@@ -28,7 +28,8 @@ export const ENEMIES = {
     attackRange: GRID.CELL_SIZE * 2,  // 2 units
     aggroRange: GRID.CELL_SIZE * 6,   // 6 units (slower, shorter range)
     attackCooldown: 1.2,
-    attackWindup: 0.5,  // Slow windup
+    attackWindup: 1.0,  // Clear 1-second telegraph
+    windupImmune: true,  // Cannot be interrupted
     attackType: 'melee',
     decisionInterval: 0.8,  // Dumb enemy (slow reaction time)
     color: '#00ff00',

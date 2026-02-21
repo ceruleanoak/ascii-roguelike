@@ -316,23 +316,22 @@ export class Player {
     if (this.dodgeRoll.active) {
       this.dodgeRoll.timer -= deltaTime;
 
-      // Keep velocity zeroed during roll for flat speed
-      this.velocity.vx = 0;
-      this.velocity.vy = 0;
-      this.acceleration.ax = 0;
-      this.acceleration.ay = 0;
-
       if (this.dodgeRoll.timer <= 0) {
-        // Roll complete
+        // Roll complete - zero out velocity
         this.dodgeRoll.active = false;
+        this.velocity.vx = 0;
+        this.velocity.vy = 0;
+        this.acceleration.ax = 0;
+        this.acceleration.ay = 0;
         if (this.dodgeRoll.type === 'hide') {
           this.hidden = false;
         }
       } else if (this.dodgeRoll.type !== 'blink') {
-        // Apply roll movement (flat velocity, not additive)
-        const rollSpeed = this.dodgeRoll.speed * deltaTime;
-        this.position.x += this.dodgeRoll.direction.x * rollSpeed;
-        this.position.y += this.dodgeRoll.direction.y * rollSpeed;
+        // Apply roll movement through velocity (allows PhysicsSystem to handle collisions)
+        this.velocity.vx = this.dodgeRoll.direction.x * this.dodgeRoll.speed;
+        this.velocity.vy = this.dodgeRoll.direction.y * this.dodgeRoll.speed;
+        this.acceleration.ax = 0;
+        this.acceleration.ay = 0;
       }
     }
   }

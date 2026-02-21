@@ -25,7 +25,7 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
     damage: 1,
-    cooldown: 0.5,
+    cooldown: 1.0,
     color: COLORS.ITEM
   },
   '†': {
@@ -821,8 +821,8 @@ export const ITEMS = {
     cooldown: 25, // Reusable with 25s cooldown (powerful)
     color: '#aaaaaa'
   },
-  'V': {
-    char: 'V',
+  'Z': {
+    char: 'Z',
     name: 'Venom Vial',
     type: ITEM_TYPES.CONSUMABLE,
     effect: 'venomcloud',

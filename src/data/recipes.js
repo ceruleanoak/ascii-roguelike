@@ -34,7 +34,6 @@ export const RECIPES = [
 
   // More combinations
   { left: 'M', right: 'M', result: '■', name: 'Metal Block' },   // Metal + Metal = Metal Block
-  { left: '|', right: '|', result: '=', name: 'Platform' },      // Stick + Stick = Platform
   { left: 'f', right: 'f', result: 'V', name: 'Fur Vest' },      // Fur + Fur = Fur Vest (armor)
 
   // Item upgrades - use existing items to create better versions

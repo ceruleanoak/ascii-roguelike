@@ -35,6 +35,7 @@ export class Enemy {
     this.aggroRange = this.data.aggroRange || GRID.CELL_SIZE * 8;
     this.attackCooldown = this.data.attackCooldown;
     this.attackWindup = this.data.attackWindup || 0.3;
+    this.windupImmune = this.data.windupImmune || false;  // Cannot be interrupted during windup
     this.attackType = this.data.attackType || 'melee';
     this.attackTimer = 0;
     this.windupTimer = 0;
@@ -1205,6 +1206,11 @@ export class Enemy {
 
     // Become enraged when attacked - never un-aggro
     this.enraged = true;
+
+    // Interrupt windup when taking damage (unless immune)
+    if (this.state === 'windup' && !this.windupImmune) {
+      this.windupTimer = 0;
+    }
 
     // Immediately lock onto attacker's position so the enemy can
     // navigate even if it was wandering or in memory mode

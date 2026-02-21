@@ -38,6 +38,7 @@ class Game {
 
     // Game state
     this.player = null;
+    this.previousPlayerPosition = { x: 0, y: 0 }; // Track previous position for exit zone crossing detection
     this.currentRoom = null;
     this.ingredients = [];
     this.items = [];
@@ -56,6 +57,15 @@ class Game {
     this.restInventory = []; // Ingredients only
     this.restQuickSlots = [null, null, null]; // Weapons only
     this.restActiveSlotIndex = 0; // Persistent active slot index
+
+    // EXPLORE room persistence (prevents room cycling cheat)
+    this.savedExploreRoom = null; // Last explore room before returning to REST
+    this.savedExploreItems = [];
+    this.savedExploreIngredients = [];
+    this.savedExplorePlacedTraps = [];
+    this.savedExploreEnemies = [];
+    this.savedExploreBackgroundObjects = [];
+    this.savedExploreCaptives = [];
 
     // Inventory for armor and consumables (lost on death)
     this.armorInventory = []; // All collected armor
@@ -123,6 +133,7 @@ class Game {
     this.ePressed = false;
     this.mPressed = false;
     this.vPressed = false;
+    this.attackSequenceActive = false; // Tracks if attack was initiated by button press (not just hold)
 
     // Arrow keys for dodge rolling
     this.arrowKeys = {
@@ -291,6 +302,7 @@ class Game {
       if (key === ' ') {
         this.keys.space = false;
         this.spacePressed = false;
+        this.attackSequenceActive = false; // Reset attack sequence on space release
 
         // Release charged bow when space is released
         if (this.player && this.player.heldItem && this.player.heldItem.isCharging) {
@@ -512,12 +524,15 @@ class Game {
 
     // Give player starting ingredients (for testing) - only on first entry
     if (this.restInventory.length === 0 && this.depth === 0) {
-      this.player.addIngredient('|'); // Stick
-      this.player.addIngredient('~'); // String
-      this.player.addIngredient('M'); // Metal
-      this.player.addIngredient('F'); // Fire Essence
-      this.player.addIngredient('F'); // Fire Essence (2nd — enables Chain Bow: Fire Bow + Fire)
-      this.player.addIngredient('b'); // Bone — enables Thunder Axe: Bone + Metal → Bone Axe → + Fire
+      // 2 of each ingredient allows for multiple crafting experiments
+      this.player.addIngredient('|'); // Stick (x2)
+      this.player.addIngredient('|');
+      this.player.addIngredient('~'); // String (x2)
+      this.player.addIngredient('~');
+      this.player.addIngredient('g'); // Goo (x2)
+      this.player.addIngredient('g');
+      this.player.addIngredient('f'); // Fur (x2)
+      this.player.addIngredient('f');
       // Also save to restInventory so they persist
       this.restInventory = [...this.player.inventory];
     }
@@ -1174,10 +1189,21 @@ class Game {
     // Check if continuing from previous explore room (depth > 0) or starting fresh (depth === 0)
     const isContinuing = this.depth > 0;
 
+    // Determine depth update strategy
+    // When entryDirection is null, we're coming from REST (via state transition)
+    // When entryDirection is set, we're moving between EXPLORE rooms (direct call, not state transition)
+    const leavingRest = entryDirection === null; // null = coming from REST, otherwise coming from another EXPLORE room
+    const roomTransition = entryDirection !== null; // Has direction = moving between rooms
+
+    // Check if we should restore saved explore room (returning from REST to same room)
+    const shouldRestoreExploreRoom = leavingRest && this.savedExploreRoom !== null;
+
+    console.log(`[enterExploreState] entryDirection=${entryDirection}, leavingRest=${leavingRest}, roomTransition=${roomTransition}, shouldRestore=${shouldRestoreExploreRoom}, depth=${this.depth}`);
+
     // Save player state from previous room
-    // Inventory: Starting from REST (depth 0) → EMPTY, continuing through rooms → keep inventory
+    // Inventory: Starting from REST → EMPTY, continuing through EXPLORE rooms → keep inventory
     // Quick slots: ALWAYS persist (both from REST and between rooms)
-    const savedInventory = this.player && isContinuing ? [...this.player.inventory] : [];
+    const savedInventory = this.player && isContinuing && !leavingRest ? [...this.player.inventory] : [];
     const savedQuickSlots = this.player ? [...this.player.quickSlots] : [null, null, null]; // Always save quick slots
     const savedActiveSlotIndex = this.player ? this.player.activeSlotIndex : 0; // Always save active slot
     const savedHp = this.player ? this.player.hp : null; // Always save HP
@@ -1221,10 +1247,43 @@ class Game {
     this.consumableFlashSlot = -1;
     this.consumableWindups = []; // Clear any pending windups
 
-    // Generate new room with player start position
-    this.depth++;
-    this.roomGenerator.setDepth(this.depth);
-    this.currentRoom = this.roomGenerator.generateRoom(null, { x: startX, y: startY });
+    // Generate or restore room
+    if (shouldRestoreExploreRoom) {
+      // Restore saved explore room (prevents room cycling cheat)
+      console.log('[enterExploreState] Restoring saved EXPLORE room');
+      this.currentRoom = this.savedExploreRoom;
+      this.items = [...this.savedExploreItems];
+      this.ingredients = [...this.savedExploreIngredients];
+      this.placedTraps = [...this.savedExplorePlacedTraps];
+      this.currentRoom.enemies = [...this.savedExploreEnemies];
+      this.backgroundObjects = [...this.savedExploreBackgroundObjects];
+      this.captives = [...this.savedExploreCaptives];
+
+      // Depth stays the same when returning to saved room
+    } else {
+      // Generate new room
+      // Depth management: Start at L1 when leaving REST, increment when moving between explore rooms
+      if (leavingRest && this.depth === 0) {
+        // First time entering EXPLORE from REST → Start at Level 1
+        this.depth = 1;
+        console.log('[enterExploreState] Starting at Level 1');
+      } else if (roomTransition) {
+        // Moving between explore rooms → Increment depth
+        this.depth++;
+        console.log('[enterExploreState] Advanced to Level', this.depth);
+      }
+      this.roomGenerator.setDepth(this.depth);
+      this.currentRoom = this.roomGenerator.generateRoom(null, { x: startX, y: startY });
+
+      // Clear saved explore room when generating new room (only restore once)
+      this.savedExploreRoom = null;
+      this.savedExploreItems = [];
+      this.savedExploreIngredients = [];
+      this.savedExplorePlacedTraps = [];
+      this.savedExploreEnemies = [];
+      this.savedExploreBackgroundObjects = [];
+      this.savedExploreCaptives = [];
+    }
 
     // Preload room previews for exits
     this.preloadRoomPreviews();
@@ -1257,16 +1316,24 @@ class Game {
     // Apply equipment effects
     this.applyEquipmentEffects();
 
-    // Setup room entities
-    this.ingredients = [];
-    this.items = this.currentRoom.items || [];
-    this.placedTraps = [];
-    this.activeNoiseSource = null;
-    this.backgroundObjects = this.currentRoom.backgroundObjects || [];
-    this.steamClouds = []; // Clear steam clouds when entering new room
-    this.debris = []; // Clear debris when entering new room
-    this.particles = []; // Clear particles when entering new room
-    this.captives = []; // Clear captives when entering new room
+    // Setup room entities (only for new rooms, not when restoring)
+    if (!shouldRestoreExploreRoom) {
+      this.ingredients = [];
+      this.items = this.currentRoom.items || [];
+      this.placedTraps = [];
+      this.activeNoiseSource = null;
+      this.backgroundObjects = this.currentRoom.backgroundObjects || [];
+      this.steamClouds = []; // Clear steam clouds when entering new room
+      this.debris = []; // Clear debris when entering new room
+      this.particles = []; // Clear particles when entering new room
+      this.captives = []; // Clear captives when entering new room
+    } else {
+      // When restoring, still clear transient effects
+      this.activeNoiseSource = null;
+      this.steamClouds = [];
+      this.debris = [];
+      this.particles = [];
+    }
 
     // Set enemy targets
     for (const enemy of this.currentRoom.enemies) {
@@ -1512,6 +1579,10 @@ class Game {
   updateRestState(deltaTime) {
     if (!this.player) return;
 
+    // Store previous position before physics update
+    this.previousPlayerPosition.x = this.player.position.x;
+    this.previousPlayerPosition.y = this.player.position.y;
+
     // Update all shared player mechanics
     this.updatePlayerMechanics(deltaTime);
 
@@ -1529,8 +1600,10 @@ class Game {
     // Update combat system (for weapon previews/attacks in rest mode)
     this.combatSystem.update(deltaTime, this.player, [], []);
 
-    // Check for North exit
-    if (this.player.position.y < GRID.CELL_SIZE * 2) {
+    // Check for North exit (detect if player crossed threshold)
+    const exitThreshold = GRID.CELL_SIZE * 2;
+    const crossedNorthExit = this.previousPlayerPosition.y >= exitThreshold && this.player.position.y < exitThreshold;
+    if (this.player.position.y < exitThreshold || crossedNorthExit) {
       this.stateMachine.transition(GAME_STATES.EXPLORE);
     }
 
@@ -1618,6 +1691,10 @@ class Game {
         this.consumableCooldowns[i] = Math.max(0, this.consumableCooldowns[i] - deltaTime);
       }
     }
+
+    // Store previous position before physics update (for exit zone crossing detection)
+    this.previousPlayerPosition.x = this.player.position.x;
+    this.previousPlayerPosition.y = this.player.position.y;
 
     // Update physics
     const waterResults = this.physicsSystem.update(deltaTime, this.currentRoom.backgroundObjects);
@@ -1754,7 +1831,8 @@ class Game {
     }
 
     // Auto-attack when holding space (guns and melee only - bows use charging)
-    if (this.keys.space && this.player.heldItem && this.player.heldItem.data.weaponType !== 'BOW' && !this.menuOpen && !this.cheatMenu.isOpen) {
+    // Only allow auto-attack if attack sequence was initiated by a button press (not just holding)
+    if (this.keys.space && this.attackSequenceActive && this.player.heldItem && this.player.heldItem.data.weaponType !== 'BOW' && !this.menuOpen && !this.cheatMenu.isOpen) {
       const weapon = this.player.heldItem;
       const attack = this.player.useHeldItem();
       if (attack) {
@@ -2005,12 +2083,13 @@ class Game {
           this.showPickupMessage(`${diedCharData.name} is lost`);
 
           // Clear active items (lost with the dead character)
-          // Keep: itemChest, armorInventory, consumableInventory (REST storage persists)
-          this.restInventory = []; // Ingredient inventory
-          this.restQuickSlots = [null, null, null]; // Equipped weapons
+          // Keep: restInventory (banked ingredients), itemChest, armorInventory, consumableInventory (REST storage persists)
+          // Note: Player loses any ingredients collected during current EXPLORE run (in player.inventory)
+          // but keeps banked ingredients (in restInventory)
+          this.restQuickSlots = [null, null, null]; // Clear equipped weapons
           this.restActiveSlotIndex = 0;
-          this.equippedArmor = null; // Active armor
-          this.equippedConsumables = [null, null]; // Active consumables
+          this.equippedArmor = null; // Clear active armor
+          this.equippedConsumables = [null, null]; // Clear active consumables
 
           // Respawn as next character
           const nextCharacter = livingCharacters[0];
@@ -2228,32 +2307,60 @@ class Game {
       this.updateExitCollisions();
     }
 
-    // Check for exits
+    // Check for exits (with crossing detection for fast dodge rolls)
     const gridPos = this.player.getGridPosition();
+    const prevGridPos = {
+      x: Math.floor(this.previousPlayerPosition.x / GRID.CELL_SIZE),
+      y: Math.floor(this.previousPlayerPosition.y / GRID.CELL_SIZE)
+    };
     const centerX = Math.floor(GRID.COLS / 2);
     const centerY = Math.floor(GRID.ROWS / 2);
 
     // North exit check (warp zone is at rows 1-2, below the wall)
-    if (gridPos.y <= 2 && Math.abs(gridPos.x - centerX) <= 1 && this.currentRoom.exits.north) {
+    const inNorthExit = gridPos.y <= 2 && Math.abs(gridPos.x - centerX) <= 1;
+    const crossedNorthExit = prevGridPos.y > 2 && gridPos.y <= 2 && Math.abs(gridPos.x - centerX) <= 1;
+    if ((inNorthExit || crossedNorthExit) && this.currentRoom.exits.north) {
       this.enterExploreState('north'); // Entering from North → spawn at South
     }
     // South exit check
-    else if (gridPos.y >= GRID.ROWS - 2 && Math.abs(gridPos.x - centerX) <= 1 && this.currentRoom.exits.south) {
-      this.bankLoot();
+    else {
+      const inSouthExit = gridPos.y >= GRID.ROWS - 2 && Math.abs(gridPos.x - centerX) <= 1;
+      const crossedSouthExit = prevGridPos.y < GRID.ROWS - 2 && gridPos.y >= GRID.ROWS - 2 && Math.abs(gridPos.x - centerX) <= 1;
+      if ((inSouthExit || crossedSouthExit) && this.currentRoom.exits.south) {
+        this.bankLoot();
 
-      // Clear combat system (projectiles, melee attacks, etc.) before transitioning
-      this.combatSystem.clear();
+        // Save EXPLORE room state before returning to REST (prevents room cycling cheat)
+        this.savedExploreRoom = this.currentRoom;
+        this.savedExploreItems = [...this.items];
+        this.savedExploreIngredients = [...this.ingredients];
+        this.savedExplorePlacedTraps = [...this.placedTraps];
+        this.savedExploreEnemies = [...this.currentRoom.enemies];
+        this.savedExploreBackgroundObjects = [...this.backgroundObjects];
+        this.savedExploreCaptives = [...this.captives];
+        console.log('[updateExploreState] Saved EXPLORE room state before returning to REST');
 
-      this.stateMachine.transition(GAME_STATES.REST);
-      // Don't reset depth - it should persist to show max depth reached
-    }
-    // East exit check (right border, centered vertically)
-    else if (gridPos.x >= GRID.COLS - 2 && Math.abs(gridPos.y - centerY) <= 1 && this.currentRoom.exits.east) {
-      this.enterExploreState('east'); // Entering from East → spawn at West
-    }
-    // West exit check (left border, centered vertically)
-    else if (gridPos.x <= 1 && Math.abs(gridPos.y - centerY) <= 1 && this.currentRoom.exits.west) {
-      this.enterExploreState('west'); // Entering from West → spawn at East
+        // Clear combat system (projectiles, melee attacks, etc.) before transitioning
+        this.combatSystem.clear();
+
+        this.stateMachine.transition(GAME_STATES.REST);
+        // Don't reset depth - it should persist to show max depth reached
+      }
+      // East exit check (right border, centered vertically)
+      else {
+        const inEastExit = gridPos.x >= GRID.COLS - 2 && Math.abs(gridPos.y - centerY) <= 1;
+        const crossedEastExit = prevGridPos.x < GRID.COLS - 2 && gridPos.x >= GRID.COLS - 2 && Math.abs(gridPos.y - centerY) <= 1;
+        if ((inEastExit || crossedEastExit) && this.currentRoom.exits.east) {
+          this.enterExploreState('east'); // Entering from East → spawn at West
+        }
+        // West exit check (left border, centered vertically)
+        else {
+          const inWestExit = gridPos.x <= 1 && Math.abs(gridPos.y - centerY) <= 1;
+          const crossedWestExit = prevGridPos.x > 1 && gridPos.x <= 1 && Math.abs(gridPos.y - centerY) <= 1;
+          if ((inWestExit || crossedWestExit) && this.currentRoom.exits.west) {
+            this.enterExploreState('west'); // Entering from West → spawn at East
+          }
+        }
+      }
     }
 
     this.updateUI();
@@ -2288,9 +2395,21 @@ class Game {
         this.equippedArmor = null;
         this.equippedConsumables = [null, null];
 
-        // Reset character lives (all characters revive for new run)
+        // Clear saved EXPLORE room on death
+        this.savedExploreRoom = null;
+        this.savedExploreItems = [];
+        this.savedExploreIngredients = [];
+        this.savedExplorePlacedTraps = [];
+        this.savedExploreEnemies = [];
+        this.savedExploreBackgroundObjects = [];
+        this.savedExploreCaptives = [];
+
+        // Reset character system for new run
         this.deadCharacters = [];
         this.activeCharacterType = 'default';
+        this.unlockedCharacters = ['default']; // Reset to only default character
+        this.captiveQueue = ['red', 'cyan', 'yellow', 'gray']; // Reset captive spawn order
+        this.roomsClearedSinceRest = 0; // Reset room clear counter
 
         // Clear crafting slots and wipe localStorage save
         this.craftingSystem.setState({ leftSlot: null, rightSlot: null, centerSlot: null });
@@ -2428,8 +2547,11 @@ class Game {
 
       // Not near any interactive slot or NPC - allow weapon preview/attack
       if (this.player.heldItem) {
+        this.attackSequenceActive = true; // Mark that attack was initiated by button press (even if windup delays it)
         const attack = this.player.useHeldItem();
-        if (attack) this.combatSystem.createAttack(attack);
+        if (attack) {
+          this.combatSystem.createAttack(attack);
+        }
       }
     } else if (state === GAME_STATES.EXPLORE) {
       // Reset captive interaction flag
@@ -2450,8 +2572,11 @@ class Game {
         this.tryPickupItem();
       } else if (this.player.heldItem && !this.captiveInteractionThisFrame) {
         // Attack — melee AoE handles object damage directly via CombatSystem
+        this.attackSequenceActive = true; // Mark that attack was initiated by button press (even if windup delays it)
         const attack = this.player.useHeldItem();
-        if (attack) this.combatSystem.createAttack(attack);
+        if (attack) {
+          this.combatSystem.createAttack(attack);
+        }
       } else {
         // Item pickup takes priority over background object interaction
         const hasNearbyItem = this.items.some(
@@ -3208,12 +3333,14 @@ class Game {
 
   bankLoot() {
     // Player successfully returned to REST with loot
-    // REPLACE restInventory with player's current inventory (which includes everything from REST + new loot)
+    // ADD collected ingredients to REST inventory (player starts EXPLORE with empty inventory)
     // Save all quick slots and active index
     if (this.player) {
-      this.restInventory = [...this.player.inventory];
+      // Add new ingredients to banked REST inventory
+      this.restInventory = [...this.restInventory, ...this.player.inventory];
       this.restQuickSlots = [...this.player.quickSlots];
       this.restActiveSlotIndex = this.player.activeSlotIndex;
+      console.log('[bankLoot] Added', this.player.inventory.length, 'ingredients to REST inventory. Total:', this.restInventory.length);
       console.log('[bankLoot] Saved quick slots:', this.restQuickSlots);
     }
   }
@@ -3644,6 +3771,14 @@ class Game {
         this.renderer.fgCtx.textAlign = 'center';
         this.renderer.fgCtx.fillText(pressSpaceText, pressSpaceX, pressSpaceY);
       }
+    }
+
+    // Version number in bottom right corner (always visible after shimmer)
+    if (time >= SHIMMER_DURATION) {
+      const versionAlpha = Math.min((time - SHIMMER_DURATION) / 1.0, 1.0);
+      this.renderer.fgCtx.fillStyle = `rgba(128, 128, 128, ${versionAlpha * 0.6})`;
+      this.renderer.fgCtx.textAlign = 'right';
+      this.renderer.fgCtx.fillText('v0.2', GRID.WIDTH - GRID.CELL_SIZE, GRID.HEIGHT - GRID.CELL_SIZE);
     }
 
     this.renderer.fgCtx.restore();
