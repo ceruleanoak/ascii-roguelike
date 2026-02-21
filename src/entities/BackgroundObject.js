@@ -1,9 +1,25 @@
 import { GRID, BACKGROUND_OBJECTS, OBJECT_ANIMATIONS, WATER_COLORS } from '../game/GameConfig.js';
+import { ITEMS, INGREDIENTS } from '../data/items.js';
 
 export class BackgroundObject {
   constructor(char, x, y) {
     this.char = char;
-    this.data = BACKGROUND_OBJECTS[char];
+    // Handle unknown characters (e.g., item chars in recipe signs)
+    // Fallback chain: BACKGROUND_OBJECTS → ITEMS → INGREDIENTS → default
+    if (BACKGROUND_OBJECTS[char]) {
+      this.data = BACKGROUND_OBJECTS[char];
+    } else {
+      // For recipe signs: use item/ingredient colors if available
+      const itemData = ITEMS[char] || INGREDIENTS[char];
+      this.data = {
+        name: itemData ? itemData.name : 'Unknown',
+        color: itemData ? itemData.color : '#888888',
+        solid: false,
+        hp: null,
+        bulletInteraction: 'passthrough',
+        indestructible: true
+      };
+    }
     this.position = { x, y };
     this.originalChar = char;
     this.color = this.data.color;

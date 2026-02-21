@@ -1,5 +1,6 @@
 import { GRID, ROOM_TYPES, BACKGROUND_OBJECTS, WALL_STRUCTURES, WATER_STRUCTURES } from '../game/GameConfig.js';
 import { getRandomEnemy, createBossEnemy } from '../data/enemies.js';
+import { RECIPES } from '../data/recipes.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
@@ -26,6 +27,7 @@ export class RoomGenerator {
       enemies: [],
       items: [],
       backgroundObjects: [],
+      recipeSign: null, // Visual-only recipe hint (not a BackgroundObject)
       exits: { north: false, east: false, west: false, south: true },
       playerStartPos: playerStartPos  // Store for enemy generation
     };
@@ -296,7 +298,10 @@ export class RoomGenerator {
 
   generateBackgroundObjects(room) {
     // Generate tall grass (very common, large swaths)
-    this.generateGrassSwaths(room);
+    const grassClusters = this.generateGrassSwaths(room);
+
+    // Generate recipe sign (10% chance) - positioned within grass clusters for natural obscuration
+    this.generateRecipeSign(room, grassClusters);
 
     // Generate organic clusters (trees, bushes, brambles)
     this.generateOrganicClusters(room);
@@ -323,11 +328,15 @@ export class RoomGenerator {
   generateGrassSwaths(room) {
     // Generate 4-7 dense clusters of tall grass
     const swathCount = this.randInt(4, 7);
+    const clusters = []; // Track cluster positions for recipe sign placement
 
     for (let i = 0; i < swathCount; i++) {
       const centerPos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
       const swathSize = this.randInt(20, 40); // Dense clusters
       const swathRadius = this.randInt(32, 64); // Tight clustering
+
+      // Store cluster info
+      clusters.push({ center: centerPos, radius: swathRadius });
 
       for (let j = 0; j < swathSize; j++) {
         const angle = Math.random() * Math.PI * 2;
@@ -349,6 +358,8 @@ export class RoomGenerator {
         }
       }
     }
+
+    return clusters; // Return cluster positions for recipe sign placement
   }
 
   generateOrganicClusters(room) {
@@ -550,6 +561,100 @@ export class RoomGenerator {
       const bgObject = new BackgroundObject(char, pos.x, pos.y);
       room.backgroundObjects.push(bgObject);
     }
+  }
+
+  generateRecipeSign(room, grassClusters) {
+    // 13% chance to generate a recipe sign (secret message in the earth)
+    if (Math.random() >= 0.13) return;
+    if (!grassClusters || grassClusters.length === 0) return; // Need grass to hide the sign
+
+    // Select random recipe
+    const recipe = RECIPES[Math.floor(Math.random() * RECIPES.length)];
+
+    // Pick a random grass cluster to place sign within
+    const cluster = grassClusters[Math.floor(Math.random() * grassClusters.length)];
+
+    // Place sign near cluster center (within inner 50% of radius for good grass coverage)
+    let placed = false;
+    for (let attempt = 0; attempt < 30 && !placed; attempt++) {
+      // Random position within 50% of cluster radius
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * (cluster.radius * 0.5);
+      const signX = cluster.center.x + Math.cos(angle) * dist;
+      const signY = cluster.center.y + Math.sin(angle) * dist;
+
+      // Convert to grid position
+      const startCol = Math.floor(signX / GRID.CELL_SIZE);
+      const startRow = Math.floor(signY / GRID.CELL_SIZE);
+
+      // Check if position is valid (in bounds and no walls)
+      if (startRow >= 2 && startRow < GRID.ROWS - 2 &&
+          startCol >= 2 && startCol < GRID.COLS - 11 &&
+          this.canPlaceSign(room, startRow, startCol)) {
+        this.stampRecipeSign(room, recipe, startRow, startCol);
+        placed = true;
+        console.log(`[RecipeSign] Secret message hidden in grass: ${recipe.left} + ${recipe.right} = ${recipe.result}`);
+      }
+    }
+  }
+
+  canPlaceSign(room, startRow, startCol) {
+    const SIGN_HEIGHT = 1;
+    const SIGN_WIDTH = 11;
+
+    // Check collision map for walls
+    for (let row = startRow; row < startRow + SIGN_HEIGHT; row++) {
+      for (let col = startCol; col < startCol + SIGN_WIDTH; col++) {
+        if (room.collisionMap[row][col]) {
+          return false; // Overlaps with wall
+        }
+      }
+    }
+
+    // Check for overlaps with solid background objects
+    for (const bgObj of room.backgroundObjects) {
+      if (bgObj.data.solid) {
+        const objCol = Math.floor(bgObj.position.x / GRID.CELL_SIZE);
+        const objRow = Math.floor(bgObj.position.y / GRID.CELL_SIZE);
+
+        if (objCol >= startCol && objCol < startCol + SIGN_WIDTH &&
+            objRow >= startRow && objRow < startRow + SIGN_HEIGHT) {
+          return false; // Overlaps with solid object
+        }
+      }
+    }
+
+    return true;
+  }
+
+  stampRecipeSign(room, recipe, startRow, startCol) {
+    // Secret message in the earth: X + Y = Z
+    // Store as simple visual data (NOT BackgroundObject to avoid conflicts with water/etc)
+    const EARTH_COLOR = '#333333'; // Dark gray - mysterious writing in the earth
+
+    const pattern = [
+      { col: 0, char: recipe.left },   // Recipe left item
+      { col: 2, char: '+' },           // Plus operator
+      { col: 4, char: recipe.right },  // Recipe right item
+      { col: 6, char: '=' },           // Equals operator
+      { col: 8, char: recipe.result }  // Recipe result
+    ];
+
+    // Store as simple data for rendering
+    const characters = [];
+    for (const { col, char } of pattern) {
+      characters.push({
+        char,
+        x: (startCol + col) * GRID.CELL_SIZE,
+        y: startRow * GRID.CELL_SIZE,
+        color: EARTH_COLOR
+      });
+    }
+
+    room.recipeSign = {
+      recipe,
+      characters
+    };
   }
 
   getObjectWeights(depth) {

@@ -137,7 +137,7 @@ export class CombatSystem {
       // Check collision with background objects
       let bgObjectHit = false;
       for (const obj of backgroundObjects) {
-        if (obj.destroyed) continue;
+        if (obj.destroyed || obj.isRecipeSign) continue; // Skip destroyed and recipe signs
 
         if (this.checkProjectileCollisionWithObject(proj, obj)) {
           const result = obj.handleBulletCollision(proj);
@@ -401,7 +401,7 @@ export class CombatSystem {
       // Check collision with background objects (only on first frame)
       if (!attack.hasHitObject) {
         for (const obj of backgroundObjects) {
-          if (obj.destroyed) continue;
+          if (obj.destroyed || obj.isRecipeSign) continue; // Skip destroyed and recipe signs
 
           if (this.checkMeleeCollisionWithObject(attack, obj)) {
             const result = obj.takeDamage(attack.damage, attack.isBlade);
@@ -1076,7 +1076,7 @@ export class CombatSystem {
 
     // Affect background objects in blast radius
     for (const obj of backgroundObjects) {
-      if (obj.destroyed) continue;
+      if (obj.destroyed || obj.isRecipeSign) continue; // Skip destroyed and recipe signs
 
       const dx = obj.position.x - x;
       const dy = obj.position.y - y;

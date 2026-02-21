@@ -83,6 +83,20 @@ export class Player {
       left: false,
       right: false
     };
+
+    // Dodge roll mechanics
+    this.dodgeRoll = {
+      active: false,
+      type: 'dodge', // 'dodge', 'hide', 'damage', 'blink'
+      direction: { x: 0, y: 0 },
+      duration: 0.15, // seconds
+      timer: 0,
+      cooldown: 0.5, // seconds between rolls
+      cooldownTimer: 0,
+      distance: GRID.CELL_SIZE * 2, // roll distance (reduced)
+      speed: 200, // pixels per second during roll (1/3 of original 600)
+      iframes: true // invulnerability during roll (for 'dodge' type)
+    };
   }
 
   // Backward compatibility: heldItem getter returns active slot
@@ -100,8 +114,8 @@ export class Player {
     // Check if charging a bow (for movement slowdown)
     const isChargingBow = this.heldItem && this.heldItem.isCharging;
 
-    // Calculate target acceleration based on input (double acceleration when unarmed)
-    const baseAcceleration = this.heldItem ? PHYSICS.PLAYER_ACCELERATION : PHYSICS.PLAYER_ACCELERATION * 2;
+    // Calculate target acceleration based on input (1.5x acceleration when unarmed)
+    const baseAcceleration = this.heldItem ? PHYSICS.PLAYER_ACCELERATION : PHYSICS.PLAYER_ACCELERATION * 1.5;
     const acceleration = baseAcceleration * (1 + this.speedBoost - this.speedPenalty);
     let targetAx = 0;
     let targetAy = 0;
@@ -142,8 +156,8 @@ export class Player {
       this.facing.y = Math.sign(targetAy);
     }
 
-    // Cap velocity to max speed (double speed when unarmed, boosted when speed buff active, armor modifiers)
-    const baseMaxSpeed = this.heldItem ? PHYSICS.PLAYER_SPEED : PHYSICS.PLAYER_SPEED * 2;
+    // Cap velocity to max speed (1.5x speed when unarmed, boosted when speed buff active, armor modifiers)
+    const baseMaxSpeed = this.heldItem ? PHYSICS.PLAYER_SPEED : PHYSICS.PLAYER_SPEED * 1.5;
     const armorModified = baseMaxSpeed * (1 + this.speedBoost - this.speedPenalty);
     const boostedMax = this.speedBoostTimer > 0 ? armorModified * this.speedBoostMultiplier : armorModified;
     const speed = Math.sqrt(this.velocity.vx ** 2 + this.velocity.vy ** 2);
@@ -195,6 +209,9 @@ export class Player {
   }
 
   update(deltaTime) {
+    // Update dodge roll state
+    this.updateDodgeRoll(deltaTime);
+
     // Update invulnerability timer
     if (this.invulnerabilityTimer > 0) {
       this.invulnerabilityTimer -= deltaTime;
@@ -236,6 +253,88 @@ export class Player {
     }
 
     return null;
+  }
+
+  startDodgeRoll(direction) {
+    // Check if on cooldown
+    if (this.dodgeRoll.cooldownTimer > 0) {
+      return false;
+    }
+
+    // Calculate current max movement speed (from updateInput logic)
+    const baseMaxSpeed = this.heldItem ? PHYSICS.PLAYER_SPEED : PHYSICS.PLAYER_SPEED * 1.5;
+    const armorModified = baseMaxSpeed * (1 + this.speedBoost - this.speedPenalty);
+    const currentMaxSpeed = this.speedBoostTimer > 0 ? armorModified * this.speedBoostMultiplier : armorModified;
+
+    // Dodge roll speed is 1.3x current max speed (always slightly faster)
+    const rollSpeed = currentMaxSpeed * 1.1;
+
+    // Activate roll
+    this.dodgeRoll.active = true;
+    this.dodgeRoll.direction = direction;
+    this.dodgeRoll.timer = this.dodgeRoll.duration;
+    this.dodgeRoll.cooldownTimer = this.dodgeRoll.cooldown;
+    this.dodgeRoll.speed = rollSpeed; // Set dynamic speed
+
+    // Zero out velocity for flat dodge roll speed (not additive with movement)
+    this.velocity.vx = 0;
+    this.velocity.vy = 0;
+    this.acceleration.ax = 0;
+    this.acceleration.ay = 0;
+
+    // Apply roll-specific effects based on type
+    switch (this.dodgeRoll.type) {
+      case 'dodge':
+        // Grant i-frames for duration
+        this.invulnerabilityTimer = this.dodgeRoll.duration;
+        break;
+      case 'hide':
+        // Invisible to enemies (will implement in Week 2)
+        this.hidden = true;
+        break;
+      case 'damage':
+        // Leave damaging trail (particles created in main.js)
+        break;
+      case 'blink':
+        // Instant teleport
+        this.position.x += direction.x * this.dodgeRoll.distance;
+        this.position.y += direction.y * this.dodgeRoll.distance;
+        this.dodgeRoll.timer = 0; // Instant
+        break;
+    }
+
+    return true;
+  }
+
+  updateDodgeRoll(deltaTime) {
+    // Cooldown tick
+    if (this.dodgeRoll.cooldownTimer > 0) {
+      this.dodgeRoll.cooldownTimer -= deltaTime;
+    }
+
+    // Active roll movement
+    if (this.dodgeRoll.active) {
+      this.dodgeRoll.timer -= deltaTime;
+
+      // Keep velocity zeroed during roll for flat speed
+      this.velocity.vx = 0;
+      this.velocity.vy = 0;
+      this.acceleration.ax = 0;
+      this.acceleration.ay = 0;
+
+      if (this.dodgeRoll.timer <= 0) {
+        // Roll complete
+        this.dodgeRoll.active = false;
+        if (this.dodgeRoll.type === 'hide') {
+          this.hidden = false;
+        }
+      } else if (this.dodgeRoll.type !== 'blink') {
+        // Apply roll movement (flat velocity, not additive)
+        const rollSpeed = this.dodgeRoll.speed * deltaTime;
+        this.position.x += this.dodgeRoll.direction.x * rollSpeed;
+        this.position.y += this.dodgeRoll.direction.y * rollSpeed;
+      }
+    }
   }
 
   takeDamage(amount, damageSource = {}) {
@@ -315,13 +414,16 @@ export class Player {
     return this.invulnerabilityTimer > 0;
   }
 
-  shouldRenderVisible() {
-    // Blink during invulnerability frames
+  getVisibilityAlpha() {
+    // Fade to 40% alpha during invulnerability frames (instead of blinking)
     if (this.invulnerabilityTimer > 0) {
-      // Blink on/off based on timer
-      const blinkCycle = Math.floor(this.invulnerabilityTimer / BLINK_FREQUENCY);
-      return blinkCycle % 2 === 0;
+      return 0.4;
     }
+    return 1.0;
+  }
+
+  shouldRenderVisible() {
+    // Always render (for backward compatibility), but use getVisibilityAlpha() for alpha
     return true;
   }
 

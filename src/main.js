@@ -12,7 +12,7 @@ import { Enemy } from './entities/Enemy.js';
 import { Ingredient } from './entities/Ingredient.js';
 import { Item } from './entities/Item.js';
 import { BackgroundObject } from './entities/BackgroundObject.js';
-import { createExplosion, createWetDrop, createActivationBurst, createSteamPuff, createChaff } from './entities/Particle.js';
+import { createExplosion, createWetDrop, createActivationBurst, createSteamPuff, createChaff, createDodgeTrail } from './entities/Particle.js';
 import { createDebris } from './entities/Debris.js';
 import { isIngredient, isItem, ITEM_TYPES, generateEnemyDrops } from './data/items.js';
 import { GAME_STATES, GRID, CRAFTING, EQUIPMENT, COLORS, INTERACTION_RANGE, OBJECT_ANIMATIONS, ROOM_TYPES } from './game/GameConfig.js';
@@ -85,6 +85,13 @@ class Game {
     this.previewBlinkState = false; // true = show preview, false = show arrow
     this.PREVIEW_BLINK_INTERVAL = 0.5; // seconds per blink cycle
 
+    // WASD inactivity blinking
+    this.inactivityTimer = 0;
+    this.wasdBlinkTimer = 0;
+    this.wasdBlinkState = false; // true = white, false = normal
+    this.INACTIVITY_THRESHOLD = 10.0; // seconds before blinking starts
+    this.WASD_BLINK_INTERVAL = 0.5; // seconds per blink cycle
+
     // Item pickup notification with queue system
     this.pickupMessage = null;
     this.pickupMessageTimer = 0;
@@ -103,6 +110,14 @@ class Game {
     this.ePressed = false;
     this.mPressed = false;
     this.vPressed = false;
+
+    // Arrow keys for dodge rolling
+    this.arrowKeys = {
+      ArrowUp: false,
+      ArrowDown: false,
+      ArrowLeft: false,
+      ArrowRight: false
+    };
 
     // UI elements
     this.ui = {
@@ -243,6 +258,13 @@ class Game {
           this.handleVPress();
         }
       }
+
+      // Arrow keys for dodge rolling (works in both REST and EXPLORE)
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown' ||
+          e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        this.arrowKeys[e.key] = true;
+        e.preventDefault();
+      }
     });
 
     window.addEventListener('keyup', (e) => {
@@ -285,7 +307,31 @@ class Game {
         this.keys.v = false;
         this.vPressed = false;
       }
+
+      // Arrow key releases
+      if (e.key.startsWith('Arrow')) {
+        this.arrowKeys[e.key] = false;
+      }
     });
+  }
+
+  // Get current dodge roll direction from arrow key state
+  getDodgeRollDirection() {
+    let dx = 0, dy = 0;
+
+    if (this.arrowKeys.ArrowUp) dy -= 1;
+    if (this.arrowKeys.ArrowDown) dy += 1;
+    if (this.arrowKeys.ArrowLeft) dx -= 1;
+    if (this.arrowKeys.ArrowRight) dx += 1;
+
+    // Normalize for consistent speed in all directions (diagonal = same speed as cardinal)
+    const length = Math.sqrt(dx * dx + dy * dy);
+    if (length > 0) {
+      dx /= length;
+      dy /= length;
+    }
+
+    return { x: dx, y: dy };
   }
 
   setupStateMachine() {
@@ -394,8 +440,40 @@ class Game {
     this.player.activeSlotIndex = this.restActiveSlotIndex;
     console.log('[enterRestState] Restored quick slots:', this.player.quickSlots);
 
-    // Clear room
-    this.currentRoom = null;
+    // Create basic REST room with collision map (walls on all borders except north exit)
+    const collisionMap = [];
+    for (let y = 0; y < GRID.ROWS; y++) {
+      collisionMap[y] = [];
+      for (let x = 0; x < GRID.COLS; x++) {
+        collisionMap[y][x] = false;
+      }
+    }
+
+    // Add border walls
+    for (let x = 0; x < GRID.COLS; x++) {
+      collisionMap[0][x] = true; // Top wall
+      collisionMap[GRID.ROWS - 1][x] = true; // Bottom wall
+    }
+    for (let y = 0; y < GRID.ROWS; y++) {
+      collisionMap[y][0] = true; // Left wall
+      collisionMap[y][GRID.COLS - 1] = true; // Right wall
+    }
+
+    // Open north exit (center of top wall)
+    const centerGridX = Math.floor(GRID.COLS / 2);
+    collisionMap[0][centerGridX] = false;
+
+    // Create minimal REST room object
+    this.currentRoom = {
+      collisionMap: collisionMap,
+      exits: { north: true, south: false, east: false, west: false },
+      enemies: [],
+      backgroundObjects: []
+    };
+
+    // Set player collision map
+    this.player.setCollisionMap(collisionMap);
+
     this.ingredients = [];
     this.items = [];
     this.placedTraps = [];
@@ -1067,6 +1145,26 @@ class Game {
     } else if (state === GAME_STATES.GAME_OVER) {
       this.updateGameOverState(deltaTime);
     }
+
+    // Track player inactivity for WASD blinking (REST and EXPLORE states only)
+    if ((state === GAME_STATES.REST || state === GAME_STATES.EXPLORE) && this.player) {
+      const isPlayerMoving = Math.abs(this.player.velocity.vx) > 1 || Math.abs(this.player.velocity.vy) > 1;
+
+      if (isPlayerMoving) {
+        this.inactivityTimer = 0; // Reset timer when moving
+      } else {
+        this.inactivityTimer += deltaTime; // Accumulate inactivity time
+      }
+
+      // Update blink animation when inactive
+      if (this.inactivityTimer >= this.INACTIVITY_THRESHOLD) {
+        this.wasdBlinkTimer += deltaTime;
+        if (this.wasdBlinkTimer >= this.WASD_BLINK_INTERVAL) {
+          this.wasdBlinkState = !this.wasdBlinkState;
+          this.wasdBlinkTimer = 0;
+        }
+      }
+    }
   }
 
   updateTitleState(deltaTime) {
@@ -1074,11 +1172,86 @@ class Game {
     this.titleAnimationTime += deltaTime;
   }
 
-  updateRestState(deltaTime) {
-    if (!this.player) return;
+  // Shared particle and debris updates for all game states
+  updateSharedGameElements(deltaTime) {
+    // Update particles (dodge trails, explosions, embers, etc.)
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const particle = this.particles[i];
 
-    // Update player movement (locked when menu is open)
-    if (!this.menuOpen) {
+      if (particle.update) {
+        particle.update(deltaTime);
+        if (!particle.alive) {
+          this.physicsSystem.removeEntity(particle);
+          this.particles.splice(i, 1);
+        }
+      } else {
+        // Simple particle objects
+        particle.life -= deltaTime;
+        particle.x += particle.vx * deltaTime;
+        particle.y += particle.vy * deltaTime;
+
+        // Embers can burn player/enemies on contact (only if alpha > 50%)
+        if (particle.isEmber && this.player) {
+          const alpha = Math.max(0, particle.life / particle.maxLife);
+
+          // Only cause damage if ember is still hot (alpha > 50%)
+          if (alpha > 0.5) {
+            const EMBER_RADIUS = GRID.CELL_SIZE;
+            const EMBER_BURN_CHANCE = 0.03;
+
+            const pdx = this.player.position.x + GRID.CELL_SIZE / 2 - particle.x;
+            const pdy = this.player.position.y + GRID.CELL_SIZE / 2 - particle.y;
+            if (Math.sqrt(pdx * pdx + pdy * pdy) < EMBER_RADIUS && Math.random() < EMBER_BURN_CHANCE) {
+              this.player.applyBurn(2.0);
+            }
+
+            if (this.currentRoom && this.currentRoom.enemies) {
+              for (const enemy of this.currentRoom.enemies) {
+                const edx = enemy.position.x + GRID.CELL_SIZE / 2 - particle.x;
+                const edy = enemy.position.y + GRID.CELL_SIZE / 2 - particle.y;
+                if (Math.sqrt(edx * edx + edy * edy) < EMBER_RADIUS && Math.random() < EMBER_BURN_CHANCE) {
+                  enemy.applyStatusEffect('burn', 2.0);
+                }
+              }
+            }
+          }
+        }
+
+        if (particle.life <= 0) {
+          this.particles.splice(i, 1);
+        }
+      }
+    }
+
+    // Update debris physics
+    if (this.debris.length > 0 && this.player) {
+      const majorObjects = [this.player];
+      if (this.currentRoom && this.currentRoom.enemies) {
+        majorObjects.push(...this.currentRoom.enemies);
+      }
+      this.physicsSystem.updateDebris(this.debris.filter(d => d), majorObjects.filter(o => o));
+    }
+  }
+
+  // Shared player mechanics for both REST and EXPLORE modes
+  updatePlayerMechanics(deltaTime) {
+    if (!this.player) return null;
+
+    // Handle dodge rolling (continuous direction updates, supports diagonals and curving)
+    const dodgeDirection = this.getDodgeRollDirection();
+    if (dodgeDirection.x !== 0 || dodgeDirection.y !== 0) {
+      // Arrow keys pressed - start or update dodge roll direction
+      if (!this.player.dodgeRoll.active && this.player.dodgeRoll.cooldownTimer <= 0) {
+        // Start new dodge roll
+        this.player.startDodgeRoll(dodgeDirection);
+      } else if (this.player.dodgeRoll.active) {
+        // Update direction during active roll (allows curving)
+        this.player.dodgeRoll.direction = dodgeDirection;
+      }
+    }
+
+    // Update player movement (locked when menu is open or during dodge roll)
+    if (!this.menuOpen && !this.player.dodgeRoll.active) {
       // Lock facing for non-bow weapons during attack; allow aiming while charging bow
       const lockFacing = this.keys.space && this.player.heldItem && this.player.heldItem.data.weaponType !== 'BOW';
       this.player.updateInput({
@@ -1088,7 +1261,7 @@ class Game {
         right: this.keys.d
       }, lockFacing);
     } else {
-      // Stop player movement when menu is open
+      // Stop player movement when menu is open or dodge rolling
       this.player.updateInput({
         up: false,
         down: false,
@@ -1097,19 +1270,39 @@ class Game {
       });
     }
 
-    // Update player state (i-frames, etc)
-    this.player.update(deltaTime);
+    // Update player state (i-frames, dodge roll, wet, burn DoT, etc)
+    const playerUpdateResult = this.player.update(deltaTime);
+
+    // Handle burn DoT damage
+    let burnKilledPlayer = false;
+    if (playerUpdateResult?.burnDamage) {
+      const burnDead = this.player.takeDamage(playerUpdateResult.burnDamage, {
+        isBullet: false,
+        element: 'burn'
+      });
+      if (burnDead === true) {
+        burnKilledPlayer = true;
+      }
+    }
+
+    // Emit dodge roll trail particles
+    if (this.player.dodgeRoll.active) {
+      const trail = createDodgeTrail(
+        this.player.position.x + this.player.width / 2,
+        this.player.position.y + this.player.height / 2,
+        this.player.color
+      );
+      this.particles.push(trail);
+      this.physicsSystem.addEntity(trail);
+    }
 
     // Update pickup message timer
     if (this.pickupMessageTimer > 0) {
       this.pickupMessageTimer -= deltaTime;
       if (this.pickupMessageTimer <= 0) {
-        // Show next message in queue if any
         this.showNextPickupMessage();
       }
     }
-
-    this.physicsSystem.update(deltaTime, this.currentRoom ? this.currentRoom.backgroundObjects : []);
 
     // Update held item cooldown and check for windup completion
     if (this.player.heldItem && this.player.heldItem.update) {
@@ -1118,6 +1311,21 @@ class Game {
         this.combatSystem.createAttack(windupAttack);
       }
     }
+
+    return { burnKilledPlayer };
+  }
+
+  updateRestState(deltaTime) {
+    if (!this.player) return;
+
+    // Update all shared player mechanics
+    this.updatePlayerMechanics(deltaTime);
+
+    // Update shared game elements (particles, debris, etc.)
+    this.updateSharedGameElements(deltaTime);
+
+    // Update physics system
+    this.physicsSystem.update(deltaTime, this.currentRoom ? this.currentRoom.backgroundObjects : []);
 
     // Update combat system (for weapon previews/attacks in rest mode)
     this.combatSystem.update(deltaTime, this.player, [], []);
@@ -1179,47 +1387,9 @@ class Game {
       this.previewBlinkState = !this.previewBlinkState;
     }
 
-    // Update pickup message timer
-    if (this.pickupMessageTimer > 0) {
-      this.pickupMessageTimer -= deltaTime;
-      if (this.pickupMessageTimer <= 0) {
-        // Show next message in queue if any
-        this.showNextPickupMessage();
-      }
-    }
-
-    // Update player movement first (before auto-attack)
-    if (!this.menuOpen) {
-      // Lock facing for non-bow weapons during attack; allow aiming while charging bow
-      const lockFacing = this.keys.space && this.player.heldItem && this.player.heldItem.data.weaponType !== 'BOW';
-      this.player.updateInput({
-        up: this.keys.w,
-        down: this.keys.s,
-        left: this.keys.a,
-        right: this.keys.d
-      }, lockFacing); // Lock facing during auto-attack for consistent aim (but not for bows)
-    } else {
-      // Stop player movement when menu is open
-      this.player.updateInput({
-        up: false,
-        down: false,
-        left: false,
-        right: false
-      });
-    }
-
-    // Update player state (i-frames, wet, burn DoT, etc)
-    const playerUpdateResult = this.player.update(deltaTime);
-    let burnKilledPlayer = false;
-    if (playerUpdateResult?.burnDamage) {
-      const burnDead = this.player.takeDamage(playerUpdateResult.burnDamage, {
-        isBullet: false,
-        element: 'burn'
-      });
-      if (burnDead === true) {
-        burnKilledPlayer = true;
-      }
-    }
+    // Update all shared player mechanics
+    const playerMechanicsResult = this.updatePlayerMechanics(deltaTime);
+    const burnKilledPlayer = playerMechanicsResult?.burnKilledPlayer || false;
 
     // Tick room-entry detection grace period
     if (this.roomEntryGraceTimer > 0) {
@@ -1738,48 +1908,8 @@ class Game {
     this.backgroundObjects = this.currentRoom.backgroundObjects; // Update local reference
     this.renderer.markBackgroundDirty();
 
-    // Update simple particles (embers, clouds, etc.)
-    for (let i = this.particles.length - 1; i >= 0; i--) {
-      const particle = this.particles[i];
-
-      // Update particle if it has an update method (Particle class instances)
-      if (particle.update) {
-        particle.update(deltaTime);
-        if (!particle.alive) {
-          this.physicsSystem.removeEntity(particle);
-          this.particles.splice(i, 1);
-        }
-      } else {
-        // Simple particle objects (embers, clouds)
-        particle.life -= deltaTime;
-        particle.x += particle.vx * deltaTime;
-        particle.y += particle.vy * deltaTime;
-
-        // Embers have a small chance to burn the player or enemies on contact
-        if (particle.isEmber) {
-          const EMBER_RADIUS = GRID.CELL_SIZE;
-          const EMBER_BURN_CHANCE = 0.03; // 3% per frame — low but noticeable over time
-
-          const pdx = this.player.position.x + GRID.CELL_SIZE / 2 - particle.x;
-          const pdy = this.player.position.y + GRID.CELL_SIZE / 2 - particle.y;
-          if (Math.sqrt(pdx * pdx + pdy * pdy) < EMBER_RADIUS && Math.random() < EMBER_BURN_CHANCE) {
-            this.player.applyBurn(2.0);
-          }
-
-          for (const enemy of this.currentRoom.enemies) {
-            const edx = enemy.position.x + GRID.CELL_SIZE / 2 - particle.x;
-            const edy = enemy.position.y + GRID.CELL_SIZE / 2 - particle.y;
-            if (Math.sqrt(edx * edx + edy * edy) < EMBER_RADIUS && Math.random() < EMBER_BURN_CHANCE) {
-              enemy.applyStatusEffect('burn', 2.0);
-            }
-          }
-        }
-
-        if (particle.life <= 0) {
-          this.particles.splice(i, 1);
-        }
-      }
-    }
+    // Update shared game elements (particles, debris, etc.)
+    this.updateSharedGameElements(deltaTime);
 
     // Update ingredient attraction
     for (let i = this.ingredients.length - 1; i >= 0; i--) {
@@ -1829,19 +1959,6 @@ class Game {
       enemy.steamClouds = this.steamClouds;
     }
 
-    // Update debris physics (can be pushed by player and enemies)
-    if (this.debris.length > 0) {
-      const majorObjects = [this.player, ...this.currentRoom.enemies];
-      this.physicsSystem.updateDebris(this.debris, majorObjects);
-    }
-
-    // Update debris entities
-    for (const piece of this.debris) {
-      if (piece.update) {
-        piece.update(deltaTime);
-      }
-    }
-
     // Check if room cleared
     if (this.currentRoom.enemies.length === 0) {
       this.currentRoom.exits.north = true;
@@ -1856,8 +1973,8 @@ class Game {
     const centerX = Math.floor(GRID.COLS / 2);
     const centerY = Math.floor(GRID.ROWS / 2);
 
-    // North exit check
-    if (gridPos.y <= 1 && Math.abs(gridPos.x - centerX) <= 1 && this.currentRoom.exits.north) {
+    // North exit check (warp zone is at rows 1-2, below the wall)
+    if (gridPos.y <= 2 && Math.abs(gridPos.x - centerX) <= 1 && this.currentRoom.exits.north) {
       this.enterExploreState('north'); // Entering from North → spawn at South
     }
     // South exit check
@@ -2800,10 +2917,10 @@ class Game {
 
   bankLoot() {
     // Player successfully returned to REST with loot
-    // ADD EXPLORE inventory to safe REST inventory (merge, not replace)
+    // REPLACE restInventory with player's current inventory (which includes everything from REST + new loot)
     // Save all quick slots and active index
     if (this.player) {
-      this.restInventory.push(...this.player.inventory);
+      this.restInventory = [...this.player.inventory];
       this.restQuickSlots = [...this.player.quickSlots];
       this.restActiveSlotIndex = this.player.activeSlotIndex;
       console.log('[bankLoot] Saved quick slots:', this.restQuickSlots);
@@ -2879,6 +2996,109 @@ class Game {
     // State 3: Ready to attack - indicator disappears
   }
 
+  renderArrowKeyIndicators(baseY, centerX) {
+    // Render arrow keys with WASD-style brackets, grouped with WASD
+    // Position: Above WASD, same visual style
+
+    const isInactive = this.inactivityTimer >= this.INACTIVITY_THRESHOLD;
+    const blinkWhite = isInactive && this.wasdBlinkState;
+    const inactiveColor = blinkWhite ? '#FFFFFF' : COLORS.TEXT;
+
+    // Check if on cooldown for color theming
+    const onCooldown = this.player && this.player.dodgeRoll.cooldownTimer > 0;
+    const cooldownColor = '#ff6666'; // Dim red when on cooldown
+    const readyColor = COLORS.ITEM; // Bright yellow when ready
+
+    const upColor = this.arrowKeys.ArrowUp ? readyColor : (onCooldown ? cooldownColor : (isInactive ? inactiveColor : COLORS.TEXT));
+    const downColor = this.arrowKeys.ArrowDown ? readyColor : (onCooldown ? cooldownColor : (isInactive ? inactiveColor : COLORS.TEXT));
+    const leftColor = this.arrowKeys.ArrowLeft ? readyColor : (onCooldown ? cooldownColor : (isInactive ? inactiveColor : COLORS.TEXT));
+    const rightColor = this.arrowKeys.ArrowRight ? readyColor : (onCooldown ? cooldownColor : (isInactive ? inactiveColor : COLORS.TEXT));
+
+    // Arrow UP (directly above WASD W key)
+    const arrowTopY = Math.floor(baseY / GRID.CELL_SIZE) - 1;
+    this.renderer.drawCell(
+      Math.floor(centerX / GRID.CELL_SIZE) - 1,
+      arrowTopY,
+      '[',
+      COLORS.BORDER
+    );
+    this.renderer.drawCell(
+      Math.floor(centerX / GRID.CELL_SIZE),
+      arrowTopY,
+      '↑',
+      upColor
+    );
+    this.renderer.drawCell(
+      Math.floor(centerX / GRID.CELL_SIZE) + 1,
+      arrowTopY,
+      ']',
+      COLORS.BORDER
+    );
+
+    // Arrow DOWN, LEFT, RIGHT (bottom row, below WASD S key)
+    const arrowBottomY = Math.floor(baseY / GRID.CELL_SIZE) + 2;
+
+    // LEFT
+    this.renderer.drawCell(
+      Math.floor(centerX / GRID.CELL_SIZE) - 5,
+      arrowBottomY,
+      '[',
+      COLORS.BORDER
+    );
+    this.renderer.drawCell(
+      Math.floor(centerX / GRID.CELL_SIZE) - 4,
+      arrowBottomY,
+      '←',
+      leftColor
+    );
+    this.renderer.drawCell(
+      Math.floor(centerX / GRID.CELL_SIZE) - 3,
+      arrowBottomY,
+      ']',
+      COLORS.BORDER
+    );
+
+    // DOWN
+    this.renderer.drawCell(
+      Math.floor(centerX / GRID.CELL_SIZE) - 1,
+      arrowBottomY,
+      '[',
+      COLORS.BORDER
+    );
+    this.renderer.drawCell(
+      Math.floor(centerX / GRID.CELL_SIZE),
+      arrowBottomY,
+      '↓',
+      downColor
+    );
+    this.renderer.drawCell(
+      Math.floor(centerX / GRID.CELL_SIZE) + 1,
+      arrowBottomY,
+      ']',
+      COLORS.BORDER
+    );
+
+    // RIGHT
+    this.renderer.drawCell(
+      Math.floor(centerX / GRID.CELL_SIZE) + 3,
+      arrowBottomY,
+      '[',
+      COLORS.BORDER
+    );
+    this.renderer.drawCell(
+      Math.floor(centerX / GRID.CELL_SIZE) + 4,
+      arrowBottomY,
+      '→',
+      rightColor
+    );
+    this.renderer.drawCell(
+      Math.floor(centerX / GRID.CELL_SIZE) + 5,
+      arrowBottomY,
+      ']',
+      COLORS.BORDER
+    );
+  }
+
   renderTitleState() {
     // Render background (only if dirty)
     if (this.renderer.backgroundDirty) {
@@ -2895,8 +3115,8 @@ class Game {
 
     // Define the ASCII art title screen (60 chars wide, 30 rows)
     const titleScreen = [
-      ";++xx+:....:::......:$$$&$&$$Xx+:;;;+XXXX$&&&$XXXx+$XXX...",
-      "+XXXXXxxXXXx:::....+$$$&+............................+&...",
+      ";++xx+:....:::......:$$$&$&$$Xx+:;;;+XXXX$&&&$XXXx+$$XX...",
+      "+XXXXXxxXXXx:::....+$$$&+............................&&...",
       ":X+.............++&&...........&&&&&$....................+",
       "..++++++++++++++&&.:.......................................",
       ".;......+++++..+&&.........................................",
@@ -2906,21 +3126,21 @@ class Game {
       ".+xx.::::..+++&..;&&&&&&&$xx::::&&&&&&&&&&&&&&&&&&x.x.....",
       ".+::::::;xxxx::&&&&&&$$&&$......&&&&&&$$&&&&&&&&&X........",
       ".:x:XX;XXX+Xxx::&&&&&&&&&.&&&&......$X&&&&&&x:............",
-      ":::::::xxxx;xx:.$:;;&$...:&&:&&&.....:...........$$$......",
-      ":xxXXxx::::x+........:...&&::&&:.:.&::.:x;::X+...&&.....",
-      ";X:.:::++++xx::...::::;:..$&.&&.....;...+&&&&&&&;+......",
-      ":xx:::+xxXxx++++&&&&$............:.x.x&&$$&&+&&+........",
+      ":::::::xxxx;xx::$:;;&$...:&&:&&&.....:...........$$$......",
+      ":xxXXxx::::+++::&....::...&&::&&:.:.:::.:x;::X+.;;&&.....",
+      ";X:.:::++++xxxXX&.::::;:..$&.&&.....;...+&&&&&&&;+......",
+      ":xx:::+xxXxx++++xxx&$............:.x.x&&$$&&+&&+........",
       "xxxxxx++xx:+Xxxxx+X&&$XX.;..&..&.$..;:.+:$.&.X:;.......",
       ":::+++;:+::::;+++X&+:&$.$$$.$&$.&&&$.&&+;..&&+.X:........",
       ";;;X::x:++:::x:.:::++++.&&..+&&.+&&..:.....:;&.+x.......",
       ":;:::::::::::...;;;;xxxxx;;;;;;;;;::::::&&&.:X::........",
       ":XXXxxx+++;;+++++x+xx.:xxx&&$:&&$::&&..&&&:.:.:+&.........",
-      ".;;xxxXXX+++++XXXXXXxx$..+X$&&$&&&$&&:::...::xx&$........",
+      ".;;xxxXXX+++++XXXXXXx$$..+X$&&$&&&$&&:::...::xx&$........",
       "xxxXXXx:+++xxxxXXXX+$&&::...............::x&X&XX..........",
       "::::::::::::..:XXXX;xx$$&&.....$$...:;&&&x&&X&::..........",
-      ":XXXx;::xxxxx+X.::.::::::;$$&&&&&&&&&$$..................",
+      ":XXXx;::xxxxx+X.::.::::::;$$&&&&&&&&&$$;;;...............",
       "XXx+XXXX+:::::;::::;;;:xxXXXx:+++xxxxXXXx:+++xxx.........",
-      ";+;;;;+;:.::.:Xxxx::xxXXXx:+++xxxxxXXXx:+++xxx............",
+      ";+;;;;+;:.::.:Xxxx::xxXXXx:+++xxxxxXXXx:+++xxx;;..........",
       "                                                            ",
       "                                                            ",
       "                                                            ",
@@ -3171,18 +3391,29 @@ class Game {
     // Render foreground
     this.renderer.clearForeground();
 
-    // Draw semi-transparent warp zone indicator for north exit (always open in REST)
+    // Draw prominent warp zone indicator for north exit (below the wall)
     const centerX = Math.floor(GRID.COLS / 2);
-    const warpZoneColor = 'rgba(100, 150, 255, 0.15)'; // Light blue, semi-transparent
+    const warpZoneColor = 'rgba(100, 200, 255, 0.5)'; // Brighter blue, more opaque
 
     this.renderer.drawRect(
       (centerX - 1) * GRID.CELL_SIZE,
-      0 * GRID.CELL_SIZE,
+      1 * GRID.CELL_SIZE,
       3 * GRID.CELL_SIZE,
       2 * GRID.CELL_SIZE,
       warpZoneColor,
       true
     );
+
+    // Add decorative border arrows pointing up to make exit more obvious
+    const arrowColor = 'rgba(150, 220, 255, 0.8)';
+    for (let i = -1; i <= 1; i++) {
+      this.renderer.drawEntity(
+        (centerX + i) * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
+        1.5 * GRID.CELL_SIZE,
+        '^',
+        arrowColor
+      );
+    }
 
     // Highlight the nearest interactive slot only (prevents multi-slot highlighting)
     const nearestSlot = this.getNearestInteractiveSlot();
@@ -3229,15 +3460,40 @@ class Game {
       );
     }
 
-    // Draw player (with i-frame blinking)
-    if (this.player.shouldRenderVisible()) {
-      this.renderer.drawEntity(
-        this.player.position.x + GRID.CELL_SIZE / 2,
-        this.player.position.y + GRID.CELL_SIZE / 2,
-        this.player.char,
-        this.player.color
-      );
+    // Draw particles (dodge trails, explosions, etc.)
+    for (const particle of this.particles) {
+      if (particle.getAlpha) {
+        // Particle class instance
+        const alpha = particle.getAlpha();
+        this.renderer.drawTextWithAlpha(
+          particle.position.x + GRID.CELL_SIZE / 2,
+          particle.position.y + GRID.CELL_SIZE / 2,
+          particle.char,
+          particle.color,
+          alpha
+        );
+      } else {
+        // Simple particle object
+        const alpha = Math.max(0, particle.life / particle.maxLife);
+        this.renderer.drawTextWithAlpha(
+          particle.x,
+          particle.y,
+          particle.char,
+          particle.color,
+          alpha
+        );
+      }
     }
+
+    // Draw player (with i-frame alpha fade)
+    const playerAlpha = this.player.getVisibilityAlpha();
+    this.renderer.drawTextWithAlpha(
+      this.player.position.x + GRID.CELL_SIZE / 2,
+      this.player.position.y + GRID.CELL_SIZE / 2,
+      this.player.char,
+      this.player.color,
+      playerAlpha
+    );
 
     // Draw bow charge indicator (shared between REST and EXPLORE states)
     this.renderBowChargeIndicator();
@@ -3250,15 +3506,26 @@ class Game {
       COLORS.TEXT
     );
 
-    // Draw WASD keyboard indicator
+    // Draw arrow key indicators (dodge roll) - positioned above WASD
     const wasdY = GRID.HEIGHT - GRID.CELL_SIZE * 6;
     const wasdCenterX = GRID.WIDTH / 2;
+    this.renderArrowKeyIndicators(wasdY, wasdCenterX);
 
-    // Determine colors based on key state (highlight when pressed)
-    const wColor = this.keys.w ? COLORS.ITEM : COLORS.TEXT;
-    const aColor = this.keys.a ? COLORS.ITEM : COLORS.TEXT;
-    const sColor = this.keys.s ? COLORS.ITEM : COLORS.TEXT;
-    const dColor = this.keys.d ? COLORS.ITEM : COLORS.TEXT;
+    // Draw WASD keyboard indicator
+
+    // Determine colors based on key state (highlight when pressed) and inactivity blinking
+    const isInactive = this.inactivityTimer >= this.INACTIVITY_THRESHOLD;
+    const blinkWhite = isInactive && this.wasdBlinkState;
+    const inactiveColor = blinkWhite ? '#FFFFFF' : COLORS.TEXT;
+
+    const wColor = this.keys.w ? COLORS.ITEM : (isInactive ? inactiveColor : COLORS.TEXT);
+    const aColor = this.keys.a ? COLORS.ITEM : (isInactive ? inactiveColor : COLORS.TEXT);
+    const sColor = this.keys.s ? COLORS.ITEM : (isInactive ? inactiveColor : COLORS.TEXT);
+    const dColor = this.keys.d ? COLORS.ITEM : (isInactive ? inactiveColor : COLORS.TEXT);
+
+    // Temporarily use lighter font for WASD keys
+    this.renderer.bgCtx.save();
+    this.renderer.bgCtx.font = `${GRID.CELL_SIZE}px "Courier New", monospace`; // Remove bold
 
     // W key (top)
     this.renderer.drawCell(
@@ -3280,30 +3547,30 @@ class Game {
       COLORS.BORDER
     );
 
-    // A S D keys (bottom row)
+    // A S D keys (bottom row) - increased spacing for visibility
     const bottomRowY = Math.floor(wasdY / GRID.CELL_SIZE) + 1;
 
-    // A key
+    // A key (left)
     this.renderer.drawCell(
-      Math.floor(wasdCenterX / GRID.CELL_SIZE) - 3,
+      Math.floor(wasdCenterX / GRID.CELL_SIZE) - 5,
       bottomRowY,
       '[',
       COLORS.BORDER
     );
     this.renderer.drawCell(
-      Math.floor(wasdCenterX / GRID.CELL_SIZE) - 2,
+      Math.floor(wasdCenterX / GRID.CELL_SIZE) - 4,
       bottomRowY,
       'A',
       aColor
     );
     this.renderer.drawCell(
-      Math.floor(wasdCenterX / GRID.CELL_SIZE) - 1,
+      Math.floor(wasdCenterX / GRID.CELL_SIZE) - 3,
       bottomRowY,
       ']',
       COLORS.BORDER
     );
 
-    // S key
+    // S key (center)
     this.renderer.drawCell(
       Math.floor(wasdCenterX / GRID.CELL_SIZE) - 1,
       bottomRowY,
@@ -3323,25 +3590,28 @@ class Game {
       COLORS.BORDER
     );
 
-    // D key
+    // D key (right)
     this.renderer.drawCell(
-      Math.floor(wasdCenterX / GRID.CELL_SIZE) + 1,
+      Math.floor(wasdCenterX / GRID.CELL_SIZE) + 3,
       bottomRowY,
       '[',
       COLORS.BORDER
     );
     this.renderer.drawCell(
-      Math.floor(wasdCenterX / GRID.CELL_SIZE) + 2,
+      Math.floor(wasdCenterX / GRID.CELL_SIZE) + 4,
       bottomRowY,
       'D',
       dColor
     );
     this.renderer.drawCell(
-      Math.floor(wasdCenterX / GRID.CELL_SIZE) + 3,
+      Math.floor(wasdCenterX / GRID.CELL_SIZE) + 5,
       bottomRowY,
       ']',
       COLORS.BORDER
     );
+
+    // Restore original bold font
+    this.renderer.bgCtx.restore();
 
     // Draw help text at bottom with key highlighting
     this.renderer.fgCtx.save();
@@ -3428,6 +3698,16 @@ class Game {
           if (this.currentRoom.collisionMap[y][x]) {
             this.renderer.drawCell(x, y, '█', '#444444');
           }
+        }
+      }
+
+      // Draw recipe sign FIRST (under all other background objects)
+      if (this.currentRoom.recipeSign) {
+        for (const char of this.currentRoom.recipeSign.characters) {
+          const x = char.x + GRID.CELL_SIZE / 2;
+          const y = char.y + GRID.CELL_SIZE / 2;
+          this.renderer.bgCtx.fillStyle = char.color;
+          this.renderer.bgCtx.fillText(char.char, x, y);
         }
       }
 
@@ -3861,15 +4141,15 @@ class Game {
       }
     }
 
-    // Draw player (with i-frame blinking)
-    if (this.player.shouldRenderVisible()) {
-      this.renderer.drawEntity(
-        this.player.position.x + GRID.CELL_SIZE / 2,
-        this.player.position.y + GRID.CELL_SIZE / 2,
-        this.player.char,
-        this.player.color
-      );
-    }
+    // Draw player (with i-frame alpha fade)
+    const playerAlpha = this.player.getVisibilityAlpha();
+    this.renderer.drawTextWithAlpha(
+      this.player.position.x + GRID.CELL_SIZE / 2,
+      this.player.position.y + GRID.CELL_SIZE / 2,
+      this.player.char,
+      this.player.color,
+      playerAlpha
+    );
 
     // Draw bow charge indicator (shared between REST and EXPLORE states)
     this.renderBowChargeIndicator();

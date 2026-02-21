@@ -166,3 +166,26 @@ export function createChaff(x, y, count = 8) {
 
   return particles;
 }
+
+// Factory function to create dodge roll trail particles
+export function createDodgeTrail(x, y, color = COLORS.PLAYER) {
+  const chars = ['-', '=', '~', '.'];
+  const char = chars[Math.floor(Math.random() * chars.length)];
+
+  // No velocity - stationary trail
+  const vx = 0;
+  const vy = 0;
+
+  // Quick fade lifetime
+  const lifetime = 0.3;
+
+  // Random slight offset within cell for natural scatter
+  const ox = (Math.random() - 0.5) * GRID.CELL_SIZE * 0.4;
+  const oy = (Math.random() - 0.5) * GRID.CELL_SIZE * 0.4;
+
+  const p = new Particle(x + ox, y + oy, char, color, { vx, vy }, lifetime);
+  p.decelerationRate = 1.0; // No deceleration (already stationary)
+  p.boundToGrid = false;
+
+  return p;
+}
