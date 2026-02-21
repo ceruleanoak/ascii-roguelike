@@ -3,9 +3,15 @@ export class PersistenceSystem {
     this.storageKey = 'ascii-roguelike-save';
   }
 
-  saveRestState(craftingSystem) {
+  saveRestState(craftingSystem, characterData = null) {
     const state = {
       crafting: craftingSystem.getState(),
+      // Character system (persists across deaths)
+      characters: characterData ? {
+        unlocked: characterData.unlocked,
+        active: characterData.active,
+        queue: characterData.queue
+      } : null,
       // Depth is NOT saved - always starts at 0 on page refresh
       // Do not persist itemChest, armor, or consumables for true roguelike
       timestamp: Date.now()

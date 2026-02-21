@@ -14,7 +14,10 @@ import { Item } from './entities/Item.js';
 import { BackgroundObject } from './entities/BackgroundObject.js';
 import { createExplosion, createWetDrop, createActivationBurst, createSteamPuff, createChaff, createDodgeTrail } from './entities/Particle.js';
 import { createDebris } from './entities/Debris.js';
+import { Captive } from './entities/Captive.js';
+import { CharacterNPC } from './entities/CharacterNPC.js';
 import { isIngredient, isItem, ITEM_TYPES, generateEnemyDrops } from './data/items.js';
+import { CHARACTER_TYPES } from './data/characters.js';
 import { GAME_STATES, GRID, CRAFTING, EQUIPMENT, COLORS, INTERACTION_RANGE, OBJECT_ANIMATIONS, ROOM_TYPES } from './game/GameConfig.js';
 
 class Game {
@@ -97,6 +100,16 @@ class Game {
     this.pickupMessageTimer = 0;
     this.pickupMessageQueue = []; // Queue for multiple pickups
     this.PICKUP_MESSAGE_DURATION = 2.0; // seconds
+
+    // Character system (captives and character types)
+    this.roomsClearedSinceRest = 0; // Track room clears for captive spawning
+    this.exitPathHistory = []; // Track exit letters chosen (future: for Week 4 secret patterns)
+    this.unlockedCharacters = ['default']; // All unlocked character types
+    this.activeCharacterType = 'default'; // Currently playing as this character
+    this.deadCharacters = []; // Characters that have died (can't be used again this run)
+    this.captiveQueue = ['red', 'cyan', 'yellow', 'gray']; // Order of captive unlocks
+    this.captives = []; // Active captives in current room
+    this.characterNPCs = []; // Character NPCs in REST mode
 
     // Input state
     this.keys = {
@@ -409,6 +422,17 @@ class Game {
   }
 
   loadGame() {
+    // Load persisted character data (unlocks persist across sessions)
+    const savedData = this.persistenceSystem.loadRestState();
+    if (savedData && savedData.characters) {
+      this.unlockedCharacters = savedData.characters.unlocked || ['default'];
+      this.activeCharacterType = savedData.characters.active || 'default';
+      this.deadCharacters = savedData.characters.dead || [];
+      this.captiveQueue = savedData.characters.queue || ['red', 'cyan', 'yellow', 'gray'];
+      console.log('[loadGame] Restored unlocked characters:', this.unlockedCharacters);
+      console.log('[loadGame] Dead characters:', this.deadCharacters);
+    }
+
     // Clear any persisted save on load - always start fresh on refresh
     this.persistenceSystem.clearSave();
 
@@ -429,10 +453,17 @@ class Game {
   }
 
   enterRestState() {
+    // Reset room progression tracking
+    this.roomsClearedSinceRest = 0;
+    // Note: exitPathHistory persists for future secret pattern tracking
+
     // Create player near north entrance
     const centerX = GRID.WIDTH / 2;
     const spawnY = GRID.CELL_SIZE * 3; // Near the north exit
     this.player = new Player(centerX, spawnY);
+
+    // Apply active character type
+    this.applyCharacterType(this.activeCharacterType);
 
     // Restore safe REST inventory and quick slots (not lost on death)
     this.player.inventory = [...this.restInventory];
@@ -491,6 +522,9 @@ class Game {
       this.restInventory = [...this.player.inventory];
     }
 
+    // Spawn character NPCs (other unlocked characters standing around)
+    this.spawnCharacterNPCs();
+
     // Reset physics
     this.physicsSystem.clear();
     this.physicsSystem.addEntity(this.player);
@@ -505,8 +539,14 @@ class Game {
   }
 
   saveGameState() {
-    // Save crafting state only, not equipment, inventories, or depth (true roguelike)
-    this.persistenceSystem.saveRestState(this.craftingSystem);
+    // Save crafting state and character data (true roguelike - persists across deaths)
+    const characterData = {
+      unlocked: this.unlockedCharacters,
+      active: this.activeCharacterType,
+      dead: this.deadCharacters,
+      queue: this.captiveQueue
+    };
+    this.persistenceSystem.saveRestState(this.craftingSystem, characterData);
   }
 
   applyEquipmentEffects() {
@@ -543,6 +583,156 @@ class Game {
 
     // Store equipped consumables for condition checking during gameplay
     this.player.equippedConsumables = [...this.equippedConsumables];
+  }
+
+  // Character system methods
+  applyCharacterType(type) {
+    const charData = CHARACTER_TYPES[type];
+    if (!charData) {
+      console.error(`Unknown character type: ${type}`);
+      return;
+    }
+
+    // Update player visual
+    this.player.color = charData.color;
+
+    // Update dodge roll properties
+    this.player.dodgeRoll.type = charData.rollType;
+    this.player.dodgeRoll.duration = charData.rollDuration;
+    this.player.dodgeRoll.cooldown = charData.rollCooldown;
+    this.player.dodgeRoll.speed = charData.rollSpeed;
+
+    // Apply weapon affinities (future: will affect combat calculations)
+    this.player.weaponAffinities = charData.weaponAffinities;
+
+    console.log(`Applied character type: ${type} (${charData.name})`);
+  }
+
+  spawnCharacterNPCs() {
+    // Clear existing NPCs
+    this.characterNPCs = [];
+
+    // Spawn NPC for each unlocked character (except active and dead ones)
+    const availableCharacters = this.unlockedCharacters.filter(
+      type => type !== this.activeCharacterType && !this.deadCharacters.includes(type)
+    );
+
+    // Position NPCs around the room
+    const centerX = GRID.WIDTH / 2;
+    const baseY = GRID.CELL_SIZE * 8; // Below the crafting area
+    const spacing = GRID.CELL_SIZE * 4;
+
+    availableCharacters.forEach((type, index) => {
+      const offsetX = (index - (availableCharacters.length - 1) / 2) * spacing;
+      const npc = new CharacterNPC(type, centerX + offsetX, baseY);
+      this.characterNPCs.push(npc);
+    });
+  }
+
+  swapWithCharacter(newType) {
+    if (newType === this.activeCharacterType) {
+      return; // Already this character
+    }
+
+    if (this.deadCharacters.includes(newType)) {
+      this.showPickupMessage('This character has already died');
+      return;
+    }
+
+    // Swap characters
+    this.activeCharacterType = newType;
+    this.applyCharacterType(newType);
+
+    // Respawn character NPCs with new active character excluded
+    this.spawnCharacterNPCs();
+
+    const charData = CHARACTER_TYPES[newType];
+    this.showPickupMessage(charData.name);
+  }
+
+  spawnCaptive(characterType) {
+    if (!this.currentRoom) return null;
+
+    // Find a safe spawn position (not too close to player, not in walls)
+    const centerX = GRID.WIDTH / 2;
+    const centerY = GRID.HEIGHT / 2;
+    let spawnX, spawnY;
+    let attempts = 0;
+    const maxAttempts = 50;
+
+    while (attempts < maxAttempts) {
+      // Random position in the center area of the room
+      spawnX = centerX + (Math.random() - 0.5) * GRID.WIDTH * 0.5;
+      spawnY = centerY + (Math.random() - 0.5) * GRID.HEIGHT * 0.5;
+
+      // Check if position is valid (not in wall, not too close to player)
+      const gridX = Math.floor(spawnX / GRID.CELL_SIZE);
+      const gridY = Math.floor(spawnY / GRID.CELL_SIZE);
+
+      if (gridX >= 0 && gridX < GRID.COLS && gridY >= 0 && gridY < GRID.ROWS) {
+        if (!this.currentRoom.collisionMap[gridY][gridX]) {
+          const distToPlayer = Math.hypot(
+            this.player.position.x - spawnX,
+            this.player.position.y - spawnY
+          );
+
+          if (distToPlayer > GRID.CELL_SIZE * 5) {
+            // Good position found
+            return new Captive(characterType, spawnX, spawnY);
+          }
+        }
+      }
+
+      attempts++;
+    }
+
+    // Fallback to center if no good position found
+    return new Captive(characterType, centerX, centerY);
+  }
+
+  checkCaptiveInteraction() {
+    if (!this.captives || this.captives.length === 0) return false;
+
+    for (const captive of this.captives) {
+      if (captive.freed) continue;
+
+      const dist = Math.hypot(
+        this.player.position.x - captive.position.x,
+        this.player.position.y - captive.position.y
+      );
+
+      if (dist < INTERACTION_RANGE * 2) { // Larger range for cage
+        if (!captive.cageDestroyed) {
+          // First interaction: destroy the cage (no message, just visual debris)
+          captive.cageDestroyed = true;
+
+          // Create cage debris (yellow fragments) - createDebris returns an array
+          const cageDebris = createDebris(
+            captive.position.x,
+            captive.position.y,
+            12, // 12 debris pieces
+            '#ffaa00' // Gold cage color
+          );
+          this.debris.push(...cageDebris);
+
+          // Prevent weapon attack
+          this.captiveInteractionThisFrame = true;
+          return true;
+        } else {
+          // Second interaction: recruit the character
+          captive.freed = true;
+          this.unlockedCharacters.push(captive.characterType);
+          const charData = CHARACTER_TYPES[captive.characterType];
+          this.showPickupMessage(`${charData.name} obtained`);
+          this.saveGameState(); // Save unlocked character
+
+          // Prevent weapon attack by clearing held item temporarily
+          this.captiveInteractionThisFrame = true;
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   updateConsumableWindups(deltaTime) {
@@ -1042,6 +1232,9 @@ class Game {
     this.player = new Player(startX, startY);
     this.player.setCollisionMap(this.currentRoom.collisionMap);
 
+    // Apply active character type
+    this.applyCharacterType(this.activeCharacterType);
+
     // Save room entry position for Rope consumable
     this.roomEntryX = startX;
     this.roomEntryY = startY;
@@ -1073,6 +1266,7 @@ class Game {
     this.steamClouds = []; // Clear steam clouds when entering new room
     this.debris = []; // Clear debris when entering new room
     this.particles = []; // Clear particles when entering new room
+    this.captives = []; // Clear captives when entering new room
 
     // Set enemy targets
     for (const enemy of this.currentRoom.enemies) {
@@ -1323,6 +1517,11 @@ class Game {
 
     // Update shared game elements (particles, debris, etc.)
     this.updateSharedGameElements(deltaTime);
+
+    // Update character NPCs (idle animations)
+    for (const npc of this.characterNPCs) {
+      npc.update(deltaTime);
+    }
 
     // Update physics system
     this.physicsSystem.update(deltaTime, this.currentRoom ? this.currentRoom.backgroundObjects : []);
@@ -1608,6 +1807,11 @@ class Game {
       this.currentRoom.enemies.push(...newEnemies);
     }
 
+    // Update captives (pulsing animation)
+    for (const captive of this.captives) {
+      captive.update(deltaTime);
+    }
+
     // Handle item pickup for item-using enemies
     for (const enemy of this.currentRoom.enemies) {
       if (enemy.itemUsage && enemy.itemUsage.canPickup) {
@@ -1782,13 +1986,53 @@ class Game {
           this.physicsSystem.addEntity(particle);
         }
 
-        console.log('⚰️  Transitioning to GAME OVER state...');
+        console.log('⚰️  Character died...');
 
-        // Clear combat system (projectiles, melee attacks, etc.) before transitioning
-        this.combatSystem.clear();
+        // Mark current character as dead
+        const diedCharacter = this.activeCharacterType;
+        if (!this.deadCharacters.includes(diedCharacter)) {
+          this.deadCharacters.push(diedCharacter);
+        }
 
-        this.stateMachine.transition(GAME_STATES.GAME_OVER);
-        return;
+        // Find next available living character
+        const livingCharacters = this.unlockedCharacters.filter(
+          type => !this.deadCharacters.includes(type)
+        );
+
+        if (livingCharacters.length > 0) {
+          // Show death message
+          const diedCharData = CHARACTER_TYPES[diedCharacter];
+          this.showPickupMessage(`${diedCharData.name} is lost`);
+
+          // Clear active items (lost with the dead character)
+          // Keep: itemChest, armorInventory, consumableInventory (REST storage persists)
+          this.restInventory = []; // Ingredient inventory
+          this.restQuickSlots = [null, null, null]; // Equipped weapons
+          this.restActiveSlotIndex = 0;
+          this.equippedArmor = null; // Active armor
+          this.equippedConsumables = [null, null]; // Active consumables
+
+          // Respawn as next character
+          const nextCharacter = livingCharacters[0];
+          this.activeCharacterType = nextCharacter;
+          console.log(`🔄 Respawning as ${CHARACTER_TYPES[nextCharacter].name}`);
+
+          // Clear combat system before transitioning
+          this.combatSystem.clear();
+
+          // Return to REST with new character
+          this.stateMachine.transition(GAME_STATES.REST);
+          return;
+        } else {
+          // All characters dead - game over
+          console.log('💀 All characters have died - GAME OVER');
+
+          // Clear combat system before transitioning
+          this.combatSystem.clear();
+
+          this.stateMachine.transition(GAME_STATES.GAME_OVER);
+          return;
+        }
       }
     }
 
@@ -1961,6 +2205,22 @@ class Game {
 
     // Check if room cleared
     if (this.currentRoom.enemies.length === 0) {
+      // Only process room clear once
+      if (!this.currentRoom.cleared) {
+        this.currentRoom.cleared = true;
+        this.roomsClearedSinceRest++;
+
+        // Check if we should spawn a captive (every 5 rooms)
+        if (this.roomsClearedSinceRest % 5 === 0 && this.captiveQueue.length > 0) {
+          const nextCaptiveType = this.captiveQueue.shift();
+          const captive = this.spawnCaptive(nextCaptiveType);
+          if (captive) {
+            this.captives.push(captive);
+            console.log(`Spawned ${nextCaptiveType} captive! (${this.roomsClearedSinceRest} rooms cleared)`);
+          }
+        }
+      }
+
       this.currentRoom.exits.north = true;
       this.currentRoom.exits.east = true;
       this.currentRoom.exits.west = true;
@@ -2027,6 +2287,10 @@ class Game {
         this.consumableInventory = [];
         this.equippedArmor = null;
         this.equippedConsumables = [null, null];
+
+        // Reset character lives (all characters revive for new run)
+        this.deadCharacters = [];
+        this.activeCharacterType = 'default';
 
         // Clear crafting slots and wipe localStorage save
         this.craftingSystem.setState({ leftSlot: null, rightSlot: null, centerSlot: null });
@@ -2143,12 +2407,39 @@ class Game {
         }
       }
 
-      // Not near any interactive slot - allow weapon preview/attack
+      // Check for character NPC interaction (swap characters)
+      let nearbyNPC = null;
+      for (const npc of this.characterNPCs) {
+        const dist = Math.hypot(
+          this.player.position.x - npc.position.x,
+          this.player.position.y - npc.position.y
+        );
+        if (dist < INTERACTION_RANGE) {
+          nearbyNPC = npc;
+          break;
+        }
+      }
+
+      if (nearbyNPC) {
+        // Swap with this character
+        this.swapWithCharacter(nearbyNPC.characterType);
+        return;
+      }
+
+      // Not near any interactive slot or NPC - allow weapon preview/attack
       if (this.player.heldItem) {
         const attack = this.player.useHeldItem();
         if (attack) this.combatSystem.createAttack(attack);
       }
     } else if (state === GAME_STATES.EXPLORE) {
+      // Reset captive interaction flag
+      this.captiveInteractionThisFrame = false;
+
+      // Captive interaction takes highest priority (prevents all other actions)
+      if (this.checkCaptiveInteraction()) {
+        return; // Exit immediately, no weapon attack or other actions
+      }
+
       // Placed-trap pickup always takes priority — check before weapon use
       const nearbyPlacedTrap = this.placedTraps.some(entry => {
         const dx = entry.item.position.x - this.player.position.x;
@@ -2157,7 +2448,7 @@ class Game {
       });
       if (nearbyPlacedTrap) {
         this.tryPickupItem();
-      } else if (this.player.heldItem) {
+      } else if (this.player.heldItem && !this.captiveInteractionThisFrame) {
         // Attack — melee AoE handles object damage directly via CombatSystem
         const attack = this.player.useHeldItem();
         if (attack) this.combatSystem.createAttack(attack);
@@ -3485,6 +3776,14 @@ class Game {
       }
     }
 
+    // Draw character NPCs (other unlocked characters)
+    for (const npc of this.characterNPCs) {
+      npc.render(this.renderer.fgCtx, (gx, gy) => ({
+        x: gx * GRID.CELL_SIZE,
+        y: gy * GRID.CELL_SIZE
+      }));
+    }
+
     // Draw player (with i-frame alpha fade)
     const playerAlpha = this.player.getVisibilityAlpha();
     this.renderer.drawTextWithAlpha(
@@ -3846,6 +4145,16 @@ class Game {
         item.char,
         item.color
       );
+    }
+
+    // Draw captives (pulsing @ characters)
+    for (const captive of this.captives) {
+      if (!captive.freed) {
+        captive.render(this.renderer.fgCtx, (gx, gy) => ({
+          x: gx * GRID.CELL_SIZE,
+          y: gy * GRID.CELL_SIZE
+        }));
+      }
     }
 
     // Draw consumable windups (dropped items during charge-up)

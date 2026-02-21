@@ -266,7 +266,7 @@ export class Player {
     const armorModified = baseMaxSpeed * (1 + this.speedBoost - this.speedPenalty);
     const currentMaxSpeed = this.speedBoostTimer > 0 ? armorModified * this.speedBoostMultiplier : armorModified;
 
-    // Dodge roll speed is 1.3x current max speed (always slightly faster)
+    // Dodge roll speed is 1.1x current max speed (always slightly faster)
     const rollSpeed = currentMaxSpeed * 1.1;
 
     // Activate roll
