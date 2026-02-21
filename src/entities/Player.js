@@ -1,0 +1,427 @@
+import { PHYSICS, GRID, COLORS, PLAYER_STATS } from '../game/GameConfig.js';
+
+const INVULNERABILITY_DURATION = 1.0; // seconds
+const BLINK_FREQUENCY = 0.1; // blink every 0.1 seconds
+
+export class Player {
+  constructor(x, y) {
+    // Pixel-based position (not grid-snapped)
+    this.position = { x, y };
+    this.velocity = { vx: 0, vy: 0 };
+    this.acceleration = { ax: 0, ay: 0 };
+
+    // Character properties
+    this.char = '@';
+    this.color = COLORS.PLAYER;
+    this.width = GRID.CELL_SIZE;
+    this.height = GRID.CELL_SIZE;
+
+    // Game state
+    this.hp = PLAYER_STATS.START_HP;
+    this.maxHp = PLAYER_STATS.MAX_HP;
+    this.defense = 0; // Defense from armor
+
+    // Armor special properties
+    this.bulletResist = 0;
+    this.dodgeChance = 0;
+    this.fireImmune = false;
+    this.freezeImmune = false;
+    this.poisonImmune = false;
+    this.reflectDamage = 0;
+    this.speedBoost = 0;
+    this.speedPenalty = 0;
+    this.slowEnemies = false;
+
+    this.quickSlots = [null, null, null]; // 3-slot loadout
+    this.activeSlotIndex = 0; // Currently selected slot (0-2)
+    this.inventory = []; // Ingredients only
+    this.facing = { x: 0, y: 1 }; // Direction player is facing
+
+    // Invulnerability frames
+    this.invulnerabilityTimer = 0;
+    this.invulnerabilityDuration = INVULNERABILITY_DURATION;
+
+    // Physics flags
+    this.hasCollision = true;
+    this.boundToGrid = true;
+    this.collisionMap = null; // Set by game state
+
+    // Wet status
+    this.wetDuration = 0;
+    this.wetDropTimer = 0; // throttles trail particle emission
+
+    // Burn status
+    this.burnDuration = 0;
+    this.burnTickTimer = 0;
+    this.burnTickRate = 1.5; // deal damage every 1.5s
+    this.burnDamage = 1;    // damage per tick
+
+    // Water immunity (from Rubber Boots)
+    this.waterImmunityTimer = 0;
+
+    // Steam trail emission timer (throttles puff particle emission)
+    this.steamTrailTimer = 0;
+
+    // Timed buffs
+    this.speedBoostTimer = 0;
+    this.speedBoostMultiplier = 1.5;
+    this.luckTimer = 0;
+    this.blockBoostTimer = 0;
+    this.blockBoostAmount = 0;
+
+    // Shield charges (from Shield / Tower Shield consumables)
+    this.shieldCharges = 0;
+    this.shieldMaxCharges = 0;
+    this.shieldCooldown = 0;
+    this.shieldCooldownMax = 5;
+    this.shieldBlocksAll = false; // true = blocks melee too, false = bullets only
+
+    // Input state
+    this.inputState = {
+      up: false,
+      down: false,
+      left: false,
+      right: false
+    };
+  }
+
+  // Backward compatibility: heldItem getter returns active slot
+  get heldItem() {
+    return this.quickSlots[this.activeSlotIndex];
+  }
+
+  setCollisionMap(collisionMap) {
+    this.collisionMap = collisionMap;
+  }
+
+  updateInput(inputState, lockFacing = false) {
+    this.inputState = inputState;
+
+    // Check if charging a bow (for movement slowdown)
+    const isChargingBow = this.heldItem && this.heldItem.isCharging;
+
+    // Calculate target acceleration based on input (double acceleration when unarmed)
+    const baseAcceleration = this.heldItem ? PHYSICS.PLAYER_ACCELERATION : PHYSICS.PLAYER_ACCELERATION * 2;
+    const acceleration = baseAcceleration * (1 + this.speedBoost - this.speedPenalty);
+    let targetAx = 0;
+    let targetAy = 0;
+
+    if (inputState.left) targetAx -= acceleration;
+    if (inputState.right) targetAx += acceleration;
+    if (inputState.up) targetAy -= acceleration;
+    if (inputState.down) targetAy += acceleration;
+
+    // Normalize diagonal movement
+    if (targetAx !== 0 && targetAy !== 0) {
+      const length = Math.sqrt(targetAx * targetAx + targetAy * targetAy);
+      targetAx = (targetAx / length) * acceleration;
+      targetAy = (targetAy / length) * acceleration;
+    }
+
+    // While charging bow: zero acceleration (movement slows to stop) but allow aiming
+    if (isChargingBow) {
+      this.acceleration.ax = 0;
+      this.acceleration.ay = 0;
+
+      // Apply gentle deceleration (friction) to bring player to a stop
+      const chargeDeceleration = 0.95; // Lower = faster stop (0.95 = gentle, gradual slowdown)
+      this.velocity.vx *= chargeDeceleration;
+      this.velocity.vy *= chargeDeceleration;
+
+      // Stop completely when velocity is very small
+      if (Math.abs(this.velocity.vx) < 5) this.velocity.vx = 0;
+      if (Math.abs(this.velocity.vy) < 5) this.velocity.vy = 0;
+    } else {
+      this.acceleration.ax = targetAx;
+      this.acceleration.ay = targetAy;
+    }
+
+    // Update facing direction for aiming (allow while charging, lock during auto-attack)
+    if (!lockFacing && (targetAx !== 0 || targetAy !== 0)) {
+      this.facing.x = Math.sign(targetAx);
+      this.facing.y = Math.sign(targetAy);
+    }
+
+    // Cap velocity to max speed (double speed when unarmed, boosted when speed buff active, armor modifiers)
+    const baseMaxSpeed = this.heldItem ? PHYSICS.PLAYER_SPEED : PHYSICS.PLAYER_SPEED * 2;
+    const armorModified = baseMaxSpeed * (1 + this.speedBoost - this.speedPenalty);
+    const boostedMax = this.speedBoostTimer > 0 ? armorModified * this.speedBoostMultiplier : armorModified;
+    const speed = Math.sqrt(this.velocity.vx ** 2 + this.velocity.vy ** 2);
+    if (speed > boostedMax) {
+      this.velocity.vx = (this.velocity.vx / speed) * boostedMax;
+      this.velocity.vy = (this.velocity.vy / speed) * boostedMax;
+    }
+  }
+
+  getHitbox() {
+    return {
+      x: this.position.x,
+      y: this.position.y,
+      width: this.width,
+      height: this.height
+    };
+  }
+
+  getGridPosition() {
+    return {
+      x: Math.floor(this.position.x / GRID.CELL_SIZE),
+      y: Math.floor(this.position.y / GRID.CELL_SIZE)
+    };
+  }
+
+  isWet() { return this.wetDuration > 0; }
+  applyWet(duration) { this.wetDuration = Math.max(this.wetDuration, duration); }
+
+  isBurning() { return this.burnDuration > 0; }
+  applyBurn(duration) { this.burnDuration = Math.max(this.burnDuration, duration); }
+
+  applySpeedBoost(duration) { this.speedBoostTimer = Math.max(this.speedBoostTimer, duration); }
+  applyLuck(duration) { this.luckTimer = Math.max(this.luckTimer, duration); }
+  applyBlockBoost(duration, amount) {
+    this.blockBoostTimer = Math.max(this.blockBoostTimer, duration);
+    this.blockBoostAmount = Math.max(this.blockBoostAmount, amount);
+  }
+
+  // Returns true if a shield charge absorbed this hit (bullet always checked;
+  // melee only absorbed if shieldBlocksAll is true)
+  tryShieldBlock(isBullet = true) {
+    if (this.shieldCharges <= 0) return false;
+    if (!isBullet && !this.shieldBlocksAll) return false;
+    this.shieldCharges--;
+    if (this.shieldCharges < this.shieldMaxCharges) {
+      this.shieldCooldown = this.shieldCooldownMax;
+    }
+    return true;
+  }
+
+  update(deltaTime) {
+    // Update invulnerability timer
+    if (this.invulnerabilityTimer > 0) {
+      this.invulnerabilityTimer -= deltaTime;
+      if (this.invulnerabilityTimer < 0) {
+        this.invulnerabilityTimer = 0;
+      }
+    }
+
+    if (this.wetDuration > 0) this.wetDuration -= deltaTime;
+
+    // Tick timed buffs
+    if (this.speedBoostTimer > 0) this.speedBoostTimer -= deltaTime;
+    if (this.luckTimer > 0) this.luckTimer -= deltaTime;
+    if (this.blockBoostTimer > 0) this.blockBoostTimer -= deltaTime;
+    if (this.waterImmunityTimer > 0) this.waterImmunityTimer -= deltaTime;
+
+    // Recharge shield charges on cooldown
+    if (this.shieldCooldown > 0) {
+      this.shieldCooldown -= deltaTime;
+      if (this.shieldCooldown <= 0 && this.shieldCharges < this.shieldMaxCharges) {
+        this.shieldCharges++;
+        if (this.shieldCharges < this.shieldMaxCharges) {
+          this.shieldCooldown = this.shieldCooldownMax;
+        }
+      }
+    }
+
+    // Burn DoT — returns damage amount if a tick fired (damage applied in main.js via takeDamage)
+    if (this.burnDuration > 0) {
+      this.burnDuration -= deltaTime;
+      this.burnTickTimer -= deltaTime;
+      if (this.burnTickTimer <= 0) {
+        this.burnTickTimer = this.burnTickRate;
+        console.log(`[DAMAGE] BURN DoT tick fired (${this.burnDamage} damage will be applied)`);
+        return { burnDamage: this.burnDamage };
+      }
+    } else {
+      this.burnTickTimer = 0;
+    }
+
+    return null;
+  }
+
+  takeDamage(amount, damageSource = {}) {
+    // Can't take damage during invulnerability frames
+    if (this.invulnerabilityTimer > 0) {
+      console.log(`[DAMAGE] Blocked by invulnerability frames (${this.invulnerabilityTimer.toFixed(2)}s remaining)`);
+      return false;
+    }
+
+    const hpBefore = this.hp;
+
+    // Dodge check (all damage types)
+    if (this.dodgeChance > 0 && Math.random() < this.dodgeChance) {
+      console.log(`[DAMAGE] DODGED! (${(this.dodgeChance * 100).toFixed(0)}% chance) - HP: ${this.hp}/${this.maxHp}`);
+      return { dodged: true };
+    }
+
+    // Bullet resistance check
+    if (damageSource.isBullet && this.bulletResist > 0) {
+      if (Math.random() < this.bulletResist) {
+        console.log(`[DAMAGE] BULLET BLOCKED! (${(this.bulletResist * 100).toFixed(0)}% chance) - HP: ${this.hp}/${this.maxHp}`);
+        return { blocked: true };
+      }
+    }
+
+    // Elemental immunity checks
+    if (damageSource.element) {
+      if (this.fireImmune && damageSource.element === 'burn') {
+        console.log(`[DAMAGE] FIRE IMMUNE! - HP: ${this.hp}/${this.maxHp}`);
+        return { immune: true };
+      }
+      if (this.freezeImmune && damageSource.element === 'freeze') {
+        console.log(`[DAMAGE] FREEZE IMMUNE! - HP: ${this.hp}/${this.maxHp}`);
+        return { immune: true };
+      }
+      if (this.poisonImmune && damageSource.element === 'poison') {
+        console.log(`[DAMAGE] POISON IMMUNE! - HP: ${this.hp}/${this.maxHp}`);
+        return { immune: true };
+      }
+    }
+
+    // Apply defense (reduce damage, minimum 1)
+    const actualDamage = Math.max(1, amount - this.defense);
+
+    this.hp -= actualDamage;
+    if (this.hp < 0) this.hp = 0;
+
+    // Log damage details
+    const damageType = damageSource.isBullet ? 'BULLET' : 'MELEE';
+    const elementInfo = damageSource.element ? ` [${damageSource.element}]` : '';
+    const defenseInfo = this.defense > 0 ? ` (${amount} - ${this.defense} defense = ${actualDamage})` : '';
+    const isDead = this.hp <= 0;
+
+    console.log(`[DAMAGE] ${damageType}${elementInfo}: ${actualDamage} damage${defenseInfo} | HP: ${hpBefore} → ${this.hp}/${this.maxHp}${isDead ? ' 💀 DEATH' : ''}`);
+
+    // Start invulnerability frames
+    if (this.hp > 0) {
+      this.invulnerabilityTimer = this.invulnerabilityDuration;
+    }
+
+    // Damage reflection
+    if (this.reflectDamage > 0 && damageSource.attacker) {
+      const reflectedAmount = Math.ceil(actualDamage * this.reflectDamage);
+      console.log(`[DAMAGE] Reflected ${reflectedAmount} damage back to attacker (${(this.reflectDamage * 100).toFixed(0)}%)`);
+      return this.hp <= 0 ? true : {
+        damaged: true,
+        reflect: reflectedAmount,
+        attacker: damageSource.attacker
+      };
+    }
+
+    // Return true if dead, or a truthy value if damaged (for damage numbers)
+    return this.hp <= 0 ? true : { damaged: true };
+  }
+
+  isInvulnerable() {
+    return this.invulnerabilityTimer > 0;
+  }
+
+  shouldRenderVisible() {
+    // Blink during invulnerability frames
+    if (this.invulnerabilityTimer > 0) {
+      // Blink on/off based on timer
+      const blinkCycle = Math.floor(this.invulnerabilityTimer / BLINK_FREQUENCY);
+      return blinkCycle % 2 === 0;
+    }
+    return true;
+  }
+
+  heal(amount) {
+    this.hp += amount;
+    if (this.hp > this.maxHp) this.hp = this.maxHp;
+  }
+
+  addIngredient(ingredient) {
+    this.inventory.push(ingredient);
+  }
+
+  removeIngredient(ingredient) {
+    const index = this.inventory.indexOf(ingredient);
+    if (index > -1) {
+      this.inventory.splice(index, 1);
+    }
+  }
+
+  pickupItem(item) {
+    // Find first empty slot
+    const emptySlotIdx = this.quickSlots.findIndex(slot => slot === null);
+
+    if (emptySlotIdx !== -1) {
+      // Fill empty slot and switch to it
+      this.quickSlots[emptySlotIdx] = item;
+      this.activeSlotIndex = emptySlotIdx;
+      return null; // No item dropped
+    } else {
+      // All slots full - swap with active slot
+      const droppedItem = this.quickSlots[this.activeSlotIndex];
+      this.quickSlots[this.activeSlotIndex] = item;
+      return droppedItem;
+    }
+  }
+
+  dropItem() {
+    const item = this.quickSlots[this.activeSlotIndex];
+    this.quickSlots[this.activeSlotIndex] = null;
+
+    // Auto-switch to next filled slot if available
+    const nextFilled = this.quickSlots.findIndex((slot, idx) =>
+      idx !== this.activeSlotIndex && slot !== null
+    );
+    if (nextFilled !== -1) {
+      this.activeSlotIndex = nextFilled;
+    }
+
+    return item;
+  }
+
+  useHeldItem() {
+    if (!this.heldItem || !this.heldItem.use) return null;
+
+    const result = this.heldItem.use(this);
+
+    // Handle consumable items - remove from slot if consumed
+    if (result && result.consumed) {
+      this.quickSlots[this.activeSlotIndex] = null;
+
+      // Auto-switch to next filled slot if available
+      const nextFilled = this.quickSlots.findIndex((slot, idx) =>
+        idx !== this.activeSlotIndex && slot !== null
+      );
+      if (nextFilled !== -1) {
+        this.activeSlotIndex = nextFilled;
+      }
+    }
+
+    return result;
+  }
+
+  cycleSlotNext() {
+    // Cycle through all slots (including empty ones for faster movement)
+    this.activeSlotIndex = (this.activeSlotIndex + 1) % this.quickSlots.length;
+  }
+
+  cycleSlotPrevious() {
+    // Cycle through all slots (including empty ones for faster movement)
+    this.activeSlotIndex = (this.activeSlotIndex - 1 + this.quickSlots.length) % this.quickSlots.length;
+  }
+
+  reset() {
+    this.hp = PLAYER_STATS.START_HP;
+    this.velocity = { vx: 0, vy: 0 };
+    this.acceleration = { ax: 0, ay: 0 };
+    this.quickSlots = [null, null, null];
+    this.activeSlotIndex = 0;
+    this.inventory = [];
+
+    // Reset armor properties
+    this.defense = 0;
+    this.bulletResist = 0;
+    this.dodgeChance = 0;
+    this.fireImmune = false;
+    this.freezeImmune = false;
+    this.poisonImmune = false;
+    this.reflectDamage = 0;
+    this.speedBoost = 0;
+    this.speedPenalty = 0;
+    this.slowEnemies = false;
+  }
+}

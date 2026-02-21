@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ASCII Roguelike</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="background-layer"></canvas>
+    <canvas id="foreground-layer"></canvas>
+    <div id="ui-overlay">
+      <div id="hp-display">HP: <span id="hp-value">10</span></div>
+      <div id="depth-display">L<span id="depth-value">0</span></div>
+      <div id="inventory-display">I: <span id="inventory-count">0</span></div>
+      <div id="held-item-display">Held: <span id="held-item">None</span></div>
+      <div id="armor-display">A: <span id="armor-char">.</span></div>
+      <div id="consumable-display">C: <span id="consumable-char-1">.</span><span id="consumable-char-2">.</span></div>
+    </div>
+    <div id="menu-overlay" class="hidden"></div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
