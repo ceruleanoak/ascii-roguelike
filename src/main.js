@@ -119,9 +119,6 @@ class Game {
     this.pickupMessageQueue = []; // Queue for multiple pickups
     this.PICKUP_MESSAGE_DURATION = 2.0; // seconds
 
-    // Tutorial state
-    this.hasSeenSwapTutorial = false; // Show "Q / E to swap items" hint on first weapon
-
     // Path announcement system (for Path Amulet)
     this.pathAnnouncement = null;
     this.pathAnnouncementTimer = 0;
@@ -163,7 +160,6 @@ class Game {
       depth: document.getElementById('depth-value'),
       inventory: document.getElementById('inventory-count'),
       heldItem: document.getElementById('held-item'),
-      swapTutorial: document.getElementById('swap-tutorial'),
       menu: document.getElementById('menu-overlay'),
       armorChar: document.getElementById('armor-char'),
       consumableChar1: document.getElementById('consumable-char-1'),
@@ -2699,9 +2695,6 @@ class Game {
         this.characterNPCs = []; // Clear character NPCs in REST
         this.zoneSystem.resetOnDeath(); // Reset zone system and captive tracking
 
-        // Reset tutorial state
-        this.hasSeenSwapTutorial = false;
-
         // Clear crafting slots and wipe localStorage save
         this.craftingSystem.setState({ leftSlot: null, rightSlot: null, centerSlot: null });
         this.persistenceSystem.clearSave();
@@ -3031,7 +3024,6 @@ class Game {
     if (state !== GAME_STATES.EXPLORE && state !== GAME_STATES.REST) return;
 
     this.player.cycleSlotNext();
-    this.hasSeenSwapTutorial = true; // Hide tutorial after first use
     this.updateUI();
   }
 
@@ -3040,7 +3032,6 @@ class Game {
     if (state !== GAME_STATES.EXPLORE && state !== GAME_STATES.REST) return;
 
     this.player.cycleSlotPrevious();
-    this.hasSeenSwapTutorial = true; // Hide tutorial after first use
     this.updateUI();
   }
 
@@ -5534,14 +5525,6 @@ class Game {
     const qColor = this.keys.q ? COLORS.ITEM : '#ffffff';
     const eColor = this.keys.e ? COLORS.ITEM : '#ffffff';
     this.ui.heldItem.innerHTML = `<span style="color: ${qColor}">Q</span> ${slots.join('')} <span style="color: ${eColor}">E</span>`;
-
-    // Show swap tutorial hint when first weapon is equipped
-    const hasAnyWeapon = this.player.quickSlots.some(item => item !== null);
-    if (!this.hasSeenSwapTutorial && hasAnyWeapon) {
-      this.ui.swapTutorial.classList.remove('hidden');
-    } else {
-      this.ui.swapTutorial.classList.add('hidden');
-    }
 
     // Armor display
     const armorChar = this.equippedArmor ? this.equippedArmor.char : '.';
