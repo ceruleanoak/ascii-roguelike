@@ -647,13 +647,38 @@ export class CombatSystem {
 
       attack.duration -= deltaTime;
 
+      // Update windup alpha (blink effect via transparency)
+      if (attack.windupPhase && attack.windupDuration !== undefined) {
+        attack.windupElapsed += deltaTime;
+        const progress = attack.windupElapsed / attack.windupDuration;
+
+        // Alpha pattern: 0%=1.0, 25%=0.25, 50%=1.0, 75%=0.25, 100%=white
+        if (progress < 0.25) {
+          attack.alpha = 1.0; // Fully visible
+        } else if (progress < 0.5) {
+          attack.alpha = 0.25; // Dimmed (first dip)
+        } else if (progress < 0.75) {
+          attack.alpha = 1.0; // Fully visible
+        } else {
+          attack.alpha = 0.25; // Dimmed (second dip)
+        }
+      }
+
+      // Update flash timer
+      if (attack.flashTimer !== undefined && attack.flashTimer > 0) {
+        attack.flashTimer -= deltaTime;
+        if (attack.flashTimer <= 0) {
+          attack.flashWhite = false;
+        }
+      }
+
       if (attack.duration <= 0) {
         this.enemyMeleeAttacks.splice(i, 1);
         continue;
       }
 
-      // Check collision with player or charmed target (only on first frame)
-      if (!attack.hasHit) {
+      // Check collision with player or charmed target (only on first frame, not during windup)
+      if (!attack.hasHit && !attack.windupPhase) {
         if (attack.isCharmedAttack && attack.charmedTarget && attack.charmedTarget !== player) {
           // Charmed attack hits the charmed target enemy
           if (this.checkMeleeCollision(attack, attack.charmedTarget)) {
@@ -765,7 +790,70 @@ export class CombatSystem {
         }
       }
 
-      if (enemy.canAttack()) {
+      // Handle sap damage
+      if (updateResult && updateResult.sapDamage) {
+        const sapData = updateResult.sapDamage;
+        const damageSource = {
+          isBullet: false,
+          element: null,
+          attacker: enemy
+        };
+        const result = player.takeDamage(sapData.damage, damageSource);
+
+        if (result.dodged) {
+          this.createDamageNumber('DODGE', player.position.x, player.position.y, '#ffff00');
+        } else if (result.blocked) {
+          this.createDamageNumber('BLOCK', player.position.x, player.position.y, '#aaaaaa');
+        } else if (result !== false) {
+          this.createDamageNumber(sapData.damage, player.position.x, player.position.y, '#cc0000');
+
+          // Handle reflection
+          if (result.reflect && result.attacker) {
+            result.attacker.takeDamage(result.reflect);
+            this.createDamageNumber(result.reflect, result.attacker.position.x, result.attacker.position.y, '#ff8800');
+          }
+        }
+
+        if (result === true) {
+          return { playerDead: true };
+        }
+      }
+
+      // Handle melee attack windup visualization
+      if (enemy.attackType === 'melee' && enemy.isWindingUp && enemy.isWindingUp()) {
+        // Enemy is winding up a melee attack - create/update windup visual
+        if (!enemy.windupAttackVisual) {
+          const windupVisual = enemy.createWindupAttackVisual();
+          if (windupVisual) {
+            this.enemyMeleeAttacks.push(windupVisual);
+            enemy.windupAttackVisual = windupVisual; // Track on enemy
+          }
+        }
+      } else if (enemy.windupAttackVisual) {
+        // Windup ended - convert visual to real attack or remove it
+        if (enemy.canAttack()) {
+          // Activate the attack (make it deal damage and flash white)
+          enemy.windupAttackVisual.windupPhase = false;
+          enemy.windupAttackVisual.hasHit = false; // Allow damage
+          enemy.windupAttackVisual.flashWhite = true; // Flash white on activation
+          enemy.windupAttackVisual.flashTimer = 0.1; // Flash for 0.1 seconds
+          enemy.windupAttackVisual.duration = 0.15; // Reset to normal attack duration
+          enemy.windupAttackVisual.alpha = 1.0; // Ensure fully visible when activated
+
+          // Set attack cooldown (same as createAttack does)
+          enemy.attackTimer = enemy.attackCooldown;
+          enemy.state = 'idle';
+        } else {
+          // Windup was interrupted - remove the visual
+          const index = this.enemyMeleeAttacks.indexOf(enemy.windupAttackVisual);
+          if (index > -1) {
+            this.enemyMeleeAttacks.splice(index, 1);
+          }
+        }
+        enemy.windupAttackVisual = null;
+      }
+
+      if (enemy.canAttack() && !enemy.windupAttackVisual) {
         const attackData = enemy.createAttack();
         if (attackData) {
           this.createEnemyAttack(attackData);
@@ -868,11 +956,15 @@ export class CombatSystem {
   }
 
   checkMeleeCollision(attack, enemy) {
+    // Use more precise hitbox matching character size (not full tile)
+    // Characters are ~50% of tile width, ~75% of tile height
+    const widthReduction = attack.width * 0.5;
+    const heightReduction = attack.height * 0.25;
     const attackBox = {
-      x: attack.position.x,
-      y: attack.position.y,
-      width: attack.width,
-      height: attack.height
+      x: attack.position.x + widthReduction / 2,
+      y: attack.position.y + heightReduction / 2,
+      width: attack.width - widthReduction,
+      height: attack.height - heightReduction
     };
 
     const enemyBox = enemy.getHitbox();
@@ -884,11 +976,14 @@ export class CombatSystem {
   }
 
   checkMeleeCollisionWithObject(attack, obj) {
+    // Use more precise hitbox matching character size (not full tile)
+    const widthReduction = attack.width * 0.5;
+    const heightReduction = attack.height * 0.25;
     const attackBox = {
-      x: attack.position.x,
-      y: attack.position.y,
-      width: attack.width,
-      height: attack.height
+      x: attack.position.x + widthReduction / 2,
+      y: attack.position.y + heightReduction / 2,
+      width: attack.width - widthReduction,
+      height: attack.height - heightReduction
     };
 
     const objBox = obj.getHitbox();
@@ -977,11 +1072,14 @@ export class CombatSystem {
   }
 
   checkMeleeCollisionWithPlayer(attack, player) {
+    // Use more precise hitbox matching character size (not full tile)
+    const widthReduction = attack.width * 0.5;
+    const heightReduction = attack.height * 0.25;
     const attackBox = {
-      x: attack.position.x,
-      y: attack.position.y,
-      width: attack.width,
-      height: attack.height
+      x: attack.position.x + widthReduction / 2,
+      y: attack.position.y + heightReduction / 2,
+      width: attack.width - widthReduction,
+      height: attack.height - heightReduction
     };
 
     const playerBox = player.getHitbox();

@@ -37,6 +37,9 @@ export class Player {
     this.inventory = []; // Ingredients only
     this.facing = { x: 0, y: 1 }; // Direction player is facing
 
+    // Trap usage tracking (resets per room)
+    this.trapUsedThisRoom = [false, false, false]; // Track if trap in each slot was used this room
+
     // Invulnerability frames
     this.invulnerabilityTimer = 0;
     this.invulnerabilityDuration = INVULNERABILITY_DURATION;
@@ -97,6 +100,16 @@ export class Player {
       speed: 200, // pixels per second during roll (1/3 of original 600)
       iframes: true // invulnerability during roll (for 'dodge' type)
     };
+
+    // Status effects
+    this.statusEffects = {
+      goo: { active: false, duration: 0, slowAmount: 0.8 }, // Heavy slow + prevents dodge roll
+      freeze: { active: false, duration: 0, slowAmount: 0.5 }
+    };
+
+    // Status visual feedback
+    this.statusBlinkTimer = 0;
+    this.baseColor = '#ffffff'; // Will be set by character type
   }
 
   // Backward compatibility: heldItem getter returns active slot
@@ -156,14 +169,15 @@ export class Player {
       this.facing.y = Math.sign(targetAy);
     }
 
-    // Cap velocity to max speed (1.5x speed when unarmed, boosted when speed buff active, armor modifiers)
+    // Cap velocity to max speed (1.5x speed when unarmed, boosted when speed buff active, armor modifiers, status effects)
     const baseMaxSpeed = this.heldItem ? PHYSICS.PLAYER_SPEED : PHYSICS.PLAYER_SPEED * 1.5;
     const armorModified = baseMaxSpeed * (1 + this.speedBoost - this.speedPenalty);
     const boostedMax = this.speedBoostTimer > 0 ? armorModified * this.speedBoostMultiplier : armorModified;
+    const finalMax = boostedMax * this.getStatusSpeedMultiplier(); // Apply status effect slows (goo, freeze)
     const speed = Math.sqrt(this.velocity.vx ** 2 + this.velocity.vy ** 2);
-    if (speed > boostedMax) {
-      this.velocity.vx = (this.velocity.vx / speed) * boostedMax;
-      this.velocity.vy = (this.velocity.vy / speed) * boostedMax;
+    if (speed > finalMax) {
+      this.velocity.vx = (this.velocity.vx / speed) * finalMax;
+      this.velocity.vy = (this.velocity.vy / speed) * finalMax;
     }
   }
 
@@ -208,7 +222,65 @@ export class Player {
     return true;
   }
 
+  applyStatusEffect(effect, duration = 3.0) {
+    if (!this.statusEffects[effect]) return;
+
+    this.statusEffects[effect].active = true;
+    this.statusEffects[effect].duration = Math.max(this.statusEffects[effect].duration, duration);
+  }
+
+  updateStatusEffects(deltaTime) {
+    // Goo effect (heavy slow + prevents dodge roll)
+    const goo = this.statusEffects.goo;
+    if (goo.active) {
+      goo.duration -= deltaTime;
+      if (goo.duration <= 0) {
+        goo.active = false;
+        goo.duration = 0;
+      }
+    }
+
+    // Freeze effect (slow movement)
+    const freeze = this.statusEffects.freeze;
+    if (freeze.active) {
+      freeze.duration -= deltaTime;
+      if (freeze.duration <= 0) {
+        freeze.active = false;
+        freeze.duration = 0;
+      }
+    }
+  }
+
+  isGooey() {
+    return this.statusEffects.goo.active;
+  }
+
+  isFrozen() {
+    return this.statusEffects.freeze.active;
+  }
+
+  getStatusSpeedMultiplier() {
+    if (this.isGooey()) return 1 - this.statusEffects.goo.slowAmount;
+    if (this.isFrozen()) return 1 - this.statusEffects.freeze.slowAmount;
+    return 1;
+  }
+
+  getDisplayColor() {
+    // Blink green when gooey
+    if (this.isGooey()) {
+      const BLINK_FREQUENCY = 0.3;
+      const blinkCycle = Math.floor(this.statusBlinkTimer / BLINK_FREQUENCY);
+      return blinkCycle % 2 === 0 ? '#00ff00' : this.baseColor;
+    }
+    return this.color;
+  }
+
   update(deltaTime) {
+    // Update status effects
+    this.updateStatusEffects(deltaTime);
+
+    // Update status blink timer
+    this.statusBlinkTimer += deltaTime;
     // Update dodge roll state
     this.updateDodgeRoll(deltaTime);
 
@@ -255,10 +327,38 @@ export class Player {
     return null;
   }
 
-  startDodgeRoll(direction) {
+  startDodgeRoll(direction, enemies = []) {
     // Check if on cooldown
     if (this.dodgeRoll.cooldownTimer > 0) {
       return false;
+    }
+
+    // Cannot dodge roll while gooey!
+    if (this.isGooey()) {
+      return false;
+    }
+
+    // Cancel attack windup for melee weapons
+    if (this.heldItem && this.heldItem.windupActive) {
+      this.heldItem.windupActive = false;
+      this.heldItem.windupTimer = 0;
+      this.heldItem.pendingPlayer = null;
+      console.log(`[DODGE] Cancelled ${this.heldItem.data.name} windup`);
+    }
+
+    // Cancel bow charging
+    if (this.heldItem && this.heldItem.isCharging) {
+      this.heldItem.isCharging = false;
+      this.heldItem.chargeTime = 0;
+      this.heldItem.chargingPlayer = null;
+      console.log(`[DODGE] Cancelled ${this.heldItem.data.name} charge`);
+    }
+
+    // Break any sapping enemies attached to this player
+    for (const enemy of enemies) {
+      if (enemy.sapping && enemy.sappingTarget === this) {
+        enemy.breakSapping(300); // Stronger knockback from dodge roll
+      }
     }
 
     // Calculate current max movement speed (from updateInput logic)
@@ -285,8 +385,8 @@ export class Player {
     // Apply roll-specific effects based on type
     switch (this.dodgeRoll.type) {
       case 'dodge':
-        // Grant i-frames for duration
-        this.invulnerabilityTimer = this.dodgeRoll.duration;
+        // Grant i-frames for duration + 0.5s extra (0.15s roll + 0.5s = 0.65s total)
+        this.invulnerabilityTimer = this.dodgeRoll.duration + 0.5;
         break;
       case 'hide':
         // Invisible to enemies (will implement in Week 2)
@@ -450,11 +550,15 @@ export class Player {
       // Fill empty slot and switch to it
       this.quickSlots[emptySlotIdx] = item;
       this.activeSlotIndex = emptySlotIdx;
+      // Reset trap usage for this slot when picking up new item
+      this.trapUsedThisRoom[emptySlotIdx] = false;
       return null; // No item dropped
     } else {
       // All slots full - swap with active slot
       const droppedItem = this.quickSlots[this.activeSlotIndex];
       this.quickSlots[this.activeSlotIndex] = item;
+      // Reset trap usage for this slot when swapping item
+      this.trapUsedThisRoom[this.activeSlotIndex] = false;
       return droppedItem;
     }
   }
@@ -462,6 +566,8 @@ export class Player {
   dropItem() {
     const item = this.quickSlots[this.activeSlotIndex];
     this.quickSlots[this.activeSlotIndex] = null;
+    // Reset trap usage for this slot when dropping item
+    this.trapUsedThisRoom[this.activeSlotIndex] = false;
 
     // Auto-switch to next filled slot if available
     const nextFilled = this.quickSlots.findIndex((slot, idx) =>
@@ -505,6 +611,23 @@ export class Player {
     this.activeSlotIndex = (this.activeSlotIndex - 1 + this.quickSlots.length) % this.quickSlots.length;
   }
 
+  // Reset trap usage for new room (called when entering new room)
+  resetTrapsForNewRoom() {
+    this.trapUsedThisRoom = [false, false, false];
+  }
+
+  // Check if active slot has a trap and if it can be used
+  canUseTrap() {
+    const item = this.heldItem;
+    if (!item || !item.data || item.data.type !== 'TRAP') return false;
+    return !this.trapUsedThisRoom[this.activeSlotIndex];
+  }
+
+  // Mark trap as used in current room
+  markTrapUsed() {
+    this.trapUsedThisRoom[this.activeSlotIndex] = true;
+  }
+
   reset() {
     this.hp = PLAYER_STATS.START_HP;
     this.velocity = { vx: 0, vy: 0 };
@@ -512,6 +635,7 @@ export class Player {
     this.quickSlots = [null, null, null];
     this.activeSlotIndex = 0;
     this.inventory = [];
+    this.trapUsedThisRoom = [false, false, false];
 
     // Reset armor properties
     this.defense = 0;

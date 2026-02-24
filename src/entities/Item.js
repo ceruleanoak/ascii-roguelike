@@ -210,13 +210,18 @@ export class Item {
       const randomness = (Math.random() - 0.5) * 0.1; // ±0.05 radians (~3 degrees)
       const spreadAngle = angle + baseSpread + randomness;
 
+      // Spawn bullets slightly offset from player center (avoids hitting sapping enemies)
+      const spawnOffset = 6;
+      const spawnX = player.position.x + player.width / 2 + Math.cos(spreadAngle) * spawnOffset;
+      const spawnY = player.position.y + player.height / 2 + Math.sin(spreadAngle) * spawnOffset;
+
       bullets.push({
         type: 'bullet',
         char: this.data.bulletChar || '·',
         weaponChar: this.char,
         position: {
-          x: player.position.x + player.width / 2,
-          y: player.position.y + player.height / 2
+          x: spawnX,
+          y: spawnY
         },
         velocity: {
           vx: Math.cos(spreadAngle) * (this.data.bulletSpeed || 300),
@@ -256,13 +261,18 @@ export class Item {
       const randomness = (Math.random() - 0.5) * 0.1; // ±0.05 radians (~3 degrees)
       const finalAngle = angle + randomness;
 
+      // Spawn bullets slightly offset from player center (avoids hitting sapping enemies)
+      const spawnOffset = 6;
+      const spawnX = player.position.x + player.width / 2 + Math.cos(finalAngle) * spawnOffset;
+      const spawnY = player.position.y + player.height / 2 + Math.sin(finalAngle) * spawnOffset;
+
       bullets.push({
         type: 'bullet',
         char: this.data.bulletChar || '·',
         weaponChar: this.char,
         position: {
-          x: player.position.x + player.width / 2,
-          y: player.position.y + player.height / 2
+          x: spawnX,
+          y: spawnY
         },
         velocity: {
           vx: Math.cos(finalAngle) * (this.data.bulletSpeed || 300),
@@ -288,13 +298,18 @@ export class Item {
       const randomness = (Math.random() - 0.5) * 0.06; // ±0.03 radians (~2 degrees) - smaller for patterns
       const angle = baseAngle + randomness;
 
+      // Spawn bullets slightly offset from player center (avoids hitting sapping enemies)
+      const spawnOffset = 6;
+      const spawnX = player.position.x + player.width / 2 + Math.cos(angle) * spawnOffset;
+      const spawnY = player.position.y + player.height / 2 + Math.sin(angle) * spawnOffset;
+
       bullets.push({
         type: 'bullet',
         char: this.data.bulletChar || '·',
         weaponChar: this.char,
         position: {
-          x: player.position.x + player.width / 2,
-          y: player.position.y + player.height / 2
+          x: spawnX,
+          y: spawnY
         },
         velocity: {
           vx: Math.cos(angle) * (this.data.bulletSpeed || 250),
@@ -321,13 +336,18 @@ export class Item {
       const randomness = (Math.random() - 0.5) * 0.06; // ±0.03 radians (~2 degrees)
       const angle = spiralAngle + randomness;
 
+      // Spawn bullets slightly offset from player center (avoids hitting sapping enemies)
+      const spawnOffset = 6;
+      const spawnX = player.position.x + player.width / 2 + Math.cos(angle) * spawnOffset;
+      const spawnY = player.position.y + player.height / 2 + Math.sin(angle) * spawnOffset;
+
       bullets.push({
         type: 'bullet',
         char: this.data.bulletChar || '·',
         weaponChar: this.char,
         position: {
-          x: player.position.x + player.width / 2,
-          y: player.position.y + player.height / 2
+          x: spawnX,
+          y: spawnY
         },
         velocity: {
           vx: Math.cos(angle) * (this.data.bulletSpeed || 280),
@@ -354,13 +374,18 @@ export class Item {
       const randomness = (Math.random() - 0.5) * 0.06; // ±0.03 radians (~2 degrees)
       const angle = baseAngle + spread + randomness;
 
+      // Spawn bullets slightly offset from player center (avoids hitting sapping enemies)
+      const spawnOffset = 6;
+      const spawnX = player.position.x + player.width / 2 + Math.cos(angle) * spawnOffset;
+      const spawnY = player.position.y + player.height / 2 + Math.sin(angle) * spawnOffset;
+
       bullets.push({
         type: 'bullet',
         char: this.data.bulletChar || '·',
         weaponChar: this.char,
         position: {
-          x: player.position.x + player.width / 2,
-          y: player.position.y + player.height / 2
+          x: spawnX,
+          y: spawnY
         },
         velocity: {
           vx: Math.cos(angle) * (this.data.bulletSpeed || 300),
@@ -412,12 +437,13 @@ export class Item {
         return injectSubtype(this.createMeleeSlam(player));
       default:
         // Default single-hit attack
+        const range = this.data.range || 20;
         return injectSubtype({
           type: 'melee',
           char: this.data.meleeChar || '█',
           position: {
-            x: player.position.x + player.facing.x * (this.data.range || 20),
-            y: player.position.y + player.facing.y * (this.data.range || 20)
+            x: player.position.x + player.facing.x * range,
+            y: player.position.y + player.facing.y * range
           },
           width: this.data.attackWidth || GRID.CELL_SIZE,
           height: this.data.attackHeight || GRID.CELL_SIZE,
@@ -750,13 +776,18 @@ export class Item {
     // Calculate arrow character based on direction
     const arrowChar = this.getArrowCharForAngle(finalAngle);
 
+    // Spawn arrows slightly offset from player center (avoids hitting sapping enemies)
+    const spawnOffset = 6;
+    const spawnX = player.position.x + player.width / 2 + Math.cos(finalAngle) * spawnOffset;
+    const spawnY = player.position.y + player.height / 2 + Math.sin(finalAngle) * spawnOffset;
+
     return {
       type: 'arrow',
       char: arrowChar,
       weaponChar: this.char,
       position: {
-        x: player.position.x + player.width / 2,
-        y: player.position.y + player.height / 2
+        x: spawnX,
+        y: spawnY
       },
       velocity: {
         vx: Math.cos(finalAngle) * finalSpeed,

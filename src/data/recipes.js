@@ -24,7 +24,6 @@ export const RECIPES = [
 
   // Utility
   { left: 'f', right: '~', result: 'R', name: 'Rope' },          // Fur + String = Rope
-  { left: 'c', right: 'c', result: '$', name: 'Gold' },          // Coin + Coin = Gold
   { left: 't', right: 'M', result: '↑', name: 'Spear' },         // Teeth + Metal = Spear
 
   // Secret recipes
@@ -45,7 +44,6 @@ export const RECIPES = [
   { left: '⊤', right: 'b', result: '⚒', name: 'Bone Crusher' },   // Bone Axe + Bone = Bone Crusher
 
   // New ingredient combinations
-  { left: 't', right: 'f', result: '◊', name: 'Trophy' },         // Teeth + Fur = Trophy
   { left: 'w', right: 'F', result: '✦', name: 'Phoenix Feather' }, // Wing + Fire = Phoenix Feather
   { left: 's', right: 'M', result: 'K', name: 'Dragon Scale Armor' }, // Scale + Metal = Dragon Scale Armor
   { left: 'g', right: 'M', result: '♠', name: 'Acid Blade' },     // Goo + Metal = Acid Blade

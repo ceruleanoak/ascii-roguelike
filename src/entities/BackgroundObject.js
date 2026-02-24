@@ -63,6 +63,11 @@ export class BackgroundObject {
   // Called by melee attacks (and can be called by any damage source).
   // Returns { destroyed, effect } where effect is the dropEffect string on kill.
   takeDamage(amount, isBlade = false) {
+    // Block damage if already queued for destruction (prevents animation spam)
+    if (this.destroyAfterAnimation) {
+      return { destroyed: false, effect: null };
+    }
+
     if (this.indestructible || this.hp === null) {
       this._playAnimation('shake');
       return { destroyed: false, effect: null };
@@ -107,7 +112,7 @@ export class BackgroundObject {
     this.hp = null; // Cut grass has no HP
     this.maxHp = null;
 
-    this._playAnimation('shake');
+    this._playAnimation('cutgrass');
   }
 
   // Non-destructive interact (used by unarmed players, shrines, water, etc.)

@@ -8,6 +8,17 @@ export const CHARACTER_TYPES = {
     rollSpeed: 600,
     weaponAffinities: {} // No bonuses
   },
+  'green': {
+    name: 'Green Ranger',
+    color: '#00ff00',
+    rollType: 'dodge',
+    rollDuration: 0.18,
+    rollCooldown: 0.45,
+    rollSpeed: 580,
+    weaponAffinities: {
+      'ranged': { damageBonus: 0.15 } // 15% bonus ranged damage
+    }
+  },
   'red': {
     name: 'Red Warrior',
     color: '#ff4444',

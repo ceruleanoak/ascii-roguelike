@@ -12,7 +12,7 @@ export const ENEMIES = {
     attackRange: GRID.CELL_SIZE * 2,  // 2 units
     aggroRange: GRID.CELL_SIZE * 8,   // 8 units detection
     attackCooldown: 1.0,
-    attackWindup: 0.4,  // Fast attack
+    attackWindup: 1.0,  // Minimum 1 second telegraph
     attackType: 'melee',
     decisionInterval: 0.4,  // Moderately smart (reassess every 0.4s)
     color: '#888888',
@@ -41,12 +41,14 @@ export const ENEMIES = {
     name: 'Bat',
     hp: 1,
     speed: 70,
-    damage: 1,
+    damage: 1,  // Not used for sap attacks
     attackRange: GRID.CELL_SIZE * 1.5,  // 1.5 units (faster, closer)
     aggroRange: GRID.CELL_SIZE * 10,    // 10 units (very aware)
     attackCooldown: 0.8,
-    attackWindup: 0.3,  // Very fast
-    attackType: 'melee',
+    attackWindup: 0.5,  // Quick telegraph before latching
+    attackType: 'sap',  // Sapping attack - locks to player
+    sapDamage: 1,  // Fixed 1 damage per tick (not scaled by depth)
+    sapDamageInterval: 1.0,  // Deal damage every 1 second while sapping
     decisionInterval: 0.25,  // Very smart (fast reactions)
     color: '#444444',
     dropTable: 'beast',
@@ -61,7 +63,7 @@ export const ENEMIES = {
     attackRange: GRID.CELL_SIZE * 5,  // 5 units (ranged)
     aggroRange: GRID.CELL_SIZE * 10,  // 10 units (ranged awareness)
     attackCooldown: 1.5,
-    attackWindup: 0.5,  // Draw bow
+    attackWindup: 1.0,  // Minimum 1 second telegraph
     attackType: 'ranged',
     decisionInterval: 0.45,  // Moderately smart
     color: '#00aa00',
@@ -88,7 +90,7 @@ export const ENEMIES = {
     attackRange: GRID.CELL_SIZE * 2,  // 2 units
     aggroRange: GRID.CELL_SIZE * 8,   // 8 units
     attackCooldown: 1.1,
-    attackWindup: 0.45,
+    attackWindup: 1.0,  // Minimum 1 second telegraph
     attackType: 'melee',
     decisionInterval: 0.5,  // Average intelligence
     color: '#eeeeee',
@@ -104,7 +106,7 @@ export const ENEMIES = {
     attackRange: GRID.CELL_SIZE * 2.5,  // 2.5 units (heavy reach)
     aggroRange: GRID.CELL_SIZE * 7,     // 7 units (slower reaction)
     attackCooldown: 1.5,
-    attackWindup: 0.7,  // Slow heavy attack
+    attackWindup: 1.2,  // Slow heavy attack - longer telegraph
     attackType: 'melee',
     decisionInterval: 0.7,  // Dumb brute (slow to react)
     color: '#aa5500',
@@ -131,7 +133,7 @@ export const ENEMIES = {
     attackRange: GRID.CELL_SIZE * 7,  // 7 units (long range fire)
     aggroRange: GRID.CELL_SIZE * 12,  // 12 units (boss awareness)
     attackCooldown: 2.0,
-    attackWindup: 0.9,  // Long breath windup
+    attackWindup: 1.5,  // Long breath windup - boss telegraph
     attackType: 'fire',
     decisionInterval: 0.3,  // Ancient intelligence (boss-level smarts)
     color: '#ff0000',
@@ -147,7 +149,7 @@ export const ENEMIES = {
     attackRange: GRID.CELL_SIZE * 8,  // 8 units (longest range)
     aggroRange: GRID.CELL_SIZE * 12,  // 12 units (magical senses)
     attackCooldown: 2.5,
-    attackWindup: 0.6,  // Casting time
+    attackWindup: 1.0,  // Minimum 1 second telegraph
     attackType: 'magic',
     decisionInterval: 0.3,  // Highly intelligent (magical awareness)
     color: '#8800ff',
@@ -163,7 +165,7 @@ export const ENEMIES = {
     attackRange: GRID.CELL_SIZE * 2,  // 2 units
     aggroRange: GRID.CELL_SIZE * 9,   // 9 units (vigilant)
     attackCooldown: 1.3,
-    attackWindup: 0.5,  // Sword swing
+    attackWindup: 1.0,  // Minimum 1 second telegraph
     attackType: 'melee',
     decisionInterval: 0.35,  // Trained warrior (tactical)
     color: '#aaaaaa',
@@ -190,7 +192,7 @@ export const ENEMIES = {
     attackRange: GRID.CELL_SIZE * 2.5,  // 2.5 units (heavy reach)
     aggroRange: GRID.CELL_SIZE * 7,     // 7 units (slow to notice)
     attackCooldown: 1.8,
-    attackWindup: 0.7,  // Heavy swing
+    attackWindup: 1.2,  // Heavy swing - longer telegraph
     attackType: 'melee',
     decisionInterval: 0.75,  // Dumb brute (very slow reactions)
     color: '#00aa00',
@@ -206,7 +208,7 @@ export const ENEMIES = {
     attackRange: GRID.CELL_SIZE * 5,  // 5 units (ranged fire)
     aggroRange: GRID.CELL_SIZE * 9,   // 9 units
     attackCooldown: 1.5,
-    attackWindup: 0.6,
+    attackWindup: 1.0,  // Minimum 1 second telegraph
     attackType: 'fire',
     decisionInterval: 0.4,
     color: '#ff4400',
@@ -227,7 +229,7 @@ export const ENEMIES = {
     attackRange: GRID.CELL_SIZE * 2,  // 2 units (melee)
     aggroRange: GRID.CELL_SIZE * 8,   // 8 units
     attackCooldown: 1.8,
-    attackWindup: 0.6,
+    attackWindup: 1.0,  // Minimum 1 second telegraph
     attackType: 'melee',
     decisionInterval: 0.6,
     color: '#aaddff',
@@ -248,7 +250,7 @@ export const ENEMIES = {
     attackRange: GRID.CELL_SIZE * 2,  // 2 units (melee with poison)
     aggroRange: GRID.CELL_SIZE * 9,   // 9 units
     attackCooldown: 1.2,
-    attackWindup: 0.4,
+    attackWindup: 1.0,  // Minimum 1 second telegraph
     attackType: 'melee',
     decisionInterval: 0.35,
     color: '#44bb44',
@@ -269,7 +271,7 @@ export const ENEMIES = {
     attackRange: GRID.CELL_SIZE * 6,  // 6 units (magic)
     aggroRange: GRID.CELL_SIZE * 10,  // 10 units
     attackCooldown: 2.0,
-    attackWindup: 0.6,
+    attackWindup: 1.0,  // Minimum 1 second telegraph
     attackType: 'magic',
     decisionInterval: 0.4,
     color: '#9944ff',
@@ -296,7 +298,7 @@ export const ENEMIES = {
     attackRange: GRID.CELL_SIZE * 3,  // 3 units
     aggroRange: GRID.CELL_SIZE * 10,  // 10 units
     attackCooldown: 1.5,
-    attackWindup: 0.5,
+    attackWindup: 1.0,  // Minimum 1 second telegraph
     attackType: 'melee',
     decisionInterval: 0.45,
     color: '#6633aa',
@@ -324,7 +326,7 @@ export const ENEMIES = {
     attackRange: GRID.CELL_SIZE * 6,  // 6 units (ranged)
     aggroRange: GRID.CELL_SIZE * 10,  // 10 units
     attackCooldown: 1.8,
-    attackWindup: 0.5,
+    attackWindup: 1.0,  // Minimum 1 second telegraph
     attackType: 'ranged',
     decisionInterval: 0.45,
     color: '#00aa00',
@@ -351,7 +353,7 @@ export const ENEMIES = {
     attackRange: GRID.CELL_SIZE * 2,  // 2 units (melee)
     aggroRange: GRID.CELL_SIZE * 8,   // 8 units
     attackCooldown: 1.2,
-    attackWindup: 0.4,
+    attackWindup: 1.0,  // Minimum 1 second telegraph
     attackType: 'melee',
     decisionInterval: 0.3,
     color: '#ccaa00',

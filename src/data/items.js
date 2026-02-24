@@ -35,7 +35,7 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.MELEE,
     damage: 2,
     windup: 0.3,
-    recovery: 0.15,
+    recovery: 0.5,
     attackPattern: 'arc',
     patternSpeed: 0.05,
     range: 20,
@@ -50,7 +50,7 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
     damage: 1,
-    cooldown: 1.0,
+    cooldown: 2.0,
     bulletCount: 3,
     color: COLORS.ITEM
   },
@@ -61,7 +61,7 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.MELEE,
     damage: 3,
     windup: 0.45,
-    recovery: 0.15,
+    recovery: 0.8,
     attackPattern: 'arc',
     patternSpeed: 0.05,
     range: 20,
@@ -85,7 +85,7 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
     damage: 1,
-    cooldown: 0.25,
+    cooldown: 0.5,
     color: COLORS.ITEM
   },
   '⌘': {
@@ -121,7 +121,7 @@ export const ITEMS = {
     weaponSubtype: 'blunt',
     damage: 4,
     windup: 0.6,
-    recovery: 0.2,
+    recovery: 0.5,
     attackPattern: 'sweep',
     patternSpeed: 0.04,
     range: 22,
@@ -134,9 +134,9 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.MELEE,
     damage: 3,
     windup: 0.45,
-    recovery: 0.15,
+    recovery: 0.45,
     attackPattern: 'thrust',
-    patternSpeed: 0.05,
+    patternSpeed: 0.1,
     range: 28,
     color: COLORS.ITEM
   },
@@ -278,7 +278,7 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.MELEE,
     damage: 6,
     windup: 0.9,
-    recovery: 0.15,
+    recovery: 0.7,
     attackPattern: 'arc',
     patternSpeed: 0.05,
     range: 24,
@@ -292,7 +292,7 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
     damage: 2,
-    cooldown: 0.3,
+    cooldown: 2,
     color: '#aaaaaa'
   },
   '⚡': {
@@ -374,8 +374,8 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
     damage: 1,
-    cooldown: 0.15,
-    attackPattern: 'burst',
+    cooldown: 0.4,
+    maxUses: 30,
     color: '#888888'
   },
   '❄': {
@@ -495,7 +495,7 @@ export const ITEMS = {
     weaponSubtype: 'blunt',
     damage: 4,
     windup: 0.6,
-    recovery: 0.2,
+    recovery: 1.0, // Longer recovery to balance power
     attackPattern: 'shockwave',
     patternSpeed: 0.1,
     range: 24,
@@ -508,9 +508,9 @@ export const ITEMS = {
     name: 'Whip',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
-    damage: 2,
-    windup: 0.3,
-    recovery: 0.1,
+    damage: 1,
+    windup: 0.5,
+    recovery: 1.0, // Longer recovery to balance range
     attackPattern: 'whipcrack',
     patternSpeed: 0.02,
     range: 40,
@@ -522,12 +522,12 @@ export const ITEMS = {
     name: 'Flail',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
-    damage: 3,
+    damage: 2,
     windup: 0.45,
     recovery: 0.15,
     attackPattern: 'ring',
-    patternSpeed: 0.05,
-    range: 22,
+    patternSpeed: 0.2,
+    range: 26,
     color: '#aaaaaa'
   },
   '╫': {
@@ -601,12 +601,12 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.MELEE,
     damage: 3,
     windup: 0.2,
-    recovery: 0.15,
+    recovery: 0.4,
     attackPattern: 'multistab',
     patternSpeed: 0.05,
     range: 16,
     isBlade: true,
-    lifesteal: 0.6,
+    lifesteal: 1.0,
     color: '#990000'
   },
   '▼': {
@@ -863,6 +863,14 @@ export const ITEMS = {
     duration: 25,
     cooldown: 30, // Reusable with 30s cooldown
     color: '#ffdd44'
+  },
+  'o': {
+    char: 'o',
+    name: 'Path Amulet',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'pathTracker',
+    passive: true, // Passive effect when equipped (no activation)
+    color: '#ffaa00'
   },
   'v': {
     char: 'v',

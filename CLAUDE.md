@@ -23,6 +23,18 @@ Both modes share the same combat system (`CombatSystem.update()`), physics syste
 
 **PRESERVE TOP MENU SINGLE LINE**: The top status bar (HP | DEPTH | INVENTORY | QUICK SLOTS) must remain a single horizontal line. Never break it into multiple rows or add vertical elements. This is a critical layout constraint.
 
+## Critical Technical Constraints
+
+**NO localStorage**: This game does NOT use localStorage for any persistence. All game state resets on page refresh and on death. This is intentional for a true roguelike experience.
+
+- **NEVER implement save/load features** using localStorage, sessionStorage, or IndexedDB
+- **PersistenceSystem.js exists but is disabled** - the `saveGameState()` and `loadGame()` functions are no-ops
+- All state must be ephemeral and reset on page refresh
+- Character unlocks, crafting recipes, and inventory do NOT persist between sessions
+- If asked to add persistence, explain this design decision and suggest alternatives (e.g., unlockables within a single session)
+
+**Why this constraint exists**: The game had localStorage persistence that caused bugs with NPCs and captives persisting across sessions. To prevent these issues and maintain true roguelike design, all persistence has been permanently disabled.
+
 ## Architectural Maturity & Senior Developer Guidance
 
 This project has reached architectural maturity with well-established patterns, systems, and abstractions. When receiving feature requests:
@@ -67,28 +79,34 @@ This approach respects your time while ensuring the codebase remains clean, scal
 ```
 src/
 ├── data/           - Game content definitions
-│   ├── enemies.js  - Enemy stats, drops, spawn tables
-│   ├── items.js    - Weapons, armor, consumables, ingredients
-│   └── recipes.js  - Crafting recipes
+│   ├── characters.js   - Character roster definitions
+│   ├── enemies.js      - Enemy stats, drops, spawn tables
+│   ├── exitLetters.js  - Exit letter mappings for zones
+│   ├── items.js        - Weapons, armor, consumables, ingredients
+│   ├── recipes.js      - Crafting recipes
+│   └── zones.js        - Zone definitions and progression
 ├── entities/       - Game object classes
-│   ├── Player.js
+│   ├── BackgroundObject.js
+│   ├── Captive.js
+│   ├── Debris.js
 │   ├── Enemy.js
+│   ├── Ingredient.js
 │   ├── Item.js
 │   ├── Particle.js
-│   ├── Debris.js
-│   ├── Ingredient.js
-│   └── BackgroundObject.js
+│   └── Player.js
 ├── systems/        - Game logic systems
-│   ├── CombatSystem.js      - Damage, attacks, AI
-│   ├── RoomGenerator.js     - Level generation
-│   ├── PhysicsSystem.js     - Collisions, movement
-│   ├── CraftingSystem.js    - Recipe matching
 │   ├── CheatMenu.js         - Debug tools
-│   └── PersistenceSystem.js - Save/load
+│   ├── CombatSystem.js      - Damage calculations, projectiles
+│   ├── CraftingSystem.js    - Recipe matching
+│   ├── ExitSystem.js        - Exit handling and zone transitions
+│   ├── PersistenceSystem.js - Save/load (disabled)
+│   ├── PhysicsSystem.js     - Collisions, movement
+│   ├── RoomGenerator.js     - Level generation
+│   └── ZoneSystem.js        - Zone management
 ├── game/           - Core game loop
+│   ├── GameConfig.js
 │   ├── GameLoop.js
-│   ├── GameStateMachine.js
-│   └── GameConfig.js
+│   └── GameStateMachine.js
 ├── rendering/
 │   └── ASCIIRenderer.js
 └── main.js         - Entry point
@@ -141,7 +159,8 @@ Add to the `ENEMIES` object:
   aggroRange: GRID.CELL_SIZE * 10,
   attackCooldown: 1.5,
   attackWindup: 0.4,
-  attackType: 'melee' | 'ranged' | 'magic' | 'fire',
+  attackType: 'melee' | 'ranged' | 'magic' | 'fire' | 'sap',
+  sapDamageInterval: 1.0,  // For 'sap' type only - damage tick rate
   decisionInterval: 0.5,  // Lower = smarter
   color: '#rrggbb',
   drops: [
@@ -191,14 +210,23 @@ Add to `BACKGROUND_TYPES`:
 
 ### Modifying Combat Mechanics
 
-**File**: `src/systems/CombatSystem.js`
+**Projectiles & Damage**: `src/systems/CombatSystem.js`
+- `update()`: Main combat loop - projectiles, melee hits, DOT damage
+- `createAttack()` / `addAttack()`: Add player attacks to combat system
+- `createEnemyAttack()`: Add enemy attacks to combat system
+- `createExplosion()`: Area-of-effect damage
+- `createChainLightning()`: Chain lightning effect
 
-Key areas:
-- `fireBullet()`: Projectile creation
-- `swingMelee()`: Melee attack patterns
-- `fireArrow()`: Bow mechanics
-- `dealDamage()`: Damage calculation
-- Status effects: `applyBurn()`, `applyFreeze()`, etc.
+**Attack Creation**: `src/entities/Item.js`
+- `createMeleeAttack()`: Router for melee patterns (line 405)
+- `createBullet()`: Gun projectile creation (line 165)
+- `createArrow()`: Bow arrow creation with charge (line 729)
+- Individual pattern methods: `createMeleeArc()`, `createMeleeSweep()`, etc.
+
+**Status Effects**: `src/entities/Enemy.js`
+- `applyStatusEffect()`: Apply burn, freeze, poison, stun, etc.
+- `updateStatusEffects()`: Tick down effect durations and apply DOT
+- `getElementalModifier()`: Check resistances and weaknesses
 
 ### Adjusting Physics
 
@@ -262,17 +290,23 @@ Key areas:
 
 ### Creating Attack Patterns
 
-**File**: `src/systems/CombatSystem.js` → `swingMelee()`
+**Pattern Implementation**: `src/entities/Item.js` → `createMeleeAttack()` (line 405)
 
 Existing patterns:
-- `arc`: Sweeping arc in front
-- `thrust`: Forward stab
-- `sweep`: Wide horizontal swing
-- `ring`: 360° area attack
-- `shockwave`: Expanding wave
-- `multistab`: Multi-hit combo
+- `arc`: 3-hit sweeping arc (swords) - line 501
+- `sweep`: 5-position horizontal sweep (axes) - line 538
+- `thrust`: Linear forward thrust (spears) - line 610
+- `ring`: Sequential circular sweep (flails) - line 465
+- `shockwave`: Expanding concentric rings (hammers) - line 572
+- `multistab`: Rapid stabs in same spot (daggers) - line 641
+- `whipcrack`: Long linear crack (whips) - line 673
+- `slam`: Single massive strike with large hitbox - line 705
 
-Add new pattern in switch statement with angle calculations.
+**To add a new pattern:**
+1. Add method `createMeleeYourPattern(player)` in `Item.js`
+2. Return attack object(s) with position, damage, delay, duration
+3. Add case to switch statement in `createMeleeAttack()` (line 421)
+4. Reference pattern name in weapon definition's `attackPattern` property
 
 ## Testing
 

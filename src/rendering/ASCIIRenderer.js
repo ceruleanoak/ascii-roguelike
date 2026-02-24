@@ -67,7 +67,7 @@ export class ASCIIRenderer {
   }
 
   // Draw border (grid-based, background layer)
-  drawBorder(exits = { north: false, south: false, east: false, west: false }) {
+  drawBorder(exits = { north: false, south: false, east: false, west: false }, borderColor = COLORS.BORDER) {
     const centerX = Math.floor(GRID.COLS / 2);
     const centerY = Math.floor(GRID.ROWS / 2);
 
@@ -75,11 +75,11 @@ export class ASCIIRenderer {
     for (let x = 0; x < GRID.COLS; x++) {
       // Create gap in top border for north exit
       if (!(exits.north && x === centerX)) {
-        this.drawFilledCell(x, 0, COLORS.BORDER);
+        this.drawFilledCell(x, 0, borderColor);
       }
       // Create gap in bottom border for south exit
       if (!(exits.south && x === centerX)) {
-        this.drawFilledCell(x, GRID.ROWS - 1, COLORS.BORDER);
+        this.drawFilledCell(x, GRID.ROWS - 1, borderColor);
       }
     }
 
@@ -87,11 +87,11 @@ export class ASCIIRenderer {
     for (let y = 0; y < GRID.ROWS; y++) {
       // Create gap in left border for west exit
       if (!(exits.west && y === centerY)) {
-        this.drawFilledCell(0, y, COLORS.BORDER);
+        this.drawFilledCell(0, y, borderColor);
       }
       // Create gap in right border for east exit
       if (!(exits.east && y === centerY)) {
-        this.drawFilledCell(GRID.COLS - 1, y, COLORS.BORDER);
+        this.drawFilledCell(GRID.COLS - 1, y, borderColor);
       }
     }
   }

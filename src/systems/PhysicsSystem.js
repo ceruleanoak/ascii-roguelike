@@ -86,7 +86,14 @@ export class PhysicsSystem {
     }
 
     // Apply velocity multiplier for liquid water and tall grass
-    const velocityMultiplier = (inLiquid || inGrass) ? 0.5 : 1.0;
+    // Dodge roll ignores grass slowdown, grass reduced from 0.5 to 0.75
+    const isDodgeRolling = entity.dodgeRoll && entity.dodgeRoll.active;
+    let velocityMultiplier = 1.0;
+    if (inLiquid) {
+      velocityMultiplier = 0.5; // Water still slows significantly
+    } else if (inGrass && !isDodgeRolling) {
+      velocityMultiplier = 0.75; // Grass slows less, and not at all during roll
+    }
 
     // Update position with velocity multiplier
     const newX = entity.position.x + entity.velocity.vx * deltaTime * velocityMultiplier;

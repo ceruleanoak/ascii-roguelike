@@ -29,6 +29,7 @@ export class Captive {
 
   getColorForType(type) {
     const colors = {
+      'green': '#00ff00',
       'red': '#ff4444',
       'cyan': '#44ffff',
       'yellow': '#ffff44',

@@ -65,7 +65,9 @@ export const EQUIPMENT = {
   CONSUMABLE1_X: 26,
   CONSUMABLE1_Y: 12,
   CONSUMABLE2_X: 26,
-  CONSUMABLE2_Y: 14
+  CONSUMABLE2_Y: 14,
+  CONSUMABLE3_X: 26,
+  CONSUMABLE3_Y: 16
 };
 
 export const PLAYER_STATS = {
@@ -633,7 +635,8 @@ export const OBJECT_ANIMATIONS = {
   scatter: { duration: 0.4, frames: [{ x: 2, y: -2 }, { x: -2, y: 2 }, { char: '.' }, { char: ' ' }] },
   flicker: { duration: 0.3, colorFrames: ['#ff4400', '#ff8800', '#ff4400'] },
   glow: { duration: 0.4, colorFrames: ['#ffff00', '#ffffff', '#ffff00'] },
-  slide: { duration: 0.3, frames: [{ x: 1, y: 0 }, { x: 2, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 0 }] }
+  slide: { duration: 0.3, frames: [{ x: 1, y: 0 }, { x: 2, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 0 }] },
+  cutgrass: { duration: 0.25, frames: [{ char: '¦' }, { char: '`.‘' }, { char: '¸,¸' }] }
 };
 
 export const INTERACTION_RANGE = 24; // pixels

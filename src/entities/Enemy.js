@@ -25,8 +25,8 @@ export class Enemy {
     this.velocity = { vx: 0, vy: 0 };
     this.acceleration = { ax: 0, ay: 0 };
 
-    // Stats (scale with depth)
-    const depthMultiplier = 1 + (depth * 0.1);
+    // Stats (scale with depth - every 3 rooms, 5% increase)
+    const depthMultiplier = 1 + (Math.floor(depth / 3) * 0.05);
     this.hp = Math.ceil(this.data.hp * depthMultiplier);
     this.maxHp = this.hp;
     this.speed = this.data.speed;
@@ -91,10 +91,10 @@ export class Enemy {
 
     // Status effects
     this.statusEffects = {
-      burn: { active: false, duration: 0, damage: 0.5, tickRate: 1.5, tickTimer: 0 },
+      burn: { active: false, duration: 8, damage: 0.5, tickRate: 2.5, tickTimer: 0 },
       poison: { active: false, duration: 0, damage: 0.3, tickRate: 0.3, tickTimer: 0 },
       acid: { active: false, duration: 0, damage: 0.4, tickRate: 0.4, tickTimer: 0 },
-      bleed: { active: false, duration: 0, damage: 0.2, tickRate: 0.25, tickTimer: 0 },
+      bleed: { active: false, duration: 0, damage: 0.2, tickRate: 0.5, tickTimer: 0 },
       freeze: { active: false, duration: 0, slowAmount: 0.5 },
       stun: { active: false, duration: 0 },
       sleep: { active: false, duration: 0 },
@@ -136,6 +136,13 @@ export class Enemy {
       this.targetItem = null;
       this.shouldDropItems = false;
     }
+
+    // Sapping system (for bat enemy)
+    this.sapping = false;
+    this.sappingTarget = null;
+    this.sapDamageTimer = 0;
+    this.sapDamageInterval = this.data.sapDamageInterval || 1.0;
+    this.sapDamage = this.data.sapDamage || 1; // Fixed sap damage (not scaled by depth)
   }
 
   setCollisionMap(collisionMap) {
@@ -381,6 +388,27 @@ export class Enemy {
     // Knockback overrides AI (keeps velocity set by knockback)
     if (this.isKnockedBack()) {
       this.state = 'idle';
+      return { dotDamage: dotDamageEvents };
+    }
+
+    // Sapping behavior (locks to target position and deals periodic damage)
+    if (this.sapping && this.sappingTarget) {
+      // Lock to target's position
+      this.position.x = this.sappingTarget.position.x;
+      this.position.y = this.sappingTarget.position.y;
+      this.velocity.vx = 0;
+      this.velocity.vy = 0;
+
+      // Deal periodic damage (fixed amount, not scaled by depth)
+      this.sapDamageTimer -= deltaTime;
+      if (this.sapDamageTimer <= 0) {
+        this.sapDamageTimer = this.sapDamageInterval;
+        return {
+          dotDamage: dotDamageEvents,
+          sapDamage: { damage: this.sapDamage, target: this.sappingTarget }
+        };
+      }
+
       return { dotDamage: dotDamageEvents };
     }
 
@@ -993,6 +1021,10 @@ export class Enemy {
   }
 
   canAttack() {
+    // Sap attacks can start when within range and not already sapping
+    if (this.attackType === 'sap') {
+      return !this.sapping && this.state === 'attack' && this.attackTimer <= 0 && this.windupTimer <= 0;
+    }
     // Can only attack after windup completes
     return this.state === 'attack' && this.attackTimer <= 0 && this.windupTimer <= 0;
   }
@@ -1036,6 +1068,8 @@ export class Enemy {
         return this.createMagicAttack();
       case 'fire':
         return this.createFireBreath();
+      case 'sap':
+        return this.createSapAttack();
       default:
         return null;
     }
@@ -1078,6 +1112,45 @@ export class Enemy {
       owner: this,
       isCharmedAttack: this.isCharmed(),
       charmedTarget: this.isCharmed() ? this.target : null
+    };
+  }
+
+  // Create windup attack visual (shown during windup, before damage can be dealt)
+  createWindupAttackVisual() {
+    if (!this.target) return null;
+
+    const dx = this.target.position.x - this.position.x;
+    const dy = this.target.position.y - this.position.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance === 0) return null;
+
+    const dirX = dx / distance;
+    const dirY = dy / distance;
+
+    const attackDistance = GRID.CELL_SIZE + (this.attackRange - GRID.CELL_SIZE) * 0.5;
+
+    return {
+      type: 'enemy_melee',
+      char: '█',
+      position: {
+        x: this.position.x + dirX * attackDistance,
+        y: this.position.y + dirY * attackDistance
+      },
+      width: GRID.CELL_SIZE,
+      height: GRID.CELL_SIZE,
+      damage: this.damage,
+      duration: this.attackWindup + 0.15, // Windup + actual attack duration
+      color: this.color,
+      knockback: 300,
+      owner: this,
+      isCharmedAttack: this.isCharmed(),
+      charmedTarget: this.isCharmed() ? this.target : null,
+      windupPhase: true, // Mark as windup - cannot deal damage yet
+      hasHit: true, // Prevent damage during windup
+      windupDuration: this.attackWindup, // Store total windup time
+      windupElapsed: 0, // Track time elapsed in windup
+      alpha: 1.0 // Start at full visibility
     };
   }
 
@@ -1187,6 +1260,16 @@ export class Enemy {
     return projectiles;
   }
 
+  createSapAttack() {
+    // Start sapping - lock onto target and deal periodic damage
+    this.sapping = true;
+    this.sappingTarget = this.target;
+    this.sapDamageTimer = this.sapDamageInterval;
+    this.attackTimer = 0; // No cooldown while sapping
+    this.state = 'idle';
+    return null; // No attack object created - damage dealt in update()
+  }
+
   takeDamage(amount, attackId = null) {
     // Block during iframes unless the hit comes from the same attack burst that
     // triggered the iframe (allows multi-bullet weapons to land all their shots).
@@ -1202,6 +1285,11 @@ export class Enemy {
     if (this.statusEffects.sleep && this.statusEffects.sleep.active) {
       this.statusEffects.sleep.active = false;
       this.statusEffects.sleep.duration = 0;
+    }
+
+    // Sapping breaks on damage - enemy gets knocked away
+    if (this.sapping) {
+      this.breakSapping(200); // Knockback force
     }
 
     // Become enraged when attacked - never un-aggro
@@ -1282,6 +1370,12 @@ export class Enemy {
       return blinkCycle % 2 === 0 ? '#ff44ff' : this.baseColor;
     }
 
+    // Freeze blink (cyan/ice blue)
+    if (this.statusEffects.freeze && this.statusEffects.freeze.active) {
+      const blinkCycle = Math.floor(this.dotBlinkTimer / DOT_BLINK_FREQUENCY);
+      return blinkCycle % 2 === 0 ? '#00ffff' : this.baseColor;
+    }
+
     // Wet blink (blue, lowest priority - only shows when no DoT or stun active)
     if (this.statusEffects.wet && this.statusEffects.wet.active) {
       const blinkCycle = Math.floor(this.dotBlinkTimer / DOT_BLINK_FREQUENCY);
@@ -1322,6 +1416,17 @@ export class Enemy {
       return {
         char: '!',
         color: '#ffff00',
+        offsetY: -GRID.CELL_SIZE  // Position above enemy
+      };
+    }
+    return null;
+  }
+
+  getSappingIndicator() {
+    if (this.sapping) {
+      return {
+        char: '*',
+        color: '#ff0000',
         offsetY: -GRID.CELL_SIZE  // Position above enemy
       };
     }
@@ -1497,6 +1602,26 @@ export class Enemy {
     this.attackType = this.data.attackType || 'melee'; // Revert to original attack type
 
     return drops;
+  }
+
+  breakSapping(knockbackForce = 200) {
+    if (!this.sapping || !this.sappingTarget) return;
+
+    // Calculate knockback direction (away from target)
+    const dx = this.position.x - this.sappingTarget.position.x;
+    const dy = this.position.y - this.sappingTarget.position.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+    // Apply knockback
+    this.velocity.vx = (dx / dist) * knockbackForce;
+    this.velocity.vy = (dy / dist) * knockbackForce;
+    this.applyStatusEffect('knockback', 0.3);
+
+    // Clear sapping state
+    this.sapping = false;
+    this.sappingTarget = null;
+    this.sapDamageTimer = 0;
+    this.attackTimer = this.attackCooldown; // Reset attack cooldown
   }
 
   getHitbox() {
