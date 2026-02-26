@@ -758,6 +758,7 @@ class Game {
   }
 
   updateConsumableWindups(deltaTime) {
+    // DELEGATED TO InventorySystem
     const enemies = this.currentRoom ? this.currentRoom.enemies : [];
 
     for (let i = this.consumableWindups.length - 1; i >= 0; i--) {
@@ -1792,23 +1793,12 @@ class Game {
     // Reapply equipment effects each frame (keeps defense in sync with timed buffs)
     this.applyEquipmentEffects();
 
-    // Tick HUD flash timer for consumable slot
-    if (this.consumableFlashTimer > 0) {
-      this.consumableFlashTimer = Math.max(0, this.consumableFlashTimer - deltaTime);
-      if (this.consumableFlashTimer === 0) this.consumableFlashSlot = -1;
-    }
-
     // Tick dodge blocked feedback cooldown
     if (this.dodgeBlockedFeedbackTimer > 0) {
       this.dodgeBlockedFeedbackTimer -= deltaTime;
     }
 
-    // Tick consumable cooldowns
-    for (let i = 0; i < this.consumableCooldowns.length; i++) {
-      if (this.consumableCooldowns[i] > 0) {
-        this.consumableCooldowns[i] = Math.max(0, this.consumableCooldowns[i] - deltaTime);
-      }
-    }
+    // Consumable cooldowns and flash timer are now handled in InventorySystem.update()
 
     // Store previous position before physics update (for exit zone crossing detection)
     this.previousPlayerPosition.x = this.player.position.x;
@@ -2169,13 +2159,18 @@ class Game {
       }
     }
 
-    // Check consumable activation AFTER combat so damage-reactive thresholds
-    // (heal, speed, block) see the post-hit HP value. "Immediate" consumables
-    // (maxhp, luck) also fire here on their first frame — one frame delay is fine.
-    this.checkConsumableActivation();
-
-    // Update consumable windups (offensive items with drop animation)
-    this.updateConsumableWindups(deltaTime);
+    // Check consumable activation and update windups (delegated to InventorySystem)
+    // Check activation AFTER combat so damage-reactive thresholds (heal, speed, block)
+    // see the post-hit HP value. "Immediate" consumables (maxhp, luck) also fire here
+    // on their first frame — one frame delay is fine.
+    this.inventorySystem.update(
+      deltaTime,
+      this.player,
+      this.currentRoom,
+      this.combatSystem,
+      this.steamClouds,
+      this.particles
+    );
 
     // If a heal consumable fired and restored HP, treat the player as alive
     const playerDied = combatResult.playerDead || burnKilledPlayer;
