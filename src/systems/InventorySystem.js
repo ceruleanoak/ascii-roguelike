@@ -13,11 +13,23 @@
 
 export class InventorySystem {
   constructor() {
-    // REST inventory (persists through death, cleared on game over)
-    this.restInventory = []; // Ingredients only
-    this.restQuickSlots = [null, null, null]; // Weapons only
-    this.restActiveSlotIndex = 0; // Persistent active slot index
-    this.itemChest = []; // Storage for weapons
+    // PER-CHARACTER REST inventory (persists through death, cleared on game over)
+    // Each character has their own separate banked inventory and quick slots
+    this.characterInventories = {
+      'default': {
+        inventory: [],        // Ingredients only
+        quickSlots: [null, null, null],  // Weapons only
+        activeSlotIndex: 0    // Persistent active slot index
+      }
+    };
+
+    // Legacy properties - maintained for backward compatibility with existing code
+    // These point to the active character's data
+    this.restInventory = this.characterInventories['default'].inventory;
+    this.restQuickSlots = this.characterInventories['default'].quickSlots;
+    this.restActiveSlotIndex = this.characterInventories['default'].activeSlotIndex;
+
+    this.itemChest = []; // Storage for weapons (shared across all characters)
 
     // EXPLORE inventory (lost on death)
     this.armorInventory = []; // All collected armor
@@ -102,6 +114,61 @@ export class InventorySystem {
 
   getSavedExploreRoom() {
     return this.savedExploreRoom;
+  }
+
+  // ========== CHARACTER INVENTORY MANAGEMENT ==========
+
+  /**
+   * Set the active character and update legacy property pointers
+   * Creates character inventory slot if it doesn't exist
+   *
+   * @param {string} characterType - Character type (e.g., 'default', 'red', 'cyan')
+   */
+  setActiveCharacter(characterType) {
+    // Ensure character inventory exists
+    if (!this.characterInventories[characterType]) {
+      this.characterInventories[characterType] = {
+        inventory: [],
+        quickSlots: [null, null, null],
+        activeSlotIndex: 0
+      };
+    }
+
+    // Update legacy property pointers to active character's data
+    this.restInventory = this.characterInventories[characterType].inventory;
+    this.restQuickSlots = this.characterInventories[characterType].quickSlots;
+    this.restActiveSlotIndex = this.characterInventories[characterType].activeSlotIndex;
+
+    console.log(`[InventorySystem] Switched to character '${characterType}' inventory`);
+  }
+
+  /**
+   * Get character's inventory data
+   *
+   * @param {string} characterType - Character type
+   * @returns {Object} - { inventory, quickSlots, activeSlotIndex }
+   */
+  getCharacterInventory(characterType) {
+    if (!this.characterInventories[characterType]) {
+      return null;
+    }
+    return this.characterInventories[characterType];
+  }
+
+  /**
+   * Clear all character inventories (game over)
+   */
+  clearAllCharacterInventories() {
+    this.characterInventories = {
+      'default': {
+        inventory: [],
+        quickSlots: [null, null, null],
+        activeSlotIndex: 0
+      }
+    };
+
+    // Reset legacy pointers to default
+    this.setActiveCharacter('default');
   }
 
   // ========== PICKUP & DROP LOGIC ==========
@@ -801,19 +868,21 @@ export class InventorySystem {
 
   /**
    * Bank loot when returning from EXPLORE to REST
-   * Transfers player inventory (ingredients) to REST inventory
-   * Saves quick slots and active slot index
+   * Transfers player inventory (ingredients) to the active character's REST inventory
+   * Saves quick slots and active slot index for the active character
    *
    * @param {Array} playerInventory - Player's inventory (ingredients)
    * @param {Array} playerQuickSlots - Player's quick slots (weapons)
    * @param {number} playerActiveSlotIndex - Active slot index
    */
   bankLoot(playerInventory, playerQuickSlots, playerActiveSlotIndex) {
-    // ADD collected ingredients to REST inventory
-    this.restInventory = [...this.restInventory, ...playerInventory];
+    // ADD collected ingredients to active character's REST inventory
+    // Note: restInventory points to the active character's inventory
+    this.restInventory.push(...playerInventory);
 
-    // Save quick slots and active index
-    this.restQuickSlots = [...playerQuickSlots];
+    // Save quick slots and active index to active character
+    this.restQuickSlots.length = 0;
+    this.restQuickSlots.push(...playerQuickSlots);
     this.restActiveSlotIndex = playerActiveSlotIndex;
 
     console.log('[bankLoot] Added', playerInventory.length, 'ingredients to REST inventory. Total:', this.restInventory.length);
@@ -822,12 +891,14 @@ export class InventorySystem {
 
   /**
    * Handle full game over (death in EXPLORE)
-   * Clears ALL inventories including REST inventory and quick slots
+   * Clears ALL inventories including ALL character REST inventories
    * This is the "true roguelike" full reset
    */
   handleGameOver() {
-    // Clear all inventories and equipment on death (true roguelike)
-    this.restInventory = [];
+    // Clear ALL character inventories (true roguelike reset)
+    this.clearAllCharacterInventories();
+
+    // Clear shared inventories and equipment
     this.itemChest = [];
     this.armorInventory = [];
     this.consumableInventory = [];
@@ -844,8 +915,7 @@ export class InventorySystem {
     // Clear saved EXPLORE room
     this.clearSavedExploreRoom();
 
-    // NOTE: Quick slots are cleared separately in the main game over handler
-    // They persist through individual deaths but are cleared on full game over
+    console.log('[handleGameOver] Cleared all character inventories');
   }
 
   /**

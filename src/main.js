@@ -563,6 +563,9 @@ class Game {
       return;
     }
 
+    // Switch inventory system to this character's banked inventory
+    this.inventorySystem.setActiveCharacter(type);
+
     // Update player visual
     this.player.color = charData.color;
     this.player.baseColor = charData.color; // Store base color for status blinking
