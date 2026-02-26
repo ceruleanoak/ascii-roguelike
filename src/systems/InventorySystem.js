@@ -117,26 +117,8 @@ export class InventorySystem {
    * @returns {Object} - { success: boolean, droppedItem: Item|null, message: string|null, removedTrap: boolean }
    */
   tryPickupItem(items, placedTraps, player, physicsSystem) {
-    // Check placed traps first (SPACE picks them back up into quick slot)
-    for (let i = 0; i < placedTraps.length; i++) {
-      const trapEntry = placedTraps[i];
-      const dx = trapEntry.item.position.x - player.position.x;
-      const dy = trapEntry.item.position.y - player.position.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      if (distance < 20) {
-        // Put trap back into quick slot (same path as weapons)
-        const droppedItem = player.pickupItem(trapEntry.item);
-        placedTraps.splice(i, 1);
-
-        return {
-          success: true,
-          droppedItem: droppedItem,
-          message: trapEntry.item.data.name,
-          removedTrap: true
-        };
-      }
-    }
+    // NOTE: Placed traps (activated with SPACE) are NOT pickable - they're active traps
+    // Only dropped traps (swapped from quick slots) in the items array can be picked up
 
     // Check ground items
     for (let i = 0; i < items.length; i++) {
