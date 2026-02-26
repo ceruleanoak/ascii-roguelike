@@ -581,41 +581,7 @@ class Game {
   }
 
   applyEquipmentEffects() {
-    // Reset all armor properties
-    this.player.defense = 0;
-    this.player.bulletResist = 0;
-    this.player.dodgeChance = 0;
-    this.player.fireImmune = false;
-    this.player.freezeImmune = false;
-    this.player.poisonImmune = false;
-    this.player.slimeImmune = false;
-    this.player.reflectDamage = 0;
-    this.player.speedBoost = 0;
-    this.player.speedPenalty = 0;
-    this.player.slowEnemies = false;
-
-    // Apply equipped armor properties
-    if (this.equippedArmor) {
-      this.player.defense = this.equippedArmor.defense || 0;
-      this.player.bulletResist = this.equippedArmor.bulletResist || 0;
-      this.player.dodgeChance = this.equippedArmor.dodgeChance || 0;
-      this.player.fireImmune = this.equippedArmor.fireImmune || false;
-      this.player.freezeImmune = this.equippedArmor.freezeImmune || false;
-      this.player.poisonImmune = this.equippedArmor.poisonImmune || false;
-      this.player.slimeImmune = this.equippedArmor.slimeImmune || false;
-      this.player.reflectDamage = this.equippedArmor.reflectDamage || 0;
-      this.player.speedBoost = this.equippedArmor.speedBoost || 0;
-      this.player.speedPenalty = this.equippedArmor.speedPenalty || 0;
-      this.player.slowEnemies = this.equippedArmor.slowEnemies || false;
-    }
-
-    // Add temporary block boost from Metal Block consumable
-    if (this.player.blockBoostTimer > 0) {
-      this.player.defense += this.player.blockBoostAmount;
-    }
-
-    // Store equipped consumables for condition checking during gameplay
-    this.player.equippedConsumables = [...this.equippedConsumables];
+    this.inventorySystem.applyEquipmentEffectsToPlayer(this.player);
   }
 
   // Character system methods

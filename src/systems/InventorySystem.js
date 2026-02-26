@@ -266,4 +266,50 @@ export class InventorySystem {
 
     return previousConsumable;
   }
+
+  // ========== ARMOR EFFECTS APPLICATION ==========
+
+  /**
+   * Apply equipped armor effects to player
+   * Resets player stats, applies armor properties, adds block boost if active
+   *
+   * @param {Player} player - Player entity to apply effects to
+   */
+  applyEquipmentEffectsToPlayer(player) {
+    // Reset all armor properties
+    player.defense = 0;
+    player.bulletResist = 0;
+    player.dodgeChance = 0;
+    player.fireImmune = false;
+    player.freezeImmune = false;
+    player.poisonImmune = false;
+    player.slimeImmune = false;
+    player.reflectDamage = 0;
+    player.speedBoost = 0;
+    player.speedPenalty = 0;
+    player.slowEnemies = false;
+
+    // Apply equipped armor properties
+    if (this.equippedArmor) {
+      player.defense = this.equippedArmor.defense || 0;
+      player.bulletResist = this.equippedArmor.bulletResist || 0;
+      player.dodgeChance = this.equippedArmor.dodgeChance || 0;
+      player.fireImmune = this.equippedArmor.fireImmune || false;
+      player.freezeImmune = this.equippedArmor.freezeImmune || false;
+      player.poisonImmune = this.equippedArmor.poisonImmune || false;
+      player.slimeImmune = this.equippedArmor.slimeImmune || false;
+      player.reflectDamage = this.equippedArmor.reflectDamage || 0;
+      player.speedBoost = this.equippedArmor.speedBoost || 0;
+      player.speedPenalty = this.equippedArmor.speedPenalty || 0;
+      player.slowEnemies = this.equippedArmor.slowEnemies || false;
+    }
+
+    // Add temporary block boost from Metal Block consumable
+    if (player.blockBoostTimer > 0) {
+      player.defense += player.blockBoostAmount;
+    }
+
+    // Store equipped consumables for condition checking during gameplay
+    player.equippedConsumables = [...this.equippedConsumables];
+  }
 }
