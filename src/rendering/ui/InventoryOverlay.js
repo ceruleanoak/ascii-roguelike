@@ -51,7 +51,7 @@ export class InventoryOverlay {
     let index = 0;
 
     // Check if all inventories are empty
-    const totalItems = game.player.inventory.length + game.armorInventory.length + game.consumableInventory.length;
+    const totalItems = game.player.inventory.length + game.inventorySystem.armorInventory.length + game.inventorySystem.consumableInventory.length;
 
     if (totalItems === 0) {
       this.renderer.drawEntity(
@@ -102,7 +102,7 @@ export class InventoryOverlay {
       }
 
       // Draw armor section
-      if (game.armorInventory.length > 0) {
+      if (game.inventorySystem.armorInventory.length > 0) {
         // Section header
         this.renderer.fgCtx.fillStyle = '#aaaaff';
         this.renderer.fgCtx.textAlign = 'left';
@@ -111,7 +111,7 @@ export class InventoryOverlay {
         index++;
 
         // Draw armor items
-        for (const armor of game.armorInventory) {
+        for (const armor of game.inventorySystem.armorInventory) {
           const y = startY + index * lineHeight;
 
           // Draw armor character
@@ -134,7 +134,7 @@ export class InventoryOverlay {
       }
 
       // Draw consumables section
-      if (game.consumableInventory.length > 0) {
+      if (game.inventorySystem.consumableInventory.length > 0) {
         // Section header
         this.renderer.fgCtx.fillStyle = '#ffaa00';
         this.renderer.fgCtx.textAlign = 'left';
@@ -143,7 +143,7 @@ export class InventoryOverlay {
         index++;
 
         // Draw consumable items
-        for (const consumable of game.consumableInventory) {
+        for (const consumable of game.inventorySystem.consumableInventory) {
           const y = startY + index * lineHeight;
 
           // Draw consumable character

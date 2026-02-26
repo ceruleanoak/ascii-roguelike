@@ -65,37 +65,8 @@ class Game {
     this.dodgeBlockedFeedbackTimer = 0; // Cooldown for red X feedback
     this.showVectors = false; // Debug: Toggle with 'v' key
 
-    // REST inventory (cleared on death)
-    this.restInventory = []; // Ingredients only
-    this.restQuickSlots = [null, null, null]; // Weapons only
-    this.restActiveSlotIndex = 0; // Persistent active slot index
-
-    // EXPLORE room persistence (prevents room cycling cheat)
-    this.savedExploreRoom = null; // Last explore room before returning to REST
-    this.savedExploreItems = [];
-    this.savedExploreIngredients = [];
-    this.savedExplorePlacedTraps = [];
-    this.savedExploreEnemies = [];
-    this.savedExploreBackgroundObjects = [];
-    this.savedExploreCaptives = [];
-
-    // Inventory for armor and consumables (lost on death)
-    this.armorInventory = []; // All collected armor
-    this.consumableInventory = []; // All collected consumables
-
-    // Equipment slots (lost on death)
-    this.equippedArmor = null; // Single armor slot
-    this.equippedConsumables = [null, null]; // 2 consumable slots
-    this.itemChest = []; // Storage for weapons
-
-    // Consumable HUD feedback state
-    this.spentConsumableSlots = [false, false]; // tracks ONE-SHOT used slots this run
-    this.consumableCooldowns = [0, 0];          // cooldown timers for reusable consumables
-    this.consumableFlashTimer = 0;              // HUD flash duration in seconds
-    this.consumableFlashSlot = -1;             // which slot is flashing (-1 = none)
-
-    // Consumable windup system (for offensive items)
-    this.consumableWindups = []; // { consumable, slotIndex, timer, maxTimer, x, y, blinkTimer }
+    // ALL INVENTORY STATE NOW IN InventorySystem
+    // Access via: this.inventorySystem.property
 
     // Room preview state
     this.roomPreviews = {
@@ -494,9 +465,9 @@ class Game {
     this.applyCharacterType(this.activeCharacterType);
 
     // Restore safe REST inventory and quick slots (not lost on death)
-    this.player.inventory = [...this.restInventory];
-    this.player.quickSlots = [...this.restQuickSlots];
-    this.player.activeSlotIndex = this.restActiveSlotIndex;
+    this.player.inventory = [...this.inventorySystem.restInventory];
+    this.player.quickSlots = [...this.inventorySystem.restQuickSlots];
+    this.player.activeSlotIndex = this.inventorySystem.restActiveSlotIndex;
     console.log('[enterRestState] Restored quick slots:', this.player.quickSlots);
 
     // Create basic REST room with collision map (walls on all borders except north exit)
@@ -539,7 +510,7 @@ class Game {
     this.activeNoiseSource = null;
 
     // Give player starting ingredients (for testing) - only on first entry
-    if (this.restInventory.length === 0 && this.depth === 0) {
+    if (this.inventorySystem.restInventory.length === 0 && this.depth === 0) {
       // 2 of each ingredient allows for multiple crafting experiments
       this.player.addIngredient('|'); // Stick (x2)
       this.player.addIngredient('|');
@@ -550,7 +521,7 @@ class Game {
       this.player.addIngredient('f'); // Fur (x2)
       this.player.addIngredient('f');
       // Also save to restInventory so they persist
-      this.restInventory = [...this.player.inventory];
+      this.inventorySystem.restInventory = [...this.player.inventory];
     }
 
     // Spawn character NPCs (other unlocked characters standing around)
@@ -737,7 +708,7 @@ class Game {
 
   checkPathAmulet() {
     // Check if Path Amulet is equipped in either consumable slot
-    const hasPathAmulet = this.equippedConsumables.some(consumable =>
+    const hasPathAmulet = this.inventorySystem.equippedConsumables.some(consumable =>
       consumable && consumable.char === 'o' && consumable.effect === 'pathTracker'
     );
 
@@ -761,8 +732,8 @@ class Game {
     // DELEGATED TO InventorySystem
     const enemies = this.currentRoom ? this.currentRoom.enemies : [];
 
-    for (let i = this.consumableWindups.length - 1; i >= 0; i--) {
-      const windup = this.consumableWindups[i];
+    for (let i = this.inventorySystem.consumableWindups.length - 1; i >= 0; i--) {
+      const windup = this.inventorySystem.consumableWindups[i];
       windup.timer -= deltaTime;
       windup.blinkTimer += deltaTime;
 
@@ -878,8 +849,8 @@ class Game {
         }
 
         // Flash HUD slot
-        this.consumableFlashSlot = windup.slotIndex;
-        this.consumableFlashTimer = 0.5;
+        this.inventorySystem.consumableFlashSlot = windup.slotIndex;
+        this.inventorySystem.consumableFlashTimer = 0.5;
 
         // Handle consumption based on one-shot vs reusable
         if (windup.isOneShot) {
@@ -887,12 +858,12 @@ class Game {
           console.log(`${cd.name} triggered (one-shot consumed)!`);
         } else {
           // Start cooldown for reusable
-          this.consumableCooldowns[windup.slotIndex] = cd.cooldown || 10;
+          this.inventorySystem.consumableCooldowns[windup.slotIndex] = cd.cooldown || 10;
           console.log(`${cd.name} triggered (${cd.cooldown}s cooldown started)!`);
         }
 
         // Remove windup
-        this.consumableWindups.splice(i, 1);
+        this.inventorySystem.consumableWindups.splice(i, 1);
         this.saveGameState();
       }
     }
@@ -904,13 +875,13 @@ class Game {
     for (let i = 0; i < this.player.equippedConsumables.length; i++) {
       const consumable = this.player.equippedConsumables[i];
       if (!consumable) continue;
-      if (this.spentConsumableSlots[i]) continue; // One-shot consumables already used
+      if (this.inventorySystem.spentConsumableSlots[i]) continue; // One-shot consumables already used
 
       // Skip if on cooldown (reusable consumables)
-      if (this.consumableCooldowns[i] > 0) continue;
+      if (this.inventorySystem.consumableCooldowns[i] > 0) continue;
 
       // Skip if already winding up
-      if (this.consumableWindups.some(w => w.slotIndex === i)) continue;
+      if (this.inventorySystem.consumableWindups.some(w => w.slotIndex === i)) continue;
 
       let shouldTrigger = false;
       let triggerData = null; // Store trigger conditions for offensive items
@@ -1136,7 +1107,7 @@ class Game {
         // Check if this needs windup (offensive items)
         if (triggerData && triggerData.windup) {
           // Start windup for offensive consumables
-          this.consumableWindups.push({
+          this.inventorySystem.consumableWindups.push({
             consumable: consumable,
             slotIndex: i,
             timer: triggerData.windup,
@@ -1151,13 +1122,13 @@ class Game {
           // Handle consumption
           if (isOneShot) {
             // One-shot: remove permanently
-            this.spentConsumableSlots[i] = true;
-            this.equippedConsumables[i] = null;
+            this.inventorySystem.spentConsumableSlots[i] = true;
+            this.inventorySystem.equippedConsumables[i] = null;
             this.player.equippedConsumables[i] = null;
             console.log(`${cd.name} windup started (one-shot)!`);
           } else {
             // Reusable: start cooldown
-            this.consumableCooldowns[i] = cd.cooldown || 10;
+            this.inventorySystem.consumableCooldowns[i] = cd.cooldown || 10;
             console.log(`${cd.name} windup started (${cd.cooldown}s cooldown)!`);
           }
         } else {
@@ -1168,21 +1139,21 @@ class Game {
             this.player.position.y - GRID.CELL_SIZE * 0.5,
             consumable.color || COLORS.ITEM
           );
-          this.consumableFlashSlot = i;
-          this.consumableFlashTimer = 0.5;
+          this.inventorySystem.consumableFlashSlot = i;
+          this.inventorySystem.consumableFlashTimer = 0.5;
           const burst = createActivationBurst(this.player.position.x, this.player.position.y, consumable.color || COLORS.ITEM);
           this.particles.push(...burst);
 
           // Handle consumption
           if (isOneShot) {
             // One-shot: remove permanently
-            this.spentConsumableSlots[i] = true;
-            this.equippedConsumables[i] = null;
+            this.inventorySystem.spentConsumableSlots[i] = true;
+            this.inventorySystem.equippedConsumables[i] = null;
             this.player.equippedConsumables[i] = null;
             console.log(`Auto-activated ${cd.name} (one-shot)!`);
           } else {
             // Reusable: start cooldown
-            this.consumableCooldowns[i] = cd.cooldown || 10;
+            this.inventorySystem.consumableCooldowns[i] = cd.cooldown || 10;
             console.log(`Auto-activated ${cd.name} (${cd.cooldown}s cooldown)!`);
           }
 
@@ -1249,11 +1220,11 @@ class Game {
     }
 
     // Reset consumable HUD feedback state for new explore run
-    this.spentConsumableSlots = [false, false];
-    this.consumableCooldowns = [0, 0]; // Reset cooldowns for new room
-    this.consumableFlashTimer = 0;
-    this.consumableFlashSlot = -1;
-    this.consumableWindups = []; // Clear any pending windups
+    this.inventorySystem.spentConsumableSlots = [false, false];
+    this.inventorySystem.consumableCooldowns = [0, 0]; // Reset cooldowns for new room
+    this.inventorySystem.consumableFlashTimer = 0;
+    this.inventorySystem.consumableFlashSlot = -1;
+    this.inventorySystem.consumableWindups = []; // Clear any pending windups
 
     // Generate or restore room
     if (shouldRestoreExploreRoom) {
@@ -2199,9 +2170,9 @@ class Game {
         );
         const burst = createActivationBurst(this.player.position.x, this.player.position.y, feather.color);
         this.particles.push(...burst);
-        this.equippedConsumables[reviveIdx] = null;
+        this.inventorySystem.equippedConsumables[reviveIdx] = null;
         this.player.equippedConsumables[reviveIdx] = null;
-        this.spentConsumableSlots[reviveIdx] = true;
+        this.inventorySystem.spentConsumableSlots[reviveIdx] = true;
         this.saveGameState();
         console.log('✨ Phoenix Feather activated — death intercepted! HP restored to ' + this.player.hp);
         // fall through — do NOT transition to GAME_OVER
@@ -2242,10 +2213,10 @@ class Game {
           // Keep: restInventory (banked ingredients), itemChest, armorInventory, consumableInventory (REST storage persists)
           // Note: Player loses any ingredients collected during current EXPLORE run (in player.inventory)
           // but keeps banked ingredients (in restInventory)
-          this.restQuickSlots = [null, null, null]; // Clear equipped weapons
-          this.restActiveSlotIndex = 0;
-          this.equippedArmor = null; // Clear active armor
-          this.equippedConsumables = [null, null]; // Clear active consumables
+          this.inventorySystem.restQuickSlots = [null, null, null]; // Clear equipped weapons
+          this.inventorySystem.restActiveSlotIndex = 0;
+          this.inventorySystem.equippedArmor = null; // Clear active armor
+          this.inventorySystem.equippedConsumables = [null, null]; // Clear active consumables
 
           // Respawn as next character
           const nextCharacter = livingCharacters[0];
@@ -2450,9 +2421,9 @@ class Game {
         if (shouldPickup) {
           // Route to correct inventory
           if (item.data.type === 'ARMOR') {
-            this.armorInventory.push(item);
+            this.inventorySystem.armorInventory.push(item);
           } else if (item.data.type === 'CONSUMABLE') {
-            this.consumableInventory.push(item);
+            this.inventorySystem.consumableInventory.push(item);
           }
 
           this.showPickupMessage(item.data.name);
@@ -2637,8 +2608,8 @@ class Game {
         this.depth = 0;
 
         // Clear held items on death (but keep crafting slots)
-        this.restQuickSlots = [null, null, null];
-        this.restActiveSlotIndex = 0;
+        this.inventorySystem.restQuickSlots = [null, null, null];
+        this.inventorySystem.restActiveSlotIndex = 0;
 
         // Clear all inventories and equipment on death (true roguelike)
         this.inventorySystem.handleGameOver();
@@ -2705,9 +2676,9 @@ class Game {
                 // Create item entity and route to correct inventory
                 const item = new Item(char, this.player.position.x, this.player.position.y);
                 if (item.data.type === 'ARMOR') {
-                  this.armorInventory.push(item);
+                  this.inventorySystem.armorInventory.push(item);
                 } else if (item.data.type === 'CONSUMABLE') {
-                  this.consumableInventory.push(item);
+                  this.inventorySystem.consumableInventory.push(item);
                 } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
                   this.player.pickupItem(item);
                 }
@@ -2735,9 +2706,9 @@ class Game {
                 // Create item entity and route to correct inventory
                 const item = new Item(char, this.player.position.x, this.player.position.y);
                 if (item.data.type === 'ARMOR') {
-                  this.armorInventory.push(item);
+                  this.inventorySystem.armorInventory.push(item);
                 } else if (item.data.type === 'CONSUMABLE') {
-                  this.consumableInventory.push(item);
+                  this.inventorySystem.consumableInventory.push(item);
                 } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
                   this.player.pickupItem(item);
                 }
@@ -2762,17 +2733,17 @@ class Game {
             if (item) {
               // Route crafted items to correct inventory based on type
               if (item.data.type === 'ARMOR') {
-                this.armorInventory.push(item);
+                this.inventorySystem.armorInventory.push(item);
                 this.showPickupMessage(item.data.name);
               } else if (item.data.type === 'CONSUMABLE') {
-                this.consumableInventory.push(item);
+                this.inventorySystem.consumableInventory.push(item);
                 this.showPickupMessage(item.data.name);
               } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
                 const droppedItem = this.player.pickupItem(item);
                 this.showPickupMessage(item.data.name);
                 // Send displaced weapon to chest instead of the explore floor
                 if (droppedItem) {
-                  this.itemChest.push(droppedItem);
+                  this.inventorySystem.addToChest(droppedItem);
                   this.showPickupMessage(`${droppedItem.data.name} → chest`);
                 }
               }
@@ -2864,7 +2835,7 @@ class Game {
         // Handle chest - store current held item
         if (nearestSlot.type === 'equipment-chest') {
           if (this.player.heldItem) {
-            this.itemChest.push(this.player.heldItem);
+            this.inventorySystem.addToChest(this.player.heldItem);
             this.player.quickSlots[this.player.activeSlotIndex] = null;
 
             // Auto-switch to next filled slot if available
@@ -3016,13 +2987,13 @@ class Game {
     } else if (type === ITEM_TYPES.WEAPON || type === ITEM_TYPES.TRAP) {
       // Add weapon/trap to item chest
       const item = new Item(char, 0, 0);
-      this.itemChest.push(item);
+      this.inventorySystem.addToChest(item);
       console.log(`[CHEAT] ✓ Added ${type === ITEM_TYPES.TRAP ? 'trap' : 'weapon'} to chest: ${name}`);
     } else if (type === ITEM_TYPES.ARMOR) {
       // Add armor to armor chest (inventory)
       const item = new Item(char, 0, 0);
-      if (!this.armorInventory.some(a => a.char === char)) {
-        this.armorInventory.push(item);
+      if (!this.inventorySystem.armorInventory.some(a => a.char === char)) {
+        this.inventorySystem.armorInventory.push(item);
         console.log(`[CHEAT] ✓ Added armor to chest: ${name}`);
       } else {
         console.log(`[CHEAT] ⚠ Already have armor: ${name}`);
@@ -3030,8 +3001,8 @@ class Game {
     } else if (type === ITEM_TYPES.CONSUMABLE) {
       // Add consumable to consumable chest (inventory)
       const item = new Item(char, 0, 0);
-      if (!this.consumableInventory.some(c => c.char === char)) {
-        this.consumableInventory.push(item);
+      if (!this.inventorySystem.consumableInventory.some(c => c.char === char)) {
+        this.inventorySystem.consumableInventory.push(item);
         console.log(`[CHEAT] ✓ Added consumable to chest: ${name}`);
       } else {
         console.log(`[CHEAT] ⚠ Already have consumable: ${name}`);
@@ -3624,7 +3595,7 @@ class Game {
     this.ui.depth.textContent = this.depth;
 
     // Highlight inventory count when I key is pressed
-    const inventoryCount = this.player.inventory.length + this.armorInventory.length + this.consumableInventory.length;
+    const inventoryCount = this.player.inventory.length + this.inventorySystem.armorInventory.length + this.inventorySystem.consumableInventory.length;
     if (this.keys.i) {
       this.ui.inventory.innerHTML = `<span style="color: ${COLORS.ITEM}">${inventoryCount}</span>`;
     } else {
@@ -3653,15 +3624,15 @@ class Game {
     this.ui.heldItem.innerHTML = `<span style="color: ${qColor}">Q</span> ${slots.join('')} <span style="color: ${eColor}">E</span>`;
 
     // Armor display
-    const armorChar = this.equippedArmor ? this.equippedArmor.char : '.';
-    const armorColor = this.equippedArmor ? (this.equippedArmor.color || '#aaaaff') : '#444';
+    const armorChar = this.inventorySystem.equippedArmor ? this.inventorySystem.equippedArmor.char : '.';
+    const armorColor = this.inventorySystem.equippedArmor ? (this.inventorySystem.equippedArmor.color || '#aaaaff') : '#444';
     this.ui.armorChar.textContent = armorChar;
     this.ui.armorChar.style.color = armorColor;
 
-    // Consumable display — use player's copy during explore, fall back to this.equippedConsumables
+    // Consumable display — use player's copy during explore, fall back to this.inventorySystem.equippedConsumables
     const consumables = (this.player && this.player.equippedConsumables)
       ? this.player.equippedConsumables
-      : this.equippedConsumables;
+      : this.inventorySystem.equippedConsumables;
     const consumableEls = [this.ui.consumableChar1, this.ui.consumableChar2];
     for (let i = 0; i < 2; i++) {
       const el = consumableEls[i];
@@ -3670,17 +3641,17 @@ class Game {
         el.textContent = consumables[i].char;
 
         // Color priority: flash white > cooldown gray > normal color
-        if (this.consumableFlashSlot === i && this.consumableFlashTimer > 0) {
+        if (this.inventorySystem.consumableFlashSlot === i && this.inventorySystem.consumableFlashTimer > 0) {
           // Flash white when activated
           el.style.color = '#ffffff';
-        } else if (this.consumableCooldowns[i] > 0) {
+        } else if (this.inventorySystem.consumableCooldowns[i] > 0) {
           // Gray when on cooldown (reusable consumables)
           el.style.color = '#666666';
         } else {
           // Normal color when ready
           el.style.color = consumables[i].color || COLORS.ITEM;
         }
-      } else if (this.spentConsumableSlots[i]) {
+      } else if (this.inventorySystem.spentConsumableSlots[i]) {
         // Spent slot: dim indicator (one-shot consumables used)
         el.textContent = '.';
         el.style.color = '#333';
@@ -3719,14 +3690,8 @@ class Game {
     this.currentMenuSlot = 'chest';
     this.selectedMenuIndex = 0;
 
-    // List all items in chest for retrieval
-    const menuOptions = [];
-
-    for (const item of this.itemChest) {
-      menuOptions.push({ action: 'retrieve', item: item, label: `${item.char} - ${item.data.name}` });
-    }
-
-    this.menuItems = menuOptions;
+    // Get chest contents from InventorySystem
+    this.menuItems = this.inventorySystem.getChestContents();
     this.renderController.menuOverlay.render(this);
   }
 
@@ -3750,14 +3715,11 @@ class Game {
         const droppedItem = this.player.pickupItem(item);
 
         // Remove from chest
-        const chestIndex = this.itemChest.indexOf(item);
-        if (chestIndex > -1) {
-          this.itemChest.splice(chestIndex, 1);
-        }
+        this.inventorySystem.retrieveFromChest(item);
 
         // If something was dropped (all slots full), put it back in chest and keep menu open
         if (droppedItem) {
-          this.itemChest.push(droppedItem);
+          this.inventorySystem.addToChest(droppedItem);
           // Keep menu open, refresh the list
           this.saveGameState();
           this.updateUI();

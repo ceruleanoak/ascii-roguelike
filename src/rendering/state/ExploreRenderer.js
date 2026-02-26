@@ -272,7 +272,7 @@ export class ExploreRenderer {
     }
 
     // Draw consumable windups (dropped items during charge-up)
-    for (const windup of game.consumableWindups) {
+    for (const windup of game.inventorySystem.consumableWindups) {
       // Blink effect: show/hide every 0.15 seconds, faster as timer runs out
       const blinkSpeed = Math.max(0.1, windup.timer * 0.15);
       const shouldShow = Math.floor(windup.blinkTimer / blinkSpeed) % 2 === 0;

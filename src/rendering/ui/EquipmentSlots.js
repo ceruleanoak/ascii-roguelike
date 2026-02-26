@@ -26,8 +26,8 @@ export class EquipmentSlots {
     this.renderer.drawCell(EQUIPMENT.ARMOR_X + 1, EQUIPMENT.ARMOR_Y, ']', COLORS.BORDER);
 
     // Draw equipped armor
-    if (game.equippedArmor) {
-      this.renderer.drawCell(EQUIPMENT.ARMOR_X, EQUIPMENT.ARMOR_Y, game.equippedArmor.char, game.equippedArmor.color);
+    if (game.inventorySystem.equippedArmor) {
+      this.renderer.drawCell(EQUIPMENT.ARMOR_X, EQUIPMENT.ARMOR_Y, game.inventorySystem.equippedArmor.char, game.inventorySystem.equippedArmor.color);
     }
 
     // Draw consumable slot 1 (right side)
@@ -36,8 +36,8 @@ export class EquipmentSlots {
     this.renderer.drawCell(EQUIPMENT.CONSUMABLE1_X + 1, EQUIPMENT.CONSUMABLE1_Y, ']', COLORS.BORDER);
 
     // Draw equipped consumable 1
-    if (game.equippedConsumables[0]) {
-      this.renderer.drawCell(EQUIPMENT.CONSUMABLE1_X, EQUIPMENT.CONSUMABLE1_Y, game.equippedConsumables[0].char, game.equippedConsumables[0].color);
+    if (game.inventorySystem.equippedConsumables[0]) {
+      this.renderer.drawCell(EQUIPMENT.CONSUMABLE1_X, EQUIPMENT.CONSUMABLE1_Y, game.inventorySystem.equippedConsumables[0].char, game.inventorySystem.equippedConsumables[0].color);
     }
 
     // Draw consumable slot 2 (right side)
@@ -46,8 +46,8 @@ export class EquipmentSlots {
     this.renderer.drawCell(EQUIPMENT.CONSUMABLE2_X + 1, EQUIPMENT.CONSUMABLE2_Y, ']', COLORS.BORDER);
 
     // Draw equipped consumable 2
-    if (game.equippedConsumables[1]) {
-      this.renderer.drawCell(EQUIPMENT.CONSUMABLE2_X, EQUIPMENT.CONSUMABLE2_Y, game.equippedConsumables[1].char, game.equippedConsumables[1].color);
+    if (game.inventorySystem.equippedConsumables[1]) {
+      this.renderer.drawCell(EQUIPMENT.CONSUMABLE2_X, EQUIPMENT.CONSUMABLE2_Y, game.inventorySystem.equippedConsumables[1].char, game.inventorySystem.equippedConsumables[1].color);
     }
   }
 }

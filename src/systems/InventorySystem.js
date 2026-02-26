@@ -922,4 +922,43 @@ export class InventorySystem {
     this.savedExploreBackgroundObjects = [];
     this.savedExploreCaptives = [];
   }
+
+  // ========== CHEST SYSTEM ==========
+
+  /**
+   * Add item to chest storage
+   *
+   * @param {Item} item - Weapon/trap item to store
+   */
+  addToChest(item) {
+    this.itemChest.push(item);
+  }
+
+  /**
+   * Remove item from chest storage
+   *
+   * @param {Item} item - Item to remove from chest
+   * @returns {boolean} - True if item was found and removed
+   */
+  retrieveFromChest(item) {
+    const chestIndex = this.itemChest.indexOf(item);
+    if (chestIndex > -1) {
+      this.itemChest.splice(chestIndex, 1);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Get chest contents formatted for menu display
+   *
+   * @returns {Array} - Menu options array
+   */
+  getChestContents() {
+    const menuOptions = [];
+    for (const item of this.itemChest) {
+      menuOptions.push({ action: 'retrieve', item: item, label: `${item.char} - ${item.data.name}` });
+    }
+    return menuOptions;
+  }
 }
