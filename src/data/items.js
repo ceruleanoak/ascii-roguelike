@@ -19,8 +19,8 @@ export const WEAPON_TYPES = {
 // Item definitions
 export const ITEMS = {
   // Starting weapons
-  '/': {
-    char: '/',
+  '¬': {
+    char: '¬',
     name: 'Gun',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
@@ -119,7 +119,7 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'blunt',
-    damage: 4,
+    damage: 3,
     windup: 0.6,
     recovery: 0.5,
     attackPattern: 'sweep',
@@ -132,11 +132,25 @@ export const ITEMS = {
     name: 'Spear',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
-    damage: 3,
-    windup: 0.45,
+    damage: 2,
+    windup: 0.15,
     recovery: 0.45,
     attackPattern: 'thrust',
-    patternSpeed: 0.1,
+    patternSpeed: 0.05,
+    range: 28,
+    color: COLORS.ITEM
+  },
+  '/': {
+    char: '/',
+    name: 'Staff',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    damage: 1,
+    windup: 0.15,
+    recovery: 0.45,
+    attackPattern: 'thrust',
+    patternSpeed: 0.05,
+    meleeChar: '|',
     range: 28,
     color: COLORS.ITEM
   },
@@ -148,6 +162,14 @@ export const ITEMS = {
     type: ITEM_TYPES.ARMOR,
     defense: 2,
     color: '#cccccc'
+  },
+  'O': {
+    char: 'O',
+    name: 'Slime Suit',
+    type: ITEM_TYPES.ARMOR,
+    defense: 1,
+    slimeImmune: true,
+    color: '#00ff00'
   },
   'V': {
     char: 'V',
@@ -164,8 +186,8 @@ export const ITEMS = {
     speedBoost: 0.2,
     color: '#8b6914'
   },
-  'C': {
-    char: 'C',
+  '⛓': {
+    char: '⛓',
     name: 'Chain Mail',
     type: ITEM_TYPES.ARMOR,
     defense: 3,
@@ -176,7 +198,8 @@ export const ITEMS = {
     char: 'R',
     name: 'Robe',
     type: ITEM_TYPES.ARMOR,
-    defense: 2,
+    defense: 1,
+    dodgeChance: 0.1,
     fireImmune: true,
     freezeImmune: true,
     color: '#9370db'
@@ -234,7 +257,7 @@ export const ITEMS = {
     name: 'Health Potion',
     type: ITEM_TYPES.CONSUMABLE,
     effect: 'heal',
-    amount: 5,
+    amount: 3,
     cooldown: 15, // Reusable with 15s cooldown
     color: '#ff00ff'
   },
@@ -266,7 +289,7 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
     damage: 2,
-    cooldown: 1.0,
+    cooldown: 3,
     bulletCount: 8,
     attackPattern: 'ring',
     color: '#ff00ff'
@@ -295,8 +318,8 @@ export const ITEMS = {
     cooldown: 2,
     color: '#aaaaaa'
   },
-  '⚡': {
-    char: '⚡',
+  '☠': {
+    char: '☠',
     name: 'Venom Blade',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -383,25 +406,25 @@ export const ITEMS = {
     name: 'Freeze Ray',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
-    damage: 1,
-    cooldown: 0.6,
-    bulletSpeed: 200,
+    damage: 0,
+    cooldown: 2,
+    bulletSpeed: 150,
     bulletChar: '❄',
     onHit: 'freeze',
     color: '#00ffff'
   },
-  '⚛': {
-    char: '⚛',
+  'ϟ': {
+    char: 'ϟ',
     name: 'Lightning Gun',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
     damage: 2,
     cooldown: 0.8,
     chain: true,
-    chainCount: 3,
+    chainCount: 1,
     onHit: 'stun',
     electric: true,
-    bulletChar: '⚡',
+    bulletChar: 'ϟ',
     color: '#ffff00'
   },
   '⊕': {
@@ -411,10 +434,10 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.GUN,
     damage: 3,
     cooldown: 1.5,
-    bulletSpeed: 180,
+    bulletSpeed: 250,
     explode: true,
-    explodeRadius: 50,
-    bulletChar: '●',
+    explodeRadius: 30,
+    bulletChar: '⁍',
     color: '#ff4400'
   },
   '═': {
@@ -1060,13 +1083,31 @@ export const DROP_TABLES = {
       [RARITY.RARE]: ['j']                   // Jaw
     },
     armor: {
-      [RARITY.COMMON]: ['A'],                // Bone Armor
-      [RARITY.UNCOMMON]: ['R'],              // Robe
+      [RARITY.COMMON]: [],                
+      [RARITY.UNCOMMON]: ['A'],              // Bone Armor
       [RARITY.RARE]: []
     },
     consumables: {
       [RARITY.COMMON]: ['H'],                // Health Potion
       [RARITY.UNCOMMON]: [],
+      [RARITY.RARE]: []
+    }
+  },
+
+  slime: {
+    ingredients: {
+      [RARITY.COMMON]: ['g'],                // Goo
+      [RARITY.UNCOMMON]: ['b', 'e'],         // Bone, Eye
+      [RARITY.RARE]: ['j']                   // Jaw
+    },
+    armor: {
+      [RARITY.COMMON]: [],                
+      [RARITY.UNCOMMON]: ['O'],              // Slime Suit
+      [RARITY.RARE]: []
+    },
+    consumables: {
+      [RARITY.COMMON]: [],                // Health Potion
+      [RARITY.UNCOMMON]: ['@'],             // Bomb (slime bombs)
       [RARITY.RARE]: []
     }
   },
@@ -1096,7 +1137,7 @@ export const DROP_TABLES = {
       [RARITY.RARE]: []
     },
     armor: {
-      [RARITY.COMMON]: ['L', 'C'],           // Leather Armor, Chain Mail
+      [RARITY.COMMON]: ['L', '⛓'],           // Leather Armor, Chain Mail
       [RARITY.UNCOMMON]: ['W'],              // Warplate
       [RARITY.RARE]: ['K']                   // Dragon Scale Armor
     },

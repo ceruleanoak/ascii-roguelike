@@ -3,15 +3,20 @@
 
 export const RECIPES = [
   // Basic weapon upgrades
-  { left: '/', right: 'M', result: '⌂', name: 'Shotgun' },       // Gun + Metal = Shotgun
+  { left: '¬', right: 'M', result: '⌂', name: 'Shotgun' },       // Gun + Metal = Shotgun
   { left: '†', right: 'F', result: '‡', name: 'Flame Sword' },   // Sword + Fire = Flame Sword
   { left: '|', right: '~', result: ')', name: 'Bow' },           // Stick + String = Bow
+  { left: '|', right: '|', result: '/', name: 'Staff' },         // Stick + String = Staff
+  { left: 'M', right: '|', result: '¬', name: 'Gun' },         // Stick + Metal = Gun
+
 
   // Dual wielding
-  { left: '/', right: '/', result: 'X', name: 'Dual Pistols' },  // Gun + Gun = Dual Pistols
+  { left: '¬', right: '¬', result: 'X', name: 'Dual Pistols' },  // Gun + Gun = Dual Pistols
 
   // Armor/defense
-  { left: 'b', right: 'g', result: 'A', name: 'Bone Armor' },    // Bone + Goo = Armor
+  { left: 'b', right: 'g', result: 'O', name: 'Slime Suit' },    // Bone + Goo = Slime Suit
+  { left: 'b', right: 'b', result: 'A', name: 'Bone Armor' },    // Bone + Bone = Bone Armor
+
 
   // Consumables
   { left: 'F', right: 'g', result: '@', name: 'Bomb' },          // Fire + Goo = Bomb
@@ -24,7 +29,7 @@ export const RECIPES = [
 
   // Utility
   { left: 'f', right: '~', result: 'R', name: 'Rope' },          // Fur + String = Rope
-  { left: 't', right: 'M', result: '↑', name: 'Spear' },         // Teeth + Metal = Spear
+  { left: 't', right: '|', result: '↑', name: 'Spear' },         // Teeth + Stick = Spear
 
   // Secret recipes
   { left: 's', right: 's', result: '♦', name: 'Dragon Heart' },  // Scale + Scale = Dragon Heart
@@ -39,7 +44,7 @@ export const RECIPES = [
   { left: '⌂', right: 's', result: '☼', name: 'Dragon Shotgun' }, // Shotgun + Scale = Dragon Shotgun
   { left: '‡', right: 's', result: '⚔', name: 'Legendary Flame Sword' }, // Flame Sword + Scale = Legendary
   { left: 'X', right: 'M', result: '※', name: 'Heavy Pistols' },  // Dual Pistols + Metal = Heavy Pistols
-  { left: '⌘', right: 'g', result: '⚡', name: 'Venom Blade' },    // Dragon Blade + Goo = Venom Blade
+  { left: '⌘', right: 'g', result: '☠', name: 'Venom Blade' },    // Dragon Blade + Goo = Venom Blade
   { left: '⟩', right: 'w', result: '⇒', name: 'Sky Bow' },        // Fire Bow + Wing = Sky Bow
   { left: '⊤', right: 'b', result: '⚒', name: 'Bone Crusher' },   // Bone Axe + Bone = Bone Crusher
 
@@ -53,14 +58,14 @@ export const RECIPES = [
 
   // === NEW GUN RECIPES (10) ===
   { left: '⌂', right: 'g', result: '⌐', name: 'Machine Gun' },     // Shotgun + Goo = Machine Gun
-  { left: '/', right: 'g', result: '❄', name: 'Freeze Ray' },      // Gun + Goo = Freeze Ray
-  { left: '/', right: 'F', result: '⚛', name: 'Lightning Gun' },   // Gun + Fire = Lightning Gun
+  { left: '¬', right: 'g', result: '❄', name: 'Freeze Ray' },      // Gun + Goo = Freeze Ray
+  { left: '¬', right: 'F', result: 'ϟ', name: 'Lightning Gun' },   // Gun + Fire = Lightning Gun
   { left: '⌂', right: 'F', result: '⊕', name: 'Rocket Launcher' }, // Shotgun + Fire = Rocket Launcher
-  { left: '/', right: 's', result: '═', name: 'Plasma Rifle' },    // Gun + Scale = Plasma Rifle
+  { left: '¬', right: 's', result: '═', name: 'Plasma Rifle' },    // Gun + Scale = Plasma Rifle
   { left: '⌐', right: 'F', result: '◙', name: 'Laser Cannon' },    // Machine Gun + Fire = Laser Cannon
   { left: '⌂', right: 'M', result: '⊞', name: 'Scatter Gun' },     // Shotgun + Metal = Scatter Gun
   { left: 'X', right: 'g', result: '☣', name: 'Venom Pistol' },    // Dual Pistols + Goo = Venom Pistol
-  { left: '/', right: 'w', result: '╬', name: 'Stun Gun' },        // Gun + Wing = Stun Gun
+  { left: '¬', right: 'w', result: '╬', name: 'Stun Gun' },        // Gun + Wing = Stun Gun
   { left: '※', right: 'M', result: '⊿', name: 'Ricochet Rifle' },  // Heavy Pistols + Metal = Ricochet Rifle
 
   // === NEW MELEE RECIPES (10) ===
@@ -104,7 +109,7 @@ export const RECIPES = [
 
   // === NEW ARMOR RECIPES (7) ===
   { left: 'f', right: '~', result: 'L', name: 'Leather Armor' },   // Fur + String = Leather Armor
-  { left: 'M', right: '~', result: 'C', name: 'Chain Mail' },      // Metal + String = Chain Mail
+  { left: 'M', right: '~', result: '⛓', name: 'Chain Mail' },      // Metal + String = Chain Mail
   { left: 'k', right: 'F', result: 'R', name: 'Robe' },            // Silk + Fire = Robe
   { left: 'M', right: 'b', result: 'W', name: 'Warplate' },        // Metal + Bone = Warplate
   { left: 'k', right: 'v', result: 'N', name: 'Ninja Garb' },      // Silk + Venom = Ninja Garb

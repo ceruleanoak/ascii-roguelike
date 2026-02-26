@@ -74,6 +74,57 @@ Frame suggestions as **professional collaboration**, not gatekeeping:
 
 This approach respects your time while ensuring the codebase remains clean, scalable, and maintainable as the game grows.
 
+## Rendering Architecture
+
+The game uses a **3-tier rendering architecture** for clean separation of concerns:
+
+```
+Game (main.js)
+  ├─ Game logic (update, input, state management)
+  └─ render(alpha) → dispatcher (12 lines in Game class)
+       ↓
+RenderController (orchestrator)
+  ├─ Manages backgroundDirty optimization
+  ├─ Routes to state-specific renderers
+  └─ Coordinates UI components
+       ↓
+StateRenderers + UIComponents
+  ├─ TitleRenderer, RestRenderer, ExploreRenderer, GameOverRenderer
+  ├─ BowChargeIndicator, ArrowKeyIndicators, CraftingStation
+  ├─ EquipmentSlots, InventoryOverlay, MenuOverlay
+  └─ All use ASCIIRenderer primitives
+```
+
+### Design Principles
+
+1. **Read-Only Views**: Renderers receive the entire `game` instance but only read state, never modify it
+2. **Dirty Flag Optimization**: `renderer.backgroundDirty` flag prevents unnecessary background redraws
+3. **Composition**: UI components are standalone, reusable across multiple states
+4. **Layered Rendering**: Strict z-ordering maintained (background → foreground → UI overlays)
+
+### Modifying Rendering
+
+**To modify state-specific rendering:**
+- Title screen: `src/rendering/state/TitleRenderer.js`
+- REST hub: `src/rendering/state/RestRenderer.js`
+- Combat rooms: `src/rendering/state/ExploreRenderer.js`
+- Game over: `src/rendering/state/GameOverRenderer.js`
+
+**To modify UI components:**
+- Bow charge bar: `src/rendering/ui/BowChargeIndicator.js`
+- Dodge controls: `src/rendering/ui/ArrowKeyIndicators.js`
+- Crafting slots: `src/rendering/ui/CraftingStation.js`
+- Equipment slots: `src/rendering/ui/EquipmentSlots.js`
+- Inventory overlay: `src/rendering/ui/InventoryOverlay.js`
+- Selection menus: `src/rendering/ui/MenuOverlay.js`
+
+**Key files:**
+- Canvas primitives: `src/rendering/ASCIIRenderer.js` (drawCell, drawEntity, drawRect, etc.)
+- Orchestration: `src/rendering/RenderController.js` (routing & dirty flag management)
+- Main dispatcher: `src/main.js` render() method (lines ~3685-3700)
+
+**Important**: When adding new rendering logic, place it in the appropriate renderer file, NOT in main.js. The Game class should only contain game logic and state management.
+
 ## Directory Structure
 
 ```
@@ -107,9 +158,22 @@ src/
 │   ├── GameConfig.js
 │   ├── GameLoop.js
 │   └── GameStateMachine.js
-├── rendering/
-│   └── ASCIIRenderer.js
-└── main.js         - Entry point
+├── rendering/      - Rendering architecture (3-tier design)
+│   ├── ASCIIRenderer.js     - Low-level canvas primitives
+│   ├── RenderController.js  - Orchestrator & state dispatcher
+│   ├── state/               - State-specific renderers
+│   │   ├── TitleRenderer.js     - Animated title screen
+│   │   ├── RestRenderer.js      - REST hub renderer
+│   │   ├── ExploreRenderer.js   - Combat room renderer
+│   │   └── GameOverRenderer.js  - Game over screen
+│   └── ui/                  - Reusable UI components
+│       ├── BowChargeIndicator.js   - Bow charge bar
+│       ├── ArrowKeyIndicators.js   - Dodge roll controls
+│       ├── CraftingStation.js      - Crafting slots
+│       ├── EquipmentSlots.js       - Armor/consumables
+│       ├── InventoryOverlay.js     - Inventory display
+│       └── MenuOverlay.js          - Selection menus
+└── main.js         - Entry point & Game class (~4000 lines)
 ```
 
 ## Common Tasks Quick Reference

@@ -3146,62 +3146,25 @@ class Game {
   }
 
   tryPickupItem() {
-    // Check placed traps first (SPACE picks them back up into quick slot)
-    for (let i = 0; i < this.placedTraps.length; i++) {
-      const trapEntry = this.placedTraps[i];
-      const dx = trapEntry.item.position.x - this.player.position.x;
-      const dy = trapEntry.item.position.y - this.player.position.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      if (distance < 20) {
-        // Put trap back into quick slot (same path as weapons)
-        const droppedItem = this.player.pickupItem(trapEntry.item);
-        this.showPickupMessage(trapEntry.item.data.name);
-        this.placedTraps.splice(i, 1);
-        // Drop previous weapon if any
-        if (droppedItem) {
-          this.items.push(droppedItem);
-          this.physicsSystem.addEntity(droppedItem);
-        }
-        this.updateUI();
-        return;
+    const result = this.inventorySystem.tryPickupItem(
+      this.items,
+      this.placedTraps,
+      this.player,
+      this.physicsSystem
+    );
+
+    if (result.success) {
+      if (result.message) {
+        this.showPickupMessage(result.message);
       }
-    }
 
-    for (let i = 0; i < this.items.length; i++) {
-      const item = this.items[i];
-      const distance = this.physicsSystem.getDistance(this.player, item);
-
-      if (distance < 20) {
-        // Route items to correct inventory based on type
-        if (item.data.type === 'ARMOR') {
-          // Add to armor inventory
-          this.armorInventory.push(item);
-          this.showPickupMessage(item.data.name);
-          this.physicsSystem.removeEntity(item);
-          this.items.splice(i, 1);
-        } else if (item.data.type === 'CONSUMABLE') {
-          // Add to consumable inventory
-          this.consumableInventory.push(item);
-          this.showPickupMessage(item.data.name);
-          this.physicsSystem.removeEntity(item);
-          this.items.splice(i, 1);
-        } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
-          // Add to quick slots (weapons and traps)
-          const droppedItem = this.player.pickupItem(item);
-          this.showPickupMessage(item.data.name);
-          this.physicsSystem.removeEntity(item);
-          this.items.splice(i, 1);
-
-          // Drop previous weapon if any
-          if (droppedItem) {
-            this.items.push(droppedItem);
-            this.physicsSystem.addEntity(droppedItem);
-          }
-        }
-
-        this.updateUI();
-        break;
+      // Drop previous weapon/trap if any
+      if (result.droppedItem) {
+        this.items.push(result.droppedItem);
+        this.physicsSystem.addEntity(result.droppedItem);
       }
+
+      this.updateUI();
     }
   }
 

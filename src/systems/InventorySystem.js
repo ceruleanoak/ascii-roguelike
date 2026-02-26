@@ -103,4 +103,82 @@ export class InventorySystem {
   getSavedExploreRoom() {
     return this.savedExploreRoom;
   }
+
+  // ========== PICKUP & DROP LOGIC ==========
+
+  /**
+   * Attempt to pick up items near the player
+   * Routes items to correct inventory (armor, consumable, weapon/trap)
+   *
+   * @param {Array} items - Game items array
+   * @param {Array} placedTraps - Placed trap entries array
+   * @param {Player} player - Player entity
+   * @param {PhysicsSystem} physicsSystem - Physics system for distance/entity management
+   * @returns {Object} - { success: boolean, droppedItem: Item|null, message: string|null, removedTrap: boolean }
+   */
+  tryPickupItem(items, placedTraps, player, physicsSystem) {
+    // Check placed traps first (SPACE picks them back up into quick slot)
+    for (let i = 0; i < placedTraps.length; i++) {
+      const trapEntry = placedTraps[i];
+      const dx = trapEntry.item.position.x - player.position.x;
+      const dy = trapEntry.item.position.y - player.position.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance < 20) {
+        // Put trap back into quick slot (same path as weapons)
+        const droppedItem = player.pickupItem(trapEntry.item);
+        placedTraps.splice(i, 1);
+
+        return {
+          success: true,
+          droppedItem: droppedItem,
+          message: trapEntry.item.data.name,
+          removedTrap: true
+        };
+      }
+    }
+
+    // Check ground items
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const distance = physicsSystem.getDistance(player, item);
+
+      if (distance < 20) {
+        let droppedItem = null;
+
+        // Route items to correct inventory based on type
+        if (item.data.type === 'ARMOR') {
+          // Add to armor inventory
+          this.armorInventory.push(item);
+          physicsSystem.removeEntity(item);
+          items.splice(i, 1);
+        } else if (item.data.type === 'CONSUMABLE') {
+          // Add to consumable inventory
+          this.consumableInventory.push(item);
+          physicsSystem.removeEntity(item);
+          items.splice(i, 1);
+        } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
+          // Add to quick slots (weapons and traps)
+          droppedItem = player.pickupItem(item);
+          physicsSystem.removeEntity(item);
+          items.splice(i, 1);
+        }
+
+        return {
+          success: true,
+          droppedItem: droppedItem,
+          message: item.data.name,
+          removedTrap: false
+        };
+      }
+    }
+
+    // No items in range
+    return {
+      success: false,
+      droppedItem: null,
+      message: null,
+      removedTrap: false
+    };
+  }
 }

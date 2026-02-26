@@ -27,6 +27,7 @@ export class Player {
     this.fireImmune = false;
     this.freezeImmune = false;
     this.poisonImmune = false;
+    this.slimeImmune = false;
     this.reflectDamage = 0;
     this.speedBoost = 0;
     this.speedPenalty = 0;
@@ -224,6 +225,9 @@ export class Player {
 
   applyStatusEffect(effect, duration = 3.0) {
     if (!this.statusEffects[effect]) return;
+
+    // Check for immunity
+    if (effect === 'goo' && this.slimeImmune) return;
 
     this.statusEffects[effect].active = true;
     this.statusEffects[effect].duration = Math.max(this.statusEffects[effect].duration, duration);

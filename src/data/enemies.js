@@ -33,7 +33,7 @@ export const ENEMIES = {
     attackType: 'melee',
     decisionInterval: 0.8,  // Dumb enemy (slow reaction time)
     color: '#00ff00',
-    dropTable: 'generic',
+    dropTable: 'slime',
     rarityProfile: 'weak'
   },
   '^': {
@@ -45,11 +45,11 @@ export const ENEMIES = {
     attackRange: GRID.CELL_SIZE * 1.5,  // 1.5 units (faster, closer)
     aggroRange: GRID.CELL_SIZE * 10,    // 10 units (very aware)
     attackCooldown: 0.8,
-    attackWindup: 0.5,  // Quick telegraph before latching
+    attackWindup: 0.8,  // Quick telegraph before latching
     attackType: 'sap',  // Sapping attack - locks to player
     sapDamage: 1,  // Fixed 1 damage per tick (not scaled by depth)
     sapDamageInterval: 1.0,  // Deal damage every 1 second while sapping
-    decisionInterval: 0.25,  // Very smart (fast reactions)
+    decisionInterval: 0.4,  // Very smart (fast reactions)
     color: '#444444',
     dropTable: 'beast',
     rarityProfile: 'weak'
