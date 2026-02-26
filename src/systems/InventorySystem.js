@@ -814,4 +814,112 @@ export class InventorySystem {
       });
     }
   }
+
+  // ========== DEATH & BANKING MECHANICS ==========
+
+  /**
+   * Bank loot when returning from EXPLORE to REST
+   * Transfers player inventory (ingredients) to REST inventory
+   * Saves quick slots and active slot index
+   *
+   * @param {Array} playerInventory - Player's inventory (ingredients)
+   * @param {Array} playerQuickSlots - Player's quick slots (weapons)
+   * @param {number} playerActiveSlotIndex - Active slot index
+   */
+  bankLoot(playerInventory, playerQuickSlots, playerActiveSlotIndex) {
+    // ADD collected ingredients to REST inventory
+    this.restInventory = [...this.restInventory, ...playerInventory];
+
+    // Save quick slots and active index
+    this.restQuickSlots = [...playerQuickSlots];
+    this.restActiveSlotIndex = playerActiveSlotIndex;
+
+    console.log('[bankLoot] Added', playerInventory.length, 'ingredients to REST inventory. Total:', this.restInventory.length);
+    console.log('[bankLoot] Saved quick slots:', this.restQuickSlots);
+  }
+
+  /**
+   * Handle full game over (death in EXPLORE)
+   * Clears ALL inventories including REST inventory and quick slots
+   * This is the "true roguelike" full reset
+   */
+  handleGameOver() {
+    // Clear all inventories and equipment on death (true roguelike)
+    this.restInventory = [];
+    this.itemChest = [];
+    this.armorInventory = [];
+    this.consumableInventory = [];
+    this.equippedArmor = null;
+    this.equippedConsumables = [null, null];
+
+    // Clear consumable state
+    this.spentConsumableSlots = [false, false];
+    this.consumableCooldowns = [0, 0];
+    this.consumableFlashTimer = 0;
+    this.consumableFlashSlot = -1;
+    this.consumableWindups = [];
+
+    // Clear saved EXPLORE room
+    this.clearSavedExploreRoom();
+
+    // NOTE: Quick slots are cleared separately in the main game over handler
+    // They persist through individual deaths but are cleared on full game over
+  }
+
+  /**
+   * Save EXPLORE room state before returning to REST
+   * Prevents room cycling cheat
+   *
+   * @param {Object} currentRoom - Current room object
+   * @param {Array} items - Items array
+   * @param {Array} ingredients - Ingredients array
+   * @param {Array} placedTraps - Placed traps array
+   * @param {Array} enemies - Enemies array (optional)
+   * @param {Array} backgroundObjects - Background objects array (optional)
+   * @param {Array} captives - Captives array (optional)
+   */
+  saveExploreRoom(currentRoom, items, ingredients, placedTraps, enemies = [], backgroundObjects = [], captives = []) {
+    this.savedExploreRoom = currentRoom;
+    this.savedExploreItems = [...items];
+    this.savedExploreIngredients = [...ingredients];
+    this.savedExplorePlacedTraps = [...placedTraps];
+    this.savedExploreEnemies = [...enemies];
+    this.savedExploreBackgroundObjects = [...backgroundObjects];
+    this.savedExploreCaptives = [...captives];
+
+    console.log('[saveExploreRoom] Saved EXPLORE room state for anti-cheat');
+  }
+
+  /**
+   * Get saved EXPLORE room data for restoration
+   * Returns null if no saved room
+   *
+   * @returns {Object|null} - { room, items, ingredients, placedTraps, enemies, backgroundObjects, captives }
+   */
+  getSavedExploreRoomData() {
+    if (!this.savedExploreRoom) return null;
+
+    return {
+      room: this.savedExploreRoom,
+      items: [...this.savedExploreItems],
+      ingredients: [...this.savedExploreIngredients],
+      placedTraps: [...this.savedExplorePlacedTraps],
+      enemies: [...this.savedExploreEnemies],
+      backgroundObjects: [...this.savedExploreBackgroundObjects],
+      captives: [...this.savedExploreCaptives]
+    };
+  }
+
+  /**
+   * Clear saved EXPLORE room (called when generating new room or on death)
+   */
+  clearSavedExploreRoom() {
+    this.savedExploreRoom = null;
+    this.savedExploreItems = [];
+    this.savedExploreIngredients = [];
+    this.savedExplorePlacedTraps = [];
+    this.savedExploreEnemies = [];
+    this.savedExploreBackgroundObjects = [];
+    this.savedExploreCaptives = [];
+  }
 }

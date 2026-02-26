@@ -1204,7 +1204,7 @@ class Game {
     const roomTransition = entryDirection !== null; // Has direction = moving between rooms
 
     // Check if we should restore saved explore room (returning from REST to same room)
-    const shouldRestoreExploreRoom = leavingRest && this.savedExploreRoom !== null;
+    const shouldRestoreExploreRoom = leavingRest && this.inventorySystem.getSavedExploreRoom() !== null;
 
     console.log(`[enterExploreState] entryDirection=${entryDirection}, exitLetter=${exitObj?.letter}, leavingRest=${leavingRest}, roomTransition=${roomTransition}, shouldRestore=${shouldRestoreExploreRoom}, depth=${this.depth}`);
 
@@ -1259,10 +1259,11 @@ class Game {
     if (shouldRestoreExploreRoom) {
       // Restore saved explore room (prevents room cycling cheat)
       console.log('[enterExploreState] Restoring saved EXPLORE room');
-      this.currentRoom = this.savedExploreRoom;
-      this.items = [...this.savedExploreItems];
-      this.ingredients = [...this.savedExploreIngredients];
-      this.placedTraps = [...this.savedExplorePlacedTraps];
+      const savedData = this.inventorySystem.getSavedExploreRoomData();
+      this.currentRoom = savedData.room;
+      this.items = savedData.items;
+      this.ingredients = savedData.ingredients;
+      this.placedTraps = savedData.placedTraps;
       this.currentRoom.enemies = [...this.savedExploreEnemies];
       this.backgroundObjects = [...this.savedExploreBackgroundObjects];
       this.captives = [...this.savedExploreCaptives];
@@ -1335,10 +1336,7 @@ class Game {
       }
 
       // Clear saved explore room when generating new room (only restore once)
-      this.savedExploreRoom = null;
-      this.savedExploreItems = [];
-      this.savedExploreIngredients = [];
-      this.savedExplorePlacedTraps = [];
+      this.inventorySystem.clearSavedExploreRoom();
       this.savedExploreEnemies = [];
       this.savedExploreBackgroundObjects = [];
       this.savedExploreCaptives = [];
@@ -2547,10 +2545,15 @@ class Game {
         this.bankLoot();
 
         // Save EXPLORE room state before returning to REST (prevents room cycling cheat)
-        this.savedExploreRoom = this.currentRoom;
-        this.savedExploreItems = [...this.items];
-        this.savedExploreIngredients = [...this.ingredients];
-        this.savedExplorePlacedTraps = [...this.placedTraps];
+        this.inventorySystem.saveExploreRoom(
+          this.currentRoom,
+          this.items,
+          this.ingredients,
+          this.placedTraps,
+          this.currentRoom.enemies,
+          this.currentRoom.backgroundObjects,
+          this.captives
+        );
         this.savedExploreEnemies = [...this.currentRoom.enemies];
         this.savedExploreBackgroundObjects = [...this.backgroundObjects];
         this.savedExploreCaptives = [...this.captives];
@@ -2638,21 +2641,7 @@ class Game {
         this.restActiveSlotIndex = 0;
 
         // Clear all inventories and equipment on death (true roguelike)
-        this.restInventory = [];
-        this.itemChest = [];
-        this.armorInventory = [];
-        this.consumableInventory = [];
-        this.equippedArmor = null;
-        this.equippedConsumables = [null, null];
-
-        // Clear saved EXPLORE room on death
-        this.savedExploreRoom = null;
-        this.savedExploreItems = [];
-        this.savedExploreIngredients = [];
-        this.savedExplorePlacedTraps = [];
-        this.savedExploreEnemies = [];
-        this.savedExploreBackgroundObjects = [];
-        this.savedExploreCaptives = [];
+        this.inventorySystem.handleGameOver();
 
         // Reset character system for new run
         this.deadCharacters = [];
@@ -3598,15 +3587,12 @@ class Game {
 
   bankLoot() {
     // Player successfully returned to REST with loot
-    // ADD collected ingredients to REST inventory (player starts EXPLORE with empty inventory)
-    // Save all quick slots and active index
     if (this.player) {
-      // Add new ingredients to banked REST inventory
-      this.restInventory = [...this.restInventory, ...this.player.inventory];
-      this.restQuickSlots = [...this.player.quickSlots];
-      this.restActiveSlotIndex = this.player.activeSlotIndex;
-      console.log('[bankLoot] Added', this.player.inventory.length, 'ingredients to REST inventory. Total:', this.restInventory.length);
-      console.log('[bankLoot] Saved quick slots:', this.restQuickSlots);
+      this.inventorySystem.bankLoot(
+        this.player.inventory,
+        this.player.quickSlots,
+        this.player.activeSlotIndex
+      );
     }
   }
 
