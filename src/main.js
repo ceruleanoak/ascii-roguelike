@@ -3762,26 +3762,8 @@ class Game {
     this.currentMenuSlot = slotType;
     this.selectedMenuIndex = 0;
 
-    // Get available items based on slot type
-    const availableItems = [];
-
-    if (slotType === 'armor') {
-      // Get all armor from armor inventory
-      for (const item of this.armorInventory) {
-        if (!availableItems.find(i => i.char === item.char)) {
-          availableItems.push(item);
-        }
-      }
-    } else if (slotType === 'consumable1' || slotType === 'consumable2') {
-      // Get all consumables from consumable inventory
-      for (const item of this.consumableInventory) {
-        if (!availableItems.find(i => i.char === item.char)) {
-          availableItems.push(item);
-        }
-      }
-    }
-
-    this.menuItems = availableItems;
+    // Get available items from InventorySystem
+    this.menuItems = this.inventorySystem.openEquipmentMenu(slotType);
     this.renderController.menuOverlay.render(this);
   }
 
@@ -3845,18 +3827,7 @@ class Game {
 
     // Handle equipment slots
     if (this.currentMenuSlot === 'armor') {
-      // If there was previously equipped armor, return it to inventory
-      if (this.equippedArmor) {
-        this.armorInventory.push(this.equippedArmor);
-      }
-
-      // Remove selected armor from inventory and equip it
-      const armorIndex = this.armorInventory.indexOf(selectedItem);
-      if (armorIndex > -1) {
-        this.armorInventory.splice(armorIndex, 1);
-      }
-      this.equippedArmor = selectedItem;
-
+      this.inventorySystem.equipArmor(selectedItem);
       this.saveGameState();
       this.renderer.markBackgroundDirty();
       this.closeMenu();
@@ -3865,18 +3836,9 @@ class Game {
     }
 
     if (this.currentMenuSlot === 'consumable1') {
-      // If there was previously equipped consumable, return it to inventory
-      if (this.equippedConsumables[0]) {
-        this.consumableInventory.push(this.equippedConsumables[0]);
-      }
-
-      // Remove selected consumable from inventory and equip it
-      const consumableIndex = this.consumableInventory.indexOf(selectedItem);
-      if (consumableIndex > -1) {
-        this.consumableInventory.splice(consumableIndex, 1);
-      }
-      this.equippedConsumables[0] = selectedItem;
-
+      this.inventorySystem.equipConsumable(0, selectedItem);
+      // Sync to player
+      this.player.equippedConsumables = [...this.inventorySystem.equippedConsumables];
       this.saveGameState();
       this.renderer.markBackgroundDirty();
       this.closeMenu();
@@ -3885,18 +3847,9 @@ class Game {
     }
 
     if (this.currentMenuSlot === 'consumable2') {
-      // If there was previously equipped consumable, return it to inventory
-      if (this.equippedConsumables[1]) {
-        this.consumableInventory.push(this.equippedConsumables[1]);
-      }
-
-      // Remove selected consumable from inventory and equip it
-      const consumableIndex = this.consumableInventory.indexOf(selectedItem);
-      if (consumableIndex > -1) {
-        this.consumableInventory.splice(consumableIndex, 1);
-      }
-      this.equippedConsumables[1] = selectedItem;
-
+      this.inventorySystem.equipConsumable(1, selectedItem);
+      // Sync to player
+      this.player.equippedConsumables = [...this.inventorySystem.equippedConsumables];
       this.saveGameState();
       this.renderer.markBackgroundDirty();
       this.closeMenu();

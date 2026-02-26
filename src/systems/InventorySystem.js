@@ -181,4 +181,89 @@ export class InventorySystem {
       removedTrap: false
     };
   }
+
+  // ========== EQUIPMENT MENU SYSTEM ==========
+
+  /**
+   * Open equipment menu and get available items (deduplicated by char)
+   *
+   * @param {string} slotType - 'armor', 'consumable1', or 'consumable2'
+   * @returns {Array} - Deduplicated array of available items
+   */
+  openEquipmentMenu(slotType) {
+    const availableItems = [];
+
+    if (slotType === 'armor') {
+      // Get all armor from armor inventory (deduplicated)
+      for (const item of this.armorInventory) {
+        if (!availableItems.find(i => i.char === item.char)) {
+          availableItems.push(item);
+        }
+      }
+    } else if (slotType === 'consumable1' || slotType === 'consumable2') {
+      // Get all consumables from consumable inventory (deduplicated)
+      for (const item of this.consumableInventory) {
+        if (!availableItems.find(i => i.char === item.char)) {
+          availableItems.push(item);
+        }
+      }
+    }
+
+    return availableItems;
+  }
+
+  /**
+   * Equip armor item
+   * Unequips current armor (returns to inventory), removes new armor from inventory
+   *
+   * @param {Item} selectedItem - Armor item to equip
+   * @returns {Item|null} - Previously equipped armor (if any)
+   */
+  equipArmor(selectedItem) {
+    const previousArmor = this.equippedArmor;
+
+    // If there was previously equipped armor, return it to inventory
+    if (this.equippedArmor) {
+      this.armorInventory.push(this.equippedArmor);
+    }
+
+    // Remove selected armor from inventory and equip it
+    const armorIndex = this.armorInventory.indexOf(selectedItem);
+    if (armorIndex > -1) {
+      this.armorInventory.splice(armorIndex, 1);
+    }
+    this.equippedArmor = selectedItem;
+
+    return previousArmor;
+  }
+
+  /**
+   * Equip consumable item to specified slot
+   * Unequips current consumable (returns to inventory), removes new consumable from inventory
+   *
+   * @param {number} slotIndex - 0 for consumable1, 1 for consumable2
+   * @param {Item} selectedItem - Consumable item to equip
+   * @returns {Item|null} - Previously equipped consumable (if any)
+   */
+  equipConsumable(slotIndex, selectedItem) {
+    const previousConsumable = this.equippedConsumables[slotIndex];
+
+    // If there was previously equipped consumable, return it to inventory
+    if (this.equippedConsumables[slotIndex]) {
+      this.consumableInventory.push(this.equippedConsumables[slotIndex]);
+    }
+
+    // Remove selected consumable from inventory and equip it
+    const consumableIndex = this.consumableInventory.indexOf(selectedItem);
+    if (consumableIndex > -1) {
+      this.consumableInventory.splice(consumableIndex, 1);
+    }
+    this.equippedConsumables[slotIndex] = selectedItem;
+
+    // Reset consumable state for this slot
+    this.spentConsumableSlots[slotIndex] = false;
+    this.consumableCooldowns[slotIndex] = 0;
+
+    return previousConsumable;
+  }
 }
