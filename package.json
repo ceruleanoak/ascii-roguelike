@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "NODE_ENV=production vite build",
     "preview": "vite preview",
-    "deploy": "npm run build && gh-pages -d dist"
+    "deploy": "npm run build && gh-pages -d dist --no-history"
   },
   "devDependencies": {
     "gh-pages": "^6.1.1",
