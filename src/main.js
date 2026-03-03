@@ -624,7 +624,7 @@ class Game {
     this.launchButtonBounds = null; // Will be set by TitleRenderer
 
     // Load title screen music (single track with custom loop point)
-    this.audioSystem.loadSingleTrack('assets/audio/intro-loop.mp3', 8.998, 0.7);
+    this.audioSystem.loadSingleTrack(`${import.meta.env.BASE_URL}assets/audio/intro-loop.mp3`, 8.998, 0.7);
   }
 
   enterRestState() {
@@ -637,19 +637,20 @@ class Game {
     if (this.audioSystem.mode === 'single') {
       console.log('[Audio] Transitioning from title music to gameplay music');
       this.audioSystem.stop();
+      const base = import.meta.env.BASE_URL;
       this.audioSystem.loadMusic(
-        'assets/audio/layer1.mp3',
-        'assets/audio/layer2.mp3',
+        `${base}assets/audio/layer1.mp3`,
+        `${base}assets/audio/layer2.mp3`,
         0.7
       ).then(() => {
         this.audioSystem.play();
         // Load sound effects
-        this.audioSystem.loadSFX('aggro', 'assets/audio/sfx-aggro.mp3');
-        this.audioSystem.loadSFX('destroy', 'assets/audio/sfx-destroy.mp3');
-        this.audioSystem.loadSFX('roll', 'assets/audio/sfx-roll.mp3');
-        this.audioSystem.loadSFX('attack_blade', 'assets/audio/sfx-attack-blade.mp3');
-        this.audioSystem.loadSFX('attack_whip', 'assets/audio/sfx-attack-whip.mp3');
-        this.audioSystem.loadSFX('charge_bow', 'assets/audio/sfx-charge-bow.mp3');
+        this.audioSystem.loadSFX('aggro', `${base}assets/audio/sfx-aggro.mp3`);
+        this.audioSystem.loadSFX('destroy', `${base}assets/audio/sfx-destroy.mp3`);
+        this.audioSystem.loadSFX('roll', `${base}assets/audio/sfx-roll.mp3`);
+        this.audioSystem.loadSFX('attack_blade', `${base}assets/audio/sfx-attack-blade.mp3`);
+        this.audioSystem.loadSFX('attack_whip', `${base}assets/audio/sfx-attack-whip.mp3`);
+        this.audioSystem.loadSFX('charge_bow', `${base}assets/audio/sfx-charge-bow.mp3`);
       });
     }
 
