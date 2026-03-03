@@ -140,6 +140,26 @@ export class RestRenderer {
       }
     }
 
+    // Draw ingredients
+    for (const ingredient of game.ingredients) {
+      this.renderer.drawEntity(
+        ingredient.position.x + GRID.CELL_SIZE / 2,
+        ingredient.position.y + GRID.CELL_SIZE / 2,
+        ingredient.char,
+        ingredient.color
+      );
+    }
+
+    // Draw items
+    for (const item of game.items) {
+      this.renderer.drawEntity(
+        item.position.x + GRID.CELL_SIZE / 2,
+        item.position.y + GRID.CELL_SIZE / 2,
+        item.char,
+        item.color
+      );
+    }
+
     // Draw character NPCs (other unlocked characters)
     for (const npc of game.characterNPCs) {
       npc.render(this.renderer.fgCtx, (gx, gy) => ({
@@ -161,6 +181,9 @@ export class RestRenderer {
 
     // Draw bow charge indicator (shared between REST and EXPLORE states)
     this.renderController.bowChargeIndicator.render(game);
+
+    // Draw green ranger action cooldown indicator
+    this.renderController.greenRangerIndicator.render(game);
 
     // Draw contextual floating text above player when near a slot
     if (nearestSlot) {

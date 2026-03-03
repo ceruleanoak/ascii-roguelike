@@ -18,7 +18,14 @@ export class ExitSystem {
       do {
         letter = this.selectExitLetter(currentDepth, zoneType);
         attempts++;
-      } while (letters.includes(letter) && attempts < maxAttempts);
+
+        // Special rule: 'O' (Ocean) cannot be a west exit
+        // (entering from west would place player in the ocean)
+        if (i === 2 && letter === 'O') {
+          continue; // Reroll if Ocean selected for west exit
+        }
+
+      } while ((letters.includes(letter) || (i === 2 && letter === 'O')) && attempts < maxAttempts);
 
       letters.push(letter);
     }

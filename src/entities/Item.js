@@ -1,5 +1,5 @@
 import { GRID, COLORS } from '../game/GameConfig.js';
-import { ITEMS } from '../data/items.js';
+import { ITEMS, WEAPON_TYPES } from '../data/items.js';
 
 let _nextAttackId = 0;
 
@@ -38,6 +38,10 @@ export class Item {
     this.maxUses = this.data.maxUses || null; // null = unlimited (for non-bows)
     this.usesRemaining = this.maxUses;
 
+    // Wand use limit system (resets per room)
+    this.maxUsesPerRoom = this.data.maxUsesPerRoom || null; // null = unlimited
+    this.wandUsesRemaining = this.maxUsesPerRoom;
+
     // Bow charging system (hold to charge)
     this.isCharging = false;
     this.chargeTime = 0;
@@ -58,11 +62,7 @@ export class Item {
   update(deltaTime) {
     // Update cooldown (recovery after attack)
     if (this.cooldownTimer > 0) {
-      const wasCooling = true;
       this.cooldownTimer -= deltaTime;
-      if (this.cooldownTimer <= 0 && wasCooling) {
-        console.log(`[WEAPON] ${this.data.name} ready to fire!`);
-      }
     }
 
     // Update bow charging (hold to charge)
@@ -85,7 +85,6 @@ export class Item {
 
         // Start recovery cooldown
         this.cooldownTimer = this.data.recovery || this.data.cooldown || 0.5;
-        console.log(`[WEAPON] ${this.data.name} windup complete, fired (cooldown: ${this.cooldownTimer}s)`);
 
         return attack;
       }
@@ -108,13 +107,17 @@ export class Item {
   use(player) {
     if (!this.canUse()) return null;
 
+    // Utility items (like vault key) have no attack behavior
+    if (this.data.weaponType === 'UTILITY') {
+      return null;
+    }
+
     // Bows use charging system (hold to charge)
     if (this.data.weaponType === 'BOW') {
       if (!this.isCharging) {
         this.isCharging = true;
         this.chargeTime = 0;
         this.chargingPlayer = player;
-        console.log(`[BOW] ${this.data.name} charging started`);
       }
       return null; // No attack while charging
     }
@@ -127,13 +130,15 @@ export class Item {
       this.windupTimer = windup;
       this.windupActive = true;
       this.pendingPlayer = player;
-      console.log(`[WEAPON] ${this.data.name} windup started (${windup}s)`);
       return null; // No immediate attack
     } else {
       // No windup - execute immediately
       const attack = this.executeAttack(player);
+
+      // Set cooldown immediately for all weapons (including wands)
+      // Proximity-based wands will reset cooldown in main.js if proximity check fails
       this.cooldownTimer = this.data.recovery || this.data.cooldown || 0.5;
-      console.log(`[WEAPON] ${this.data.name} fired (cooldown: ${this.cooldownTimer}s)`);
+
       return attack;
     }
   }
@@ -150,8 +155,6 @@ export class Item {
 
     // Calculate charge multiplier (0 to 1, where 1 = max charge = 2x speed)
     const chargeRatio = Math.min(this.chargeTime / this.maxChargeTime, 1.0);
-
-    console.log(`[BOW] ${this.data.name} released at ${(chargeRatio * 100).toFixed(0)}% charge`);
 
     // Fire arrow with charge multiplier
     const attack = this.executeAttack(player, chargeRatio);
@@ -179,6 +182,8 @@ export class Item {
         return this.createMeleeAttack(player);
       case 'BOW':
         return this.createArrow(player, chargeRatio);
+      case 'WAND':
+        return this.createWandAttack(player);
       default:
         return null;
     }
@@ -244,6 +249,7 @@ export class Item {
         explode: this.data.explode,
         explodeRadius: this.data.explodeRadius || 30,
         owner: player,
+        shooterPlane: player.plane,
         attackId
       });
     }
@@ -282,7 +288,8 @@ export class Item {
         color: this.color,
         onHit: this.data.onHit,
         electric: this.data.electric,
-        owner: player
+        owner: player,
+        shooterPlane: player.plane
       });
     }
 
@@ -319,7 +326,8 @@ export class Item {
         color: this.color,
         onHit: this.data.onHit,
         electric: this.data.electric,
-        owner: player
+        owner: player,
+        shooterPlane: player.plane
       });
     }
 
@@ -357,7 +365,8 @@ export class Item {
         electric: this.data.electric,
         color: this.color,
         onHit: this.data.onHit,
-        owner: player
+        owner: player,
+        shooterPlane: player.plane
       });
     }
 
@@ -395,7 +404,8 @@ export class Item {
         color: this.color,
         onHit: this.data.onHit,
         electric: this.data.electric,
-        owner: player
+        owner: player,
+        shooterPlane: player.plane
       });
     }
 
@@ -457,7 +467,8 @@ export class Item {
           chain: this.data.chain,
           explode: this.data.explode,
           explodeRadius: this.data.explodeRadius || 40,
-          owner: player
+          owner: player,
+        shooterPlane: player.plane
         });
     }
   }
@@ -491,7 +502,8 @@ export class Item {
         color: this.color,
         onHit: this.data.onHit,
         knockback: this.data.knockback || 300,
-        owner: player
+        owner: player,
+        shooterPlane: player.plane
       });
     }
 
@@ -528,7 +540,8 @@ export class Item {
         onHit: this.data.onHit,
         knockback: knockbackValue,
         lifesteal: this.data.lifesteal,
-        owner: player
+        owner: player,
+        shooterPlane: player.plane
       });
     }
 
@@ -562,7 +575,8 @@ export class Item {
         color: this.color,
         onHit: this.data.onHit,
         knockback: this.data.knockback || 300,
-        owner: player
+        owner: player,
+        shooterPlane: player.plane
       });
     }
 
@@ -599,7 +613,8 @@ export class Item {
           knockback: this.data.knockback || 300,
           explode: this.data.explode,
           explodeRadius: this.data.explodeRadius,
-          owner: player
+          owner: player,
+        shooterPlane: player.plane
         });
       }
     }
@@ -631,7 +646,8 @@ export class Item {
         color: this.color,
         onHit: this.data.onHit,
         knockback: this.data.knockback || 300,
-        owner: player
+        owner: player,
+        shooterPlane: player.plane
       });
     }
 
@@ -663,7 +679,8 @@ export class Item {
         onHit: this.data.onHit,
         knockback: this.data.knockback || 300,
         lifesteal: this.data.lifesteal,
-        owner: player
+        owner: player,
+        shooterPlane: player.plane
       });
     }
 
@@ -695,7 +712,8 @@ export class Item {
         color: this.color,
         onHit: this.data.onHit,
         knockback: this.data.knockback || 300,
-        owner: player
+        owner: player,
+        shooterPlane: player.plane
       });
     }
 
@@ -737,12 +755,10 @@ export class Item {
     // Decrement use count for bows with limited uses
     if (this.maxUses !== null && this.usesRemaining > 0) {
       this.usesRemaining--;
-      console.log(`[BOW] ${this.data.name} - Uses remaining: ${this.usesRemaining}/${this.maxUses} (${(speedMultiplier * 100).toFixed(0)}% speed)`);
 
       // If depleted, set a long cooldown to prevent further use
       if (this.usesRemaining <= 0) {
         this.cooldownTimer = 9999; // Effectively infinite until reset
-        console.log(`[BOW] ${this.data.name} - OUT OF ARROWS! Reset on next room.`);
       }
     }
 
@@ -805,6 +821,7 @@ export class Item {
       explodeRadius: this.data.explodeRadius || 35,
       chain: this.data.chain,
       chainCount: this.data.chainCount || 2,
+      shooterPlane: player.plane,
       owner: player
     };
   }
@@ -829,15 +846,121 @@ export class Item {
     else return '↗'; // Up-right (292.5-337.5)
   }
 
-  // Reset bow uses when entering a new room
+  createWandAttack(player) {
+    // Check uses remaining for limited-use wands
+    if (this.wandUsesRemaining !== null && this.wandUsesRemaining <= 0) {
+      return null; // No attack if out of uses
+    }
+
+    // Wand-specific attack creation
+    const wandType = this.char;
+
+    switch (wandType) {
+      case '\\': // Chaos Wand - proximity AOE damage
+        return this.createChaosWandAttack(player);
+
+      case '}': // Blind Wand - proximity AOE blind
+        return this.createBlindWandAttack(player);
+
+      case '>': // Transmutation Wand - polymorph bolt
+        // Check uses remaining
+        if (this.wandUsesRemaining !== null && this.wandUsesRemaining <= 0) {
+          return null;
+        }
+        // Decrement uses
+        if (this.wandUsesRemaining !== null) {
+          this.wandUsesRemaining--;
+        }
+        return this.createTransmutationWandAttack(player);
+
+      case '`': // Infusion Wand - electrical infusion missile
+        // TODO: Implement in Phase 6
+        return null;
+
+      default:
+        console.warn(`[WAND] Unknown wand type: ${wandType}`);
+        return null;
+    }
+  }
+
+  createChaosWandAttack(player) {
+    // Chaos Wand requires proximity - must be near at least 1 enemy
+    // This check will be done by the game/combat system, we just return the attack data
+    const centerX = player.position.x + player.width / 2;
+    const centerY = player.position.y + player.height / 2;
+
+    return {
+      type: 'chaos_wand',
+      wandChar: this.char,
+      wandName: this.data.name,
+      position: { x: centerX, y: centerY },
+      damage: this.data.damage,
+      blastRadius: this.data.blastRadius,
+      damageMin: this.data.damageMin, // Minimum damage at edge (25%)
+      proximityRequired: this.data.proximityRequired,
+      color: this.color,
+      owner: player
+    };
+  }
+
+  createBlindWandAttack(player) {
+    // Blind Wand requires proximity - must be near at least 1 enemy
+    const centerX = player.position.x + player.width / 2;
+    const centerY = player.position.y + player.height / 2;
+
+    return {
+      type: 'blind_wand',
+      wandChar: this.char,
+      wandName: this.data.name,
+      position: { x: centerX, y: centerY },
+      effectRadius: this.data.effectRadius,
+      effectDuration: this.data.effectDuration,
+      proximityRequired: this.data.proximityRequired,
+      color: this.color,
+      owner: player
+    };
+  }
+
+  createTransmutationWandAttack(player) {
+    // Transmutation Wand fires a purple polymorph bolt
+    const angle = Math.atan2(player.facing.y, player.facing.x);
+
+    // Spawn offset from player center
+    const spawnOffset = 6;
+    const spawnX = player.position.x + player.width / 2 + Math.cos(angle) * spawnOffset;
+    const spawnY = player.position.y + player.height / 2 + Math.sin(angle) * spawnOffset;
+
+    const speed = this.data.projectileSpeed || 180;
+
+    return {
+      type: 'transmutation_bolt',
+      char: '>',
+      wandChar: this.char,
+      wandName: this.data.name,
+      position: { x: spawnX, y: spawnY },
+      velocity: {
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed
+      },
+      color: this.color,
+      owner: player
+    };
+  }
+
+  // Reset bow and wand uses when entering a new room
   resetUses() {
+    // Reset bow uses
     if (this.maxUses !== null) {
       this.usesRemaining = this.maxUses;
       // Also clear the infinite cooldown if bow was depleted
       if (this.cooldownTimer > 1000) {
         this.cooldownTimer = 0;
       }
-      console.log(`[BOW] ${this.data.name} - Uses reset to ${this.maxUses}`);
+    }
+
+    // Reset wand uses
+    if (this.maxUsesPerRoom !== null) {
+      this.wandUsesRemaining = this.maxUsesPerRoom;
     }
   }
 }

@@ -39,13 +39,38 @@ export const ZONES = {
       background: '#110000' // Red tint
     },
     spawnTables: ['fire', 'demon'],
+
+    // Environmental generation parameters
+    environmentalFeatures: {
+      liquidType: 'lava',           // Replace water with lava
+      liquidChar: '~',              // Lava uses ~ char
+      liquidColor: '#ff6600',
+      liquidDamage: 2,              // Lava deals damage
+
+      mudBeds: true,                // Enable mud bed generation
+      mudChar: '~',                 // Dry mud (reuses ~ but different color)
+      mudColorDry: '#aa8855',       // Light brown
+      mudColorWet: '#664422',       // Dark brown (after walking)
+
+      grassDensity: 0.3,            // 30% of GREEN zone grass
+      grassPreburned: true,         // Grass spawns burned
+
+      rockVariants: [
+        { char: '0', name: 'Scorched Rock', dropTable: 'basic' },
+        { char: 'Q', name: 'Obsidian Boulder', dropTable: 'gemstone' },
+        { char: '*', name: 'Lava Crystal', dropTable: 'rare_gemstone' }
+      ]
+    },
+
     objectWeights: {
-      '!': 0.15, // Fire
-      'p': 0.10, // Barrel
-      '8': 0.15, // Bones
-      '0': 0.30, // Rock (scorched)
-      'Y': 0.20, // Stump (charred)
-      '#': 0.10  // Crate
+      '~': 0.20,  // Lava rivers (replaces water)
+      '!': 0.15,  // Fire hazards
+      'p': 0.10,  // Barrels
+      '8': 0.15,  // Bones
+      '0': 0.15,  // Scorched rocks
+      'Q': 0.05,  // Obsidian boulders
+      '*': 0.05,  // Lava crystals
+      'Y': 0.15   // Charred stumps
     },
     preSpawnBurned: true // Background objects spawn pre-burned
   },

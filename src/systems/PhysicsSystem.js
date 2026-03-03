@@ -1,5 +1,18 @@
 import { PHYSICS, GRID } from '../game/GameConfig.js';
 
+/**
+ * Check if two entities are in the same plane
+ * Used for vision, combat, and interaction checks
+ * @param {Object} entity1 - First entity (must have .plane property)
+ * @param {Object} entity2 - Second entity (must have .plane property)
+ * @returns {boolean} True if both entities are in the same plane
+ */
+export function inSamePlane(entity1, entity2) {
+  const plane1 = entity1.plane !== undefined ? entity1.plane : 0;
+  const plane2 = entity2.plane !== undefined ? entity2.plane : 0;
+  return plane1 === plane2;
+}
+
 export class PhysicsSystem {
   constructor() {
     this.entities = [];
@@ -22,16 +35,16 @@ export class PhysicsSystem {
     this.entities = [];
   }
 
-  update(deltaTime, backgroundObjects = []) {
+  update(deltaTime, backgroundObjects = [], room = null) {
     const waterResults = [];
     for (const entity of this.entities) {
-      const result = this.updateEntity(entity, deltaTime, backgroundObjects);
+      const result = this.updateEntity(entity, deltaTime, backgroundObjects, room);
       if (result) waterResults.push({ entity, ...result });
     }
     return waterResults;
   }
 
-  updateEntity(entity, deltaTime, backgroundObjects = []) {
+  updateEntity(entity, deltaTime, backgroundObjects = [], room = null) {
     if (!entity.position || !entity.velocity) return null;
 
     // Apply acceleration
@@ -45,6 +58,8 @@ export class PhysicsSystem {
     let inLiquid = false;
     let liquidState = 'normal';
     let inGrass = false;
+    let slowingMultiplier = 1.0; // For numeric slowing values (trees, stumps)
+    let damagingLiquid = null; // Track lava damage
     const isProjectile = entity.type === 'bullet' || entity.type === 'arrow';
 
     if (!isProjectile && backgroundObjects && backgroundObjects.length > 0) {
@@ -63,16 +78,39 @@ export class PhysicsSystem {
           entityBox.y < objBox.y + objBox.height && entityBox.y + entityBox.height > objBox.y;
 
         if (overlapping) {
-          // Check for water
+          // Check for mud beds (RED zone - dry mud becomes wet and slowing)
+          if (obj.isDryMud && !obj.slowing) {
+            // Convert dry mud to wet mud on first step
+            obj.isDryMud = false;
+            obj.color = '#664422';  // Dark brown (wet)
+            obj.slowing = true;
+            obj.name = 'Wet Mud';
+          }
+
+          // Check for water (or lava in RED zone)
           if (obj.char === '~') {
+            // Check if it's damaging lava
+            if (obj.damaging && obj.damage) {
+              damagingLiquid = { damage: obj.damage, name: obj.name || 'Lava' };
+            }
+
             const wState = obj.getWaterState ? obj.getWaterState() : 'normal';
             if (wState === 'frozen') { onIce = true; }
             else { inLiquid = true; liquidState = wState; }
             break;
           }
-          // Check for tall grass (slows movement)
-          else if (obj.slowsMovement && obj.slowsMovement()) {
-            inGrass = true;
+          // Check for objects with numeric slowing first (trees, stumps)
+          if (obj.data && typeof obj.data.slowing === 'number') {
+            // Use the numeric value as speed multiplier (0.1 = 10% speed)
+            slowingMultiplier = Math.min(slowingMultiplier, obj.data.slowing);
+          }
+          // Check for tall grass (boolean slowing)
+          else if (obj.data && obj.data.slowing === true) {
+            inGrass = true;  // 75% speed for grass
+          }
+          // Check for wet mud (instance property, boolean slowing)
+          else if (obj.slowing === true && !obj.isDryMud) {
+            inGrass = true;  // 75% speed for mud
           }
         }
       }
@@ -85,14 +123,16 @@ export class PhysicsSystem {
       entity.velocity.vy *= friction;
     }
 
-    // Apply velocity multiplier for liquid water and tall grass
-    // Dodge roll ignores grass slowdown, grass reduced from 0.5 to 0.75
+    // Apply velocity multiplier for liquid water, grass, and slowing objects
+    // Dodge roll ignores grass/terrain slowdown
     const isDodgeRolling = entity.dodgeRoll && entity.dodgeRoll.active;
     let velocityMultiplier = 1.0;
     if (inLiquid) {
-      velocityMultiplier = 0.5; // Water still slows significantly
+      velocityMultiplier = 0.5; // Water slows to 50%
     } else if (inGrass && !isDodgeRolling) {
-      velocityMultiplier = 0.75; // Grass slows less, and not at all during roll
+      velocityMultiplier = 0.75; // Grass slows to 75% (dodge roll ignores)
+    } else if (slowingMultiplier < 1.0 && !isDodgeRolling) {
+      velocityMultiplier = slowingMultiplier; // Trees/stumps use numeric value (dodge roll ignores)
     }
 
     // Update position with velocity multiplier
@@ -101,7 +141,7 @@ export class PhysicsSystem {
 
     // Collision detection (if entity has collision)
     if (entity.hasCollision) {
-      const collision = this.checkCollision(entity, newX, newY);
+      const collision = this.checkCollision(entity, newX, newY, backgroundObjects);
       if (!collision.x) {
         entity.position.x = newX;
       } else {
@@ -122,10 +162,20 @@ export class PhysicsSystem {
       this.enforceGridBounds(entity);
     }
 
-    return { inLiquid, liquidState };
+    // Update plane if in tunnel room
+    if (room && room.tunnel && entity.plane !== undefined) {
+      this.updatePlane(entity, room.tunnel);
+    }
+
+    // Resolve tunnel wall overlaps (push entities towards tunnel center)
+    if (room && room.tunnel && entity.plane === 1 && backgroundObjects) {
+      this.resolveTunnelWallOverlap(entity, room.tunnel, backgroundObjects);
+    }
+
+    return { inLiquid, liquidState, damagingLiquid };
   }
 
-  checkCollision(entity, newX, newY) {
+  checkCollision(entity, newX, newY, backgroundObjects = []) {
     const collision = { x: false, y: false };
 
     // Get entity dimensions
@@ -165,6 +215,13 @@ export class PhysicsSystem {
       }
     }
 
+    // Check background object collisions (for tunnel walls and solid objects)
+    if (backgroundObjects && backgroundObjects.length > 0) {
+      const bgCollision = this.checkBackgroundObjectCollision(entity, newX, newY, backgroundObjects);
+      collision.x = collision.x || bgCollision.x;
+      collision.y = collision.y || bgCollision.y;
+    }
+
     return collision;
   }
 
@@ -190,6 +247,125 @@ export class PhysicsSystem {
     return false; // No collision
   }
 
+  /**
+   * Check collision with solid background objects (especially tunnel walls)
+   * CRITICAL: Tunnel walls ONLY collide when entity.plane === 1
+   */
+  checkBackgroundObjectCollision(entity, newX, newY, backgroundObjects) {
+    const collision = { x: false, y: false };
+    const width = entity.width || GRID.CELL_SIZE;
+    const height = entity.height || GRID.CELL_SIZE;
+    const entityPlane = entity.plane !== undefined ? entity.plane : 0;
+
+    for (const obj of backgroundObjects) {
+      if (obj.destroyed) continue;
+
+      // TUNNEL WALL LOGIC: Only collide if entity is in tunnel plane
+      if (obj.data.tunnelWall) {
+        if (entityPlane !== 1) {
+          // NOT in tunnel plane - tunnel walls are passable
+          continue;
+        }
+        // IN tunnel plane - tunnel walls are solid
+        // Fall through to collision check below
+      } else {
+        // Objects with numeric slowing are passable (trees, stumps) - player walks through slowly
+        if (obj.data && typeof obj.data.slowing === 'number') continue;
+
+        // Non-tunnel objects: only check collision if they have solid property or block bullets
+        const isSolid = obj.data.solid || obj.data.bulletInteraction === 'block' || obj.data.bulletInteraction === 'interact-preserve';
+        if (!isSolid) continue;
+      }
+
+      const objBox = obj.getHitbox();
+
+      // Use ellipse collision if object has elliptical collision shape
+      if (obj.collisionShape === 'ellipse') {
+        const xCollision = this.checkEllipseRectCollision(objBox, {
+          x: newX,
+          y: entity.position.y,
+          width,
+          height
+        });
+        const yCollision = this.checkEllipseRectCollision(objBox, {
+          x: entity.position.x,
+          y: newY,
+          width,
+          height
+        });
+
+        if (xCollision) collision.x = true;
+        if (yCollision) collision.y = true;
+      } else {
+        // Standard AABB collision for rectangular objects
+        // Check X-axis collision (test new X with current Y)
+        const testXBox = {
+          x: newX,
+          y: entity.position.y,
+          width,
+          height
+        };
+        const xOverlap =
+          testXBox.x < objBox.x + objBox.width &&
+          testXBox.x + testXBox.width > objBox.x &&
+          testXBox.y < objBox.y + objBox.height &&
+          testXBox.y + testXBox.height > objBox.y;
+
+        if (xOverlap) {
+          collision.x = true;
+        }
+
+        // Check Y-axis collision (test new Y with current X)
+        const testYBox = {
+          x: entity.position.x,
+          y: newY,
+          width,
+          height
+        };
+        const yOverlap =
+          testYBox.x < objBox.x + objBox.width &&
+          testYBox.x + testYBox.width > objBox.x &&
+          testYBox.y < objBox.y + objBox.height &&
+          testYBox.y + testYBox.height > objBox.y;
+
+        if (yOverlap) {
+          collision.y = true;
+        }
+      }
+
+      // Early exit if both axes collide
+      if (collision.x && collision.y) break;
+    }
+
+    return collision;
+  }
+
+  /**
+   * Check collision between an ellipse and a rectangle (AABB)
+   * Ellipse is defined by its bounding box (center and semi-axes from width/height)
+   */
+  checkEllipseRectCollision(ellipseBox, rectBox) {
+    // Ellipse center and semi-axes
+    const ex = ellipseBox.x + ellipseBox.width / 2;
+    const ey = ellipseBox.y + ellipseBox.height / 2;
+    const a = ellipseBox.width / 2;  // Semi-axis X
+    const b = ellipseBox.height / 2; // Semi-axis Y
+
+    // Find closest point on rectangle to ellipse center
+    const closestX = Math.max(rectBox.x, Math.min(ex, rectBox.x + rectBox.width));
+    const closestY = Math.max(rectBox.y, Math.min(ey, rectBox.y + rectBox.height));
+
+    // Calculate distance from ellipse center to closest point
+    const dx = closestX - ex;
+    const dy = closestY - ey;
+
+    // Check if closest point is inside ellipse using ellipse equation
+    // (dx/a)² + (dy/b)² <= 1
+    const normalized = (dx * dx) / (a * a) + (dy * dy) / (b * b);
+
+    return normalized <= 1.0;
+  }
+
   enforceGridBounds(entity) {
     const hitbox = entity.getHitbox ? entity.getHitbox() : {
       width: entity.width || GRID.CELL_SIZE,
@@ -205,6 +381,159 @@ export class PhysicsSystem {
       entity.position.y = GRID.HEIGHT - hitbox.height;
     }
   }
+
+  /**
+   * Resolve tunnel wall overlaps by pushing entities towards tunnel center
+   * Prevents entities from getting stuck in walls
+   */
+  resolveTunnelWallOverlap(entity, tunnelData, backgroundObjects) {
+    const { orientation, bounds } = tunnelData;
+    const entityBox = {
+      x: entity.position.x,
+      y: entity.position.y,
+      width: entity.width || GRID.CELL_SIZE,
+      height: entity.height || GRID.CELL_SIZE
+    };
+
+    // Find all tunnel walls the entity is overlapping with
+    for (const obj of backgroundObjects) {
+      if (!obj.data || !obj.data.tunnelWall || obj.destroyed) continue;
+
+      const objBox = obj.getHitbox();
+
+      // Check if entity is overlapping with this wall
+      const overlapping =
+        entityBox.x < objBox.x + objBox.width &&
+        entityBox.x + entityBox.width > objBox.x &&
+        entityBox.y < objBox.y + objBox.height &&
+        entityBox.y + entityBox.height > objBox.y;
+
+      if (!overlapping) continue;
+
+      // Entity is overlapping with a tunnel wall - push towards tunnel center
+      const wallGridX = Math.floor(obj.position.x / GRID.CELL_SIZE);
+      const wallGridY = Math.floor(obj.position.y / GRID.CELL_SIZE);
+
+      const PUSH_DISTANCE = 2; // Pixels to push per frame
+
+      if (orientation === 'horizontal') {
+        // Horizontal tunnel: walls are on top and bottom
+        // Determine if this is the top wall or bottom wall
+        const tunnelCenterRow = (bounds.minRow + bounds.maxRow) / 2;
+
+        if (wallGridY < tunnelCenterRow) {
+          // Top wall - push down
+          entity.position.y += PUSH_DISTANCE;
+        } else {
+          // Bottom wall - push up
+          entity.position.y -= PUSH_DISTANCE;
+        }
+      } else {
+        // Vertical tunnel: walls are on left and right
+        // Determine if this is the left wall or right wall
+        const tunnelCenterCol = (bounds.minCol + bounds.maxCol) / 2;
+
+        if (wallGridX < tunnelCenterCol) {
+          // Left wall - push right
+          entity.position.x += PUSH_DISTANCE;
+        } else {
+          // Right wall - push left
+          entity.position.x -= PUSH_DISTANCE;
+        }
+      }
+    }
+  }
+
+  /**
+   * Update entity's plane based on tunnel entrances
+   * CRITICAL: Plane switches ONLY occur when crossing entrance objects, NOT at tunnel walls
+   * - Enter tunnel (plane 0 → 1): Cross entrance moving INTO tunnel
+   * - Exit tunnel (plane 1 → 0): Cross entrance moving OUT OF tunnel (opposite direction)
+   */
+  updatePlane(entity, tunnelData) {
+    const { entrances, entranceAxis } = tunnelData;
+    if (!entrances || entrances.length === 0) return;
+
+    // Convert entity position to grid coordinates
+    const entityGridX = Math.floor(entity.position.x / GRID.CELL_SIZE);
+    const entityGridY = Math.floor(entity.position.y / GRID.CELL_SIZE);
+
+    const isPlayer = entity.char === '@';
+    const currentPlane = entity.plane !== undefined ? entity.plane : 0;
+
+    // Check if entity is on any entrance
+    const onEntrance = entrances.find(e => e.col === entityGridX && e.row === entityGridY);
+
+    if (!onEntrance) {
+      // Not on an entrance - no plane switch possible
+      return;
+    }
+
+    // Entity is on an entrance - check if they should switch planes
+    // This requires checking movement direction (are they entering or exiting?)
+
+    // For now, we'll use a simpler approach:
+    // - If on plane 0 and moving towards tunnel interior → switch to plane 1
+    // - If on plane 1 and moving towards tunnel exterior → switch to plane 0
+
+    // Determine movement direction based on velocity
+    const movingRight = entity.velocity && entity.velocity.vx > 0;
+    const movingLeft = entity.velocity && entity.velocity.vx < 0;
+    const movingDown = entity.velocity && entity.velocity.vy > 0;
+    const movingUp = entity.velocity && entity.velocity.vy < 0;
+
+    let shouldSwitch = false;
+    let newPlane = currentPlane;
+
+    if (entranceAxis === 'horizontal') {
+      // Horizontal tunnel: entrances on left/right
+      if (onEntrance.direction === 'left') {
+        // Left entrance: enter by moving RIGHT, exit by moving LEFT
+        if (currentPlane === 0 && movingRight) {
+          shouldSwitch = true;
+          newPlane = 1;
+        } else if (currentPlane === 1 && movingLeft) {
+          shouldSwitch = true;
+          newPlane = 0;
+        }
+      } else if (onEntrance.direction === 'right') {
+        // Right entrance: enter by moving LEFT, exit by moving RIGHT
+        if (currentPlane === 0 && movingLeft) {
+          shouldSwitch = true;
+          newPlane = 1;
+        } else if (currentPlane === 1 && movingRight) {
+          shouldSwitch = true;
+          newPlane = 0;
+        }
+      }
+    } else if (entranceAxis === 'vertical') {
+      // Vertical tunnel: entrances on top/bottom
+      if (onEntrance.direction === 'up') {
+        // Top entrance: enter by moving DOWN, exit by moving UP
+        if (currentPlane === 0 && movingDown) {
+          shouldSwitch = true;
+          newPlane = 1;
+        } else if (currentPlane === 1 && movingUp) {
+          shouldSwitch = true;
+          newPlane = 0;
+        }
+      } else if (onEntrance.direction === 'down') {
+        // Bottom entrance: enter by moving UP, exit by moving DOWN
+        if (currentPlane === 0 && movingUp) {
+          shouldSwitch = true;
+          newPlane = 1;
+        } else if (currentPlane === 1 && movingDown) {
+          shouldSwitch = true;
+          newPlane = 0;
+        }
+      }
+    }
+
+    if (shouldSwitch) {
+      entity.plane = newPlane;
+    }
+  }
+
 
   // Ingredient attraction physics
   applyAttraction(ingredient, target) {

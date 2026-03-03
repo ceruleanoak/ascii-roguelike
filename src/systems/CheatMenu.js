@@ -2,11 +2,13 @@ import { ITEMS, INGREDIENTS, ITEM_TYPES } from '../data/items.js';
 import { GRID } from '../game/GameConfig.js';
 
 export class CheatMenu {
-  constructor() {
+  constructor(game = null) {
+    this.game = game; // Store game reference for zone depth access
     this.isOpen = false;
     this.selectedIndex = 0;
     this.scrollOffset = 0;
     this.maxVisibleItems = 15;
+    this.warpMode = false; // Room warp mode
 
     // Build categorized item list
     this.categories = this.buildItemCategories();
@@ -15,12 +17,24 @@ export class CheatMenu {
 
   buildItemCategories() {
     const categories = {
+      'ZONE TELEPORT': [],
       'WEAPONS': [],
       'ARMOR': [],
       'CONSUMABLES': [],
       'TRAPS': [],
       'INGREDIENTS': []
     };
+
+    // Add zone teleports (if game reference available)
+    if (this.game && this.game.zoneDepths) {
+      categories['ZONE TELEPORT'] = [
+        { char: 'G', name: `GREEN (L${this.game.zoneDepths.green})`, type: 'zone', zone: 'green', color: '#00ff00' },
+        { char: 'R', name: `RED (L${this.game.zoneDepths.red})`, type: 'zone', zone: 'red', color: '#ff4400' },
+        { char: 'C', name: `CYAN (L${this.game.zoneDepths.cyan})`, type: 'zone', zone: 'cyan', color: '#44ffff' },
+        { char: 'Y', name: `YELLOW (L${this.game.zoneDepths.yellow})`, type: 'zone', zone: 'yellow', color: '#ffff44' },
+        { char: 'D', name: `GRAY (L${this.game.zoneDepths.gray})`, type: 'zone', zone: 'gray', color: '#888888' }
+      ];
+    }
 
     // Categorize items
     for (const [char, data] of Object.entries(ITEMS)) {
@@ -61,6 +75,10 @@ export class CheatMenu {
   toggle() {
     this.isOpen = !this.isOpen;
     if (this.isOpen) {
+      // Rebuild categories to get latest zone depths
+      this.categories = this.buildItemCategories();
+      this.flattenedItems = this.flattenCategories();
+
       // Start at first actual item, not header
       this.selectedIndex = 0;
       while (this.selectedIndex < this.flattenedItems.length &&
@@ -68,13 +86,35 @@ export class CheatMenu {
         this.selectedIndex++;
       }
       this.scrollOffset = 0;
+      this.warpMode = false; // Reset warp mode when toggling
     }
   }
 
   handleInput(key) {
     if (!this.isOpen) return null;
 
-    if (key === 'ArrowDown') {
+    // Handle warp mode inputs
+    if (this.warpMode) {
+      if (key === 'Escape' || key === '\\') {
+        // Exit warp mode
+        this.warpMode = false;
+        return 'handled';
+      }
+
+      // Any other key is treated as a room letter
+      const roomLetter = key.toUpperCase();
+      console.log('[CHEAT] Warp to room:', roomLetter);
+      this.warpMode = false;
+      return { action: 'warp', roomLetter };
+    }
+
+    // Regular menu navigation
+    if (key === 'r' || key === 'R') {
+      // Enter warp mode
+      this.warpMode = true;
+      console.log('[CHEAT] Entering warp mode');
+      return 'handled';
+    } else if (key === 'ArrowDown') {
       this.selectedIndex++;
       if (this.selectedIndex >= this.flattenedItems.length) {
         this.selectedIndex = this.flattenedItems.length - 1;
@@ -103,8 +143,16 @@ export class CheatMenu {
       const selected = this.flattenedItems[this.selectedIndex];
       console.log('[CHEAT] Enter pressed, selected:', selected);
       if (selected && !selected.isHeader) {
-        console.log('[CHEAT] Spawning item');
-        return { action: 'spawn', item: selected };
+        // Zone teleport action
+        if (selected.type === 'zone') {
+          console.log('[CHEAT] Teleporting to zone:', selected.zone);
+          return { action: 'teleport_zone', zone: selected.zone };
+        }
+        // Item spawn action
+        else {
+          console.log('[CHEAT] Spawning item');
+          return { action: 'spawn', item: selected };
+        }
       } else {
         console.log('[CHEAT] Selected item is a header or invalid');
       }
@@ -136,11 +184,27 @@ export class CheatMenu {
     // Draw border
     renderer.drawRect(x, y, width, height, '#ffff00', false);
 
-    // Draw title
     renderer.fgCtx.save();
     renderer.fgCtx.fillStyle = '#ffff00';
     renderer.fgCtx.textAlign = 'center';
     renderer.fgCtx.textBaseline = 'middle';
+
+    // Warp mode overlay
+    if (this.warpMode) {
+      renderer.fgCtx.fillText('ROOM WARP', GRID.WIDTH / 2, y + GRID.CELL_SIZE * 1.5);
+
+      renderer.fgCtx.fillStyle = '#ffffff';
+      renderer.fgCtx.fillText('Press desired key to warp', GRID.WIDTH / 2, GRID.HEIGHT / 2);
+
+      renderer.fgCtx.fillStyle = '#888888';
+      const instructionsY = y + height - GRID.CELL_SIZE;
+      renderer.fgCtx.fillText('ESC:Cancel  \\:Close', GRID.WIDTH / 2, instructionsY);
+
+      renderer.fgCtx.restore();
+      return;
+    }
+
+    // Draw title
     renderer.fgCtx.fillText('CHEAT MENU', GRID.WIDTH / 2, y + GRID.CELL_SIZE * 1.5);
 
     // Calculate visible area for items
@@ -211,7 +275,7 @@ export class CheatMenu {
     renderer.fgCtx.fillStyle = '#888888';
     renderer.fgCtx.textAlign = 'center';
     const instructionsY = y + height - GRID.CELL_SIZE;
-    renderer.fgCtx.fillText('↑↓:Select  Enter:Spawn  \\:Close', GRID.WIDTH / 2, instructionsY);
+    renderer.fgCtx.fillText('↑↓:Select  Enter:Spawn  R:Warp  \\:Close', GRID.WIDTH / 2, instructionsY);
 
     renderer.fgCtx.restore();
   }

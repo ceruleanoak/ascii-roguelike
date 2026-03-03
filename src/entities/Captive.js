@@ -1,21 +1,16 @@
 import { GRID } from '../game/GameConfig.js';
+import { NeutralCharacter } from './NeutralCharacter.js';
 
-export class Captive {
+export class Captive extends NeutralCharacter {
   constructor(characterType, x, y) {
+    const color = Captive.getColorForType(characterType);
+    super('@', color, x, y);
+
     this.characterType = characterType; // 'red', 'cyan', 'yellow', 'gray'
-    this.char = '@';
-    this.color = this.getColorForType(characterType);
-    this.position = { x, y };
     this.width = GRID.CELL_SIZE * 3; // Wider for cage
     this.height = GRID.CELL_SIZE * 3; // Taller for cage
     this.cageDestroyed = false; // First interaction: destroy cage
     this.freed = false; // Second interaction: recruit character
-
-    // Pulsing animation
-    this.pulseTimer = 0;
-    this.pulseSpeed = 2.0;
-    this.pulseMin = 0.7;
-    this.pulseMax = 1.0;
 
     // Cage structure (5x5 grid)
     this.cage = [
@@ -27,7 +22,7 @@ export class Captive {
     ];
   }
 
-  getColorForType(type) {
+  static getColorForType(type) {
     const colors = {
       'green': '#00ff00',
       'red': '#ff4444',
@@ -39,14 +34,8 @@ export class Captive {
   }
 
   update(deltaTime) {
-    // Gentle pulsing animation
-    this.pulseTimer += deltaTime * this.pulseSpeed;
-  }
-
-  getPulseAlpha() {
-    // Sine wave between pulseMin and pulseMax
-    const sineWave = Math.sin(this.pulseTimer);
-    return this.pulseMin + (sineWave + 1) * 0.5 * (this.pulseMax - this.pulseMin);
+    // Update base pulse animation
+    super.update(deltaTime);
   }
 
   getHitbox() {

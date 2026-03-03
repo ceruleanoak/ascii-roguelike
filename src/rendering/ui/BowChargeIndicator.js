@@ -1,11 +1,14 @@
 /**
- * BowChargeIndicator - Visual feedback for bow charge state
+ * BowChargeIndicator - Visual feedback for bow charge state and wand uses
  *
- * Shows 3 states:
+ * Shows 3 states for BOWs:
  * - Out of arrows: Blinking red X
  * - Charging: Growing yellow bar (bottom to top)
  * - Cooldown: Blinking bar at last charge level
  * - Ready: No indicator
+ *
+ * Shows 1 state for WANDs:
+ * - Out of uses: Blinking red X
  */
 
 import { GRID } from '../../game/GameConfig.js';
@@ -16,16 +19,39 @@ export class BowChargeIndicator {
   }
 
   render(game) {
-    if (!game.player || !game.player.heldItem || game.player.heldItem.data.weaponType !== 'BOW') {
+    if (!game.player || !game.player.heldItem) {
       return;
     }
 
     const weapon = game.player.heldItem;
+    const weaponType = weapon.data.weaponType;
+
+    // Only render for BOWs and WANDs
+    if (weaponType !== 'BOW' && weaponType !== 'WAND') {
+      return;
+    }
+
     const barHeight = GRID.CELL_SIZE; // Player height
     const barX = game.player.position.x + GRID.CELL_SIZE * 1.5; // To the right of player
     const barY = game.player.position.y; // Aligned with player
 
-    // State 0: Out of arrows - show blinking red X
+    // Wands: Show red X when out of uses
+    if (weaponType === 'WAND') {
+      if (weapon.wandUsesRemaining !== null && weapon.wandUsesRemaining <= 0) {
+        const blinkOn = Math.floor(performance.now() / 1000 * 6) % 2 === 0;
+        if (blinkOn) {
+          this.renderer.drawEntity(
+            barX + 2, // Center the X in the bar position
+            barY + barHeight / 2,
+            'X',
+            '#ff0000'
+          );
+        }
+      }
+      return; // Wands only show red X, no charge bar
+    }
+
+    // Bows: State 0 - Out of arrows - show blinking red X
     if (weapon.usesRemaining !== null && weapon.usesRemaining <= 0) {
       const blinkOn = Math.floor(performance.now() / 1000 * 6) % 2 === 0;
       if (blinkOn) {

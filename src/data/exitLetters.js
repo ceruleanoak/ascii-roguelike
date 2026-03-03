@@ -30,11 +30,12 @@ export const EXIT_LETTERS = {
     weight: 0.20
   },
   'V': {
-    name: 'Valley',
+    name: 'Vault',
     roomType: 'COMBAT',
-    weight: 0.15,
+    weight: 0.05,  // Rare - contains guaranteed treasure
     zoneBoosts: {
-      gray: 5
+      gray: 3,     // Slightly more common in endgame
+      red: 2       // Rare fire vaults
     }
   },
   'P': {
@@ -46,6 +47,11 @@ export const EXIT_LETTERS = {
     name: 'Tunnel',
     roomType: 'COMBAT',
     weight: 0.15
+  },
+  'O': {
+    name: 'Ocean',
+    roomType: 'COMBAT',
+    weight: 0.10
   },
   'R': {
     name: 'Ridge',
@@ -114,6 +120,15 @@ export const EXIT_LETTERS = {
     name: 'Gate',
     roomType: 'COMBAT',
     weight: 0.01
+  },
+  'K': {
+    name: 'Key Room',
+    roomType: 'COMBAT',
+    weight: 0.08,  // Fairly common - needed for vault access
+    zoneBoosts: {
+      green: 2,    // More common early (before vaults)
+      cyan: 1.5
+    }
   }
 };
 

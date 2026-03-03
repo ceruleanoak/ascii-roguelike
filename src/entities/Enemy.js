@@ -1,5 +1,6 @@
 import { GRID, COLORS } from '../game/GameConfig.js';
 import { ENEMIES } from '../data/enemies.js';
+import { inSamePlane } from '../systems/PhysicsSystem.js';
 
 const ENEMY_INVULNERABILITY_DURATION = 0.3; // seconds
 const ENEMY_BLINK_FREQUENCY = 0.05; // blink every 0.05 seconds
@@ -56,6 +57,7 @@ export class Enemy {
     this.boundToGrid = true;
     this.collisionMap = null;
     this.backgroundObjects = null; // Reference to background objects for vision checks
+    this.plane = 0; // 0=normal plane, 1=tunnel plane
 
     // AI state
     this.target = null;
@@ -100,7 +102,8 @@ export class Enemy {
       sleep: { active: false, duration: 0 },
       charm: { active: false, duration: 0 },
       wet: { active: false, duration: 0 },
-      knockback: { active: false, duration: 0 }
+      knockback: { active: false, duration: 0 },
+      blind: { active: false, duration: 0 } // Attacks miss (0 damage)
     };
 
     // DOT blink timer
@@ -115,6 +118,10 @@ export class Enemy {
       resistance: {},
       weakness: {}
     };
+
+    // Wand system properties
+    this.electrified = false; // Electrical infusion on enemy
+    this.electrifiedTimer = 0;
 
     // Spawning system
     this.spawning = this.data.spawning || null;
@@ -143,6 +150,17 @@ export class Enemy {
     this.sapDamageTimer = 0;
     this.sapDamageInterval = this.data.sapDamageInterval || 1.0;
     this.sapDamage = this.data.sapDamage || 1; // Fixed sap damage (not scaled by depth)
+
+    // Pack behavior system (for wolves and spiders)
+    this.packBehavior = this.data.packBehavior || null;
+    if (this.packBehavior && this.packBehavior.enabled) {
+      this.hoverTimer = 0;
+      this.isHovering = false;
+      this.hoverLocked = false; // Once locked, hover continues until attack
+      this.isAttacking = false; // Aggressive rush state after hovering
+      this.attackRushTimer = 0; // Duration of attack rush
+      this.packmates = []; // Reference to nearby pack members (updated by game)
+    }
   }
 
   setCollisionMap(collisionMap) {
@@ -164,15 +182,15 @@ export class Enemy {
   getElementalModifier(elementType) {
     if (!elementType || !this.elementalAffinity) return 1.0;
 
-    if (this.elementalAffinity.immunity.includes(elementType)) {
+    if (this.elementalAffinity.immunity && this.elementalAffinity.immunity.includes(elementType)) {
       return 0.0;
     }
 
-    if (this.elementalAffinity.resistance[elementType] !== undefined) {
+    if (this.elementalAffinity.resistance && this.elementalAffinity.resistance[elementType] !== undefined) {
       return this.elementalAffinity.resistance[elementType];
     }
 
-    if (this.elementalAffinity.weakness[elementType] !== undefined) {
+    if (this.elementalAffinity.weakness && this.elementalAffinity.weakness[elementType] !== undefined) {
       return this.elementalAffinity.weakness[elementType];
     }
 
@@ -180,6 +198,7 @@ export class Enemy {
   }
 
   shouldApplyStatusEffect(effect) {
+    if (!this.elementalAffinity || !this.elementalAffinity.immunity) return true;
     return !this.elementalAffinity.immunity.includes(effect);
   }
 
@@ -286,6 +305,16 @@ export class Enemy {
       }
     }
 
+    // Blind effect (prevents attacks)
+    const blind = this.statusEffects.blind;
+    if (blind.active) {
+      blind.duration -= deltaTime;
+      if (blind.duration <= 0) {
+        blind.active = false;
+        blind.duration = 0;
+      }
+    }
+
     return damageEvents;
   }
 
@@ -305,6 +334,14 @@ export class Enemy {
 
   isKnockedBack() { return this.statusEffects.knockback.active; }
 
+
+  isBlind() { return this.statusEffects.blind.active; }
+
+  // Get effective damage (0 if blind, normal damage otherwise)
+  getEffectiveDamage() {
+    return this.isBlind() ? 0 : this.damage;
+  }
+
   getSpeedMultiplier() {
     if (this.isStunned()) return 0;
     if (this.isKnockedBack()) return 0;
@@ -316,8 +353,141 @@ export class Enemy {
     return Object.keys(this.statusEffects).filter(effect => this.statusEffects[effect].active);
   }
 
+  /**
+   * Calculate pack behavior movement (for wolves and spiders)
+   * Returns movement vector and whether to hover
+   */
+  calculatePackMovement(playerPosition, speedMultiplier) {
+    if (!this.packBehavior || !this.packBehavior.enabled) {
+      return null;
+    }
+
+    const dx = playerPosition.x - this.position.x;
+    const dy = playerPosition.y - this.position.y;
+    const distanceToPlayer = Math.sqrt(dx * dx + dy * dy);
+
+    // Calculate pack center if there are packmates
+    let packCenterX = this.position.x;
+    let packCenterY = this.position.y;
+    let packCount = 1;
+
+    if (this.packmates && this.packmates.length > 0) {
+      for (const mate of this.packmates) {
+        packCenterX += mate.position.x;
+        packCenterY += mate.position.y;
+        packCount++;
+      }
+      packCenterX /= packCount;
+      packCenterY /= packCount;
+    }
+
+    // Vector to pack center
+    const toPackX = packCenterX - this.position.x;
+    const toPackY = packCenterY - this.position.y;
+    const distanceToPack = Math.sqrt(toPackX * toPackX + toPackY * toPackY);
+
+    // Separation force - maintain distance from packmates
+    let separationX = 0;
+    let separationY = 0;
+    const separationDistance = GRID.CELL_SIZE * 2; // Minimum distance between pack members
+
+    if (this.packmates && this.packmates.length > 0) {
+      for (const mate of this.packmates) {
+        const mateDx = this.position.x - mate.position.x;
+        const mateDy = this.position.y - mate.position.y;
+        const mateDist = Math.sqrt(mateDx * mateDx + mateDy * mateDy);
+
+        // Apply stronger separation when too close
+        if (mateDist < separationDistance && mateDist > 0) {
+          const force = (separationDistance - mateDist) / separationDistance;
+          separationX += (mateDx / mateDist) * force;
+          separationY += (mateDy / mateDist) * force;
+        }
+      }
+    }
+
+    // Vector away from player
+    const awayX = -dx;
+    const awayY = -dy;
+
+    // Determine behavior based on distance to player
+    const shouldRetreat = distanceToPlayer < this.packBehavior.retreatThreshold && !this.hoverLocked;
+    const isAtKiteDistance = distanceToPlayer >= this.packBehavior.kiteDistance &&
+                             distanceToPlayer <= this.packBehavior.kiteDistance + GRID.CELL_SIZE * 2;
+
+    let vx = 0;
+    let vy = 0;
+    let shouldHover = false;
+
+    // Once hovering is locked, it continues regardless of distance
+    if (this.hoverLocked) {
+      shouldHover = true;
+    }
+
+    if (shouldRetreat) {
+      // Player too close - retreat while staying near pack
+      // 60% away from player, 20% towards pack, 20% separation
+      vx = (awayX * 0.6) + (toPackX * 0.2) + (separationX * 0.2);
+      vy = (awayY * 0.6) + (toPackY * 0.2) + (separationY * 0.2);
+      this.hoverTimer = 0; // Reset hover timer when retreating
+      this.isHovering = false;
+      this.hoverLocked = false;
+    } else if (isAtKiteDistance || this.hoverLocked) {
+      // At ideal kite distance OR hover is locked - hover and circle
+      shouldHover = true;
+
+      // Lock hover once we start (prevents reset from player movement)
+      if (!this.hoverLocked && isAtKiteDistance) {
+        this.hoverLocked = true;
+      }
+
+      // Circle strafe: perpendicular to player direction
+      const perpX = -dy / (distanceToPlayer || 1);
+      const perpY = dx / (distanceToPlayer || 1);
+
+      // 40% circle, 20% pack center, 40% separation (creates hunting circle)
+      if (distanceToPack > GRID.CELL_SIZE) {
+        vx = (perpX * 0.4) + (toPackX * 0.2) + (separationX * 0.4);
+        vy = (perpY * 0.4) + (toPackY * 0.2) + (separationY * 0.4);
+      } else {
+        // Close to pack - circle with separation
+        vx = (perpX * 0.6) + (separationX * 0.4);
+        vy = (perpY * 0.6) + (separationY * 0.4);
+      }
+    } else if (distanceToPlayer > this.packBehavior.kiteDistance + GRID.CELL_SIZE) {
+      // Too far - move closer while staying near pack
+      // 40% towards player, 40% towards pack, 20% separation
+      vx = (dx * 0.4) + (toPackX * 0.4) + (separationX * 0.2);
+      vy = (dy * 0.4) + (toPackY * 0.4) + (separationY * 0.2);
+
+      // Don't reset hover if already locked
+      if (!this.hoverLocked) {
+        this.hoverTimer = 0;
+        this.isHovering = false;
+      }
+    }
+
+    // Normalize and apply speed
+    const magnitude = Math.sqrt(vx * vx + vy * vy);
+    if (magnitude > 0) {
+      vx = (vx / magnitude) * this.speed * speedMultiplier * 0.8; // Slower kiting speed
+      vy = (vy / magnitude) * this.speed * speedMultiplier * 0.8;
+    }
+
+    return {
+      vx,
+      vy,
+      shouldHover
+    };
+  }
+
   update(deltaTime) {
-    if (!this.target) return { dotDamage: [] };
+    // Track if this enemy just detected player (for aggro SFX)
+    let justAggrod = false;
+
+    if (!this.target) {
+      return { dotDamage: [] };
+    }
 
     // Update invulnerability timer
     if (this.invulnerabilityTimer > 0) {
@@ -424,6 +594,21 @@ export class Enemy {
       if (this.lastKnownPosition && !this.aggroMemoryActive) {
         this.aggroMemoryActive = true;
         this.memoryMoveDelayTimer = this.memoryMoveDelay; // Start delay timer
+        // Reset cached direction to force immediate recalculation towards memory mark
+        this.currentDirection = { x: 0, y: 0 };
+
+        // Share memory mark with all packmates (pack communication)
+        if (this.packmates && this.packmates.length > 0) {
+          for (const mate of this.packmates) {
+            mate.target = this.target; // Share player target
+            mate.lastKnownPosition = { x: this.lastKnownPosition.x, y: this.lastKnownPosition.y };
+            mate.aggroMemoryActive = true;
+            mate.memoryMoveDelayTimer = this.memoryMoveDelay;
+            mate.currentDirection = { x: 0, y: 0 };
+            mate.enraged = true; // Pack member becomes enraged when pack detects player
+            mate.state = 'chase'; // Ensure chase state is set
+          }
+        }
       }
 
       // Pursue memory mark
@@ -441,6 +626,20 @@ export class Enemy {
               this.state = 'chase';
               // Show detection indicator (reacquired target!)
               this.detectionIndicatorTimer = this.detectionIndicatorDuration;
+
+              // Share reacquisition with packmates (pack coordination)
+              if (this.packmates && this.packmates.length > 0) {
+                for (const mate of this.packmates) {
+                  mate.target = this.target; // Share player target
+                  mate.lastKnownPosition = { x: this.target.position.x, y: this.target.position.y };
+                  mate.detectionIndicatorTimer = this.detectionIndicatorDuration;
+                  mate.aggroMemoryActive = false;
+                  mate.memoryMoveDelayTimer = 0;
+                  mate.currentDirection = { x: 0, y: 0 };
+                  mate.enraged = true;
+                  mate.state = 'chase'; // Ensure chase state is set
+                }
+              }
             }
           }
         }
@@ -461,12 +660,25 @@ export class Enemy {
           } else {
             // Delay elapsed - start moving
 
-            // Reached memory mark - end aggro
+            // Reached memory mark - end aggro for self and packmates
             if (memDistance < GRID.CELL_SIZE) {
               this.aggroMemoryActive = false;
               this.lastKnownPosition = null;
               this.memoryMoveDelayTimer = 0;
               this.state = 'idle';
+              this.enraged = false; // Give up the hunt
+
+              // Clear memory mark for all packmates (pack shares memory)
+              if (this.packmates && this.packmates.length > 0) {
+                for (const mate of this.packmates) {
+                  mate.aggroMemoryActive = false;
+                  mate.lastKnownPosition = null;
+                  mate.memoryMoveDelayTimer = 0;
+                  mate.currentDirection = { x: 0, y: 0 };
+                  mate.enraged = false; // Pack gives up together
+                  mate.state = 'idle';
+                }
+              }
             } else {
               // Chase to memory mark using vector navigation
               this.state = 'chase';
@@ -505,47 +717,111 @@ export class Enemy {
       this.velocity.vx = 0;
       this.velocity.vy = 0;
     } else if (distance <= this.attackRange && this.attackTimer <= 0) {
-      // In range and ready to attack - start windup
-      if (this.state !== 'windup' && this.state !== 'attack') {
-        this.state = 'windup';
-        this.windupTimer = this.attackWindup;
-        this.velocity.vx = 0;
-        this.velocity.vy = 0;
-      }
-    } else if ((distance > this.attackRange && distance <= this.aggroRange) || (this.enraged && distance > this.attackRange)) {
-      // Within aggro range OR enraged and outside attack range - chase
-      const wasIdle = this.state === 'idle';
-      const wasInMemoryMode = this.aggroMemoryActive;
-      this.state = 'chase';
+      // CRITICAL: Can only attack if aggro'd (enraged) OR within aggro range
+      const isAggrod = this.enraged || distance <= this.aggroRange;
 
-      // Make AI decisions on a timer (throttled intelligence)
-      if (this.decisionTimer <= 0) {
-        // Check vision to determine if we can see the player
+      if (isAggrod) {
+        // In range and aggro'd - check vision before attacking
+        const canSeeTarget = this.hasVision(this.position, this.target.position, effectiveVisionLength);
+
+        if (canSeeTarget && this.state !== 'windup' && this.state !== 'attack') {
+          this.state = 'windup';
+          this.windupTimer = this.attackWindup;
+          this.velocity.vx = 0;
+          this.velocity.vy = 0;
+        } else if (!canSeeTarget) {
+          // Can't see target (wrong plane or obstructed) - go into memory/chase mode
+          // Let the chase logic below handle it
+          // Do nothing here, fall through to chase condition
+        }
+      }
+      // If not aggro'd, don't attack - fall through to other behaviors
+    } else if ((distance > this.attackRange && distance <= this.aggroRange) || (this.enraged && distance > this.attackRange)) {
+      // Within aggro range OR enraged and outside attack range
+      // But first check if we're on the same plane - can't chase across planes unless already enraged/memory
+      const onSamePlane = inSamePlane(this, this.target);
+      const canChase = onSamePlane || this.enraged || this.aggroMemoryActive;
+
+      if (!canChase) {
+        // Different plane and not already chasing - remain idle
+        this.state = 'idle';
+      } else {
+        // Can chase - either same plane, or already aggro'd/memory from before
+        const wasIdle = this.state === 'idle';
+        const wasInMemoryMode = this.aggroMemoryActive;
+        this.state = 'chase';
+
+        // ALWAYS check vision when in aggro range (don't throttle initial detection)
         const canSeePlayer = this.hasVision(this.position, this.target.position, effectiveVisionLength);
 
         if (canSeePlayer) {
           // Vision is clear - update last known position and deactivate memory
           this.lastKnownPosition = { x: this.target.position.x, y: this.target.position.y };
 
+          // Check if this is a NEW detection (transition from not detecting to detecting)
+          const isNewDetection = this.detectionIndicatorTimer <= 0;
+
           // Always refresh detection indicator when player is in sight (ensures ! overrides ?)
           this.detectionIndicatorTimer = this.detectionIndicatorDuration;
 
+          // Flag for aggro SFX
+          if (isNewDetection) {
+            justAggrod = true;
+          }
+
           this.aggroMemoryActive = false;
           this.memoryMoveDelayTimer = 0; // Reset delay timer
-        } else {
-          // Lost vision - activate memory mode ONLY if we have a valid last known position
-          if (this.lastKnownPosition) {
-            // We had vision before and now lost it - pursue memory mark
-            if (!this.aggroMemoryActive) {
-              this.aggroMemoryActive = true;
-              this.memoryMoveDelayTimer = this.memoryMoveDelay; // Start delay timer
+
+          // Share NEW detection with packmates (pack coordination)
+          if (isNewDetection && this.packmates && this.packmates.length > 0) {
+            for (const mate of this.packmates) {
+              mate.target = this.target; // Share player target
+              mate.lastKnownPosition = { x: this.target.position.x, y: this.target.position.y };
+              mate.detectionIndicatorTimer = this.detectionIndicatorDuration;
+              mate.aggroMemoryActive = false;
+              mate.memoryMoveDelayTimer = 0;
+              mate.currentDirection = { x: 0, y: 0 };
+              mate.enraged = true;
+              mate.state = 'chase'; // Ensure chase state is set
             }
-          } else {
-            // Never had vision of player (spawned with wall between) - set current position as "last known"
-            // This prevents endless chasing through walls when we never actually saw them
+          }
+        } else {
+          // Lost vision - activate memory mode if not already active
+          if (this.lastKnownPosition && !this.aggroMemoryActive) {
+            // TRANSITION: Just lost vision - capture CURRENT player position as memory mark
+            // This is where they disappeared (tunnel entrance, tall grass, etc.)
             this.lastKnownPosition = { x: this.target.position.x, y: this.target.position.y };
             this.aggroMemoryActive = true;
             this.memoryMoveDelayTimer = this.memoryMoveDelay; // Start delay timer
+            // Reset cached direction to force immediate recalculation towards memory mark
+            this.currentDirection = { x: 0, y: 0 };
+
+            // Share memory mark with all packmates (pack communication)
+            if (this.packmates && this.packmates.length > 0) {
+              for (const mate of this.packmates) {
+                mate.target = this.target; // Share player target
+                mate.lastKnownPosition = { x: this.lastKnownPosition.x, y: this.lastKnownPosition.y };
+                mate.aggroMemoryActive = true;
+                mate.memoryMoveDelayTimer = this.memoryMoveDelay;
+                mate.currentDirection = { x: 0, y: 0 };
+                mate.enraged = true; // Pack member becomes enraged when pack detects player
+                mate.state = 'chase'; // Ensure chase state is set
+              }
+            }
+          }
+          // If already in memory mode, do nothing here - keep pursuing the existing memory mark
+          else if (!this.lastKnownPosition) {
+            // Never had vision of player (spawned with wall between) - set current position as "last known"
+            // This prevents endless chasing through walls when we never actually saw them
+            // BUT: Only do this if actually within aggro range AND on same plane
+            // Different planes = no detection, like tall grass
+            if (distance <= this.aggroRange && inSamePlane(this, this.target)) {
+              this.lastKnownPosition = { x: this.target.position.x, y: this.target.position.y };
+              this.aggroMemoryActive = true;
+              this.memoryMoveDelayTimer = this.memoryMoveDelay; // Start delay timer
+              // Reset cached direction to force immediate recalculation towards memory mark
+              this.currentDirection = { x: 0, y: 0 };
+            }
           }
         }
       }
@@ -567,7 +843,7 @@ export class Enemy {
         } else {
           // Delay elapsed - start moving
 
-          // Reached memory mark but player still hidden - give up
+          // Reached memory mark but player still hidden - give up for self and packmates
           if (memDistance < GRID.CELL_SIZE) {
             this.aggroMemoryActive = false;
             this.lastKnownPosition = null;
@@ -575,6 +851,19 @@ export class Enemy {
             this.state = 'idle';
             this.velocity.vx = 0;
             this.velocity.vy = 0;
+            this.enraged = false; // Give up the hunt
+
+            // Clear memory mark for all packmates (pack shares memory)
+            if (this.packmates && this.packmates.length > 0) {
+              for (const mate of this.packmates) {
+                mate.aggroMemoryActive = false;
+                mate.lastKnownPosition = null;
+                mate.memoryMoveDelayTimer = 0;
+                mate.currentDirection = { x: 0, y: 0 };
+                mate.enraged = false; // Pack gives up together
+                mate.state = 'idle';
+              }
+            }
           } else {
             // Still pursuing memory mark
             if (this.collisionMap) {
@@ -589,22 +878,108 @@ export class Enemy {
         }
       } else {
         // Direct chase (can see player)
-        if (this.collisionMap) {
-          this.updateVectorNavigation(speedMultiplier, this.target.position, deltaTime);
-        } else {
-          const navDx = this.target.position.x - this.position.x;
-          const navDy = this.target.position.y - this.position.y;
-          const navDistance = Math.sqrt(navDx * navDx + navDy * navDy);
 
-          if (navDistance > 0) {
-            const dirX = navDx / navDistance;
-            const dirY = navDy / navDistance;
-            this.velocity.vx = dirX * this.speed * speedMultiplier;
-            this.velocity.vy = dirY * this.speed * speedMultiplier;
+        // === PACK BEHAVIOR ===
+        // Only activate pack tactics if this enemy OR any packmate has detected the player
+        const packDetected = this.detectionIndicatorTimer > 0 ||
+                            (this.packmates && this.packmates.some(mate => mate.detectionIndicatorTimer > 0));
+
+        if (this.packBehavior && this.packBehavior.enabled && packDetected) {
+          // ESCAPE FROM HOVER: If player evades and creates new memory mark, abandon hover
+          if (this.isHovering && this.aggroMemoryActive) {
+            // Player escaped during hover - reset hover state and pursue memory
+            this.isHovering = false;
+            this.hoverLocked = false;
+            this.hoverTimer = 0;
+
+            // Fall through to normal memory pursuit behavior below
+            if (this.collisionMap) {
+              this.updateVectorNavigation(speedMultiplier, this.target.position, deltaTime);
+            } else {
+              const navDx = this.target.position.x - this.position.x;
+              const navDy = this.target.position.y - this.position.y;
+              const navDistance = Math.sqrt(navDx * navDx + navDy * navDy);
+
+              if (navDistance > 0) {
+                const dirX = navDx / navDistance;
+                const dirY = navDy / navDistance;
+                this.velocity.vx = dirX * this.speed * speedMultiplier;
+                this.velocity.vy = dirY * this.speed * speedMultiplier;
+              }
+            }
+          }
+          // Check if in aggressive attack rush
+          else if (this.isAttacking) {
+            this.attackRushTimer -= deltaTime;
+
+            // Fast aggressive movement towards player (1.5x normal speed)
+            const navDx = this.target.position.x - this.position.x;
+            const navDy = this.target.position.y - this.position.y;
+            const navDistance = Math.sqrt(navDx * navDx + navDy * navDy);
+
+            if (navDistance > 0) {
+              const dirX = navDx / navDistance;
+              const dirY = navDy / navDistance;
+              this.velocity.vx = dirX * this.speed * speedMultiplier * 1.5; // Fast rush
+              this.velocity.vy = dirY * this.speed * speedMultiplier * 1.5;
+            }
+
+            // End attack rush when timer expires or reached attack range
+            if (this.attackRushTimer <= 0 || navDistance <= this.attackRange) {
+              this.isAttacking = false;
+              this.attackRushTimer = 0;
+              this.hoverLocked = false;
+              this.hoverTimer = 0;
+              this.detectionIndicatorTimer = 0; // Clear red indicator
+            }
+          } else {
+            const packMovement = this.calculatePackMovement(this.target.position, speedMultiplier);
+
+            if (packMovement) {
+              this.velocity.vx = packMovement.vx;
+              this.velocity.vy = packMovement.vy;
+
+              // Update hover timer
+              if (packMovement.shouldHover) {
+                this.isHovering = true;
+                this.hoverTimer += deltaTime;
+
+                // After hovering long enough, commit to aggressive attack
+                if (this.hoverTimer >= this.packBehavior.hoverTime) {
+                  this.isHovering = false;
+                  this.hoverTimer = 0;
+                  this.hoverLocked = false;
+
+                  // Enter aggressive attack state
+                  this.isAttacking = true;
+                  this.attackRushTimer = 2.0; // 2 second aggressive rush
+                  this.detectionIndicatorTimer = 2.0; // Show red ! during rush
+                }
+              } else {
+                this.isHovering = false;
+              }
+            }
+          }
+        } else {
+          // Normal chase behavior (no pack tactics)
+          if (this.collisionMap) {
+            this.updateVectorNavigation(speedMultiplier, this.target.position, deltaTime);
+          } else {
+            const navDx = this.target.position.x - this.position.x;
+            const navDy = this.target.position.y - this.position.y;
+            const navDistance = Math.sqrt(navDx * navDx + navDy * navDy);
+
+            if (navDistance > 0) {
+              const dirX = navDx / navDistance;
+              const dirY = navDy / navDistance;
+              this.velocity.vx = dirX * this.speed * speedMultiplier;
+              this.velocity.vy = dirY * this.speed * speedMultiplier;
+            }
           }
         }
-      }
-    } else {
+      } // Close the canChase else block
+    } // Close the aggro range else if block
+    else {
       // Between attack range and aggro range, but conditions not met
       this.state = 'idle';
       this.velocity.vx = 0;
@@ -683,7 +1058,7 @@ export class Enemy {
       }
     }
 
-    return { dotDamage: dotDamageEvents };
+    return { dotDamage: dotDamageEvents, justAggrod };
   }
 
   /**
@@ -712,9 +1087,6 @@ export class Enemy {
     // If moving slower than 5 units/sec, consider stuck (works for all enemy speeds)
     if (currentSpeed < STUCK_THRESHOLD) {
       this.stuckTimer += deltaTime;
-      if (this.stuckTimer > 0.3 && Math.random() < 0.1) { // Log occasionally when stuck
-        console.log(`[${this.data.name}] STUCK: speed=${currentSpeed.toFixed(1)} < ${STUCK_THRESHOLD} (expected=${expectedSpeed.toFixed(1)}), stuckTimer=${this.stuckTimer.toFixed(2)}s, bruteForceTimer=${this.bruteForceTimer.toFixed(2)}s`);
-      }
     } else {
       this.stuckTimer = 0;
     }
@@ -747,10 +1119,6 @@ export class Enemy {
       (this.currentDirection.x === 0 && this.currentDirection.y === 0) ||
       currentPathObstructed
     );
-
-    if (this.stuckTimer > 0.3 && Math.random() < 0.05) {
-      console.log(`[${this.data.name}] Recalc check: bruteForceTimer=${this.bruteForceTimer.toFixed(2)}, needsRecalc=${needsRecalc}, stuckTimer=${this.stuckTimer.toFixed(2)}, pathObstructed=${currentPathObstructed}`);
-    }
 
     if (needsRecalc) {
       const dx = target.x - this.position.x;
@@ -791,9 +1159,6 @@ export class Enemy {
         // If we tried this angle last time and we're still stuck, try the other adjacent snap
         if (this.lastBruteForceAngle !== null && Math.abs(snapAngle - this.lastBruteForceAngle) < 0.1) {
           snapAngle = distToLower > distToUpper ? upperSnap : lowerSnap;
-          console.log(`[${this.data.name}] 🔴 BRUTE FORCE (RETRY): Last attempt ${(this.lastBruteForceAngle*180/Math.PI).toFixed(0)}° failed, trying OTHER snap ${(snapAngle*180/Math.PI).toFixed(0)}° for 1.0s`);
-        } else {
-          console.log(`[${this.data.name}] 🔴 BRUTE FORCE: target=${(angle*180/Math.PI).toFixed(1)}° → lower=${(lowerSnap*180/Math.PI).toFixed(0)}° (dist=${(distToLower*180/Math.PI).toFixed(1)}°), upper=${(upperSnap*180/Math.PI).toFixed(0)}° (dist=${(distToUpper*180/Math.PI).toFixed(1)}°) → FORCING ${(snapAngle*180/Math.PI).toFixed(0)}° for 1.0s`);
         }
 
         // FORCE this direction - no checking, just do it!
@@ -950,8 +1315,15 @@ export class Enemy {
    * Check if enemy can see the target (vision check)
    * More restrictive than hasLineOfSight - includes background objects
    * Used for aggro/memory system, NOT navigation
+   * PLANE-AWARE: Returns false if target is in different plane
    */
   hasVision(start, end, maxLength) {
+    // CRITICAL: Check if target is in same plane
+    // If target has a position property, it's likely the player object
+    if (this.target && !inSamePlane(this, this.target)) {
+      return false;
+    }
+
     const dx = end.x - start.x;
     const dy = end.y - start.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
@@ -1021,6 +1393,8 @@ export class Enemy {
   }
 
   canAttack() {
+    // Blind enemies can still attack, but will miss (damage set to 0 in createAttack)
+
     // Sap attacks can start when within range and not already sapping
     if (this.attackType === 'sap') {
       return !this.sapping && this.state === 'attack' && this.attackTimer <= 0 && this.windupTimer <= 0;
@@ -1089,8 +1463,8 @@ export class Enemy {
 
     if (distance === 0) return null;
 
-    const dirX = dx / distance;
-    const dirY = dy / distance;
+    let dirX = dx / distance;
+    let dirY = dy / distance;
 
     // Create attack zone extending toward player (full attack range)
     // Position it 1 unit away from enemy, extending to attack range
@@ -1105,13 +1479,14 @@ export class Enemy {
       },
       width: GRID.CELL_SIZE,
       height: GRID.CELL_SIZE,
-      damage: this.damage,
+      damage: this.getEffectiveDamage(),
       duration: 0.15,
       color: this.color,
       knockback: 300,
       owner: this,
       isCharmedAttack: this.isCharmed(),
-      charmedTarget: this.isCharmed() ? this.target : null
+      charmedTarget: this.isCharmed() ? this.target : null,
+      shooterPlane: this.plane
     };
   }
 
@@ -1139,7 +1514,7 @@ export class Enemy {
       },
       width: GRID.CELL_SIZE,
       height: GRID.CELL_SIZE,
-      damage: this.damage,
+      damage: this.getEffectiveDamage(),
       duration: this.attackWindup + 0.15, // Windup + actual attack duration
       color: this.color,
       knockback: 300,
@@ -1150,7 +1525,8 @@ export class Enemy {
       hasHit: true, // Prevent damage during windup
       windupDuration: this.attackWindup, // Store total windup time
       windupElapsed: 0, // Track time elapsed in windup
-      alpha: 1.0 // Start at full visibility
+      alpha: 1.0, // Start at full visibility
+      shooterPlane: this.plane
     };
   }
 
@@ -1164,8 +1540,10 @@ export class Enemy {
     const dirX = dx / distance;
     const dirY = dy / distance;
 
-    // Add slight randomness to direction
+    // Calculate base angle
     const baseAngle = Math.atan2(dirY, dirX);
+
+    // Normal slight randomness for projectile aim
     const randomness = (Math.random() - 0.5) * 0.1; // ±0.05 radians (~3 degrees)
     const finalAngle = baseAngle + randomness;
 
@@ -1180,9 +1558,10 @@ export class Enemy {
         vx: Math.cos(finalAngle) * 200,
         vy: Math.sin(finalAngle) * 200
       },
-      damage: this.damage,
+      damage: this.getEffectiveDamage(),
       color: this.color,
-      owner: 'enemy'
+      owner: 'enemy',
+      shooterPlane: this.plane
     };
   }
 
@@ -1196,10 +1575,14 @@ export class Enemy {
     const dirX = dx / distance;
     const dirY = dy / distance;
 
+    let targetAngle = Math.atan2(dirY, dirX);
+
+    // Reckless misdirection (applied to all missiles)
+
     // Wizard shoots 3 magic missiles in a spread
     const projectiles = [];
     for (let i = -1; i <= 1; i++) {
-      const baseAngle = Math.atan2(dirY, dirX) + (i * 0.2);
+      const baseAngle = targetAngle + (i * 0.2);
       const randomness = (Math.random() - 0.5) * 0.06; // ±0.03 radians (~2 degrees)
       const angle = baseAngle + randomness;
 
@@ -1214,9 +1597,10 @@ export class Enemy {
           vx: Math.cos(angle) * 180,
           vy: Math.sin(angle) * 180
         },
-        damage: this.damage,
+        damage: this.getEffectiveDamage(),
         color: '#8800ff',
-        owner: 'enemy'
+        owner: 'enemy',
+        shooterPlane: this.plane
       });
     }
 
@@ -1233,10 +1617,14 @@ export class Enemy {
     const dirX = dx / distance;
     const dirY = dy / distance;
 
+    let targetAngle = Math.atan2(dirY, dirX);
+
+    // Reckless misdirection (applied to all fire projectiles)
+
     // Dragon shoots 5 fire projectiles in a cone
     const projectiles = [];
     for (let i = -2; i <= 2; i++) {
-      const baseAngle = Math.atan2(dirY, dirX) + (i * 0.15);
+      const baseAngle = targetAngle + (i * 0.15);
       const randomness = (Math.random() - 0.5) * 0.06; // ±0.03 radians (~2 degrees)
       const angle = baseAngle + randomness;
 
@@ -1251,9 +1639,10 @@ export class Enemy {
           vx: Math.cos(angle) * 220,
           vy: Math.sin(angle) * 220
         },
-        damage: this.damage,
+        damage: this.getEffectiveDamage(),
         color: '#ff4400',
-        owner: 'enemy'
+        owner: 'enemy',
+        shooterPlane: this.plane
       });
     }
 
@@ -1400,8 +1789,9 @@ export class Enemy {
   }
 
   getMemoryIndicator() {
-    // Only show ? when in memory mode AND the ! indicator is not currently flashing
-    if (this.aggroMemoryActive && this.state === 'chase' && this.detectionIndicatorTimer <= 0) {
+    // Only show ? when in memory mode AND not hovering (hover takes priority)
+    if (this.aggroMemoryActive && this.state === 'chase' &&
+        this.detectionIndicatorTimer <= 0 && !this.isHovering) {
       return {
         char: '?',
         color: '#ffff00',
@@ -1411,11 +1801,25 @@ export class Enemy {
     return null;
   }
 
+  getHoverIndicator() {
+    // Show ... when pack hunting and hovering (distinct state - overrides memory)
+    if (this.isHovering && this.detectionIndicatorTimer <= 0) {
+      return {
+        char: '...',
+        color: '#aaaaaa',
+        offsetY: -GRID.CELL_SIZE  // Position above enemy
+      };
+    }
+    return null;
+  }
+
   getDetectionIndicator() {
     if (this.detectionIndicatorTimer > 0 && !this.aggroMemoryActive) {
+      // Red indicator during aggressive attack rush, yellow otherwise
+      const isAttackingRush = this.isAttacking && this.packBehavior && this.packBehavior.enabled;
       return {
         char: '!',
-        color: '#ffff00',
+        color: isAttackingRush ? '#ff0000' : '#ffff00',
         offsetY: -GRID.CELL_SIZE  // Position above enemy
       };
     }
@@ -1457,6 +1861,13 @@ export class Enemy {
   getSpawnIndicator() {
     if (this.spawnWindupActive && this.spawnWindupTimer > 0) {
       return { char: '+', color: '#ff00ff', offsetY: -GRID.CELL_SIZE };
+    }
+    return null;
+  }
+
+  getBlindIndicator() {
+    if (this.isBlind()) {
+      return { char: 'X', color: '#ff0000', offsetY: -GRID.CELL_SIZE };
     }
     return null;
   }

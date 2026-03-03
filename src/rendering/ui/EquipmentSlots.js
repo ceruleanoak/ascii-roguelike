@@ -15,35 +15,39 @@ export class EquipmentSlots {
   }
 
   render(game) {
-    // Draw storage chest (top left)
-    this.renderer.drawCell(EQUIPMENT.CHEST_X - 1, EQUIPMENT.CHEST_Y, '[', COLORS.BORDER);
-    this.renderer.drawCell(EQUIPMENT.CHEST_X, EQUIPMENT.CHEST_Y, '#', '#8b4513'); // Chest icon
-    this.renderer.drawCell(EQUIPMENT.CHEST_X + 1, EQUIPMENT.CHEST_Y, ']', COLORS.BORDER);
+    const RED = '#ff4444';
+    const YELLOW = '#ffff00';
+    const BLUE = '#4488ff';
 
-    // Draw armor slot (below chest)
-    this.renderer.drawCell(EQUIPMENT.ARMOR_X - 1, EQUIPMENT.ARMOR_Y, '[', COLORS.BORDER);
-    this.renderer.drawCell(EQUIPMENT.ARMOR_X, EQUIPMENT.ARMOR_Y, ' ', COLORS.BORDER);
-    this.renderer.drawCell(EQUIPMENT.ARMOR_X + 1, EQUIPMENT.ARMOR_Y, ']', COLORS.BORDER);
+    // Draw storage chest (top left) - red
+    this.renderer.drawCell(EQUIPMENT.CHEST_X - 1, EQUIPMENT.CHEST_Y, '[', RED);
+    this.renderer.drawCell(EQUIPMENT.CHEST_X, EQUIPMENT.CHEST_Y, '#', RED);
+    this.renderer.drawCell(EQUIPMENT.CHEST_X + 1, EQUIPMENT.CHEST_Y, ']', RED);
+
+    // Draw armor slot (below chest) - blue
+    this.renderer.drawCell(EQUIPMENT.ARMOR_X - 1, EQUIPMENT.ARMOR_Y, '[', BLUE);
+    this.renderer.drawCell(EQUIPMENT.ARMOR_X, EQUIPMENT.ARMOR_Y, ' ', BLUE);
+    this.renderer.drawCell(EQUIPMENT.ARMOR_X + 1, EQUIPMENT.ARMOR_Y, ']', BLUE);
 
     // Draw equipped armor
     if (game.inventorySystem.equippedArmor) {
       this.renderer.drawCell(EQUIPMENT.ARMOR_X, EQUIPMENT.ARMOR_Y, game.inventorySystem.equippedArmor.char, game.inventorySystem.equippedArmor.color);
     }
 
-    // Draw consumable slot 1 (right side)
-    this.renderer.drawCell(EQUIPMENT.CONSUMABLE1_X - 1, EQUIPMENT.CONSUMABLE1_Y, '[', COLORS.BORDER);
-    this.renderer.drawCell(EQUIPMENT.CONSUMABLE1_X, EQUIPMENT.CONSUMABLE1_Y, ' ', COLORS.BORDER);
-    this.renderer.drawCell(EQUIPMENT.CONSUMABLE1_X + 1, EQUIPMENT.CONSUMABLE1_Y, ']', COLORS.BORDER);
+    // Draw consumable slot 1 (right side) - yellow
+    this.renderer.drawCell(EQUIPMENT.CONSUMABLE1_X - 1, EQUIPMENT.CONSUMABLE1_Y, '[', YELLOW);
+    this.renderer.drawCell(EQUIPMENT.CONSUMABLE1_X, EQUIPMENT.CONSUMABLE1_Y, ' ', YELLOW);
+    this.renderer.drawCell(EQUIPMENT.CONSUMABLE1_X + 1, EQUIPMENT.CONSUMABLE1_Y, ']', YELLOW);
 
     // Draw equipped consumable 1
     if (game.inventorySystem.equippedConsumables[0]) {
       this.renderer.drawCell(EQUIPMENT.CONSUMABLE1_X, EQUIPMENT.CONSUMABLE1_Y, game.inventorySystem.equippedConsumables[0].char, game.inventorySystem.equippedConsumables[0].color);
     }
 
-    // Draw consumable slot 2 (right side)
-    this.renderer.drawCell(EQUIPMENT.CONSUMABLE2_X - 1, EQUIPMENT.CONSUMABLE2_Y, '[', COLORS.BORDER);
-    this.renderer.drawCell(EQUIPMENT.CONSUMABLE2_X, EQUIPMENT.CONSUMABLE2_Y, ' ', COLORS.BORDER);
-    this.renderer.drawCell(EQUIPMENT.CONSUMABLE2_X + 1, EQUIPMENT.CONSUMABLE2_Y, ']', COLORS.BORDER);
+    // Draw consumable slot 2 (right side) - yellow
+    this.renderer.drawCell(EQUIPMENT.CONSUMABLE2_X - 1, EQUIPMENT.CONSUMABLE2_Y, '[', YELLOW);
+    this.renderer.drawCell(EQUIPMENT.CONSUMABLE2_X, EQUIPMENT.CONSUMABLE2_Y, ' ', YELLOW);
+    this.renderer.drawCell(EQUIPMENT.CONSUMABLE2_X + 1, EQUIPMENT.CONSUMABLE2_Y, ']', YELLOW);
 
     // Draw equipped consumable 2
     if (game.inventorySystem.equippedConsumables[1]) {

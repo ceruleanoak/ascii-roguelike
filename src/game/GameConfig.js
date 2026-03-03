@@ -25,6 +25,7 @@ export const GAME_STATES = {
   REST: 'REST',
   EXPLORE: 'EXPLORE',
   COMBAT: 'COMBAT',
+  NEUTRAL: 'NEUTRAL',
   GAME_OVER: 'GAME_OVER'
 };
 
@@ -32,7 +33,8 @@ export const ROOM_TYPES = {
   COMBAT: 'COMBAT',
   BOSS: 'BOSS',
   DISCOVERY: 'DISCOVERY',
-  CAMP: 'CAMP'
+  CAMP: 'CAMP',
+  TUNNEL: 'TUNNEL'
 };
 
 export const COLORS = {
@@ -97,6 +99,7 @@ export const BACKGROUND_OBJECTS = {
     bulletInteraction: 'block',
     flammability: 'high',
     conductivity: 'none',
+    slowing: 0.1,
     interactions: {
       default: { animation: 'shake', message: null }
     }
@@ -104,6 +107,8 @@ export const BACKGROUND_OBJECTS = {
   '0': {
     name: 'Rock',
     color: '#888888',
+    solid: true,
+    collisionShape: 'ellipse', // Use elliptical collision instead of rectangle
     hp: 3,
     dropEffect: 'destroyObject:spawnIngredient:M',
     dropChance: 0.2,
@@ -160,6 +165,7 @@ export const BACKGROUND_OBJECTS = {
     bulletInteraction: 'block',
     flammability: 'medium',
     conductivity: 'none',
+    slowing: 0.1,
     interactions: {
       default: { animation: 'shake', message: null }
     }
@@ -224,6 +230,17 @@ export const BACKGROUND_OBJECTS = {
     conductivity: 'water',
     interactions: {
       default: { animation: 'ripple', message: null }
+    }
+  },
+  '.': {
+    name: 'Sand',
+    color: '#d4a896',
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    interactions: {
+      default: { animation: 'none', message: null }
     }
   },
   'i': {
@@ -316,6 +333,94 @@ export const BACKGROUND_OBJECTS = {
     indestructible: true,
     interactions: {
       default: { animation: 'shake', message: null }
+    }
+  },
+  '-': {
+    name: 'Tunnel Wall (Horizontal)',
+    color: '#666666',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    tunnelWall: true,
+    solid: true,
+    renderOnlyOnPlane: 1, // Only render when entity is in tunnel (plane 1)
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
+  'I': {
+    name: 'Tunnel Wall (Vertical)',
+    color: '#666666',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    tunnelWall: true,
+    solid: true,
+    renderOnlyOnPlane: 1, // Only render when entity is in tunnel (plane 1)
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
+  '<': {
+    name: 'Tunnel Entrance (Left)',
+    color: '#888888',
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    tunnelEntrance: true,
+    entranceDirection: 'left', // Enter by moving right (from left side)
+    solid: false,
+    alwaysRender: true, // Always visible regardless of plane
+    interactions: {
+      default: { animation: 'none', message: null }
+    }
+  },
+  '>': {
+    name: 'Tunnel Entrance (Right)',
+    color: '#888888',
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    tunnelEntrance: true,
+    entranceDirection: 'right', // Enter by moving left (from right side)
+    solid: false,
+    alwaysRender: true, // Always visible regardless of plane
+    interactions: {
+      default: { animation: 'none', message: null }
+    }
+  },
+  '^': {
+    name: 'Tunnel Entrance (Up)',
+    color: '#888888',
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    tunnelEntrance: true,
+    entranceDirection: 'up', // Enter by moving down (from top side)
+    solid: false,
+    alwaysRender: true, // Always visible regardless of plane
+    interactions: {
+      default: { animation: 'none', message: null }
+    }
+  },
+  'v': {
+    name: 'Tunnel Entrance (Down)',
+    color: '#888888',
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    tunnelEntrance: true,
+    entranceDirection: 'down', // Enter by moving up (from bottom side)
+    solid: false,
+    alwaysRender: true, // Always visible regardless of plane
+    interactions: {
+      default: { animation: 'none', message: null }
     }
   }
 };
@@ -640,3 +745,29 @@ export const OBJECT_ANIMATIONS = {
 };
 
 export const INTERACTION_RANGE = 24; // pixels
+
+// Polymorph transformation outcomes for Transmutation Wand
+export const POLYMORPH_OUTCOMES = {
+  backgroundObject: {
+    weight: 20,
+    objects: ['%', '&', '0', 'Y', '*', '#', 'p', '=', 'i', '!', 'B', 'Q', '~'] // Various background objects
+  },
+  lesserEnemy: {
+    weight: 20,
+    // Spawns a level 1 enemy type scaled to current room depth
+  },
+  item: {
+    weight: 20,
+    rarityMin: 'common',
+    rarityMax: 'rare'
+    // Drops a random item between common and rare rarity
+  },
+  equivalentEnemy: {
+    weight: 20
+    // Swaps to a different enemy of the same tier/level
+  },
+  boss: {
+    weight: 20
+    // Spawns a BOSS enemy at current room depth - DANGER!
+  }
+};

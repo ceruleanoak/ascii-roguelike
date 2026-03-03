@@ -56,6 +56,9 @@ export class InventorySystem {
     this.savedExploreEnemies = [];
     this.savedExploreBackgroundObjects = [];
     this.savedExploreCaptives = [];
+
+    // REST mode persistence
+    this.savedRestIngredients = []; // Ingredients on the ground in REST mode
   }
 
   // ========== GETTERS (for UI access) ==========
@@ -138,8 +141,6 @@ export class InventorySystem {
     this.restInventory = this.characterInventories[characterType].inventory;
     this.restQuickSlots = this.characterInventories[characterType].quickSlots;
     this.restActiveSlotIndex = this.characterInventories[characterType].activeSlotIndex;
-
-    console.log(`[InventorySystem] Switched to character '${characterType}' inventory`);
   }
 
   /**
@@ -194,6 +195,7 @@ export class InventorySystem {
 
       if (distance < 20) {
         let droppedItem = null;
+        let customMessage = null;
 
         // Route items to correct inventory based on type
         if (item.data.type === 'ARMOR') {
@@ -211,12 +213,28 @@ export class InventorySystem {
           droppedItem = player.pickupItem(item);
           physicsSystem.removeEntity(item);
           items.splice(i, 1);
+        } else if (item.data.type === 'BLESSING') {
+          // Blessings are handled by caller (applyBlessing in main.js)
+          physicsSystem.removeEntity(item);
+          items.splice(i, 1);
+          return {
+            success: true,
+            droppedItem: null,
+            message: null,
+            removedTrap: false,
+            blessing: item // Return blessing item for caller to apply
+          };
+        } else if (item.data.type === 'NEUTRAL') {
+          // Neutral items just show message (lore/flavor)
+          customMessage = item.data.name;
+          physicsSystem.removeEntity(item);
+          items.splice(i, 1);
         }
 
         return {
           success: true,
           droppedItem: droppedItem,
-          message: item.data.name,
+          message: customMessage || item.data.name,
           removedTrap: false
         };
       }
@@ -666,10 +684,8 @@ export class InventorySystem {
         this.spentConsumableSlots[slotIndex] = true;
         this.equippedConsumables[slotIndex] = null;
         player.equippedConsumables[slotIndex] = null;
-        console.log(`${cd.name} windup started (one-shot)!`);
       } else {
         this.consumableCooldowns[slotIndex] = cd.cooldown || 10;
-        console.log(`${cd.name} windup started (${cd.cooldown}s cooldown)!`);
       }
     } else {
       // Instant activation
@@ -702,10 +718,8 @@ export class InventorySystem {
         this.spentConsumableSlots[slotIndex] = true;
         this.equippedConsumables[slotIndex] = null;
         player.equippedConsumables[slotIndex] = null;
-        console.log(`Auto-activated ${cd.name} (one-shot)!`);
       } else {
         this.consumableCooldowns[slotIndex] = cd.cooldown || 10;
-        console.log(`Auto-activated ${cd.name} (${cd.cooldown}s cooldown)!`);
       }
     }
   }
@@ -836,11 +850,8 @@ export class InventorySystem {
     this.consumableFlashTimer = 0.5;
 
     // Handle consumption based on one-shot vs reusable
-    if (windup.isOneShot) {
-      console.log(`${cd.name} triggered (one-shot consumed)!`);
-    } else {
+    if (!windup.isOneShot) {
       this.consumableCooldowns[windup.slotIndex] = cd.cooldown || 10;
-      console.log(`${cd.name} triggered (${cd.cooldown}s cooldown started)!`);
     }
   }
 
@@ -884,9 +895,6 @@ export class InventorySystem {
     this.restQuickSlots.length = 0;
     this.restQuickSlots.push(...playerQuickSlots);
     this.restActiveSlotIndex = playerActiveSlotIndex;
-
-    console.log('[bankLoot] Added', playerInventory.length, 'ingredients to REST inventory. Total:', this.restInventory.length);
-    console.log('[bankLoot] Saved quick slots:', this.restQuickSlots);
   }
 
   /**
@@ -915,7 +923,8 @@ export class InventorySystem {
     // Clear saved EXPLORE room
     this.clearSavedExploreRoom();
 
-    console.log('[handleGameOver] Cleared all character inventories');
+    // Clear saved REST ingredients
+    this.clearSavedRestIngredients();
   }
 
   /**
@@ -938,8 +947,6 @@ export class InventorySystem {
     this.savedExploreEnemies = [...enemies];
     this.savedExploreBackgroundObjects = [...backgroundObjects];
     this.savedExploreCaptives = [...captives];
-
-    console.log('[saveExploreRoom] Saved EXPLORE room state for anti-cheat');
   }
 
   /**
@@ -973,6 +980,33 @@ export class InventorySystem {
     this.savedExploreEnemies = [];
     this.savedExploreBackgroundObjects = [];
     this.savedExploreCaptives = [];
+  }
+
+  // ========== REST MODE PERSISTENCE ==========
+
+  /**
+   * Save REST mode ground ingredients when leaving for EXPLORE
+   *
+   * @param {Array} ingredients - Ingredients array from REST mode
+   */
+  saveRestIngredients(ingredients) {
+    this.savedRestIngredients = [...ingredients];
+  }
+
+  /**
+   * Get saved REST ingredients for restoration
+   *
+   * @returns {Array} - Copy of saved REST ingredients
+   */
+  getSavedRestIngredients() {
+    return [...this.savedRestIngredients];
+  }
+
+  /**
+   * Clear saved REST ingredients (called on game over)
+   */
+  clearSavedRestIngredients() {
+    this.savedRestIngredients = [];
   }
 
   // ========== CHEST SYSTEM ==========

@@ -15,9 +15,10 @@ export const CHARACTER_TYPES = {
     rollDuration: 0.18,
     rollCooldown: 0.45,
     rollSpeed: 580,
-    weaponAffinities: {
-      'ranged': { damageBonus: 0.15 } // 15% bonus ranged damage
-    }
+    actionCooldownMax: 2.5,   // Shared cooldown for attacks and dodge roll
+    idleDamageBonus: 2,        // +2 flat damage when all enemies are idle (or no enemies)
+    combatDamagePenalty: 1,    // -1 flat damage when any enemy is not idle
+    weaponAffinities: {}
   },
   'red': {
     name: 'Red Warrior',

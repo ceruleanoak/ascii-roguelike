@@ -34,14 +34,46 @@ export class BackgroundObject {
     this.destroyAfterAnimation = false;
 
     this.hasCollision = false;
-    this.width = GRID.CELL_SIZE;
-    this.height = GRID.CELL_SIZE;
+
+    // Reduce hitbox for ground-level liquids to match ASCII character size
+    const isGroundLiquid = char === '=' || char === '~' || char === '!';
+    // Circular hitbox for rocks to match round shape
+    const isRock = char === '0';
+    // Narrow trunk hitbox for trees and stumps (passable but slowing)
+    const isTreeOrStump = char === '&' || char === 'Y';
+
+    if (isRock) {
+      // Small circular collision (6x12 centered in 16x16 cell)
+      this.width = 6;
+      this.height = GRID.CELL_SIZE * 0.75;
+      this.hitboxOffsetX = 5; // Center the hitbox horizontally
+      this.hitboxOffsetY = GRID.CELL_SIZE * 0.125;
+    } else if (isGroundLiquid) {
+      this.width = GRID.CELL_SIZE * 0.4;
+      this.height = GRID.CELL_SIZE * 0.3;
+      this.hitboxOffsetX = GRID.CELL_SIZE * 0.25;
+      this.hitboxOffsetY = GRID.CELL_SIZE * 0.6;
+    } else if (isTreeOrStump) {
+      // Narrow trunk hitbox (6x10 centered in 16x16 cell)
+      // Used for slowdown detection, not collision (they're passable)
+      this.width = 6;
+      this.height = 10;
+      this.hitboxOffsetX = 5; // Center horizontally
+      this.hitboxOffsetY = 3; // Center vertically
+    } else {
+      // Default: full cell collision
+      this.width = GRID.CELL_SIZE;
+      this.height = GRID.CELL_SIZE;
+      this.hitboxOffsetX = 0;
+      this.hitboxOffsetY = 0;
+    }
 
     // Bullet interaction properties
     this.bulletInteraction = this.data.bulletInteraction || 'block';
     this.indestructible = this.data.indestructible || false;
     this.conductivity = this.data.conductivity || 'none';
     this.flammability = this.data.flammability || 'none';
+    this.collisionShape = this.data.collisionShape || 'rectangle'; // 'rectangle' or 'ellipse'
 
     // HP system
     this.maxHp = this.data.hp !== undefined ? this.data.hp : null;
@@ -58,6 +90,16 @@ export class BackgroundObject {
 
     // Drop tracking - prevents duplicate drops from same object
     this.hasDropped = false;
+
+    // Leshy chase event flags (set by RoomGenerator for secret events)
+    this.isShaking = false;
+    this.leshyBush = false;
+    this.shakeTimer = 0;
+
+    // Wand system properties
+    this.rock = this.data.rock || false; // Negates magic/elemental effects
+    this.electrified = false; // Electrical infusion trap
+    this.electrifiedTimer = 0;
   }
 
   // Called by melee attacks (and can be called by any damage source).
@@ -156,16 +198,16 @@ export class BackgroundObject {
       }
     }
 
-    // Tick water state timer
-    if (this.char === '~' && this.waterState !== 'normal') {
+    // Tick water state timer (skip for lava/damaging liquids and mud beds)
+    if (this.char === '~' && this.waterState !== 'normal' && !this.damaging && !this.isDryMud && !this.slowing) {
       this.waterStateTimer -= deltaTime;
       if (this.waterStateTimer <= 0) {
         this.setWaterState('normal', 0);
       }
     }
 
-    // Apply water state color and char
-    if (this.char === '~') {
+    // Apply water state color and char (skip for lava/damaging liquids and mud beds)
+    if (this.char === '~' && !this.damaging && !this.isDryMud && !this.slowing) {
       if (this.waterState === 'frozen') {
         this.animationChar = '=';
         this.animationColor = WATER_COLORS.frozen;
@@ -183,6 +225,16 @@ export class BackgroundObject {
         this.electricBlinkTimer = 0;
         this.electricBlinkOn = false;
         this.animationColor = WATER_COLORS[this.waterState] || WATER_COLORS.normal;
+      }
+    }
+
+    // Leshy shaking bush animation (periodic shake every 3-5 seconds)
+    if (this.isShaking) {
+      this.shakeTimer += deltaTime;
+      const shakeInterval = 3 + Math.random() * 2; // 3-5 seconds
+      if (this.shakeTimer >= shakeInterval) {
+        this._playAnimation('shake');
+        this.shakeTimer = 0;
       }
     }
 
@@ -226,8 +278,8 @@ export class BackgroundObject {
 
   getHitbox() {
     return {
-      x: this.position.x,
-      y: this.position.y,
+      x: this.position.x + this.hitboxOffsetX,
+      y: this.position.y + this.hitboxOffsetY,
       width: this.width,
       height: this.height
     };
@@ -237,13 +289,15 @@ export class BackgroundObject {
     let color = this.onFire ? '#ff4400' : this.animationColor;
     // Water state color override (in case animationColor was reset by animation end)
     // Electrified is excluded: its per-frame blink value lives in animationColor and must not be replaced
-    if (!this.onFire && this.char === '~' && this.waterState !== 'electrified') {
+    // Damaging liquids (lava) and mud beds excluded: they use their custom colors, not water colors
+    if (!this.onFire && this.char === '~' && this.waterState !== 'electrified' && !this.damaging && !this.isDryMud && !this.slowing) {
       color = WATER_COLORS[this.waterState] || WATER_COLORS.normal;
       // Frozen water also overrides the char for the static (non-animating) path
       if (this.waterState === 'frozen' && this.animationChar === this.originalChar) {
         return { x: this.position.x, y: this.position.y, char: '=', color };
       }
     }
+
     return {
       x: this.position.x,
       y: this.position.y,

@@ -44,11 +44,13 @@ export class Player {
     // Invulnerability frames
     this.invulnerabilityTimer = 0;
     this.invulnerabilityDuration = INVULNERABILITY_DURATION;
+    this.attackBlockTimer = 0; // Blocks attacks during extended iframe period (cyan rogue)
 
     // Physics flags
     this.hasCollision = true;
     this.boundToGrid = true;
     this.collisionMap = null; // Set by game state
+    this.plane = 0; // 0=normal plane, 1=tunnel plane
 
     // Wet status
     this.wetDuration = 0;
@@ -111,6 +113,16 @@ export class Player {
     // Status visual feedback
     this.statusBlinkTimer = 0;
     this.baseColor = '#ffffff'; // Will be set by character type
+
+    // Character type tracking
+    this.characterType = 'default';
+
+    // Green ranger: shared action cooldown (gates both attacks and dodge rolling)
+    this.actionCooldown = 0;
+    this.actionCooldownMax = 0;
+    this.continuousRollActive = false; // Sustained slide while holding arrow keys
+    this.greenIdleDamageBonus = 0;
+    this.greenCombatDamagePenalty = 0;
   }
 
   // Backward compatibility: heldItem getter returns active slot
@@ -296,6 +308,14 @@ export class Player {
       }
     }
 
+    // Update attack block timer
+    if (this.attackBlockTimer > 0) {
+      this.attackBlockTimer -= deltaTime;
+      if (this.attackBlockTimer < 0) {
+        this.attackBlockTimer = 0;
+      }
+    }
+
     if (this.wetDuration > 0) this.wetDuration -= deltaTime;
 
     // Tick timed buffs
@@ -303,6 +323,12 @@ export class Player {
     if (this.luckTimer > 0) this.luckTimer -= deltaTime;
     if (this.blockBoostTimer > 0) this.blockBoostTimer -= deltaTime;
     if (this.waterImmunityTimer > 0) this.waterImmunityTimer -= deltaTime;
+
+    // Tick green ranger action cooldown
+    if (this.actionCooldown > 0) {
+      this.actionCooldown -= deltaTime;
+      if (this.actionCooldown < 0) this.actionCooldown = 0;
+    }
 
     // Recharge shield charges on cooldown
     if (this.shieldCooldown > 0) {
@@ -321,7 +347,6 @@ export class Player {
       this.burnTickTimer -= deltaTime;
       if (this.burnTickTimer <= 0) {
         this.burnTickTimer = this.burnTickRate;
-        console.log(`[DAMAGE] BURN DoT tick fired (${this.burnDamage} damage will be applied)`);
         return { burnDamage: this.burnDamage };
       }
     } else {
@@ -347,7 +372,6 @@ export class Player {
       this.heldItem.windupActive = false;
       this.heldItem.windupTimer = 0;
       this.heldItem.pendingPlayer = null;
-      console.log(`[DODGE] Cancelled ${this.heldItem.data.name} windup`);
     }
 
     // Cancel bow charging
@@ -355,7 +379,6 @@ export class Player {
       this.heldItem.isCharging = false;
       this.heldItem.chargeTime = 0;
       this.heldItem.chargingPlayer = null;
-      console.log(`[DODGE] Cancelled ${this.heldItem.data.name} charge`);
     }
 
     // Break any sapping enemies attached to this player
@@ -393,8 +416,12 @@ export class Player {
         this.invulnerabilityTimer = this.dodgeRoll.duration + 0.5;
         break;
       case 'hide':
-        // Invisible to enemies (will implement in Week 2)
+        // Invisible to enemies + extended i-frames (cyan rogue specialty)
         this.hidden = true;
+        // Extended i-frames: 0.25s roll + 1.25s = 1.5s total invulnerability
+        this.invulnerabilityTimer = this.dodgeRoll.duration + 1.25;
+        // Attacks blocked for entire extended iframe duration
+        this.attackBlockTimer = this.invulnerabilityTimer;
         break;
       case 'damage':
         // Leave damaging trail (particles created in main.js)
@@ -443,7 +470,6 @@ export class Player {
   takeDamage(amount, damageSource = {}) {
     // Can't take damage during invulnerability frames
     if (this.invulnerabilityTimer > 0) {
-      console.log(`[DAMAGE] Blocked by invulnerability frames (${this.invulnerabilityTimer.toFixed(2)}s remaining)`);
       return false;
     }
 
@@ -451,14 +477,12 @@ export class Player {
 
     // Dodge check (all damage types)
     if (this.dodgeChance > 0 && Math.random() < this.dodgeChance) {
-      console.log(`[DAMAGE] DODGED! (${(this.dodgeChance * 100).toFixed(0)}% chance) - HP: ${this.hp}/${this.maxHp}`);
       return { dodged: true };
     }
 
     // Bullet resistance check
     if (damageSource.isBullet && this.bulletResist > 0) {
       if (Math.random() < this.bulletResist) {
-        console.log(`[DAMAGE] BULLET BLOCKED! (${(this.bulletResist * 100).toFixed(0)}% chance) - HP: ${this.hp}/${this.maxHp}`);
         return { blocked: true };
       }
     }
@@ -466,15 +490,12 @@ export class Player {
     // Elemental immunity checks
     if (damageSource.element) {
       if (this.fireImmune && damageSource.element === 'burn') {
-        console.log(`[DAMAGE] FIRE IMMUNE! - HP: ${this.hp}/${this.maxHp}`);
         return { immune: true };
       }
       if (this.freezeImmune && damageSource.element === 'freeze') {
-        console.log(`[DAMAGE] FREEZE IMMUNE! - HP: ${this.hp}/${this.maxHp}`);
         return { immune: true };
       }
       if (this.poisonImmune && damageSource.element === 'poison') {
-        console.log(`[DAMAGE] POISON IMMUNE! - HP: ${this.hp}/${this.maxHp}`);
         return { immune: true };
       }
     }
@@ -485,14 +506,6 @@ export class Player {
     this.hp -= actualDamage;
     if (this.hp < 0) this.hp = 0;
 
-    // Log damage details
-    const damageType = damageSource.isBullet ? 'BULLET' : 'MELEE';
-    const elementInfo = damageSource.element ? ` [${damageSource.element}]` : '';
-    const defenseInfo = this.defense > 0 ? ` (${amount} - ${this.defense} defense = ${actualDamage})` : '';
-    const isDead = this.hp <= 0;
-
-    console.log(`[DAMAGE] ${damageType}${elementInfo}: ${actualDamage} damage${defenseInfo} | HP: ${hpBefore} → ${this.hp}/${this.maxHp}${isDead ? ' 💀 DEATH' : ''}`);
-
     // Start invulnerability frames
     if (this.hp > 0) {
       this.invulnerabilityTimer = this.invulnerabilityDuration;
@@ -501,7 +514,6 @@ export class Player {
     // Damage reflection
     if (this.reflectDamage > 0 && damageSource.attacker) {
       const reflectedAmount = Math.ceil(actualDamage * this.reflectDamage);
-      console.log(`[DAMAGE] Reflected ${reflectedAmount} damage back to attacker (${(this.reflectDamage * 100).toFixed(0)}%)`);
       return this.hp <= 0 ? true : {
         damaged: true,
         reflect: reflectedAmount,
@@ -515,6 +527,28 @@ export class Player {
 
   isInvulnerable() {
     return this.invulnerabilityTimer > 0;
+  }
+
+  canAttack() {
+    if (this.attackBlockTimer > 0) return false;
+    if (this.characterType === 'green' && this.actionCooldown > 0) return false;
+    if (this.characterType === 'green' && this.continuousRollActive) return false;
+    return true;
+  }
+
+  // Returns flat damage modifier for green ranger based on current enemy states
+  getCharacterDamageBonus(enemies = []) {
+    if (this.characterType !== 'green') return 0;
+    const anyNotIdle = enemies.some(e => e.state !== 'idle');
+    return anyNotIdle ? -this.greenCombatDamagePenalty : this.greenIdleDamageBonus;
+  }
+
+  // Returns current roll speed (matching startDodgeRoll calculation)
+  getRollSpeed() {
+    const baseMaxSpeed = this.heldItem ? PHYSICS.PLAYER_SPEED : PHYSICS.PLAYER_SPEED * 1.5;
+    const armorModified = baseMaxSpeed * (1 + this.speedBoost - this.speedPenalty);
+    const currentMaxSpeed = this.speedBoostTimer > 0 ? armorModified * this.speedBoostMultiplier : armorModified;
+    return currentMaxSpeed * 1.1;
   }
 
   getVisibilityAlpha() {

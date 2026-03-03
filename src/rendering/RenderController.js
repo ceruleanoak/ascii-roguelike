@@ -11,6 +11,7 @@
  */
 
 import { BowChargeIndicator } from './ui/BowChargeIndicator.js';
+import { GreenRangerIndicator } from './ui/GreenRangerIndicator.js';
 import { ArrowKeyIndicators } from './ui/ArrowKeyIndicators.js';
 import { CraftingStation } from './ui/CraftingStation.js';
 import { MenuOverlay } from './ui/MenuOverlay.js';
@@ -20,6 +21,7 @@ import { TitleRenderer } from './state/TitleRenderer.js';
 import { GameOverRenderer } from './state/GameOverRenderer.js';
 import { RestRenderer } from './state/RestRenderer.js';
 import { ExploreRenderer } from './state/ExploreRenderer.js';
+import { NeutralRenderer } from './state/NeutralRenderer.js';
 
 export class RenderController {
   constructor(renderer) {
@@ -27,6 +29,7 @@ export class RenderController {
 
     // UI components (must be initialized before state renderers that use them)
     this.bowChargeIndicator = new BowChargeIndicator(renderer);
+    this.greenRangerIndicator = new GreenRangerIndicator(renderer);
     this.arrowKeyIndicators = new ArrowKeyIndicators(renderer);
     this.craftingStation = new CraftingStation(renderer);
     this.menuOverlay = new MenuOverlay(renderer);
@@ -38,6 +41,7 @@ export class RenderController {
     this.gameOverRenderer = new GameOverRenderer(renderer);
     this.restRenderer = new RestRenderer(renderer, this);
     this.exploreRenderer = new ExploreRenderer(renderer, this);
+    this.neutralRenderer = new NeutralRenderer(renderer, this);
   }
 
   renderTitleState(game) {
@@ -50,6 +54,10 @@ export class RenderController {
 
   renderExploreState(game) {
     this.exploreRenderer.render(game);
+  }
+
+  renderNeutralState(game) {
+    this.neutralRenderer.render(game);
   }
 
   renderGameOverState(game) {

@@ -258,8 +258,56 @@ export const ITEMS = {
     type: ITEM_TYPES.CONSUMABLE,
     effect: 'heal',
     amount: 3,
-    cooldown: 15, // Reusable with 15s cooldown
+    oneShot: true,
+    autoTriggerHP: 0.4,
     color: '#ff00ff'
+  },
+  'ᒧ': {
+    char: 'ᒧ',
+    name: 'Meat Jerky',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'heal',
+    amount: 2,
+    oneShot: true,
+    autoTriggerHP: 0.3,
+    color: '#aa4422'
+  },
+  'ᐧ': {
+    char: 'ᐧ',
+    name: 'Bone Dust',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'panic_blind',
+    oneShot: true,
+    radius: 96,
+    duration: 4.0,
+    autoTrigger: {
+      condition: 'surrounded_or_critical',
+      nearbyEnemies: 3,
+      criticalHP: 0.2
+    },
+    color: '#cccccc'
+  },
+  'ᐤ': {
+    char: 'ᐤ',
+    name: 'Fur Cloak',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'auto_dodge',
+    oneShot: true,
+    autoTrigger: {
+      condition: 'taking_damage',
+      dodgeNext: 1
+    },
+    duration: 10.0,
+    color: '#8b6914'
+  },
+  'ᑕ': {
+    char: 'ᑕ',
+    name: 'Tooth Necklace',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'damageBuff',
+    passive: true,
+    damageBonus: 1,
+    color: '#ffffff'
   },
 
   // Special items
@@ -797,11 +845,13 @@ export const ITEMS = {
   // Utility items
   '●': {
     char: '●',
-    name: 'Slime Ball',
-    type: ITEM_TYPES.CONSUMABLE,
+    name: 'Slime Bomb',
+    type: ITEM_TYPES.TRAP,
+    oneShot: true,
+    triggerRadius: 24,
+    effectRadius: 80,
     effect: 'slow',
-    duration: 10,
-    cooldown: 12, // Reusable with 12s cooldown
+    effectDuration: 8.0,
     color: '#00ff00'
   },
   '■': {
@@ -835,8 +885,8 @@ export const ITEMS = {
     cooldown: 8, // Reusable with 8s cooldown
     color: '#aaddff'
   },
-  'Z': {
-    char: 'Z',
+  'ω': {
+    char: 'ω',
     name: 'Smoke Bomb',
     type: ITEM_TYPES.CONSUMABLE,
     effect: 'invuln',
@@ -1006,6 +1056,11 @@ export const ITEMS = {
     effectRadius: 80,
     effect: 'goo',
     color: '#00ff00'
+  },
+  '߃': {
+    char: '߃',
+    name: 'Vault Key',
+    type: ITEM_TYPES.WEAPON,
   }
 };
 

@@ -38,7 +38,9 @@ export class ExploreRenderer {
     // Render background (only if dirty)
     if (!this.renderer.backgroundDirty) return;
 
-    this.renderer.clearBackground();
+    // Get zone background color (with progression blending)
+    const environmentColors = game.zoneSystem.getBlendedEnvironmentColors(game.currentRoom.zone);
+    this.renderer.clearBackground(environmentColors.background);
 
     // Only create holes in border when exits are unlocked
     // Exception: south exit opens if player has no items (escape route)
@@ -70,11 +72,37 @@ export class ExploreRenderer {
     for (const obj of game.backgroundObjects) {
       const isGrass = obj.char === '|' || obj.char === '\\' || obj.char === '/' || obj.char === ',';
       if (!obj.currentAnimation && obj.char !== '~' && !isGrass) {
+        // Check plane-aware rendering (tunnel walls, entrances, etc.)
+        if (!this.shouldRenderBackgroundObject(obj, game.player)) continue;
+
         // Draw directly to background context (not foreground)
         const x = obj.position.x + GRID.CELL_SIZE / 2;
         const y = obj.position.y + GRID.CELL_SIZE / 2;
-        this.renderer.bgCtx.fillStyle = obj.color;
-        this.renderer.bgCtx.fillText(obj.char, x, y);
+
+        // Check if this object should be rendered with dithering (tunnel walls when player in tunnel)
+        const isTunnelWall = obj.data && obj.data.tunnelWall;
+        const playerInTunnel = game.player.plane === 1;
+        const useDithering = isTunnelWall && playerInTunnel;
+
+        if (useDithering) {
+          // Tunnel walls render with dithering when player is in tunnel
+          // Need to temporarily draw to foreground context for dithering, then copy to background
+          this.renderer.fgCtx.save();
+          this.renderer.fgCtx.fillStyle = obj.color;
+          this.renderer.fgCtx.fillText(obj.char, x, y);
+          this.renderer.fgCtx.globalCompositeOperation = 'destination-out';
+          this.renderer.fgCtx.fillStyle = this.renderer.createDitherPattern();
+          this.renderer.fgCtx.fillRect(x - GRID.CELL_SIZE/2, y - GRID.CELL_SIZE/2, GRID.CELL_SIZE, GRID.CELL_SIZE);
+          this.renderer.fgCtx.restore();
+          // Copy to background
+          this.renderer.bgCtx.drawImage(this.renderer.fgCanvas, 0, 0);
+          // Clear foreground
+          this.renderer.fgCtx.clearRect(x - GRID.CELL_SIZE/2, y - GRID.CELL_SIZE/2, GRID.CELL_SIZE, GRID.CELL_SIZE);
+        } else {
+          // Normal rendering
+          this.renderer.bgCtx.fillStyle = obj.color;
+          this.renderer.bgCtx.fillText(obj.char, x, y);
+        }
       }
     }
 
@@ -178,6 +206,9 @@ export class ExploreRenderer {
     // Draw animating background objects
     for (const obj of game.backgroundObjects) {
       if (obj.currentAnimation) {
+        // Check plane-aware rendering
+        if (!this.shouldRenderBackgroundObject(obj, game.player)) continue;
+
         const renderData = obj.getRenderPosition();
         this.renderer.drawEntity(
           renderData.x + GRID.CELL_SIZE / 2 + obj.animationOffset.x,
@@ -191,6 +222,9 @@ export class ExploreRenderer {
     // Draw water tiles on foreground so state changes (frozen '=', electrified blink) render each frame
     for (const obj of game.backgroundObjects) {
       if (obj.char === '~' && !obj.currentAnimation) {
+        // Check plane-aware rendering
+        if (!this.shouldRenderBackgroundObject(obj, game.player)) continue;
+
         const renderData = obj.getRenderPosition();
         this.renderer.drawEntity(
           renderData.x + GRID.CELL_SIZE / 2,
@@ -242,7 +276,11 @@ export class ExploreRenderer {
 
     // Draw items
     for (const item of game.items) {
-      this.renderer.drawEntity(
+      const itemPlane = item.plane !== undefined ? item.plane : 0;
+      const useDithering = itemPlane === 1 && game.player.plane === 1;
+      const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
+
+      this.renderer[drawMethod](
         item.position.x + GRID.CELL_SIZE / 2,
         item.position.y + GRID.CELL_SIZE / 2,
         item.char,
@@ -269,6 +307,14 @@ export class ExploreRenderer {
           y: gy * GRID.CELL_SIZE
         }));
       }
+    }
+
+    // Draw neutral characters (Leshy, NPCs, etc.)
+    for (const neutralChar of game.neutralCharacters) {
+      neutralChar.render(this.renderer.fgCtx, (gx, gy) => ({
+        x: gx * GRID.CELL_SIZE,
+        y: gy * GRID.CELL_SIZE
+      }));
     }
 
     // Draw consumable windups (dropped items during charge-up)
@@ -344,12 +390,21 @@ export class ExploreRenderer {
       // Skip sapping enemies - they render on top later
       if (enemy.sapping) continue;
 
+      // Skip if enemy is in different plane than player
+      if (!this.shouldRenderEntity(enemy, game.player, game.currentRoom)) continue;
+
       this.renderEnemy(game, enemy);
     }
 
     // Draw projectiles
     for (const proj of game.combatSystem.getProjectiles()) {
-      this.renderer.drawEntity(
+      // Skip if projectile is in different plane than player
+      if (!this.shouldRenderEntity(proj, game.player, game.currentRoom)) continue;
+
+      const useDithering = proj.plane === 1 && game.player.plane === 1;
+      const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
+
+      this.renderer[drawMethod](
         proj.position.x + GRID.CELL_SIZE / 2,
         proj.position.y + GRID.CELL_SIZE / 2,
         proj.char,
@@ -359,7 +414,13 @@ export class ExploreRenderer {
 
     // Draw enemy projectiles
     for (const proj of game.combatSystem.getEnemyProjectiles()) {
-      this.renderer.drawEntity(
+      // Skip if projectile is in different plane than player
+      if (!this.shouldRenderEntity(proj, game.player, game.currentRoom)) continue;
+
+      const useDithering = proj.plane === 1 && game.player.plane === 1;
+      const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
+
+      this.renderer[drawMethod](
         proj.position.x + GRID.CELL_SIZE / 2,
         proj.position.y + GRID.CELL_SIZE / 2,
         proj.char,
@@ -369,7 +430,11 @@ export class ExploreRenderer {
 
     // Draw melee attacks
     for (const attack of game.combatSystem.getMeleeAttacks()) {
-      this.renderer.drawEntity(
+      // Note: Melee attacks inherit plane from attacker via shooterPlane
+      const useDithering = attack.shooterPlane === 1 && game.player.plane === 1;
+      const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
+
+      this.renderer[drawMethod](
         attack.position.x + GRID.CELL_SIZE / 2,
         attack.position.y + GRID.CELL_SIZE / 2,
         attack.char,
@@ -399,6 +464,40 @@ export class ExploreRenderer {
         arrow.char,
         arrow.color
       );
+    }
+
+    // Draw wand proximity failure indicators (blinking outline circle)
+    if (game.combatSystem.wandProximityFailures) {
+      const blinkOn = Math.floor(performance.now() / 1000 * 8) % 2 === 0; // 8 Hz blink
+      if (blinkOn) {
+        for (const failure of game.combatSystem.wandProximityFailures) {
+          // Draw the proximity requirement radius (blinking outline)
+          this.renderer.drawCircle(
+            failure.position.x,
+            failure.position.y,
+            failure.proximityRequired || 100, // Default 100 if not specified
+            failure.color,
+            false, // Outline only
+            0.8
+          );
+        }
+      }
+    }
+
+    // Draw wand AOE effects (filled semi-transparent circle)
+    if (game.combatSystem.aoeEffects) {
+      for (const effect of game.combatSystem.aoeEffects) {
+        // Fade out based on timer
+        const alpha = Math.min(effect.timer / 0.3, 0.5); // Max 50% opacity
+        this.renderer.drawCircle(
+          effect.x,
+          effect.y,
+          effect.radius,
+          effect.color,
+          true, // Filled
+          alpha
+        );
+      }
     }
 
     // Draw damage numbers
@@ -475,13 +574,26 @@ export class ExploreRenderer {
     // Draw player (with i-frame alpha fade and status color)
     const playerAlpha = game.player.getVisibilityAlpha();
     const playerColor = game.player.getDisplayColor();
-    this.renderer.drawTextWithAlpha(
-      game.player.position.x + GRID.CELL_SIZE / 2,
-      game.player.position.y + GRID.CELL_SIZE / 2,
-      game.player.char,
-      playerColor,
-      playerAlpha
-    );
+    const playerOnTunnelPlane = game.player.plane === 1;
+
+    // Use dithered rendering when on tunnel plane
+    if (playerOnTunnelPlane) {
+      this.renderer.drawTextWithAlphaDithered(
+        game.player.position.x + GRID.CELL_SIZE / 2,
+        game.player.position.y + GRID.CELL_SIZE / 2,
+        game.player.char,
+        playerColor,
+        playerAlpha
+      );
+    } else {
+      this.renderer.drawTextWithAlpha(
+        game.player.position.x + GRID.CELL_SIZE / 2,
+        game.player.position.y + GRID.CELL_SIZE / 2,
+        game.player.char,
+        playerColor,
+        playerAlpha
+      );
+    }
 
     // Draw sapping enemies on top of player
     for (const enemy of game.currentRoom.enemies) {
@@ -518,6 +630,9 @@ export class ExploreRenderer {
     for (const obj of game.backgroundObjects) {
       const isGrass = obj.char === '|' || obj.char === '\\' || obj.char === '/' || obj.char === ',';
       if (isGrass && !obj.currentAnimation && !obj.destroyed) {
+        // Check plane-aware rendering
+        if (!this.shouldRenderBackgroundObject(obj, game.player)) continue;
+
         const offsetX = obj.grassRenderOffset ? obj.grassRenderOffset.x : 0;
         this.renderer.drawEntity(
           obj.position.x + GRID.CELL_SIZE / 2 + offsetX,
@@ -530,6 +645,9 @@ export class ExploreRenderer {
 
     // Draw bow charge indicator (shared between REST and EXPLORE states)
     this.renderController.bowChargeIndicator.render(game);
+
+    // Draw green ranger action cooldown indicator
+    this.renderController.greenRangerIndicator.render(game);
 
     // Old exit indicator system removed - now using colored exit letters
     // (Letters render at actual exit positions when exits unlock)
@@ -560,12 +678,29 @@ export class ExploreRenderer {
       const dotColor = enemy.getDOTBlinkColor();
       const displayColor = dotColor !== null ? dotColor : enemy.color;
 
-      this.renderer.drawEntity(
-        enemy.position.x + GRID.CELL_SIZE / 2,
-        enemy.position.y + GRID.CELL_SIZE / 2,
-        enemy.char,
-        displayColor
-      );
+      // Use dithered rendering for tunnel plane entities (plane 1)
+      const useDithering = enemy.plane === 1 && game.player.plane === 1;
+      const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
+
+      // Boss Slime renders as 'o' at double font size
+      if (enemy.char === 'M') {
+        this.renderer.fgCtx.save();
+        this.renderer.fgCtx.font = `bold ${GRID.CELL_SIZE * 2}px "Courier New", monospace`;
+        this.renderer[drawMethod](
+          enemy.position.x + GRID.CELL_SIZE / 2,
+          enemy.position.y + GRID.CELL_SIZE / 2,
+          'o',
+          displayColor
+        );
+        this.renderer.fgCtx.restore();
+      } else {
+        this.renderer[drawMethod](
+          enemy.position.x + GRID.CELL_SIZE / 2,
+          enemy.position.y + GRID.CELL_SIZE / 2,
+          enemy.char,
+          displayColor
+        );
+      }
     }
 
     // Draw windup telegraph
@@ -601,6 +736,17 @@ export class ExploreRenderer {
       );
     }
 
+    // Draw hover indicator (... when pack hunting)
+    const hoverIndicator = enemy.getHoverIndicator();
+    if (hoverIndicator) {
+      this.renderer.drawEntity(
+        enemy.position.x + GRID.CELL_SIZE / 2,
+        enemy.position.y + GRID.CELL_SIZE / 2 + hoverIndicator.offsetY,
+        hoverIndicator.char,
+        hoverIndicator.color
+      );
+    }
+
     // Draw sapping indicator (red * when latched to player)
     const sappingIndicator = enemy.getSappingIndicator();
     if (sappingIndicator) {
@@ -620,6 +766,17 @@ export class ExploreRenderer {
         enemy.position.y + GRID.CELL_SIZE / 2 + spawnIndicator.offsetY,
         spawnIndicator.char,
         spawnIndicator.color
+      );
+    }
+
+    // Draw blind indicator (red X when blinded)
+    const blindIndicator = enemy.getBlindIndicator();
+    if (blindIndicator) {
+      this.renderer.drawEntity(
+        enemy.position.x + GRID.CELL_SIZE / 2,
+        enemy.position.y + GRID.CELL_SIZE / 2 + blindIndicator.offsetY,
+        blindIndicator.char,
+        blindIndicator.color
       );
     }
 
@@ -686,5 +843,54 @@ export class ExploreRenderer {
         );
       }
     }
+  }
+
+  /**
+   * Determine if an entity should be rendered based on plane visibility
+   * CRITICAL RULES:
+   * - Standard plane (0) entities: ALWAYS visible
+   * - Tunnel plane (1) entities: ONLY visible if player is in tunnel (player.plane === 1)
+   * - Tunnel walls: Always rendered (handled separately as background objects)
+   */
+  shouldRenderEntity(entity, player, room) {
+    // No tunnel room - always render
+    if (!room.tunnel) return true;
+
+    const playerPlane = player.plane !== undefined ? player.plane : 0;
+    const entityPlane = entity.plane !== undefined ? entity.plane : 0;
+
+    // Standard plane (0) ALWAYS renders
+    if (entityPlane === 0) {
+      return true;
+    }
+
+    // Tunnel plane (1) ONLY renders if player is in tunnel
+    if (entityPlane === 1) {
+      return playerPlane === 1;
+    }
+
+    // Default: render
+    return true;
+  }
+
+  /**
+   * Check if a background object should render based on plane and visibility flags
+   * - alwaysRender: Always visible (e.g., tunnel entrances)
+   * - renderOnlyOnPlane: Only visible when player is on specified plane (e.g., tunnel walls)
+   */
+  shouldRenderBackgroundObject(obj, player) {
+    // Always render objects with alwaysRender flag (tunnel entrances)
+    if (obj.data && obj.data.alwaysRender) {
+      return true;
+    }
+
+    // Check renderOnlyOnPlane flag (tunnel walls)
+    if (obj.data && obj.data.renderOnlyOnPlane !== undefined) {
+      const playerPlane = player.plane !== undefined ? player.plane : 0;
+      return playerPlane === obj.data.renderOnlyOnPlane;
+    }
+
+    // Default: render all objects
+    return true;
   }
 }

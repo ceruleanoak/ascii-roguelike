@@ -27,8 +27,31 @@ export class ASCIIRenderer {
     ctx.imageSmoothingEnabled = false;
   }
 
-  clearBackground() {
-    this.bgCtx.fillStyle = COLORS.BACKGROUND;
+  // Create checkerboard dither pattern for tunnel plane rendering
+  createDitherPattern() {
+    if (this.ditherPattern) return this.ditherPattern;
+
+    // Create a 4x4 canvas for checkerboard pattern (2x2 pixel blocks)
+    const patternCanvas = document.createElement('canvas');
+    patternCanvas.width = 4;
+    patternCanvas.height = 4;
+    const patternCtx = patternCanvas.getContext('2d');
+
+    // Draw checkerboard (2x2 pixel blocks)
+    patternCtx.fillStyle = 'rgba(0, 0, 0, 1)'; // Opaque
+    patternCtx.fillRect(0, 0, 2, 2); // Top-left block
+    patternCtx.fillRect(2, 2, 2, 2); // Bottom-right block
+
+    patternCtx.fillStyle = 'rgba(0, 0, 0, 0)'; // Transparent
+    patternCtx.fillRect(2, 0, 2, 2); // Top-right block
+    patternCtx.fillRect(0, 2, 2, 2); // Bottom-left block
+
+    this.ditherPattern = this.fgCtx.createPattern(patternCanvas, 'repeat');
+    return this.ditherPattern;
+  }
+
+  clearBackground(backgroundColor = COLORS.BACKGROUND) {
+    this.bgCtx.fillStyle = backgroundColor;
     this.bgCtx.fillRect(0, 0, GRID.WIDTH, GRID.HEIGHT);
   }
 
@@ -55,6 +78,47 @@ export class ASCIIRenderer {
   drawEntity(x, y, char, color = COLORS.TEXT) {
     this.fgCtx.fillStyle = color;
     this.fgCtx.fillText(char, x, y);
+  }
+
+  // Draw entity with checkerboard dithering (for tunnel plane)
+  drawEntityDithered(x, y, char, color = COLORS.TEXT) {
+    this.fgCtx.save();
+
+    // Draw the character normally first
+    this.fgCtx.fillStyle = color;
+    this.fgCtx.fillText(char, x, y);
+
+    // Apply checkerboard mask using destination-out composition
+    // This will "cut out" half the pixels in a checkerboard pattern
+    this.fgCtx.globalCompositeOperation = 'destination-out';
+    this.fgCtx.fillStyle = this.createDitherPattern();
+
+    // Fill a rectangle around the character position with the pattern
+    const size = GRID.CELL_SIZE;
+    this.fgCtx.fillRect(x - size/2, y - size/2, size, size);
+
+    this.fgCtx.restore();
+  }
+
+  // Draw text with both alpha and dithering (for tunnel plane with transparency)
+  drawTextWithAlphaDithered(x, y, char, color, alpha) {
+    this.fgCtx.save();
+
+    // Draw the character with alpha
+    this.fgCtx.globalAlpha = alpha;
+    this.fgCtx.fillStyle = color;
+    this.fgCtx.fillText(char, x, y);
+
+    // Apply checkerboard mask
+    this.fgCtx.globalCompositeOperation = 'destination-out';
+    this.fgCtx.globalAlpha = 1.0; // Reset alpha for mask
+    this.fgCtx.fillStyle = this.createDitherPattern();
+
+    // Fill a rectangle around the character position with the pattern
+    const size = GRID.CELL_SIZE;
+    this.fgCtx.fillRect(x - size/2, y - size/2, size, size);
+
+    this.fgCtx.restore();
   }
 
   // Draw text with alpha transparency (foreground layer)
@@ -141,6 +205,26 @@ export class ASCIIRenderer {
     this.fgCtx.moveTo(x1, y1);
     this.fgCtx.lineTo(x2, y2);
     this.fgCtx.stroke();
+  }
+
+  // Draw circle (foreground layer)
+  drawCircle(x, y, radius, color, filled = false, alpha = 1.0) {
+    this.fgCtx.save();
+    this.fgCtx.globalAlpha = alpha;
+    this.fgCtx.strokeStyle = color;
+    this.fgCtx.fillStyle = color;
+    this.fgCtx.lineWidth = 2;
+
+    this.fgCtx.beginPath();
+    this.fgCtx.arc(x, y, radius, 0, Math.PI * 2);
+
+    if (filled) {
+      this.fgCtx.fill();
+    } else {
+      this.fgCtx.stroke();
+    }
+
+    this.fgCtx.restore();
   }
 
   // Convert grid coordinates to pixel coordinates

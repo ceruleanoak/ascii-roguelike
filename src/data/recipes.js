@@ -33,12 +33,17 @@ export const RECIPES = [
 
   // Secret recipes
   { left: 's', right: 's', result: '♦', name: 'Dragon Heart' },  // Scale + Scale = Dragon Heart
-  { left: 'g', right: 'g', result: '●', name: 'Slime Ball' },    // Goo + Goo = Slime Ball
+  { left: 'g', right: 'g', result: '●', name: 'Slime Bomb' },    // Goo + Goo = Slime Bomb (trap)
   { left: 'w', right: 'w', result: '∞', name: 'Wings' },         // Wing + Wing = Wings (speed boost)
+
+  // === GREEN GAP RECIPES (early game common ingredients) ===
+  { left: 'm', right: 'm', result: 'ᒧ', name: 'Meat Jerky' },    // Meat + Meat = Meat Jerky (heal 2)
+  { left: 'b', right: 'b', result: 'ᐧ', name: 'Bone Dust' },     // Bone + Bone = Bone Dust (panic blind)
+  { left: 'f', right: 'f', result: 'ᐤ', name: 'Fur Cloak' },     // Fur + Fur = Fur Cloak (auto-dodge)
+  { left: 't', right: 't', result: 'ᑕ', name: 'Tooth Necklace' }, // Teeth + Teeth = Tooth Necklace (+1 dmg)
 
   // More combinations
   { left: 'M', right: 'M', result: '■', name: 'Metal Block' },   // Metal + Metal = Metal Block
-  { left: 'f', right: 'f', result: 'V', name: 'Fur Vest' },      // Fur + Fur = Fur Vest (armor)
 
   // Item upgrades - use existing items to create better versions
   { left: '⌂', right: 's', result: '☼', name: 'Dragon Shotgun' }, // Shotgun + Scale = Dragon Shotgun
@@ -129,4 +134,9 @@ export function findRecipe(leftChar, rightChar) {
 export function getRecipeResult(leftChar, rightChar) {
   const recipe = findRecipe(leftChar, rightChar);
   return recipe ? recipe.result : null;
+}
+
+export function findRecipeByResult(resultChar) {
+  const recipe = RECIPES.find(r => r.result === resultChar);
+  return recipe ? { left: recipe.left, right: recipe.right } : null;
 }

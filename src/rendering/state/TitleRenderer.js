@@ -26,6 +26,12 @@ export class TitleRenderer {
     // Clear foreground
     this.renderer.clearForeground();
 
+    // Pre-animation screen: Show button and credit before animation starts
+    if (!game.introAnimationStarted) {
+      this.renderPreIntroScreen(game);
+      return;
+    }
+
     // Title screen uses 60x30 grid (narrower cells for wider display)
     const TITLE_COLS = 60;
     const TITLE_CELL_WIDTH = GRID.WIDTH / TITLE_COLS; // 480 / 60 = 8px wide cells
@@ -257,9 +263,9 @@ export class TitleRenderer {
 
     // Phase 4: "PRESS SPACE" snaps in (10.0s+) with slow on/off blink
     if (time >= PRESS_SPACE_START) {
-      const pressSpaceText = "PRESS SPACE";
-      const pressSpaceY = GRID.CELL_SIZE * 27.5; // Row 27
-      const pressSpaceX = GRID.WIDTH / 2;
+      const buttonText = "PRESS SPACE";
+      const buttonY = GRID.CELL_SIZE * 27.5; // Row 27
+      const buttonX = GRID.WIDTH / 2;
 
       // Slow on/off blink (1.5 second period)
       const blinkPeriod = 1.5;
@@ -268,8 +274,27 @@ export class TitleRenderer {
       if (blinkOn) {
         this.renderer.fgCtx.fillStyle = COLORS.ITEM;
         this.renderer.fgCtx.textAlign = 'center';
-        this.renderer.fgCtx.fillText(pressSpaceText, pressSpaceX, pressSpaceY);
+        this.renderer.fgCtx.fillText(buttonText, buttonX, buttonY);
       }
+
+      // Store button bounds for click detection (on game instance)
+      if (game && !game.launchButtonBounds) {
+        const textWidth = this.renderer.fgCtx.measureText(buttonText).width;
+        game.launchButtonBounds = {
+          x: buttonX - textWidth / 2,
+          y: buttonY - GRID.CELL_SIZE / 2,
+          width: textWidth,
+          height: GRID.CELL_SIZE
+        };
+      }
+    }
+
+    // "Created by CeruleanOak" in bottom left corner (always visible after shimmer)
+    if (time >= SHIMMER_DURATION) {
+      const creditAlpha = Math.min((time - SHIMMER_DURATION) / 1.0, 1.0);
+      this.renderer.fgCtx.fillStyle = `rgba(128, 128, 128, ${creditAlpha * 0.6})`;
+      this.renderer.fgCtx.textAlign = 'left';
+      this.renderer.fgCtx.fillText('Created by CeruleanOak', GRID.CELL_SIZE, GRID.HEIGHT - GRID.CELL_SIZE);
     }
 
     // Version number in bottom right corner (always visible after shimmer)
@@ -277,8 +302,46 @@ export class TitleRenderer {
       const versionAlpha = Math.min((time - SHIMMER_DURATION) / 1.0, 1.0);
       this.renderer.fgCtx.fillStyle = `rgba(128, 128, 128, ${versionAlpha * 0.6})`;
       this.renderer.fgCtx.textAlign = 'right';
-      this.renderer.fgCtx.fillText('v0.2', GRID.WIDTH - GRID.CELL_SIZE, GRID.HEIGHT - GRID.CELL_SIZE);
+      this.renderer.fgCtx.fillText('v0.3', GRID.WIDTH - GRID.CELL_SIZE, GRID.HEIGHT - GRID.CELL_SIZE);
     }
+
+    this.renderer.fgCtx.restore();
+  }
+
+  renderPreIntroScreen(game) {
+    // Pre-animation screen: centered button and credit
+    this.renderer.fgCtx.save();
+    this.renderer.fgCtx.font = `${GRID.CELL_SIZE}px "Courier New", monospace`;
+    this.renderer.fgCtx.textAlign = 'center';
+    this.renderer.fgCtx.textBaseline = 'middle';
+
+    const centerX = GRID.WIDTH / 2;
+    const centerY = GRID.HEIGHT / 2;
+
+    // Blinking "PRESS SPACE" button
+    const blinkPeriod = 1.0;
+    const blinkOn = Math.floor(Date.now() / 1000 / blinkPeriod) % 2 === 0;
+
+    if (blinkOn) {
+      const buttonText = "CLICK TO PLAY GAME";
+      this.renderer.fgCtx.fillStyle = COLORS.ITEM;
+      this.renderer.fgCtx.fillText(buttonText, centerX, centerY);
+
+      // Store button bounds for click detection
+      if (!game.launchButtonBounds) {
+        const textWidth = this.renderer.fgCtx.measureText(buttonText).width;
+        game.launchButtonBounds = {
+          x: centerX - textWidth / 2,
+          y: centerY - GRID.CELL_SIZE / 2,
+          width: textWidth,
+          height: GRID.CELL_SIZE
+        };
+      }
+    }
+
+    // "Created by CeruleanOak" below the button
+    this.renderer.fgCtx.fillStyle = 'rgba(128, 128, 128, 0.8)';
+    this.renderer.fgCtx.fillText('Created by CeruleanOak', centerX, centerY + GRID.CELL_SIZE * 3);
 
     this.renderer.fgCtx.restore();
   }
