@@ -54,6 +54,9 @@ export class MenuOverlay {
     html += '</div>'; // Close scrollable area
     game.ui.menu.innerHTML = html;
     game.ui.menu.classList.remove('hidden');
+
+    const selected = game.ui.menu.querySelector('.menu-item.selected');
+    if (selected) selected.scrollIntoView({ block: 'nearest' });
   }
 
   render3Column(game) {
@@ -138,5 +141,8 @@ export class MenuOverlay {
     html += '</div>';
     game.ui.menu.innerHTML = html;
     game.ui.menu.classList.remove('hidden');
+
+    const selected = game.ui.menu.querySelector('.menu-item.selected');
+    if (selected) selected.scrollIntoView({ block: 'nearest' });
   }
 }

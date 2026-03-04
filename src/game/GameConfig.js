@@ -86,6 +86,7 @@ export const BACKGROUND_OBJECTS = {
     bulletInteraction: 'pass-through',
     flammability: 'high',
     conductivity: 'none',
+    slowing: 0.8,
     interactions: {
       default: { animation: 'shake', message: null }
     }
@@ -99,7 +100,7 @@ export const BACKGROUND_OBJECTS = {
     bulletInteraction: 'block',
     flammability: 'high',
     conductivity: 'none',
-    slowing: 0.1,
+    slowing: 0.8,
     interactions: {
       default: { animation: 'shake', message: null }
     }
@@ -165,7 +166,7 @@ export const BACKGROUND_OBJECTS = {
     bulletInteraction: 'block',
     flammability: 'medium',
     conductivity: 'none',
-    slowing: 0.1,
+    slowing: 0.5,
     interactions: {
       default: { animation: 'shake', message: null }
     }
