@@ -1,17 +1,17 @@
 import { GRID, COLORS } from '../game/GameConfig.js';
-import { ITEMS, WEAPON_TYPES } from '../data/items.js';
+import { ITEMS, WEAPON_TYPES, resolveWeaponDefaults } from '../data/items.js';
 
 let _nextAttackId = 0;
 
 export class Item {
   constructor(char, x, y) {
     this.char = char;
-    this.data = ITEMS[char] || {
+    this.data = resolveWeaponDefaults(ITEMS[char] || {
       char,
       name: 'Unknown',
       type: 'WEAPON',
       color: COLORS.ITEM
-    };
+    });
 
     // Pixel-based position
     this.position = { x, y };
@@ -167,8 +167,14 @@ export class Item {
     this.chargeTime = 0;
     this.chargingPlayer = null;
 
-    // Start cooldown
-    this.cooldownTimer = this.data.cooldown || 0.5;
+    // Start cooldown (apply weapon affinity modifiers if player has them)
+    let cooldown = this.data.cooldown || 0.5;
+    const affinities = player && player.weaponAffinities;
+    if (affinities && affinities['bow']) {
+      if (affinities['bow'].cooldownReduction) cooldown *= (1 - affinities['bow'].cooldownReduction);
+      if (affinities['bow'].cooldownPenalty)   cooldown *= (1 + affinities['bow'].cooldownPenalty);
+    }
+    this.cooldownTimer = cooldown;
 
     return attack;
   }
@@ -415,13 +421,16 @@ export class Item {
   createMeleeAttack(player) {
     // Route to pattern-specific generators
     const pattern = this.data.attackPattern || 'default';
-    const subtype = this.data.weaponSubtype; // e.g. 'blunt' for hammers, batons, axes
+    const subtype = this.data.weaponSubtype; // e.g. 'hammer', 'axe', 'sword', etc.
 
     const injectSubtype = (result) => {
       const props = {};
       if (subtype) props.weaponSubtype = subtype;
       if (this.data.electric) props.electric = this.data.electric;
       if (this.data.isBlade) props.isBlade = this.data.isBlade;
+      if (this.data.isBlunt) props.isBlunt = this.data.isBlunt;
+      if (this.data.canSmash) props.canSmash = this.data.canSmash;
+      if (this.data.isPickaxe) props.isPickaxe = this.data.isPickaxe;
 
       if (Object.keys(props).length === 0) return result;
       if (Array.isArray(result)) return result.map(a => ({ ...a, ...props }));
@@ -448,9 +457,12 @@ export class Item {
       default:
         // Default single-hit attack
         const range = this.data.range || 20;
+        const defaultChar = this.data.meleeChar || '█';
+        const defaultAngle = Math.atan2(player.facing.y, player.facing.x);
         return injectSubtype({
           type: 'melee',
-          char: this.data.meleeChar || '█',
+          char: defaultChar,
+          drawAngle: this.getMeleeDrawAngle(defaultChar, defaultAngle),
           position: {
             x: player.position.x + player.facing.x * range,
             y: player.position.y + player.facing.y * range
@@ -480,6 +492,7 @@ export class Item {
     const sweepDuration = 0.4; // Total time for full circle sweep
     const delayPerStep = sweepDuration / count;
 
+    const ringChar = this.data.meleeChar || '~';
     for (let i = 0; i < count; i++) {
       const angle = (Math.PI * 2 / count) * i;
       const distance = this.data.range || 20;
@@ -488,7 +501,8 @@ export class Item {
 
       attacks.push({
         type: 'melee',
-        char: this.data.meleeChar || '~',
+        char: ringChar,
+        drawAngle: this.getMeleeDrawAngle(ringChar, angle),
         position: {
           x: player.position.x + relX,
           y: player.position.y + relY
@@ -525,10 +539,12 @@ export class Item {
       const relY = Math.sin(angle) * distance;
 
       const knockbackValue = this.data.knockback || 150;
+      const meleeChar = this.data.meleeChar || '/';
 
       attacks.push({
         type: 'melee',
-        char: this.data.meleeChar || '/',
+        char: meleeChar,
+        drawAngle: this.getMeleeDrawAngle(meleeChar, angle),
         position: { x: player.position.x + relX, y: player.position.y + relY },
         relX, relY,
         width: GRID.CELL_SIZE,
@@ -561,10 +577,12 @@ export class Item {
       const angle = baseAngle + offsets[i];
       const relX = Math.cos(angle) * distance;
       const relY = Math.sin(angle) * distance;
+      const meleeChar = this.data.meleeChar || '═';
 
       attacks.push({
         type: 'melee',
-        char: this.data.meleeChar || '═',
+        char: meleeChar,
+        drawAngle: this.getMeleeDrawAngle(meleeChar, angle),
         position: { x: player.position.x + relX, y: player.position.y + relY },
         relX, relY,
         width: GRID.CELL_SIZE,
@@ -593,6 +611,7 @@ export class Item {
       const radius = ring * GRID.CELL_SIZE;
       const positions = 8; // 8 positions per ring
 
+      const shockwaveChar = this.data.meleeChar || '○';
       for (let i = 0; i < positions; i++) {
         const angle = (Math.PI * 2 / positions) * i;
         const relX = Math.cos(angle) * radius;
@@ -600,7 +619,8 @@ export class Item {
 
         attacks.push({
           type: 'melee',
-          char: this.data.meleeChar || '○',
+          char: shockwaveChar,
+          drawAngle: this.getMeleeDrawAngle(shockwaveChar, angle),
           position: { x: player.position.x + relX, y: player.position.y + relY },
           relX, relY,
           width: GRID.CELL_SIZE,
@@ -628,6 +648,8 @@ export class Item {
     const baseAngle = Math.atan2(player.facing.y, player.facing.x);
     const patternSpeed = this.data.patternSpeed || 0.05;
 
+    const thrustChar = this.data.meleeChar || '→';
+    const thrustDrawAngle = this.getMeleeDrawAngle(thrustChar, baseAngle);
     for (let i = 1; i <= 3; i++) {
       const distance = i * GRID.CELL_SIZE;
       const relX = Math.cos(baseAngle) * distance;
@@ -635,7 +657,8 @@ export class Item {
 
       attacks.push({
         type: 'melee',
-        char: this.data.meleeChar || '→',
+        char: thrustChar,
+        drawAngle: thrustDrawAngle,
         position: { x: player.position.x + relX, y: player.position.y + relY },
         relX, relY,
         width: GRID.CELL_SIZE,
@@ -664,10 +687,13 @@ export class Item {
 
     const relX = Math.cos(baseAngle) * distance;
     const relY = Math.sin(baseAngle) * distance;
+    const multistabChar = this.data.meleeChar || '†';
+    const multistabDrawAngle = this.getMeleeDrawAngle(multistabChar, baseAngle);
     for (let i = 0; i < stabs; i++) {
       attacks.push({
         type: 'melee',
-        char: this.data.meleeChar || '†',
+        char: multistabChar,
+        drawAngle: multistabDrawAngle,
         position: { x: player.position.x + relX, y: player.position.y + relY },
         relX, relY,
         width: GRID.CELL_SIZE * 0.75,
@@ -694,6 +720,8 @@ export class Item {
     const patternSpeed = this.data.patternSpeed || 0.02;
     const reach = 5;
 
+    const whipChar = this.data.meleeChar || '~';
+    const whipDrawAngle = this.getMeleeDrawAngle(whipChar, baseAngle);
     for (let i = 1; i <= reach; i++) {
       const distance = i * GRID.CELL_SIZE;
       const relX = Math.cos(baseAngle) * distance;
@@ -701,7 +729,8 @@ export class Item {
 
       attacks.push({
         type: 'melee',
-        char: this.data.meleeChar || '~',
+        char: whipChar,
+        drawAngle: whipDrawAngle,
         position: { x: player.position.x + relX, y: player.position.y + relY },
         relX, relY,
         width: GRID.CELL_SIZE * 0.8,
@@ -724,10 +753,12 @@ export class Item {
     // Single massive strike with large hitbox (heavy blades)
     const baseAngle = Math.atan2(player.facing.y, player.facing.x);
     const distance = this.data.range || 24;
+    const slamChar = this.data.meleeChar || '█';
 
     return {
       type: 'melee',
-      char: this.data.meleeChar || '█',
+      char: slamChar,
+      drawAngle: this.getMeleeDrawAngle(slamChar, baseAngle),
       position: {
         x: player.position.x + Math.cos(baseAngle) * distance,
         y: player.position.y + Math.sin(baseAngle) * distance
@@ -824,6 +855,31 @@ export class Item {
       shooterPlane: player.plane,
       owner: player
     };
+  }
+
+  getMeleeDrawAngle(char, attackAngle) {
+    // Maps each char to the attackAngle at which it looks correct without rotation.
+    // drawAngle = attackAngle - naturalAngle is then applied as a canvas rotation.
+    //
+    // Examples:
+    //   '|' looks correct (vertical) when attacking up (-π/2) → naturalAngle = -π/2
+    //   '→' looks correct (rightward) when attacking right (0) → naturalAngle = 0
+    //   '/' looks correct (up-right diagonal) when attacking up-right (-π/4) → naturalAngle = -π/4
+    const NATURAL_ANGLES = {
+      '|':  -Math.PI / 2,
+      '═':  -Math.PI / 2,
+      '-':  0,
+      '║':  0,
+      '/':  -Math.PI / 4,
+      '\\': Math.PI / 4,
+      '~':  0,
+      '→':  0,
+      '←':  Math.PI,
+      '↑':  -Math.PI / 2,
+      '↓':  Math.PI / 2,
+    };
+    const naturalAngle = NATURAL_ANGLES[char];
+    return naturalAngle !== undefined ? attackAngle - naturalAngle : null;
   }
 
   getArrowCharForAngle(angle) {

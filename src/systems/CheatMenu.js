@@ -1,5 +1,6 @@
 import { ITEMS, INGREDIENTS, ITEM_TYPES } from '../data/items.js';
 import { GRID } from '../game/GameConfig.js';
+import { CHARACTER_TYPES } from '../data/characters.js';
 
 export class CheatMenu {
   constructor(game = null) {
@@ -18,6 +19,7 @@ export class CheatMenu {
   buildItemCategories() {
     const categories = {
       'ZONE TELEPORT': [],
+      'CHARACTERS': [],
       'WEAPONS': [],
       'ARMOR': [],
       'CONSUMABLES': [],
@@ -34,6 +36,21 @@ export class CheatMenu {
         { char: 'Y', name: `YELLOW (L${this.game.zoneDepths.yellow})`, type: 'zone', zone: 'yellow', color: '#ffff44' },
         { char: 'D', name: `GRAY (L${this.game.zoneDepths.gray})`, type: 'zone', zone: 'gray', color: '#888888' }
       ];
+    }
+
+    // Add characters
+    for (const [type, data] of Object.entries(CHARACTER_TYPES)) {
+      const isActive = this.game && this.game.activeCharacterType === type;
+      const isDead = this.game && this.game.deadCharacters && this.game.deadCharacters.includes(type);
+      const suffix = isActive ? ' (active)' : isDead ? ' (dead)' : '';
+      categories['CHARACTERS'].push({
+        char: '@',
+        name: data.name + suffix,
+        type: 'character',
+        characterType: type,
+        color: data.color,
+        disabled: isActive || isDead
+      });
     }
 
     // Categorize items
@@ -147,6 +164,12 @@ export class CheatMenu {
         if (selected.type === 'zone') {
           console.log('[CHEAT] Teleporting to zone:', selected.zone);
           return { action: 'teleport_zone', zone: selected.zone };
+        }
+        // Character change action
+        else if (selected.type === 'character') {
+          if (selected.disabled) return 'handled';
+          console.log('[CHEAT] Changing character to:', selected.characterType);
+          return { action: 'change_character', characterType: selected.characterType };
         }
         // Item spawn action
         else {
@@ -275,7 +298,7 @@ export class CheatMenu {
     renderer.fgCtx.fillStyle = '#888888';
     renderer.fgCtx.textAlign = 'center';
     const instructionsY = y + height - GRID.CELL_SIZE;
-    renderer.fgCtx.fillText('↑↓:Select  Enter:Spawn  R:Warp  \\:Close', GRID.WIDTH / 2, instructionsY);
+    renderer.fgCtx.fillText('↑↓:Select  Enter:Spawn/Change  R:Warp  \\:Close', GRID.WIDTH / 2, instructionsY);
 
     renderer.fgCtx.restore();
   }

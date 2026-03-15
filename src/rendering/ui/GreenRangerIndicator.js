@@ -1,10 +1,10 @@
 /**
- * GreenRangerIndicator - Visual feedback for the Green Ranger's action cooldown
+ * GreenRangerIndicator - Visual feedback for the Green Ranger's charge meter
  *
- * Shows a green rising bar to the left of the player:
- * - Solid full bar: currently in continuous roll
- * - Rising bar (empty→full): recovering from action cooldown
- * - No bar: ready (no cooldown active)
+ * Shows a green bar to the left of the player:
+ * - Draining bar (full→empty): rolling (charge being consumed)
+ * - Rising bar (empty→full): recovering from action cooldown (charge refilling)
+ * - No bar: ready (full charge, no cooldown active)
  */
 
 import { GRID } from '../../game/GameConfig.js';
@@ -31,8 +31,10 @@ export class GreenRangerIndicator {
     this.renderer.drawRect(barX, barY, 4, barHeight, '#003318', true);
 
     if (rolling) {
-      // Solid green bar while sliding
-      this.renderer.drawRect(barX, barY, 4, barHeight, '#00ff44', true);
+      // Draining bar anchored at bottom — shrinks from top down as charge depletes (mirrors recovery)
+      const chargeRatio = player.rollCharge / player.actionCooldownMax;
+      const filledHeight = Math.max(1, barHeight * chargeRatio);
+      this.renderer.drawRect(barX, barY + (barHeight - filledHeight), 4, filledHeight, '#00ff44', true);
     } else {
       // Rising bar shows recovery progress (fills bottom-to-top as cooldown expires)
       const recoveryRatio = 1 - (player.actionCooldown / player.actionCooldownMax);

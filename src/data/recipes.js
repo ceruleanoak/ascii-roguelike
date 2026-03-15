@@ -21,6 +21,12 @@ export const RECIPES = [
   // Consumables
   { left: 'F', right: 'g', result: '@', name: 'Bomb' },          // Fire + Goo = Bomb
   { left: 'm', right: 'F', result: 'H', name: 'Health Potion' }, // Meat + Fire = Health Potion
+  { left: 'y', right: 'y', result: '@', name: 'Bomb' },           // Firecracker + Firecracker = Bomb
+  { left: 'G', right: 'm', result: 'H', name: 'Health Potion' },  // Base Potion + Meat = Health Potion
+  { left: 'G', right: 'w', result: 'q', name: 'Haste Draught' },  // Base Potion + Wing = Haste Draught
+  { left: 'G', right: 'b', result: 'x', name: 'Stone Skin' },     // Base Potion + Bone = Stone Skin
+  { left: 'G', right: 't', result: 'u', name: 'Battle Elixir' },  // Base Potion + Teeth = Battle Elixir
+  { left: 'G', right: 'h', result: 'z', name: 'Mending Brew' },   // Base Potion + Herb = Mending Brew
 
   // Advanced weapons
   { left: '†', right: 's', result: '⌘', name: 'Dragon Blade' },  // Sword + Scale = Dragon Blade
@@ -119,7 +125,10 @@ export const RECIPES = [
   { left: 'M', right: 'b', result: 'W', name: 'Warplate' },        // Metal + Bone = Warplate
   { left: 'k', right: 'v', result: 'N', name: 'Ninja Garb' },      // Silk + Venom = Ninja Garb
   { left: 'a', right: 'M', result: 'E', name: 'Ember Cloak' },     // Ash + Metal = Ember Cloak
-  { left: 'g', right: 's', result: 'I', name: 'Ice Plate' }        // Goo + Scale = Ice Plate
+  { left: 'g', right: 's', result: 'I', name: 'Ice Plate' },       // Goo + Scale = Ice Plate
+
+  // === FISHING ===
+  { left: '/', right: '~', result: 'ߒ', name: 'Fishing Pole' }   // Staff + String = Fishing Pole
 ];
 
 export function findRecipe(leftChar, rightChar) {

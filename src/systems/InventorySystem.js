@@ -37,13 +37,19 @@ export class InventorySystem {
 
     // Equipment slots (lost on death)
     this.equippedArmor = null; // Single armor slot
-    this.equippedConsumables = [null, null]; // 2 consumable slots
+    this.equippedConsumables = [null, null]; // 2 consumable slots (can expand to 5)
+    this.maxConsumableSlots = 2; // Unlockable up to 5; resets on death
 
     // Consumable HUD feedback state
     this.spentConsumableSlots = [false, false]; // tracks ONE-SHOT used slots this run
     this.consumableCooldowns = [0, 0]; // cooldown timers for reusable consumables
-    this.consumableFlashTimer = 0; // HUD flash duration in seconds
+    this.consumableFlashTimer = 0; // HUD flash duration in seconds (kept for compat)
     this.consumableFlashSlot = -1; // which slot is flashing (-1 = none)
+    // Blink animation: alternates solid block ↔ normal char
+    this.consumableBlinkSlot = -1;   // slot index being blinked (-1 = none)
+    this.consumableBlinkTimer = 0;   // total remaining blink duration
+    this.consumableBlinkPhase = 0;   // sub-timer within current half-cycle
+    this.consumableBlinkShowBlock = false; // true = show '█', false = show normal char
 
     // Consumable windup system (for offensive items)
     this.consumableWindups = []; // { consumable, slotIndex, timer, maxTimer, x, y, blinkTimer }
@@ -267,7 +273,7 @@ export class InventorySystem {
           availableItems.push(item);
         }
       }
-    } else if (slotType === 'consumable1' || slotType === 'consumable2') {
+    } else if (slotType.startsWith('consumable')) {
       // Get all consumables from consumable inventory (deduplicated)
       for (const item of this.consumableInventory) {
         if (!availableItems.find(i => i.char === item.char)) {
@@ -277,6 +283,18 @@ export class InventorySystem {
     }
 
     return availableItems;
+  }
+
+  /**
+   * Unlock one additional consumable slot (max 5).
+   * Expands the equippedConsumables, spentConsumableSlots, and consumableCooldowns arrays.
+   */
+  unlockConsumableSlot() {
+    if (this.maxConsumableSlots >= 5) return;
+    this.maxConsumableSlots++;
+    this.equippedConsumables.push(null);
+    this.spentConsumableSlots.push(false);
+    this.consumableCooldowns.push(0);
   }
 
   /**
@@ -358,17 +376,18 @@ export class InventorySystem {
 
     // Apply equipped armor properties
     if (this.equippedArmor) {
-      player.defense = this.equippedArmor.defense || 0;
-      player.bulletResist = this.equippedArmor.bulletResist || 0;
-      player.dodgeChance = this.equippedArmor.dodgeChance || 0;
-      player.fireImmune = this.equippedArmor.fireImmune || false;
-      player.freezeImmune = this.equippedArmor.freezeImmune || false;
-      player.poisonImmune = this.equippedArmor.poisonImmune || false;
-      player.slimeImmune = this.equippedArmor.slimeImmune || false;
-      player.reflectDamage = this.equippedArmor.reflectDamage || 0;
-      player.speedBoost = this.equippedArmor.speedBoost || 0;
-      player.speedPenalty = this.equippedArmor.speedPenalty || 0;
-      player.slowEnemies = this.equippedArmor.slowEnemies || false;
+      const a = this.equippedArmor.data;
+      player.defense = a.defense || 0;
+      player.bulletResist = a.bulletResist || 0;
+      player.dodgeChance = a.dodgeChance || 0;
+      player.fireImmune = a.fireImmune || false;
+      player.freezeImmune = a.freezeImmune || false;
+      player.poisonImmune = a.poisonImmune || false;
+      player.slimeImmune = a.slimeImmune || false;
+      player.reflectDamage = a.reflectDamage || 0;
+      player.speedBoost = a.speedBoost || 0;
+      player.speedPenalty = a.speedPenalty || 0;
+      player.slowEnemies = a.slowEnemies || false;
     }
 
     // Add temporary block boost from Metal Block consumable
@@ -419,15 +438,34 @@ export class InventorySystem {
   }
 
   /**
-   * Tick down HUD flash timer for consumable slot
+   * Tick down HUD flash/blink timers for consumable slot.
+   * Returns true while a blink is in progress (caller should updateUI this frame).
    */
   updateConsumableFlash(deltaTime) {
+    // Legacy flash timer (color-only flash, used by windup completion)
     if (this.consumableFlashTimer > 0) {
       this.consumableFlashTimer = Math.max(0, this.consumableFlashTimer - deltaTime);
       if (this.consumableFlashTimer === 0) {
         this.consumableFlashSlot = -1;
       }
     }
+
+    // Block-blink animation: 4 half-cycles at 0.1s each = 0.4s total
+    if (this.consumableBlinkTimer > 0) {
+      this.consumableBlinkTimer = Math.max(0, this.consumableBlinkTimer - deltaTime);
+      this.consumableBlinkPhase -= deltaTime;
+      if (this.consumableBlinkPhase <= 0) {
+        // Toggle solid block vs normal char
+        this.consumableBlinkShowBlock = !this.consumableBlinkShowBlock;
+        this.consumableBlinkPhase = 0.1; // 100ms per half-cycle
+      }
+      if (this.consumableBlinkTimer === 0) {
+        this.consumableBlinkSlot = -1;
+        this.consumableBlinkShowBlock = false;
+      }
+      return true; // HUD needs refresh this frame
+    }
+    return false;
   }
 
   /**
@@ -473,8 +511,10 @@ export class InventorySystem {
 
     switch (cd.effect) {
       case 'heal': {
-        // Health Potion: HP < 50% maxHp; Heart: HP < 25% maxHp
-        const threshold = cd.amount >= 10 ? 0.25 : 0.5;
+        // Use item's autoTriggerHP if defined; otherwise fall back to amount-based threshold
+        const threshold = cd.autoTriggerHP !== undefined
+          ? cd.autoTriggerHP
+          : (cd.amount >= 10 ? 0.25 : 0.5);
         if (player.hp < player.maxHp * threshold) {
           player.heal(cd.amount);
           return true;
@@ -488,8 +528,8 @@ export class InventorySystem {
         return true;
       }
       case 'speed': {
-        // Wings: HP < 40% maxHp
-        if (player.hp < player.maxHp * 0.4) {
+        const threshold = cd.autoTriggerHP !== undefined ? cd.autoTriggerHP : 0.4;
+        if (player.hp < player.maxHp * threshold) {
           player.applySpeedBoost(cd.duration);
           return true;
         }
@@ -649,6 +689,48 @@ export class InventorySystem {
         // Steam Vial: creates a steam cloud — START WINDUP
         return { windup: 0.6, effectType: 'throwSteam' };
       }
+      case 'firecracker': {
+        const px = player.position.x + 20, py = player.position.y + 20;
+        for (const enemy of enemies) {
+          const dx = (enemy.position.x + 20) - px, dy = (enemy.position.y + 20) - py;
+          if (Math.sqrt(dx * dx + dy * dy) <= 50) return { windup: 0.5, effectType: 'firecracker' };
+        }
+        return false;
+      }
+      case 'stoneskin': {
+        const px = player.position.x + 20, py = player.position.y + 20;
+        let nearbyCount = 0;
+        for (const enemy of enemies) {
+          const dx = (enemy.position.x + 20) - px, dy = (enemy.position.y + 20) - py;
+          if (Math.sqrt(dx * dx + dy * dy) <= 80) nearbyCount++;
+        }
+        if (player.hp < player.maxHp * (cd.autoTrigger?.criticalHP ?? 0.35) || nearbyCount >= (cd.autoTrigger?.nearbyEnemies ?? 2)) {
+          player.applyStoneSkin(cd.duration || 10, cd.defenseBonus || 3);
+          return true;
+        }
+        return false;
+      }
+      case 'regen': {
+        const threshold = cd.autoTriggerHP ?? 0.50;
+        if (player.hp < player.maxHp * threshold) {
+          player.applyRegen(cd.duration || 5, cd.regenAmount || 1, cd.regenInterval || 1.0);
+          return true;
+        }
+        return false;
+      }
+      case 'damageBuff': {
+        if (cd.duration && !cd.passive) {
+          const px = player.position.x + 20, py = player.position.y + 20;
+          for (const enemy of enemies) {
+            const dx = (enemy.position.x + 20) - px, dy = (enemy.position.y + 20) - py;
+            if (Math.sqrt(dx * dx + dy * dy) <= (cd.autoTrigger?.range ?? 80)) {
+              player.applyDamageBuff(cd.duration, cd.damageBonus || 2);
+              return true;
+            }
+          }
+        }
+        return false;
+      }
       default:
         return false;
     }
@@ -688,19 +770,24 @@ export class InventorySystem {
         this.consumableCooldowns[slotIndex] = cd.cooldown || 10;
       }
     } else {
-      // Instant activation
+      // Instant activation — show consumable char at 2x size above player
       combatSystem.createDamageNumber(
         consumable.char,
         player.position.x,
         player.position.y - 20 * 0.5,
-        consumable.color || '#ffaa00'
+        consumable.color || '#ffaa00',
+        2
       );
-      this.consumableFlashSlot = slotIndex;
-      this.consumableFlashTimer = 0.5;
+      // Start slot blink: 4 half-cycles × 100ms = 0.4s
+      this.consumableBlinkSlot = slotIndex;
+      this.consumableBlinkTimer = 0.4;
+      this.consumableBlinkPhase = 0.1;
+      this.consumableBlinkShowBlock = true; // start with solid block
 
       // Import createActivationBurst dynamically - assume particles array accepts it
       // Note: This requires createActivationBurst import at top of file
       // For now, create simple particles
+      const burstChars = ['+', '*', 'o', '.'];
       for (let i = 0; i < 10; i++) {
         particles.push({
           x: player.position.x + Math.random() * 40 - 20,
@@ -709,6 +796,7 @@ export class InventorySystem {
           vy: Math.random() * 60 - 30,
           life: 0.5,
           maxLife: 0.5,
+          char: burstChars[Math.floor(Math.random() * burstChars.length)],
           color: consumable.color || '#ffaa00'
         });
       }
@@ -831,6 +919,17 @@ export class InventorySystem {
         this._createExplosion(particles, px, py, 30, '#ffff00');
         break;
       }
+      case 'firecracker': {
+        const burnRadius = windup.consumable?.data?.radius || 40;
+        for (const enemy of enemies) {
+          const dx = (enemy.position.x + 20) - px, dy = (enemy.position.y + 20) - py;
+          if (Math.sqrt(dx * dx + dy * dy) <= burnRadius) {
+            enemy.applyStatusEffect('burn', 3.0);
+          }
+        }
+        this._createSparkBurst(particles, px, py);
+        break;
+      }
       case 'throwSteam': {
         // Steam Vial
         if (!steamClouds) steamClouds = [];
@@ -845,9 +944,11 @@ export class InventorySystem {
       }
     }
 
-    // Flash HUD slot
-    this.consumableFlashSlot = windup.slotIndex;
-    this.consumableFlashTimer = 0.5;
+    // Blink HUD slot
+    this.consumableBlinkSlot = windup.slotIndex;
+    this.consumableBlinkTimer = 0.4;
+    this.consumableBlinkPhase = 0.1;
+    this.consumableBlinkShowBlock = true;
 
     // Handle consumption based on one-shot vs reusable
     if (!windup.isOneShot) {
@@ -860,6 +961,7 @@ export class InventorySystem {
    * @private
    */
   _createExplosion(particles, x, y, count, color) {
+    const chars = ['*', '+', 'x', '.', 'o'];
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 50 + Math.random() * 50;
@@ -870,7 +972,29 @@ export class InventorySystem {
         vy: Math.sin(angle) * speed,
         life: 0.5 + Math.random() * 0.5,
         maxLife: 1.0,
+        char: chars[Math.floor(Math.random() * chars.length)],
         color: color
+      });
+    }
+  }
+
+  /**
+   * Create spark burst particles for firecracker effect
+   * @private
+   */
+  _createSparkBurst(particles, x, y) {
+    for (let i = 0; i < 12; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 80 + Math.random() * 120;
+      particles.push({
+        x: x + (Math.random() - 0.5) * 8,
+        y: y + (Math.random() - 0.5) * 8,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 0.2 + Math.random() * 0.2,
+        maxLife: 0.4,
+        char: Math.random() < 0.5 ? '*' : '.',
+        color: Math.random() < 0.6 ? '#ff8800' : '#ffff00'
       });
     }
   }
@@ -913,11 +1037,16 @@ export class InventorySystem {
     this.equippedArmor = null;
     this.equippedConsumables = [null, null];
 
-    // Clear consumable state
+    // Clear consumable state and reset unlocked slots
+    this.maxConsumableSlots = 2;
     this.spentConsumableSlots = [false, false];
     this.consumableCooldowns = [0, 0];
     this.consumableFlashTimer = 0;
     this.consumableFlashSlot = -1;
+    this.consumableBlinkSlot = -1;
+    this.consumableBlinkTimer = 0;
+    this.consumableBlinkPhase = 0;
+    this.consumableBlinkShowBlock = false;
     this.consumableWindups = [];
 
     // Clear saved EXPLORE room

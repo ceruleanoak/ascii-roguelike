@@ -23,6 +23,9 @@ export class Ingredient {
 
     // State
     this.pickedUp = false;
+    this.pickupCooldown = 0;  // seconds before magnetization kicks in
+    this.bobTimer = 0;        // accumulates while in water for bob animation
+    this.inWater = false;     // set each frame by waterResults processing
   }
 
   getHitbox() {

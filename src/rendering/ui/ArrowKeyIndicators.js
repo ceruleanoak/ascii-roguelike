@@ -121,7 +121,7 @@ export class ArrowKeyIndicators {
 
     // Draw "D O D G E" label below arrow keys
     this.renderer.fgCtx.save();
-    this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 0.7}px "Courier New", monospace`;
+    this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 0.7}px 'VentureArcade', 'Unifont', monospace`;
     this.renderer.fgCtx.textBaseline = 'middle';
     this.renderer.fgCtx.textAlign = 'center';
     const labelY = GRID.HEIGHT - GRID.CELL_SIZE * 2;

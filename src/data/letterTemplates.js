@@ -2,6 +2,28 @@
 // Defines how each exit letter modifies room generation (terrain, objects, spawn rules)
 
 export const LETTER_TEMPLATES = {
+  A: {
+    name: 'Ascent',
+    description: 'Central high-ground plateau ringed by sloped terrain that pushes entities outward',
+
+    wallStructures: {
+      allow: true
+    },
+
+    bgObjectRules: {
+      // Keep the central plateau clear of random objects
+      clearingZone: {
+        centerCol: 15,
+        centerRow: 15,
+        width: 12,  // covers the inner plateau radius (~5 cells each side)
+        height: 12,
+        allowGrass: false,
+        allowObjects: false
+      },
+      grassDensity: 0.8
+    }
+  },
+
   B: {
     name: 'Boss Clearing',
     description: 'Open center arena with dense perimeter',
@@ -161,6 +183,79 @@ export const LETTER_TEMPLATES = {
     }
   },
 
+  E: {
+    name: 'Errand',
+    description: 'A mysterious traveler appears after enemies are cleared, seeking an item in trade',
+
+    wallStructures: {
+      allow: true
+    },
+
+    bgObjectRules: {
+      grassDensity: 0.7
+    },
+
+    // After room clear, spawn an ErrandCharacter NPC
+    neutralAfterClear: true
+  },
+
+  I: {
+    name: 'Island',
+    description: 'Mostly water with a generated land mass in the center - barrels and crates wash ashore',
+
+    wallStructures: {
+      allow: false // Water is the environmental boundary
+    },
+
+    islandZone: {
+      enabled: true,
+      islandCenterCol: 15,
+      islandCenterRow: 15,
+      islandRadius: 5,      // Island land mass radius (cells from center)
+      lakeRadius: 12,       // Outer water ring boundary — beyond this is normal land
+      edgeNoise: 1.5,       // Noise for organic shorelines (both inner and outer)
+      waterDensity: 0.85,   // Water coverage probability within the ring
+      barrelMin: 3,         // Min barrels scattered on the island
+      barrelMax: 5          // Max barrels scattered on the island
+    },
+
+    bgObjectRules: {
+      grassDensity: 0.6,
+      objectBias: {
+        'p': 4.0,  // Heavy barrel weight
+        '#': 1.5,  // Some crates
+        '%': 0.5,  // Fewer bushes
+        '&': 0.5,  // Fewer trees
+        '0': 0.3   // Fewer rocks
+      }
+    }
+  },
+
+  L: {
+    name: 'Lake',
+    description: 'A large irregular body of water — fishing available after clearing enemies',
+
+    wallStructures: {
+      allow: false
+    },
+
+    lakeZone: {
+      enabled: true,
+      nodes: [
+        { col: 11, row: 12, radius: 6 },
+        { col: 16, row: 15, radius: 5 },
+        { col: 13, row: 19, radius: 4.5 }
+      ],
+      edgeNoise: 2.2,
+      waterDensity: 0.88
+    },
+
+    bgObjectRules: {
+      grassDensity: 0.5,
+      objectBias: { '%': 1.2, '0': 0.8, '&': 0.6, 'n': 0.8 }
+    }
+  },
+
   O: {
     name: 'Ocean',
     description: 'Water-filled right third with sandy shore - no eastern passage',
@@ -195,7 +290,36 @@ export const LETTER_TEMPLATES = {
     // Enemy spawn rules
     enemySpawnRule: {
       spawnMode: 'OCEAN',      // Avoid water zone
-      preventWaterSpawn: true  // Don't spawn enemies in water
+      preventWaterSpawn: true  // Don't spawn enemies in water (except injected water-affinity enemies)
+    },
+
+    // Always inject 1-2 sea snakes regardless of zone spawn table
+    enemyInjection: {
+      char: 's',
+      minCount: 1,
+      maxCount: 2,
+      preferLiquid: true   // Sea snakes spawn in/near water
+    }
+  },
+
+  U: {
+    name: 'Underground',
+    description: 'Dual-plane cave system with aboveground clearings near exits and fog-of-war underground',
+
+    wallStructures: {
+      allow: false
+    },
+
+    bgObjectRules: {
+      clearingZone: {
+        centerCol: 15,
+        centerRow: 15,
+        width: 28,
+        height: 28,
+        allowGrass: false,
+        allowObjects: false
+      },
+      grassDensity: 0.0
     }
   }
 };

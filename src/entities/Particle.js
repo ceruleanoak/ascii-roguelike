@@ -140,7 +140,7 @@ export function createExplosion(x, y, count = 20, color = COLORS.PLAYER) {
 }
 
 // Factory function to create chaff particles (grass debris from bullet impacts)
-export function createChaff(x, y, count = 8) {
+export function createChaff(x, y, count = 4) {
   const particles = [];
   const chars = [',', '.', "'", '`', '-'];
   const color = '#667755'; // Muted grass color
@@ -148,15 +148,15 @@ export function createChaff(x, y, count = 8) {
   for (let i = 0; i < count; i++) {
     // Random spray pattern with upward bias
     const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.2;
-    const speed = 80 + Math.random() * 100; // 80-180 px/s
+    const speed = 40 + Math.random() * 50; // 40-90 px/s
     const vx = Math.cos(angle) * speed;
     const vy = Math.sin(angle) * speed;
 
     // Random character
     const char = chars[Math.floor(Math.random() * chars.length)];
 
-    // Quick lifetime (0.4-0.9 seconds)
-    const lifetime = 0.4 + Math.random() * 0.5;
+    // Quick lifetime (0.2-0.45 seconds)
+    const lifetime = 0.2 + Math.random() * 0.25;
 
     const p = new Particle(x, y, char, color, { vx, vy }, lifetime);
     p.decelerationRate = 0.88; // Decelerate quickly
@@ -165,6 +165,17 @@ export function createChaff(x, y, count = 8) {
   }
 
   return particles;
+}
+
+// Factory function to create a sprint footstep dot particle
+// Emitted alternating left/right of the player's path while sprinting unarmed.
+// x, y: pixel-space center of where the foot landed
+export function createFootstep(x, y) {
+  // Stationary dot that fades out quickly
+  const p = new Particle(x, y, '.', '#666666', { vx: 0, vy: 0 }, 0.55);
+  p.decelerationRate = 1.0;
+  p.boundToGrid = false;
+  return p;
 }
 
 // Factory function to create dodge roll trail particles

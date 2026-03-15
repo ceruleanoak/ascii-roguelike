@@ -11,25 +11,32 @@ import { ExitSystem } from './systems/ExitSystem.js';
 import { PersistenceSystem } from './systems/PersistenceSystem.js';
 import { InventorySystem } from './systems/InventorySystem.js';
 import { NeutralRoomSystem } from './systems/NeutralRoomSystem.js';
+import { ErrandSystem } from './systems/ErrandSystem.js';
 import { CheatMenu } from './systems/CheatMenu.js';
 import { AudioSystem } from './systems/AudioSystem.js';
+import { FishingSystem } from './systems/FishingSystem.js';
+import { LootSystem } from './systems/LootSystem.js';
+import { TrapSystem } from './systems/TrapSystem.js';
+import { InteractionSystem } from './systems/InteractionSystem.js';
+import { CharacterSystem } from './systems/CharacterSystem.js';
+import { MenuSystem } from './systems/MenuSystem.js';
+import { EnemySpawnSystem } from './systems/EnemySpawnSystem.js';
 import { Player } from './entities/Player.js';
 import { Enemy } from './entities/Enemy.js';
 import { Ingredient } from './entities/Ingredient.js';
 import { Item } from './entities/Item.js';
 import { BackgroundObject } from './entities/BackgroundObject.js';
 import { GooBlob } from './entities/GooBlob.js';
-import { Particle, createExplosion, createWetDrop, createActivationBurst, createSteamPuff, createChaff, createDodgeTrail } from './entities/Particle.js';
+import { Particle, createExplosion, createWetDrop, createActivationBurst, createSteamPuff, createChaff, createDodgeTrail, createFootstep } from './entities/Particle.js';
 import { createDebris } from './entities/Debris.js';
 import { Captive } from './entities/Captive.js';
 import { Leshy } from './entities/Leshy.js';
 import { CharacterNPC } from './entities/CharacterNPC.js';
-import { isIngredient, isItem, ITEM_TYPES, generateEnemyDrops, INGREDIENTS, ITEMS } from './data/items.js';
-import { findRecipeByResult } from './data/recipes.js';
+import { ITEM_TYPES, INGREDIENTS, ITEMS } from './data/items.js';
 import { CHARACTER_TYPES } from './data/characters.js';
 import { EXIT_LETTERS } from './data/exitLetters.js';
 import { ZONES } from './data/zones.js';
-import { GAME_STATES, GRID, CRAFTING, EQUIPMENT, COLORS, INTERACTION_RANGE, OBJECT_ANIMATIONS, ROOM_TYPES, POLYMORPH_OUTCOMES } from './game/GameConfig.js';
+import { GAME_STATES, GRID, CRAFTING, INTERACTION_RANGE, ROOM_TYPES } from './game/GameConfig.js';
 
 class Game {
   constructor() {
@@ -48,10 +55,19 @@ class Game {
     this.exitSystem = new ExitSystem(this.zoneSystem);
     this.roomGenerator = new RoomGenerator(this.exitSystem, this.zoneSystem);
     this.neutralRoomSystem = new NeutralRoomSystem();
+    this.errandSystem = new ErrandSystem();
     this.cheatMenu = new CheatMenu(this);
     this.persistenceSystem = new PersistenceSystem();
     this.inventorySystem = new InventorySystem();
     this.audioSystem = new AudioSystem();
+    this.fishingSystem = new FishingSystem();
+    // New focused systems (instantiated after core systems so they can receive `this`)
+    this.lootSystem = new LootSystem(this);
+    this.trapSystem = new TrapSystem(this);
+    this.interactionSystem = new InteractionSystem(this);
+    this.characterSystem = new CharacterSystem(this);
+    this.menuSystem = new MenuSystem(this);
+    this.enemySpawnSystem = new EnemySpawnSystem(this);
 
     // Game state
     this.player = null;
@@ -79,6 +95,11 @@ class Game {
 
     this.gameOverWaitingForSpace = false;
     this.gameOverDeathTimer = 0; // Timer for 2-second delay before showing "Press SPACE"
+    this.characterDeathPending = false; // True when a character died but others remain
+    this.characterDeathTimer = 0; // Like gameOverDeathTimer but for character-death path
+    this.pendingNextCharacter = null; // Character type to swap to after space press
+    this.characterDeathName = ''; // Name of the character who just died
+    this.restBundle = null; // One-time starter bundle object (destroyed on SPACE to drop ingredients)
     this.dodgeBlockedFeedbackTimer = 0; // Cooldown for red X feedback
     this.showVectors = false; // Debug: Toggle with 'v' key
 
@@ -158,11 +179,19 @@ class Game {
       hp: document.getElementById('hp-value'),
       depth: document.getElementById('depth-value'),
       inventory: document.getElementById('inventory-count'),
-      heldItem: document.getElementById('held-item'),
+      slotQ: document.getElementById('slot-q'),
+      slot1: document.getElementById('slot-1'),
+      slot2: document.getElementById('slot-2'),
+      slot3: document.getElementById('slot-3'),
+      slotE: document.getElementById('slot-e'),
       menu: document.getElementById('menu-overlay'),
       armorChar: document.getElementById('armor-char'),
       consumableChar1: document.getElementById('consumable-char-1'),
-      consumableChar2: document.getElementById('consumable-char-2')
+      consumableChar2: document.getElementById('consumable-char-2'),
+      consumableChar3: document.getElementById('consumable-char-3'),
+      consumableChar4: document.getElementById('consumable-char-4'),
+      consumableChar5: document.getElementById('consumable-char-5'),
+      overlay: document.getElementById('ui-overlay')
     };
 
     // Menu state
@@ -220,6 +249,11 @@ class Game {
         } else if (result && result.action === 'warp') {
           this.handleRoomWarp(result.roomLetter);
           this.cheatMenu.toggle(); // Close menu after warp
+          e.preventDefault();
+          return;
+        } else if (result && result.action === 'change_character') {
+          this.swapWithCharacter(result.characterType);
+          this.cheatMenu.toggle(); // Close menu after swap
           e.preventDefault();
           return;
         }
@@ -358,6 +392,7 @@ class Game {
         }
       }
 
+
       // Arrow keys for dodge rolling (works in both REST and EXPLORE)
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown' ||
           e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
@@ -378,6 +413,11 @@ class Game {
         this.keys.space = false;
         this.spacePressed = false;
         this.attackSequenceActive = false; // Reset attack sequence on space release
+
+        // Release fishing charge when space is released
+        if (this.fishingSystem && this.fishingSystem.state === this.fishingSystem.STATES.CHARGING) {
+          this.fishingSystem.releaseCharge(this);
+        }
 
         // Release charged bow when space is released
         if (this.player && this.player.heldItem && this.player.heldItem.isCharging) {
@@ -475,21 +515,7 @@ class Game {
 
   // Get current dodge roll direction from arrow key state
   getDodgeRollDirection() {
-    let dx = 0, dy = 0;
-
-    if (this.arrowKeys.ArrowUp) dy -= 1;
-    if (this.arrowKeys.ArrowDown) dy += 1;
-    if (this.arrowKeys.ArrowLeft) dx -= 1;
-    if (this.arrowKeys.ArrowRight) dx += 1;
-
-    // Normalize for consistent speed in all directions (diagonal = same speed as cardinal)
-    const length = Math.sqrt(dx * dx + dy * dy);
-    if (length > 0) {
-      dx /= length;
-      dy /= length;
-    }
-
-    return { x: dx, y: dy };
+    return Player.getDodgeRollDirection(this.arrowKeys);
   }
 
   setupStateMachine() {
@@ -516,73 +542,24 @@ class Game {
   }
 
   getNearestInteractiveSlot() {
-    if (!this.player) return null;
-
-    const gridPos = this.player.getGridPosition();
-    const INTERACTION_DISTANCE = 1.5; // Grid cells
-
-    // Define all interactive slots with their positions
-    const slots = [
-      { type: 'crafting-left', x: CRAFTING.LEFT_SLOT_X, y: CRAFTING.STATION_Y },
-      { type: 'crafting-center', x: CRAFTING.CENTER_SLOT_X, y: CRAFTING.STATION_Y },
-      { type: 'crafting-right', x: CRAFTING.RIGHT_SLOT_X, y: CRAFTING.STATION_Y },
-      { type: 'equipment-chest', x: EQUIPMENT.CHEST_X, y: EQUIPMENT.CHEST_Y },
-      { type: 'equipment-armor', x: EQUIPMENT.ARMOR_X, y: EQUIPMENT.ARMOR_Y },
-      { type: 'equipment-consumable1', x: EQUIPMENT.CONSUMABLE1_X, y: EQUIPMENT.CONSUMABLE1_Y },
-      { type: 'equipment-consumable2', x: EQUIPMENT.CONSUMABLE2_X, y: EQUIPMENT.CONSUMABLE2_Y }
-    ];
-
-    // Find the closest slot within interaction distance
-    let nearestSlot = null;
-    let minDistance = INTERACTION_DISTANCE;
-
-    for (const slot of slots) {
-      const dx = gridPos.x - slot.x;
-      const dy = gridPos.y - slot.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      if (distance < minDistance) {
-        minDistance = distance;
-        nearestSlot = slot;
-      }
-    }
-
-    return nearestSlot;
+    return this.menuSystem.getNearestInteractiveSlot();
   }
 
   showPickupMessage(itemName) {
-    // Add to queue
-    this.pickupMessageQueue.push(itemName.toUpperCase());
-
-    // If no message is currently showing, start showing the first one
-    if (!this.pickupMessage) {
-      this.showNextPickupMessage();
-    }
+    this.menuSystem.showPickupMessage(itemName);
   }
 
   showNextPickupMessage() {
-    if (this.pickupMessageQueue.length > 0) {
-      this.pickupMessage = this.pickupMessageQueue.shift();
-      this.pickupMessageTimer = this.PICKUP_MESSAGE_DURATION;
-    } else {
-      this.pickupMessage = null;
-      this.pickupMessageTimer = 0;
-    }
+    this.menuSystem.showNextPickupMessage();
   }
 
   // Zone depth helpers
   getCurrentZoneDepth() {
-    const zone = this.zoneSystem.currentZone;
-    return this.zoneDepths[zone] || 0;
+    return this.zoneSystem.getCurrentZoneDepth(this.zoneDepths);
   }
 
   incrementZoneDepth() {
-    const zone = this.zoneSystem.currentZone;
-    if (this.zoneDepths[zone] === 0) {
-      this.zoneDepths[zone] = 1; // First entry to zone
-    } else {
-      this.zoneDepths[zone]++;
-    }
+    this.zoneSystem.incrementZoneDepth(this.zoneDepths);
   }
 
   loadGame() {
@@ -630,6 +607,9 @@ class Game {
   enterRestState() {
     // Note: exitPathHistory persists for future secret pattern tracking
 
+    // Show the HUD (hidden until first game start)
+    this.ui.overlay.classList.remove('hidden');
+
     // Clear title screen state
     this.launchButtonBounds = null;
 
@@ -657,10 +637,13 @@ class Game {
     // Reset zone system on rest
     this.zoneSystem.resetOnRest();
 
-    // Create player near north entrance
+    // Create player just below the "E X P L O R E" label (text centre = 4.5 * CELL_SIZE)
     const centerX = GRID.WIDTH / 2;
-    const spawnY = GRID.CELL_SIZE * 3; // Near the north exit
+    const spawnY = GRID.CELL_SIZE * 5.5;
     this.player = new Player(centerX, spawnY);
+
+    // Reset fishing system so Rusalka pull/suppression doesn't persist into REST
+    this.fishingSystem.resetForNewRoom(this.player);
 
     // Apply active character type
     this.applyCharacterType(this.activeCharacterType);
@@ -704,6 +687,12 @@ class Game {
     // Set player collision map
     this.player.setCollisionMap(collisionMap);
 
+    this.particles = [];
+    this.gooBlobs = [];
+    this.steamClouds = [];
+    this.debris = [];
+    this.captives = [];
+    this.neutralCharacters = [];
     this.items = [];
     this.placedTraps = [];
     this.activeNoiseSource = null;
@@ -714,30 +703,20 @@ class Game {
       // Restore previously saved REST ingredients
       this.ingredients = savedRestIngredients;
     } else {
-      // First time in REST - create starting ingredients on the ground
+      // First time in REST - place a bundle object holding the starting ingredients
       this.ingredients = [];
       const isFirstRun = Object.values(this.zoneDepths).every(depth => depth === 0);
-      if (isFirstRun) {
-        // Place starting ingredients on the ground (not in player inventory)
-        const startX = centerX - 100;
-        const startY = GRID.HEIGHT / 2 + 60; // Below crafting slots
-
-        // 2 of each ingredient allows for multiple crafting experiments
-        const startingIngredients = [
-          { char: '|', x: startX, y: startY },           // Stick
-          { char: '|', x: startX + 40, y: startY },      // Farther apart horizontally
-          { char: '~', x: startX + 80, y: startY },      // String
-          { char: '~', x: startX + 120, y: startY },
-          { char: 'g', x: startX, y: startY + 20 },      // Goo
-          { char: 'g', x: startX + 40, y: startY + 20 },
-          { char: 'f', x: startX + 80, y: startY + 20 }, // Fur
-          { char: 'f', x: startX + 120, y: startY + 20 }
-        ];
-
-        for (const ing of startingIngredients) {
-          const ingredient = new Ingredient(ing.char, ing.x, ing.y);
-          this.ingredients.push(ingredient);
-        }
+      if (isFirstRun && !this.restBundle) {
+        // Place bundle just below "C R A F T" label (row STATION_Y + 4)
+        this.restBundle = {
+          char: 'ට',
+          color: '#cc9944',
+          position: {
+            x: centerX - GRID.CELL_SIZE / 2,
+            y: (CRAFTING.STATION_Y + 4) * GRID.CELL_SIZE
+          },
+          chars: ['|', '|', '~', '~', 'g', 'g', 'f', 'f']
+        };
       }
     }
 
@@ -917,55 +896,15 @@ class Game {
 
 // Character system methods
   applyCharacterType(type) {
-    const charData = CHARACTER_TYPES[type];
-    if (!charData) {
-      console.error(`Unknown character type: ${type}`);
-      return;
-    }
-
-    // Switch inventory system to this character's banked inventory
-    this.inventorySystem.setActiveCharacter(type);
-
-    // Update player visual
-    this.player.color = charData.color;
-    this.player.baseColor = charData.color; // Store base color for status blinking
-
-    // Update dodge roll properties
-    this.player.dodgeRoll.type = charData.rollType;
-    this.player.dodgeRoll.duration = charData.rollDuration;
-    this.player.dodgeRoll.cooldown = charData.rollCooldown;
-    this.player.dodgeRoll.speed = charData.rollSpeed;
-
-    // Apply weapon affinities
-    this.player.weaponAffinities = charData.weaponAffinities;
-
-    // Store character type and apply character-specific properties
-    this.player.characterType = type;
-    this.player.actionCooldownMax = charData.actionCooldownMax || 0;
-    this.player.greenIdleDamageBonus = charData.idleDamageBonus || 0;
-    this.player.greenCombatDamagePenalty = charData.combatDamagePenalty || 0;
-    // Reset green ranger state when switching characters
-    this.player.actionCooldown = 0;
-    this.player.continuousRollActive = false;
-
+    this.characterSystem.applyCharacterType(type);
   }
 
-  // Applies green ranger's conditional +2/-1 damage modifier to an attack object or array
   applyGreenDamageModifier(attack) {
-    if (this.activeCharacterType !== 'green' || !attack) return attack;
-    const enemies = this.currentRoom ? this.currentRoom.enemies : [];
-    const bonus = this.player.getCharacterDamageBonus(enemies);
-    if (Array.isArray(attack)) {
-      return attack.map(a => ({ ...a, damage: Math.max(1, (a.damage || 1) + bonus) }));
-    }
-    return { ...attack, damage: Math.max(1, (attack.damage || 1) + bonus) };
+    return this.characterSystem.applyGreenDamageModifier(attack);
   }
 
-  // Starts the green ranger's shared action cooldown after an attack fires
   triggerGreenActionCooldown() {
-    if (this.activeCharacterType === 'green' && this.player) {
-      this.player.actionCooldown = this.player.actionCooldownMax;
-    }
+    this.characterSystem.triggerGreenActionCooldown();
   }
 
   // Play attack SFX based on weapon type (blade or whip)
@@ -979,45 +918,11 @@ class Game {
   }
 
   spawnCharacterNPCs() {
-    // Clear existing NPCs
-    this.characterNPCs = [];
-
-    // Spawn NPC for each unlocked character (except active and dead ones)
-    const availableCharacters = this.unlockedCharacters.filter(
-      type => type !== this.activeCharacterType && !this.deadCharacters.includes(type)
-    );
-
-    // Position NPCs around the room
-    const centerX = GRID.WIDTH / 2;
-    const baseY = GRID.CELL_SIZE * 8; // Below the crafting area
-    const spacing = GRID.CELL_SIZE * 4;
-
-    availableCharacters.forEach((type, index) => {
-      const offsetX = (index - (availableCharacters.length - 1) / 2) * spacing;
-      const npc = new CharacterNPC(type, centerX + offsetX, baseY);
-      this.characterNPCs.push(npc);
-    });
+    this.characterSystem.spawnCharacterNPCs();
   }
 
   swapWithCharacter(newType) {
-    if (newType === this.activeCharacterType) {
-      return; // Already this character
-    }
-
-    if (this.deadCharacters.includes(newType)) {
-      this.showPickupMessage('This character has already died');
-      return;
-    }
-
-    // Swap characters
-    this.activeCharacterType = newType;
-    this.applyCharacterType(newType);
-
-    // Respawn character NPCs with new active character excluded
-    this.spawnCharacterNPCs();
-
-    const charData = CHARACTER_TYPES[newType];
-    this.showPickupMessage(charData.name);
+    this.characterSystem.swapWithCharacter(newType);
   }
 
   spawnCaptive(characterType) {
@@ -1092,48 +997,7 @@ class Game {
   }
 
   checkCaptiveInteraction() {
-    if (!this.captives || this.captives.length === 0) return false;
-
-    for (const captive of this.captives) {
-      if (captive.freed) continue;
-
-      const dist = Math.hypot(
-        this.player.position.x - captive.position.x,
-        this.player.position.y - captive.position.y
-      );
-
-      if (dist < INTERACTION_RANGE * 2) { // Larger range for cage
-        if (!captive.cageDestroyed) {
-          // First interaction: destroy the cage (no message, just visual debris)
-          captive.cageDestroyed = true;
-
-          // Create cage debris (yellow fragments) - createDebris returns an array
-          const cageDebris = createDebris(
-            captive.position.x,
-            captive.position.y,
-            12, // 12 debris pieces
-            '#ffaa00' // Gold cage color
-          );
-          this.debris.push(...cageDebris);
-
-          // Prevent weapon attack
-          this.captiveInteractionThisFrame = true;
-          return true;
-        } else {
-          // Second interaction: recruit the character
-          captive.freed = true;
-          this.unlockedCharacters.push(captive.characterType);
-          const charData = CHARACTER_TYPES[captive.characterType];
-          this.showPickupMessage(`${charData.name} obtained`);
-          this.saveGameState(); // Save unlocked character
-
-          // Prevent weapon attack by clearing held item temporarily
-          this.captiveInteractionThisFrame = true;
-          return true;
-        }
-      }
-    }
-    return false;
+    return this.interactionSystem.checkCaptiveInteraction();
   }
 
   checkPathAmulet() {
@@ -1155,432 +1019,6 @@ class Game {
     // Check if player has no items in quick slots (escape route condition)
     if (!this.player || !this.player.quickSlots) return false;
     return this.player.quickSlots.every(slot => slot === null);
-  }
-
-  updateConsumableWindups(deltaTime) {
-    // DELEGATED TO InventorySystem
-    const enemies = this.currentRoom ? this.currentRoom.enemies : [];
-
-    for (let i = this.inventorySystem.consumableWindups.length - 1; i >= 0; i--) {
-      const windup = this.inventorySystem.consumableWindups[i];
-      windup.timer -= deltaTime;
-      windup.blinkTimer += deltaTime;
-
-      // Windup complete — trigger effect
-      if (windup.timer <= 0) {
-        const cd = windup.consumable.data;
-        const px = windup.x;
-        const py = windup.y;
-
-        // Execute effect based on type
-        switch (windup.effectType) {
-          case 'explode': {
-            // Bomb explosion
-            const aoeRadius = cd.radius * 2;
-            for (const enemy of enemies) {
-              const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - px;
-              const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - py;
-              if (Math.sqrt(dx * dx + dy * dy) <= aoeRadius) {
-                enemy.takeDamage(cd.damage);
-              }
-            }
-            const explosion = createExplosion(px, py, 20, windup.consumable.color || '#ff4400');
-            this.particles.push(...explosion);
-            break;
-          }
-          case 'curse': {
-            // Cursed Skull damage
-            for (const enemy of enemies) {
-              const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - px;
-              const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - py;
-              if (Math.sqrt(dx * dx + dy * dy) <= cd.radius) {
-                enemy.takeDamage(cd.damage);
-                this.combatSystem.createDamageNumber(cd.damage, enemy.position.x, enemy.position.y, '#ffffff');
-              }
-            }
-            // Dark explosion effect
-            const curseBurst = createExplosion(px, py, 25, '#9900ff');
-            this.particles.push(...curseBurst);
-            break;
-          }
-          case 'slow': {
-            // Slime Ball - apply freeze (slow) effect
-            for (const enemy of enemies) {
-              const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - px;
-              const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - py;
-              if (Math.sqrt(dx * dx + dy * dy) <= 50) {
-                enemy.applyStatusEffect('freeze', cd.duration || 10);
-                this.combatSystem.createDamageNumber('~', enemy.position.x, enemy.position.y, '#00ff00');
-              }
-            }
-            // Green goo burst
-            const slimeBurst = createExplosion(px, py, 15, '#00ff00');
-            this.particles.push(...slimeBurst);
-            break;
-          }
-          case 'poison': {
-            // Poison Flask - apply poison status effect
-            for (const enemy of enemies) {
-              const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - px;
-              const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - py;
-              if (Math.sqrt(dx * dx + dy * dy) <= 55) {
-                enemy.applyStatusEffect('poison', 8);
-                this.combatSystem.createDamageNumber('☠', enemy.position.x, enemy.position.y, '#44ff44');
-              }
-            }
-            // Green cloud burst
-            const poisonBurst = createExplosion(px, py, 18, '#44ff44');
-            this.particles.push(...poisonBurst);
-            break;
-          }
-          case 'venomcloud': {
-            // Venom Vial - damage + poison + slow (freeze)
-            for (const enemy of enemies) {
-              const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - px;
-              const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - py;
-              if (Math.sqrt(dx * dx + dy * dy) <= 60) {
-                enemy.takeDamage(3);
-                enemy.applyStatusEffect('poison', 8);
-                enemy.applyStatusEffect('freeze', 5); // Slow effect via freeze
-                this.combatSystem.createDamageNumber(3, enemy.position.x, enemy.position.y, '#00ff44');
-              }
-            }
-            // Toxic green burst
-            const venomBurst = createExplosion(px, py, 22, '#00ff44');
-            this.particles.push(...venomBurst);
-            break;
-          }
-          case 'jolt': {
-            // Jolt Jar — damages all enemies in room
-            for (const enemy of enemies) {
-              enemy.takeDamage(4);
-              this.combatSystem.createDamageNumber(4, enemy.position.x, enemy.position.y, '#ffff00');
-            }
-            // Electric burst
-            const joltBurst = createExplosion(px, py, 30, '#ffff00');
-            this.particles.push(...joltBurst);
-            break;
-          }
-          case 'throwSteam': {
-            // Steam Vial
-            if (!this.steamClouds) this.steamClouds = [];
-            this.steamClouds.push({
-              x: px,
-              y: py,
-              radius: cd.radius || GRID.CELL_SIZE * 4,
-              timer: cd.duration || 8.0
-            });
-            // Steam burst
-            const steamBurst = createExplosion(px, py, 25, '#aaaaaa');
-            this.particles.push(...steamBurst);
-            break;
-          }
-        }
-
-        // Flash HUD slot
-        this.inventorySystem.consumableFlashSlot = windup.slotIndex;
-        this.inventorySystem.consumableFlashTimer = 0.5;
-
-        // Handle consumption based on one-shot vs reusable
-        if (windup.isOneShot) {
-          // Already marked as spent when windup started
-        } else {
-          // Start cooldown for reusable
-          this.inventorySystem.consumableCooldowns[windup.slotIndex] = cd.cooldown || 10;
-        }
-
-        // Remove windup
-        this.inventorySystem.consumableWindups.splice(i, 1);
-        this.saveGameState();
-      }
-    }
-  }
-
-  checkConsumableActivation() {
-    if (!this.player.equippedConsumables) return;
-
-    for (let i = 0; i < this.player.equippedConsumables.length; i++) {
-      const consumable = this.player.equippedConsumables[i];
-      if (!consumable) continue;
-      if (this.inventorySystem.spentConsumableSlots[i]) continue; // One-shot consumables already used
-
-      // Skip if on cooldown (reusable consumables)
-      if (this.inventorySystem.consumableCooldowns[i] > 0) continue;
-
-      // Skip if already winding up
-      if (this.inventorySystem.consumableWindups.some(w => w.slotIndex === i)) continue;
-
-      let shouldTrigger = false;
-      let triggerData = null; // Store trigger conditions for offensive items
-      // consumable is an Item instance; data properties live on consumable.data
-      const cd = consumable.data;
-
-      switch (cd.effect) {
-        case 'heal': {
-          // Health Potion: HP < 50% maxHp; Heart: HP < 25% maxHp (instant activation)
-          const threshold = cd.amount >= 10 ? 0.25 : 0.5;
-          if (this.player.hp < this.player.maxHp * threshold) {
-            this.player.heal(cd.amount);
-            shouldTrigger = true;
-          }
-          break;
-        }
-        case 'maxhp': {
-          // Dragon Heart: immediately on first active frame (instant activation)
-          this.player.maxHp += cd.amount;
-          this.player.hp = this.player.maxHp;
-          shouldTrigger = true;
-          break;
-        }
-        case 'speed': {
-          // Wings: HP < 40% maxHp (instant activation)
-          if (this.player.hp < this.player.maxHp * 0.4) {
-            this.player.applySpeedBoost(cd.duration);
-            shouldTrigger = true;
-          }
-          break;
-        }
-        case 'explode': {
-          // Bomb: nearest enemy within 60px — START WINDUP
-          const enemies = this.currentRoom ? this.currentRoom.enemies : [];
-          let nearestDist = Infinity;
-          for (const enemy of enemies) {
-            const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - (this.player.position.x + GRID.CELL_SIZE / 2);
-            const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - (this.player.position.y + GRID.CELL_SIZE / 2);
-            nearestDist = Math.min(nearestDist, Math.sqrt(dx * dx + dy * dy));
-          }
-          if (nearestDist <= 60) {
-            shouldTrigger = true;
-            triggerData = { windup: 1.5, effectType: 'explode' };
-          }
-          break;
-        }
-        case 'curse': {
-          // Cursed Skull: 3+ enemies within 80px — START WINDUP
-          const enemies = this.currentRoom ? this.currentRoom.enemies : [];
-          const px = this.player.position.x + GRID.CELL_SIZE / 2;
-          const py = this.player.position.y + GRID.CELL_SIZE / 2;
-          let nearbyCount = 0;
-          for (const enemy of enemies) {
-            const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - px;
-            const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - py;
-            if (Math.sqrt(dx * dx + dy * dy) <= 80) nearbyCount++;
-          }
-          if (nearbyCount >= 3) {
-            shouldTrigger = true;
-            triggerData = { windup: 1.2, effectType: 'curse' };
-          }
-          break;
-        }
-        case 'luck': {
-          // Lucky Coin: immediately (instant activation)
-          this.player.applyLuck(cd.duration);
-          shouldTrigger = true;
-          break;
-        }
-        case 'block': {
-          // Metal Block: HP < 50% (instant activation)
-          if (this.player.hp < this.player.maxHp * 0.5) {
-            this.player.applyBlockBoost(8, 5);
-            shouldTrigger = true;
-          }
-          break;
-        }
-        case 'slow': {
-          // Slime Ball: nearest enemy within 50px — START WINDUP
-          const enemies = this.currentRoom ? this.currentRoom.enemies : [];
-          const px = this.player.position.x + GRID.CELL_SIZE / 2;
-          const py = this.player.position.y + GRID.CELL_SIZE / 2;
-          let nearestDist = Infinity;
-          for (const enemy of enemies) {
-            const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - px;
-            const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - py;
-            nearestDist = Math.min(nearestDist, Math.sqrt(dx * dx + dy * dy));
-          }
-          if (nearestDist <= 50) {
-            shouldTrigger = true;
-            triggerData = { windup: 0.8, effectType: 'slow' };
-          }
-          break;
-        }
-        case 'poison': {
-          // Poison Flask: nearest enemy within 55px — START WINDUP
-          const enemies = this.currentRoom ? this.currentRoom.enemies : [];
-          const px = this.player.position.x + GRID.CELL_SIZE / 2;
-          const py = this.player.position.y + GRID.CELL_SIZE / 2;
-          let nearestDist = Infinity;
-          for (const enemy of enemies) {
-            const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - px;
-            const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - py;
-            nearestDist = Math.min(nearestDist, Math.sqrt(dx * dx + dy * dy));
-          }
-          if (nearestDist <= 55) {
-            shouldTrigger = true;
-            triggerData = { windup: 1.0, effectType: 'poison' };
-          }
-          break;
-        }
-        case 'cleanse': {
-          // Tonic: player has burn or wet (instant activation)
-          if (this.player.burnDuration > 0 || this.player.wetDuration > 0) {
-            this.player.burnDuration = 0;
-            this.player.wetDuration = 0;
-            shouldTrigger = true;
-          }
-          break;
-        }
-        case 'invuln': {
-          // Smoke Bomb: HP < 25% (instant activation)
-          if (this.player.hp < this.player.maxHp * 0.25) {
-            const duration = cd.duration || 3.5;
-            this.player.invulnerabilityTimer = Math.max(this.player.invulnerabilityTimer, duration);
-
-            // Create smoke cloud using existing steam cloud system
-            if (!this.steamClouds) this.steamClouds = [];
-            this.steamClouds.push({
-              x: this.player.position.x + GRID.CELL_SIZE / 2,
-              y: this.player.position.y + GRID.CELL_SIZE / 2,
-              radius: GRID.CELL_SIZE * 3.5, // Large smoke cloud
-              timer: duration // Lasts as long as invulnerability
-            });
-
-            shouldTrigger = true;
-          }
-          break;
-        }
-        case 'venomcloud': {
-          // Venom Vial: 2+ enemies within 60px — START WINDUP
-          const enemies = this.currentRoom ? this.currentRoom.enemies : [];
-          const px = this.player.position.x + GRID.CELL_SIZE / 2;
-          const py = this.player.position.y + GRID.CELL_SIZE / 2;
-          let nearbyCount = 0;
-          for (const enemy of enemies) {
-            const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - px;
-            const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - py;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist <= 60) {
-              nearbyCount++;
-            }
-          }
-          if (nearbyCount >= 2) {
-            shouldTrigger = true;
-            triggerData = { windup: 1.0, effectType: 'venomcloud' };
-          }
-          break;
-        }
-        case 'jolt': {
-          // Jolt Jar: 2+ enemies in room — START WINDUP
-          const enemies = this.currentRoom ? this.currentRoom.enemies : [];
-          if (enemies.length >= 2) {
-            shouldTrigger = true;
-            triggerData = { windup: 1.3, effectType: 'jolt' };
-          }
-          break;
-        }
-        case 'shield': {
-          // Activates immediately — grants bullet-blocking charges with recharge (instant activation)
-          // Only activate if not already active
-          if (this.player.shieldMaxCharges === 0) {
-            this.player.shieldCharges = cd.charges || 3;
-            this.player.shieldMaxCharges = cd.charges || 3;
-            this.player.shieldCooldownMax = cd.rechargeCooldown || 5;
-            this.player.shieldCooldown = 0;
-            this.player.shieldBlocksAll = false;
-            shouldTrigger = true;
-          }
-          break;
-        }
-        case 'bulwark': {
-          // Activates immediately — grants all-hit-blocking charges with recharge (instant activation)
-          // Only activate if not already active
-          if (this.player.shieldMaxCharges === 0) {
-            this.player.shieldCharges = cd.charges || 2;
-            this.player.shieldMaxCharges = cd.charges || 2;
-            this.player.shieldCooldownMax = cd.rechargeCooldown || 8;
-            this.player.shieldCooldown = 0;
-            this.player.shieldBlocksAll = true;
-            shouldTrigger = true;
-          }
-          break;
-        }
-        case 'waterImmunity': {
-          // Rubber Boots: always activates immediately (instant activation)
-          this.player.waterImmunityTimer = cd.duration;
-          shouldTrigger = true;
-          break;
-        }
-        case 'throwSteam': {
-          // Steam Vial: creates a steam cloud — START WINDUP
-          shouldTrigger = true;
-          triggerData = { windup: 0.6, effectType: 'throwSteam' };
-          break;
-        }
-        case 'platform':
-          console.warn('Effect not implemented:', cd.effect);
-          break;
-        default:
-          break;
-      }
-
-      if (shouldTrigger) {
-        // Check if this is a one-shot or reusable consumable
-        // Shields are special: they activate once but stay equipped (charge system handles blocking)
-        const isShield = cd.effect === 'shield' || cd.effect === 'bulwark';
-        const isOneShot = cd.oneShot === true && !isShield;
-
-        // Check if this needs windup (offensive items)
-        if (triggerData && triggerData.windup) {
-          // Start windup for offensive consumables
-          this.inventorySystem.consumableWindups.push({
-            consumable: consumable,
-            slotIndex: i,
-            timer: triggerData.windup,
-            maxTimer: triggerData.windup,
-            effectType: triggerData.effectType,
-            x: this.player.position.x + GRID.CELL_SIZE / 2,
-            y: this.player.position.y + GRID.CELL_SIZE / 2,
-            blinkTimer: 0,
-            isOneShot: isOneShot
-          });
-
-          // Handle consumption
-          if (isOneShot) {
-            // One-shot: remove permanently
-            this.inventorySystem.spentConsumableSlots[i] = true;
-            this.inventorySystem.equippedConsumables[i] = null;
-            this.player.equippedConsumables[i] = null;
-          } else {
-            // Reusable: start cooldown
-            this.inventorySystem.consumableCooldowns[i] = cd.cooldown || 10;
-          }
-        } else {
-          // Instant activation (heal, buff, shield items)
-          this.combatSystem.createDamageNumber(
-            consumable.char,
-            this.player.position.x,
-            this.player.position.y - GRID.CELL_SIZE * 0.5,
-            consumable.color || COLORS.ITEM
-          );
-          this.inventorySystem.consumableFlashSlot = i;
-          this.inventorySystem.consumableFlashTimer = 0.5;
-          const burst = createActivationBurst(this.player.position.x, this.player.position.y, consumable.color || COLORS.ITEM);
-          this.particles.push(...burst);
-
-          // Handle consumption
-          if (isOneShot) {
-            // One-shot: remove permanently
-            this.inventorySystem.spentConsumableSlots[i] = true;
-            this.inventorySystem.equippedConsumables[i] = null;
-            this.player.equippedConsumables[i] = null;
-          } else {
-            // Reusable: start cooldown
-            this.inventorySystem.consumableCooldowns[i] = cd.cooldown || 10;
-          }
-
-          this.saveGameState();
-        }
-      }
-    }
   }
 
   transitionToNeutralRoom(scriptName) {
@@ -1615,6 +1053,9 @@ class Game {
     this.gooBlobs = [];
     this.neutralCharacters = [];
 
+    // Reset fishing system for new room
+    this.fishingSystem.resetForNewRoom(this.player);
+
     // Initialize physics system
     this.physicsSystem.clear();
     this.physicsSystem.addEntity(this.player);
@@ -1629,7 +1070,7 @@ class Game {
     this.stateMachine.transition(GAME_STATES.NEUTRAL);
   }
 
-  enterExploreState(entryDirection = null, exitObj = null) {
+  enterExploreState(entryDirection = null, exitObj = null, secretPattern = null) {
     // Zone depths only reset on death, not when entering from REST
     // Check if continuing in current zone (depth > 0) or starting fresh in this zone (depth === 0)
     const isContinuing = this.getCurrentZoneDepth() > 0;
@@ -1685,10 +1126,15 @@ class Game {
     }
 
     // Reset consumable HUD feedback state for new explore run
-    this.inventorySystem.spentConsumableSlots = [false, false];
-    this.inventorySystem.consumableCooldowns = [0, 0]; // Reset cooldowns for new room
+    const _nSlots = this.inventorySystem.maxConsumableSlots;
+    this.inventorySystem.spentConsumableSlots = Array(_nSlots).fill(false);
+    this.inventorySystem.consumableCooldowns = Array(_nSlots).fill(0); // Reset cooldowns for new room
     this.inventorySystem.consumableFlashTimer = 0;
     this.inventorySystem.consumableFlashSlot = -1;
+    this.inventorySystem.consumableBlinkSlot = -1;
+    this.inventorySystem.consumableBlinkTimer = 0;
+    this.inventorySystem.consumableBlinkPhase = 0;
+    this.inventorySystem.consumableBlinkShowBlock = false;
     this.inventorySystem.consumableWindups = []; // Clear any pending windups
 
     // Generate or restore room
@@ -1743,7 +1189,10 @@ class Game {
 
       // Determine room type from exit letter (if provided)
       let roomType = null;
-      if (exitObj && exitObj.letter) {
+      if (secretPattern === 'B-A-T') {
+        // B-A-T sequence: generate bat belfry instead of the T tunnel room
+        roomType = ROOM_TYPES.BAT_BELFRY;
+      } else if (exitObj && exitObj.letter) {
         const letterData = EXIT_LETTERS[exitObj.letter];
         if (letterData && letterData.roomType) {
           roomType = ROOM_TYPES[letterData.roomType];
@@ -1752,6 +1201,7 @@ class Game {
 
       this.roomGenerator.setDepth(this.getCurrentZoneDepth());
       this.currentRoom = this.roomGenerator.generateRoom(roomType, { x: startX, y: startY }, currentZone, progressionColor, exitObj?.letter);
+      this.currentRoom.exitLetter = exitObj?.letter || null;
 
       // Reset trap charges for new room
       if (this.player) {
@@ -1790,6 +1240,9 @@ class Game {
 
     this.player = new Player(startX, startY);
     this.player.setCollisionMap(this.currentRoom.collisionMap);
+
+    // Reset fishing system for new room (cleans up Rusalka, bobber, fish, etc.)
+    this.fishingSystem.resetForNewRoom(this.player);
 
     // Apply active character type
     this.applyCharacterType(this.activeCharacterType);
@@ -1834,6 +1287,17 @@ class Game {
       this.gooBlobs = []; // Clear goo blobs when entering new room
       this.captives = []; // Clear captives when entering new room
       this.neutralCharacters = []; // Clear neutral characters when entering new room
+
+      // Errand room: if an errand is active and this is an E-letter room, clear enemies and
+      // spawn the traveler immediately (they remember what they wanted last time)
+      if (this.errandSystem.activeErrand && this.currentRoom.exitLetter === 'E') {
+        this.currentRoom.enemies = [];
+        this.currentRoom.enemiesPlane0 = [];
+        this.currentRoom.enemiesPlane1 = [];
+        this.currentRoom.exitsLocked = false;
+        const errandChar = this.errandSystem.spawnErrandCharacter();
+        if (errandChar) this.neutralCharacters.push(errandChar);
+      }
     } else {
       // When restoring, still clear transient effects
       this.activeNoiseSource = null;
@@ -1910,9 +1374,32 @@ class Game {
     // Update neutral room system script
     this.neutralRoomSystem.update(deltaTime, this.currentRoom, this.player);
 
-    // Update ingredient attraction (same as EXPLORE/REST mode)
+    // Update ingredient attraction, cooldown, and separation (same as EXPLORE/REST mode)
     for (let i = this.ingredients.length - 1; i >= 0; i--) {
       const ingredient = this.ingredients[i];
+
+      if (ingredient.pickupCooldown > 0) {
+        ingredient.pickupCooldown = Math.max(0, ingredient.pickupCooldown - deltaTime);
+      }
+
+      for (let j = i - 1; j >= 0; j--) {
+        const other = this.ingredients[j];
+        const dx = ingredient.position.x - other.position.x;
+        const dy = ingredient.position.y - other.position.y;
+        const distSq = dx * dx + dy * dy;
+        const sep = GRID.CELL_SIZE * 1.2;
+        if (distSq < sep * sep && distSq > 0.01) {
+          const dist = Math.sqrt(distSq);
+          const force = (sep - dist) * 40;
+          const nx = dx / dist;
+          const ny = dy / dist;
+          ingredient.velocity.vx += nx * force * deltaTime;
+          ingredient.velocity.vy += ny * force * deltaTime;
+          other.velocity.vx -= nx * force * deltaTime;
+          other.velocity.vy -= ny * force * deltaTime;
+        }
+      }
+
       const shouldPickup = this.physicsSystem.applyAttraction(ingredient, this.player);
 
       if (shouldPickup) {
@@ -1980,24 +1467,19 @@ class Game {
     this.gameOverWaitingForSpace = true;
     this.gameOverDeathTimer = 2.0; // 2-second delay before showing "Press SPACE"
 
+    // If this is a true game over (not a character-death swap), clear the pending flag
+    if (!this.characterDeathPending) {
+      this.characterDeathTimer = 0;
+      this.pendingNextCharacter = null;
+      this.characterDeathName = '';
+    }
+
     // Update UI to show HP at 0
     this.updateUI();
   }
 
   preloadRoomPreviews() {
-    this.roomPreviews = { north: null, east: null, west: null, south: null };
-
-    const directions = ['north', 'east', 'west'];
-    for (const direction of directions) {
-      const roomType = this.roomGenerator.determineRoomType();
-      const preview = this.roomGenerator.getRoomPreview(roomType);
-
-      this.roomPreviews[direction] = {
-        type: roomType,
-        char: preview.char,
-        name: preview.name
-      };
-    }
+    this.roomPreviews = this.roomGenerator.preloadRoomPreviews();
   }
 
   update(deltaTime) {
@@ -2098,17 +1580,17 @@ class Game {
     for (const gooBlob of this.gooBlobs) {
       gooBlob.update(deltaTime);
 
-      // Check collision with player
-      if (this.player && gooBlob.isNearEntity(this.player)) {
+      // Check collision with player (only if on the same plane)
+      if (this.player && (gooBlob.plane ?? 0) === (this.player.plane ?? 0) && gooBlob.isNearEntity(this.player)) {
         this.player.applyStatusEffect('goo', 5.0); // 5 second goo effect
       }
 
-      // Check collision with enemies (slimes are immune)
+      // Check collision with enemies (slimes are immune, must share plane)
       if (this.currentRoom && this.currentRoom.enemies) {
         for (const enemy of this.currentRoom.enemies) {
           if (enemy.char === 'o' || enemy.char === 'M') continue; // Slimes are immune to goo
 
-          if (gooBlob.isNearEntity(enemy)) {
+          if ((gooBlob.plane ?? 0) === (enemy.plane ?? 0) && gooBlob.isNearEntity(enemy)) {
             enemy.applyStatusEffect('freeze', 0.5); // Enemies get frozen instead of goo
             enemy.statusEffects.freeze.slowAmount = 0.8; // Heavy slow
           }
@@ -2126,16 +1608,116 @@ class Game {
     }
   }
 
+  // Yellow mage blink: check if a candidate position is free of walls, objects, and exit zones
+  _isValidBlinkPosition(x, y) {
+    const player = this.player;
+    const w = player.width;
+    const h = player.height;
+    const C = GRID.CELL_SIZE;
+
+    // 3-cell safety margin from all edges — blocks perimeter walls, exit gaps, and exit trigger zones
+    const margin = C * 3;
+    if (x < margin || x + w > GRID.WIDTH - margin) return false;
+    if (y < margin || y + h > GRID.HEIGHT - margin) return false;
+
+    // Wall collision map check
+    if (player.collisionMap) {
+      const cx1 = Math.floor(x / C);
+      const cy1 = Math.floor(y / C);
+      const cx2 = Math.floor((x + w - 1) / C);
+      const cy2 = Math.floor((y + h - 1) / C);
+      for (let cy = cy1; cy <= cy2; cy++) {
+        for (let cx = cx1; cx <= cx2; cx++) {
+          if (player.collisionMap[cy]?.[cx]) return false;
+        }
+      }
+    }
+
+    // Solid background object check
+    const bgObjects = this.currentRoom?.backgroundObjects || [];
+    for (const obj of bgObjects) {
+      if (obj.destroyed || !obj.data?.solid) continue;
+      if (x < obj.position.x + GRID.CELL_SIZE && x + w > obj.position.x &&
+          y < obj.position.y + GRID.CELL_SIZE && y + h > obj.position.y) return false;
+    }
+
+    return true;
+  }
+
+  // Yellow mage blink: find the furthest valid position along the blink direction, emit trail particles, then move
+  _resolveBlinkTeleport({ direction, distance }) {
+    const player = this.player;
+    const C = GRID.CELL_SIZE;
+    const step = C / 4; // 4px steps for fine collision resolution
+
+    const originX = player.position.x;
+    const originY = player.position.y;
+
+    // Walk forward until collision, keep last valid spot
+    let bestX = originX;
+    let bestY = originY;
+    for (let d = step; d <= distance; d += step) {
+      const testX = originX + direction.x * d;
+      const testY = originY + direction.y * d;
+      if (this._isValidBlinkPosition(testX, testY)) {
+        bestX = testX;
+        bestY = testY;
+      } else {
+        break;
+      }
+    }
+
+    // Center points for trail calculations
+    const ox = originX + player.width / 2;
+    const oy = originY + player.height / 2;
+    const dx = (bestX + player.width / 2) - ox;
+    const dy = (bestY + player.height / 2) - oy;
+    const trailDist = Math.sqrt(dx * dx + dy * dy);
+
+    // Origin burst
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2;
+      const speed = 30 + Math.random() * 25;
+      this.particles.push({ x: ox, y: oy, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        life: 0.35, maxLife: 0.35, char: '*', color: player.color });
+    }
+
+    // Path trail (static dots that fade out)
+    if (trailDist > 2) {
+      const steps = Math.max(2, Math.floor(trailDist / (C / 2)));
+      for (let i = 1; i < steps; i++) {
+        const t = i / steps;
+        this.particles.push({ x: ox + dx * t, y: oy + dy * t, vx: 0, vy: 0,
+          life: 0.25, maxLife: 0.25, char: '.', color: player.color });
+      }
+    }
+
+    // Destination burst
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2;
+      const speed = 25 + Math.random() * 30;
+      this.particles.push({ x: ox + dx, y: oy + dy, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        life: 0.4, maxLife: 0.4, char: '*', color: player.color });
+    }
+
+    // Apply teleport
+    player.position.x = bestX;
+    player.position.y = bestY;
+  }
+
   // Shared player mechanics for both REST and EXPLORE modes
   updatePlayerMechanics(deltaTime) {
     if (!this.player) return null;
 
     // Handle dodge rolling (continuous direction updates, supports diagonals and curving)
-    const dodgeDirection = this.getDodgeRollDirection();
+    // Disabled while Rusalka's charm is active (player cannot break the trance)
+    const rusalkaActive = this.fishingSystem?.rusalka?.alive === true;
+    const dodgeDirection = rusalkaActive ? { x: 0, y: 0 } : this.getDodgeRollDirection();
     if (this.activeCharacterType === 'green') {
       // Green ranger: hold arrow keys for a continuous slide (no individual roll timers)
       if (dodgeDirection.x !== 0 || dodgeDirection.y !== 0) {
-        if (this.player.actionCooldown <= 0 && !this.player.isGooey()) {
+        const attackingWithSpaceGreen = this.keys.space && this.player.heldItem && this.player.heldItem.windupActive;
+        if (this.player.actionCooldown <= 0 && !this.player.isGooey() && !attackingWithSpaceGreen) {
           if (!this.player.continuousRollActive) {
             // Start the continuous roll
             this.player.continuousRollActive = true;
@@ -2163,32 +1745,52 @@ class Game {
             }
             this.audioSystem.playSFX('roll');
           }
-          // Update player facing direction toward roll direction
-          if (dodgeDirection.x !== 0) this.player.facing.x = Math.sign(dodgeDirection.x);
-          if (dodgeDirection.y !== 0) this.player.facing.y = Math.sign(dodgeDirection.y);
-          // Set velocity directly each frame (sustained movement)
-          const rollSpeed = this.player.getRollSpeed();
-          this.player.velocity.vx = dodgeDirection.x * rollSpeed;
-          this.player.velocity.vy = dodgeDirection.y * rollSpeed;
-          this.player.acceleration.ax = 0;
-          this.player.acceleration.ay = 0;
+          // Drain charge while rolling (2 units per second, matching actionCooldownMax scale)
+          this.player.rollCharge -= deltaTime * 1.75;
+          if (this.player.rollCharge <= 0) {
+            // Charge depleted — force end roll with full cooldown
+            this.player.rollCharge = 0;
+            this.player.continuousRollActive = false;
+            this.player.actionCooldown = this.player.actionCooldownMax;
+            this.player.velocity.vx = 0;
+            this.player.velocity.vy = 0;
+          } else {
+            // Update player facing direction toward roll direction
+            if (dodgeDirection.x !== 0) this.player.facing.x = Math.sign(dodgeDirection.x);
+            if (dodgeDirection.y !== 0) this.player.facing.y = Math.sign(dodgeDirection.y);
+            // Set velocity directly each frame (sustained movement)
+            const rollSpeed = this.player.getRollSpeed();
+            this.player.velocity.vx = dodgeDirection.x * rollSpeed;
+            this.player.velocity.vy = dodgeDirection.y * rollSpeed;
+            this.player.acceleration.ax = 0;
+            this.player.acceleration.ay = 0;
+          }
         }
       } else if (this.player.continuousRollActive) {
-        // Arrow keys released — end continuous roll and start shared cooldown
+        // Arrow keys released — cooldown proportional to charge used (longer roll = longer cooldown)
+        const chargeUsed = this.player.actionCooldownMax - this.player.rollCharge;
         this.player.continuousRollActive = false;
-        this.player.actionCooldown = this.player.actionCooldownMax;
+        this.player.actionCooldown = chargeUsed;
         this.player.velocity.vx = 0;
         this.player.velocity.vy = 0;
+      } else if (this.player.actionCooldown <= 0 && this.player.rollCharge < this.player.actionCooldownMax) {
+        // Cooldown finished — restore charge to full
+        this.player.rollCharge = this.player.actionCooldownMax;
       }
     } else {
       // Standard dodge roll for all other characters
       if (dodgeDirection.x !== 0 || dodgeDirection.y !== 0) {
-        if (!this.player.dodgeRoll.active && this.player.dodgeRoll.cooldownTimer <= 0) {
+        if (!this.player.dodgeRoll.active && this.player.dodgeRoll.cooldownTimer <= 0 && !this.keys.space) {
           const enemies = this.currentRoom ? this.currentRoom.enemies : [];
           const rollStarted = this.player.startDodgeRoll(dodgeDirection, enemies);
 
           if (rollStarted) {
             this.audioSystem.playSFX('roll');
+            // Resolve yellow mage blink (deferred for collision checking + trail)
+            if (this.player.pendingBlink) {
+              this._resolveBlinkTeleport(this.player.pendingBlink);
+              this.player.pendingBlink = null;
+            }
           }
 
           // Show red X if dodge roll blocked by goo (with cooldown to prevent spam)
@@ -2218,13 +1820,18 @@ class Game {
       // Green ranger continuous roll: velocity is managed directly above, skip updateInput
       // (calling updateInput would cap velocity to normal walk speed)
     } else if (!this.menuOpen && !this.player.dodgeRoll.active) {
+      // Lock movement during fishing cast/wait
+      const fishingBlocked = this.player.fishingLocked;
       // Lock facing for non-bow weapons during attack; allow aiming while charging bow
       const lockFacing = this.keys.space && this.player.heldItem && this.player.heldItem.data.weaponType !== 'BOW';
+      // Apply Rusalka input suppression (scale keys toward zero)
+      const rs = this.player.rusalkaInputScale;
+      const rng = () => Math.random() < rs; // probabilistic suppression
       this.player.updateInput({
-        up: this.keys.w,
-        down: this.keys.s,
-        left: this.keys.a,
-        right: this.keys.d
+        up:    fishingBlocked ? false : (rs >= 1.0 ? this.keys.w : rng() && this.keys.w),
+        down:  fishingBlocked ? false : (rs >= 1.0 ? this.keys.s : rng() && this.keys.s),
+        left:  fishingBlocked ? false : (rs >= 1.0 ? this.keys.a : rng() && this.keys.a),
+        right: fishingBlocked ? false : (rs >= 1.0 ? this.keys.d : rng() && this.keys.d)
       }, lockFacing);
     } else {
       // Stop player movement when menu is open or dodge rolling
@@ -2305,9 +1912,32 @@ class Game {
       npc.update(deltaTime);
     }
 
-    // Update ingredient attraction (same as EXPLORE mode)
+    // Update ingredient attraction, cooldown, and separation (same as EXPLORE mode)
     for (let i = this.ingredients.length - 1; i >= 0; i--) {
       const ingredient = this.ingredients[i];
+
+      if (ingredient.pickupCooldown > 0) {
+        ingredient.pickupCooldown = Math.max(0, ingredient.pickupCooldown - deltaTime);
+      }
+
+      for (let j = i - 1; j >= 0; j--) {
+        const other = this.ingredients[j];
+        const dx = ingredient.position.x - other.position.x;
+        const dy = ingredient.position.y - other.position.y;
+        const distSq = dx * dx + dy * dy;
+        const sep = GRID.CELL_SIZE * 1.2;
+        if (distSq < sep * sep && distSq > 0.01) {
+          const dist = Math.sqrt(distSq);
+          const force = (sep - dist) * 40;
+          const nx = dx / dist;
+          const ny = dy / dist;
+          ingredient.velocity.vx += nx * force * deltaTime;
+          ingredient.velocity.vy += ny * force * deltaTime;
+          other.velocity.vx -= nx * force * deltaTime;
+          other.velocity.vy -= ny * force * deltaTime;
+        }
+      }
+
       const shouldPickup = this.physicsSystem.applyAttraction(ingredient, this.player);
 
       if (shouldPickup) {
@@ -2337,11 +1967,17 @@ class Game {
   }
 
   updateGameOverState(deltaTime) {
-    // Tick down the death timer
+    // Tick down the death timer (used by both game-over and character-death paths)
     if (this.gameOverDeathTimer > 0) {
       this.gameOverDeathTimer -= deltaTime;
       if (this.gameOverDeathTimer < 0) {
         this.gameOverDeathTimer = 0;
+      }
+    }
+    if (this.characterDeathTimer > 0) {
+      this.characterDeathTimer -= deltaTime;
+      if (this.characterDeathTimer < 0) {
+        this.characterDeathTimer = 0;
       }
     }
 
@@ -2427,7 +2063,40 @@ class Game {
     // Track if lava killed the player
     let lavaKilledPlayer = false;
 
+    // Reset per-frame liquid flags before processing
+    this.player.inLiquid = false;
+    for (const ingredient of this.ingredients) {
+      ingredient.inWater = false;
+    }
+
     for (const { entity, inLiquid, liquidState, damagingLiquid } of waterResults) {
+      // Ingredients: lava destroys them, water makes them bob
+      if (entity.pickupCooldown !== undefined) {
+        if (damagingLiquid) {
+          const idx = this.ingredients.indexOf(entity);
+          if (idx !== -1) {
+            this.physicsSystem.removeEntity(entity);
+            this.ingredients.splice(idx, 1);
+          }
+          continue;
+        }
+        if (inLiquid) {
+          entity.inWater = true;
+          entity.bobTimer += deltaTime;
+        }
+        continue;
+      }
+
+      // Dropped items (weapons/armor): lava destroys them
+      const itemIdx = this.items.indexOf(entity);
+      if (itemIdx !== -1) {
+        if (damagingLiquid) {
+          this.physicsSystem.removeEntity(entity);
+          this.items.splice(itemIdx, 1);
+        }
+        continue;
+      }
+
       // Check for damaging liquid (lava) FIRST before water effects
       if (damagingLiquid) {
         // Apply lava damage (not affected by water immunity)
@@ -2482,6 +2151,9 @@ class Game {
 
       if (!inLiquid) continue;
 
+      // Track player liquid state for Rusalka movement
+      if (entity === this.player) this.player.inLiquid = true;
+
       // Check water immunity (Rubber Boots) — blocks elemental status effects but not movement slow
       const isImmune = entity === this.player && this.player.waterImmunityTimer > 0;
 
@@ -2507,6 +2179,20 @@ class Game {
       }
     }
 
+    // Rusalka water-touch respawn: if a Rusalka has ever appeared this run,
+    // stepping into water in any cleared lake room summons a new one
+    if (
+      this.fishingSystem.rusalkaHasAppeared &&
+      !this.fishingSystem.rusalka?.alive &&
+      this.fishingSystem.isLakeRoom(this) &&
+      this.fishingSystem.roomCleared(this)
+    ) {
+      const playerWaterResult = waterResults.find(r => r.entity === this.player);
+      if (playerWaterResult?.inLiquid) {
+        this.fishingSystem.spawnRusalkaAt(this, GRID.WIDTH / 2, GRID.HEIGHT / 2);
+      }
+    }
+
     // Slime enemy collision: apply goo effect on contact
     const SLIME_COLLISION_DISTANCE = 16; // pixels
     for (const enemy of this.currentRoom.enemies) {
@@ -2518,6 +2204,30 @@ class Game {
         if (distance < SLIME_COLLISION_DISTANCE) {
           this.player.applyStatusEffect('goo', 5.0); // 5 second goo effect
         }
+      }
+    }
+
+    // Sprint footstep trail: emit dots while unarmed and moving
+    {
+      const isSprinting = !this.player.heldItem && !this.player.dodgeRoll.active;
+      const speed = Math.sqrt(this.player.velocity.vx ** 2 + this.player.velocity.vy ** 2);
+      if (isSprinting && speed > 30) {
+        this.player.footstepTimer -= deltaTime;
+        if (this.player.footstepTimer <= 0) {
+          // Drop dot at current player center; player walks away, leaving trail behind
+          const f = this.player.facing;
+          const cx = this.player.position.x;
+          const cy = this.player.position.y;
+          // Offset left/right of the facing direction to alternate feet
+          const side = this.player.footstepSide === 0 ? .5 : -.5;
+          const ox = -f.y * GRID.CELL_SIZE * 0.3 * side;
+          const oy =  f.x * GRID.CELL_SIZE * 0.3 * side;
+          this.particles.push(createFootstep(cx + ox, cy + oy));
+          this.player.footstepSide = 1 - this.player.footstepSide;
+          this.player.footstepTimer = 0.10;
+        }
+      } else {
+        this.player.footstepTimer = 0;
       }
     }
 
@@ -2626,7 +2336,7 @@ class Game {
     // Auto-attack when holding space (guns and melee only - bows use charging, wands require deliberate timing)
     // Only allow auto-attack if attack sequence was initiated by a button press (not just holding)
     // Skip vault key (UTILITY type)
-    if (this.keys.space && this.attackSequenceActive && this.player.heldItem && this.player.heldItem.data.weaponType !== 'BOW' && this.player.heldItem.data.weaponType !== 'WAND' && this.player.heldItem.data.weaponType !== 'UTILITY' && !this.menuOpen && !this.cheatMenu.isOpen && this.player.canAttack()) {
+    if (this.keys.space && this.attackSequenceActive && this.player.heldItem && this.player.heldItem.data.weaponType !== 'BOW' && this.player.heldItem.data.weaponType !== 'WAND' && this.player.heldItem.data.weaponType !== 'UTILITY' && !this.player.fishingLocked && !this.menuOpen && !this.cheatMenu.isOpen && this.player.canAttack()) {
       const weapon = this.player.heldItem;
       const attack = this.player.useHeldItem();
       if (attack) {
@@ -2691,7 +2401,6 @@ class Game {
     }
 
     // Handle enemy spawn requests and item usage (must happen before combat update)
-    const spawnRequests = [];
     for (const enemy of this.currentRoom.enemies) {
       // Check consumable usage
       if (enemy.itemUsage && enemy.itemUsage.enabled) {
@@ -2715,7 +2424,7 @@ class Game {
       }
 
       if (updateResult.shouldSpawn) {
-        spawnRequests.push({ spawner: enemy, spawnData: updateResult.spawnData });
+        this.enemySpawnSystem.queueRequest(enemy, updateResult.spawnData);
       }
 
       // Check for stun-dropped items
@@ -2758,6 +2467,7 @@ class Game {
             performance.now(),
             true // stationary
           );
+          gooBlob.plane = enemy.plane ?? 0;
           this.gooBlobs.push(gooBlob);
 
           // FIFO queue management: max 15 goo blobs
@@ -2768,35 +2478,11 @@ class Game {
         }
       }
 
-      // Boss Slime: spawn a lesser slime every 5 seconds
-      if (enemy.char === 'M') {
-        if (enemy.slimeSpawnTimer === undefined) enemy.slimeSpawnTimer = 5.0;
-        enemy.slimeSpawnTimer -= deltaTime;
-        if (enemy.slimeSpawnTimer <= 0) {
-          enemy.slimeSpawnTimer = 5.0;
-          const offset = GRID.CELL_SIZE * 1.5;
-          const angle = Math.random() * Math.PI * 2;
-          const spawnX = enemy.position.x + Math.cos(angle) * offset;
-          const spawnY = enemy.position.y + Math.sin(angle) * offset;
-          const lesserSlime = new Enemy('o', spawnX, spawnY, this.depth || 0);
-          lesserSlime.setCollisionMap(this.currentRoom.collisionMap);
-          lesserSlime.setBackgroundObjects(this.currentRoom.backgroundObjects);
-          if (this.steamClouds) lesserSlime.setSteamClouds(this.steamClouds);
-          lesserSlime.setTarget(this.player);
-          this.physicsSystem.addEntity(lesserSlime);
-          this.currentRoom.enemies.push(lesserSlime);
-        }
-      }
+
     }
 
     // Process spawn requests
-    for (const request of spawnRequests) {
-      const newEnemies = this.spawnEnemiesFrom(request.spawner, request.spawnData);
-      for (const newEnemy of newEnemies) {
-        request.spawner.registerSpawn(newEnemy);
-      }
-      this.currentRoom.enemies.push(...newEnemies);
-    }
+    this.enemySpawnSystem.flush();
 
     // Update captives (pulsing animation)
     for (const captive of this.captives) {
@@ -2871,6 +2557,56 @@ class Game {
       this.activeNoiseSource,
       this.currentRoom
     );
+
+    // Check player attacks hitting goo blobs (destroy on hit, 5% chance to drop goo)
+    if (this.gooBlobs.length > 0) {
+      for (let bi = this.gooBlobs.length - 1; bi >= 0; bi--) {
+        const blob = this.gooBlobs[bi];
+        let hit = false;
+
+        // Melee attacks — blades only
+        for (const attack of this.combatSystem.meleeAttacks) {
+          if (!attack.isBlade) continue;
+          const atkR = (attack.radius || GRID.CELL_SIZE) + blob.radius;
+          const dx = blob.position.x - attack.position.x;
+          const dy = blob.position.y - attack.position.y;
+          if (dx * dx + dy * dy < atkR * atkR) { hit = true; break; }
+        }
+
+        if (hit) {
+          this.gooBlobs.splice(bi, 1);
+          if (Math.random() < 0.05) {
+            const ing = new Ingredient('g', blob.position.x, blob.position.y);
+            this.ingredients.push(ing);
+            this.physicsSystem.addEntity(ing);
+          }
+        }
+      }
+    }
+
+    // Check melee attacks hitting fishing reward objects
+    if (this.fishingSystem.rewardObjects.length > 0) {
+      for (const attack of this.combatSystem.meleeAttacks) {
+        if (!attack.isBlade) continue; // Only blade weapons can break reward objects
+
+        const atkX = attack.position.x;
+        const atkY = attack.position.y;
+        const atkR = (attack.radius || GRID.CELL_SIZE) + GRID.CELL_SIZE;
+
+        for (const reward of this.fishingSystem.rewardObjects) {
+          if (!reward.alive) continue;
+          const dx = reward.position.x + GRID.CELL_SIZE / 2 - atkX;
+          const dy = reward.position.y + GRID.CELL_SIZE / 2 - atkY;
+          if (dx * dx + dy * dy < atkR * atkR) {
+            this.fishingSystem.hitRewardObject(reward, (char, x, y) => {
+              const ing = new Ingredient(char, x, y);
+              this.ingredients.push(ing);
+              this.physicsSystem.addEntity(ing);
+            });
+          }
+        }
+      }
+    }
 
     // Spawn drops from objects destroyed this frame (by melee or bullets)
     if (combatResult.objectEffects) {
@@ -3055,8 +2791,17 @@ class Game {
       this.particles
     );
 
+    // Drive per-frame HUD update while consumable slot is blinking
+    if (this.inventorySystem.consumableBlinkTimer > 0) {
+      this.updateUI();
+    }
+
+    // Update fishing system before death check so Rusalka kills are caught this frame
+    this.fishingSystem.update(deltaTime, this);
+
     // If a heal consumable fired and restored HP, treat the player as alive
-    const playerDied = combatResult.playerDead || burnKilledPlayer || lavaKilledPlayer;
+    // hp <= 0 catch-all covers Rusalka, burn-through-invuln, and any direct hp writes
+    const playerDied = combatResult.playerDead || burnKilledPlayer || lavaKilledPlayer || this.player.hp <= 0;
     if (playerDied && this.player.hp > 0) {
       // Give brief invuln so the restored player doesn't instantly die again
       this.player.invulnerabilityTimer = Math.max(this.player.invulnerabilityTimer, 1.0);
@@ -3119,29 +2864,20 @@ class Game {
         );
 
         if (livingCharacters.length > 0) {
-          // Show death message
           const diedCharData = CHARACTER_TYPES[diedCharacter];
-          this.showPickupMessage(`${diedCharData.name} is lost`);
-
-          // Clear active items (lost with the dead character)
-          // Keep: restInventory (banked ingredients), itemChest, armorInventory, consumableInventory (REST storage persists)
-          // Note: Player loses any ingredients collected during current EXPLORE run (in player.inventory)
-          // but keeps banked ingredients (in restInventory)
-          this.inventorySystem.restQuickSlots = [null, null, null]; // Clear equipped weapons
-          this.inventorySystem.restActiveSlotIndex = 0;
-          this.inventorySystem.equippedArmor = null; // Clear active armor
-          this.inventorySystem.equippedConsumables = [null, null]; // Clear active consumables
-
-          // Respawn as next character
           const nextCharacter = livingCharacters[0];
-          this.activeCharacterType = nextCharacter;
-          console.log(`🔄 Respawning as ${CHARACTER_TYPES[nextCharacter].name}`);
+
+          // Set up character-death pause: stay in GAME_OVER to show "[name] lost" then wait for SPACE
+          this.characterDeathPending = true;
+          this.characterDeathTimer = 2.0;
+          this.pendingNextCharacter = nextCharacter;
+          this.characterDeathName = diedCharData.name;
 
           // Clear combat system before transitioning
           this.combatSystem.clear();
 
-          // Return to REST with new character
-          this.stateMachine.transition(GAME_STATES.REST);
+          console.log(`⚰️  ${diedCharData.name} lost — waiting for SPACE before switching to ${CHARACTER_TYPES[nextCharacter].name}`);
+          this.stateMachine.transition(GAME_STATES.GAME_OVER);
           return;
         } else {
           // All characters dead - game over
@@ -3163,21 +2899,8 @@ class Game {
         // Play destroy sound effect
         this.audioSystem.playSFX('destroy');
 
-        // Check spawn on death
-        if (enemy.spawning && enemy.spawning.spawnOnDeath) {
-          const deathSpawns = this.spawnEnemiesFrom(enemy, {
-            spawnChar: enemy.spawning.spawnChar,
-            spawnCount: enemy.spawning.spawnOnDeathCount || 3,
-            spawnRange: enemy.spawning.spawnRange,
-            spawnerPosition: { x: enemy.position.x, y: enemy.position.y }
-          });
-          this.currentRoom.enemies.push(...deathSpawns);
-        }
-
-        // Notify parent spawner
-        if (enemy.spawner) {
-          enemy.spawner.notifySpawnDeath(enemy);
-        }
+        // Handle spawn-on-death and parent spawner notification
+        this.enemySpawnSystem.handleEnemyDeath(enemy);
 
         // Drop inventory items
         const itemDrops = enemy.dropInventory();
@@ -3218,40 +2941,58 @@ class Game {
         obj.update(deltaTime);
       }
 
-      // Grass bending: change grass char based on player position
-      // Only affect tall grass (|), not cut grass (,) or other slowing objects
-      if (obj.char === '|' && obj.data && obj.data.slowing) {
-        const dx = obj.position.x - this.player.position.x;
-        const dy = obj.position.y - this.player.position.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        // Initialize render offset if not present
-        if (!obj.grassRenderOffset) {
-          obj.grassRenderOffset = { x: 0, y: 0 };
+      // Grass bending: animate tall grass as player passes through; imprint on dodge roll.
+      // Identity check uses cuttable+cutState so bent chars (/ \) don't break the gate.
+      if (obj.data && obj.data.cuttable && obj.data.cutState === ',') {
+        // Lazy-init grass state
+        if (obj.grassImprinted === undefined) {
+          obj.grassImprinted = false;
+          obj.grassResetTimer = 0;
+          if (!obj.grassRenderOffset) obj.grassRenderOffset = { x: 0, y: 0 };
         }
 
-        // Bend grass only when player overlaps or is very close (within 0.8 tiles)
-        // This matches the visual collision better
-        if (dist < GRID.CELL_SIZE * 0.7) {
-          const oldChar = obj.char;
-          // Determine bend direction based on horizontal position relative to player
-          if (dx > GRID.CELL_SIZE * 0.25) {
-            // Grass is significantly to the right of player - bend right
-            obj.char = '/';
-            obj.grassRenderOffset.x = GRID.CELL_SIZE * 0.25; // Offset right (quarter tile)
-          } else if (dx < -GRID.CELL_SIZE * 0.25) {
-            // Grass is significantly to the left of player - bend left
-            obj.char = '\\';
-            obj.grassRenderOffset.x = -GRID.CELL_SIZE * 0.25; // Offset left (quarter tile)
-          } else {
-            // Grass is directly above/below player - keep straight
-            obj.char = '|';
-            obj.grassRenderOffset.x = 0; // No offset
-          }
+        // Imprinted grass stays bent — dodge-roll footprint, never auto-resets
+        if (obj.grassImprinted) {
+          // Nothing to do; char and offset remain as stamped
         } else {
-          // Reset to straight grass when player moves away
-          obj.char = '|';
-          obj.grassRenderOffset.x = 0;
+          const dx = obj.position.x - this.player.position.x;
+          const dy = obj.position.y - this.player.position.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const inRange = dist < GRID.CELL_SIZE * 0.7;
+
+          if (inRange) {
+            // Determine bend direction
+            let newChar, newOffset;
+            if (dx > GRID.CELL_SIZE * 0.25) {
+              newChar = '/';
+              newOffset = GRID.CELL_SIZE * 0.25;
+            } else if (dx < -GRID.CELL_SIZE * 0.25) {
+              newChar = '\\';
+              newOffset = -GRID.CELL_SIZE * 0.25;
+            } else {
+              newChar = '|';
+              newOffset = 0;
+            }
+
+            obj.char = newChar;
+            obj.grassRenderOffset.x = newOffset;
+            obj.grassResetTimer = 0.18; // brief spring-back delay
+
+            // Stamp imprint if player is dodge rolling
+            if (this.player.dodgeRoll.active && newChar !== '|') {
+              obj.grassImprinted = true;
+            }
+          } else if (obj.grassResetTimer > 0) {
+            // Spring-back: hold the bent char a moment before snapping straight
+            obj.grassResetTimer -= deltaTime;
+            if (obj.grassResetTimer <= 0) {
+              obj.char = '|';
+              obj.grassRenderOffset.x = 0;
+            }
+          } else {
+            obj.char = '|';
+            obj.grassRenderOffset.x = 0;
+          }
         }
       }
 
@@ -3320,9 +3061,34 @@ class Game {
     // Update shared game elements (particles, debris, etc.)
     this.updateSharedGameElements(deltaTime);
 
-    // Update ingredient attraction
+    // Update ingredient attraction, cooldown, and separation
     for (let i = this.ingredients.length - 1; i >= 0; i--) {
       const ingredient = this.ingredients[i];
+
+      // Tick pickup cooldown
+      if (ingredient.pickupCooldown > 0) {
+        ingredient.pickupCooldown = Math.max(0, ingredient.pickupCooldown - deltaTime);
+      }
+
+      // Ingredient-ingredient soft separation
+      for (let j = i - 1; j >= 0; j--) {
+        const other = this.ingredients[j];
+        const dx = ingredient.position.x - other.position.x;
+        const dy = ingredient.position.y - other.position.y;
+        const distSq = dx * dx + dy * dy;
+        const sep = GRID.CELL_SIZE * 1.2;
+        if (distSq < sep * sep && distSq > 0.01) {
+          const dist = Math.sqrt(distSq);
+          const force = (sep - dist) * 40;
+          const nx = dx / dist;
+          const ny = dy / dist;
+          ingredient.velocity.vx += nx * force * deltaTime;
+          ingredient.velocity.vy += ny * force * deltaTime;
+          other.velocity.vx -= nx * force * deltaTime;
+          other.velocity.vy -= ny * force * deltaTime;
+        }
+      }
+
       const shouldPickup = this.physicsSystem.applyAttraction(ingredient, this.player);
 
       if (shouldPickup) {
@@ -3348,6 +3114,8 @@ class Game {
       enemy.steamClouds = this.steamClouds;
     }
 
+    // (fishing system updated earlier, before death check)
+
     // Check if room cleared
     if (this.currentRoom.enemies.length === 0) {
       // Only process room clear once
@@ -3371,6 +3139,23 @@ class Game {
         // Apply secret events (key glitter, leshy chase, etc.)
         // Uses priority system - only 1 event per room
         this.roomGenerator.applySecretEvents(this.currentRoom);
+
+        // E-room: spawn the errand traveler after enemies are cleared
+        if (this.currentRoom.letterTemplate?.neutralAfterClear) {
+          const errandChar = this.errandSystem.onRoomClear(this.player);
+          if (errandChar) this.neutralCharacters.push(errandChar);
+        }
+
+        // Bat belfry reward: unlock a new consumable slot
+        if (this.currentRoom.isBatBelfry) {
+          this.inventorySystem.unlockConsumableSlot();
+          if (this.player) {
+            this.player.equippedConsumables = [...this.inventorySystem.equippedConsumables];
+          }
+          this.menuSystem.showPickupMessage('NEW CONSUMABLE SLOT');
+          this.renderer.markBackgroundDirty();
+          this.updateUI();
+        }
       }
 
       // Unlock exits (letters are already generated)
@@ -3398,9 +3183,6 @@ class Game {
 
       // Check for secret patterns
       const secret = this.exitSystem.checkSecretPattern(this.zoneSystem.pathHistory);
-      if (secret) {
-        // TODO: Trigger secret room or reward
-      }
 
       // Check for Leshy chase event
       if (exitObj.chaseEvent) {
@@ -3418,7 +3200,7 @@ class Game {
         }
       }
 
-      this.enterExploreState('north', exitObj); // Entering from North → spawn at South
+      this.enterExploreState('north', exitObj, secret?.pattern); // Entering from North → spawn at South
     }
     // South exit check
     else {
@@ -3465,9 +3247,6 @@ class Game {
 
           // Check for secret patterns
           const secret = this.exitSystem.checkSecretPattern(this.zoneSystem.pathHistory);
-          if (secret) {
-            // TODO: Trigger secret room or reward
-          }
 
           // Check for Leshy chase event
           if (exitObj.chaseEvent) {
@@ -3485,7 +3264,7 @@ class Game {
             }
           }
 
-          this.enterExploreState('east', exitObj); // Entering from East → spawn at West
+          this.enterExploreState('east', exitObj, secret?.pattern); // Entering from East → spawn at West
         }
         // West exit check (left border, centered vertically)
         else {
@@ -3498,9 +3277,6 @@ class Game {
 
             // Check for secret patterns
             const secret = this.exitSystem.checkSecretPattern(this.zoneSystem.pathHistory);
-            if (secret) {
-                // TODO: Trigger secret room or reward
-            }
 
             // Check for Leshy chase event
             if (exitObj.chaseEvent) {
@@ -3518,7 +3294,7 @@ class Game {
               }
             }
 
-            this.enterExploreState('west', exitObj); // Entering from West → spawn at East
+            this.enterExploreState('west', exitObj, secret?.pattern); // Entering from West → spawn at East
           }
         }
       }
@@ -3547,6 +3323,21 @@ class Game {
     // EXPLORE: Check vault unlock first (higher priority than traps)
     if (state === GAME_STATES.EXPLORE) {
 
+      // Fishing: resolve bite window OR cancel bobbing on space press
+      if (
+        this.fishingSystem.state === this.fishingSystem.STATES.BITE_WINDOW ||
+        this.fishingSystem.state === this.fishingSystem.STATES.BOBBING
+      ) {
+        this.fishingSystem.onSpacePress(this);
+        return;
+      }
+
+      // Fishing: start charge if holding fishing rod in lake room
+      if (this.fishingSystem.canFish(this)) {
+        this.fishingSystem.startCharge(this);
+        return;
+      }
+
       // Try to unlock vault if player is in position with key
       if (this.canUnlockVault()) {
         this.unlockVault();
@@ -3561,8 +3352,32 @@ class Game {
     }
 
     if (state === GAME_STATES.GAME_OVER) {
-      // Only allow space press after 2-second delay
-      if (this.gameOverWaitingForSpace && this.gameOverDeathTimer <= 0) {
+      if (this.characterDeathPending && this.characterDeathTimer <= 0) {
+        // A character died but others remain — swap to next character and return to REST
+        this.characterDeathPending = false;
+        this.gameOverWaitingForSpace = false;
+        this.particles = [];
+        this.debris = [];
+        this.gooBlobs = [];
+
+        // Clear active items lost with the dead character
+        this.inventorySystem.restQuickSlots = [null, null, null];
+        this.inventorySystem.restActiveSlotIndex = 0;
+        this.inventorySystem.equippedArmor = null;
+        this.inventorySystem.equippedConsumables = Array(this.inventorySystem.maxConsumableSlots).fill(null);
+
+        // Switch to next character
+        this.activeCharacterType = this.pendingNextCharacter;
+        this.pendingNextCharacter = null;
+        this.characterDeathName = '';
+        console.log(`🔄 Respawning as ${CHARACTER_TYPES[this.activeCharacterType].name}`);
+
+        if (this.player) {
+          this.player.reset();
+        }
+        this.stateMachine.transition(GAME_STATES.REST);
+      } else if (this.gameOverWaitingForSpace && this.gameOverDeathTimer <= 0 && !this.characterDeathPending) {
+        // True game over — full reset
         this.gameOverWaitingForSpace = false;
         this.particles = [];
         this.debris = [];
@@ -3590,11 +3405,15 @@ class Game {
         this.unlockedCharacters = ['default']; // Reset to only default character
         this.captives = []; // Clear active captives
         this.characterNPCs = []; // Clear character NPCs in REST
+        this.errandSystem.resetOnDeath();
         this.zoneSystem.resetOnDeath(); // Reset zone system and captive tracking
 
         // Clear crafting slots and wipe localStorage save
         this.craftingSystem.setState({ leftSlot: null, rightSlot: null, centerSlot: null });
         this.persistenceSystem.clearSave();
+
+        // Reset starter bundle so a fresh one spawns on new run
+        this.restBundle = null;
 
         if (this.player) {
           this.player.reset();
@@ -3605,129 +3424,49 @@ class Game {
     }
 
     if (state === GAME_STATES.REST) {
-      // Get the nearest interactive slot
+      // Bundle world object: destroy and scatter ingredients
+      if (this.restBundle) {
+        const dist = Math.hypot(
+          this.player.position.x - this.restBundle.position.x,
+          this.player.position.y - this.restBundle.position.y
+        );
+        if (dist < GRID.CELL_SIZE * 3) {
+          const cx = this.restBundle.position.x;
+          const cy = this.restBundle.position.y;
+          const count = this.restBundle.chars.length;
+          for (let i = 0; i < count; i++) {
+            const angle = (i / count) * Math.PI * 2;
+            const r = GRID.CELL_SIZE * (1.5 + Math.random());
+            const ing = new Ingredient(
+              this.restBundle.chars[i],
+              cx + Math.cos(angle) * r,
+              cy + Math.sin(angle) * r
+            );
+            ing.pickupCooldown = 0.5;
+            this.ingredients.push(ing);
+            this.physicsSystem.addEntity(ing);
+          }
+          this.restBundle = null;
+          return;
+        }
+      }
+
       const nearestSlot = this.getNearestInteractiveSlot();
 
       if (nearestSlot) {
-        // Handle armor slot - open armor selection menu
-        if (nearestSlot.type === 'equipment-armor') {
-          this.openEquipmentMenu('armor');
+        if (nearestSlot.type === 'equipment-armor') { this.openEquipmentMenu('armor'); return; }
+        if (nearestSlot.type === 'equipment-consumable1') { this.openEquipmentMenu('consumable1'); return; }
+        if (nearestSlot.type === 'equipment-consumable2') { this.openEquipmentMenu('consumable2'); return; }
+        if (nearestSlot.type === 'equipment-consumable3') { this.openEquipmentMenu('consumable3'); return; }
+        if (nearestSlot.type === 'equipment-chest1') { this.openChestRetrievalMenu(0); return; }
+        if (nearestSlot.type === 'equipment-chest2') { this.openChestRetrievalMenu(1); return; }
+        if (nearestSlot.type === 'equipment-chest3') { this.openChestRetrievalMenu(2); return; }
+
+        if (nearestSlot.type.startsWith('crafting-')) {
+          this.menuSystem.handleCraftingSlotClaim(nearestSlot.type);
           return;
         }
 
-        // Handle consumable slot 1 - open consumable selection menu
-        if (nearestSlot.type === 'equipment-consumable1') {
-          this.openEquipmentMenu('consumable1');
-          return;
-        }
-
-        // Handle consumable slot 2 - open consumable selection menu
-        if (nearestSlot.type === 'equipment-consumable2') {
-          this.openEquipmentMenu('consumable2');
-          return;
-        }
-
-        // Handle chest - open retrieval menu
-        if (nearestSlot.type === 'equipment-chest') {
-          this.openChestRetrievalMenu();
-          return;
-        }
-
-        // Handle left crafting slot
-        if (nearestSlot.type === 'crafting-left') {
-          if (this.craftingSystem.leftSlot) {
-            // Claim item from slot
-            const char = this.craftingSystem.clearLeftSlot();
-            if (char) {
-              if (isIngredient(char)) {
-                // Return ingredient to inventory
-                this.player.addIngredient(char);
-              } else if (isItem(char)) {
-                // Create item entity and route to correct inventory
-                const item = new Item(char, this.player.position.x, this.player.position.y);
-                if (item.data.type === 'ARMOR') {
-                  this.inventorySystem.armorInventory.push(item);
-                } else if (item.data.type === 'CONSUMABLE') {
-                  this.inventorySystem.consumableInventory.push(item);
-                } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
-                  this.player.pickupItem(item);
-                }
-              }
-            }
-            this.renderer.markBackgroundDirty();
-            this.updateUI();
-          } else {
-            // Open 3-column crafting menu
-            this.openCraftingMenu('left');
-          }
-          return;
-        }
-
-        // Handle right crafting slot
-        if (nearestSlot.type === 'crafting-right') {
-          if (this.craftingSystem.rightSlot) {
-            // Claim item from slot
-            const char = this.craftingSystem.clearRightSlot();
-            if (char) {
-              if (isIngredient(char)) {
-                // Return ingredient to inventory
-                this.player.addIngredient(char);
-              } else if (isItem(char)) {
-                // Create item entity and route to correct inventory
-                const item = new Item(char, this.player.position.x, this.player.position.y);
-                if (item.data.type === 'ARMOR') {
-                  this.inventorySystem.armorInventory.push(item);
-                } else if (item.data.type === 'CONSUMABLE') {
-                  this.inventorySystem.consumableInventory.push(item);
-                } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
-                  this.player.pickupItem(item);
-                }
-              }
-            }
-            this.renderer.markBackgroundDirty();
-            this.updateUI();
-          } else {
-            // Open 3-column crafting menu
-            this.openCraftingMenu('right');
-          }
-          return;
-        }
-
-        // Handle center crafting slot
-        if (nearestSlot.type === 'crafting-center') {
-          // If center has item, claim it
-          if (this.craftingSystem.centerSlot) {
-            // Claim item from center slot
-            const item = this.craftingSystem.claimCraftedItem(
-              this.player.position.x,
-              this.player.position.y
-            );
-
-            if (item) {
-              // Route to correct inventory based on type
-              if (item.data.type === 'ARMOR') {
-                this.inventorySystem.armorInventory.push(item);
-              } else if (item.data.type === 'CONSUMABLE') {
-                this.inventorySystem.consumableInventory.push(item);
-              } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
-                const droppedItem = this.player.pickupItem(item);
-                if (droppedItem) {
-                  this.inventorySystem.addToChest(droppedItem);
-                }
-              }
-              this.showPickupMessage(item.data.name);
-              this.renderer.markBackgroundDirty();
-              this.updateUI();
-            }
-            return;
-          } else if (!this.craftingSystem.leftSlot && !this.craftingSystem.rightSlot) {
-            // Center is empty and no ingredients present - open reverse crafting menu
-            this.openCraftingMenu('center');
-            return;
-          }
-          // If ingredient slots are occupied, block interaction to prevent overwriting them
-          return;
-        }
       }
 
       // Check for character NPC interaction (swap characters)
@@ -3808,38 +3547,39 @@ class Game {
         }
       }
     } else if (state === GAME_STATES.NEUTRAL) {
+      // Item pickup has priority over grass interaction (same as EXPLORE)
+      const hasNearbyItem = this.items.some(
+        item => this.physicsSystem.getDistance(this.player, item) < 20
+      );
+      if (hasNearbyItem) {
+        this.tryPickupItem();
+        return;
+      }
+
       // NEUTRAL state: Interact with Leshy grass or other neutral room objects
       const nearbyObject = this.findNearbyBackgroundObject();
-
 
       if (nearbyObject && nearbyObject.leshyGrass && nearbyObject.char === '|') {
 
         // Call neutral room system to handle interaction (grass cutting)
         const result = this.neutralRoomSystem.handleInteraction(nearbyObject, this.player, this.currentRoom);
 
-
         // Add spawned entities to game (separate ingredients from items)
         if (result && result.spawnedItems) {
-
-          let ingredientCount = 0;
-          let itemCount = 0;
-
           for (const entity of result.spawnedItems) {
             // Route to appropriate array based on entity type
             if (entity instanceof Ingredient) {
               this.ingredients.push(entity);
-              ingredientCount++;
             } else {
               this.items.push(entity);
-              itemCount++;
             }
             this.physicsSystem.addEntity(entity);
           }
+        }
 
-
-          // Mark background dirty to update cut grass display
+        // Always redraw background when a cluster is cut (covers cutAllRemaining too)
+        if (result) {
           this.renderer.markBackgroundDirty();
-        } else {
         }
       }
     }
@@ -3853,73 +3593,27 @@ class Game {
       const nearestSlot = this.getNearestInteractiveSlot();
 
       if (nearestSlot) {
-        // Handle chest - store current held item
-        if (nearestSlot.type === 'equipment-chest') {
-          if (this.player.heldItem) {
-            this.inventorySystem.addToChest(this.player.heldItem);
-            this.player.quickSlots[this.player.activeSlotIndex] = null;
+        if (nearestSlot.type === 'equipment-chest1') { this.menuSystem.handleChestStore(0); return; }
+        if (nearestSlot.type === 'equipment-chest2') { this.menuSystem.handleChestStore(1); return; }
+        if (nearestSlot.type === 'equipment-chest3') { this.menuSystem.handleChestStore(2); return; }
 
-            // Auto-switch to next filled slot if available
-            const nextFilled = this.player.quickSlots.findIndex((slot, idx) =>
-              idx !== this.player.activeSlotIndex && slot !== null
-            );
-            if (nextFilled !== -1) {
-              this.player.activeSlotIndex = nextFilled;
-            }
-
-            this.saveGameState();
-            this.updateUI();
-          }
+        if (nearestSlot.type.startsWith('crafting-')) {
+          this.menuSystem.handleCraftingSlotPlace(nearestSlot.type);
           return;
-        }
-
-
-        // Place held item in crafting slot (if player has held item)
-        if (this.player.heldItem) {
-          // Handle center crafting slot (reverse crafting)
-          if (nearestSlot.type === 'crafting-center' && !this.craftingSystem.centerSlot && !this.craftingSystem.leftSlot && !this.craftingSystem.rightSlot) {
-            const itemChar = this.player.heldItem.char;
-            const recipe = findRecipeByResult(itemChar);
-
-            if (recipe) {
-              // This is a craftable item - populate all three slots
-              this.craftingSystem.leftSlot = recipe.left;
-              this.craftingSystem.rightSlot = recipe.right;
-              this.craftingSystem.centerSlot = itemChar;
-
-              // Remove from active slot
-              this.player.quickSlots[this.player.activeSlotIndex] = null;
-
-              this.saveGameState();
-              this.renderer.markBackgroundDirty();
-              this.updateUI();
-            }
-            // If not craftable, do nothing (no feedback needed)
-            return;
-          }
-
-          // Handle left crafting slot
-          if (nearestSlot.type === 'crafting-left' && !this.craftingSystem.leftSlot) {
-            this.craftingSystem.setLeftSlot(this.player.heldItem.char);
-            this.player.quickSlots[this.player.activeSlotIndex] = null;
-            this.renderer.markBackgroundDirty();
-            this.updateUI();
-            return;
-          }
-
-          // Handle right crafting slot
-          if (nearestSlot.type === 'crafting-right' && !this.craftingSystem.rightSlot) {
-            this.craftingSystem.setRightSlot(this.player.heldItem.char);
-            this.player.quickSlots[this.player.activeSlotIndex] = null;
-            this.renderer.markBackgroundDirty();
-            this.updateUI();
-            return;
-          }
         }
       }
     }
 
     if (state === GAME_STATES.EXPLORE) {
+      // Check for errand traveler interaction (SHIFT = give item)
+      const giveResult = this.errandSystem.checkGive(this.player, this.neutralCharacters);
+      if (giveResult) {
+        const rewardItem = new Item(giveResult.rewardChar, giveResult.x, giveResult.y);
+        this.items.push(rewardItem);
+        this.physicsSystem.addEntity(rewardItem);
+        return;
+      }
+
       // Check for nearby item to swap with
       let nearbyItem = null;
       for (const item of this.items) {
@@ -3954,36 +3648,7 @@ class Game {
         }
         // If nearby item is armor/consumable, do nothing (SHIFT is only for weapon swapping)
       } else if (this.player.heldItem && !nearbyItem) {
-        // Drop held item — if it's a persistent TRAP, place and activate it
-        const heldData = this.player.heldItem.data || this.player.heldItem;
-        if (heldData.type === 'TRAP' && !heldData.oneShot) {
-          // Persistent placeables only (Music Box, Noise-maker, Tesla Coil, Goo Dispenser)
-          const droppedItem = this.player.dropItem();
-          const trapItem = new Item(
-            droppedItem.char,
-            this.player.position.x,
-            this.player.position.y
-          );
-          trapItem.isPlaced = true;
-          const trapData = droppedItem.data || droppedItem;
-          this.placedTraps.push({
-            item: trapItem,
-            tickTimer: trapData.tickInterval || 0,
-            activeDuration: trapData.activeDuration != null ? trapData.activeDuration : Infinity,
-            affectedEnemies: new Set()
-          });
-          this.showPickupMessage('trap placed');
-        } else {
-          // Drop held weapon normally (one-shot traps are placed with spacebar, not Q)
-          const droppedItem = this.player.dropItem();
-          const item = new Item(
-            droppedItem.char,
-            this.player.position.x,
-            this.player.position.y
-          );
-          this.items.push(item);
-          this.physicsSystem.addEntity(item);
-        }
+        this.trapSystem.dropOrPlaceTrap();
       }
     }
 
@@ -3992,7 +3657,7 @@ class Game {
 
   handleCycleNext() {
     const state = this.stateMachine.getCurrentState();
-    if (state !== GAME_STATES.EXPLORE && state !== GAME_STATES.REST) return;
+    if (state !== GAME_STATES.EXPLORE && state !== GAME_STATES.REST && state !== GAME_STATES.NEUTRAL) return;
 
     this.player.cycleSlotNext();
     this.updateUI();
@@ -4000,7 +3665,7 @@ class Game {
 
   handleCyclePrevious() {
     const state = this.stateMachine.getCurrentState();
-    if (state !== GAME_STATES.EXPLORE && state !== GAME_STATES.REST) return;
+    if (state !== GAME_STATES.EXPLORE && state !== GAME_STATES.REST && state !== GAME_STATES.NEUTRAL) return;
 
     this.player.cycleSlotPrevious();
     this.updateUI();
@@ -4334,515 +3999,44 @@ class Game {
 
   // Place trap at player position (spacebar)
   placeTrap() {
-    if (!this.player.canUseTrap()) return;
-
-    const trapItem = this.player.heldItem;
-    const trapData = trapItem.data;
-
-
-    // Mark trap as used this room (don't remove from inventory)
-    this.player.markTrapUsed();
-
-    // Create placed trap entity at player position
-    const placedTrapItem = new Item(
-      trapItem.char,
-      this.player.position.x,
-      this.player.position.y
-    );
-    placedTrapItem.isPlaced = true;
-
-    // Add to placed traps list for auto-trigger detection
-    this.placedTraps.push({
-      item: placedTrapItem,
-      tickTimer: trapData.tickInterval || 0,
-      activeDuration: trapData.activeDuration != null ? trapData.activeDuration : Infinity,
-      affectedEnemies: new Set()
-    });
-
-    this.showPickupMessage('trap placed');
-    this.updateUI();
+    this.trapSystem.placeTrap();
   }
 
   updatePlacedTraps(deltaTime) {
-    if (!this.currentRoom) return;
-    const enemies = this.currentRoom.enemies;
-    this.activeNoiseSource = null; // reset each frame
-
-    for (let i = this.placedTraps.length - 1; i >= 0; i--) {
-      const entry = this.placedTraps[i];
-      const { item } = entry;
-      const trapData = item.data;
-      const tx = item.position.x;
-      const ty = item.position.y;
-
-      if (trapData.oneShot) {
-        // One-shot trap: check if enemy is within trigger radius
-        let triggered = false;
-        for (const enemy of enemies) {
-          const dx = enemy.position.x - tx;
-          const dy = enemy.position.y - ty;
-          if (Math.sqrt(dx * dx + dy * dy) <= trapData.triggerRadius) {
-            triggered = true;
-            break;
-          }
-        }
-
-        if (triggered) {
-          // Apply effect to all enemies in effectRadius
-          for (const enemy of enemies) {
-            const dx = enemy.position.x - tx;
-            const dy = enemy.position.y - ty;
-            if (Math.sqrt(dx * dx + dy * dy) <= trapData.effectRadius) {
-              if (trapData.effect === 'burn' && this.currentRoom.backgroundObjects) {
-                // Fire Trap: also ignite flammable background objects
-                for (const obj of this.currentRoom.backgroundObjects) {
-                  if (obj.destroyed || !obj.isFlammable) continue;
-                  const odx = obj.position.x - tx;
-                  const ody = obj.position.y - ty;
-                  if (Math.sqrt(odx * odx + ody * ody) <= trapData.effectRadius) {
-                    if (obj.isFlammable()) obj.ignite(5.0);
-                  }
-                }
-              }
-              enemy.applyStatusEffect(trapData.effect, trapData.effectDuration);
-            }
-          }
-
-          // Burst particle effect at trap location
-          const burstParticles = createActivationBurst(tx, ty, trapData.color || '#ffffff');
-          this.particles.push(...burstParticles);
-
-          // Remove trap from ground
-          this.placedTraps.splice(i, 1);
-        }
-      } else {
-        // Persistent placeable
-        const effect = trapData.effect;
-
-        if (effect === 'noise') {
-          // Noise-maker: redirect enemies toward self; destroyed on enemy contact
-          this.activeNoiseSource = { x: tx, y: ty, radius: trapData.effectRadius };
-          // Destroy on enemy overlap (< 16 px)
-          let destroyed = false;
-          for (const enemy of enemies) {
-            const dx = enemy.position.x - tx;
-            const dy = enemy.position.y - ty;
-            if (Math.sqrt(dx * dx + dy * dy) < 16) {
-              destroyed = true;
-              break;
-            }
-          }
-          if (destroyed) {
-            this.placedTraps.splice(i, 1);
-          }
-
-        } else if (effect === 'sleep') {
-          // Music Box: apply sleep to enemies that enter radius while active
-          entry.activeDuration -= deltaTime;
-          if (entry.activeDuration > 0) {
-            for (const enemy of enemies) {
-              const dx = enemy.position.x - tx;
-              const dy = enemy.position.y - ty;
-              if (Math.sqrt(dx * dx + dy * dy) <= trapData.effectRadius) {
-                if (!entry.affectedEnemies.has(enemy)) {
-                  entry.affectedEnemies.add(enemy);
-                  enemy.applyStatusEffect('sleep', trapData.effectDuration);
-                }
-              } else {
-                // Enemy left radius — allow re-triggering if they re-enter
-                entry.affectedEnemies.delete(enemy);
-              }
-            }
-          }
-
-        } else if (effect === 'stun') {
-          // Tesla Coil: deal damage + stun every tickInterval seconds
-          entry.tickTimer -= deltaTime;
-          if (entry.tickTimer <= 0) {
-            entry.tickTimer = trapData.tickInterval;
-            for (const enemy of enemies) {
-              const dx = enemy.position.x - tx;
-              const dy = enemy.position.y - ty;
-              if (Math.sqrt(dx * dx + dy * dy) <= trapData.effectRadius) {
-                enemy.takeDamage(trapData.damage || 2);
-                enemy.applyStatusEffect('stun', trapData.stunDuration || 0.8);
-                this.combatSystem.createDamageNumber(trapData.damage || 2, enemy.position.x, enemy.position.y, '#00ffff');
-                // Lightning particle
-                this.particles.push({
-                  x: tx,
-                  y: ty,
-                  vx: (Math.random() - 0.5) * 60,
-                  vy: (Math.random() - 0.5) * 60,
-                  life: 0.3,
-                  maxLife: 0.3,
-                  char: '!',
-                  color: '#00ffff',
-                  isImpact: true
-                });
-              }
-            }
-          }
-
-        } else if (effect === 'goo') {
-          // Goo Dispenser: generate spreading goo blobs that slow and prevent dodge rolling
-
-          // Initialize generation timer if not set (1 second startup delay)
-          if (entry.gooGenerationTimer === undefined) {
-            entry.gooGenerationTimer = 1.0; // 1 second delay before first goo
-          }
-
-          // Tick down generation timer
-          entry.gooGenerationTimer -= deltaTime;
-
-          // Generate goo blob every 1 second after startup delay
-          if (entry.gooGenerationTimer <= 0) {
-            entry.gooGenerationTimer = 1.0; // Generate every 1 second
-
-            // Create new goo blob at dispenser center
-            const gooBlob = new GooBlob(
-              tx + GRID.CELL_SIZE / 2,
-              ty + GRID.CELL_SIZE / 2,
-              performance.now()
-            );
-            this.gooBlobs.push(gooBlob);
-
-            // FIFO queue management: max 15 goo blobs
-            const MAX_GOO_BLOBS = 15;
-            if (this.gooBlobs.length > MAX_GOO_BLOBS) {
-              // Remove oldest goo blob (first in array)
-              this.gooBlobs.shift();
-            }
-          }
-        }
-      }
-    }
+    this.trapSystem.updatePlacedTraps(deltaTime);
   }
 
   updateExitCollisions() {
-    if (!this.currentRoom || !this.currentRoom.collisionMap) return;
-
-    const centerX = Math.floor(GRID.COLS / 2);
-    const centerY = Math.floor(GRID.ROWS / 2);
-
-    // Open north exit in collision map
-    if (this.currentRoom.exits.north) {
-      this.currentRoom.collisionMap[0][centerX] = false;
-    }
-
-    // Open south exit in collision map
-    if (this.currentRoom.exits.south) {
-      this.currentRoom.collisionMap[GRID.ROWS - 1][centerX] = false;
-    }
-
-    // Open east exit in collision map
-    if (this.currentRoom.exits.east) {
-      this.currentRoom.collisionMap[centerY][GRID.COLS - 1] = false;
-    }
-
-    // Open west exit in collision map
-    if (this.currentRoom.exits.west) {
-      this.currentRoom.collisionMap[centerY][0] = false;
-    }
-
-    // Update player's collision map reference
-    this.player.setCollisionMap(this.currentRoom.collisionMap);
+    this.exitSystem.updateExitCollisions(this.currentRoom, this.player);
   }
 
   findNearbyBackgroundObject() {
-    // Use currentRoom.backgroundObjects for all states (including NEUTRAL)
-    const objects = this.currentRoom ? this.currentRoom.backgroundObjects : this.backgroundObjects;
-    for (const obj of objects) {
-      const distance = this.physicsSystem.getDistance(this.player, obj);
-      if (distance < INTERACTION_RANGE) {
-        return obj;
-      }
-    }
-    return null;
+    return this.interactionSystem.findNearbyBackgroundObject();
   }
 
   interactWithObject(obj) {
-    const heldItemChar = this.player.heldItem ? this.player.heldItem.char : null;
-    const result = obj.interact(heldItemChar);
-
-    // Leshy spawn event: trigger on ANY interaction with shaking bush (not just destruction)
-    if (obj.leshyBush && !obj.leshySpawned) {
-      obj.leshySpawned = true; // Mark to prevent multiple spawns
-      const leshy = new Leshy(obj.position.x, obj.position.y, this.currentRoom.exits);
-      leshy.startFleeing();
-      this.neutralCharacters.push(leshy);
-      this.zoneSystem.startLeshyChase(leshy.targetExit);
-      console.log(`[Secret] Leshy discovered! Fleeing to ${leshy.targetExit} exit`);
-    }
-
-    if (result.effect) {
-      this.handleObjectEffect(result.effect, obj);
-    }
-
-    if (result.message) {
-      console.log(result.message); // Temporary: log to console
-    }
+    this.interactionSystem.interactWithObject(obj);
   }
 
   handleObjectEffect(effect, obj) {
-    if (!effect) return;
-
-    // Debug logging for key drop debugging
-    if (obj.dropsKey) {
-    }
-
-    // Check for key drops in K rooms (vault key system)
-    if (obj.dropsKey && effect.includes('destroyObject')) {
-      obj.destroyAfterAnimation = true;
-      this.renderer.markBackgroundDirty();
-
-      // Spawn the vault key
-      const key = new Item(obj.keyChar, obj.position.x, obj.position.y);
-      this.items.push(key);
-      this.physicsSystem.addEntity(key);
-      return; // Stop processing other effects
-    }
-
-    // Check for zone-specific drop tables (e.g., gemstones from RED zone rocks)
-    if (obj.dropTable && effect.includes('destroyObject')) {
-      obj.destroyAfterAnimation = true;
-      this.renderer.markBackgroundDirty();
-
-      // Determine rarity profile (gemstone = normal, rare_gemstone = elite)
-      const rarityProfile = obj.dropTable === 'rare_gemstone' ? 'elite' : 'normal';
-      const drops = generateEnemyDrops(obj.dropTable, rarityProfile, 1);
-
-      for (const drop of drops) {
-        if (isIngredient(drop)) {
-          const ingredient = new Ingredient(drop, obj.position.x, obj.position.y);
-          this.ingredients.push(ingredient);
-          this.physicsSystem.addEntity(ingredient);
-        }
-      }
-      return; // Stop processing other effects
-    }
-
-    // Handle destroy + spawn combined effects (e.g., "destroyObject:spawnIngredient:|")
-    if (effect.startsWith('destroyObject:spawnIngredient:')) {
-      const ingredientChar = effect.split(':')[2]; // Get character after "destroyObject:spawnIngredient:"
-      obj.destroyAfterAnimation = true;
-      this.renderer.markBackgroundDirty();
-
-      const ingredient = new Ingredient(
-        ingredientChar,
-        obj.position.x,
-        obj.position.y
-      );
-      this.ingredients.push(ingredient);
-      this.physicsSystem.addEntity(ingredient);
-    } else if (effect === 'destroyObject:spawnRandom') {
-      obj.destroyAfterAnimation = true;
-      this.renderer.markBackgroundDirty();
-
-      // Use generic drop table with weak rarity profile
-      const drops = generateEnemyDrops('generic', 'weak', 1);
-
-      for (const drop of drops) {
-        if (isIngredient(drop)) {
-          const ingredient = new Ingredient(drop, obj.position.x, obj.position.y);
-          this.ingredients.push(ingredient);
-          this.physicsSystem.addEntity(ingredient);
-        } else if (isItem(drop)) {
-          const item = new Item(drop, obj.position.x, obj.position.y);
-          this.items.push(item);
-          this.physicsSystem.addEntity(item);
-        }
-      }
-    } else if (effect === 'destroyObject') {
-      obj.destroyAfterAnimation = true;
-      this.renderer.markBackgroundDirty();
-    } else if (effect.startsWith('spawnIngredient:')) {
-      const ingredientChar = effect.split(':')[1];
-      const ingredient = new Ingredient(
-        ingredientChar,
-        obj.position.x,
-        obj.position.y
-      );
-      this.ingredients.push(ingredient);
-      this.physicsSystem.addEntity(ingredient);
-    } else if (effect.startsWith('spawnMultiple:')) {
-      // Format: spawnMultiple:char:count
-      const parts = effect.split(':');
-      const ingredientChar = parts[1];
-      const count = parseInt(parts[2]) || 2;
-
-      for (let i = 0; i < count; i++) {
-        const offsetX = (Math.random() - 0.5) * 20;
-        const offsetY = (Math.random() - 0.5) * 20;
-        const ingredient = new Ingredient(
-          ingredientChar,
-          obj.position.x + offsetX,
-          obj.position.y + offsetY
-        );
-        this.ingredients.push(ingredient);
-        this.physicsSystem.addEntity(ingredient);
-      }
-    } else if (effect.startsWith('transformObject:')) {
-      // Format: transformObject:newChar
-      const newChar = effect.split(':')[1];
-
-      // Find the object in the room's backgroundObjects array and replace it
-      const index = this.currentRoom.backgroundObjects.indexOf(obj);
-      if (index !== -1) {
-        const newObj = new BackgroundObject(newChar, obj.position.x, obj.position.y);
-        this.currentRoom.backgroundObjects[index] = newObj;
-
-        // Trigger transition animation on new object
-        const animData = OBJECT_ANIMATIONS['freeze'] || OBJECT_ANIMATIONS['melt'];
-        if (animData) {
-          newObj.currentAnimation = {
-            type: 'transform',
-            data: animData,
-            elapsed: 0
-          };
-        }
-
-        this.renderer.markBackgroundDirty();
-      }
-    } else if (effect === 'spawnFire') {
-      // Create a fire object at the position
-      const fire = new BackgroundObject('!', obj.position.x, obj.position.y);
-      this.currentRoom.backgroundObjects.push(fire);
-      obj.destroyAfterAnimation = true;
-      this.renderer.markBackgroundDirty();
-    } else if (effect.startsWith('spawnCloud:')) {
-      // Format: spawnCloud:type (poison, smoke, etc.)
-      const cloudType = effect.split(':')[1];
-
-      // Create particle cloud effect
-      const cloudColor = cloudType === 'poison' ? '#88ff00' : '#888888';
-      for (let i = 0; i < 10; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = Math.random() * 50 + 30;
-        const particle = {
-          x: obj.position.x + GRID.CELL_SIZE / 2,
-          y: obj.position.y + GRID.CELL_SIZE / 2,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed,
-          life: 1.0,
-          maxLife: 1.0,
-          char: '·',
-          color: cloudColor,
-          size: 4
-        };
-        this.particles.push(particle);
-      }
-    }
+    this.interactionSystem.handleObjectEffect(effect, obj);
   }
 
   spawnLoot(enemy) {
-    const luckMult = (this.player && this.player.luckTimer > 0) ? 1.75 : 1.0;
-
-    // Use new drop table system if enemy has dropTable defined
-    let drops = [];
-    if (enemy.data.dropTable && enemy.data.rarityProfile) {
-      // Generate drops from drop table
-      const baseDropCount = enemy.data.isBoss ? 3 : null; // Bosses drop more
-      const generatedDrops = generateEnemyDrops(
-        enemy.data.dropTable,
-        enemy.data.rarityProfile,
-        baseDropCount
-      );
-
-      // Luck increases drop count chance
-      if (luckMult > 1.0 && Math.random() < 0.4) {
-        const bonusDrop = generateEnemyDrops(enemy.data.dropTable, enemy.data.rarityProfile, 1);
-        generatedDrops.push(...bonusDrop);
-      }
-
-      drops = generatedDrops;
-    }
-    // Fallback to old drops array system (for backwards compatibility)
-    else if (enemy.data.drops) {
-      for (const drop of enemy.data.drops) {
-        const adjustedChance = Math.min(1.0, drop.chance * luckMult);
-        if (Math.random() < adjustedChance) {
-          drops.push(drop.char);
-        }
-      }
-    }
-
-    // Spawn the drops
-    for (const drop of drops) {
-      // Check if drop is an ingredient or an item (armor/consumable/weapon)
-      if (isIngredient(drop)) {
-        const ingredient = new Ingredient(
-          drop,
-          enemy.position.x,
-          enemy.position.y
-        );
-        this.ingredients.push(ingredient);
-        this.physicsSystem.addEntity(ingredient);
-      } else if (isItem(drop)) {
-        const item = new Item(
-          drop,
-          enemy.position.x,
-          enemy.position.y
-        );
-        this.items.push(item);
-        this.physicsSystem.addEntity(item);
-      }
-    }
+    this.lootSystem.spawnLoot(enemy);
   }
 
-  spawnEnemiesFrom(spawner, spawnData) {
-    const newEnemies = [];
-    const { spawnChar, spawnCount, spawnRange, spawnerPosition } = spawnData;
-
-    for (let i = 0; i < spawnCount; i++) {
-      const spawnPos = this.findSpawnPosition(
-        spawnerPosition,
-        spawnRange,
-        this.currentRoom.collisionMap,
-        this.currentRoom.enemies
-      );
-
-      if (spawnPos) {
-        const newEnemy = new Enemy(spawnChar, spawnPos.x, spawnPos.y, this.currentDepth);
-        newEnemy.setCollisionMap(this.currentRoom.collisionMap);
-        newEnemy.setBackgroundObjects(this.currentRoom.backgroundObjects);
-        newEnemy.setSteamClouds(this.steamClouds);
-        newEnemy.setTarget(this.player);
-        newEnemy.enraged = true;
-        this.physicsSystem.addEntity(newEnemy);
-        newEnemies.push(newEnemy);
-      }
-    }
-
-    return newEnemies;
+  spawnIngredientDrop(char, x, y, angle = null) {
+    return this.lootSystem.spawnIngredientDrop(char, x, y, angle);
   }
+
+  spawnItemDrop(char, x, y, angle = null) {
+    return this.lootSystem.spawnItemDrop(char, x, y, angle);
+  }
+
 
   findSpawnPosition(center, range, collisionMap, enemies) {
-    for (let i = 0; i < 20; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const distance = Math.random() * range;
-      const x = center.x + Math.cos(angle) * distance;
-      const y = center.y + Math.sin(angle) * distance;
-
-      const gridX = Math.floor(x / GRID.CELL_SIZE);
-      const gridY = Math.floor(y / GRID.CELL_SIZE);
-
-      if (gridX < 0 || gridX >= GRID.COLS || gridY < 0 || gridY >= GRID.ROWS) continue;
-      if (collisionMap[gridY][gridX]) continue;
-
-      let overlaps = false;
-      for (const enemy of enemies) {
-        const dx = enemy.position.x - x;
-        const dy = enemy.position.y - y;
-        if (Math.sqrt(dx * dx + dy * dy) < GRID.CELL_SIZE * 2) {
-          overlaps = true;
-          break;
-        }
-      }
-
-      if (!overlaps) return { x, y };
-    }
-
-    return null;
+    return this.roomGenerator.findSpawnPosition(center, range, collisionMap, enemies);
   }
 
   bankLoot() {
@@ -4880,326 +4074,32 @@ class Game {
 
 
   updateUI() {
-    if (!this.player) return;
-
-    this.ui.hp.textContent = this.player.hp;
-    this.ui.depth.textContent = this.getCurrentZoneDepth();
-
-    // Highlight inventory count when I key is pressed
-    const inventoryCount = this.player.inventory.length + this.inventorySystem.armorInventory.length + this.inventorySystem.consumableInventory.length;
-    if (this.keys.i) {
-      this.ui.inventory.innerHTML = `<span style="color: ${COLORS.ITEM}">${inventoryCount}</span>`;
-    } else {
-      this.ui.inventory.textContent = inventoryCount;
-    }
-
-    // Show all 3 slots with active indicator and Q/E indicators
-    // Example: Q [/] · ‡ E  (Gun active, slot 1 empty, Flame Sword in slot 2)
-    // Darken used traps (trap used this room)
-    const slots = this.player.quickSlots.map((item, idx) => {
-      const isActive = idx === this.player.activeSlotIndex;
-      const char = item ? item.char : '.';
-      const slotText = isActive ? `[${char}]` : ` ${char} `;
-
-      // Darken if it's a used trap
-      if (item && item.data && item.data.type === 'TRAP' && this.player.trapUsedThisRoom[idx]) {
-        return `<span style="opacity: 0.3">${slotText}</span>`;
-      }
-
-      return slotText;
-    });
-
-    // Highlight Q and E when pressed
-    const qColor = this.keys.q ? COLORS.ITEM : '#ffffff';
-    const eColor = this.keys.e ? COLORS.ITEM : '#ffffff';
-    this.ui.heldItem.innerHTML = `<span style="color: ${qColor}">Q</span> ${slots.join('')} <span style="color: ${eColor}">E</span>`;
-
-    // Armor display
-    const armorChar = this.inventorySystem.equippedArmor ? this.inventorySystem.equippedArmor.char : '.';
-    const armorColor = this.inventorySystem.equippedArmor ? (this.inventorySystem.equippedArmor.color || '#aaaaff') : '#444';
-    this.ui.armorChar.textContent = armorChar;
-    this.ui.armorChar.style.color = armorColor;
-
-    // Consumable display — use player's copy during explore, fall back to this.inventorySystem.equippedConsumables
-    const consumables = (this.player && this.player.equippedConsumables)
-      ? this.player.equippedConsumables
-      : this.inventorySystem.equippedConsumables;
-    const consumableEls = [this.ui.consumableChar1, this.ui.consumableChar2];
-    for (let i = 0; i < 2; i++) {
-      const el = consumableEls[i];
-      if (consumables[i]) {
-        // Active slot: show item char
-        el.textContent = consumables[i].char;
-
-        // Color priority: flash white > cooldown gray > normal color
-        if (this.inventorySystem.consumableFlashSlot === i && this.inventorySystem.consumableFlashTimer > 0) {
-          // Flash white when activated
-          el.style.color = '#ffffff';
-        } else if (this.inventorySystem.consumableCooldowns[i] > 0) {
-          // Gray when on cooldown (reusable consumables)
-          el.style.color = '#666666';
-        } else {
-          // Normal color when ready
-          el.style.color = consumables[i].color || COLORS.ITEM;
-        }
-      } else if (this.inventorySystem.spentConsumableSlots[i]) {
-        // Spent slot: dim indicator (one-shot consumables used)
-        el.textContent = '.';
-        el.style.color = '#333';
-      } else {
-        // Empty slot: mid-gray
-        el.textContent = '.';
-        el.style.color = '#555';
-      }
-    }
+    this.menuSystem.updateUI();
   }
 
 
   openEquipmentMenu(slotType) {
-    this.menuOpen = true;
-    this.currentMenuSlot = slotType;
-    this.selectedMenuIndex = 0;
-
-    // Get available items from InventorySystem
-    this.menuItems = this.inventorySystem.openEquipmentMenu(slotType);
-    this.renderController.menuOverlay.render(this);
+    this.menuSystem.openEquipmentMenu(slotType);
   }
 
-  openChestRetrievalMenu() {
-    this.menuOpen = true;
-    this.currentMenuSlot = 'chest';
-    this.selectedMenuIndex = 0;
-
-    // Get chest contents from InventorySystem
-    this.menuItems = this.inventorySystem.getChestContents();
-    this.renderController.menuOverlay.render(this);
+  openChestRetrievalMenu(slotIdx = null) {
+    this.menuSystem.openChestRetrievalMenu(slotIdx);
   }
 
   openCraftingMenu(slotType) {
-    this.menuOpen = true;
-    this.currentMenuSlot = slotType;
-    this.selectedMenuIndex = 0;
-
-    // Populate columns based on slot type
-    const weaponsList = [];
-    const armorList = [];
-    const consumableList = [];
-
-    // Get weapons from chest (deduplicated by char)
-    for (const item of this.inventorySystem.itemChest) {
-      if (!weaponsList.find(i => i.char === item.char)) {
-        weaponsList.push(item);
-      }
-    }
-
-    // Get armor (deduplicated by char)
-    for (const item of this.inventorySystem.armorInventory) {
-      if (!armorList.find(i => i.char === item.char)) {
-        armorList.push(item);
-      }
-    }
-
-    // Get consumables (deduplicated by char)
-    for (const item of this.inventorySystem.consumableInventory) {
-      if (!consumableList.find(i => i.char === item.char)) {
-        consumableList.push(item);
-      }
-    }
-
-    // Get ingredients (deduplicated consistently with other lists)
-    const ingredientList = [];
-    for (const ingredientChar of this.player.inventory) {
-      if (!ingredientList.includes(ingredientChar)) {
-        ingredientList.push(ingredientChar);
-      }
-    }
-
-    // For center slot, exclude ingredients (only craftable items allowed)
-    if (slotType === 'center') {
-      this.menuColumns = [weaponsList, armorList, consumableList];
-      this.disabledColumns = [false, false, false];
-      this.selectedColumn = 1; // Start with armor
-    } else {
-      // For left/right slots, include all columns
-      this.menuColumns = [weaponsList, armorList, ingredientList, consumableList];
-      this.disabledColumns = [false, false, false, false];
-      this.selectedColumn = 2; // Start with ingredients
-    }
-
-    this.menuItems = this.menuColumns[this.selectedColumn];
-
-    this.renderController.menuOverlay.render(this);
+    this.menuSystem.openCraftingMenu(slotType);
   }
 
   closeMenu() {
-    this.menuOpen = false;
-    this.currentMenuSlot = null;
-    this.menuColumns = null;
-    this.disabledColumns = [];
-    this.ui.menu.classList.add('hidden');
+    this.menuSystem.closeMenu();
   }
 
-
   selectMenuItem() {
-    if (!this.menuOpen || this.menuItems.length === 0) return;
-
-    const selectedItem = this.menuItems[this.selectedMenuIndex];
-
-
-    // Handle chest operations
-    if (this.currentMenuSlot === 'chest') {
-      if (selectedItem.action === 'retrieve') {
-        // Retrieve item from chest to quick slots
-        const item = selectedItem.item;
-        const droppedItem = this.player.pickupItem(item);
-
-        // Remove from chest
-        this.inventorySystem.retrieveFromChest(item);
-
-        // If something was dropped (all slots full), put it back in chest and keep menu open
-        if (droppedItem) {
-          this.inventorySystem.addToChest(droppedItem);
-          // Keep menu open, refresh the list
-          this.saveGameState();
-          this.updateUI();
-          this.openChestRetrievalMenu(); // Refresh menu with updated chest contents
-        } else {
-          // All good, close menu
-          this.saveGameState();
-          this.closeMenu();
-          this.updateUI();
-        }
-      }
-      return;
-    }
-
-    // Handle equipment slots
-    if (this.currentMenuSlot === 'armor') {
-      this.inventorySystem.equipArmor(selectedItem);
-      this.saveGameState();
-      this.renderer.markBackgroundDirty();
-      this.closeMenu();
-      this.updateUI();
-      return;
-    }
-
-    if (this.currentMenuSlot === 'consumable1') {
-      this.inventorySystem.equipConsumable(0, selectedItem);
-      // Sync to player
-      this.player.equippedConsumables = [...this.inventorySystem.equippedConsumables];
-      this.saveGameState();
-      this.renderer.markBackgroundDirty();
-      this.closeMenu();
-      this.updateUI();
-      return;
-    }
-
-    if (this.currentMenuSlot === 'consumable2') {
-      this.inventorySystem.equipConsumable(1, selectedItem);
-      // Sync to player
-      this.player.equippedConsumables = [...this.inventorySystem.equippedConsumables];
-      this.saveGameState();
-      this.renderer.markBackgroundDirty();
-      this.closeMenu();
-      this.updateUI();
-      return;
-    }
-
-    // Handle center slot (reverse crafting with 3-column menu)
-    if (this.currentMenuSlot === 'center') {
-      this.handleCenterSlotSelection(selectedItem);
-      return;
-    }
-
-    // Handle left/right crafting slots (with 3-column menu)
-    if (this.currentMenuSlot === 'left' || this.currentMenuSlot === 'right') {
-      // Get item char - handle both string (ingredient) and object (equipment) types
-      const itemChar = typeof selectedItem === 'string' ? selectedItem : selectedItem.char;
-
-      // Remove item from appropriate inventory
-      if (typeof selectedItem === 'string') {
-        // Ingredient - remove from player inventory
-        this.player.removeIngredient(selectedItem);
-      } else if (selectedItem.data.type === 'WEAPON' || selectedItem.data.type === 'TRAP') {
-        // Weapon/Trap - remove from chest
-        this.inventorySystem.retrieveFromChest(selectedItem);
-      } else if (selectedItem.data.type === 'ARMOR') {
-        // Armor - remove from armor inventory
-        const armorIndex = this.inventorySystem.armorInventory.indexOf(selectedItem);
-        if (armorIndex > -1) {
-          this.inventorySystem.armorInventory.splice(armorIndex, 1);
-        }
-      } else if (selectedItem.data.type === 'CONSUMABLE') {
-        // Consumable - remove from consumable inventory
-        const consumableIndex = this.inventorySystem.consumableInventory.indexOf(selectedItem);
-        if (consumableIndex > -1) {
-          this.inventorySystem.consumableInventory.splice(consumableIndex, 1);
-        }
-      }
-
-      // Place in crafting slot
-      if (this.currentMenuSlot === 'left') {
-        this.craftingSystem.setLeftSlot(itemChar);
-      } else if (this.currentMenuSlot === 'right') {
-        this.craftingSystem.setRightSlot(itemChar);
-      }
-
-      this.saveGameState();
-      this.renderer.markBackgroundDirty();
-      this.closeMenu();
-      this.updateUI();
-    }
+    this.menuSystem.selectMenuItem();
   }
 
   handleCenterSlotSelection(selectedItem) {
-    // Get item char - handle both string (ingredient) and object (equipment) types
-    const itemChar = typeof selectedItem === 'string' ? selectedItem : selectedItem.char;
-
-    // Try reverse recipe lookup
-    const recipe = findRecipeByResult(itemChar);
-
-    if (recipe) {
-      // This is a craftable item - populate all three slots
-      this.craftingSystem.leftSlot = recipe.left;
-      this.craftingSystem.rightSlot = recipe.right;
-      this.craftingSystem.centerSlot = itemChar;
-
-      // Remove item from appropriate inventory
-      if (typeof selectedItem === 'string') {
-        // Ingredient - remove from player inventory
-        this.player.removeIngredient(selectedItem);
-      } else if (selectedItem.data.type === 'WEAPON' || selectedItem.data.type === 'TRAP') {
-        // Weapon/Trap - remove from chest
-        this.inventorySystem.retrieveFromChest(selectedItem);
-      } else if (selectedItem.data.type === 'ARMOR') {
-        // Armor - remove from armor inventory
-        const armorIndex = this.inventorySystem.armorInventory.indexOf(selectedItem);
-        if (armorIndex > -1) {
-          this.inventorySystem.armorInventory.splice(armorIndex, 1);
-        }
-      } else if (selectedItem.data.type === 'CONSUMABLE') {
-        // Consumable - remove from consumable inventory
-        const consumableIndex = this.inventorySystem.consumableInventory.indexOf(selectedItem);
-        if (consumableIndex > -1) {
-          this.inventorySystem.consumableInventory.splice(consumableIndex, 1);
-        }
-      } else if (selectedItem.data.type === 'WEAPON' || selectedItem.data.type === 'TRAP') {
-        // Should not happen - weapons/traps placed via SHIFT, not menu
-        // But handle anyway - remove from active slot or chest
-        const activeSlot = this.player.activeSlotIndex;
-        if (this.player.quickSlots[activeSlot] && this.player.quickSlots[activeSlot].char === itemChar) {
-          this.player.quickSlots[activeSlot] = null;
-        }
-      }
-
-      this.saveGameState();
-      this.renderer.markBackgroundDirty();
-      this.closeMenu();
-      this.updateUI();
-    } else {
-      // Not a craftable result - just close menu (or show error?)
-      this.closeMenu();
-    }
+    this.menuSystem.handleCenterSlotSelection(selectedItem);
   }
 
   getIngredientData(char) {

@@ -317,8 +317,20 @@ export class ZoneSystem {
       return false;
     }
 
-    // 100% spawn rate for testing (change to 0.15 for 15% later)
-    return Math.random() < 1.0;
+    return Math.random() < 0.2;
+  }
+
+  getCurrentZoneDepth(zoneDepths) {
+    return zoneDepths[this.currentZone] || 0;
+  }
+
+  incrementZoneDepth(zoneDepths) {
+    const zone = this.currentZone;
+    if (zoneDepths[zone] === 0) {
+      zoneDepths[zone] = 1;
+    } else {
+      zoneDepths[zone]++;
+    }
   }
 
   // Serialization for persistence

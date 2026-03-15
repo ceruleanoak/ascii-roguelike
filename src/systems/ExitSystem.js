@@ -1,13 +1,14 @@
 import { EXIT_LETTERS, SECRET_PATTERNS } from '../data/exitLetters.js';
 import { ZONES, ZONE_COLORS } from '../data/zones.js';
+import { GRID } from '../game/GameConfig.js';
 
 export class ExitSystem {
   constructor(zoneSystem) {
     this.zoneSystem = zoneSystem;
   }
 
-  generateExits(currentDepth, roomType, zoneType, progressionColor = null) {
-    // Generate 3 UNIQUE letters (no duplicates)
+  generateExits(currentDepth, roomType, zoneType, progressionColor = null, currentLetter = null) {
+    // Generate 3 UNIQUE letters (no duplicates, never the same letter as the room we're in)
     const letters = [];
     const maxAttempts = 50; // Prevent infinite loop
 
@@ -25,7 +26,10 @@ export class ExitSystem {
           continue; // Reroll if Ocean selected for west exit
         }
 
-      } while ((letters.includes(letter) || (i === 2 && letter === 'O')) && attempts < maxAttempts);
+      } while (
+        attempts < maxAttempts &&
+        (letters.includes(letter) || letter === currentLetter || (i === 2 && letter === 'O'))
+      );
 
       letters.push(letter);
     }
@@ -147,5 +151,27 @@ export class ExitSystem {
       }
     }
     return null;
+  }
+
+  updateExitCollisions(room, player) {
+    if (!room || !room.collisionMap) return;
+
+    const centerX = Math.floor(GRID.COLS / 2);
+    const centerY = Math.floor(GRID.ROWS / 2);
+
+    if (room.exits.north) {
+      room.collisionMap[0][centerX] = false;
+    }
+    if (room.exits.south) {
+      room.collisionMap[GRID.ROWS - 1][centerX] = false;
+    }
+    if (room.exits.east) {
+      room.collisionMap[centerY][GRID.COLS - 1] = false;
+    }
+    if (room.exits.west) {
+      room.collisionMap[centerY][0] = false;
+    }
+
+    player.setCollisionMap(room.collisionMap);
   }
 }

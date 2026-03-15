@@ -7,11 +7,17 @@ export class ASCIIRenderer {
     this.bgCtx = backgroundCanvas.getContext('2d');
     this.fgCtx = foregroundCanvas.getContext('2d');
 
-    // Set canvas dimensions
-    this.bgCanvas.width = GRID.WIDTH;
-    this.bgCanvas.height = GRID.HEIGHT;
-    this.fgCanvas.width = GRID.WIDTH;
-    this.fgCanvas.height = GRID.HEIGHT;
+    // Scale canvas buffer to physical device pixels so pixel fonts render
+    // at 1:1 device pixels instead of being upscaled and blurred by the OS.
+    // All game coordinates remain in logical (480px) space via ctx.scale().
+    const dpr = window.devicePixelRatio || 1;
+    this.dpr = dpr;
+    for (const canvas of [this.bgCanvas, this.fgCanvas]) {
+      canvas.width  = GRID.WIDTH  * dpr;
+      canvas.height = GRID.HEIGHT * dpr;
+      canvas.style.width  = GRID.WIDTH  + 'px';
+      canvas.style.height = GRID.HEIGHT + 'px';
+    }
 
     // Configure rendering contexts
     this.setupContext(this.bgCtx);
@@ -21,7 +27,8 @@ export class ASCIIRenderer {
   }
 
   setupContext(ctx) {
-    ctx.font = `bold ${GRID.CELL_SIZE}px "Courier New", monospace`;
+    ctx.scale(this.dpr, this.dpr);
+    ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.imageSmoothingEnabled = false;
@@ -80,6 +87,42 @@ export class ASCIIRenderer {
     this.fgCtx.fillText(char, x, y);
   }
 
+  // Draw entity using VentureArcade pixel font (for zone exit letters)
+  drawEntityVA(x, y, char, color = COLORS.TEXT) {
+    this.fgCtx.save();
+    this.fgCtx.font = `${GRID.CELL_SIZE}px 'VentureArcade', monospace`;
+    this.fgCtx.fillStyle = color;
+    this.fgCtx.fillText(char, x, y);
+    this.fgCtx.restore();
+  }
+
+  // Draw a pixel-positioned entity rotated by angle (radians) around its center
+  drawEntityRotated(x, y, char, color, angle) {
+    this.fgCtx.save();
+    this.fgCtx.translate(x, y);
+    this.fgCtx.rotate(angle);
+    this.fgCtx.fillStyle = color;
+    this.fgCtx.fillText(char, 0, 0);
+    this.fgCtx.restore();
+  }
+
+  // Rotated draw with checkerboard dithering (for tunnel plane)
+  drawEntityRotatedDithered(x, y, char, color, angle) {
+    this.fgCtx.save();
+    this.fgCtx.translate(x, y);
+    this.fgCtx.rotate(angle);
+
+    this.fgCtx.fillStyle = color;
+    this.fgCtx.fillText(char, 0, 0);
+
+    this.fgCtx.globalCompositeOperation = 'destination-out';
+    this.fgCtx.fillStyle = this.createDitherPattern();
+    const size = GRID.CELL_SIZE;
+    this.fgCtx.fillRect(-size / 2, -size / 2, size, size);
+
+    this.fgCtx.restore();
+  }
+
   // Draw entity with checkerboard dithering (for tunnel plane)
   drawEntityDithered(x, y, char, color = COLORS.TEXT) {
     this.fgCtx.save();
@@ -119,6 +162,31 @@ export class ASCIIRenderer {
     this.fgCtx.fillRect(x - size/2, y - size/2, size, size);
 
     this.fgCtx.restore();
+  }
+
+  // Draw text with word-wrap. Returns the total height used (lineHeight * numLines).
+  // ctx must already have font/textAlign/textBaseline/fillStyle set before calling.
+  drawWrappedText(ctx, text, x, y, maxWidth, lineHeight) {
+    const words = text.split(' ');
+    let line = '';
+    const lines = [];
+    for (const word of words) {
+      const testLine = line ? `${line} ${word}` : word;
+      if (ctx.measureText(testLine).width > maxWidth && line) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = testLine;
+      }
+    }
+    if (line) lines.push(line);
+
+    const totalHeight = lines.length * lineHeight;
+    const startY = y - (totalHeight - lineHeight) / 2;
+    for (let i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i], x, startY + i * lineHeight);
+    }
+    return totalHeight;
   }
 
   // Draw text with alpha transparency (foreground layer)

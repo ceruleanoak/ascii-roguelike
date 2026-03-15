@@ -99,12 +99,38 @@ export class NeutralRenderer {
       );
     }
 
+    // Draw cuts-remaining counter while minigame is active
+    const nrState = game.neutralRoomSystem.state;
+    if (nrState && nrState.cutsRemaining !== undefined && !nrState.celebrationActive) {
+      const ctx = this.renderer.fgCtx;
+      ctx.save();
+      ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = '#00cc44';
+      ctx.globalAlpha = 0.85;
+      const label = nrState.cutsRemaining > 0
+        ? `[ choose ${nrState.cutsRemaining} ]`
+        : `[ done ]`;
+      ctx.fillText(label, GRID.WIDTH / 2, GRID.CELL_SIZE * 1.5);
+      ctx.restore();
+    }
+
+    // Draw pickup message (identical to EXPLORE/REST states)
+    if (game.pickupMessage && game.pickupMessageTimer > 0) {
+      const ctx = this.renderer.fgCtx;
+      ctx.save();
+      ctx.font = `${GRID.CELL_SIZE * 2}px 'Unifont', monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = COLORS.ITEM;
+      this.renderer.drawWrappedText(ctx, game.pickupMessage, GRID.WIDTH / 2, GRID.HEIGHT / 2, GRID.WIDTH * 0.8, GRID.CELL_SIZE * 2.5);
+      ctx.restore();
+    }
+
     // Draw inventory overlay (if player is holding 'i')
     if (game.showInventory) {
       this.renderController.inventoryOverlay.render(game);
     }
-
-    // Note: Per user request, no help text like "Cuts Remaining: N"
-    // Players discover mechanics naturally through interaction
   }
 }

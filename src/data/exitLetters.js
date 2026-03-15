@@ -1,15 +1,20 @@
 // Exit letter definitions (independent of zone colors)
 // Letters represent room types/semantics, colors are assigned dynamically by zone
 
+// Vowels form a distinct category for the secret-sequence system.
+// When two-tier exit selection is implemented, the vowel pool will draw
+// from this category weight before individual vowel weights are applied.
+export const VOWEL_CATEGORY_WEIGHT = 2.5;
+
 export const EXIT_LETTERS = {
-  // Special room types
+  // ── Special room types ──────────────────────────────────────────────────
   'B': {
     name: 'Boss',
     roomType: 'BOSS',
-    weight: 0.03,
+    weight: 0.10,
     zoneBoosts: {
-      gray: 10,
-      red: 3.3
+      gray: 3,
+      red: 1
     }
   },
   'C': {
@@ -23,7 +28,7 @@ export const EXIT_LETTERS = {
     weight: 0.05
   },
 
-  // Generic combat letters (work in any zone)
+  // ── Generic combat consonants ────────────────────────────────────────────
   'X': {
     name: 'Crossroads',
     roomType: 'COMBAT',
@@ -32,10 +37,10 @@ export const EXIT_LETTERS = {
   'V': {
     name: 'Vault',
     roomType: 'COMBAT',
-    weight: 0.05,  // Rare - contains guaranteed treasure
+    weight: 0.05,
     zoneBoosts: {
-      gray: 3,     // Slightly more common in endgame
-      red: 2       // Rare fire vaults
+      gray: 3,
+      red: 2
     }
   },
   'P': {
@@ -48,40 +53,19 @@ export const EXIT_LETTERS = {
     roomType: 'COMBAT',
     weight: 0.15
   },
-  'O': {
-    name: 'Ocean',
-    roomType: 'COMBAT',
-    weight: 0.10
-  },
   'R': {
     name: 'Ridge',
     roomType: 'COMBAT',
     weight: 0.10
   },
 
-  // Pattern/secret letters (rare)
-  'A': {
-    name: 'Ascent',
-    roomType: 'COMBAT',
-    weight: 0.01,
-    zoneBoosts: {
-      gray: 10
-    }
-  },
+  // ── Pattern / secret consonants (rare) ──────────────────────────────────
   'D': {
     name: 'Descent',
     roomType: 'COMBAT',
     weight: 0.01,
     zoneBoosts: {
       gray: 15
-    }
-  },
-  'E': {
-    name: 'East Path',
-    roomType: 'COMBAT',
-    weight: 0.01,
-    zoneBoosts: {
-      gray: 10
     }
   },
   'N': {
@@ -108,14 +92,6 @@ export const EXIT_LETTERS = {
       gray: 5
     }
   },
-  'O': {
-    name: 'Opening',
-    roomType: 'COMBAT',
-    weight: 0.01,
-    zoneBoosts: {
-      gray: 5
-    }
-  },
   'G': {
     name: 'Gate',
     roomType: 'COMBAT',
@@ -124,16 +100,66 @@ export const EXIT_LETTERS = {
   'K': {
     name: 'Key Room',
     roomType: 'COMBAT',
-    weight: 0.08,  // Fairly common - needed for vault access
+    weight: 0.08,
     zoneBoosts: {
-      green: 2,    // More common early (before vaults)
+      green: 2,
       cyan: 1.5
     }
+  },
+
+  // ── Lake room ────────────────────────────────────────────────────────────
+  'L': {
+    name: 'Lake',
+    roomType: 'COMBAT',
+    weight: 0.10,
+    zoneBoosts: {
+      green: 2.0,
+      cyan: 1.5
+    }
+  },
+
+  // ── Vowels (vowel: true — used by secret-sequence system) ────────────────
+  // Combined category weight: VOWEL_CATEGORY_WEIGHT (2.5)
+  // Individual weights reflect relative frequency within the vowel pool.
+  'A': {
+    name: 'Ascent',
+    roomType: 'COMBAT',
+    weight: 0.30,
+    vowel: true
+  },
+  'E': {
+    name: 'Errand',       // Future implementation
+    roomType: 'COMBAT',
+    weight: 0.20,
+    vowel: true
+  },
+  'I': {
+    name: 'Island',
+    roomType: 'COMBAT',
+    weight: 0.10,
+    vowel: true
+  },
+  'O': {
+    name: 'Ocean',
+    roomType: 'COMBAT',
+    weight: 0.10,
+    vowel: true
+  },
+  'U': {
+    name: 'Underground',  // Future implementation
+    roomType: 'COMBAT',
+    weight: 0.10,
+    vowel: true
   }
 };
 
 // Secret letter sequences (unchanged from exits.js)
 export const SECRET_PATTERNS = {
+  'B-A-T': {
+    name: 'Bat Belfry',
+    rewardType: 'bat_belfry',
+    message: 'The darkness swirls with wings...'
+  },
   'B-A-D': {
     name: 'Evil Path',
     rewardType: 'cursed_chest',

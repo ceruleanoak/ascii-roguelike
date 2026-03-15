@@ -1,6 +1,26 @@
-import { GRID, COLORS } from '../game/GameConfig.js';
+import { GRID, COLORS, PHYSICS } from '../game/GameConfig.js';
 import { ENEMIES } from '../data/enemies.js';
 import { inSamePlane } from '../systems/PhysicsSystem.js';
+
+// ─── Enemy AI Debug Logger ─────────────────────────────────────────────────
+// Toggle in browser console: window.ENEMY_AI_DEBUG = true
+// Filter by enemy char:      window.ENEMY_AI_DEBUG_FILTER = 'g'   (null = all)
+let _enemyDebugIdCounter = 0;
+const EnemyDebug = {
+  log(enemy, category, msg, data) {
+    if (!window.ENEMY_AI_DEBUG) return;
+    const filter = window.ENEMY_AI_DEBUG_FILTER;
+    if (filter && enemy.char !== filter) return;
+    const ts = performance.now().toFixed(1);
+    const label = `[${ts}ms][${enemy.char}#${enemy._debugId}]`;
+    if (data !== undefined) {
+      console.log(`${label}[${category}] ${msg}`, data);
+    } else {
+      console.log(`${label}[${category}] ${msg}`);
+    }
+  }
+};
+// ──────────────────────────────────────────────────────────────────────────
 
 const ENEMY_INVULNERABILITY_DURATION = 0.3; // seconds
 const ENEMY_BLINK_FREQUENCY = 0.05; // blink every 0.05 seconds
@@ -24,6 +44,7 @@ export class Enemy {
     // Pixel-based position
     this.position = { x, y };
     this.velocity = { vx: 0, vy: 0 };
+    this.targetVelocity = { vx: 0, vy: 0 };
     this.acceleration = { ax: 0, ay: 0 };
 
     // Stats (scale with depth - every 3 rooms, 5% increase)
@@ -31,6 +52,7 @@ export class Enemy {
     this.hp = Math.ceil(this.data.hp * depthMultiplier);
     this.maxHp = this.hp;
     this.speed = this.data.speed;
+    this.accelRate = this.data.acceleration || PHYSICS.ENEMY_ACCELERATION;
     this.damage = Math.ceil(this.data.damage * depthMultiplier);
     this.attackRange = this.data.attackRange;
     this.aggroRange = this.data.aggroRange || GRID.CELL_SIZE * 8;
@@ -70,12 +92,19 @@ export class Enemy {
     this.wanderSpeed = this.speed * 0.3; // 30% of normal speed
 
     // Vector-based navigation
-    this.navigationLength = GRID.CELL_SIZE * 3; // Vector length for pathfinding around walls
+    this.navigationLength = GRID.CELL_SIZE * 6; // Vector length for pathfinding around walls
     this.visionLength = GRID.CELL_SIZE * 8; // Longer vector for vision checks (can see further)
     this.rotationIncrement = 1; // Degrees to rotate when checking for clear path
     this.currentDirection = { x: 0, y: 0 }; // Cached movement direction
     this.stuckTimer = 0; // Track how long we've been stuck
     this.lastPosition = { x, y }; // For stuck detection
+    this.lastDistToTarget = null; // For progress-based stuck detection
+    this.navDirection = 0; // Persistent rotation preference: 1=CCW, -1=CW, 0=undecided
+    this.navDirectionFlipTimer = 0; // Accumulates when paths fail; flips navDirection when large
+
+    // Node-based pathfinding
+    this.pathNodes = []; // Computed waypoints around obstacles
+    this.currentNodeIndex = 0;
 
     // Memory-based aggro
     this.lastKnownPosition = null; // Last known player position
@@ -84,12 +113,21 @@ export class Enemy {
     this.memoryMoveDelay = 1.0; // 1 second delay before chasing memory
     this.detectionIndicatorTimer = 0; // Show yellow ! when detecting/reacquiring player
     this.detectionIndicatorDuration = 1.0; // Show detection indicator for 1 second
+    this.hadVisualContact = false; // Set true on first real sighting; gates proximity-only re-aggro
+    this.memoryMarkPlane = 0;  // Plane player was on when memory mark was created
+    this.memoryStaleTimer = 2.0; // Countdown (sec) before a cross-plane-stale mark expires
 
     // Unified AI decision-making (intelligence system)
     this.decisionInterval = this.data.decisionInterval || 0.5; // How often to reassess (smarter = lower)
     this.decisionTimer = Math.random() * this.decisionInterval; // Time until next decision (randomized start)
     this.bruteForceTimer = 0; // Cooldown after applying 45° brute force (prevents immediate recalc)
     this.lastBruteForceAngle = null; // Track last forced angle to avoid repeating
+
+    // Debug tracking
+    this._debugId = _enemyDebugIdCounter++;
+    this._lastPathRecalcTime = null; // performance.now() at last updateVectorNavigation recalc
+    this._prevState = 'idle'; // for detecting state transitions
+    this._zeroNodeCount = 0; // consecutive 0-node computeNodePath results
 
     // Status effects
     this.statusEffects = {
@@ -150,6 +188,7 @@ export class Enemy {
     this.sapDamageTimer = 0;
     this.sapDamageInterval = this.data.sapDamageInterval || 1.0;
     this.sapDamage = this.data.sapDamage || 1; // Fixed sap damage (not scaled by depth)
+    this.sapSlot = -1; // Which sap slot this bat occupies on the target (0, 1, or 2)
 
     // Pack behavior system (for wolves and spiders)
     this.packBehavior = this.data.packBehavior || null;
@@ -511,6 +550,11 @@ export class Enemy {
     // Update status effects and capture DOT damage events
     const dotDamageEvents = this.updateStatusEffects(deltaTime);
 
+    // Blend velocity toward targetVelocity (smooth accel/decel, skipped during knockback)
+    if (!this.isKnockedBack()) {
+      this._blendVelocity(deltaTime);
+    }
+
     // Check if enemy is inside a steam cloud (reduces vision and speed)
     const STEAM_VISION_THRESHOLD = GRID.CELL_SIZE * 2;
     let inSteam = false;
@@ -523,6 +567,14 @@ export class Enemy {
     const dx = this.target.position.x - this.position.x;
     const dy = this.target.position.y - this.position.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Gate all detection and range conditions on plane membership.
+    // If the player is on a different plane and this enemy isn't already in pursuit
+    // (enraged or memory-active), treat the player as infinitely far away so that
+    // no new aggro, memory marks, or movement toward the player can occur cross-plane.
+    const effectiveDistance = (inSamePlane(this, this.target) || this.enraged || this.aggroMemoryActive)
+      ? distance
+      : Infinity;
 
     // Update attack timer
     if (this.attackTimer > 0) {
@@ -541,16 +593,16 @@ export class Enemy {
 
     // Sleep overrides all AI (like stun, but breaks on damage — see takeDamage)
     if (this.isSleeping()) {
-      this.velocity.vx = 0;
-      this.velocity.vy = 0;
+      this.targetVelocity.vx = 0;
+      this.targetVelocity.vy = 0;
       this.state = 'idle';
       return { dotDamage: dotDamageEvents };
     }
 
     // Stun overrides all AI
     if (this.isStunned()) {
-      this.velocity.vx = 0;
-      this.velocity.vy = 0;
+      this.targetVelocity.vx = 0;
+      this.targetVelocity.vy = 0;
       this.state = 'idle';
       return { dotDamage: dotDamageEvents };
     }
@@ -566,8 +618,8 @@ export class Enemy {
       // Lock to target's position
       this.position.x = this.sappingTarget.position.x;
       this.position.y = this.sappingTarget.position.y;
-      this.velocity.vx = 0;
-      this.velocity.vy = 0;
+      this.targetVelocity.vx = 0;
+      this.targetVelocity.vy = 0;
 
       // Deal periodic damage (fixed amount, not scaled by depth)
       this.sapDamageTimer -= deltaTime;
@@ -582,18 +634,62 @@ export class Enemy {
       return { dotDamage: dotDamageEvents };
     }
 
+    // ── Rest state: dormant until player enters close proximity ─────────────
+    if (this.state === 'rest') {
+      this.targetVelocity = { vx: 0, vy: 0 };
+      if (!inSamePlane(this, this.target)) return { dotDamage: dotDamageEvents };
+      const REST_WAKE_RADIUS = GRID.CELL_SIZE * 4;
+      if (distance < REST_WAKE_RADIUS) {
+        this.state = 'chase';
+        this.enraged = true;
+      } else {
+        return { dotDamage: dotDamageEvents };
+      }
+    }
+
     let speedMultiplier = this.getSpeedMultiplier();
     if (inSteam) speedMultiplier *= 0.6; // Steam slows enemies (cautious movement)
 
     // Update AI decision timer
     this.decisionTimer -= deltaTime;
 
+    // Bug 17 fix (part 2): expire memory marks that become stale when the player switches planes.
+    // If the mark was created while the player was on planeX, and the player later moves to planeY,
+    // the mark is unreachable — expire it after a short window so the enemy stops hunting the wrong plane.
+    if (this.aggroMemoryActive && this.lastKnownPosition && this.target) {
+      if (this.target.plane !== this.memoryMarkPlane) {
+        this.memoryStaleTimer -= deltaTime;
+        if (this.memoryStaleTimer <= 0) {
+          EnemyDebug.log(this, 'MEMORY', 'Memory mark expired — player switched planes (stale)', {
+            memoryMarkPlane: this.memoryMarkPlane,
+            playerPlane: this.target.plane
+          });
+          this.aggroMemoryActive = false;
+          this.lastKnownPosition = null;
+          this.memoryMoveDelayTimer = 0;
+          this.memoryStaleTimer = 2.0;
+          this.state = 'idle';
+          this.enraged = false;
+        }
+      } else {
+        // Player still on the marked plane — keep the stale window fresh
+        this.memoryStaleTimer = 2.0;
+      }
+    }
+
     // AI behavior - only engage within aggro range (unless enraged or has memory)
-    if (distance > this.aggroRange && !this.enraged) {
+    if (effectiveDistance > this.aggroRange && !this.enraged) {
       // Player left aggro range - activate memory mode if we have a last known position
       if (this.lastKnownPosition && !this.aggroMemoryActive) {
+        EnemyDebug.log(this, 'MEMORY', 'Activating memory mode — player left aggro range', {
+          distToPlayer: distance.toFixed(1),
+          aggroRange: this.aggroRange,
+          memoryMark: { x: this.lastKnownPosition.x.toFixed(1), y: this.lastKnownPosition.y.toFixed(1) }
+        });
         this.aggroMemoryActive = true;
         this.memoryMoveDelayTimer = this.memoryMoveDelay; // Start delay timer
+        this.memoryMarkPlane = this.plane; // Track enemy's plane so stale timer fires if player goes underground
+        this.memoryStaleTimer = 2.0;
         // Reset cached direction to force immediate recalculation towards memory mark
         this.currentDirection = { x: 0, y: 0 };
 
@@ -604,6 +700,8 @@ export class Enemy {
             mate.lastKnownPosition = { x: this.lastKnownPosition.x, y: this.lastKnownPosition.y };
             mate.aggroMemoryActive = true;
             mate.memoryMoveDelayTimer = this.memoryMoveDelay;
+            mate.memoryMarkPlane = this.memoryMarkPlane;
+            mate.memoryStaleTimer = 2.0;
             mate.currentDirection = { x: 0, y: 0 };
             mate.enraged = true; // Pack member becomes enraged when pack detects player
             mate.state = 'chase'; // Ensure chase state is set
@@ -619,6 +717,9 @@ export class Enemy {
           if (distance <= this.aggroRange) {
             const canSeePlayer = this.hasVision(this.position, this.target.position, effectiveVisionLength);
             if (canSeePlayer) {
+              EnemyDebug.log(this, 'MEMORY', 'Reacquired player — exiting memory mode', {
+                distToPlayer: distance.toFixed(1)
+              });
               // Regained vision - exit memory mode and resume normal chase
               this.aggroMemoryActive = false;
               this.memoryMoveDelayTimer = 0; // Reset delay timer
@@ -654,14 +755,18 @@ export class Enemy {
           if (this.memoryMoveDelayTimer > 0) {
             this.memoryMoveDelayTimer -= deltaTime;
             // Stand still during delay
-            this.velocity.vx = 0;
-            this.velocity.vy = 0;
+            this.targetVelocity.vx = 0;
+            this.targetVelocity.vy = 0;
             this.state = 'chase';
           } else {
             // Delay elapsed - start moving
 
             // Reached memory mark - end aggro for self and packmates
             if (memDistance < GRID.CELL_SIZE) {
+              EnemyDebug.log(this, 'MEMORY', 'Reached memory mark — giving up chase (out-of-range branch)', {
+                distToPlayer: distance.toFixed(1),
+                memDistance: memDistance.toFixed(1)
+              });
               this.aggroMemoryActive = false;
               this.lastKnownPosition = null;
               this.memoryMoveDelayTimer = 0;
@@ -687,8 +792,8 @@ export class Enemy {
               } else {
                 const dirX = memDx / memDistance;
                 const dirY = memDy / memDistance;
-                this.velocity.vx = dirX * this.speed * speedMultiplier;
-                this.velocity.vy = dirY * this.speed * speedMultiplier;
+                this.targetVelocity.vx = dirX * this.speed * speedMultiplier;
+                this.targetVelocity.vy = dirY * this.speed * speedMultiplier;
               }
             }
           }
@@ -700,25 +805,74 @@ export class Enemy {
         // Update wander timer
         this.wanderTimer -= deltaTime;
         if (this.wanderTimer <= 0) {
-          // Pick new random direction
-          const angle = Math.random() * Math.PI * 2;
-          this.wanderDirection.x = Math.cos(angle);
-          this.wanderDirection.y = Math.sin(angle);
+          const hasWaterAffinity = this.data.waterAffinity === true;
+          let chosenAngle = Math.random() * Math.PI * 2;
+
+          if (this.backgroundObjects && this.backgroundObjects.length > 0) {
+            if (!hasWaterAffinity) {
+              // Avoid wandering into water or puddles - try up to 8 candidate directions
+              for (let attempt = 0; attempt < 8; attempt++) {
+                const testAngle = Math.random() * Math.PI * 2;
+                const lookDist = this.wanderSpeed * 0.5;
+                const testX = this.position.x + Math.cos(testAngle) * lookDist;
+                const testY = this.position.y + Math.sin(testAngle) * lookDist;
+                const wouldHitWater = this.backgroundObjects.some(obj =>
+                  (obj.char === '=' || obj.char === '~') &&
+                  Math.abs(obj.position.x - testX) < GRID.CELL_SIZE &&
+                  Math.abs(obj.position.y - testY) < GRID.CELL_SIZE
+                );
+                if (!wouldHitWater) {
+                  chosenAngle = testAngle;
+                  break;
+                }
+              }
+            } else {
+              // Water-affinity: drift toward nearest water tile 60% of the time
+              let nearestWaterAngle = null;
+              let nearestWaterDist = Infinity;
+              for (const obj of this.backgroundObjects) {
+                if (obj.char === '=' || obj.char === '~') {
+                  const wdx = obj.position.x - this.position.x;
+                  const wdy = obj.position.y - this.position.y;
+                  const wDist = Math.sqrt(wdx * wdx + wdy * wdy);
+                  if (wDist < nearestWaterDist) {
+                    nearestWaterDist = wDist;
+                    nearestWaterAngle = Math.atan2(wdy, wdx);
+                  }
+                }
+              }
+              if (nearestWaterAngle !== null && nearestWaterDist < GRID.CELL_SIZE * 12 && Math.random() < 0.6) {
+                // Drift toward water with slight variance
+                chosenAngle = nearestWaterAngle + (Math.random() - 0.5) * Math.PI * 0.4;
+              }
+            }
+          }
+
+          this.wanderDirection.x = Math.cos(chosenAngle);
+          this.wanderDirection.y = Math.sin(chosenAngle);
           // Change direction every 2-4 seconds
           this.wanderTimer = 2 + Math.random() * 2;
         }
 
         // Move in wander direction
-        this.velocity.vx = this.wanderDirection.x * this.wanderSpeed * speedMultiplier;
-        this.velocity.vy = this.wanderDirection.y * this.wanderSpeed * speedMultiplier;
+        this.targetVelocity.vx = this.wanderDirection.x * this.wanderSpeed * speedMultiplier;
+        this.targetVelocity.vy = this.wanderDirection.y * this.wanderSpeed * speedMultiplier;
       }
     } else if (this.state === 'windup') {
       // Stay still during windup
-      this.velocity.vx = 0;
-      this.velocity.vy = 0;
-    } else if (distance <= this.attackRange && this.attackTimer <= 0) {
+      this.targetVelocity.vx = 0;
+      this.targetVelocity.vy = 0;
+    } else if (this.attackType === 'melee' && effectiveDistance < this.attackRange && this.attackTimer > 0 && (this.enraged || effectiveDistance <= this.aggroRange)) {
+      // Player is inside melee AOE range while on cooldown — back away so the next
+      // attack hits. The enemy retreats until it reaches its natural attack distance.
+      this.state = 'chase';
+      const dirX = dx / distance;
+      const dirY = dy / distance;
+      this.targetVelocity.vx = -dirX * this.speed * speedMultiplier;
+      this.targetVelocity.vy = -dirY * this.speed * speedMultiplier;
+    } else if (effectiveDistance <= this.attackRange && this.attackTimer <= 0) {
       // CRITICAL: Can only attack if aggro'd (enraged) OR within aggro range
-      const isAggrod = this.enraged || distance <= this.aggroRange;
+      const isAggrod = this.enraged || effectiveDistance <= this.aggroRange;
 
       if (isAggrod) {
         // In range and aggro'd - check vision before attacking
@@ -727,8 +881,11 @@ export class Enemy {
         if (canSeeTarget && this.state !== 'windup' && this.state !== 'attack') {
           this.state = 'windup';
           this.windupTimer = this.attackWindup;
-          this.velocity.vx = 0;
-          this.velocity.vy = 0;
+          // Snapshot target position at windup start so attacks aim at where
+          // the player WAS, not where they are when the windup completes.
+          this.markedTargetPosition = { x: this.target.position.x, y: this.target.position.y };
+          this.targetVelocity.vx = 0;
+          this.targetVelocity.vy = 0;
         } else if (!canSeeTarget) {
           // Can't see target (wrong plane or obstructed) - go into memory/chase mode
           // Let the chase logic below handle it
@@ -736,11 +893,13 @@ export class Enemy {
         }
       }
       // If not aggro'd, don't attack - fall through to other behaviors
-    } else if ((distance > this.attackRange && distance <= this.aggroRange) || (this.enraged && distance > this.attackRange)) {
+    } else if ((effectiveDistance > this.attackRange && effectiveDistance <= this.aggroRange) || (this.enraged && effectiveDistance > this.attackRange)) {
       // Within aggro range OR enraged and outside attack range
       // But first check if we're on the same plane - can't chase across planes unless already enraged/memory
       const onSamePlane = inSamePlane(this, this.target);
       const canChase = onSamePlane || this.enraged || this.aggroMemoryActive;
+      // Hoisted so it's in scope for the memory-vs-direct-chase branch below
+      const canSeePlayer = canChase && this.hasVision(this.position, this.target.position, effectiveVisionLength);
 
       if (!canChase) {
         // Different plane and not already chasing - remain idle
@@ -751,9 +910,6 @@ export class Enemy {
         const wasInMemoryMode = this.aggroMemoryActive;
         this.state = 'chase';
 
-        // ALWAYS check vision when in aggro range (don't throttle initial detection)
-        const canSeePlayer = this.hasVision(this.position, this.target.position, effectiveVisionLength);
-
         if (canSeePlayer) {
           // Vision is clear - update last known position and deactivate memory
           this.lastKnownPosition = { x: this.target.position.x, y: this.target.position.y };
@@ -761,6 +917,15 @@ export class Enemy {
           // Check if this is a NEW detection (transition from not detecting to detecting)
           const isNewDetection = this.detectionIndicatorTimer <= 0;
 
+          if (isNewDetection) {
+            EnemyDebug.log(this, 'AGGRO', 'New detection — player spotted in aggro range', {
+              distToPlayer: distance.toFixed(1),
+              aggroRange: this.aggroRange,
+              enraged: this.enraged
+            });
+          }
+
+          this.hadVisualContact = true; // confirmed sighting — enable vision-only re-aggro
           // Always refresh detection indicator when player is in sight (ensures ! overrides ?)
           this.detectionIndicatorTimer = this.detectionIndicatorDuration;
 
@@ -788,9 +953,23 @@ export class Enemy {
         } else {
           // Lost vision - activate memory mode if not already active
           if (this.lastKnownPosition && !this.aggroMemoryActive) {
-            // TRANSITION: Just lost vision - capture CURRENT player position as memory mark
-            // This is where they disappeared (tunnel entrance, tall grass, etc.)
+            EnemyDebug.log(this, 'MEMORY', 'Lost vision — activating memory mode (in-range branch)', {
+              distToPlayer: distance.toFixed(1),
+              aggroRange: this.aggroRange,
+              memoryMark: { x: this.target.position.x.toFixed(1), y: this.target.position.y.toFixed(1) }
+            });
+            // TRANSITION: Just lost vision — place the mark at the player's current position.
+            // For same-plane disappearances (wall, tall grass) this is just where they hid.
+            // For plane-switch disappearances (tunnel entrance) this lands just past the
+            // threshold on the player's side, so the enemy navigates through the entrance
+            // rather than stopping at it.  effectiveDistance already prevents non-pursuing
+            // enemies from reacting cross-plane, making this safe.
             this.lastKnownPosition = { x: this.target.position.x, y: this.target.position.y };
+            // Track the player's plane at mark creation so the stale timer only fires
+            // if the player subsequently changes planes (not while enemy is crossing).
+            this.memoryMarkPlane = this.target.plane;
+            this.memoryStaleTimer = 2.0;
+
             this.aggroMemoryActive = true;
             this.memoryMoveDelayTimer = this.memoryMoveDelay; // Start delay timer
             // Reset cached direction to force immediate recalculation towards memory mark
@@ -803,6 +982,8 @@ export class Enemy {
                 mate.lastKnownPosition = { x: this.lastKnownPosition.x, y: this.lastKnownPosition.y };
                 mate.aggroMemoryActive = true;
                 mate.memoryMoveDelayTimer = this.memoryMoveDelay;
+                mate.memoryMarkPlane = this.memoryMarkPlane;
+                mate.memoryStaleTimer = 2.0;
                 mate.currentDirection = { x: 0, y: 0 };
                 mate.enraged = true; // Pack member becomes enraged when pack detects player
                 mate.state = 'chase'; // Ensure chase state is set
@@ -810,17 +991,27 @@ export class Enemy {
             }
           }
           // If already in memory mode, do nothing here - keep pursuing the existing memory mark
-          else if (!this.lastKnownPosition) {
-            // Never had vision of player (spawned with wall between) - set current position as "last known"
-            // This prevents endless chasing through walls when we never actually saw them
-            // BUT: Only do this if actually within aggro range AND on same plane
-            // Different planes = no detection, like tall grass
+          else if (!this.lastKnownPosition && !this.hadVisualContact) {
+            // Never had vision of player (spawned blind behind a wall) — sense by proximity only.
+            // Guarded by hadVisualContact: once an enemy has actually seen the player it must
+            // re-acquire through vision, not proximity, to prevent oscillation after reaching
+            // a stale memory mark and immediately setting a new one at the player's current spot.
             if (distance <= this.aggroRange && inSamePlane(this, this.target)) {
-              this.lastKnownPosition = { x: this.target.position.x, y: this.target.position.y };
-              this.aggroMemoryActive = true;
-              this.memoryMoveDelayTimer = this.memoryMoveDelay; // Start delay timer
-              // Reset cached direction to force immediate recalculation towards memory mark
-              this.currentDirection = { x: 0, y: 0 };
+              const closeRange = GRID.CELL_SIZE * 3;
+              if (this.isTargetInTallGrass() && distance > closeRange) {
+                // Player is hidden in tall grass — idle enemies can't detect by proximity alone.
+                // Exception: within close range the player is too near to hide (can't conceal yourself
+                // from something standing right next to you).
+                this.state = 'idle';
+              } else {
+                this.lastKnownPosition = { x: this.target.position.x, y: this.target.position.y };
+                this.aggroMemoryActive = true;
+                this.memoryMoveDelayTimer = this.memoryMoveDelay; // Start delay timer
+                this.memoryMarkPlane = this.plane;
+                this.memoryStaleTimer = 2.0;
+                // Reset cached direction to force immediate recalculation towards memory mark
+                this.currentDirection = { x: 0, y: 0 };
+              }
             }
           }
         }
@@ -837,8 +1028,8 @@ export class Enemy {
         if (this.memoryMoveDelayTimer > 0) {
           this.memoryMoveDelayTimer -= deltaTime;
           // Stand still during delay
-          this.velocity.vx = 0;
-          this.velocity.vy = 0;
+          this.targetVelocity.vx = 0;
+          this.targetVelocity.vy = 0;
           this.state = 'chase';
         } else {
           // Delay elapsed - start moving
@@ -849,8 +1040,8 @@ export class Enemy {
             this.lastKnownPosition = null;
             this.memoryMoveDelayTimer = 0;
             this.state = 'idle';
-            this.velocity.vx = 0;
-            this.velocity.vy = 0;
+            this.targetVelocity.vx = 0;
+            this.targetVelocity.vy = 0;
             this.enraged = false; // Give up the hunt
 
             // Clear memory mark for all packmates (pack shares memory)
@@ -871,12 +1062,12 @@ export class Enemy {
             } else {
               const dirX = memDx / memDistance;
               const dirY = memDy / memDistance;
-              this.velocity.vx = dirX * this.speed * speedMultiplier;
-              this.velocity.vy = dirY * this.speed * speedMultiplier;
+              this.targetVelocity.vx = dirX * this.speed * speedMultiplier;
+              this.targetVelocity.vy = dirY * this.speed * speedMultiplier;
             }
           }
         }
-      } else {
+      } else if (canSeePlayer) {
         // Direct chase (can see player)
 
         // === PACK BEHAVIOR ===
@@ -903,8 +1094,8 @@ export class Enemy {
               if (navDistance > 0) {
                 const dirX = navDx / navDistance;
                 const dirY = navDy / navDistance;
-                this.velocity.vx = dirX * this.speed * speedMultiplier;
-                this.velocity.vy = dirY * this.speed * speedMultiplier;
+                this.targetVelocity.vx = dirX * this.speed * speedMultiplier;
+                this.targetVelocity.vy = dirY * this.speed * speedMultiplier;
               }
             }
           }
@@ -920,8 +1111,8 @@ export class Enemy {
             if (navDistance > 0) {
               const dirX = navDx / navDistance;
               const dirY = navDy / navDistance;
-              this.velocity.vx = dirX * this.speed * speedMultiplier * 1.5; // Fast rush
-              this.velocity.vy = dirY * this.speed * speedMultiplier * 1.5;
+              this.targetVelocity.vx = dirX * this.speed * speedMultiplier * 1.5; // Fast rush
+              this.targetVelocity.vy = dirY * this.speed * speedMultiplier * 1.5;
             }
 
             // End attack rush when timer expires or reached attack range
@@ -936,8 +1127,8 @@ export class Enemy {
             const packMovement = this.calculatePackMovement(this.target.position, speedMultiplier);
 
             if (packMovement) {
-              this.velocity.vx = packMovement.vx;
-              this.velocity.vy = packMovement.vy;
+              this.targetVelocity.vx = packMovement.vx;
+              this.targetVelocity.vy = packMovement.vy;
 
               // Update hover timer
               if (packMovement.shouldHover) {
@@ -972,18 +1163,23 @@ export class Enemy {
             if (navDistance > 0) {
               const dirX = navDx / navDistance;
               const dirY = navDy / navDistance;
-              this.velocity.vx = dirX * this.speed * speedMultiplier;
-              this.velocity.vy = dirY * this.speed * speedMultiplier;
+              this.targetVelocity.vx = dirX * this.speed * speedMultiplier;
+              this.targetVelocity.vy = dirY * this.speed * speedMultiplier;
             }
           }
         }
+      } else {
+        // In aggro range but can't see player and no memory mark — stop and wait
+        this.state = 'idle';
+        this.targetVelocity.vx = 0;
+        this.targetVelocity.vy = 0;
       } // Close the canChase else block
     } // Close the aggro range else if block
     else {
       // Between attack range and aggro range, but conditions not met
       this.state = 'idle';
-      this.velocity.vx = 0;
-      this.velocity.vy = 0;
+      this.targetVelocity.vx = 0;
+      this.targetVelocity.vy = 0;
     }
 
     // Cut grass when searching with blade weapons
@@ -1058,7 +1254,38 @@ export class Enemy {
       }
     }
 
+    // State transition logging (only fires when state actually changes)
+    if (this.state !== this._prevState) {
+      EnemyDebug.log(this, 'STATE', `${this._prevState} → ${this.state}`, {
+        distToPlayer: distance.toFixed(1),
+        aggroMemoryActive: this.aggroMemoryActive,
+        enraged: this.enraged,
+        memoryMark: this.lastKnownPosition
+          ? { x: this.lastKnownPosition.x.toFixed(1), y: this.lastKnownPosition.y.toFixed(1) }
+          : null
+      });
+      this._prevState = this.state;
+    }
+
     return { dotDamage: dotDamageEvents, justAggrod };
+  }
+
+  /**
+   * Smoothly blends velocity toward targetVelocity at this.accelRate px/s².
+   * Called once per update() when not knocked back.
+   */
+  _blendVelocity(deltaTime) {
+    const dvx = this.targetVelocity.vx - this.velocity.vx;
+    const dvy = this.targetVelocity.vy - this.velocity.vy;
+    const mag = Math.sqrt(dvx * dvx + dvy * dvy);
+    if (mag < 0.5) {
+      this.velocity.vx = this.targetVelocity.vx;
+      this.velocity.vy = this.targetVelocity.vy;
+      return;
+    }
+    const step = Math.min(this.accelRate * deltaTime, mag);
+    this.velocity.vx += (dvx / mag) * step;
+    this.velocity.vy += (dvy / mag) * step;
   }
 
   /**
@@ -1069,52 +1296,103 @@ export class Enemy {
   updateVectorNavigation(speedMultiplier, targetOverride = null, deltaTime = 0.016) {
     if (!this.collisionMap) return;
 
-    // Determine target position (live player or memory mark)
     const target = targetOverride || (this.target ? this.target.position : null);
     if (!target) return;
 
-    // Update brute force cooldown timer
+    // Update path-recompute cooldown
     if (this.bruteForceTimer > 0) {
       this.bruteForceTimer -= deltaTime;
       if (this.bruteForceTimer < 0) this.bruteForceTimer = 0;
     }
 
-    // Detect if stuck using velocity-based check (absolute threshold, not percentage)
-    const currentSpeed = Math.sqrt(this.velocity.vx * this.velocity.vx + this.velocity.vy * this.velocity.vy);
-    const expectedSpeed = this.speed * speedMultiplier;
-    const STUCK_THRESHOLD = 5.0; // Absolute speed threshold (units per second)
+    // === FOLLOW ACTIVE PATH NODES ===
+    if (this.pathNodes.length > 0 && this.currentNodeIndex < this.pathNodes.length) {
+      const node = this.pathNodes[this.currentNodeIndex];
+      const nodeDx = node.x - this.position.x;
+      const nodeDy = node.y - this.position.y;
+      const nodeDist = Math.sqrt(nodeDx * nodeDx + nodeDy * nodeDy);
 
-    // If moving slower than 5 units/sec, consider stuck (works for all enemy speeds)
-    if (currentSpeed < STUCK_THRESHOLD) {
-      this.stuckTimer += deltaTime;
-    } else {
-      this.stuckTimer = 0;
+      // Stuck detection while following a node: measure progress toward the CURRENT NODE
+      // (not target — the path may go sideways/backward to navigate around an obstacle).
+      const PROGRESS_THRESHOLD = 3.0; // px/s of closing on the waypoint
+      if (this.lastDistToTarget !== null) {
+        const progressRate = (this.lastDistToTarget - nodeDist) / Math.max(deltaTime, 0.001);
+        if (progressRate < PROGRESS_THRESHOLD) {
+          this.stuckTimer += deltaTime;
+        } else {
+          this.stuckTimer = 0;
+        }
+      }
+      this.lastDistToTarget = nodeDist;
+
+      if (nodeDist < GRID.CELL_SIZE * 0.8) {
+        // Reached waypoint — advance to next
+        this.currentNodeIndex++;
+        this.stuckTimer = 0;
+        this.lastDistToTarget = null;
+      } else {
+        this.targetVelocity.vx = (nodeDx / nodeDist) * this.speed * speedMultiplier;
+        this.targetVelocity.vy = (nodeDy / nodeDist) * this.speed * speedMultiplier;
+
+        // Still stuck while following waypoint — invalidate path and recompute
+        if (this.stuckTimer > 0.5 && this.bruteForceTimer <= 0) {
+          this.pathNodes = [];
+          this.currentNodeIndex = 0;
+          this.stuckTimer = 0;
+          this.lastDistToTarget = null;
+          // Fall through to recalculation below
+        } else {
+          return;
+        }
+      }
     }
 
+    // === DIRECT NAVIGATION stuck detection ===
+    // Direction-alignment: stuck = trying to move but actual displacement diverges from intent.
+    // Progress-toward-target was a false positive when chasing a fleeing player in open space.
+    {
+      const posDx = this.position.x - this.lastPosition.x;
+      const posDy = this.position.y - this.lastPosition.y;
+      const tvx = this.targetVelocity.vx;
+      const tvy = this.targetVelocity.vy;
+      const targetSpd = Math.sqrt(tvx * tvx + tvy * tvy);
+      if (targetSpd > 5) {
+        const actualSpd = Math.sqrt(posDx * posDx + posDy * posDy) / Math.max(deltaTime, 0.001);
+        // Dot product of actual vs intended direction; -1 when not moving at all
+        const dot = actualSpd > 0.1
+          ? ((posDx / Math.max(deltaTime, 0.001)) * tvx + (posDy / Math.max(deltaTime, 0.001)) * tvy) / (actualSpd * targetSpd)
+          : -1;
+        if (dot < 0.3 || actualSpd < targetSpd * 0.15) {
+          this.stuckTimer += deltaTime;
+        } else {
+          this.stuckTimer = 0;
+        }
+      } else {
+        this.stuckTimer = 0;
+      }
+    }
     this.lastPosition = { x: this.position.x, y: this.position.y };
 
-    // Check if current cached direction is obstructed
-    // Test if moving along the cached direction would hit an obstacle
-    let currentPathObstructed = false;
-    if (this.currentDirection.x !== 0 || this.currentDirection.y !== 0) {
-      const testPoint = {
-        x: this.position.x + this.currentDirection.x * this.navigationLength,
-        y: this.position.y + this.currentDirection.y * this.navigationLength
-      };
-      currentPathObstructed = !this.hasLineOfSight(this.position, testPoint, this.navigationLength);
-    }
-
-    // Check if pursuing a static target (memory mark) vs dynamic target (live player)
+    // === DIRECT NAVIGATION (no active path nodes) ===
     const isPursuingStaticMark = this.aggroMemoryActive && this.lastKnownPosition;
 
-    // Recalculate if:
-    // 1. Decision timer expired (intelligence-based reassessment) - SKIP for static marks
-    // 2. Stuck in place for too long (>0.3s triggers brute force)
-    // 3. No direction cached yet (initialization)
-    // 4. Current path became obstructed (dynamic obstacle avoidance)
-    // BUT: Don't recalc if brute force cooldown is active (let sliding collision work)
+    let currentPathObstructed = false;
+    if (this.currentDirection.x !== 0 || this.currentDirection.y !== 0) {
+      // Cap the test distance to actual target distance — avoids false positives when
+      // the target is nearby and the extended vector overshoots into a wall behind it.
+      const tDx = target.x - this.position.x;
+      const tDy = target.y - this.position.y;
+      const distToTarget = Math.sqrt(tDx * tDx + tDy * tDy);
+      const testDist = Math.min(this.navigationLength, distToTarget);
+      const testPoint = {
+        x: this.position.x + this.currentDirection.x * testDist,
+        y: this.position.y + this.currentDirection.y * testDist
+      };
+      currentPathObstructed = !this.hasLineOfSight(this.position, testPoint, testDist);
+    }
+
     const needsRecalc = this.bruteForceTimer <= 0 && (
-      (!isPursuingStaticMark && this.decisionTimer <= 0) ||  // Skip decision timer for static marks
+      (!isPursuingStaticMark && this.decisionTimer <= 0) ||
       this.stuckTimer > 0.3 ||
       (this.currentDirection.x === 0 && this.currentDirection.y === 0) ||
       currentPathObstructed
@@ -1124,91 +1402,270 @@ export class Enemy {
       const dx = target.x - this.position.x;
       const dy = target.y - this.position.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
-
       if (distance === 0) return;
 
-      // Initial direction vector toward target
-      let angle = Math.atan2(dy, dx);
+      // --- Debug: log what triggered this recalc and key distances ---
+      if (window.ENEMY_AI_DEBUG) {
+        const timeSinceLast = this._lastPathRecalcTime !== null
+          ? (performance.now() - this._lastPathRecalcTime).toFixed(0) + 'ms'
+          : 'first';
+        const isMemoryTarget = isPursuingStaticMark;
+        const distToActualPlayer = this.target
+          ? Math.sqrt(
+              (this.target.position.x - this.position.x) ** 2 +
+              (this.target.position.y - this.position.y) ** 2
+            ).toFixed(1)
+          : 'n/a';
+        const triggerReasons = [];
+        if (!isPursuingStaticMark && this.decisionTimer <= 0) triggerReasons.push('decisionTimer');
+        if (this.stuckTimer > 0.3) triggerReasons.push(`stuck(${this.stuckTimer.toFixed(2)}s)`);
+        if (this.currentDirection.x === 0 && this.currentDirection.y === 0) triggerReasons.push('noDir');
+        if (currentPathObstructed) triggerReasons.push('obstructed');
+        EnemyDebug.log(this, 'PATH', `Recalculating — triggered by [${triggerReasons.join(', ')}]`, {
+          targetType: isMemoryTarget ? 'MEMORY_MARK' : 'PLAYER',
+          distToTarget: distance.toFixed(1),
+          distToActualPlayer,
+          timeSinceLast,
+          stuckTimer: this.stuckTimer.toFixed(2),
+          decisionTimer: this.decisionTimer.toFixed(3)
+        });
+        this._lastPathRecalcTime = performance.now();
+      }
+      // ---
+
+      const angle = Math.atan2(dy, dx);
       let foundDirection = false;
 
-      // Check if direct path is clear (using navigation length for collision avoidance)
-      if (this.hasLineOfSight(this.position, target, this.navigationLength)) {
-        // Clear path - move directly
+      if (distance < this.navigationLength * 0.5 && !this.stuckTimer > 0.3) {
+        // Target is very close — head directly toward it rather than letting the rotation
+        // search pick a 96px test point that may point away from a nearby mark.
         this.currentDirection.x = dx / distance;
         this.currentDirection.y = dy / distance;
         foundDirection = true;
-      } else if (this.stuckTimer > 0.3) {
-        // BRUTE FORCE: Stuck on corner - snap to FURTHEST 45° angle and COMMIT
-        // Don't check if blocked - let sliding collision handle it!
-        const PI_4 = Math.PI / 4; // 45 degrees
-
-        // Normalize angle to [0, 2π]
-        const normalizedAngle = ((angle % (Math.PI * 2)) + (Math.PI * 2)) % (Math.PI * 2);
-
-        // Find the two adjacent 45° snaps
-        const lowerSnap = Math.floor(normalizedAngle / PI_4) * PI_4;
-        const upperSnap = lowerSnap + PI_4;
-
-        // Calculate distances to each snap
-        const distToLower = Math.abs(normalizedAngle - lowerSnap);
-        const distToUpper = Math.abs(normalizedAngle - upperSnap);
-
-        // Pick the FURTHEST snap, but if we just tried it, use the OTHER one
-        let snapAngle = distToLower > distToUpper ? lowerSnap : upperSnap;
-
-        // If we tried this angle last time and we're still stuck, try the other adjacent snap
-        if (this.lastBruteForceAngle !== null && Math.abs(snapAngle - this.lastBruteForceAngle) < 0.1) {
-          snapAngle = distToLower > distToUpper ? upperSnap : lowerSnap;
-        }
-
-        // FORCE this direction - no checking, just do it!
-        this.currentDirection.x = Math.cos(snapAngle);
-        this.currentDirection.y = Math.sin(snapAngle);
-        this.bruteForceTimer = 1.0; // Commit to this direction for 1 second
-        this.lastBruteForceAngle = snapAngle; // Remember this angle
+        this.pathNodes = [];
+        EnemyDebug.log(this, 'PATH', 'Close target — heading direct');
+      } else if (this.hasLineOfSight(this.position, target, this.navigationLength) && this.stuckTimer <= 0.3) {
+        // Direct path clear and not stuck — aim straight at target
+        this.currentDirection.x = dx / distance;
+        this.currentDirection.y = dy / distance;
         foundDirection = true;
+        this.pathNodes = [];
+        EnemyDebug.log(this, 'PATH', 'Direct path clear — heading straight');
+      } else if (this.stuckTimer > 0.3) {
+        // Stuck against an obstacle — build a node path curving around it.
+        // Allow the fallback direction only after the flip timer has run long enough.
+        this.navDirectionFlipTimer += this.stuckTimer;
+        const allowFlip = this.navDirectionFlipTimer > 6.0;
+        if (allowFlip) this.navDirectionFlipTimer = 0;
+        this.computeNodePath(target, allowFlip);
+        this.stuckTimer = 0;
+        EnemyDebug.log(this, 'PATH', `Node path computed — ${this.pathNodes.length} nodes, allowFlip=${allowFlip}`);
+        if (this.pathNodes.length > 0) {
+          this._zeroNodeCount = 0;
+          this.bruteForceTimer = 2.5;
+          const fn = this.pathNodes[0];
+          const fnDx = fn.x - this.position.x;
+          const fnDy = fn.y - this.position.y;
+          const fnDist = Math.sqrt(fnDx * fnDx + fnDy * fnDy);
+          if (fnDist > 0) {
+            this.targetVelocity.vx = (fnDx / fnDist) * this.speed * speedMultiplier;
+            this.targetVelocity.vy = (fnDy / fnDist) * this.speed * speedMultiplier;
+          }
+        } else {
+          // Completely boxed in — no path found around the obstacle.
+          this._zeroNodeCount = (this._zeroNodeCount || 0) + 1;
+          if (this._zeroNodeCount >= 3 && this.aggroMemoryActive) {
+            // Give up on the unreachable memory mark rather than looping forever.
+            EnemyDebug.log(this, 'PATH', `Abandoning memory mark — boxed in ${this._zeroNodeCount}x`);
+            this.aggroMemoryActive = false;
+            this.lastKnownPosition = null;
+            this.enraged = false;
+            this.state = 'idle';
+            this._zeroNodeCount = 0;
+            this.bruteForceTimer = 1.0;
+            return;
+          }
+          // Random escape direction — break out of the corner
+          const escapeAngle = Math.random() * Math.PI * 2;
+          this.currentDirection.x = Math.cos(escapeAngle);
+          this.currentDirection.y = Math.sin(escapeAngle);
+          this.bruteForceTimer = 1.0;
+          EnemyDebug.log(this, 'PATH', `0-node boxed in — random escape (attempt #${this._zeroNodeCount})`);
+        }
+        return;
       } else {
-        // Path obstructed but not stuck yet - use fine rotation search
-        const maxRotation = 180; // Maximum degrees to search
-        const increment = this.rotationIncrement * (Math.PI / 180); // Convert to radians
-
-        for (let deg = increment; deg <= maxRotation * (Math.PI / 180); deg += increment) {
-          // Alternate between clockwise and counterclockwise
+        // Path obstructed, not stuck yet — fine rotation search
+        const increment = this.rotationIncrement * (Math.PI / 180);
+        for (let deg = increment; deg <= Math.PI; deg += increment) {
           for (const direction of [1, -1]) {
             const testAngle = angle + (deg * direction);
             const testTarget = {
               x: this.position.x + Math.cos(testAngle) * this.navigationLength,
               y: this.position.y + Math.sin(testAngle) * this.navigationLength
             };
-
             if (this.hasLineOfSight(this.position, testTarget, this.navigationLength)) {
-              // Found clear path at this angle
               this.currentDirection.x = Math.cos(testAngle);
               this.currentDirection.y = Math.sin(testAngle);
               foundDirection = true;
               break;
             }
           }
-
           if (foundDirection) break;
         }
-
-        // If no clear path found, use direct direction as last resort
         if (!foundDirection) {
+          EnemyDebug.log(this, 'PATH', 'No clear rotation found — forcing direct direction');
           this.currentDirection.x = dx / distance;
           this.currentDirection.y = dy / distance;
+        } else {
+          EnemyDebug.log(this, 'PATH', 'Rotation search found clear angle');
         }
       }
 
-      // Reset stuck timer only if we found a direction
-      if (foundDirection) {
-        this.stuckTimer = 0;
+    }
+
+    this.targetVelocity.vx = this.currentDirection.x * this.speed * speedMultiplier;
+    this.targetVelocity.vy = this.currentDirection.y * this.speed * speedMultiplier;
+  }
+
+  /**
+   * Build a chain of waypoints curving around an obstacle toward the target.
+   * From each waypoint, checks direct visibility to target (early exit).
+   * Locks in a rotation direction after the first clear vector for consistent curving.
+   */
+  /**
+   * allowFlip: permit trying the opposite rotation direction if the preferred one
+   * fails. Should only be true after the navDirectionFlipTimer threshold is met.
+   */
+  computeNodePath(targetPos, allowFlip = false) {
+    this.pathNodes = [];
+    this.currentNodeIndex = 0;
+
+    const MAX_NODES = 8;
+    // nodeStep scales with distance so nearby obstacles get tight waypoints and
+    // distant ones get proportionally wider hops. Clamped to [CELL_SIZE, 3*CELL_SIZE].
+    const totalDist = Math.sqrt(
+      (targetPos.x - this.position.x) ** 2 + (targetPos.y - this.position.y) ** 2
+    );
+    const nodeStep = Math.max(GRID.CELL_SIZE, Math.min(totalDist / 5, GRID.CELL_SIZE * 3));
+    let pos = { x: this.position.x, y: this.position.y };
+
+    // If we have no persistent preference yet, pick a direction now and lock it.
+    // It persists across calls until allowFlip permits a reversal.
+    let lockedDir = this.navDirection !== 0 ? this.navDirection : 1;
+
+    // If the path to the target is already clear, no nodes are needed.
+    {
+      const dx0 = targetPos.x - pos.x;
+      const dy0 = targetPos.y - pos.y;
+      const d0 = Math.sqrt(dx0 * dx0 + dy0 * dy0);
+      if (d0 < GRID.CELL_SIZE || this.hasLineOfSight(pos, targetPos, d0)) return;
+    }
+
+    // === PHASE 1: Dodge-direction determination (no node placed) ===
+    // Find the first clear angle away from the immediate wall face and advance pos
+    // to that position. This separates "figuring out which way to go" from actual
+    // node placement, so the first real node is always past the wall edge.
+    {
+      const dx0 = targetPos.x - pos.x;
+      const dy0 = targetPos.y - pos.y;
+      const baseAngle0 = Math.atan2(dy0, dx0);
+      const inc = Math.PI / 180;
+      const dirsToTry0 = allowFlip ? [lockedDir, -lockedDir] : [lockedDir];
+      let foundAngle0 = null;
+
+      outerPhase1: for (const dir of dirsToTry0) {
+        for (let deg = 1; deg <= 180; deg++) {
+          const testAngle = baseAngle0 + deg * inc * dir;
+          const testEnd = {
+            x: pos.x + Math.cos(testAngle) * nodeStep,
+            y: pos.y + Math.sin(testAngle) * nodeStep
+          };
+          if (this.hasLineOfSight(pos, testEnd, nodeStep)) {
+            foundAngle0 = testAngle;
+            if (dir !== lockedDir) lockedDir = dir;
+            break outerPhase1;
+          }
+        }
+      }
+
+      if (foundAngle0 === null) return; // completely boxed in — give up
+      pos = {
+        x: pos.x + Math.cos(foundAngle0) * nodeStep,
+        y: pos.y + Math.sin(foundAngle0) * nodeStep
+      };
+      // pos is now the "dodge anchor" — first node placement begins from here
+    }
+
+    // === PHASE 2: Node placement ===
+    for (let n = 0; n < MAX_NODES; n++) {
+      const dx = targetPos.x - pos.x;
+      const dy = targetPos.y - pos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < GRID.CELL_SIZE) break;
+
+      // Can we see the target directly from here? Then this is the last node needed.
+      if (this.hasLineOfSight(pos, targetPos, dist + GRID.CELL_SIZE)) {
+        this.pathNodes.push({ x: pos.x, y: pos.y });
+        break;
+      }
+
+      const baseAngle = Math.atan2(dy, dx);
+      const inc = Math.PI / 180;
+      let foundAngle = null;
+
+      // Always try the committed direction first; only offer opposite if allowFlip.
+      const dirsToTry = allowFlip ? [lockedDir, -lockedDir] : [lockedDir];
+
+      outerLoop: for (const dir of dirsToTry) {
+        for (let deg = 1; deg <= 180; deg++) {
+          const testAngle = baseAngle + deg * inc * dir;
+          const testEnd = {
+            x: pos.x + Math.cos(testAngle) * nodeStep,
+            y: pos.y + Math.sin(testAngle) * nodeStep
+          };
+          if (this.hasLineOfSight(pos, testEnd, nodeStep)) {
+            foundAngle = testAngle;
+            if (dir !== lockedDir) lockedDir = dir;
+            break outerLoop;
+          }
+        }
+      }
+
+      if (foundAngle === null) break;
+
+      pos = {
+        x: pos.x + Math.cos(foundAngle) * nodeStep,
+        y: pos.y + Math.sin(foundAngle) * nodeStep
+      };
+      this.pathNodes.push({ x: pos.x, y: pos.y });
+    }
+
+    // Post-pass: if the last placed node still can't see the target directly, try one
+    // more hop so the enemy doesn't attempt to walk through the wall on final approach.
+    if (this.pathNodes.length > 0) {
+      const last = this.pathNodes[this.pathNodes.length - 1];
+      const fdx = targetPos.x - last.x;
+      const fdy = targetPos.y - last.y;
+      const fdist = Math.sqrt(fdx * fdx + fdy * fdy);
+      if (fdist > GRID.CELL_SIZE && !this.hasLineOfSight(last, targetPos, fdist)) {
+        const baseAngle = Math.atan2(fdy, fdx);
+        const inc = Math.PI / 180;
+        for (let deg = 1; deg <= 180; deg++) {
+          const testAngle = baseAngle + deg * inc * lockedDir;
+          const testEnd = {
+            x: last.x + Math.cos(testAngle) * nodeStep,
+            y: last.y + Math.sin(testAngle) * nodeStep
+          };
+          if (this.hasLineOfSight(last, testEnd, nodeStep)) {
+            this.pathNodes.push({ x: testEnd.x, y: testEnd.y });
+            break;
+          }
+        }
       }
     }
 
-    // Apply cached direction to velocity
-    this.velocity.vx = this.currentDirection.x * this.speed * speedMultiplier;
-    this.velocity.vy = this.currentDirection.y * this.speed * speedMultiplier;
+    // Persist the direction used (or chosen) so the next call starts from the same side.
+    this.navDirection = lockedDir;
   }
 
   /**
@@ -1219,31 +1676,60 @@ export class Enemy {
     const dx = end.x - start.x;
     const dy = end.y - start.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
-    const checkDistance = Math.min(distance, maxLength);
+    if (distance === 0) return true;
+    const checkDist = Math.min(distance, maxLength);
 
-    // Sample points along the vector
-    const samples = Math.ceil(checkDistance / (GRID.CELL_SIZE / 2));
+    const nx = dx / distance;
+    const ny = dy / distance;
+    const C = GRID.CELL_SIZE;
 
-    for (let i = 1; i <= samples; i++) {
-      const t = i / samples;
-      const checkX = start.x + dx * t;
-      const checkY = start.y + dy * t;
+    // DDA grid traversal — steps to every grid-line crossing so no cell is skipped,
+    // including the diagonal-corner case where uniform sampling misses wall corners.
+    let gx = Math.floor(start.x / C);
+    let gy = Math.floor(start.y / C);
 
-      // Convert to grid coordinates
-      const gridX = Math.floor(checkX / GRID.CELL_SIZE);
-      const gridY = Math.floor(checkY / GRID.CELL_SIZE);
+    const stepX = nx >= 0 ? 1 : -1;
+    const stepY = ny >= 0 ? 1 : -1;
 
-      // Check if out of bounds or collision
-      if (gridX < 0 || gridX >= GRID.COLS || gridY < 0 || gridY >= GRID.ROWS) {
-        return false;
-      }
+    // Distance along the ray to the first vertical / horizontal boundary
+    const firstBoundX = nx >= 0 ? (gx + 1) * C : gx * C;
+    const firstBoundY = ny >= 0 ? (gy + 1) * C : gy * C;
+    let tMaxX = nx !== 0 ? Math.abs((firstBoundX - start.x) / nx) : Infinity;
+    let tMaxY = ny !== 0 ? Math.abs((firstBoundY - start.y) / ny) : Infinity;
+    const tDeltaX = nx !== 0 ? Math.abs(C / nx) : Infinity;
+    const tDeltaY = ny !== 0 ? Math.abs(C / ny) : Infinity;
 
-      if (this.collisionMap[gridY][gridX]) {
-        return false; // Collision detected
+    // Check each cell the ray enters until checkDist is reached
+    for (let safety = 0; safety < 128; safety++) {
+      if (gx < 0 || gx >= GRID.COLS || gy < 0 || gy >= GRID.ROWS) return false;
+      if (this.collisionMap[gy][gx]) return false;
+
+      const tNext = Math.min(tMaxX, tMaxY);
+      if (tNext >= checkDist) break; // Reached the end without hitting anything
+
+      const EPS = 1e-6;
+      if (Math.abs(tMaxX - tMaxY) < EPS) {
+        // Exact corner: ray hits two cell boundaries simultaneously.
+        // Check all three newly entered cells to avoid the diagonal-corner miss.
+        const cx = gx + stepX, cy = gy + stepY;
+        if (cx < 0 || cx >= GRID.COLS || cy < 0 || cy >= GRID.ROWS) return false;
+        // Cross cell
+        if (this.collisionMap[gy][cx]) return false;
+        if (this.collisionMap[cy][gx]) return false;
+        tMaxX += tDeltaX;
+        tMaxY += tDeltaY;
+        gx = cx;
+        gy = cy;
+      } else if (tMaxX < tMaxY) {
+        tMaxX += tDeltaX;
+        gx += stepX;
+      } else {
+        tMaxY += tDeltaY;
+        gy += stepY;
       }
     }
 
-    return true; // Clear path
+    return true;
   }
 
   /**
@@ -1254,11 +1740,11 @@ export class Enemy {
     const dx = end.x - start.x;
     const dy = end.y - start.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
-    const checkDistance = Math.min(distance, maxLength);
+    if (distance === 0) return { x: end.x, y: end.y, blocked: false };
+    const checkDist = Math.min(distance, maxLength);
 
-    // Too far to see
+    // Too far to see — return point at vision limit
     if (distance > maxLength) {
-      // Return point at max vision length
       const angle = Math.atan2(dy, dx);
       return {
         x: start.x + Math.cos(angle) * maxLength,
@@ -1267,48 +1753,62 @@ export class Enemy {
       };
     }
 
-    // Sample points along the vector
-    const samples = Math.ceil(checkDistance / (GRID.CELL_SIZE / 2));
+    // DDA traversal (same as hasLineOfSight) for accurate obstruction point.
+    const nx = dx / distance;
+    const ny = dy / distance;
+    const C = GRID.CELL_SIZE;
 
-    for (let i = 1; i <= samples; i++) {
-      const t = i / samples;
-      const checkX = start.x + dx * t;
-      const checkY = start.y + dy * t;
+    let gx = Math.floor(start.x / C);
+    let gy = Math.floor(start.y / C);
+    const stepX = nx >= 0 ? 1 : -1;
+    const stepY = ny >= 0 ? 1 : -1;
 
-      // Convert to grid coordinates
-      const gridX = Math.floor(checkX / GRID.CELL_SIZE);
-      const gridY = Math.floor(checkY / GRID.CELL_SIZE);
+    const firstBoundX = nx >= 0 ? (gx + 1) * C : gx * C;
+    const firstBoundY = ny >= 0 ? (gy + 1) * C : gy * C;
+    let tMaxX = nx !== 0 ? Math.abs((firstBoundX - start.x) / nx) : Infinity;
+    let tMaxY = ny !== 0 ? Math.abs((firstBoundY - start.y) / ny) : Infinity;
+    const tDeltaX = nx !== 0 ? Math.abs(C / nx) : Infinity;
+    const tDeltaY = ny !== 0 ? Math.abs(C / ny) : Infinity;
 
-      // Check if out of bounds
-      if (gridX < 0 || gridX >= GRID.COLS || gridY < 0 || gridY >= GRID.ROWS) {
-        return { x: checkX, y: checkY, blocked: true };
-      }
-
-      // Check collision map (solid walls)
-      if (this.collisionMap && this.collisionMap[gridY][gridX]) {
-        return { x: checkX, y: checkY, blocked: true };
-      }
-
-      // Check background objects (trees, boulders, etc.)
+    const isBlocked = (cgx, cgy) => {
+      if (cgx < 0 || cgx >= GRID.COLS || cgy < 0 || cgy >= GRID.ROWS) return true;
+      if (this.collisionMap && this.collisionMap[cgy][cgx]) return true;
       if (this.backgroundObjects) {
         for (const obj of this.backgroundObjects) {
           if (obj.destroyed) continue;
-
-          const objGridX = Math.floor(obj.position.x / GRID.CELL_SIZE);
-          const objGridY = Math.floor(obj.position.y / GRID.CELL_SIZE);
-
-          if (objGridX === gridX && objGridY === gridY) {
+          if (Math.floor(obj.position.x / C) === cgx && Math.floor(obj.position.y / C) === cgy) {
             if (obj.bulletInteraction === 'block' ||
                 obj.bulletInteraction === 'interact-preserve' ||
-                obj.bulletInteraction === 'interact-destroy') {
-              return { x: checkX, y: checkY, blocked: true };
-            }
+                obj.bulletInteraction === 'interact-destroy') return true;
           }
         }
       }
+      return false;
+    };
+
+    for (let safety = 0; safety < 128; safety++) {
+      if (isBlocked(gx, gy)) {
+        return { x: start.x + nx * Math.min(tMaxX, tMaxY), y: start.y + ny * Math.min(tMaxX, tMaxY), blocked: true };
+      }
+
+      const tNext = Math.min(tMaxX, tMaxY);
+      if (tNext >= checkDist) break;
+
+      const EPS = 1e-6;
+      if (Math.abs(tMaxX - tMaxY) < EPS) {
+        const cx = gx + stepX, cy = gy + stepY;
+        if (isBlocked(cx, gy)) return { x: start.x + nx * tMaxX, y: start.y + ny * tMaxX, blocked: true };
+        if (isBlocked(gx, cy)) return { x: start.x + nx * tMaxY, y: start.y + ny * tMaxY, blocked: true };
+        tMaxX += tDeltaX; tMaxY += tDeltaY;
+        gx = cx; gy = cy;
+      } else if (tMaxX < tMaxY) {
+        tMaxX += tDeltaX; gx += stepX;
+      } else {
+        tMaxY += tDeltaY; gy += stepY;
+      }
     }
 
-    return { x: end.x, y: end.y, blocked: false }; // Clear vision to target
+    return { x: end.x, y: end.y, blocked: false };
   }
 
   /**
@@ -1368,7 +1868,9 @@ export class Enemy {
           if (objGridX === gridX && objGridY === gridY) {
             // Block vision if object has blocksVision property or blocks bullets
             if (obj.blocksVision && obj.blocksVision()) {
-              return false; // Tall grass blocks vision
+              // Grass doesn't block vision at close range — enemy can sense nearby player.
+              // 3-cell threshold: you can't hide from something standing right next to you.
+              if (distance > GRID.CELL_SIZE * 3) return false;
             }
             if (obj.bulletInteraction === 'block' ||
                 obj.bulletInteraction === 'interact-preserve') {
@@ -1392,12 +1894,31 @@ export class Enemy {
     return true; // Clear vision
   }
 
+  /**
+   * Returns true if the target (player) is currently overlapping a tall grass tile.
+   * Used to suppress idle proximity detection — grass conceals the player from unaware enemies.
+   */
+  isTargetInTallGrass() {
+    if (!this.target || !this.backgroundObjects) return false;
+    const px = Math.floor(this.target.position.x / GRID.CELL_SIZE);
+    const py = Math.floor(this.target.position.y / GRID.CELL_SIZE);
+    for (const obj of this.backgroundObjects) {
+      if (obj.destroyed || obj.char !== '|') continue;
+      if (Math.floor(obj.position.x / GRID.CELL_SIZE) === px &&
+          Math.floor(obj.position.y / GRID.CELL_SIZE) === py) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   canAttack() {
     // Blind enemies can still attack, but will miss (damage set to 0 in createAttack)
 
-    // Sap attacks can start when within range and not already sapping
+    // Sap attacks can start when within range, not already sapping, and target has room for another bat
     if (this.attackType === 'sap') {
-      return !this.sapping && this.state === 'attack' && this.attackTimer <= 0 && this.windupTimer <= 0;
+      const targetFull = (this.target?.activeSappingBats?.length ?? 0) >= 3;
+      return !this.sapping && !targetFull && this.state === 'attack' && this.attackTimer <= 0 && this.windupTimer <= 0;
     }
     // Can only attack after windup completes
     return this.state === 'attack' && this.attackTimer <= 0 && this.windupTimer <= 0;
@@ -1457,8 +1978,9 @@ export class Enemy {
   }
 
   createMeleeAttack() {
-    const dx = this.target.position.x - this.position.x;
-    const dy = this.target.position.y - this.position.y;
+    const aimPos = this.markedTargetPosition || this.target.position;
+    const dx = aimPos.x - this.position.x;
+    const dy = aimPos.y - this.position.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
     if (distance === 0) return null;
@@ -1494,8 +2016,9 @@ export class Enemy {
   createWindupAttackVisual() {
     if (!this.target) return null;
 
-    const dx = this.target.position.x - this.position.x;
-    const dy = this.target.position.y - this.position.y;
+    const aimPos = this.markedTargetPosition || this.target.position;
+    const dx = aimPos.x - this.position.x;
+    const dy = aimPos.y - this.position.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
     if (distance === 0) return null;
@@ -1531,8 +2054,9 @@ export class Enemy {
   }
 
   createProjectile() {
-    const dx = this.target.position.x - this.position.x;
-    const dy = this.target.position.y - this.position.y;
+    const aimPos = this.markedTargetPosition || this.target.position;
+    const dx = aimPos.x - this.position.x;
+    const dy = aimPos.y - this.position.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
     if (distance === 0) return null;
@@ -1566,8 +2090,9 @@ export class Enemy {
   }
 
   createMagicAttack() {
-    const dx = this.target.position.x - this.position.x;
-    const dy = this.target.position.y - this.position.y;
+    const aimPos = this.markedTargetPosition || this.target.position;
+    const dx = aimPos.x - this.position.x;
+    const dy = aimPos.y - this.position.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
     if (distance === 0) return null;
@@ -1608,8 +2133,9 @@ export class Enemy {
   }
 
   createFireBreath() {
-    const dx = this.target.position.x - this.position.x;
-    const dy = this.target.position.y - this.position.y;
+    const aimPos = this.markedTargetPosition || this.target.position;
+    const dx = aimPos.x - this.position.x;
+    const dy = aimPos.y - this.position.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
     if (distance === 0) return null;
@@ -1651,8 +2177,13 @@ export class Enemy {
 
   createSapAttack() {
     // Start sapping - lock onto target and deal periodic damage
+    const target = this.target;
+    if (target?.activeSappingBats) {
+      this.sapSlot = target.activeSappingBats.length; // 0, 1, or 2
+      target.activeSappingBats.push(this);
+    }
     this.sapping = true;
-    this.sappingTarget = this.target;
+    this.sappingTarget = target;
     this.sapDamageTimer = this.sapDamageInterval;
     this.attackTimer = 0; // No cooldown while sapping
     this.state = 'idle';
@@ -1827,14 +2358,28 @@ export class Enemy {
   }
 
   getSappingIndicator() {
-    if (this.sapping) {
-      return {
-        char: '*',
-        color: '#ff0000',
-        offsetY: -GRID.CELL_SIZE  // Position above enemy
-      };
+    if (!this.sapping) return null;
+
+    const total = this.sappingTarget?.activeSappingBats?.length || 1;
+    const slot = this.sapSlot;
+
+    let offsetX = 0;
+    let offsetY = -GRID.CELL_SIZE;
+
+    if (total === 2) {
+      // Two bats: side by side  * *
+      offsetX = (slot === 0) ? -GRID.CELL_SIZE : GRID.CELL_SIZE;
+    } else if (total >= 3) {
+      // Three bats: triangle  * *
+      //                         *
+      if (slot < 2) {
+        offsetX = (slot === 0) ? -GRID.CELL_SIZE : GRID.CELL_SIZE;
+      } else {
+        offsetY = -GRID.CELL_SIZE * 2; // top center
+      }
     }
-    return null;
+
+    return { char: '*', color: '#ff0000', offsetX, offsetY };
   }
 
   canSpawn() {
@@ -2018,6 +2563,12 @@ export class Enemy {
   breakSapping(knockbackForce = 200) {
     if (!this.sapping || !this.sappingTarget) return;
 
+    // Deregister from target's active sapping list
+    if (this.sappingTarget.activeSappingBats) {
+      const idx = this.sappingTarget.activeSappingBats.indexOf(this);
+      if (idx !== -1) this.sappingTarget.activeSappingBats.splice(idx, 1);
+    }
+
     // Calculate knockback direction (away from target)
     const dx = this.position.x - this.sappingTarget.position.x;
     const dy = this.position.y - this.sappingTarget.position.y;
@@ -2032,6 +2583,7 @@ export class Enemy {
     this.sapping = false;
     this.sappingTarget = null;
     this.sapDamageTimer = 0;
+    this.sapSlot = -1;
     this.attackTimer = this.attackCooldown; // Reset attack cooldown
   }
 

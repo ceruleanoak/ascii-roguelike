@@ -12,6 +12,7 @@ export const PHYSICS = {
   PLAYER_SPEED: 180,           // pixels per second (1.5x speed increase)
   PLAYER_ACCELERATION: 600,    // pixels per second squared
   ENEMY_SPEED_BASE: 80,        // base enemy speed
+  ENEMY_ACCELERATION: 600,     // pixels per second squared (default; overridable per-enemy via data.acceleration)
   BULLET_SPEED: 300,           // projectile speed
   ARROW_SPEED: 250,
   ATTRACTION_RADIUS: 100,      // ingredient attraction distance
@@ -29,12 +30,29 @@ export const GAME_STATES = {
   GAME_OVER: 'GAME_OVER'
 };
 
+/**
+ * Room type registry.
+ *
+ * ADDING A NEW ROOM TYPE — checklist:
+ *  1. Add the constant here.
+ *  2. Add a case in RoomGenerator.getStructureCount() — return 0 if the room
+ *     manages its own terrain, or a count range for standard wall structures.
+ *     Omitting this case will trigger a console.warn and skip wall placement,
+ *     but should no longer crash.
+ *  3. Add a case in RoomGenerator.generateRoom()'s switch to call the room's
+ *     generator method.
+ *  4. If the type is triggered by an exit letter, add the letter override in
+ *     generateRoom() (see the 'T' / 'A' checks above the switch).
+ */
 export const ROOM_TYPES = {
   COMBAT: 'COMBAT',
   BOSS: 'BOSS',
   DISCOVERY: 'DISCOVERY',
   CAMP: 'CAMP',
-  TUNNEL: 'TUNNEL'
+  TUNNEL: 'TUNNEL',
+  ASCENT: 'ASCENT',
+  UNDERGROUND: 'UNDERGROUND',
+  BAT_BELFRY: 'BAT_BELFRY'
 };
 
 export const COLORS = {
@@ -51,25 +69,33 @@ export const COLORS = {
 
 export const CRAFTING = {
   STATION_Y: 15,     // row position of crafting station (centered vertically)
-  LEFT_SLOT_X: 13,   // column positions (centered horizontally)
-  CENTER_SLOT_X: 15,
-  RIGHT_SLOT_X: 17
+  LEFT_SLOT_X: 12,   // column positions (centered: block spans cols 12-18, center at col 15)
+  CENTER_SLOT_X: 14,
+  RIGHT_SLOT_X: 16
 };
 
 export const EQUIPMENT = {
-  // Left side - Storage chest and armor
+  // Left side - Three item chests (one per quick slot)
   CHEST_X: 3,
-  CHEST_Y: 10,
-  ARMOR_X: 3,
-  ARMOR_Y: 13,
+  CHEST1_Y: 7,
+  CHEST2_Y: 9,
+  CHEST3_Y: 11,
 
-  // Right side - Consumables
+  // Left side - Armor slot
+  ARMOR_X: 3,
+  ARMOR_Y: 14,
+
+  // Right side - Consumable slots (index 2 / slot 3 is locked/unlockable)
   CONSUMABLE1_X: 26,
-  CONSUMABLE1_Y: 12,
+  CONSUMABLE1_Y: 8,
   CONSUMABLE2_X: 26,
-  CONSUMABLE2_Y: 14,
+  CONSUMABLE2_Y: 10,
   CONSUMABLE3_X: 26,
-  CONSUMABLE3_Y: 16
+  CONSUMABLE3_Y: 12,
+  CONSUMABLE4_X: 26,
+  CONSUMABLE4_Y: 14,
+  CONSUMABLE5_X: 26,
+  CONSUMABLE5_Y: 16
 };
 
 export const PLAYER_STATS = {
@@ -202,6 +228,7 @@ export const BACKGROUND_OBJECTS = {
     name: 'Metal Box',
     color: '#999999',
     hp: 4,
+    hitbox: { w: 0.75, h: 0.75 },   // 12×12 — heavy box, fills most of cell
     dropEffect: 'destroyObject:spawnRandom',
     bulletInteraction: 'block',
     flammability: 'none',
@@ -214,6 +241,7 @@ export const BACKGROUND_OBJECTS = {
     name: 'Boulder',
     color: '#666666',
     hp: 5,
+    hitbox: { w: 0.875, h: 0.875 }, // 14×14 — large immovable rock
     dropEffect: 'destroyObject:spawnMultiple:M:2',
     dropChance: 0.3,
     bulletInteraction: 'block',
@@ -285,6 +313,7 @@ export const BACKGROUND_OBJECTS = {
     hp: 2,
     damagedChar: 'P',
     dropEffect: 'destroyObject:spawnRandom',
+    dropChance: 0.45,  // 65% of barrels are empty; when they do drop, uses weak rarity (mostly ingredients)
     bulletInteraction: 'interact-destroy',
     flammability: 'high',
     conductivity: 'none',
@@ -309,7 +338,7 @@ export const BACKGROUND_OBJECTS = {
     name: 'Tall Grass',
     color: '#559944',
     hp: 1,
-    bulletInteraction: 'interact-destroy',
+    bulletInteraction: 'pass-through',
     flammability: 'high',
     burnDuration: 1.5,
     conductivity: 'none',
@@ -422,6 +451,51 @@ export const BACKGROUND_OBJECTS = {
     alwaysRender: true, // Always visible regardless of plane
     interactions: {
       default: { animation: 'none', message: null }
+    }
+  },
+  'ʌ': {
+    name: 'Slope (Up)',
+    color: '#555555',
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    slope: true,
+    slopeDirection: 'up',
+    solid: false,
+    interactions: {
+      default: { animation: 'none', message: null }
+    }
+  },
+  '}': {
+    name: 'Cave Wall',
+    color: '#554433',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    tunnelWall: true,
+    solid: true,
+    renderOnlyOnPlane: 1,
+    interactions: {
+      default: { animation: 'bounce', message: null }
+    }
+  },
+  '2': {
+    name: 'Glittering Rock',
+    color: '#aaddff',
+    hp: 3,
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: false,
+    glitteringRock: true,
+    solid: true,
+    tunnelWall: false,
+    renderOnlyOnPlane: 1,
+    dropEffect: 'destroyObject:spawnGemstone',
+    interactions: {
+      default: { animation: 'bounce', message: null }
     }
   }
 };

@@ -20,11 +20,27 @@
  */
 
 import { GRID, COLORS } from '../../game/GameConfig.js';
+import { PixelatedDissolve, SplitReveal } from '../effects/TextEffects.js';
 
 export class ExploreRenderer {
   constructor(renderer, renderController) {
     this.renderer = renderer;
     this.renderController = renderController;
+
+    // REST label pixelated-dissolve effect (speed=1.5 → ~0.67 s full transition)
+    // blockSize=6 gives chunky cell-sized blocks that match the VentureArcade font.
+    this._restDissolve = new PixelatedDissolve({ speed: 1.5, blockSize: 6 });
+
+    // Per-direction split-reveal effects for exit gap openings.
+    // North/south gaps are on horizontal borders → halves slide left/right.
+    // East/west gaps are on vertical borders   → halves slide up/down.
+    this._exitSplits = {
+      north: new SplitReveal({ speed: 3.5, axis: 'horizontal' }),
+      south: new SplitReveal({ speed: 3.5, axis: 'horizontal' }),
+      east:  new SplitReveal({ speed: 3.5, axis: 'vertical' }),
+      west:  new SplitReveal({ speed: 3.5, axis: 'vertical' }),
+    };
+    this._lastRoom = null;
   }
 
   render(game) {
@@ -35,6 +51,28 @@ export class ExploreRenderer {
   }
 
   renderBackground(game) {
+    // Force background redraw when player plane changes (plane-aware bg objects appear/disappear)
+    const currentPlane = game.player?.plane ?? 0;
+    if (this._lastPlayerPlane !== currentPlane) {
+      this._lastPlayerPlane = currentPlane;
+      this.renderer.backgroundDirty = true;
+    }
+
+    // Force background redraw when the escape-route condition changes so the south
+    // border gap appears/disappears as the player picks up or drops all items.
+    const hasNoItems = game.playerHasNoItems();
+    if (this._lastHasNoItems !== hasNoItems) {
+      this._lastHasNoItems = hasNoItems;
+      this.renderer.backgroundDirty = true;
+    }
+
+    // Force background redraw when exits unlock so the border gap is drawn.
+    const exitsLocked = game.currentRoom.exitsLocked;
+    if (this._lastExitsLocked !== exitsLocked) {
+      this._lastExitsLocked = exitsLocked;
+      this.renderer.backgroundDirty = true;
+    }
+
     // Render background (only if dirty)
     if (!this.renderer.backgroundDirty) return;
 
@@ -42,18 +80,31 @@ export class ExploreRenderer {
     const environmentColors = game.zoneSystem.getBlendedEnvironmentColors(game.currentRoom.zone);
     this.renderer.clearBackground(environmentColors.background);
 
-    // Only create holes in border when exits are unlocked
-    // Exception: south exit opens if player has no items (escape route)
-    const borderExits = game.currentRoom.exitsLocked ?
-      { north: false, south: game.currentRoom.exits.south && game.playerHasNoItems(), east: false, west: false } :
-      game.currentRoom.exits;
+    // Always draw visual gaps for every exit that exists on this room.
+    // The split panels on the foreground act as doors — they cover each gap
+    // when closed and slide away when open.  Physics (collision map) stays
+    // separate and is controlled by updateExitCollisions().
+    const exits = game.currentRoom.exits;
+    const borderExits = {
+      north: !!exits.north,
+      south: !!exits.south,
+      east:  !!exits.east,
+      west:  !!exits.west,
+    };
     this.renderer.drawBorder(borderExits, game.currentRoom.borderColor);
 
-    // Draw collision map
+    // Draw collision map — skip every cell that sits on a visual gap position
+    // so the gap is never painted over by a solid wall cell.
+    const centerX = Math.floor(GRID.COLS / 2);
+    const centerY = Math.floor(GRID.ROWS / 2);
     for (let y = 0; y < GRID.ROWS; y++) {
       for (let x = 0; x < GRID.COLS; x++) {
         if (game.currentRoom.collisionMap[y][x]) {
-          this.renderer.drawCell(x, y, '█', '#444444');
+          if (exits.south && y === GRID.ROWS - 1 && x === centerX) continue;
+          if (exits.north && y === 0             && x === centerX) continue;
+          if (exits.east  && x === GRID.COLS - 1 && y === centerY) continue;
+          if (exits.west  && x === 0             && y === centerY) continue;
+          this.renderer.drawFilledCell(x, y, '#444444');
         }
       }
     }
@@ -68,41 +119,20 @@ export class ExploreRenderer {
       }
     }
 
-    // Draw static background objects (exclude water and grass - they render on foreground for dynamic state)
+    // Draw static background objects (exclude water, grass, and tunnel walls)
+    // Tunnel walls are rendered in the foreground pass to avoid stale-canvas copy bugs
+    // (the old fg→bg drawImage approach caused wrong-scale and previous-frame ghost artifacts)
     for (const obj of game.backgroundObjects) {
       const isGrass = obj.char === '|' || obj.char === '\\' || obj.char === '/' || obj.char === ',';
-      if (!obj.currentAnimation && obj.char !== '~' && !isGrass) {
-        // Check plane-aware rendering (tunnel walls, entrances, etc.)
+      const isTunnelWall = obj.data && obj.data.tunnelWall;
+      if (!obj.currentAnimation && obj.char !== '~' && !isGrass && !isTunnelWall) {
+        // Check plane-aware rendering (tunnel entrances, etc.)
         if (!this.shouldRenderBackgroundObject(obj, game.player)) continue;
 
-        // Draw directly to background context (not foreground)
         const x = obj.position.x + GRID.CELL_SIZE / 2;
         const y = obj.position.y + GRID.CELL_SIZE / 2;
-
-        // Check if this object should be rendered with dithering (tunnel walls when player in tunnel)
-        const isTunnelWall = obj.data && obj.data.tunnelWall;
-        const playerInTunnel = game.player.plane === 1;
-        const useDithering = isTunnelWall && playerInTunnel;
-
-        if (useDithering) {
-          // Tunnel walls render with dithering when player is in tunnel
-          // Need to temporarily draw to foreground context for dithering, then copy to background
-          this.renderer.fgCtx.save();
-          this.renderer.fgCtx.fillStyle = obj.color;
-          this.renderer.fgCtx.fillText(obj.char, x, y);
-          this.renderer.fgCtx.globalCompositeOperation = 'destination-out';
-          this.renderer.fgCtx.fillStyle = this.renderer.createDitherPattern();
-          this.renderer.fgCtx.fillRect(x - GRID.CELL_SIZE/2, y - GRID.CELL_SIZE/2, GRID.CELL_SIZE, GRID.CELL_SIZE);
-          this.renderer.fgCtx.restore();
-          // Copy to background
-          this.renderer.bgCtx.drawImage(this.renderer.fgCanvas, 0, 0);
-          // Clear foreground
-          this.renderer.fgCtx.clearRect(x - GRID.CELL_SIZE/2, y - GRID.CELL_SIZE/2, GRID.CELL_SIZE, GRID.CELL_SIZE);
-        } else {
-          // Normal rendering
-          this.renderer.bgCtx.fillStyle = obj.color;
-          this.renderer.bgCtx.fillText(obj.char, x, y);
-        }
+        this.renderer.bgCtx.fillStyle = obj.color;
+        this.renderer.bgCtx.fillText(obj.char, x, y);
       }
     }
 
@@ -113,60 +143,22 @@ export class ExploreRenderer {
     // Render foreground
     this.renderer.clearForeground();
 
-    // Draw semi-transparent warp zone indicators for all exits (only when unlocked)
     const centerX = Math.floor(GRID.COLS / 2);
     const centerY = Math.floor(GRID.ROWS / 2);
-    const warpZoneColor = 'rgba(100, 150, 255, 0.15)'; // Light blue, semi-transparent
     const exitsUnlocked = !game.currentRoom.exitsLocked;
 
-    // North exit warp zone (3 cells wide, 2 cells deep)
-    if (game.currentRoom.exits.north && exitsUnlocked) {
-      this.renderer.drawRect(
-        (centerX - 1) * GRID.CELL_SIZE,
-        0 * GRID.CELL_SIZE,
-        3 * GRID.CELL_SIZE,
-        2 * GRID.CELL_SIZE,
-        warpZoneColor,
-        true
-      );
-    }
-
-    // South exit warp zone (3 cells wide, 2 cells deep)
-    // Opens when unlocked OR when player has no items (escape route)
-    const southExitOpen = exitsUnlocked || game.playerHasNoItems();
-    if (game.currentRoom.exits.south && southExitOpen) {
-      this.renderer.drawRect(
-        (centerX - 1) * GRID.CELL_SIZE,
-        (GRID.ROWS - 2) * GRID.CELL_SIZE,
-        3 * GRID.CELL_SIZE,
-        2 * GRID.CELL_SIZE,
-        warpZoneColor,
-        true
-      );
-    }
-
-    // East exit warp zone (2 cells wide, 3 cells tall)
-    if (game.currentRoom.exits.east && exitsUnlocked) {
-      this.renderer.drawRect(
-        (GRID.COLS - 2) * GRID.CELL_SIZE,
-        (centerY - 1) * GRID.CELL_SIZE,
-        2 * GRID.CELL_SIZE,
-        3 * GRID.CELL_SIZE,
-        warpZoneColor,
-        true
-      );
-    }
-
-    // West exit warp zone (2 cells wide, 3 cells tall)
-    if (game.currentRoom.exits.west && exitsUnlocked) {
-      this.renderer.drawRect(
-        0 * GRID.CELL_SIZE,
-        (centerY - 1) * GRID.CELL_SIZE,
-        2 * GRID.CELL_SIZE,
-        3 * GRID.CELL_SIZE,
-        warpZoneColor,
-        true
-      );
+    // "R E S T" label — always call so the dissolve can animate in both directions.
+    // PixelatedDissolve handles the fade-out when visible=false.
+    const southExitOpen = !!(game.currentRoom.exits.south && (exitsUnlocked || game.playerHasNoItems()));
+    if (game.currentRoom.exits.south) {
+      this._restDissolve.render(this.renderer.fgCtx, {
+        text: ' R E S T',
+        font: `${GRID.CELL_SIZE}px 'VentureArcade', 'Unifont', monospace`,
+        color: '#666666',
+        x: GRID.WIDTH / 2,
+        y: (GRID.ROWS - 3) * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
+        visible: southExitOpen,
+      });
     }
 
     // Draw exit letters (if exits are unlocked) - only for north/east/west
@@ -174,7 +166,7 @@ export class ExploreRenderer {
     if (!game.currentRoom.exitsLocked) {
       // North exit
       if (game.currentRoom.exits.north && game.currentRoom.exits.north.letter) {
-        this.renderer.drawEntity(
+        this.renderer.drawEntityVA(
           centerX * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
           1 * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
           game.currentRoom.exits.north.letter,
@@ -184,7 +176,7 @@ export class ExploreRenderer {
 
       // East exit
       if (game.currentRoom.exits.east && game.currentRoom.exits.east.letter) {
-        this.renderer.drawEntity(
+        this.renderer.drawEntityVA(
           (GRID.COLS - 2) * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
           centerY * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
           game.currentRoom.exits.east.letter,
@@ -194,7 +186,7 @@ export class ExploreRenderer {
 
       // West exit
       if (game.currentRoom.exits.west && game.currentRoom.exits.west.letter) {
-        this.renderer.drawEntity(
+        this.renderer.drawEntityVA(
           1 * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
           centerY * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
           game.currentRoom.exits.west.letter,
@@ -202,6 +194,10 @@ export class ExploreRenderer {
         );
       }
     }
+
+    // Exit gap split-reveal overlays — drawn after letters so panels mask them
+    // during the opening animation, then slide away to reveal the open gap.
+    this._renderExitSplits(game, centerX, centerY);
 
     // Draw animating background objects
     for (const obj of game.backgroundObjects) {
@@ -235,8 +231,21 @@ export class ExploreRenderer {
       }
     }
 
+    // Draw tunnel walls on foreground (dithered when player is inside, invisible when outside)
+    // Moved from background pass to avoid: (1) wrong DPR scale from cross-canvas drawImage,
+    // and (2) stale previous-frame content being copied from fgCanvas to bgCanvas.
+    if (game.currentRoom?.tunnel && game.player.plane === 1) {
+      for (const obj of game.backgroundObjects) {
+        if (!obj.data || !obj.data.tunnelWall || obj.destroyed) continue;
+        const x = obj.position.x + GRID.CELL_SIZE / 2;
+        const y = obj.position.y + GRID.CELL_SIZE / 2;
+        this.renderer.drawEntityDithered(x, y, obj.char, obj.color);
+      }
+    }
+
     // Draw goo blobs (ground layer - under enemies and player)
     for (const gooBlob of game.gooBlobs) {
+      if (!this.shouldRenderEntity(gooBlob, game.player, game.currentRoom)) continue;
       const scale = gooBlob.getCurrentScale();
       this.renderer.fgCtx.save();
       const screenX = gooBlob.position.x;
@@ -266,9 +275,10 @@ export class ExploreRenderer {
 
     // Draw ingredients
     for (const ingredient of game.ingredients) {
+      const bobY = ingredient.inWater ? Math.sin(ingredient.bobTimer * 4) * 2 : 0;
       this.renderer.drawEntity(
         ingredient.position.x + GRID.CELL_SIZE / 2,
-        ingredient.position.y + GRID.CELL_SIZE / 2,
+        ingredient.position.y + GRID.CELL_SIZE / 2 + bobY,
         ingredient.char,
         ingredient.color
       );
@@ -316,6 +326,116 @@ export class ExploreRenderer {
         y: gy * GRID.CELL_SIZE
       }));
     }
+
+    // ── Fishing system render passes ──────────────────────────────────────────
+    const fishingSystem = game.fishingSystem;
+    if (fishingSystem) {
+      // Ambient fish (jump arcs from water)
+      for (const fish of fishingSystem.fishEntities) {
+        this.renderer.drawEntity(
+          fish.getRenderX(),
+          fish.getRenderY(),
+          fish.char,
+          fish.color
+        );
+      }
+
+      // Bobber (visible while BOBBING state)
+      if (fishingSystem.bobber?.visible) {
+        const bobber = fishingSystem.bobber;
+        this.renderer.drawEntity(
+          bobber.getRenderX(),
+          bobber.getRenderY(),
+          bobber.char,
+          bobber.color
+        );
+      }
+
+      // Fishing charge bar: shown while holding space to cast (like bow charge)
+      if (fishingSystem.state === fishingSystem.STATES.CHARGING && game.player) {
+        const chargeRatio = Math.min(fishingSystem.chargeTime / 1.5, 1.0);
+        const barHeight = GRID.CELL_SIZE;
+        const barX = game.player.position.x + GRID.CELL_SIZE * 1.5;
+        const barY = game.player.position.y;
+        const filledHeight = barHeight * chargeRatio;
+        this.renderer.drawRect(
+          barX,
+          barY + (barHeight - filledHeight),
+          4,
+          filledHeight,
+          '#8b4513',
+          true
+        );
+      }
+
+      // Bite window indicator: flash '!' when bobber bites
+      if (fishingSystem.state === fishingSystem.STATES.BITE_WINDOW) {
+        const ctx = this.renderer.fgCtx;
+        const pulse = Math.sin(Date.now() / 80) > 0;
+        if (pulse && game.player) {
+          ctx.save();
+          ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = '#ffff00';
+          ctx.globalAlpha = 0.9;
+          ctx.fillText(
+            '!',
+            game.player.position.x + GRID.CELL_SIZE / 2,
+            game.player.position.y - GRID.CELL_SIZE
+          );
+          ctx.restore();
+        }
+      }
+
+      // Rusalka (rendered separately from neutralCharacters to avoid double-update)
+      if (fishingSystem.rusalka?.alive) {
+        const rusalka = fishingSystem.rusalka;
+        const ctx = this.renderer.fgCtx;
+        ctx.save();
+        ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.globalAlpha = rusalka.getPulseAlpha();
+        ctx.fillStyle = rusalka.color;
+        ctx.fillText(
+          rusalka.char,
+          rusalka.position.x + GRID.CELL_SIZE / 2,
+          rusalka.position.y + GRID.CELL_SIZE / 2
+        );
+        ctx.restore();
+      }
+
+      // Reward objects: draw char + "CAUGHT: NAME" label
+      for (const reward of fishingSystem.rewardObjects) {
+        if (!reward.alive) continue;
+
+        this.renderer.drawEntity(
+          reward.getRenderX(),
+          reward.getRenderY(),
+          reward.char,
+          reward.color
+        );
+
+        // "CAUGHT: NAME" text above the char (fades out after 2s)
+        if (reward.messageTimer > 0) {
+          const ctx = this.renderer.fgCtx;
+          ctx.save();
+          ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillStyle = reward.color;
+          ctx.globalAlpha = Math.min(0.9, reward.messageTimer); // fade in last second
+          ctx.fillText(
+            `CAUGHT: ${reward.name}`,
+            reward.getRenderX(),
+            reward.getRenderY() - GRID.CELL_SIZE / 2 - 2
+          );
+          ctx.restore();
+        }
+      }
+    }
+    // ── End fishing render passes ─────────────────────────────────────────────
 
     // Draw consumable windups (dropped items during charge-up)
     for (const windup of game.inventorySystem.consumableWindups) {
@@ -432,14 +552,19 @@ export class ExploreRenderer {
     for (const attack of game.combatSystem.getMeleeAttacks()) {
       // Note: Melee attacks inherit plane from attacker via shooterPlane
       const useDithering = attack.shooterPlane === 1 && game.player.plane === 1;
-      const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
+      const cx = attack.position.x + GRID.CELL_SIZE / 2;
+      const cy = attack.position.y + GRID.CELL_SIZE / 2;
 
-      this.renderer[drawMethod](
-        attack.position.x + GRID.CELL_SIZE / 2,
-        attack.position.y + GRID.CELL_SIZE / 2,
-        attack.char,
-        attack.color
-      );
+      if (attack.drawAngle != null) {
+        if (useDithering) {
+          this.renderer.drawEntityRotatedDithered(cx, cy, attack.char, attack.color, attack.drawAngle);
+        } else {
+          this.renderer.drawEntityRotated(cx, cy, attack.char, attack.color, attack.drawAngle);
+        }
+      } else {
+        const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
+        this.renderer[drawMethod](cx, cy, attack.char, attack.color);
+      }
     }
 
     // Draw enemy melee attacks
@@ -502,13 +627,24 @@ export class ExploreRenderer {
 
     // Draw damage numbers
     for (const dmgNum of game.combatSystem.getDamageNumbers()) {
-      this.renderer.drawTextWithAlpha(
-        dmgNum.x,
-        dmgNum.y,
-        dmgNum.value.toString(),
-        dmgNum.color,
-        dmgNum.alpha
-      );
+      const scale = dmgNum.scale || 1;
+      if (scale !== 1) {
+        const ctx = this.renderer.fgCtx;
+        ctx.save();
+        ctx.globalAlpha = dmgNum.alpha;
+        ctx.fillStyle = dmgNum.color;
+        ctx.font = `${GRID.CELL_SIZE * scale}px 'Unifont', monospace`;
+        ctx.fillText(dmgNum.value.toString(), dmgNum.x, dmgNum.y);
+        ctx.restore();
+      } else {
+        this.renderer.drawTextWithAlpha(
+          dmgNum.x,
+          dmgNum.y,
+          dmgNum.value.toString(),
+          dmgNum.color,
+          dmgNum.alpha
+        );
+      }
     }
 
     // Draw particles (embers, explosions, clouds)
@@ -534,26 +670,6 @@ export class ExploreRenderer {
           alpha
         );
       }
-    }
-
-    // Draw goo blobs with pulsing scale effect
-    for (const gooBlob of game.gooBlobs) {
-      const scale = gooBlob.getCurrentScale();
-      // Render with pulsing
-      this.renderer.fgCtx.save();
-      const screenX = gooBlob.position.x;
-      const screenY = gooBlob.position.y;
-
-      // Apply scale
-      this.renderer.fgCtx.translate(screenX, screenY);
-      this.renderer.fgCtx.scale(scale, scale);
-      this.renderer.fgCtx.translate(-screenX, -screenY);
-
-      // Draw without glow
-      this.renderer.fgCtx.globalAlpha = 0.7;
-      this.renderer.drawEntity(screenX, screenY, gooBlob.char, gooBlob.color);
-
-      this.renderer.fgCtx.restore();
     }
 
     // Draw steam clouds (fire+water smokescreen)
@@ -612,11 +728,11 @@ export class ExploreRenderer {
         );
       }
 
-      // Draw sapping indicator (red * when latched to player)
+      // Draw sapping indicator (red * when latched to player; offset varies with bat count)
       const sappingIndicator = enemy.getSappingIndicator();
       if (sappingIndicator) {
         this.renderer.drawEntity(
-          enemy.position.x + GRID.CELL_SIZE / 2,
+          enemy.position.x + GRID.CELL_SIZE / 2 + (sappingIndicator.offsetX || 0),
           enemy.position.y + GRID.CELL_SIZE / 2 + sappingIndicator.offsetY,
           sappingIndicator.char,
           sappingIndicator.color
@@ -652,15 +768,34 @@ export class ExploreRenderer {
     // Old exit indicator system removed - now using colored exit letters
     // (Letters render at actual exit positions when exits unlock)
 
+    // Underground fog-of-war overlay: darken everything outside the player's visibility circle.
+    // Drawn after all entities so it clips both fg content and the bg canvas beneath.
+    // Uses evenodd fill rule to punch a transparent hole at the player's position.
+    if (game.currentRoom?.underground && game.player?.plane === 1) {
+      const fogRadius = (game.currentRoom.underground.caveFogRadius || 5) * GRID.CELL_SIZE;
+      const px = game.player.position.x + GRID.CELL_SIZE / 2;
+      const py = game.player.position.y + GRID.CELL_SIZE / 2;
+      const envColors = game.zoneSystem.getBlendedEnvironmentColors(game.currentRoom.zone);
+      const ctx = this.renderer.fgCtx;
+      ctx.save();
+      ctx.fillStyle = envColors.background || '#000000';
+      ctx.beginPath();
+      ctx.rect(0, 0, GRID.WIDTH, GRID.HEIGHT);
+      ctx.arc(px, py, fogRadius, 0, Math.PI * 2);
+      ctx.fill('evenodd');
+      ctx.restore();
+    }
+
     // Draw pickup message if active
     if (game.pickupMessage && game.pickupMessageTimer > 0) {
-      this.renderer.fgCtx.save();
-      this.renderer.fgCtx.font = `bold ${GRID.CELL_SIZE * 2}px "Courier New", monospace`;
-      this.renderer.fgCtx.textAlign = 'center';
-      this.renderer.fgCtx.textBaseline = 'middle';
-      this.renderer.fgCtx.fillStyle = COLORS.ITEM;
-      this.renderer.fgCtx.fillText(game.pickupMessage, GRID.WIDTH / 2, GRID.HEIGHT / 2);
-      this.renderer.fgCtx.restore();
+      const ctx = this.renderer.fgCtx;
+      ctx.save();
+      ctx.font = `${GRID.CELL_SIZE * 2}px 'VentureArcade', Unifont, monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = COLORS.ITEM;
+      this.renderer.drawWrappedText(ctx, game.pickupMessage, GRID.WIDTH / 2, GRID.HEIGHT / 2 - 100, GRID.WIDTH * 0.8, GRID.CELL_SIZE * 2.5);
+      ctx.restore();
     }
 
     // Draw inventory overlay when 'i' key is held
@@ -670,6 +805,53 @@ export class ExploreRenderer {
 
     // Render cheat menu overlay (if open)
     game.cheatMenu.render(this.renderer);
+  }
+
+  _renderExitSplits(game, centerX, centerY) {
+    const cs = GRID.CELL_SIZE;
+    const ctx = this.renderer.fgCtx;
+    const exits = game.currentRoom.exits;
+    const exitsUnlocked = !game.currentRoom.exitsLocked;
+    // Use the wall face color (same as collision-map cells) so the closing panel
+    // is visually indistinguishable from the adjacent border wall cells.
+    const wallColor = '#444444';
+
+    // On room change: start all splits fully open so they animate closed if
+    // exits are locked (enemies present), or stay open if already unlocked.
+    if (this._lastRoom !== game.currentRoom) {
+      this._lastRoom = game.currentRoom;
+      for (const split of Object.values(this._exitSplits)) split.startOpen();
+    }
+
+    // South exit: opens as escape route even while locked (playerHasNoItems).
+    const southOpen = !!(exits.south && (exitsUnlocked || game.playerHasNoItems()));
+    if (exits.south) {
+      this._exitSplits.south.render(ctx, {
+        x: centerX * cs, y: (GRID.ROWS - 1) * cs,
+        size: cs, color: wallColor, visible: southOpen,
+      });
+    }
+
+    if (exits.north) {
+      this._exitSplits.north.render(ctx, {
+        x: centerX * cs, y: 0,
+        size: cs, color: wallColor, visible: exitsUnlocked,
+      });
+    }
+
+    if (exits.east) {
+      this._exitSplits.east.render(ctx, {
+        x: (GRID.COLS - 1) * cs, y: centerY * cs,
+        size: cs, color: wallColor, visible: exitsUnlocked,
+      });
+    }
+
+    if (exits.west) {
+      this._exitSplits.west.render(ctx, {
+        x: 0, y: centerY * cs,
+        size: cs, color: wallColor, visible: exitsUnlocked,
+      });
+    }
   }
 
   renderEnemy(game, enemy) {
@@ -685,7 +867,7 @@ export class ExploreRenderer {
       // Boss Slime renders as 'o' at double font size
       if (enemy.char === 'M') {
         this.renderer.fgCtx.save();
-        this.renderer.fgCtx.font = `bold ${GRID.CELL_SIZE * 2}px "Courier New", monospace`;
+        this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 2}px 'Unifont', monospace`;
         this.renderer[drawMethod](
           enemy.position.x + GRID.CELL_SIZE / 2,
           enemy.position.y + GRID.CELL_SIZE / 2,
@@ -747,11 +929,11 @@ export class ExploreRenderer {
       );
     }
 
-    // Draw sapping indicator (red * when latched to player)
+    // Draw sapping indicator (red * when latched to player; offset varies with bat count)
     const sappingIndicator = enemy.getSappingIndicator();
     if (sappingIndicator) {
       this.renderer.drawEntity(
-        enemy.position.x + GRID.CELL_SIZE / 2,
+        enemy.position.x + GRID.CELL_SIZE / 2 + (sappingIndicator.offsetX || 0),
         enemy.position.y + GRID.CELL_SIZE / 2 + sappingIndicator.offsetY,
         sappingIndicator.char,
         sappingIndicator.color
@@ -842,6 +1024,25 @@ export class ExploreRenderer {
           '#00ff00'
         );
       }
+
+      // 5. Draw node path waypoints (magenta dots + connecting lines)
+      if (enemy.pathNodes && enemy.pathNodes.length > 0) {
+        let prevPt = enemyCenter;
+        for (let ni = enemy.currentNodeIndex; ni < enemy.pathNodes.length; ni++) {
+          const node = enemy.pathNodes[ni];
+          const nc = { x: node.x + GRID.CELL_SIZE / 2, y: node.y + GRID.CELL_SIZE / 2 };
+          this.renderer.drawLine(prevPt.x, prevPt.y, nc.x, nc.y, '#ff00ff88');
+          this.renderer.drawEntity(nc.x, nc.y, ni === enemy.currentNodeIndex ? '>' : '*', '#ff00ff');
+          prevPt = nc;
+        }
+      }
+
+      // 6. Stuck indicator — flash red '!' above enemy when stuckTimer > 0.1
+      if (enemy.stuckTimer > 0.1) {
+        const alpha = Math.min(enemy.stuckTimer / 0.3, 1.0);
+        const hex = Math.floor(alpha * 255).toString(16).padStart(2, '0');
+        this.renderer.drawEntity(enemyCenter.x, enemyCenter.y - GRID.CELL_SIZE, '!', `#ff0000${hex}`);
+      }
     }
   }
 
@@ -853,8 +1054,8 @@ export class ExploreRenderer {
    * - Tunnel walls: Always rendered (handled separately as background objects)
    */
   shouldRenderEntity(entity, player, room) {
-    // No tunnel room - always render
-    if (!room.tunnel) return true;
+    // No tunnel/underground room - always render
+    if (!room.tunnel && !room.underground) return true;
 
     const playerPlane = player.plane !== undefined ? player.plane : 0;
     const entityPlane = entity.plane !== undefined ? entity.plane : 0;

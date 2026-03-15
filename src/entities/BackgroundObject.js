@@ -35,37 +35,50 @@ export class BackgroundObject {
 
     this.hasCollision = false;
 
-    // Reduce hitbox for ground-level liquids to match ASCII character size
+    // Special-case hitboxes for certain char types, then fall through to
+    // data-driven hitbox (from BACKGROUND_OBJECTS), then to the render-size default.
     const isGroundLiquid = char === '=' || char === '~' || char === '!';
-    // Circular hitbox for rocks to match round shape
     const isRock = char === '0';
-    // Narrow trunk hitbox for trees and stumps (passable but slowing)
     const isTreeOrStump = char === '&' || char === 'Y';
 
     if (isRock) {
-      // Small circular collision (6x12 centered in 16x16 cell)
+      // Narrow elliptical collision — rock is round, not square.
+      // collisionShape: 'ellipse' is set in data; semi-axes a=3 b=6.
       this.width = 6;
-      this.height = GRID.CELL_SIZE * 0.75;
-      this.hitboxOffsetX = 5; // Center the hitbox horizontally
-      this.hitboxOffsetY = GRID.CELL_SIZE * 0.125;
+      this.height = GRID.CELL_SIZE * 0.75;   // 12px
+      this.hitboxOffsetX = 5;                // centers 6px box in 16px cell
+      this.hitboxOffsetY = GRID.CELL_SIZE * 0.125; // 2px
     } else if (isGroundLiquid) {
-      this.width = GRID.CELL_SIZE * 0.4;
-      this.height = GRID.CELL_SIZE * 0.3;
-      this.hitboxOffsetX = GRID.CELL_SIZE * 0.25;
-      this.hitboxOffsetY = GRID.CELL_SIZE * 0.6;
+      // Ground-level contact region — lower third of cell, centered horizontally.
+      // Gives the illusion that the liquid/fire sits on the floor plane.
+      this.width = GRID.CELL_SIZE * 0.4;     // 6px
+      this.height = GRID.CELL_SIZE * 0.3;    // 5px
+      this.hitboxOffsetX = GRID.CELL_SIZE * 0.25; // 4px
+      this.hitboxOffsetY = GRID.CELL_SIZE * 0.6;  // 10px (bottom third)
     } else if (isTreeOrStump) {
-      // Narrow trunk hitbox (6x10 centered in 16x16 cell)
-      // Used for slowdown detection, not collision (they're passable)
+      // Narrow trunk hitbox — used only for slowdown overlap, not solid blocking.
       this.width = 6;
       this.height = 10;
-      this.hitboxOffsetX = 5; // Center horizontally
-      this.hitboxOffsetY = 3; // Center vertically
+      this.hitboxOffsetX = 5;
+      this.hitboxOffsetY = 3;
+    } else if (this.data.hitbox) {
+      // Data-driven hitbox: BACKGROUND_OBJECTS entries can declare
+      //   hitbox: { w: <widthFraction>, h: <heightFraction> }
+      // Offsets are auto-calculated to center the box inside the cell.
+      const hb = this.data.hitbox;
+      this.width  = Math.round(GRID.CELL_SIZE * hb.w);
+      this.height = Math.round(GRID.CELL_SIZE * hb.h);
+      this.hitboxOffsetX = Math.floor((GRID.CELL_SIZE - this.width)  / 2);
+      this.hitboxOffsetY = Math.floor((GRID.CELL_SIZE - this.height) / 2);
     } else {
-      // Default: full cell collision
-      this.width = GRID.CELL_SIZE;
-      this.height = GRID.CELL_SIZE;
-      this.hitboxOffsetX = 0;
-      this.hitboxOffsetY = 0;
+      // Default: mirror the rendered glyph footprint.
+      // Unifont at 16px renders ASCII glyphs ~8px wide × ~12px tall, centered
+      // in the 16×16 cell.  Full-cell collision creates invisible walls; this
+      // keeps the collision box flush with what the player actually sees.
+      this.width  = Math.round(GRID.CELL_SIZE * 0.5);   // 8px
+      this.height = Math.round(GRID.CELL_SIZE * 0.75);  // 12px
+      this.hitboxOffsetX = Math.floor((GRID.CELL_SIZE - this.width)  / 2); // 4px
+      this.hitboxOffsetY = Math.floor((GRID.CELL_SIZE - this.height) / 2); // 2px
     }
 
     // Bullet interaction properties
@@ -151,6 +164,7 @@ export class BackgroundObject {
 
     // Update object properties from new data
     this.indestructible = this.data.indestructible || false;
+    this.bulletInteraction = this.data.bulletInteraction || 'block';
     this.hp = null; // Cut grass has no HP
     this.maxHp = null;
 
@@ -308,7 +322,23 @@ export class BackgroundObject {
 
   // Used by projectiles (bullets/arrows) — keeps existing bullet interaction logic.
   handleBulletCollision(bullet) {
-    if (this.indestructible) {
+    // Arrows pass through grass with slight speed decay — grass is not destroyed
+    if (bullet.type === 'arrow' && (this.char === '|' || this.char === ',')) {
+      this._playAnimation('shake');
+      return {
+        bulletBehavior: 'slow',
+        speedMultiplier: 0.95,
+        shouldDestroyBullet: false,
+        effect: null,
+        message: null,
+        object: this
+      };
+    }
+
+    // Pass-through and pass-through-slow always win, even for indestructible objects
+    if (this.bulletInteraction === 'pass-through' || this.bulletInteraction === 'pass-through-slow') {
+      // fall through to switch below
+    } else if (this.indestructible) {
       return {
         bulletBehavior: 'block',
         effect: null,
@@ -410,6 +440,7 @@ export class BackgroundObject {
       this.char = ',';
       this.originalChar = ',';
       this.data = BACKGROUND_OBJECTS[','];
+      this.bulletInteraction = this.data.bulletInteraction || 'block';
     }
 
     // Set burned color and make non-flammable

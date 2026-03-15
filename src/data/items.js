@@ -13,7 +13,8 @@ export const ITEM_TYPES = {
 export const WEAPON_TYPES = {
   GUN: 'GUN',
   MELEE: 'MELEE',
-  BOW: 'BOW'
+  BOW: 'BOW',
+  FISHING_ROD: 'FISHING_ROD'
 };
 
 // Item definitions
@@ -33,13 +34,12 @@ export const ITEMS = {
     name: 'Sword',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'sword',
     damage: 2,
     windup: 0.3,
     recovery: 0.5,
-    attackPattern: 'arc',
     patternSpeed: 0.05,
     range: 20,
-    isBlade: true,
     color: COLORS.ITEM
   },
 
@@ -59,13 +59,12 @@ export const ITEMS = {
     name: 'Flame Sword',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'sword',
     damage: 3,
     windup: 0.45,
     recovery: 0.8,
-    attackPattern: 'arc',
     patternSpeed: 0.05,
     range: 20,
-    isBlade: true,
     onHit: 'burn',
     color: '#ff4400'
   },
@@ -93,13 +92,12 @@ export const ITEMS = {
     name: 'Dragon Blade',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'sword',
     damage: 5,
     windup: 0.75,
     recovery: 0.25,
-    attackPattern: 'arc',
     patternSpeed: 0.05,
     range: 24,
-    isBlade: true,
     color: '#ff00ff'
   },
   '⟩': {
@@ -118,11 +116,10 @@ export const ITEMS = {
     name: 'Bone Axe',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
-    weaponSubtype: 'blunt',
+    weaponSubtype: 'axe',
     damage: 3,
     windup: 0.6,
     recovery: 0.5,
-    attackPattern: 'sweep',
     patternSpeed: 0.04,
     range: 22,
     color: '#cccccc'
@@ -132,12 +129,11 @@ export const ITEMS = {
     name: 'Spear',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'spear',
     damage: 2,
     windup: 0.15,
     recovery: 0.45,
-    attackPattern: 'thrust',
     patternSpeed: 0.05,
-    range: 28,
     color: COLORS.ITEM
   },
   '/': {
@@ -145,14 +141,28 @@ export const ITEMS = {
     name: 'Staff',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'staff',
     damage: 1,
     windup: 0.15,
     recovery: 0.45,
-    attackPattern: 'thrust',
     patternSpeed: 0.05,
     meleeChar: '|',
     range: 28,
     color: COLORS.ITEM
+  },
+
+  'ߒ': {
+    char: 'ߒ',
+    name: 'Fishing Pole',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'staff',
+    isFishingRod: true,           // Enables fishing minigame when conditions are met
+    damage: 1,
+    windup: 0.35,
+    recovery: 0.55,
+    range: 32,
+    color: '#8b4513'
   },
 
   // Armor/defense
@@ -242,6 +252,36 @@ export const ITEMS = {
   },
 
   // Consumables
+  'G': {
+    char: 'G', name: 'Base Potion', type: ITEM_TYPES.CONSUMABLE,
+    effect: 'heal', amount: 1, oneShot: true,
+    autoTriggerHP: 0.20, color: '#88aaff'
+  },
+  'y': {
+    char: 'y', name: 'Firecracker', type: ITEM_TYPES.CONSUMABLE,
+    effect: 'firecracker', radius: 40, oneShot: true, color: '#ff8800'
+  },
+  'q': {
+    char: 'q', name: 'Haste Draught', type: ITEM_TYPES.CONSUMABLE,
+    effect: 'speed', duration: 8, oneShot: true,
+    autoTriggerHP: 0.40, color: '#00ffcc'
+  },
+  'x': {
+    char: 'x', name: 'Stone Skin', type: ITEM_TYPES.CONSUMABLE,
+    effect: 'stoneskin', duration: 10, defenseBonus: 3, oneShot: true,
+    autoTrigger: { condition: 'low_hp_or_surrounded', criticalHP: 0.35, nearbyEnemies: 2 },
+    color: '#aabb88'
+  },
+  'u': {
+    char: 'u', name: 'Battle Elixir', type: ITEM_TYPES.CONSUMABLE,
+    effect: 'damageBuff', damageBonus: 2, duration: 8, oneShot: true,
+    autoTrigger: { condition: 'nearest_enemy', range: 80 }, color: '#ff6644'
+  },
+  'z': {
+    char: 'z', name: 'Mending Brew', type: ITEM_TYPES.CONSUMABLE,
+    effect: 'regen', regenAmount: 1, regenInterval: 1.0, duration: 5, oneShot: true,
+    autoTriggerHP: 0.50, color: '#88ffaa'
+  },
   '@': {
     char: '@',
     name: 'Bomb',
@@ -259,7 +299,7 @@ export const ITEMS = {
     effect: 'heal',
     amount: 3,
     oneShot: true,
-    autoTriggerHP: 0.4,
+    autoTriggerHP: 0.5,
     color: '#ff00ff'
   },
   'ᒧ': {
@@ -347,13 +387,12 @@ export const ITEMS = {
     name: 'Legendary Flame Sword',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'sword',
     damage: 6,
     windup: 0.9,
     recovery: 0.7,
-    attackPattern: 'arc',
     patternSpeed: 0.05,
     range: 24,
-    isBlade: true,
     onHit: 'burn',
     color: '#ffaa00'
   },
@@ -371,13 +410,12 @@ export const ITEMS = {
     name: 'Venom Blade',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'sword',
     damage: 5,
     windup: 0.75,
     recovery: 0.15,
-    attackPattern: 'arc',
     patternSpeed: 0.05,
     range: 24,
-    isBlade: true,
     onHit: 'poison',
     color: '#00ff00'
   },
@@ -386,9 +424,9 @@ export const ITEMS = {
     name: 'Sky Bow',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
-    damage: 4,
+    damage: 3,
     cooldown: 1.2,
-    maxUses: 30,  // Fast bow with more uses
+    maxUses: 20,  // Fast bow with more uses
     color: '#00ffff'
   },
   '⚒': {
@@ -396,8 +434,8 @@ export const ITEMS = {
     name: 'Bone Crusher',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
-    weaponSubtype: 'blunt',
-    damage: 7,
+    weaponSubtype: 'hammer',
+    damage: 6,
     windup: 1.05,
     recovery: 0.2,
     attackPattern: 'sweep',
@@ -427,13 +465,12 @@ export const ITEMS = {
     name: 'Acid Blade',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'sword',
     damage: 4,
     windup: 0.6,
     recovery: 0.15,
-    attackPattern: 'arc',
     patternSpeed: 0.05,
     range: 22,
-    isBlade: true,
     onHit: 'acid',
     color: '#00ff00'
   },
@@ -563,11 +600,10 @@ export const ITEMS = {
     name: 'Ice Hammer',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
-    weaponSubtype: 'blunt',
+    weaponSubtype: 'hammer',
     damage: 4,
     windup: 0.6,
-    recovery: 1.0, // Longer recovery to balance power
-    attackPattern: 'shockwave',
+    recovery: 1.0,
     patternSpeed: 0.1,
     range: 24,
     onHit: 'freeze',
@@ -579,10 +615,10 @@ export const ITEMS = {
     name: 'Whip',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'whip',
     damage: 1,
     windup: 0.5,
-    recovery: 1.0, // Longer recovery to balance range
-    attackPattern: 'whipcrack',
+    recovery: 1.0,
     patternSpeed: 0.02,
     range: 40,
     meleeChar: '~',
@@ -593,10 +629,10 @@ export const ITEMS = {
     name: 'Flail',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'flail',
     damage: 2,
     windup: 0.45,
     recovery: 0.15,
-    attackPattern: 'ring',
     patternSpeed: 0.2,
     range: 26,
     color: '#aaaaaa'
@@ -606,13 +642,12 @@ export const ITEMS = {
     name: 'Blood Sword',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'sword',
     damage: 4,
     windup: 0.6,
     recovery: 0.15,
-    attackPattern: 'arc',
     patternSpeed: 0.05,
     range: 22,
-    isBlade: true,
     onHit: 'bleed',
     lifesteal: 0.4,
     color: '#cc0000'
@@ -622,10 +657,10 @@ export const ITEMS = {
     name: 'Thunder Axe',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'axe',
     damage: 5,
     windup: 0.75,
     recovery: 0.2,
-    attackPattern: 'sweep',
     patternSpeed: 0.04,
     range: 24,
     onHit: 'stun',
@@ -639,11 +674,10 @@ export const ITEMS = {
     name: 'Exploding Mace',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
-    weaponSubtype: 'blunt',
+    weaponSubtype: 'hammer',
     damage: 4,
     windup: 0.6,
     recovery: 0.3,
-    attackPattern: 'shockwave',
     patternSpeed: 0.1,
     range: 20,
     explode: true,
@@ -655,7 +689,6 @@ export const ITEMS = {
     name: 'Stun Baton',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
-    weaponSubtype: 'blunt',
     damage: 2,
     windup: 0.3,
     recovery: 0.2,
@@ -663,6 +696,7 @@ export const ITEMS = {
     range: 18,
     onHit: 'stun',
     knockback: 200,
+    isBlunt: true,
     color: '#0088ff'
   },
   '♣': {
@@ -670,13 +704,11 @@ export const ITEMS = {
     name: 'Vampire Dagger',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'dagger',
     damage: 3,
     windup: 0.2,
     recovery: 0.4,
-    attackPattern: 'multistab',
     patternSpeed: 0.05,
-    range: 16,
-    isBlade: true,
     lifesteal: 1.0,
     color: '#990000'
   },
@@ -685,11 +717,10 @@ export const ITEMS = {
     name: 'Earthquake Hammer',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
-    weaponSubtype: 'blunt',
+    weaponSubtype: 'hammer',
     damage: 6,
     windup: 0.9,
     recovery: 0.3,
-    attackPattern: 'shockwave',
     patternSpeed: 0.1,
     range: 20,
     knockback: 350,
@@ -702,13 +733,12 @@ export const ITEMS = {
     name: 'Chaos Blade',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'sword',
     damage: 4,
     windup: 0.6,
     recovery: 0.15,
-    attackPattern: 'arc',
     patternSpeed: 0.05,
     range: 24,
-    isBlade: true,
     onHit: 'burn', // Random effect would need special handling
     color: '#ff00ff'
   },
@@ -721,7 +751,7 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.BOW,
     damage: 2,
     cooldown: 1.8,
-    maxUses: 15,  // Fewer uses for elemental bow
+    maxUses: 5,  // Fewer uses for elemental bow
     onHit: 'freeze',
     arrowChar: '❅',
     color: '#00ddff'
@@ -733,7 +763,7 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.BOW,
     damage: 2,
     cooldown: 2.2,
-    maxUses: 12,  // Fewer uses since it fires 3 arrows
+    maxUses: 5,  // Fewer uses since it fires 3 arrows
     arrowCount: 3,
     color: '#ff8800'
   },
@@ -744,7 +774,7 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.BOW,
     damage: 3,
     cooldown: 2.5,
-    maxUses: 10,  // Very limited uses for powerful explosive bow
+    maxUses: 3,  // Very limited uses for powerful explosive bow
     explode: true,
     explodeRadius: 40,
     arrowChar: '●',
@@ -757,7 +787,7 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.BOW,
     damage: 3,
     cooldown: 2.0,
-    maxUses: 12,  // Limited uses for homing bow
+    maxUses: 8,  // Limited uses for homing bow
     homing: true,
     arrowChar: '◈',
     color: '#ff00ff'
@@ -769,7 +799,7 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.BOW,
     damage: 3,
     cooldown: 1.8,
-    maxUses: 18,  // Good uses for piercing bow
+    maxUses: 12,  // Good uses for piercing bow
     pierce: true,
     arrowChar: '⇶',
     color: '#00ff00'
@@ -781,7 +811,7 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.BOW,
     damage: 2,
     cooldown: 2.2,
-    maxUses: 12,  // Limited uses for chain lightning bow
+    maxUses: 5,  // Limited uses for chain lightning bow
     chain: true,
     chainCount: 2,
     onHit: 'stun',
@@ -796,7 +826,7 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.BOW,
     damage: 2,
     cooldown: 2.0,
-    maxUses: 15,  // Limited uses since arrows split
+    maxUses: 10,  // Limited uses since arrows split
     split: true,
     splitCount: 3,
     arrowChar: '→',
@@ -1061,6 +1091,20 @@ export const ITEMS = {
     char: '߃',
     name: 'Vault Key',
     type: ITEM_TYPES.WEAPON,
+  },
+  '⛏': {
+    char: '⛏',
+    name: 'Pickaxe',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'pickaxe',
+    damage: 4,
+    windup: 0.5,
+    recovery: 0.6,
+    attackPattern: 'thrust',
+    range: 22,
+    isPickaxe: true,
+    color: '#aaaaaa'
   }
 };
 
@@ -1089,8 +1133,35 @@ export const INGREDIENTS = {
   'o': { char: 'o', name: 'Oil', color: '#886644' },
   'r': { char: 'r', name: 'Root', color: '#996633' },
   'v': { char: 'v', name: 'Venom', color: '#00ff44' },
-  '0': { char: '0', name: 'Rock', color: '#888888' }
+  '0': { char: '0', name: 'Rock', color: '#888888' },
+  '1': { char: '1', name: 'Topaz',    color: '#ffcc00' },
+  '9': { char: '9', name: 'Garnet',   color: '#cc2222' },
+  '`': { char: '`', name: 'Emerald',  color: '#00cc44' },
+  '_': { char: '_', name: 'Diamond',  color: '#eeeeff' },
+  '6': { char: '6', name: 'Onyx',     color: '#333344' },
+  '?': { char: '?', name: 'Ruby',     color: '#ff2244' },
+  '(': { char: '(', name: 'Sapphire', color: '#2244ff' }
 };
+
+// Subtype defaults — explicit weapon properties override these
+export const SUBTYPE_DEFAULTS = {
+  sword:   { attackPattern: 'arc',       isBlade: true },
+  axe:     { attackPattern: 'sweep',     isBlade: true },
+  spear:   { attackPattern: 'thrust',    isBlade: true, range: 28 },
+  dagger:  { attackPattern: 'multistab', isBlade: true, range: 16 },
+  hammer:  { attackPattern: 'shockwave', canSmash: true },
+  flail:   { attackPattern: 'ring',      isBlunt: true },
+  whip:    { attackPattern: 'whipcrack', isBlunt: true, onHit: 'stun' },
+  staff:   { attackPattern: 'thrust',    isBlunt: true },
+  pickaxe: { attackPattern: 'thrust',    isBlade: false, isBlunt: false },
+};
+
+export function resolveWeaponDefaults(data) {
+  if (!data.weaponSubtype) return data;
+  const defaults = SUBTYPE_DEFAULTS[data.weaponSubtype];
+  if (!defaults) return data;
+  return { ...defaults, ...data }; // explicit values always win
+}
 
 export function getItemData(char) {
   return ITEMS[char] || INGREDIENTS[char] || null;
@@ -1143,7 +1214,7 @@ export const DROP_TABLES = {
       [RARITY.RARE]: []
     },
     consumables: {
-      [RARITY.COMMON]: ['H'],                // Health Potion
+      [RARITY.COMMON]: ['G'],                // Base Potion
       [RARITY.UNCOMMON]: [],
       [RARITY.RARE]: []
     }
@@ -1161,8 +1232,8 @@ export const DROP_TABLES = {
       [RARITY.RARE]: []
     },
     consumables: {
-      [RARITY.COMMON]: [],                // Health Potion
-      [RARITY.UNCOMMON]: ['@'],             // Bomb (slime bombs)
+      [RARITY.COMMON]: ['G'],             // Base Potion
+      [RARITY.UNCOMMON]: ['y'],           // Firecracker
       [RARITY.RARE]: []
     }
   },
@@ -1179,8 +1250,8 @@ export const DROP_TABLES = {
       [RARITY.RARE]: []
     },
     consumables: {
-      [RARITY.COMMON]: ['H'],                // Health Potion
-      [RARITY.UNCOMMON]: ['∞'],              // Wings (speed boost)
+      [RARITY.COMMON]: ['G'],                // Base Potion
+      [RARITY.UNCOMMON]: ['∞', 'y'],         // Wings (speed boost), Firecracker
       [RARITY.RARE]: ['♥']                   // Heart (heal)
     }
   },
@@ -1197,8 +1268,8 @@ export const DROP_TABLES = {
       [RARITY.RARE]: ['K']                   // Dragon Scale Armor
     },
     consumables: {
-      [RARITY.COMMON]: ['H'],                // Health Potion
-      [RARITY.UNCOMMON]: ['@'],              // Bomb
+      [RARITY.COMMON]: ['G'],                // Base Potion
+      [RARITY.UNCOMMON]: ['y'],              // Firecracker
       [RARITY.RARE]: ['★']                   // Lucky Coin
     }
   },
@@ -1288,8 +1359,8 @@ export const DROP_TABLES = {
       [RARITY.RARE]: ['E', 'I', 'K']
     },
     consumables: {
-      [RARITY.COMMON]: ['H'],
-      [RARITY.UNCOMMON]: ['@', '●'],
+      [RARITY.COMMON]: ['G'],
+      [RARITY.UNCOMMON]: ['y', '●'],
       [RARITY.RARE]: ['♥', '★', '∞', '♦']
     }
   }

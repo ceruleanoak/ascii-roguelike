@@ -1,5 +1,5 @@
 import { GRID, ROOM_TYPES, BACKGROUND_OBJECTS, WALL_STRUCTURES, WATER_STRUCTURES } from '../game/GameConfig.js';
-import { getRandomEnemy, getZoneRandomEnemy, createBossEnemy } from '../data/enemies.js';
+import { ENEMIES, getRandomEnemy, getZoneRandomEnemy, createBossEnemy } from '../data/enemies.js';
 import { RECIPES } from '../data/recipes.js';
 import { ZONES } from '../data/zones.js';
 import { LETTER_TEMPLATES } from '../data/letterTemplates.js';
@@ -65,6 +65,16 @@ export class RoomGenerator {
       type = ROOM_TYPES.TUNNEL;
     }
 
+    // Check if this is an ASCENT room (letter 'A')
+    if (exitLetter === 'A') {
+      type = ROOM_TYPES.ASCENT;
+    }
+
+    // Check if this is an UNDERGROUND room (letter 'U')
+    if (exitLetter === 'U') {
+      type = ROOM_TYPES.UNDERGROUND;
+    }
+
     // Determine room type if not specified
     if (!type) {
       type = this.determineRoomType();
@@ -84,7 +94,7 @@ export class RoomGenerator {
       items: [],
       backgroundObjects: [],
       recipeSign: null, // Visual-only recipe hint (not a BackgroundObject)
-      exits: this.exitSystem ? this.exitSystem.generateExits(this.currentDepth, type, zoneType, progressionColor) : { north: false, east: false, west: false, south: true },
+      exits: this.exitSystem ? this.exitSystem.generateExits(this.currentDepth, type, zoneType, progressionColor, exitLetter) : { north: false, east: false, west: false, south: true },
       playerStartPos: playerStartPos,  // Store for enemy generation
       letterTemplate: this.currentLetterTemplate // Store template for later event checks
     };
@@ -119,11 +129,15 @@ export class RoomGenerator {
       case ROOM_TYPES.TUNNEL:
         this.generateTunnelRoom(room);
         break;
-    }
-
-    // Generate ocean terrain if ocean template
-    if (this.currentLetterTemplate?.oceanZone?.enabled) {
-      this.generateOceanTerrain(room);
+      case ROOM_TYPES.ASCENT:
+        this.generateAscentRoom(room);
+        break;
+      case ROOM_TYPES.UNDERGROUND:
+        this.generateUndergroundRoom(room);
+        break;
+      case ROOM_TYPES.BAT_BELFRY:
+        this.generateBatBelfryRoom(room);
+        break;
     }
 
     // Note: Secret events (shaking bushes) are applied at runtime when room is cleared
@@ -277,16 +291,50 @@ export class RoomGenerator {
 
 
   generateCombatRoom(room) {
-    // Spawn 1-6 enemies based on depth
+    // Generate terrain first so liquid positions are known before enemy placement
+    this.generateBackgroundObjects(room);
+
+    // Special terrain overlays — run before enemies so they avoid liquid tiles
+    if (this.currentLetterTemplate?.islandZone?.enabled) {
+      this.generateIslandTerrain(room);
+    }
+    if (this.currentLetterTemplate?.oceanZone?.enabled) {
+      this.generateOceanTerrain(room);
+    }
+    if (this.currentLetterTemplate?.lakeZone?.enabled) {
+      this.generateLakeTerrain(room);
+    }
+
+    // Spawn 1-6 enemies based on depth, avoiding liquid tiles
     const enemyCount = Math.min(1 + Math.floor(this.currentDepth / 2), 6);
+    const islandConfig = this.currentLetterTemplate?.islandZone?.enabled ? this.currentLetterTemplate.islandZone : null;
 
     for (let i = 0; i < enemyCount; i++) {
       const enemyChar = getZoneRandomEnemy(this.currentDepth, room.zone);
-      const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
+      const allowLiquid = ENEMIES[enemyChar]?.waterAffinity === true;
+      const pos = islandConfig
+        ? this.getIslandPosition(islandConfig, room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects)
+        : this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, allowLiquid);
       const enemy = new Enemy(enemyChar, pos.x, pos.y, this.currentDepth);
       enemy.setCollisionMap(room.collisionMap);
       enemy.setBackgroundObjects(room.backgroundObjects);
       this.addEnemyToRoom(room, enemy);
+    }
+
+    // Inject letter-specific enemies (e.g., sea snakes always present in O rooms)
+    if (this.currentLetterTemplate?.enemyInjection) {
+      const inj = this.currentLetterTemplate.enemyInjection;
+      const injCount = inj.minCount + Math.floor(Math.random() * (inj.maxCount - inj.minCount + 1));
+      for (let i = 0; i < injCount; i++) {
+        const allowLiquid = inj.preferLiquid === true;
+        const pos = islandConfig
+          ? this.getIslandPosition(islandConfig, room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects)
+          : this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, allowLiquid);
+        const enemy = new Enemy(inj.char, pos.x, pos.y, this.currentDepth);
+        enemy.setCollisionMap(room.collisionMap);
+        enemy.setBackgroundObjects(room.backgroundObjects);
+        this.addEnemyToRoom(room, enemy);
+      }
     }
 
     // Add starting weapons in first room for combat demo
@@ -302,9 +350,6 @@ export class RoomGenerator {
       room.items.push(sword);
     }
 
-    // Generate background objects
-    this.generateBackgroundObjects(room);
-
     // Ensure K rooms have at least one guaranteed key dropper
     this.ensureKeyDroppers(room);
 
@@ -313,9 +358,12 @@ export class RoomGenerator {
   }
 
   generateBossRoom(room) {
-    // Single boss enemy
+    // Generate terrain first so liquid positions are known before enemy placement
+    this.generateBackgroundObjects(room);
+
+    // Single boss enemy, avoiding liquid tiles
     const boss = createBossEnemy(this.currentDepth);
-    const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
+    const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects);
     const enemy = new Enemy(boss.char, pos.x, pos.y, this.currentDepth);
     enemy.hp = boss.hp;
     enemy.damage = boss.damage;
@@ -332,9 +380,6 @@ export class RoomGenerator {
       const item = new Item(itemChar, itemPos.x, itemPos.y);
       room.items.push(item);
     }
-
-    // Generate background objects
-    this.generateBackgroundObjects(room);
 
     // Ensure K rooms have at least one guaranteed key dropper
     this.ensureKeyDroppers(room);
@@ -437,6 +482,17 @@ export class RoomGenerator {
         room.backgroundObjects.push(rightEntrance);
         entrances.push({ col: endCol, row, direction: 'right' });
       }
+
+      // Cap rocks at the four corners where tunnel walls meet the entrance opening.
+      // The wall chars (-) are not solid on plane 0, so rocks provide structural blocking.
+      // Pattern: 0 < < < 0  (left side) and  0 > > > 0  (right side)
+      for (const capCol of [startCol, endCol]) {
+        for (const capRow of [startRow, endRow]) {
+          const cap = new BackgroundObject('0', capCol * GRID.CELL_SIZE, capRow * GRID.CELL_SIZE);
+          cap.indestructible = true;
+          room.backgroundObjects.push(cap);
+        }
+      }
     } else {
       // Vertical tunnel: runs top-bottom
       const startCol = centerCol - Math.floor(width / 2);
@@ -480,6 +536,17 @@ export class RoomGenerator {
         room.backgroundObjects.push(bottomEntrance);
         entrances.push({ col, row: endRow, direction: 'down' });
       }
+
+      // Cap rocks at the four corners where tunnel walls meet the entrance opening.
+      // The wall chars (I) are not solid on plane 0, so rocks provide structural blocking.
+      // Pattern: 0 ^ ^ ^ 0  (top side) and  0 v v v 0  (bottom side)
+      for (const capCol of [startCol, endCol]) {
+        for (const capRow of [startRow, endRow]) {
+          const cap = new BackgroundObject('0', capCol * GRID.CELL_SIZE, capRow * GRID.CELL_SIZE);
+          cap.indestructible = true;
+          room.backgroundObjects.push(cap);
+        }
+      }
     }
 
     // Store tunnel metadata on room for plane switching logic
@@ -496,11 +563,12 @@ export class RoomGenerator {
     // Reset tunnel flag
     this.isGeneratingTunnel = false;
 
-    // Spawn 2-4 enemies (some inside tunnel, some outside)
+    // Spawn 2-4 enemies (some inside tunnel, some outside), avoiding liquid tiles
     const enemyCount = 2 + Math.floor(Math.random() * 3);
     for (let i = 0; i < enemyCount; i++) {
       const enemyChar = getZoneRandomEnemy(this.currentDepth, room.zone);
-      const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
+      const allowLiquid = ENEMIES[enemyChar]?.waterAffinity === true;
+      const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, allowLiquid);
       const enemy = new Enemy(enemyChar, pos.x, pos.y, this.currentDepth);
       enemy.setCollisionMap(room.collisionMap);
       enemy.setBackgroundObjects(room.backgroundObjects);
@@ -509,6 +577,536 @@ export class RoomGenerator {
 
     // Exits are locked until all enemies defeated
     room.exitsLocked = true;
+  }
+
+  generateAscentRoom(room) {
+    const CENTER_COL = Math.floor(GRID.COLS / 2);
+    const CENTER_ROW = Math.floor(GRID.ROWS / 2);
+    // Flat plateau: cells within INNER_RADIUS get no slope tile
+    const INNER_RADIUS = 5;
+    // Slope ring: INNER_RADIUS to OUTER_RADIUS
+    const OUTER_RADIUS = 8;
+    const FILL_CHANCE = 0.92;  // high fill so the larger ring reads as a solid circle
+    const SLOPE_COLOR = '#555555';
+
+    // Slope data shared by all four directional chars (overrides tunnel entrance data)
+    const makeSlopeData = (direction) => ({
+      name: `Slope (${direction})`,
+      color: SLOPE_COLOR,
+      solid: false,
+      bulletInteraction: 'pass-through',
+      flammability: 'none',
+      conductivity: 'none',
+      indestructible: true,
+      interactions: { default: { animation: 'none', message: null } }
+    });
+
+    for (let col = 1; col < GRID.COLS - 1; col++) {
+      for (let row = 1; row < GRID.ROWS - 1; row++) {
+        const dx = col - CENTER_COL;
+        const dy = row - CENTER_ROW;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < INNER_RADIUS || dist > OUTER_RADIUS) continue;
+        if (Math.random() > FILL_CHANCE) continue;
+        if (!this.isValidPosition(col, row, room)) continue;
+
+        // Determine cardinal direction away from center
+        const absDx = Math.abs(dx);
+        const absDy = Math.abs(dy);
+        let slopeChar, slopeDirection;
+
+        if (absDy >= absDx) {
+          if (dy < 0) { slopeChar = 'ʌ'; slopeDirection = 'up'; }
+          else        { slopeChar = 'v'; slopeDirection = 'down'; }
+        } else {
+          if (dx < 0) { slopeChar = '<'; slopeDirection = 'left'; }
+          else        { slopeChar = '>'; slopeDirection = 'right'; }
+        }
+
+        const slopeTile = new BackgroundObject(slopeChar, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+
+        // Override tunnel-entrance properties with slope properties
+        slopeTile.data         = makeSlopeData(slopeDirection);
+        slopeTile.slope        = true;
+        slopeTile.slopeDirection = slopeDirection;
+        slopeTile.color        = SLOPE_COLOR;
+        slopeTile.animationColor = SLOPE_COLOR;
+        slopeTile.bulletInteraction = 'pass-through';
+        slopeTile.indestructible = true;
+
+        room.backgroundObjects.push(slopeTile);
+      }
+    }
+
+    // Standard background objects (grass, trees, rocks) — clearing zone keeps plateau tidy
+    this.generateBackgroundObjects(room);
+
+    // Spawn enemies, avoiding liquid tiles
+    const enemyCount = Math.min(2 + Math.floor(this.currentDepth / 2), 6);
+    for (let i = 0; i < enemyCount; i++) {
+      const enemyChar = getZoneRandomEnemy(this.currentDepth, room.zone);
+      const allowLiquid = ENEMIES[enemyChar]?.waterAffinity === true;
+      const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, allowLiquid);
+      const enemy = new Enemy(enemyChar, pos.x, pos.y, this.currentDepth);
+      enemy.setCollisionMap(room.collisionMap);
+      enemy.setBackgroundObjects(room.backgroundObjects);
+      this.addEnemyToRoom(room, enemy);
+    }
+
+    this.ensureKeyDroppers(room);
+    room.exitsLocked = true;
+  }
+
+  generateUndergroundRoom(room) {
+    const COLS = GRID.COLS; // 30
+    const ROWS = GRID.ROWS; // 30
+
+    // ── Define 4 clearings near each exit edge ───────────────────────────────
+    const clearings = [
+      { minCol: 13, maxCol: 17, minRow: 1,  maxRow: 4,  side: 'north' },
+      { minCol: 13, maxCol: 17, minRow: 25, maxRow: 28, side: 'south' },
+      { minCol: 25, maxCol: 28, minRow: 13, maxRow: 17, side: 'east'  },
+      { minCol: 1,  maxCol: 4,  minRow: 13, maxRow: 17, side: 'west'  }
+    ];
+
+    const isInClearing = (col, row) =>
+      clearings.some(c => col >= c.minCol && col <= c.maxCol && row >= c.minRow && row <= c.maxRow);
+
+    // ── Cellular automata cave generation ────────────────────────────────────
+    const SEED_CHANCE = 0.45;
+    // caveGrid[row][col] = 1 → wall, 0 → passage
+    const caveGrid = Array.from({ length: ROWS }, (_, r) =>
+      Array.from({ length: COLS }, (_, c) => {
+        if (c === 0 || c === COLS - 1 || r === 0 || r === ROWS - 1) return 1; // border
+        if (isInClearing(c, r)) return 0; // clearings are open
+        return Math.random() < SEED_CHANCE ? 1 : 0;
+      })
+    );
+
+    const countNeighbors = (grid, col, row) => {
+      let count = 0;
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          const nr = row + dr, nc = col + dc;
+          if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) { count++; continue; }
+          if (grid[nr][nc]) count++;
+        }
+      }
+      return count;
+    };
+
+    for (let gen = 0; gen < 5; gen++) {
+      const next = caveGrid.map(r => [...r]);
+      for (let r = 1; r < ROWS - 1; r++) {
+        for (let c = 1; c < COLS - 1; c++) {
+          if (isInClearing(c, r)) { next[r][c] = 0; continue; }
+          const n = countNeighbors(caveGrid, c, r);
+          if (caveGrid[r][c] === 1) {
+            next[r][c] = (n >= 4) ? 1 : 0; // survival: S45678
+          } else {
+            next[r][c] = (n === 3) ? 1 : 0; // birth: B3
+          }
+        }
+      }
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          caveGrid[r][c] = next[r][c];
+        }
+      }
+    }
+
+    // ── Carve corridors from center to each clearing entrance ────────────────
+    const centerCol = Math.floor(COLS / 2);
+    const centerRow = Math.floor(ROWS / 2);
+
+    const carvePath = (fromCol, fromRow, toCol, toRow) => {
+      // Manhattan path: first horizontal, then vertical, 2-cell wide
+      let c = fromCol, r = fromRow;
+      while (c !== toCol) {
+        const step = c < toCol ? 1 : -1;
+        caveGrid[r][c] = 0;
+        if (r + 1 < ROWS - 1) caveGrid[r + 1][c] = 0;
+        c += step;
+      }
+      while (r !== toRow) {
+        const step = r < toRow ? 1 : -1;
+        caveGrid[r][c] = 0;
+        if (c + 1 < COLS - 1) caveGrid[r][c + 1] = 0;
+        r += step;
+      }
+    };
+
+    // Target midpoint of inner edge of each clearing
+    carvePath(centerCol, centerRow, 15, 5);  // to north clearing inner edge
+    carvePath(centerCol, centerRow, 15, 24); // to south clearing inner edge
+    carvePath(centerCol, centerRow, 24, 15); // to east clearing inner edge
+    carvePath(centerCol, centerRow, 5, 15);  // to west clearing inner edge
+
+    // ── Entrance markers at clearing inner edges ─────────────────────────────
+    const entranceData = [];
+
+    // North: entrance at row 4, player moves DOWN to enter cave
+    for (let c = 14; c <= 16; c++) {
+      const obj = new BackgroundObject('^', c * GRID.CELL_SIZE, 4 * GRID.CELL_SIZE);
+      obj.alwaysRender = true;
+      room.backgroundObjects.push(obj);
+      entranceData.push({ col: c, row: 4, direction: 'up' });
+    }
+    // South: entrance at row 25, player moves UP to enter cave
+    for (let c = 14; c <= 16; c++) {
+      const obj = new BackgroundObject('v', c * GRID.CELL_SIZE, 25 * GRID.CELL_SIZE);
+      obj.alwaysRender = true;
+      room.backgroundObjects.push(obj);
+      entranceData.push({ col: c, row: 25, direction: 'down' });
+    }
+    // East: entrance at col 25, player moves LEFT to enter cave
+    for (let r = 14; r <= 16; r++) {
+      const obj = new BackgroundObject('>', 25 * GRID.CELL_SIZE, r * GRID.CELL_SIZE);
+      obj.alwaysRender = true;
+      room.backgroundObjects.push(obj);
+      entranceData.push({ col: 25, row: r, direction: 'right' });
+    }
+    // West: entrance at col 4, player moves RIGHT to enter cave
+    for (let r = 14; r <= 16; r++) {
+      const obj = new BackgroundObject('<', 4 * GRID.CELL_SIZE, r * GRID.CELL_SIZE);
+      obj.alwaysRender = true;
+      room.backgroundObjects.push(obj);
+      entranceData.push({ col: 4, row: r, direction: 'left' });
+    }
+
+    // ── Place cave wall bg objects on cave cells ──────────────────────────────
+    // Also track open cave passage cells for glittering rock / enemy placement
+    const passageCells = [];
+    for (let r = 1; r < ROWS - 1; r++) {
+      for (let c = 1; c < COLS - 1; c++) {
+        if (caveGrid[r][c] === 1) {
+          // Skip entrance cells — they must stay traversable
+          const isEntrance = entranceData.some(e => e.col === c && e.row === r);
+          if (isEntrance) continue;
+          const obj = new BackgroundObject('}', c * GRID.CELL_SIZE, r * GRID.CELL_SIZE);
+          room.backgroundObjects.push(obj);
+        } else if (!isInClearing(c, r)) {
+          // Open cave passage (not in clearing) — eligible for rocks / enemy spawns
+          const isEntrance = entranceData.some(e => e.col === c && e.row === r);
+          if (!isEntrance) passageCells.push({ col: c, row: r });
+        }
+      }
+    }
+
+    // ── Place 5-10 glittering rocks in cave passages ──────────────────────────
+    this._shuffleArray(passageCells);
+    const rockCount = this.randInt(5, 10);
+    let rocksPlaced = 0;
+    for (const cell of passageCells) {
+      if (rocksPlaced >= rockCount) break;
+      const obj = new BackgroundObject('2', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
+      room.backgroundObjects.push(obj);
+      rocksPlaced++;
+    }
+
+    // ── Spawn 3-6 enemies in cave with plane 1 + rest state ──────────────────
+    const enemyCount = this.randInt(3, 6);
+    const usedCells = new Set();
+    let spawned = 0;
+    // shuffle again to pick different positions for enemies
+    const enemyCandidates = passageCells.slice(rockCount);
+    this._shuffleArray(enemyCandidates);
+    for (const cell of enemyCandidates) {
+      if (spawned >= enemyCount) break;
+      const key = `${cell.col},${cell.row}`;
+      if (usedCells.has(key)) continue;
+      // Keep away from entrances and clearings
+      if (isInClearing(cell.col, cell.row)) continue;
+      usedCells.add(key);
+      const enemyChar = getZoneRandomEnemy(this.currentDepth, room.zone);
+      const ex = cell.col * GRID.CELL_SIZE;
+      const ey = cell.row * GRID.CELL_SIZE;
+      const enemy = new Enemy(enemyChar, ex, ey, this.currentDepth);
+      enemy.plane = 1;
+      enemy.state = 'rest';
+      enemy.setCollisionMap(room.collisionMap);
+      enemy.setBackgroundObjects(room.backgroundObjects);
+      this.addEnemyToRoom(room, enemy);
+      spawned++;
+    }
+
+    // ── Spawn one pickaxe in a clearing so the player can find it ─────────────
+    const pickaxeClearing = clearings[Math.floor(Math.random() * clearings.length)];
+    const pickCol = this.randInt(pickaxeClearing.minCol + 1, pickaxeClearing.maxCol - 1);
+    const pickRow = this.randInt(pickaxeClearing.minRow + 1, pickaxeClearing.maxRow - 1);
+    const pickaxe = new Item('⛏', pickCol * GRID.CELL_SIZE, pickRow * GRID.CELL_SIZE);
+    room.items.push(pickaxe);
+
+    // ── Store underground metadata ────────────────────────────────────────────
+    room.underground = {
+      clearings,
+      entrances: entranceData,
+      entranceAxis: 'all',
+      caveFogRadius: 5,
+      caveGrid
+    };
+
+    this.ensureKeyDroppers(room);
+    room.exitsLocked = true;
+  }
+
+  generateBatBelfryRoom(room) {
+    const COLS = GRID.COLS; // 30
+    const ROWS = GRID.ROWS; // 30
+
+    // Reuse underground cave generation for the underground atmosphere
+    const clearings = [
+      { minCol: 13, maxCol: 17, minRow: 1,  maxRow: 4,  side: 'north' },
+      { minCol: 13, maxCol: 17, minRow: 25, maxRow: 28, side: 'south' },
+      { minCol: 25, maxCol: 28, minRow: 13, maxRow: 17, side: 'east'  },
+      { minCol: 1,  maxCol: 4,  minRow: 13, maxRow: 17, side: 'west'  }
+    ];
+
+    const isInClearing = (col, row) =>
+      clearings.some(c => col >= c.minCol && col <= c.maxCol && row >= c.minRow && row <= c.maxRow);
+
+    // Cellular automata cave generation (same as underground)
+    const SEED_CHANCE = 0.45;
+    const caveGrid = Array.from({ length: ROWS }, (_, r) =>
+      Array.from({ length: COLS }, (_, c) => {
+        if (c === 0 || c === COLS - 1 || r === 0 || r === ROWS - 1) return 1;
+        if (isInClearing(c, r)) return 0;
+        return Math.random() < SEED_CHANCE ? 1 : 0;
+      })
+    );
+
+    const countNeighbors = (grid, col, row) => {
+      let count = 0;
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          const nr = row + dr, nc = col + dc;
+          if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) { count++; continue; }
+          if (grid[nr][nc]) count++;
+        }
+      }
+      return count;
+    };
+
+    for (let gen = 0; gen < 5; gen++) {
+      const next = caveGrid.map(r => [...r]);
+      for (let r = 1; r < ROWS - 1; r++) {
+        for (let c = 1; c < COLS - 1; c++) {
+          if (isInClearing(c, r)) { next[r][c] = 0; continue; }
+          const n = countNeighbors(caveGrid, c, r);
+          if (caveGrid[r][c] === 1) {
+            next[r][c] = (n >= 4) ? 1 : 0;
+          } else {
+            next[r][c] = (n === 3) ? 1 : 0;
+          }
+        }
+      }
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          caveGrid[r][c] = next[r][c];
+        }
+      }
+    }
+
+    // Carve corridors from center to each clearing
+    const centerCol = Math.floor(COLS / 2);
+    const centerRow = Math.floor(ROWS / 2);
+
+    const carvePath = (fromCol, fromRow, toCol, toRow) => {
+      let c = fromCol, r = fromRow;
+      while (c !== toCol) {
+        const step = c < toCol ? 1 : -1;
+        caveGrid[r][c] = 0;
+        if (r + 1 < ROWS - 1) caveGrid[r + 1][c] = 0;
+        c += step;
+      }
+      while (r !== toRow) {
+        const step = r < toRow ? 1 : -1;
+        caveGrid[r][c] = 0;
+        if (c + 1 < COLS - 1) caveGrid[r][c + 1] = 0;
+        r += step;
+      }
+    };
+
+    carvePath(centerCol, centerRow, 15, 5);
+    carvePath(centerCol, centerRow, 15, 24);
+    carvePath(centerCol, centerRow, 24, 15);
+    carvePath(centerCol, centerRow, 5, 15);
+
+    // Entrance markers
+    const entranceData = [];
+    for (let c = 14; c <= 16; c++) {
+      const obj = new BackgroundObject('^', c * GRID.CELL_SIZE, 4 * GRID.CELL_SIZE);
+      obj.alwaysRender = true;
+      room.backgroundObjects.push(obj);
+      entranceData.push({ col: c, row: 4, direction: 'up' });
+    }
+    for (let c = 14; c <= 16; c++) {
+      const obj = new BackgroundObject('v', c * GRID.CELL_SIZE, 25 * GRID.CELL_SIZE);
+      obj.alwaysRender = true;
+      room.backgroundObjects.push(obj);
+      entranceData.push({ col: c, row: 25, direction: 'down' });
+    }
+    for (let r = 14; r <= 16; r++) {
+      const obj = new BackgroundObject('>', 25 * GRID.CELL_SIZE, r * GRID.CELL_SIZE);
+      obj.alwaysRender = true;
+      room.backgroundObjects.push(obj);
+      entranceData.push({ col: 25, row: r, direction: 'right' });
+    }
+    for (let r = 14; r <= 16; r++) {
+      const obj = new BackgroundObject('<', 4 * GRID.CELL_SIZE, r * GRID.CELL_SIZE);
+      obj.alwaysRender = true;
+      room.backgroundObjects.push(obj);
+      entranceData.push({ col: 4, row: r, direction: 'left' });
+    }
+
+    // Place cave walls and collect passage cells
+    const passageCells = [];
+    for (let r = 1; r < ROWS - 1; r++) {
+      for (let c = 1; c < COLS - 1; c++) {
+        if (caveGrid[r][c] === 1) {
+          const isEntrance = entranceData.some(e => e.col === c && e.row === r);
+          if (isEntrance) continue;
+          const obj = new BackgroundObject('}', c * GRID.CELL_SIZE, r * GRID.CELL_SIZE);
+          room.backgroundObjects.push(obj);
+        } else if (!isInClearing(c, r)) {
+          const isEntrance = entranceData.some(e => e.col === c && e.row === r);
+          if (!isEntrance) passageCells.push({ col: c, row: r });
+        }
+      }
+    }
+
+    // A few glittering rocks for atmosphere
+    this._shuffleArray(passageCells);
+    const rockCount = this.randInt(3, 6);
+    let rocksPlaced = 0;
+    for (const cell of passageCells) {
+      if (rocksPlaced >= rockCount) break;
+      const obj = new BackgroundObject('2', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
+      room.backgroundObjects.push(obj);
+      rocksPlaced++;
+    }
+
+    // Spawn 15 bats in cave passages (plane 1, rest state — same as underground)
+    const batCandidates = passageCells.slice(rockCount);
+    this._shuffleArray(batCandidates);
+    const usedCells = new Set();
+    let batsSpawned = 0;
+    for (const cell of batCandidates) {
+      if (batsSpawned >= 15) break;
+      const key = `${cell.col},${cell.row}`;
+      if (usedCells.has(key)) continue;
+      if (isInClearing(cell.col, cell.row)) continue;
+      usedCells.add(key);
+      const bat = new Enemy('^', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE, this.currentDepth);
+      bat.plane = 1;
+      bat.state = 'rest';
+      bat.setCollisionMap(room.collisionMap);
+      bat.setBackgroundObjects(room.backgroundObjects);
+      this.addEnemyToRoom(room, bat);
+      batsSpawned++;
+    }
+
+    room.isBatBelfry = true;
+    room.underground = {
+      clearings,
+      entrances: entranceData,
+      entranceAxis: 'all',
+      caveFogRadius: 5,
+      caveGrid
+    };
+
+    this.ensureKeyDroppers(room);
+    room.exitsLocked = true;
+  }
+
+  // Fisher-Yates shuffle (in-place)
+  _shuffleArray(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+  }
+
+  generateIslandTerrain(room) {
+    const config = this.currentLetterTemplate.islandZone;
+    const {
+      islandCenterCol, islandCenterRow,
+      islandRadius, lakeRadius, edgeNoise,
+      waterDensity, barrelMin, barrelMax
+    } = config;
+    const barrelCount = this.randInt(barrelMin, barrelMax);
+
+    // Shoreline transition bands
+    const islandInner  = islandRadius - edgeNoise;  // Always land
+    const islandOuter  = islandRadius + edgeNoise;  // Island → water transition
+    const lakeInner    = lakeRadius   - edgeNoise;  // Water → outer land transition
+    const lakeOuter    = lakeRadius   + edgeNoise;  // Always outer land
+
+    // Remove background objects that landed in the water ring
+    room.backgroundObjects = room.backgroundObjects.filter(obj => {
+      const col = obj.position.x / GRID.CELL_SIZE;
+      const row = obj.position.y / GRID.CELL_SIZE;
+      const dx = col - islandCenterCol;
+      const dy = row - islandCenterRow;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      // Keep objects on the island or on the outer land; remove from the water ring
+      return dist <= islandOuter || dist >= lakeInner;
+    });
+
+    // Flood the lake ring with water tiles
+    for (let col = 1; col < GRID.COLS - 1; col++) {
+      for (let row = 1; row < GRID.ROWS - 1; row++) {
+        if (room.collisionMap[row][col]) continue;
+        if (this.hasObjectAt(room, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE)) continue;
+
+        const dx = col - islandCenterCol;
+        const dy = row - islandCenterRow;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        let waterChance = 0;
+
+        if (dist > islandOuter && dist < lakeInner) {
+          // Core water ring — full density
+          waterChance = waterDensity;
+        } else if (dist > islandInner && dist <= islandOuter) {
+          // Island shoreline — smooth fade from land to water
+          const t = (dist - islandInner) / (islandOuter - islandInner);
+          waterChance = t * waterDensity;
+        } else if (dist >= lakeInner && dist < lakeOuter) {
+          // Outer shoreline — smooth fade from water to outer land
+          const t = 1 - (dist - lakeInner) / (lakeOuter - lakeInner);
+          waterChance = t * waterDensity;
+        }
+
+        if (waterChance > 0 && Math.random() < waterChance) {
+          const water = new BackgroundObject('~', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+          room.backgroundObjects.push(water);
+        }
+      }
+    }
+
+    // Scatter barrels on the island
+    let placed = 0;
+    let attempts = 0;
+    while (placed < barrelCount && attempts < 200) {
+      attempts++;
+      const angle = Math.random() * Math.PI * 2;
+      const radius = Math.random() * Math.max(islandInner - 1, 1);
+      const col = Math.round(islandCenterCol + Math.cos(angle) * radius);
+      const row = Math.round(islandCenterRow + Math.sin(angle) * radius);
+
+      if (this.isValidPosition(col, row, room) &&
+          !this.hasObjectAt(room, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE)) {
+        const barrel = new BackgroundObject('p', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+        this.applyZoneProperties(barrel, room.zone);
+        this.applyKeyDropLogic(barrel);
+        room.backgroundObjects.push(barrel);
+        placed++;
+      }
+    }
   }
 
   generateOceanTerrain(room) {
@@ -554,6 +1152,137 @@ export class RoomGenerator {
     }
   }
 
+  generateLakeTerrain(room) {
+    const config = this.currentLetterTemplate.lakeZone;
+    const { nodes, edgeNoise, waterDensity } = config;
+
+    // For each grid cell, check if it falls inside any blob node
+    for (let col = 1; col < GRID.COLS - 1; col++) {
+      for (let row = 1; row < GRID.ROWS - 1; row++) {
+        if (room.collisionMap[row][col]) continue;
+
+        // Check if cell is inside any blob (with noise)
+        let inAnyBlob = false;
+        for (const node of nodes) {
+          const dx = col - node.col;
+          const dy = row - node.row;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          // Perlin-like edge noise: add random offset to threshold per cell
+          const noiseOffset = (Math.random() - 0.5) * edgeNoise;
+          if (dist < node.radius + noiseOffset) {
+            inAnyBlob = true;
+            break;
+          }
+        }
+
+        if (inAnyBlob && Math.random() < waterDensity) {
+          // Remove any existing background object at this cell
+          const cellX = col * GRID.CELL_SIZE;
+          const cellY = row * GRID.CELL_SIZE;
+          const halfCell = GRID.CELL_SIZE / 2;
+
+          room.backgroundObjects = room.backgroundObjects.filter(obj =>
+            !(Math.abs(obj.position.x - cellX) < halfCell &&
+              Math.abs(obj.position.y - cellY) < halfCell)
+          );
+
+          // Place water tile
+          const water = new BackgroundObject('~', cellX, cellY);
+          room.backgroundObjects.push(water);
+        }
+      }
+    }
+
+    // Scatter shoreline decoration (rocks, bushes) at blob edges
+    for (const node of nodes) {
+      const decCount = Math.floor(node.radius * 1.5);
+      for (let i = 0; i < decCount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const edgeDist = node.radius + 0.5 + Math.random() * 1.5;
+        const col = Math.round(node.col + Math.cos(angle) * edgeDist);
+        const row = Math.round(node.row + Math.sin(angle) * edgeDist);
+
+        if (this.isValidPosition(col, row, room) &&
+            !this.hasObjectAt(room, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE)) {
+          const decChar = Math.random() < 0.6 ? '%' : '0';
+          const decObj = new BackgroundObject(decChar, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+          this.applyZoneProperties(decObj, room.zone);
+          room.backgroundObjects.push(decObj);
+        }
+      }
+    }
+  }
+
+  preloadRoomPreviews() {
+    const previews = { north: null, east: null, west: null, south: null };
+    const directions = ['north', 'east', 'west'];
+    for (const direction of directions) {
+      const roomType = this.determineRoomType();
+      const preview = this.getRoomPreview(roomType);
+      previews[direction] = {
+        type: roomType,
+        char: preview.char,
+        name: preview.name
+      };
+    }
+    return previews;
+  }
+
+  findSpawnPosition(center, range, collisionMap, enemies) {
+    for (let i = 0; i < 20; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const distance = Math.random() * range;
+      const x = center.x + Math.cos(angle) * distance;
+      const y = center.y + Math.sin(angle) * distance;
+
+      const gridX = Math.floor(x / GRID.CELL_SIZE);
+      const gridY = Math.floor(y / GRID.CELL_SIZE);
+
+      if (gridX < 0 || gridX >= GRID.COLS || gridY < 0 || gridY >= GRID.ROWS) continue;
+      if (collisionMap[gridY][gridX]) continue;
+
+      let overlaps = false;
+      for (const enemy of enemies) {
+        const dx = enemy.position.x - x;
+        const dy = enemy.position.y - y;
+        if (Math.sqrt(dx * dx + dy * dy) < GRID.CELL_SIZE * 2) {
+          overlaps = true;
+          break;
+        }
+      }
+
+      if (!overlaps) return { x, y };
+    }
+    return null;
+  }
+
+  spawnEnemiesFrom(game, spawner, spawnData) {
+    const newEnemies = [];
+    const { spawnChar, spawnCount, spawnRange, spawnerPosition } = spawnData;
+
+    for (let i = 0; i < spawnCount; i++) {
+      const spawnPos = this.findSpawnPosition(
+        spawnerPosition,
+        spawnRange,
+        game.currentRoom.collisionMap,
+        game.currentRoom.enemies
+      );
+
+      if (spawnPos) {
+        const newEnemy = new Enemy(spawnChar, spawnPos.x, spawnPos.y, game.currentDepth);
+        newEnemy.setCollisionMap(game.currentRoom.collisionMap);
+        newEnemy.setBackgroundObjects(game.currentRoom.backgroundObjects);
+        newEnemy.setSteamClouds(game.steamClouds);
+        newEnemy.setTarget(game.player);
+        newEnemy.enraged = true;
+        game.physicsSystem.addEntity(newEnemy);
+        newEnemies.push(newEnemy);
+      }
+    }
+
+    return newEnemies;
+  }
+
   hasObjectAt(room, x, y) {
     // Check if there's already a background object at this pixel position
     const threshold = GRID.CELL_SIZE / 2; // Allow objects within half a cell
@@ -563,12 +1292,64 @@ export class RoomGenerator {
     );
   }
 
-  getRandomPosition(collisionMap, existingEnemies = [], playerStartPos = null) {
+  getIslandPosition(islandConfig, collisionMap, existingEnemies = [], playerStartPos = null, backgroundObjects = []) {
+    const { islandCenterCol, islandCenterRow, islandRadius, edgeNoise } = islandConfig;
+    const islandInner = islandRadius - edgeNoise;
+    const spawnRadius = Math.max(islandInner - 1, 1);
+    const MIN_SPACING = GRID.CELL_SIZE * 2;
+    const PLAYER_BUFFER = GRID.CELL_SIZE * 3;
+
+    for (let attempts = 0; attempts < 200; attempts++) {
+      const angle = Math.random() * Math.PI * 2;
+      const r = Math.random() * spawnRadius;
+      const col = Math.round(islandCenterCol + Math.cos(angle) * r);
+      const row = Math.round(islandCenterRow + Math.sin(angle) * r);
+
+      if (col < 1 || col >= GRID.COLS - 1 || row < 1 || row >= GRID.ROWS - 1) continue;
+      if (collisionMap[row]?.[col]) continue;
+
+      const pixelX = col * GRID.CELL_SIZE;
+      const pixelY = row * GRID.CELL_SIZE;
+
+      if (playerStartPos) {
+        const dx = pixelX - playerStartPos.x;
+        const dy = pixelY - playerStartPos.y;
+        if (Math.sqrt(dx * dx + dy * dy) < PLAYER_BUFFER) continue;
+      }
+
+      let tooClose = false;
+      for (const e of existingEnemies) {
+        const dx = pixelX - e.position.x;
+        const dy = pixelY - e.position.y;
+        if (Math.sqrt(dx * dx + dy * dy) < MIN_SPACING) { tooClose = true; break; }
+      }
+      if (tooClose) continue;
+
+      let blocked = false;
+      for (const obj of backgroundObjects) {
+        if (obj.solid) {
+          const dx = pixelX - obj.position.x;
+          const dy = pixelY - obj.position.y;
+          if (Math.abs(dx) < GRID.CELL_SIZE && Math.abs(dy) < GRID.CELL_SIZE) { blocked = true; break; }
+        }
+      }
+      if (blocked) continue;
+
+      return { x: pixelX, y: pixelY };
+    }
+
+    // Fallback to any position on the island center
+    return { x: islandCenterCol * GRID.CELL_SIZE, y: islandCenterRow * GRID.CELL_SIZE };
+  }
+
+  getRandomPosition(collisionMap, existingEnemies = [], playerStartPos = null, backgroundObjects = [], allowLiquid = false) {
     let x, y;
     let attempts = 0;
     const MIN_SPACING = GRID.CELL_SIZE * 2; // Minimum distance between entities
     const PLAYER_BUFFER = GRID.CELL_SIZE * 3; // Larger buffer around player start
     const EXIT_CLEARANCE = 3; // Grid cells to clear around each exit
+    // Liquid chars enemies should never spawn on (water, lava, mud all use '~'; '=' is static water)
+    const LIQUID_CHARS = new Set(['~', '=']);
 
     // Calculate exit positions (matching createCollisionMap exit zones)
     const centerX = Math.floor(GRID.COLS / 2);
@@ -592,6 +1373,15 @@ export class RoomGenerator {
       if (collisionMap[y][x]) {
         attempts++;
         continue;
+      }
+
+      // Reject positions inside the vault interior (only walls are solid; interior must stay enemy-free)
+      if (this.currentVaultInfo) {
+        const v = this.currentVaultInfo;
+        if (x > v.minCol && x < v.maxCol && y > v.minRow && y < v.maxRow) {
+          attempts++;
+          continue;
+        }
       }
 
       // Check distance from all 4 exit zones
@@ -638,6 +1428,43 @@ export class RoomGenerator {
       if (tooCloseToEnemy) {
         attempts++;
         continue;
+      }
+
+      // Reject positions on liquid tiles (water/lava/mud) unless enemy has water affinity
+      if (!allowLiquid && backgroundObjects.length > 0) {
+        const onLiquid = backgroundObjects.some(obj =>
+          LIQUID_CHARS.has(obj.char) &&
+          Math.abs(obj.position.x - pixelX) < GRID.CELL_SIZE &&
+          Math.abs(obj.position.y - pixelY) < GRID.CELL_SIZE
+        );
+        if (onLiquid) {
+          attempts++;
+          continue;
+        }
+      }
+
+      // Reject positions overlapping solid background objects (rocks, boulders, crates, etc.)
+      if (backgroundObjects.length > 0) {
+        const overlappingSolid = backgroundObjects.some(obj => {
+          if (obj.destroyed) return false;
+          if (!obj.data) return false;
+          if (typeof obj.data.slowing === 'number') return false; // trees/stumps are passable
+          const isSolid = obj.data.solid ||
+            obj.data.bulletInteraction === 'block' ||
+            obj.data.bulletInteraction === 'interact-preserve';
+          if (!isSolid) return false;
+          const objBox = obj.getHitbox();
+          return (
+            pixelX < objBox.x + objBox.width &&
+            pixelX + GRID.CELL_SIZE > objBox.x &&
+            pixelY < objBox.y + objBox.height &&
+            pixelY + GRID.CELL_SIZE > objBox.y
+          );
+        });
+        if (overlappingSolid) {
+          attempts++;
+          continue;
+        }
       }
 
       // Valid position found
@@ -1427,6 +2254,11 @@ export class RoomGenerator {
     const availableStructures = this.getStructuresForRoom(roomType);
     const structureCount = this.getStructureCount(roomType);
 
+    // Guard: if no structures are defined for this room type, skip placement.
+    // This can happen when a new ROOM_TYPE is added but getStructureCount has
+    // no explicit case for it — see the contract comment on getStructureCount.
+    if (Object.keys(availableStructures).length === 0 || structureCount === 0) return;
+
     for (let i = 0; i < structureCount; i++) {
       const structure = this.selectWeightedStructure(availableStructures);
       const rotation = structure.allowRotation ? this.randomRotation() : 0;
@@ -1494,13 +2326,37 @@ export class RoomGenerator {
       .reduce((obj, [key, value]) => ({ ...obj, [key]: value }), {});
   }
 
+  /**
+   * Returns the number of random wall structures to stamp into a room.
+   *
+   * CONTRACT — every entry in ROOM_TYPES must have an explicit case here.
+   *
+   * When a new room type is added to ROOM_TYPES (GameConfig.js), add a
+   * corresponding case below before shipping. The choices are:
+   *   • return a count range  → standard wall structures will be placed
+   *   • return 0              → room manages its own terrain (e.g. ASCENT,
+   *                             TUNNEL), or should stay open by design
+   *
+   * Failing to add a case causes the default branch to run, which returns a
+   * non-zero count. placeWallStructures will then call getStructuresForRoom
+   * with the unknown type, receive an empty object, and crash inside
+   * selectWeightedStructure when it tries to access entries[0][1].
+   * The guard in placeWallStructures prevents the crash, but a console.warn
+   * will fire so the missing case is still visible during development.
+   */
   getStructureCount(roomType) {
     switch(roomType) {
-      case ROOM_TYPES.COMBAT: return this.randInt(1, 2);
-      case ROOM_TYPES.BOSS: return 1;
+      case ROOM_TYPES.COMBAT:    return this.randInt(1, 2);
+      case ROOM_TYPES.BOSS:      return 1;
       case ROOM_TYPES.DISCOVERY: return this.randInt(2, 3);
-      case ROOM_TYPES.CAMP: return this.randInt(1, 2);
-      default: return this.randInt(1, 2);
+      case ROOM_TYPES.CAMP:      return this.randInt(1, 2);
+      case ROOM_TYPES.TUNNEL:      return 0; // Tunnel generates its own walls
+      case ROOM_TYPES.ASCENT:      return 0; // Slope ring is the environmental feature
+      case ROOM_TYPES.UNDERGROUND: return 0; // Underground generates its own cave terrain
+      default:
+        console.warn(`[RoomGenerator] getStructureCount: no case for room type "${roomType}". ` +
+          'Add an explicit case to RoomGenerator.getStructureCount(). Returning 0 as safe fallback.');
+        return 0;
     }
   }
 
@@ -1753,6 +2609,11 @@ export class RoomGenerator {
         priority: 5,
         condition: (room) => {
           const roomCleared = room.enemies.length === 0;
+          // Active chase: guaranteed spawn so the Leshy never silently disappears mid-chase.
+          // shouldSpawnShakingBush blocks when leshyChaseActive, so check it separately.
+          if (this.zoneSystem?.leshyChaseActive) {
+            return room.zone === 'green' && roomCleared;
+          }
           return this.zoneSystem?.shouldSpawnShakingBush(room.zone, roomCleared) || false;
         },
         eligibleObjects: (room) => {

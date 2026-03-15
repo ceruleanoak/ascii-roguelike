@@ -149,30 +149,38 @@ export const NEUTRAL_ROOMS = {
     },
 
     /**
-     * Generate prize array: 3 blessings (single), 6 ingredient bunches (2-3 items each)
+     * Generate prize array: 9 ingredient bunches across 2 tiers.
+     * 3 premium clusters (4-5 rare ingredients), 6 standard clusters (2-3 common ones).
+     * Blessings are a separate system and are not items — handled in a future pass.
      */
     generatePrizes() {
       const prizes = [];
 
-      // Add 3 blessings (high-value, single items)
-      const blessings = ['S', 'V', 'X']; // Strength, Vitality, Swiftness
-      for (const blessingChar of blessings) {
-        prizes.push([blessingChar]); // Single item
-      }
+      // Rare ingredients (green-zone drops, crafting staples)
+      const rarePool   = ['k', 'e', 's', 'F', 'h', 'i']; // Silk, Eye, Scale, Fire Essence, Herb, Ice
+      const commonPool = ['g', 'M', 'w', 'b', 'f', 't']; // Goo, Metal, Wing, Bone, Fur, Teeth
 
-      // Add 6 ingredient bunches (2-3 rare ingredients each)
-      const rareIngredients = ['g', 'M', 'w', 'b']; // Mushroom, mineral, frost, bone
-      for (let i = 0; i < 6; i++) {
-        const bunchSize = 2 + Math.floor(Math.random() * 2); // 2-3 items
+      // 3 premium bunches (signal the best picks)
+      for (let i = 0; i < 3; i++) {
+        const size = 4 + Math.floor(Math.random() * 2); // 4-5 items
         const bunch = [];
-        for (let j = 0; j < bunchSize; j++) {
-          const randomIngredient = rareIngredients[Math.floor(Math.random() * rareIngredients.length)];
-          bunch.push(randomIngredient);
+        for (let j = 0; j < size; j++) {
+          bunch.push(rarePool[Math.floor(Math.random() * rarePool.length)]);
         }
         prizes.push(bunch);
       }
 
-      // Shuffle prizes for variety
+      // 6 standard bunches
+      for (let i = 0; i < 6; i++) {
+        const size = 2 + Math.floor(Math.random() * 2); // 2-3 items
+        const bunch = [];
+        for (let j = 0; j < size; j++) {
+          bunch.push(commonPool[Math.floor(Math.random() * commonPool.length)]);
+        }
+        prizes.push(bunch);
+      }
+
+      // Shuffle so premium clusters are distributed among the 9
       for (let i = prizes.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [prizes[i], prizes[j]] = [prizes[j], prizes[i]];
@@ -241,6 +249,7 @@ export const NEUTRAL_ROOMS = {
         const isIngr = isIngredient(char);
         if (isIngr) {
           entity = new Ingredient(char, clusterCenter.x, clusterCenter.y);
+          entity.pickupCooldown = 1.5; // Same cooldown as enemy drops — prevents instant magnet
         } else {
           entity = new Item(char, clusterCenter.x, clusterCenter.y);
         }
@@ -256,12 +265,41 @@ export const NEUTRAL_ROOMS = {
       // Decrement cuts
       state.cutsRemaining--;
 
+      // After 3 picks: auto-cut remaining clusters and start celebration
+      if (state.cutsRemaining === 0) {
+        for (const obj of room.backgroundObjects) {
+          if (obj.leshyGrass && obj.char === '|') {
+            obj.cutGrass();
+          }
+        }
+        state.celebrationActive = true;
+        state.celebrationTimer = 4.0;
+        state.celebrationTime = 0;
+      }
+
       // Return spawned items so they can be added to game
       return { spawnedItems };
     },
 
     onUpdate(deltaTime, room, player, state) {
-      // No continuous logic needed
+      if (state.celebrationActive) {
+        state.celebrationTimer -= deltaTime;
+        state.celebrationTime = (state.celebrationTime || 0) + deltaTime;
+        if (state.celebrationTimer <= 0) {
+          state.celebrationActive = false;
+        }
+      }
+    },
+
+    onRender(renderer, room, player, state) {
+      if (!state.celebrationActive) return;
+
+      const centerX = Math.floor(GRID.COLS / 2) * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+      const centerY = Math.floor(GRID.ROWS / 2) * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+      // Hop at ~5 cycles per second, 4px amplitude; fade out in the last 0.5s
+      const bobOffset = Math.sin(state.celebrationTime * Math.PI * 10) * 4;
+      const alpha = Math.min(1, state.celebrationTimer / 0.5);
+      renderer.drawTextWithAlpha(centerX, centerY + bobOffset, 'l', '#00ff00', alpha);
     },
 
     onExit(room, player, state) {

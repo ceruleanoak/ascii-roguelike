@@ -36,6 +36,7 @@ export class Player {
     this.quickSlots = [null, null, null]; // 3-slot loadout
     this.activeSlotIndex = 0; // Currently selected slot (0-2)
     this.inventory = []; // Ingredients only
+    this.activeSappingBats = []; // Bats currently latched to this player (up to 3)
     this.facing = { x: 0, y: 1 }; // Direction player is facing
 
     // Trap usage tracking (resets per room)
@@ -56,6 +57,10 @@ export class Player {
     this.wetDuration = 0;
     this.wetDropTimer = 0; // throttles trail particle emission
 
+    // Sprint footstep trail
+    this.footstepTimer = 0; // throttles footstep dot emission
+    this.footstepSide = 0;  // alternates 0/1 for left/right foot
+
     // Burn status
     this.burnDuration = 0;
     this.burnTickTimer = 0;
@@ -74,6 +79,14 @@ export class Player {
     this.luckTimer = 0;
     this.blockBoostTimer = 0;
     this.blockBoostAmount = 0;
+    this.stoneSkinTimer = 0;
+    this.stoneSkinBonus = 0;
+    this.damageBonusTimer = 0;
+    this.damageBonusAmount = 0;
+    this.regenTimer = 0;
+    this.regenAmount = 1;
+    this.regenInterval = 1.0;
+    this.regenTickTimer = 0;
 
     // Shield charges (from Shield / Tower Shield consumables)
     this.shieldCharges = 0;
@@ -81,6 +94,10 @@ export class Player {
     this.shieldCooldown = 0;
     this.shieldCooldownMax = 5;
     this.shieldBlocksAll = false; // true = blocks melee too, false = bullets only
+
+    // Fishing state
+    this.fishingLocked = false;       // Movement blocked during fishing cast/wait
+    this.rusalkaInputScale = 1.0;     // 1.0 = full control, 0.0 = no control (Rusalka seduction)
 
     // Input state
     this.inputState = {
@@ -101,8 +118,18 @@ export class Player {
       cooldownTimer: 0,
       distance: GRID.CELL_SIZE * 2, // roll distance (reduced)
       speed: 200, // pixels per second during roll (1/3 of original 600)
-      iframes: true // invulnerability during roll (for 'dodge' type)
+      iframes: true, // invulnerability during roll (for 'dodge' type)
+
+      // Slope interaction — see updateDodgeRoll for full mechanic description
+      slopeFreeTime: 5 / 60, // seconds of unimpeded roll on a slope (~20 frames at 60fps)
+      slopeTimer:    0,        // countdown for the remaining slope-roll window
+      slopeActive:   false,    // true once a slope tile was detected during this roll
+      slopeLocked:   false     // true during mercy phase: roll velocity zeroed, slope takes over
     };
+
+    // Set by PhysicsSystem each frame; read by updateDodgeRoll (1-frame lag is imperceptible)
+    this.isOnSlope = false;
+    this.isOnIce   = false;
 
     // Status effects
     this.statusEffects = {
@@ -120,7 +147,9 @@ export class Player {
     // Green ranger: shared action cooldown (gates both attacks and dodge rolling)
     this.actionCooldown = 0;
     this.actionCooldownMax = 0;
+    this.rollCharge = 0;   // Green ranger: energy drained while rolling, restored during cooldown
     this.continuousRollActive = false; // Sustained slide while holding arrow keys
+    this.pendingBlink = null; // Yellow mage: deferred teleport resolved in main.js
     this.greenIdleDamageBonus = 0;
     this.greenCombatDamagePenalty = 0;
   }
@@ -158,13 +187,20 @@ export class Player {
       targetAy = (targetAy / length) * acceleration;
     }
 
+    // During dodge roll: ignore input acceleration entirely — roll direction drives movement
+    if (this.dodgeRoll.active) {
+      this.acceleration.ax = 0;
+      this.acceleration.ay = 0;
+      return;
+    }
+
     // While charging bow: zero acceleration (movement slows to stop) but allow aiming
     if (isChargingBow) {
       this.acceleration.ax = 0;
       this.acceleration.ay = 0;
 
       // Apply gentle deceleration (friction) to bring player to a stop
-      const chargeDeceleration = 0.95; // Lower = faster stop (0.95 = gentle, gradual slowdown)
+      const chargeDeceleration = 0.8; // Lower = faster stop (0.95 = gentle, gradual slowdown)
       this.velocity.vx *= chargeDeceleration;
       this.velocity.vy *= chargeDeceleration;
 
@@ -218,6 +254,20 @@ export class Player {
 
   applySpeedBoost(duration) { this.speedBoostTimer = Math.max(this.speedBoostTimer, duration); }
   applyLuck(duration) { this.luckTimer = Math.max(this.luckTimer, duration); }
+  applyStoneSkin(duration, bonus) {
+    this.stoneSkinTimer = Math.max(this.stoneSkinTimer, duration);
+    this.stoneSkinBonus = Math.max(this.stoneSkinBonus, bonus);
+  }
+  applyDamageBuff(duration, bonus) {
+    this.damageBonusTimer = Math.max(this.damageBonusTimer, duration);
+    this.damageBonusAmount = Math.max(this.damageBonusAmount, bonus);
+  }
+  applyRegen(duration, amount, interval) {
+    this.regenTimer = Math.max(this.regenTimer, duration);
+    this.regenAmount = amount;
+    this.regenInterval = interval;
+    this.regenTickTimer = 0;
+  }
   applyBlockBoost(duration, amount) {
     this.blockBoostTimer = Math.max(this.blockBoostTimer, duration);
     this.blockBoostAmount = Math.max(this.blockBoostAmount, amount);
@@ -323,6 +373,19 @@ export class Player {
     if (this.luckTimer > 0) this.luckTimer -= deltaTime;
     if (this.blockBoostTimer > 0) this.blockBoostTimer -= deltaTime;
     if (this.waterImmunityTimer > 0) this.waterImmunityTimer -= deltaTime;
+    if (this.stoneSkinTimer > 0) {
+      this.stoneSkinTimer -= deltaTime;
+      if (this.stoneSkinTimer <= 0) { this.stoneSkinTimer = 0; this.stoneSkinBonus = 0; }
+    }
+    if (this.damageBonusTimer > 0) this.damageBonusTimer -= deltaTime;
+    if (this.regenTimer > 0) {
+      this.regenTimer -= deltaTime;
+      this.regenTickTimer -= deltaTime;
+      if (this.regenTickTimer <= 0) {
+        this.regenTickTimer = this.regenInterval;
+        this.heal(this.regenAmount);
+      }
+    }
 
     // Tick green ranger action cooldown
     if (this.actionCooldown > 0) {
@@ -403,6 +466,11 @@ export class Player {
     this.dodgeRoll.cooldownTimer = this.dodgeRoll.cooldown;
     this.dodgeRoll.speed = rollSpeed; // Set dynamic speed
 
+    // Reset slope/ice lock state for fresh roll
+    this.dodgeRoll.slopeTimer  = 0;
+    this.dodgeRoll.slopeActive = false;
+    this.dodgeRoll.slopeLocked = false;
+
     // Zero out velocity for flat dodge roll speed (not additive with movement)
     this.velocity.vx = 0;
     this.velocity.vy = 0;
@@ -424,12 +492,12 @@ export class Player {
         this.attackBlockTimer = this.invulnerabilityTimer;
         break;
       case 'damage':
-        // Leave damaging trail (particles created in main.js)
+        // Minimal i-frames — only for the roll duration itself, no buffer (requires precision)
+        this.invulnerabilityTimer = this.dodgeRoll.duration;
         break;
       case 'blink':
-        // Instant teleport
-        this.position.x += direction.x * this.dodgeRoll.distance;
-        this.position.y += direction.y * this.dodgeRoll.distance;
+        // Defer teleport to main.js for collision checking, bounds enforcement, and trail particles
+        this.pendingBlink = { direction: { x: direction.x, y: direction.y }, distance: this.dodgeRoll.distance };
         this.dodgeRoll.timer = 0; // Instant
         break;
     }
@@ -445,10 +513,31 @@ export class Player {
 
     // Active roll movement
     if (this.dodgeRoll.active) {
+      // ── Slope / ice lock phase ─────────────────────────────────────────────
+      // When the player enters a slope or frozen-ice tile during a roll, a
+      // free-time window opens (slopeFreeTime ≈ 20 frames).  During that window
+      // the roll velocity drives movement as normal ("burst").  Once the window
+      // expires, slopeLocked is set: roll velocity is zeroed and the tile's own
+      // physics (slope push / ice inertia) take over ("mercy phase").
+      const onSpecialTerrain = this.isOnSlope || this.isOnIce;
+      if (onSpecialTerrain && this.dodgeRoll.type !== 'blink') {
+        if (!this.dodgeRoll.slopeActive) {
+          this.dodgeRoll.slopeActive = true; // Start window on first contact
+          this.dodgeRoll.slopeTimer  = 0;
+        }
+        if (!this.dodgeRoll.slopeLocked) {
+          this.dodgeRoll.slopeTimer += deltaTime;
+          if (this.dodgeRoll.slopeTimer >= this.dodgeRoll.slopeFreeTime) {
+            this.dodgeRoll.slopeLocked = true;
+          }
+        }
+      }
+      // ──────────────────────────────────────────────────────────────────────
+
       this.dodgeRoll.timer -= deltaTime;
 
       if (this.dodgeRoll.timer <= 0) {
-        // Roll complete - zero out velocity
+        // Roll complete — zero out velocity and deactivate
         this.dodgeRoll.active = false;
         this.velocity.vx = 0;
         this.velocity.vy = 0;
@@ -458,9 +547,15 @@ export class Player {
           this.hidden = false;
         }
       } else if (this.dodgeRoll.type !== 'blink') {
-        // Apply roll movement through velocity (allows PhysicsSystem to handle collisions)
-        this.velocity.vx = this.dodgeRoll.direction.x * this.dodgeRoll.speed;
-        this.velocity.vy = this.dodgeRoll.direction.y * this.dodgeRoll.speed;
+        if (this.dodgeRoll.slopeLocked) {
+          // Mercy phase: zero roll velocity so slope push / ice momentum drives
+          this.velocity.vx = 0;
+          this.velocity.vy = 0;
+        } else {
+          // Normal roll or within free-time window on special terrain
+          this.velocity.vx = this.dodgeRoll.direction.x * this.dodgeRoll.speed;
+          this.velocity.vy = this.dodgeRoll.direction.y * this.dodgeRoll.speed;
+        }
         this.acceleration.ax = 0;
         this.acceleration.ay = 0;
       }
@@ -501,7 +596,8 @@ export class Player {
     }
 
     // Apply defense (reduce damage, minimum 1)
-    const actualDamage = Math.max(1, amount - this.defense);
+    const tempDefense = this.stoneSkinTimer > 0 ? this.stoneSkinBonus : 0;
+    const actualDamage = Math.max(1, amount - this.defense - tempDefense);
 
     this.hp -= actualDamage;
     if (this.hp < 0) this.hp = 0;
@@ -534,13 +630,6 @@ export class Player {
     if (this.characterType === 'green' && this.actionCooldown > 0) return false;
     if (this.characterType === 'green' && this.continuousRollActive) return false;
     return true;
-  }
-
-  // Returns flat damage modifier for green ranger based on current enemy states
-  getCharacterDamageBonus(enemies = []) {
-    if (this.characterType !== 'green') return 0;
-    const anyNotIdle = enemies.some(e => e.state !== 'idle');
-    return anyNotIdle ? -this.greenCombatDamagePenalty : this.greenIdleDamageBonus;
   }
 
   // Returns current roll speed (matching startDodgeRoll calculation)
@@ -675,6 +764,11 @@ export class Player {
     this.inventory = [];
     this.trapUsedThisRoom = [false, false, false];
 
+    // Reset new buff timers
+    this.stoneSkinTimer = 0; this.stoneSkinBonus = 0;
+    this.damageBonusTimer = 0; this.damageBonusAmount = 0;
+    this.regenTimer = 0; this.regenTickTimer = 0;
+
     // Reset armor properties
     this.defense = 0;
     this.bulletResist = 0;
@@ -686,5 +780,24 @@ export class Player {
     this.speedBoost = 0;
     this.speedPenalty = 0;
     this.slowEnemies = false;
+    this.fishingLocked = false;
+    this.rusalkaInputScale = 1.0;
+  }
+
+  static getDodgeRollDirection(arrowKeys) {
+    let dx = 0, dy = 0;
+
+    if (arrowKeys.ArrowUp) dy -= 1;
+    if (arrowKeys.ArrowDown) dy += 1;
+    if (arrowKeys.ArrowLeft) dx -= 1;
+    if (arrowKeys.ArrowRight) dx += 1;
+
+    const length = Math.sqrt(dx * dx + dy * dy);
+    if (length > 0) {
+      dx /= length;
+      dy /= length;
+    }
+
+    return { x: dx, y: dy };
   }
 }

@@ -18,6 +18,9 @@ export class CombatSystem {
   }
 
   update(deltaTime, player, enemies, backgroundObjects = [], noiseSource = null, room = null) {
+    // Red warrior damage roll: hits and knocks back enemies, smashes background objects
+    this.updateRollDamage(player, enemies, backgroundObjects);
+
     // Update pending melee attacks (for delayed spawning like flail sweep)
     for (let i = this.pendingMeleeAttacks.length - 1; i >= 0; i--) {
       const pending = this.pendingMeleeAttacks[i];
@@ -174,9 +177,29 @@ export class CombatSystem {
 
           // Handle bullet behavior
           if (result.bulletBehavior === 'slow') {
-            // Slow bullet to 50% speed
-            proj.velocity.vx *= 0.5;
-            proj.velocity.vy *= 0.5;
+            const mult = result.speedMultiplier !== undefined ? result.speedMultiplier : 0.5;
+            if (result.speedMultiplier !== undefined) {
+              // One-time slow per object (e.g. arrows through grass): only apply on first contact
+              if (!proj.slowedByObjects) proj.slowedByObjects = new Set();
+              if (!proj.slowedByObjects.has(obj)) {
+                proj.slowedByObjects.add(obj);
+                // Speed floor: grass clusters can't slow an arrow below 80% of its launch speed
+                const currentSpeed = Math.hypot(proj.velocity.vx, proj.velocity.vy);
+                const floorSpeed = (proj.initialSpeed || currentSpeed) * 0.80;
+                if (currentSpeed * mult >= floorSpeed) {
+                  proj.velocity.vx *= mult;
+                  proj.velocity.vy *= mult;
+                } else if (currentSpeed > floorSpeed) {
+                  // Clamp to floor without overshooting
+                  const scale = floorSpeed / currentSpeed;
+                  proj.velocity.vx *= scale;
+                  proj.velocity.vy *= scale;
+                }
+              }
+            } else {
+              proj.velocity.vx *= mult;
+              proj.velocity.vy *= mult;
+            }
           } else if (result.bulletBehavior === 'reflectBullet' || result.effect === 'reflectBullet') {
             // Reflect bullet
             this.reflectBullet(proj, obj);
@@ -187,8 +210,8 @@ export class CombatSystem {
             this.objectDestroyEvents.push({ obj, effect: result.effect });
           }
 
-          // Chaff VFX when bullets hit grass (tall or cut)
-          if (proj.type === 'bullet' && (obj.char === '|' || obj.char === ',')) {
+          // Chaff VFX when bullets or arrows hit grass (tall or cut) — 5% chance
+          if ((proj.type === 'bullet' || proj.type === 'arrow') && (obj.char === '|' || obj.char === ',') && Math.random() < 0.05) {
             this.impactEffects.push({
               x: obj.position.x,
               y: obj.position.y,
@@ -330,7 +353,13 @@ export class CombatSystem {
 
           // Apply elemental affinity modifier and speed falloff
           const elementalMod = enemy.getElementalModifier(proj.onHit);
-          const adjustedDamage = Math.ceil(proj.damage * elementalMod * speedMultiplier);
+          let adjustedDamage = Math.ceil(proj.damage * elementalMod * speedMultiplier);
+          // Green Ranger flat modifier applied after multipliers so it isn't scaled by speed falloff
+          if (proj.owner && proj.owner.characterType === 'green') {
+            const enemyUndetected = enemy.detectionIndicatorTimer <= 0;
+            const greenBonus = enemyUndetected ? proj.owner.greenIdleDamageBonus : -proj.owner.greenCombatDamagePenalty;
+            adjustedDamage = Math.max(1, adjustedDamage + greenBonus);
+          }
 
           // Handle immunity
           if (elementalMod === 0.0) {
@@ -450,63 +479,91 @@ export class CombatSystem {
           if (obj.destroyed || obj.isRecipeSign) continue; // Skip destroyed and recipe signs
 
           if (this.checkMeleeCollisionWithObject(attack, obj)) {
-            const result = obj.takeDamage(attack.damage, attack.isBlade);
-
-            if (result.destroyed && result.effect) {
-              this.objectDestroyEvents.push({ obj, effect: result.effect });
+            // Glittering rocks require a pickaxe — other weapons bounce off
+            if (obj.data?.glitteringRock) {
+              if (!attack.isPickaxe) {
+                this.createDamageNumber('!', obj.position.x, obj.position.y, '#aaaaaa');
+                continue;
+              }
+              const result = obj.takeDamage(attack.damage);
+              if (result.destroyed && result.effect) {
+                this.objectDestroyEvents.push({ obj, effect: result.effect });
+              }
+              attack.hasHitObject = true;
+              continue;
             }
 
-            // Fire weapons ignite flammable objects — spread outward if object is destroyed
-            if (attack.onHit === 'burn' && obj.isFlammable()) {
-              const ignited = obj.ignite(5.0);
-              if (ignited) {
-                this.createDamageNumber('!', obj.position.x, obj.position.y, '#ff4400');
+            // Blunt weapons can't damage objects, but still rustle grass
+            if (!attack.isBlunt) {
+              const smashDamage = attack.canSmash ? attack.damage * 2 : attack.damage;
+              const result = obj.takeDamage(smashDamage, attack.isBlade);
+
+              if (result.destroyed && result.effect) {
+                this.objectDestroyEvents.push({ obj, effect: result.effect });
               }
-              if (result.destroyed) {
-                for (const other of backgroundObjects) {
-                  if (other === obj || other.destroyed || !other.isFlammable()) continue;
-                  const dx = other.position.x - obj.position.x;
-                  const dy = other.position.y - obj.position.y;
-                  if (dx * dx + dy * dy < 48 * 48) other.ignite(5.0);
+
+              // Fire weapons ignite flammable objects — spread outward if object is destroyed
+              if (attack.onHit === 'burn' && obj.isFlammable()) {
+                const ignited = obj.ignite(5.0);
+                if (ignited) {
+                  this.createDamageNumber('!', obj.position.x, obj.position.y, '#ff4400');
+                }
+                if (result.destroyed) {
+                  for (const other of backgroundObjects) {
+                    if (other === obj || other.destroyed || !other.isFlammable()) continue;
+                    const dx = other.position.x - obj.position.x;
+                    const dy = other.position.y - obj.position.y;
+                    if (dx * dx + dy * dy < 48 * 48) other.ignite(5.0);
+                  }
+                }
+              }
+              // Emit impact effect for elemental melee (skip water — it has its own feedback)
+              if (attack.onHit && !(obj.isWater && obj.isWater())) {
+                this.impactEffects.push({ x: obj.position.x, y: obj.position.y, onHit: attack.onHit, color: attack.color });
+              }
+
+              // Electric weapons conduct through conductive objects
+              if (attack.onHit === 'stun' && attack.electric && obj.isConductive()) {
+                this.conductElectricity(obj, attack.damage, enemies, player);
+              }
+
+              // Water state transitions from melee
+              if (obj.isWater && obj.isWater()) {
+                if (attack.onHit === 'freeze') {
+                  obj.setWaterState('frozen', Infinity); // Stays frozen until thawed by fire
+                  this.createDamageNumber('❄', obj.position.x, obj.position.y, '#aaddff');
+                } else if (attack.onHit === 'poison') {
+                  obj.setWaterState('poisoned', 8.0);
+                  this.createDamageNumber('☠', obj.position.x, obj.position.y, '#44bb44');
+                } else if (attack.onHit === 'stun' && attack.electric) {
+                  obj.setWaterState('electrified', 5.0);
+                  this.createDamageNumber('⚡', obj.position.x, obj.position.y, '#cccc00');
+                } else if (attack.onHit === 'burn') {
+                  if (obj.getWaterState() === 'frozen') {
+                    obj.setWaterState('normal', 0); // Melt ice
+                    this.createDamageNumber('~', obj.position.x, obj.position.y, '#3366ff');
+                  } else {
+                    // Fire hits liquid water → steam cloud
+                    this.newSteamClouds.push({
+                      x: obj.position.x + GRID.CELL_SIZE / 2,
+                      y: obj.position.y + GRID.CELL_SIZE / 2,
+                      radius: GRID.CELL_SIZE * 3,
+                      timer: 7.0
+                    });
+                    this.createDamageNumber('=', obj.position.x, obj.position.y, '#aaaaaa');
+                  }
                 }
               }
             }
-            // Emit impact effect for elemental melee (skip water — it has its own feedback)
-            if (attack.onHit && !(obj.isWater && obj.isWater())) {
-              this.impactEffects.push({ x: obj.position.x, y: obj.position.y, onHit: attack.onHit, color: attack.color });
-            }
 
-            // Electric weapons conduct through conductive objects
-            if (attack.onHit === 'stun' && attack.electric && obj.isConductive()) {
-              this.conductElectricity(obj, attack.damage, enemies, player);
-            }
-
-            // Water state transitions from melee
-            if (obj.isWater && obj.isWater()) {
-              if (attack.onHit === 'freeze') {
-                obj.setWaterState('frozen', Infinity); // Stays frozen until thawed by fire
-                this.createDamageNumber('❄', obj.position.x, obj.position.y, '#aaddff');
-              } else if (attack.onHit === 'poison') {
-                obj.setWaterState('poisoned', 8.0);
-                this.createDamageNumber('☠', obj.position.x, obj.position.y, '#44bb44');
-              } else if (attack.onHit === 'stun' && attack.electric) {
-                obj.setWaterState('electrified', 5.0);
-                this.createDamageNumber('⚡', obj.position.x, obj.position.y, '#cccc00');
-              } else if (attack.onHit === 'burn') {
-                if (obj.getWaterState() === 'frozen') {
-                  obj.setWaterState('normal', 0); // Melt ice
-                  this.createDamageNumber('~', obj.position.x, obj.position.y, '#3366ff');
-                } else {
-                  // Fire hits liquid water → steam cloud
-                  this.newSteamClouds.push({
-                    x: obj.position.x + GRID.CELL_SIZE / 2,
-                    y: obj.position.y + GRID.CELL_SIZE / 2,
-                    radius: GRID.CELL_SIZE * 3,
-                    timer: 7.0
-                  });
-                  this.createDamageNumber('=', obj.position.x, obj.position.y, '#aaaaaa');
-                }
-              }
+            // Chaff VFX when melee hits grass (all weapons including blunt) — 5% chance
+            if ((obj.char === '|' || obj.char === ',') && Math.random() < 0.05) {
+              this.impactEffects.push({
+                x: obj.position.x,
+                y: obj.position.y,
+                effect: 'chaff',
+                color: '#667755'
+              });
             }
           }
         }
@@ -527,9 +584,16 @@ export class CombatSystem {
             // Apply elemental affinity modifier
             const elementalMod = enemy.getElementalModifier(attack.onHit);
 
+            // Green Ranger stealth modifier: bonus when enemy hasn't detected the player
+            let totalDamage = attack.damage;
+            if (attack.owner && attack.owner.characterType === 'green') {
+              const enemyUndetected = enemy.detectionIndicatorTimer <= 0;
+              const greenBonus = enemyUndetected ? attack.owner.greenIdleDamageBonus : -attack.owner.greenCombatDamagePenalty;
+              totalDamage = Math.max(1, totalDamage + greenBonus);
+            }
+
             // Wet enemies take bonus damage from electric and ice attacks
             const isFrozen = enemy.statusEffects.freeze && enemy.statusEffects.freeze.active;
-            let totalDamage = attack.damage;
             let statusDuration = 3.0;
             if (isWet && attack.onHit === 'stun') {
               totalDamage *= 2;      // Double damage from electricity on wet enemies
@@ -540,7 +604,7 @@ export class CombatSystem {
             }
 
             // Blunt weapons deal 2.5x damage to frozen enemies
-            if (isFrozen && attack.weaponSubtype === 'blunt') {
+            if (isFrozen && attack.weaponSubtype === 'hammer') {
               totalDamage = Math.ceil(totalDamage * 2.5);
             }
 
@@ -592,7 +656,7 @@ export class CombatSystem {
               }
 
               // Show blunt-on-frozen bonus indicator
-              if (isFrozen && attack.weaponSubtype === 'blunt') {
+              if (isFrozen && attack.weaponSubtype === 'hammer') {
                 this.createDamageNumber('*', enemy.position.x, enemy.position.y - 12, '#00ddff');
               }
 
@@ -1223,6 +1287,55 @@ export class CombatSystem {
            attackBox.y + attackBox.height > playerBox.y;
   }
 
+  updateRollDamage(player, enemies, backgroundObjects) {
+    if (!player || player.dodgeRoll.type !== 'damage') return;
+
+    const rolling = player.dodgeRoll.active;
+
+    // Reset hit-tracking sets at the start of each new roll
+    if (rolling && !this._rollWasActive) {
+      this._rollHitEnemies = new Set();
+      this._rollHitObjects = new Set();
+    }
+    this._rollWasActive = rolling;
+
+    if (!rolling) return;
+
+    const hitbox = { x: player.position.x, y: player.position.y, width: player.width, height: player.height };
+    const dir = player.dodgeRoll.direction;
+
+    // Damage enemies on contact (once per enemy per roll)
+    for (const enemy of enemies) {
+      if (this._rollHitEnemies.has(enemy) || enemy.hp <= 0) continue;
+      const eb = enemy.getHitbox();
+      if (hitbox.x < eb.x + eb.width && hitbox.x + hitbox.width > eb.x &&
+          hitbox.y < eb.y + eb.height && hitbox.y + hitbox.height > eb.y) {
+        this._rollHitEnemies.add(enemy);
+        enemy.takeDamage(1);
+        this.createDamageNumber(1, enemy.position.x, enemy.position.y, '#ff4444');
+        // Knockback in the roll direction
+        enemy.velocity.vx = dir.x * 300;
+        enemy.velocity.vy = dir.y * 300;
+        if (enemy.applyStatusEffect) enemy.applyStatusEffect('knockback', 0.25);
+      }
+    }
+
+    // Smash background objects on contact (once per object per roll)
+    for (const obj of backgroundObjects) {
+      if (obj.destroyed || obj.isRecipeSign || obj.indestructible || obj.hp === null) continue;
+      if (this._rollHitObjects.has(obj)) continue;
+      const ob = obj.getHitbox();
+      if (hitbox.x < ob.x + ob.width && hitbox.x + hitbox.width > ob.x &&
+          hitbox.y < ob.y + ob.height && hitbox.y + hitbox.height > ob.y) {
+        this._rollHitObjects.add(obj);
+        const result = obj.takeDamage(1, false);
+        if (result.destroyed && result.effect) {
+          this.objectDestroyEvents.push({ obj, effect: result.effect });
+        }
+      }
+    }
+  }
+
   applyKnockback(enemy, attack) {
     const dx = enemy.position.x - attack.position.x;
     const dy = enemy.position.y - attack.position.y;
@@ -1407,6 +1520,15 @@ export class CombatSystem {
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       if (dist <= radius) {
+        // Glittering rocks: explosions always destroy and drop gems
+        if (obj.data?.glitteringRock) {
+          const result = obj.takeDamage(9999);
+          if (result.destroyed && result.effect) {
+            this.objectDestroyEvents.push({ obj, effect: result.effect });
+          }
+          continue;
+        }
+
         const damageFalloff = 1 - (dist / radius);
         const explosionDamage = Math.ceil(damage * damageFalloff);
 
@@ -1454,7 +1576,7 @@ export class CombatSystem {
     }
   }
 
-  createDamageNumber(damage, x, y, color) {
+  createDamageNumber(damage, x, y, color, scale = 1) {
     this.damageNumbers.push({
       value: damage,
       x: x + GRID.CELL_SIZE / 2,
@@ -1463,7 +1585,8 @@ export class CombatSystem {
       timer: 0,
       duration: 1.0,  // 1 second lifetime
       riseSpeed: 30,  // pixels per second
-      color: color
+      color: color,
+      scale: scale
     });
   }
 

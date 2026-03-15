@@ -9,6 +9,22 @@ Browser-based roguelike game built with vanilla JavaScript. Features:
 - Enemy AI with different attack patterns
 - Physics-based interactions (knockback, environmental hazards)
 
+## Design Philosophy (Mission Statement)
+
+This is a **pure roguelike** — death means a full reset. The game has no traditional progression. The "save file" is mental: familiarity with recipes, zone colors, enemy behaviors, and room layouts is the reward.
+
+**Core principles:**
+- **Non-instructive UI**: The game should wire the player's brain naturally. Minimal explicit tutorials. Players should feel like they're figuring things out themselves.
+- **Mental progression over mechanical progression**: Growing pattern recognition and recipe memory is the loop, not grinding for unlocks.
+- **Arcade purity**: Fast, repeatable, accessible. Death is acceptable, not punishing. Reset is part of the experience.
+- **Color-coded zone system**: Exit colors are meaningful and part of accumulated player knowledge. Green → Yellow → Red represents increasing danger. Each zone tracks depth independently.
+
+**When adding features**: Ask whether the feature rewards player knowledge/familiarity or shortcuts it. Features that bypass the "figuring out" experience work against the design.
+
+## Known Bugs
+
+See `claudedocs/known-bugs.md` — review at the start of every session before adding new features.
+
 ## Game States
 
 The game has two main gameplay states:
@@ -22,6 +38,14 @@ Both modes share the same combat system (`CombatSystem.update()`), physics syste
 ## Critical UI Requirements
 
 **PRESERVE TOP MENU SINGLE LINE**: The top status bar (HP | DEPTH | INVENTORY | QUICK SLOTS) must remain a single horizontal line. Never break it into multiple rows or add vertical elements. This is a critical layout constraint.
+
+## Font Usage Rules
+
+Two fonts are in use. Do not mix them outside their designated roles:
+
+- **VentureArcade** (`font-family: 'VentureArcade', monospace`): Prominent UI labels and player instructions only — e.g. `HP:`, `L`, `Q`, `E`, `A:`, `C:`, `I:` in the top bar; "GAME OVER" / "Press SPACE to continue"; zone exit letters on the canvas. **VentureArcade has limited glyph coverage — it does not reliably support all ASCII or Unicode characters.** Never use it for item/enemy characters or equippable slots.
+
+- **Unifont** (`font-family: 'Unifont', monospace`): Everything else — weapon/armor/consumable chars, subscript slot placeholders, all canvas entity rendering, any fallback text. Unifont has complete Unicode coverage and is the safe default.
 
 ## Critical Technical Constraints
 
@@ -146,13 +170,19 @@ src/
 │   ├── Particle.js
 │   └── Player.js
 ├── systems/        - Game logic systems
+│   ├── CharacterSystem.js   - Character type abilities and NPC swaps
 │   ├── CheatMenu.js         - Debug tools
 │   ├── CombatSystem.js      - Damage calculations, projectiles
 │   ├── CraftingSystem.js    - Recipe matching
 │   ├── ExitSystem.js        - Exit handling and zone transitions
+│   ├── InteractionSystem.js - Background object and captive interactions
+│   ├── InventorySystem.js   - Inventory, equipment, consumable auto-trigger
+│   ├── LootSystem.js        - Item/ingredient drop spawning
+│   ├── MenuSystem.js        - Menu open/close/select, UI updates, pickup messages
 │   ├── PersistenceSystem.js - Save/load (disabled)
 │   ├── PhysicsSystem.js     - Collisions, movement
 │   ├── RoomGenerator.js     - Level generation
+│   ├── TrapSystem.js        - Trap placement and persistent trap updates
 │   └── ZoneSystem.js        - Zone management
 ├── game/           - Core game loop
 │   ├── GameConfig.js
@@ -310,12 +340,11 @@ Add to `BACKGROUND_TYPES`:
 
 ## Character Encoding Rule
 
-**CRITICAL**: All game characters must use printable 7-bit ASCII only (code points 0x20–0x7E).
+**CRITICAL**: Where possible, game characters should use printable 7-bit ASCII  (code points 0x20–0x7E).
 
-- Never use Unicode symbols, box-drawing characters, or emoji for game object identifiers
+- Due to the limitations of ASCII, Unicode symbols are allowed to avoid conflict with existing character use and for clarity, especially if proffered by the user, but emoji and character box should be avoided
 - Never use Unicode escapes (`\uXXXX`, `\u{XXXX}`, `\U...`) for character values
 - This applies to: background objects, items, enemies, particles, UI icons, and animation frames
-- Valid chars: letters (A-Z, a-z), digits (0-9), and punctuation (! " # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \ ] ^ _ ` { | } ~)
 
 ### Background Object Char Map
 
@@ -401,3 +430,39 @@ Entity Classes:
 - **Player**: `src/entities/Player.js`
 - **Enemy AI**: `src/entities/Enemy.js`
 - **Items**: `src/entities/Item.js`
+
+## main.js — Orchestration Rules
+
+`src/main.js` is the **entry point and orchestrator only**. It must not house system or entity logic.
+
+### What belongs in main.js
+- `constructor()` — system wiring only
+- `setupInput()` / `setupStateMachine()` — thin configuration
+- `update(dt)` and `render(alpha)` — dispatch to systems, no logic
+- `enterXxxState()` / `updateXxxState()` — state machine transitions only
+- Shared entity array declarations
+
+### What does NOT belong in main.js
+
+| Category | Correct Location |
+|----------|-----------------|
+| Item/loot spawning | `LootSystem.js` |
+| Trap placement/update | `TrapSystem.js` |
+| Object interactions | `InteractionSystem.js` |
+| Character type abilities | `CharacterSystem.js` |
+| Menu open/close/select | `MenuSystem.js` |
+| Consumable effects | `InventorySystem.js` |
+| Room spawn helpers | `RoomGenerator.js` |
+| Player geometry helpers | `Player.js` |
+| Zone depth tracking | `ZoneSystem.js` |
+
+### Rule of Thumb
+If a method touches only one system or entity's data → it belongs in that system/entity file.
+If a method coordinates two or more systems → it may belong in main.js *only* if it can't go in either system.
+
+### Adding New Systems
+When creating a new system:
+1. Create `src/systems/NewSystem.js` with a class that takes `game` as constructor arg
+2. Instantiate in `Game.constructor()`: `this.newSystem = new NewSystem(this)`
+3. Call `update(dt)` in the appropriate `updateXxxState()` method
+4. Never add the implementation directly to main.js

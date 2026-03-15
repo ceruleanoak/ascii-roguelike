@@ -38,11 +38,49 @@ export class GameOverRenderer {
         }
       }
 
+      // Draw static background objects (water and grass render on foreground)
+      for (const obj of game.backgroundObjects) {
+        const isGrass = obj.char === '|' || obj.char === '\\' || obj.char === '/' || obj.char === ',';
+        if (!obj.currentAnimation && obj.char !== '~' && !isGrass) {
+          const x = obj.position.x + GRID.CELL_SIZE / 2;
+          const y = obj.position.y + GRID.CELL_SIZE / 2;
+          this.renderer.bgCtx.fillStyle = obj.color;
+          this.renderer.bgCtx.fillText(obj.char, x, y);
+        }
+      }
+
       this.renderer.backgroundDirty = false;
     }
 
     // Render foreground
     this.renderer.clearForeground();
+
+    // Draw water tiles (dynamic state changes each frame)
+    for (const obj of game.backgroundObjects) {
+      if (obj.char === '~' && !obj.currentAnimation) {
+        const renderData = obj.getRenderPosition();
+        this.renderer.drawEntity(
+          renderData.x + GRID.CELL_SIZE / 2,
+          renderData.y + GRID.CELL_SIZE / 2,
+          renderData.char,
+          renderData.color
+        );
+      }
+    }
+
+    // Draw grass on foreground (renders over debris)
+    for (const obj of game.backgroundObjects) {
+      const isGrass = obj.char === '|' || obj.char === '\\' || obj.char === '/' || obj.char === ',';
+      if (isGrass && !obj.currentAnimation && !obj.destroyed) {
+        const offsetX = obj.grassRenderOffset ? obj.grassRenderOffset.x : 0;
+        this.renderer.drawEntity(
+          obj.position.x + GRID.CELL_SIZE / 2 + offsetX,
+          obj.position.y + GRID.CELL_SIZE / 2,
+          obj.char,
+          obj.color
+        );
+      }
+    }
 
     // Draw debris (remains on ground)
     for (const piece of game.debris) {
@@ -77,21 +115,25 @@ export class GameOverRenderer {
       }
     }
 
-    // Draw "GAME OVER" text
-    const gameOverText = 'GAME OVER';
+    // Draw main death text
+    const isCharacterDeath = game.characterDeathPending;
+    const deathText = isCharacterDeath ? `${game.characterDeathName} lost` : 'GAME OVER';
+    const deathColor = isCharacterDeath ? '#ffaa00' : '#ff0000';
+    const timerExpired = isCharacterDeath ? game.characterDeathTimer <= 0 : game.gameOverDeathTimer <= 0;
+
     this.renderer.fgCtx.save();
-    this.renderer.fgCtx.font = `bold ${GRID.CELL_SIZE * 2}px "Courier New", monospace`;
+    this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 2}px 'VentureArcade', monospace`;
     this.renderer.fgCtx.textAlign = 'center';
     this.renderer.fgCtx.textBaseline = 'middle';
-    this.renderer.fgCtx.fillStyle = '#ff0000';
-    this.renderer.fgCtx.fillText(gameOverText, GRID.WIDTH / 2, GRID.HEIGHT / 2);
+    this.renderer.fgCtx.fillStyle = deathColor;
+    this.renderer.fgCtx.fillText(deathText, GRID.WIDTH / 2, GRID.HEIGHT / 2);
     this.renderer.fgCtx.restore();
 
     // Draw "Press SPACE to continue" text (only after 2-second delay)
-    if (game.gameOverDeathTimer <= 0) {
+    if (timerExpired) {
       const continueText = 'Press SPACE to continue';
       this.renderer.fgCtx.save();
-      this.renderer.fgCtx.font = `bold ${GRID.CELL_SIZE}px "Courier New", monospace`;
+      this.renderer.fgCtx.font = `${GRID.CELL_SIZE}px 'VentureArcade', monospace`;
       this.renderer.fgCtx.textAlign = 'center';
       this.renderer.fgCtx.textBaseline = 'middle';
       this.renderer.fgCtx.fillStyle = COLORS.TEXT;

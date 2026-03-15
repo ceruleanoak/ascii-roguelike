@@ -24,6 +24,7 @@ export const ENEMIES = {
     name: 'Slime',
     hp: 2,
     speed: 20,
+    acceleration: 200,
     damage: 1,
     attackRange: GRID.CELL_SIZE * 2,  // 2 units
     aggroRange: GRID.CELL_SIZE * 6,   // 6 units (slower, shorter range)
@@ -41,6 +42,7 @@ export const ENEMIES = {
     name: 'Boss Slime',
     hp: 4,
     speed: 40,
+    acceleration: 50,
     damage: 2,
     attackRange: GRID.CELL_SIZE * 2.5,
     aggroRange: GRID.CELL_SIZE * 8,
@@ -50,6 +52,17 @@ export const ENEMIES = {
     attackType: 'melee',
     decisionInterval: 0.7,
     color: '#00cc00',
+    spawning: {
+      enabled: true,
+      spawnChar: 'o',
+      spawnCooldown: 5.0,
+      maxSpawns: 3,
+      maxLifetimeSpawns: 9,
+      spawnRange: GRID.CELL_SIZE * 1.5,
+      spawnWindup: 0.5,
+      spawnCount: 1,
+      spawnOnDeath: false
+    },
     dropTable: 'slime',
     rarityProfile: 'elite'
   },
@@ -708,6 +721,31 @@ export const ENEMIES = {
     },
     dropTable: 'elemental_lightning',
     rarityProfile: 'elite'
+  },
+
+  // === OCEAN ENEMIES ===
+
+  's': {
+    char: 's',
+    name: 'Sea Snake',
+    hp: 3,
+    speed: 38,
+    damage: 2,
+    attackRange: GRID.CELL_SIZE * 2,   // 2 units (bite range)
+    aggroRange: GRID.CELL_SIZE * 8,    // 8 units
+    attackCooldown: 1.2,
+    attackWindup: 1.0,
+    attackType: 'melee',
+    decisionInterval: 0.4,
+    color: '#00bbcc',
+    waterAffinity: true,               // Prefers water; never avoids it while wandering
+    elementalAffinity: {
+      immunity: ['wet'],
+      resistance: { 'freeze': 0.6 },
+      weakness: { 'burn': 1.5 }
+    },
+    dropTable: 'beast',
+    rarityProfile: 'weak'
   }
 };
 

@@ -1,7 +1,7 @@
 export const CHARACTER_TYPES = {
   'default': {
-    name: 'Default',
-    color: '#00ffff',
+    name: 'Gold Hero',
+    color: '#ffee88',
     rollType: 'dodge',
     rollDuration: 0.15,
     rollCooldown: 0.5,
@@ -18,17 +18,20 @@ export const CHARACTER_TYPES = {
     actionCooldownMax: 2.5,   // Shared cooldown for attacks and dodge roll
     idleDamageBonus: 2,        // +2 flat damage when all enemies are idle (or no enemies)
     combatDamagePenalty: 1,    // -1 flat damage when any enemy is not idle
-    weaponAffinities: {}
+    weaponAffinities: {
+      'bow': { cooldownReduction: 0.25 } // 25% faster bow fire rate
+    }
   },
   'red': {
     name: 'Red Warrior',
     color: '#ff4444',
-    rollType: 'damage', // Leaves damaging trail
+    rollType: 'damage', // Damages + knocks back enemies; smashes background objects
     rollDuration: 0.2,
     rollCooldown: 0.6,
     rollSpeed: 550,
     weaponAffinities: {
-      'melee': { windupReduction: 0.2 } // 20% faster melee windup
+      'melee': { windupReduction: 0.2 }, // 20% faster melee windup
+      'bow': { cooldownPenalty: 0.5 }    // 50% longer bow cooldown (glass cannon trade-off)
     }
   },
   'cyan': {
@@ -38,9 +41,7 @@ export const CHARACTER_TYPES = {
     rollDuration: 0.25,
     rollCooldown: 0.4,
     rollSpeed: 650,
-    weaponAffinities: {
-      'bow': { cooldownReduction: 0.15 } // 15% faster bow fire rate
-    }
+    weaponAffinities: {}
   },
   'yellow': {
     name: 'Yellow Mage',

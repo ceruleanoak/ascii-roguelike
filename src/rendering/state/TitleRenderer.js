@@ -82,7 +82,7 @@ export class TitleRenderer {
 
     // Draw each line of the title screen with 60-column layout
     this.renderer.fgCtx.save();
-    this.renderer.fgCtx.font = `${GRID.CELL_SIZE}px "Courier New", monospace`;
+    this.renderer.fgCtx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
     this.renderer.fgCtx.textAlign = 'center';
     this.renderer.fgCtx.textBaseline = 'middle';
 
@@ -236,6 +236,9 @@ export class TitleRenderer {
       }
     }
 
+    // Switch to VentureArcade for all label/title text from here on
+    this.renderer.fgCtx.font = `${GRID.CELL_SIZE}px 'VentureArcade', 'Unifont', monospace`;
+
     // Phase 3: "PURE ROGUE" title vertical on far right (5.0 - 9.0s)
     if (time >= TITLE_START) {
       const titleProgress = Math.min((time - TITLE_START) / TITLE_DURATION, 1.0);
@@ -311,7 +314,7 @@ export class TitleRenderer {
   renderPreIntroScreen(game) {
     // Pre-animation screen: centered button and credit
     this.renderer.fgCtx.save();
-    this.renderer.fgCtx.font = `${GRID.CELL_SIZE}px "Courier New", monospace`;
+    this.renderer.fgCtx.font = `${GRID.CELL_SIZE}px 'VentureArcade', 'Unifont', monospace`;
     this.renderer.fgCtx.textAlign = 'center';
     this.renderer.fgCtx.textBaseline = 'middle';
 

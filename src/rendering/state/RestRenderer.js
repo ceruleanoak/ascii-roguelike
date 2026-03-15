@@ -14,7 +14,8 @@
  * - Render cheat menu if open
  */
 
-import { GRID, COLORS } from '../../game/GameConfig.js';
+import { GRID, COLORS, EQUIPMENT } from '../../game/GameConfig.js';
+import { getItemData } from '../../data/items.js';
 
 export class RestRenderer {
   constructor(renderer, renderController) {
@@ -46,28 +47,52 @@ export class RestRenderer {
     // Render foreground
     this.renderer.clearForeground();
 
-    // Draw prominent warp zone indicator for north exit (below the wall)
+    // Draw prominent warp zone indicator for north exit (3 rows of arrows)
     const centerX = Math.floor(GRID.COLS / 2);
-    const warpZoneColor = 'rgba(100, 200, 255, 0.5)'; // Brighter blue, more opaque
+    const warpZoneColor = 'rgba(100, 200, 255, 0.5)';
 
     this.renderer.drawRect(
       (centerX - 1) * GRID.CELL_SIZE,
       1 * GRID.CELL_SIZE,
       3 * GRID.CELL_SIZE,
-      2 * GRID.CELL_SIZE,
+      3 * GRID.CELL_SIZE,
       warpZoneColor,
       true
     );
 
-    // Add decorative border arrows pointing up to make exit more obvious
     const arrowColor = 'rgba(150, 220, 255, 0.8)';
-    for (let i = -1; i <= 1; i++) {
-      this.renderer.drawEntity(
-        (centerX + i) * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
-        1.5 * GRID.CELL_SIZE,
-        '^',
-        arrowColor
-      );
+    for (let row = 0; row < 3; row++) {
+      for (let i = -1; i <= 1; i++) {
+        this.renderer.drawEntity(
+          (centerX + i) * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
+          (1.5 + row) * GRID.CELL_SIZE,
+          '^',
+          arrowColor
+        );
+      }
+    }
+
+    // Draw active quick slot's chest in white on foreground (updates every frame)
+    if (game.player) {
+      const chestYs = [EQUIPMENT.CHEST1_Y, EQUIPMENT.CHEST2_Y, EQUIPMENT.CHEST3_Y];
+      const activeIdx = game.player.activeSlotIndex;
+      const activeChestY = chestYs[activeIdx];
+      const item = game.player.quickSlots[activeIdx];
+      const char = item ? item.char : String(activeIdx + 1);
+
+      this.renderer.fgCtx.save();
+      this.renderer.fgCtx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
+      this.renderer.fgCtx.textAlign = 'center';
+      this.renderer.fgCtx.textBaseline = 'middle';
+      const halfCell = GRID.CELL_SIZE / 2;
+      const chestBaseY = activeChestY * GRID.CELL_SIZE + halfCell;
+
+      this.renderer.fgCtx.fillStyle = '#ffffff';
+      this.renderer.fgCtx.fillText('[', (EQUIPMENT.CHEST_X - 1) * GRID.CELL_SIZE + halfCell, chestBaseY);
+      this.renderer.fgCtx.fillText(']', (EQUIPMENT.CHEST_X + 1) * GRID.CELL_SIZE + halfCell, chestBaseY);
+      this.renderer.fgCtx.fillStyle = item ? (item.color || '#ffffff') : '#ffffff';
+      this.renderer.fgCtx.fillText(char, EQUIPMENT.CHEST_X * GRID.CELL_SIZE + halfCell, chestBaseY);
+      this.renderer.fgCtx.restore();
     }
 
     // Highlight the nearest interactive slot only (prevents multi-slot highlighting)
@@ -140,6 +165,35 @@ export class RestRenderer {
       }
     }
 
+    // Draw starter bundle (world object, destroyed on SPACE)
+    if (game.restBundle) {
+      this.renderer.drawEntity(
+        game.restBundle.position.x + GRID.CELL_SIZE / 2,
+        game.restBundle.position.y + GRID.CELL_SIZE / 2,
+        game.restBundle.char,
+        game.restBundle.color
+      );
+
+      // Show PRESS SPACE when player is near the bundle
+      const bundleDist = Math.hypot(
+        game.player.position.x - game.restBundle.position.x,
+        game.player.position.y - game.restBundle.position.y
+      );
+      if (bundleDist < GRID.CELL_SIZE * 3) {
+        this.renderer.fgCtx.save();
+        this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 0.8}px 'VentureArcade', 'Unifont', monospace`;
+        this.renderer.fgCtx.textAlign = 'center';
+        this.renderer.fgCtx.textBaseline = 'middle';
+        this.renderer.fgCtx.fillStyle = COLORS.TEXT;
+        this.renderer.fgCtx.fillText(
+          'SPACE',
+          game.player.position.x + GRID.CELL_SIZE / 2,
+          game.player.position.y - GRID.CELL_SIZE * 1.5
+        );
+        this.renderer.fgCtx.restore();
+      }
+    }
+
     // Draw ingredients
     for (const ingredient of game.ingredients) {
       this.renderer.drawEntity(
@@ -188,19 +242,56 @@ export class RestRenderer {
     // Draw contextual floating text above player when near a slot
     if (nearestSlot) {
       this.renderer.fgCtx.save();
-      this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 0.8}px "Courier New", monospace`;
+      this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 0.8}px 'VentureArcade', 'Unifont', monospace`;
       this.renderer.fgCtx.textAlign = 'center';
       this.renderer.fgCtx.textBaseline = 'middle';
-      this.renderer.fgCtx.fillStyle = COLORS.TEXT;
       const floatingTextY = game.player.position.y - GRID.CELL_SIZE * 1.5;
 
-      // Armor and consumable slots only use SPACE
-      const isArmorOrConsumable = nearestSlot.type === 'equipment-armor' ||
-                                   nearestSlot.type === 'equipment-consumable1' ||
-                                   nearestSlot.type === 'equipment-consumable2';
-      const instructionText = isArmorOrConsumable ? 'SPACE' : 'SPACE or SHIFT';
+      // Try to read the item occupying this slot and show its name in slot color
+      let slotItemName = null;
+      let slotItemColor = COLORS.TEXT;
 
-      this.renderer.fgCtx.fillText(instructionText, game.player.position.x + GRID.CELL_SIZE / 2, floatingTextY);
+      if (nearestSlot.type === 'equipment-chest1') {
+        const item = game.player.quickSlots[0];
+        if (item) { slotItemName = item.data.name; slotItemColor = '#ff4444'; }
+      } else if (nearestSlot.type === 'equipment-chest2') {
+        const item = game.player.quickSlots[1];
+        if (item) { slotItemName = item.data.name; slotItemColor = '#ff4444'; }
+      } else if (nearestSlot.type === 'equipment-chest3') {
+        const item = game.player.quickSlots[2];
+        if (item) { slotItemName = item.data.name; slotItemColor = '#ff4444'; }
+      } else if (nearestSlot.type === 'equipment-armor') {
+        const armor = game.inventorySystem.equippedArmor;
+        if (armor) { slotItemName = armor.data.name; slotItemColor = '#4488ff'; }
+      } else if (nearestSlot.type === 'equipment-consumable1') {
+        const cons = game.inventorySystem.equippedConsumables[0];
+        if (cons) { slotItemName = cons.data.name; slotItemColor = '#ffff00'; }
+      } else if (nearestSlot.type === 'equipment-consumable2') {
+        const cons = game.inventorySystem.equippedConsumables[1];
+        if (cons) { slotItemName = cons.data.name; slotItemColor = '#ffff00'; }
+      } else if (nearestSlot.type === 'equipment-consumable3') {
+        const cons = game.inventorySystem.equippedConsumables[2];
+        if (cons) { slotItemName = cons.data.name; slotItemColor = '#ffff00'; }
+      } else if (nearestSlot.type.startsWith('crafting-')) {
+        const state = game.craftingSystem.getState();
+        const charMap = { 'crafting-left': state.leftSlot, 'crafting-right': state.rightSlot, 'crafting-center': state.centerSlot };
+        const char = charMap[nearestSlot.type];
+        if (char) {
+          const data = getItemData(char);
+          if (data) { slotItemName = data.name; slotItemColor = COLORS.ITEM; }
+        }
+      }
+
+      if (slotItemName) {
+        this.renderer.fgCtx.fillStyle = slotItemColor;
+        this.renderer.fgCtx.fillText(slotItemName.toUpperCase(), game.player.position.x + GRID.CELL_SIZE / 2, floatingTextY);
+      } else {
+        // Slot is empty — show interaction hint
+        this.renderer.fgCtx.fillStyle = COLORS.TEXT;
+        const hintText = nearestSlot.type.startsWith('crafting-') ? 'SPACE / SHIFT' : 'SPACE';
+        this.renderer.fgCtx.fillText(hintText, game.player.position.x + GRID.CELL_SIZE / 2, floatingTextY);
+      }
+
       this.renderer.fgCtx.restore();
     }
 
@@ -211,6 +302,15 @@ export class RestRenderer {
       '↑',
       COLORS.TEXT
     );
+
+    // Draw "EXPLORE" label just below the north exit warp zone
+    this.renderer.fgCtx.save();
+    this.renderer.fgCtx.font = `${GRID.CELL_SIZE}px 'VentureArcade', 'Unifont', monospace`;
+    this.renderer.fgCtx.textAlign = 'center';
+    this.renderer.fgCtx.textBaseline = 'middle';
+    this.renderer.fgCtx.fillStyle = '#666666';
+    this.renderer.fgCtx.fillText(' E X P L O R E', GRID.WIDTH / 2, 4 * GRID.CELL_SIZE + GRID.CELL_SIZE / 2 + 5);
+    this.renderer.fgCtx.restore();
 
     // === LEFT SIDE: WASD KEYS WITH "M O V E" ===
     const wasdY = GRID.HEIGHT - GRID.CELL_SIZE * 5;
@@ -228,7 +328,7 @@ export class RestRenderer {
 
     // Temporarily use lighter font for keys
     this.renderer.bgCtx.save();
-    this.renderer.bgCtx.font = `${GRID.CELL_SIZE}px "Courier New", monospace`; // Remove bold
+    this.renderer.bgCtx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
 
     // W key (top)
     this.renderer.drawCell(
@@ -316,12 +416,12 @@ export class RestRenderer {
     // === RIGHT SIDE: ARROW KEYS WITH "D O D G E" ===
     this.renderController.arrowKeyIndicators.render(game);
 
-    // Restore original bold font
+    // Restore original font
     this.renderer.bgCtx.restore();
 
     // Draw "M O V E" text below WASD (left side)
     this.renderer.fgCtx.save();
-    this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 0.7}px "Courier New", monospace`;
+    this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 0.7}px 'VentureArcade', 'Unifont', monospace`;
     this.renderer.fgCtx.textBaseline = 'middle';
     this.renderer.fgCtx.textAlign = 'center';
     const labelY = GRID.HEIGHT - GRID.CELL_SIZE * 2;
@@ -333,23 +433,24 @@ export class RestRenderer {
 
     // Draw pickup message if active (crafted items)
     if (game.pickupMessage && game.pickupMessageTimer > 0) {
-      this.renderer.fgCtx.save();
-      this.renderer.fgCtx.font = `bold ${GRID.CELL_SIZE * 2}px "Courier New", monospace`;
-      this.renderer.fgCtx.textAlign = 'center';
-      this.renderer.fgCtx.textBaseline = 'middle';
-      this.renderer.fgCtx.fillStyle = COLORS.ITEM;
-      this.renderer.fgCtx.fillText(game.pickupMessage, GRID.WIDTH / 2, GRID.HEIGHT / 2);
-      this.renderer.fgCtx.restore();
+      const ctx = this.renderer.fgCtx;
+      ctx.save();
+      ctx.font = `${GRID.CELL_SIZE * 2}px 'VentureArcade', 'Unifont', monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = COLORS.ITEM;
+      this.renderer.drawWrappedText(ctx, game.pickupMessage, GRID.WIDTH / 2, GRID.HEIGHT / 2 - 100, GRID.WIDTH * 0.8, GRID.CELL_SIZE * 2.5);
+      ctx.restore();
     }
 
     // Draw path announcement if active (Path Amulet)
     if (game.pathAnnouncement && game.pathAnnouncementTimer > 0) {
       this.renderer.fgCtx.save();
-      this.renderer.fgCtx.font = `bold ${GRID.CELL_SIZE * 2}px "Courier New", monospace`;
+      this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 2}px 'VentureArcade', 'Unifont', monospace`;
       this.renderer.fgCtx.textAlign = 'center';
       this.renderer.fgCtx.textBaseline = 'middle';
       this.renderer.fgCtx.fillStyle = '#ffaa00'; // Yellow-orange for path
-      this.renderer.fgCtx.fillText(game.pathAnnouncement, GRID.WIDTH / 2, GRID.HEIGHT / 2);
+      this.renderer.fgCtx.fillText(game.pathAnnouncement, GRID.WIDTH / 2, GRID.HEIGHT / 2 - 100);
       this.renderer.fgCtx.restore();
     }
 
