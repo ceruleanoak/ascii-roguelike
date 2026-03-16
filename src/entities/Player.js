@@ -52,6 +52,8 @@ export class Player {
     this.boundToGrid = true;
     this.collisionMap = null; // Set by game state
     this.plane = 0; // 0=normal plane, 1=tunnel plane
+    this.inHut = false; // true while inside a hut interior overlay
+    this.hutExitPosition = null; // saved exterior position when entering a hut
 
     // Wet status
     this.wetDuration = 0;

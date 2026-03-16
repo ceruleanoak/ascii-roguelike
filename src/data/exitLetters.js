@@ -107,6 +107,28 @@ export const EXIT_LETTERS = {
     }
   },
 
+  // ── Hut room ─────────────────────────────────────────────────────────────
+  'H': {
+    name: 'Hut',
+    roomType: 'COMBAT',
+    weight: 0.08,
+    zoneBoosts: {
+      green: 1.5,
+      yellow: 1.2
+    }
+  },
+
+  // ── Dungeon room ─────────────────────────────────────────────────────────
+  'D': {
+    name: 'Dungeon',
+    roomType: 'COMBAT',
+    weight: 0.1,
+    zoneBoosts: {
+      gray: 2.0,
+      red: 1.5
+    }
+  },
+
   // ── Lake room ────────────────────────────────────────────────────────────
   'L': {
     name: 'Lake',

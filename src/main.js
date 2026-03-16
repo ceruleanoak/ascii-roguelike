@@ -21,6 +21,8 @@ import { InteractionSystem } from './systems/InteractionSystem.js';
 import { CharacterSystem } from './systems/CharacterSystem.js';
 import { MenuSystem } from './systems/MenuSystem.js';
 import { EnemySpawnSystem } from './systems/EnemySpawnSystem.js';
+import { HutSystem } from './systems/HutSystem.js';
+import { DungeonSystem } from './systems/DungeonSystem.js';
 import { Player } from './entities/Player.js';
 import { Enemy } from './entities/Enemy.js';
 import { Ingredient } from './entities/Ingredient.js';
@@ -68,6 +70,8 @@ class Game {
     this.characterSystem = new CharacterSystem(this);
     this.menuSystem = new MenuSystem(this);
     this.enemySpawnSystem = new EnemySpawnSystem(this);
+    this.hutSystem = new HutSystem(this);
+    this.dungeonSystem = new DungeonSystem(this);
 
     // Game state
     this.player = null;
@@ -83,6 +87,9 @@ class Game {
     this.debris = []; // Enemy debris
     this.gooBlobs = []; // Goo blobs from Goo Dispenser
     this.neutralCharacters = []; // Neutral entities (Leshy, NPCs, etc.)
+    this.hutInterior = null;       // Active interior state (hut or dungeon floor)
+    this.dungeonFloors = [];       // Persistent dungeon floor states for current visit
+    this.dungeonCurrentFloor = -1; // -1 = not in dungeon
 
     // Per-zone depth tracking (independent progression)
     this.zoneDepths = {
@@ -645,6 +652,11 @@ class Game {
     // Reset fishing system so Rusalka pull/suppression doesn't persist into REST
     this.fishingSystem.resetForNewRoom(this.player);
 
+    // Reset hut/dungeon state on returning to REST
+    this.hutInterior = null;
+    this.dungeonFloors = [];
+    this.dungeonCurrentFloor = -1;
+
     // Apply active character type
     this.applyCharacterType(this.activeCharacterType);
 
@@ -1056,6 +1068,15 @@ class Game {
     // Reset fishing system for new room
     this.fishingSystem.resetForNewRoom(this.player);
 
+    // Reset hut/dungeon state on room transition
+    this.hutInterior = null;
+    this.dungeonFloors = [];
+    this.dungeonCurrentFloor = -1;
+    if (this.player) {
+      this.player.inHut = false;
+      this.player.hutExitPosition = null;
+    }
+
     // Initialize physics system
     this.physicsSystem.clear();
     this.physicsSystem.addEntity(this.player);
@@ -1243,6 +1264,13 @@ class Game {
 
     // Reset fishing system for new room (cleans up Rusalka, bobber, fish, etc.)
     this.fishingSystem.resetForNewRoom(this.player);
+
+    // Reset hut/dungeon state for new room
+    this.hutInterior = null;
+    this.dungeonFloors = [];
+    this.dungeonCurrentFloor = -1;
+    this.player.inHut = false;
+    this.player.hutExitPosition = null;
 
     // Apply active character type
     this.applyCharacterType(this.activeCharacterType);
@@ -2057,8 +2085,10 @@ class Game {
     this.previousPlayerPosition.x = this.player.position.x;
     this.previousPlayerPosition.y = this.player.position.y;
 
-    // Update physics
-    const waterResults = this.physicsSystem.update(deltaTime, this.currentRoom.backgroundObjects, this.currentRoom);
+    // Update physics — redirect to hut interior collision source when inside a hut
+    const waterResults = (this.player.inHut && this.hutInterior)
+      ? this.physicsSystem.update(deltaTime, this.hutInterior.backgroundObjects, this.hutInterior)
+      : this.physicsSystem.update(deltaTime, this.currentRoom.backgroundObjects, this.currentRoom);
 
     // Track if lava killed the player
     let lavaKilledPlayer = false;
@@ -2401,6 +2431,10 @@ class Game {
     }
 
     // Handle enemy spawn requests and item usage (must happen before combat update)
+    // Exterior enemies are frozen while player is inside a hut interior
+    if (this.player.inHut) {
+      // Interior enemy updates handled by HutSystem.update() above
+    } else
     for (const enemy of this.currentRoom.enemies) {
       // Check consumable usage
       if (enemy.itemUsage && enemy.itemUsage.enabled) {
@@ -2548,14 +2582,20 @@ class Game {
       }
     }
 
-    // Update combat
+    // Update combat — redirect to interior enemies/objects when inside a hut
+    const activeEnemies = (this.player.inHut && this.hutInterior)
+      ? this.hutInterior.enemies
+      : this.currentRoom.enemies;
+    const activeBackgroundObjects = (this.player.inHut && this.hutInterior)
+      ? this.hutInterior.backgroundObjects
+      : this.currentRoom.backgroundObjects;
     const combatResult = this.combatSystem.update(
       deltaTime,
       this.player,
-      this.currentRoom.enemies,
-      this.currentRoom.backgroundObjects,
+      activeEnemies,
+      activeBackgroundObjects,
       this.activeNoiseSource,
-      this.currentRoom
+      this.player.inHut ? this.hutInterior : this.currentRoom
     );
 
     // Check player attacks hitting goo blobs (destroy on hit, 5% chance to drop goo)
@@ -2795,6 +2835,10 @@ class Game {
     if (this.inventorySystem.consumableBlinkTimer > 0) {
       this.updateUI();
     }
+
+    // Update hut/dungeon systems (door entry/exit detection and interior entity logic)
+    this.hutSystem.update(deltaTime);
+    this.dungeonSystem.update(deltaTime);
 
     // Update fishing system before death check so Rusalka kills are caught this frame
     this.fishingSystem.update(deltaTime, this);

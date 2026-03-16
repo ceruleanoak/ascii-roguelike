@@ -75,6 +75,14 @@ export class RoomGenerator {
       type = ROOM_TYPES.UNDERGROUND;
     }
 
+    // Check if this is a HUT room (letter 'H') or DUNGEON room (letter 'D')
+    if (exitLetter === 'H') {
+      type = ROOM_TYPES.HUT;
+    }
+    if (exitLetter === 'D') {
+      type = ROOM_TYPES.DUNGEON;
+    }
+
     // Determine room type if not specified
     if (!type) {
       type = this.determineRoomType();
@@ -137,6 +145,12 @@ export class RoomGenerator {
         break;
       case ROOM_TYPES.BAT_BELFRY:
         this.generateBatBelfryRoom(room);
+        break;
+      case ROOM_TYPES.HUT:
+        this.generateHutRoom(room);
+        break;
+      case ROOM_TYPES.DUNGEON:
+        this.generateDungeonRoom(room);
         break;
     }
 
@@ -2353,6 +2367,8 @@ export class RoomGenerator {
       case ROOM_TYPES.TUNNEL:      return 0; // Tunnel generates its own walls
       case ROOM_TYPES.ASCENT:      return 0; // Slope ring is the environmental feature
       case ROOM_TYPES.UNDERGROUND: return 0; // Underground generates its own cave terrain
+      case ROOM_TYPES.HUT:         return 0; // Hut generates its own wall structure
+      case ROOM_TYPES.DUNGEON:     return 0; // Dungeon generates its own wall structure
       default:
         console.warn(`[RoomGenerator] getStructureCount: no case for room type "${roomType}". ` +
           'Add an explicit case to RoomGenerator.getStructureCount(). Returning 0 as safe fallback.');
@@ -2749,6 +2765,168 @@ export class RoomGenerator {
     // Create and add item to room
     const item = new Item(itemChar, spawnPos.x, spawnPos.y);
     room.items.push(item);
+  }
+
+  generateHutRoom(room) {
+    const template = this.currentLetterTemplate?.hutStructure;
+    const centerCol = template?.centerCol ?? 15;
+    const centerRow = template?.centerRow ?? 15;
+    const extW = template?.exteriorWidth ?? 5;   // half-extents
+    const extH = template?.exteriorHeight ?? 5;
+    const halfW = Math.floor(extW / 2);           // 2
+    const halfH = Math.floor(extH / 2);           // 2
+
+    const minCol = centerCol - halfW;   // 13
+    const maxCol = centerCol + halfW;   // 17
+    const minRow = centerRow - halfH;   // 13
+    const maxRow = centerRow + halfH;   // 17
+
+    // Place hollow 5×5 hut walls (solid), leave interior open
+    for (let row = minRow; row <= maxRow; row++) {
+      for (let col = minCol; col <= maxCol; col++) {
+        const isWall = row === minRow || row === maxRow || col === minCol || col === maxCol;
+        if (!isWall) continue;
+        // South gap: door location (center of south wall)
+        if (row === maxRow && col === centerCol) continue;
+        room.collisionMap[row][col] = true;
+        const wallObj = new BackgroundObject('≡', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+        room.backgroundObjects.push(wallObj);
+      }
+    }
+
+    // Place door (∩) at south-center of hut footprint
+    const doorCol = centerCol;
+    const doorRow = maxRow;
+    const doorObj = new BackgroundObject('∩', doorCol * GRID.CELL_SIZE, doorRow * GRID.CELL_SIZE);
+    room.backgroundObjects.push(doorObj);
+
+    // Store hut metadata on the room
+    const hutKindRoll = Math.random();
+    const hutKind = hutKindRoll < 0.5 ? 'enemy_encounter' : 'neutral_npc';
+    room.hut = {
+      exteriorBounds: { minCol, maxCol, minRow, maxRow },
+      doorPosition: { col: doorCol, row: doorRow },
+      hutKind,
+      interiorGenerated: false
+    };
+
+    // Generate background objects (standard combat room style)
+    // Override clearing zone to keep hut perimeter clear
+    const prevClearingZone = this.currentLetterTemplate?.bgObjectRules?.clearingZone;
+    if (this.currentLetterTemplate?.bgObjectRules) {
+      this.currentLetterTemplate.bgObjectRules.clearingZone = {
+        centerCol,
+        centerRow,
+        width: extW + 4,   // 2-cell buffer around hut
+        height: extH + 4,
+        allowGrass: false,
+        allowObjects: false
+      };
+    }
+
+    this.generateBackgroundObjects(room);
+
+    // Restore original clearing zone setting
+    if (this.currentLetterTemplate?.bgObjectRules) {
+      this.currentLetterTemplate.bgObjectRules.clearingZone = prevClearingZone;
+    }
+
+    // Spawn enemies outside the hut perimeter
+    const enemyCount = this.randInt(2, 4);
+    for (let i = 0; i < enemyCount; i++) {
+      const enemyChar = getZoneRandomEnemy(this.currentDepth, room.zone);
+      if (!enemyChar) continue;
+      const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects);
+      // Re-roll if too close to hut center
+      const gc = Math.floor(pos.x / GRID.CELL_SIZE);
+      const gr = Math.floor(pos.y / GRID.CELL_SIZE);
+      const tooClose = gc >= minCol - 1 && gc <= maxCol + 1 && gr >= minRow - 1 && gr <= maxRow + 1;
+      if (tooClose) continue;
+      const enemy = new Enemy(enemyChar, pos.x, pos.y, this.currentDepth);
+      enemy.setCollisionMap(room.collisionMap);
+      enemy.setBackgroundObjects(room.backgroundObjects);
+      this.addEnemyToRoom(room, enemy);
+    }
+
+    room.exitsLocked = room.enemies.length > 0;
+  }
+
+  generateDungeonRoom(room) {
+    const template = this.currentLetterTemplate?.hutStructure;
+    const centerCol = template?.centerCol ?? 15;
+    const centerRow = template?.centerRow ?? 15;
+    const extW = template?.exteriorWidth ?? 5;
+    const extH = template?.exteriorHeight ?? 5;
+    const halfW = Math.floor(extW / 2);
+    const halfH = Math.floor(extH / 2);
+
+    const minCol = centerCol - halfW;
+    const maxCol = centerCol + halfW;
+    const minRow = centerRow - halfH;
+    const maxRow = centerRow + halfH;
+
+    // Place hollow 5×5 dungeon entrance walls (same ≡ char as hut)
+    for (let row = minRow; row <= maxRow; row++) {
+      for (let col = minCol; col <= maxCol; col++) {
+        const isWall = row === minRow || row === maxRow || col === minCol || col === maxCol;
+        if (!isWall) continue;
+        if (row === maxRow && col === centerCol) continue; // south gap for door
+        room.collisionMap[row][col] = true;
+        const wallObj = new BackgroundObject('≡', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+        room.backgroundObjects.push(wallObj);
+      }
+    }
+
+    // Place door (∩) at south-center
+    const doorCol = centerCol;
+    const doorRow = maxRow;
+    const doorObj = new BackgroundObject('∩', doorCol * GRID.CELL_SIZE, doorRow * GRID.CELL_SIZE);
+    room.backgroundObjects.push(doorObj);
+
+    // Store dungeon metadata on the room
+    room.dungeon = {
+      exteriorBounds: { minCol, maxCol, minRow, maxRow },
+      doorPosition: { col: doorCol, row: doorRow },
+      hutKind: 'enemy_encounter',
+      interiorGenerated: false
+    };
+
+    // Generate background objects with clearing zone around dungeon entrance
+    const prevClearingZone = this.currentLetterTemplate?.bgObjectRules?.clearingZone;
+    if (this.currentLetterTemplate?.bgObjectRules) {
+      this.currentLetterTemplate.bgObjectRules.clearingZone = {
+        centerCol,
+        centerRow,
+        width: extW + 4,
+        height: extH + 4,
+        allowGrass: false,
+        allowObjects: false
+      };
+    }
+
+    this.generateBackgroundObjects(room);
+
+    if (this.currentLetterTemplate?.bgObjectRules) {
+      this.currentLetterTemplate.bgObjectRules.clearingZone = prevClearingZone;
+    }
+
+    // Spawn enemies outside the dungeon entrance perimeter
+    const enemyCount = this.randInt(2, 5);
+    for (let i = 0; i < enemyCount; i++) {
+      const enemyChar = getZoneRandomEnemy(this.currentDepth, room.zone);
+      if (!enemyChar) continue;
+      const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects);
+      const gc = Math.floor(pos.x / GRID.CELL_SIZE);
+      const gr = Math.floor(pos.y / GRID.CELL_SIZE);
+      const tooClose = gc >= minCol - 1 && gc <= maxCol + 1 && gr >= minRow - 1 && gr <= maxRow + 1;
+      if (tooClose) continue;
+      const enemy = new Enemy(enemyChar, pos.x, pos.y, this.currentDepth);
+      enemy.setCollisionMap(room.collisionMap);
+      enemy.setBackgroundObjects(room.backgroundObjects);
+      this.addEnemyToRoom(room, enemy);
+    }
+
+    room.exitsLocked = room.enemies.length > 0;
   }
 
   /**

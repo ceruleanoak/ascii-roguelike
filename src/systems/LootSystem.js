@@ -49,6 +49,7 @@ export class LootSystem {
   spawnIngredientDrop(char, x, y, angle = null) {
     const ingredient = new Ingredient(char, x, y);
     ingredient.pickupCooldown = 1.5;
+    if (this.game.player?.inHut) ingredient.hutPlane = true;
     const a = angle !== null ? angle : Math.random() * Math.PI * 2;
     const speed = 60 + Math.random() * 80;
     ingredient.velocity.vx = Math.cos(a) * speed;
@@ -60,6 +61,7 @@ export class LootSystem {
 
   spawnItemDrop(char, x, y, angle = null) {
     const item = new Item(char, x, y);
+    if (this.game.player?.inHut) item.hutPlane = true;
     const a = angle !== null ? angle : Math.random() * Math.PI * 2;
     const speed = 60 + Math.random() * 80;
     item.velocity.vx = Math.cos(a) * speed;

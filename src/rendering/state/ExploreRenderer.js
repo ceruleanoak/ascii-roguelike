@@ -263,8 +263,9 @@ export class ExploreRenderer {
       this.renderer.fgCtx.restore();
     }
 
-    // Draw debris (enemy remains)
+    // Draw debris (enemy remains) — skip hutPlane pieces (overlay renders those)
     for (const piece of game.debris) {
+      if (piece.hutPlane) continue;
       this.renderer.drawEntity(
         piece.position.x + GRID.CELL_SIZE / 2,
         piece.position.y + GRID.CELL_SIZE / 2,
@@ -273,8 +274,9 @@ export class ExploreRenderer {
       );
     }
 
-    // Draw ingredients
+    // Draw ingredients — skip hutPlane ones (overlay renders those)
     for (const ingredient of game.ingredients) {
+      if (ingredient.hutPlane) continue;
       const bobY = ingredient.inWater ? Math.sin(ingredient.bobTimer * 4) * 2 : 0;
       this.renderer.drawEntity(
         ingredient.position.x + GRID.CELL_SIZE / 2,
@@ -284,8 +286,9 @@ export class ExploreRenderer {
       );
     }
 
-    // Draw items
+    // Draw items — skip hutPlane ones (overlay renders those)
     for (const item of game.items) {
+      if (item.hutPlane) continue;
       const itemPlane = item.plane !== undefined ? item.plane : 0;
       const useDithering = itemPlane === 1 && game.player.plane === 1;
       const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
@@ -437,8 +440,13 @@ export class ExploreRenderer {
     }
     // ── End fishing render passes ─────────────────────────────────────────────
 
+    // When player is inside a hut, all interior-coord entities (player, combat,
+    // particles) are rendered by HutInteriorOverlay at the correct canvas offset.
+    // Skip them here to prevent ghosting at unshifted positions.
+    const inHut = game.player.inHut;
+
     // Draw consumable windups (dropped items during charge-up)
-    for (const windup of game.inventorySystem.consumableWindups) {
+    for (const windup of !inHut ? game.inventorySystem.consumableWindups : []) {
       // Blink effect: show/hide every 0.15 seconds, faster as timer runs out
       const blinkSpeed = Math.max(0.1, windup.timer * 0.15);
       const shouldShow = Math.floor(windup.blinkTimer / blinkSpeed) % 2 === 0;
@@ -506,7 +514,8 @@ export class ExploreRenderer {
     }
 
     // Draw non-sapping enemies first (so they render behind player)
-    for (const enemy of game.currentRoom.enemies) {
+    // Skip when inHut — exterior enemies are frozen and the overlay handles interior ones
+    if (!inHut) for (const enemy of game.currentRoom.enemies) {
       // Skip sapping enemies - they render on top later
       if (enemy.sapping) continue;
 
@@ -516,8 +525,8 @@ export class ExploreRenderer {
       this.renderEnemy(game, enemy);
     }
 
-    // Draw projectiles
-    for (const proj of game.combatSystem.getProjectiles()) {
+    // Draw projectiles — skip when inHut (overlay renders at correct offset)
+    if (!inHut) for (const proj of game.combatSystem.getProjectiles()) {
       // Skip if projectile is in different plane than player
       if (!this.shouldRenderEntity(proj, game.player, game.currentRoom)) continue;
 
@@ -532,8 +541,8 @@ export class ExploreRenderer {
       );
     }
 
-    // Draw enemy projectiles
-    for (const proj of game.combatSystem.getEnemyProjectiles()) {
+    // Draw enemy projectiles — skip when inHut
+    if (!inHut) for (const proj of game.combatSystem.getEnemyProjectiles()) {
       // Skip if projectile is in different plane than player
       if (!this.shouldRenderEntity(proj, game.player, game.currentRoom)) continue;
 
@@ -548,8 +557,8 @@ export class ExploreRenderer {
       );
     }
 
-    // Draw melee attacks
-    for (const attack of game.combatSystem.getMeleeAttacks()) {
+    // Draw melee attacks — skip when inHut
+    if (!inHut) for (const attack of game.combatSystem.getMeleeAttacks()) {
       // Note: Melee attacks inherit plane from attacker via shooterPlane
       const useDithering = attack.shooterPlane === 1 && game.player.plane === 1;
       const cx = attack.position.x + GRID.CELL_SIZE / 2;
@@ -567,8 +576,8 @@ export class ExploreRenderer {
       }
     }
 
-    // Draw enemy melee attacks
-    for (const attack of game.combatSystem.getEnemyMeleeAttacks()) {
+    // Draw enemy melee attacks — skip when inHut
+    if (!inHut) for (const attack of game.combatSystem.getEnemyMeleeAttacks()) {
       const displayColor = attack.flashWhite ? '#ffffff' : attack.color;
       const alpha = attack.alpha !== undefined ? attack.alpha : 1.0;
 
@@ -581,8 +590,8 @@ export class ExploreRenderer {
       );
     }
 
-    // Draw stuck arrows (arrows embedded in enemies)
-    for (const arrow of game.combatSystem.getStuckArrows()) {
+    // Draw stuck arrows — skip when inHut
+    if (!inHut) for (const arrow of game.combatSystem.getStuckArrows()) {
       this.renderer.drawEntity(
         arrow.position.x + GRID.CELL_SIZE / 2,
         arrow.position.y + GRID.CELL_SIZE / 2,
@@ -591,8 +600,8 @@ export class ExploreRenderer {
       );
     }
 
-    // Draw wand proximity failure indicators (blinking outline circle)
-    if (game.combatSystem.wandProximityFailures) {
+    // Draw wand proximity failure indicators — skip when inHut
+    if (!inHut && game.combatSystem.wandProximityFailures) {
       const blinkOn = Math.floor(performance.now() / 1000 * 8) % 2 === 0; // 8 Hz blink
       if (blinkOn) {
         for (const failure of game.combatSystem.wandProximityFailures) {
@@ -609,8 +618,8 @@ export class ExploreRenderer {
       }
     }
 
-    // Draw wand AOE effects (filled semi-transparent circle)
-    if (game.combatSystem.aoeEffects) {
+    // Draw wand AOE effects — skip when inHut
+    if (!inHut && game.combatSystem.aoeEffects) {
       for (const effect of game.combatSystem.aoeEffects) {
         // Fade out based on timer
         const alpha = Math.min(effect.timer / 0.3, 0.5); // Max 50% opacity
@@ -625,8 +634,8 @@ export class ExploreRenderer {
       }
     }
 
-    // Draw damage numbers
-    for (const dmgNum of game.combatSystem.getDamageNumbers()) {
+    // Draw damage numbers — skip when inHut (overlay renders at correct offset)
+    if (!inHut) for (const dmgNum of game.combatSystem.getDamageNumbers()) {
       const scale = dmgNum.scale || 1;
       if (scale !== 1) {
         const ctx = this.renderer.fgCtx;
@@ -647,8 +656,8 @@ export class ExploreRenderer {
       }
     }
 
-    // Draw particles (embers, explosions, clouds)
-    for (const particle of game.particles) {
+    // Draw particles — skip when inHut (overlay renders at correct offset)
+    if (!inHut) for (const particle of game.particles) {
       if (particle.getAlpha) {
         // Particle class instance
         const alpha = particle.getAlpha();
@@ -672,8 +681,8 @@ export class ExploreRenderer {
       }
     }
 
-    // Draw steam clouds (fire+water smokescreen)
-    for (const cloud of game.steamClouds) {
+    // Draw steam clouds — skip when inHut
+    if (!inHut) for (const cloud of game.steamClouds) {
       const maxTimer = 7.0;
       const alpha = Math.min(0.9, (cloud.timer / maxTimer) * 0.9 + 0.1);
       const steamChars = ['=', '~', '=', '-'];
@@ -687,7 +696,8 @@ export class ExploreRenderer {
       }
     }
 
-    // Draw player (with i-frame alpha fade and status color)
+    // Draw player — skip when inHut (overlay renders player at correct interior offset)
+    if (!inHut) {
     const playerAlpha = game.player.getVisibilityAlpha();
     const playerColor = game.player.getDisplayColor();
     const playerOnTunnelPlane = game.player.plane === 1;
@@ -710,9 +720,10 @@ export class ExploreRenderer {
         playerAlpha
       );
     }
+    } // end if (!inHut) — player render block
 
-    // Draw sapping enemies on top of player
-    for (const enemy of game.currentRoom.enemies) {
+    // Draw sapping enemies on top of player — skip when inHut
+    if (!inHut) for (const enemy of game.currentRoom.enemies) {
       if (!enemy.sapping) continue;
 
       if (enemy.shouldRenderVisible()) {
@@ -759,11 +770,11 @@ export class ExploreRenderer {
       }
     }
 
-    // Draw bow charge indicator (shared between REST and EXPLORE states)
-    this.renderController.bowChargeIndicator.render(game);
+    // Draw bow charge indicator — skip when inHut (overlay renders these)
+    if (!inHut) this.renderController.bowChargeIndicator.render(game);
 
-    // Draw green ranger action cooldown indicator
-    this.renderController.greenRangerIndicator.render(game);
+    // Draw green ranger action cooldown indicator — skip when inHut
+    if (!inHut) this.renderController.greenRangerIndicator.render(game);
 
     // Old exit indicator system removed - now using colored exit letters
     // (Letters render at actual exit positions when exits unlock)
@@ -801,6 +812,11 @@ export class ExploreRenderer {
     // Draw inventory overlay when 'i' key is held
     if (game.keys.i) {
       this.renderController.inventoryOverlay.render(game);
+    }
+
+    // Render hut interior overlay (picture-in-picture) when player is inside a hut
+    if (game.player.inHut) {
+      this.renderController.hutInteriorOverlay.render(game);
     }
 
     // Render cheat menu overlay (if open)

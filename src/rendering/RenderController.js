@@ -22,6 +22,7 @@ import { GameOverRenderer } from './state/GameOverRenderer.js';
 import { RestRenderer } from './state/RestRenderer.js';
 import { ExploreRenderer } from './state/ExploreRenderer.js';
 import { NeutralRenderer } from './state/NeutralRenderer.js';
+import { HutInteriorOverlay } from './ui/HutInteriorOverlay.js';
 
 export class RenderController {
   constructor(renderer) {
@@ -35,6 +36,9 @@ export class RenderController {
     this.menuOverlay = new MenuOverlay(renderer);
     this.equipmentSlots = new EquipmentSlots(renderer);
     this.inventoryOverlay = new InventoryOverlay(renderer);
+
+    // Hut interior overlay (needs renderController for renderEnemy access)
+    this.hutInteriorOverlay = new HutInteriorOverlay(renderer, this);
 
     // State renderers (pass renderController for component access)
     this.titleRenderer = new TitleRenderer(renderer);

@@ -302,6 +302,68 @@ export const LETTER_TEMPLATES = {
     }
   },
 
+  H: {
+    name: 'Hut',
+    description: 'A small structure from outside — a separate arena within',
+
+    wallStructures: {
+      allow: false // Hut generates its own wall structure
+    },
+
+    bgObjectRules: {
+      grassDensity: 0.7,
+      objectBias: {
+        '%': 1.2, // Slightly more bushes
+        '&': 0.8,
+        '0': 0.6
+      }
+    },
+
+    hutStructure: {
+      enabled: true,
+      centerCol: 15,
+      centerRow: 15,
+      exteriorWidth: 5,   // Hut footprint on exterior room (5×5 cells)
+      exteriorHeight: 5,
+      wallChar: '≡',      // Plank-wall char
+      doorChar: '∩',      // Archway entrance char
+      doorSide: 'south'   // Door always opens southward (player approaches from south)
+    },
+
+    hutKind: 'random' // 'enemy_encounter' | 'neutral_npc' | 'random'
+  },
+
+  D: {
+    name: 'Dungeon',
+    description: 'A dungeon entrance — a separate interior arena with its own space',
+
+    wallStructures: {
+      allow: false // Dungeon generates its own wall structure
+    },
+
+    bgObjectRules: {
+      grassDensity: 0.4,
+      objectBias: {
+        '0': 1.5, // More rocks
+        '8': 1.2, // More bones
+        '%': 0.5
+      }
+    },
+
+    hutStructure: {
+      enabled: true,
+      centerCol: 15,
+      centerRow: 15,
+      exteriorWidth: 5,
+      exteriorHeight: 5,
+      wallChar: '≡',
+      doorChar: '∩',
+      doorSide: 'south'
+    },
+
+    hutKind: 'enemy_encounter'
+  },
+
   U: {
     name: 'Underground',
     description: 'Dual-plane cave system with aboveground clearings near exits and fog-of-war underground',

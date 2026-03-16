@@ -305,7 +305,7 @@ export class TitleRenderer {
       const versionAlpha = Math.min((time - SHIMMER_DURATION) / 1.0, 1.0);
       this.renderer.fgCtx.fillStyle = `rgba(128, 128, 128, ${versionAlpha * 0.6})`;
       this.renderer.fgCtx.textAlign = 'right';
-      this.renderer.fgCtx.fillText('v0.3', GRID.WIDTH - GRID.CELL_SIZE, GRID.HEIGHT - GRID.CELL_SIZE);
+      this.renderer.fgCtx.fillText('v0.4', GRID.WIDTH - GRID.CELL_SIZE, GRID.HEIGHT - GRID.CELL_SIZE);
     }
 
     this.renderer.fgCtx.restore();

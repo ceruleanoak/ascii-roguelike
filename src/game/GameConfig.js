@@ -52,7 +52,9 @@ export const ROOM_TYPES = {
   TUNNEL: 'TUNNEL',
   ASCENT: 'ASCENT',
   UNDERGROUND: 'UNDERGROUND',
-  BAT_BELFRY: 'BAT_BELFRY'
+  BAT_BELFRY: 'BAT_BELFRY',
+  HUT: 'HUT',
+  DUNGEON: 'DUNGEON'
 };
 
 export const COLORS = {
@@ -479,6 +481,61 @@ export const BACKGROUND_OBJECTS = {
     renderOnlyOnPlane: 1,
     interactions: {
       default: { animation: 'bounce', message: null }
+    }
+  },
+  '≡': {
+    name: 'Hut Wall',
+    color: '#5c4a2a',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    hutWall: true,
+    solid: true,
+    interactions: {
+      default: { animation: 'bounce', message: null }
+    }
+  },
+  '∩': {
+    name: 'Hut Door',
+    color: '#c8a96e',
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    hutEntrance: true,
+    solid: false,
+    alwaysRender: true,
+    interactions: {
+      default: { animation: 'none', message: null }
+    }
+  },
+  'v': {
+    name: 'Stairs Down',
+    color: '#8b7355',
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    stairsDown: true,
+    solid: false,
+    alwaysRender: true,
+    interactions: {
+      default: { animation: 'none', message: null }
+    }
+  },
+  '^': {
+    name: 'Stairs Up',
+    color: '#8b7355',
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    stairsUp: true,
+    solid: false,
+    alwaysRender: true,
+    interactions: {
+      default: { animation: 'none', message: null }
     }
   },
   '2': {
