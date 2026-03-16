@@ -1,8 +1,23 @@
 import { GRID } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Enemy } from '../entities/Enemy.js';
+import { Item } from '../entities/Item.js';
+import { Particle } from '../entities/Particle.js';
 import { getZoneRandomEnemy } from '../data/enemies.js';
 import { createDebris } from '../entities/Debris.js';
+
+// Reward weapon chars by floor tier — all mid-to-high tier since the dungeon is tough
+const REWARD_TIERS = [
+  ['‡', '⊤', '⇒', '♠'],         // floor 0: Flame Sword, Bone Axe, Sky Bow, Acid Blade (3-4 dmg)
+  ['⌘', '☠', '⚒', '⚔'],        // floor 1-2: Dragon Blade, Venom Blade, Bone Crusher, Legendary Flame Sword (5-6 dmg)
+  ['⚔', '⚒', '☼'],              // floor 3+: top-tier weapons
+];
+
+function _getFloorRewardItem(floorIndex) {
+  const tier = Math.min(Math.floor(floorIndex / 2), REWARD_TIERS.length - 1);
+  const pool = REWARD_TIERS[tier];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
 
 /**
  * DungeonSystem — multi-floor dungeon interior system.
@@ -35,6 +50,7 @@ const STAIRS_DOWN_ROW = 4;   // v stairs row on floor 0
 const STAIRS_UP_ROW   = 3;   // ^ stairs row on floor 1+
 const STAIRS_DEEP_ROW = 20;  // v stairs row on floor 1+
 const EXIT_ROW        = 23;  // ∩ door row (floor 0 exit to exterior)
+const MAX_FLOOR_INDEX = 2;   // 3 floors total (0, 1, 2)
 
 export class DungeonSystem {
   constructor(game) {
@@ -81,9 +97,23 @@ export class DungeonSystem {
       backgroundObjects.push(stairsUp);
     }
 
-    // Stairs down (v) — on all floors that aren't the max depth
-    const stairsDown = new BackgroundObject('v', STAIRS_COL * GRID.CELL_SIZE, (floorIndex === 0 ? STAIRS_DOWN_ROW : STAIRS_DEEP_ROW) * GRID.CELL_SIZE);
-    backgroundObjects.push(stairsDown);
+    // Stairs down (v) — only on floors below the cap
+    const isLastFloor = floorIndex >= MAX_FLOOR_INDEX;
+    const stairsDownRow = floorIndex === 0 ? STAIRS_DOWN_ROW : STAIRS_DEEP_ROW;
+    let stairsDown = null;
+    if (!isLastFloor) {
+      stairsDown = new BackgroundObject('x', STAIRS_COL * GRID.CELL_SIZE, stairsDownRow * GRID.CELL_SIZE);
+      stairsDown.char = 'x';
+      stairsDown.color = '#cc3333';
+      stairsDown.animationChar = 'x';
+      stairsDown.animationColor = '#cc3333';
+      backgroundObjects.push(stairsDown);
+    }
+
+    // Reward item — spawned on the floor as a pickable Item
+    const rewardChar = _getFloorRewardItem(floorIndex);
+    const rewardItem = new Item(rewardChar, 4 * GRID.CELL_SIZE, 12 * GRID.CELL_SIZE);
+    rewardItem.hutPlane = true;
 
     // Enemies — scale count and difficulty with floor depth
     const enemies = [];
@@ -92,13 +122,50 @@ export class DungeonSystem {
       const zone = this.game.currentRoom?.zone || 'gray';
       const enemyChar = getZoneRandomEnemy(depth + floorIndex, zone);
       if (!enemyChar) continue;
-      // Keep enemies away from staircase areas
+      // Keep enemies away from staircase areas and reward item
       const col = 3 + Math.floor(Math.random() * (cols - 6));
       const row = 7 + Math.floor(Math.random() * (rows - 12));
       const enemy = new Enemy(enemyChar, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE, depth + floorIndex);
       enemy.setCollisionMap(collisionMap);
       enemy.setBackgroundObjects(backgroundObjects);
       enemies.push(enemy);
+    }
+
+    // Unlock condition — only on floors that have stairs down
+    const conditionType = isLastFloor ? null : ['key_enemy', 'glitter_object', 'item_slot'][Math.floor(Math.random() * 3)];
+    let unlockCondition = { type: conditionType };
+
+    if (conditionType === null) {
+      // Last floor — no stairs, no unlock condition needed
+    } else if (conditionType === 'key_enemy' && enemies.length > 0) {
+      const keyEnemy = enemies[Math.floor(Math.random() * enemies.length)];
+      keyEnemy.hasKey = true;
+    } else if (conditionType === 'glitter_object') {
+      // Find a bg object with hp to make glitter (non-stairs)
+      const candidates = backgroundObjects.filter(o =>
+        o !== stairsDown && o.hp !== null && o.maxHp !== null
+      );
+      if (candidates.length > 0) {
+        const target = candidates[Math.floor(Math.random() * candidates.length)];
+        target.isGlittering = true;
+        target.glitterColor = '#00ffcc';
+        // Persistent teal tint so players can identify the target
+        target.color = '#00ffcc';
+        target.animationColor = '#00ffcc';
+        // Monkey-patch takeDamage: object never dies but sets glitterHit flag
+        const origTakeDamage = target.takeDamage.bind(target);
+        target.takeDamage = (amount, isBlade) => {
+          origTakeDamage(amount, isBlade);
+          target.hp = target.maxHp; // restore — object never dies
+          target.glitterHit = true; // polled in update() to unlock stairs
+          return { destroyed: false, effect: null };
+        };
+      } else {
+        // Fallback to item_slot if no valid candidate
+        unlockCondition = { type: 'item_slot', col: 20, row: 12, slotItem: null };
+      }
+    } else if (conditionType === 'item_slot') {
+      unlockCondition = { type: 'item_slot', col: 20, row: 12, slotItem: null };
     }
 
     return {
@@ -108,16 +175,21 @@ export class DungeonSystem {
       collisionMap,
       backgroundObjects,
       enemies,
-      items: [],
+      items: [rewardItem],
+      ingredients: [],
       npcs: [],
       doors: [],
       // Positions used by checkStairs / checkInteriorExit
       exitRow: floorIndex === 0 ? EXIT_ROW : null,
       exitCol: floorIndex === 0 ? STAIRS_COL : null,
-      stairsDownRow: floorIndex === 0 ? STAIRS_DOWN_ROW : STAIRS_DEEP_ROW,
-      stairsDownCol: STAIRS_COL,
+      stairsDownRow: isLastFloor ? null : stairsDownRow,
+      stairsDownCol: isLastFloor ? null : STAIRS_COL,
       stairsUpRow: floorIndex === 0 ? null : STAIRS_UP_ROW,
       stairsUpCol: floorIndex === 0 ? null : STAIRS_COL,
+      // Lock system
+      stairsLocked: !isLastFloor, // last floor has no stairs to lock
+      unlockCondition,
+      stairsDownObj: stairsDown, // null on last floor
     };
   }
 
@@ -173,25 +245,31 @@ export class DungeonSystem {
       return;
     }
 
-    // Stairs down (v)
-    if (floor.stairsDownRow !== null) {
+    // Stairs (up/down) are now triggered by SPACE, not by walking into them.
+    // See handleSpacePress() below.
+  }
+
+  /** Returns 'down', 'up', or null depending on which staircase the player is overlapping. */
+  nearStairsType() {
+    const { game } = this;
+    if (!game.player?.inHut || !game.hutInterior) return null;
+    if (game.hutInterior.gridCols !== INTERIOR_COLS) return null;
+    const floor = game.hutInterior;
+    const player = game.player;
+
+    if (floor.stairsDownRow !== null && !floor.stairsLocked) {
       const sxPx = floor.stairsDownCol * GRID.CELL_SIZE;
       const syPx = floor.stairsDownRow * GRID.CELL_SIZE;
-      if (this._overlapsCell(player, sxPx, syPx)) {
-        this._descendFloor();
-        return;
-      }
+      if (this._overlapsCell(player, sxPx, syPx)) return 'down';
     }
 
-    // Stairs up (^) — floor 1+ only
     if (floor.stairsUpRow !== null) {
       const sxPx = floor.stairsUpCol * GRID.CELL_SIZE;
       const syPx = floor.stairsUpRow * GRID.CELL_SIZE;
-      if (this._overlapsCell(player, sxPx, syPx)) {
-        this._ascendFloor();
-        return;
-      }
+      if (this._overlapsCell(player, sxPx, syPx)) return 'up';
     }
+
+    return null;
   }
 
   // ─── Floor Transitions ────────────────────────────────────────────────────
@@ -205,11 +283,28 @@ export class DungeonSystem {
     const { game } = this;
     const floor = game.dungeonFloors[floorIndex];
 
-    // Swap physics entities
+    // Swap physics entities — enemies
     if (game.hutInterior?.enemies) {
       for (const e of game.hutInterior.enemies) game.physicsSystem.removeEntity(e);
     }
     for (const e of floor.enemies) game.physicsSystem.addEntity(e);
+
+    // Swap floor items + ingredients: save current floor's hutPlane entities, load new floor's
+    if (game.hutInterior) {
+      const prevFloorIndex = game.dungeonCurrentFloor;
+      if (prevFloorIndex >= 0 && game.dungeonFloors[prevFloorIndex]) {
+        game.dungeonFloors[prevFloorIndex].items       = game.items.filter(i => i.hutPlane);
+        game.dungeonFloors[prevFloorIndex].ingredients = game.ingredients.filter(i => i.hutPlane);
+      }
+      game.items       = game.items.filter(i => !i.hutPlane);
+      game.ingredients = game.ingredients.filter(i => !i.hutPlane);
+    }
+    for (const item of floor.items) {
+      if (!game.items.includes(item)) game.items.push(item);
+    }
+    for (const ing of (floor.ingredients || [])) {
+      if (!game.ingredients.includes(ing)) game.ingredients.push(ing);
+    }
 
     game.hutInterior = floor;
     game.dungeonCurrentFloor = floorIndex;
@@ -229,6 +324,7 @@ export class DungeonSystem {
   _descendFloor() {
     const { game } = this;
     const nextFloorIndex = game.dungeonCurrentFloor + 1;
+    if (nextFloorIndex > MAX_FLOOR_INDEX) return; // cap reached
 
     if (!game.dungeonFloors[nextFloorIndex]) {
       const depth = game.getCurrentZoneDepth ? game.getCurrentZoneDepth() : 1;
@@ -347,6 +443,12 @@ export class DungeonSystem {
       for (let i = floor.enemies.length - 1; i >= 0; i--) {
         const enemy = floor.enemies[i];
         if (enemy.hp <= 0) {
+          // Key enemy killed → unlock stairs
+          if (enemy.hasKey && floor.stairsLocked) {
+            floor.stairsLocked = false;
+            this._spawnStairsUnlockEffect(floor);
+          }
+
           game.audioSystem?.playSFX('destroy');
           game.spawnLoot(enemy);
 
@@ -365,12 +467,154 @@ export class DungeonSystem {
         }
       }
 
+      // Glitter object hit check → unlock stairs
+      if (floor.stairsLocked && floor.unlockCondition?.type === 'glitter_object') {
+        for (const obj of floor.backgroundObjects) {
+          if (obj.glitterHit) {
+            obj.glitterHit = false;
+            floor.stairsLocked = false;
+            this._spawnStairsUnlockEffect(floor);
+            break;
+          }
+        }
+      }
+
+      // Glitter particle emission (every 3s)
+      this._glitterTimer = (this._glitterTimer || 0) + dt;
+      if (this._glitterTimer >= 3.0) {
+        this._glitterTimer = 0;
+        for (const obj of floor.backgroundObjects) {
+          if (!obj.isGlittering || obj.destroyed) continue;
+          for (let g = 0; g < 3; g++) {
+            const p = new Particle(
+              obj.position.x + (Math.random() - 0.5) * 8,
+              obj.position.y + (Math.random() - 0.5) * 8,
+              '*',
+              obj.glitterColor || '#00ffcc',
+              { vx: (Math.random() - 0.5) * 20, vy: -30 - Math.random() * 20 },
+              0.8 + Math.random() * 0.4
+            );
+            game.particles.push(p);
+          }
+        }
+      }
+
+      // Stairs visual update based on lock state (must update animationChar/animationColor — what getRenderPosition() uses)
+      if (floor.stairsDownObj) {
+        const lockedColor = '#cc3333';
+        const unlockedColor = '#8b7355';
+        const stairsChar = floor.stairsLocked ? 'x' : 'v';
+        const stairsColor = floor.stairsLocked ? lockedColor : unlockedColor;
+        floor.stairsDownObj.char = stairsChar;
+        floor.stairsDownObj.color = stairsColor;
+        floor.stairsDownObj.animationChar = stairsChar;
+        floor.stairsDownObj.animationColor = stairsColor;
+      }
+
       // Update background objects
       for (const obj of floor.backgroundObjects) obj.update(dt);
 
       this.checkStairs();
     } else if (!game.player.inHut) {
       this.checkDoorEntry();
+    }
+  }
+
+  // ─── Item Slot Interaction ────────────────────────────────────────────────
+
+  /**
+   * SPACE inside dungeon: descend/ascend stairs, or retrieve from sacrifice slot.
+   * Returns true if handled (prevents default SPACE behavior).
+   */
+  handleSpacePress() {
+    const { game } = this;
+    if (!game.player?.inHut || !game.hutInterior) return false;
+    if ((game.player._hutEntryCooldown ?? 0) > 0) return false;
+
+    // Staircase transitions take priority
+    const stairsType = this.nearStairsType();
+    if (stairsType === 'down') { this._descendFloor(); return true; }
+    if (stairsType === 'up')   { this._ascendFloor();  return true; }
+
+    const floor = game.hutInterior;
+    const uc = floor.unlockCondition;
+    if (uc?.type !== 'item_slot' || !uc.slotItem) return false;
+
+    // Proximity check (2 cells)
+    const slotPx = uc.col * GRID.CELL_SIZE;
+    const slotPy = uc.row * GRID.CELL_SIZE;
+    const dx = game.player.position.x - slotPx;
+    const dy = game.player.position.y - slotPy;
+    if (Math.sqrt(dx * dx + dy * dy) > GRID.CELL_SIZE * 2) return false;
+
+    // Return item to player quick slots (first empty slot)
+    const slots = game.player.quickSlots;
+    let placed = false;
+    for (let i = 0; i < slots.length; i++) {
+      if (!slots[i]) {
+        slots[i] = uc.slotItem;
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) return false; // No empty slot to return to
+
+    uc.slotItem = null;
+    floor.stairsLocked = true;
+    return true;
+  }
+
+  /**
+   * SHIFT near item slot: deposit active weapon into sacrifice slot (unlocks stairs).
+   * Returns true if handled (prevents default SHIFT behavior).
+   */
+  handleShiftPress() {
+    const { game } = this;
+    if (!game.player?.inHut || !game.hutInterior) return false;
+    const floor = game.hutInterior;
+    const uc = floor.unlockCondition;
+    if (uc?.type !== 'item_slot' || uc.slotItem) return false;
+
+    // Proximity check (2 cells)
+    const slotPx = uc.col * GRID.CELL_SIZE;
+    const slotPy = uc.row * GRID.CELL_SIZE;
+    const dx = game.player.position.x - slotPx;
+    const dy = game.player.position.y - slotPy;
+    if (Math.sqrt(dx * dx + dy * dy) > GRID.CELL_SIZE * 2) return false;
+
+    // Grab active item from player's quick slot
+    const slotIndex = game.player.activeSlotIndex;
+    const active = game.player.quickSlots[slotIndex];
+    if (!active) return false;
+
+    game.player.quickSlots[slotIndex] = null;
+    uc.slotItem = active;
+    floor.stairsLocked = false;
+    this._spawnStairsUnlockEffect(floor);
+    return true;
+  }
+
+  // ─── Unlock Visual Effect ─────────────────────────────────────────────────
+
+  _spawnStairsUnlockEffect(floor) {
+    const { game } = this;
+    if (!floor.stairsDownObj) return;
+    const sx = floor.stairsDownObj.position.x + GRID.CELL_SIZE / 2;
+    const sy = floor.stairsDownObj.position.y + GRID.CELL_SIZE / 2;
+    const chars = ['*', '+', '߃', '*', '+'];
+    const colors = ['#ffcc00', '#ffffff', '#ffcc00', '#ffffaa', '#ffcc00'];
+    for (let i = 0; i < chars.length; i++) {
+      const angle = (i / chars.length) * Math.PI * 2;
+      const speed = 30 + Math.random() * 30;
+      const p = new Particle(
+        sx + (Math.random() - 0.5) * 6,
+        sy + (Math.random() - 0.5) * 6,
+        chars[i],
+        colors[i],
+        { vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 20 },
+        1.0 + Math.random() * 0.5
+      );
+      game.particles.push(p);
     }
   }
 

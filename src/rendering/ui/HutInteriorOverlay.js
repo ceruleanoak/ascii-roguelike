@@ -104,6 +104,15 @@ export class HutInteriorOverlay {
     // ── 8. Interior enemies (full indicator rendering) ─────────────────────────
     for (const enemy of game.hutInterior.enemies) {
       this.renderController.exploreRenderer.renderEnemy(game, enemy);
+      // Key indicator one full cell above hasKey enemies (vault key char '߃')
+      if (enemy.hasKey) {
+        ctx.fillStyle = '#ffcc00';
+        ctx.fillText(
+          '߃',
+          enemy.position.x + GRID.CELL_SIZE / 2,
+          enemy.position.y - GRID.CELL_SIZE
+        );
+      }
     }
 
     // ── 9. Player projectiles (interior coords) ────────────────────────────────
@@ -208,6 +217,46 @@ export class HutInteriorOverlay {
 
     // ── 18. Green ranger indicator ─────────────────────────────────────────────
     this.renderController.greenRangerIndicator.render(game);
+
+    // ── 19. Item sacrifice slot (dungeon lock condition) ────────────────────────
+    const uc = game.hutInterior.unlockCondition;
+    if (uc?.type === 'item_slot') {
+      const CS = GRID.CELL_SIZE;
+      const slotCx = uc.col * CS + CS / 2;
+      const slotCy = uc.row * CS + CS / 2;
+      const pdx = game.player.position.x + CS / 2 - slotCx;
+      const pdy = game.player.position.y + CS / 2 - slotCy;
+      const nearSlot = Math.sqrt(pdx * pdx + pdy * pdy) < CS * 2;
+      ctx.fillStyle = nearSlot ? '#ffffff' : '#888888';
+      ctx.fillText('[', slotCx - CS, slotCy);
+      ctx.fillText(']', slotCx, slotCy);
+      if (uc.slotItem) {
+        ctx.fillStyle = uc.slotItem.color || '#ffcc00';
+        ctx.fillText(uc.slotItem.char, slotCx - CS / 2, slotCy);
+      } else {
+        ctx.fillStyle = '#444444';
+        ctx.fillText('?', slotCx - CS / 2, slotCy);
+      }
+    }
+
+    // ── 20. Staircase prompt ───────────────────────────────────────────────────
+    if (game.dungeonSystem) {
+      const stairsType = game.dungeonSystem.nearStairsType();
+      if (stairsType) {
+        const label = stairsType === 'down' ? 'SPACE  DESCEND' : 'SPACE  ASCEND';
+        const floor = game.hutInterior;
+        const col = stairsType === 'down' ? floor.stairsDownCol : floor.stairsUpCol;
+        const row = stairsType === 'down' ? floor.stairsDownRow : floor.stairsUpRow;
+        ctx.save();
+        ctx.font = `10px 'Unifont', monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#ccccaa';
+        ctx.fillText(label, col * GRID.CELL_SIZE + GRID.CELL_SIZE / 2, row * GRID.CELL_SIZE - GRID.CELL_SIZE);
+        ctx.restore();
+        ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`; // restore font
+      }
+    }
 
     // ── Restore interior offset ────────────────────────────────────────────────
     ctx.restore(); // removes translate + restores outer state

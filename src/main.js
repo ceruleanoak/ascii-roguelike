@@ -1809,7 +1809,9 @@ class Game {
       // Standard dodge roll for all other characters
       if (dodgeDirection.x !== 0 || dodgeDirection.y !== 0) {
         if (!this.player.dodgeRoll.active && this.player.dodgeRoll.cooldownTimer <= 0 && !this.keys.space) {
-          const enemies = this.currentRoom ? this.currentRoom.enemies : [];
+          const enemies = this.player.inHut && this.hutInterior
+            ? this.hutInterior.enemies
+            : (this.currentRoom ? this.currentRoom.enemies : []);
           const rollStarted = this.player.startDodgeRoll(dodgeDirection, enemies);
 
           if (rollStarted) {
@@ -3367,6 +3369,9 @@ class Game {
     // EXPLORE: Check vault unlock first (higher priority than traps)
     if (state === GAME_STATES.EXPLORE) {
 
+      // Dungeon item slot: SPACE retrieves weapon from sacrifice slot (re-locks stairs)
+      if (this.player.inHut && this.dungeonSystem?.handleSpacePress()) return;
+
       // Fishing: resolve bite window OR cancel bobbing on space press
       if (
         this.fishingSystem.state === this.fishingSystem.STATES.BITE_WINDOW ||
@@ -3649,6 +3654,9 @@ class Game {
     }
 
     if (state === GAME_STATES.EXPLORE) {
+      // Dungeon item slot: SHIFT deposits active weapon into sacrifice slot (unlocks stairs)
+      if (this.player.inHut && this.dungeonSystem?.handleShiftPress()) return;
+
       // Check for errand traveler interaction (SHIFT = give item)
       const giveResult = this.errandSystem.checkGive(this.player, this.neutralCharacters);
       if (giveResult) {
@@ -3686,6 +3694,7 @@ class Game {
 
           // Drop previous item if any
           if (droppedItem) {
+            if (this.player.inHut) droppedItem.hutPlane = true;
             this.items.push(droppedItem);
             this.physicsSystem.addEntity(droppedItem);
           }

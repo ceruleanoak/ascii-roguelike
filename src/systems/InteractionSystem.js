@@ -13,8 +13,10 @@ export class InteractionSystem {
 
   findNearbyBackgroundObject() {
     const game = this.game;
-    // Use currentRoom.backgroundObjects for all states (including NEUTRAL)
-    const objects = game.currentRoom ? game.currentRoom.backgroundObjects : game.backgroundObjects;
+    // When inside a hut/dungeon, search the interior objects only
+    const objects = (game.player?.inHut && game.hutInterior)
+      ? game.hutInterior.backgroundObjects
+      : (game.currentRoom ? game.currentRoom.backgroundObjects : game.backgroundObjects);
     for (const obj of objects) {
       const distance = game.physicsSystem.getDistance(game.player, obj);
       if (distance < INTERACTION_RANGE) {

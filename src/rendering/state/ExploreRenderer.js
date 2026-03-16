@@ -91,8 +91,6 @@ export class ExploreRenderer {
       east:  !!exits.east,
       west:  !!exits.west,
     };
-    this.renderer.drawBorder(borderExits, game.currentRoom.borderColor);
-
     // Draw collision map — skip every cell that sits on a visual gap position
     // so the gap is never painted over by a solid wall cell.
     const centerX = Math.floor(GRID.COLS / 2);
@@ -108,6 +106,9 @@ export class ExploreRenderer {
         }
       }
     }
+
+    // Draw border after collision map so zone color overwrites the gray perimeter cells.
+    this.renderer.drawBorder(borderExits, game.currentRoom.borderColor);
 
     // Draw recipe sign FIRST (under all other background objects)
     if (game.currentRoom.recipeSign) {
@@ -828,9 +829,8 @@ export class ExploreRenderer {
     const ctx = this.renderer.fgCtx;
     const exits = game.currentRoom.exits;
     const exitsUnlocked = !game.currentRoom.exitsLocked;
-    // Use the wall face color (same as collision-map cells) so the closing panel
-    // is visually indistinguishable from the adjacent border wall cells.
-    const wallColor = '#444444';
+    // Use the zone border color so the closing panel blends with the perimeter.
+    const wallColor = game.currentRoom.borderColor;
 
     // On room change: start all splits fully open so they animate closed if
     // exits are locked (enemies present), or stay open if already unlocked.

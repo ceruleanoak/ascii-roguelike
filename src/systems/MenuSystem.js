@@ -254,7 +254,11 @@ export class MenuSystem {
 
   selectMenuItem() {
     const game = this.game;
-    if (!game.menuOpen || game.menuItems.length === 0) return;
+    if (!game.menuOpen) return;
+    if (game.menuItems.length === 0) {
+      this.closeMenu();
+      return;
+    }
 
     const selectedItem = game.menuItems[game.selectedMenuIndex];
 
