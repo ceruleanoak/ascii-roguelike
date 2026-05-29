@@ -17,6 +17,8 @@ export class InventoryOverlay {
   }
 
   render(game) {
+    this.renderer.fgCtx.save();
+
     // Draw semi-transparent background
     this.renderer.drawRect(
       GRID.CELL_SIZE * 2,
@@ -54,10 +56,13 @@ export class InventoryOverlay {
     const totalItems = game.player.inventory.length + game.inventorySystem.armorInventory.length + game.inventorySystem.consumableInventory.length;
 
     if (totalItems === 0) {
+      const emptyMsg = game.stateMachine.getCurrentState() === GAME_STATES.REST
+        ? 'explore to gather ingredients'
+        : 'Empty';
       this.renderer.drawEntity(
         GRID.WIDTH / 2,
         GRID.HEIGHT / 2,
-        'Empty',
+        emptyMsg,
         COLORS.TEXT
       );
     } else {
@@ -164,5 +169,7 @@ export class InventoryOverlay {
         }
       }
     }
+
+    this.renderer.fgCtx.restore();
   }
 }

@@ -2,16 +2,41 @@
 // Format: [leftItem, rightItem] -> resultItem
 
 export const RECIPES = [
+  // === MANA CONVERSIONS (skeletal/organ/nature ingredients → raw mana) ===
+  // Future use: mana flasks in consumable slots for magic builds
+  { left: 'j', right: 'e', result: '𝑚', name: 'Mana' },  // Jaw + Eye    (creature essence)
+  { left: 'l', right: 'r', result: '𝑚', name: 'Mana' },  // Leaf + Root  (nature essence)
+  { left: 'd', right: 'b', result: '𝑚', name: 'Mana' },  // Dust + Bone  (remains)
+
+  // === ROCK RECIPES ===
+  { left: '0', right: '0', result: '△', name: 'Arrowhead' },      // Rock + Rock = Arrowhead
+  { left: '0', right: '|', result: '⊥', name: 'Hammer' },        // Rock + Stick = Hammer
+  { left: '0', right: '~', result: '⊸', name: 'Sling' },         // Rock + String = Sling
+  { left: '|', right: '△', result: '⇈', name: 'Fletch of Arrows' }, // Stick + Arrowhead = Fletch of Arrows
+  { left: '/', right: '△', result: '↑', name: 'Spear' },         // Staff + Arrowhead = Spear
+
   // Basic weapon upgrades
   { left: '¬', right: 'M', result: '⌂', name: 'Shotgun' },       // Gun + Metal = Shotgun
   { left: '†', right: 'F', result: '‡', name: 'Flame Sword' },   // Sword + Fire = Flame Sword
+  { left: '†', right: '†', result: '⫯', name: 'Longsword' },     // Sword + Sword = Longsword
   { left: '|', right: '~', result: ')', name: 'Bow' },           // Stick + String = Bow
-  { left: '|', right: '|', result: '/', name: 'Staff' },         // Stick + String = Staff
+  { left: '|', right: '|', result: '/', name: 'Staff' },         // Stick + Stick = Staff
+  { left: '/', right: '/', result: 'Ψ', name: 'Thick Staff' },   // Staff + Staff = Thick Staff
   { left: 'M', right: '|', result: '¬', name: 'Gun' },         // Stick + Metal = Gun
+
+  // === GEM WANDS (Staff + gemstone) ===
+  { left: '/', right: '?', result: '⚝', name: 'Ruby Staff' },     // Staff + Ruby
+  { left: '/', right: '(', result: '⚹', name: 'Sapphire Staff' }, // Staff + Sapphire
+  { left: '/', right: '1', result: '⚶', name: 'Topaz Staff' },    // Staff + Topaz
+  { left: '/', right: '6', result: '⚸', name: 'Onyx Staff' },     // Staff + Onyx
+  { left: '/', right: '`', result: '⚘', name: 'Emerald Staff' },  // Staff + Emerald
+  { left: '/', right: '9', result: '⚭', name: 'Garnet Staff' },   // Staff + Garnet
+  { left: '/', right: '_', result: '⚳', name: 'Force Wand' },    // Staff + Diamond
 
 
   // Dual wielding
   { left: '¬', right: '¬', result: 'X', name: 'Dual Pistols' },  // Gun + Gun = Dual Pistols
+  { left: '¬', right: 'b', result: 'ƒ', name: "Fester's Gun" }, // Gun + Bone = Fester's Gun
 
   // Armor/defense
   { left: 'b', right: 'g', result: 'O', name: 'Slime Suit' },    // Bone + Goo = Slime Suit
@@ -34,8 +59,12 @@ export const RECIPES = [
   { left: 'b', right: 'M', result: '⊤', name: 'Bone Axe' },      // Bone + Metal = Bone Axe
 
   // Utility
-  { left: 'f', right: '~', result: 'R', name: 'Rope' },          // Fur + String = Rope
+  { left: 'f', right: '~', result: 'R', name: 'Robe' },          // Fur + String = Rope
   { left: 't', right: '|', result: '↑', name: 'Spear' },         // Teeth + Stick = Spear
+  { left: '↑', right: 'v', result: '↟', name: 'Venom Lance' },  // Spear + Venom = Venom Lance
+  { left: '↑', right: 'j', result: 'ψ', name: 'Trident' },      // Spear + Jaw = Trident (jaw-bone prongs)
+  { left: '↑', right: 'M', result: '⇑', name: 'War Spear' },    // Spear + Metal = War Spear
+  { left: '/', right: 'M', result: 'Ƨ', name: 'Scythe' },        // Staff + Metal = Scythe (long handle + curved blade)
 
   // Secret recipes
   { left: 's', right: 's', result: '♦', name: 'Dragon Heart' },  // Scale + Scale = Dragon Heart
@@ -44,7 +73,7 @@ export const RECIPES = [
 
   // === GREEN GAP RECIPES (early game common ingredients) ===
   { left: 'm', right: 'm', result: 'ᒧ', name: 'Meat Jerky' },    // Meat + Meat = Meat Jerky (heal 2)
-  { left: 'b', right: 'b', result: 'ᐧ', name: 'Bone Dust' },     // Bone + Bone = Bone Dust (panic blind)
+  { left: 'b', right: 'a', result: 'ᐧ', name: 'Bone Dust' },     // Bone + Ash = Bone Dust (panic blind)
   { left: 'f', right: 'f', result: 'ᐤ', name: 'Fur Cloak' },     // Fur + Fur = Fur Cloak (auto-dodge)
   { left: 't', right: 't', result: 'ᑕ', name: 'Tooth Necklace' }, // Teeth + Teeth = Tooth Necklace (+1 dmg)
 
@@ -54,8 +83,9 @@ export const RECIPES = [
   // Item upgrades - use existing items to create better versions
   { left: '⌂', right: 's', result: '☼', name: 'Dragon Shotgun' }, // Shotgun + Scale = Dragon Shotgun
   { left: '‡', right: 's', result: '⚔', name: 'Legendary Flame Sword' }, // Flame Sword + Scale = Legendary
+  { left: '‡', right: 'a', result: '╪', name: 'Lava Sword' },             // Flame Sword + Ash = Lava Sword
   { left: 'X', right: 'M', result: '※', name: 'Heavy Pistols' },  // Dual Pistols + Metal = Heavy Pistols
-  { left: '⌘', right: 'g', result: '☠', name: 'Venom Blade' },    // Dragon Blade + Goo = Venom Blade
+  { left: '⌘', right: 'g', result: '☤', name: 'Venom Blade' },    // Dragon Blade + Goo = Venom Blade
   { left: '⟩', right: 'w', result: '⇒', name: 'Sky Bow' },        // Fire Bow + Wing = Sky Bow
   { left: '⊤', right: 'b', result: '⚒', name: 'Bone Crusher' },   // Bone Axe + Bone = Bone Crusher
 
@@ -66,9 +96,10 @@ export const RECIPES = [
   { left: 'b', right: 'F', result: '☠', name: 'Cursed Skull' },   // Bone + Fire = Cursed Skull
   { left: 'm', right: '~', result: '♥', name: 'Heart' },          // Meat + String = Heart
   { left: 'c', right: 'F', result: '★', name: 'Lucky Coin' },     // Coin + Fire = Lucky Coin
+  { left: 'a', right: 'c', result: '¤', name: 'Infused Coin' },   // Ash + Coin = Infused Coin (offering for Well)
 
   // === NEW GUN RECIPES (10) ===
-  { left: '⌂', right: 'g', result: '⌐', name: 'Machine Gun' },     // Shotgun + Goo = Machine Gun
+  { left: '⌂', right: 'j', result: '⌐', name: 'Machine Gun' },     // Shotgun + Goo = Machine Gun
   { left: '¬', right: 'g', result: '❄', name: 'Freeze Ray' },      // Gun + Goo = Freeze Ray
   { left: '¬', right: 'F', result: 'ϟ', name: 'Lightning Gun' },   // Gun + Fire = Lightning Gun
   { left: '⌂', right: 'F', result: '⊕', name: 'Rocket Launcher' }, // Shotgun + Fire = Rocket Launcher
@@ -82,18 +113,18 @@ export const RECIPES = [
   // === NEW MELEE RECIPES (10) ===
   { left: '⊤', right: 'g', result: '☃', name: 'Ice Hammer' },      // Bone Axe + Goo = Ice Hammer
   { left: '~', right: '~', result: '≋', name: 'Whip' },            // String + String = Whip
-  { left: 'M', right: '~', result: '○', name: 'Flail' },           // Metal + String = Flail
+  { left: 'j', right: '~', result: '○', name: 'Flail' },           // Jaw + String = Flail
   { left: '†', right: 'm', result: '╫', name: 'Blood Sword' },     // Sword + Meat = Blood Sword
   { left: '⊤', right: 'F', result: '⚯', name: 'Thunder Axe' },     // Bone Axe + Fire = Thunder Axe
   { left: '⊤', right: '@', result: '◉', name: 'Exploding Mace' },  // Bone Axe + Bomb = Exploding Mace
-  { left: '↑', right: 'w', result: '╪', name: 'Stun Baton' },      // Spear + Wing = Stun Baton
+  { left: '↑', right: 'w', result: '⌁', name: 'Stun Baton' },      // Spear + Wing = Stun Baton
   { left: '‡', right: 'm', result: '♣', name: 'Vampire Dagger' },  // Flame Sword + Meat = Vampire Dagger
   { left: '⚒', right: 'M', result: '▼', name: 'Earthquake Hammer' }, // Bone Crusher + Metal = Earthquake Hammer
   { left: '⌘', right: 'F', result: '◇', name: 'Chaos Blade' },     // Dragon Blade + Fire = Chaos Blade
 
   // === NEW BOW RECIPES (8) ===
   { left: ')', right: 'g', result: '❅', name: 'Ice Bow' },         // Bow + Goo = Ice Bow
-  { left: ')', right: '~', result: '⋙', name: 'Multi-Shot Bow' },  // Bow + String = Multi-Shot Bow
+  { left: ')', right: ')', result: '⋙', name: 'Multi-Shot Bow' },  // Bow + Bow = Multi-Shot Bow
   { left: ')', right: '@', result: '⊛', name: 'Explosive Bow' },   // Bow + Bomb = Explosive Bow
   { left: ')', right: 'w', result: '◈', name: 'Homing Bow' },      // Bow + Wing = Homing Bow
   { left: ')', right: 'M', result: '⇶', name: 'Piercing Bow' },    // Bow + Metal = Piercing Bow
@@ -118,8 +149,13 @@ export const RECIPES = [
   { left: 'M', right: 'F', result: ']', name: 'Tesla Coil' },      // Metal + Fire = Tesla Coil
   { left: 'g', right: '~', result: ',', name: 'Goo Dispenser' },   // Goo + String = Goo Dispenser
 
+  // === ARMOR UPGRADES (basic ingredient + base armor) ===
+  { left: 'V', right: '~', result: '2', name: 'Stitched Vest' },        // Fur Vest + String = Stitched Vest
+  { left: 'O', right: 'b', result: '3', name: 'Reinforced Slime Suit' }, // Slime Suit + Bone = Reinforced Slime Suit
+  { left: 'A', right: 'f', result: '4', name: 'Padded Bone Armor' },     // Bone Armor + Fur = Padded Bone Armor
+
   // === NEW ARMOR RECIPES (7) ===
-  { left: 'f', right: '~', result: 'L', name: 'Leather Armor' },   // Fur + String = Leather Armor
+  { left: 'f', right: 'b', result: 'L', name: 'Leather Armor' },   // Fur + Bone = Leather Armor
   { left: 'M', right: '~', result: '⛓', name: 'Chain Mail' },      // Metal + String = Chain Mail
   { left: 'k', right: 'F', result: 'R', name: 'Robe' },            // Silk + Fire = Robe
   { left: 'M', right: 'b', result: 'W', name: 'Warplate' },        // Metal + Bone = Warplate
@@ -127,8 +163,25 @@ export const RECIPES = [
   { left: 'a', right: 'M', result: 'E', name: 'Ember Cloak' },     // Ash + Metal = Ember Cloak
   { left: 'g', right: 's', result: 'I', name: 'Ice Plate' },       // Goo + Scale = Ice Plate
 
+  // === INFUSED ROBES (Robe + elemental gemstone) ===
+  { left: 'R', right: '(', result: 'ℜ', name: 'Frost Robe' },   // Robe + Sapphire = Frost Robe
+  { left: 'R', right: '?', result: 'ℛ', name: 'Flame Robe' },   // Robe + Ruby     = Flame Robe
+  { left: 'R', right: '1', result: 'ℝ', name: 'Storm Robe' },   // Robe + Topaz    = Storm Robe
+  { left: 'R', right: '9', result: 'ℬ', name: 'Blood Robe' },   // Robe + Garnet   = Blood Robe
+  { left: 'R', right: '`', result: 'ℰ', name: 'Emerald Robe' }, // Robe + Emerald  = Emerald Robe
+  { left: 'R', right: '6', result: 'ℌ', name: 'Shadow Robe' },  // Robe + Onyx     = Shadow Robe
+  { left: 'R', right: 's', result: '⊛', name: 'Whirlwind Cape' }, // Robe + Scale    = Whirlwind Cape
+
   // === FISHING ===
-  { left: '/', right: '~', result: 'ߒ', name: 'Fishing Pole' }   // Staff + String = Fishing Pole
+  { left: '/', right: '~', result: 'ߒ', name: 'Fishing Pole' },  // Staff + String = Fishing Pole
+
+  // === UTILITY ===
+  { left: 'w', right: 'f', result: 'Ω', name: 'Floating Boots' }, // Wing + Fur = Floating Boots
+
+  // === BLUE-ZONE ARMOR (water-only mechanics) ===
+  { left: 'p', right: 'n', result: '∆', name: 'Shark Mask' },       // Pearl Shard + Sharkbone = Shark Mask
+  { left: 'p', right: 'C', result: '❖', name: 'Coral Crown' },      // Pearl Shard + Coral Cluster = Coral Crown
+  { left: 'p', right: 'Y', result: 'Ϡ', name: 'Stingray Mantle' }   // Pearl Shard + Stingray Barb = Stingray Mantle
 ];
 
 export function findRecipe(leftChar, rightChar) {

@@ -1,0 +1,12 @@
+{
+  "name": "sfx-editor",
+  "version": "1.0.0",
+  "description": "Chiptune SFX editor for ASCII roguelike — exports WAV",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}

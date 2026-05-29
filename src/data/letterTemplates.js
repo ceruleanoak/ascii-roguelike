@@ -65,7 +65,10 @@ export const LETTER_TEMPLATES = {
       },
 
       // Overall grass density
-      grassDensity: 0.2 // 20% normal (sparse grass, mostly on perimeter)
+      grassDensity: 0.2, // 20% normal (sparse grass, mostly on perimeter)
+
+      // No water/lava in the arena — liquid breaks line-of-sight and clutters the fight
+      suppressLiquid: true
     },
 
     // Enemy spawn rules
@@ -160,6 +163,49 @@ export const LETTER_TEMPLATES = {
     }
   },
 
+  G: {
+    name: 'Grass',
+    description: 'Overgrown meadow — tall grass conceals ground enemies, items, and the player. Flying enemies remain above the canopy. A Scythe waits in a small clearing.',
+
+    wallStructures: {
+      allow: false // Open meadow — no walls
+    },
+
+    bgObjectRules: {
+      // Small central clearing where the Scythe spawns
+      clearingZone: {
+        centerCol: 15,
+        centerRow: 15,
+        width: 9,
+        height: 7,
+        allowGrass: false,
+        allowObjects: false
+      },
+
+      // Heavy grass swaths everywhere except the clearing
+      grassDensity: 2.5,
+
+      // Sparse trees / rocks / bushes — keep the meadow open
+      densityMultiplier: 0.45,
+      objectBias: {
+        '%': 0.6,  // Few bushes
+        '&': 0.4,  // Few trees
+        '0': 0.3,  // Few rocks
+        '+': 0.3   // Few brambles
+      },
+
+      // Water breaks the grass coverage — keep it out
+      suppressLiquid: true
+    },
+
+    // Always drop a Scythe in the clearing
+    guaranteedItems: {
+      enabled: true,
+      position: 'clearing_center',
+      itemPool: ['Ƨ'] // Scythe
+    }
+  },
+
   T: {
     name: 'Tunnel Passage',
     description: 'Dual-plane tunnel with entrance-based plane switching',
@@ -228,6 +274,14 @@ export const LETTER_TEMPLATES = {
         '&': 0.5,  // Fewer trees
         '0': 0.3   // Fewer rocks
       }
+    },
+
+    // Always inject 1-2 frogs that swim in the surrounding water ring
+    enemyInjection: {
+      char: 'g',
+      minCount: 1,
+      maxCount: 2,
+      preferLiquid: true
     }
   },
 
@@ -252,7 +306,41 @@ export const LETTER_TEMPLATES = {
 
     bgObjectRules: {
       grassDensity: 0.5,
-      objectBias: { '%': 1.2, '0': 0.8, '&': 0.6, 'n': 0.8 }
+      objectBias: { '%': 1.2, '0': 0.8, '&': 0.6, 'n': 0.8, 'C': 4.0 }
+    },
+
+    // Always inject 1-2 frogs near the lake shore
+    enemyInjection: {
+      char: 'g',
+      minCount: 1,
+      maxCount: 2,
+      preferLiquid: true
+    }
+  },
+
+  L_BOSS: {
+    name: 'Lake (Boss)',
+    description: 'Large lake arena for The Frosted Maw boss encounter',
+
+    wallStructures: {
+      allow: false
+    },
+
+    lakeZone: {
+      enabled: true,
+      nodes: [
+        { col: 13, row: 12, radius: 12 },  // upper body
+        { col: 16, row: 18, radius: 11 },  // lower body
+        { col: 7,  row: 14, radius: 8  },  // left arm
+        { col: 22, row: 13, radius: 8  },  // right arm
+      ],
+      edgeNoise: 2.0,
+      waterDensity: 0.93
+    },
+
+    bgObjectRules: {
+      grassDensity: 0.5,
+      objectBias: { '%': 1.2, '0': 0.8, '&': 0.6 }
     }
   },
 
@@ -333,6 +421,35 @@ export const LETTER_TEMPLATES = {
     hutKind: 'random' // 'enemy_encounter' | 'neutral_npc' | 'random'
   },
 
+  M: {
+    name: 'Maze',
+    description: 'A crumbling maze — 4×4 grid of maze-like rooms hiding precious loot behind a rising ghost curse',
+
+    wallStructures: {
+      allow: false // Maze generates its own exterior structure
+    },
+
+    bgObjectRules: {
+      grassDensity: 0.5,
+      objectBias: {
+        '8': 1.5, // More bones — abandoned feel
+        '0': 1.2,
+        '%': 0.4
+      }
+    },
+
+    hutStructure: {
+      enabled: true,
+      centerCol: 15,
+      centerRow: 15,
+      exteriorWidth: 5,
+      exteriorHeight: 5,
+      wallChar: '≡',
+      doorChar: '∩',
+      doorSide: 'south'
+    }
+  },
+
   D: {
     name: 'Dungeon',
     description: 'A dungeon entrance — a separate interior arena with its own space',
@@ -383,5 +500,281 @@ export const LETTER_TEMPLATES = {
       },
       grassDensity: 0.0
     }
+  },
+
+  R: {
+    name: 'Ridge',
+    description: 'Impassable ravine across the top third; crossable only when bridge is built',
+
+    wallStructures: {
+      allow: false
+    },
+
+    bgObjectRules: {
+      // Full-width clearing over ravine rows 0-9 — no random objects in that zone
+      clearingZone: {
+        centerCol: 15,
+        centerRow: 5,
+        width: 30,
+        height: 10,
+        allowGrass: false,
+        allowObjects: false
+      },
+      grassDensity: 0.6
+    }
+  },
+
+  F: {
+    name: 'Fountain',
+    description: 'A large square pool with two waterfalls flanking a central pad — drop a weapon here to summon a fairy upgrade',
+
+    wallStructures: {
+      allow: false
+    },
+
+    bgObjectRules: {
+      // Keep the central fountain footprint free of random objects
+      clearingZone: {
+        centerCol: 15,
+        centerRow: 15,
+        width: 12,
+        height: 12,
+        allowGrass: false,
+        allowObjects: false
+      },
+      grassDensity: 0.5,
+      objectBias: {
+        '%': 1.2,
+        '&': 0.8,
+        '0': 0.5
+      }
+    },
+
+    fountainStructure: {
+      enabled: true,
+      centerCol: 15,
+      centerRow: 15,
+      poolRadius: 4,        // 9×9 pool footprint (radius 4 → 9 cells across)
+      padRadius: 0,         // 1×1 walkable center pad (player stands here to offer)
+      waterfallCols: [-3, 3] // waterfall columns relative to center
+    }
+  },
+
+  W: {
+    name: 'Well',
+    description: 'A small stone well at center — drop an Infused Coin to awaken the magic meter',
+
+    wallStructures: {
+      allow: false
+    },
+
+    bgObjectRules: {
+      // Keep the central well clearing free of random objects
+      clearingZone: {
+        centerCol: 15,
+        centerRow: 15,
+        width: 8,
+        height: 8,
+        allowGrass: false,
+        allowObjects: false
+      },
+      grassDensity: 0.5,
+      objectBias: {
+        '%': 1.1,
+        '&': 0.8,
+        '0': 0.6
+      }
+    },
+
+    wellStructure: {
+      enabled: true,
+      centerCol: 15,
+      centerRow: 15,
+      ringRadius: 2  // 5x5 footprint with circular ring of stones
+    }
+  },
+
+  // ── Stub templates — prevent undefined lookups from RoomGenerator ──────────
+  // These rooms exist in EXIT_LETTERS but have no layout content yet.
+  // Each stub falls back to generic open-floor generation until real content
+  // is designed. RoomGenerator must treat these as valid (non-undefined) entries.
+
+  P: {
+    name: 'Press Hut',
+    description: 'A hut containing an oil press — stub template, falls back to hut generation',
+
+    wallStructures: {
+      allow: false
+    },
+
+    bgObjectRules: {
+      grassDensity: 0.6,
+      objectBias: {
+        '%': 1.0,
+        '&': 0.8,
+        '0': 0.5
+      }
+    },
+
+    hutStructure: {
+      enabled: true,
+      centerCol: 15,
+      centerRow: 15,
+      exteriorWidth: 5,
+      exteriorHeight: 5,
+      wallChar: '≡',
+      doorChar: '∩',
+      doorSide: 'south'
+    },
+
+    hutKind: 'neutral_npc'
+  },
+
+  C: {
+    name: 'Camp',
+    description: 'A traveler\'s camp — stub template, open floor with light scatter',
+
+    wallStructures: {
+      allow: true
+    },
+
+    bgObjectRules: {
+      grassDensity: 0.5,
+      objectBias: {
+        'p': 1.5,  // barrels — camping supplies
+        '8': 1.2,  // bones — campfire remnants
+        '%': 0.8,
+        '&': 0.6
+      }
+    }
+  },
+
+  '?': {
+    name: 'Mystery',
+    description: 'A discovery room of unknown type — stub template, open floor',
+
+    wallStructures: {
+      allow: true
+    },
+
+    bgObjectRules: {
+      grassDensity: 0.5
+    }
+  },
+
+  // ── Blue-zone (Tidefall) tutorial rooms ────────────────────────────────────
+  // The four room templates of the secret blue zone. Each pairs a familiar
+  // water terrain config (lake / ocean / dry-sand) with an armor pickup
+  // placed by RoomGenerator. See main.js blueZoneRoom for progression order.
+
+  '~': {
+    name: 'Shallows',
+    description: 'Blue-zone entry: a central pool bisects the room; Shark Mask waits on a midwater island',
+
+    wallStructures: { allow: false },
+
+    lakeZone: {
+      enabled: true,
+      nodes: [
+        { col: 15, row: 13, radius: 8 } // single broad central pool
+      ],
+      edgeNoise: 1.6,
+      waterDensity: 0.92
+    },
+
+    bgObjectRules: {
+      grassDensity: 0.0, // sand floor only
+      objectBias: { '0': 0.6 }
+    },
+
+    // 2-3 frogs in the water — tutorial targets for the emerge attack
+    enemyInjection: {
+      char: 'g',
+      minCount: 2,
+      maxCount: 3,
+      preferLiquid: true
+    },
+
+    blueZoneArmor: '∆' // Shark Mask placed on the central island
+  },
+
+  '⌇': {
+    name: 'Reef Walk',
+    description: 'Blue-zone reef: wide ocean body with scattered islands; Coral Crown gates the path',
+
+    wallStructures: { allow: false },
+
+    oceanZone: {
+      enabled: true,
+      waterStartCol: 6,
+      waterEndCol: 26,
+      sandStartCol: 5,
+      sandEndCol: 27,
+      waterDensity: 0.85,
+      sandDensity: 0.5
+    },
+
+    bgObjectRules: {
+      grassDensity: 0.0,
+      objectBias: { '0': 0.5 }
+    },
+
+    // Frogs + sea snakes patrol the water; player can ignore via Coral Crown bridge
+    enemyInjection: {
+      char: 's',
+      minCount: 2,
+      maxCount: 3,
+      preferLiquid: true
+    },
+
+    blueZoneArmor: '❖'
+  },
+
+  '⌒': {
+    name: 'Wake Drift',
+    description: 'Blue-zone wake gauntlet: elongated pool spanning the room; pack of enemies test the Stingray Mantle',
+
+    wallStructures: { allow: false },
+
+    lakeZone: {
+      enabled: true,
+      nodes: [
+        { col: 6,  row: 15, radius: 5 },
+        { col: 12, row: 15, radius: 5 },
+        { col: 18, row: 15, radius: 5 },
+        { col: 24, row: 15, radius: 5 }
+      ],
+      edgeNoise: 1.4,
+      waterDensity: 0.9
+    },
+
+    bgObjectRules: {
+      grassDensity: 0.0,
+      objectBias: { '0': 0.4 }
+    },
+
+    // Larger pack so the wake mechanic shines (4-5 frogs + sea snakes)
+    enemyInjection: {
+      char: 'g',
+      minCount: 4,
+      maxCount: 5,
+      preferLiquid: true
+    },
+
+    blueZoneArmor: 'Ϡ'
+  },
+
+  '◌': {
+    name: 'Pearl Cache',
+    description: 'Blue-zone reward room: small hand-shaped sand chamber with a pedestal and a one-way return',
+
+    wallStructures: { allow: false },
+
+    bgObjectRules: {
+      grassDensity: 0.0,
+      objectBias: { '0': 0.3 }
+    },
+
+    blueZonePedestal: true // RoomGenerator places the pearl-cache pedestal at center
   }
 };

@@ -45,6 +45,10 @@ export class ZoneSystem {
     this.leshyChaseActive = false;
     this.leshyChaseCount = 0;
     this.leshyLastExitDirection = null; // 'north', 'east', 'west'
+
+    // Boss tracking — persists for the entire run
+    this.defeatedBosses = new Set(); // zones whose boss has been killed this run
+    this.bossRoomPending = false;    // true once threshold reached, until room is generated
   }
 
   recordExit(exitObject) {
@@ -57,7 +61,19 @@ export class ZoneSystem {
     }
   }
 
+  /** Force the next call to checkZoneTransition() to return a specific zone. */
+  forceNextZone(zone) {
+    this._forcedZone = zone;
+  }
+
   checkZoneTransition() {
+    // Forced override (e.g. ridge north exit → gray zone)
+    if (this._forcedZone) {
+      const forced = this._forcedZone;
+      this._forcedZone = null;
+      return forced;
+    }
+
     // Gray zone: 10 consecutive rooms in green zone only
     if (this.consecutiveGreenRooms >= 10) {
       return 'gray';
@@ -213,6 +229,29 @@ export class ZoneSystem {
     this.clearedZones.add(currentZone);
   }
 
+  // ── Boss tracking ──────────────────────────────────────────────────────────
+
+  /**
+   * Returns true when the player has reached the boss depth threshold
+   * for the given zone and the boss has not yet been defeated this run.
+   */
+  isBossReady(zone, depth) {
+    if (this.defeatedBosses.has(zone)) return false;
+    const threshold = ZONES[zone]?.bossDepth;
+    if (!threshold) return false;
+    return depth >= threshold;
+  }
+
+  markBossDefeated(zone) {
+    this.defeatedBosses.add(zone);
+    this.bossRoomPending = false;
+  }
+
+  /** Used by ExitSystem to prevent a defeated zone's color from appearing. */
+  isZoneDefeated(zone) {
+    return this.defeatedBosses.has(zone);
+  }
+
   resetOnRest() {
     this.roomsSinceRest = 0;
     this.consecutiveGreenRooms = 0; // Reset gray zone progress on rest
@@ -232,8 +271,10 @@ export class ZoneSystem {
     this.pathHistory = [];
     this.lastColoredZone = null;
     this.roomsClearedInCurrentZone = 0;
-    this.clearedZones.clear(); // Clear captive progress
-    this.resetLeshyChase(); // Reset chase tracking on death
+    this.clearedZones.clear();
+    this.defeatedBosses.clear();
+    this.bossRoomPending = false;
+    this.resetLeshyChase();
   }
 
   // Get blended environment colors for current zone with progression
@@ -326,9 +367,10 @@ export class ZoneSystem {
 
   incrementZoneDepth(zoneDepths) {
     const zone = this.currentZone;
+    const cap = ZONES[zone]?.bossDepth;
     if (zoneDepths[zone] === 0) {
       zoneDepths[zone] = 1;
-    } else {
+    } else if (cap == null || zoneDepths[zone] < cap) {
       zoneDepths[zone]++;
     }
   }

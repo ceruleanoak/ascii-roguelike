@@ -2,16 +2,32 @@ import { GRID } from '../game/GameConfig.js';
 import { ErrandCharacter } from '../entities/ErrandCharacter.js';
 
 /**
- * Items the errand traveler may request.
- * Chosen from weapons and consumables the player commonly carries.
+ * Three-stage trade progression.
+ *
+ * Stage 0 — rare ingredient → good item (tier-2 weapon/armor)
+ * Stage 1 — low-tier item   → medium-tier item
+ * Stage 2 — medium-tier item → legendary item  (repeats indefinitely)
  */
-const REQUEST_POOL = ['¬', '†', ')', '/', '↑', 'H', '@', '‡', '⊤', 'X', '⌐'];
-
-/**
- * Rewards dispensed after completing an errand.
- * Rare / powerful items that feel worth the trade.
- */
-const REWARD_POOL = ['♦', '✦', '∞', '⚔', '⌘', '⇒', '⚒', 'K', '⛓', 'I', 'W', 'E', 'ᑕ'];
+const STAGE_CONFIG = [
+  {
+    // Stage 0: rare ingredient for a solid tier-2 weapon or armor
+    requestPool: ['M', 't', 'e', 's', 'F', 'k'], // Metal, Teeth, Eye, Scale, Fire Essence, Silk
+    rewardPool:  ['‡', '⌂', '⟩', '⊤', 'X', '⛓', 'R', 'L'],
+    isIngredient: true
+  },
+  {
+    // Stage 1: starter weapon for a strong mid-tier weapon or armor
+    requestPool: ['¬', '†', ')', '/', '↑'],       // tier-1 starters
+    rewardPool:  ['⌐', '❄', 'ϟ', '═', '⊞', '◈', '⇶', '◉', '╫', 'W'],
+    isIngredient: false
+  },
+  {
+    // Stage 2: mid-tier item for legendary — repeats on subsequent trades
+    requestPool: ['‡', '⌂', '⟩', '⊤', 'X', '⌐', 'R', '⛓', 'L', 'W'],
+    rewardPool:  ['⚔', '▼', '⚒', '◙', '⚯', '⊕', '⇒', '✦', '♦', '∞', 'K', 'E', 'N', '☼'],
+    isIngredient: false
+  }
+];
 
 /**
  * ErrandSystem
@@ -23,14 +39,15 @@ const REWARD_POOL = ['♦', '✦', '∞', '⚔', '⌘', '⇒', '⚒', 'K', '⛓'
  *   2. Room cleared → onRoomClear(player): starts first errand, returns ErrandCharacter.
  *   3. Player re-enters any E room with active errand → main.js calls
  *      spawnErrandCharacter() after clearing enemies from the room.
- *   4. Player holds requested item, walks close, presses SHIFT →
+ *   4. Player holds requested item (or ingredient), walks close, presses SHIFT →
  *      checkGive(player, neutralCharacters): removes item, returns reward data.
- *   5. ErrandCharacter immediately requests next item (loop continues).
+ *   5. Stage advances (capped at 2); ErrandCharacter requests the next item.
  *   6. Death → resetOnDeath(): wipes state for a clean new run.
  */
 export class ErrandSystem {
   constructor() {
-    this.activeErrand = null; // { requestedItem: char, rewardIndex: number }
+    this.activeErrand = null; // { requestedItem: char, rewardIndex: number, stage: number }
+    this.stage = 0;           // 0 | 1 | 2
   }
 
   // ── Hooks called by main.js ─────────────────────────────────────────────────
@@ -60,16 +77,17 @@ export class ErrandSystem {
 
     const centerX = (GRID.COLS / 2) * GRID.CELL_SIZE;
     const centerY = (GRID.ROWS / 2) * GRID.CELL_SIZE;
-    return new ErrandCharacter(centerX, centerY, this.activeErrand.requestedItem);
+    return new ErrandCharacter(centerX, centerY, this.activeErrand.requestedItem, this.activeErrand.stage);
   }
 
   /**
    * Called from the SHIFT handler in EXPLORE mode.
-   * Checks whether the player is close to the traveler and holds the requested item.
+   * Checks whether the player is close to the traveler and holds (or carries as ingredient)
+   * the requested item.
    *
    * @param {Player} player
    * @param {Array}  neutralCharacters  – game.neutralCharacters
-   * @returns {{ rewardChar, rewardName, x, y }|null}
+   * @returns {{ rewardChar, x, y }|null}
    *   Non-null means a give occurred; caller should spawn the reward Item.
    */
   checkGive(player, neutralCharacters) {
@@ -84,30 +102,44 @@ export class ErrandSystem {
     );
     if (dist > errandChar.getInteractionDistance()) return null;
 
-    const heldItem = player.heldItem;
-    if (!heldItem || heldItem.char !== this.activeErrand.requestedItem) return null;
+    const stageConfig = STAGE_CONFIG[this.activeErrand.stage];
+    const requestedChar = this.activeErrand.requestedItem;
+    let givenChar;
 
-    const givenChar = heldItem.char; // capture before slot is nulled
+    if (stageConfig.isIngredient) {
+      // Stage 0: consume from player.inventory
+      const idx = player.inventory.findIndex(ing => ing === requestedChar);
+      if (idx === -1) return null;
+      player.inventory.splice(idx, 1);
+      givenChar = requestedChar;
+    } else {
+      // Stages 1-2: consume from active quick slot
+      const heldItem = player.heldItem;
+      if (!heldItem || heldItem.char !== requestedChar) return null;
+      givenChar = heldItem.char;
+      player.quickSlots[player.activeSlotIndex] = null;
+      const nextFilled = player.quickSlots.findIndex(
+        (slot, idx) => idx !== player.activeSlotIndex && slot !== null
+      );
+      if (nextFilled !== -1) player.activeSlotIndex = nextFilled;
+    }
 
-    // Consume item from active quick slot
-    player.quickSlots[player.activeSlotIndex] = null;
-    const nextFilled = player.quickSlots.findIndex(
-      (slot, idx) => idx !== player.activeSlotIndex && slot !== null
-    );
-    if (nextFilled !== -1) player.activeSlotIndex = nextFilled;
-
-    // Collect reward data before overwriting errand state
-    const rewardChar = REWARD_POOL[this.activeErrand.rewardIndex];
+    // Collect reward before advancing stage
+    const rewardChar = stageConfig.rewardPool[this.activeErrand.rewardIndex];
     const result = {
       rewardChar,
       x: errandChar.position.x + (Math.random() - 0.5) * GRID.CELL_SIZE * 2,
       y: errandChar.position.y + (Math.random() - 0.5) * GRID.CELL_SIZE * 2
     };
 
-    // Start next errand, excluding the item just handed over
+    // Advance stage (cap at 2 so legendary trades continue indefinitely)
+    this.stage = Math.min(this.stage + 1, STAGE_CONFIG.length - 1);
+
+    // Start next errand at new stage, excluding the item just handed over
     this._pickRequest(player, givenChar);
     if (this.activeErrand) {
       errandChar.requestedItem = this.activeErrand.requestedItem;
+      errandChar.stage = this.activeErrand.stage;
       errandChar.playerIsClose = false; // force indicator refresh
     }
 
@@ -117,29 +149,42 @@ export class ErrandSystem {
   /** Wipe errand state on player death (new run starts clean). */
   resetOnDeath() {
     this.activeErrand = null;
+    this.stage = 0;
   }
 
   // ── Internal ────────────────────────────────────────────────────────────────
 
   /**
-   * Choose a random request that the player doesn't already have in quick slots.
+   * Choose a random request from the current stage's pool.
+   * For item stages, filters out chars already in the player's quick slots.
    * @param {Player} player
-   * @param {string|null} excludeChar  Item that was just handed over — don't repeat it.
+   * @param {string|null} excludeChar  Item/ingredient just handed over — don't repeat it.
    */
   _pickRequest(player, excludeChar = null) {
-    const equipped = (player?.quickSlots ?? [])
-      .filter(Boolean)
-      .map(s => s.char);
+    const config = STAGE_CONFIG[this.stage];
 
-    const available = REQUEST_POOL.filter(
-      c => !equipped.includes(c) && c !== excludeChar
-    );
-    if (available.length === 0) return;
+    let available;
+    if (config.isIngredient) {
+      // Any ingredient from the pool is fair game; just avoid immediate repeat
+      available = config.requestPool.filter(c => c !== excludeChar);
+    } else {
+      const equipped = (player?.quickSlots ?? []).filter(Boolean).map(s => s.char);
+      available = config.requestPool.filter(
+        c => !equipped.includes(c) && c !== excludeChar
+      );
+    }
+
+    if (available.length === 0) {
+      // Fallback: allow repeat if pool is exhausted by exclusions
+      available = config.requestPool.filter(c => c !== excludeChar);
+    }
+    if (available.length === 0) available = config.requestPool;
 
     const requestedItem = available[Math.floor(Math.random() * available.length)];
     this.activeErrand = {
       requestedItem,
-      rewardIndex: Math.floor(Math.random() * REWARD_POOL.length)
+      rewardIndex: Math.floor(Math.random() * config.rewardPool.length),
+      stage: this.stage
     };
   }
 }

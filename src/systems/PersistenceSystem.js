@@ -1,54 +1,30 @@
+// PersistenceSystem — permanently disabled.
+//
+// CLAUDE.md states: "This game does NOT use localStorage for any persistence."
+// All methods are no-ops so that any stale call sites fail silently rather than
+// reading/writing localStorage and causing cross-session state bugs.
 export class PersistenceSystem {
   constructor() {
     this.storageKey = 'ascii-roguelike-save';
   }
 
-  saveRestState(craftingSystem, characterData = null) {
-    const state = {
-      crafting: craftingSystem.getState(),
-      // Character system (persists across deaths)
-      characters: characterData ? {
-        unlocked: characterData.unlocked,
-        active: characterData.active,
-        queue: characterData.queue
-      } : null,
-      // Depth is NOT saved - always starts at 0 on page refresh
-      // Do not persist itemChest, armor, or consumables for true roguelike
-      timestamp: Date.now()
-    };
-
-    try {
-      localStorage.setItem(this.storageKey, JSON.stringify(state));
-      return true;
-    } catch (e) {
-      console.error('Failed to save state:', e);
-      return false;
-    }
+  saveRestState(_craftingSystem, _characterData = null) {
+    // No-op: persistence is disabled for true roguelike design.
+    return false;
   }
 
   loadRestState() {
-    try {
-      const data = localStorage.getItem(this.storageKey);
-      if (!data) return null;
-
-      return JSON.parse(data);
-    } catch (e) {
-      console.error('Failed to load state:', e);
-      return null;
-    }
+    // No-op: always returns null so callers treat every session as fresh.
+    return null;
   }
 
   clearSave() {
-    try {
-      localStorage.removeItem(this.storageKey);
-      return true;
-    } catch (e) {
-      console.error('Failed to clear save:', e);
-      return false;
-    }
+    // No-op: nothing to clear.
+    return true;
   }
 
   hasSave() {
-    return localStorage.getItem(this.storageKey) !== null;
+    // No-op: always reports no save so load paths are never triggered.
+    return false;
   }
 }

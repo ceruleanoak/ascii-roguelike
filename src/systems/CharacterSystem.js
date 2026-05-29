@@ -15,8 +15,40 @@ export class CharacterSystem {
       return;
     }
 
+    // Save the outgoing character's magic-meter state so it's restored on a
+    // future swap-back. Yellow's all-slots state is regenerated on demand and
+    // doesn't need persistence, but we still snapshot it for consistency.
+    const inv = game.inventorySystem;
+    const prevType = inv._activeCharacterType;
+    if (prevType && game.player?.magicMeter) {
+      const prevEntry = inv.characterInventories[prevType];
+      if (prevEntry) {
+        const m = game.player.magicMeter;
+        prevEntry.manaState = {
+          slots: [...(m.slots || [])],
+          current: m.current,
+          max: m.max
+        };
+      }
+    }
+
     // Switch inventory system to this character's banked inventory
-    game.inventorySystem.setActiveCharacter(type);
+    inv.setActiveCharacter(type);
+
+    // Restore (or initialize) this character's saved magic-meter state.
+    if (game.player?.magicMeter) {
+      const saved = inv.characterInventories[type]?.manaState;
+      const m = game.player.magicMeter;
+      if (saved) {
+        m.slots = [...saved.slots];
+        m.current = saved.current;
+        m.max = saved.max;
+      } else {
+        m.slots = [];
+        m.current = 0;
+      }
+      m.active = m.slots.length > 0;
+    }
 
     // Update player visual
     game.player.color = charData.color;
@@ -27,6 +59,7 @@ export class CharacterSystem {
     game.player.dodgeRoll.duration = charData.rollDuration;
     game.player.dodgeRoll.cooldown = charData.rollCooldown;
     game.player.dodgeRoll.speed = charData.rollSpeed;
+    game.player.dodgeRoll.hideDuration = charData.hideDuration || 0;
 
     // Apply weapon affinities
     game.player.weaponAffinities = charData.weaponAffinities;
@@ -36,10 +69,18 @@ export class CharacterSystem {
     game.player.actionCooldownMax = charData.actionCooldownMax || 0;
     game.player.greenIdleDamageBonus = charData.idleDamageBonus || 0;
     game.player.greenCombatDamagePenalty = charData.combatDamagePenalty || 0;
+    game.player.backstabMultiplier = charData.backstabMultiplier || 1.0;
     // Reset green ranger state when switching characters
     game.player.actionCooldown = 0;
     game.player.rollCharge = game.player.actionCooldownMax; // Start with full charge
     game.player.continuousRollActive = false;
+
+    // Yellow Mage is always "on with mana" — auto-lock every consumable slot
+    // into mana mode and unequip anything currently sitting there. All other
+    // characters use the well/hut upgrade path to convert slots one at a time.
+    if (type === 'yellow') {
+      game.magicSystem?.activateAllMagicMeterSlots(game.player);
+    }
   }
 
   applyGreenDamageModifier(attack) {
@@ -59,6 +100,9 @@ export class CharacterSystem {
   triggerGreenActionCooldown() {
     const game = this.game;
     if (game.activeCharacterType === 'green' && game.player) {
+      // Guns fire on their own weapon cooldown — they don't consume the ranger's action stamina
+      const heldItem = game.player.heldItem;
+      if (heldItem && heldItem.data.weaponType === 'GUN') return;
       game.player.actionCooldown = game.player.actionCooldownMax;
     }
   }

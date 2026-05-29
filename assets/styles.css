@@ -75,7 +75,7 @@ body {
 .ui-sep             { color: #444; position: absolute; top: 50%; transform: translateY(-50%); }
 
 /* Unifont for equippable item chars only — full Unicode coverage required */
-#slot-1, #slot-2, #slot-3,
+#weapon-char-1, #weapon-char-2, #weapon-char-3,
 #armor-char,
 #consumable-char-1, #consumable-char-2, #consumable-char-3,
 #consumable-char-4, #consumable-char-5 {
@@ -84,27 +84,30 @@ body {
 }
 
 #hp-display         { left:   5px; }
+#hp-display.heal-blink { animation: hp-heal-blink 0.18s steps(1, end) 4; }
+@keyframes hp-heal-blink {
+  0%, 100% { color: #0f0; }
+  50%      { color: #ffaaff; }
+}
 #depth-display      { left:  82px; }
-#slot-q             { left: 119px; color: #ff4444; width: 12px; text-align: center; }
-#slot-1             { left: 141px; width: 26px; text-align: center; }
-#slot-2             { left: 179px; width: 26px; text-align: center; }
-#slot-3             { left: 215px; width: 26px; text-align: center; }
-#slot-e             { left: 249px; color: #ff4444; width: 12px; text-align: center; }
-#armor-display      { left: 268px; }
-#consumable-display { left: 308px; }
-#inventory-display  { left: 420px; }
+#slot-1             { left: 125px; }
+#slot-2             { left: 150px; }
+#slot-3             { left: 175px; }
+#armor-display      { left: 245px; }
+#consumable-display { left: 272px; }
+#inventory-display  { left: 430px; }
 
 #ui-overlay.hidden {
   display: none;
 }
 
-/* Color-coordinate top menu sections to match REST mode canvas slots */
+/* Bracket colors match their REST mode canvas slot equivalents */
 #armor-display {
-  color: #4488ff; /* blue — matches armor slot on canvas */
+  color: #4488ff; /* blue — matches armor [ ] slot on canvas */
 }
 
 #consumable-display {
-  color: #ffff00; /* yellow — matches consumable slots on canvas */
+  color: #ffff00; /* yellow — matches consumable [ ] slots on canvas */
 }
 
 #menu-overlay {

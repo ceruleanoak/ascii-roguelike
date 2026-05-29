@@ -1,305 +1,627 @@
-import { ITEMS, INGREDIENTS, ITEM_TYPES } from '../data/items.js';
+import { ITEMS, INGREDIENTS, ITEM_TYPES, WEAPON_TYPES } from '../data/items.js';
+import { ENEMIES, ZONE_SPAWN_TABLES } from '../data/enemies.js';
 import { GRID } from '../game/GameConfig.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
 
+const GRID_COLS = 4;
+const TILE_COLS = 5;   // cell-widths per tile
+const TILE_ROWS = 3;   // cell-heights per tile
+
 export class CheatMenu {
   constructor(game = null) {
-    this.game = game; // Store game reference for zone depth access
+    this.game = game;
     this.isOpen = false;
-    this.selectedIndex = 0;
-    this.scrollOffset = 0;
-    this.maxVisibleItems = 15;
-    this.warpMode = false; // Room warp mode
+    this.warpMode = false;
+    this.godMode = false;
+    this.depthMode = false;
+    this.depthInput = '';
 
-    // Build categorized item list
-    this.categories = this.buildItemCategories();
-    this.flattenedItems = this.flattenCategories();
+    // Hierarchical navigation state
+    this.tree = this.buildTree();
+    this.path = [];           // child indices from root → current node
+    this.selectedIndex = 0;   // selection within current node
+    this.savedIndices = [];   // selection at each ancestor level
+    this.scrollOffset = 0;    // for list view
+    this.gridRowOffset = 0;   // for grid view (in rows)
   }
 
-  buildItemCategories() {
-    const categories = {
-      'ZONE TELEPORT': [],
-      'CHARACTERS': [],
-      'WEAPONS': [],
-      'ARMOR': [],
-      'CONSUMABLES': [],
-      'TRAPS': [],
-      'INGREDIENTS': []
-    };
+  // ── Tree construction ───────────────────────────────────────────────────
 
-    // Add zone teleports (if game reference available)
-    if (this.game && this.game.zoneDepths) {
-      categories['ZONE TELEPORT'] = [
-        { char: 'G', name: `GREEN (L${this.game.zoneDepths.green})`, type: 'zone', zone: 'green', color: '#00ff00' },
-        { char: 'R', name: `RED (L${this.game.zoneDepths.red})`, type: 'zone', zone: 'red', color: '#ff4400' },
-        { char: 'C', name: `CYAN (L${this.game.zoneDepths.cyan})`, type: 'zone', zone: 'cyan', color: '#44ffff' },
-        { char: 'Y', name: `YELLOW (L${this.game.zoneDepths.yellow})`, type: 'zone', zone: 'yellow', color: '#ffff44' },
-        { char: 'D', name: `GRAY (L${this.game.zoneDepths.gray})`, type: 'zone', zone: 'gray', color: '#888888' }
-      ];
-    }
+  buildTree() {
+    const godMode = this.godMode;
+    const meterActive = !!this.game?.player?.magicMeter?.active;
 
-    // Add characters
-    for (const [type, data] of Object.entries(CHARACTER_TYPES)) {
+    const togglesItems = [
+      { char: godMode ? '✓' : '○', name: `GOD MODE [${godMode ? 'ON' : 'OFF'}]`, type: 'toggle_god_mode', color: godMode ? '#00ff88' : '#888888' },
+      { char: meterActive ? '✓' : '○', name: `MAGIC METER [${meterActive ? 'ON' : 'OFF'}]`, type: 'activate_magic_meter', color: meterActive ? '#cc66ff' : '#888888' }
+    ];
+
+    const zoneItems = (this.game && this.game.zoneDepths) ? [
+      { char: 'G', name: `GREEN (L${this.game.zoneDepths.green})`, type: 'zone', zone: 'green', color: '#00ff00' },
+      { char: 'R', name: `RED (L${this.game.zoneDepths.red})`, type: 'zone', zone: 'red', color: '#ff4400' },
+      { char: 'C', name: `CYAN (L${this.game.zoneDepths.cyan})`, type: 'zone', zone: 'cyan', color: '#44ffff' },
+      { char: 'Y', name: `YELLOW (L${this.game.zoneDepths.yellow})`, type: 'zone', zone: 'yellow', color: '#ffff44' },
+      { char: 'D', name: `GRAY (L${this.game.zoneDepths.gray})`, type: 'zone', zone: 'gray', color: '#888888' }
+    ] : [];
+
+    const bossItems = (this.game && this.game.zoneDepths) ? [
+      { char: 'Ω', name: 'GOO DRAGON (green)',  type: 'boss_test', zone: 'green',  color: '#22cc44' },
+      { char: '@', name: 'ANCIENT SHELL (red)', type: 'boss_test', zone: 'red',    color: '#ff4400' },
+      { char: '~', name: 'FROSTED MAW (cyan)',  type: 'boss_test', zone: 'cyan',   color: '#44ffff' },
+      { char: 'Ω', name: 'BOSS (yellow)',       type: 'boss_test', zone: 'yellow', color: '#ffff44' }
+    ] : [];
+
+    const characterItems = Object.entries(CHARACTER_TYPES).map(([type, data]) => {
       const isActive = this.game && this.game.activeCharacterType === type;
       const isDead = this.game && this.game.deadCharacters && this.game.deadCharacters.includes(type);
       const suffix = isActive ? ' (active)' : isDead ? ' (dead)' : '';
-      categories['CHARACTERS'].push({
+      return {
         char: '@',
         name: data.name + suffix,
         type: 'character',
         characterType: type,
         color: data.color,
         disabled: isActive || isDead
-      });
-    }
+      };
+    });
 
-    // Categorize items
+    const weaponBuckets = {
+      'GUNS': [], 'BOWS': [], 'SWORDS': [], 'AXES': [], 'HAMMERS': [],
+      'SPEARS': [], 'STAVES': [], 'DAGGERS': [], 'WHIPS': [], 'FLAILS': [],
+      'PICKAXES': [], 'WANDS': [], 'OTHER': []
+    };
+    const armorItems = [];
+    const consumableItems = [];
+    const trapItems = [];
+    const ingredientItems = [];
+
+    const meleeSubtypeBuckets = {
+      sword: 'SWORDS', axe: 'AXES', hammer: 'HAMMERS', spear: 'SPEARS',
+      staff: 'STAVES', dagger: 'DAGGERS', whip: 'WHIPS', flail: 'FLAILS',
+      pickaxe: 'PICKAXES'
+    };
+
     for (const [char, data] of Object.entries(ITEMS)) {
       const item = { char, ...data };
-
       if (data.type === ITEM_TYPES.WEAPON) {
-        categories.WEAPONS.push(item);
+        if (data.weaponType === WEAPON_TYPES.GUN) weaponBuckets.GUNS.push(item);
+        else if (data.weaponType === WEAPON_TYPES.BOW) weaponBuckets.BOWS.push(item);
+        else if (data.weaponType === WEAPON_TYPES.WAND) weaponBuckets.WANDS.push(item);
+        else if (data.weaponType === WEAPON_TYPES.MELEE) {
+          const bucket = meleeSubtypeBuckets[data.weaponSubtype];
+          if (bucket) weaponBuckets[bucket].push(item);
+          else weaponBuckets.OTHER.push(item);
+        } else {
+          weaponBuckets.OTHER.push(item);
+        }
       } else if (data.type === ITEM_TYPES.ARMOR) {
-        categories.ARMOR.push(item);
+        armorItems.push(item);
       } else if (data.type === ITEM_TYPES.CONSUMABLE) {
-        categories.CONSUMABLES.push(item);
+        consumableItems.push(item);
       } else if (data.type === ITEM_TYPES.TRAP) {
-        categories.TRAPS.push(item);
+        trapItems.push(item);
       }
     }
 
-    // Add ingredients
     for (const [char, data] of Object.entries(INGREDIENTS)) {
-      categories.INGREDIENTS.push({ char, ...data, type: ITEM_TYPES.INGREDIENT });
+      ingredientItems.push({ char, ...data, type: ITEM_TYPES.INGREDIENT });
     }
 
-    return categories;
-  }
+    // Sort weapon buckets by damage ascending so tiers read in order
+    for (const key of Object.keys(weaponBuckets)) {
+      weaponBuckets[key].sort((a, b) => (a.damage ?? 0) - (b.damage ?? 0));
+    }
 
-  flattenCategories() {
-    const flattened = [];
+    // Build weapon subfolders (skip empties)
+    const weaponChildren = [];
+    for (const [name, items] of Object.entries(weaponBuckets)) {
+      if (items.length > 0) weaponChildren.push({ name, items });
+    }
 
-    for (const [categoryName, items] of Object.entries(this.categories)) {
-      if (items.length > 0) {
-        flattened.push({ isHeader: true, name: categoryName });
-        flattened.push(...items.map(item => ({ isHeader: false, ...item })));
+    const zoneLabelColors = {
+      green: '#00ff00', red: '#ff4400', cyan: '#44ffff', yellow: '#ffff44', gray: '#888888'
+    };
+    const tierOrder = { weak: 0, normal: 1, elite: 2, boss: 3 };
+    const enemyZoneFolders = [];
+    const seenInAnyZone = new Set();
+
+    for (const [zone, table] of Object.entries(ZONE_SPAWN_TABLES)) {
+      const uniqueChars = [...new Set(Object.values(table).flat())];
+      const zoneEnemyItems = uniqueChars
+        .filter(char => ENEMIES[char])
+        .sort((a, b) => {
+          const ta = tierOrder[ENEMIES[a].tier] ?? 1;
+          const tb = tierOrder[ENEMIES[b].tier] ?? 1;
+          return ta !== tb ? ta - tb : (ENEMIES[a].name < ENEMIES[b].name ? -1 : 1);
+        })
+        .map(char => {
+          seenInAnyZone.add(char);
+          const data = ENEMIES[char];
+          return { char: data.char || char, name: data.name, type: 'enemy', color: data.color };
+        });
+      if (zoneEnemyItems.length > 0) {
+        enemyZoneFolders.push({ name: zone.toUpperCase(), items: zoneEnemyItems, color: zoneLabelColors[zone] });
       }
     }
 
-    return flattened;
+    const otherEnemyItems = Object.entries(ENEMIES)
+      .filter(([char]) => !seenInAnyZone.has(char))
+      .sort(([, a], [, b]) => {
+        const ta = tierOrder[a.tier] ?? 1;
+        const tb = tierOrder[b.tier] ?? 1;
+        return ta !== tb ? ta - tb : (a.name < b.name ? -1 : 1);
+      })
+      .map(([char, data]) => ({ char: data.char || char, name: data.name, type: 'enemy', color: data.color }));
+
+    if (otherEnemyItems.length > 0) {
+      enemyZoneFolders.push({ name: 'OTHER', items: otherEnemyItems, color: '#aaaaaa' });
+    }
+
+    const children = [];
+    if (togglesItems.length) children.push({ name: 'TOGGLES', items: togglesItems });
+    if (zoneItems.length) children.push({ name: 'ZONES', items: zoneItems });
+    if (bossItems.length) children.push({ name: 'BOSSES', items: bossItems });
+    if (characterItems.length) children.push({ name: 'CHARACTERS', items: characterItems });
+    if (weaponChildren.length) children.push({ name: 'WEAPONS', children: weaponChildren });
+    if (armorItems.length) children.push({ name: 'ARMOR', items: armorItems });
+    if (consumableItems.length) children.push({ name: 'CONSUMABLES', items: consumableItems });
+    if (trapItems.length) children.push({ name: 'TRAPS', items: trapItems });
+    if (ingredientItems.length) children.push({ name: 'INGREDIENTS', items: ingredientItems });
+    if (enemyZoneFolders.length) children.push({ name: 'ENEMIES', children: enemyZoneFolders });
+
+    return { name: 'CHEAT MENU', children };
   }
+
+  rebuild() {
+    // Preserve path/selection across rebuilds when possible (toggles, magic activation)
+    const oldPath = this.path.slice();
+    const oldSel = this.selectedIndex;
+    const oldSaved = this.savedIndices.slice();
+    this.tree = this.buildTree();
+
+    // Clamp path to still-valid indices
+    let node = this.tree;
+    const newPath = [];
+    for (const idx of oldPath) {
+      const entries = this._getEntries(node);
+      if (idx >= 0 && idx < entries.length && (entries[idx].children || entries[idx].items)) {
+        newPath.push(idx);
+        node = entries[idx];
+      } else {
+        break;
+      }
+    }
+    this.path = newPath;
+    this.savedIndices = oldSaved.slice(0, newPath.length);
+
+    const currentEntries = this._getEntries(this.getCurrentNode());
+    this.selectedIndex = Math.min(oldSel, Math.max(0, currentEntries.length - 1));
+  }
+
+  // ── Navigation helpers ──────────────────────────────────────────────────
+
+  _getEntries(node) {
+    return node?.children || node?.items || [];
+  }
+
+  getCurrentNode() {
+    let node = this.tree;
+    for (const idx of this.path) {
+      node = this._getEntries(node)[idx];
+    }
+    return node;
+  }
+
+  // What view a node uses: grid if it holds folders, list if it holds items.
+  // Root is always grid.
+  _getView(node) {
+    if (!node || node === this.tree) return 'grid';
+    return node.children ? 'grid' : 'list';
+  }
+
+  // Resolve a folder's display glyph by descending to the first item
+  _getNodeIcon(node) {
+    if (node.char) return { char: node.char, color: node.color || '#ffffff' };
+    const entries = this._getEntries(node);
+    if (entries.length === 0) return { char: '?', color: '#888888' };
+    return this._getNodeIcon(entries[0]);
+  }
+
+  _descend(index) {
+    this.savedIndices.push(this.selectedIndex);
+    this.path.push(index);
+    this.selectedIndex = 0;
+    this.scrollOffset = 0;
+    this.gridRowOffset = 0;
+  }
+
+  _ascend() {
+    if (this.path.length === 0) return false;
+    this.path.pop();
+    this.selectedIndex = this.savedIndices.pop() ?? 0;
+    this.scrollOffset = 0;
+    this.gridRowOffset = 0;
+    return true;
+  }
+
+  // ── Lifecycle ───────────────────────────────────────────────────────────
 
   toggle() {
     this.isOpen = !this.isOpen;
     if (this.isOpen) {
-      // Rebuild categories to get latest zone depths
-      this.categories = this.buildItemCategories();
-      this.flattenedItems = this.flattenCategories();
-
-      // Start at first actual item, not header
+      this.tree = this.buildTree();
+      this.path = [];
       this.selectedIndex = 0;
-      while (this.selectedIndex < this.flattenedItems.length &&
-             this.flattenedItems[this.selectedIndex].isHeader) {
-        this.selectedIndex++;
-      }
+      this.savedIndices = [];
       this.scrollOffset = 0;
-      this.warpMode = false; // Reset warp mode when toggling
+      this.gridRowOffset = 0;
+      this.warpMode = false;
+      this.depthMode = false;
+      this.depthInput = '';
     }
   }
+
+  // ── Input ───────────────────────────────────────────────────────────────
 
   handleInput(key) {
     if (!this.isOpen) return null;
 
-    // Handle warp mode inputs
+    // Depth jump mode
+    if (this.depthMode) {
+      if (key === 'Escape') {
+        this.depthMode = false;
+        this.depthInput = '';
+        return 'handled';
+      }
+      if (key === 'Backspace') {
+        this.depthInput = this.depthInput.slice(0, -1);
+        if (this.depthInput === '') this.depthMode = false;
+        return 'handled';
+      }
+      if (key === 'Enter') {
+        const depth = parseInt(this.depthInput, 10);
+        this.depthMode = false;
+        this.depthInput = '';
+        if (!isNaN(depth) && depth >= 1) return { action: 'set_depth', depth };
+        return 'handled';
+      }
+      if (/^\d$/.test(key)) {
+        this.depthInput += key;
+        return 'handled';
+      }
+      return 'handled';
+    }
+
+    // Warp mode
     if (this.warpMode) {
       if (key === 'Escape' || key === '\\') {
-        // Exit warp mode
         this.warpMode = false;
         return 'handled';
       }
-
-      // Any other key is treated as a room letter
       const roomLetter = key.toUpperCase();
-      console.log('[CHEAT] Warp to room:', roomLetter);
       this.warpMode = false;
       return { action: 'warp', roomLetter };
     }
 
-    // Regular menu navigation
+    // Digit triggers depth mode
+    if (/^\d$/.test(key)) {
+      this.depthMode = true;
+      this.depthInput = key;
+      return 'handled';
+    }
+
+    // R toggles warp mode
     if (key === 'r' || key === 'R') {
-      // Enter warp mode
       this.warpMode = true;
-      console.log('[CHEAT] Entering warp mode');
       return 'handled';
-    } else if (key === 'ArrowDown') {
-      this.selectedIndex++;
-      if (this.selectedIndex >= this.flattenedItems.length) {
-        this.selectedIndex = this.flattenedItems.length - 1;
-      }
-      // Skip headers
-      while (this.selectedIndex < this.flattenedItems.length &&
-             this.flattenedItems[this.selectedIndex].isHeader) {
-        this.selectedIndex++;
-      }
-      this.updateScroll();
+    }
+
+    // Escape / Backspace / Shift ascend the menu hierarchy
+    if (key === 'Escape' || key === 'Backspace' || key === 'Shift') {
+      this._ascend();
       return 'handled';
-    } else if (key === 'ArrowUp') {
-      this.selectedIndex--;
-      if (this.selectedIndex < 0) {
-        this.selectedIndex = 0;
+    }
+
+    const node = this.getCurrentNode();
+    const entries = this._getEntries(node);
+    if (entries.length === 0) return null;
+
+    const view = this._getView(node);
+
+    if (view === 'grid') {
+      const cols = Math.min(GRID_COLS, entries.length);
+      if (key === 'ArrowLeft') {
+        if (this.selectedIndex > 0) this.selectedIndex--;
+        this._updateGridScroll(entries.length);
+        return 'handled';
       }
-      // Skip headers
-      while (this.selectedIndex >= 0 &&
-             this.flattenedItems[this.selectedIndex].isHeader) {
-        this.selectedIndex--;
+      if (key === 'ArrowRight') {
+        if (this.selectedIndex < entries.length - 1) this.selectedIndex++;
+        this._updateGridScroll(entries.length);
+        return 'handled';
       }
-      if (this.selectedIndex < 0) this.selectedIndex = 0;
-      this.updateScroll();
-      return 'handled';
-    } else if (key === 'Enter') {
-      const selected = this.flattenedItems[this.selectedIndex];
-      console.log('[CHEAT] Enter pressed, selected:', selected);
-      if (selected && !selected.isHeader) {
-        // Zone teleport action
-        if (selected.type === 'zone') {
-          console.log('[CHEAT] Teleporting to zone:', selected.zone);
-          return { action: 'teleport_zone', zone: selected.zone };
-        }
-        // Character change action
-        else if (selected.type === 'character') {
-          if (selected.disabled) return 'handled';
-          console.log('[CHEAT] Changing character to:', selected.characterType);
-          return { action: 'change_character', characterType: selected.characterType };
-        }
-        // Item spawn action
-        else {
-          console.log('[CHEAT] Spawning item');
-          return { action: 'spawn', item: selected };
-        }
-      } else {
-        console.log('[CHEAT] Selected item is a header or invalid');
+      if (key === 'ArrowUp') {
+        if (this.selectedIndex - cols >= 0) this.selectedIndex -= cols;
+        this._updateGridScroll(entries.length);
+        return 'handled';
       }
+      if (key === 'ArrowDown') {
+        if (this.selectedIndex + cols < entries.length) this.selectedIndex += cols;
+        this._updateGridScroll(entries.length);
+        return 'handled';
+      }
+    } else {
+      if (key === 'ArrowUp') {
+        if (this.selectedIndex > 0) this.selectedIndex--;
+        this._updateListScroll();
+        return 'handled';
+      }
+      if (key === 'ArrowDown') {
+        if (this.selectedIndex < entries.length - 1) this.selectedIndex++;
+        this._updateListScroll();
+        return 'handled';
+      }
+    }
+
+    if (key === 'Enter') {
+      const selected = entries[this.selectedIndex];
+      if (!selected) return null;
+      // Folder → descend
+      if (selected.children || selected.items) {
+        this._descend(this.selectedIndex);
+        return 'handled';
+      }
+      // Leaf → activate
+      return this._activateItem(selected);
     }
 
     return null;
   }
 
-  updateScroll() {
-    // Keep selected item visible
-    if (this.selectedIndex < this.scrollOffset) {
-      this.scrollOffset = this.selectedIndex;
-    } else if (this.selectedIndex >= this.scrollOffset + this.maxVisibleItems) {
-      this.scrollOffset = this.selectedIndex - this.maxVisibleItems + 1;
+  _activateItem(selected) {
+    if (selected.type === 'toggle_god_mode') return { action: 'toggle_god_mode' };
+    if (selected.type === 'activate_magic_meter') return { action: 'activate_magic_meter' };
+    if (selected.type === 'zone') return { action: 'teleport_zone', zone: selected.zone };
+    if (selected.type === 'boss_test') return { action: 'boss_test', zone: selected.zone };
+    if (selected.type === 'character') {
+      if (selected.disabled) return 'handled';
+      return { action: 'change_character', characterType: selected.characterType };
+    }
+    if (selected.type === 'enemy') return { action: 'spawn_enemy', enemy: selected };
+    return { action: 'spawn', item: selected };
+  }
+
+  _updateListScroll() {
+    const maxVisible = this._listMaxVisible();
+    if (this.selectedIndex < this.scrollOffset) this.scrollOffset = this.selectedIndex;
+    else if (this.selectedIndex >= this.scrollOffset + maxVisible) {
+      this.scrollOffset = this.selectedIndex - maxVisible + 1;
     }
   }
+
+  _updateGridScroll(total) {
+    const cols = Math.min(GRID_COLS, total);
+    const row = Math.floor(this.selectedIndex / cols);
+    const maxRows = this._gridMaxRows();
+    if (row < this.gridRowOffset) this.gridRowOffset = row;
+    else if (row >= this.gridRowOffset + maxRows) {
+      this.gridRowOffset = row - maxRows + 1;
+    }
+  }
+
+  _listMaxVisible() {
+    // Computed from window geometry (see render())
+    return 13;
+  }
+
+  _gridMaxRows() {
+    return 5;
+  }
+
+  // ── Render ──────────────────────────────────────────────────────────────
 
   render(renderer) {
     if (!this.isOpen) return;
 
-    const width = GRID.WIDTH - GRID.CELL_SIZE * 6;
-    const height = GRID.HEIGHT - GRID.CELL_SIZE * 6;
-    const x = GRID.CELL_SIZE * 3;
-    const y = GRID.CELL_SIZE * 3;
+    const CELL = GRID.CELL_SIZE;
+    const width = GRID.WIDTH - CELL * 6;
+    const height = GRID.HEIGHT - CELL * 6;
+    const x = CELL * 3;
+    const y = CELL * 3;
 
-    // Draw semi-transparent background
     renderer.drawRect(x, y, width, height, 'rgba(0, 0, 0, 0.9)', true);
-
-    // Draw border
     renderer.drawRect(x, y, width, height, '#ffff00', false);
 
-    renderer.fgCtx.save();
-    renderer.fgCtx.fillStyle = '#ffff00';
-    renderer.fgCtx.textAlign = 'center';
-    renderer.fgCtx.textBaseline = 'middle';
+    const ctx = renderer.fgCtx;
+    ctx.save();
+    ctx.fillStyle = '#ffff00';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
 
     // Warp mode overlay
     if (this.warpMode) {
-      renderer.fgCtx.fillText('ROOM WARP', GRID.WIDTH / 2, y + GRID.CELL_SIZE * 1.5);
-
-      renderer.fgCtx.fillStyle = '#ffffff';
-      renderer.fgCtx.fillText('Press desired key to warp', GRID.WIDTH / 2, GRID.HEIGHT / 2);
-
-      renderer.fgCtx.fillStyle = '#888888';
-      const instructionsY = y + height - GRID.CELL_SIZE;
-      renderer.fgCtx.fillText('ESC:Cancel  \\:Close', GRID.WIDTH / 2, instructionsY);
-
-      renderer.fgCtx.restore();
+      ctx.fillText('ROOM WARP', GRID.WIDTH / 2, y + CELL * 1.5);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText('Press desired key to warp', GRID.WIDTH / 2, GRID.HEIGHT / 2);
+      ctx.fillStyle = '#888888';
+      ctx.fillText('ESC:Cancel  \\:Close', GRID.WIDTH / 2, y + height - CELL);
+      ctx.restore();
       return;
     }
 
-    // Draw title
-    renderer.fgCtx.fillText('CHEAT MENU', GRID.WIDTH / 2, y + GRID.CELL_SIZE * 1.5);
+    // Breadcrumb / title
+    const crumbs = ['CHEAT MENU'];
+    let walker = this.tree;
+    for (const idx of this.path) {
+      walker = this._getEntries(walker)[idx];
+      crumbs.push(walker.name);
+    }
+    ctx.fillText(crumbs.join(' › '), GRID.WIDTH / 2, y + CELL * 1.5);
 
-    // Calculate visible area for items
-    const startY = y + GRID.CELL_SIZE * 3;
-    const lineHeight = GRID.CELL_SIZE * 1.5;
+    // Depth-jump input bar
+    if (this.depthMode) {
+      const barY = y + CELL * 2.6;
+      renderer.drawRect(x + CELL, barY - CELL * 0.6, width - CELL * 2, CELL * 1.1, 'rgba(255,255,0,0.15)', true);
+      renderer.drawRect(x + CELL, barY - CELL * 0.6, width - CELL * 2, CELL * 1.1, '#ffff00', false);
+      ctx.fillStyle = '#888888';
+      ctx.textAlign = 'left';
+      ctx.fillText('JUMP TO LEVEL:', x + CELL * 2, barY);
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'right';
+      const cursor = Math.floor(performance.now() / 500) % 2 === 0 ? '_' : '';
+      ctx.fillText(this.depthInput + cursor, x + width - CELL * 2, barY);
+      ctx.textAlign = 'center';
+    }
 
-    // Draw items
-    const visibleItems = this.flattenedItems.slice(
-      this.scrollOffset,
-      this.scrollOffset + this.maxVisibleItems
-    );
+    const node = this.getCurrentNode();
+    const entries = this._getEntries(node);
+    const view = this._getView(node);
 
-    for (let i = 0; i < visibleItems.length; i++) {
-      const item = visibleItems[i];
-      const itemY = startY + i * lineHeight;
-      const globalIndex = this.scrollOffset + i;
+    const contentTop = y + CELL * 3;
+    const contentBottom = y + height - CELL * 1.5;
 
-      if (item.isHeader) {
-        // Category header
-        renderer.fgCtx.fillStyle = '#888888';
-        renderer.fgCtx.textAlign = 'left';
-        renderer.fgCtx.fillText(`--- ${item.name} ---`, x + GRID.CELL_SIZE * 2, itemY);
-      } else {
-        // Item
-        const isSelected = globalIndex === this.selectedIndex;
+    if (view === 'grid') {
+      this._renderGrid(renderer, entries, x, contentTop, width, contentBottom - contentTop);
+    } else {
+      this._renderList(renderer, entries, x, contentTop, width, contentBottom - contentTop);
+    }
 
-        // Selection highlight
-        if (isSelected) {
-          renderer.drawRect(
-            x + GRID.CELL_SIZE,
-            itemY - lineHeight / 2,
-            width - GRID.CELL_SIZE * 2,
-            lineHeight,
-            'rgba(255, 255, 0, 0.3)',
-            true
-          );
-        }
+    // Bottom hints
+    ctx.fillStyle = '#888888';
+    ctx.textAlign = 'center';
+    const back = this.path.length > 0 ? 'Shift:Back  ' : '';
+    ctx.fillText(`${back}↑↓←→:Move  Enter:Select  R:Warp  0-9:Level  \\:Close`, GRID.WIDTH / 2, y + height - CELL * 0.6);
 
-        // Draw item char
-        renderer.drawEntity(
-          x + GRID.CELL_SIZE * 2,
-          itemY,
-          item.char,
-          item.color || '#ffffff'
-        );
+    ctx.restore();
+  }
 
-        // Draw item name
-        renderer.fgCtx.fillStyle = isSelected ? '#ffffff' : '#cccccc';
-        renderer.fgCtx.textAlign = 'left';
-        const name = item.name.length > 25 ? item.name.substring(0, 22) + '...' : item.name;
-        renderer.fgCtx.fillText(name, x + GRID.CELL_SIZE * 4, itemY);
+  _renderGrid(renderer, entries, x, top, width, availH) {
+    const CELL = GRID.CELL_SIZE;
+    const ctx = renderer.fgCtx;
+
+    const tileW = CELL * TILE_COLS;
+    const tileH = CELL * TILE_ROWS;
+    const cols = Math.min(GRID_COLS, entries.length);
+    const totalGridW = cols * tileW;
+    const startX = x + (width - totalGridW) / 2;
+    const maxRows = Math.max(1, Math.floor(availH / tileH));
+
+    // Clamp / update scroll
+    const totalRows = Math.ceil(entries.length / cols);
+    if (this.gridRowOffset > Math.max(0, totalRows - maxRows)) {
+      this.gridRowOffset = Math.max(0, totalRows - maxRows);
+    }
+
+    const firstIdx = this.gridRowOffset * cols;
+    const lastIdx = Math.min(entries.length, firstIdx + maxRows * cols);
+
+    for (let i = firstIdx; i < lastIdx; i++) {
+      const entry = entries[i];
+      const localIdx = i - firstIdx;
+      const r = Math.floor(localIdx / cols);
+      const c = localIdx % cols;
+      const tx = startX + c * tileW;
+      const ty = top + r * tileH;
+
+      const isSelected = i === this.selectedIndex;
+      const icon = this._getNodeIcon(entry);
+      const isFolder = !!(entry.children || entry.items);
+
+      // Tile background + border
+      const fillStyle = isSelected ? 'rgba(255, 255, 0, 0.18)' : 'rgba(255, 255, 255, 0.04)';
+      const borderStyle = isSelected ? '#ffff00' : '#444444';
+      renderer.drawRect(tx + 2, ty + 2, tileW - 4, tileH - 4, fillStyle, true);
+      renderer.drawRect(tx + 2, ty + 2, tileW - 4, tileH - 4, borderStyle, false);
+
+      // Glyph (scaled up)
+      const glyphX = tx + tileW / 2;
+      const glyphY = ty + CELL * 1.1;
+      renderer.drawEntityScaled(glyphX, glyphY, icon.char, icon.color, 1.6);
+
+      // Folder indicator (small marker bottom-right)
+      if (isFolder) {
+        ctx.fillStyle = isSelected ? '#ffff00' : '#666666';
+        ctx.textAlign = 'right';
+        ctx.fillText('›', tx + tileW - 6, ty + 10);
       }
+
+      // Label
+      ctx.fillStyle = isSelected ? '#ffffff' : '#aaaaaa';
+      ctx.textAlign = 'center';
+      const label = entry.name || '';
+      const trimmed = label.length > 10 ? label.substring(0, 9) + '…' : label;
+      ctx.fillText(trimmed, tx + tileW / 2, ty + tileH - 8);
     }
 
-    // Draw scroll indicators
+    // Scroll indicators
+    if (this.gridRowOffset > 0) {
+      ctx.fillStyle = '#ffff00';
+      ctx.textAlign = 'center';
+      ctx.fillText('↑', x + width / 2, top - 4);
+    }
+    if (this.gridRowOffset + maxRows < totalRows) {
+      ctx.fillStyle = '#ffff00';
+      ctx.textAlign = 'center';
+      ctx.fillText('↓', x + width / 2, top + maxRows * tileH + 8);
+    }
+  }
+
+  _renderList(renderer, entries, x, top, width, availH) {
+    const CELL = GRID.CELL_SIZE;
+    const ctx = renderer.fgCtx;
+    const lineHeight = CELL * 1.5;
+    const maxVisible = Math.max(1, Math.floor(availH / lineHeight));
+
+    // Clamp scroll
+    if (this.scrollOffset > Math.max(0, entries.length - maxVisible)) {
+      this.scrollOffset = Math.max(0, entries.length - maxVisible);
+    }
+    if (this.selectedIndex < this.scrollOffset) this.scrollOffset = this.selectedIndex;
+    else if (this.selectedIndex >= this.scrollOffset + maxVisible) {
+      this.scrollOffset = this.selectedIndex - maxVisible + 1;
+    }
+
+    const startY = top + lineHeight / 2;
+    const visible = entries.slice(this.scrollOffset, this.scrollOffset + maxVisible);
+
+    for (let i = 0; i < visible.length; i++) {
+      const entry = visible[i];
+      const globalIdx = this.scrollOffset + i;
+      const itemY = startY + i * lineHeight;
+      const isSelected = globalIdx === this.selectedIndex;
+      const isFolder = !!(entry.children || entry.items);
+
+      if (isSelected) {
+        renderer.drawRect(
+          x + CELL,
+          itemY - lineHeight / 2,
+          width - CELL * 2,
+          lineHeight,
+          'rgba(255, 255, 0, 0.3)',
+          true
+        );
+      }
+
+      const icon = this._getNodeIcon(entry);
+      renderer.drawEntity(x + CELL * 2, itemY, icon.char, icon.color);
+
+      ctx.fillStyle = isSelected ? '#ffffff' : '#cccccc';
+      ctx.textAlign = 'left';
+      let name = entry.name || '';
+      if (isFolder) name += ' ›';
+      const trimmed = name.length > 28 ? name.substring(0, 25) + '...' : name;
+      ctx.fillText(trimmed, x + CELL * 4, itemY);
+    }
+
     if (this.scrollOffset > 0) {
-      renderer.fgCtx.fillStyle = '#ffff00';
-      renderer.fgCtx.textAlign = 'right';
-      renderer.fgCtx.fillText('↑', x + width - GRID.CELL_SIZE, startY - lineHeight / 2);
+      ctx.fillStyle = '#ffff00';
+      ctx.textAlign = 'right';
+      ctx.fillText('↑', x + width - CELL, top + lineHeight / 2 - 4);
     }
-    if (this.scrollOffset + this.maxVisibleItems < this.flattenedItems.length) {
-      renderer.fgCtx.fillStyle = '#ffff00';
-      renderer.fgCtx.textAlign = 'right';
-      renderer.fgCtx.fillText('↓', x + width - GRID.CELL_SIZE, startY + this.maxVisibleItems * lineHeight);
+    if (this.scrollOffset + maxVisible < entries.length) {
+      ctx.fillStyle = '#ffff00';
+      ctx.textAlign = 'right';
+      ctx.fillText('↓', x + width - CELL, top + maxVisible * lineHeight - 4);
     }
-
-    // Draw instructions at bottom
-    renderer.fgCtx.fillStyle = '#888888';
-    renderer.fgCtx.textAlign = 'center';
-    const instructionsY = y + height - GRID.CELL_SIZE;
-    renderer.fgCtx.fillText('↑↓:Select  Enter:Spawn/Change  R:Warp  \\:Close', GRID.WIDTH / 2, instructionsY);
-
-    renderer.fgCtx.restore();
   }
 }

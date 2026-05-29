@@ -23,7 +23,7 @@ export class HutInteriorOverlay {
   }
 
   render(game) {
-    if (!game.player?.inHut || !game.hutInterior) return;
+    if ((!game.player?.inHut && !game.player?.inDungeon) || !game.hutInterior) return;
 
     // Compute panel dimensions from interior grid size (auto-sizes for hut vs dungeon)
     const interiorPxW = game.hutInterior.gridCols * GRID.CELL_SIZE;
@@ -54,6 +54,23 @@ export class HutInteriorOverlay {
     ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+
+    // ── 3b. Dungeon wall tiles ─────────────────────────────────────────────────
+    // Render solid collision-map cells as visible stone walls.
+    // Hut interiors are open floor only (10 cols); dungeon interiors are 24 cols.
+    if (game.hutInterior.collisionMap && game.hutInterior.gridCols > 12) {
+      const CS = GRID.CELL_SIZE;
+      const cm = game.hutInterior.collisionMap;
+      for (let r = 0; r < cm.length; r++) {
+        for (let c = 0; c < (cm[r]?.length ?? 0); c++) {
+          if (!cm[r][c]) continue;
+          ctx.fillStyle = '#1a1512';
+          ctx.fillRect(c * CS, r * CS, CS, CS);
+          ctx.fillStyle = '#2e2218';
+          ctx.fillText('≡', c * CS + CS / 2, r * CS + CS / 2);
+        }
+      }
+    }
 
     // ── 4. Interior background objects ─────────────────────────────────────────
     for (const obj of game.hutInterior.backgroundObjects) {
@@ -115,14 +132,45 @@ export class HutInteriorOverlay {
       }
     }
 
+    // ── 8b. Interior NPCs (WiseFellow, Witch) ─────────────────────────────────
+    for (const npc of game.hutInterior.npcs) {
+      const npcAlpha = npc.getPulseAlpha ? npc.getPulseAlpha() : 1.0;
+      this.renderer.drawTextWithAlpha(
+        npc.position.x + GRID.CELL_SIZE / 2,
+        npc.position.y + GRID.CELL_SIZE / 2,
+        npc.char,
+        npc.color,
+        npcAlpha
+      );
+
+      // WiseFellow hint text — fades in on proximity (word per line above NPC)
+      if (npc.hintText && npc.hintAlpha > 0.02) {
+        const words = npc.hintText.split(' ');
+        const lineH = 9;
+        ctx.save();
+        ctx.globalAlpha = npc.hintAlpha;
+        ctx.fillStyle = '#e8c060';
+        ctx.font = `8px 'VentureArcade', monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const baseY = npc.position.y - GRID.CELL_SIZE * 1.2 - (words.length - 1) * lineH * 0.5;
+        for (let wi = 0; wi < words.length; wi++) {
+          ctx.fillText(words[wi], npc.position.x + GRID.CELL_SIZE / 2, baseY + wi * lineH);
+        }
+        ctx.restore();
+        ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`; // restore main font
+      }
+    }
+
     // ── 9. Player projectiles (interior coords) ────────────────────────────────
     for (const proj of game.combatSystem.getProjectiles()) {
-      this.renderer.drawEntity(
-        proj.position.x + GRID.CELL_SIZE / 2,
-        proj.position.y + GRID.CELL_SIZE / 2,
-        proj.char,
-        proj.color
-      );
+      const cx = proj.position.x + GRID.CELL_SIZE / 2;
+      const cy = proj.position.y + GRID.CELL_SIZE / 2;
+      if (proj.drawAngle != null) {
+        this.renderer.drawEntityRotated(cx, cy, proj.char, proj.color, proj.drawAngle);
+      } else {
+        this.renderer.drawEntity(cx, cy, proj.char, proj.color);
+      }
     }
 
     // ── 10. Enemy projectiles (interior coords) ────────────────────────────────
@@ -133,6 +181,31 @@ export class HutInteriorOverlay {
         proj.char,
         proj.color
       );
+    }
+
+    // ── 10b. Player tongue attacks (frog form) ─────────────────────────────────
+    if (game.playerTongueAttacks?.length) {
+      const pctx = ctx;
+      for (const tongue of game.playerTongueAttacks) {
+        if (tongue.currentLength <= 0) continue;
+        const sx = game.player.position.x + GRID.CELL_SIZE / 2;
+        const sy = game.player.position.y + GRID.CELL_SIZE / 2;
+        const ex = sx + tongue.direction.x * tongue.currentLength;
+        const ey = sy + tongue.direction.y * tongue.currentLength;
+        pctx.save();
+        pctx.strokeStyle = tongue.color;
+        pctx.lineWidth = 2.5;
+        pctx.lineCap = 'round';
+        pctx.beginPath();
+        pctx.moveTo(sx, sy);
+        pctx.lineTo(ex, ey);
+        pctx.stroke();
+        pctx.fillStyle = tongue.color;
+        pctx.beginPath();
+        pctx.arc(ex, ey, 3, 0, Math.PI * 2);
+        pctx.fill();
+        pctx.restore();
+      }
     }
 
     // ── 11. Player melee attacks ───────────────────────────────────────────────
@@ -169,19 +242,42 @@ export class HutInteriorOverlay {
       );
     }
 
+    // ── 13b. Chain lightning arcs ─────────────────────────────────────────────
+    if (game.combatSystem.getChainArcs) {
+      for (const arc of game.combatSystem.getChainArcs()) {
+        const alpha = Math.max(0, arc.timer / arc.duration);
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = arc.color;
+        ctx.lineWidth = 2;
+        const dx = arc.x2 - arc.x1;
+        const dy = arc.y2 - arc.y1;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        const px = -dy / len;
+        const py = dx / len;
+        const segs = 4;
+        ctx.beginPath();
+        ctx.moveTo(arc.x1, arc.y1);
+        for (let s = 1; s < segs; s++) {
+          const t = s / segs;
+          const jitter = (Math.random() - 0.5) * 8;
+          ctx.lineTo(arc.x1 + dx * t + px * jitter, arc.y1 + dy * t + py * jitter);
+        }
+        ctx.lineTo(arc.x2, arc.y2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
     // ── 14. Damage numbers ─────────────────────────────────────────────────────
     for (const dmgNum of game.combatSystem.getDamageNumbers()) {
       const scale = dmgNum.scale || 1;
-      if (scale !== 1) {
-        ctx.save();
-        ctx.globalAlpha = dmgNum.alpha;
-        ctx.fillStyle = dmgNum.color;
-        ctx.font = `${GRID.CELL_SIZE * scale}px 'Unifont', monospace`;
-        ctx.fillText(dmgNum.value.toString(), dmgNum.x, dmgNum.y);
-        ctx.restore();
-      } else {
-        this.renderer.drawTextWithAlpha(dmgNum.x, dmgNum.y, dmgNum.value.toString(), dmgNum.color, dmgNum.alpha);
-      }
+      ctx.save();
+      ctx.globalAlpha = dmgNum.alpha;
+      ctx.fillStyle = dmgNum.color;
+      ctx.font = `${GRID.CELL_SIZE * scale}px 'Unifont', monospace`;
+      ctx.fillText(dmgNum.value.toString(), dmgNum.x, dmgNum.y);
+      ctx.restore();
     }
 
     // ── 15. Particles ─────────────────────────────────────────────────────────
@@ -211,6 +307,14 @@ export class HutInteriorOverlay {
       playerColor,
       playerAlpha
     );
+
+    // ── 16b. Camp companion (uses interior coords because it tracks player) ──
+    if (game.companion) {
+      game.companion.render(ctx, (gx, gy) => ({
+        x: gx * GRID.CELL_SIZE,
+        y: gy * GRID.CELL_SIZE
+      }));
+    }
 
     // ── 17. Bow charge indicator (reads game.player.position — offset applies) ─
     this.renderController.bowChargeIndicator.render(game);
@@ -255,6 +359,33 @@ export class HutInteriorOverlay {
         ctx.fillText(label, col * GRID.CELL_SIZE + GRID.CELL_SIZE / 2, row * GRID.CELL_SIZE - GRID.CELL_SIZE);
         ctx.restore();
         ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`; // restore font
+      }
+    }
+
+    // ── 21. Interior exit door prompt (hut/dungeon) ───────────────────────────
+    {
+      const isHut = game.hutInterior.gridCols <= 12;
+      const nearExit = isHut
+        ? game.hutSystem?.nearInteriorExit?.()
+        : game.dungeonSystem?.nearInteriorExit?.();
+
+      if (nearExit) {
+        const exitCol = game.hutInterior.exitCol;
+        const exitRow = game.hutInterior.exitRow;
+        if (exitCol != null && exitRow != null) {
+          ctx.save();
+          ctx.font = `10px 'Unifont', monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = '#ccccaa';
+          ctx.fillText(
+            'SPACE  EXIT',
+            exitCol * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
+            exitRow * GRID.CELL_SIZE - GRID.CELL_SIZE * 0.75
+          );
+          ctx.restore();
+          ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
+        }
       }
     }
 

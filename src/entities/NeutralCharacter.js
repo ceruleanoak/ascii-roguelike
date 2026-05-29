@@ -58,7 +58,7 @@ export class NeutralCharacter {
     );
 
     ctx.save();
-    ctx.font = `${GRID.CELL_SIZE}px monospace`;
+    ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 

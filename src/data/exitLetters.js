@@ -7,7 +7,13 @@
 export const VOWEL_CATEGORY_WEIGHT = 2.5;
 
 export const EXIT_LETTERS = {
-  // ── Special room types ──────────────────────────────────────────────────
+  'A': {
+    name: 'Ascent',
+    roomType: 'ASCENT',
+    weight: 0.30,
+    vowel: true,
+    spellDescription: 'THE SEEKER PATH.'
+  },
   'B': {
     name: 'Boss',
     roomType: 'BOSS',
@@ -15,87 +21,70 @@ export const EXIT_LETTERS = {
     zoneBoosts: {
       gray: 3,
       red: 1
-    }
+    },
+    spellDescription: 'ARE YOU PREPARED?'
   },
   'C': {
     name: 'Camp',
     roomType: 'CAMP',
-    weight: 0.07
+    weight: 0.07,
+    spellDescription: 'THE PATH OF WEAKNESS.'
   },
-  '?': {
-    name: 'Mystery',
-    roomType: 'DISCOVERY',
-    weight: 0.05
-  },
-
-  // ── Generic combat consonants ────────────────────────────────────────────
-  'X': {
-    name: 'Crossroads',
-    roomType: 'COMBAT',
-    weight: 0.20
-  },
-  'V': {
-    name: 'Vault',
-    roomType: 'COMBAT',
-    weight: 0.05,
-    zoneBoosts: {
-      gray: 3,
-      red: 2
-    }
-  },
-  'P': {
-    name: 'Peak',
-    roomType: 'COMBAT',
-    weight: 0.15
-  },
-  'T': {
-    name: 'Tunnel',
-    roomType: 'COMBAT',
-    weight: 0.15
-  },
-  'R': {
-    name: 'Ridge',
-    roomType: 'COMBAT',
-    weight: 0.10
-  },
-
-  // ── Pattern / secret consonants (rare) ──────────────────────────────────
   'D': {
-    name: 'Descent',
-    roomType: 'COMBAT',
-    weight: 0.01,
+    name: 'Dungeon',
+    roomType: 'DUNGEON',
+    weight: 0.1,
     zoneBoosts: {
-      gray: 15
-    }
+      gray: 2.0,
+      red: 1.5
+    },
+    spellDescription: 'SEEK THE THIRD STAIR.'
   },
-  'N': {
-    name: 'North Path',
+  'E': {
+    name: 'Errand',
     roomType: 'COMBAT',
-    weight: 0.01,
-    zoneBoosts: {
-      gray: 10
-    }
+    weight: 0.20,
+    vowel: true,
+    spellDescription: 'THE SERVANT PATH.'
   },
-  'S': {
-    name: 'South Path',
-    roomType: 'COMBAT',
-    weight: 0.01,
-    zoneBoosts: {
-      gray: 10
-    }
-  },
-  'W': {
-    name: 'West Path',
-    roomType: 'COMBAT',
-    weight: 0.01,
-    zoneBoosts: {
-      gray: 5
-    }
+  // Weight is zero — the only way to encounter an 'F' exit is for a fairy to
+  // dust an existing exit. The entry exists so RoomGenerator + the renderer
+  // recognize F as a valid letter when it appears via mutation.
+  'F': {
+    name: 'Fountain',
+    roomType: 'FOUNTAIN',
+    weight: 0,
+    spellDescription: 'A FAIRY GIFT.'
   },
   'G': {
-    name: 'Gate',
+    name: 'Grass',
     roomType: 'COMBAT',
-    weight: 0.01
+    weight: 0.10,
+    zoneBoosts: {
+      green: 1.8,
+      yellow: 0,
+      red: 0,
+      cyan: 0,
+      gray: 0
+    },
+    spellDescription: 'HIDDEN IN THE BLADES.'
+  },
+  'H': {
+    name: 'Hut',
+    roomType: 'HUT',
+    weight: 0.12,
+    zoneBoosts: {
+      green: 1.5,
+      yellow: 1.2
+    },
+    spellDescription: 'A HUT OF BROWN.'
+  },
+  'I': {
+    name: 'Island',
+    roomType: 'COMBAT',
+    weight: 0.10,
+    vowel: true,
+    spellDescription: 'THE HOARDER PATH.'
   },
   'K': {
     name: 'Key Room',
@@ -104,32 +93,9 @@ export const EXIT_LETTERS = {
     zoneBoosts: {
       green: 2,
       cyan: 1.5
-    }
+    },
+    spellDescription: 'A GLIMMERING KEY.'
   },
-
-  // ── Hut room ─────────────────────────────────────────────────────────────
-  'H': {
-    name: 'Hut',
-    roomType: 'COMBAT',
-    weight: 0.08,
-    zoneBoosts: {
-      green: 1.5,
-      yellow: 1.2
-    }
-  },
-
-  // ── Dungeon room ─────────────────────────────────────────────────────────
-  'D': {
-    name: 'Dungeon',
-    roomType: 'COMBAT',
-    weight: 0.1,
-    zoneBoosts: {
-      gray: 2.0,
-      red: 1.5
-    }
-  },
-
-  // ── Lake room ────────────────────────────────────────────────────────────
   'L': {
     name: 'Lake',
     roomType: 'COMBAT',
@@ -137,41 +103,116 @@ export const EXIT_LETTERS = {
     zoneBoosts: {
       green: 2.0,
       cyan: 1.5
-    }
+    },
+    spellDescription: 'BEWARE THE RUSALKA.'
   },
-
-  // ── Vowels (vowel: true — used by secret-sequence system) ────────────────
-  // Combined category weight: VOWEL_CATEGORY_WEIGHT (2.5)
-  // Individual weights reflect relative frequency within the vowel pool.
-  'A': {
-    name: 'Ascent',
-    roomType: 'COMBAT',
-    weight: 0.30,
-    vowel: true
-  },
-  'E': {
-    name: 'Errand',       // Future implementation
-    roomType: 'COMBAT',
-    weight: 0.20,
-    vowel: true
-  },
-  'I': {
-    name: 'Island',
-    roomType: 'COMBAT',
-    weight: 0.10,
-    vowel: true
+  'M': {
+    name: 'Maze',
+    roomType: 'MAZE',
+    weight: 0.08,
+    zoneBoosts: {
+      yellow: 1.3,
+      red: 1.2
+    },
+    spellDescription: 'A TRAP FOR FOOLS.'
   },
   'O': {
     name: 'Ocean',
     roomType: 'COMBAT',
     weight: 0.10,
-    vowel: true
+    vowel: true,
+    spellDescription: 'THE MARINER PATH.'
+  },
+  'P': {
+    name: 'Press Hut',
+    roomType: 'HUT',
+    weight: 0.04,
+    zoneBoosts: {
+      red: 2.0,
+      yellow: 1.5
+    },
+    spellDescription: 'THE PRESS WITHIN.'
+  },
+  'R': {
+    name: 'Ridge',
+    roomType: 'RIDGE',
+    weight: 0.10,
+    spellDescription: 'HIGH GROUND AHEAD.'
+  },
+  'T': {
+    name: 'Tunnel',
+    roomType: 'TUNNEL',
+    weight: 0.15,
+    spellDescription: 'BURROW AND HIDE.'
   },
   'U': {
-    name: 'Underground',  // Future implementation
-    roomType: 'COMBAT',
+    name: 'Underground',
+    roomType: 'UNDERGROUND',
     weight: 0.10,
-    vowel: true
+    vowel: true,
+    spellDescription: 'THE MAGE PATH.'
+  },
+  'V': {
+    name: 'Vault',
+    roomType: 'COMBAT',
+    weight: 0.05,
+    zoneBoosts: {
+      gray: 3,
+      red: 2
+    },
+    spellDescription: 'A SIMPLE LOCK.'
+  },
+  'W': {
+    name: 'Well',
+    roomType: 'WELL',
+    weight: 0.06,
+    zoneBoosts: {
+      green: 1.5,
+      cyan: 1.3
+    },
+    spellDescription: 'A WISH FOR MORE.'
+  },
+  'X': {
+    name: 'Crossroads',
+    roomType: 'COMBAT',
+    weight: 0.20,
+    spellDescription: 'MANY PATHS CROSS.'
+  },
+  '?': {
+    name: 'Mystery',
+    roomType: 'DISCOVERY',
+    weight: 0.05,
+    spellDescription: 'QUESTIONABLE.'
+  },
+
+  // ── Blue-zone (Tidefall) tutorial rooms ──────────────────────────────────
+  // Weight 0: these only appear via the linear blue-zone progression (driven
+  // by game.blueZoneRoom in main.js), never via the normal weighted picker.
+  // The '~' entry exit is opened by the pearl pedestal in an Ocean room
+  // (main.js handlePearlPedestalSpace).
+  '~': {
+    name: 'Shallows',
+    roomType: 'COMBAT',
+    weight: 0,
+    spellDescription: 'THE TIDE HAS PARTED.'
+  },
+  '⌇': {
+    name: 'Reef Walk',
+    roomType: 'COMBAT',
+    weight: 0,
+    spellDescription: 'STEP WHERE NO PATH IS.'
+  },
+  '⌒': {
+    name: 'Wake Drift',
+    roomType: 'COMBAT',
+    weight: 0,
+    spellDescription: 'LEAVE A LIVE TRAIL.'
+  },
+  '◌': {
+    name: 'Pearl Cache',
+    roomType: 'CAMP',
+    weight: 0,
+    spellDescription: 'THE GIFT OF THE DEEP.'
   }
 };
 
@@ -201,5 +242,10 @@ export const SECRET_PATTERNS = {
     name: 'Death\'s Door',
     rewardType: 'gray_zone_hint',
     message: 'The realm of the dead beckons...'
+  },
+  'D-R-A-W': {
+    name: 'Gallery',
+    neutralScript: 'drawRoom',
+    message: 'A blank canvas awaits.'
   }
 };

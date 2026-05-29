@@ -13,6 +13,7 @@ export class GameLoop {
   start() {
     if (this.isRunning) return;
 
+    this.accumulator = 0; // Reset on every start() to prevent burst ticks after stop()/start() cycles
     this.isRunning = true;
     this.lastTime = performance.now() / 1000;
     this.loop();

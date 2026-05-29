@@ -9,10 +9,12 @@
  */
 
 import { GRID, COLORS } from '../../game/GameConfig.js';
+import { objectOnPlane, planeOf } from '../../systems/PlaneSystem.js';
 
 export class GameOverRenderer {
-  constructor(renderer) {
+  constructor(renderer, renderController) {
     this.renderer = renderer;
+    this.renderController = renderController;
   }
 
   render(game) {
@@ -38,8 +40,12 @@ export class GameOverRenderer {
         }
       }
 
-      // Draw static background objects (water and grass render on foreground)
+      // Draw static background objects (water and grass render on foreground).
+      // Use the player's plane at death so plane-1-only objects (glittering rocks,
+      // red vein markers, tunnel walls) don't bleed onto the game over screen.
+      const deathPlane = planeOf(game.player);
       for (const obj of game.backgroundObjects) {
+        if (!objectOnPlane(obj, deathPlane)) continue;
         const isGrass = obj.char === '|' || obj.char === '\\' || obj.char === '/' || obj.char === ',';
         if (!obj.currentAnimation && obj.char !== '~' && !isGrass) {
           const x = obj.position.x + GRID.CELL_SIZE / 2;
@@ -55,63 +61,69 @@ export class GameOverRenderer {
     // Render foreground
     this.renderer.clearForeground();
 
-    // Draw water tiles (dynamic state changes each frame)
-    for (const obj of game.backgroundObjects) {
-      if (obj.char === '~' && !obj.currentAnimation) {
-        const renderData = obj.getRenderPosition();
+    if (game.player.inHut) {
+      // Player died inside a hut/dungeon — delegate foreground to the hut overlay
+      // so the death explosion renders at the correct PIP position.
+      this.renderController.hutInteriorOverlay.render(game);
+    } else {
+      // Draw water tiles (dynamic state changes each frame)
+      for (const obj of game.backgroundObjects) {
+        if (obj.char === '~' && !obj.currentAnimation) {
+          const renderData = obj.getRenderPosition();
+          this.renderer.drawEntity(
+            renderData.x + GRID.CELL_SIZE / 2,
+            renderData.y + GRID.CELL_SIZE / 2,
+            renderData.char,
+            renderData.color
+          );
+        }
+      }
+
+      // Draw grass on foreground (renders over debris)
+      for (const obj of game.backgroundObjects) {
+        const isGrass = obj.char === '|' || obj.char === '\\' || obj.char === '/' || obj.char === ',';
+        if (isGrass && !obj.currentAnimation && !obj.destroyed) {
+          const offsetX = obj.grassRenderOffset ? obj.grassRenderOffset.x : 0;
+          this.renderer.drawEntity(
+            obj.position.x + GRID.CELL_SIZE / 2 + offsetX,
+            obj.position.y + GRID.CELL_SIZE / 2,
+            obj.char,
+            obj.color
+          );
+        }
+      }
+
+      // Draw debris (remains on ground)
+      for (const piece of game.debris) {
         this.renderer.drawEntity(
-          renderData.x + GRID.CELL_SIZE / 2,
-          renderData.y + GRID.CELL_SIZE / 2,
-          renderData.char,
-          renderData.color
+          piece.position.x + GRID.CELL_SIZE / 2,
+          piece.position.y + GRID.CELL_SIZE / 2,
+          piece.char,
+          piece.color
         );
       }
-    }
 
-    // Draw grass on foreground (renders over debris)
-    for (const obj of game.backgroundObjects) {
-      const isGrass = obj.char === '|' || obj.char === '\\' || obj.char === '/' || obj.char === ',';
-      if (isGrass && !obj.currentAnimation && !obj.destroyed) {
-        const offsetX = obj.grassRenderOffset ? obj.grassRenderOffset.x : 0;
-        this.renderer.drawEntity(
-          obj.position.x + GRID.CELL_SIZE / 2 + offsetX,
-          obj.position.y + GRID.CELL_SIZE / 2,
-          obj.char,
-          obj.color
-        );
-      }
-    }
-
-    // Draw debris (remains on ground)
-    for (const piece of game.debris) {
-      this.renderer.drawEntity(
-        piece.position.x + GRID.CELL_SIZE / 2,
-        piece.position.y + GRID.CELL_SIZE / 2,
-        piece.char,
-        piece.color
-      );
-    }
-
-    // Draw particles (explosion and embers)
-    for (const particle of game.particles) {
-      if (particle.getAlpha) {
-        const alpha = particle.getAlpha();
-        this.renderer.drawTextWithAlpha(
-          particle.position.x + GRID.CELL_SIZE / 2,
-          particle.position.y + GRID.CELL_SIZE / 2,
-          particle.char,
-          particle.color,
-          alpha
-        );
-      } else {
-        const alpha = Math.max(0, particle.life / particle.maxLife);
-        this.renderer.drawTextWithAlpha(
-          particle.x,
-          particle.y,
-          particle.char,
-          particle.color,
-          alpha
-        );
+      // Draw particles (explosion and embers)
+      for (const particle of game.particles) {
+        if (particle.getAlpha) {
+          const alpha = particle.getAlpha();
+          this.renderer.drawTextWithAlpha(
+            particle.position.x + GRID.CELL_SIZE / 2,
+            particle.position.y + GRID.CELL_SIZE / 2,
+            particle.char,
+            particle.color,
+            alpha
+          );
+        } else {
+          const alpha = Math.max(0, particle.life / particle.maxLife);
+          this.renderer.drawTextWithAlpha(
+            particle.x,
+            particle.y,
+            particle.char,
+            particle.color,
+            alpha
+          );
+        }
       }
     }
 

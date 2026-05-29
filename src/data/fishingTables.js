@@ -2,6 +2,10 @@
 // Each catch: { name, char, color, drops[], weight }
 // 'char' is always 'ծ' (Armenian Da) — name/color distinguish catches visually
 // 'drops' are ingredient chars spawned when the reward object is melee-hit
+// 'specialDrops' (optional) are ITEMS keys spawned alongside ingredient drops —
+// FishingSystem looks these up via spawnItemFn so non-ingredient items (e.g.
+// empty bottle, fairy) can come out of catches. Distinct from 'drops' because
+// drops use the INGREDIENTS char namespace and would collide otherwise.
 
 export const FISHING_TABLES = {
   green: {
@@ -11,7 +15,14 @@ export const FISHING_TABLES = {
       { name: 'Perch',       char: 'ծ', color: '#aaddff', drops: ['s', 'm'],        weight: 25 },
       { name: 'Crayfish',    char: 'ծ', color: '#ff9966', drops: ['b'],             weight: 20 },
       { name: 'Newt',        char: 'ծ', color: '#44ffaa', drops: ['v'],             weight: 15 },
-      { name: 'Giant Turtle',char: 'ծ', color: '#88cc44', drops: ['b', 's', 'm'],   weight: 10 }
+      { name: 'Giant Turtle',char: 'ծ', color: '#88cc44', drops: ['b', 's', 'm'],   weight: 10 },
+      { name: 'Empty Bottle',char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 },
+      // Blue-zone supply line: rare catches that gate the water-armor recipes.
+      // Drop weights are low; the blue-zone Pearl Cache gives a bundle as the
+      // bootstrap source.
+      { name: 'Oyster Husk', char: 'ծ', color: '#ddeeff', drops: ['p'],             weight: 3 },
+      { name: 'Sharkbone',   char: 'ծ', color: '#ccd8e8', drops: ['n'],             weight: 1 },
+      { name: 'Ray Tail',    char: 'ծ', color: '#aabbcc', drops: ['Y'],             weight: 1 }
     ]
   },
 
@@ -21,7 +32,8 @@ export const FISHING_TABLES = {
       { name: 'Salamander',  char: 'ծ', color: '#ff6600', drops: ['F', 'a'],        weight: 30 },
       { name: 'Lava Eel',    char: 'ծ', color: '#ff3300', drops: ['s', 'F'],        weight: 25 },
       { name: 'Charfish',    char: 'ծ', color: '#cc4400', drops: ['a', 'm'],        weight: 25 },
-      { name: 'Ember Toad',  char: 'ծ', color: '#ff8800', drops: ['F', 'g'],        weight: 20 }
+      { name: 'Ember Toad',  char: 'ծ', color: '#ff8800', drops: ['F', 'g'],        weight: 20 },
+      { name: 'Empty Bottle',char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 }
     ]
   },
 
@@ -31,7 +43,8 @@ export const FISHING_TABLES = {
       { name: 'Ice Fish',       char: 'ծ', color: '#aaddff', drops: ['i', 's'],     weight: 30 },
       { name: 'Frost Crab',     char: 'ծ', color: '#cceeff', drops: ['i', 'b'],     weight: 25 },
       { name: 'Glacial Carp',   char: 'ծ', color: '#88ccff', drops: ['s', 'm'],     weight: 25 },
-      { name: 'Snow Salamander',char: 'ծ', color: '#eeeeff', drops: ['i', 'v'],     weight: 20 }
+      { name: 'Snow Salamander',char: 'ծ', color: '#eeeeff', drops: ['i', 'v'],     weight: 20 },
+      { name: 'Empty Bottle',   char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 }
     ]
   },
 
@@ -41,7 +54,8 @@ export const FISHING_TABLES = {
       { name: 'Storm Eel',      char: 'ծ', color: '#ffff44', drops: ['M', 's'],     weight: 30 },
       { name: 'Thunder Toad',   char: 'ծ', color: '#ffffaa', drops: ['g', 'M'],     weight: 25 },
       { name: 'Charged Catfish',char: 'ծ', color: '#ffee00', drops: ['M'],          weight: 25 },
-      { name: 'Spark Minnow',   char: 'ծ', color: '#ccff44', drops: ['k', 'M'],     weight: 20 }
+      { name: 'Spark Minnow',   char: 'ծ', color: '#ccff44', drops: ['k', 'M'],     weight: 20 },
+      { name: 'Empty Bottle',   char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 }
     ]
   },
 
@@ -51,7 +65,20 @@ export const FISHING_TABLES = {
       { name: 'Bone Fish',   char: 'ծ', color: '#dddddd', drops: ['b', 'b'],        weight: 30 },
       { name: 'Soul Carp',   char: 'ծ', color: '#aaaacc', drops: ['e', 'b'],        weight: 25 },
       { name: 'Phantom Eel', char: 'ծ', color: '#8888aa', drops: ['d', 'e'],        weight: 25 },
-      { name: 'Dead Weight', char: 'ծ', color: '#666677', drops: ['b', 'd'],        weight: 20 }
+      { name: 'Dead Weight', char: 'ծ', color: '#666677', drops: ['b', 'd'],        weight: 20 },
+      { name: 'Empty Bottle', char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 }
+    ]
+  },
+
+  // Fountain ('F') room — fairies are the headline catch; the empty bottle
+  // shows up here too so a patient angler can self-source the bottle without
+  // wandering. No fish, no rusalka — this water is something else.
+  fountain: {
+    rusalkaChance: 0,
+    catches: [
+      { name: 'Fairy',        char: 'ծ', color: '#ffaaff', drops: [], specialDrops: ['fairy'], weight: 60 },
+      { name: 'Empty Bottle', char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'],     weight: 25 },
+      { name: 'Petal',        char: 'ծ', color: '#ffccee', drops: ['l'],                       weight: 15 }
     ]
   }
 };

@@ -3,6 +3,7 @@ import { GameStateMachine } from './game/GameStateMachine.js';
 import { ASCIIRenderer } from './rendering/ASCIIRenderer.js';
 import { RenderController } from './rendering/RenderController.js';
 import { PhysicsSystem } from './systems/PhysicsSystem.js';
+import { inSamePlane } from './systems/PlaneSystem.js';
 import { CraftingSystem } from './systems/CraftingSystem.js';
 import { CombatSystem } from './systems/CombatSystem.js';
 import { RoomGenerator } from './systems/RoomGenerator.js';
@@ -20,17 +21,33 @@ import { TrapSystem } from './systems/TrapSystem.js';
 import { InteractionSystem } from './systems/InteractionSystem.js';
 import { CharacterSystem } from './systems/CharacterSystem.js';
 import { MenuSystem } from './systems/MenuSystem.js';
+import { AnimationSystem } from './systems/AnimationSystem.js';
 import { EnemySpawnSystem } from './systems/EnemySpawnSystem.js';
 import { HutSystem } from './systems/HutSystem.js';
+import { PressSystem } from './systems/PressSystem.js';
 import { DungeonSystem } from './systems/DungeonSystem.js';
+import { MazeSystem } from './systems/MazeSystem.js';
+import { BossSystem } from './systems/BossSystem.js';
+import { BoulderSystem } from './systems/BoulderSystem.js';
+import { SpellSystem } from './systems/SpellSystem.js';
+import { RidgeSystem } from './systems/RidgeSystem.js';
+import { PolymorphSystem } from './systems/PolymorphSystem.js';
+import { MagicSystem } from './systems/MagicSystem.js';
+import { WellSystem } from './systems/WellSystem.js';
+import { FountainSystem } from './systems/FountainSystem.js';
+import { Fairy } from './entities/Fairy.js';
+import { CampNPCSystem } from './systems/CampNPCSystem.js';
+import { CAMP_NPC_STATE } from './entities/CampNPC.js';
 import { Player } from './entities/Player.js';
 import { Enemy } from './entities/Enemy.js';
 import { Ingredient } from './entities/Ingredient.js';
 import { Item } from './entities/Item.js';
 import { BackgroundObject } from './entities/BackgroundObject.js';
 import { GooBlob } from './entities/GooBlob.js';
+import { Crow } from './entities/Crow.js';
 import { Particle, createExplosion, createWetDrop, createActivationBurst, createSteamPuff, createChaff, createDodgeTrail, createFootstep } from './entities/Particle.js';
 import { createDebris } from './entities/Debris.js';
+import { Puddle } from './entities/Puddle.js';
 import { Captive } from './entities/Captive.js';
 import { Leshy } from './entities/Leshy.js';
 import { CharacterNPC } from './entities/CharacterNPC.js';
@@ -54,14 +71,15 @@ class Game {
     this.craftingSystem = new CraftingSystem();
     this.combatSystem = new CombatSystem(this.physicsSystem);
     this.zoneSystem = new ZoneSystem();
-    this.exitSystem = new ExitSystem(this.zoneSystem);
-    this.roomGenerator = new RoomGenerator(this.exitSystem, this.zoneSystem);
+    this.exitSystem = new ExitSystem(this.zoneSystem, this);
+    this.roomGenerator = new RoomGenerator(this.exitSystem, this.zoneSystem, this);
     this.neutralRoomSystem = new NeutralRoomSystem();
     this.errandSystem = new ErrandSystem();
     this.cheatMenu = new CheatMenu(this);
     this.persistenceSystem = new PersistenceSystem();
     this.inventorySystem = new InventorySystem();
     this.audioSystem = new AudioSystem();
+    this.combatSystem.audioSystem = this.audioSystem;
     this.fishingSystem = new FishingSystem();
     // New focused systems (instantiated after core systems so they can receive `this`)
     this.lootSystem = new LootSystem(this);
@@ -69,9 +87,24 @@ class Game {
     this.interactionSystem = new InteractionSystem(this);
     this.characterSystem = new CharacterSystem(this);
     this.menuSystem = new MenuSystem(this);
+    this.animationSystem = new AnimationSystem(this);
     this.enemySpawnSystem = new EnemySpawnSystem(this);
     this.hutSystem = new HutSystem(this);
+    this.pressSystem = new PressSystem(this);
     this.dungeonSystem = new DungeonSystem(this);
+    this.mazeSystem = new MazeSystem(this);
+    this.bossSystem = new BossSystem(this);
+    this.boulderSystem = new BoulderSystem(this);
+    this.spellSystem = new SpellSystem(this);
+    this.ridgeSystem = new RidgeSystem(this);
+    this.polymorphSystem = new PolymorphSystem();
+    this.magicSystem = new MagicSystem(this);
+    this.wellSystem = new WellSystem(this);
+    this.fountainSystem = new FountainSystem(this);
+    // Wire InventorySystem back to game so it can mutate player.equippedConsumables
+    this.inventorySystem.game = this;
+    this.campNPCSystem = new CampNPCSystem(this);
+    this.bridgeMenuOpen = false;
 
     // Game state
     this.player = null;
@@ -80,16 +113,36 @@ class Game {
     this.ingredients = [];
     this.items = [];
     this.placedTraps = []; // Placed trap items { item, tickTimer, activeDuration, affectedEnemies }
+    this.wellCoinAnim = null;       // WellSystem in-flight coin animation state
+    this.wellFlashTimer = 0;        // Post-ritual screen flash decay
+    this.wellFlashDuration = 0;     // Initial flash duration (used for normalized alpha)
+    this.fairiesAngered = false;    // Run-scoped: set when fountain is corrupted; suppresses all fairy spawns
     this.activeNoiseSource = null; // Set each frame by updatePlacedTraps if noise-maker is active
     this.backgroundObjects = [];
     this.steamClouds = []; // Steam clouds from fire+water and Steam Vial
+    this.soundEvents = []; // Sound pulses emitted by player attacks/interactions; used for enemy detection
     this.particles = []; // Explosion particles
     this.debris = []; // Enemy debris
     this.gooBlobs = []; // Goo blobs from Goo Dispenser
+    this.puddles = []; // Persistent slime puddles from Slime Bomb
+    this.wishesUsed = 0; // CLEANSE spell wishes used this run (max 3)
+    this.cleanseWave = null; // Active wave animation { startTime, duration }
+    this.bossDefeatFlash = null; // White screen flash on boss defeat { startTime, duration }
+    this._savedDestroyedSlots = [false, false, false]; // Persists across player recreations
     this.neutralCharacters = []; // Neutral entities (Leshy, NPCs, etc.)
+    this.cureRusalka = null;      // Stationary cure Rusalka for polymorph reversal (Lake rooms)
+    this.playerTongueAttacks = []; // Player frog-tongue attacks when polymorphed
     this.hutInterior = null;       // Active interior state (hut or dungeon floor)
+    this.mazeInterior = null;   // Active maze interior (MazeSystem)
     this.dungeonFloors = [];       // Persistent dungeon floor states for current visit
     this.dungeonCurrentFloor = -1; // -1 = not in dungeon
+    this.companion = null;         // Active camp NPC companion (promoted from room.campNPC)
+
+    // Tracks which zone's music is currently loaded (for zone-specific music switching)
+    this.currentMusicZone = 'green';
+
+    // Pre-boss gate: set at depth 14 room clear, cleared on room transition
+    this.preBossGateActive = false;
 
     // Per-zone depth tracking (independent progression)
     this.zoneDepths = {
@@ -100,13 +153,28 @@ class Game {
       gray: 0
     };
 
+    this.knownSpells = new Set(); // Spells the player has learned this run (resets on death)
+
     this.gameOverWaitingForSpace = false;
     this.gameOverDeathTimer = 0; // Timer for 2-second delay before showing "Press SPACE"
     this.characterDeathPending = false; // True when a character died but others remain
     this.characterDeathTimer = 0; // Like gameOverDeathTimer but for character-death path
     this.pendingNextCharacter = null; // Character type to swap to after space press
     this.characterDeathName = ''; // Name of the character who just died
+
+    // Tombstone: appears in REST after death, tracks what killed the player
+    this.lastDeathCause = null; // { name, char, color, description } of the killing enemy
+    this.tombstoneActive = false; // Show tombstone in REST mode
+    this.tombstonePopup = null; // { phase: 0|1|2, timer: float } or null
+
+    // Slot popup: animated expand box before equipment/chest menus open
+    this.slotPopup = null; // { phase, timer, pixelX, pixelY, open: fn } or null
+
+    // Trap throw charge state
+    this.trapCharging = null; // { timer: float } while player is charging a throw, null otherwise
+    this.inFlightTraps = [];  // [{ x, y, vx, vy, decel, targetX, targetY, char, color, trapData, plane }]
     this.restBundle = null; // One-time starter bundle object (destroyed on SPACE to drop ingredients)
+    this.hasLeftRestOnce = false; // Becomes true on first EXPLORE entry; gates the rest-bundle pickup hint arrow
     this.dodgeBlockedFeedbackTimer = 0; // Cooldown for red X feedback
     this.showVectors = false; // Debug: Toggle with 'v' key
 
@@ -128,6 +196,9 @@ class Game {
     this.previewBlinkTimer = 0;
     this.previewBlinkState = false; // true = show preview, false = show arrow
     this.PREVIEW_BLINK_INTERVAL = 0.5; // seconds per blink cycle
+
+    // Ocean (O room) ambient wave SFX timer — counts down to next play.
+    this.waveSfxTimer = 0;
 
     // Secret event particle timers
     this.glitterTimer = 0;
@@ -162,14 +233,15 @@ class Game {
     // Input state
     this.keys = {
       w: false, a: false, s: false, d: false,
-      space: false, shift: false, i: false,
-      q: false, e: false, m: false, v: false
+      space: false, shift: false, tab: false,
+      m: false, v: false
     };
+    // Rolling keystroke buffer for background word highlighting (up to 9 chars, uppercase)
+    this.keyBuffer = [];
+    // Per-letter flash timestamps for one-shot blink rendering { 'A': performance.now(), ... }
+    this.keyFlashMap = {};
     this.spacePressed = false;
     this.shiftPressed = false;
-    this.qPressed = false;
-    this.ePressed = false;
-    this.mPressed = false;
     this.vPressed = false;
     this.attackSequenceActive = false; // Tracks if attack was initiated by button press (not just hold)
 
@@ -186,11 +258,12 @@ class Game {
       hp: document.getElementById('hp-value'),
       depth: document.getElementById('depth-value'),
       inventory: document.getElementById('inventory-count'),
-      slotQ: document.getElementById('slot-q'),
       slot1: document.getElementById('slot-1'),
       slot2: document.getElementById('slot-2'),
       slot3: document.getElementById('slot-3'),
-      slotE: document.getElementById('slot-e'),
+      weaponChar1: document.getElementById('weapon-char-1'),
+      weaponChar2: document.getElementById('weapon-char-2'),
+      weaponChar3: document.getElementById('weapon-char-3'),
       menu: document.getElementById('menu-overlay'),
       armorChar: document.getElementById('armor-char'),
       consumableChar1: document.getElementById('consumable-char-1'),
@@ -198,6 +271,11 @@ class Game {
       consumableChar3: document.getElementById('consumable-char-3'),
       consumableChar4: document.getElementById('consumable-char-4'),
       consumableChar5: document.getElementById('consumable-char-5'),
+      cslot1: document.getElementById('cslot-1'),
+      cslot2: document.getElementById('cslot-2'),
+      cslot3: document.getElementById('cslot-3'),
+      cslot4: document.getElementById('cslot-4'),
+      cslot5: document.getElementById('cslot-5'),
       overlay: document.getElementById('ui-overlay')
     };
 
@@ -234,6 +312,19 @@ class Game {
       // Handle cheat menu toggle (backslash key)
       if (e.key === '\\') {
         this.cheatMenu.toggle();
+        if (this.cheatMenu.isOpen) {
+          // Clear any held keys / charges so the player stops moving/attacking
+          this.keys.w = this.keys.a = this.keys.s = this.keys.d = false;
+          this.keys.space = this.keys.shift = this.keys.tab = this.keys.v = false;
+          this.spacePressed = false;
+          this.shiftPressed = false;
+          this.vPressed = false;
+          this.attackSequenceActive = false;
+          if (this.arrowKeys) {
+            this.arrowKeys.ArrowUp = this.arrowKeys.ArrowDown = false;
+            this.arrowKeys.ArrowLeft = this.arrowKeys.ArrowRight = false;
+          }
+        }
         e.preventDefault();
         return;
       }
@@ -246,6 +337,10 @@ class Game {
           return;
         } else if (result && result.action === 'spawn') {
           this.spawnCheatItem(result.item);
+          e.preventDefault();
+          return;
+        } else if (result && result.action === 'spawn_enemy') {
+          this.spawnCheatEnemy(result.enemy);
           e.preventDefault();
           return;
         } else if (result && result.action === 'teleport_zone') {
@@ -263,12 +358,46 @@ class Game {
           this.cheatMenu.toggle(); // Close menu after swap
           e.preventDefault();
           return;
+        } else if (result && result.action === 'boss_test') {
+          this.handleBossTest(result.zone);
+          this.cheatMenu.toggle();
+          e.preventDefault();
+          return;
+        } else if (result && result.action === 'set_depth') {
+          this.handleDepthJump(result.depth);
+          this.cheatMenu.toggle();
+          e.preventDefault();
+          return;
+        } else if (result && result.action === 'toggle_god_mode') {
+          this.cheatMenu.godMode = !this.cheatMenu.godMode;
+          this.player.godMode = this.cheatMenu.godMode;
+          this.cheatMenu.rebuild();
+          e.preventDefault();
+          return;
+        } else if (result && result.action === 'activate_magic_meter') {
+          this.magicSystem?.activateMagicMeter(this.player);
+          this.cheatMenu.rebuild();
+          this.updateUI();
+          e.preventDefault();
+          return;
         }
+        // Menu is open — swallow all unhandled keys so player can't move/attack/roll/drop
+        e.preventDefault();
+        return;
       }
 
       // Handle menu navigation
       if (this.menuOpen) {
         const key = e.key.toLowerCase();
+
+        // Movement-exit: close menu on A/D when flagged (e.g. chest retrieval menu)
+        // W/S are reserved for up/down navigation and must not close the menu
+        if (this.menuSystem.closeOnMovement && (key === 'a' || key === 'd')) {
+          this.menuSystem.closeOnMovement = false;
+          this.closeMenu();
+          e.preventDefault();
+          return;
+        }
 
         // A/D or ArrowLeft/Right for column switching (circular navigation)
         if (this.menuColumns && (key === 'a' || e.key === 'ArrowLeft')) {
@@ -353,9 +482,22 @@ class Game {
       if (key === 'w' || key === 'a' || key === 's' || key === 'd') {
         this.keys[key] = true;
       }
-      if (key === 'i') {
-        this.keys.i = true;
+      if (e.key === 'Tab') {
+        this.keys.tab = true;
+        e.preventDefault();
       }
+      // Space/Shift/Enter: detect spell FIRST so spells can preempt game-state handlers
+      if (e.key === ' ' || e.key === 'Shift' || e.key === 'Enter') {
+        this.spellSystem.detect(this.keyBuffer);
+        this.keyBuffer = [];
+        this.keyFlashMap = {};
+      } else if (e.key.length === 1) {
+        const upper = e.key.toUpperCase();
+        this.keyBuffer.push(upper);
+        if (this.keyBuffer.length > 9) this.keyBuffer.shift();
+        this.keyFlashMap[upper] = performance.now();
+      }
+
       if (key === ' ') {
         this.keys.space = true;
         if (!this.spacePressed) {
@@ -365,31 +507,15 @@ class Game {
       }
       if (key === 'shift') {
         this.keys.shift = true;
-        if (!this.shiftPressed) {
+        if (!this.shiftPressed && !this.player?.polymorphed) {
           this.shiftPressed = true;
           this.handleShiftPress();
         }
       }
-      if (key === 'q') {
-        this.keys.q = true;
-        if (!this.qPressed) {
-          this.qPressed = true;
-          this.handleCyclePrevious();
-        }
-      }
-      if (key === 'e') {
-        this.keys.e = true;
-        if (!this.ePressed) {
-          this.ePressed = true;
-          this.handleCycleNext();
-        }
-      }
-      if (key === 'm') {
-        this.keys.m = true;
-        if (!this.mPressed) {
-          this.mPressed = true;
-          this.handleMPress();
-        }
+      if (!this.player?.polymorphed) {
+        if (key === '1') this.handleSelectSlot(0);
+        if (key === '2') this.handleSelectSlot(1);
+        if (key === '3') this.handleSelectSlot(2);
       }
       if (key === 'v') {
         this.keys.v = true;
@@ -400,41 +526,69 @@ class Game {
       }
 
 
-      // Arrow keys for dodge rolling (works in both REST and EXPLORE)
+
+      // Arrow keys for dodge rolling — suppressed when polymorphed
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown' ||
           e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-        this.arrowKeys[e.key] = true;
+        if (!this.player?.polymorphed) this.arrowKeys[e.key] = true;
         e.preventDefault();
       }
     });
 
     window.addEventListener('keyup', (e) => {
+      // Block all player action-release logic while the cheat menu is open
+      if (this.cheatMenu.isOpen) {
+        e.preventDefault();
+        return;
+      }
       const key = e.key.toLowerCase();
       if (key === 'w' || key === 'a' || key === 's' || key === 'd') {
         this.keys[key] = false;
       }
-      if (key === 'i') {
-        this.keys.i = false;
+      if (e.key === 'Tab') {
+        this.keys.tab = false;
       }
       if (key === ' ') {
         this.keys.space = false;
         this.spacePressed = false;
         this.attackSequenceActive = false; // Reset attack sequence on space release
 
+        // Staff block: release pushes enemies and clears swing-tracking flag
+        if (this.player) {
+          if (this.player.isStaffBlocking) {
+            this._releaseStaffBlock(this.player);
+          }
+          this.player.staffSwingHasFired = false;
+        }
+
         // Release fishing charge when space is released
         if (this.fishingSystem && this.fishingSystem.state === this.fishingSystem.STATES.CHARGING) {
           this.fishingSystem.releaseCharge(this);
         }
 
+        // Release trap throw when space is released (weapon throws use SHIFT, handled below)
+        if (this.trapCharging && this.player?.heldItem?.data?.type === 'TRAP') {
+          this.trapSystem.releaseTrapThrow();
+        }
+
         // Release charged bow when space is released
         if (this.player && this.player.heldItem && this.player.heldItem.isCharging) {
-          // Stop the bowstring charge sound regardless of whether the shot fires
-          this.audioSystem.stopSFXByName('charge_bow');
-          if (this.player.canAttack()) {
-            const attack = this.player.heldItem.releaseBow();
-            if (attack) {
-              this.combatSystem.createAttack(this.applyGreenDamageModifier(attack), this.currentRoom ? this.currentRoom.enemies : []);
-              this.triggerGreenActionCooldown();
+          // Gem wands: cancel charge if released before completion (no mana cost)
+          if (this.player.heldItem.data?.gemWand) {
+            this.magicSystem.handleSpaceRelease(this.player);
+          } else if (this.player.heldItem.data?.chargeHammer) {
+            // Crystal Maul: release before full charge cancels (no attack) — identical to wand cancel.
+            this.player.heldItem.releaseChargeHammer();
+          } else {
+            // Stop the bowstring charge sound regardless of whether the shot fires
+            this.audioSystem.stopSFXByName('charge_bow');
+            if (this.player.canAttack()) {
+              const attack = this.player.heldItem.releaseBow();
+              if (attack) {
+                this.combatSystem.createAttack(this.applyGreenDamageModifier(attack), this.currentRoom ? this.currentRoom.enemies : []);
+                this.triggerGreenActionCooldown();
+                this._emitSoundEvent();
+              }
             }
           }
         }
@@ -442,18 +596,10 @@ class Game {
       if (key === 'shift') {
         this.keys.shift = false;
         this.shiftPressed = false;
-      }
-      if (key === 'q') {
-        this.keys.q = false;
-        this.qPressed = false;
-      }
-      if (key === 'e') {
-        this.keys.e = false;
-        this.ePressed = false;
-      }
-      if (key === 'm') {
-        this.keys.m = false;
-        this.mPressed = false;
+        // Release weapon throw on SHIFT keyup (trap throws use SPACE, handled above)
+        if (this.trapCharging && this.player?.heldItem?.data?.type !== 'TRAP') {
+          this.trapSystem.releaseTrapThrow();
+        }
       }
       if (key === 'v') {
         this.keys.v = false;
@@ -614,6 +760,15 @@ class Game {
   enterRestState() {
     // Note: exitPathHistory persists for future secret pattern tracking
 
+    // Cancel any in-progress trap throw
+    this.trapSystem.cancelTrapCharge();
+
+    // Reset spell follow-up state on room transition
+    this.spellSystem.resetAwaiting();
+
+    // Deactivate boss fight if player exits south mid-fight (edge case)
+    this.bossSystem.deactivate();
+
     // Show the HUD (hidden until first game start)
     this.ui.overlay.classList.remove('hidden');
 
@@ -638,24 +793,78 @@ class Game {
         this.audioSystem.loadSFX('attack_blade', `${base}assets/audio/sfx-attack-blade.mp3`);
         this.audioSystem.loadSFX('attack_whip', `${base}assets/audio/sfx-attack-whip.mp3`);
         this.audioSystem.loadSFX('charge_bow', `${base}assets/audio/sfx-charge-bow.mp3`);
+        this.audioSystem.loadSFX('player_death', `${base}assets/audio/sfx-player-death.mp3`);
+        this.audioSystem.loadSFX('craft_cycle', `${base}assets/audio/sfx-craft-cycle.mp3`);
+        this.audioSystem.loadSFX('mag_reload', `${base}assets/audio/sfx-mag-reload.mp3`);
+        this.audioSystem.loadSFX('energy_charge', `${base}assets/audio/sfx-energy-charge.wav`);
+        this.audioSystem.loadSFX('enemy_hit', `${base}assets/audio/sfx-enemy-hit.wav`);
+        this.audioSystem.loadSFX('goo_hit', `${base}assets/audio/sfx-goo-hit.wav`);
+        this.audioSystem.loadSFX('goo_death_1', `${base}assets/audio/sfx-goo-death-1.mp3`);
+        this.audioSystem.loadSFX('goo_death_2', `${base}assets/audio/sfx-goo-death-2.mp3`);
+        this.audioSystem.loadSFX('ghost_spawn', `${base}assets/audio/sfx-ghost-spawn.wav`);
+        this.audioSystem.loadSFX('frog', `${base}assets/audio/sfx-frog.wav`);
+        this.audioSystem.loadSFX('hut_lower', `${base}assets/audio/sfx-hut-lower.wav`);
+        this.audioSystem.loadSFX('polymorph', `${base}assets/audio/sfx-polymorph.wav`);
+        this.audioSystem.loadSFX('wave_1', `${base}assets/audio/sfx-wave-01.wav`);
+        this.audioSystem.loadSFX('wave_2', `${base}assets/audio/sfx-wave-03.wav`);
+        this.audioSystem.loadSFX('wave_3', `${base}assets/audio/sfx-wave-05.wav`);
+        this.audioSystem.loadSFX('weapon_pickup', `${base}assets/audio/sfx-weapon-pickup.wav`);
+        this.audioSystem.loadSFX('boss_defeat', `${base}assets/audio/sfx-boss-defeat.wav`);
+        this.audioSystem.loadSFX('coin_plink', `${base}assets/audio/sfx-coin-plink.wav`);
+        // Placeholder ricochet SFX — reusing coin-plink until a dedicated asset exists.
+        this.audioSystem.loadSFX('ricochet', `${base}assets/audio/sfx-coin-plink.wav`);
+        // Load boss tracks in background (ready before player reaches depth 14)
+        this.audioSystem.loadBossTracks(base);
+        // Load red zone tracks in background (ready before player enters red zone)
+        this.audioSystem.loadRedTracks(base);
       });
+    } else if (this.audioSystem.mode === 'sequence' && this.audioSystem.bossAnticipationActive) {
+      // Returned to REST from depth-14 pre-boss room — anticipation mini-loop persists
+    } else if (this.audioSystem.mode === 'sequence' && !this.audioSystem.bossAnticipationActive) {
+      // Died in boss fight — reset boss music and restore zone music
+      this.audioSystem.stopBossMusic(); // mode → 'dual', isPlaying = false
+      this.preBossGateActive = false;
+      this.currentMusicZone = 'green';
+      const base = import.meta.env.BASE_URL;
+      this.audioSystem.switchMusic(
+        `${base}assets/audio/layer1.mp3`,
+        `${base}assets/audio/layer2.mp3`
+      ).then(() => this.audioSystem.setLayer2Enabled(false));
     }
+    // Note: when entering REST from a non-green zone (cyan, red), the current
+    // zone music carries over instead of resetting to green. The death-reset
+    // path (hardResetDualLayers, ~line 4908) is the only thing that forces a
+    // hard return to green.
 
     // Reset zone system on rest
     this.zoneSystem.resetOnRest();
+
+    // Capture magic-meter state from prior player before reconstructing.
+    // Cleared by the true-game-over reset block, so death wipes it correctly.
+    const savedMagicMeter = this.player?.magicMeter
+      ? { ...this.player.magicMeter }
+      : this._savedMagicMeter ?? null;
 
     // Create player just below the "E X P L O R E" label (text centre = 4.5 * CELL_SIZE)
     const centerX = GRID.WIDTH / 2;
     const spawnY = GRID.CELL_SIZE * 5.5;
     this.player = new Player(centerX, spawnY);
+    this.player.godMode = this.cheatMenu.godMode;
+    if (savedMagicMeter) {
+      this.player.magicMeter = savedMagicMeter;
+      this._savedMagicMeter = savedMagicMeter;
+    }
 
     // Reset fishing system so Rusalka pull/suppression doesn't persist into REST
     this.fishingSystem.resetForNewRoom(this.player);
 
-    // Reset hut/dungeon state on returning to REST
+    // Reset hut/dungeon/maze state on returning to REST
     this.hutInterior = null;
+    this.mazeInterior = null;
     this.dungeonFloors = [];
     this.dungeonCurrentFloor = -1;
+    this.cureRusalka = null;
+    this.playerTongueAttacks = [];
 
     // Apply active character type
     this.applyCharacterType(this.activeCharacterType);
@@ -664,6 +873,7 @@ class Game {
     this.player.inventory = [...this.inventorySystem.restInventory];
     this.player.quickSlots = [...this.inventorySystem.restQuickSlots];
     this.player.activeSlotIndex = this.inventorySystem.restActiveSlotIndex;
+    this.player.destroyedSlots = [...(this._savedDestroyedSlots ?? [false, false, false])];
 
     // Create basic REST room with collision map (walls on all borders except north exit)
     const collisionMap = [];
@@ -701,6 +911,7 @@ class Game {
 
     this.particles = [];
     this.gooBlobs = [];
+    this.puddles = [];
     this.steamClouds = [];
     this.debris = [];
     this.captives = [];
@@ -727,7 +938,7 @@ class Game {
             x: centerX - GRID.CELL_SIZE / 2,
             y: (CRAFTING.STATION_Y + 4) * GRID.CELL_SIZE
           },
-          chars: ['|', '|', '~', '~', 'g', 'g', 'f', 'f']
+          chars: ['|', '|', '~', '~', '0', '0', 'f', 'f']
         };
       }
     }
@@ -915,8 +1126,130 @@ class Game {
     return this.characterSystem.applyGreenDamageModifier(attack);
   }
 
+  // Basic staves and the fishing pole gain a hold-to-block stance.
+  // Excludes gem staves (weaponType: WAND), which keep their charge mechanic.
+  _isBlockingStaff(weapon) {
+    return !!weapon
+      && weapon.data?.weaponType === 'MELEE'
+      && weapon.data?.weaponSubtype === 'staff';
+  }
+
+  // Exit staff block: push enemies on/adjacent to the player radially outward
+  // by ~1 cell, and trigger an 8-direction visual sweep.
+  _releaseStaffBlock(player) {
+    if (!player.isStaffBlocking) return;
+    player.isStaffBlocking = false;
+
+    if (this.currentRoom && this.currentRoom.enemies) {
+      const C = GRID.CELL_SIZE;
+      const px = player.position.x + C / 2;
+      const py = player.position.y + C / 2;
+      // "On or adjacent" → up to ~2 cells from center (covers diagonals).
+      const radius = C * 2;
+      const radiusSq = radius * radius;
+      const force = 250; // ~1 cell of knockback at default 0.2s duration
+
+      for (const enemy of this.currentRoom.enemies) {
+        if (!enemy || enemy.dead) continue;
+        const ex = enemy.position.x + (enemy.width || C) / 2;
+        const ey = enemy.position.y + (enemy.height || C) / 2;
+        const dx = ex - px;
+        const dy = ey - py;
+        if (dx * dx + dy * dy > radiusSq) continue;
+        this.physicsSystem.applyKnockback(enemy, px, py, force);
+      }
+    }
+
+    this._spawnStaffBlockSweepVisual(player);
+  }
+
+  // 8-direction melee sweep — fires sequentially around the player to telegraph
+  // the block release. Damage is per-weapon via data.blockReleaseDamage (default 0).
+  _spawnStaffBlockSweepVisual(player) {
+    if (!this.combatSystem) return;
+    const C = GRID.CELL_SIZE;
+    const range = C * 1.25;
+    const stepDelay = 0.025;
+    const meleeChar = player.heldItem?.data?.meleeChar || '|';
+    const color = player.heldItem?.color || '#ffffff';
+    const sweepDamage = player.heldItem?.data?.blockReleaseDamage || 0;
+
+    for (let i = 0; i < 8; i++) {
+      const angle = (Math.PI * 2 / 8) * i - Math.PI / 2; // start up, go clockwise
+      const relX = Math.cos(angle) * range;
+      const relY = Math.sin(angle) * range;
+      this.combatSystem.addAttack({
+        type: 'melee',
+        char: meleeChar,
+        drawAngle: angle + Math.PI / 2,
+        position: { x: player.position.x + relX, y: player.position.y + relY },
+        relX, relY,
+        width: C,
+        height: C,
+        damage: sweepDamage,
+        duration: 0.08,
+        delay: i * stepDelay,
+        color,
+        owner: player,
+        shooterPlane: player.plane
+      });
+    }
+  }
+
+  // Spawn lava background tiles in a 15° forward arc from the player on grid.
+  // Called when a weapon flagged with `placesLava` completes its swing.
+  _spawnLavaSweep(player, room) {
+    if (!room || !room.backgroundObjects) return;
+    const C = GRID.CELL_SIZE;
+    const baseAngle = Math.atan2(player.facing.y, player.facing.x);
+    const sweepHalf = (Math.PI / 12) / 2;  // 15° total → ±7.5°
+    const playerCx = player.position.x + C / 2;
+    const playerCy = player.position.y + C / 2;
+
+    const samples = [
+      { angle: baseAngle - sweepHalf, dist: C * 2 },
+      { angle: baseAngle,             dist: C * 2 },
+      { angle: baseAngle + sweepHalf, dist: C * 2 },
+      { angle: baseAngle,             dist: C * 3 }
+    ];
+
+    for (const s of samples) {
+      const tx = playerCx + Math.cos(s.angle) * s.dist;
+      const ty = playerCy + Math.sin(s.angle) * s.dist;
+      const col = Math.floor(tx / C);
+      const row = Math.floor(ty / C);
+      if (col < 1 || col >= GRID.COLS - 1 || row < 1 || row >= GRID.ROWS - 1) continue;
+      if (room.collisionMap?.[row]?.[col]) continue;
+
+      const x = col * C;
+      const y = row * C;
+      const occupied = room.backgroundObjects.some(obj =>
+        !obj.destroyed &&
+        Math.abs(obj.position.x - x) < C / 2 &&
+        Math.abs(obj.position.y - y) < C / 2
+      );
+      if (occupied) continue;
+
+      room.backgroundObjects.push(BackgroundObject.createVariant('lava', x, y));
+    }
+  }
+
   triggerGreenActionCooldown() {
     this.characterSystem.triggerGreenActionCooldown();
+  }
+
+  /**
+   * Emit a sound event at the player's current position.
+   * Enemies with `setGame(game)` called will hear this within HEARING_RANGE (~7 cells)
+   * and use it to trigger detection instead of relying on pure proximity+vision.
+   */
+  _emitSoundEvent() {
+    if (!this.player) return;
+    this.soundEvents.push({
+      x: this.player.position.x,
+      y: this.player.position.y,
+      lifetime: 0.5  // Expires after 0.5 s — just long enough for enemies to react
+    });
   }
 
   // Play attack SFX based on weapon type (blade or whip)
@@ -926,6 +1259,39 @@ class Game {
       this.audioSystem.playSFX('attack_blade');
     } else if (weapon.data.attackPattern === 'whipcrack') {
       this.audioSystem.playSFX('attack_whip');
+    }
+  }
+
+  // Drive reload audio for the held weapon:
+  // - 'magazine' guns: one short SFX per bullet refilled (queued by Item.update)
+  // - 'energy' guns: one long stoppable SFX, started when reload begins, cut when it completes
+  _updateReloadAudio(item) {
+    if (!item || !this.audioSystem) return;
+
+    // Mechanical magazine ticks
+    if (item.consumeReloadTicks) {
+      const ticks = item.consumeReloadTicks();
+      for (let i = 0; i < ticks; i++) {
+        this.audioSystem.playSFX('mag_reload');
+      }
+    }
+
+    // Energy reload state tracking — only during the reload phase, not the
+    // normal post-fire cooldown that precedes it.
+    const isEnergyReloading =
+      item.data.weaponType === 'GUN' &&
+      item.data.reloadType === 'energy' &&
+      item._reloading &&
+      !!item.data.reloadTime;
+
+    if (isEnergyReloading && this._energyReloadItem !== item) {
+      // Stop any prior energy reload (in case of weapon swap mid-charge)
+      if (this._energyReloadItem) this.audioSystem.stopSFXByName('energy_charge');
+      this.audioSystem.playStoppableSFX('energy_charge');
+      this._energyReloadItem = item;
+    } else if (!isEnergyReloading && this._energyReloadItem) {
+      this.audioSystem.stopSFXByName('energy_charge');
+      this._energyReloadItem = null;
     }
   }
 
@@ -958,6 +1324,19 @@ class Game {
 
       if (gridX >= 0 && gridX < GRID.COLS && gridY >= 0 && gridY < GRID.ROWS) {
         if (!this.currentRoom.collisionMap[gridY][gridX]) {
+          // Reject positions inside special structure interiors (hut, maze, dungeon)
+          // — their perimeter walls are solid but their interiors are open in collisionMap
+          const structureBounds = [
+            this.currentRoom.hut?.exteriorBounds,
+            this.currentRoom.maze?.exteriorBounds,
+            this.currentRoom.dungeon?.exteriorBounds,
+          ].filter(Boolean);
+          const insideStructure = structureBounds.some(b =>
+            gridX >= b.minCol && gridX <= b.maxCol &&
+            gridY >= b.minRow && gridY <= b.maxRow
+          );
+          if (insideStructure) { attempts++; continue; }
+
           const distToPlayer = Math.hypot(
             this.player.position.x - spawnX,
             this.player.position.y - spawnY
@@ -1063,18 +1442,26 @@ class Game {
     this.debris = [];
     this.steamClouds = [];
     this.gooBlobs = [];
+    this.puddles = [];
     this.neutralCharacters = [];
 
     // Reset fishing system for new room
     this.fishingSystem.resetForNewRoom(this.player);
 
-    // Reset hut/dungeon state on room transition
+    // Reset hut/dungeon/maze state on room transition
     this.hutInterior = null;
+    this.mazeInterior = null;
     this.dungeonFloors = [];
     this.dungeonCurrentFloor = -1;
+    this.cureRusalka = null;
+    this.playerTongueAttacks = [];
     if (this.player) {
       this.player.inHut = false;
       this.player.hutExitPosition = null;
+      this.player.inMaze = false;
+      this.player.mazeExitPosition = null;
+      this.player.inDungeon = false;
+      this.player.dungeonExitPosition = null;
     }
 
     // Initialize physics system
@@ -1091,7 +1478,130 @@ class Game {
     this.stateMachine.transition(GAME_STATES.NEUTRAL);
   }
 
+  /**
+   * Animate the player through an exit, then perform the warp, then animate
+   * them inward from the opposite edge of the new room.
+   *
+   * @param {string}   direction  'north' | 'south' | 'east' | 'west' — the
+   *                              edge the player is leaving through
+   * @param {Function} warpFn     callback that performs the actual state /
+   *                              room transition (e.g. enterExploreState or
+   *                              stateMachine.transition). May replace
+   *                              this.player; we retarget the animation.
+   */
+  animateExitWarp(direction, warpFn) {
+    if (this.animationSystem.isAnimating(this.player)) return;
+
+    const C = GRID.CELL_SIZE;
+    const cx = (GRID.COLS / 2) * C;
+    const cy = (GRID.ROWS / 2) * C;
+    const W = GRID.COLS * C;
+    const H = GRID.ROWS * C;
+
+    // Edge anchors stay one cell inside the bounds so physics' grid clamp
+    // doesn't fight the animation when the player snaps to the entry edge.
+    // postTo sits ~5 cells from the entry edge so the inbound walk reads
+    // clearly as "entering the room" before control returns.
+    const inset = 4;
+    const px = this.player.position.x;
+    const py = this.player.position.y;
+    let alignTo, preTo, postFrom, postTo;
+    switch (direction) {
+      case 'north':
+        alignTo  = { x: cx, y: py };
+        preTo    = { x: cx, y: 0 };
+        postFrom = { x: cx, y: H - C };
+        postTo   = { x: cx, y: (GRID.ROWS - 1 - inset) * C };
+        break;
+      case 'south':
+        alignTo  = { x: cx, y: py };
+        preTo    = { x: cx, y: H - C };
+        postFrom = { x: cx, y: 0 };
+        postTo   = { x: cx, y: inset * C };
+        break;
+      case 'east':
+        alignTo  = { x: px, y: cy };
+        preTo    = { x: W - C, y: cy };
+        postFrom = { x: 0,     y: cy };
+        postTo   = { x: inset * C, y: cy };
+        break;
+      case 'west':
+        alignTo  = { x: px, y: cy };
+        preTo    = { x: 0,     y: cy };
+        postFrom = { x: W - C, y: cy };
+        postTo   = { x: (GRID.COLS - 1 - inset) * C, y: cy };
+        break;
+      default:
+        warpFn();
+        return;
+    }
+
+    // Scale alignment duration to the perpendicular distance so a centered
+    // approach doesn't sit through a fixed pause when there's nothing to move.
+    const alignDist = Math.hypot(alignTo.x - px, alignTo.y - py);
+    const alignDuration = Math.min(0.5, (alignDist / C) * 0.08);
+
+    const oldPlayer = this.player;
+    this.animationSystem.play(this.player, [
+      // 1) Align with the exit gap on the perpendicular axis.
+      { type: 'moveTo', x: alignTo.x, y: alignTo.y, duration: alignDuration, easing: 'easeOut' },
+      // 2) Quick step into the gap.
+      { type: 'moveTo', x: preTo.x, y: preTo.y, duration: 0.2, easing: 'linear' },
+      { type: 'callback', fn: () => {
+          warpFn();
+          // enterExploreState / state transitions may rebuild this.player
+          if (this.player !== oldPlayer) {
+            this.animationSystem.retarget(oldPlayer, this.player);
+          }
+          // Re-anchor at the entry edge so the post-tween reads from there,
+          // and sync prev-pos so the inbound path isn't re-detected as an exit.
+          this.player.position.x = postFrom.x;
+          this.player.position.y = postFrom.y;
+          this.previousPlayerPosition.x = postFrom.x;
+          this.previousPlayerPosition.y = postFrom.y;
+      }},
+      { type: 'moveTo', x: postTo.x, y: postTo.y, duration: 1.10, easing: 'easeOut',
+        interruptible: true,
+        interruptAfter: 0.5,
+        canInterrupt: () => (
+          this.keys.w || this.keys.a || this.keys.s || this.keys.d ||
+          this.keys.space ||
+          this.arrowKeys.ArrowUp || this.arrowKeys.ArrowDown ||
+          this.arrowKeys.ArrowLeft || this.arrowKeys.ArrowRight
+        ) },
+      // Resolve any wall / solid-object overlap the inbound walk landed on.
+      { type: 'callback', fn: () => {
+          if (!this.player || !this.currentRoom) return;
+          this.physicsSystem.resolveCollisionMapOverlap(this.player, this.currentRoom);
+          const bgObjects = this._activeBackgroundObjects
+            ? this._activeBackgroundObjects()
+            : (this.currentRoom.backgroundObjects ?? []);
+          this.physicsSystem.resolveSolidObjectOverlap(this.player, bgObjects);
+          this.previousPlayerPosition.x = this.player.position.x;
+          this.previousPlayerPosition.y = this.player.position.y;
+      }},
+    ]);
+  }
+
   enterExploreState(entryDirection = null, exitObj = null, secretPattern = null) {
+    // Reset spell follow-up state on room transition
+    this.spellSystem.resetAwaiting();
+
+    // Mark that the player has left REST at least once — gates the rest-bundle pickup hint arrow
+    this.hasLeftRestOnce = true;
+
+    // Reset robe aura roll-pulse so it fires once in the new room
+    if (this.player) this.player._auraRollPulseUsed = false;
+
+    // Room-transition mana grant. Once the meter is active (well or cauldron),
+    // every room transition adds +2 mana, with a +2 robe bonus (so robes give
+    // +4 per room rather than the previous full refill).
+    if (this.player?.magicMeter?.active) {
+      const isRobe = this.inventorySystem.equippedArmor?.data?.armorClass === 'robe';
+      const grant = isRobe ? 4 : 2;
+      this.magicSystem.addMana(this.player, grant);
+    }
+
     // Zone depths only reset on death, not when entering from REST
     // Check if continuing in current zone (depth > 0) or starting fresh in this zone (depth === 0)
     const isContinuing = this.getCurrentZoneDepth() > 0;
@@ -1101,6 +1611,12 @@ class Game {
     // When entryDirection is set, we're moving between EXPLORE rooms (direct call, not state transition)
     const leavingRest = entryDirection === null; // null = coming from REST, otherwise coming from another EXPLORE room
     const roomTransition = entryDirection !== null; // Has direction = moving between rooms
+
+    // Dismiss tombstone when the player leaves for explore
+    if (leavingRest) {
+      this.tombstoneActive = false;
+      this.menuSystem.closeTombstonePopup();
+    }
 
     // Check if we should restore saved explore room (returning from REST to same room)
     const shouldRestoreExploreRoom = leavingRest && this.inventorySystem.getSavedExploreRoom() !== null;
@@ -1113,6 +1629,19 @@ class Game {
     const savedQuickSlots = this.player ? [...this.player.quickSlots] : [null, null, null]; // Always save quick slots
     const savedActiveSlotIndex = this.player ? this.player.activeSlotIndex : 0; // Always save active slot
     const savedHp = this.player ? this.player.hp : null; // Always save HP
+    const savedDestroyedSlots = this.player ? [...this.player.destroyedSlots] : [...this._savedDestroyedSlots];
+    // Polymorph state persists across rooms
+    const savedPolymorph = this.player
+      ? {
+          active:  this.player.polymorphed,
+          cursed:  this.player.polymorphCursed,
+          cured:   this.player.polymorphCured,   // persists even when not currently morphed
+        }
+      : null;
+    // Magic meter persists across rooms (resets only on death)
+    const savedMagicMeter = this.player?.magicMeter
+      ? { ...this.player.magicMeter }
+      : null;
 
     // Determine player spawn position based on entry direction
     const centerX = GRID.WIDTH / 2;
@@ -1176,6 +1705,15 @@ class Game {
       // Check zone transition FIRST (before updating depth)
       if (roomTransition) {
         this.zoneSystem.incrementRoomCount();
+        // Deactivate any active boss fight when leaving a room
+        this.bossSystem.deactivate();
+      }
+      // Blue-zone (Tidefall) entry/progression. Any exit tagged secretBlueZone
+      // routes into the linear 4-room tutorial sequence. Room counter tracks
+      // which room (1=Shallows, 2=Reef Walk, 3=Wake Drift, 4=Pearl Cache).
+      if (exitObj?.secretBlueZone) {
+        this.zoneSystem.forceNextZone('blue');
+        this.blueZoneRoom = (this.blueZoneRoom || 0) + 1;
       }
       const currentZone = this.zoneSystem.checkZoneTransition();
       const progressionColor = this.zoneSystem.getProgressionColor();
@@ -1213,6 +1751,7 @@ class Game {
       if (secretPattern === 'B-A-T') {
         // B-A-T sequence: generate bat belfry instead of the T tunnel room
         roomType = ROOM_TYPES.BAT_BELFRY;
+        console.log('[Secret] B-A-T pattern detected → Bat Belfry!');
       } else if (exitObj && exitObj.letter) {
         const letterData = EXIT_LETTERS[exitObj.letter];
         if (letterData && letterData.roomType) {
@@ -1220,13 +1759,68 @@ class Game {
         }
       }
 
+      // Zone boss injection: override room type when depth threshold is reached
+      const zoneBossTriggered = roomTransition &&
+        this.zoneSystem.isBossReady(currentZone, this.zoneDepths[currentZone]);
+      if (zoneBossTriggered) {
+        roomType = ROOM_TYPES.BOSS;
+        this.roomGenerator.isZoneBossRoom = true;
+        console.log(`[Boss] Zone boss triggered for ${currentZone} at depth ${this.zoneDepths[currentZone]}`);
+        // Transition boss music: anticipation mini-loop → full 5-track sequence
+        // If anticipation is running, bossSequencePending queues the switch at next track boundary.
+        // If entering boss room directly (cheat menu), starts immediately.
+        this.audioSystem.scheduleBossSequence();
+      }
+
+      // Clear pre-boss gate on any room transition
+      this.preBossGateActive = false;
+
       this.roomGenerator.setDepth(this.getCurrentZoneDepth());
       this.currentRoom = this.roomGenerator.generateRoom(roomType, { x: startX, y: startY }, currentZone, progressionColor, exitObj?.letter);
+      this.roomGenerator.isZoneBossRoom = false; // always reset after generation
       this.currentRoom.exitLetter = exitObj?.letter || null;
+
+      // Blue-zone linear progression: north exit always points at the next
+      // tutorial room (or stays disabled in Pearl Cache, where RoomGenerator
+      // killed it). Tagging secretBlueZone keeps the chain going on next walk.
+      if (currentZone === 'blue' && this.currentRoom.exits.north) {
+        const BLUE_ROOM_LETTERS = ['⌇', '⌒', '◌'];
+        const nextLetter = BLUE_ROOM_LETTERS[(this.blueZoneRoom || 1) - 1];
+        if (nextLetter) {
+          this.currentRoom.exits.north = {
+            letter: nextLetter,
+            color: '#66aaff',
+            secretBlueZone: true
+          };
+        }
+      }
+
+      // Activate boss system for zone boss rooms
+      if (this.currentRoom.isZoneBossRoom) {
+        this.bossSystem.activate(this.currentRoom, currentZone);
+      }
+
+      // If the room declares its own spawn zones, use them (overrides direction-based defaults).
+      // This ensures warps and future entry systems always land in valid positions.
+      if (this.currentRoom.spawnZones) {
+        const zone = this.currentRoom.spawnZones[entryDirection] ?? this.currentRoom.spawnZones.default;
+        if (zone) { startX = zone.x; startY = zone.y; }
+      }
 
       // Reset trap charges for new room
       if (this.player) {
         this.player.resetTrapsForNewRoom();
+      }
+
+      // Reset charge-hammer once-per-room usage for new room
+      if (this.player) {
+        for (const slot of this.player.quickSlots) {
+          if (slot?.data?.chargeHammer) {
+            slot.chargeAttackUsed = false;
+            slot.isCharging = false;
+            slot.chargeTime = 0;
+          }
+        }
       }
 
       // Debug: Log generated exits
@@ -1244,8 +1838,22 @@ class Game {
         }
       }
 
+      // Pass game reference to all enemies (needed for sound detection)
+      for (const enemy of this.currentRoom.enemies) {
+        enemy.setGame(this);
+        enemy.setRoom(this.currentRoom);
+      }
+
+      // Clear sound events from any previous room
+      this.soundEvents = [];
+
       // Unlock exits immediately if room has no enemies (CAMP, DISCOVERY, etc.)
-      if (this.currentRoom.enemies.length === 0) {
+      // Hidden mimics don't count — exits stay open until they reveal.
+      if (this._countedEnemies(this.currentRoom.enemies).length === 0) {
+        this.currentRoom.exitsLocked = false;
+      }
+      // Witch-curse polymorph: exits always open until cured
+      if (this.player?.polymorphCursed) {
         this.currentRoom.exitsLocked = false;
       }
 
@@ -1260,20 +1868,38 @@ class Game {
     this.preloadRoomPreviews();
 
     this.player = new Player(startX, startY);
+    this.player.godMode = this.cheatMenu.godMode;
     this.player.setCollisionMap(this.currentRoom.collisionMap);
 
     // Reset fishing system for new room (cleans up Rusalka, bobber, fish, etc.)
     this.fishingSystem.resetForNewRoom(this.player);
 
-    // Reset hut/dungeon state for new room
+    // Reset hut/dungeon/maze state for new room
     this.hutInterior = null;
+    this.mazeInterior = null;
     this.dungeonFloors = [];
     this.dungeonCurrentFloor = -1;
+    this.cureRusalka = null;
+    this.playerTongueAttacks = [];
     this.player.inHut = false;
     this.player.hutExitPosition = null;
+    this.player.inMaze = false;
+    this.player.mazeExitPosition = null;
+    this.player.inDungeon = false;
+    this.player.dungeonExitPosition = null;
 
     // Apply active character type
     this.applyCharacterType(this.activeCharacterType);
+
+    // Restore polymorph across room transition (applyCharacterType ran first so
+    // savedState will capture the correct base char/color for this character)
+    if (savedPolymorph) {
+      if (savedPolymorph.active) {
+        this.polymorphSystem.activatePolymorph(this, savedPolymorph.cursed);
+      }
+      // Always restore cured flag — this is what unlocks the F key toggle
+      if (savedPolymorph.cured) this.player.polymorphCured = true;
+    }
 
     // Save room entry position for Rope consumable
     this.roomEntryX = startX;
@@ -1283,9 +1909,14 @@ class Game {
     this.player.inventory = savedInventory;
     this.player.quickSlots = savedQuickSlots;
     this.player.activeSlotIndex = savedActiveSlotIndex;
+    this.player.destroyedSlots = savedDestroyedSlots;
     if (savedHp !== null) {
       this.player.hp = savedHp;
     }
+    if (savedMagicMeter) {
+      this.player.magicMeter = savedMagicMeter;
+    }
+
 
     // Reset trap charges when entering from REST or restoring saved room
     if (leavingRest || shouldRestoreExploreRoom) {
@@ -1313,8 +1944,27 @@ class Game {
       this.debris = []; // Clear debris when entering new room
       this.particles = []; // Clear particles when entering new room
       this.gooBlobs = []; // Clear goo blobs when entering new room
+      this.puddles = []; // Clear slime puddles when entering new room
       this.captives = []; // Clear captives when entering new room
       this.neutralCharacters = []; // Clear neutral characters when entering new room
+      this.bridgeMenuOpen = false; // Close bridge menu on room transition
+
+      // Ridge room: attach ridge system and push bridge worker if not yet built
+      if (this.currentRoom.type === ROOM_TYPES.RIDGE) {
+        this.ridgeSystem.attachToRoom(this.currentRoom);
+        if (this.currentRoom.bridgeWorker && !this.currentRoom.bridgeBuilt) {
+          this.neutralCharacters.push(this.currentRoom.bridgeWorker);
+        }
+      }
+
+      // Pearl-guide fairy (O room + pearl in inventory): pre-spawned at room
+      // generation. Pushed here so it lives in neutralCharacters alongside the
+      // fight, and reveals the pedestal on room clear if still uncollected.
+      // Suppressed once the fountain has been corrupted — the run's fairies
+      // have all gone hostile.
+      if (this.currentRoom.pearlFairy && !this.currentRoom.pearlFairy.consumed && !this.fairiesAngered) {
+        this.neutralCharacters.push(this.currentRoom.pearlFairy);
+      }
 
       // Errand room: if an errand is active and this is an E-letter room, clear enemies and
       // spawn the traveler immediately (they remember what they wanted last time)
@@ -1333,6 +1983,7 @@ class Game {
       this.debris = [];
       this.particles = [];
       this.gooBlobs = [];
+      this.puddles = [];
       this.neutralCharacters = [];
     }
 
@@ -1340,6 +1991,9 @@ class Game {
     for (const enemy of this.currentRoom.enemies) {
       enemy.setTarget(this.player);
     }
+
+    // Carry companion (if hired) into this room: full HP and snap beside player
+    this.campNPCSystem?.onRoomEnter();
 
     // 2-second detection grace period — suppress aggro range so enemies
     // can't spot the player the moment they enter the room
@@ -1364,6 +2018,8 @@ class Game {
       this.physicsSystem.addEntity(item);
     }
 
+    this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
+
     // Reset combat
     this.combatSystem.clear();
 
@@ -1372,10 +2028,38 @@ class Game {
     // Mark background dirty
     this.renderer.markBackgroundDirty();
 
+    // Switch music based on zone (covers all entry paths: new room, restore, and leavingRest)
+    // Skip when boss sequence mode is active (anticipation or full fight)
+    if (this.audioSystem.mode === 'dual' || this.audioSystem.mode === 'red') {
+      const roomZone = this.currentRoom?.zone || 'green';
+      const base = import.meta.env.BASE_URL;
+      if (roomZone === 'red' && this.currentMusicZone !== 'red') {
+        this.currentMusicZone = 'red';
+        this.audioSystem.switchToRedSequence();
+      } else if (roomZone === 'cyan' && this.currentMusicZone !== 'cyan') {
+        this.currentMusicZone = 'cyan';
+        this.audioSystem.switchMusic(
+          `${base}assets/audio/cyan-layer1.mp3`,
+          `${base}assets/audio/cyan-layer2.mp3`
+        );
+      } else if (roomZone !== 'cyan' && roomZone !== 'red'
+                 && (this.currentMusicZone === 'cyan' || this.currentMusicZone === 'red')) {
+        this.currentMusicZone = 'green';
+        this.audioSystem.switchMusic(
+          `${base}assets/audio/layer1.mp3`,
+          `${base}assets/audio/layer2.mp3`
+        );
+      }
+    }
+
     // Set layer 2 (bassline) based on enemy presence
     // Always check for enemies, regardless of how we entered EXPLORE
     const hasEnemies = this.currentRoom && this.currentRoom.enemies && this.currentRoom.enemies.length > 0;
     this.audioSystem.setLayer2Enabled(hasEnemies);
+
+    // Open physical wall gaps for all exits so escape-route south exit (no weapons)
+    // is passable from the moment the player enters — not gated on enemy-clear.
+    this.updateExitCollisions();
 
     this.updateUI();
   }
@@ -1409,6 +2093,9 @@ class Game {
       if (ingredient.pickupCooldown > 0) {
         ingredient.pickupCooldown = Math.max(0, ingredient.pickupCooldown - deltaTime);
       }
+      if (ingredient.dropBounceTimer > 0) {
+        ingredient.dropBounceTimer = Math.max(0, ingredient.dropBounceTimer - deltaTime);
+      }
 
       for (let j = i - 1; j >= 0; j--) {
         const other = this.ingredients[j];
@@ -1431,7 +2118,16 @@ class Game {
       const shouldPickup = this.physicsSystem.applyAttraction(ingredient, this.player);
 
       if (shouldPickup) {
-        this.player.addIngredient(ingredient.char);
+        // Emerald Robe: goo consumed for 1HP heal instead of going to inventory
+        if (ingredient.char === 'g' && this.player.gooConsume) {
+          this.player.hp = Math.min(this.player.hp + 1, this.player.maxHp);
+        } else if (ingredient.char === '𝑚' && this.player.magicMeter?.active) {
+          // Mana drop auto-refills the meter once the well/cauldron has
+          // activated it; bypass inventory entirely.
+          this.magicSystem.addMana(this.player, 2);
+        } else {
+          this.player.addIngredient(ingredient.char);
+        }
         this.physicsSystem.removeEntity(ingredient);
         this.ingredients.splice(i, 1);
       }
@@ -1457,7 +2153,8 @@ class Game {
     const inSouthExit = gridPos.y >= GRID.ROWS - 2 && Math.abs(gridPos.x - centerX) <= 1;
     const crossedSouthExit = prevGridPos.y < GRID.ROWS - 2 && gridPos.y >= GRID.ROWS - 2 && Math.abs(gridPos.x - centerX) <= 1;
 
-    if ((inSouthExit || crossedSouthExit) && this.currentRoom.exits.south) {
+    if (!this.animationSystem.isAnimating(this.player) &&
+        (inSouthExit || crossedSouthExit) && this.currentRoom.exits.south) {
 
       // Call neutral room exit hook
       this.neutralRoomSystem.onExit(this.currentRoom, this.player);
@@ -1471,8 +2168,10 @@ class Game {
         this.backgroundObjects = [...this.savedExploreState.backgroundObjects];
         this.captives = [...this.savedExploreState.captives];
         this.neutralCharacters = [...this.savedExploreState.neutralCharacters];
-        this.player.position.x = this.savedExploreState.playerPosition.x;
-        this.player.position.y = this.savedExploreState.playerPosition.y;
+        // Spawn at the center of the explore room rather than the saved
+        // edge-of-room position (which would re-trigger the south transition).
+        this.player.position.x = Math.floor(GRID.COLS / 2) * GRID.CELL_SIZE;
+        this.player.position.y = Math.floor(GRID.ROWS / 2) * GRID.CELL_SIZE;
 
         // Clear saved state
         this.savedExploreState = null;
@@ -1491,6 +2190,15 @@ class Game {
   }
 
   enterGameOverState() {
+    this.cleanseWave = null;
+    this.bossDefeatFlash = null;
+
+    // Reset spell follow-up state
+    this.spellSystem.resetAwaiting();
+
+    // Deactivate boss fight if one was in progress
+    this.bossSystem.deactivate();
+
     // Player died - wait for space to continue
     this.gameOverWaitingForSpace = true;
     this.gameOverDeathTimer = 2.0; // 2-second delay before showing "Press SPACE"
@@ -1510,8 +2218,71 @@ class Game {
     this.roomPreviews = this.roomGenerator.preloadRoomPreviews();
   }
 
+  // Returns the background objects for whichever layer the player is currently in.
+  // Maze interiors have no background objects; hut/dungeon use hutInterior's array;
+  // otherwise use the exterior currentRoom array.
+  _activeBackgroundObjects() {
+    if (this.player.inMaze && this.mazeInterior) return [];
+    if ((this.player.inHut || this.player.inDungeon) && this.hutInterior) return this.hutInterior.backgroundObjects;
+    return this.currentRoom ? this.currentRoom.backgroundObjects : [];
+  }
+
+  // Returns the enemies for whichever layer the player is currently in.
+  _activeEnemies() {
+    if (this.player.inMaze && this.mazeInterior) return [];
+    if ((this.player.inHut || this.player.inDungeon) && this.hutInterior) return this.hutInterior.enemies;
+    return this.currentRoom ? this.currentRoom.enemies : [];
+  }
+
+  // Enemies that count toward "room cleared". Hidden mimics are excluded
+  // so they don't block exits — the player can't reasonably find them
+  // until they reveal themselves on approach.
+  _isHiddenEnemy(e) {
+    if (e.data?.mimicMechanic?.enabled && !e.mimicRevealed) return true;
+    if (e.data?.shellCamouflage && e.inShellForm && !e.hasBeenActivated) return true;
+    return false;
+  }
+  _countedEnemies(enemies) {
+    return enemies.filter(e => !this._isHiddenEnemy(e) && !e.isDying);
+  }
+
+  // Spawn a fire or ice trail puddle from enemy trail mechanic
+  _spawnEnemyTrailPuddle(x, y, type, duration, radius, plane) {
+    if (!this.puddles) return;
+    const puddle = new Puddle(x, y, radius, type, plane);
+    puddle.lifetime = duration;  // Override default lifetime
+    this.puddles.push(puddle);
+  }
+
+  // Apply Shaman buff to nearby allied enemies
+  _applyShamanBuff(buffData, allEnemies) {
+    const { position, radius, buffs, speedMultiplier, damageMultiplier, buffDuration, caster } = buffData;
+    const buff = buffs[Math.floor(Math.random() * buffs.length)];
+
+    for (const enemy of allEnemies) {
+      if (enemy === caster) continue;
+      const dx = enemy.position.x - position.x;
+      const dy = enemy.position.y - position.y;
+      if (Math.sqrt(dx * dx + dy * dy) > radius) continue;
+
+      if (buff === 'speed') {
+        enemy._shamBuff = { type: 'speed', multiplier: speedMultiplier, timer: buffDuration, baseSpeed: enemy.speed };
+        enemy.speed = enemy.data.speed * speedMultiplier;
+      } else if (buff === 'damage') {
+        enemy._shamBuff = { type: 'damage', multiplier: damageMultiplier, timer: buffDuration, baseDamage: enemy.damage };
+        enemy.damage = Math.ceil(enemy.data.damage * damageMultiplier);
+      }
+    }
+  }
+
   update(deltaTime) {
     const state = this.stateMachine.getCurrentState();
+
+    // Advance any in-flight animations before per-state logic so the new
+    // target position is visible to physics, exit detection, and rendering.
+    if (state !== GAME_STATES.TITLE) {
+      this.animationSystem.update(deltaTime);
+    }
 
     if (state === GAME_STATES.TITLE) {
       this.updateTitleState(deltaTime);
@@ -1554,8 +2325,71 @@ class Game {
   }
 
   // Shared particle and debris updates for all game states
+  updateCrows(deltaTime) {
+    const crows = this.currentRoom?.crows;
+    if (!crows || crows.length === 0) return;
+
+    const bgObjects = this.currentRoom.backgroundObjects || [];
+
+    // Build a flat list of "threat points" — melee attack and projectile positions.
+    // Crows scare on weapon use, not mere proximity, so we sample what the player swung.
+    const threats = [];
+    for (const atk of this.combatSystem.getMeleeAttacks()) {
+      threats.push({ x: atk.position.x, y: atk.position.y });
+    }
+    for (const proj of this.combatSystem.getProjectiles()) {
+      threats.push({ x: proj.position.x, y: proj.position.y });
+    }
+
+    for (const crow of crows) {
+      crow.update(deltaTime, bgObjects, crows);
+
+      for (const t of threats) {
+        if (crow.isWithinScareRange(t.x, t.y)) {
+          const droppedPearl = crow.scare(t.x, t.y);
+          if (droppedPearl) {
+            const pearl = new Ingredient('●', crow.position.x, crow.position.y);
+            pearl.startDropBounce(0.55);
+            this.ingredients.push(pearl);
+            this.physicsSystem.addEntity(pearl);
+          }
+          break;
+        }
+      }
+    }
+  }
+
   updateSharedGameElements(deltaTime) {
+    // Decay ember stacks and cooldowns each frame
+    if (this.player) {
+      if (this.player.emberStackCooldown > 0) {
+        this.player.emberStackCooldown -= deltaTime;
+      }
+      if (this.player.emberStackTimer > 0) {
+        this.player.emberStackTimer -= deltaTime;
+        if (this.player.emberStackTimer <= 0) {
+          this.player.emberStacks = 0;
+          this.player.emberStackTimer = 0;
+        }
+      }
+    }
+    if (this.currentRoom && this.currentRoom.enemies) {
+      for (const enemy of this.currentRoom.enemies) {
+        if ((enemy.emberStackCooldown || 0) > 0) {
+          enemy.emberStackCooldown -= deltaTime;
+        }
+        if ((enemy.emberStacks || 0) > 0) {
+          enemy.emberStackTimer -= deltaTime;
+          if (enemy.emberStackTimer <= 0) {
+            enemy.emberStacks = 0;
+            enemy.emberStackTimer = 0;
+          }
+        }
+      }
+    }
+
     // Update particles (dodge trails, explosions, embers, etc.)
+    const emberHitEntities = new Set(); // cap to one ember contact per entity per frame
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const particle = this.particles[i];
 
@@ -1571,27 +2405,55 @@ class Game {
         particle.x += particle.vx * deltaTime;
         particle.y += particle.vy * deltaTime;
 
-        // Embers can burn player/enemies on contact (only if alpha > 50%)
+        // Embers accumulate burn stacks — contact must be "successive" within a time window.
+        // Grass/objects ignite instantly (handled via obj.ignite). Entities require 3 hits.
+        // Immune enemies (fire-type etc.) are skipped entirely.
         if (particle.isEmber && this.player) {
           const alpha = Math.max(0, particle.life / particle.maxLife);
 
-          // Only cause damage if ember is still hot (alpha > 50%)
           if (alpha > 0.5) {
             const EMBER_RADIUS = GRID.CELL_SIZE;
-            const EMBER_BURN_CHANCE = 0.03;
+            const EMBER_STACK_WINDOW = 2.0; // seconds before stack resets
+            const EMBER_THRESHOLD = 5;      // hits needed to ignite
 
-            const pdx = this.player.position.x + GRID.CELL_SIZE / 2 - particle.x;
-            const pdy = this.player.position.y + GRID.CELL_SIZE / 2 - particle.y;
-            if (Math.sqrt(pdx * pdx + pdy * pdy) < EMBER_RADIUS && Math.random() < EMBER_BURN_CHANCE) {
-              this.player.applyBurn(2.0);
+            const EMBER_STACK_COOLDOWN = 0.5; // min seconds between stack gains
+
+            // Player — skipped if fire immune or on cooldown; burnResist does not block ember stacks
+            if (!emberHitEntities.has(this.player) && !this.player.fireImmune &&
+                this.player.emberStackCooldown <= 0) {
+              const pdx = this.player.position.x + GRID.CELL_SIZE / 2 - particle.x;
+              const pdy = this.player.position.y + GRID.CELL_SIZE / 2 - particle.y;
+              if (Math.sqrt(pdx * pdx + pdy * pdy) < EMBER_RADIUS) {
+                emberHitEntities.add(this.player);
+                this.player.emberStacks++;
+                this.player.emberStackTimer = EMBER_STACK_WINDOW;
+                this.player.emberStackCooldown = EMBER_STACK_COOLDOWN;
+                if (this.player.emberStacks >= EMBER_THRESHOLD) {
+                  this.player.applyBurn(2.0);
+                  this.player.emberStacks = 0;
+                  this.player.emberStackTimer = 0;
+                }
+              }
             }
 
+            // Enemies — immune enemies silently skip; all others need 3 stacks with cooldown
             if (this.currentRoom && this.currentRoom.enemies) {
               for (const enemy of this.currentRoom.enemies) {
+                if (emberHitEntities.has(enemy)) continue;
+                if (!enemy.shouldApplyStatusEffect('burn')) continue;
+                if ((enemy.emberStackCooldown || 0) > 0) continue;
                 const edx = enemy.position.x + GRID.CELL_SIZE / 2 - particle.x;
                 const edy = enemy.position.y + GRID.CELL_SIZE / 2 - particle.y;
-                if (Math.sqrt(edx * edx + edy * edy) < EMBER_RADIUS && Math.random() < EMBER_BURN_CHANCE) {
-                  enemy.applyStatusEffect('burn', 2.0);
+                if (Math.sqrt(edx * edx + edy * edy) < EMBER_RADIUS) {
+                  emberHitEntities.add(enemy);
+                  enemy.emberStacks = (enemy.emberStacks || 0) + 1;
+                  enemy.emberStackTimer = EMBER_STACK_WINDOW;
+                  enemy.emberStackCooldown = EMBER_STACK_COOLDOWN;
+                  if (enemy.emberStacks >= EMBER_THRESHOLD) {
+                    enemy.applyStatusEffect('burn', 2.0);
+                    enemy.emberStacks = 0;
+                    enemy.emberStackTimer = 0;
+                  }
                 }
               }
             }
@@ -1616,7 +2478,7 @@ class Game {
       // Check collision with enemies (slimes are immune, must share plane)
       if (this.currentRoom && this.currentRoom.enemies) {
         for (const enemy of this.currentRoom.enemies) {
-          if (enemy.char === 'o' || enemy.char === 'M') continue; // Slimes are immune to goo
+          if (enemy.getElementalModifier('slime') === 0) continue; // Slime-affinity enemies are immune to goo
 
           if ((gooBlob.plane ?? 0) === (enemy.plane ?? 0) && gooBlob.isNearEntity(enemy)) {
             enemy.applyStatusEffect('freeze', 0.5); // Enemies get frozen instead of goo
@@ -1662,7 +2524,7 @@ class Game {
     }
 
     // Solid background object check
-    const bgObjects = this.currentRoom?.backgroundObjects || [];
+    const bgObjects = this._activeBackgroundObjects();
     for (const obj of bgObjects) {
       if (obj.destroyed || !obj.data?.solid) continue;
       if (x < obj.position.x + GRID.CELL_SIZE && x + w > obj.position.x &&
@@ -1738,9 +2600,45 @@ class Game {
     if (!this.player) return null;
 
     // Handle dodge rolling (continuous direction updates, supports diagonals and curving)
-    // Disabled while Rusalka's charm is active (player cannot break the trance)
+    // Disabled while Rusalka's charm is active or while polymorphed (frog form has no roll)
     const rusalkaActive = this.fishingSystem?.rusalka?.alive === true;
-    const dodgeDirection = rusalkaActive ? { x: 0, y: 0 } : this.getDodgeRollDirection();
+    const dodgeDirection = (rusalkaActive || this.player.polymorphed || this.player.hookedByMimic) ? { x: 0, y: 0 } : this.getDodgeRollDirection();
+
+    // Shark Mask water dive/emerge — overrides standard dodge for ALL characters
+    // (including Green Ranger continuous-roll). Edge detection on dodgeDirection
+    // ensures a held arrow doesn't immediately auto-emerge after diving.
+    if (this.player.sharkMask && this.player.inLiquid && !this.keys.space && !this.player.isGooey()) {
+      const hasDodgeInput = (dodgeDirection.x !== 0 || dodgeDirection.y !== 0);
+      const dodgeInputEdge = hasDodgeInput && !this._sharkLastDodgeInput;
+      this._sharkLastDodgeInput = hasDodgeInput;
+
+      if (dodgeInputEdge && this.player.diving) {
+        // Re-press while diving → emerge burst
+        this._sharkEmergeAttack(dodgeDirection);
+      } else if (dodgeInputEdge && !this.player.diving &&
+                 this.player.dodgeRoll.cooldownTimer <= 0 &&
+                 !this.player.dodgeRoll.active &&
+                 !this.player.continuousRollActive) {
+        this.player.startSharkDive(dodgeDirection);
+        this.audioSystem.playSFX('roll');
+      }
+
+      // While diving, drive the player ourselves and skip the character-class
+      // dispatch entirely (otherwise Green Ranger's slide would override us).
+      if (this.player.diving) {
+        if (hasDodgeInput) {
+          const baseMax = (this.player.heldItem ? 110 : 165) * (1 + this.player.speedBoost);
+          this.player.velocity.vx = dodgeDirection.x * baseMax;
+          this.player.velocity.vy = dodgeDirection.y * baseMax;
+          this.player.acceleration.ax = 0;
+          this.player.acceleration.ay = 0;
+        }
+        return; // skip dodge/movement dispatch this frame
+      }
+    } else {
+      this._sharkLastDodgeInput = false;
+    }
+
     if (this.activeCharacterType === 'green') {
       // Green ranger: hold arrow keys for a continuous slide (no individual roll timers)
       if (dodgeDirection.x !== 0 || dodgeDirection.y !== 0) {
@@ -1809,12 +2707,39 @@ class Game {
       // Standard dodge roll for all other characters
       if (dodgeDirection.x !== 0 || dodgeDirection.y !== 0) {
         if (!this.player.dodgeRoll.active && this.player.dodgeRoll.cooldownTimer <= 0 && !this.keys.space) {
-          const enemies = this.player.inHut && this.hutInterior
-            ? this.hutInterior.enemies
-            : (this.currentRoom ? this.currentRoom.enemies : []);
-          const rollStarted = this.player.startDodgeRoll(dodgeDirection, enemies);
+          // Shadow Robe: dodge key triggers bat form (speed boost + char change) instead of rolling
+          if (this.player.batTransform && this.player.batFormTimer <= 0) {
+            this.player.batFormTimer = 1.2;
+            this.player.char = '^';
+            this.player.speedBoostTimer = 1.2;
+            this.player.speedBoostMultiplier = 2.5;
+          }
+
+          const enemies = this.player.inMaze && this.mazeInterior
+            ? [] // ghosts are not enemies; dodge roll ignores them
+            : ((this.player.inHut || this.player.inDungeon) && this.hutInterior
+              ? this.hutInterior.enemies
+              : (this.currentRoom ? this.currentRoom.enemies : []));
+          const rollStarted = this.player.batTransform
+            ? false // bat form replaces the roll
+            : this.player.startDodgeRoll(dodgeDirection, enemies);
 
           if (rollStarted) {
+            // Whirlwind Cape: transform roll into a spinning dash — covers distance, dizzies nearby enemies, no iframes
+            if (this.player.whirlwindCape) {
+              this.player.dodgeRoll.type = 'whirlwind';
+              this.player.dodgeRoll.speed *= 1.5;
+              const spinRadius = GRID.CELL_SIZE * 2;
+              const px = this.player.position.x + GRID.CELL_SIZE / 2;
+              const py = this.player.position.y + GRID.CELL_SIZE / 2;
+              for (const enemy of enemies) {
+                const ex = enemy.position.x + GRID.CELL_SIZE / 2;
+                const ey = enemy.position.y + GRID.CELL_SIZE / 2;
+                if (Math.hypot(ex - px, ey - py) < spinRadius) {
+                  enemy.applyStatusEffect('dizzy', 4.0);
+                }
+              }
+            }
             this.audioSystem.playSFX('roll');
             // Resolve yellow mage blink (deferred for collision checking + trail)
             if (this.player.pendingBlink) {
@@ -1846,22 +2771,30 @@ class Game {
     }
 
     // Update player movement (locked when menu is open, during dodge roll, or continuous rolling)
-    if (this.player.continuousRollActive) {
+    if (this.animationSystem.isAnimating(this.player)) {
+      // AnimationSystem owns position this frame — suppress input entirely
+      this.player.updateInput({ up: false, down: false, left: false, right: false });
+    } else if (this.player.continuousRollActive) {
       // Green ranger continuous roll: velocity is managed directly above, skip updateInput
       // (calling updateInput would cap velocity to normal walk speed)
-    } else if (!this.menuOpen && !this.player.dodgeRoll.active) {
+    } else if (!this.menuOpen && !this.bridgeMenuOpen && !this.player.dodgeRoll.active) {
       // Lock movement during fishing cast/wait
       const fishingBlocked = this.player.fishingLocked;
-      // Lock facing for non-bow weapons during attack; allow aiming while charging bow
-      const lockFacing = this.keys.space && this.player.heldItem && this.player.heldItem.data.weaponType !== 'BOW';
+      // Lock movement during windup and attack flash for weapons that require a planted stance
+      const windupLocked = !!(this.player.heldItem?.data?.locksMovement &&
+        (this.player.heldItem?.windupActive || this.player.heldItem?.attackLockTimer > 0));
+      // Lock facing for non-bow weapons during attack; allow aiming while charging bow; lock during trap charge
+      const lockFacing = !!this.trapCharging || (this.keys.space && this.player.heldItem && this.player.heldItem.data.weaponType !== 'BOW');
       // Apply Rusalka input suppression (scale keys toward zero)
       const rs = this.player.rusalkaInputScale;
       const rng = () => Math.random() < rs; // probabilistic suppression
+      const dizzy = this.player.isDizzy();
+      const moveLocked = fishingBlocked || windupLocked;
       this.player.updateInput({
-        up:    fishingBlocked ? false : (rs >= 1.0 ? this.keys.w : rng() && this.keys.w),
-        down:  fishingBlocked ? false : (rs >= 1.0 ? this.keys.s : rng() && this.keys.s),
-        left:  fishingBlocked ? false : (rs >= 1.0 ? this.keys.a : rng() && this.keys.a),
-        right: fishingBlocked ? false : (rs >= 1.0 ? this.keys.d : rng() && this.keys.d)
+        up:    moveLocked ? false : (dizzy && Math.random() < 0.15 ? this.keys.s : (rs >= 1.0 ? this.keys.w : rng() && this.keys.w)),
+        down:  moveLocked ? false : (dizzy && Math.random() < 0.15 ? this.keys.w : (rs >= 1.0 ? this.keys.s : rng() && this.keys.s)),
+        left:  moveLocked ? false : (dizzy && Math.random() < 0.15 ? this.keys.d : (rs >= 1.0 ? this.keys.a : rng() && this.keys.a)),
+        right: moveLocked ? false : (dizzy && Math.random() < 0.15 ? this.keys.a : (rs >= 1.0 ? this.keys.d : rng() && this.keys.d))
       }, lockFacing);
     } else {
       // Stop player movement when menu is open or dodge rolling
@@ -1912,13 +2845,40 @@ class Game {
       this.pathAnnouncementTimer -= deltaTime;
     }
 
+    // Clear staff-block state if the held weapon is no longer a blocking staff
+    if (this.player.isStaffBlocking && !this._isBlockingStaff(this.player.heldItem)) {
+      this.player.isStaffBlocking = false;
+      this.player.staffSwingHasFired = false;
+    }
+
     // Update held item cooldown and check for windup completion
     if (this.player.heldItem && this.player.heldItem.update) {
       const windupAttack = this.player.heldItem.update(deltaTime);
       if (windupAttack) {
         this.playWeaponAttackSFX(this.player.heldItem);
         this.combatSystem.createAttack(this.applyGreenDamageModifier(windupAttack), this.currentRoom ? this.currentRoom.enemies : []);
+        // Directly create the expanding shockwave ring for hammer-type attacks
+        const _swHits = Array.isArray(windupAttack) ? windupAttack : [windupAttack];
+        const _swTrigger = _swHits.find(a => a?.triggerShockwave);
+        if (_swTrigger) {
+          this.playerShockwave = {
+            x: _swTrigger.shockwaveOrigin.x,
+            y: _swTrigger.shockwaveOrigin.y,
+            radius: 0, prevRadius: 0,
+            maxRadius: GRID.CELL_SIZE * 5,
+            speed: GRID.CELL_SIZE * 8,
+            color: _swTrigger.shockwaveColor || _swTrigger.color,
+          };
+        }
+        if (this.player.heldItem.data?.placesLava) {
+          this._spawnLavaSweep(this.player, this.currentRoom);
+        }
+        if (this._isBlockingStaff(this.player.heldItem)) {
+          this.player.staffSwingHasFired = true;
+        }
+        this._emitSoundEvent();
       }
+      this._updateReloadAudio(this.player.heldItem);
     }
 
     return { burnKilledPlayer };
@@ -1931,6 +2891,9 @@ class Game {
     this.previousPlayerPosition.x = this.player.position.x;
     this.previousPlayerPosition.y = this.player.position.y;
 
+    // Reapply equipment effects (keeps armor properties like batTransform in sync)
+    this.applyEquipmentEffects();
+
     // Update all shared player mechanics
     this.updatePlayerMechanics(deltaTime);
 
@@ -1942,12 +2905,19 @@ class Game {
       npc.update(deltaTime);
     }
 
+    // Animate tombstone and slot popups
+    this.menuSystem.updateTombstonePopup(deltaTime);
+    this.menuSystem.updateSlotPopup(deltaTime);
+
     // Update ingredient attraction, cooldown, and separation (same as EXPLORE mode)
     for (let i = this.ingredients.length - 1; i >= 0; i--) {
       const ingredient = this.ingredients[i];
 
       if (ingredient.pickupCooldown > 0) {
         ingredient.pickupCooldown = Math.max(0, ingredient.pickupCooldown - deltaTime);
+      }
+      if (ingredient.dropBounceTimer > 0) {
+        ingredient.dropBounceTimer = Math.max(0, ingredient.dropBounceTimer - deltaTime);
       }
 
       for (let j = i - 1; j >= 0; j--) {
@@ -1971,7 +2941,16 @@ class Game {
       const shouldPickup = this.physicsSystem.applyAttraction(ingredient, this.player);
 
       if (shouldPickup) {
-        this.player.addIngredient(ingredient.char);
+        // Emerald Robe: goo consumed for 1HP heal instead of going to inventory
+        if (ingredient.char === 'g' && this.player.gooConsume) {
+          this.player.hp = Math.min(this.player.hp + 1, this.player.maxHp);
+        } else if (ingredient.char === '𝑚' && this.player.magicMeter?.active) {
+          // Mana drop auto-refills the meter once the well/cauldron has
+          // activated it; bypass inventory entirely.
+          this.magicSystem.addMana(this.player, 2);
+        } else {
+          this.player.addIngredient(ingredient.char);
+        }
         this.physicsSystem.removeEntity(ingredient);
         this.ingredients.splice(i, 1);
       }
@@ -1983,14 +2962,23 @@ class Game {
     // Update combat system (for weapon previews/attacks in rest mode)
     this.combatSystem.update(deltaTime, this.player, [], []);
 
-    // Check for North exit (detect if player crossed threshold)
-    const exitThreshold = GRID.CELL_SIZE * 2;
+    // Check for North exit — gated to the center warp arrows (3-cell-wide column)
+    // so other interactives near the top edge (e.g. the gravestone) don't
+    // accidentally cross the y-threshold and trigger an exit.
+    const exitThreshold = GRID.CELL_SIZE * 2 - 10;
+    const centerX = Math.floor(GRID.COLS / 2);
+    const gridX = Math.floor(this.player.position.x / GRID.CELL_SIZE);
+    const inWarpColumn = gridX >= centerX - 1 && gridX <= centerX + 1;
     const crossedNorthExit = this.previousPlayerPosition.y >= exitThreshold && this.player.position.y < exitThreshold;
-    if (this.player.position.y < exitThreshold || crossedNorthExit) {
+    if (!this.animationSystem.isAnimating(this.player) &&
+        inWarpColumn &&
+        (this.player.position.y < exitThreshold || crossedNorthExit)) {
       // Save REST ingredients before leaving for EXPLORE
       this.inventorySystem.saveRestIngredients(this.ingredients);
 
-      this.stateMachine.transition(GAME_STATES.EXPLORE);
+      this.animateExitWarp('north', () => {
+        this.stateMachine.transition(GAME_STATES.EXPLORE);
+      });
     }
 
     this.updateUI();
@@ -2051,9 +3039,27 @@ class Game {
       this.previewBlinkState = !this.previewBlinkState;
     }
 
+    // Ocean (O room) ambient wave SFX — random variant every 3-5s
+    if (this.currentRoom.letterTemplate?.oceanZone?.enabled) {
+      this.waveSfxTimer -= deltaTime;
+      if (this.waveSfxTimer <= 0) {
+        const variant = 1 + Math.floor(Math.random() * 3);
+        this.audioSystem.playSFX(`wave_${variant}`);
+        this.waveSfxTimer = 3 + Math.random() * 2;
+      }
+    } else {
+      this.waveSfxTimer = 0;
+    }
+
     // Update all shared player mechanics
     const playerMechanicsResult = this.updatePlayerMechanics(deltaTime);
     const burnKilledPlayer = playerMechanicsResult?.burnKilledPlayer || false;
+
+    // Blue-zone water armor tick — Coral Crown crystallizes the tile underfoot,
+    // Stingray Mantle drops an electrified wake in vacated cells + damages
+    // enemies standing in any electrified water within reach.
+    this._updateCoralCrown();
+    this._updateStingrayMantle(deltaTime);
 
     // Tick room-entry detection grace period
     if (this.roomEntryGraceTimer > 0) {
@@ -2071,6 +3077,43 @@ class Game {
     // Reapply equipment effects each frame (keeps defense in sync with timed buffs)
     this.applyEquipmentEffects();
 
+    // Drive gem-wand auto-cast lifecycle
+    this.magicSystem.update(deltaTime);
+
+    // Drive Crystal Maul charge-hammer auto-fire (mirrors MagicSystem pattern for gem wands)
+    {
+      const weapon = this.player?.heldItem;
+      if (weapon?.data?.chargeHammer && weapon.isCharging && !weapon.chargeAttackUsed &&
+          weapon.chargeTime >= weapon.data.chargeTime) {
+        const attacks = weapon.fireChargeHammerAttack();
+        if (attacks) {
+          this.combatSystem.createAttack(this.applyGreenDamageModifier(attacks), this.currentRoom ? this.currentRoom.enemies : []);
+          this._emitSoundEvent();
+          const _cswHits = Array.isArray(attacks) ? attacks : [attacks];
+          const _cswTrigger = _cswHits.find(a => a?.triggerShockwave);
+          if (_cswTrigger) {
+            this.playerShockwave = {
+              x: _cswTrigger.shockwaveOrigin.x,
+              y: _cswTrigger.shockwaveOrigin.y,
+              radius: 0, prevRadius: 0,
+              maxRadius: GRID.CELL_SIZE * 5,
+              speed: GRID.CELL_SIZE * 8,
+              color: _cswTrigger.shockwaveColor || _cswTrigger.color,
+            };
+          }
+        }
+      }
+    }
+
+    // Drive Infused Coin → well arc animation + post-ritual flash
+    this.wellSystem.update(deltaTime);
+
+    // Drive fountain weapon arc + fairy delivery + corruption swarm timers
+    this.fountainSystem.update(deltaTime);
+
+    // Drive C-room camp NPC (idle/interested/companion/fleeing)
+    this.campNPCSystem.update(deltaTime);
+
     // Tick dodge blocked feedback cooldown
     if (this.dodgeBlockedFeedbackTimer > 0) {
       this.dodgeBlockedFeedbackTimer -= deltaTime;
@@ -2083,20 +3126,35 @@ class Game {
     // Update secret event visual effects (glitter, shaking, etc.)
     this.updateSecretEventEffects(deltaTime);
 
-    // Store previous position before physics update (for exit zone crossing detection)
-    this.previousPlayerPosition.x = this.player.position.x;
-    this.previousPlayerPosition.y = this.player.position.y;
+    // Drive bridge build animation in RIDGE rooms
+    if (this.currentRoom?.type === 'RIDGE') {
+      this.ridgeSystem.update(deltaTime);
+    }
 
-    // Update physics — redirect to hut interior collision source when inside a hut
-    const waterResults = (this.player.inHut && this.hutInterior)
-      ? this.physicsSystem.update(deltaTime, this.hutInterior.backgroundObjects, this.hutInterior)
-      : this.physicsSystem.update(deltaTime, this.currentRoom.backgroundObjects, this.currentRoom);
+    // Store previous position before physics update (for exit zone crossing detection)
+    // Skip while inside a maze/hut/dungeon — their coordinate spaces differ from the room grid
+    if (!this.player.inMaze && !this.player.inHut && !this.player.inDungeon) {
+      this.previousPlayerPosition.x = this.player.position.x;
+      this.previousPlayerPosition.y = this.player.position.y;
+    }
+
+    // Update physics — redirect collision source when inside a hut, dungeon, or maze
+    const activeRoom = (this.player.inMaze && this.mazeInterior) ? this.mazeInterior
+      : ((this.player.inHut || this.player.inDungeon) && this.hutInterior) ? this.hutInterior
+      : this.currentRoom;
+    const waterResults = this.physicsSystem.update(deltaTime, this._activeBackgroundObjects(), activeRoom);
+
+    // Soft contact: gently separate player from overlapping enemies to prevent stacking
+    if (!this.player.inHut && !this.player.inDungeon && !this.player.inMaze) {
+      this.physicsSystem.resolveEntityContacts(this.player, this.currentRoom.enemies);
+    }
 
     // Track if lava killed the player
     let lavaKilledPlayer = false;
 
     // Reset per-frame liquid flags before processing
     this.player.inLiquid = false;
+    this.player.inDamagingLiquid = false;
     for (const ingredient of this.ingredients) {
       ingredient.inWater = false;
     }
@@ -2130,7 +3188,15 @@ class Game {
       }
 
       // Check for damaging liquid (lava) FIRST before water effects
+      // Float (Floating Boots) bypasses all liquid damage — already cleared by PhysicsSystem,
+      // but guard here too in case an enemy with float: true passes through this path.
       if (damagingLiquid) {
+        // Lava-immune enemies (e.g. Tortoise) survive lava but track their state for behavior changes
+        if (entity.data?.lavaImmune) {
+          entity.inLava = true;
+          continue;
+        }
+        if (entity === this.player) this.player.inDamagingLiquid = true;
         // Apply lava damage (not affected by water immunity)
         if (entity.takeDamage) {
           // Initialize lava damage timer if needed
@@ -2181,6 +3247,9 @@ class Game {
         continue;
       }
 
+      // Clear inLava for lava-immune entities that have left the lava
+      if (entity.data?.lavaImmune && entity.inLava) entity.inLava = false;
+
       if (!inLiquid) continue;
 
       // Track player liquid state for Rusalka movement
@@ -2226,9 +3295,10 @@ class Game {
     }
 
     // Slime enemy collision: apply goo effect on contact
+    // Skip when player is inside a PiP interior (maze/hut/dungeon) — positions are in different coordinate spaces
     const SLIME_COLLISION_DISTANCE = 16; // pixels
-    for (const enemy of this.currentRoom.enemies) {
-      if (enemy.char === 'o' || enemy.char === 'M') { // Slime and Boss Slime enemies
+    for (const enemy of (this.player.inMaze || this.player.inHut || this.player.inDungeon) ? [] : this.currentRoom.enemies) {
+      if (enemy.getElementalModifier('slime') === 0) { // Slime-affinity enemies
         const dx = this.player.position.x - enemy.position.x;
         const dy = this.player.position.y - enemy.position.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
@@ -2352,13 +3422,27 @@ class Game {
       }
     }
 
+    // Clear staff-block state if the held weapon is no longer a blocking staff
+    if (this.player.isStaffBlocking && !this._isBlockingStaff(this.player.heldItem)) {
+      this.player.isStaffBlocking = false;
+      this.player.staffSwingHasFired = false;
+    }
+
     // Update held item cooldown and check for windup completion
     if (this.player.heldItem && this.player.heldItem.update) {
       const windupAttack = this.player.heldItem.update(deltaTime);
       if (windupAttack) {
         this.playWeaponAttackSFX(this.player.heldItem);
         this.combatSystem.createAttack(this.applyGreenDamageModifier(windupAttack), this.currentRoom ? this.currentRoom.enemies : []);
+        if (this.player.heldItem.data?.placesLava) {
+          this._spawnLavaSweep(this.player, this.currentRoom);
+        }
+        if (this._isBlockingStaff(this.player.heldItem)) {
+          this.player.staffSwingHasFired = true;
+        }
+        this._emitSoundEvent();
       }
+      this._updateReloadAudio(this.player.heldItem);
     }
 
     // Bow charging: chargeTime is incremented by item.update() while isCharging is true.
@@ -2368,32 +3452,70 @@ class Game {
     // Auto-attack when holding space (guns and melee only - bows use charging, wands require deliberate timing)
     // Only allow auto-attack if attack sequence was initiated by a button press (not just holding)
     // Skip vault key (UTILITY type)
-    if (this.keys.space && this.attackSequenceActive && this.player.heldItem && this.player.heldItem.data.weaponType !== 'BOW' && this.player.heldItem.data.weaponType !== 'WAND' && this.player.heldItem.data.weaponType !== 'UTILITY' && !this.player.fishingLocked && !this.menuOpen && !this.cheatMenu.isOpen && this.player.canAttack()) {
+    if (this.keys.space && this.attackSequenceActive && this.player.heldItem && this.player.heldItem.data.weaponType !== 'BOW' && this.player.heldItem.data.weaponType !== 'WAND' && this.player.heldItem.data.weaponType !== 'UTILITY' && !this.player.heldItem.data.chargeHammer && !this.player.fishingLocked && !this.menuOpen && !this.bridgeMenuOpen && !this.cheatMenu.isOpen && this.player.canAttack()) {
       const weapon = this.player.heldItem;
-      const attack = this.player.useHeldItem();
-      if (attack) {
-        // Debug logging for wands
-        if (weapon.data.weaponType === 'WAND') {
-          const enemies = this.currentRoom ? this.currentRoom.enemies : [];
+
+      // Staff blocking: cooldown fully elapsed while space still held → enter
+      // block instead of starting another swing. weapon.canUse() going true is
+      // the precise "ready to re-swing" moment; block hijacks that instant.
+      // Already-blocking → suppress new swings.
+      if (this._isBlockingStaff(weapon) && this.player.staffSwingHasFired && weapon.canUse()) {
+        if (!this.player.isStaffBlocking) {
+          this.player.isStaffBlocking = true;
         }
+      } else if (this._isBlockingStaff(weapon) && this.player.isStaffBlocking) {
+        // Hold sustained — keep blocking, suppress further swings.
+      } else {
+        const attack = this.player.useHeldItem();
+        if (attack) {
+          // Debug logging for wands
+          if (weapon.data.weaponType === 'WAND') {
+            const enemies = this.currentRoom ? this.currentRoom.enemies : [];
+          }
 
-        const attackSucceeded = this.combatSystem.createAttack(this.applyGreenDamageModifier(attack), this.currentRoom ? this.currentRoom.enemies : []);
+          const attackSucceeded = this.combatSystem.createAttack(this.applyGreenDamageModifier(attack), this.currentRoom ? this.currentRoom.enemies : []);
 
-        // For wands with proximity requirement, reset cooldown if proximity check failed
-        if (weapon.data.weaponType === 'WAND' && attackSucceeded === false) {
-          weapon.cooldownTimer = 0; // Reset cooldown (proximity requirement not met)
-        } else {
-          this.triggerGreenActionCooldown();
+          // For wands with proximity requirement, reset cooldown if proximity check failed
+          if (weapon.data.weaponType === 'WAND' && attackSucceeded === false) {
+            weapon.cooldownTimer = 0; // Reset cooldown (proximity requirement not met)
+          } else {
+            this.triggerGreenActionCooldown();
+            this._emitSoundEvent();
+          }
         }
       }
     }
 
+    // Advance trap throw charge and in-flight traps
+    this.trapSystem.updateTrapCharge(deltaTime);
+    this.trapSystem.updateInFlightTraps(deltaTime);
+
     // Update placed traps (sets this.activeNoiseSource for this frame)
     this.updatePlacedTraps(deltaTime);
+    this.trapSystem.checkWeaponTriggers();
+    this.trapSystem.updatePuddles(deltaTime);
 
     // Update pack behavior - find packmates and share memory marks
     for (const enemy of this.currentRoom.enemies) {
-      if (enemy.packBehavior && enemy.packBehavior.enabled) {
+      if (enemy.packCoordination && !enemy.packBehavior) {
+        // New-style kiter with packCoordination — populate packmates from same-char enemies in room
+        enemy.packmates = this.currentRoom.enemies.filter(other =>
+          other !== enemy && other.char === enemy.char
+        );
+
+        // Share memory marks across pack
+        if (enemy.packmates.length > 0) {
+          let sharedMemory = enemy.lastKnownPosition;
+          for (const mate of enemy.packmates) {
+            if (mate.lastKnownPosition && (mate.aggroMemoryActive || !sharedMemory)) {
+              sharedMemory = mate.lastKnownPosition;
+            }
+          }
+          if (sharedMemory && !enemy.lastKnownPosition) {
+            enemy.lastKnownPosition = { x: sharedMemory.x, y: sharedMemory.y };
+          }
+        }
+      } else if (enemy.packBehavior && enemy.packBehavior.enabled) {
         // Find nearby packmates (same character type)
         const potentialMates = this.currentRoom.enemies.filter(other => other !== enemy && other.char === enemy.char);
 
@@ -2433,11 +3555,14 @@ class Game {
     }
 
     // Handle enemy spawn requests and item usage (must happen before combat update)
-    // Exterior enemies are frozen while player is inside a hut interior
-    if (this.player.inHut) {
-      // Interior enemy updates handled by HutSystem.update() above
+    // Exterior enemies are frozen while player is inside a hut, dungeon, or maze interior
+    if (this.player.inHut || this.player.inDungeon || this.player.inMaze) {
+      // Interior enemy/ghost updates handled by HutSystem/DungeonSystem/MazeSystem.update() above
     } else
     for (const enemy of this.currentRoom.enemies) {
+      // Skip AI/attacks for enemies in death-shake state
+      if (enemy.isDying) continue;
+
       // Check consumable usage
       if (enemy.itemUsage && enemy.itemUsage.enabled) {
         const consumable = enemy.shouldUseConsumable();
@@ -2447,7 +3572,87 @@ class Game {
         }
       }
 
+      // Target selection: prefer the nearest living entity (companion or player).
+      // Enemies only fight what they can see/reach, so this just tells them WHO to
+      // pursue — the aggro-range and vision checks inside Enemy.update() still gate
+      // whether they actually chase.
+      const companion = this.companion;
+      if (companion && companion.hp > 0 && companion.state !== CAMP_NPC_STATE.FLEEING) {
+        const pDx = this.player.position.x - enemy.position.x;
+        const pDy = this.player.position.y - enemy.position.y;
+        const cDx = companion.position.x - enemy.position.x;
+        const cDy = companion.position.y - enemy.position.y;
+        enemy.setTarget(
+          cDx * cDx + cDy * cDy < pDx * pDx + pDy * pDy ? companion : this.player
+        );
+      } else {
+        enemy.setTarget(this.player);
+      }
+
+      // Cache the previous-frame charge velocity so we can detect a wall-block
+      // (charging speed pinned to ~0 by physics resolution = hit something solid)
+      const prevChargeSpeed = enemy.chargeState === 'charging'
+        ? Math.sqrt(enemy.velocity.vx ** 2 + enemy.velocity.vy ** 2)
+        : null;
+
       const updateResult = enemy.update(deltaTime);
+
+      // Boar charge: contact damage + knockback on player hit; stun on wall hit.
+      if (enemy.data.chargeMechanic?.enabled) {
+        // Wall-block detection: was charging last frame but moved too slowly to
+        // be unimpeded. Only meaningful after at least one frame of motion.
+        if (enemy.chargeState === 'charging' && prevChargeSpeed !== null) {
+          const expected = enemy.data.chargeMechanic.chargeSpeed;
+          if (prevChargeSpeed < expected * 0.3) {
+            enemy.chargeState = 'stunned';
+            enemy.chargeDurationTimer = 0;
+            enemy.chargeStunTimer = enemy.data.chargeMechanic.wallStunDuration;
+            enemy.velocity.vx = 0;
+            enemy.velocity.vy = 0;
+            enemy.chargeTimer = enemy.data.chargeMechanic.cooldown;
+          }
+        }
+        // Player contact during the dash: deal one melee hit with knockback,
+        // then end the charge (the boar barrels past, doesn't grind on top).
+        if (enemy.chargeState === 'charging' && !enemy.chargeHasHit
+            && inSamePlane(enemy, this.player)) {
+          const px = this.player.position.x, py = this.player.position.y;
+          const ex = enemy.position.x, ey = enemy.position.y;
+          const overlap = Math.abs(px - ex) < GRID.CELL_SIZE
+                       && Math.abs(py - ey) < GRID.CELL_SIZE;
+          if (overlap) {
+            enemy.chargeHasHit = true;
+            // Direct contact damage: createMeleeAttack would offset the hitbox
+            // ~24px past the player (the boar is already on top of them), so the
+            // combat system never registers a hit. Apply damage and knockback here.
+            const damage = enemy.getEffectiveDamage();
+            const result = this.player.takeDamage(damage, {
+              isMelee: true,
+              attacker: enemy
+            });
+            // Death is picked up by the global hp<=0 check later this frame.
+            if (result?.dodged) {
+              this.combatSystem.createDamageNumber('DODGE', this.player.position.x, this.player.position.y, '#ffff00');
+            } else if (result?.blocked) {
+              this.combatSystem.createDamageNumber('BLOCK', this.player.position.x, this.player.position.y, '#aaaaaa');
+            } else if (result?.immune) {
+              this.combatSystem.createDamageNumber('IMMUNE', this.player.position.x, this.player.position.y, '#00ffff');
+            } else if (result !== false && result !== true) {
+              this.combatSystem.createDamageNumber(damage, this.player.position.x, this.player.position.y, this.player.color);
+              const knockback = 450 * (enemy.knockbackMultiplier ?? 1.0);
+              this.physicsSystem.applyKnockback(this.player, ex, ey, knockback);
+              this.physicsSystem.applyHitstop(this.player, 0.06);
+              if (result?.reflect && result.attacker) {
+                result.attacker.takeDamage(result.reflect);
+                this.combatSystem.createDamageNumber(result.reflect, result.attacker.position.x, result.attacker.position.y, '#ff8800');
+              }
+            }
+            enemy.chargeState = 'idle';
+            enemy.chargeDurationTimer = 0;
+            enemy.chargeTimer = enemy.data.chargeMechanic.cooldown;
+          }
+        }
+      }
 
       // Handle aggro sound effect
       if (updateResult.justAggrod) {
@@ -2463,6 +3668,55 @@ class Game {
         this.enemySpawnSystem.queueRequest(enemy, updateResult.spawnData);
       }
 
+      // Giant Slime: emit a fan of GooBlobs into the room.
+      if (updateResult.shouldSpewGoo && updateResult.gooSpewData) {
+        for (const b of updateResult.gooSpewData) {
+          const blob = new GooBlob(b.x, b.y, performance.now(), false, b.vx, b.vy, b.decel);
+          blob.plane = b.plane ?? 0;
+          this.gooBlobs.push(blob);
+        }
+        const MAX_GOO_BLOBS = 20;
+        while (this.gooBlobs.length > MAX_GOO_BLOBS) this.gooBlobs.shift();
+        this.audioSystem?.playSFX('goo_hit');
+      }
+
+      // Tick down Shaman buff on this enemy
+      if (enemy._shamBuff) {
+        enemy._shamBuff.timer -= deltaTime;
+        if (enemy._shamBuff.timer <= 0) {
+          if (enemy._shamBuff.type === 'speed') enemy.speed = enemy._shamBuff.baseSpeed;
+          else if (enemy._shamBuff.type === 'damage') enemy.damage = enemy._shamBuff.baseDamage;
+          enemy._shamBuff = null;
+        }
+      }
+
+      // Fire trail / ice trail mechanic (Magma Slug, Glacier Crab)
+      if (updateResult.shouldPlaceTrail) {
+        const td = updateResult.trailData;
+        this._spawnEnemyTrailPuddle(td.x, td.y, td.type, td.duration, td.radius, enemy.plane ?? 0);
+      }
+
+      // Shaman buff mechanic
+      if (updateResult.shouldBuff) {
+        const bd = updateResult.buffData;
+        this._applyShamanBuff(bd, this._activeEnemies());
+      }
+
+      // Siren lure mechanic — apply pull force to player
+      if (updateResult.shouldLure) {
+        const ld = updateResult.lureData;
+        this.player.velocity.vx += ld.forceX;
+        this.player.velocity.vy += ld.forceY;
+      }
+
+      // Trap Goblin — lay a trap at current position
+      if (updateResult.shouldLayTrap) {
+        const trd = updateResult.trapData;
+        if (this.trapSystem) {
+          this.trapSystem.placeTrapAtPosition(trd.x, trd.y, trd.type, enemy.plane ?? 0, enemy);
+        }
+      }
+
       // Check for stun-dropped items
       const droppedItems = enemy.getStunDroppedItems();
       if (droppedItems.length > 0) {
@@ -2473,7 +3727,7 @@ class Game {
       }
 
       // Slime trail: slimes leave goo blobs every 3 seconds
-      if (enemy.char === 'o' || enemy.char === 'M') { // Slime and Boss Slime enemies
+      if (enemy.getElementalModifier('slime') === 0) { // Slime-affinity enemies
         // Speed boost when touching own goo
         const baseSpeed = enemy.data.speed;
         const GOO_TOUCH_RADIUS = GRID.CELL_SIZE;
@@ -2481,7 +3735,7 @@ class Game {
           const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - blob.position.x;
           const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - blob.position.y;
           return Math.sqrt(dx * dx + dy * dy) < GOO_TOUCH_RADIUS + blob.radius;
-        });
+        }) || this.puddles.some(p => p.isEntityOnPuddle(enemy));
         enemy.speed = onGoo ? baseSpeed * 2 : baseSpeed;
 
         // Initialize goo trail timer if not set
@@ -2525,6 +3779,11 @@ class Game {
       captive.update(deltaTime);
     }
 
+    // Close bridge menu when player walks out of interaction range
+    if (this.bridgeMenuOpen && this.ridgeSystem.getWorkerDistance() > this.ridgeSystem.CLOSE_RANGE * 1.5) {
+      this.ridgeSystem.closeMenu();
+    }
+
     // Update neutral characters (Leshy, NPCs, etc.)
     for (let i = this.neutralCharacters.length - 1; i >= 0; i--) {
       const char = this.neutralCharacters[i];
@@ -2553,6 +3812,16 @@ class Game {
 
         // Remove Leshy from array (despawned)
         this.neutralCharacters.splice(i, 1);
+        continue;
+      }
+
+      // Fairy: touch-resolution (heal / bottle-convert) and lifecycle cleanup
+      if (char instanceof Fairy) {
+        this.interactionSystem.checkFairyTouch?.(char);
+        if (char.consumed || char.state === 'exited') {
+          this.neutralCharacters.splice(i, 1);
+          continue;
+        }
       }
     }
 
@@ -2569,13 +3838,19 @@ class Game {
           const dist = Math.sqrt(dx * dx + dy * dy);
 
           if (dist < GRID.CELL_SIZE) {
-            // Pickup
-            const success = enemy.pickupItem(targetItem);
-            if (success) {
+            // Pickup. pickupItem returns either false (rejected), null (taken
+            // into empty slot), or the displaced item (weapon swap — we need to
+            // put the old weapon back into the world so the player can grab it).
+            const result = enemy.pickupItem(targetItem);
+            if (result !== false) {
               const index = this.items.indexOf(targetItem);
               if (index > -1) {
                 this.items.splice(index, 1);
                 this.physicsSystem.removeEntity(targetItem);
+              }
+              if (result && typeof result === 'object') {
+                this.items.push(result);
+                this.physicsSystem.addEntity?.(result);
               }
             }
             enemy.targetItem = null;
@@ -2584,20 +3859,16 @@ class Game {
       }
     }
 
-    // Update combat — redirect to interior enemies/objects when inside a hut
-    const activeEnemies = (this.player.inHut && this.hutInterior)
-      ? this.hutInterior.enemies
-      : this.currentRoom.enemies;
-    const activeBackgroundObjects = (this.player.inHut && this.hutInterior)
-      ? this.hutInterior.backgroundObjects
-      : this.currentRoom.backgroundObjects;
+    // Update combat — redirect to interior enemies/objects when inside a hut or maze
+    const activeEnemies = this._activeEnemies();
+    const activeBackgroundObjects = this._activeBackgroundObjects();
     const combatResult = this.combatSystem.update(
       deltaTime,
       this.player,
       activeEnemies,
       activeBackgroundObjects,
       this.activeNoiseSource,
-      this.player.inHut ? this.hutInterior : this.currentRoom
+      this.player.inMaze ? this.mazeInterior : ((this.player.inHut || this.player.inDungeon) ? this.hutInterior : this.currentRoom)
     );
 
     // Check player attacks hitting goo blobs (destroy on hit, 5% chance to drop goo)
@@ -2613,6 +3884,11 @@ class Game {
           const dx = blob.position.x - attack.position.x;
           const dy = blob.position.y - attack.position.y;
           if (dx * dx + dy * dy < atkR * atkR) { hit = true; break; }
+        }
+
+        if (blob.expired) {
+          this.gooBlobs.splice(bi, 1);
+          continue;
         }
 
         if (hit) {
@@ -2640,11 +3916,25 @@ class Game {
           const dx = reward.position.x + GRID.CELL_SIZE / 2 - atkX;
           const dy = reward.position.y + GRID.CELL_SIZE / 2 - atkY;
           if (dx * dx + dy * dy < atkR * atkR) {
-            this.fishingSystem.hitRewardObject(reward, (char, x, y) => {
-              const ing = new Ingredient(char, x, y);
-              this.ingredients.push(ing);
-              this.physicsSystem.addEntity(ing);
-            });
+            this.fishingSystem.hitRewardObject(
+              reward,
+              (char, x, y) => {
+                const ing = new Ingredient(char, x, y);
+                this.ingredients.push(ing);
+                this.physicsSystem.addEntity(ing);
+              },
+              (specialKey, x, y) => {
+                if (specialKey === 'fairy') {
+                  if (this.fairiesAngered) return;
+                  const fairy = new Fairy(x, y, this.currentRoom?.exits || {});
+                  if (!this.neutralCharacters) this.neutralCharacters = [];
+                  this.neutralCharacters.push(fairy);
+                  return;
+                }
+                // Treat as ITEMS key — defer to LootSystem
+                this.lootSystem?.spawnItemDrop?.(specialKey, x, y, null, null);
+              }
+            );
           }
         }
       }
@@ -2652,7 +3942,7 @@ class Game {
 
     // Spawn drops from objects destroyed this frame (by melee or bullets)
     if (combatResult.objectEffects) {
-      for (const { obj, effect } of combatResult.objectEffects) {
+      for (const { obj, effect, attack } of combatResult.objectEffects) {
         // Skip if this object has already been processed (safety check)
         if (obj.hasDropped) continue;
 
@@ -2671,12 +3961,12 @@ class Game {
 
         // Key droppers always drop (bypass dropChance)
         if (obj.dropsKey) {
-          this.handleObjectEffect(effect, obj);
+          this.handleObjectEffect(effect, obj, attack);
         } else {
           // Normal drop chance logic
           const chance = obj.data.dropChance;
           if (chance === undefined || Math.random() < chance) {
-            this.handleObjectEffect(effect, obj);
+            this.handleObjectEffect(effect, obj, attack);
           } else {
             // No drop this time — still mark background dirty if object was destroyed
             if (effect && effect.startsWith('destroyObject')) {
@@ -2838,9 +4128,22 @@ class Game {
       this.updateUI();
     }
 
-    // Update hut/dungeon systems (door entry/exit detection and interior entity logic)
+    // Update hut/dungeon/maze systems (door entry/exit and interior entity logic)
     this.hutSystem.update(deltaTime);
     this.dungeonSystem.update(deltaTime);
+    this.mazeSystem.update(deltaTime);
+
+    // Update polymorph system (tongue attacks, cure Rusalka contact, Lake room spawn)
+    this.polymorphSystem.update(deltaTime, this);
+
+    // Lava adjacent to water → solidify to rock
+    this.interactionSystem.update(deltaTime, this._activeBackgroundObjects());
+
+    // Update boss system (phase transitions, reflect checks, grab escape)
+    this.bossSystem.update(deltaTime);
+
+    // Update boulder system (red zone rolling boulder hazard)
+    this.boulderSystem.update(deltaTime);
 
     // Update fishing system before death check so Rusalka kills are caught this frame
     this.fishingSystem.update(deltaTime, this);
@@ -2861,6 +4164,28 @@ class Game {
       console.log(`💀 Zone: ${this.zoneSystem.currentZone} | Depth: ${this.getCurrentZoneDepth()}`);
       console.log(`💀 ═══════════════════════════════════════════════════════════\n`);
 
+      // Check for Fairy in a Bottle death intercept (full heal — preferred over Phoenix Feather)
+      const bottleIdx = (this.player.equippedConsumables || []).findIndex(c => c?.data?.effect === 'revive_on_death');
+      if (bottleIdx !== -1) {
+        const bottle = this.player.equippedConsumables[bottleIdx];
+        this.player.hp = this.player.maxHp;
+        this.player.invulnerabilityTimer = 2.0;
+        this.combatSystem.createDamageNumber(
+          bottle.char,
+          this.player.position.x,
+          this.player.position.y - GRID.CELL_SIZE * 0.5,
+          bottle.color
+        );
+        const burst = createActivationBurst(this.player.position.x, this.player.position.y, bottle.color);
+        this.particles.push(...burst);
+        this.inventorySystem.equippedConsumables[bottleIdx] = null;
+        this.player.equippedConsumables[bottleIdx] = null;
+        this.inventorySystem.spentConsumableSlots[bottleIdx] = true;
+        this.audioSystem?.playSFX?.('pickup');
+        this.saveGameState();
+        console.log('🧚 Fairy in a Bottle activated — death intercepted! HP fully restored.');
+        // fall through — do NOT transition to GAME_OVER
+      } else {
       // Check for Phoenix Feather death intercept
       const reviveIdx = (this.player.equippedConsumables || []).findIndex(c => c?.data?.effect === 'revive');
       if (reviveIdx !== -1) {
@@ -2882,18 +4207,35 @@ class Game {
         console.log('✨ Phoenix Feather activated — death intercepted! HP restored to ' + this.player.hp);
         // fall through — do NOT transition to GAME_OVER
       } else {
-        // Create explosion at player position
-        const explosion = createExplosion(
-          this.player.position.x + GRID.CELL_SIZE / 2,
-          this.player.position.y + GRID.CELL_SIZE / 2,
-          20,
-          this.player.color
-        );
-        this.particles.push(...explosion);
+        // Stop music and play death SFX
+        this.audioSystem.stop();
+        this.audioSystem.playSFX('player_death');
 
-        // Add particles to physics system
-        for (const particle of explosion) {
-          this.physicsSystem.addEntity(particle);
+        // Record what killed the player (for REST tombstone)
+        const killer = this.player._lastAttacker;
+        if (killer && killer.data) {
+          this.lastDeathCause = {
+            name: killer.data.name,
+            char: killer.char,
+            color: killer.color,
+            description: killer.data.description || ''
+          };
+        }
+        this.tombstoneActive = true;
+        this.tombstonePopup = null;
+
+        // Ghost kills have no death animation
+        if (!this.player._killedByGhost) {
+          const explosion = createExplosion(
+            this.player.position.x + GRID.CELL_SIZE / 2,
+            this.player.position.y + GRID.CELL_SIZE / 2,
+            20,
+            this.player.color
+          );
+          this.particles.push(...explosion);
+          for (const particle of explosion) {
+            this.physicsSystem.addEntity(particle);
+          }
         }
 
         console.log('⚰️  Character died...');
@@ -2936,26 +4278,112 @@ class Game {
           return;
         }
       }
+      }
+    }
+
+    // Tick dying-shake timers for enemies with deathExplosion deathDelay
+    for (const enemy of this.currentRoom.enemies) {
+      if (enemy.isDying) {
+        enemy.dyingTimer -= deltaTime;
+      }
     }
 
     // Remove dead enemies and spawn loot + debris
     for (let i = this.currentRoom.enemies.length - 1; i >= 0; i--) {
       const enemy = this.currentRoom.enemies[i];
+      // deathExplosion enemies shake for deathDelay seconds before truly dying
+      if (enemy.hp <= 0 && !enemy.isDying && enemy.data.deathExplosion?.deathDelay) {
+        enemy.isDying = true;
+        enemy.dyingTimer = enemy.data.deathExplosion.deathDelay;
+        enemy.velocity = { vx: 0, vy: 0 };
+        continue;
+      }
+      if (enemy.isDying && enemy.dyingTimer > 0) continue;
       if (enemy.hp <= 0) {
-        // Play destroy sound effect
-        this.audioSystem.playSFX('destroy');
+        // Blood Robe: blade kill heals 1HP
+        if (enemy.killedByBlade && this.player?.bladeKillHeal) {
+          this.player.hp = Math.min(this.player.hp + 1, this.player.maxHp);
+        }
+
+        // Per-enemy death SFX (data.sfx.death — string or array for random pick),
+        // falling back to the generic destroy sound.
+        const deathSfx = enemy.data?.sfx?.death;
+        if (deathSfx) {
+          const name = Array.isArray(deathSfx)
+            ? deathSfx[Math.floor(Math.random() * deathSfx.length)]
+            : deathSfx;
+          this.audioSystem.playSFX(name);
+        } else {
+          this.audioSystem.playSFX('destroy');
+        }
 
         // Handle spawn-on-death and parent spawner notification
         this.enemySpawnSystem.handleEnemyDeath(enemy);
 
+        // Death explosion (Magma Slug, Glacier Crab)
+        if (enemy.data.deathExplosion?.enabled) {
+          const de = enemy.data.deathExplosion;
+          const cx = enemy.position.x + GRID.CELL_SIZE / 2;
+          const cy = enemy.position.y + GRID.CELL_SIZE / 2;
+          const spread = (de.spreadAngle || 360) * Math.PI / 180;
+          const baseAngle = Math.random() * Math.PI * 2;
+          for (let p = 0; p < de.projectileCount; p++) {
+            const angle = baseAngle + (spread / de.projectileCount) * p;
+            this.combatSystem.createEnemyAttack({
+              type: 'enemy_projectile',
+              char: de.projectileType === 'fire' ? '·' : '*',
+              position: { x: cx, y: cy },
+              velocity: { vx: Math.cos(angle) * de.speed, vy: Math.sin(angle) * de.speed },
+              damage: de.damage,
+              color: de.projectileType === 'fire' ? '#ff6600' : '#88ccff',
+              onHit: de.projectileType === 'freeze' ? 'freeze' : undefined,
+              owner: enemy,
+              shooterPlane: enemy.plane ?? 0
+            });
+          }
+        }
+
+        // Hex Witch spell learning on death
+        if (enemy.data.hexMechanic?.learnSpellOnDeath && this.knownSpells) {
+          this.knownSpells.add(enemy.data.hexMechanic.learnSpellOnDeath);
+        }
+
+        // Armor mechanic: Rockwarden — spawn debris projectiles when armor chunk breaks
+        // (armor chunk breaks are tracked in CombatSystem; see takeDamage override below)
+
         // Drop inventory items
         const itemDrops = enemy.dropInventory();
+        const enemyPlane = enemy.plane ?? 0;
+        for (const item of itemDrops) {
+          item.plane = enemyPlane;
+        }
         this.items.push(...itemDrops);
         for (const item of itemDrops) {
           this.physicsSystem.addEntity(item);
         }
 
         this.spawnLoot(enemy);
+
+        // Alchemist dropLastThrown: guaranteed drop of the last potion type thrown
+        if (enemy.data.potionMechanic?.dropLastThrown && enemy.lastPotionThrown) {
+          const effectToIngredient = { burn: 'F', freeze: 'i', poison: 'v', confusion: 'd' };
+          const ingredientChar = effectToIngredient[enemy.lastPotionThrown.effect];
+          if (ingredientChar) {
+            this.lootSystem.spawnIngredientDrop(ingredientChar, enemy.position.x, enemy.position.y, null, enemy);
+          }
+        }
+
+        // Mana drop — only once the magic meter is active. 75% chance per
+        // kill (100% on bosses) to drop a Mana ingredient (𝑚) that auto-refills
+        // the meter on pickup. Skipped when the meter is already full so the
+        // player isn't tempted to dawdle for waste drops.
+        if (this.player?.magicMeter?.active &&
+            this.player.magicMeter.current < this.player.magicMeter.max) {
+          const manaDropChance = enemy.data?.isBoss ? 1.0 : 0.75;
+          if (Math.random() < manaDropChance) {
+            this.lootSystem.spawnIngredientDrop('𝑚', enemy.position.x, enemy.position.y, null, enemy);
+          }
+        }
 
         // Create debris at enemy position
         const enemyDebris = createDebris(
@@ -2964,6 +4392,9 @@ class Game {
           4 + Math.floor(Math.random() * 3), // 4-6 pieces
           '#666666'
         );
+        for (const piece of enemyDebris) {
+          piece.plane = enemyPlane;
+        }
         this.debris.push(...enemyDebris);
 
         // Add debris to physics system
@@ -2976,13 +4407,15 @@ class Game {
       }
     }
 
-    // Mute layer 2 (bassline) when all enemies are cleared
-    if (this.currentRoom.enemies.length === 0) {
-      this.audioSystem.setLayer2Enabled(false);
+    // Mute layer 2 (bassline) immediately when all enemies are cleared.
+    // Hidden mimics don't count — combat is effectively over from the player's POV.
+    if (this._countedEnemies(this.currentRoom.enemies).length === 0) {
+      this.audioSystem.muteLayer2Immediately();
     }
 
     // Update background object animations and fire propagation
-    for (const obj of this.currentRoom.backgroundObjects) {
+    const activeBgObjects = this._activeBackgroundObjects();
+    for (const obj of activeBgObjects) {
       if (obj.update) {
         obj.update(deltaTime);
       }
@@ -3001,18 +4434,35 @@ class Game {
         if (obj.grassImprinted) {
           // Nothing to do; char and offset remain as stamped
         } else {
-          const dx = obj.position.x - this.player.position.x;
-          const dy = obj.position.y - this.player.position.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const inRange = dist < GRID.CELL_SIZE * 0.7;
+          // Player proximity (highest priority — controls imprint)
+          const pdx = obj.position.x - this.player.position.x;
+          const pdy = obj.position.y - this.player.position.y;
+          const playerInRange = Math.sqrt(pdx * pdx + pdy * pdy) < GRID.CELL_SIZE * 0.7;
 
-          if (inRange) {
-            // Determine bend direction
+          // Find closest enemy in range if player isn't bending this blade
+          let bendDx = pdx;
+          let entityInRange = playerInRange;
+          if (!playerInRange) {
+            let closestDist = Infinity;
+            for (const enemy of this._activeEnemies()) {
+              const edx = obj.position.x - enemy.position.x;
+              const edy = obj.position.y - enemy.position.y;
+              const eDist = Math.sqrt(edx * edx + edy * edy);
+              if (eDist < GRID.CELL_SIZE * 0.7 && eDist < closestDist) {
+                closestDist = eDist;
+                bendDx = edx;
+                entityInRange = true;
+              }
+            }
+          }
+
+          if (entityInRange) {
+            // Determine bend direction based on whichever entity is bending this blade
             let newChar, newOffset;
-            if (dx > GRID.CELL_SIZE * 0.25) {
+            if (bendDx > GRID.CELL_SIZE * 0.25) {
               newChar = '/';
               newOffset = GRID.CELL_SIZE * 0.25;
-            } else if (dx < -GRID.CELL_SIZE * 0.25) {
+            } else if (bendDx < -GRID.CELL_SIZE * 0.25) {
               newChar = '\\';
               newOffset = -GRID.CELL_SIZE * 0.25;
             } else {
@@ -3024,8 +4474,8 @@ class Game {
             obj.grassRenderOffset.x = newOffset;
             obj.grassResetTimer = 0.18; // brief spring-back delay
 
-            // Stamp imprint if player is dodge rolling
-            if (this.player.dodgeRoll.active && newChar !== '|') {
+            // Stamp imprint only for player dodge roll
+            if (playerInRange && this.player.dodgeRoll.active && newChar !== '|') {
               obj.grassImprinted = true;
             }
           } else if (obj.grassResetTimer > 0) {
@@ -3047,7 +4497,7 @@ class Game {
         const emberCount = obj.flammability === 'high' ? 3 : 1;
         const emberChance = emberCount * deltaTime;
 
-        if (Math.random() < emberChance) {
+        if (Math.random() < emberChance && this.particles.length < 200) {
           const angle = Math.random() * Math.PI * 2;
           const speed = Math.random() * 50 + 30;
           const travelDist = obj.flammability === 'high' ? 48 : 32;
@@ -3062,14 +4512,15 @@ class Game {
             char: '.',
             color: '#ff6600',
             size: 3,
-            isEmber: true
+            isEmber: true,
+            alive: true
           };
           this.particles.push(ember);
 
           // Check if ember ignites other objects (5% chance)
           if (Math.random() < 0.05) {
-            for (const otherObj of this.currentRoom.backgroundObjects) {
-              if (otherObj !== obj && !otherObj.destroyed && otherObj.isFlammable()) {
+            for (const otherObj of activeBgObjects) {
+              if (otherObj !== obj && !otherObj.destroyed && !otherObj.onFire && otherObj.isFlammable()) {
                 const dx = otherObj.position.x - ember.x;
                 const dy = otherObj.position.y - ember.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
@@ -3084,8 +4535,8 @@ class Game {
 
         // Check adjacent objects for fire spread (15% chance per second)
         if (Math.random() < 0.15 * deltaTime) {
-          for (const otherObj of this.currentRoom.backgroundObjects) {
-            if (otherObj !== obj && !otherObj.destroyed && otherObj.isFlammable()) {
+          for (const otherObj of activeBgObjects) {
+            if (otherObj !== obj && !otherObj.destroyed && !otherObj.onFire && otherObj.isFlammable()) {
               const dx = otherObj.position.x - obj.position.x;
               const dy = otherObj.position.y - obj.position.y;
               const dist = Math.sqrt(dx * dx + dy * dy);
@@ -3099,9 +4550,64 @@ class Game {
       }
     }
 
-    // Remove destroyed objects
+    // Direct fire contact — player overlapping a burning object accumulates ember stacks
+    // without relying on emitted particles, which may travel away before reaching threshold.
+    if (this.player && !this.player.fireImmune) {
+      const EMBER_STACK_COOLDOWN = 0.5;
+      const EMBER_STACK_WINDOW  = 2.0;
+      const EMBER_THRESHOLD     = 3;
+      const px = this.player.position.x + GRID.CELL_SIZE / 2;
+      const py = this.player.position.y + GRID.CELL_SIZE / 2;
+      if (this.player.emberStackCooldown <= 0) {
+        for (const obj of activeBgObjects) {
+          if (!obj.onFire || obj.destroyed) continue;
+          const cx = obj.position.x + GRID.CELL_SIZE / 2;
+          const cy = obj.position.y + GRID.CELL_SIZE / 2;
+          if (Math.abs(px - cx) < GRID.CELL_SIZE && Math.abs(py - cy) < GRID.CELL_SIZE) {
+            this.player.emberStacks++;
+            this.player.emberStackTimer   = EMBER_STACK_WINDOW;
+            this.player.emberStackCooldown = EMBER_STACK_COOLDOWN;
+            if (this.player.emberStacks >= EMBER_THRESHOLD) {
+              this.player.applyBurn(2.0);
+              this.player.emberStacks     = 0;
+              this.player.emberStackTimer = 0;
+            }
+            break; // one contact credit per frame regardless of how many tiles are burning
+          }
+        }
+      }
+    }
+
+    // Generate embers from burning stuck arrows (same generator as grass fire)
+    for (const arrow of this.combatSystem.getStuckArrows()) {
+      if (arrow.isBurning && this.particles.length < 200) {
+        if (Math.random() < deltaTime) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = Math.random() * 50 + 30;
+          const travelDist = 32;
+          this.particles.push({
+            x: arrow.position.x + GRID.CELL_SIZE / 2,
+            y: arrow.position.y + GRID.CELL_SIZE / 2,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed - 20, // Slight upward bias
+            life: travelDist / speed,
+            maxLife: travelDist / speed,
+            char: '.',
+            color: '#ff6600',
+            size: 3,
+            isEmber: true,
+            alive: true
+          });
+        }
+      }
+    }
+
+    // Remove destroyed objects (exterior always; interior when active)
     this.currentRoom.backgroundObjects = this.currentRoom.backgroundObjects.filter(obj => !obj.destroyed);
     this.backgroundObjects = this.currentRoom.backgroundObjects; // Update local reference
+    if (this.hutInterior) {
+      this.hutInterior.backgroundObjects = this.hutInterior.backgroundObjects.filter(obj => !obj.destroyed);
+    }
     this.renderer.markBackgroundDirty();
 
     // Update shared game elements (particles, debris, etc.)
@@ -3114,6 +4620,9 @@ class Game {
       // Tick pickup cooldown
       if (ingredient.pickupCooldown > 0) {
         ingredient.pickupCooldown = Math.max(0, ingredient.pickupCooldown - deltaTime);
+      }
+      if (ingredient.dropBounceTimer > 0) {
+        ingredient.dropBounceTimer = Math.max(0, ingredient.dropBounceTimer - deltaTime);
       }
 
       // Ingredient-ingredient soft separation
@@ -3138,7 +4647,16 @@ class Game {
       const shouldPickup = this.physicsSystem.applyAttraction(ingredient, this.player);
 
       if (shouldPickup) {
-        this.player.addIngredient(ingredient.char);
+        // Emerald Robe: goo consumed for 1HP heal instead of going to inventory
+        if (ingredient.char === 'g' && this.player.gooConsume) {
+          this.player.hp = Math.min(this.player.hp + 1, this.player.maxHp);
+        } else if (ingredient.char === '𝑚' && this.player.magicMeter?.active) {
+          // Mana drop auto-refills the meter once the well/cauldron has
+          // activated it; bypass inventory entirely.
+          this.magicSystem.addMana(this.player, 2);
+        } else {
+          this.player.addIngredient(ingredient.char);
+        }
         this.physicsSystem.removeEntity(ingredient);
         this.ingredients.splice(i, 1);
       }
@@ -3146,6 +4664,15 @@ class Game {
 
     // EXPLORE state: No item magnetization - all items require manual pickup with SPACE
     // (Only ingredients magnetize in all game states)
+
+    // Update idle crows (first explore room only — array is empty otherwise)
+    this.updateCrows(deltaTime);
+
+    // Age and prune sound events (used for global enemy sound detection)
+    for (let i = this.soundEvents.length - 1; i >= 0; i--) {
+      this.soundEvents[i].lifetime -= deltaTime;
+      if (this.soundEvents[i].lifetime <= 0) this.soundEvents.splice(i, 1);
+    }
 
     // Update steam clouds (fire+water reaction and Steam Vial)
     for (let i = this.steamClouds.length - 1; i >= 0; i--) {
@@ -3162,8 +4689,10 @@ class Game {
 
     // (fishing system updated earlier, before death check)
 
-    // Check if room cleared
-    if (this.currentRoom.enemies.length === 0) {
+    // Check if room cleared. Hidden mimics don't block clear — they're still
+    // in the enemies array, so if they reveal post-clear they fight normally,
+    // but exits and clear-side effects fire on visible-enemy defeat.
+    if (this._countedEnemies(this.currentRoom.enemies).length === 0) {
       // Only process room clear once
       if (!this.currentRoom.cleared) {
         this.currentRoom.cleared = true;
@@ -3202,12 +4731,43 @@ class Game {
           this.renderer.markBackgroundDirty();
           this.updateUI();
         }
+
+        // Pearl-guide fairy: if it's still around at room clear, the player
+        // missed (or skipped) the heal/bottle touch. Reveal the pedestal so
+        // they can complete the offering and unlock the blue-zone exit.
+        this.revealPearlPedestal();
+
+        // Pre-boss gate: depth 14 cleared → north-only 'B' exit + anticipation music
+        const preBossZone = this.currentRoom.zone || 'green';
+        const preBossDepth = this.zoneDepths[preBossZone] || 0;
+        if (preBossDepth === 14 && !this.zoneSystem.defeatedBosses?.has(preBossZone)) {
+          this.preBossGateActive = true;
+          this.currentRoom.exits.east = null;
+          this.currentRoom.exits.west = null;
+          this.currentRoom.exits.north = { letter: 'B', color: '#ff6600' };
+          this.audioSystem.startBossAnticipation();
+        }
       }
 
       // Unlock exits (letters are already generated)
       this.currentRoom.exitsLocked = false;
       // Update collision map to open exits
       this.updateExitCollisions();
+    }
+
+    // Don't process room exits while inside a maze, hut, or dungeon interior.
+    // UI must still update so HP / quick-slot changes inside interiors render this frame.
+    if (this.player.inMaze || this.player.inHut || this.player.inDungeon) {
+      this.updateUI();
+      return;
+    }
+
+    // While an exit-warp animation is running, position is owned by the
+    // animation system; the player crossing back across the entry edge
+    // during the inbound tween must not re-trigger detection.
+    if (this.animationSystem.isAnimating(this.player)) {
+      this.updateUI();
+      return;
     }
 
     // Check for exits (with crossing detection for fast dodge rolls)
@@ -3219,10 +4779,19 @@ class Game {
     const centerX = Math.floor(GRID.COLS / 2);
     const centerY = Math.floor(GRID.ROWS / 2);
 
+    // Pixel thresholds are 10px tighter than the row/col cell boundary so the
+    // warp animation only fires once the player is well inside the exit lane.
+    const northThreshold = GRID.CELL_SIZE * 3 - 10;
+    const southThreshold = (GRID.ROWS - 2) * GRID.CELL_SIZE + 10;
+    const westThreshold = GRID.CELL_SIZE * 2 - 10;
+    const eastThreshold = (GRID.COLS - 2) * GRID.CELL_SIZE + 10;
+    const playerPx = this.player.position;
+    const prevPx = this.previousPlayerPosition;
+
     // North exit check (warp zone is at rows 1-2, below the wall)
-    const inNorthExit = gridPos.y <= 2 && Math.abs(gridPos.x - centerX) <= 1;
-    const crossedNorthExit = prevGridPos.y > 2 && gridPos.y <= 2 && Math.abs(gridPos.x - centerX) <= 1;
-    if ((inNorthExit || crossedNorthExit) && this.currentRoom.exits.north && !this.currentRoom.exitsLocked) {
+    const inNorthExit = playerPx.y < northThreshold && gridPos.x === centerX;
+    const crossedNorthExit = prevPx.y >= northThreshold && playerPx.y < northThreshold && gridPos.x === centerX;
+    if ((inNorthExit || crossedNorthExit) && this.currentRoom.exits.north && (!this.currentRoom.exitsLocked || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0) {
       const exitObj = this.currentRoom.exits.north;
       this.zoneSystem.recordExit(exitObj);
       const letterPath = this.zoneSystem.pathHistory.map(exit => exit.letter).join('-');
@@ -3246,15 +4815,34 @@ class Game {
         }
       }
 
-      this.enterExploreState('north', exitObj, secret?.pattern); // Entering from North → spawn at South
+      // Secret pattern may route to a neutral room (e.g. D-R-A-W → drawRoom)
+      if (secret?.neutralScript) {
+        this.transitionToNeutralRoom(secret.neutralScript);
+        return;
+      }
+
+      // If exit has a neutralScript, route to neutral room instead of explore
+      if (exitObj?.neutralScript) {
+        this.transitionToNeutralRoom(exitObj.neutralScript);
+        return;
+      }
+
+      // If exit forces a specific zone (e.g. ridge north → gray zone), prime ZoneSystem
+      if (exitObj?.forceZone) {
+        this.zoneSystem.forceNextZone(exitObj.forceZone);
+      }
+
+      this.animateExitWarp('north', () => {
+        this.enterExploreState('north', exitObj, secret?.pattern);
+      });
     }
     // South exit check
     else {
-      const inSouthExit = gridPos.y >= GRID.ROWS - 2 && Math.abs(gridPos.x - centerX) <= 1;
-      const crossedSouthExit = prevGridPos.y < GRID.ROWS - 2 && gridPos.y >= GRID.ROWS - 2 && Math.abs(gridPos.x - centerX) <= 1;
+      const inSouthExit = playerPx.y >= southThreshold && gridPos.x === centerX;
+      const crossedSouthExit = prevPx.y < southThreshold && playerPx.y >= southThreshold && gridPos.x === centerX;
 
       // South exit opens if: 1) exits unlocked, 2) player has no items (escape route), OR 3) south exit exists
-      const canUseSouthExit = this.currentRoom.exits.south && (!this.currentRoom.exitsLocked || this.playerHasNoItems());
+      const canUseSouthExit = this.currentRoom.exits.south && (!this.currentRoom.exitsLocked || this.playerHasNoItems() || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0;
 
       if ((inSouthExit || crossedSouthExit) && canUseSouthExit) {
         // South exit is always boolean (returns to REST), not a letter
@@ -3279,14 +4867,16 @@ class Game {
         // Clear combat system (projectiles, melee attacks, etc.) before transitioning
         this.combatSystem.clear();
 
-        this.stateMachine.transition(GAME_STATES.REST);
+        this.animateExitWarp('south', () => {
+          this.stateMachine.transition(GAME_STATES.REST);
+        });
         // Don't reset depth - it should persist to show max depth reached
       }
       // East exit check (right border, centered vertically)
       else {
-        const inEastExit = gridPos.x >= GRID.COLS - 2 && Math.abs(gridPos.y - centerY) <= 1;
-        const crossedEastExit = prevGridPos.x < GRID.COLS - 2 && gridPos.x >= GRID.COLS - 2 && Math.abs(gridPos.y - centerY) <= 1;
-        if ((inEastExit || crossedEastExit) && this.currentRoom.exits.east && !this.currentRoom.exitsLocked) {
+        const inEastExit = playerPx.x >= eastThreshold && gridPos.y === centerY;
+        const crossedEastExit = prevPx.x < eastThreshold && playerPx.x >= eastThreshold && gridPos.y === centerY;
+        if ((inEastExit || crossedEastExit) && this.currentRoom.exits.east && (!this.currentRoom.exitsLocked || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0) {
           const exitObj = this.currentRoom.exits.east;
           this.zoneSystem.recordExit(exitObj);
           const letterPath = this.zoneSystem.pathHistory.map(exit => exit.letter).join('-');
@@ -3310,13 +4900,29 @@ class Game {
             }
           }
 
-          this.enterExploreState('east', exitObj, secret?.pattern); // Entering from East → spawn at West
+          if (secret?.neutralScript) {
+            this.transitionToNeutralRoom(secret.neutralScript);
+            return;
+          }
+          if (exitObj?.neutralScript) {
+            this.transitionToNeutralRoom(exitObj.neutralScript);
+            return;
+          }
+
+          // If exit forces a specific zone, prime ZoneSystem
+          if (exitObj?.forceZone) {
+            this.zoneSystem.forceNextZone(exitObj.forceZone);
+          }
+
+          this.animateExitWarp('east', () => {
+            this.enterExploreState('east', exitObj, secret?.pattern);
+          });
         }
         // West exit check (left border, centered vertically)
         else {
-          const inWestExit = gridPos.x <= 1 && Math.abs(gridPos.y - centerY) <= 1;
-          const crossedWestExit = prevGridPos.x > 1 && gridPos.x <= 1 && Math.abs(gridPos.y - centerY) <= 1;
-          if ((inWestExit || crossedWestExit) && this.currentRoom.exits.west && !this.currentRoom.exitsLocked) {
+          const inWestExit = playerPx.x < westThreshold && gridPos.y === centerY;
+          const crossedWestExit = prevPx.x >= westThreshold && playerPx.x < westThreshold && gridPos.y === centerY;
+          if ((inWestExit || crossedWestExit) && this.currentRoom.exits.west && (!this.currentRoom.exitsLocked || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0) {
             const exitObj = this.currentRoom.exits.west;
             this.zoneSystem.recordExit(exitObj);
             const letterPath = this.zoneSystem.pathHistory.map(exit => exit.letter).join('-');
@@ -3340,7 +4946,23 @@ class Game {
               }
             }
 
-            this.enterExploreState('west', exitObj, secret?.pattern); // Entering from West → spawn at East
+            if (secret?.neutralScript) {
+              this.transitionToNeutralRoom(secret.neutralScript);
+              return;
+            }
+            if (exitObj?.neutralScript) {
+              this.transitionToNeutralRoom(exitObj.neutralScript);
+              return;
+            }
+
+            // If exit forces a specific zone, prime ZoneSystem
+            if (exitObj?.forceZone) {
+              this.zoneSystem.forceNextZone(exitObj.forceZone);
+            }
+
+            this.animateExitWarp('west', () => {
+              this.enterExploreState('west', exitObj, secret?.pattern);
+            });
           }
         }
       }
@@ -3369,8 +4991,44 @@ class Game {
     // EXPLORE: Check vault unlock first (higher priority than traps)
     if (state === GAME_STATES.EXPLORE) {
 
-      // Dungeon item slot: SPACE retrieves weapon from sacrifice slot (re-locks stairs)
-      if (this.player.inHut && this.dungeonSystem?.handleSpacePress()) return;
+      // Polymorphed frog: SPACE fires tongue attack, all other EXPLORE actions suppressed.
+      // Exception: allow interior exit handling so a frogged player can leave a hut/dungeon/maze.
+      if (this.player?.polymorphed) {
+        if (this.player.inDungeon && this.dungeonSystem?.handleSpacePress()) return;
+        if (this.player.inHut && this.hutSystem?.handleSpacePress()) return;
+        if (this.player.inMaze && this.mazeSystem?.handleSpacePress()) return;
+        this.polymorphSystem.createTongueAttack(this);
+        return;
+      }
+
+      // Interior systems: dungeon entry/exit/staircase/item-slot, hut entry/exit, maze entry/object interaction
+      if (this.dungeonSystem?.handleSpacePress()) return;
+      if (this.pressSystem?.handleSpacePress()) return;
+      if (this.hutSystem?.handleSpacePress()) return;
+      if (this.mazeSystem?.handleSpacePress()) return;
+      if (this.wellSystem?.handleSpacePress()) return;
+      if (this.campNPCSystem?.handleSpacePress()) return;
+      if (this.handlePearlPedestalSpace()) return;
+      if (this.handlePearlCachePedestalSpace()) return;
+
+      // Bridge donation menu
+      if (this.currentRoom?.type === ROOM_TYPES.RIDGE && !this.currentRoom?.bridgeBuilt) {
+        if (this.bridgeMenuOpen) {
+          // SPACE while menu open: donate then close
+          this.ridgeSystem.donateAvailable();
+          this.ridgeSystem.closeMenu();
+          return;
+        }
+        if (this.ridgeSystem.getWorkerDistance() < this.ridgeSystem.CLOSE_RANGE) {
+          this.ridgeSystem.openMenu();
+          return;
+        }
+      }
+      // Safety: close bridge menu if somehow still open outside RIDGE context
+      if (this.bridgeMenuOpen) {
+        this.ridgeSystem.closeMenu();
+        return;
+      }
 
       // Fishing: resolve bite window OR cancel bobbing on space press
       if (
@@ -3387,20 +5045,46 @@ class Game {
         return;
       }
 
+      // Errand traveler interaction (SPACE = give item/ingredient)
+      const errandNpcArray = this.player.inHut && this.hutInterior
+        ? this.hutInterior.npcs
+        : this.neutralCharacters;
+      const giveResult = this.errandSystem.checkGive(this.player, errandNpcArray);
+      if (giveResult) {
+        const rewardItem = new Item(giveResult.rewardChar, giveResult.x, giveResult.y);
+        if (this.player.inHut) rewardItem.hutPlane = true;
+        this.items.push(rewardItem);
+        this.physicsSystem.addEntity(rewardItem);
+        return;
+      }
+
       // Try to unlock vault if player is in position with key
       if (this.canUnlockVault()) {
         this.unlockVault();
         return;
       }
 
-      // Place trap if holding one and it hasn't been used this room
-      if (this.player.canUseTrap()) {
-        this.placeTrap();
+      // Detonate any placed remote bombs (takes priority over new throw)
+      const hasRemoteBombs = this.placedTraps.some(e => e.item.data.remoteTrigger);
+      if (hasRemoteBombs) {
+        this.trapSystem.detonateRemoteBombs();
+        return;
+      }
+
+      // Begin trap throw charge only when no nearby item to pick up
+      const hasNearbyPickup = this.items.some(
+        item => this.physicsSystem.getDistance(this.player, item) < 20
+      );
+      if (this.player.canUseTrap() && !hasNearbyPickup) {
+        this.trapSystem.startTrapCharge();
         return;
       }
     }
 
     if (state === GAME_STATES.GAME_OVER) {
+      // If a spell just entered awaiting state (e.g. REVIVE waiting for YES), hold off
+      if (this.spellSystem.awaitingSpell !== null) return;
+
       if (this.characterDeathPending && this.characterDeathTimer <= 0) {
         // A character died but others remain — swap to next character and return to REST
         this.characterDeathPending = false;
@@ -3408,6 +5092,7 @@ class Game {
         this.particles = [];
         this.debris = [];
         this.gooBlobs = [];
+        this.puddles = [];
 
         // Clear active items lost with the dead character
         this.inventorySystem.restQuickSlots = [null, null, null];
@@ -3424,13 +5109,20 @@ class Game {
         if (this.player) {
           this.player.reset();
         }
+        this.audioSystem.play();
         this.stateMachine.transition(GAME_STATES.REST);
       } else if (this.gameOverWaitingForSpace && this.gameOverDeathTimer <= 0 && !this.characterDeathPending) {
         // True game over — full reset
         this.gameOverWaitingForSpace = false;
+
+        // Reset wish/slot state for fresh run
+        this.wishesUsed = 0;
+        this._savedDestroyedSlots = [false, false, false];
+        if (this.player) this.player.destroyedSlots = [false, false, false];
         this.particles = [];
         this.debris = [];
         this.gooBlobs = [];
+        this.puddles = [];
 
         // Reset all zone depths on death
         this.zoneDepths = {
@@ -3440,6 +5132,7 @@ class Game {
           yellow: 0,
           gray: 0
         };
+        this.currentMusicZone = 'green';
 
         // Clear held items on death (but keep crafting slots)
         this.inventorySystem.restQuickSlots = [null, null, null];
@@ -3447,6 +5140,23 @@ class Game {
 
         // Clear all inventories and equipment on death (true roguelike)
         this.inventorySystem.handleGameOver();
+
+        // Reset learned spells for new run
+        this.knownSpells = new Set();
+
+        // Reset magic meter — must be re-activated via well or cauldron each run
+        if (this.player?.magicMeter) {
+          this.player.magicMeter = { active: false, slots: [], current: 0, max: 10 };
+        }
+        this._savedMagicMeter = null;
+
+        // Reset well ritual state (any in-flight coin or lingering flash)
+        this.wellCoinAnim = null;
+        this.wellFlashTimer = 0;
+        this.wellFlashDuration = 0;
+
+        // Reset fairy run-flag for new run
+        this.fairiesAngered = false;
 
         // Reset character system for new run
         this.deadCharacters = [];
@@ -3456,23 +5166,46 @@ class Game {
         this.characterNPCs = []; // Clear character NPCs in REST
         this.errandSystem.resetOnDeath();
         this.zoneSystem.resetOnDeath(); // Reset zone system and captive tracking
+        this.bossSystem.deactivate();   // Clean up any active boss fight
+        // Reset boss music and pre-boss gate state for new run
+        this.preBossGateActive = false;
+        if (this.audioSystem.mode === 'sequence' || this.audioSystem.bossAnticipationActive) {
+          this.audioSystem.stopBossMusic();
+        }
 
         // Clear crafting slots and wipe localStorage save
         this.craftingSystem.setState({ leftSlot: null, rightSlot: null, centerSlot: null });
+        this.craftingSystem.resetDiscoveries();
         this.persistenceSystem.clearSave();
 
         // Reset starter bundle so a fresh one spawns on new run
         this.restBundle = null;
+        this.hasLeftRestOnce = false;
+
+        // Clear companion so a stale hired NPC doesn't carry over to the next run
+        this.companion = null;
 
         if (this.player) {
           this.player.reset();
         }
+        const audioBase = import.meta.env.BASE_URL;
+        this.audioSystem.hardResetDualLayers(
+          `${audioBase}assets/audio/layer1.mp3`,
+          `${audioBase}assets/audio/layer2.mp3`
+        );
         this.stateMachine.transition(GAME_STATES.REST);
       }
       return;
     }
 
     if (state === GAME_STATES.REST) {
+      // Close any open popup on SPACE
+      if (this.tombstonePopup) {
+        this.menuSystem.closeTombstonePopup();
+        return;
+      }
+      if (this.slotPopup) { this.slotPopup = null; return; }
+
       // Bundle world object: destroy and scatter ingredients
       if (this.restBundle) {
         const dist = Math.hypot(
@@ -3491,7 +5224,7 @@ class Game {
               cx + Math.cos(angle) * r,
               cy + Math.sin(angle) * r
             );
-            ing.pickupCooldown = 0.5;
+            ing.pickupCooldown = 0.25;
             this.ingredients.push(ing);
             this.physicsSystem.addEntity(ing);
           }
@@ -3503,19 +5236,7 @@ class Game {
       const nearestSlot = this.getNearestInteractiveSlot();
 
       if (nearestSlot) {
-        if (nearestSlot.type === 'equipment-armor') { this.openEquipmentMenu('armor'); return; }
-        if (nearestSlot.type === 'equipment-consumable1') { this.openEquipmentMenu('consumable1'); return; }
-        if (nearestSlot.type === 'equipment-consumable2') { this.openEquipmentMenu('consumable2'); return; }
-        if (nearestSlot.type === 'equipment-consumable3') { this.openEquipmentMenu('consumable3'); return; }
-        if (nearestSlot.type === 'equipment-chest1') { this.openChestRetrievalMenu(0); return; }
-        if (nearestSlot.type === 'equipment-chest2') { this.openChestRetrievalMenu(1); return; }
-        if (nearestSlot.type === 'equipment-chest3') { this.openChestRetrievalMenu(2); return; }
-
-        if (nearestSlot.type.startsWith('crafting-')) {
-          this.menuSystem.handleCraftingSlotClaim(nearestSlot.type);
-          return;
-        }
-
+        if (this.menuSystem.triggerSlotPopup(nearestSlot)) return;
       }
 
       // Check for character NPC interaction (swap characters)
@@ -3537,6 +5258,17 @@ class Game {
         return;
       }
 
+      // Check tombstone interaction
+      if (this.tombstoneActive && this.lastDeathCause) {
+        const tombX = (GRID.COLS - 4) * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+        const tombY = 2 * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+        const dist = Math.hypot(this.player.position.x - tombX, this.player.position.y - tombY);
+        if (dist < GRID.CELL_SIZE * 3) {
+          this.menuSystem.triggerTombstonePopup();
+          return;
+        }
+      }
+
       // Not near any interactive slot or NPC - allow weapon preview/attack
       if (this.player.heldItem && this.player.canAttack()) {
         this.attackSequenceActive = true; // Mark that attack was initiated by button press (even if windup delays it)
@@ -3548,6 +5280,7 @@ class Game {
           }
           this.combatSystem.createAttack(this.applyGreenDamageModifier(attack), this.currentRoom ? this.currentRoom.enemies : []);
           this.triggerGreenActionCooldown();
+          this._emitSoundEvent();
         }
       }
     } else if (state === GAME_STATES.EXPLORE) {
@@ -3570,8 +5303,20 @@ class Game {
         return; // Exit - successful pickup prevents attack
       }
 
+      // Spacebar-openable containers (barrels, crates, metal boxes) supersede
+      // attacking — opening should work whether or not the player is armed.
+      const nearbyContainer = this.findNearbyBackgroundObject();
+      if (nearbyContainer && nearbyContainer.acceptsInteraction('spacebar') && nearbyContainer.data.dropEffect) {
+        this.interactionSystem.openContainer(nearbyContainer);
+        return;
+      }
+
       // If player has a weapon and can attack, attack
       if (this.player.heldItem && !this.captiveInteractionThisFrame && this.player.canAttack()) {
+        // Gem wands gate the charge on mana availability before useHeldItem starts charging.
+        if (this.player.heldItem.data?.gemWand && !this.magicSystem.tryStartCharge(this.player)) {
+          return;
+        }
         // Attack — melee AoE handles object damage directly via CombatSystem
         this.attackSequenceActive = true; // Mark that attack was initiated by button press (even if windup delays it)
         const wasBowCharging = this.player.heldItem.data.weaponType === 'BOW' && this.player.heldItem.isCharging;
@@ -3654,73 +5399,39 @@ class Game {
     }
 
     if (state === GAME_STATES.EXPLORE) {
-      // Dungeon item slot: SHIFT deposits active weapon into sacrifice slot (unlocks stairs)
-      if (this.player.inHut && this.dungeonSystem?.handleShiftPress()) return;
-
-      // Check for errand traveler interaction (SHIFT = give item)
-      const giveResult = this.errandSystem.checkGive(this.player, this.neutralCharacters);
-      if (giveResult) {
-        const rewardItem = new Item(giveResult.rewardChar, giveResult.x, giveResult.y);
-        this.items.push(rewardItem);
-        this.physicsSystem.addEntity(rewardItem);
+      // Close bridge menu on SHIFT (no donation)
+      if (this.bridgeMenuOpen) {
+        this.ridgeSystem.closeMenu();
         return;
       }
 
-      // Check for nearby item to swap with
-      let nearbyItem = null;
-      for (const item of this.items) {
-        const distance = this.physicsSystem.getDistance(this.player, item);
-        if (distance < INTERACTION_RANGE) {
-          nearbyItem = item;
-          break;
+      // Dungeon item slot: SHIFT deposits active weapon into sacrifice slot (unlocks stairs)
+      if (this.player.inDungeon && this.dungeonSystem?.handleShiftPress()) return;
+
+      const held = this.player.heldItem;
+      if (held) {
+        if (held.data?.type === 'TRAP') {
+          // Trap equipped: preserve existing drop/place-persistent behavior on SHIFT.
+          this.trapSystem.dropOrPlaceTrap();
+        } else {
+          // Weapon equipped: start throw charge. Release on SHIFT keyup fires the throw.
+          this.trapSystem.startTrapCharge();
         }
-      }
-
-      if (this.player.heldItem && nearbyItem) {
-        // Only allow swapping weapons with weapons
-        if (nearbyItem.data.type === 'WEAPON') {
-          // Swap weapons
-          const droppedItem = this.player.pickupItem(nearbyItem);
-
-          // Show pickup message for swapped item
-          this.showPickupMessage(nearbyItem.data.name);
-
-          // Remove picked up item
-          const itemIndex = this.items.indexOf(nearbyItem);
-          if (itemIndex > -1) {
-            this.physicsSystem.removeEntity(nearbyItem);
-            this.items.splice(itemIndex, 1);
-          }
-
-          // Drop previous item if any
-          if (droppedItem) {
-            if (this.player.inHut) droppedItem.hutPlane = true;
-            this.items.push(droppedItem);
-            this.physicsSystem.addEntity(droppedItem);
-          }
-        }
-        // If nearby item is armor/consumable, do nothing (SHIFT is only for weapon swapping)
-      } else if (this.player.heldItem && !nearbyItem) {
-        this.trapSystem.dropOrPlaceTrap();
       }
     }
 
     this.updateUI();
   }
 
-  handleCycleNext() {
+  handleSelectSlot(index) {
     const state = this.stateMachine.getCurrentState();
     if (state !== GAME_STATES.EXPLORE && state !== GAME_STATES.REST && state !== GAME_STATES.NEUTRAL) return;
+    if (this.player.destroyedSlots?.[index]) return; // can't select a destroyed slot
 
-    this.player.cycleSlotNext();
-    this.updateUI();
-  }
-
-  handleCyclePrevious() {
-    const state = this.stateMachine.getCurrentState();
-    if (state !== GAME_STATES.EXPLORE && state !== GAME_STATES.REST && state !== GAME_STATES.NEUTRAL) return;
-
-    this.player.cycleSlotPrevious();
+    if (index !== this.player.activeSlotIndex) {
+      this.player.heldItem?.cancelChargeAndReload?.();
+    }
+    this.player.activeSlotIndex = index;
     this.updateUI();
   }
 
@@ -3775,6 +5486,29 @@ class Game {
     this.renderer.markBackgroundDirty();
   }
 
+  spawnCheatEnemy(enemyData) {
+    const state = this.stateMachine.getCurrentState();
+    if (state !== GAME_STATES.EXPLORE) {
+      console.log('[CHEAT] ⚠ Enemy spawn only works in EXPLORE mode.');
+      return;
+    }
+    const { char, name } = enemyData;
+    const room = this.currentRoom;
+    const pos = this.findSpawnPosition(
+      this.player.position,
+      GRID.CELL_SIZE * 6,
+      room.collisionMap,
+      room.enemies
+    );
+    if (!pos) {
+      console.log(`[CHEAT] ⚠ No spawn position found for ${name}`);
+      return;
+    }
+    room.enemies.push(new Enemy(char, pos.x, pos.y));
+    console.log(`[CHEAT] ✓ Spawned ${name} (${char})`);
+    this.renderer.markBackgroundDirty();
+  }
+
   handleZoneTeleport(targetZone) {
     console.log(`[CHEAT] Teleporting to ${targetZone} zone`);
 
@@ -3803,7 +5537,7 @@ class Game {
 
     // Regenerate room with target zone's depth
     this.roomGenerator.setDepth(this.zoneDepths[targetZone]);
-    const playerPos = { x: this.player.x, y: this.player.y };
+    const playerPos = { x: this.player.position.x, y: this.player.position.y };
     const newRoom = this.roomGenerator.generateRoom(
       null,
       playerPos,
@@ -3838,6 +5572,7 @@ class Game {
     for (const item of this.items) {
       this.physicsSystem.addEntity(item);
     }
+    this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
 
     // Reset combat system
     this.combatSystem.clear();
@@ -3845,10 +5580,141 @@ class Game {
     // Mark background dirty for redraw
     this.renderer.markBackgroundDirty();
 
+    // Switch music if entering/leaving a zone with custom music
+    if (this.audioSystem.mode === 'dual' || this.audioSystem.mode === 'red') {
+      const base = import.meta.env.BASE_URL;
+      if (targetZone === 'red' && this.currentMusicZone !== 'red') {
+        this.currentMusicZone = 'red';
+        this.audioSystem.switchToRedSequence();
+      } else if (targetZone === 'cyan' && this.currentMusicZone !== 'cyan') {
+        this.currentMusicZone = 'cyan';
+        this.audioSystem.switchMusic(
+          `${base}assets/audio/cyan-layer1.mp3`,
+          `${base}assets/audio/cyan-layer2.mp3`
+        );
+      } else if (targetZone !== 'cyan' && targetZone !== 'red'
+                 && (this.currentMusicZone === 'cyan' || this.currentMusicZone === 'red')) {
+        this.currentMusicZone = 'green';
+        this.audioSystem.switchMusic(
+          `${base}assets/audio/layer1.mp3`,
+          `${base}assets/audio/layer2.mp3`
+        );
+      }
+    }
+
     // Update UI
     this.updateUI();
 
     console.log(`[CHEAT] ✓ Teleported to ${targetZone} zone at depth ${this.getCurrentZoneDepth()}`);
+  }
+
+  handleDepthJump(depth) {
+    const state = this.stateMachine.getCurrentState();
+    if (state !== GAME_STATES.EXPLORE) {
+      console.log('[CHEAT] ⚠ Depth jump only works during EXPLORE mode. Exit REST first.');
+      return;
+    }
+
+    const currentZone = this.zoneSystem.currentZone;
+    this.zoneDepths[currentZone] = depth;
+    this.roomGenerator.setDepth(depth);
+    this.preBossGateActive = false;
+    this.bossSystem.deactivate();
+
+    // Generate a fresh room at the target depth (same zone, no forced room type)
+    const playerPos = { x: this.player.position.x, y: this.player.position.y };
+    const newRoom = this.roomGenerator.generateRoom(null, playerPos, currentZone, null);
+
+    // Replace current room
+    this.currentRoom = newRoom;
+    this.player.setCollisionMap(newRoom.collisionMap);
+    this.backgroundObjects = newRoom.backgroundObjects;
+
+    for (const enemy of newRoom.enemies) {
+      enemy.setTarget(this.player);
+      enemy.setCollisionMap(newRoom.collisionMap);
+    }
+
+    // Grace period so enemies don't immediately attack
+    this.roomEntryGraceTimer = 2.0;
+    for (const enemy of newRoom.enemies) {
+      enemy.graceTimer = this.roomEntryGraceTimer;
+    }
+
+    // Reset interior state
+    this.player.inHut = false;
+    this.player.inMaze = false;
+    this.player.inDungeon = false;
+    this.hutInterior = null;
+    this.mazeInterior = null;
+    this.items = [];
+    this.captives = [];
+    this.neutralCharacters = [];
+
+    this.physicsSystem.clear();
+    this.physicsSystem.addEntity(this.player);
+    for (const enemy of newRoom.enemies) {
+      this.physicsSystem.addEntity(enemy);
+    }
+    this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
+    this.combatSystem.clear();
+    this.renderer.markBackgroundDirty();
+    this.updateUI();
+
+    console.log(`[CHEAT] ✓ Depth jump → L${depth} in ${currentZone} zone`);
+  }
+
+  handleBossTest(targetZone) {
+    const state = this.stateMachine.getCurrentState();
+    if (state !== GAME_STATES.EXPLORE) {
+      console.log('[CHEAT] ⚠ Boss test only works during EXPLORE mode. Exit REST first.');
+      return;
+    }
+
+    // Deactivate any existing boss fight
+    this.bossSystem.deactivate();
+
+    // Set zone + depth so isBossReady() returns true
+    this.zoneSystem.currentZone = targetZone;
+    const bossDepth = ZONES[targetZone]?.bossDepth ?? 15;
+    this.zoneDepths[targetZone] = bossDepth;
+    this.roomGenerator.setDepth(bossDepth);
+
+    // Generate boss room directly
+    this.roomGenerator.isZoneBossRoom = true;
+    const playerPos = { x: this.player.position.x, y: this.player.position.y };
+    const newRoom = this.roomGenerator.generateRoom(ROOM_TYPES.BOSS, playerPos, targetZone, null);
+    this.roomGenerator.isZoneBossRoom = false;
+
+    // Replace current room
+    this.currentRoom = newRoom;
+    this.backgroundObjects = newRoom.backgroundObjects;
+
+    // Activate boss
+    this.bossSystem.activate(newRoom, targetZone);
+
+    // Wire up entities
+    for (const enemy of newRoom.enemies) {
+      enemy.setTarget(this.player);
+      enemy.setCollisionMap(newRoom.collisionMap);
+    }
+    this.player.setCollisionMap(newRoom.collisionMap);
+
+    // Setup grace period
+    this.roomEntryGraceTimer = 2.0;
+
+    // Reset systems
+    this.physicsSystem.clear();
+    this.physicsSystem.addEntity(this.player);
+    for (const enemy of newRoom.enemies) {
+      this.physicsSystem.addEntity(enemy);
+    }
+    this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
+    this.combatSystem.clear();
+    this.renderer.markBackgroundDirty();
+    this.updateUI();
+
+    console.log(`[CHEAT] ✓ Boss test: ${targetZone} zone boss spawned`);
   }
 
   handleRoomWarp(roomLetter) {
@@ -3889,6 +5755,16 @@ class Game {
 
     // Replace current room
     this.currentRoom = newRoom;
+
+    // Apply room-declared spawn zone if present (e.g. underground clearings)
+    if (newRoom.spawnZones) {
+      const zone = newRoom.spawnZones.default;
+      if (zone) {
+        this.player.position.x = zone.x;
+        this.player.position.y = zone.y;
+      }
+    }
+
     this.player.setCollisionMap(newRoom.collisionMap);
     this.backgroundObjects = newRoom.backgroundObjects || [];
     this.items = newRoom.items || [];
@@ -3898,8 +5774,18 @@ class Game {
     this.debris = [];
     this.particles = [];
     this.gooBlobs = [];
+    this.puddles = [];
     this.captives = [];
     this.neutralCharacters = [];
+    this.bridgeMenuOpen = false;
+
+    // Ridge room: push bridge worker if not yet built
+    if (newRoom.type === ROOM_TYPES.RIDGE) {
+      this.ridgeSystem.attachToRoom(newRoom);
+      if (newRoom.bridgeWorker && !newRoom.bridgeBuilt) {
+        this.neutralCharacters.push(newRoom.bridgeWorker);
+      }
+    }
 
     // Update all enemies
     for (const enemy of newRoom.enemies) {
@@ -3923,6 +5809,7 @@ class Game {
     for (const item of this.items) {
       this.physicsSystem.addEntity(item);
     }
+    this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
 
     // Reset combat system
     this.combatSystem.clear();
@@ -3944,6 +5831,7 @@ class Game {
     const savedQuickSlots = this.player ? [...this.player.quickSlots] : [null, null, null];
     const savedActiveSlotIndex = this.player ? this.player.activeSlotIndex : 0;
     const savedHp = this.player ? this.player.hp : null;
+    const savedDestroyedSlots = this.player ? [...this.player.destroyedSlots] : [...this._savedDestroyedSlots];
 
     // Generate maze room first
     const centerX = GRID.WIDTH / 2;
@@ -3952,11 +5840,13 @@ class Game {
 
     // Create player at south entrance
     this.player = new Player(centerX, startY);
+    this.player.godMode = this.cheatMenu.godMode;
     this.player.setCollisionMap(this.currentRoom.collisionMap);
 
     // Restore state
     this.player.quickSlots = savedQuickSlots;
     this.player.activeSlotIndex = savedActiveSlotIndex;
+    this.player.destroyedSlots = savedDestroyedSlots;
     if (savedHp !== null) this.player.hp = savedHp;
 
     // Setup room entities (sync with room's state)
@@ -3968,6 +5858,7 @@ class Game {
     this.debris = [];
     this.particles = [];
     this.gooBlobs = [];
+    this.puddles = [];
 
     // Set enemy targets
     for (const enemy of this.currentRoom.enemies) {
@@ -3983,6 +5874,7 @@ class Game {
     for (const item of this.items) {
       this.physicsSystem.addEntity(item);
     }
+    this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
 
     // Reset combat
     this.combatSystem.clear();
@@ -4010,10 +5902,13 @@ class Game {
         this.showPickupMessage(result.message);
       }
 
-      // Drop previous weapon/trap if any
+      if (result.pickedUpType === 'WEAPON' && this.stateMachine.currentState === GAME_STATES.EXPLORE) {
+        this.audioSystem.playSFX('weapon_pickup');
+      }
+
+      // Displaced item routes to REST chest instead of being dropped on the ground
       if (result.droppedItem) {
-        this.items.push(result.droppedItem);
-        this.physicsSystem.addEntity(result.droppedItem);
+        this.inventorySystem.addToChest(result.droppedItem);
       }
 
       this.updateUI();
@@ -4069,27 +5964,163 @@ class Game {
 
   interactWithObject(obj) {
     this.interactionSystem.interactWithObject(obj);
+    this._emitSoundEvent();
   }
 
-  handleObjectEffect(effect, obj) {
-    this.interactionSystem.handleObjectEffect(effect, obj);
+  handleObjectEffect(effect, obj, attack = null) {
+    this.interactionSystem.handleObjectEffect(effect, obj, attack);
   }
 
   spawnLoot(enemy) {
     this.lootSystem.spawnLoot(enemy);
   }
 
-  spawnIngredientDrop(char, x, y, angle = null) {
-    return this.lootSystem.spawnIngredientDrop(char, x, y, angle);
+  spawnIngredientDrop(char, x, y, angle = null, source = null) {
+    return this.lootSystem.spawnIngredientDrop(char, x, y, angle, source);
   }
 
-  spawnItemDrop(char, x, y, angle = null) {
-    return this.lootSystem.spawnItemDrop(char, x, y, angle);
+  spawnItemDrop(char, x, y, angle = null, source = null) {
+    return this.lootSystem.spawnItemDrop(char, x, y, angle, source);
   }
 
 
   findSpawnPosition(center, range, collisionMap, enemies) {
     return this.roomGenerator.findSpawnPosition(center, range, collisionMap, enemies);
+  }
+
+  /**
+   * Execute a CLEANSE wish — destroys all non-player, non-background entities,
+   * consumes one wish, and permanently destroys the highest available quick slot.
+   */
+  executeCleanse() {
+    if (this.wishesUsed >= 3) return;
+
+    // Consume one wish and destroy the corresponding quick slot (0→1→2 as wishes used)
+    const slotIdx = this.wishesUsed; // wish 1 → slot 0, wish 2 → slot 1, wish 3 → slot 2
+    this.wishesUsed++;
+
+    this._savedDestroyedSlots[slotIdx] = true;
+    if (this.player) {
+      // Move item to an empty slot before destroying this one
+      const item = this.player.quickSlots[slotIdx];
+      if (item) {
+        const emptySlot = this.player.quickSlots.findIndex(
+          (s, i) => i !== slotIdx && s === null && !this.player.destroyedSlots[i]
+        );
+        if (emptySlot !== -1) this.player.quickSlots[emptySlot] = item;
+      }
+      this.player.quickSlots[slotIdx] = null;
+      this.player.destroyedSlots[slotIdx] = true;
+      // Shift active slot away from any destroyed slot
+      if (this.player.destroyedSlots[this.player.activeSlotIndex]) {
+        const next = this.player.quickSlots.findIndex((_, i) => !this.player.destroyedSlots[i]);
+        if (next !== -1) this.player.activeSlotIndex = next;
+      }
+    }
+
+    // Clear all non-player, non-background entities
+    if (this.currentRoom) {
+      this.currentRoom.enemies = [];
+    }
+    this.combatSystem.clear();
+    this.particles = [];
+    this.gooBlobs = [];
+    this.puddles = [];
+    this.steamClouds = [];
+    this.items = [];
+    this.ingredients = [];
+    this.debris = [];
+
+    // Play wave animation
+    this.cleanseWave = { startTime: performance.now(), duration: 1400 };
+
+    this.renderController.screenShake.trigger();
+    this.updateUI();
+  }
+
+  /**
+   * Execute a REVIVE wish — consumes a wish and continues the current fight
+   * in place without resetting the room. Zone depths, run state, and all
+   * living enemies are preserved.
+   */
+  executeRevive() {
+    if (this.wishesUsed >= 3) return;
+    if (this.stateMachine.getCurrentState() !== GAME_STATES.GAME_OVER) return;
+
+    // Consume a wish and destroy a slot (same order as CLEANSE: 0→1→2)
+    const slotIdx = this.wishesUsed;
+    this.wishesUsed++;
+
+    this._savedDestroyedSlots[slotIdx] = true;
+    if (this.player) {
+      // Move item to an empty slot before destroying this one
+      const item = this.player.quickSlots[slotIdx];
+      if (item) {
+        const emptySlot = this.player.quickSlots.findIndex(
+          (s, i) => i !== slotIdx && s === null && !this.player.destroyedSlots[i]
+        );
+        if (emptySlot !== -1) this.player.quickSlots[emptySlot] = item;
+      }
+      this.player.quickSlots[slotIdx] = null;
+      this.player.destroyedSlots[slotIdx] = true;
+      // Shift active slot away from any destroyed slot
+      if (this.player.destroyedSlots[this.player.activeSlotIndex]) {
+        const next = this.player.quickSlots.findIndex((_, i) => !this.player.destroyedSlots[i]);
+        if (next !== -1) this.player.activeSlotIndex = next;
+      }
+    }
+    // Clear the REST-saved slot so enterRestState() won't restore an item into it
+    if (this.inventorySystem.restQuickSlots) {
+      this.inventorySystem.restQuickSlots[slotIdx] = null;
+    }
+    // Sanitize restActiveSlotIndex so enterRestState() doesn't restore a destroyed slot as active
+    if (this._savedDestroyedSlots[this.inventorySystem.restActiveSlotIndex ?? 0]) {
+      const next = this._savedDestroyedSlots.findIndex(d => !d);
+      this.inventorySystem.restActiveSlotIndex = next !== -1 ? next : 0;
+    }
+
+    // If a character-death swap was pending, undo it — the revived run continues with this character
+    if (this.characterDeathPending) {
+      const deadIdx = this.deadCharacters.indexOf(this.activeCharacterType);
+      if (deadIdx !== -1) this.deadCharacters.splice(deadIdx, 1);
+      this.characterDeathPending = false;
+      this.characterDeathTimer = 0;
+      this.pendingNextCharacter = null;
+      this.characterDeathName = '';
+    }
+
+    // Restore player at half HP with a brief invulnerability window
+    if (this.player) {
+      this.player.hp = Math.ceil(this.player.maxHp * 0.5);
+      this.player.invulnerabilityTimer = 5.0;
+      this.player.velocity.vx = 0;
+      this.player.velocity.vy = 0;
+      this.player._killedByGhost = false;
+    }
+
+    // Clear death screen state
+    this.gameOverWaitingForSpace = false;
+    this.gameOverDeathTimer = 0;
+
+    // Clear death explosion particles (leave environmental debris)
+    this.particles = [];
+
+    // Reactivate boss AI if the player died in a boss room
+    if (this.currentRoom?.isBossRoom) {
+      this.bossSystem.reactivate(this.currentRoom);
+    }
+
+    // Resume music
+    this.audioSystem.play();
+
+    // Force background redraw
+    this.renderer.markBackgroundDirty();
+
+    // Return to EXPLORE without regenerating the room (bypass the state handler)
+    this.stateMachine.currentState = GAME_STATES.EXPLORE;
+
+    this.renderController.screenShake.trigger();
+    this.updateUI();
   }
 
   bankLoot() {
@@ -4104,6 +6135,7 @@ class Game {
   }
 
   render(alpha) {
+    this.renderController.applyShake();
     const state = this.stateMachine.getCurrentState();
 
     if (state === GAME_STATES.TITLE) {
@@ -4116,6 +6148,14 @@ class Game {
       this.renderController.renderNeutralState(this);
     } else if (state === GAME_STATES.GAME_OVER) {
       this.renderController.renderGameOverState(this);
+    }
+
+    if (state !== GAME_STATES.TITLE && state !== GAME_STATES.GAME_OVER) {
+      this.renderController.renderCleanseWave(this);
+      this.renderController.renderBossDefeatFlash(this);
+    }
+    if (state !== GAME_STATES.TITLE) {
+      this.renderController.renderSpellResponse(this);
     }
   }
 
@@ -4157,6 +6197,296 @@ class Game {
 
   getIngredientData(char) {
     return INGREDIENTS[char] || { name: 'Unknown' };
+  }
+
+  // SPACE while adjacent to a revealed pearl pedestal: consume the pearl from
+  // inventory, mark the pedestal activated (pearl glyph appears on top), open
+  // the previously-blocked east exit as a blue-zone slot, and dismiss the
+  // fairy. Returns true if the press was consumed.
+  handlePearlPedestalSpace() {
+    const room = this.currentRoom;
+    const pedestal = room?.pearlPedestal;
+    if (!pedestal || pedestal.activated) return false;
+    if (!this.player?.inventory?.includes('●')) return false;
+
+    const CS = GRID.CELL_SIZE;
+    const px = this.player.position.x + CS / 2;
+    const py = this.player.position.y + CS / 2;
+    const dx = px - pedestal.x;
+    const dy = py - pedestal.y;
+    // Adjacency: within ~1.5 cells of the pedestal center
+    if (dx * dx + dy * dy > (CS * 1.5) * (CS * 1.5)) return false;
+
+    this.player.removeIngredient('●');
+    pedestal.activated = true;
+    // Visually crown the pedestal with the pearl glyph by swapping the bg char.
+    if (pedestal.obj) {
+      pedestal.obj.char = '●';
+      pedestal.obj.color = '#f4f4f8';
+    }
+
+    // Open the east exit (normally blocked by the ocean template). Mark it as
+    // a hidden blue-zone slot so future zone routing can pick it up. The
+    // letter '~' echoes the water motif; color is blue.
+    room.exits.east = {
+      letter: '~',
+      color: '#66aaff',
+      secretBlueZone: true
+    };
+    this.updateExitCollisions();
+    this.renderer.markBackgroundDirty();
+
+    // Visual shockwave centered on the freshly opened east exit — sweeps the
+    // sand/water tiles around it, producing a rippling reveal.
+    const exitCx = (GRID.COLS - 2) * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+    const exitCy = Math.floor(GRID.ROWS / 2) * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+    this.playerShockwave = {
+      x: exitCx,
+      y: exitCy,
+      radius: 0, prevRadius: 0,
+      maxRadius: GRID.CELL_SIZE * 6,
+      speed: GRID.CELL_SIZE * 10,
+      color: '#66aaff',
+    };
+
+    // Dismiss the guide fairy — its job is done. Send it offscreen east.
+    const fairy = room.pearlFairy;
+    if (fairy && !fairy.consumed) {
+      fairy.state = 'exited';
+      fairy.targetPosition = {
+        x: GRID.COLS * CS + CS * 2,
+        y: pedestal.y
+      };
+    }
+
+    this.audioSystem?.playSFX?.('pickup');
+    this.menuSystem?.showPickupMessage?.('THE PATH OPENS.');
+    this.updateUI();
+    return true;
+  }
+
+  // Pearl Cache pedestal (blue-zone Pearl Cache, '◌' room). SPACE while
+  // adjacent drops the recipe-rebundle: 2× Pearl Shard + 1× Sharkbone + 1×
+  // Coral Cluster + 1× Stingray Barb. Player can craft any of the three
+  // water armors back in Rest. Returns true if the press was consumed.
+  handlePearlCachePedestalSpace() {
+    const room = this.currentRoom;
+    const pedestal = room?.pearlCachePedestal;
+    if (!pedestal || pedestal.activated) return false;
+
+    const CS = GRID.CELL_SIZE;
+    const px = this.player.position.x + CS / 2;
+    const py = this.player.position.y + CS / 2;
+    const dx = px - pedestal.x;
+    const dy = py - pedestal.y;
+    if (dx * dx + dy * dy > (CS * 1.5) * (CS * 1.5)) return false;
+
+    pedestal.activated = true;
+    if (pedestal.obj) {
+      pedestal.obj.char = '●';
+      pedestal.obj.color = '#f4f4f8';
+    }
+
+    // Drop the bundle straight into the player's inventory.
+    const bundle = ['p', 'p', 'n', 'C', 'Y'];
+    for (const ch of bundle) {
+      if (this.player.addIngredient) {
+        this.player.addIngredient(ch);
+      } else {
+        this.player.inventory.push(ch);
+      }
+    }
+
+    this.audioSystem?.playSFX?.('pickup');
+    this.menuSystem?.showPickupMessage?.('THE DEEP GIVES.');
+    this.updateUI();
+    this.renderer.markBackgroundDirty();
+    return true;
+  }
+
+  // Coral Crown: while wearing the crown and standing on a water tile, that
+  // tile becomes 'crystallized' — walkable, blocks contact slowdown, lasts 6s.
+  // Tiles auto-expire via BackgroundObject.waterStateTimer.
+  _updateCoralCrown() {
+    const p = this.player;
+    if (!p?.coralCrown || !p.inLiquid || !this.currentRoom) return;
+    const CS = GRID.CELL_SIZE;
+    const px = p.position.x + CS / 2;
+    const py = p.position.y + CS / 2;
+    const half = CS / 2;
+    for (const obj of this.currentRoom.backgroundObjects) {
+      if (obj.destroyed || obj.char !== '~') continue;
+      if (obj.waterState !== 'normal') continue;
+      const cx = obj.position.x + half;
+      const cy = obj.position.y + half;
+      if (Math.abs(cx - px) < half && Math.abs(cy - py) < half) {
+        obj.setWaterState('crystallized', 6.0);
+        break;
+      }
+    }
+  }
+
+  // Stingray Mantle: moving through water leaves an electrified wake. Each
+  // vacated water cell flips to 'electrified' for 1s. While the player is in
+  // water, ticks damage on enemies standing on any electrified cell — wet
+  // enemies take 2× via the existing wet+shock interaction (we apply the 2×
+  // directly here since this is the wake's own damage source).
+  _updateStingrayMantle(deltaTime) {
+    const p = this.player;
+    if (!p?.stingrayMantle || !this.currentRoom) return;
+    const CS = GRID.CELL_SIZE;
+    const px = p.position.x + CS / 2;
+    const py = p.position.y + CS / 2;
+    const col = Math.floor(px / CS);
+    const row = Math.floor(py / CS);
+
+    if (p.inLiquid) {
+      if (p._wakePrevCol === undefined) { p._wakePrevCol = col; p._wakePrevRow = row; }
+      if (col !== p._wakePrevCol || row !== p._wakePrevRow) {
+        const prevX = p._wakePrevCol * CS;
+        const prevY = p._wakePrevRow * CS;
+        for (const obj of this.currentRoom.backgroundObjects) {
+          if (obj.destroyed || obj.char !== '~') continue;
+          if (Math.abs(obj.position.x - prevX) < 4 && Math.abs(obj.position.y - prevY) < 4) {
+            if (obj.waterState === 'normal') obj.setWaterState('electrified', 1.0);
+            break;
+          }
+        }
+        p._wakePrevCol = col;
+        p._wakePrevRow = row;
+      }
+    } else {
+      p._wakePrevCol = undefined;
+      p._wakePrevRow = undefined;
+    }
+
+    // Damage tick — 0.25s interval
+    p._wakeTickTimer = (p._wakeTickTimer || 0) - deltaTime;
+    if (p._wakeTickTimer > 0) return;
+    p._wakeTickTimer = 0.25;
+    const half = CS / 2;
+    for (const enemy of this.currentRoom.enemies) {
+      if (enemy.hp <= 0) continue;
+      const ex = enemy.position.x + half;
+      const ey = enemy.position.y + half;
+      for (const obj of this.currentRoom.backgroundObjects) {
+        if (obj.destroyed || obj.char !== '~') continue;
+        if (obj.waterState !== 'electrified') continue;
+        const cx = obj.position.x + half;
+        const cy = obj.position.y + half;
+        if (Math.abs(cx - ex) < half && Math.abs(cy - ey) < half) {
+          const wet = (enemy.wetDuration || 0) > 0;
+          const dmg = wet ? 2 : 1;
+          enemy.takeDamage(dmg);
+          this.combatSystem?.createDamageNumber(dmg, enemy.position.x, enemy.position.y, wet ? '#ffff66' : '#88ddff', 1.0, 0.6);
+          break;
+        }
+      }
+    }
+  }
+
+  // Shark Mask emerge attack: triggered when the player re-rolls during a dive.
+  // Deals 3× base melee damage to every enemy within 1.5 cells, ends the dive,
+  // produces a big splash via createWetDrop-style particles. Wet enemies eat
+  // an additional 2× from any subsequent shock — but we don't apply that here;
+  // it's a bonus of subsequent player attacks.
+  _sharkEmergeAttack(direction) {
+    if (!this.player.diving) return;
+    const CS = GRID.CELL_SIZE;
+    const radius = CS * 1.5;
+    const cx = this.player.position.x + CS / 2;
+    const cy = this.player.position.y + CS / 2;
+    const enemies = this.currentRoom?.enemies || [];
+    const BASE_DAMAGE = 1;
+    const EMERGE_DAMAGE = BASE_DAMAGE * 3;
+    for (const enemy of enemies) {
+      if (enemy.hp <= 0) continue;
+      const ex = enemy.position.x + CS / 2;
+      const ey = enemy.position.y + CS / 2;
+      if (Math.hypot(ex - cx, ey - cy) > radius) continue;
+      enemy.takeDamage(EMERGE_DAMAGE);
+      this.combatSystem?.createDamageNumber(EMERGE_DAMAGE, enemy.position.x, enemy.position.y, '#88ccff', 1.4, 1.1);
+      // Brief stagger so the player can follow up
+      enemy.applyStatusEffect?.('freeze', 0.5);
+    }
+    // Splash particles
+    for (let i = 0; i < 14; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const speed = 60 + Math.random() * 90;
+      this.particles.push({
+        x: cx, y: cy,
+        vx: Math.cos(ang) * speed,
+        vy: Math.sin(ang) * speed,
+        life: 0.7, maxLife: 0.7,
+        char: Math.random() < 0.5 ? '·' : '▪',
+        color: '#88ccff'
+      });
+    }
+    this.audioSystem?.playSFX?.('roll');
+    this.player.endSharkDive();
+    this.player.dodgeRoll.cooldownTimer = 0.5;
+  }
+
+  // O-room pearl path: room cleared with the guide fairy still in play. Place
+  // a pedestal in an open dry-side cell and tether the fairy to it so the
+  // player has a tangible "press SPACE here" beacon. No pedestal if the fairy
+  // was already consumed (heal or bottle) or the player no longer has a pearl.
+  revealPearlPedestal() {
+    const room = this.currentRoom;
+    if (!room) return;
+    if (this.fairiesAngered) return; // no fairy to reveal the pedestal
+    const fairy = room.pearlFairy;
+    if (!fairy || fairy.consumed) return;
+    if (room.pearlPedestal) return; // already revealed
+    if (!this.player?.inventory?.includes('●')) return;
+
+    const CS = GRID.CELL_SIZE;
+    // Search dry-side cells (cols 12-16) for an open, non-water spot near
+    // mid-vertical. Walk outward from a preferred center until we find one.
+    const preferredCols = [14, 13, 15, 12, 16];
+    const preferredRows = [10, 9, 11, 8, 12, 7, 13];
+    let placed = null;
+    for (const c of preferredCols) {
+      for (const r of preferredRows) {
+        if (room.collisionMap?.[r]?.[c]) continue;
+        const x = c * CS;
+        const y = r * CS;
+        const occupied = room.backgroundObjects.some(o =>
+          !o.destroyed && Math.abs(o.position.x - x) < CS / 2 && Math.abs(o.position.y - y) < CS / 2
+        );
+        if (occupied) continue;
+        placed = { col: c, row: r, x, y };
+        break;
+      }
+      if (placed) break;
+    }
+    if (!placed) return;
+
+    const pedestal = new BackgroundObject('∏', placed.x, placed.y);
+    pedestal.color = '#cccccc';
+    pedestal.pearlPedestal = true;
+    pedestal.hasCollision = true;
+    room.collisionMap[placed.row][placed.col] = true;
+    room.backgroundObjects.push(pedestal);
+    this.renderer.markBackgroundDirty();
+
+    room.pearlPedestal = {
+      col: placed.col,
+      row: placed.row,
+      x: placed.x + CS / 2,
+      y: placed.y + CS / 2,
+      activated: false,
+      obj: pedestal
+    };
+
+    // Anchor the fairy over the pedestal. flutterDuration was set huge at
+    // spawn, so it will keep oscillating here until SPACE'd or consumed.
+    fairy.anchor.x = placed.x + CS / 2;
+    fairy.anchor.y = placed.y - CS * 0.5; // hover slightly above
+    fairy.position.x = fairy.anchor.x;
+    fairy.position.y = fairy.anchor.y;
+    fairy.flutterRadius = 10;
+    fairy.flutterElapsed = 0;
   }
 }
 

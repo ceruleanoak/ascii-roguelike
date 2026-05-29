@@ -20,6 +20,14 @@ export class GameStateMachine {
   transition(newState, data = {}) {
     if (this.currentState === newState) return;
 
+    // COMBAT is a vestigial state constant — combat runs inside EXPLORE.
+    // Guard here so a stray transition('COMBAT') fails loudly instead of
+    // silently entering a state with no registered handler (which appears as a freeze).
+    if (newState === 'COMBAT') {
+      console.warn('[GameStateMachine] Attempted transition to vestigial COMBAT state — blocked. Combat runs inside EXPLORE.');
+      return;
+    }
+
     const transitionKey = `${this.currentState}->${newState}`;
 
     // Call transition handler if exists

@@ -1,0 +1,2451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SFX Editor</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #0d0d0d;
+  color: #ccc;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 12px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ── Toolbar ─────────────────────────────────────────────────── */
+#toolbar {
+  height: 40px;
+  min-height: 40px;
+  background: #161616;
+  border-bottom: 1px solid #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+}
+
+#toolbar .sep { width: 1px; height: 20px; background: #333; margin: 0 4px; }
+
+button {
+  background: #1e1e1e;
+  color: #ccc;
+  border: 1px solid #444;
+  padding: 4px 10px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 2px;
+}
+button:hover { background: #2a2a2a; border-color: #666; }
+button.active { background: #1a3a1a; border-color: #4a8a4a; color: #8f8; }
+button.primary { border-color: #4a7a4a; color: #8f8; }
+button.danger { border-color: #7a4a4a; color: #f88; }
+
+/* ── Render overlay ──────────────────────────────────────────── */
+#render-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.72);
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+#render-overlay.visible { display: flex; }
+#render-modal {
+  background: #141420;
+  border: 1px solid #446;
+  padding: 22px 44px;
+  text-align: center;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+#render-modal .rm-title { color: #88aaff; font-size: 13px; margin-bottom: 8px; }
+#render-modal .rm-sub   { color: #445; font-size: 10px; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+#render-modal .rm-dots  { color: #556; font-size: 20px; animation: blink 1s infinite; }
+
+label { color: #888; font-size: 11px; }
+
+input[type=number] {
+  background: #1e1e1e;
+  color: #ccc;
+  border: 1px solid #444;
+  width: 52px;
+  padding: 3px 5px;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+select {
+  background: #1e1e1e;
+  color: #ccc;
+  border: 1px solid #444;
+  padding: 3px 5px;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+optgroup { color: #555; background: #1e1e1e; }
+optgroup option { color: #ccc; }
+
+#sfx-name {
+  background: #1e1e1e;
+  color: #ccc;
+  border: 1px solid #444;
+  padding: 3px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  width: 140px;
+}
+
+/* ── Main layout ─────────────────────────────────────────────── */
+#main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Left panel ──────────────────────────────────────────────── */
+#panel-left {
+  width: 200px;
+  min-width: 200px;
+  background: #111;
+  border-right: 1px solid #2a2a2a;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section-title {
+  font-size: 10px;
+  color: #555;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  border-bottom: 1px solid #222;
+  padding-bottom: 4px;
+}
+
+.toggle-group { display: flex; gap: 4px; }
+.toggle-group button { flex: 1; padding: 4px; }
+
+.param-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 6px;
+}
+.param-row label { color: #777; font-size: 11px; display: flex; justify-content: space-between; }
+.param-row label span { color: #aaa; }
+
+input[type=range] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 4px;
+  background: #333;
+  border-radius: 2px;
+  outline: none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  background: #6699cc;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.env-canvas-wrap {
+  position: relative;
+  width: 100%;
+}
+.env-canvas-wrap canvas {
+  width: 100%;
+  height: 80px;
+  display: block;
+  background: #0a0a0a;
+  border: 1px solid #222;
+  cursor: crosshair;
+}
+.env-hint {
+  font-size: 9px;
+  color: #444;
+  margin-top: 2px;
+}
+
+/* ── Center panel (piano roll) ───────────────────────────────── */
+#panel-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+#piano-roll-wrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+#piano-roll {
+  display: block;
+  cursor: crosshair;
+}
+
+/* ── Right panel ─────────────────────────────────────────────── */
+#panel-right {
+  width: 200px;
+  min-width: 200px;
+  background: #111;
+  border-left: 1px solid #2a2a2a;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+
+.lever-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lever-row label {
+  color: #777;
+  font-size: 11px;
+  display: flex;
+  justify-content: space-between;
+}
+.lever-row label span { color: #aaa; font-size: 10px; }
+
+.dual-range {
+  position: relative;
+  height: 20px;
+  width: 100%;
+}
+.dual-range input[type=range] {
+  position: absolute;
+  top: 8px;
+  left: 0;
+  width: 100%;
+  pointer-events: none;
+  height: 4px;
+  background: transparent;
+}
+.dual-range input[type=range]::-webkit-slider-thumb {
+  pointer-events: all;
+  width: 14px;
+  height: 14px;
+  background: #6699cc;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.dual-range .track {
+  position: absolute;
+  top: 10px;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: #2a2a2a;
+  border-radius: 2px;
+  pointer-events: none;
+}
+.dual-range .fill {
+  position: absolute;
+  top: 10px;
+  height: 4px;
+  background: #446688;
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.rand-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+.rand-btns button { padding: 8px; font-size: 12px; }
+#btn-generate { border-color: #4a8a4a; color: #8f8; }
+#btn-subtle   { border-color: #8a7a3a; color: #fc8; }
+
+.lock-btn {
+  padding: 0px 4px;
+  font-size: 10px;
+  border-color: transparent;
+  background: none;
+  color: #555;
+  cursor: pointer;
+  line-height: 1;
+  margin-left: 2px;
+}
+.lock-btn:hover { color: #888; background: none; border-color: transparent; }
+.lock-btn.locked { color: #fa6; border-color: #886633 !important; background: #1a1000; }
+
+/* ── Note inspector ──────────────────────────────────────────── */
+#note-inspector {
+  border-top: 1px solid #222;
+  padding-top: 10px;
+  margin-top: 4px;
+}
+#note-inspector .param-row { margin-bottom: 5px; }
+#note-inspector input[type=number] {
+  width: 70px;
+  background: #1a1a1a;
+  color: #ccc;
+  border: 1px solid #444;
+  padding: 2px 5px;
+  font-family: inherit;
+  font-size: 11px;
+}
+#note-inspector input[type=number]:focus {
+  outline: none;
+  border-color: #668;
+}
+#note-freq-name {
+  display: inline-block;
+  width: 30px;
+  color: #6af;
+  font-size: 11px;
+  text-align: right;
+}
+.note-actions { display: flex; gap: 5px; margin-top: 6px; }
+.note-actions button { flex: 1; padding: 5px; font-size: 11px; }
+#note-mute-btn { border-color: #886633; color: #ca8; }
+#note-mute-btn.muted { background: #2a1a00; border-color: #cc7722; color: #fa6; }
+#note-delete-btn { border-color: #663333; color: #c66; }
+
+#multi-select-inspector {
+  border-top: 1px solid #222;
+  padding-top: 10px;
+  margin-top: 4px;
+}
+#multi-select-count {
+  font-size: 11px;
+  color: #88aaff;
+  margin-bottom: 8px;
+}
+.multi-actions { display: flex; flex-direction: column; gap: 5px; }
+.multi-actions button { padding: 5px; font-size: 11px; width: 100%; }
+</style>
+</head>
+<body>
+
+<!-- ── Toolbar ───────────────────────────────────────────────── -->
+<div id="toolbar">
+  <button id="btn-play">▶ PLAY</button>
+  <button id="btn-stop">■ STOP</button>
+  <button id="btn-undo" disabled title="Undo (Ctrl+Z)">↩ UNDO</button>
+  <div class="sep"></div>
+  <span style="color:#888;font-size:11px">PRESET</span>
+  <select id="preset-select">
+    <option value="">— select —</option>
+    <optgroup label="BUILT-IN">
+      <option value="HIT">HIT</option>
+      <option value="PICKUP">PICKUP</option>
+      <option value="DEATH">DEATH</option>
+      <option value="EXPLOSION">EXPLOSION</option>
+      <option value="SELECT">SELECT</option>
+      <option value="POWERUP">POWERUP</option>
+      <option value="COIN">COIN</option>
+      <option value="ERROR">ERROR</option>
+    </optgroup>
+  </select>
+  <button id="btn-save-preset" title="Save current SFX as preset">+ SAVE</button>
+  <button id="btn-load-preset" style="display:none" title="Load selected preset">↑ LOAD</button>
+  <button id="btn-del-preset" class="danger" title="Delete selected user preset" disabled>− DEL</button>
+  <div class="sep"></div>
+  <label>NAME <input type="text" id="sfx-name" value="untitled"></label>
+  <label>BPM <input type="number" id="bpm" value="120" min="40" max="300"></label>
+  <label>SNAP
+    <select id="snap-mode">
+      <option value="none">NONE</option>
+      <option value="frame">FRAME (1/60s)</option>
+      <option value="beat">BEAT</option>
+    </select>
+  </label>
+  <div class="sep"></div>
+  <label>DURATION <input type="number" id="total-duration" value="0.5" min="0.05" max="10" step="0.05"> s</label>
+  <div class="sep"></div>
+  <button id="btn-export" class="primary">⬇ EXPORT WAV</button>
+</div>
+
+<!-- ── Main ──────────────────────────────────────────────────── -->
+<div id="main">
+
+  <!-- Left: instrument + envelopes -->
+  <div id="panel-left">
+
+    <div>
+      <div class="section-title">Instrument</div>
+      <div class="toggle-group" style="margin-bottom:8px">
+        <button id="type-square" class="active">SQUARE</button>
+        <button id="type-noise">NOISE</button>
+      </div>
+
+      <!-- Square params -->
+      <div id="sq-params">
+        <div class="param-row">
+          <label>Duty cycle <span id="duty-val">0.50</span></label>
+          <input type="range" id="duty" min="0.05" max="0.95" step="0.05" value="0.5">
+        </div>
+      </div>
+
+      <!-- Noise params -->
+      <div id="noise-params" style="display:none">
+        <div class="toggle-group" style="margin-bottom:8px">
+          <button id="noise-white" class="active">WHITE</button>
+          <button id="noise-pink">PINK</button>
+        </div>
+        <div class="param-row">
+          <label>Filter Hz <span id="noise-filter-val">2000</span></label>
+          <input type="range" id="noise-filter" min="100" max="8000" step="100" value="2000">
+        </div>
+      </div>
+
+      <!-- Shared -->
+      <div class="param-row">
+        <label>Master vol <span id="master-gain-val">0.80</span></label>
+        <input type="range" id="master-gain" min="0.0" max="1.0" step="0.01" value="0.8">
+      </div>
+    </div>
+
+    <!-- Echo -->
+    <div>
+      <div class="section-title" style="display:flex;align-items:center;justify-content:space-between">
+        Echo
+        <button id="echo-toggle" style="padding:1px 7px;font-size:10px;letter-spacing:1px">OFF</button>
+      </div>
+      <div id="echo-params" style="display:none">
+        <div class="param-row">
+          <label>Delay (s) <span id="echo-delay-val">0.12</span></label>
+          <input type="range" id="echo-delay" min="0.01" max="1.0" step="0.01" value="0.12">
+        </div>
+        <div class="param-row">
+          <label>Scale <span id="echo-scale-val">0.55</span></label>
+          <input type="range" id="echo-scale" min="0.05" max="0.95" step="0.01" value="0.55">
+        </div>
+        <div class="param-row">
+          <label>Repeats <span id="echo-count-val">4</span></label>
+          <input type="range" id="echo-count" min="1" max="12" step="1" value="4">
+        </div>
+      </div>
+    </div>
+
+    <!-- Volume envelope -->
+    <div>
+      <div class="section-title">Volume Env</div>
+      <div class="env-canvas-wrap">
+        <canvas id="vol-env-canvas" width="180" height="80"></canvas>
+      </div>
+      <div class="env-hint">dbl-click add · right-click remove</div>
+    </div>
+
+    <!-- Pitch envelope (square only) -->
+    <div id="pitch-env-section">
+      <div class="section-title">Pitch Env (semitones)</div>
+      <div class="env-canvas-wrap">
+        <canvas id="pitch-env-canvas" width="180" height="80"></canvas>
+      </div>
+      <div class="env-hint">dbl-click add · right-click remove</div>
+    </div>
+
+    <!-- Multi-select summary (shown when 2+ notes selected) -->
+    <div id="multi-select-inspector" style="display:none">
+      <div class="section-title">Selection</div>
+      <div id="multi-select-count">0 notes selected</div>
+      <div class="multi-actions">
+        <button id="multi-mute-btn" style="border-color:#886633;color:#ca8">MUTE ALL</button>
+        <button id="multi-unmute-btn" style="border-color:#886633;color:#ca8">UNMUTE ALL</button>
+        <button id="multi-delete-btn" class="danger" style="border-color:#663333;color:#c66">DELETE ALL</button>
+      </div>
+      <div class="env-hint" style="margin-top:5px">Del = delete · M = mute · Esc = deselect</div>
+    </div>
+
+    <!-- Note inspector (shown when a note is selected) -->
+    <div id="note-inspector" style="display:none">
+      <div class="section-title">Selected Note <span id="note-freq-name">A4</span></div>
+      <div class="param-row">
+        <label>Freq (Hz)</label>
+        <input type="number" id="note-freq" min="16" max="20000" step="0.1">
+      </div>
+      <div class="param-row">
+        <label>Start (s)</label>
+        <input type="number" id="note-time" min="0" step="0.001">
+      </div>
+      <div class="param-row">
+        <label>Duration (s)</label>
+        <input type="number" id="note-dur" min="0.005" step="0.001">
+      </div>
+      <div class="param-row">
+        <label>Volume <span id="note-vol-val">0.90</span></label>
+        <input type="range" id="note-vol" min="0" max="1" step="0.01" value="0.9">
+      </div>
+      <div class="note-actions">
+        <button id="note-mute-btn">MUTE</button>
+        <button id="note-delete-btn" class="danger">DELETE</button>
+      </div>
+      <div class="env-hint" style="margin-top:5px">M = mute · Del = delete</div>
+    </div>
+
+  </div>
+
+  <!-- Center: piano roll -->
+  <div id="panel-center">
+    <div id="piano-roll-wrap">
+      <canvas id="piano-roll"></canvas>
+    </div>
+  </div>
+
+  <!-- Right: randomizer -->
+  <div id="panel-right">
+    <div class="section-title">Randomizer</div>
+
+    <div class="lever-row">
+      <label>Freq Range <span id="freq-range-lbl">80 — 880 Hz</span><button class="lock-btn" id="lock-freqRange" title="Lock this parameter">🔓</button></label>
+      <div class="dual-range" id="dr-freq">
+        <div class="track"></div>
+        <div class="fill" id="dr-freq-fill"></div>
+        <input type="range" id="dr-freq-min" min="40" max="4000" value="80">
+        <input type="range" id="dr-freq-max" min="40" max="4000" value="880">
+      </div>
+    </div>
+
+    <div class="lever-row">
+      <label>Pitch Sweep <span id="pitch-sweep-lbl">-12 — +12 st</span><button class="lock-btn" id="lock-pitchSweep" title="Lock this parameter">🔓</button></label>
+      <div class="dual-range" id="dr-sweep">
+        <div class="track"></div>
+        <div class="fill" id="dr-sweep-fill"></div>
+        <input type="range" id="dr-sweep-min" min="-36" max="36" value="-12">
+        <input type="range" id="dr-sweep-max" min="-36" max="36" value="12">
+      </div>
+    </div>
+
+    <div class="lever-row">
+      <label>Decay Speed <span id="decay-lbl">0.05 — 0.50 s</span><button class="lock-btn" id="lock-decaySpeed" title="Lock this parameter">🔓</button></label>
+      <div class="dual-range" id="dr-decay">
+        <div class="track"></div>
+        <div class="fill" id="dr-decay-fill"></div>
+        <input type="range" id="dr-decay-min" min="0.01" max="2.0" step="0.01" value="0.05">
+        <input type="range" id="dr-decay-max" min="0.01" max="2.0" step="0.01" value="0.5">
+      </div>
+    </div>
+
+    <div class="lever-row">
+      <label>Note Count <span id="count-lbl">1 — 8</span><button class="lock-btn" id="lock-noteCount" title="Lock this parameter">🔓</button></label>
+      <div class="dual-range" id="dr-count">
+        <div class="track"></div>
+        <div class="fill" id="dr-count-fill"></div>
+        <input type="range" id="dr-count-min" min="1" max="32" value="1">
+        <input type="range" id="dr-count-max" min="1" max="32" value="8">
+      </div>
+    </div>
+
+    <div class="lever-row">
+      <label>Duration <span id="dur-lbl">0.10 — 1.00 s</span><button class="lock-btn" id="lock-duration" title="Lock this parameter">🔓</button></label>
+      <div class="dual-range" id="dr-dur">
+        <div class="track"></div>
+        <div class="fill" id="dr-dur-fill"></div>
+        <input type="range" id="dr-dur-min" min="0.05" max="10" step="0.05" value="0.1">
+        <input type="range" id="dr-dur-max" min="0.05" max="10" step="0.05" value="1.0">
+      </div>
+    </div>
+
+    <div class="rand-btns">
+      <button id="btn-generate">⚄ GENERATE</button>
+      <button id="btn-subtle">~ SUBTLE</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Render overlay -->
+<div id="render-overlay">
+  <div id="render-modal">
+    <div class="rm-title">Rendering WAV</div>
+    <div class="rm-dots">▪ ▪ ▪</div>
+    <div class="rm-sub">writing offline audio context</div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════════════
+// APP STATE
+// ═══════════════════════════════════════════════════════════════
+
+const appState = {
+  sfx: createDefaultSFX(),
+  isPlaying: false,
+  selectedNoteIds: new Set(),
+  zoom: { xPixPerSec: 400, yPixPerRow: 9 },
+  scroll: { xSec: 0, yMidi: 84 }, // yMidi = top visible midi note (C6 default)
+  randomizerLevers: {
+    freqRange:  { min: 80,   max: 880,  locked: false },
+    pitchSweep: { min: -12,  max: 12,   locked: false },
+    decaySpeed: { min: 0.05, max: 0.5,  locked: false },
+    noteCount:  { min: 1,    max: 8,    locked: false },
+    noiseMix:   { min: 0,    max: 0,    locked: false },
+    duration:   { min: 0.1,  max: 1.0,  locked: false }
+  }
+};
+
+function createDefaultSFX() {
+  return {
+    name: 'untitled',
+    totalDuration: 0.5,
+    bpm: 120,
+    snapMode: 'none',
+    instrument: {
+      type: 'square',
+      duty: 0.5,
+      noiseType: 'white',
+      noiseFilterFreq: 2000,
+      masterGain: 0.8
+    },
+    volumeEnvelope: [
+      { t: 0.0, v: 1.0 },
+      { t: 0.15, v: 0.7 },
+      { t: 1.0, v: 0.0 }
+    ],
+    pitchEnvelope: [
+      { t: 0.0, semitones: 7 },
+      { t: 0.3, semitones: 0 },
+      { t: 1.0, semitones: -2 }
+    ],
+    notes: [
+      { id: uid(), time: 0.0, duration: 0.12, frequency: midiToFreq(69), volume: 0.9, muted: false }
+    ],
+    echo: {
+      enabled: false,
+      delay: 0.12,   // seconds between repeats
+      scale: 0.55,   // volume multiplier per repeat
+      count: 4       // number of repeats
+    }
+  };
+}
+
+function uid() {
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
+function midiToFreq(midi) {
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+function freqToMidi(hz) {
+  return Math.round(69 + 12 * Math.log2(hz / 440));
+}
+
+function midiToName(midi) {
+  const names = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  return names[midi % 12] + Math.floor(midi / 12 - 1);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PRESETS
+// ═══════════════════════════════════════════════════════════════
+
+const PRESETS = {
+  HIT: {
+    name: 'hit', totalDuration: 0.14, bpm: 120, snapMode: 'none',
+    instrument: { type: 'square', duty: 0.5, noiseType: 'white', noiseFilterFreq: 2000, masterGain: 0.85 },
+    volumeEnvelope: [ { t: 0, v: 1.0 }, { t: 0.05, v: 0.7 }, { t: 1.0, v: 0.0 } ],
+    pitchEnvelope: [ { t: 0, semitones: 8 }, { t: 0.25, semitones: -4 }, { t: 1.0, semitones: -8 } ],
+    notes: [ { id: 'x', time: 0, duration: 0.10, frequency: 220, volume: 1.0, muted: false } ],
+    echo: { enabled: false, delay: 0.12, scale: 0.55, count: 4 }
+  },
+  PICKUP: {
+    name: 'pickup', totalDuration: 0.30, bpm: 120, snapMode: 'none',
+    instrument: { type: 'square', duty: 0.5, noiseType: 'white', noiseFilterFreq: 2000, masterGain: 0.75 },
+    volumeEnvelope: [ { t: 0, v: 0.8 }, { t: 0.4, v: 1.0 }, { t: 1.0, v: 0.0 } ],
+    pitchEnvelope: [ { t: 0, semitones: 0 }, { t: 0.5, semitones: 2 }, { t: 1.0, semitones: 4 } ],
+    notes: [
+      { id: 'x', time: 0.00, duration: 0.09, frequency: 523.25, volume: 0.8, muted: false },
+      { id: 'x', time: 0.10, duration: 0.09, frequency: 659.26, volume: 0.9, muted: false },
+      { id: 'x', time: 0.20, duration: 0.09, frequency: 783.99, volume: 1.0, muted: false }
+    ],
+    echo: { enabled: false, delay: 0.12, scale: 0.55, count: 4 }
+  },
+  DEATH: {
+    name: 'death', totalDuration: 0.90, bpm: 120, snapMode: 'none',
+    instrument: { type: 'square', duty: 0.3, noiseType: 'white', noiseFilterFreq: 2000, masterGain: 0.8 },
+    volumeEnvelope: [ { t: 0, v: 1.0 }, { t: 0.3, v: 0.7 }, { t: 0.8, v: 0.3 }, { t: 1.0, v: 0.0 } ],
+    pitchEnvelope: [ { t: 0, semitones: 4 }, { t: 0.4, semitones: -4 }, { t: 1.0, semitones: -12 } ],
+    notes: [
+      { id: 'x', time: 0.00, duration: 0.25, frequency: 440,    volume: 1.0,  muted: false },
+      { id: 'x', time: 0.30, duration: 0.25, frequency: 349.23, volume: 0.85, muted: false },
+      { id: 'x', time: 0.60, duration: 0.25, frequency: 261.63, volume: 0.7,  muted: false }
+    ],
+    echo: { enabled: false, delay: 0.12, scale: 0.55, count: 4 }
+  },
+  EXPLOSION: {
+    name: 'explosion', totalDuration: 0.60, bpm: 120, snapMode: 'none',
+    instrument: { type: 'noise', duty: 0.5, noiseType: 'pink', noiseFilterFreq: 1200, masterGain: 0.9 },
+    volumeEnvelope: [ { t: 0, v: 1.0 }, { t: 0.08, v: 0.6 }, { t: 0.5, v: 0.15 }, { t: 1.0, v: 0.0 } ],
+    pitchEnvelope: [ { t: 0, semitones: 0 }, { t: 1.0, semitones: 0 } ],
+    notes: [ { id: 'x', time: 0, duration: 0.45, frequency: 110, volume: 1.0, muted: false } ],
+    echo: { enabled: false, delay: 0.12, scale: 0.55, count: 4 }
+  },
+  SELECT: {
+    name: 'select', totalDuration: 0.10, bpm: 120, snapMode: 'none',
+    instrument: { type: 'square', duty: 0.5, noiseType: 'white', noiseFilterFreq: 2000, masterGain: 0.65 },
+    volumeEnvelope: [ { t: 0, v: 1.0 }, { t: 0.3, v: 0.5 }, { t: 1.0, v: 0.0 } ],
+    pitchEnvelope: [ { t: 0, semitones: 2 }, { t: 0.5, semitones: 0 }, { t: 1.0, semitones: -1 } ],
+    notes: [ { id: 'x', time: 0, duration: 0.07, frequency: 783.99, volume: 0.9, muted: false } ],
+    echo: { enabled: false, delay: 0.12, scale: 0.55, count: 4 }
+  },
+  POWERUP: {
+    name: 'powerup', totalDuration: 0.45, bpm: 120, snapMode: 'none',
+    instrument: { type: 'square', duty: 0.5, noiseType: 'white', noiseFilterFreq: 2000, masterGain: 0.75 },
+    volumeEnvelope: [ { t: 0, v: 0.7 }, { t: 0.5, v: 1.0 }, { t: 0.9, v: 0.8 }, { t: 1.0, v: 0.0 } ],
+    pitchEnvelope: [ { t: 0, semitones: 0 }, { t: 0.7, semitones: 7 }, { t: 1.0, semitones: 12 } ],
+    notes: [
+      { id: 'x', time: 0.00, duration: 0.08, frequency: 261.63, volume: 0.8, muted: false },
+      { id: 'x', time: 0.10, duration: 0.08, frequency: 329.63, volume: 0.85, muted: false },
+      { id: 'x', time: 0.20, duration: 0.08, frequency: 392.00, volume: 0.9, muted: false },
+      { id: 'x', time: 0.30, duration: 0.12, frequency: 523.25, volume: 1.0, muted: false }
+    ],
+    echo: { enabled: false, delay: 0.12, scale: 0.55, count: 4 }
+  },
+  COIN: {
+    name: 'coin', totalDuration: 0.18, bpm: 120, snapMode: 'none',
+    instrument: { type: 'square', duty: 0.5, noiseType: 'white', noiseFilterFreq: 2000, masterGain: 0.7 },
+    volumeEnvelope: [ { t: 0, v: 1.0 }, { t: 0.15, v: 0.5 }, { t: 1.0, v: 0.0 } ],
+    pitchEnvelope: [ { t: 0, semitones: 3 }, { t: 0.3, semitones: 0 }, { t: 1.0, semitones: -1 } ],
+    notes: [ { id: 'x', time: 0, duration: 0.14, frequency: 880, volume: 0.9, muted: false } ],
+    echo: { enabled: false, delay: 0.12, scale: 0.55, count: 4 }
+  },
+  ERROR: {
+    name: 'error', totalDuration: 0.30, bpm: 120, snapMode: 'none',
+    instrument: { type: 'square', duty: 0.7, noiseType: 'white', noiseFilterFreq: 2000, masterGain: 0.8 },
+    volumeEnvelope: [ { t: 0, v: 1.0 }, { t: 0.4, v: 0.7 }, { t: 1.0, v: 0.0 } ],
+    pitchEnvelope: [ { t: 0, semitones: 0 }, { t: 0.5, semitones: -2 }, { t: 1.0, semitones: -4 } ],
+    notes: [
+      { id: 'x', time: 0, duration: 0.22, frequency: 261.63, volume: 0.9, muted: false },
+      { id: 'x', time: 0, duration: 0.22, frequency: 277.18, volume: 0.9, muted: false }
+    ],
+    echo: { enabled: false, delay: 0.12, scale: 0.55, count: 4 }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// USER PRESET MANAGEMENT
+// ═══════════════════════════════════════════════════════════════
+
+let userPresets = {};
+
+function rebuildPresetDropdown() {
+  const sel = document.getElementById('preset-select');
+  const currentVal = sel.value;
+
+  // Remove any existing user-presets group
+  const existing = document.getElementById('user-presets-group');
+  if (existing) existing.remove();
+
+  const keys = Object.keys(userPresets);
+  if (keys.length > 0) {
+    const group = document.createElement('optgroup');
+    group.label = 'SAVED';
+    group.id = 'user-presets-group';
+    for (const key of keys) {
+      const opt = document.createElement('option');
+      opt.value = '__user__' + key;
+      opt.textContent = key;
+      group.appendChild(opt);
+    }
+    sel.appendChild(group);
+  }
+
+  // Restore prior selection if still valid
+  sel.value = currentVal;
+  if (sel.value !== currentVal) sel.value = '';
+
+  // Sync LOAD/DEL button state to match current dropdown value
+  const isUser = sel.value.startsWith('__user__');
+  const loadBtn = document.getElementById('btn-load-preset');
+  const delBtn  = document.getElementById('btn-del-preset');
+  if (loadBtn) loadBtn.style.display = isUser ? '' : 'none';
+  if (delBtn)  delBtn.disabled = !isUser;
+}
+
+async function loadUserPresets() {
+  if (window.electronAPI) {
+    userPresets = (await window.electronAPI.loadPresets()) || {};
+  }
+  rebuildPresetDropdown();
+}
+
+function persistUserPresets() {
+  if (window.electronAPI) window.electronAPI.savePresets(userPresets);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// UNDO
+// ═══════════════════════════════════════════════════════════════
+
+const undoStack = [];
+const MAX_UNDO = 50;
+
+function pushUndo() {
+  undoStack.push(JSON.parse(JSON.stringify(appState.sfx)));
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+  updateUndoButton();
+}
+
+function undo() {
+  if (!undoStack.length) return;
+  appState.sfx = undoStack.pop();
+  clearSelection();
+  syncAllUI();
+  scrollToFitNotes();
+  requestRedraw();
+  updateUndoButton();
+}
+
+function updateUndoButton() {
+  const btn = document.getElementById('btn-undo');
+  if (btn) btn.disabled = undoStack.length === 0;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SELECTION HELPERS
+// ═══════════════════════════════════════════════════════════════
+
+function isNoteSelected(id)    { return appState.selectedNoteIds.has(id); }
+function getSelectedNotes()    { return appState.sfx.notes.filter(n => appState.selectedNoteIds.has(n.id)); }
+function clearSelection()      { appState.selectedNoteIds.clear(); updateNoteInspector(); }
+
+function notesInRect(x1, y1, x2, y2) {
+  const rx1 = Math.min(x1, x2), rx2 = Math.max(x1, x2);
+  const ry1 = Math.min(y1, y2), ry2 = Math.max(y1, y2);
+  return appState.sfx.notes.filter(note => {
+    const nx = pianoRoll.timeToX(note.time);
+    const nw = Math.max(4, note.duration * appState.zoom.xPixPerSec);
+    const ny = pianoRoll.midiToY(freqToMidi(note.frequency));
+    const nh = appState.zoom.yPixPerRow - 1;
+    return nx < rx2 && nx + nw > rx1 && ny < ry2 && ny + nh > ry1;
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// REDRAW SCHEDULER
+// ═══════════════════════════════════════════════════════════════
+
+let rafPending = false;
+function requestRedraw() {
+  if (rafPending) return;
+  rafPending = true;
+  requestAnimationFrame(() => {
+    rafPending = false;
+    pianoRoll.render();
+    volEnvEditor.render();
+    pitchEnvEditor.render();
+  });
+}
+
+function getEffectiveDuration(sfx) {
+  // Latest possible end time across all notes including echo tails
+  let end = sfx.totalDuration;
+  for (const note of sfx.notes) {
+    if (note.muted) continue;
+    const echoOffset = sfx.echo?.enabled ? sfx.echo.count * sfx.echo.delay : 0;
+    end = Math.max(end, note.time + note.duration + echoOffset);
+  }
+  return end;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SFX SYNTHESIZER
+// ═══════════════════════════════════════════════════════════════
+
+class SFXSynthesizer {
+  constructor() {
+    this.ctx = null;
+    this.masterGain = null;
+    this.activeNodes = [];
+    this._stopTimer = null;
+  }
+
+  ensureContext() {
+    if (this.ctx) return;
+    this.ctx = new AudioContext({ sampleRate: 44100 });
+    this.masterGain = this.ctx.createGain();
+    this.masterGain.connect(this.ctx.destination);
+  }
+
+  play(sfx) {
+    this.ensureContext();
+    this.stop();
+    appState.isPlaying = true;
+    document.getElementById('btn-play').classList.add('active');
+
+    const startAt = this.ctx.currentTime + 0.02;
+    for (const note of sfx.notes) {
+      if (note.muted) continue;
+      this._scheduleWithEcho(note, sfx, startAt, this.ctx);
+    }
+
+    const dur = getEffectiveDuration(sfx) * 1000 + 100;
+    this._stopTimer = setTimeout(() => {
+      appState.isPlaying = false;
+      document.getElementById('btn-play').classList.remove('active');
+    }, dur);
+  }
+
+  stop() {
+    if (this._stopTimer) { clearTimeout(this._stopTimer); this._stopTimer = null; }
+    for (const n of this.activeNodes) {
+      try { n.source.stop(); } catch(e) {}
+      try { n.gain.disconnect(); } catch(e) {}
+    }
+    this.activeNodes = [];
+    appState.isPlaying = false;
+    document.getElementById('btn-play').classList.remove('active');
+  }
+
+  _scheduleWithEcho(note, sfx, baseTime, ctx) {
+    // Original voice
+    this._scheduleNote(note, sfx, baseTime, ctx);
+
+    const echo = sfx.echo;
+    if (!echo || !echo.enabled) return;
+
+    for (let i = 1; i <= echo.count; i++) {
+      const echoVol = note.volume * Math.pow(echo.scale, i);
+      if (echoVol < 0.005) break; // inaudible — stop early
+      const echoNote = {
+        ...note,
+        time: note.time + echo.delay * i,
+        volume: echoVol
+      };
+      this._scheduleNote(echoNote, sfx, baseTime, ctx);
+    }
+  }
+
+  _scheduleNote(note, sfx, baseTime, ctx) {
+    const when = baseTime + note.time;
+    const dur = Math.max(0.005, note.duration);
+    const inst = sfx.instrument;
+
+    const gainNode = ctx.createGain();
+    gainNode.gain.setValueAtTime(0.0001, when);
+
+    // Volume envelope automation
+    const volPts = sfx.volumeEnvelope;
+    for (let i = 0; i < volPts.length; i++) {
+      const absT = when + volPts[i].t * sfx.totalDuration;
+      const val = Math.max(0.0001, volPts[i].v * note.volume * inst.masterGain);
+      if (i === 0) gainNode.gain.setValueAtTime(val, Math.max(when, absT));
+      else gainNode.gain.linearRampToValueAtTime(val, Math.max(when + 0.001, absT));
+    }
+    gainNode.gain.setValueAtTime(0.0001, when + dur);
+
+    let source;
+
+    if (inst.type === 'square') {
+      source = ctx.createOscillator();
+      if (Math.abs(inst.duty - 0.5) < 0.01) {
+        source.type = 'square';
+      } else {
+        source.setPeriodicWave(this._makePeriodicWave(ctx, inst.duty));
+      }
+
+      // Apply pitch envelope — set t=0 value first, then ramp
+      const pitchPts = sfx.pitchEnvelope;
+      if (pitchPts.length > 0) {
+        const f0 = note.frequency * Math.pow(2, pitchPts[0].semitones / 12);
+        source.frequency.setValueAtTime(Math.max(1, f0), when);
+        for (let i = 1; i < pitchPts.length; i++) {
+          const absT = when + pitchPts[i].t * sfx.totalDuration;
+          const targetFreq = note.frequency * Math.pow(2, pitchPts[i].semitones / 12);
+          source.frequency.linearRampToValueAtTime(Math.max(1, targetFreq), Math.max(when + 0.001, absT));
+        }
+      } else {
+        source.frequency.setValueAtTime(note.frequency, when);
+      }
+
+      source.connect(gainNode);
+    } else {
+      // Noise — fill a buffer with white or pink noise
+      const sampleRate = ctx.sampleRate;
+      const numSamples = Math.ceil(sampleRate * dur);
+      const buf = ctx.createBuffer(1, numSamples, sampleRate);
+      const data = buf.getChannelData(0);
+      if (inst.noiseType === 'pink') {
+        let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+        for (let i = 0; i < numSamples; i++) {
+          const w = Math.random() * 2 - 1;
+          b0=0.99886*b0+w*0.0555179; b1=0.99332*b1+w*0.0750759;
+          b2=0.96900*b2+w*0.1538520; b3=0.86650*b3+w*0.3104856;
+          b4=0.55000*b4+w*0.5329522; b5=-0.7616*b5-w*0.0168980;
+          data[i] = (b0+b1+b2+b3+b4+b5+b6+w*0.5362)*0.11;
+          b6 = w*0.115926;
+        }
+      } else {
+        for (let i = 0; i < numSamples; i++) data[i] = Math.random() * 2 - 1;
+      }
+
+      source = ctx.createBufferSource();
+      source.buffer = buf;
+
+      if (inst.noiseFilterFreq && inst.noiseType === 'pink') {
+        const filt = ctx.createBiquadFilter();
+        filt.type = 'lowpass';
+        filt.frequency.value = inst.noiseFilterFreq;
+        source.connect(filt);
+        filt.connect(gainNode);
+      } else {
+        source.connect(gainNode);
+      }
+    }
+
+    gainNode.connect(this.masterGain);
+
+    source.start(when);
+    source.stop(when + dur + 0.01);
+    this.activeNodes.push({ source, gain: gainNode });
+  }
+
+  _makePeriodicWave(ctx, duty) {
+    const N = 64;
+    const real = new Float32Array(N);
+    const imag = new Float32Array(N);
+    for (let n = 1; n < N; n++) {
+      imag[n] = (2 / (n * Math.PI)) * Math.sin(n * Math.PI * duty);
+    }
+    return ctx.createPeriodicWave(real, imag, { disableNormalization: false });
+  }
+
+  async renderOffline(sfx) {
+    const sampleRate = 44100;
+
+    // Trim leading silence: shift all notes so the earliest starts at t=0
+    let earliestNoteTime = Infinity;
+    for (const note of sfx.notes) {
+      if (!note.muted) earliestNoteTime = Math.min(earliestNoteTime, note.time);
+    }
+    if (earliestNoteTime === Infinity) earliestNoteTime = 0;
+
+    const numSamples = Math.ceil(sampleRate * Math.max(0.01, getEffectiveDuration(sfx) - earliestNoteTime));
+    const offCtx = new OfflineAudioContext(1, numSamples, sampleRate);
+
+    const offMaster = offCtx.createGain();
+    offMaster.gain.value = 1.0;
+    offMaster.connect(offCtx.destination);
+
+    // Swap masterGain to the offline master, stash active nodes
+    const origMaster = this.masterGain;
+    const origActive = this.activeNodes;
+    this.masterGain = offMaster;
+    this.activeNodes = [];
+
+    for (const note of sfx.notes) {
+      if (note.muted) continue;
+      this._scheduleWithEcho(note, sfx, -earliestNoteTime, offCtx);
+    }
+
+    // Restore live context state before awaiting (render is async)
+    this.masterGain = origMaster;
+    this.activeNodes = origActive;
+
+    return offCtx.startRendering();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ENVELOPE EDITOR
+// ═══════════════════════════════════════════════════════════════
+
+class EnvelopeEditor {
+  constructor(canvas, key) {
+    this.canvas = canvas;
+    this.key = key; // 'volumeEnvelope' or 'pitchEnvelope'
+    this.ctx = canvas.getContext('2d');
+    this.dragIdx = null;
+    this.POINT_R = 5;
+    this._bind();
+  }
+
+  get points() { return appState.sfx[this.key]; }
+  get isVol()  { return this.key === 'volumeEnvelope'; }
+
+  _yRange() { return this.isVol ? { min: 0, max: 1 } : { min: -24, max: 24 }; }
+
+  tToX(t)  { return t * (this.canvas.width - 2) + 1; }
+  xToT(px) { return Math.max(0, Math.min(1, (px - 1) / (this.canvas.width - 2))); }
+
+  vToY(v) {
+    const r = this._yRange();
+    const norm = (v - r.min) / (r.max - r.min);
+    return (1 - norm) * (this.canvas.height - 2) + 1;
+  }
+  yToV(py) {
+    const r = this._yRange();
+    const norm = 1 - (py - 1) / (this.canvas.height - 2);
+    return Math.max(r.min, Math.min(r.max, r.min + norm * (r.max - r.min)));
+  }
+
+  getVal(pt) { return this.isVol ? pt.v : pt.semitones; }
+  setVal(pt, v) { if (this.isVol) pt.v = v; else pt.semitones = v; }
+
+  _interpAt(t) {
+    const pts = this.points;
+    if (pts.length === 0) return this.isVol ? 1 : 0;
+    if (t <= pts[0].t) return this.getVal(pts[0]);
+    if (t >= pts[pts.length-1].t) return this.getVal(pts[pts.length-1]);
+    for (let i = 0; i < pts.length - 1; i++) {
+      if (t >= pts[i].t && t <= pts[i+1].t) {
+        const frac = (t - pts[i].t) / (pts[i+1].t - pts[i].t);
+        return this.getVal(pts[i]) + frac * (this.getVal(pts[i+1]) - this.getVal(pts[i]));
+      }
+    }
+    return 0;
+  }
+
+  render() {
+    const c = this.ctx;
+    const W = this.canvas.width, H = this.canvas.height;
+    c.fillStyle = '#0a0a0a';
+    c.fillRect(0, 0, W, H);
+
+    // Mid line for pitch
+    if (!this.isVol) {
+      c.strokeStyle = '#222';
+      c.lineWidth = 1;
+      c.beginPath();
+      const midY = this.vToY(0);
+      c.moveTo(0, midY); c.lineTo(W, midY);
+      c.stroke();
+    }
+
+    // Curve
+    c.beginPath();
+    c.strokeStyle = this.isVol ? '#4488cc' : '#cc8844';
+    c.lineWidth = 1.5;
+    for (let px = 0; px < W; px++) {
+      const t = px / (W - 1);
+      const v = this._interpAt(t);
+      const y = this.vToY(v);
+      if (px === 0) c.moveTo(px, y); else c.lineTo(px, y);
+    }
+    c.stroke();
+
+    // Fill under curve (vol only)
+    if (this.isVol) {
+      c.beginPath();
+      for (let px = 0; px < W; px++) {
+        const t = px / (W - 1);
+        const v = this._interpAt(t);
+        const y = this.vToY(v);
+        if (px === 0) c.moveTo(px, y); else c.lineTo(px, y);
+      }
+      c.lineTo(W, H); c.lineTo(0, H); c.closePath();
+      c.fillStyle = 'rgba(68,136,204,0.12)';
+      c.fill();
+    }
+
+    // Control points
+    const pts = this.points;
+    for (let i = 0; i < pts.length; i++) {
+      const x = this.tToX(pts[i].t);
+      const y = this.vToY(this.getVal(pts[i]));
+      c.beginPath();
+      c.arc(x, y, this.POINT_R, 0, Math.PI * 2);
+      c.fillStyle = i === this.dragIdx ? '#fff' : (this.isVol ? '#6699cc' : '#cc9966');
+      c.fill();
+      c.strokeStyle = '#000';
+      c.lineWidth = 1;
+      c.stroke();
+    }
+  }
+
+  _hitTest(mx, my) {
+    const pts = this.points;
+    for (let i = 0; i < pts.length; i++) {
+      const dx = mx - this.tToX(pts[i].t);
+      const dy = my - this.vToY(this.getVal(pts[i]));
+      if (Math.sqrt(dx*dx+dy*dy) < this.POINT_R + 3) return i;
+    }
+    return -1;
+  }
+
+  _bind() {
+    const el = this.canvas;
+    el.addEventListener('mousedown', e => {
+      if (e.button === 2) return;
+      const r = el.getBoundingClientRect();
+      const mx = (e.clientX - r.left) * (el.width / r.width);
+      const my = (e.clientY - r.top) * (el.height / r.height);
+      this.dragIdx = this._hitTest(mx, my);
+      if (this.dragIdx >= 0) pushUndo();
+      requestRedraw();
+    });
+
+    el.addEventListener('mousemove', e => {
+      if (this.dragIdx === null || this.dragIdx < 0) return;
+      const r = el.getBoundingClientRect();
+      const mx = (e.clientX - r.left) * (el.width / r.width);
+      const my = (e.clientY - r.top) * (el.height / r.height);
+      const pts = this.points;
+      const pt = pts[this.dragIdx];
+      // Clamp t: first and last points stay at 0 and 1
+      if (this.dragIdx === 0) pt.t = 0;
+      else if (this.dragIdx === pts.length - 1) pt.t = 1;
+      else pt.t = Math.max(pts[this.dragIdx-1].t + 0.001, Math.min(pts[this.dragIdx+1].t - 0.001, this.xToT(mx)));
+      this.setVal(pt, this.yToV(my));
+      requestRedraw();
+    });
+
+    el.addEventListener('mouseup', () => { this.dragIdx = null; });
+    el.addEventListener('mouseleave', () => { this.dragIdx = null; });
+
+    el.addEventListener('dblclick', e => {
+      const r = el.getBoundingClientRect();
+      const mx = (e.clientX - r.left) * (el.width / r.width);
+      const my = (e.clientY - r.top) * (el.height / r.height);
+      if (this._hitTest(mx, my) >= 0) return;
+      pushUndo();
+      const t = this.xToT(mx);
+      const v = this.yToV(my);
+      const pt = this.isVol ? { t, v } : { t, semitones: v };
+      this.points.push(pt);
+      this.points.sort((a, b) => a.t - b.t);
+      requestRedraw();
+    });
+
+    el.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      const mx = (e.clientX - r.left) * (el.width / r.width);
+      const my = (e.clientY - r.top) * (el.height / r.height);
+      const idx = this._hitTest(mx, my);
+      if (idx >= 0 && this.points.length > 2) {
+        pushUndo();
+        this.points.splice(idx, 1);
+        requestRedraw();
+      }
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PIANO ROLL
+// ═══════════════════════════════════════════════════════════════
+
+class PianoRoll {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.LABEL_W = 48;
+    this.HEADER_H = 22;
+    this.BLACK_KEYS = new Set([1,3,6,8,10]); // semitone offsets in octave
+    this.dragState = null;
+    this.hoverNoteId = null;
+    this._bind();
+  }
+
+  // Coordinate transforms
+  timeToX(sec) {
+    return this.LABEL_W + (sec - appState.scroll.xSec) * appState.zoom.xPixPerSec;
+  }
+  xToTime(px) {
+    return (px - this.LABEL_W) / appState.zoom.xPixPerSec + appState.scroll.xSec;
+  }
+  midiToY(midi) {
+    return this.HEADER_H + (appState.scroll.yMidi - midi) * appState.zoom.yPixPerRow;
+  }
+  yToMidi(py) {
+    return Math.round(appState.scroll.yMidi - (py - this.HEADER_H) / appState.zoom.yPixPerRow);
+  }
+
+  snapTime(t) {
+    const s = appState.sfx.snapMode;
+    if (s === 'frame') return Math.round(t * 60) / 60;
+    if (s === 'beat') { const beat = 60 / appState.sfx.bpm; return Math.round(t / beat) * beat; }
+    return t;
+  }
+
+  _hitTest(mx, my) {
+    for (const note of appState.sfx.notes) {
+      const x = this.timeToX(note.time);
+      const w = note.duration * appState.zoom.xPixPerSec;
+      const y = this.midiToY(freqToMidi(note.frequency));
+      const h = appState.zoom.yPixPerRow - 1;
+      if (mx >= x && mx <= x + w && my >= y && my <= y + h) {
+        const isResize = mx > x + w - 6;
+        return { note, isResize };
+      }
+    }
+    return null;
+  }
+
+  render() {
+    const c = this.ctx;
+    const W = this.canvas.width, H = this.canvas.height;
+
+    c.fillStyle = '#0d0d0d';
+    c.fillRect(0, 0, W, H);
+
+    this._drawNoteGrid(c, W, H);
+    this._drawTimeGrid(c, W, H);
+    this._drawPianoKeys(c, H);
+    this._drawNotes(c);
+    this._drawPlayhead(c, H);
+    this._drawMarquee(c);
+  }
+
+  _drawNoteGrid(c, W, H) {
+    const rowH = appState.zoom.yPixPerRow;
+    const topMidi = appState.scroll.yMidi;
+    const bottomMidi = topMidi - Math.ceil(H / rowH) - 1;
+
+    for (let midi = Math.max(0, bottomMidi); midi <= Math.min(127, topMidi + 1); midi++) {
+      const y = this.midiToY(midi);
+      if (y < this.HEADER_H - rowH || y > H) continue;
+      const inOctave = midi % 12;
+      const isBlack = this.BLACK_KEYS.has(inOctave);
+      c.fillStyle = isBlack ? '#0f0f0f' : '#131313';
+      c.fillRect(this.LABEL_W, y, W - this.LABEL_W, rowH - 1);
+      // Octave separator
+      if (inOctave === 0) {
+        c.strokeStyle = '#222';
+        c.lineWidth = 1;
+        c.beginPath(); c.moveTo(this.LABEL_W, y + rowH - 0.5); c.lineTo(W, y + rowH - 0.5); c.stroke();
+      }
+    }
+  }
+
+  _drawPianoKeys(c, H) {
+    const rowH = appState.zoom.yPixPerRow;
+    const topMidi = appState.scroll.yMidi;
+    const bottomMidi = topMidi - Math.ceil(H / rowH) - 1;
+    c.fillStyle = '#111';
+    c.fillRect(0, this.HEADER_H, this.LABEL_W, H - this.HEADER_H);
+
+    for (let midi = Math.max(0, bottomMidi); midi <= Math.min(127, topMidi + 1); midi++) {
+      const y = this.midiToY(midi);
+      if (y < this.HEADER_H - rowH || y > H) continue;
+      const inOctave = midi % 12;
+      const isBlack = this.BLACK_KEYS.has(inOctave);
+      c.fillStyle = isBlack ? '#1a1a1a' : '#252525';
+      c.fillRect(1, y, this.LABEL_W - 2, rowH - 1);
+
+      // Label C notes
+      if (inOctave === 0 && rowH >= 7) {
+        c.fillStyle = '#555';
+        c.font = `${Math.min(10, rowH - 1)}px Consolas, monospace`;
+        c.textAlign = 'right';
+        c.fillText('C' + Math.floor(midi / 12 - 1), this.LABEL_W - 4, y + rowH - 2);
+      }
+    }
+    // Border
+    c.strokeStyle = '#2a2a2a';
+    c.lineWidth = 1;
+    c.beginPath(); c.moveTo(this.LABEL_W - 0.5, this.HEADER_H); c.lineTo(this.LABEL_W - 0.5, H); c.stroke();
+  }
+
+  _drawTimeGrid(c, W, H) {
+    c.fillStyle = '#161616';
+    c.fillRect(0, 0, W, this.HEADER_H);
+    c.strokeStyle = '#2a2a2a';
+    c.lineWidth = 1;
+    c.beginPath(); c.moveTo(0, this.HEADER_H - 0.5); c.lineTo(W, this.HEADER_H - 0.5); c.stroke();
+
+    const pxPerSec = appState.zoom.xPixPerSec;
+    const minGap = 40; // min pixels between lines
+    // Pick a grid interval
+    const candidates = [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5];
+    let interval = candidates.find(iv => iv * pxPerSec >= minGap) || 5;
+
+    const startT = appState.scroll.xSec;
+    const endT = startT + (W - this.LABEL_W) / pxPerSec;
+    let t = Math.floor(startT / interval) * interval;
+
+    c.font = '9px Consolas, monospace';
+    c.textAlign = 'center';
+
+    while (t <= endT + interval) {
+      const x = this.timeToX(t);
+      if (x >= this.LABEL_W) {
+        c.strokeStyle = Math.abs(t % (interval * 4)) < 0.0001 ? '#333' : '#1e1e1e';
+        c.lineWidth = 1;
+        c.beginPath(); c.moveTo(x + 0.5, this.HEADER_H); c.lineTo(x + 0.5, H); c.stroke();
+        c.fillStyle = '#444';
+        c.fillText((t * 1000).toFixed(0) + 'ms', x, this.HEADER_H - 4);
+      }
+      t = Math.round((t + interval) * 10000) / 10000;
+    }
+
+    // Total duration marker
+    const durX = this.timeToX(appState.sfx.totalDuration);
+    if (durX >= this.LABEL_W && durX <= W) {
+      c.strokeStyle = '#446';
+      c.lineWidth = 1;
+      c.setLineDash([4, 3]);
+      c.beginPath(); c.moveTo(durX, 0); c.lineTo(durX, H); c.stroke();
+      c.setLineDash([]);
+    }
+  }
+
+  _drawNotes(c) {
+    const rowH = appState.zoom.yPixPerRow;
+    const inst = appState.sfx.instrument;
+    const isSquare = inst.type === 'square';
+
+    for (const note of appState.sfx.notes) {
+      const x = this.timeToX(note.time);
+      const w = Math.max(4, note.duration * appState.zoom.xPixPerSec);
+      const midi = freqToMidi(note.frequency);
+      const y = this.midiToY(midi);
+      const h = rowH - 1;
+
+      if (x + w < this.LABEL_W || x > this.canvas.width) continue;
+
+      const isMuted    = note.muted;
+      const isSelected = isNoteSelected(note.id);
+      const isHover    = note.id === this.hoverNoteId;
+
+      if (isMuted) {
+        // Muted: very dim base fill + diagonal hatch
+        c.fillStyle = isSquare ? 'rgba(80,140,255,0.12)' : 'rgba(255,140,60,0.12)';
+        c.fillRect(x, y, w, h);
+        // Hatch lines
+        c.save();
+        c.beginPath(); c.rect(x, y, w, h); c.clip();
+        c.strokeStyle = isSquare ? 'rgba(80,140,255,0.22)' : 'rgba(255,140,60,0.22)';
+        c.lineWidth = 1;
+        for (let hx = x - h; hx < x + w + h; hx += 5) {
+          c.beginPath(); c.moveTo(hx, y + h); c.lineTo(hx + h, y); c.stroke();
+        }
+        c.restore();
+        // "M" badge
+        if (w > 10 && rowH >= 7) {
+          c.fillStyle = 'rgba(200,160,80,0.6)';
+          c.font = `${Math.min(8, rowH - 1)}px Consolas, monospace`;
+          c.textAlign = 'left';
+          c.fillText('M', x + 2, y + rowH - 2);
+        }
+      } else {
+        const alpha = 0.35 + note.volume * 0.65;
+        const baseClr  = isSquare ? `rgba(80,140,255,${alpha})`   : `rgba(255,140,60,${alpha})`;
+        const hoverClr = isSquare ? `rgba(130,190,255,${alpha})`  : `rgba(255,190,110,${alpha})`;
+        c.fillStyle = isHover ? hoverClr : baseClr;
+        c.fillRect(x, y, w, h);
+
+        // Resize handle
+        c.fillStyle = 'rgba(0,0,0,0.35)';
+        c.fillRect(x + w - 4, y, 4, h);
+
+        // Note name label
+        if (w > 24 && rowH >= 7) {
+          c.fillStyle = 'rgba(255,255,255,0.7)';
+          c.font = `${Math.min(9, rowH - 2)}px Consolas, monospace`;
+          c.textAlign = 'left';
+          c.fillText(midiToName(midi), x + 3, y + rowH - 2);
+        }
+      }
+
+      // Selection border
+      if (isSelected) {
+        c.strokeStyle = '#fff';
+        c.lineWidth = 1.5;
+        c.strokeRect(x + 0.75, y + 0.75, w - 1.5, h - 1.5);
+      }
+    }
+  }
+
+  _drawPlayhead(c, H) {
+    // Only drawn if playing — omitted for now (no playback position tracking)
+  }
+
+  _drawMarquee(c) {
+    const ds = this.dragState;
+    if (!ds || ds.type !== 'marquee' || !ds.moved) return;
+    const x1 = Math.min(ds.startX, ds.curX), x2 = Math.max(ds.startX, ds.curX);
+    const y1 = Math.min(ds.startY, ds.curY), y2 = Math.max(ds.startY, ds.curY);
+    c.save();
+    c.fillStyle = 'rgba(100,160,255,0.06)';
+    c.fillRect(x1, y1, x2 - x1, y2 - y1);
+    c.strokeStyle = 'rgba(180,220,255,0.7)';
+    c.lineWidth = 1;
+    c.setLineDash([4, 3]);
+    c.strokeRect(x1 + 0.5, y1 + 0.5, x2 - x1, y2 - y1);
+    c.setLineDash([]);
+    c.restore();
+  }
+
+  _bind() {
+    const el = this.canvas;
+    const DRAG_THRESHOLD = 4; // px before a click becomes a drag
+
+    el.addEventListener('mousedown', e => {
+      if (e.button === 2) {
+        const r = el.getBoundingClientRect();
+        const mx = (e.clientX - r.left) * (el.width / r.width);
+        const my = (e.clientY - r.top) * (el.height / r.height);
+        const hit = this._hitTest(mx, my);
+        if (hit) {
+          pushUndo();
+          // Right-click on a selected note removes all selected; otherwise just this one
+          if (isNoteSelected(hit.note.id) && appState.selectedNoteIds.size > 1) {
+            const ids = new Set([...appState.selectedNoteIds]);
+            appState.sfx.notes = appState.sfx.notes.filter(n => !ids.has(n.id));
+            clearSelection();
+          } else {
+            appState.sfx.notes = appState.sfx.notes.filter(n => n.id !== hit.note.id);
+            appState.selectedNoteIds.delete(hit.note.id);
+            updateNoteInspector();
+          }
+          requestRedraw();
+        }
+        return;
+      }
+
+      const r = el.getBoundingClientRect();
+      const mx = (e.clientX - r.left) * (el.width / r.width);
+      const my = (e.clientY - r.top) * (el.height / r.height);
+      const hit = this._hitTest(mx, my);
+
+      if (hit) {
+        if (e.altKey) {
+          // Alt-click: toggle mute immediately, no drag
+          pushUndo();
+          hit.note.muted = !hit.note.muted;
+          updateNoteInspector();
+          requestRedraw();
+          return;
+        }
+
+        if (e.shiftKey) {
+          // Shift-click: toggle this note in selection, no drag
+          if (isNoteSelected(hit.note.id)) {
+            appState.selectedNoteIds.delete(hit.note.id);
+          } else {
+            appState.selectedNoteIds.add(hit.note.id);
+          }
+          updateNoteInspector();
+          requestRedraw();
+          return;
+        }
+
+        // Normal click on a note
+        if (hit.isResize) {
+          // Resize always acts on the single clicked note
+          pushUndo();
+          if (!isNoteSelected(hit.note.id)) {
+            clearSelection();
+            appState.selectedNoteIds.add(hit.note.id);
+          }
+          this.dragState = {
+            type: 'resize',
+            note: hit.note,
+            startX: mx, startY: my,
+            origTime: hit.note.time,
+            origDur: hit.note.duration,
+            origMidi: freqToMidi(hit.note.frequency),
+            moved: false
+          };
+        } else {
+          // Move — if the note is already in the selection, do a group move
+          pushUndo();
+          if (!isNoteSelected(hit.note.id)) {
+            clearSelection();
+            appState.selectedNoteIds.add(hit.note.id);
+            updateNoteInspector();
+            requestRedraw();
+          }
+          this.dragState = {
+            type: 'pending',
+            note: hit.note,
+            startX: mx, startY: my,
+            origTime: hit.note.time,
+            origDur: hit.note.duration,
+            origMidi: freqToMidi(hit.note.frequency),
+            moved: false,
+            origPositions: null  // populated on transition to move
+          };
+        }
+      } else {
+        // Empty space — start marquee (or clear + marquee if shift not held)
+        if (!e.shiftKey) clearSelection();
+        this.dragState = {
+          type: 'marquee',
+          startX: mx, startY: my,
+          curX: mx, curY: my,
+          moved: false
+        };
+      }
+    });
+
+    el.addEventListener('mousemove', e => {
+      const r = el.getBoundingClientRect();
+      const mx = (e.clientX - r.left) * (el.width / r.width);
+      const my = (e.clientY - r.top) * (el.height / r.height);
+
+      // Update hover
+      const hit = this._hitTest(mx, my);
+      const newHover = hit ? hit.note.id : null;
+      if (newHover !== this.hoverNoteId) {
+        this.hoverNoteId = newHover;
+        if (hit) el.style.cursor = hit.isResize ? 'ew-resize' : 'grab';
+        else el.style.cursor = 'crosshair';
+        requestRedraw();
+      }
+
+      if (!this.dragState) return;
+      const ds = this.dragState;
+      const dx = mx - ds.startX;
+      const dy = my - ds.startY;
+      const pxPerSec = appState.zoom.xPixPerSec;
+
+      if (ds.type === 'marquee') {
+        if (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD) ds.moved = true;
+        ds.curX = mx; ds.curY = my;
+        requestRedraw();
+        return;
+      }
+
+      // Upgrade pending → move once threshold crossed
+      if (ds.type === 'pending') {
+        if (Math.sqrt(dx*dx + dy*dy) < DRAG_THRESHOLD) return;
+        ds.type = 'move';
+        // Save originals for ALL selected notes for group move
+        ds.origPositions = new Map();
+        for (const n of getSelectedNotes()) {
+          ds.origPositions.set(n.id, { time: n.time, frequency: n.frequency });
+        }
+      }
+
+      if (ds.type === 'move') {
+        const midiDelta = -Math.round(dy / appState.zoom.yPixPerRow);
+        if (ds.origPositions && ds.origPositions.size > 1) {
+          // Group move — apply delta to all selected notes
+          for (const n of getSelectedNotes()) {
+            const orig = ds.origPositions.get(n.id);
+            if (!orig) continue;
+            n.time = Math.max(0, this.snapTime(orig.time + dx / pxPerSec));
+            const newMidi = Math.max(0, Math.min(127, freqToMidi(orig.frequency) + midiDelta));
+            n.frequency = midiToFreq(newMidi);
+          }
+        } else {
+          ds.note.time = Math.max(0, this.snapTime(ds.origTime + dx / pxPerSec));
+          const newMidi = Math.max(0, Math.min(127, ds.origMidi + midiDelta));
+          ds.note.frequency = midiToFreq(newMidi);
+        }
+        ds.moved = true;
+        updateNoteInspector();
+      } else if (ds.type === 'resize') {
+        const minDur = 1 / pxPerSec;
+        ds.note.duration = Math.max(minDur, ds.origDur + dx / pxPerSec);
+        ds.moved = true;
+        updateNoteInspector();
+      }
+      requestRedraw();
+    });
+
+    el.addEventListener('mouseup', e => {
+      const ds = this.dragState;
+      if (!ds) return;
+
+      if (ds.type === 'marquee') {
+        if (!ds.moved) {
+          // Pure click on empty space — create a new note
+          pushUndo();
+          const time = Math.max(0, this.snapTime(this.xToTime(ds.startX)));
+          const midi = Math.max(0, Math.min(127, this.yToMidi(ds.startY)));
+          const newNote = {
+            id: uid(), time,
+            duration: 1 / appState.zoom.xPixPerSec,
+            frequency: midiToFreq(midi),
+            volume: 0.9, muted: false
+          };
+          appState.sfx.notes.push(newNote);
+          appState.selectedNoteIds.clear();
+          appState.selectedNoteIds.add(newNote.id);
+          // Switch to a resize drag so the user can drag to set note length
+          this.dragState = {
+            type: 'resize',
+            note: newNote,
+            startX: ds.startX, startY: ds.startY,
+            origTime: time, origDur: 0,
+            origMidi: midi, moved: false
+          };
+          updateNoteInspector();
+          requestRedraw();
+          return; // keep drag active for resize
+        } else {
+          // Marquee drag — select overlapping notes
+          const found = notesInRect(ds.startX, ds.startY, ds.curX, ds.curY);
+          if (!e.shiftKey) appState.selectedNoteIds.clear();
+          for (const n of found) appState.selectedNoteIds.add(n.id);
+          updateNoteInspector();
+          requestRedraw();
+        }
+      } else if (ds.type === 'pending') {
+        // Pure click on a note — already selected on mousedown, nothing else to do
+      }
+
+      this.dragState = null;
+    });
+    el.addEventListener('mouseleave', () => { this.dragState = null; });
+
+    el.addEventListener('contextmenu', e => e.preventDefault());
+
+    el.addEventListener('wheel', e => {
+      e.preventDefault();
+      if (e.ctrlKey || e.metaKey) {
+        // Zoom X
+        const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+        appState.zoom.xPixPerSec = Math.max(50, Math.min(4000, appState.zoom.xPixPerSec * factor));
+      } else if (e.altKey) {
+        // Zoom Y
+        const factor = e.deltaY < 0 ? 1.2 : 1 / 1.2;
+        appState.zoom.yPixPerRow = Math.max(4, Math.min(40, appState.zoom.yPixPerRow * factor));
+      } else if (e.shiftKey) {
+        // Scroll Y
+        appState.scroll.yMidi = Math.max(0, Math.min(127, appState.scroll.yMidi + (e.deltaY > 0 ? -3 : 3)));
+      } else {
+        // Scroll X
+        appState.scroll.xSec = Math.max(0, appState.scroll.xSec + e.deltaX * 0.003 + e.deltaY * 0.003);
+      }
+      requestRedraw();
+    }, { passive: false });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RANDOMIZER
+// ═══════════════════════════════════════════════════════════════
+
+class Randomizer {
+  constructor() {}
+
+  generate() {
+    const lev = appState.randomizerLevers;
+    const sfx = appState.sfx;
+
+    // Duration — from lever (skip if locked)
+    if (!lev.duration.locked) {
+      sfx.totalDuration = this._rand(lev.duration.min, lev.duration.max);
+      document.getElementById('total-duration').value = sfx.totalDuration.toFixed(2);
+    }
+
+    // Instrument type is NOT touched — user's square/noise choice persists
+
+    // Notes — count and/or frequencies may be locked independently
+    if (!lev.noteCount.locked) {
+      const n = Math.round(this._rand(lev.noteCount.min, lev.noteCount.max));
+      if (!lev.freqRange.locked) {
+        // Regenerate all notes from scratch
+        sfx.notes = [];
+        for (let i = 0; i < n; i++) {
+          const time = Math.random() * sfx.totalDuration * 0.85;
+          const maxDur = sfx.totalDuration - time;
+          const duration = Math.max(0.01, Math.min(maxDur, this._rand(0.02, sfx.totalDuration * 0.5)));
+          const freq = this._logRandFreq(lev.freqRange.min, lev.freqRange.max);
+          const midi = freqToMidi(freq);
+          sfx.notes.push({ id: uid(), time, duration, frequency: midiToFreq(midi), volume: 0.7 + Math.random() * 0.3 });
+        }
+      } else {
+        // Count changes but keep existing frequencies — trim or duplicate
+        const cur = sfx.notes.slice();
+        sfx.notes = [];
+        for (let i = 0; i < n; i++) {
+          const src = cur[i % cur.length];
+          const time = Math.random() * sfx.totalDuration * 0.85;
+          const maxDur = sfx.totalDuration - time;
+          const duration = Math.max(0.01, Math.min(maxDur, this._rand(0.02, sfx.totalDuration * 0.5)));
+          sfx.notes.push({ id: uid(), time, duration, frequency: src ? src.frequency : 440, volume: 0.7 + Math.random() * 0.3 });
+        }
+      }
+      sfx.notes.sort((a, b) => a.time - b.time);
+    } else if (!lev.freqRange.locked) {
+      // Count locked but frequencies change
+      for (const note of sfx.notes) {
+        const freq = this._logRandFreq(lev.freqRange.min, lev.freqRange.max);
+        note.frequency = midiToFreq(freqToMidi(freq));
+      }
+    }
+
+    // Volume envelope — shaped by decaySpeed lever (skip if locked)
+    if (!lev.decaySpeed.locked) {
+      const decay = this._rand(lev.decaySpeed.min, lev.decaySpeed.max);
+      sfx.volumeEnvelope = [
+        { t: 0,   v: 1.0 },
+        { t: Math.min(0.2,  decay / sfx.totalDuration),     v: 0.8 },
+        { t: Math.min(0.99, decay * 2 / sfx.totalDuration), v: 0.2 },
+        { t: 1.0, v: 0.0 }
+      ];
+    }
+
+    // Pitch envelope — only for square; skip if locked
+    if (sfx.instrument.type === 'square' && !lev.pitchSweep.locked) {
+      const sweepLo = lev.pitchSweep.min, sweepHi = lev.pitchSweep.max;
+      const sweepStart = this._rand(Math.max(-1, sweepLo), sweepHi);
+      const sweepEnd   = this._rand(sweepLo, Math.min(1, sweepHi));
+      sfx.pitchEnvelope = [
+        { t: 0,   semitones: sweepStart },
+        { t: 0.3, semitones: sweepStart * 0.3 },
+        { t: 1.0, semitones: sweepEnd }
+      ];
+    }
+
+    clearSelection();
+    scrollToFitNotes();
+    requestRedraw();
+    if (synth) synth.play(sfx);
+  }
+
+  subtle(factor = 0.15) {
+    const lev = appState.randomizerLevers;
+    const sfx = appState.sfx;
+
+    // Nudge note frequencies (skip if freqRange locked)
+    if (!lev.freqRange.locked) {
+      for (const note of sfx.notes) {
+        const midi = freqToMidi(note.frequency);
+        const nudge = Math.round((Math.random() - 0.5) * 2 * factor * 12);
+        note.frequency = midiToFreq(Math.max(0, Math.min(127, midi + nudge)));
+      }
+    }
+    // Nudge note volumes (always — not lever-controlled)
+    for (const note of sfx.notes) {
+      note.volume = Math.max(0.1, Math.min(1, note.volume + (Math.random()-0.5) * factor * 0.5));
+    }
+
+    // Nudge volume envelope (skip if decaySpeed locked)
+    if (!lev.decaySpeed.locked) {
+      for (const pt of sfx.volumeEnvelope) {
+        pt.v = Math.max(0, Math.min(1, pt.v + (Math.random()-0.5) * factor));
+      }
+    }
+
+    // Nudge pitch envelope (skip if pitchSweep locked)
+    if (!lev.pitchSweep.locked) {
+      for (const pt of sfx.pitchEnvelope) {
+        const sweepRange = lev.pitchSweep.max - lev.pitchSweep.min;
+        pt.semitones = Math.max(-36, Math.min(36, pt.semitones + (Math.random()-0.5) * factor * sweepRange));
+      }
+    }
+
+    requestRedraw();
+    if (synth) synth.play(sfx);
+  }
+
+  _rand(a, b) { return a + Math.random() * (b - a); }
+  _logRandFreq(min, max) { return min * Math.pow(max / min, Math.random()); }
+
+  _syncInstrumentUI() {
+    const type = appState.sfx.instrument.type;
+    document.getElementById('type-square').classList.toggle('active', type === 'square');
+    document.getElementById('type-noise').classList.toggle('active', type === 'noise');
+    document.getElementById('sq-params').style.display = type === 'square' ? '' : 'none';
+    document.getElementById('noise-params').style.display = type === 'noise' ? '' : 'none';
+    document.getElementById('pitch-env-section').style.display = type === 'square' ? '' : 'none';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EXPORTER
+// ═══════════════════════════════════════════════════════════════
+
+class Exporter {
+  constructor(synth) { this.synth = synth; }
+
+  async exportWAV() {
+    const overlay = document.getElementById('render-overlay');
+    const btn = document.getElementById('btn-export');
+    overlay.classList.add('visible');
+    btn.disabled = true;
+
+    // Let the overlay paint before blocking the thread
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+    try {
+      const buffer = await this.synth.renderOffline(appState.sfx);
+      const wav = this._toWAV(buffer);
+      const name = appState.sfx.name || 'untitled';
+
+      overlay.classList.remove('visible');
+      btn.disabled = false;
+
+      if (window.electronAPI) {
+        await window.electronAPI.exportWAV(wav, name + '.wav');
+      } else {
+        const blob = new Blob([wav], { type: 'audio/wav' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = name + '.wav'; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      }
+    } catch(e) {
+      console.error('Export failed:', e);
+      overlay.classList.remove('visible');
+      btn.disabled = false;
+    }
+  }
+
+  _toWAV(audioBuffer) {
+    const sampleRate = audioBuffer.sampleRate;
+    const data = audioBuffer.getChannelData(0);
+    const numSamples = data.length;
+
+    // Peak normalize
+    let peak = 0;
+    for (let i = 0; i < numSamples; i++) peak = Math.max(peak, Math.abs(data[i]));
+    const gain = peak > 0.001 ? 0.95 / peak : 1;
+
+    const bufSize = 44 + numSamples * 2;
+    const ab = new ArrayBuffer(bufSize);
+    const view = new DataView(ab);
+
+    const ws = (off, str) => { for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i)); };
+    ws(0, 'RIFF');
+    view.setUint32(4, bufSize - 8, true);
+    ws(8, 'WAVE');
+    ws(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);   // PCM
+    view.setUint16(22, 1, true);   // mono
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    ws(36, 'data');
+    view.setUint32(40, numSamples * 2, true);
+
+    for (let i = 0; i < numSamples; i++) {
+      const s = Math.max(-1, Math.min(1, data[i] * gain));
+      view.setInt16(44 + i * 2, Math.round(s * 32767), true);
+    }
+
+    return ab;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INIT & WIRING
+// ═══════════════════════════════════════════════════════════════
+
+let pianoRoll, volEnvEditor, pitchEnvEditor, synth, exporter, randomizer;
+
+function initDualRange(idPrefix, lbl, lblEl, min, max, step, fmt, leverKey) {
+  const minEl = document.getElementById(idPrefix + '-min');
+  const maxEl = document.getElementById(idPrefix + '-max');
+  const fillEl = document.getElementById(idPrefix + '-fill');
+  const lblDisplay = document.getElementById(lblEl);
+  const container = minEl.closest('.dual-range');
+  const trackW = () => container.getBoundingClientRect().width;
+
+  function update() {
+    let lo = parseFloat(minEl.value), hi = parseFloat(maxEl.value);
+    const minVal = parseFloat(minEl.min), maxVal = parseFloat(minEl.max);
+    if (lo > hi) { if (this === minEl) minEl.value = hi; else maxEl.value = lo; lo = parseFloat(minEl.value); hi = parseFloat(maxEl.value); }
+    const loFrac = (lo - minVal) / (maxVal - minVal);
+    const hiFrac = (hi - minVal) / (maxVal - minVal);
+    fillEl.style.left = (loFrac * 100) + '%';
+    fillEl.style.width = ((hiFrac - loFrac) * 100) + '%';
+    appState.randomizerLevers[leverKey] = { min: lo, max: hi };
+    lblDisplay.textContent = fmt(lo, hi);
+  }
+
+  minEl.addEventListener('input', update);
+  maxEl.addEventListener('input', update);
+  update.call(minEl);
+}
+
+function resizePianoRoll() {
+  const wrap = document.getElementById('piano-roll-wrap');
+  const r = wrap.getBoundingClientRect();
+  pianoRoll.canvas.width  = Math.floor(r.width);
+  pianoRoll.canvas.height = Math.floor(r.height);
+  requestRedraw();
+}
+
+function resizeEnvCanvases() {
+  for (const id of ['vol-env-canvas', 'pitch-env-canvas']) {
+    const el = document.getElementById(id);
+    const r = el.getBoundingClientRect();
+    if (r.width > 0) { el.width = Math.floor(r.width); el.height = 80; }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SCROLL HELPERS
+// ═══════════════════════════════════════════════════════════════
+
+function scrollToFitNotes() {
+  const notes = appState.sfx.notes;
+  if (!notes.length) return;
+
+  const midis = notes.map(n => freqToMidi(n.frequency));
+  const maxMidi = Math.max(...midis);
+  const minMidi = Math.min(...midis);
+
+  const canvas = document.getElementById('piano-roll');
+  const visibleRows = Math.floor((canvas.height - 22) / appState.zoom.yPixPerRow);
+  const span = maxMidi - minMidi;
+
+  // Set top so the highest note has 4 rows of padding above it,
+  // and if the span fits, the lowest note is visible too.
+  const needed = span + 8; // span + 4 padding top + 4 bottom
+  appState.scroll.yMidi = maxMidi + 4;
+
+  // If all notes fit in the current view, center them
+  if (needed <= visibleRows) {
+    appState.scroll.yMidi = Math.round((maxMidi + minMidi) / 2) + Math.floor(visibleRows / 2);
+  }
+
+  appState.scroll.yMidi = Math.max(minMidi + visibleRows - 1, Math.min(127, appState.scroll.yMidi));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NOTE INSPECTOR
+// ═══════════════════════════════════════════════════════════════
+
+function getSelectedNote() {
+  return getSelectedNotes()[0] || null;
+}
+
+function updateNoteInspector() {
+  const singlePanel = document.getElementById('note-inspector');
+  const multiPanel  = document.getElementById('multi-select-inspector');
+  const selected    = getSelectedNotes();
+
+  if (selected.length === 0) {
+    singlePanel.style.display = 'none';
+    multiPanel.style.display  = 'none';
+    return;
+  }
+
+  if (selected.length > 1) {
+    singlePanel.style.display = 'none';
+    multiPanel.style.display  = '';
+    document.getElementById('multi-select-count').textContent = `${selected.length} notes selected`;
+    return;
+  }
+
+  // Exactly 1 selected — show single inspector
+  multiPanel.style.display = 'none';
+  singlePanel.style.display = '';
+  const note = selected[0];
+  const midi = freqToMidi(note.frequency);
+  document.getElementById('note-freq-name').textContent = midiToName(midi);
+  document.getElementById('note-freq').value = note.frequency.toFixed(2);
+  document.getElementById('note-time').value = note.time.toFixed(4);
+  document.getElementById('note-dur').value  = note.duration.toFixed(4);
+  document.getElementById('note-vol').value  = note.volume;
+  document.getElementById('note-vol-val').textContent = note.volume.toFixed(2);
+
+  const muteBtn = document.getElementById('note-mute-btn');
+  muteBtn.textContent = note.muted ? 'UNMUTE' : 'MUTE';
+  muteBtn.classList.toggle('muted', note.muted);
+}
+
+function bindNoteInspector() {
+  document.getElementById('note-freq').addEventListener('change', e => {
+    const note = getSelectedNote(); if (!note) return;
+    const hz = parseFloat(e.target.value);
+    if (!isNaN(hz) && hz > 0) {
+      note.frequency = hz;
+      document.getElementById('note-freq-name').textContent = midiToName(freqToMidi(hz));
+      requestRedraw();
+    }
+  });
+
+  document.getElementById('note-time').addEventListener('change', e => {
+    const note = getSelectedNote(); if (!note) return;
+    const t = parseFloat(e.target.value);
+    if (!isNaN(t) && t >= 0) { note.time = t; requestRedraw(); }
+  });
+
+  document.getElementById('note-dur').addEventListener('change', e => {
+    const note = getSelectedNote(); if (!note) return;
+    const d = parseFloat(e.target.value);
+    if (!isNaN(d) && d > 0) { note.duration = d; requestRedraw(); }
+  });
+
+  document.getElementById('note-vol').addEventListener('input', e => {
+    const note = getSelectedNote(); if (!note) return;
+    note.volume = parseFloat(e.target.value);
+    document.getElementById('note-vol-val').textContent = note.volume.toFixed(2);
+    requestRedraw();
+  });
+
+  document.getElementById('note-mute-btn').addEventListener('click', () => {
+    const note = getSelectedNote(); if (!note) return;
+    pushUndo();
+    note.muted = !note.muted;
+    updateNoteInspector();
+    requestRedraw();
+  });
+
+  document.getElementById('note-delete-btn').addEventListener('click', () => {
+    const note = getSelectedNote(); if (!note) return;
+    pushUndo();
+    appState.sfx.notes = appState.sfx.notes.filter(n => n.id !== note.id);
+    clearSelection();
+    requestRedraw();
+  });
+
+  // Keyboard shortcuts (only when not focused on a text/number input)
+  document.addEventListener('keydown', e => {
+    const tag = document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+
+    if (e.key === 'Escape') {
+      clearSelection();
+      requestRedraw();
+      return;
+    }
+
+    if (e.key === 'm' || e.key === 'M') {
+      const selected = getSelectedNotes();
+      if (!selected.length) return;
+      pushUndo();
+      // If any are unmuted, mute all; otherwise unmute all
+      const anyUnmuted = selected.some(n => !n.muted);
+      for (const n of selected) n.muted = anyUnmuted;
+      updateNoteInspector();
+      requestRedraw();
+    }
+
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      const selected = getSelectedNotes();
+      if (!selected.length) return;
+      pushUndo();
+      const ids = new Set(selected.map(n => n.id));
+      appState.sfx.notes = appState.sfx.notes.filter(n => !ids.has(n.id));
+      clearSelection();
+      requestRedraw();
+      e.preventDefault();
+    }
+  });
+
+  // Multi-select inspector buttons
+  document.getElementById('multi-mute-btn').addEventListener('click', () => {
+    pushUndo();
+    for (const n of getSelectedNotes()) n.muted = true;
+    updateNoteInspector(); requestRedraw();
+  });
+  document.getElementById('multi-unmute-btn').addEventListener('click', () => {
+    pushUndo();
+    for (const n of getSelectedNotes()) n.muted = false;
+    updateNoteInspector(); requestRedraw();
+  });
+  document.getElementById('multi-delete-btn').addEventListener('click', () => {
+    pushUndo();
+    const ids = new Set(getSelectedNotes().map(n => n.id));
+    appState.sfx.notes = appState.sfx.notes.filter(n => !ids.has(n.id));
+    clearSelection(); requestRedraw();
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SYNC UI ← sfx STATE
+// ═══════════════════════════════════════════════════════════════
+
+function syncAllUI() {
+  const sfx  = appState.sfx;
+  const inst = sfx.instrument;
+
+  document.getElementById('sfx-name').value       = sfx.name || 'untitled';
+  document.getElementById('bpm').value             = sfx.bpm;
+  document.getElementById('snap-mode').value       = sfx.snapMode;
+  document.getElementById('total-duration').value  = sfx.totalDuration.toFixed(2);
+
+  // Instrument type
+  const isSquare = inst.type === 'square';
+  document.getElementById('type-square').classList.toggle('active', isSquare);
+  document.getElementById('type-noise').classList.toggle('active', !isSquare);
+  document.getElementById('sq-params').style.display        = isSquare ? '' : 'none';
+  document.getElementById('noise-params').style.display     = isSquare ? 'none' : '';
+  document.getElementById('pitch-env-section').style.display = isSquare ? '' : 'none';
+
+  // Noise subtype
+  const isPink = inst.noiseType === 'pink';
+  document.getElementById('noise-white').classList.toggle('active', !isPink);
+  document.getElementById('noise-pink').classList.toggle('active', isPink);
+
+  // Sliders
+  document.getElementById('duty').value         = inst.duty;
+  document.getElementById('duty-val').textContent = inst.duty.toFixed(2);
+  document.getElementById('noise-filter').value        = inst.noiseFilterFreq;
+  document.getElementById('noise-filter-val').textContent = Math.round(inst.noiseFilterFreq);
+  document.getElementById('master-gain').value        = inst.masterGain;
+  document.getElementById('master-gain-val').textContent = inst.masterGain.toFixed(2);
+
+  // Echo
+  const echoBtn = document.getElementById('echo-toggle');
+  echoBtn.textContent = sfx.echo.enabled ? 'ON' : 'OFF';
+  echoBtn.classList.toggle('active', sfx.echo.enabled);
+  document.getElementById('echo-params').style.display = sfx.echo.enabled ? '' : 'none';
+  document.getElementById('echo-delay').value         = sfx.echo.delay;
+  document.getElementById('echo-delay-val').textContent = sfx.echo.delay.toFixed(2);
+  document.getElementById('echo-scale').value         = sfx.echo.scale;
+  document.getElementById('echo-scale-val').textContent = sfx.echo.scale.toFixed(2);
+  document.getElementById('echo-count').value         = sfx.echo.count;
+  document.getElementById('echo-count-val').textContent = sfx.echo.count;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Instantiate
+  synth       = new SFXSynthesizer();
+  exporter    = new Exporter(synth);
+  randomizer  = new Randomizer();
+  pianoRoll   = new PianoRoll(document.getElementById('piano-roll'));
+  volEnvEditor   = new EnvelopeEditor(document.getElementById('vol-env-canvas'),   'volumeEnvelope');
+  pitchEnvEditor = new EnvelopeEditor(document.getElementById('pitch-env-canvas'), 'pitchEnvelope');
+
+  // Load persisted user presets
+  loadUserPresets();
+
+  // Resize canvases
+  setTimeout(() => { resizeEnvCanvases(); resizePianoRoll(); requestRedraw(); }, 50);
+  window.addEventListener('resize', () => { resizeEnvCanvases(); resizePianoRoll(); });
+
+  // Toolbar
+  document.getElementById('btn-play').addEventListener('click', () => {
+    synth.play(appState.sfx);
+  });
+  document.getElementById('btn-stop').addEventListener('click', () => synth.stop());
+  document.getElementById('btn-undo').addEventListener('click', () => undo());
+  document.getElementById('btn-export').addEventListener('click', () => exporter.exportWAV());
+
+  // Undo via Ctrl+Z (handled before the focus-guarded keydown below)
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
+  }, true);
+
+  // Snapshot before any slider drag (fires once per mousedown on a range input)
+  document.querySelectorAll('input[type=range]').forEach(el => {
+    el.addEventListener('mousedown', pushUndo);
+  });
+
+  // Snapshot before editing note number fields
+  ['note-freq', 'note-time', 'note-dur'].forEach(id => {
+    document.getElementById(id).addEventListener('focus', pushUndo);
+  });
+
+  // Preset selector — built-ins auto-load; user presets only select (use LOAD to apply)
+  document.getElementById('preset-select').addEventListener('change', e => {
+    const val = e.target.value;
+    const delBtn  = document.getElementById('btn-del-preset');
+    const loadBtn = document.getElementById('btn-load-preset');
+
+    if (!val) {
+      delBtn.disabled = true;
+      loadBtn.style.display = 'none';
+      return;
+    }
+
+    if (val.startsWith('__user__')) {
+      // User preset: select only — enable LOAD and DEL without loading
+      const key = val.slice(8);
+      const exists = !!userPresets[key];
+      delBtn.disabled  = !exists;
+      loadBtn.style.display = exists ? '' : 'none';
+      loadBtn.disabled = !exists;
+      return;
+    }
+
+    // Built-in: auto-load immediately
+    if (!PRESETS[val]) return;
+    pushUndo();
+    const preset = JSON.parse(JSON.stringify(PRESETS[val]));
+    for (const note of preset.notes) note.id = uid();
+    appState.sfx = preset;
+    clearSelection();
+    syncAllUI();
+    scrollToFitNotes();
+    requestRedraw();
+    if (synth) synth.play(preset);
+    e.target.value = '';
+    delBtn.disabled = true;
+    loadBtn.style.display = 'none';
+  });
+
+  // Load the currently selected user preset
+  document.getElementById('btn-load-preset').addEventListener('click', () => {
+    const val = document.getElementById('preset-select').value;
+    if (!val.startsWith('__user__')) return;
+    const key = val.slice(8);
+    if (!userPresets[key]) return;
+    pushUndo();
+    const preset = JSON.parse(JSON.stringify(userPresets[key]));
+    for (const note of preset.notes) note.id = uid();
+    appState.sfx = preset;
+    clearSelection();
+    syncAllUI();
+    scrollToFitNotes();
+    requestRedraw();
+    if (synth) synth.play(preset);
+  });
+
+  // Save current SFX as user preset
+  document.getElementById('btn-save-preset').addEventListener('click', () => {
+    const name = (appState.sfx.name || 'untitled').trim();
+    userPresets[name] = JSON.parse(JSON.stringify(appState.sfx));
+    rebuildPresetDropdown();
+    document.getElementById('preset-select').value = '__user__' + name;
+    document.getElementById('btn-del-preset').disabled = false;
+    document.getElementById('btn-load-preset').style.display = '';
+    document.getElementById('btn-load-preset').disabled = false;
+    persistUserPresets();
+  });
+
+  // Delete the currently selected user preset
+  document.getElementById('btn-del-preset').addEventListener('click', () => {
+    const val = document.getElementById('preset-select').value;
+    if (!val.startsWith('__user__')) return;
+    const key = val.slice(8);
+    delete userPresets[key];
+    rebuildPresetDropdown();
+    document.getElementById('preset-select').value = '';
+    document.getElementById('btn-del-preset').disabled = true;
+    document.getElementById('btn-load-preset').style.display = 'none';
+    persistUserPresets();
+  });
+
+  document.getElementById('sfx-name').addEventListener('input', e => {
+    appState.sfx.name = e.target.value;
+  });
+  document.getElementById('bpm').addEventListener('input', e => {
+    appState.sfx.bpm = parseInt(e.target.value) || 120;
+    requestRedraw();
+  });
+  document.getElementById('snap-mode').addEventListener('change', e => {
+    appState.sfx.snapMode = e.target.value;
+  });
+  document.getElementById('total-duration').addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    if (v > 0) { appState.sfx.totalDuration = v; requestRedraw(); }
+  });
+
+  // Instrument type
+  document.getElementById('type-square').addEventListener('click', () => {
+    pushUndo();
+    appState.sfx.instrument.type = 'square';
+    document.getElementById('type-square').classList.add('active');
+    document.getElementById('type-noise').classList.remove('active');
+    document.getElementById('sq-params').style.display = '';
+    document.getElementById('noise-params').style.display = 'none';
+    document.getElementById('pitch-env-section').style.display = '';
+    requestRedraw();
+  });
+  document.getElementById('type-noise').addEventListener('click', () => {
+    pushUndo();
+    appState.sfx.instrument.type = 'noise';
+    document.getElementById('type-noise').classList.add('active');
+    document.getElementById('type-square').classList.remove('active');
+    document.getElementById('sq-params').style.display = 'none';
+    document.getElementById('noise-params').style.display = '';
+    document.getElementById('pitch-env-section').style.display = 'none';
+    requestRedraw();
+  });
+
+  // Noise subtype
+  document.getElementById('noise-white').addEventListener('click', () => {
+    pushUndo();
+    appState.sfx.instrument.noiseType = 'white';
+    document.getElementById('noise-white').classList.add('active');
+    document.getElementById('noise-pink').classList.remove('active');
+  });
+  document.getElementById('noise-pink').addEventListener('click', () => {
+    pushUndo();
+    appState.sfx.instrument.noiseType = 'pink';
+    document.getElementById('noise-pink').classList.add('active');
+    document.getElementById('noise-white').classList.remove('active');
+  });
+
+  // Param sliders
+  function bindSlider(id, valId, key, transform) {
+    const el = document.getElementById(id);
+    el.addEventListener('input', () => {
+      const v = transform ? transform(parseFloat(el.value)) : parseFloat(el.value);
+      // Set nested key
+      const parts = key.split('.');
+      let obj = appState.sfx;
+      for (let i = 0; i < parts.length - 1; i++) obj = obj[parts[i]];
+      obj[parts[parts.length-1]] = v;
+      document.getElementById(valId).textContent = v.toFixed(2);
+    });
+  }
+  bindSlider('duty',          'duty-val',          'instrument.duty');
+  bindSlider('noise-filter',  'noise-filter-val',  'instrument.noiseFilterFreq', v => Math.round(v));
+  bindSlider('master-gain',   'master-gain-val',   'instrument.masterGain');
+
+  // Echo controls
+  document.getElementById('echo-toggle').addEventListener('click', () => {
+    pushUndo();
+    const sfx = appState.sfx;
+    sfx.echo.enabled = !sfx.echo.enabled;
+    const btn = document.getElementById('echo-toggle');
+    btn.textContent = sfx.echo.enabled ? 'ON' : 'OFF';
+    btn.classList.toggle('active', sfx.echo.enabled);
+    document.getElementById('echo-params').style.display = sfx.echo.enabled ? '' : 'none';
+  });
+
+  document.getElementById('echo-delay').addEventListener('input', e => {
+    appState.sfx.echo.delay = parseFloat(e.target.value);
+    document.getElementById('echo-delay-val').textContent = appState.sfx.echo.delay.toFixed(2);
+  });
+  document.getElementById('echo-scale').addEventListener('input', e => {
+    appState.sfx.echo.scale = parseFloat(e.target.value);
+    document.getElementById('echo-scale-val').textContent = appState.sfx.echo.scale.toFixed(2);
+  });
+  document.getElementById('echo-count').addEventListener('input', e => {
+    appState.sfx.echo.count = parseInt(e.target.value);
+    document.getElementById('echo-count-val').textContent = appState.sfx.echo.count;
+  });
+
+  // Update noise-filter display differently
+  document.getElementById('noise-filter').addEventListener('input', e => {
+    document.getElementById('noise-filter-val').textContent = Math.round(e.target.value);
+  });
+
+  // Randomizer levers
+  initDualRange('dr-freq',  'freq-range-lbl',  'freq-range-lbl',  40, 4000, 1,
+    (a,b) => `${Math.round(a)} — ${Math.round(b)} Hz`, 'freqRange');
+  initDualRange('dr-sweep', 'pitch-sweep-lbl', 'pitch-sweep-lbl', -36, 36, 1,
+    (a,b) => `${a>0?'+':''}${Math.round(a)} — ${b>0?'+':''}${Math.round(b)} st`, 'pitchSweep');
+  initDualRange('dr-decay', 'decay-lbl',       'decay-lbl',       0.01, 2.0, 0.01,
+    (a,b) => `${a.toFixed(2)} — ${b.toFixed(2)} s`, 'decaySpeed');
+  initDualRange('dr-count', 'count-lbl',       'count-lbl',       1, 32, 1,
+    (a,b) => `${Math.round(a)} — ${Math.round(b)}`, 'noteCount');
+  initDualRange('dr-dur',   'dur-lbl',         'dur-lbl',         0.05, 10, 0.05,
+    (a,b) => `${a.toFixed(2)} — ${b.toFixed(2)} s`, 'duration');
+
+  // Lock buttons
+  const LOCK_KEYS = ['freqRange', 'pitchSweep', 'decaySpeed', 'noteCount', 'duration'];
+  const LOCK_IDS  = ['lock-freqRange', 'lock-pitchSweep', 'lock-decaySpeed', 'lock-noteCount', 'lock-duration'];
+  LOCK_KEYS.forEach((key, i) => {
+    const btn = document.getElementById(LOCK_IDS[i]);
+    btn.addEventListener('click', () => {
+      const lev = appState.randomizerLevers[key];
+      lev.locked = !lev.locked;
+      btn.textContent = lev.locked ? '🔒' : '🔓';
+      btn.classList.toggle('locked', lev.locked);
+    });
+  });
+
+  bindNoteInspector();
+
+  document.getElementById('btn-generate').addEventListener('click', () => { pushUndo(); randomizer.generate(); });
+  document.getElementById('btn-subtle').addEventListener('click',   () => { pushUndo(); randomizer.subtle(); });
+});
+</script>
+</body>
+</html>

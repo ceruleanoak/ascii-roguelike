@@ -1,13 +1,21 @@
 import { GRID } from '../game/GameConfig.js';
+import { planeOf, inSamePlane, objectOnPlane } from './PlaneSystem.js';
+import { cycleExitLetter, findExitAtPoint, mutateExitLetter } from './ExitSystem.js';
+
+// Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
+// room — keeps cross-room sniping in check while still feeling powerful.
+const DEFAULT_BULLET_RANGE = GRID.CELL_SIZE * 20;
 
 export class CombatSystem {
   constructor(physicsSystem) {
     this.physicsSystem = physicsSystem;
+    this.audioSystem = null; // wired by main.js after construction
     this.projectiles = [];
     this.enemyProjectiles = [];
     this.meleeAttacks = [];
     this.enemyMeleeAttacks = [];
-    this.pendingMeleeAttacks = []; // Attacks waiting to spawn
+    this.pendingMeleeAttacks = [];         // Player melee attacks waiting to spawn
+    this.pendingEnemyProjectiles = [];     // Enemy projectiles waiting on delay
     this.damageNumbers = [];
     this.objectDestroyEvents = []; // { obj, effect } collected each frame
     this.impactEffects = [];       // { x, y, onHit, color } — elemental hit sparks
@@ -15,11 +23,23 @@ export class CombatSystem {
     this.stuckArrows = [];         // { char, position, stuckTo, offset, color, isBurning }
     this.polymorphEvents = [];     // { enemy, outcome } — polymorph transformations to process
     this.aoeEffects = [];          // { type, x, y, radius, timer, color } — AOE visual effects (wand explosions)
+    this.tongueAttacks = [];       // { owner, direction, maxLength, currentLength, phase, ... }
+    this.chainArcs = [];           // { x1, y1, x2, y2, color, timer, duration } — chain lightning visuals
   }
 
   update(deltaTime, player, enemies, backgroundObjects = [], noiseSource = null, room = null) {
     // Red warrior damage roll: hits and knocks back enemies, smashes background objects
     this.updateRollDamage(player, enemies, backgroundObjects);
+
+    // Update pending enemy projectiles (for delayed spawning like boss slam rings)
+    for (let i = this.pendingEnemyProjectiles.length - 1; i >= 0; i--) {
+      const pending = this.pendingEnemyProjectiles[i];
+      pending.delay -= deltaTime;
+      if (pending.delay <= 0) {
+        this.enemyProjectiles.push(pending);
+        this.pendingEnemyProjectiles.splice(i, 1);
+      }
+    }
 
     // Update pending melee attacks (for delayed spawning like flail sweep)
     for (let i = this.pendingMeleeAttacks.length - 1; i >= 0; i--) {
@@ -77,6 +97,15 @@ export class CombatSystem {
       }
     }
 
+    // Update chain lightning arcs (short-lived visual fades)
+    for (let i = this.chainArcs.length - 1; i >= 0; i--) {
+      const arc = this.chainArcs[i];
+      arc.timer -= deltaTime;
+      if (arc.timer <= 0) {
+        this.chainArcs.splice(i, 1);
+      }
+    }
+
     // Update projectiles
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const proj = this.projectiles[i];
@@ -115,6 +144,7 @@ export class CombatSystem {
           const newAngle = currentAngle + angleDiff * turnRate;
           proj.velocity.vx = Math.cos(newAngle) * speed;
           proj.velocity.vy = Math.sin(newAngle) * speed;
+          if (proj.drawAngle != null) proj.drawAngle = newAngle;
         }
       }
 
@@ -145,12 +175,16 @@ export class CombatSystem {
           if (newSpeed < 30) {
             this.stuckArrows.push({
               char: proj.char,
+              weaponChar: proj.weaponChar,
+              stuckType: 'ground',
+              pickupable: !!proj.weaponChar,
               position: { x: proj.position.x, y: proj.position.y },
               stuckTo: null, // Not stuck to anything, just on the ground
               offset: { x: 0, y: 0 },
               color: proj.color,
               isBurning: proj.onHit === 'burn',
-              burnParticleTimer: 0
+              fireGenTimer: 0,
+              lifetime: 8.0
             });
             this.projectiles.splice(i, 1);
             continue;
@@ -158,19 +192,70 @@ export class CombatSystem {
         }
       }
 
+      // Orbital looping bullets (e.g. Fester's Gun): velocity derived analytically so the
+      // bullet revolves around a center point advancing along the straight firing line.
+      if (proj.loopOmega) {
+        const t = proj.loopTime;
+        const { loopForward: fwd, loopPerp: perp, loopRadius: R, loopLinearSpeed: ls, loopOmega: omega } = proj;
+        proj.velocity.vx = fwd.x * (ls + R * omega * Math.sin(omega * t)) + perp.x * R * omega * Math.cos(omega * t);
+        proj.velocity.vy = fwd.y * (ls + R * omega * Math.sin(omega * t)) + perp.y * R * omega * Math.cos(omega * t);
+        proj.drawAngle = Math.atan2(proj.velocity.vy, proj.velocity.vx);
+        proj.loopTime += deltaTime;
+      }
+
       // Move projectile
       proj.position.x += proj.velocity.vx * deltaTime;
       proj.position.y += proj.velocity.vy * deltaTime;
+
+      // Distance cap (e.g. from rock ricochet) — despawn when exhausted
+      if (proj.remainingDistance !== undefined) {
+        const moveSpeed = Math.hypot(proj.velocity.vx, proj.velocity.vy);
+        proj.remainingDistance -= moveSpeed * deltaTime;
+        if (proj.remainingDistance <= 0) {
+          this.projectiles.splice(i, 1);
+          continue;
+        }
+      }
 
       // Update plane if in tunnel room
       if (room && room.tunnel && proj.plane !== undefined) {
         this.updateProjectilePlane(proj, room.tunnel);
       }
 
+      // Check collision with room walls via collisionMap.
+      // Ricochet projectiles skip this — they use checkRicochet() for canvas-edge bouncing.
+      if (!proj.ricochet && this._hitsWall(proj, room)) {
+        // Bullets ricochet off interior structure walls (flat axis-aligned surfaces).
+        // Border walls and out-of-grid still destroy.
+        if (proj.type === 'bullet' && this._tryStructureWallRicochet(proj, room, deltaTime)) {
+          continue;
+        }
+        // Arrows stick to walls in the main room; in interior rooms (hut/dungeon) just destroy.
+        const isInterior = room?.gridCols !== undefined && room.gridCols !== GRID.COLS;
+        if (proj.type === 'arrow' && !isInterior) {
+          this.stuckArrows.push({
+            char: proj.char,
+            weaponChar: proj.weaponChar,
+            stuckType: 'wall',
+            pickupable: !!proj.weaponChar,
+            position: { x: proj.position.x, y: proj.position.y },
+            stuckTo: null,
+            offset: { x: 0, y: 0 },
+            color: proj.color,
+            isBurning: proj.onHit === 'burn',
+            fireGenTimer: 0,
+            lifetime: 8.0
+          });
+        }
+        this.projectiles.splice(i, 1);
+        continue;
+      }
+
       // Check collision with background objects
       let bgObjectHit = false;
       for (const obj of backgroundObjects) {
         if (obj.destroyed || obj.isRecipeSign) continue; // Skip destroyed and recipe signs
+        if (!objectOnPlane(obj, planeOf(proj))) continue;
 
         if (this.checkProjectileCollisionWithObject(proj, obj)) {
           const result = obj.handleBulletCollision(proj);
@@ -203,6 +288,25 @@ export class CombatSystem {
           } else if (result.bulletBehavior === 'reflectBullet' || result.effect === 'reflectBullet') {
             // Reflect bullet
             this.reflectBullet(proj, obj);
+          } else if (result.bulletBehavior === 'rockRicochet') {
+            this.reflectBullet(proj, obj);
+            // Halve the bullet's remaining travel range from this point
+            const canvasW = GRID.COLS * GRID.CELL_SIZE;
+            const canvasH = GRID.ROWS * GRID.CELL_SIZE;
+            const vx = proj.velocity.vx;
+            const vy = proj.velocity.vy;
+            const tX = vx > 0 ? (canvasW - proj.position.x) / vx
+                     : vx < 0 ? -proj.position.x / vx
+                     : Infinity;
+            const tY = vy > 0 ? (canvasH - proj.position.y) / vy
+                     : vy < 0 ? -proj.position.y / vy
+                     : Infinity;
+            const speed = Math.hypot(vx, vy);
+            const distToEdge = Math.min(tX, tY) * speed;
+            const halved = isFinite(distToEdge) ? distToEdge * 0.5 : 0;
+            proj.remainingDistance = proj.remainingDistance !== undefined
+              ? Math.min(proj.remainingDistance, halved)
+              : halved;
           }
 
           // Collect drop effects from destroyed objects
@@ -238,14 +342,15 @@ export class CombatSystem {
               // Source object is dying; spread fire outward immediately
               for (const other of backgroundObjects) {
                 if (other === obj || other.destroyed || !other.isFlammable()) continue;
+                if (!objectOnPlane(other, planeOf(proj))) continue;
                 const dx = other.position.x - obj.position.x;
                 const dy = other.position.y - obj.position.y;
                 if (dx * dx + dy * dy < 48 * 48) other.ignite(5.0);
               }
             }
           }
-          // Emit impact effect for elemental projectiles (skip water — it has its own feedback)
-          if (proj.onHit && !(obj.isWater && obj.isWater())) {
+          // Emit impact effect for elemental projectiles (skip steam-producing objects — they have their own feedback)
+          if (proj.onHit && !(obj.steamOnFire && obj.steamOnFire())) {
             this.impactEffects.push({ x: obj.position.x, y: obj.position.y, onHit: proj.onHit, color: proj.color });
           }
 
@@ -253,7 +358,6 @@ export class CombatSystem {
           if (obj.isWater && obj.isWater()) {
             if (proj.onHit === 'freeze') {
               obj.setWaterState('frozen', Infinity); // Stays frozen until thawed by fire
-              this.createDamageNumber('❄', obj.position.x, obj.position.y, '#aaddff');
             } else if (proj.onHit === 'poison') {
               obj.setWaterState('poisoned', 8.0);
               this.createDamageNumber('☠', obj.position.x, obj.position.y, '#44bb44');
@@ -263,7 +367,6 @@ export class CombatSystem {
             } else if (proj.onHit === 'burn') {
               if (obj.getWaterState() === 'frozen') {
                 obj.setWaterState('normal', 0); // Melt ice
-                this.createDamageNumber('~', obj.position.x, obj.position.y, '#3366ff');
               } else {
                 // Fire hits liquid water → steam cloud
                 this.newSteamClouds.push({
@@ -277,6 +380,17 @@ export class CombatSystem {
             }
           }
 
+          // Water attack hits lava → solidify to rock
+          if (obj.isLava && obj.isLava() && proj.onHit === 'freeze') {
+            obj.solidifyToRock();
+            this.newSteamClouds.push({
+              x: obj.position.x + GRID.CELL_SIZE / 2,
+              y: obj.position.y + GRID.CELL_SIZE / 2,
+              radius: GRID.CELL_SIZE * 2,
+              timer: 3.0
+            });
+          }
+
           // Destroy bullet if needed
           if (result.shouldDestroyBullet) {
             bgObjectHit = true;
@@ -285,6 +399,9 @@ export class CombatSystem {
             if (proj.type === 'arrow') {
               this.stuckArrows.push({
                 char: proj.char,
+                weaponChar: proj.weaponChar,
+                stuckType: 'object',
+                pickupable: !!proj.weaponChar,
                 position: { x: proj.position.x, y: proj.position.y },
                 stuckTo: obj,
                 offset: {
@@ -293,7 +410,8 @@ export class CombatSystem {
                 },
                 color: proj.color,
                 isBurning: proj.onHit === 'burn',
-                burnParticleTimer: 0
+                fireGenTimer: 0,
+                lifetime: 12.0
               });
             }
             break;
@@ -327,12 +445,39 @@ export class CombatSystem {
       // Check collision with enemies
       let hit = false;
       for (const enemy of enemies) {
-        // Skip if projectile and enemy are in different planes
-        if (proj.plane !== undefined && enemy.plane !== undefined && proj.plane !== enemy.plane) {
-          continue;
-        }
+        if (!inSamePlane(proj, enemy)) continue;
 
         if (this.checkProjectileCollision(proj, enemy)) {
+          // Missed shot — show MISS once per enemy and pass through. Bullet keeps traveling
+          // (and can still hit other enemies normally; only this enemy was missed).
+          if (proj.missed) {
+            if (!proj._missedEnemies) proj._missedEnemies = new Set();
+            if (!proj._missedEnemies.has(enemy)) {
+              proj._missedEnemies.add(enemy);
+              this.createDamageNumber('MISS', enemy.position.x, enemy.position.y, '#888888');
+            }
+            continue;
+          }
+          // Reflect shield (Mirror Imp): bounce projectile back at player if shield active
+          if (enemy.shieldActive && enemy.data.reflectShield?.enabled) {
+            const reflectedDmg = Math.ceil(proj.damage * (enemy.data.reflectShield.reflectDamageBonus ?? 0.5));
+            const spd = Math.sqrt(proj.velocity.vx ** 2 + proj.velocity.vy ** 2) || 150;
+            // Direction: from enemy toward original shooter (reversal)
+            const rdx = -proj.velocity.vx;
+            const rdy = -proj.velocity.vy;
+            const rdist = Math.sqrt(rdx * rdx + rdy * rdy) || 1;
+            this.enemyProjectiles.push({
+              ...proj,
+              velocity: { vx: (rdx / rdist) * spd, vy: (rdy / rdist) * spd },
+              damage: reflectedDmg,
+              reflected: true,
+              owner: enemy
+            });
+            this.createDamageNumber('REFLECT', enemy.position.x, enemy.position.y, '#ccddff');
+            hit = true;   // Remove from player projectiles
+            break;
+          }
+
           // Special handling for transmutation bolt - polymorph enemy
           if (proj.type === 'transmutation_bolt') {
             // Store polymorph event to process after projectile loop
@@ -352,7 +497,9 @@ export class CombatSystem {
           }
 
           // Apply elemental affinity modifier and speed falloff
-          const elementalMod = enemy.getElementalModifier(proj.onHit);
+          let elementalMod = enemy.getElementalModifier(proj.onHit);
+          if (proj.electric) elementalMod *= enemy.getElementalModifier('shock');
+          if (proj.isBlade) elementalMod *= enemy.getElementalModifier('blade');
           let adjustedDamage = Math.ceil(proj.damage * elementalMod * speedMultiplier);
           // Green Ranger flat modifier applied after multipliers so it isn't scaled by speed falloff
           if (proj.owner && proj.owner.characterType === 'green') {
@@ -371,13 +518,21 @@ export class CombatSystem {
             continue;
           }
 
-          const damaged = enemy.takeDamage(adjustedDamage, proj.attackId);
+          const critRoll = this._applyCritIfLucky(adjustedDamage, proj.owner);
+          const finalDamage = critRoll.damage;
+          const damaged = enemy.takeDamage(finalDamage, proj.attackId);
           if (damaged !== false) {
-            // Show damage number with color based on affinity
-            const damageColor = elementalMod < 1.0 ? '#888888' :   // Resisted
-                               elementalMod > 1.0 ? '#ffff00' :    // Weakness
-                               enemy.color;                        // Normal
-            this.createDamageNumber(adjustedDamage, enemy.position.x, enemy.position.y, damageColor);
+            // Show damage number with color based on affinity (crit overrides color + scale)
+            const damageColor = critRoll.isCrit ? '#ffff66' :
+                               elementalMod < 1.0 ? '#888888' :   // Resisted
+                               elementalMod > 1.0 ? '#ffff00' :   // Weakness
+                               enemy.color;                       // Normal
+            this.createDamageNumber(finalDamage, enemy.position.x, enemy.position.y, damageColor, critRoll.isCrit ? 1.7 : 1);
+
+            if (critRoll.isCrit) {
+              const critLabel = critRoll.isLucky ? 'LUCKY CRIT' : 'CRIT';
+              this.createDamageNumber(critLabel, enemy.position.x, enemy.position.y - 14, '#ffff66');
+            }
 
             // Show weakness indicator
             if (elementalMod > 1.0) {
@@ -390,11 +545,12 @@ export class CombatSystem {
               const modifiedDuration = baseDuration * elementalMod;
 
               if (proj.onHit === 'freeze') {
-                // Freeze escalation: second ice hit while frozen → stun (freeze continues)
-                if (enemy.statusEffects.freeze && enemy.statusEffects.freeze.active) {
+                // Freeze escalation: second ice hit while fully frozen → stun
+                if (enemy.isFrozen()) {
                   enemy.applyStatusEffect('stun', 2.5 * elementalMod);
                 } else {
                   enemy.applyStatusEffect('freeze', 8.0 * elementalMod);
+                  if (!enemy.data.freezePermanent) enemy.statusEffects.freeze.frozen = true;
                 }
               } else {
                 enemy.applyStatusEffect(proj.onHit, modifiedDuration);
@@ -410,6 +566,10 @@ export class CombatSystem {
               this.applyKnockback(enemy, proj);
             }
 
+            // Hitstop on confirmed projectile hit
+            this.physicsSystem.applyHitstop(enemy, 0.06);
+            if (proj.owner) this.physicsSystem.applyHitstop(proj.owner, 0.04);
+
             // Apply lifesteal to player
             if (proj.lifesteal && proj.owner === 'player') {
               proj.owner.hp = Math.min(proj.owner.hp + proj.damage * proj.lifesteal, proj.owner.maxHp);
@@ -422,7 +582,7 @@ export class CombatSystem {
 
             // Explosion effect
             if (proj.explode) {
-              this.createExplosion(proj.position.x, proj.position.y, proj.explodeRadius || 30, proj.damage, enemies, backgroundObjects);
+              this.createExplosion(proj.position.x, proj.position.y, proj.explodeRadius || 30, proj.damage, enemies, backgroundObjects, 0, planeOf(proj));
             }
           }
 
@@ -434,6 +594,8 @@ export class CombatSystem {
             if (proj.type === 'arrow') {
               this.stuckArrows.push({
                 char: proj.char,
+                weaponChar: proj.weaponChar,
+                stuckType: 'enemy',
                 position: { x: proj.position.x, y: proj.position.y },
                 stuckTo: enemy,
                 offset: {
@@ -442,7 +604,7 @@ export class CombatSystem {
                 },
                 color: proj.color,
                 isBurning: proj.onHit === 'burn',
-                burnParticleTimer: 0
+                fireGenTimer: 0
               });
             }
           }
@@ -473,10 +635,22 @@ export class CombatSystem {
         continue;
       }
 
+      // Sword of the Letter: striking an exit letter cycles it forward
+      if (attack.cyclesExitLetter && !attack.hasCycledLetter && room && room.exits) {
+        const hit = findExitAtPoint(room, attack.position.x, attack.position.y, attack.width, attack.height);
+        if (hit) {
+          const next = cycleExitLetter(hit.exit.letter);
+          if (mutateExitLetter(hit.exit, next, { source: 'sword' })) {
+            attack.hasCycledLetter = true;
+          }
+        }
+      }
+
       // Check collision with background objects (only on first frame)
       if (!attack.hasHitObject) {
         for (const obj of backgroundObjects) {
           if (obj.destroyed || obj.isRecipeSign) continue; // Skip destroyed and recipe signs
+          if (!objectOnPlane(obj, attack.shooterPlane ?? 0)) continue;
 
           if (this.checkMeleeCollisionWithObject(attack, obj)) {
             // Glittering rocks require a pickaxe — other weapons bounce off
@@ -493,13 +667,21 @@ export class CombatSystem {
               continue;
             }
 
+            // Rocks only yield to pickaxe or hammer — everything else clinks off
+            if (obj.char === '0' && !attack.isPickaxe && !attack.canSmash) {
+              this.createDamageNumber('!', obj.position.x, obj.position.y, '#aaaaaa');
+              continue;
+            }
+
             // Blunt weapons can't damage objects, but still rustle grass
             if (!attack.isBlunt) {
               const smashDamage = attack.canSmash ? attack.damage * 2 : attack.damage;
               const result = obj.takeDamage(smashDamage, attack.isBlade);
 
-              if (result.destroyed && result.effect) {
-                this.objectDestroyEvents.push({ obj, effect: result.effect });
+              // Queue any effect (destructive or not — non-destructive effects like
+              // 'cutGrass' need to reach handleObjectEffect to roll pollen / fairy spawns).
+              if (result.effect) {
+                this.objectDestroyEvents.push({ obj, effect: result.effect, attack });
               }
 
               // Fire weapons ignite flammable objects — spread outward if object is destroyed
@@ -511,14 +693,15 @@ export class CombatSystem {
                 if (result.destroyed) {
                   for (const other of backgroundObjects) {
                     if (other === obj || other.destroyed || !other.isFlammable()) continue;
+                    if (!objectOnPlane(other, attack.shooterPlane ?? 0)) continue;
                     const dx = other.position.x - obj.position.x;
                     const dy = other.position.y - obj.position.y;
                     if (dx * dx + dy * dy < 48 * 48) other.ignite(5.0);
                   }
                 }
               }
-              // Emit impact effect for elemental melee (skip water — it has its own feedback)
-              if (attack.onHit && !(obj.isWater && obj.isWater())) {
+              // Emit impact effect for elemental melee (skip steam-producing objects — they have their own feedback)
+              if (attack.onHit && !(obj.steamOnFire && obj.steamOnFire())) {
                 this.impactEffects.push({ x: obj.position.x, y: obj.position.y, onHit: attack.onHit, color: attack.color });
               }
 
@@ -531,7 +714,6 @@ export class CombatSystem {
               if (obj.isWater && obj.isWater()) {
                 if (attack.onHit === 'freeze') {
                   obj.setWaterState('frozen', Infinity); // Stays frozen until thawed by fire
-                  this.createDamageNumber('❄', obj.position.x, obj.position.y, '#aaddff');
                 } else if (attack.onHit === 'poison') {
                   obj.setWaterState('poisoned', 8.0);
                   this.createDamageNumber('☠', obj.position.x, obj.position.y, '#44bb44');
@@ -541,7 +723,6 @@ export class CombatSystem {
                 } else if (attack.onHit === 'burn') {
                   if (obj.getWaterState() === 'frozen') {
                     obj.setWaterState('normal', 0); // Melt ice
-                    this.createDamageNumber('~', obj.position.x, obj.position.y, '#3366ff');
                   } else {
                     // Fire hits liquid water → steam cloud
                     this.newSteamClouds.push({
@@ -554,6 +735,17 @@ export class CombatSystem {
                   }
                 }
               }
+
+              // Water attack hits lava → solidify to rock
+              if (obj.isLava && obj.isLava() && attack.onHit === 'freeze') {
+                obj.solidifyToRock();
+                this.newSteamClouds.push({
+                  x: obj.position.x + GRID.CELL_SIZE / 2,
+                  y: obj.position.y + GRID.CELL_SIZE / 2,
+                  radius: GRID.CELL_SIZE * 2,
+                  timer: 3.0
+                });
+                  }
             }
 
             // Chaff VFX when melee hits grass (all weapons including blunt) — 5% chance
@@ -573,27 +765,80 @@ export class CombatSystem {
       // Check collision with enemies (only on first frame)
       if (!attack.hasHit) {
         for (const enemy of enemies) {
-          // Skip if attack and enemy are in different planes
-          if (attack.shooterPlane !== undefined && enemy.plane !== undefined && attack.shooterPlane !== enemy.plane) {
-            continue;
-          }
+          if (planeOf(enemy) !== (attack.shooterPlane ?? 0)) continue;
 
           if (this.checkMeleeCollision(attack, enemy)) {
+            // Parry mechanic (Duelist): reflect melee back at player
+            if (enemy.parryActive && attack.owner && attack.isMelee !== false) {
+              const reflectDmg = Math.ceil(attack.damage * (enemy.data.parryMechanic?.reflectDamage ? 0.5 : 0));
+              if (reflectDmg > 0 && attack.owner.takeDamage) {
+                attack.owner.takeDamage(reflectDmg, { isBullet: false, isMelee: true });
+                this.createDamageNumber('PARRY', enemy.position.x, enemy.position.y, '#eeeeff');
+                this.createDamageNumber(reflectDmg, attack.owner.position.x, attack.owner.position.y, '#eeeeff');
+              } else {
+                this.createDamageNumber('PARRY', enemy.position.x, enemy.position.y, '#eeeeff');
+              }
+              attack.hasHit = true;
+              // Counter-attack: schedule immediate melee retaliation
+              if (enemy.data.parryMechanic?.counterAttack) {
+                const counter = enemy.createMeleeAttack();
+                if (counter) this.createEnemyAttack(counter);
+              }
+              // chargeOnParry: enter charge windup immediately after a successful parry
+              if (enemy.data.parryMechanic?.chargeOnParry &&
+                  enemy.data.chargeMechanic?.enabled &&
+                  enemy.chargeState === 'idle') {
+                enemy.chargeState = 'windup';
+                enemy.chargeWindupTimer = enemy.data.chargeMechanic.chargeWindup * 0.6;
+              }
+              continue;
+            }
+
+            // Reflect shield (Mirror Imp) blocks ranged/arrow attacks — handled via projectile loop
+            // Melee still bypasses shield
+
             const isWet = enemy.isWet && enemy.isWet();
 
+            // Chaos Blade: resolve random onHit per arc hit before any elemental logic
+            if (attack.randomOnHit) {
+              attack.onHit = attack.randomOnHit[Math.floor(Math.random() * attack.randomOnHit.length)];
+            }
+
             // Apply elemental affinity modifier
-            const elementalMod = enemy.getElementalModifier(attack.onHit);
+            let elementalMod = enemy.getElementalModifier(attack.onHit);
+            if (attack.electric) elementalMod *= enemy.getElementalModifier('shock');
+            if (attack.isBlade) elementalMod *= enemy.getElementalModifier('blade');
 
             // Green Ranger stealth modifier: bonus when enemy hasn't detected the player
             let totalDamage = attack.damage;
+
+            // Acid Blade corrosion: corroded enemies take +50% damage
+            if (enemy.statusEffects.corrosion?.active) {
+              totalDamage = Math.ceil(totalDamage * 1.5);
+            }
+
+            // Spear distance crit: 3rd hitbox at full thrust range — guaranteed crit
+            if (attack.distanceCrit) {
+              totalDamage = Math.ceil(totalDamage * 1.5);
+            }
             if (attack.owner && attack.owner.characterType === 'green') {
               const enemyUndetected = enemy.detectionIndicatorTimer <= 0;
               const greenBonus = enemyUndetected ? attack.owner.greenIdleDamageBonus : -attack.owner.greenCombatDamagePenalty;
               totalDamage = Math.max(1, totalDamage + greenBonus);
             }
 
+            // Backstab (assassin strike): multiplier when hitting an enemy that hasn't detected the player.
+            // Cyan Rogue speciality — highest multiplier — but any character with backstabMultiplier > 1
+            // benefits. Enemy is "unaware" when idle (not enraged, no memory chase, no active detection).
+            if (attack.owner && (attack.owner.backstabMultiplier || 1.0) > 1.0) {
+              const enemyUnaware = !enemy.enraged && !enemy.aggroMemoryActive && enemy.detectionIndicatorTimer <= 0;
+              if (enemyUnaware) {
+                totalDamage = Math.ceil(totalDamage * attack.owner.backstabMultiplier);
+              }
+            }
+
             // Wet enemies take bonus damage from electric and ice attacks
-            const isFrozen = enemy.statusEffects.freeze && enemy.statusEffects.freeze.active;
+            const isFrozen = enemy.isFrozen();
             let statusDuration = 3.0;
             if (isWet && attack.onHit === 'stun') {
               totalDamage *= 2;      // Double damage from electricity on wet enemies
@@ -617,13 +862,22 @@ export class CombatSystem {
               continue;
             }
 
-            const damaged = enemy.takeDamage(totalDamage);
+            const critRoll = this._applyCritIfLucky(totalDamage, attack.owner);
+            const finalDamage = critRoll.damage;
+            const damaged = enemy.takeDamage(finalDamage);
+            if (damaged === true && attack.isBlade) enemy.killedByBlade = true;
             if (damaged !== false) {
-              // Show damage number with color based on affinity
-              const damageColor = elementalMod < 1.0 ? '#888888' :   // Resisted
-                                 elementalMod > 1.0 ? '#ffff00' :    // Weakness
-                                 enemy.color;                        // Normal
-              this.createDamageNumber(totalDamage, enemy.position.x, enemy.position.y, damageColor);
+              // Show damage number with color based on affinity (crit overrides color + scale)
+              const damageColor = critRoll.isCrit ? '#ffff66' :
+                                 elementalMod < 1.0 ? '#888888' :   // Resisted
+                                 elementalMod > 1.0 ? '#ffff00' :   // Weakness
+                                 enemy.color;                       // Normal
+              this.createDamageNumber(finalDamage, enemy.position.x, enemy.position.y, damageColor, critRoll.isCrit ? 1.7 : 1);
+
+              if (critRoll.isCrit) {
+                const critLabel = critRoll.isLucky ? 'LUCKY CRIT' : 'CRIT';
+                this.createDamageNumber(critLabel, enemy.position.x, enemy.position.y - 14, '#ffff66');
+              }
 
               // Show weakness indicator
               if (elementalMod > 1.0) {
@@ -635,11 +889,12 @@ export class CombatSystem {
                 const modifiedDuration = statusDuration * elementalMod;
 
                 if (attack.onHit === 'freeze') {
-                  // Freeze escalation: second ice hit while frozen → stun (freeze continues)
+                  // Freeze escalation: second ice hit while fully frozen → stun
                   if (isFrozen) {
                     enemy.applyStatusEffect('stun', 2.5 * elementalMod);
                   } else {
                     enemy.applyStatusEffect('freeze', 8.0 * elementalMod);
+                    if (!enemy.data.freezePermanent) enemy.statusEffects.freeze.frozen = true;
                   }
                 } else {
                   enemy.applyStatusEffect(attack.onHit, modifiedDuration);
@@ -660,9 +915,44 @@ export class CombatSystem {
                 this.createDamageNumber('*', enemy.position.x, enemy.position.y - 12, '#00ddff');
               }
 
-              // Apply knockback
+              // Show distance crit indicator (spear full-extension bonus)
+              if (attack.distanceCrit) {
+                this.createDamageNumber('PIERCE', enemy.position.x, enemy.position.y - 14, '#ffff66');
+              }
+
+              // Acid Blade corrosion: apply debuff so next hits deal +50% damage
+              if (attack.corrosion) {
+                enemy.applyStatusEffect('corrosion', 3.0);
+                this.createDamageNumber('CORRODE', enemy.position.x, enemy.position.y - 14, '#44ff00');
+              }
+
+              // Venom Blade poison stacking: 3 hits triggers a burst
+              if (attack.poisonStacks && attack.onHit === 'poison') {
+                enemy.poisonStackCount = (enemy.poisonStackCount || 0) + 1;
+                if (enemy.poisonStackCount >= 3) {
+                  enemy.hp = Math.max(0, enemy.hp - 2);
+                  enemy.poisonStackCount = 0;
+                  this.createDamageNumber('BURST', enemy.position.x, enemy.position.y - 16, '#00ff88');
+                  this.createDamageNumber(2, enemy.position.x, enemy.position.y, '#00ff88');
+                }
+              }
+
+              // Apply knockback — spear uses exact facing direction, others use positional
               if (attack.knockback) {
-                this.applyKnockback(enemy, attack);
+                if (attack.facing) {
+                  this.physicsSystem.applyKnockbackDir(enemy, attack.facing.x, attack.facing.y, attack.knockback);
+                } else {
+                  this.applyKnockback(enemy, attack);
+                }
+              }
+
+              // Hitstop, recoil on confirmed melee hit
+              this.physicsSystem.applyHitstop(enemy, 0.06);
+              if (attack.owner) {
+                this.physicsSystem.applyHitstop(attack.owner, 0.04);
+                const dx = attack.owner.position.x - enemy.position.x;
+                const dy = attack.owner.position.y - enemy.position.y;
+                this.physicsSystem.applyImpulse(attack.owner, dx, dy, 60);
               }
 
               // Apply lifesteal
@@ -677,7 +967,7 @@ export class CombatSystem {
 
               // Explosion effect
               if (attack.explode) {
-                this.createExplosion(attack.position.x, attack.position.y, attack.explodeRadius || 40, attack.damage, enemies, backgroundObjects);
+                this.createExplosion(attack.position.x, attack.position.y, attack.explodeRadius || 40, attack.damage, enemies, backgroundObjects, 0, attack.shooterPlane ?? 0);
               }
             }
           }
@@ -690,13 +980,47 @@ export class CombatSystem {
     for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
       const proj = this.enemyProjectiles[i];
 
+      // Decrement lifetime for short-lived hitbox projectiles
+      if (proj.lifetime !== undefined) {
+        proj.lifetime -= deltaTime;
+        if (proj.lifetime <= 0) {
+          this.enemyProjectiles.splice(i, 1);
+          continue;
+        }
+      }
+
       // Move projectile
       proj.position.x += proj.velocity.vx * deltaTime;
       proj.position.y += proj.velocity.vy * deltaTime;
 
+      // Freeze water tiles as ice-stream projectile passes over them
+      if (proj.freezesWater) {
+        const scanR = GRID.CELL_SIZE * 1.2;
+        const scanRSq = scanR * scanR;
+        let hits = 0;
+        for (const obj of backgroundObjects) {
+          if (hits >= 2) break;
+          if (obj.destroyed || !obj.isWater || !obj.isWater()) continue;
+          if (!objectOnPlane(obj, planeOf(proj))) continue;
+          if (obj.getWaterState() === 'frozen') continue;
+          const dx = (obj.position.x + GRID.CELL_SIZE / 2) - proj.position.x;
+          const dy = (obj.position.y + GRID.CELL_SIZE / 2) - proj.position.y;
+          if (dx * dx + dy * dy <= scanRSq) {
+            obj.setWaterState('frozen', Infinity);
+            hits++;
+          }
+        }
+      }
+
       // Update plane if in tunnel room
       if (room && room.tunnel && proj.plane !== undefined) {
         this.updateProjectilePlane(proj, room.tunnel);
+      }
+
+      // Check collision with room walls via collisionMap
+      if (this._hitsWall(proj, room)) {
+        this.enemyProjectiles.splice(i, 1);
+        continue;
       }
 
       // Check bounds
@@ -705,14 +1029,20 @@ export class CombatSystem {
         continue;
       }
 
+      if (!inSamePlane(proj, player)) continue;
 
-      // Skip if projectile and player are in different planes
-      if (proj.plane !== undefined && player.plane !== undefined && proj.plane !== player.plane) {
-        continue;
-      }
+      // Reflected boss projectiles travel back toward the boss; skip player collision
+      if (proj.reflected) continue;
 
       // Check collision with player
       if (this.checkProjectileCollisionWithPlayer(proj, player)) {
+        let consumed = true; // whether to remove the projectile this frame
+        if (player.isStaffBlocking) {
+          // Staff block: deflect missile (consume without damage)
+          this.createDamageNumber('BLOCK', player.position.x, player.position.y, '#aaaaaa');
+          this.enemyProjectiles.splice(i, 1);
+          continue;
+        }
         if (player.tryShieldBlock && player.tryShieldBlock(true)) {
           // Shield absorbed the bullet
           this.createDamageNumber('*', player.position.x, player.position.y, '#aaddff');
@@ -725,45 +1055,73 @@ export class CombatSystem {
           };
           const result = player.takeDamage(proj.damage, damageSource);
 
-          // Handle special results
-          if (result.dodged) {
-            this.createDamageNumber('DODGE', player.position.x, player.position.y, '#ffff00');
-          } else if (result.blocked) {
-            this.createDamageNumber('BLOCK', player.position.x, player.position.y, '#aaaaaa');
-          } else if (result.immune) {
-            this.createDamageNumber('IMMUNE', player.position.x, player.position.y, '#00ffff');
-          } else if (result !== false) {
-            this.createDamageNumber(proj.damage, player.position.x, player.position.y, player.color);
+          if (result === false) {
+            // Player is invulnerable (dodge roll, i-frames, god mode) — let projectile pass through
+            consumed = false;
+          } else {
+            // Handle special results
+            if (result.dodged) {
+              this.createDamageNumber(result.lucky ? 'LUCKY DODGE' : 'DODGE',
+                                      player.position.x, player.position.y,
+                                      result.lucky ? '#ffff66' : '#ffff00');
+            } else if (result.blocked) {
+              this.createDamageNumber('BLOCK', player.position.x, player.position.y, '#aaaaaa');
+            } else if (result.immune) {
+              this.createDamageNumber('IMMUNE', player.position.x, player.position.y, '#00ffff');
+            } else {
+              this.createDamageNumber(result.actualDamage ?? proj.damage, player.position.x, player.position.y, player.color);
 
-            // Handle reflection
-            if (result.reflect && result.attacker) {
-              result.attacker.takeDamage(result.reflect);
-              this.createDamageNumber(result.reflect, result.attacker.position.x, result.attacker.position.y, '#ff8800');
+              // Rock projectile: extra knockback force
+              if (proj.knockbackForce) {
+                this.physicsSystem.applyKnockback(player, proj.position.x, proj.position.y, proj.knockbackForce);
+              }
+
+              // Potion projectile: apply elemental status effect
+              if (proj.type === 'potion_projectile' && proj.potionEffect) {
+                if (proj.potionEffect === 'confusion') {
+                  player.confusionTimer = (player.confusionTimer || 0) + 3.0;
+                } else {
+                  player.applyStatusEffect?.(proj.potionEffect, 3.0);
+                }
+              }
+
+              // Steam cloud: apply scald (burn+slow) in AOE
+              if (proj.type === 'steam_cloud') {
+                player.applyStatusEffect?.('burn', proj.scaldDuration || 2.5);
+                player.applyStatusEffect?.('slow', proj.slowDuration || 3.0);
+              }
+
+              // Handle reflection
+              if (result.reflect && result.attacker) {
+                result.attacker.takeDamage(result.reflect);
+                this.createDamageNumber(result.reflect, result.attacker.position.x, result.attacker.position.y, '#ff8800');
+              }
+            }
+
+            if (result === true) {
+              this.enemyProjectiles.splice(i, 1);
+              return { playerDead: true };
+            }
+
+            // Create stuck arrow if this is an arrow (not a bullet/magic)
+            if (proj.type === 'arrow') {
+              this.stuckArrows.push({
+                char: proj.char,
+                stuckType: 'player',
+                position: { x: proj.position.x, y: proj.position.y },
+                stuckTo: player,
+                offset: {
+                  x: proj.position.x - player.position.x,
+                  y: proj.position.y - player.position.y
+                },
+                color: proj.color,
+                isBurning: proj.onHit === 'burn',
+                fireGenTimer: 0
+              });
             }
           }
-
-          if (result === true) {
-            this.enemyProjectiles.splice(i, 1);
-            return { playerDead: true };
-          }
-
-          // Create stuck arrow if this is an arrow (not a bullet/magic)
-          if (proj.type === 'arrow') {
-            this.stuckArrows.push({
-              char: proj.char,
-              position: { x: proj.position.x, y: proj.position.y },
-              stuckTo: player,
-              offset: {
-                x: proj.position.x - player.position.x,
-                y: proj.position.y - player.position.y
-              },
-              color: proj.color,
-              isBurning: proj.onHit === 'burn',
-              burnParticleTimer: 0
-            });
-          }
         }
-        this.enemyProjectiles.splice(i, 1);
+        if (consumed) this.enemyProjectiles.splice(i, 1);
       }
     }
 
@@ -777,6 +1135,12 @@ export class CombatSystem {
       if (attack.windupPhase && attack.windupDuration !== undefined) {
         attack.windupElapsed += deltaTime;
         const progress = attack.windupElapsed / attack.windupDuration;
+
+        // Track the owner's position so the hitbox follows knockback during windup.
+        if (attack.owner && attack.ownerOffsetX !== undefined) {
+          attack.position.x = attack.owner.position.x + attack.ownerOffsetX;
+          attack.position.y = attack.owner.position.y + attack.ownerOffsetY;
+        }
 
         // Alpha pattern: 0%=1.0, 25%=0.25, 50%=1.0, 75%=0.25, 100%=white
         if (progress < 0.25) {
@@ -813,14 +1177,18 @@ export class CombatSystem {
             this.createDamageNumber(attack.damage, attack.charmedTarget.position.x, attack.charmedTarget.position.y, '#ff44ff');
           }
         } else {
-          // Skip if attack and player are in different planes
-          if (attack.shooterPlane !== undefined && player.plane !== undefined && attack.shooterPlane !== player.plane) {
+          if (planeOf(player) !== (attack.shooterPlane ?? 0)) {
             attack.hasHit = true; // Mark as processed so it doesn't linger
             continue;
           }
 
           // Normal attack (or charmed fallback targeting player)
           if (this.checkMeleeCollisionWithPlayer(attack, player)) {
+            if (player.isStaffBlocking && !attack.isImpact) {
+              this.createDamageNumber('BLOCK', player.position.x, player.position.y, '#aaaaaa');
+              attack.hasHit = true;
+              continue;
+            }
             if (player.tryShieldBlock && player.tryShieldBlock(false)) {
               // Tower Shield absorbed the melee hit
               this.createDamageNumber('*', player.position.x, player.position.y, '#8888ff');
@@ -828,6 +1196,7 @@ export class CombatSystem {
               // Build damage source object
               const damageSource = {
                 isBullet: false,
+                isMelee: true,
                 element: attack.onHit,
                 attacker: attack.owner
               };
@@ -835,23 +1204,27 @@ export class CombatSystem {
 
               // Handle special results
               if (result.dodged) {
-                this.createDamageNumber('DODGE', player.position.x, player.position.y, '#ffff00');
+                this.createDamageNumber(result.lucky ? 'LUCKY DODGE' : 'DODGE',
+                                        player.position.x, player.position.y,
+                                        result.lucky ? '#ffff66' : '#ffff00');
               } else if (result.blocked) {
                 this.createDamageNumber('BLOCK', player.position.x, player.position.y, '#aaaaaa');
               } else if (result.immune) {
                 this.createDamageNumber('IMMUNE', player.position.x, player.position.y, '#00ffff');
               } else if (result !== false) {
-                this.createDamageNumber(attack.damage, player.position.x, player.position.y, player.color);
+                this.createDamageNumber(result.actualDamage ?? attack.damage, player.position.x, player.position.y, player.color);
 
                 // Apply knockback to player
                 if (attack.knockback) {
-                  const dx = player.position.x - attack.position.x;
-                  const dy = player.position.y - attack.position.y;
-                  const distance = Math.sqrt(dx * dx + dy * dy) || 1;
-                  const knockbackForce = attack.knockback || 200;
-                  player.velocity.vx = (dx / distance) * knockbackForce;
-                  player.velocity.vy = (dy / distance) * knockbackForce;
+                  this.physicsSystem.applyKnockback(
+                    player,
+                    attack.position.x, attack.position.y,
+                    attack.knockback || 200
+                  );
                 }
+
+                // Hitstop on confirmed player hit
+                this.physicsSystem.applyHitstop(player, 0.06);
 
                 // Handle reflection
                 if (result.reflect && result.attacker) {
@@ -908,6 +1281,8 @@ export class CombatSystem {
           if (Math.sqrt(dx * dx + dy * dy) <= noiseSource.radius) {
             enemy.lastKnownPosition = { x: noiseSource.x, y: noiseSource.y };
             enemy.aggroMemoryActive = true;
+            enemy.memoryMoveDelayTimer = 0; // Investigate immediately
+            enemy.currentDirection = { x: 0, y: 0 }; // Force direction recalc toward noise
             enemy.setTarget(player); // keep formal target as player, memory pulls to noise
           }
         }
@@ -926,6 +1301,9 @@ export class CombatSystem {
       // Handle sap damage
       if (updateResult && updateResult.sapDamage) {
         const sapData = updateResult.sapDamage;
+        if (player.isStaffBlocking) {
+          this.createDamageNumber('BLOCK', player.position.x, player.position.y, '#aaaaaa');
+        } else {
         const damageSource = {
           isBullet: false,
           element: null,
@@ -934,11 +1312,13 @@ export class CombatSystem {
         const result = player.takeDamage(sapData.damage, damageSource);
 
         if (result.dodged) {
-          this.createDamageNumber('DODGE', player.position.x, player.position.y, '#ffff00');
+          this.createDamageNumber(result.lucky ? 'LUCKY DODGE' : 'DODGE',
+                                  player.position.x, player.position.y,
+                                  result.lucky ? '#ffff66' : '#ffff00');
         } else if (result.blocked) {
           this.createDamageNumber('BLOCK', player.position.x, player.position.y, '#aaaaaa');
         } else if (result !== false) {
-          this.createDamageNumber(sapData.damage, player.position.x, player.position.y, '#cc0000');
+          this.createDamageNumber(result.actualDamage ?? sapData.damage, player.position.x, player.position.y, '#cc0000');
 
           // Handle reflection
           if (result.reflect && result.attacker) {
@@ -950,6 +1330,7 @@ export class CombatSystem {
         if (result === true) {
           return { playerDead: true };
         }
+        } // end else (!player.isStaffBlocking)
       }
 
       // Handle melee attack windup visualization
@@ -998,35 +1379,125 @@ export class CombatSystem {
     for (let i = this.stuckArrows.length - 1; i >= 0; i--) {
       const arrow = this.stuckArrows[i];
 
+      // Expire after lifetime
+      arrow.lifetime -= deltaTime;
+      if (arrow.lifetime <= 0) {
+        this.stuckArrows.splice(i, 1);
+        continue;
+      }
+
       // If stuck to something, check if target is dead and remove arrow
       if (arrow.stuckTo) {
         const targetDead = (arrow.stuckTo.hp !== undefined && arrow.stuckTo.hp <= 0) ||
                           arrow.stuckTo.destroyed;
         if (targetDead) {
-          this.stuckArrows.splice(i, 1);
-          continue;
+          // Small chance for an arrow stuck in a slain enemy to drop for re-pickup
+          if (arrow.stuckType === 'enemy' && arrow.weaponChar && Math.random() < 0.25) {
+            arrow.stuckTo = null;
+            arrow.stuckType = 'ground';
+            arrow.pickupable = true;
+            arrow.lifetime = 8.0;
+            arrow.offset = { x: 0, y: 0 };
+          } else {
+            this.stuckArrows.splice(i, 1);
+            continue;
+          }
+        } else {
+          // Update position to follow target
+          arrow.position.x = arrow.stuckTo.position.x + arrow.offset.x;
+          arrow.position.y = arrow.stuckTo.position.y + arrow.offset.y;
         }
-
-        // Update position to follow target
-        arrow.position.x = arrow.stuckTo.position.x + arrow.offset.x;
-        arrow.position.y = arrow.stuckTo.position.y + arrow.offset.y;
       }
       // If on ground (stuckTo === null), arrow stays at fixed position
 
-      // Fire arrows emit flame particles
+      // Player can pick up ground arrows to refund ammo to the matching bow
+      if (arrow.pickupable && arrow.weaponChar && player && !player.isDead) {
+        const ax = arrow.position.x + GRID.CELL_SIZE / 2;
+        const ay = arrow.position.y + GRID.CELL_SIZE / 2;
+        const px = player.position.x + player.width / 2;
+        const py = player.position.y + player.height / 2;
+        if (Math.abs(ax - px) < GRID.CELL_SIZE && Math.abs(ay - py) < GRID.CELL_SIZE) {
+          const bow = (player.quickSlots || []).find(slot =>
+            slot &&
+            slot.data?.weaponType === 'BOW' &&
+            slot.char === arrow.weaponChar &&
+            slot.maxUses !== null &&
+            slot.usesRemaining < slot.maxUses
+          );
+          if (bow) {
+            bow.usesRemaining++;
+            if (bow.cooldownTimer > 1000) bow.cooldownTimer = 0; // Clear depletion lock
+            this.createDamageNumber('+1', arrow.position.x, arrow.position.y, arrow.color || '#ffffff');
+            this.stuckArrows.splice(i, 1);
+            continue;
+          }
+        }
+      }
+
+      // Advance fire generator timer; expire after 3 seconds
       if (arrow.isBurning) {
-        arrow.burnParticleTimer -= deltaTime;
-        if (arrow.burnParticleTimer <= 0) {
-          // Emit a small flame particle
-          const angle = Math.random() * Math.PI * 2;
-          const speed = 10 + Math.random() * 20;
-          this.impactEffects.push({
-            x: arrow.position.x,
-            y: arrow.position.y,
-            onHit: 'burn',
-            color: arrow.color
-          });
-          arrow.burnParticleTimer = 0.1; // Emit every 0.1 seconds
+        arrow.fireGenTimer += deltaTime;
+        if (arrow.fireGenTimer >= 3.0) {
+          arrow.isBurning = false;
+        }
+      }
+    }
+
+    // Update tongue attacks (frog)
+    for (let i = this.tongueAttacks.length - 1; i >= 0; i--) {
+      const tongue = this.tongueAttacks[i];
+      tongue.timer += deltaTime;
+
+      if (tongue.phase === 'extending') {
+        const t = Math.min(tongue.timer / tongue.extendDuration, 1);
+        tongue.currentLength = tongue.maxLength * t;
+        if (tongue.timer >= tongue.extendDuration) {
+          tongue.currentLength = tongue.maxLength;
+          tongue.phase = 'hold';
+          tongue.timer = 0;
+
+          // Collision check at full extension — damage player if tongue tip reaches them
+          if (!tongue.hasHit) {
+            const owner = tongue.owner;
+            const sx = owner.position.x + GRID.CELL_SIZE / 2;
+            const sy = owner.position.y + GRID.CELL_SIZE / 2;
+            const tipX = sx + tongue.direction.x * tongue.maxLength;
+            const tipY = sy + tongue.direction.y * tongue.maxLength;
+            const playerBox = player.getHitbox();
+            const half = GRID.CELL_SIZE * 0.5;
+            if (tipX + half > playerBox.x && tipX - half < playerBox.x + playerBox.width &&
+                tipY + half > playerBox.y && tipY - half < playerBox.y + playerBox.height) {
+              if (player.isStaffBlocking) {
+                this.createDamageNumber('BLOCK', player.position.x, player.position.y, '#aaaaaa');
+                tongue.hasHit = true;
+                continue;
+              }
+              const result = player.takeDamage(tongue.damage, { isBullet: false, attacker: owner });
+              if (result === true) {
+                this.tongueAttacks.splice(i, 1);
+                return { playerDead: true, objectEffects: this.objectDestroyEvents.splice(0), impactEffects: this.impactEffects.splice(0), newSteamClouds: this.newSteamClouds.splice(0), polymorphEvents: this.polymorphEvents.splice(0) };
+              }
+              if (result?.dodged) {
+                this.createDamageNumber(result.lucky ? 'LUCKY DODGE' : 'DODGE',
+                                        player.position.x, player.position.y,
+                                        result.lucky ? '#ffff66' : '#ffff00');
+              } else if (result !== false) {
+                this.createDamageNumber(result.actualDamage ?? tongue.damage, player.position.x, player.position.y, player.color);
+              }
+              tongue.hasHit = true;
+            }
+          }
+        }
+      } else if (tongue.phase === 'hold') {
+        if (tongue.timer >= tongue.holdDuration) {
+          tongue.phase = 'retracting';
+          tongue.timer = 0;
+        }
+      } else if (tongue.phase === 'retracting') {
+        const t = Math.min(tongue.timer / tongue.retractDuration, 1);
+        tongue.currentLength = tongue.maxLength * (1 - t);
+        if (tongue.timer >= tongue.retractDuration) {
+          this.tongueAttacks.splice(i, 1);
         }
       }
     }
@@ -1053,12 +1524,22 @@ export class CombatSystem {
 
   addAttack(attackData, enemies = []) {
     if (attackData.type === 'bullet' || attackData.type === 'arrow' || attackData.type === 'transmutation_bolt') {
-      this.projectiles.push({
+      const proj = {
         ...attackData,
         width: GRID.CELL_SIZE,
         height: GRID.CELL_SIZE,
         plane: attackData.shooterPlane !== undefined ? attackData.shooterPlane : 0 // Inherit plane from shooter
-      });
+      };
+      // Universal finite bullet range — arrows have their own deceleration model
+      if (proj.type === 'bullet' && proj.remainingDistance === undefined) {
+        proj.remainingDistance = attackData.bulletRange ?? DEFAULT_BULLET_RANGE;
+      }
+      // Per-shot accuracy roll — missed bullets pass through enemies with no damage,
+      // showing "MISS". 1.0 (or undefined) always hits.
+      if (proj.type === 'bullet' && attackData.accuracy !== undefined && attackData.accuracy < 1.0) {
+        proj.missed = Math.random() > attackData.accuracy;
+      }
+      this.projectiles.push(proj);
     } else if (attackData.type === 'melee') {
       // Check if this is a delayed attack (for sequential animations like flail sweep)
       if (attackData.delay && attackData.delay > 0) {
@@ -1074,7 +1555,7 @@ export class CombatSystem {
     } else if (attackData.type === 'chaos_wand' || attackData.type === 'blind_wand') {
       // Wand attacks with proximity requirement
       // Check if at least one enemy is within proximity range
-      const hasNearbyEnemy = this.checkProximity(attackData.position, attackData.proximityRequired, enemies);
+      const hasNearbyEnemy = this.checkProximity(attackData.position, attackData.proximityRequired, enemies, planeOf(attackData.owner));
 
       if (!hasNearbyEnemy) {
         // Proximity requirement not met - show red X feedback and don't consume attack
@@ -1099,7 +1580,8 @@ export class CombatSystem {
           attackData.damage,
           enemies,
           [],
-          attackData.damageMin // Pass damage falloff
+          attackData.damageMin, // Pass damage falloff
+          planeOf(attackData.owner) // Plane of the wand's owner
         );
         // Add visual AOE effect
         this.aoeEffects.push({
@@ -1117,7 +1599,8 @@ export class CombatSystem {
           attackData.effectRadius,
           'blind',
           attackData.effectDuration,
-          enemies
+          enemies,
+          planeOf(attackData.owner) // Plane of the wand's owner
         );
         // Add visual AOE effect
         this.aoeEffects.push({
@@ -1151,15 +1634,11 @@ export class CombatSystem {
   }
 
   checkMeleeCollision(attack, enemy) {
-    // Use more precise hitbox matching character size (not full tile)
-    // Characters are ~50% of tile width, ~75% of tile height
-    const widthReduction = attack.width * 0.5;
-    const heightReduction = attack.height * 0.25;
     const attackBox = {
-      x: attack.position.x + widthReduction / 2,
-      y: attack.position.y + heightReduction / 2,
-      width: attack.width - widthReduction,
-      height: attack.height - heightReduction
+      x: attack.position.x,
+      y: attack.position.y,
+      width: attack.width,
+      height: attack.height
     };
 
     const enemyBox = enemy.getHitbox();
@@ -1171,14 +1650,11 @@ export class CombatSystem {
   }
 
   checkMeleeCollisionWithObject(attack, obj) {
-    // Use more precise hitbox matching character size (not full tile)
-    const widthReduction = attack.width * 0.5;
-    const heightReduction = attack.height * 0.25;
     const attackBox = {
-      x: attack.position.x + widthReduction / 2,
-      y: attack.position.y + heightReduction / 2,
-      width: attack.width - widthReduction,
-      height: attack.height - heightReduction
+      x: attack.position.x,
+      y: attack.position.y,
+      width: attack.width,
+      height: attack.height
     };
 
     const objBox = obj.getHitbox();
@@ -1212,6 +1688,10 @@ export class CombatSystem {
       bounced = true;
     }
 
+    if (bounced && proj.drawAngle != null) {
+      proj.drawAngle = Math.atan2(proj.velocity.vy, proj.velocity.vx);
+    }
+
     return bounced;
   }
 
@@ -1222,42 +1702,117 @@ export class CombatSystem {
            proj.position.y > GRID.HEIGHT;
   }
 
+  // Returns true if `proj` occupies a solid cell in `room.collisionMap`, or is outside
+  // the map's grid boundaries. Works for both normal rooms (30×30) and interior rooms
+  // (hut 10×10, dungeon 24×24). Returns false when room has no collisionMap.
+  _hitsWall(proj, room) {
+    if (!room?.collisionMap) return false;
+    const col = Math.floor(proj.position.x / GRID.CELL_SIZE);
+    const row = Math.floor(proj.position.y / GRID.CELL_SIZE);
+    const map = room.collisionMap;
+    if (row < 0 || row >= map.length) return true;
+    const rowArr = map[row];
+    return !rowArr || col < 0 || col >= rowArr.length || rowArr[col] === true;
+  }
+
+  // Ricochet bullets off interior structure walls. Border-wall cells and
+  // out-of-grid positions return false so the caller falls through to destroy.
+  _tryStructureWallRicochet(proj, room, deltaTime) {
+    const map = room?.collisionMap;
+    if (!map) return false;
+    const cs = GRID.CELL_SIZE;
+    const rows = map.length;
+    const cols = map[0]?.length || 0;
+
+    const col = Math.floor(proj.position.x / cs);
+    const row = Math.floor(proj.position.y / cs);
+
+    // Out-of-grid → treat as border
+    if (row < 0 || row >= rows || col < 0 || col >= cols) return false;
+    // Border-wall cell → no ricochet
+    if (row === 0 || row === rows - 1 || col === 0 || col === cols - 1) return false;
+    // Not actually a wall cell (defensive) → no ricochet
+    if (!map[row][col]) return false;
+
+    // Reconstruct the bullet's pre-move position to determine the surface normal.
+    const prevX = proj.position.x - proj.velocity.vx * deltaTime;
+    const prevY = proj.position.y - proj.velocity.vy * deltaTime;
+    const prevCol = Math.floor(prevX / cs);
+    const prevRow = Math.floor(prevY / cs);
+
+    const enteredFromFreeCol = prevCol !== col && prevCol >= 0 && prevCol < cols && !map[row]?.[prevCol];
+    const enteredFromFreeRow = prevRow !== row && prevRow >= 0 && prevRow < rows && !map[prevRow]?.[col];
+
+    let flipX = enteredFromFreeCol;
+    let flipY = enteredFromFreeRow;
+    // Pure diagonal entry through a corner — flip both
+    if (!flipX && !flipY) {
+      flipX = true;
+      flipY = true;
+    }
+
+    if (flipX) proj.velocity.vx = -proj.velocity.vx;
+    if (flipY) proj.velocity.vy = -proj.velocity.vy;
+
+    // Step back to the previously-free cell so the bullet doesn't re-collide next frame.
+    proj.position.x = prevX;
+    proj.position.y = prevY;
+
+    if (proj.drawAngle != null) {
+      proj.drawAngle = Math.atan2(proj.velocity.vy, proj.velocity.vx);
+    }
+    this.audioSystem?.playSFX?.('ricochet', 0.6);
+    return true;
+  }
+
   createEnemyAttack(attackData) {
     if (!attackData) return;
 
     if (Array.isArray(attackData)) {
-      // Multiple projectiles (magic, fire breath, etc)
+      // Multi-element attack (multi-shot, fire breath, melee arc/sweep, etc).
+      // Dispatch each element by type so e.g. a goblin's swung sword arc lands
+      // in enemyMeleeAttacks rather than enemyProjectiles.
       for (const data of attackData) {
-        this.enemyProjectiles.push({
-          ...data,
-          width: GRID.CELL_SIZE,
-          height: GRID.CELL_SIZE,
-          plane: data.shooterPlane !== undefined ? data.shooterPlane : 0 // Inherit plane from shooter
-        });
+        this.createEnemyAttack(data);
       }
-    } else if (attackData.type === 'enemy_melee') {
-      // Melee attack
-      this.enemyMeleeAttacks.push({
-        ...attackData,
-        hasHit: false
-      });
+      return;
+    }
+
+    if (attackData.type === 'tongue') {
+      this.tongueAttacks.push(attackData);
+      return;
+    }
+
+    if (attackData.type === 'enemy_melee') {
+      // Delay (e.g. multi-hit arc/sweep) is uncommon for enemy melee; ignore it
+      // for now and fire each segment immediately. pendingMeleeAttacks is the
+      // player-melee queue, so we can't reuse it here.
+      this.enemyMeleeAttacks.push({ ...attackData, hasHit: false });
+      return;
+    }
+
+    // Default: projectile (arrow, bolt, rock, magic, etc.)
+    const proj = {
+      ...attackData,
+      width:  attackData.width  ?? GRID.CELL_SIZE,
+      height: attackData.height ?? GRID.CELL_SIZE,
+      plane: attackData.shooterPlane !== undefined ? attackData.shooterPlane : 0
+    };
+    if (attackData.delay && attackData.delay > 0) {
+      this.pendingEnemyProjectiles.push(proj);
     } else {
-      // Single projectile
-      this.enemyProjectiles.push({
-        ...attackData,
-        width: GRID.CELL_SIZE,
-        height: GRID.CELL_SIZE,
-        plane: attackData.shooterPlane !== undefined ? attackData.shooterPlane : 0 // Inherit plane from shooter
-      });
+      this.enemyProjectiles.push(proj);
     }
   }
 
   checkProjectileCollisionWithPlayer(proj, player) {
+    const hw = proj.width  || GRID.CELL_SIZE;
+    const hh = proj.height || GRID.CELL_SIZE;
     const projBox = {
-      x: proj.position.x,
-      y: proj.position.y,
-      width: proj.width || GRID.CELL_SIZE,
-      height: proj.height || GRID.CELL_SIZE
+      x: proj.position.x + (GRID.CELL_SIZE - hw) / 2,
+      y: proj.position.y + (GRID.CELL_SIZE - hh) / 2,
+      width:  hw,
+      height: hh
     };
 
     const playerBox = player.getHitbox();
@@ -1301,12 +1856,13 @@ export class CombatSystem {
 
     if (!rolling) return;
 
-    const hitbox = { x: player.position.x, y: player.position.y, width: player.width, height: player.height };
+    const hitbox = player.getHitbox();
     const dir = player.dodgeRoll.direction;
 
     // Damage enemies on contact (once per enemy per roll)
     for (const enemy of enemies) {
       if (this._rollHitEnemies.has(enemy) || enemy.hp <= 0) continue;
+      if (!inSamePlane(player, enemy)) continue;
       const eb = enemy.getHitbox();
       if (hitbox.x < eb.x + eb.width && hitbox.x + hitbox.width > eb.x &&
           hitbox.y < eb.y + eb.height && hitbox.y + hitbox.height > eb.y) {
@@ -1323,6 +1879,7 @@ export class CombatSystem {
     // Smash background objects on contact (once per object per roll)
     for (const obj of backgroundObjects) {
       if (obj.destroyed || obj.isRecipeSign || obj.indestructible || obj.hp === null) continue;
+      if (!objectOnPlane(obj, planeOf(player))) continue;
       if (this._rollHitObjects.has(obj)) continue;
       const ob = obj.getHitbox();
       if (hitbox.x < ob.x + ob.width && hitbox.x + hitbox.width > ob.x &&
@@ -1337,18 +1894,11 @@ export class CombatSystem {
   }
 
   applyKnockback(enemy, attack) {
-    const dx = enemy.position.x - attack.position.x;
-    const dy = enemy.position.y - attack.position.y;
-    const distance = Math.sqrt(dx * dx + dy * dy) || 1;
-
-    const knockbackForce = attack.knockback || 200;
-    enemy.velocity.vx = (dx / distance) * knockbackForce;
-    enemy.velocity.vy = (dy / distance) * knockbackForce;
-
-    // Activate knockback status effect to prevent AI from overriding velocity
-    if (enemy.applyStatusEffect) {
-      enemy.applyStatusEffect('knockback', 0.2); // 0.2 second knockback duration
-    }
+    this.physicsSystem.applyKnockback(
+      enemy,
+      attack.position.x, attack.position.y,
+      attack.knockback || 200
+    );
   }
 
   /**
@@ -1421,6 +1971,7 @@ export class CombatSystem {
 
       for (const enemy of enemies) {
         if (alreadyHit.has(enemy)) continue;
+        if (!inSamePlane(hitEnemy, enemy)) continue;
 
         const dx = enemy.position.x - currentEnemy.position.x;
         const dy = enemy.position.y - currentEnemy.position.y;
@@ -1444,16 +1995,36 @@ export class CombatSystem {
       if (isWet) {
         this.createDamageNumber('⚡', nearestEnemy.position.x, nearestEnemy.position.y - 12, '#ffff00');
       }
+
+      // Visual arc between source and chained target
+      const cs = (currentEnemy.width || GRID.CELL_SIZE) / 2;
+      const ns = (nearestEnemy.width || GRID.CELL_SIZE) / 2;
+      this.chainArcs.push({
+        x1: currentEnemy.position.x + cs,
+        y1: currentEnemy.position.y + cs,
+        x2: nearestEnemy.position.x + ns,
+        y2: nearestEnemy.position.y + ns,
+        color: isWet ? '#ffff66' : '#88ddff',
+        timer: 0.18,
+        duration: 0.18
+      });
+
       alreadyHit.add(nearestEnemy);
       currentEnemy = nearestEnemy;
       chained++;
     }
   }
 
+  getChainArcs() {
+    return this.chainArcs;
+  }
+
   // Check if at least one enemy is within proximity range
   // position: player's center position
-  checkProximity(position, proximityRange, enemies) {
+  checkProximity(position, proximityRange, enemies, sourcePlane = 0) {
     for (const enemy of enemies) {
+      if (planeOf(enemy) !== sourcePlane) continue;
+
       // Calculate enemy center position (enemy.position is top-left)
       const enemyCenterX = enemy.position.x + (enemy.width || GRID.CELL_SIZE) / 2;
       const enemyCenterY = enemy.position.y + (enemy.height || GRID.CELL_SIZE) / 2;
@@ -1470,9 +2041,11 @@ export class CombatSystem {
   }
 
   // Apply status effect to all enemies in radius
-  applyAOEStatus(position, radius, statusType, duration, enemies) {
+  applyAOEStatus(position, radius, statusType, duration, enemies, sourcePlane = 0) {
     let affectedCount = 0;
     for (const enemy of enemies) {
+      if (planeOf(enemy) !== sourcePlane) continue;
+
       const dx = enemy.position.x - position.x;
       const dy = enemy.position.y - position.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -1485,10 +2058,12 @@ export class CombatSystem {
     return affectedCount;
   }
 
-  createExplosion(x, y, radius, damage, enemies, backgroundObjects = [], damageMin = 0) {
+  createExplosion(x, y, radius, damage, enemies, backgroundObjects = [], damageMin = 0, sourcePlane = 0) {
     // Damage enemies in blast radius
     // damageMin: minimum damage multiplier at edge (0 = full falloff, 0.25 = 25% damage at edge)
     for (const enemy of enemies) {
+      if (planeOf(enemy) !== sourcePlane) continue;
+
       const dx = enemy.position.x - x;
       const dy = enemy.position.y - y;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -1502,12 +2077,11 @@ export class CombatSystem {
         enemy.takeDamage(explosionDamage);
         this.createDamageNumber(explosionDamage, enemy.position.x, enemy.position.y, '#ff8800');
 
-        // Knockback from explosion center
+        // Knockback and hitstop from explosion center
         if (dist > 0) {
-          const knockbackForce = 300 * damageFalloff;
-          enemy.velocity.vx = (dx / dist) * knockbackForce;
-          enemy.velocity.vy = (dy / dist) * knockbackForce;
+          this.physicsSystem.applyKnockback(enemy, x, y, 300 * damageFalloff);
         }
+        this.physicsSystem.applyHitstop(enemy, 0.06);
       }
     }
 
@@ -1560,6 +2134,19 @@ export class CombatSystem {
       const spreadAngle = angle + (i - Math.floor(splitCount / 2)) * 0.4;
 
       this.projectiles.push({
+        // Inherit all special properties from the original projectile
+        onHit: originalProj.onHit,
+        owner: originalProj.owner,
+        plane: originalProj.plane,
+        shooterPlane: originalProj.shooterPlane,
+        knockback: originalProj.knockback,
+        chain: originalProj.chain,
+        chainCount: originalProj.chainCount,
+        explode: originalProj.explode,
+        explodeRadius: originalProj.explodeRadius,
+        pierce: originalProj.pierce,
+        lifesteal: originalProj.lifesteal,
+        // Split-specific overrides
         type: originalProj.type,
         char: originalProj.char,
         position: { ...originalProj.position },
@@ -1576,14 +2163,35 @@ export class CombatSystem {
     }
   }
 
-  createDamageNumber(damage, x, y, color, scale = 1) {
+  // Returns { damage, isCrit, isLucky }. Only player attacks roll crits, gated
+  // by player.critChance (Lucky Coin / well ritual) or weapon's own critChance.
+  // isLucky=true when the Lucky Coin/well is the crit source (shows "LUCKY CRIT");
+  // isLucky=false when the weapon alone provides the chance (shows "CRIT").
+  _applyCritIfLucky(damage, owner) {
+    if (!owner?.quickSlots) return { damage, isCrit: false };
+    let critChance = owner.critChance || 0;
+    const isLucky = critChance > 0; // Lucky Coin or well is contributing
+    const activeWeapon = owner.quickSlots[owner.activeSlotIndex];
+    if (activeWeapon?.data?.critChance) {
+      critChance = Math.max(critChance, activeWeapon.data.critChance);
+    }
+    // Post-dodge crit window: dagger-class weapons force a guaranteed crit.
+    if (activeWeapon?.data?.weaponSubtype === 'dagger' && owner.postDodgeCritTimer > 0) {
+      critChance = 1;
+    }
+    if (!(critChance > 0)) return { damage, isCrit: false };
+    if (Math.random() >= critChance) return { damage, isCrit: false };
+    return { damage: Math.ceil(damage * 1.5), isCrit: true, isLucky };
+  }
+
+  createDamageNumber(damage, x, y, color, scale = 1, duration = 1.0) {
     this.damageNumbers.push({
       value: damage,
       x: x + GRID.CELL_SIZE / 2,
       y: y,
       alpha: 1.0,
       timer: 0,
-      duration: 1.0,  // 1 second lifetime
+      duration,
       riseSpeed: 30,  // pixels per second
       color: color,
       scale: scale
@@ -1596,8 +2204,16 @@ export class CombatSystem {
     this.meleeAttacks = [];
     this.enemyMeleeAttacks = [];
     this.pendingMeleeAttacks = [];
+    this.pendingEnemyProjectiles = [];
     this.damageNumbers = [];
     this.stuckArrows = [];
+    this.tongueAttacks = [];
+    this.aoeEffects = [];
+    this.chainArcs = [];
+    this.polymorphEvents = [];
+    this.impactEffects = [];
+    this.newSteamClouds = [];
+    this.objectDestroyEvents = [];
   }
 
   getProjectiles() {
@@ -1624,6 +2240,18 @@ export class CombatSystem {
     return this.stuckArrows;
   }
 
+  getTongueAttacks() {
+    return this.tongueAttacks;
+  }
+
+  cancelPendingAttacksFrom(owner) {
+    for (let i = this.pendingEnemyProjectiles.length - 1; i >= 0; i--) {
+      if (this.pendingEnemyProjectiles[i].owner === owner) {
+        this.pendingEnemyProjectiles.splice(i, 1);
+      }
+    }
+  }
+
   checkProjectileCollisionWithObject(proj, obj) {
     const projBox = {
       x: proj.position.x,
@@ -1648,12 +2276,13 @@ export class CombatSystem {
     const speed = Math.sqrt(bullet.velocity.vx ** 2 + bullet.velocity.vy ** 2);
     bullet.velocity.vx = Math.cos(reflectedAngle) * speed;
     bullet.velocity.vy = Math.sin(reflectedAngle) * speed;
+    if (bullet.drawAngle != null) bullet.drawAngle = reflectedAngle;
 
     // Mark as reflected so it doesn't hit player
     bullet.reflected = true;
 
-    // Create sparkle effect (TODO: add to particle system)
-    this.createDamageNumber('✧', obj.position.x, obj.position.y, '#ffff00');
+    // Placeholder ricochet SFX — wired via main.js; silently no-ops if unloaded.
+    this.audioSystem?.playSFX?.('ricochet', 0.6);
   }
 
   conductElectricity(sourceObj, damage, enemies, player = null) {
@@ -1663,6 +2292,7 @@ export class CombatSystem {
 
     for (const enemy of enemies) {
       if (!enemy.isWet || !enemy.isWet()) continue;
+      if (!inSamePlane(sourceObj, enemy)) continue;
 
       const dx = enemy.position.x - sourceObj.position.x;
       const dy = enemy.position.y - sourceObj.position.y;

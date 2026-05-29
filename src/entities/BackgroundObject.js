@@ -1,8 +1,8 @@
-import { GRID, BACKGROUND_OBJECTS, OBJECT_ANIMATIONS, WATER_COLORS } from '../game/GameConfig.js';
+import { GRID, BACKGROUND_OBJECTS, BACKGROUND_OBJECT_VARIANTS, OBJECT_ANIMATIONS, WATER_COLORS } from '../game/GameConfig.js';
 import { ITEMS, INGREDIENTS } from '../data/items.js';
 
 export class BackgroundObject {
-  constructor(char, x, y) {
+  constructor(char, x, y, options = {}) {
     this.char = char;
     // Handle unknown characters (e.g., item chars in recipe signs)
     // Fallback chain: BACKGROUND_OBJECTS → ITEMS → INGREDIENTS → default
@@ -16,7 +16,7 @@ export class BackgroundObject {
         color: itemData ? itemData.color : '#888888',
         solid: false,
         hp: null,
-        bulletInteraction: 'passthrough',
+        bulletInteraction: 'pass-through',
         indestructible: true
       };
     }
@@ -86,6 +86,21 @@ export class BackgroundObject {
     this.indestructible = this.data.indestructible || false;
     this.conductivity = this.data.conductivity || 'none';
     this.flammability = this.data.flammability || 'none';
+
+    // Interaction-type enum (see INTERACTION_TYPES in GameConfig). Default
+    // omits 'spacebar' so trees/rocks keep harvest-only semantics — only
+    // containers opt in to direct player opening.
+    this.acceptsInteractions = this.data.acceptsInteractions || ['blade', 'bullet', 'blunt'];
+
+    // Variant identity — decouples behavior from render char
+    this.typeId = options.typeId || null;
+    this._variantData = null;
+    if (this.typeId) {
+      const base = BACKGROUND_OBJECT_VARIANTS[this.typeId];
+      this._variantData = options.variantOverrides
+        ? { ...base, ...options.variantOverrides }
+        : base || null;
+    }
     this.collisionShape = this.data.collisionShape || 'rectangle'; // 'rectangle' or 'ellipse'
 
     // HP system
@@ -98,7 +113,7 @@ export class BackgroundObject {
     this.fireTimer = 0;
 
     // Water state (only meaningful when this.char === '~')
-    this.waterState = 'normal'; // 'normal' | 'frozen' | 'poisoned' | 'electrified'
+    this.waterState = 'normal'; // 'normal' | 'frozen' | 'poisoned' | 'electrified' | 'crystallized'
     this.waterStateTimer = 0;
 
     // Drop tracking - prevents duplicate drops from same object
@@ -107,12 +122,28 @@ export class BackgroundObject {
     // Leshy chase event flags (set by RoomGenerator for secret events)
     this.isShaking = false;
     this.leshyBush = false;
+    this.fairyGrass = false;
     this.shakeTimer = 0;
 
     // Wand system properties
     this.rock = this.data.rock || false; // Negates magic/elemental effects
     this.electrified = false; // Electrical infusion trap
     this.electrifiedTimer = 0;
+
+    // Fields that were previously lazy-initialized at runtime; declared here to avoid
+    // undefined-vs-false ambiguity and to satisfy the constructor-completeness requirement.
+    this.isCampfire = false;        // Set by RoomGenerator for campfire objects
+    this._flickerTimer = 0;         // Campfire flicker countdown
+    this.fountainWater = false;     // F-room water tile — drives shimmer cycle
+    this.fountainWaterfall = false; // F-room waterfall tile — drives downward char cycle
+    this._fountainShimmerTimer = 0;
+    this._fountainWaterfallTimer = 0;
+    this._fountainWaterfallPhase = Math.floor(Math.random() * 4);
+    this.electricBlinkTimer = 0;    // Electrified water blink interval timer
+    this.electricBlinkOn = false;   // Electrified water blink state
+    this.burnt = false;             // Set by burnGrass() after fire burns out
+    this.damaging = false;          // Set by RoomGenerator for lava tiles
+    this.isDryMud = false;          // Set by PhysicsSystem for drying mud tiles
   }
 
   // Called by melee attacks (and can be called by any damage source).
@@ -171,9 +202,13 @@ export class BackgroundObject {
     this._playAnimation('cutgrass');
   }
 
+  acceptsInteraction(type) {
+    return this.acceptsInteractions.includes('all') || this.acceptsInteractions.includes(type);
+  }
+
   // Non-destructive interact (used by unarmed players, shrines, water, etc.)
   interact() {
-    const interaction = this.data.interactions.default;
+    const interaction = this.data?.interactions?.default;
     if (!interaction) return { message: null, effect: null, object: this };
 
     this._playAnimation(interaction.animation);
@@ -212,19 +247,22 @@ export class BackgroundObject {
       }
     }
 
-    // Tick water state timer (skip for lava/damaging liquids and mud beds)
-    if (this.char === '~' && this.waterState !== 'normal' && !this.damaging && !this.isDryMud && !this.slowing) {
+    // Tick water state timer (water only)
+    if (this.char === '~' && this.waterState !== 'normal' && this.isWater()) {
       this.waterStateTimer -= deltaTime;
       if (this.waterStateTimer <= 0) {
         this.setWaterState('normal', 0);
       }
     }
 
-    // Apply water state color and char (skip for lava/damaging liquids and mud beds)
-    if (this.char === '~' && !this.damaging && !this.isDryMud && !this.slowing) {
+    // Apply water state color and char (water only)
+    if (this.char === '~' && this.isWater()) {
       if (this.waterState === 'frozen') {
         this.animationChar = '=';
         this.animationColor = WATER_COLORS.frozen;
+      } else if (this.waterState === 'crystallized') {
+        this.animationChar = '◇';
+        this.animationColor = WATER_COLORS.crystallized;
       } else if (this.waterState === 'electrified') {
         this.animationChar = '~';
         // Blink between yellow and blue at 0.15s interval
@@ -239,6 +277,40 @@ export class BackgroundObject {
         this.electricBlinkTimer = 0;
         this.electricBlinkOn = false;
         this.animationColor = WATER_COLORS[this.waterState] || WATER_COLORS.normal;
+      }
+    }
+
+    // Fountain water shimmer — cycle through wave chars per-tile.
+    // Skipped while corrupted/elemental-affected so the underlying state-color shows through.
+    if (this.fountainWater && this.waterState === 'normal' && !this.onFire) {
+      this._fountainShimmerTimer -= deltaTime;
+      if (this._fountainShimmerTimer <= 0) {
+        this._fountainShimmerTimer = 0.10 + Math.random() * 0.08;
+        const shimmer = ['~', '≈', '˜', '~'];
+        this.animationChar = shimmer[Math.floor(Math.random() * shimmer.length)];
+      }
+    }
+
+    // Fountain waterfall — downward-cycling char animation
+    if (this.fountainWaterfall) {
+      this._fountainWaterfallTimer -= deltaTime;
+      if (this._fountainWaterfallTimer <= 0) {
+        this._fountainWaterfallTimer = 0.10;
+        const cycle = ['│', '┃', '╿', '╽'];
+        this._fountainWaterfallPhase = (this._fountainWaterfallPhase + 1) % cycle.length;
+        this.animationChar = cycle[this._fountainWaterfallPhase];
+      }
+    }
+
+    // Campfire flicker — cycle through flame chars + warm-color jitter
+    if (this.isCampfire) {
+      this._flickerTimer = (this._flickerTimer || 0) - deltaTime;
+      if (this._flickerTimer <= 0) {
+        this._flickerTimer = 0.08 + Math.random() * 0.1;
+        const chars = ['!', '*', '^', 'i'];
+        const colors = ['#ff8822', '#ffaa33', '#ffcc44', '#ff6611'];
+        this.animationChar = chars[Math.floor(Math.random() * chars.length)];
+        this.animationColor = colors[Math.floor(Math.random() * colors.length)];
       }
     }
 
@@ -304,7 +376,7 @@ export class BackgroundObject {
     // Water state color override (in case animationColor was reset by animation end)
     // Electrified is excluded: its per-frame blink value lives in animationColor and must not be replaced
     // Damaging liquids (lava) and mud beds excluded: they use their custom colors, not water colors
-    if (!this.onFire && this.char === '~' && this.waterState !== 'electrified' && !this.damaging && !this.isDryMud && !this.slowing) {
+    if (!this.onFire && this.isWater() && this.waterState !== 'electrified') {
       color = WATER_COLORS[this.waterState] || WATER_COLORS.normal;
       // Frozen water also overrides the char for the static (non-animating) path
       if (this.waterState === 'frozen' && this.animationChar === this.originalChar) {
@@ -330,6 +402,28 @@ export class BackgroundObject {
         speedMultiplier: 0.95,
         shouldDestroyBullet: false,
         effect: null,
+        message: null,
+        object: this
+      };
+    }
+
+    // Rocks are nigh-indestructible — bullets ricochet with halved remaining range;
+    // arrows simply stop. Neither drops M ingredient (only pickaxe/hammer melee can).
+    if (this.char === '0') {
+      this._playAnimation('bounce');
+      if (bullet.type === 'bullet') {
+        return {
+          bulletBehavior: 'rockRicochet',
+          effect: null,
+          shouldDestroyBullet: false,
+          message: null,
+          object: this
+        };
+      }
+      return {
+        bulletBehavior: 'block',
+        effect: null,
+        shouldDestroyBullet: true,
         message: null,
         object: this
       };
@@ -404,6 +498,7 @@ export class BackgroundObject {
 
   ignite(duration = 5.0) {
     if (this.flammability === 'none') return false;
+    if (this.onFire) return true; // Already burning — don't reset the timer
     this.onFire = true;
     // Use custom burn duration if defined, otherwise use provided duration
     this.fireDuration = this.data.burnDuration || duration;
@@ -411,24 +506,101 @@ export class BackgroundObject {
     return true;
   }
 
+  isWater() {
+    if (this.destroyed) return false;
+    if (this.typeId) return this.typeId === 'water';
+    // Legacy: '~' without typeId defaults to water if not lava/mud
+    return this.char === '~' && !this.damaging && !this.isDryMud
+        && !(this.slowing === true);
+  }
+
+  isLava() {
+    if (this.destroyed) return false;
+    if (this.typeId) return this.typeId === 'lava';
+    return this.char === '~' && !!this.damaging;
+  }
+
+  // Transform this lava tile into a rock in-place (water quenches lava)
+  solidifyToRock() {
+    if (!this.isLava()) return;
+    this.char = '0';
+    this.originalChar = '0';
+    this.typeId = null;
+    this._variantData = null;
+    this.data = BACKGROUND_OBJECTS['0'];
+    this.color = '#888888';
+    this.animationColor = '#888888';
+    this.animationChar = '0';
+    this.bulletInteraction = this.data.bulletInteraction || 'interact-preserve';
+    this.indestructible = false;
+    this.conductivity = 'none';
+    this.flammability = 'none';
+    this.collisionShape = 'ellipse';
+    this.maxHp = 3;
+    this.hp = 3;
+    // Update hitbox to match rock collision (narrow ellipse, same as constructor)
+    this.width = 6;
+    this.height = GRID.CELL_SIZE * 0.75;
+    this.hitboxOffsetX = 5;
+    this.hitboxOffsetY = GRID.CELL_SIZE * 0.125;
+  }
+
+  isMud() {
+    if (this.destroyed) return false;
+    if (this.typeId) return this.typeId === 'mud_dry' || this.typeId === 'mud_wet';
+    return this.char === '~' && (!!this.isDryMud || this.slowing === true);
+  }
+
+  // Used by CombatSystem to decide whether fire should suppress impact effects
+  // and produce steam instead
+  steamOnFire() {
+    if (this._variantData) return !!this._variantData.steamOnFire;
+    return this.isWater(); // legacy
+  }
+
   setWaterState(state, duration) {
-    if (this.char !== '~') return;
+    if (!this.isWater()) return; // Only real water supports water states
     this.waterState = state;
     this.waterStateTimer = duration;
-    // Frozen water loses conductivity so electricity won't chain through ice
-    this.conductivity = (state === 'frozen') ? 'none' : 'water';
+    // conductivity handled by isConductive() checking waterState — no mutation needed
   }
 
   getWaterState() { return this.waterState; }
-
-  isWater() { return this.char === '~' && !this.destroyed; }
 
   isFlammable() {
     return this.flammability !== 'none';
   }
 
   isConductive() {
+    if (this._variantData) {
+      if (this._variantData.conductivity === 'none') return false;
+      if (this.waterState === 'frozen') return false;
+      return true;
+    }
+    // Legacy: frozen water loses conductivity
+    if (this.char === '~' && this.waterState === 'frozen') return false;
     return this.conductivity !== 'none';
+  }
+
+  static createVariant(typeId, x, y, variantOverrides = {}) {
+    const base = BACKGROUND_OBJECT_VARIANTS[typeId];
+    if (!base) {
+      console.warn(`BackgroundObject.createVariant: unknown typeId '${typeId}'`);
+      return new BackgroundObject('~', x, y);
+    }
+    const obj = new BackgroundObject(base.char, x, y, {
+      typeId,
+      variantOverrides: Object.keys(variantOverrides).length ? variantOverrides : undefined
+    });
+    // Apply any color override to both color slots
+    if (variantOverrides.color) {
+      obj.color = variantOverrides.color;
+      obj.animationColor = variantOverrides.color;
+    } else {
+      obj.color = base.color;
+      obj.animationColor = base.color;
+    }
+    return obj;
   }
 
   // Burn grass: keep as cut grass but change color to burned

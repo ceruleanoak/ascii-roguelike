@@ -53,6 +53,22 @@ export class FishingSystem {
     return game.currentRoom?.letterTemplate?.name === 'Lake';
   }
 
+  // Fountain ('F') rooms support fishing with the FOUNTAIN_CATCHES table.
+  // Treated as a "fishable room" parallel to Lake — same minigame, different table.
+  isFountainRoom(game) {
+    return game.currentRoom?.letterTemplate?.name === 'Fountain'
+        || game.currentRoom?.type === 'FOUNTAIN';
+  }
+
+  isFishableRoom(game) {
+    return this.isLakeRoom(game) || this.isFountainRoom(game);
+  }
+
+  fishingZone(game) {
+    if (this.isFountainRoom(game)) return 'fountain';
+    return game.currentRoom?.zone || 'green';
+  }
+
   roomCleared(game) {
     return game.currentRoom?.enemies?.length === 0;
   }
@@ -73,14 +89,35 @@ export class FishingSystem {
     });
   }
 
+  // Nearest fountain water tile within casting range, or null.
+  // Fountains have no ambient fish entities — the player just casts at the water.
+  nearestFountainWater(game) {
+    if (!game.player || !this.isFountainRoom(game)) return null;
+    const objs = game.currentRoom?.backgroundObjects || [];
+    const px = game.player.position.x;
+    const py = game.player.position.y;
+    const threshold = GRID.CELL_SIZE * 4;
+    let nearest = null;
+    let nearestDist = threshold * threshold;
+    for (const obj of objs) {
+      if (!obj.fountainWater || obj.destroyed) continue;
+      const dx = obj.position.x - px;
+      const dy = obj.position.y - py;
+      const d = dx * dx + dy * dy;
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearest = obj;
+      }
+    }
+    return nearest;
+  }
+
   canFish(game) {
-    return (
-      this.isLakeRoom(game) &&
-      this.roomCleared(game) &&
-      this.holdingFishingRod(game) &&
-      this.nearFish(game) &&
-      this.state === STATES.IDLE
-    );
+    if (!this.isFishableRoom(game) || !this.roomCleared(game)) return false;
+    if (!this.holdingFishingRod(game) || this.state !== STATES.IDLE) return false;
+    // Fountain rooms: cast at the water itself, no ambient fish required.
+    if (this.isFountainRoom(game)) return this.nearestFountainWater(game) !== null;
+    return this.nearFish(game);
   }
 
   // ── State transitions ─────────────────────────────────────────────────────
@@ -96,19 +133,26 @@ export class FishingSystem {
 
     const chargeRatio = Math.min(this.chargeTime / MAX_CHARGE_TIME, 1.0);
 
-    // Always cast to the nearest fish's tile so the bobber lands where the fish is
-    const nearest = this.findNearestFish(game);
-    if (!nearest) {
-      // No fish nearby — cancel
-      this.resetMinigame(game);
-      return;
-    }
-    this.targetedFish = nearest;
-
-    // Bobber flies from player position to the fish's water tile in a parabolic arc
+    // Lake: aim at the nearest fish entity. Fountain: aim at the nearest water tile.
     const px = game.player.position.x;
     const py = game.player.position.y;
-    this.bobber = new Bobber(px, py, nearest.position.x, nearest.position.y, chargeRatio);
+    let targetX, targetY;
+    if (this.isFountainRoom(game)) {
+      const tile = this.nearestFountainWater(game);
+      if (!tile) { this.resetMinigame(game); return; }
+      targetX = tile.position.x;
+      targetY = tile.position.y;
+      this.targetedFish = null;
+    } else {
+      const nearest = this.findNearestFish(game);
+      if (!nearest) { this.resetMinigame(game); return; }
+      this.targetedFish = nearest;
+      targetX = nearest.position.x;
+      targetY = nearest.position.y;
+    }
+
+    // Bobber flies from player position to the target tile in a parabolic arc
+    this.bobber = new Bobber(px, py, targetX, targetY, chargeRatio);
 
     // Bite timer starts AFTER bobber lands (-1 = not yet initialized)
     this.biteTimer = -1;
@@ -159,7 +203,7 @@ export class FishingSystem {
   // ── Catch resolution ──────────────────────────────────────────────────────
 
   resolveCatch(game) {
-    const zone = game.currentRoom?.zone || 'green';
+    const zone = this.fishingZone(game);
     const table = FISHING_TABLES[zone];
     if (!table) return;
 
@@ -265,7 +309,9 @@ export class FishingSystem {
       }
     }
 
-    // Spawn ambient fish when room is cleared (Lake room only)
+    // Spawn ambient fish when room is cleared — Lake only.
+    // Fountains are fishable but visually a clean sanctuary; the fountain
+    // catch table is rolled at cast time, no ambient fish needed.
     if (this.isLakeRoom(game) && this.roomCleared(game)) {
       this.fishSpawnTimer -= dt;
       if (this.fishSpawnTimer <= 0) {
@@ -342,7 +388,7 @@ export class FishingSystem {
   spawnAmbientFish(game) {
     if (this.fishEntities.length >= this.maxFishCount) return;
 
-    const allWater = (game.backgroundObjects || []).filter(o => o.char === '~');
+    const allWater = (game.backgroundObjects || []).filter(o => o.char === '~' || o.char === '=');
     if (allWater.length === 0) return;
 
     // Build a set of occupied grid cells for fast adjacency lookup
@@ -369,8 +415,9 @@ export class FishingSystem {
   }
 
   // Called when a melee blade attack hits a reward object.
-  // spawnIngredientFn is provided by main.js: (char, x, y) => void
-  hitRewardObject(reward, spawnIngredientFn) {
+  // spawnIngredientFn: (char, x, y) => void  (INGREDIENTS namespace)
+  // spawnSpecialFn:    (specialKey, x, y) => void  (optional; ITEMS keys or sentinels like 'fairy')
+  hitRewardObject(reward, spawnIngredientFn, spawnSpecialFn = null) {
     if (!reward.alive) return;
     reward.alive = false;
 
@@ -381,6 +428,15 @@ export class FishingSystem {
         reward.position.x + scatter(),
         reward.position.y + scatter()
       );
+    }
+    if (spawnSpecialFn && reward.specialDrops) {
+      for (const specialKey of reward.specialDrops) {
+        spawnSpecialFn(
+          specialKey,
+          reward.position.x + scatter(),
+          reward.position.y + scatter()
+        );
+      }
     }
   }
 

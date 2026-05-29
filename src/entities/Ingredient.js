@@ -26,6 +26,27 @@ export class Ingredient {
     this.pickupCooldown = 0;  // seconds before magnetization kicks in
     this.bobTimer = 0;        // accumulates while in water for bob animation
     this.inWater = false;     // set each frame by waterResults processing
+
+    // Drop-bounce animation (used by crow-pearl drop and any future "tossed" ingredient).
+    // dropBounceTimer counts down from dropBounceDuration; renderer reads the ratio to
+    // offset y by a decaying sine. When > 0, pickupCooldown also blocks magnet pickup.
+    this.dropBounceTimer = 0;
+    this.dropBounceDuration = 0;
+  }
+
+  startDropBounce(duration = 0.55) {
+    this.dropBounceTimer = duration;
+    this.dropBounceDuration = duration;
+    // Pickup is gated on this cooldown elsewhere; keep them in sync so the bounce plays out.
+    if (this.pickupCooldown < duration) this.pickupCooldown = duration;
+  }
+
+  // Returns vertical pixel offset for the bounce-settle animation, 0 once finished.
+  getDropBounceOffsetY() {
+    if (this.dropBounceTimer <= 0 || this.dropBounceDuration <= 0) return 0;
+    const t = 1 - (this.dropBounceTimer / this.dropBounceDuration); // 0 → 1
+    // Two decaying hops, then settle. Negative = up.
+    return -Math.abs(Math.sin(t * Math.PI * 2)) * 6 * (1 - t);
   }
 
   getHitbox() {

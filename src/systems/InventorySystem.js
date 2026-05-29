@@ -11,6 +11,9 @@
  * - Room persistence anti-cheat
  */
 
+import { inSamePlane } from './PlaneSystem.js';
+import { Item } from '../entities/Item.js';
+
 export class InventorySystem {
   constructor() {
     // PER-CHARACTER REST inventory (persists through death, cleared on game over)
@@ -19,7 +22,8 @@ export class InventorySystem {
       'default': {
         inventory: [],        // Ingredients only
         quickSlots: [null, null, null],  // Weapons only
-        activeSlotIndex: 0    // Persistent active slot index
+        activeSlotIndex: 0,   // Persistent active slot index
+        manaState: null       // { slots, current, max } — survives character swaps
       }
     };
 
@@ -28,6 +32,10 @@ export class InventorySystem {
     this.restInventory = this.characterInventories['default'].inventory;
     this.restQuickSlots = this.characterInventories['default'].quickSlots;
     this.restActiveSlotIndex = this.characterInventories['default'].activeSlotIndex;
+
+    // Track which character is currently active so bankLoot() can write the
+    // activeSlotIndex back to the correct characterInventories entry.
+    this._activeCharacterType = 'default';
 
     this.itemChest = []; // Storage for weapons (shared across all characters)
 
@@ -50,6 +58,7 @@ export class InventorySystem {
     this.consumableBlinkTimer = 0;   // total remaining blink duration
     this.consumableBlinkPhase = 0;   // sub-timer within current half-cycle
     this.consumableBlinkShowBlock = false; // true = show '█', false = show normal char
+    this.activeEffectTimers = [0, 0, 0, 0, 0]; // per-slot countdown while effect is active
 
     // Consumable windup system (for offensive items)
     this.consumableWindups = []; // { consumable, slotIndex, timer, maxTimer, x, y, blinkTimer }
@@ -139,7 +148,8 @@ export class InventorySystem {
       this.characterInventories[characterType] = {
         inventory: [],
         quickSlots: [null, null, null],
-        activeSlotIndex: 0
+        activeSlotIndex: 0,
+        manaState: null
       };
     }
 
@@ -147,6 +157,7 @@ export class InventorySystem {
     this.restInventory = this.characterInventories[characterType].inventory;
     this.restQuickSlots = this.characterInventories[characterType].quickSlots;
     this.restActiveSlotIndex = this.characterInventories[characterType].activeSlotIndex;
+    this._activeCharacterType = characterType;
   }
 
   /**
@@ -170,7 +181,8 @@ export class InventorySystem {
       'default': {
         inventory: [],
         quickSlots: [null, null, null],
-        activeSlotIndex: 0
+        activeSlotIndex: 0,
+        manaState: null
       }
     };
 
@@ -195,8 +207,11 @@ export class InventorySystem {
     // Only dropped traps (swapped from quick slots) in the items array can be picked up
 
     // Check ground items
+    const now = performance.now();
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
+      if (!inSamePlane(player, item)) continue; // Cross-plane items are unreachable
+      if (item.pickupReadyAt && item.pickupReadyAt > now) continue; // Recently swapped — wait
       const distance = physicsSystem.getDistance(player, item);
 
       if (distance < 20) {
@@ -205,8 +220,11 @@ export class InventorySystem {
 
         // Route items to correct inventory based on type
         if (item.data.type === 'ARMOR') {
-          // Add to armor inventory
+          // Add to armor inventory and auto-equip (mirrors weapon pickup behavior).
+          // Previously equipped armor is returned to armorInventory by equipArmor().
           this.armorInventory.push(item);
+          this.equipArmor(item);
+          this.applyEquipmentEffectsToPlayer(player);
           physicsSystem.removeEntity(item);
           items.splice(i, 1);
         } else if (item.data.type === 'CONSUMABLE') {
@@ -241,7 +259,8 @@ export class InventorySystem {
           success: true,
           droppedItem: droppedItem,
           message: customMessage || item.data.name,
-          removedTrap: false
+          removedTrap: false,
+          pickedUpType: item.data.type
         };
       }
     }
@@ -295,6 +314,7 @@ export class InventorySystem {
     this.equippedConsumables.push(null);
     this.spentConsumableSlots.push(false);
     this.consumableCooldowns.push(0);
+    this.activeEffectTimers.push(0);
   }
 
   /**
@@ -364,6 +384,7 @@ export class InventorySystem {
     // Reset all armor properties
     player.defense = 0;
     player.bulletResist = 0;
+    player.meleeResist = 0;
     player.dodgeChance = 0;
     player.fireImmune = false;
     player.freezeImmune = false;
@@ -373,12 +394,24 @@ export class InventorySystem {
     player.speedBoost = 0;
     player.speedPenalty = 0;
     player.slowEnemies = false;
+    player.burnResist = 0;
+    player.massBonus = 0;
+    player.rollCooldownMult = 1.0;
+    player.extraIframes = 0;
+    player.gooConsume = false;
+    player.bladeKillHeal = false;
+    player.batTransform = false;
+    player.whirlwindCape = false;
+    player.sharkMask = false;
+    player.coralCrown = false;
+    player.stingrayMantle = false;
 
     // Apply equipped armor properties
     if (this.equippedArmor) {
       const a = this.equippedArmor.data;
       player.defense = a.defense || 0;
       player.bulletResist = a.bulletResist || 0;
+      player.meleeResist = a.meleeResist || 0;
       player.dodgeChance = a.dodgeChance || 0;
       player.fireImmune = a.fireImmune || false;
       player.freezeImmune = a.freezeImmune || false;
@@ -388,11 +421,40 @@ export class InventorySystem {
       player.speedBoost = a.speedBoost || 0;
       player.speedPenalty = a.speedPenalty || 0;
       player.slowEnemies = a.slowEnemies || false;
+      player.burnResist = a.burnResist || 0;
+      player.massBonus = a.massBonus || 0;
+      player.rollCooldownMult = a.rollCooldownMult || 1.0;
+      player.extraIframes = a.extraIframes || 0;
+      player.gooConsume = a.gooConsume || false;
+      player.bladeKillHeal = a.bladeKillHeal || false;
+      player.batTransform = a.batTransform || false;
+      player.whirlwindCape = a.whirlwindCape || false;
+      player.sharkMask = a.sharkMask || false;
+      player.coralCrown = a.coralCrown || false;
+      player.stingrayMantle = a.stingrayMantle || false;
     }
+
+    // massBonus adds to base mass so PhysicsSystem reads the correct value
+    player.mass = 1 + player.massBonus;
 
     // Add temporary block boost from Metal Block consumable
     if (player.blockBoostTimer > 0) {
       player.defense += player.blockBoostAmount;
+    }
+
+    // Apply passive consumable bonuses (Lucky Coin). luckBlessed is a separate
+    // run-flag set by the well ritual and is not touched here.
+    player.luckActive = false;
+    player.critChance = 0;
+    player.luckDodgeBonus = 0;
+    for (const slot of this.equippedConsumables) {
+      const cd = slot?.data;
+      if (!cd) continue;
+      if (cd.luckPassive) {
+        player.luckActive = true;
+        player.critChance = Math.max(player.critChance, cd.critChance || 0);
+        player.luckDodgeBonus = Math.max(player.luckDodgeBonus, cd.dodgeBonus || 0);
+      }
     }
 
     // Store equipped consumables for condition checking during gameplay
@@ -424,6 +486,159 @@ export class InventorySystem {
 
     // Update active windups
     this.updateConsumableWindups(deltaTime, player, currentRoom, combatSystem, steamClouds, particles);
+
+    // Elemental robe aura: particle emission + contact status pulses
+    this._updateRobeAura(deltaTime, player, currentRoom, particles);
+  }
+
+  _updateRobeAura(deltaTime, player, currentRoom, particles) {
+    const armorData = this.equippedArmor?.data;
+    const auraType = armorData?.particleAura;
+    if (!auraType) return;
+
+    const cx = player.position.x + 8;
+    const cy = player.position.y + 8;
+
+    // Ambient particle emission — only while charge is available (or for non-pulse robes)
+    const chargeSpent = armorData.rollPulse && player._auraRollPulseUsed;
+    if (!chargeSpent) {
+      player._auraParticleTimer = (player._auraParticleTimer || 0) + deltaTime;
+      const emitInterval = auraType === 'shock' ? 0.07 : auraType === 'shadow' ? 0.12 : 0.10;
+      if (player._auraParticleTimer >= emitInterval) {
+        player._auraParticleTimer = 0;
+        const p = this._makeAuraParticle(cx, cy, auraType);
+        if (p) particles.push(p);
+      }
+    }
+
+    // Roll pulse: triggers on the first frame of a dodge roll, once per room
+    if (!armorData.rollPulse || !currentRoom?.enemies) return;
+
+    const isRolling = player.dodgeRoll.active;
+    const rollJustStarted = isRolling && !player._lastAuraDodgeActive;
+
+    if (rollJustStarted && !player._auraRollPulseUsed) {
+      player._auraRollPulseUsed = true;
+
+      const radius = (armorData.rollPulseRadius || 3) * 16;
+      const duration = armorData.rollPulseDuration || 2.0;
+
+      for (const enemy of currentRoom.enemies) {
+        if (enemy.hp <= 0) continue;
+        if (Math.hypot(enemy.position.x + 8 - cx, enemy.position.y + 8 - cy) <= radius) {
+          enemy.applyStatusEffect(armorData.rollPulse, duration);
+        }
+      }
+
+      // Radial blast — particles spread outward in all directions
+      const blastCount = 20;
+      for (let i = 0; i < blastCount; i++) {
+        const angle = (i / blastCount) * Math.PI * 2;
+        const speed = 80 + Math.random() * 80;
+        const p = this._makeAuraParticle(cx, cy, auraType);
+        if (p) {
+          p.vx = Math.cos(angle) * speed;
+          p.vy = Math.sin(angle) * speed;
+          p.life = 0.4 + Math.random() * 0.3;
+          p.maxLife = p.life;
+          particles.push(p);
+        }
+      }
+    }
+
+    player._lastAuraDodgeActive = isRolling;
+  }
+
+  _makeAuraParticle(cx, cy, type) {
+    const CELL = 16;
+    const ox = (Math.random() - 0.5) * CELL * 1.6;
+    const oy = (Math.random() - 0.5) * CELL * 1.6;
+
+    if (type === 'frost') {
+      const chars = ['*', '+', '.', '*'];
+      const colors = ['#aaddff', '#88ccff', '#cceeff', '#ffffff'];
+      const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.4;
+      const speed = 10 + Math.random() * 22;
+      return {
+        x: cx + ox, y: cy + oy,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        life: 0.55 + Math.random() * 0.35, maxLife: 0.9,
+        char: chars[Math.floor(Math.random() * chars.length)],
+        color: colors[Math.floor(Math.random() * colors.length)],
+        decayRate: 0.87
+      };
+    }
+    if (type === 'flame') {
+      const chars = ['!', '.', "'", '!'];
+      const colors = ['#ff4400', '#ff8800', '#ffcc00', '#ff6600'];
+      const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.9;
+      const speed = 20 + Math.random() * 35;
+      return {
+        x: cx + ox * 0.75, y: cy + oy * 0.5,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        life: 0.3 + Math.random() * 0.25, maxLife: 0.55,
+        char: chars[Math.floor(Math.random() * chars.length)],
+        color: colors[Math.floor(Math.random() * colors.length)],
+        decayRate: 0.90
+      };
+    }
+    if (type === 'shock') {
+      const chars = ['|', '-', '+', '.'];
+      const colors = ['#00ffff', '#88ffff', '#aaffff', '#ffffff'];
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 35 + Math.random() * 55;
+      return {
+        x: cx + ox, y: cy + oy,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        life: 0.15 + Math.random() * 0.2, maxLife: 0.35,
+        char: chars[Math.floor(Math.random() * chars.length)],
+        color: colors[Math.floor(Math.random() * colors.length)],
+        decayRate: 0.78
+      };
+    }
+    if (type === 'nature') {
+      const chars = ["'", '.', ',', "'"];
+      const colors = ['#44cc44', '#33aa33', '#88dd44', '#66bb44'];
+      const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.6;
+      const speed = 8 + Math.random() * 18;
+      return {
+        x: cx + ox, y: cy + oy,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        life: 0.7 + Math.random() * 0.5, maxLife: 1.2,
+        char: chars[Math.floor(Math.random() * chars.length)],
+        color: colors[Math.floor(Math.random() * colors.length)],
+        decayRate: 0.91
+      };
+    }
+    if (type === 'blood') {
+      const chars = ['.', "'", '.', ','];
+      const colors = ['#cc2222', '#aa1111', '#dd3333', '#881111'];
+      const angle = Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.8; // mostly downward
+      const speed = 12 + Math.random() * 22;
+      return {
+        x: cx + ox * 0.8, y: cy + oy * 0.5,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        life: 0.45 + Math.random() * 0.35, maxLife: 0.8,
+        char: chars[Math.floor(Math.random() * chars.length)],
+        color: colors[Math.floor(Math.random() * colors.length)],
+        decayRate: 0.88
+      };
+    }
+    if (type === 'shadow') {
+      const chars = ['.', '·', '.', '-'];
+      const colors = ['#444466', '#333355', '#555577', '#222244'];
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 5 + Math.random() * 15;
+      return {
+        x: cx + ox, y: cy + oy,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        life: 0.4 + Math.random() * 0.4, maxLife: 0.8,
+        char: chars[Math.floor(Math.random() * chars.length)],
+        color: colors[Math.floor(Math.random() * colors.length)],
+        decayRate: 0.92
+      };
+    }
+    return null;
   }
 
   /**
@@ -465,7 +680,16 @@ export class InventorySystem {
       }
       return true; // HUD needs refresh this frame
     }
-    return false;
+
+    // Tick active-effect timers (drive slow blink in top bar while effect lasts)
+    let anyActive = false;
+    for (let i = 0; i < this.activeEffectTimers.length; i++) {
+      if (this.activeEffectTimers[i] > 0) {
+        this.activeEffectTimers[i] = Math.max(0, this.activeEffectTimers[i] - deltaTime);
+        anyActive = true;
+      }
+    }
+    return anyActive;
   }
 
   /**
@@ -488,6 +712,10 @@ export class InventorySystem {
       let shouldTrigger = false;
       let triggerData = null; // Store trigger conditions for offensive items
       const cd = consumable.data;
+
+      // Oils are passive augments — they apply to bow/dagger attacks via Item.js
+      // and never auto-trigger on their own.
+      if (cd.oilEffect) continue;
 
       // Check trigger condition based on effect type
       shouldTrigger = this._checkTriggerCondition(cd, player, currentRoom, steamClouds);
@@ -564,9 +792,10 @@ export class InventorySystem {
         return false;
       }
       case 'luck': {
-        // Lucky Coin: immediately
-        player.applyLuck(cd.duration);
-        return true;
+        // Lucky Coin is now a pure passive — bonuses are applied via
+        // applyEquipmentEffectsToPlayer when the slot is equipped. Never
+        // auto-fires, never oneShots.
+        return false;
       }
       case 'block': {
         // Metal Block: HP < 50%
@@ -621,14 +850,16 @@ export class InventorySystem {
           const duration = cd.duration || 3.5;
           player.invulnerabilityTimer = Math.max(player.invulnerabilityTimer, duration);
 
-          // Create smoke cloud
-          if (!steamClouds) steamClouds = [];
-          steamClouds.push({
-            x: player.position.x + 20,
-            y: player.position.y + 20,
-            radius: 20 * 3.5, // GRID.CELL_SIZE * 3.5
-            timer: duration
-          });
+          // Create smoke cloud — only push when the caller provided a valid array.
+          // Rebinding the local parameter has no effect on the caller's reference.
+          if (steamClouds) {
+            steamClouds.push({
+              x: player.position.x + 20,
+              y: player.position.y + 20,
+              radius: 20 * 3.5, // GRID.CELL_SIZE * 3.5
+              timer: duration
+            });
+          }
 
           return true;
         }
@@ -681,8 +912,15 @@ export class InventorySystem {
         return false;
       }
       case 'waterImmunity': {
-        // Rubber Boots: always activates immediately
+        // Rubber Boots: only fires on first contact with liquid terrain
+        if (!player.inLiquid && !player.inDamagingLiquid) return false;
         player.waterImmunityTimer = cd.duration;
+        return true;
+      }
+      case 'float': {
+        // Floating Boots: only fires on first contact with liquid or damaging liquid terrain
+        if (!player.inLiquid && !player.inDamagingLiquid) return false;
+        player.floatTimer = cd.duration;
         return true;
       }
       case 'throwSteam': {
@@ -731,6 +969,47 @@ export class InventorySystem {
         }
         return false;
       }
+      case 'auto_dodge': {
+        // Fur Cloak: grants a brief invulnerability window when HP is critically low (< 30%).
+        // Fires above the Smoke Bomb threshold (25%) so it acts as a first line of defense.
+        const threshold = cd.autoTrigger?.criticalHP ?? 0.30;
+        if (player.hp < player.maxHp * threshold) {
+          player.invulnerabilityTimer = Math.max(player.invulnerabilityTimer, cd.duration || 10.0);
+          return true;
+        }
+        return false;
+      }
+      case 'arrowRefill': {
+        const emptyBow = player.quickSlots.find(s => s?.data?.weaponType === 'BOW' && s.usesRemaining <= 0);
+        if (!emptyBow) return false;
+        emptyBow.usesRemaining = Math.min(emptyBow.usesRemaining + (cd.amount || 5), emptyBow.maxUses ?? Infinity);
+        return true;
+      }
+      case 'panic_blind': {
+        // Bone Dust: blinds nearby enemies when surrounded (3+ within radius) or at critical HP.
+        const px = player.position.x + 20;
+        const py = player.position.y + 20;
+        const blindRadius = cd.radius ?? 96;
+        const critThreshold = cd.autoTrigger?.criticalHP ?? 0.2;
+        const nearbyThreshold = cd.autoTrigger?.nearbyEnemies ?? 3;
+        let nearbyCount = 0;
+        for (const enemy of enemies) {
+          const dx = (enemy.position.x + 20) - px;
+          const dy = (enemy.position.y + 20) - py;
+          if (Math.sqrt(dx * dx + dy * dy) <= blindRadius) nearbyCount++;
+        }
+        if (player.hp < player.maxHp * critThreshold || nearbyCount >= nearbyThreshold) {
+          for (const enemy of enemies) {
+            const dx = (enemy.position.x + 20) - px;
+            const dy = (enemy.position.y + 20) - py;
+            if (Math.sqrt(dx * dx + dy * dy) <= blindRadius) {
+              enemy.applyStatusEffect('blind', cd.duration || 4.0);
+            }
+          }
+          return true;
+        }
+        return false;
+      }
       default:
         return false;
     }
@@ -740,6 +1019,42 @@ export class InventorySystem {
    * Trigger a consumable (instant or start windup)
    * @private
    */
+  // Replace a consumable slot with another item (used by leavesBottle path
+  // when a magic potion is consumed, and by external systems like the
+  // FountainSystem fairy-bottle conversion). Writes to both InventorySystem
+  // and player slot arrays so the UI stays in sync.
+  replaceConsumableSlot(slotIndex, newChar) {
+    if (slotIndex < 0 || slotIndex >= this.equippedConsumables.length) return false;
+    const replacement = new Item(newChar, 0, 0);
+    this.equippedConsumables[slotIndex] = replacement;
+    if (this.game?.player?.equippedConsumables) {
+      this.game.player.equippedConsumables[slotIndex] = replacement;
+    }
+    // Slot is no longer spent — the replacement is a fresh item the player
+    // can equip/use normally.
+    if (this.spentConsumableSlots) this.spentConsumableSlots[slotIndex] = false;
+    return true;
+  }
+
+  // Centralized slot-consumption for one-shot consumables. Honors leavesBottle:
+  // magic potions tagged with leavesBottle: true convert the spent slot to an
+  // Empty Bottle ('B') instead of clearing to null. Sources: magic-potion
+  // residue (per design: any "potion such as haste draught").
+  _consumeOneShotSlot(slotIndex, consumable, player) {
+    const leavesBottle = consumable?.data?.leavesBottle === true;
+    if (leavesBottle) {
+      const bottle = new Item('B', 0, 0);
+      this.equippedConsumables[slotIndex] = bottle;
+      if (player.equippedConsumables) player.equippedConsumables[slotIndex] = bottle;
+      // Not spent — bottle is a real item in the slot
+      this.spentConsumableSlots[slotIndex] = false;
+    } else {
+      this.spentConsumableSlots[slotIndex] = true;
+      this.equippedConsumables[slotIndex] = null;
+      player.equippedConsumables[slotIndex] = null;
+    }
+  }
+
   _triggerConsumable(slotIndex, consumable, triggerData, player, combatSystem, particles) {
     const cd = consumable.data;
 
@@ -763,9 +1078,7 @@ export class InventorySystem {
 
       // Handle consumption
       if (isOneShot) {
-        this.spentConsumableSlots[slotIndex] = true;
-        this.equippedConsumables[slotIndex] = null;
-        player.equippedConsumables[slotIndex] = null;
+        this._consumeOneShotSlot(slotIndex, consumable, player);
       } else {
         this.consumableCooldowns[slotIndex] = cd.cooldown || 10;
       }
@@ -783,6 +1096,11 @@ export class InventorySystem {
       this.consumableBlinkTimer = 0.4;
       this.consumableBlinkPhase = 0.1;
       this.consumableBlinkShowBlock = true; // start with solid block
+
+      // Mark effect as active for the full duration (drives slow bar blink)
+      if (cd.duration > 0) {
+        this.activeEffectTimers[slotIndex] = cd.duration;
+      }
 
       // Import createActivationBurst dynamically - assume particles array accepts it
       // Note: This requires createActivationBurst import at top of file
@@ -803,9 +1121,7 @@ export class InventorySystem {
 
       // Handle consumption
       if (isOneShot) {
-        this.spentConsumableSlots[slotIndex] = true;
-        this.equippedConsumables[slotIndex] = null;
-        player.equippedConsumables[slotIndex] = null;
+        this._consumeOneShotSlot(slotIndex, consumable, player);
       } else {
         this.consumableCooldowns[slotIndex] = cd.cooldown || 10;
       }
@@ -931,14 +1247,16 @@ export class InventorySystem {
         break;
       }
       case 'throwSteam': {
-        // Steam Vial
-        if (!steamClouds) steamClouds = [];
-        steamClouds.push({
-          x: px,
-          y: py,
-          radius: cd.radius || 20 * 4, // GRID.CELL_SIZE * 4
-          timer: cd.duration || 8.0
-        });
+        // Steam Vial — only push when the caller provided a valid array.
+        // Rebinding the local parameter has no effect on the caller's reference.
+        if (steamClouds) {
+          steamClouds.push({
+            x: px,
+            y: py,
+            radius: cd.radius || 20 * 4, // GRID.CELL_SIZE * 4
+            timer: cd.duration || 8.0
+          });
+        }
         this._createExplosion(particles, px, py, 25, '#aaaaaa');
         break;
       }
@@ -1015,10 +1333,16 @@ export class InventorySystem {
     // Note: restInventory points to the active character's inventory
     this.restInventory.push(...playerInventory);
 
-    // Save quick slots and active index to active character
+    // Save quick slots and active index to active character.
+    // restQuickSlots is a live reference to the character's array, so length/push
+    // writes through correctly. restActiveSlotIndex is a scalar copy, so we must
+    // also write back to the canonical characterInventories entry.
     this.restQuickSlots.length = 0;
     this.restQuickSlots.push(...playerQuickSlots);
     this.restActiveSlotIndex = playerActiveSlotIndex;
+    if (this._activeCharacterType && this.characterInventories[this._activeCharacterType]) {
+      this.characterInventories[this._activeCharacterType].activeSlotIndex = playerActiveSlotIndex;
+    }
   }
 
   /**
@@ -1047,6 +1371,7 @@ export class InventorySystem {
     this.consumableBlinkTimer = 0;
     this.consumableBlinkPhase = 0;
     this.consumableBlinkShowBlock = false;
+    this.activeEffectTimers = [0, 0];
     this.consumableWindups = [];
 
     // Clear saved EXPLORE room

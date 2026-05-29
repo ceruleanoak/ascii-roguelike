@@ -1,11 +1,54 @@
 /**
- * TextEffects — reusable per-pixel text transition effects for canvas rendering.
+ * TextEffects — reusable per-pixel text transition effects and screen effects for canvas rendering.
  *
  * Effects are stateful objects designed to be instantiated once and updated
  * each render frame. All effects use CSS-pixel coordinates and are safe to
  * use on DPR-scaled canvas contexts (the offscreen canvas is kept at CSS
  * pixel density; drawImage handles the mapping automatically).
  */
+
+// ---------------------------------------------------------------------------
+// ScreenShake
+//
+// Horizontal-only shake with sinusoidal oscillation and linear amplitude decay.
+//
+// Usage:
+//   const shake = new ScreenShake();
+//
+//   // Trigger a shake:
+//   shake.trigger(amplitude, duration);   // amplitude in CSS px, duration in seconds
+//
+//   // Each render frame — read and apply the offset:
+//   const offsetX = shake.getOffsetX();
+// ---------------------------------------------------------------------------
+export class ScreenShake {
+  constructor() {
+    this._amplitude = 0;
+    this._startTime = null;
+    this._duration  = 0;
+    this._frequency = 28; // oscillations per second
+  }
+
+  /**
+   * Start a new shake, overriding any currently active one.
+   * @param {number} [amplitude=5]  Peak horizontal displacement in CSS pixels.
+   * @param {number} [duration=0.4] Total shake duration in seconds.
+   */
+  trigger(amplitude = 5, duration = 0.4) {
+    this._amplitude = amplitude;
+    this._duration  = duration;
+    this._startTime = performance.now();
+  }
+
+  /** Returns the current horizontal offset in CSS pixels (0 when inactive). */
+  getOffsetX() {
+    if (this._startTime === null) return 0;
+    const elapsed = (performance.now() - this._startTime) / 1000;
+    if (elapsed >= this._duration) return 0;
+    const decay = 1 - elapsed / this._duration;
+    return Math.sin(elapsed * this._frequency * Math.PI * 2) * this._amplitude * decay;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Bayer 4×4 ordered-dither matrix (values 0–15; threshold = value / 16)
@@ -37,7 +80,7 @@ const BAYER_4x4 = [
 //   split.reset();
 //
 //   // Each frame:
-//   split.render(ctx, { x, y, size, color, visible });
+//   split.render(ctx, { x, y, width, height, color, visible });
 // ---------------------------------------------------------------------------
 export class SplitReveal {
   /**
@@ -67,39 +110,42 @@ export class SplitReveal {
    *
    * @param {CanvasRenderingContext2D} ctx
    * @param {object}  opts
-   * @param {number}  opts.x       Left edge of the gap cell in CSS pixels.
-   * @param {number}  opts.y       Top edge of the gap cell in CSS pixels.
-   * @param {number}  opts.size    Cell size (gap is a square: size × size).
+   * @param {number}  opts.x       Left edge of the gap in CSS pixels.
+   * @param {number}  opts.y       Top edge of the gap in CSS pixels.
+   * @param {number}  opts.width   Panel width in CSS pixels.
+   * @param {number}  opts.height  Panel height in CSS pixels.
    * @param {string}  opts.color   Panel fill color — should match border.
    * @param {boolean} opts.visible true → animate open; false → animate closed.
    * @returns {boolean} Whether anything was drawn.
    */
-  render(ctx, { x, y, size, color, visible }) {
+  render(ctx, { x, y, width, height, color, visible }) {
     this._step(visible ? 1 : 0);
 
     if (this._progress >= 1) return false; // Fully open — nothing to overlay
 
     // Ease-out quadratic: snappy open, smooth settle.
     const p = 1 - (1 - this._progress) * (1 - this._progress);
-    const half = size / 2;
+    // For horizontal axis the two halves slide left/right, so half is half the width.
+    // For vertical axis the two halves slide up/down, so half is half the height.
+    const half = this.axis === 'horizontal' ? width / 2 : height / 2;
     const offset = p * half;
 
-    // Clip to the exact gap-cell bounds so panels never bleed onto adjacent wall cells.
+    // Clip to the exact gap bounds so panels never bleed onto adjacent cells.
     ctx.save();
     ctx.beginPath();
-    ctx.rect(x, y, size, size);
+    ctx.rect(x, y, width, height);
     ctx.clip();
 
     ctx.fillStyle = color;
     if (this._progress <= 0) {
       // Fully closed — single solid rectangle (no sliding math needed).
-      ctx.fillRect(x, y, size, size);
+      ctx.fillRect(x, y, width, height);
     } else if (this.axis === 'horizontal') {
-      ctx.fillRect(x - offset,        y, half, size); // left half  → slides left
-      ctx.fillRect(x + half + offset, y, half, size); // right half → slides right
+      ctx.fillRect(x - offset,        y, half, height); // left half  → slides left
+      ctx.fillRect(x + half + offset, y, half, height); // right half → slides right
     } else {
-      ctx.fillRect(x, y - offset,        size, half); // top half   → slides up
-      ctx.fillRect(x, y + half + offset, size, half); // bottom half → slides down
+      ctx.fillRect(x, y - offset,        width, half); // top half   → slides up
+      ctx.fillRect(x, y + half + offset, width, half); // bottom half → slides down
     }
 
     ctx.restore();

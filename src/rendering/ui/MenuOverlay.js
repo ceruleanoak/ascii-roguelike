@@ -25,6 +25,7 @@ export class MenuOverlay {
     // Original single-column menu
     let title = 'Select Item';
     if (game.currentMenuSlot === 'chest') title = 'Item Chest';
+    else if (game.currentMenuSlot === 'press') title = 'PRESS';
 
     let html = `<h3 style="text-align: center;">${title}</h3>`;
     html += '<div style="max-height: 300px; overflow-y: auto; overflow-x: hidden;">';
@@ -112,9 +113,19 @@ export class MenuOverlay {
 
             if (typeof item === 'string') {
               const data = game.getIngredientData(item);
-              html += `<div class="menu-item ${selected}">${item} - ${data.name}</div>`;
+              const recipeName = game.identifiedMenuItems?.get(item);
+              const isIdentified = recipeName !== undefined;
+              const isFailed = !isIdentified && game.failedMenuItems?.has(item);
+              const itemColor = isIdentified ? '#00ff00' : isFailed ? '#555555' : '#ffffff';
+              const recipeStr = isIdentified ? ` -> ${recipeName}` : isFailed ? ' -> none' : '';
+              const count = game.ingredientCounts?.get(item) ?? 1;
+              const countStr = count > 1 ? `<span style="color: #888;">x${count}</span>` : '';
+              html += `<div class="menu-item ${selected}" style="display: flex; justify-content: space-between; color: ${itemColor};"><span>${item} - ${data.name}${recipeStr}</span>${countStr}</div>`;
             } else {
-              html += `<div class="menu-item ${selected}">${item.char} - ${item.data.name}</div>`;
+              const isEquipped = game.equippedMenuItems?.has(item);
+              const itemColor = isEquipped ? '#ffdd88' : '#ffffff';
+              const equippedStr = isEquipped ? ' (E)' : '';
+              html += `<div class="menu-item ${selected}" style="color: ${itemColor};">${item.char} - ${item.data.name}${equippedStr}</div>`;
             }
           }
         }

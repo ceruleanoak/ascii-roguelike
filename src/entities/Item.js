@@ -1,7 +1,44 @@
 import { GRID, COLORS } from '../game/GameConfig.js';
 import { ITEMS, WEAPON_TYPES, resolveWeaponDefaults } from '../data/items.js';
 
+/**
+ * Carrier interface (duck-typed)
+ *
+ * The melee/bow/gun attack-creation methods below (createMeleeAttack, createMeleeArc,
+ * createMeleeSweep, createMeleeThrust, createMeleeMultistab, createMeleeSlam,
+ * createMeleeRing, createMeleeHammerRing, createMeleeShockwave, createMeleeWhipcrack, createBullets,
+ * createBurstPattern, createRingPattern, createSpiralPattern, createWavePattern,
+ * createArrow, createSingleArrow) accept any object shaped like:
+ *
+ *   { position: {x,y}, facing: {x,y}, width, height, plane,
+ *     weaponAffinities? (optional), equippedConsumables? (optional) }
+ *
+ * Player entities fit this naturally. CampNPC also fits it so the companion can
+ * borrow the full sword/bow/gun pipeline. Wand methods are NOT part of this
+ * interface — wands remain player-only.
+ *
+ * The parameter name `player` in these methods is historical; treat it as a
+ * generic carrier.
+ */
+
 let _nextAttackId = 0;
+
+// Aggregate oilEffect from any equipped consumables. Returns
+// { onHit: string|null, arrowSpeedMult: number }. First oil with onHit wins;
+// arrowSpeedMult multiplies across all oils (typically just one).
+function _readEquippedOilEffect(player) {
+  const slots = player?.equippedConsumables;
+  if (!slots) return { onHit: null, arrowSpeedMult: 1 };
+  let onHit = null;
+  let arrowSpeedMult = 1;
+  for (const c of slots) {
+    const oe = c?.data?.oilEffect;
+    if (!oe) continue;
+    if (oe.onHit && !onHit) onHit = oe.onHit;
+    if (oe.arrowSpeedMult) arrowSpeedMult *= oe.arrowSpeedMult;
+  }
+  return { onHit, arrowSpeedMult };
+}
 
 export class Item {
   constructor(char, x, y) {
@@ -33,10 +70,14 @@ export class Item {
     this.windupTimer = 0;
     this.windupActive = false;
     this.pendingPlayer = null; // Store player during windup
+    this.attackLockTimer = 0; // Locks movement during attack flash for locksMovement weapons
 
     // Bow use limit system (resets per room)
     this.maxUses = this.data.maxUses || null; // null = unlimited (for non-bows)
     this.usesRemaining = this.maxUses;
+
+    // Trap charge system — traps only; tracks uses remaining across rooms
+    this.charges = this.data.type === 'TRAP' ? (this.data.charges ?? 3) : null;
 
     // Wand use limit system (resets per room)
     this.maxUsesPerRoom = this.data.maxUsesPerRoom || null; // null = unlimited
@@ -48,6 +89,10 @@ export class Item {
     this.maxChargeTime = 1.5; // 1.5 seconds to reach max charge (2x speed)
     this.chargingPlayer = null;
     this.lastChargeRatio = 0; // Store charge level when fired (for cooldown indicator)
+
+    // Charge-hammer system (Crystal Maul): once-per-room mega-attack via hold-to-charge.
+    // Reset to false on room entry.
+    this.chargeAttackUsed = false;
   }
 
   getHitbox() {
@@ -60,17 +105,74 @@ export class Item {
   }
 
   update(deltaTime) {
-    // Update cooldown (recovery after attack)
+    // Update cooldown (recovery after attack, OR reload after mag empties)
     if (this.cooldownTimer > 0) {
       this.cooldownTimer -= deltaTime;
+
+      // Mid-reload: queue per-bullet SFX ticks for mechanical magazines.
+      // Energy reload type is handled at the audio layer (single stoppable SFX) — no ticks here.
+      if (
+        this._reloading &&
+        this.data.reloadTime &&
+        this.data.reloadType === 'magazine'
+      ) {
+        const interval = this.data.reloadTime / this.maxUses;
+        const elapsed = Math.max(0, this.data.reloadTime - this.cooldownTimer);
+        const expected = Math.min(this.maxUses, Math.ceil(elapsed / interval));
+        const delta = expected - (this._reloadTicksPlayed || 0);
+        if (delta > 0) {
+          this._reloadTicksPending = (this._reloadTicksPending || 0) + delta;
+          this._reloadTicksPlayed = expected;
+        }
+      }
+
+      // Phase transition when timer hits zero
+      if (this.cooldownTimer <= 0) {
+        if (this._reloading) {
+          // Reload complete — refill mag
+          this.usesRemaining = this.maxUses;
+          this._reloading = false;
+        } else if (
+          this.maxUses !== null &&
+          this.usesRemaining <= 0 &&
+          this.data.reloadTime &&
+          this.data.weaponType === 'GUN'
+        ) {
+          // Normal post-fire cooldown ended on an empty mag — kick off reload phase
+          this._reloading = true;
+          this.cooldownTimer = this.data.reloadTime;
+          this._reloadTicksPlayed = 0;
+          this._reloadTicksPending = 0;
+        }
+      }
     }
 
-    // Update bow charging (hold to charge)
-    if (this.isCharging && this.data.weaponType === 'BOW') {
+    // Update gem-wand charging (hold to cast). Auto-completion handled by MagicSystem.
+    if (this.isCharging && this.data.gemWand) {
+      this.chargeTime += deltaTime;
+      // Cap at the wand's required charge time (prevents runaway accumulation)
+      if (this.chargeTime > this.data.chargeTime) {
+        this.chargeTime = this.data.chargeTime;
+      }
+    }
+
+    // Charge hammer (Crystal Maul): hold-to-charge mega-attack, auto-fires via main.js.
+    if (this.isCharging && this.data.chargeHammer) {
+      this.chargeTime += deltaTime;
+      if (this.chargeTime > this.data.chargeTime) this.chargeTime = this.data.chargeTime;
+    }
+
+    // Update bow charging (hold to charge) — also applies to guns flagged requiresCharge
+    if (this.isCharging && (this.data.weaponType === 'BOW' || this.data.requiresCharge)) {
       this.chargeTime += deltaTime;
       if (this.chargeTime > this.maxChargeTime) {
         this.chargeTime = this.maxChargeTime; // Cap at max charge
       }
+    }
+
+    // Tick attack-phase movement lock (locksMovement weapons only)
+    if (this.attackLockTimer > 0) {
+      this.attackLockTimer -= deltaTime;
     }
 
     // Update windup (charge-up before attack)
@@ -86,6 +188,15 @@ export class Item {
         // Start recovery cooldown
         this.cooldownTimer = this.data.recovery || this.data.cooldown || 0.5;
 
+        // Lock movement through the attack flash for weapons that opt in
+        if (this.data.locksMovement && attack) {
+          const hits = Array.isArray(attack) ? attack : [attack];
+          this.attackLockTimer = hits.reduce(
+            (max, a) => Math.max(max, (a.delay || 0) + (a.duration || 0.15)),
+            0
+          );
+        }
+
         return attack;
       }
     }
@@ -96,8 +207,11 @@ export class Item {
   canUse() {
     const cooldownReady = this.cooldownTimer <= 0 && !this.windupActive;
 
-    // Check bow use limit (if applicable)
-    if (this.data.weaponType === 'BOW' && this.maxUses !== null) {
+    // Bows + guns with a magazine: blocked when out of ammo
+    if (
+      this.maxUses !== null &&
+      (this.data.weaponType === 'BOW' || this.data.weaponType === 'GUN')
+    ) {
       return cooldownReady && this.usesRemaining > 0;
     }
 
@@ -112,8 +226,30 @@ export class Item {
       return null;
     }
 
-    // Bows use charging system (hold to charge)
-    if (this.data.weaponType === 'BOW') {
+    // Charge hammer: hold-to-charge mega-attack (once per room), identical lifecycle to gem wands.
+    // Release before full charge cancels — no attack. Auto-fires shockwave when complete.
+    // If the mega-attack has already been used this room, fall through to the normal melee path.
+    if (this.data.chargeHammer && !this.chargeAttackUsed) {
+      if (!this.isCharging) {
+        this.isCharging = true;
+        this.chargeTime = 0;
+        this.chargingPlayer = player;
+      }
+      return null;
+    }
+
+    // Gem wands: hold-to-charge, auto-cast when chargeTime is reached (driven by MagicSystem).
+    if (this.data.gemWand) {
+      if (!this.isCharging) {
+        this.isCharging = true;
+        this.chargeTime = 0;
+        this.chargingPlayer = player;
+      }
+      return null; // No attack while charging — MagicSystem fires it
+    }
+
+    // Bows (and chargeable guns) use the hold-to-charge system
+    if (this.data.weaponType === 'BOW' || this.data.requiresCharge) {
       if (!this.isCharging) {
         this.isCharging = true;
         this.chargeTime = 0;
@@ -123,7 +259,13 @@ export class Item {
     }
 
     // Check if weapon has windup (melee weapons typically do)
-    const windup = this.data.windup || 0;
+    let windup = this.data.windup || 0;
+
+    // Apply melee windup reduction affinity (e.g. Red Warrior: 20% faster melee windup)
+    const affinities = player && player.weaponAffinities;
+    if (windup > 0 && affinities && affinities['melee'] && affinities['melee'].windupReduction) {
+      windup *= (1 - affinities['melee'].windupReduction);
+    }
 
     if (windup > 0) {
       // Start windup, attack will execute after windup completes
@@ -135,17 +277,33 @@ export class Item {
       // No windup - execute immediately
       const attack = this.executeAttack(player);
 
-      // Set cooldown immediately for all weapons (including wands)
-      // Proximity-based wands will reset cooldown in main.js if proximity check fails
-      this.cooldownTimer = this.data.recovery || this.data.cooldown || 0.5;
+      // Set cooldown immediately for all weapons (including wands).
+      // Proximity-based wands will reset cooldown in main.js if proximity check fails.
+      // For guns whose mag just emptied, the reload phase begins automatically
+      // when this normal cooldown reaches zero (see update()).
+      let cooldown = this.data.recovery || this.data.cooldown || 0.5;
+      // Apply gun fire rate bonus affinity (e.g. Yellow Mage: 20% faster gun fire rate)
+      if (this.data.weaponType === 'GUN' && affinities && affinities['gun'] && affinities['gun'].fireRateBonus) {
+        cooldown *= (1 - affinities['gun'].fireRateBonus);
+      }
+      this.cooldownTimer = cooldown;
+
+      // Firing a gun dramatically slows the player; refreshed each shot so rapid fire stays slow.
+      if (this.data.weaponType === 'GUN') {
+        player.firingSlowTimer = Math.max(player.firingSlowTimer || 0, cooldown);
+      }
 
       return attack;
     }
   }
 
-  // Release charged bow (called when player releases space)
+  // Release charged weapon (called when player releases space)
+  // Handles both bows and chargeable guns (requiresCharge flag).
   releaseBow() {
-    if (!this.isCharging || this.data.weaponType !== 'BOW') return null;
+    if (!this.isCharging) return null;
+    const isBow = this.data.weaponType === 'BOW';
+    const isChargeGun = this.data.requiresCharge && this.data.weaponType === 'GUN';
+    if (!isBow && !isChargeGun) return null;
 
     const player = this.chargingPlayer;
     if (!player) {
@@ -174,16 +332,83 @@ export class Item {
       if (affinities['bow'].cooldownReduction) cooldown *= (1 - affinities['bow'].cooldownReduction);
       if (affinities['bow'].cooldownPenalty)   cooldown *= (1 + affinities['bow'].cooldownPenalty);
     }
+    // For chargeable guns whose mag just emptied, the reload phase begins
+    // automatically when this normal cooldown reaches zero (see update()).
     this.cooldownTimer = cooldown;
 
+    // Charge guns apply the same firing slow as instant guns.
+    if (isChargeGun && player) {
+      player.firingSlowTimer = Math.max(player.firingSlowTimer || 0, cooldown);
+    }
+
     return attack;
+  }
+
+  // Called when space is released before the Crystal Maul charge completes.
+  // Tap (<10% charge): treat as a regular melee attack so the weapon is usable
+  //   before the mega-attack is committed. Kicks off the standard windup path.
+  // Mid-charge release (>=10%): cancel with no attack (same as wand cancel).
+  releaseChargeHammer() {
+    if (!this.isCharging || !this.data.chargeHammer) return;
+    const player = this.chargingPlayer;
+    const chargeRatio = this.data.chargeTime > 0
+      ? this.chargeTime / this.data.chargeTime
+      : 0;
+    this.isCharging = false;
+    this.chargeTime = 0;
+    this.chargingPlayer = null;
+    if (chargeRatio < 0.10 && player && !this.windupActive && this.cooldownTimer <= 0) {
+      let windup = this.data.windup || 0;
+      const affinities = player.weaponAffinities;
+      if (windup > 0 && affinities && affinities['melee'] && affinities['melee'].windupReduction) {
+        windup *= (1 - affinities['melee'].windupReduction);
+      }
+      if (windup > 0) {
+        this.windupTimer = windup;
+        this.windupActive = true;
+        this.pendingPlayer = player;
+      }
+    }
+  }
+
+  // Fires the charged mega-attack (shockwave). Called by main.js when chargeTime is complete.
+  // Sets chargeAttackUsed so no further mega-attacks this room.
+  fireChargeHammerAttack() {
+    if (!this.isCharging || !this.data.chargeHammer) return null;
+    const player = this.chargingPlayer;
+    this.isCharging = false;
+    this.chargeTime = 0;
+    this.chargingPlayer = null;
+    this.chargeAttackUsed = true;
+    if (!player) return null;
+    // Call the shockwave creator directly — avoids mutating the shared data object.
+    // Inject the same subtype props that injectSubtype() would apply in createMeleeAttack,
+    // so canSmash, electric, isBlade, isBlunt, isPickaxe, cyclesExitLetter are preserved.
+    const attacks = this.createMeleeShockwave(player);
+    const props = {};
+    if (this.data.weaponSubtype) props.weaponSubtype = this.data.weaponSubtype;
+    if (this.data.electric) props.electric = this.data.electric;
+    if (this.data.isBlade) props.isBlade = this.data.isBlade;
+    if (this.data.isBlunt) props.isBlunt = this.data.isBlunt;
+    if (this.data.canSmash) props.canSmash = this.data.canSmash;
+    if (this.data.isPickaxe) props.isPickaxe = this.data.isPickaxe;
+    if (this.data.cyclesExitLetter) props.cyclesExitLetter = this.data.cyclesExitLetter;
+    const result = Array.isArray(attacks)
+      ? attacks.map((a, idx) => {
+          const merged = { ...a, ...props };
+          if (idx > 0) delete merged.cyclesExitLetter;
+          return merged;
+        })
+      : { ...attacks, ...props };
+    this.cooldownTimer = this.data.recovery || 0.5;
+    return result;
   }
 
   executeAttack(player, chargeRatio = 0) {
     // Return attack data based on weapon type
     switch (this.data.weaponType) {
       case 'GUN':
-        return this.createBullets(player);
+        return this.createBullets(player, chargeRatio);
       case 'MELEE':
         return this.createMeleeAttack(player);
       case 'BOW':
@@ -195,13 +420,30 @@ export class Item {
     }
   }
 
-  createBullets(player) {
+  createBullets(player, chargeRatio = 0) {
     const bullets = [];
     const bulletCount = this.data.bulletCount || 1;
     const spread = bulletCount > 1 ? 0.3 : 0;
     const angle = Math.atan2(player.facing.y, player.facing.x);
     // Unique ID for this burst — lets same-burst bullets bypass enemy iframes
     const attackId = `burst_${_nextAttackId++}`;
+
+    // One trigger pull = one ammo, regardless of pellet count or pattern
+    if (this.maxUses !== null && this.usesRemaining > 0) {
+      this.usesRemaining--;
+      // Mag just emptied — clear reload SFX trackers so the next reload plays from tick 0
+      if (this.usesRemaining <= 0) {
+        this._reloadTicksPlayed = 0;
+        this._reloadTicksPending = 0;
+      }
+    }
+
+    // Charge-scaled chain count: 0% charge = 0 chains, 100% = 3 chains.
+    // Only applied when the gun has requiresCharge + chain.
+    let scaledChainCount = this.data.chainCount || 3;
+    if (this.data.requiresCharge && this.data.chain) {
+      scaledChainCount = Math.round(chargeRatio * 3);
+    }
 
     // Special attack patterns
     if (this.data.attackPattern === 'burst') {
@@ -218,7 +460,7 @@ export class Item {
     for (let i = 0; i < bulletCount; i++) {
       // Add base spread for multi-bullet weapons, plus slight randomness for all bullets
       const baseSpread = (Math.random() - 0.5) * spread;
-      const randomness = (Math.random() - 0.5) * 0.1; // ±0.05 radians (~3 degrees)
+      const randomness = (Math.random() - 0.5) * (this.data.inaccuracy ?? 0.1);
       const spreadAngle = angle + baseSpread + randomness;
 
       // Spawn bullets slightly offset from player center (avoids hitting sapping enemies)
@@ -226,9 +468,10 @@ export class Item {
       const spawnX = player.position.x + player.width / 2 + Math.cos(spreadAngle) * spawnOffset;
       const spawnY = player.position.y + player.height / 2 + Math.sin(spreadAngle) * spawnOffset;
 
-      bullets.push({
+      const bullet = {
         type: 'bullet',
         char: this.data.bulletChar || '·',
+        drawAngle: spreadAngle,
         weaponChar: this.char,
         position: {
           x: spawnX,
@@ -250,14 +493,36 @@ export class Item {
         splitCount: this.data.splitCount || 3,
         knockback: this.data.knockback,
         lifesteal: this.data.lifesteal,
-        chain: this.data.chain,
-        chainCount: this.data.chainCount || 3,
+        chain: this.data.chain && (!this.data.requiresCharge || scaledChainCount > 0),
+        chainCount: scaledChainCount,
         explode: this.data.explode,
         explodeRadius: this.data.explodeRadius || 30,
+        accuracy: this.data.accuracy,
         owner: player,
         shooterPlane: player.plane,
         attackId
-      });
+      };
+
+      // Orbital looping bullet: center advances along firing line, bullet revolves around it.
+      // pos(t) = origin + fwd*(ls*t + R - R*cos(ω*t)) + perp*R*sin(ω*t)
+      // vel(t) = fwd*(ls + R*ω*sin(ω*t)) + perp*R*ω*cos(ω*t)  →  at t=0: fwd*ls + perp*R*ω
+      if (this.data.loopOmega) {
+        const fwd = { x: Math.cos(spreadAngle), y: Math.sin(spreadAngle) };
+        const perp = { x: -fwd.y, y: fwd.x };
+        const R = this.data.loopRadius || 30;
+        const ls = this.data.loopLinearSpeed || 130;
+        const omega = this.data.loopOmega;
+        bullet.velocity.vx = fwd.x * ls + perp.x * R * omega;
+        bullet.velocity.vy = fwd.y * ls + perp.y * R * omega;
+        bullet.loopOmega = omega;
+        bullet.loopRadius = R;
+        bullet.loopLinearSpeed = ls;
+        bullet.loopForward = fwd;
+        bullet.loopPerp = perp;
+        bullet.loopTime = 0;
+      }
+
+      bullets.push(bullet);
     }
 
     return bullets;
@@ -268,6 +533,7 @@ export class Item {
     // For now, just create the bullets simultaneously
     const bullets = [];
     const angle = Math.atan2(player.facing.y, player.facing.x);
+    const attackId = `burst_${_nextAttackId++}`;
 
     for (let i = 0; i < 3; i++) {
       const randomness = (Math.random() - 0.5) * 0.1; // ±0.05 radians (~3 degrees)
@@ -281,6 +547,7 @@ export class Item {
       bullets.push({
         type: 'bullet',
         char: this.data.bulletChar || '·',
+        drawAngle: finalAngle,
         weaponChar: this.char,
         position: {
           x: spawnX,
@@ -294,8 +561,22 @@ export class Item {
         color: this.color,
         onHit: this.data.onHit,
         electric: this.data.electric,
+        homing: this.data.homing,
+        ricochet: this.data.ricochet,
+        maxRicochets: this.data.maxRicochets || 3,
+        pierce: this.data.pierce,
+        split: this.data.split,
+        splitCount: this.data.splitCount || 3,
+        knockback: this.data.knockback,
+        lifesteal: this.data.lifesteal,
+        chain: this.data.chain,
+        chainCount: this.data.chainCount || 3,
+        explode: this.data.explode,
+        explodeRadius: this.data.explodeRadius || 30,
+        accuracy: this.data.accuracy,
         owner: player,
-        shooterPlane: player.plane
+        shooterPlane: player.plane,
+        attackId
       });
     }
 
@@ -305,6 +586,7 @@ export class Item {
   createRingPattern(player) {
     const bullets = [];
     const count = this.data.bulletCount || 8;
+    const attackId = `burst_${_nextAttackId++}`;
 
     for (let i = 0; i < count; i++) {
       const baseAngle = (Math.PI * 2 / count) * i;
@@ -319,6 +601,7 @@ export class Item {
       bullets.push({
         type: 'bullet',
         char: this.data.bulletChar || '·',
+        drawAngle: angle,
         weaponChar: this.char,
         position: {
           x: spawnX,
@@ -332,8 +615,22 @@ export class Item {
         color: this.color,
         onHit: this.data.onHit,
         electric: this.data.electric,
+        homing: this.data.homing,
+        ricochet: this.data.ricochet,
+        maxRicochets: this.data.maxRicochets || 3,
+        pierce: this.data.pierce,
+        split: this.data.split,
+        splitCount: this.data.splitCount || 3,
+        knockback: this.data.knockback,
+        lifesteal: this.data.lifesteal,
+        chain: this.data.chain,
+        chainCount: this.data.chainCount || 3,
+        explode: this.data.explode,
+        explodeRadius: this.data.explodeRadius || 30,
+        accuracy: this.data.accuracy,
         owner: player,
-        shooterPlane: player.plane
+        shooterPlane: player.plane,
+        attackId
       });
     }
 
@@ -344,6 +641,7 @@ export class Item {
     const bullets = [];
     const count = this.data.bulletCount || 5;
     const baseAngle = Math.atan2(player.facing.y, player.facing.x);
+    const attackId = `burst_${_nextAttackId++}`;
 
     for (let i = 0; i < count; i++) {
       const spiralAngle = baseAngle + (i * 0.4);
@@ -358,6 +656,7 @@ export class Item {
       bullets.push({
         type: 'bullet',
         char: this.data.bulletChar || '·',
+        drawAngle: angle,
         weaponChar: this.char,
         position: {
           x: spawnX,
@@ -368,11 +667,25 @@ export class Item {
           vy: Math.sin(angle) * (this.data.bulletSpeed || 280)
         },
         damage: this.data.damage,
-        electric: this.data.electric,
         color: this.color,
         onHit: this.data.onHit,
+        electric: this.data.electric,
+        homing: this.data.homing,
+        ricochet: this.data.ricochet,
+        maxRicochets: this.data.maxRicochets || 3,
+        pierce: this.data.pierce,
+        split: this.data.split,
+        splitCount: this.data.splitCount || 3,
+        knockback: this.data.knockback,
+        lifesteal: this.data.lifesteal,
+        chain: this.data.chain,
+        chainCount: this.data.chainCount || 3,
+        explode: this.data.explode,
+        explodeRadius: this.data.explodeRadius || 30,
+        accuracy: this.data.accuracy,
         owner: player,
-        shooterPlane: player.plane
+        shooterPlane: player.plane,
+        attackId
       });
     }
 
@@ -383,6 +696,7 @@ export class Item {
     const bullets = [];
     const count = this.data.bulletCount || 5;
     const baseAngle = Math.atan2(player.facing.y, player.facing.x);
+    const attackId = `burst_${_nextAttackId++}`;
 
     for (let i = 0; i < count; i++) {
       const spread = Math.sin(i * 0.5) * 0.6;
@@ -397,6 +711,7 @@ export class Item {
       bullets.push({
         type: 'bullet',
         char: this.data.bulletChar || '·',
+        drawAngle: angle,
         weaponChar: this.char,
         position: {
           x: spawnX,
@@ -410,8 +725,22 @@ export class Item {
         color: this.color,
         onHit: this.data.onHit,
         electric: this.data.electric,
+        homing: this.data.homing,
+        ricochet: this.data.ricochet,
+        maxRicochets: this.data.maxRicochets || 3,
+        pierce: this.data.pierce,
+        split: this.data.split,
+        splitCount: this.data.splitCount || 3,
+        knockback: this.data.knockback,
+        lifesteal: this.data.lifesteal,
+        chain: this.data.chain,
+        chainCount: this.data.chainCount || 3,
+        explode: this.data.explode,
+        explodeRadius: this.data.explodeRadius || 30,
+        accuracy: this.data.accuracy,
         owner: player,
-        shooterPlane: player.plane
+        shooterPlane: player.plane,
+        attackId
       });
     }
 
@@ -431,19 +760,33 @@ export class Item {
       if (this.data.isBlunt) props.isBlunt = this.data.isBlunt;
       if (this.data.canSmash) props.canSmash = this.data.canSmash;
       if (this.data.isPickaxe) props.isPickaxe = this.data.isPickaxe;
+      if (this.data.cyclesExitLetter) props.cyclesExitLetter = this.data.cyclesExitLetter;
+      if (this.data.corrosion) props.corrosion = true;
+      if (this.data.poisonStacks) props.poisonStacks = true;
+      if (this.data.randomOnHit) props.randomOnHit = this.data.randomOnHit;
 
       if (Object.keys(props).length === 0) return result;
-      if (Array.isArray(result)) return result.map(a => ({ ...a, ...props }));
+      if (Array.isArray(result)) {
+        return result.map((a, idx) => {
+          const merged = { ...a, ...props };
+          if (idx > 0) delete merged.cyclesExitLetter;
+          return merged;
+        });
+      }
       return { ...result, ...props };
     };
 
     switch (pattern) {
       case 'arc':
         return injectSubtype(this.createMeleeArc(player));
+      case 'axe':
+        return injectSubtype(this.createMeleeSweep(player));
       case 'sweep':
         return injectSubtype(this.createMeleeSweep(player));
       case 'shockwave':
         return injectSubtype(this.createMeleeShockwave(player));
+      case 'hammerRing':
+        return injectSubtype(this.createMeleeHammerRing(player));
       case 'thrust':
         return injectSubtype(this.createMeleeThrust(player));
       case 'multistab':
@@ -455,9 +798,12 @@ export class Item {
       case 'slam':
         return injectSubtype(this.createMeleeSlam(player));
       default:
-        // Default single-hit attack
+        // Default single-hit attack. Fall back to the weapon's own glyph
+        // (rather than '█') so the player AND any enemy wielding the same
+        // weapon both swing a visually distinct character — keeps player-NPC
+        // animation parity while making sword vs. axe vs. spear readable.
         const range = this.data.range || 20;
-        const defaultChar = this.data.meleeChar || '█';
+        const defaultChar = this.data.meleeChar || this.data.char || '█';
         const defaultAngle = Math.atan2(player.facing.y, player.facing.x);
         return injectSubtype({
           type: 'melee',
@@ -541,14 +887,16 @@ export class Item {
       const knockbackValue = this.data.knockback || 150;
       const meleeChar = this.data.meleeChar || '/';
 
+      const drawScale = this.data.drawScale || 1.0;
       attacks.push({
         type: 'melee',
         char: meleeChar,
         drawAngle: this.getMeleeDrawAngle(meleeChar, angle),
+        drawScale,
         position: { x: player.position.x + relX, y: player.position.y + relY },
         relX, relY,
-        width: GRID.CELL_SIZE,
-        height: GRID.CELL_SIZE,
+        width: GRID.CELL_SIZE * drawScale,
+        height: GRID.CELL_SIZE * drawScale,
         damage: this.data.damage,
         duration: 0.1,
         delay: i * patternSpeed,
@@ -601,15 +949,47 @@ export class Item {
     return attacks;
   }
 
+  createMeleeHammerRing(player) {
+    // Single weapon-glyph flash at the strike point (facing × range).
+    // Movement is locked by locksMovement + attackLockTimer for the flash duration.
+    const facingAngle = Math.atan2(player.facing.y, player.facing.x);
+    const range = this.data.range || GRID.CELL_SIZE * 1.25;
+
+    return {
+      type: 'melee',
+      char: this.data.char,
+      drawAngle: this.getMeleeDrawAngle(this.data.char, facingAngle),
+      position: {
+        x: player.position.x + Math.cos(facingAngle) * range,
+        y: player.position.y + Math.sin(facingAngle) * range,
+      },
+      width: GRID.CELL_SIZE,
+      height: GRID.CELL_SIZE,
+      damage: this.data.damage,
+      duration: 0.15,
+      delay: 0,
+      color: this.color,
+      onHit: this.data.onHit,
+      knockback: this.data.knockback || 300,
+      owner: player,
+      shooterPlane: player.plane,
+    };
+  }
+
   createMeleeShockwave(player) {
-    // Expanding concentric rings (hammers)
+    // Expanding concentric rings — hammer augment/special pattern.
+    // patternSpeed is hardcoded here so the weapon's data.patternSpeed
+    // (used by the tap sweep) doesn't bleed into the shockwave cadence.
+    // 0.125s/ring matches the visual ring expansion (8 cells/sec, 1 cell per ring).
     const attacks = [];
-    const patternSpeed = this.data.patternSpeed || 0.1;
+    const patternSpeed = 0.4;
     const rings = 3;
+    const cx = player.position.x + GRID.CELL_SIZE / 2;
+    const cy = player.position.y + GRID.CELL_SIZE / 2;
 
     for (let ring = 1; ring <= rings; ring++) {
       const radius = ring * GRID.CELL_SIZE;
-      const positions = 8; // 8 positions per ring
+      const positions = 8;
 
       const shockwaveChar = this.data.meleeChar || '○';
       for (let i = 0; i < positions; i++) {
@@ -630,11 +1010,16 @@ export class Item {
           delay: (ring - 1) * patternSpeed,
           color: this.color,
           onHit: this.data.onHit,
-          knockback: this.data.knockback || 300,
+          knockback: this.data.knockback || 150,
           explode: this.data.explode,
           explodeRadius: this.data.explodeRadius,
           owner: player,
-        shooterPlane: player.plane
+          shooterPlane: player.plane,
+          ...(ring === 1 && i === 0 ? {
+            triggerShockwave: true,
+            shockwaveOrigin: { x: cx, y: cy },
+            shockwaveColor: this.color,
+          } : {}),
         });
       }
     }
@@ -650,10 +1035,13 @@ export class Item {
 
     const thrustChar = this.data.meleeChar || '→';
     const thrustDrawAngle = this.getMeleeDrawAngle(thrustChar, baseAngle);
+    const facingX = Math.cos(baseAngle);
+    const facingY = Math.sin(baseAngle);
+
     for (let i = 1; i <= 3; i++) {
       const distance = i * GRID.CELL_SIZE;
-      const relX = Math.cos(baseAngle) * distance;
-      const relY = Math.sin(baseAngle) * distance;
+      const relX = facingX * distance;
+      const relY = facingY * distance;
 
       attacks.push({
         type: 'melee',
@@ -669,6 +1057,8 @@ export class Item {
         color: this.color,
         onHit: this.data.onHit,
         knockback: this.data.knockback || 300,
+        facing: { x: facingX, y: facingY },
+        distanceCrit: i === 3 && (this.data.distanceCrit || false),
         owner: player,
         shooterPlane: player.plane
       });
@@ -678,16 +1068,21 @@ export class Item {
   }
 
   createMeleeMultistab(player) {
-    // Rapid multiple stabs in same position (daggers)
+    // Rapid short-range stabs half a cell in front of the player (daggers).
+    // Glyph is the weapon's own char rotated to face the attack direction.
     const attacks = [];
     const baseAngle = Math.atan2(player.facing.y, player.facing.x);
-    const distance = this.data.range || 16;
+    const distance = this.data.range ?? GRID.CELL_SIZE * 0.5;
     const patternSpeed = this.data.patternSpeed || 0.05;
     const stabs = 3;
 
+    // Daggers benefit from oil augments (onHit override only — speed is bow-specific)
+    const isDagger = this.data.weaponSubtype === 'dagger';
+    const oilOnHit = isDagger ? _readEquippedOilEffect(player).onHit : null;
+
     const relX = Math.cos(baseAngle) * distance;
     const relY = Math.sin(baseAngle) * distance;
-    const multistabChar = this.data.meleeChar || '†';
+    const multistabChar = this.data.meleeChar || this.char;
     const multistabDrawAngle = this.getMeleeDrawAngle(multistabChar, baseAngle);
     for (let i = 0; i < stabs; i++) {
       attacks.push({
@@ -702,7 +1097,7 @@ export class Item {
         duration: 0.08,
         delay: i * patternSpeed,
         color: this.color,
-        onHit: this.data.onHit,
+        onHit: oilOnHit || this.data.onHit,
         knockback: this.data.knockback || 300,
         lifesteal: this.data.lifesteal,
         owner: player,
@@ -771,7 +1166,8 @@ export class Item {
       color: this.color,
       onHit: this.data.onHit,
       knockback: this.data.knockback || 300,
-      owner: player
+      owner: player,
+      shooterPlane: player.plane ?? 0
     };
   }
 
@@ -783,29 +1179,28 @@ export class Item {
     // Calculate speed multiplier from charge (1x to 2x)
     const speedMultiplier = 1.0 + chargeRatio; // 0% charge = 1x, 100% charge = 2x
 
-    // Decrement use count for bows with limited uses
-    if (this.maxUses !== null && this.usesRemaining > 0) {
-      this.usesRemaining--;
-
-      // If depleted, set a long cooldown to prevent further use
-      if (this.usesRemaining <= 0) {
-        this.cooldownTimer = 9999; // Effectively infinite until reset
-      }
-    }
-
     // Special patterns
     if (this.data.attackPattern === 'burst') {
       // Burst bow fires multiple arrows in sequence
       for (let i = 0; i < 3; i++) {
         arrows.push(this.createSingleArrow(player, angle, speedMultiplier));
       }
-      return arrows;
+    } else {
+      // Multi-shot or single arrow
+      for (let i = 0; i < arrowCount; i++) {
+        const spreadAngle = arrowCount > 1 ? angle + (i - Math.floor(arrowCount / 2)) * 0.3 : angle;
+        arrows.push(this.createSingleArrow(player, spreadAngle, speedMultiplier));
+      }
     }
 
-    // Multi-shot or single arrow
-    for (let i = 0; i < arrowCount; i++) {
-      const spreadAngle = arrowCount > 1 ? angle + (i - Math.floor(arrowCount / 2)) * 0.3 : angle;
-      arrows.push(this.createSingleArrow(player, spreadAngle, speedMultiplier));
+    // Deplete one use per arrow fired so refunds (via pickup) match expenditure
+    if (this.maxUses !== null && this.usesRemaining > 0) {
+      this.usesRemaining = Math.max(0, this.usesRemaining - arrows.length);
+
+      // If depleted, set a long cooldown to prevent further use
+      if (this.usesRemaining <= 0) {
+        this.cooldownTimer = 9999; // Effectively infinite until reset
+      }
     }
 
     return arrows;
@@ -816,9 +1211,12 @@ export class Item {
     const randomness = (Math.random() - 0.5) * 0.1; // ±0.05 radians (~3 degrees)
     const finalAngle = angle + randomness;
 
+    // Equipped oil augment (Slick = +speed, Fire/Frost/Drowse = onHit override)
+    const oil = _readEquippedOilEffect(player);
+
     // Apply speed multiplier from charge
     const baseSpeed = this.data.arrowSpeed || 250;
-    const finalSpeed = baseSpeed * speedMultiplier;
+    const finalSpeed = baseSpeed * speedMultiplier * oil.arrowSpeedMult;
 
     // Calculate arrow character based on direction
     const arrowChar = this.getArrowCharForAngle(finalAngle);
@@ -842,7 +1240,7 @@ export class Item {
       },
       damage: this.data.damage,
       color: this.color,
-      onHit: this.data.onHit,
+      onHit: oil.onHit || this.data.onHit,
       electric: this.data.electric,
       homing: this.data.homing,
       pierce: this.data.pierce,
@@ -877,6 +1275,7 @@ export class Item {
       '←':  Math.PI,
       '↑':  -Math.PI / 2,
       '↓':  Math.PI / 2,
+      '↾':  -Math.PI / 2,
     };
     const naturalAngle = NATURAL_ANGLES[char];
     return naturalAngle !== undefined ? attackAngle - naturalAngle : null;
@@ -903,6 +1302,11 @@ export class Item {
   }
 
   createWandAttack(player) {
+    // Gem wands route through the magic-meter system, not the per-room use system.
+    if (this.data.gemWand) {
+      return this.createGemWandAttack(player);
+    }
+
     // Check uses remaining for limited-use wands
     if (this.wandUsesRemaining !== null && this.wandUsesRemaining <= 0) {
       return null; // No attack if out of uses
@@ -977,6 +1381,27 @@ export class Item {
     };
   }
 
+  createGemWandAttack(player) {
+    // Phase 1: placeholder cast — returns a tagged attack object that MagicSystem
+    // intercepts to deduct mana and emit a floating-text effect. Real spell logic
+    // (fire AOE, blizzard, chain stun, blind cone, grass circle, charm AOE) lands
+    // in Phase 2.
+    const centerX = player.position.x + player.width / 2;
+    const centerY = player.position.y + player.height / 2;
+
+    return {
+      type: 'gem_wand_cast',
+      wandChar: this.char,
+      wandName: this.data.name,
+      spellEffect: this.data.spellEffect,
+      manaCost: this.data.manaCost,
+      position: { x: centerX, y: centerY },
+      facing: { x: player.facing.x, y: player.facing.y },
+      color: this.color,
+      owner: player
+    };
+  }
+
   createTransmutationWandAttack(player) {
     // Transmutation Wand fires a purple polymorph bolt
     const angle = Math.atan2(player.facing.y, player.facing.x);
@@ -1001,6 +1426,70 @@ export class Item {
       color: this.color,
       owner: player
     };
+  }
+
+  // Gem-wand cast: returns attack data once chargeTime has reached data.chargeTime.
+  // Caller (MagicSystem) is responsible for the mana check + deduction.
+  releaseGemWand() {
+    if (!this.isCharging || !this.data.gemWand) return null;
+    if (this.chargeTime < this.data.chargeTime) return null;
+
+    const player = this.chargingPlayer;
+    if (!player) {
+      this.isCharging = false;
+      this.chargeTime = 0;
+      return null;
+    }
+
+    const attack = this.executeAttack(player);
+
+    this.isCharging = false;
+    this.chargeTime = 0;
+    this.chargingPlayer = null;
+    this.cooldownTimer = this.data.recovery || 0.5;
+
+    return attack;
+  }
+
+  // Cancel a gem-wand charge in progress (e.g. player released space before completion).
+  // No mana cost. Returns true if a charge was in progress and cancelled.
+  cancelGemWandCharge() {
+    if (!this.isCharging || !this.data.gemWand) return false;
+    this.isCharging = false;
+    this.chargeTime = 0;
+    this.chargingPlayer = null;
+    return true;
+  }
+
+  // Called when this weapon is being switched away from (player picks a different slot).
+  // Cancels charge / windup, and forces any in-progress reload to restart from the beginning
+  // when the player switches back.
+  cancelChargeAndReload() {
+    if (this.isCharging) {
+      this.isCharging = false;
+      this.chargeTime = 0;
+      this.chargingPlayer = null;
+    }
+    if (this.windupActive) {
+      this.windupActive = false;
+      this.windupTimer = 0;
+      this.pendingPlayer = null;
+    }
+    // If currently in the reload phase, restart it from the beginning.
+    // (If still in the post-fire cooldown phase, leave it alone — the reload
+    // will start fresh once that cooldown elapses.)
+    if (this._reloading && this.data.reloadTime) {
+      this.cooldownTimer = this.data.reloadTime;
+      this._reloadTicksPlayed = 0;
+      this._reloadTicksPending = 0;
+    }
+  }
+
+  // Drain pending mechanical reload ticks (audio layer plays one SFX per tick).
+  consumeReloadTicks() {
+    const n = this._reloadTicksPending || 0;
+    this._reloadTicksPending = 0;
+    return n;
   }
 
   // Reset bow and wand uses when entering a new room

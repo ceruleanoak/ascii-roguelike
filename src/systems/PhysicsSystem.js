@@ -1,17 +1,14 @@
-import { PHYSICS, GRID } from '../game/GameConfig.js';
+import { PHYSICS, GRID, BACKGROUND_OBJECT_VARIANTS } from '../game/GameConfig.js';
+import {
+  PLANE_TUNNEL,
+  planeOf,
+  inSamePlane,
+  objectOnPlane,
+} from './PlaneSystem.js';
 
-/**
- * Check if two entities are in the same plane
- * Used for vision, combat, and interaction checks
- * @param {Object} entity1 - First entity (must have .plane property)
- * @param {Object} entity2 - Second entity (must have .plane property)
- * @returns {boolean} True if both entities are in the same plane
- */
-export function inSamePlane(entity1, entity2) {
-  const plane1 = entity1.plane !== undefined ? entity1.plane : 0;
-  const plane2 = entity2.plane !== undefined ? entity2.plane : 0;
-  return plane1 === plane2;
-}
+// Re-exported so existing imports (e.g. Enemy.js) keep working.
+// New code should import directly from PlaneSystem.
+export { inSamePlane };
 
 export class PhysicsSystem {
   constructor() {
@@ -35,6 +32,85 @@ export class PhysicsSystem {
     this.entities = [];
   }
 
+  /**
+   * Apply knockback to an entity away from a source position.
+   * Reads entity.knockbackResistance (0 = none, 1 = immune) to scale force.
+   */
+  applyKnockback(entity, sourceX, sourceY, force, duration = 0.2) {
+    const cx = entity.position.x + GRID.CELL_SIZE / 2;
+    const cy = entity.position.y + GRID.CELL_SIZE / 2;
+    const dx = cx - sourceX;
+    const dy = cy - sourceY;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    this._applyKnockbackForce(entity, dx / dist, dy / dist, force, duration);
+  }
+
+  /**
+   * Apply knockback to an entity along an explicit direction vector.
+   * Use when the direction is independent of source position (e.g. boulders).
+   */
+  applyKnockbackDir(entity, dirX, dirY, force, duration = 0.2) {
+    const dist = Math.sqrt(dirX * dirX + dirY * dirY) || 1;
+    this._applyKnockbackForce(entity, dirX / dist, dirY / dist, force, duration);
+  }
+
+  /**
+   * Freeze an entity's position integration for a short duration.
+   * Takes the max of any existing timer so multiple simultaneous hits don't fight.
+   */
+  applyHitstop(entity, duration) {
+    if (!entity) return;
+    entity.hitstopTimer = Math.max(entity.hitstopTimer ?? 0, duration);
+  }
+
+  /**
+   * Additive velocity impulse, mass-scaled. Unlike applyKnockback this does not
+   * override existing velocity — it nudges it. Used for recoil and soft contact.
+   */
+  applyImpulse(entity, dirX, dirY, force) {
+    const dist = Math.sqrt(dirX * dirX + dirY * dirY) || 1;
+    const massScale = 1 / (entity.mass ?? 1);
+    entity.velocity.vx += (dirX / dist) * force * massScale;
+    entity.velocity.vy += (dirY / dist) * force * massScale;
+  }
+
+  /**
+   * Soft separation pass: gently push the player and any overlapping enemies apart.
+   * Prevents stacking without using knockback (no status effects, no resistance).
+   * Call once per frame after the main physics update.
+   */
+  resolveEntityContacts(player, enemies) {
+    if (player.dodgeRoll?.active && player.dodgeRoll.type === 'whirlwind') return; // pass through enemies during spin
+    const MIN_DIST = GRID.CELL_SIZE * 1.2;
+    const FORCE = 120;
+    for (const enemy of enemies) {
+      if (enemy.destroyed) continue;
+      if (enemy.sapping) continue; // Sapping enemies are intentionally on the player — no separation
+      if (enemy.isBossEntity) continue; // Boss entities own their movement — separation would prevent grabs
+      if (enemy.chargeState === 'charging') continue; // Charging enemies (boar) plow through — soft push would cancel the dash hit
+      if (!inSamePlane(player, enemy)) continue; // Cross-plane enemies are non-interactive
+      const dx = player.position.x - enemy.position.x;
+      const dy = player.position.y - enemy.position.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      if (dist < MIN_DIST) {
+        const overlap = (MIN_DIST - dist) / MIN_DIST;
+        const force = FORCE * overlap;
+        this.applyImpulse(player, dx, dy, force);
+        this.applyImpulse(enemy, -dx, -dy, force);
+      }
+    }
+  }
+
+  _applyKnockbackForce(entity, nx, ny, force, duration) {
+    const massResistance = 1 - (1 / (entity.mass ?? 1));
+    const resistance = Math.max(massResistance, entity.knockbackResistance ?? 0);
+    if (resistance >= 1) return;
+    const scaledForce = force * (1 - resistance);
+    entity.velocity.vx = nx * scaledForce;
+    entity.velocity.vy = ny * scaledForce;
+    entity.applyStatusEffect?.('knockback', duration);
+  }
+
   update(deltaTime, backgroundObjects = [], room = null) {
     const waterResults = [];
     for (const entity of this.entities) {
@@ -46,6 +122,27 @@ export class PhysicsSystem {
 
   updateEntity(entity, deltaTime, backgroundObjects = [], room = null) {
     if (!entity.position || !entity.velocity) return null;
+
+    // Hitstop: freeze position integration, tick timer
+    if (entity.hitstopTimer > 0) {
+      entity.hitstopTimer = Math.max(0, entity.hitstopTimer - deltaTime);
+      return null;
+    }
+
+    // Carried by thrown spear: TrapSystem owns position this frame — skip all physics
+    if (entity.carriedBySpear) return null;
+
+    // Pinned to wall/object (spear throw): incoming knockback breaks it, otherwise frozen
+    if (entity.pinnedDuration > 0) {
+      const spd = Math.sqrt(entity.velocity.vx ** 2 + entity.velocity.vy ** 2);
+      if (spd > 80) {
+        entity.pinnedDuration = 0; // New knockback breaks the pin
+      } else {
+        entity.pinnedDuration = Math.max(0, entity.pinnedDuration - deltaTime);
+        entity.velocity.vx = 0;
+        entity.velocity.vy = 0;
+      }
+    }
 
     // Apply acceleration
     if (entity.acceleration) {
@@ -69,9 +166,11 @@ export class PhysicsSystem {
       entity.isOnIce   = false;
     }
 
-    if (!isProjectile && backgroundObjects && backgroundObjects.length > 0) {
+    if (!isProjectile && !entity.ignoreBackgroundCollision && backgroundObjects && backgroundObjects.length > 0) {
+      const entityPlane = planeOf(entity);
       for (const obj of backgroundObjects) {
         if (obj.destroyed) continue;
+        if (!objectOnPlane(obj, entityPlane)) continue;
 
         const objBox = obj.getHitbox();
         const entityBox = {
@@ -91,28 +190,48 @@ export class PhysicsSystem {
             entity.isOnSlope = true; // For dodge roll slope-lock mechanic
           }
 
-          // Check for mud beds (RED zone - dry mud becomes wet and slowing)
-          if (obj.isDryMud && !obj.slowing) {
-            // Convert dry mud to wet mud on first step
-            obj.isDryMud = false;
-            obj.color = '#664422';  // Dark brown (wet)
-            obj.slowing = true;
-            obj.name = 'Wet Mud';
-          }
-
-          // Check for water (or lava in RED zone)
+          // Check for water/lava/mud (~)
           if (obj.char === '~') {
-            // Check if it's damaging lava
-            if (obj.damaging && obj.damage) {
-              damagingLiquid = { damage: obj.damage, name: obj.name || 'Lava' };
+            const isLavaObj = obj.typeId ? obj.typeId === 'lava'
+                                         : (obj.damaging && obj.damage);
+            const isMudObj  = obj.typeId ? (obj.typeId === 'mud_dry' || obj.typeId === 'mud_wet')
+                                         : (obj.isDryMud || obj.slowing === true);
+
+            // Mud activation: dry → wet on first step
+            if (obj.typeId === 'mud_dry') {
+              obj.typeId = 'mud_wet';
+              obj._variantData = BACKGROUND_OBJECT_VARIANTS['mud_wet'];
+              obj.color = obj._variantData.color;
+              obj.animationColor = obj._variantData.color;
+            } else if (obj.isDryMud && !obj.slowing) {
+              // Legacy path
+              obj.isDryMud = false;
+              obj.color = '#664422';
+              obj.slowing = true;
+              obj.name = 'Wet Mud';
             }
 
-            const wState = obj.getWaterState ? obj.getWaterState() : 'normal';
-            if (wState === 'frozen') {
-              onIce = true;
-              entity.isOnIce = true; // For dodge roll ice-lock mechanic
+            if (isLavaObj) {
+              const dmg = obj._variantData ? obj._variantData.damage : obj.damage;
+              damagingLiquid = { damage: dmg, name: obj.name || 'Lava' };
+              // Lava does NOT set inLiquid — no wet status
+            } else if (isMudObj) {
+              inGrass = true; // 75% speed, same path as grass — but NOT inLiquid
+              // Mud does NOT set inLiquid — no wet status, no water state transitions
+            } else {
+              // Real water
+              const wState = obj.getWaterState ? obj.getWaterState() : 'normal';
+              if (wState === 'frozen') {
+                onIce = true;
+                entity.isOnIce = true; // For dodge roll ice-lock mechanic
+              } else if (wState === 'crystallized') {
+                // Coral Crown platform — walkable, no wet status, no slide.
+                // Intentionally leave inLiquid/onIce false.
+              } else {
+                inLiquid = true;
+                liquidState = wState;
+              }
             }
-            else { inLiquid = true; liquidState = wState; }
             break;
           }
           // Check for objects with numeric slowing first (trees, stumps)
@@ -134,7 +253,7 @@ export class PhysicsSystem {
 
     // Apply friction (ice = less friction = more sliding)
     if (entity.friction !== false) {
-      const friction = onIce ? PHYSICS.FRICTION * 1.07 : PHYSICS.FRICTION;
+      const friction = onIce ? PHYSICS.FRICTION * 1.03 : PHYSICS.FRICTION;
       entity.velocity.vx *= friction;
       entity.velocity.vy *= friction;
     }
@@ -156,16 +275,31 @@ export class PhysicsSystem {
       }
     }
 
+    // Float (Floating Boots or flying enemies) — immune to all liquid and mud effects
+    const hasFloat = (entity.floatTimer > 0) || (entity.data?.float);
+    if (hasFloat) {
+      inLiquid = false;
+      damagingLiquid = null;
+      inGrass = false;
+    }
+
     // Apply velocity multiplier for liquid water, grass, and slowing objects
     // Dodge roll ignores grass/terrain slowdown
     const isDodgeRolling = entity.dodgeRoll && entity.dodgeRoll.active;
     let velocityMultiplier = 1.0;
     if (inLiquid) {
-      velocityMultiplier = 0.5; // Water slows to 50%
+      // swimAffinity entities (e.g. frog) glide through water at full speed —
+      // they compensate via higher jump velocity in water. Shark Mask divers
+      // are treated the same way while their dive is active.
+      velocityMultiplier = (entity.data?.swimAffinity || entity.diving) ? 1.0 : 0.5;
     } else if (inGrass && !isDodgeRolling) {
       velocityMultiplier = 0.75; // Grass slows to 75% (dodge roll ignores)
     } else if (slowingMultiplier < 1.0 && !isDodgeRolling) {
       velocityMultiplier = slowingMultiplier; // Trees/stumps use numeric value (dodge roll ignores)
+    }
+
+    if (entity.isStaffBlocking && !isDodgeRolling) {
+      velocityMultiplier *= 0.5; // Staff block: half-speed while bracing
     }
 
     // Update position with velocity multiplier
@@ -174,7 +308,7 @@ export class PhysicsSystem {
 
     // Collision detection (if entity has collision)
     if (entity.hasCollision) {
-      const collision = this.checkCollision(entity, newX, newY, backgroundObjects);
+      const collision = this.checkCollision(entity, newX, newY, backgroundObjects, room);
       if (!collision.x) {
         entity.position.x = newX;
       } else {
@@ -185,6 +319,11 @@ export class PhysicsSystem {
       } else {
         entity.velocity.vy = 0;
       }
+      if (entity.pinOnWallContact && (collision.x || collision.y)) {
+        entity.pinnedDuration = 2.0;
+        entity.pinOnWallContact = false;
+      }
+
     } else {
       entity.position.x = newX;
       entity.position.y = newY;
@@ -197,13 +336,13 @@ export class PhysicsSystem {
 
     // Eject entity from any wall cells it currently overlaps (knockback / spawn-inside fix).
     if (!isProjectile && entity.hasCollision) {
-      this.resolveCollisionMapOverlap(entity);
+      this.resolveCollisionMapOverlap(entity, room);
     }
 
     // Eject entity from any solid background objects it is already overlapping.
     // This handles cases where an entity spawns inside (or is pushed into) a solid
     // object, which would otherwise leave it permanently stuck.
-    if (!isProjectile && entity.hasCollision && backgroundObjects && backgroundObjects.length > 0) {
+    if (!isProjectile && !entity.ignoreBackgroundCollision && entity.hasCollision && backgroundObjects && backgroundObjects.length > 0) {
       this.resolveSolidObjectOverlap(entity, backgroundObjects);
     }
 
@@ -218,14 +357,14 @@ export class PhysicsSystem {
     }
 
     // Resolve tunnel wall overlaps (push entities towards tunnel center)
-    if (room && room.tunnel && entity.plane === 1 && backgroundObjects) {
-      this.resolveTunnelWallOverlap(entity, room.tunnel, backgroundObjects);
+    if (room && room.tunnel && planeOf(entity) === PLANE_TUNNEL && backgroundObjects) {
+      this.resolveTunnelWallOverlap(entity, room.tunnel, backgroundObjects, deltaTime);
     }
 
     return { inLiquid, liquidState, damagingLiquid };
   }
 
-  checkCollision(entity, newX, newY, backgroundObjects = []) {
+  checkCollision(entity, newX, newY, backgroundObjects = [], room = null) {
     const collision = { x: false, y: false };
 
     // Get entity dimensions
@@ -250,7 +389,9 @@ export class PhysicsSystem {
           entity.position.y,
           width,
           height,
-          'x'
+          'x',
+          entity,
+          room
         );
       }
 
@@ -262,13 +403,15 @@ export class PhysicsSystem {
           newY,
           width,
           height,
-          'y'
+          'y',
+          entity,
+          room
         );
       }
     }
 
     // Check background object collisions (for tunnel walls and solid objects)
-    if (backgroundObjects && backgroundObjects.length > 0) {
+    if (!entity.ignoreBackgroundCollision && backgroundObjects && backgroundObjects.length > 0) {
       const bgCollision = this.checkBackgroundObjectCollision(entity, newX, newY, backgroundObjects);
       collision.x = collision.x || bgCollision.x;
       collision.y = collision.y || bgCollision.y;
@@ -278,11 +421,33 @@ export class PhysicsSystem {
   }
 
   /**
+   * Returns true if the entity can pass through a collisionMap cell due to a
+   * room-defined conditional passable zone.
+   *
+   * Supported conditions (room.passableZones[i].condition):
+   *   'float' — entity.floatTimer > 0 (Floating Boots active)
+   *   'small' — entity.isSmall truthy (frog form / mini — future)
+   *
+   * The passableZones array is set on rooms at generation time and is read-only
+   * by the physics system.
+   */
+  _isCellConditionallyPassable(row, col, entity, room) {
+    if (!room?.passableZones) return false;
+    for (const zone of room.passableZones) {
+      if (row < zone.minRow || row > zone.maxRow) continue;
+      if (col < zone.minCol || col > zone.maxCol) continue;
+      if (zone.condition === 'float' && entity.floatTimer > 0) return true;
+      if (zone.condition === 'small' && entity.isSmall)        return true;
+    }
+    return false;
+  }
+
+  /**
    * Check if a specific position collides with walls
    * Helper for independent X/Y axis collision testing
    * For 'x' axis, wall cells use half their tile width (CELL_SIZE/2 inner region)
    */
-  checkAxisCollision(collisionMap, testX, testY, width, height, axis = 'y') {
+  checkAxisCollision(collisionMap, testX, testY, width, height, axis = 'y', entity = null, room = null) {
     const cellX = Math.floor(testX / GRID.CELL_SIZE);
     const cellY = Math.floor(testY / GRID.CELL_SIZE);
     const cellX2 = Math.floor((testX + width - 1) / GRID.CELL_SIZE);
@@ -290,7 +455,10 @@ export class PhysicsSystem {
 
     for (let cy = cellY; cy <= cellY2; cy++) {
       for (let cx = cellX; cx <= cellX2; cx++) {
-        if (collisionMap[cy]?.[cx]) return true;
+        if (collisionMap[cy]?.[cx]) {
+          if (entity && room && this._isCellConditionallyPassable(cy, cx, entity, room)) continue;
+          return true;
+        }
       }
     }
     return false;
@@ -302,7 +470,7 @@ export class PhysicsSystem {
    * as resolveSolidObjectOverlap for background objects. Called after
    * position is committed so knockback / spawn-inside cases can't deadlock.
    */
-  resolveCollisionMapOverlap(entity) {
+  resolveCollisionMapOverlap(entity, room = null) {
     if (!entity.collisionMap) return;
     const width  = entity.width  || GRID.CELL_SIZE;
     const height = entity.height || GRID.CELL_SIZE;
@@ -319,6 +487,7 @@ export class PhysicsSystem {
       outer: for (let cy = cellY; cy <= cellY2; cy++) {
         for (let cx = cellX; cx <= cellX2; cx++) {
           if (!entity.collisionMap[cy]?.[cx]) continue;
+          if (room && this._isCellConditionallyPassable(cy, cx, entity, room)) continue;
 
           const wallLeft   = cx * GRID.CELL_SIZE;
           const wallRight  = wallLeft  + GRID.CELL_SIZE;
@@ -355,31 +524,26 @@ export class PhysicsSystem {
   }
 
   /**
-   * Check collision with solid background objects (especially tunnel walls)
-   * CRITICAL: Tunnel walls ONLY collide when entity.plane === 1
+   * Check collision with solid background objects.
+   * Plane affinity is resolved via PlaneSystem.objectOnPlane — objects not on the
+   * entity's plane (e.g. tunnel walls when above ground, rocks when below) are skipped.
    */
   checkBackgroundObjectCollision(entity, newX, newY, backgroundObjects) {
     const collision = { x: false, y: false };
     const width = entity.width || GRID.CELL_SIZE;
     const height = entity.height || GRID.CELL_SIZE;
-    const entityPlane = entity.plane !== undefined ? entity.plane : 0;
+    const entityPlane = planeOf(entity);
 
     for (const obj of backgroundObjects) {
       if (obj.destroyed) continue;
 
-      // TUNNEL WALL LOGIC: Only collide if entity is in tunnel plane
-      if (obj.data.tunnelWall) {
-        if (entityPlane !== 1) {
-          // NOT in tunnel plane - tunnel walls are passable
-          continue;
-        }
-        // IN tunnel plane - tunnel walls are solid
-        // Fall through to collision check below
-      } else {
-        // Objects with numeric slowing are passable (trees, stumps) - player walks through slowly
-        if (obj.data && typeof obj.data.slowing === 'number') continue;
+      // Plane affinity gate — must be present on entity's plane to be collidable.
+      if (!objectOnPlane(obj, entityPlane)) continue;
 
-        // Non-tunnel objects: only check collision if they have solid property or block bullets
+      // tunnelWall objects are unconditionally solid on their plane (no slowing/isSolid check).
+      // Other objects (including surfaceOnly) follow normal solidity rules.
+      if (!obj.data.tunnelWall) {
+        if (obj.data && typeof obj.data.slowing === 'number') continue;
         const isSolid = obj.data.solid || obj.data.bulletInteraction === 'block' || obj.data.bulletInteraction === 'interact-preserve';
         if (!isSolid) continue;
       }
@@ -492,7 +656,7 @@ export class PhysicsSystem {
    * Resolve tunnel wall overlaps by pushing entities towards tunnel center
    * Prevents entities from getting stuck in walls
    */
-  resolveTunnelWallOverlap(entity, tunnelData, backgroundObjects) {
+  resolveTunnelWallOverlap(entity, tunnelData, backgroundObjects, deltaTime = 1 / 60) {
     const { orientation, bounds } = tunnelData;
     const entityBox = {
       x: entity.position.x,
@@ -520,7 +684,8 @@ export class PhysicsSystem {
       const wallGridX = Math.floor(obj.position.x / GRID.CELL_SIZE);
       const wallGridY = Math.floor(obj.position.y / GRID.CELL_SIZE);
 
-      const PUSH_DISTANCE = 2; // Pixels to push per frame
+      const PUSH_SPEED = 120; // Pixels per second (frame-rate independent)
+      const pushAmount = PUSH_SPEED * deltaTime;
 
       if (orientation === 'horizontal') {
         // Horizontal tunnel: walls are on top and bottom
@@ -529,10 +694,10 @@ export class PhysicsSystem {
 
         if (wallGridY < tunnelCenterRow) {
           // Top wall - push down
-          entity.position.y += PUSH_DISTANCE;
+          entity.position.y += pushAmount;
         } else {
           // Bottom wall - push up
-          entity.position.y -= PUSH_DISTANCE;
+          entity.position.y -= pushAmount;
         }
       } else {
         // Vertical tunnel: walls are on left and right
@@ -541,10 +706,10 @@ export class PhysicsSystem {
 
         if (wallGridX < tunnelCenterCol) {
           // Left wall - push right
-          entity.position.x += PUSH_DISTANCE;
+          entity.position.x += pushAmount;
         } else {
           // Right wall - push left
-          entity.position.x -= PUSH_DISTANCE;
+          entity.position.x -= pushAmount;
         }
       }
     }
@@ -560,7 +725,7 @@ export class PhysicsSystem {
     const { entrances, entranceAxis } = tunnelData;
     if (!entrances || entrances.length === 0) return;
 
-    const currentPlane = entity.plane !== undefined ? entity.plane : 0;
+    const currentPlane = planeOf(entity);
 
     // Use AABB hitbox overlap instead of exact grid-cell match.
     // Grid-cell equality fails for diagonal movement: when the entity first
@@ -569,15 +734,14 @@ export class PhysicsSystem {
     // An overlap check fires whenever any part of the hitbox touches an entrance tile.
     const entityW = entity.width  || GRID.CELL_SIZE;
     const entityH = entity.height || GRID.CELL_SIZE;
+    const CELL = GRID.CELL_SIZE;
+    const OVERLAP_THRESHOLD = CELL * CELL * 0.6; // 60% of entrance cell area — must commit before plane flips
     const onEntrance = entrances.find(e => {
-      const ex = e.col * GRID.CELL_SIZE;
-      const ey = e.row * GRID.CELL_SIZE;
-      return (
-        entity.position.x     < ex + GRID.CELL_SIZE &&
-        entity.position.x + entityW > ex             &&
-        entity.position.y     < ey + GRID.CELL_SIZE &&
-        entity.position.y + entityH > ey
-      );
+      const ex = e.col * CELL;
+      const ey = e.row * CELL;
+      const overlapX = Math.max(0, Math.min(entity.position.x + entityW, ex + CELL) - Math.max(entity.position.x, ex));
+      const overlapY = Math.max(0, Math.min(entity.position.y + entityH, ey + CELL) - Math.max(entity.position.y, ey));
+      return overlapX * overlapY >= OVERLAP_THRESHOLD;
     });
 
     if (!onEntrance) {
@@ -684,6 +848,12 @@ export class PhysicsSystem {
       return false;
     }
 
+    // Cross-plane ingredients are unreachable — no attraction, no pickup.
+    if (!inSamePlane(ingredient, target)) {
+      ingredient.acceleration = { ax: 0, ay: 0 };
+      return false;
+    }
+
     const dx = target.position.x - ingredient.position.x;
     const dy = target.position.y - ingredient.position.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
@@ -768,54 +938,68 @@ export class PhysicsSystem {
   resolveSolidObjectOverlap(entity, backgroundObjects) {
     const width = entity.width || GRID.CELL_SIZE;
     const height = entity.height || GRID.CELL_SIZE;
-    const entityPlane = entity.plane !== undefined ? entity.plane : 0;
+    const entityPlane = planeOf(entity);
 
-    for (const obj of backgroundObjects) {
-      if (obj.destroyed) continue;
-      if (!obj.data) continue;
+    // Multi-pass eject — pushing out of one object can put the entity inside
+    // another (rocks placed in adjacent cells, knockback into a cluster, etc.).
+    // Mirrors the 2-pass approach used by resolveCollisionMapOverlap.
+    for (let pass = 0; pass < 4; pass++) {
+      let pushed = false;
 
-      // Tunnel walls: only collide in tunnel plane (handled by resolveTunnelWallOverlap)
-      if (obj.data.tunnelWall) {
-        if (entityPlane !== 1) continue;
-      } else {
-        // Trees/stumps are passable (slowing only)
-        if (typeof obj.data.slowing === 'number') continue;
-        const isSolid = obj.data.solid ||
-          obj.data.bulletInteraction === 'block' ||
-          obj.data.bulletInteraction === 'interact-preserve';
-        if (!isSolid) continue;
+      for (const obj of backgroundObjects) {
+        if (obj.destroyed) continue;
+        if (!obj.data) continue;
+
+        // Plane affinity gate.
+        if (!objectOnPlane(obj, entityPlane)) continue;
+
+        // tunnelWall is unconditionally solid on its plane; others must clear solidity rules.
+        if (!obj.data.tunnelWall) {
+          if (typeof obj.data.slowing === 'number') continue;
+          const isSolid = obj.data.solid ||
+            obj.data.bulletInteraction === 'block' ||
+            obj.data.bulletInteraction === 'interact-preserve';
+          if (!isSolid) continue;
+        }
+
+        const objBox = obj.getHitbox();
+        const ex = entity.position.x;
+        const ey = entity.position.y;
+
+        // Compute overlap on each axis
+        const overlapX = Math.min(ex + width, objBox.x + objBox.width) - Math.max(ex, objBox.x);
+        const overlapY = Math.min(ey + height, objBox.y + objBox.height) - Math.max(ey, objBox.y);
+
+        if (overlapX <= 0 || overlapY <= 0) continue; // Not actually overlapping
+
+        // Push along the axis of minimum penetration. Preserve velocity in the
+        // direction away from the object (matches resolveCollisionMapOverlap)
+        // so the entity can slide along instead of fully stalling.
+        if (overlapX < overlapY) {
+          const entityCenterX = ex + width / 2;
+          const objCenterX = objBox.x + objBox.width / 2;
+          if (entityCenterX < objCenterX) {
+            entity.position.x -= overlapX;
+            entity.velocity.vx = Math.min(0, entity.velocity.vx);
+          } else {
+            entity.position.x += overlapX;
+            entity.velocity.vx = Math.max(0, entity.velocity.vx);
+          }
+        } else {
+          const entityCenterY = ey + height / 2;
+          const objCenterY = objBox.y + objBox.height / 2;
+          if (entityCenterY < objCenterY) {
+            entity.position.y -= overlapY;
+            entity.velocity.vy = Math.min(0, entity.velocity.vy);
+          } else {
+            entity.position.y += overlapY;
+            entity.velocity.vy = Math.max(0, entity.velocity.vy);
+          }
+        }
+        pushed = true;
       }
 
-      const objBox = obj.getHitbox();
-      const ex = entity.position.x;
-      const ey = entity.position.y;
-
-      // Compute overlap on each axis
-      const overlapX = Math.min(ex + width, objBox.x + objBox.width) - Math.max(ex, objBox.x);
-      const overlapY = Math.min(ey + height, objBox.y + objBox.height) - Math.max(ey, objBox.y);
-
-      if (overlapX <= 0 || overlapY <= 0) continue; // Not actually overlapping
-
-      // Push along the axis of minimum penetration
-      if (overlapX < overlapY) {
-        const entityCenterX = ex + width / 2;
-        const objCenterX = objBox.x + objBox.width / 2;
-        if (entityCenterX < objCenterX) {
-          entity.position.x -= overlapX;
-        } else {
-          entity.position.x += overlapX;
-        }
-        entity.velocity.vx = 0;
-      } else {
-        const entityCenterY = ey + height / 2;
-        const objCenterY = objBox.y + objBox.height / 2;
-        if (entityCenterY < objCenterY) {
-          entity.position.y -= overlapY;
-        } else {
-          entity.position.y += overlapY;
-        }
-        entity.velocity.vy = 0;
-      }
+      if (!pushed) break;
     }
   }
 }

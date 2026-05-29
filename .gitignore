@@ -19,3 +19,6 @@ npm-debug.log*
 # Environment variables
 .env
 .env.local
+
+# Playtesting simulator (local balance analysis, not shipped)
+playtesting/

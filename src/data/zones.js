@@ -4,20 +4,37 @@ export const ZONE_COLORS = {
   red: '#ff4400',
   cyan: '#44ffff',
   yellow: '#ffff44',
-  gray: '#888888'
+  gray: '#888888',
+  blue: '#66aaff'
 };
 
 export const ZONES = {
   'green': {
     name: 'Verdant Wilds',
+    spellDescription: 'THE PATH BEGINS.',
+    wiseSayings: [
+      'BRING A BLADE WHEN YOU FISH.',
+      'WHERE DID I PUT MY OIL PRESS?',
+      'THE LESHY HIDES IN GREEN THINGS.',
+      'THERE ARE MULTIPLE PATHS.',
+      'BEWARE THE RUSALKA.',
+      'SPEAK AND THE HUT WILL SIT.',
+      'GOO IS IMMUNE TO GOO.',
+      'THREE HEADS ARE FAR WORSE THAN ONE.'
+    ],
     borderColor: '#00ff00',
     exitColor: ZONE_COLORS.green,
     alternativeZones: ['red', 'cyan', 'yellow'],
+    bossDepth: 15,
+    bossPool: ['giant_slime', 'goblin_army'],
     environmentColors: {
       grass: '#559944',
       tree: '#336633',
       background: '#000000'
     },
+    // Combat rhythm: "learn the basics" — direct threats mixed with ranged keepers
+    // and one pack-kiter type. Player learns melee vs. ranged enemy patterns.
+    movementProfiles: ['chaser', 'keeper', 'kiter'],
     spawnTables: ['basic', 'forest'],
     objectWeights: {
       '%': 0.25, // Bush
@@ -25,19 +42,36 @@ export const ZONES = {
       '0': 0.20, // Rock
       '=': 0.10, // Water
       'Y': 0.15, // Stump
-      'n': 0.10  // Mushroom
+      'n': 0.10, // Mushroom
+      'C': 0.02, // Coral Cluster — boosted via Lake objectBias
+      '⊞': 0.02  // Chest (rare)
     }
   },
   'red': {
     name: 'Scorched Wastes',
+    spellDescription: 'THE BURNING PLACE.',
+    wiseSayings: [
+      'PREPARE FOR HARSE CONDITIONS.',
+      'WATER CAN BE A WEAPON.',
+      'TO DESCEND FURTHER, SPEAK THE MAGIC WORD.',
+      'GHOSTS CAN BE LAID TO REST WITH FIRE.',
+      'SEEK THE PATH OF THE MAGE.',
+      'RUBY IS THE STONE OF FLAME.',
+      'THE TREES HERE CARRY A RARE SAP.',
+      'RESCUE THE BRUTAL WARRIOR.'
+    ],
     borderColor: '#ff4400',
     exitColor: ZONE_COLORS.red,
     alternativeZones: ['green', 'cyan', 'yellow'],
+    bossDepth: 15,
     environmentColors: {
       grass: '#664422', // Burned grass
       tree: '#332211', // Charred
       background: '#110000' // Red tint
     },
+    // Combat rhythm: "pure aggression" — fast chasers and fire keepers that zone the player.
+    // Ambushers (Living Rock) punish careless exploration. No kite/hover — just pressure.
+    movementProfiles: ['chaser', 'keeper', 'ambusher'],
     spawnTables: ['fire', 'demon'],
 
     // Environmental generation parameters
@@ -70,50 +104,94 @@ export const ZONES = {
       '0': 0.15,  // Scorched rocks
       'Q': 0.05,  // Obsidian boulders
       '*': 0.05,  // Lava crystals
-      'Y': 0.15   // Charred stumps
+      'Y': 0.15,  // Charred stumps
+      '⊞': 0.02   // Chest (rare)
     },
     preSpawnBurned: true // Background objects spawn pre-burned
   },
   'cyan': {
     name: 'Frozen Peaks',
+    spellDescription: 'COLD AND ANCIENT.',
+    wiseSayings: [
+      'THE COLD DOES NOT TIRE.',
+      'ICE HIDES BUT NEVER FORGETS.',
+      'CRYSTALS HOLD STOLEN WORDS.',
+      'STILLNESS IS NOT SAFETY.',
+      'WHAT FREEZES CAN BE BROKEN.',
+      'LISTEN FOR THE CRACK.',
+      'THE PEAKS REMEMBER EVERY STEP.',
+      'WARMTH IS A WEAPON HERE.'
+    ],
     borderColor: '#44ffff',
     exitColor: ZONE_COLORS.cyan,
     alternativeZones: ['green', 'red', 'yellow'],
+    bossDepth: 15,
     environmentColors: {
       grass: '#aaffff',
       tree: '#6699aa',
       background: '#000011'
     },
+    // Combat rhythm: "tactical" — kiter packs force repositioning, keepers punish rush-in.
+    // Player must think about spacing on two axes simultaneously.
+    movementProfiles: ['kiter', 'keeper', 'chaser'],
     spawnTables: ['ice', 'frost'],
     objectWeights: {
       'i': 0.25, // Ice
       '~': 0.20, // Puddle (frozen)
       '*': 0.15, // Crystal
       '0': 0.25, // Rock
-      'Q': 0.15  // Boulder
+      'Q': 0.15, // Boulder
+      '⊞': 0.02  // Chest (rare)
     }
   },
   'yellow': {
     name: 'Stormlands',
+    spellDescription: 'THE STORM WATCHES.',
+    wiseSayings: [
+      'IT STRIKES BEFORE YOU SEE.',
+      'METAL CALLS THE SKY.',
+      'COUNT BETWEEN FLASH AND ROAR.',
+      'THE STORM HAS NO PATIENCE.',
+      'SAND REMEMBERS LIGHTNING.',
+      'STAND APART FROM IRON.',
+      'THE SKY CHOOSES ITS MARK.',
+      'WET GROUND CARRIES THE SPARK.'
+    ],
     borderColor: '#ffff44',
     exitColor: ZONE_COLORS.yellow,
     alternativeZones: ['green', 'red', 'cyan'],
+    bossDepth: 15,
     environmentColors: {
       grass: '#888844',
       tree: '#666633',
       background: '#000800'
     },
+    // Combat rhythm: "erratic" — kiter spiders plus fast-darting keepers.
+    // Unpredictable timing; enemies don't behave the same way twice.
+    movementProfiles: ['kiter', 'keeper', 'jumper'],
     spawnTables: ['lightning', 'storm'],
     objectWeights: {
       '*': 0.20, // Crystal (conductive)
       'B': 0.15, // Metal Box
       '~': 0.15, // Puddle (electrified)
       '0': 0.25, // Rock
-      '&': 0.25  // Tree
+      '&': 0.25, // Tree
+      '⊞': 0.02  // Chest (rare)
     }
   },
   'gray': {
     name: 'Realm of the Dead',
+    spellDescription: 'LOST IN THE MIST.',
+    wiseSayings: [
+      'NONE ESCAPE THE MIST.',
+      'TEN STEPS AND THEN NOTHING.',
+      'THE DEAD WALK BUT DO NOT LEAD.',
+      'RETURN IS NOT GIVEN HERE.',
+      'FIVE MUST BECOME ONE.',
+      'COUNT YOUR STEPS CAREFULLY.',
+      'THE MIST KNOWS YOUR NAME.',
+      'NO SHRINE ANSWERS HERE.'
+    ],
     borderColor: '#888888',
     exitColor: ZONE_COLORS.gray,
     alternativeZones: [], // Gray zone has no alternative colors
@@ -122,6 +200,9 @@ export const ZONES = {
       tree: '#222222',
       background: '#050505'
     },
+    // Combat rhythm: "relentless" — all direct chasers with keeper necromancers.
+    // Overwhelming pressure from every direction; no clever tactics, just endurance.
+    movementProfiles: ['chaser', 'keeper'],
     spawnTables: ['undead', 'boss'],
     objectWeights: {
       '8': 0.40, // Bones (everywhere)
@@ -131,5 +212,34 @@ export const ZONES = {
     },
     hardMode: true, // All enemies +50% stats
     noRest: true // Cannot return to base from gray zone
+  },
+  'blue': {
+    name: 'Tidefall',
+    spellDescription: 'THE TIDE HAS PARTED.',
+    wiseSayings: [
+      'WATER IS A WEAPON, NOT A WALL.',
+      'THE FIN STRIKES FROM BELOW.',
+      'CRYSTALS CARRY YOUR WEIGHT.',
+      'THE WAKE REMEMBERS.'
+    ],
+    borderColor: '#66aaff',
+    exitColor: ZONE_COLORS.blue,
+    alternativeZones: [], // Linear pearl-ritual zone; no in-zone color drift.
+    // No bossDepth — the zone is exactly 4 rooms (Shallows → Reef Walk → Wake
+    // Drift → Pearl Cache) tracked by game.blueZoneRoom; no boss.
+    environmentColors: {
+      grass: '#3a8fbf',    // wet sand
+      tree: '#2a6080',     // weathered seaweed columns
+      background: '#04101a' // deep tidal night
+    },
+    movementProfiles: ['keeper', 'kiter'], // gentle — tutorial zone
+    spawnTables: ['basic', 'forest'],       // reuses Frog/Sea Snake injections from terrain templates
+    objectWeights: {
+      '~': 0.35, // water
+      '0': 0.15, // rock
+      'C': 0.05, // coral cluster (cuttable, drops Coral Cluster ingredient)
+      '%': 0.05, // kelp (visually styled)
+      '⊞': 0.00  // no chests in tutorial rooms
+    }
   }
 };

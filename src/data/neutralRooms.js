@@ -123,11 +123,21 @@ export const NEUTRAL_ROOMS = {
       const clusterSize = 5; // 5x5 grass blades per cluster
       state.cutClusters = new Set(); // Track which clusters have been cut
 
+      // Record cluster center pixel coords so onRender can label missed clusters
+      state.clusterCenters = [];
+
+      const jitter = () => Math.floor(Math.random() * 7) - 3; // -3..3 inclusive
+
       let clusterIndex = 0;
       for (let row = -1; row <= 1; row++) {
         for (let col = -1; col <= 1; col++) {
           const clusterCenterX = centerX + col * 6;
           const clusterCenterY = centerY + row * 6;
+
+          state.clusterCenters.push({
+            x: clusterCenterX * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
+            y: clusterCenterY * GRID.CELL_SIZE + GRID.CELL_SIZE / 2
+          });
 
           // Create 5x5 cluster of grass blades
           for (let gy = -2; gy <= 2; gy++) {
@@ -135,11 +145,22 @@ export const NEUTRAL_ROOMS = {
               const grassX = (clusterCenterX + gx) * GRID.CELL_SIZE;
               const grassY = (clusterCenterY + gy) * GRID.CELL_SIZE;
 
+              // Paired stalks (mirrors RoomGenerator.generateGrassSwaths) — a
+              // single blade looks too thin; the +6px twin gives the dense visual.
               const grass = new BackgroundObject('|', grassX, grassY);
               grass.leshyGrass = true;
-              grass.clusterIndex = clusterIndex; // All grass in same cluster share index
+              grass.clusterIndex = clusterIndex;
+              grass.renderOffsetX = jitter();
+              grass.renderOffsetY = jitter();
+
+              const grass2 = new BackgroundObject('|', grassX + 6, grassY);
+              grass2.leshyGrass = true;
+              grass2.clusterIndex = clusterIndex;
+              grass2.renderOffsetX = jitter();
+              grass2.renderOffsetY = jitter();
 
               room.backgroundObjects.push(grass);
+              room.backgroundObjects.push(grass2);
             }
           }
 
@@ -249,7 +270,7 @@ export const NEUTRAL_ROOMS = {
         const isIngr = isIngredient(char);
         if (isIngr) {
           entity = new Ingredient(char, clusterCenter.x, clusterCenter.y);
-          entity.pickupCooldown = 1.5; // Same cooldown as enemy drops — prevents instant magnet
+          entity.pickupCooldown = 0.75; // Same cooldown as enemy drops — prevents instant magnet
         } else {
           entity = new Item(char, clusterCenter.x, clusterCenter.y);
         }
@@ -292,6 +313,27 @@ export const NEUTRAL_ROOMS = {
     },
 
     onRender(renderer, room, player, state) {
+      // Reveal what each un-picked cluster would have given, once all grass has been cut.
+      if (state.cutsRemaining === 0 && state.clusterCenters && state.prizes) {
+        for (let i = 0; i < state.clusterCenters.length; i++) {
+          if (state.cutClusters && state.cutClusters.has(i)) continue;
+          const center = state.clusterCenters[i];
+          const prizeChars = state.prizes[i] || [];
+          // Lay the chars out in a small horizontal row centered on the cluster.
+          const spacing = GRID.CELL_SIZE * 0.7;
+          const startX = center.x - ((prizeChars.length - 1) * spacing) / 2;
+          for (let j = 0; j < prizeChars.length; j++) {
+            renderer.drawTextWithAlpha(
+              startX + j * spacing,
+              center.y,
+              prizeChars[j],
+              '#888888',
+              0.6
+            );
+          }
+        }
+      }
+
       if (!state.celebrationActive) return;
 
       const centerX = Math.floor(GRID.COLS / 2) * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
@@ -305,5 +347,82 @@ export const NEUTRAL_ROOMS = {
     onExit(room, player, state) {
       // Clean exit - no special logic needed
     }
+  },
+
+  /**
+   * Three Room — the view from the ridge. Stub placeholder.
+   * A centered '3' marker hints at the three zones ahead.
+   */
+  threeRoom: {
+    onGenerate(room, state) {
+      const cx = Math.floor(GRID.COLS / 2) * GRID.CELL_SIZE;
+      const cy = Math.floor(GRID.ROWS / 2) * GRID.CELL_SIZE;
+      const marker = new BackgroundObject('3', cx, cy);
+      marker.indestructible = true;
+      marker.color = '#888888';
+      marker.animationColor = '#888888';
+      room.backgroundObjects.push(marker);
+    },
+
+    onInteract(target, player, room, state) { return null; },
+
+    onUpdate(dt, room, player, state) {},
+
+    onExit(room, player, state) {}
+  },
+
+  /**
+   * Draw Room — secret gallery accessible via D-R-A-W exit sequence.
+   * Dodge-rolling permanently marks grid cells as ASCII brush strokes.
+   * Canvas is a pixel-resolution Map (key: "px,py") — one char per unique
+   * pixel coordinate, bounded by room dimensions, not an entity list.
+   */
+  drawRoom: {
+    onGenerate(room, state) {
+      room.borderColor = '#cccccc';
+      state.canvas = new Map();
+    },
+
+    onUpdate(dt, room, player, state) {
+      if (!player.dodgeRoll?.active && !player.continuousRollActive) return;
+
+      const px = Math.round(player.position.x + (player.width  ?? GRID.CELL_SIZE) / 2);
+      const py = Math.round(player.position.y + (player.height ?? GRID.CELL_SIZE) / 2);
+      const key = `${px},${py}`;
+
+      if (!state.canvas.has(key)) {
+        const chars = ['-', '=', '~', '.'];
+        state.canvas.set(key, {
+          char: chars[Math.floor(Math.random() * chars.length)],
+          color: player.color
+        });
+      }
+    },
+
+    onRenderBefore(renderer, room, player, state) {
+      if (!state.canvas?.size) return;
+
+      const ctx = renderer.fgCtx;
+      ctx.save();
+      ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'center';
+
+      for (const [key, cell] of state.canvas) {
+        const comma = key.indexOf(',');
+        const x = +key.slice(0, comma);
+        const y = +key.slice(comma + 1);
+        ctx.fillStyle = cell.color;
+        ctx.fillText(cell.char, x, y);
+      }
+
+      ctx.restore();
+    },
+
+    onRender(renderer, room, player, state) {},
+
+    onInteract(target, player, room, state) { return null; },
+
+    onExit(room, player, state) {}
   }
 };

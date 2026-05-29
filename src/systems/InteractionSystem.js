@@ -1,29 +1,204 @@
 import { Item } from '../entities/Item.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Leshy } from '../entities/Leshy.js';
+import { Fairy } from '../entities/Fairy.js';
 import { isIngredient, isItem, generateEnemyDrops } from '../data/items.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
 import { createDebris } from '../entities/Debris.js';
 import { INTERACTION_RANGE, OBJECT_ANIMATIONS, GRID } from '../game/GameConfig.js';
+import { inSamePlane, planeOf, objectOnPlane } from './PlaneSystem.js';
 
 export class InteractionSystem {
   constructor(game) {
     this.game = game;
+    this._lavaWaterCheckTimer = 0;
+  }
+
+  // Check lava tiles adjacent to water tiles and solidify them
+  update(deltaTime, backgroundObjects) {
+    // ── Player shockwave — runs every frame (creation handled in main.js) ────
+    const sw = this.game.playerShockwave;
+    if (sw) {
+      sw.prevRadius = sw.radius;
+      sw.radius += sw.speed * deltaTime;
+
+      const playerPlane = planeOf(this.game.player);
+
+      // Shake any background object the ring sweeps past (only on player's plane).
+      for (const obj of backgroundObjects) {
+        if (obj.destroyed) continue;
+        if (!objectOnPlane(obj, playerPlane)) continue;
+        const cx = obj.position.x + GRID.CELL_SIZE / 2;
+        const cy = obj.position.y + GRID.CELL_SIZE / 2;
+        const dist = Math.hypot(cx - sw.x, cy - sw.y);
+        if (dist > sw.prevRadius && dist <= sw.radius) {
+          obj._playAnimation?.('shake');
+        }
+      }
+
+      // Knock back enemies the ring sweeps past (only on player's plane).
+      for (const enemy of this.game._activeEnemies()) {
+        if (enemy.hp <= 0) continue;
+        if (!inSamePlane(this.game.player, enemy)) continue;
+        const cx = enemy.position.x + GRID.CELL_SIZE / 2;
+        const cy = enemy.position.y + GRID.CELL_SIZE / 2;
+        const dist = Math.hypot(cx - sw.x, cy - sw.y);
+        if (dist > sw.prevRadius && dist <= sw.radius) {
+          this.game.physicsSystem.applyKnockback(enemy, sw.x, sw.y, 320, 0.18);
+        }
+      }
+
+      if (sw.radius >= sw.maxRadius) {
+        this.game.playerShockwave = null;
+      }
+    }
+
+    // ── Lava/water solidification (throttled) ────────────────────────────────
+    this._lavaWaterCheckTimer -= deltaTime;
+    if (this._lavaWaterCheckTimer > 0) return;
+    this._lavaWaterCheckTimer = 0.5;
+
+    const combatSystem = this.game.combatSystem;
+    const adjacentDist = GRID.CELL_SIZE * 1.5;
+
+    for (const lava of backgroundObjects) {
+      if (!lava.isLava || !lava.isLava()) continue;
+      for (const water of backgroundObjects) {
+        if (water === lava) continue;
+        const isWaterTile = (water.isWater && water.isWater()) || water.char === '=';
+        if (!isWaterTile) continue;
+        const dx = lava.position.x - water.position.x;
+        const dy = lava.position.y - water.position.y;
+        if (dx * dx + dy * dy <= adjacentDist * adjacentDist) {
+          lava.solidifyToRock();
+          combatSystem.newSteamClouds.push({
+            x: lava.position.x + GRID.CELL_SIZE / 2,
+            y: lava.position.y + GRID.CELL_SIZE / 2,
+            radius: GRID.CELL_SIZE * 2,
+            timer: 3.0
+          });
+          break;
+        }
+      }
+    }
   }
 
   findNearbyBackgroundObject() {
     const game = this.game;
-    // When inside a hut/dungeon, search the interior objects only
-    const objects = (game.player?.inHut && game.hutInterior)
-      ? game.hutInterior.backgroundObjects
-      : (game.currentRoom ? game.currentRoom.backgroundObjects : game.backgroundObjects);
+    // When inside a hut/dungeon/maze, search the appropriate objects
+    const objects = (game.player?.inMaze && game.mazeInterior)
+      ? [] // Maze objects handled by MazeSystem, not InteractionSystem
+      : ((game.player?.inHut || game.player?.inDungeon) && game.hutInterior)
+        ? game.hutInterior.backgroundObjects
+        : (game.currentRoom ? game.currentRoom.backgroundObjects : game.backgroundObjects);
+    const playerPlane = planeOf(game.player);
     for (const obj of objects) {
+      if (!objectOnPlane(obj, playerPlane)) continue;
       const distance = game.physicsSystem.getDistance(game.player, obj);
       if (distance < INTERACTION_RANGE) {
         return obj;
       }
     }
     return null;
+  }
+
+  // Fairy touch resolution. Called per-frame from main.js for each Fairy in
+  // neutralCharacters. Returns true if the fairy was consumed by the touch
+  // (heal or bottle conversion), so the caller can despawn it.
+  //
+  // Outcomes (priority order):
+  //   1. Player has an Empty Bottle ('B') equipped + is at full HP →
+  //      convert the bottle slot to 'fairy_in_a_bottle' (⚱). One-shot revive.
+  //   2. Otherwise → heal to full.
+  //
+  // Only fires while the fairy is in 'flutter' state. Fleeing/dusting/
+  // delivering fairies don't react to touch.
+  checkFairyTouch(fairy) {
+    const game = this.game;
+    const player = game.player;
+    if (!player || !fairy) return false;
+    if (fairy.state !== 'flutter') return false;
+    if (fairy.consumed) return false;
+    // Spawn-grace: ignore touches for the first ~2s so the player can see the
+    // fairy before incidentally consuming it.
+    if ((fairy.touchImmunityTimer ?? 0) > 0) return false;
+
+    // AABB overlap between player hitbox and fairy hitbox
+    const fh = fairy.getHitbox();
+    const px = player.position.x;
+    const py = player.position.y;
+    const pw = player.width  ?? GRID.CELL_SIZE;
+    const ph = player.height ?? GRID.CELL_SIZE;
+    if (px + pw < fh.x || px > fh.x + fh.width)  return false;
+    if (py + ph < fh.y || py > fh.y + fh.height) return false;
+
+    // Bottle conversion path: empty bottle ('B') equipped + at full HP
+    const consumables = player.equippedConsumables;
+    const fullHP = player.hp >= player.maxHp;
+    if (fullHP && Array.isArray(consumables)) {
+      for (let i = 0; i < consumables.length; i++) {
+        const slot = consumables[i];
+        if (slot?.data?.char === 'B') {
+          // Replace the empty bottle with a fairy_in_a_bottle (⚱)
+          const inv = game.inventorySystem;
+          if (inv) {
+            inv.replaceConsumableSlot?.(i, '⚱')
+              || this._fallbackReplaceConsumableSlot(i, '⚱');
+          } else {
+            this._fallbackReplaceConsumableSlot(i, '⚱');
+          }
+          game.menuSystem?.showPickupMessage?.('CAUGHT A FAIRY!');
+          game.audioSystem?.playSFX?.('pickup');
+          game.menuSystem?.updateUI?.();
+          fairy.consume();
+          return true;
+        }
+      }
+    }
+
+    // Default: full heal. No text — the HP readout blinks instead.
+    player.hp = player.maxHp;
+    game.audioSystem?.playSFX?.('pickup');
+    game.menuSystem?.updateUI?.();
+    this._blinkHPDisplay();
+    fairy.consume();
+    return true;
+  }
+
+  // Retrigger the HP heal-blink CSS animation by toggling the class off/on.
+  _blinkHPDisplay() {
+    const el = document.getElementById('hp-display');
+    if (!el) return;
+    el.classList.remove('heal-blink');
+    // Force reflow so removing+re-adding restarts the animation.
+    void el.offsetWidth;
+    el.classList.add('heal-blink');
+  }
+
+  // Fallback when InventorySystem doesn't expose a slot-replace helper. Writes
+  // a minimal item-like wrapper directly into both inventory and player slots.
+  _fallbackReplaceConsumableSlot(slotIndex, newChar) {
+    const game = this.game;
+    const newItem = new Item(newChar, 0, 0);
+    const inv = game.inventorySystem;
+    if (inv?.equippedConsumables) {
+      inv.equippedConsumables[slotIndex] = newItem;
+    }
+    if (game.player?.equippedConsumables) {
+      game.player.equippedConsumables[slotIndex] = newItem;
+    }
+  }
+
+  // Spacebar-triggered container open: bypasses HP/damage and runs the
+  // object's dropEffect directly. Used for barrels, crates, metal boxes —
+  // any object whose acceptsInteractions includes 'spacebar' or 'all'.
+  openContainer(obj) {
+    if (!obj || obj.destroyed || obj.destroyAfterAnimation) return;
+    if (!obj.data.dropEffect) return;
+    obj.destroyAfterAnimation = true;
+    obj._playAnimation('crack');
+    this.handleObjectEffect(obj.data.dropEffect, obj);
+    this.game.renderer.markBackgroundDirty();
   }
 
   interactWithObject(obj) {
@@ -50,7 +225,7 @@ export class InteractionSystem {
     }
   }
 
-  handleObjectEffect(effect, obj) {
+  handleObjectEffect(effect, obj, attack = null) {
     const game = this.game;
     if (!effect) return;
 
@@ -75,7 +250,7 @@ export class InteractionSystem {
 
       for (const drop of drops) {
         if (isIngredient(drop)) {
-          game.lootSystem.spawnIngredientDrop(drop, obj.position.x, obj.position.y);
+          game.lootSystem.spawnIngredientDrop(drop, obj.position.x, obj.position.y, null, obj);
         }
       }
       return;
@@ -83,10 +258,20 @@ export class InteractionSystem {
 
     // Handle destroy + spawn combined effects
     if (effect.startsWith('destroyObject:spawnIngredient:')) {
-      const ingredientChar = effect.split(':')[2];
+      let ingredientChar = effect.split(':')[2];
+
+      // Tree sap: red/cyan zones swap to rare elemental saps; other zones
+      // 50/50 between the original drop (Stick) and common Sap (ŝ).
+      if (obj.originalChar === '&') {
+        const zone = game.currentRoom?.zone;
+        if (zone === 'red') ingredientChar = 'š';
+        else if (zone === 'cyan') ingredientChar = 'ş';
+        else if (Math.random() < 0.5) ingredientChar = 'ŝ';
+      }
+
       obj.destroyAfterAnimation = true;
       game.renderer.markBackgroundDirty();
-      game.lootSystem.spawnIngredientDrop(ingredientChar, obj.position.x, obj.position.y);
+      game.lootSystem.spawnIngredientDrop(ingredientChar, obj.position.x, obj.position.y, null, obj);
     } else if (effect === 'destroyObject:spawnRandom') {
       obj.destroyAfterAnimation = true;
       game.renderer.markBackgroundDirty();
@@ -94,23 +279,77 @@ export class InteractionSystem {
       const drops = generateEnemyDrops('generic', 'weak', 1);
       for (const drop of drops) {
         if (isIngredient(drop)) {
-          game.lootSystem.spawnIngredientDrop(drop, obj.position.x, obj.position.y);
+          game.lootSystem.spawnIngredientDrop(drop, obj.position.x, obj.position.y, null, obj);
         } else if (isItem(drop)) {
-          game.lootSystem.spawnItemDrop(drop, obj.position.x, obj.position.y);
+          game.lootSystem.spawnItemDrop(drop, obj.position.x, obj.position.y, null, obj);
+        }
+      }
+    } else if (effect === 'destroyObject:spawnChestLoot') {
+      obj.destroyAfterAnimation = true;
+      game.renderer.markBackgroundDirty();
+
+      const drops = generateEnemyDrops('generic', 'normal', 2);
+      for (const drop of drops) {
+        if (isIngredient(drop)) {
+          game.lootSystem.spawnIngredientDrop(drop, obj.position.x, obj.position.y, null, obj);
+        } else if (isItem(drop)) {
+          game.lootSystem.spawnItemDrop(drop, obj.position.x, obj.position.y, null, obj);
         }
       }
     } else if (effect === 'destroyObject') {
       obj.destroyAfterAnimation = true;
       game.renderer.markBackgroundDirty();
+    } else if (effect === 'cutGrass') {
+      // Cut tall grass has a small chance of yielding Pollen (raw oil).
+      // Cap to one pollen per swing — a single blade swing can hit multiple
+      // grass tiles via AOE, and rolling per-tile multiplies the perceived rate.
+      if (!attack?.droppedPollen && Math.random() < 0.01) {
+        game.lootSystem.spawnIngredientDrop('ł', obj.position.x, obj.position.y, null, obj);
+        if (attack) attack.droppedPollen = true;
+      }
+      // Fairy grass: blade-cut releases the fairy. Multiple grass tiles in the
+      // room are marked; the first one cut spawns the fairy, the rest are inert.
+      if (obj.fairyGrass && !game.currentRoom?.fairySpawned && !game.fairiesAngered) {
+        game.currentRoom.fairySpawned = true;
+        const fairy = new Fairy(
+          obj.position.x + GRID.CELL_SIZE / 2,
+          obj.position.y + GRID.CELL_SIZE / 2,
+          game.currentRoom.exits
+        );
+        game.neutralCharacters.push(fairy);
+        console.log('[Secret] Fairy discovered!');
+      }
     } else if (effect === 'destroyObject:spawnGemstone') {
       obj.destroyAfterAnimation = true;
       game.renderer.markBackgroundDirty();
+      // Always drop 1-2 regular stones (building material for bridge quest).
+      const stoneCount = Math.random() < 0.5 ? 2 : 1;
+      for (let i = 0; i < stoneCount; i++) {
+        const angle = (i / stoneCount) * Math.PI * 2 + Math.random() * 0.5;
+        game.lootSystem.spawnIngredientDrop('0', obj.position.x, obj.position.y, angle, obj);
+      }
+      // Gem drop: 25% chance per rock; guaranteed on the last rock if none found yet.
       const GEM_CHARS = ['1', '9', '`', '_', '6', '?', '('];
-      const gemChar = GEM_CHARS[Math.floor(Math.random() * GEM_CHARS.length)];
-      game.lootSystem.spawnIngredientDrop(gemChar, obj.position.x, obj.position.y);
+      if (!game.currentRoom.miningGemDropped) {
+        const rocksRemaining = game._activeBackgroundObjects().filter(
+          o => !o.destroyed && o.glitteringRock && o !== obj
+        ).length;
+        if (rocksRemaining === 0 || Math.random() < 0.25) {
+          game.currentRoom.miningGemDropped = true;
+          const gemChar = GEM_CHARS[Math.floor(Math.random() * GEM_CHARS.length)];
+          game.lootSystem.spawnIngredientDrop(gemChar, obj.position.x, obj.position.y, null, obj);
+        }
+      }
+    } else if (effect.startsWith('destroyObject:spawnWeapon:')) {
+      const weaponChar = effect.split(':')[2];
+      obj.destroyAfterAnimation = true;
+      game.renderer.markBackgroundDirty();
+      const weapon = new Item(weaponChar, obj.position.x, obj.position.y);
+      game.items.push(weapon);
+      game.physicsSystem.addEntity(weapon);
     } else if (effect.startsWith('spawnIngredient:')) {
       const ingredientChar = effect.split(':')[1];
-      game.lootSystem.spawnIngredientDrop(ingredientChar, obj.position.x, obj.position.y);
+      game.lootSystem.spawnIngredientDrop(ingredientChar, obj.position.x, obj.position.y, null, obj);
     } else if (effect.startsWith('spawnMultiple:')) {
       // Format: spawnMultiple:char:count
       const parts = effect.split(':');
@@ -119,16 +358,17 @@ export class InteractionSystem {
 
       for (let i = 0; i < count; i++) {
         const angle = (i / count) * Math.PI * 2 + Math.random() * 0.5;
-        game.lootSystem.spawnIngredientDrop(ingredientChar, obj.position.x, obj.position.y, angle);
+        game.lootSystem.spawnIngredientDrop(ingredientChar, obj.position.x, obj.position.y, angle, obj);
       }
     } else if (effect.startsWith('transformObject:')) {
       // Format: transformObject:newChar
       const newChar = effect.split(':')[1];
 
-      const index = game.currentRoom.backgroundObjects.indexOf(obj);
+      const activeBgObjects = game._activeBackgroundObjects();
+      const index = activeBgObjects.indexOf(obj);
       if (index !== -1) {
         const newObj = new BackgroundObject(newChar, obj.position.x, obj.position.y);
-        game.currentRoom.backgroundObjects[index] = newObj;
+        activeBgObjects[index] = newObj;
 
         const animData = OBJECT_ANIMATIONS['freeze'] || OBJECT_ANIMATIONS['melt'];
         if (animData) {
@@ -143,7 +383,7 @@ export class InteractionSystem {
       }
     } else if (effect === 'spawnFire') {
       const fire = new BackgroundObject('!', obj.position.x, obj.position.y);
-      game.currentRoom.backgroundObjects.push(fire);
+      game._activeBackgroundObjects().push(fire);
       obj.destroyAfterAnimation = true;
       game.renderer.markBackgroundDirty();
     } else if (effect.startsWith('spawnCloud:')) {

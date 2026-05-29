@@ -1,14 +1,19 @@
 import { GRID, ROOM_TYPES, BACKGROUND_OBJECTS, WALL_STRUCTURES, WATER_STRUCTURES } from '../game/GameConfig.js';
-import { ENEMIES, getRandomEnemy, getZoneRandomEnemy, createBossEnemy } from '../data/enemies.js';
+import { ENEMIES, getRandomEnemy, getZoneRandomEnemy, createBossEnemy, BOSS_ENCOUNTERS } from '../data/enemies.js';
 import { RECIPES } from '../data/recipes.js';
 import { ZONES } from '../data/zones.js';
 import { LETTER_TEMPLATES } from '../data/letterTemplates.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
+import { BridgeWorker } from '../entities/BridgeWorker.js';
+import { getDungeonDesign } from '../data/dungeonDesigns.js';
+import { CampNPC } from '../entities/CampNPC.js';
+import { Crow } from '../entities/Crow.js';
+import { Fairy } from '../entities/Fairy.js';
 
 export class RoomGenerator {
-  constructor(exitSystem, zoneSystem = null) {
+  constructor(exitSystem, zoneSystem = null, game = null) {
     this.currentDepth = 0;
     this.currentZoneWeights = null; // Store zone-specific weights
     this.currentEnvironmentColors = null; // Store blended zone colors
@@ -16,6 +21,7 @@ export class RoomGenerator {
     this.exitSystem = exitSystem; // Exit letter generation system
     this.zoneSystem = zoneSystem; // Zone progression system for color blending
     this.isGeneratingTunnel = false; // Flag to reduce rock formations in tunnel rooms
+    this.game = game; // Game ref for cheat-flag access (e.g. cheat_forceHutKind)
   }
 
   setDepth(depth) {
@@ -82,6 +88,21 @@ export class RoomGenerator {
     if (exitLetter === 'D') {
       type = ROOM_TYPES.DUNGEON;
     }
+    if (exitLetter === 'P') {
+      type = ROOM_TYPES.HUT; // Press hut — guaranteed press inside
+    }
+    if (exitLetter === 'R') {
+      type = ROOM_TYPES.RIDGE;
+    }
+    if (exitLetter === 'M') {
+      type = ROOM_TYPES.MAZE;
+    }
+    if (exitLetter === 'W') {
+      type = ROOM_TYPES.WELL;
+    }
+    if (exitLetter === 'F') {
+      type = ROOM_TYPES.FOUNTAIN;
+    }
 
     // Determine room type if not specified
     if (!type) {
@@ -100,11 +121,13 @@ export class RoomGenerator {
       enemiesPlane0: [], // Standard plane enemies (always visible)
       enemiesPlane1: [], // Tunnel plane enemies (only visible in tunnel)
       items: [],
+      crows: [], // Idle non-combat birds — populated only for the very first explore room
       backgroundObjects: [],
       recipeSign: null, // Visual-only recipe hint (not a BackgroundObject)
       exits: this.exitSystem ? this.exitSystem.generateExits(this.currentDepth, type, zoneType, progressionColor, exitLetter) : { north: false, east: false, west: false, south: true },
       playerStartPos: playerStartPos,  // Store for enemy generation
-      letterTemplate: this.currentLetterTemplate // Store template for later event checks
+      letterTemplate: this.currentLetterTemplate, // Store template for later event checks
+      exitLetter: exitLetter // Letter that produced this room (e.g. 'P', 'R', 'H')
     };
 
     // Set zone-specific background object weights
@@ -127,6 +150,7 @@ export class RoomGenerator {
         break;
       case ROOM_TYPES.BOSS:
         this.generateBossRoom(room);
+        room.isZoneBossRoom = !!this.isZoneBossRoom;
         break;
       case ROOM_TYPES.DISCOVERY:
         this.generateDiscoveryRoom(room);
@@ -152,6 +176,18 @@ export class RoomGenerator {
       case ROOM_TYPES.DUNGEON:
         this.generateDungeonRoom(room);
         break;
+      case ROOM_TYPES.RIDGE:
+        this.generateRidgeRoom(room);
+        break;
+      case ROOM_TYPES.MAZE:
+        this.generateMazeRoom(room);
+        break;
+      case ROOM_TYPES.WELL:
+        this.generateWellRoom(room);
+        break;
+      case ROOM_TYPES.FOUNTAIN:
+        this.generateFountainRoom(room);
+        break;
     }
 
     // Note: Secret events (shaking bushes) are applied at runtime when room is cleared
@@ -162,13 +198,129 @@ export class RoomGenerator {
       this.spawnGuaranteedItems(room);
     }
 
+    // Blue-zone room post-processing — armor pickup + pedestal + linear exits
+    if (this.currentLetterTemplate?.blueZoneArmor || this.currentLetterTemplate?.blueZonePedestal) {
+      this.applyBlueZoneTemplate(room);
+    }
+
     // Attach vault info if this is a vault room
     if (this.currentVaultInfo) {
       room.vaultInfo = this.currentVaultInfo;
       this.currentVaultInfo = null; // Reset for next room
     }
 
+    // First-room flourish: a small flock of idle crows in the very first
+    // green-zone explore room. Teaches the player that not all motion is hostile.
+    // One crow holds a pearl that drops the first time it's scared.
+    // Skip BOSS rooms (high-tension first impression would clash).
+    const introRoomEligible = type === ROOM_TYPES.COMBAT
+      || type === ROOM_TYPES.DISCOVERY
+      || type === ROOM_TYPES.CAMP;
+    if (this.currentDepth === 1 && zoneType === 'green' && introRoomEligible) {
+      this.spawnIntroCrows(room);
+      console.log(`[Crows] spawned ${room.crows.length} in depth-1 ${type} room`);
+    }
+
+    // O (Ocean) + pearl-in-inventory: pre-spawn a guide fairy that gates the
+    // hidden blue-zone exit. If the player ignores it through the fight, the
+    // fairy reveals a pedestal at room-clear (see main.js updateExploreState).
+    if (exitLetter === 'O' && !this.game?.fairiesAngered) {
+      const playerInv = this.game?.player?.inventory;
+      if (playerInv && playerInv.includes('●')) {
+        this.spawnPearlFairy(room);
+      }
+    }
+
     return room;
+  }
+
+  // Pre-spawn the guide fairy on the dry side of an O room, well clear of the
+  // ocean tiles (sand starts at col 18). Stored on room.pearlFairy so main.js
+  // can push it into neutralCharacters on entry, and so the room-clear hook
+  // can find it later to trigger the pedestal reveal.
+  spawnPearlFairy(room) {
+    const CS = GRID.CELL_SIZE;
+    const col = 8 + Math.floor(Math.random() * 6);   // cols 8-13: dry land, away from water
+    const row = 6 + Math.floor(Math.random() * 6);   // rows 6-11: mid vertical band
+    const x = col * CS;
+    const y = row * CS;
+    const fairy = new Fairy(x, y, room.exits || {}, {
+      // Don't let it flee mid-fight — we want it tied to room clear, not a timer.
+      flutterDuration: 1e9,
+      touchImmunity: 1.5
+    });
+    fairy.pearlGuide = true;
+    room.pearlFairy = fairy;
+  }
+
+  spawnIntroCrows(room) {
+    const COUNT = 3;
+    const minDistFromPlayer = GRID.CELL_SIZE * 5;
+    const minDistFromOther = GRID.CELL_SIZE * 3;
+    const playerStart = room.playerStartPos || { x: GRID.WIDTH / 2, y: (GRID.ROWS - 3) * GRID.CELL_SIZE };
+
+    const isClear = (x, y) => {
+      const col = Math.floor(x / GRID.CELL_SIZE);
+      const row = Math.floor(y / GRID.CELL_SIZE);
+      if (col < 2 || col >= GRID.COLS - 2 || row < 2 || row >= GRID.ROWS - 2) return false;
+      if (room.collisionMap[row]?.[col]) return false;
+      const px = playerStart.x - x;
+      const py = playerStart.y - y;
+      if (px * px + py * py < minDistFromPlayer * minDistFromPlayer) return false;
+      for (const obj of room.backgroundObjects) {
+        if (obj.destroyed) continue;
+        const dx = obj.position.x - x;
+        const dy = obj.position.y - y;
+        if (dx * dx + dy * dy < (GRID.CELL_SIZE * 0.9) ** 2) return false;
+      }
+      return true;
+    };
+
+    // Prefer positions adjacent to trees/stumps; fall back to scattered open ground.
+    const candidates = [];
+    for (const obj of room.backgroundObjects) {
+      if (obj.destroyed) continue;
+      if (obj.char !== '&' && obj.char !== 'Y') continue;
+      const cx = obj.position.x;
+      const cy = obj.position.y - GRID.CELL_SIZE;
+      if (isClear(cx, cy)) candidates.push({ x: cx, y: cy });
+    }
+    // Shuffle for variety
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+
+    const pickRandomOpen = () => {
+      for (let attempt = 0; attempt < 30; attempt++) {
+        const col = 3 + Math.floor(Math.random() * (GRID.COLS - 6));
+        const row = 3 + Math.floor(Math.random() * (GRID.ROWS - 6));
+        const x = col * GRID.CELL_SIZE;
+        const y = row * GRID.CELL_SIZE;
+        if (isClear(x, y)) return { x, y };
+      }
+      return null;
+    };
+
+    const positions = [];
+    while (positions.length < COUNT) {
+      let candidate = candidates.shift() || pickRandomOpen();
+      if (!candidate) break;
+      const tooClose = positions.some(p => {
+        const dx = p.x - candidate.x;
+        const dy = p.y - candidate.y;
+        return dx * dx + dy * dy < minDistFromOther * minDistFromOther;
+      });
+      if (tooClose) continue;
+      positions.push(candidate);
+    }
+
+    if (positions.length === 0) return;
+
+    const pearlIndex = Math.floor(Math.random() * positions.length);
+    positions.forEach((pos, i) => {
+      room.crows.push(new Crow(pos.x, pos.y, { hasPearl: i === pearlIndex }));
+    });
   }
 
   determineRoomType() {
@@ -329,6 +481,7 @@ export class RoomGenerator {
       const pos = islandConfig
         ? this.getIslandPosition(islandConfig, room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects)
         : this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, allowLiquid);
+      if (!pos) continue;
       const enemy = new Enemy(enemyChar, pos.x, pos.y, this.currentDepth);
       enemy.setCollisionMap(room.collisionMap);
       enemy.setBackgroundObjects(room.backgroundObjects);
@@ -344,6 +497,7 @@ export class RoomGenerator {
         const pos = islandConfig
           ? this.getIslandPosition(islandConfig, room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects)
           : this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, allowLiquid);
+        if (!pos) continue;
         const enemy = new Enemy(inj.char, pos.x, pos.y, this.currentDepth);
         enemy.setCollisionMap(room.collisionMap);
         enemy.setBackgroundObjects(room.backgroundObjects);
@@ -355,13 +509,17 @@ export class RoomGenerator {
     if (this.currentDepth === 1) {
       // Add gun
       const gunPos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
-      const gun = new Item('/', gunPos.x, gunPos.y);
-      room.items.push(gun);
+      if (gunPos) {
+        const gun = new Item('/', gunPos.x, gunPos.y);
+        room.items.push(gun);
 
-      // Add sword
-      const swordPos = this.getRandomPosition(room.collisionMap, [...room.enemies, gun], room.playerStartPos);
-      const sword = new Item('†', swordPos.x, swordPos.y);
-      room.items.push(sword);
+        // Add sword
+        const swordPos = this.getRandomPosition(room.collisionMap, [...room.enemies, gun], room.playerStartPos);
+        if (swordPos) {
+          const sword = new Item('†', swordPos.x, swordPos.y);
+          room.items.push(sword);
+        }
+      }
     }
 
     // Ensure K rooms have at least one guaranteed key dropper
@@ -375,24 +533,39 @@ export class RoomGenerator {
     // Generate terrain first so liquid positions are known before enemy placement
     this.generateBackgroundObjects(room);
 
-    // Single boss enemy, avoiding liquid tiles
-    const boss = createBossEnemy(this.currentDepth);
-    const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects);
-    const enemy = new Enemy(boss.char, pos.x, pos.y, this.currentDepth);
-    enemy.hp = boss.hp;
-    enemy.damage = boss.damage;
-    enemy.color = boss.color;
-    enemy.setCollisionMap(room.collisionMap);
-    enemy.setBackgroundObjects(room.backgroundObjects);
-    this.addEnemyToRoom(room, enemy);
+    const zone = ZONES[room.zone];
+    const pool = zone?.bossPool;
+
+    if (pool && pool.length > 0) {
+      const encounterId = pool[Math.floor(Math.random() * pool.length)];
+      const encounter = BOSS_ENCOUNTERS[encounterId];
+      if (encounter) {
+        this.spawnBossEncounter(room, encounter);
+      }
+    } else {
+      // Fallback for zones without a bossPool: single buffed enemy
+      const boss = createBossEnemy(this.currentDepth);
+      const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects);
+      if (pos) {
+        const enemy = new Enemy(boss.char, pos.x, pos.y, this.currentDepth);
+        enemy.hp = boss.hp;
+        enemy.damage = boss.damage;
+        enemy.color = boss.color;
+        enemy.setCollisionMap(room.collisionMap);
+        enemy.setBackgroundObjects(room.backgroundObjects);
+        this.addEnemyToRoom(room, enemy);
+      }
+    }
 
     // Ensure first room always has at least one item
     if (this.currentDepth === 1) {
       const basicItems = ['/', '†'];
       const itemChar = basicItems[Math.floor(Math.random() * basicItems.length)];
       const itemPos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
-      const item = new Item(itemChar, itemPos.x, itemPos.y);
-      room.items.push(item);
+      if (itemPos) {
+        const item = new Item(itemChar, itemPos.x, itemPos.y);
+        room.items.push(item);
+      }
     }
 
     // Ensure K rooms have at least one guaranteed key dropper
@@ -402,13 +575,98 @@ export class RoomGenerator {
     room.exitsLocked = true;
   }
 
+  /**
+   * Place a boss encounter from BOSS_ENCOUNTERS into a room.
+   * - 'center'    : boss placed at room center (single-entity bosses like Giant Slime)
+   * - 'formation' : leader at center, followers placed in a ring at the leader's
+   *                 followLeader.formationRadius. Followers are linked to their leader
+   *                 via enemy.leaderRef so the followLeader behavior can find them.
+   *                 Spawns with `equippedWeapon` get the matching Item pre-equipped.
+   */
+  spawnBossEncounter(room, encounter) {
+    const centerX = (GRID.COLS / 2) * GRID.CELL_SIZE;
+    const centerY = (GRID.ROWS / 2) * GRID.CELL_SIZE;
+
+    const placedFollowerSpawns = [];
+    let leader = null;
+    let leaderFormationRadius = GRID.CELL_SIZE * 3;
+    let followerOrbitIndex = 0;
+
+    // Count total followers across spawn entries for ring placement
+    let totalFollowers = 0;
+    for (const spawn of encounter.spawns) {
+      if (spawn.role === 'follower') totalFollowers += spawn.count;
+    }
+
+    for (const spawn of encounter.spawns) {
+      for (let i = 0; i < spawn.count; i++) {
+        let x, y;
+        let mySlot = -1;
+
+        if (spawn.role === 'boss' || spawn.role === 'leader') {
+          x = centerX;
+          y = centerY;
+        } else if (spawn.role === 'follower' && leader) {
+          // Initial placement is a tidy ring; runtime formation state machine
+          // takes over from there (encircle → line). Slot index is preserved
+          // on the enemy so the line formation can give each follower a stable
+          // lateral position in the wall.
+          mySlot = followerOrbitIndex;
+          const angle = (followerOrbitIndex / Math.max(totalFollowers, 1)) * Math.PI * 2;
+          x = leader.position.x + Math.cos(angle) * leaderFormationRadius;
+          y = leader.position.y + Math.sin(angle) * leaderFormationRadius;
+          followerOrbitIndex++;
+        } else {
+          // Fallback: random valid position
+          const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects);
+          if (!pos) continue;
+          x = pos.x;
+          y = pos.y;
+        }
+
+        const enemy = new Enemy(spawn.char, x, y, this.currentDepth);
+        enemy.setCollisionMap(room.collisionMap);
+        enemy.setBackgroundObjects(room.backgroundObjects);
+
+        if (spawn.equippedWeapon) {
+          const weapon = new Item(spawn.equippedWeapon, x, y);
+          if (enemy.itemUsage) {
+            // Encounter-scripted equipment overrides any random spawn loadout
+            // the constructor rolled (e.g. goblin spawnEquipment).
+            enemy.inventory = [];
+            enemy.equippedWeapon = null;
+            enemy.pickupItem(weapon);
+          }
+        }
+
+        if (spawn.role === 'leader') {
+          leader = enemy;
+          if (enemy.data.followLeader?.formationRadius) {
+            leaderFormationRadius = enemy.data.followLeader.formationRadius;
+          } else if (enemy.data.rallyCall) {
+            // Leaders define orbit radius via their followers; fall back to default
+            leaderFormationRadius = GRID.CELL_SIZE * 3;
+          }
+        } else if (spawn.role === 'follower' && leader) {
+          enemy.leaderRef = leader;
+          enemy.formationSlot = mySlot;
+          enemy.formationCount = totalFollowers;
+        }
+
+        this.addEnemyToRoom(room, enemy);
+      }
+    }
+  }
+
   generateDiscoveryRoom(room) {
     // No enemies, guaranteed rare item
-    const rareItems = ['⌂', '‡', ')', 'X', '⌘', '⟩', '⊤'];
+    const rareItems = ['⌂', '‡', ')', 'X', '⌘', '⟩', '⊤', 'ƒ'];
     const itemChar = rareItems[Math.floor(Math.random() * rareItems.length)];
     const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
-    const item = new Item(itemChar, pos.x, pos.y);
-    room.items.push(item);
+    if (pos) {
+      const item = new Item(itemChar, pos.x, pos.y);
+      room.items.push(item);
+    }
 
     // Generate background objects
     this.generateBackgroundObjects(room);
@@ -422,15 +680,55 @@ export class RoomGenerator {
 
   generateCampRoom(room) {
     // No enemies, safe zone
-    // Add some basic items
-    const basicItems = ['/', '†'];
+    // Baseline weapon pool: sword (†) and staff (/) most common; spear (↑), bow ()), dagger (↾) less common.
+    // Weighting via repetition keeps this dependency-free.
+    const basicItems = ['†', '†', '†', '/', '/', '/', '↑', ')', '↾'];
     const itemChar = basicItems[Math.floor(Math.random() * basicItems.length)];
     const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
-    const item = new Item(itemChar, pos.x, pos.y);
-    room.items.push(item);
+    if (pos) {
+      const item = new Item(itemChar, pos.x, pos.y);
+      room.items.push(item);
+    }
 
     // Generate background objects
     this.generateBackgroundObjects(room);
+
+    // Place a flickering campfire near the room center and a CampNPC beside it.
+    // The campfire is an indestructible '!' fire object; the NPC sits one cell
+    // beside it and uses the campfire pos as its tether anchor.
+    const centerCol = Math.floor(GRID.COLS / 2);
+    const centerRow = Math.floor(GRID.ROWS / 2);
+    const fireCol = centerCol;
+    const fireRow = centerRow;
+
+    // Clear collision at and around the campfire/NPC tile
+    if (room.collisionMap[fireRow]) {
+      room.collisionMap[fireRow][fireCol] = false;
+      if (room.collisionMap[fireRow][fireCol + 1] !== undefined) {
+        room.collisionMap[fireRow][fireCol + 1] = false;
+      }
+    }
+
+    const fireX = fireCol * GRID.CELL_SIZE;
+    const fireY = fireRow * GRID.CELL_SIZE;
+    const fire = new BackgroundObject('!', fireX, fireY);
+    fire.indestructible = true;
+    fire.isCampfire = true; // enables flicker animation in BackgroundObject.update
+    room.backgroundObjects.push(fire);
+
+    // Remove any background object that overlaps the NPC's tile so it spawns clear
+    const npcCol = fireCol + 1;
+    const npcX = npcCol * GRID.CELL_SIZE;
+    const npcY = fireRow * GRID.CELL_SIZE;
+    room.backgroundObjects = room.backgroundObjects.filter(obj => {
+      if (obj === fire) return true;
+      const oCol = Math.round(obj.position.x / GRID.CELL_SIZE);
+      const oRow = Math.round(obj.position.y / GRID.CELL_SIZE);
+      return !(oCol === npcCol && oRow === fireRow);
+    });
+
+    const npc = new CampNPC(npcX, npcY, { x: fireX, y: fireY });
+    room.campNPC = npc;
 
     // Exits are already generated by ExitSystem in generateRoom()
     // No need to override them here
@@ -583,6 +881,7 @@ export class RoomGenerator {
       const enemyChar = getZoneRandomEnemy(this.currentDepth, room.zone);
       const allowLiquid = ENEMIES[enemyChar]?.waterAffinity === true;
       const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, allowLiquid);
+      if (!pos) continue;
       const enemy = new Enemy(enemyChar, pos.x, pos.y, this.currentDepth);
       enemy.setCollisionMap(room.collisionMap);
       enemy.setBackgroundObjects(room.backgroundObjects);
@@ -662,6 +961,7 @@ export class RoomGenerator {
       const enemyChar = getZoneRandomEnemy(this.currentDepth, room.zone);
       const allowLiquid = ENEMIES[enemyChar]?.waterAffinity === true;
       const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, allowLiquid);
+      if (!pos) continue;
       const enemy = new Enemy(enemyChar, pos.x, pos.y, this.currentDepth);
       enemy.setCollisionMap(room.collisionMap);
       enemy.setBackgroundObjects(room.backgroundObjects);
@@ -686,6 +986,47 @@ export class RoomGenerator {
 
     const isInClearing = (col, row) =>
       clearings.some(c => col >= c.minCol && col <= c.maxCol && row >= c.minRow && row <= c.maxRow);
+
+    // ── Fill plane 0 with an organic rock wall outside the clearings ─────────
+    // The surface is impassable except for the 4 exit clearings; the player
+    // must descend via a cave entrance (^v<>) to plane 1 to traverse between
+    // clearings. Solid bg objects default to plane 0 only (no tunnelWall flag),
+    // so they don't interfere with cave navigation.
+    //
+    // We mix rock / boulder / crystal chars for visual variety. Positions are
+    // grid-aligned (no sub-cell jitter) — earlier jitter caused rocks adjacent
+    // to clearings to bleed their hitboxes into the clearing, trapping the
+    // player at the moment of plane-1 → plane-0 transition. The south rows
+    // below the entrance row are left clear so the REST exit text isn't
+    // obscured.
+    const isInRestCorridor = (col, row) =>
+      row >= 26 && col >= 10 && col <= 20;
+
+    const pickWallChar = () => {
+      const r = Math.random();
+      if (r < 0.10) return 'Q';   // boulder — large, fills 14×14
+      if (r < 0.16) return '*';   // crystal — accent
+      return '0';                 // rock — primary
+    };
+
+    for (let r = 1; r < ROWS - 1; r++) {
+      for (let c = 1; c < COLS - 1; c++) {
+        if (isInClearing(c, r)) continue;
+        if (isInRestCorridor(c, r)) continue;
+        const char = pickWallChar();
+        const obj = new BackgroundObject(
+          char,
+          c * GRID.CELL_SIZE,
+          r * GRID.CELL_SIZE
+        );
+        // Hide the surface wall when the player descends into the cave.
+        // (ExploreRenderer's shouldRenderBackgroundObject defaults to "render
+        // on both planes" — without this flag, plane-0 rocks would draw on
+        // top of the plane-1 cave walls.)
+        obj.surfaceOnly = true;
+        room.backgroundObjects.push(obj);
+      }
+    }
 
     // ── Cellular automata cave generation ────────────────────────────────────
     const SEED_CHANCE = 0.45;
@@ -790,6 +1131,23 @@ export class RoomGenerator {
       entranceData.push({ col: 4, row: r, direction: 'left' });
     }
 
+    // ── Cap rocks flanking each entrance row ─────────────────────────────────
+    // Mirrors the T-room pattern: surface-plane rocks on either end of the
+    // entrance opening so the player can only enter head-on, not by sliding
+    // sideways from an adjacent clearing cell. Pattern: 0 ^ ^ ^ 0 (etc.)
+    const capPositions = [
+      { col: 13, row: 4 },  { col: 17, row: 4 },   // flanks of north (^^^)
+      { col: 13, row: 25 }, { col: 17, row: 25 },  // flanks of south (vvv)
+      { col: 25, row: 13 }, { col: 25, row: 17 },  // flanks of east (>>>)
+      { col: 4,  row: 13 }, { col: 4,  row: 17 }   // flanks of west (<<<)
+    ];
+    for (const { col, row } of capPositions) {
+      const cap = new BackgroundObject('0', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+      cap.indestructible = true;
+      cap.surfaceOnly = true; // hide when player descends into the cave
+      room.backgroundObjects.push(cap);
+    }
+
     // ── Place cave wall bg objects on cave cells ──────────────────────────────
     // Also track open cave passage cells for glittering rock / enemy placement
     const passageCells = [];
@@ -853,6 +1211,35 @@ export class RoomGenerator {
     const pickaxe = new Item('⛏', pickCol * GRID.CELL_SIZE, pickRow * GRID.CELL_SIZE);
     room.items.push(pickaxe);
 
+    // ── Place 1 secret vein pair: red marker underground + secret rock on surface ──
+    // The red '⊙' marker (plane 1, indestructible) appears underground at the same grid
+    // position as a golden '@' rock on the surface. Mining the surface rock with a pickaxe
+    // drops a Crystal Maul (T4 weapon). Candidate cells are taken from the portion of
+    // passageCells not used by glittering rocks or enemies.
+    const veinCandidates = passageCells.slice(rockCount + enemyCount);
+    for (const cell of veinCandidates) {
+      const veinX = cell.col * GRID.CELL_SIZE;
+      const veinY = cell.row * GRID.CELL_SIZE;
+      // Require a surface rock at this position (placed in the fill loop above).
+      const surfaceIdx = room.backgroundObjects.findIndex(
+        o => o.surfaceOnly && !o.destroyed &&
+             o.position.x === veinX && o.position.y === veinY
+      );
+      if (surfaceIdx === -1) continue;
+      // Replace the surface rock with the secret vein rock.
+      // Override char/color so it renders identically to a regular '0' rock.
+      const secretSurface = new BackgroundObject('@', veinX, veinY);
+      secretSurface.surfaceOnly = true;
+      secretSurface.char = '0';
+      secretSurface.animationChar = '0';
+      secretSurface.color = '#888888';
+      secretSurface.animationColor = '#888888';
+      room.backgroundObjects[surfaceIdx] = secretSurface;
+      // Place the underground red marker at the same grid position.
+      room.backgroundObjects.push(new BackgroundObject('⊙', veinX, veinY));
+      break;
+    }
+
     // ── Store underground metadata ────────────────────────────────────────────
     room.underground = {
       clearings,
@@ -860,6 +1247,19 @@ export class RoomGenerator {
       entranceAxis: 'all',
       caveFogRadius: 5,
       caveGrid
+    };
+
+    // ── Declare per-direction spawn zones (center of each clearing) ─────────
+    // Any system (enterExploreState, debug warps, future warp items) should
+    // use these instead of generic edge-based defaults — entering from a side
+    // lands the player in the opposite clearing; warps drop them at south.
+    const C = GRID.CELL_SIZE;
+    room.spawnZones = {
+      north:   { x: 15 * C, y: 25 * C }, // entering from north → south clearing
+      south:   { x: 15 * C, y:  3 * C }, // entering from south → north clearing
+      east:    { x:  3 * C, y: 15 * C }, // entering from east  → west clearing
+      west:    { x: 25 * C, y: 15 * C }, // entering from west  → east clearing
+      default: { x: 15 * C, y: 25 * C }, // warp / no direction → south clearing
     };
 
     this.ensureKeyDroppers(room);
@@ -1288,6 +1688,8 @@ export class RoomGenerator {
         newEnemy.setBackgroundObjects(game.currentRoom.backgroundObjects);
         newEnemy.setSteamClouds(game.steamClouds);
         newEnemy.setTarget(game.player);
+        newEnemy.setGame(game);
+        newEnemy.setRoom(game.currentRoom);
         newEnemy.enraged = true;
         game.physicsSystem.addEntity(newEnemy);
         newEnemies.push(newEnemy);
@@ -1485,6 +1887,11 @@ export class RoomGenerator {
       break;
     } while (attempts < 100);
 
+    // Exhausted all attempts without finding a valid position
+    if (attempts >= 100) {
+      return null;
+    }
+
     return {
       x: x * GRID.CELL_SIZE,
       y: y * GRID.CELL_SIZE
@@ -1562,6 +1969,7 @@ export class RoomGenerator {
 
     for (let i = 0; i < swathCount; i++) {
       const centerPos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
+      if (!centerPos) continue;
       const baseSwathSize = this.randInt(20, 40);
       const swathSize = Math.round(baseSwathSize * grassDensity); // Scale by density
       const swathRadius = this.randInt(32, 64); // Tight clustering
@@ -1660,6 +2068,7 @@ export class RoomGenerator {
 
     for (let i = 0; i < clusterCount; i++) {
       const centerPos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
+      if (!centerPos) continue;
       const char = organicChars[Math.floor(Math.random() * organicChars.length)];
       const size = this.randInt(3, 6);
       const radius = this.randInt(48, 96);
@@ -1678,8 +2087,8 @@ export class RoomGenerator {
           const bgObject = new BackgroundObject(char, pos.x, pos.y);
           this.applyZoneProperties(bgObject, room.zone);
 
-          // Pre-spawn as burned/damaged if zone requires it
-          if (preSpawnBurned && bgObject.onFire !== undefined) {
+          // Pre-spawn as burned/damaged if zone requires it (only applies to flammable objects)
+          if (preSpawnBurned && bgObject.flammability !== 'none') {
             // Set to burned/charred appearance (dark, non-flammable)
             bgObject.flammability = 'none';
             // Darken the color more for burned effect
@@ -1707,6 +2116,7 @@ export class RoomGenerator {
     if (formationType === 'pool') {
       puddleCount = this.randInt(10, 20);
       const centerPos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
+      if (!centerPos) return;
       const radius = this.randInt(40, 80);
 
       for (let i = 0; i < puddleCount; i++) {
@@ -1726,6 +2136,7 @@ export class RoomGenerator {
     } else if (formationType === 'lake' && this.currentDepth >= 5) {
       puddleCount = this.randInt(30, 60);
       const centerPos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
+      if (!centerPos) return;
       const radiusCells = 4;
 
       for (let i = 0; i < puddleCount; i++) {
@@ -1746,6 +2157,7 @@ export class RoomGenerator {
     } else if (formationType === 'stream') {
       puddleCount = this.randInt(15, 25);
       const startPos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
+      if (!startPos) return;
       const angle = Math.random() * Math.PI * 2;
 
       for (let i = 0; i < puddleCount; i++) {
@@ -1960,6 +2372,7 @@ export class RoomGenerator {
 
     for (let i = 0; i < formationCount; i++) {
       const centerPos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
+      if (!centerPos) continue;
       const rockVariant = rockData[Math.floor(Math.random() * rockData.length)];
       const size = this.randInt(2, 4);
       const spacing = this.randInt(24, 48);
@@ -1994,6 +2407,7 @@ export class RoomGenerator {
     for (let i = 0; i < objectCount; i++) {
       const char = this.weightedRandomChoice(weights);
       const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
+      if (!pos) continue;
 
       const bgObject = new BackgroundObject(char, pos.x, pos.y);
 
@@ -2130,6 +2544,7 @@ export class RoomGenerator {
 
     // Check for overlaps with solid background objects
     for (const bgObj of room.backgroundObjects) {
+      if (!bgObj || !bgObj.data) continue;
       if (bgObj.data.solid) {
         const objCol = Math.floor(bgObj.position.x / GRID.CELL_SIZE);
         const objRow = Math.floor(bgObj.position.y / GRID.CELL_SIZE);
@@ -2201,7 +2616,8 @@ export class RoomGenerator {
         'n': 0.10,
         '*': 0.05,
         'p': 0.05,
-        '~': 0.10
+        '~': 0.10,
+        '⊞': 0.02
       };
     } else {
       return {
@@ -2215,7 +2631,8 @@ export class RoomGenerator {
         '~': 0.10,
         'p': 0.10,
         '8': 0.05,
-        'i': 0.05
+        'i': 0.05,
+        '⊞': 0.03
       };
     }
   }
@@ -2369,6 +2786,11 @@ export class RoomGenerator {
       case ROOM_TYPES.UNDERGROUND: return 0; // Underground generates its own cave terrain
       case ROOM_TYPES.HUT:         return 0; // Hut generates its own wall structure
       case ROOM_TYPES.DUNGEON:     return 0; // Dungeon generates its own wall structure
+      case ROOM_TYPES.MAZE:        return 0; // Maze generates its own exterior building
+      case ROOM_TYPES.RIDGE:       return 0; // Ridge generates its own ravine structure
+      case ROOM_TYPES.BAT_BELFRY:  return 0; // Bat belfry generates its own cave terrain
+      case ROOM_TYPES.WELL:        return 0; // Well room places its own central structure
+      case ROOM_TYPES.FOUNTAIN:    return 0; // Fountain places its own pool + waterfall structure
       default:
         console.warn(`[RoomGenerator] getStructureCount: no case for room type "${roomType}". ` +
           'Add an explicit case to RoomGenerator.getStructureCount(). Returning 0 as safe fallback.');
@@ -2641,6 +3063,41 @@ export class RoomGenerator {
           selectedObject.isShaking = true;
           selectedObject.leshyBush = true;
         }
+      },
+
+      // PRIORITY 3: Fairy Grass (any zone, low chance — only when not angered)
+      // The fairy is the player's only path to discovering F (Fountain) rooms.
+      // Marks multiple tall-grass tiles ('|') so any one of them releases the
+      // fairy when cut. InteractionSystem.cutGrass enforces one-per-room via
+      // game.currentRoom.fairySpawned.
+      {
+        name: 'fairy_grass',
+        priority: 3,
+        condition: (room) => {
+          if (this.game?.fairiesAngered) return false;
+          const roomCleared = room.enemies.length === 0;
+          if (!roomCleared) return false;
+          // 25% per eligible room. Multiple grass tiles marked, so first
+          // cut spawns the fairy regardless of which marked tile the player hits.
+          return Math.random() < 0.25;
+        },
+        eligibleObjects: (room) => {
+          return room.backgroundObjects.filter(obj => obj.char === '|');
+        },
+        mark: (selectedObject, eligibleObjects) => {
+          // Mark roughly a third of eligible grass tiles (min 3, capped at all).
+          const count = Math.min(eligibleObjects.length, Math.max(3, Math.ceil(eligibleObjects.length / 3)));
+          // Always include the framework-selected object, then fill from a shuffle.
+          const pool = eligibleObjects.filter(o => o !== selectedObject);
+          for (let i = pool.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [pool[i], pool[j]] = [pool[j], pool[i]];
+          }
+          const marked = [selectedObject, ...pool.slice(0, count - 1)];
+          for (const obj of marked) {
+            obj.fairyGrass = true;
+          }
+        }
       }
 
       // Future events can be added here with appropriate priorities
@@ -2685,8 +3142,9 @@ export class RoomGenerator {
       const randomIndex = Math.floor(Math.random() * eligibleObjects.length);
       const selectedObject = eligibleObjects[randomIndex];
 
-      // Mark the object with this event
-      eventType.mark(selectedObject);
+      // Mark the object with this event (event may opt to mark additional
+      // siblings from `eligibleObjects` — e.g. fairy_grass marks several).
+      eventType.mark(selectedObject, eligibleObjects);
 
       // Store event type on room for rendering reference
       room.activeSecretEvent = eventType.name;
@@ -2728,7 +3186,9 @@ export class RoomGenerator {
 
     // Determine item pool based on config
     let itemPool = [];
-    if (itemConfig.itemPool === 'rare_epic') {
+    if (Array.isArray(itemConfig.itemPool)) {
+      itemPool = itemConfig.itemPool;
+    } else if (itemConfig.itemPool === 'rare_epic') {
       // High-tier weapons, armor, and consumables
       itemPool = [
         '⌘', // Dragon Blade (damage 5)
@@ -2757,40 +3217,158 @@ export class RoomGenerator {
       const centerX = vault.centerCol * GRID.CELL_SIZE + (GRID.CELL_SIZE / 2);
       const centerY = vault.centerRow * GRID.CELL_SIZE + (GRID.CELL_SIZE / 2);
       spawnPos = { x: centerX, y: centerY };
+    } else if (itemConfig.position === 'clearing_center') {
+      // Spawn at the center of the template's clearingZone
+      const clearing = this.currentLetterTemplate.bgObjectRules?.clearingZone;
+      if (clearing) {
+        const centerX = clearing.centerCol * GRID.CELL_SIZE + (GRID.CELL_SIZE / 2);
+        const centerY = clearing.centerRow * GRID.CELL_SIZE + (GRID.CELL_SIZE / 2);
+        spawnPos = { x: centerX, y: centerY };
+      } else {
+        spawnPos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
+      }
     } else {
       // Fallback to random position
       spawnPos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
     }
+
+    if (!spawnPos) return;
 
     // Create and add item to room
     const item = new Item(itemChar, spawnPos.x, spawnPos.y);
     room.items.push(item);
   }
 
+  // Blue-zone tutorial rooms: drop the armor pickup (Shallows/Reef/Wake) or the
+  // pearl-cache pedestal (Pearl Cache), and clamp exits to a linear N/S spine
+  // so the player can only advance forward or retreat. The actual N exit-letter
+  // routing (which room comes next) is set in main.js via game.blueZoneRoom.
+  applyBlueZoneTemplate(room) {
+    const tpl = this.currentLetterTemplate;
+    if (!tpl) return;
+
+    // Clear any cell collision at the spawn cell so the player can pick up / step on
+    const clearCell = (col, row) => {
+      if (!room.collisionMap?.[row]) return;
+      room.collisionMap[row][col] = false;
+      const cellX = col * GRID.CELL_SIZE;
+      const cellY = row * GRID.CELL_SIZE;
+      const half = GRID.CELL_SIZE / 2;
+      room.backgroundObjects = room.backgroundObjects.filter(o =>
+        !(Math.abs(o.position.x - cellX) < half && Math.abs(o.position.y - cellY) < half)
+      );
+    };
+
+    // Armor pickup: spawn on the south-center dry strip — players enter from
+    // south so the item is the first thing they see.
+    if (tpl.blueZoneArmor) {
+      const armorCol = 15;
+      const armorRow = 26;
+      clearCell(armorCol, armorRow);
+      const x = armorCol * GRID.CELL_SIZE;
+      const y = armorRow * GRID.CELL_SIZE;
+      const armor = new Item(tpl.blueZoneArmor, x, y);
+      room.items.push(armor);
+    }
+
+    // Pearl Cache pedestal: BackgroundObject at room center, marked for the
+    // SPACE-press handler in main.js. Mirrors the Ocean pearl-pedestal pattern.
+    if (tpl.blueZonePedestal) {
+      const pCol = 15;
+      const pRow = 15;
+      clearCell(pCol, pRow);
+      const px = pCol * GRID.CELL_SIZE;
+      const py = pRow * GRID.CELL_SIZE;
+      const pedestal = new BackgroundObject('∏', px, py);
+      pedestal.color = '#ccddff';
+      pedestal.hasCollision = true;
+      pedestal.pearlCachePedestal = true;
+      if (room.collisionMap?.[pRow]) {
+        room.collisionMap[pRow][pCol] = true;
+      }
+      room.backgroundObjects.push(pedestal);
+      room.pearlCachePedestal = {
+        col: pCol, row: pRow,
+        x: px + GRID.CELL_SIZE / 2,
+        y: py + GRID.CELL_SIZE / 2,
+        activated: false,
+        obj: pedestal
+      };
+    }
+
+    // Linear spine — kill east/west exits. North advances, south retreats.
+    // Pearl Cache is terminal: no north (no further blue rooms); south returns
+    // to Rest. The actual N exit letter for the three combat rooms is wired in
+    // main.js where game.blueZoneRoom drives the next room generation.
+    room.exits.east = false;
+    room.exits.west = false;
+    if (tpl.blueZonePedestal) {
+      room.exits.north = false;
+    }
+  }
+
   generateHutRoom(room) {
     const template = this.currentLetterTemplate?.hutStructure;
     const centerCol = template?.centerCol ?? 15;
-    const centerRow = template?.centerRow ?? 15;
+    const baseCenterRow = template?.centerRow ?? 15;
     const extW = template?.exteriorWidth ?? 5;   // half-extents
     const extH = template?.exteriorHeight ?? 5;
     const halfW = Math.floor(extW / 2);           // 2
     const halfH = Math.floor(extH / 2);           // 2
 
-    const minCol = centerCol - halfW;   // 13
-    const maxCol = centerCol + halfW;   // 17
-    const minRow = centerRow - halfH;   // 13
-    const maxRow = centerRow + halfH;   // 17
+    // Roll hut scenario first — witch huts shift the structure up by 2 rows
+    // to make room for chicken legs underneath. Cheat override:
+    //   game.cheat_forceHutKind = 'witch' | 'enemy_encounter' | 'neutral_npc'
+    // forces every subsequent hut roll to that kind.
+    // P-rooms (Press Hut) always get a guaranteed press inside, which means
+    // the player must be able to reach the door — so we never roll witch.
+    const isPressHut = room.exitLetter === 'P';
+    const cheatKind = this.game?.cheat_forceHutKind;
+    const validKinds = new Set(['enemy_encounter', 'neutral_npc', 'wise_man', 'witch']);
+    let hutKind;
+    if (cheatKind && validKinds.has(cheatKind)) {
+      hutKind = cheatKind;
+    } else if (isPressHut) {
+      hutKind = Math.random() < 0.5 ? 'enemy_encounter' : 'neutral_npc';
+    } else {
+      const r = Math.random();
+      hutKind =
+        r < 0.40 ? 'enemy_encounter' :  // 40% — combat
+        r < 0.70 ? 'neutral_npc'      :  // 30% — errand traveler (placeholder)
+        r < 0.90 ? 'wise_man'         :  // 20% — wise fellow hint
+                   'witch';               // 10% — chicken-leg hut
+    }
 
-    // Place hollow 5×5 hut walls (solid), leave interior open
+    const isWitchRaised = hutKind === 'witch';
+    const verticalShift = isWitchRaised ? 2 : 0;
+    const centerRow = baseCenterRow - verticalShift;
+
+    const minCol = centerCol - halfW;
+    const maxCol = centerCol + halfW;
+    const minRow = centerRow - halfH;
+    const maxRow = centerRow + halfH;
+
+    // The entire hut footprint is solid — walls, door cell, and the interior
+    // dark fill cells — so nothing can occupy any cell of the building from
+    // the exterior room. Entry is SPACE-only via proximity check.
+    const wallObjects = [];
+    const interiorObjects = [];
     for (let row = minRow; row <= maxRow; row++) {
       for (let col = minCol; col <= maxCol; col++) {
-        const isWall = row === minRow || row === maxRow || col === minCol || col === maxCol;
-        if (!isWall) continue;
-        // South gap: door location (center of south wall)
-        if (row === maxRow && col === centerCol) continue;
         room.collisionMap[row][col] = true;
+        const isWall = row === minRow || row === maxRow || col === minCol || col === maxCol;
+        if (!isWall) {
+          // Interior cell: paint with dark fill so the hut reads as enclosed.
+          const fill = new BackgroundObject('█', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+          room.backgroundObjects.push(fill);
+          interiorObjects.push(fill);
+          continue;
+        }
+        // Door cell: mark solid (above) but skip the wall glyph; door overlays.
+        if (row === maxRow && col === centerCol) continue;
         const wallObj = new BackgroundObject('≡', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
         room.backgroundObjects.push(wallObj);
+        wallObjects.push(wallObj);
       }
     }
 
@@ -2800,15 +3378,52 @@ export class RoomGenerator {
     const doorObj = new BackgroundObject('∩', doorCol * GRID.CELL_SIZE, doorRow * GRID.CELL_SIZE);
     room.backgroundObjects.push(doorObj);
 
-    // Store hut metadata on the room
-    const hutKindRoll = Math.random();
-    const hutKind = hutKindRoll < 0.5 ? 'enemy_encounter' : 'neutral_npc';
+    // Witch huts rest atop two chicken legs: the door is unreachable until the
+    // SIT/SITDOWN spell lowers the hut. Legs are passable (player walks under)
+    // but bullet-blocking, so they shake when struck.
+    const legObjects = [];
+    if (isWitchRaised) {
+      const legCols = [centerCol - 1, centerCol + 1];
+      const legRows = [maxRow + 1, maxRow + 2];
+      for (const lc of legCols) {
+        for (const lr of legRows) {
+          if (lr >= GRID.ROWS - 1) continue;
+          const leg = new BackgroundObject('λ', lc * GRID.CELL_SIZE, lr * GRID.CELL_SIZE);
+          room.backgroundObjects.push(leg);
+          legObjects.push(leg);
+        }
+      }
+    }
+
     room.hut = {
       exteriorBounds: { minCol, maxCol, minRow, maxRow },
       doorPosition: { col: doorCol, row: doorRow },
       hutKind,
-      interiorGenerated: false
+      interiorGenerated: false,
+      pressBias: isPressHut, // HutSystem reads this when generating interior
+      raised: isWitchRaised,
+      verticalShift,
+      wallObjects,
+      doorObject: doorObj,
+      interiorObjects,
+      legObjects
     };
+
+    // Press Hut: P-marker glyph on the exterior north wall (above the door
+    // alignment) so the player can identify the room from outside.
+    if (isPressHut) {
+      const marker = new BackgroundObject('P', centerCol * GRID.CELL_SIZE, minRow * GRID.CELL_SIZE);
+      marker.color = '#ffd54a';
+      marker.indestructible = true;
+      room.backgroundObjects.push(marker);
+    }
+
+    // Effective vertical bounds include chicken legs for witch huts so that
+    // background-object clearing and enemy spacing treat the legs as part
+    // of the hut footprint.
+    const effectiveMaxRow = maxRow + (isWitchRaised ? 2 : 0);
+    const effectiveCenterRow = (minRow + effectiveMaxRow) / 2;
+    const effectiveExtH = effectiveMaxRow - minRow + 1;
 
     // Generate background objects (standard combat room style)
     // Override clearing zone to keep hut perimeter clear
@@ -2816,9 +3431,9 @@ export class RoomGenerator {
     if (this.currentLetterTemplate?.bgObjectRules) {
       this.currentLetterTemplate.bgObjectRules.clearingZone = {
         centerCol,
-        centerRow,
+        centerRow: effectiveCenterRow,
         width: extW + 4,   // 2-cell buffer around hut
-        height: extH + 4,
+        height: effectiveExtH + 4,
         allowGrass: false,
         allowObjects: false
       };
@@ -2831,16 +3446,16 @@ export class RoomGenerator {
       this.currentLetterTemplate.bgObjectRules.clearingZone = prevClearingZone;
     }
 
-    // Spawn enemies outside the hut perimeter
+    // Spawn enemies outside the hut perimeter (including legs for witch huts)
     const enemyCount = this.randInt(2, 4);
     for (let i = 0; i < enemyCount; i++) {
       const enemyChar = getZoneRandomEnemy(this.currentDepth, room.zone);
       if (!enemyChar) continue;
       const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects);
-      // Re-roll if too close to hut center
+      if (!pos) continue;
       const gc = Math.floor(pos.x / GRID.CELL_SIZE);
       const gr = Math.floor(pos.y / GRID.CELL_SIZE);
-      const tooClose = gc >= minCol - 1 && gc <= maxCol + 1 && gr >= minRow - 1 && gr <= maxRow + 1;
+      const tooClose = gc >= minCol - 1 && gc <= maxCol + 1 && gr >= minRow - 1 && gr <= effectiveMaxRow + 1;
       if (tooClose) continue;
       const enemy = new Enemy(enemyChar, pos.x, pos.y, this.currentDepth);
       enemy.setCollisionMap(room.collisionMap);
@@ -2851,82 +3466,392 @@ export class RoomGenerator {
     room.exitsLocked = room.enemies.length > 0;
   }
 
-  generateDungeonRoom(room) {
-    const template = this.currentLetterTemplate?.hutStructure;
-    const centerCol = template?.centerCol ?? 15;
-    const centerRow = template?.centerRow ?? 15;
-    const extW = template?.exteriorWidth ?? 5;
-    const extH = template?.exteriorHeight ?? 5;
-    const halfW = Math.floor(extW / 2);
-    const halfH = Math.floor(extH / 2);
+  /**
+   * Ridge room ('R') — the entire top 9 rows are an impassable ravine.
+   * A BridgeWorker NPC stands south of the cliff; donating sticks/metal/rocks
+   * (or casting BRIDGE with a wish) builds planks row-by-row across cols
+   * 14-16, opening a 3-cell-wide path to the north exit.
+   *
+   * The dark cliff visual is painted by ExploreRenderer's ravine gradient
+   * (rows 0..ravineRows). Background objects in those rows are stripped so
+   * trees/grass don't poke through the ravine fill.
+   */
+  generateRidgeRoom(room) {
+    const CS = GRID.CELL_SIZE;
+    const RAVINE_ROW_MAX = 9; // last row of the ravine; player ground starts at row 10
 
-    const minCol = centerCol - halfW;
-    const maxCol = centerCol + halfW;
-    const minRow = centerRow - halfH;
-    const maxRow = centerRow + halfH;
+    // Standard background pass for terrain/decor on the player's side.
+    this.generateBackgroundObjects(room);
 
-    // Place hollow 5×5 dungeon entrance walls (same ≡ char as hut)
-    for (let row = minRow; row <= maxRow; row++) {
-      for (let col = minCol; col <= maxCol; col++) {
-        const isWall = row === minRow || row === maxRow || col === minCol || col === maxCol;
-        if (!isWall) continue;
-        if (row === maxRow && col === centerCol) continue; // south gap for door
-        room.collisionMap[row][col] = true;
-        const wallObj = new BackgroundObject('≡', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
-        room.backgroundObjects.push(wallObj);
+    // Strip any background objects the standard pass dropped into the ravine
+    // — the ravine gradient covers them visually but they'd flicker through
+    // animations and confuse pathing.
+    for (let i = room.backgroundObjects.length - 1; i >= 0; i--) {
+      const o = room.backgroundObjects[i];
+      const or = Math.floor(o.position.y / CS);
+      if (or >= 1 && or <= RAVINE_ROW_MAX) room.backgroundObjects.splice(i, 1);
+    }
+
+    // Solidify the entire ravine band (excluding border columns, which are
+    // already solid). RidgeSystem._placeBridgeRow opens cols 14-16 of rows
+    // 2-9 as planks are placed.
+    for (let r = 1; r <= RAVINE_ROW_MAX; r++) {
+      for (let c = 1; c < GRID.COLS - 1; c++) {
+        room.collisionMap[r][c] = true;
       }
     }
 
-    // Place door (∩) at south-center
-    const doorCol = centerCol;
-    const doorRow = maxRow;
-    const doorObj = new BackgroundObject('∩', doorCol * GRID.CELL_SIZE, doorRow * GRID.CELL_SIZE);
-    room.backgroundObjects.push(doorObj);
+    // Tell ExploreRenderer how tall the ravine is (paints the cliff gradient).
+    room.ravineRows = RAVINE_ROW_MAX;
 
-    // Store dungeon metadata on the room
-    room.dungeon = {
-      exteriorBounds: { minCol, maxCol, minRow, maxRow },
-      doorPosition: { col: doorCol, row: doorRow },
-      hutKind: 'enemy_encounter',
-      interiorGenerated: false
+    // North exit always reads as "gray zone" from a Ridge room — the ridge
+    // climbs into the misted high country.
+    if (room.exits?.north) {
+      room.exits.north.color = '#888888';
+    }
+
+    // Bridge state — donations + worker reference. main.js reads bridgeWorker
+    // on room entry to register the NPC into game.neutralCharacters.
+    room.bridgeDonated = { stick: 0, metal: 0, rock: 0 };
+    room.bridgeBuilt = false;
+    room.bridgeAnimating = false;
+
+    // Place worker south of the cliff lip, on the bridge-approach centerline.
+    const workerCol = 15;
+    const workerRow = 14;
+    room.bridgeWorker = new BridgeWorker(workerCol * CS, workerRow * CS);
+
+    // Spawn zones — keep the player south of the cliff regardless of which
+    // direction they warped in from.
+    const safeY = (RAVINE_ROW_MAX + 6) * CS; // row 15
+    room.spawnZones = {
+      north:   { x: 15 * CS, y: safeY }, // bridge approach
+      south:   { x: 15 * CS, y: (GRID.ROWS - 3) * CS },
+      east:    { x: 2 * CS,  y: safeY },
+      west:    { x: (GRID.COLS - 3) * CS, y: safeY },
+      default: { x: 15 * CS, y: safeY },
     };
 
-    // Generate background objects with clearing zone around dungeon entrance
-    const prevClearingZone = this.currentLetterTemplate?.bgObjectRules?.clearingZone;
-    if (this.currentLetterTemplate?.bgObjectRules) {
-      this.currentLetterTemplate.bgObjectRules.clearingZone = {
-        centerCol,
-        centerRow,
-        width: extW + 4,
-        height: extH + 4,
-        allowGrass: false,
-        allowObjects: false
-      };
-    }
+    room.exitsLocked = false;
+  }
 
+  generateWellRoom(room) {
+    const CS = GRID.CELL_SIZE;
+    const template = this.currentLetterTemplate?.wellStructure;
+    const centerCol = template?.centerCol ?? 15;
+    const centerRow = template?.centerRow ?? 15;
+    const ringRadius = template?.ringRadius ?? 2;
+
+    // Background terrain pass first so the standard objects fill the room edges,
+    // then the clearingZone in the W template keeps the well's footprint clear.
     this.generateBackgroundObjects(room);
 
-    if (this.currentLetterTemplate?.bgObjectRules) {
-      this.currentLetterTemplate.bgObjectRules.clearingZone = prevClearingZone;
+    // Place a circular ring of well stones around the central water cell.
+    // Cells inside the ring (excluding the center) stay walkable so the player
+    // can approach from any side; corners outside the ring are dropped to
+    // soften the silhouette into a circle rather than a square.
+    const ringCells = [];
+    for (let dr = -ringRadius; dr <= ringRadius; dr++) {
+      for (let dc = -ringRadius; dc <= ringRadius; dc++) {
+        const dist = Math.sqrt(dr * dr + dc * dc);
+        // Outer ring: cells whose distance is within [r-0.5, r+0.5]
+        if (dist < ringRadius - 0.5 || dist > ringRadius + 0.5) continue;
+        ringCells.push({ r: centerRow + dr, c: centerCol + dc });
+      }
     }
 
-    // Spawn enemies outside the dungeon entrance perimeter
-    const enemyCount = this.randInt(2, 5);
+    for (const { r, c } of ringCells) {
+      if (r < 1 || r >= GRID.ROWS - 1 || c < 1 || c >= GRID.COLS - 1) continue;
+      room.collisionMap[r][c] = true;
+      const stone = new BackgroundObject('◯', c * CS, r * CS);
+      room.backgroundObjects.push(stone);
+    }
+
+    // Center water cell — the target of the Infused Coin animation.
+    room.collisionMap[centerRow][centerCol] = true;
+    const water = new BackgroundObject('=', centerCol * CS, centerRow * CS);
+    room.backgroundObjects.push(water);
+
+    // Strip any background objects the standard pass may have placed inside the
+    // ring footprint so the well silhouette stays clean.
+    for (let i = room.backgroundObjects.length - 1; i >= 0; i--) {
+      const o = room.backgroundObjects[i];
+      const oc = Math.floor(o.position.x / CS);
+      const orow = Math.floor(o.position.y / CS);
+      if (o.char === '◯' || (oc === centerCol && orow === centerRow)) continue;
+      const dr = orow - centerRow;
+      const dc = oc - centerCol;
+      if (Math.sqrt(dr * dr + dc * dc) <= ringRadius + 0.5) {
+        room.backgroundObjects.splice(i, 1);
+      }
+    }
+
+    // Spawn 1-2 zone enemies in the rest of the room — keeps it from being
+    // a pure safe-zone before activation, but light so the player can focus
+    // on the ritual.
+    const enemyCount = this.randInt(1, 2);
     for (let i = 0; i < enemyCount; i++) {
       const enemyChar = getZoneRandomEnemy(this.currentDepth, room.zone);
       if (!enemyChar) continue;
       const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects);
-      const gc = Math.floor(pos.x / GRID.CELL_SIZE);
-      const gr = Math.floor(pos.y / GRID.CELL_SIZE);
-      const tooClose = gc >= minCol - 1 && gc <= maxCol + 1 && gr >= minRow - 1 && gr <= maxRow + 1;
-      if (tooClose) continue;
+      if (!pos) continue;
       const enemy = new Enemy(enemyChar, pos.x, pos.y, this.currentDepth);
       enemy.setCollisionMap(room.collisionMap);
       enemy.setBackgroundObjects(room.backgroundObjects);
       this.addEnemyToRoom(room, enemy);
     }
 
-    room.exitsLocked = room.enemies.length > 0;
+    // Per-room well state — WellSystem reads this to detect activation
+    // proximity. Once consumed, the well stays inert for the rest of the room.
+    room.well = {
+      centerCol,
+      centerRow,
+      centerX: centerCol * CS + CS / 2,
+      centerY: centerRow * CS + CS / 2,
+      consumed: false
+    };
+  }
+
+  // F (Fountain) room — large square pool with two waterfall columns and a
+  // 1×1 walkable center pad. Throw a weapon into the pool (aim the reticule
+  // inside the pool footprint) to offer it for a tier upgrade (FountainSystem).
+  // The background-object pass is skipped inside the pool footprint so the
+  // water silhouette stays clean.
+  generateFountainRoom(room) {
+    const CS = GRID.CELL_SIZE;
+    const fs = this.currentLetterTemplate?.fountainStructure;
+    const centerCol      = fs?.centerCol      ?? 15;
+    const centerRow      = fs?.centerRow      ?? 15;
+    const poolRadius     = fs?.poolRadius     ?? 4;     // 9×9 pool (radius 4)
+    const padRadius      = fs?.padRadius      ?? 0;     // 1×1 walkable center
+    const waterfallCols  = fs?.waterfallCols  ?? [-3, 3];
+    const waterfallRows  = fs?.waterfallRows  ?? [-poolRadius, poolRadius];
+
+    // Standard background pass first so trees/grass populate the edges; the
+    // template's clearingZone keeps the pool footprint clear.
+    this.generateBackgroundObjects(room);
+
+    // Place pool water tiles in a square. Tiles use '~' (water) with a
+    // shimmer animation flag so the renderer can cycle glyphs per-tile.
+    for (let dr = -poolRadius; dr <= poolRadius; dr++) {
+      for (let dc = -poolRadius; dc <= poolRadius; dc++) {
+        // Carve out the center walkable pad
+        if (Math.abs(dr) <= padRadius && Math.abs(dc) <= padRadius) continue;
+        const r = centerRow + dr;
+        const c = centerCol + dc;
+        if (r < 1 || r >= GRID.ROWS - 1 || c < 1 || c >= GRID.COLS - 1) continue;
+        room.collisionMap[r][c] = true;
+        const water = new BackgroundObject('~', c * CS, r * CS);
+        water.color = '#66bbff';
+        water.animationColor = '#aaddff';
+        water.fountainWater = true; // marker for shimmer animation + corruption detection
+        room.backgroundObjects.push(water);
+      }
+    }
+
+    // Waterfall columns — vertical animated tiles flanking the pool. These
+    // sit at the pool's top and bottom edges in the configured columns, and
+    // render with a downward-cycling glyph (handled by RenderController).
+    for (const dc of waterfallCols) {
+      for (const dr of waterfallRows) {
+        const r = centerRow + dr;
+        const c = centerCol + dc;
+        if (r < 1 || r >= GRID.ROWS - 1 || c < 1 || c >= GRID.COLS - 1) continue;
+        // Replace the water tile at this slot with a waterfall tile
+        for (let i = room.backgroundObjects.length - 1; i >= 0; i--) {
+          const o = room.backgroundObjects[i];
+          if (Math.floor(o.position.x / CS) === c && Math.floor(o.position.y / CS) === r) {
+            room.backgroundObjects.splice(i, 1);
+          }
+        }
+        const fall = new BackgroundObject('│', c * CS, r * CS);
+        fall.color = '#aaddff';
+        fall.animationColor = '#eeffff';
+        fall.fountainWaterfall = true;
+        room.collisionMap[r][c] = true;
+        room.backgroundObjects.push(fall);
+      }
+    }
+
+    // Strip any standard objects that landed inside the pool footprint —
+    // matches the well-room cleanup pattern.
+    for (let i = room.backgroundObjects.length - 1; i >= 0; i--) {
+      const o = room.backgroundObjects[i];
+      if (o.fountainWater || o.fountainWaterfall) continue;
+      const oc = Math.floor(o.position.x / CS);
+      const orow = Math.floor(o.position.y / CS);
+      if (Math.abs(orow - centerRow) <= poolRadius && Math.abs(oc - centerCol) <= poolRadius) {
+        room.backgroundObjects.splice(i, 1);
+      }
+    }
+
+    // No enemies — fountain room is a sanctuary. The threat is the player's
+    // own choice (corrupting it with elemental damage).
+
+    // Per-room fountain state — FountainSystem reads this for proximity,
+    // ritual locks, and corruption tracking.
+    room.fountain = {
+      centerCol,
+      centerRow,
+      centerX: centerCol * CS + CS / 2,
+      centerY: centerRow * CS + CS / 2,
+      poolRadius,
+      padRadius,
+      corrupted: false
+    };
+  }
+
+  generateDungeonRoom(room) {
+    const design = getDungeonDesign(room.zone);
+    const { grid, wallColor, doorColor } = design;
+
+    let doorCol = 15, doorRow = 10;
+    let minWallCol = 29, maxWallCol = 0, minWallRow = 29, maxWallRow = 0;
+    let foundWall = false;
+
+    for (let r = 0; r < grid.length; r++) {
+      const row = grid[r];
+      for (let c = 0; c < row.length; c++) {
+        const ch = row[c];
+        if (ch === '#' || ch === '.') continue;
+
+        const px = c * GRID.CELL_SIZE;
+        const py = r * GRID.CELL_SIZE;
+
+        if (ch === '≡') {
+          room.collisionMap[r][c] = true;
+          const wall = new BackgroundObject('≡', px, py);
+          wall.color = wallColor;
+          wall.animationColor = wallColor;
+          room.backgroundObjects.push(wall);
+          if (!foundWall || c < minWallCol) minWallCol = c;
+          if (!foundWall || c > maxWallCol) maxWallCol = c;
+          if (!foundWall || r < minWallRow) minWallRow = r;
+          if (!foundWall || r > maxWallRow) maxWallRow = r;
+          foundWall = true;
+        } else if (ch === '∩') {
+          doorCol = c;
+          doorRow = r;
+          const door = new BackgroundObject('∩', px, py);
+          door.color = doorColor;
+          door.animationColor = doorColor;
+          room.backgroundObjects.push(door);
+        } else {
+          const deco = new BackgroundObject(ch, px, py);
+          room.backgroundObjects.push(deco);
+        }
+      }
+    }
+
+    room.dungeon = {
+      exteriorBounds: { minCol: minWallCol, maxCol: maxWallCol, minRow: minWallRow, maxRow: maxWallRow },
+      doorPosition: { col: doorCol, row: doorRow },
+      hutKind: 'enemy_encounter',
+      interiorGenerated: false,
+    };
+
+    // No random background objects — design covers the full room
+    // No enemies — same as maze room
+    room.exitsLocked = false;
+  }
+
+  generateMazeRoom(room) {
+    // 19×19 hollow exterior shell matching the interior's footprint.
+    // The MazeSystem generates the real 19×19 interior on entry.
+    const centerCol = 15;
+    const centerRow = 14; // shift up slightly so south door has clearance
+    const halfW = 9, halfH = 9; // 19×19
+
+    const minCol = centerCol - halfW; // 6
+    const maxCol = centerCol + halfW; // 24
+    const minRow = centerRow - halfH; // 5
+    const maxRow = centerRow + halfH; // 23
+
+    const WALL_COLOR = '#3a2255';
+    const DECO_COLOR = '#1a0f2e';
+
+    // ── Exterior perimeter walls ────────────────────────────────────────────
+    for (let row = minRow; row <= maxRow; row++) {
+      for (let col = minCol; col <= maxCol; col++) {
+        const isWall = row === minRow || row === maxRow || col === minCol || col === maxCol;
+        if (!isWall) continue;
+        room.collisionMap[row][col] = true;
+        const wallObj = new BackgroundObject('≡', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+        wallObj.color = WALL_COLOR;
+        room.backgroundObjects.push(wallObj);
+      }
+    }
+
+    // ── Decorative mini-maze inside the exterior (non-solid, visual only) ──
+    // Interior is 17×17 cells (minCol+1..maxCol-1, minRow+1..maxRow-1).
+    // Run a DFS on an 8×8 logical grid → 17×17 physical cells.
+    const DL = 8; // logical size
+    const DP = DL * 2 + 1; // 17 physical cells
+    const decoVisited = Array.from({ length: DL }, () => new Array(DL).fill(false));
+    const decoWall    = Array.from({ length: DP }, () => new Array(DP).fill(true));
+    const pR = lr => lr * 2 + 1, pC = lc => lc * 2 + 1;
+    const carve = (lr, lc) => {
+      decoVisited[lr][lc] = true;
+      decoWall[pR(lr)][pC(lc)] = false;
+      const dirs = [[-1,0],[1,0],[0,-1],[0,1]].sort(() => Math.random() - 0.5);
+      for (const [dr, dc] of dirs) {
+        const nr = lr + dr, nc = lc + dc;
+        if (nr < 0 || nr >= DL || nc < 0 || nc >= DL || decoVisited[nr][nc]) continue;
+        decoWall[pR(lr) + dr][pC(lc) + dc] = false;
+        carve(nr, nc);
+      }
+    };
+    carve(0, 0);
+
+    const iCol0 = minCol + 1, iRow0 = minRow + 1;
+    for (let dr = 0; dr < DP; dr++) {
+      for (let dc = 0; dc < DP; dc++) {
+        if (!decoWall[dr][dc]) continue;
+        const col = iCol0 + dc, row = iRow0 + dr;
+        if (col > maxCol - 1 || row > maxRow - 1) continue; // stay inside perimeter
+        const decoObj = new BackgroundObject('≡', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+        decoObj.color = DECO_COLOR;
+        room.backgroundObjects.push(decoObj);
+      }
+    }
+
+    // ── South door glyph ────────────────────────────────────────────────────
+    const doorObj = new BackgroundObject('∩', centerCol * GRID.CELL_SIZE, maxRow * GRID.CELL_SIZE);
+    doorObj.color = WALL_COLOR;
+    room.backgroundObjects.push(doorObj);
+
+    // ── Maze metadata (MazeSystem reads this) ───────────────────────────────
+    room.maze = {
+      exteriorBounds: { minCol, maxCol, minRow, maxRow },
+      doorPosition: { col: centerCol, row: maxRow },
+      interiorGenerated: false,
+      sealed: false,
+    };
+
+    // ── Sparse exterior bg objects (no room inside the large shell) ─────────
+    const prev = this.currentLetterTemplate?.bgObjectRules?.clearingZone;
+    if (this.currentLetterTemplate?.bgObjectRules) {
+      this.currentLetterTemplate.bgObjectRules.clearingZone = {
+        centerCol, centerRow, width: 23, height: 23,
+        allowGrass: false, allowObjects: false,
+      };
+    }
+    this.generateBackgroundObjects(room);
+    if (this.currentLetterTemplate?.bgObjectRules) {
+      this.currentLetterTemplate.bgObjectRules.clearingZone = prev;
+    }
+
+    // No exterior enemy spawns — the maze itself is the encounter.
+    const C = GRID.CELL_SIZE;
+    room.spawnZones = {
+      north:   { x: centerCol * C, y: (maxRow + 3) * C },
+      south:   { x: centerCol * C, y: (minRow - 2) * C },
+      east:    { x: (minCol - 3) * C, y: centerRow  * C },
+      west:    { x: (maxCol + 3) * C, y: centerRow  * C },
+      default: { x: centerCol * C, y: (maxRow + 3) * C },
+    };
+
+    room.exitsLocked = false;
   }
 
   /**

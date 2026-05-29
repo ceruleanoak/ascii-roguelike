@@ -54,7 +54,11 @@ export const ROOM_TYPES = {
   UNDERGROUND: 'UNDERGROUND',
   BAT_BELFRY: 'BAT_BELFRY',
   HUT: 'HUT',
-  DUNGEON: 'DUNGEON'
+  DUNGEON: 'DUNGEON',
+  MAZE: 'MAZE',
+  RIDGE: 'RIDGE',
+  WELL: 'WELL',
+  FOUNTAIN: 'FOUNTAIN'
 };
 
 export const COLORS = {
@@ -105,6 +109,19 @@ export const PLAYER_STATS = {
   START_HP: 10
 };
 
+// Categorizes how a background object can be acted on. Each BACKGROUND_OBJECTS
+// entry may declare an `acceptsInteractions` array using these values; objects
+// without one default to ['blade','bullet','blunt'] (resource-harvest behavior).
+// 'spacebar' enables direct player interaction (open container) regardless of
+// whether the player is holding a weapon. 'all' is shorthand for every type.
+export const INTERACTION_TYPES = {
+  SPACEBAR: 'spacebar',
+  BLADE: 'blade',
+  BULLET: 'bullet',
+  BLUNT: 'blunt',
+  ALL: 'all'
+};
+
 export const BACKGROUND_OBJECTS = {
   '%': {
     name: 'Bush',
@@ -115,6 +132,18 @@ export const BACKGROUND_OBJECTS = {
     flammability: 'high',
     conductivity: 'none',
     slowing: 0.8,
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
+  '⊓': {
+    name: 'Press',
+    color: '#aa8855',
+    solid: true,
+    indestructible: true,
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
     interactions: {
       default: { animation: 'shake', message: null }
     }
@@ -168,6 +197,7 @@ export const BACKGROUND_OBJECTS = {
     bulletInteraction: 'interact-destroy',
     flammability: 'medium',
     conductivity: 'none',
+    acceptsInteractions: ['all'],
     interactions: {
       default: { animation: 'shake', message: null }
     }
@@ -235,6 +265,7 @@ export const BACKGROUND_OBJECTS = {
     bulletInteraction: 'block',
     flammability: 'none',
     conductivity: 'metal',
+    acceptsInteractions: ['all'],
     interactions: {
       default: { animation: 'clang', message: null }
     }
@@ -319,6 +350,36 @@ export const BACKGROUND_OBJECTS = {
     bulletInteraction: 'interact-destroy',
     flammability: 'high',
     conductivity: 'none',
+    acceptsInteractions: ['all'],
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
+  'C': {
+    // Coral Cluster — cuttable background object that drops the Coral Cluster
+    // ingredient. Spawns in green-zone Lake rooms (low weight) and inside
+    // blue-zone Reef Walk. Pink-coral palette to read distinctly from bushes.
+    name: 'Coral Cluster',
+    color: '#ff88aa',
+    hp: 1,
+    dropEffect: 'destroyObject:spawnIngredient:C',
+    dropChance: 0.6,
+    bulletInteraction: 'interact-destroy',
+    flammability: 'none',
+    conductivity: 'none',
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
+  '⊞': {
+    name: 'Chest',
+    color: '#ccaa66',
+    hp: 1,
+    dropEffect: 'destroyObject:spawnChestLoot',
+    bulletInteraction: 'interact-destroy',
+    flammability: 'low',
+    conductivity: 'none',
+    acceptsInteractions: ['all'],
     interactions: {
       default: { animation: 'shake', message: null }
     }
@@ -345,7 +406,7 @@ export const BACKGROUND_OBJECTS = {
     burnDuration: 1.5,
     conductivity: 'none',
     blocksVision: true,
-    slowing: true,
+    slowing: 0.6, // numeric multiplier: 0.6 = 40% slow (consistent with other slowing objects)
     cuttable: true,
     cutState: ',',
     dropEffect: 'cutGrass',
@@ -510,21 +571,62 @@ export const BACKGROUND_OBJECTS = {
       default: { animation: 'none', message: null }
     }
   },
-  'v': {
-    name: 'Stairs Down',
-    color: '#8b7355',
+  '▓': {
+    name: 'Chasm',
+    color: '#1a1410',
     bulletInteraction: 'pass-through',
     flammability: 'none',
     conductivity: 'none',
     indestructible: true,
-    stairsDown: true,
-    solid: false,
-    alwaysRender: true,
+    chasm: true,
+    solid: true,
     interactions: {
       default: { animation: 'none', message: null }
     }
   },
-  '^': {
+  '█': {
+    name: 'Hut Interior',
+    color: '#0a0a0a',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    hutInterior: true,
+    solid: true,
+    interactions: {
+      default: { animation: 'none', message: null }
+    }
+  },
+  '◯': {
+    name: 'Well Stone',
+    color: '#7a7060',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    wellStone: true,
+    solid: true,
+    interactions: {
+      default: { animation: 'bounce', message: null }
+    }
+  },
+  'λ': {
+    name: 'Chicken Leg',
+    color: '#c8a35c',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    chickenLeg: true,
+    solid: false,
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
+  // Dungeon stairs — use '{' (up) to avoid collision with tunnel entrance chars '^'/'v'.
+  // DungeonSystem creates BackgroundObject('{', ...) for stairs up.
+  // Stairs down use char 'x' with manual color override in DungeonSystem (no config entry needed).
+  '{': {
     name: 'Stairs Up',
     color: '#8b7355',
     bulletInteraction: 'pass-through',
@@ -554,14 +656,97 @@ export const BACKGROUND_OBJECTS = {
     interactions: {
       default: { animation: 'bounce', message: null }
     }
+  },
+  // Secret vein rock — surface (plane 0). Same grid position as a '⊙' underground marker.
+  // Requires a pickaxe to mine (glitteringRock: true gates the pickaxe check in CombatSystem).
+  // Drops a Crystal Maul (T4 weapon) when destroyed.
+  '@': {
+    name: 'Secret Vein Rock',
+    color: '#888888',
+    hp: 3,
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: false,
+    glitteringRock: true,
+    solid: true,
+    dropEffect: 'destroyObject:spawnWeapon:⬡',
+    interactions: {
+      default: { animation: 'bounce', message: null }
+    }
+  },
+  // Red vein marker — underground only (plane 1). Floats above the cave floor as a visual hint
+  // that a secret vein rock exists directly above on the surface. Indestructible and non-solid.
+  '⊙': {
+    name: 'Red Vein Marker',
+    color: '#ff3333',
+    hp: null,
+    indestructible: true,
+    solid: true,
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    renderOnlyOnPlane: 1,
+    interactions: {
+      default: { animation: 'none', message: null }
+    }
   }
+};
+
+export const BACKGROUND_OBJECT_VARIANTS = {
+  'water': {
+    char: '~',
+    name: 'Puddle',
+    color: '#3366ff',
+    makesWet:    true,
+    steamOnFire: true,
+    conductivity: 'water',
+    damaging:    false,
+    damage:      0,
+    slowing:     false,
+  },
+  'lava': {
+    char: '~',
+    name: 'Lava',
+    color: '#ff4400',
+    makesWet:    false,
+    steamOnFire: false,
+    conductivity: 'none',
+    damaging:    true,
+    damage:      2,
+    slowing:     false,
+  },
+  'mud_dry': {
+    char: '~',
+    name: 'Dry Mud',
+    color: '#997755',
+    makesWet:    false,
+    steamOnFire: false,
+    conductivity: 'none',
+    damaging:    false,
+    damage:      0,
+    slowing:     false,
+    transitionsTo: 'mud_wet',
+  },
+  'mud_wet': {
+    char: '~',
+    name: 'Wet Mud',
+    color: '#664422',
+    makesWet:    false,
+    steamOnFire: false,
+    conductivity: 'none',
+    damaging:    false,
+    damage:      0,
+    slowing:     true,
+  },
 };
 
 export const WATER_COLORS = {
   normal:      '#3366ff',
   frozen:      '#ffffff',
   poisoned:    '#44bb44',
-  electrified: '#cccc00'
+  electrified: '#cccc00',
+  crystallized: '#bbeeff' // Coral Crown — walkable platform, blocks bullets, 6s decay
 };
 
 export const WATER_STRUCTURES = {

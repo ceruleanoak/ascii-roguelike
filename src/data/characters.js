@@ -37,10 +37,12 @@ export const CHARACTER_TYPES = {
   'cyan': {
     name: 'Cyan Rogue',
     color: '#44ffff',
-    rollType: 'hide', // Invisibility during roll
+    rollType: 'hide', // Invisibility during roll + extended hide window after
     rollDuration: 0.25,
-    rollCooldown: 0.4,
+    rollCooldown: 2.0, // Long cooldown — 1.5s hide + 0.5s after becoming visible
     rollSpeed: 650,
+    hideDuration: 1.5, // Total hidden window (matches iframe+attackBlock); enemies forget player while hidden
+    backstabMultiplier: 2.5, // 2.5x damage when hitting an enemy that hasn't detected the player
     weaponAffinities: {}
   },
   'yellow': {

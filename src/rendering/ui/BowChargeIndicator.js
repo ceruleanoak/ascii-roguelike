@@ -1,5 +1,5 @@
 /**
- * BowChargeIndicator - Visual feedback for bow charge state and wand uses
+ * BowChargeIndicator - Visual feedback for bow charge state, wand uses, and gun reloads
  *
  * Shows 3 states for BOWs:
  * - Out of arrows: Blinking red X
@@ -9,6 +9,9 @@
  *
  * Shows 1 state for WANDs:
  * - Out of uses: Blinking red X
+ *
+ * Shows 1 state for GUNs with a magazine:
+ * - Reloading: Growing yellow bar (same visual as bow charge)
  */
 
 import { GRID } from '../../game/GameConfig.js';
@@ -26,14 +29,61 @@ export class BowChargeIndicator {
     const weapon = game.player.heldItem;
     const weaponType = weapon.data.weaponType;
 
-    // Only render for BOWs and WANDs
-    if (weaponType !== 'BOW' && weaponType !== 'WAND') {
+    const isChargeGun = weaponType === 'GUN' && weapon.data.requiresCharge;
+    const isGun = weaponType === 'GUN';
+
+    // Charge hammer (Crystal Maul): cyan charge bar while building up; nothing after used.
+    if (weapon.data.chargeHammer) {
+      if (weapon.chargeAttackUsed) return; // mega-attack spent — no indicator
+      if (!weapon.isCharging) return;      // not charging — no indicator
+      const ratio = Math.min(weapon.chargeTime / weapon.data.chargeTime, 1.0);
+      const barHeight = GRID.CELL_SIZE;
+      const barX = game.player.position.x + GRID.CELL_SIZE * 1.5;
+      const barY = game.player.position.y;
+      const filledHeight = barHeight * ratio;
+      this.renderer.drawRect(barX, barY + (barHeight - filledHeight), 4, filledHeight, '#88eeff', true);
+      return;
+    }
+
+    // Weapon throw charge bar (SHIFT-hold for non-trap items)
+    if (game.trapCharging && weapon.data.type !== 'TRAP') {
+      const ratio = Math.min(game.trapCharging.timer / (game.trapCharging.maxTime || 0.7), 1.0);
+      const barHeight = GRID.CELL_SIZE;
+      const barX = game.player.position.x + GRID.CELL_SIZE * 1.5;
+      const barY = game.player.position.y;
+      const filledHeight = barHeight * ratio;
+      this.renderer.drawRect(barX, barY + (barHeight - filledHeight), 4, filledHeight, '#ffdd44', true);
+      return;
+    }
+
+    // Only render for BOWs, WANDs, and GUNs
+    if (weaponType !== 'BOW' && weaponType !== 'WAND' && !isGun) {
       return;
     }
 
     const barHeight = GRID.CELL_SIZE; // Player height
     const barX = game.player.position.x + GRID.CELL_SIZE * 1.5; // To the right of player
     const barY = game.player.position.y; // Aligned with player
+
+    // GUN reload bar: only shown during the dedicated reload phase (post-fire
+    // cooldown runs first), fills bottom-to-top as reload progresses.
+    const isReloading = isGun && weapon._reloading && !!weapon.data.reloadTime;
+    if (isReloading) {
+      const ratio = 1 - Math.max(0, Math.min(1, weapon.cooldownTimer / weapon.data.reloadTime));
+      const filledHeight = barHeight * ratio;
+      this.renderer.drawRect(
+        barX,
+        barY + (barHeight - filledHeight),
+        4,
+        filledHeight,
+        '#ffdd44',
+        true
+      );
+      return;
+    }
+
+    // Non-charge regular guns have no further indicator state
+    if (isGun && !isChargeGun) return;
 
     // Wands: Show red X when out of uses
     if (weaponType === 'WAND') {
@@ -51,8 +101,8 @@ export class BowChargeIndicator {
       return; // Wands only show red X, no charge bar
     }
 
-    // Bows: State 0 - Out of arrows - show blinking red X
-    if (weapon.usesRemaining !== null && weapon.usesRemaining <= 0) {
+    // Bows / charge guns: State 0 - Out of arrows - show blinking red X (bows only)
+    if (!isChargeGun && weapon.usesRemaining !== null && weapon.usesRemaining <= 0) {
       const blinkOn = Math.floor(performance.now() / 1000 * 6) % 2 === 0;
       if (blinkOn) {
         this.renderer.drawEntity(

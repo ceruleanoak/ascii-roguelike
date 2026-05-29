@@ -14,13 +14,22 @@
  * - Render cheat menu if open
  */
 
-import { GRID, COLORS, EQUIPMENT } from '../../game/GameConfig.js';
+import { GRID, COLORS, EQUIPMENT, CRAFTING } from '../../game/GameConfig.js';
 import { getItemData } from '../../data/items.js';
+import { PixelatedDissolve } from '../effects/TextEffects.js';
 
 export class RestRenderer {
   constructor(renderer, renderController) {
     this.renderer = renderer;
     this.renderController = renderController;
+    // Dissolve effect for the CRAFT label (fades in/out based on proximity)
+    this._craftDissolve = new PixelatedDissolve({ speed: 1.5, blockSize: 6 });
+    // Vacuum particle state — pixel motes cycling upward into the north exit
+    this._vacuumParticles = [];
+    this._lastVacuumTime = 0;
+    for (let i = 0; i < 24; i++) {
+      this._vacuumParticles.push(this._makeVacuumParticle());
+    }
   }
 
   render(game) {
@@ -38,39 +47,24 @@ export class RestRenderer {
       // Draw crafting station
       this.renderController.craftingStation.render(game);
 
-      // Draw equipment slots
-      this.renderController.equipmentSlots.render(game);
-
       this.renderer.backgroundDirty = false;
     }
+
+    // Equipment slots redraw every frame (outside dirty gate) so the empty-slot
+    // blink animation can update — same pattern as ArrowKeyIndicators below.
+    this.renderController.equipmentSlots.render(game);
 
     // Render foreground
     this.renderer.clearForeground();
 
-    // Draw prominent warp zone indicator for north exit (3 rows of arrows)
-    const centerX = Math.floor(GRID.COLS / 2);
-    const warpZoneColor = 'rgba(100, 200, 255, 0.5)';
+    // Vacuum particles — pixel-sized motes slowly drawn toward the north exit
+    const _vpNow = performance.now();
+    const _vpDt = Math.min((_vpNow - (this._lastVacuumTime || _vpNow)) / 1000, 0.05);
+    this._lastVacuumTime = _vpNow;
+    this._updateAndDrawVacuumParticles(_vpDt);
 
-    this.renderer.drawRect(
-      (centerX - 1) * GRID.CELL_SIZE,
-      1 * GRID.CELL_SIZE,
-      3 * GRID.CELL_SIZE,
-      3 * GRID.CELL_SIZE,
-      warpZoneColor,
-      true
-    );
-
-    const arrowColor = 'rgba(150, 220, 255, 0.8)';
-    for (let row = 0; row < 3; row++) {
-      for (let i = -1; i <= 1; i++) {
-        this.renderer.drawEntity(
-          (centerX + i) * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
-          (1.5 + row) * GRID.CELL_SIZE,
-          '^',
-          arrowColor
-        );
-      }
-    }
+    // Cycling upgrade animation on center crafting slot (updates every frame)
+    this.renderController.craftingStation.renderForeground(game);
 
     // Draw active quick slot's chest in white on foreground (updates every frame)
     if (game.player) {
@@ -98,6 +92,27 @@ export class RestRenderer {
     // Highlight the nearest interactive slot only (prevents multi-slot highlighting)
     const nearestSlot = game.getNearestInteractiveSlot();
 
+    // Determine which single object shows a floating hint — nearest wins, no overlaps.
+    // To add a new interactive object, push a { source, dist } entry here.
+    const _hintCandidates = [];
+    if (nearestSlot) {
+      const slotPx = nearestSlot.x * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+      const slotPy = nearestSlot.y * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+      _hintCandidates.push({ source: 'slot', dist: Math.hypot(game.player.position.x - slotPx, game.player.position.y - slotPy) });
+    }
+    if (game.restBundle) {
+      const d = Math.hypot(game.player.position.x - game.restBundle.position.x, game.player.position.y - game.restBundle.position.y);
+      if (d < GRID.CELL_SIZE * 3) _hintCandidates.push({ source: 'bundle', dist: d });
+    }
+    if (game.tombstoneActive && game.lastDeathCause && !game.tombstonePopup) {
+      const _tombPx = (GRID.COLS - 4) * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+      const _tombPy = 2 * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+      const d = Math.hypot(game.player.position.x - _tombPx, game.player.position.y - _tombPy);
+      if (d < GRID.CELL_SIZE * 3) _hintCandidates.push({ source: 'tombstone', dist: d });
+    }
+    _hintCandidates.sort((a, b) => a.dist - b.dist);
+    const activeHint = _hintCandidates.length > 0 ? _hintCandidates[0].source : null;
+
     if (nearestSlot) {
       let highlightX, highlightY;
 
@@ -122,12 +137,13 @@ export class RestRenderer {
 
     // Draw projectiles (for weapon preview)
     for (const proj of game.combatSystem.getProjectiles()) {
-      this.renderer.drawEntity(
-        proj.position.x + GRID.CELL_SIZE / 2,
-        proj.position.y + GRID.CELL_SIZE / 2,
-        proj.char,
-        proj.color
-      );
+      const cx = proj.position.x + GRID.CELL_SIZE / 2;
+      const cy = proj.position.y + GRID.CELL_SIZE / 2;
+      if (proj.drawAngle != null) {
+        this.renderer.drawEntityRotated(cx, cy, proj.char, proj.color, proj.drawAngle);
+      } else {
+        this.renderer.drawEntity(cx, cy, proj.char, proj.color);
+      }
     }
 
     // Draw melee attacks (for weapon preview)
@@ -167,19 +183,33 @@ export class RestRenderer {
 
     // Draw starter bundle (world object, destroyed on SPACE)
     if (game.restBundle) {
+      // Gentle sinusoidal bob so the satchel reads as a pickup, not scenery.
+      const bobOffset = Math.sin(performance.now() / 400) * 3;
       this.renderer.drawEntity(
         game.restBundle.position.x + GRID.CELL_SIZE / 2,
-        game.restBundle.position.y + GRID.CELL_SIZE / 2,
+        game.restBundle.position.y + GRID.CELL_SIZE / 2 + bobOffset,
         game.restBundle.char,
         game.restBundle.color
       );
 
-      // Show PRESS SPACE when player is near the bundle
-      const bundleDist = Math.hypot(
-        game.player.position.x - game.restBundle.position.x,
-        game.player.position.y - game.restBundle.position.y
-      );
-      if (bundleDist < GRID.CELL_SIZE * 3) {
+      // Blinking yellow up-arrow under the bundle once the player has been to EXPLORE —
+      // a gentle nudge that this starter satchel is still sitting unclaimed.
+      if (game.hasLeftRestOnce && (performance.now() % 1000) < 500) {
+        this.renderer.fgCtx.save();
+        this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 0.7}px 'Unifont', monospace`;
+        this.renderer.fgCtx.textAlign = 'center';
+        this.renderer.fgCtx.textBaseline = 'middle';
+        this.renderer.fgCtx.fillStyle = '#ffcc33';
+        this.renderer.fgCtx.fillText(
+          '↑',
+          game.restBundle.position.x + GRID.CELL_SIZE / 2,
+          game.restBundle.position.y + GRID.CELL_SIZE * 1.5
+        );
+        this.renderer.fgCtx.restore();
+      }
+
+      // Show PRESS SPACE when player is near the bundle (activeHint guards against overlap)
+      if (activeHint === 'bundle') {
         this.renderer.fgCtx.save();
         this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 0.8}px 'VentureArcade', 'Unifont', monospace`;
         this.renderer.fgCtx.textAlign = 'center';
@@ -240,7 +270,7 @@ export class RestRenderer {
     this.renderController.greenRangerIndicator.render(game);
 
     // Draw contextual floating text above player when near a slot
-    if (nearestSlot) {
+    if (nearestSlot && activeHint === 'slot') {
       this.renderer.fgCtx.save();
       this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 0.8}px 'VentureArcade', 'Unifont', monospace`;
       this.renderer.fgCtx.textAlign = 'center';
@@ -295,22 +325,62 @@ export class RestRenderer {
       this.renderer.fgCtx.restore();
     }
 
-    // Draw North exit indicator
-    this.renderer.drawEntity(
+    // Draw "E X P L O R E" label — per-letter so recently-pressed keys blink
+    this._drawLitLabel(
+      this.renderer.fgCtx,
+      ' E X P L O R E',
       GRID.WIDTH / 2,
-      GRID.CELL_SIZE / 2,
-      '↑',
-      COLORS.TEXT
+      4 * GRID.CELL_SIZE + GRID.CELL_SIZE / 2 + 5,
+      game.keyFlashMap
     );
 
-    // Draw "EXPLORE" label just below the north exit warp zone
-    this.renderer.fgCtx.save();
-    this.renderer.fgCtx.font = `${GRID.CELL_SIZE}px 'VentureArcade', 'Unifont', monospace`;
-    this.renderer.fgCtx.textAlign = 'center';
-    this.renderer.fgCtx.textBaseline = 'middle';
-    this.renderer.fgCtx.fillStyle = '#666666';
-    this.renderer.fgCtx.fillText(' E X P L O R E', GRID.WIDTH / 2, 4 * GRID.CELL_SIZE + GRID.CELL_SIZE / 2 + 5);
-    this.renderer.fgCtx.restore();
+    // Draw "C R A F T" label — dissolves in when player is near the crafting station,
+    // with per-letter key-buffer highlighting overlaid on top.
+    const craftText = ' C R A F T';
+    const craftLabelX = GRID.WIDTH / 2;
+    const craftLabelY = (CRAFTING.STATION_Y + 2) * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+    const stationPx = CRAFTING.CENTER_SLOT_X * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+    const stationPy = CRAFTING.STATION_Y * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+    const craftDist = Math.hypot(
+      game.player.position.x - stationPx,
+      game.player.position.y - stationPy
+    );
+    const nearCraft = craftDist < GRID.CELL_SIZE * 3;
+
+    this._craftDissolve.render(this.renderer.fgCtx, {
+      text: craftText,
+      font: `${GRID.CELL_SIZE}px 'VentureArcade', 'Unifont', monospace`,
+      color: '#666666',
+      x: craftLabelX,
+      y: craftLabelY,
+      visible: nearCraft,
+    });
+
+    // Overlay lit letters on top of the dissolve (one-shot blink)
+    if (this._craftDissolve.alpha > 0) {
+      const FLASH_MS = 220;
+      const now = performance.now();
+      const flashMap = game.keyFlashMap || {};
+      const ctx = this.renderer.fgCtx;
+      ctx.save();
+      ctx.globalAlpha = this._craftDissolve.alpha;
+      ctx.font = `${GRID.CELL_SIZE}px 'VentureArcade', 'Unifont', monospace`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      const totalW = ctx.measureText(craftText).width;
+      const charW = totalW / craftText.length;
+      let cx = craftLabelX - totalW / 2;
+      for (const ch of craftText) {
+        const upper = ch.toUpperCase();
+        if (upper !== ' ' && flashMap[upper] !== undefined && (now - flashMap[upper]) < FLASH_MS) {
+          ctx.fillStyle = '#7a7a7a';
+          ctx.fillText(ch, cx, craftLabelY);
+        }
+        cx += charW;
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
 
     // === LEFT SIDE: WASD KEYS WITH "M O V E" ===
     const wasdY = GRID.HEIGHT - GRID.CELL_SIZE * 5;
@@ -454,12 +524,208 @@ export class RestRenderer {
       this.renderer.fgCtx.restore();
     }
 
-    // Draw inventory overlay when 'i' key is held
-    if (game.keys.i) {
+    // Draw tombstone in top-right corner (visible after death, gone when entering explore)
+    if (game.tombstoneActive && game.lastDeathCause) {
+      const tombCol = GRID.COLS - 4;
+      const tombRow = 2;
+      const tombPx = tombCol * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+      const tombPy = tombRow * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+
+      this.renderer.fgCtx.save();
+      this.renderer.fgCtx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
+      this.renderer.fgCtx.textAlign = 'center';
+      this.renderer.fgCtx.textBaseline = 'middle';
+      this.renderer.fgCtx.fillStyle = '#888888';
+      this.renderer.fgCtx.fillText('\u2020', tombPx, tombPy);
+      this.renderer.fgCtx.restore();
+
+      // Show SPACE hint when player is near the tombstone (activeHint guards against overlap)
+      if (activeHint === 'tombstone') {
+        this.renderer.fgCtx.save();
+        this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 0.8}px 'VentureArcade', 'Unifont', monospace`;
+        this.renderer.fgCtx.textAlign = 'center';
+        this.renderer.fgCtx.textBaseline = 'middle';
+        this.renderer.fgCtx.fillStyle = COLORS.TEXT;
+        this.renderer.fgCtx.fillText('SPACE', game.player.position.x + GRID.CELL_SIZE / 2, game.player.position.y - GRID.CELL_SIZE * 1.5);
+        this.renderer.fgCtx.restore();
+      }
+    }
+
+    // Render tombstone popup
+    if (game.tombstonePopup && game.lastDeathCause) {
+      this._renderTombstonePopup(game);
+    }
+
+    // Render slot popup (animated expand box before equipment/crafting menus open)
+    if (game.slotPopup) {
+      this._renderSlotPopup(game);
+    }
+
+    // Draw inventory overlay when Tab is held
+    if (game.keys.tab) {
       this.renderController.inventoryOverlay.render(game);
     }
 
     // Render cheat menu overlay (if open)
     game.cheatMenu.render(this.renderer);
+  }
+
+  /** Creates a single vacuum particle with a random initial cycle phase. */
+  _makeVacuumParticle() {
+    const colors = ['#8ab4cc', '#9cc4d8', '#b2d2e2', '#c4dce8'];
+    return {
+      // Wider spread at bottom, converges toward center as particles rise
+      xOffset: (Math.random() - 0.5) * GRID.CELL_SIZE * 4,
+      // Phase 0→1: particle travels from 2 cells below exit up to the gap
+      t: Math.random(),
+      cycleSpeed: 0.20 + Math.random() * 0.12,  // full cycle in ~4–5 s
+      size: Math.random() < 0.65 ? 1 : 2,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      maxAlpha: 0.3 + Math.random() * 0.4,
+    };
+  }
+
+  /** Advances each particle's cycle phase and draws it within the 2-cell exit zone. */
+  _updateAndDrawVacuumParticles(dt) {
+    const exitX = GRID.WIDTH / 2;
+    // Zone reaches from the exit gap down to the top of the EXPLORE label
+    const zoneDepth = 4 * GRID.CELL_SIZE + GRID.CELL_SIZE / 2 + 5;
+    const ctx = this.renderer.fgCtx;
+
+    for (const p of this._vacuumParticles) {
+      p.t = (p.t + p.cycleSpeed * dt) % 1;
+
+      // t=0 → bottom of zone (at EXPLORE label), t=1 → at the exit gap
+      const y = (1 - p.t) * zoneDepth;
+      // Spread converges toward center as the particle rises toward the exit
+      const x = exitX + p.xOffset * (1 - p.t * 0.65);
+
+      // Alpha envelope: fade in [0, 0.25], hold [0.25, 0.72], fade out [0.72, 1]
+      let env;
+      if (p.t < 0.25) {
+        env = p.t / 0.25;
+      } else if (p.t < 0.72) {
+        env = 1;
+      } else {
+        env = 1 - (p.t - 0.72) / 0.28;
+      }
+
+      const drawAlpha = env * p.maxAlpha;
+      if (drawAlpha < 0.01) continue;
+
+      ctx.globalAlpha = drawAlpha;
+      ctx.fillStyle = p.color;
+      ctx.fillRect(Math.round(x - p.size * 0.5), Math.round(y - p.size * 0.5), p.size, p.size);
+    }
+
+    ctx.globalAlpha = 1;
+  }
+
+  /** Renders a spaced-letter label with recently-pressed keys shown in light gray. */
+  _drawLitLabel(ctx, text, centerX, y, keyFlashMap = {}) {
+    const FLASH_MS = 220;
+    const now = performance.now();
+    ctx.save();
+    ctx.font = `${GRID.CELL_SIZE}px 'VentureArcade', 'Unifont', monospace`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    const totalW = ctx.measureText(text).width;
+    const charW = totalW / text.length;
+    let cx = centerX - totalW / 2;
+    for (const ch of text) {
+      const upper = ch.toUpperCase();
+      const isLit = upper !== ' ' && keyFlashMap[upper] !== undefined && (now - keyFlashMap[upper]) < FLASH_MS;
+      ctx.fillStyle = isLit ? '#7a7a7a' : '#666666';
+      ctx.fillText(ch, cx, y);
+      cx += charW;
+    }
+    ctx.restore();
+  }
+
+  _renderTombstonePopup(game) {
+    const { phase } = game.tombstonePopup;
+    const cause = game.lastDeathCause;
+    const ctx = this.renderer.fgCtx;
+
+    // Box dimensions by phase (in pixels)
+    const sizes = [
+      { w: 80,  h: 48  },  // phase 0: small empty
+      { w: 208, h: 80  },  // phase 1: medium empty
+      { w: 336, h: 128 }   // phase 2: full with text
+    ];
+    const { w, h } = sizes[Math.min(phase, 2)];
+    const cx = GRID.WIDTH / 2;
+    const cy = GRID.HEIGHT / 2;
+    const x = cx - w / 2;
+    const y = cy - h / 2;
+
+    ctx.save();
+
+    // Background fill
+    ctx.fillStyle = 'rgba(10, 10, 10, 0.94)';
+    ctx.fillRect(x, y, w, h);
+
+    // Border
+    ctx.strokeStyle = '#555555';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+
+    if (phase >= 2 && cause) {
+      const padX = 14;
+      const padY = 14;
+      const textMaxW = w - padX * 2;
+
+      // Header: "ended by [Name]"
+      ctx.font = `${GRID.CELL_SIZE * 0.85}px 'VentureArcade', 'Unifont', monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = '#cccccc';
+      ctx.fillText('ended by', cx, y + padY);
+
+      ctx.font = `${GRID.CELL_SIZE}px 'VentureArcade', 'Unifont', monospace`;
+      ctx.fillStyle = cause.color || '#ffffff';
+      const nameY = y + padY + GRID.CELL_SIZE * 0.9;
+      ctx.fillText(cause.name.toUpperCase(), cx, nameY);
+
+      // Separator line
+      const sepY = nameY + GRID.CELL_SIZE + 4;
+      ctx.strokeStyle = '#444444';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x + padX, sepY);
+      ctx.lineTo(x + w - padX, sepY);
+      ctx.stroke();
+
+      // Description text (word-wrapped)
+      if (cause.description) {
+        ctx.font = `11px 'Unifont', monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = '#999999';
+        this.renderer.drawWrappedText(ctx, cause.description, cx, sepY + 10, textMaxW, 14);
+      }
+    }
+
+    ctx.restore();
+  }
+
+  _renderSlotPopup(game) {
+    const { phase } = game.slotPopup;
+    const ctx = this.renderer.fgCtx;
+    const sizes = [
+      { w: 80,  h: 48 },  // phase 0: small empty
+      { w: 208, h: 80 },  // phase 1: medium empty
+    ];
+    const { w, h } = sizes[Math.min(phase, 1)];
+    const x = GRID.WIDTH / 2 - w / 2;
+    const y = GRID.HEIGHT / 2 - h / 2;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(10, 10, 10, 0.94)';
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = '#555555';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+    ctx.restore();
   }
 }

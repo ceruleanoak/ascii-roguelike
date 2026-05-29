@@ -37,87 +37,52 @@ export class ArrowKeyIndicators {
     const rightColor = game.arrowKeys.ArrowRight ? readyColor : (onCooldown ? cooldownColor : (isInactive ? inactiveColor : COLORS.TEXT));
 
     // Arrow UP (top)
-    this.renderer.drawCell(
-      Math.floor(arrowCenterX / GRID.CELL_SIZE) - 1,
-      Math.floor(arrowY / GRID.CELL_SIZE),
-      '[',
-      COLORS.BORDER
-    );
-    this.renderer.drawCell(
-      Math.floor(arrowCenterX / GRID.CELL_SIZE),
-      Math.floor(arrowY / GRID.CELL_SIZE),
-      '↑',
-      upColor
-    );
-    this.renderer.drawCell(
-      Math.floor(arrowCenterX / GRID.CELL_SIZE) + 1,
-      Math.floor(arrowY / GRID.CELL_SIZE),
-      ']',
-      COLORS.BORDER
-    );
+    const topRow = Math.floor(arrowY / GRID.CELL_SIZE);
+    const centerCol = Math.floor(arrowCenterX / GRID.CELL_SIZE);
+    this.renderer.drawCell(centerCol - 1, topRow, '[', COLORS.BORDER);
+    this.renderer.drawCell(centerCol,     topRow, '↑', upColor);
+    this.renderer.drawCell(centerCol + 1, topRow, ']', COLORS.BORDER);
 
     // Arrow LEFT, DOWN, RIGHT (bottom row)
-    const arrowBottomRowY = Math.floor(arrowY / GRID.CELL_SIZE) + 1;
+    const arrowBottomRowY = topRow + 1;
 
     // LEFT
-    this.renderer.drawCell(
-      Math.floor(arrowCenterX / GRID.CELL_SIZE) - 5,
-      arrowBottomRowY,
-      '[',
-      COLORS.BORDER
-    );
-    this.renderer.drawCell(
-      Math.floor(arrowCenterX / GRID.CELL_SIZE) - 4,
-      arrowBottomRowY,
-      '←',
-      leftColor
-    );
-    this.renderer.drawCell(
-      Math.floor(arrowCenterX / GRID.CELL_SIZE) - 3,
-      arrowBottomRowY,
-      ']',
-      COLORS.BORDER
-    );
+    this.renderer.drawCell(centerCol - 5, arrowBottomRowY, '[', COLORS.BORDER);
+    this.renderer.drawCell(centerCol - 4, arrowBottomRowY, '←', leftColor);
+    this.renderer.drawCell(centerCol - 3, arrowBottomRowY, ']', COLORS.BORDER);
 
     // DOWN
-    this.renderer.drawCell(
-      Math.floor(arrowCenterX / GRID.CELL_SIZE) - 1,
-      arrowBottomRowY,
-      '[',
-      COLORS.BORDER
-    );
-    this.renderer.drawCell(
-      Math.floor(arrowCenterX / GRID.CELL_SIZE),
-      arrowBottomRowY,
-      '↓',
-      downColor
-    );
-    this.renderer.drawCell(
-      Math.floor(arrowCenterX / GRID.CELL_SIZE) + 1,
-      arrowBottomRowY,
-      ']',
-      COLORS.BORDER
-    );
+    this.renderer.drawCell(centerCol - 1, arrowBottomRowY, '[', COLORS.BORDER);
+    this.renderer.drawCell(centerCol,     arrowBottomRowY, '↓', downColor);
+    this.renderer.drawCell(centerCol + 1, arrowBottomRowY, ']', COLORS.BORDER);
 
     // RIGHT
-    this.renderer.drawCell(
-      Math.floor(arrowCenterX / GRID.CELL_SIZE) + 3,
-      arrowBottomRowY,
-      '[',
-      COLORS.BORDER
-    );
-    this.renderer.drawCell(
-      Math.floor(arrowCenterX / GRID.CELL_SIZE) + 4,
-      arrowBottomRowY,
-      '→',
-      rightColor
-    );
-    this.renderer.drawCell(
-      Math.floor(arrowCenterX / GRID.CELL_SIZE) + 5,
-      arrowBottomRowY,
-      ']',
-      COLORS.BORDER
-    );
+    this.renderer.drawCell(centerCol + 3, arrowBottomRowY, '[', COLORS.BORDER);
+    this.renderer.drawCell(centerCol + 4, arrowBottomRowY, '→', rightColor);
+    this.renderer.drawCell(centerCol + 5, arrowBottomRowY, ']', COLORS.BORDER);
+
+    // When an arrow key is in the ready/pressed state (yellow), overlay the
+    // glyph at 2× scale on the foreground so the active dodge direction pops.
+    // Drawn after the bg pass so it sits cleanly on top of the 1× version.
+    const fg = this.renderer.fgCtx;
+    fg.save();
+    fg.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
+    fg.textAlign = 'center';
+    fg.textBaseline = 'middle';
+    const half = GRID.CELL_SIZE / 2;
+    if (game.arrowKeys.ArrowUp) {
+      this.renderer.drawEntityScaled(centerCol * GRID.CELL_SIZE + half, topRow * GRID.CELL_SIZE + half, '↑', readyColor, 2.0);
+    }
+    if (game.arrowKeys.ArrowLeft) {
+      this.renderer.drawEntityScaled((centerCol - 4) * GRID.CELL_SIZE + half, arrowBottomRowY * GRID.CELL_SIZE + half, '←', readyColor, 2.0);
+    }
+    if (game.arrowKeys.ArrowDown) {
+      this.renderer.drawEntityScaled(centerCol * GRID.CELL_SIZE + half, arrowBottomRowY * GRID.CELL_SIZE + half, '↓', readyColor, 2.0);
+    }
+    if (game.arrowKeys.ArrowRight) {
+      this.renderer.drawEntityScaled((centerCol + 4) * GRID.CELL_SIZE + half, arrowBottomRowY * GRID.CELL_SIZE + half, '→', readyColor, 2.0);
+    }
+    fg.restore();
 
     // Draw "D O D G E" label below arrow keys
     this.renderer.fgCtx.save();

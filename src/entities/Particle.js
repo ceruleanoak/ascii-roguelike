@@ -178,6 +178,70 @@ export function createFootstep(x, y) {
   return p;
 }
 
+// ── Elemental robe aura particles ─────────────────────────────────────────────
+
+// Frost aura: soft ice crystals that drift slowly upward and disperse
+export function createFrostAuraParticle(x, y) {
+  const chars = ['*', '+', '.', '*'];
+  const char = chars[Math.floor(Math.random() * chars.length)];
+  const colors = ['#aaddff', '#88ccff', '#cceeff', '#ffffff'];
+  const color = colors[Math.floor(Math.random() * colors.length)];
+  const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.4; // mostly upward spread
+  const speed = 10 + Math.random() * 22;
+  const vx = Math.cos(angle) * speed;
+  const vy = Math.sin(angle) * speed;
+  const ox = (Math.random() - 0.5) * GRID.CELL_SIZE * 1.6;
+  const oy = (Math.random() - 0.5) * GRID.CELL_SIZE * 1.6;
+  const p = new Particle(x + ox, y + oy, char, color, { vx, vy }, 0.55 + Math.random() * 0.35);
+  p.decelerationRate = 0.87;
+  p.boundToGrid = false;
+  return p;
+}
+
+// Flame aura: embers that rise and dissipate quickly
+export function createFlameAuraParticle(x, y) {
+  const chars = ['!', '.', '\'', '!'];
+  const char = chars[Math.floor(Math.random() * chars.length)];
+  const colors = ['#ff4400', '#ff8800', '#ffcc00', '#ff6600'];
+  const color = colors[Math.floor(Math.random() * colors.length)];
+  const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.9; // tighter upward column
+  const speed = 20 + Math.random() * 35;
+  const vx = Math.cos(angle) * speed;
+  const vy = Math.sin(angle) * speed;
+  const ox = (Math.random() - 0.5) * GRID.CELL_SIZE * 1.2;
+  const oy = (Math.random() - 0.5) * GRID.CELL_SIZE * 0.8;
+  const p = new Particle(x + ox, y + oy, char, color, { vx, vy }, 0.3 + Math.random() * 0.25);
+  p.decelerationRate = 0.90;
+  p.boundToGrid = false;
+  return p;
+}
+
+// Shock aura: erratic electric sparks that crackle outward and vanish
+export function createShockAuraParticle(x, y) {
+  const chars = ['|', '-', '+', '.'];
+  const char = chars[Math.floor(Math.random() * chars.length)];
+  const colors = ['#00ffff', '#88ffff', '#aaffff', '#ffffff'];
+  const color = colors[Math.floor(Math.random() * colors.length)];
+  const angle = Math.random() * Math.PI * 2; // fully random direction
+  const speed = 35 + Math.random() * 55;
+  const vx = Math.cos(angle) * speed;
+  const vy = Math.sin(angle) * speed;
+  const ox = (Math.random() - 0.5) * GRID.CELL_SIZE * 1.4;
+  const oy = (Math.random() - 0.5) * GRID.CELL_SIZE * 1.4;
+  const p = new Particle(x + ox, y + oy, char, color, { vx, vy }, 0.15 + Math.random() * 0.2);
+  p.decelerationRate = 0.78; // sparks die fast
+  p.boundToGrid = false;
+  return p;
+}
+
+// Dispatcher — returns one aura particle for the given type
+export function createAuraParticle(x, y, type) {
+  if (type === 'frost') return createFrostAuraParticle(x, y);
+  if (type === 'flame') return createFlameAuraParticle(x, y);
+  if (type === 'shock') return createShockAuraParticle(x, y);
+  return null;
+}
+
 // Factory function to create dodge roll trail particles
 export function createDodgeTrail(x, y, color = COLORS.PLAYER) {
   const chars = ['-', '=', '~', '.'];

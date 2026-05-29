@@ -25,13 +25,13 @@ export class NeutralRenderer {
     this.renderer.clearBackground('#000000');
 
     // Draw border with exits (neutral rooms always have exits unlocked)
-    this.renderer.drawBorder(game.currentRoom.exits, '#00ff00');
+    this.renderer.drawBorder(game.currentRoom.exits, game.currentRoom.borderColor || '#00ff00');
 
     // Draw static background objects (grass on background layer)
     for (const obj of game.currentRoom.backgroundObjects) {
       if (!obj.destroyed && !obj.currentAnimation) {
-        const x = obj.position.x + GRID.CELL_SIZE / 2;
-        const y = obj.position.y + GRID.CELL_SIZE / 2;
+        const x = obj.position.x + GRID.CELL_SIZE / 2 + (obj.renderOffsetX || 0);
+        const y = obj.position.y + GRID.CELL_SIZE / 2 + (obj.renderOffsetY || 0);
         this.renderer.bgCtx.fillStyle = obj.color;
         this.renderer.bgCtx.fillText(obj.char, x, y);
       }
@@ -64,8 +64,8 @@ export class NeutralRenderer {
       if (obj.currentAnimation) {
         const renderData = obj.getRenderPosition();
         this.renderer.drawEntity(
-          renderData.x + GRID.CELL_SIZE / 2 + obj.animationOffset.x,
-          renderData.y + GRID.CELL_SIZE / 2 + obj.animationOffset.y,
+          renderData.x + GRID.CELL_SIZE / 2 + obj.animationOffset.x + (obj.renderOffsetX || 0),
+          renderData.y + GRID.CELL_SIZE / 2 + obj.animationOffset.y + (obj.renderOffsetY || 0),
           renderData.char,
           renderData.color
         );
@@ -79,12 +79,26 @@ export class NeutralRenderer {
       this.renderer.drawEntity(x, y, item.char, item.color);
     }
 
+    // Draw ingredients (Leshy grass prize drops live in the ingredients array)
+    for (const ingredient of game.ingredients) {
+      const x = ingredient.position.x + GRID.CELL_SIZE / 2;
+      const y = ingredient.position.y + GRID.CELL_SIZE / 2;
+      this.renderer.drawEntity(x, y, ingredient.char, ingredient.color);
+    }
+
+    // Script-specific rendering before player (background-layer content e.g. draw canvas)
+    if (game.neutralRoomSystem.currentScript?.onRenderBefore) {
+      game.neutralRoomSystem.currentScript.onRenderBefore(
+        this.renderer, game.currentRoom, game.player, game.neutralRoomSystem.state
+      );
+    }
+
     // Draw player
     const pulseAlpha = game.player.getPulseAlpha ? game.player.getPulseAlpha() : 1.0;
     this.renderer.drawTextWithAlpha(
       game.player.position.x + GRID.CELL_SIZE / 2,
       game.player.position.y + GRID.CELL_SIZE / 2,
-      '@',
+      game.player.char,
       game.player.color,
       pulseAlpha
     );

@@ -87,6 +87,15 @@ export class ASCIIRenderer {
     this.fgCtx.fillText(char, x, y);
   }
 
+  drawEntityScaled(x, y, char, color = COLORS.TEXT, scale = 1.0) {
+    this.fgCtx.save();
+    this.fgCtx.translate(x, y);
+    this.fgCtx.scale(scale, scale);
+    this.fgCtx.fillStyle = color;
+    this.fgCtx.fillText(char, 0, 0);
+    this.fgCtx.restore();
+  }
+
   // Draw entity using VentureArcade pixel font (for zone exit letters)
   drawEntityVA(x, y, char, color = COLORS.TEXT) {
     this.fgCtx.save();
@@ -97,20 +106,22 @@ export class ASCIIRenderer {
   }
 
   // Draw a pixel-positioned entity rotated by angle (radians) around its center
-  drawEntityRotated(x, y, char, color, angle) {
+  drawEntityRotated(x, y, char, color, angle, scale = 1.0) {
     this.fgCtx.save();
     this.fgCtx.translate(x, y);
     this.fgCtx.rotate(angle);
+    if (scale !== 1.0) this.fgCtx.scale(scale, scale);
     this.fgCtx.fillStyle = color;
     this.fgCtx.fillText(char, 0, 0);
     this.fgCtx.restore();
   }
 
   // Rotated draw with checkerboard dithering (for tunnel plane)
-  drawEntityRotatedDithered(x, y, char, color, angle) {
+  drawEntityRotatedDithered(x, y, char, color, angle, scale = 1.0) {
     this.fgCtx.save();
     this.fgCtx.translate(x, y);
     this.fgCtx.rotate(angle);
+    if (scale !== 1.0) this.fgCtx.scale(scale, scale);
 
     this.fgCtx.fillStyle = color;
     this.fgCtx.fillText(char, 0, 0);
@@ -202,6 +213,8 @@ export class ASCIIRenderer {
   drawBorder(exits = { north: false, south: false, east: false, west: false }, borderColor = COLORS.BORDER) {
     const centerX = Math.floor(GRID.COLS / 2);
     const centerY = Math.floor(GRID.ROWS / 2);
+    const cs = GRID.CELL_SIZE;
+    const extra = 2; // extra pixels to widen each exit gap on each side
 
     // Top and bottom borders
     for (let x = 0; x < GRID.COLS; x++) {
@@ -225,6 +238,25 @@ export class ASCIIRenderer {
       if (!(exits.east && y === centerY)) {
         this.drawFilledCell(GRID.COLS - 1, y, borderColor);
       }
+    }
+
+    // Widen each gap by erasing extra pixels on the sides of adjacent cells.
+    this.bgCtx.fillStyle = COLORS.BACKGROUND;
+    if (exits.north) {
+      this.bgCtx.fillRect(centerX * cs - extra, 0, extra, cs);
+      this.bgCtx.fillRect((centerX + 1) * cs,   0, extra, cs);
+    }
+    if (exits.south) {
+      this.bgCtx.fillRect(centerX * cs - extra, (GRID.ROWS - 1) * cs, extra, cs);
+      this.bgCtx.fillRect((centerX + 1) * cs,   (GRID.ROWS - 1) * cs, extra, cs);
+    }
+    if (exits.west) {
+      this.bgCtx.fillRect(0, centerY * cs - extra, cs, extra);
+      this.bgCtx.fillRect(0, (centerY + 1) * cs,   cs, extra);
+    }
+    if (exits.east) {
+      this.bgCtx.fillRect((GRID.COLS - 1) * cs, centerY * cs - extra, cs, extra);
+      this.bgCtx.fillRect((GRID.COLS - 1) * cs, (centerY + 1) * cs,   cs, extra);
     }
   }
 

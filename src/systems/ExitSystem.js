@@ -2,9 +2,77 @@ import { EXIT_LETTERS, SECRET_PATTERNS } from '../data/exitLetters.js';
 import { ZONES, ZONE_COLORS } from '../data/zones.js';
 import { GRID } from '../game/GameConfig.js';
 
+// Letters whose weights get boosted when the player has the well-vested luck
+// blessing. V (Vault), K (Key Room), ? (Mystery), C (Camp) — all desirable
+// stops that make luck feel like it's reshaping the run, not just fattening
+// the loot table.
+const LUCKY_BOOST = { 'V': 2.5, 'K': 2.0, '?': 2.0, 'C': 1.5 };
+
+// Walks the alphabet forward from `currentLetter`, returning the first letter
+// that is a defined entry in EXIT_LETTERS. Wraps A→...→Z→A. Non-alphabet
+// inputs (e.g. '?') start the search from before 'A'. Used by the
+// Sword of the Letter to cycle exit destinations on hit.
+export function cycleExitLetter(currentLetter) {
+  const startCode = /^[A-Z]$/.test(currentLetter) ? currentLetter.charCodeAt(0) : 64;
+  for (let i = 1; i <= 26; i++) {
+    const next = String.fromCharCode(((startCode - 65 + i) % 26) + 65);
+    if (EXIT_LETTERS[next]) return next;
+  }
+  return currentLetter;
+}
+
+// ── Exit-letter mutation surface ──────────────────────────────────────────────
+// Single source of truth for exit letter slot positions and mutations. Used by
+// the Sword of the Letter (cycles letters on hit) and the Fairy fountain
+// (fairies dust an exit, mutating its letter to 'F'). Any future mechanic that
+// rewrites exit letters at runtime should go through mutateExitLetter so the
+// renderer (and future systems) can react to mutations via exit.mutationSource.
+
+export const EXIT_SLOT_POSITIONS = {
+  north: { col: Math.floor(GRID.COLS / 2), row: 1 },
+  east:  { col: GRID.COLS - 2,             row: Math.floor(GRID.ROWS / 2) },
+  west:  { col: 1,                         row: Math.floor(GRID.ROWS / 2) }
+};
+
+export function getExitSlotPosition(direction) {
+  return EXIT_SLOT_POSITIONS[direction] || null;
+}
+
+// Returns { direction, exit } for the first exit letter slot whose cell
+// overlaps the given rect (x, y in pixels; width/height default to 0 for a
+// point test, which still falls inside the cell). Returns null if no overlap
+// or if the room has no exits.
+export function findExitAtPoint(room, x, y, width = 0, height = 0) {
+  if (!room || !room.exits) return null;
+  const cs = GRID.CELL_SIZE;
+  for (const [dir, slot] of Object.entries(EXIT_SLOT_POSITIONS)) {
+    const exit = room.exits[dir];
+    if (!exit || !exit.letter) continue;
+    const lx = slot.col * cs;
+    const ly = slot.row * cs;
+    if (x < lx + cs && x + width > lx && y < ly + cs && y + height > ly) {
+      return { direction: dir, exit };
+    }
+  }
+  return null;
+}
+
+// Mutates an exit's letter in place and tags the mutation so the renderer
+// (and any future system) can react. Source examples: 'sword', 'fairyDust'.
+// Returns true if the letter actually changed.
+export function mutateExitLetter(exit, newLetter, { source = null } = {}) {
+  if (!exit || !newLetter) return false;
+  if (exit.letter === newLetter) return false;
+  exit.letter = newLetter;
+  exit.mutated = true;
+  exit.mutationSource = source;
+  return true;
+}
+
 export class ExitSystem {
-  constructor(zoneSystem) {
+  constructor(zoneSystem, game = null) {
     this.zoneSystem = zoneSystem;
+    this.game = game;
   }
 
   generateExits(currentDepth, roomType, zoneType, progressionColor = null, currentLetter = null) {
@@ -69,9 +137,15 @@ export class ExitSystem {
       // Mid-progression: use progression color
       colors[altIndex] = progressionColor;
     } else {
-      // No progression: use random alternative
-      const altZone = zone.alternativeZones[Math.floor(Math.random() * zone.alternativeZones.length)];
-      colors[altIndex] = ZONE_COLORS[altZone];
+      // No progression: use random alternative, excluding zones whose boss is defeated
+      const available = zone.alternativeZones.filter(
+        z => !this.zoneSystem.isZoneDefeated(z)
+      );
+      if (available.length > 0) {
+        const altZone = available[Math.floor(Math.random() * available.length)];
+        colors[altIndex] = ZONE_COLORS[altZone];
+      }
+      // If all alternativeZones are defeated, all exits show the current zone color (no alt)
     }
 
     return colors;
@@ -79,6 +153,7 @@ export class ExitSystem {
 
   getLetterWeightsForZone(zoneType, depth) {
     const weights = {};
+    const blessed = !!this.game?.player?.luckBlessed;
 
     // Build weights from EXIT_LETTERS
     for (const [letter, data] of Object.entries(EXIT_LETTERS)) {
@@ -94,32 +169,31 @@ export class ExitSystem {
         weight *= 2;
       }
 
+      // Lucky blessing reshapes the route: more vaults, key rooms, mystery,
+      // and camps. Boss is intentionally excluded — depth pacing owns it.
+      if (blessed && LUCKY_BOOST[letter]) {
+        weight *= LUCKY_BOOST[letter];
+      }
+
       weights[letter] = weight;
     }
 
-    return weights;
-  }
-
-  checkSecretPattern(pathHistory) {
-    if (!pathHistory || pathHistory.length < 3) return null;
-
-    // Check entire path history for pattern matches (not just recent letters)
-    // Patterns can be discovered later even if first few rooms were random
-    const fullPath = pathHistory.join('-');
-
-    for (const [pattern, data] of Object.entries(SECRET_PATTERNS)) {
-      // Check if pattern appears anywhere in the full path
-      if (fullPath.includes(pattern)) {
-        // Only trigger once per pattern (check if we just completed it)
-        const patternLength = pattern.split('-').length;
-        const lastNLetters = pathHistory.slice(-patternLength).join('-');
-
-        if (lastNLetters === pattern) {
-          return { pattern, ...data };
+    // Penalize recently visited letters so the same room type is less likely to
+    // repeat. Most-recent = heaviest penalty; penalty fades over 5 rooms.
+    const history = this.game?.zoneSystem?.pathHistory;
+    if (history?.length) {
+      const RECENCY_PENALTIES = [0.1, 0.25, 0.45, 0.65, 0.82];
+      const penalized = new Set();
+      for (let i = 0; i < history.length && i < RECENCY_PENALTIES.length; i++) {
+        const recent = history[history.length - 1 - i].letter;
+        if (!penalized.has(recent) && weights[recent] !== undefined) {
+          weights[recent] *= RECENCY_PENALTIES[i];
+          penalized.add(recent);
         }
       }
     }
-    return null;
+
+    return weights;
   }
 
   weightedRandomChoice(weights) {
@@ -158,20 +232,24 @@ export class ExitSystem {
 
     const centerX = Math.floor(GRID.COLS / 2);
     const centerY = Math.floor(GRID.ROWS / 2);
+    const locked = !!room.exitsLocked;
 
     if (room.exits.north) {
-      room.collisionMap[0][centerX] = false;
+      room.collisionMap[0][centerX] = locked;
     }
     if (room.exits.south) {
-      room.collisionMap[GRID.ROWS - 1][centerX] = false;
+      room.collisionMap[GRID.ROWS - 1][centerX] = locked;
     }
     if (room.exits.east) {
-      room.collisionMap[centerY][GRID.COLS - 1] = false;
+      room.collisionMap[centerY][GRID.COLS - 1] = locked;
     }
     if (room.exits.west) {
-      room.collisionMap[centerY][0] = false;
+      room.collisionMap[centerY][0] = locked;
     }
 
-    player.setCollisionMap(room.collisionMap);
+    // Don't overwrite the player's collision map while inside a maze/hut interior
+    if (!player.inMaze && !player.inHut) {
+      player.setCollisionMap(room.collisionMap);
+    }
   }
 }

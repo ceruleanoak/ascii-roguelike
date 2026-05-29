@@ -35,7 +35,15 @@ export class EnemySpawnSystem {
         request.spawnData
       );
       for (const newEnemy of newEnemies) {
-        request.spawner.registerSpawn(newEnemy);
+        // Generic spawner registration (active/lifetime counts)
+        if (typeof request.spawner.registerSpawn === 'function' && request.spawner.spawning) {
+          request.spawner.registerSpawn(newEnemy);
+        }
+        // Giant Slime split linkage: tag child with parent + reform fields
+        const link = request.spawnData._splitChildLink;
+        if (link && typeof link.parent.registerSplitChild === 'function') {
+          link.parent.registerSplitChild(newEnemy, link);
+        }
       }
       this.game.currentRoom.enemies.push(...newEnemies);
     }
@@ -59,6 +67,12 @@ export class EnemySpawnSystem {
 
     if (enemy.spawner) {
       enemy.spawner.notifySpawnDeath(enemy);
+    }
+
+    // Split-child notifies parent so reform tracking stays accurate
+    if (enemy.parentRef && typeof enemy.parentRef.notifySplitChildGone === 'function') {
+      enemy.parentRef.notifySplitChildGone(enemy, false);
+      enemy.parentRef = null;
     }
   }
 }

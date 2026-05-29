@@ -4,6 +4,7 @@
  * Displays three slots: [Left] [Center] [Right]
  * - Left and Right slots: Input ingredients
  * - Center slot: Output result (appears when valid recipe matched)
+ * - Cycling animation (gold) when two identical weapons are placed
  * - "CRAFT" label rendered in dark gray below the slots
  */
 
@@ -14,6 +15,7 @@ export class CraftingStation {
     this.renderer = renderer;
   }
 
+  /** Called on background pass — draws brackets and static slot contents. */
   render(game) {
     // Draw crafting slot brackets
     this.renderer.drawCell(CRAFTING.LEFT_SLOT_X,     CRAFTING.STATION_Y, '[', COLORS.BORDER);
@@ -36,21 +38,32 @@ export class CraftingStation {
     if (state.rightSlot) {
       this.renderer.drawCell(CRAFTING.RIGHT_SLOT_X + 1, CRAFTING.STATION_Y, state.rightSlot, COLORS.ITEM);
     }
-    if (state.centerSlot) {
+    // Static center slot — only drawn here when NOT cycling (cycling draws on foreground every frame)
+    if (state.centerSlot && !state.cycleState) {
       this.renderer.drawCell(CRAFTING.CENTER_SLOT_X + 1, CRAFTING.STATION_Y, state.centerSlot, COLORS.ITEM);
     }
+  }
 
-    // Draw "C R A F T" label below slots in dark gray
-    const labelCenterX = GRID.WIDTH / 2;
-    const labelY = (CRAFTING.STATION_Y + 2) * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+  /** Called every frame on the foreground pass — animates the cycling center slot. */
+  renderForeground(game) {
+    const state = game.craftingSystem.getState();
+    if (!state.cycleState) return;
 
-    this.renderer.bgCtx.save();
-    this.renderer.bgCtx.font = `${GRID.CELL_SIZE}px 'VentureArcade', 'Unifont', monospace`;
-    this.renderer.bgCtx.textAlign = 'center';
-    this.renderer.bgCtx.textBaseline = 'middle';
-    this.renderer.bgCtx.fillStyle = '#666666';
-    this.renderer.bgCtx.fillText(' C R A F T', labelCenterX, labelY);
-    this.renderer.bgCtx.restore();
+    const { pool, cyclingStartTime } = state.cycleState;
+    const idx = Math.floor((performance.now() - cyclingStartTime) / 100) % pool.length;
+    const char = pool[idx];
 
+    const ctx = this.renderer.fgCtx;
+    const halfCell = GRID.CELL_SIZE / 2;
+    const px = (CRAFTING.CENTER_SLOT_X + 1) * GRID.CELL_SIZE + halfCell;
+    const py = CRAFTING.STATION_Y * GRID.CELL_SIZE + halfCell;
+
+    ctx.save();
+    ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffcc00';
+    ctx.fillText(char, px, py);
+    ctx.restore();
   }
 }

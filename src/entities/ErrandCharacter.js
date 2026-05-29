@@ -5,10 +5,14 @@ const CLOSE_RANGE = GRID.CELL_SIZE * 4;  // Distance to show indicator / enable 
 const HOP_PERIOD = 2.2;                  // Seconds between hop bursts when far
 const HOP_ACTIVE = 0.38;                 // Duration of each hop
 
+// Indicator color per trade stage: ingredient (teal), low-tier (yellow), legendary (gold)
+const STAGE_COLORS = ['#44ffee', '#ffff00', '#ffaa00'];
+
 export class ErrandCharacter extends NeutralCharacter {
-  constructor(x, y, requestedItem) {
+  constructor(x, y, requestedItem, stage = 0) {
     super('e', '#88ffcc', x, y);
     this.requestedItem = requestedItem;  // char of the item being requested
+    this.stage = stage;                  // 0 | 1 | 2 — controls indicator color
 
     // Hop animation
     this.hopCycleTimer = Math.random() * HOP_PERIOD;
@@ -69,10 +73,10 @@ export class ErrandCharacter extends NeutralCharacter {
     ctx.fillStyle = this.color;
     ctx.fillText(this.char, charX, charY);
 
-    // Yellow item indicator when player is close
+    // Stage-colored item indicator when player is close
     if (this.playerIsClose && this.requestedItem) {
       ctx.globalAlpha = 1.0;
-      ctx.fillStyle = '#ffff00';
+      ctx.fillStyle = STAGE_COLORS[this.stage] ?? '#ffff00';
       ctx.fillText(this.requestedItem, charX, charY - GRID.CELL_SIZE);
     }
 
