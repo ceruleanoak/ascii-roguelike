@@ -74,7 +74,10 @@ export class LootSystem {
     const ingredient = new Ingredient(char, x, y);
     ingredient.pickupCooldown = 0.75;
     if (source) ingredient.plane = planeOf(source);
-    if (this.game.player?.inHut) ingredient.hutPlane = true;
+    // hutPlane covers both hut and dungeon interiors — they share game.activeFloor and
+    // the same overlay render path. Without this, dungeon-spawned loot drops would
+    // render at wrong screen coords and slip past the overlay's hutPlane filter.
+    if (this.game.activeFloor) ingredient.hutPlane = true;
     if (this.game.player?.inMaze) ingredient.mazePlane = true;
     const a = angle !== null ? angle : Math.random() * Math.PI * 2;
     const speed = 60 + Math.random() * 80;
@@ -88,7 +91,7 @@ export class LootSystem {
   spawnItemDrop(char, x, y, angle = null, source = null) {
     const item = new Item(char, x, y);
     if (source) item.plane = planeOf(source);
-    if (this.game.player?.inHut) item.hutPlane = true;
+    if (this.game.activeFloor) item.hutPlane = true;
     if (this.game.player?.inMaze) item.mazePlane = true;
     const a = angle !== null ? angle : Math.random() * Math.PI * 2;
     const speed = 60 + Math.random() * 80;

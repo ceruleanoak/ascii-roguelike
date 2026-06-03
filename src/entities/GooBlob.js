@@ -24,6 +24,10 @@ export class GooBlob {
     this.baseScale = 1.0;
     this.pulseSpeed = 2.0; // Pulsing speed
     this.pulseAmount = 0.25; // How much it pulses (±15%)
+
+    // Slime trail drop tracking (distance-based stamps along the blob's path)
+    this.trailLastX = x;
+    this.trailLastY = y;
   }
 
   update(deltaTime) {

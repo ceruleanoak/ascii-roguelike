@@ -662,6 +662,37 @@ export const LETTER_TEMPLATES = {
     }
   },
 
+  X: {
+    name: 'Crossroads',
+    // Open central clearing where many paths meet; ringed by perch-friendly
+    // trees and stumps so a flock of crows has somewhere to settle.
+    description: 'Open central clearing ringed by trees — crows hoard shiny things here',
+
+    wallStructures: {
+      allow: false // no random walls breaking the converging-paths read
+    },
+
+    bgObjectRules: {
+      // Keep the center open so the "many paths cross" feel reads cleanly
+      clearingZone: {
+        centerCol: 15,
+        centerRow: 15,
+        width: 10,
+        height: 10,
+        allowGrass: true,
+        allowObjects: false
+      },
+      // Light grass overall, with biased perch objects on the perimeter
+      grassDensity: 0.5,
+      objectBias: {
+        '&': 1.8, // trees — crow perches
+        'Y': 1.6, // stumps — crow perches
+        '%': 0.6, // sparse bushes
+        '0': 0.4  // sparse rocks
+      }
+    }
+  },
+
   // ── Blue-zone (Tidefall) tutorial rooms ────────────────────────────────────
   // The four room templates of the secret blue zone. Each pairs a familiar
   // water terrain config (lake / ocean / dry-sand) with an armor pickup

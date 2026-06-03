@@ -10,6 +10,7 @@ export class CombatSystem {
   constructor(physicsSystem) {
     this.physicsSystem = physicsSystem;
     this.audioSystem = null; // wired by main.js after construction
+    this.game = null;        // wired by main.js after construction; used for hutPlane tagging
     this.projectiles = [];
     this.enemyProjectiles = [];
     this.meleeAttacks = [];
@@ -1506,6 +1507,11 @@ export class CombatSystem {
     const impactEffects = this.impactEffects.splice(0);
     const newSteamClouds = this.newSteamClouds.splice(0);
     const polymorphEvents = this.polymorphEvents.splice(0);
+
+    // Tag any newly-spawned combat entities with the current interior state so
+    // render helpers can filter by hutPlane (idempotent — already-tagged entities skipped).
+    this._tagCombatHutPlane();
+
     return { playerDead: false, objectEffects, impactEffects, newSteamClouds, polymorphEvents };
   }
 
@@ -2214,6 +2220,27 @@ export class CombatSystem {
     this.impactEffects = [];
     this.newSteamClouds = [];
     this.objectDestroyEvents = [];
+  }
+
+  // Tag all combat entities with hutPlane based on current game.activeFloor state.
+  // Called at the end of update() so newly-spawned entities (this frame) get tagged
+  // before render. Existing tagged entities are skipped (idempotent). Lets render
+  // helpers filter by hutPlane without touching every push site (20+ in this file
+  // plus more in main.js / Enemy.js callbacks).
+  _tagCombatHutPlane() {
+    const hp = !!this.game?.activeFloor;
+    const arrays = [
+      this.projectiles, this.enemyProjectiles,
+      this.meleeAttacks, this.enemyMeleeAttacks,
+      this.stuckArrows, this.tongueAttacks,
+      this.chainArcs, this.aoeEffects,
+      this.damageNumbers,
+    ];
+    for (const arr of arrays) {
+      for (const e of arr) {
+        if (e.hutPlane === undefined) e.hutPlane = hp;
+      }
+    }
   }
 
   getProjectiles() {

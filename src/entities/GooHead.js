@@ -160,10 +160,15 @@ export class GooHead extends Enemy {
       this.grabCooldown = Math.max(0, this.grabCooldown - deltaTime);
     }
 
-    // Lunge → collision grab (pixel AABB, fixed linear trajectory)
+    // Lunge → collision grab (pixel AABB, fixed linear trajectory).
+    // Grab + status-effect application is a player-specific interaction —
+    // gate on the target supporting applyStatusEffect so companions (camp NPC,
+    // tamed rats) don't trigger crashes or get yanked around by it.
     let tx, ty;
     if (!this.isGrabbing) {
-      const canGrab = this.grabCooldown <= 0 && !this.target?.dodgeRoll?.active;
+      const canGrab = this.grabCooldown <= 0
+        && !this.target?.dodgeRoll?.active
+        && typeof this.target?.applyStatusEffect === 'function';
 
       if (this.isLunging) {
         this.lungeTimer += deltaTime;

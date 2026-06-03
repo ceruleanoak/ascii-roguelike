@@ -1,4 +1,4 @@
-import { COLORS } from '../game/GameConfig.js';
+import { COLORS, GRID } from '../game/GameConfig.js';
 
 // Item types
 export const ITEM_TYPES = {
@@ -703,7 +703,7 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'hammer',
-    damage: 2,
+    damage: 3,
     windup: 0.6,
     recovery: 0.8,
     range: 20,
@@ -828,6 +828,9 @@ export const ITEMS = {
     windup: 0.15,
     recovery: 0.45,
     patternSpeed: 0.05,
+    // Needle-thin thrust hitbox — 50% narrower than the default cell.
+    attackWidth: GRID.CELL_SIZE * 0.5,
+    attackHeight: GRID.CELL_SIZE * 0.5,
     color: COLORS.ITEM
   },
 
@@ -1373,9 +1376,22 @@ export const ITEMS = {
   'Ϡ': {
     char: 'Ϡ', name: 'Stingray Mantle', type: ITEM_TYPES.ARMOR,
     defense: 1,
-    stingrayMantle: true,  // moving in water → leaves 1s electric wake tile in vacated cell; chains 2× shock on wet
+    stingrayMantle: true,  // moving in water → leaves 4s electric wake in vacated cells; wearer is shock-immune; chains 2× shock on wet
     spellDescription: 'LEAVE A LIVE WAKE.',
     color: '#ccddee'
+  },
+
+  // ── Spectacles: cipher decoder, no defense ────────────────────────────────
+  // Occupies the armor slot. While equipped, the render hooks in cipher.js
+  // toggle the Greek↔Latin substitution OFF wherever the cipher is applied:
+  // exit letters, REST label, recipe hints, maze object covers, dungeon
+  // ciphered hints. Trades all physical protection for total cipher decoding.
+  '⊙': {
+    char: '⊙', name: 'Spectacles', type: ITEM_TYPES.ARMOR,
+    defense: 0,
+    spectacles: true,
+    spellDescription: 'SEE THE WORLD RELABELED.',
+    color: '#ddccff'
   },
 
   // ============================================================================
@@ -1734,6 +1750,21 @@ export const ITEMS = {
     effect: 'revive_on_death',
     oneShot: true,
     color: '#ffaaff'
+  },
+
+  // Bread: equippable utility consumable. Use action drops the loaf on the
+  // ground (handled in Item.use via effect: 'dropBread'). Idle crows in the
+  // room — fed or not — seek the nearest dropped bread; eating it flips them
+  // to 'fed' (won't flee player proximity) or, if already fed, to 'companion'.
+  // Found commonly in huts and occasionally in chests (see HutSystem, AFFINITY_POOLS).
+  '⌬': {
+    char: '⌬',
+    name: 'Bread',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: 'UTILITY',
+    effect: 'dropBread',
+    oneShot: true,
+    color: '#daa520'
   },
 
   // ============================================================================
@@ -2311,7 +2342,7 @@ export const AFFINITY_POOLS = {
       [RARITY.EPIC]:     ['E', 'I', 'K']  // Ember Cloak, Ice Plate, Dragon Scale
     },
     consumables: {
-      [RARITY.COMMON]:   ['G'],              // Base Potion
+      [RARITY.COMMON]:   ['G', '⌬'],         // Base Potion, Bread
       [RARITY.UNCOMMON]: ['y'],              // Firecracker
       [RARITY.RARE]:     ['♥', '★', '∞', '♦', 'Ω']
     }

@@ -26,11 +26,11 @@ export class PressSystem {
   /** True if the player is adjacent to a press object inside the active hut. */
   nearPress() {
     const game = this.game;
-    if (!game.player?.inHut || !game.hutInterior) return false;
+    if (!game.player?.inHut || !game.activeFloor) return false;
     const C = GRID.CELL_SIZE;
     const px = game.player.position.x + C / 2;
     const py = game.player.position.y + C / 2;
-    for (const obj of game.hutInterior.backgroundObjects) {
+    for (const obj of game.activeFloor.backgroundObjects) {
       if (obj.char !== '⊓' || obj.destroyed) continue;
       const cx = obj.position.x + C / 2;
       const cy = obj.position.y + C / 2;

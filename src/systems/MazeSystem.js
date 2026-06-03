@@ -1,6 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { Ingredient } from '../entities/Ingredient.js';
 import { INGREDIENTS } from '../data/items.js';
+import { coverFor } from '../data/cipher.js';
 
 /**
  * MazeSystem — manages the Maze (M) room interior.
@@ -46,8 +47,9 @@ const GHOST_DAMAGE_INTERVAL = 0.75; // s between damage ticks
 
 const TIMER_DURATION = 5.0; // s per countdown
 
-// Maze object glyphs — mysterious ornaments
-const OBJ_CHARS  = ['Ω', 'Σ', 'Δ', 'Φ', 'Ψ', 'Λ', 'Π', 'Γ'];
+// Maze object cover color — actual cover glyph is derived from the hidden
+// ingredient via the cipher (see coverFor). Each cover taught is a cipher
+// pairing learned.
 const OBJ_COLOR  = '#9977aa';
 
 // Hidden ingredient rewards — tiered by depth
@@ -135,8 +137,8 @@ export class MazeSystem {
     for (let lr = 0; lr < LOGICAL_SIZE; lr++) {
       for (let lc = 0; lc < LOGICAL_SIZE; lc++) {
         if (degrees[lr][lc] !== 1) continue; // only dead ends
-        const char   = OBJ_CHARS[Math.floor(Math.random() * OBJ_CHARS.length)];
         const hidden = rewards.shift() || 'c';
+        const char   = coverFor(hidden);
         mazeObjects.push(new MazeObject(char, physC(lc), physR(lr), hidden));
         // Object is solid — player must hit it, not walk through it
         collisionMap[physR(lr)][physC(lc)] = true;

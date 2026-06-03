@@ -1,7 +1,7 @@
 import { Item } from '../entities/Item.js';
 import { GooBlob } from '../entities/GooBlob.js';
 import { Puddle } from '../entities/Puddle.js';
-import { createActivationBurst } from '../entities/Particle.js';
+import { createActivationBurst, createEmberBurst } from '../entities/Particle.js';
 import { GRID } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 
@@ -311,8 +311,13 @@ export class TrapSystem {
     item.velocity = { vx: 0, vy: 0 };
     item.pickupReadyAt = performance.now() + 600;
     item.plane = t.plane ?? 0;
-    if (t.inHut) item.hutPlane = true;
-    if (t.inMaze) item.mazePlane = true;
+    // Absolute (not additive) — an item that was picked up inside a hut keeps
+    // hutPlane=true on its inventory entry, so re-throwing it on the surface
+    // would otherwise carry the stale flag and confuse plane-aware scans
+    // (e.g. surface rats ignoring SHIFT-thrown bread that was originally a
+    // hut loaf).
+    item.hutPlane = t.inHut === true;
+    item.mazePlane = t.inMaze === true;
     game.items.push(item);
     game.physicsSystem.addEntity(item);
   }
@@ -391,7 +396,7 @@ export class TrapSystem {
   _getActiveEnemies() {
     const game = this.game;
     if (game.player?.inMaze && game.mazeInterior) return game.mazeInterior.enemies || [];
-    if (game.player?.inHut && game.hutInterior) return game.hutInterior.enemies;
+    if (game.player?.inHut && game.activeFloor) return game.activeFloor.enemies;
     return game.currentRoom?.enemies ?? [];
   }
 
@@ -527,6 +532,7 @@ export class TrapSystem {
               performance.now()
             );
             gooBlob.plane = item.plane ?? 0;
+            gooBlob.hutPlane = !!game.activeFloor;
             game.gooBlobs.push(gooBlob);
 
             const MAX_GOO_BLOBS = 15;
@@ -570,7 +576,16 @@ export class TrapSystem {
           if (game.player.statusEffects?.freeze) game.player.statusEffects.freeze.slowAmount = 0.92;
         }
       }
-      game.puddles.push(new Puddle(cx, cy, r, 'slime', item.plane ?? 0));
+      // Lay a disk of slimeTrail tiles covering the blast footprint — uses the
+      // shared trail-tile system instead of a one-off circle puddle.
+      const plane = item.plane ?? 0;
+      game._dropSlimeTrail(cx, cy, plane);
+      const RING_RADIUS = r * 0.7;
+      const RING_TILES = 12;
+      for (let i = 0; i < RING_TILES; i++) {
+        const a = (i / RING_TILES) * Math.PI * 2;
+        game._dropSlimeTrail(cx + Math.cos(a) * RING_RADIUS, cy + Math.sin(a) * RING_RADIUS, plane);
+      }
     } else if (trapData.effect === 'freeze') {
       // Freeze Trap: freeze enemies + crystallize water/puddle tiles + scatter ice objects
       for (const enemy of enemies) {
@@ -730,7 +745,11 @@ export class TrapSystem {
     }
 
     // Burst particle effect at trap location
-    game.particles.push(...createActivationBurst(cx, cy, trapData.color || '#ffffff'));
+    if (trapData.effect === 'burn') {
+      game.particles.push(...createEmberBurst(cx, cy));
+    } else {
+      game.particles.push(...createActivationBurst(cx, cy, trapData.color || '#ffffff'));
+    }
     game.placedTraps.splice(index, 1);
   }
 
@@ -810,9 +829,9 @@ export class TrapSystem {
       if ((puddle.plane ?? 0) !== playerPlane) continue;
 
       switch (puddle.type) {
-        case 'slime': this._applySlimePuddle(puddle, playerPlane); break;
-        case 'fire':  this._applyFirePuddle(puddle, playerPlane);  break;
-        case 'ice':   this._applyIcePuddle(puddle, playerPlane);   break;
+        case 'fire': this._applyFirePuddle(puddle, playerPlane); break;
+        case 'ice':  this._applyIcePuddle(puddle, playerPlane);  break;
+        // slimeTrail contact effects are applied in main.js (see updateExploreState).
         // Future types added here
       }
     }
@@ -849,34 +868,6 @@ export class TrapSystem {
       const freezeImmune = enemy.elementalAffinity?.immunity?.includes('freeze');
       if (!freezeImmune) {
         enemy.applyStatusEffect('freeze', 0.5);
-      }
-    }
-  }
-
-  _applySlimePuddle(puddle, playerPlane) {
-    const game = this.game;
-
-    // Player: slime affinity (slimeImmune) → 2x speed boost; otherwise → goo slow
-    if (puddle.isEntityOnPuddle(game.player)) {
-      if (game.player.slimeImmune) {
-        game.player.applyStatusEffect('slimeBoost', 0.25); // refreshed each frame while on puddle
-      } else {
-        game.player.applyStatusEffect('goo', 0.25);
-      }
-    }
-
-    if (!game.currentRoom?.enemies) return;
-    for (const enemy of game.currentRoom.enemies) {
-      if ((enemy.plane ?? 0) !== playerPlane) continue;
-      if (!puddle.isEntityOnPuddle(enemy)) continue;
-
-      if (enemy.getElementalModifier('slime') === 0) {
-        // Slime-affinity enemies: 2x speed boost (same as slime-suit player)
-        enemy.speed = enemy.data.speed * 2;
-      } else {
-        // Normal enemies: slow via freeze. Don't override slowAmount — let the
-        // default (0.5) or a stronger blast slow (0.92) persist naturally.
-        enemy.applyStatusEffect('freeze', 0.25);
       }
     }
   }

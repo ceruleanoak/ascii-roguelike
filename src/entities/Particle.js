@@ -113,6 +113,51 @@ export function createActivationBurst(x, y, color = COLORS.ITEM) {
   return particles;
 }
 
+// Factory function to create a flame ember burst (fire trap / burn-effect trigger).
+// Two layers: a fast radial flame blast and slower upward-drifting embers that linger.
+export function createEmberBurst(x, y) {
+  const particles = [];
+  const flameColors = ['#ff2200', '#ff4400', '#ff6600', '#ffaa00', '#ffdd44'];
+  const blastChars = ['*', '+', '.', '·'];
+  const emberChars = ["'", '`', '.', '*'];
+
+  // Radial flame blast — fast outward spread
+  const blastCount = 18;
+  for (let i = 0; i < blastCount; i++) {
+    const angle = (Math.PI * 2 * i) / blastCount + (Math.random() - 0.5) * 0.4;
+    const speed = 90 + Math.random() * 110;
+    const vx = Math.cos(angle) * speed;
+    const vy = Math.sin(angle) * speed;
+    const char = blastChars[Math.floor(Math.random() * blastChars.length)];
+    const color = flameColors[Math.floor(Math.random() * flameColors.length)];
+    const lifetime = 0.35 + Math.random() * 0.35;
+    const p = new Particle(x, y, char, color, { vx, vy }, lifetime);
+    p.decelerationRate = 0.90;
+    p.boundToGrid = false;
+    particles.push(p);
+  }
+
+  // Rising embers — slower, drift upward, longer-lived
+  const emberCount = 10;
+  for (let i = 0; i < emberCount; i++) {
+    const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.9;
+    const speed = 30 + Math.random() * 50;
+    const vx = Math.cos(angle) * speed;
+    const vy = Math.sin(angle) * speed;
+    const ox = (Math.random() - 0.5) * GRID.CELL_SIZE * 0.8;
+    const oy = (Math.random() - 0.5) * GRID.CELL_SIZE * 0.4;
+    const char = emberChars[Math.floor(Math.random() * emberChars.length)];
+    const color = flameColors[Math.floor(Math.random() * flameColors.length)];
+    const lifetime = 0.7 + Math.random() * 0.6;
+    const p = new Particle(x + ox, y + oy, char, color, { vx, vy }, lifetime);
+    p.decelerationRate = 0.94;
+    p.boundToGrid = false;
+    particles.push(p);
+  }
+
+  return particles;
+}
+
 // Factory function to create explosion particles
 export function createExplosion(x, y, count = 20, color = COLORS.PLAYER) {
   const particles = [];

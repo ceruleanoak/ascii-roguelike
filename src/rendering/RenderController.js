@@ -22,6 +22,7 @@ import { GameOverRenderer } from './state/GameOverRenderer.js';
 import { RestRenderer } from './state/RestRenderer.js';
 import { ExploreRenderer } from './state/ExploreRenderer.js';
 import { NeutralRenderer } from './state/NeutralRenderer.js';
+import { DemoRenderer } from './state/DemoRenderer.js';
 import { HutInteriorOverlay } from './ui/HutInteriorOverlay.js';
 import { MazeInteriorOverlay } from './ui/MazeInteriorOverlay.js';
 import { PixelatedDissolve, ScreenShake } from './effects/TextEffects.js';
@@ -52,6 +53,7 @@ export class RenderController {
     this.restRenderer = new RestRenderer(renderer, this);
     this.exploreRenderer = new ExploreRenderer(renderer, this);
     this.neutralRenderer = new NeutralRenderer(renderer, this);
+    this.demoRenderer = new DemoRenderer(renderer, this);
 
     // Spell response overlay state
     this._spellText = null;
@@ -87,6 +89,10 @@ export class RenderController {
 
   renderGameOverState(game) {
     this.gameOverRenderer.render(game);
+  }
+
+  renderDemoState(game) {
+    this.demoRenderer.render(game);
   }
 
   renderCleanseWave(game) {

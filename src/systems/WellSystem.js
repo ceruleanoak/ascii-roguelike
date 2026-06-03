@@ -100,8 +100,8 @@ export class WellSystem {
     // Raw coin probe (`c` ingredient): always available, doesn't consume the well.
     // Plays the spinning arc + hollow plink — the well's indifferent response
     // that nudges the player toward crafting the real offering.
-    if (player.inventory && player.inventory.includes('c')) {
-      player.removeIngredient('c');
+    if (game.inventorySystem?.hasCoin()) {
+      game.inventorySystem.removeCoin();
       game.wellCoinAnim = {
         startX: px,
         startY: py,

@@ -117,10 +117,10 @@ export class CampNPCSystem {
 
       if (npc.hp <= 0) {
         const game = this.game;
-        if ((game.player.inDungeon || game.player.inHut) && game.hutInterior) {
+        if ((game.player.inDungeon || game.player.inHut) && game.activeFloor) {
           // Inside an interior, flee toward the floor-0 exit door or the up-stairs —
           // exterior exit coordinates are meaningless here.
-          const interior = game.hutInterior;
+          const interior = game.activeFloor;
           const fleeX = (interior.exitCol ?? Math.floor(interior.gridCols / 2)) * GRID.CELL_SIZE;
           const fleeY = (interior.exitRow ?? (interior.gridRows - 2)) * GRID.CELL_SIZE;
           npc.startFleeingToPosition(fleeX, fleeY);
@@ -133,9 +133,9 @@ export class CampNPCSystem {
 
     // Clamp companion to interior bounds — the companion self-manages its position
     // with no physics collision, so without this it can drift outside the PiP panel.
-    if (isCompanion && (this.game.player.inDungeon || this.game.player.inHut) && this.game.hutInterior) {
+    if (isCompanion && (this.game.player.inDungeon || this.game.player.inHut) && this.game.activeFloor) {
       const C = GRID.CELL_SIZE;
-      const interior = this.game.hutInterior;
+      const interior = this.game.activeFloor;
       npc.position.x = Math.max(C, Math.min((interior.gridCols - 2) * C, npc.position.x));
       npc.position.y = Math.max(C, Math.min((interior.gridRows - 2) * C, npc.position.y));
     }
@@ -196,9 +196,9 @@ export class CampNPCSystem {
     if (!player) return;
 
     // Find nearest enemy within aggro range (in same plane).
-    // Inside a hut or dungeon the active enemies are on hutInterior, not currentRoom.
-    const enemies = ((game.player.inDungeon || game.player.inHut) && game.hutInterior)
-      ? game.hutInterior.enemies
+    // Inside a hut or dungeon the active enemies are on activeFloor, not currentRoom.
+    const enemies = ((game.player.inDungeon || game.player.inHut) && game.activeFloor)
+      ? game.activeFloor.enemies
       : game.currentRoom?.enemies || [];
     let target = null;
     let targetDist = Infinity;
@@ -494,13 +494,13 @@ export class CampNPCSystem {
     const dx = pcx - ncx, dy = pcy - ncy;
     if (dx * dx + dy * dy > COIN_INTERACT_RADIUS * COIN_INTERACT_RADIUS) return false;
 
-    // Player must have a coin (`c` raw ingredient)
-    if (!player.inventory || !player.inventory.includes('c')) return false;
+    // Player must have a coin in the passive wallet
+    if (!game.inventorySystem?.hasCoin()) return false;
 
     // Determine intent: hire if INTERESTED + has weapon, otherwise hint
     const intent = (npc.state === CAMP_NPC_STATE.INTERESTED && npc.weapon) ? 'hire' : 'hint';
 
-    player.removeIngredient('c');
+    game.inventorySystem.removeCoin();
     this.coinAnim = {
       startX: pcx, startY: pcy,
       endX: ncx,   endY: ncy,

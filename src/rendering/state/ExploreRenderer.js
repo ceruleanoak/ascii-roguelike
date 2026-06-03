@@ -20,10 +20,12 @@
  */
 
 import { GRID, COLORS, ROOM_TYPES } from '../../game/GameConfig.js';
+import { INGREDIENTS } from '../../data/items.js';
 import { BRIDGE_MATERIALS } from '../../systems/RidgeSystem.js';
 import { PixelatedDissolve, SplitReveal } from '../effects/TextEffects.js';
 import { CHARGE_DURATION, ROLL_CHARS, HEAD_OFFSET } from '../../entities/TurtleShell.js';
 import { HEAD_FLASH_FREQ } from '../../entities/TurtleHead.js';
+import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE } from '../../data/cipher.js';
 
 function drawDizzyOrbitals(ctx, cx, cy, timer) {
   const r = 6;
@@ -204,9 +206,15 @@ export class ExploreRenderer {
     const restLabelX = GRID.WIDTH / 2;
     const restLabelY = (GRID.ROWS - 3) * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
     if (game.currentRoom.exits.south) {
+      const spectaclesOn = isSpectaclesActive(game);
+      // VentureArcade has limited glyph coverage; under spectacles fall back to
+      // Unifont which renders the Greek substitutes correctly.
+      const restFont = spectaclesOn
+        ? `${Math.round(GRID.CELL_SIZE * CIPHER_FONT_SCALE)}px 'Unifont', monospace`
+        : `${GRID.CELL_SIZE}px 'VentureArcade', 'Unifont', monospace`;
       this._restDissolve.render(this.renderer.fgCtx, {
-        text: ' R E S T',
-        font: `${GRID.CELL_SIZE}px 'VentureArcade', 'Unifont', monospace`,
+        text: spectaclesTransformString(' R E S T', spectaclesOn),
+        font: restFont,
         color: '#666666',
         x: restLabelX,
         y: restLabelY,
@@ -218,18 +226,21 @@ export class ExploreRenderer {
         const FLASH_MS = 220;
         const now = performance.now();
         const flashMap = game.keyFlashMap || {};
-        const text = ' R E S T';
+        const text = spectaclesTransformString(' R E S T', spectaclesOn);
+        // Flash lookup uses the original Latin letter so keypress R/E/S/T still lights the right slot.
+        const flashLookup = ' R E S T';
         const ctx = this.renderer.fgCtx;
         ctx.save();
         ctx.globalAlpha = this._restDissolve.alpha;
-        ctx.font = `${GRID.CELL_SIZE}px 'VentureArcade', 'Unifont', monospace`;
+        ctx.font = restFont;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         const totalW = ctx.measureText(text).width;
         const charW = totalW / text.length;
         let cx = restLabelX - totalW / 2;
-        for (const ch of text) {
-          const upper = ch.toUpperCase();
+        for (let i = 0; i < text.length; i++) {
+          const ch = text[i];
+          const upper = flashLookup[i].toUpperCase();
           if (upper !== ' ' && flashMap[upper] !== undefined && (now - flashMap[upper]) < FLASH_MS) {
             ctx.fillStyle = '#7a7a7a';
             ctx.fillText(ch, cx, restLabelY);
@@ -282,6 +293,22 @@ export class ExploreRenderer {
       // letters are reserved for keyboard-input prompts (F key, etc.).
       const DUSTED_EXIT_COLOR = '#ffaaff';
 
+      const spectaclesOn = isSpectaclesActive(game);
+      // drawEntityVA uses the VentureArcade font, which lacks Greek glyph
+      // coverage. Route ciphered letters through drawEntity (Unifont) instead.
+      const drawExitLetter = (x, y, letter, color) => {
+        if (spectaclesOn) {
+          const ctx = this.renderer.fgCtx;
+          ctx.save();
+          ctx.font = `${Math.round(GRID.CELL_SIZE * CIPHER_FONT_SCALE)}px 'Unifont', monospace`;
+          ctx.fillStyle = color;
+          ctx.fillText(spectaclesTransform(letter, true), x, y);
+          ctx.restore();
+        } else {
+          this.renderer.drawEntityVA(x, y, letter, color);
+        }
+      };
+
       // North exit
       if (game.currentRoom.exits.north && game.currentRoom.exits.north.letter) {
         const ex = game.currentRoom.exits.north;
@@ -296,7 +323,7 @@ export class ExploreRenderer {
         } else {
           displayColor = litExitColor(letter, baseColor);
         }
-        this.renderer.drawEntityVA(
+        drawExitLetter(
           centerX * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
           1 * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
           letter,
@@ -311,7 +338,7 @@ export class ExploreRenderer {
         const displayColor = (ex.mutated && ex.mutationSource === 'fairyDust')
           ? DUSTED_EXIT_COLOR
           : litExitColor(letter, color);
-        this.renderer.drawEntityVA(
+        drawExitLetter(
           (GRID.COLS - 2) * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
           centerY * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
           letter,
@@ -326,7 +353,7 @@ export class ExploreRenderer {
         const displayColor = (ex.mutated && ex.mutationSource === 'fairyDust')
           ? DUSTED_EXIT_COLOR
           : litExitColor(letter, color);
-        this.renderer.drawEntityVA(
+        drawExitLetter(
           1 * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
           centerY * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
           letter,
@@ -394,150 +421,37 @@ export class ExploreRenderer {
       }
     }
 
-    // Draw puddles (floor stain — deepest ground layer, below goo blobs and entities)
-    const playerPlane = game.player.plane ?? 0;
-    const isPlaneRoom = !!(game.currentRoom?.tunnel || game.currentRoom?.underground);
-    if (game.puddles?.length) {
-      const ctx = this.renderer.fgCtx;
-      for (const puddle of game.puddles) {
-        if (isPlaneRoom && (puddle.plane ?? 0) !== playerPlane) continue;
-        const { x, y } = puddle.position;
-        const r = puddle.radius;
+    // Draw puddles + goo blobs (surface entries only — interior entries routed via overlay).
+    // hutPlane=false here selects the surface set; hutPlane=true is called by HutInteriorOverlay.
+    this.drawPuddles(game, false);
+    this.drawGooBlobs(game, false);
 
-        // Semi-transparent filled circle — flat floor stain, no pulsing
-        ctx.save();
-        ctx.globalAlpha = 0.28;
-        ctx.fillStyle = puddle.fillColor;
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-
-        // Scattered texture chars
-        ctx.save();
-        ctx.globalAlpha = 0.45;
-        for (const pt of puddle.scatterPoints) {
-          this.renderer.drawEntity(x + pt.dx, y + pt.dy, puddle.char, puddle.color);
-        }
-        ctx.restore();
-      }
-    }
-
-    // Draw goo blobs (ground layer - under enemies and player)
-    // In plane-aware rooms, only show blobs on the player's current plane (matches gameplay effect logic).
-    for (const gooBlob of game.gooBlobs) {
-      if (isPlaneRoom && (gooBlob.plane ?? 0) !== playerPlane) continue;
-      const scale = gooBlob.getCurrentScale();
-      this.renderer.fgCtx.save();
-      const screenX = gooBlob.position.x;
-      const screenY = gooBlob.position.y;
-
-      // Apply scale
-      this.renderer.fgCtx.translate(screenX, screenY);
-      this.renderer.fgCtx.scale(scale, scale);
-      this.renderer.fgCtx.translate(-screenX, -screenY);
-
-      // Draw without glow
-      this.renderer.fgCtx.globalAlpha = 0.7;
-      this.renderer.drawEntity(screenX, screenY, gooBlob.char, gooBlob.color);
-
-      this.renderer.fgCtx.restore();
-    }
-
-    // Draw debris (enemy remains) — skip hutPlane pieces (overlay renders those)
-    for (const piece of game.debris) {
-      if (piece.hutPlane) continue;
-      if (!this.shouldRenderEntity(piece, game.player, game.currentRoom)) continue;
-      const piecePlane = piece.plane !== undefined ? piece.plane : 0;
-      const useDithering = piecePlane === 1 && game.player.plane === 1;
-      const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
-      this.renderer[drawMethod](
-        piece.position.x + GRID.CELL_SIZE / 2,
-        piece.position.y + GRID.CELL_SIZE / 2,
-        piece.char,
-        piece.color
-      );
-    }
-
-    // Draw ingredients — skip hutPlane ones (overlay renders those)
-    const inGRoomIng = this._isGRoom(game);
-    for (const ingredient of game.ingredients) {
-      if (ingredient.hutPlane) continue;
-      if (!this.shouldRenderEntity(ingredient, game.player, game.currentRoom)) continue;
-      const ingredientPlane = ingredient.plane !== undefined ? ingredient.plane : 0;
-      const useDithering = ingredientPlane === 1 && game.player.plane === 1;
-      const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
-      const bobY = ingredient.inWater ? Math.sin(ingredient.bobTimer * 4) * 2 : 0;
-      const bounceY = ingredient.getDropBounceOffsetY ? ingredient.getDropBounceOffsetY() : 0;
-      const cx = ingredient.position.x + GRID.CELL_SIZE / 2;
-      const cy = ingredient.position.y + GRID.CELL_SIZE / 2 + bobY + bounceY;
-
-      // G-room concealment: ingredient is hidden under tall grass; sparkle
-      // marks the spot after a 3s grace period so freshly-dropped loot stays
-      // unhinted while the grass settles around it.
-      if (inGRoomIng && this._isOnTallGrass(game, ingredient.position.x, ingredient.position.y)) {
-        const now = performance.now() / 1000;
-        if (ingredient._concealedSince === undefined) ingredient._concealedSince = now;
-        if (now - ingredient._concealedSince >= 3) this._drawGrassSparkle(cx, cy);
-        continue;
-      }
-      ingredient._concealedSince = undefined;
-
-      this.renderer[drawMethod](cx, cy, ingredient.char, ingredient.color);
-    }
+    // Draw debris + ingredients (surface entries only — interior entries routed via overlay).
+    this.drawDebris(game, false);
+    this.drawIngredients(game, false);
 
     // Draw crows (first explore room flavor)
     if (game.currentRoom.crows && game.currentRoom.crows.length > 0) {
       for (const crow of game.currentRoom.crows) {
-        const offsetY = crow.getRenderOffsetY();
-        this.renderer.drawEntity(
-          crow.position.x + GRID.CELL_SIZE / 2,
-          crow.position.y + GRID.CELL_SIZE / 2 + offsetY,
-          crow.char,
-          crow.color
-        );
-        // Pearl-bearer hint: a single white pixel in the crow's beak. Vanishes
-        // once the pearl is dropped so the cue tracks the actual state.
-        if (crow.hasPearl && !crow.droppedPearl) {
-          const prev = this.renderer.fgCtx.fillStyle;
-          this.renderer.fgCtx.fillStyle = '#ffffff';
-          this.renderer.fgCtx.fillRect(
-            Math.round(crow.position.x + GRID.CELL_SIZE / 2 + 3),
-            Math.round(crow.position.y + GRID.CELL_SIZE / 2 + offsetY + 1),
-            1, 1
-          );
-          this.renderer.fgCtx.fillStyle = prev;
-        }
+        this._drawCrow(crow);
       }
     }
 
-    // Draw items — skip hutPlane ones (overlay renders those)
-    const inGRoomItems = this._isGRoom(game);
-    for (const item of game.items) {
-      if (item.hutPlane) continue;
-      const itemPlane = item.plane !== undefined ? item.plane : 0;
-      if (!this.shouldRenderEntity(item, game.player, game.currentRoom)) continue;
-
-      const cx = item.position.x + GRID.CELL_SIZE / 2;
-      const cy = item.position.y + GRID.CELL_SIZE / 2;
-
-      // G-room concealment: item is hidden under tall grass; advertise it
-      // with an intermittent sparkle so the player can still scan for loot.
-      // 3s grace before the sparkle begins so freshly-dropped loot doesn't
-      // immediately give itself away.
-      if (inGRoomItems && this._isOnTallGrass(game, item.position.x, item.position.y)) {
-        const now = performance.now() / 1000;
-        if (item._concealedSince === undefined) item._concealedSince = now;
-        if (now - item._concealedSince >= 3) this._drawGrassSparkle(cx, cy);
-        continue;
+    // Draw follower flock (persists across rooms after feeding events).
+    if (game.followerCrows && game.followerCrows.length > 0) {
+      for (const crow of game.followerCrows) {
+        this._drawCrow(crow);
       }
-      item._concealedSince = undefined;
-
-      const useDithering = itemPlane === 1 && game.player.plane === 1;
-      const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
-
-      this.renderer[drawMethod](cx, cy, item.char, item.color);
     }
+
+    if (game.companionCrows && game.companionCrows.length > 0) {
+      for (const c of game.companionCrows) {
+        this._drawCrow(c);
+      }
+    }
+
+    // Draw items (surface entries only — interior entries routed via overlay).
+    this.drawItems(game, false);
 
     // Draw placed traps
     for (const entry of game.placedTraps) {
@@ -767,17 +681,14 @@ export class ExploreRenderer {
     }
 
     // Draw non-sapping enemies first (so they render behind player)
-    // Skip when inHut — exterior enemies are frozen and the overlay handles interior ones
-    if (!inHut && !inMaze && !inDungeon) for (const enemy of game.currentRoom.enemies) {
-      // Skip sapping enemies - they render on top later
-      if (enemy.sapping) continue;
-      // Boss entities are rendered as a composite later
-      if (enemy.isBossEntity) continue;
-
-      // Skip if enemy is in different plane than player
-      if (!this.shouldRenderEntity(enemy, game.player, game.currentRoom)) continue;
-
-      this.renderEnemy(game, enemy);
+    // Skip when interior (overlay calls drawNonSappingEnemies after translate with activeFloor enemies)
+    if (!inHut && !inMaze && !inDungeon) {
+      this.drawNonSappingEnemies(game, game.activeRoom.enemies);
+      // Tamed rats render through a dedicated minimal path — NPCRat doesn't
+      // implement the full Enemy indicator surface (windup/memory/detection
+      // /hover/sapping/spawn/blind indicators) so reusing the Enemy renderer
+      // would crash. See _renderTamedRats below.
+      if (game.tamedRats?.length) this._renderTamedRats(game);
     }
 
     // Detection system overlay (toggle with 'v' key)
@@ -785,95 +696,19 @@ export class ExploreRenderer {
       this._renderDetectionVisuals(game);
     }
 
-    // Draw projectiles — skip when inHut (overlay renders at correct offset)
-    if (!inHut && !inMaze && !inDungeon) for (const proj of game.combatSystem.getProjectiles()) {
-      // Skip if projectile is in different plane than player
-      if (!this.shouldRenderEntity(proj, game.player, game.currentRoom)) continue;
+    // Surface projectiles only — interior projectiles routed via overlay's drawProjectiles(true).
+    this.drawProjectiles(game, false);
 
-      const useDithering = proj.plane === 1 && game.player.plane === 1;
-      const cx = proj.position.x + GRID.CELL_SIZE / 2;
-      const cy = proj.position.y + GRID.CELL_SIZE / 2;
-
-      if (proj.drawAngle != null) {
-        const method = useDithering ? 'drawEntityRotatedDithered' : 'drawEntityRotated';
-        this.renderer[method](cx, cy, proj.char, proj.color, proj.drawAngle);
-      } else {
-        const method = useDithering ? 'drawEntityDithered' : 'drawEntity';
-        this.renderer[method](cx, cy, proj.char, proj.color);
-      }
-    }
-
-    // Draw enemy projectiles — skip when inHut
-    if (!inHut && !inMaze && !inDungeon) for (const proj of game.combatSystem.getEnemyProjectiles()) {
-      // Skip if projectile is in different plane than player
-      if (!this.shouldRenderEntity(proj, game.player, game.currentRoom)) continue;
-
-      const useDithering = proj.plane === 1 && game.player.plane === 1;
-      const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
-
-      // Reflectable projectiles glow bright green to signal they can be deflected
-      const projColor = (proj.reflectable && !proj.reflected) ? '#00ff66' : proj.color;
-      this.renderer[drawMethod](
-        proj.position.x + GRID.CELL_SIZE / 2,
-        proj.position.y + GRID.CELL_SIZE / 2,
-        proj.char,
-        projColor
-      );
-    }
-
-    // Draw melee attacks — skip when inHut
-    if (!inHut && !inMaze && !inDungeon) for (const attack of game.combatSystem.getMeleeAttacks()) {
-      // Note: Melee attacks inherit plane from attacker via shooterPlane
-      const useDithering = attack.shooterPlane === 1 && game.player.plane === 1;
-      const cx = attack.position.x + GRID.CELL_SIZE / 2;
-      const cy = attack.position.y + GRID.CELL_SIZE / 2;
-
-      const scale = attack.drawScale || 1.0;
-      if (attack.drawAngle != null) {
-        if (useDithering) {
-          this.renderer.drawEntityRotatedDithered(cx, cy, attack.char, attack.color, attack.drawAngle, scale);
-        } else {
-          this.renderer.drawEntityRotated(cx, cy, attack.char, attack.color, attack.drawAngle, scale);
-        }
-      } else if (scale !== 1.0) {
-        this.renderer.drawEntityScaled(cx, cy, attack.char, attack.color, scale);
-      } else {
-        const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
-        this.renderer[drawMethod](cx, cy, attack.char, attack.color);
-      }
-    }
+    // Surface enemy projectiles + melee — interior versions routed via overlay.
+    this.drawEnemyProjectiles(game, false);
+    this.drawMeleeAttacks(game, false);
 
     // Player shockwave (Crystal Maul charged attack) is invisible by design —
     // it manifests only through background objects shaking as the ring sweeps
     // them (handled in InteractionSystem). Mirrors the cyan-zone boss pattern.
 
-    // Draw enemy melee attacks — skip when inHut
-    if (!inHut && !inMaze && !inDungeon) for (const attack of game.combatSystem.getEnemyMeleeAttacks()) {
-      const displayColor = attack.flashWhite ? '#ffffff' : attack.color;
-      const alpha = attack.alpha !== undefined ? attack.alpha : 1.0;
-      const cx = attack.position.x + GRID.CELL_SIZE / 2;
-      const cy = attack.position.y + GRID.CELL_SIZE / 2;
-      const scale = attack.drawScale || 1.0;
-
-      // Player-style weapon swings carry drawAngle/drawScale; honor them so
-      // goblin sword/axe/spear swipes render with the same animation as the
-      // player's swings instead of a static glyph.
-      if (attack.drawAngle != null) {
-        const ctx = this.renderer.fgCtx;
-        const prevAlpha = ctx.globalAlpha;
-        ctx.globalAlpha = alpha;
-        this.renderer.drawEntityRotated(cx, cy, attack.char, displayColor, attack.drawAngle, scale);
-        ctx.globalAlpha = prevAlpha;
-      } else if (scale !== 1.0) {
-        const ctx = this.renderer.fgCtx;
-        const prevAlpha = ctx.globalAlpha;
-        ctx.globalAlpha = alpha;
-        this.renderer.drawEntityScaled(cx, cy, attack.char, displayColor, scale);
-        ctx.globalAlpha = prevAlpha;
-      } else {
-        this.renderer.drawTextWithAlpha(cx, cy, attack.char, displayColor, alpha);
-      }
-    }
+    // Surface enemy melee — interior versions routed via overlay.
+    this.drawEnemyMeleeAttacks(game, false);
 
     // Draw frog tongue attacks — extending/retracting lines
     if (!inHut && !inMaze && !inDungeon) for (const tongue of game.combatSystem.getTongueAttacks()) {
@@ -901,7 +736,7 @@ export class ExploreRenderer {
     }
 
     // Draw mimic tongue attacks — extends toward player then tracks them when hooked
-    if (!inHut && !inMaze && !inDungeon) for (const enemy of game.currentRoom?.enemies ?? []) {
+    if (!inHut && !inMaze && !inDungeon) for (const enemy of game.activeRoom?.enemies ?? []) {
       if (!enemy.mimicTongue || !enemy.mimicRevealed) continue;
       const tongue = enemy.mimicTongue;
       const sx = enemy.position.x + GRID.CELL_SIZE / 2;
@@ -930,30 +765,8 @@ export class ExploreRenderer {
       tctx.restore();
     }
 
-    // Draw player tongue attacks (frog polymorph form) — skip when inHut/inMaze
-    if (!inHut && !inMaze && !inDungeon && game.playerTongueAttacks?.length) {
-      const tctx = this.renderer.fgCtx;
-      for (const tongue of game.playerTongueAttacks) {
-        if (tongue.currentLength <= 0) continue;
-        const sx = game.player.position.x + GRID.CELL_SIZE / 2;
-        const sy = game.player.position.y + GRID.CELL_SIZE / 2;
-        const ex = sx + tongue.direction.x * tongue.currentLength;
-        const ey = sy + tongue.direction.y * tongue.currentLength;
-        tctx.save();
-        tctx.strokeStyle = tongue.color;
-        tctx.lineWidth = 2.5;
-        tctx.lineCap = 'round';
-        tctx.beginPath();
-        tctx.moveTo(sx, sy);
-        tctx.lineTo(ex, ey);
-        tctx.stroke();
-        tctx.fillStyle = tongue.color;
-        tctx.beginPath();
-        tctx.arc(ex, ey, 3, 0, Math.PI * 2);
-        tctx.fill();
-        tctx.restore();
-      }
-    }
+    // Surface frog-tongue attacks — interior versions routed via overlay.
+    this.drawPlayerTongueAttacks(game, false);
 
     // Draw cure Rusalka (polymorph reversal, Lake rooms) — skip when inHut/inMaze
     if (!inHut && !inMaze && !inDungeon && game.cureRusalka) {
@@ -968,15 +781,8 @@ export class ExploreRenderer {
       );
     }
 
-    // Draw stuck arrows — skip when inHut
-    if (!inHut && !inMaze && !inDungeon) for (const arrow of game.combatSystem.getStuckArrows()) {
-      this.renderer.drawEntity(
-        arrow.position.x + GRID.CELL_SIZE / 2,
-        arrow.position.y + GRID.CELL_SIZE / 2,
-        arrow.char,
-        arrow.color
-      );
-    }
+    // Surface stuck arrows — interior versions routed via overlay.
+    this.drawStuckArrows(game, false);
 
     // Draw wand proximity failure indicators — skip when inHut
     if (!inHut && !inMaze && !inDungeon && game.combatSystem.wandProximityFailures) {
@@ -1020,98 +826,25 @@ export class ExploreRenderer {
       }
     }
 
-    // Draw chain lightning arcs — skip when inHut/inMaze
-    if (!inHut && !inMaze && !inDungeon && game.combatSystem.getChainArcs) {
-      const ctx = this.renderer.fgCtx;
-      for (const arc of game.combatSystem.getChainArcs()) {
-        const alpha = Math.max(0, arc.timer / arc.duration);
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.strokeStyle = arc.color;
-        ctx.lineWidth = 2;
-        // Jagged bolt: 4 segments with perpendicular jitter
-        const dx = arc.x2 - arc.x1;
-        const dy = arc.y2 - arc.y1;
-        const len = Math.sqrt(dx * dx + dy * dy) || 1;
-        const px = -dy / len;
-        const py = dx / len;
-        const segs = 4;
-        ctx.beginPath();
-        ctx.moveTo(arc.x1, arc.y1);
-        for (let s = 1; s < segs; s++) {
-          const t = s / segs;
-          const jitter = (Math.random() - 0.5) * 8;
-          ctx.lineTo(
-            arc.x1 + dx * t + px * jitter,
-            arc.y1 + dy * t + py * jitter
-          );
-        }
-        ctx.lineTo(arc.x2, arc.y2);
-        ctx.stroke();
-        ctx.restore();
-      }
-    }
-
-    // Draw damage numbers — skip when inHut (overlay renders at correct offset)
-    if (!inHut && !inMaze && !inDungeon) for (const dmgNum of game.combatSystem.getDamageNumbers()) {
-      const scale = dmgNum.scale || 1;
-      const ctx = this.renderer.fgCtx;
-      ctx.save();
-      ctx.globalAlpha = dmgNum.alpha;
-      ctx.fillStyle = dmgNum.color;
-      ctx.font = `${GRID.CELL_SIZE * scale}px 'Unifont', monospace`;
-      ctx.fillText(dmgNum.value.toString(), dmgNum.x, dmgNum.y);
-      ctx.restore();
-    }
-
-    // Draw particles — skip when inHut (overlay renders at correct offset)
-    if (!inHut && !inMaze && !inDungeon) for (const particle of game.particles) {
-      if (particle.getAlpha) {
-        // Particle class instance
-        const alpha = particle.getAlpha();
-        this.renderer.drawTextWithAlpha(
-          particle.position.x + GRID.CELL_SIZE / 2,
-          particle.position.y + GRID.CELL_SIZE / 2,
-          particle.char,
-          particle.color,
-          alpha
-        );
-      } else {
-        // Simple particle object
-        const alpha = Math.max(0, particle.life / particle.maxLife);
-        this.renderer.drawTextWithAlpha(
-          particle.x,
-          particle.y,
-          particle.char,
-          particle.color,
-          alpha
-        );
-      }
-    }
-
-    // Draw steam clouds — skip when inHut
-    if (!inHut && !inMaze && !inDungeon) for (const cloud of game.steamClouds) {
-      const maxTimer = 7.0;
-      const alpha = Math.min(0.9, (cloud.timer / maxTimer) * 0.9 + 0.1);
-      const steamChars = ['=', '~', '=', '-'];
-      for (let s = 0; s < 4; s++) {
-        const jx = cloud.x + (Math.random() - 0.5) * cloud.radius * 1.6;
-        const jy = cloud.y + (Math.random() - 0.5) * cloud.radius * 1.6;
-        const dx = jx - cloud.x, dy = jy - cloud.y;
-        if (dx * dx + dy * dy <= cloud.radius * cloud.radius) {
-          this.renderer.drawTextWithAlpha(jx, jy, steamChars[s % steamChars.length], '#8c8c8c', alpha);
-        }
-      }
-    }
+    // Surface combat flourish — interior versions routed via overlay.
+    this.drawChainArcs(game, false);
+    this.drawDamageNumbers(game, false);
+    this.drawParticles(game, false);
+    this.drawSteamClouds(game, false);
 
     // Draw player — skip when inHut (overlay renders player at correct interior offset)
-    // G-room: player is also concealed inside tall grass.
-    const playerConcealed = this._isGRoom(game) &&
-      this._isOnTallGrass(game, game.player.position.x, game.player.position.y);
-    if (!inHut && !inMaze && !inDungeon && !playerConcealed) {
+    // Tall-grass concealment fades rapidly in/out so stepping into cover
+    // doesn't pop the player sprite.
+    if (!inHut && !inMaze && !inDungeon) {
+    const playerHidden = this._isOnTallGrass(game, game.player.position.x, game.player.position.y);
+    const concealAlpha = this._stepConcealmentAlpha(game.player, !playerHidden);
+    if (concealAlpha > 0.005) {
     const playerAlpha = game.player.getVisibilityAlpha();
     const playerColor = game.player.getDisplayColor();
     const playerOnTunnelPlane = game.player.plane === 1;
+    const ctx = this.renderer.fgCtx;
+    const needsAlpha = concealAlpha < 0.999;
+    if (needsAlpha) { ctx.save(); ctx.globalAlpha = concealAlpha; }
 
     // Use dithered rendering when on tunnel plane
     if (playerOnTunnelPlane) {
@@ -1141,7 +874,9 @@ export class ExploreRenderer {
         playerAlpha
       );
     }
-    } // end if (!inHut && !inMaze && !inDungeon && !playerConcealed) — player render block
+    if (needsAlpha) ctx.restore();
+    }
+    } // end player render block
 
     // Dizzy orbital particles — player
     if (!inHut && !inMaze && !inDungeon && game.player.isDizzy()) {
@@ -1265,38 +1000,8 @@ export class ExploreRenderer {
       ctx.restore();
     }
 
-    // Draw sapping enemies on top of player — skip when inHut
-    if (!inHut && !inMaze && !inDungeon) for (const enemy of game.currentRoom.enemies) {
-      if (!enemy.sapping) continue;
-      if (enemy.isBossEntity) continue;
-
-      if (enemy.shouldRenderVisible()) {
-        // iframe flash (white) takes priority, then DOT blink, then base color
-        const iframeColor = enemy.getIframeFlashColor();
-        const dotColor = iframeColor === null ? enemy.getDOTBlinkColor() : null;
-        const displayColor = iframeColor !== null ? iframeColor
-                           : dotColor !== null     ? dotColor
-                           : enemy.color;
-
-        this.renderer.drawEntity(
-          enemy.position.x + GRID.CELL_SIZE / 2,
-          enemy.position.y + GRID.CELL_SIZE / 2,
-          enemy.char,
-          displayColor
-        );
-      }
-
-      // Draw sapping indicator (red * when latched to player; offset varies with bat count)
-      const sappingIndicator = enemy.getSappingIndicator();
-      if (sappingIndicator) {
-        this.renderer.drawEntity(
-          enemy.position.x + GRID.CELL_SIZE / 2 + (sappingIndicator.offsetX || 0),
-          enemy.position.y + GRID.CELL_SIZE / 2 + sappingIndicator.offsetY,
-          sappingIndicator.char,
-          sappingIndicator.color
-        );
-      }
-    }
+    // Draw sapping enemies on top of player — skip when interior (overlay handles via its own drawSappingEnemies call)
+    if (!inHut && !inMaze && !inDungeon) this.drawSappingEnemies(game, game.activeRoom.enemies);
 
     // Draw boss composite (body + necks + multi-char heads) — skips individual entity rendering
     if (!inHut && !inMaze && !inDungeon && game.bossSystem?.active) {
@@ -1605,11 +1310,33 @@ export class ExploreRenderer {
     }
   }
 
-  // Returns true if (x, y) sits on a tall-grass '|' tile that is part of a
-  // cluster — i.e. at least one 4-neighbor tile is also '|'. A single isolated
-  // blade does NOT conceal anything: a lone glyph in the open doesn't read as
-  // cover. Used by both the in-any-room grassStealth check and G-room-wide
-  // concealment, so the cluster rule applies universally.
+  // Rapidly interpolate `entity._concealmentAlpha` toward 1 (visible) or 0
+  // (hidden). Smooths the transition when a player or enemy steps in or out
+  // of grass cover so visibility doesn't pop. ~0.125s for a full transition.
+  _stepConcealmentAlpha(entity, targetVisible) {
+    const now = performance.now() / 1000;
+    const FADE_SPEED = 8;
+    if (entity._concealmentAlpha === undefined) {
+      entity._concealmentAlpha = targetVisible ? 1 : 0;
+      entity._concealmentLastT = now;
+      return entity._concealmentAlpha;
+    }
+    const dt = Math.max(0, Math.min(0.1, now - entity._concealmentLastT));
+    entity._concealmentLastT = now;
+    const target = targetVisible ? 1 : 0;
+    const diff = target - entity._concealmentAlpha;
+    const maxStep = FADE_SPEED * dt;
+    if (Math.abs(diff) <= maxStep) entity._concealmentAlpha = target;
+    else entity._concealmentAlpha += Math.sign(diff) * maxStep;
+    return entity._concealmentAlpha;
+  }
+
+  // Returns true if (x, y) sits inside a tall-grass cluster dense enough to
+  // act as cover. RoomGenerator emits two BackgroundObject instances per
+  // visual blade (6px apart, so each blade can straddle two grid cells), so
+  // we count raw '|' instances in the standing cell plus its 4 cardinal
+  // neighbours and require ≥ 6 — ~3 visual blades minimum. Same rule drives
+  // grassStealth detection and universal player/item/enemy concealment.
   _isOnTallGrass(game, x, y) {
     const bgObjects = game._activeBackgroundObjects
       ? game._activeBackgroundObjects()
@@ -1617,22 +1344,18 @@ export class ExploreRenderer {
     const cs = GRID.CELL_SIZE;
     const cx = Math.floor(x / cs);
     const cy = Math.floor(y / cs);
-    let onGrass = false;
-    let hasNeighbor = false;
+    let onCell = 0;
+    let nearby = 0;
     for (const obj of bgObjects) {
       if (obj.destroyed || obj.char !== '|') continue;
       const ox = Math.floor(obj.position.x / cs);
       const oy = Math.floor(obj.position.y / cs);
-      if (ox === cx && oy === cy) onGrass = true;
-      else if ((ox === cx && Math.abs(oy - cy) === 1) ||
-               (oy === cy && Math.abs(ox - cx) === 1)) hasNeighbor = true;
-      if (onGrass && hasNeighbor) return true;
+      const dx = Math.abs(ox - cx);
+      const dy = Math.abs(oy - cy);
+      if (dx === 0 && dy === 0) onCell++;
+      if (dx + dy <= 1) nearby++;
     }
-    return false;
-  }
-
-  _isGRoom(game) {
-    return game.currentRoom?.exitLetter === 'G';
+    return onCell > 0 && nearby >= 6;
   }
 
   // Draw a single intermittent sparkle at the center of a tile.
@@ -1654,18 +1377,47 @@ export class ExploreRenderer {
     }
   }
 
-  renderEnemy(game, enemy) {
-    // Grass stealth: enemies with grassStealth are invisible inside tall grass.
-    // In a G room, this expands to ALL non-flying enemies (float !== true).
-    // Use the active layer's background objects so interior enemies check interior grass,
-    // not exterior grass (which may not share the same coordinate space).
-    const inGRoom = this._isGRoom(game);
-    const groundEnemy = enemy.data?.float !== true;
-    if (enemy.data?.grassStealth || (inGRoom && groundEnemy)) {
-      if (this._isOnTallGrass(game, enemy.position.x, enemy.position.y)) {
-        return; // Hidden in tall grass — skip all rendering
-      }
+  _drawCrow(crow) {
+    const offsetY = crow.getRenderOffsetY();
+    this.renderer.drawEntity(
+      crow.position.x + GRID.CELL_SIZE / 2,
+      crow.position.y + GRID.CELL_SIZE / 2 + offsetY,
+      crow.char,
+      crow.color
+    );
+    // Hoard-bearer hint: single pixel in the crow's beak, color-matched to
+    // the carried glyph. Vanishes once the hoard is dropped.
+    if (crow.hoardItem && !crow.droppedHoard) {
+      const dot = INGREDIENTS[crow.hoardItem]?.color || '#ffffff';
+      const prev = this.renderer.fgCtx.fillStyle;
+      this.renderer.fgCtx.fillStyle = dot;
+      this.renderer.fgCtx.fillRect(
+        Math.round(crow.position.x + GRID.CELL_SIZE / 2 + 3),
+        Math.round(crow.position.y + GRID.CELL_SIZE / 2 + offsetY + 1),
+        1, 1
+      );
+      this.renderer.fgCtx.fillStyle = prev;
     }
+  }
+
+  renderEnemy(game, enemy) {
+    // Tall-grass stealth: any non-flying enemy standing inside a 3+ blade
+    // cluster fades to hidden. grassStealth enemies use the same rule — the
+    // flag is now redundant for ground enemies but kept for future flying
+    // variants. Use the active layer's background objects so interior enemies
+    // check interior grass, not exterior grass.
+    const groundEnemy = enemy.data?.float !== true;
+    const applyGrass = enemy.data?.grassStealth || groundEnemy;
+    let concealAlpha = 1;
+    if (applyGrass) {
+      const hidden = this._isOnTallGrass(game, enemy.position.x, enemy.position.y);
+      concealAlpha = this._stepConcealmentAlpha(enemy, !hidden);
+      if (concealAlpha < 0.005) return;
+    }
+    const _enemyCtx = this.renderer.fgCtx;
+    const _enemyNeedsAlpha = concealAlpha < 0.999;
+    if (_enemyNeedsAlpha) { _enemyCtx.save(); _enemyCtx.globalAlpha = concealAlpha; }
+    try {
 
     // Shell camouflage: render as a rock when in shell form
     if (enemy.data?.shellCamouflage && enemy.inShellForm) {
@@ -1733,13 +1485,16 @@ export class ExploreRenderer {
         displayColor = Math.floor(Date.now() / 120) % 2 === 0 ? deathColor : displayColor;
       }
 
-      // Giant Slime renders as a huge 'o' (same as regular slime, just enormous)
+      // Giant Slime renders as a huge 'o' (same as regular slime, just enormous).
+      // Lift visually during the leap arc; compress slightly during windup so the player reads the telegraph.
       if (enemy.char === 'M') {
+        const liftY = enemy.leapArcLift || 0;
+        const windupSquash = enemy.leapWindupActive ? Math.min(0.85, 1 - (enemy.leapWindupTimer / (enemy.data.leapAttack?.windupTime || 1)) * 0.15) : 1;
         this.renderer.fgCtx.save();
-        this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 3}px 'Unifont', monospace`;
+        this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 3 * windupSquash}px 'Unifont', monospace`;
         this.renderer[drawMethod](
           enemy.position.x + GRID.CELL_SIZE / 2 + shakeX,
-          enemy.position.y + GRID.CELL_SIZE / 2 + shakeY,
+          enemy.position.y + GRID.CELL_SIZE / 2 + shakeY - liftY,
           'o',
           displayColor
         );
@@ -1877,6 +1632,17 @@ export class ExploreRenderer {
       );
     }
 
+    // Draw trap-layer indicator (... while charging, yellow ! while fleeing)
+    const trapLayerIndicator = enemy.getTrapLayerIndicator();
+    if (trapLayerIndicator) {
+      this.renderer.drawEntity(
+        enemy.position.x + GRID.CELL_SIZE / 2,
+        enemy.position.y + GRID.CELL_SIZE / 2 + trapLayerIndicator.offsetY,
+        trapLayerIndicator.char,
+        trapLayerIndicator.color
+      );
+    }
+
     // Draw sapping indicator (red * when latched to player; offset varies with bat count)
     const sappingIndicator = enemy.getSappingIndicator();
     if (sappingIndicator) {
@@ -2002,6 +1768,9 @@ export class ExploreRenderer {
         this.renderer.drawEntity(enemyCenter.x, enemyCenter.y - GRID.CELL_SIZE, '!', `#ff0000${hex}`);
       }
     }
+    } finally {
+      if (_enemyNeedsAlpha) _enemyCtx.restore();
+    }
   }
 
   /**
@@ -2019,7 +1788,7 @@ export class ExploreRenderer {
     const SOUND_RADIUS    = GRID.CELL_SIZE * 7;   // visual for emitted sound pulse
     const SOUND_LIFETIME  = 0.5;                  // must match _emitSoundEvent lifetime
 
-    for (const enemy of game.currentRoom.enemies) {
+    for (const enemy of game.activeRoom.enemies) {
       const cx = enemy.position.x + GRID.CELL_SIZE / 2;
       const cy = enemy.position.y + GRID.CELL_SIZE / 2;
 
@@ -2635,9 +2404,10 @@ export class ExploreRenderer {
         if (word.startsWith(suffix)) { progress = len; break; }
       }
 
+      const specOn = isSpectaclesActive(game);
       for (let i = 0; i < word.length; i++) {
         ctx.fillStyle = i < progress ? '#88ff88' : '#333333';
-        ctx.fillText(word[i], startX + i * spacing, cy);
+        ctx.fillText(spectaclesTransform(word[i], specOn), startX + i * spacing, cy);
       }
 
       row++;
@@ -2656,7 +2426,7 @@ export class ExploreRenderer {
     const room = game.currentRoom;
     if (!room || room.type !== ROOM_TYPES.WELL) return;
     if (!room.well || room.well.consumed) return;
-    if (!game.player?.inventory?.includes('c')) return;
+    if (!game.inventorySystem?.hasCoin()) return;
 
     const C = GRID.CELL_SIZE;
     const ctx = this.renderer.fgCtx;
@@ -2671,7 +2441,8 @@ export class ExploreRenderer {
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#ffff66';
     ctx.globalAlpha = 0.55;
-    ctx.fillText('c', cx, cy);
+    const coinTxt = isSpectaclesActive(game) ? spectaclesTransform('C', true) : 'c';
+    ctx.fillText(coinTxt, cx, cy);
     ctx.restore();
   }
 
@@ -2700,7 +2471,11 @@ export class ExploreRenderer {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#ccccaa';
-    ctx.fillText('SPACE  ENTER', doorPosition.col * C + C / 2, doorPosition.row * C - C * 0.75);
+    ctx.fillText(
+      spectaclesTransformString('SPACE  ENTER', isSpectaclesActive(game)),
+      doorPosition.col * C + C / 2,
+      doorPosition.row * C - C * 0.75
+    );
     ctx.restore();
   }
 
@@ -2751,5 +2526,380 @@ export class ExploreRenderer {
     }
 
     ctx.globalAlpha = 1;
+  }
+
+  // ─── Shared render passes ────────────────────────────────────────────────
+  // Called from both surface render (no transform) and interior overlays
+  // (after applying ctx.translate). Body must use entity-local coords so the
+  // active transform places them correctly in either context. Plane-aware
+  // checks degrade to no-ops in interior since interior entities are plane 0.
+
+  drawProjectiles(game, hutPlane = false) {
+    for (const proj of game.combatSystem.getProjectiles()) {
+      if (!!proj.hutPlane !== hutPlane) continue;
+      if (!this.shouldRenderEntity(proj, game.player, game.currentRoom)) continue;
+      const useDithering = proj.plane === 1 && game.player.plane === 1;
+      const cx = proj.position.x + GRID.CELL_SIZE / 2;
+      const cy = proj.position.y + GRID.CELL_SIZE / 2;
+      if (proj.drawAngle != null) {
+        const method = useDithering ? 'drawEntityRotatedDithered' : 'drawEntityRotated';
+        this.renderer[method](cx, cy, proj.char, proj.color, proj.drawAngle);
+      } else {
+        const method = useDithering ? 'drawEntityDithered' : 'drawEntity';
+        this.renderer[method](cx, cy, proj.char, proj.color);
+      }
+    }
+  }
+
+  drawEnemyProjectiles(game, hutPlane = false) {
+    for (const proj of game.combatSystem.getEnemyProjectiles()) {
+      if (!!proj.hutPlane !== hutPlane) continue;
+      if (!this.shouldRenderEntity(proj, game.player, game.currentRoom)) continue;
+      const useDithering = proj.plane === 1 && game.player.plane === 1;
+      const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
+      const projColor = (proj.reflectable && !proj.reflected) ? '#00ff66' : proj.color;
+      this.renderer[drawMethod](
+        proj.position.x + GRID.CELL_SIZE / 2,
+        proj.position.y + GRID.CELL_SIZE / 2,
+        proj.char,
+        projColor
+      );
+    }
+  }
+
+  drawMeleeAttacks(game, hutPlane = false) {
+    for (const attack of game.combatSystem.getMeleeAttacks()) {
+      if (!!attack.hutPlane !== hutPlane) continue;
+      const useDithering = attack.shooterPlane === 1 && game.player.plane === 1;
+      const cx = attack.position.x + GRID.CELL_SIZE / 2;
+      const cy = attack.position.y + GRID.CELL_SIZE / 2;
+      const scale = attack.drawScale || 1.0;
+      if (attack.drawAngle != null) {
+        if (useDithering) {
+          this.renderer.drawEntityRotatedDithered(cx, cy, attack.char, attack.color, attack.drawAngle, scale);
+        } else {
+          this.renderer.drawEntityRotated(cx, cy, attack.char, attack.color, attack.drawAngle, scale);
+        }
+      } else if (scale !== 1.0) {
+        this.renderer.drawEntityScaled(cx, cy, attack.char, attack.color, scale);
+      } else {
+        const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
+        this.renderer[drawMethod](cx, cy, attack.char, attack.color);
+      }
+    }
+  }
+
+  drawEnemyMeleeAttacks(game, hutPlane = false) {
+    for (const attack of game.combatSystem.getEnemyMeleeAttacks()) {
+      if (!!attack.hutPlane !== hutPlane) continue;
+      const displayColor = attack.flashWhite ? '#ffffff' : attack.color;
+      const alpha = attack.alpha !== undefined ? attack.alpha : 1.0;
+      const cx = attack.position.x + GRID.CELL_SIZE / 2;
+      const cy = attack.position.y + GRID.CELL_SIZE / 2;
+      const scale = attack.drawScale || 1.0;
+      if (attack.drawAngle != null) {
+        const ctx = this.renderer.fgCtx;
+        const prevAlpha = ctx.globalAlpha;
+        ctx.globalAlpha = alpha;
+        this.renderer.drawEntityRotated(cx, cy, attack.char, displayColor, attack.drawAngle, scale);
+        ctx.globalAlpha = prevAlpha;
+      } else if (scale !== 1.0) {
+        const ctx = this.renderer.fgCtx;
+        const prevAlpha = ctx.globalAlpha;
+        ctx.globalAlpha = alpha;
+        this.renderer.drawEntityScaled(cx, cy, attack.char, displayColor, scale);
+        ctx.globalAlpha = prevAlpha;
+      } else {
+        this.renderer.drawTextWithAlpha(cx, cy, attack.char, displayColor, alpha);
+      }
+    }
+  }
+
+  drawStuckArrows(game, hutPlane = false) {
+    for (const arrow of game.combatSystem.getStuckArrows()) {
+      if (!!arrow.hutPlane !== hutPlane) continue;
+      this.renderer.drawEntity(
+        arrow.position.x + GRID.CELL_SIZE / 2,
+        arrow.position.y + GRID.CELL_SIZE / 2,
+        arrow.char,
+        arrow.color
+      );
+    }
+  }
+
+  drawChainArcs(game, hutPlane = false) {
+    if (!game.combatSystem.getChainArcs) return;
+    const ctx = this.renderer.fgCtx;
+    for (const arc of game.combatSystem.getChainArcs()) {
+      if (!!arc.hutPlane !== hutPlane) continue;
+      const alpha = Math.max(0, arc.timer / arc.duration);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = arc.color;
+      ctx.lineWidth = 2;
+      const dx = arc.x2 - arc.x1;
+      const dy = arc.y2 - arc.y1;
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      const px = -dy / len;
+      const py = dx / len;
+      const segs = 4;
+      ctx.beginPath();
+      ctx.moveTo(arc.x1, arc.y1);
+      for (let s = 1; s < segs; s++) {
+        const t = s / segs;
+        const jitter = (Math.random() - 0.5) * 8;
+        ctx.lineTo(arc.x1 + dx * t + px * jitter, arc.y1 + dy * t + py * jitter);
+      }
+      ctx.lineTo(arc.x2, arc.y2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  drawDamageNumbers(game, hutPlane = false) {
+    const ctx = this.renderer.fgCtx;
+    for (const dmgNum of game.combatSystem.getDamageNumbers()) {
+      if (!!dmgNum.hutPlane !== hutPlane) continue;
+      const scale = dmgNum.scale || 1;
+      ctx.save();
+      ctx.globalAlpha = dmgNum.alpha;
+      ctx.fillStyle = dmgNum.color;
+      ctx.font = `${GRID.CELL_SIZE * scale}px 'Unifont', monospace`;
+      ctx.fillText(dmgNum.value.toString(), dmgNum.x, dmgNum.y);
+      ctx.restore();
+    }
+  }
+
+  drawParticles(game, hutPlane = false) {
+    for (const particle of game.particles) {
+      if (!!particle.hutPlane !== hutPlane) continue;
+      if (particle.getAlpha) {
+        const alpha = particle.getAlpha();
+        this.renderer.drawTextWithAlpha(
+          particle.position.x + GRID.CELL_SIZE / 2,
+          particle.position.y + GRID.CELL_SIZE / 2,
+          particle.char,
+          particle.color,
+          alpha
+        );
+      } else {
+        const alpha = Math.max(0, particle.life / particle.maxLife);
+        this.renderer.drawTextWithAlpha(particle.x, particle.y, particle.char, particle.color, alpha);
+      }
+    }
+  }
+
+  drawNonSappingEnemies(game, enemies) {
+    for (const enemy of enemies) {
+      if (enemy.sapping) continue;
+      if (enemy.isBossEntity) continue;
+      if (!this.shouldRenderEntity(enemy, game.player, game.currentRoom)) continue;
+      this.renderEnemy(game, enemy);
+    }
+  }
+
+  // Minimal NPCRat render: char + color + iframe white-flash. NPCRats don't
+  // carry the full Enemy indicator surface (windup, sapping, hover, etc.) so
+  // we don't try to reuse renderEnemy.
+  _renderTamedRats(game) {
+    for (const rat of game.tamedRats) {
+      if (!this.shouldRenderEntity(rat, game.player, game.currentRoom)) continue;
+      const flash = rat.getIframeFlashColor?.();
+      const color = flash !== null && flash !== undefined ? flash : rat.color;
+      this.renderer.drawEntity(
+        rat.position.x + GRID.CELL_SIZE / 2,
+        rat.position.y + GRID.CELL_SIZE / 2,
+        rat.char,
+        color
+      );
+    }
+  }
+
+  drawSappingEnemies(game, enemies) {
+    for (const enemy of enemies) {
+      if (!enemy.sapping) continue;
+      if (enemy.isBossEntity) continue;
+      if (enemy.shouldRenderVisible()) {
+        const iframeColor = enemy.getIframeFlashColor();
+        const dotColor = iframeColor === null ? enemy.getDOTBlinkColor() : null;
+        const displayColor = iframeColor !== null ? iframeColor
+                           : dotColor !== null     ? dotColor
+                           : enemy.color;
+        this.renderer.drawEntity(
+          enemy.position.x + GRID.CELL_SIZE / 2,
+          enemy.position.y + GRID.CELL_SIZE / 2,
+          enemy.char,
+          displayColor
+        );
+      }
+      // Sapping indicator (red * when latched to player; offset varies with bat count)
+      const sappingIndicator = enemy.getSappingIndicator();
+      if (sappingIndicator) {
+        this.renderer.drawEntity(
+          enemy.position.x + GRID.CELL_SIZE / 2 + (sappingIndicator.offsetX || 0),
+          enemy.position.y + GRID.CELL_SIZE / 2 + sappingIndicator.offsetY,
+          sappingIndicator.char,
+          sappingIndicator.color
+        );
+      }
+    }
+  }
+
+  // Puddles, goo blobs, and steam clouds use the `hutPlane` discriminator (same
+  // convention as debris/ingredients/items) to route between surface and interior
+  // render contexts. Surface caller passes hutPlane=false (skips interior-spawned
+  // entries); HutInteriorOverlay caller passes hutPlane=true (skips surface entries).
+  // Spawn sites tag with `entity.hutPlane = !!game.activeFloor`.
+  drawPuddles(game, hutPlane = false) {
+    if (!game.puddles?.length) return;
+    const playerPlane = game.player.plane ?? 0;
+    const isPlaneRoom = !!(game.currentRoom?.tunnel || game.currentRoom?.underground);
+    const ctx = this.renderer.fgCtx;
+    for (const puddle of game.puddles) {
+      if (!!puddle.hutPlane !== hutPlane) continue;
+      if (isPlaneRoom && (puddle.plane ?? 0) !== playerPlane) continue;
+      const { x, y } = puddle.position;
+      const r = puddle.radius;
+      ctx.save();
+      ctx.globalAlpha = puddle.opaque ? 1.0 : 0.28;
+      ctx.fillStyle = puddle.fillColor;
+      if (puddle.shape === 'square') {
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      } else {
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+      ctx.save();
+      ctx.globalAlpha = 0.45;
+      for (const pt of puddle.scatterPoints) {
+        this.renderer.drawEntity(x + pt.dx, y + pt.dy, puddle.char, puddle.color);
+      }
+      ctx.restore();
+    }
+  }
+
+  drawGooBlobs(game, hutPlane = false) {
+    const playerPlane = game.player.plane ?? 0;
+    const isPlaneRoom = !!(game.currentRoom?.tunnel || game.currentRoom?.underground);
+    for (const gooBlob of game.gooBlobs) {
+      if (!!gooBlob.hutPlane !== hutPlane) continue;
+      if (isPlaneRoom && (gooBlob.plane ?? 0) !== playerPlane) continue;
+      const scale = gooBlob.getCurrentScale();
+      this.renderer.fgCtx.save();
+      const screenX = gooBlob.position.x;
+      const screenY = gooBlob.position.y;
+      this.renderer.fgCtx.translate(screenX, screenY);
+      this.renderer.fgCtx.scale(scale, scale);
+      this.renderer.fgCtx.translate(-screenX, -screenY);
+      this.renderer.fgCtx.globalAlpha = 0.7;
+      this.renderer.drawEntity(screenX, screenY, gooBlob.char, gooBlob.color);
+      this.renderer.fgCtx.restore();
+    }
+  }
+
+  drawSteamClouds(game, hutPlane = false) {
+    if (!game.steamClouds?.length) return;
+    for (const cloud of game.steamClouds) {
+      if (!!cloud.hutPlane !== hutPlane) continue;
+      const maxTimer = 7.0;
+      const alpha = Math.min(0.9, (cloud.timer / maxTimer) * 0.9 + 0.1);
+      const steamChars = ['=', '~', '=', '-'];
+      for (let s = 0; s < 4; s++) {
+        const jx = cloud.x + (Math.random() - 0.5) * cloud.radius * 1.6;
+        const jy = cloud.y + (Math.random() - 0.5) * cloud.radius * 1.6;
+        const dx = jx - cloud.x, dy = jy - cloud.y;
+        if (dx * dx + dy * dy <= cloud.radius * cloud.radius) {
+          this.renderer.drawTextWithAlpha(jx, jy, steamChars[s % steamChars.length], '#8c8c8c', alpha);
+        }
+      }
+    }
+  }
+
+  drawDebris(game, hutPlane = false) {
+    for (const piece of game.debris) {
+      if (!!piece.hutPlane !== hutPlane) continue;
+      if (!this.shouldRenderEntity(piece, game.player, game.currentRoom)) continue;
+      const piecePlane = piece.plane !== undefined ? piece.plane : 0;
+      const useDithering = piecePlane === 1 && game.player.plane === 1;
+      const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
+      this.renderer[drawMethod](
+        piece.position.x + GRID.CELL_SIZE / 2,
+        piece.position.y + GRID.CELL_SIZE / 2,
+        piece.char,
+        piece.color
+      );
+    }
+  }
+
+  drawIngredients(game, hutPlane = false) {
+    for (const ingredient of game.ingredients) {
+      if (!!ingredient.hutPlane !== hutPlane) continue;
+      if (!this.shouldRenderEntity(ingredient, game.player, game.currentRoom)) continue;
+      const ingredientPlane = ingredient.plane !== undefined ? ingredient.plane : 0;
+      const useDithering = ingredientPlane === 1 && game.player.plane === 1;
+      const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
+      const bobY = ingredient.inWater ? Math.sin(ingredient.bobTimer * 4) * 2 : 0;
+      const bounceY = ingredient.getDropBounceOffsetY ? ingredient.getDropBounceOffsetY() : 0;
+      const cx = ingredient.position.x + GRID.CELL_SIZE / 2;
+      const cy = ingredient.position.y + GRID.CELL_SIZE / 2 + bobY + bounceY;
+      // Tall-grass concealment is a no-op in interiors (no tall grass) so the helper is safe to share.
+      if (this._isOnTallGrass(game, ingredient.position.x, ingredient.position.y)) {
+        const now = performance.now() / 1000;
+        if (ingredient._concealedSince === undefined) ingredient._concealedSince = now;
+        if (now - ingredient._concealedSince >= 3) this._drawGrassSparkle(cx, cy);
+        continue;
+      }
+      ingredient._concealedSince = undefined;
+      this.renderer[drawMethod](cx, cy, ingredient.char, ingredient.color);
+    }
+  }
+
+  drawItems(game, hutPlane = false) {
+    for (const item of game.items) {
+      if (!!item.hutPlane !== hutPlane) continue;
+      if (!this.shouldRenderEntity(item, game.player, game.currentRoom)) continue;
+      const itemPlane = item.plane !== undefined ? item.plane : 0;
+      const cx = item.position.x + GRID.CELL_SIZE / 2;
+      const cy = item.position.y + GRID.CELL_SIZE / 2;
+      // Tall-grass concealment is a no-op in interiors (no tall grass) so the helper is safe to share.
+      if (this._isOnTallGrass(game, item.position.x, item.position.y)) {
+        const now = performance.now() / 1000;
+        if (item._concealedSince === undefined) item._concealedSince = now;
+        if (now - item._concealedSince >= 3) this._drawGrassSparkle(cx, cy);
+        continue;
+      }
+      item._concealedSince = undefined;
+      const useDithering = itemPlane === 1 && game.player.plane === 1;
+      const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
+      this.renderer[drawMethod](cx, cy, item.char, item.color);
+    }
+  }
+
+  drawPlayerTongueAttacks(game, hutPlane = false) {
+    if (!game.playerTongueAttacks?.length) return;
+    const tctx = this.renderer.fgCtx;
+    for (const tongue of game.playerTongueAttacks) {
+      if (!!tongue.hutPlane !== hutPlane) continue;
+      if (tongue.currentLength <= 0) continue;
+      const sx = game.player.position.x + GRID.CELL_SIZE / 2;
+      const sy = game.player.position.y + GRID.CELL_SIZE / 2;
+      const ex = sx + tongue.direction.x * tongue.currentLength;
+      const ey = sy + tongue.direction.y * tongue.currentLength;
+      tctx.save();
+      tctx.strokeStyle = tongue.color;
+      tctx.lineWidth = 2.5;
+      tctx.lineCap = 'round';
+      tctx.beginPath();
+      tctx.moveTo(sx, sy);
+      tctx.lineTo(ex, ey);
+      tctx.stroke();
+      tctx.fillStyle = tongue.color;
+      tctx.beginPath();
+      tctx.arc(ex, ey, 3, 0, Math.PI * 2);
+      tctx.fill();
+      tctx.restore();
+    }
   }
 }

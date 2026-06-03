@@ -258,7 +258,7 @@ export class MagicSystem {
   _activeEnemies() {
     const game = this.game;
     if (game.player?.inMaze && game.mazeInterior) return game.mazeInterior.ghosts || [];
-    if (game.player?.inHut && game.hutInterior) return game.hutInterior.enemies;
+    if (game.player?.inHut && game.activeFloor) return game.activeFloor.enemies;
     return game.currentRoom?.enemies ?? [];
   }
 
@@ -266,7 +266,7 @@ export class MagicSystem {
   _activeBackgroundObjects() {
     const game = this.game;
     if (game.player?.inMaze && game.mazeInterior) return game.mazeInterior.mazeObjects || [];
-    if (game.player?.inHut && game.hutInterior) return game.hutInterior.backgroundObjects;
+    if (game.player?.inHut && game.activeFloor) return game.activeFloor.backgroundObjects;
     return game.backgroundObjects ?? [];
   }
 

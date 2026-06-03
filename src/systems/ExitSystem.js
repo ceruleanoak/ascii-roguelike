@@ -164,9 +164,10 @@ export class ExitSystem {
         weight *= data.zoneBoosts[zoneType];
       }
 
-      // Increase boss chance at higher depths
-      if (letter === 'B' && depth >= 5) {
-        weight *= 2;
+      // Boss mini-room: locked out before L5, doubled from L5 onward
+      if (letter === 'B') {
+        if (depth < 5) weight = 0;
+        else weight *= 2;
       }
 
       // Lucky blessing reshapes the route: more vaults, key rooms, mystery,
@@ -247,8 +248,8 @@ export class ExitSystem {
       room.collisionMap[centerY][0] = locked;
     }
 
-    // Don't overwrite the player's collision map while inside a maze/hut interior
-    if (!player.inMaze && !player.inHut) {
+    // Don't overwrite the player's collision map while inside a maze/hut/dungeon interior
+    if (!player.inMaze && !player.inHut && !player.inDungeon) {
       player.setCollisionMap(room.collisionMap);
     }
   }

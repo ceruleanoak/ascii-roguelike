@@ -230,6 +230,11 @@ export class MenuSystem {
     const inventoryCount = game.player.inventory.length + game.inventorySystem.armorInventory.length + game.inventorySystem.consumableInventory.length;
     if (game.keys.tab) {
       game.ui.inventory.innerHTML = `<span style="color: ${COLORS.ITEM}">${inventoryCount}</span>`;
+    } else if (inventoryCount > 20) {
+      // Over-capacity warning: blink yellow to hint the player should bank by returning to REST.
+      const blinkCycle = Math.floor((game.player.statusBlinkTimer ?? 0) / 0.35);
+      const color = blinkCycle % 2 === 0 ? COLORS.ITEM : '#665500';
+      game.ui.inventory.innerHTML = `<span style="color: ${color}">${inventoryCount}</span>`;
     } else {
       game.ui.inventory.textContent = inventoryCount;
     }
@@ -391,7 +396,7 @@ export class MenuSystem {
     const PHASE_1_INGREDIENTS = ['g'];
 
     const counts = new Map();
-    for (const ch of player.inventory) {
+    for (const ch of game.getActiveIngredients()) {
       counts.set(ch, (counts.get(ch) ?? 0) + 1);
     }
 
@@ -482,11 +487,18 @@ export class MenuSystem {
 
     const ingredientCounts = new Map();
     const ingredientList = [];
-    for (const ingredientChar of game.player.inventory) {
+    for (const ingredientChar of game.getActiveIngredients()) {
       ingredientCounts.set(ingredientChar, (ingredientCounts.get(ingredientChar) ?? 0) + 1);
       if (!ingredientList.includes(ingredientChar)) {
         ingredientList.push(ingredientChar);
       }
+    }
+    // Coins live in the passive wallet, not in any ingredient pool. Surface
+    // them here so recipes that consume `c` are still selectable.
+    const coinCount = game.inventorySystem?.getCoinCount?.() ?? 0;
+    if (coinCount > 0) {
+      ingredientList.push('c');
+      ingredientCounts.set('c', coinCount);
     }
     game.ingredientCounts = ingredientCounts;
 
@@ -682,7 +694,7 @@ export class MenuSystem {
       const itemChar = typeof selectedItem === 'string' ? selectedItem : selectedItem.char;
 
       if (typeof selectedItem === 'string') {
-        game.player.removeIngredient(selectedItem);
+        game.removeIngredient(selectedItem);
       } else {
         const quickSlotIdx = game.player.quickSlots.indexOf(selectedItem);
         if (quickSlotIdx !== -1) {
@@ -735,7 +747,7 @@ export class MenuSystem {
       game.craftingSystem.centerSlot = itemChar;
 
       if (typeof selectedItem === 'string') {
-        game.player.removeIngredient(selectedItem);
+        game.removeIngredient(selectedItem);
       } else {
         const quickSlotIdx = game.player.quickSlots.indexOf(selectedItem);
         if (quickSlotIdx !== -1) {
@@ -815,7 +827,7 @@ export class MenuSystem {
             const dropped = game.player.pickupItem(item);
             if (dropped) game.inventorySystem.addToChest(dropped);
           } else if (item.data.type === 'INGREDIENT') {
-            game.player.addIngredient(item.char);
+            game.addIngredient(item.char);
           }
           game.showPickupMessage(item.data.name);
           game.renderer.markBackgroundDirty();
@@ -833,7 +845,7 @@ export class MenuSystem {
   _returnSlotItemToInventory(char) {
     const game = this.game;
     if (isIngredient(char)) {
-      game.player.addIngredient(char);
+      game.addIngredient(char);
     } else if (isItem(char)) {
       const item = new Item(char, game.player.position.x, game.player.position.y);
       if (item.data.type === 'ARMOR') {
@@ -843,7 +855,7 @@ export class MenuSystem {
       } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
         game.player.pickupItem(item);
       } else if (item.data.type === 'INGREDIENT') {
-        game.player.addIngredient(char);
+        game.addIngredient(char);
       }
     }
   }

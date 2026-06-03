@@ -161,8 +161,8 @@ export class PolymorphSystem {
     if (!player?.polymorphed) return;
 
     // Find enemies based on whether we're inside a hut interior
-    const enemies = (player.inHut && game.hutInterior)
-      ? game.hutInterior.enemies
+    const enemies = (player.inHut && game.activeFloor)
+      ? game.activeFloor.enemies
       : (game.currentRoom?.enemies ?? []);
 
     // Pick nearest enemy for direction; fall back to facing direction

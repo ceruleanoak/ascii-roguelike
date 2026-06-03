@@ -121,7 +121,7 @@ export class RoomGenerator {
       enemiesPlane0: [], // Standard plane enemies (always visible)
       enemiesPlane1: [], // Tunnel plane enemies (only visible in tunnel)
       items: [],
-      crows: [], // Idle non-combat birds — populated only for the very first explore room
+      crows: [], // Idle non-combat birds — depth-1 intro room + X (Crossroads) rooms
       backgroundObjects: [],
       recipeSign: null, // Visual-only recipe hint (not a BackgroundObject)
       exits: this.exitSystem ? this.exitSystem.generateExits(this.currentDepth, type, zoneType, progressionColor, exitLetter) : { north: false, east: false, west: false, south: true },
@@ -217,8 +217,30 @@ export class RoomGenerator {
       || type === ROOM_TYPES.DISCOVERY
       || type === ROOM_TYPES.CAMP;
     if (this.currentDepth === 1 && zoneType === 'green' && introRoomEligible) {
-      this.spawnIntroCrows(room);
+      // Intro flock: one crow is guaranteed to carry the pearl — that drop
+      // gates the blue-zone Ocean exit, so the chance must be 100%.
+      this.spawnCrows(room, { guaranteedItem: '●' });
       console.log(`[Crows] spawned ${room.crows.length} in depth-1 ${type} room`);
+    }
+
+    // X (Crossroads) rooms: a flock of crows hoards a random shiny.
+    // Same mechanic, different pool — gems/coin/pearl all possible.
+    // Skip if the intro flock already populated this room (depth-1 green).
+    if (exitLetter === 'X' && introRoomEligible && room.crows.length === 0) {
+      this.spawnCrows(room, { hoardPool: RoomGenerator.CROW_HOARD_POOL });
+      console.log(`[Crows] spawned ${room.crows.length} in X crossroads room`);
+    }
+
+    // Bread-fed crows raise the odds of crows appearing in ANY eligible room.
+    // 25% per fed crow, capped at 75% (3 fed crows). One small flock — not the
+    // full X-room treatment. Only fires if no other rule already populated.
+    const fedCount = this.game?.fedCrowCount || 0;
+    if (fedCount > 0 && introRoomEligible && room.crows.length === 0) {
+      const chance = Math.min(0.75, fedCount * 0.25);
+      if (Math.random() < chance) {
+        this.spawnCrows(room, { hoardPool: RoomGenerator.CROW_HOARD_POOL, count: 2 });
+        console.log(`[Crows] fed-bonus flock (fedCount=${fedCount}, p=${chance.toFixed(2)})`);
+      }
     }
 
     // O (Ocean) + pearl-in-inventory: pre-spawn a guide fairy that gates the
@@ -253,8 +275,34 @@ export class RoomGenerator {
     room.pearlFairy = fairy;
   }
 
-  spawnIntroCrows(room) {
-    const COUNT = 3;
+  // Curated corvid hoard — shiny things a crow would snatch.
+  // Each glyph is a valid INGREDIENTS key; Ingredient's constructor picks the
+  // matching color from data/items.js so the dropped "pixel" matches the gem.
+  static CROW_HOARD_POOL = [
+    '●', // Pearl
+    '1', // Topaz
+    '9', // Garnet
+    '`', // Emerald
+    '_', // Diamond
+    '6', // Onyx
+    '?', // Ruby
+    '(', // Sapphire
+    'c'  // Coin
+  ];
+
+  // hoardPool: glyphs the carrier crow may pick from (random).
+  // guaranteedItem: if set, the carrier always drops this glyph instead of rolling.
+  // count: number of crows in the flock.
+  spawnCrows(room, { hoardPool = null, guaranteedItem = null, count = 3 } = {}) {
+    // Global cap: there are only ever 3 crows in the game at any time
+    // (companions + followers + wild crows in the current room). The room
+    // being generated starts empty, so the available headroom equals
+    // 3 - (companions + followers).
+    const existing = (this.game?.companionCrows?.length || 0)
+      + (this.game?.followerCrows?.length || 0);
+    const headroom = Math.max(0, 3 - existing);
+    if (headroom === 0) return;
+    const COUNT = Math.min(count, headroom);
     const minDistFromPlayer = GRID.CELL_SIZE * 5;
     const minDistFromOther = GRID.CELL_SIZE * 3;
     const playerStart = room.playerStartPos || { x: GRID.WIDTH / 2, y: (GRID.ROWS - 3) * GRID.CELL_SIZE };
@@ -317,17 +365,26 @@ export class RoomGenerator {
 
     if (positions.length === 0) return;
 
-    const pearlIndex = Math.floor(Math.random() * positions.length);
+    const carrierIndex = Math.floor(Math.random() * positions.length);
+    const pool = hoardPool && hoardPool.length ? hoardPool : null;
     positions.forEach((pos, i) => {
-      room.crows.push(new Crow(pos.x, pos.y, { hasPearl: i === pearlIndex }));
+      let hoardItem = null;
+      if (i === carrierIndex) {
+        if (guaranteedItem) hoardItem = guaranteedItem;
+        else if (pool) hoardItem = pool[Math.floor(Math.random() * pool.length)];
+      }
+      room.crows.push(new Crow(pos.x, pos.y, { hoardItem }));
     });
   }
 
   determineRoomType() {
     const roll = Math.random();
 
+    // Mini-boss rooms gated to L5+, same threshold as the 'B' exit letter.
+    // Below L5 the BOSS slice rolls into COMBAT instead.
+    const bossAllowed = this.currentDepth >= 5;
     if (roll < 0.7) return ROOM_TYPES.COMBAT;
-    if (roll < 0.8) return ROOM_TYPES.BOSS;
+    if (roll < 0.8) return bossAllowed ? ROOM_TYPES.BOSS : ROOM_TYPES.COMBAT;
     if (roll < 0.9) return ROOM_TYPES.DISCOVERY;
     return ROOM_TYPES.CAMP;
   }
@@ -535,14 +592,17 @@ export class RoomGenerator {
 
     const zone = ZONES[room.zone];
     const pool = zone?.bossPool;
+    // Zone boss rooms get their unique encounter from BossSystem.activate() —
+    // skip bossPool here so it isn't spawned on top of the zone boss.
+    const useMiniBossPool = !this.isZoneBossRoom && pool && pool.length > 0;
 
-    if (pool && pool.length > 0) {
+    if (useMiniBossPool) {
       const encounterId = pool[Math.floor(Math.random() * pool.length)];
       const encounter = BOSS_ENCOUNTERS[encounterId];
       if (encounter) {
         this.spawnBossEncounter(room, encounter);
       }
-    } else {
+    } else if (!this.isZoneBossRoom) {
       // Fallback for zones without a bossPool: single buffed enemy
       const boss = createBossEnemy(this.currentDepth);
       const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects);
@@ -649,6 +709,8 @@ export class RoomGenerator {
           }
         } else if (spawn.role === 'follower' && leader) {
           enemy.leaderRef = leader;
+          // Provisional slot — corrected in the second pass below so the line
+          // formation only counts melee followers (ranged ones stand back).
           enemy.formationSlot = mySlot;
           enemy.formationCount = totalFollowers;
         }
@@ -656,6 +718,17 @@ export class RoomGenerator {
         this.addEnemyToRoom(room, enemy);
       }
     }
+
+    // Renumber formation slots for melee followers only; ranged followers
+    // (bow/gun) keep their leaderRef but are excluded from the line so we
+    // don't end up with gaps in the wall.
+    const meleeFollowers = room.enemies.filter(
+      e => e.leaderRef === leader && e.attackType !== 'item_ranged' && e.movementStyle !== 'keeper'
+    );
+    meleeFollowers.forEach((e, idx) => {
+      e.formationSlot = idx;
+      e.formationCount = meleeFollowers.length;
+    });
   }
 
   generateDiscoveryRoom(room) {
@@ -1179,11 +1252,21 @@ export class RoomGenerator {
     }
 
     // ── Spawn 3-6 enemies in cave with plane 1 + rest state ──────────────────
+    // Centralize spawns near the cave center (15, 15) so enemies cluster in the
+    // middle rather than ambushing the player at the corridor mouths.
     const enemyCount = this.randInt(3, 6);
     const usedCells = new Set();
     let spawned = 0;
-    // shuffle again to pick different positions for enemies
-    const enemyCandidates = passageCells.slice(rockCount);
+    const CENTER_RADIUS = 5;
+    const remainingPassage = passageCells.slice(rockCount);
+    const centralCells = remainingPassage.filter(cell =>
+      Math.abs(cell.col - centerCol) <= CENTER_RADIUS &&
+      Math.abs(cell.row - centerRow) <= CENTER_RADIUS
+    );
+    // Fallback to all remaining passage cells if not enough cluster around center
+    const enemyCandidates = centralCells.length >= enemyCount
+      ? centralCells
+      : remainingPassage;
     this._shuffleArray(enemyCandidates);
     for (const cell of enemyCandidates) {
       if (spawned >= enemyCount) break;

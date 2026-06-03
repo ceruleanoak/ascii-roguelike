@@ -13,11 +13,12 @@ const HIT_RADIUS         = GRID.CELL_SIZE * 0.85;
 
 const DIRECTIONS = ['north', 'south', 'east', 'west'];
 
+// Direction names the source edge; vectors point AWAY from that edge.
 const DIR_VEC = {
-  north: { dx: 0,  dy: -1 },
-  south: { dx: 0,  dy: 1  },
-  east:  { dx: 1,  dy: 0  },
-  west:  { dx: -1, dy: 0  },
+  north: { dx: 0,  dy: 1  },
+  south: { dx: 0,  dy: -1 },
+  east:  { dx: -1, dy: 0  },
+  west:  { dx: 1,  dy: 0  },
 };
 
 export class BoulderSystem {
@@ -76,12 +77,12 @@ export class BoulderSystem {
     }
 
     // Update active rocks
-    const vec = DIR_VEC[this.roomDirection];
     const inHut = game.player.inHut;
     const inMaze = game.player.inMaze;
 
     for (let i = this.rocks.length - 1; i >= 0; i--) {
       const r = this.rocks[i];
+      const vec = DIR_VEC[r.direction];
 
       // Lava speed check
       const rCol = Math.floor(r.x / GRID.CELL_SIZE);

@@ -103,6 +103,32 @@ export class NeutralRenderer {
       pulseAlpha
     );
 
+    // Follower flock (persists across rooms after feeding events).
+    if (game.followerCrows && game.followerCrows.length > 0) {
+      for (const f of game.followerCrows) {
+        const fOff = f.getRenderOffsetY();
+        this.renderer.drawEntity(
+          f.position.x + GRID.CELL_SIZE / 2,
+          f.position.y + GRID.CELL_SIZE / 2 + fOff,
+          f.char,
+          f.color
+        );
+      }
+    }
+
+    // Companion crows: persist across states; perch around the player.
+    if (game.companionCrows && game.companionCrows.length > 0) {
+      for (const c of game.companionCrows) {
+        const offY = c.getRenderOffsetY();
+        this.renderer.drawEntity(
+          c.position.x + GRID.CELL_SIZE / 2,
+          c.position.y + GRID.CELL_SIZE / 2 + offY,
+          c.char,
+          c.color
+        );
+      }
+    }
+
     // Script-specific rendering (if script provides onRender hook)
     if (game.neutralRoomSystem.currentScript && game.neutralRoomSystem.currentScript.onRender) {
       game.neutralRoomSystem.currentScript.onRender(

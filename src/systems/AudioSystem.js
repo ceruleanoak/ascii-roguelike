@@ -871,9 +871,9 @@ export class AudioSystem {
   switchToRedSequence() {
     if (!this.redBuffers.length) {
       console.warn('[Audio] Red tracks not loaded yet');
-      return;
+      return false;
     }
-    if (!this.layer1Gain) return;
+    if (!this.layer1Gain) return false;
 
     // Stop dual sources (mirrors boss-sequence pattern)
     for (const prop of ['layer1Source', 'layer2Source']) {
@@ -886,6 +886,7 @@ export class AudioSystem {
     this.mode = 'red';
     this.redCombatActive = false;
     this._startRedTrack(0);
+    return true;
   }
 
   /**

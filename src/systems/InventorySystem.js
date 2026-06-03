@@ -16,11 +16,21 @@ import { Item } from '../entities/Item.js';
 
 export class InventorySystem {
   constructor() {
-    // PER-CHARACTER REST inventory (persists through death, cleared on game over)
-    // Each character has their own separate banked inventory and quick slots
+    // SHARED banked ingredients (one pile for all characters — ingredients have
+    // no character affinity, so there's no situation where per-character
+    // partitioning makes sense). Persists through death; cleared on game over.
+    this.restInventory = [];
+
+    // Coins are passive: never enter restInventory or player.inventory. Picked
+    // up directly into this wallet, spendable from anywhere (well, NPC, crafting).
+    // Persists through banking and death; cleared only on full game over.
+    this.coinWallet = 0;
+
+    // PER-CHARACTER REST loadout (quick slots + active slot + mana state).
+    // Quick slots stay per-character because each character runs their own
+    // weapon loadout.
     this.characterInventories = {
       'default': {
-        inventory: [],        // Ingredients only
         quickSlots: [null, null, null],  // Weapons only
         activeSlotIndex: 0,   // Persistent active slot index
         manaState: null       // { slots, current, max } — survives character swaps
@@ -29,7 +39,6 @@ export class InventorySystem {
 
     // Legacy properties - maintained for backward compatibility with existing code
     // These point to the active character's data
-    this.restInventory = this.characterInventories['default'].inventory;
     this.restQuickSlots = this.characterInventories['default'].quickSlots;
     this.restActiveSlotIndex = this.characterInventories['default'].activeSlotIndex;
 
@@ -81,6 +90,16 @@ export class InventorySystem {
   getRestInventory() {
     return this.restInventory;
   }
+
+  // ─── Coin wallet ──────────────────────────────────────────────────────────
+  addCoin(n = 1) { this.coinWallet += n; }
+  removeCoin(n = 1) {
+    if (this.coinWallet < n) return false;
+    this.coinWallet -= n;
+    return true;
+  }
+  hasCoin(n = 1) { return this.coinWallet >= n; }
+  getCoinCount() { return this.coinWallet; }
 
   getRestQuickSlots() {
     return this.restQuickSlots;
@@ -146,15 +165,14 @@ export class InventorySystem {
     // Ensure character inventory exists
     if (!this.characterInventories[characterType]) {
       this.characterInventories[characterType] = {
-        inventory: [],
         quickSlots: [null, null, null],
         activeSlotIndex: 0,
         manaState: null
       };
     }
 
-    // Update legacy property pointers to active character's data
-    this.restInventory = this.characterInventories[characterType].inventory;
+    // Update legacy property pointers to active character's data.
+    // restInventory (ingredients) is shared across characters and not touched here.
     this.restQuickSlots = this.characterInventories[characterType].quickSlots;
     this.restActiveSlotIndex = this.characterInventories[characterType].activeSlotIndex;
     this._activeCharacterType = characterType;
@@ -179,12 +197,14 @@ export class InventorySystem {
   clearAllCharacterInventories() {
     this.characterInventories = {
       'default': {
-        inventory: [],
         quickSlots: [null, null, null],
         activeSlotIndex: 0,
         manaState: null
       }
     };
+
+    // Clear shared ingredients pile (in-place so external references stay valid).
+    this.restInventory.length = 0;
 
     // Reset legacy pointers to default
     this.setActiveCharacter('default');
@@ -1332,6 +1352,9 @@ export class InventorySystem {
     // ADD collected ingredients to active character's REST inventory
     // Note: restInventory points to the active character's inventory
     this.restInventory.push(...playerInventory);
+    // Clear the player-carried inventory — items are now banked. Without this,
+    // re-entering REST after another EXPLORE run would double-bank everything.
+    playerInventory.length = 0;
 
     // Save quick slots and active index to active character.
     // restQuickSlots is a live reference to the character's array, so length/push
@@ -1358,6 +1381,7 @@ export class InventorySystem {
     this.itemChest = [];
     this.armorInventory = [];
     this.consumableInventory = [];
+    this.coinWallet = 0;
     this.equippedArmor = null;
     this.equippedConsumables = [null, null];
 

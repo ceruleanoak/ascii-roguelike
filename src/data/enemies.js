@@ -282,6 +282,22 @@ export const ENEMIES = {
       blobSpeed: 110,
       blobDecel: 2.0
     },
+    leapAttack: {
+      enabled: true,
+      triggerRangeMin: GRID.CELL_SIZE * 4,    // Only leap when player is outside melee range
+      triggerRangeMax: GRID.CELL_SIZE * 12,   // Don't leap from across the map
+      cooldown: 5.0,
+      windupTime: 1.2,                         // Compression telegraph before launch
+      airTime: 1.4,                            // Seconds airborne — long enough for the player to read the arc and reposition
+      arcLift: GRID.CELL_SIZE * 5,             // Peak visual lift height during arc — clearly above other entities
+      landRadius: GRID.CELL_SIZE * 2.2,        // Direct-hit impact zone on landing
+      landDamage: 3,
+      shockwaveMaxRadius: GRID.CELL_SIZE * 8,
+      shockwaveSpeed: GRID.CELL_SIZE * 14,     // ~224 px/s; ring crosses landing zone in ~1s
+      shockwaveDamage: 2,
+      shockwaveKnockback: 320,                 // Px/s applied to entities caught in the sweep
+      trailDropOnLanding: true                 // Spawn a slime trail puddle at the landing site
+    },
     elementalAffinity: { immunity: ['slime'], weakness: { freeze: 2.0, blade: 2.0 } },
     freezePermanent: true,
     affinities: ['goo'],
@@ -297,12 +313,12 @@ export const ENEMIES = {
     name: 'Goblin',
     description: 'Scavenges weapons before closing in. Steals stronger gear off the ground.',
     spellDescription: 'WANTS YOUR LOOT.',
-    hp: 5,
-    speed: 40,
+    hp: 7,
+    speed: 35,
     damage: 2,
-    attackRange: GRID.CELL_SIZE * 5,  // 5 units (ranged)
+    attackRange: GRID.CELL_SIZE * 6,  // 6 units (ranged)
     aggroRange: GRID.CELL_SIZE * 10,  // 10 units (ranged awareness)
-    attackCooldown: 1.5,
+    attackCooldown: 1.8,
     attackWindup: 1.0,  // Minimum 1 second telegraph
     attackType: 'ranged',
     projectileType: 'arrow',
@@ -312,15 +328,15 @@ export const ENEMIES = {
     itemUsage: {
       enabled: true,
       canPickup: true,
-      pickupRange: GRID.CELL_SIZE * 2,
+      pickupRange: GRID.CELL_SIZE * 3,
       // Goblins covet any weapon, plus health pots. Pickup priority compares
       // weapon damage against current loadout — see evaluateItemPickup.
       preferredItems: [')', '†', '⫯', '⊤', '↑', '↾', 'H'],
-      useRange: GRID.CELL_SIZE * 7,
+      useRange: GRID.CELL_SIZE * 8,
       useCooldown: 2.0,
-      maxItems: 1,
+      maxItems: 2,
       dropOnDeath: true,
-      useConsumablesAt: 0.5
+      useConsumablesAt: 0.4
     },
     // When spawned as a Brute follower, leaderRef gets set on the instance and
     // this orbits the leader at formationRadius. Standalone goblins have no
@@ -332,10 +348,12 @@ export const ENEMIES = {
       orbitSpeed: 1.2
     },
     // Per-instance random spawn loadout (RoomGenerator rolls this for standalone
-    // goblins so they appear with assorted basic weapons).
+    // goblins so they appear with assorted basic weapons). Bow-dominant: duped
+    // entries weight the pool so most goblins carry a bow; melee variants are
+    // the occasional outlier rather than the norm.
     spawnEquipment: {
-      chance: 0.55,
-      weapons: ['†', '⊤', '↑', '↾', '⫯', ')']
+      chance: 1.0,
+      weapons: [')', ')', ')', ')', ')', ')', ')', '†', '⊤', '↑']
     },
     affinities: ['humanoid'],
     tier: 'normal'
@@ -411,38 +429,6 @@ export const ENEMIES = {
       maxItems: 1,
       dropOnDeath: true,
       useConsumablesAt: 0.3
-    },
-    affinities: ['humanoid'],
-    tier: 'normal'
-  },
-
-  'A': {
-    char: 'A',
-    name: 'Archer Goblin',
-    description: 'Keeps its distance and fires. Always carries a spare.',
-    spellDescription: 'STAYS FAR. FIRES.',
-    hp: 7,
-    speed: 35,
-    damage: 2,
-    attackRange: GRID.CELL_SIZE * 6,  // 6 units (ranged)
-    aggroRange: GRID.CELL_SIZE * 10,  // 10 units
-    attackCooldown: 1.8,
-    attackWindup: 1.0,  // Minimum 1 second telegraph
-    attackType: 'ranged',
-    projectileType: 'arrow',
-    movementStyle: 'keeper',  // Maintains arrow range; flees if player closes to melee
-    decisionInterval: 0.45,
-    color: '#00aa00',
-    itemUsage: {
-      enabled: true,
-      canPickup: true,
-      pickupRange: GRID.CELL_SIZE * 3,
-      preferredItems: [')', '>', 'H'],  // Bows, health potions
-      useRange: GRID.CELL_SIZE * 8,
-      useCooldown: 2.0,
-      maxItems: 2,
-      dropOnDeath: true,
-      useConsumablesAt: 0.4
     },
     affinities: ['humanoid'],
     tier: 'normal'
@@ -1750,31 +1736,29 @@ export const ENEMIES = {
     spellDescription: 'TRAPS THE PATH.',
     mass: 0.6,
     hp: 4,
-    speed: 58,
-    acceleration: 380,
-    damage: 1,
-    attackRange: GRID.CELL_SIZE * 2,
-    aggroRange: GRID.CELL_SIZE * 10,
-    attackCooldown: 3.5,   // Prefers to orbit indefinitely over attacking
-    attackWindup: 1.2,
-    windupMovement: 'retreat',  // Backs away while winding up — creates distance then swings
-    attackType: 'melee',
+    speed: 72,            // Fast enough to keep distance — has no attack of its own
+    acceleration: 420,
+    attackType: 'none',   // No direct attack — traps are the entire threat
+    attackRange: 0,
+    aggroRange: GRID.CELL_SIZE * 12,
     movementStyle: 'kiter',
     movementConfig: {
-      kiteDistance: GRID.CELL_SIZE * 6,    // Wider orbit — seeding more trap arc per circuit
-      retreatThreshold: GRID.CELL_SIZE * 3,
-      hoverTime: 2.5   // Full orbit committed — readable encirclement, not erratic fleeing
+      kiteDistance: GRID.CELL_SIZE * 7,    // Wider orbit — seeding more trap arc per circuit
+      retreatThreshold: GRID.CELL_SIZE * 6, // Contiguous with the hover band — no "approach gap" where kiter pulls back in
+      hoverTime: Infinity                  // Trap Goblin never commits to the kiter rush — it has no attack to deliver
     },
     decisionInterval: 0.25,
     color: '#ccaa00',
     trapLayerMechanic: {
       enabled: true,
       trapTypes: ['slow', 'slow', 'fire'],  // 2:1 bias: slow sets up, fire punishes stopping
-      trapCooldown: 5.0,            // One trap every 5s — deliberate, not a minefield
-      trapWindup: 0.5,
-      trapOnlyWhileFleeing: false,
-      postTrapBurstDuration: 1.5,   // Scuttles away fast immediately after dropping
-      postTrapBurstSpeed: 1.8       // Speed multiplier during burst retreat
+      trapCooldown: 5.0,                    // Base cooldown while not seeing player
+      trapCooldownVisibleMult: 0.4,         // 2.5× faster when the player is in sight (~2s effective)
+      trapWindup: 0.5,                      // '...' telegraph before placing; player gets a beat to back off
+      trapSafeRange: GRID.CELL_SIZE * 2,    // Within 2 cells: drop is held, '!' flee kicks in. Otherwise orbit naturally and place traps freely.
+      fleeSpeedMult: 1.8,                   // Active flee speed while player breaches safe range
+      postTrapBurstDuration: 1.5,           // Scuttles away fast immediately after dropping
+      postTrapBurstSpeed: 1.8               // Speed multiplier during burst retreat
     },
     idleBehavior: 'wander',
     elementalAffinity: {
@@ -1960,9 +1944,9 @@ export const SPAWN_TABLES = {
   0: ['r', 'o'],                              // Depth 0-1: Easy enemies
   2: ['r', 'o', '^', 'G'],                    // Depth 2-4: Add bats and goblins (G has item pickup)
   5: ['o', '^', 'G', 'S', 'P', 'L'],          // Depth 5-7: Add poison spider, looter
-  8: ['G', 'S', 'O', 'W', 'F', 'N', 'A'],     // Depth 8-10: Add fire elemental, necromancer, archer
-  11: ['S', 'O', 'W', 'K', 'I', 'N', 'A'],    // Depth 11-14: Add ice golem, knight (K has item pickup)
-  15: ['O', 'W', 'K', 'T', 'D', 'F', 'I', 'N', 'Q', 'A', 'L']  // Depth 15+: All enemies
+  8: ['G', 'S', 'O', 'W', 'F', 'N'],          // Depth 8-10: Add fire elemental, necromancer
+  11: ['S', 'O', 'W', 'K', 'I', 'N', 'G'],    // Depth 11-14: Add ice golem, knight (K has item pickup)
+  15: ['O', 'W', 'K', 'T', 'D', 'F', 'I', 'N', 'Q', 'G', 'L']  // Depth 15+: All enemies
 };
 
 // Zone-specific spawn tables (independent difficulty progression per zone)
@@ -1972,8 +1956,8 @@ export const ZONE_SPAWN_TABLES = {
     0: ['r', 'o'],                                     // L1-2: Rats, Slimes
     3: ['r', 'o', '^', 'G', 'g', 'b'],                // L3-5: Add Bats, Goblins, Frogs, Boars
     6: ['o', '^', 'G', 'S', 'P', 'g', 'b', 'm'],      // L6-8: Add Skeletons, Poison Spiders, Mimics ('M' Giant Slime is now boss-only)
-    9: ['G', 'S', 'O', 'A', 'W', 'P', 'g', 'a', 'd'], // L9-11: Add Ogres, Archers, Wizards, Shamans, Duelists
-    12: ['S', 'O', 'A', 'W', 'K', 'T', 'L', 'a', 'd'] // L12+: Add Knights, Trolls, Looters, Shamans, Duelists
+    9: ['G', 'S', 'O', 'W', 'P', 'g', 'a', 'd'],     // L9-11: Add Ogres, Wizards, Shamans, Duelists
+    12: ['S', 'O', 'G', 'W', 'K', 'T', 'L', 'a', 'd'] // L12+: Add Knights, Trolls, Looters, Shamans, Duelists
   },
 
   // Blue zone (Tidefall) — tutorial zone. Only Frogs + Sea Snakes; injected
@@ -2101,15 +2085,16 @@ export const BOSS_ENCOUNTERS = {
   },
   goblin_army: {
     // Followers are regular Goblins (G), each scavenged a different weapon.
-    // The leaderRef + followLeader behavior (configured on G data) makes them
-    // orbit the Brute while the player is in range.
+    // Five melee goblins form a perpendicular wall between the Brute and the
+    // player; the bow goblin stays back per its keeper movement style.
     spawns: [
       { char: 'B', count: 1, role: 'leader' },
       { char: 'G', count: 1, role: 'follower', equippedWeapon: '†' },   // Sword
       { char: 'G', count: 1, role: 'follower', equippedWeapon: '⊤' },   // Bone axe
       { char: 'G', count: 1, role: 'follower', equippedWeapon: '↑' },   // Spear
       { char: 'G', count: 1, role: 'follower', equippedWeapon: '↾' },   // Dagger
-      { char: 'G', count: 1, role: 'follower', equippedWeapon: '⫯' }    // Longsword
+      { char: 'G', count: 1, role: 'follower', equippedWeapon: '⫯' },   // Longsword
+      { char: 'G', count: 1, role: 'follower', equippedWeapon: ')' }    // Bow (ranged)
     ],
     arenaSpacing: 'formation'
   }

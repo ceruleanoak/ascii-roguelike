@@ -31,9 +31,11 @@ export class CheatMenu {
     const godMode = this.godMode;
     const meterActive = !!this.game?.player?.magicMeter?.active;
 
+    const demoRecording = !!this.game?.demoSystem?.recording;
     const togglesItems = [
       { char: godMode ? '✓' : '○', name: `GOD MODE [${godMode ? 'ON' : 'OFF'}]`, type: 'toggle_god_mode', color: godMode ? '#00ff88' : '#888888' },
-      { char: meterActive ? '✓' : '○', name: `MAGIC METER [${meterActive ? 'ON' : 'OFF'}]`, type: 'activate_magic_meter', color: meterActive ? '#cc66ff' : '#888888' }
+      { char: meterActive ? '✓' : '○', name: `MAGIC METER [${meterActive ? 'ON' : 'OFF'}]`, type: 'activate_magic_meter', color: meterActive ? '#cc66ff' : '#888888' },
+      { char: demoRecording ? '●' : '○', name: `RECORD DEMO [${demoRecording ? 'ON' : 'OFF'}]`, type: 'toggle_demo_recording', color: demoRecording ? '#ff4444' : '#888888' }
     ];
 
     const zoneItems = (this.game && this.game.zoneDepths) ? [
@@ -381,6 +383,7 @@ export class CheatMenu {
   _activateItem(selected) {
     if (selected.type === 'toggle_god_mode') return { action: 'toggle_god_mode' };
     if (selected.type === 'activate_magic_meter') return { action: 'activate_magic_meter' };
+    if (selected.type === 'toggle_demo_recording') return { action: 'toggle_demo_recording' };
     if (selected.type === 'zone') return { action: 'teleport_zone', zone: selected.zone };
     if (selected.type === 'boss_test') return { action: 'boss_test', zone: selected.zone };
     if (selected.type === 'character') {

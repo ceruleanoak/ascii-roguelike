@@ -158,8 +158,9 @@ export class ASCIIRenderer {
   drawTextWithAlphaDithered(x, y, char, color, alpha) {
     this.fgCtx.save();
 
-    // Draw the character with alpha
-    this.fgCtx.globalAlpha = alpha;
+    // Draw the character with alpha — multiply into any outer globalAlpha
+    // so external fades (e.g. tall-grass concealment) compose correctly.
+    this.fgCtx.globalAlpha = this.fgCtx.globalAlpha * alpha;
     this.fgCtx.fillStyle = color;
     this.fgCtx.fillText(char, x, y);
 
@@ -200,10 +201,12 @@ export class ASCIIRenderer {
     return totalHeight;
   }
 
-  // Draw text with alpha transparency (foreground layer)
+  // Draw text with alpha transparency (foreground layer). Multiplies into any
+  // outer globalAlpha so external fades (e.g. tall-grass concealment) compose
+  // with the per-call alpha rather than being clobbered by it.
   drawTextWithAlpha(x, y, text, color, alpha) {
     this.fgCtx.save();
-    this.fgCtx.globalAlpha = alpha;
+    this.fgCtx.globalAlpha = this.fgCtx.globalAlpha * alpha;
     this.fgCtx.fillStyle = color;
     this.fgCtx.fillText(text, x, y);
     this.fgCtx.restore();

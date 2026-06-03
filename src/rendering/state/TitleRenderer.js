@@ -305,7 +305,7 @@ export class TitleRenderer {
       const versionAlpha = Math.min((time - SHIMMER_DURATION) / 1.0, 1.0);
       this.renderer.fgCtx.fillStyle = `rgba(128, 128, 128, ${versionAlpha * 0.6})`;
       this.renderer.fgCtx.textAlign = 'right';
-      this.renderer.fgCtx.fillText('v0.4', GRID.WIDTH - GRID.CELL_SIZE, GRID.HEIGHT - GRID.CELL_SIZE);
+      this.renderer.fgCtx.fillText('v0.5', GRID.WIDTH - GRID.CELL_SIZE, GRID.HEIGHT - GRID.CELL_SIZE);
     }
 
     this.renderer.fgCtx.restore();
@@ -325,21 +325,22 @@ export class TitleRenderer {
     const blinkPeriod = 1.0;
     const blinkOn = Math.floor(Date.now() / 1000 / blinkPeriod) % 2 === 0;
 
+    // Always record button bounds so the click hit-test still works during
+    // the blink-off frames (and while the demo is playing on top of this overlay).
+    const buttonText = "CLICK TO PLAY GAME";
+    if (!game.launchButtonBounds) {
+      const textWidth = this.renderer.fgCtx.measureText(buttonText).width;
+      game.launchButtonBounds = {
+        x: centerX - textWidth / 2,
+        y: centerY - GRID.CELL_SIZE / 2,
+        width: textWidth,
+        height: GRID.CELL_SIZE
+      };
+    }
+
     if (blinkOn) {
-      const buttonText = "CLICK TO PLAY GAME";
       this.renderer.fgCtx.fillStyle = COLORS.ITEM;
       this.renderer.fgCtx.fillText(buttonText, centerX, centerY);
-
-      // Store button bounds for click detection
-      if (!game.launchButtonBounds) {
-        const textWidth = this.renderer.fgCtx.measureText(buttonText).width;
-        game.launchButtonBounds = {
-          x: centerX - textWidth / 2,
-          y: centerY - GRID.CELL_SIZE / 2,
-          width: textWidth,
-          height: GRID.CELL_SIZE
-        };
-      }
     }
 
     // "Created by CeruleanOak" below the button

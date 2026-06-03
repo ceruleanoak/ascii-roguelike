@@ -4,7 +4,7 @@ import { GRID } from '../../game/GameConfig.js';
  * HutInteriorOverlay — picture-in-picture rendering for both Hut and Dungeon interiors.
  *
  * Canvas: 480×480 (30×30 cells × 16px)
- * Panel size and offset are computed dynamically from game.hutInterior.gridCols/gridRows:
+ * Panel size and offset are computed dynamically from game.activeFloor.gridCols/gridRows:
  *   Hut (10×10)    → 160×160 panel, centered at offset (160, 160)
  *   Dungeon (24×24) → 384×384 panel, centered at offset (48, 48)
  *
@@ -23,11 +23,11 @@ export class HutInteriorOverlay {
   }
 
   render(game) {
-    if ((!game.player?.inHut && !game.player?.inDungeon) || !game.hutInterior) return;
+    if ((!game.player?.inHut && !game.player?.inDungeon) || !game.activeFloor) return;
 
     // Compute panel dimensions from interior grid size (auto-sizes for hut vs dungeon)
-    const interiorPxW = game.hutInterior.gridCols * GRID.CELL_SIZE;
-    const interiorPxH = game.hutInterior.gridRows * GRID.CELL_SIZE;
+    const interiorPxW = game.activeFloor.gridCols * GRID.CELL_SIZE;
+    const interiorPxH = game.activeFloor.gridRows * GRID.CELL_SIZE;
     const offsetX = Math.floor((GRID.WIDTH  - interiorPxW) / 2);
     const offsetY = Math.floor((GRID.HEIGHT - interiorPxH) / 2);
 
@@ -49,31 +49,44 @@ export class HutInteriorOverlay {
 
     // ── Apply interior-coordinate offset for all entity rendering ─────────────
     // After this point, drawing at (x, y) appears at canvas (offsetX+x, offsetY+y).
+    // Clip to the interior grid so any surface-coord content that leaks past
+    // hutPlane filters (e.g. puddles/gooBlobs missing the tag) gets clipped out
+    // rather than rendering on top of the PiP frame.
     ctx.translate(offsetX, offsetY);
+    ctx.beginPath();
+    ctx.rect(0, 0, interiorPxW, interiorPxH);
+    ctx.clip();
 
     ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
+    // ── 3a. Interior puddles + goo blobs + steam clouds (slime trails, etc.) ───
+    // hutPlane=true selects only entries tagged with hutPlane=true on spawn,
+    // i.e. those that originated inside the active interior.
+    this.renderController.exploreRenderer.drawPuddles(game, true);
+    this.renderController.exploreRenderer.drawGooBlobs(game, true);
+    this.renderController.exploreRenderer.drawSteamClouds(game, true);
+
     // ── 3b. Dungeon wall tiles ─────────────────────────────────────────────────
     // Render solid collision-map cells as visible stone walls.
     // Hut interiors are open floor only (10 cols); dungeon interiors are 24 cols.
-    if (game.hutInterior.collisionMap && game.hutInterior.gridCols > 12) {
+    if (game.activeFloor.collisionMap && game.activeFloor.gridCols > 12) {
       const CS = GRID.CELL_SIZE;
-      const cm = game.hutInterior.collisionMap;
+      const cm = game.activeFloor.collisionMap;
       for (let r = 0; r < cm.length; r++) {
         for (let c = 0; c < (cm[r]?.length ?? 0); c++) {
           if (!cm[r][c]) continue;
-          ctx.fillStyle = '#1a1512';
+          ctx.fillStyle = '#3a2a1c';
           ctx.fillRect(c * CS, r * CS, CS, CS);
-          ctx.fillStyle = '#2e2218';
+          ctx.fillStyle = '#6a4830';
           ctx.fillText('≡', c * CS + CS / 2, r * CS + CS / 2);
         }
       }
     }
 
     // ── 4. Interior background objects ─────────────────────────────────────────
-    for (const obj of game.hutInterior.backgroundObjects) {
+    for (const obj of game.activeFloor.backgroundObjects) {
       if (obj.destroyed) continue;
       const renderData = obj.getRenderPosition();
       ctx.fillStyle = renderData.color;
@@ -84,44 +97,17 @@ export class HutInteriorOverlay {
       );
     }
 
-    // ── 5. Hutplane debris ────────────────────────────────────────────────────
-    for (const piece of game.debris) {
-      if (!piece.hutPlane) continue;
-      this.renderer.drawEntity(
-        piece.position.x + GRID.CELL_SIZE / 2,
-        piece.position.y + GRID.CELL_SIZE / 2,
-        piece.char,
-        piece.color
-      );
-    }
-
-    // ── 6. Hutplane ingredients ───────────────────────────────────────────────
-    for (const ingredient of game.ingredients) {
-      if (!ingredient.hutPlane) continue;
-      const bobY = ingredient.inWater ? Math.sin(ingredient.bobTimer * 4) * 2 : 0;
-      this.renderer.drawEntity(
-        ingredient.position.x + GRID.CELL_SIZE / 2,
-        ingredient.position.y + GRID.CELL_SIZE / 2 + bobY,
-        ingredient.char,
-        ingredient.color
-      );
-    }
-
-    // ── 7. Hutplane items ─────────────────────────────────────────────────────
-    for (const item of game.items) {
-      if (!item.hutPlane) continue;
-      this.renderer.drawEntity(
-        item.position.x + GRID.CELL_SIZE / 2,
-        item.position.y + GRID.CELL_SIZE / 2,
-        item.char,
-        item.color
-      );
-    }
+    // ── 5-7. Hutplane debris / ingredients / items ────────────────────────────
+    // Delegates to the shared helpers on ExploreRenderer with hutPlane=true filter.
+    this.renderController.exploreRenderer.drawDebris(game, true);
+    this.renderController.exploreRenderer.drawIngredients(game, true);
+    this.renderController.exploreRenderer.drawItems(game, true);
 
     // ── 8. Interior enemies (full indicator rendering) ─────────────────────────
-    for (const enemy of game.hutInterior.enemies) {
-      this.renderController.exploreRenderer.renderEnemy(game, enemy);
-      // Key indicator one full cell above hasKey enemies (vault key char '߃')
+    // Use the shared non-sapping pass, then redraw sapping ones on top of player below.
+    this.renderController.exploreRenderer.drawNonSappingEnemies(game, game.activeFloor.enemies);
+    // Key indicator one full cell above hasKey enemies (vault key char '߃')
+    for (const enemy of game.activeFloor.enemies) {
       if (enemy.hasKey) {
         ctx.fillStyle = '#ffcc00';
         ctx.fillText(
@@ -132,16 +118,16 @@ export class HutInteriorOverlay {
       }
     }
 
-    // ── 8b. Interior NPCs (WiseFellow, Witch) ─────────────────────────────────
-    for (const npc of game.hutInterior.npcs) {
-      const npcAlpha = npc.getPulseAlpha ? npc.getPulseAlpha() : 1.0;
-      this.renderer.drawTextWithAlpha(
-        npc.position.x + GRID.CELL_SIZE / 2,
-        npc.position.y + GRID.CELL_SIZE / 2,
-        npc.char,
-        npc.color,
-        npcAlpha
-      );
+    // ── 8b. Interior NPCs (WiseFellow, Witch, ErrandCharacter) ────────────────
+    // Delegate to each NPC's own render() so ErrandCharacter draws its hop
+    // animation and stage-colored requested-item indicator, matching E-rooms.
+    const npcGridToPixel = (gx, gy) => ({ x: gx * GRID.CELL_SIZE, y: gy * GRID.CELL_SIZE });
+    for (const npc of game.activeFloor.npcs) {
+      npc.render(ctx, npcGridToPixel);
+      // Restore overlay font in case the NPC's render() swapped it.
+      ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
 
       // WiseFellow hint text — fades in on proximity (word per line above NPC)
       if (npc.hintText && npc.hintAlpha > 0.02) {
@@ -163,139 +149,31 @@ export class HutInteriorOverlay {
     }
 
     // ── 9. Player projectiles (interior coords) ────────────────────────────────
-    for (const proj of game.combatSystem.getProjectiles()) {
-      const cx = proj.position.x + GRID.CELL_SIZE / 2;
-      const cy = proj.position.y + GRID.CELL_SIZE / 2;
-      if (proj.drawAngle != null) {
-        this.renderer.drawEntityRotated(cx, cy, proj.char, proj.color, proj.drawAngle);
-      } else {
-        this.renderer.drawEntity(cx, cy, proj.char, proj.color);
-      }
-    }
+    this.renderController.exploreRenderer.drawProjectiles(game, true);
 
     // ── 10. Enemy projectiles (interior coords) ────────────────────────────────
-    for (const proj of game.combatSystem.getEnemyProjectiles()) {
-      this.renderer.drawEntity(
-        proj.position.x + GRID.CELL_SIZE / 2,
-        proj.position.y + GRID.CELL_SIZE / 2,
-        proj.char,
-        proj.color
-      );
-    }
+    this.renderController.exploreRenderer.drawEnemyProjectiles(game, true);
 
     // ── 10b. Player tongue attacks (frog form) ─────────────────────────────────
-    if (game.playerTongueAttacks?.length) {
-      const pctx = ctx;
-      for (const tongue of game.playerTongueAttacks) {
-        if (tongue.currentLength <= 0) continue;
-        const sx = game.player.position.x + GRID.CELL_SIZE / 2;
-        const sy = game.player.position.y + GRID.CELL_SIZE / 2;
-        const ex = sx + tongue.direction.x * tongue.currentLength;
-        const ey = sy + tongue.direction.y * tongue.currentLength;
-        pctx.save();
-        pctx.strokeStyle = tongue.color;
-        pctx.lineWidth = 2.5;
-        pctx.lineCap = 'round';
-        pctx.beginPath();
-        pctx.moveTo(sx, sy);
-        pctx.lineTo(ex, ey);
-        pctx.stroke();
-        pctx.fillStyle = tongue.color;
-        pctx.beginPath();
-        pctx.arc(ex, ey, 3, 0, Math.PI * 2);
-        pctx.fill();
-        pctx.restore();
-      }
-    }
+    this.renderController.exploreRenderer.drawPlayerTongueAttacks(game, true);
 
     // ── 11. Player melee attacks ───────────────────────────────────────────────
-    for (const attack of game.combatSystem.getMeleeAttacks()) {
-      const cx = attack.position.x + GRID.CELL_SIZE / 2;
-      const cy = attack.position.y + GRID.CELL_SIZE / 2;
-      if (attack.drawAngle != null) {
-        this.renderer.drawEntityRotated(cx, cy, attack.char, attack.color, attack.drawAngle);
-      } else {
-        this.renderer.drawEntity(cx, cy, attack.char, attack.color);
-      }
-    }
+    this.renderController.exploreRenderer.drawMeleeAttacks(game, true);
 
     // ── 12. Enemy melee attacks ────────────────────────────────────────────────
-    for (const attack of game.combatSystem.getEnemyMeleeAttacks()) {
-      const displayColor = attack.flashWhite ? '#ffffff' : attack.color;
-      const alpha = attack.alpha !== undefined ? attack.alpha : 1.0;
-      this.renderer.drawTextWithAlpha(
-        attack.position.x + GRID.CELL_SIZE / 2,
-        attack.position.y + GRID.CELL_SIZE / 2,
-        attack.char,
-        displayColor,
-        alpha
-      );
-    }
+    this.renderController.exploreRenderer.drawEnemyMeleeAttacks(game, true);
 
     // ── 13. Stuck arrows ───────────────────────────────────────────────────────
-    for (const arrow of game.combatSystem.getStuckArrows()) {
-      this.renderer.drawEntity(
-        arrow.position.x + GRID.CELL_SIZE / 2,
-        arrow.position.y + GRID.CELL_SIZE / 2,
-        arrow.char,
-        arrow.color
-      );
-    }
+    this.renderController.exploreRenderer.drawStuckArrows(game, true);
 
     // ── 13b. Chain lightning arcs ─────────────────────────────────────────────
-    if (game.combatSystem.getChainArcs) {
-      for (const arc of game.combatSystem.getChainArcs()) {
-        const alpha = Math.max(0, arc.timer / arc.duration);
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.strokeStyle = arc.color;
-        ctx.lineWidth = 2;
-        const dx = arc.x2 - arc.x1;
-        const dy = arc.y2 - arc.y1;
-        const len = Math.sqrt(dx * dx + dy * dy) || 1;
-        const px = -dy / len;
-        const py = dx / len;
-        const segs = 4;
-        ctx.beginPath();
-        ctx.moveTo(arc.x1, arc.y1);
-        for (let s = 1; s < segs; s++) {
-          const t = s / segs;
-          const jitter = (Math.random() - 0.5) * 8;
-          ctx.lineTo(arc.x1 + dx * t + px * jitter, arc.y1 + dy * t + py * jitter);
-        }
-        ctx.lineTo(arc.x2, arc.y2);
-        ctx.stroke();
-        ctx.restore();
-      }
-    }
+    this.renderController.exploreRenderer.drawChainArcs(game, true);
 
     // ── 14. Damage numbers ─────────────────────────────────────────────────────
-    for (const dmgNum of game.combatSystem.getDamageNumbers()) {
-      const scale = dmgNum.scale || 1;
-      ctx.save();
-      ctx.globalAlpha = dmgNum.alpha;
-      ctx.fillStyle = dmgNum.color;
-      ctx.font = `${GRID.CELL_SIZE * scale}px 'Unifont', monospace`;
-      ctx.fillText(dmgNum.value.toString(), dmgNum.x, dmgNum.y);
-      ctx.restore();
-    }
+    this.renderController.exploreRenderer.drawDamageNumbers(game, true);
 
     // ── 15. Particles ─────────────────────────────────────────────────────────
-    for (const particle of game.particles) {
-      if (particle.getAlpha) {
-        const alpha = particle.getAlpha();
-        this.renderer.drawTextWithAlpha(
-          particle.position.x + GRID.CELL_SIZE / 2,
-          particle.position.y + GRID.CELL_SIZE / 2,
-          particle.char,
-          particle.color,
-          alpha
-        );
-      } else {
-        const alpha = Math.max(0, particle.life / particle.maxLife);
-        this.renderer.drawTextWithAlpha(particle.x, particle.y, particle.char, particle.color, alpha);
-      }
-    }
+    this.renderController.exploreRenderer.drawParticles(game, true);
 
     // ── 16. Player ────────────────────────────────────────────────────────────
     const playerAlpha = game.player.getVisibilityAlpha?.() ?? 1.0;
@@ -316,6 +194,9 @@ export class HutInteriorOverlay {
       }));
     }
 
+    // ── 16c. Sapping enemies on top of player (bats latched on player) ────────
+    this.renderController.exploreRenderer.drawSappingEnemies(game, game.activeFloor.enemies);
+
     // ── 17. Bow charge indicator (reads game.player.position — offset applies) ─
     this.renderController.bowChargeIndicator.render(game);
 
@@ -323,7 +204,7 @@ export class HutInteriorOverlay {
     this.renderController.greenRangerIndicator.render(game);
 
     // ── 19. Item sacrifice slot (dungeon lock condition) ────────────────────────
-    const uc = game.hutInterior.unlockCondition;
+    const uc = game.activeFloor.unlockCondition;
     if (uc?.type === 'item_slot') {
       const CS = GRID.CELL_SIZE;
       const slotCx = uc.col * CS + CS / 2;
@@ -348,7 +229,7 @@ export class HutInteriorOverlay {
       const stairsType = game.dungeonSystem.nearStairsType();
       if (stairsType) {
         const label = stairsType === 'down' ? 'SPACE  DESCEND' : 'SPACE  ASCEND';
-        const floor = game.hutInterior;
+        const floor = game.activeFloor;
         const col = stairsType === 'down' ? floor.stairsDownCol : floor.stairsUpCol;
         const row = stairsType === 'down' ? floor.stairsDownRow : floor.stairsUpRow;
         ctx.save();
@@ -364,14 +245,14 @@ export class HutInteriorOverlay {
 
     // ── 21. Interior exit door prompt (hut/dungeon) ───────────────────────────
     {
-      const isHut = game.hutInterior.gridCols <= 12;
+      const isHut = game.activeFloor.gridCols <= 12;
       const nearExit = isHut
         ? game.hutSystem?.nearInteriorExit?.()
         : game.dungeonSystem?.nearInteriorExit?.();
 
       if (nearExit) {
-        const exitCol = game.hutInterior.exitCol;
-        const exitRow = game.hutInterior.exitRow;
+        const exitCol = game.activeFloor.exitCol;
+        const exitRow = game.activeFloor.exitRow;
         if (exitCol != null && exitRow != null) {
           ctx.save();
           ctx.font = `10px 'Unifont', monospace`;
@@ -399,7 +280,7 @@ export class HutInteriorOverlay {
     ctx.textBaseline = 'top';
     ctx.fillStyle = '#887755';
     let label;
-    if (game.hutInterior.gridCols <= 12) {
+    if (game.activeFloor.gridCols <= 12) {
       label = '[ HUT ]';
     } else {
       const floorNum = (game.dungeonCurrentFloor ?? 0) + 1;

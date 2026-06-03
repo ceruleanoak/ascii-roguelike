@@ -181,7 +181,10 @@ export const RECIPES = [
   // === BLUE-ZONE ARMOR (water-only mechanics) ===
   { left: 'p', right: 'n', result: '∆', name: 'Shark Mask' },       // Pearl Shard + Sharkbone = Shark Mask
   { left: 'p', right: 'C', result: '❖', name: 'Coral Crown' },      // Pearl Shard + Coral Cluster = Coral Crown
-  { left: 'p', right: 'Y', result: 'Ϡ', name: 'Stingray Mantle' }   // Pearl Shard + Stingray Barb = Stingray Mantle
+  { left: 'p', right: 'Y', result: 'Ϡ', name: 'Stingray Mantle' },  // Pearl Shard + Stingray Barb = Stingray Mantle
+
+  // === CIPHER DECODER ===
+  { left: 'e', right: '`', result: '⊙', name: 'Spectacles' }        // Eye + Emerald = Spectacles (crystal lens)
 ];
 
 export function findRecipe(leftChar, rightChar) {

@@ -891,13 +891,20 @@ class SFXSynthesizer {
     appState.isPlaying = true;
     document.getElementById('btn-play').classList.add('active');
 
-    const startAt = this.ctx.currentTime + 0.02;
+    // Trim leading silence: shift so the earliest unmuted note plays at 0ms
+    let earliestNoteTime = Infinity;
+    for (const note of sfx.notes) {
+      if (!note.muted) earliestNoteTime = Math.min(earliestNoteTime, note.time);
+    }
+    if (earliestNoteTime === Infinity) earliestNoteTime = 0;
+
+    const startAt = this.ctx.currentTime + 0.02 - earliestNoteTime;
     for (const note of sfx.notes) {
       if (note.muted) continue;
       this._scheduleWithEcho(note, sfx, startAt, this.ctx);
     }
 
-    const dur = getEffectiveDuration(sfx) * 1000 + 100;
+    const dur = Math.max(0.01, getEffectiveDuration(sfx) - earliestNoteTime) * 1000 + 100;
     this._stopTimer = setTimeout(() => {
       appState.isPlaying = false;
       document.getElementById('btn-play').classList.remove('active');
@@ -1771,6 +1778,11 @@ class Randomizer {
         }
       }
       sfx.notes.sort((a, b) => a.time - b.time);
+      // Anchor earliest note at t=0 — no leading dead air
+      if (sfx.notes.length > 0) {
+        const shift = sfx.notes[0].time;
+        if (shift > 0) for (const note of sfx.notes) note.time -= shift;
+      }
     } else if (!lev.freqRange.locked) {
       // Count locked but frequencies change
       for (const note of sfx.notes) {

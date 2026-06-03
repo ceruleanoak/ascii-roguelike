@@ -52,8 +52,11 @@ export class InventoryOverlay {
     const lineHeight = GRID.CELL_SIZE * 1.5;
     let index = 0;
 
+    // Active ingredient pool: banked in REST, unbanked carried otherwise.
+    const activeIngredients = game.getActiveIngredients();
+
     // Check if all inventories are empty
-    const totalItems = game.player.inventory.length + game.inventorySystem.armorInventory.length + game.inventorySystem.consumableInventory.length;
+    const totalItems = activeIngredients.length + game.inventorySystem.armorInventory.length + game.inventorySystem.consumableInventory.length;
 
     if (totalItems === 0) {
       const emptyMsg = game.stateMachine.getCurrentState() === GAME_STATES.REST
@@ -67,7 +70,7 @@ export class InventoryOverlay {
       );
     } else {
       // Draw ingredients section
-      if (game.player.inventory.length > 0) {
+      if (activeIngredients.length > 0) {
         // Section header
         this.renderer.fgCtx.fillStyle = COLORS.INGREDIENT;
         this.renderer.fgCtx.textAlign = 'left';
@@ -77,7 +80,7 @@ export class InventoryOverlay {
 
         // Count each ingredient type
         const ingredientCounts = {};
-        for (const ingredient of game.player.inventory) {
+        for (const ingredient of activeIngredients) {
           ingredientCounts[ingredient] = (ingredientCounts[ingredient] || 0) + 1;
         }
 

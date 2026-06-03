@@ -114,7 +114,7 @@ Do not "fix" these. Do not replicate them.
 - **Input handlers** — SHIFT/Tab/M/V key handlers in `setupInput()` still contain logic blocks that belong in their respective systems. Flagged, not yet delegated.
 
 **Anti-patterns — do NOT replicate:**
-- Monkey-patching `takeDamage()` on live entities at runtime (see DungeonSystem glitter objects). Use flags or state fields instead.
+- Monkey-patching method overrides on live entities at runtime. Use flags or state fields instead — `BackgroundObject.takeDamage` short-circuits on the `puzzleSignal` flag for dungeon glitter objects (sets `glitterHit`, restores HP), no per-instance override required.
 - Lazy property initialization on plain objects at runtime. Initialize all fields in constructors or factory functions.
 - Interior state split across game and system — if adding a 4th interior system, use a unified InteriorManager.
 

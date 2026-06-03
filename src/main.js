@@ -14,6 +14,7 @@ import { InventorySystem } from './systems/InventorySystem.js';
 import { NeutralRoomSystem } from './systems/NeutralRoomSystem.js';
 import { ErrandSystem } from './systems/ErrandSystem.js';
 import { CheatMenu } from './systems/CheatMenu.js';
+import { DemoSystem } from './systems/DemoSystem.js';
 import { AudioSystem } from './systems/AudioSystem.js';
 import { FishingSystem } from './systems/FishingSystem.js';
 import { LootSystem } from './systems/LootSystem.js';
@@ -45,6 +46,7 @@ import { Item } from './entities/Item.js';
 import { BackgroundObject } from './entities/BackgroundObject.js';
 import { GooBlob } from './entities/GooBlob.js';
 import { Crow } from './entities/Crow.js';
+import { NPCRat } from './entities/NPCRat.js';
 import { Particle, createExplosion, createWetDrop, createActivationBurst, createSteamPuff, createChaff, createDodgeTrail, createFootstep } from './entities/Particle.js';
 import { createDebris } from './entities/Debris.js';
 import { Puddle } from './entities/Puddle.js';
@@ -80,6 +82,7 @@ class Game {
     this.inventorySystem = new InventorySystem();
     this.audioSystem = new AudioSystem();
     this.combatSystem.audioSystem = this.audioSystem;
+    this.combatSystem.game = this;
     this.fishingSystem = new FishingSystem();
     // New focused systems (instantiated after core systems so they can receive `this`)
     this.lootSystem = new LootSystem(this);
@@ -101,6 +104,7 @@ class Game {
     this.magicSystem = new MagicSystem(this);
     this.wellSystem = new WellSystem(this);
     this.fountainSystem = new FountainSystem(this);
+    this.demoSystem = new DemoSystem(this);
     // Wire InventorySystem back to game so it can mutate player.equippedConsumables
     this.inventorySystem.game = this;
     this.campNPCSystem = new CampNPCSystem(this);
@@ -117,6 +121,21 @@ class Game {
     this.wellFlashTimer = 0;        // Post-ritual screen flash decay
     this.wellFlashDuration = 0;     // Initial flash duration (used for normalized alpha)
     this.fairiesAngered = false;    // Run-scoped: set when fountain is corrupted; suppresses all fairy spawns
+    this.fedCrowCount = 0;          // Run-scoped: bread-fed crows so far (caps at 3); boosts crow spawn odds in new rooms
+    this.companionCrows = [];       // Run-scoped: crows that ate bread; act as combat companions across rooms
+    this.followerCrows = [];        // Room-scoped: bystander crows that joined a feed event in the current room
+    this.tamedRats = [];            // Run-scoped: rats that ate bread; companion mode driven by Enemy.tamed
+
+    // Selectors that return arrays of entities eligible to eat a dropped loaf.
+    // SPACE with bread equipped is a no-op unless at least one selector returns
+    // a non-empty list. Append more selectors as new feed-able creatures land.
+    this.breadTargetSelectors = [
+      (game) => game.currentRoom?.crows || [],
+      (game) => game.followerCrows || [],
+      // Wild rats in the current room are eligible: SPACE drops a loaf and the
+      // nearest wild rat paths to it via updateBreadSeekingRats.
+      (game) => (game.currentRoom?.enemies || []).filter(e => e.char === 'r' && !e.tamed && e.hp > 0)
+    ];
     this.activeNoiseSource = null; // Set each frame by updatePlacedTraps if noise-maker is active
     this.backgroundObjects = [];
     this.steamClouds = []; // Steam clouds from fire+water and Steam Vial
@@ -125,6 +144,7 @@ class Game {
     this.debris = []; // Enemy debris
     this.gooBlobs = []; // Goo blobs from Goo Dispenser
     this.puddles = []; // Persistent slime puddles from Slime Bomb
+    this.enemyShockwaves = []; // Invisible expanding rings from enemy attacks (e.g., Giant Slime leap landing)
     this.wishesUsed = 0; // CLEANSE spell wishes used this run (max 3)
     this.cleanseWave = null; // Active wave animation { startTime, duration }
     this.bossDefeatFlash = null; // White screen flash on boss defeat { startTime, duration }
@@ -132,7 +152,7 @@ class Game {
     this.neutralCharacters = []; // Neutral entities (Leshy, NPCs, etc.)
     this.cureRusalka = null;      // Stationary cure Rusalka for polymorph reversal (Lake rooms)
     this.playerTongueAttacks = []; // Player frog-tongue attacks when polymorphed
-    this.hutInterior = null;       // Active interior state (hut or dungeon floor)
+    this.activeFloor = null;       // Active interior floor (hut or dungeon floor). Null on surface.
     this.mazeInterior = null;   // Active maze interior (MazeSystem)
     this.dungeonFloors = [];       // Persistent dungeon floor states for current visit
     this.dungeonCurrentFloor = -1; // -1 = not in dungeon
@@ -293,6 +313,10 @@ class Game {
     this.titleAnimationTime = 0;
     this.introAnimationStarted = false; // Tracks if user has started the intro
     this.launchButtonBounds = null; // Set by TitleRenderer for click detection
+    // Arcade attract-mode: after this many seconds of idle on the pre-intro
+    // title screen, the demo begins playing behind the launch button.
+    this.titleIdleTimer = 0;
+    this.TITLE_IDLE_THRESHOLD = 5.0;
 
     // Setup
     this.setupInput();
@@ -380,10 +404,36 @@ class Game {
           this.updateUI();
           e.preventDefault();
           return;
+        } else if (result && result.action === 'toggle_demo_recording') {
+          this.toggleDemoRecording();
+          this.cheatMenu.rebuild();
+          e.preventDefault();
+          return;
         }
         // Menu is open — swallow all unhandled keys so player can't move/attack/roll/drop
         e.preventDefault();
         return;
+      }
+
+      // Arcade demo: any keypress aborts playback back to the pre-intro title.
+      if (this.stateMachine.getCurrentState() === GAME_STATES.ARCADE_DEMO) {
+        this.stateMachine.transition(GAME_STATES.TITLE);
+        e.preventDefault();
+        return;
+      }
+
+      // Demo recording toggle (dev hotkey). Placed after the arcade-demo
+      // abort so 'r' during playback still cancels back to title, and before
+      // recordEvent so the toggle keystroke isn't captured into the buffer.
+      if (e.key === 'r' || e.key === 'R') {
+        this.toggleDemoRecording();
+        e.preventDefault();
+        return;
+      }
+
+      // Recording mode: capture keydown for later playback before normal handling.
+      if (this.demoSystem.recording) {
+        this.demoSystem.recordEvent('keydown', e.key);
       }
 
       // Handle menu navigation
@@ -541,6 +591,10 @@ class Game {
         e.preventDefault();
         return;
       }
+      // Recording mode: capture keyup so playback can release held keys.
+      if (this.demoSystem.recording) {
+        this.demoSystem.recordEvent('keyup', e.key);
+      }
       const key = e.key.toLowerCase();
       if (key === 'w' || key === 'a' || key === 's' || key === 'd') {
         this.keys[key] = false;
@@ -551,55 +605,12 @@ class Game {
       if (key === ' ') {
         this.keys.space = false;
         this.spacePressed = false;
-        this.attackSequenceActive = false; // Reset attack sequence on space release
-
-        // Staff block: release pushes enemies and clears swing-tracking flag
-        if (this.player) {
-          if (this.player.isStaffBlocking) {
-            this._releaseStaffBlock(this.player);
-          }
-          this.player.staffSwingHasFired = false;
-        }
-
-        // Release fishing charge when space is released
-        if (this.fishingSystem && this.fishingSystem.state === this.fishingSystem.STATES.CHARGING) {
-          this.fishingSystem.releaseCharge(this);
-        }
-
-        // Release trap throw when space is released (weapon throws use SHIFT, handled below)
-        if (this.trapCharging && this.player?.heldItem?.data?.type === 'TRAP') {
-          this.trapSystem.releaseTrapThrow();
-        }
-
-        // Release charged bow when space is released
-        if (this.player && this.player.heldItem && this.player.heldItem.isCharging) {
-          // Gem wands: cancel charge if released before completion (no mana cost)
-          if (this.player.heldItem.data?.gemWand) {
-            this.magicSystem.handleSpaceRelease(this.player);
-          } else if (this.player.heldItem.data?.chargeHammer) {
-            // Crystal Maul: release before full charge cancels (no attack) — identical to wand cancel.
-            this.player.heldItem.releaseChargeHammer();
-          } else {
-            // Stop the bowstring charge sound regardless of whether the shot fires
-            this.audioSystem.stopSFXByName('charge_bow');
-            if (this.player.canAttack()) {
-              const attack = this.player.heldItem.releaseBow();
-              if (attack) {
-                this.combatSystem.createAttack(this.applyGreenDamageModifier(attack), this.currentRoom ? this.currentRoom.enemies : []);
-                this.triggerGreenActionCooldown();
-                this._emitSoundEvent();
-              }
-            }
-          }
-        }
+        this.handleSpaceRelease();
       }
       if (key === 'shift') {
         this.keys.shift = false;
         this.shiftPressed = false;
-        // Release weapon throw on SHIFT keyup (trap throws use SPACE, handled above)
-        if (this.trapCharging && this.player?.heldItem?.data?.type !== 'TRAP') {
-          this.trapSystem.releaseTrapThrow();
-        }
+        this.handleShiftRelease();
       }
       if (key === 'v') {
         this.keys.v = false;
@@ -612,32 +623,35 @@ class Game {
       }
     });
 
-    // Click handler for launch button on title screen
+    // Click handler for launch button on title screen (and during demo).
     window.addEventListener('click', (e) => {
       const state = this.stateMachine.getCurrentState();
 
-      // Only handle clicks on title screen
-      if (state === GAME_STATES.TITLE && this.launchButtonBounds) {
-        // Get canvas position
-        const canvas = document.getElementById('foreground-layer');
-        const rect = canvas.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
-        const clickY = e.clientY - rect.top;
+      if (state !== GAME_STATES.TITLE && state !== GAME_STATES.ARCADE_DEMO) return;
+      if (!this.launchButtonBounds) return;
 
-        // Check if click is within button bounds
-        const bounds = this.launchButtonBounds;
-        if (clickX >= bounds.x && clickX <= bounds.x + bounds.width &&
-            clickY >= bounds.y && clickY <= bounds.y + bounds.height) {
-          if (!this.introAnimationStarted) {
-            // Start the intro animation and music together
-            this.introAnimationStarted = true;
-            this.audioSystem.play();
-            this.renderer.markBackgroundDirty();
-          } else {
-            // Animation is playing, skip to REST (music continues)
-            this.stateMachine.transition(GAME_STATES.REST);
-          }
-        }
+      const canvas = document.getElementById('foreground-layer');
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+
+      const bounds = this.launchButtonBounds;
+      const inLaunch = clickX >= bounds.x && clickX <= bounds.x + bounds.width &&
+                       clickY >= bounds.y && clickY <= bounds.y + bounds.height;
+      if (!inLaunch) return;
+
+      // If the demo is playing, end it first so we land cleanly on the title.
+      if (state === GAME_STATES.ARCADE_DEMO) {
+        this.stateMachine.transition(GAME_STATES.TITLE);
+      }
+
+      // Pre-intro click starts the intro animation; post-intro click skips to REST.
+      if (!this.introAnimationStarted) {
+        this.introAnimationStarted = true;
+        this.audioSystem.play();
+        this.renderer.markBackgroundDirty();
+      } else {
+        this.stateMachine.transition(GAME_STATES.REST);
       }
     });
 
@@ -646,13 +660,12 @@ class Game {
       const state = this.stateMachine.getCurrentState();
       const canvas = document.getElementById('foreground-layer');
 
-      // Only update cursor on title screen
-      if (state === GAME_STATES.TITLE && this.launchButtonBounds) {
+      // Update cursor on title or while demo is playing (launch button stays clickable).
+      if ((state === GAME_STATES.TITLE || state === GAME_STATES.ARCADE_DEMO) && this.launchButtonBounds) {
         const rect = canvas.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
 
-        // Check if mouse is within button bounds
         const bounds = this.launchButtonBounds;
         if (mouseX >= bounds.x && mouseX <= bounds.x + bounds.width &&
             mouseY >= bounds.y && mouseY <= bounds.y + bounds.height) {
@@ -675,6 +688,10 @@ class Game {
     // Register state handlers
     this.stateMachine.registerStateHandler(GAME_STATES.TITLE, () => {
       this.enterTitleState();
+    });
+
+    this.stateMachine.registerStateHandler(GAME_STATES.ARCADE_DEMO, () => {
+      this.enterDemoState();
     });
 
     this.stateMachine.registerStateHandler(GAME_STATES.REST, () => {
@@ -744,6 +761,37 @@ class Game {
   }
 
   enterTitleState() {
+    // Safety: ensure no seeded RNG carries over from a prior demo run.
+    this.demoSystem?.stopPlayback();
+
+    // TITLE never shows the HUD. If we're returning here from ARCADE_DEMO
+    // (which routed through enterExploreState), the overlay still has
+    // slide-up applied — clear it.
+    this.ui.overlay.classList.remove('slide-up');
+    this.ui.overlay.classList.add('hidden');
+
+    // TITLE is always a "no run in progress" state. Reset every gameplay
+    // variable the arcade demo (or anything else) may have touched so the
+    // next real run from this title screen starts at L1 in a fresh world.
+    // Idempotent on first boot — these fields are already in their initial
+    // form set by the constructor.
+    this.zoneDepths = { green: 0, red: 0, cyan: 0, yellow: 0, gray: 0, blue: 0 };
+    this.zoneSystem.resetOnDeath();
+    this.roomGenerator.setDepth(0);
+    this.bossSystem.deactivate();
+    this.physicsSystem.clear();
+    this.combatSystem.clear();
+    this.inventorySystem.clearAllCharacterInventories();
+    this.currentRoom = null;
+    this.backgroundObjects = [];
+    this.items = [];
+    this.ingredients = [];
+    this.placedTraps = [];
+    this.currentMusicZone = 'green';
+    this.preBossGateActive = false;
+    this.knownSpells?.clear?.();
+    this.blueZoneRoom = 0;
+
     // No player needed for title screen
     this.player = null;
     this.renderer.markBackgroundDirty();
@@ -752,9 +800,251 @@ class Game {
     this.titleAnimationTime = 0;
     this.introAnimationStarted = false; // Start with pre-intro screen
     this.launchButtonBounds = null; // Will be set by TitleRenderer
+    this.titleIdleTimer = 0;
 
-    // Load title screen music (single track with custom loop point)
-    this.audioSystem.loadSingleTrack(`${import.meta.env.BASE_URL}assets/audio/intro-loop.mp3`, 8.998, 0.7);
+    // Load title screen music (single track with custom loop point).
+    // Skip the reload if it's already loaded — re-entering TITLE from the
+    // demo would otherwise dispose the loaded buffer and replace it with
+    // an in-flight async fetch, leaving audioSystem.play() silent because
+    // singleBuffer is null until the fetch resolves.
+    const titleTrackLoaded = this.audioSystem.mode === 'single' && this.audioSystem.singleBuffer;
+    if (!titleTrackLoaded) {
+      this.audioSystem.loadSingleTrack(`${import.meta.env.BASE_URL}assets/audio/intro-loop.mp3`, 8.998, 0.7);
+    }
+  }
+
+  enterDemoState() {
+    // Arcade attract-mode: bootstrap an EXPLORE-style world from the
+    // current recording's snapshot, then let DemoSystem drive synthetic
+    // input through the explore update loop.
+    const recording = this.demoSystem.currentRecording;
+    if (!recording) {
+      this.stateMachine.transition(GAME_STATES.TITLE);
+      return;
+    }
+
+    // Bootstrap player + a default explore room so we have scaffolding to
+    // overwrite. This drains the global RNG, which is fine — we reseed
+    // afterwards and run the deterministic demo setup from a fresh state.
+    this.enterExploreState();
+
+    // Attract-mode is title-screen scenery — the HP/depth/slots HUD must
+    // not be visible. enterExploreState slid it up; put it back.
+    this.ui.overlay.classList.remove('slide-up');
+    this.ui.overlay.classList.add('hidden');
+
+    // Now reseed for deterministic AI / room generation.
+    this.demoSystem.installSeededRandom(recording.seed);
+
+    // Generate the demo's room under the seeded RNG.
+    this._setupDemoWorld(recording.room, recording.startState);
+
+    // Apply the player startState snapshot (character, hp, loadout, pos).
+    this._applyDemoStartState(recording.startState);
+
+    // Overlay enemy snapshot on top of the regenerated room.
+    this._applyDemoEnemies(recording.enemies);
+
+    // Begin event playback now that the world matches the recording.
+    this.demoSystem.startPlayback();
+
+    // Player must not die mid-demo; godMode is the cleanest safety net.
+    if (this.player) this.player.godMode = true;
+  }
+
+  // ── Demo room/state setup helpers ───────────────────────────────────────
+  //
+  // Shared by recording (toggle_demo_recording) and playback (enterDemoState)
+  // so the world generation path is identical in both directions. Keeping
+  // these in main.js (next to enterDemoState/enterExploreState) makes the
+  // orchestration responsibilities obvious; DemoSystem stays focused on
+  // event capture/playback.
+
+  /**
+   * Toggle the DemoSystem recorder. Shared by the cheat-menu entry and the
+   * 'r' global hotkey so both paths build the seeded world identically.
+   */
+  toggleDemoRecording() {
+    if (this.demoSystem.recording) {
+      this.demoSystem.stopRecording();
+      return;
+    }
+    // Capture the room spec BEFORE installing the seed so it reflects
+    // where the player chose to start the recording.
+    const roomSpec = this._buildDemoRoomSpec();
+    this.demoSystem.startRecording();
+    // Regenerate the current room under the seeded RNG so playback sees
+    // the same world the recording captured.
+    if (this.stateMachine.getCurrentState() === GAME_STATES.EXPLORE) {
+      this._setupDemoWorld(roomSpec, null);
+    }
+    // Capture player + enemy snapshot AFTER the seeded regen.
+    const startState = this._captureDemoStartState();
+    const enemies = this._captureDemoEnemies();
+    this.demoSystem.setRecordingContext({ roomSpec, startState, enemies });
+  }
+
+  /** Read current world state into a roomSpec for the active recording. */
+  _buildDemoRoomSpec() {
+    const zone = this.zoneSystem.currentZone || 'green';
+    const depth = this.zoneDepths[zone] || 1;
+    const boss = !!(this.currentRoom && this.currentRoom.isZoneBossRoom);
+    return { zone, depth, boss };
+  }
+
+  /** Capture the player state needed to reproduce demo conditions. */
+  _captureDemoStartState() {
+    const p = this.player;
+    if (!p) return null;
+    return {
+      characterType: p.characterType || 'default',
+      hp: p.hp,
+      quickSlots: p.quickSlots.map(slot => (slot ? slot.char : null)),
+      activeSlotIndex: p.activeSlotIndex || 0,
+      position: { x: p.position.x, y: p.position.y },
+    };
+  }
+
+  /** Capture room enemies into a plain-data snapshot. */
+  _captureDemoEnemies() {
+    const enemies = this.currentRoom?.enemies || [];
+    return enemies.map(e => ({
+      char: e.char,
+      x: e.position.x,
+      y: e.position.y,
+      hp: e.hp,
+    }));
+  }
+
+  /**
+   * Generate the demo's room under whatever RNG is currently installed.
+   * Mirrors the cheat-menu warp paths (handleZoneTeleport / handleBossTest)
+   * but skipped of side effects we don't need for a demo (music switches,
+   * grace timers tied to player progress).
+   */
+  _setupDemoWorld(roomSpec, _startState) {
+    if (!roomSpec) return;
+    const zone = roomSpec.zone || 'green';
+    const depth = roomSpec.depth || 1;
+    const wantBoss = !!roomSpec.boss;
+
+    // Force the zone + depth so room generation is deterministic.
+    const zoneColor = ZONES[zone]?.exitColor || '#ffffff';
+    this.zoneSystem.pathHistory = [
+      { letter: 'X', color: zoneColor },
+      { letter: 'X', color: zoneColor },
+      { letter: 'X', color: zoneColor },
+    ];
+    this.zoneSystem.currentZone = zone;
+    this.zoneDepths[zone] = depth;
+    this.roomGenerator.setDepth(depth);
+
+    // Deactivate any prior boss state before regenerating.
+    this.bossSystem.deactivate();
+
+    const playerPos = this.player
+      ? { x: this.player.position.x, y: this.player.position.y }
+      : { x: GRID.WIDTH / 2, y: (GRID.ROWS - 3) * GRID.CELL_SIZE };
+
+    this.roomGenerator.isZoneBossRoom = wantBoss;
+    const roomType = wantBoss ? ROOM_TYPES.BOSS : null;
+    const newRoom = this.roomGenerator.generateRoom(roomType, playerPos, zone, null);
+    this.roomGenerator.isZoneBossRoom = false;
+
+    this.currentRoom = newRoom;
+    this.backgroundObjects = newRoom.backgroundObjects || [];
+    this.items = newRoom.items || [];
+    this.ingredients = newRoom.ingredients || [];
+    this.placedTraps = [];
+
+    if (wantBoss) {
+      this.bossSystem.activate(newRoom, zone);
+    }
+
+    // Apply room-declared spawn zone so the player isn't stranded in a wall
+    // after regeneration.
+    if (this.player) {
+      if (newRoom.spawnZones?.default) {
+        this.player.position.x = newRoom.spawnZones.default.x;
+        this.player.position.y = newRoom.spawnZones.default.y;
+      }
+      this.player.setCollisionMap(newRoom.collisionMap);
+    }
+
+    for (const enemy of newRoom.enemies) {
+      enemy.setTarget(this.player);
+      enemy.setCollisionMap(newRoom.collisionMap);
+    }
+
+    // Reset physics + combat so we start clean.
+    this.physicsSystem.clear();
+    if (this.player) this.physicsSystem.addEntity(this.player);
+    for (const enemy of newRoom.enemies) {
+      this.physicsSystem.addEntity(enemy);
+    }
+    for (const item of this.items) {
+      this.physicsSystem.addEntity(item);
+    }
+    this.combatSystem.clear();
+    this.renderer.markBackgroundDirty();
+  }
+
+  /** Apply a demo startState snapshot onto the active player. */
+  _applyDemoStartState(startState) {
+    if (!startState || !this.player) return;
+
+    if (startState.characterType && startState.characterType !== this.player.characterType) {
+      this.applyCharacterType(startState.characterType);
+    }
+
+    if (startState.hp != null) {
+      this.player.hp = startState.hp;
+    }
+
+    if (startState.position) {
+      this.player.position.x = startState.position.x;
+      this.player.position.y = startState.position.y;
+      this.player.velocity.vx = 0;
+      this.player.velocity.vy = 0;
+    }
+
+    if (Array.isArray(startState.quickSlots)) {
+      this.player.quickSlots = startState.quickSlots.map(char => {
+        if (!char) return null;
+        return new Item(char, 0, 0);
+      });
+    }
+
+    if (Number.isInteger(startState.activeSlotIndex)) {
+      this.player.activeSlotIndex = Math.max(
+        0,
+        Math.min(startState.activeSlotIndex, this.player.quickSlots.length - 1)
+      );
+    }
+  }
+
+  /** Replace the current room's enemies with a demo snapshot. */
+  _applyDemoEnemies(enemiesSnapshot) {
+    if (!Array.isArray(enemiesSnapshot) || enemiesSnapshot.length === 0) return;
+    if (!this.currentRoom) return;
+
+    const depth = this.zoneDepths[this.zoneSystem.currentZone] || 1;
+    const newEnemies = enemiesSnapshot.map(snap => {
+      const e = new Enemy(snap.char, snap.x, snap.y, depth);
+      if (snap.hp != null) e.hp = snap.hp;
+      e.setCollisionMap(this.currentRoom.collisionMap);
+      if (this.player) e.setTarget(this.player);
+      return e;
+    });
+
+    // Drop previous enemies from physics, then install the snapshot ones.
+    for (const old of this.currentRoom.enemies) {
+      this.physicsSystem.removeEntity?.(old);
+    }
+    this.currentRoom.enemies = newEnemies;
+    for (const e of newEnemies) {
+      this.physicsSystem.addEntity(e);
+    }
   }
 
   enterRestState() {
@@ -769,8 +1059,10 @@ class Game {
     // Deactivate boss fight if player exits south mid-fight (edge case)
     this.bossSystem.deactivate();
 
-    // Show the HUD (hidden until first game start)
+    // Show the HUD container but slide it down behind the canvas — the
+    // status bar isn't needed in REST. enterExploreState slides it back up.
     this.ui.overlay.classList.remove('hidden');
+    this.ui.overlay.classList.remove('slide-up');
 
     // Clear title screen state
     this.launchButtonBounds = null;
@@ -859,7 +1151,7 @@ class Game {
     this.fishingSystem.resetForNewRoom(this.player);
 
     // Reset hut/dungeon/maze state on returning to REST
-    this.hutInterior = null;
+    this.activeFloor = null;
     this.mazeInterior = null;
     this.dungeonFloors = [];
     this.dungeonCurrentFloor = -1;
@@ -869,8 +1161,10 @@ class Game {
     // Apply active character type
     this.applyCharacterType(this.activeCharacterType);
 
-    // Restore safe REST inventory and quick slots (not lost on death)
-    this.player.inventory = [...this.inventorySystem.restInventory];
+    // Restore quick slots (not lost on death). Banked ingredients stay in
+    // inventorySystem.restInventory (the crafting-table store) and are NOT
+    // copied into player.inventory — player.inventory is "unbanked carried"
+    // only, so the top-bar "I" count reflects at-risk items.
     this.player.quickSlots = [...this.inventorySystem.restQuickSlots];
     this.player.activeSlotIndex = this.inventorySystem.restActiveSlotIndex;
     this.player.destroyedSlots = [...(this._savedDestroyedSlots ?? [false, false, false])];
@@ -909,11 +1203,7 @@ class Game {
     // Set player collision map
     this.player.setCollisionMap(collisionMap);
 
-    this.particles = [];
-    this.gooBlobs = [];
-    this.puddles = [];
-    this.steamClouds = [];
-    this.debris = [];
+    this._resetEnvironmentalEffects();
     this.captives = [];
     this.neutralCharacters = [];
     this.items = [];
@@ -946,6 +1236,10 @@ class Game {
     // Spawn character NPCs (other unlocked characters standing around)
     this.spawnCharacterNPCs();
 
+    // Carry companions (crows / camp NPC / tamed rats) into REST — they snap
+    // to the player and re-register with physics on the rebuild below.
+    this.snapAllCompanionsOnRoomEnter();
+
     // Reset physics
     this.physicsSystem.clear();
     this.physicsSystem.addEntity(this.player);
@@ -954,6 +1248,9 @@ class Game {
     for (const ingredient of this.ingredients) {
       this.physicsSystem.addEntity(ingredient);
     }
+
+    this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
+    this.registerTamedRatsWithPhysics();
 
     // Mark background dirty
     this.renderer.markBackgroundDirty();
@@ -1438,18 +1735,14 @@ class Game {
     // Clear transient entities
     this.items = [...this.currentRoom.items]; // Use room's items
     this.ingredients = [];
-    this.particles = [];
-    this.debris = [];
-    this.steamClouds = [];
-    this.gooBlobs = [];
-    this.puddles = [];
+    this._resetEnvironmentalEffects();
     this.neutralCharacters = [];
 
     // Reset fishing system for new room
     this.fishingSystem.resetForNewRoom(this.player);
 
     // Reset hut/dungeon/maze state on room transition
-    this.hutInterior = null;
+    this.activeFloor = null;
     this.mazeInterior = null;
     this.dungeonFloors = [];
     this.dungeonCurrentFloor = -1;
@@ -1464,12 +1757,19 @@ class Game {
       this.player.dungeonExitPosition = null;
     }
 
+    // Carry companions into the neutral room — snap to player, then re-register
+    // with physics on the rebuild below.
+    this.snapAllCompanionsOnRoomEnter();
+
     // Initialize physics system
     this.physicsSystem.clear();
     this.physicsSystem.addEntity(this.player);
     for (const item of this.items) {
       this.physicsSystem.addEntity(item);
     }
+
+    this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
+    this.registerTamedRatsWithPhysics();
 
     // Update collision map
     this.updateExitCollisions();
@@ -1586,6 +1886,11 @@ class Game {
   enterExploreState(entryDirection = null, exitObj = null, secretPattern = null) {
     // Reset spell follow-up state on room transition
     this.spellSystem.resetAwaiting();
+
+    // Slide the HUD up from behind the canvas. Idempotent across room
+    // transitions within EXPLORE (no class change → no animation re-trigger).
+    this.ui.overlay.classList.remove('hidden');
+    this.ui.overlay.classList.add('slide-up');
 
     // Mark that the player has left REST at least once — gates the rest-bundle pickup hint arrow
     this.hasLeftRestOnce = true;
@@ -1871,11 +2176,16 @@ class Game {
     this.player.godMode = this.cheatMenu.godMode;
     this.player.setCollisionMap(this.currentRoom.collisionMap);
 
+    // Room transition: dispatch every companion through its own onRoomEnter
+    // so each type (crow / camp NPC / tamed rat) handles its own snap+reset
+    // without redundant logic at the call site.
+    this.snapAllCompanionsOnRoomEnter();
+
     // Reset fishing system for new room (cleans up Rusalka, bobber, fish, etc.)
     this.fishingSystem.resetForNewRoom(this.player);
 
     // Reset hut/dungeon/maze state for new room
-    this.hutInterior = null;
+    this.activeFloor = null;
     this.mazeInterior = null;
     this.dungeonFloors = [];
     this.dungeonCurrentFloor = -1;
@@ -1940,11 +2250,7 @@ class Game {
       this.placedTraps = [];
       this.activeNoiseSource = null;
       this.backgroundObjects = this.currentRoom.backgroundObjects || [];
-      this.steamClouds = []; // Clear steam clouds when entering new room
-      this.debris = []; // Clear debris when entering new room
-      this.particles = []; // Clear particles when entering new room
-      this.gooBlobs = []; // Clear goo blobs when entering new room
-      this.puddles = []; // Clear slime puddles when entering new room
+      this._resetEnvironmentalEffects();
       this.captives = []; // Clear captives when entering new room
       this.neutralCharacters = []; // Clear neutral characters when entering new room
       this.bridgeMenuOpen = false; // Close bridge menu on room transition
@@ -1979,11 +2285,7 @@ class Game {
     } else {
       // When restoring, still clear transient effects
       this.activeNoiseSource = null;
-      this.steamClouds = [];
-      this.debris = [];
-      this.particles = [];
-      this.gooBlobs = [];
-      this.puddles = [];
+      this._resetEnvironmentalEffects();
       this.neutralCharacters = [];
     }
 
@@ -1992,8 +2294,14 @@ class Game {
       enemy.setTarget(this.player);
     }
 
-    // Carry companion (if hired) into this room: full HP and snap beside player
-    this.campNPCSystem?.onRoomEnter();
+    // Follower flock is room-scoped: bystander crows that joined the feed
+    // event don't trail the player across rooms (companions still do).
+    // Auto-join reputation effect still applies per-room if fedCrowCount ≥ 3.
+    if (!shouldRestoreExploreRoom) {
+      this.followerCrows = [];
+      this.autoJoinWildCrows();
+    }
+
 
     // 2-second detection grace period — suppress aggro range so enemies
     // can't spot the player the moment they enter the room
@@ -2019,6 +2327,7 @@ class Game {
     }
 
     this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
+    this.registerTamedRatsWithPhysics();
 
     // Reset combat
     this.combatSystem.clear();
@@ -2034,8 +2343,9 @@ class Game {
       const roomZone = this.currentRoom?.zone || 'green';
       const base = import.meta.env.BASE_URL;
       if (roomZone === 'red' && this.currentMusicZone !== 'red') {
-        this.currentMusicZone = 'red';
-        this.audioSystem.switchToRedSequence();
+        if (this.audioSystem.switchToRedSequence()) {
+          this.currentMusicZone = 'red';
+        }
       } else if (roomZone === 'cyan' && this.currentMusicZone !== 'cyan') {
         this.currentMusicZone = 'cyan';
         this.audioSystem.switchMusic(
@@ -2126,7 +2436,7 @@ class Game {
           // activated it; bypass inventory entirely.
           this.magicSystem.addMana(this.player, 2);
         } else {
-          this.player.addIngredient(ingredient.char);
+          this.addIngredient(ingredient.char);
         }
         this.physicsSystem.removeEntity(ingredient);
         this.ingredients.splice(i, 1);
@@ -2141,6 +2451,10 @@ class Game {
     for (const obj of this.currentRoom.backgroundObjects) {
       obj.update(deltaTime);
     }
+
+    // Companion crow perches/follows in NEUTRAL too.
+    this.updateCompanionCrow(deltaTime);
+    this.updateFollowerCrows(deltaTime);
 
     // Check for south exit (return to EXPLORE)
     const gridPos = this.player.getGridPosition();
@@ -2218,19 +2532,28 @@ class Game {
     this.roomPreviews = this.roomGenerator.preloadRoomPreviews();
   }
 
+  // Returns the room the player is currently interacting with — interior takes priority over surface.
+  // Maze returns its own interior; hut/dungeon return activeFloor; otherwise the surface currentRoom.
+  // Call sites should prefer this over open-coding the three-way ternary.
+  get activeRoom() {
+    if (this.player?.inMaze && this.mazeInterior) return this.mazeInterior;
+    if ((this.player?.inHut || this.player?.inDungeon) && this.activeFloor) return this.activeFloor;
+    return this.currentRoom;
+  }
+
   // Returns the background objects for whichever layer the player is currently in.
-  // Maze interiors have no background objects; hut/dungeon use hutInterior's array;
+  // Maze interiors have no background objects; hut/dungeon use activeFloor's array;
   // otherwise use the exterior currentRoom array.
   _activeBackgroundObjects() {
     if (this.player.inMaze && this.mazeInterior) return [];
-    if ((this.player.inHut || this.player.inDungeon) && this.hutInterior) return this.hutInterior.backgroundObjects;
+    if ((this.player.inHut || this.player.inDungeon) && this.activeFloor) return this.activeFloor.backgroundObjects;
     return this.currentRoom ? this.currentRoom.backgroundObjects : [];
   }
 
   // Returns the enemies for whichever layer the player is currently in.
   _activeEnemies() {
     if (this.player.inMaze && this.mazeInterior) return [];
-    if ((this.player.inHut || this.player.inDungeon) && this.hutInterior) return this.hutInterior.enemies;
+    if ((this.player.inHut || this.player.inDungeon) && this.activeFloor) return this.activeFloor.enemies;
     return this.currentRoom ? this.currentRoom.enemies : [];
   }
 
@@ -2246,12 +2569,70 @@ class Game {
     return enemies.filter(e => !this._isHiddenEnemy(e) && !e.isDying);
   }
 
-  // Spawn a fire or ice trail puddle from enemy trail mechanic
-  _spawnEnemyTrailPuddle(x, y, type, duration, radius, plane) {
+  // Clear all environmental / transient world-effect arrays (room transitions, deaths, cleanse, etc.).
+  // Centralized so adding a new effect array doesn't require touching every reset site.
+  _resetEnvironmentalEffects() {
+    this.gooBlobs = [];
+    this.puddles = [];
+    this.enemyShockwaves = [];
+    this.debris = [];
+    this.particles = [];
+    this.steamClouds = [];
+  }
+
+  // Stamp a trail tile of `type` at (x, y). Overlapping nearby same-type tiles
+  // bump their overlap counter and grow to maxR — moving entities leave a
+  // thinning trail, lingering ones accumulate a thicker pool. Lifetime governs
+  // decay: 7s for slime, Infinity for lava/ice (cleared on room exit).
+  _dropTrailTile(x, y, type, plane = 0, lifetime = 7.0) {
     if (!this.puddles) return;
-    const puddle = new Puddle(x, y, radius, type, plane);
-    puddle.lifetime = duration;  // Override default lifetime
-    this.puddles.push(puddle);
+    const baseR = GRID.CELL_SIZE / 8;          // Quarter-cell side at spawn (thin trail)
+    const maxR = GRID.CELL_SIZE / 4;           // Half-cell side at max growth (thick pool)
+
+    // Count visual overlaps with existing same-type tiles on this plane, and
+    // bump each touched tile's overlap counter. A tile rendered at half-width
+    // snaps to full once its overlap count reaches 2 — so the middle of any
+    // continuous trail thickens while the endpoints stay thin.
+    let newCount = 0;
+    for (const p of this.puddles) {
+      if (p.type !== type) continue;
+      if ((p.plane ?? 0) !== plane) continue;
+      const dx = p.position.x - x;
+      const dy = p.position.y - y;
+      if (Math.abs(dx) < p.radius + maxR && Math.abs(dy) < p.radius + maxR) {
+        p.overlapCount = (p.overlapCount ?? 0) + 1;
+        if (p.overlapCount >= 2) p.radius = maxR;
+        p.age = 0;
+        newCount++;
+      }
+    }
+
+    const newPuddle = new Puddle(x, y, newCount >= 2 ? maxR : baseR, type, plane, {
+      shape: 'square', opaque: true, lifetime
+    });
+    newPuddle.overlapCount = newCount;
+    // Tag with the active interior so the render path filters surface vs interior puddles.
+    newPuddle.hutPlane = !!this.activeFloor;
+    this.puddles.push(newPuddle);
+  }
+
+  _dropSlimeTrail(x, y, plane) {
+    this._dropTrailTile(x, y, 'slimeTrail', plane ?? 0, 7.0);
+  }
+
+  // Stamp a disk of trail tiles for an enemy's persistent fire/ice trail.
+  // Tiles persist until the room is cleared (cleared by _resetEnvironmentalEffects).
+  // `radius` controls the disk coverage of each drop event.
+  _spawnEnemyTrailPuddle(x, y, type, radius, plane) {
+    if (!this.puddles) return;
+    const p = plane ?? 0;
+    this._dropTrailTile(x, y, type, p, Infinity);
+    const RING_TILES = 6;
+    const RING_RADIUS = radius * 0.6;
+    for (let i = 0; i < RING_TILES; i++) {
+      const a = (i / RING_TILES) * Math.PI * 2;
+      this._dropTrailTile(x + Math.cos(a) * RING_RADIUS, y + Math.sin(a) * RING_RADIUS, type, p, Infinity);
+    }
   }
 
   // Apply Shaman buff to nearby allied enemies
@@ -2278,6 +2659,9 @@ class Game {
   update(deltaTime) {
     const state = this.stateMachine.getCurrentState();
 
+    // DemoSystem shares a frame counter with both playback and recording.
+    this.demoSystem.tickGlobalFrame();
+
     // Advance any in-flight animations before per-state logic so the new
     // target position is visible to physics, exit detection, and rendering.
     if (state !== GAME_STATES.TITLE) {
@@ -2294,6 +2678,8 @@ class Game {
       this.updateNeutralState(deltaTime);
     } else if (state === GAME_STATES.GAME_OVER) {
       this.updateGameOverState(deltaTime);
+    } else if (state === GAME_STATES.ARCADE_DEMO) {
+      this.updateDemoState(deltaTime);
     }
 
     // Track player inactivity for WASD blinking (REST, EXPLORE, and NEUTRAL states)
@@ -2322,40 +2708,509 @@ class Game {
     if (this.introAnimationStarted) {
       this.titleAnimationTime += deltaTime;
     }
+
+    // Pre-intro idle → arcade attract demo plays behind the title overlay.
+    if (!this.introAnimationStarted) {
+      this.titleIdleTimer += deltaTime;
+      if (this.titleIdleTimer >= this.TITLE_IDLE_THRESHOLD) {
+        this.titleIdleTimer = 0;
+        this.stateMachine.transition(GAME_STATES.ARCADE_DEMO);
+      }
+    }
+  }
+
+  updateDemoState(deltaTime) {
+    // Apply this frame's recorded events to game.keys/arrowKeys/handlers.
+    const stillPlaying = this.demoSystem.tickPlayback();
+
+    // Drive the actual explore loop — same systems, same rendering.
+    this.updateExploreState(deltaTime);
+
+    if (!stillPlaying) {
+      this.stateMachine.transition(GAME_STATES.TITLE);
+    }
+  }
+
+  // True iff any entity in the current room would eat a dropped loaf.
+  // Iterates breadTargetSelectors so new bread-eaters drop in by appending.
+  hasBreadEligibleTarget() {
+    for (const sel of this.breadTargetSelectors) {
+      const list = sel(this);
+      if (list && list.length > 0) return true;
+    }
+    return false;
+  }
+
+  // Spawn a Bread Item entity at the player's feet — SPACE path. Wild rats
+  // are steered toward it by updateBreadSeekingRats (which scans every frame
+  // so SHIFT-thrown loaves are handled the same way without a parallel hook).
+  dropBreadAtPlayer() {
+    if (!this.player) return;
+    const loaf = new Item('⌬', this.player.position.x, this.player.position.y);
+    loaf.pickupReadyAt = performance.now() + 1500;
+    this.items.push(loaf);
+    this.physicsSystem.addEntity(loaf);
+  }
+
+  // Wild rats seeking bread: assign unowned loaves → nearest wild rat each
+  // frame (so both SPACE-drop and SHIFT-throw work without a separate hook),
+  // then check proximity, consume the loaf, remove the wild Enemy, and spawn
+  // a fresh NPCRat in its place. Replacing rather than re-skinning keeps the
+  // hostile Enemy AI cleanly out of the companion's behavior tree.
+  updateBreadSeekingRats() {
+    const enemies = this.currentRoom?.enemies;
+    if (!enemies || enemies.length === 0) return;
+
+    // Assign loaves to wild rats. A loaf is "owned" once any wild rat is
+    // seeking it; other rats stick to their default AI until more bread drops.
+    // Hut/maze interiors seed bread into game.items tagged with hutPlane /
+    // mazePlane — those positions are in interior grid space (top-left ≈ the
+    // outer-room origin) and must be excluded, or surface rats path to the
+    // wrong coordinates and "eat" a loaf the player never dropped.
+    const loaves = this.items.filter(it =>
+      it && it.char === '⌬' && !it.consumed && !it.hutPlane && !it.mazePlane
+    );
+    if (loaves.length > 0) {
+      const claimedLoaves = new Set();
+      const claimedRats = new Set();
+      for (const e of enemies) {
+        if (!e.seekingBread) continue;
+        const t = e.breadTarget;
+        // Release the rat if its target vanished or is an interior-tagged loaf
+        // (covers any stale assignment from before the surface-only filter
+        // landed) — otherwise it'd march to the top-left forever.
+        if (!t || t.consumed || t.hutPlane || t.mazePlane) {
+          e.seekingBread = false;
+          e.breadTarget = null;
+          continue;
+        }
+        claimedLoaves.add(t);
+        claimedRats.add(e);
+      }
+      for (const loaf of loaves) {
+        if (claimedLoaves.has(loaf)) continue;
+        let nearest = null;
+        let nearestDistSq = Infinity;
+        for (const r of enemies) {
+          if (r.char !== 'r') continue;
+          if (r.hp <= 0) continue;
+          if (claimedRats.has(r)) continue;
+          const dx = r.position.x - loaf.position.x;
+          const dy = r.position.y - loaf.position.y;
+          const d = dx * dx + dy * dy;
+          if (d < nearestDistSq) { nearestDistSq = d; nearest = r; }
+        }
+        if (nearest) {
+          nearest.seekingBread = true;
+          nearest.breadTarget = loaf;
+          nearest.breadSeekStartTime = performance.now();
+          claimedRats.add(nearest);
+          claimedLoaves.add(loaf);
+        }
+      }
+    }
+
+    // Tight overlap required — at 0.7 cells the white-flip fired while the rat
+    // was still visibly approaching. 0.35 puts the centers inside each other's
+    // sprite so the eat reads as physical contact.
+    const EAT_DIST_SQ = (GRID.CELL_SIZE * 0.35) ** 2;
+    // Minimum time between seeking-bread assignment and eat — guarantees a
+    // visible "walk to the bread" beat even if the rat was already adjacent.
+    const EAT_GRACE_MS = 350;
+    const now = performance.now();
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const rat = enemies[i];
+      if (!rat.seekingBread || !rat.breadTarget) continue;
+      const loaf = rat.breadTarget;
+      if (loaf.consumed || loaf.destroyed) {
+        rat.seekingBread = false;
+        rat.breadTarget = null;
+        continue;
+      }
+      if (now - (rat.breadSeekStartTime || 0) < EAT_GRACE_MS) continue;
+      const dx = loaf.position.x - rat.position.x;
+      const dy = loaf.position.y - rat.position.y;
+      if (dx * dx + dy * dy > EAT_DIST_SQ) continue;
+
+      // Eat the loaf
+      loaf.consumed = true;
+      const lIdx = this.items.indexOf(loaf);
+      if (lIdx !== -1) {
+        this.physicsSystem.removeEntity(loaf);
+        this.items.splice(lIdx, 1);
+      }
+
+      // Yank the wild Enemy out of every room.enemies-style cache and physics.
+      enemies.splice(i, 1);
+      const p0 = this.currentRoom?.enemiesPlane0;
+      if (p0) {
+        const idx = p0.indexOf(rat);
+        if (idx !== -1) p0.splice(idx, 1);
+      }
+      const p1 = this.currentRoom?.enemiesPlane1;
+      if (p1) {
+        const idx = p1.indexOf(rat);
+        if (idx !== -1) p1.splice(idx, 1);
+      }
+      this.physicsSystem.removeEntity(rat);
+
+      // Spawn the companion at the wild rat's exact position so the visual
+      // hand-off reads as the rat eating the bread and turning friendly.
+      const npc = new NPCRat(rat.position.x, rat.position.y);
+      npc.plane = rat.plane ?? 0;
+      npc.setGame(this);
+      npc.setRoom(this.currentRoom);
+      npc.collisionMap = this.currentRoom?.collisionMap || null;
+      npc.backgroundObjects = this.currentRoom?.backgroundObjects || null;
+      this.tamedRats.push(npc);
+      this.physicsSystem.addEntity(npc);
+
+      // Promotion burst — small white sparkle so the moment reads visually.
+      const ex = npc.position.x + GRID.CELL_SIZE / 2;
+      const ey = npc.position.y + GRID.CELL_SIZE / 2;
+      for (let k = 0; k < 10; k++) {
+        const angle = (k / 10) * Math.PI * 2 + Math.random() * 0.3;
+        const speed = 30 + Math.random() * 30;
+        this.particles.push({
+          x: ex, y: ey,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 15,
+          life: 0.5, maxLife: 0.5,
+          char: '·', color: '#ffffff'
+        });
+      }
+      this.particles.push({
+        x: ex, y: ey - 4, vx: 0, vy: -22,
+        life: 0.9, maxLife: 0.9, char: '♥', color: '#ff5577'
+      });
+    }
+  }
+
+  // Per-frame NPCRat driver: run each rat's own update with the live enemies
+  // list, surface damage numbers on hits, and despawn perma-fleeing rats that
+  // have reached an exit.
+  updateTamedRats(deltaTime) {
+    if (!this.tamedRats || this.tamedRats.length === 0) return;
+    const enemies = this.currentRoom?.enemies || [];
+    const siblings = this.tamedRats;
+    for (let i = this.tamedRats.length - 1; i >= 0; i--) {
+      const rat = this.tamedRats[i];
+      if (rat.state === 'permaFlee' && rat.fleeReached) {
+        this.physicsSystem.removeEntity(rat);
+        this.tamedRats.splice(i, 1);
+        continue;
+      }
+      const result = rat.update(deltaTime, enemies, this.player, siblings);
+      if (result?.attacked) {
+        const victim = result.attacked;
+        this.combatSystem.createDamageNumber?.(result.damage ?? 1,
+                                               victim.position.x, victim.position.y,
+                                               victim.color || '#ffffff');
+      }
+    }
+  }
+
+  // Apply enemy melee + projectile hits to tamed rats. Mirrors
+  // CampNPCSystem._applyEnemyDamage but operates over the multi-instance array.
+  applyEnemyDamageToTamedRats() {
+    if (!this.tamedRats || this.tamedRats.length === 0) return;
+    const cs = this.combatSystem;
+    if (!cs) return;
+
+    const projs = cs.enemyProjectiles || [];
+    for (const rat of this.tamedRats) {
+      if (rat.state === 'permaFlee') continue;
+      if (rat.invulnerabilityTimer > 0) continue;
+      // Projectiles
+      for (let i = projs.length - 1; i >= 0; i--) {
+        const p = projs[i];
+        if ((p.plane ?? 0) !== rat.plane) continue;
+        const cx = rat.position.x + rat.width / 2;
+        const cy = rat.position.y + rat.height / 2;
+        const dx = p.position.x - cx;
+        const dy = p.position.y - cy;
+        const r = GRID.CELL_SIZE * 0.6 + Math.min(rat.width, rat.height) / 2;
+        if (dx * dx + dy * dy < r * r) {
+          rat.takeDamage(p.damage || 1);
+          projs.splice(i, 1);
+          cs.createDamageNumber?.(p.damage || 1, rat.position.x, rat.position.y, rat.color);
+          break;
+        }
+      }
+      if (rat.invulnerabilityTimer > 0) continue;
+      // Melee attack hitboxes
+      const melee = cs.enemyMeleeAttacks || [];
+      for (const m of melee) {
+        if (m.windupPhase) continue;
+        if (m.hasHit) continue;
+        if ((m.plane ?? 0) !== rat.plane) continue;
+        const ax = m.position.x;
+        const ay = m.position.y;
+        const aw = m.width || GRID.CELL_SIZE;
+        const ah = m.height || GRID.CELL_SIZE;
+        if (
+          ax < rat.position.x + rat.width && ax + aw > rat.position.x &&
+          ay < rat.position.y + rat.height && ay + ah > rat.position.y
+        ) {
+          m.hasHit = true;
+          rat.takeDamage(m.damage || 1);
+          cs.createDamageNumber?.(m.damage || 1, rat.position.x, rat.position.y, rat.color);
+          break;
+        }
+      }
+    }
+  }
+
+  // Unified companion room-entry dispatch. Each companion type (crow, tamed
+  // rat, camp NPC) owns its own onRoomEnter — this just walks the rosters and
+  // calls each. Companion crows reuse companionShoulderIndex for their slot;
+  // tamed rats pass (index, total) so they radial-spread around the player.
+  snapAllCompanionsOnRoomEnter() {
+    if (!this.player) return;
+    for (const c of this.companionCrows) c.onRoomEnter?.(this.player);
+    // Perma-fleeing rats from the previous room don't come back — they've
+    // abandoned the player and despawn at the transition.
+    if (this.tamedRats?.length) {
+      this.tamedRats = this.tamedRats.filter(r => r.state !== 'permaFlee');
+    }
+    const ratCount = this.tamedRats?.length || 0;
+    for (let i = 0; i < ratCount; i++) {
+      this.tamedRats[i].onRoomEnter?.(this.player, this, i, ratCount);
+    }
+    this.companion?.onRoomEnter?.(this.player, this);
+  }
+
+  registerTamedRatsWithPhysics() {
+    if (!this.tamedRats || this.tamedRats.length === 0) return;
+    for (const rat of this.tamedRats) {
+      this.physicsSystem.addEntity(rat);
+    }
   }
 
   // Shared particle and debris updates for all game states
   updateCrows(deltaTime) {
-    const crows = this.currentRoom?.crows;
-    if (!crows || crows.length === 0) return;
+    const crows = this.currentRoom?.crows || [];
+    const followers = this.followerCrows || [];
 
-    const bgObjects = this.currentRoom.backgroundObjects || [];
+    // Pull all on-ground bread loaves so crows can target them.
+    const breadItems = this.items.filter(it => it && it.char === '⌬' && !it.consumed);
 
-    // Build a flat list of "threat points" — melee attack and projectile positions.
-    // Crows scare on weapon use, not mere proximity, so we sample what the player swung.
-    const threats = [];
+    // Skip the whole pipeline when nothing eligible can react to bread or
+    // threats. Followers without bread are handled by updateFollowerCrows.
+    if (crows.length === 0 && !(followers.length > 0 && breadItems.length > 0)) {
+      return;
+    }
+
+    const bgObjects = this.currentRoom?.backgroundObjects || [];
+
+    // Player-as-threat: scares unfed crows on proximity. Fed crows (already
+    // tame) skip this — they only flee actual weapon contact.
+    // While bread is on the ground, the player is offering food, not
+    // threatening — otherwise SPACE-dropped bread at the player's feet
+    // creates a scare loop: crow seeks → enters scare radius → flees →
+    // returns → seeks → forever. Weapon attacks below still scare.
+    const playerThreat = (this.player && this.player.plane === 0 && breadItems.length === 0)
+      ? { x: this.player.position.x, y: this.player.position.y }
+      : null;
+
+    // Weapon threats apply to fed and unfed crows alike.
+    const weaponThreats = [];
     for (const atk of this.combatSystem.getMeleeAttacks()) {
-      threats.push({ x: atk.position.x, y: atk.position.y });
+      weaponThreats.push({ x: atk.position.x, y: atk.position.y });
     }
     for (const proj of this.combatSystem.getProjectiles()) {
-      threats.push({ x: proj.position.x, y: proj.position.y });
+      weaponThreats.push({ x: proj.position.x, y: proj.position.y });
     }
 
-    for (const crow of crows) {
-      crow.update(deltaTime, bgObjects, crows);
+    // Eat handler: remove the loaf, promote the eater to companion. Every
+    // bread-eat adds one more companion — they accumulate. Other crows in the
+    // room join the follower flock, drawn toward the feed point.
+    const onAteBread = (loaf, crow) => {
+      const idx = this.items.indexOf(loaf);
+      if (idx !== -1) {
+        this.physicsSystem.removeEntity(loaf);
+        this.items.splice(idx, 1);
+      }
+      const ex = crow.position.x + GRID.CELL_SIZE / 2;
+      const ey = crow.position.y + GRID.CELL_SIZE / 2;
 
+      // Other room crows take off toward the feed point and join the flock.
+      for (let i = crows.length - 1; i >= 0; i--) {
+        const other = crows[i];
+        if (other === crow) continue;
+        other.becomeFollower(ex, ey);
+        this.followerCrows.push(other);
+        crows.splice(i, 1);
+      }
+      // Existing followers redirect interest to the new feed point.
+      for (const f of this.followerCrows) {
+        f.becomeFollower(ex, ey);
+      }
+
+      // Promote the eater. Pull it out of room.crows / follower flock if
+      // present. Append to companion list — multiple companions are allowed.
+      const cIdx = crows.indexOf(crow);
+      if (cIdx !== -1) crows.splice(cIdx, 1);
+      const fIdx = this.followerCrows.indexOf(crow);
+      if (fIdx !== -1) this.followerCrows.splice(fIdx, 1);
+      crow.becomeCompanion();
+      crow.companionShoulderIndex = this.companionCrows.length;
+      this.companionCrows.push(crow);
+      this.fedCrowCount = Math.min(3, (this.fedCrowCount || 0) + 1);
+
+      // Promotion burst: feather puff + golden crumbs + rising heart.
+      for (let i = 0; i < 14; i++) {
+        const angle = (i / 14) * Math.PI * 2 + Math.random() * 0.3;
+        const speed = 35 + Math.random() * 35;
+        this.particles.push({
+          x: ex, y: ey,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 20,
+          life: 0.55, maxLife: 0.55,
+          char: i % 2 === 0 ? '*' : '·',
+          color: i % 2 === 0 ? '#ffffff' : '#daa520'
+        });
+      }
+      this.particles.push({
+        x: ex, y: ey - 4, vx: 0, vy: -22,
+        life: 0.9, maxLife: 0.9, char: '♥', color: '#ff5577'
+      });
+    };
+
+    for (const crow of crows) {
+      crow.update(deltaTime, bgObjects, crows, breadItems, onAteBread);
+
+      const threats = playerThreat ? [playerThreat, ...weaponThreats] : weaponThreats;
       for (const t of threats) {
         if (crow.isWithinScareRange(t.x, t.y)) {
-          const droppedPearl = crow.scare(t.x, t.y);
-          if (droppedPearl) {
-            const pearl = new Ingredient('●', crow.position.x, crow.position.y);
-            pearl.startDropBounce(0.55);
-            this.ingredients.push(pearl);
-            this.physicsSystem.addEntity(pearl);
+          const droppedGlyph = crow.scare(t.x, t.y);
+          if (droppedGlyph) {
+            const drop = new Ingredient(droppedGlyph, crow.position.x, crow.position.y);
+            drop.startDropBounce(0.55);
+            this.ingredients.push(drop);
+            this.physicsSystem.addEntity(drop);
           }
           break;
         }
       }
+    }
+
+    // Followers break orbit to chase bread. Drives them through the same wild
+    // seek/eat state machine; onAteBread promotes the eater to companion and
+    // pulls it out of the follower list. updateFollowerCrows skips any that
+    // entered 'seekingBread' this frame so they don't double-step.
+    if (breadItems.length > 0 && followers.length > 0) {
+      for (const f of [...followers]) {
+        f.update(deltaTime, bgObjects, followers, breadItems, onAteBread);
+      }
+    }
+  }
+
+  updateCompanionCrow(deltaTime) {
+    if (!this.companionCrows || this.companionCrows.length === 0) return;
+    const ctx = {
+      player: this.player,
+      ingredients: this.ingredients,
+      enemies: this.currentRoom?.enemies || [],
+      items: this.items,
+      // Full pickup: add to inventory, unregister physics, drop from list.
+      // Mirrors the player-pickup path in updateNeutralState/updateExploreState.
+      pickupIngredient: (ing) => {
+        this.addIngredient(ing.char);
+        ing.consumed = true;
+        this.physicsSystem.removeEntity(ing);
+        const idx = this.ingredients.indexOf(ing);
+        if (idx !== -1) this.ingredients.splice(idx, 1);
+      },
+      companionCount: this.companionCrows.length
+    };
+    for (const c of this.companionCrows) {
+      c.updateAsCompanion(deltaTime, ctx);
+    }
+    this._processCompanionDiveAttacks(deltaTime);
+  }
+
+  // Dive-attack coordination: at most ONE companion is in flight at a time.
+  // Picks the first eligible orbiter that is off cooldown and launches it
+  // with a miss-chance roll. Telegraph (windup, during which the crow keeps
+  // orbiting) → dash → cooldown.
+  _processCompanionDiveAttacks(deltaTime) {
+    // Global one-at-a-time gate: any companion currently winding up or
+    // diving blocks new launches this frame.
+    const anyEngaged = this.companionCrows.some(c => c.diveState && c.diveState !== 'idle');
+    if (!anyEngaged) {
+      for (const c of this.companionCrows) {
+        if (c.diveCooldownTimer > 0) continue;
+        if (c.companionTask !== 'enemy' || !c.companionTarget) continue;
+        const t = c.companionTarget;
+        if (!t || t.isDead || t.dead || t.hp <= 0) continue;
+        // 45% miss rate — keeps dives feeling more like harassment than
+        // a guaranteed strike, and gives the enemy room to counter.
+        const miss = Math.random() < 0.45;
+        c.beginDive(t, { miss });
+        break;
+      }
+    }
+    // Drive any in-flight dives and apply hits
+    for (const c of this.companionCrows) {
+      if (!c.diveState || c.diveState === 'idle') continue;
+      const hitEnemy = c.updateDive(deltaTime);
+      if (hitEnemy && !c.diveHasHit) {
+        c.diveHasHit = true;
+        const dmg = 1;
+        if (typeof hitEnemy.takeDamage === 'function') {
+          hitEnemy.takeDamage(dmg, this);
+        }
+        this.combatSystem.createDamageNumber(dmg, hitEnemy.position.x, hitEnemy.position.y, '#ffdd66');
+        // Small impact burst
+        const ix = hitEnemy.position.x + GRID.CELL_SIZE / 2;
+        const iy = hitEnemy.position.y + GRID.CELL_SIZE / 2;
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2;
+          this.particles.push({
+            x: ix, y: iy,
+            vx: Math.cos(a) * 50, vy: Math.sin(a) * 50,
+            life: 0.35, maxLife: 0.35,
+            char: '·', color: '#ffffff'
+          });
+        }
+      }
+    }
+  }
+
+  // Reputation effect: once the player has fed three crows, every wild crow
+  // in a newly-entered room joins the follower flock immediately (no bread
+  // needed). The flock still clears on the next room transition.
+  autoJoinWildCrows() {
+    if ((this.fedCrowCount || 0) < 3) return;
+    const crows = this.currentRoom?.crows;
+    if (!crows || crows.length === 0) return;
+    if (!this.player) return;
+    const px = this.player.position.x + GRID.CELL_SIZE / 2;
+    const py = this.player.position.y + GRID.CELL_SIZE / 2;
+    for (const c of crows) {
+      c.becomeFollower(px, py);
+      this.followerCrows.push(c);
+    }
+    crows.length = 0;
+  }
+
+  updateFollowerCrows(deltaTime) {
+    if (!this.followerCrows || this.followerCrows.length === 0) return;
+    const bgObjects = this.currentRoom?.backgroundObjects || [];
+    const playerSpeed = this.player
+      ? Math.hypot(this.player.velocity.vx, this.player.velocity.vy)
+      : 0;
+    const ctx = {
+      player: this.player,
+      backgroundObjects: bgObjects,
+      playerSpeed,
+      otherFollowers: this.followerCrows
+    };
+    for (const f of this.followerCrows) {
+      // updateCrows already drove this frame's tick for bread-seekers.
+      if (f.state === 'seekingBread') continue;
+      f.updateAsFollower(deltaTime, ctx);
     }
   }
 
@@ -2466,23 +3321,88 @@ class Game {
       }
     }
 
+    // Update puddles — age timed puddles and remove expired ones (persistent puddles tick no-op)
+    for (let i = this.puddles.length - 1; i >= 0; i--) {
+      const p = this.puddles[i];
+      p.update?.(deltaTime);
+      if (p.expired) this.puddles.splice(i, 1);
+    }
+
+    // Update enemy shockwaves — invisible expanding rings (Cyan-boss pattern).
+    // Visual feedback is bg objects shaking as the ring sweeps; damage/knockback applied once per entity.
+    if (this.enemyShockwaves.length && this.currentRoom) {
+      const C = GRID.CELL_SIZE;
+      for (let i = this.enemyShockwaves.length - 1; i >= 0; i--) {
+        const sw = this.enemyShockwaves[i];
+        const prevRadius = sw.radius;
+        sw.radius += sw.speed * deltaTime;
+
+        // Shake background objects newly swept by the ring this frame
+        const bgObjs = this.currentRoom.backgroundObjects || [];
+        for (const obj of bgObjs) {
+          if (obj.destroyed) continue;
+          const cx = obj.position.x + C / 2;
+          const cy = obj.position.y + C / 2;
+          const d = Math.hypot(cx - sw.x, cy - sw.y);
+          if (d <= prevRadius || d > sw.radius) continue;
+          obj._playAnimation?.('shake');
+        }
+
+        // Apply damage / knockback to entities inside the current ring radius (once each via hitEntities Set)
+        const apply = (entity) => {
+          if (!entity || entity.hp <= 0) return;
+          if (sw.hitEntities.has(entity)) return;
+          if ((entity.plane ?? 0) !== sw.plane) return;
+          const ex = entity.position.x + C / 2;
+          const ey = entity.position.y + C / 2;
+          const d = Math.hypot(ex - sw.x, ey - sw.y);
+          if (d > sw.radius) return;
+          sw.hitEntities.add(entity);
+          const isSlime = entity.getElementalModifier?.('slime') === 0;
+          this.physicsSystem.applyKnockback(entity, sw.x, sw.y, sw.knockback, 0.12);
+          if (!isSlime) {
+            entity.takeDamage(sw.damage);
+            if (entity === this.player) {
+              this.combatSystem.createDamageNumber(sw.damage, entity.position.x, entity.position.y, entity.color);
+            } else {
+              this.combatSystem.createDamageNumber(sw.damage, entity.position.x, entity.position.y, '#ffffff');
+            }
+          }
+        };
+        apply(this.player);
+        for (const enemy of this.currentRoom.enemies) apply(enemy);
+
+        if (sw.radius >= sw.maxRadius) this.enemyShockwaves.splice(i, 1);
+      }
+    }
+
     // Update goo blobs
+    const SLIME_TRAIL_DROP_PX = 10;
+    const SLIME_TRAIL_DROP_PX_SQ = SLIME_TRAIL_DROP_PX * SLIME_TRAIL_DROP_PX;
     for (const gooBlob of this.gooBlobs) {
       gooBlob.update(deltaTime);
+
+      // Stamp a slime trail along the blob's path (distance-based — stationary blobs don't spam trails)
+      const tdx = gooBlob.position.x - gooBlob.trailLastX;
+      const tdy = gooBlob.position.y - gooBlob.trailLastY;
+      if (tdx * tdx + tdy * tdy >= SLIME_TRAIL_DROP_PX_SQ) {
+        this._dropSlimeTrail(gooBlob.position.x, gooBlob.position.y, gooBlob.plane ?? 0);
+        gooBlob.trailLastX = gooBlob.position.x;
+        gooBlob.trailLastY = gooBlob.position.y;
+      }
 
       // Check collision with player (only if on the same plane)
       if (this.player && (gooBlob.plane ?? 0) === (this.player.plane ?? 0) && gooBlob.isNearEntity(this.player)) {
         this.player.applyStatusEffect('goo', 5.0); // 5 second goo effect
       }
 
-      // Check collision with enemies (slimes are immune, must share plane)
+      // Check collision with enemies (slimes are immune, must share plane).
+      // Unified slime state: non-slime enemies also get the goo status (slow) — not freeze.
       if (this.currentRoom && this.currentRoom.enemies) {
         for (const enemy of this.currentRoom.enemies) {
-          if (enemy.getElementalModifier('slime') === 0) continue; // Slime-affinity enemies are immune to goo
-
+          if (enemy.getElementalModifier('slime') === 0) continue; // Slime-affinity enemies are immune
           if ((gooBlob.plane ?? 0) === (enemy.plane ?? 0) && gooBlob.isNearEntity(enemy)) {
-            enemy.applyStatusEffect('freeze', 0.5); // Enemies get frozen instead of goo
-            enemy.statusEffects.freeze.slowAmount = 0.8; // Heavy slow
+            enemy.applyStatusEffect('goo', 5.0);
           }
         }
       }
@@ -2602,7 +3522,7 @@ class Game {
     // Handle dodge rolling (continuous direction updates, supports diagonals and curving)
     // Disabled while Rusalka's charm is active or while polymorphed (frog form has no roll)
     const rusalkaActive = this.fishingSystem?.rusalka?.alive === true;
-    const dodgeDirection = (rusalkaActive || this.player.polymorphed || this.player.hookedByMimic) ? { x: 0, y: 0 } : this.getDodgeRollDirection();
+    let dodgeDirection = (rusalkaActive || this.player.polymorphed || this.player.hookedByMimic) ? { x: 0, y: 0 } : this.getDodgeRollDirection();
 
     // Shark Mask water dive/emerge — overrides standard dodge for ALL characters
     // (including Green Ranger continuous-roll). Edge detection on dodgeDirection
@@ -2635,6 +3555,11 @@ class Game {
         }
         return; // skip dodge/movement dispatch this frame
       }
+      // Shark Mask equipped + in water but not diving (e.g. dive ended while
+      // arrows still held, or cooldown blocks entry). Zero out dodgeDirection
+      // so the standard/green-ranger dodge handlers below cannot fire — the
+      // dive is the only valid water dodge response when wearing the mask.
+      dodgeDirection = { x: 0, y: 0 };
     } else {
       this._sharkLastDodgeInput = false;
     }
@@ -2715,11 +3640,8 @@ class Game {
             this.player.speedBoostMultiplier = 2.5;
           }
 
-          const enemies = this.player.inMaze && this.mazeInterior
-            ? [] // ghosts are not enemies; dodge roll ignores them
-            : ((this.player.inHut || this.player.inDungeon) && this.hutInterior
-              ? this.hutInterior.enemies
-              : (this.currentRoom ? this.currentRoom.enemies : []));
+          // maze returns [] (ghosts aren't enemies); hut/dungeon returns activeFloor.enemies; surface returns currentRoom.enemies
+          const enemies = this._activeEnemies();
           const rollStarted = this.player.batTransform
             ? false // bat form replaces the roll
             : this.player.startDodgeRoll(dodgeDirection, enemies);
@@ -2949,7 +3871,8 @@ class Game {
           // activated it; bypass inventory entirely.
           this.magicSystem.addMana(this.player, 2);
         } else {
-          this.player.addIngredient(ingredient.char);
+          // REST pickup routes to banked pool via addIngredient.
+          this.addIngredient(ingredient.char);
         }
         this.physicsSystem.removeEntity(ingredient);
         this.ingredients.splice(i, 1);
@@ -3027,10 +3950,19 @@ class Game {
       const majorObjects = [this.player, ...this.currentRoom.enemies].filter(obj => obj);
       this.physicsSystem.updateDebris(this.debris, majorObjects);
     }
+
+    // Companion crow perches/follows in REST too.
+    this.updateCompanionCrow(deltaTime);
+    this.updateFollowerCrows(deltaTime);
   }
 
   updateExploreState(deltaTime) {
     if (!this.currentRoom) return;
+
+    // Keep the south escape-route wall in sync with the player's inventory:
+    // picking up or dropping the last item flips playerHasNoItems(), and the
+    // physical wall must match the renderer's open-door visual.
+    this.updateExitCollisions();
 
     // Update preview blink animation
     this.previewBlinkTimer += deltaTime;
@@ -3138,11 +4070,8 @@ class Game {
       this.previousPlayerPosition.y = this.player.position.y;
     }
 
-    // Update physics — redirect collision source when inside a hut, dungeon, or maze
-    const activeRoom = (this.player.inMaze && this.mazeInterior) ? this.mazeInterior
-      : ((this.player.inHut || this.player.inDungeon) && this.hutInterior) ? this.hutInterior
-      : this.currentRoom;
-    const waterResults = this.physicsSystem.update(deltaTime, this._activeBackgroundObjects(), activeRoom);
+    // Update physics — collision source follows activeRoom (interior takes priority)
+    const waterResults = this.physicsSystem.update(deltaTime, this._activeBackgroundObjects(), this.activeRoom);
 
     // Soft contact: gently separate player from overlapping enemies to prevent stacking
     if (!this.player.inHut && !this.player.inDungeon && !this.player.inMaze) {
@@ -3257,6 +4186,10 @@ class Game {
 
       // Check water immunity (Rubber Boots) — blocks elemental status effects but not movement slow
       const isImmune = entity === this.player && this.player.waterImmunityTimer > 0;
+      // Stingray Mantle: wearer is immune to shock from electrified water
+      // (their own wake or any other source) — they sit at the source of the
+      // current, not in its path.
+      const isShockImmune = entity === this.player && this.player.stingrayMantle;
 
       // Apply wet status (6s; Math.max in applyWet/applyStatusEffect refreshes while in water)
       if (!isImmune) {
@@ -3273,7 +4206,7 @@ class Game {
       if (!isImmune) {
         if (liquidState === 'poisoned') {
           if (entity.applyStatusEffect) entity.applyStatusEffect('poison', 4.0);
-        } else if (liquidState === 'electrified') {
+        } else if (liquidState === 'electrified' && !isShockImmune) {
           if (entity.applyStatusEffect) entity.applyStatusEffect('stun', 1.5);
           if (entity.takeDamage) entity.takeDamage(1);
         }
@@ -3294,17 +4227,55 @@ class Game {
       }
     }
 
-    // Slime enemy collision: apply goo effect on contact
+    // Slime enemy contact: apply goo to player and to any non-slime enemy in touch range.
     // Skip when player is inside a PiP interior (maze/hut/dungeon) — positions are in different coordinate spaces
     const SLIME_COLLISION_DISTANCE = 16; // pixels
-    for (const enemy of (this.player.inMaze || this.player.inHut || this.player.inDungeon) ? [] : this.currentRoom.enemies) {
-      if (enemy.getElementalModifier('slime') === 0) { // Slime-affinity enemies
-        const dx = this.player.position.x - enemy.position.x;
-        const dy = this.player.position.y - enemy.position.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+    const SLIME_COLLISION_SQ = SLIME_COLLISION_DISTANCE * SLIME_COLLISION_DISTANCE;
+    const slimeEnemies = (this.player.inMaze || this.player.inHut || this.player.inDungeon)
+      ? []
+      : this.currentRoom.enemies.filter(e => e.getElementalModifier('slime') === 0);
+    for (const slime of slimeEnemies) {
+      // Player contact
+      const pdx = this.player.position.x - slime.position.x;
+      const pdy = this.player.position.y - slime.position.y;
+      if (pdx * pdx + pdy * pdy < SLIME_COLLISION_SQ) {
+        this.player.applyStatusEffect('goo', 5.0);
+      }
+      // Non-slime enemy contact
+      for (const other of this.currentRoom.enemies) {
+        if (other === slime) continue;
+        if (other.getElementalModifier('slime') === 0) continue; // skip fellow slimes
+        const dx = other.position.x - slime.position.x;
+        const dy = other.position.y - slime.position.y;
+        if (dx * dx + dy * dy < SLIME_COLLISION_SQ) {
+          other.applyStatusEffect('goo', 5.0);
+        }
+      }
+    }
 
-        if (distance < SLIME_COLLISION_DISTANCE) {
-          this.player.applyStatusEffect('goo', 5.0); // 5 second goo effect
+    // Slime trail puddle contact: slime-suited player gets a speed boost, otherwise goo slow. Non-slime enemies on the same plane get goo.
+    // Maze still skipped (no puddles spawn in maze interior). Puddles + enemies route by hutPlane / activeRoom — surface and interior both run.
+    if (this.puddles.length && !this.player.inMaze) {
+      const playerPlane = this.player.plane ?? 0;
+      const playerInInterior = !!this.activeFloor;
+      const activeEnemies = this._activeEnemies();
+      for (const puddle of this.puddles) {
+        if (puddle.type !== 'slimeTrail') continue;
+        // Skip surface puddles when player is in interior (and vice versa)
+        if (!!puddle.hutPlane !== playerInInterior) continue;
+        if ((puddle.plane ?? 0) === playerPlane && puddle.isEntityOnPuddle(this.player)) {
+          if (this.player.slimeImmune) {
+            this.player.applyStatusEffect('slimeBoost', 5.0);
+          } else {
+            this.player.applyStatusEffect('goo', 5.0);
+          }
+        }
+        for (const enemy of activeEnemies) {
+          if (enemy.getElementalModifier('slime') === 0) continue; // slime-affinity immune
+          if ((puddle.plane ?? 0) !== (enemy.plane ?? 0)) continue;
+          if (puddle.isEntityOnPuddle(enemy)) {
+            enemy.applyStatusEffect('goo', 5.0);
+          }
         }
       }
     }
@@ -3572,22 +4543,31 @@ class Game {
         }
       }
 
-      // Target selection: prefer the nearest living entity (companion or player).
-      // Enemies only fight what they can see/reach, so this just tells them WHO to
-      // pursue — the aggro-range and vision checks inside Enemy.update() still gate
-      // whether they actually chase.
+      // Target selection: prefer the nearest living entity (player, camp NPC
+      // companion, or any tamed rat). Enemies only fight what they can see/
+      // reach, so this just tells them WHO to pursue — the aggro-range and
+      // vision checks inside Enemy.update() still gate whether they actually
+      // chase. Tamed rats join the eligibility list so "takes aggro from
+      // player when closer" falls out of nearest-target math (no taunt needed).
+      let nearestTarget = this.player;
+      let nearestDistSq = (this.player.position.x - enemy.position.x) ** 2
+                       + (this.player.position.y - enemy.position.y) ** 2;
       const companion = this.companion;
       if (companion && companion.hp > 0 && companion.state !== CAMP_NPC_STATE.FLEEING) {
-        const pDx = this.player.position.x - enemy.position.x;
-        const pDy = this.player.position.y - enemy.position.y;
         const cDx = companion.position.x - enemy.position.x;
         const cDy = companion.position.y - enemy.position.y;
-        enemy.setTarget(
-          cDx * cDx + cDy * cDy < pDx * pDx + pDy * pDy ? companion : this.player
-        );
-      } else {
-        enemy.setTarget(this.player);
+        const d = cDx * cDx + cDy * cDy;
+        if (d < nearestDistSq) { nearestDistSq = d; nearestTarget = companion; }
       }
+      for (const rat of this.tamedRats) {
+        if (rat.state === 'permaFlee') continue;
+        if ((rat.plane ?? 0) !== (enemy.plane ?? 0)) continue;
+        const rDx = rat.position.x - enemy.position.x;
+        const rDy = rat.position.y - enemy.position.y;
+        const d = rDx * rDx + rDy * rDy;
+        if (d < nearestDistSq) { nearestDistSq = d; nearestTarget = rat; }
+      }
+      enemy.setTarget(nearestTarget);
 
       // Cache the previous-frame charge velocity so we can detect a wall-block
       // (charging speed pinned to ~0 by physics resolution = hit something solid)
@@ -3596,6 +4576,11 @@ class Game {
         : null;
 
       const updateResult = enemy.update(deltaTime);
+
+      // Boss sub-entities (TurtleLeg, etc.) lack `data` and run their own update path —
+      // their per-frame work was done by enemy.update above; skip the post-update
+      // Enemy side-effect handlers below to avoid undefined access on .data.
+      if (!enemy.data) continue;
 
       // Boar charge: contact damage + knockback on player hit; stun on wall hit.
       if (enemy.data.chargeMechanic?.enabled) {
@@ -3673,10 +4658,63 @@ class Game {
         for (const b of updateResult.gooSpewData) {
           const blob = new GooBlob(b.x, b.y, performance.now(), false, b.vx, b.vy, b.decel);
           blob.plane = b.plane ?? 0;
+          blob.hutPlane = !!this.activeFloor;
           this.gooBlobs.push(blob);
         }
         const MAX_GOO_BLOBS = 20;
         while (this.gooBlobs.length > MAX_GOO_BLOBS) this.gooBlobs.shift();
+        this.audioSystem?.playSFX('goo_hit');
+      }
+
+      // Slime-affinity enemies: stamp a slime trail tile along their path
+      if (updateResult.shouldDropSlimeTrail) {
+        const t = updateResult.shouldDropSlimeTrail;
+        this._dropSlimeTrail(t.x, t.y, t.plane);
+      }
+
+      // Giant Slime: leap landing → impact damage + invisible shockwave + landing trail
+      if (updateResult.shouldLeapLand && updateResult.leapLandData) {
+        const ld = updateResult.leapLandData;
+        const cfg = ld.cfg;
+        const hitEntities = new Set();
+        // Direct impact: damage player if standing in the landing footprint (don't double-hit them with the ring sweep)
+        if (this.player && (this.player.plane ?? 0) === ld.plane) {
+          const pcx = this.player.position.x + GRID.CELL_SIZE / 2;
+          const pcy = this.player.position.y + GRID.CELL_SIZE / 2;
+          if (Math.hypot(pcx - ld.x, pcy - ld.y) <= cfg.landRadius) {
+            this.player.takeDamage(cfg.landDamage);
+            this.combatSystem.createDamageNumber(cfg.landDamage, this.player.position.x, this.player.position.y, this.player.color);
+            this.physicsSystem.applyKnockback(this.player, ld.x, ld.y, cfg.shockwaveKnockback, 0.12);
+            hitEntities.add(this.player);
+          }
+        }
+        // Spawn an invisible expanding shockwave — visual is bg objects shaking as the ring sweeps past
+        this.enemyShockwaves.push({
+          x: ld.x,
+          y: ld.y,
+          plane: ld.plane,
+          radius: cfg.landRadius, // start where the direct impact ended
+          maxRadius: cfg.shockwaveMaxRadius,
+          speed: cfg.shockwaveSpeed,
+          damage: cfg.shockwaveDamage,
+          knockback: cfg.shockwaveKnockback,
+          hitEntities
+        });
+        // Landing slime splash: drop the central tile plus a ring of tiles around it.
+        // The overlap-and-grow logic in _dropSlimeTrail will merge them into one big slime blob.
+        if (cfg.trailDropOnLanding) {
+          this._dropSlimeTrail(ld.x, ld.y, ld.plane);
+          const RING_RADIUS = GRID.CELL_SIZE * 1.4;
+          const RING_TILES = 10;
+          for (let r = 0; r < RING_TILES; r++) {
+            const a = (r / RING_TILES) * Math.PI * 2;
+            this._dropSlimeTrail(
+              ld.x + Math.cos(a) * RING_RADIUS,
+              ld.y + Math.sin(a) * RING_RADIUS,
+              ld.plane
+            );
+          }
+        }
         this.audioSystem?.playSFX('goo_hit');
       }
 
@@ -3690,10 +4728,10 @@ class Game {
         }
       }
 
-      // Fire trail / ice trail mechanic (Magma Slug, Glacier Crab)
+      // Fire trail / ice trail mechanic — persistent tile trail until room exit.
       if (updateResult.shouldPlaceTrail) {
         const td = updateResult.trailData;
-        this._spawnEnemyTrailPuddle(td.x, td.y, td.type, td.duration, td.radius, enemy.plane ?? 0);
+        this._spawnEnemyTrailPuddle(td.x, td.y, td.type, td.radius, enemy.plane ?? 0);
       }
 
       // Shaman buff mechanic
@@ -3726,46 +4764,27 @@ class Game {
         }
       }
 
-      // Slime trail: slimes leave goo blobs every 3 seconds
-      if (enemy.getElementalModifier('slime') === 0) { // Slime-affinity enemies
-        // Speed boost when touching own goo
+      // Slime speed boost when touching goo or any slime-related puddle.
+      // Uses bounding-box overlap (slime body vs puddle footprint) instead of
+      // `isEntityOnPuddle`'s strict center-in-square test, so thin trail tiles
+      // (CELL_SIZE/8 wide) still register as the slime walks across them.
+      if (enemy.getElementalModifier('slime') === 0) {
         const baseSpeed = enemy.data.speed;
         const GOO_TOUCH_RADIUS = GRID.CELL_SIZE;
+        const ecx = enemy.position.x + GRID.CELL_SIZE / 2;
+        const ecy = enemy.position.y + GRID.CELL_SIZE / 2;
+        const halfBody = GRID.CELL_SIZE / 2;
         const onGoo = this.gooBlobs.some(blob => {
-          const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - blob.position.x;
-          const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - blob.position.y;
+          const dx = ecx - blob.position.x;
+          const dy = ecy - blob.position.y;
           return Math.sqrt(dx * dx + dy * dy) < GOO_TOUCH_RADIUS + blob.radius;
-        }) || this.puddles.some(p => p.isEntityOnPuddle(enemy));
+        }) || this.puddles.some(p => {
+          if (p.type !== 'slimeTrail') return false;
+          if ((p.plane ?? 0) !== (enemy.plane ?? 0)) return false;
+          return Math.abs(ecx - p.position.x) < halfBody + p.radius
+              && Math.abs(ecy - p.position.y) < halfBody + p.radius;
+        });
         enemy.speed = onGoo ? baseSpeed * 2 : baseSpeed;
-
-        // Initialize goo trail timer if not set
-        if (enemy.gooTrailTimer === undefined) {
-          enemy.gooTrailTimer = 3.0; // Start with 3 seconds
-        }
-
-        // Tick down timer
-        enemy.gooTrailTimer -= deltaTime;
-
-        // Generate goo blob every 3 seconds
-        if (enemy.gooTrailTimer <= 0) {
-          enemy.gooTrailTimer = 3.0; // Reset timer
-
-          // Create stationary goo blob at slime's center
-          const gooBlob = new GooBlob(
-            enemy.position.x + GRID.CELL_SIZE / 2,
-            enemy.position.y + GRID.CELL_SIZE / 2,
-            performance.now(),
-            true // stationary
-          );
-          gooBlob.plane = enemy.plane ?? 0;
-          this.gooBlobs.push(gooBlob);
-
-          // FIFO queue management: max 15 goo blobs
-          const MAX_GOO_BLOBS = 15;
-          if (this.gooBlobs.length > MAX_GOO_BLOBS) {
-            this.gooBlobs.shift(); // Remove oldest
-          }
-        }
       }
 
 
@@ -3868,7 +4887,7 @@ class Game {
       activeEnemies,
       activeBackgroundObjects,
       this.activeNoiseSource,
-      this.player.inMaze ? this.mazeInterior : ((this.player.inHut || this.player.inDungeon) ? this.hutInterior : this.currentRoom)
+      this.activeRoom
     );
 
     // Check player attacks hitting goo blobs (destroy on hit, 5% chance to drop goo)
@@ -4031,6 +5050,7 @@ class Game {
     // Collect new steam clouds from combat (fire+water reactions)
     if (combatResult.newSteamClouds && combatResult.newSteamClouds.length > 0) {
       for (const cloud of combatResult.newSteamClouds) {
+        cloud.hutPlane = !!this.activeFloor;
         this.steamClouds.push(cloud);
       }
     }
@@ -4605,8 +5625,8 @@ class Game {
     // Remove destroyed objects (exterior always; interior when active)
     this.currentRoom.backgroundObjects = this.currentRoom.backgroundObjects.filter(obj => !obj.destroyed);
     this.backgroundObjects = this.currentRoom.backgroundObjects; // Update local reference
-    if (this.hutInterior) {
-      this.hutInterior.backgroundObjects = this.hutInterior.backgroundObjects.filter(obj => !obj.destroyed);
+    if (this.activeFloor) {
+      this.activeFloor.backgroundObjects = this.activeFloor.backgroundObjects.filter(obj => !obj.destroyed);
     }
     this.renderer.markBackgroundDirty();
 
@@ -4655,7 +5675,7 @@ class Game {
           // activated it; bypass inventory entirely.
           this.magicSystem.addMana(this.player, 2);
         } else {
-          this.player.addIngredient(ingredient.char);
+          this.addIngredient(ingredient.char);
         }
         this.physicsSystem.removeEntity(ingredient);
         this.ingredients.splice(i, 1);
@@ -4667,6 +5687,16 @@ class Game {
 
     // Update idle crows (first explore room only — array is empty otherwise)
     this.updateCrows(deltaTime);
+
+    // Companion crow: persistent across rooms, runs its own priority FSM.
+    this.updateCompanionCrow(deltaTime);
+    this.updateFollowerCrows(deltaTime);
+
+    // Tamed rats: wild → bread-seek, then tamed companion movement + flee FSM,
+    // then enemy attack collision against them (mirrors camp NPC damage poll).
+    this.updateBreadSeekingRats();
+    this.updateTamedRats(deltaTime);
+    this.applyEnemyDamageToTamedRats();
 
     // Age and prune sound events (used for global enemy sound detection)
     for (let i = this.soundEvents.length - 1; i >= 0; i--) {
@@ -4744,7 +5774,10 @@ class Game {
           this.preBossGateActive = true;
           this.currentRoom.exits.east = null;
           this.currentRoom.exits.west = null;
-          this.currentRoom.exits.north = { letter: 'B', color: '#ff6600' };
+          // Color MUST match the current zone's exitColor so recordExit keeps
+          // the streak intact in checkZoneTransition. ExploreRenderer paints
+          // the pulse from preBossGateActive, not from this stored color.
+          this.currentRoom.exits.north = { letter: 'B', color: ZONES[preBossZone].exitColor };
           this.audioSystem.startBossAnticipation();
         }
       }
@@ -4988,8 +6021,8 @@ class Game {
       }
     }
 
-    // EXPLORE: Check vault unlock first (higher priority than traps)
-    if (state === GAME_STATES.EXPLORE) {
+    // EXPLORE (and ARCADE_DEMO, which drives the explore loop with prerecorded inputs)
+    if (state === GAME_STATES.EXPLORE || state === GAME_STATES.ARCADE_DEMO) {
 
       // Polymorphed frog: SPACE fires tongue attack, all other EXPLORE actions suppressed.
       // Exception: allow interior exit handling so a frogged player can leave a hut/dungeon/maze.
@@ -4998,6 +6031,18 @@ class Game {
         if (this.player.inHut && this.hutSystem?.handleSpacePress()) return;
         if (this.player.inMaze && this.mazeSystem?.handleSpacePress()) return;
         this.polymorphSystem.createTongueAttack(this);
+        return;
+      }
+
+      // Item pickup takes precedence over interior-system interactions.
+      // Items can land on top of pressable/spacebar objects (press, well,
+      // pedestals) and the player almost always wants to grab the item first.
+      // Mirrors the lower-block pickup check at the captive/attack tier.
+      const hasNearbyItemTop = this.items.some(
+        item => this.physicsSystem.getDistance(this.player, item) < 20
+      );
+      if (hasNearbyItemTop) {
+        this.tryPickupItem();
         return;
       }
 
@@ -5046,13 +6091,13 @@ class Game {
       }
 
       // Errand traveler interaction (SPACE = give item/ingredient)
-      const errandNpcArray = this.player.inHut && this.hutInterior
-        ? this.hutInterior.npcs
+      const errandNpcArray = this.player.inHut && this.activeFloor
+        ? this.activeFloor.npcs
         : this.neutralCharacters;
       const giveResult = this.errandSystem.checkGive(this.player, errandNpcArray);
       if (giveResult) {
         const rewardItem = new Item(giveResult.rewardChar, giveResult.x, giveResult.y);
-        if (this.player.inHut) rewardItem.hutPlane = true;
+        if (this.activeFloor) rewardItem.hutPlane = true;
         this.items.push(rewardItem);
         this.physicsSystem.addEntity(rewardItem);
         return;
@@ -5089,10 +6134,7 @@ class Game {
         // A character died but others remain — swap to next character and return to REST
         this.characterDeathPending = false;
         this.gameOverWaitingForSpace = false;
-        this.particles = [];
-        this.debris = [];
-        this.gooBlobs = [];
-        this.puddles = [];
+        this._resetEnvironmentalEffects();
 
         // Clear active items lost with the dead character
         this.inventorySystem.restQuickSlots = [null, null, null];
@@ -5119,10 +6161,7 @@ class Game {
         this.wishesUsed = 0;
         this._savedDestroyedSlots = [false, false, false];
         if (this.player) this.player.destroyedSlots = [false, false, false];
-        this.particles = [];
-        this.debris = [];
-        this.gooBlobs = [];
-        this.puddles = [];
+        this._resetEnvironmentalEffects();
 
         // Reset all zone depths on death
         this.zoneDepths = {
@@ -5157,6 +6196,10 @@ class Game {
 
         // Reset fairy run-flag for new run
         this.fairiesAngered = false;
+        this.fedCrowCount = 0;
+        this.companionCrows = [];
+        this.followerCrows = [];
+        this.tamedRats = [];
 
         // Reset character system for new run
         this.deadCharacters = [];
@@ -5283,7 +6326,7 @@ class Game {
           this._emitSoundEvent();
         }
       }
-    } else if (state === GAME_STATES.EXPLORE) {
+    } else if (state === GAME_STATES.EXPLORE || state === GAME_STATES.ARCADE_DEMO) {
       // Reset captive interaction flag
       this.captiveInteractionThisFrame = false;
 
@@ -5317,6 +6360,12 @@ class Game {
         if (this.player.heldItem.data?.gemWand && !this.magicSystem.tryStartCharge(this.player)) {
           return;
         }
+        // Bread is a targeted feed, not a free drop. Without an eligible
+        // eater in the current room, SPACE is a no-op (loaf stays in the slot).
+        if (this.player.heldItem.data?.effect === 'dropBread'
+            && !this.hasBreadEligibleTarget()) {
+          return;
+        }
         // Attack — melee AoE handles object damage directly via CombatSystem
         this.attackSequenceActive = true; // Mark that attack was initiated by button press (even if windup delays it)
         const wasBowCharging = this.player.heldItem.data.weaponType === 'BOW' && this.player.heldItem.isCharging;
@@ -5326,12 +6375,19 @@ class Game {
           this.audioSystem.playStoppableSFX('charge_bow');
         }
         if (attack) {
-          // Debug logging for wands
-          if (this.player.heldItem.data.weaponType === 'WAND') {
-            const enemies = this.currentRoom ? this.currentRoom.enemies : [];
+          // Bread "use" is really a drop: spawn the loaf at the player's feet
+          // and skip the attack pipeline. The slot was already cleared inside
+          // Player.useHeldItem because the result was { consumed: true }.
+          if (attack.dropBread) {
+            this.dropBreadAtPlayer();
+          } else {
+            // Debug logging for wands
+            if (this.player.heldItem && this.player.heldItem.data.weaponType === 'WAND') {
+              const enemies = this.currentRoom ? this.currentRoom.enemies : [];
+            }
+            this.combatSystem.createAttack(this.applyGreenDamageModifier(attack), this.currentRoom ? this.currentRoom.enemies : []);
+            this.triggerGreenActionCooldown();
           }
-          this.combatSystem.createAttack(this.applyGreenDamageModifier(attack), this.currentRoom ? this.currentRoom.enemies : []);
-          this.triggerGreenActionCooldown();
         }
       } else {
         // Unarmed and no item nearby: interact with background object if present
@@ -5398,7 +6454,7 @@ class Game {
       }
     }
 
-    if (state === GAME_STATES.EXPLORE) {
+    if (state === GAME_STATES.EXPLORE || state === GAME_STATES.ARCADE_DEMO) {
       // Close bridge menu on SHIFT (no donation)
       if (this.bridgeMenuOpen) {
         this.ridgeSystem.closeMenu();
@@ -5421,6 +6477,54 @@ class Game {
     }
 
     this.updateUI();
+  }
+
+  // Mirror of the SPACE keyup release logic, factored out so DemoSystem
+  // playback can fire the same effects (bow release, fishing release, trap
+  // throw release, staff block release) that the keyboard pipeline does.
+  handleSpaceRelease() {
+    this.attackSequenceActive = false;
+
+    if (this.player) {
+      if (this.player.isStaffBlocking) {
+        this._releaseStaffBlock(this.player);
+      }
+      this.player.staffSwingHasFired = false;
+    }
+
+    if (this.fishingSystem && this.fishingSystem.state === this.fishingSystem.STATES.CHARGING) {
+      this.fishingSystem.releaseCharge(this);
+    }
+
+    if (this.trapCharging && this.player?.heldItem?.data?.type === 'TRAP') {
+      this.trapSystem.releaseTrapThrow();
+    }
+
+    if (this.player && this.player.heldItem && this.player.heldItem.isCharging) {
+      if (this.player.heldItem.data?.gemWand) {
+        this.magicSystem.handleSpaceRelease(this.player);
+      } else if (this.player.heldItem.data?.chargeHammer) {
+        this.player.heldItem.releaseChargeHammer();
+      } else {
+        this.audioSystem.stopSFXByName('charge_bow');
+        if (this.player.canAttack()) {
+          const attack = this.player.heldItem.releaseBow();
+          if (attack) {
+            this.combatSystem.createAttack(this.applyGreenDamageModifier(attack), this.currentRoom ? this.currentRoom.enemies : []);
+            this.triggerGreenActionCooldown();
+            this._emitSoundEvent();
+          }
+        }
+      }
+    }
+  }
+
+  // Mirror of the SHIFT keyup release logic — fires the weapon throw that
+  // handleShiftPress armed via trapSystem.startTrapCharge().
+  handleShiftRelease() {
+    if (this.trapCharging && this.player?.heldItem?.data?.type !== 'TRAP') {
+      this.trapSystem.releaseTrapThrow();
+    }
   }
 
   handleSelectSlot(index) {
@@ -5453,9 +6557,8 @@ class Game {
     console.log('[CHEAT] Spawning item:', name, type);
 
     if (type === ITEM_TYPES.INGREDIENT) {
-      // Add ingredient to inventory
-      const ingredient = new Ingredient(char, 0, 0);
-      this.player.addIngredient(ingredient);
+      // Add ingredient to active pool (banked in REST, carried in EXPLORE)
+      this.addIngredient(char);
       console.log(`[CHEAT] ✓ Added ingredient: ${name}`);
     } else if (type === ITEM_TYPES.WEAPON || type === ITEM_TYPES.TRAP) {
       // Add weapon/trap to item chest
@@ -5504,7 +6607,15 @@ class Game {
       console.log(`[CHEAT] ⚠ No spawn position found for ${name}`);
       return;
     }
-    room.enemies.push(new Enemy(char, pos.x, pos.y));
+    const enemy = new Enemy(char, pos.x, pos.y, this.currentDepth);
+    enemy.setCollisionMap(room.collisionMap);
+    enemy.setBackgroundObjects(room.backgroundObjects);
+    enemy.setSteamClouds(this.steamClouds);
+    enemy.setTarget(this.player);
+    enemy.setGame(this);
+    enemy.setRoom(room);
+    this.physicsSystem.addEntity(enemy);
+    room.enemies.push(enemy);
     console.log(`[CHEAT] ✓ Spawned ${name} (${char})`);
     this.renderer.markBackgroundDirty();
   }
@@ -5573,6 +6684,7 @@ class Game {
       this.physicsSystem.addEntity(item);
     }
     this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
+    this.registerTamedRatsWithPhysics();
 
     // Reset combat system
     this.combatSystem.clear();
@@ -5584,8 +6696,9 @@ class Game {
     if (this.audioSystem.mode === 'dual' || this.audioSystem.mode === 'red') {
       const base = import.meta.env.BASE_URL;
       if (targetZone === 'red' && this.currentMusicZone !== 'red') {
-        this.currentMusicZone = 'red';
-        this.audioSystem.switchToRedSequence();
+        if (this.audioSystem.switchToRedSequence()) {
+          this.currentMusicZone = 'red';
+        }
       } else if (targetZone === 'cyan' && this.currentMusicZone !== 'cyan') {
         this.currentMusicZone = 'cyan';
         this.audioSystem.switchMusic(
@@ -5645,7 +6758,7 @@ class Game {
     this.player.inHut = false;
     this.player.inMaze = false;
     this.player.inDungeon = false;
-    this.hutInterior = null;
+    this.activeFloor = null;
     this.mazeInterior = null;
     this.items = [];
     this.captives = [];
@@ -5657,6 +6770,7 @@ class Game {
       this.physicsSystem.addEntity(enemy);
     }
     this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
+    this.registerTamedRatsWithPhysics();
     this.combatSystem.clear();
     this.renderer.markBackgroundDirty();
     this.updateUI();
@@ -5710,6 +6824,7 @@ class Game {
       this.physicsSystem.addEntity(enemy);
     }
     this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
+    this.registerTamedRatsWithPhysics();
     this.combatSystem.clear();
     this.renderer.markBackgroundDirty();
     this.updateUI();
@@ -5770,11 +6885,7 @@ class Game {
     this.items = newRoom.items || [];
     this.placedTraps = [];
     this.activeNoiseSource = null;
-    this.steamClouds = [];
-    this.debris = [];
-    this.particles = [];
-    this.gooBlobs = [];
-    this.puddles = [];
+    this._resetEnvironmentalEffects();
     this.captives = [];
     this.neutralCharacters = [];
     this.bridgeMenuOpen = false;
@@ -5810,6 +6921,7 @@ class Game {
       this.physicsSystem.addEntity(item);
     }
     this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
+    this.registerTamedRatsWithPhysics();
 
     // Reset combat system
     this.combatSystem.clear();
@@ -5855,10 +6967,7 @@ class Game {
     this.placedTraps = [];
     this.activeNoiseSource = null;
     this.backgroundObjects = this.currentRoom.backgroundObjects || [];
-    this.debris = [];
-    this.particles = [];
-    this.gooBlobs = [];
-    this.puddles = [];
+    this._resetEnvironmentalEffects();
 
     // Set enemy targets
     for (const enemy of this.currentRoom.enemies) {
@@ -5875,6 +6984,7 @@ class Game {
       this.physicsSystem.addEntity(item);
     }
     this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
+    this.registerTamedRatsWithPhysics();
 
     // Reset combat
     this.combatSystem.clear();
@@ -5956,6 +7066,17 @@ class Game {
 
   updateExitCollisions() {
     this.exitSystem.updateExitCollisions(this.currentRoom, this.player);
+    // Escape route: south wall must be physically passable when the room is
+    // locked but the player has no items (matches the renderer's open-door
+    // visual at ExploreRenderer.js — otherwise the player walks into an
+    // invisible wall at row ROWS-1 col centerX).
+    if (this.currentRoom?.exits?.south && this.currentRoom.exitsLocked && this.playerHasNoItems()) {
+      const centerX = Math.floor(GRID.COLS / 2);
+      this.currentRoom.collisionMap[GRID.ROWS - 1][centerX] = false;
+      if (!this.player.inMaze && !this.player.inHut && !this.player.inDungeon) {
+        this.player.setCollisionMap(this.currentRoom.collisionMap);
+      }
+    }
   }
 
   findNearbyBackgroundObject() {
@@ -6023,13 +7144,9 @@ class Game {
       this.currentRoom.enemies = [];
     }
     this.combatSystem.clear();
-    this.particles = [];
-    this.gooBlobs = [];
-    this.puddles = [];
-    this.steamClouds = [];
+    this._resetEnvironmentalEffects();
     this.items = [];
     this.ingredients = [];
-    this.debris = [];
 
     // Play wave animation
     this.cleanseWave = { startTime: performance.now(), duration: 1400 };
@@ -6134,6 +7251,42 @@ class Game {
     }
   }
 
+  // Active ingredient pool by state:
+  //   REST    → banked (inventorySystem.restInventory, the crafting table)
+  //   else    → unbanked carried (player.inventory)
+  // Crafting/mana menus and the Tab overlay use this so banked ingredients
+  // remain available in REST without polluting the unbanked "I" count.
+  getActiveIngredients() {
+    if (this.stateMachine.getCurrentState() === GAME_STATES.REST) {
+      return this.inventorySystem.restInventory;
+    }
+    return this.player?.inventory ?? [];
+  }
+
+  addIngredient(char) {
+    // Coins live in a passive wallet, not in either ingredient pool, so they
+    // remain spendable at wells / NPCs / crafting even after banking.
+    if (char === 'c') {
+      this.inventorySystem.addCoin();
+      return;
+    }
+    if (this.stateMachine.getCurrentState() === GAME_STATES.REST) {
+      this.inventorySystem.restInventory.push(char);
+    } else if (this.player) {
+      this.player.addIngredient(char);
+    }
+  }
+
+  removeIngredient(char) {
+    if (char === 'c') {
+      this.inventorySystem.removeCoin();
+      return;
+    }
+    const pool = this.getActiveIngredients();
+    const idx = pool.indexOf(char);
+    if (idx > -1) pool.splice(idx, 1);
+  }
+
   render(alpha) {
     this.renderController.applyShake();
     const state = this.stateMachine.getCurrentState();
@@ -6148,6 +7301,8 @@ class Game {
       this.renderController.renderNeutralState(this);
     } else if (state === GAME_STATES.GAME_OVER) {
       this.renderController.renderGameOverState(this);
+    } else if (state === GAME_STATES.ARCADE_DEMO) {
+      this.renderController.renderDemoState(this);
     }
 
     if (state !== GAME_STATES.TITLE && state !== GAME_STATES.GAME_OVER) {
@@ -6327,10 +7482,12 @@ class Game {
   }
 
   // Stingray Mantle: moving through water leaves an electrified wake. Each
-  // vacated water cell flips to 'electrified' for 1s. While the player is in
-  // water, ticks damage on enemies standing on any electrified cell — wet
-  // enemies take 2× via the existing wet+shock interaction (we apply the 2×
-  // directly here since this is the wake's own damage source).
+  // vacated water cell flips to 'electrified' for 4s — long enough to form a
+  // visible trail behind the player and keep zapping enemies that wander in.
+  // While the player is in water, ticks damage on enemies standing on any
+  // electrified cell — wet enemies take 2× via the existing wet+shock
+  // interaction (we apply the 2× directly here since this is the wake's own
+  // damage source).
   _updateStingrayMantle(deltaTime) {
     const p = this.player;
     if (!p?.stingrayMantle || !this.currentRoom) return;
@@ -6348,7 +7505,7 @@ class Game {
         for (const obj of this.currentRoom.backgroundObjects) {
           if (obj.destroyed || obj.char !== '~') continue;
           if (Math.abs(obj.position.x - prevX) < 4 && Math.abs(obj.position.y - prevY) < 4) {
-            if (obj.waterState === 'normal') obj.setWaterState('electrified', 1.0);
+            if (obj.waterState === 'normal') obj.setWaterState('electrified', 4.0);
             break;
           }
         }

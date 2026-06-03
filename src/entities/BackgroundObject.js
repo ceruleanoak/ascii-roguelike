@@ -165,6 +165,15 @@ export class BackgroundObject {
       return { destroyed: false, effect: 'cutGrass' };
     }
 
+    // Puzzle-signal glitter objects (dungeon glitter_object unlock condition):
+    // never destroyed; each hit pulses glitterHit for the lock-condition poll.
+    // Distinct from K-room key glitter which IS destroyable (drops a key on death).
+    if (this.puzzleSignal) {
+      this.glitterHit = true;
+      this._playAnimation('shake');
+      return { destroyed: false, effect: 'glitterHit' };
+    }
+
     this.hp = Math.max(0, this.hp - amount);
 
     if (this.hp <= 0) {

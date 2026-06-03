@@ -17,6 +17,7 @@
 import { GRID, COLORS, EQUIPMENT, CRAFTING } from '../../game/GameConfig.js';
 import { getItemData } from '../../data/items.js';
 import { PixelatedDissolve } from '../effects/TextEffects.js';
+import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE } from '../../data/cipher.js';
 
 export class RestRenderer {
   constructor(renderer, renderController) {
@@ -37,6 +38,9 @@ export class RestRenderer {
     if (!game.player) {
       return;
     }
+
+    // Spectacles state — used at multiple keystroke-label sites below.
+    const spectaclesOn = isSpectaclesActive(game);
 
     // Render background (only if dirty)
     if (this.renderer.backgroundDirty) {
@@ -148,12 +152,16 @@ export class RestRenderer {
 
     // Draw melee attacks (for weapon preview)
     for (const attack of game.combatSystem.getMeleeAttacks()) {
-      this.renderer.drawEntity(
-        attack.position.x + GRID.CELL_SIZE / 2,
-        attack.position.y + GRID.CELL_SIZE / 2,
-        attack.char,
-        attack.color
-      );
+      const cx = attack.position.x + GRID.CELL_SIZE / 2;
+      const cy = attack.position.y + GRID.CELL_SIZE / 2;
+      const scale = attack.drawScale || 1.0;
+      if (attack.drawAngle != null) {
+        this.renderer.drawEntityRotated(cx, cy, attack.char, attack.color, attack.drawAngle, scale);
+      } else if (scale !== 1.0) {
+        this.renderer.drawEntityScaled(cx, cy, attack.char, attack.color, scale);
+      } else {
+        this.renderer.drawEntity(cx, cy, attack.char, attack.color);
+      }
     }
 
     // Draw particles (dodge trails, explosions, etc.)
@@ -211,12 +219,14 @@ export class RestRenderer {
       // Show PRESS SPACE when player is near the bundle (activeHint guards against overlap)
       if (activeHint === 'bundle') {
         this.renderer.fgCtx.save();
-        this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 0.8}px 'VentureArcade', 'Unifont', monospace`;
+        this.renderer.fgCtx.font = spectaclesOn
+          ? `${Math.round(GRID.CELL_SIZE * 0.8 * CIPHER_FONT_SCALE)}px 'Unifont', monospace`
+          : `${GRID.CELL_SIZE * 0.8}px 'VentureArcade', 'Unifont', monospace`;
         this.renderer.fgCtx.textAlign = 'center';
         this.renderer.fgCtx.textBaseline = 'middle';
         this.renderer.fgCtx.fillStyle = COLORS.TEXT;
         this.renderer.fgCtx.fillText(
-          'SPACE',
+          spectaclesTransformString('SPACE', spectaclesOn),
           game.player.position.x + GRID.CELL_SIZE / 2,
           game.player.position.y - GRID.CELL_SIZE * 1.5
         );
@@ -263,6 +273,32 @@ export class RestRenderer {
       playerAlpha
     );
 
+    // Follower flock (persists across rooms after feeding events).
+    if (game.followerCrows && game.followerCrows.length > 0) {
+      for (const f of game.followerCrows) {
+        const fOff = f.getRenderOffsetY();
+        this.renderer.drawEntity(
+          f.position.x + GRID.CELL_SIZE / 2,
+          f.position.y + GRID.CELL_SIZE / 2 + fOff,
+          f.char,
+          f.color
+        );
+      }
+    }
+
+    // Companion crows: persist across states; perch around the player.
+    if (game.companionCrows && game.companionCrows.length > 0) {
+      for (const c of game.companionCrows) {
+        const offY = c.getRenderOffsetY();
+        this.renderer.drawEntity(
+          c.position.x + GRID.CELL_SIZE / 2,
+          c.position.y + GRID.CELL_SIZE / 2 + offY,
+          c.char,
+          c.color
+        );
+      }
+    }
+
     // Draw bow charge indicator (shared between REST and EXPLORE states)
     this.renderController.bowChargeIndicator.render(game);
 
@@ -272,7 +308,9 @@ export class RestRenderer {
     // Draw contextual floating text above player when near a slot
     if (nearestSlot && activeHint === 'slot') {
       this.renderer.fgCtx.save();
-      this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 0.8}px 'VentureArcade', 'Unifont', monospace`;
+      this.renderer.fgCtx.font = spectaclesOn
+        ? `${Math.round(GRID.CELL_SIZE * 0.8 * CIPHER_FONT_SCALE)}px 'Unifont', monospace`
+        : `${GRID.CELL_SIZE * 0.8}px 'VentureArcade', 'Unifont', monospace`;
       this.renderer.fgCtx.textAlign = 'center';
       this.renderer.fgCtx.textBaseline = 'middle';
       const floatingTextY = game.player.position.y - GRID.CELL_SIZE * 1.5;
@@ -314,12 +352,20 @@ export class RestRenderer {
 
       if (slotItemName) {
         this.renderer.fgCtx.fillStyle = slotItemColor;
-        this.renderer.fgCtx.fillText(slotItemName.toUpperCase(), game.player.position.x + GRID.CELL_SIZE / 2, floatingTextY);
+        this.renderer.fgCtx.fillText(
+          spectaclesTransformString(slotItemName.toUpperCase(), spectaclesOn),
+          game.player.position.x + GRID.CELL_SIZE / 2,
+          floatingTextY
+        );
       } else {
         // Slot is empty — show interaction hint
         this.renderer.fgCtx.fillStyle = COLORS.TEXT;
         const hintText = nearestSlot.type.startsWith('crafting-') ? 'SPACE / SHIFT' : 'SPACE';
-        this.renderer.fgCtx.fillText(hintText, game.player.position.x + GRID.CELL_SIZE / 2, floatingTextY);
+        this.renderer.fgCtx.fillText(
+          spectaclesTransformString(hintText, spectaclesOn),
+          game.player.position.x + GRID.CELL_SIZE / 2,
+          floatingTextY
+        );
       }
 
       this.renderer.fgCtx.restore();
@@ -331,7 +377,8 @@ export class RestRenderer {
       ' E X P L O R E',
       GRID.WIDTH / 2,
       4 * GRID.CELL_SIZE + GRID.CELL_SIZE / 2 + 5,
-      game.keyFlashMap
+      game.keyFlashMap,
+      spectaclesOn
     );
 
     // Draw "C R A F T" label — dissolves in when player is near the crafting station,
@@ -347,9 +394,12 @@ export class RestRenderer {
     );
     const nearCraft = craftDist < GRID.CELL_SIZE * 3;
 
+    const craftFont = spectaclesOn
+      ? `${Math.round(GRID.CELL_SIZE * CIPHER_FONT_SCALE)}px 'Unifont', monospace`
+      : `${GRID.CELL_SIZE}px 'VentureArcade', 'Unifont', monospace`;
     this._craftDissolve.render(this.renderer.fgCtx, {
-      text: craftText,
-      font: `${GRID.CELL_SIZE}px 'VentureArcade', 'Unifont', monospace`,
+      text: spectaclesTransformString(craftText, spectaclesOn),
+      font: craftFont,
       color: '#666666',
       x: craftLabelX,
       y: craftLabelY,
@@ -362,19 +412,20 @@ export class RestRenderer {
       const now = performance.now();
       const flashMap = game.keyFlashMap || {};
       const ctx = this.renderer.fgCtx;
+      const displayCraft = spectaclesTransformString(craftText, spectaclesOn);
       ctx.save();
       ctx.globalAlpha = this._craftDissolve.alpha;
-      ctx.font = `${GRID.CELL_SIZE}px 'VentureArcade', 'Unifont', monospace`;
+      ctx.font = craftFont;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      const totalW = ctx.measureText(craftText).width;
-      const charW = totalW / craftText.length;
+      const totalW = ctx.measureText(displayCraft).width;
+      const charW = totalW / displayCraft.length;
       let cx = craftLabelX - totalW / 2;
-      for (const ch of craftText) {
-        const upper = ch.toUpperCase();
+      for (let i = 0; i < displayCraft.length; i++) {
+        const upper = craftText[i].toUpperCase();
         if (upper !== ' ' && flashMap[upper] !== undefined && (now - flashMap[upper]) < FLASH_MS) {
           ctx.fillStyle = '#7a7a7a';
-          ctx.fillText(ch, cx, craftLabelY);
+          ctx.fillText(displayCraft[i], cx, craftLabelY);
         }
         cx += charW;
       }
@@ -396,9 +447,13 @@ export class RestRenderer {
     const sColor = game.keys.s ? COLORS.ITEM : (isInactive ? inactiveColor : COLORS.TEXT);
     const dColor = game.keys.d ? COLORS.ITEM : (isInactive ? inactiveColor : COLORS.TEXT);
 
-    // Temporarily use lighter font for keys
+    // Temporarily use lighter font for keys. Greek substitutes get a scaled
+    // font to match VentureArcade's visual size elsewhere in the UI.
     this.renderer.bgCtx.save();
-    this.renderer.bgCtx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
+    const wasdFontPx = spectaclesOn
+      ? Math.round(GRID.CELL_SIZE * CIPHER_FONT_SCALE)
+      : GRID.CELL_SIZE;
+    this.renderer.bgCtx.font = `${wasdFontPx}px 'Unifont', monospace`;
 
     // W key (top)
     this.renderer.drawCell(
@@ -410,7 +465,7 @@ export class RestRenderer {
     this.renderer.drawCell(
       Math.floor(wasdCenterX / GRID.CELL_SIZE),
       Math.floor(wasdY / GRID.CELL_SIZE),
-      'W',
+      spectaclesTransform('W', spectaclesOn),
       wColor
     );
     this.renderer.drawCell(
@@ -433,7 +488,7 @@ export class RestRenderer {
     this.renderer.drawCell(
       Math.floor(wasdCenterX / GRID.CELL_SIZE) - 4,
       wasdBottomRowY,
-      'A',
+      spectaclesTransform('A', spectaclesOn),
       aColor
     );
     this.renderer.drawCell(
@@ -453,7 +508,7 @@ export class RestRenderer {
     this.renderer.drawCell(
       Math.floor(wasdCenterX / GRID.CELL_SIZE),
       wasdBottomRowY,
-      'S',
+      spectaclesTransform('S', spectaclesOn),
       sColor
     );
     this.renderer.drawCell(
@@ -473,7 +528,7 @@ export class RestRenderer {
     this.renderer.drawCell(
       Math.floor(wasdCenterX / GRID.CELL_SIZE) + 4,
       wasdBottomRowY,
-      'D',
+      spectaclesTransform('D', spectaclesOn),
       dColor
     );
     this.renderer.drawCell(
@@ -491,13 +546,15 @@ export class RestRenderer {
 
     // Draw "M O V E" text below WASD (left side)
     this.renderer.fgCtx.save();
-    this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 0.7}px 'VentureArcade', 'Unifont', monospace`;
+    this.renderer.fgCtx.font = spectaclesOn
+      ? `${Math.round(GRID.CELL_SIZE * 0.7 * CIPHER_FONT_SCALE)}px 'Unifont', monospace`
+      : `${GRID.CELL_SIZE * 0.7}px 'VentureArcade', 'Unifont', monospace`;
     this.renderer.fgCtx.textBaseline = 'middle';
     this.renderer.fgCtx.textAlign = 'center';
     const labelY = GRID.HEIGHT - GRID.CELL_SIZE * 2;
 
     this.renderer.fgCtx.fillStyle = COLORS.TEXT;
-    this.renderer.fgCtx.fillText('M O V E', wasdCenterX, labelY);
+    this.renderer.fgCtx.fillText(spectaclesTransformString('M O V E', spectaclesOn), wasdCenterX, labelY);
 
     this.renderer.fgCtx.restore();
 
@@ -542,11 +599,17 @@ export class RestRenderer {
       // Show SPACE hint when player is near the tombstone (activeHint guards against overlap)
       if (activeHint === 'tombstone') {
         this.renderer.fgCtx.save();
-        this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 0.8}px 'VentureArcade', 'Unifont', monospace`;
+        this.renderer.fgCtx.font = spectaclesOn
+          ? `${Math.round(GRID.CELL_SIZE * 0.8 * CIPHER_FONT_SCALE)}px 'Unifont', monospace`
+          : `${GRID.CELL_SIZE * 0.8}px 'VentureArcade', 'Unifont', monospace`;
         this.renderer.fgCtx.textAlign = 'center';
         this.renderer.fgCtx.textBaseline = 'middle';
         this.renderer.fgCtx.fillStyle = COLORS.TEXT;
-        this.renderer.fgCtx.fillText('SPACE', game.player.position.x + GRID.CELL_SIZE / 2, game.player.position.y - GRID.CELL_SIZE * 1.5);
+        this.renderer.fgCtx.fillText(
+          spectaclesTransformString('SPACE', spectaclesOn),
+          game.player.position.x + GRID.CELL_SIZE / 2,
+          game.player.position.y - GRID.CELL_SIZE * 1.5
+        );
         this.renderer.fgCtx.restore();
       }
     }
@@ -621,19 +684,28 @@ export class RestRenderer {
     ctx.globalAlpha = 1;
   }
 
-  /** Renders a spaced-letter label with recently-pressed keys shown in light gray. */
-  _drawLitLabel(ctx, text, centerX, y, keyFlashMap = {}) {
+  /**
+   * Renders a spaced-letter label with recently-pressed keys shown in light gray.
+   * Under spectacles, each Latin char is rendered as its Greek cipher form in
+   * scaled Unifont (VA lacks Greek coverage), but the flash lookup still uses
+   * the original Latin so keypresses light the correct slot.
+   */
+  _drawLitLabel(ctx, text, centerX, y, keyFlashMap = {}, spectaclesOn = false) {
     const FLASH_MS = 220;
     const now = performance.now();
     ctx.save();
-    ctx.font = `${GRID.CELL_SIZE}px 'VentureArcade', 'Unifont', monospace`;
+    ctx.font = spectaclesOn
+      ? `${Math.round(GRID.CELL_SIZE * CIPHER_FONT_SCALE)}px 'Unifont', monospace`
+      : `${GRID.CELL_SIZE}px 'VentureArcade', 'Unifont', monospace`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    const totalW = ctx.measureText(text).width;
-    const charW = totalW / text.length;
+    const displayText = spectaclesTransformString(text, spectaclesOn);
+    const totalW = ctx.measureText(displayText).width;
+    const charW = totalW / displayText.length;
     let cx = centerX - totalW / 2;
-    for (const ch of text) {
-      const upper = ch.toUpperCase();
+    for (let i = 0; i < displayText.length; i++) {
+      const ch = displayText[i];
+      const upper = text[i].toUpperCase();
       const isLit = upper !== ' ' && keyFlashMap[upper] !== undefined && (now - keyFlashMap[upper]) < FLASH_MS;
       ctx.fillStyle = isLit ? '#7a7a7a' : '#666666';
       ctx.fillText(ch, cx, y);

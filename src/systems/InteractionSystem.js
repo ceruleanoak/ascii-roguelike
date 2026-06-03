@@ -88,8 +88,8 @@ export class InteractionSystem {
     // When inside a hut/dungeon/maze, search the appropriate objects
     const objects = (game.player?.inMaze && game.mazeInterior)
       ? [] // Maze objects handled by MazeSystem, not InteractionSystem
-      : ((game.player?.inHut || game.player?.inDungeon) && game.hutInterior)
-        ? game.hutInterior.backgroundObjects
+      : ((game.player?.inHut || game.player?.inDungeon) && game.activeFloor)
+        ? game.activeFloor.backgroundObjects
         : (game.currentRoom ? game.currentRoom.backgroundObjects : game.backgroundObjects);
     const playerPlane = planeOf(game.player);
     for (const obj of objects) {

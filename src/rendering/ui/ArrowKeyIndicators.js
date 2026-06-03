@@ -10,6 +10,7 @@
  */
 
 import { GRID, COLORS } from '../../game/GameConfig.js';
+import { spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE } from '../../data/cipher.js';
 
 export class ArrowKeyIndicators {
   constructor(renderer) {
@@ -85,13 +86,16 @@ export class ArrowKeyIndicators {
     fg.restore();
 
     // Draw "D O D G E" label below arrow keys
+    const spectaclesOn = isSpectaclesActive(game);
     this.renderer.fgCtx.save();
-    this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 0.7}px 'VentureArcade', 'Unifont', monospace`;
+    this.renderer.fgCtx.font = spectaclesOn
+      ? `${Math.round(GRID.CELL_SIZE * 0.7 * CIPHER_FONT_SCALE)}px 'Unifont', monospace`
+      : `${GRID.CELL_SIZE * 0.7}px 'VentureArcade', 'Unifont', monospace`;
     this.renderer.fgCtx.textBaseline = 'middle';
     this.renderer.fgCtx.textAlign = 'center';
     const labelY = GRID.HEIGHT - GRID.CELL_SIZE * 2;
     this.renderer.fgCtx.fillStyle = COLORS.TEXT;
-    this.renderer.fgCtx.fillText('D O D G E', arrowCenterX, labelY);
+    this.renderer.fgCtx.fillText(spectaclesTransformString('D O D G E', spectaclesOn), arrowCenterX, labelY);
     this.renderer.fgCtx.restore();
   }
 }

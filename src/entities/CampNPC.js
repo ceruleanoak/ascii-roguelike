@@ -125,6 +125,13 @@ export class CampNPC extends NeutralCharacter {
     this.clearIndicator();
   }
 
+  // Shared companion hook: delegates to CampNPCSystem.onRoomEnter (which owns
+  // the weapon sanitization details). Mirrors Crow.onRoomEnter / Enemy.onRoomEnter
+  // so main.js can iterate all companions through one call site.
+  onRoomEnter(player, game) {
+    game?.campNPCSystem?.onRoomEnter();
+  }
+
   startFleeing(exits) {
     this.state = CAMP_NPC_STATE.FLEEING;
     this.char = SAD_CHAR;

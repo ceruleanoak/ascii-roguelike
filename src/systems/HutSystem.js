@@ -1,6 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Enemy } from '../entities/Enemy.js';
+import { Item } from '../entities/Item.js';
 import { getZoneRandomEnemy } from '../data/enemies.js';
 import { createDebris } from '../entities/Debris.js';
 import { WiseFellow } from '../entities/WiseFellow.js';
@@ -49,14 +50,42 @@ export class HutSystem {
     // Background objects: simple border wall visuals + sparse decor
     const backgroundObjects = [];
 
+    // Spawn-occupancy helper: rejects walls AND cells already holding a
+    // background object or item. Prevents items/decor from rendering on top
+    // of fixed objects like the oil press.
+    const cellOccupied = (col, row, items = []) => {
+      if (collisionMap[row]?.[col]) return true;
+      const x = col * GRID.CELL_SIZE;
+      const y = row * GRID.CELL_SIZE;
+      if (backgroundObjects.some(o => o.position.x === x && o.position.y === y)) return true;
+      if (items.some(it => it.position.x === x && it.position.y === y)) return true;
+      return false;
+    };
+
+    // ── Fixed-position background objects first ──
+    // Oil press: P-flagged huts always get one; other huts have a small chance.
+    // Placed BEFORE decor/bread so those spawn loops can reject the press cell.
+    const hasPress = pressBias || Math.random() < 0.10;
+    if (hasPress) {
+      backgroundObjects.push(new BackgroundObject(
+        '⊓',
+        2 * GRID.CELL_SIZE,
+        2 * GRID.CELL_SIZE
+      ));
+    }
+
     // Interior floor decor (very sparse — hut is small)
     const decorChars = ['n', '*', '8', '%'];
     const decorCount = 1 + Math.floor(Math.random() * 3);
     for (let i = 0; i < decorCount; i++) {
-      const col = 2 + Math.floor(Math.random() * (cols - 4));
-      const row = 2 + Math.floor(Math.random() * (rows - 5));
-      const char = decorChars[Math.floor(Math.random() * decorChars.length)];
-      backgroundObjects.push(new BackgroundObject(char, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
+      for (let attempt = 0; attempt < 12; attempt++) {
+        const col = 2 + Math.floor(Math.random() * (cols - 4));
+        const row = 2 + Math.floor(Math.random() * (rows - 5));
+        if (cellOccupied(col, row)) continue;
+        const char = decorChars[Math.floor(Math.random() * decorChars.length)];
+        backgroundObjects.push(new BackgroundObject(char, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
+        break;
+      }
     }
 
     // Enemies and NPCs — populated based on hutKind
@@ -70,8 +99,13 @@ export class HutSystem {
         const zone = this.game.currentRoom?.zone || 'green';
         const enemyChar = getZoneRandomEnemy(depth, zone);
         if (!enemyChar) continue;
-        const col = 2 + Math.floor(Math.random() * (cols - 4));
-        const row = 2 + Math.floor(Math.random() * (rows - 6));
+        let col = 2;
+        let row = 2;
+        for (let attempt = 0; attempt < 12; attempt++) {
+          col = 2 + Math.floor(Math.random() * (cols - 4));
+          row = 2 + Math.floor(Math.random() * (rows - 6));
+          if (!cellOccupied(col, row)) break;
+        }
         const enemy = new Enemy(enemyChar, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE, depth);
         enemy.setCollisionMap(collisionMap);
         enemy.setBackgroundObjects(backgroundObjects);
@@ -81,16 +115,15 @@ export class HutSystem {
     } else if (hutKind === 'barrel_room') {
       // 3–5 barrels scattered in the interior — no enemies
       const barrelCount = 3 + Math.floor(Math.random() * 3);
-      const placed = new Set();
+      let placed = 0;
       let attempts = 0;
-      while (placed.size < barrelCount && attempts < barrelCount * 6) {
+      while (placed < barrelCount && attempts < barrelCount * 6) {
         attempts++;
         const col = 2 + Math.floor(Math.random() * (cols - 4));
         const row = 2 + Math.floor(Math.random() * (rows - 5));
-        const key = `${col},${row}`;
-        if (placed.has(key) || collisionMap[row]?.[col]) continue;
-        placed.add(key);
+        if (cellOccupied(col, row)) continue;
         backgroundObjects.push(new BackgroundObject('p', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
+        placed++;
       }
 
     } else if (hutKind === 'wise_man') {
@@ -128,16 +161,22 @@ export class HutSystem {
       }
     }
 
-    // Oil press: P-flagged huts always get one; other huts have a small chance.
-    if (pressBias || Math.random() < 0.10) {
-      const pressCol = 2;
-      const pressRow = 2;
-      const press = new BackgroundObject(
-        '⊓',
-        pressCol * GRID.CELL_SIZE,
-        pressRow * GRID.CELL_SIZE
-      );
-      backgroundObjects.push(press);
+    // Bread loaves: very common in huts (90% chance to spawn, 1–2 loaves).
+    // Player picks them up off the floor; pressing the use button later drops
+    // a loaf for crows. Items are seeded into activeFloor.items and pushed
+    // into game.items on entry by _enterHut (marked hutPlane).
+    const breadItems = [];
+    if (hutKind !== 'witch' && Math.random() < 0.90) {
+      const loafCount = 1 + (Math.random() < 0.45 ? 1 : 0);
+      for (let i = 0; i < loafCount; i++) {
+        for (let attempt = 0; attempt < 12; attempt++) {
+          const col = 2 + Math.floor(Math.random() * (cols - 4));
+          const row = 2 + Math.floor(Math.random() * (rows - 5));
+          if (cellOccupied(col, row, breadItems)) continue;
+          breadItems.push(new Item('⌬', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
+          break;
+        }
+      }
     }
 
     // Interior exit door at south-center border. The door cell stays solid so
@@ -155,19 +194,33 @@ export class HutSystem {
       y: (exitRow - 2) * GRID.CELL_SIZE
     };
 
+    // Viewport metadata: where the PiP panel renders on the main canvas.
+    // Phase A only stores this; Phase B will route ExploreRenderer through it.
+    const interiorPxW = cols * GRID.CELL_SIZE;
+    const interiorPxH = rows * GRID.CELL_SIZE;
+    const viewport = {
+      offsetX: Math.floor((GRID.WIDTH  - interiorPxW) / 2),
+      offsetY: Math.floor((GRID.HEIGHT - interiorPxH) / 2),
+      gridCols: cols,
+      gridRows: rows,
+      cellSize: GRID.CELL_SIZE,
+    };
+
     return {
+      type: 'HUT_INTERIOR',
       gridCols: cols,
       gridRows: rows,
       collisionMap,
       backgroundObjects,
       enemies,
       npcs,
-      items: [],
+      items: breadItems,
       doors: [{ col: exitCol, row: exitRow, leadsTo: null }],
       hutKind,
       spawnPoint,
       exitCol,
-      exitRow
+      exitRow,
+      viewport,
     };
   }
 
@@ -311,9 +364,9 @@ export class HutSystem {
   /** Returns true if player is close enough to the interior exit door to interact. */
   nearInteriorExit() {
     const { game } = this;
-    if (!game.player?.inHut || !game.hutInterior) return false;
-    if (game.hutInterior.gridCols !== INTERIOR_COLS) return false;
-    const { exitCol, exitRow } = game.hutInterior;
+    if (!game.player?.inHut || !game.activeFloor) return false;
+    if (game.activeFloor.gridCols !== INTERIOR_COLS) return false;
+    const { exitCol, exitRow } = game.activeFloor;
     return this._nearCell(game.player, exitCol * GRID.CELL_SIZE, exitRow * GRID.CELL_SIZE);
   }
 
@@ -336,7 +389,7 @@ export class HutSystem {
     }
 
     // Exit from interior (hut only — dungeon handled by DungeonSystem)
-    if (game.player.inHut && game.hutInterior?.gridCols === INTERIOR_COLS && this.nearInteriorExit()) {
+    if (game.player.inHut && game.activeFloor?.gridCols === INTERIOR_COLS && this.nearInteriorExit()) {
       this._exitHut();
       return true;
     }
@@ -356,28 +409,45 @@ export class HutSystem {
       y: game.player.position.y
     };
 
+    // Wipe surface combat state on transition into interior so in-flight
+    // surface projectiles/arrows don't ghost-render at upper-left of canvas
+    // during interior play. Matches the clear pattern of surface room transitions.
+    game.combatSystem.clear();
+
     // Reuse cached interior if the player has been here before in this room
     // visit — preserves broken barrels, defeated enemies, NPC dialogue state, etc.
     if (hut.interiorState) {
-      game.hutInterior = hut.interiorState;
+      game.activeFloor = hut.interiorState;
     } else {
       const depth = game.getCurrentZoneDepth ? game.getCurrentZoneDepth() : 1;
-      game.hutInterior = this.generateHutInterior(hut.hutKind, depth, hut.pressBias === true);
-      hut.interiorState = game.hutInterior;
+      game.activeFloor = this.generateHutInterior(hut.hutKind, depth, hut.pressBias === true);
+      hut.interiorState = game.activeFloor;
       hut.interiorGenerated = true;
     }
 
     // Register interior enemies with physics
-    for (const enemy of game.hutInterior.enemies) {
+    for (const enemy of game.activeFloor.enemies) {
       game.physicsSystem.addEntity(enemy);
     }
 
+    // Hand pre-seeded interior items (bread) to the live game.items list and
+    // tag them as hutPlane so _exitHut sweeps any unpicked loaves out cleanly.
+    // We drain activeFloor.items so cached re-entry doesn't double-spawn.
+    if (game.activeFloor.items && game.activeFloor.items.length) {
+      for (const it of game.activeFloor.items) {
+        it.hutPlane = true;
+        game.items.push(it);
+        game.physicsSystem.addEntity(it);
+      }
+      game.activeFloor.items = [];
+    }
+
     // Switch player collision map to interior grid
-    game.player.setCollisionMap(game.hutInterior.collisionMap);
+    game.player.setCollisionMap(game.activeFloor.collisionMap);
 
     // Teleport player into interior
-    game.player.position.x = game.hutInterior.spawnPoint.x;
-    game.player.position.y = game.hutInterior.spawnPoint.y;
+    game.player.position.x = game.activeFloor.spawnPoint.x;
+    game.player.position.y = game.activeFloor.spawnPoint.y;
     game.player.inHut = true;
 
     // Bring the camp companion (if any) along — snap it beside the player
@@ -390,9 +460,13 @@ export class HutSystem {
   _exitHut() {
     const { game } = this;
 
+    // Wipe interior combat state on exit so interior projectiles/arrows don't
+    // leak into the surface render at interior coords.
+    game.combatSystem.clear();
+
     // Remove interior enemies from physics
-    if (game.hutInterior?.enemies) {
-      for (const enemy of game.hutInterior.enemies) {
+    if (game.activeFloor?.enemies) {
+      for (const enemy of game.activeFloor.enemies) {
         game.physicsSystem.removeEntity(enemy);
       }
     }
@@ -419,7 +493,7 @@ export class HutSystem {
     game.ingredients = game.ingredients.filter(i => !i.hutPlane);
     game.items = game.items.filter(i => !i.hutPlane);
 
-    game.hutInterior = null;
+    game.activeFloor = null;
 
     // Force background redraw
     game.renderer.backgroundDirty = true;
@@ -436,19 +510,33 @@ export class HutSystem {
       game.player._hutEntryCooldown -= dt;
     }
 
-    if (game.player.inHut && game.hutInterior) {
+    if (game.player.inHut && game.activeFloor) {
       // Only process if this is a hut interior (10 cols), not a dungeon (24 cols)
-      if (game.hutInterior.gridCols !== INTERIOR_COLS) return;
+      if (game.activeFloor.gridCols !== INTERIOR_COLS) return;
 
-      // Update interior enemies
-      for (const enemy of game.hutInterior.enemies) {
+      // Update interior enemies. The return value carries side-effect requests
+      // (slime trail, fire/ice trail, goo spew, item attacks, aggro sound) that
+      // the surface loop in main.js consumes — interior enemies need the same
+      // routing or slime-affinity enemies emit no trail, etc.
+      for (const enemy of game.activeFloor.enemies) {
         enemy.target = game.player;
-        enemy.update(dt);
+        const r = enemy.update(dt);
+        if (!r) continue;
+        if (r.justAggrod) game.audioSystem?.playSFX('aggro');
+        if (r.itemAttack) game.combatSystem.createEnemyAttack(r.itemAttack);
+        if (r.shouldDropSlimeTrail) {
+          const t = r.shouldDropSlimeTrail;
+          game._dropSlimeTrail(t.x, t.y, t.plane);
+        }
+        if (r.shouldPlaceTrail && r.trailData) {
+          const td = r.trailData;
+          game._spawnEnemyTrailPuddle(td.x, td.y, td.type, td.radius, enemy.plane ?? 0);
+        }
       }
 
       // Process interior enemy deaths
-      for (let i = game.hutInterior.enemies.length - 1; i >= 0; i--) {
-        const enemy = game.hutInterior.enemies[i];
+      for (let i = game.activeFloor.enemies.length - 1; i >= 0; i--) {
+        const enemy = game.activeFloor.enemies[i];
         if (enemy.hp <= 0) {
           game.audioSystem?.playSFX('destroy');
 
@@ -471,22 +559,22 @@ export class HutSystem {
           }
 
           game.physicsSystem.removeEntity(enemy);
-          game.hutInterior.enemies.splice(i, 1);
+          game.activeFloor.enemies.splice(i, 1);
         }
       }
 
       // Update interior background objects
-      for (const obj of game.hutInterior.backgroundObjects) {
+      for (const obj of game.activeFloor.backgroundObjects) {
         obj.update(dt);
       }
 
       // Update interior NPCs (WiseFellow, Witch, etc.)
-      for (const npc of game.hutInterior.npcs) {
+      for (const npc of game.activeFloor.npcs) {
         npc.update(dt, this.game);
       }
 
       // Poll Witch trigger — activate polymorph on first contact
-      for (const npc of game.hutInterior.npcs) {
+      for (const npc of game.activeFloor.npcs) {
         if (npc.triggered && !game.player.polymorphed) {
           this.game.polymorphSystem?.activatePolymorph(this.game, true);
         }

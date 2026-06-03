@@ -1,4 +1,5 @@
 import { GRID } from '../../game/GameConfig.js';
+import { isSpectaclesActive } from '../../data/cipher.js';
 
 /**
  * MazeInteriorOverlay — picture-in-picture renderer for the Maze maze.
@@ -87,6 +88,7 @@ export class MazeInteriorOverlay {
     }
 
     // ── 4. Maze objects ─────────────────────────────────────────────────
+    const spectaclesOn = isSpectaclesActive(game);
     for (const obj of mi.mazeObjects) {
       if (obj.destroyed) continue;
 
@@ -102,7 +104,8 @@ export class MazeInteriorOverlay {
           ? `hsl(290,40%,${35 + t * 25}%)`
           : obj.color;
       }
-      ctx.fillText(obj.char, cx, cy);
+      // Spectacles decode the cover to its hidden ingredient char.
+      ctx.fillText(spectaclesOn && obj.hiddenChar ? obj.hiddenChar : obj.char, cx, cy);
 
       // HP pip dots above object
       for (let i = 0; i < obj.maxHp; i++) {

@@ -2,6 +2,7 @@ import { GRID, COLORS, PHYSICS } from '../game/GameConfig.js';
 import { ENEMIES } from '../data/enemies.js';
 import { Item } from './Item.js';
 import { inSamePlane, planeOf, objectOnPlane } from '../systems/PlaneSystem.js';
+import { EXIT_SLOT_POSITIONS } from '../systems/ExitSystem.js';
 
 // ─── Enemy AI Debug Logger ─────────────────────────────────────────────────
 // Toggle in browser console: window.ENEMY_AI_DEBUG = true
@@ -148,7 +149,8 @@ export class Enemy {
       knockback: { active: false, duration: 0 },
       blind: { active: false, duration: 0 }, // Attacks miss (0 damage)
       corrosion: { active: false, duration: 0 }, // Acid Blade: +50% damage taken on next hits
-      dizzy: { active: false, duration: 0 }
+      dizzy: { active: false, duration: 0 },
+      goo: { active: false, duration: 0, slowAmount: 0.8 }
     };
 
     // Venom Blade stack counter — resets when poison wears off
@@ -379,6 +381,8 @@ export class Enemy {
     // ── Trap layer (Trap Goblin) ──────────────────────────────────────────────
     if (this.data.trapLayerMechanic?.enabled) {
       this.trapLayTimer = 0;
+      this.trapWindupActive = false;
+      this.trapWindupTimer = 0;
       this.postTrapBurstTimer = 0;
     }
 
@@ -400,6 +404,28 @@ export class Enemy {
       this.spewDamageAccum = 0;
       this.spewWindupActive = false;
       this.spewWindupTimer = 0;
+    }
+
+    // ── Leap attack (Giant Slime) ─────────────────────────────────────────────
+    if (this.data.leapAttack?.enabled) {
+      this.leapCooldown = 2.0; // brief grace at spawn
+      this.leapWindupActive = false;
+      this.leapWindupTimer = 0;
+      this.leapAirborneActive = false;
+      this.leapAirTimer = 0;
+      this.leapAirDuration = 0;
+      this.leapStartX = 0;
+      this.leapStartY = 0;
+      this.leapTargetX = 0;
+      this.leapTargetY = 0;
+      this.leapArcLift = 0; // current visual lift in px (renderer reads this)
+    }
+
+    // ── Slime trail drop tracking (slime-affinity enemies) ────────────────────
+    if (this.data.elementalAffinity?.immunity?.includes('slime')) {
+      this.trailLastDropX = 0;
+      this.trailLastDropY = 0;
+      this.trailDropInitialized = false;
     }
 
     // ── Reform behavior (split-child slimes) ──────────────────────────────────
@@ -429,6 +455,16 @@ export class Enemy {
 
     // ── Knockback multiplier ──────────────────────────────────────────────────
     this.knockbackMultiplier = this.data.knockbackMultiplier ?? 1.0;
+
+    // Bread-seek (wild rat → dropped loaf). Set by main.js when bread lands
+    // in the room (SPACE drop or SHIFT throw). The Enemy AI uses these to
+    // redirect movement toward the loaf; main.js replaces the wild rat with
+    // an NPCRat instance on contact. `breadSeekStartTime` gates the eat so
+    // a rat already adjacent to the bread can't be tamed in a single frame
+    // — the visible "walk to bread" beat is required for the eat to read.
+    this.seekingBread = false;
+    this.breadTarget = null;
+    this.breadSeekStartTime = 0;
   }
 
   setCollisionMap(collisionMap) {
@@ -618,6 +654,12 @@ export class Enemy {
       if (dizzy.duration <= 0) { dizzy.active = false; dizzy.duration = 0; }
     }
 
+    const goo = this.statusEffects.goo;
+    if (goo.active) {
+      goo.duration -= deltaTime;
+      if (goo.duration <= 0) { goo.active = false; goo.duration = 0; }
+    }
+
     return damageEvents;
   }
 
@@ -642,6 +684,8 @@ export class Enemy {
 
   isDizzy() { return this.statusEffects.dizzy.active; }
 
+  isGooey() { return this.statusEffects.goo.active; }
+
   // Get effective damage (0 if blind, normal damage otherwise)
   getEffectiveDamage() {
     return this.isBlind() ? 0 : this.damage;
@@ -652,6 +696,7 @@ export class Enemy {
     if (this.isKnockedBack()) return 0;
     if (this.isFrozen()) return 0;
     if (this.statusEffects.freeze.active) return 1 - this.statusEffects.freeze.slowAmount;
+    if (this.isGooey()) return 1 - this.statusEffects.goo.slowAmount;
     if (this.isDizzy()) return 0.35;
     return 1;
   }
@@ -792,6 +837,34 @@ export class Enemy {
     // Track if this enemy just detected player (for aggro SFX)
     let justAggrod = false;
 
+    // ── Bread-seek (wild rat) ────────────────────────────────────────────────
+    // Overrides default chase: pull the rat directly toward a dropped loaf.
+    // Eating happens in main.js (proximity check + setTamed). Falls through
+    // to default AI if the loaf was consumed or destroyed by something else.
+    // Sets velocity directly so physics moves the rat next frame, and resets
+    // state/attack timers so the post-update canAttack/createAttack in
+    // CombatSystem can't fire mid-seek (kept attacking the player otherwise).
+    if (this.seekingBread && this.breadTarget) {
+      const t = this.breadTarget;
+      if (t.consumed || t.destroyed) {
+        this.seekingBread = false;
+        this.breadTarget = null;
+      } else {
+        const dx = t.position.x - this.position.x;
+        const dy = t.position.y - this.position.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const speed = this.speed;
+        this.targetVelocity.vx = (dx / d) * speed;
+        this.targetVelocity.vy = (dy / d) * speed;
+        this.velocity.vx = this.targetVelocity.vx;
+        this.velocity.vy = this.targetVelocity.vy;
+        this.state = 'chase';
+        this.windupTimer = 0;
+        if (this.attackTimer < 0.5) this.attackTimer = 0.5;
+        return { dotDamage: [] };
+      }
+    }
+
     if (!this.target) {
       return { dotDamage: [] };
     }
@@ -845,6 +918,59 @@ export class Enemy {
 
     // Update status effects and capture DOT damage events
     const dotDamageEvents = this.updateStatusEffects(deltaTime);
+
+    // ── Leap attack (Giant Slime): cooldown / airborne arc / windup hold ──────
+    if (this.data.leapAttack?.enabled) {
+      if (this.leapCooldown > 0) this.leapCooldown = Math.max(0, this.leapCooldown - deltaTime);
+
+      // Airborne: lerp from start → target snapshot; suppress all other AI
+      if (this.leapAirborneActive) {
+        this.leapAirTimer -= deltaTime;
+        const dur = this.leapAirDuration || this.data.leapAttack.airTime || 0.5;
+        const t = Math.min(1, 1 - this.leapAirTimer / dur);
+        this.position.x = this.leapStartX + (this.leapTargetX - this.leapStartX) * t;
+        this.position.y = this.leapStartY + (this.leapTargetY - this.leapStartY) * t;
+        this.leapArcLift = Math.sin(t * Math.PI) * (this.data.leapAttack.arcLift || GRID.CELL_SIZE * 1.5);
+        this.velocity.vx = 0;
+        this.velocity.vy = 0;
+        if (this.targetVelocity) { this.targetVelocity.vx = 0; this.targetVelocity.vy = 0; }
+        if (this.leapAirTimer <= 0) {
+          this.leapAirborneActive = false;
+          this.leapArcLift = 0;
+          this.position.x = this.leapTargetX;
+          this.position.y = this.leapTargetY;
+          this.leapCooldown = this.data.leapAttack.cooldown;
+          return {
+            dotDamage: dotDamageEvents,
+            shouldLeapLand: true,
+            leapLandData: {
+              x: this.leapTargetX + GRID.CELL_SIZE / 2,
+              y: this.leapTargetY + GRID.CELL_SIZE / 2,
+              cfg: this.data.leapAttack,
+              plane: this.plane ?? 0
+            }
+          };
+        }
+        return { dotDamage: dotDamageEvents };
+      }
+
+      // Windup: compress in place; transition to airborne when timer expires
+      if (this.leapWindupActive) {
+        this.leapWindupTimer -= deltaTime;
+        this.velocity.vx = 0;
+        this.velocity.vy = 0;
+        if (this.targetVelocity) { this.targetVelocity.vx = 0; this.targetVelocity.vy = 0; }
+        if (this.leapWindupTimer <= 0) {
+          this.leapWindupActive = false;
+          this.leapStartX = this.position.x;
+          this.leapStartY = this.position.y;
+          this.leapAirDuration = this.data.leapAttack.airTime;
+          this.leapAirTimer = this.leapAirDuration;
+          this.leapAirborneActive = true;
+        }
+        return { dotDamage: dotDamageEvents };
+      }
+    }
 
     // While being carried by a thrown spear, TrapSystem owns position — skip all movement AI
     if (this.carriedBySpear) {
@@ -900,6 +1026,25 @@ export class Enemy {
       ? distance
       : Infinity;
 
+    // ── Leap attack (Giant Slime): initiate windup when player is out of melee but in leap range ─
+    if (this.data.leapAttack?.enabled
+        && !this.spewWindupActive
+        && this.leapCooldown <= 0
+        && inSamePlane(this, this.target)) {
+      const lcfg = this.data.leapAttack;
+      if (effectiveDistance >= lcfg.triggerRangeMin && effectiveDistance <= lcfg.triggerRangeMax) {
+        this.leapWindupActive = true;
+        this.leapWindupTimer = lcfg.windupTime;
+        // Snapshot target at windup start — telegraphed; player can dodge after this
+        this.leapTargetX = this.target.position.x;
+        this.leapTargetY = this.target.position.y;
+        this.velocity.vx = 0;
+        this.velocity.vy = 0;
+        if (this.targetVelocity) { this.targetVelocity.vx = 0; this.targetVelocity.vy = 0; }
+        return { dotDamage: dotDamageEvents };
+      }
+    }
+
     // Update attack timer
     if (this.attackTimer > 0) {
       this.attackTimer -= deltaTime;
@@ -912,18 +1057,6 @@ export class Enemy {
         // Windup complete, ready to attack
         this.state = 'attack';
         this.windupTimer = 0;
-
-        // Leap-on-attack: melee-equipped enemies (e.g. goblins with sword/axe)
-        // burst forward into the target as the swing lands. Ranged loadouts
-        // keep their distance and skip this.
-        if (this.leapOnAttack && this.target && !this.isFrozen() && !this.isStunned()) {
-          const lx = this.target.position.x - this.position.x;
-          const ly = this.target.position.y - this.position.y;
-          const ld = Math.sqrt(lx * lx + ly * ly) || 1;
-          const leapSpeed = Math.max(this.speed * 3.2, 180);
-          this.velocity.vx = (lx / ld) * leapSpeed;
-          this.velocity.vy = (ly / ld) * leapSpeed;
-        }
       }
     }
 
@@ -1488,6 +1621,9 @@ export class Enemy {
       if (this.equippedWeapon && this.equippedWeapon.update) {
         const itemAttack = this.equippedWeapon.update(deltaTime);
         if (itemAttack) {
+          // Weapon windup just resolved — the swing is firing this frame, so
+          // burst forward in sync with it.
+          this._executeLeapAttack();
           return {
             dotDamage: dotDamageEvents,
             itemAttack: this.convertToEnemyAttack(itemAttack)
@@ -1815,23 +1951,115 @@ export class Enemy {
     }
 
     // ── Trap layer (Trap Goblin) ──────────────────────────────────────────────
+    // Self-contained state machine + custom movement. The trap block fully owns
+    // the goblin's velocity each frame — it can't share targetVelocity with the
+    // kiter because the kiter's hover band has no radial-stability force, so any
+    // drift accumulates until the goblin coasts into safe range and aborts the
+    // windup. We write `velocity` AND `targetVelocity` directly so _blendVelocity
+    // converges immediately and the kiter's earlier writes are obliterated.
     if (this.data.trapLayerMechanic?.enabled) {
-      this.trapLayTimer -= deltaTime;
-      if (this.trapLayTimer <= 0) {
-        this.trapLayTimer = this.data.trapLayerMechanic.trapCooldown;
-        const trapTypes = this.data.trapLayerMechanic.trapTypes;
-        const trapType = trapTypes[Math.floor(Math.random() * trapTypes.length)];
-        this.postTrapBurstTimer = this.data.trapLayerMechanic.postTrapBurstDuration ?? 1.5;
-        return {
-          dotDamage: dotDamageEvents,
-          shouldLayTrap: true,
-          trapData: {
-            x: this.position.x + this.width / 2,
-            y: this.position.y + this.height / 2,
-            type: trapType
-          }
-        };
+      const cfg = this.data.trapLayerMechanic;
+      const safeRange = cfg.trapSafeRange ?? GRID.CELL_SIZE * 5;
+      const kiteDistance = this.movementConfig?.kiteDistance ?? GRID.CELL_SIZE * 7;
+      let playerDx = 0, playerDy = 0, playerDist = Infinity;
+      let playerTooClose = false;
+      let seesPlayer = false;
+      if (this.target) {
+        playerDx = this.position.x - this.target.position.x;
+        playerDy = this.position.y - this.target.position.y;
+        playerDist = Math.sqrt(playerDx * playerDx + playerDy * playerDy);
+        playerTooClose = playerDist < safeRange;
+        seesPlayer = this.hasVision(this.position, this.target.position, this.visionLength, { ignoreCone: true });
       }
+
+      // Post-trap flee timer ticks independent of movement dispatch.
+      if (this.postTrapBurstTimer > 0) {
+        this.postTrapBurstTimer = Math.max(0, this.postTrapBurstTimer - deltaTime);
+      }
+
+      let trapDropResult = null;
+      if (this.trapWindupActive) {
+        if (playerTooClose) {
+          this.trapWindupActive = false;
+          this.trapWindupTimer = 0;
+          this.trapLayTimer = 0;
+        } else {
+          this.trapWindupTimer -= deltaTime;
+          if (this.trapWindupTimer <= 0) {
+            this.trapWindupActive = false;
+            this.trapLayTimer = cfg.trapCooldown;
+            this.postTrapBurstTimer = cfg.postTrapBurstDuration ?? 1.5;
+            const trapType = cfg.trapTypes[Math.floor(Math.random() * cfg.trapTypes.length)];
+            trapDropResult = {
+              dotDamage: dotDamageEvents,
+              shouldLayTrap: true,
+              trapData: {
+                x: this.position.x + this.width / 2,
+                y: this.position.y + this.height / 2,
+                type: trapType
+              }
+            };
+          }
+        }
+      } else if (this.postTrapBurstTimer <= 0) {
+        const cooldownSpeed = seesPlayer ? (cfg.trapCooldownVisibleMult ?? 0.4) : 1.0;
+        this.trapLayTimer = Math.max(0, this.trapLayTimer - deltaTime / cooldownSpeed);
+        if (this.trapLayTimer <= 0 && !playerTooClose && this.target) {
+          this.trapWindupActive = true;
+          this.trapWindupTimer = cfg.trapWindup ?? 0.5;
+        }
+      }
+
+      // Custom movement — overrides kiter writes. Velocity is set directly so
+      // _blendVelocity has nothing to lag behind.
+      let vx = 0, vy = 0;
+      if (this.trapWindupActive) {
+        // Stand still during '...' telegraph.
+        vx = 0; vy = 0;
+      } else if (this.target && playerDist > 0) {
+        if (this.postTrapBurstTimer > 0 || playerTooClose) {
+          // Either '!' post-trap burst or proactive GTFO. Pure radial retreat.
+          const fleeMult = this.postTrapBurstTimer > 0
+            ? (cfg.postTrapBurstSpeed ?? 1.8)
+            : (cfg.fleeSpeedMult ?? 1.8);
+          const fleeSpeed = this.speed * fleeMult;
+          vx = (playerDx / playerDist) * fleeSpeed;
+          vy = (playerDy / playerDist) * fleeSpeed;
+        } else {
+          // Orbit at kiteDistance with active radial correction. PD-ish controller:
+          // tangential drives the circle, radial pulls toward the target radius.
+          const radialErr = playerDist - kiteDistance;     // +ve = too far, -ve = too close
+          const goblinToPlayerX = -playerDx / playerDist;
+          const goblinToPlayerY = -playerDy / playerDist;
+          const perpX = -playerDy / playerDist;            // CCW tangent (orbit direction)
+          const perpY = playerDx / playerDist;
+          // Tangential speed at 75% of max; radial correction proportional to error.
+          const tangentialSpeed = this.speed * 0.75;
+          const radialSpeed = Math.max(-this.speed, Math.min(this.speed, radialErr * 3.0));
+          vx = perpX * tangentialSpeed + goblinToPlayerX * radialSpeed;
+          vy = perpY * tangentialSpeed + goblinToPlayerY * radialSpeed;
+          // Cap combined magnitude at this.speed so orbit never exceeds base speed.
+          const mag = Math.sqrt(vx * vx + vy * vy);
+          if (mag > this.speed) { vx = (vx / mag) * this.speed; vy = (vy / mag) * this.speed; }
+        }
+
+        // Keep the goblin out of exit doorways.
+        const repel = this._exitRepulsionVector();
+        vx += repel.vx;
+        vy += repel.vy;
+      }
+      const speedMult = this.getSpeedMultiplier();
+      this.velocity.vx = vx * speedMult;
+      this.velocity.vy = vy * speedMult;
+      this.targetVelocity.vx = this.velocity.vx;
+      this.targetVelocity.vy = this.velocity.vy;
+      // Clear kiter-state flags so it can't fight us next frame.
+      this.hoverLocked = false;
+      this.isHovering = false;
+      this.isAttacking = false;
+      this.attackRushTimer = 0;
+
+      if (trapDropResult) return trapDropResult;
     }
 
     // ── Charge mechanic (Boar) ────────────────────────────────────────────────
@@ -2005,7 +2233,30 @@ export class Enemy {
     // Runs after the regular AI so it can stamp final velocity for formation orbit.
     this._tickLeaderFollowerBehaviors(deltaTime);
 
-    return { dotDamage: dotDamageEvents, justAggrod };
+    // ── Slime trail drop: slime-affinity enemies stamp a trail puddle every N px traveled ──
+    let shouldDropSlimeTrail = null;
+    if (this.data.elementalAffinity?.immunity?.includes('slime')) {
+      if (!this.trailDropInitialized) {
+        this.trailLastDropX = this.position.x;
+        this.trailLastDropY = this.position.y;
+        this.trailDropInitialized = true;
+      } else {
+        const tdx = this.position.x - this.trailLastDropX;
+        const tdy = this.position.y - this.trailLastDropY;
+        const SLIME_TRAIL_DROP_PX = 5;
+        if (tdx * tdx + tdy * tdy >= SLIME_TRAIL_DROP_PX * SLIME_TRAIL_DROP_PX) {
+          shouldDropSlimeTrail = {
+            x: this.position.x + GRID.CELL_SIZE / 2,
+            y: this.position.y + GRID.CELL_SIZE / 2,
+            plane: this.plane ?? 0
+          };
+          this.trailLastDropX = this.position.x;
+          this.trailLastDropY = this.position.y;
+        }
+      }
+    }
+
+    return { dotDamage: dotDamageEvents, justAggrod, shouldDropSlimeTrail };
   }
 
   /**
@@ -2082,7 +2333,11 @@ export class Enemy {
         }
       }
 
-      if (this._formationState === 'encircle') {
+      // Ranged followers (bow/gun) don't get pinned to a formation slot —
+      // keeper movement archetype handles their distance-keeping already.
+      const rangedFollower = this.attackType === 'item_ranged' || this.movementStyle === 'keeper';
+
+      if (this._formationState === 'encircle' && !rangedFollower) {
         const orbitSpeed = fl.orbitSpeed ?? 1.2;
         if (this._orbitAngle === undefined) {
           const ox = this.position.x - this.leaderRef.position.x;
@@ -2093,7 +2348,7 @@ export class Enemy {
         const slotX = this.leaderRef.position.x + Math.cos(this._orbitAngle) * radius;
         const slotY = this.leaderRef.position.y + Math.sin(this._orbitAngle) * radius;
         this._steerToSlot(slotX, slotY);
-      } else if (this._formationState === 'line') {
+      } else if (this._formationState === 'line' && !rangedFollower) {
         // Perpendicular wall between leader and player. The anchor sits part
         // way down the leader→player axis; followers spread along the
         // perpendicular at lineSpacing apart so the pack reads as a wall the
@@ -2117,9 +2372,13 @@ export class Enemy {
         const pdy = this.target.position.y - this.position.y;
         const distToPlayer = Math.sqrt(pdx * pdx + pdy * pdy);
 
-        // Once in attack range, drop the formation override so chase AI takes
-        // over and the goblin commits its leap-swing.
-        if (distToPlayer > this.attackRange) {
+        // Wall holds while the player is still pressing on the formation, but
+        // once they breach to within ~2.5× attack range the goblin breaks
+        // ranks and lets its own chase AI close + swing. Without this, only
+        // the middle-slot goblin could ever reach the player; the flanks
+        // sat at their lateral offset out of reach.
+        const breachDistance = this.attackRange * 2.5;
+        if (distToPlayer > breachDistance) {
           this._steerToSlot(slotX, slotY);
         }
       }
@@ -2158,6 +2417,35 @@ export class Enemy {
   }
 
   /**
+   * Returns a velocity vector that pushes this enemy radially away from any
+   * open room exit within `radius` pixels. Magnitude scales linearly with
+   * proximity, reaching `this.speed` at the exit center. Intended for fleeing
+   * enemies that would otherwise hide in doorways; opt-in per movement style.
+   */
+  _exitRepulsionVector(radius = GRID.CELL_SIZE * 3) {
+    const room = this.game?.currentRoom;
+    if (!room?.exits) return { vx: 0, vy: 0 };
+    const gx = this.position.x + GRID.CELL_SIZE / 2;
+    const gy = this.position.y + GRID.CELL_SIZE / 2;
+    let vx = 0, vy = 0;
+    for (const dir of ['north', 'east', 'west']) {
+      if (!room.exits[dir]?.letter) continue;
+      const slot = EXIT_SLOT_POSITIONS[dir];
+      const ex = slot.col * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+      const ey = slot.row * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+      const dx = gx - ex;
+      const dy = gy - ey;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d > 0 && d < radius) {
+        const strength = (radius - d) / radius;
+        vx += (dx / d) * this.speed * strength;
+        vy += (dy / d) * this.speed * strength;
+      }
+    }
+    return { vx, vy };
+  }
+
+  /**
    * Smoothly blends velocity toward targetVelocity at this.accelRate px/s².
    * Called once per update() when not knocked back.
    */
@@ -2182,19 +2470,10 @@ export class Enemy {
    * Routes to the correct movement implementation based on movementStyle.
    */
   _updateMovement(speedMultiplier, targetPos, deltaTime) {
-    // Post-trap burst: Trap Goblin scuttles away at high speed right after laying a trap
-    if (this.postTrapBurstTimer > 0) {
-      this.postTrapBurstTimer -= deltaTime;
-      const burstMult = this.data.trapLayerMechanic?.postTrapBurstSpeed ?? 1.8;
-      const dx = this.position.x - targetPos.x;
-      const dy = this.position.y - targetPos.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist > 0) {
-        this.targetVelocity.vx = (dx / dist) * this.speed * speedMultiplier * burstMult;
-        this.targetVelocity.vy = (dy / dist) * this.speed * speedMultiplier * burstMult;
-      }
-      return;
-    }
+    // Trap Goblin state (windup hold / post-trap flee / proactive flee) is fully
+    // handled in the trap-layer block in update() — those overrides run after
+    // this dispatch and unconditionally, so they're safe even if _updateMovement
+    // is skipped (e.g. when vision is lost).
 
     // Shield phase movement: Mirror Imp retreats while its reflect shield is active
     if (this.shieldActive && this.data.reflectShield?.shieldPhaseMovement) {
@@ -3031,8 +3310,11 @@ export class Enemy {
     const tDeltaX = nx !== 0 ? Math.abs(C / nx) : Infinity;
     const tDeltaY = ny !== 0 ? Math.abs(C / ny) : Infinity;
 
+    const mapRows = this.collisionMap ? this.collisionMap.length : GRID.ROWS;
+    const mapCols = this.collisionMap?.[0]?.length ?? GRID.COLS;
     const isBlocked = (cgx, cgy) => {
-      if (cgx < 0 || cgx >= GRID.COLS || cgy < 0 || cgy >= GRID.ROWS) return true;
+      // Use actual collision-map dimensions so interior maps (24×24, 10×10) bound correctly.
+      if (cgx < 0 || cgx >= mapCols || cgy < 0 || cgy >= mapRows) return true;
       if (this.collisionMap && this.collisionMap[cgy][cgx]) return true;
       if (this.backgroundObjects) {
         const myPlane = planeOf(this);
@@ -3129,8 +3411,12 @@ export class Enemy {
       const gridX = Math.floor(checkX / GRID.CELL_SIZE);
       const gridY = Math.floor(checkY / GRID.CELL_SIZE);
 
-      // Check if out of bounds
-      if (gridX < 0 || gridX >= GRID.COLS || gridY < 0 || gridY >= GRID.ROWS) {
+      // Check if out of bounds — use the actual collision map dimensions so dungeon/hut
+      // interiors (24×24, 10×10) bound correctly instead of falling through to GRID.COLS/ROWS
+      // and hitting undefined cells (which evaluate falsy and silently skip the wall check).
+      const mapRows = this.collisionMap ? this.collisionMap.length : GRID.ROWS;
+      const mapCols = this.collisionMap?.[0]?.length ?? GRID.COLS;
+      if (gridX < 0 || gridX >= mapCols || gridY < 0 || gridY >= mapRows) {
         return false;
       }
 
@@ -3209,16 +3495,25 @@ export class Enemy {
 
   isTargetInTallGrass() {
     if (!this.target || !this.backgroundObjects) return false;
-    const px = Math.floor(this.target.position.x / GRID.CELL_SIZE);
-    const py = Math.floor(this.target.position.y / GRID.CELL_SIZE);
+    const cs = GRID.CELL_SIZE;
+    const px = Math.floor(this.target.position.x / cs);
+    const py = Math.floor(this.target.position.y / cs);
+    // RoomGenerator emits two '|' BackgroundObjects per visual blade, so we
+    // count raw instances in target's cell + 4 cardinal neighbours. ≥ 6
+    // means ~3 visual blades, matching the renderer's concealment rule so
+    // idle proximity detection lines up with what the player can see.
+    let onCell = 0;
+    let nearby = 0;
     for (const obj of this.backgroundObjects) {
       if (obj.destroyed || obj.char !== '|') continue;
-      if (Math.floor(obj.position.x / GRID.CELL_SIZE) === px &&
-          Math.floor(obj.position.y / GRID.CELL_SIZE) === py) {
-        return true;
-      }
+      const ox = Math.floor(obj.position.x / cs);
+      const oy = Math.floor(obj.position.y / cs);
+      const dx = Math.abs(ox - px);
+      const dy = Math.abs(oy - py);
+      if (dx === 0 && dy === 0) onCell++;
+      if (dx + dy <= 1) nearby++;
     }
-    return false;
+    return onCell > 0 && nearby >= 6;
   }
 
   canAttack() {
@@ -3243,6 +3538,30 @@ export class Enemy {
     return this.isDizzy() ? (Math.random() - 0.5) * (Math.PI * 4 / 3) : 0; // ±120°
   }
 
+  // Burst forward into the target at the instant a melee swing fires. Called
+  // from both the equipped-weapon swing path (Item.update returns an attack)
+  // and the native createMeleeAttack path so the leap is always coupled to
+  // the actual moment of impact, not the earlier Enemy windup → attack state
+  // transition (which fires before Item.windup on equipped melee).
+  _executeLeapAttack() {
+    if (!this.leapOnAttack || !this.target) return;
+    if (this.isFrozen() || this.isStunned()) return;
+    // Knockback freezes _blendVelocity decay, so stamping a leap on top would
+    // glide for the full knockback window. Bail out and let the hit reaction play.
+    if (this.isKnockedBack()) return;
+    const lx = this.target.position.x - this.position.x;
+    const ly = this.target.position.y - this.position.y;
+    const ld = Math.sqrt(lx * lx + ly * ly);
+    if (ld < 1) return;
+    // Distance-clamped impulse: speed scales toward a 1-cell hop so the burst
+    // can never carry past the target. Friction (~0.9/frame) then decays it.
+    const MAX_LEAP_TRAVEL = GRID.CELL_SIZE * 1.25;
+    const desiredTravel = Math.min(ld, MAX_LEAP_TRAVEL);
+    const leapSpeed = Math.min(desiredTravel * 6, 130); // ≈ friction-integrated travel of `desiredTravel`
+    this.velocity.vx = (lx / ld) * leapSpeed;
+    this.velocity.vy = (ly / ld) * leapSpeed;
+  }
+
   createAttack() {
     if (!this.canAttack() || !this.target) return null;
 
@@ -3259,21 +3578,45 @@ export class Enemy {
         height: this.height
       };
 
+      // Bows use the player's hold-to-charge mechanic, but enemies have no
+      // input cycle to release the draw. Release at zero charge so the arrow
+      // fires at base speed — full-charge release gave a 2x velocity bonus
+      // that made archer goblins nearly undodgeable.
+      if (this.equippedWeapon.data.weaponType === 'BOW') {
+        this.equippedWeapon.use(fakePlayer); // starts the draw
+        if (this.equippedWeapon.isCharging) {
+          const released = this.equippedWeapon.releaseBow();
+          if (released) {
+            this.itemUseCooldown = this.itemUsage.useCooldown;
+            return this.convertToEnemyAttack(released);
+          }
+        }
+        return null;
+      }
+
       const attack = this.equippedWeapon.use(fakePlayer);
       if (attack) {
         this.itemUseCooldown = this.itemUsage.useCooldown;
+        // Item.use returns null when a windup is starting; if we got an
+        // actual attack here, the swing is firing this frame — leap with it.
+        this._executeLeapAttack();
         return this.convertToEnemyAttack(attack);
       }
       return null;
     }
 
+    let nativeAttack = null;
     switch (this.attackType) {
       case 'melee':
         // Lava-immune enemies (e.g. Tortoise) switch to mini fire breath when standing in lava
         if (this.inLava && this.data?.lavaImmune) {
-          return this.createMiniFireBreath();
+          nativeAttack = this.createMiniFireBreath();
+        } else {
+          nativeAttack = this.createMeleeAttack();
+          // Native melee swing fires immediately — leap with it.
+          if (nativeAttack) this._executeLeapAttack();
         }
-        return this.createMeleeAttack();
+        return nativeAttack;
       case 'ranged':
         if (this.data.projectileType === 'rock') return this.createRockProjectile();
         if (this.data.projectileType === 'potion') return this.createPotionAttack();
@@ -3736,8 +4079,11 @@ export class Enemy {
     }
 
     // ── Giant Slime: split a child off on damage ──────────────────────────────
+    // One blob per HP lost, each with 1 HP. Killing the blobs before they reform
+    // is the only way to actually deplete the boss — uncaptured blobs return to
+    // the parent and restore the HP. Splitting is inevitable; no cap.
     if (this.hp > 0 && this.data.splitOnDamage?.enabled) {
-      this._trySplitOnDamage();
+      this._trySplitOnDamage(amount);
     }
 
     // ── Giant Slime: accumulate damage toward goo-spew cone ───────────────────
@@ -3940,6 +4286,17 @@ export class Enemy {
     return null;
   }
 
+  getTrapLayerIndicator() {
+    // Trap Goblin: '...' while charging a trap, yellow '!' while scuttling away after.
+    if (this.trapWindupActive) {
+      return { char: '...', color: '#ccaa00', offsetY: -GRID.CELL_SIZE };
+    }
+    if (this.postTrapBurstTimer > 0) {
+      return { char: '!', color: '#ffff00', offsetY: -GRID.CELL_SIZE };
+    }
+    return null;
+  }
+
   getDetectionIndicator() {
     if (this.detectionIndicatorTimer > 0 && !this.aggroMemoryActive) {
       // Red indicator during aggressive attack rush, yellow otherwise
@@ -4000,28 +4357,23 @@ export class Enemy {
   }
 
   // ── Giant Slime: split-on-damage ─────────────────────────────────────────────
-  _trySplitOnDamage() {
+  _trySplitOnDamage(damageAmount = 1) {
     const cfg = this.data.splitOnDamage;
     if (!cfg?.enabled) return;
     if (!this.splitChildren) this.splitChildren = new Set();
-    if (this.hp < cfg.minHpToSplit) return;
-    if (this.splitChildren.size >= cfg.maxActiveChildren) return;
     if (!this.game?.enemySpawnSystem) return;
 
-    // Queue a spawn request and tag the resulting child with reform fields
-    // once it's created. We rely on the EnemySpawnSystem.flush path that
-    // calls roomGenerator.spawnEnemiesFrom for placement; the freshly-spawned
-    // enemy is pushed into the room and we link it here by walking the most
-    // recent spawns. Simpler: enqueue, then inject linkage on next flush.
+    // One 1-HP child per HP lost. No active-child cap — the player MUST kill the
+    // blobs (or run out the reform timer) to actually take HP off the boss.
+    const count = Math.max(1, Math.floor(damageAmount));
     this.game.enemySpawnSystem.queueRequest(this, {
       spawnChar: cfg.spawnChar,
-      spawnCount: 1,
+      spawnCount: count,
       spawnRange: this.data.attackRange ?? 24,
       spawnerPosition: { x: this.position.x, y: this.position.y },
       _splitChildLink: {
         parent: this,
-        reformDelay: cfg.reformDelay,
-        reformValue: cfg.reformValue
+        reformDelay: cfg.reformDelay
       }
     });
   }
@@ -4030,8 +4382,9 @@ export class Enemy {
     if (!this.splitChildren) this.splitChildren = new Set();
     child.parentRef = this;
     child.reformDelay = cfg.reformDelay;
-    child.reformValue = cfg.reformValue;
+    child.reformValue = 1; // Each child carries exactly 1 HP back to the parent
     child.reformReturning = false;
+    child.hp = 1; // Children spawn fragile — killing them is the win condition
     this.splitChildren.add(child);
   }
 

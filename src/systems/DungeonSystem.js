@@ -5,6 +5,7 @@ import { Item } from '../entities/Item.js';
 import { Particle } from '../entities/Particle.js';
 import { getZoneRandomEnemy } from '../data/enemies.js';
 import { createDebris } from '../entities/Debris.js';
+import { pickRandomTemplateName, applyTemplateToCollisionMap } from '../data/dungeonFloorTemplates.js';
 
 // Reward weapons by floor (1-indexed in design talk, 0-indexed here).
 // Only the puzzle floor (index 2) and the deepest hidden floor (index 4) drop a reward;
@@ -25,7 +26,7 @@ function _getFloorRewardItem(floorIndex) {
 /**
  * DungeonSystem — multi-floor dungeon interior system.
  *
- * Uses the shared game.hutInterior / player.inHut state so the existing
+ * Uses the shared game.activeFloor / player.inDungeon state so the existing
  * physics redirect, combat redirect, and HutInteriorOverlay all work unchanged.
  *
  * Floor layout
@@ -83,16 +84,50 @@ export class DungeonSystem {
       }
     }
 
+    // ── Interior wall template ───────────────────────────────────────────────
+    // Reserve the staircase corridor (col STAIRS_COL between the two stair rows
+    // plus the spawn approach) so templates never block reachability. The green
+    // companion-switch floor uses the bare 'open' layout — its puzzle assumes
+    // a clean playfield.
+    const zoneForTemplate = this.game.currentRoom?.zone || 'gray';
+    const isCompanionPuzzleFloor = floorIndex === 2 && zoneForTemplate === 'green';
+    if (!isCompanionPuzzleFloor) {
+      const reserved = [];
+      // Col 12 stair corridor (rows 3..21 covers both stair pairs + spawn)
+      for (let r = 3; r <= 21; r++) reserved.push({ row: r, col: STAIRS_COL });
+      // Side cells of stair rows so the player can step off the stair tile
+      const stairRows = [STAIRS_DOWN_ROW, STAIRS_UP_ROW, STAIRS_DEEP_ROW];
+      for (const sr of stairRows) {
+        reserved.push({ row: sr, col: STAIRS_COL - 1 });
+        reserved.push({ row: sr, col: STAIRS_COL + 1 });
+      }
+      const templateName = pickRandomTemplateName();
+      applyTemplateToCollisionMap(collisionMap, templateName, reserved);
+    }
+
     const backgroundObjects = [];
+
+    // Pick a random open cell (not a wall, not the staircase column). Used for
+    // decor and enemy spawns so the template's walls don't trap entities.
+    const pickOpenCell = (minRow, maxRow, minCol, maxCol) => {
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const r = minRow + Math.floor(Math.random() * (maxRow - minRow + 1));
+        const c = minCol + Math.floor(Math.random() * (maxCol - minCol + 1));
+        if (collisionMap[r]?.[c]) continue;
+        if (c === STAIRS_COL) continue;
+        return { row: r, col: c };
+      }
+      return null;
+    };
 
     // Sparse dungeon decor (bones, rocks, crystals)
     const decorChars = ['8', '0', '*', '8'];
     const decorCount = 5 + Math.floor(Math.random() * 5);
     for (let i = 0; i < decorCount; i++) {
-      const col = 2 + Math.floor(Math.random() * (cols - 4));
-      const row = 6 + Math.floor(Math.random() * (rows - 10));
+      const cell = pickOpenCell(6, rows - 5, 2, cols - 3);
+      if (!cell) continue;
       const char = decorChars[Math.floor(Math.random() * decorChars.length)];
-      backgroundObjects.push(new BackgroundObject(char, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
+      backgroundObjects.push(new BackgroundObject(char, cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE));
     }
 
     // Floor 0: ∩ exit door at south border + v stairs near top
@@ -135,9 +170,9 @@ export class DungeonSystem {
       const enemyChar = getZoneRandomEnemy(depth + floorIndex, zone);
       if (!enemyChar) continue;
       // Keep enemies away from staircase areas and reward item
-      const col = 3 + Math.floor(Math.random() * (cols - 6));
-      const row = 7 + Math.floor(Math.random() * (rows - 12));
-      const enemy = new Enemy(enemyChar, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE, depth + floorIndex);
+      const cell = pickOpenCell(7, rows - 5, 3, cols - 4);
+      if (!cell) continue;
+      const enemy = new Enemy(enemyChar, cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE, depth + floorIndex);
       enemy.setCollisionMap(collisionMap);
       enemy.setBackgroundObjects(backgroundObjects);
       enemies.push(enemy);
@@ -182,19 +217,16 @@ export class DungeonSystem {
       );
       if (candidates.length > 0) {
         const target = candidates[Math.floor(Math.random() * candidates.length)];
+        // puzzleSignal=true is handled in BackgroundObject.takeDamage: HP is preserved,
+        // glitterHit pulses true on every hit, and the unlock-condition poll in update()
+        // consumes the flag. No runtime method override required.
+        // isGlittering drives the sparkle particle visual (shared with K-room key glitter).
         target.isGlittering = true;
+        target.puzzleSignal = true;
         target.glitterColor = '#00ffcc';
         // Persistent teal tint so players can identify the target
         target.color = '#00ffcc';
         target.animationColor = '#00ffcc';
-        // Monkey-patch takeDamage: object never dies but sets glitterHit flag
-        const origTakeDamage = target.takeDamage.bind(target);
-        target.takeDamage = (amount, isBlade) => {
-          origTakeDamage(amount, isBlade);
-          target.hp = target.maxHp; // restore — object never dies
-          target.glitterHit = true; // polled in update() to unlock stairs
-          return { destroyed: false, effect: null };
-        };
       } else {
         // Fallback to item_slot if no valid candidate
         unlockCondition = { type: 'item_slot', col: 20, row: 12, slotItem: null };
@@ -203,7 +235,20 @@ export class DungeonSystem {
       unlockCondition = { type: 'item_slot', col: 20, row: 12, slotItem: null };
     }
 
+    // Viewport metadata: where the PiP panel renders on the main canvas.
+    // Phase A only stores this; Phase B will route ExploreRenderer through it.
+    const interiorPxW = cols * GRID.CELL_SIZE;
+    const interiorPxH = rows * GRID.CELL_SIZE;
+    const viewport = {
+      offsetX: Math.floor((GRID.WIDTH  - interiorPxW) / 2),
+      offsetY: Math.floor((GRID.HEIGHT - interiorPxH) / 2),
+      gridCols: cols,
+      gridRows: rows,
+      cellSize: GRID.CELL_SIZE,
+    };
+
     return {
+      type: 'DUNGEON_FLOOR',
       floorIndex,
       gridCols: cols,
       gridRows: rows,
@@ -214,6 +259,7 @@ export class DungeonSystem {
       ingredients: [],
       npcs: [],
       doors: [],
+      viewport,
       // Positions used by checkStairs / checkInteriorExit
       exitRow: floorIndex === 0 ? EXIT_ROW : null,
       exitCol: floorIndex === 0 ? STAIRS_COL : null,
@@ -246,9 +292,9 @@ export class DungeonSystem {
   /** Returns true if player is close enough to the floor-0 interior exit door to interact. */
   nearInteriorExit() {
     const { game } = this;
-    if (!game.player?.inDungeon || !game.hutInterior) return false;
-    if (game.hutInterior.gridCols !== INTERIOR_COLS) return false;
-    const floor = game.hutInterior;
+    if (!game.player?.inDungeon || !game.activeFloor) return false;
+    if (game.activeFloor.gridCols !== INTERIOR_COLS) return false;
+    const floor = game.activeFloor;
     if (floor.exitRow === null || floor.exitCol === null) return false;
     return this._nearCell(game.player, floor.exitCol * GRID.CELL_SIZE, floor.exitRow * GRID.CELL_SIZE);
   }
@@ -261,6 +307,7 @@ export class DungeonSystem {
       x: game.player.position.x,
       y: game.player.position.y
     };
+    // Surface combat clear happens in _activateFloor (also covers inter-floor transitions)
 
     if (!game.dungeonFloors[0]) {
       const depth = game.getCurrentZoneDepth ? game.getCurrentZoneDepth() : 1;
@@ -285,9 +332,9 @@ export class DungeonSystem {
   /** Returns 'down', 'up', or null depending on which staircase the player is overlapping. */
   nearStairsType() {
     const { game } = this;
-    if (!game.player?.inDungeon || !game.hutInterior) return null;
-    if (game.hutInterior.gridCols !== INTERIOR_COLS) return null;
-    const floor = game.hutInterior;
+    if (!game.player?.inDungeon || !game.activeFloor) return null;
+    if (game.activeFloor.gridCols !== INTERIOR_COLS) return null;
+    const floor = game.activeFloor;
     const player = game.player;
 
     if (floor.stairsDownRow !== null && !floor.stairsLocked) {
@@ -316,14 +363,18 @@ export class DungeonSystem {
     const { game } = this;
     const floor = game.dungeonFloors[floorIndex];
 
+    // Wipe combat state on every floor activation (initial entry + inter-floor).
+    // In-flight projectiles/arrows shouldn't carry across context boundaries.
+    game.combatSystem.clear();
+
     // Swap physics entities — enemies
-    if (game.hutInterior?.enemies) {
-      for (const e of game.hutInterior.enemies) game.physicsSystem.removeEntity(e);
+    if (game.activeFloor?.enemies) {
+      for (const e of game.activeFloor.enemies) game.physicsSystem.removeEntity(e);
     }
     for (const e of floor.enemies) game.physicsSystem.addEntity(e);
 
     // Swap floor items + ingredients: save current floor's hutPlane entities, load new floor's
-    if (game.hutInterior) {
+    if (game.activeFloor) {
       const prevFloorIndex = game.dungeonCurrentFloor;
       if (prevFloorIndex >= 0 && game.dungeonFloors[prevFloorIndex]) {
         game.dungeonFloors[prevFloorIndex].items       = game.items.filter(i => i.hutPlane);
@@ -339,7 +390,7 @@ export class DungeonSystem {
       if (!game.ingredients.includes(ing)) game.ingredients.push(ing);
     }
 
-    game.hutInterior = floor;
+    game.activeFloor = floor;
     game.dungeonCurrentFloor = floorIndex;
 
     game.player.setCollisionMap(floor.collisionMap);
@@ -427,9 +478,23 @@ export class DungeonSystem {
   _exitDungeon() {
     const { game } = this;
 
-    // Remove current floor enemies from physics
-    if (game.hutInterior?.enemies) {
-      for (const e of game.hutInterior.enemies) game.physicsSystem.removeEntity(e);
+    // Wipe interior combat state on exit so dungeon projectiles/arrows don't
+    // leak into surface coords on the return canvas.
+    game.combatSystem.clear();
+
+    // Snapshot the current floor's loot before clearing globals, so that
+    // re-entering the same D room restores picked-up state correctly.
+    // Floors persist on game.dungeonFloors for the duration of the D-room visit;
+    // they are wiped only on room change / REST / death (see main.js).
+    const currentFloorIndex = game.dungeonCurrentFloor;
+    if (currentFloorIndex >= 0 && game.dungeonFloors[currentFloorIndex]) {
+      game.dungeonFloors[currentFloorIndex].items       = game.items.filter(i => i.hutPlane);
+      game.dungeonFloors[currentFloorIndex].ingredients = game.ingredients.filter(i => i.hutPlane);
+    }
+
+    // Remove current floor enemies from physics (they remain on floor.enemies)
+    if (game.activeFloor?.enemies) {
+      for (const e of game.activeFloor.enemies) game.physicsSystem.removeEntity(e);
     }
 
     // Restore exterior position
@@ -450,14 +515,15 @@ export class DungeonSystem {
     game.campNPCSystem?.snapCompanionToPlayer?.();
     if (game.companion) game.companion.commandTarget = null;
 
-    // Clear hutPlane loot
+    // Clear hutPlane loot from active globals (preserved on floor objects above)
     game.ingredients = game.ingredients.filter(i => !i.hutPlane);
     game.items = game.items.filter(i => !i.hutPlane);
 
-    // Clear floor stack
-    game.dungeonFloors = [];
+    // Floors persist across exit/re-entry within the same D-room visit.
+    // dungeonFloors and dungeonCurrentFloor are NOT cleared here; only activeFloor
+    // is detached so exterior physics paths don't see stale interior state.
     game.dungeonCurrentFloor = -1;
-    game.hutInterior = null;
+    game.activeFloor = null;
 
     game.renderer.backgroundDirty = true;
   }
@@ -473,16 +539,29 @@ export class DungeonSystem {
       game.player._hutEntryCooldown -= dt;
     }
 
-    if (game.player.inDungeon && game.hutInterior) {
+    if (game.player.inDungeon && game.activeFloor) {
       // Only process if this is a dungeon interior (24 cols)
-      if (game.hutInterior.gridCols !== INTERIOR_COLS) return;
+      if (game.activeFloor.gridCols !== INTERIOR_COLS) return;
 
-      const floor = game.hutInterior;
+      const floor = game.activeFloor;
 
-      // Update interior enemies
+      // Update interior enemies. Capture the return value so side-effect
+      // requests (slime trail, fire/ice trail, aggro sound, item attacks) flow
+      // — surface loop in main.js processes the same fields.
       for (const enemy of floor.enemies) {
         enemy.target = game.player;
-        enemy.update(dt);
+        const r = enemy.update(dt);
+        if (!r) continue;
+        if (r.justAggrod) game.audioSystem?.playSFX('aggro');
+        if (r.itemAttack) game.combatSystem.createEnemyAttack(r.itemAttack);
+        if (r.shouldDropSlimeTrail) {
+          const t = r.shouldDropSlimeTrail;
+          game._dropSlimeTrail(t.x, t.y, t.plane);
+        }
+        if (r.shouldPlaceTrail && r.trailData) {
+          const td = r.trailData;
+          game._spawnEnemyTrailPuddle(td.x, td.y, td.type, td.radius, enemy.plane ?? 0);
+        }
       }
 
       // Process interior enemy deaths
@@ -603,8 +682,8 @@ export class DungeonSystem {
       return true;
     }
 
-    if (!game.player.inDungeon || !game.hutInterior) return false;
-    if (game.hutInterior.gridCols !== INTERIOR_COLS) return false;
+    if (!game.player.inDungeon || !game.activeFloor) return false;
+    if (game.activeFloor.gridCols !== INTERIOR_COLS) return false;
 
     // Interior exit (floor 0 only) — SPACE near the ∩ door
     if (this.nearInteriorExit()) {
@@ -626,8 +705,8 @@ export class DungeonSystem {
    */
   handleShiftPress() {
     const { game } = this;
-    if (!game.player?.inDungeon || !game.hutInterior) return false;
-    const floor = game.hutInterior;
+    if (!game.player?.inDungeon || !game.activeFloor) return false;
+    const floor = game.activeFloor;
     const uc = floor.unlockCondition;
     if (uc?.type !== 'item_slot' || uc.slotItem) return false;
 

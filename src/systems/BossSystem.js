@@ -371,6 +371,7 @@ export class BossSystem {
           atk.velocity.vx, atk.velocity.vy,
           atk.decel ?? 2.2
         );
+        blob.hutPlane = !!this.game.activeFloor;
         this.game.gooBlobs.push(blob);
         while (this.game.gooBlobs.length > 20) this.game.gooBlobs.shift();
       } else {
