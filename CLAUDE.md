@@ -4,6 +4,17 @@
 
 Browser-based roguelike, vanilla JavaScript + Vite. `npm run dev` / `npm run build`. CheatMenu: press `\` in-game.
 
+## Deploying
+
+```
+npm run deploy
+```
+
+Builds for production and pushes `dist/` to the `gh-pages` branch. Live at https://ceruleanoak.github.io/ascii-roguelike/
+
+- Do not create GitHub Actions workflows or any other deploy mechanism — this script is the deploy motion.
+- Run it directly whenever the user says "deploy", "publish", "push to pages", or similar.
+
 ## Design Philosophy
 
 Pure roguelike — death is a full reset. The "save file" is mental: recipe memory, zone knowledge, pattern recognition.
