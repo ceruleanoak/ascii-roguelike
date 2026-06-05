@@ -1,6 +1,8 @@
 // Death ledger — captures a full snapshot on true player death for design analysis.
-// Records are POSTed to the Vite dev server (appended to claudedocs/death-ledger.jsonl)
-// and held in sessionDeaths for in-browser download via the cheat menu.
+// Records are POSTed to Google Sheets (all environments) and to the Vite dev server
+// (dev only, appends to claudedocs/death-ledger.jsonl).
+
+const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbyInq93Ldkax78sERsdlu20DAvaDSMaNdIFbCkIVTkAnwZ2iNroKgYMXRglFGvD6KLT/exec';
 
 export const sessionDeaths = [];
 
@@ -47,6 +49,15 @@ export function captureDeath(game) {
 
   sessionDeaths.push(record);
 
+  // Google Sheets — works in all environments (no-cors avoids preflight)
+  fetch(SHEETS_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(record),
+  }).catch(() => {});
+
+  // Local dev server — appends to claudedocs/death-ledger.jsonl during npm run dev
   fetch('/api/death-ledger', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
