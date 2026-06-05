@@ -19,6 +19,7 @@ import { AudioSystem } from './systems/AudioSystem.js';
 import { FishingSystem } from './systems/FishingSystem.js';
 import { LootSystem } from './systems/LootSystem.js';
 import { TrapSystem } from './systems/TrapSystem.js';
+import { WireSystem } from './systems/WireSystem.js';
 import { InteractionSystem } from './systems/InteractionSystem.js';
 import { CharacterSystem } from './systems/CharacterSystem.js';
 import { MenuSystem } from './systems/MenuSystem.js';
@@ -47,17 +48,65 @@ import { BackgroundObject } from './entities/BackgroundObject.js';
 import { GooBlob } from './entities/GooBlob.js';
 import { Crow } from './entities/Crow.js';
 import { NPCRat } from './entities/NPCRat.js';
-import { Particle, createExplosion, createWetDrop, createActivationBurst, createSteamPuff, createChaff, createDodgeTrail, createFootstep } from './entities/Particle.js';
+import { Particle, createExplosion, createWetDrop, createActivationBurst, createSteamPuff, createChaff, createDodgeTrail, createFootstep, createEmberBurst, createIceBurst, createFrostAuraParticle, createFlameAuraParticle, createShockAuraParticle } from './entities/Particle.js';
 import { createDebris } from './entities/Debris.js';
 import { Puddle } from './entities/Puddle.js';
 import { Captive } from './entities/Captive.js';
 import { Leshy } from './entities/Leshy.js';
 import { CharacterNPC } from './entities/CharacterNPC.js';
+import { WiseFellow } from './entities/WiseFellow.js';
 import { ITEM_TYPES, INGREDIENTS, ITEMS } from './data/items.js';
 import { CHARACTER_TYPES } from './data/characters.js';
 import { EXIT_LETTERS } from './data/exitLetters.js';
 import { ZONES } from './data/zones.js';
 import { GAME_STATES, GRID, CRAFTING, INTERACTION_RANGE, ROOM_TYPES } from './game/GameConfig.js';
+import { captureDeath, downloadSessionLedger } from './systems/DeathLedgerSystem.js';
+
+// Enemies that play the magical death SFX when no per-enemy sfx.death is set.
+// Covers arcane casters and pure elemental beings; element-tinted beasts
+// (Fire Bat, Frost Wolf, etc.) keep the generic destroy sound.
+const MAGIC_DEATH_NAMES = new Set([
+  'Wizard', 'Shaman', 'Necromancer', 'Hex Witch', 'Alchemist',
+  'Cryomancer', 'Storm Caller',
+  'Ember Sprite', 'Pyroclast', 'Fire Elemental',
+  'Breeze Wisp', 'Ice Wraith', 'Frozen Construct', 'Steam Specter',
+  'Spark', 'Voltaic Golem', 'Mirror Imp'
+]);
+
+// Particle Fireworks (debug toggle): each entry produces one effect at (x, y),
+// cycled in order. Mix of bursts (return arrays) and single emitters.
+const FIREWORK_FACTORIES = [
+  { name: 'WetDrop',        fn: (x, y) => createWetDrop(x, y) },
+  { name: 'SteamPuff',      fn: (x, y) => createSteamPuff(x, y) },
+  { name: 'ActivationBurst',fn: (x, y) => createActivationBurst(x, y) },
+  { name: 'EmberBurst',     fn: (x, y) => createEmberBurst(x, y) },
+  { name: 'IceBurst',       fn: (x, y) => createIceBurst(x, y) },
+  { name: 'Explosion',      fn: (x, y) => createExplosion(x, y) },
+  { name: 'Chaff',          fn: (x, y) => createChaff(x, y) },
+  { name: 'Footstep',       fn: (x, y) => createFootstep(x, y) },
+  { name: 'FrostAura',      fn: (x, y) => createFrostAuraParticle(x, y) },
+  { name: 'FlameAura',      fn: (x, y) => createFlameAuraParticle(x, y) },
+  { name: 'ShockAura',      fn: (x, y) => createShockAuraParticle(x, y) },
+  { name: 'DodgeTrail',     fn: (x, y) => createDodgeTrail(x, y) }
+];
+
+// Starter satchel: 3 distinct ingredients from a fixed pool. Metal is always x1;
+// everything else drops x2 (per-run randomization for replay variety).
+function rollStarterSatchelChars() {
+  const pool = ['g', '0', '|', '~', 'f', 'M'];
+  const picks = [];
+  const remaining = pool.slice();
+  for (let i = 0; i < 3; i++) {
+    const idx = Math.floor(Math.random() * remaining.length);
+    picks.push(remaining.splice(idx, 1)[0]);
+  }
+  const chars = [];
+  for (const c of picks) {
+    const count = c === 'M' ? 1 : 2;
+    for (let i = 0; i < count; i++) chars.push(c);
+  }
+  return chars;
+}
 
 class Game {
   constructor() {
@@ -87,6 +136,7 @@ class Game {
     // New focused systems (instantiated after core systems so they can receive `this`)
     this.lootSystem = new LootSystem(this);
     this.trapSystem = new TrapSystem(this);
+    this.wireSystem = new WireSystem(this);
     this.interactionSystem = new InteractionSystem(this);
     this.characterSystem = new CharacterSystem(this);
     this.menuSystem = new MenuSystem(this);
@@ -194,6 +244,9 @@ class Game {
     this.trapCharging = null; // { timer: float } while player is charging a throw, null otherwise
     this.inFlightTraps = [];  // [{ x, y, vx, vy, decel, targetX, targetY, char, color, trapData, plane }]
     this.restBundle = null; // One-time starter bundle object (destroyed on SPACE to drop ingredients)
+    this.particleFireworks = false; // Debug toggle: cycles every particle factory at random screen positions
+    this._fwTimer = 0;
+    this._fwIndex = -1;
     this.hasLeftRestOnce = false; // Becomes true on first EXPLORE entry; gates the rest-bundle pickup hint arrow
     this.dodgeBlockedFeedbackTimer = 0; // Cooldown for red X feedback
     this.showVectors = false; // Debug: Toggle with 'v' key
@@ -407,6 +460,17 @@ class Game {
         } else if (result && result.action === 'toggle_demo_recording') {
           this.toggleDemoRecording();
           this.cheatMenu.rebuild();
+          e.preventDefault();
+          return;
+        } else if (result && result.action === 'toggle_particle_fireworks') {
+          this.particleFireworks = !this.particleFireworks;
+          this._fwTimer = 0;
+          this._fwIndex = -1;  // first tick advances to 0
+          this.cheatMenu.rebuild();
+          e.preventDefault();
+          return;
+        } else if (result && result.action === 'download_death_ledger') {
+          downloadSessionLedger();
           e.preventDefault();
           return;
         }
@@ -823,6 +887,10 @@ class Game {
       return;
     }
 
+    // SFX are normally loaded on first TITLE→REST transition; the demo skips
+    // REST, so load them here. Idempotent — no-op once loaded.
+    this.audioSystem.loadGameplaySFX(import.meta.env.BASE_URL);
+
     // Bootstrap player + a default explore room so we have scaffolding to
     // overwrite. This drains the global RNG, which is fine — we reseed
     // afterwards and run the deterministic demo setup from a fresh state.
@@ -902,6 +970,12 @@ class Game {
       quickSlots: p.quickSlots.map(slot => (slot ? slot.char : null)),
       activeSlotIndex: p.activeSlotIndex || 0,
       position: { x: p.position.x, y: p.position.y },
+      magicMeter: {
+        active: !!p.magicMeter?.active,
+        slots: Array.isArray(p.magicMeter?.slots) ? [...p.magicMeter.slots] : [],
+        current: p.magicMeter?.current || 0,
+        max: p.magicMeter?.max || 10,
+      },
     };
   }
 
@@ -1021,6 +1095,15 @@ class Game {
         Math.min(startState.activeSlotIndex, this.player.quickSlots.length - 1)
       );
     }
+
+    // Restore magic meter so wand demos can actually cast.
+    if (startState.magicMeter && this.player.magicMeter) {
+      const mm = startState.magicMeter;
+      this.player.magicMeter.active = !!mm.active;
+      this.player.magicMeter.slots = Array.isArray(mm.slots) ? [...mm.slots] : [];
+      this.player.magicMeter.max = mm.max || this.player.magicMeter.max;
+      this.player.magicMeter.current = Math.min(mm.current || 0, this.player.magicMeter.max);
+    }
   }
 
   /** Replace the current room's enemies with a demo snapshot. */
@@ -1078,33 +1161,7 @@ class Game {
         0.7
       ).then(() => {
         this.audioSystem.play();
-        // Load sound effects
-        this.audioSystem.loadSFX('aggro', `${base}assets/audio/sfx-aggro.mp3`);
-        this.audioSystem.loadSFX('destroy', `${base}assets/audio/sfx-destroy.mp3`);
-        this.audioSystem.loadSFX('roll', `${base}assets/audio/sfx-roll.mp3`);
-        this.audioSystem.loadSFX('attack_blade', `${base}assets/audio/sfx-attack-blade.mp3`);
-        this.audioSystem.loadSFX('attack_whip', `${base}assets/audio/sfx-attack-whip.mp3`);
-        this.audioSystem.loadSFX('charge_bow', `${base}assets/audio/sfx-charge-bow.mp3`);
-        this.audioSystem.loadSFX('player_death', `${base}assets/audio/sfx-player-death.mp3`);
-        this.audioSystem.loadSFX('craft_cycle', `${base}assets/audio/sfx-craft-cycle.mp3`);
-        this.audioSystem.loadSFX('mag_reload', `${base}assets/audio/sfx-mag-reload.mp3`);
-        this.audioSystem.loadSFX('energy_charge', `${base}assets/audio/sfx-energy-charge.wav`);
-        this.audioSystem.loadSFX('enemy_hit', `${base}assets/audio/sfx-enemy-hit.wav`);
-        this.audioSystem.loadSFX('goo_hit', `${base}assets/audio/sfx-goo-hit.wav`);
-        this.audioSystem.loadSFX('goo_death_1', `${base}assets/audio/sfx-goo-death-1.mp3`);
-        this.audioSystem.loadSFX('goo_death_2', `${base}assets/audio/sfx-goo-death-2.mp3`);
-        this.audioSystem.loadSFX('ghost_spawn', `${base}assets/audio/sfx-ghost-spawn.wav`);
-        this.audioSystem.loadSFX('frog', `${base}assets/audio/sfx-frog.wav`);
-        this.audioSystem.loadSFX('hut_lower', `${base}assets/audio/sfx-hut-lower.wav`);
-        this.audioSystem.loadSFX('polymorph', `${base}assets/audio/sfx-polymorph.wav`);
-        this.audioSystem.loadSFX('wave_1', `${base}assets/audio/sfx-wave-01.wav`);
-        this.audioSystem.loadSFX('wave_2', `${base}assets/audio/sfx-wave-03.wav`);
-        this.audioSystem.loadSFX('wave_3', `${base}assets/audio/sfx-wave-05.wav`);
-        this.audioSystem.loadSFX('weapon_pickup', `${base}assets/audio/sfx-weapon-pickup.wav`);
-        this.audioSystem.loadSFX('boss_defeat', `${base}assets/audio/sfx-boss-defeat.wav`);
-        this.audioSystem.loadSFX('coin_plink', `${base}assets/audio/sfx-coin-plink.wav`);
-        // Placeholder ricochet SFX — reusing coin-plink until a dedicated asset exists.
-        this.audioSystem.loadSFX('ricochet', `${base}assets/audio/sfx-coin-plink.wav`);
+        this.audioSystem.loadGameplaySFX(base);
         // Load boss tracks in background (ready before player reaches depth 14)
         this.audioSystem.loadBossTracks(base);
         // Load red zone tracks in background (ready before player enters red zone)
@@ -1228,7 +1285,7 @@ class Game {
             x: centerX - GRID.CELL_SIZE / 2,
             y: (CRAFTING.STATION_Y + 4) * GRID.CELL_SIZE
           },
-          chars: ['|', '|', '~', '~', '0', '0', 'f', 'f']
+          chars: rollStarterSatchelChars()
         };
       }
     }
@@ -1892,11 +1949,19 @@ class Game {
     this.ui.overlay.classList.remove('hidden');
     this.ui.overlay.classList.add('slide-up');
 
-    // Mark that the player has left REST at least once — gates the rest-bundle pickup hint arrow
-    this.hasLeftRestOnce = true;
+    // Mark that the player has left REST at least once — gates the rest-bundle pickup hint arrow.
+    // Skip in attract-mode: enterDemoState bootstraps through here, but the real player hasn't left yet.
+    if (this.stateMachine.getCurrentState() !== GAME_STATES.ARCADE_DEMO) {
+      this.hasLeftRestOnce = true;
+    }
 
     // Reset robe aura roll-pulse so it fires once in the new room
     if (this.player) this.player._auraRollPulseUsed = false;
+
+    // Reset Acid Blade charges (3 per room: each swing that hits water or an
+    // enemy depletes 1; at 0, swings still land but apply no poison and don't
+    // convert water tiles)
+    if (this.player) this.player._acidBladeChargesThisRoom = 3;
 
     // Room-transition mana grant. Once the meter is active (well or cauldron),
     // every room transition adds +2 mana, with a +2 robe bonus (so robes give
@@ -2438,6 +2503,7 @@ class Game {
         } else {
           this.addIngredient(ingredient.char);
         }
+        this.audioSystem?.playSFX('ingredient_pickup');
         this.physicsSystem.removeEntity(ingredient);
         this.ingredients.splice(i, 1);
       }
@@ -2661,6 +2727,23 @@ class Game {
 
     // DemoSystem shares a frame counter with both playback and recording.
     this.demoSystem.tickGlobalFrame();
+
+    // Particle Fireworks (debug): cycle through every effect at ~2.5 bursts/sec
+    // at random screen positions. Skips TITLE (no canvas particle pipe there).
+    if (this.particleFireworks && state !== GAME_STATES.TITLE) {
+      this._fwTimer += deltaTime;
+      if (this._fwTimer >= 0.4) {
+        this._fwTimer = 0;
+        this._fwIndex = (this._fwIndex + 1) % FIREWORK_FACTORIES.length;
+        const W = GRID.COLS * GRID.CELL_SIZE;
+        const H = GRID.ROWS * GRID.CELL_SIZE;
+        const x = 48 + Math.random() * (W - 96);
+        const y = 48 + Math.random() * (H - 96);
+        const result = FIREWORK_FACTORIES[this._fwIndex].fn(x, y);
+        if (Array.isArray(result)) this.particles.push(...result);
+        else if (result) this.particles.push(result);
+      }
+    }
 
     // Advance any in-flight animations before per-state logic so the new
     // target position is visible to physics, exit detection, and rendering.
@@ -3080,10 +3163,14 @@ class Game {
     for (const crow of crows) {
       crow.update(deltaTime, bgObjects, crows, breadItems, onAteBread);
 
-      const threats = playerThreat ? [playerThreat, ...weaponThreats] : weaponThreats;
+      // Tagged threats: weapon contact counts as an attack and shakes the
+      // hoard loose; player proximity only spooks the crow into the air.
+      const threats = [];
+      if (playerThreat) threats.push({ x: playerThreat.x, y: playerThreat.y, isAttack: false });
+      for (const t of weaponThreats) threats.push({ x: t.x, y: t.y, isAttack: true });
       for (const t of threats) {
         if (crow.isWithinScareRange(t.x, t.y)) {
-          const droppedGlyph = crow.scare(t.x, t.y);
+          const droppedGlyph = crow.scare(t.x, t.y, t.isAttack);
           if (droppedGlyph) {
             const drop = new Ingredient(droppedGlyph, crow.position.x, crow.position.y);
             drop.startDropBounce(0.55);
@@ -3092,6 +3179,12 @@ class Game {
           }
           break;
         }
+      }
+
+      if (crow.takeoffPending) {
+        const variant = Math.random() < 0.5 ? 'crow_takeoff_1' : 'crow_takeoff_2';
+        this.audioSystem?.playSFX(variant);
+        crow.takeoffPending = false;
       }
     }
 
@@ -3113,14 +3206,35 @@ class Game {
       ingredients: this.ingredients,
       enemies: this.currentRoom?.enemies || [],
       items: this.items,
-      // Full pickup: add to inventory, unregister physics, drop from list.
-      // Mirrors the player-pickup path in updateNeutralState/updateExploreState.
-      pickupIngredient: (ing) => {
-        this.addIngredient(ing.char);
+      // Lift the ingredient off the ground but DON'T credit the player —
+      // the companion ferries it back and deposits on perch. Returns true if
+      // the world removal succeeded so the crow knows the pickup took.
+      takeIngredient: (ing) => {
+        if (!ing || ing.consumed) return false;
         ing.consumed = true;
         this.physicsSystem.removeEntity(ing);
         const idx = this.ingredients.indexOf(ing);
         if (idx !== -1) this.ingredients.splice(idx, 1);
+        return true;
+      },
+      // Hand-off on perch: credit the player with the carried glyph. Optional
+      // delivery pop so the player sees the trade happen.
+      depositIngredient: (glyph, crow) => {
+        if (!glyph) return;
+        this.addIngredient(glyph);
+        if (crow) {
+          const cx = crow.position.x + GRID.CELL_SIZE / 2;
+          const cy = crow.position.y + GRID.CELL_SIZE / 2;
+          for (let i = 0; i < 5; i++) {
+            const a = (i / 5) * Math.PI * 2;
+            this.particles.push({
+              x: cx, y: cy,
+              vx: Math.cos(a) * 25, vy: Math.sin(a) * 25 - 10,
+              life: 0.35, maxLife: 0.35,
+              char: '·', color: '#ffffff'
+            });
+          }
+        }
       },
       companionCount: this.companionCrows.length
     };
@@ -3360,7 +3474,7 @@ class Game {
           sw.hitEntities.add(entity);
           const isSlime = entity.getElementalModifier?.('slime') === 0;
           this.physicsSystem.applyKnockback(entity, sw.x, sw.y, sw.knockback, 0.12);
-          if (!isSlime) {
+          if (!isSlime && sw.damage > 0) {
             entity.takeDamage(sw.damage);
             if (entity === this.player) {
               this.combatSystem.createDamageNumber(sw.damage, entity.position.x, entity.position.y, entity.color);
@@ -3583,6 +3697,7 @@ class Game {
             // Cancel bow charging
             if (this.player.heldItem && this.player.heldItem.isCharging) {
               this.audioSystem.stopSFXByName('charge_bow');
+              this.audioSystem.stopSFXByName('wand_charge');
               this.player.heldItem.isCharging = false;
               this.player.heldItem.chargeTime = 0;
               this.player.heldItem.chargingPlayer = null;
@@ -3743,6 +3858,27 @@ class Game {
       }
     }
 
+    // Moss Cloak ✿ stealth state machine. Armed by the active→inactive dodge transition;
+    // becomes active when the player stops issuing WASD input. Any WASD held cancels.
+    const cloakEquipped = this.inventorySystem.equippedArmor?.data?.mossCloak === true;
+    if (cloakEquipped) {
+      const wasdHeld = this.keys.w || this.keys.a || this.keys.s || this.keys.d;
+      if (this.player._lastDodgeActive && !this.player.dodgeRoll.active) {
+        this.player.mossCloakArmed = true;
+      }
+      this.player._lastDodgeActive = this.player.dodgeRoll.active;
+      if (wasdHeld || this.player.dodgeRoll.active) {
+        this.player.mossCloakArmed = false;
+        this.player.mossCloakActive = false;
+      } else if (this.player.mossCloakArmed) {
+        this.player.mossCloakActive = true;
+      }
+    } else {
+      this.player.mossCloakArmed = false;
+      this.player.mossCloakActive = false;
+      this.player._lastDodgeActive = this.player.dodgeRoll.active;
+    }
+
     // Emit dodge roll trail particles (also during green ranger continuous roll)
     if (this.player.dodgeRoll.active || this.player.continuousRollActive) {
       const trail = createDodgeTrail(
@@ -3874,6 +4010,7 @@ class Game {
           // REST pickup routes to banked pool via addIngredient.
           this.addIngredient(ingredient.char);
         }
+        this.audioSystem?.playSFX('ingredient_pickup');
         this.physicsSystem.removeEntity(ingredient);
         this.ingredients.splice(i, 1);
       }
@@ -4465,6 +4602,7 @@ class Game {
     this.updatePlacedTraps(deltaTime);
     this.trapSystem.checkWeaponTriggers();
     this.trapSystem.updatePuddles(deltaTime);
+    this.wireSystem.update(deltaTime);
 
     // Update pack behavior - find packmates and share memory marks
     for (const enemy of this.currentRoom.enemies) {
@@ -4666,10 +4804,25 @@ class Game {
         this.audioSystem?.playSFX('goo_hit');
       }
 
-      // Slime-affinity enemies: stamp a slime trail tile along their path
+      // Slime-affinity enemies: stamp a slime trail tile along their path.
+      // Giant Slime is ~3 cells wide visually, so it drops a small cluster of
+      // tiles around its center — the merge-on-overlap logic in _dropSlimeTrail
+      // fuses them into one fat puddle scaled to the boss's footprint.
       if (updateResult.shouldDropSlimeTrail) {
         const t = updateResult.shouldDropSlimeTrail;
         this._dropSlimeTrail(t.x, t.y, t.plane);
+        if (enemy.char === 'M') {
+          const RING_RADIUS = GRID.CELL_SIZE * 0.4;
+          const RING_TILES = 4;
+          for (let r = 0; r < RING_TILES; r++) {
+            const a = (r / RING_TILES) * Math.PI * 2;
+            this._dropSlimeTrail(
+              t.x + Math.cos(a) * RING_RADIUS,
+              t.y + Math.sin(a) * RING_RADIUS,
+              t.plane
+            );
+          }
+        }
       }
 
       // Giant Slime: leap landing → impact damage + invisible shockwave + landing trail
@@ -4684,7 +4837,7 @@ class Game {
           if (Math.hypot(pcx - ld.x, pcy - ld.y) <= cfg.landRadius) {
             this.player.takeDamage(cfg.landDamage);
             this.combatSystem.createDamageNumber(cfg.landDamage, this.player.position.x, this.player.position.y, this.player.color);
-            this.physicsSystem.applyKnockback(this.player, ld.x, ld.y, cfg.shockwaveKnockback, 0.12);
+            this.physicsSystem.applyKnockback(this.player, ld.x, ld.y, cfg.landKnockback ?? cfg.shockwaveKnockback, 0.12);
             hitEntities.add(this.player);
           }
         }
@@ -5002,9 +5155,7 @@ class Game {
         burn:   ['!', '+', '.'],
         stun:   ['+', '*', '.'],
         freeze: ['*', '+', '.'],
-        poison: ['+', '.', 'o'],
-        acid:   ['+', '.', 'o'],
-        bleed:  ['+', '.', '*']
+        poison: ['+', '.', 'o']
       };
       for (const fx of combatResult.impactEffects) {
         // Handle chaff VFX (grass debris from bullet impacts)
@@ -5231,6 +5382,9 @@ class Game {
         this.audioSystem.stop();
         this.audioSystem.playSFX('player_death');
 
+        // Capture death snapshot for design analysis before any state is cleared
+        captureDeath(this);
+
         // Record what killed the player (for REST tombstone)
         const killer = this.player._lastAttacker;
         if (killer && killer.data) {
@@ -5325,14 +5479,17 @@ class Game {
           this.player.hp = Math.min(this.player.hp + 1, this.player.maxHp);
         }
 
-        // Per-enemy death SFX (data.sfx.death — string or array for random pick),
-        // falling back to the generic destroy sound.
+        // Per-enemy death SFX (data.sfx.death — string or array for random pick).
+        // Pure elementals and arcane casters share a magical death sound; everything
+        // else falls back to the generic destroy thud.
         const deathSfx = enemy.data?.sfx?.death;
         if (deathSfx) {
           const name = Array.isArray(deathSfx)
             ? deathSfx[Math.floor(Math.random() * deathSfx.length)]
             : deathSfx;
           this.audioSystem.playSFX(name);
+        } else if (MAGIC_DEATH_NAMES.has(enemy.data?.name)) {
+          this.audioSystem.playSFX('magic_death');
         } else {
           this.audioSystem.playSFX('destroy');
         }
@@ -5677,6 +5834,7 @@ class Game {
         } else {
           this.addIngredient(ingredient.char);
         }
+        this.audioSystem?.playSFX('ingredient_pickup');
         this.physicsSystem.removeEntity(ingredient);
         this.ingredients.splice(i, 1);
       }
@@ -6055,6 +6213,7 @@ class Game {
       if (this.campNPCSystem?.handleSpacePress()) return;
       if (this.handlePearlPedestalSpace()) return;
       if (this.handlePearlCachePedestalSpace()) return;
+      if (this.wireSystem?.handleSpacePress()) return;
 
       // Bridge donation menu
       if (this.currentRoom?.type === ROOM_TYPES.RIDGE && !this.currentRoom?.bridgeBuilt) {
@@ -6090,11 +6249,46 @@ class Game {
         return;
       }
 
-      // Errand traveler interaction (SPACE = give item/ingredient)
-      const errandNpcArray = this.player.inHut && this.activeFloor
+      // NPC interactions (errand traveler + wise fellow). Resolve which list
+      // to scan once — interior NPCs live on activeFloor.npcs; surface NPCs on
+      // neutralCharacters.
+      const npcArray = this.player.inHut && this.activeFloor
         ? this.activeFloor.npcs
         : this.neutralCharacters;
-      const giveResult = this.errandSystem.checkGive(this.player, errandNpcArray);
+
+      // Artifact → wise fellow: consume ⚱, unlock rare-tier hint for this zone.
+      // Checked before the errand path so the wise man (when nearby) wins the
+      // give; they're in different rooms in practice so this only matters when
+      // both flows exist within the same hut.
+      if (npcArray) {
+        for (const npc of npcArray) {
+          if (!(npc instanceof WiseFellow)) continue;
+          const dist = Math.hypot(
+            this.player.position.x - npc.position.x,
+            this.player.position.y - npc.position.y
+          );
+          if (dist > GRID.CELL_SIZE * 2) continue;
+          const idx = this.player.inventory.indexOf('⚱');
+          if (idx === -1) continue;
+          this.player.inventory.splice(idx, 1);
+          npc.unlockRareHint(this.currentRoom?.zone || 'green');
+          return;
+        }
+      }
+
+      // Artifact → errand traveler: consume ⚱, spawn 2 coin ingredients at NPC.
+      // Side trade — does not advance or alter the active stage errand.
+      const artifactResult = this.errandSystem.tryGiveArtifact(this.player, npcArray);
+      if (artifactResult) {
+        for (let i = 0; i < artifactResult.coins; i++) {
+          const angle = (i / artifactResult.coins) * Math.PI * 2 + Math.random() * 0.4;
+          this.lootSystem.spawnIngredientDrop('c', artifactResult.x, artifactResult.y, angle, null);
+        }
+        return;
+      }
+
+      // Errand traveler interaction (SPACE = give item/ingredient)
+      const giveResult = this.errandSystem.checkGive(this.player, npcArray);
       if (giveResult) {
         const rewardItem = new Item(giveResult.rewardChar, giveResult.x, giveResult.y);
         if (this.activeFloor) rewardItem.hutPlane = true;
@@ -6116,12 +6310,14 @@ class Game {
         return;
       }
 
-      // Begin trap throw charge only when no nearby item to pick up
+      // SPACE places/arms the trap at the player's feet. (Wires were already
+      // handled earlier via wireSystem.handleSpacePress.) Skip if a ground item
+      // is nearby — pickup wins to avoid trapping over a pickup.
       const hasNearbyPickup = this.items.some(
         item => this.physicsSystem.getDistance(this.player, item) < 20
       );
       if (this.player.canUseTrap() && !hasNearbyPickup) {
-        this.trapSystem.startTrapCharge();
+        this.trapSystem.placeTrap();
         return;
       }
     }
@@ -6369,10 +6565,15 @@ class Game {
         // Attack — melee AoE handles object damage directly via CombatSystem
         this.attackSequenceActive = true; // Mark that attack was initiated by button press (even if windup delays it)
         const wasBowCharging = this.player.heldItem.data.weaponType === 'BOW' && this.player.heldItem.isCharging;
+        const wasGemCharging = this.player.heldItem.data?.gemWand && this.player.heldItem.isCharging;
         const attack = this.player.useHeldItem();
         // Play bow charge SFX when charging begins (use() sets isCharging on first press)
         if (!wasBowCharging && this.player.heldItem && this.player.heldItem.data.weaponType === 'BOW' && this.player.heldItem.isCharging) {
           this.audioSystem.playStoppableSFX('charge_bow');
+        }
+        // Gem-wand charge SFX, stretched to match this wand's chargeTime.
+        if (!wasGemCharging && this.player.heldItem?.data?.gemWand && this.player.heldItem.isCharging) {
+          this.audioSystem.playStoppableSFXStretched('wand_charge', this.player.heldItem.data.chargeTime);
         }
         if (attack) {
           // Bread "use" is really a drop: spawn the loaf at the player's feet
@@ -6466,13 +6667,11 @@ class Game {
 
       const held = this.player.heldItem;
       if (held) {
-        if (held.data?.type === 'TRAP') {
-          // Trap equipped: preserve existing drop/place-persistent behavior on SHIFT.
-          this.trapSystem.dropOrPlaceTrap();
-        } else {
-          // Weapon equipped: start throw charge. Release on SHIFT keyup fires the throw.
-          this.trapSystem.startTrapCharge();
-        }
+        // SHIFT charges a throw for any held slot item. Throwing IS dropping —
+        // the item leaves the slot and lands on the ground. Traps arm where they
+        // land; weapons and wires land as pickups. Placement/arming for traps
+        // also happens on SPACE.
+        this.trapSystem.startTrapCharge();
       }
     }
 

@@ -171,6 +171,7 @@ export class MagicSystem {
     // If the cast was about to fire this frame, MagicSystem.update handled it.
     if (wand.chargeTime >= wand.data.chargeTime) return;
     wand.cancelGemWandCharge();
+    this.game.audioSystem?.stopSFXByName('wand_charge');
   }
 
   // Per-frame: complete any gem-wand cast whose charge has finished.
@@ -184,6 +185,7 @@ export class MagicSystem {
     // Final mana check (could have been spent elsewhere mid-charge)
     if (!this.hasMana(player, wand.data.manaCost)) {
       wand.cancelGemWandCharge();
+      this.game.audioSystem?.stopSFXByName('wand_charge');
       this.game.menuSystem?.showPickupMessage?.('NOT ENOUGH MANA');
       return;
     }
@@ -192,6 +194,7 @@ export class MagicSystem {
     if (!attack) return;
 
     this.spendMana(player, wand.data.manaCost);
+    this.game.audioSystem?.stopSFXByName('wand_charge');
     this.runSpellEffect(attack);
   }
 

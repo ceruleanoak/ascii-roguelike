@@ -183,7 +183,6 @@ export const ENEMIES = {
     color: '#44bb44',
     elementalAffinity: {
       immunity: ['poison'],
-      resistance: { 'acid': 0.5 },
       weakness: { 'burn': 1.5, 'freeze': 1.3 }
     },
     affinities: ['venom', 'beast'],
@@ -268,10 +267,7 @@ export const ENEMIES = {
     splitOnDamage: {
       enabled: true,
       spawnChar: 'o',
-      minHpToSplit: 2,        // Won't split below this HP
-      maxActiveChildren: 4,   // Cap concurrent split children
-      reformDelay: 4.0,       // Children spend this long pursuing player before returning
-      reformValue: 2          // HP restored to parent per absorbed child
+      mergeCooldown: 5.0      // Children can't re-merge with the boss for this long after spawning
     },
     gooSpewCone: {
       enabled: true,
@@ -292,10 +288,11 @@ export const ENEMIES = {
       arcLift: GRID.CELL_SIZE * 5,             // Peak visual lift height during arc — clearly above other entities
       landRadius: GRID.CELL_SIZE * 2.2,        // Direct-hit impact zone on landing
       landDamage: 3,
+      landKnockback: 320,                      // Px/s for the direct landing contact hit
       shockwaveMaxRadius: GRID.CELL_SIZE * 8,
       shockwaveSpeed: GRID.CELL_SIZE * 14,     // ~224 px/s; ring crosses landing zone in ~1s
-      shockwaveDamage: 2,
-      shockwaveKnockback: 320,                 // Px/s applied to entities caught in the sweep
+      shockwaveDamage: 0,                      // Cosmetic ring only — damage limited to contact (landRadius)
+      shockwaveKnockback: 140,                 // Mild push as the ring sweeps past
       trailDropOnLanding: true                 // Spawn a slime trail puddle at the landing site
     },
     elementalAffinity: { immunity: ['slime'], weakness: { freeze: 2.0, blade: 2.0 } },
@@ -817,7 +814,7 @@ export const ENEMIES = {
     color: '#ff4400',
     elementalAffinity: {
       immunity: ['burn'],
-      resistance: { 'stun': 0.5, 'acid': 0.7 },
+      resistance: { 'stun': 0.5 },
       weakness: { 'freeze': 2.0, 'wet': 1.5 }
     },
     affinities: ['fire'],
@@ -2085,14 +2082,12 @@ export const BOSS_ENCOUNTERS = {
   },
   goblin_army: {
     // Followers are regular Goblins (G), each scavenged a different weapon.
-    // Five melee goblins form a perpendicular wall between the Brute and the
+    // Three melee goblins form a perpendicular wall between the Brute and the
     // player; the bow goblin stays back per its keeper movement style.
     spawns: [
       { char: 'B', count: 1, role: 'leader' },
       { char: 'G', count: 1, role: 'follower', equippedWeapon: '†' },   // Sword
-      { char: 'G', count: 1, role: 'follower', equippedWeapon: '⊤' },   // Bone axe
       { char: 'G', count: 1, role: 'follower', equippedWeapon: '↑' },   // Spear
-      { char: 'G', count: 1, role: 'follower', equippedWeapon: '↾' },   // Dagger
       { char: 'G', count: 1, role: 'follower', equippedWeapon: '⫯' },   // Longsword
       { char: 'G', count: 1, role: 'follower', equippedWeapon: ')' }    // Bow (ranged)
     ],

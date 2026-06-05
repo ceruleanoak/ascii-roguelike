@@ -820,4 +820,299 @@ export const DEMO_RECORDINGS = [
     }
   ]
   },
+  {
+  "name": "recorded-mpywgvam",
+  "seed": 2834701676,
+  "durationFrames": 623,
+  "startState": {
+    "characterType": "default",
+    "hp": 10,
+    "quickSlots": [
+      "†",
+      "⚶",
+      null
+    ],
+    "activeSlotIndex": 1,
+    "position": {
+      "x": 89.30193556720596,
+      "y": 196.83462438914475
+    },
+    "magicMeter": {
+      "active": true,
+      "slots": [0],
+      "current": 10,
+      "max": 10
+    }
+  },
+  "room": {
+    "zone": "green",
+    "depth": 1,
+    "boss": false
+  },
+  "enemies": [
+    {
+      "char": "o",
+      "x": 384,
+      "y": 432,
+      "hp": 3
+    }
+  ],
+  "events": [
+    {
+      "f": 93,
+      "type": "keydown",
+      "key": "w"
+    },
+    {
+      "f": 114,
+      "type": "keydown",
+      "key": "d"
+    },
+    {
+      "f": 129,
+      "type": "keyup",
+      "key": "w"
+    },
+    {
+      "f": 144,
+      "type": "keydown",
+      "key": "d"
+    },
+    {
+      "f": 149,
+      "type": "keydown",
+      "key": "d"
+    },
+    {
+      "f": 153,
+      "type": "keydown",
+      "key": "s"
+    },
+    {
+      "f": 183,
+      "type": "keydown",
+      "key": "s"
+    },
+    {
+      "f": 188,
+      "type": "keydown",
+      "key": "s"
+    },
+    {
+      "f": 193,
+      "type": "keydown",
+      "key": "s"
+    },
+    {
+      "f": 198,
+      "type": "keydown",
+      "key": "s"
+    },
+    {
+      "f": 199,
+      "type": "keyup",
+      "key": "d"
+    },
+    {
+      "f": 203,
+      "type": "keydown",
+      "key": "s"
+    },
+    {
+      "f": 208,
+      "type": "keydown",
+      "key": "s"
+    },
+    {
+      "f": 213,
+      "type": "keydown",
+      "key": "s"
+    },
+    {
+      "f": 218,
+      "type": "keydown",
+      "key": "s"
+    },
+    {
+      "f": 224,
+      "type": "keydown",
+      "key": "s"
+    },
+    {
+      "f": 229,
+      "type": "keydown",
+      "key": "s"
+    },
+    {
+      "f": 234,
+      "type": "keydown",
+      "key": "s"
+    },
+    {
+      "f": 238,
+      "type": "keydown",
+      "key": "s"
+    },
+    {
+      "f": 244,
+      "type": "keydown",
+      "key": "s"
+    },
+    {
+      "f": 249,
+      "type": "keydown",
+      "key": "s"
+    },
+    {
+      "f": 254,
+      "type": "keydown",
+      "key": "s"
+    },
+    {
+      "f": 259,
+      "type": "keydown",
+      "key": "s"
+    },
+    {
+      "f": 262,
+      "type": "keydown",
+      "key": "d"
+    },
+    {
+      "f": 292,
+      "type": "keydown",
+      "key": "d"
+    },
+    {
+      "f": 297,
+      "type": "keydown",
+      "key": "d"
+    },
+    {
+      "f": 302,
+      "type": "keydown",
+      "key": "d"
+    },
+    {
+      "f": 307,
+      "type": "keydown",
+      "key": "d"
+    },
+    {
+      "f": 312,
+      "type": "keydown",
+      "key": "d"
+    },
+    {
+      "f": 317,
+      "type": "keydown",
+      "key": "d"
+    },
+    {
+      "f": 319,
+      "type": "keyup",
+      "key": "d"
+    },
+    {
+      "f": 352,
+      "type": "keydown",
+      "key": "d"
+    },
+    {
+      "f": 371,
+      "type": "keyup",
+      "key": "s"
+    },
+    {
+      "f": 382,
+      "type": "keydown",
+      "key": "d"
+    },
+    {
+      "f": 387,
+      "type": "keydown",
+      "key": "d"
+    },
+    {
+      "f": 392,
+      "type": "keydown",
+      "key": "d"
+    },
+    {
+      "f": 397,
+      "type": "keydown",
+      "key": "d"
+    },
+    {
+      "f": 402,
+      "type": "keydown",
+      "key": " "
+    },
+    {
+      "f": 403,
+      "type": "keyup",
+      "key": "d"
+    },
+    {
+      "f": 432,
+      "type": "keydown",
+      "key": " "
+    },
+    {
+      "f": 437,
+      "type": "keydown",
+      "key": " "
+    },
+    {
+      "f": 442,
+      "type": "keydown",
+      "key": " "
+    },
+    {
+      "f": 447,
+      "type": "keydown",
+      "key": " "
+    },
+    {
+      "f": 452,
+      "type": "keydown",
+      "key": " "
+    },
+    {
+      "f": 457,
+      "type": "keydown",
+      "key": " "
+    },
+    {
+      "f": 462,
+      "type": "keydown",
+      "key": " "
+    },
+    {
+      "f": 467,
+      "type": "keydown",
+      "key": " "
+    },
+    {
+      "f": 472,
+      "type": "keydown",
+      "key": " "
+    },
+    {
+      "f": 477,
+      "type": "keydown",
+      "key": " "
+    },
+    {
+      "f": 482,
+      "type": "keydown",
+      "key": " "
+    },
+    {
+      "f": 487,
+      "type": "keyup",
+      "key": " "
+    }
+  ]
+  }
 ];

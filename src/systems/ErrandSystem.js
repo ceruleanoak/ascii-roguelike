@@ -18,7 +18,7 @@ const STAGE_CONFIG = [
   {
     // Stage 1: starter weapon for a strong mid-tier weapon or armor
     requestPool: ['¬', '†', ')', '/', '↑'],       // tier-1 starters
-    rewardPool:  ['⌐', '❄', 'ϟ', '═', '⊞', '◈', '⇶', '◉', '╫', 'W'],
+    rewardPool:  ['⌐', '❄', 'ϟ', '═', '⊞', '◈', '⇶', '◉', 'W'],
     isIngredient: false
   },
   {
@@ -144,6 +144,32 @@ export class ErrandSystem {
     }
 
     return result;
+  }
+
+  /**
+   * Side-trade: hand the traveler an Artifact ⚱ for 2 coins, independent of
+   * the active stage errand. Returns spawn data ({coins, x, y}) on success.
+   * Active errand is untouched — the player can still complete the stage trade.
+   */
+  tryGiveArtifact(player, neutralCharacters) {
+    const errandChar = neutralCharacters?.find(nc => nc instanceof ErrandCharacter);
+    if (!errandChar) return null;
+
+    const dist = Math.hypot(
+      player.position.x - errandChar.position.x,
+      player.position.y - errandChar.position.y
+    );
+    if (dist > errandChar.getInteractionDistance()) return null;
+
+    const idx = player.inventory.indexOf('⚱');
+    if (idx === -1) return null;
+    player.inventory.splice(idx, 1);
+
+    return {
+      coins: 2,
+      x: errandChar.position.x,
+      y: errandChar.position.y
+    };
   }
 
   /** Wipe errand state on player death (new run starts clean). */

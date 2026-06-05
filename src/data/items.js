@@ -35,7 +35,7 @@ export const WEAPON_TIERS = {
   sword: [
     ['†'],
     ['‡', '⌘', '╪'],
-    ['⚔', '♠', '╫', '◇']
+    ['⚔', '♠', '◇']
   ],
   axe: [
     ['⛏'],
@@ -473,6 +473,25 @@ export const ITEMS = {
     critChance: 0.12,
     color: '#ff8888'
   },
+  // Zelda-style boomerang: flies out, returns to player along a straight-line
+  // toward their current position (no curve). First enemy hit also chain-damages
+  // nearby enemies in a tight radius. One shot per room.
+  '↩': {
+    char: '↩',
+    name: 'Boomerang',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.BOW,
+    damage: 1,
+    cooldown: 1.5,
+    maxUses: 1,
+    critChance: 0.10,
+    boomerang: true,
+    boomerangBaseDuration: 0.45,  // seconds before return triggers (no-charge)
+    boomerangChargeBonus: 0.55,   // additional seconds at full charge
+    boomerangHitDefer: 0.18,      // seconds added to the return timer per enemy hit
+    chainRadius: 32,              // ~1 cell — chain damage radius around first hit
+    color: '#ffaa44'
+  },
 
   // ============================================================================
   // WEAPONS — MELEE
@@ -606,30 +625,15 @@ export const ITEMS = {
     name: 'Acid Blade',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
-    weaponSubtype: 'sword',
-    damage: 4,
-    windup: 0.6,
-    recovery: 0.15,
+    weaponSubtype: 'dagger',
+    damage: 3,
+    windup: 0.2,
+    recovery: 0.4,
     patternSpeed: 0.05,
-    range: 22,
-    onHit: 'acid',
-    corrosion: true,
+    range: 20,
+    onHit: 'poison',
+    acidBlade: true,
     color: '#44ff00'
-  },
-  '╫': {
-    char: '╫',
-    name: 'Blood Sword',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.MELEE,
-    weaponSubtype: 'sword',
-    damage: 4,
-    windup: 0.6,
-    recovery: 0.15,
-    patternSpeed: 0.05,
-    range: 22,
-    onHit: 'bleed',
-    lifesteal: 0.4,
-    color: '#cc0000'
   },
   '◇': {
     char: '◇',
@@ -1381,6 +1385,18 @@ export const ITEMS = {
     color: '#ccddee'
   },
 
+  // ── Moss Cloak: stealth bush transform ────────────────────────────────────
+  // After a dodge roll ends, the player becomes "armed". Staying still (no WASD)
+  // activates the cloak: player renders as a bush `%`, and enemies that haven't
+  // already aggro'd cannot detect the player at any range. Moving cancels it.
+  '✿': {
+    char: '✿', name: 'Moss Cloak', type: ITEM_TYPES.ARMOR,
+    defense: 1,
+    mossCloak: true,
+    spellDescription: 'STILL AS A BUSH.',
+    color: '#5a8a3a'
+  },
+
   // ── Spectacles: cipher decoder, no defense ────────────────────────────────
   // Occupies the armor slot. While equipped, the render hooks in cipher.js
   // toggle the Greek↔Latin substitution OFF wherever the cipher is applied:
@@ -1895,15 +1911,18 @@ export const ITEMS = {
     stunDuration: 0.8,
     color: '#00ffff'
   },
-  ',': {
-    char: ',',
-    name: 'Goo Dispenser',
+  // Sticky Tripline: SPACE on an eligible bg object anchors point 1, SPACE on a
+  // second anchors point 2. The segment slows entities (goo status). One per room.
+  // WireSystem handles placement; uses the standard trap `charges` mechanism so
+  // resetTrapsForNewRoom() refills it each new EXPLORE room.
+  '⌇': {
+    char: '⌇',
+    name: 'Sticky Tripline',
     type: ITEM_TYPES.TRAP,
-    oneShot: false,
+    wire: true,
+    wireType: 'slime',
     charges: 1,
-    effectRadius: 80,
-    effect: 'goo',
-    color: '#00ff00'
+    color: '#88dd88'
   },
 
   // ── Intermediate crafting materials ─────────────────────────────────────────
@@ -1965,7 +1984,13 @@ export const INGREDIENTS = {
   'p': { char: 'p', name: 'Pearl Shard',    color: '#ddeeff' },
   'n': { char: 'n', name: 'Sharkbone',      color: '#ccd8e8' },
   'C': { char: 'C', name: 'Coral Cluster',  color: '#ff88aa' },
-  'Y': { char: 'Y', name: 'Stingray Barb',  color: '#aabbcc' }
+  'Y': { char: 'Y', name: 'Stingray Barb',  color: '#aabbcc' },
+
+  // Rock-harvest ingredients — drop from `0` Rock bg objects (rock harvest table).
+  // ⚱ Artifact also drops rarely from chests; trades to errand NPC (2 coins) or
+  // wise man (unlocks rare hint tier). ❦ Moss is the only path to Moss Cloak.
+  '⚱': { char: '⚱', name: 'Artifact',       color: '#d4af37' },
+  '❦': { char: '❦', name: 'Moss',           color: '#5a8a3a' }
 };
 
 // Subtype defaults — explicit weapon properties override these
@@ -2047,7 +2072,7 @@ export const AFFINITY_POOLS = {
     },
     weapons: {
       [RARITY.UNCOMMON]: ['⊤'],              // Bone Axe
-      [RARITY.RARE]:     ['╫', '⚸']        // Blood Sword, Onyx Staff
+      [RARITY.RARE]:     ['⚸']              // Onyx Staff
     },
     traps: {
       [RARITY.UNCOMMON]: [';'],              // Sleep Bomb
@@ -2075,7 +2100,7 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     []
     },
     traps: {
-      [RARITY.UNCOMMON]: [','],              // Goo Dispenser
+      [RARITY.UNCOMMON]: [],
       [RARITY.RARE]:     []
     },
     armor: {
@@ -2282,7 +2307,7 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     [],
     },
     traps: {
-      [RARITY.UNCOMMON]: [','],             // Goo Dispenser
+      [RARITY.UNCOMMON]: [],
       [RARITY.RARE]:     []
     },
     armor: {

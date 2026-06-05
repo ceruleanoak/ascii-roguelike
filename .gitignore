@@ -22,3 +22,6 @@ npm-debug.log*
 
 # Playtesting simulator (local balance analysis, not shipped)
 playtesting/
+
+# Death ledger (local design analysis, not shipped)
+claudedocs/death-ledger.jsonl

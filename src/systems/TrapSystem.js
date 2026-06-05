@@ -1,7 +1,6 @@
 import { Item } from '../entities/Item.js';
-import { GooBlob } from '../entities/GooBlob.js';
 import { Puddle } from '../entities/Puddle.js';
-import { createActivationBurst, createEmberBurst } from '../entities/Particle.js';
+import { createActivationBurst, createEmberBurst, createIceBurst } from '../entities/Particle.js';
 import { GRID } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 
@@ -89,7 +88,9 @@ export class TrapSystem {
     const heldItem = game.player.heldItem;
     if (!heldItem) { game.trapCharging = null; return; }
 
-    const isTrap = heldItem.data?.type === 'TRAP';
+    // Wires are TRAP-typed but throw-land as pickups (WireSystem handles placement
+    // via two-stage SPACE anchoring, not trap arming on landing).
+    const isTrap = heldItem.data?.type === 'TRAP' && !heldItem.data?.wire;
     if (isTrap && !game.player.canUseTrap()) { game.trapCharging = null; return; }
 
     const pos = this.getTrapReticulePos();
@@ -515,31 +516,6 @@ export class TrapSystem {
             }
           }
 
-        } else if (effect === 'goo') {
-          // Goo Dispenser: generate spreading goo blobs
-          if (entry.gooGenerationTimer === undefined) {
-            entry.gooGenerationTimer = 1.0;
-          }
-
-          entry.gooGenerationTimer -= deltaTime;
-
-          if (entry.gooGenerationTimer <= 0) {
-            entry.gooGenerationTimer = 1.0;
-
-            const gooBlob = new GooBlob(
-              tx + GRID.CELL_SIZE / 2,
-              ty + GRID.CELL_SIZE / 2,
-              performance.now()
-            );
-            gooBlob.plane = item.plane ?? 0;
-            gooBlob.hutPlane = !!game.activeFloor;
-            game.gooBlobs.push(gooBlob);
-
-            const MAX_GOO_BLOBS = 15;
-            if (game.gooBlobs.length > MAX_GOO_BLOBS) {
-              game.gooBlobs.shift();
-            }
-          }
         }
       }
     }
@@ -558,22 +534,21 @@ export class TrapSystem {
     const r = trapData.effectRadius;
 
     if (trapData.effect === 'slow') {
-      // Slime Bomb: massive initial blast slow + spawn permanent floor puddle
+      // Slime Bomb: blast applies goo status to enemies + player in radius (gooBlob parity)
+      // and lays a permanent slime puddle on the ground.
       for (const enemy of enemies) {
         if (enemy.getElementalModifier('slime') === 0) continue;
         const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - cx;
         const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - cy;
         if (Math.sqrt(dx * dx + dy * dy) <= r) {
-          enemy.applyStatusEffect('freeze', 3.5);
-          if (enemy.statusEffects?.freeze) enemy.statusEffects.freeze.slowAmount = 0.92;
+          enemy.applyStatusEffect('goo', 5.0);
         }
       }
       if (game.player) {
         const pdx = (game.player.position.x + GRID.CELL_SIZE / 2) - cx;
         const pdy = (game.player.position.y + GRID.CELL_SIZE / 2) - cy;
         if (Math.sqrt(pdx * pdx + pdy * pdy) <= r) {
-          game.player.applyStatusEffect?.('freeze', 3.5);
-          if (game.player.statusEffects?.freeze) game.player.statusEffects.freeze.slowAmount = 0.92;
+          game.player.applyStatusEffect?.('goo', 5.0);
         }
       }
       // Lay a disk of slimeTrail tiles covering the blast footprint — uses the
@@ -587,12 +562,17 @@ export class TrapSystem {
         game._dropSlimeTrail(cx + Math.cos(a) * RING_RADIUS, cy + Math.sin(a) * RING_RADIUS, plane);
       }
     } else if (trapData.effect === 'freeze') {
-      // Freeze Trap: freeze enemies + crystallize water/puddle tiles + scatter ice objects
+      // Freeze Trap: freeze enemies + crystallize water/puddle tiles + scatter ice objects.
+      // Slimes and ice-weak enemies stay frozen permanently — others thaw normally.
+      game.particles.push(...createIceBurst(cx, cy));
       for (const enemy of enemies) {
         const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - cx;
         const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - cy;
         if (Math.sqrt(dx * dx + dy * dy) <= r) {
-          enemy.applyStatusEffect('freeze', trapData.effectDuration);
+          const isSlime = enemy.getElementalModifier('slime') === 0;
+          const isIceWeak = enemy.getElementalModifier('freeze') > 1.0;
+          const duration = (isSlime || isIceWeak) ? Infinity : trapData.effectDuration;
+          enemy.applyStatusEffect('freeze', duration);
           if (!enemy.data.freezePermanent) enemy.statusEffects.freeze.frozen = true;
         }
       }
@@ -620,8 +600,10 @@ export class TrapSystem {
             // Puddle → freeze in place
             obj.setWaterState('frozen', Infinity);
           } else if (!SKIP_FREEZE.has(obj.char)) {
-            // Trees, bushes, rocks, crates, etc. → tint ice-blue
+            // Trees, bushes, rocks, crates, etc. → tint ice-blue and flag so the
+            // cut-grass handler can produce an ice-burst on slicing frozen grass.
             obj.color = '#aaffff';
+            obj.frozen = true;
           }
         }
 
@@ -872,15 +854,18 @@ export class TrapSystem {
     }
   }
 
-  /** Handle shift+drop in EXPLORE: persistent traps activate, weapons drop normally. */
-  dropOrPlaceTrap() {
+  /** SPACE in EXPLORE: place/arm the held trap at the player's feet. Wires are
+   *  handled separately by WireSystem before this is reached. */
+  placeTrap() {
     const game = this.game;
+    const held = game.player.heldItem;
+    if (!held || held.data?.wire) return;
     const droppedItem = game.player.dropItem();
     if (!droppedItem) return;
 
     const trapData = droppedItem.data || droppedItem;
     if (trapData.type === 'TRAP' && !trapData.oneShot) {
-      // Persistent placeables (Music Box, Noise-maker, Tesla Coil, Goo Dispenser)
+      // Persistent placeables (Music Box, Noise-maker, Tesla Coil)
       const trapItem = new Item(droppedItem.char, game.player.position.x, game.player.position.y);
       trapItem.isPlaced = true;
       game.placedTraps.push({
@@ -891,7 +876,7 @@ export class TrapSystem {
       });
 
     } else if (trapData.type === 'TRAP' && trapData.oneShot) {
-      // One-shot traps dropped via SHIFT arm in-place (not pickable, same as thrown traps)
+      // One-shot traps arm in-place (not pickable)
       const C = GRID.CELL_SIZE;
       const cx = game.player.position.x + C / 2;
       const cy = game.player.position.y + C / 2;
@@ -907,15 +892,8 @@ export class TrapSystem {
       if (trapData.remoteTrigger) { entry.blinkTimer = 0; entry.blinkVisible = true; }
       game.placedTraps.push(entry);
       game.particles.push(...createActivationBurst(cx, cy, trapData.color || '#ffffff'));
-
-    } else {
-      // Drop held weapon/trap normally — reuse the existing instance to preserve charges
-      droppedItem.position.x = game.player.position.x;
-      droppedItem.position.y = game.player.position.y;
-      droppedItem.velocity = { vx: 0, vy: 0 };
-      game.items.push(droppedItem);
-      game.physicsSystem.addEntity(droppedItem);
     }
     game.updateUI();
   }
+
 }

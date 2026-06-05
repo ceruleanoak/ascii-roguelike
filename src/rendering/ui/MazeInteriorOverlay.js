@@ -185,11 +185,15 @@ export class MazeInteriorOverlay {
 
     // ── 9. Player ──────────────────────────────────────────────────────────
     const playerAlpha = game.player.getVisibilityAlpha?.() ?? 1.0;
-    const playerColor = game.player.getDisplayColor?.() ?? game.player.color;
+    const mossActive = game.player.mossCloakActive === true;
+    const playerChar = mossActive ? '%' : game.player.char;
+    const playerColor = mossActive
+      ? '#228822'
+      : (game.player.getDisplayColor?.() ?? game.player.color);
     this.renderer.drawTextWithAlpha(
       game.player.position.x + CS / 2,
       game.player.position.y + CS / 2,
-      game.player.char, playerColor, playerAlpha
+      playerChar, playerColor, playerAlpha
     );
 
     this.renderController.bowChargeIndicator.render(game);

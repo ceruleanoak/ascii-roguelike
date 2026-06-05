@@ -29,6 +29,20 @@ export class WiseFellow extends NeutralCharacter {
     }
   }
 
+  /**
+   * Swap to a rare-tier hint (gated by Artifact ⚱ payment in main.js SPACE handler).
+   * Replaces hintText in place so the proximity fade keeps running without flicker.
+   * Re-callable — each Artifact buys a fresh rare hint roll.
+   */
+  unlockRareHint(zoneName) {
+    const rare = ZONES[zoneName]?.rareSayings;
+    if (Array.isArray(rare) && rare.length > 0) {
+      this.hintText = rare[Math.floor(Math.random() * rare.length)];
+    } else {
+      this.hintText = 'NO SECRETS HERE.';
+    }
+  }
+
   update(dt, game) {
     super.update(dt); // pulse animation
     if (!game?.player || !this.hintText) return;

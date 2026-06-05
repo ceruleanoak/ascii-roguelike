@@ -68,6 +68,24 @@ export class LakeBoss {
     this.target   = null;
     this.velocity = { vx: 0, vy: 0 };  // stub for shared loops
 
+    // Shared-loop stubs: CombatSystem inspects these on every melee/projectile
+    // hit. LakeBoss exposes a hitbox (most bosses don't), so it reaches those
+    // branches. Matches Enemy.js shape so freeze etc. resolve cleanly.
+    this.statusEffects = {
+      burn:      { active: false, duration: 0, damage: 0.5, tickRate: 2.5, tickTimer: 0 },
+      poison:    { active: false, duration: 0, damage: 0.3, tickRate: 0.3, tickTimer: 0 },
+      freeze:    { active: false, duration: 0, slowAmount: 0.5, frozen: false, shuddering: false },
+      stun:      { active: false, duration: 0 },
+      sleep:     { active: false, duration: 0 },
+      charm:     { active: false, duration: 0 },
+      wet:       { active: false, duration: 0 },
+      knockback: { active: false, duration: 0 },
+      blind:     { active: false, duration: 0 },
+      dizzy:     { active: false, duration: 0 },
+      goo:       { active: false, duration: 0, slowAmount: 0.8 }
+    };
+    this.detectionIndicatorTimer = 0;
+
     this._pickNewTarget();
   }
 

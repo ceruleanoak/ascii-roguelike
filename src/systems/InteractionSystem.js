@@ -5,6 +5,7 @@ import { Fairy } from '../entities/Fairy.js';
 import { isIngredient, isItem, generateEnemyDrops } from '../data/items.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
 import { createDebris } from '../entities/Debris.js';
+import { createIceBurst } from '../entities/Particle.js';
 import { INTERACTION_RANGE, OBJECT_ANIMATIONS, GRID } from '../game/GameConfig.js';
 import { inSamePlane, planeOf, objectOnPlane } from './PlaneSystem.js';
 
@@ -240,6 +241,40 @@ export class InteractionSystem {
       return;
     }
 
+    // Rock harvest is checked BEFORE generic dropTable so mineral-formation rocks
+    // (which have dropTable='basic' set by RoomGenerator) still get the guaranteed
+    // Rock drop. Zone dropTable extras stack on top of the harvest rolls.
+    if (effect === 'destroyObject:rockHarvest') {
+      obj.destroyAfterAnimation = true;
+      game.renderer.markBackgroundDirty();
+      const rolls = [
+        { char: '0', chance: 1.00 },
+        { char: 'M', chance: 0.20 },
+        { char: '❦', chance: 0.12 },
+        { char: '⚱', chance: 0.03 }
+      ];
+      let i = 0;
+      for (const r of rolls) {
+        if (Math.random() < r.chance) {
+          const angle = (i / rolls.length) * Math.PI * 2 + Math.random() * 0.4;
+          game.lootSystem.spawnIngredientDrop(r.char, obj.position.x, obj.position.y, angle, obj);
+          i++;
+        }
+      }
+      // Zone-formation rocks also roll their dropTable bonus (e.g. red-zone gemstones).
+      if (obj.dropTable) {
+        const rarityProfile = obj.dropTable === 'rare_gemstone' ? 'elite' : 'normal';
+        const extras = generateEnemyDrops(obj.dropTable, rarityProfile, 1);
+        for (const drop of extras) {
+          if (isIngredient(drop)) {
+            const angle = Math.random() * Math.PI * 2;
+            game.lootSystem.spawnIngredientDrop(drop, obj.position.x, obj.position.y, angle, obj);
+          }
+        }
+      }
+      return;
+    }
+
     // Check for zone-specific drop tables (e.g., gemstones from RED zone rocks)
     if (obj.dropTable && effect.includes('destroyObject')) {
       obj.destroyAfterAnimation = true;
@@ -287,6 +322,7 @@ export class InteractionSystem {
     } else if (effect === 'destroyObject:spawnChestLoot') {
       obj.destroyAfterAnimation = true;
       game.renderer.markBackgroundDirty();
+      game.audioSystem?.playSFX('chest_open');
 
       const drops = generateEnemyDrops('generic', 'normal', 2);
       for (const drop of drops) {
@@ -296,10 +332,22 @@ export class InteractionSystem {
           game.lootSystem.spawnItemDrop(drop, obj.position.x, obj.position.y, null, obj);
         }
       }
+      // Rare Artifact roll on chests — separate from generic loot pool so it
+      // doesn't leak into barrels/crates (which share `generic`). 10% per chest.
+      if (Math.random() < 0.10) {
+        game.lootSystem.spawnIngredientDrop('⚱', obj.position.x, obj.position.y, null, obj);
+      }
     } else if (effect === 'destroyObject') {
       obj.destroyAfterAnimation = true;
       game.renderer.markBackgroundDirty();
     } else if (effect === 'cutGrass') {
+      // Frozen grass (tinted by a Freeze Trap) emits an ice burst when sliced.
+      if (obj.frozen) {
+        game.particles.push(...createIceBurst(
+          obj.position.x + GRID.CELL_SIZE / 2,
+          obj.position.y + GRID.CELL_SIZE / 2
+        ));
+      }
       // Cut tall grass has a small chance of yielding Pollen (raw oil).
       // Cap to one pollen per swing — a single blade swing can hit multiple
       // grass tiles via AOE, and rolling per-tile multiplies the perceived rate.

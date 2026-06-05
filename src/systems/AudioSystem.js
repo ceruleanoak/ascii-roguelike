@@ -73,6 +73,8 @@ export class AudioSystem {
     this.isPlaying = false;
     this.autoplayBlocked = false;
     this.userInteractionListener = null;
+    this.autoResumeListener = null;
+    this.visibilityChangeListener = null;
     this.masterVolume = 0.7;
   }
 
@@ -99,11 +101,61 @@ export class AudioSystem {
     this.sfxGain.gain.value = this.sfxVolume;
     this.sfxGain.connect(this.audioContext.destination);
 
+    this.armAutoResume();
+
     try {
       const audioData = await this.fetchAudioBuffer(audioPath);
       this.singleBuffer = await this.audioContext.decodeAudioData(audioData);
     } catch (error) {
       console.error('[Audio] Failed to load single track:', error);
+    }
+  }
+
+  /**
+   * Register a one-shot listener that resumes the AudioContext on the
+   * first user gesture of any kind. Browsers require a user gesture to
+   * transition the context from 'suspended' → 'running'; without this,
+   * SFX silently no-op until the player clicks the launch button.
+   *
+   * Idempotent — repeat calls do nothing. The listener removes itself
+   * once the context is running.
+   */
+  armAutoResume() {
+    if (this.autoResumeListener || !this.audioContext) return;
+
+    // Kept armed for the full lifetime of the AudioContext. Browsers (Chrome in
+    // particular) re-suspend the context when the tab is hidden or backgrounded,
+    // so a one-shot listener that disarms on first success will miss future
+    // suspensions. The listener is cheap — it only calls resume() when needed.
+    const tryResume = () => {
+      if (!this.audioContext || this.audioContext.state === 'running') return;
+      this.audioContext.resume().catch(() => {});
+    };
+
+    // Also resume when the tab becomes visible again (covers browser-initiated
+    // suspensions that occur while the page is hidden).
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') tryResume();
+    };
+
+    this.autoResumeListener = tryResume;
+    this.visibilityChangeListener = onVisibilityChange;
+    document.addEventListener('pointerdown', tryResume);
+    document.addEventListener('keydown', tryResume);
+    document.addEventListener('touchstart', tryResume, { passive: true });
+    document.addEventListener('visibilitychange', onVisibilityChange);
+  }
+
+  disarmAutoResume() {
+    if (this.autoResumeListener) {
+      document.removeEventListener('pointerdown', this.autoResumeListener);
+      document.removeEventListener('keydown', this.autoResumeListener);
+      document.removeEventListener('touchstart', this.autoResumeListener);
+      this.autoResumeListener = null;
+    }
+    if (this.visibilityChangeListener) {
+      document.removeEventListener('visibilitychange', this.visibilityChangeListener);
+      this.visibilityChangeListener = null;
     }
   }
 
@@ -125,6 +177,8 @@ export class AudioSystem {
     this.sfxGain = this.audioContext.createGain();
     this.sfxGain.gain.value = this.sfxVolume;
     this.sfxGain.connect(this.audioContext.destination);
+
+    this.armAutoResume();
 
     try {
       const [layer1Data, layer2Data] = await Promise.all([
@@ -209,6 +263,11 @@ export class AudioSystem {
       console.warn(`[Audio] Cannot play SFX: ${name} (not loaded or context unavailable)`);
       return;
     }
+    // Drop SFX while the AudioContext is suspended (autoplay-blocked).
+    // start(0) on a suspended context queues the source; when the user
+    // finally interacts and the context resumes, every queued source fires
+    // at once — producing a burst of stale sounds. Better to silently drop.
+    if (this.audioContext.state !== 'running') return;
 
     try {
       // Evict oldest concurrent instance if at limit, to prevent node storms
@@ -259,6 +318,7 @@ export class AudioSystem {
    */
   playStoppableSFX(name, volume = 1.0) {
     if (!this.sfxBuffers[name] || !this.audioContext || !this.sfxGain) return;
+    if (this.audioContext.state !== 'running') return;
 
     this.stopSFXByName(name);
 
@@ -296,6 +356,53 @@ export class AudioSystem {
       source.start(0);
     } catch (error) {
       console.error(`[Audio] Error playing stoppable SFX ${name}:`, error);
+    }
+  }
+
+  /**
+   * Stoppable SFX with playbackRate scaled so the sample plays in exactly
+   * `targetSeconds`. Pitch shifts with rate (resampling, not time-stretching).
+   * Used for charge cues whose length matches gameplay timers.
+   */
+  playStoppableSFXStretched(name, targetSeconds, volume = 1.0) {
+    if (!this.sfxBuffers[name] || !this.audioContext || !this.sfxGain) return;
+    if (this.audioContext.state !== 'running') return;
+    if (!(targetSeconds > 0)) return;
+
+    this.stopSFXByName(name);
+
+    try {
+      const source = this.audioContext.createBufferSource();
+      source.buffer = this.sfxBuffers[name];
+      source.playbackRate.value = source.buffer.duration / targetSeconds;
+
+      const persistentGain = this.sfxNodeGains[name];
+      let gainNode;
+      if (persistentGain) {
+        persistentGain.gain.value = volume;
+        gainNode = persistentGain;
+        source.connect(gainNode);
+      } else {
+        gainNode = this.audioContext.createGain();
+        gainNode.gain.value = volume;
+        source.connect(gainNode);
+        gainNode.connect(this.sfxGain);
+      }
+
+      this.stoppableSources[name] = { source, gainNode: persistentGain ? null : gainNode };
+
+      source.onended = () => {
+        const entry = this.stoppableSources[name];
+        if (entry && entry.source === source) {
+          if (entry.gainNode) entry.gainNode.disconnect();
+          delete this.stoppableSources[name];
+        }
+        source.disconnect();
+      };
+
+      source.start(0);
+    } catch (error) {
+      console.error(`[Audio] Error playing stretched SFX ${name}:`, error);
     }
   }
 
@@ -662,6 +769,50 @@ export class AudioSystem {
   }
 
   /**
+   * Load the full gameplay SFX set. Idempotent — subsequent calls are no-ops
+   * so REST entry and arcade-demo entry can both call this without re-fetching.
+   * Requires an AudioContext (created by loadSingleTrack or loadMusic).
+   * @param {string} base - BASE_URL prefix
+   */
+  loadGameplaySFX(base) {
+    if (!this.audioContext || this.gameplaySFXLoaded) return;
+    this.gameplaySFXLoaded = true;
+    this.loadSFX('aggro', `${base}assets/audio/sfx-aggro.mp3`);
+    this.loadSFX('destroy', `${base}assets/audio/sfx-destroy.mp3`);
+    this.loadSFX('roll', `${base}assets/audio/sfx-roll.mp3`);
+    this.loadSFX('attack_blade', `${base}assets/audio/sfx-attack-blade.mp3`);
+    this.loadSFX('attack_whip', `${base}assets/audio/sfx-attack-whip.mp3`);
+    this.loadSFX('charge_bow', `${base}assets/audio/sfx-charge-bow.mp3`);
+    this.loadSFX('wand_charge', `${base}assets/audio/sfx-wand-charge.wav`);
+    this.loadSFX('player_death', `${base}assets/audio/sfx-player-death.mp3`);
+    this.loadSFX('craft_cycle', `${base}assets/audio/sfx-craft-cycle.mp3`);
+    this.loadSFX('mag_reload', `${base}assets/audio/sfx-mag-reload.mp3`);
+    this.loadSFX('energy_charge', `${base}assets/audio/sfx-energy-charge.wav`);
+    this.loadSFX('enemy_hit', `${base}assets/audio/sfx-enemy-hit.wav`);
+    this.loadSFX('goo_hit', `${base}assets/audio/sfx-goo-hit.wav`);
+    this.loadSFX('goo_death_1', `${base}assets/audio/sfx-goo-death-1.mp3`);
+    this.loadSFX('goo_death_2', `${base}assets/audio/sfx-goo-death-2.mp3`);
+    this.loadSFX('ghost_spawn', `${base}assets/audio/sfx-ghost-spawn.wav`);
+    this.loadSFX('frog', `${base}assets/audio/sfx-frog.wav`);
+    this.loadSFX('hut_lower', `${base}assets/audio/sfx-hut-lower.wav`);
+    this.loadSFX('polymorph', `${base}assets/audio/sfx-polymorph.wav`);
+    this.loadSFX('wave_1', `${base}assets/audio/sfx-wave-01.wav`);
+    this.loadSFX('wave_2', `${base}assets/audio/sfx-wave-03.wav`);
+    this.loadSFX('wave_3', `${base}assets/audio/sfx-wave-05.wav`);
+    this.loadSFX('weapon_pickup', `${base}assets/audio/sfx-weapon-pickup.wav`);
+    this.loadSFX('boss_defeat', `${base}assets/audio/sfx-boss-defeat.wav`);
+    this.loadSFX('coin_plink', `${base}assets/audio/sfx-coin-plink.wav`);
+    // Placeholder ricochet SFX — reusing coin-plink until a dedicated asset exists.
+    this.loadSFX('ricochet', `${base}assets/audio/sfx-coin-plink.wav`);
+    this.loadSFX('lightning', `${base}assets/audio/sfx-lightning.wav`);
+    this.loadSFX('chest_open', `${base}assets/audio/sfx-chest-open.wav`);
+    this.loadSFX('crow_takeoff_1', `${base}assets/audio/sfx-crow-1.wav`);
+    this.loadSFX('crow_takeoff_2', `${base}assets/audio/sfx-crow-2.wav`);
+    this.loadSFX('magic_death', `${base}assets/audio/sfx-magic-death.wav`);
+    this.loadSFX('ingredient_pickup', `${base}assets/audio/sfx-ingredient-pickup.wav`);
+  }
+
+  /**
    * Load all 6 boss audio tracks (tracks 1–5 + the loop stinger).
    * Must be called after loadMusic() so the AudioContext exists.
    * Fire-and-forget: resolves silently if files are missing.
@@ -960,6 +1111,7 @@ export class AudioSystem {
   dispose() {
     this.stop();
     this.removeAutoplayUnblock();
+    this.disarmAutoResume();
 
     if (this.audioContext) {
       this.audioContext.close();

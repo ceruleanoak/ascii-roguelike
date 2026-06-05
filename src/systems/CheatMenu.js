@@ -2,6 +2,7 @@ import { ITEMS, INGREDIENTS, ITEM_TYPES, WEAPON_TYPES } from '../data/items.js';
 import { ENEMIES, ZONE_SPAWN_TABLES } from '../data/enemies.js';
 import { GRID } from '../game/GameConfig.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
+import { sessionDeaths } from './DeathLedgerSystem.js';
 
 const GRID_COLS = 4;
 const TILE_COLS = 5;   // cell-widths per tile
@@ -32,10 +33,14 @@ export class CheatMenu {
     const meterActive = !!this.game?.player?.magicMeter?.active;
 
     const demoRecording = !!this.game?.demoSystem?.recording;
+    const fireworks = !!this.game?.particleFireworks;
+    const deathCount = sessionDeaths.length;
     const togglesItems = [
       { char: godMode ? '✓' : '○', name: `GOD MODE [${godMode ? 'ON' : 'OFF'}]`, type: 'toggle_god_mode', color: godMode ? '#00ff88' : '#888888' },
       { char: meterActive ? '✓' : '○', name: `MAGIC METER [${meterActive ? 'ON' : 'OFF'}]`, type: 'activate_magic_meter', color: meterActive ? '#cc66ff' : '#888888' },
-      { char: demoRecording ? '●' : '○', name: `RECORD DEMO [${demoRecording ? 'ON' : 'OFF'}]`, type: 'toggle_demo_recording', color: demoRecording ? '#ff4444' : '#888888' }
+      { char: demoRecording ? '●' : '○', name: `RECORD DEMO [${demoRecording ? 'ON' : 'OFF'}]`, type: 'toggle_demo_recording', color: demoRecording ? '#ff4444' : '#888888' },
+      { char: fireworks ? '✶' : '○', name: `PARTICLE FIREWORKS [${fireworks ? 'ON' : 'OFF'}]`, type: 'toggle_particle_fireworks', color: fireworks ? '#ffaa44' : '#888888' },
+      { char: '↓', name: `DOWNLOAD LEDGER (${deathCount} death${deathCount !== 1 ? 's' : ''})`, type: 'download_death_ledger', color: deathCount > 0 ? '#aaaaff' : '#444466' }
     ];
 
     const zoneItems = (this.game && this.game.zoneDepths) ? [
@@ -384,6 +389,8 @@ export class CheatMenu {
     if (selected.type === 'toggle_god_mode') return { action: 'toggle_god_mode' };
     if (selected.type === 'activate_magic_meter') return { action: 'activate_magic_meter' };
     if (selected.type === 'toggle_demo_recording') return { action: 'toggle_demo_recording' };
+    if (selected.type === 'toggle_particle_fireworks') return { action: 'toggle_particle_fireworks' };
+    if (selected.type === 'download_death_ledger') return { action: 'download_death_ledger' };
     if (selected.type === 'zone') return { action: 'teleport_zone', zone: selected.zone };
     if (selected.type === 'boss_test') return { action: 'boss_test', zone: selected.zone };
     if (selected.type === 'character') {

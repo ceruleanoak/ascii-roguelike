@@ -150,7 +150,8 @@ export class CombatSystem {
       }
 
       // Apply deceleration to arrows (maintains speed initially, hard falloff at end)
-      if (proj.type === 'arrow') {
+      // Boomerangs skip deceleration — they maintain constant speed and return to player.
+      if (proj.type === 'arrow' && !proj.boomerang) {
         // Store initial speed on first frame
         if (!proj.initialSpeed) {
           proj.initialSpeed = Math.sqrt(proj.velocity.vx ** 2 + proj.velocity.vy ** 2);
@@ -204,6 +205,51 @@ export class CombatSystem {
         proj.loopTime += deltaTime;
       }
 
+      // Boomerang: outbound timer (charge-scaled, extended per enemy hit). When it
+      // expires, flip to return mode and steer in a straight line directly toward
+      // the owner each frame (no curve interp). No retrieval — despawns on catch
+      // or owner death.
+      if (proj.boomerang) {
+        const bSpeed = Math.hypot(proj.velocity.vx, proj.velocity.vy) || 250;
+        if (!proj.boomerangReturning) {
+          proj.boomerangTimer -= deltaTime;
+          if (proj.boomerangTimer <= 0) proj.boomerangReturning = true;
+        }
+        if (proj.boomerangReturning) {
+          if (!proj.owner || proj.owner.isDead) {
+            this.projectiles.splice(i, 1);
+            continue;
+          }
+          const tx = proj.owner.position.x + (proj.owner.width || GRID.CELL_SIZE) / 2;
+          const ty = proj.owner.position.y + (proj.owner.height || GRID.CELL_SIZE) / 2;
+          const dx = tx - proj.position.x;
+          const dy = ty - proj.position.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < GRID.CELL_SIZE * 0.6) {
+            // Caught — refund one charge to the matching bow slot (matches arrow-pickup pattern).
+            const bow = (proj.owner.quickSlots || []).find(slot =>
+              slot &&
+              slot.data?.weaponType === 'BOW' &&
+              slot.char === proj.weaponChar &&
+              slot.maxUses !== null &&
+              slot.usesRemaining < slot.maxUses
+            );
+            if (bow) {
+              bow.usesRemaining++;
+              if (bow.cooldownTimer > 1000) bow.cooldownTimer = 0; // Clear depletion lock
+              this.createDamageNumber('+1', proj.position.x, proj.position.y, proj.color || '#ffffff');
+            }
+            this.projectiles.splice(i, 1);
+            continue;
+          }
+          // Straight-line aim: snap velocity to current player direction at constant speed.
+          proj.velocity.vx = (dx / dist) * bSpeed;
+          proj.velocity.vy = (dy / dist) * bSpeed;
+        }
+        // Spin the glyph for visual feedback
+        proj.drawAngle = (proj.drawAngle || 0) + 14 * deltaTime;
+      }
+
       // Move projectile
       proj.position.x += proj.velocity.vx * deltaTime;
       proj.position.y += proj.velocity.vy * deltaTime;
@@ -226,6 +272,16 @@ export class CombatSystem {
       // Check collision with room walls via collisionMap.
       // Ricochet projectiles skip this — they use checkRicochet() for canvas-edge bouncing.
       if (!proj.ricochet && this._hitsWall(proj, room)) {
+        // Boomerangs bounce off walls into return mode instead of dying.
+        if (proj.boomerang) {
+          if (!proj.boomerangReturning) proj.boomerangReturning = true;
+          // Nudge back along the inverse velocity so the next tick isn't still inside the wall.
+          proj.position.x -= proj.velocity.vx * deltaTime;
+          proj.position.y -= proj.velocity.vy * deltaTime;
+          proj.velocity.vx *= -1;
+          proj.velocity.vy *= -1;
+          continue;
+        }
         // Bullets ricochet off interior structure walls (flat axis-aligned surfaces).
         // Border walls and out-of-grid still destroy.
         if (proj.type === 'bullet' && this._tryStructureWallRicochet(proj, room, deltaTime)) {
@@ -394,6 +450,13 @@ export class CombatSystem {
 
           // Destroy bullet if needed
           if (result.shouldDestroyBullet) {
+            // Boomerangs bounce off blocking objects instead of being destroyed
+            if (proj.boomerang && !proj.boomerangReturning) {
+              proj.boomerangReturning = true;
+              proj.boomerangRicochetReturn = true;
+              break;
+            }
+
             bgObjectHit = true;
 
             // Create stuck arrow if this is an arrow hitting any background object
@@ -447,6 +510,11 @@ export class CombatSystem {
       let hit = false;
       for (const enemy of enemies) {
         if (!inSamePlane(proj, enemy)) continue;
+        // Boomerang gating: normal return is inert; ricochet return stuns but deals no damage.
+        if (proj.boomerang) {
+          if (proj.boomerangReturning && !proj.boomerangRicochetReturn) continue;
+          if (proj._boomerangHitEnemies && proj._boomerangHitEnemies.has(enemy)) continue;
+        }
 
         if (this.checkProjectileCollision(proj, enemy)) {
           // Missed shot — show MISS once per enemy and pass through. Bullet keeps traveling
@@ -488,6 +556,16 @@ export class CombatSystem {
             });
             hit = true;
             break;
+          }
+
+          // Boomerang ricochet return: stun only, no damage, passes through all enemies
+          if (proj.boomerang && proj.boomerangRicochetReturn) {
+            if (!proj._boomerangHitEnemies) proj._boomerangHitEnemies = new Set();
+            proj._boomerangHitEnemies.add(enemy);
+            enemy.applyStatusEffect('stun', 1.5);
+            this.createDamageNumber('STUN', enemy.position.x, enemy.position.y, '#ffff44');
+            this.physicsSystem.applyHitstop(enemy, 0.06);
+            continue;
           }
 
           // Calculate arrow speed falloff (damage decreases as arrow slows down)
@@ -585,14 +663,67 @@ export class CombatSystem {
             if (proj.explode) {
               this.createExplosion(proj.position.x, proj.position.y, proj.explodeRadius || 30, proj.damage, enemies, backgroundObjects, 0, planeOf(proj));
             }
+
+            // Boomerang: record this enemy as hit, defer the return timer, and on the
+            // very first hit also chain-damage nearby enemies in a tight radius.
+            // Then redirect toward the nearest un-hit enemy in range, or flip to
+            // return mode if none remain.
+            if (proj.boomerang) {
+              if (!proj._boomerangHitEnemies) proj._boomerangHitEnemies = new Set();
+              proj._boomerangHitEnemies.add(enemy);
+              proj.boomerangTimer += proj.boomerangHitDefer || 0.18;
+              if (!proj.boomerangHasHitFirst) {
+                proj.boomerangHasHitFirst = true;
+                const r = proj.chainRadius || 32;
+                for (const other of enemies) {
+                  if (other === enemy) continue;
+                  if (!inSamePlane(proj, other)) continue;
+                  const ddx = other.position.x - enemy.position.x;
+                  const ddy = other.position.y - enemy.position.y;
+                  if (Math.hypot(ddx, ddy) > r) continue;
+                  const chainDamaged = other.takeDamage(proj.damage, proj.attackId);
+                  if (chainDamaged !== false) {
+                    this.createDamageNumber(proj.damage, other.position.x, other.position.y, other.color);
+                    this.physicsSystem.applyHitstop(other, 0.04);
+                    proj._boomerangHitEnemies.add(other);
+                  }
+                }
+              }
+              // Find nearest un-hit enemy within bounce range and redirect; otherwise
+              // initiate early return.
+              const bounceRadius = proj.boomerangBounceRadius || 120;
+              let bestTarget = null;
+              let bestDist = Infinity;
+              for (const other of enemies) {
+                if (other === enemy) continue;
+                if (!inSamePlane(proj, other)) continue;
+                if (proj._boomerangHitEnemies.has(other)) continue;
+                const ddx = other.position.x - proj.position.x;
+                const ddy = other.position.y - proj.position.y;
+                const d = Math.hypot(ddx, ddy);
+                if (d > bounceRadius) continue;
+                if (d < bestDist) { bestDist = d; bestTarget = other; }
+              }
+              if (bestTarget) {
+                const spd = Math.hypot(proj.velocity.vx, proj.velocity.vy) || 250;
+                const tx = bestTarget.position.x - proj.position.x;
+                const ty = bestTarget.position.y - proj.position.y;
+                const tdist = Math.hypot(tx, ty) || 1;
+                proj.velocity.vx = (tx / tdist) * spd;
+                proj.velocity.vy = (ty / tdist) * spd;
+              } else {
+                proj.boomerangReturning = true;
+              }
+              break;
+            }
           }
 
           // Pierce projectiles don't get removed
           if (!proj.pierce) {
             hit = true;
 
-            // Create stuck arrow if this is an arrow
-            if (proj.type === 'arrow') {
+            // Create stuck arrow if this is an arrow (boomerangs return — no stuck arrow)
+            if (proj.type === 'arrow' && !proj.boomerang) {
               this.stuckArrows.push({
                 char: proj.char,
                 weaponChar: proj.weaponChar,
@@ -661,7 +792,7 @@ export class CombatSystem {
                 continue;
               }
               const result = obj.takeDamage(attack.damage);
-              if (result.destroyed && result.effect) {
+              if (result.effect) {
                 this.objectDestroyEvents.push({ obj, effect: result.effect });
               }
               attack.hasHitObject = true;
@@ -713,7 +844,18 @@ export class CombatSystem {
 
               // Water state transitions from melee
               if (obj.isWater && obj.isWater()) {
-                if (attack.onHit === 'freeze') {
+                const acidActive = attack.acidBlade && player && player._acidBladeChargesThisRoom > 0;
+                if (attack.acidBlade && !acidActive) {
+                  // Out of charges — Acid Blade swings still land but don't
+                  // convert water (and skip the 8s poisoned-water fallback below).
+                } else if (acidActive) {
+                  this._acidFloodFillWater(obj, backgroundObjects);
+                  this.createDamageNumber('☠', obj.position.x, obj.position.y, '#44bb44');
+                  if (!attack._acidChargeDepleted) {
+                    attack._acidChargeDepleted = true;
+                    player._acidBladeChargesThisRoom = Math.max(0, player._acidBladeChargesThisRoom - 1);
+                  }
+                } else if (attack.onHit === 'freeze') {
                   obj.setWaterState('frozen', Infinity); // Stays frozen until thawed by fire
                 } else if (attack.onHit === 'poison') {
                   obj.setWaterState('poisoned', 8.0);
@@ -813,11 +955,6 @@ export class CombatSystem {
             // Green Ranger stealth modifier: bonus when enemy hasn't detected the player
             let totalDamage = attack.damage;
 
-            // Acid Blade corrosion: corroded enemies take +50% damage
-            if (enemy.statusEffects.corrosion?.active) {
-              totalDamage = Math.ceil(totalDamage * 1.5);
-            }
-
             // Spear distance crit: 3rd hitbox at full thrust range — guaranteed crit
             if (attack.distanceCrit) {
               totalDamage = Math.ceil(totalDamage * 1.5);
@@ -885,8 +1022,17 @@ export class CombatSystem {
                 this.createDamageNumber('!', enemy.position.x, enemy.position.y - 12, '#ff4400');
               }
 
+              // Acid Blade: each swing that connects with an enemy depletes 1
+              // charge (max 1 per swing across enemy + water-tile hits). At 0
+              // charges the sword still swings but applies no poison.
+              const acidOutOfCharges = attack.acidBlade && (!player || player._acidBladeChargesThisRoom <= 0);
+              if (attack.acidBlade && !acidOutOfCharges && !attack._acidChargeDepleted) {
+                attack._acidChargeDepleted = true;
+                player._acidBladeChargesThisRoom = Math.max(0, player._acidBladeChargesThisRoom - 1);
+              }
+
               // Apply status effects with affinity-modified duration
-              if (attack.onHit && enemy.shouldApplyStatusEffect(attack.onHit)) {
+              if (attack.onHit && !acidOutOfCharges && enemy.shouldApplyStatusEffect(attack.onHit)) {
                 const modifiedDuration = statusDuration * elementalMod;
 
                 if (attack.onHit === 'freeze') {
@@ -902,7 +1048,7 @@ export class CombatSystem {
                 }
                 // Emit impact effect for visual feedback
                 this.impactEffects.push({ x: enemy.position.x, y: enemy.position.y, onHit: attack.onHit, color: attack.color });
-              } else if (attack.onHit && !enemy.shouldApplyStatusEffect(attack.onHit)) {
+              } else if (attack.onHit && !acidOutOfCharges && !enemy.shouldApplyStatusEffect(attack.onHit)) {
                 this.createDamageNumber('RESIST', enemy.position.x, enemy.position.y - 12, '#888888');
               }
 
@@ -919,12 +1065,6 @@ export class CombatSystem {
               // Show distance crit indicator (spear full-extension bonus)
               if (attack.distanceCrit) {
                 this.createDamageNumber('PIERCE', enemy.position.x, enemy.position.y - 14, '#ffff66');
-              }
-
-              // Acid Blade corrosion: apply debuff so next hits deal +50% damage
-              if (attack.corrosion) {
-                enemy.applyStatusEffect('corrosion', 3.0);
-                this.createDamageNumber('CORRODE', enemy.position.x, enemy.position.y - 14, '#44ff00');
               }
 
               // Venom Blade poison stacking: 3 hits triggers a burst
@@ -1247,9 +1387,7 @@ export class CombatSystem {
     // DOT effect colors
     const DOT_COLORS = {
       burn: '#ff4400',
-      poison: '#88ff00',
-      acid: '#00ff00',
-      bleed: '#cc0000'
+      poison: '#88ff00'
     };
 
     // Enemy attacks and DOT damage
@@ -1892,7 +2030,7 @@ export class CombatSystem {
           hitbox.y < ob.y + ob.height && hitbox.y + hitbox.height > ob.y) {
         this._rollHitObjects.add(obj);
         const result = obj.takeDamage(1, false);
-        if (result.destroyed && result.effect) {
+        if (result.effect) {
           this.objectDestroyEvents.push({ obj, effect: result.effect });
         }
       }
@@ -1963,6 +2101,7 @@ export class CombatSystem {
   }
 
   createChainLightning(source, hitEnemy, enemies) {
+    this.game.audioSystem?.playSFX('lightning');
     const chainRange = 80;
     const chainDamage = source.damage * 0.5;
     const maxChains = source.chainCount || 3;
@@ -2103,7 +2242,7 @@ export class CombatSystem {
         // Glittering rocks: explosions always destroy and drop gems
         if (obj.data?.glitteringRock) {
           const result = obj.takeDamage(9999);
-          if (result.destroyed && result.effect) {
+          if (result.effect) {
             this.objectDestroyEvents.push({ obj, effect: result.effect });
           }
           continue;
@@ -2120,7 +2259,7 @@ export class CombatSystem {
         // Damage destructible objects
         if (!obj.indestructible && obj.hp !== null) {
           const result = obj.takeDamage(explosionDamage);
-          if (result.destroyed && result.effect) {
+          if (result.effect) {
             this.objectDestroyEvents.push({ obj, effect: result.effect });
           }
         }
@@ -2310,6 +2449,44 @@ export class CombatSystem {
 
     // Placeholder ricochet SFX — wired via main.js; silently no-ops if unloaded.
     this.audioSystem?.playSFX?.('ricochet', 0.6);
+  }
+
+  // Acid Blade: flood-fill connected water tiles, permanently converting the
+  // entire pond to acid (modelled as the existing 'poisoned' waterState with
+  // Infinity duration). 4-connected adjacency on the cell grid.
+  _acidFloodFillWater(startObj, backgroundObjects) {
+    const CELL = GRID.CELL_SIZE;
+    const key = (x, y) => `${Math.round(x / CELL)},${Math.round(y / CELL)}`;
+
+    const waterMap = new Map();
+    for (const obj of backgroundObjects) {
+      if (obj.destroyed) continue;
+      if (!obj.isWater || !obj.isWater()) continue;
+      waterMap.set(key(obj.position.x, obj.position.y), obj);
+    }
+
+    const visited = new Set();
+    const queue = [startObj];
+    visited.add(key(startObj.position.x, startObj.position.y));
+
+    while (queue.length > 0) {
+      const obj = queue.shift();
+      obj.setWaterState('poisoned', Infinity);
+
+      const cx = Math.round(obj.position.x / CELL);
+      const cy = Math.round(obj.position.y / CELL);
+      const neighborKeys = [
+        `${cx - 1},${cy}`, `${cx + 1},${cy}`,
+        `${cx},${cy - 1}`, `${cx},${cy + 1}`
+      ];
+      for (const nk of neighborKeys) {
+        if (visited.has(nk)) continue;
+        const neighbor = waterMap.get(nk);
+        if (!neighbor) continue;
+        visited.add(nk);
+        queue.push(neighbor);
+      }
+    }
   }
 
   conductElectricity(sourceObj, damage, enemies, player = null) {

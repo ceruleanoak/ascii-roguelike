@@ -12,6 +12,13 @@ import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
 
+// Zone-boss arena → letter template key. Boss rooms are entered without a
+// letter (cheat warp) or with an arbitrary one (normal progression), so we
+// force the dedicated arena template by zone here.
+const ZONE_BOSS_TEMPLATES = {
+  cyan: 'L_BOSS',
+};
+
 export class RoomGenerator {
   constructor(exitSystem, zoneSystem = null, game = null) {
     this.currentDepth = 0;
@@ -587,8 +594,31 @@ export class RoomGenerator {
   }
 
   generateBossRoom(room) {
+    // Zone-boss arena override: each zone boss gets a dedicated terrain template
+    // (e.g. cyan's Frosted Maw needs the L_BOSS lake arena). These templates are
+    // never reached via exit letters, so we force them here.
+    if (this.isZoneBossRoom) {
+      const bossTemplate = ZONE_BOSS_TEMPLATES[room.zone];
+      if (bossTemplate && LETTER_TEMPLATES[bossTemplate]) {
+        this.currentLetterTemplate = LETTER_TEMPLATES[bossTemplate];
+        room.letterTemplate = this.currentLetterTemplate;
+      }
+    }
+
     // Generate terrain first so liquid positions are known before enemy placement
     this.generateBackgroundObjects(room);
+
+    // Template-driven terrain overlays (same set CombatRoom runs). The boss
+    // template's lakeZone is what carves the Frosted Maw arena.
+    if (this.currentLetterTemplate?.islandZone?.enabled) {
+      this.generateIslandTerrain(room);
+    }
+    if (this.currentLetterTemplate?.oceanZone?.enabled) {
+      this.generateOceanTerrain(room);
+    }
+    if (this.currentLetterTemplate?.lakeZone?.enabled) {
+      this.generateLakeTerrain(room);
+    }
 
     const zone = ZONES[room.zone];
     const pool = zone?.bossPool;

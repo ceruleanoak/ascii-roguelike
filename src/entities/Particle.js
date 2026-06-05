@@ -158,6 +158,31 @@ export function createEmberBurst(x, y) {
   return particles;
 }
 
+// Factory function to create an ice burst (freeze trap activation / cutting frozen grass).
+// Radial crystalline shards with no upward drift — sharper, colder counterpart to ember.
+export function createIceBurst(x, y) {
+  const particles = [];
+  const iceColors = ['#aaffff', '#ccffff', '#88ddff', '#e0f4ff'];
+  const shardChars = ['*', '+', '·', '.', '❄'];
+
+  const count = 14;
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
+    const speed = 70 + Math.random() * 90;
+    const vx = Math.cos(angle) * speed;
+    const vy = Math.sin(angle) * speed;
+    const char = shardChars[Math.floor(Math.random() * shardChars.length)];
+    const color = iceColors[Math.floor(Math.random() * iceColors.length)];
+    const lifetime = 0.4 + Math.random() * 0.4;
+    const p = new Particle(x, y, char, color, { vx, vy }, lifetime);
+    p.decelerationRate = 0.88;
+    p.boundToGrid = false;
+    particles.push(p);
+  }
+
+  return particles;
+}
+
 // Factory function to create explosion particles
 export function createExplosion(x, y, count = 20, color = COLORS.PLAYER) {
   const particles = [];

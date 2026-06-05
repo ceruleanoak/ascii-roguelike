@@ -768,6 +768,10 @@ export class ExploreRenderer {
     // Surface frog-tongue attacks — interior versions routed via overlay.
     this.drawPlayerTongueAttacks(game, false);
 
+    // Sticky triplines: permanent committed segments + live preview from player
+    // to pendingAnchor. Red X above player when wire equipped but not over an anchor.
+    if (!inHut && !inMaze && !inDungeon) this._drawWires(game);
+
     // Draw cure Rusalka (polymorph reversal, Lake rooms) — skip when inHut/inMaze
     if (!inHut && !inMaze && !inDungeon && game.cureRusalka) {
       const r = game.cureRusalka;
@@ -840,7 +844,10 @@ export class ExploreRenderer {
     const concealAlpha = this._stepConcealmentAlpha(game.player, !playerHidden);
     if (concealAlpha > 0.005) {
     const playerAlpha = game.player.getVisibilityAlpha();
-    const playerColor = game.player.getDisplayColor();
+    // Moss Cloak ✿ active: render the player as a bush `%` in moss-green.
+    const mossActive = game.player.mossCloakActive === true;
+    const playerChar = mossActive ? '%' : game.player.char;
+    const playerColor = mossActive ? '#228822' : game.player.getDisplayColor();
     const playerOnTunnelPlane = game.player.plane === 1;
     const ctx = this.renderer.fgCtx;
     const needsAlpha = concealAlpha < 0.999;
@@ -851,7 +858,7 @@ export class ExploreRenderer {
       this.renderer.drawTextWithAlphaDithered(
         game.player.position.x + GRID.CELL_SIZE / 2,
         game.player.position.y + GRID.CELL_SIZE / 2,
-        game.player.char,
+        playerChar,
         playerColor,
         playerAlpha
       );
@@ -861,7 +868,7 @@ export class ExploreRenderer {
       this.renderer.drawEntityRotated(
         game.player.position.x + GRID.CELL_SIZE / 2,
         game.player.position.y + GRID.CELL_SIZE / 2,
-        game.player.char,
+        playerChar,
         playerColor,
         spinAngle
       );
@@ -869,7 +876,7 @@ export class ExploreRenderer {
       this.renderer.drawTextWithAlpha(
         game.player.position.x + GRID.CELL_SIZE / 2,
         game.player.position.y + GRID.CELL_SIZE / 2,
-        game.player.char,
+        playerChar,
         playerColor,
         playerAlpha
       );
@@ -1385,10 +1392,15 @@ export class ExploreRenderer {
       crow.char,
       crow.color
     );
-    // Hoard-bearer hint: single pixel in the crow's beak, color-matched to
-    // the carried glyph. Vanishes once the hoard is dropped.
-    if (crow.hoardItem && !crow.droppedHoard) {
-      const dot = INGREDIENTS[crow.hoardItem]?.color || '#ffffff';
+    // Beak pixel: shown for either the wild hoard glyph or a companion's
+    // ferried ingredient. Same visual language — single colored pixel
+    // matched to the glyph — so the player reads both cases as "this crow
+    // is holding something."
+    const beakGlyph = (crow.hoardItem && !crow.droppedHoard)
+      ? crow.hoardItem
+      : crow.carriedIngredient;
+    if (beakGlyph) {
+      const dot = INGREDIENTS[beakGlyph]?.color || '#ffffff';
       const prev = this.renderer.fgCtx.fillStyle;
       this.renderer.fgCtx.fillStyle = dot;
       this.renderer.fgCtx.fillRect(
@@ -2874,6 +2886,43 @@ export class ExploreRenderer {
       const useDithering = itemPlane === 1 && game.player.plane === 1;
       const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
       this.renderer[drawMethod](cx, cy, item.char, item.color);
+    }
+  }
+
+  _drawWires(game) {
+    const ctx = this.renderer.fgCtx;
+    const triplines = game.currentRoom?.triplines || [];
+    const drawSeg = (seg, alpha) => {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = seg.wireType === 'slime' ? '#88dd88' : '#88ccff';
+      ctx.lineWidth = 1.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(seg.x1, seg.y1);
+      ctx.lineTo(seg.x2, seg.y2);
+      ctx.stroke();
+      ctx.restore();
+    };
+    for (const seg of triplines) drawSeg(seg, 1.0);
+
+    const preview = game.wireSystem?.getPreviewSegment();
+    if (preview) drawSeg(preview, 0.7);
+
+    // Red X above player — only flashes after the player pressed SPACE without
+    // a nearby anchor. WireSystem sets a brief timer; it ticks down each frame.
+    if (game.wireSystem?.redXTimer > 0) {
+      ctx.save();
+      ctx.font = `${GRID.CELL_SIZE * 0.9}px 'Unifont', monospace`;
+      ctx.fillStyle = '#ff0000';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(
+        'X',
+        game.player.position.x + game.player.width / 2,
+        game.player.position.y - GRID.CELL_SIZE * 0.6
+      );
+      ctx.restore();
     }
   }
 

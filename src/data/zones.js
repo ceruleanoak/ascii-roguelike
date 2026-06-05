@@ -22,6 +22,13 @@ export const ZONES = {
       'GOO IS IMMUNE TO GOO.',
       'THREE HEADS ARE FAR WORSE THAN ONE.'
     ],
+    // Rare-tier sayings — unlocked by giving an Artifact ⚱ to the wise fellow.
+    // Content should reveal genuinely game-changing info, not flavor.
+    rareSayings: [
+      'A BUSH DOES NOT FEAR THE WOLF.',
+      'STONE GIVES MORE THAN STONE.',
+      'THE FAIRY KNOWS THE WAY TO DUST.'
+    ],
     borderColor: '#00ff00',
     exitColor: ZONE_COLORS.green,
     alternativeZones: ['red', 'cyan', 'yellow'],
@@ -59,6 +66,11 @@ export const ZONES = {
       'RUBY IS THE STONE OF FLAME.',
       'THE TREES HERE CARRY A RARE SAP.',
       'RESCUE THE BRUTAL WARRIOR.'
+    ],
+    rareSayings: [
+      'THE INFUSED COIN TURNS THE WELL.',
+      'OBSIDIAN HIDES THE GEMSTONE.',
+      'A QUENCHED FLAME BECOMES A STONE.'
     ],
     borderColor: '#ff4400',
     exitColor: ZONE_COLORS.red,
@@ -122,6 +134,11 @@ export const ZONES = {
       'THE PEAKS REMEMBER EVERY STEP.',
       'WARMTH IS A WEAPON HERE.'
     ],
+    rareSayings: [
+      'FROZEN WATER FORGETS THE SPARK.',
+      'THE CRYSTAL ANSWERS THE BULLET.',
+      'BREAK ICE TO DRINK THE PEAK.'
+    ],
     borderColor: '#44ffff',
     exitColor: ZONE_COLORS.cyan,
     alternativeZones: ['green', 'red', 'yellow'],
@@ -156,6 +173,11 @@ export const ZONES = {
       'STAND APART FROM IRON.',
       'THE SKY CHOOSES ITS MARK.',
       'WET GROUND CARRIES THE SPARK.'
+    ],
+    rareSayings: [
+      'IRON IN HAND IS IRON IN SKY.',
+      'THE BOX CONDUCTS, THE WOOD DOES NOT.',
+      'A WET FOE IS A LIT FOE.'
     ],
     borderColor: '#ffff44',
     exitColor: ZONE_COLORS.yellow,

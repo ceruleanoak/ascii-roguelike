@@ -169,8 +169,9 @@ export const BACKGROUND_OBJECTS = {
     solid: true,
     collisionShape: 'ellipse', // Use elliptical collision instead of rectangle
     hp: 3,
-    dropEffect: 'destroyObject:spawnIngredient:M',
-    dropChance: 0.2,
+    // Multi-drop harvest: guaranteed Rock, 20% Metal, 12% Moss, 3% Artifact.
+    // No dropChance — table is internally weighted (see InteractionSystem.rockHarvest).
+    dropEffect: 'destroyObject:rockHarvest',
     bulletInteraction: 'interact-preserve',
     flammability: 'none',
     conductivity: 'none',

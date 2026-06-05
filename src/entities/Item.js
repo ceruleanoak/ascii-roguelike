@@ -766,8 +766,8 @@ export class Item {
       if (this.data.canSmash) props.canSmash = this.data.canSmash;
       if (this.data.isPickaxe) props.isPickaxe = this.data.isPickaxe;
       if (this.data.cyclesExitLetter) props.cyclesExitLetter = this.data.cyclesExitLetter;
-      if (this.data.corrosion) props.corrosion = true;
       if (this.data.poisonStacks) props.poisonStacks = true;
+      if (this.data.acidBlade) props.acidBlade = true;
       if (this.data.randomOnHit) props.randomOnHit = this.data.randomOnHit;
 
       if (Object.keys(props).length === 0) return result;
@@ -1231,9 +1231,16 @@ export class Item {
     const spawnX = player.position.x + player.width / 2 + Math.cos(finalAngle) * spawnOffset;
     const spawnY = player.position.y + player.height / 2 + Math.sin(finalAngle) * spawnOffset;
 
+    const isBoomerang = !!this.data.boomerang;
+    // Outbound duration scales with bow charge (speedMultiplier = 1 + chargeRatio).
+    const chargeRatio = Math.max(0, Math.min(1, speedMultiplier - 1));
+    const boomerangTimer = isBoomerang
+      ? (this.data.boomerangBaseDuration ?? 0.45) + chargeRatio * (this.data.boomerangChargeBonus ?? 0.55)
+      : 0;
+
     return {
       type: 'arrow',
-      char: arrowChar,
+      char: isBoomerang ? this.char : arrowChar,
       weaponChar: this.char,
       position: {
         x: spawnX,
@@ -1248,7 +1255,7 @@ export class Item {
       onHit: oil.onHit || this.data.onHit,
       electric: this.data.electric,
       homing: this.data.homing,
-      pierce: this.data.pierce,
+      pierce: this.data.pierce || isBoomerang,  // Boomerang: pierce so wall/single-hit doesn't despawn it
       split: this.data.split,
       splitCount: this.data.splitCount || 3,
       explode: this.data.explode,
@@ -1256,7 +1263,15 @@ export class Item {
       chain: this.data.chain,
       chainCount: this.data.chainCount || 2,
       shooterPlane: player.plane,
-      owner: player
+      owner: player,
+      // Boomerang state
+      boomerang: isBoomerang,
+      boomerangTimer,                                   // counts down to return-mode flip
+      boomerangHitDefer: this.data.boomerangHitDefer,
+      chainRadius: this.data.chainRadius,
+      boomerangReturning: false,
+      boomerangHasHitFirst: false,
+      drawAngle: isBoomerang ? 0 : undefined
     };
   }
 

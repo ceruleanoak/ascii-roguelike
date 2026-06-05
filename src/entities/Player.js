@@ -219,6 +219,12 @@ export class Player {
     // CombatSystem._applyCritIfLucky forces a guaranteed crit while >0.
     this.postDodgeCritTimer = 0;
 
+    // Moss Cloak ✿: armed by dodge-end transition, active while no WASD input.
+    // Drives bush-render override and the enemy detection skip in Enemy.update().
+    this.mossCloakArmed = false;
+    this.mossCloakActive = false;
+    this._lastDodgeActive = false;
+
     // Set by PhysicsSystem each frame; read by updateDodgeRoll (1-frame lag is imperceptible)
     this.isOnSlope = false;
     this.isOnIce   = false;

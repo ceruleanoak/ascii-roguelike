@@ -44,10 +44,10 @@ export class BackgroundObject {
     if (isRock) {
       // Narrow elliptical collision — rock is round, not square.
       // collisionShape: 'ellipse' is set in data; semi-axes a=3 b=6.
-      this.width = 6;
-      this.height = GRID.CELL_SIZE * 0.75;   // 12px
-      this.hitboxOffsetX = 5;                // centers 6px box in 16px cell
-      this.hitboxOffsetY = GRID.CELL_SIZE * 0.125; // 2px
+      this.width = 3;
+      this.height = GRID.CELL_SIZE * 0.375;   // 6px
+      this.hitboxOffsetX = 7;                 // centers 3px box in 16px cell
+      this.hitboxOffsetY = GRID.CELL_SIZE * 0.3125; // 5px
     } else if (isGroundLiquid) {
       // Ground-level contact region — lower third of cell, centered horizontally.
       // Gives the illusion that the liquid/fire sits on the floor plane.
@@ -548,10 +548,10 @@ export class BackgroundObject {
     this.maxHp = 3;
     this.hp = 3;
     // Update hitbox to match rock collision (narrow ellipse, same as constructor)
-    this.width = 6;
-    this.height = GRID.CELL_SIZE * 0.75;
-    this.hitboxOffsetX = 5;
-    this.hitboxOffsetY = GRID.CELL_SIZE * 0.125;
+    this.width = 3;
+    this.height = GRID.CELL_SIZE * 0.375;
+    this.hitboxOffsetX = 7;
+    this.hitboxOffsetY = GRID.CELL_SIZE * 0.3125;
   }
 
   isMud() {

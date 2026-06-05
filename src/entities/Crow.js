@@ -77,6 +77,9 @@ export class Crow {
     this.fleeTimer = 0;
     this.bobPhase = Math.random() * Math.PI * 2;
     this.wingPhase = Math.random() * Math.PI * 2;
+    // One-shot flag set whenever the crow leaves a perch (wild flee or companion
+    // take-off). Consumed and cleared by main.js to trigger the takeoff SFX.
+    this.takeoffPending = false;
 
     // hoardItem: ingredient glyph this crow carries (e.g. '●', '1', 'c'), or null.
     // Dropped exactly once on the crow's first scare; the matching-color pixel
@@ -95,6 +98,10 @@ export class Crow {
     this.companionTask = 'perched';    // 'ingredient' | 'enemy' | 'item' | 'perched'
     this.companionTarget = null;       // ingredient/enemy/item entity
     this.companionOrbitPhase = Math.random() * Math.PI * 2;
+    // Carried ingredient glyph; set when a companion grabs a shiny off the
+    // ground, cleared when it perches on the player and "gives" it over.
+    // Only one at a time — a carrying companion ignores other ingredients.
+    this.carriedIngredient = null;
 
     // Follower mode — flock that trails the player after a feeding event.
     // becomeFollower() flips this on; followers live on game.followerCrows.
@@ -166,7 +173,10 @@ export class Crow {
     this.velocity.vy = 0;
   }
 
-  scare(fromX, fromY) {
+  // isAttack: true for weapon contact (melee/projectile), false for passive
+  // proximity (player nearby). Only attacks knock the hoard loose; spooking
+  // a crow off a perch just by walking past shouldn't shake out loot.
+  scare(fromX, fromY, isAttack = false) {
     const wasIdle = this.state === 'idle';
 
     // Already airborne? Refresh the flee timer and reflag as fleeing,
@@ -174,6 +184,10 @@ export class Crow {
     if (!wasIdle) {
       this.state = 'fleeing';
       this.fleeTimer = FLEE_DURATION;
+      if (isAttack && this.hoardItem && !this.droppedHoard) {
+        this.droppedHoard = true;
+        return this.hoardItem;
+      }
       return null;
     }
 
@@ -190,8 +204,9 @@ export class Crow {
 
     this.state = 'fleeing';
     this.fleeTimer = FLEE_DURATION;
+    this.takeoffPending = true;
 
-    const shouldDrop = this.hoardItem && !this.droppedHoard;
+    const shouldDrop = isAttack && this.hoardItem && !this.droppedHoard;
     if (shouldDrop) {
       this.droppedHoard = true;
       return this.hoardItem;
@@ -390,42 +405,52 @@ export class Crow {
     }
 
     // Priority 1: ingredients — grab dropped shinies before anything else.
-    const ingredient = this._closestPickable(ctx.ingredients, ctx.player.plane);
-    if (ingredient) {
-      this.companionTask = 'ingredient';
-      this.companionTarget = ingredient;
-      const dx = ingredient.position.x - this.position.x;
-      const dy = ingredient.position.y - this.position.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist < COMPANION_PICKUP_DIST) {
-        // Full hand-off: routes to inventory, unregisters physics, drops
-        // the entity from game.ingredients. Setting `consumed` alone left
-        // a ghost on the ground that the crow ignored but never cleaned up.
-        ctx.pickupIngredient?.(ingredient);
-      } else {
-        const s = COMPANION_INGREDIENT_SPEED;
-        this.position.x += (dx / dist) * s * deltaTime;
-        this.position.y += (dy / dist) * s * deltaTime;
+    // Skipped while already carrying: a companion ferries one at a time and
+    // must return to the player to hand it off before grabbing another.
+    if (!this.carriedIngredient) {
+      const ingredient = this._closestPickable(ctx.ingredients, ctx.player.plane);
+      if (ingredient) {
+        this.companionTask = 'ingredient';
+        this.companionTarget = ingredient;
+        const dx = ingredient.position.x - this.position.x;
+        const dy = ingredient.position.y - this.position.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < COMPANION_PICKUP_DIST) {
+          // Lift the ingredient off the ground but DON'T add to inventory yet —
+          // the crow will deliver it on perch. takeIngredient unregisters physics
+          // and removes from game.ingredients without crediting the player.
+          const glyph = ingredient.char;
+          if (ctx.takeIngredient?.(ingredient)) {
+            this.carriedIngredient = glyph;
+          }
+        } else {
+          const s = COMPANION_INGREDIENT_SPEED;
+          this.position.x += (dx / dist) * s * deltaTime;
+          this.position.y += (dy / dist) * s * deltaTime;
+        }
+        return;
       }
-      return;
     }
 
-    // Priority 2: enemies — orbit (dive coordinated by main.js)
-    const enemy = this._closestAlive(ctx.enemies, ctx.player.plane);
-    if (enemy) {
-      this.companionTask = 'enemy';
-      this.companionTarget = enemy;
-      this._orbitTarget(enemy, COMPANION_ORBIT_RADIUS_ENEMY, deltaTime);
-      return;
-    }
+    // Priority 2: enemies — orbit (dive coordinated by main.js).
+    // Skipped while carrying so the crow heads straight back to deliver.
+    if (!this.carriedIngredient) {
+      const enemy = this._closestAlive(ctx.enemies, ctx.player.plane);
+      if (enemy) {
+        this.companionTask = 'enemy';
+        this.companionTarget = enemy;
+        this._orbitTarget(enemy, COMPANION_ORBIT_RADIUS_ENEMY, deltaTime);
+        return;
+      }
 
-    // Priority 3: pickup items (weapons, armor, consumables, traps)
-    const item = this._closestPickable(ctx.items, ctx.player.plane, it => it.char !== '⌬');
-    if (item) {
-      this.companionTask = 'item';
-      this.companionTarget = item;
-      this._orbitTarget(item, COMPANION_ORBIT_RADIUS_ITEM, deltaTime);
-      return;
+      // Priority 3: pickup items (weapons, armor, consumables, traps)
+      const item = this._closestPickable(ctx.items, ctx.player.plane, it => it.char !== '⌬');
+      if (item) {
+        this.companionTask = 'item';
+        this.companionTarget = item;
+        this._orbitTarget(item, COMPANION_ORBIT_RADIUS_ITEM, deltaTime);
+        return;
+      }
     }
 
     // Priority 4: perch near the player. With multiple companions, fan out
@@ -442,6 +467,14 @@ export class Crow {
     if (dist < COMPANION_SHOULDER_SNAP_DIST) {
       this.position.x = tx;
       this.position.y = ty;
+      // Hand-off: a carrying companion deposits to inventory the moment it
+      // lands on the player's shoulder. Clear before delivering so a same-
+      // frame recheck doesn't double-credit.
+      if (this.carriedIngredient && ctx.depositIngredient) {
+        const glyph = this.carriedIngredient;
+        this.carriedIngredient = null;
+        ctx.depositIngredient(glyph, this);
+      }
     } else {
       const s = COMPANION_FOLLOW_SPEED;
       this.position.x += (dx / dist) * s * deltaTime;
@@ -585,6 +618,7 @@ export class Crow {
       if (Math.hypot(dpx, dpy) > PERCH_LEAVE_DIST) {
         this.followerSubstate = 'follow';
         this.followerPerchCheckTimer = PERCH_CHECK_INTERVAL * 0.5;
+        this.takeoffPending = true;
       }
       return;
     }

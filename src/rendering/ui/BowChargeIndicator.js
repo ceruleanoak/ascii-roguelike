@@ -101,8 +101,9 @@ export class BowChargeIndicator {
       return; // Wands only show red X, no charge bar
     }
 
-    // Bows / charge guns: State 0 - Out of arrows - show blinking red X (bows only)
-    if (!isChargeGun && weapon.usesRemaining !== null && weapon.usesRemaining <= 0) {
+    // Bows / charge guns: State 0 - Out of arrows - show blinking red X (bows only).
+    // Boomerangs skip this — every throw is refunded on catch, so "0 ammo" is just mid-flight state.
+    if (!isChargeGun && !weapon.data?.boomerang && weapon.usesRemaining !== null && weapon.usesRemaining <= 0) {
       const blinkOn = Math.floor(performance.now() / 1000 * 6) % 2 === 0;
       if (blinkOn) {
         this.renderer.drawEntity(

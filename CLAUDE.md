@@ -57,6 +57,18 @@ All modes share CombatSystem, PhysicsSystem, and entity classes.
 - `PersistenceSystem.js` exists but is permanently disabled (no-ops).
 - If asked to add persistence, explain the design decision.
 
+## Runtime-Fetched Assets Must Live in `public/`
+
+Files loaded at runtime via `fetch()` (all audio, fonts loaded by JS, anything referenced through `${import.meta.env.BASE_URL}…`) **must** live under `public/`. Vite only copies `public/` into `dist/`; files in `assets/` are invisible to the production build unless referenced from `index.html` (which Vite processes and bundles, e.g. `assets/styles.css`).
+
+- New audio → `public/assets/audio/`. New JS-loaded fonts → `public/assets/fonts/`.
+- Symptom of getting this wrong: works on `npm run dev`, silently 404s on GitHub Pages (dev server serves project root; production serves only `dist/`).
+- Don't add files to the top-level `assets/` directory for runtime use. That folder is legacy and only `styles.css` (bundled via `<link>` in `index.html`) belongs there.
+
+### Placeholder SFX
+
+Some SFX names are wired into gameplay code before the audio asset exists. Register them as `loadSFX('name', null)` — this marks the name as known, `playSFX('name')` silently no-ops, and the call site is greppable for future audio work: `grep -rn "loadSFX(.*null" src/`. Do **not** invent a filename for an asset you have not been shown.
+
 ## Architectural Maturity — Senior Dev Guidance
 
 The project has established patterns and abstractions. Before implementing:
