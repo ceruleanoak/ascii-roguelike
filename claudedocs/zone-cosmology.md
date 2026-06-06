@@ -128,8 +128,13 @@ your weapon.`
   deflected back with the matched tool; spreading lava lured across; spewing
   craters read and exploited.
 - **Combat** — decisive force, reflex, confrontation.
-- **Puzzle** — *(open)* likely transformation/consequence: irreversible,
-  in-the-moment.
+- **Puzzle** — **kinetic redirection.** Inject a hazard + a tool-match into a
+  room and the reactive answer *is* the solution. Canonical example: deflect a
+  **rolling boulder** with a **hammer** (`INTERACTION_TYPES.BLUNT` — the "right
+  tool"; a blade or bullet won't turn it) into a **blocked cave**, smashing it
+  open. Built by **augmenting Green's U room** (Underground — passive foraging)
+  into an active forced entry; the cave yields gems (an R-room drop), making it
+  the **Green × Red "Raider"** overlap in room form. See *Augmentation* below.
 
 **Red is the Mage's mirror:** both turn environmental hazards into weapons, but
 Yellow does it by *deliberate placement* (premeditated, essence-driven) and Red
@@ -214,9 +219,29 @@ releasing into force. **The parry is literally Anticipate + React fused.**
 - **Green × Cyan** → **the Treasure-Hunter** — *find* hidden wealth by looking
   (the rabbit that digs up a cache lives here).
 
-**Open question:** do the overlaps become *transition rooms*, *hybrid character
-classes* (note `Cryomancer`, `Storm Caller` already in the character roster), or
-both?
+### Overlaps as room augmentations
+
+The concrete answer to *"what **is** an overlap, mechanically?"*: a petal does
+not invent room types from scratch — it **augments an existing Green archetype
+by injecting its verb.** Same room, new stance. This reuses the letter-template
+system (`letter-template-system.md`) instead of hand-building rooms, exactly the
+system-level move CLAUDE.md asks for.
+
+Worked on Green's **U room** (Underground — passive foraging):
+
+| Augment U with… | Verb | The beat | Overlap |
+|---|---|---|---|
+| **Red** (kinetic hazard + tool-match) | React | Deflect a boulder into the blocked cave to break it open | **Raider** — take buried wealth by force |
+| **Cyan** (reveal-on-stillness) | Anticipate | The cave opens only to the patient (the rabbit digs it out) | **Treasure-Hunter** — find hidden wealth by looking |
+| **Yellow** (conductive medium) | Channel | Chain lightning through the cave to crack it | **Artificer** — make value through power |
+
+So the Venn overlaps and the room-augmentations are the **same idea at two
+scales**: a Green room wearing a petal's verb. Reusable rule — to build a petal
+puzzle, start from a Green archetype and add the petal's verb as the solution.
+
+**Still open:** do the overlaps *also* surface as **hybrid character classes**
+(note `Cryomancer`, `Storm Caller` already in the character roster), or only as
+augmented rooms?
 
 ---
 
