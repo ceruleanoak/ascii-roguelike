@@ -901,11 +901,25 @@ export class InventorySystem {
         return false;
       }
       case 'jolt': {
-        // Jolt Jar: 2+ enemies in room — START WINDUP
-        if (enemies.length >= 2) {
-          return { windup: 1.3, effectType: 'jolt' };
+        // Jolt Jar: 2+ enemies in room — throw at the nearest one and explode on impact
+        if (enemies.length < 2) return false;
+        const px = player.position.x + 20;
+        const py = player.position.y + 20;
+        let nearest = null;
+        let bestDist = Infinity;
+        for (const enemy of enemies) {
+          const dx = (enemy.position.x + 20) - px;
+          const dy = (enemy.position.y + 20) - py;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < bestDist) { bestDist = d2; nearest = enemy; }
         }
-        return false;
+        if (!nearest) return false;
+        return {
+          windup: 0.7,
+          effectType: 'jolt',
+          targetX: nearest.position.x + 20,
+          targetY: nearest.position.y + 20,
+        };
       }
       case 'shield': {
         // Activates immediately — grants bullet-blocking charges
@@ -1084,14 +1098,20 @@ export class InventorySystem {
 
     if (triggerData && triggerData.windup) {
       // Start windup for offensive consumables
+      const startX = player.position.x + 20;
+      const startY = player.position.y + 20;
       this.consumableWindups.push({
         consumable: consumable,
         slotIndex: slotIndex,
         timer: triggerData.windup,
         maxTimer: triggerData.windup,
         effectType: triggerData.effectType,
-        x: player.position.x + 20, // GRID.CELL_SIZE / 2
-        y: player.position.y + 20,
+        x: startX, // GRID.CELL_SIZE / 2
+        y: startY,
+        startX,
+        startY,
+        targetX: triggerData.targetX ?? null,
+        targetY: triggerData.targetY ?? null,
         blinkTimer: 0,
         isOneShot: isOneShot
       });
@@ -1158,6 +1178,14 @@ export class InventorySystem {
       const windup = this.consumableWindups[i];
       windup.timer -= deltaTime;
       windup.blinkTimer += deltaTime;
+
+      // Jolt Jar throw arc: interpolate jar position from player to target,
+      // with a small parabolic lift so it reads as a throw.
+      if (windup.effectType === 'jolt' && windup.targetX != null) {
+        const t = Math.min(1, Math.max(0, 1 - windup.timer / windup.maxTimer));
+        windup.x = windup.startX + (windup.targetX - windup.startX) * t;
+        windup.y = windup.startY + (windup.targetY - windup.startY) * t - Math.sin(t * Math.PI) * 22;
+      }
 
       // Windup complete — trigger effect
       if (windup.timer <= 0) {
@@ -1247,12 +1275,28 @@ export class InventorySystem {
         break;
       }
       case 'jolt': {
-        // Jolt Jar — damages all enemies
+        // Jolt Jar — impact AoE at the throw target (set when the jar was thrown)
+        const ix = windup.targetX != null ? windup.targetX : px;
+        const iy = windup.targetY != null ? windup.targetY : py;
+        const radius = cd.radius || 80;
+        const damage = cd.damage || 4;
         for (const enemy of enemies) {
-          enemy.takeDamage(4);
-          combatSystem.createDamageNumber(4, enemy.position.x, enemy.position.y, '#ffff00');
+          const ex = enemy.position.x + 20;
+          const ey = enemy.position.y + 20;
+          const dx = ex - ix;
+          const dy = ey - iy;
+          if (Math.sqrt(dx * dx + dy * dy) <= radius) {
+            enemy.takeDamage(damage);
+            combatSystem.createDamageNumber(damage, enemy.position.x, enemy.position.y, '#ffff00');
+          }
         }
-        this._createExplosion(particles, px, py, 30, '#ffff00');
+        // Spark burst at impact + four ring offsets so the AoE reads "large"
+        this._createSparkBurst(particles, ix, iy);
+        const ring = radius * 0.55;
+        this._createSparkBurst(particles, ix + ring, iy);
+        this._createSparkBurst(particles, ix - ring, iy);
+        this._createSparkBurst(particles, ix, iy + ring);
+        this._createSparkBurst(particles, ix, iy - ring);
         break;
       }
       case 'firecracker': {

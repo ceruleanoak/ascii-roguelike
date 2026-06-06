@@ -11,6 +11,7 @@ export const RECIPES = [
   // === ROCK RECIPES ===
   { left: '0', right: '0', result: '△', name: 'Arrowhead' },      // Rock + Rock = Arrowhead
   { left: '0', right: '|', result: '⊥', name: 'Hammer' },        // Rock + Stick = Hammer
+  { left: '⊥', right: '6', result: '⬢', name: 'Onyx Hammer' },   // Hammer + Onyx = Onyx Hammer (crit + faster windup)
   { left: '0', right: '~', result: '⊸', name: 'Sling' },         // Rock + String = Sling
   { left: '|', right: '△', result: '⇈', name: 'Fletch of Arrows' }, // Stick + Arrowhead = Fletch of Arrows
   { left: '/', right: '△', result: '↑', name: 'Spear' },         // Staff + Arrowhead = Spear
@@ -32,6 +33,12 @@ export const RECIPES = [
   { left: '/', right: '`', result: '⚘', name: 'Emerald Staff' },  // Staff + Emerald
   { left: '/', right: '9', result: '⚭', name: 'Garnet Staff' },   // Staff + Garnet
   { left: '/', right: '_', result: '⚳', name: 'Force Wand' },    // Staff + Diamond
+
+  // === GEM WHIPS (Whip + gemstone) — magic-infused whipcrack ===
+  { left: '≋', right: '?', result: '∿', name: 'Ruby Whip' },      // Whip + Ruby     = burn lash
+  { left: '≋', right: '(', result: '≀', name: 'Sapphire Whip' },  // Whip + Sapphire = freeze lash
+  { left: '≋', right: '1', result: '⤳', name: 'Topaz Whip' },     // Whip + Topaz    = electric stun lash
+  { left: '≋', right: '`', result: '∽', name: 'Emerald Whip' },   // Whip + Emerald  = poison lash
 
 
   // Dual wielding

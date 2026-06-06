@@ -286,14 +286,16 @@ export const BACKGROUND_OBJECTS = {
       default: { animation: 'bounce', message: null }
     }
   },
-  // Deflector rocks — angled fixtures that bend a rolling boulder 90°
-  // (BoulderSystem). Each is an elbow with two OPEN sides it routes between and
-  // two SOLID sides that stop a boulder. `deflectorElbow` names the open pair.
-  // Indestructible fixtures; the bounce itself teaches the routing rule.
-  '7': {
+  // Deflector rocks — right-triangle fixtures (BoulderSystem). The hypotenuse
+  // is the 45° face on the OPEN pair of sides and bends a boulder 90°; the two
+  // legs on the SOLID pair U-turn it back the way it came. `deflectorElbow`
+  // names the open pair (equivalently, the right angle sits in the opposite
+  // corner). Indestructible; the bounce itself teaches the routing rule.
+  '◣': {
     name: 'Deflector (NE)',
     color: '#b08850',
     hitbox: { w: 0.875, h: 0.875 },
+    collisionShape: 'triangle',
     indestructible: true,
     bulletInteraction: 'block',
     flammability: 'none',
@@ -302,10 +304,11 @@ export const BACKGROUND_OBJECTS = {
     deflectorElbow: 'NE',
     interactions: { default: { animation: 'clang', message: null } }
   },
-  'r': {
+  '◢': {
     name: 'Deflector (NW)',
     color: '#b08850',
     hitbox: { w: 0.875, h: 0.875 },
+    collisionShape: 'triangle',
     indestructible: true,
     bulletInteraction: 'block',
     flammability: 'none',
@@ -314,10 +317,11 @@ export const BACKGROUND_OBJECTS = {
     deflectorElbow: 'NW',
     interactions: { default: { animation: 'clang', message: null } }
   },
-  'L': {
+  '◥': {
     name: 'Deflector (SW)',
     color: '#b08850',
     hitbox: { w: 0.875, h: 0.875 },
+    collisionShape: 'triangle',
     indestructible: true,
     bulletInteraction: 'block',
     flammability: 'none',
@@ -326,10 +330,11 @@ export const BACKGROUND_OBJECTS = {
     deflectorElbow: 'SW',
     interactions: { default: { animation: 'clang', message: null } }
   },
-  'J': {
+  '◤': {
     name: 'Deflector (SE)',
     color: '#b08850',
     hitbox: { w: 0.875, h: 0.875 },
+    collisionShape: 'triangle',
     indestructible: true,
     bulletInteraction: 'block',
     flammability: 'none',

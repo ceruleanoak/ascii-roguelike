@@ -104,8 +104,13 @@ function rollStarterSatchelChars() {
   }
   const chars = [];
   for (const c of picks) {
-    const count = c === 'M' ? 1 : 2;
-    for (let i = 0; i < count; i++) chars.push(c);
+    if (c === 'M') {
+      chars.push('M');
+    } else if (c === 'f') {
+      chars.push('f', '0');
+    } else {
+      chars.push(c, c);
+    }
   }
   return chars;
 }

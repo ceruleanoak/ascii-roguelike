@@ -308,6 +308,11 @@ export class CombatSystem {
         continue;
       }
 
+      // Deflector triangles bend the bullet/arrow before any background-object
+      // damage interaction can fire. Handled by cell occupancy (matches boulder
+      // system) so the projectile no longer "hits" the deflector as a wall.
+      if (this._tryDeflectorRedirect(proj)) continue;
+
       // Check collision with background objects
       let bgObjectHit = false;
       for (const obj of backgroundObjects) {
@@ -315,6 +320,8 @@ export class CombatSystem {
         if (!objectOnPlane(obj, planeOf(proj))) continue;
 
         if (this.checkProjectileCollisionWithObject(proj, obj)) {
+          // Deflectors are routed above; skip the generic bullet-interaction path.
+          if (obj.data?.boulderDeflector) continue;
           const result = obj.handleBulletCollision(proj);
 
           // Handle bullet behavior
@@ -1172,6 +1179,11 @@ export class CombatSystem {
         continue;
       }
 
+      // Deflector triangles also bend enemy projectiles. Reflected enemy
+      // projectiles skip player collision (existing convention), so a deflected
+      // shot can no longer hurt the player.
+      this._tryDeflectorRedirect(proj);
+
       if (!inSamePlane(proj, player)) continue;
 
       // Reflected boss projectiles travel back toward the boss; skip player collision
@@ -1853,8 +1865,12 @@ export class CombatSystem {
   // (hut 10×10, dungeon 24×24). Returns false when room has no collisionMap.
   _hitsWall(proj, room) {
     if (!room?.collisionMap) return false;
-    const col = Math.floor(proj.position.x / GRID.CELL_SIZE);
-    const row = Math.floor(proj.position.y / GRID.CELL_SIZE);
+    // proj.position is the cell top-left of the glyph; the visible bullet sits
+    // at +CELL_SIZE/2. Check the wall under the bullet's visual center so
+    // collisions are symmetric on all four sides (left/right/top/bottom).
+    const cs = GRID.CELL_SIZE;
+    const col = Math.floor((proj.position.x + cs / 2) / cs);
+    const row = Math.floor((proj.position.y + cs / 2) / cs);
     const map = room.collisionMap;
     if (row < 0 || row >= map.length) return true;
     const rowArr = map[row];
@@ -1870,8 +1886,12 @@ export class CombatSystem {
     const rows = map.length;
     const cols = map[0]?.length || 0;
 
-    const col = Math.floor(proj.position.x / cs);
-    const row = Math.floor(proj.position.y / cs);
+    // Use the bullet's visual center so left/right and top/bottom collide
+    // symmetrically. proj.position is the cell top-left.
+    const centerX = proj.position.x + cs / 2;
+    const centerY = proj.position.y + cs / 2;
+    const col = Math.floor(centerX / cs);
+    const row = Math.floor(centerY / cs);
 
     // Out-of-grid → treat as border
     if (row < 0 || row >= rows || col < 0 || col >= cols) return false;
@@ -1880,9 +1900,9 @@ export class CombatSystem {
     // Not actually a wall cell (defensive) → no ricochet
     if (!map[row][col]) return false;
 
-    // Reconstruct the bullet's pre-move position to determine the surface normal.
-    const prevX = proj.position.x - proj.velocity.vx * deltaTime;
-    const prevY = proj.position.y - proj.velocity.vy * deltaTime;
+    // Reconstruct the bullet's pre-move position (also center) to determine the surface normal.
+    const prevX = centerX - proj.velocity.vx * deltaTime;
+    const prevY = centerY - proj.velocity.vy * deltaTime;
     const prevCol = Math.floor(prevX / cs);
     const prevRow = Math.floor(prevY / cs);
 
@@ -1900,9 +1920,11 @@ export class CombatSystem {
     if (flipX) proj.velocity.vx = -proj.velocity.vx;
     if (flipY) proj.velocity.vy = -proj.velocity.vy;
 
-    // Step back to the previously-free cell so the bullet doesn't re-collide next frame.
-    proj.position.x = prevX;
-    proj.position.y = prevY;
+    // Step back to the previously-free cell so the bullet doesn't re-collide
+    // next frame. prevX/Y are in center-space; subtract the cell half to convert
+    // back to the top-left convention proj.position uses.
+    proj.position.x = prevX - cs / 2;
+    proj.position.y = prevY - cs / 2;
 
     if (proj.drawAngle != null) {
       proj.drawAngle = Math.atan2(proj.velocity.vy, proj.velocity.vx);
@@ -2434,6 +2456,35 @@ export class CombatSystem {
            projBox.x + projBox.width > objBox.x &&
            projBox.y < objBox.y + objBox.height &&
            projBox.y + projBox.height > objBox.y;
+  }
+
+  // Redirect a projectile off a deflector triangle by cell occupancy. Mirrors
+  // BoulderSystem's lookup so the bounce uses the same elbow table. Returns
+  // true if redirected. Tracks `_lastDeflectorObj` so the projectile doesn't
+  // re-deflect on the same tile every frame.
+  _tryDeflectorRedirect(proj) {
+    const bs = this.game?.boulderSystem;
+    if (!bs?.findDeflectorAt) return false;
+    // proj.position is the cell top-left; the deflector test wants the bullet's
+    // visual center so the triangle interior test lines up with the rendered glyph.
+    const cs = GRID.CELL_SIZE;
+    const deflector = bs.findDeflectorAt(proj.position.x + cs / 2, proj.position.y + cs / 2);
+    if (!deflector) {
+      if (proj._lastDeflectorObj) proj._lastDeflectorObj = null;
+      return false;
+    }
+    if (proj._lastDeflectorObj === deflector) return false;
+    const out = bs.deflectVelocity(deflector.data.deflectorElbow, proj.velocity.vx, proj.velocity.vy);
+    if (!out) return false;
+    // Update velocity in place — no snap. The bullet continues from its actual
+    // hit point inside the triangle and exits naturally on the next frames.
+    proj.velocity.vx = out.vx;
+    proj.velocity.vy = out.vy;
+    if (proj.drawAngle != null) proj.drawAngle = Math.atan2(out.vy, out.vx);
+    proj._lastDeflectorObj = deflector;
+    proj.reflected = true;
+    this.audioSystem?.playSFX?.('ricochet', 0.5);
+    return true;
   }
 
   reflectBullet(bullet, obj) {

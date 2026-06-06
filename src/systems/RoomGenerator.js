@@ -2063,9 +2063,30 @@ export class RoomGenerator {
     // Generate random individual objects based on depth
     this.generateDepthBasedObjects(room, effectiveZone);
 
+    // RED zone: scatter right-triangle deflectors so projectile/boulder routing
+    // becomes part of normal combat, not just the puzzle.
+    if (effectiveZone === 'red') {
+      this.generateRedZoneDeflectors(room);
+    }
+
     // Letter template: Generate corner clusters if specified
     if (this.currentLetterTemplate?.bgObjectRules?.cornerClusters?.enabled) {
       this.generateCornerClusters(room);
+    }
+  }
+
+  // Scatter 2–4 deflector triangles in a red-zone room. Each one picks a random
+  // orientation; placement uses the same valid-position check as other objects.
+  generateRedZoneDeflectors(room) {
+    const DEFLECTOR_CHARS = ['◣', '◢', '◥', '◤'];
+    const count = this.randInt(2, 4);
+    for (let i = 0; i < count; i++) {
+      const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
+      if (!pos) continue;
+      const char = DEFLECTOR_CHARS[Math.floor(Math.random() * DEFLECTOR_CHARS.length)];
+      const obj = new BackgroundObject(char, pos.x, pos.y);
+      this.applyZoneProperties(obj, 'red');
+      room.backgroundObjects.push(obj);
     }
   }
 

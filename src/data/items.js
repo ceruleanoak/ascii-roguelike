@@ -44,7 +44,7 @@ export const WEAPON_TIERS = {
   ],
   hammer: [
     ['⊥'],
-    ['☃', '◉'],
+    ['☃', '◉', '⬢'],
     ['▼', '⚒']
   ]
 };
@@ -749,6 +749,21 @@ export const ITEMS = {
     knockback: 250,
     color: '#00ddff'
   },
+  '⬢': {
+    char: '⬢',
+    name: 'Onyx Hammer',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'hammer',
+    damage: 3,
+    windup: 0.35,
+    recovery: 0.8,
+    range: 20,
+    attackPattern: 'hammerRing',
+    locksMovement: true,
+    critChance: 0.35,
+    color: '#666666'
+  },
   '◉': {
     char: '◉',
     name: 'Exploding Mace',
@@ -1079,6 +1094,70 @@ export const ITEMS = {
     range: 40,
     meleeChar: '~',
     color: '#8b4513'
+  },
+
+  // ── MELEE / whip — gem-infused (Whip + gemstone) ──────────────────────────
+  // Elemental whipcracks: long-range lash inherits the gem's status effect.
+  '∿': {
+    char: '∿',
+    name: 'Ruby Whip',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'whip',
+    damage: 2,
+    windup: 0.5,
+    recovery: 1.0,
+    patternSpeed: 0.02,
+    range: 40,
+    meleeChar: '~',
+    onHit: 'burn',
+    color: '#ff2244'
+  },
+  '≀': {
+    char: '≀',
+    name: 'Sapphire Whip',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'whip',
+    damage: 2,
+    windup: 0.5,
+    recovery: 1.0,
+    patternSpeed: 0.02,
+    range: 40,
+    meleeChar: '~',
+    onHit: 'freeze',
+    color: '#2244ff'
+  },
+  '⤳': {
+    char: '⤳',
+    name: 'Topaz Whip',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'whip',
+    damage: 2,
+    windup: 0.5,
+    recovery: 1.0,
+    patternSpeed: 0.02,
+    range: 40,
+    meleeChar: '~',
+    onHit: 'stun',
+    electric: true,
+    color: '#ffcc00'
+  },
+  '∽': {
+    char: '∽',
+    name: 'Emerald Whip',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'whip',
+    damage: 2,
+    windup: 0.5,
+    recovery: 1.0,
+    patternSpeed: 0.02,
+    range: 40,
+    meleeChar: '~',
+    onHit: 'poison',
+    color: '#00cc44'
   },
 
   // ── MELEE / flail ─────────────────────────────────────────────────────────
@@ -1672,6 +1751,8 @@ export const ITEMS = {
     name: 'Jolt Jar',
     type: ITEM_TYPES.CONSUMABLE,
     effect: 'jolt',
+    radius: 80,   // Large AoE at impact (was room-wide)
+    damage: 4,
     cooldown: 15, // Reusable with 15s cooldown
     color: '#ffff00'
   },

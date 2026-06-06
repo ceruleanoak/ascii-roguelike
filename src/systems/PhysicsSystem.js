@@ -575,6 +575,23 @@ export class PhysicsSystem {
 
       const objBox = obj.getHitbox();
 
+      // Right-triangle collision for deflector tiles. The triangle's bounding
+      // box is the deflector cell itself, matching the drawn shape so the
+      // player stops at the visible edge on every side. `data.deflectorElbow`
+      // names the right-angle corner.
+      if (obj.collisionShape === 'triangle') {
+        const cs = GRID.CELL_SIZE;
+        const triBox = { x: obj.position.x, y: obj.position.y, width: cs, height: cs };
+        const elbow = obj.data.deflectorElbow;
+        const xCollision = this._rectVsRightTriangle(
+          { x: newX, y: entity.position.y, w: width, h: height }, triBox, elbow
+        );
+        const yCollision = this._rectVsRightTriangle(
+          { x: entity.position.x, y: newY, w: width, h: height }, triBox, elbow
+        );
+        if (xCollision) collision.x = true;
+        if (yCollision) collision.y = true;
+      } else
       // Use ellipse collision if object has elliptical collision shape
       if (obj.collisionShape === 'ellipse') {
         const xCollision = this.checkEllipseRectCollision(objBox, {
@@ -639,6 +656,49 @@ export class PhysicsSystem {
    * Check collision between an ellipse and a rectangle (AABB)
    * Ellipse is defined by its bounding box (center and semi-axes from width/height)
    */
+  // Rect-vs-axis-aligned-right-triangle overlap. The triangle's bounding box
+  // equals `triBox`; `elbow` names the open pair (the right-angle corner is in
+  // the opposite cell corner). Returns true iff `rect` overlaps the triangle
+  // interior — i.e. the rect ∩ triBox intersection contains a point on the
+  // RA-corner side of the hypotenuse.
+  _rectVsRightTriangle(rect, triBox, elbow) {
+    const ix = Math.max(rect.x, triBox.x);
+    const iy = Math.max(rect.y, triBox.y);
+    const iMaxX = Math.min(rect.x + rect.w, triBox.x + triBox.width);
+    const iMaxY = Math.min(rect.y + rect.h, triBox.y + triBox.height);
+    if (iMaxX <= ix || iMaxY <= iy) return false;  // no AABB overlap with cell
+    const tw = triBox.width;
+    const th = triBox.height;
+    // Pick the intersection corner closest to the RA corner — it minimizes the
+    // signed hypotenuse distance, so if it's still on the "outside" side, the
+    // rect can't reach the triangle interior.
+    let px, py;
+    switch (elbow) {
+      case 'NE': px = ix;     py = iMaxY; break;  // RA at SW → SW-most point
+      case 'NW': px = iMaxX;  py = iMaxY; break;  // RA at SE → SE-most point
+      case 'SE': px = ix;     py = iy;    break;  // RA at NW → NW-most point
+      case 'SW': px = iMaxX;  py = iy;    break;  // RA at NE → NE-most point
+      default:   return true;                     // unknown elbow → behave as AABB
+    }
+    // f(p) is the implicit form of the hypotenuse, oriented so the RA-corner
+    // side is f ≤ 0. Two hypotenuse orientations:
+    //   NW→SE diagonal (elbows NE / SW): f = th·dx − tw·dy
+    //   NE→SW diagonal (elbows NW / SE): f = th·dx + tw·dy − tw·th
+    // For RA corners on the "positive" side (SW / SE), flip the sign so the
+    // inside test stays uniform: f ≤ 0.
+    const dx = px - triBox.x;
+    const dy = py - triBox.y;
+    let f;
+    if (elbow === 'NE' || elbow === 'SW') {
+      f = th * dx - tw * dy;
+      if (elbow === 'SW') f = -f;
+    } else {
+      f = th * dx + tw * dy - tw * th;
+      if (elbow === 'NW') f = -f;
+    }
+    return f <= 0;
+  }
+
   checkEllipseRectCollision(ellipseBox, rectBox) {
     // Ellipse center and semi-axes
     const ex = ellipseBox.x + ellipseBox.width / 2;

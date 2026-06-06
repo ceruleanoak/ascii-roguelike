@@ -185,7 +185,14 @@ export class ExploreRenderer {
         const x = obj.position.x + GRID.CELL_SIZE / 2;
         const y = obj.position.y + GRID.CELL_SIZE / 2;
         this.renderer.bgCtx.fillStyle = obj.color;
-        this.renderer.bgCtx.fillText(obj.char, x, y);
+        // Deflectors render as Path2D filled triangles at 1.5× cell size so
+        // every collision system (bullets, boulders, player) lines up exactly
+        // with the visible hypotenuse and legs.
+        if (obj.data?.boulderDeflector) {
+          this._drawDeflectorTriangle(this.renderer.bgCtx, x, y, obj.data.deflectorElbow, obj.color);
+        } else {
+          this.renderer.bgCtx.fillText(obj.char, x, y);
+        }
       }
     }
 
@@ -648,7 +655,7 @@ export class ExploreRenderer {
             aoeRadius = 60; // Venom Vial
             break;
           case 'jolt':
-            aoeRadius = 999; // Room-wide (show large ring)
+            aoeRadius = cd.radius || 80; // Drawn at target position below
             break;
           case 'throwSteam':
             aoeRadius = cd.radius; // Steam Vial
@@ -657,24 +664,28 @@ export class ExploreRenderer {
             aoeRadius = 40;
         }
 
-        // Draw pulsing ring to show AoE damage radius
+        // Draw pulsing ring to show AoE damage radius.
+        // Jolt Jar is a thrown projectile — show the ring at the locked impact
+        // target, not around the moving jar.
         const progress = 1 - (windup.timer / windup.maxTimer);
         const pulse = Math.sin(progress * Math.PI * 6) * 0.15; // Subtle pulse
         const displayRadius = aoeRadius * (1 + pulse);
+        const ringX = (windup.effectType === 'jolt' && windup.targetX != null) ? windup.targetX : windup.x;
+        const ringY = (windup.effectType === 'jolt' && windup.targetY != null) ? windup.targetY : windup.y;
 
         this.renderer.fgCtx.save();
         this.renderer.fgCtx.strokeStyle = windup.consumable.color;
         this.renderer.fgCtx.globalAlpha = 0.4 + Math.sin(progress * Math.PI * 8) * 0.2;
         this.renderer.fgCtx.lineWidth = 2;
         this.renderer.fgCtx.beginPath();
-        this.renderer.fgCtx.arc(windup.x, windup.y, displayRadius, 0, Math.PI * 2);
+        this.renderer.fgCtx.arc(ringX, ringY, displayRadius, 0, Math.PI * 2);
         this.renderer.fgCtx.stroke();
 
         // Draw inner ring at 50% radius for better depth perception
         this.renderer.fgCtx.globalAlpha = 0.2;
         this.renderer.fgCtx.lineWidth = 1;
         this.renderer.fgCtx.beginPath();
-        this.renderer.fgCtx.arc(windup.x, windup.y, displayRadius * 0.5, 0, Math.PI * 2);
+        this.renderer.fgCtx.arc(ringX, ringY, displayRadius * 0.5, 0, Math.PI * 2);
         this.renderer.fgCtx.stroke();
 
         this.renderer.fgCtx.restore();
@@ -1354,6 +1365,30 @@ export class ExploreRenderer {
       const angle = ((t - 0.15) / 0.3) * (Math.PI * 2 / 3);
       this.renderer.drawEntityRotated(cx, cy, '*', color, angle);
     }
+  }
+
+  // Draws a deflector as a filled right triangle centered at (cx, cy). The
+  // triangle fills the cell exactly so it lines up with the collision shape
+  // used by PhysicsSystem / BoulderSystem / CombatSystem.
+  _drawDeflectorTriangle(ctx, cx, cy, elbow, color) {
+    const h = GRID.CELL_SIZE * 0.5;
+    let v0, v1, v2;
+    switch (elbow) {
+      case 'NE': v0 = [cx - h, cy + h]; v1 = [cx - h, cy - h]; v2 = [cx + h, cy + h]; break;
+      case 'NW': v0 = [cx + h, cy + h]; v1 = [cx + h, cy - h]; v2 = [cx - h, cy + h]; break;
+      case 'SE': v0 = [cx - h, cy - h]; v1 = [cx - h, cy + h]; v2 = [cx + h, cy - h]; break;
+      case 'SW': v0 = [cx + h, cy - h]; v1 = [cx + h, cy + h]; v2 = [cx - h, cy - h]; break;
+      default:   return;
+    }
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(v0[0], v0[1]);
+    ctx.lineTo(v1[0], v1[1]);
+    ctx.lineTo(v2[0], v2[1]);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
   }
 
   _drawCrow(crow) {

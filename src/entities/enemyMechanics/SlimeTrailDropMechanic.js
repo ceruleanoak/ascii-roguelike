@@ -9,7 +9,7 @@ const SLIME_TRAIL_DROP_PX = 5;
 
 export const SlimeTrailDropMechanic = {
   isEnabled(enemy) {
-    return enemy.data.elementalAffinity?.immunity?.includes('slime') === true;
+    return enemy.data.affinities?.includes('goo') === true;
   },
 
   init(enemy) {
@@ -20,7 +20,7 @@ export const SlimeTrailDropMechanic = {
 
   // Returns drop payload or null. Caller merges into final update() return.
   update(enemy) {
-    if (!enemy.data.elementalAffinity?.immunity?.includes('slime')) return null;
+    if (!enemy.data.affinities?.includes('goo')) return null;
 
     if (!enemy.trailDropInitialized) {
       enemy.trailLastDropX = enemy.position.x;

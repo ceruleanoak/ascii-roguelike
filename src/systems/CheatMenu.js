@@ -61,10 +61,10 @@ export class CheatMenu {
     // BOULDER TEST — debug placement for the Red deflect puzzle. Spawn the 4
     // elbow deflectors at the player and trigger a boulder to watch it route.
     const boulderTestItems = [
-      { char: '7', name: 'Deflector NE', type: 'spawn_object', objChar: '7', color: '#b08850' },
-      { char: 'r', name: 'Deflector NW', type: 'spawn_object', objChar: 'r', color: '#b08850' },
-      { char: 'L', name: 'Deflector SW', type: 'spawn_object', objChar: 'L', color: '#b08850' },
-      { char: 'J', name: 'Deflector SE', type: 'spawn_object', objChar: 'J', color: '#b08850' },
+      { char: '◣', name: 'Deflector NE', type: 'spawn_object', objChar: '◣', color: '#b08850' },
+      { char: '◢', name: 'Deflector NW', type: 'spawn_object', objChar: '◢', color: '#b08850' },
+      { char: '◥', name: 'Deflector SW', type: 'spawn_object', objChar: '◥', color: '#b08850' },
+      { char: '◤', name: 'Deflector SE', type: 'spawn_object', objChar: '◤', color: '#b08850' },
       { char: 'Q', name: 'Trigger Boulder (red only)', type: 'trigger_boulder', color: '#888888' }
     ];
 

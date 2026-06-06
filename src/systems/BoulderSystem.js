@@ -12,6 +12,28 @@ const HIT_COOLDOWN       = 0.5;
 const HIT_RADIUS         = GRID.CELL_SIZE * 0.85;
 const DEFLECT_RADIUS     = GRID.CELL_SIZE * 1.1;  // hammer reach to redirect a rolling boulder
 
+// Deflector triangles render and collide at cell size, so the visible shape
+// and every physics test reference the exact same geometry.
+export const DEFLECTOR_HALF_EXTENT = GRID.CELL_SIZE * 0.5;
+
+// Point-inside-right-triangle test for a deflector. (px, py) is in world pixels.
+// The triangle is a 2h × 2h right triangle centered on the deflector's cell
+// center, with the right-angle corner determined by `elbow`.
+export function pointInDeflector(deflector, px, py, h = DEFLECTOR_HALF_EXTENT) {
+  const cx = deflector.position.x + GRID.CELL_SIZE / 2;
+  const cy = deflector.position.y + GRID.CELL_SIZE / 2;
+  const dx = px - cx;
+  const dy = py - cy;
+  if (dx < -h || dx > h || dy < -h || dy > h) return false;
+  switch (deflector.data.deflectorElbow) {
+    case 'NE': return dx - dy <= 0;  // RA at SW: inside is dy ≥ dx
+    case 'NW': return dx + dy >= 0;  // RA at SE
+    case 'SE': return dx + dy <= 0;  // RA at NW
+    case 'SW': return dx - dy >= 0;  // RA at NE
+    default:   return false;
+  }
+}
+
 const DIRECTIONS = ['north', 'south', 'east', 'west'];
 
 // Direction names the source edge; vectors point AWAY from that edge.
@@ -129,37 +151,25 @@ export class BoulderSystem {
 
       const baseSpeed = onLava ? BOULDER_SPEED_LAVA : BOULDER_SPEED;
       const speed = r.empowered ? baseSpeed * 2 : baseSpeed;
+      const prevX = r.x;
+      const prevY = r.y;
       r.x += r.vx * speed * deltaTime;
       r.y += r.vy * speed * deltaTime;
 
-      // Deflector rocks bend the boulder 90° (or stop it on the solid side).
-      // Intrinsic to the boulder — works empowered or not, so a normal boulder
-      // bounces to teach the rule and a charged one can be routed into the cave.
-      let onDeflector = null;
-      const rCellCol = Math.floor(r.x / GRID.CELL_SIZE);
-      const rCellRow = Math.floor(r.y / GRID.CELL_SIZE);
-      for (const obj of game.backgroundObjects) {
-        if (!obj.data?.boulderDeflector || obj.destroyed) continue;
-        if (Math.floor(obj.position.x / GRID.CELL_SIZE) === rCellCol &&
-            Math.floor(obj.position.y / GRID.CELL_SIZE) === rCellRow) {
-          onDeflector = obj;
-          break;
-        }
-      }
+      // Deflector triangles bend the boulder via the same shape used for
+      // bullets and the player. Hypotenuse → 90°; legs → U-turn. Empowered
+      // and normal boulders behave the same way.
+      const onDeflector = this.findDeflectorAt(r.x, r.y);
       if (onDeflector) {
         if (r.lastDeflector !== onDeflector) {
           r.lastDeflector = onDeflector;
           const out = this._deflect(onDeflector.data.deflectorElbow, r.vx, r.vy);
           if (out) {
-            // Snap to cell center so the 90° turn is clean and grid-true.
-            r.x = rCellCol * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
-            r.y = rCellRow * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+            // Snap to triangle centroid (= cell center) so the turn is grid-true.
+            r.x = onDeflector.position.x + GRID.CELL_SIZE / 2;
+            r.y = onDeflector.position.y + GRID.CELL_SIZE / 2;
             r.vx = out.vx;
             r.vy = out.vy;
-          } else {
-            // Hit the solid back of the wedge — the boulder stops here.
-            this.rocks.splice(i, 1);
-            continue;
           }
         }
       } else {
@@ -204,10 +214,26 @@ export class BoulderSystem {
         }
       }
 
-      // Despawn at border
-      if (r.x <= GRID.CELL_SIZE || r.x >= (GRID.COLS - 1) * GRID.CELL_SIZE ||
-          r.y <= GRID.CELL_SIZE || r.y >= (GRID.ROWS - 1) * GRID.CELL_SIZE) {
+      // Boulders fly past the room border (despawn). Interior solid walls —
+      // anything else marked in the collisionMap — reflect them back as flat
+      // surfaces.
+      const cellCol = Math.floor(r.x / GRID.CELL_SIZE);
+      const cellRow = Math.floor(r.y / GRID.CELL_SIZE);
+      const oob = cellCol < 0 || cellCol >= GRID.COLS ||
+                  cellRow < 0 || cellRow >= GRID.ROWS;
+      if (oob) {
         this.rocks.splice(i, 1);
+        continue;
+      }
+      const onBorder = cellCol === 0 || cellCol === GRID.COLS - 1 ||
+                       cellRow === 0 || cellRow === GRID.ROWS - 1;
+      const intoWall = !onBorder && !!game.currentRoom?.collisionMap?.[cellRow]?.[cellCol];
+      if (intoWall) {
+        r.x = prevX;
+        r.y = prevY;
+        r.vx *= -1;
+        r.vy *= -1;
+        r.lastDeflector = null;
       }
     }
   }
@@ -216,15 +242,53 @@ export class BoulderSystem {
     return { rocks: this.rocks, warnings: this.warnings };
   }
 
-  // 90° elbow deflection in screen-space (vx,vy ∈ {0,±1}). Each orientation has
-  // two OPEN sides; a boulder entering one exits the other. A boulder hitting a
-  // SOLID side returns null (blocked). `elbow` names the open pair (NE/NW/SE/SW).
+  // Find a deflector whose 1.5× triangle contains the given pixel point.
+  // Shared by projectile / boulder / thrown-weapon systems so they all hit
+  // the same visible shape.
+  findDeflectorAt(pixelX, pixelY) {
+    const game = this.game;
+    if (!game.backgroundObjects) return null;
+    for (const obj of game.backgroundObjects) {
+      if (!obj.data?.boulderDeflector || obj.destroyed) continue;
+      if (pointInDeflector(obj, pixelX, pixelY)) return obj;
+    }
+    return null;
+  }
+
+  // Public helper: deflect an arbitrary velocity vector off a deflector. The
+  // direction is quantized to the dominant cardinal axis (matching the boulder
+  // model the player has already internalized), then redirected via _deflect.
+  // Original speed magnitude is preserved. Returns { vx, vy } or null if there
+  // is no defined response for that input.
+  deflectVelocity(elbow, vx, vy) {
+    const speed = Math.hypot(vx, vy);
+    if (speed === 0) return null;
+    const cardX = Math.abs(vx) >= Math.abs(vy) ? Math.sign(vx) : 0;
+    const cardY = cardX === 0 ? Math.sign(vy) : 0;
+    const out = this._deflect(elbow, cardX, cardY);
+    if (!out) return null;
+    return { vx: out.vx * speed, vy: out.vy * speed };
+  }
+
+  // Right-triangle deflection in screen-space (vx,vy ∈ {0,±1}). `elbow` names
+  // the open pair of sides — equivalently, the right-angle corner sits in the
+  // opposite corner (NE open ↔ right angle at SW), with the two legs along the
+  // solid sides and the hypotenuse forming the 45° face on the open pair.
+  // Hypotenuse hits: 90° turn. Leg hits: 180° U-turn back the way it came.
   _deflect(elbow, vx, vy) {
     const MAP = {
-      NE: { '0,1': { vx: 1, vy: 0 },  '-1,0': { vx: 0, vy: -1 } },
-      NW: { '0,1': { vx: -1, vy: 0 }, '1,0':  { vx: 0, vy: -1 } },
-      SE: { '0,-1': { vx: 1, vy: 0 }, '-1,0': { vx: 0, vy: 1 } },
-      SW: { '0,-1': { vx: -1, vy: 0 }, '1,0': { vx: 0, vy: 1 } },
+      // Right angle at SW: legs S+W, hypotenuse NW→SE
+      NE: { '0,1':  { vx: 1, vy: 0 },  '-1,0': { vx: 0, vy: -1 },
+            '0,-1': { vx: 0, vy: 1 },  '1,0':  { vx: -1, vy: 0 } },
+      // Right angle at SE: legs S+E, hypotenuse NE→SW
+      NW: { '0,1':  { vx: -1, vy: 0 }, '1,0':  { vx: 0, vy: -1 },
+            '0,-1': { vx: 0, vy: 1 },  '-1,0': { vx: 1, vy: 0 } },
+      // Right angle at NW: legs N+W, hypotenuse SW→NE
+      SE: { '0,-1': { vx: 1, vy: 0 },  '-1,0': { vx: 0, vy: 1 },
+            '0,1':  { vx: 0, vy: -1 }, '1,0':  { vx: -1, vy: 0 } },
+      // Right angle at NE: legs N+E, hypotenuse SE→NW
+      SW: { '0,-1': { vx: -1, vy: 0 }, '1,0':  { vx: 0, vy: 1 },
+            '0,1':  { vx: 0, vy: -1 }, '-1,0': { vx: 1, vy: 0 } },
     };
     return MAP[elbow]?.[`${vx},${vy}`] || null;
   }

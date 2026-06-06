@@ -180,6 +180,9 @@ export class TrapSystem {
           game.inFlightTraps.splice(i, 1);
           continue;
         }
+        // Deflector triangles bend the throw 90° (or U-turn off the legs).
+        // Mirrors boulder/projectile redirection so the player learns one rule.
+        this._tryThrownDeflect(t);
       }
 
       // Pinning spear carry: drag the carried enemy with the spear mid-flight
@@ -243,6 +246,41 @@ export class TrapSystem {
         }
       }
     }
+  }
+
+  // Bend a thrown weapon off a deflector triangle by cell occupancy. Mirrors
+  // CombatSystem's projectile path and BoulderSystem's lookup so all three
+  // share one routing rule. Recomputes the trap's targetX/Y from the new
+  // velocity so the natural decel→stop logic still lands the weapon correctly.
+  _tryThrownDeflect(t) {
+    if (t.interior === true) return false;          // interior throws aren't on the surface deflector grid
+    const game = this.game;
+    const bs = game.boulderSystem;
+    if (!bs?.findDeflectorAt) return false;
+    const deflector = bs.findDeflectorAt(t.x, t.y);
+    if (!deflector) {
+      if (t._lastDeflector) t._lastDeflector = null;
+      return false;
+    }
+    if (t._lastDeflector === deflector) return false;
+    const out = bs.deflectVelocity(deflector.data.deflectorElbow, t.vx, t.vy);
+    if (!out) return false;
+    const C = GRID.CELL_SIZE;
+    const col = Math.floor(deflector.position.x / C);
+    const row = Math.floor(deflector.position.y / C);
+    t.x = col * C + C / 2;
+    t.y = row * C + C / 2;
+    t.vx = out.vx;
+    t.vy = out.vy;
+    // Linear decel → stop distance = v² / (2·decel). Repoint targetX/Y so the
+    // throw will come to rest along the new heading instead of teleporting to
+    // the original target on the final frame.
+    const speed = Math.hypot(out.vx, out.vy);
+    const stopDist = t.decel > 0 ? (speed * speed) / (2 * t.decel) : 0;
+    t.targetX = t.x + (out.vx / speed) * stopDist;
+    t.targetY = t.y + (out.vy / speed) * stopDist;
+    t._lastDeflector = deflector;
+    return true;
   }
 
   // Check if a spear's current position overlaps a room wall or solid background object.
