@@ -420,6 +420,16 @@ class Game {
           this.spawnCheatEnemy(result.enemy);
           e.preventDefault();
           return;
+        } else if (result && result.action === 'spawn_object') {
+          this.spawnCheatObject(result.objChar);
+          this.cheatMenu.toggle(); // Close so the player can reposition for the next placement
+          e.preventDefault();
+          return;
+        } else if (result && result.action === 'trigger_boulder') {
+          this.boulderSystem?.triggerBoulderRain(1);
+          this.cheatMenu.toggle();
+          e.preventDefault();
+          return;
         } else if (result && result.action === 'teleport_zone') {
           this.handleZoneTeleport(result.zone);
           this.cheatMenu.toggle(); // Close menu after teleport
@@ -6786,6 +6796,21 @@ class Game {
 
     this.saveGameState();
     this.renderer.markBackgroundDirty();
+  }
+
+  // Debug: drop a background object (e.g. a deflector rock) at the player's
+  // cell. Runtime-spawned, so it isn't baked into collisionMap — fine for
+  // testing boulder routing, which reads game.backgroundObjects directly.
+  spawnCheatObject(objChar) {
+    if (!this.currentRoom) return;
+    const C = GRID.CELL_SIZE;
+    const col = Math.floor((this.player.position.x + C / 2) / C);
+    const row = Math.floor((this.player.position.y + C / 2) / C);
+    const obj = new BackgroundObject(objChar, col * C, row * C);
+    this.currentRoom.backgroundObjects.push(obj);
+    this.backgroundObjects = this.currentRoom.backgroundObjects;
+    this.renderer.markBackgroundDirty();
+    console.log(`[CHEAT] Placed object '${objChar}' at cell ${col},${row}`);
   }
 
   spawnCheatEnemy(enemyData) {

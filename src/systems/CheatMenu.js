@@ -58,6 +58,16 @@ export class CheatMenu {
       { char: 'Ω', name: 'BOSS (yellow)',       type: 'boss_test', zone: 'yellow', color: '#ffff44' }
     ] : [];
 
+    // BOULDER TEST — debug placement for the Red deflect puzzle. Spawn the 4
+    // elbow deflectors at the player and trigger a boulder to watch it route.
+    const boulderTestItems = [
+      { char: '7', name: 'Deflector NE', type: 'spawn_object', objChar: '7', color: '#b08850' },
+      { char: 'r', name: 'Deflector NW', type: 'spawn_object', objChar: 'r', color: '#b08850' },
+      { char: 'L', name: 'Deflector SW', type: 'spawn_object', objChar: 'L', color: '#b08850' },
+      { char: 'J', name: 'Deflector SE', type: 'spawn_object', objChar: 'J', color: '#b08850' },
+      { char: 'Q', name: 'Trigger Boulder (red only)', type: 'trigger_boulder', color: '#888888' }
+    ];
+
     const characterItems = Object.entries(CHARACTER_TYPES).map(([type, data]) => {
       const isActive = this.game && this.game.activeCharacterType === type;
       const isDead = this.game && this.game.deadCharacters && this.game.deadCharacters.includes(type);
@@ -168,6 +178,7 @@ export class CheatMenu {
     if (togglesItems.length) children.push({ name: 'TOGGLES', items: togglesItems });
     if (zoneItems.length) children.push({ name: 'ZONES', items: zoneItems });
     if (bossItems.length) children.push({ name: 'BOSSES', items: bossItems });
+    if (boulderTestItems.length) children.push({ name: 'BOULDER TEST', items: boulderTestItems });
     if (characterItems.length) children.push({ name: 'CHARACTERS', items: characterItems });
     if (weaponChildren.length) children.push({ name: 'WEAPONS', children: weaponChildren });
     if (armorItems.length) children.push({ name: 'ARMOR', items: armorItems });
@@ -398,6 +409,8 @@ export class CheatMenu {
       return { action: 'change_character', characterType: selected.characterType };
     }
     if (selected.type === 'enemy') return { action: 'spawn_enemy', enemy: selected };
+    if (selected.type === 'spawn_object') return { action: 'spawn_object', objChar: selected.objChar };
+    if (selected.type === 'trigger_boulder') return { action: 'trigger_boulder' };
     return { action: 'spawn', item: selected };
   }
 
