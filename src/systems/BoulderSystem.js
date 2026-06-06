@@ -132,6 +132,40 @@ export class BoulderSystem {
       r.x += r.vx * speed * deltaTime;
       r.y += r.vy * speed * deltaTime;
 
+      // Deflector rocks bend the boulder 90° (or stop it on the solid side).
+      // Intrinsic to the boulder — works empowered or not, so a normal boulder
+      // bounces to teach the rule and a charged one can be routed into the cave.
+      let onDeflector = null;
+      const rCellCol = Math.floor(r.x / GRID.CELL_SIZE);
+      const rCellRow = Math.floor(r.y / GRID.CELL_SIZE);
+      for (const obj of game.backgroundObjects) {
+        if (!obj.data?.boulderDeflector || obj.destroyed) continue;
+        if (Math.floor(obj.position.x / GRID.CELL_SIZE) === rCellCol &&
+            Math.floor(obj.position.y / GRID.CELL_SIZE) === rCellRow) {
+          onDeflector = obj;
+          break;
+        }
+      }
+      if (onDeflector) {
+        if (r.lastDeflector !== onDeflector) {
+          r.lastDeflector = onDeflector;
+          const out = this._deflect(onDeflector.data.deflectorElbow, r.vx, r.vy);
+          if (out) {
+            // Snap to cell center so the 90° turn is clean and grid-true.
+            r.x = rCellCol * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+            r.y = rCellRow * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+            r.vx = out.vx;
+            r.vy = out.vy;
+          } else {
+            // Hit the solid back of the wedge — the boulder stops here.
+            this.rocks.splice(i, 1);
+            continue;
+          }
+        }
+      } else {
+        r.lastDeflector = null;
+      }
+
       r.animTimer += deltaTime;
       if (r.animTimer >= ROLL_ANIM_INTERVAL) {
         r.animTimer = 0;
@@ -182,6 +216,19 @@ export class BoulderSystem {
     return { rocks: this.rocks, warnings: this.warnings };
   }
 
+  // 90° elbow deflection in screen-space (vx,vy ∈ {0,±1}). Each orientation has
+  // two OPEN sides; a boulder entering one exits the other. A boulder hitting a
+  // SOLID side returns null (blocked). `elbow` names the open pair (NE/NW/SE/SW).
+  _deflect(elbow, vx, vy) {
+    const MAP = {
+      NE: { '0,1': { vx: 1, vy: 0 },  '-1,0': { vx: 0, vy: -1 } },
+      NW: { '0,1': { vx: -1, vy: 0 }, '1,0':  { vx: 0, vy: -1 } },
+      SE: { '0,-1': { vx: 1, vy: 0 }, '-1,0': { vx: 0, vy: 1 } },
+      SW: { '0,-1': { vx: -1, vy: 0 }, '1,0': { vx: 0, vy: 1 } },
+    };
+    return MAP[elbow]?.[`${vx},${vy}`] || null;
+  }
+
   _scheduleWarning() {
     const dir = this.roomDirection;
     const innerMinPx = 2 * GRID.CELL_SIZE;
@@ -218,7 +265,7 @@ export class BoulderSystem {
       y = lateralPx;
     }
     const vec = DIR_VEC[direction];
-    this.rocks.push({ x, y, direction, vx: vec.dx, vy: vec.dy, empowered: false, animFrame: 0, animTimer: 0, hitCooldowns: new Map() });
+    this.rocks.push({ x, y, direction, vx: vec.dx, vy: vec.dy, empowered: false, lastDeflector: null, animFrame: 0, animTimer: 0, hitCooldowns: new Map() });
 
   }
 

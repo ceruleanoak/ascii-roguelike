@@ -169,11 +169,15 @@ The canonical Red puzzle, fully specified:
   Arc: *introduce → bounce teaches routing → cave teaches empowerment → boss
   rewards mastery.*
 
-**Build status:** Phase 1 (deflect + empower) **built** in `BoulderSystem`
-(per-rock `vx/vy/empowered`, hammer-strike redirect). Not yet built: deflector-
-rock 90° bounce (Phase 2), breakable cave wall + chest alcove (Phase 3),
-red-augmented U-room layout (Phase 4). The deflect reuses the
-`ChargeMechanic` / `ParryMechanic` knockback seams.
+**Build status:** Phase 1 (deflect + empower) and Phase 2 (deflector rocks)
+**built** in `BoulderSystem`. Boulders carry `vx/vy/empowered/lastDeflector`;
+hammer strike redirects + empowers; 4 elbow deflectors (`7`/`r`/`L`/`J` =
+NE/NW/SE/SW, in `BACKGROUND_OBJECTS`) bend a boulder 90° between their two open
+sides or stop it on a solid side. Not yet built: breakable cave wall + chest
+alcove (Phase 3), red-augmented U-room layout that places the puzzle (Phase 4),
+and in-room **placement** of deflectors (currently no spawn path — needs Phase 4
+or a cheat-spawn to test). The deflect reuses the `ChargeMechanic` /
+`ParryMechanic` knockback seams.
 
 ---
 

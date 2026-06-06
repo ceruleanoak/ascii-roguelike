@@ -286,6 +286,58 @@ export const BACKGROUND_OBJECTS = {
       default: { animation: 'bounce', message: null }
     }
   },
+  // Deflector rocks — angled fixtures that bend a rolling boulder 90°
+  // (BoulderSystem). Each is an elbow with two OPEN sides it routes between and
+  // two SOLID sides that stop a boulder. `deflectorElbow` names the open pair.
+  // Indestructible fixtures; the bounce itself teaches the routing rule.
+  '7': {
+    name: 'Deflector (NE)',
+    color: '#b08850',
+    hitbox: { w: 0.875, h: 0.875 },
+    indestructible: true,
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    boulderDeflector: true,
+    deflectorElbow: 'NE',
+    interactions: { default: { animation: 'clang', message: null } }
+  },
+  'r': {
+    name: 'Deflector (NW)',
+    color: '#b08850',
+    hitbox: { w: 0.875, h: 0.875 },
+    indestructible: true,
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    boulderDeflector: true,
+    deflectorElbow: 'NW',
+    interactions: { default: { animation: 'clang', message: null } }
+  },
+  'L': {
+    name: 'Deflector (SW)',
+    color: '#b08850',
+    hitbox: { w: 0.875, h: 0.875 },
+    indestructible: true,
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    boulderDeflector: true,
+    deflectorElbow: 'SW',
+    interactions: { default: { animation: 'clang', message: null } }
+  },
+  'J': {
+    name: 'Deflector (SE)',
+    color: '#b08850',
+    hitbox: { w: 0.875, h: 0.875 },
+    indestructible: true,
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    boulderDeflector: true,
+    deflectorElbow: 'SE',
+    interactions: { default: { animation: 'clang', message: null } }
+  },
   '~': {
     name: 'Puddle',
     color: '#3366ff',
