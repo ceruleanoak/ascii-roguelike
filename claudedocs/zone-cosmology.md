@@ -143,10 +143,37 @@ mind.
 
 **Build status:** Red is already the most environmentally-developed zone — the
 *only* one with a real `environmentalFeatures` block (`zones.js`): lava
-(`liquidType`, `liquidDamage`), `mudBeds`, `rockVariants`, `grassDensity`.
-Rolling rocks / spreading lava / spewing craters are those **static features
-turned kinetic** — design intent, not yet built. The deflect beat can reuse the
-`ChargeMechanic` / `ParryMechanic` seams.
+(`liquidType`, `liquidDamage`), `mudBeds`, `rockVariants`, `grassDensity`. And
+**`BoulderSystem` already rolls cardinal-direction boulders in red rooms**
+(contact damage + knockback, red-zone-gated, already wired into `BossSystem`
+via `triggerBoulderRain`).
+
+### Boulder deflect — confirmed mechanic & build arc
+
+The canonical Red puzzle, fully specified:
+
+- **Hammer hit** (`attack.canSmash` — the "right tool") **redirects + empowers**
+  a rolling boulder: snaps its heading to the cardinal axis away from the player
+  and doubles **speed and damage**. The hazard becomes the player's weapon.
+- **Deflector rocks** turn a boulder 90° on contact — **intrinsic to the
+  boulder, empowered or not.** Normal boulders bounce to *teach* the rule;
+  empowered boulders bounce so a charged one can be *routed*.
+- **The cave wall's HP is the gate:** above a normal boulder's damage, at/below
+  an empowered one's — so only a hammer-charged boulder breaks through. The
+  deflector rocks teach *routing*; the cave's toughness teaches *empowerment*.
+  No tutorial text.
+- **Reward:** breaking the cave opens a **deeper underground alcove with
+  chests** — a bigger payoff for the harder route (the Green × Red "Raider").
+- **Mastery payoff = the boss room.** `BossSystem` already rains boulders, so a
+  player who learned the deflect turns the boss's own barrage into the kill.
+  Arc: *introduce → bounce teaches routing → cave teaches empowerment → boss
+  rewards mastery.*
+
+**Build status:** Phase 1 (deflect + empower) **built** in `BoulderSystem`
+(per-rock `vx/vy/empowered`, hammer-strike redirect). Not yet built: deflector-
+rock 90° bounce (Phase 2), breakable cave wall + chest alcove (Phase 3),
+red-augmented U-room layout (Phase 4). The deflect reuses the
+`ChargeMechanic` / `ParryMechanic` knockback seams.
 
 ---
 

@@ -10,6 +10,7 @@ const ROCK_CHARS         = ['O', 'o', '0', 'Q'];
 const ROLL_ANIM_INTERVAL = 0.10;
 const HIT_COOLDOWN       = 0.5;
 const HIT_RADIUS         = GRID.CELL_SIZE * 0.85;
+const DEFLECT_RADIUS     = GRID.CELL_SIZE * 1.1;  // hammer reach to redirect a rolling boulder
 
 const DIRECTIONS = ['north', 'south', 'east', 'west'];
 
@@ -82,7 +83,36 @@ export class BoulderSystem {
 
     for (let i = this.rocks.length - 1; i >= 0; i--) {
       const r = this.rocks[i];
-      const vec = DIR_VEC[r.direction];
+
+      // Hammer strike ("the right tool") redirects the boulder away from the
+      // player and empowers it: ×2 speed and damage. The charged boulder turns
+      // the zone's hazard into the player's weapon — routed through deflector
+      // rocks into enemies or a blocked cave. Bounces (Phase 2) act on any
+      // boulder; only the empowered one carries enough force to break a cave.
+      if (game.combatSystem) {
+        for (const attack of game.combatSystem.getMeleeAttacks()) {
+          if (!attack.canSmash) continue;  // hammers only
+          const adx = r.x - attack.position.x;
+          const ady = r.y - attack.position.y;
+          if (adx * adx + ady * ady > DEFLECT_RADIUS * DEFLECT_RADIUS) continue;
+          // One deflect per swing — the attack lingers a few frames.
+          if (!attack._deflectedRocks) attack._deflectedRocks = new Set();
+          if (attack._deflectedRocks.has(r)) continue;
+          attack._deflectedRocks.add(r);
+          // Snap the new heading to the cardinal axis pointing away from the
+          // player, so it reads as "I knocked it that way" and stays grid-true
+          // for deterministic deflector-rock bounces.
+          const pcx = game.player.position.x + GRID.CELL_SIZE / 2;
+          const pcy = game.player.position.y + GRID.CELL_SIZE / 2;
+          const rdx = r.x - pcx;
+          const rdy = r.y - pcy;
+          if (Math.abs(rdx) >= Math.abs(rdy)) { r.vx = Math.sign(rdx) || 1; r.vy = 0; }
+          else { r.vx = 0; r.vy = Math.sign(rdy) || 1; }
+          r.empowered = true;
+          // Grace the striker so the boulder they just hit doesn't instantly recoil into them.
+          r.hitCooldowns.set(game.player, HIT_COOLDOWN);
+        }
+      }
 
       // Lava speed check
       const rCol = Math.floor(r.x / GRID.CELL_SIZE);
@@ -97,8 +127,10 @@ export class BoulderSystem {
         }
       }
 
-      r.x += vec.dx * (onLava ? BOULDER_SPEED_LAVA : BOULDER_SPEED) * deltaTime;
-      r.y += vec.dy * (onLava ? BOULDER_SPEED_LAVA : BOULDER_SPEED) * deltaTime;
+      const baseSpeed = onLava ? BOULDER_SPEED_LAVA : BOULDER_SPEED;
+      const speed = r.empowered ? baseSpeed * 2 : baseSpeed;
+      r.x += r.vx * speed * deltaTime;
+      r.y += r.vy * speed * deltaTime;
 
       r.animTimer += deltaTime;
       if (r.animTimer >= ROLL_ANIM_INTERVAL) {
@@ -118,10 +150,11 @@ export class BoulderSystem {
         const dx = (game.player.position.x + GRID.CELL_SIZE / 2) - r.x;
         const dy = (game.player.position.y + GRID.CELL_SIZE / 2) - r.y;
         if (dx * dx + dy * dy < HIT_RADIUS * HIT_RADIUS) {
-          game.player.takeDamage(BOULDER_DAMAGE, { type: 'boulder' });
+          const dmg = r.empowered ? BOULDER_DAMAGE * 2 : BOULDER_DAMAGE;
+          game.player.takeDamage(dmg, { type: 'boulder' });
           r.hitCooldowns.set(game.player, HIT_COOLDOWN);
-          // Knock player in the rock's travel direction
-          game.physicsSystem.applyKnockbackDir(game.player, vec.dx, vec.dy, 250);
+          // Knock player in the rock's travel direction (harder when empowered)
+          game.physicsSystem.applyKnockbackDir(game.player, r.vx, r.vy, r.empowered ? 400 : 250);
         }
       }
 
@@ -132,7 +165,7 @@ export class BoulderSystem {
         const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - r.x;
         const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - r.y;
         if (dx * dx + dy * dy < HIT_RADIUS * HIT_RADIUS) {
-          enemy.takeDamage(BOULDER_DAMAGE, null);
+          enemy.takeDamage(r.empowered ? BOULDER_DAMAGE * 2 : BOULDER_DAMAGE, null);
           r.hitCooldowns.set(enemy, HIT_COOLDOWN);
         }
       }
@@ -184,7 +217,8 @@ export class BoulderSystem {
       x = (GRID.COLS - 2) * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
       y = lateralPx;
     }
-    this.rocks.push({ x, y, direction, animFrame: 0, animTimer: 0, hitCooldowns: new Map() });
+    const vec = DIR_VEC[direction];
+    this.rocks.push({ x, y, direction, vx: vec.dx, vy: vec.dy, empowered: false, animFrame: 0, animTimer: 0, hitCooldowns: new Map() });
 
   }
 
