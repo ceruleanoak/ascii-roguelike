@@ -419,7 +419,7 @@ export class CombatSystem {
               obj.setWaterState('poisoned', 8.0);
               this.createDamageNumber('☠', obj.position.x, obj.position.y, '#44bb44');
             } else if (proj.onHit === 'stun' && proj.electric) {
-              obj.setWaterState('electrified', 5.0);
+              this._electrifyFloodFillWater(obj, backgroundObjects, 5.0);
               this.createDamageNumber('⚡', obj.position.x, obj.position.y, '#cccc00');
             } else if (proj.onHit === 'burn') {
               if (obj.getWaterState() === 'frozen') {
@@ -628,8 +628,9 @@ export class CombatSystem {
                 if (enemy.isFrozen()) {
                   enemy.applyStatusEffect('stun', 2.5 * elementalMod);
                 } else {
-                  enemy.applyStatusEffect('freeze', 8.0 * elementalMod);
-                  if (!enemy.data.freezePermanent) enemy.statusEffects.freeze.frozen = true;
+                  const dur = enemy.data.freezePermanent ? Infinity : 8.0 * elementalMod;
+                  enemy.applyStatusEffect('freeze', dur);
+                  enemy.statusEffects.freeze.frozen = true;
                 }
               } else {
                 enemy.applyStatusEffect(proj.onHit, modifiedDuration);
@@ -861,7 +862,7 @@ export class CombatSystem {
                   obj.setWaterState('poisoned', 8.0);
                   this.createDamageNumber('☠', obj.position.x, obj.position.y, '#44bb44');
                 } else if (attack.onHit === 'stun' && attack.electric) {
-                  obj.setWaterState('electrified', 5.0);
+                  this._electrifyFloodFillWater(obj, backgroundObjects, 5.0);
                   this.createDamageNumber('⚡', obj.position.x, obj.position.y, '#cccc00');
                 } else if (attack.onHit === 'burn') {
                   if (obj.getWaterState() === 'frozen') {
@@ -1040,8 +1041,9 @@ export class CombatSystem {
                   if (isFrozen) {
                     enemy.applyStatusEffect('stun', 2.5 * elementalMod);
                   } else {
-                    enemy.applyStatusEffect('freeze', 8.0 * elementalMod);
-                    if (!enemy.data.freezePermanent) enemy.statusEffects.freeze.frozen = true;
+                    const dur = enemy.data.freezePermanent ? Infinity : 8.0 * elementalMod;
+                    enemy.applyStatusEffect('freeze', dur);
+                    enemy.statusEffects.freeze.frozen = true;
                   }
                 } else {
                   enemy.applyStatusEffect(attack.onHit, modifiedDuration);
@@ -1088,7 +1090,7 @@ export class CombatSystem {
               }
 
               // Hitstop, recoil on confirmed melee hit
-              this.physicsSystem.applyHitstop(enemy, 0.06);
+              this.physicsSystem.applyHitstop(enemy, attack.hitstop ?? 0.06);
               if (attack.owner) {
                 this.physicsSystem.applyHitstop(attack.owner, 0.04);
                 const dx = attack.owner.position.x - enemy.position.x;
@@ -2454,6 +2456,47 @@ export class CombatSystem {
   // Acid Blade: flood-fill connected water tiles, permanently converting the
   // entire pond to acid (modelled as the existing 'poisoned' waterState with
   // Infinity duration). 4-connected adjacency on the cell grid.
+  // Flood-fills electrified state across all 4-adjacent water tiles connected to
+  // startObj. Mirrors _acidFloodFillWater so a single zap on a stream or river
+  // electrifies the whole flow. Skips tiles that aren't in 'normal' state so
+  // frozen/poisoned/crystallized water isn't overwritten.
+  _electrifyFloodFillWater(startObj, backgroundObjects, duration) {
+    const CELL = GRID.CELL_SIZE;
+    const key = (x, y) => `${Math.round(x / CELL)},${Math.round(y / CELL)}`;
+
+    const waterMap = new Map();
+    for (const obj of backgroundObjects) {
+      if (obj.destroyed) continue;
+      if (!obj.isWater || !obj.isWater()) continue;
+      waterMap.set(key(obj.position.x, obj.position.y), obj);
+    }
+
+    const visited = new Set();
+    const queue = [startObj];
+    visited.add(key(startObj.position.x, startObj.position.y));
+
+    while (queue.length > 0) {
+      const obj = queue.shift();
+      if (obj.waterState === 'normal' || obj.waterState === 'electrified') {
+        obj.setWaterState('electrified', duration);
+      }
+
+      const cx = Math.round(obj.position.x / CELL);
+      const cy = Math.round(obj.position.y / CELL);
+      const neighborKeys = [
+        `${cx - 1},${cy}`, `${cx + 1},${cy}`,
+        `${cx},${cy - 1}`, `${cx},${cy + 1}`
+      ];
+      for (const nk of neighborKeys) {
+        if (visited.has(nk)) continue;
+        const neighbor = waterMap.get(nk);
+        if (!neighbor) continue;
+        visited.add(nk);
+        queue.push(neighbor);
+      }
+    }
+  }
+
   _acidFloodFillWater(startObj, backgroundObjects) {
     const CELL = GRID.CELL_SIZE;
     const key = (x, y) => `${Math.round(x / CELL)},${Math.round(y / CELL)}`;

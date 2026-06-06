@@ -1,6 +1,16 @@
 import { GRID, BACKGROUND_OBJECTS, BACKGROUND_OBJECT_VARIANTS, OBJECT_ANIMATIONS, WATER_COLORS } from '../game/GameConfig.js';
 import { ITEMS, INGREDIENTS } from '../data/items.js';
 
+// Linear-interpolate between two #rrggbb colors. t in [0, 1].
+function _lerpHex(a, b, t) {
+  const ar = parseInt(a.slice(1, 3), 16), ag = parseInt(a.slice(3, 5), 16), ab = parseInt(a.slice(5, 7), 16);
+  const br = parseInt(b.slice(1, 3), 16), bg = parseInt(b.slice(3, 5), 16), bb = parseInt(b.slice(5, 7), 16);
+  const r = Math.round(ar + (br - ar) * t);
+  const g = Math.round(ag + (bg - ag) * t);
+  const bl = Math.round(ab + (bb - ab) * t);
+  return '#' + [r, g, bl].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+
 export class BackgroundObject {
   constructor(char, x, y, options = {}) {
     this.char = char;
@@ -144,6 +154,15 @@ export class BackgroundObject {
     this.burnt = false;             // Set by burnGrass() after fire burns out
     this.damaging = false;          // Set by RoomGenerator for lava tiles
     this.isDryMud = false;          // Set by PhysicsSystem for drying mud tiles
+
+    // River-flow animation (yellow zone). Set by RoomGenerator on river center tiles.
+    // animationChar is held at this._directionChar (`< > v ^`); color cycles blue→white
+    // along flowDir with a per-tile phase offset to read as a traveling current.
+    this.riverFlow = false;
+    this.flowIndex = 0;
+    this.flowDir = null;
+    this._directionChar = null;
+    this._flowTime = 0;
   }
 
   // Called by melee attacks (and can be called by any damage source).
@@ -273,7 +292,7 @@ export class BackgroundObject {
         this.animationChar = '◇';
         this.animationColor = WATER_COLORS.crystallized;
       } else if (this.waterState === 'electrified') {
-        this.animationChar = '~';
+        this.animationChar = this.riverFlow ? this._directionChar : '~';
         // Blink between yellow and blue at 0.15s interval
         this.electricBlinkTimer = (this.electricBlinkTimer || 0) - deltaTime;
         if (this.electricBlinkTimer <= 0) {
@@ -281,6 +300,20 @@ export class BackgroundObject {
           this.electricBlinkOn = !this.electricBlinkOn;
         }
         this.animationColor = this.electricBlinkOn ? '#cccc00' : '#3366ff';
+      } else if (this.riverFlow) {
+        // River center: hold directional char, animate blue→white traveling wave
+        // along flowDir. SPEED cells/sec × per-tile phase offset = a pulse that
+        // visibly moves in the current direction.
+        this.animationChar = this._directionChar;
+        this.electricBlinkTimer = 0;
+        this.electricBlinkOn = false;
+        this._flowTime += deltaTime;
+        const SPEED = 5;   // cells per second
+        const PERIOD = 4;  // cells per wave
+        const phase = (((this._flowTime * SPEED - this.flowIndex) % PERIOD) + PERIOD) % PERIOD;
+        const t = phase / PERIOD;
+        const intensity = 0.5 - 0.5 * Math.cos(t * Math.PI * 2); // 0..1, peaks white
+        this.animationColor = _lerpHex('#3366ff', '#ffffff', intensity);
       } else {
         this.animationChar = '~';
         this.electricBlinkTimer = 0;
@@ -385,7 +418,7 @@ export class BackgroundObject {
     // Water state color override (in case animationColor was reset by animation end)
     // Electrified is excluded: its per-frame blink value lives in animationColor and must not be replaced
     // Damaging liquids (lava) and mud beds excluded: they use their custom colors, not water colors
-    if (!this.onFire && this.isWater() && this.waterState !== 'electrified') {
+    if (!this.onFire && this.isWater() && this.waterState !== 'electrified' && !this.riverFlow) {
       color = WATER_COLORS[this.waterState] || WATER_COLORS.normal;
       // Frozen water also overrides the char for the static (non-animating) path
       if (this.waterState === 'frozen' && this.animationChar === this.originalChar) {

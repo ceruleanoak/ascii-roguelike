@@ -1128,6 +1128,11 @@ export class AudioSystem {
     this.sfxBuffers = {};
     this.sfxNodeGains = {};
     this.sfxActiveSources = {};
+    // Reset so loadGameplaySFX re-fetches into the new AudioContext.
+    // Without this, a demo→title→launch sequence leaves the flag set while
+    // dispose() wipes the buffers, so REST entry's loadGameplaySFX short-circuits
+    // and the main game runs with no SFX.
+    this.gameplaySFXLoaded = false;
     this.bossBuffers = [];
     this.bossLoopBuffer = null;
     this.redBuffers = [];

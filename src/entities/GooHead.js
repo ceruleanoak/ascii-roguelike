@@ -28,7 +28,8 @@ const HEAD_DATA = {
   attackType: 'melee',
   decisionInterval: 0.2,
   color: '#118833',
-  drops: []
+  drops: [],
+  affinities: ['goo'],  // auto-immune to goo-affinity effects (slime bomb, slime puddle)
 };
 
 export class GooHead extends Enemy {

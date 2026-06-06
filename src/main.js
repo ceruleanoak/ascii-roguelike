@@ -36,6 +36,8 @@ import { RidgeSystem } from './systems/RidgeSystem.js';
 import { PolymorphSystem } from './systems/PolymorphSystem.js';
 import { MagicSystem } from './systems/MagicSystem.js';
 import { WellSystem } from './systems/WellSystem.js';
+import { LightningStrikeSystem } from './systems/LightningStrikeSystem.js';
+import { SandstormSystem } from './systems/SandstormSystem.js';
 import { FountainSystem } from './systems/FountainSystem.js';
 import { Fairy } from './entities/Fairy.js';
 import { CampNPCSystem } from './systems/CampNPCSystem.js';
@@ -154,6 +156,8 @@ class Game {
     this.magicSystem = new MagicSystem(this);
     this.wellSystem = new WellSystem(this);
     this.fountainSystem = new FountainSystem(this);
+    this.lightningStrikeSystem = new LightningStrikeSystem(this);
+    this.sandstormSystem = new SandstormSystem(this);
     this.demoSystem = new DemoSystem(this);
     // Wire InventorySystem back to game so it can mutate player.equippedConsumables
     this.inventorySystem.game = this;
@@ -1560,6 +1564,31 @@ class Game {
     }
   }
 
+  // Schedule a delayed lightning strike one cell beyond the weapon's tip.
+  // Called when a weapon flagged with `callsLightning` completes its swing.
+  // Strike point is locked at swing time — the player can dodge out of the zone
+  // during the warning, which is the skill expression.
+  _callLightningStrike(player, weaponData) {
+    const C = GRID.CELL_SIZE;
+    const reach = (weaponData.range || 20) + C;
+    const px = player.position.x + C / 2;
+    const py = player.position.y + C / 2;
+    const fx = player.facing?.x || 0;
+    const fy = player.facing?.y || -1;
+    const flen = Math.sqrt(fx * fx + fy * fy) || 1;
+    const x = px + (fx / flen) * reach;
+    const y = py + (fy / flen) * reach;
+    this.lightningStrikeSystem.scheduleStrike({
+      x, y,
+      radius: weaponData.lightningRadius ?? (C * 1.2),
+      delay: weaponData.lightningDelay ?? 0.6,
+      damage: weaponData.lightningDamage ?? 4,
+      hitsPlayer: false,
+      plane: player.plane ?? 0,
+      source: 'lightning_sword'
+    });
+  }
+
   // Spawn lava background tiles in a 15° forward arc from the player on grid.
   // Called when a weapon flagged with `placesLava` completes its swing.
   _spawnLavaSweep(player, room) {
@@ -2092,8 +2121,18 @@ class Game {
       // routes into the linear 4-room tutorial sequence. Room counter tracks
       // which room (1=Shallows, 2=Reef Walk, 3=Wake Drift, 4=Pearl Cache).
       if (exitObj?.secretBlueZone) {
+        // Capture origin zone on first blue room so Pearl Cache's west exit
+        // can warp the player back to an O room in that same zone.
+        if (!this.blueZoneRoom) {
+          this.blueZoneOriginZone = this.zoneSystem.currentZone;
+        }
         this.zoneSystem.forceNextZone('blue');
         this.blueZoneRoom = (this.blueZoneRoom || 0) + 1;
+      }
+      // Returning from blue-zone Pearl Cache: reset the linear blue progression
+      // so a future secret entry starts at Shallows again.
+      if (exitObj?.returnFromBlueZone) {
+        this.blueZoneRoom = 0;
       }
       const currentZone = this.zoneSystem.checkZoneTransition();
       const progressionColor = this.zoneSystem.getProgressionColor();
@@ -2654,12 +2693,14 @@ class Game {
     this.debris = [];
     this.particles = [];
     this.steamClouds = [];
+    this.lightningStrikeSystem?.reset();
+    this.sandstormSystem?.reset();
   }
 
   // Stamp a trail tile of `type` at (x, y). Overlapping nearby same-type tiles
   // bump their overlap counter and grow to maxR — moving entities leave a
-  // thinning trail, lingering ones accumulate a thicker pool. Lifetime governs
-  // decay: 7s for slime, Infinity for lava/ice (cleared on room exit).
+  // thinning trail, lingering ones accumulate a thicker pool. Lifetime is the
+  // per-tile decay; enemy fire/ice trails pass the enemy's configured trailDuration.
   _dropTrailTile(x, y, type, plane = 0, lifetime = 7.0) {
     if (!this.puddles) return;
     const baseR = GRID.CELL_SIZE / 8;          // Quarter-cell side at spawn (thin trail)
@@ -2696,18 +2737,19 @@ class Game {
     this._dropTrailTile(x, y, 'slimeTrail', plane ?? 0, 7.0);
   }
 
-  // Stamp a disk of trail tiles for an enemy's persistent fire/ice trail.
-  // Tiles persist until the room is cleared (cleared by _resetEnvironmentalEffects).
+  // Stamp a disk of trail tiles for an enemy's fire/ice trail.
   // `radius` controls the disk coverage of each drop event.
-  _spawnEnemyTrailPuddle(x, y, type, radius, plane) {
+  // `duration` is the per-tile lifetime in seconds from the enemy's trailMechanic config.
+  _spawnEnemyTrailPuddle(x, y, type, radius, plane, duration) {
     if (!this.puddles) return;
     const p = plane ?? 0;
-    this._dropTrailTile(x, y, type, p, Infinity);
+    const life = duration ?? 7.0;
+    this._dropTrailTile(x, y, type, p, life);
     const RING_TILES = 6;
     const RING_RADIUS = radius * 0.6;
     for (let i = 0; i < RING_TILES; i++) {
       const a = (i / RING_TILES) * Math.PI * 2;
-      this._dropTrailTile(x + Math.cos(a) * RING_RADIUS, y + Math.sin(a) * RING_RADIUS, type, p, Infinity);
+      this._dropTrailTile(x + Math.cos(a) * RING_RADIUS, y + Math.sin(a) * RING_RADIUS, type, p, life);
     }
   }
 
@@ -3381,6 +3423,7 @@ class Game {
       } else {
         // Simple particle objects
         particle.life -= deltaTime;
+        if (particle.gravity) particle.vy += particle.gravity * deltaTime;
         particle.x += particle.vx * deltaTime;
         particle.y += particle.vy * deltaTime;
 
@@ -3482,7 +3525,7 @@ class Game {
           const d = Math.hypot(ex - sw.x, ey - sw.y);
           if (d > sw.radius) return;
           sw.hitEntities.add(entity);
-          const isSlime = entity.getElementalModifier?.('slime') === 0;
+          const isSlime = entity.data?.affinities?.includes('goo');
           this.physicsSystem.applyKnockback(entity, sw.x, sw.y, sw.knockback, 0.12);
           if (!isSlime && sw.damage > 0) {
             entity.takeDamage(sw.damage);
@@ -3524,7 +3567,7 @@ class Game {
       // Unified slime state: non-slime enemies also get the goo status (slow) — not freeze.
       if (this.currentRoom && this.currentRoom.enemies) {
         for (const enemy of this.currentRoom.enemies) {
-          if (enemy.getElementalModifier('slime') === 0) continue; // Slime-affinity enemies are immune
+          if (enemy.data?.affinities?.includes('goo')) continue; // goo-affinity enemies are immune to goo
           if ((gooBlob.plane ?? 0) === (enemy.plane ?? 0) && gooBlob.isNearEntity(enemy)) {
             enemy.applyStatusEffect('goo', 5.0);
           }
@@ -3941,6 +3984,9 @@ class Game {
         if (this.player.heldItem.data?.placesLava) {
           this._spawnLavaSweep(this.player, this.currentRoom);
         }
+        if (this.player.heldItem.data?.callsLightning) {
+          this._callLightningStrike(this.player, this.player.heldItem.data);
+        }
         if (this._isBlockingStaff(this.player.heldItem)) {
           this.player.staffSwingHasFired = true;
         }
@@ -4081,6 +4127,7 @@ class Game {
         }
       } else {
         particle.life -= deltaTime;
+        if (particle.gravity) particle.vy += particle.gravity * deltaTime;
         particle.x += particle.vx * deltaTime;
         particle.y += particle.vy * deltaTime;
         if (particle.life <= 0) {
@@ -4380,7 +4427,7 @@ class Game {
     const SLIME_COLLISION_SQ = SLIME_COLLISION_DISTANCE * SLIME_COLLISION_DISTANCE;
     const slimeEnemies = (this.player.inMaze || this.player.inHut || this.player.inDungeon)
       ? []
-      : this.currentRoom.enemies.filter(e => e.getElementalModifier('slime') === 0);
+      : this.currentRoom.enemies.filter(e => e.data?.affinities?.includes('goo'));
     for (const slime of slimeEnemies) {
       // Player contact
       const pdx = this.player.position.x - slime.position.x;
@@ -4391,7 +4438,7 @@ class Game {
       // Non-slime enemy contact
       for (const other of this.currentRoom.enemies) {
         if (other === slime) continue;
-        if (other.getElementalModifier('slime') === 0) continue; // skip fellow slimes
+        if (other.data?.affinities?.includes('goo')) continue; // skip fellow goo-affinity creatures
         const dx = other.position.x - slime.position.x;
         const dy = other.position.y - slime.position.y;
         if (dx * dx + dy * dy < SLIME_COLLISION_SQ) {
@@ -4418,7 +4465,7 @@ class Game {
           }
         }
         for (const enemy of activeEnemies) {
-          if (enemy.getElementalModifier('slime') === 0) continue; // slime-affinity immune
+          if (enemy.data?.affinities?.includes('goo')) continue; // goo-affinity immune
           if ((puddle.plane ?? 0) !== (enemy.plane ?? 0)) continue;
           if (puddle.isEntityOnPuddle(enemy)) {
             enemy.applyStatusEffect('goo', 5.0);
@@ -4555,6 +4602,9 @@ class Game {
         if (this.player.heldItem.data?.placesLava) {
           this._spawnLavaSweep(this.player, this.currentRoom);
         }
+        if (this.player.heldItem.data?.callsLightning) {
+          this._callLightningStrike(this.player, this.player.heldItem.data);
+        }
         if (this._isBlockingStaff(this.player.heldItem)) {
           this.player.staffSwingHasFired = true;
         }
@@ -4613,6 +4663,9 @@ class Game {
     this.trapSystem.checkWeaponTriggers();
     this.trapSystem.updatePuddles(deltaTime);
     this.wireSystem.update(deltaTime);
+    this.lightningStrikeSystem.update(deltaTime);
+    this.sandstormSystem.bindToRoom(this.currentRoom);
+    this.sandstormSystem.update(deltaTime);
 
     // Update pack behavior - find packmates and share memory marks
     for (const enemy of this.currentRoom.enemies) {
@@ -4891,10 +4944,10 @@ class Game {
         }
       }
 
-      // Fire trail / ice trail mechanic — persistent tile trail until room exit.
+      // Fire trail / ice trail mechanic — each tile decays after td.duration seconds.
       if (updateResult.shouldPlaceTrail) {
         const td = updateResult.trailData;
-        this._spawnEnemyTrailPuddle(td.x, td.y, td.type, td.radius, enemy.plane ?? 0);
+        this._spawnEnemyTrailPuddle(td.x, td.y, td.type, td.radius, enemy.plane ?? 0, td.duration);
       }
 
       // Shaman buff mechanic
@@ -4931,7 +4984,7 @@ class Game {
       // Uses bounding-box overlap (slime body vs puddle footprint) instead of
       // `isEntityOnPuddle`'s strict center-in-square test, so thin trail tiles
       // (CELL_SIZE/8 wide) still register as the slime walks across them.
-      if (enemy.getElementalModifier('slime') === 0) {
+      if (enemy.data?.affinities?.includes('goo')) {
         const baseSpeed = enemy.data.speed;
         const GOO_TOUCH_RADIUS = GRID.CELL_SIZE;
         const ecx = enemy.position.x + GRID.CELL_SIZE / 2;
@@ -6320,14 +6373,15 @@ class Game {
         return;
       }
 
-      // SPACE places/arms the trap at the player's feet. (Wires were already
-      // handled earlier via wireSystem.handleSpacePress.) Skip if a ground item
-      // is nearby — pickup wins to avoid trapping over a pickup.
+      // SPACE deploys the trap with a throw — charge time + facing aim the arc,
+      // SPACE release fires it (trap arms where it lands). Wires were handled
+      // earlier via wireSystem.handleSpacePress. Skip if a ground item is nearby
+      // so pickup wins.
       const hasNearbyPickup = this.items.some(
         item => this.physicsSystem.getDistance(this.player, item) < 20
       );
       if (this.player.canUseTrap() && !hasNearbyPickup) {
-        this.trapSystem.placeTrap();
+        this.trapSystem.startTrapCharge('deploy');
         return;
       }
     }
@@ -6677,11 +6731,9 @@ class Game {
 
       const held = this.player.heldItem;
       if (held) {
-        // SHIFT charges a throw for any held slot item. Throwing IS dropping —
-        // the item leaves the slot and lands on the ground. Traps arm where they
-        // land; weapons and wires land as pickups. Placement/arming for traps
-        // also happens on SPACE.
-        this.trapSystem.startTrapCharge();
+        // SHIFT throws to drop — any held item leaves the slot and lands as a
+        // pickup. Weapons may damage en route; traps do NOT arm (deploy is SPACE).
+        this.trapSystem.startTrapCharge('drop');
       }
     }
 
@@ -6705,7 +6757,8 @@ class Game {
       this.fishingSystem.releaseCharge(this);
     }
 
-    if (this.trapCharging && this.player?.heldItem?.data?.type === 'TRAP') {
+    // SPACE release fires the deploy throw (mode='deploy', started by SPACE press).
+    if (this.trapCharging && this.trapCharging.mode === 'deploy') {
       this.trapSystem.releaseTrapThrow();
     }
 
@@ -6728,10 +6781,9 @@ class Game {
     }
   }
 
-  // Mirror of the SHIFT keyup release logic — fires the weapon throw that
-  // handleShiftPress armed via trapSystem.startTrapCharge().
+  // SHIFT release fires the drop throw (mode='drop', started by SHIFT press).
   handleShiftRelease() {
-    if (this.trapCharging && this.player?.heldItem?.data?.type !== 'TRAP') {
+    if (this.trapCharging && this.trapCharging.mode === 'drop') {
       this.trapSystem.releaseTrapThrow();
     }
   }
@@ -7279,11 +7331,6 @@ class Game {
     }
   }
 
-  // Place trap at player position (spacebar)
-  placeTrap() {
-    this.trapSystem.placeTrap();
-  }
-
   updatePlacedTraps(deltaTime) {
     this.trapSystem.updatePlacedTraps(deltaTime);
   }
@@ -7675,6 +7722,18 @@ class Game {
         this.player.inventory.push(ch);
       }
     }
+
+    // Open the west exit so the player can return to an O room in whatever
+    // zone they came from. Without this the Pearl Cache is a dead end (north
+    // is killed by the blue-zone template, south retreats to Rest only).
+    const originZone = this.blueZoneOriginZone || 'green';
+    room.exits.west = {
+      letter: 'O',
+      color: '#66aaff',
+      returnFromBlueZone: true,
+      forceZone: originZone
+    };
+    this.updateExitCollisions();
 
     this.audioSystem?.playSFX?.('pickup');
     this.menuSystem?.showPickupMessage?.('THE DEEP GIVES.');

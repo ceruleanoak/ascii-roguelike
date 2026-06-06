@@ -97,7 +97,6 @@ export const ENEMIES = {
       waterJumpDuration: 0.30
     },
     elementalAffinity: {
-      immunity: ['wet'],
       weakness: { 'shock': 2.0 }
     },
     affinities: ['beast', 'aquatic'],
@@ -182,7 +181,6 @@ export const ENEMIES = {
     decisionInterval: 0.35,
     color: '#44bb44',
     elementalAffinity: {
-      immunity: ['poison'],
       weakness: { 'burn': 1.5, 'freeze': 1.3 }
     },
     affinities: ['venom', 'beast'],
@@ -237,10 +235,11 @@ export const ENEMIES = {
     attackCooldown: 1.2,
     attackWindup: 1.0,  // Clear 1-second telegraph
     windupImmune: true,  // Cannot be interrupted
+    windupMovement: 'advance',  // Keep closing during windup so a backing player stays in range
     attackType: 'melee',
     decisionInterval: 0.8,  // Dumb enemy (slow reaction time)
     color: '#00ff00',
-    elementalAffinity: { immunity: ['slime'], weakness: { freeze: 2.0 } },
+    elementalAffinity: { weakness: { freeze: 2.0 } },
     freezePermanent: true,
     affinities: ['goo'],
     sfx: { hit: 'goo_hit', death: ['goo_death_1', 'goo_death_2'] },
@@ -295,7 +294,7 @@ export const ENEMIES = {
       shockwaveKnockback: 140,                 // Mild push as the ring sweeps past
       trailDropOnLanding: true                 // Spawn a slime trail puddle at the landing site
     },
-    elementalAffinity: { immunity: ['slime'], weakness: { freeze: 2.0, blade: 2.0 } },
+    elementalAffinity: { weakness: { freeze: 2.0, blade: 2.0 } },
     freezePermanent: true,
     affinities: ['goo'],
     sfx: { hit: 'goo_hit', death: ['goo_death_1', 'goo_death_2'] },
@@ -708,7 +707,6 @@ export const ENEMIES = {
       deathDelay: 0.8
     },
     elementalAffinity: {
-      immunity: ['burn'],
       weakness: { 'freeze': 2.0, 'wet': 1.8 }
     },
     affinities: ['fire'],
@@ -756,7 +754,6 @@ export const ENEMIES = {
       deathDelay: 0.8
     },
     elementalAffinity: {
-      immunity: ['burn'],
       weakness: { 'freeze': 2.5, 'wet': 1.8 }
     },
     affinities: ['fire'],
@@ -789,7 +786,6 @@ export const ENEMIES = {
     // ⚠️ NEW MECHANIC (burstFireMechanic — fires 3 rocks with 0.25s delays):
     // burstFireMechanic: { enabled: true, projectileCount: 3, projectileDelay: 0.25, reloadCooldown: 2.0 }
     elementalAffinity: {
-      immunity: ['burn'],
       weakness: { 'freeze': 1.5, 'wet': 1.3 }
     },
     affinities: ['fire'],
@@ -813,7 +809,6 @@ export const ENEMIES = {
     decisionInterval: 0.4,
     color: '#ff4400',
     elementalAffinity: {
-      immunity: ['burn'],
       resistance: { 'stun': 0.5 },
       weakness: { 'freeze': 2.0, 'wet': 1.5 }
     },
@@ -865,7 +860,6 @@ export const ENEMIES = {
       deathDelay: 0.8
     },
     elementalAffinity: {
-      immunity: ['burn'],
       weakness: { 'freeze': 1.8, 'wet': 1.5 }
     },
     affinities: ['beast', 'fire'],
@@ -900,7 +894,6 @@ export const ENEMIES = {
     },
     idleBehavior: 'stationary',
     elementalAffinity: {
-      immunity: ['burn'],
       resistance: { 'physical': 0.4 },
       weakness: { 'freeze': 1.5, 'wet': 1.5 }
     },
@@ -1112,7 +1105,6 @@ export const ENEMIES = {
     isImpact: true,           // Wind can't be blocked by staff
     float: true,              // Stands on ice tiles it pushes you toward
     elementalAffinity: {
-      immunity: ['freeze'],
       weakness: { 'burn': 2.0 }
     },
     affinities: ['ice'],
@@ -1141,7 +1133,6 @@ export const ENEMIES = {
     float: true,  // Ghostly — drifts over ground hazards
     packCoordination: true,  // Multiple wraiths coordinate latching to exhaust the player
     elementalAffinity: {
-      immunity: ['freeze'],
       weakness: { 'burn': 2.0, 'magic': 1.5 }
     },
     affinities: ['ice', 'undead'],
@@ -1162,11 +1153,11 @@ export const ENEMIES = {
     aggroRange: GRID.CELL_SIZE * 8,   // 8 units
     attackCooldown: 1.8,
     attackWindup: 1.0,  // Minimum 1 second telegraph
+    windupMovement: 'advance',  // Heavy golem keeps closing during windup
     attackType: 'melee',
     decisionInterval: 0.6,
     color: '#aaddff',
     elementalAffinity: {
-      immunity: ['freeze'],
       resistance: { 'stun': 0.6, 'poison': 0.8 },
       weakness: { 'burn': 2.0 }
     },
@@ -1209,7 +1200,7 @@ export const ENEMIES = {
       deathDelay: 0.8
     },
     elementalAffinity: {
-      immunity: ['freeze', 'poison'],
+      immunity: ['poison'],
       resistance: { 'physical': 0.5, 'stun': 0.8 },
       weakness: { 'burn': 2.0, 'magic': 1.3 }
     },
@@ -1264,7 +1255,6 @@ export const ENEMIES = {
       deathDelay: 0.8
     },
     elementalAffinity: {
-      immunity: ['freeze'],
       weakness: { 'burn': 2.0, 'stun': 1.5 }
     },
     affinities: ['ice', 'aquatic'],
@@ -1297,7 +1287,6 @@ export const ENEMIES = {
     },
     packCoordination: true,  // Shares detection & memory marks with all wolves in room
     elementalAffinity: {
-      immunity: ['freeze'],
       weakness: { 'burn': 1.8 }
     },
     affinities: ['beast', 'ice'],
@@ -1339,7 +1328,6 @@ export const ENEMIES = {
       trailRadius: GRID.CELL_SIZE * 1.0
     },
     elementalAffinity: {
-      immunity: ['freeze'],
       resistance: { 'physical': 0.6, 'stun': 0.7 },
       weakness: { 'burn': 2.0 }
     },
@@ -1379,7 +1367,6 @@ export const ENEMIES = {
       trailRadius: GRID.CELL_SIZE * 0.9
     },
     elementalAffinity: {
-      immunity: ['freeze'],
       weakness: { 'burn': 1.8 }
     },
     spawning: {
@@ -1433,7 +1420,6 @@ export const ENEMIES = {
       clearIceTiles: true                  // Melts Glacier Crab ice patches on burst
     },
     elementalAffinity: {
-      immunity: ['burn', 'freeze'],
       weakness: { 'wet': 1.8 }
     },
     affinities: ['fire', 'ice'],
@@ -1476,7 +1462,6 @@ export const ENEMIES = {
       lureIndicatorChar: '~'
     },
     elementalAffinity: {
-      immunity: ['wet'],
       weakness: { 'burn': 2.0, 'stun': 2.0 }  // stun: interrupt the song mid-channel
     },
     affinities: ['aquatic'],
@@ -1506,9 +1491,10 @@ export const ENEMIES = {
     attackType: 'magic',
     movementStyle: 'jumper',
     movementConfig: {
-      jumpInterval: 0.5,
-      jumpSpeed: 180,
-      jumpDuration: 0.1,
+      jumpInterval: 0.9,
+      jumpSpeed: 260,
+      jumpDuration: 0.45,
+      arcHeight: GRID.CELL_SIZE * 1.6,  // Parabolic visual lift — peaks mid-flight
       zigzagStrength: 0.85   // Strong deterministic zigzag — chaotic but learnable
     },
     acceleration: 700,
@@ -1524,7 +1510,6 @@ export const ENEMIES = {
       deathDelay: 0.8
     },
     elementalAffinity: {
-      immunity: ['stun'],
       weakness: { 'wet': 2.0 }
     },
     affinities: ['electric'],
@@ -1564,7 +1549,6 @@ export const ENEMIES = {
       chargeRange: GRID.CELL_SIZE * 7
     },
     elementalAffinity: {
-      immunity: ['stun'],
       resistance: { 'physical': 0.5, 'magic': 0.7 },
       weakness: { 'wet': 2.5 }
     },
@@ -1605,7 +1589,6 @@ export const ENEMIES = {
       shieldPhaseMovement: true   // Retreats directly away from player while shield is up
     },
     elementalAffinity: {
-      immunity: ['stun'],
       weakness: { 'burn': 1.5, 'freeze': 1.3 }
     },
     affinities: ['electric'],
@@ -1629,7 +1612,6 @@ export const ENEMIES = {
     decisionInterval: 0.3,  // Intelligent caster
     color: '#ffcc00',
     elementalAffinity: {
-      immunity: ['stun'],
       weakness: { 'wet': 1.8 }
     },
     spawning: {
@@ -1674,7 +1656,6 @@ export const ENEMIES = {
     },
     packCoordination: true,  // Shares detection & memory marks with all spiders in room
     elementalAffinity: {
-      immunity: ['stun'],
       weakness: { 'wet': 1.8, 'burn': 1.3 }
     },
     affinities: ['beast', 'electric'],
@@ -1716,7 +1697,6 @@ export const ENEMIES = {
     knockbackMultiplier: 2.0,
     isImpact: true,              // Diving strike bypasses staff block
     elementalAffinity: {
-      immunity: ['stun'],
       weakness: { 'wet': 1.8 }
     },
     affinities: ['beast', 'electric'],
@@ -1927,7 +1907,6 @@ export const ENEMIES = {
     color: '#00bbcc',
     waterAffinity: true,               // Prefers water; never avoids it while wandering
     elementalAffinity: {
-      immunity: ['wet'],
       resistance: { 'freeze': 0.6 },
       weakness: { 'burn': 1.5 }
     },

@@ -44,11 +44,13 @@ export class TrapSystem {
     this.game = game;
   }
 
-  // Begin charging a throw. Called on SPACE keydown (traps) or SHIFT keydown (weapons).
-  // Profile is captured at charge start from the currently held item.
-  startTrapCharge() {
+  // Begin charging a throw.
+  //   mode === 'deploy' — SPACE on a trap; the trap arms where it lands.
+  //   mode === 'drop'   — SHIFT on any item; lands on the ground as a pickup
+  //                       (weapons may damage en route, traps do NOT arm).
+  startTrapCharge(mode = 'deploy') {
     const profile = getThrowProfile(this.game.player?.heldItem);
-    this.game.trapCharging = { timer: 0, maxDist: profile.maxDist, maxTime: MAX_CHARGE_TIME };
+    this.game.trapCharging = { timer: 0, maxDist: profile.maxDist, maxTime: MAX_CHARGE_TIME, mode };
   }
 
   // Cancel charge without throwing (state change, death, etc.).
@@ -81,17 +83,23 @@ export class TrapSystem {
     };
   }
 
-  // Execute the throw on key release. Routes to trap-arm or weapon-pickup flight.
+  // Execute the throw on key release. Mode decides the landing behavior:
+  //   deploy → trap arms where it lands (non-wire traps only).
+  //   drop   → item lands on the ground as a pickup (any item type).
   releaseTrapThrow() {
     const game = this.game;
     if (!game.trapCharging) return;
     const heldItem = game.player.heldItem;
     if (!heldItem) { game.trapCharging = null; return; }
 
-    // Wires are TRAP-typed but throw-land as pickups (WireSystem handles placement
-    // via two-stage SPACE anchoring, not trap arming on landing).
-    const isTrap = heldItem.data?.type === 'TRAP' && !heldItem.data?.wire;
-    if (isTrap && !game.player.canUseTrap()) { game.trapCharging = null; return; }
+    const mode = game.trapCharging.mode || 'deploy';
+    // Wires are TRAP-typed but never arm on landing — WireSystem handles their
+    // placement via two-stage SPACE anchoring.
+    const armsOnLanding = mode === 'deploy'
+      && heldItem.data?.type === 'TRAP'
+      && !heldItem.data?.wire;
+
+    if (armsOnLanding && !game.player.canUseTrap()) { game.trapCharging = null; return; }
 
     const pos = this.getTrapReticulePos();
     game.trapCharging = null;
@@ -105,7 +113,9 @@ export class TrapSystem {
     const v0 = Math.sqrt(2 * THROW_DECEL * dist);
     const profile = getThrowProfile(heldItem);
 
-    if (isTrap) {
+    const interior = !!(game.player.inHut || game.player.inDungeon || game.player.inMaze);
+
+    if (armsOnLanding) {
       game.inFlightTraps.push({
         kind: 'trap',
         x: px, y: py,
@@ -117,6 +127,7 @@ export class TrapSystem {
         color: heldItem.color,
         trapData: heldItem.data,
         plane: game.player.plane ?? 0,
+        interior,
       });
       game.player.markTrapUsed();
     } else {
@@ -144,6 +155,7 @@ export class TrapSystem {
         plane: game.player.plane ?? 0,
         inHut: game.player.inHut === true,
         inMaze: game.player.inMaze === true,
+        interior,
       });
     }
     game.updateUI();
@@ -153,8 +165,10 @@ export class TrapSystem {
   updateInFlightTraps(deltaTime) {
     const game = this.game;
     const C = GRID.CELL_SIZE;
+    const playerInInterior = !!(game.player?.inHut || game.player?.inDungeon || game.player?.inMaze);
     for (let i = game.inFlightTraps.length - 1; i >= 0; i--) {
       const t = game.inFlightTraps[i];
+      if ((t.interior === true) !== playerInInterior) continue;
       const speed = Math.sqrt(t.vx * t.vx + t.vy * t.vy);
       const decelThisFrame = t.decel * deltaTime;
 
@@ -235,13 +249,17 @@ export class TrapSystem {
   _spearHitsWall(t) {
     const game = this.game;
     const C = GRID.CELL_SIZE;
-    // Out-of-bounds positions are treated as wall hits (catches fast tunneling past border walls)
-    if (t.x < 0 || t.y < 0 || t.x >= GRID.WIDTH || t.y >= GRID.HEIGHT) return true;
+    // Pick the right collision source: interior throws hit the active floor's
+    // walls/objects; surface throws hit the current room's.
+    const interior = t.interior === true && game.activeFloor;
+    const boundsW = interior ? game.activeFloor.gridCols * C : GRID.WIDTH;
+    const boundsH = interior ? game.activeFloor.gridRows * C : GRID.HEIGHT;
+    if (t.x < 0 || t.y < 0 || t.x >= boundsW || t.y >= boundsH) return true;
     const gridX = Math.floor(t.x / C);
     const gridY = Math.floor(t.y / C);
-    const room = game.currentRoom;
-    if (room?.collisionMap?.[gridY]?.[gridX]) return true;
-    const bgObjs = room?.backgroundObjects;
+    const source = interior ? game.activeFloor : game.currentRoom;
+    if (source?.collisionMap?.[gridY]?.[gridX]) return true;
+    const bgObjs = source?.backgroundObjects;
     if (!bgObjs) return false;
     for (const obj of bgObjs) {
       if (obj.destroyed || !obj.data?.solid) continue;
@@ -334,7 +352,8 @@ export class TrapSystem {
       item: placedTrapItem,
       tickTimer: t.trapData.tickInterval || 0,
       activeDuration: t.trapData.activeDuration != null ? t.trapData.activeDuration : Infinity,
-      affectedEnemies: new Set()
+      affectedEnemies: new Set(),
+      interior: t.interior === true,
     };
     if (t.trapData.remoteTrigger) {
       entry.blinkTimer = 0;
@@ -342,36 +361,6 @@ export class TrapSystem {
     }
     game.placedTraps.push(entry);
     game.particles.push(...createActivationBurst(t.x, t.y, t.trapData.color || '#ffffff'));
-  }
-
-  placeTrap() {
-    const game = this.game;
-    if (!game.player.canUseTrap()) return;
-
-    const trapItem = game.player.heldItem;
-    const trapData = trapItem.data;
-
-    // Decrement charge and advance to next slot
-    game.player.markTrapUsed();
-
-    // Create placed trap entity at player position
-    const placedTrapItem = new Item(
-      trapItem.char,
-      game.player.position.x,
-      game.player.position.y
-    );
-    placedTrapItem.isPlaced = true;
-    placedTrapItem.plane = game.player.plane ?? 0;
-
-    // Add to placed traps list for auto-trigger detection
-    game.placedTraps.push({
-      item: placedTrapItem,
-      tickTimer: trapData.tickInterval || 0,
-      activeDuration: trapData.activeDuration != null ? trapData.activeDuration : Infinity,
-      affectedEnemies: new Set()
-    });
-
-    game.updateUI();
   }
 
   // Place a trap at an arbitrary world position (used by Trap Goblin enemy).
@@ -397,8 +386,27 @@ export class TrapSystem {
   _getActiveEnemies() {
     const game = this.game;
     if (game.player?.inMaze && game.mazeInterior) return game.mazeInterior.enemies || [];
-    if (game.player?.inHut && game.activeFloor) return game.activeFloor.enemies;
+    if ((game.player?.inHut || game.player?.inDungeon) && game.activeFloor) return game.activeFloor.enemies;
     return game.currentRoom?.enemies ?? [];
+  }
+
+  // Apply a trap hit to one enemy, respecting `trapData.affinity`. Affinity uses the
+  // canonical elemental taxonomy (ice, fire, electric, goo, venom, …) — same namespace
+  // as `enemy.affinities` and AFFINITY_POOLS. An enemy whose affinities include the
+  // trap's affinity is IMMUNE: no damage, no status, IMMUNE floater shown. Traps with
+  // no affinity (sleep, charm) always land. Damage <= 0 skips the damage step.
+  _applyTrapHit(enemy, trapData, damage, color) {
+    const game = this.game;
+    const affinity = trapData.affinity;
+    if (affinity && enemy.data?.affinities?.includes(affinity)) {
+      game.combatSystem?.createDamageNumber?.('IMMUNE', enemy.position.x, enemy.position.y, '#cccccc');
+      return false;
+    }
+    if (damage > 0) {
+      enemy.takeDamage(damage);
+      game.combatSystem?.createDamageNumber?.(damage, enemy.position.x, enemy.position.y, color);
+    }
+    return true;
   }
 
   updatePlacedTraps(deltaTime) {
@@ -406,9 +414,11 @@ export class TrapSystem {
     if (!game.currentRoom) return;
     const enemies = this._getActiveEnemies();
     game.activeNoiseSource = null; // reset each frame
+    const playerInInterior = !!(game.player?.inHut || game.player?.inDungeon || game.player?.inMaze);
 
     for (let i = game.placedTraps.length - 1; i >= 0; i--) {
       const entry = game.placedTraps[i];
+      if ((entry.interior === true) !== playerInInterior) continue;
       const { item } = entry;
       const trapData = item.data;
       const tx = item.position.x;
@@ -470,7 +480,8 @@ export class TrapSystem {
           }
 
         } else if (effect === 'sleep') {
-          // Music Box: apply sleep to enemies that enter radius while active
+          // Music Box: apply sleep to enemies that enter radius while active. No affinity
+          // (sleep has no elemental class) — every enemy is a valid target.
           entry.activeDuration -= deltaTime;
           if (entry.activeDuration > 0) {
             for (const enemy of enemies) {
@@ -488,31 +499,31 @@ export class TrapSystem {
             }
           }
 
-        } else if (effect === 'stun') {
-          // Tesla Coil: deal damage + stun every tickInterval seconds
+        } else if (effect === 'zap') {
+          // Tesla Coil: damage + zap (electric-affinity stun) every tickInterval seconds.
+          // Electric-affinity enemies are IMMUNE (handled by _applyTrapHit + affinity gate).
           entry.tickTimer -= deltaTime;
           if (entry.tickTimer <= 0) {
             entry.tickTimer = trapData.tickInterval;
+            const zapDmg = trapData.damage || 2;
             for (const enemy of enemies) {
               const dx = enemy.position.x - tx;
               const dy = enemy.position.y - ty;
-              if (Math.sqrt(dx * dx + dy * dy) <= trapData.effectRadius) {
-                enemy.takeDamage(trapData.damage || 2);
-                enemy.applyStatusEffect('stun', trapData.stunDuration || 0.8);
-                game.combatSystem.createDamageNumber(trapData.damage || 2, enemy.position.x, enemy.position.y, '#00ffff');
-                // Lightning particle
-                game.particles.push({
-                  x: tx,
-                  y: ty,
-                  vx: (Math.random() - 0.5) * 60,
-                  vy: (Math.random() - 0.5) * 60,
-                  life: 0.3,
-                  maxLife: 0.3,
-                  char: '!',
-                  color: '#00ffff',
-                  isImpact: true
-                });
-              }
+              if (Math.sqrt(dx * dx + dy * dy) > trapData.effectRadius) continue;
+              if (!this._applyTrapHit(enemy, trapData, zapDmg, '#00ffff')) continue;
+              enemy.applyStatusEffect('zap', trapData.stunDuration || 0.8);
+              // Lightning particle
+              game.particles.push({
+                x: tx,
+                y: ty,
+                vx: (Math.random() - 0.5) * 60,
+                vy: (Math.random() - 0.5) * 60,
+                life: 0.3,
+                maxLife: 0.3,
+                char: '!',
+                color: '#00ffff',
+                isImpact: true
+              });
             }
           }
 
@@ -534,15 +545,15 @@ export class TrapSystem {
     const r = trapData.effectRadius;
 
     if (trapData.effect === 'slow') {
-      // Slime Bomb: blast applies goo status to enemies + player in radius (gooBlob parity)
-      // and lays a permanent slime puddle on the ground.
+      // Slime Bomb: blast deals 1+ damage and applies goo to enemies in radius. Slime-immune
+      // enemies are filtered by _applyTrapHit via trapData.affinity='slime' (shows IMMUNE).
+      const slowDmg = trapData.damage || 1;
       for (const enemy of enemies) {
-        if (enemy.getElementalModifier('slime') === 0) continue;
         const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - cx;
         const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - cy;
-        if (Math.sqrt(dx * dx + dy * dy) <= r) {
-          enemy.applyStatusEffect('goo', 5.0);
-        }
+        if (Math.sqrt(dx * dx + dy * dy) > r) continue;
+        if (!this._applyTrapHit(enemy, trapData, slowDmg, '#00ff00')) continue;
+        enemy.applyStatusEffect('goo', 5.0);
       }
       if (game.player) {
         const pdx = (game.player.position.x + GRID.CELL_SIZE / 2) - cx;
@@ -562,19 +573,22 @@ export class TrapSystem {
         game._dropSlimeTrail(cx + Math.cos(a) * RING_RADIUS, cy + Math.sin(a) * RING_RADIUS, plane);
       }
     } else if (trapData.effect === 'freeze') {
-      // Freeze Trap: freeze enemies + crystallize water/puddle tiles + scatter ice objects.
-      // Slimes and ice-weak enemies stay frozen permanently — others thaw normally.
+      // Freeze Trap: damage + freeze enemies + crystallize water/puddle tiles + scatter ice objects.
+      // freezePermanent enemies (slimes) lock at Infinity duration and never thaw; other ice-weak
+      // enemies (freeze >1.0) also get Infinity. Everyone else uses effectDuration. `frozen=true`
+      // unconditionally so the freeze is full immobilization, not just slow. Freeze-immune enemies
+      // are filtered by _applyTrapHit via trapData.affinity='freeze'.
       game.particles.push(...createIceBurst(cx, cy));
+      const freezeDmg = trapData.damage || 1;
       for (const enemy of enemies) {
         const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - cx;
         const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - cy;
-        if (Math.sqrt(dx * dx + dy * dy) <= r) {
-          const isSlime = enemy.getElementalModifier('slime') === 0;
-          const isIceWeak = enemy.getElementalModifier('freeze') > 1.0;
-          const duration = (isSlime || isIceWeak) ? Infinity : trapData.effectDuration;
-          enemy.applyStatusEffect('freeze', duration);
-          if (!enemy.data.freezePermanent) enemy.statusEffects.freeze.frozen = true;
-        }
+        if (Math.sqrt(dx * dx + dy * dy) > r) continue;
+        if (!this._applyTrapHit(enemy, trapData, freezeDmg, '#aaffff')) continue;
+        const isIceWeak = enemy.getElementalModifier('freeze') > 1.0;
+        const duration = (enemy.data.freezePermanent || isIceWeak) ? Infinity : trapData.effectDuration;
+        enemy.applyStatusEffect('freeze', duration);
+        enemy.statusEffects.freeze.frozen = true;
       }
 
       const C = GRID.CELL_SIZE;
@@ -656,7 +670,9 @@ export class TrapSystem {
         });
       }
     } else if (trapData.effect === 'remote') {
-      // Remote Bomb: radial explosion damage + fire particles (friendly fire)
+      // Remote Bomb: radial explosion damage + fire particles (friendly fire). Pure
+      // concussive damage — no affinity gate, so fire-affinity enemies still take it.
+      // The burn status follows but is also unconditional (lore: shrapnel ignites).
       const dmg = trapData.damage || 6;
       for (const enemy of enemies) {
         const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - cx;
@@ -693,23 +709,29 @@ export class TrapSystem {
         });
       }
     } else {
-      // All other one-shot effects: apply to enemies and player in effectRadius
+      // All other one-shot effects (burn, stun, sleep, charm): _applyTrapHit gates on affinity
+      // (fire-immune enemies block the Fire Trap, electric-immune block Stun, etc.) — then
+      // damage + status follow. Damage runs before the status so a sleep trap doesn't get
+      // cleared the moment it's applied (Enemy.takeDamage clears already-active sleep).
+      const effectDmg = trapData.damage || 1;
+      const dmgColor = trapData.color || '#ffffff';
+
+      // Fire Trap also ignites flammable bg objects in radius — environmental, not per-enemy.
+      if (trapData.effect === 'burn' && game.currentRoom.backgroundObjects) {
+        for (const obj of game.currentRoom.backgroundObjects) {
+          if (obj.destroyed || !obj.isFlammable) continue;
+          const odx = obj.position.x - tx;
+          const ody = obj.position.y - ty;
+          if (Math.sqrt(odx * odx + ody * ody) <= r && obj.isFlammable()) obj.ignite(5.0);
+        }
+      }
+
       for (const enemy of enemies) {
         const dx = enemy.position.x - tx;
         const dy = enemy.position.y - ty;
-        if (Math.sqrt(dx * dx + dy * dy) <= r) {
-          if (trapData.effect === 'burn' && game.currentRoom.backgroundObjects) {
-            for (const obj of game.currentRoom.backgroundObjects) {
-              if (obj.destroyed || !obj.isFlammable) continue;
-              const odx = obj.position.x - tx;
-              const ody = obj.position.y - ty;
-              if (Math.sqrt(odx * odx + ody * ody) <= r) {
-                if (obj.isFlammable()) obj.ignite(5.0);
-              }
-            }
-          }
-          enemy.applyStatusEffect(trapData.effect, trapData.effectDuration);
-        }
+        if (Math.sqrt(dx * dx + dy * dy) > r) continue;
+        if (!this._applyTrapHit(enemy, trapData, effectDmg, dmgColor)) continue;
+        enemy.applyStatusEffect(trapData.effect, trapData.effectDuration);
       }
       if (game.player) {
         const pdx = (game.player.position.x + GRID.CELL_SIZE / 2) - cx;
@@ -719,7 +741,8 @@ export class TrapSystem {
             game.player.applyBurn?.(trapData.effectDuration);
           } else if (trapData.effect === 'freeze') {
             game.player.applyStatusEffect?.('freeze', trapData.effectDuration);
-          } else if (trapData.effect === 'stun') {
+          } else if (trapData.effect === 'zap') {
+            // Player has no zap status — map to freeze (the player's slow/lock status) for now.
             game.player.applyStatusEffect?.('freeze', 1.0);
           }
         }
@@ -829,8 +852,7 @@ export class TrapSystem {
     for (const enemy of (game.currentRoom?.enemies ?? [])) {
       if ((enemy.plane ?? 0) !== playerPlane) continue;
       if (!puddle.isEntityOnPuddle(enemy)) continue;
-      const fireImmune = enemy.elementalAffinity?.immunity?.includes('burn');
-      if (!fireImmune) {
+      if (enemy.shouldApplyStatusEffect?.('burn')) {
         enemy.applyStatusEffect('burn', 3.0);
       }
     }
@@ -847,53 +869,10 @@ export class TrapSystem {
     for (const enemy of (game.currentRoom?.enemies ?? [])) {
       if ((enemy.plane ?? 0) !== playerPlane) continue;
       if (!puddle.isEntityOnPuddle(enemy)) continue;
-      const freezeImmune = enemy.elementalAffinity?.immunity?.includes('freeze');
-      if (!freezeImmune) {
+      if (enemy.shouldApplyStatusEffect?.('freeze')) {
         enemy.applyStatusEffect('freeze', 0.5);
       }
     }
-  }
-
-  /** SPACE in EXPLORE: place/arm the held trap at the player's feet. Wires are
-   *  handled separately by WireSystem before this is reached. */
-  placeTrap() {
-    const game = this.game;
-    const held = game.player.heldItem;
-    if (!held || held.data?.wire) return;
-    const droppedItem = game.player.dropItem();
-    if (!droppedItem) return;
-
-    const trapData = droppedItem.data || droppedItem;
-    if (trapData.type === 'TRAP' && !trapData.oneShot) {
-      // Persistent placeables (Music Box, Noise-maker, Tesla Coil)
-      const trapItem = new Item(droppedItem.char, game.player.position.x, game.player.position.y);
-      trapItem.isPlaced = true;
-      game.placedTraps.push({
-        item: trapItem,
-        tickTimer: trapData.tickInterval || 0,
-        activeDuration: trapData.activeDuration != null ? trapData.activeDuration : Infinity,
-        affectedEnemies: new Set()
-      });
-
-    } else if (trapData.type === 'TRAP' && trapData.oneShot) {
-      // One-shot traps arm in-place (not pickable)
-      const C = GRID.CELL_SIZE;
-      const cx = game.player.position.x + C / 2;
-      const cy = game.player.position.y + C / 2;
-      const placedTrapItem = new Item(droppedItem.char, game.player.position.x, game.player.position.y);
-      placedTrapItem.isPlaced = true;
-      placedTrapItem.plane = game.player.plane ?? 0;
-      const entry = {
-        item: placedTrapItem,
-        tickTimer: trapData.tickInterval || 0,
-        activeDuration: trapData.activeDuration != null ? trapData.activeDuration : Infinity,
-        affectedEnemies: new Set()
-      };
-      if (trapData.remoteTrigger) { entry.blinkTimer = 0; entry.blinkVisible = true; }
-      game.placedTraps.push(entry);
-      game.particles.push(...createActivationBurst(cx, cy, trapData.color || '#ffffff'));
-    }
-    game.updateUI();
   }
 
 }

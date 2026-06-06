@@ -25,7 +25,8 @@ const HEAD_DATA = {
   attackType: 'ranged',
   decisionInterval: 0.1,
   color: '#ff8800',
-  drops: []
+  drops: [],
+  affinities: ['fire'],  // auto-immune to fire-affinity effects (burn, fire traps)
 };
 
 export class TurtleHead extends Enemy {
@@ -84,10 +85,10 @@ export class TurtleHead extends Enemy {
     };
   }
 
-  // Override: water weakness, fire immune, ice neutral
+  // Fire-affinity: immune to burn (and any future fire-affinity effect); aquatic weakness.
   getElementalModifier(elementType) {
-    if (elementType === 'burn')  return 0.0;
-    if (elementType === 'wet')   return 2.0;
+    if (elementType === 'burn' || elementType === 'fire') return 0.0;
+    if (elementType === 'wet'  || elementType === 'aquatic') return 2.0;
     return 1.0;
   }
 

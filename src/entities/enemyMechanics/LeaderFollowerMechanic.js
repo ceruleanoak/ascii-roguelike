@@ -20,8 +20,9 @@ function _steerToSlot(enemy, slotX, slotY) {
   const sdy = slotY - enemy.position.y;
   const sd = Math.sqrt(sdx * sdx + sdy * sdy);
   if (sd > 2) {
-    const vx = (sdx / sd) * enemy.speed;
-    const vy = (sdy / sd) * enemy.speed;
+    const rallyMult = enemy.rallyBoostTimer > 0 ? (enemy._rallyBoostMultiplier ?? 1.3) : 1;
+    const vx = (sdx / sd) * enemy.speed * rallyMult;
+    const vy = (sdy / sd) * enemy.speed * rallyMult;
     enemy.velocity.vx = vx;
     enemy.velocity.vy = vy;
     enemy.targetVelocity.vx = vx;
@@ -151,10 +152,8 @@ export const LeaderFollowerMechanic = {
       enemy.followerRoleActive = false;
     }
 
-    if (enemy.rallyBoostTimer > 0) {
-      const mult = enemy._rallyBoostMultiplier ?? 1.3;
-      enemy.velocity.vx *= mult;
-      enemy.velocity.vy *= mult;
-    }
+    // Rally boost is consumed via Enemy.getSpeedMultiplier() (scales targetVelocity);
+    // no post-blend velocity mult here — that compounded against the melee leap
+    // impulse into exponential runaway.
   }
 };

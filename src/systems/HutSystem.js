@@ -530,7 +530,7 @@ export class HutSystem {
         }
         if (r.shouldPlaceTrail && r.trailData) {
           const td = r.trailData;
-          game._spawnEnemyTrailPuddle(td.x, td.y, td.type, td.radius, enemy.plane ?? 0);
+          game._spawnEnemyTrailPuddle(td.x, td.y, td.type, td.radius, enemy.plane ?? 0, td.duration);
         }
       }
 

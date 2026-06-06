@@ -1,5 +1,18 @@
 import { GRID, COLORS, PHYSICS } from '../game/GameConfig.js';
 import { ENEMIES } from '../data/enemies.js';
+
+// Effect → affinity mapping. An effect with a mapped affinity is auto-immuned when the
+// receiving enemy's `data.affinities` includes that affinity (no explicit immunity needed).
+// Effects without an entry here are affinity-less (stun, sleep, charm, dizzy, blind, knockback)
+// and can only be blocked by an explicit `elementalAffinity.immunity` entry.
+export const EFFECT_AFFINITY = {
+  burn:   'fire',
+  freeze: 'ice',
+  zap:    'electric',
+  poison: 'venom',
+  wet:    'aquatic',
+  goo:    'goo',
+};
 import { Item } from './Item.js';
 import { inSamePlane, planeOf, objectOnPlane } from '../systems/PlaneSystem.js';
 import { EXIT_SLOT_POSITIONS } from '../systems/ExitSystem.js';
@@ -160,6 +173,7 @@ export class Enemy {
       poison: { active: false, duration: 0, damage: 0.3, tickRate: 0.3, tickTimer: 0 },
       freeze: { active: false, duration: 0, slowAmount: 0.5, frozen: false, shuddering: false },
       stun: { active: false, duration: 0 },
+      zap: { active: false, duration: 0 }, // electric-affinity stun; renders with rapid shake
       sleep: { active: false, duration: 0 },
       charm: { active: false, duration: 0 },
       wet: { active: false, duration: 0 },
@@ -372,27 +386,36 @@ export class Enemy {
     this.target = target;
   }
 
+  // Immunity model:
+  //   - Explicit `elementalAffinity.immunity: [effect, ...]` blocks specific effects by name.
+  //   - Affinity auto-immunity: if the effect maps to an affinity (EFFECT_AFFINITY) and the
+  //     enemy's `data.affinities` includes that affinity, the effect is blocked. This way a
+  //     fire-affinity enemy is auto-immune to burn (and any future fire-affinity effect) with
+  //     no per-effect data needed.
+  //   - Resistance/weakness lookup is keyed by effect name (not affinity).
+  _isImmuneToEffect(effect) {
+    if (!effect) return false;
+    if (this.elementalAffinity?.immunity?.includes(effect)) return true;
+    const affinity = EFFECT_AFFINITY[effect];
+    if (affinity && this.data?.affinities?.includes(affinity)) return true;
+    return false;
+  }
+
   getElementalModifier(elementType) {
-    if (!elementType || !this.elementalAffinity) return 1.0;
-
-    if (this.elementalAffinity.immunity && this.elementalAffinity.immunity.includes(elementType)) {
-      return 0.0;
-    }
-
-    if (this.elementalAffinity.resistance && this.elementalAffinity.resistance[elementType] !== undefined) {
+    if (!elementType) return 1.0;
+    if (this._isImmuneToEffect(elementType)) return 0.0;
+    if (!this.elementalAffinity) return 1.0;
+    if (this.elementalAffinity.resistance?.[elementType] !== undefined) {
       return this.elementalAffinity.resistance[elementType];
     }
-
-    if (this.elementalAffinity.weakness && this.elementalAffinity.weakness[elementType] !== undefined) {
+    if (this.elementalAffinity.weakness?.[elementType] !== undefined) {
       return this.elementalAffinity.weakness[elementType];
     }
-
     return 1.0;
   }
 
   shouldApplyStatusEffect(effect) {
-    if (!this.elementalAffinity || !this.elementalAffinity.immunity) return true;
-    return !this.elementalAffinity.immunity.includes(effect);
+    return !this._isImmuneToEffect(effect);
   }
 
   applyStatusEffect(effect, duration = 3.0) {
@@ -462,13 +485,13 @@ export class Enemy {
       }
     }
 
-    // Stun effect (disable movement and attacks)
-    const stun = this.statusEffects.stun;
-    if (stun.active) {
-      stun.duration -= deltaTime;
-      if (stun.duration <= 0) {
-        stun.active = false;
-        stun.duration = 0;
+    // Stun + Zap (both disable movement and attacks; zap is the electric-affinity variant
+    // with a rapid-shake visual). Tick down identically.
+    for (const key of ['stun', 'zap']) {
+      const s = this.statusEffects[key];
+      if (s.active) {
+        s.duration -= deltaTime;
+        if (s.duration <= 0) { s.active = false; s.duration = 0; }
       }
     }
 
@@ -538,6 +561,12 @@ export class Enemy {
     return this.statusEffects.stun.active;
   }
 
+  // Zap = electric-affinity immobilization. Mechanically blocks movement/attacks like stun;
+  // visually distinct (rapid shake render). Affinity gating means electric enemies are auto-immune.
+  isZapped() {
+    return this.statusEffects.zap.active;
+  }
+
   isFrozen() {
     return this.statusEffects.freeze.active && this.statusEffects.freeze.frozen;
   }
@@ -563,13 +592,18 @@ export class Enemy {
   }
 
   getSpeedMultiplier() {
-    if (this.isStunned()) return 0;
+    if (this.isStunned() || this.isZapped()) return 0;
     if (this.isKnockedBack()) return 0;
     if (this.isFrozen()) return 0;
-    if (this.statusEffects.freeze.active) return 1 - this.statusEffects.freeze.slowAmount;
-    if (this.isGooey()) return 1 - this.statusEffects.goo.slowAmount;
-    if (this.isDizzy()) return 0.35;
-    return 1;
+    let m = 1;
+    if (this.statusEffects.freeze.active) m = 1 - this.statusEffects.freeze.slowAmount;
+    else if (this.isGooey()) m = 1 - this.statusEffects.goo.slowAmount;
+    else if (this.isDizzy()) m = 0.35;
+    // Rally boost: scale chase target velocity so _blendVelocity converges cleanly.
+    // (Earlier impl multiplied raw velocity post-blend, which compounded each frame
+    // against any large velocity impulse — e.g. the melee leap — into a runaway.)
+    if (this.rallyBoostTimer > 0) m *= (this._rallyBoostMultiplier ?? 1.3);
+    return m;
   }
 
   getActiveStatusEffects() {
@@ -862,8 +896,8 @@ export class Enemy {
       return { dotDamage: dotDamageEvents };
     }
 
-    // Stun overrides all AI
-    if (this.isStunned()) {
+    // Stun/Zap override all AI
+    if (this.isStunned() || this.isZapped()) {
       this.targetVelocity.vx = 0;
       this.targetVelocity.vy = 0;
       this.state = 'idle';
@@ -2642,7 +2676,7 @@ export class Enemy {
   // transition (which fires before Item.windup on equipped melee).
   _executeLeapAttack() {
     if (!this.leapOnAttack || !this.target) return;
-    if (this.isFrozen() || this.isStunned()) return;
+    if (this.isFrozen() || this.isStunned() || this.isZapped()) return;
     // Knockback freezes _blendVelocity decay, so stamping a leap on top would
     // glide for the full knockback window. Bail out and let the hit reaction play.
     if (this.isKnockedBack()) return;
@@ -3292,6 +3326,12 @@ export class Enemy {
         const blinkCycle = Math.floor(this.dotBlinkTimer / DOT_BLINK_FREQUENCY);
         return blinkCycle % 2 === 0 ? DOT_COLORS[effect] : this.baseColor;
       }
+    }
+
+    // Zap blink (cyan-electric) — checked before stun so the electric variant wins when both are active
+    if (this.statusEffects.zap && this.statusEffects.zap.active) {
+      const blinkCycle = Math.floor(this.dotBlinkTimer / DOT_BLINK_FREQUENCY);
+      return blinkCycle % 2 === 0 ? '#00ffff' : this.baseColor;
     }
 
     // Stun blink (yellow) — shows when stunned and no DoT active

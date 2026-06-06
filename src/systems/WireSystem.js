@@ -180,7 +180,7 @@ export class WireSystem {
   _applyStatus(entity, wireType) {
     if (!entity || typeof entity.applyStatusEffect !== 'function') return;
     if (wireType === 'slime') {
-      if (entity.getElementalModifier?.('slime') === 0) return; // slime-immune
+      if (entity.data?.affinities?.includes('goo')) return; // goo-affinity immune
       entity.applyStatusEffect('goo', 5.0);
     }
     // Future wire types (e.g. 'electric') wire in here.

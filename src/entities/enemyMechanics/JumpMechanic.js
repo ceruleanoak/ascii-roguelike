@@ -20,6 +20,9 @@ export const JumpMechanic = {
     enemy.frogJumpTimer = Math.random() * baseInterval;
     enemy.frogJumpActive = false;
     enemy.frogJumpDurationTimer = 0;
+    enemy.frogJumpDurationTotal = 0;
+    enemy.frogJumpArcHeight = 0;
+    enemy.jumpArcLift = 0;
     enemy.frogJumpSide = 1;
   },
 
@@ -39,12 +42,18 @@ export const JumpMechanic = {
 
     if (enemy.frogJumpActive) {
       enemy.frogJumpDurationTimer -= deltaTime;
+      // Parabolic vertical arc: sin(πt) peaks mid-flight, lands at 0
+      const total = enemy.frogJumpDurationTotal || 1;
+      const t = 1 - Math.max(0, enemy.frogJumpDurationTimer) / total;
+      enemy.jumpArcLift = Math.sin(t * Math.PI) * (enemy.frogJumpArcHeight || 0);
       if (enemy.frogJumpDurationTimer <= 0) {
         enemy.frogJumpActive = false;
+        enemy.jumpArcLift = 0;
         // targetVelocity stays 0 → _blendVelocity decelerates velocity to a stop
       }
       return;
     }
+    enemy.jumpArcLift = 0;
 
     if (enemy.state !== 'chase' && enemy.state !== 'idle') return;
 
@@ -58,6 +67,8 @@ export const JumpMechanic = {
     enemy.frogJumpTimer = jumpInterval * (0.7 + Math.random() * 0.6);
     enemy.frogJumpActive = true;
     enemy.frogJumpDurationTimer = jumpDuration;
+    enemy.frogJumpDurationTotal = jumpDuration;
+    enemy.frogJumpArcHeight = onWater ? 0 : (cfg.arcHeight ?? jb?.arcHeight ?? 0);
 
     // Chase: jump toward target with zigzag. Idle: jump along wander direction.
     let dirX, dirY;

@@ -453,9 +453,10 @@ export class ExploreRenderer {
     // Draw items (surface entries only — interior entries routed via overlay).
     this.drawItems(game, false);
 
-    // Draw placed traps
+    // Draw placed traps (surface only — interior-tagged entries draw via overlay).
     for (const entry of game.placedTraps) {
       const { item } = entry;
+      if (entry.interior === true) continue;
       if (entry.blinkVisible === false) continue;
       this.renderer.drawEntity(
         item.position.x + GRID.CELL_SIZE / 2,
@@ -831,6 +832,7 @@ export class ExploreRenderer {
     }
 
     // Surface combat flourish — interior versions routed via overlay.
+    this.drawLightningStrikes(game, false);
     this.drawChainArcs(game, false);
     this.drawDamageNumbers(game, false);
     this.drawParticles(game, false);
@@ -966,46 +968,10 @@ export class ExploreRenderer {
     }
 
     // Draw trap throw reticule while charging (traps only — weapons use bow charge bar)
-    if (!inHut && !inMaze && !inDungeon && game.trapCharging &&
-        game.player.heldItem?.data?.type === 'TRAP') {
-      const pos = game.trapSystem.getTrapReticulePos();
-      if (pos) {
-        const blink = Math.floor(performance.now() / 120) % 2 === 0;
-        const held = game.player.heldItem;
-        const ctx = this.renderer.fgCtx;
-        ctx.save();
-        ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = blink ? (held?.color || '#ffffff') : '#555555';
-        ctx.fillText('x', pos.x, pos.y);
-        ctx.restore();
-      }
-    }
+    if (!inHut && !inMaze && !inDungeon) this.drawTrapReticule(game);
 
-    // Draw in-flight throwables (traps + thrown weapons). Centered + optional rotation
-    // matches the X reticule's center/middle anchor so landing aligns with the marker.
-    if (!inHut && !inMaze && !inDungeon && game.inFlightTraps.length) {
-      const ctx = this.renderer.fgCtx;
-      const C = GRID.CELL_SIZE;
-      ctx.save();
-      ctx.font = `${C}px 'Unifont', monospace`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      for (const t of game.inFlightTraps) {
-        ctx.fillStyle = t.color || '#ffffff';
-        if (t.rotation) {
-          ctx.save();
-          ctx.translate(t.x, t.y);
-          ctx.rotate(t.rotation);
-          ctx.fillText(t.char, 0, 0);
-          ctx.restore();
-        } else {
-          ctx.fillText(t.char, t.x, t.y);
-        }
-      }
-      ctx.restore();
-    }
+    // Draw in-flight throwables (traps + thrown weapons).
+    if (!inHut && !inMaze && !inDungeon) this.drawInFlightTraps(game, false);
 
     // Draw sapping enemies on top of player — skip when interior (overlay handles via its own drawSappingEnemies call)
     if (!inHut && !inMaze && !inDungeon) this.drawSappingEnemies(game, game.activeRoom.enemies);
@@ -1070,6 +1036,12 @@ export class ExploreRenderer {
 
     // Draw green ranger action cooldown indicator — skip when inHut
     if (!inHut && !inMaze && !inDungeon) this.renderController.greenRangerIndicator.render(game);
+
+    // Sandstorm sand motes — yellow zone wind. Drawn over entities so motes
+    // pass in front, under interior overlays so they don't bleed into the PiP.
+    if (!inHut && !inMaze && !inDungeon) {
+      game.sandstormSystem?.render(this.renderer.fgCtx);
+    }
 
     // Old exit indicator system removed - now using colored exit letters
     // (Letters render at actual exit positions when exits unlock)
@@ -1483,6 +1455,13 @@ export class ExploreRenderer {
         shakeY = Math.round(Math.cos(t * 67 + enemy.position.y * 0.1) * 2);
       }
 
+      // Zap (electric-affinity stun): rapid hi-frequency shake distinguishes it from plain stun.
+      if (enemy.isZapped?.()) {
+        const t = Date.now() / 1000;
+        shakeX += Math.round(Math.sin(t * 140 + enemy.position.x) * 2);
+        shakeY += Math.round(Math.cos(t * 137 + enemy.position.y) * 2);
+      }
+
       // Death-shake: enemy with deathExplosion shakes urgently before detonating
       if (enemy.isDying) {
         const t = Date.now() / 1000;
@@ -1523,9 +1502,10 @@ export class ExploreRenderer {
         );
         this.renderer.fgCtx.restore();
       } else {
+        const arcLift = enemy.jumpArcLift || 0;
         this.renderer[drawMethod](
           enemy.position.x + GRID.CELL_SIZE / 2 + shakeX,
-          enemy.position.y + GRID.CELL_SIZE / 2 + shakeY,
+          enemy.position.y + GRID.CELL_SIZE / 2 + shakeY - arcLift,
           enemy.char,
           displayColor
         );
@@ -2639,6 +2619,52 @@ export class ExploreRenderer {
     }
   }
 
+  drawLightningStrikes(game, hutPlane = false) {
+    if (!game.lightningStrikeSystem) return;
+    const ctx = this.renderer.fgCtx;
+    const strikes = game.lightningStrikeSystem.getStrikes();
+    for (const s of strikes) {
+      if (!!s.hutPlane !== hutPlane) continue;
+
+      if (s.warningTimer > 0) {
+        // Warning circle — pulses, color crossfades yellow → white as t→0
+        const t = 1 - (s.warningTimer / s.warningDuration); // 0..1 toward strike
+        const pulse = 0.55 + 0.35 * Math.sin(t * Math.PI * 8);
+        const r = Math.floor(255);
+        const g = Math.floor(255);
+        const b = Math.floor(120 + 135 * t);
+        const color = `rgb(${r},${g},${b})`;
+        this.renderer.drawCircle(s.x, s.y, s.radius, color, false, pulse);
+        // A second ring just inside makes the telegraph readable on noisy ground
+        this.renderer.drawCircle(s.x, s.y, s.radius * 0.65, color, false, pulse * 0.6);
+      } else if (s.flashTimer > 0) {
+        // Strike flash — jagged bolt from top of canvas to strike point
+        const alpha = Math.max(0, s.flashTimer / 0.12);
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.shadowColor = '#ffff88';
+        ctx.shadowBlur = 8;
+        const segs = 10;
+        const startY = 0;
+        ctx.beginPath();
+        ctx.moveTo(s.x, startY);
+        for (let i = 1; i < segs; i++) {
+          const f = i / segs;
+          const y = startY + (s.y - startY) * f;
+          const jitter = (Math.random() - 0.5) * GRID.CELL_SIZE * 0.9;
+          ctx.lineTo(s.x + jitter, y);
+        }
+        ctx.lineTo(s.x, s.y);
+        ctx.stroke();
+        ctx.restore();
+        // Bright impact flash on the ground
+        this.renderer.drawCircle(s.x, s.y, s.radius, '#ffffff', true, alpha * 0.5);
+      }
+    }
+  }
+
   drawChainArcs(game, hutPlane = false) {
     if (!game.combatSystem.getChainArcs) return;
     const ctx = this.renderer.fgCtx;
@@ -2826,6 +2852,64 @@ export class ExploreRenderer {
           this.renderer.drawTextWithAlpha(jx, jy, steamChars[s % steamChars.length], '#8c8c8c', alpha);
         }
       }
+    }
+  }
+
+  // Reticule + in-flight + placed traps share a single render path so the
+  // surface canvas and the interior overlay (HutInteriorOverlay) can both
+  // call them in their respective coord spaces.
+  drawTrapReticule(game) {
+    if (!game.trapCharging || game.player?.heldItem?.data?.type !== 'TRAP') return;
+    const pos = game.trapSystem.getTrapReticulePos();
+    if (!pos) return;
+    const blink = Math.floor(performance.now() / 120) % 2 === 0;
+    const held = game.player.heldItem;
+    const ctx = this.renderer.fgCtx;
+    ctx.save();
+    ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = blink ? (held?.color || '#ffffff') : '#555555';
+    ctx.fillText('x', pos.x, pos.y);
+    ctx.restore();
+  }
+
+  drawInFlightTraps(game, interior = false) {
+    if (!game.inFlightTraps.length) return;
+    const ctx = this.renderer.fgCtx;
+    const C = GRID.CELL_SIZE;
+    ctx.save();
+    ctx.font = `${C}px 'Unifont', monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const t of game.inFlightTraps) {
+      if ((t.interior === true) !== interior) continue;
+      ctx.fillStyle = t.color || '#ffffff';
+      if (t.rotation) {
+        ctx.save();
+        ctx.translate(t.x, t.y);
+        ctx.rotate(t.rotation);
+        ctx.fillText(t.char, 0, 0);
+        ctx.restore();
+      } else {
+        ctx.fillText(t.char, t.x, t.y);
+      }
+    }
+    ctx.restore();
+  }
+
+  drawPlacedTraps(game, interior = false) {
+    const C = GRID.CELL_SIZE;
+    for (const entry of game.placedTraps) {
+      if ((entry.interior === true) !== interior) continue;
+      const { item } = entry;
+      if (entry.blinkVisible === false) continue;
+      this.renderer.drawEntity(
+        item.position.x + C / 2,
+        item.position.y + C / 2,
+        item.char,
+        item.color
+      );
     }
   }
 

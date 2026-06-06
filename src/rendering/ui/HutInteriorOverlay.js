@@ -103,6 +103,9 @@ export class HutInteriorOverlay {
     this.renderController.exploreRenderer.drawIngredients(game, true);
     this.renderController.exploreRenderer.drawItems(game, true);
 
+    // ── 7b. Placed traps tagged as interior (armed where they landed) ─────────
+    this.renderController.exploreRenderer.drawPlacedTraps(game, true);
+
     // ── 8. Interior enemies (full indicator rendering) ─────────────────────────
     // Use the shared non-sapping pass, then redraw sapping ones on top of player below.
     this.renderController.exploreRenderer.drawNonSappingEnemies(game, game.activeFloor.enemies);
@@ -167,6 +170,7 @@ export class HutInteriorOverlay {
     this.renderController.exploreRenderer.drawStuckArrows(game, true);
 
     // ── 13b. Chain lightning arcs ─────────────────────────────────────────────
+    this.renderController.exploreRenderer.drawLightningStrikes(game, true);
     this.renderController.exploreRenderer.drawChainArcs(game, true);
 
     // ── 14. Damage numbers ─────────────────────────────────────────────────────
@@ -200,6 +204,10 @@ export class HutInteriorOverlay {
 
     // ── 16c. Sapping enemies on top of player (bats latched on player) ────────
     this.renderController.exploreRenderer.drawSappingEnemies(game, game.activeFloor.enemies);
+
+    // ── 16d. Trap throw reticule + in-flight throwables (interior plane) ──────
+    this.renderController.exploreRenderer.drawTrapReticule(game);
+    this.renderController.exploreRenderer.drawInFlightTraps(game, true);
 
     // ── 17. Bow charge indicator (reads game.player.position — offset applies) ─
     this.renderController.bowChargeIndicator.render(game);

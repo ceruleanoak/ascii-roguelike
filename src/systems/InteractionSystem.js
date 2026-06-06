@@ -64,13 +64,15 @@ export class InteractionSystem {
 
     for (const lava of backgroundObjects) {
       if (!lava.isLava || !lava.isLava()) continue;
-      for (const water of backgroundObjects) {
-        if (water === lava) continue;
-        const isWaterTile = (water.isWater && water.isWater()) || water.char === '=';
-        if (!isWaterTile) continue;
-        const dx = lava.position.x - water.position.x;
-        const dy = lava.position.y - water.position.y;
-        if (dx * dx + dy * dy <= adjacentDist * adjacentDist) {
+      let solidified = false;
+      for (const other of backgroundObjects) {
+        if (other === lava || other.destroyed) continue;
+        const dx = lava.position.x - other.position.x;
+        const dy = lava.position.y - other.position.y;
+        if (dx * dx + dy * dy > adjacentDist * adjacentDist) continue;
+
+        const isWaterTile = (other.isWater && other.isWater()) || other.char === '=';
+        if (isWaterTile) {
           lava.solidifyToRock();
           combatSystem.newSteamClouds.push({
             x: lava.position.x + GRID.CELL_SIZE / 2,
@@ -78,9 +80,18 @@ export class InteractionSystem {
             radius: GRID.CELL_SIZE * 2,
             timer: 3.0
           });
+          solidified = true;
           break;
         }
+
+        // Lava burns flammable neighbors. Rock/wall/metal (flammability 'none')
+        // and other lava are immune.
+        if (other.isLava && other.isLava()) continue;
+        if (other.isFlammable && other.isFlammable() && !other.onFire) {
+          other.ignite(other.data?.burnDuration || 2.0);
+        }
       }
+      if (solidified) continue;
     }
   }
 

@@ -158,6 +158,7 @@ export class PhysicsSystem {
     let slowingMultiplier = 1.0; // For numeric slowing values (trees, stumps)
     let damagingLiquid = null; // Track lava damage
     let onSlopeDirection = null; // Ascent room slope push direction
+    let onCurrentDirection = null; // Yellow zone river current push direction
     const isProjectile = entity.type === 'bullet' || entity.type === 'arrow';
 
     // Reset per-frame terrain flags (read by Player.updateDodgeRoll with 1-frame lag)
@@ -230,6 +231,9 @@ export class PhysicsSystem {
               } else {
                 inLiquid = true;
                 liquidState = wState;
+                // River-current push: only the center flow tile carries a direction.
+                // Sides are static water (no flowDir) and don't shove the entity.
+                if (obj.riverFlow && obj.flowDir) onCurrentDirection = obj.flowDir;
               }
             }
             break;
@@ -273,6 +277,27 @@ export class PhysicsSystem {
         case 'left':  entity.velocity.vx -= slopeAccel * deltaTime; break;
         case 'right': entity.velocity.vx += slopeAccel * deltaTime; break;
       }
+    }
+
+    // River current — constant acceleration along flow direction (8 dirs).
+    // Same shape as the slope push above so diagonal vs cardinal movement gives
+    // the same net drift. Floating entities are unaffected (handled below).
+    if (onCurrentDirection && !isProjectile && !(entity.floatTimer > 0) && !(entity.data?.float)) {
+      const CURRENT_ACCEL = 320; // px/s² — gentler than slopes; enemies/items still navigable
+      const absVx = Math.abs(entity.velocity.vx);
+      const absVy = Math.abs(entity.velocity.vy);
+      const isDiagonal = absVx > 10 && absVy > 10;
+      const accel = isDiagonal ? CURRENT_ACCEL / Math.SQRT2 : CURRENT_ACCEL;
+      const DIAG = 1 / Math.SQRT2;
+      const PUSH = {
+        up:    [0, -1], down:  [0, 1],
+        left:  [-1, 0], right: [1, 0],
+        ne:    [DIAG, -DIAG], nw: [-DIAG, -DIAG],
+        se:    [DIAG,  DIAG], sw: [-DIAG,  DIAG]
+      };
+      const [px, py] = PUSH[onCurrentDirection] || [0, 0];
+      entity.velocity.vx += px * accel * deltaTime;
+      entity.velocity.vy += py * accel * deltaTime;
     }
 
     // Float (Floating Boots or flying enemies) — immune to all liquid and mud effects

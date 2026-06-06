@@ -1089,7 +1089,11 @@ export class Item {
     const relY = Math.sin(baseAngle) * distance;
     const multistabChar = this.data.meleeChar || this.char;
     const multistabDrawAngle = this.getMeleeDrawAngle(multistabChar, baseAngle);
+    // Combo finisher: only the final stab applies knockback (and full hitstop).
+    // The earlier stabs use a light hitstop so they don't eat the finisher's
+    // 0.2s knockback window the way 3 full hitstops do.
     for (let i = 0; i < stabs; i++) {
+      const isFinisher = (i === stabs - 1);
       attacks.push({
         type: 'melee',
         char: multistabChar,
@@ -1103,7 +1107,8 @@ export class Item {
         delay: i * patternSpeed,
         color: this.color,
         onHit: oilOnHit || this.data.onHit,
-        knockback: this.data.knockback || 300,
+        knockback: isFinisher ? (this.data.knockback || 350) : 0,
+        hitstop: isFinisher ? 0.06 : 0.02,
         lifesteal: this.data.lifesteal,
         owner: player,
         shooterPlane: player.plane

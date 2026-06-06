@@ -155,13 +155,15 @@ export class LakeBoss {
       height: 3 * cs,
     };
   }
+  // Ice-affinity boss: immune to ice-affinity effects (freeze), weak to fire-affinity (burn).
+  // Aligns with the EFFECT_AFFINITY model — accepts both effect names and affinity names.
   getElementalModifier(elementType) {
-    if (elementType === 'freeze' || elementType === 'ice') return 0;    // immune
-    if (elementType === 'burn'   || elementType === 'fire') return 2.0; // weak
+    if (elementType === 'freeze' || elementType === 'ice')  return 0;    // immune
+    if (elementType === 'burn'   || elementType === 'fire') return 2.0;  // weak
     return 1;
   }
   shouldApplyStatusEffect(effect) {
-    return effect !== 'freeze' && effect !== 'ice';
+    return effect !== 'freeze';
   }
   applyStatusEffect()     {}
   breakSapping()          {}

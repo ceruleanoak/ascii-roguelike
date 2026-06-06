@@ -2025,23 +2025,30 @@ export class RoomGenerator {
     const effectiveZone = this.getEffectiveZoneForFeatures(room.zone);
     const zoneHasSpecialLiquid = ZONES[effectiveZone]?.environmentalFeatures?.liquidType;
 
-    // Structured liquid (depth 3+, or always in zones with special liquids like lava)
-    if (this.currentDepth >= 3 || zoneHasSpecialLiquid) {
-      this.placeLiquidStructures(room, effectiveZone);
-    }
+    if (effectiveZone === 'yellow') {
+      // Stormlands: every room gets one water template (stream / river / dry bed /
+      // river+river / river+2 streams / oasis). Contiguous 4-adjacent water cells
+      // so a single zap conducts down the whole flow.
+      this.generateYellowWaterTemplate(room);
+    } else {
+      // Structured liquid (depth 3+, or always in zones with special liquids like lava)
+      if (this.currentDepth >= 3 || zoneHasSpecialLiquid) {
+        this.placeLiquidStructures(room, effectiveZone);
+      }
 
-    // Organic fallback liquid (shallow depths, or occasional supplement deeper)
-    // Always generate in special liquid zones (RED = lava), otherwise use random chance
-    const shouldGenerateLiquid = zoneHasSpecialLiquid ||
-                                  (this.currentDepth < 3 && Math.random() < 0.3) ||
-                                  (this.currentDepth >= 3 && Math.random() < 0.2);
+      // Organic fallback liquid (shallow depths, or occasional supplement deeper)
+      // Always generate in special liquid zones (RED = lava), otherwise use random chance
+      const shouldGenerateLiquid = zoneHasSpecialLiquid ||
+                                    (this.currentDepth < 3 && Math.random() < 0.3) ||
+                                    (this.currentDepth >= 3 && Math.random() < 0.2);
 
-    if (shouldGenerateLiquid && !zoneHasSpecialLiquid) {
-      // Only generate fallback if we didn't already generate structured special liquid
-      this.generateLiquidFormation(room, effectiveZone);
-    } else if (zoneHasSpecialLiquid && Math.random() < 0.5) {
-      // 50% chance of additional organic lava formations
-      this.generateLiquidFormation(room, effectiveZone);
+      if (shouldGenerateLiquid && !zoneHasSpecialLiquid) {
+        // Only generate fallback if we didn't already generate structured special liquid
+        this.generateLiquidFormation(room, effectiveZone);
+      } else if (zoneHasSpecialLiquid && Math.random() < 0.5) {
+        // 50% chance of additional organic lava formations
+        this.generateLiquidFormation(room, effectiveZone);
+      }
     }
 
     // Zone-specific features (mud beds in RED zone)
@@ -2219,6 +2226,330 @@ export class RoomGenerator {
           }
         }
       }
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Yellow zone: rivers, streams, dry beds.
+  //
+  // Paths run wall-to-wall: start and end are both picked on the room's edges,
+  // and the carver greedily steps toward the end with 8-direction moves plus
+  // organic jitter. Each path cell is annotated with its step direction; when
+  // a step is diagonal, an orthogonal bridge cell is inserted so every cell in
+  // the returned list is 4-adjacent to the next — required so electrified-water
+  // conduction propagates the full length of the flow.
+  //
+  // Rivers stamp the centerline as directional flow tiles (`< > v Λ` for
+  // cardinals, `↗ ↖ ↘ ↙` for diagonals) and thicken by filling every cardinal
+  // neighbor of the centerline as plain water. Side fill auto-resolves any
+  // visual gaps at turns or diagonals. Dry beds use the same footprint with
+  // mud tiles (no conduction). Streams are just the centerline.
+  // ──────────────────────────────────────────────────────────────────────────
+
+  generateYellowWaterTemplate(room) {
+    const templates = ['stream', 'river', 'dry', 'river_river', 'river_streams', 'oasis'];
+    const choice = templates[Math.floor(Math.random() * templates.length)];
+
+    switch (choice) {
+      case 'stream':
+        this._buildPath(room, 'stream');
+        break;
+      case 'river':
+        this._buildPath(room, 'river');
+        break;
+      case 'dry':
+        this._buildPath(room, 'dry');
+        break;
+      case 'river_river': {
+        const main = this._buildPath(room, 'river');
+        if (main && main.length > 6) {
+          const tap = main[Math.floor(main.length / 2)];
+          this._buildPath(room, 'river', tap, this._pickEdgePoint());
+        }
+        break;
+      }
+      case 'river_streams': {
+        const main = this._buildPath(room, 'river');
+        if (main && main.length > 8) {
+          for (let i = 0; i < 2; i++) {
+            const j = Math.floor((i + 1) * main.length / 3);
+            this._buildPath(room, 'stream', main[j], this._pickEdgePoint());
+          }
+        }
+        break;
+      }
+      case 'oasis':
+        this._placeOasis(room);
+        break;
+    }
+  }
+
+  _dirChar(dir) {
+    // 'Λ' (Greek capital lambda) — upside-down V, matches the Ascend-room idiom.
+    return {
+      right: '>', left: '<', down: 'v', up: 'Λ',
+      ne:    '↗', nw:   '↖', se:   '↘', sw: '↙'
+    }[dir];
+  }
+
+  _dirFromDelta(dc, dr) {
+    if (dr === -1 && dc ===  0) return 'up';
+    if (dr ===  1 && dc ===  0) return 'down';
+    if (dc === -1 && dr ===  0) return 'left';
+    if (dc ===  1 && dr ===  0) return 'right';
+    if (dc ===  1 && dr === -1) return 'ne';
+    if (dc === -1 && dr === -1) return 'nw';
+    if (dc ===  1 && dr ===  1) return 'se';
+    if (dc === -1 && dr ===  1) return 'sw';
+    return 'right';
+  }
+
+  // Pick a cell on a random edge of the room, avoiding the center exit bands.
+  _pickEdgePoint() {
+    const edges = ['top', 'bottom', 'left', 'right'];
+    const e = edges[Math.floor(Math.random() * 4)];
+    const centerC = Math.floor(GRID.COLS / 2);
+    const centerR = Math.floor(GRID.ROWS / 2);
+    if (e === 'top' || e === 'bottom') {
+      const choices = [];
+      for (let c = 3; c < GRID.COLS - 3; c++) if (Math.abs(c - centerC) > 4) choices.push(c);
+      const col = choices[Math.floor(Math.random() * choices.length)];
+      return { col, row: e === 'top' ? 1 : GRID.ROWS - 2, edge: e };
+    }
+    const choices = [];
+    for (let r = 3; r < GRID.ROWS - 3; r++) if (Math.abs(r - centerR) > 4) choices.push(r);
+    const row = choices[Math.floor(Math.random() * choices.length)];
+    return { col: e === 'left' ? 1 : GRID.COLS - 2, row, edge: e };
+  }
+
+  _isInExitClearance(col, row) {
+    const centerC = Math.floor(GRID.COLS / 2);
+    const centerR = Math.floor(GRID.ROWS / 2);
+    const r = 2;
+    if (Math.abs(col - centerC) <= r && row <= r + 2) return true;
+    if (Math.abs(col - centerC) <= r && row >= GRID.ROWS - r - 3) return true;
+    if (Math.abs(row - centerR) <= r && col <= r + 2) return true;
+    if (Math.abs(row - centerR) <= r && col >= GRID.COLS - r - 3) return true;
+    return false;
+  }
+
+  _validPathCell(col, row, room) {
+    if (col < 1 || col >= GRID.COLS - 1 || row < 1 || row >= GRID.ROWS - 1) return false;
+    if (room.collisionMap[row]?.[col]) return false;
+    if (this._isInExitClearance(col, row)) return false;
+    return true;
+  }
+
+  // 8-direction greedy carve from start → end. Each step toward the end may
+  // include random axis-drop jitter for organic shape. Diagonal steps emit an
+  // orthogonal bridge cell first so the returned list is monotonically
+  // 4-adjacent (necessary for electric conduction to traverse the full path).
+  _carvePath(room, start, end, maxLen = 80) {
+    const cells = [];
+    const seen = new Set();
+    const tryPush = (c, r, dir) => {
+      const k = `${c},${r}`;
+      if (seen.has(k)) return true; // already part of the path
+      if (!this._validPathCell(c, r, room)) return false;
+      seen.add(k);
+      cells.push({ col: c, row: r, dir });
+      return true;
+    };
+
+    let col = start.col, row = start.row;
+    let started = false;
+
+    for (let step = 0; step < maxLen; step++) {
+      let dc = Math.sign(end.col - col);
+      let dr = Math.sign(end.row - row);
+      if (dc === 0 && dr === 0) break;
+
+      // Organic jitter — drop one axis 30% of the time to wander.
+      if (Math.random() < 0.3) {
+        if (dc !== 0 && dr !== 0) {
+          if (Math.random() < 0.5) dc = 0; else dr = 0;
+        } else if (dc === 0) {
+          dc = Math.random() < 0.5 ? -1 : 1;
+        } else {
+          dr = Math.random() < 0.5 ? -1 : 1;
+        }
+      }
+
+      const dir = this._dirFromDelta(dc, dr);
+
+      // Stamp the start cell with the first chosen direction.
+      if (!started) {
+        if (!tryPush(start.col, start.row, dir)) return cells;
+        started = true;
+      }
+
+      if (dc !== 0 && dr !== 0) {
+        // Diagonal — insert a cardinal bridge so consecutive cells stay
+        // 4-adjacent. Try both corner options before giving up.
+        const options = Math.random() < 0.5
+          ? [{ c: col + dc, r: row }, { c: col, r: row + dr }]
+          : [{ c: col, r: row + dr }, { c: col + dc, r: row }];
+        let bridged = false;
+        for (const b of options) {
+          if (this._validPathCell(b.c, b.r, room)) {
+            tryPush(b.c, b.r, dir);
+            bridged = true;
+            break;
+          }
+        }
+        if (!bridged) break;
+        col += dc;
+        row += dr;
+        if (!tryPush(col, row, dir)) break;
+      } else {
+        col += dc;
+        row += dr;
+        if (!tryPush(col, row, dir)) break;
+      }
+
+      if ((col === end.col && row === end.row) || this._reachedEdge(col, row, end.edge)) break;
+    }
+
+    return cells;
+  }
+
+  _reachedEdge(col, row, edge) {
+    if (edge === 'top')    return row <= 1;
+    if (edge === 'bottom') return row >= GRID.ROWS - 2;
+    if (edge === 'left')   return col <= 1;
+    if (edge === 'right')  return col >= GRID.COLS - 2;
+    return false;
+  }
+
+  // Build a wall-to-wall path of `kind` between two edge points (auto-picked
+  // unless caller supplies endpoints — e.g. a branch that taps an existing
+  // river center). Returns the carved cell list for the caller to branch from.
+  _buildPath(room, kind, start = null, end = null) {
+    const a = start || this._pickEdgePoint();
+    let b = end;
+    if (!b) {
+      let attempts = 0;
+      do {
+        b = this._pickEdgePoint();
+        attempts++;
+      } while (b.edge === a.edge && attempts < 10);
+    }
+    const path = this._carvePath(room, a, b, 80);
+    if (path.length === 0) return path;
+    if (kind === 'stream') this._stampStream(room, path);
+    else if (kind === 'river') this._stampRiver(room, path);
+    else if (kind === 'dry')   this._stampDryBed(room, path);
+    return path;
+  }
+
+  _stampStream(room, path) {
+    const seen = new Set();
+    for (const cell of path) {
+      const key = `${cell.col},${cell.row}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const water = new BackgroundObject('~', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
+      room.backgroundObjects.push(water);
+    }
+  }
+
+  _stampRiver(room, path) {
+    // 1) Stamp the centerline as directional flow tiles.
+    const centerSet = new Set();
+    for (let i = 0; i < path.length; i++) {
+      const cell = path[i];
+      const k = `${cell.col},${cell.row}`;
+      if (centerSet.has(k)) continue;
+      if (!this._validPathCell(cell.col, cell.row, room)) continue;
+      centerSet.add(k);
+      const center = new BackgroundObject('~', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
+      const dch = this._dirChar(cell.dir);
+      center.originalChar = dch;
+      center.animationChar = dch;
+      center._directionChar = dch;
+      center.riverFlow = true;
+      center.flowIndex = i;
+      center.flowDir = cell.dir;
+      room.backgroundObjects.push(center);
+    }
+
+    // 2) Thicken: every cardinal neighbor of a center cell becomes plain
+    // water. Auto-resolves visual gaps on turns and diagonals; centerline is
+    // 4-adjacent by construction, so the river reads as one contiguous flow.
+    const sideSet = new Set();
+    for (const cell of path) {
+      for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const sc = cell.col + dc, sr = cell.row + dr;
+        const sk = `${sc},${sr}`;
+        if (centerSet.has(sk) || sideSet.has(sk)) continue;
+        if (!this._validPathCell(sc, sr, room)) continue;
+        sideSet.add(sk);
+        const side = new BackgroundObject('~', sc * GRID.CELL_SIZE, sr * GRID.CELL_SIZE);
+        room.backgroundObjects.push(side);
+      }
+    }
+  }
+
+  _stampDryBed(room, path) {
+    const seen = new Set();
+    const stamp = (col, row) => {
+      const key = `${col},${row}`;
+      if (seen.has(key)) return;
+      if (!this._validPathCell(col, row, room)) return;
+      seen.add(key);
+      const mud = new BackgroundObject('~', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+      mud.color = '#aa8855';
+      mud.animationColor = '#aa8855';
+      mud.isDryMud = true;   // makes isWater() false, isMud() true — no conduction
+      mud.slowing = false;
+      mud.name = 'Dry Bed';
+      room.backgroundObjects.push(mud);
+    };
+    // Same footprint as river — centerline + cardinal neighbors.
+    for (const cell of path) {
+      stamp(cell.col, cell.row);
+      for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        stamp(cell.col + dc, cell.row + dr);
+      }
+    }
+  }
+
+  _placeOasis(room) {
+    // Pond: blob of water roughly 3 cells across.
+    let centerCol = 0, centerRow = 0;
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const c = this.randInt(6, GRID.COLS - 7);
+      const r = this.randInt(6, GRID.ROWS - 7);
+      if (this._validPathCell(c, r, room)) { centerCol = c; centerRow = r; break; }
+    }
+    if (centerCol === 0) return;
+
+    const pondCells = new Set();
+    for (let dr = -2; dr <= 2; dr++) {
+      for (let dc = -2; dc <= 2; dc++) {
+        if (dc * dc + dr * dr > 5) continue; // rough circle
+        const c = centerCol + dc, r = centerRow + dr;
+        if (!this._validPathCell(c, r, room)) continue;
+        pondCells.add(`${c},${r}`);
+        const water = new BackgroundObject('~', c * GRID.CELL_SIZE, r * GRID.CELL_SIZE);
+        room.backgroundObjects.push(water);
+      }
+    }
+
+    // Stream out of the pond toward an edge. Start one cell outside the pond,
+    // bridge to keep the pond + stream contiguous for conduction.
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    const [dc, dr] = dirs[Math.floor(Math.random() * 4)];
+    const bridgeCol = centerCol + dc * 2;
+    const bridgeRow = centerRow + dr * 2;
+    const startCol  = centerCol + dc * 3;
+    const startRow  = centerRow + dr * 3;
+    if (this._validPathCell(startCol, startRow, room)) {
+      if (this._validPathCell(bridgeCol, bridgeRow, room) && !pondCells.has(`${bridgeCol},${bridgeRow}`)) {
+        const bridge = new BackgroundObject('~', bridgeCol * GRID.CELL_SIZE, bridgeRow * GRID.CELL_SIZE);
+        room.backgroundObjects.push(bridge);
+      }
+      this._buildPath(room, 'stream', { col: startCol, row: startRow });
     }
   }
 

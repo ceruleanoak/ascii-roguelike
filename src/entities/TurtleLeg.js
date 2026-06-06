@@ -4,10 +4,13 @@ import { GRID } from '../game/GameConfig.js';
 // Leg chars by corner index: 0=front-left, 1=front-right, 2=back-left, 3=back-right
 export const LEG_CHARS = ['/', '\\', '\\', '/'];
 
+const LEG_DATA = { affinities: ['fire'] }; // auto-immune to fire-affinity effects
+
 export class TurtleLeg extends Enemy {
   constructor(x, y, legIndex) {
     super('?', x, y, 0);
 
+    this.data             = LEG_DATA;
     this.char             = LEG_CHARS[legIndex] ?? '/';
     this.legIndex         = legIndex;
     this.hp               = 1;   // stub — canonical HP is on TurtleShell
@@ -51,9 +54,10 @@ export class TurtleLeg extends Enemy {
     return { dotDamage: dotDamageEvents };
   }
 
+  // Fire-affinity: immune to burn (and any future fire-affinity effect); aquatic weakness.
   getElementalModifier(elementType) {
-    if (elementType === 'burn') return 0.0;   // fire immune
-    if (elementType === 'wet')  return 2.0;   // water weakness
+    if (elementType === 'burn' || elementType === 'fire') return 0.0;
+    if (elementType === 'wet'  || elementType === 'aquatic') return 2.0;
     return 1.0;
   }
 

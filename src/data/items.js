@@ -589,6 +589,23 @@ export const ITEMS = {
     placesLava: true,
     color: '#ff6600'
   },
+  'Ϟ': {
+    char: 'Ϟ',
+    name: 'Lightning Sword',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'sword',
+    damage: 2,
+    windup: 0.4,
+    recovery: 0.8,
+    patternSpeed: 0.05,
+    range: 20,
+    callsLightning: true,
+    lightningDelay: 0.6,
+    lightningDamage: 4,
+    lightningRadius: 19,        // ~1.2 cells
+    color: '#ffee44'
+  },
 
   // ── MELEE / sword — Tier 3 ────────────────────────────────────────────────
   '⚔': {
@@ -1026,9 +1043,9 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'dagger',
-    damage: 2,
-    windup: 0.2,
-    recovery: 0.4,
+    damage: 1,
+    windup: 0.1,
+    recovery: 0.6,
     range: 20,
     patternSpeed: 0.05,
     color: '#cccccc'
@@ -1788,6 +1805,10 @@ export const ITEMS = {
   // ============================================================================
 
   // ── One-shot traps ────────────────────────────────────────────────────────
+  // `affinity` names the canonical elemental class (ice/fire/electric/goo/venom/…) — same
+  // taxonomy as `enemy.affinities` and AFFINITY_POOLS. Used by TrapSystem._applyTrapHit
+  // to gate damage+status: enemies whose affinities include the trap's affinity are IMMUNE.
+  // Sleep/Charm have no elemental class so they omit `affinity` and damage everyone.
   '[': {
     char: '[',
     name: 'Freeze Trap',
@@ -1797,6 +1818,7 @@ export const ITEMS = {
     triggerRadius: 24,
     effectRadius: 48,
     effect: 'freeze',
+    affinity: 'ice',
     effectDuration: 10.0,
     color: '#00ddff'
   },
@@ -1808,7 +1830,8 @@ export const ITEMS = {
     charges: 3,
     triggerRadius: 24,
     effectRadius: 96,
-    effect: 'stun',
+    effect: 'zap',
+    affinity: 'electric',
     electric: true,
     effectDuration: 6.0,
     color: '#ffff00'
@@ -1822,6 +1845,7 @@ export const ITEMS = {
     triggerRadius: 24,
     effectRadius: 112,
     effect: 'burn',
+    affinity: 'fire',
     effectDuration: 6.0,
     color: '#ff4400'
   },
@@ -1870,6 +1894,7 @@ export const ITEMS = {
     triggerRadius: 24,
     effectRadius: 48,
     effect: 'slow',
+    affinity: 'goo',
     effectDuration: 6.0,
     color: '#00ff00'
   },
@@ -1904,7 +1929,8 @@ export const ITEMS = {
     oneShot: false,
     charges: 1,
     effectRadius: 64,
-    effect: 'stun',
+    effect: 'zap',
+    affinity: 'electric',
     electric: true,
     tickInterval: 2.5,
     damage: 2,
