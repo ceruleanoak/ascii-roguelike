@@ -1087,4 +1087,146 @@ export class PhysicsSystem {
       if (!pushed) break;
     }
   }
+
+  // Apply the liquid interaction results produced by update() to the world:
+  // lava destroys ingredients/dropped items and ticks damage; water applies
+  // bob/wet/status effects. `game` supplies the entity arrays and combat
+  // feedback (damage numbers). Returns true if lava killed the player.
+  applyLiquidResults(deltaTime, waterResults, game) {
+    let lavaKilledPlayer = false;
+
+    // Reset per-frame liquid flags before processing
+    game.player.inLiquid = false;
+    game.player.inDamagingLiquid = false;
+    for (const ingredient of game.ingredients) {
+      ingredient.inWater = false;
+    }
+
+    for (const { entity, inLiquid, liquidState, damagingLiquid } of waterResults) {
+      // Ingredients: lava destroys them, water makes them bob
+      if (entity.pickupCooldown !== undefined) {
+        if (damagingLiquid) {
+          const idx = game.ingredients.indexOf(entity);
+          if (idx !== -1) {
+            this.removeEntity(entity);
+            game.ingredients.splice(idx, 1);
+          }
+          continue;
+        }
+        if (inLiquid) {
+          entity.inWater = true;
+          entity.bobTimer += deltaTime;
+        }
+        continue;
+      }
+
+      // Dropped items (weapons/armor): lava destroys them
+      const itemIdx = game.items.indexOf(entity);
+      if (itemIdx !== -1) {
+        if (damagingLiquid) {
+          this.removeEntity(entity);
+          game.items.splice(itemIdx, 1);
+        }
+        continue;
+      }
+
+      // Check for damaging liquid (lava) FIRST before water effects
+      // Float (Floating Boots) bypasses all liquid damage — already cleared by PhysicsSystem,
+      // but guard here too in case an enemy with float: true passes through this path.
+      if (damagingLiquid) {
+        // Lava-immune enemies (e.g. Tortoise) survive lava but track their state for behavior changes
+        if (entity.data?.lavaImmune) {
+          entity.inLava = true;
+          continue;
+        }
+        if (entity === game.player) game.player.inDamagingLiquid = true;
+        // Apply lava damage (not affected by water immunity)
+        if (entity.takeDamage) {
+          // Initialize lava damage timer if needed
+          if (!entity.lavaDamageTimer) {
+            entity.lavaDamageTimer = 0;
+          }
+
+          // Only apply damage once per second (not every frame)
+          entity.lavaDamageTimer -= deltaTime;
+          if (entity.lavaDamageTimer <= 0) {
+            const damageResult = entity.takeDamage(damagingLiquid.damage);
+
+            // Only create visual feedback if damage was actually dealt
+            if (entity === game.player) {
+              if (damageResult === true) {
+                // Player died from lava
+                lavaKilledPlayer = true;
+                game.combatSystem.createDamageNumber(
+                  damagingLiquid.damage,
+                  entity.position.x,
+                  entity.position.y,
+                  '#ff4400'
+                );
+                entity.hitFlashTimer = 0.15;
+              } else if (damageResult && damageResult.damaged) {
+                // Damage was dealt successfully
+                game.combatSystem.createDamageNumber(
+                  damagingLiquid.damage,
+                  entity.position.x,
+                  entity.position.y,
+                  '#ff4400'
+                );
+                entity.hitFlashTimer = 0.15;
+              } else if (damageResult && damageResult.dodged) {
+                game.combatSystem.createDamageNumber('DODGE', entity.position.x, entity.position.y, '#ffff00');
+              } else if (damageResult && damageResult.immune) {
+                game.combatSystem.createDamageNumber('IMMUNE', entity.position.x, entity.position.y, '#00ffff');
+              } else if (damageResult === false) {
+                // Blocked by invulnerability frames - no visual feedback
+              }
+            }
+
+            // Reset timer for next damage tick (1 second interval)
+            entity.lavaDamageTimer = 1.0;
+          }
+        }
+        // Lava doesn't apply water effects - skip rest of loop
+        continue;
+      }
+
+      // Clear inLava for lava-immune entities that have left the lava
+      if (entity.data?.lavaImmune && entity.inLava) entity.inLava = false;
+
+      if (!inLiquid) continue;
+
+      // Track player liquid state for Rusalka movement
+      if (entity === game.player) game.player.inLiquid = true;
+
+      // Check water immunity (Rubber Boots) — blocks elemental status effects but not movement slow
+      const isImmune = entity === game.player && game.player.waterImmunityTimer > 0;
+      // Stingray Mantle: wearer is immune to shock from electrified water
+      // (their own wake or any other source) — they sit at the source of the
+      // current, not in its path.
+      const isShockImmune = entity === game.player && game.player.stingrayMantle;
+
+      // Apply wet status (6s; Math.max in applyWet/applyStatusEffect refreshes while in water)
+      if (!isImmune) {
+        if (entity.applyWet) {
+          entity.applyWet(6.0); // Player
+          entity.burnDuration = 0;  // Water extinguishes burn
+        } else if (entity.applyStatusEffect) {
+          entity.applyStatusEffect('wet', 6.0); // Enemies
+          if (entity.statusEffects?.burn) entity.statusEffects.burn.active = false; // Water extinguishes burn
+        }
+      }
+
+      // Apply water state effects (skip if immune)
+      if (!isImmune) {
+        if (liquidState === 'poisoned') {
+          if (entity.applyStatusEffect) entity.applyStatusEffect('poison', 4.0);
+        } else if (liquidState === 'electrified' && !isShockImmune) {
+          if (entity.applyStatusEffect) entity.applyStatusEffect('stun', 1.5);
+          if (entity.takeDamage) entity.takeDamage(1);
+        }
+      }
+    }
+
+    return lavaKilledPlayer;
+  }
 }

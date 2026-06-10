@@ -26,15 +26,19 @@ Ordered by value ÷ risk. Sizes measured 2026-06-09. Each completed row should b
 | # | Extraction | From | To | ~Lines | Status |
 |---|-----------|------|----|--------|--------|
 | 1 | Companion pipeline (bread-feed, tamed rats, crow flock/companions) | main.js | `systems/CompanionSystem.js` | 514 | ✅ done 2026-06-09 |
-| 2 | Inline liquid/lava damage resolution in `updateExploreState` (per-entity-class branching, hand-rolled `lavaDamageTimer` lazy-init — violates the documented anti-pattern) | main.js | `PhysicsSystem` or `CombatSystem` | ~90 | open |
-| 3 | Blue-zone armor ticks `_updateCoralCrown` / `_updateStingrayMantle` | main.js | `InventorySystem` (or item mechanics, see #6) | ~75 | open |
-| 4 | Green-character weapon helpers: `_isBlockingStaff`, `_releaseStaffBlock`, `_spawnStaffBlockSweepVisual`, `_callLightningStrike`, `_spawnLavaSweep` | main.js | `CharacterSystem` | ~120 | open |
-| 5 | Crystal Maul charge-hammer auto-fire block in `updateExploreState` | main.js | `MagicSystem` (generalize auto-cast lifecycle) | ~25 | open |
+| 2 | Inline liquid/lava damage resolution in `updateExploreState` (per-entity-class branching, hand-rolled `lavaDamageTimer` lazy-init — violates the documented anti-pattern) | main.js | `PhysicsSystem.applyLiquidResults` | ~130 | ✅ done 2026-06-09 (lazy-init timer kept as-is — behavior-preserving move; flagged in code) |
+| 3 | Blue-zone armor ticks `_updateCoralCrown` / `_updateStingrayMantle` | main.js | `InventorySystem.updateBlueArmorEffects` | ~95 | ✅ done 2026-06-09 |
+| 4 | Green-character weapon helpers: `_isBlockingStaff`, `_releaseStaffBlock`, `_spawnStaffBlockSweepVisual`, `_callLightningStrike`, `_spawnLavaSweep` | main.js | `CharacterSystem` (joins applyGreenDamageModifier there) | ~130 | ✅ done 2026-06-09 |
+| 5 | Crystal Maul charge-hammer auto-fire block in `updateExploreState` | main.js | `MagicSystem._updateChargeHammer` | ~25 | ✅ done 2026-06-09 |
 | 6 | `entities/itemMechanics/` composition directory mirroring `enemyMechanics/` — migrate `data?.flag` interpreters (`chargeHammer`, `gemWand`, `callsLightning`, `placesLava`, `mossCloak`, …) opportunistically as each is next touched | main.js / Item.js | new mechanic files | incremental | open |
 | 7 | `handleSpacePress()` decomposition to dispatch-only (476 lines) | main.js | owning systems per branch | ~400 | open |
 | 8 | `updatePlayerMechanics` (314) + `updateSharedGameElements` (204) — audit for system-owned chunks | main.js | various | partial | open |
 
 Items 2–5 are mechanical moves with no behavior change intended. Item 7 is the riskiest (interleaved input state); do it last, branch by branch.
+
+## Discovered during cleanup
+
+The #4 extraction audit surfaced **bug #88** (see `known-bugs.md`): `updatePlayerMechanics` and `updateExploreState` both run the held-item update pipeline, so weapon cooldowns/windups tick at 2× data values in EXPLORE and hammer shockwaves intermittently drop. Deliberately NOT fixed during refactoring — the game is balanced around the 2× ticking, so the fix is a balance decision, not a cleanup. Both duplicate blocks were left in place verbatim.
 
 ## Out of scope (explicitly rejected)
 

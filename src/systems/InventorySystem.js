@@ -13,6 +13,7 @@
 
 import { inSamePlane } from './PlaneSystem.js';
 import { Item } from '../entities/Item.js';
+import { GRID } from '../game/GameConfig.js';
 
 export class InventorySystem {
   constructor() {
@@ -1589,5 +1590,99 @@ export class InventorySystem {
       menuOptions.push({ action: 'retrieve', item: item, label: `${item.char} - ${item.data.name}` });
     }
     return menuOptions;
+  }
+
+  // ── Blue-zone armor world-effects ──────────────────────────────────────────
+  // Per-frame EXPLORE ticks for water-interaction armor. Called from
+  // updateExploreState; both bail unless the relevant piece is equipped.
+
+  updateBlueArmorEffects(deltaTime) {
+    this._updateCoralCrown();
+    this._updateStingrayMantle(deltaTime);
+  }
+
+  // Coral Crown: while wearing the crown and standing on a water tile, that
+  // tile becomes 'crystallized' — walkable, blocks contact slowdown, lasts 6s.
+  // Tiles auto-expire via BackgroundObject.waterStateTimer.
+  _updateCoralCrown() {
+    const game = this.game;
+    const p = game.player;
+    if (!p?.coralCrown || !p.inLiquid || !game.currentRoom) return;
+    const CS = GRID.CELL_SIZE;
+    const px = p.position.x + CS / 2;
+    const py = p.position.y + CS / 2;
+    const half = CS / 2;
+    for (const obj of game.currentRoom.backgroundObjects) {
+      if (obj.destroyed || obj.char !== '~') continue;
+      if (obj.waterState !== 'normal') continue;
+      const cx = obj.position.x + half;
+      const cy = obj.position.y + half;
+      if (Math.abs(cx - px) < half && Math.abs(cy - py) < half) {
+        obj.setWaterState('crystallized', 6.0);
+        break;
+      }
+    }
+  }
+
+  // Stingray Mantle: moving through water leaves an electrified wake. Each
+  // vacated water cell flips to 'electrified' for 4s — long enough to form a
+  // visible trail behind the player and keep zapping enemies that wander in.
+  // While the player is in water, ticks damage on enemies standing on any
+  // electrified cell — wet enemies take 2× via the existing wet+shock
+  // interaction (we apply the 2× directly here since this is the wake's own
+  // damage source).
+  _updateStingrayMantle(deltaTime) {
+    const game = this.game;
+    const p = game.player;
+    if (!p?.stingrayMantle || !game.currentRoom) return;
+    const CS = GRID.CELL_SIZE;
+    const px = p.position.x + CS / 2;
+    const py = p.position.y + CS / 2;
+    const col = Math.floor(px / CS);
+    const row = Math.floor(py / CS);
+
+    if (p.inLiquid) {
+      if (p._wakePrevCol === undefined) { p._wakePrevCol = col; p._wakePrevRow = row; }
+      if (col !== p._wakePrevCol || row !== p._wakePrevRow) {
+        const prevX = p._wakePrevCol * CS;
+        const prevY = p._wakePrevRow * CS;
+        for (const obj of game.currentRoom.backgroundObjects) {
+          if (obj.destroyed || obj.char !== '~') continue;
+          if (Math.abs(obj.position.x - prevX) < 4 && Math.abs(obj.position.y - prevY) < 4) {
+            if (obj.waterState === 'normal') obj.setWaterState('electrified', 4.0);
+            break;
+          }
+        }
+        p._wakePrevCol = col;
+        p._wakePrevRow = row;
+      }
+    } else {
+      p._wakePrevCol = undefined;
+      p._wakePrevRow = undefined;
+    }
+
+    // Damage tick — 0.25s interval
+    p._wakeTickTimer = (p._wakeTickTimer || 0) - deltaTime;
+    if (p._wakeTickTimer > 0) return;
+    p._wakeTickTimer = 0.25;
+    const half = CS / 2;
+    for (const enemy of game.currentRoom.enemies) {
+      if (enemy.hp <= 0) continue;
+      const ex = enemy.position.x + half;
+      const ey = enemy.position.y + half;
+      for (const obj of game.currentRoom.backgroundObjects) {
+        if (obj.destroyed || obj.char !== '~') continue;
+        if (obj.waterState !== 'electrified') continue;
+        const cx = obj.position.x + half;
+        const cy = obj.position.y + half;
+        if (Math.abs(cx - ex) < half && Math.abs(cy - ey) < half) {
+          const wet = (enemy.wetDuration || 0) > 0;
+          const dmg = wet ? 2 : 1;
+          enemy.takeDamage(dmg);
+          game.combatSystem?.createDamageNumber(dmg, enemy.position.x, enemy.position.y, wet ? '#ffff66' : '#88ddff', 1.0, 0.6);
+          break;
+        }
+      }
+    }
   }
 }

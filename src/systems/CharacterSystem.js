@@ -1,10 +1,150 @@
 import { CharacterNPC } from '../entities/CharacterNPC.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
 import { GRID } from '../game/GameConfig.js';
+import { BackgroundObject } from '../entities/BackgroundObject.js';
 
 export class CharacterSystem {
   constructor(game) {
     this.game = game;
+  }
+
+  // ── Player weapon-action helpers ─────────────────────────────────────────
+  // Staff block stance + swing-completion effects (lightning, lava) for
+  // data-flagged weapons. Live here with the other player-action helpers
+  // (applyGreenDamageModifier, triggerGreenActionCooldown).
+
+  // Basic staves and the fishing pole gain a hold-to-block stance.
+  // Excludes gem staves (weaponType: WAND), which keep their charge mechanic.
+  isBlockingStaff(weapon) {
+    return !!weapon
+      && weapon.data?.weaponType === 'MELEE'
+      && weapon.data?.weaponSubtype === 'staff';
+  }
+
+  // Exit staff block: push enemies on/adjacent to the player radially outward
+  // by ~1 cell, and trigger an 8-direction visual sweep.
+  releaseStaffBlock(player) {
+    if (!player.isStaffBlocking) return;
+    player.isStaffBlocking = false;
+
+    const room = this.game.currentRoom;
+    if (room && room.enemies) {
+      const C = GRID.CELL_SIZE;
+      const px = player.position.x + C / 2;
+      const py = player.position.y + C / 2;
+      // "On or adjacent" → up to ~2 cells from center (covers diagonals).
+      const radius = C * 2;
+      const radiusSq = radius * radius;
+      const force = 250; // ~1 cell of knockback at default 0.2s duration
+
+      for (const enemy of room.enemies) {
+        if (!enemy || enemy.dead) continue;
+        const ex = enemy.position.x + (enemy.width || C) / 2;
+        const ey = enemy.position.y + (enemy.height || C) / 2;
+        const dx = ex - px;
+        const dy = ey - py;
+        if (dx * dx + dy * dy > radiusSq) continue;
+        this.game.physicsSystem.applyKnockback(enemy, px, py, force);
+      }
+    }
+
+    this._spawnStaffBlockSweepVisual(player);
+  }
+
+  // 8-direction melee sweep — fires sequentially around the player to telegraph
+  // the block release. Damage is per-weapon via data.blockReleaseDamage (default 0).
+  _spawnStaffBlockSweepVisual(player) {
+    if (!this.game.combatSystem) return;
+    const C = GRID.CELL_SIZE;
+    const range = C * 1.25;
+    const stepDelay = 0.025;
+    const meleeChar = player.heldItem?.data?.meleeChar || '|';
+    const color = player.heldItem?.color || '#ffffff';
+    const sweepDamage = player.heldItem?.data?.blockReleaseDamage || 0;
+
+    for (let i = 0; i < 8; i++) {
+      const angle = (Math.PI * 2 / 8) * i - Math.PI / 2; // start up, go clockwise
+      const relX = Math.cos(angle) * range;
+      const relY = Math.sin(angle) * range;
+      this.game.combatSystem.addAttack({
+        type: 'melee',
+        char: meleeChar,
+        drawAngle: angle + Math.PI / 2,
+        position: { x: player.position.x + relX, y: player.position.y + relY },
+        relX, relY,
+        width: C,
+        height: C,
+        damage: sweepDamage,
+        duration: 0.08,
+        delay: i * stepDelay,
+        color,
+        owner: player,
+        shooterPlane: player.plane
+      });
+    }
+  }
+
+  // Schedule a delayed lightning strike one cell beyond the weapon's tip.
+  // Called when a weapon flagged with `callsLightning` completes its swing.
+  // Strike point is locked at swing time — the player can dodge out of the zone
+  // during the warning, which is the skill expression.
+  callLightningStrike(player, weaponData) {
+    const C = GRID.CELL_SIZE;
+    const reach = (weaponData.range || 20) + C;
+    const px = player.position.x + C / 2;
+    const py = player.position.y + C / 2;
+    const fx = player.facing?.x || 0;
+    const fy = player.facing?.y || -1;
+    const flen = Math.sqrt(fx * fx + fy * fy) || 1;
+    const x = px + (fx / flen) * reach;
+    const y = py + (fy / flen) * reach;
+    this.game.lightningStrikeSystem.scheduleStrike({
+      x, y,
+      radius: weaponData.lightningRadius ?? (C * 1.2),
+      delay: weaponData.lightningDelay ?? 0.6,
+      damage: weaponData.lightningDamage ?? 4,
+      hitsPlayer: false,
+      plane: player.plane ?? 0,
+      source: 'lightning_sword'
+    });
+  }
+
+  // Spawn lava background tiles in a 15° forward arc from the player on grid.
+  // Called when a weapon flagged with `placesLava` completes its swing.
+  spawnLavaSweep(player, room) {
+    if (!room || !room.backgroundObjects) return;
+    const C = GRID.CELL_SIZE;
+    const baseAngle = Math.atan2(player.facing.y, player.facing.x);
+    const sweepHalf = (Math.PI / 12) / 2;  // 15° total → ±7.5°
+    const playerCx = player.position.x + C / 2;
+    const playerCy = player.position.y + C / 2;
+
+    const samples = [
+      { angle: baseAngle - sweepHalf, dist: C * 2 },
+      { angle: baseAngle,             dist: C * 2 },
+      { angle: baseAngle + sweepHalf, dist: C * 2 },
+      { angle: baseAngle,             dist: C * 3 }
+    ];
+
+    for (const s of samples) {
+      const tx = playerCx + Math.cos(s.angle) * s.dist;
+      const ty = playerCy + Math.sin(s.angle) * s.dist;
+      const col = Math.floor(tx / C);
+      const row = Math.floor(ty / C);
+      if (col < 1 || col >= GRID.COLS - 1 || row < 1 || row >= GRID.ROWS - 1) continue;
+      if (room.collisionMap?.[row]?.[col]) continue;
+
+      const x = col * C;
+      const y = row * C;
+      const occupied = room.backgroundObjects.some(obj =>
+        !obj.destroyed &&
+        Math.abs(obj.position.x - x) < C / 2 &&
+        Math.abs(obj.position.y - y) < C / 2
+      );
+      if (occupied) continue;
+
+      room.backgroundObjects.push(BackgroundObject.createVariant('lava', x, y));
+    }
   }
 
   applyCharacterType(type) {

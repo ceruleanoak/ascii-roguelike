@@ -176,6 +176,11 @@ export class MagicSystem {
 
   // Per-frame: complete any gem-wand cast whose charge has finished.
   update(_dt) {
+    this._updateGemWandAutoCast();
+    this._updateChargeHammer();
+  }
+
+  _updateGemWandAutoCast() {
     const player = this.game.player;
     const wand = player?.heldItem;
     if (!wand?.data?.gemWand) return;
@@ -196,6 +201,33 @@ export class MagicSystem {
     this.spendMana(player, wand.data.manaCost);
     this.game.audioSystem?.stopSFXByName('wand_charge');
     this.runSpellEffect(attack);
+  }
+
+  // Crystal Maul charge-hammer auto-fire — same hold-to-threshold lifecycle as
+  // gem wands, but releases a melee attack set (no mana cost).
+  _updateChargeHammer() {
+    const game = this.game;
+    const weapon = game.player?.heldItem;
+    if (!weapon?.data?.chargeHammer || !weapon.isCharging || weapon.chargeAttackUsed) return;
+    if (weapon.chargeTime < weapon.data.chargeTime) return;
+
+    const attacks = weapon.fireChargeHammerAttack();
+    if (!attacks) return;
+
+    game.combatSystem.createAttack(game.applyGreenDamageModifier(attacks), game.currentRoom ? game.currentRoom.enemies : []);
+    game._emitSoundEvent();
+    const hits = Array.isArray(attacks) ? attacks : [attacks];
+    const trigger = hits.find(a => a?.triggerShockwave);
+    if (trigger) {
+      game.playerShockwave = {
+        x: trigger.shockwaveOrigin.x,
+        y: trigger.shockwaveOrigin.y,
+        radius: 0, prevRadius: 0,
+        maxRadius: GRID.CELL_SIZE * 5,
+        speed: GRID.CELL_SIZE * 8,
+        color: trigger.shockwaveColor || trigger.color,
+      };
+    }
   }
 
   // Dispatches the cast to its concrete effect. attack.position is the player

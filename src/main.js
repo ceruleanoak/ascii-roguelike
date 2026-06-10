@@ -1503,139 +1503,6 @@ class Game {
     return this.characterSystem.applyGreenDamageModifier(attack);
   }
 
-  // Basic staves and the fishing pole gain a hold-to-block stance.
-  // Excludes gem staves (weaponType: WAND), which keep their charge mechanic.
-  _isBlockingStaff(weapon) {
-    return !!weapon
-      && weapon.data?.weaponType === 'MELEE'
-      && weapon.data?.weaponSubtype === 'staff';
-  }
-
-  // Exit staff block: push enemies on/adjacent to the player radially outward
-  // by ~1 cell, and trigger an 8-direction visual sweep.
-  _releaseStaffBlock(player) {
-    if (!player.isStaffBlocking) return;
-    player.isStaffBlocking = false;
-
-    if (this.currentRoom && this.currentRoom.enemies) {
-      const C = GRID.CELL_SIZE;
-      const px = player.position.x + C / 2;
-      const py = player.position.y + C / 2;
-      // "On or adjacent" → up to ~2 cells from center (covers diagonals).
-      const radius = C * 2;
-      const radiusSq = radius * radius;
-      const force = 250; // ~1 cell of knockback at default 0.2s duration
-
-      for (const enemy of this.currentRoom.enemies) {
-        if (!enemy || enemy.dead) continue;
-        const ex = enemy.position.x + (enemy.width || C) / 2;
-        const ey = enemy.position.y + (enemy.height || C) / 2;
-        const dx = ex - px;
-        const dy = ey - py;
-        if (dx * dx + dy * dy > radiusSq) continue;
-        this.physicsSystem.applyKnockback(enemy, px, py, force);
-      }
-    }
-
-    this._spawnStaffBlockSweepVisual(player);
-  }
-
-  // 8-direction melee sweep — fires sequentially around the player to telegraph
-  // the block release. Damage is per-weapon via data.blockReleaseDamage (default 0).
-  _spawnStaffBlockSweepVisual(player) {
-    if (!this.combatSystem) return;
-    const C = GRID.CELL_SIZE;
-    const range = C * 1.25;
-    const stepDelay = 0.025;
-    const meleeChar = player.heldItem?.data?.meleeChar || '|';
-    const color = player.heldItem?.color || '#ffffff';
-    const sweepDamage = player.heldItem?.data?.blockReleaseDamage || 0;
-
-    for (let i = 0; i < 8; i++) {
-      const angle = (Math.PI * 2 / 8) * i - Math.PI / 2; // start up, go clockwise
-      const relX = Math.cos(angle) * range;
-      const relY = Math.sin(angle) * range;
-      this.combatSystem.addAttack({
-        type: 'melee',
-        char: meleeChar,
-        drawAngle: angle + Math.PI / 2,
-        position: { x: player.position.x + relX, y: player.position.y + relY },
-        relX, relY,
-        width: C,
-        height: C,
-        damage: sweepDamage,
-        duration: 0.08,
-        delay: i * stepDelay,
-        color,
-        owner: player,
-        shooterPlane: player.plane
-      });
-    }
-  }
-
-  // Schedule a delayed lightning strike one cell beyond the weapon's tip.
-  // Called when a weapon flagged with `callsLightning` completes its swing.
-  // Strike point is locked at swing time — the player can dodge out of the zone
-  // during the warning, which is the skill expression.
-  _callLightningStrike(player, weaponData) {
-    const C = GRID.CELL_SIZE;
-    const reach = (weaponData.range || 20) + C;
-    const px = player.position.x + C / 2;
-    const py = player.position.y + C / 2;
-    const fx = player.facing?.x || 0;
-    const fy = player.facing?.y || -1;
-    const flen = Math.sqrt(fx * fx + fy * fy) || 1;
-    const x = px + (fx / flen) * reach;
-    const y = py + (fy / flen) * reach;
-    this.lightningStrikeSystem.scheduleStrike({
-      x, y,
-      radius: weaponData.lightningRadius ?? (C * 1.2),
-      delay: weaponData.lightningDelay ?? 0.6,
-      damage: weaponData.lightningDamage ?? 4,
-      hitsPlayer: false,
-      plane: player.plane ?? 0,
-      source: 'lightning_sword'
-    });
-  }
-
-  // Spawn lava background tiles in a 15° forward arc from the player on grid.
-  // Called when a weapon flagged with `placesLava` completes its swing.
-  _spawnLavaSweep(player, room) {
-    if (!room || !room.backgroundObjects) return;
-    const C = GRID.CELL_SIZE;
-    const baseAngle = Math.atan2(player.facing.y, player.facing.x);
-    const sweepHalf = (Math.PI / 12) / 2;  // 15° total → ±7.5°
-    const playerCx = player.position.x + C / 2;
-    const playerCy = player.position.y + C / 2;
-
-    const samples = [
-      { angle: baseAngle - sweepHalf, dist: C * 2 },
-      { angle: baseAngle,             dist: C * 2 },
-      { angle: baseAngle + sweepHalf, dist: C * 2 },
-      { angle: baseAngle,             dist: C * 3 }
-    ];
-
-    for (const s of samples) {
-      const tx = playerCx + Math.cos(s.angle) * s.dist;
-      const ty = playerCy + Math.sin(s.angle) * s.dist;
-      const col = Math.floor(tx / C);
-      const row = Math.floor(ty / C);
-      if (col < 1 || col >= GRID.COLS - 1 || row < 1 || row >= GRID.ROWS - 1) continue;
-      if (room.collisionMap?.[row]?.[col]) continue;
-
-      const x = col * C;
-      const y = row * C;
-      const occupied = room.backgroundObjects.some(obj =>
-        !obj.destroyed &&
-        Math.abs(obj.position.x - x) < C / 2 &&
-        Math.abs(obj.position.y - y) < C / 2
-      );
-      if (occupied) continue;
-
-      room.backgroundObjects.push(BackgroundObject.createVariant('lava', x, y));
-    }
-  }
-
   triggerGreenActionCooldown() {
     this.characterSystem.triggerGreenActionCooldown();
   }
@@ -3452,7 +3319,7 @@ class Game {
     }
 
     // Clear staff-block state if the held weapon is no longer a blocking staff
-    if (this.player.isStaffBlocking && !this._isBlockingStaff(this.player.heldItem)) {
+    if (this.player.isStaffBlocking && !this.characterSystem.isBlockingStaff(this.player.heldItem)) {
       this.player.isStaffBlocking = false;
       this.player.staffSwingHasFired = false;
     }
@@ -3477,12 +3344,12 @@ class Game {
           };
         }
         if (this.player.heldItem.data?.placesLava) {
-          this._spawnLavaSweep(this.player, this.currentRoom);
+          this.characterSystem.spawnLavaSweep(this.player, this.currentRoom);
         }
         if (this.player.heldItem.data?.callsLightning) {
-          this._callLightningStrike(this.player, this.player.heldItem.data);
+          this.characterSystem.callLightningStrike(this.player, this.player.heldItem.data);
         }
-        if (this._isBlockingStaff(this.player.heldItem)) {
+        if (this.characterSystem.isBlockingStaff(this.player.heldItem)) {
           this.player.staffSwingHasFired = true;
         }
         this._emitSoundEvent();
@@ -3679,8 +3546,7 @@ class Game {
     // Blue-zone water armor tick — Coral Crown crystallizes the tile underfoot,
     // Stingray Mantle drops an electrified wake in vacated cells + damages
     // enemies standing in any electrified water within reach.
-    this._updateCoralCrown();
-    this._updateStingrayMantle(deltaTime);
+    this.inventorySystem.updateBlueArmorEffects(deltaTime);
 
     // Tick room-entry detection grace period
     if (this.roomEntryGraceTimer > 0) {
@@ -3698,33 +3564,8 @@ class Game {
     // Reapply equipment effects each frame (keeps defense in sync with timed buffs)
     this.applyEquipmentEffects();
 
-    // Drive gem-wand auto-cast lifecycle
+    // Drive gem-wand auto-cast + Crystal Maul charge-hammer lifecycles
     this.magicSystem.update(deltaTime);
-
-    // Drive Crystal Maul charge-hammer auto-fire (mirrors MagicSystem pattern for gem wands)
-    {
-      const weapon = this.player?.heldItem;
-      if (weapon?.data?.chargeHammer && weapon.isCharging && !weapon.chargeAttackUsed &&
-          weapon.chargeTime >= weapon.data.chargeTime) {
-        const attacks = weapon.fireChargeHammerAttack();
-        if (attacks) {
-          this.combatSystem.createAttack(this.applyGreenDamageModifier(attacks), this.currentRoom ? this.currentRoom.enemies : []);
-          this._emitSoundEvent();
-          const _cswHits = Array.isArray(attacks) ? attacks : [attacks];
-          const _cswTrigger = _cswHits.find(a => a?.triggerShockwave);
-          if (_cswTrigger) {
-            this.playerShockwave = {
-              x: _cswTrigger.shockwaveOrigin.x,
-              y: _cswTrigger.shockwaveOrigin.y,
-              radius: 0, prevRadius: 0,
-              maxRadius: GRID.CELL_SIZE * 5,
-              speed: GRID.CELL_SIZE * 8,
-              color: _cswTrigger.shockwaveColor || _cswTrigger.color,
-            };
-          }
-        }
-      }
-    }
 
     // Drive Infused Coin → well arc animation + post-ritual flash
     this.wellSystem.update(deltaTime);
@@ -3767,140 +3608,9 @@ class Game {
       this.physicsSystem.resolveEntityContacts(this.player, this.currentRoom.enemies);
     }
 
-    // Track if lava killed the player
-    let lavaKilledPlayer = false;
-
-    // Reset per-frame liquid flags before processing
-    this.player.inLiquid = false;
-    this.player.inDamagingLiquid = false;
-    for (const ingredient of this.ingredients) {
-      ingredient.inWater = false;
-    }
-
-    for (const { entity, inLiquid, liquidState, damagingLiquid } of waterResults) {
-      // Ingredients: lava destroys them, water makes them bob
-      if (entity.pickupCooldown !== undefined) {
-        if (damagingLiquid) {
-          const idx = this.ingredients.indexOf(entity);
-          if (idx !== -1) {
-            this.physicsSystem.removeEntity(entity);
-            this.ingredients.splice(idx, 1);
-          }
-          continue;
-        }
-        if (inLiquid) {
-          entity.inWater = true;
-          entity.bobTimer += deltaTime;
-        }
-        continue;
-      }
-
-      // Dropped items (weapons/armor): lava destroys them
-      const itemIdx = this.items.indexOf(entity);
-      if (itemIdx !== -1) {
-        if (damagingLiquid) {
-          this.physicsSystem.removeEntity(entity);
-          this.items.splice(itemIdx, 1);
-        }
-        continue;
-      }
-
-      // Check for damaging liquid (lava) FIRST before water effects
-      // Float (Floating Boots) bypasses all liquid damage — already cleared by PhysicsSystem,
-      // but guard here too in case an enemy with float: true passes through this path.
-      if (damagingLiquid) {
-        // Lava-immune enemies (e.g. Tortoise) survive lava but track their state for behavior changes
-        if (entity.data?.lavaImmune) {
-          entity.inLava = true;
-          continue;
-        }
-        if (entity === this.player) this.player.inDamagingLiquid = true;
-        // Apply lava damage (not affected by water immunity)
-        if (entity.takeDamage) {
-          // Initialize lava damage timer if needed
-          if (!entity.lavaDamageTimer) {
-            entity.lavaDamageTimer = 0;
-          }
-
-          // Only apply damage once per second (not every frame)
-          entity.lavaDamageTimer -= deltaTime;
-          if (entity.lavaDamageTimer <= 0) {
-            const damageResult = entity.takeDamage(damagingLiquid.damage);
-
-            // Only create visual feedback if damage was actually dealt
-            if (entity === this.player) {
-              if (damageResult === true) {
-                // Player died from lava
-                lavaKilledPlayer = true;
-                this.combatSystem.createDamageNumber(
-                  damagingLiquid.damage,
-                  entity.position.x,
-                  entity.position.y,
-                  '#ff4400'
-                );
-                entity.hitFlashTimer = 0.15;
-              } else if (damageResult && damageResult.damaged) {
-                // Damage was dealt successfully
-                this.combatSystem.createDamageNumber(
-                  damagingLiquid.damage,
-                  entity.position.x,
-                  entity.position.y,
-                  '#ff4400'
-                );
-                entity.hitFlashTimer = 0.15;
-              } else if (damageResult && damageResult.dodged) {
-                this.combatSystem.createDamageNumber('DODGE', entity.position.x, entity.position.y, '#ffff00');
-              } else if (damageResult && damageResult.immune) {
-                this.combatSystem.createDamageNumber('IMMUNE', entity.position.x, entity.position.y, '#00ffff');
-              } else if (damageResult === false) {
-                // Blocked by invulnerability frames - no visual feedback
-              }
-            }
-
-            // Reset timer for next damage tick (1 second interval)
-            entity.lavaDamageTimer = 1.0;
-          }
-        }
-        // Lava doesn't apply water effects - skip rest of loop
-        continue;
-      }
-
-      // Clear inLava for lava-immune entities that have left the lava
-      if (entity.data?.lavaImmune && entity.inLava) entity.inLava = false;
-
-      if (!inLiquid) continue;
-
-      // Track player liquid state for Rusalka movement
-      if (entity === this.player) this.player.inLiquid = true;
-
-      // Check water immunity (Rubber Boots) — blocks elemental status effects but not movement slow
-      const isImmune = entity === this.player && this.player.waterImmunityTimer > 0;
-      // Stingray Mantle: wearer is immune to shock from electrified water
-      // (their own wake or any other source) — they sit at the source of the
-      // current, not in its path.
-      const isShockImmune = entity === this.player && this.player.stingrayMantle;
-
-      // Apply wet status (6s; Math.max in applyWet/applyStatusEffect refreshes while in water)
-      if (!isImmune) {
-        if (entity.applyWet) {
-          entity.applyWet(6.0); // Player
-          entity.burnDuration = 0;  // Water extinguishes burn
-        } else if (entity.applyStatusEffect) {
-          entity.applyStatusEffect('wet', 6.0); // Enemies
-          if (entity.statusEffects?.burn) entity.statusEffects.burn.active = false; // Water extinguishes burn
-        }
-      }
-
-      // Apply water state effects (skip if immune)
-      if (!isImmune) {
-        if (liquidState === 'poisoned') {
-          if (entity.applyStatusEffect) entity.applyStatusEffect('poison', 4.0);
-        } else if (liquidState === 'electrified' && !isShockImmune) {
-          if (entity.applyStatusEffect) entity.applyStatusEffect('stun', 1.5);
-          if (entity.takeDamage) entity.takeDamage(1);
-        }
-      }
-    }
+    // Apply liquid results: lava destroys ingredients/items + ticks damage;
+    // water applies bob/wet/status effects. True return = lava killed player.
+    const lavaKilledPlayer = this.physicsSystem.applyLiquidResults(deltaTime, waterResults, this);
 
     // Rusalka water-touch respawn: if a Rusalka has ever appeared this run,
     // stepping into water in any cleared lake room summons a new one
@@ -4083,7 +3793,7 @@ class Game {
     }
 
     // Clear staff-block state if the held weapon is no longer a blocking staff
-    if (this.player.isStaffBlocking && !this._isBlockingStaff(this.player.heldItem)) {
+    if (this.player.isStaffBlocking && !this.characterSystem.isBlockingStaff(this.player.heldItem)) {
       this.player.isStaffBlocking = false;
       this.player.staffSwingHasFired = false;
     }
@@ -4095,12 +3805,12 @@ class Game {
         this.playWeaponAttackSFX(this.player.heldItem);
         this.combatSystem.createAttack(this.applyGreenDamageModifier(windupAttack), this.currentRoom ? this.currentRoom.enemies : []);
         if (this.player.heldItem.data?.placesLava) {
-          this._spawnLavaSweep(this.player, this.currentRoom);
+          this.characterSystem.spawnLavaSweep(this.player, this.currentRoom);
         }
         if (this.player.heldItem.data?.callsLightning) {
-          this._callLightningStrike(this.player, this.player.heldItem.data);
+          this.characterSystem.callLightningStrike(this.player, this.player.heldItem.data);
         }
-        if (this._isBlockingStaff(this.player.heldItem)) {
+        if (this.characterSystem.isBlockingStaff(this.player.heldItem)) {
           this.player.staffSwingHasFired = true;
         }
         this._emitSoundEvent();
@@ -4122,11 +3832,11 @@ class Game {
       // block instead of starting another swing. weapon.canUse() going true is
       // the precise "ready to re-swing" moment; block hijacks that instant.
       // Already-blocking → suppress new swings.
-      if (this._isBlockingStaff(weapon) && this.player.staffSwingHasFired && weapon.canUse()) {
+      if (this.characterSystem.isBlockingStaff(weapon) && this.player.staffSwingHasFired && weapon.canUse()) {
         if (!this.player.isStaffBlocking) {
           this.player.isStaffBlocking = true;
         }
-      } else if (this._isBlockingStaff(weapon) && this.player.isStaffBlocking) {
+      } else if (this.characterSystem.isBlockingStaff(weapon) && this.player.isStaffBlocking) {
         // Hold sustained — keep blocking, suppress further swings.
       } else {
         const attack = this.player.useHeldItem();
@@ -6245,7 +5955,7 @@ class Game {
 
     if (this.player) {
       if (this.player.isStaffBlocking) {
-        this._releaseStaffBlock(this.player);
+        this.characterSystem.releaseStaffBlock(this.player);
       }
       this.player.staffSwingHasFired = false;
     }
@@ -7243,89 +6953,6 @@ class Game {
     this.updateUI();
     this.renderer.markBackgroundDirty();
     return true;
-  }
-
-  // Coral Crown: while wearing the crown and standing on a water tile, that
-  // tile becomes 'crystallized' — walkable, blocks contact slowdown, lasts 6s.
-  // Tiles auto-expire via BackgroundObject.waterStateTimer.
-  _updateCoralCrown() {
-    const p = this.player;
-    if (!p?.coralCrown || !p.inLiquid || !this.currentRoom) return;
-    const CS = GRID.CELL_SIZE;
-    const px = p.position.x + CS / 2;
-    const py = p.position.y + CS / 2;
-    const half = CS / 2;
-    for (const obj of this.currentRoom.backgroundObjects) {
-      if (obj.destroyed || obj.char !== '~') continue;
-      if (obj.waterState !== 'normal') continue;
-      const cx = obj.position.x + half;
-      const cy = obj.position.y + half;
-      if (Math.abs(cx - px) < half && Math.abs(cy - py) < half) {
-        obj.setWaterState('crystallized', 6.0);
-        break;
-      }
-    }
-  }
-
-  // Stingray Mantle: moving through water leaves an electrified wake. Each
-  // vacated water cell flips to 'electrified' for 4s — long enough to form a
-  // visible trail behind the player and keep zapping enemies that wander in.
-  // While the player is in water, ticks damage on enemies standing on any
-  // electrified cell — wet enemies take 2× via the existing wet+shock
-  // interaction (we apply the 2× directly here since this is the wake's own
-  // damage source).
-  _updateStingrayMantle(deltaTime) {
-    const p = this.player;
-    if (!p?.stingrayMantle || !this.currentRoom) return;
-    const CS = GRID.CELL_SIZE;
-    const px = p.position.x + CS / 2;
-    const py = p.position.y + CS / 2;
-    const col = Math.floor(px / CS);
-    const row = Math.floor(py / CS);
-
-    if (p.inLiquid) {
-      if (p._wakePrevCol === undefined) { p._wakePrevCol = col; p._wakePrevRow = row; }
-      if (col !== p._wakePrevCol || row !== p._wakePrevRow) {
-        const prevX = p._wakePrevCol * CS;
-        const prevY = p._wakePrevRow * CS;
-        for (const obj of this.currentRoom.backgroundObjects) {
-          if (obj.destroyed || obj.char !== '~') continue;
-          if (Math.abs(obj.position.x - prevX) < 4 && Math.abs(obj.position.y - prevY) < 4) {
-            if (obj.waterState === 'normal') obj.setWaterState('electrified', 4.0);
-            break;
-          }
-        }
-        p._wakePrevCol = col;
-        p._wakePrevRow = row;
-      }
-    } else {
-      p._wakePrevCol = undefined;
-      p._wakePrevRow = undefined;
-    }
-
-    // Damage tick — 0.25s interval
-    p._wakeTickTimer = (p._wakeTickTimer || 0) - deltaTime;
-    if (p._wakeTickTimer > 0) return;
-    p._wakeTickTimer = 0.25;
-    const half = CS / 2;
-    for (const enemy of this.currentRoom.enemies) {
-      if (enemy.hp <= 0) continue;
-      const ex = enemy.position.x + half;
-      const ey = enemy.position.y + half;
-      for (const obj of this.currentRoom.backgroundObjects) {
-        if (obj.destroyed || obj.char !== '~') continue;
-        if (obj.waterState !== 'electrified') continue;
-        const cx = obj.position.x + half;
-        const cy = obj.position.y + half;
-        if (Math.abs(cx - ex) < half && Math.abs(cy - ey) < half) {
-          const wet = (enemy.wetDuration || 0) > 0;
-          const dmg = wet ? 2 : 1;
-          enemy.takeDamage(dmg);
-          this.combatSystem?.createDamageNumber(dmg, enemy.position.x, enemy.position.y, wet ? '#ffff66' : '#88ddff', 1.0, 0.6);
-          break;
-        }
-      }
-    }
   }
 
   // Shark Mask emerge attack: triggered when the player re-rolls during a dive.
