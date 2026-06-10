@@ -2898,6 +2898,11 @@ class Game {
     // Update all shared player mechanics
     this.updatePlayerMechanics(deltaTime);
 
+    // Drive gem-wand auto-cast + Crystal Maul charge-hammer lifecycles — same
+    // as EXPLORE, so charged weapons fire in the hub instead of hanging at
+    // full charge (REST parity; spell effects no-op safely with no enemies).
+    this.magicSystem.update(deltaTime);
+
     // Update shared game elements (particles, debris, etc.)
     this.worldEffectsSystem.update(deltaTime);
 
@@ -5123,19 +5128,12 @@ class Game {
         }
       }
 
-      // Not near any interactive slot or NPC - allow weapon preview/attack
+      // Not near any interactive slot or NPC — weapon preview/attack through
+      // the same flow as EXPLORE (gem mana gate, bread gate, charge SFX) so
+      // weapons behave identically in the hub. REST has no enemies, so the
+      // sound-event pulse the old inline path emitted is irrelevant here.
       if (this.player.heldItem && this.player.canAttack()) {
-        this.attackSequenceActive = true; // Mark that attack was initiated by button press (even if windup delays it)
-        const attack = this.player.useHeldItem();
-        if (attack) {
-          // Debug logging for wands
-          if (this.player.heldItem.data.weaponType === 'WAND') {
-            const enemies = this.currentRoom ? this.currentRoom.enemies : [];
-          }
-          this.combatSystem.createAttack(this.applyGreenDamageModifier(attack), this.currentRoom ? this.currentRoom.enemies : []);
-          this.triggerGreenActionCooldown();
-          this._emitSoundEvent();
-        }
+        this.combatSystem.tryUseHeldWeapon();
       }
     } else if (state === GAME_STATES.EXPLORE || state === GAME_STATES.ARCADE_DEMO) {
       // Reset captive interaction flag
