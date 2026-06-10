@@ -122,11 +122,22 @@ See `claudedocs/reference.md` for the legacy violations table and background obj
 | Character type abilities | `CharacterSystem.js` |
 | Menu open/close/select | `MenuSystem.js` |
 | Consumable effects | `InventorySystem.js` |
+| Companion behavior (bread-feed, tamed rats, crows) | `CompanionSystem.js` |
 | Room spawn helpers | `RoomGenerator.js` |
 | Player geometry helpers | `Player.js` |
 | Zone depth tracking | `ZoneSystem.js` |
 
 **Adding a new system**: Create `src/systems/NewSystem.js` (takes `game` as constructor arg) → instantiate in `Game.constructor()` → call `update(dt)` in `updateXxxState()`.
+
+### Code Placement Procedure (mandatory for net-new behavior)
+
+main.js reached ~8,000 lines because behavior with "no obvious home" defaulted into the orchestrator. The default is now inverted — full risk register: `claudedocs/architecture-governance.md`.
+
+1. **Name the owning file before writing any logic.** The table above routes known categories.
+2. **No home exists? Create a system.** A 60-line `src/systems/XxxSystem.js` always beats 60 inline lines in main.js — there is no "too small for a system" threshold.
+3. **Input handlers are dispatch-only for new code.** A new branch in `setupInput()` / `handleSpacePress()` / `handleShiftPress()` may only translate the input into a single system call. The behavior lives in the system.
+4. **Extend, don't mirror.** If new code would "mirror the X pattern" inline (e.g. re-implementing the MagicSystem auto-cast lifecycle for a new weapon), extend system X or add a mechanic file (`entities/enemyMechanics/`-style composition) instead.
+5. **Budgets are enforced.** `npm run build` runs `tools/check-architecture.js` against `tools/arch-budgets.json`. Budgets only ratchet down — after an extraction shrinks a file, run `node tools/check-architecture.js --update` to lock in the new ceiling. If the check fails, route the code out; never raise a budget to pass.
 
 ## Architectural Compromises
 
@@ -134,6 +145,7 @@ Do not "fix" these. Do not replicate them.
 
 - **Menu state** (`menuOpen`, `menuItems`, `selectedMenuIndex`, `menuColumns`, `disabledColumns`) lives on `game` — every renderer reads `game.menuXxx` directly.
 - **Trap state** (`placedTraps`, `inFlightTraps`, `trapCharging`) lives on `game` — 22+ references make moving it costly. TrapSystem owns the logic; game is just the data holder.
+- **Companion state** (`tamedRats`, `companionCrows`, `followerCrows`, `fedCrowCount`, `breadTargetSelectors`) lives on `game` — renderers read the rosters directly. CompanionSystem owns the logic; game is just the data holder.
 - **Input handlers** — SHIFT/Tab/M/V key handlers in `setupInput()` still contain logic blocks that belong in their respective systems. Flagged, not yet delegated.
 
 **Anti-patterns — do NOT replicate:**
@@ -154,10 +166,12 @@ HutSystem, DungeonSystem, and MazeSystem all share this structure. Follow it exa
 
 ## Entity Size Norms
 
-Do not attempt to split without tracing all shared-state dependencies:
-- **`Enemy.js`** (~1,200 lines): AI, pathfinding, pack behavior, status effects, item usage — single cohesive domain.
-- **`Item.js`** (~1,000 lines): Attack pattern factory — size justified by pattern count, not tangled concerns.
-- **`Player.js`** (~1,200 lines): Stat container + input response + dodge roll + status tracking — organized by comment sections.
+Authoritative per-file ceilings live in `tools/arch-budgets.json` and are enforced by `npm run check:arch` (runs as part of `build`). Do not restate line counts here — they go stale and erode the rule.
+
+Do not attempt to split these without tracing all shared-state dependencies:
+- **`Enemy.js`**: AI, pathfinding, status effects, item usage — single cohesive domain. New behaviors go in `entities/enemyMechanics/` composition files, which is why the core file is allowed to be large but not to grow.
+- **`Item.js`**: Attack pattern factory — size justified by pattern count, not tangled concerns.
+- **`Player.js`**: Stat container + input response + dodge roll + status tracking — organized by comment sections.
 
 ---
 

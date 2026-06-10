@@ -1,0 +1,10 @@
+{
+  "src/main.js": 7464,
+  "src/systems/RoomGenerator.js": 4521,
+  "src/entities/Enemy.js": 3847,
+  "src/rendering/state/ExploreRenderer.js": 3098,
+  "src/systems/CombatSystem.js": 2648,
+  "src/systems/InventorySystem.js": 1618,
+  "src/entities/Item.js": 1561,
+  "src/entities/Player.js": 1305
+}

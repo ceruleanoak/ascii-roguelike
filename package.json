@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "NODE_ENV=production vite build",
+    "check:arch": "node tools/check-architecture.js",
+    "build": "npm run check:arch && NODE_ENV=production vite build",
     "preview": "vite preview",
     "deploy": "npm run build && gh-pages -d dist --no-history"
   },
