@@ -48,6 +48,11 @@ export class InventorySystem {
 
     this.itemChest = []; // Storage for weapons (shared across all characters)
 
+    // Weapons displaced during EXPLORE pickup buffer here, not in itemChest.
+    // Flushed to itemChest by bankLoot() on safe REST return. Discarded on
+    // character/run death so EXPLORE-picked-up weapons don't survive a wipe.
+    this.pendingChestDeposits = [];
+
     // EXPLORE inventory (lost on death)
     this.armorInventory = []; // All collected armor
     this.consumableInventory = []; // All collected consumables
@@ -1410,6 +1415,12 @@ export class InventorySystem {
     if (this._activeCharacterType && this.characterInventories[this._activeCharacterType]) {
       this.characterInventories[this._activeCharacterType].activeSlotIndex = playerActiveSlotIndex;
     }
+
+    // Flush deferred EXPLORE chest deposits — survived the run, now banked.
+    if (this.pendingChestDeposits.length > 0) {
+      this.itemChest.push(...this.pendingChestDeposits);
+      this.pendingChestDeposits.length = 0;
+    }
   }
 
   /**
@@ -1423,6 +1434,7 @@ export class InventorySystem {
 
     // Clear shared inventories and equipment
     this.itemChest = [];
+    this.pendingChestDeposits = [];
     this.armorInventory = [];
     this.consumableInventory = [];
     this.coinWallet = 0;
@@ -1540,6 +1552,15 @@ export class InventorySystem {
    */
   addToChest(item) {
     this.itemChest.push(item);
+  }
+
+  /**
+   * EXPLORE-time deferred chest deposit. Item is held in pendingChestDeposits
+   * until bankLoot() flushes it on safe REST return; cleared on death so
+   * displaced weapons don't survive a wipe.
+   */
+  deferToChest(item) {
+    this.pendingChestDeposits.push(item);
   }
 
   /**

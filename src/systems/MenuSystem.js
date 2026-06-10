@@ -853,7 +853,8 @@ export class MenuSystem {
       } else if (item.data.type === 'CONSUMABLE') {
         game.inventorySystem.consumableInventory.push(item);
       } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
-        game.player.pickupItem(item);
+        const dropped = game.player.pickupItem(item);
+        if (dropped) game.inventorySystem.addToChest(dropped);
       } else if (item.data.type === 'INGREDIENT') {
         game.addIngredient(char);
       }

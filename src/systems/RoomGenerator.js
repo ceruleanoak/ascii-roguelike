@@ -535,16 +535,27 @@ export class RoomGenerator {
       this.generateLakeTerrain(room);
     }
 
-    // Spawn 1-6 enemies based on depth, avoiding liquid tiles
+    // Spawn 1-6 enemies based on depth, avoiding liquid tiles.
+    // Cluster spawns around 3 anchor points so heavy enemy counts feel like
+    // pockets to clear rather than ambient chaos. Water-affinity enemies skip
+    // clustering (they want liquid tiles, not dry anchors).
     const enemyCount = Math.min(1 + Math.floor(this.currentDepth / 2), 6);
     const islandConfig = this.currentLetterTemplate?.islandZone?.enabled ? this.currentLetterTemplate.islandZone : null;
+    const clusterAnchors = this.pickEnemyClusterAnchors(room, 3, { islandConfig });
 
     for (let i = 0; i < enemyCount; i++) {
       const enemyChar = getZoneRandomEnemy(this.currentDepth, room.zone);
       const allowLiquid = ENEMIES[enemyChar]?.waterAffinity === true;
-      const pos = islandConfig
-        ? this.getIslandPosition(islandConfig, room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects)
-        : this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, allowLiquid);
+      let pos = null;
+      if (clusterAnchors.length > 0 && !allowLiquid) {
+        const anchor = clusterAnchors[Math.floor(Math.random() * clusterAnchors.length)];
+        pos = this.getClusteredPosition(anchor, room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, false);
+      }
+      if (!pos) {
+        pos = islandConfig
+          ? this.getIslandPosition(islandConfig, room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects)
+          : this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, allowLiquid);
+      }
       if (!pos) continue;
       const enemy = new Enemy(enemyChar, pos.x, pos.y, this.currentDepth);
       enemy.setCollisionMap(room.collisionMap);
@@ -1058,12 +1069,21 @@ export class RoomGenerator {
     // Standard background objects (grass, trees, rocks) — clearing zone keeps plateau tidy
     this.generateBackgroundObjects(room);
 
-    // Spawn enemies, avoiding liquid tiles
+    // Spawn enemies, clustered around 3 anchor points so dense rooms feel like
+    // pockets to clear rather than wall-to-wall chaos.
     const enemyCount = Math.min(2 + Math.floor(this.currentDepth / 2), 6);
+    const clusterAnchors = this.pickEnemyClusterAnchors(room, 3);
     for (let i = 0; i < enemyCount; i++) {
       const enemyChar = getZoneRandomEnemy(this.currentDepth, room.zone);
       const allowLiquid = ENEMIES[enemyChar]?.waterAffinity === true;
-      const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, allowLiquid);
+      let pos = null;
+      if (clusterAnchors.length > 0 && !allowLiquid) {
+        const anchor = clusterAnchors[Math.floor(Math.random() * clusterAnchors.length)];
+        pos = this.getClusteredPosition(anchor, room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, false);
+      }
+      if (!pos) {
+        pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, allowLiquid);
+      }
       if (!pos) continue;
       const enemy = new Enemy(enemyChar, pos.x, pos.y, this.currentDepth);
       enemy.setCollisionMap(room.collisionMap);
@@ -2009,6 +2029,144 @@ export class RoomGenerator {
       x: x * GRID.CELL_SIZE,
       y: y * GRID.CELL_SIZE
     };
+  }
+
+  /**
+   * Pick N anchor positions spread across the room to seed enemy clusters.
+   * Anchors are sampled via getRandomPosition (or getIslandPosition when on an
+   * island) and required to sit at least MIN_ANCHOR_SPACING apart so clusters
+   * don't collapse on top of each other.
+   *
+   * Returns an array of {x, y} pixel positions (may be shorter than `count`
+   * if the room can't fit that many spread-out spots).
+   */
+  pickEnemyClusterAnchors(room, count, { islandConfig = null } = {}) {
+    const MIN_ANCHOR_SPACING = GRID.CELL_SIZE * 6;
+    const anchors = [];
+    const pickOne = () => islandConfig
+      ? this.getIslandPosition(islandConfig, room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects)
+      : this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, false);
+
+    for (let i = 0; i < count; i++) {
+      let chosen = null;
+      for (let attempt = 0; attempt < 30; attempt++) {
+        const pos = pickOne();
+        if (!pos) break;
+        let tooClose = false;
+        for (const a of anchors) {
+          const dx = pos.x - a.x;
+          const dy = pos.y - a.y;
+          if (Math.sqrt(dx * dx + dy * dy) < MIN_ANCHOR_SPACING) { tooClose = true; break; }
+        }
+        if (!tooClose) { chosen = pos; break; }
+      }
+      // Accept whatever we last got rather than dropping the anchor entirely —
+      // a slightly-too-close anchor is better than fewer clusters.
+      if (!chosen) chosen = pickOne();
+      if (chosen) anchors.push(chosen);
+    }
+    return anchors;
+  }
+
+  /**
+   * Pick a spawn position within `radiusCells` of `anchor` that passes the same
+   * validity checks as getRandomPosition (collision, vault interior, exit clearance,
+   * player buffer, enemy spacing, liquid avoidance, solid bg objects).
+   *
+   * Returns null if no valid cell found near the anchor — caller should fall
+   * back to getRandomPosition so the enemy still spawns somewhere.
+   */
+  getClusteredPosition(anchor, collisionMap, existingEnemies = [], playerStartPos = null, backgroundObjects = [], allowLiquid = false, radiusCells = 4) {
+    const MIN_SPACING = GRID.CELL_SIZE * 2;
+    const PLAYER_BUFFER = GRID.CELL_SIZE * 3;
+    const EXIT_CLEARANCE = 3;
+    const LIQUID_CHARS = new Set(['~', '=']);
+
+    const centerX = Math.floor(GRID.COLS / 2);
+    const centerY = Math.floor(GRID.ROWS / 2);
+    const exitZones = [
+      { x: centerX, y: 2 },
+      { x: centerX, y: GRID.ROWS - 3 },
+      { x: GRID.COLS - 3, y: centerY },
+      { x: 2, y: centerY }
+    ];
+
+    const anchorCol = Math.round(anchor.x / GRID.CELL_SIZE);
+    const anchorRow = Math.round(anchor.y / GRID.CELL_SIZE);
+
+    for (let attempt = 0; attempt < 60; attempt++) {
+      // Random offset within radius (uniform-ish — disk sample)
+      const angle = Math.random() * Math.PI * 2;
+      const r = Math.sqrt(Math.random()) * radiusCells;
+      const col = Math.round(anchorCol + Math.cos(angle) * r);
+      const row = Math.round(anchorRow + Math.sin(angle) * r);
+
+      if (col < 2 || col >= GRID.COLS - 2 || row < 2 || row >= GRID.ROWS - 2) continue;
+      if (collisionMap[row]?.[col]) continue;
+
+      if (this.currentVaultInfo) {
+        const v = this.currentVaultInfo;
+        if (col > v.minCol && col < v.maxCol && row > v.minRow && row < v.maxRow) continue;
+      }
+
+      let tooCloseToExit = false;
+      for (const exit of exitZones) {
+        if (Math.abs(col - exit.x) <= EXIT_CLEARANCE && Math.abs(row - exit.y) <= EXIT_CLEARANCE) {
+          tooCloseToExit = true; break;
+        }
+      }
+      if (tooCloseToExit) continue;
+
+      const pixelX = col * GRID.CELL_SIZE;
+      const pixelY = row * GRID.CELL_SIZE;
+
+      if (playerStartPos) {
+        const dx = pixelX - playerStartPos.x;
+        const dy = pixelY - playerStartPos.y;
+        if (Math.sqrt(dx * dx + dy * dy) < PLAYER_BUFFER) continue;
+      }
+
+      let tooCloseToEnemy = false;
+      for (const enemy of existingEnemies) {
+        const dx = pixelX - enemy.position.x;
+        const dy = pixelY - enemy.position.y;
+        if (Math.sqrt(dx * dx + dy * dy) < MIN_SPACING) { tooCloseToEnemy = true; break; }
+      }
+      if (tooCloseToEnemy) continue;
+
+      if (!allowLiquid && backgroundObjects.length > 0) {
+        const onLiquid = backgroundObjects.some(obj =>
+          LIQUID_CHARS.has(obj.char) &&
+          Math.abs(obj.position.x - pixelX) < GRID.CELL_SIZE &&
+          Math.abs(obj.position.y - pixelY) < GRID.CELL_SIZE
+        );
+        if (onLiquid) continue;
+      }
+
+      if (backgroundObjects.length > 0) {
+        const overlappingSolid = backgroundObjects.some(obj => {
+          if (obj.destroyed) return false;
+          if (!obj.data) return false;
+          if (typeof obj.data.slowing === 'number') return false;
+          const isSolid = obj.data.solid ||
+            obj.data.bulletInteraction === 'block' ||
+            obj.data.bulletInteraction === 'interact-preserve';
+          if (!isSolid) return false;
+          const objBox = obj.getHitbox();
+          return (
+            pixelX < objBox.x + objBox.width &&
+            pixelX + GRID.CELL_SIZE > objBox.x &&
+            pixelY < objBox.y + objBox.height &&
+            pixelY + GRID.CELL_SIZE > objBox.y
+          );
+        });
+        if (overlappingSolid) continue;
+      }
+
+      return { x: pixelX, y: pixelY };
+    }
+
+    return null;
   }
 
   generateBackgroundObjects(room) {

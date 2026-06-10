@@ -91,6 +91,9 @@ export class LakeBoss {
 
   // ── Public interface ────────────────────────────────────────────────────────
 
+  setGame(game) { this.game = game; }
+  setRoom(room) { this.room = room; }
+
   get vulnerable() { return this.invulnerabilityTimer <= 0; }
 
   takeDamage(amount) {
