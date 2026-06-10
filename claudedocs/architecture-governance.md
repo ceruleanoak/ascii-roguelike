@@ -30,15 +30,17 @@ Ordered by value ÷ risk. Sizes measured 2026-06-09. Each completed row should b
 | 3 | Blue-zone armor ticks `_updateCoralCrown` / `_updateStingrayMantle` | main.js | `InventorySystem.updateBlueArmorEffects` | ~95 | ✅ done 2026-06-09 |
 | 4 | Green-character weapon helpers: `_isBlockingStaff`, `_releaseStaffBlock`, `_spawnStaffBlockSweepVisual`, `_callLightningStrike`, `_spawnLavaSweep` | main.js | `CharacterSystem` (joins applyGreenDamageModifier there) | ~130 | ✅ done 2026-06-09 |
 | 5 | Crystal Maul charge-hammer auto-fire block in `updateExploreState` | main.js | `MagicSystem._updateChargeHammer` | ~25 | ✅ done 2026-06-09 |
-| 6 | `entities/itemMechanics/` composition directory mirroring `enemyMechanics/` — migrate `data?.flag` interpreters (`chargeHammer`, `gemWand`, `callsLightning`, `placesLava`, `mossCloak`, …) opportunistically as each is next touched | main.js / Item.js | new mechanic files | incremental | open |
-| 7 | `handleSpacePress()` decomposition to dispatch-only (476 lines) | main.js | owning systems per branch | ~400 | open |
-| 8 | `updatePlayerMechanics` (314) + `updateSharedGameElements` (204) — audit for system-owned chunks | main.js | various | partial | open |
+| 6 | `data?.flag` interpreter migration — resolved as **standing policy**, not a one-time task: the lifecycle-bearing flags now live in systems (`chargeHammer`/`gemWand` → MagicSystem, `callsLightning`/`placesLava` → CharacterSystem, `mossCloak` → InventorySystem); remaining flags in main.js are one-line predicates, fine inline. New flags follow the Code Placement Procedure on day one. A dedicated `itemMechanics/` directory stays an option if a future flag needs per-item state. | — | — | — | ✅ resolved 2026-06-10 |
+| 7 | `handleSpacePress()` decomposition to dispatch-only (476 → 281 lines): armed-attack flow → `CombatSystem.tryUseHeldWeapon`, vault → `InteractionSystem.canUnlockVault/unlockVault`, wise-fellow artifact → `InteractionSystem.tryGiveArtifactToWiseFellow`, bundle scatter → `LootSystem.scatterRestBundle`, NPC swap → `CharacterSystem.trySwapWithNearbyNPC`, GAME_OVER resets → named `_respawnNextCharacter`/`_resetRunToRest` (run-reset is state-transition orchestration, stays in main.js) | main.js | per branch | ~250 | ✅ done 2026-06-10 |
+| 8 | `updatePlayerMechanics` + `updateSharedGameElements` audit: dodge dispatch (shark/green/standard + `_sharkEmergeAttack`) → `CharacterSystem.updateDodge`, moss cloak → `InventorySystem.updateMossCloak`, entire shared world-effects ticker → new `WorldEffectsSystem` | main.js | CharacterSystem / InventorySystem / WorldEffectsSystem | ~430 | ✅ done 2026-06-10 |
 
 Items 2–5 are mechanical moves with no behavior change intended. Item 7 is the riskiest (interleaved input state); do it last, branch by branch.
 
 ## Discovered during cleanup
 
-The #4 extraction audit surfaced **bug #88** (see `known-bugs.md`): `updatePlayerMechanics` and `updateExploreState` both run the held-item update pipeline, so weapon cooldowns/windups tick at 2× data values in EXPLORE and hammer shockwaves intermittently drop. Deliberately NOT fixed during refactoring — the game is balanced around the 2× ticking, so the fix is a balance decision, not a cleanup. Both duplicate blocks were left in place verbatim.
+The #4 extraction audit surfaced **bug #88**: `updatePlayerMechanics` and `updateExploreState` both ran the held-item update pipeline, so weapon cooldowns/windups ticked at 2× data values in EXPLORE (1× in REST/NEUTRAL) and hammer shockwaves intermittently dropped (the duplicate lacked the shockwave branch). Verified via full static trace + git history (`179bdbb` extracted the pipeline but never deleted the EXPLORE copy).
+
+**Fixed 2026-06-10** behavior-preservingly: duplicate deleted, single source in `updatePlayerMechanics` ticks at `PHYSICS.WEAPON_TIMER_RATE` (= 2). EXPLORE feel unchanged; REST/NEUTRAL gain parity (now also 2×); shockwaves always fire. Weapon timing data remains in "double-seconds" — effective seconds = data value / 2. Normalizing the data (halve all cooldown/windup/recovery/reloadTime/chargeTime AND code-level fallbacks, then delete the constant) is a possible follow-up, but it must be one deliberate pass — the playtesting simulator reads raw data values and is currently 2× optimistic on cooldown-dominated TTK.
 
 ## Out of scope (explicitly rejected)
 

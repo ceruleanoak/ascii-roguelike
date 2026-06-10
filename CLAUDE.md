@@ -123,6 +123,7 @@ See `claudedocs/reference.md` for the legacy violations table and background obj
 | Menu open/close/select | `MenuSystem.js` |
 | Consumable effects | `InventorySystem.js` |
 | Companion behavior (bread-feed, tamed rats, crows) | `CompanionSystem.js` |
+| Transient world effects (particles, puddles, goo blobs, shockwaves, debris, ember stacks) | `WorldEffectsSystem.js` |
 | Room spawn helpers | `RoomGenerator.js` |
 | Player geometry helpers | `Player.js` |
 | Zone depth tracking | `ZoneSystem.js` |
@@ -146,6 +147,7 @@ Do not "fix" these. Do not replicate them.
 - **Menu state** (`menuOpen`, `menuItems`, `selectedMenuIndex`, `menuColumns`, `disabledColumns`) lives on `game` — every renderer reads `game.menuXxx` directly.
 - **Trap state** (`placedTraps`, `inFlightTraps`, `trapCharging`) lives on `game` — 22+ references make moving it costly. TrapSystem owns the logic; game is just the data holder.
 - **Companion state** (`tamedRats`, `companionCrows`, `followerCrows`, `fedCrowCount`, `breadTargetSelectors`) lives on `game` — renderers read the rosters directly. CompanionSystem owns the logic; game is just the data holder.
+- **Weapon timing data is in "double-seconds"** — the held item ticks at `PHYSICS.WEAPON_TIMER_RATE` (= 2), so a weapon's effective cooldown/windup/reload/charge in seconds is its data value ÷ 2 (resolved bug #88: every weapon was tuned against an accidental double tick). Do not remove the multiplier without halving all timing data AND code-level fallbacks in the same pass. The playtesting simulator reads raw values — divide by 2 when comparing to real-game TTK.
 - **Input handlers** — SHIFT/Tab/M/V key handlers in `setupInput()` still contain logic blocks that belong in their respective systems. Flagged, not yet delegated.
 
 **Anti-patterns — do NOT replicate:**

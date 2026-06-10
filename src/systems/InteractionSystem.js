@@ -5,14 +5,124 @@ import { Fairy } from '../entities/Fairy.js';
 import { isIngredient, isItem, generateEnemyDrops } from '../data/items.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
 import { createDebris } from '../entities/Debris.js';
-import { createIceBurst } from '../entities/Particle.js';
-import { INTERACTION_RANGE, OBJECT_ANIMATIONS, GRID } from '../game/GameConfig.js';
+import { createIceBurst, Particle } from '../entities/Particle.js';
+import { INTERACTION_RANGE, OBJECT_ANIMATIONS, GRID, GAME_STATES } from '../game/GameConfig.js';
 import { inSamePlane, planeOf, objectOnPlane } from './PlaneSystem.js';
+import { WiseFellow } from '../entities/WiseFellow.js';
 
 export class InteractionSystem {
   constructor(game) {
     this.game = game;
     this._lavaWaterCheckTimer = 0;
+  }
+
+  // Vault (V room): true when the player stands south of the vault's bottom
+  // wall, roughly centered, with the vault key ߃ held.
+  canUnlockVault() {
+    const game = this.game;
+    // Only check in EXPLORE mode with a current room and vault
+    const state = game.stateMachine.getCurrentState();
+    if (state !== GAME_STATES.EXPLORE || !game.currentRoom || !game.currentRoom.vaultInfo) {
+      return false;
+    }
+
+    const vault = game.currentRoom.vaultInfo;
+
+    // Check if vault is already unlocked
+    if (vault.unlocked) {
+      return false;
+    }
+
+    // Check if player has the vault key equipped (in active quick slot)
+    const hasKey = game.player.heldItem && game.player.heldItem.char === '߃';
+    if (!hasKey) {
+      return false;
+    }
+
+    // Player must be SOUTH (outside) of the bottom wall and horizontally centered
+    const playerGridX = Math.floor(game.player.position.x / GRID.CELL_SIZE);
+    const playerGridY = Math.floor(game.player.position.y / GRID.CELL_SIZE);
+
+    const isSouthOfVault = playerGridY > vault.bottomWallRow; // Player is below/south of the wall
+    const distanceToCenter = Math.abs(playerGridX - vault.centerCol);
+    const maxCenterDist = vault.size / 2 + 2; // Lenient horizontal range
+    const isNearCenter = distanceToCenter <= maxCenterDist;
+
+    return isSouthOfVault && isNearCenter;
+  }
+
+  // Open the vault: clear the bottom wall, consume the key, debris burst.
+  unlockVault() {
+    const game = this.game;
+    const vault = game.currentRoom.vaultInfo;
+    if (!vault || vault.unlocked) return;
+
+    // Remove bottom wall from collision map
+    const bottomRow = vault.bottomWallRow;
+    for (let col = vault.minCol; col <= vault.maxCol; col++) {
+      game.currentRoom.collisionMap[bottomRow][col] = false;
+    }
+
+    // Mark vault as unlocked
+    vault.unlocked = true;
+
+    // Remove key from active quick slot (consumed)
+    if (game.player.heldItem && game.player.heldItem.char === '߃') {
+      game.player.quickSlots[game.player.activeSlotIndex] = null;
+
+      // Auto-switch to next filled slot if available
+      const nextFilled = game.player.quickSlots.findIndex((slot, idx) =>
+        idx !== game.player.activeSlotIndex && slot !== null
+      );
+      if (nextFilled !== -1) {
+        game.player.activeSlotIndex = nextFilled;
+      }
+    }
+
+    // Mark background dirty to show wall removal
+    game.renderer.markBackgroundDirty();
+
+    // Visual feedback - create some debris particles
+    const centerX = vault.centerCol * GRID.CELL_SIZE + (GRID.CELL_SIZE / 2);
+    const bottomY = bottomRow * GRID.CELL_SIZE + (GRID.CELL_SIZE / 2);
+
+    for (let i = 0; i < 10; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 50 + Math.random() * 50;
+      const particle = new Particle(
+        centerX,
+        bottomY,
+        '#',                    // char
+        '#888888',              // color
+        {                       // velocity
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed
+        },
+        0.8                     // lifetime
+      );
+      game.particles.push(particle);
+    }
+  }
+
+  // Artifact ⚱ → wise fellow: consume the artifact, unlock the rare-tier hint
+  // for the current zone. Returns true if a wise fellow in range took it.
+  tryGiveArtifactToWiseFellow(npcArray) {
+    const game = this.game;
+    if (!npcArray) return false;
+    for (const npc of npcArray) {
+      if (!(npc instanceof WiseFellow)) continue;
+      const dist = Math.hypot(
+        game.player.position.x - npc.position.x,
+        game.player.position.y - npc.position.y
+      );
+      if (dist > GRID.CELL_SIZE * 2) continue;
+      const idx = game.player.inventory.indexOf('⚱');
+      if (idx === -1) continue;
+      game.player.inventory.splice(idx, 1);
+      npc.unlockRareHint(game.currentRoom?.zone || 'green');
+      return true;
+    }
+    return false;
   }
 
   // Check lava tiles adjacent to water tiles and solidify them

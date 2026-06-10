@@ -1,11 +1,28 @@
 import { CharacterNPC } from '../entities/CharacterNPC.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
-import { GRID } from '../game/GameConfig.js';
+import { GRID, INTERACTION_RANGE } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 
 export class CharacterSystem {
   constructor(game) {
     this.game = game;
+  }
+
+  // REST: swap with the first character NPC within interaction range.
+  // Returns true if a swap happened.
+  trySwapWithNearbyNPC() {
+    const game = this.game;
+    for (const npc of game.characterNPCs) {
+      const dist = Math.hypot(
+        game.player.position.x - npc.position.x,
+        game.player.position.y - npc.position.y
+      );
+      if (dist < INTERACTION_RANGE) {
+        this.swapWithCharacter(npc.characterType);
+        return true;
+      }
+    }
+    return false;
   }
 
   // ── Player weapon-action helpers ─────────────────────────────────────────
@@ -145,6 +162,233 @@ export class CharacterSystem {
 
       room.backgroundObjects.push(BackgroundObject.createVariant('lava', x, y));
     }
+  }
+
+  // Per-frame dodge dispatch for the active character: Shark Mask water
+  // dive/emerge, Green Ranger continuous roll, or the standard dodge roll.
+  // Returns { skipFrame: true } when the shark dive drove the player directly
+  // this frame — caller must skip the rest of updatePlayerMechanics (existing
+  // behavior: no movement dispatch, no player.update, no held-item tick).
+  updateDodge(deltaTime) {
+    const game = this.game;
+    const player = game.player;
+
+    // Handle dodge rolling (continuous direction updates, supports diagonals and curving)
+    // Disabled while Rusalka's charm is active or while polymorphed (frog form has no roll)
+    const rusalkaActive = game.fishingSystem?.rusalka?.alive === true;
+    let dodgeDirection = (rusalkaActive || player.polymorphed || player.hookedByMimic) ? { x: 0, y: 0 } : game.getDodgeRollDirection();
+
+    // Shark Mask water dive/emerge — overrides standard dodge for ALL characters
+    // (including Green Ranger continuous-roll). Edge detection on dodgeDirection
+    // ensures a held arrow doesn't immediately auto-emerge after diving.
+    if (player.sharkMask && player.inLiquid && !game.keys.space && !player.isGooey()) {
+      const hasDodgeInput = (dodgeDirection.x !== 0 || dodgeDirection.y !== 0);
+      const dodgeInputEdge = hasDodgeInput && !game._sharkLastDodgeInput;
+      game._sharkLastDodgeInput = hasDodgeInput;
+
+      if (dodgeInputEdge && player.diving) {
+        // Re-press while diving → emerge burst
+        this._sharkEmergeAttack(dodgeDirection);
+      } else if (dodgeInputEdge && !player.diving &&
+                 player.dodgeRoll.cooldownTimer <= 0 &&
+                 !player.dodgeRoll.active &&
+                 !player.continuousRollActive) {
+        player.startSharkDive(dodgeDirection);
+        game.audioSystem.playSFX('roll');
+      }
+
+      // While diving, drive the player ourselves and skip the character-class
+      // dispatch entirely (otherwise Green Ranger's slide would override us).
+      if (player.diving) {
+        if (hasDodgeInput) {
+          const baseMax = (player.heldItem ? 110 : 165) * (1 + player.speedBoost);
+          player.velocity.vx = dodgeDirection.x * baseMax;
+          player.velocity.vy = dodgeDirection.y * baseMax;
+          player.acceleration.ax = 0;
+          player.acceleration.ay = 0;
+        }
+        return { skipFrame: true }; // skip dodge/movement dispatch this frame
+      }
+      // Shark Mask equipped + in water but not diving (e.g. dive ended while
+      // arrows still held, or cooldown blocks entry). Zero out dodgeDirection
+      // so the standard/green-ranger dodge handlers below cannot fire — the
+      // dive is the only valid water dodge response when wearing the mask.
+      dodgeDirection = { x: 0, y: 0 };
+    } else {
+      game._sharkLastDodgeInput = false;
+    }
+
+    if (game.activeCharacterType === 'green') {
+      // Green ranger: hold arrow keys for a continuous slide (no individual roll timers)
+      if (dodgeDirection.x !== 0 || dodgeDirection.y !== 0) {
+        const attackingWithSpaceGreen = game.keys.space && player.heldItem && player.heldItem.windupActive;
+        if (player.actionCooldown <= 0 && !player.isGooey() && !attackingWithSpaceGreen) {
+          if (!player.continuousRollActive) {
+            // Start the continuous roll
+            player.continuousRollActive = true;
+            // Brief iframes at roll start (standard dodge amount)
+            player.invulnerabilityTimer = player.dodgeRoll.duration + 0.5;
+            // Cancel active melee windup
+            if (player.heldItem && player.heldItem.windupActive) {
+              player.heldItem.windupActive = false;
+              player.heldItem.windupTimer = 0;
+              player.heldItem.pendingPlayer = null;
+            }
+            // Cancel bow charging
+            if (player.heldItem && player.heldItem.isCharging) {
+              game.audioSystem.stopSFXByName('charge_bow');
+              game.audioSystem.stopSFXByName('wand_charge');
+              player.heldItem.isCharging = false;
+              player.heldItem.chargeTime = 0;
+              player.heldItem.chargingPlayer = null;
+            }
+            // Break any sapping enemies
+            const rollEnemies = game.currentRoom ? game.currentRoom.enemies : [];
+            for (const enemy of rollEnemies) {
+              if (enemy.sapping && enemy.sappingTarget === player) {
+                enemy.breakSapping(300);
+              }
+            }
+            game.audioSystem.playSFX('roll');
+          }
+          // Drain charge while rolling (2 units per second, matching actionCooldownMax scale)
+          player.rollCharge -= deltaTime * 1.75;
+          if (player.rollCharge <= 0) {
+            // Charge depleted — force end roll with full cooldown
+            player.rollCharge = 0;
+            player.continuousRollActive = false;
+            player.actionCooldown = player.actionCooldownMax;
+            player.velocity.vx = 0;
+            player.velocity.vy = 0;
+          } else {
+            // Update player facing direction toward roll direction
+            if (dodgeDirection.x !== 0) player.facing.x = Math.sign(dodgeDirection.x);
+            if (dodgeDirection.y !== 0) player.facing.y = Math.sign(dodgeDirection.y);
+            // Set velocity directly each frame (sustained movement)
+            const rollSpeed = player.getRollSpeed();
+            player.velocity.vx = dodgeDirection.x * rollSpeed;
+            player.velocity.vy = dodgeDirection.y * rollSpeed;
+            player.acceleration.ax = 0;
+            player.acceleration.ay = 0;
+          }
+        }
+      } else if (player.continuousRollActive) {
+        // Arrow keys released — cooldown proportional to charge used (longer roll = longer cooldown)
+        const chargeUsed = player.actionCooldownMax - player.rollCharge;
+        player.continuousRollActive = false;
+        player.actionCooldown = chargeUsed;
+        player.velocity.vx = 0;
+        player.velocity.vy = 0;
+      } else if (player.actionCooldown <= 0 && player.rollCharge < player.actionCooldownMax) {
+        // Cooldown finished — restore charge to full
+        player.rollCharge = player.actionCooldownMax;
+      }
+    } else {
+      // Standard dodge roll for all other characters
+      if (dodgeDirection.x !== 0 || dodgeDirection.y !== 0) {
+        if (!player.dodgeRoll.active && player.dodgeRoll.cooldownTimer <= 0 && !game.keys.space) {
+          // Shadow Robe: dodge key triggers bat form (speed boost + char change) instead of rolling
+          if (player.batTransform && player.batFormTimer <= 0) {
+            player.batFormTimer = 1.2;
+            player.char = '^';
+            player.speedBoostTimer = 1.2;
+            player.speedBoostMultiplier = 2.5;
+          }
+
+          // maze returns [] (ghosts aren't enemies); hut/dungeon returns activeFloor.enemies; surface returns currentRoom.enemies
+          const enemies = game._activeEnemies();
+          const rollStarted = player.batTransform
+            ? false // bat form replaces the roll
+            : player.startDodgeRoll(dodgeDirection, enemies);
+
+          if (rollStarted) {
+            // Whirlwind Cape: transform roll into a spinning dash — covers distance, dizzies nearby enemies, no iframes
+            if (player.whirlwindCape) {
+              player.dodgeRoll.type = 'whirlwind';
+              player.dodgeRoll.speed *= 1.5;
+              const spinRadius = GRID.CELL_SIZE * 2;
+              const px = player.position.x + GRID.CELL_SIZE / 2;
+              const py = player.position.y + GRID.CELL_SIZE / 2;
+              for (const enemy of enemies) {
+                const ex = enemy.position.x + GRID.CELL_SIZE / 2;
+                const ey = enemy.position.y + GRID.CELL_SIZE / 2;
+                if (Math.hypot(ex - px, ey - py) < spinRadius) {
+                  enemy.applyStatusEffect('dizzy', 4.0);
+                }
+              }
+            }
+            game.audioSystem.playSFX('roll');
+            // Resolve yellow mage blink (deferred for collision checking + trail)
+            if (player.pendingBlink) {
+              game._resolveBlinkTeleport(player.pendingBlink);
+              player.pendingBlink = null;
+            }
+          }
+
+          // Show red X if dodge roll blocked by goo (with cooldown to prevent spam)
+          if (!rollStarted && player.isGooey() && game.dodgeBlockedFeedbackTimer <= 0) {
+            game.particles.push({
+              x: player.position.x + GRID.CELL_SIZE / 2,
+              y: player.position.y - 10,
+              vx: 0,
+              vy: -30,
+              life: 0.5,
+              maxLife: 0.5,
+              char: 'X',
+              color: '#ff0000',
+              isImpact: true
+            });
+            game.dodgeBlockedFeedbackTimer = 0.5;
+          }
+        } else if (player.dodgeRoll.active) {
+          // Update direction during active roll (allows curving)
+          player.dodgeRoll.direction = dodgeDirection;
+        }
+      }
+    }
+  }
+
+  // Shark Mask emerge attack: triggered when the player re-rolls during a dive.
+  // Deals 3× base melee damage to every enemy within 1.5 cells, ends the dive,
+  // produces a big splash via createWetDrop-style particles. Wet enemies eat
+  // an additional 2× from any subsequent shock — but we don't apply that here;
+  // it's a bonus of subsequent player attacks.
+  _sharkEmergeAttack(direction) {
+    const game = this.game;
+    if (!game.player.diving) return;
+    const CS = GRID.CELL_SIZE;
+    const radius = CS * 1.5;
+    const cx = game.player.position.x + CS / 2;
+    const cy = game.player.position.y + CS / 2;
+    const enemies = game.currentRoom?.enemies || [];
+    const BASE_DAMAGE = 1;
+    const EMERGE_DAMAGE = BASE_DAMAGE * 3;
+    for (const enemy of enemies) {
+      if (enemy.hp <= 0) continue;
+      const ex = enemy.position.x + CS / 2;
+      const ey = enemy.position.y + CS / 2;
+      if (Math.hypot(ex - cx, ey - cy) > radius) continue;
+      enemy.takeDamage(EMERGE_DAMAGE);
+      game.combatSystem?.createDamageNumber(EMERGE_DAMAGE, enemy.position.x, enemy.position.y, '#88ccff', 1.4, 1.1);
+      // Brief stagger so the player can follow up
+      enemy.applyStatusEffect?.('freeze', 0.5);
+    }
+    // Splash particles
+    for (let i = 0; i < 14; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const speed = 60 + Math.random() * 90;
+      game.particles.push({
+        x: cx, y: cy,
+        vx: Math.cos(ang) * speed,
+        vy: Math.sin(ang) * speed,
+        life: 0.7, maxLife: 0.7,
+        char: Math.random() < 0.5 ? '·' : '▪',
+        color: '#88ccff'
+      });
+    }
+    game.audioSystem?.playSFX?.('roll');
+    game.player.endSharkDive();
+    game.player.dodgeRoll.cooldownTimer = 0.5;
   }
 
   applyCharacterType(type) {

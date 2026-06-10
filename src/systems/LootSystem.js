@@ -2,10 +2,41 @@ import { Ingredient } from '../entities/Ingredient.js';
 import { Item } from '../entities/Item.js';
 import { isIngredient, isItem, generateEnemyDrops } from '../data/items.js';
 import { planeOf } from './PlaneSystem.js';
+import { GRID } from '../game/GameConfig.js';
 
 export class LootSystem {
   constructor(game) {
     this.game = game;
+  }
+
+  // REST starter bundle: SPACE near the bundle destroys it and scatters its
+  // ingredients in a ring. Returns true if the bundle was in range and burst.
+  scatterRestBundle() {
+    const game = this.game;
+    if (!game.restBundle) return false;
+    const dist = Math.hypot(
+      game.player.position.x - game.restBundle.position.x,
+      game.player.position.y - game.restBundle.position.y
+    );
+    if (dist >= GRID.CELL_SIZE * 3) return false;
+
+    const cx = game.restBundle.position.x;
+    const cy = game.restBundle.position.y;
+    const count = game.restBundle.chars.length;
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2;
+      const r = GRID.CELL_SIZE * (1.5 + Math.random());
+      const ing = new Ingredient(
+        game.restBundle.chars[i],
+        cx + Math.cos(angle) * r,
+        cy + Math.sin(angle) * r
+      );
+      ing.pickupCooldown = 0.25;
+      game.ingredients.push(ing);
+      game.physicsSystem.addEntity(ing);
+    }
+    game.restBundle = null;
+    return true;
   }
 
   spawnLoot(enemy) {

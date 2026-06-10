@@ -42,6 +42,7 @@ import { FountainSystem } from './systems/FountainSystem.js';
 import { Fairy } from './entities/Fairy.js';
 import { CampNPCSystem } from './systems/CampNPCSystem.js';
 import { CompanionSystem } from './systems/CompanionSystem.js';
+import { WorldEffectsSystem } from './systems/WorldEffectsSystem.js';
 import { CAMP_NPC_STATE } from './entities/CampNPC.js';
 import { Player } from './entities/Player.js';
 import { Enemy } from './entities/Enemy.js';
@@ -62,7 +63,7 @@ import { ITEM_TYPES, INGREDIENTS, ITEMS } from './data/items.js';
 import { CHARACTER_TYPES } from './data/characters.js';
 import { EXIT_LETTERS } from './data/exitLetters.js';
 import { ZONES } from './data/zones.js';
-import { GAME_STATES, GRID, CRAFTING, INTERACTION_RANGE, ROOM_TYPES } from './game/GameConfig.js';
+import { GAME_STATES, GRID, CRAFTING, INTERACTION_RANGE, ROOM_TYPES, PHYSICS } from './game/GameConfig.js';
 import { captureDeath, downloadSessionLedger } from './systems/DeathLedgerSystem.js';
 
 // Enemies that play the magical death SFX when no per-enemy sfx.death is set.
@@ -171,6 +172,7 @@ class Game {
     this.inventorySystem.game = this;
     this.campNPCSystem = new CampNPCSystem(this);
     this.companionSystem = new CompanionSystem(this);
+    this.worldEffectsSystem = new WorldEffectsSystem(this);
     this.bridgeMenuOpen = false;
 
     // Game state
@@ -1357,93 +1359,6 @@ class Game {
 
   applyEquipmentEffects() {
     this.inventorySystem.applyEquipmentEffectsToPlayer(this.player);
-  }
-
-  canUnlockVault() {
-    // Only check in EXPLORE mode with a current room and vault
-    const state = this.stateMachine.getCurrentState();
-    if (state !== GAME_STATES.EXPLORE || !this.currentRoom || !this.currentRoom.vaultInfo) {
-      return false;
-    }
-
-    const vault = this.currentRoom.vaultInfo;
-
-    // Check if vault is already unlocked
-    if (vault.unlocked) {
-      return false;
-    }
-
-    // Check if player has the vault key equipped (in active quick slot)
-    const hasKey = this.player.heldItem && this.player.heldItem.char === '߃';
-    if (!hasKey) {
-      return false;
-    }
-
-    // Player must be SOUTH (outside) of the bottom wall and horizontally centered
-    const playerGridX = Math.floor(this.player.position.x / GRID.CELL_SIZE);
-    const playerGridY = Math.floor(this.player.position.y / GRID.CELL_SIZE);
-
-    const isSouthOfVault = playerGridY > vault.bottomWallRow; // Player is below/south of the wall
-    const distanceToCenter = Math.abs(playerGridX - vault.centerCol);
-    const maxCenterDist = vault.size / 2 + 2; // Lenient horizontal range
-    const isNearCenter = distanceToCenter <= maxCenterDist;
-
-    if (isSouthOfVault && isNearCenter) {
-      return true;
-    } else {
-      return false;
-    }
-  }
-
-  unlockVault() {
-    const vault = this.currentRoom.vaultInfo;
-    if (!vault || vault.unlocked) return;
-
-    // Remove bottom wall from collision map
-    const bottomRow = vault.bottomWallRow;
-    for (let col = vault.minCol; col <= vault.maxCol; col++) {
-      this.currentRoom.collisionMap[bottomRow][col] = false;
-    }
-
-    // Mark vault as unlocked
-    vault.unlocked = true;
-
-    // Remove key from active quick slot (consumed)
-    if (this.player.heldItem && this.player.heldItem.char === '߃') {
-      this.player.quickSlots[this.player.activeSlotIndex] = null;
-
-      // Auto-switch to next filled slot if available
-      const nextFilled = this.player.quickSlots.findIndex((slot, idx) =>
-        idx !== this.player.activeSlotIndex && slot !== null
-      );
-      if (nextFilled !== -1) {
-        this.player.activeSlotIndex = nextFilled;
-      }
-    }
-
-    // Mark background dirty to show wall removal
-    this.renderer.markBackgroundDirty();
-
-    // Visual feedback - create some debris particles
-    const centerX = vault.centerCol * GRID.CELL_SIZE + (GRID.CELL_SIZE / 2);
-    const bottomY = bottomRow * GRID.CELL_SIZE + (GRID.CELL_SIZE / 2);
-
-    for (let i = 0; i < 10; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 50 + Math.random() * 50;
-      const particle = new Particle(
-        centerX,
-        bottomY,
-        '#',                    // char
-        '#888888',              // color
-        {                       // velocity
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed
-        },
-        0.8                     // lifetime
-      );
-      this.particles.push(particle);
-    }
   }
 
   updateSecretEventEffects(deltaTime) {
@@ -2742,211 +2657,6 @@ class Game {
     }
   }
 
-  updateSharedGameElements(deltaTime) {
-    // Decay ember stacks and cooldowns each frame
-    if (this.player) {
-      if (this.player.emberStackCooldown > 0) {
-        this.player.emberStackCooldown -= deltaTime;
-      }
-      if (this.player.emberStackTimer > 0) {
-        this.player.emberStackTimer -= deltaTime;
-        if (this.player.emberStackTimer <= 0) {
-          this.player.emberStacks = 0;
-          this.player.emberStackTimer = 0;
-        }
-      }
-    }
-    if (this.currentRoom && this.currentRoom.enemies) {
-      for (const enemy of this.currentRoom.enemies) {
-        if ((enemy.emberStackCooldown || 0) > 0) {
-          enemy.emberStackCooldown -= deltaTime;
-        }
-        if ((enemy.emberStacks || 0) > 0) {
-          enemy.emberStackTimer -= deltaTime;
-          if (enemy.emberStackTimer <= 0) {
-            enemy.emberStacks = 0;
-            enemy.emberStackTimer = 0;
-          }
-        }
-      }
-    }
-
-    // Update particles (dodge trails, explosions, embers, etc.)
-    const emberHitEntities = new Set(); // cap to one ember contact per entity per frame
-    for (let i = this.particles.length - 1; i >= 0; i--) {
-      const particle = this.particles[i];
-
-      if (particle.update) {
-        particle.update(deltaTime);
-        if (!particle.alive) {
-          this.physicsSystem.removeEntity(particle);
-          this.particles.splice(i, 1);
-        }
-      } else {
-        // Simple particle objects
-        particle.life -= deltaTime;
-        if (particle.gravity) particle.vy += particle.gravity * deltaTime;
-        particle.x += particle.vx * deltaTime;
-        particle.y += particle.vy * deltaTime;
-
-        // Embers accumulate burn stacks — contact must be "successive" within a time window.
-        // Grass/objects ignite instantly (handled via obj.ignite). Entities require 3 hits.
-        // Immune enemies (fire-type etc.) are skipped entirely.
-        if (particle.isEmber && this.player) {
-          const alpha = Math.max(0, particle.life / particle.maxLife);
-
-          if (alpha > 0.5) {
-            const EMBER_RADIUS = GRID.CELL_SIZE;
-            const EMBER_STACK_WINDOW = 2.0; // seconds before stack resets
-            const EMBER_THRESHOLD = 5;      // hits needed to ignite
-
-            const EMBER_STACK_COOLDOWN = 0.5; // min seconds between stack gains
-
-            // Player — skipped if fire immune or on cooldown; burnResist does not block ember stacks
-            if (!emberHitEntities.has(this.player) && !this.player.fireImmune &&
-                this.player.emberStackCooldown <= 0) {
-              const pdx = this.player.position.x + GRID.CELL_SIZE / 2 - particle.x;
-              const pdy = this.player.position.y + GRID.CELL_SIZE / 2 - particle.y;
-              if (Math.sqrt(pdx * pdx + pdy * pdy) < EMBER_RADIUS) {
-                emberHitEntities.add(this.player);
-                this.player.emberStacks++;
-                this.player.emberStackTimer = EMBER_STACK_WINDOW;
-                this.player.emberStackCooldown = EMBER_STACK_COOLDOWN;
-                if (this.player.emberStacks >= EMBER_THRESHOLD) {
-                  this.player.applyBurn(2.0);
-                  this.player.emberStacks = 0;
-                  this.player.emberStackTimer = 0;
-                }
-              }
-            }
-
-            // Enemies — immune enemies silently skip; all others need 3 stacks with cooldown
-            if (this.currentRoom && this.currentRoom.enemies) {
-              for (const enemy of this.currentRoom.enemies) {
-                if (emberHitEntities.has(enemy)) continue;
-                if (!enemy.shouldApplyStatusEffect('burn')) continue;
-                if ((enemy.emberStackCooldown || 0) > 0) continue;
-                const edx = enemy.position.x + GRID.CELL_SIZE / 2 - particle.x;
-                const edy = enemy.position.y + GRID.CELL_SIZE / 2 - particle.y;
-                if (Math.sqrt(edx * edx + edy * edy) < EMBER_RADIUS) {
-                  emberHitEntities.add(enemy);
-                  enemy.emberStacks = (enemy.emberStacks || 0) + 1;
-                  enemy.emberStackTimer = EMBER_STACK_WINDOW;
-                  enemy.emberStackCooldown = EMBER_STACK_COOLDOWN;
-                  if (enemy.emberStacks >= EMBER_THRESHOLD) {
-                    enemy.applyStatusEffect('burn', 2.0);
-                    enemy.emberStacks = 0;
-                    enemy.emberStackTimer = 0;
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        if (particle.life <= 0) {
-          this.particles.splice(i, 1);
-        }
-      }
-    }
-
-    // Update puddles — age timed puddles and remove expired ones (persistent puddles tick no-op)
-    for (let i = this.puddles.length - 1; i >= 0; i--) {
-      const p = this.puddles[i];
-      p.update?.(deltaTime);
-      if (p.expired) this.puddles.splice(i, 1);
-    }
-
-    // Update enemy shockwaves — invisible expanding rings (Cyan-boss pattern).
-    // Visual feedback is bg objects shaking as the ring sweeps; damage/knockback applied once per entity.
-    if (this.enemyShockwaves.length && this.currentRoom) {
-      const C = GRID.CELL_SIZE;
-      for (let i = this.enemyShockwaves.length - 1; i >= 0; i--) {
-        const sw = this.enemyShockwaves[i];
-        const prevRadius = sw.radius;
-        sw.radius += sw.speed * deltaTime;
-
-        // Shake background objects newly swept by the ring this frame
-        const bgObjs = this.currentRoom.backgroundObjects || [];
-        for (const obj of bgObjs) {
-          if (obj.destroyed) continue;
-          const cx = obj.position.x + C / 2;
-          const cy = obj.position.y + C / 2;
-          const d = Math.hypot(cx - sw.x, cy - sw.y);
-          if (d <= prevRadius || d > sw.radius) continue;
-          obj._playAnimation?.('shake');
-        }
-
-        // Apply damage / knockback to entities inside the current ring radius (once each via hitEntities Set)
-        const apply = (entity) => {
-          if (!entity || entity.hp <= 0) return;
-          if (sw.hitEntities.has(entity)) return;
-          if ((entity.plane ?? 0) !== sw.plane) return;
-          const ex = entity.position.x + C / 2;
-          const ey = entity.position.y + C / 2;
-          const d = Math.hypot(ex - sw.x, ey - sw.y);
-          if (d > sw.radius) return;
-          sw.hitEntities.add(entity);
-          const isSlime = entity.data?.affinities?.includes('goo');
-          this.physicsSystem.applyKnockback(entity, sw.x, sw.y, sw.knockback, 0.12);
-          if (!isSlime && sw.damage > 0) {
-            entity.takeDamage(sw.damage);
-            if (entity === this.player) {
-              this.combatSystem.createDamageNumber(sw.damage, entity.position.x, entity.position.y, entity.color);
-            } else {
-              this.combatSystem.createDamageNumber(sw.damage, entity.position.x, entity.position.y, '#ffffff');
-            }
-          }
-        };
-        apply(this.player);
-        for (const enemy of this.currentRoom.enemies) apply(enemy);
-
-        if (sw.radius >= sw.maxRadius) this.enemyShockwaves.splice(i, 1);
-      }
-    }
-
-    // Update goo blobs
-    const SLIME_TRAIL_DROP_PX = 10;
-    const SLIME_TRAIL_DROP_PX_SQ = SLIME_TRAIL_DROP_PX * SLIME_TRAIL_DROP_PX;
-    for (const gooBlob of this.gooBlobs) {
-      gooBlob.update(deltaTime);
-
-      // Stamp a slime trail along the blob's path (distance-based — stationary blobs don't spam trails)
-      const tdx = gooBlob.position.x - gooBlob.trailLastX;
-      const tdy = gooBlob.position.y - gooBlob.trailLastY;
-      if (tdx * tdx + tdy * tdy >= SLIME_TRAIL_DROP_PX_SQ) {
-        this._dropSlimeTrail(gooBlob.position.x, gooBlob.position.y, gooBlob.plane ?? 0);
-        gooBlob.trailLastX = gooBlob.position.x;
-        gooBlob.trailLastY = gooBlob.position.y;
-      }
-
-      // Check collision with player (only if on the same plane)
-      if (this.player && (gooBlob.plane ?? 0) === (this.player.plane ?? 0) && gooBlob.isNearEntity(this.player)) {
-        this.player.applyStatusEffect('goo', 5.0); // 5 second goo effect
-      }
-
-      // Check collision with enemies (slimes are immune, must share plane).
-      // Unified slime state: non-slime enemies also get the goo status (slow) — not freeze.
-      if (this.currentRoom && this.currentRoom.enemies) {
-        for (const enemy of this.currentRoom.enemies) {
-          if (enemy.data?.affinities?.includes('goo')) continue; // goo-affinity enemies are immune to goo
-          if ((gooBlob.plane ?? 0) === (enemy.plane ?? 0) && gooBlob.isNearEntity(enemy)) {
-            enemy.applyStatusEffect('goo', 5.0);
-          }
-        }
-      }
-    }
-
-    // Update debris physics
-    if (this.debris.length > 0 && this.player) {
-      const majorObjects = [this.player];
-      if (this.currentRoom && this.currentRoom.enemies) {
-        majorObjects.push(...this.currentRoom.enemies);
-      }
-      this.physicsSystem.updateDebris(this.debris.filter(d => d), majorObjects.filter(o => o));
-    }
-  }
-
   // Yellow mage blink: check if a candidate position is free of walls, objects, and exit zones
   _isValidBlinkPosition(x, y) {
     const player = this.player;
@@ -3048,179 +2758,11 @@ class Game {
   updatePlayerMechanics(deltaTime) {
     if (!this.player) return null;
 
-    // Handle dodge rolling (continuous direction updates, supports diagonals and curving)
-    // Disabled while Rusalka's charm is active or while polymorphed (frog form has no roll)
-    const rusalkaActive = this.fishingSystem?.rusalka?.alive === true;
-    let dodgeDirection = (rusalkaActive || this.player.polymorphed || this.player.hookedByMimic) ? { x: 0, y: 0 } : this.getDodgeRollDirection();
-
-    // Shark Mask water dive/emerge — overrides standard dodge for ALL characters
-    // (including Green Ranger continuous-roll). Edge detection on dodgeDirection
-    // ensures a held arrow doesn't immediately auto-emerge after diving.
-    if (this.player.sharkMask && this.player.inLiquid && !this.keys.space && !this.player.isGooey()) {
-      const hasDodgeInput = (dodgeDirection.x !== 0 || dodgeDirection.y !== 0);
-      const dodgeInputEdge = hasDodgeInput && !this._sharkLastDodgeInput;
-      this._sharkLastDodgeInput = hasDodgeInput;
-
-      if (dodgeInputEdge && this.player.diving) {
-        // Re-press while diving → emerge burst
-        this._sharkEmergeAttack(dodgeDirection);
-      } else if (dodgeInputEdge && !this.player.diving &&
-                 this.player.dodgeRoll.cooldownTimer <= 0 &&
-                 !this.player.dodgeRoll.active &&
-                 !this.player.continuousRollActive) {
-        this.player.startSharkDive(dodgeDirection);
-        this.audioSystem.playSFX('roll');
-      }
-
-      // While diving, drive the player ourselves and skip the character-class
-      // dispatch entirely (otherwise Green Ranger's slide would override us).
-      if (this.player.diving) {
-        if (hasDodgeInput) {
-          const baseMax = (this.player.heldItem ? 110 : 165) * (1 + this.player.speedBoost);
-          this.player.velocity.vx = dodgeDirection.x * baseMax;
-          this.player.velocity.vy = dodgeDirection.y * baseMax;
-          this.player.acceleration.ax = 0;
-          this.player.acceleration.ay = 0;
-        }
-        return; // skip dodge/movement dispatch this frame
-      }
-      // Shark Mask equipped + in water but not diving (e.g. dive ended while
-      // arrows still held, or cooldown blocks entry). Zero out dodgeDirection
-      // so the standard/green-ranger dodge handlers below cannot fire — the
-      // dive is the only valid water dodge response when wearing the mask.
-      dodgeDirection = { x: 0, y: 0 };
-    } else {
-      this._sharkLastDodgeInput = false;
-    }
-
-    if (this.activeCharacterType === 'green') {
-      // Green ranger: hold arrow keys for a continuous slide (no individual roll timers)
-      if (dodgeDirection.x !== 0 || dodgeDirection.y !== 0) {
-        const attackingWithSpaceGreen = this.keys.space && this.player.heldItem && this.player.heldItem.windupActive;
-        if (this.player.actionCooldown <= 0 && !this.player.isGooey() && !attackingWithSpaceGreen) {
-          if (!this.player.continuousRollActive) {
-            // Start the continuous roll
-            this.player.continuousRollActive = true;
-            // Brief iframes at roll start (standard dodge amount)
-            this.player.invulnerabilityTimer = this.player.dodgeRoll.duration + 0.5;
-            // Cancel active melee windup
-            if (this.player.heldItem && this.player.heldItem.windupActive) {
-              this.player.heldItem.windupActive = false;
-              this.player.heldItem.windupTimer = 0;
-              this.player.heldItem.pendingPlayer = null;
-            }
-            // Cancel bow charging
-            if (this.player.heldItem && this.player.heldItem.isCharging) {
-              this.audioSystem.stopSFXByName('charge_bow');
-              this.audioSystem.stopSFXByName('wand_charge');
-              this.player.heldItem.isCharging = false;
-              this.player.heldItem.chargeTime = 0;
-              this.player.heldItem.chargingPlayer = null;
-            }
-            // Break any sapping enemies
-            const rollEnemies = this.currentRoom ? this.currentRoom.enemies : [];
-            for (const enemy of rollEnemies) {
-              if (enemy.sapping && enemy.sappingTarget === this.player) {
-                enemy.breakSapping(300);
-              }
-            }
-            this.audioSystem.playSFX('roll');
-          }
-          // Drain charge while rolling (2 units per second, matching actionCooldownMax scale)
-          this.player.rollCharge -= deltaTime * 1.75;
-          if (this.player.rollCharge <= 0) {
-            // Charge depleted — force end roll with full cooldown
-            this.player.rollCharge = 0;
-            this.player.continuousRollActive = false;
-            this.player.actionCooldown = this.player.actionCooldownMax;
-            this.player.velocity.vx = 0;
-            this.player.velocity.vy = 0;
-          } else {
-            // Update player facing direction toward roll direction
-            if (dodgeDirection.x !== 0) this.player.facing.x = Math.sign(dodgeDirection.x);
-            if (dodgeDirection.y !== 0) this.player.facing.y = Math.sign(dodgeDirection.y);
-            // Set velocity directly each frame (sustained movement)
-            const rollSpeed = this.player.getRollSpeed();
-            this.player.velocity.vx = dodgeDirection.x * rollSpeed;
-            this.player.velocity.vy = dodgeDirection.y * rollSpeed;
-            this.player.acceleration.ax = 0;
-            this.player.acceleration.ay = 0;
-          }
-        }
-      } else if (this.player.continuousRollActive) {
-        // Arrow keys released — cooldown proportional to charge used (longer roll = longer cooldown)
-        const chargeUsed = this.player.actionCooldownMax - this.player.rollCharge;
-        this.player.continuousRollActive = false;
-        this.player.actionCooldown = chargeUsed;
-        this.player.velocity.vx = 0;
-        this.player.velocity.vy = 0;
-      } else if (this.player.actionCooldown <= 0 && this.player.rollCharge < this.player.actionCooldownMax) {
-        // Cooldown finished — restore charge to full
-        this.player.rollCharge = this.player.actionCooldownMax;
-      }
-    } else {
-      // Standard dodge roll for all other characters
-      if (dodgeDirection.x !== 0 || dodgeDirection.y !== 0) {
-        if (!this.player.dodgeRoll.active && this.player.dodgeRoll.cooldownTimer <= 0 && !this.keys.space) {
-          // Shadow Robe: dodge key triggers bat form (speed boost + char change) instead of rolling
-          if (this.player.batTransform && this.player.batFormTimer <= 0) {
-            this.player.batFormTimer = 1.2;
-            this.player.char = '^';
-            this.player.speedBoostTimer = 1.2;
-            this.player.speedBoostMultiplier = 2.5;
-          }
-
-          // maze returns [] (ghosts aren't enemies); hut/dungeon returns activeFloor.enemies; surface returns currentRoom.enemies
-          const enemies = this._activeEnemies();
-          const rollStarted = this.player.batTransform
-            ? false // bat form replaces the roll
-            : this.player.startDodgeRoll(dodgeDirection, enemies);
-
-          if (rollStarted) {
-            // Whirlwind Cape: transform roll into a spinning dash — covers distance, dizzies nearby enemies, no iframes
-            if (this.player.whirlwindCape) {
-              this.player.dodgeRoll.type = 'whirlwind';
-              this.player.dodgeRoll.speed *= 1.5;
-              const spinRadius = GRID.CELL_SIZE * 2;
-              const px = this.player.position.x + GRID.CELL_SIZE / 2;
-              const py = this.player.position.y + GRID.CELL_SIZE / 2;
-              for (const enemy of enemies) {
-                const ex = enemy.position.x + GRID.CELL_SIZE / 2;
-                const ey = enemy.position.y + GRID.CELL_SIZE / 2;
-                if (Math.hypot(ex - px, ey - py) < spinRadius) {
-                  enemy.applyStatusEffect('dizzy', 4.0);
-                }
-              }
-            }
-            this.audioSystem.playSFX('roll');
-            // Resolve yellow mage blink (deferred for collision checking + trail)
-            if (this.player.pendingBlink) {
-              this._resolveBlinkTeleport(this.player.pendingBlink);
-              this.player.pendingBlink = null;
-            }
-          }
-
-          // Show red X if dodge roll blocked by goo (with cooldown to prevent spam)
-          if (!rollStarted && this.player.isGooey() && this.dodgeBlockedFeedbackTimer <= 0) {
-            this.particles.push({
-              x: this.player.position.x + GRID.CELL_SIZE / 2,
-              y: this.player.position.y - 10,
-              vx: 0,
-              vy: -30,
-              life: 0.5,
-              maxLife: 0.5,
-              char: 'X',
-              color: '#ff0000',
-              isImpact: true
-            });
-            this.dodgeBlockedFeedbackTimer = 0.5;
-          }
-        } else if (this.player.dodgeRoll.active) {
-          // Update direction during active roll (allows curving)
-          this.player.dodgeRoll.direction = dodgeDirection;
-        }
-      }
-    }
+    // Dodge dispatch (shark dive / green continuous roll / standard roll)
+    // lives in CharacterSystem. skipFrame = shark dive drove the player
+    // directly; skip movement dispatch, player.update, and held-item tick
+    // this frame (pre-existing behavior).
+    if (this.characterSystem.updateDodge(deltaTime)?.skipFrame) return;
 
     // Update player movement (locked when menu is open, during dodge roll, or continuous rolling)
     if (this.animationSystem.isAnimating(this.player)) {
@@ -3273,26 +2815,7 @@ class Game {
       }
     }
 
-    // Moss Cloak ✿ stealth state machine. Armed by the active→inactive dodge transition;
-    // becomes active when the player stops issuing WASD input. Any WASD held cancels.
-    const cloakEquipped = this.inventorySystem.equippedArmor?.data?.mossCloak === true;
-    if (cloakEquipped) {
-      const wasdHeld = this.keys.w || this.keys.a || this.keys.s || this.keys.d;
-      if (this.player._lastDodgeActive && !this.player.dodgeRoll.active) {
-        this.player.mossCloakArmed = true;
-      }
-      this.player._lastDodgeActive = this.player.dodgeRoll.active;
-      if (wasdHeld || this.player.dodgeRoll.active) {
-        this.player.mossCloakArmed = false;
-        this.player.mossCloakActive = false;
-      } else if (this.player.mossCloakArmed) {
-        this.player.mossCloakActive = true;
-      }
-    } else {
-      this.player.mossCloakArmed = false;
-      this.player.mossCloakActive = false;
-      this.player._lastDodgeActive = this.player.dodgeRoll.active;
-    }
+    this.inventorySystem.updateMossCloak();
 
     // Emit dodge roll trail particles (also during green ranger continuous roll)
     if (this.player.dodgeRoll.active || this.player.continuousRollActive) {
@@ -3324,9 +2847,11 @@ class Game {
       this.player.staffSwingHasFired = false;
     }
 
-    // Update held item cooldown and check for windup completion
+    // Update held item cooldown and check for windup completion. This is the
+    // ONLY place the held item ticks — at WEAPON_TIMER_RATE (2×), preserving
+    // the double-tick feel all weapon data was tuned against (resolved bug #88).
     if (this.player.heldItem && this.player.heldItem.update) {
-      const windupAttack = this.player.heldItem.update(deltaTime);
+      const windupAttack = this.player.heldItem.update(deltaTime * PHYSICS.WEAPON_TIMER_RATE);
       if (windupAttack) {
         this.playWeaponAttackSFX(this.player.heldItem);
         this.combatSystem.createAttack(this.applyGreenDamageModifier(windupAttack), this.currentRoom ? this.currentRoom.enemies : []);
@@ -3374,7 +2899,7 @@ class Game {
     this.updatePlayerMechanics(deltaTime);
 
     // Update shared game elements (particles, debris, etc.)
-    this.updateSharedGameElements(deltaTime);
+    this.worldEffectsSystem.update(deltaTime);
 
     // Update character NPCs (idle animations)
     for (const npc of this.characterNPCs) {
@@ -3792,31 +3317,9 @@ class Game {
       }
     }
 
-    // Clear staff-block state if the held weapon is no longer a blocking staff
-    if (this.player.isStaffBlocking && !this.characterSystem.isBlockingStaff(this.player.heldItem)) {
-      this.player.isStaffBlocking = false;
-      this.player.staffSwingHasFired = false;
-    }
-
-    // Update held item cooldown and check for windup completion
-    if (this.player.heldItem && this.player.heldItem.update) {
-      const windupAttack = this.player.heldItem.update(deltaTime);
-      if (windupAttack) {
-        this.playWeaponAttackSFX(this.player.heldItem);
-        this.combatSystem.createAttack(this.applyGreenDamageModifier(windupAttack), this.currentRoom ? this.currentRoom.enemies : []);
-        if (this.player.heldItem.data?.placesLava) {
-          this.characterSystem.spawnLavaSweep(this.player, this.currentRoom);
-        }
-        if (this.player.heldItem.data?.callsLightning) {
-          this.characterSystem.callLightningStrike(this.player, this.player.heldItem.data);
-        }
-        if (this.characterSystem.isBlockingStaff(this.player.heldItem)) {
-          this.player.staffSwingHasFired = true;
-        }
-        this._emitSoundEvent();
-      }
-      this._updateReloadAudio(this.player.heldItem);
-    }
+    // Held-item ticking + windup completion live in updatePlayerMechanics
+    // (single source for all states). A verbatim copy used to sit here too,
+    // double-ticking every weapon timer in EXPLORE — bug #88.
 
     // Bow charging: chargeTime is incremented by item.update() while isCharging is true.
     // Charging can only START from handleSpacePress (which guards against pickup/other actions).
@@ -5056,7 +4559,7 @@ class Game {
     this.renderer.markBackgroundDirty();
 
     // Update shared game elements (particles, debris, etc.)
-    this.updateSharedGameElements(deltaTime);
+    this.worldEffectsSystem.update(deltaTime);
 
     // Update ingredient attraction, cooldown, and separation
     for (let i = this.ingredients.length - 1; i >= 0; i--) {
@@ -5528,21 +5031,7 @@ class Game {
       // Checked before the errand path so the wise man (when nearby) wins the
       // give; they're in different rooms in practice so this only matters when
       // both flows exist within the same hut.
-      if (npcArray) {
-        for (const npc of npcArray) {
-          if (!(npc instanceof WiseFellow)) continue;
-          const dist = Math.hypot(
-            this.player.position.x - npc.position.x,
-            this.player.position.y - npc.position.y
-          );
-          if (dist > GRID.CELL_SIZE * 2) continue;
-          const idx = this.player.inventory.indexOf('⚱');
-          if (idx === -1) continue;
-          this.player.inventory.splice(idx, 1);
-          npc.unlockRareHint(this.currentRoom?.zone || 'green');
-          return;
-        }
-      }
+      if (this.interactionSystem.tryGiveArtifactToWiseFellow(npcArray)) return;
 
       // Artifact → errand traveler: consume ⚱, spawn 2 coin ingredients at NPC.
       // Side trade — does not advance or alter the active stage errand.
@@ -5566,8 +5055,8 @@ class Game {
       }
 
       // Try to unlock vault if player is in position with key
-      if (this.canUnlockVault()) {
-        this.unlockVault();
+      if (this.interactionSystem.canUnlockVault()) {
+        this.interactionSystem.unlockVault();
         return;
       }
 
@@ -5596,114 +5085,9 @@ class Game {
       if (this.spellSystem.awaitingSpell !== null) return;
 
       if (this.characterDeathPending && this.characterDeathTimer <= 0) {
-        // A character died but others remain — swap to next character and return to REST
-        this.characterDeathPending = false;
-        this.gameOverWaitingForSpace = false;
-        this._resetEnvironmentalEffects();
-
-        // Clear active items lost with the dead character
-        this.inventorySystem.restQuickSlots = [null, null, null];
-        this.inventorySystem.restActiveSlotIndex = 0;
-        this.inventorySystem.equippedArmor = null;
-        this.inventorySystem.equippedConsumables = Array(this.inventorySystem.maxConsumableSlots).fill(null);
-        // Discard EXPLORE-deferred chest deposits — displaced weapons die with the character
-        this.inventorySystem.pendingChestDeposits = [];
-
-        // Switch to next character
-        this.activeCharacterType = this.pendingNextCharacter;
-        this.pendingNextCharacter = null;
-        this.characterDeathName = '';
-        console.log(`🔄 Respawning as ${CHARACTER_TYPES[this.activeCharacterType].name}`);
-
-        if (this.player) {
-          this.player.reset();
-        }
-        this.audioSystem.play();
-        this.stateMachine.transition(GAME_STATES.REST);
+        this._respawnNextCharacter();
       } else if (this.gameOverWaitingForSpace && this.gameOverDeathTimer <= 0 && !this.characterDeathPending) {
-        // True game over — full reset
-        this.gameOverWaitingForSpace = false;
-
-        // Reset wish/slot state for fresh run
-        this.wishesUsed = 0;
-        this._savedDestroyedSlots = [false, false, false];
-        if (this.player) this.player.destroyedSlots = [false, false, false];
-        this._resetEnvironmentalEffects();
-
-        // Reset all zone depths on death
-        this.zoneDepths = {
-          green: 0,
-          red: 0,
-          cyan: 0,
-          yellow: 0,
-          gray: 0
-        };
-        this.currentMusicZone = 'green';
-
-        // Clear held items on death (but keep crafting slots)
-        this.inventorySystem.restQuickSlots = [null, null, null];
-        this.inventorySystem.restActiveSlotIndex = 0;
-
-        // Clear all inventories and equipment on death (true roguelike)
-        this.inventorySystem.handleGameOver();
-
-        // Reset learned spells for new run
-        this.knownSpells = new Set();
-
-        // Reset magic meter — must be re-activated via well or cauldron each run
-        if (this.player?.magicMeter) {
-          this.player.magicMeter = { active: false, slots: [], current: 0, max: 10 };
-        }
-        this._savedMagicMeter = null;
-
-        // Reset well ritual state (any in-flight coin or lingering flash)
-        this.wellCoinAnim = null;
-        this.wellFlashTimer = 0;
-        this.wellFlashDuration = 0;
-
-        // Reset fairy run-flag for new run
-        this.fairiesAngered = false;
-        this.fedCrowCount = 0;
-        this.companionCrows = [];
-        this.followerCrows = [];
-        this.tamedRats = [];
-
-        // Reset character system for new run
-        this.deadCharacters = [];
-        this.activeCharacterType = 'default';
-        this.unlockedCharacters = ['default']; // Reset to only default character
-        this.captives = []; // Clear active captives
-        this.characterNPCs = []; // Clear character NPCs in REST
-        this.errandSystem.resetOnDeath();
-        this.zoneSystem.resetOnDeath(); // Reset zone system and captive tracking
-        this.bossSystem.deactivate();   // Clean up any active boss fight
-        // Reset boss music and pre-boss gate state for new run
-        this.preBossGateActive = false;
-        if (this.audioSystem.mode === 'sequence' || this.audioSystem.bossAnticipationActive) {
-          this.audioSystem.stopBossMusic();
-        }
-
-        // Clear crafting slots and wipe localStorage save
-        this.craftingSystem.setState({ leftSlot: null, rightSlot: null, centerSlot: null });
-        this.craftingSystem.resetDiscoveries();
-        this.persistenceSystem.clearSave();
-
-        // Reset starter bundle so a fresh one spawns on new run
-        this.restBundle = null;
-        this.hasLeftRestOnce = false;
-
-        // Clear companion so a stale hired NPC doesn't carry over to the next run
-        this.companion = null;
-
-        if (this.player) {
-          this.player.reset();
-        }
-        const audioBase = import.meta.env.BASE_URL;
-        this.audioSystem.hardResetDualLayers(
-          `${audioBase}assets/audio/layer1.mp3`,
-          `${audioBase}assets/audio/layer2.mp3`
-        );
-        this.stateMachine.transition(GAME_STATES.REST);
+        this._resetRunToRest();
       }
       return;
     }
@@ -5717,31 +5101,7 @@ class Game {
       if (this.slotPopup) { this.slotPopup = null; return; }
 
       // Bundle world object: destroy and scatter ingredients
-      if (this.restBundle) {
-        const dist = Math.hypot(
-          this.player.position.x - this.restBundle.position.x,
-          this.player.position.y - this.restBundle.position.y
-        );
-        if (dist < GRID.CELL_SIZE * 3) {
-          const cx = this.restBundle.position.x;
-          const cy = this.restBundle.position.y;
-          const count = this.restBundle.chars.length;
-          for (let i = 0; i < count; i++) {
-            const angle = (i / count) * Math.PI * 2;
-            const r = GRID.CELL_SIZE * (1.5 + Math.random());
-            const ing = new Ingredient(
-              this.restBundle.chars[i],
-              cx + Math.cos(angle) * r,
-              cy + Math.sin(angle) * r
-            );
-            ing.pickupCooldown = 0.25;
-            this.ingredients.push(ing);
-            this.physicsSystem.addEntity(ing);
-          }
-          this.restBundle = null;
-          return;
-        }
-      }
+      if (this.lootSystem.scatterRestBundle()) return;
 
       const nearestSlot = this.getNearestInteractiveSlot();
 
@@ -5749,24 +5109,8 @@ class Game {
         if (this.menuSystem.triggerSlotPopup(nearestSlot)) return;
       }
 
-      // Check for character NPC interaction (swap characters)
-      let nearbyNPC = null;
-      for (const npc of this.characterNPCs) {
-        const dist = Math.hypot(
-          this.player.position.x - npc.position.x,
-          this.player.position.y - npc.position.y
-        );
-        if (dist < INTERACTION_RANGE) {
-          nearbyNPC = npc;
-          break;
-        }
-      }
-
-      if (nearbyNPC) {
-        // Swap with this character
-        this.swapWithCharacter(nearbyNPC.characterType);
-        return;
-      }
+      // Character NPC interaction (swap characters)
+      if (this.characterSystem.trySwapWithNearbyNPC()) return;
 
       // Check tombstone interaction
       if (this.tombstoneActive && this.lastDeathCause) {
@@ -5821,46 +5165,10 @@ class Game {
         return;
       }
 
-      // If player has a weapon and can attack, attack
+      // If player has a weapon and can attack, attack (gem/bread gating +
+      // charge SFX + attack creation live in CombatSystem.tryUseHeldWeapon)
       if (this.player.heldItem && !this.captiveInteractionThisFrame && this.player.canAttack()) {
-        // Gem wands gate the charge on mana availability before useHeldItem starts charging.
-        if (this.player.heldItem.data?.gemWand && !this.magicSystem.tryStartCharge(this.player)) {
-          return;
-        }
-        // Bread is a targeted feed, not a free drop. Without an eligible
-        // eater in the current room, SPACE is a no-op (loaf stays in the slot).
-        if (this.player.heldItem.data?.effect === 'dropBread'
-            && !this.companionSystem.hasBreadEligibleTarget()) {
-          return;
-        }
-        // Attack — melee AoE handles object damage directly via CombatSystem
-        this.attackSequenceActive = true; // Mark that attack was initiated by button press (even if windup delays it)
-        const wasBowCharging = this.player.heldItem.data.weaponType === 'BOW' && this.player.heldItem.isCharging;
-        const wasGemCharging = this.player.heldItem.data?.gemWand && this.player.heldItem.isCharging;
-        const attack = this.player.useHeldItem();
-        // Play bow charge SFX when charging begins (use() sets isCharging on first press)
-        if (!wasBowCharging && this.player.heldItem && this.player.heldItem.data.weaponType === 'BOW' && this.player.heldItem.isCharging) {
-          this.audioSystem.playStoppableSFX('charge_bow');
-        }
-        // Gem-wand charge SFX, stretched to match this wand's chargeTime.
-        if (!wasGemCharging && this.player.heldItem?.data?.gemWand && this.player.heldItem.isCharging) {
-          this.audioSystem.playStoppableSFXStretched('wand_charge', this.player.heldItem.data.chargeTime);
-        }
-        if (attack) {
-          // Bread "use" is really a drop: spawn the loaf at the player's feet
-          // and skip the attack pipeline. The slot was already cleared inside
-          // Player.useHeldItem because the result was { consumed: true }.
-          if (attack.dropBread) {
-            this.companionSystem.dropBreadAtPlayer();
-          } else {
-            // Debug logging for wands
-            if (this.player.heldItem && this.player.heldItem.data.weaponType === 'WAND') {
-              const enemies = this.currentRoom ? this.currentRoom.enemies : [];
-            }
-            this.combatSystem.createAttack(this.applyGreenDamageModifier(attack), this.currentRoom ? this.currentRoom.enemies : []);
-            this.triggerGreenActionCooldown();
-          }
-        }
+        this.combatSystem.tryUseHeldWeapon();
       } else {
         // Unarmed and no item nearby: interact with background object if present
         const nearbyObject = this.findNearbyBackgroundObject();
@@ -5905,6 +5213,124 @@ class Game {
         }
       }
     }
+  }
+
+
+  // A character died but others remain: clear the dead character's gear,
+  // swap to the pending next character, and return to REST.
+  _respawnNextCharacter() {
+    // A character died but others remain — swap to next character and return to REST
+    this.characterDeathPending = false;
+    this.gameOverWaitingForSpace = false;
+    this._resetEnvironmentalEffects();
+
+    // Clear active items lost with the dead character
+    this.inventorySystem.restQuickSlots = [null, null, null];
+    this.inventorySystem.restActiveSlotIndex = 0;
+    this.inventorySystem.equippedArmor = null;
+    this.inventorySystem.equippedConsumables = Array(this.inventorySystem.maxConsumableSlots).fill(null);
+    // Discard EXPLORE-deferred chest deposits — displaced weapons die with the character
+    this.inventorySystem.pendingChestDeposits = [];
+
+    // Switch to next character
+    this.activeCharacterType = this.pendingNextCharacter;
+    this.pendingNextCharacter = null;
+    this.characterDeathName = '';
+    console.log(`🔄 Respawning as ${CHARACTER_TYPES[this.activeCharacterType].name}`);
+
+    if (this.player) {
+      this.player.reset();
+    }
+    this.audioSystem.play();
+    this.stateMachine.transition(GAME_STATES.REST);
+  }
+
+  // True game over: full run reset (zones, inventories, spells, magic meter,
+  // companions, characters, boss/audio state) and back to REST.
+  _resetRunToRest() {
+    // True game over — full reset
+    this.gameOverWaitingForSpace = false;
+
+    // Reset wish/slot state for fresh run
+    this.wishesUsed = 0;
+    this._savedDestroyedSlots = [false, false, false];
+    if (this.player) this.player.destroyedSlots = [false, false, false];
+    this._resetEnvironmentalEffects();
+
+    // Reset all zone depths on death
+    this.zoneDepths = {
+      green: 0,
+      red: 0,
+      cyan: 0,
+      yellow: 0,
+      gray: 0
+    };
+    this.currentMusicZone = 'green';
+
+    // Clear held items on death (but keep crafting slots)
+    this.inventorySystem.restQuickSlots = [null, null, null];
+    this.inventorySystem.restActiveSlotIndex = 0;
+
+    // Clear all inventories and equipment on death (true roguelike)
+    this.inventorySystem.handleGameOver();
+
+    // Reset learned spells for new run
+    this.knownSpells = new Set();
+
+    // Reset magic meter — must be re-activated via well or cauldron each run
+    if (this.player?.magicMeter) {
+      this.player.magicMeter = { active: false, slots: [], current: 0, max: 10 };
+    }
+    this._savedMagicMeter = null;
+
+    // Reset well ritual state (any in-flight coin or lingering flash)
+    this.wellCoinAnim = null;
+    this.wellFlashTimer = 0;
+    this.wellFlashDuration = 0;
+
+    // Reset fairy run-flag for new run
+    this.fairiesAngered = false;
+    this.fedCrowCount = 0;
+    this.companionCrows = [];
+    this.followerCrows = [];
+    this.tamedRats = [];
+
+    // Reset character system for new run
+    this.deadCharacters = [];
+    this.activeCharacterType = 'default';
+    this.unlockedCharacters = ['default']; // Reset to only default character
+    this.captives = []; // Clear active captives
+    this.characterNPCs = []; // Clear character NPCs in REST
+    this.errandSystem.resetOnDeath();
+    this.zoneSystem.resetOnDeath(); // Reset zone system and captive tracking
+    this.bossSystem.deactivate();   // Clean up any active boss fight
+    // Reset boss music and pre-boss gate state for new run
+    this.preBossGateActive = false;
+    if (this.audioSystem.mode === 'sequence' || this.audioSystem.bossAnticipationActive) {
+      this.audioSystem.stopBossMusic();
+    }
+
+    // Clear crafting slots and wipe localStorage save
+    this.craftingSystem.setState({ leftSlot: null, rightSlot: null, centerSlot: null });
+    this.craftingSystem.resetDiscoveries();
+    this.persistenceSystem.clearSave();
+
+    // Reset starter bundle so a fresh one spawns on new run
+    this.restBundle = null;
+    this.hasLeftRestOnce = false;
+
+    // Clear companion so a stale hired NPC doesn't carry over to the next run
+    this.companion = null;
+
+    if (this.player) {
+      this.player.reset();
+    }
+    const audioBase = import.meta.env.BASE_URL;
+    this.audioSystem.hardResetDualLayers(
+      `${audioBase}assets/audio/layer1.mp3`,
+      `${audioBase}assets/audio/layer2.mp3`
+    );
+    this.stateMachine.transition(GAME_STATES.REST);
   }
 
   handleShiftPress() {
@@ -6953,48 +6379,6 @@ class Game {
     this.updateUI();
     this.renderer.markBackgroundDirty();
     return true;
-  }
-
-  // Shark Mask emerge attack: triggered when the player re-rolls during a dive.
-  // Deals 3× base melee damage to every enemy within 1.5 cells, ends the dive,
-  // produces a big splash via createWetDrop-style particles. Wet enemies eat
-  // an additional 2× from any subsequent shock — but we don't apply that here;
-  // it's a bonus of subsequent player attacks.
-  _sharkEmergeAttack(direction) {
-    if (!this.player.diving) return;
-    const CS = GRID.CELL_SIZE;
-    const radius = CS * 1.5;
-    const cx = this.player.position.x + CS / 2;
-    const cy = this.player.position.y + CS / 2;
-    const enemies = this.currentRoom?.enemies || [];
-    const BASE_DAMAGE = 1;
-    const EMERGE_DAMAGE = BASE_DAMAGE * 3;
-    for (const enemy of enemies) {
-      if (enemy.hp <= 0) continue;
-      const ex = enemy.position.x + CS / 2;
-      const ey = enemy.position.y + CS / 2;
-      if (Math.hypot(ex - cx, ey - cy) > radius) continue;
-      enemy.takeDamage(EMERGE_DAMAGE);
-      this.combatSystem?.createDamageNumber(EMERGE_DAMAGE, enemy.position.x, enemy.position.y, '#88ccff', 1.4, 1.1);
-      // Brief stagger so the player can follow up
-      enemy.applyStatusEffect?.('freeze', 0.5);
-    }
-    // Splash particles
-    for (let i = 0; i < 14; i++) {
-      const ang = Math.random() * Math.PI * 2;
-      const speed = 60 + Math.random() * 90;
-      this.particles.push({
-        x: cx, y: cy,
-        vx: Math.cos(ang) * speed,
-        vy: Math.sin(ang) * speed,
-        life: 0.7, maxLife: 0.7,
-        char: Math.random() < 0.5 ? '·' : '▪',
-        color: '#88ccff'
-      });
-    }
-    this.audioSystem?.playSFX?.('roll');
-    this.player.endSharkDive();
-    this.player.dodgeRoll.cooldownTimer = 0.5;
   }
 
   // O-room pearl path: room cleared with the guide fairy still in play. Place

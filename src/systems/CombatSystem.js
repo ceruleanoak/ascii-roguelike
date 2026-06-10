@@ -1667,6 +1667,50 @@ export class CombatSystem {
     return { playerDead: false, objectEffects, impactEffects, newSteamClouds, polymorphEvents };
   }
 
+  // SPACE attack flow (EXPLORE): gem-wand mana gate, bread feed gate, charge
+  // SFX on first press, then route the attack (or bread drop). Caller has
+  // already verified player.heldItem && player.canAttack() and that no
+  // higher-priority interaction (pickup, captive, container) claimed the press.
+  tryUseHeldWeapon() {
+    const game = this.game;
+    const player = game.player;
+
+    // Gem wands gate the charge on mana availability before useHeldItem starts charging.
+    if (player.heldItem.data?.gemWand && !game.magicSystem.tryStartCharge(player)) {
+      return;
+    }
+    // Bread is a targeted feed, not a free drop. Without an eligible
+    // eater in the current room, SPACE is a no-op (loaf stays in the slot).
+    if (player.heldItem.data?.effect === 'dropBread'
+        && !game.companionSystem.hasBreadEligibleTarget()) {
+      return;
+    }
+    // Attack — melee AoE handles object damage directly via CombatSystem
+    game.attackSequenceActive = true; // Mark that attack was initiated by button press (even if windup delays it)
+    const wasBowCharging = player.heldItem.data.weaponType === 'BOW' && player.heldItem.isCharging;
+    const wasGemCharging = player.heldItem.data?.gemWand && player.heldItem.isCharging;
+    const attack = player.useHeldItem();
+    // Play bow charge SFX when charging begins (use() sets isCharging on first press)
+    if (!wasBowCharging && player.heldItem && player.heldItem.data.weaponType === 'BOW' && player.heldItem.isCharging) {
+      game.audioSystem.playStoppableSFX('charge_bow');
+    }
+    // Gem-wand charge SFX, stretched to match this wand's chargeTime.
+    if (!wasGemCharging && player.heldItem?.data?.gemWand && player.heldItem.isCharging) {
+      game.audioSystem.playStoppableSFXStretched('wand_charge', player.heldItem.data.chargeTime);
+    }
+    if (attack) {
+      // Bread "use" is really a drop: spawn the loaf at the player's feet
+      // and skip the attack pipeline. The slot was already cleared inside
+      // Player.useHeldItem because the result was { consumed: true }.
+      if (attack.dropBread) {
+        game.companionSystem.dropBreadAtPlayer();
+      } else {
+        this.createAttack(game.applyGreenDamageModifier(attack), game.currentRoom ? game.currentRoom.enemies : []);
+        game.triggerGreenActionCooldown();
+      }
+    }
+  }
+
   createAttack(attackData, enemies = []) {
     if (!attackData) return;
 

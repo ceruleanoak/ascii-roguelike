@@ -18,7 +18,17 @@ export const PHYSICS = {
   ATTRACTION_RADIUS: 100,      // ingredient attraction distance
   ATTRACTION_STRENGTH: 200,    // ingredient acceleration
   PICKUP_RADIUS: 16,           // auto-pickup distance
-  FRICTION: 0.9                // velocity damping
+  FRICTION: 0.9,               // velocity damping
+
+  // Player held-weapon timers (cooldown/windup/reload/charge in Item.update)
+  // tick at 2× frame time. Historical: EXPLORE accidentally ticked the held
+  // item twice per frame from day one (resolved bug #88), so every weapon's
+  // timing data was tuned against double-rate ticking. The duplicate call is
+  // gone; this constant preserves the tuned feel and gives REST/NEUTRAL the
+  // same rate (they used to tick at 1×). Effective seconds = data value / 2.
+  // Do NOT remove without halving every cooldown/windup/recovery/reloadTime/
+  // chargeTime in items.js AND the code-level fallbacks that feed cooldownTimer.
+  WEAPON_TIMER_RATE: 2
 };
 
 export const GAME_STATES = {

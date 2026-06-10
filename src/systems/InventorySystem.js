@@ -1592,6 +1592,32 @@ export class InventorySystem {
     return menuOptions;
   }
 
+  // Moss Cloak ✿ stealth state machine. Armed by the active→inactive dodge
+  // transition; becomes active when the player stops issuing WASD input.
+  // Any WASD held cancels.
+  updateMossCloak() {
+    const game = this.game;
+    const player = game.player;
+    const cloakEquipped = this.equippedArmor?.data?.mossCloak === true;
+    if (cloakEquipped) {
+      const wasdHeld = game.keys.w || game.keys.a || game.keys.s || game.keys.d;
+      if (player._lastDodgeActive && !player.dodgeRoll.active) {
+        player.mossCloakArmed = true;
+      }
+      player._lastDodgeActive = player.dodgeRoll.active;
+      if (wasdHeld || player.dodgeRoll.active) {
+        player.mossCloakArmed = false;
+        player.mossCloakActive = false;
+      } else if (player.mossCloakArmed) {
+        player.mossCloakActive = true;
+      }
+    } else {
+      player.mossCloakArmed = false;
+      player.mossCloakActive = false;
+      player._lastDodgeActive = player.dodgeRoll.active;
+    }
+  }
+
   // ── Blue-zone armor world-effects ──────────────────────────────────────────
   // Per-frame EXPLORE ticks for water-interaction armor. Called from
   // updateExploreState; both bail unless the relevant piece is equipped.
