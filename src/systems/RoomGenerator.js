@@ -2603,17 +2603,39 @@ export class RoomGenerator {
   // Build a wall-to-wall path of `kind` between two edge points (auto-picked
   // unless caller supplies endpoints — e.g. a branch that taps an existing
   // river center). Returns the carved cell list for the caller to branch from.
+  //
+  // A single carve can dead-end mid-room on a wall structure (the walk breaks
+  // when both diagonal bridge options are blocked). A river that stops in the
+  // middle of the room kills the drift fantasy, so unless the caller pinned
+  // the end point we retry with fresh endpoints until a carve actually spans
+  // to an edge, keeping the longest attempt as fallback.
   _buildPath(room, kind, start = null, end = null) {
-    const a = start || this._pickEdgePoint();
-    let b = end;
-    if (!b) {
-      let attempts = 0;
-      do {
-        b = this._pickEdgePoint();
-        attempts++;
-      } while (b.edge === a.edge && attempts < 10);
+    const MIN_SPAN_LEN = 12;
+    const maxAttempts = end ? 1 : 5;
+    let best = [];
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const a = start || this._pickEdgePoint();
+      let b = end;
+      if (!b) {
+        let picks = 0;
+        do {
+          b = this._pickEdgePoint();
+          picks++;
+        } while (b.edge === a.edge && picks < 10);
+      }
+      const path = this._carvePath(room, a, b, 80);
+      const last = path[path.length - 1];
+      const spansToEdge = last && (
+        last.row <= 1 || last.row >= GRID.ROWS - 2 ||
+        last.col <= 1 || last.col >= GRID.COLS - 2
+      );
+      if (spansToEdge && path.length >= MIN_SPAN_LEN) {
+        best = path; // a spanning path always beats a longer dead-end
+        break;
+      }
+      if (path.length > best.length) best = path;
     }
-    const path = this._carvePath(room, a, b, 80);
+    const path = best;
     if (path.length === 0) return path;
     if (kind === 'stream') this._stampStream(room, path);
     else if (kind === 'river') this._stampRiver(room, path);
@@ -2633,14 +2655,41 @@ export class RoomGenerator {
   }
 
   _stampRiver(room, path) {
-    // 1) Stamp the centerline as directional flow tiles.
+    // 1) Dedup the carve into the ordered centerline.
     const centerSet = new Set();
-    for (let i = 0; i < path.length; i++) {
-      const cell = path[i];
+    const centers = [];
+    for (const cell of path) {
       const k = `${cell.col},${cell.row}`;
       if (centerSet.has(k)) continue;
       if (!this._validPathCell(cell.col, cell.row, room)) continue;
       centerSet.add(k);
+      centers.push(cell);
+    }
+
+    // 2) Smooth the flow: each center points at the cell LOOKAHEAD steps
+    // downstream instead of carrying its raw carve step. The carve's 30%
+    // jitter used to stamp sideways arrows that shoved the player onto the
+    // bank (side tiles carry no current); lookahead arrows always push along
+    // the channel and pre-steer into bends, so drift carries end to end.
+    const LOOKAHEAD = 3;
+    const dominantDir = (dc, dr) => {
+      // Snap to the dominant axis — sign() alone turns any slight lateral
+      // drift into a diagonal push that ejects drifting entities from the
+      // 3-wide corridor. Only a genuine 45° trend keeps the diagonal.
+      if (Math.abs(dc) > Math.abs(dr)) dr = 0;
+      else if (Math.abs(dr) > Math.abs(dc)) dc = 0;
+      return this._dirFromDelta(Math.sign(dc), Math.sign(dr));
+    };
+    for (let i = 0; i < centers.length; i++) {
+      const cur = centers[i];
+      const ahead = centers[Math.min(i + LOOKAHEAD, centers.length - 1)];
+      if (ahead === cur) continue; // tail cells keep their carve dir (push off the edge)
+      cur.dir = dominantDir(ahead.col - cur.col, ahead.row - cur.row);
+    }
+
+    // 3) Stamp the centerline as directional flow tiles.
+    for (let i = 0; i < centers.length; i++) {
+      const cell = centers[i];
       const center = new BackgroundObject('~', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
       const dch = this._dirChar(cell.dir);
       center.originalChar = dch;
@@ -2652,11 +2701,17 @@ export class RoomGenerator {
       room.backgroundObjects.push(center);
     }
 
-    // 2) Thicken: every cardinal neighbor of a center cell becomes plain
-    // water. Auto-resolves visual gaps on turns and diagonals; centerline is
-    // 4-adjacent by construction, so the river reads as one contiguous flow.
+    // 4) Thicken: every cardinal neighbor of a center cell becomes bank
+    // water carrying the SAME current as its parent center. The whole 3-wide
+    // channel is a conveyor — drift that wanders off the centerline (e.g. a
+    // diagonal push at a bend) keeps moving downstream instead of stalling on
+    // a currentless bank. Banks keep the plain '~' glyph (arrows stay a
+    // centerline-only visual) but inherit the parent's flowIndex so the
+    // traveling color wave crosses the full channel width in phase.
     const sideSet = new Set();
-    for (const cell of path) {
+    for (let i = 0; i < centers.length; i++) {
+      const cell = centers[i];
+      const target = centers[Math.min(i + LOOKAHEAD, centers.length - 1)];
       for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const sc = cell.col + dc, sr = cell.row + dr;
         const sk = `${sc},${sr}`;
@@ -2664,6 +2719,15 @@ export class RoomGenerator {
         if (!this._validPathCell(sc, sr, room)) continue;
         sideSet.add(sk);
         const side = new BackgroundObject('~', sc * GRID.CELL_SIZE, sr * GRID.CELL_SIZE);
+        side.riverFlow = true;
+        // Banks aim at the downstream CENTER, not their parent's direction —
+        // the current funnels drifters back toward the centerline while
+        // still carrying them forward.
+        side.flowDir = (target === cell)
+          ? cell.dir
+          : this._dirFromDelta(Math.sign(target.col - sc), Math.sign(target.row - sr));
+        side.flowIndex = i;
+        side._directionChar = '~';
         room.backgroundObjects.push(side);
       }
     }

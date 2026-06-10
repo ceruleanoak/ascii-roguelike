@@ -231,8 +231,9 @@ export class PhysicsSystem {
               } else {
                 inLiquid = true;
                 liquidState = wState;
-                // River-current push: only the center flow tile carries a direction.
-                // Sides are static water (no flowDir) and don't shove the entity.
+                // River-current push: the whole channel is a conveyor — center
+                // tiles show the arrow, bank tiles inherit the parent center's
+                // direction so drift never stalls mid-river.
                 if (obj.riverFlow && obj.flowDir) onCurrentDirection = obj.flowDir;
               }
             }
