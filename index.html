@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>ASCII Roguelike</title>
+  <link rel="stylesheet" href="https://fonts.cdnfonts.com/css/unifont">
+  <script type="module" crossorigin src="/ascii-roguelike/assets/index-BIr13sKh.js"></script>
+  <link rel="stylesheet" crossorigin href="/ascii-roguelike/assets/index-BkkqtZHH.css">
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="background-layer"></canvas>
+    <canvas id="foreground-layer"></canvas>
+    <div id="ui-overlay" class="hidden">
+      <div id="hp-display">HP:<span id="hp-value">10</span></div>
+      <div class="ui-sep" style="left:75px" aria-hidden="true">|</div>
+      <div id="depth-display">L<span id="depth-value">0</span></div>
+      <div class="ui-sep" style="left:112px" aria-hidden="true">|</div>
+      <div id="slot-1">[<span id="weapon-char-1">&#x2081;</span>]</div>
+      <div id="slot-2">[<span id="weapon-char-2">&#x2082;</span>]</div>
+      <div id="slot-3">[<span id="weapon-char-3">&#x2083;</span>]</div>
+      <div id="armor-display">[<span id="armor-char"> </span>]</div>
+      <div id="consumable-display"><span id="cslot-1">[<span id="consumable-char-1"> </span>]</span><span id="cslot-2">[<span id="consumable-char-2"> </span>]</span><span id="cslot-3">[<span id="consumable-char-3"> </span>]</span><span id="cslot-4">[<span id="consumable-char-4"> </span>]</span><span id="cslot-5">[<span id="consumable-char-5"> </span>]</span></div>
+      <div class="ui-sep" style="left:420px" aria-hidden="true">|</div>
+      <div id="inventory-display">I:<span id="inventory-count">0</span></div>
+    </div>
+    <div id="menu-overlay" class="hidden"></div>
+  </div>
+</body>
+</html>
