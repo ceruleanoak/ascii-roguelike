@@ -1,0 +1,4 @@
+#!/bin/sh
+# Headless SFX render pipeline — run `sfx help` for usage.
+dir="$(cd "$(dirname "$0")" && pwd)"
+exec "$dir/node_modules/.bin/electron" "$dir" "$@"

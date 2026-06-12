@@ -22,7 +22,7 @@ export const ZONES = {
       'GOO IS IMMUNE TO GOO.',
       'THREE HEADS ARE FAR WORSE THAN ONE.'
     ],
-    // Rare-tier sayings — unlocked by giving an Artifact ⚱ to the wise fellow.
+    // Rare-tier sayings — unlocked by giving an Artifact ⚜ to the wise fellow.
     // Content should reveal genuinely game-changing info, not flavor.
     rareSayings: [
       'A BUSH DOES NOT FEAR THE WOLF.',
@@ -45,12 +45,11 @@ export const ZONES = {
     spawnTables: ['basic', 'forest'],
     objectWeights: {
       '%': 0.25, // Bush
-      '&': 0.20, // Tree
+      '&': 0.40, // Tree
       '0': 0.20, // Rock
       '=': 0.10, // Water
       'Y': 0.15, // Stump
       'n': 0.10, // Mushroom
-      'C': 0.02, // Coral Cluster — boosted via Lake objectBias
       '⊞': 0.02  // Chest (rare)
     }
   },
@@ -197,7 +196,7 @@ export const ZONES = {
       'B': 0.15, // Metal Box
       '~': 0.15, // Puddle (electrified)
       '0': 0.25, // Rock
-      '&': 0.25, // Tree
+      '&': 0.45, // Tree
       '⊞': 0.02  // Chest (rare)
     }
   },

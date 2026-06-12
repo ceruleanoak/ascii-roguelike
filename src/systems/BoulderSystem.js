@@ -111,9 +111,11 @@ export class BoulderSystem {
       // the zone's hazard into the player's weapon — routed through deflector
       // rocks into enemies or a blocked cave. Bounces (Phase 2) act on any
       // boulder; only the empowered one carries enough force to break a cave.
+      // Other blunt weapons (flail, staff, bat) knock the boulder back the
+      // same way but never empower it — that stays hammer-exclusive.
       if (game.combatSystem) {
         for (const attack of game.combatSystem.getMeleeAttacks()) {
-          if (!attack.canSmash) continue;  // hammers only
+          if (!attack.canSmash && !attack.isBlunt) continue;
           const adx = r.x - attack.position.x;
           const ady = r.y - attack.position.y;
           if (adx * adx + ady * ady > DEFLECT_RADIUS * DEFLECT_RADIUS) continue;
@@ -130,7 +132,7 @@ export class BoulderSystem {
           const rdy = r.y - pcy;
           if (Math.abs(rdx) >= Math.abs(rdy)) { r.vx = Math.sign(rdx) || 1; r.vy = 0; }
           else { r.vx = 0; r.vy = Math.sign(rdy) || 1; }
-          r.empowered = true;
+          if (attack.canSmash) r.empowered = true;
           // Grace the striker so the boulder they just hit doesn't instantly recoil into them.
           r.hitCooldowns.set(game.player, HIT_COOLDOWN);
         }

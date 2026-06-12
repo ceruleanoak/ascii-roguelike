@@ -26,6 +26,22 @@ export const FISHING_TABLES = {
     ]
   },
 
+  // Ocean ('O') rooms — any zone. Saltwater creatures plus a meaningfully
+  // fatter blue-zone supply line (p/n/Y) than green lakes: the ocean is the
+  // overworld face of Tidefall, and the fisherman's pearl legend points here.
+  ocean: {
+    rusalkaChance: 0,
+    catches: [
+      { name: 'Mackerel',     char: 'ծ', color: '#88bbee', drops: ['m', 's'],       weight: 30 },
+      { name: 'Blue Crab',    char: 'ծ', color: '#4477cc', drops: ['b', 'g'],       weight: 22 },
+      { name: 'Jellyfish',    char: 'ծ', color: '#ccaaff', drops: ['v', 'g'],       weight: 18 },
+      { name: 'Oyster',       char: 'ծ', color: '#ddeeff', drops: ['p'],            weight: 12 },
+      { name: 'Sharkbone',    char: 'ծ', color: '#ccd8e8', drops: ['n'],            weight: 5 },
+      { name: 'Ray Tail',     char: 'ծ', color: '#aabbcc', drops: ['Y'],            weight: 5 },
+      { name: 'Empty Bottle', char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 }
+    ]
+  },
+
   red: {
     rusalkaChance: 0,
     catches: [
@@ -51,10 +67,10 @@ export const FISHING_TABLES = {
   yellow: {
     rusalkaChance: 0,
     catches: [
-      { name: 'Storm Eel',      char: 'ծ', color: '#ffff44', drops: ['M', 's'],     weight: 30 },
-      { name: 'Thunder Toad',   char: 'ծ', color: '#ffffaa', drops: ['g', 'M'],     weight: 25 },
-      { name: 'Charged Catfish',char: 'ծ', color: '#ffee00', drops: ['M'],          weight: 25 },
-      { name: 'Spark Minnow',   char: 'ծ', color: '#ccff44', drops: ['k', 'M'],     weight: 20 },
+      { name: 'Storm Eel',      char: 'ծ', color: '#ffff44', drops: ['1', 's'],     weight: 30 },
+      { name: 'Thunder Toad',   char: 'ծ', color: '#ffffaa', drops: ['g', '1'],     weight: 25 },
+      { name: 'Charged Catfish',char: 'ծ', color: '#ffee00', drops: ['1'],          weight: 25 },
+      { name: 'Spark Minnow',   char: 'ծ', color: '#ccff44', drops: ['k', '1'],     weight: 20 },
       { name: 'Empty Bottle',   char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 }
     ]
   },

@@ -226,9 +226,12 @@ export class InventorySystem {
    * @param {Array} placedTraps - Placed trap entries array
    * @param {Player} player - Player entity
    * @param {PhysicsSystem} physicsSystem - Physics system for distance/entity management
+   * @param {boolean} allowSlotChoice - When true, a weapon/trap pickup with all
+   *   usable quick slots full returns { needsSlotChoice, pendingItem } instead
+   *   of auto-displacing the active slot (caller opens SlotReplacementSystem)
    * @returns {Object} - { success: boolean, droppedItem: Item|null, message: string|null, removedTrap: boolean }
    */
-  tryPickupItem(items, placedTraps, player, physicsSystem) {
+  tryPickupItem(items, placedTraps, player, physicsSystem, allowSlotChoice = false) {
     // NOTE: Placed traps (activated with SPACE) are NOT pickable - they're active traps
     // Only dropped traps (swapped from quick slots) in the items array can be picked up
 
@@ -246,19 +249,41 @@ export class InventorySystem {
 
         // Route items to correct inventory based on type
         if (item.data.type === 'ARMOR') {
-          // Add to armor inventory and auto-equip (mirrors weapon pickup behavior).
-          // Previously equipped armor is returned to armorInventory by equipArmor().
+          if (allowSlotChoice && this.equippedArmor !== null) return { success: false, needsSlotChoice: true, slotType: 'armor', pendingItem: item, droppedItem: null, message: null, removedTrap: false };
           this.armorInventory.push(item);
           this.equipArmor(item);
           this.applyEquipmentEffectsToPlayer(player);
           physicsSystem.removeEntity(item);
           items.splice(i, 1);
         } else if (item.data.type === 'CONSUMABLE') {
-          // Add to consumable inventory
-          this.consumableInventory.push(item);
+          if (allowSlotChoice) {
+            const emptySlot = this.equippedConsumables.findIndex(s => s === null);
+            if (emptySlot === -1) return { success: false, needsSlotChoice: true, slotType: 'consumable', pendingItem: item, droppedItem: null, message: null, removedTrap: false };
+            this.consumableInventory.push(item);
+            this.equipConsumable(emptySlot, item);
+          } else this.consumableInventory.push(item);
           physicsSystem.removeEntity(item);
           items.splice(i, 1);
         } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
+          // Full quick slots: don't silently displace the loadout — signal the
+          // caller to open the paused slot-choice prompt (SlotReplacementSystem).
+          // The item stays on the ground until the player confirms a destination.
+          if (allowSlotChoice) {
+            const hasEmptyUsable = player.quickSlots.some(
+              (slot, idx) => slot === null && !player.destroyedSlots?.[idx]
+            );
+            const anyUsable = player.quickSlots.some((_, idx) => !player.destroyedSlots?.[idx]);
+            if (!hasEmptyUsable && anyUsable) {
+              return {
+                success: false,
+                needsSlotChoice: true,
+                pendingItem: item,
+                droppedItem: null,
+                message: null,
+                removedTrap: false
+              };
+            }
+          }
           // Add to quick slots (weapons and traps)
           droppedItem = player.pickupItem(item);
           physicsSystem.removeEntity(item);

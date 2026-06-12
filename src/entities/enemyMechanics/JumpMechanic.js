@@ -34,9 +34,15 @@ export const JumpMechanic = {
     const onWater = enemy._isOnWater();
     const cfg = enemy.movementConfig;
     const jb = enemy.jumpBehavior;
-    const jumpInterval = onWater ? (cfg.waterJumpInterval ?? jb?.waterJumpInterval) : (cfg.jumpInterval ?? jb?.jumpInterval);
-    const jumpSpeed    = onWater ? (cfg.waterJumpSpeed    ?? jb?.waterJumpSpeed)    : (cfg.jumpSpeed    ?? jb?.jumpSpeed);
-    const jumpDuration = onWater ? (cfg.waterJumpDuration ?? jb?.waterJumpDuration) : (cfg.jumpDuration ?? jb?.jumpDuration);
+    // Water params are optional tuning — jumpers without them (e.g. floating
+    // Sparks drifting over a yellow river) fall back to their land params.
+    // Without the fallback these resolve to undefined and NaN the velocity.
+    const landInterval = cfg.jumpInterval ?? jb?.jumpInterval;
+    const landSpeed    = cfg.jumpSpeed    ?? jb?.jumpSpeed;
+    const landDuration = cfg.jumpDuration ?? jb?.jumpDuration;
+    const jumpInterval = onWater ? (cfg.waterJumpInterval ?? jb?.waterJumpInterval ?? landInterval) : landInterval;
+    const jumpSpeed    = onWater ? (cfg.waterJumpSpeed    ?? jb?.waterJumpSpeed    ?? landSpeed)    : landSpeed;
+    const jumpDuration = onWater ? (cfg.waterJumpDuration ?? jb?.waterJumpDuration ?? landDuration) : landDuration;
 
     enemy.frogJumpTimer -= deltaTime;
 

@@ -21,6 +21,10 @@ export class NeutralCharacter {
 
     // Optional indicator (e.g., white '!' above character)
     this.indicator = null; // { char, color, offsetY }
+
+    // True once DialogueSystem has opened this NPC's dialogue (gates flows
+    // that should only unlock after the player has heard the NPC out).
+    this.spokenOnce = false;
   }
 
   update(deltaTime) {
@@ -36,6 +40,22 @@ export class NeutralCharacter {
 
   setIndicator(char, color, offsetY = -GRID.CELL_SIZE) {
     this.indicator = { char, color, offsetY };
+  }
+
+  // Speaking NPCs (those with getDialogueLines) call this each frame: shows a
+  // '!' affordance in talk range, hidden while the dialogue box is open.
+  updateTalkIndicator(game, range = GRID.CELL_SIZE * 2.5) {
+    const player = game?.player;
+    if (!player) return;
+    const dist = Math.hypot(
+      player.position.x - this.position.x,
+      player.position.y - this.position.y
+    );
+    if (dist < range && !game.dialogueSystem?.isOpen()) {
+      this.setIndicator('!', '#ffffff');
+    } else {
+      this.clearIndicator();
+    }
   }
 
   clearIndicator() {

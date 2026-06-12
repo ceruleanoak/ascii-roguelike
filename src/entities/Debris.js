@@ -66,8 +66,10 @@ export class Debris {
   }
 }
 
-// Factory function to create debris from enemy death
-export function createDebris(x, y, count = 5, color = '#666666') {
+// Factory function to create debris from enemy death.
+// inheritVelocity: optional {vx, vy} added on top of the spread (e.g. the
+// dead enemy's knockback launch velocity, so pieces spray in the hit direction).
+export function createDebris(x, y, count = 5, color = '#666666', inheritVelocity = null) {
   const debris = [];
   const chars = [',', '"', '.', '`', "'", ';', '_'];
 
@@ -86,8 +88,8 @@ export function createDebris(x, y, count = 5, color = '#666666') {
     const piece = new Debris(x + offsetX, y + offsetY, char, color);
 
     // Set initial velocity for mild spread
-    piece.velocity.vx = Math.cos(angle) * speed;
-    piece.velocity.vy = Math.sin(angle) * speed;
+    piece.velocity.vx = Math.cos(angle) * speed + (inheritVelocity?.vx ?? 0);
+    piece.velocity.vy = Math.sin(angle) * speed + (inheritVelocity?.vy ?? 0);
 
     debris.push(piece);
   }

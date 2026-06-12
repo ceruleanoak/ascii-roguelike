@@ -3,8 +3,12 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
   exportWAV: (arrayBuffer, filename) =>
     ipcRenderer.invoke('export-wav', arrayBuffer, filename),
-  savePresets: (data) =>
-    ipcRenderer.invoke('save-presets', data),
-  loadPresets: () =>
-    ipcRenderer.invoke('load-presets')
+  listTemplates: () =>
+    ipcRenderer.invoke('templates-list'),
+  loadTemplate: (relPath) =>
+    ipcRenderer.invoke('template-load', relPath),
+  saveTemplate: (relPath, data) =>
+    ipcRenderer.invoke('template-save', relPath, data),
+  deleteTemplate: (relPath) =>
+    ipcRenderer.invoke('template-delete', relPath)
 });

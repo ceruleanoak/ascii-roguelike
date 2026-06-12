@@ -420,7 +420,10 @@ Inactive by default. `slot` = index into `player.equippedConsumables`. Resets on
 2. Enter W-room, approach well within 3 cells, SPACE with `¤` in consumable slot
 3. `MagicSystem.activateMagicMeter()` → meter active, slot cleared, fills to max
 4. Also accepts Lucky Coin (`★`) → `player.luckBlessed = true` (half-power luck boost)
-5. Raw Coin (`c`) → `THE WELL IS QUIET.` (implicit hint — well wants something crafted)
+5. Raw Coin (`c`) → zone-specific one-time blessing (well not consumed):
+   green `luckBlessed` · yellow scatters 2–3 Mana ingredients (`𝑚`, repeatable) ·
+   red `wellDamageBlessed` (+1 damage) · cyan `stealthBlessed` (enemy aggro radius ×0.65) ·
+   gray/blue `THE WELL IS QUIET.`
 
 **Mana conversion values** (`INGREDIENT_MANA_VALUES`):
 

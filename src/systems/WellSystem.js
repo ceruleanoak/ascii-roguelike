@@ -6,12 +6,20 @@
  *
  *   ¤  Infused Coin (consumable slot)  → activates the magic meter
  *   ★  Lucky Coin   (consumable slot)  → permanent half-power luck blessing
- *   c  Coin         (raw ingredient)    → hollow plink, well stays usable
+ *   c  Coin         (raw ingredient)    → zone-specific blessing, well stays usable
  *
- * All three offerings play the spinning-arc animation. Slot offerings (¤, ★)
- * land with a flash and consume the well. Raw-coin offerings land with the
- * same plink but no flash, and do NOT consume the well — the player is just
- * probing it.
+ * Raw-coin rewards depend on the current zone:
+ *   green  → luckBlessed (same half-power luck blessing as ★ vesting)
+ *   yellow → scatters 2–3 Mana ingredients (𝑚) from the well
+ *   red    → wellDamageBlessed (+1 damage on all attacks)
+ *   cyan   → stealthBlessed (enemies detect at reduced radius)
+ *
+ * The green/red/cyan blessings are run-flags and cannot stack — a repeat toss
+ * lands silently (plink, no flash, no message). Yellow drops are repeatable.
+ *
+ * All offerings play the spinning-arc animation. Slot offerings (¤, ★) land
+ * with a flash and consume the well. Raw-coin offerings flash only when a
+ * blessing is actually granted, and never consume the well.
  */
 
 import { GRID, ROOM_TYPES } from '../game/GameConfig.js';
@@ -138,6 +146,59 @@ export class WellSystem {
     return null;
   }
 
+  // Grants the zone-specific raw-coin blessing. Returns true if something was
+  // actually granted (drives the screen flash); false for redundant or quiet
+  // tosses. The boolean blessings can't stack — a redundant toss lands silently.
+  _grantCoinBlessing(anim) {
+    const game = this.game;
+    const player = game.player;
+    const msg = (text) => game.menuSystem?.showPickupMessage?.(text);
+    const zone = game.zoneSystem?.currentZone || 'green';
+
+    switch (zone) {
+      case 'green':
+        if (player.luckBlessed) {
+          return false;
+        }
+        player.luckBlessed = true;
+        msg('FEELING LUCKY?');
+        return true;
+
+      case 'yellow': {
+        // The well spits back a scatter of Mana ingredients (𝑚). Pickup
+        // auto-fills the meter when active; stores as ingredients otherwise.
+        const count = 2 + Math.floor(Math.random() * 2); // 2–3
+        for (let i = 0; i < count; i++) {
+          const angle = (i / count) * Math.PI * 2 + Math.random() * 0.8;
+          game.lootSystem?.spawnIngredientDrop('𝑚', anim.endX, anim.endY, angle);
+        }
+        msg('MANA WELLS UP.');
+        return true;
+      }
+
+      case 'red':
+        if (player.wellDamageBlessed) {
+          return false;
+        }
+        player.wellDamageBlessed = true;
+        msg('FEELING STRONGER?');
+        return true;
+
+      case 'cyan':
+        if (player.stealthBlessed) {
+          return false;
+        }
+        player.stealthBlessed = true;
+        msg('FEELING QUIET?');
+        return true;
+
+      default:
+        // Gray/blue wells stay indifferent.
+        msg('THE WELL IS QUIET.');
+        return false;
+    }
+  }
+
   _completeRitual(anim) {
     const game = this.game;
     const player = game.player;
@@ -148,10 +209,14 @@ export class WellSystem {
     // distinguish offerings, only the player's reward does.
     game.audioSystem?.playSFX?.('coin_plink');
 
-    // Raw-coin probe: plink + message only. No slot consumption, no flash,
-    // no meter activation. The `c` ingredient was already removed at SPACE press.
+    // Raw-coin toss: zone-specific blessing. The `c` ingredient was already
+    // removed at SPACE press; the well itself is never consumed by this path.
     if (anim.offeringType === 'raw') {
-      game.menuSystem?.showPickupMessage?.('THE WELL IS QUIET.');
+      const granted = this._grantCoinBlessing(anim);
+      if (granted) {
+        game.wellFlashTimer = FLASH_DURATION;
+        game.wellFlashDuration = FLASH_DURATION;
+      }
       game.menuSystem?.updateUI?.();
       return;
     }

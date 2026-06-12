@@ -11,6 +11,7 @@ import { getDungeonDesign } from '../data/dungeonDesigns.js';
 import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
+import { maybeSpawnPeacefulFishingRoom, buildVaultInteriorLoot, protectRegion, cleanupStrayBackgroundObjects, darkenColor } from './roomFeatures.js';
 
 // Zone-boss arena → letter template key. Boss rooms are entered without a
 // letter (cheat warp) or with an arbitrary one (normal progression), so we
@@ -137,6 +138,13 @@ export class RoomGenerator {
       exitLetter: exitLetter // Letter that produced this room (e.g. 'P', 'R', 'H')
     };
 
+    // Wall-block / vault cells stamped during collision-map creation are
+    // protected from stray background objects (cleanup pass strips them).
+    if (this.pendingWallCells?.length) {
+      protectRegion(room, { kind: 'cells', cells: this.pendingWallCells });
+      this.pendingWallCells = [];
+    }
+
     // Set zone-specific background object weights
     this.currentZoneWeights = zone.objectWeights;
 
@@ -216,6 +224,12 @@ export class RoomGenerator {
       this.currentVaultInfo = null; // Reset for next room
     }
 
+    // Flush vault interior loot staged by placeVaultStructure
+    if (this.pendingVaultLoot?.length) {
+      room.backgroundObjects.push(...this.pendingVaultLoot);
+      this.pendingVaultLoot = [];
+    }
+
     // First-room flourish: a small flock of idle crows in the very first
     // green-zone explore room. Teaches the player that not all motion is hostile.
     // One crow holds a pearl that drops the first time it's scared.
@@ -259,6 +273,15 @@ export class RoomGenerator {
         this.spawnPearlFairy(room);
       }
     }
+
+    // Final pass: strip stray bg objects inside protected structure regions
+    // (hut footprint, maze shell, ravine band, well ring, …) and on room
+    // border walls / wall-block cells — roomFeatures.js.
+    cleanupStrayBackgroundObjects(room);
+
+    // Re-mark a key dropper if the cleanup stripped the chosen one (K rooms;
+    // idempotent — no-op when a dropper survived).
+    this.ensureKeyDroppers(room);
 
     return room;
   }
@@ -435,6 +458,10 @@ export class RoomGenerator {
   }
 
   createCollisionMap(roomType = ROOM_TYPES.COMBAT) {
+    // Cells stamped by wall-block / vault patterns — generateRoom registers
+    // them as a protected region for the stray-object cleanup pass.
+    this.pendingWallCells = [];
+
     // Create empty collision map
     const map = [];
     for (let y = 0; y < GRID.ROWS; y++) {
@@ -454,15 +481,16 @@ export class RoomGenerator {
       map[y][GRID.COLS - 1] = true;
     }
 
+    // Place vault structure first if template defines it — wall blocks must
+    // not stamp over the cage (canPlaceStructure keeps off it + a 1-cell ring)
+    if (this.currentLetterTemplate?.vaultStructure?.enabled) {
+      this.placeVaultStructure(map);
+    }
+
     // Place wall structures (unless template forbids it)
     const allowWallStructures = this.currentLetterTemplate?.wallStructures?.allow !== false;
     if (allowWallStructures) {
       this.placeWallStructures(map, roomType);
-    }
-
-    // Place vault structure if template defines it
-    if (this.currentLetterTemplate?.vaultStructure?.enabled) {
-      this.placeVaultStructure(map);
     }
 
     // Clear areas near all exits to ensure player can spawn and access exits
@@ -513,6 +541,9 @@ export class RoomGenerator {
         }
       }
     }
+
+    // Exit clearance may have re-opened stamped cells — drop those.
+    this.pendingWallCells = this.pendingWallCells.filter(c => map[c.row][c.col]);
 
     return map;
   }
@@ -600,6 +631,9 @@ export class RoomGenerator {
     // Ensure K rooms have at least one guaranteed key dropper
     this.ensureKeyDroppers(room);
 
+    // Low-depth L/O rooms may roll peaceful (shore Fisherman) — roomFeatures.js
+    if (maybeSpawnPeacefulFishingRoom(this, room)) return;
+
     // Exits are locked until all enemies defeated
     room.exitsLocked = true;
   }
@@ -649,9 +683,8 @@ export class RoomGenerator {
       const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects);
       if (pos) {
         const enemy = new Enemy(boss.char, pos.x, pos.y, this.currentDepth);
-        enemy.hp = boss.hp;
-        enemy.damage = boss.damage;
-        enemy.color = boss.color;
+        // maxHp must track the buffed hp (constructor set it from base data); isBoss drives the near-death blink
+        Object.assign(enemy, { hp: boss.hp, maxHp: boss.hp, damage: boss.damage, color: boss.color, isBoss: true });
         enemy.setCollisionMap(room.collisionMap);
         enemy.setBackgroundObjects(room.backgroundObjects);
         this.addEnemyToRoom(room, enemy);
@@ -828,18 +861,14 @@ export class RoomGenerator {
     const fire = new BackgroundObject('!', fireX, fireY);
     fire.indestructible = true;
     fire.isCampfire = true; // enables flicker animation in BackgroundObject.update
+    fire.structural = true;
     room.backgroundObjects.push(fire);
 
-    // Remove any background object that overlaps the NPC's tile so it spawns clear
+    // Keep the NPC's tile clear of background objects so it spawns clear
     const npcCol = fireCol + 1;
     const npcX = npcCol * GRID.CELL_SIZE;
     const npcY = fireRow * GRID.CELL_SIZE;
-    room.backgroundObjects = room.backgroundObjects.filter(obj => {
-      if (obj === fire) return true;
-      const oCol = Math.round(obj.position.x / GRID.CELL_SIZE);
-      const oRow = Math.round(obj.position.y / GRID.CELL_SIZE);
-      return !(oCol === npcCol && oRow === fireRow);
-    });
+    protectRegion(room, { kind: 'cells', cells: [{ col: npcCol, row: fireRow }] });
 
     const npc = new CampNPC(npcX, npcY, { x: fireX, y: fireY });
     room.campNPC = npc;
@@ -1338,11 +1367,18 @@ export class RoomGenerator {
     }
 
     // ── Spawn one pickaxe in a clearing so the player can find it ─────────────
-    const pickaxeClearing = clearings[Math.floor(Math.random() * clearings.length)];
-    const pickCol = this.randInt(pickaxeClearing.minCol + 1, pickaxeClearing.maxCol - 1);
-    const pickRow = this.randInt(pickaxeClearing.minRow + 1, pickaxeClearing.maxRow - 1);
-    const pickaxe = new Item('⛏', pickCol * GRID.CELL_SIZE, pickRow * GRID.CELL_SIZE);
-    room.items.push(pickaxe);
+    // Pickaxe is unique: skip while one is owned (slots/chest/pending deposits).
+    const inv = this.game?.inventorySystem;
+    const ownsPickaxe = (list) => list?.some(s => s?.char === '⛏');
+    const hasPickaxe = ownsPickaxe(this.game?.player?.quickSlots) ||
+      ownsPickaxe(inv?.itemChest) || ownsPickaxe(inv?.pendingChestDeposits);
+    if (!hasPickaxe) {
+      const pickaxeClearing = clearings[Math.floor(Math.random() * clearings.length)];
+      const pickCol = this.randInt(pickaxeClearing.minCol + 1, pickaxeClearing.maxCol - 1);
+      const pickRow = this.randInt(pickaxeClearing.minRow + 1, pickaxeClearing.maxRow - 1);
+      const pickaxe = new Item('⛏', pickCol * GRID.CELL_SIZE, pickRow * GRID.CELL_SIZE);
+      room.items.push(pickaxe);
+    }
 
     // ── Place 1 secret vein pair: red marker underground + secret rock on surface ──
     // The red '⊙' marker (plane 1, indestructible) appears underground at the same grid
@@ -1805,15 +1841,19 @@ export class RoomGenerator {
 
   spawnEnemiesFrom(game, spawner, spawnData) {
     const newEnemies = [];
-    const { spawnChar, spawnCount, spawnRange, spawnerPosition } = spawnData;
+    const { spawnChar, spawnCount, spawnRange, spawnerPosition, exactPosition } = spawnData;
 
     for (let i = 0; i < spawnCount; i++) {
-      const spawnPos = this.findSpawnPosition(
-        spawnerPosition,
-        spawnRange,
-        game.currentRoom.collisionMap,
-        game.currentRoom.enemies
-      );
+      // exactPosition skips placement search — used by spawners that launch the
+      // child away immediately (e.g. Giant Slime split), so overlap is transient.
+      const spawnPos = exactPosition
+        ? { x: spawnerPosition.x, y: spawnerPosition.y }
+        : this.findSpawnPosition(
+            spawnerPosition,
+            spawnRange,
+            game.currentRoom.collisionMap,
+            game.currentRoom.enemies
+          );
 
       if (spawnPos) {
         const newEnemy = new Enemy(spawnChar, spawnPos.x, spawnPos.y, game.currentDepth);
@@ -2360,15 +2400,19 @@ export class RoomGenerator {
   }
 
   generateOrganicClusters(room) {
-    const clusterCount = this.currentDepth < 5 ? this.randInt(2, 3) : this.randInt(3, 5);
-    const organicChars = ['%', '&', '+', 'Y'];
+    const clusterCount = this.currentDepth < 5 ? this.randInt(3, 4) : this.randInt(4, 6);
+    // Trees dominate the organic mix; the letter template's '&' bias multiplies
+    // on top, so tree-biased rooms (forest perimeters, hut groves, well
+    // clearings) read denser while low-tree templates stay sparse.
+    const treeBias = this.currentLetterTemplate?.bgObjectRules?.objectBias?.['&'] ?? 1;
+    const organicWeights = { '%': 1, '&': 3 * treeBias, '+': 1, 'Y': 1 };
     const zone = ZONES[room.zone];
     const preSpawnBurned = zone?.preSpawnBurned || false;
 
     for (let i = 0; i < clusterCount; i++) {
       const centerPos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
       if (!centerPos) continue;
-      const char = organicChars[Math.floor(Math.random() * organicChars.length)];
+      const char = this.weightedRandomChoice(organicWeights);
       const size = this.randInt(3, 6);
       const radius = this.randInt(48, 96);
 
@@ -2392,7 +2436,7 @@ export class RoomGenerator {
             bgObject.flammability = 'none';
             // Darken the color more for burned effect
             const currentColor = bgObject.color;
-            bgObject.color = this.darkenColor(currentColor, 0.5); // 50% darker
+            bgObject.color = darkenColor(currentColor, 0.5); // 50% darker
             bgObject.animationColor = bgObject.color;
           }
 
@@ -3042,8 +3086,8 @@ export class RoomGenerator {
   }
 
   generateMineralFormations(room) {
-    // Reduce rock formations in tunnel rooms (0-1 instead of 1-3)
-    const formationCount = this.isGeneratingTunnel ? this.randInt(0, 1) : this.randInt(1, 3);
+    // Tunnels always carry ≥1 formation — the mining aisle never comes up empty
+    const formationCount = this.isGeneratingTunnel ? this.randInt(1, 2) : this.randInt(1, 3);
     const zone = ZONES[room.zone];
     const features = zone?.environmentalFeatures;
 
@@ -3278,50 +3322,39 @@ export class RoomGenerator {
 
   getObjectWeights(depth) {
     // Use zone-specific weights if available, otherwise fall back to depth-based
+    let weights;
     if (this.currentZoneWeights) {
-      return this.currentZoneWeights;
-    }
-
-    // Fallback to depth-based weights for backwards compatibility
-    if (depth < 5) {
-      return {
-        '%': 0.25,
-        '&': 0.20,
-        '0': 0.20,
-        '=': 0.10,
-        '#': 0.15,
-        '+': 0.10
-      };
+      weights = this.currentZoneWeights;
+    } else if (depth < 5) {
+      // Fallback to depth-based weights for backwards compatibility
+      weights = { '%': 0.25, '&': 0.20, '0': 0.20, '=': 0.10, '#': 0.15, '+': 0.10 };
     } else if (depth < 10) {
-      return {
-        '%': 0.15,
-        '&': 0.15,
-        '0': 0.10,
-        '#': 0.10,
-        '+': 0.10,
-        'Y': 0.10,
-        'n': 0.10,
-        '*': 0.05,
-        'p': 0.05,
-        '~': 0.10,
-        '⊞': 0.02
+      weights = {
+        '%': 0.15, '&': 0.15, '0': 0.10, '#': 0.10, '+': 0.10, 'Y': 0.10,
+        'n': 0.10, '*': 0.05, 'p': 0.05, '~': 0.10, '⊞': 0.02
       };
     } else {
-      return {
-        '0': 0.10,
-        '#': 0.05,
-        'Y': 0.10,
-        'n': 0.10,
-        '*': 0.15,
-        'B': 0.10,
-        'Q': 0.10,
-        '~': 0.10,
-        'p': 0.10,
-        '8': 0.05,
-        'i': 0.05,
-        '⊞': 0.03
+      weights = {
+        '0': 0.10, '#': 0.05, 'Y': 0.10, 'n': 0.10, '*': 0.15, 'B': 0.10,
+        'Q': 0.10, '~': 0.10, 'p': 0.10, '8': 0.05, 'i': 0.05, '⊞': 0.03
       };
     }
+
+    // Letter templates bias the base weights per object (bgObjectRules.objectBias).
+    // Multiplicative only — chars absent from the base table stay absent, so a
+    // bias can't introduce an object the zone doesn't carry. Template-exclusive
+    // objects (e.g. Ocean coral) use bgObjectRules.objectWeights: absolute
+    // entries merged into the table, introducing chars the zone lacks.
+    const rules = this.currentLetterTemplate?.bgObjectRules;
+    if (rules?.objectBias || rules?.objectWeights) {
+      weights = { ...weights };
+      for (const [char, mult] of Object.entries(rules.objectBias ?? {})) {
+        if (weights[char] !== undefined) weights[char] *= mult;
+      }
+      Object.assign(weights, rules.objectWeights ?? {});
+    }
+
+    return weights;
   }
 
   weightedRandomChoice(weights) {
@@ -3340,30 +3373,6 @@ export class RoomGenerator {
 
   randInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
-  }
-
-  // Darken a hex color by a percentage (0.5 = 50% darker)
-  darkenColor(hexColor, percent) {
-    const parseHex = (hex) => {
-      const clean = hex.replace('#', '');
-      return {
-        r: parseInt(clean.substring(0, 2), 16),
-        g: parseInt(clean.substring(2, 4), 16),
-        b: parseInt(clean.substring(4, 6), 16)
-      };
-    };
-
-    const rgb = parseHex(hexColor);
-    const r = Math.round(rgb.r * (1 - percent));
-    const g = Math.round(rgb.g * (1 - percent));
-    const b = Math.round(rgb.b * (1 - percent));
-
-    const toHex = (n) => {
-      const hex = n.toString(16);
-      return hex.length === 1 ? '0' + hex : hex;
-    };
-
-    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
   }
 
   // Structure placement methods
@@ -3405,6 +3414,7 @@ export class RoomGenerator {
     const centerCol = vault.centerCol;
     const centerRow = vault.centerRow;
     const size = vault.size;
+    this.pendingVaultLoot = [];
 
     // Create hollow square (only walls on perimeter)
     const halfSize = Math.floor(size / 2);
@@ -3433,9 +3443,16 @@ export class RoomGenerator {
 
         if (isPerimeter && row > 0 && row < GRID.ROWS - 1 && col > 0 && col < GRID.COLS - 1) {
           collisionMap[row][col] = true;
+          this.pendingWallCells.push({ col, row });
         }
       }
     }
+
+    // Vault interior abundance — flushed into room.backgroundObjects later
+    this.pendingVaultLoot = buildVaultInteriorLoot(
+      { minCol, maxCol, minRow, maxRow, centerCol, centerRow },
+      (arr) => this._shuffleArray(arr)
+    );
   }
 
   getStructuresForRoom(roomType) {
@@ -3516,6 +3533,13 @@ export class RoomGenerator {
       return false;
     }
 
+    // Keep wall blocks off the vault cage plus a 1-cell ring (door approach)
+    const v = this.currentVaultInfo;
+    if (v && pos.x <= v.maxCol + 1 && pos.x + width - 1 >= v.minCol - 1 &&
+        pos.y <= v.maxRow + 1 && pos.y + height - 1 >= v.minRow - 1) {
+      return false;
+    }
+
     const centerX = Math.floor(GRID.COLS / 2);
     const centerY = Math.floor(GRID.ROWS / 2);
     const clearRadius = 2;
@@ -3561,6 +3585,7 @@ export class RoomGenerator {
       for (let px = 0; px < pattern[py].length; px++) {
         if (pattern[py][px]) {
           collisionMap[pos.y + py][pos.x + px] = true;
+          this.pendingWallCells.push({ col: pos.x + px, row: pos.y + py });
         }
       }
     }
@@ -3938,12 +3963,7 @@ export class RoomGenerator {
     const clearCell = (col, row) => {
       if (!room.collisionMap?.[row]) return;
       room.collisionMap[row][col] = false;
-      const cellX = col * GRID.CELL_SIZE;
-      const cellY = row * GRID.CELL_SIZE;
-      const half = GRID.CELL_SIZE / 2;
-      room.backgroundObjects = room.backgroundObjects.filter(o =>
-        !(Math.abs(o.position.x - cellX) < half && Math.abs(o.position.y - cellY) < half)
-      );
+      protectRegion(room, { kind: 'cells', cells: [{ col, row }] });
     };
 
     // Armor pickup: spawn on the south-center dry strip — players enter from
@@ -3970,6 +3990,7 @@ export class RoomGenerator {
       pedestal.color = '#ccddff';
       pedestal.hasCollision = true;
       pedestal.pearlCachePedestal = true;
+      pedestal.structural = true;
       if (room.collisionMap?.[pRow]) {
         room.collisionMap[pRow][pCol] = true;
       }
@@ -4011,7 +4032,7 @@ export class RoomGenerator {
     // the player must be able to reach the door — so we never roll witch.
     const isPressHut = room.exitLetter === 'P';
     const cheatKind = this.game?.cheat_forceHutKind;
-    const validKinds = new Set(['enemy_encounter', 'neutral_npc', 'wise_man', 'witch']);
+    const validKinds = new Set(['enemy_encounter', 'neutral_npc', 'wise_man', 'fisherman', 'witch']);
     let hutKind;
     if (cheatKind && validKinds.has(cheatKind)) {
       hutKind = cheatKind;
@@ -4021,8 +4042,9 @@ export class RoomGenerator {
       const r = Math.random();
       hutKind =
         r < 0.40 ? 'enemy_encounter' :  // 40% — combat
-        r < 0.70 ? 'neutral_npc'      :  // 30% — errand traveler (placeholder)
-        r < 0.90 ? 'wise_man'         :  // 20% — wise fellow hint
+        r < 0.67 ? 'neutral_npc'      :  // 27% — errand traveler (placeholder)
+        r < 0.83 ? 'wise_man'         :  // 16% — wise fellow hint
+        r < 0.90 ? 'fisherman'        :  //  7% — fishing-loop tips
                    'witch';               // 10% — chicken-leg hut
     }
 
@@ -4047,6 +4069,7 @@ export class RoomGenerator {
         if (!isWall) {
           // Interior cell: paint with dark fill so the hut reads as enclosed.
           const fill = new BackgroundObject('█', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+          fill.structural = true;
           room.backgroundObjects.push(fill);
           interiorObjects.push(fill);
           continue;
@@ -4054,6 +4077,7 @@ export class RoomGenerator {
         // Door cell: mark solid (above) but skip the wall glyph; door overlays.
         if (row === maxRow && col === centerCol) continue;
         const wallObj = new BackgroundObject('≡', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+        wallObj.structural = true;
         room.backgroundObjects.push(wallObj);
         wallObjects.push(wallObj);
       }
@@ -4063,6 +4087,7 @@ export class RoomGenerator {
     const doorCol = centerCol;
     const doorRow = maxRow;
     const doorObj = new BackgroundObject('∩', doorCol * GRID.CELL_SIZE, doorRow * GRID.CELL_SIZE);
+    doorObj.structural = true;
     room.backgroundObjects.push(doorObj);
 
     // Witch huts rest atop two chicken legs: the door is unreachable until the
@@ -4076,6 +4101,7 @@ export class RoomGenerator {
         for (const lr of legRows) {
           if (lr >= GRID.ROWS - 1) continue;
           const leg = new BackgroundObject('λ', lc * GRID.CELL_SIZE, lr * GRID.CELL_SIZE);
+          leg.structural = true;
           room.backgroundObjects.push(leg);
           legObjects.push(leg);
         }
@@ -4102,6 +4128,7 @@ export class RoomGenerator {
       const marker = new BackgroundObject('P', centerCol * GRID.CELL_SIZE, minRow * GRID.CELL_SIZE);
       marker.color = '#ffd54a';
       marker.indestructible = true;
+      marker.structural = true;
       room.backgroundObjects.push(marker);
     }
 
@@ -4111,6 +4138,9 @@ export class RoomGenerator {
     const effectiveMaxRow = maxRow + (isWitchRaised ? 2 : 0);
     const effectiveCenterRow = (minRow + effectiveMaxRow) / 2;
     const effectiveExtH = effectiveMaxRow - minRow + 1;
+
+    // Protect the hut footprint (plus the leg rows on witch huts) from strays.
+    protectRegion(room, { kind: 'rect', minCol, maxCol, minRow, maxRow: effectiveMaxRow });
 
     // Generate background objects (standard combat room style)
     // Override clearing zone to keep hut perimeter clear
@@ -4170,14 +4200,10 @@ export class RoomGenerator {
     // Standard background pass for terrain/decor on the player's side.
     this.generateBackgroundObjects(room);
 
-    // Strip any background objects the standard pass dropped into the ravine
-    // — the ravine gradient covers them visually but they'd flicker through
-    // animations and confuse pathing.
-    for (let i = room.backgroundObjects.length - 1; i >= 0; i--) {
-      const o = room.backgroundObjects[i];
-      const or = Math.floor(o.position.y / CS);
-      if (or >= 1 && or <= RAVINE_ROW_MAX) room.backgroundObjects.splice(i, 1);
-    }
+    // Protect the ravine band so the cleanup pass strips anything dropped
+    // into it — the ravine gradient covers stray objects visually but they'd
+    // flicker through animations and confuse pathing.
+    protectRegion(room, { kind: 'rows', minRow: 1, maxRow: RAVINE_ROW_MAX });
 
     // Solidify the entire ravine band (excluding border columns, which are
     // already solid). RidgeSystem._placeBridgeRow opens cols 14-16 of rows
@@ -4251,27 +4277,19 @@ export class RoomGenerator {
       if (r < 1 || r >= GRID.ROWS - 1 || c < 1 || c >= GRID.COLS - 1) continue;
       room.collisionMap[r][c] = true;
       const stone = new BackgroundObject('◯', c * CS, r * CS);
+      stone.structural = true;
       room.backgroundObjects.push(stone);
     }
 
     // Center water cell — the target of the Infused Coin animation.
     room.collisionMap[centerRow][centerCol] = true;
     const water = new BackgroundObject('=', centerCol * CS, centerRow * CS);
+    water.structural = true;
     room.backgroundObjects.push(water);
 
-    // Strip any background objects the standard pass may have placed inside the
-    // ring footprint so the well silhouette stays clean.
-    for (let i = room.backgroundObjects.length - 1; i >= 0; i--) {
-      const o = room.backgroundObjects[i];
-      const oc = Math.floor(o.position.x / CS);
-      const orow = Math.floor(o.position.y / CS);
-      if (o.char === '◯' || (oc === centerCol && orow === centerRow)) continue;
-      const dr = orow - centerRow;
-      const dc = oc - centerCol;
-      if (Math.sqrt(dr * dr + dc * dc) <= ringRadius + 0.5) {
-        room.backgroundObjects.splice(i, 1);
-      }
-    }
+    // Protect the ring footprint so the cleanup pass strips anything other
+    // passes placed inside it — keeps the well silhouette clean.
+    protectRegion(room, { kind: 'circle', centerCol, centerRow, radius: ringRadius + 0.5 });
 
     // Spawn 1-2 zone enemies in the rest of the room — keeps it from being
     // a pure safe-zone before activation, but light so the player can focus
@@ -4332,6 +4350,7 @@ export class RoomGenerator {
         water.color = '#66bbff';
         water.animationColor = '#aaddff';
         water.fountainWater = true; // marker for shimmer animation + corruption detection
+        water.structural = true;
         room.backgroundObjects.push(water);
       }
     }
@@ -4355,22 +4374,15 @@ export class RoomGenerator {
         fall.color = '#aaddff';
         fall.animationColor = '#eeffff';
         fall.fountainWaterfall = true;
+        fall.structural = true;
         room.collisionMap[r][c] = true;
         room.backgroundObjects.push(fall);
       }
     }
 
-    // Strip any standard objects that landed inside the pool footprint —
-    // matches the well-room cleanup pattern.
-    for (let i = room.backgroundObjects.length - 1; i >= 0; i--) {
-      const o = room.backgroundObjects[i];
-      if (o.fountainWater || o.fountainWaterfall) continue;
-      const oc = Math.floor(o.position.x / CS);
-      const orow = Math.floor(o.position.y / CS);
-      if (Math.abs(orow - centerRow) <= poolRadius && Math.abs(oc - centerCol) <= poolRadius) {
-        room.backgroundObjects.splice(i, 1);
-      }
-    }
+    // Protect the pool footprint so the cleanup pass strips any standard
+    // objects that landed inside it.
+    protectRegion(room, { kind: 'rect', minCol: centerCol - poolRadius, maxCol: centerCol + poolRadius, minRow: centerRow - poolRadius, maxRow: centerRow + poolRadius });
 
     // No enemies — fountain room is a sanctuary. The threat is the player's
     // own choice (corrupting it with elemental damage).
@@ -4410,6 +4422,7 @@ export class RoomGenerator {
           const wall = new BackgroundObject('≡', px, py);
           wall.color = wallColor;
           wall.animationColor = wallColor;
+          wall.structural = true;
           room.backgroundObjects.push(wall);
           if (!foundWall || c < minWallCol) minWallCol = c;
           if (!foundWall || c > maxWallCol) maxWallCol = c;
@@ -4422,9 +4435,11 @@ export class RoomGenerator {
           const door = new BackgroundObject('∩', px, py);
           door.color = doorColor;
           door.animationColor = doorColor;
+          door.structural = true;
           room.backgroundObjects.push(door);
         } else {
           const deco = new BackgroundObject(ch, px, py);
+          deco.structural = true;
           room.backgroundObjects.push(deco);
         }
       }
@@ -4436,6 +4451,8 @@ export class RoomGenerator {
       hutKind: 'enemy_encounter',
       interiorGenerated: false,
     };
+
+    if (foundWall) protectRegion(room, { kind: 'rect', minCol: minWallCol, maxCol: maxWallCol, minRow: minWallRow, maxRow: maxWallRow });
 
     // No random background objects — design covers the full room
     // No enemies — same as maze room
@@ -4465,6 +4482,7 @@ export class RoomGenerator {
         room.collisionMap[row][col] = true;
         const wallObj = new BackgroundObject('≡', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
         wallObj.color = WALL_COLOR;
+        wallObj.structural = true;
         room.backgroundObjects.push(wallObj);
       }
     }
@@ -4498,6 +4516,7 @@ export class RoomGenerator {
         if (col > maxCol - 1 || row > maxRow - 1) continue; // stay inside perimeter
         const decoObj = new BackgroundObject('≡', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
         decoObj.color = DECO_COLOR;
+        decoObj.structural = true;
         room.backgroundObjects.push(decoObj);
       }
     }
@@ -4505,6 +4524,7 @@ export class RoomGenerator {
     // ── South door glyph ────────────────────────────────────────────────────
     const doorObj = new BackgroundObject('∩', centerCol * GRID.CELL_SIZE, maxRow * GRID.CELL_SIZE);
     doorObj.color = WALL_COLOR;
+    doorObj.structural = true;
     room.backgroundObjects.push(doorObj);
 
     // ── Maze metadata (MazeSystem reads this) ───────────────────────────────
@@ -4514,6 +4534,11 @@ export class RoomGenerator {
       interiorGenerated: false,
       sealed: false,
     };
+
+    // Protect the full shell footprint — the decorative interior is non-solid, so
+    // passes that only check the collision map (e.g. yellow river templates)
+    // would otherwise stamp objects across it.
+    protectRegion(room, { kind: 'rect', minCol, maxCol, minRow, maxRow });
 
     // ── Sparse exterior bg objects (no room inside the large shell) ─────────
     const prev = this.currentLetterTemplate?.bgObjectRules?.clearingZone;

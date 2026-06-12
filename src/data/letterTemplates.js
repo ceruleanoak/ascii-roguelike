@@ -215,10 +215,19 @@ export const LETTER_TEMPLATES = {
       allow: false
     },
 
-    // Background objects minimal (tunnel walls are the main feature)
+    // Background objects minimal (tunnel walls are the main feature), but
+    // rocks are biased up: tunnels are the mining aisle — the reliable place
+    // to harvest the zone mineral (see InteractionSystem.getZoneMineral).
+    // Combat strategy stays the room's identity; the rocks give a reason to
+    // pick the T door when low on minerals.
     bgObjectRules: {
       densityMultiplier: 0.3, // Minimal objects
-      grassDensity: 0.2 // Sparse grass
+      grassDensity: 0.2, // Sparse grass
+      objectBias: {
+        '0': 3.0,  // Rocks dominate what little spawns
+        '%': 0.3,
+        '&': 0.2
+      }
     },
 
     // Enemy spawn rules
@@ -306,7 +315,7 @@ export const LETTER_TEMPLATES = {
 
     bgObjectRules: {
       grassDensity: 0.5,
-      objectBias: { '%': 1.2, '0': 0.8, '&': 0.6, 'n': 0.8, 'C': 4.0 }
+      objectBias: { '%': 1.2, '0': 0.8, '&': 0.6, 'n': 0.8 }
     },
 
     // Always inject 1-2 frogs near the lake shore
@@ -367,7 +376,9 @@ export const LETTER_TEMPLATES = {
     // Background object generation rules
     bgObjectRules: {
       densityMultiplier: 1.0, // Normal object density
-      grassDensity: 0.8       // Normal grass (except in water zone)
+      grassDensity: 0.8,      // Normal grass (except in water zone)
+      // Coral grows only here — absolute weight added to the zone table
+      objectWeights: { 'C': 0.08 }
     },
 
     // Exit rules - east exit disabled (ocean blocks passage)
@@ -402,7 +413,7 @@ export const LETTER_TEMPLATES = {
       grassDensity: 0.7,
       objectBias: {
         '%': 1.2, // Slightly more bushes
-        '&': 0.8,
+        '&': 2.0, // Trees cluster around huts
         '0': 0.6
       }
     },
@@ -581,7 +592,7 @@ export const LETTER_TEMPLATES = {
       grassDensity: 0.5,
       objectBias: {
         '%': 1.1,
-        '&': 0.8,
+        '&': 2.0, // Trees cluster around the well
         '0': 0.6
       }
     },

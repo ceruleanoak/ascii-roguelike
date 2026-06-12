@@ -28,7 +28,16 @@ export const PHYSICS = {
   // same rate (they used to tick at 1×). Effective seconds = data value / 2.
   // Do NOT remove without halving every cooldown/windup/recovery/reloadTime/
   // chargeTime in items.js AND the code-level fallbacks that feed cooldownTimer.
-  WEAPON_TIMER_RATE: 2
+  WEAPON_TIMER_RATE: 2,
+
+  // Enemy timers have the same history (resolved bug #92): enemies ticked
+  // twice per frame (main.js + CombatSystem loops) from day one, so all enemy
+  // timing data (attack cooldowns, windups, status durations, decisionInterval,
+  // mergeCooldown) was tuned against double-rate ticking. The duplicate tick
+  // is gone; the single canonical tick multiplies deltaTime by this rate to
+  // preserve the tuned pacing. Effective seconds = data value / 2. Do NOT
+  // remove without halving all enemy timing data in the same pass.
+  ENEMY_TIMER_RATE: 2
 };
 
 export const GAME_STATES = {
@@ -163,8 +172,9 @@ export const BACKGROUND_OBJECTS = {
     name: 'Tree',
     color: '#336633',
     hp: 3,
+    // No dropChance — guaranteed Stick like the rock harvest; sap is a bonus
+    // roll on top (see InteractionSystem spawnIngredient tree branch).
     dropEffect: 'destroyObject:spawnIngredient:|',
-    dropChance: 0.15,
     bulletInteraction: 'block',
     flammability: 'high',
     conductivity: 'none',
@@ -179,14 +189,17 @@ export const BACKGROUND_OBJECTS = {
     solid: true,
     collisionShape: 'ellipse', // Use elliptical collision instead of rectangle
     hp: 3,
-    // Multi-drop harvest: guaranteed Rock, 20% Metal, 12% Moss, 3% Artifact.
-    // No dropChance — table is internally weighted (see InteractionSystem.rockHarvest).
+    // Multi-drop harvest: guaranteed Rock, ~7% zone mineral (green Moss, red
+    // Metal, yellow gem, cyan Arrowhead), 3% Artifact. No dropChance — table is
+    // internally weighted (see InteractionSystem rockHarvest + getZoneMineral).
     dropEffect: 'destroyObject:rockHarvest',
     bulletInteraction: 'interact-preserve',
     flammability: 'none',
     conductivity: 'none',
     interactions: {
       default: { animation: 'bounce', message: null },
+      // Effect char is a placeholder — InteractionSystem swaps in the zone
+      // mineral and limits the poke to once per rock.
       '/': { animation: 'flash', message: null, effect: 'spawnIngredient:M' }
     }
   },

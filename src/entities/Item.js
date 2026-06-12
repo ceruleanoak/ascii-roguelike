@@ -162,6 +162,13 @@ export class Item {
       if (this.chargeTime > this.data.chargeTime) this.chargeTime = this.data.chargeTime;
     }
 
+    // Bat windup: accumulate toward the full 270° charge, capped (BatSystem
+    // reads chargeTime/data.chargeTime as the windup ratio).
+    if (this.isCharging && this.data.batCharge) {
+      this.chargeTime += deltaTime;
+      if (this.chargeTime > this.data.chargeTime) this.chargeTime = this.data.chargeTime;
+    }
+
     // Update bow charging (hold to charge) — also applies to guns flagged requiresCharge
     if (this.isCharging && (this.data.weaponType === 'BOW' || this.data.requiresCharge)) {
       this.chargeTime += deltaTime;
@@ -241,6 +248,17 @@ export class Item {
         this.chargingPlayer = player;
       }
       return null;
+    }
+
+    // Bat: hold-to-windup charge. BatSystem drives the rotating windup visual
+    // and fires the release sweep on SPACE release (handleSpaceRelease).
+    if (this.data.batCharge) {
+      if (!this.isCharging) {
+        this.isCharging = true;
+        this.chargeTime = 0;
+        this.chargingPlayer = player;
+      }
+      return null; // No attack while winding up — release fires the sweep
     }
 
     // Gem wands: hold-to-charge, auto-cast when chargeTime is reached (driven by MagicSystem).
@@ -1237,10 +1255,14 @@ export class Item {
     const spawnY = player.position.y + player.height / 2 + Math.sin(finalAngle) * spawnOffset;
 
     const isBoomerang = !!this.data.boomerang;
-    // Outbound duration scales with bow charge (speedMultiplier = 1 + chargeRatio).
+    // Outbound duration and enemy-to-enemy ricochet budget both scale with bow
+    // charge (speedMultiplier = 1 + chargeRatio).
     const chargeRatio = Math.max(0, Math.min(1, speedMultiplier - 1));
     const boomerangTimer = isBoomerang
       ? (this.data.boomerangBaseDuration ?? 0.45) + chargeRatio * (this.data.boomerangChargeBonus ?? 0.55)
+      : 0;
+    const boomerangBounces = isBoomerang
+      ? Math.round(chargeRatio * (this.data.boomerangMaxRicochets ?? 3))
       : 0;
 
     return {
@@ -1276,6 +1298,8 @@ export class Item {
       chainRadius: this.data.chainRadius,
       boomerangReturning: false,
       boomerangHasHitFirst: false,
+      boomerangBounceTarget: null,                      // enemy locked by post-hit bounce homing
+      boomerangBouncesLeft: boomerangBounces,           // charge-scaled enemy-to-enemy ricochet budget
       drawAngle: isBoomerang ? 0 : undefined
     };
   }

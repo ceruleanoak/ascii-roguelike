@@ -755,12 +755,16 @@ export class TrapSystem {
       const dmgColor = trapData.color || '#ffffff';
 
       // Fire Trap also ignites flammable bg objects in radius — environmental, not per-enemy.
+      // Routed through FireSystem (owns spread + render dirty flag).
       if (trapData.effect === 'burn' && game.currentRoom.backgroundObjects) {
         for (const obj of game.currentRoom.backgroundObjects) {
           if (obj.destroyed || !obj.isFlammable) continue;
           const odx = obj.position.x - tx;
           const ody = obj.position.y - ty;
-          if (Math.sqrt(odx * odx + ody * ody) <= r && obj.isFlammable()) obj.ignite(5.0);
+          if (Math.sqrt(odx * odx + ody * ody) <= r && obj.isFlammable()) {
+            if (game.fireSystem) game.fireSystem.igniteObject(obj, 5.0);
+            else obj.ignite(5.0);
+          }
         }
       }
 

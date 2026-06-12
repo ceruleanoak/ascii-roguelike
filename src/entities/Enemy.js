@@ -118,6 +118,10 @@ export class Enemy {
 
     // AI state
     this.target = null;
+    // Cached return value of this frame's update(), written by the canonical
+    // tick (main.js surface loop / HutSystem / DungeonSystem) and consumed by
+    // CombatSystem.update — bug #92: CombatSystem must not re-tick.
+    this._frameUpdateResult = null;
     this.state = 'idle'; // idle, chase, windup, attack
     this.enraged = false; // Once attacked, always aggro'd
 
@@ -169,7 +173,7 @@ export class Enemy {
 
     // Status effects
     this.statusEffects = {
-      burn: { active: false, duration: 8, damage: 0.5, tickRate: 2.5, tickTimer: 0 },
+      burn: { active: false, duration: 5, damage: 1, tickRate: 1.25, tickTimer: 0 }, // ~4 ticks of 1 over 5s — short, punchy, readable
       poison: { active: false, duration: 0, damage: 0.3, tickRate: 0.3, tickTimer: 0 },
       freeze: { active: false, duration: 0, slowAmount: 0.5, frozen: false, shuddering: false },
       stun: { active: false, duration: 0 },
@@ -427,8 +431,9 @@ export class Enemy {
       this.statusEffects[effect].tickTimer = 0;
     }
 
-    // Drop items when stunned (electric shock effect)
-    if (effect === 'stun' && this.itemUsage && this.inventory.length > 0) {
+    // Electric shock jolts carried items loose. 'zap' is the electric effect;
+    // 'stun' kept for legacy stun-source parity (this hook predates zap).
+    if ((effect === 'stun' || effect === 'zap') && this.itemUsage && this.inventory.length > 0) {
       this.shouldDropItems = true;
     }
   }
@@ -869,6 +874,8 @@ export class Enemy {
     const effectiveDistance = (inSamePlane(this, this.target) || this.enraged || this.aggroMemoryActive)
       ? distance
       : Infinity;
+    // Cyan well blessing shrinks the aggro radius (boss parts use Infinity aggro — unaffected)
+    const effectiveAggroRange = this.target?.stealthBlessed ? this.aggroRange * 0.65 : this.aggroRange;
 
     const leapTrigger = LeapAttackMechanic.tryTrigger(this, { effectiveDistance, dotDamageEvents });
     if (leapTrigger?.suspend) return leapTrigger.result;
@@ -997,7 +1004,7 @@ export class Enemy {
     }
 
     // AI behavior - only engage within aggro range (unless enraged or has memory)
-    if (effectiveDistance > this.aggroRange && !this.enraged) {
+    if (effectiveDistance > effectiveAggroRange && !this.enraged) {
       // Player left aggro range - activate memory mode if we have a last known position
       if (this.lastKnownPosition && !this.aggroMemoryActive) {
         // Cancel the mark if it is now beyond vision range (e.g. enemy was knocked far away).
@@ -1008,7 +1015,7 @@ export class Enemy {
         this.memoryMarkSuspected = markDist > effectiveVisionLength;
         EnemyDebug.log(this, 'MEMORY', 'Activating memory mode — player left aggro range', {
           distToPlayer: distance.toFixed(1),
-          aggroRange: this.aggroRange,
+          aggroRange: effectiveAggroRange,
           suspected: this.memoryMarkSuspected,
           memoryMark: { x: this.lastKnownPosition.x.toFixed(1), y: this.lastKnownPosition.y.toFixed(1) }
         });
@@ -1042,7 +1049,7 @@ export class Enemy {
         // Periodically check if player is back in range and visible (decision-based)
         if (this.decisionTimer <= 0) {
           // If player is within aggro range again, check if we can see them
-          if (distance <= this.aggroRange) {
+          if (distance <= effectiveAggroRange) {
             const canSeePlayer = this.hasVision(this.position, this.target.position, effectiveVisionLength);
             if (canSeePlayer) {
               EnemyDebug.log(this, 'MEMORY', 'Reacquired player — exiting memory mode', {
@@ -1139,7 +1146,7 @@ export class Enemy {
       }
     } else if (this.state === 'windup') {
       this._applyWindupMovement(speedMultiplier);
-    } else if (this.attackType === 'melee' && effectiveDistance < this.attackRange && this.attackTimer > 0 && (this.enraged || effectiveDistance <= this.aggroRange)) {
+    } else if (this.attackType === 'melee' && effectiveDistance < this.attackRange && this.attackTimer > 0 && (this.enraged || effectiveDistance <= effectiveAggroRange)) {
       // Player is inside melee AOE range while on cooldown — back away so the next
       // attack hits. The enemy retreats until it reaches its natural attack distance.
       this.state = 'chase';
@@ -1149,7 +1156,7 @@ export class Enemy {
       this.targetVelocity.vy = -dirY * this.speed * speedMultiplier * 0.5;
     } else if (effectiveDistance <= this.attackRange && this.attackTimer <= 0) {
       // CRITICAL: Can only attack if aggro'd (enraged) OR within aggro range
-      const isAggrod = this.enraged || effectiveDistance <= this.aggroRange;
+      const isAggrod = this.enraged || effectiveDistance <= effectiveAggroRange;
 
       if (isAggrod) {
         // In range and aggro'd - check vision before attacking.
@@ -1172,7 +1179,7 @@ export class Enemy {
         }
       }
       // If not aggro'd, don't attack - fall through to other behaviors
-    } else if ((effectiveDistance > this.attackRange && effectiveDistance <= this.aggroRange) || (this.enraged && effectiveDistance > this.attackRange)) {
+    } else if ((effectiveDistance > this.attackRange && effectiveDistance <= effectiveAggroRange) || (this.enraged && effectiveDistance > this.attackRange)) {
       // Within aggro range OR enraged and outside attack range
       // But first check if we're on the same plane - can't chase across planes unless already enraged/memory
       const onSamePlane = inSamePlane(this, this.target);
@@ -1194,7 +1201,7 @@ export class Enemy {
           wasIdle, canSeePlayer, aggroMemoryActive: this.aggroMemoryActive,
           enraged: this.enraged, lastKnownPosition: !!this.lastKnownPosition,
           hadVisualContact: this.hadVisualContact,
-          effectiveDistance: effectiveDistance.toFixed(1), aggroRange: this.aggroRange
+          effectiveDistance: effectiveDistance.toFixed(1), aggroRange: effectiveAggroRange
         });
 
         if (canSeePlayer) {
@@ -1300,7 +1307,7 @@ export class Enemy {
             // Guarded by hadVisualContact: once an enemy has actually seen the player it must
             // re-acquire through vision, not proximity, to prevent oscillation after reaching
             // a stale memory mark and immediately setting a new one at the player's current spot.
-            if (distance <= this.aggroRange && inSamePlane(this, this.target)) {
+            if (distance <= effectiveAggroRange && inSamePlane(this, this.target)) {
               const closeRange = GRID.CELL_SIZE * 3;
               if (this.isTargetInTallGrass() && distance > closeRange) {
                 // Player is hidden in tall grass — idle enemies can't detect by proximity alone.
@@ -3312,6 +3319,15 @@ export class Enemy {
     return blinkCycle % 2 === 0 ? '#ffffff' : null;
   }
 
+  // Boss/miniboss low-HP warning: blink dark red at ≤30% HP — same near-death
+  // signal as the player (Player.getDisplayColor). Date.now() keeps all parts
+  // of a composite boss blinking in phase.
+  getNearDeathBlinkColor() {
+    if (!(this.isBoss || this.isBossEntity || this.data?.tier === 'boss')) return null;
+    if (this.hp <= 0 || this.hp > this.maxHp * 0.3) return null;
+    return Math.floor(Date.now() / 250) % 2 === 0 ? '#660000' : null;
+  }
+
   getDOTBlinkColor() {
     // DOT effect colors (priority order: burn > poison)
     const DOT_COLORS = {
@@ -3502,13 +3518,12 @@ export class Enemy {
     // the child before mergeCooldown elapses to make the damage stick — otherwise
     // colliding with the boss re-merges it and restores the HP.
     const childHp = Math.max(1, Math.floor(damageAmount));
-    // Spawn range has to clear the boss's own 2-cell rejection radius in
-    // findSpawnPosition; attackRange is too tight (2.5 cells) and almost every
-    // roll lands too close to the boss to be accepted.
+    // Child spawns at the boss's center and is launched outward in a random
+    // direction by registerSplitChild — no placement search needed.
     this.game.enemySpawnSystem.queueRequest(this, {
       spawnChar: cfg.spawnChar,
       spawnCount: 1,
-      spawnRange: GRID.CELL_SIZE * 4,
+      exactPosition: true,
       spawnerPosition: { x: this.position.x, y: this.position.y },
       _splitChildLink: {
         parent: this,
@@ -3524,6 +3539,16 @@ export class Enemy {
     child.mergeCooldownTimer = cfg.mergeCooldown ?? 0;
     child.reformValue = cfg.childHp; // Absorbing returns exactly the HP the player failed to remove
     child.hp = cfg.childHp;
+    // Launch the child away from the boss center in a random direction;
+    // knockback status keeps AI from overriding the velocity mid-flight.
+    const launchAngle = Math.random() * Math.PI * 2;
+    child.velocity.vx = Math.cos(launchAngle) * 300;
+    child.velocity.vy = Math.sin(launchAngle) * 300;
+    child.applyStatusEffect('knockback', 0.35);
+    // Spawn iframes: the child appears at the boss center, inside whatever
+    // attack just split it off — without these it dies instantly. 2 real
+    // seconds (timer is in double-seconds, ENEMY_TIMER_RATE = 2).
+    child.invulnerabilityTimer = 4.0;
     this.splitChildren.add(child);
   }
 

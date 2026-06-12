@@ -31,6 +31,7 @@ export class DemoSystem {
     this.currentIndex = 0; // index into DEMO_RECORDINGS; advances each play
 
     // Recording state
+    this.hotkeyEnabled = false; // arms the global 'r' record hotkey (cheat-menu toggle); off so 'r' stays a normal gameplay key
     this.recording = false;
     this.recordBuffer = [];
     this.recordSeed = 0;

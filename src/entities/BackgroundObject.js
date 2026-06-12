@@ -35,6 +35,9 @@ export class BackgroundObject {
     this.color = this.data.color;
     this.destroyed = false;
 
+    // Rock poke drop ('/' interaction → zone mineral) is claimable once per rock.
+    this.pokeMineralClaimed = false;
+
     this.animationTimer = 0;
     this.currentAnimation = null;
     this.animationOffset = { x: 0, y: 0 };
@@ -44,6 +47,10 @@ export class BackgroundObject {
     this.destroyAfterAnimation = false;
 
     this.hasCollision = false;
+
+    // Part of a generated structure (hut walls, well ring, maze shell, …) —
+    // exempt from the post-generation stray cleanup pass (roomFeatures.js).
+    this.structural = false;
 
     // Special-case hitboxes for certain char types, then fall through to
     // data-driven hitbox (from BACKGROUND_OBJECTS), then to the render-size default.

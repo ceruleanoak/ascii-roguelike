@@ -16,6 +16,22 @@ export class InteractionSystem {
     this._lavaWaterCheckTimer = 0;
   }
 
+  // Each zone's rocks hide a different mineral (rock-harvest rare slot and the
+  // once-per-rock poke drop). Red owns Metal; yellow is the gem/magic zone;
+  // cyan feeds the bow path. Unlisted zones (gray, blue) hide nothing extra.
+  getZoneMineral(zone) {
+    switch (zone) {
+      case 'green':  return '❦';                       // Moss
+      case 'red':    return 'M';                       // Metal
+      case 'yellow': {                                 // Gemstone
+        const gems = ['1', '9', '`', '?', '('];
+        return gems[Math.floor(Math.random() * gems.length)];
+      }
+      case 'cyan':   return '△';                       // Arrowhead
+      default:       return null;
+    }
+  }
+
   // Vault (V room): true when the player stands south of the vault's bottom
   // wall, roughly centered, with the vault key ߃ held.
   canUnlockVault() {
@@ -104,7 +120,7 @@ export class InteractionSystem {
     }
   }
 
-  // Artifact ⚱ → wise fellow: consume the artifact, unlock the rare-tier hint
+  // Artifact ⚜ → wise fellow: consume the artifact, unlock the rare-tier hint
   // for the current zone. Returns true if a wise fellow in range took it.
   tryGiveArtifactToWiseFellow(npcArray) {
     const game = this.game;
@@ -116,7 +132,7 @@ export class InteractionSystem {
         game.player.position.y - npc.position.y
       );
       if (dist > GRID.CELL_SIZE * 2) continue;
-      const idx = game.player.inventory.indexOf('⚱');
+      const idx = game.player.inventory.indexOf('⚜');
       if (idx === -1) continue;
       game.player.inventory.splice(idx, 1);
       npc.unlockRareHint(game.currentRoom?.zone || 'green');
@@ -368,17 +384,23 @@ export class InteractionSystem {
     if (effect === 'destroyObject:rockHarvest') {
       obj.destroyAfterAnimation = true;
       game.renderer.markBackgroundDirty();
+      // Guaranteed Rock + a ~7% zone mineral (each zone's rocks hide a different
+      // rare: knowledge of WHERE to smash rocks is the gate) + 3% Artifact.
       const rolls = [
         { char: '0', chance: 1.00 },
-        { char: 'M', chance: 0.20 },
-        { char: '❦', chance: 0.12 },
-        { char: '⚱', chance: 0.03 }
+        { char: '⚜', chance: 0.03 }
       ];
+      const zoneMineral = this.getZoneMineral(game.currentRoom?.zone);
+      if (zoneMineral) rolls.splice(1, 0, { char: zoneMineral, chance: 0.07 });
       let i = 0;
       for (const r of rolls) {
         if (Math.random() < r.chance) {
           const angle = (i / rolls.length) * Math.PI * 2 + Math.random() * 0.4;
-          game.lootSystem.spawnIngredientDrop(r.char, obj.position.x, obj.position.y, angle, obj);
+          if (isIngredient(r.char)) {
+            game.lootSystem.spawnIngredientDrop(r.char, obj.position.x, obj.position.y, angle, obj);
+          } else {
+            game.lootSystem.spawnItemDrop(r.char, obj.position.x, obj.position.y, angle, obj);
+          }
           i++;
         }
       }
@@ -414,30 +436,37 @@ export class InteractionSystem {
 
     // Handle destroy + spawn combined effects
     if (effect.startsWith('destroyObject:spawnIngredient:')) {
-      let ingredientChar = effect.split(':')[2];
-
-      // Tree sap: red/cyan zones swap to rare elemental saps; other zones
-      // 50/50 between the original drop (Stick) and common Sap (ŝ).
-      if (obj.originalChar === '&') {
-        const zone = game.currentRoom?.zone;
-        if (zone === 'red') ingredientChar = 'š';
-        else if (zone === 'cyan') ingredientChar = 'ş';
-        else if (Math.random() < 0.5) ingredientChar = 'ŝ';
-      }
+      const ingredientChar = effect.split(':')[2];
 
       obj.destroyAfterAnimation = true;
       game.renderer.markBackgroundDirty();
       game.lootSystem.spawnIngredientDrop(ingredientChar, obj.position.x, obj.position.y, null, obj);
+
+      // Tree harvest mirrors rockHarvest: guaranteed Stick above, plus a 15%
+      // sap bonus (red/cyan zones carry rare elemental saps; others common ŝ).
+      if (obj.originalChar === '&' && Math.random() < 0.15) {
+        const zone = game.currentRoom?.zone;
+        const sapChar = zone === 'red' ? 'š' : zone === 'cyan' ? 'ş' : 'ŝ';
+        const angle = Math.random() * Math.PI * 2;
+        game.lootSystem.spawnIngredientDrop(sapChar, obj.position.x, obj.position.y, angle, obj);
+      }
     } else if (effect === 'destroyObject:spawnRandom') {
       obj.destroyAfterAnimation = true;
       game.renderer.markBackgroundDirty();
 
-      const drops = generateEnemyDrops('generic', 'weak', 1);
-      for (const drop of drops) {
-        if (isIngredient(drop)) {
-          game.lootSystem.spawnIngredientDrop(drop, obj.position.x, obj.position.y, null, obj);
-        } else if (isItem(drop)) {
-          game.lootSystem.spawnItemDrop(drop, obj.position.x, obj.position.y, null, obj);
+      // Barrels are provisions caches: 25% of non-empty barrels yield a bread
+      // loaf instead of a generic roll (hut floor-spawn rate was cut in favor
+      // of this path). Crates/metal boxes share spawnRandom and are unaffected.
+      if (obj.originalChar === 'p' && Math.random() < 0.25) {
+        game.lootSystem.spawnItemDrop('⌬', obj.position.x, obj.position.y, null, obj);
+      } else {
+        const drops = generateEnemyDrops('generic', 'weak', 1);
+        for (const drop of drops) {
+          if (isIngredient(drop)) {
+            game.lootSystem.spawnIngredientDrop(drop, obj.position.x, obj.position.y, null, obj);
+          } else if (isItem(drop)) {
+            game.lootSystem.spawnItemDrop(drop, obj.position.x, obj.position.y, null, obj);
+          }
         }
       }
     } else if (effect === 'destroyObject:spawnChestLoot') {
@@ -456,7 +485,7 @@ export class InteractionSystem {
       // Rare Artifact roll on chests — separate from generic loot pool so it
       // doesn't leak into barrels/crates (which share `generic`). 10% per chest.
       if (Math.random() < 0.10) {
-        game.lootSystem.spawnIngredientDrop('⚱', obj.position.x, obj.position.y, null, obj);
+        game.lootSystem.spawnIngredientDrop('⚜', obj.position.x, obj.position.y, null, obj);
       }
     } else if (effect === 'destroyObject') {
       obj.destroyAfterAnimation = true;
@@ -517,8 +546,24 @@ export class InteractionSystem {
       game.items.push(weapon);
       game.physicsSystem.addEntity(weapon);
     } else if (effect.startsWith('spawnIngredient:')) {
-      const ingredientChar = effect.split(':')[1];
-      game.lootSystem.spawnIngredientDrop(ingredientChar, obj.position.x, obj.position.y, null, obj);
+      let ingredientChar = effect.split(':')[1];
+
+      // Rock poke (bullet/staff '/' interaction): yields the zone mineral
+      // instead of the data-table Metal, and only once per rock — the
+      // repeatable guaranteed-Metal poke was the gun-leveling faucet.
+      if (obj.char === '0' || obj.originalChar === '0') {
+        if (obj.pokeMineralClaimed) return;
+        obj.pokeMineralClaimed = true;
+        const zoneMineral = this.getZoneMineral(game.currentRoom?.zone);
+        if (!zoneMineral) return;
+        ingredientChar = zoneMineral;
+      }
+
+      if (isIngredient(ingredientChar)) {
+        game.lootSystem.spawnIngredientDrop(ingredientChar, obj.position.x, obj.position.y, null, obj);
+      } else {
+        game.lootSystem.spawnItemDrop(ingredientChar, obj.position.x, obj.position.y, null, obj);
+      }
     } else if (effect.startsWith('spawnMultiple:')) {
       // Format: spawnMultiple:char:count
       const parts = effect.split(':');

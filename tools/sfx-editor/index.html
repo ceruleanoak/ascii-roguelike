@@ -361,9 +361,9 @@ input[type=range]::-webkit-slider-thumb {
       <option value="ERROR">ERROR</option>
     </optgroup>
   </select>
-  <button id="btn-save-preset" title="Save current SFX as preset">+ SAVE</button>
-  <button id="btn-load-preset" style="display:none" title="Load selected preset">↑ LOAD</button>
-  <button id="btn-del-preset" class="danger" title="Delete selected user preset" disabled>− DEL</button>
+  <button id="btn-save-preset" title="Save as template — NAME may include folders, e.g. enemy/magic/zap">+ SAVE</button>
+  <button id="btn-load-preset" style="display:none" title="Load selected template">↑ LOAD</button>
+  <button id="btn-del-preset" class="danger" title="Delete selected template" disabled>− DEL</button>
   <div class="sep"></div>
   <label>NAME <input type="text" id="sfx-name" value="untitled"></label>
   <label>BPM <input type="number" id="bpm" value="120" min="40" max="300"></label>
@@ -741,28 +741,34 @@ const PRESETS = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// USER PRESET MANAGEMENT
+// TEMPLATE MANAGEMENT — templates/ dir, sub-folders are categories
+// (e.g. enemy/magic/fairy). NAME field accepts folder paths on SAVE.
 // ═══════════════════════════════════════════════════════════════
 
-let userPresets = {};
+let templateIndex = []; // rel paths without .json, e.g. 'enemy/magic/fairy'
 
 function rebuildPresetDropdown() {
   const sel = document.getElementById('preset-select');
   const currentVal = sel.value;
 
-  // Remove any existing user-presets group
-  const existing = document.getElementById('user-presets-group');
-  if (existing) existing.remove();
+  // Remove any existing template groups
+  sel.querySelectorAll('optgroup.tpl-group').forEach(g => g.remove());
 
-  const keys = Object.keys(userPresets);
-  if (keys.length > 0) {
+  // One optgroup per folder path
+  const groups = {};
+  for (const rel of templateIndex) {
+    const idx = rel.lastIndexOf('/');
+    const folder = idx === -1 ? 'templates' : rel.slice(0, idx);
+    (groups[folder] = groups[folder] || []).push(rel);
+  }
+  for (const folder of Object.keys(groups).sort()) {
     const group = document.createElement('optgroup');
-    group.label = 'SAVED';
-    group.id = 'user-presets-group';
-    for (const key of keys) {
+    group.label = folder.toUpperCase();
+    group.className = 'tpl-group';
+    for (const rel of groups[folder]) {
       const opt = document.createElement('option');
-      opt.value = '__user__' + key;
-      opt.textContent = key;
+      opt.value = '__tpl__' + rel;
+      opt.textContent = rel.slice(rel.lastIndexOf('/') + 1);
       group.appendChild(opt);
     }
     sel.appendChild(group);
@@ -773,22 +779,18 @@ function rebuildPresetDropdown() {
   if (sel.value !== currentVal) sel.value = '';
 
   // Sync LOAD/DEL button state to match current dropdown value
-  const isUser = sel.value.startsWith('__user__');
+  const isTpl = sel.value.startsWith('__tpl__');
   const loadBtn = document.getElementById('btn-load-preset');
   const delBtn  = document.getElementById('btn-del-preset');
-  if (loadBtn) loadBtn.style.display = isUser ? '' : 'none';
-  if (delBtn)  delBtn.disabled = !isUser;
+  if (loadBtn) loadBtn.style.display = isTpl ? '' : 'none';
+  if (delBtn)  delBtn.disabled = !isTpl;
 }
 
-async function loadUserPresets() {
+async function refreshTemplateIndex() {
   if (window.electronAPI) {
-    userPresets = (await window.electronAPI.loadPresets()) || {};
+    templateIndex = (await window.electronAPI.listTemplates()) || [];
   }
   rebuildPresetDropdown();
-}
-
-function persistUserPresets() {
-  if (window.electronAPI) window.electronAPI.savePresets(userPresets);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1736,6 +1738,47 @@ class PianoRoll {
 // RANDOMIZER
 // ═══════════════════════════════════════════════════════════════
 
+// Pure variation pass shared by the SUBTLE button and the CLI `vary` command.
+// Mutates and returns sfx. Without levers, everything is unlocked with the
+// default ±12 st sweep range.
+function applySubtleVariation(sfx, factor = 0.15, levers = null) {
+  const lev = levers || {
+    freqRange:  { locked: false },
+    decaySpeed: { locked: false },
+    pitchSweep: { min: -12, max: 12, locked: false }
+  };
+
+  // Nudge note frequencies (skip if freqRange locked)
+  if (!lev.freqRange.locked) {
+    for (const note of sfx.notes) {
+      const midi = freqToMidi(note.frequency);
+      const nudge = Math.round((Math.random() - 0.5) * 2 * factor * 12);
+      note.frequency = midiToFreq(Math.max(0, Math.min(127, midi + nudge)));
+    }
+  }
+  // Nudge note volumes (always — not lever-controlled)
+  for (const note of sfx.notes) {
+    note.volume = Math.max(0.1, Math.min(1, note.volume + (Math.random()-0.5) * factor * 0.5));
+  }
+
+  // Nudge volume envelope (skip if decaySpeed locked)
+  if (!lev.decaySpeed.locked) {
+    for (const pt of sfx.volumeEnvelope) {
+      pt.v = Math.max(0, Math.min(1, pt.v + (Math.random()-0.5) * factor));
+    }
+  }
+
+  // Nudge pitch envelope (skip if pitchSweep locked)
+  if (!lev.pitchSweep.locked) {
+    for (const pt of sfx.pitchEnvelope) {
+      const sweepRange = lev.pitchSweep.max - lev.pitchSweep.min;
+      pt.semitones = Math.max(-36, Math.min(36, pt.semitones + (Math.random()-0.5) * factor * sweepRange));
+    }
+  }
+
+  return sfx;
+}
+
 class Randomizer {
   constructor() {}
 
@@ -1821,39 +1864,9 @@ class Randomizer {
   }
 
   subtle(factor = 0.15) {
-    const lev = appState.randomizerLevers;
-    const sfx = appState.sfx;
-
-    // Nudge note frequencies (skip if freqRange locked)
-    if (!lev.freqRange.locked) {
-      for (const note of sfx.notes) {
-        const midi = freqToMidi(note.frequency);
-        const nudge = Math.round((Math.random() - 0.5) * 2 * factor * 12);
-        note.frequency = midiToFreq(Math.max(0, Math.min(127, midi + nudge)));
-      }
-    }
-    // Nudge note volumes (always — not lever-controlled)
-    for (const note of sfx.notes) {
-      note.volume = Math.max(0.1, Math.min(1, note.volume + (Math.random()-0.5) * factor * 0.5));
-    }
-
-    // Nudge volume envelope (skip if decaySpeed locked)
-    if (!lev.decaySpeed.locked) {
-      for (const pt of sfx.volumeEnvelope) {
-        pt.v = Math.max(0, Math.min(1, pt.v + (Math.random()-0.5) * factor));
-      }
-    }
-
-    // Nudge pitch envelope (skip if pitchSweep locked)
-    if (!lev.pitchSweep.locked) {
-      for (const pt of sfx.pitchEnvelope) {
-        const sweepRange = lev.pitchSweep.max - lev.pitchSweep.min;
-        pt.semitones = Math.max(-36, Math.min(36, pt.semitones + (Math.random()-0.5) * factor * sweepRange));
-      }
-    }
-
+    applySubtleVariation(appState.sfx, factor, appState.randomizerLevers);
     requestRedraw();
-    if (synth) synth.play(sfx);
+    if (synth) synth.play(appState.sfx);
   }
 
   _rand(a, b) { return a + Math.random() * (b - a); }
@@ -1888,7 +1901,8 @@ class Exporter {
     try {
       const buffer = await this.synth.renderOffline(appState.sfx);
       const wav = this._toWAV(buffer);
-      const name = appState.sfx.name || 'untitled';
+      // Names may be template paths (enemy/magic/fairy) — file name is the basename
+      const name = (appState.sfx.name || 'untitled').split('/').pop();
 
       overlay.classList.remove('visible');
       btn.disabled = false;
@@ -1945,6 +1959,22 @@ class Exporter {
 
     return ab;
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CLI BRIDGE — called via executeJavaScript by the headless `sfx`
+// CLI (main.js). Same render path as the GUI export.
+// ═══════════════════════════════════════════════════════════════
+
+async function __cliRender(sfx) {
+  const buffer = await synth.renderOffline(sfx);
+  const wav = exporter._toWAV(buffer);
+  const u8 = new Uint8Array(wav);
+  let bin = '';
+  for (let i = 0; i < u8.length; i += 0x8000) {
+    bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  }
+  return btoa(bin);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2221,8 +2251,8 @@ document.addEventListener('DOMContentLoaded', () => {
   volEnvEditor   = new EnvelopeEditor(document.getElementById('vol-env-canvas'),   'volumeEnvelope');
   pitchEnvEditor = new EnvelopeEditor(document.getElementById('pitch-env-canvas'), 'pitchEnvelope');
 
-  // Load persisted user presets
-  loadUserPresets();
+  // Load template index from templates/
+  refreshTemplateIndex();
 
   // Resize canvases
   setTimeout(() => { resizeEnvCanvases(); resizePianoRoll(); requestRedraw(); }, 50);
@@ -2251,7 +2281,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById(id).addEventListener('focus', pushUndo);
   });
 
-  // Preset selector — built-ins auto-load; user presets only select (use LOAD to apply)
+  // Preset selector — built-ins auto-load; templates only select (use LOAD to apply)
   document.getElementById('preset-select').addEventListener('change', e => {
     const val = e.target.value;
     const delBtn  = document.getElementById('btn-del-preset');
@@ -2263,10 +2293,10 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    if (val.startsWith('__user__')) {
-      // User preset: select only — enable LOAD and DEL without loading
-      const key = val.slice(8);
-      const exists = !!userPresets[key];
+    if (val.startsWith('__tpl__')) {
+      // Template: select only — enable LOAD and DEL without loading
+      const rel = val.slice(7);
+      const exists = templateIndex.includes(rel);
       delBtn.disabled  = !exists;
       loadBtn.style.display = exists ? '' : 'none';
       loadBtn.disabled = !exists;
@@ -2289,15 +2319,16 @@ document.addEventListener('DOMContentLoaded', () => {
     loadBtn.style.display = 'none';
   });
 
-  // Load the currently selected user preset
-  document.getElementById('btn-load-preset').addEventListener('click', () => {
+  // Load the currently selected template
+  document.getElementById('btn-load-preset').addEventListener('click', async () => {
     const val = document.getElementById('preset-select').value;
-    if (!val.startsWith('__user__')) return;
-    const key = val.slice(8);
-    if (!userPresets[key]) return;
+    if (!val.startsWith('__tpl__') || !window.electronAPI) return;
+    const rel = val.slice(7);
+    const preset = await window.electronAPI.loadTemplate(rel);
+    if (!preset) return;
     pushUndo();
-    const preset = JSON.parse(JSON.stringify(userPresets[key]));
     for (const note of preset.notes) note.id = uid();
+    preset.name = rel; // round-trip: SAVE writes back to the same template path
     appState.sfx = preset;
     clearSelection();
     syncAllUI();
@@ -2306,29 +2337,28 @@ document.addEventListener('DOMContentLoaded', () => {
     if (synth) synth.play(preset);
   });
 
-  // Save current SFX as user preset
-  document.getElementById('btn-save-preset').addEventListener('click', () => {
-    const name = (appState.sfx.name || 'untitled').trim();
-    userPresets[name] = JSON.parse(JSON.stringify(appState.sfx));
-    rebuildPresetDropdown();
-    document.getElementById('preset-select').value = '__user__' + name;
+  // Save current SFX as a template — NAME may include folders (enemy/magic/zap)
+  document.getElementById('btn-save-preset').addEventListener('click', async () => {
+    if (!window.electronAPI) return;
+    const rel = (appState.sfx.name || 'untitled').trim().replace(/^\/+|\/+$/g, '');
+    if (!rel) return;
+    await window.electronAPI.saveTemplate(rel, JSON.parse(JSON.stringify(appState.sfx)));
+    await refreshTemplateIndex();
+    document.getElementById('preset-select').value = '__tpl__' + rel;
     document.getElementById('btn-del-preset').disabled = false;
     document.getElementById('btn-load-preset').style.display = '';
     document.getElementById('btn-load-preset').disabled = false;
-    persistUserPresets();
   });
 
-  // Delete the currently selected user preset
-  document.getElementById('btn-del-preset').addEventListener('click', () => {
+  // Delete the currently selected template
+  document.getElementById('btn-del-preset').addEventListener('click', async () => {
     const val = document.getElementById('preset-select').value;
-    if (!val.startsWith('__user__')) return;
-    const key = val.slice(8);
-    delete userPresets[key];
-    rebuildPresetDropdown();
+    if (!val.startsWith('__tpl__') || !window.electronAPI) return;
+    await window.electronAPI.deleteTemplate(val.slice(7));
+    await refreshTemplateIndex();
     document.getElementById('preset-select').value = '';
     document.getElementById('btn-del-preset').disabled = true;
     document.getElementById('btn-load-preset').style.display = 'none';
-    persistUserPresets();
   });
 
   document.getElementById('sfx-name').addEventListener('input', e => {

@@ -11,9 +11,11 @@ export const RECIPES = [
   // === ROCK RECIPES ===
   { left: '0', right: '0', result: '△', name: 'Arrowhead' },      // Rock + Rock = Arrowhead
   { left: '0', right: '|', result: '⊥', name: 'Hammer' },        // Rock + Stick = Hammer
+  { left: '⊥', right: '⊥', result: '⟘', name: 'Maul' },          // Hammer + Hammer = Maul (radial knockback; explicit so T1 never slot-machines)
   { left: '⊥', right: '6', result: '⬢', name: 'Onyx Hammer' },   // Hammer + Onyx = Onyx Hammer (crit + faster windup)
   { left: '0', right: '~', result: '⊸', name: 'Sling' },         // Rock + String = Sling
   { left: '|', right: '△', result: '⇈', name: 'Fletch of Arrows' }, // Stick + Arrowhead = Fletch of Arrows
+  { left: '△', right: '|', result: '⊦', name: 'Axe' },           // Arrowhead + Stick = Axe (slot order distinguishes from Fletch, like Bone Axe/Warplate)
   { left: '/', right: '△', result: '↑', name: 'Spear' },         // Staff + Arrowhead = Spear
 
   // Basic weapon upgrades
@@ -23,6 +25,9 @@ export const RECIPES = [
   { left: '|', right: '~', result: ')', name: 'Bow' },           // Stick + String = Bow
   { left: '|', right: '|', result: '/', name: 'Staff' },         // Stick + Stick = Staff
   { left: '/', right: '/', result: 'Ψ', name: 'Thick Staff' },   // Staff + Staff = Thick Staff
+  { left: 'Ψ', right: 'Ψ', result: '¡', name: 'Bat' },           // Thick Staff + Thick Staff = Bat (windup slugger)
+  { left: 'g', right: '|', result: '‖', name: 'Rubber Bat' },    // Goo + Stick = Rubber Bat (0 dmg, launch only)
+  { left: '¡', right: 'M', result: '⸘', name: 'Metal Bat' },     // Bat + Metal = Metal Bat (double damage)
   { left: 'M', right: '|', result: '↾', name: 'Dagger' },      // Metal + Stick = Dagger
 
   // === GEM WANDS (Staff + gemstone) ===

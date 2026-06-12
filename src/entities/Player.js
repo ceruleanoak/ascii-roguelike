@@ -158,6 +158,10 @@ export class Player {
     this.luckBlessed = false;
     this.critChance = 0;        // chance to crit on player→enemy hits
     this.luckDodgeBonus = 0;    // additional dodge chance, distinct from armor dodgeChance
+    // Well coin blessings — permanent run-flags granted by tossing a raw coin
+    // (`c`) into a well. Booleans, so they cannot stack.
+    this.wellDamageBlessed = false; // red zone well: +1 damage on all attacks
+    this.stealthBlessed = false;    // cyan zone well: enemies detect at reduced radius
     this.blockBoostTimer = 0;
     this.blockBoostAmount = 0;
     this.stoneSkinTimer = 0;
@@ -290,8 +294,10 @@ export class Player {
       return;
     }
 
-    // Check if charging a bow (for movement slowdown)
-    const isChargingBow = this.heldItem && this.heldItem.isCharging;
+    // Check if charging a bow (for movement slowdown). Bat windup (batCharge)
+    // is exempt from the full stop — it moves at half speed instead (see the
+    // batChargeMult max-speed clamp below).
+    const isChargingBow = this.heldItem && this.heldItem.isCharging && !this.heldItem.data?.batCharge;
 
     // Calculate target acceleration based on input (1.5x acceleration when unarmed)
     // Polymorph speed/accel overrides (set by PolymorphSystem when in frog form)
@@ -369,7 +375,9 @@ export class Player {
     const batMax = this.batFormTimer > 0 ? armorModified * 1.8 : armorModified;
     const boostedMax = this.speedBoostTimer > 0 ? Math.max(batMax, armorModified * this.speedBoostMultiplier) : batMax;
     const firingMult = this.firingSlowTimer > 0 ? 0.35 : 1; // Dramatic ~65% slow while firing a gun
-    const finalMax = boostedMax * this.getStatusSpeedMultiplier() * firingMult; // Apply status effect slows (goo, freeze)
+    // Bat windup: half speed while charging — slowed like other charge weapons, but not the bow's full stop
+    const batChargeMult = (this.heldItem?.isCharging && this.heldItem.data?.batCharge) ? 0.5 : 1;
+    const finalMax = boostedMax * this.getStatusSpeedMultiplier() * firingMult * batChargeMult; // Apply status effect slows (goo, freeze)
     const speed = Math.sqrt(this.velocity.vx ** 2 + this.velocity.vy ** 2);
     if (speed > finalMax) {
       this.velocity.vx = (this.velocity.vx / speed) * finalMax;
@@ -1135,6 +1143,10 @@ export class Player {
     this.luckBlessed = false;
     this.critChance = 0;
     this.luckDodgeBonus = 0;
+
+    // Reset well coin blessings
+    this.wellDamageBlessed = false;
+    this.stealthBlessed = false;
 
     // Reset armor properties
     this.defense = 0;

@@ -1,0 +1,81 @@
+{
+  "name": "enemy/magic/fairy",
+  "totalDuration": 0.8561649253179977,
+  "bpm": 120,
+  "snapMode": "none",
+  "instrument": {
+    "type": "square",
+    "duty": 0.5,
+    "noiseType": "white",
+    "noiseFilterFreq": 2000,
+    "masterGain": 0.8
+  },
+  "volumeEnvelope": [
+    {
+      "t": 0,
+      "v": 1
+    },
+    {
+      "t": 0.10015793973814949,
+      "v": 0.7331599869666429
+    },
+    {
+      "t": 0.20031587947629897,
+      "v": 0.18183894129169503
+    },
+    {
+      "t": 1,
+      "v": 0.058047733819619585
+    }
+  ],
+  "pitchEnvelope": [
+    {
+      "t": 0,
+      "semitones": 1.7419881484153978
+    },
+    {
+      "t": 0.3,
+      "semitones": 1.1013600273429764
+    },
+    {
+      "t": 1,
+      "semitones": -2.019520066715014
+    }
+  ],
+  "notes": [
+    {
+      "id": "l310jpyuhzimpw20t7i",
+      "time": 0.018616287263660384,
+      "duration": 0.26307051719125785,
+      "frequency": 1567.981743926997,
+      "volume": 0.926298812197694
+    },
+    {
+      "id": "0e1ttq34vlxmpw20t7i",
+      "time": 0.33287636580672675,
+      "duration": 0.1875161842020797,
+      "frequency": 1396.9129257320155,
+      "volume": 0.9078850670869568
+    },
+    {
+      "id": "dd7y34t8xedmpw20t7i",
+      "time": 0.4585889272064843,
+      "duration": 0.06046391255877814,
+      "frequency": 1244.5079348883235,
+      "volume": 0.7156524398836407
+    },
+    {
+      "id": "kk9vv9aqgzhmpw20t7i",
+      "time": 0.5179530924187674,
+      "duration": 0.19571183289923033,
+      "frequency": 2489.015869776647,
+      "volume": 0.8792732391864563
+    }
+  ],
+  "echo": {
+    "enabled": true,
+    "delay": 0.08,
+    "scale": 0.28,
+    "count": 2
+  }
+}

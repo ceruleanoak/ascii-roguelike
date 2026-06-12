@@ -197,9 +197,21 @@ export class SandstormSystem {
   _strikeRandom() {
     const lss = this.game.lightningStrikeSystem;
     if (!lss) return;
-    const margin = GRID.CELL_SIZE * 2;
-    const x = margin + Math.random() * (GRID.WIDTH  - margin * 2);
-    const y = margin + Math.random() * (GRID.HEIGHT - margin * 2);
+    let x, y;
+    // Half the storm strikes aim at water when the room has any — rivers are
+    // the show: a strike on the channel sends a visible electric cascade
+    // downstream (ElectricitySystem). The rest stay fully random.
+    const waterTiles = (this.game.currentRoom?.backgroundObjects ?? [])
+      .filter(o => !o.destroyed && o.isWater?.());
+    if (waterTiles.length > 0 && Math.random() < 0.5) {
+      const t = waterTiles[Math.floor(Math.random() * waterTiles.length)];
+      x = t.position.x + GRID.CELL_SIZE / 2;
+      y = t.position.y + GRID.CELL_SIZE / 2;
+    } else {
+      const margin = GRID.CELL_SIZE * 2;
+      x = margin + Math.random() * (GRID.WIDTH  - margin * 2);
+      y = margin + Math.random() * (GRID.HEIGHT - margin * 2);
+    }
     lss.scheduleStrike({ x, y, delay: 0.7, hitsPlayer: true, plane: 0 });
   }
 

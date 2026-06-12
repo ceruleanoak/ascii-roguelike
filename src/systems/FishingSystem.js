@@ -45,12 +45,25 @@ export class FishingSystem {
     this.maxFishCount = 3; // Decreases with each successful catch
     this.fishSpawnTimer = 0;
     this.rusalkaKilledPlayer = false;
+    // Electrified water killed the fish this room visit — they drop Meat and
+    // the minigame stays disabled until the player leaves the room.
+    this.fishingElectrocuted = false;
   }
 
   // ── Condition checks ─────────────────────────────────────────────────────
 
   isLakeRoom(game) {
     return game.currentRoom?.letterTemplate?.name === 'Lake';
+  }
+
+  // Ocean ('O') rooms fish like lakes but roll the dedicated 'ocean' table
+  // (ocean creatures + the blue-zone supply line).
+  isOceanRoom(game) {
+    return game.currentRoom?.letterTemplate?.name === 'Ocean';
+  }
+
+  isOpenWaterRoom(game) {
+    return this.isLakeRoom(game) || this.isOceanRoom(game);
   }
 
   // Fountain ('F') rooms support fishing with the FOUNTAIN_CATCHES table.
@@ -61,11 +74,12 @@ export class FishingSystem {
   }
 
   isFishableRoom(game) {
-    return this.isLakeRoom(game) || this.isFountainRoom(game);
+    return this.isOpenWaterRoom(game) || this.isFountainRoom(game);
   }
 
   fishingZone(game) {
     if (this.isFountainRoom(game)) return 'fountain';
+    if (this.isOceanRoom(game)) return 'ocean';
     return game.currentRoom?.zone || 'green';
   }
 
@@ -113,6 +127,7 @@ export class FishingSystem {
   }
 
   canFish(game) {
+    if (this.fishingElectrocuted) return false; // dead water — nothing left to catch
     if (!this.isFishableRoom(game) || !this.roomCleared(game)) return false;
     if (!this.holdingFishingRod(game) || this.state !== STATES.IDLE) return false;
     // Fountain rooms: cast at the water itself, no ambient fish required.
@@ -309,12 +324,16 @@ export class FishingSystem {
       }
     }
 
-    // Spawn ambient fish when room is cleared — Lake only.
+    // Spawn ambient fish when room is cleared — open water (Lake/Ocean) only.
     // Fountains are fishable but visually a clean sanctuary; the fountain
     // catch table is rolled at cast time, no ambient fish needed.
-    if (this.isLakeRoom(game) && this.roomCleared(game)) {
+    if (this.isOpenWaterRoom(game) && this.roomCleared(game)) {
+      // Electrified water kills fish on contact (the cascade front sweeps the
+      // lake and pops them one by one into Meat drops).
+      this.checkFishElectrocution(game);
+
       this.fishSpawnTimer -= dt;
-      if (this.fishSpawnTimer <= 0) {
+      if (this.fishSpawnTimer <= 0 && !this.fishingElectrocuted) {
         this.spawnAmbientFish(game);
         this.fishSpawnTimer = FISH_SPAWN_INTERVAL_MIN +
           Math.random() * (FISH_SPAWN_INTERVAL_MAX - FISH_SPAWN_INTERVAL_MIN);
@@ -323,6 +342,46 @@ export class FishingSystem {
       // Update existing fish
       for (let i = this.fishEntities.length - 1; i >= 0; i--) {
         this.fishEntities[i].update(dt);
+      }
+    }
+  }
+
+  /**
+   * Kill any fish whose water tile is electrified: the fish pops into a Meat
+   * ('m') ingredient drop, and fishing is disabled for the rest of this room
+   * visit (the catch is dead — nothing left to hook). An in-progress cast is
+   * cancelled so the player isn't stuck waiting on a bite from a dead lake.
+   */
+  checkFishElectrocution(game) {
+    if (this.fishEntities.length === 0) return;
+    const C = GRID.CELL_SIZE;
+    const electrifiedCells = new Set();
+    for (const obj of game.currentRoom?.backgroundObjects ?? []) {
+      if (obj.destroyed || !obj.isWater?.()) continue;
+      if (obj.waterState !== 'electrified') continue;
+      electrifiedCells.add(`${Math.round(obj.position.x / C)},${Math.round(obj.position.y / C)}`);
+    }
+    if (electrifiedCells.size === 0) return;
+
+    for (let i = this.fishEntities.length - 1; i >= 0; i--) {
+      const fish = this.fishEntities[i];
+      const key = `${Math.round(fish.position.x / C)},${Math.round(fish.position.y / C)}`;
+      if (!electrifiedCells.has(key)) continue;
+
+      this.fishEntities.splice(i, 1);
+      this.fishingElectrocuted = true;
+      game.lootSystem?.spawnIngredientDrop?.('m', fish.position.x, fish.position.y);
+      game.combatSystem?.createDamageNumber?.('⚡', fish.position.x, fish.position.y - C * 0.5, '#ffff00');
+
+      // Cancel an in-flight cast (charging/bobbing/bite) — the lake is dead.
+      if (this.state !== STATES.IDLE) {
+        this.state = STATES.IDLE;
+        this.bobber = null;
+        this.chargeTime = 0;
+        this.biteTimer = 0;
+        this.windowTimer = 0;
+        this.targetedFish = null;
+        if (game.player) game.player.fishingLocked = false;
       }
     }
   }
@@ -396,8 +455,11 @@ export class FishingSystem {
       allWater.map(o => `${Math.round(o.position.x / GRID.CELL_SIZE)},${Math.round(o.position.y / GRID.CELL_SIZE)}`)
     );
 
-    // Only spawn on tiles that have at least 2 cardinal-direction water neighbors
+    // Only spawn on tiles that have at least 2 cardinal-direction water
+    // neighbors. Electrified tiles are excluded — no fish surfaces into a
+    // live current (checkFishElectrocution would just kill it next frame).
     const eligible = allWater.filter(tile => {
+      if (tile.waterState === 'electrified') return false;
       const col = Math.round(tile.position.x / GRID.CELL_SIZE);
       const row = Math.round(tile.position.y / GRID.CELL_SIZE);
       let neighbors = 0;
@@ -456,6 +518,7 @@ export class FishingSystem {
     this.maxFishCount = 3;
     this.fishSpawnTimer = 0;
     this.rusalkaKilledPlayer = false;
+    this.fishingElectrocuted = false; // dead water is per-room — new room, new fish
     // rusalkaHasAppeared is intentionally NOT reset — it's a permanent run toggle
     if (player) {
       player.fishingLocked = false;

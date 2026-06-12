@@ -91,12 +91,53 @@ export class PhysicsSystem {
       if (!inSamePlane(player, enemy)) continue; // Cross-plane enemies are non-interactive
       const dx = player.position.x - enemy.position.x;
       const dy = player.position.y - enemy.position.y;
+      // A corrupted (NaN) enemy position must not propagate to the player:
+      // Math.sqrt(NaN) || 1 yields 1, which passes the overlap check below.
+      if (!Number.isFinite(dx) || !Number.isFinite(dy)) continue;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
       if (dist < MIN_DIST) {
         const overlap = (MIN_DIST - dist) / MIN_DIST;
         const force = FORCE * overlap;
         this.applyImpulse(player, dx, dy, force);
         this.applyImpulse(enemy, -dx, -dy, force);
+      }
+    }
+  }
+
+  /**
+   * Knocked-away chain: an enemy flying from knockback bowls over any enemy it
+   * collides with — the struck enemy departs at the flyer's current speed along
+   * the line of centers (billiard-style deflection: an enemy offset to the left
+   * of the flight path is sent at a matching leftward angle), and inherits the
+   * knocked-away state so the chain continues. Already-flying enemies are
+   * skipped so two enemies travelling together don't re-launch each other.
+   * Velocity transfer routes through _applyKnockbackForce, so mass/knockback
+   * resistance scale the inherited speed and state interruption applies.
+   * Call once per frame after the physics update.
+   */
+  propagateKnockAway(enemies) {
+    const CONTACT_DIST = GRID.CELL_SIZE * 1.1;
+    const MIN_CHAIN_SPEED = 80; // slower than this won't bowl anything over
+    for (const enemy of enemies) {
+      if (enemy.dead || !enemy.isKnockedBack?.()) continue;
+      const speed = Math.sqrt(enemy.velocity.vx ** 2 + enemy.velocity.vy ** 2);
+      if (speed < MIN_CHAIN_SPEED) continue;
+      for (const other of enemies) {
+        if (other === enemy || other.dead) continue;
+        if (other.isKnockedBack?.()) continue;
+        if (!inSamePlane(enemy, other)) continue;
+        const dx = other.position.x - enemy.position.x;
+        const dy = other.position.y - enemy.position.y;
+        if (!Number.isFinite(dx) || !Number.isFinite(dy)) continue;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist >= CONTACT_DIST) continue;
+        // Only contacts on the flyer's leading side are impacts — an enemy
+        // grazed on the trailing side shouldn't launch backward into the flyer.
+        if (dx * enemy.velocity.vx + dy * enemy.velocity.vy <= 0) continue;
+        const nx = dist > 0 ? dx / dist : enemy.velocity.vx / speed;
+        const ny = dist > 0 ? dy / dist : enemy.velocity.vy / speed;
+        const remaining = Math.max(enemy.statusEffects?.knockback?.duration ?? 0, 0.2);
+        this._applyKnockbackForce(other, nx, ny, speed, remaining);
       }
     }
   }
@@ -109,6 +150,18 @@ export class PhysicsSystem {
     entity.velocity.vx = nx * scaledForce;
     entity.velocity.vy = ny * scaledForce;
     entity.applyStatusEffect?.('knockback', duration);
+
+    // Knocked away interrupts in-flight telegraphs (attack windup, charge
+    // windup/dash) so they don't resume mid-air or fire on landing. The AI
+    // loop already idles the main state machine while knockback is active.
+    if (entity.state === 'windup') {
+      entity.state = 'chase';
+      entity.windupTimer = 0;
+    }
+    if (entity.chargeState === 'windup' || entity.chargeState === 'charging') {
+      entity.chargeState = 'idle';
+      entity.chargeWindupTimer = 0;
+    }
   }
 
   update(deltaTime, backgroundObjects = [], room = null) {
@@ -1201,10 +1254,8 @@ export class PhysicsSystem {
 
       // Check water immunity (Rubber Boots) — blocks elemental status effects but not movement slow
       const isImmune = entity === game.player && game.player.waterImmunityTimer > 0;
-      // Stingray Mantle: wearer is immune to shock from electrified water
-      // (their own wake or any other source) — they sit at the source of the
-      // current, not in its path.
-      const isShockImmune = entity === game.player && game.player.stingrayMantle;
+      // Shock consequences (and shock immunities — Stingray Mantle, electric
+      // affinity) are owned by ElectricitySystem.shockEntity, not here.
 
       // Apply wet status (6s; Math.max in applyWet/applyStatusEffect refreshes while in water)
       if (!isImmune) {
@@ -1221,9 +1272,8 @@ export class PhysicsSystem {
       if (!isImmune) {
         if (liquidState === 'poisoned') {
           if (entity.applyStatusEffect) entity.applyStatusEffect('poison', 4.0);
-        } else if (liquidState === 'electrified' && !isShockImmune) {
-          if (entity.applyStatusEffect) entity.applyStatusEffect('stun', 1.5);
-          if (entity.takeDamage) entity.takeDamage(1);
+        } else if (liquidState === 'electrified') {
+          game.electricitySystem?.shockEntity(entity);
         }
       }
     }

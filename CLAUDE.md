@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Browser-based roguelike, vanilla JavaScript + Vite. `npm run dev` / `npm run build`. CheatMenu: press `\` in-game.
+Browser-based roguelike, vanilla JavaScript + Vite. `npm run dev` / `npm run build`. Dev/debug tooling: see "Dev & Debug Tools" below.
 
 ## Deploying
 
@@ -14,6 +14,20 @@ Builds for production and pushes `dist/` to the `gh-pages` branch. Live at https
 
 - Do not create GitHub Actions workflows or any other deploy mechanism — this script is the deploy motion.
 - Run it directly whenever the user says "deploy", "publish", "push to pages", or similar.
+
+## Dev & Debug Tools
+
+Three tiers — pick the right one; don't reach for the CheatMenu when a headless tool fits.
+
+**In-game — CheatMenu** (`\` in-game, `src/systems/CheatMenu.js`): god mode, magic meter, demo recording, particle fireworks, death-ledger download, zone jump, boss/enemy/item/trap/ingredient spawning. Manual browser testing only — it cannot verify anything headlessly.
+
+**CLI / headless:**
+- `npm run build` — production build; runs `check:arch` first. Primary verification step after code changes.
+- `npm run check:arch` — architecture budget check alone (faster than full build when that's all you need).
+- `node playtesting/simulator.js [--runs N --zone X]` — headless balance/TTK simulation; see `playtesting/README.md`. Weapon timing data is in double-seconds (÷2 vs. real game).
+- `tools/sfx-editor/` — SFX authoring. GUI: `npm start` inside that folder. Headless CLI: `tools/sfx-editor/sfx list | render <name> | render all | vary <name> --count N` (run `sfx help`). Templates live in `tools/sfx-editor/templates/` as git-tracked JSON; sub-folders are categories (e.g. `enemy/magic/fairy`). CLI output goes to `tools/sfx-editor/renders/` (gitignored) — audition there, promote a variant by copying its `.json` into `templates/`, and ship audio by rendering with `--out public/assets/audio/<name>.wav`. Grow the template tree over time: save new sounds under a category path rather than loose names.
+
+**Ad-hoc debug scripts** (bug repro, state-dump one-offs): write them to `tools/debug/*.mjs` — never the project root. The directory is gitignored. Delete the script when the bug closes; promote anything durable into `playtesting/` or a named `tools/` script.
 
 ## Design Philosophy
 
@@ -36,8 +50,9 @@ Log immediately when you observe: unexpected behavior, user-reported bugs, revea
 Entry format: `| N | **Short title** — symptom + root cause | source/date | open |`
 - P1 = confirmed broken. P2 = balance/missing implementation.
 - **On fix**: move the row into `claudedocs/resolved-bugs.md` with `✅ fixed — <date> — <one-line summary>` in the status column. Do not leave a resolved stub in `known-bugs.md`.
-- **Not a bug?** Drop the entry entirely (design decision, false positive, verification reminder). Track playtest/verification work in a TODO, not the bug list.
+- **Not a bug?** Drop the entry entirely (design decision, false positive, verification reminder). Track playtest/verification work in `claudedocs/pinboard.md`, not the bug list.
 - Bug numbers are never reused.
+- **Categories**: recurring root-cause families carry a `[category]` tag in the bug title; the Categories block at the top of `known-bugs.md` names each family's canonical fix shape. Check it before debugging a new report, and propose a new category when a third bug shares a root cause.
 
 ## Zones and Rooms
 
@@ -55,6 +70,8 @@ All modes share CombatSystem, PhysicsSystem, and entity classes.
 ## Critical UI Constraints
 
 **Top status bar must stay a single horizontal line.** Never break HP | DEPTH | INVENTORY | QUICK SLOTS into multiple rows.
+
+**Popup/modal UIs are non-instructive — compliance rule.** No key-hint footers, no explanatory headers/questions, no "X → Y" pickup messages. Content is limited to glyphs, the selection cursor, and bare option labels (e.g. STORE IN CHEST) — the visuals speak for themselves. Applies to every new popup; SlotReplacementOverlay is the reference implementation.
 
 ## Font Rules
 

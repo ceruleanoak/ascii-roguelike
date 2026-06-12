@@ -8,6 +8,12 @@ const GRID_COLS = 4;
 const TILE_COLS = 5;   // cell-widths per tile
 const TILE_ROWS = 3;   // cell-heights per tile
 
+// Actions that do NOT mark the run as cheated (dev/cosmetic only).
+// Everything else returned by handleInput sets game.cheatUsed for the death ledger.
+const CHEAT_EXEMPT_ACTIONS = new Set([
+  'download_death_ledger', 'toggle_demo_recording', 'toggle_record_hotkey', 'toggle_particle_fireworks'
+]);
+
 export class CheatMenu {
   constructor(game = null) {
     this.game = game;
@@ -33,12 +39,14 @@ export class CheatMenu {
     const meterActive = !!this.game?.player?.magicMeter?.active;
 
     const demoRecording = !!this.game?.demoSystem?.recording;
+    const recordHotkey = !!this.game?.demoSystem?.hotkeyEnabled;
     const fireworks = !!this.game?.particleFireworks;
-    const deathCount = sessionDeaths.length;
+    const deathCount = sessionDeaths.filter(r => r.event !== 'revive').length;
     const togglesItems = [
       { char: godMode ? '✓' : '○', name: `GOD MODE [${godMode ? 'ON' : 'OFF'}]`, type: 'toggle_god_mode', color: godMode ? '#00ff88' : '#888888' },
       { char: meterActive ? '✓' : '○', name: `MAGIC METER [${meterActive ? 'ON' : 'OFF'}]`, type: 'activate_magic_meter', color: meterActive ? '#cc66ff' : '#888888' },
       { char: demoRecording ? '●' : '○', name: `RECORD DEMO [${demoRecording ? 'ON' : 'OFF'}]`, type: 'toggle_demo_recording', color: demoRecording ? '#ff4444' : '#888888' },
+      { char: recordHotkey ? 'R' : '○', name: `R RECORD KEY [${recordHotkey ? 'ON' : 'OFF'}]`, type: 'toggle_record_hotkey', color: recordHotkey ? '#ff8844' : '#888888' },
       { char: fireworks ? '✶' : '○', name: `PARTICLE FIREWORKS [${fireworks ? 'ON' : 'OFF'}]`, type: 'toggle_particle_fireworks', color: fireworks ? '#ffaa44' : '#888888' },
       { char: '↓', name: `DOWNLOAD LEDGER (${deathCount} death${deathCount !== 1 ? 's' : ''})`, type: 'download_death_ledger', color: deathCount > 0 ? '#aaaaff' : '#444466' }
     ];
@@ -282,6 +290,14 @@ export class CheatMenu {
   // ── Input ───────────────────────────────────────────────────────────────
 
   handleInput(key) {
+    const result = this._handleInput(key);
+    if (result?.action && !CHEAT_EXEMPT_ACTIONS.has(result.action) && this.game) {
+      this.game.cheatUsed = true;
+    }
+    return result;
+  }
+
+  _handleInput(key) {
     if (!this.isOpen) return null;
 
     // Depth jump mode
@@ -400,6 +416,14 @@ export class CheatMenu {
     if (selected.type === 'toggle_god_mode') return { action: 'toggle_god_mode' };
     if (selected.type === 'activate_magic_meter') return { action: 'activate_magic_meter' };
     if (selected.type === 'toggle_demo_recording') return { action: 'toggle_demo_recording' };
+    if (selected.type === 'toggle_record_hotkey') {
+      // Self-contained dev toggle — arms/disarms the global 'r' record hotkey
+      // without a main.js dispatch branch.
+      const demo = this.game?.demoSystem;
+      if (demo) demo.hotkeyEnabled = !demo.hotkeyEnabled;
+      this.rebuild();
+      return 'handled';
+    }
     if (selected.type === 'toggle_particle_fireworks') return { action: 'toggle_particle_fireworks' };
     if (selected.type === 'download_death_ledger') return { action: 'download_death_ledger' };
     if (selected.type === 'zone') return { action: 'teleport_zone', zone: selected.zone };

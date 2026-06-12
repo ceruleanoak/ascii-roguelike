@@ -12,6 +12,42 @@ export class MenuSystem {
     this.closeOnMovement = false;
   }
 
+  // ── Menu navigation (driven by menuIntent in main.js setupInput) ─────────
+
+  // Column switching with wrapping, skipping disabled columns. dir = -1 | 1.
+  moveColumn(dir) {
+    const game = this.game;
+    if (!game.menuColumns) return;
+    const maxColumns = game.menuColumns.length;
+    let newColumn = game.selectedColumn + dir;
+    let attempts = 0;
+
+    while (attempts < maxColumns) {
+      if (newColumn < 0) newColumn = maxColumns - 1; // Wrap to end
+      if (newColumn >= maxColumns) newColumn = 0;    // Wrap to start
+      if (!game.disabledColumns[newColumn]) break;
+      newColumn += dir;
+      attempts++;
+    }
+
+    if (attempts < maxColumns) {
+      game.selectedColumn = newColumn;
+      game.selectedMenuIndex = 0;
+      game.menuItems = game.menuColumns[game.selectedColumn];
+      game.renderController.menuOverlay.render(game);
+    }
+  }
+
+  // Move the selection within the current column, clamped. dir = -1 | 1.
+  moveSelection(dir) {
+    const game = this.game;
+    game.selectedMenuIndex = Math.max(
+      0,
+      Math.min(game.menuItems.length - 1, game.selectedMenuIndex + dir)
+    );
+    game.renderController.menuOverlay.render(game);
+  }
+
   // Returns true (and resets the flag) if movement-exit is active and a movement key is held.
   checkMovementExit(keys) {
     if (!this.closeOnMovement) return false;

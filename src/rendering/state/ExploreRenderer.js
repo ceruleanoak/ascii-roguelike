@@ -23,8 +23,7 @@ import { GRID, COLORS, ROOM_TYPES } from '../../game/GameConfig.js';
 import { INGREDIENTS } from '../../data/items.js';
 import { BRIDGE_MATERIALS } from '../../systems/RidgeSystem.js';
 import { PixelatedDissolve, SplitReveal } from '../effects/TextEffects.js';
-import { CHARGE_DURATION, ROLL_CHARS, HEAD_OFFSET } from '../../entities/TurtleShell.js';
-import { HEAD_FLASH_FREQ } from '../../entities/TurtleHead.js';
+import { BossRenderer } from './BossRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE } from '../../data/cipher.js';
 
 function drawDizzyOrbitals(ctx, cx, cy, timer) {
@@ -54,6 +53,7 @@ export class ExploreRenderer {
   constructor(renderer, renderController) {
     this.renderer = renderer;
     this.renderController = renderController;
+    this.bossRenderer = new BossRenderer(renderer);
 
     // REST label pixelated-dissolve effect (speed=1.5 → ~0.67 s full transition)
     // blockSize=6 gives chunky cell-sized blocks that match the VentureArcade font.
@@ -178,6 +178,7 @@ export class ExploreRenderer {
       const isGrass = obj.char === '|' || obj.char === '\\' || obj.char === '/' || obj.char === ',';
       const isTunnelWall = obj.data && obj.data.tunnelWall;
       if (obj.isCampfire) continue;
+      if (obj.onFire) continue; // burning objects flicker on the foreground (drawBurningObjects)
       if (!obj.currentAnimation && obj.char !== '~' && !isGrass && !isTunnelWall) {
         // Check plane-aware rendering (tunnel entrances, etc.)
         if (!this.shouldRenderBackgroundObject(obj, game.player)) continue;
@@ -989,7 +990,7 @@ export class ExploreRenderer {
 
     // Draw boss composite (body + necks + multi-char heads) — skips individual entity rendering
     if (!inHut && !inMaze && !inDungeon && game.bossSystem?.active) {
-      this.renderBossComposite(game);
+      this.bossRenderer.renderBossComposite(game);
     }
 
     // Draw grass on foreground AFTER player so it appears on top
@@ -998,6 +999,7 @@ export class ExploreRenderer {
     // render their own foreground layer, and exterior grass must not bleed over the overlay.
     if (!inHut && !inMaze && !inDungeon) {
       for (const obj of game.backgroundObjects) {
+        if (obj.onFire) continue; // burning grass is drawn by the flicker pass below
         const isGrass = obj.char === '|' || obj.char === '\\' || obj.char === '/' || obj.char === ',';
         if (isGrass && !obj.currentAnimation && !obj.destroyed) {
           if (!this.shouldRenderBackgroundObject(obj, game.player)) continue;
@@ -1011,6 +1013,10 @@ export class ExploreRenderer {
           );
         }
       }
+
+      // Burning objects flicker on the foreground each frame (same idea as the
+      // campfire loop) — drawn after grass so the fire reads on top of the field.
+      this.drawBurningObjects(game, false);
     }
 
     // Draw rolling rocks and edge-warning arrows (red zone only)
@@ -1211,40 +1217,36 @@ export class ExploreRenderer {
     }
 
     // Coin arc — north-peaked parabola from player → NPC, mirroring well ritual
-    const sys = game.campNPCSystem;
-    const anim = sys?.getCoinAnim?.();
-    if (anim) {
-      const dur = 0.55;
-      const peak = GRID.CELL_SIZE * 4;
-      const t = Math.min(1, anim.t / dur);
-      const x = anim.startX + (anim.endX - anim.startX) * t;
-      const arcLift = 4 * t * (1 - t);
-      const baseY = anim.startY + (anim.endY - anim.startY) * t;
-      const y = baseY - peak * arcLift;
-      const frames = ['c', 'O', '|', 'O'];
-      const frame = frames[Math.floor(anim.spinPhase) % frames.length];
-      ctx.save();
-      ctx.font = `${GRID.CELL_SIZE * 1.25}px 'Unifont', monospace`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#ffcc66';
-      ctx.shadowColor = '#ffaa33';
-      ctx.shadowBlur = 6;
-      ctx.fillText(frame, x, y);
-      ctx.restore();
-    }
+    const anim = game.campNPCSystem?.getCoinAnim?.();
+    if (anim) this.drawCoinArc(anim);
 
-    // Hint text — center-screen, like spell responses
-    const hint = sys?.getHintText?.();
-    if (hint) {
-      ctx.save();
-      ctx.font = `${GRID.CELL_SIZE * 1.5}px 'VentureArcade', Unifont, monospace`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#ffffaa';
-      this.renderer.drawWrappedText(ctx, hint, GRID.WIDTH / 2, GRID.HEIGHT / 2 - 80, GRID.WIDTH * 0.7, GRID.CELL_SIZE * 1.8);
-      ctx.restore();
-    }
+    // Camp NPC hints speak through the dialogue box (DialogueSystem), not
+    // center-screen text — that style is reserved for the narrator voice.
+  }
+
+  // Spinning wallet-coin arc (player → recipient). Shared by the surface
+  // camp-NPC pass and the hut PiP (fisherman coin trade) — the PiP path works
+  // because fgCtx is already translated to interior coords when this runs.
+  drawCoinArc(anim) {
+    const ctx = this.renderer.fgCtx;
+    const dur = 0.55;
+    const peak = GRID.CELL_SIZE * 4;
+    const t = Math.min(1, anim.t / dur);
+    const x = anim.startX + (anim.endX - anim.startX) * t;
+    const arcLift = 4 * t * (1 - t);
+    const baseY = anim.startY + (anim.endY - anim.startY) * t;
+    const y = baseY - peak * arcLift;
+    const frames = ['c', 'O', '|', 'O'];
+    const frame = frames[Math.floor(anim.spinPhase) % frames.length];
+    ctx.save();
+    ctx.font = `${GRID.CELL_SIZE * 1.25}px 'Unifont', monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffcc66';
+    ctx.shadowColor = '#ffaa33';
+    ctx.shadowBlur = 6;
+    ctx.fillText(frame, x, y);
+    ctx.restore();
   }
 
   _renderExitSplits(game, centerX, centerY) {
@@ -1477,6 +1479,10 @@ export class ExploreRenderer {
       if (enemy.inLava && enemy.data?.lavaImmune && iframeColor === null) {
         displayColor = Math.floor(Date.now() / 250) % 2 === 0 ? '#ff3300' : displayColor;
       }
+
+      // Boss/miniboss near-death warning: blink dark red — highest-priority signal (mirrors the player)
+      const nearDeathColor = enemy.getNearDeathBlinkColor();
+      if (nearDeathColor !== null) displayColor = nearDeathColor;
 
       // Use dithered rendering for tunnel plane entities (plane 1)
       const useDithering = enemy.plane === 1 && game.player.plane === 1;
@@ -1928,382 +1934,6 @@ export class ExploreRenderer {
 
     // Default: render all objects
     return true;
-  }
-
-  // ── Boss composite rendering ───────────────────────────────────────────────
-
-  /**
-   * Renders the full Goo Dragon boss as a multi-character composite:
-   *   - Central body (5 chars wide)
-   *   - Three necks as chains of '~' between body and each head
-   *   - Three heads (3 chars wide each): middle head is the main weak point,
-   *     side heads are secondary (damageable only during grab escape)
-   *   - Red eye indicator on the middle head when vulnerable
-   */
-  renderBossComposite(game) {
-    const bs = game.bossSystem;
-    if (!bs?.active) return;
-    if (bs.lakeBoss)    { this.renderLakeBossComposite(game); return; }
-    if (bs.turtleShell) { this.renderTurtleBossComposite(game); return; }
-    if (!bs.dragon) return;
-
-    const dragon = bs.dragon;
-    const cs  = GRID.CELL_SIZE;
-    const ctx = this.renderer.fgCtx;
-
-    // Body is anchored at the dragon's float center (static reference point)
-    const bx = dragon.floatCenterX;
-    const by = dragon.floatCenterY;
-
-    const baseColor = dragon.color;
-    const stunTimer = dragon.bossStunTimer;
-    const isStunned = stunTimer > 0;
-    // Last second: flash between light blue and white at 10 Hz
-    const stunFlash = isStunned && stunTimer < 1.0 && Math.floor(stunTimer * 10) % 2 === 0;
-
-    const bodyColor = stunFlash ? '#ffffff'
-                    : isStunned ? '#88bbff'
-                    : baseColor;
-
-    // I-frame flash: alternate body/neck/heads to white only when iframes were triggered by player damage
-    const dragonFlash  = !isStunned && dragon.hitFlash && Math.floor(performance.now() / 1000 * 24) % 2 === 0;
-    const drawBodyColor = dragonFlash ? '#ffffff' : bodyColor;
-
-    // ── Body + middle neck + middle head ──────────────────────────────────
-    const bodyChars = ['{', '~', '=', '~', '}'];
-    for (let i = 0; i < bodyChars.length; i++) {
-      this.renderer.drawEntity(bx + (i - 2) * cs, by, bodyChars[i], drawBodyColor);
-    }
-
-    this._drawBossNeck(dragon.position, { x: bx, y: by }, drawBodyColor);
-    this._drawBossHead(dragon, 'middle', stunFlash, isStunned, dragonFlash);
-
-    // ── Side heads (each has its own i-frame state) ────────────────────────
-    for (const head of bs.heads) {
-      const headInvulnerable = head.invulnerabilityTimer > 0;
-      const headFlash = headInvulnerable && Math.floor(performance.now() / 1000 * 24) % 2 === 0;
-      const headNeckColor = headFlash ? '#ffffff' : bodyColor;
-
-      if (!head.detached) this._drawBossNeck(head.position, { x: bx, y: by }, headNeckColor);
-      this._drawBossHead(head, 'side', stunFlash, isStunned, headFlash);
-    }
-
-    // ── HP bar (shown only after first damage) ────────────────────────────
-    if (dragon.hasTakenDamage) {
-      const BAR_W = cs * 5, BAR_H = 4;
-      const barX  = bx - BAR_W / 2;
-      const barY  = by - cs * 1.5;
-      ctx.fillStyle = '#333333';
-      ctx.fillRect(barX, barY, BAR_W, BAR_H);
-      ctx.fillStyle = dragon.bossPhase >= 3 ? '#cc3300' : dragon.bossPhase === 2 ? '#aacc22' : '#22cc44';
-      ctx.fillRect(barX, barY, BAR_W * Math.max(0, dragon.hp / dragon.maxHp), BAR_H);
-    }
-  }
-
-  // ── Turtle boss composite (red zone) ──────────────────────────────────────
-
-  renderTurtleBossComposite(game) {
-    const bs    = game.bossSystem;
-    const shell = bs.turtleShell;
-    const head  = bs.turtleHead;
-    const cs    = GRID.CELL_SIZE;
-    const ctx   = this.renderer.fgCtx;
-
-    const shellFlash   = shell.hitFlash && Math.floor(performance.now() / 1000 * 24) % 2 === 0;
-    const shellColor   = shellFlash ? '#ffffff' : shell.color;
-    const isCharging   = shell.shellState === 'charging';
-
-    // shell.position.x/y is the visual body center
-    const sx = shell.position.x;
-    const sy = shell.position.y;
-
-    // ── Legs (4 corners, visible always — sold as part of the turtle body) ──
-    const legBaseColor = shell.bossPhase >= 2 ? '#ffaa66' : '#a07820';
-    const legColor     = shellFlash ? '#ffffff' : legBaseColor;
-    for (const leg of bs.turtleLegs) {
-      const legFlash  = leg.hitFlash && Math.floor(performance.now() / 1000 * 24) % 2 === 0;
-      const lc        = legFlash ? '#ffffff' : legColor;
-      // leg.position is top-left of 1×1; center = position + cs/2
-      this.renderer.drawEntity(leg.position.x + cs * 0.5, leg.position.y + cs * 0.5, leg.char, lc);
-    }
-
-    // ── Shell body (5×2): brackets + inner fill ───────────────────────────
-    // When stopped/charging: solid shell pattern (@); when rolling: animated chars
-    const innerA  = isCharging ? '@' : (ROLL_CHARS[shell.rollAnimFrame] ?? 'O');
-    const innerB  = isCharging ? '@' : (ROLL_CHARS[(shell.rollAnimFrame + 2) % ROLL_CHARS.length] ?? '0');
-    const bracketL = isCharging ? '{' : '(';
-    const bracketR = isCharging ? '}' : ')';
-    // Top row
-    this.renderer.drawEntity(sx - cs * 2, sy - cs * 0.5, bracketL, shellColor);
-    this.renderer.drawEntity(sx - cs,     sy - cs * 0.5, innerA,   shellColor);
-    this.renderer.drawEntity(sx,          sy - cs * 0.5, innerB,   shellColor);
-    this.renderer.drawEntity(sx + cs,     sy - cs * 0.5, innerA,   shellColor);
-    this.renderer.drawEntity(sx + cs * 2, sy - cs * 0.5, bracketR, shellColor);
-    // Bottom row
-    this.renderer.drawEntity(sx - cs * 2, sy + cs * 0.5, bracketL, shellColor);
-    this.renderer.drawEntity(sx - cs,     sy + cs * 0.5, innerB,   shellColor);
-    this.renderer.drawEntity(sx,          sy + cs * 0.5, innerA,   shellColor);
-    this.renderer.drawEntity(sx + cs,     sy + cs * 0.5, innerB,   shellColor);
-    this.renderer.drawEntity(sx + cs * 2, sy + cs * 0.5, bracketR, shellColor);
-
-    // ── HP bar (shown only after first damage) ────────────────────────────
-    if (shell.hasTakenDamage) {
-      const BAR_W = cs * 5, BAR_H = 4;
-      const barX  = sx - BAR_W / 2;
-      const barY  = sy - cs * 1.5;
-      ctx.fillStyle = '#333333';
-      ctx.fillRect(barX, barY, BAR_W, BAR_H);
-      ctx.fillStyle = shell.bossPhase >= 2 ? '#ffaa66' : '#cc3300';
-      ctx.fillRect(barX, barY, BAR_W * Math.max(0, shell.hp / shell.maxHp), BAR_H);
-    }
-
-    // ── Phase 1: flame charge cone overlay ────────────────────────────────
-    if (shell.bossPhase === 1 && shell.shellState === 'charging' && head) {
-      this._renderFlameChargeCone(ctx, shell, head, cs);
-    }
-
-    // ── Head rendering ────────────────────────────────────────────────────
-    if (head) {
-      if (shell.bossPhase === 1 && head.headState === 'extended') {
-        this._renderTurtleHeadP1(ctx, head, cs);
-      } else if (shell.bossPhase >= 2) {
-        this._renderTurtleHeadP2(ctx, shell, head, cs);
-      }
-    }
-  }
-
-  _renderFlameChargeCone(ctx, shell, head, cs) {
-    const progress     = Math.min(shell.chargeTimer / CHARGE_DURATION, 1.0);
-    const CONE_HALF    = Math.PI / 5;   // must match TurtleShell CONE_HALF_SPREAD (±36°)
-    const coneLen      = cs * 7;
-    // Cone originates from head center, not shell center
-    const ox = head.position.x + cs;
-    const oy = head.position.y + cs;
-    const angle = shell.chargeTargetAngle;
-
-    ctx.save();
-
-    // Filled danger cone — darkens as charge builds
-    ctx.globalAlpha = 0.15 + progress * 0.30;
-    ctx.fillStyle   = '#ff4400';
-    ctx.beginPath();
-    ctx.moveTo(ox, oy);
-    ctx.arc(ox, oy, coneLen, angle - CONE_HALF, angle + CONE_HALF);
-    ctx.closePath();
-    ctx.fill();
-
-    // Pulsing edge lines
-    const pulseAlpha = 0.4 + Math.sin(performance.now() / 1000 * 8) * 0.3;
-    ctx.globalAlpha  = pulseAlpha;
-    ctx.strokeStyle  = '#ff8800';
-    ctx.lineWidth    = 1.5;
-    for (const side of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(ox, oy);
-      ctx.lineTo(ox + Math.cos(angle + side * CONE_HALF) * coneLen,
-                 oy + Math.sin(angle + side * CONE_HALF) * coneLen);
-      ctx.stroke();
-    }
-
-    ctx.restore();
-  }
-
-  _renderTurtleHeadP1(ctx, head, cs) {
-    const flashOn   = Math.floor(head.flashTimer / HEAD_FLASH_FREQ) % 2 === 0;
-    const headColor = flashOn ? '#ffffff' : head.color;
-    // head.position is top-left of 2×2; center = (position.x + cs, position.y + cs)
-    const hcx = head.position.x + cs;
-    const hcy = head.position.y + cs;
-    this.renderer.drawEntity(hcx - cs / 2, hcy - cs / 2, 'Θ', headColor);
-    this.renderer.drawEntity(hcx + cs / 2, hcy - cs / 2, 'Θ', headColor);
-    this.renderer.drawEntity(hcx - cs / 2, hcy + cs / 2, 'Θ', headColor);
-    this.renderer.drawEntity(hcx + cs / 2, hcy + cs / 2, 'Θ', headColor);
-  }
-
-  _renderTurtleHeadP2(ctx, shell, head, cs) {
-    // ── Orbiting head (2×2) ───────────────────────────────────────────────
-    const headHitFlash  = head.hitFlash && Math.floor(performance.now() / 1000 * 24) % 2 === 0;
-    const preFireFlash  = head.preFireFlashTimer > 0 && Math.floor(performance.now() / 1000 * 20) % 2 === 0;
-    const headColor     = (headHitFlash || preFireFlash) ? '#ffffff' : head.color;
-    const hcx = head.position.x + cs;
-    const hcy = head.position.y + cs;
-    this.renderer.drawEntity(hcx - cs / 2, hcy - cs / 2, 'Θ', headColor);
-    this.renderer.drawEntity(hcx + cs / 2, hcy - cs / 2, 'Θ', headColor);
-    this.renderer.drawEntity(hcx - cs / 2, hcy + cs / 2, 'Θ', headColor);
-    this.renderer.drawEntity(hcx + cs / 2, hcy + cs / 2, 'Θ', headColor);
-
-  }
-
-  renderLakeBossComposite(game) {
-    const boss = game.bossSystem.lakeBoss;
-    const cs   = GRID.CELL_SIZE;
-    const ctx  = this.renderer.fgCtx;
-
-    // UNDERWATER: darken nearby water tiles; don't render body
-    if (boss.state === 'underwater') {
-      const tx = boss.position.x, ty = boss.position.y;
-      const R  = cs * 4;
-      const RSq = R * R;
-      ctx.save();
-      ctx.globalAlpha = 0.4;
-      ctx.fillStyle   = '#000033';
-      for (const obj of game.currentRoom.backgroundObjects) {
-        if (obj.destroyed || !obj.isWater || !obj.isWater()) continue;
-        const dx = obj.position.x - tx, dy = obj.position.y - ty;
-        if (dx * dx + dy * dy <= RSq)
-          ctx.fillRect(obj.position.x, obj.position.y, cs, cs);
-      }
-      ctx.restore();
-      return;  // no body rendered while submerged
-    }
-
-    // SURFACED / SLAMMING: draw composite body
-    const bx = boss.position.x + cs / 2;
-    const by = boss.position.y + cs / 2 + boss.jumpOffset;
-
-    // i-frame color cycle (24 Hz) — only when iframes were triggered by player damage
-    const FLASH_COLORS = ['#ff2222', '#ff8800', '#ffee00'];
-    const flashColor = boss.hitFlash ? FLASH_COLORS[Math.floor(performance.now() / 1000 * 24) % FLASH_COLORS.length] : null;
-
-    const hp_pct   = boss.hp / boss.maxHp;
-    const BODY_CLR = flashColor ?? (hp_pct < 0.4 ? '#ff8888' : '#aaffff');
-    const EYE_CLR  = '#ffffff';
-    const RIM_CLR  = flashColor ?? '#4488aa';
-
-    const draw = (offX, offY, char, color) =>
-      this.renderer.drawEntity(bx + offX * cs, by + offY * cs, char, color);
-
-    // Row -2: eyes
-    draw(-2, -2, '\u25C9', EYE_CLR);  // ◉
-    draw(+2, -2, '\u25C9', EYE_CLR);
-
-    // Row -1: surface frill
-    draw(-1, -1, '~', BODY_CLR);
-    draw( 0, -1, '^', BODY_CLR);
-    draw(+1, -1, '~', BODY_CLR);
-
-    // Row 0: mouth — forced open during fall phase slam
-    const slamming = boss.state === 'slamming';
-    const falling  = slamming && boss.jumpPhase === 'fall';
-    const mChars   = falling ? ['{', ' ', ' ', ' ', '}'] : boss.getMouthChars();
-    for (let i = 0; i < 5; i++) {
-      const c = (i === 0 || i === 4) ? RIM_CLR : BODY_CLR;
-      draw(i - 2, 0, mChars[i], c);
-    }
-
-    // Row +1: exposed lower body while airborne
-    if (slamming) {
-      ['(', '~', '~', '~', '~', '~', ')'].forEach((ch, i) =>
-        draw(i - 3, +1, ch, BODY_CLR));
-    }
-
-    // HP bar (above composite, shown only after first damage)
-    if (boss.hasTakenDamage) {
-      const BAR_W = cs * 6, BAR_H = 4;
-      const barX  = bx - BAR_W / 2, barY = by - cs * 3.5;
-      ctx.fillStyle = '#333';
-      ctx.fillRect(barX, barY, BAR_W, BAR_H);
-      ctx.fillStyle = '#aaffff';
-      ctx.fillRect(barX, barY, BAR_W * (boss.hp / boss.maxHp), BAR_H);
-    }
-  }
-
-  /**
-   * Draw a chain of '~' chars along the line from bodyCenter to headPos.
-   * Skips the first and last segment so chars don't overlap the body or head.
-   */
-  _drawBossNeck(headPos, bodyCenter, color) {
-    const cs = GRID.CELL_SIZE;
-    const hx = headPos.x + cs / 2;
-    const hy = headPos.y + cs / 2;
-    const dx = hx - bodyCenter.x;
-    const dy = hy - bodyCenter.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 1) return;
-
-    // Fixed segment count — spacing stretches with neck length instead of chars appearing/disappearing
-    const NECK_SEGS = 7;
-
-    // Perpendicular unit vector (rotated 90°)
-    const perpX = -dy / dist;
-    const perpY =  dx / dist;
-
-    // Travelling sine wave. Envelope sin(t·π) tapers to 0 at both endpoints so the
-    // neck connects smoothly to body and head rather than whipping at the joints.
-    const waveAmp   = cs * 0.42;
-    const timePhase = (performance.now() / 1000) * 2.2;
-
-    for (let i = 1; i < NECK_SEGS; i++) {
-      const t        = i / NECK_SEGS;
-      const envelope = Math.sin(t * Math.PI);             // 0 at ends, 1 at middle
-      const wave     = Math.sin(t * Math.PI * 3 - timePhase) * waveAmp * envelope;
-      const nx = bodyCenter.x + dx * t + perpX * wave;
-      const ny = bodyCenter.y + dy * t + perpY * wave;
-      this.renderer.drawEntity(nx, ny, '~', color);
-    }
-  }
-
-  /**
-   * Draw a 3-char head for the given entity.
-   * Middle head: <Ω> (main weak point), red eye circle when vulnerable.
-   * Side heads:  (ω) normally, >ω< when actively grabbing.
-   */
-  // Lerp from entity's base green toward yellow as HP drops
-  // Lerp from #22cc44 (full health) toward #cc3300 (empty) as HP drops
-  _bossHeadHealthColor(entity) {
-    const t = 1 - Math.max(0, entity.hp / entity.maxHp);
-    const r = Math.round(0x22 + (0xcc - 0x22) * t);
-    const g = Math.round(0xcc + (0x33 - 0xcc) * t);
-    const b = Math.round(0x44 * (1 - t));
-    return `rgb(${r},${g},${b})`;
-  }
-
-  _drawBossHead(entity, type, stunFlash, isStunned, iframeFlash = false) {
-    const cs = GRID.CELL_SIZE;
-    const hx = entity.position.x + cs / 2;
-    const hy = entity.position.y + cs / 2;
-
-    const dead        = entity.hp <= 0;
-    const healthColor = dead ? '#555555' : this._bossHeadHealthColor(entity);
-    let color;
-
-    if (type === 'middle') {
-      const mouthOpen = entity.mouthOpenTimer > 0;
-      color = dead                    ? '#555555'
-            : stunFlash || iframeFlash ? '#ffffff'
-            : isStunned               ? '#88bbff'
-            : healthColor;
-      const spread = mouthOpen ? cs * 1 : cs * 0.5;
-      this.renderer.drawEntity(hx - spread, hy, '<', color);
-      this.renderer.drawEntity(hx,          hy, 'Ω', color);
-      this.renderer.drawEntity(hx + spread, hy, '>', color);
-    } else {
-      const grabbing  = entity.isGrabbing;
-      const mouthOpen = entity.isLunging && !grabbing;
-      color = dead                    ? '#555555'
-            : stunFlash || iframeFlash ? '#ffffff'
-            : isStunned               ? '#88bbff'
-            : grabbing                ? '#44ff66'
-            : healthColor;
-      // Open mouth: brackets wide; closed: brackets tucked inside the ω glyph
-      const spread = mouthOpen ? cs * 1.2 : cs * 0.5;
-      this.renderer.drawEntity(hx - spread, hy, '<', color);
-      this.renderer.drawEntity(hx,          hy, 'ω', color);
-      this.renderer.drawEntity(hx + spread, hy, '>', color);
-    }
-
-    if (type === 'side') return; // brackets already drawn above
-
-    // Red eye dot above vulnerable middle head
-    if (type === 'middle' && entity.vulnerable) {
-      const ctx = this.renderer.fgCtx;
-      ctx.save();
-      ctx.fillStyle = '#ff2222';
-      ctx.beginPath();
-      ctx.arc(hx, hy - cs * 0.75, cs * 0.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
   }
 
   _renderBridgePanel(game) {
@@ -2823,6 +2453,34 @@ export class ExploreRenderer {
   // render contexts. Surface caller passes hutPlane=false (skips interior-spawned
   // entries); HutInteriorOverlay caller passes hutPlane=true (skips surface entries).
   // Spawn sites tag with `entity.hutPlane = !!game.activeFloor`.
+  // Draw burning objects on the foreground each frame so the fire flicker reads
+  // (modeled on the campfire loop in renderForeground — same per-frame approach).
+  // Keeps each object's own char; only the color cycles through fire tones.
+  // hutPlane=true is the interior overlay path (activeFloor objects), matching
+  // the drawPuddles/drawDebris helper convention.
+  drawBurningObjects(game, hutPlane = false) {
+    const objects = hutPlane
+      ? (game.activeFloor?.backgroundObjects ?? [])
+      : game.backgroundObjects;
+    const FIRE_COLORS = ['#ff4400', '#ff8800', '#ffaa00'];
+    for (const obj of objects) {
+      if (!obj.onFire || obj.destroyed || obj.isCampfire) continue;
+      if (!hutPlane && !this.shouldRenderBackgroundObject(obj, game.player)) continue;
+      // Campfire-like cadence (~0.13s per swap), keyed off the object's own
+      // fireTimer with a per-cell phase offset so a field doesn't blink in unison.
+      const phase = Math.floor(obj.position.x / GRID.CELL_SIZE) * 7 +
+                    Math.floor(obj.position.y / GRID.CELL_SIZE) * 13;
+      const color = FIRE_COLORS[(Math.floor(obj.fireTimer * 8) + phase) % FIRE_COLORS.length];
+      const offsetX = obj.grassRenderOffset ? obj.grassRenderOffset.x : 0;
+      this.renderer.drawEntity(
+        obj.position.x + GRID.CELL_SIZE / 2 + offsetX,
+        obj.position.y + GRID.CELL_SIZE / 2,
+        obj.char,
+        color
+      );
+    }
+  }
+
   drawPuddles(game, hutPlane = false) {
     if (!game.puddles?.length) return;
     const playerPlane = game.player.plane ?? 0;

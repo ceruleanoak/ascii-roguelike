@@ -1,6 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { planeOf, inSamePlane, objectOnPlane } from './PlaneSystem.js';
 import { cycleExitLetter, findExitAtPoint, mutateExitLetter } from './ExitSystem.js';
+import { BoomerangMechanic } from './BoomerangMechanic.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
 // room — keeps cross-room sniping in check while still feeling powerful.
@@ -28,7 +29,56 @@ export class CombatSystem {
     this.chainArcs = [];           // { x1, y1, x2, y2, color, timer, duration } — chain lightning visuals
   }
 
-  update(deltaTime, player, enemies, backgroundObjects = [], noiseSource = null, room = null) {
+  // Route object ignitions through FireSystem (owns spread + render dirty flag).
+  // Falls back to direct ignite for headless harnesses where game isn't wired.
+  _ignite(obj, duration = 5.0) {
+    return this.game?.fireSystem
+      ? this.game.fireSystem.igniteObject(obj, duration)
+      : obj.ignite(duration);
+  }
+
+  /**
+   * Per-frame target overrides, applied by the canonical enemy tick BEFORE
+   * enemy.update() (bug #92 — targeting must precede the single tick).
+   * Charm: fight the nearest non-charmed enemy. Noise-maker: keep the formal
+   * target on the player but pull aggro memory toward the noise source.
+   * Returns true when it set the target (caller skips its own selection).
+   */
+  applyTargetOverrides(enemy, enemies, player, noiseSource = null) {
+    if (enemy.isCharmed && enemy.isCharmed()) {
+      // Charmed: fight nearest non-charmed enemy
+      let nearestEnemy = null;
+      let nearestDist = Infinity;
+      for (const other of enemies) {
+        if (other === enemy || (other.isCharmed && other.isCharmed())) continue;
+        const dx = other.position.x - enemy.position.x;
+        const dy = other.position.y - enemy.position.y;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d < nearestDist) {
+          nearestDist = d;
+          nearestEnemy = other;
+        }
+      }
+      enemy.setTarget(nearestEnemy ?? player);
+      return true;
+    }
+    // Noise-maker redirect: pull enemy toward noise source instead of player
+    if (noiseSource) {
+      const dx = noiseSource.x - enemy.position.x;
+      const dy = noiseSource.y - enemy.position.y;
+      if (Math.sqrt(dx * dx + dy * dy) <= noiseSource.radius) {
+        enemy.lastKnownPosition = { x: noiseSource.x, y: noiseSource.y };
+        enemy.aggroMemoryActive = true;
+        enemy.memoryMoveDelayTimer = 0; // Investigate immediately
+        enemy.currentDirection = { x: 0, y: 0 }; // Force direction recalc toward noise
+        enemy.setTarget(player); // keep formal target as player, memory pulls to noise
+        return true;
+      }
+    }
+    return false;
+  }
+
+  update(deltaTime, player, enemies, backgroundObjects = [], room = null) {
     // Red warrior damage roll: hits and knocks back enemies, smashes background objects
     this.updateRollDamage(player, enemies, backgroundObjects);
 
@@ -205,49 +255,10 @@ export class CombatSystem {
         proj.loopTime += deltaTime;
       }
 
-      // Boomerang: outbound timer (charge-scaled, extended per enemy hit). When it
-      // expires, flip to return mode and steer in a straight line directly toward
-      // the owner each frame (no curve interp). No retrieval — despawns on catch
-      // or owner death.
-      if (proj.boomerang) {
-        const bSpeed = Math.hypot(proj.velocity.vx, proj.velocity.vy) || 250;
-        if (!proj.boomerangReturning) {
-          proj.boomerangTimer -= deltaTime;
-          if (proj.boomerangTimer <= 0) proj.boomerangReturning = true;
-        }
-        if (proj.boomerangReturning) {
-          if (!proj.owner || proj.owner.isDead) {
-            this.projectiles.splice(i, 1);
-            continue;
-          }
-          const tx = proj.owner.position.x + (proj.owner.width || GRID.CELL_SIZE) / 2;
-          const ty = proj.owner.position.y + (proj.owner.height || GRID.CELL_SIZE) / 2;
-          const dx = tx - proj.position.x;
-          const dy = ty - proj.position.y;
-          const dist = Math.hypot(dx, dy);
-          if (dist < GRID.CELL_SIZE * 0.6) {
-            // Caught — refund one charge to the matching bow slot (matches arrow-pickup pattern).
-            const bow = (proj.owner.quickSlots || []).find(slot =>
-              slot &&
-              slot.data?.weaponType === 'BOW' &&
-              slot.char === proj.weaponChar &&
-              slot.maxUses !== null &&
-              slot.usesRemaining < slot.maxUses
-            );
-            if (bow) {
-              bow.usesRemaining++;
-              if (bow.cooldownTimer > 1000) bow.cooldownTimer = 0; // Clear depletion lock
-              this.createDamageNumber('+1', proj.position.x, proj.position.y, proj.color || '#ffffff');
-            }
-            this.projectiles.splice(i, 1);
-            continue;
-          }
-          // Straight-line aim: snap velocity to current player direction at constant speed.
-          proj.velocity.vx = (dx / dist) * bSpeed;
-          proj.velocity.vy = (dy / dist) * bSpeed;
-        }
-        // Spin the glyph for visual feedback
-        proj.drawAngle = (proj.drawAngle || 0) + 14 * deltaTime;
+      // Boomerang flight: bounce-target homing, outbound timer, return-to-owner steering.
+      if (proj.boomerang && BoomerangMechanic.updateFlight(proj, deltaTime, this)) {
+        this.projectiles.splice(i, 1);
+        continue;
       }
 
       // Move projectile
@@ -274,12 +285,7 @@ export class CombatSystem {
       if (!proj.ricochet && this._hitsWall(proj, room)) {
         // Boomerangs bounce off walls into return mode instead of dying.
         if (proj.boomerang) {
-          if (!proj.boomerangReturning) proj.boomerangReturning = true;
-          // Nudge back along the inverse velocity so the next tick isn't still inside the wall.
-          proj.position.x -= proj.velocity.vx * deltaTime;
-          proj.position.y -= proj.velocity.vy * deltaTime;
-          proj.velocity.vx *= -1;
-          proj.velocity.vy *= -1;
+          BoomerangMechanic.onWallHit(proj, deltaTime);
           continue;
         }
         // Bullets ricochet off interior structure walls (flat axis-aligned surfaces).
@@ -325,7 +331,8 @@ export class CombatSystem {
           const result = obj.handleBulletCollision(proj);
 
           // Handle bullet behavior
-          if (result.bulletBehavior === 'slow') {
+          // Boomerangs ignore terrain slow (grass) — constant flight speed is core to the return loop.
+          if (result.bulletBehavior === 'slow' && !proj.boomerang) {
             const mult = result.speedMultiplier !== undefined ? result.speedMultiplier : 0.5;
             if (result.speedMultiplier !== undefined) {
               // One-time slow per object (e.g. arrows through grass): only apply on first contact
@@ -396,9 +403,10 @@ export class CombatSystem {
             }
           }
 
-          // Fire interactions — also spread to adjacent objects if this one is destroyed
+          // Fire interactions — also spread to adjacent objects if this one is destroyed.
+          // Ignitions route through FireSystem so the deterministic front + dirty flag own propagation.
           if (proj.onHit === 'burn' && obj.isFlammable()) {
-            const ignited = obj.ignite(5.0);
+            const ignited = this._ignite(obj);
             if (ignited) {
               this.createDamageNumber('!', obj.position.x, obj.position.y, '#ff4400');
             }
@@ -409,7 +417,7 @@ export class CombatSystem {
                 if (!objectOnPlane(other, planeOf(proj))) continue;
                 const dx = other.position.x - obj.position.x;
                 const dy = other.position.y - obj.position.y;
-                if (dx * dx + dy * dy < 48 * 48) other.ignite(5.0);
+                if (dx * dx + dy * dy < 48 * 48) this._ignite(other);
               }
             }
           }
@@ -426,7 +434,8 @@ export class CombatSystem {
               obj.setWaterState('poisoned', 8.0);
               this.createDamageNumber('☠', obj.position.x, obj.position.y, '#44bb44');
             } else if (proj.onHit === 'stun' && proj.electric) {
-              this._electrifyFloodFillWater(obj, backgroundObjects, 5.0);
+              this.game?.electricitySystem?.seedFromObject(obj, backgroundObjects,
+                { tileDuration: 4.0, hutPlane: !!this.game?.activeFloor });
               this.createDamageNumber('⚡', obj.position.x, obj.position.y, '#cccc00');
             } else if (proj.onHit === 'burn') {
               if (obj.getWaterState() === 'frozen') {
@@ -567,11 +576,7 @@ export class CombatSystem {
 
           // Boomerang ricochet return: stun only, no damage, passes through all enemies
           if (proj.boomerang && proj.boomerangRicochetReturn) {
-            if (!proj._boomerangHitEnemies) proj._boomerangHitEnemies = new Set();
-            proj._boomerangHitEnemies.add(enemy);
-            enemy.applyStatusEffect('stun', 1.5);
-            this.createDamageNumber('STUN', enemy.position.x, enemy.position.y, '#ffff44');
-            this.physicsSystem.applyHitstop(enemy, 0.06);
+            BoomerangMechanic.onRicochetReturnHit(proj, enemy, this);
             continue;
           }
 
@@ -601,6 +606,9 @@ export class CombatSystem {
               hit = true;
               break;
             }
+            // Boomerang: mark the immune enemy as hit and drop any lock on it,
+            // otherwise per-frame homing would orbit it forever.
+            if (proj.boomerang) BoomerangMechanic.onImmuneEnemy(proj, enemy);
             continue;
           }
 
@@ -625,8 +633,12 @@ export class CombatSystem {
               this.createDamageNumber('!', enemy.position.x, enemy.position.y - 12, '#ff4400');
             }
 
-            // Apply status effects with affinity-modified duration
-            if (proj.onHit && enemy.shouldApplyStatusEffect(proj.onHit)) {
+            // Apply status effects with affinity-modified duration.
+            // Electric weapons carry onHit:'stun' in item data; the status
+            // actually applied is 'zap' (electric identity — shake visual,
+            // EFFECT_AFFINITY auto-immunity for electric enemies).
+            const projStatus = (proj.onHit === 'stun' && proj.electric) ? 'zap' : proj.onHit;
+            if (proj.onHit && enemy.shouldApplyStatusEffect(projStatus)) {
               const baseDuration = 3.0;
               const modifiedDuration = baseDuration * elementalMod;
 
@@ -640,11 +652,11 @@ export class CombatSystem {
                   enemy.statusEffects.freeze.frozen = true;
                 }
               } else {
-                enemy.applyStatusEffect(proj.onHit, modifiedDuration);
+                enemy.applyStatusEffect(projStatus, modifiedDuration);
               }
               // Emit impact effect for visual feedback
               this.impactEffects.push({ x: enemy.position.x, y: enemy.position.y, onHit: proj.onHit, color: proj.color });
-            } else if (proj.onHit && !enemy.shouldApplyStatusEffect(proj.onHit)) {
+            } else if (proj.onHit && !enemy.shouldApplyStatusEffect(projStatus)) {
               this.createDamageNumber('RESIST', enemy.position.x, enemy.position.y - 12, '#888888');
             }
 
@@ -672,56 +684,10 @@ export class CombatSystem {
               this.createExplosion(proj.position.x, proj.position.y, proj.explodeRadius || 30, proj.damage, enemies, backgroundObjects, 0, planeOf(proj));
             }
 
-            // Boomerang: record this enemy as hit, defer the return timer, and on the
-            // very first hit also chain-damage nearby enemies in a tight radius.
-            // Then redirect toward the nearest un-hit enemy in range, or flip to
-            // return mode if none remain.
+            // Boomerang: record hit, defer return timer, first-hit chain damage,
+            // then lock onto the nearest un-hit enemy in range or flip to return.
             if (proj.boomerang) {
-              if (!proj._boomerangHitEnemies) proj._boomerangHitEnemies = new Set();
-              proj._boomerangHitEnemies.add(enemy);
-              proj.boomerangTimer += proj.boomerangHitDefer || 0.18;
-              if (!proj.boomerangHasHitFirst) {
-                proj.boomerangHasHitFirst = true;
-                const r = proj.chainRadius || 32;
-                for (const other of enemies) {
-                  if (other === enemy) continue;
-                  if (!inSamePlane(proj, other)) continue;
-                  const ddx = other.position.x - enemy.position.x;
-                  const ddy = other.position.y - enemy.position.y;
-                  if (Math.hypot(ddx, ddy) > r) continue;
-                  const chainDamaged = other.takeDamage(proj.damage, proj.attackId);
-                  if (chainDamaged !== false) {
-                    this.createDamageNumber(proj.damage, other.position.x, other.position.y, other.color);
-                    this.physicsSystem.applyHitstop(other, 0.04);
-                    proj._boomerangHitEnemies.add(other);
-                  }
-                }
-              }
-              // Find nearest un-hit enemy within bounce range and redirect; otherwise
-              // initiate early return.
-              const bounceRadius = proj.boomerangBounceRadius || 120;
-              let bestTarget = null;
-              let bestDist = Infinity;
-              for (const other of enemies) {
-                if (other === enemy) continue;
-                if (!inSamePlane(proj, other)) continue;
-                if (proj._boomerangHitEnemies.has(other)) continue;
-                const ddx = other.position.x - proj.position.x;
-                const ddy = other.position.y - proj.position.y;
-                const d = Math.hypot(ddx, ddy);
-                if (d > bounceRadius) continue;
-                if (d < bestDist) { bestDist = d; bestTarget = other; }
-              }
-              if (bestTarget) {
-                const spd = Math.hypot(proj.velocity.vx, proj.velocity.vy) || 250;
-                const tx = bestTarget.position.x - proj.position.x;
-                const ty = bestTarget.position.y - proj.position.y;
-                const tdist = Math.hypot(tx, ty) || 1;
-                proj.velocity.vx = (tx / tdist) * spd;
-                proj.velocity.vy = (ty / tdist) * spd;
-              } else {
-                proj.boomerangReturning = true;
-              }
+              BoomerangMechanic.onEnemyHit(proj, enemy, enemies, this);
               break;
             }
           }
@@ -813,6 +779,18 @@ export class CombatSystem {
               continue;
             }
 
+            // Trees only fall to axes — blades, hammers, and the pickaxe (rocks
+            // are its specialty) thunk off. Fire weapons still ignite them
+            // (burning ≠ chopping).
+            if (obj.char === '&' && attack.weaponSubtype !== 'axe') {
+              if (attack.onHit === 'burn' && obj.isFlammable() && this._ignite(obj)) {
+                this.createDamageNumber('!', obj.position.x, obj.position.y, '#ff4400');
+              } else {
+                this.createDamageNumber('!', obj.position.x, obj.position.y, '#aaaaaa');
+              }
+              continue;
+            }
+
             // Blunt weapons can't damage objects, but still rustle grass
             if (!attack.isBlunt) {
               const smashDamage = attack.canSmash ? attack.damage * 2 : attack.damage;
@@ -824,9 +802,10 @@ export class CombatSystem {
                 this.objectDestroyEvents.push({ obj, effect: result.effect, attack });
               }
 
-              // Fire weapons ignite flammable objects — spread outward if object is destroyed
+              // Fire weapons ignite flammable objects — spread outward if object is destroyed.
+              // Ignitions route through FireSystem so the deterministic front + dirty flag own propagation.
               if (attack.onHit === 'burn' && obj.isFlammable()) {
-                const ignited = obj.ignite(5.0);
+                const ignited = this._ignite(obj);
                 if (ignited) {
                   this.createDamageNumber('!', obj.position.x, obj.position.y, '#ff4400');
                 }
@@ -836,7 +815,7 @@ export class CombatSystem {
                     if (!objectOnPlane(other, attack.shooterPlane ?? 0)) continue;
                     const dx = other.position.x - obj.position.x;
                     const dy = other.position.y - obj.position.y;
-                    if (dx * dx + dy * dy < 48 * 48) other.ignite(5.0);
+                    if (dx * dx + dy * dy < 48 * 48) this._ignite(other);
                   }
                 }
               }
@@ -869,7 +848,8 @@ export class CombatSystem {
                   obj.setWaterState('poisoned', 8.0);
                   this.createDamageNumber('☠', obj.position.x, obj.position.y, '#44bb44');
                 } else if (attack.onHit === 'stun' && attack.electric) {
-                  this._electrifyFloodFillWater(obj, backgroundObjects, 5.0);
+                  this.game?.electricitySystem?.seedFromObject(obj, backgroundObjects,
+                    { tileDuration: 4.0, hutPlane: !!this.game?.activeFloor });
                   this.createDamageNumber('⚡', obj.position.x, obj.position.y, '#cccc00');
                 } else if (attack.onHit === 'burn') {
                   if (obj.getWaterState() === 'frozen') {
@@ -1018,7 +998,10 @@ export class CombatSystem {
                                  elementalMod < 1.0 ? '#888888' :   // Resisted
                                  elementalMod > 1.0 ? '#ffff00' :   // Weakness
                                  enemy.color;                       // Normal
-              this.createDamageNumber(finalDamage, enemy.position.x, enemy.position.y, damageColor, critRoll.isCrit ? 1.7 : 1);
+              // Zero-damage hits (Rubber Bat) skip the number — the launch is the feedback
+              if (finalDamage > 0) {
+                this.createDamageNumber(finalDamage, enemy.position.x, enemy.position.y, damageColor, critRoll.isCrit ? 1.7 : 1);
+              }
 
               if (critRoll.isCrit) {
                 const critLabel = critRoll.isLucky ? 'LUCKY CRIT' : 'CRIT';
@@ -1039,8 +1022,11 @@ export class CombatSystem {
                 player._acidBladeChargesThisRoom = Math.max(0, player._acidBladeChargesThisRoom - 1);
               }
 
-              // Apply status effects with affinity-modified duration
-              if (attack.onHit && !acidOutOfCharges && enemy.shouldApplyStatusEffect(attack.onHit)) {
+              // Apply status effects with affinity-modified duration.
+              // Same stun→zap translation as the projectile path: electric
+              // melee applies 'zap', keeping item data ('stun' + electric) as-is.
+              const attackStatus = (attack.onHit === 'stun' && attack.electric) ? 'zap' : attack.onHit;
+              if (attack.onHit && !acidOutOfCharges && enemy.shouldApplyStatusEffect(attackStatus)) {
                 const modifiedDuration = statusDuration * elementalMod;
 
                 if (attack.onHit === 'freeze') {
@@ -1053,11 +1039,11 @@ export class CombatSystem {
                     enemy.statusEffects.freeze.frozen = true;
                   }
                 } else {
-                  enemy.applyStatusEffect(attack.onHit, modifiedDuration);
+                  enemy.applyStatusEffect(attackStatus, modifiedDuration);
                 }
                 // Emit impact effect for visual feedback
                 this.impactEffects.push({ x: enemy.position.x, y: enemy.position.y, onHit: attack.onHit, color: attack.color });
-              } else if (attack.onHit && !acidOutOfCharges && !enemy.shouldApplyStatusEffect(attack.onHit)) {
+              } else if (attack.onHit && !acidOutOfCharges && !enemy.shouldApplyStatusEffect(attackStatus)) {
                 this.createDamageNumber('RESIST', enemy.position.x, enemy.position.y - 12, '#888888');
               }
 
@@ -1094,6 +1080,12 @@ export class CombatSystem {
                 } else {
                   this.applyKnockback(enemy, attack);
                 }
+              }
+
+              // Bat launch (batCharge release sweep): BatSystem sends
+              // non-heavy enemies flying along the contact angle.
+              if (attack.batLaunch) {
+                this.game?.batSystem?.applyLaunch(enemy, attack);
               }
 
               // Hitstop, recoil on confirmed melee hit
@@ -1406,42 +1398,13 @@ export class CombatSystem {
 
     // Enemy attacks and DOT damage
     for (const enemy of enemies) {
-      // Per-frame target override for charm and noise-maker
-      if (enemy.isCharmed && enemy.isCharmed()) {
-        // Charmed: fight nearest non-charmed enemy
-        let nearestEnemy = null;
-        let nearestDist = Infinity;
-        for (const other of enemies) {
-          if (other === enemy || (other.isCharmed && other.isCharmed())) continue;
-          const dx = other.position.x - enemy.position.x;
-          const dy = other.position.y - enemy.position.y;
-          const d = Math.sqrt(dx * dx + dy * dy);
-          if (d < nearestDist) {
-            nearestDist = d;
-            nearestEnemy = other;
-          }
-        }
-        enemy.setTarget(nearestEnemy ?? player);
-      } else {
-        // Restore target to player when charm expires
-        if (enemy.target !== player) {
-          enemy.setTarget(player);
-        }
-        // Noise-maker redirect: pull enemy toward noise source instead of player
-        if (noiseSource) {
-          const dx = noiseSource.x - enemy.position.x;
-          const dy = noiseSource.y - enemy.position.y;
-          if (Math.sqrt(dx * dx + dy * dy) <= noiseSource.radius) {
-            enemy.lastKnownPosition = { x: noiseSource.x, y: noiseSource.y };
-            enemy.aggroMemoryActive = true;
-            enemy.memoryMoveDelayTimer = 0; // Investigate immediately
-            enemy.currentDirection = { x: 0, y: 0 }; // Force direction recalc toward noise
-            enemy.setTarget(player); // keep formal target as player, memory pulls to noise
-          }
-        }
-      }
-
-      const updateResult = enemy.update(deltaTime);
+      // Bug #92: the canonical enemy tick lives in main.js (surface loop) or
+      // HutSystem/DungeonSystem (interiors). Consume its cached result here —
+      // calling enemy.update() again doubled every enemy timer and swallowed
+      // one-shot events ~50% of the time. Target overrides (charm/noise) now
+      // run at the tick site via applyTargetOverrides().
+      const updateResult = enemy._frameUpdateResult;
+      enemy._frameUpdateResult = null;
 
       // Create damage numbers for DOT damage
       if (updateResult && updateResult.dotDamage) {
@@ -2203,7 +2166,8 @@ export class CombatSystem {
       const stunDur = isWet ? 3.5 : 2.0;
 
       nearestEnemy.takeDamage(actualDamage);
-      nearestEnemy.applyStatusEffect('stun', stunDur);
+      // Chain lightning is electric — 'zap', not generic 'stun'.
+      nearestEnemy.applyStatusEffect('zap', stunDur);
       this.createDamageNumber(actualDamage, nearestEnemy.position.x, nearestEnemy.position.y, '#00ffff');
       if (isWet) {
         this.createDamageNumber('⚡', nearestEnemy.position.x, nearestEnemy.position.y - 12, '#ffff00');
@@ -2319,9 +2283,9 @@ export class CombatSystem {
         const damageFalloff = 1 - (dist / radius);
         const explosionDamage = Math.ceil(damage * damageFalloff);
 
-        // Ignite flammable objects
+        // Ignite flammable objects (routed through FireSystem)
         if (obj.isFlammable && obj.isFlammable()) {
-          obj.ignite(5.0);
+          this._ignite(obj);
         }
 
         // Damage destructible objects
@@ -2551,47 +2515,8 @@ export class CombatSystem {
   // Acid Blade: flood-fill connected water tiles, permanently converting the
   // entire pond to acid (modelled as the existing 'poisoned' waterState with
   // Infinity duration). 4-connected adjacency on the cell grid.
-  // Flood-fills electrified state across all 4-adjacent water tiles connected to
-  // startObj. Mirrors _acidFloodFillWater so a single zap on a stream or river
-  // electrifies the whole flow. Skips tiles that aren't in 'normal' state so
-  // frozen/poisoned/crystallized water isn't overwritten.
-  _electrifyFloodFillWater(startObj, backgroundObjects, duration) {
-    const CELL = GRID.CELL_SIZE;
-    const key = (x, y) => `${Math.round(x / CELL)},${Math.round(y / CELL)}`;
-
-    const waterMap = new Map();
-    for (const obj of backgroundObjects) {
-      if (obj.destroyed) continue;
-      if (!obj.isWater || !obj.isWater()) continue;
-      waterMap.set(key(obj.position.x, obj.position.y), obj);
-    }
-
-    const visited = new Set();
-    const queue = [startObj];
-    visited.add(key(startObj.position.x, startObj.position.y));
-
-    while (queue.length > 0) {
-      const obj = queue.shift();
-      if (obj.waterState === 'normal' || obj.waterState === 'electrified') {
-        obj.setWaterState('electrified', duration);
-      }
-
-      const cx = Math.round(obj.position.x / CELL);
-      const cy = Math.round(obj.position.y / CELL);
-      const neighborKeys = [
-        `${cx - 1},${cy}`, `${cx + 1},${cy}`,
-        `${cx},${cy - 1}`, `${cx},${cy + 1}`
-      ];
-      for (const nk of neighborKeys) {
-        if (visited.has(nk)) continue;
-        const neighbor = waterMap.get(nk);
-        if (!neighbor) continue;
-        visited.add(nk);
-        queue.push(neighbor);
-      }
-    }
-  }
-
+  // (Electrify is NOT instant like this — shock-on-water routes through
+  // ElectricitySystem so the charge spreads tile-by-tile at a fixed rate.)
   _acidFloodFillWater(startObj, backgroundObjects) {
     const CELL = GRID.CELL_SIZE;
     const key = (x, y) => `${Math.round(x / CELL)},${Math.round(y / CELL)}`;
@@ -2643,7 +2568,9 @@ export class CombatSystem {
       if (dist <= WET_RANGE) {
         const dmg = Math.ceil(damage * WET_MULT);
         enemy.takeDamage(dmg);
-        enemy.applyStatusEffect('stun', 3.5);
+        // 'zap', not 'stun' — electric immobilization with the shake visual;
+        // electric-affinity enemies are auto-immune via EFFECT_AFFINITY.
+        enemy.applyStatusEffect('zap', 3.5);
         this.createDamageNumber(dmg, enemy.position.x, enemy.position.y, '#00ffff');
         this.createDamageNumber('⚡', enemy.position.x, enemy.position.y - 10, '#ffff00');
       }

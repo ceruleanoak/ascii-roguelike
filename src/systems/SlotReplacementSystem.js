@@ -1,0 +1,176 @@
+import { GAME_STATES } from '../game/GameConfig.js';
+import { menuIntent } from './MenuInput.js';
+import { SlotReplacementOverlay } from '../rendering/ui/SlotReplacementOverlay.js';
+
+/**
+ * SlotReplacementSystem — paused slot-choice prompt for full quick slots.
+ *
+ * When the player picks up a quick-slot item (weapon/trap) with all three
+ * usable slots occupied, the old behavior silently displaced the active slot
+ * — easy to do by accident on a no-combat item like Bread and lose a key
+ * loadout piece. Instead, this system opens a PauseSystem modal: the world
+ * freezes, a popup shows the three quick slots with a ▼ cursor, plus a
+ * STORE IN CHEST option below.
+ *
+ * Controls (WASD and arrows both supported):
+ *   A/D, ←/→        — move cursor between usable slots
+ *   S, ↓            — jump to STORE IN CHEST
+ *   W, ↑            — back up to the slot row
+ *   SPACE / ENTER   — confirm selection
+ *   SHIFT           — fast path: store in chest immediately and close
+ *
+ * The item stays on the ground (game is paused) until a choice is confirmed.
+ * Replacing a slot reuses Player.pickupItem so trap-charge affinity and the
+ * displaced-item → chest routing match a normal pickup exactly.
+ */
+export class SlotReplacementSystem {
+  constructor(game) {
+    this.game = game;
+    this.overlay = new SlotReplacementOverlay();
+    this.pendingItem = null;
+    this.slotType = 'weapon';   // 'weapon' | 'armor' | 'consumable'
+    this.selection = 0;
+    this.lastSlotSelection = 0;
+  }
+
+  get storeIndex() {
+    if (this.slotType === 'armor') return 1;
+    if (this.slotType === 'consumable') return 2;
+    return 3;
+  }
+
+  /** Dispatch helper for main.js: opens the prompt when a pickup result asks for it. */
+  maybeOpen(result) {
+    if (!result?.needsSlotChoice) return false;
+    this.open(result.pendingItem, result.slotType || 'weapon');
+    return true;
+  }
+
+  /** Open the prompt for a ground item. Item is NOT yet removed from the world. */
+  open(item, slotType = 'weapon') {
+    this.slotType = slotType;
+    let start = 0;
+    if (slotType === 'weapon') {
+      const player = this.game.player;
+      start = player.activeSlotIndex;
+      if (player.destroyedSlots?.[start]) {
+        start = player.quickSlots.findIndex((_, i) => !player.destroyedSlots?.[i]);
+        if (start === -1) return;
+      }
+    }
+    if (!this.game.pauseSystem.openModal(this)) return;
+    this.pendingItem = item;
+    this.selection = start;
+    this.lastSlotSelection = start;
+  }
+
+  // ── PauseSystem modal contract ───────────────────────────────────────────
+
+  handleKey(key, event) {
+    if (event?.repeat) return; // held SPACE/SHIFT from the pickup press must not auto-confirm
+    const intent = menuIntent(event);
+    if (intent === 'shift') {
+      this._confirmStore(); // fast path: straight to chest, no navigation
+    } else if (intent === 'left') {
+      this._moveSlot(-1);
+    } else if (intent === 'right') {
+      this._moveSlot(1);
+    } else if (intent === 'down' && this.selection !== this.storeIndex) {
+      this.lastSlotSelection = this.selection;
+      this.selection = this.storeIndex;
+    } else if (intent === 'up' && this.selection === this.storeIndex) {
+      this.selection = this.lastSlotSelection;
+    } else if (intent === 'confirm') {
+      if (this.selection === this.storeIndex) this._confirmStore();
+      else this._confirmSlot(this.selection);
+    }
+  }
+
+  render(renderer, game) {
+    this.overlay.render(renderer, game, this);
+  }
+
+  onClose() {
+    this.pendingItem = null;
+  }
+
+  // ── Internals ────────────────────────────────────────────────────────────
+
+  _moveSlot(dir) {
+    if (this.selection === this.storeIndex) return;
+    const maxSlot = this.storeIndex - 1;
+    if (this.slotType === 'weapon') {
+      const destroyed = this.game.player.destroyedSlots || [];
+      for (let idx = this.selection + dir; idx >= 0 && idx <= maxSlot; idx += dir) {
+        if (!destroyed[idx]) { this.selection = idx; return; }
+      }
+    } else {
+      const next = this.selection + dir;
+      if (next >= 0 && next <= maxSlot) this.selection = next;
+    }
+  }
+
+  /** Remove the pending item from the world (it stayed on the ground while open). */
+  _takeFromWorld() {
+    const game = this.game;
+    const item = this.pendingItem;
+    const idx = game.items.indexOf(item);
+    if (idx > -1) game.items.splice(idx, 1);
+    game.physicsSystem.removeEntity(item);
+    return item;
+  }
+
+  _routeToChest(item) {
+    const game = this.game;
+    if (game.stateMachine.getCurrentState() === GAME_STATES.EXPLORE) {
+      game.inventorySystem.deferToChest(item);
+    } else {
+      game.inventorySystem.addToChest(item);
+    }
+  }
+
+  _confirmSlot(slotIdx) {
+    const game = this.game;
+    const item = this._takeFromWorld();
+
+    if (this.slotType === 'armor') {
+      const inv = game.inventorySystem;
+      // Grab old before equip; null it out so equipArmor won't push it to armorInventory
+      const displaced = inv.equippedArmor;
+      inv.equippedArmor = null;
+      inv.armorInventory.push(item);
+      inv.equipArmor(item);
+      inv.applyEquipmentEffectsToPlayer(game.player);
+      if (displaced) this._routeToChest(displaced);
+    } else if (this.slotType === 'consumable') {
+      const inv = game.inventorySystem;
+      // Grab old before equip; null it out so equipConsumable won't push it to consumableInventory
+      const displaced = inv.equippedConsumables[slotIdx];
+      inv.equippedConsumables[slotIdx] = null;
+      inv.consumableInventory.push(item);
+      inv.equipConsumable(slotIdx, item);
+      inv.applyEquipmentEffectsToPlayer(game.player);
+      if (displaced) this._routeToChest(displaced);
+    } else {
+      // Weapon/trap: reuse Player.pickupItem
+      game.player.activeSlotIndex = slotIdx;
+      const displaced = game.player.pickupItem(item);
+      if (displaced) this._routeToChest(displaced);
+      if (item.data.type === 'WEAPON' && game.stateMachine.getCurrentState() === GAME_STATES.EXPLORE) {
+        game.audioSystem.playSFX('weapon_pickup');
+      }
+    }
+
+    game.showPickupMessage(item.data.name);
+    game.updateUI();
+    game.pauseSystem.closeModal();
+  }
+
+  _confirmStore() {
+    // No pickup message — the popup interaction itself is the feedback
+    // (non-instructive UI compliance: no "X → Y" text).
+    this._routeToChest(this._takeFromWorld());
+    this.game.updateUI();
+    this.game.pauseSystem.closeModal();
+  }
+}

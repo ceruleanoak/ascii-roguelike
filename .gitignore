@@ -23,5 +23,11 @@ npm-debug.log*
 # Playtesting simulator (local balance analysis, not shipped)
 playtesting/
 
+# Ad-hoc debug/repro scripts (see CLAUDE.md "Dev & Debug Tools")
+tools/debug/
+
+# SFX CLI render output (audition WAVs/variant params; promote keepers to templates/)
+tools/sfx-editor/renders/
+
 # Death ledger (local design analysis, not shipped)
 claudedocs/death-ledger.jsonl

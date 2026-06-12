@@ -111,6 +111,10 @@ export class LightningStrikeSystem {
       }
     }
 
+    // Strike on (or near) water: charge the body of water — the cascade
+    // spreads tile-to-tile from the impact point at a fixed rate.
+    game.electricitySystem?.seedNear(s.x, s.y, s.radius, { hutPlane: s.hutPlane });
+
     // Spark burst — simple particles with gravity, parabolic arc
     const sparks = createLightningSparks(s.x, s.y);
     for (const spark of sparks) {

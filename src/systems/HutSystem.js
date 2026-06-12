@@ -1,10 +1,10 @@
-import { GRID } from '../game/GameConfig.js';
+import { GRID, PHYSICS } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
 import { getZoneRandomEnemy } from '../data/enemies.js';
-import { createDebris } from '../entities/Debris.js';
 import { WiseFellow } from '../entities/WiseFellow.js';
+import { Fisherman } from '../entities/Fisherman.js';
 import { Witch } from '../entities/Witch.js';
 import { ErrandCharacter } from '../entities/ErrandCharacter.js';
 
@@ -135,6 +135,15 @@ export class HutSystem {
       wise.setHint(zone);
       npcs.push(wise);
 
+    } else if (hutKind === 'fisherman') {
+      // Fisherman at interior center — fishing-loop tips via the dialogue box
+      const zone = this.game.currentRoom?.zone || 'green';
+      const centerCol = Math.floor(cols / 2);
+      const centerRow = Math.floor(rows / 2) - 1;
+      const fisher = new Fisherman(centerCol * GRID.CELL_SIZE, centerRow * GRID.CELL_SIZE);
+      fisher.setZone(zone, { coinDemo: true });
+      npcs.push(fisher);
+
     } else if (hutKind === 'witch') {
       // Witch at interior center
       const centerCol = Math.floor(cols / 2);
@@ -161,13 +170,15 @@ export class HutSystem {
       }
     }
 
-    // Bread loaves: very common in huts (90% chance to spawn, 1–2 loaves).
-    // Player picks them up off the floor; pressing the use button later drops
-    // a loaf for crows. Items are seeded into activeFloor.items and pushed
-    // into game.items on entry by _enterHut (marked hutPlane).
+    // Bread loaves: occasional in huts (40% chance to spawn, 1–2 loaves) —
+    // barrels are now the more reliable bread source (see spawnRandom in
+    // InteractionSystem). Player picks them up off the floor; pressing the use
+    // button later drops a loaf for crows. Items are seeded into
+    // activeFloor.items and pushed into game.items on entry by _enterHut
+    // (marked hutPlane).
     const breadItems = [];
-    if (hutKind !== 'witch' && Math.random() < 0.90) {
-      const loafCount = 1 + (Math.random() < 0.45 ? 1 : 0);
+    if (hutKind !== 'witch' && Math.random() < 0.40) {
+      const loafCount = 1 + (Math.random() < 0.15 ? 1 : 0);
       for (let i = 0; i < loafCount; i++) {
         for (let attempt = 0; attempt < 12; attempt++) {
           const col = 2 + Math.floor(Math.random() * (cols - 4));
@@ -468,6 +479,9 @@ export class HutSystem {
     if (game.activeFloor?.enemies) {
       for (const enemy of game.activeFloor.enemies) {
         game.physicsSystem.removeEntity(enemy);
+        // Drop the unconsumed tick cache so CombatSystem can't replay stale
+        // dot/sap events on re-entry (bug #92)
+        enemy._frameUpdateResult = null;
       }
     }
 
@@ -519,8 +533,14 @@ export class HutSystem {
       // the surface loop in main.js consumes — interior enemies need the same
       // routing or slime-affinity enemies emit no trail, etc.
       for (const enemy of game.activeFloor.enemies) {
-        enemy.target = game.player;
-        const r = enemy.update(dt);
+        if (!game.combatSystem.applyTargetOverrides(enemy, game.activeFloor.enemies, game.player, game.activeNoiseSource)) {
+          enemy.target = game.player;
+        }
+        // Canonical interior tick (bug #92): 2× rate (enemy timing data is
+        // double-seconds), result cached for CombatSystem — which used to be
+        // the duplicate second tick and now only consumes.
+        const r = enemy.update(dt * PHYSICS.ENEMY_TIMER_RATE);
+        enemy._frameUpdateResult = r;
         if (!r) continue;
         if (r.justAggrod) game.audioSystem?.playSFX('aggro');
         if (r.itemAttack) game.combatSystem.createEnemyAttack(r.itemAttack);
@@ -543,20 +563,9 @@ export class HutSystem {
           // Spawn loot (LootSystem marks hutPlane when player.inHut)
           game.spawnLoot(enemy);
 
-          // Create debris at enemy position (hutPlane so overlay renders it)
-          const enemyDebris = createDebris(
-            enemy.position.x + GRID.CELL_SIZE / 2,
-            enemy.position.y + GRID.CELL_SIZE / 2,
-            4 + Math.floor(Math.random() * 3),
-            '#666666'
-          );
-          for (const piece of enemyDebris) {
-            piece.hutPlane = true;
-          }
-          game.debris.push(...enemyDebris);
-          for (const piece of enemyDebris) {
-            game.physicsSystem.addEntity(piece);
-          }
+          // Death detritus (goo blobs for slimes, gray debris otherwise);
+          // hutPlane so the overlay renders it. Inherits knockback velocity.
+          game.worldEffectsSystem.spawnDeathDetritus(enemy, { hutPlane: true });
 
           game.physicsSystem.removeEntity(enemy);
           game.activeFloor.enemies.splice(i, 1);

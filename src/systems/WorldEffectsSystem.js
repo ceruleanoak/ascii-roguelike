@@ -1,4 +1,8 @@
 import { GRID } from '../game/GameConfig.js';
+import { GooBlob } from '../entities/GooBlob.js';
+import { createDebris } from '../entities/Debris.js';
+
+const MAX_GOO_BLOBS = 20;
 
 // Shared transient world-effect ticker — runs in REST and EXPLORE alike.
 // Owns the per-frame lifecycle of: ember stack decay + ember contact ignition,
@@ -216,6 +220,51 @@ export class WorldEffectsSystem {
         majorObjects.push(...game.currentRoom.enemies);
       }
       game.physicsSystem.updateDebris(game.debris.filter(d => d), majorObjects.filter(o => o));
+    }
+  }
+
+  /**
+   * Enemy death detritus: gray debris pieces, or GooBlobs for goo-affinity
+   * enemies (slimes). If the killing blow carried knockback, the enemy's
+   * launch velocity is still on it (knockback status outlives the hit), so
+   * the pieces inherit it and spray in the hit direction.
+   * hutPlane: pass true from interior death loops (hut/dungeon) so overlays
+   * render the pieces; surface deaths tag the enemy's plane instead.
+   */
+  spawnDeathDetritus(enemy, { hutPlane = false } = {}) {
+    const game = this.game;
+    const cx = enemy.position.x + GRID.CELL_SIZE / 2;
+    const cy = enemy.position.y + GRID.CELL_SIZE / 2;
+    // Half the launch velocity — full knockback speed reads as the pieces
+    // outrunning the hit.
+    const inheritVelocity =
+      enemy.isKnockedBack?.() &&
+      Number.isFinite(enemy.velocity?.vx) && Number.isFinite(enemy.velocity?.vy)
+        ? { vx: enemy.velocity.vx * 0.5, vy: enemy.velocity.vy * 0.5 }
+        : null;
+    const count = 4 + Math.floor(Math.random() * 3); // 4-6 pieces
+
+    if (enemy.data?.affinities?.includes('goo')) {
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 1.0;
+        const speed = 40 + Math.random() * 30;
+        const vx = Math.cos(angle) * speed + (inheritVelocity?.vx ?? 0);
+        const vy = Math.sin(angle) * speed + (inheritVelocity?.vy ?? 0);
+        const blob = new GooBlob(cx, cy, performance.now(), false, vx, vy, 2.0);
+        blob.plane = enemy.plane ?? 0;
+        blob.hutPlane = hutPlane;
+        game.gooBlobs.push(blob);
+      }
+      while (game.gooBlobs.length > MAX_GOO_BLOBS) game.gooBlobs.shift();
+      return;
+    }
+
+    const pieces = createDebris(cx, cy, count, '#666666', inheritVelocity);
+    for (const piece of pieces) {
+      if (hutPlane) piece.hutPlane = true;
+      else piece.plane = enemy.plane ?? 0;
+      game.debris.push(piece);
+      game.physicsSystem.addEntity(piece);
     }
   }
 }

@@ -9,6 +9,29 @@ export class LootSystem {
     this.game = game;
   }
 
+  // Canonical ingredient grant — routes special pickups (Emerald Robe goo heal,
+  // active-meter mana refill), otherwise banks/carries via game.addIngredient,
+  // then removes the ingredient from the world. Shared by the player attraction
+  // pickup in all three states and the boomerang fetch.
+  collectIngredient(ingredient) {
+    const game = this.game;
+    const player = game.player;
+    if (ingredient.char === 'g' && player.gooConsume) {
+      // Emerald Robe: goo consumed for 1HP heal instead of going to inventory
+      player.hp = Math.min(player.hp + 1, player.maxHp);
+    } else if (ingredient.char === '𝑚' && player.magicMeter?.active) {
+      // Mana drop auto-refills the meter once the well/cauldron has
+      // activated it; bypass inventory entirely.
+      game.magicSystem.addMana(player, 2);
+    } else {
+      game.addIngredient(ingredient.char);
+    }
+    game.audioSystem?.playSFX('ingredient_pickup');
+    game.physicsSystem.removeEntity(ingredient);
+    const idx = game.ingredients.indexOf(ingredient);
+    if (idx !== -1) game.ingredients.splice(idx, 1);
+  }
+
   // REST starter bundle: SPACE near the bundle destroys it and scatters its
   // ingredients in a ring. Returns true if the bundle was in range and burst.
   scatterRestBundle() {

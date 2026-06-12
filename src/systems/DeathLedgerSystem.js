@@ -1,19 +1,32 @@
-// Death ledger — captures a full snapshot on true player death for design analysis.
-// Records are POSTed to Google Sheets (all environments) and to the Vite dev server
-// (dev only, appends to claudedocs/death-ledger.jsonl).
+// Death ledger — captures a full snapshot on player death for design analysis.
+// True deaths AND revive intercepts (Fairy in a Bottle, Phoenix Feather) are both
+// recorded; records sharing a runId belong to the same run. Records are POSTed to
+// Google Sheets (all environments) and to the Vite dev server (dev only, appends
+// to claudedocs/death-ledger.jsonl).
 
 const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbyInq93Ldkax78sERsdlu20DAvaDSMaNdIFbCkIVTkAnwZ2iNroKgYMXRglFGvD6KLT/exec';
 
 export const sessionDeaths = [];
 
-export function captureDeath(game) {
+// Compact unique id linking all ledger records from one run.
+export function newRunId() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+// event: 'death' (true death) | 'revive' (death intercepted by a revive item).
+// revivedBy names the intercepting item on revive records.
+export function captureDeath(game, { event = 'death', revivedBy = null } = {}) {
   const player = game.player;
   const inv = game.inventorySystem;
   const killer = player._lastAttacker;
 
   const record = {
     timestamp: new Date().toISOString(),
+    runId: game.runId ?? null,
+    event,
+    ...(revivedBy ? { revivedBy } : {}),
     character: game.activeCharacterType,
+    cheatMenu: game.cheatUsed ? 'Y' : 'N',
     killedBy: killer?.data
       ? { name: killer.data.name, char: killer.char, tier: killer.data.tier ?? null }
       : (game.lastDeathCause ?? null),

@@ -38,13 +38,13 @@ export const WEAPON_TIERS = {
     ['⚔', '♠', '◇']
   ],
   axe: [
-    ['⛏'],
+    ['⛏', '⊦'],
     ['⊤'],
     ['⚯']
   ],
   hammer: [
     ['⊥'],
-    ['☃', '◉', '⬢'],
+    ['⟘', '☃', '◉', '⬢'],
     ['▼', '⚒']
   ]
 };
@@ -489,6 +489,7 @@ export const ITEMS = {
     boomerangBaseDuration: 0.45,  // seconds before return triggers (no-charge)
     boomerangChargeBonus: 0.55,   // additional seconds at full charge
     boomerangHitDefer: 0.18,      // seconds added to the return timer per enemy hit
+    boomerangMaxRicochets: 3,     // enemy-to-enemy bounces at full charge (0 at no charge)
     chainRadius: 32,              // ~1 cell — chain damage radius around first hit
     color: '#ffaa44'
   },
@@ -683,6 +684,20 @@ export const ITEMS = {
     color: '#aaaaaa'
   },
 
+  '⊦': {
+    char: '⊦',
+    name: 'Axe',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'axe',
+    damage: 2,
+    windup: 0.5,
+    recovery: 0.6,
+    patternSpeed: 0.04,
+    range: 22,
+    color: COLORS.ITEM
+  },
+
   // ── MELEE / axe — Tier 2 ──────────────────────────────────────────────────
   '⊤': {
     char: '⊤',
@@ -734,6 +749,21 @@ export const ITEMS = {
   },
 
   // ── MELEE / hammer — Tier 2 ───────────────────────────────────────────────
+  '⟘': {
+    char: '⟘',
+    name: 'Maul',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'hammer',
+    damage: 4,
+    windup: 0.8,
+    recovery: 1.0,
+    range: 20,
+    attackPattern: 'hammerRing',
+    locksMovement: true,
+    knockback: 140,
+    color: '#bb9966'
+  },
   '☃': {
     char: '☃',
     name: 'Ice Hammer',
@@ -743,8 +773,8 @@ export const ITEMS = {
     damage: 4,
     windup: 0.6,
     recovery: 1.0,
-    patternSpeed: 0.1,
-    range: 24,
+    patternSpeed: 0.4,
+    range: 18,
     onHit: 'freeze',
     knockback: 250,
     color: '#00ddff'
@@ -960,6 +990,67 @@ export const ITEMS = {
     range: 32,
     knockback: 25,
     color: '#8b4513'
+  },
+
+  // ── MELEE / bat — Tier 2 ──────────────────────────────────────────────────
+  // Hold-to-windup slugger (BatSystem owns the lifecycle): while SPACE is held
+  // the swing glyph rotates slowly clockwise from 45° counter-clockwise of the
+  // facing direction (the player moves at half speed while winding up),
+  // stopping and blinking white at 270° (full charge). Release sweeps rapidly
+  // counter-clockwise back through the wound arc; non-heavy enemies (mass < 2,
+  // non-boss) hit by the sweep are launched along the contact angle. Damage and
+  // launch force scale with windup level.
+  '¡': {
+    char: '¡',
+    name: 'Bat',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'bat',
+    batCharge: true,
+    damage: 2,              // at full windup; BatSystem scales down for partial charge
+    chargeTime: 2.4,        // time to reach the full 270° windup
+    recovery: 0.9,
+    meleeChar: '❙',         // vertical like the staff's '|' so the swing angle reads the same
+    range: 20,
+    isBlunt: true,
+    launchForce: 1100,      // at full windup; scaled by charge on release
+    color: '#cc9966'
+  },
+  '⸘': {
+    // Metal Bat (Bat + Metal) — Tier 3 of the windup slugger: double damage,
+    // same windup/launch behavior.
+    char: '⸘',
+    name: 'Metal Bat',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'bat',
+    batCharge: true,
+    damage: 4,
+    chargeTime: 2.4,
+    recovery: 0.9,
+    meleeChar: '❚',         // heavier vertical bar than the wooden Bat's '❙'
+    range: 20,
+    isBlunt: true,
+    launchForce: 1100,
+    color: '#aabbcc'
+  },
+  '‖': {
+    // Rubber Bat — identical windup/launch to the Bat, but deals no damage.
+    // Pure crowd-control: launching (and the knocked-away chain) is the payoff.
+    char: '‖',
+    name: 'Rubber Bat',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'bat',
+    batCharge: true,
+    damage: 0,
+    chargeTime: 2.4,
+    recovery: 0.9,
+    meleeChar: '❙',
+    range: 20,
+    isBlunt: true,
+    launchForce: 1100,
+    color: '#44dd44'
   },
 
   // ── WAND / gem-fused (Staff + gemstone) ───────────────────────────────────
@@ -2094,9 +2185,10 @@ export const INGREDIENTS = {
   'Y': { char: 'Y', name: 'Stingray Barb',  color: '#aabbcc' },
 
   // Rock-harvest ingredients — drop from `0` Rock bg objects (rock harvest table).
-  // ⚱ Artifact also drops rarely from chests; trades to errand NPC (2 coins) or
-  // wise man (unlocks rare hint tier). ❦ Moss is the only path to Moss Cloak.
-  '⚱': { char: '⚱', name: 'Artifact',       color: '#d4af37' },
+  // △ Arrowhead also crafts into bows/axes/spears. ⚜ Artifact drops from rocks/chests;
+  // trades to errand NPC (2 coins) or wise fellow (unlocks rare hint). ❦ Moss → Moss Cloak.
+  '△': { char: '△', name: 'Arrowhead',       color: '#aaaaaa' },
+  '⚜': { char: '⚜', name: 'Artifact',        color: '#d4af37' },
   '❦': { char: '❦', name: 'Moss',           color: '#5a8a3a' }
 };
 
@@ -2109,7 +2201,7 @@ export const SUBTYPE_DEFAULTS = {
   dagger:  { attackPattern: 'multistab', isBlade: true, range: 16 },
   hammer:  { attackPattern: 'shockwave', canSmash: true },
   flail:   { attackPattern: 'ring',      isBlunt: true },
-  whip:    { attackPattern: 'whipcrack', isBlunt: true, onHit: 'stun' },
+  whip:    { attackPattern: 'whipcrack', onHit: 'stun' },
   staff:   { attackPattern: 'thrust',    isBlunt: true },
   pickaxe: { attackPattern: 'thrust',    isBlade: false, isBlunt: false },
 };
@@ -2248,8 +2340,8 @@ export const AFFINITY_POOLS = {
 
   humanoid: {
     ingredients: {
-      [RARITY.COMMON]:   ['c', 'M', '~'],    // Coin, Metal, String
-      [RARITY.UNCOMMON]: ['F'],              // Fire Essence
+      [RARITY.COMMON]:   ['c', '~'],         // Coin, String
+      [RARITY.UNCOMMON]: ['F', 'M'],         // Fire Essence, Metal (red zone owns Metal; humanoids carry scraps)
       [RARITY.RARE]:     []
     },
     weapons: {
@@ -2382,8 +2474,8 @@ export const AFFINITY_POOLS = {
   // Yellow zone / lightning enemies
   electric: {
     ingredients: {
-      [RARITY.COMMON]:   ['M'],              // Metal (conductor)
-      [RARITY.UNCOMMON]: ['1', 'c'],         // Topaz, Coin (conductors)
+      [RARITY.COMMON]:   ['1'],              // Topaz (yellow's stone — magic zone identity)
+      [RARITY.UNCOMMON]: ['M', 'c'],         // Metal, Coin (conductors; red zone owns Metal)
       [RARITY.RARE]:     ['e'],              // Eye (luminescent orb)
     },
     weapons: {

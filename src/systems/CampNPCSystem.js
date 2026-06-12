@@ -25,7 +25,6 @@ const COMPANION_FOLLOW_SPEED_MULT = 0.75;         // companion trails a bit slow
 const COIN_ARC_DURATION = 0.55;
 const COIN_ARC_PEAK_HEIGHT = GRID.CELL_SIZE * 4;
 
-const HINT_DISPLAY_DURATION = 3.5;
 
 const COMPANION_FOLLOW_DISTANCE = GRID.CELL_SIZE * 4;
 const COMPANION_MAX_LEASH       = GRID.CELL_SIZE * 12;
@@ -45,19 +44,12 @@ export class CampNPCSystem {
   constructor(game) {
     this.game = game;
     this.coinAnim = null;       // { startX, startY, endX, endY, t, spinPhase, intent: 'hint'|'hire', target }
-    this.hintText = null;
-    this.hintTimer = 0;
   }
 
   // ─── Frame update ────────────────────────────────────────────────────────
 
   update(dt) {
     const game = this.game;
-
-    if (this.hintTimer > 0) {
-      this.hintTimer -= dt;
-      if (this.hintTimer <= 0) this.hintText = null;
-    }
 
     // Animate the in-flight coin
     if (this.coinAnim) {
@@ -533,14 +525,14 @@ export class CampNPCSystem {
       npc._attackCooldown = 0;
       game.menuSystem?.showPickupMessage?.('AT YOUR SIDE.');
     } else {
-      // Hint — show a zone wise-saying for a few seconds
+      // Hint — the NPC speaks a zone wise-saying through the dialogue box.
+      // Never center-screen text: that's the narrator's voice, not an NPC's.
       const zone = game.currentRoom?.zone || 'green';
       const sayings = ZONES[zone]?.wiseSayings || [];
       const text = sayings.length > 0
         ? sayings[Math.floor(Math.random() * sayings.length)]
         : 'KEEP MOVING.';
-      this.hintText = text;
-      this.hintTimer = HINT_DISPLAY_DURATION;
+      game.dialogueSystem?.open(npc, [text]);
     }
     game.menuSystem?.updateUI?.();
   }
@@ -675,10 +667,6 @@ export class CampNPCSystem {
     return this.coinAnim;
   }
 
-  /** Returns the active hint text (for renderer), or null. */
-  getHintText() {
-    return this.hintTimer > 0 ? this.hintText : null;
-  }
 }
 
 export const COIN_ARC_PEAK_HEIGHT_EXPORT = COIN_ARC_PEAK_HEIGHT;

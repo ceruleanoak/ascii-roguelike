@@ -24,6 +24,7 @@ import { ExploreRenderer } from './state/ExploreRenderer.js';
 import { NeutralRenderer } from './state/NeutralRenderer.js';
 import { DemoRenderer } from './state/DemoRenderer.js';
 import { HutInteriorOverlay } from './ui/HutInteriorOverlay.js';
+import { DialogueBox } from './ui/DialogueBox.js';
 import { MazeInteriorOverlay } from './ui/MazeInteriorOverlay.js';
 import { PixelatedDissolve, ScreenShake } from './effects/TextEffects.js';
 import { GRID } from '../game/GameConfig.js';
@@ -43,6 +44,9 @@ export class RenderController {
 
     // Hut interior overlay (needs renderController for renderEnemy access)
     this.hutInteriorOverlay = new HutInteriorOverlay(renderer, this);
+
+    // NPC speech panel — drawn last so it sits above interior overlays
+    this.dialogueBox = new DialogueBox(renderer);
 
     // Maze interior overlay (scrolling viewport)
     this.mazeInteriorOverlay = new MazeInteriorOverlay(renderer, this);
@@ -81,10 +85,12 @@ export class RenderController {
 
   renderExploreState(game) {
     this.exploreRenderer.render(game);
+    this.dialogueBox.render(game);
   }
 
   renderNeutralState(game) {
     this.neutralRenderer.render(game);
+    this.dialogueBox.render(game);
   }
 
   renderGameOverState(game) {

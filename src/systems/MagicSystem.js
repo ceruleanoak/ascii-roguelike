@@ -369,7 +369,9 @@ export class MagicSystem {
 
     const damage = 3;
     nearest.takeDamage(damage);
-    nearest.applyStatusEffect('stun', 2.0);
+    // 'zap', not 'stun' — chain lightning is electric; zap carries the shake
+    // visual and electric-affinity auto-immunity (EFFECT_AFFINITY).
+    nearest.applyStatusEffect('zap', 2.0);
     this.game.combatSystem.createDamageNumber?.(
       damage, nearest.position.x, nearest.position.y, '#88ddff'
     );

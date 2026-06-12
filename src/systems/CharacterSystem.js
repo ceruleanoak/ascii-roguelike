@@ -474,6 +474,8 @@ export class CharacterSystem {
     // Only bake in shrine/consumable damage bonuses here.
     let bonus = 0;
     if (game.player.damageBonusTimer > 0) bonus += game.player.damageBonusAmount;
+    if (game.player.wellDamageBlessed) bonus += 1; // red well coin blessing
+
     if (bonus === 0) return attack;
     if (Array.isArray(attack)) {
       return attack.map(a => ({ ...a, damage: Math.max(1, (a.damage || 1) + bonus) }));

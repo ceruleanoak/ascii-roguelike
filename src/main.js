@@ -35,14 +35,23 @@ import { SpellSystem } from './systems/SpellSystem.js';
 import { RidgeSystem } from './systems/RidgeSystem.js';
 import { PolymorphSystem } from './systems/PolymorphSystem.js';
 import { MagicSystem } from './systems/MagicSystem.js';
+import { BatSystem } from './systems/BatSystem.js';
 import { WellSystem } from './systems/WellSystem.js';
 import { LightningStrikeSystem } from './systems/LightningStrikeSystem.js';
 import { SandstormSystem } from './systems/SandstormSystem.js';
+import { ElectricitySystem } from './systems/ElectricitySystem.js';
+import { FireSystem } from './systems/FireSystem.js';
 import { FountainSystem } from './systems/FountainSystem.js';
+import { isCellProtected } from './systems/roomFeatures.js';
 import { Fairy } from './entities/Fairy.js';
 import { CampNPCSystem } from './systems/CampNPCSystem.js';
+import { DialogueSystem } from './systems/DialogueSystem.js';
+import { FishermanDemoSystem } from './systems/FishermanDemoSystem.js';
 import { CompanionSystem } from './systems/CompanionSystem.js';
 import { WorldEffectsSystem } from './systems/WorldEffectsSystem.js';
+import { PauseSystem } from './systems/PauseSystem.js';
+import { SlotReplacementSystem } from './systems/SlotReplacementSystem.js';
+import { menuIntent } from './systems/MenuInput.js';
 import { CAMP_NPC_STATE } from './entities/CampNPC.js';
 import { Player } from './entities/Player.js';
 import { Enemy } from './entities/Enemy.js';
@@ -53,7 +62,6 @@ import { GooBlob } from './entities/GooBlob.js';
 import { Crow } from './entities/Crow.js';
 import { NPCRat } from './entities/NPCRat.js';
 import { Particle, createExplosion, createWetDrop, createActivationBurst, createSteamPuff, createChaff, createDodgeTrail, createFootstep, createEmberBurst, createIceBurst, createFrostAuraParticle, createFlameAuraParticle, createShockAuraParticle } from './entities/Particle.js';
-import { createDebris } from './entities/Debris.js';
 import { Puddle } from './entities/Puddle.js';
 import { Captive } from './entities/Captive.js';
 import { Leshy } from './entities/Leshy.js';
@@ -64,7 +72,7 @@ import { CHARACTER_TYPES } from './data/characters.js';
 import { EXIT_LETTERS } from './data/exitLetters.js';
 import { ZONES } from './data/zones.js';
 import { GAME_STATES, GRID, CRAFTING, INTERACTION_RANGE, ROOM_TYPES, PHYSICS } from './game/GameConfig.js';
-import { captureDeath, downloadSessionLedger } from './systems/DeathLedgerSystem.js';
+import { captureDeath, downloadSessionLedger, newRunId } from './systems/DeathLedgerSystem.js';
 
 // Enemies that play the magical death SFX when no per-enemy sfx.death is set.
 // Covers arcane casters and pure elemental beings; element-tinted beasts
@@ -163,16 +171,23 @@ class Game {
     this.ridgeSystem = new RidgeSystem(this);
     this.polymorphSystem = new PolymorphSystem();
     this.magicSystem = new MagicSystem(this);
+    this.batSystem = new BatSystem(this);
     this.wellSystem = new WellSystem(this);
     this.fountainSystem = new FountainSystem(this);
     this.lightningStrikeSystem = new LightningStrikeSystem(this);
     this.sandstormSystem = new SandstormSystem(this);
+    this.electricitySystem = new ElectricitySystem(this);
+    this.fireSystem = new FireSystem(this);
     this.demoSystem = new DemoSystem(this);
     // Wire InventorySystem back to game so it can mutate player.equippedConsumables
     this.inventorySystem.game = this;
     this.campNPCSystem = new CampNPCSystem(this);
     this.companionSystem = new CompanionSystem(this);
     this.worldEffectsSystem = new WorldEffectsSystem(this);
+    this.dialogueSystem = new DialogueSystem(this);
+    this.fishermanDemoSystem = new FishermanDemoSystem(this);
+    this.pauseSystem = new PauseSystem(this);
+    this.slotReplacementSystem = new SlotReplacementSystem(this);
     this.bridgeMenuOpen = false;
 
     // Game state
@@ -186,6 +201,8 @@ class Game {
     this.wellFlashTimer = 0;        // Post-ritual screen flash decay
     this.wellFlashDuration = 0;     // Initial flash duration (used for normalized alpha)
     this.fairiesAngered = false;    // Run-scoped: set when fountain is corrupted; suppresses all fairy spawns
+    this.cheatUsed = false;         // Run-scoped: set when any gameplay-affecting cheat-menu action fires; reported in the death ledger
+    this.runId = newRunId();        // Run-scoped: links all death-ledger records (deaths + revives) from this run
     this.fedCrowCount = 0;          // Run-scoped: bread-fed crows so far (caps at 3); boosts crow spawn odds in new rooms
     this.companionCrows = [];       // Run-scoped: crows that ate bread; act as combat companions across rooms
     this.followerCrows = [];        // Room-scoped: bystander crows that joined a feed event in the current room
@@ -511,10 +528,12 @@ class Game {
         return;
       }
 
-      // Demo recording toggle (dev hotkey). Placed after the arcade-demo
+      // Demo recording toggle (dev hotkey). Only active while armed via the
+      // cheat-menu R RECORD KEY toggle — otherwise 'r' falls through to normal
+      // gameplay handling (wishes, etc.). Placed after the arcade-demo
       // abort so 'r' during playback still cancels back to title, and before
       // recordEvent so the toggle keystroke isn't captured into the buffer.
-      if (e.key === 'r' || e.key === 'R') {
+      if (this.demoSystem.hotkeyEnabled && (e.key === 'r' || e.key === 'R')) {
         this.toggleDemoRecording();
         e.preventDefault();
         return;
@@ -525,94 +544,33 @@ class Game {
         this.demoSystem.recordEvent('keydown', e.key);
       }
 
-      // Handle menu navigation
+      if (this.pauseSystem.isPaused()) {
+        // Modal pause (PauseSystem): the active modal owns all keyboard input
+        this.pauseSystem.handleKeydown(e);
+        e.preventDefault();
+        return;
+      }
+
+      // Handle menu navigation — key→intent via the shared menuIntent map;
+      // movement logic lives in MenuSystem. Menus consume every key.
       if (this.menuOpen) {
         const key = e.key.toLowerCase();
+        const intent = menuIntent(e);
 
         // Movement-exit: close menu on A/D when flagged (e.g. chest retrieval menu)
         // W/S are reserved for up/down navigation and must not close the menu
         if (this.menuSystem.closeOnMovement && (key === 'a' || key === 'd')) {
           this.menuSystem.closeOnMovement = false;
           this.closeMenu();
-          e.preventDefault();
-          return;
-        }
-
-        // A/D or ArrowLeft/Right for column switching (circular navigation)
-        if (this.menuColumns && (key === 'a' || e.key === 'ArrowLeft')) {
-          // Move left with wrapping, skipping disabled columns
-          let newColumn = this.selectedColumn - 1;
-          let attempts = 0;
-          const maxColumns = this.menuColumns.length;
-
-          while (attempts < maxColumns) {
-            if (newColumn < 0) newColumn = maxColumns - 1; // Wrap to end
-            if (!this.disabledColumns[newColumn]) break;
-            newColumn--;
-            attempts++;
-          }
-
-          if (attempts < maxColumns) {
-            this.selectedColumn = newColumn;
-            this.selectedMenuIndex = 0;
-            this.menuItems = this.menuColumns[this.selectedColumn];
-            this.renderController.menuOverlay.render(this);
-          }
-          e.preventDefault();
-          return;
-        }
-        if (this.menuColumns && (key === 'd' || e.key === 'ArrowRight')) {
-          // Move right with wrapping, skipping disabled columns
-          let newColumn = this.selectedColumn + 1;
-          let attempts = 0;
-          const maxColumns = this.menuColumns.length;
-
-          while (attempts < maxColumns) {
-            if (newColumn >= maxColumns) newColumn = 0; // Wrap to start
-            if (!this.disabledColumns[newColumn]) break;
-            newColumn++;
-            attempts++;
-          }
-
-          if (attempts < maxColumns) {
-            this.selectedColumn = newColumn;
-            this.selectedMenuIndex = 0;
-            this.menuItems = this.menuColumns[this.selectedColumn];
-            this.renderController.menuOverlay.render(this);
-          }
-          e.preventDefault();
-          return;
-        }
-
-        // WASD + Arrow key navigation (W/ArrowUp=up, S/ArrowDown=down)
-        if (key === 'w' || e.key === 'ArrowUp') {
-          this.selectedMenuIndex = Math.max(0, this.selectedMenuIndex - 1);
-          this.renderController.menuOverlay.render(this);
-          e.preventDefault();
-          return;
-        }
-        if (key === 's' || e.key === 'ArrowDown') {
-          this.selectedMenuIndex = Math.min(this.menuItems.length - 1, this.selectedMenuIndex + 1);
-          this.renderController.menuOverlay.render(this);
-          e.preventDefault();
-          return;
-        }
-
-        // Space to confirm selection
-        if (key === ' ') {
+        } else if (intent === 'left' || intent === 'right') {
+          this.menuSystem.moveColumn(intent === 'left' ? -1 : 1);
+        } else if (intent === 'up' || intent === 'down') {
+          this.menuSystem.moveSelection(intent === 'up' ? -1 : 1);
+        } else if (intent === 'confirm' && key === ' ') {
           this.selectMenuItem();
-          e.preventDefault();
-          return;
-        }
-
-        // Shift to close menu
-        if (key === 'shift') {
+        } else if (intent === 'shift') {
           this.closeMenu();
-          e.preventDefault();
-          return;
         }
-
-        // Block all other keys when menu is open
         e.preventDefault();
         return;
       }
@@ -683,6 +641,12 @@ class Game {
       // Recording mode: capture keyup so playback can release held keys.
       if (this.demoSystem.recording) {
         this.demoSystem.recordEvent('keyup', e.key);
+      }
+
+      // Modal pause: clear held-key flags without release side effects
+      if (this.pauseSystem.isPaused()) {
+        this.pauseSystem.handleKeyup(e);
+        return;
       }
       const key = e.key.toLowerCase();
       if (key === 'w' || key === 'a' || key === 's' || key === 'd') {
@@ -1051,10 +1015,6 @@ class Game {
     this.roomGenerator.isZoneBossRoom = false;
 
     this.currentRoom = newRoom;
-    this.backgroundObjects = newRoom.backgroundObjects || [];
-    this.items = newRoom.items || [];
-    this.ingredients = newRoom.ingredients || [];
-    this.placedTraps = [];
 
     if (wantBoss) {
       this.bossSystem.activate(newRoom, zone);
@@ -1070,22 +1030,10 @@ class Game {
       this.player.setCollisionMap(newRoom.collisionMap);
     }
 
-    for (const enemy of newRoom.enemies) {
-      enemy.setTarget(this.player);
-      enemy.setCollisionMap(newRoom.collisionMap);
-    }
-
-    // Reset physics + combat so we start clean.
-    this.physicsSystem.clear();
-    if (this.player) this.physicsSystem.addEntity(this.player);
-    for (const enemy of newRoom.enemies) {
-      this.physicsSystem.addEntity(enemy);
-    }
-    for (const item of this.items) {
-      this.physicsSystem.addEntity(item);
-    }
-    this.combatSystem.clear();
-    this.renderer.markBackgroundDirty();
+    // Room-swap core, sans entry grace (demo enemies act immediately)
+    this.applyRoomSwap(newRoom, { grace: false });
+    // Demo rooms may pre-place ingredients; applyRoomSwap clears them
+    this.ingredients = newRoom.ingredients || [];
   }
 
   /** Apply a demo startState snapshot onto the active player. */
@@ -1140,8 +1088,6 @@ class Game {
     const newEnemies = enemiesSnapshot.map(snap => {
       const e = new Enemy(snap.char, snap.x, snap.y, depth);
       if (snap.hp != null) e.hp = snap.hp;
-      e.setCollisionMap(this.currentRoom.collisionMap);
-      if (this.player) e.setTarget(this.player);
       return e;
     });
 
@@ -1150,6 +1096,7 @@ class Game {
       this.physicsSystem.removeEntity?.(old);
     }
     this.currentRoom.enemies = newEnemies;
+    this.wireRoomEnemies(this.currentRoom);
     for (const e of newEnemies) {
       this.physicsSystem.addEntity(e);
     }
@@ -1490,54 +1437,37 @@ class Game {
   spawnCaptive(characterType) {
     if (!this.currentRoom) return null;
 
-    // Find a safe spawn position (not too close to player, not in walls)
     const centerX = GRID.WIDTH / 2;
     const centerY = GRID.HEIGHT / 2;
-    let spawnX, spawnY;
-    let attempts = 0;
-    const maxAttempts = 50;
 
-    while (attempts < maxAttempts) {
+    // Two tries to find a clear cell — open in the collision map, outside
+    // every protected structure region (hut/maze/dungeon footprints, well
+    // ring, fountain pool, ravine band, wall blocks), and away from the
+    // player. No center fallback: room centers ARE the structure in M/W/F/H
+    // rooms. Returning null leaves the zone un-marked so the caller retries
+    // in the next cleared room.
+    for (let attempt = 0; attempt < 2; attempt++) {
       // Random position in the center area of the room
-      spawnX = centerX + (Math.random() - 0.5) * GRID.WIDTH * 0.5;
-      spawnY = centerY + (Math.random() - 0.5) * GRID.HEIGHT * 0.5;
-
-      // Check if position is valid (not in wall, not too close to player)
+      const spawnX = centerX + (Math.random() - 0.5) * GRID.WIDTH * 0.5;
+      const spawnY = centerY + (Math.random() - 0.5) * GRID.HEIGHT * 0.5;
       const gridX = Math.floor(spawnX / GRID.CELL_SIZE);
       const gridY = Math.floor(spawnY / GRID.CELL_SIZE);
 
-      if (gridX >= 0 && gridX < GRID.COLS && gridY >= 0 && gridY < GRID.ROWS) {
-        if (!this.currentRoom.collisionMap[gridY][gridX]) {
-          // Reject positions inside special structure interiors (hut, maze, dungeon)
-          // — their perimeter walls are solid but their interiors are open in collisionMap
-          const structureBounds = [
-            this.currentRoom.hut?.exteriorBounds,
-            this.currentRoom.maze?.exteriorBounds,
-            this.currentRoom.dungeon?.exteriorBounds,
-          ].filter(Boolean);
-          const insideStructure = structureBounds.some(b =>
-            gridX >= b.minCol && gridX <= b.maxCol &&
-            gridY >= b.minRow && gridY <= b.maxRow
-          );
-          if (insideStructure) { attempts++; continue; }
+      if (gridX <= 0 || gridX >= GRID.COLS - 1 || gridY <= 0 || gridY >= GRID.ROWS - 1) continue;
+      if (this.currentRoom.collisionMap[gridY][gridX]) continue;
+      if (isCellProtected(this.currentRoom, gridX, gridY)) continue;
 
-          const distToPlayer = Math.hypot(
-            this.player.position.x - spawnX,
-            this.player.position.y - spawnY
-          );
+      const distToPlayer = Math.hypot(
+        this.player.position.x - spawnX,
+        this.player.position.y - spawnY
+      );
+      if (distToPlayer <= GRID.CELL_SIZE * 5) continue;
 
-          if (distToPlayer > GRID.CELL_SIZE * 5) {
-            // Good position found
-            return new Captive(characterType, spawnX, spawnY);
-          }
-        }
-      }
-
-      attempts++;
+      return new Captive(characterType, spawnX, spawnY);
     }
 
-    // Fallback to center if no good position found
-    return new Captive(characterType, centerX, centerY);
+    console.log('[Captive] no clear spawn cell after 2 tries — deferred to next room');
+    return null;
   }
 
   markRandomBushShaking() {
@@ -2048,24 +1978,8 @@ class Game {
         }
       }
 
-      // Pass game reference to all enemies (needed for sound detection)
-      for (const enemy of this.currentRoom.enemies) {
-        enemy.setGame(this);
-        enemy.setRoom(this.currentRoom);
-      }
-
-      // Clear sound events from any previous room
-      this.soundEvents = [];
-
-      // Unlock exits immediately if room has no enemies (CAMP, DISCOVERY, etc.)
-      // Hidden mimics don't count — exits stay open until they reveal.
-      if (this._countedEnemies(this.currentRoom.enemies).length === 0) {
-        this.currentRoom.exitsLocked = false;
-      }
-      // Witch-curse polymorph: exits always open until cured
-      if (this.player?.polymorphCursed) {
-        this.currentRoom.exitsLocked = false;
-      }
+      // Enemy wiring, sound-event clearing, and exitsLocked policy now happen
+      // in applyRoomSwap below (shared with all warp paths).
 
       // Clear saved explore room when generating new room (only restore once)
       this.inventorySystem.clearSavedExploreRoom();
@@ -2148,124 +2062,15 @@ class Game {
     // Apply equipment effects
     this.applyEquipmentEffects();
 
-    // Setup room entities (only for new rooms, not when restoring)
-    if (!shouldRestoreExploreRoom) {
-      this.ingredients = [];
-      this.items = this.currentRoom.items || [];
-      this.placedTraps = [];
-      this.activeNoiseSource = null;
-      this.backgroundObjects = this.currentRoom.backgroundObjects || [];
-      this._resetEnvironmentalEffects();
-      this.captives = []; // Clear captives when entering new room
-      this.neutralCharacters = []; // Clear neutral characters when entering new room
-      this.bridgeMenuOpen = false; // Close bridge menu on room transition
-
-      // Ridge room: attach ridge system and push bridge worker if not yet built
-      if (this.currentRoom.type === ROOM_TYPES.RIDGE) {
-        this.ridgeSystem.attachToRoom(this.currentRoom);
-        if (this.currentRoom.bridgeWorker && !this.currentRoom.bridgeBuilt) {
-          this.neutralCharacters.push(this.currentRoom.bridgeWorker);
-        }
-      }
-
-      // Pearl-guide fairy (O room + pearl in inventory): pre-spawned at room
-      // generation. Pushed here so it lives in neutralCharacters alongside the
-      // fight, and reveals the pedestal on room clear if still uncollected.
-      // Suppressed once the fountain has been corrupted — the run's fairies
-      // have all gone hostile.
-      if (this.currentRoom.pearlFairy && !this.currentRoom.pearlFairy.consumed && !this.fairiesAngered) {
-        this.neutralCharacters.push(this.currentRoom.pearlFairy);
-      }
-
-      // Errand room: if an errand is active and this is an E-letter room, clear enemies and
-      // spawn the traveler immediately (they remember what they wanted last time)
-      if (this.errandSystem.activeErrand && this.currentRoom.exitLetter === 'E') {
-        this.currentRoom.enemies = [];
-        this.currentRoom.enemiesPlane0 = [];
-        this.currentRoom.enemiesPlane1 = [];
-        this.currentRoom.exitsLocked = false;
-        const errandChar = this.errandSystem.spawnErrandCharacter();
-        if (errandChar) this.neutralCharacters.push(errandChar);
-      }
-    } else {
-      // When restoring, still clear transient effects
-      this.activeNoiseSource = null;
-      this._resetEnvironmentalEffects();
-      this.neutralCharacters = [];
-    }
-
-    // Set enemy targets
-    for (const enemy of this.currentRoom.enemies) {
-      enemy.setTarget(this.player);
-    }
-
-    // Follower flock is room-scoped: bystander crows that joined the feed
-    // event don't trail the player across rooms (companions still do).
-    // Auto-join reputation effect still applies per-room if fedCrowCount ≥ 3.
-    if (!shouldRestoreExploreRoom) {
-      this.followerCrows = [];
-      this.companionSystem.autoJoinWildCrows();
-    }
-
-
-    // 2-second detection grace period — suppress aggro range so enemies
-    // can't spot the player the moment they enter the room
-    this.roomEntryGraceTimer = 2.0;
-    for (const enemy of this.currentRoom.enemies) {
-      enemy._savedAggroRange = enemy.aggroRange;
-      enemy.aggroRange = 0;
-    }
-
-    // Check for Path Amulet and display path announcement
-    this.checkPathAmulet();
-
-    // Reset physics
-    this.physicsSystem.clear();
-    this.physicsSystem.addEntity(this.player);
-
-    for (const enemy of this.currentRoom.enemies) {
-      this.physicsSystem.addEntity(enemy);
-    }
-
-    for (const item of this.items) {
-      this.physicsSystem.addEntity(item);
-    }
-
-    this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
-    this.companionSystem.registerTamedRatsWithPhysics();
-
-    // Reset combat
-    this.combatSystem.clear();
+    // Room-swap core: entity arrays + room attachments (ridge/fairy/fisherman/
+    // errand), enemy wiring, entry grace, physics/combat reset. Shared with
+    // every warp path — see applyRoomSwap.
+    this.applyRoomSwap(this.currentRoom, { resetEntities: !shouldRestoreExploreRoom });
 
     // Leshy chase rooms will get shaking bush AFTER clearing (same as first encounter)
 
-    // Mark background dirty
-    this.renderer.markBackgroundDirty();
-
     // Switch music based on zone (covers all entry paths: new room, restore, and leavingRest)
-    // Skip when boss sequence mode is active (anticipation or full fight)
-    if (this.audioSystem.mode === 'dual' || this.audioSystem.mode === 'red') {
-      const roomZone = this.currentRoom?.zone || 'green';
-      const base = import.meta.env.BASE_URL;
-      if (roomZone === 'red' && this.currentMusicZone !== 'red') {
-        if (this.audioSystem.switchToRedSequence()) {
-          this.currentMusicZone = 'red';
-        }
-      } else if (roomZone === 'cyan' && this.currentMusicZone !== 'cyan') {
-        this.currentMusicZone = 'cyan';
-        this.audioSystem.switchMusic(
-          `${base}assets/audio/cyan-layer1.mp3`,
-          `${base}assets/audio/cyan-layer2.mp3`
-        );
-      } else if (roomZone !== 'cyan' && roomZone !== 'red'
-                 && (this.currentMusicZone === 'cyan' || this.currentMusicZone === 'red')) {
-        this.currentMusicZone = 'green';
-        this.audioSystem.switchMusic(
-          `${base}assets/audio/layer1.mp3`,
-          `${base}assets/audio/layer2.mp3`
-        );
-      }
-    }
+    this.switchZoneMusic(this.currentRoom?.zone || 'green');
 
     // Set layer 2 (bassline) based on enemy presence
     // Always check for enemies, regardless of how we entered EXPLORE
@@ -2333,19 +2138,7 @@ class Game {
       const shouldPickup = this.physicsSystem.applyAttraction(ingredient, this.player);
 
       if (shouldPickup) {
-        // Emerald Robe: goo consumed for 1HP heal instead of going to inventory
-        if (ingredient.char === 'g' && this.player.gooConsume) {
-          this.player.hp = Math.min(this.player.hp + 1, this.player.maxHp);
-        } else if (ingredient.char === '𝑚' && this.player.magicMeter?.active) {
-          // Mana drop auto-refills the meter once the well/cauldron has
-          // activated it; bypass inventory entirely.
-          this.magicSystem.addMana(this.player, 2);
-        } else {
-          this.addIngredient(ingredient.char);
-        }
-        this.audioSystem?.playSFX('ingredient_pickup');
-        this.physicsSystem.removeEntity(ingredient);
-        this.ingredients.splice(i, 1);
+        this.lootSystem.collectIngredient(ingredient);
       }
     }
 
@@ -2486,6 +2279,8 @@ class Game {
     this.steamClouds = [];
     this.lightningStrikeSystem?.reset();
     this.sandstormSystem?.reset();
+    this.electricitySystem?.reset();
+    this.fireSystem?.reset();
   }
 
   // Stamp a trail tile of `type` at (x, y). Overlapping nearby same-type tiles
@@ -2570,6 +2365,8 @@ class Game {
 
     // DemoSystem shares a frame counter with both playback and recording.
     this.demoSystem.tickGlobalFrame();
+
+    if (this.pauseSystem.isPaused()) return; // modal pause — world frozen, render continues
 
     // Particle Fireworks (debug): cycle through every effect at ~2.5 bursts/sec
     // at random screen positions. Skips TITLE (no canvas particle pipe there).
@@ -2882,6 +2679,9 @@ class Game {
       this._updateReloadAudio(this.player.heldItem);
     }
 
+    // Bat windup visual + charge lifecycle (batCharge weapons, all states)
+    this.batSystem.update(deltaTime);
+
     return { burnKilledPlayer };
   }
 
@@ -2947,20 +2747,7 @@ class Game {
       const shouldPickup = this.physicsSystem.applyAttraction(ingredient, this.player);
 
       if (shouldPickup) {
-        // Emerald Robe: goo consumed for 1HP heal instead of going to inventory
-        if (ingredient.char === 'g' && this.player.gooConsume) {
-          this.player.hp = Math.min(this.player.hp + 1, this.player.maxHp);
-        } else if (ingredient.char === '𝑚' && this.player.magicMeter?.active) {
-          // Mana drop auto-refills the meter once the well/cauldron has
-          // activated it; bypass inventory entirely.
-          this.magicSystem.addMana(this.player, 2);
-        } else {
-          // REST pickup routes to banked pool via addIngredient.
-          this.addIngredient(ingredient.char);
-        }
-        this.audioSystem?.playSFX('ingredient_pickup');
-        this.physicsSystem.removeEntity(ingredient);
-        this.ingredients.splice(i, 1);
+        this.lootSystem.collectIngredient(ingredient);
       }
     }
 
@@ -3069,6 +2856,10 @@ class Game {
       this.waveSfxTimer = 0;
     }
 
+    // Auto-close the dialogue box when the player walks away from the speaker
+    this.dialogueSystem.update();
+    this.fishermanDemoSystem.update(deltaTime);
+
     // Update all shared player mechanics
     const playerMechanicsResult = this.updatePlayerMechanics(deltaTime);
     const burnKilledPlayer = playerMechanicsResult?.burnKilledPlayer || false;
@@ -3137,6 +2928,9 @@ class Game {
     if (!this.player.inHut && !this.player.inDungeon && !this.player.inMaze) {
       this.physicsSystem.resolveEntityContacts(this.player, this.currentRoom.enemies);
     }
+
+    // Knocked-away chain: enemies sent flying bowl over enemies they hit
+    this.physicsSystem.propagateKnockAway(this.currentRoom.enemies);
 
     // Apply liquid results: lava destroys ingredients/items + ticks damage;
     // water applies bob/wet/status effects. True return = lava killed player.
@@ -3379,6 +3173,8 @@ class Game {
     this.lightningStrikeSystem.update(deltaTime);
     this.sandstormSystem.bindToRoom(this.currentRoom);
     this.sandstormSystem.update(deltaTime);
+    this.electricitySystem.update(deltaTime);
+    this.fireSystem.update(deltaTime);
 
     // Update pack behavior - find packmates and share memory marks
     for (const enemy of this.currentRoom.enemies) {
@@ -3457,31 +3253,36 @@ class Game {
         }
       }
 
-      // Target selection: prefer the nearest living entity (player, camp NPC
-      // companion, or any tamed rat). Enemies only fight what they can see/
-      // reach, so this just tells them WHO to pursue — the aggro-range and
-      // vision checks inside Enemy.update() still gate whether they actually
-      // chase. Tamed rats join the eligibility list so "takes aggro from
-      // player when closer" falls out of nearest-target math (no taunt needed).
-      let nearestTarget = this.player;
-      let nearestDistSq = (this.player.position.x - enemy.position.x) ** 2
-                       + (this.player.position.y - enemy.position.y) ** 2;
-      const companion = this.companion;
-      if (companion && companion.hp > 0 && companion.state !== CAMP_NPC_STATE.FLEEING) {
-        const cDx = companion.position.x - enemy.position.x;
-        const cDy = companion.position.y - enemy.position.y;
-        const d = cDx * cDx + cDy * cDy;
-        if (d < nearestDistSq) { nearestDistSq = d; nearestTarget = companion; }
+      // Charm / noise-maker overrides win over nearest-target selection.
+      // (Lived in CombatSystem's duplicate tick loop before bug #92; targeting
+      // must run before the single canonical tick below.)
+      if (!this.combatSystem.applyTargetOverrides(enemy, this.currentRoom.enemies, this.player, this.activeNoiseSource)) {
+        // Target selection: prefer the nearest living entity (player, camp NPC
+        // companion, or any tamed rat). Enemies only fight what they can see/
+        // reach, so this just tells them WHO to pursue — the aggro-range and
+        // vision checks inside Enemy.update() still gate whether they actually
+        // chase. Tamed rats join the eligibility list so "takes aggro from
+        // player when closer" falls out of nearest-target math (no taunt needed).
+        let nearestTarget = this.player;
+        let nearestDistSq = (this.player.position.x - enemy.position.x) ** 2
+                         + (this.player.position.y - enemy.position.y) ** 2;
+        const companion = this.companion;
+        if (companion && companion.hp > 0 && companion.state !== CAMP_NPC_STATE.FLEEING) {
+          const cDx = companion.position.x - enemy.position.x;
+          const cDy = companion.position.y - enemy.position.y;
+          const d = cDx * cDx + cDy * cDy;
+          if (d < nearestDistSq) { nearestDistSq = d; nearestTarget = companion; }
+        }
+        for (const rat of this.tamedRats) {
+          if (rat.state === 'permaFlee') continue;
+          if ((rat.plane ?? 0) !== (enemy.plane ?? 0)) continue;
+          const rDx = rat.position.x - enemy.position.x;
+          const rDy = rat.position.y - enemy.position.y;
+          const d = rDx * rDx + rDy * rDy;
+          if (d < nearestDistSq) { nearestDistSq = d; nearestTarget = rat; }
+        }
+        enemy.setTarget(nearestTarget);
       }
-      for (const rat of this.tamedRats) {
-        if (rat.state === 'permaFlee') continue;
-        if ((rat.plane ?? 0) !== (enemy.plane ?? 0)) continue;
-        const rDx = rat.position.x - enemy.position.x;
-        const rDy = rat.position.y - enemy.position.y;
-        const d = rDx * rDx + rDy * rDy;
-        if (d < nearestDistSq) { nearestDistSq = d; nearestTarget = rat; }
-      }
-      enemy.setTarget(nearestTarget);
 
       // Cache the previous-frame charge velocity so we can detect a wall-block
       // (charging speed pinned to ~0 by physics resolution = hit something solid)
@@ -3489,7 +3290,12 @@ class Game {
         ? Math.sqrt(enemy.velocity.vx ** 2 + enemy.velocity.vy ** 2)
         : null;
 
-      const updateResult = enemy.update(deltaTime);
+      // Canonical enemy tick (bug #92): exactly one update() per frame, at 2×
+      // rate because all enemy timing data is double-seconds (tuned against
+      // the old duplicate tick — see PHYSICS.ENEMY_TIMER_RATE). The result is
+      // cached so CombatSystem.update consumes it instead of re-ticking.
+      const updateResult = enemy.update(deltaTime * PHYSICS.ENEMY_TIMER_RATE);
+      enemy._frameUpdateResult = updateResult;
 
       // Boss sub-entities (TurtleLeg, etc.) lack `data` and run their own update path —
       // their per-frame work was done by enemy.update above; skip the post-update
@@ -3815,7 +3621,6 @@ class Game {
       this.player,
       activeEnemies,
       activeBackgroundObjects,
-      this.activeNoiseSource,
       this.activeRoom
     );
 
@@ -4114,6 +3919,8 @@ class Game {
       // Check for Fairy in a Bottle death intercept (full heal — preferred over Phoenix Feather)
       const bottleIdx = (this.player.equippedConsumables || []).findIndex(c => c?.data?.effect === 'revive_on_death');
       if (bottleIdx !== -1) {
+        // Ledger: record the intercepted death before restoring state
+        captureDeath(this, { event: 'revive', revivedBy: 'fairy_bottle' });
         const bottle = this.player.equippedConsumables[bottleIdx];
         this.player.hp = this.player.maxHp;
         this.player.invulnerabilityTimer = 2.0;
@@ -4136,6 +3943,8 @@ class Game {
       // Check for Phoenix Feather death intercept
       const reviveIdx = (this.player.equippedConsumables || []).findIndex(c => c?.data?.effect === 'revive');
       if (reviveIdx !== -1) {
+        // Ledger: record the intercepted death before restoring state
+        captureDeath(this, { event: 'revive', revivedBy: 'phoenix_feather' });
         const feather = this.player.equippedConsumables[reviveIdx];
         this.player.hp = Math.floor(this.player.maxHp * 0.5);
         this.player.invulnerabilityTimer = 2.0;
@@ -4338,22 +4147,9 @@ class Game {
           }
         }
 
-        // Create debris at enemy position
-        const enemyDebris = createDebris(
-          enemy.position.x + GRID.CELL_SIZE / 2,
-          enemy.position.y + GRID.CELL_SIZE / 2,
-          4 + Math.floor(Math.random() * 3), // 4-6 pieces
-          '#666666'
-        );
-        for (const piece of enemyDebris) {
-          piece.plane = enemyPlane;
-        }
-        this.debris.push(...enemyDebris);
-
-        // Add debris to physics system
-        for (const piece of enemyDebris) {
-          this.physicsSystem.addEntity(piece);
-        }
+        // Death detritus (goo blobs for slimes, gray debris otherwise);
+        // inherits knockback velocity from the killing blow
+        this.worldEffectsSystem.spawnDeathDetritus(enemy);
 
         this.physicsSystem.removeEntity(enemy);
         this.currentRoom.enemies.splice(i, 1);
@@ -4445,115 +4241,10 @@ class Game {
         }
       }
 
-      // Generate embers from burning objects
-      if (obj.onFire && !obj.destroyed) {
-        const emberCount = obj.flammability === 'high' ? 3 : 1;
-        const emberChance = emberCount * deltaTime;
-
-        if (Math.random() < emberChance && this.particles.length < 200) {
-          const angle = Math.random() * Math.PI * 2;
-          const speed = Math.random() * 50 + 30;
-          const travelDist = obj.flammability === 'high' ? 48 : 32;
-
-          const ember = {
-            x: obj.position.x + GRID.CELL_SIZE / 2,
-            y: obj.position.y + GRID.CELL_SIZE / 2,
-            vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed - 20, // Slight upward bias
-            life: travelDist / speed,
-            maxLife: travelDist / speed,
-            char: '.',
-            color: '#ff6600',
-            size: 3,
-            isEmber: true,
-            alive: true
-          };
-          this.particles.push(ember);
-
-          // Check if ember ignites other objects (5% chance)
-          if (Math.random() < 0.05) {
-            for (const otherObj of activeBgObjects) {
-              if (otherObj !== obj && !otherObj.destroyed && !otherObj.onFire && otherObj.isFlammable()) {
-                const dx = otherObj.position.x - ember.x;
-                const dy = otherObj.position.y - ember.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-
-                if (dist < 16) { // Close enough to ignite
-                  otherObj.ignite();
-                }
-              }
-            }
-          }
-        }
-
-        // Check adjacent objects for fire spread (15% chance per second)
-        if (Math.random() < 0.15 * deltaTime) {
-          for (const otherObj of activeBgObjects) {
-            if (otherObj !== obj && !otherObj.destroyed && !otherObj.onFire && otherObj.isFlammable()) {
-              const dx = otherObj.position.x - obj.position.x;
-              const dy = otherObj.position.y - obj.position.y;
-              const dist = Math.sqrt(dx * dx + dy * dy);
-
-              if (dist < 32) { // Adjacent
-                otherObj.ignite();
-              }
-            }
-          }
-        }
-      }
     }
 
-    // Direct fire contact — player overlapping a burning object accumulates ember stacks
-    // without relying on emitted particles, which may travel away before reaching threshold.
-    if (this.player && !this.player.fireImmune) {
-      const EMBER_STACK_COOLDOWN = 0.5;
-      const EMBER_STACK_WINDOW  = 2.0;
-      const EMBER_THRESHOLD     = 3;
-      const px = this.player.position.x + GRID.CELL_SIZE / 2;
-      const py = this.player.position.y + GRID.CELL_SIZE / 2;
-      if (this.player.emberStackCooldown <= 0) {
-        for (const obj of activeBgObjects) {
-          if (!obj.onFire || obj.destroyed) continue;
-          const cx = obj.position.x + GRID.CELL_SIZE / 2;
-          const cy = obj.position.y + GRID.CELL_SIZE / 2;
-          if (Math.abs(px - cx) < GRID.CELL_SIZE && Math.abs(py - cy) < GRID.CELL_SIZE) {
-            this.player.emberStacks++;
-            this.player.emberStackTimer   = EMBER_STACK_WINDOW;
-            this.player.emberStackCooldown = EMBER_STACK_COOLDOWN;
-            if (this.player.emberStacks >= EMBER_THRESHOLD) {
-              this.player.applyBurn(2.0);
-              this.player.emberStacks     = 0;
-              this.player.emberStackTimer = 0;
-            }
-            break; // one contact credit per frame regardless of how many tiles are burning
-          }
-        }
-      }
-    }
-
-    // Generate embers from burning stuck arrows (same generator as grass fire)
-    for (const arrow of this.combatSystem.getStuckArrows()) {
-      if (arrow.isBurning && this.particles.length < 200) {
-        if (Math.random() < deltaTime) {
-          const angle = Math.random() * Math.PI * 2;
-          const speed = Math.random() * 50 + 30;
-          const travelDist = 32;
-          this.particles.push({
-            x: arrow.position.x + GRID.CELL_SIZE / 2,
-            y: arrow.position.y + GRID.CELL_SIZE / 2,
-            vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed - 20, // Slight upward bias
-            life: travelDist / speed,
-            maxLife: travelDist / speed,
-            char: '.',
-            color: '#ff6600',
-            size: 3,
-            isEmber: true,
-            alive: true
-          });
-        }
-      }
-    }
+    // Fire propagation, ember visuals, and player fire contact live in
+    // FireSystem (updated alongside the other element systems above).
 
     // Remove destroyed objects (exterior always; interior when active)
     this.currentRoom.backgroundObjects = this.currentRoom.backgroundObjects.filter(obj => !obj.destroyed);
@@ -4600,19 +4291,7 @@ class Game {
       const shouldPickup = this.physicsSystem.applyAttraction(ingredient, this.player);
 
       if (shouldPickup) {
-        // Emerald Robe: goo consumed for 1HP heal instead of going to inventory
-        if (ingredient.char === 'g' && this.player.gooConsume) {
-          this.player.hp = Math.min(this.player.hp + 1, this.player.maxHp);
-        } else if (ingredient.char === '𝑚' && this.player.magicMeter?.active) {
-          // Mana drop auto-refills the meter once the well/cauldron has
-          // activated it; bypass inventory entirely.
-          this.magicSystem.addMana(this.player, 2);
-        } else {
-          this.addIngredient(ingredient.char);
-        }
-        this.audioSystem?.playSFX('ingredient_pickup');
-        this.physicsSystem.removeEntity(ingredient);
-        this.ingredients.splice(i, 1);
+        this.lootSystem.collectIngredient(ingredient);
       }
     }
 
@@ -4968,6 +4647,9 @@ class Game {
         return;
       }
 
+      // Open dialogue box consumes SPACE first (advance/close)
+      if (this.dialogueSystem.advance()) return;
+
       // Item pickup takes precedence over interior-system interactions.
       // Items can land on top of pressable/spacebar objects (press, well,
       // pedestals) and the player almost always wants to grab the item first.
@@ -5032,13 +4714,13 @@ class Game {
         ? this.activeFloor.npcs
         : this.neutralCharacters;
 
-      // Artifact → wise fellow: consume ⚱, unlock rare-tier hint for this zone.
+      // Artifact → wise fellow: consume ⚜, unlock rare-tier hint for this zone.
       // Checked before the errand path so the wise man (when nearby) wins the
       // give; they're in different rooms in practice so this only matters when
       // both flows exist within the same hut.
       if (this.interactionSystem.tryGiveArtifactToWiseFellow(npcArray)) return;
 
-      // Artifact → errand traveler: consume ⚱, spawn 2 coin ingredients at NPC.
+      // Artifact → errand traveler: consume ⚜, spawn 2 coin ingredients at NPC.
       // Side trade — does not advance or alter the active stage errand.
       const artifactResult = this.errandSystem.tryGiveArtifact(this.player, npcArray);
       if (artifactResult) {
@@ -5058,6 +4740,12 @@ class Game {
         this.physicsSystem.addEntity(rewardItem);
         return;
       }
+
+      // Hut fisherman coin trade (gated on tips heard — see FishermanDemoSystem)
+      if (this.fishermanDemoSystem.trySpacePress()) return;
+
+      // Speaking NPCs open the dialogue box (after trade flows, which keep priority)
+      if (this.dialogueSystem.tryOpenNearby()) return;
 
       // Try to unlock vault if player is in position with key
       if (this.interactionSystem.canUnlockVault()) {
@@ -5107,6 +4795,13 @@ class Game {
 
       // Bundle world object: destroy and scatter ingredients
       if (this.lootSystem.scatterRestBundle()) return;
+
+      // Item pickup: crafted items (and any other items) land on ground in REST —
+      // pick them up before other REST interactions, same as EXPLORE mode.
+      const hasNearbyRestItem = this.items.some(
+        item => this.physicsSystem.getDistance(this.player, item) < 20
+      );
+      if (hasNearbyRestItem) { this.tryPickupItem(); return; }
 
       const nearestSlot = this.getNearestInteractiveSlot();
 
@@ -5286,6 +4981,11 @@ class Game {
     this.wellFlashTimer = 0;
     this.wellFlashDuration = 0;
 
+    // New run → new ledger run id; cheat flag stays set if god mode is still
+    // on, since cheatMenu.godMode persists and is reapplied to the new Player.
+    this.runId = newRunId();
+    this.cheatUsed = !!this.cheatMenu.godMode;
+
     // Reset fairy run-flag for new run
     this.fairiesAngered = false;
     this.fedCrowCount = 0;
@@ -5398,6 +5098,8 @@ class Game {
         this.magicSystem.handleSpaceRelease(this.player);
       } else if (this.player.heldItem.data?.chargeHammer) {
         this.player.heldItem.releaseChargeHammer();
+      } else if (this.player.heldItem.data?.batCharge) {
+        this.batSystem.release(this.player);
       } else {
         this.audioSystem.stopSFXByName('charge_bow');
         if (this.player.canAttack()) {
@@ -5527,6 +5229,157 @@ class Game {
     this.renderer.markBackgroundDirty();
   }
 
+  // Post-generation enemy wiring — part of the room-swap core below, also
+  // callable alone. setGame is load-bearing: without it, takeDamage/update
+  // paths that reach for game systems silently no-op — Giant Slime split
+  // children (enemySpawnSystem), per-enemy hit SFX (audioSystem), sound
+  // detection (bug #93).
+  wireRoomEnemies(room) {
+    for (const enemy of room.enemies) {
+      enemy.setTarget(this.player);
+      enemy.setCollisionMap(room.collisionMap);
+      enemy.setGame(this);
+      enemy.setRoom(room);
+    }
+  }
+
+  // ── Room-swap core (bug category: warp/natural room-entry divergence) ─────
+  // Single source of truth for the reset that must run whenever currentRoom is
+  // replaced — called by enterExploreState (new-room AND restore branches) and
+  // every warp path (cheat zone/depth/room/boss warps, demo setup, maze test).
+  // Bug #93: the warps used to hand-copy fragments of this block and drifted
+  // (missing setGame, dead grace timers, stale items). Add new per-room resets
+  // HERE, never at a single call site.
+  //   resetEntities: false → restore path; entity arrays were repopulated from
+  //                  the saved-room snapshot, only transient effects reset.
+  //   grace:         false → demo attract mode; enemies act immediately.
+  applyRoomSwap(room, { resetEntities = true, grace = true } = {}) {
+    if (resetEntities) {
+      this.ingredients = [];
+      this.items = room.items || [];
+      this.placedTraps = [];
+      this.activeNoiseSource = null;
+      this._resetEnvironmentalEffects();
+      this.captives = [];
+      this.neutralCharacters = [];
+      this.bridgeMenuOpen = false;
+      this.backgroundObjects = room.backgroundObjects || [];
+
+      // Clear sound events from any previous room
+      this.soundEvents = [];
+
+      // Ridge room: attach ridge system and push bridge worker if not yet built
+      if (room.type === ROOM_TYPES.RIDGE) {
+        this.ridgeSystem.attachToRoom(room);
+        if (room.bridgeWorker && !room.bridgeBuilt) {
+          this.neutralCharacters.push(room.bridgeWorker);
+        }
+      }
+
+      // Pearl-guide fairy (O room + pearl in inventory): pre-spawned at room
+      // generation; lives in neutralCharacters alongside the fight. Suppressed
+      // once the fountain has been corrupted.
+      if (room.pearlFairy && !room.pearlFairy.consumed && !this.fairiesAngered) {
+        this.neutralCharacters.push(room.pearlFairy);
+      }
+
+      // Peaceful fishing room (low-depth L/O roll): the shore Fisherman joins
+      if (room.lakeFisherman) {
+        this.neutralCharacters.push(room.lakeFisherman);
+      }
+
+      // Errand room: active errand + E room clears enemies and spawns the
+      // traveler immediately (they remember what they wanted last time)
+      if (this.errandSystem.activeErrand && room.exitLetter === 'E') {
+        room.enemies = [];
+        room.enemiesPlane0 = [];
+        room.enemiesPlane1 = [];
+        room.exitsLocked = false;
+        const errandChar = this.errandSystem.spawnErrandCharacter();
+        if (errandChar) this.neutralCharacters.push(errandChar);
+      }
+
+      // Unlock exits immediately if room has no enemies (CAMP, DISCOVERY, etc.)
+      // Hidden mimics don't count — exits stay open until they reveal.
+      if (this._countedEnemies(room.enemies).length === 0) {
+        room.exitsLocked = false;
+      }
+      // Witch-curse polymorph: exits always open until cured
+      if (this.player?.polymorphCursed) {
+        room.exitsLocked = false;
+      }
+
+      // Follower flock is room-scoped: bystander crows don't trail the player
+      // across rooms (companions still do). Auto-join reapplies per-room.
+      this.followerCrows = [];
+      if (this.player) this.companionSystem.autoJoinWildCrows();
+    } else {
+      // Restore path: still clear transient effects
+      this.activeNoiseSource = null;
+      this._resetEnvironmentalEffects();
+      this.neutralCharacters = [];
+    }
+
+    this.wireRoomEnemies(room);
+
+    if (grace) {
+      // 2-second detection grace period — suppress aggro range so enemies
+      // can't spot the player the moment they enter the room
+      this.roomEntryGraceTimer = 2.0;
+      for (const enemy of room.enemies) {
+        enemy._savedAggroRange = enemy.aggroRange;
+        enemy.aggroRange = 0;
+      }
+    }
+
+    // Check for Path Amulet and display path announcement
+    if (this.player) this.checkPathAmulet();
+
+    // Reset physics
+    this.physicsSystem.clear();
+    if (this.player) this.physicsSystem.addEntity(this.player);
+    for (const enemy of room.enemies) {
+      this.physicsSystem.addEntity(enemy);
+    }
+    for (const item of this.items) {
+      this.physicsSystem.addEntity(item);
+    }
+    this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
+    this.companionSystem.registerTamedRatsWithPhysics();
+
+    // Reset combat
+    this.combatSystem.clear();
+
+    // Mark background dirty
+    this.renderer.markBackgroundDirty();
+  }
+
+  // Zone-music switcher shared by enterExploreState and handleZoneTeleport
+  // (was hand-copied; same warp/natural-divergence category as applyRoomSwap).
+  // Skipped while boss sequence mode is active (anticipation or full fight).
+  switchZoneMusic(zone) {
+    if (this.audioSystem.mode !== 'dual' && this.audioSystem.mode !== 'red') return;
+    const base = import.meta.env.BASE_URL;
+    if (zone === 'red' && this.currentMusicZone !== 'red') {
+      if (this.audioSystem.switchToRedSequence()) {
+        this.currentMusicZone = 'red';
+      }
+    } else if (zone === 'cyan' && this.currentMusicZone !== 'cyan') {
+      this.currentMusicZone = 'cyan';
+      this.audioSystem.switchMusic(
+        `${base}assets/audio/cyan-layer1.mp3`,
+        `${base}assets/audio/cyan-layer2.mp3`
+      );
+    } else if (zone !== 'cyan' && zone !== 'red'
+               && (this.currentMusicZone === 'cyan' || this.currentMusicZone === 'red')) {
+      this.currentMusicZone = 'green';
+      this.audioSystem.switchMusic(
+        `${base}assets/audio/layer1.mp3`,
+        `${base}assets/audio/layer2.mp3`
+      );
+    }
+  }
+
   handleZoneTeleport(targetZone) {
     console.log(`[CHEAT] Teleporting to ${targetZone} zone`);
 
@@ -5563,64 +5416,14 @@ class Game {
       null
     );
 
-    // Replace current room
+    // Replace current room — applyRoomSwap covers entity arrays, enemy
+    // wiring, entry grace, and physics/combat reset (shared with natural entry)
     this.currentRoom = newRoom;
     this.player.setCollisionMap(newRoom.collisionMap);
-    this.backgroundObjects = newRoom.backgroundObjects;
-
-    // Update all entities
-    for (const enemy of newRoom.enemies) {
-      enemy.setTarget(this.player);
-      enemy.setCollisionMap(newRoom.collisionMap);
-    }
-
-    // Setup 2-second grace period for enemies
-    this.roomEntryGraceTimer = 2.0;
-    for (const enemy of newRoom.enemies) {
-      enemy._savedAggroRange = enemy.aggroRange;
-      enemy.aggroRange = 0;
-    }
-
-    // Reset physics system and add all entities
-    this.physicsSystem.clear();
-    this.physicsSystem.addEntity(this.player);
-    for (const enemy of newRoom.enemies) {
-      this.physicsSystem.addEntity(enemy);
-    }
-    for (const item of this.items) {
-      this.physicsSystem.addEntity(item);
-    }
-    this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
-    this.companionSystem.registerTamedRatsWithPhysics();
-
-    // Reset combat system
-    this.combatSystem.clear();
-
-    // Mark background dirty for redraw
-    this.renderer.markBackgroundDirty();
+    this.applyRoomSwap(newRoom);
 
     // Switch music if entering/leaving a zone with custom music
-    if (this.audioSystem.mode === 'dual' || this.audioSystem.mode === 'red') {
-      const base = import.meta.env.BASE_URL;
-      if (targetZone === 'red' && this.currentMusicZone !== 'red') {
-        if (this.audioSystem.switchToRedSequence()) {
-          this.currentMusicZone = 'red';
-        }
-      } else if (targetZone === 'cyan' && this.currentMusicZone !== 'cyan') {
-        this.currentMusicZone = 'cyan';
-        this.audioSystem.switchMusic(
-          `${base}assets/audio/cyan-layer1.mp3`,
-          `${base}assets/audio/cyan-layer2.mp3`
-        );
-      } else if (targetZone !== 'cyan' && targetZone !== 'red'
-                 && (this.currentMusicZone === 'cyan' || this.currentMusicZone === 'red')) {
-        this.currentMusicZone = 'green';
-        this.audioSystem.switchMusic(
-          `${base}assets/audio/layer1.mp3`,
-          `${base}assets/audio/layer2.mp3`
-        );
-      }
-    }
+    this.switchZoneMusic(targetZone);
 
     // Update UI
     this.updateUI();
@@ -5645,21 +5448,10 @@ class Game {
     const playerPos = { x: this.player.position.x, y: this.player.position.y };
     const newRoom = this.roomGenerator.generateRoom(null, playerPos, currentZone, null);
 
-    // Replace current room
+    // Replace current room — applyRoomSwap covers entity arrays, enemy
+    // wiring, entry grace, and physics/combat reset (shared with natural entry)
     this.currentRoom = newRoom;
     this.player.setCollisionMap(newRoom.collisionMap);
-    this.backgroundObjects = newRoom.backgroundObjects;
-
-    for (const enemy of newRoom.enemies) {
-      enemy.setTarget(this.player);
-      enemy.setCollisionMap(newRoom.collisionMap);
-    }
-
-    // Grace period so enemies don't immediately attack
-    this.roomEntryGraceTimer = 2.0;
-    for (const enemy of newRoom.enemies) {
-      enemy.graceTimer = this.roomEntryGraceTimer;
-    }
 
     // Reset interior state
     this.player.inHut = false;
@@ -5667,19 +5459,8 @@ class Game {
     this.player.inDungeon = false;
     this.activeFloor = null;
     this.mazeInterior = null;
-    this.items = [];
-    this.captives = [];
-    this.neutralCharacters = [];
 
-    this.physicsSystem.clear();
-    this.physicsSystem.addEntity(this.player);
-    for (const enemy of newRoom.enemies) {
-      this.physicsSystem.addEntity(enemy);
-    }
-    this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
-    this.companionSystem.registerTamedRatsWithPhysics();
-    this.combatSystem.clear();
-    this.renderer.markBackgroundDirty();
+    this.applyRoomSwap(newRoom);
     this.updateUI();
 
     console.log(`[CHEAT] ✓ Depth jump → L${depth} in ${currentZone} zone`);
@@ -5707,33 +5488,16 @@ class Game {
     const newRoom = this.roomGenerator.generateRoom(ROOM_TYPES.BOSS, playerPos, targetZone, null);
     this.roomGenerator.isZoneBossRoom = false;
 
-    // Replace current room
+    // Replace current room — applyRoomSwap covers entity arrays, enemy
+    // wiring, entry grace, and physics/combat reset (shared with natural entry)
     this.currentRoom = newRoom;
-    this.backgroundObjects = newRoom.backgroundObjects;
-
-    // Activate boss
-    this.bossSystem.activate(newRoom, targetZone);
-
-    // Wire up entities
-    for (const enemy of newRoom.enemies) {
-      enemy.setTarget(this.player);
-      enemy.setCollisionMap(newRoom.collisionMap);
-    }
     this.player.setCollisionMap(newRoom.collisionMap);
 
-    // Setup grace period
-    this.roomEntryGraceTimer = 2.0;
+    // Activate boss BEFORE the swap so any boss entities it adds to
+    // newRoom.enemies get wired and physics-registered too
+    this.bossSystem.activate(newRoom, targetZone);
 
-    // Reset systems
-    this.physicsSystem.clear();
-    this.physicsSystem.addEntity(this.player);
-    for (const enemy of newRoom.enemies) {
-      this.physicsSystem.addEntity(enemy);
-    }
-    this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
-    this.companionSystem.registerTamedRatsWithPhysics();
-    this.combatSystem.clear();
-    this.renderer.markBackgroundDirty();
+    this.applyRoomSwap(newRoom);
     this.updateUI();
 
     console.log(`[CHEAT] ✓ Boss test: ${targetZone} zone boss spawned`);
@@ -5775,8 +5539,13 @@ class Game {
       roomLetter
     );
 
-    // Replace current room
+    // Replace current room — applyRoomSwap covers entity arrays + room
+    // attachments, enemy wiring, entry grace, and physics/combat reset
+    // (shared with natural entry)
     this.currentRoom = newRoom;
+    // Natural entry records the exit letter for letter-gated behaviors
+    // (e.g. errand rooms check exitLetter === 'E')
+    newRoom.exitLetter = roomLetter;
 
     // Apply room-declared spawn zone if present (e.g. underground clearings)
     if (newRoom.spawnZones) {
@@ -5788,56 +5557,10 @@ class Game {
     }
 
     this.player.setCollisionMap(newRoom.collisionMap);
-    this.backgroundObjects = newRoom.backgroundObjects || [];
-    this.items = newRoom.items || [];
-    this.placedTraps = [];
-    this.activeNoiseSource = null;
-    this._resetEnvironmentalEffects();
-    this.captives = [];
-    this.neutralCharacters = [];
-    this.bridgeMenuOpen = false;
-
-    // Ridge room: push bridge worker if not yet built
-    if (newRoom.type === ROOM_TYPES.RIDGE) {
-      this.ridgeSystem.attachToRoom(newRoom);
-      if (newRoom.bridgeWorker && !newRoom.bridgeBuilt) {
-        this.neutralCharacters.push(newRoom.bridgeWorker);
-      }
-    }
-
-    // Update all enemies
-    for (const enemy of newRoom.enemies) {
-      enemy.setTarget(this.player);
-      enemy.setCollisionMap(newRoom.collisionMap);
-    }
-
-    // Setup 2-second grace period for enemies
-    this.roomEntryGraceTimer = 2.0;
-    for (const enemy of newRoom.enemies) {
-      enemy._savedAggroRange = enemy.aggroRange;
-      enemy.aggroRange = 0;
-    }
-
-    // Reset physics system and add all entities
-    this.physicsSystem.clear();
-    this.physicsSystem.addEntity(this.player);
-    for (const enemy of newRoom.enemies) {
-      this.physicsSystem.addEntity(enemy);
-    }
-    for (const item of this.items) {
-      this.physicsSystem.addEntity(item);
-    }
-    this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
-    this.companionSystem.registerTamedRatsWithPhysics();
-
-    // Reset combat system
-    this.combatSystem.clear();
+    this.applyRoomSwap(newRoom);
 
     // Preload room previews for exits
     this.preloadRoomPreviews();
-
-    // Mark background dirty for redraw
-    this.renderer.markBackgroundDirty();
 
     // Update UI
     this.updateUI();
@@ -5868,36 +5591,11 @@ class Game {
     this.player.destroyedSlots = savedDestroyedSlots;
     if (savedHp !== null) this.player.hp = savedHp;
 
-    // Setup room entities (sync with room's state)
-    this.ingredients = [];
-    this.items = this.currentRoom.items || [];
-    this.placedTraps = [];
-    this.activeNoiseSource = null;
-    this.backgroundObjects = this.currentRoom.backgroundObjects || [];
-    this._resetEnvironmentalEffects();
+    // Room-swap core: entity arrays, enemy wiring, entry grace, physics/combat
+    // reset (shared with natural entry and all warp paths)
+    this.applyRoomSwap(this.currentRoom);
 
-    // Set enemy targets
-    for (const enemy of this.currentRoom.enemies) {
-      enemy.setTarget(this.player);
-    }
-
-    // Reset physics system
-    this.physicsSystem.clear();
-    this.physicsSystem.addEntity(this.player);
-    for (const enemy of this.currentRoom.enemies) {
-      this.physicsSystem.addEntity(enemy);
-    }
-    for (const item of this.items) {
-      this.physicsSystem.addEntity(item);
-    }
-    this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
-    this.companionSystem.registerTamedRatsWithPhysics();
-
-    // Reset combat
-    this.combatSystem.clear();
-
-    // Redraw and set state (don't call transition - that would trigger enterExploreState and overwrite our maze!)
-    this.renderer.markBackgroundDirty();
+    // Set state directly (don't call transition - that would trigger enterExploreState and overwrite our maze!)
     this.stateMachine.currentState = GAME_STATES.EXPLORE;
   }
 
@@ -5906,8 +5604,13 @@ class Game {
       this.items,
       this.placedTraps,
       this.player,
-      this.physicsSystem
+      this.physicsSystem,
+      // slot-choice prompt off during demo playback (recordings expect auto-swap)
+      this.stateMachine.getCurrentState() !== GAME_STATES.ARCADE_DEMO
     );
+
+    // Full quick slots: paused slot-choice prompt instead of auto-displacement
+    if (this.slotReplacementSystem.maybeOpen(result)) return;
 
     if (result.success) {
       // Handle blessing pickup (apply blessing effect)
@@ -6072,6 +5775,11 @@ class Game {
     if (this.wishesUsed >= 3) return;
     if (this.stateMachine.getCurrentState() !== GAME_STATES.GAME_OVER) return;
 
+    // Ledger: the preceding 'death' record shares this runId — a 'revive'
+    // record marks that death as undone, so analysis can tell wish-revived
+    // deaths from run-ending ones. Snapshot before slots are destroyed.
+    captureDeath(this, { event: 'revive', revivedBy: 'wish' });
+
     // Consume a wish and destroy a slot (same order as CLEANSE: 0→1→2)
     const slotIdx = this.wishesUsed;
     this.wishesUsed++;
@@ -6220,6 +5928,8 @@ class Game {
     if (state !== GAME_STATES.TITLE) {
       this.renderController.renderSpellResponse(this);
     }
+
+    this.pauseSystem.render(this.renderer); // modal overlay — drawn last, above everything
   }
 
 

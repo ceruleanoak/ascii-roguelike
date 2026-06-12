@@ -24,6 +24,7 @@ export class LakeBoss {
     this.mass = 20;
     this.isBossEntity   = true;
     this.isBossLakeBoss = true;
+    this._frameUpdateResult = null; // canonical-tick cache, see Enemy.js / bug #92
 
     this.position = { x, y };
     this.width    = GRID.CELL_SIZE;
@@ -112,6 +113,13 @@ export class LakeBoss {
     this.hitFlash = true;
     this.hasTakenDamage = true;
     return amount;
+  }
+
+  // Near-death warning: blink dark red at ≤30% HP — same signal as the player
+  // and Enemy.getNearDeathBlinkColor (LakeBoss doesn't extend Enemy).
+  getNearDeathBlinkColor() {
+    if (this.hp <= 0 || this.hp > this.maxHp * 0.3) return null;
+    return Math.floor(Date.now() / 250) % 2 === 0 ? '#660000' : null;
   }
 
   update(deltaTime) {

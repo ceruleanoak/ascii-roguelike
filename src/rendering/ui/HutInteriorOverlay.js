@@ -88,6 +88,7 @@ export class HutInteriorOverlay {
     // ── 4. Interior background objects ─────────────────────────────────────────
     for (const obj of game.activeFloor.backgroundObjects) {
       if (obj.destroyed) continue;
+      if (obj.onFire && !obj.isCampfire) continue; // drawn by the shared flicker pass below
       const renderData = obj.getRenderPosition();
       ctx.fillStyle = renderData.color;
       ctx.fillText(
@@ -96,6 +97,10 @@ export class HutInteriorOverlay {
         renderData.y + GRID.CELL_SIZE / 2
       );
     }
+
+    // Burning interior objects flicker per-frame via the shared helper
+    // (hutPlane=true selects activeFloor objects; ctx translate already applied).
+    this.renderController.exploreRenderer.drawBurningObjects(game, true);
 
     // ── 5-7. Hutplane debris / ingredients / items ────────────────────────────
     // Delegates to the shared helpers on ExploreRenderer with hutPlane=true filter.
@@ -131,24 +136,25 @@ export class HutInteriorOverlay {
       ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
+      // NPC speech now goes through the SPACE-driven dialogue box
+      // (DialogueSystem + DialogueBox) — no passive proximity text here.
+    }
 
-      // WiseFellow hint text — fades in on proximity (word per line above NPC)
-      if (npc.hintText && npc.hintAlpha > 0.02) {
-        const words = npc.hintText.split(' ');
-        const lineH = 9;
-        ctx.save();
-        ctx.globalAlpha = npc.hintAlpha;
-        ctx.fillStyle = '#e8c060';
-        ctx.font = `8px 'VentureArcade', monospace`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        const baseY = npc.position.y - GRID.CELL_SIZE * 1.2 - (words.length - 1) * lineH * 0.5;
-        for (let wi = 0; wi < words.length; wi++) {
-          ctx.fillText(words[wi], npc.position.x + GRID.CELL_SIZE / 2, baseY + wi * lineH);
-        }
-        ctx.restore();
-        ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`; // restore main font
-      }
+    // Fisherman coin pay — spinning arc from player to the fisherman
+    // (interior coords; shared draw helper, ctx translate already applied).
+    const coinAnim = game.fishermanDemoSystem?.getCoinAnim?.();
+    if (coinAnim) this.renderController.exploreRenderer.drawCoinArc(coinAnim);
+
+    // Fisherman coin-demo fish — transient marker beside the NPC while he
+    // demonstrates cutting the catch open.
+    const demoFish = game.fishermanDemoSystem?.getFishMarker();
+    if (demoFish) {
+      ctx.fillStyle = demoFish.color;
+      ctx.fillText(
+        demoFish.char,
+        demoFish.x + GRID.CELL_SIZE / 2,
+        demoFish.y + GRID.CELL_SIZE / 2
+      );
     }
 
     // ── 9. Player projectiles (interior coords) ────────────────────────────────

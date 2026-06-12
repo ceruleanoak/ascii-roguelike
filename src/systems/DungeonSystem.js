@@ -1,10 +1,9 @@
-import { GRID } from '../game/GameConfig.js';
+import { GRID, PHYSICS } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
 import { Particle } from '../entities/Particle.js';
 import { getZoneRandomEnemy } from '../data/enemies.js';
-import { createDebris } from '../entities/Debris.js';
 import { pickRandomTemplateName, applyTemplateToCollisionMap } from '../data/dungeonFloorTemplates.js';
 
 // Reward weapons by floor (1-indexed in design talk, 0-indexed here).
@@ -492,9 +491,14 @@ export class DungeonSystem {
       game.dungeonFloors[currentFloorIndex].ingredients = game.ingredients.filter(i => i.hutPlane);
     }
 
-    // Remove current floor enemies from physics (they remain on floor.enemies)
+    // Remove current floor enemies from physics (they remain on floor.enemies).
+    // Also drop unconsumed tick caches so CombatSystem can't replay stale
+    // dot/sap events on re-entry (bug #92).
     if (game.activeFloor?.enemies) {
-      for (const e of game.activeFloor.enemies) game.physicsSystem.removeEntity(e);
+      for (const e of game.activeFloor.enemies) {
+        game.physicsSystem.removeEntity(e);
+        e._frameUpdateResult = null;
+      }
     }
 
     // Restore exterior position
@@ -549,8 +553,14 @@ export class DungeonSystem {
       // requests (slime trail, fire/ice trail, aggro sound, item attacks) flow
       // — surface loop in main.js processes the same fields.
       for (const enemy of floor.enemies) {
-        enemy.target = game.player;
-        const r = enemy.update(dt);
+        if (!game.combatSystem.applyTargetOverrides(enemy, floor.enemies, game.player, game.activeNoiseSource)) {
+          enemy.target = game.player;
+        }
+        // Canonical interior tick (bug #92): 2× rate (enemy timing data is
+        // double-seconds), result cached for CombatSystem — which used to be
+        // the duplicate second tick and now only consumes.
+        const r = enemy.update(dt * PHYSICS.ENEMY_TIMER_RATE);
+        enemy._frameUpdateResult = r;
         if (!r) continue;
         if (r.justAggrod) game.audioSystem?.playSFX('aggro');
         if (r.itemAttack) game.combatSystem.createEnemyAttack(r.itemAttack);
@@ -577,15 +587,9 @@ export class DungeonSystem {
           game.audioSystem?.playSFX('destroy');
           game.spawnLoot(enemy);
 
-          const enemyDebris = createDebris(
-            enemy.position.x + GRID.CELL_SIZE / 2,
-            enemy.position.y + GRID.CELL_SIZE / 2,
-            4 + Math.floor(Math.random() * 3),
-            '#666666'
-          );
-          for (const piece of enemyDebris) piece.hutPlane = true;
-          game.debris.push(...enemyDebris);
-          for (const piece of enemyDebris) game.physicsSystem.addEntity(piece);
+          // Death detritus (goo blobs for slimes, gray debris otherwise);
+          // hutPlane so the overlay renders it. Inherits knockback velocity.
+          game.worldEffectsSystem.spawnDeathDetritus(enemy, { hutPlane: true });
 
           game.physicsSystem.removeEntity(enemy);
           floor.enemies.splice(i, 1);
