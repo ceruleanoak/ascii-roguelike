@@ -13,8 +13,8 @@ export class WarpSystem {
     const h = player.height;
     const C = GRID.CELL_SIZE;
 
-    // 3-cell safety margin from all edges — blocks perimeter walls, exit gaps, and exit trigger zones
-    const margin = C * 3;
+    // 2-cell safety margin from all edges — blocks perimeter walls, exit gaps, and exit trigger zones
+    const margin = C * 2;
     if (x < margin || x + w > GRID.WIDTH - margin) return false;
     if (y < margin || y + h > GRID.HEIGHT - margin) return false;
 
