@@ -100,6 +100,16 @@ All modes share CombatSystem, PhysicsSystem, and entity classes.
 - **VentureArcade**: UI labels only (`HP:`, `L`, `Q`, zone exit letters, "GAME OVER"). Limited glyph coverage — never use for item/enemy chars or slot placeholders.
 - **Unifont**: Everything else (all canvas entity rendering, weapon/armor chars, slot placeholders). Complete Unicode coverage; safe default.
 
+## Input Feedback System (REST Mode)
+
+Arrow keys and WASD controls display real-time feedback when pressed:
+- **Font size**: Increases to 1.4× (40% larger) when key is pressed
+- **Color**: Changes to yellow (`COLORS.ITEM`) when key is pressed
+- **Rendering**: All keys drawn on foreground layer (`fgCtx`) to avoid layering conflicts
+- **Implementation files**: `RestRenderer.js` (WASD + brackets), `ArrowKeyIndicators.js` (arrows + brackets)
+
+Avoid double-rendering by always drawing keys to a single layer. The 2× scaling animation has been replaced with font size + color changes for cleaner visual feedback.
+
 ## Critical Technical Constraints
 
 **NO localStorage, sessionStorage, or IndexedDB.** All state resets on page refresh and on death. This is intentional.

@@ -440,112 +440,76 @@ export class RestRenderer {
     const wasdY = GRID.HEIGHT - GRID.CELL_SIZE * 5;
     const wasdCenterX = GRID.WIDTH / 4; // Left quarter of screen
 
-    // Determine colors based on key state (highlight when pressed) and inactivity blinking
+    // Determine colors and sizes based on key state (highlight when pressed) and inactivity blinking
     const isInactive = game.inactivityTimer >= game.INACTIVITY_THRESHOLD;
     const blinkWhite = isInactive && game.wasdBlinkState;
     const inactiveColor = blinkWhite ? '#FFFFFF' : COLORS.TEXT;
 
-    const wColor = game.keys.w ? COLORS.ITEM : (isInactive ? inactiveColor : COLORS.TEXT);
-    const aColor = game.keys.a ? COLORS.ITEM : (isInactive ? inactiveColor : COLORS.TEXT);
-    const sColor = game.keys.s ? COLORS.ITEM : (isInactive ? inactiveColor : COLORS.TEXT);
-    const dColor = game.keys.d ? COLORS.ITEM : (isInactive ? inactiveColor : COLORS.TEXT);
+    const getWasdStyle = (isPressed) => {
+      if (isPressed) {
+        return { fontSize: GRID.CELL_SIZE * 1.4, color: COLORS.ITEM };
+      } else if (isInactive) {
+        return { fontSize: GRID.CELL_SIZE, color: inactiveColor };
+      } else {
+        return { fontSize: GRID.CELL_SIZE, color: COLORS.TEXT };
+      }
+    };
 
-    // Temporarily use lighter font for keys. Greek substitutes get a scaled
-    // font to match VentureArcade's visual size elsewhere in the UI.
-    this.renderer.bgCtx.save();
-    const wasdFontPx = spectaclesOn
-      ? Math.round(GRID.CELL_SIZE * CIPHER_FONT_SCALE)
-      : GRID.CELL_SIZE;
-    this.renderer.bgCtx.font = `${wasdFontPx}px 'Unifont', monospace`;
+    const wStyle = getWasdStyle(game.keys.w);
+    const aStyle = getWasdStyle(game.keys.a);
+    const sStyle = getWasdStyle(game.keys.s);
+    const dStyle = getWasdStyle(game.keys.d);
+
+    // Draw using foreground context for proper layering with variable font sizes
+    const wasdCtx = this.renderer.fgCtx;
+    wasdCtx.save();
+    wasdCtx.textAlign = 'center';
+    wasdCtx.textBaseline = 'middle';
+    const half = GRID.CELL_SIZE / 2;
+
+    const wasdTopRow = Math.floor(wasdY / GRID.CELL_SIZE);
+    const wasdCenterCol = Math.floor(wasdCenterX / GRID.CELL_SIZE);
+    const wasdBottomRow = wasdTopRow + 1;
+
+    // Brackets (static size)
+    wasdCtx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
+    wasdCtx.fillStyle = COLORS.BORDER;
+    wasdCtx.fillText('[', (wasdCenterCol - 1) * GRID.CELL_SIZE + half, wasdTopRow * GRID.CELL_SIZE + half);
+    wasdCtx.fillText(']', (wasdCenterCol + 1) * GRID.CELL_SIZE + half, wasdTopRow * GRID.CELL_SIZE + half);
+
+    wasdCtx.fillText('[', (wasdCenterCol - 5) * GRID.CELL_SIZE + half, wasdBottomRow * GRID.CELL_SIZE + half);
+    wasdCtx.fillText(']', (wasdCenterCol - 3) * GRID.CELL_SIZE + half, wasdBottomRow * GRID.CELL_SIZE + half);
+
+    wasdCtx.fillText('[', (wasdCenterCol - 1) * GRID.CELL_SIZE + half, wasdBottomRow * GRID.CELL_SIZE + half);
+    wasdCtx.fillText(']', (wasdCenterCol + 1) * GRID.CELL_SIZE + half, wasdBottomRow * GRID.CELL_SIZE + half);
+
+    wasdCtx.fillText('[', (wasdCenterCol + 3) * GRID.CELL_SIZE + half, wasdBottomRow * GRID.CELL_SIZE + half);
+    wasdCtx.fillText(']', (wasdCenterCol + 5) * GRID.CELL_SIZE + half, wasdBottomRow * GRID.CELL_SIZE + half);
 
     // W key (top)
-    this.renderer.drawCell(
-      Math.floor(wasdCenterX / GRID.CELL_SIZE) - 1,
-      Math.floor(wasdY / GRID.CELL_SIZE),
-      '[',
-      COLORS.BORDER
-    );
-    this.renderer.drawCell(
-      Math.floor(wasdCenterX / GRID.CELL_SIZE),
-      Math.floor(wasdY / GRID.CELL_SIZE),
-      spectaclesTransform('W', spectaclesOn),
-      wColor
-    );
-    this.renderer.drawCell(
-      Math.floor(wasdCenterX / GRID.CELL_SIZE) + 1,
-      Math.floor(wasdY / GRID.CELL_SIZE),
-      ']',
-      COLORS.BORDER
-    );
-
-    // A S D keys (bottom row)
-    const wasdBottomRowY = Math.floor(wasdY / GRID.CELL_SIZE) + 1;
+    wasdCtx.font = `${wStyle.fontSize}px 'Unifont', monospace`;
+    wasdCtx.fillStyle = wStyle.color;
+    wasdCtx.fillText(spectaclesTransform('W', spectaclesOn), wasdCenterCol * GRID.CELL_SIZE + half, wasdTopRow * GRID.CELL_SIZE + half);
 
     // A key (left)
-    this.renderer.drawCell(
-      Math.floor(wasdCenterX / GRID.CELL_SIZE) - 5,
-      wasdBottomRowY,
-      '[',
-      COLORS.BORDER
-    );
-    this.renderer.drawCell(
-      Math.floor(wasdCenterX / GRID.CELL_SIZE) - 4,
-      wasdBottomRowY,
-      spectaclesTransform('A', spectaclesOn),
-      aColor
-    );
-    this.renderer.drawCell(
-      Math.floor(wasdCenterX / GRID.CELL_SIZE) - 3,
-      wasdBottomRowY,
-      ']',
-      COLORS.BORDER
-    );
+    wasdCtx.font = `${aStyle.fontSize}px 'Unifont', monospace`;
+    wasdCtx.fillStyle = aStyle.color;
+    wasdCtx.fillText(spectaclesTransform('A', spectaclesOn), (wasdCenterCol - 4) * GRID.CELL_SIZE + half, wasdBottomRow * GRID.CELL_SIZE + half);
 
     // S key (center)
-    this.renderer.drawCell(
-      Math.floor(wasdCenterX / GRID.CELL_SIZE) - 1,
-      wasdBottomRowY,
-      '[',
-      COLORS.BORDER
-    );
-    this.renderer.drawCell(
-      Math.floor(wasdCenterX / GRID.CELL_SIZE),
-      wasdBottomRowY,
-      spectaclesTransform('S', spectaclesOn),
-      sColor
-    );
-    this.renderer.drawCell(
-      Math.floor(wasdCenterX / GRID.CELL_SIZE) + 1,
-      wasdBottomRowY,
-      ']',
-      COLORS.BORDER
-    );
+    wasdCtx.font = `${sStyle.fontSize}px 'Unifont', monospace`;
+    wasdCtx.fillStyle = sStyle.color;
+    wasdCtx.fillText(spectaclesTransform('S', spectaclesOn), wasdCenterCol * GRID.CELL_SIZE + half, wasdBottomRow * GRID.CELL_SIZE + half);
 
     // D key (right)
-    this.renderer.drawCell(
-      Math.floor(wasdCenterX / GRID.CELL_SIZE) + 3,
-      wasdBottomRowY,
-      '[',
-      COLORS.BORDER
-    );
-    this.renderer.drawCell(
-      Math.floor(wasdCenterX / GRID.CELL_SIZE) + 4,
-      wasdBottomRowY,
-      spectaclesTransform('D', spectaclesOn),
-      dColor
-    );
-    this.renderer.drawCell(
-      Math.floor(wasdCenterX / GRID.CELL_SIZE) + 5,
-      wasdBottomRowY,
-      ']',
-      COLORS.BORDER
-    );
+    wasdCtx.font = `${dStyle.fontSize}px 'Unifont', monospace`;
+    wasdCtx.fillStyle = dStyle.color;
+    wasdCtx.fillText(spectaclesTransform('D', spectaclesOn), (wasdCenterCol + 4) * GRID.CELL_SIZE + half, wasdBottomRow * GRID.CELL_SIZE + half);
+
+    wasdCtx.restore();
 
     // === RIGHT SIDE: ARROW KEYS WITH "D O D G E" ===
     this.renderController.arrowKeyIndicators.render(game);
-
-    // Restore original font
-    this.renderer.bgCtx.restore();
 
     // Draw "M O V E" text below WASD (left side)
     this.renderer.fgCtx.save();

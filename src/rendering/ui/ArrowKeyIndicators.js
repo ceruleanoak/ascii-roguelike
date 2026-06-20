@@ -32,58 +32,71 @@ export class ArrowKeyIndicators {
     const cooldownColor = '#ff6666'; // Dim red when on cooldown
     const readyColor = COLORS.ITEM; // Bright yellow when ready
 
-    const upColor = game.arrowKeys.ArrowUp ? readyColor : (onCooldown ? cooldownColor : (isInactive ? inactiveColor : COLORS.TEXT));
-    const downColor = game.arrowKeys.ArrowDown ? readyColor : (onCooldown ? cooldownColor : (isInactive ? inactiveColor : COLORS.TEXT));
-    const leftColor = game.arrowKeys.ArrowLeft ? readyColor : (onCooldown ? cooldownColor : (isInactive ? inactiveColor : COLORS.TEXT));
-    const rightColor = game.arrowKeys.ArrowRight ? readyColor : (onCooldown ? cooldownColor : (isInactive ? inactiveColor : COLORS.TEXT));
+    // Determine font sizes: pressed keys get larger font
+    const getArrowStyle = (isPressed) => {
+      if (isPressed) {
+        return { fontSize: GRID.CELL_SIZE * 1.4, color: readyColor };
+      } else if (onCooldown) {
+        return { fontSize: GRID.CELL_SIZE, color: cooldownColor };
+      } else if (isInactive) {
+        return { fontSize: GRID.CELL_SIZE, color: inactiveColor };
+      } else {
+        return { fontSize: GRID.CELL_SIZE, color: COLORS.TEXT };
+      }
+    };
 
-    // Arrow UP (top)
+    const upStyle = getArrowStyle(game.arrowKeys.ArrowUp);
+    const downStyle = getArrowStyle(game.arrowKeys.ArrowDown);
+    const leftStyle = getArrowStyle(game.arrowKeys.ArrowLeft);
+    const rightStyle = getArrowStyle(game.arrowKeys.ArrowRight);
+
+    // Draw using foreground context for proper layering with variable font sizes
+    const ctx = this.renderer.fgCtx;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const half = GRID.CELL_SIZE / 2;
+
     const topRow = Math.floor(arrowY / GRID.CELL_SIZE);
     const centerCol = Math.floor(arrowCenterX / GRID.CELL_SIZE);
-    this.renderer.drawCell(centerCol - 1, topRow, '[', COLORS.BORDER);
-    this.renderer.drawCell(centerCol,     topRow, '↑', upColor);
-    this.renderer.drawCell(centerCol + 1, topRow, ']', COLORS.BORDER);
+    const bottomRow = topRow + 1;
 
-    // Arrow LEFT, DOWN, RIGHT (bottom row)
-    const arrowBottomRowY = topRow + 1;
+    // Brackets (static size)
+    ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
+    ctx.fillStyle = COLORS.BORDER;
+    ctx.fillText('[', (centerCol - 1) * GRID.CELL_SIZE + half, topRow * GRID.CELL_SIZE + half);
+    ctx.fillText(']', (centerCol + 1) * GRID.CELL_SIZE + half, topRow * GRID.CELL_SIZE + half);
 
-    // LEFT
-    this.renderer.drawCell(centerCol - 5, arrowBottomRowY, '[', COLORS.BORDER);
-    this.renderer.drawCell(centerCol - 4, arrowBottomRowY, '←', leftColor);
-    this.renderer.drawCell(centerCol - 3, arrowBottomRowY, ']', COLORS.BORDER);
+    ctx.fillText('[', (centerCol - 5) * GRID.CELL_SIZE + half, bottomRow * GRID.CELL_SIZE + half);
+    ctx.fillText(']', (centerCol - 3) * GRID.CELL_SIZE + half, bottomRow * GRID.CELL_SIZE + half);
 
-    // DOWN
-    this.renderer.drawCell(centerCol - 1, arrowBottomRowY, '[', COLORS.BORDER);
-    this.renderer.drawCell(centerCol,     arrowBottomRowY, '↓', downColor);
-    this.renderer.drawCell(centerCol + 1, arrowBottomRowY, ']', COLORS.BORDER);
+    ctx.fillText('[', (centerCol - 1) * GRID.CELL_SIZE + half, bottomRow * GRID.CELL_SIZE + half);
+    ctx.fillText(']', (centerCol + 1) * GRID.CELL_SIZE + half, bottomRow * GRID.CELL_SIZE + half);
 
-    // RIGHT
-    this.renderer.drawCell(centerCol + 3, arrowBottomRowY, '[', COLORS.BORDER);
-    this.renderer.drawCell(centerCol + 4, arrowBottomRowY, '→', rightColor);
-    this.renderer.drawCell(centerCol + 5, arrowBottomRowY, ']', COLORS.BORDER);
+    ctx.fillText('[', (centerCol + 3) * GRID.CELL_SIZE + half, bottomRow * GRID.CELL_SIZE + half);
+    ctx.fillText(']', (centerCol + 5) * GRID.CELL_SIZE + half, bottomRow * GRID.CELL_SIZE + half);
 
-    // When an arrow key is in the ready/pressed state (yellow), overlay the
-    // glyph at 2× scale on the foreground so the active dodge direction pops.
-    // Drawn after the bg pass so it sits cleanly on top of the 1× version.
-    const fg = this.renderer.fgCtx;
-    fg.save();
-    fg.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
-    fg.textAlign = 'center';
-    fg.textBaseline = 'middle';
-    const half = GRID.CELL_SIZE / 2;
-    if (game.arrowKeys.ArrowUp) {
-      this.renderer.drawEntityScaled(centerCol * GRID.CELL_SIZE + half, topRow * GRID.CELL_SIZE + half, '↑', readyColor, 2.0);
-    }
-    if (game.arrowKeys.ArrowLeft) {
-      this.renderer.drawEntityScaled((centerCol - 4) * GRID.CELL_SIZE + half, arrowBottomRowY * GRID.CELL_SIZE + half, '←', readyColor, 2.0);
-    }
-    if (game.arrowKeys.ArrowDown) {
-      this.renderer.drawEntityScaled(centerCol * GRID.CELL_SIZE + half, arrowBottomRowY * GRID.CELL_SIZE + half, '↓', readyColor, 2.0);
-    }
-    if (game.arrowKeys.ArrowRight) {
-      this.renderer.drawEntityScaled((centerCol + 4) * GRID.CELL_SIZE + half, arrowBottomRowY * GRID.CELL_SIZE + half, '→', readyColor, 2.0);
-    }
-    fg.restore();
+    // Arrow UP (top)
+    ctx.font = `${upStyle.fontSize}px 'Unifont', monospace`;
+    ctx.fillStyle = upStyle.color;
+    ctx.fillText('↑', centerCol * GRID.CELL_SIZE + half, topRow * GRID.CELL_SIZE + half);
+
+    // Arrow LEFT (bottom row)
+    ctx.font = `${leftStyle.fontSize}px 'Unifont', monospace`;
+    ctx.fillStyle = leftStyle.color;
+    ctx.fillText('←', (centerCol - 4) * GRID.CELL_SIZE + half, bottomRow * GRID.CELL_SIZE + half);
+
+    // Arrow DOWN (bottom row)
+    ctx.font = `${downStyle.fontSize}px 'Unifont', monospace`;
+    ctx.fillStyle = downStyle.color;
+    ctx.fillText('↓', centerCol * GRID.CELL_SIZE + half, bottomRow * GRID.CELL_SIZE + half);
+
+    // Arrow RIGHT (bottom row)
+    ctx.font = `${rightStyle.fontSize}px 'Unifont', monospace`;
+    ctx.fillStyle = rightStyle.color;
+    ctx.fillText('→', (centerCol + 4) * GRID.CELL_SIZE + half, bottomRow * GRID.CELL_SIZE + half);
+
+    ctx.restore();
 
     // Draw "D O D G E" label below arrow keys
     const spectaclesOn = isSpectaclesActive(game);
