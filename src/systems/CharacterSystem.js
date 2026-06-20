@@ -128,8 +128,13 @@ export class CharacterSystem {
 
   // Spawn lava background tiles in a 15° forward arc from the player on grid.
   // Called when a weapon flagged with `placesLava` completes its swing.
-  spawnLavaSweep(player, room) {
-    if (!room || !room.backgroundObjects) return;
+  // Routes through the active layer so lava lands in the hut/dungeon the player
+  // is standing in, not the surface (bounds + collision follow the layer too).
+  spawnLavaSweep(player) {
+    const game = this.game;
+    const objects = game._activeBackgroundObjects();
+    const { cols, rows, collisionMap } = game.activeGridBounds();
+    if (!objects) return;
     const C = GRID.CELL_SIZE;
     const baseAngle = Math.atan2(player.facing.y, player.facing.x);
     const sweepHalf = (Math.PI / 12) / 2;  // 15° total → ±7.5°
@@ -148,19 +153,19 @@ export class CharacterSystem {
       const ty = playerCy + Math.sin(s.angle) * s.dist;
       const col = Math.floor(tx / C);
       const row = Math.floor(ty / C);
-      if (col < 1 || col >= GRID.COLS - 1 || row < 1 || row >= GRID.ROWS - 1) continue;
-      if (room.collisionMap?.[row]?.[col]) continue;
+      if (col < 1 || col >= cols - 1 || row < 1 || row >= rows - 1) continue;
+      if (collisionMap?.[row]?.[col]) continue;
 
       const x = col * C;
       const y = row * C;
-      const occupied = room.backgroundObjects.some(obj =>
+      const occupied = objects.some(obj =>
         !obj.destroyed &&
         Math.abs(obj.position.x - x) < C / 2 &&
         Math.abs(obj.position.y - y) < C / 2
       );
       if (occupied) continue;
 
-      room.backgroundObjects.push(BackgroundObject.createVariant('lava', x, y));
+      objects.push(BackgroundObject.createVariant('lava', x, y));
     }
   }
 
@@ -486,9 +491,9 @@ export class CharacterSystem {
   triggerGreenActionCooldown() {
     const game = this.game;
     if (game.activeCharacterType === 'green' && game.player) {
-      // Guns fire on their own weapon cooldown — they don't consume the ranger's action stamina
+      // Guns and bows fire on their own weapon cooldown — they don't consume the ranger's action stamina
       const heldItem = game.player.heldItem;
-      if (heldItem && heldItem.data.weaponType === 'GUN') return;
+      if (heldItem && (heldItem.data.weaponType === 'GUN' || heldItem.data.weaponType === 'BOW')) return;
       game.player.actionCooldown = game.player.actionCooldownMax;
     }
   }
@@ -499,7 +504,9 @@ export class CharacterSystem {
     game.characterNPCs = [];
 
     const availableCharacters = game.unlockedCharacters.filter(
-      type => type !== game.activeCharacterType && !game.deadCharacters.includes(type)
+      type => type !== game.activeCharacterType &&
+        !game.deadCharacters.includes(type) &&
+        !game.lostCharacters.includes(type)
     );
 
     const centerX = GRID.WIDTH / 2;
