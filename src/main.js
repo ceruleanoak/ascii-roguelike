@@ -8,7 +8,7 @@ import { CraftingSystem } from './systems/CraftingSystem.js';
 import { CombatSystem } from './systems/CombatSystem.js';
 import { RoomGenerator } from './systems/RoomGenerator.js';
 import { ZoneSystem } from './systems/ZoneSystem.js';
-import { ExitSystem } from './systems/ExitSystem.js';
+import { ExitSystem, isPressingIntoExitGap } from './systems/ExitSystem.js';
 import { PersistenceSystem } from './systems/PersistenceSystem.js';
 import { InventorySystem } from './systems/InventorySystem.js';
 import { NeutralRoomSystem } from './systems/NeutralRoomSystem.js';
@@ -37,8 +37,11 @@ import { PolymorphSystem } from './systems/PolymorphSystem.js';
 import { MagicSystem } from './systems/MagicSystem.js';
 import { BatSystem } from './systems/BatSystem.js';
 import { WellSystem } from './systems/WellSystem.js';
+import { PuzzleSystem } from './systems/PuzzleSystem.js';
+import { KeyItemSystem } from './systems/KeyItemSystem.js';
 import { LightningStrikeSystem } from './systems/LightningStrikeSystem.js';
 import { SandstormSystem } from './systems/SandstormSystem.js';
+import { GrayZoneSystem } from './systems/GrayZoneSystem.js';
 import { ElectricitySystem } from './systems/ElectricitySystem.js';
 import { FireSystem } from './systems/FireSystem.js';
 import { FountainSystem } from './systems/FountainSystem.js';
@@ -70,7 +73,7 @@ import { WiseFellow } from './entities/WiseFellow.js';
 import { ITEM_TYPES, INGREDIENTS, ITEMS } from './data/items.js';
 import { CHARACTER_TYPES } from './data/characters.js';
 import { EXIT_LETTERS } from './data/exitLetters.js';
-import { ZONES } from './data/zones.js';
+import { ZONES, freshZoneDepths } from './data/zones.js';
 import { GAME_STATES, GRID, CRAFTING, INTERACTION_RANGE, ROOM_TYPES, PHYSICS } from './game/GameConfig.js';
 import { captureDeath, downloadSessionLedger, newRunId } from './systems/DeathLedgerSystem.js';
 
@@ -102,27 +105,15 @@ const FIREWORK_FACTORIES = [
   { name: 'DodgeTrail',     fn: (x, y) => createDodgeTrail(x, y) }
 ];
 
-// Starter satchel: 3 distinct ingredients from a fixed pool. Metal is always x1;
-// everything else drops x2 (per-run randomization for replay variety).
+// Starter satchel: 3 distinct ingredients from a fixed pool. Each rolled char
+// drops per the table below; unlisted chars drop x2 (per-run replay variety).
 function rollStarterSatchelChars() {
-  const pool = ['g', '0', '|', '~', 'f', 'M'];
-  const picks = [];
-  const remaining = pool.slice();
-  for (let i = 0; i < 3; i++) {
-    const idx = Math.floor(Math.random() * remaining.length);
-    picks.push(remaining.splice(idx, 1)[0]);
-  }
+  const drops = { M: ['M'], f: ['f', '0'], g: ['g', '~'], '0': ['0', '|'], '~': ['0', '~'] };
+  const remaining = ['g', '0', '|', '~', 'f', 'M'];
   const chars = [];
-  for (const c of picks) {
-    if (c === 'M') {
-      chars.push('M');
-    } else if (c === 'f') {
-      chars.push('f', '0');
-    } else if (c === 'g') {
-      chars.push('g', '~');
-    } else {
-      chars.push(c, c);
-    }
+  for (let i = 0; i < 3; i++) {
+    const c = remaining.splice(Math.floor(Math.random() * remaining.length), 1)[0];
+    chars.push(...(drops[c] || [c, c]));
   }
   return chars;
 }
@@ -174,8 +165,11 @@ class Game {
     this.batSystem = new BatSystem(this);
     this.wellSystem = new WellSystem(this);
     this.fountainSystem = new FountainSystem(this);
+    this.puzzleSystem = new PuzzleSystem(this);
+    this.keyItemSystem = new KeyItemSystem(this);
     this.lightningStrikeSystem = new LightningStrikeSystem(this);
     this.sandstormSystem = new SandstormSystem(this);
+    this.grayZoneSystem = new GrayZoneSystem(this);
     this.electricitySystem = new ElectricitySystem(this);
     this.fireSystem = new FireSystem(this);
     this.demoSystem = new DemoSystem(this);
@@ -201,6 +195,10 @@ class Game {
     this.wellFlashTimer = 0;        // Post-ritual screen flash decay
     this.wellFlashDuration = 0;     // Initial flash duration (used for normalized alpha)
     this.fairiesAngered = false;    // Run-scoped: set when fountain is corrupted; suppresses all fairy spawns
+    this.swordDrawnThisRun = false;       // Run-scoped: § drawn from a green L-room islet (KeyItemSystem)
+    this.spectaclesTakenThisRun = false;  // Run-scoped: ⊙ taken from the yellow O-room far shore (KeyItemSystem)
+    this.graySnapshots = [];        // Run-scoped: loadouts of characters the mist took at gray L10 (future 5-character ending hook)
+    this.lostCharacters = [];       // Run-scoped: characters lost in the mist — distinct from deadCharacters
     this.cheatUsed = false;         // Run-scoped: set when any gameplay-affecting cheat-menu action fires; reported in the death ledger
     this.runId = newRunId();        // Run-scoped: links all death-ledger records (deaths + revives) from this run
     this.fedCrowCount = 0;          // Run-scoped: bread-fed crows so far (caps at 3); boosts crow spawn odds in new rooms
@@ -247,13 +245,7 @@ class Game {
     this.preBossGateActive = false;
 
     // Per-zone depth tracking (independent progression)
-    this.zoneDepths = {
-      green: 0,
-      red: 0,
-      cyan: 0,
-      yellow: 0,
-      gray: 0
-    };
+    this.zoneDepths = freshZoneDepths();
 
     this.knownSpells = new Set(); // Spells the player has learned this run (resets on death)
 
@@ -445,7 +437,7 @@ class Game {
           e.preventDefault();
           return;
         } else if (result && result.action === 'spawn') {
-          this.spawnCheatItem(result.item);
+          this.cheatMenu.spawnItem(result.item);
           e.preventDefault();
           return;
         } else if (result && result.action === 'spawn_enemy') {
@@ -801,13 +793,7 @@ class Game {
     this.persistenceSystem.clearSave();
 
     // All zone depths start at 0 on page load
-    this.zoneDepths = {
-      green: 0,
-      red: 0,
-      cyan: 0,
-      yellow: 0,
-      gray: 0
-    };
+    this.zoneDepths = freshZoneDepths();
 
     // Start in TITLE state
     this.stateMachine.transition(GAME_STATES.TITLE);
@@ -828,7 +814,7 @@ class Game {
     // next real run from this title screen starts at L1 in a fresh world.
     // Idempotent on first boot — these fields are already in their initial
     // form set by the constructor.
-    this.zoneDepths = { green: 0, red: 0, cyan: 0, yellow: 0, gray: 0, blue: 0 };
+    this.zoneDepths = freshZoneDepths();
     this.zoneSystem.resetOnDeath();
     this.roomGenerator.setDepth(0);
     this.bossSystem.deactivate();
@@ -904,9 +890,6 @@ class Game {
 
     // Begin event playback now that the world matches the recording.
     this.demoSystem.startPlayback();
-
-    // Player must not die mid-demo; godMode is the cleanest safety net.
-    if (this.player) this.player.godMode = true;
   }
 
   // ── Demo room/state setup helpers ───────────────────────────────────────
@@ -1475,8 +1458,8 @@ class Game {
 
     // Find spawn object: bush → tree → rock (fallback chain)
     let selectedObject = null;
-    const bushes = this.currentRoom.backgroundObjects.filter(obj => !obj.destroyed && obj.char === '%');
-    const trees = this.currentRoom.backgroundObjects.filter(obj => !obj.destroyed && obj.char === '&');
+    const bushes = this.currentRoom.backgroundObjects.filter(obj => !obj.destroyed && (obj.char === '%' || obj.char === '&'));
+    const trees = this.currentRoom.backgroundObjects.filter(obj => !obj.destroyed && obj.char === 'Y');
     const rocks = this.currentRoom.backgroundObjects.filter(obj => !obj.destroyed && obj.char === '0');
 
     if (bushes.length > 0) {
@@ -1526,9 +1509,9 @@ class Game {
     return this.player.quickSlots.every(slot => slot === null);
   }
 
-  transitionToNeutralRoom(scriptName) {
+  transitionToNeutralRoom(scriptName, entryDirection = 'north') {
 
-    // Save current explore state (for return via south exit)
+    // Save current explore state (for return via the entry-edge exit)
     this.savedExploreState = {
       room: this.currentRoom,
       items: [...this.items],
@@ -1542,9 +1525,10 @@ class Game {
     };
 
     // Generate neutral room via script system
-    this.currentRoom = this.neutralRoomSystem.generateNeutralRoom(scriptName);
+    this.currentRoom = this.neutralRoomSystem.generateNeutralRoom(scriptName, entryDirection);
 
-    // Reset player position to center of room
+    // Center fallback position — when entry runs through animateExitWarp the
+    // warp callback re-anchors the player at the entry edge right after this.
     this.player.position.x = Math.floor(GRID.COLS / 2) * GRID.CELL_SIZE;
     this.player.position.y = Math.floor(GRID.ROWS / 2) * GRID.CELL_SIZE;
     this.player.velocity = { vx: 0, vy: 0 };
@@ -1965,18 +1949,8 @@ class Game {
 
       // Debug: Log generated exits
 
-      // Apply gray zone special mechanics
-      if (currentZone === 'gray') {
-        // Remove south exit (no escape from gray zone)
-        this.currentRoom.exits.south = false;
-
-        // Apply hardmode enemy buffs (+50% HP and damage)
-        for (const enemy of this.currentRoom.enemies) {
-          enemy.hp = Math.ceil(enemy.hp * 1.5);
-          enemy.maxHp = Math.ceil(enemy.maxHp * 1.5);
-          enemy.damage = Math.ceil(enemy.damage * 1.5);
-        }
-      }
+      // Gray zone hardMode (+50% enemies) and noRest (no south exit) are
+      // data-driven now: zones.js flags, applied by RoomGenerator/ExitSystem.
 
       // Enemy wiring, sound-event clearing, and exitsLocked policy now happen
       // in applyRoomSwap below (shared with all warp paths).
@@ -2155,19 +2129,32 @@ class Game {
     this.companionSystem.updateCompanionCrow(deltaTime);
     this.companionSystem.updateFollowerCrows(deltaTime);
 
-    // Check for south exit (return to EXPLORE)
+    // Check for the return exit (back to EXPLORE) — sits on the edge the
+    // player entered through (south / west / east, see NeutralRoomSystem)
     const gridPos = this.player.getGridPosition();
     const prevGridPos = {
       x: Math.floor(this.previousPlayerPosition.x / GRID.CELL_SIZE),
       y: Math.floor(this.previousPlayerPosition.y / GRID.CELL_SIZE)
     };
     const centerX = Math.floor(GRID.COLS / 2);
+    const centerY = Math.floor(GRID.ROWS / 2);
+    const returnExit = this.currentRoom.returnExit || 'south';
 
-    const inSouthExit = gridPos.y >= GRID.ROWS - 2 && Math.abs(gridPos.x - centerX) <= 1;
-    const crossedSouthExit = prevGridPos.y < GRID.ROWS - 2 && gridPos.y >= GRID.ROWS - 2 && Math.abs(gridPos.x - centerX) <= 1;
+    let inReturnExit = false;
+    let crossedReturnExit = false;
+    if (returnExit === 'south') {
+      inReturnExit = gridPos.y >= GRID.ROWS - 2 && Math.abs(gridPos.x - centerX) <= 1;
+      crossedReturnExit = prevGridPos.y < GRID.ROWS - 2 && gridPos.y >= GRID.ROWS - 2 && Math.abs(gridPos.x - centerX) <= 1;
+    } else if (returnExit === 'west') {
+      inReturnExit = gridPos.x <= 1 && Math.abs(gridPos.y - centerY) <= 1;
+      crossedReturnExit = prevGridPos.x > 1 && gridPos.x <= 1 && Math.abs(gridPos.y - centerY) <= 1;
+    } else if (returnExit === 'east') {
+      inReturnExit = gridPos.x >= GRID.COLS - 2 && Math.abs(gridPos.y - centerY) <= 1;
+      crossedReturnExit = prevGridPos.x < GRID.COLS - 2 && gridPos.x >= GRID.COLS - 2 && Math.abs(gridPos.y - centerY) <= 1;
+    }
 
     if (!this.animationSystem.isAnimating(this.player) &&
-        (inSouthExit || crossedSouthExit) && this.currentRoom.exits.south) {
+        (inReturnExit || crossedReturnExit) && this.currentRoom.exits[returnExit]) {
 
       // Call neutral room exit hook
       this.neutralRoomSystem.onExit(this.currentRoom, this.player);
@@ -2216,6 +2203,9 @@ class Game {
     this.gameOverWaitingForSpace = true;
     this.gameOverDeathTimer = 2.0; // 2-second delay before showing "Press SPACE"
 
+    // Gray zone: arm the mist death-swallow (hole lingers, then closes)
+    this.grayZoneSystem.onGameOver();
+
     // If this is a true game over (not a character-death swap), clear the pending flag
     if (!this.characterDeathPending) {
       this.characterDeathTimer = 0;
@@ -2240,20 +2230,29 @@ class Game {
     return this.currentRoom;
   }
 
-  // Returns the background objects for whichever layer the player is currently in.
-  // Maze interiors have no background objects; hut/dungeon use activeFloor's array;
-  // otherwise use the exterior currentRoom array.
+  // CANONICAL background-object list for the player's current layer (maze: none;
+  // hut/dungeon: activeFloor; else currentRoom). Combat/effect code must spawn through
+  // this, never currentRoom.backgroundObjects (enforced by check-architecture). Null-safe.
   _activeBackgroundObjects() {
-    if (this.player.inMaze && this.mazeInterior) return [];
-    if ((this.player.inHut || this.player.inDungeon) && this.activeFloor) return this.activeFloor.backgroundObjects;
+    if (this.player?.inMaze && this.mazeInterior) return [];
+    if ((this.player?.inHut || this.player?.inDungeon) && this.activeFloor) return this.activeFloor.backgroundObjects;
     return this.currentRoom ? this.currentRoom.backgroundObjects : [];
   }
 
-  // Returns the enemies for whichever layer the player is currently in.
+  // CANONICAL enemy list for the player's current layer (see _activeBackgroundObjects). Null-safe.
   _activeEnemies() {
-    if (this.player.inMaze && this.mazeInterior) return [];
-    if ((this.player.inHut || this.player.inDungeon) && this.activeFloor) return this.activeFloor.enemies;
+    if (this.player?.inMaze && this.mazeInterior) return [];
+    if ((this.player?.inHut || this.player?.inDungeon) && this.activeFloor) return this.activeFloor.enemies;
     return this.currentRoom ? this.currentRoom.enemies : [];
+  }
+
+  // Grid bounds + collision map for the player's current layer (interiors carry their own).
+  activeGridBounds() {
+    const f = this.activeFloor;
+    if ((this.player?.inHut || this.player?.inDungeon) && f) {
+      return { cols: f.gridCols, rows: f.gridRows, collisionMap: f.collisionMap };
+    }
+    return { cols: GRID.COLS, rows: GRID.ROWS, collisionMap: this.currentRoom?.collisionMap ?? null };
   }
 
   // Enemies that count toward "room cleared". Hidden mimics are excluded
@@ -2513,6 +2512,23 @@ class Game {
       }
     }
 
+    // If blocked at origin, retry with shorter distances (25px decrements)
+    if (bestX === originX && bestY === originY && distance > 25) {
+      for (let retryDist = distance - 25; retryDist >= 25; retryDist -= 25) {
+        for (let d = step; d <= retryDist; d += step) {
+          const testX = originX + direction.x * d;
+          const testY = originY + direction.y * d;
+          if (this._isValidBlinkPosition(testX, testY)) {
+            bestX = testX;
+            bestY = testY;
+          } else {
+            break;
+          }
+        }
+        if (bestX !== originX || bestY !== originY) break;
+      }
+    }
+
     // Center points for trail calculations
     const ox = originX + player.width / 2;
     const oy = originY + player.height / 2;
@@ -2666,7 +2682,7 @@ class Game {
           };
         }
         if (this.player.heldItem.data?.placesLava) {
-          this.characterSystem.spawnLavaSweep(this.player, this.currentRoom);
+          this.characterSystem.spawnLavaSweep(this.player);
         }
         if (this.player.heldItem.data?.callsLightning) {
           this.characterSystem.callLightningStrike(this.player, this.player.heldItem.data);
@@ -2780,6 +2796,9 @@ class Game {
   }
 
   updateGameOverState(deltaTime) {
+    // Keep the gray-zone mist drifting — game over in the mist shows only mist
+    this.grayZoneSystem.update(deltaTime);
+
     // Tick down the death timer (used by both game-over and character-death paths)
     if (this.gameOverDeathTimer > 0) {
       this.gameOverDeathTimer -= deltaTime;
@@ -2893,6 +2912,10 @@ class Game {
 
     // Drive fountain weapon arc + fairy delivery + corruption swarm timers
     this.fountainSystem.update(deltaTime);
+
+    // Drive P-room puzzle demos/solve detection + key-item draw animations
+    this.puzzleSystem.update(deltaTime);
+    this.keyItemSystem.update(deltaTime);
 
     // Drive C-room camp NPC (idle/interested/companion/fleeing)
     this.campNPCSystem.update(deltaTime);
@@ -3173,6 +3196,7 @@ class Game {
     this.lightningStrikeSystem.update(deltaTime);
     this.sandstormSystem.bindToRoom(this.currentRoom);
     this.sandstormSystem.update(deltaTime);
+    this.grayZoneSystem.update(deltaTime);
     this.electricitySystem.update(deltaTime);
     this.fireSystem.update(deltaTime);
 
@@ -3644,7 +3668,7 @@ class Game {
           continue;
         }
 
-        if (hit) {
+        if (hit && !blob.isInvulnerable()) {
           this.gooBlobs.splice(bi, 1);
           if (Math.random() < 0.05) {
             const ing = new Ingredient('g', blob.position.x, blob.position.y);
@@ -3793,10 +3817,12 @@ class Game {
         const enemy = event.enemy;
         const pos = event.position;
 
-        // Remove the polymorphed enemy
-        const enemyIndex = this.currentRoom.enemies.indexOf(enemy);
+        // Active layer — interior enemies live in activeFloor.enemies, not the surface.
+        const polyEnemies = this._activeEnemies();
+        const polyRoom = this.activeRoom;
+        const enemyIndex = polyEnemies.indexOf(enemy);
         if (enemyIndex !== -1) {
-          this.currentRoom.enemies.splice(enemyIndex, 1);
+          polyEnemies.splice(enemyIndex, 1);
 
           // Create transformation particle effect
           for (let i = 0; i < 20; i++) {
@@ -3821,15 +3847,15 @@ class Game {
 
           if (roll < 20) {
             // 20% - Background object (removes enemy)
-            const objects = ['%', '&', '0', 'Y', '*', '#', 'p', '=', 'i', '!', 'B', 'Q', '~'];
+            const objects = ['%', '&', '0', 'Y', 'ŋ', '*', '#', 'p', '=', 'i', '!', 'B', 'Q', '~'];
             const randomObj = objects[Math.floor(Math.random() * objects.length)];
-            this.currentRoom.backgroundObjects.push(new BackgroundObject(randomObj, pos.x, pos.y));
+            this._activeBackgroundObjects().push(new BackgroundObject(randomObj, pos.x, pos.y));
             outcome = `background object (${randomObj})`;
           } else if (roll < 40) {
             // 20% - Lesser enemy (weaker enemy spawn)
             const lesserEnemies = ['o', 'g']; // Slime, Goblin (basic enemies)
             const randomEnemy = lesserEnemies[Math.floor(Math.random() * lesserEnemies.length)];
-            this.currentRoom.enemies.push(new Enemy(randomEnemy, pos.x, pos.y));
+            polyEnemies.push(new Enemy(randomEnemy, pos.x, pos.y));
             outcome = `lesser enemy (${randomEnemy})`;
           } else if (roll < 60) {
             // 20% - Item drop (random weapon/armor/consumable)
@@ -3840,21 +3866,21 @@ class Game {
             );
             if (allItems.length > 0) {
               const randomItem = allItems[Math.floor(Math.random() * allItems.length)];
-              this.currentRoom.items.push(new Item(randomItem, pos.x, pos.y));
+              polyRoom.items.push(new Item(randomItem, pos.x, pos.y));
               outcome = `item drop (${ITEMS[randomItem].name})`;
             }
           } else if (roll < 80) {
             // 20% - Equivalent enemy (different enemy of similar strength)
             const equivalentEnemies = ['o', 'g', 's', 'b', 'r', 't', 'w']; // Various enemies
             const randomEnemy = equivalentEnemies[Math.floor(Math.random() * equivalentEnemies.length)];
-            this.currentRoom.enemies.push(new Enemy(randomEnemy, pos.x, pos.y));
+            polyEnemies.push(new Enemy(randomEnemy, pos.x, pos.y));
             outcome = `equivalent enemy (${randomEnemy})`;
           } else {
             // 20% - BOSS! (dangerous outcome)
             const bossEnemies = ['D', 'W', 'G', 'S']; // Dragon, Wizard, Golem, etc.
             const randomBoss = bossEnemies[Math.floor(Math.random() * bossEnemies.length)];
             const boss = new Enemy(randomBoss, pos.x, pos.y);
-            this.currentRoom.enemies.push(boss);
+            polyEnemies.push(boss);
             outcome = `BOSS! (${randomBoss})`;
           }
 
@@ -4005,9 +4031,9 @@ class Game {
           this.deadCharacters.push(diedCharacter);
         }
 
-        // Find next available living character
+        // Find next available living character (lost-in-the-mist counts as gone)
         const livingCharacters = this.unlockedCharacters.filter(
-          type => !this.deadCharacters.includes(type)
+          type => !this.deadCharacters.includes(type) && !this.lostCharacters.includes(type)
         );
 
         if (livingCharacters.length > 0) {
@@ -4437,7 +4463,7 @@ class Game {
     // North exit check (warp zone is at rows 1-2, below the wall)
     const inNorthExit = playerPx.y < northThreshold && gridPos.x === centerX;
     const crossedNorthExit = prevPx.y >= northThreshold && playerPx.y < northThreshold && gridPos.x === centerX;
-    if ((inNorthExit || crossedNorthExit) && this.currentRoom.exits.north && (!this.currentRoom.exitsLocked || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0) {
+    if ((inNorthExit || crossedNorthExit || isPressingIntoExitGap(this.player, this.keys, 'north')) && this.currentRoom.exits.north && (!this.currentRoom.exitsLocked || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0) {
       const exitObj = this.currentRoom.exits.north;
       this.zoneSystem.recordExit(exitObj);
       const letterPath = this.zoneSystem.pathHistory.map(exit => exit.letter).join('-');
@@ -4452,7 +4478,7 @@ class Game {
 
         if (result === 'leshyGrove') {
           console.log('[Secret] 3rd chase successful! Entering Leshy Grove...');
-          this.transitionToNeutralRoom('leshyGrove');
+          this.animateExitWarp('north', () => this.transitionToNeutralRoom('leshyGrove', 'north'));
           return;
         } else if (result === 'continue') {
           // Fall through to normal room generation
@@ -4463,13 +4489,13 @@ class Game {
 
       // Secret pattern may route to a neutral room (e.g. D-R-A-W → drawRoom)
       if (secret?.neutralScript) {
-        this.transitionToNeutralRoom(secret.neutralScript);
+        this.animateExitWarp('north', () => this.transitionToNeutralRoom(secret.neutralScript, 'north'));
         return;
       }
 
       // If exit has a neutralScript, route to neutral room instead of explore
       if (exitObj?.neutralScript) {
-        this.transitionToNeutralRoom(exitObj.neutralScript);
+        this.animateExitWarp('north', () => this.transitionToNeutralRoom(exitObj.neutralScript, 'north'));
         return;
       }
 
@@ -4490,7 +4516,7 @@ class Game {
       // South exit opens if: 1) exits unlocked, 2) player has no items (escape route), OR 3) south exit exists
       const canUseSouthExit = this.currentRoom.exits.south && (!this.currentRoom.exitsLocked || this.playerHasNoItems() || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0;
 
-      if ((inSouthExit || crossedSouthExit) && canUseSouthExit) {
+      if ((inSouthExit || crossedSouthExit || isPressingIntoExitGap(this.player, this.keys, 'south')) && canUseSouthExit) {
         // South exit is always boolean (returns to REST), not a letter
         const escapeRoute = this.currentRoom.exitsLocked && this.playerHasNoItems();
 
@@ -4522,7 +4548,7 @@ class Game {
       else {
         const inEastExit = playerPx.x >= eastThreshold && gridPos.y === centerY;
         const crossedEastExit = prevPx.x < eastThreshold && playerPx.x >= eastThreshold && gridPos.y === centerY;
-        if ((inEastExit || crossedEastExit) && this.currentRoom.exits.east && (!this.currentRoom.exitsLocked || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0) {
+        if ((inEastExit || crossedEastExit || isPressingIntoExitGap(this.player, this.keys, 'east')) && this.currentRoom.exits.east && (!this.currentRoom.exitsLocked || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0) {
           const exitObj = this.currentRoom.exits.east;
           this.zoneSystem.recordExit(exitObj);
           const letterPath = this.zoneSystem.pathHistory.map(exit => exit.letter).join('-');
@@ -4537,7 +4563,7 @@ class Game {
 
             if (result === 'leshyGrove') {
               console.log('[Secret] 3rd chase successful! Entering Leshy Grove...');
-              this.transitionToNeutralRoom('leshyGrove');
+              this.animateExitWarp('east', () => this.transitionToNeutralRoom('leshyGrove', 'east'));
               return;
             } else if (result === 'continue') {
               // Fall through to normal room generation
@@ -4547,11 +4573,11 @@ class Game {
           }
 
           if (secret?.neutralScript) {
-            this.transitionToNeutralRoom(secret.neutralScript);
+            this.animateExitWarp('east', () => this.transitionToNeutralRoom(secret.neutralScript, 'east'));
             return;
           }
           if (exitObj?.neutralScript) {
-            this.transitionToNeutralRoom(exitObj.neutralScript);
+            this.animateExitWarp('east', () => this.transitionToNeutralRoom(exitObj.neutralScript, 'east'));
             return;
           }
 
@@ -4568,7 +4594,7 @@ class Game {
         else {
           const inWestExit = playerPx.x < westThreshold && gridPos.y === centerY;
           const crossedWestExit = prevPx.x >= westThreshold && playerPx.x < westThreshold && gridPos.y === centerY;
-          if ((inWestExit || crossedWestExit) && this.currentRoom.exits.west && (!this.currentRoom.exitsLocked || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0) {
+          if ((inWestExit || crossedWestExit || isPressingIntoExitGap(this.player, this.keys, 'west')) && this.currentRoom.exits.west && (!this.currentRoom.exitsLocked || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0) {
             const exitObj = this.currentRoom.exits.west;
             this.zoneSystem.recordExit(exitObj);
             const letterPath = this.zoneSystem.pathHistory.map(exit => exit.letter).join('-');
@@ -4583,7 +4609,7 @@ class Game {
 
               if (result === 'leshyGrove') {
                 console.log('[Secret] 3rd chase successful! Entering Leshy Grove...');
-                this.transitionToNeutralRoom('leshyGrove');
+                this.animateExitWarp('west', () => this.transitionToNeutralRoom('leshyGrove', 'west'));
                 return;
               } else if (result === 'continue') {
                   // Fall through to normal room generation
@@ -4593,11 +4619,11 @@ class Game {
             }
 
             if (secret?.neutralScript) {
-              this.transitionToNeutralRoom(secret.neutralScript);
+              this.animateExitWarp('west', () => this.transitionToNeutralRoom(secret.neutralScript, 'west'));
               return;
             }
             if (exitObj?.neutralScript) {
-              this.transitionToNeutralRoom(exitObj.neutralScript);
+              this.animateExitWarp('west', () => this.transitionToNeutralRoom(exitObj.neutralScript, 'west'));
               return;
             }
 
@@ -4668,6 +4694,7 @@ class Game {
       if (this.hutSystem?.handleSpacePress()) return;
       if (this.mazeSystem?.handleSpacePress()) return;
       if (this.wellSystem?.handleSpacePress()) return;
+      if (this.keyItemSystem?.handleSpacePress()) return;
       if (this.campNPCSystem?.handleSpacePress()) return;
       if (this.handlePearlPedestalSpace()) return;
       if (this.handlePearlCachePedestalSpace()) return;
@@ -4776,6 +4803,9 @@ class Game {
     if (state === GAME_STATES.GAME_OVER) {
       // If a spell just entered awaiting state (e.g. REVIVE waiting for YES), hold off
       if (this.spellSystem.awaitingSpell !== null) return;
+
+      // Gray zone: SPACE waits until the mist has finished swallowing the site
+      if (this.grayZoneSystem.isSwallowing()) return;
 
       if (this.characterDeathPending && this.characterDeathTimer <= 0) {
         this._respawnNextCharacter();
@@ -4914,22 +4944,30 @@ class Game {
   _respawnNextCharacter() {
     // A character died but others remain — swap to next character and return to REST
     this.characterDeathPending = false;
+    const next = this.pendingNextCharacter;
+    this.pendingNextCharacter = null;
+    this.characterDeathName = '';
+    this._switchToCharacterAtRest(next);
+  }
+
+  // Shared character-handoff: wipe the departing character's gear, swap to
+  // `nextType`, and return to REST. Used by the death flow above and by the
+  // gray-zone mist-out (GrayZoneSystem), which loses a character without
+  // killing them.
+  _switchToCharacterAtRest(nextType) {
     this.gameOverWaitingForSpace = false;
     this._resetEnvironmentalEffects();
 
-    // Clear active items lost with the dead character
+    // Clear active items lost with the departing character
     this.inventorySystem.restQuickSlots = [null, null, null];
     this.inventorySystem.restActiveSlotIndex = 0;
     this.inventorySystem.equippedArmor = null;
     this.inventorySystem.equippedConsumables = Array(this.inventorySystem.maxConsumableSlots).fill(null);
-    // Discard EXPLORE-deferred chest deposits — displaced weapons die with the character
+    // Discard EXPLORE-deferred chest deposits — displaced weapons go with the character
     this.inventorySystem.pendingChestDeposits = [];
 
-    // Switch to next character
-    this.activeCharacterType = this.pendingNextCharacter;
-    this.pendingNextCharacter = null;
-    this.characterDeathName = '';
-    console.log(`🔄 Respawning as ${CHARACTER_TYPES[this.activeCharacterType].name}`);
+    this.activeCharacterType = nextType;
+    console.log(`🔄 Continuing as ${CHARACTER_TYPES[this.activeCharacterType].name}`);
 
     if (this.player) {
       this.player.reset();
@@ -4951,13 +4989,7 @@ class Game {
     this._resetEnvironmentalEffects();
 
     // Reset all zone depths on death
-    this.zoneDepths = {
-      green: 0,
-      red: 0,
-      cyan: 0,
-      yellow: 0,
-      gray: 0
-    };
+    this.zoneDepths = freshZoneDepths();
     this.currentMusicZone = 'green';
 
     // Clear held items on death (but keep crafting slots)
@@ -4988,6 +5020,8 @@ class Game {
 
     // Reset fairy run-flag for new run
     this.fairiesAngered = false;
+    this.swordDrawnThisRun = false;
+    this.spectaclesTakenThisRun = false;
     this.fedCrowCount = 0;
     this.companionCrows = [];
     this.followerCrows = [];
@@ -4995,6 +5029,8 @@ class Game {
 
     // Reset character system for new run
     this.deadCharacters = [];
+    this.lostCharacters = [];
+    this.graySnapshots = [];  // Mist snapshots only count within a single run
     this.activeCharacterType = 'default';
     this.unlockedCharacters = ['default']; // Reset to only default character
     this.captives = []; // Clear active captives
@@ -5146,43 +5182,6 @@ class Game {
     console.log(`Vector visualization: ${this.showVectors ? 'ON' : 'OFF'}`);
   }
 
-  spawnCheatItem(itemData) {
-    const { char, type, name } = itemData;
-    console.log('[CHEAT] Spawning item:', name, type);
-
-    if (type === ITEM_TYPES.INGREDIENT) {
-      // Add ingredient to active pool (banked in REST, carried in EXPLORE)
-      this.addIngredient(char);
-      console.log(`[CHEAT] ✓ Added ingredient: ${name}`);
-    } else if (type === ITEM_TYPES.WEAPON || type === ITEM_TYPES.TRAP) {
-      // Add weapon/trap to item chest
-      const item = new Item(char, 0, 0);
-      this.inventorySystem.addToChest(item);
-      console.log(`[CHEAT] ✓ Added ${type === ITEM_TYPES.TRAP ? 'trap' : 'weapon'} to chest: ${name}`);
-    } else if (type === ITEM_TYPES.ARMOR) {
-      // Add armor to armor chest (inventory)
-      const item = new Item(char, 0, 0);
-      if (!this.inventorySystem.armorInventory.some(a => a.char === char)) {
-        this.inventorySystem.armorInventory.push(item);
-        console.log(`[CHEAT] ✓ Added armor to chest: ${name}`);
-      } else {
-        console.log(`[CHEAT] ⚠ Already have armor: ${name}`);
-      }
-    } else if (type === ITEM_TYPES.CONSUMABLE) {
-      // Add consumable to consumable chest (inventory)
-      const item = new Item(char, 0, 0);
-      if (!this.inventorySystem.consumableInventory.some(c => c.char === char)) {
-        this.inventorySystem.consumableInventory.push(item);
-        console.log(`[CHEAT] ✓ Added consumable to chest: ${name}`);
-      } else {
-        console.log(`[CHEAT] ⚠ Already have consumable: ${name}`);
-      }
-    }
-
-    this.saveGameState();
-    this.renderer.markBackgroundDirty();
-  }
-
   // Debug: drop a background object (e.g. a deflector rock) at the player's
   // cell. Runtime-spawned, so it isn't baked into collisionMap — fine for
   // testing boulder routing, which reads game.backgroundObjects directly.
@@ -5191,9 +5190,9 @@ class Game {
     const C = GRID.CELL_SIZE;
     const col = Math.floor((this.player.position.x + C / 2) / C);
     const row = Math.floor((this.player.position.y + C / 2) / C);
-    const obj = new BackgroundObject(objChar, col * C, row * C);
-    this.currentRoom.backgroundObjects.push(obj);
-    this.backgroundObjects = this.currentRoom.backgroundObjects;
+    const objects = this._activeBackgroundObjects();
+    objects.push(new BackgroundObject(objChar, col * C, row * C));
+    if (objects === this.currentRoom.backgroundObjects) this.backgroundObjects = objects; // surface mirror
     this.renderer.markBackgroundDirty();
     console.log(`[CHEAT] Placed object '${objChar}' at cell ${col},${row}`);
   }
@@ -5321,6 +5320,11 @@ class Game {
     }
 
     this.wireRoomEnemies(room);
+
+    // Gray zone mist + depth-10 finish line. Lives here (not enterExploreState)
+    // so cheat warps and test rooms arm/disarm the mist exactly like natural
+    // entry — see the [warp-divergence] bug category.
+    this.grayZoneSystem.onRoomEnter(room.zone, this.zoneDepths[room.zone] || 0);
 
     if (grace) {
       // 2-second detection grace period — suppress aggro range so enemies
