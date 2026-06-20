@@ -19,6 +19,21 @@ export class WorldEffectsSystem {
   update(deltaTime) {
     const game = this.game;
 
+    // Bloom Mantle: a landed hit this frame bursts a pollen smoke screen. Reuses the
+    // steam-cloud system (which already blocks enemy sight lines in hasVision), tinted
+    // yellow for pollen. Flag is set in Player.takeDamage and consumed here.
+    if (game.player?.smokeBurstPending) {
+      game.player.smokeBurstPending = false;
+      game.steamClouds.push({
+        x: game.player.position.x + GRID.CELL_SIZE / 2,
+        y: game.player.position.y + GRID.CELL_SIZE / 2,
+        radius: GRID.CELL_SIZE * 3,
+        timer: 4.0,
+        color: '#ffe566',
+        hutPlane: !!game.activeFloor
+      });
+    }
+
     // Decay ember stacks and cooldowns each frame
     if (game.player) {
       if (game.player.emberStackCooldown > 0) {
@@ -142,8 +157,8 @@ export class WorldEffectsSystem {
         const prevRadius = sw.radius;
         sw.radius += sw.speed * deltaTime;
 
-        // Shake background objects newly swept by the ring this frame
-        const bgObjs = game.currentRoom.backgroundObjects || [];
+        // Shake background objects newly swept by the ring this frame (active layer).
+        const bgObjs = game._activeBackgroundObjects() || [];
         for (const obj of bgObjs) {
           if (obj.destroyed) continue;
           const cx = obj.position.x + C / 2;

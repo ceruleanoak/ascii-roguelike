@@ -31,10 +31,12 @@ import { LeaderFollowerMechanic } from './enemyMechanics/LeaderFollowerMechanic.
 import { JumpMechanic } from './enemyMechanics/JumpMechanic.js';
 import { SlimeTrailDropMechanic } from './enemyMechanics/SlimeTrailDropMechanic.js';
 import { PackBehaviorMechanic } from './enemyMechanics/PackBehaviorMechanic.js';
+import { FlockMechanic } from './enemyMechanics/FlockMechanic.js';
 import { ShellFormMechanic } from './enemyMechanics/ShellFormMechanic.js';
 import { ArmorMechanic } from './enemyMechanics/ArmorMechanic.js';
 import { PotionMechanic } from './enemyMechanics/PotionMechanic.js';
 import { SplitOnDamageMechanic } from './enemyMechanics/SplitOnDamageMechanic.js';
+import { RiseAgainMechanic } from './enemyMechanics/RiseAgainMechanic.js';
 
 // ─── Enemy AI Debug Logger ─────────────────────────────────────────────────
 // Toggle in browser console: window.ENEMY_AI_DEBUG = true
@@ -306,6 +308,7 @@ export class Enemy {
     if (PackBehaviorMechanic.isEnabled(this)) PackBehaviorMechanic.init(this);
 
     if (JumpMechanic.isEnabled(this)) JumpMechanic.init(this);
+    if (FlockMechanic.isEnabled(this)) FlockMechanic.init(this);
 
     if (ChargeMechanic.isEnabled(this)) ChargeMechanic.init(this);
 
@@ -325,6 +328,7 @@ export class Enemy {
     if (TrapLayerMechanic.isEnabled(this)) TrapLayerMechanic.init(this);
     if (PotionMechanic.isEnabled(this)) PotionMechanic.init(this);
     if (SplitOnDamageMechanic.isEnabled(this)) SplitOnDamageMechanic.init(this);
+    if (RiseAgainMechanic.isEnabled(this)) RiseAgainMechanic.init(this);
 
     if (GooSpewMechanic.isEnabled(this)) GooSpewMechanic.init(this);
 
@@ -615,134 +619,6 @@ export class Enemy {
     return Object.keys(this.statusEffects).filter(effect => this.statusEffects[effect].active);
   }
 
-  /**
-   * Calculate pack behavior movement (for wolves and spiders)
-   * Returns movement vector and whether to hover
-   */
-  calculatePackMovement(playerPosition, speedMultiplier) {
-    if (!this.packBehavior || !this.packBehavior.enabled) {
-      return null;
-    }
-
-    const dx = playerPosition.x - this.position.x;
-    const dy = playerPosition.y - this.position.y;
-    const distanceToPlayer = Math.sqrt(dx * dx + dy * dy);
-
-    // Calculate pack center if there are packmates
-    let packCenterX = this.position.x;
-    let packCenterY = this.position.y;
-    let packCount = 1;
-
-    if (this.packmates && this.packmates.length > 0) {
-      for (const mate of this.packmates) {
-        packCenterX += mate.position.x;
-        packCenterY += mate.position.y;
-        packCount++;
-      }
-      packCenterX /= packCount;
-      packCenterY /= packCount;
-    }
-
-    // Vector to pack center
-    const toPackX = packCenterX - this.position.x;
-    const toPackY = packCenterY - this.position.y;
-    const distanceToPack = Math.sqrt(toPackX * toPackX + toPackY * toPackY);
-
-    // Separation force - maintain distance from packmates
-    let separationX = 0;
-    let separationY = 0;
-    const separationDistance = GRID.CELL_SIZE * 2; // Minimum distance between pack members
-
-    if (this.packmates && this.packmates.length > 0) {
-      for (const mate of this.packmates) {
-        const mateDx = this.position.x - mate.position.x;
-        const mateDy = this.position.y - mate.position.y;
-        const mateDist = Math.sqrt(mateDx * mateDx + mateDy * mateDy);
-
-        // Apply stronger separation when too close
-        if (mateDist < separationDistance && mateDist > 0) {
-          const force = (separationDistance - mateDist) / separationDistance;
-          separationX += (mateDx / mateDist) * force;
-          separationY += (mateDy / mateDist) * force;
-        }
-      }
-    }
-
-    // Vector away from player
-    const awayX = -dx;
-    const awayY = -dy;
-
-    // Determine behavior based on distance to player
-    const shouldRetreat = distanceToPlayer < this.packBehavior.retreatThreshold && !this.hoverLocked;
-    const isAtKiteDistance = distanceToPlayer >= this.packBehavior.kiteDistance &&
-                             distanceToPlayer <= this.packBehavior.kiteDistance + GRID.CELL_SIZE * 2;
-
-    let vx = 0;
-    let vy = 0;
-    let shouldHover = false;
-
-    // Once hovering is locked, it continues regardless of distance
-    if (this.hoverLocked) {
-      shouldHover = true;
-    }
-
-    if (shouldRetreat) {
-      // Player too close - retreat while staying near pack
-      // 60% away from player, 20% towards pack, 20% separation
-      vx = (awayX * 0.6) + (toPackX * 0.2) + (separationX * 0.2);
-      vy = (awayY * 0.6) + (toPackY * 0.2) + (separationY * 0.2);
-      this.hoverTimer = 0; // Reset hover timer when retreating
-      this.isHovering = false;
-      this.hoverLocked = false;
-    } else if (isAtKiteDistance || this.hoverLocked) {
-      // At ideal kite distance OR hover is locked - hover and circle
-      shouldHover = true;
-
-      // Lock hover once we start (prevents reset from player movement)
-      if (!this.hoverLocked && isAtKiteDistance) {
-        this.hoverLocked = true;
-      }
-
-      // Circle strafe: perpendicular to player direction
-      const perpX = -dy / (distanceToPlayer || 1);
-      const perpY = dx / (distanceToPlayer || 1);
-
-      // 40% circle, 20% pack center, 40% separation (creates hunting circle)
-      if (distanceToPack > GRID.CELL_SIZE) {
-        vx = (perpX * 0.4) + (toPackX * 0.2) + (separationX * 0.4);
-        vy = (perpY * 0.4) + (toPackY * 0.2) + (separationY * 0.4);
-      } else {
-        // Close to pack - circle with separation
-        vx = (perpX * 0.6) + (separationX * 0.4);
-        vy = (perpY * 0.6) + (separationY * 0.4);
-      }
-    } else if (distanceToPlayer > this.packBehavior.kiteDistance + GRID.CELL_SIZE) {
-      // Too far - move closer while staying near pack
-      // 40% towards player, 40% towards pack, 20% separation
-      vx = (dx * 0.4) + (toPackX * 0.4) + (separationX * 0.2);
-      vy = (dy * 0.4) + (toPackY * 0.4) + (separationY * 0.2);
-
-      // Don't reset hover if already locked
-      if (!this.hoverLocked) {
-        this.hoverTimer = 0;
-        this.isHovering = false;
-      }
-    }
-
-    // Normalize and apply speed
-    const magnitude = Math.sqrt(vx * vx + vy * vy);
-    if (magnitude > 0) {
-      vx = (vx / magnitude) * this.speed * speedMultiplier * 0.8; // Slower kiting speed
-      vy = (vy / magnitude) * this.speed * speedMultiplier * 0.8;
-    }
-
-    return {
-      vx,
-      vy,
-      shouldHover
-    };
-  }
-
   update(deltaTime) {
     // Track if this enemy just detected player (for aggro SFX)
     let justAggrod = false;
@@ -828,6 +704,10 @@ export class Enemy {
       if (this.acceleration) { this.acceleration.ax = 0; this.acceleration.ay = 0; }
       return { dotDamage: dotDamageEvents };
     }
+
+    // Collapsed Risen pile: AI suspended until it rises; DoTs above still burn it out
+    const collapsedResult = RiseAgainMechanic.update(this, { deltaTime, dotDamageEvents });
+    if (collapsedResult?.suspend) return collapsedResult.result;
 
     // Force Wand root: tick timer; on expiry hurl enemy in stored facing direction
     if (this.forceRootTimer > 0) {
@@ -945,6 +825,9 @@ export class Enemy {
 
       return { dotDamage: dotDamageEvents };
     }
+
+    // Roost upkeep must run before the rest-state early-return below
+    FlockMechanic.updateRoost(this);
 
     // ── Rest state: dormant until player enters close proximity ─────────────
     if (this.state === 'rest') {
@@ -1106,17 +989,7 @@ export class Enemy {
               this.memoryChaseTimer = 0;
               this.state = 'idle';
               this.enraged = false;
-              if (this.packmates && this.packmates.length > 0) {
-                for (const mate of this.packmates) {
-                  mate.aggroMemoryActive = false;
-                  mate.lastKnownPosition = null;
-                  mate.memoryMoveDelayTimer = 0;
-                  mate.memoryChaseTimer = 0;
-                  mate.currentDirection = { x: 0, y: 0 };
-                  mate.enraged = false;
-                  mate.state = 'idle';
-                }
-              }
+              this._resetPackMemory();
             // Reached the mark — linger and search until memoryChaseTimer expires.
             // Abandoning on arrival made the timer meaningless when the mark was placed
             // close to the enemy (the common case when vision is briefly lost).
@@ -1146,9 +1019,12 @@ export class Enemy {
       }
     } else if (this.state === 'windup') {
       this._applyWindupMovement(speedMultiplier);
-    } else if (this.attackType === 'melee' && effectiveDistance < this.attackRange && this.attackTimer > 0 && (this.enraged || effectiveDistance <= effectiveAggroRange)) {
+    } else if ((this.attackType === 'melee' || this.attackType === 'item_melee') && effectiveDistance < this.attackRange && this.attackTimer > 0 && (this.enraged || effectiveDistance <= effectiveAggroRange)) {
       // Player is inside melee AOE range while on cooldown — back away so the next
       // attack hits. The enemy retreats until it reaches its natural attack distance.
+      // Applies to enemies wielding a picked-up melee weapon (item_melee) too:
+      // without this they creep into point-blank overlap, where the swing arc
+      // (offset by weapon range in the facing direction) overshoots and whiffs.
       this.state = 'chase';
       const dirX = dx / distance;
       const dirY = dy / distance;
@@ -1369,18 +1245,7 @@ export class Enemy {
             this.targetVelocity.vx = 0;
             this.targetVelocity.vy = 0;
             this.enraged = false;
-
-            if (this.packmates && this.packmates.length > 0) {
-              for (const mate of this.packmates) {
-                mate.aggroMemoryActive = false;
-                mate.lastKnownPosition = null;
-                mate.memoryMoveDelayTimer = 0;
-                mate.memoryChaseTimer = 0;
-                mate.currentDirection = { x: 0, y: 0 };
-                mate.enraged = false;
-                mate.state = 'idle';
-              }
-            }
+            this._resetPackMemory();
           } else if (memDistance < GRID.CELL_SIZE) {
             // Reached the mark — linger and search until the timer expires.
             this.state = 'chase';
@@ -1525,6 +1390,8 @@ export class Enemy {
     ChargeMechanic.update(this, { deltaTime, distance, effectiveVisionLength });
 
     JumpMechanic.update(this, { deltaTime });
+
+    FlockMechanic.updateSwirl(this, { deltaTime });
 
     // State transition logging (only fires when state actually changes)
     if (this.state !== this._prevState) {
@@ -1683,13 +1550,16 @@ export class Enemy {
   }
 
   /**
-   * kiter: maintain kiteDistance, circle-strafe, and rush after hoverTime.
-   * Supports pack coordination (shared detection via this.packmates).
+   * kiter: hold kiteDistance and circle-strafe while the core attack cooldown
+   * ticks; when the attack is ready, dive straight in and let the core
+   * windup → attack states deliver the hit (the windup '!' is the tell).
+   * The dive cadence IS attackCooldown — there is no separate hover/rush
+   * sub-state. Pack dive desync emerges from per-enemy cooldown timing.
    *
    * Config (all optional — defaults shown):
    *   kiteDistance       = GRID.CELL_SIZE * 4
    *   retreatThreshold   = GRID.CELL_SIZE * 2
-   *   hoverTime          = 2.5
+   *   dive               = true   (false: never dive — e.g. Trap Goblin)
    */
   _moveKiter(speedMultiplier, targetPos, deltaTime) {
     // Only activate kite tactics if this enemy or a packmate has detected the player
@@ -1701,121 +1571,53 @@ export class Enemy {
     }
 
     const cfg = this.movementConfig;
-    const hoverTime = cfg.hoverTime ?? (this.packBehavior?.hoverTime ?? 2.5);
+    const dx = targetPos.x - this.position.x;
+    const dy = targetPos.y - this.position.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
 
-    // ESCAPE: player evaded during hover — reset and pursue
-    if (this.isHovering && this.aggroMemoryActive) {
-      this.isHovering = false;
-      this.hoverLocked = false;
-      this.hoverTimer = 0;
-      return this._moveChaser(speedMultiplier, targetPos, deltaTime);
-    }
-
-    // ATTACK RUSH: committed rush after hover completes
-    if (this.isAttacking) {
-      this.attackRushTimer -= deltaTime;
-      const dx = targetPos.x - this.position.x;
-      const dy = targetPos.y - this.position.y;
-      const navDist = Math.sqrt(dx * dx + dy * dy);
-      if (navDist > 0) {
-        this.targetVelocity.vx = (dx / navDist) * this.speed * speedMultiplier * 1.5;
-        this.targetVelocity.vy = (dy / navDist) * this.speed * speedMultiplier * 1.5;
-      }
-      if (this.attackRushTimer <= 0 || navDist <= this.attackRange) {
-        this.isAttacking = false;
-        this.attackRushTimer = 0;
-        this.hoverLocked = false;
-        this.hoverTimer = 0;
-        this.detectionIndicatorTimer = 0;
-      }
+    // DIVE: attack off cooldown — close in; windup triggers at attackRange
+    if (cfg.dive !== false && this.attackTimer <= 0) {
+      this.targetVelocity.vx = (dx / dist) * this.speed * speedMultiplier * 1.2;
+      this.targetVelocity.vy = (dy / dist) * this.speed * speedMultiplier * 1.2;
       return;
     }
 
-    // KITE MOVEMENT
-    const packMovement = this.calculatePackMovement(targetPos, speedMultiplier);
-    if (packMovement) {
-      this.targetVelocity.vx = packMovement.vx;
-      this.targetVelocity.vy = packMovement.vy;
-
-      if (packMovement.shouldHover) {
-        this.isHovering = true;
-        this.hoverTimer += deltaTime;
-        if (this.hoverTimer >= hoverTime) {
-          this.isHovering = false;
-          this.hoverTimer = 0;
-          this.hoverLocked = false;
-          this.isAttacking = true;
-          this.attackRushTimer = 2.0;
-          this.detectionIndicatorTimer = 2.0;
-        }
-      } else {
-        this.isHovering = false;
-      }
-    } else {
-      // No legacy packBehavior — implement kite movement using movementConfig directly
-      const cfg = this.movementConfig;
-      const kiteDistance = cfg.kiteDistance ?? GRID.CELL_SIZE * 4;
-      const retreatThreshold = cfg.retreatThreshold ?? GRID.CELL_SIZE * 2;
-
-      const dx = targetPos.x - this.position.x;
-      const dy = targetPos.y - this.position.y;
-      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-
-      // Separation force from packmates
-      let sepX = 0, sepY = 0;
-      const sepDist = GRID.CELL_SIZE * 2;
-      if (this.packmates) {
-        for (const mate of this.packmates) {
-          const mx = this.position.x - mate.position.x;
-          const my = this.position.y - mate.position.y;
-          const md = Math.sqrt(mx * mx + my * my);
-          if (md < sepDist && md > 0) {
-            const f = (sepDist - md) / sepDist;
-            sepX += (mx / md) * f;
-            sepY += (my / md) * f;
-          }
+    // On cooldown: hold the kite ring with packmate separation
+    const kiteDistance = cfg.kiteDistance ?? GRID.CELL_SIZE * 4;
+    const retreatThreshold = cfg.retreatThreshold ?? GRID.CELL_SIZE * 2;
+    let sepX = 0, sepY = 0;
+    const sepDist = GRID.CELL_SIZE * 2;
+    if (this.packmates) {
+      for (const mate of this.packmates) {
+        const mx = this.position.x - mate.position.x;
+        const my = this.position.y - mate.position.y;
+        const md = Math.sqrt(mx * mx + my * my);
+        if (md < sepDist && md > 0) {
+          const f = (sepDist - md) / sepDist;
+          sepX += (mx / md) * f;
+          sepY += (my / md) * f;
         }
       }
-
-      let vx = 0, vy = 0;
-      if (dist < retreatThreshold && !this.hoverLocked) {
-        // Too close — retreat
-        vx = (-dx / dist) * 0.8 + sepX * 0.2;
-        vy = (-dy / dist) * 0.8 + sepY * 0.2;
-        this.hoverTimer = 0;
-        this.isHovering = false;
-        this.hoverLocked = false;
-      } else if ((dist >= kiteDistance - GRID.CELL_SIZE && dist <= kiteDistance + GRID.CELL_SIZE * 2) || this.hoverLocked) {
-        // At kite distance — lock hover and circle-strafe
-        if (!this.hoverLocked) this.hoverLocked = true;
-        this.isHovering = true;
-        this.hoverTimer += deltaTime;
-        if (this.hoverTimer >= hoverTime) {
-          this.isHovering = false;
-          this.hoverTimer = 0;
-          this.hoverLocked = false;
-          this.isAttacking = true;
-          this.attackRushTimer = 2.0;
-          this.detectionIndicatorTimer = 2.0;
-        }
-        const perpX = -dy / dist;
-        const perpY = dx / dist;
-        vx = perpX * 0.6 + sepX * 0.4;
-        vy = perpY * 0.6 + sepY * 0.4;
-      } else {
-        // Too far — approach player
-        vx = (dx / dist) * 0.8 + sepX * 0.2;
-        vy = (dy / dist) * 0.8 + sepY * 0.2;
-        if (!this.hoverLocked) {
-          this.hoverTimer = 0;
-          this.isHovering = false;
-        }
-      }
-
-      const mag = Math.sqrt(vx * vx + vy * vy) || 1;
-      this.targetVelocity.vx = (vx / mag) * this.speed * speedMultiplier * 0.8;
-      this.targetVelocity.vy = (vy / mag) * this.speed * speedMultiplier * 0.8;
     }
+
+    let vx, vy;
+    if (dist < retreatThreshold) {
+      // Too close — retreat
+      vx = (-dx / dist) * 0.8 + sepX * 0.2;
+      vy = (-dy / dist) * 0.8 + sepY * 0.2;
+    } else if (dist <= kiteDistance + GRID.CELL_SIZE * 2) {
+      // At kite distance — circle-strafe
+      vx = (-dy / dist) * 0.6 + sepX * 0.4;
+      vy = (dx / dist) * 0.6 + sepY * 0.4;
+    } else {
+      // Too far — approach player
+      vx = (dx / dist) * 0.8 + sepX * 0.2;
+      vy = (dy / dist) * 0.8 + sepY * 0.2;
+    }
+
+    const mag = Math.sqrt(vx * vx + vy * vy) || 1;
+    this.targetVelocity.vx = (vx / mag) * this.speed * speedMultiplier * 0.8;
+    this.targetVelocity.vy = (vy / mag) * this.speed * speedMultiplier * 0.8;
   }
 
   /**
@@ -1907,6 +1709,20 @@ export class Enemy {
 
     this.targetVelocity.vx = this.wanderDirection.x * this.wanderSpeed * speedMultiplier;
     this.targetVelocity.vy = this.wanderDirection.y * this.wanderSpeed * speedMultiplier;
+  }
+
+  /** Clears shared memory marks across the pack and stands everyone down to idle. */
+  _resetPackMemory() {
+    if (!this.packmates) return;
+    for (const mate of this.packmates) {
+      mate.aggroMemoryActive = false;
+      mate.lastKnownPosition = null;
+      mate.memoryMoveDelayTimer = 0;
+      mate.memoryChaseTimer = 0;
+      mate.currentDirection = { x: 0, y: 0 };
+      mate.enraged = false;
+      mate.state = 'idle';
+    }
   }
 
   /**
@@ -2500,7 +2316,7 @@ export class Enemy {
       return false;
     }
 
-    // Moss Cloak ✿ — non-aggro enemies cannot see the player at any range.
+    // Moss Cloak 𐤒 — non-aggro enemies cannot see the player at any range.
     // Already-aggro'd enemies (enraged or chasing memory) keep their vision.
     if (this.target && this.target.mossCloakActive && !this.enraged && !this.aggroMemoryActive) {
       return false;
@@ -3205,6 +3021,12 @@ export class Enemy {
     this.hp -= amount;
     if (this.hp < 0) this.hp = 0;
 
+    // Risen: first lethal hit collapses into a bone pile (no iframes — smashable); collapsed dies for real
+    if (this.hp <= 0 && this.data.riseAgain && !this.riseUsed && !this.collapsed) {
+      RiseAgainMechanic.collapse(this);
+      return { damaged: true };
+    }
+
     // Per-enemy hit SFX. Death SFX is handled by the enemy-removal loop in
     // main.js so it isn't doubled up here. `sfx.hit` may be a string or an
     // array of strings (random pick).
@@ -3216,23 +3038,11 @@ export class Enemy {
       this.game?.audioSystem?.playSFX(name);
     }
 
-    // ── Giant Slime: split a child off on damage ──────────────────────────────
-    // One blob per HP lost, each with 1 HP. Killing the blobs before they reform
-    // is the only way to actually deplete the boss — uncaptured blobs return to
-    // the parent and restore the HP. Splitting is inevitable; no cap.
-    if (this.hp > 0 && this.data.splitOnDamage?.enabled) {
-      this._trySplitOnDamage(amount);
-    }
-
-    // ── Giant Slime: accumulate damage toward goo-spew cone ───────────────────
-    if (this.hp > 0 && this.data.gooSpewCone?.enabled) {
-      this.spewDamageAccum = (this.spewDamageAccum || 0) + amount;
-      const cfg = this.data.gooSpewCone;
-      if (!this.spewWindupActive && this.spewDamageAccum >= cfg.damageThreshold) {
-        this.spewDamageAccum -= cfg.damageThreshold;
-        this.spewWindupActive = true;
-        this.spewWindupTimer = cfg.chargeUpTime;
-      }
+    // Giant Slime on-damage hooks: child split (one blob per HP lost — see
+    // _trySplitOnDamage) and goo-spew damage accumulation (GooSpewMechanic).
+    if (this.hp > 0) {
+      if (this.data.splitOnDamage?.enabled) this._trySplitOnDamage(amount);
+      GooSpewMechanic.onDamaged(this, amount);
     }
 
     // Sleep breaks on damage
@@ -3412,25 +3222,12 @@ export class Enemy {
   }
 
   getMemoryIndicator() {
-    // Only show ? when in memory mode AND not hovering (hover takes priority)
     if (this.aggroMemoryActive && this.state === 'chase' &&
-        this.detectionIndicatorTimer <= 0 && !this.isHovering) {
+        this.detectionIndicatorTimer <= 0) {
       return {
         char: '?',
         // Gray = suspected (heard/felt); yellow = confirmed (saw player go somewhere)
         color: this.memoryMarkSuspected ? '#aaaaaa' : '#ffff00',
-        offsetY: -GRID.CELL_SIZE  // Position above enemy
-      };
-    }
-    return null;
-  }
-
-  getHoverIndicator() {
-    // Show ... when pack hunting and hovering (distinct state - overrides memory)
-    if (this.isHovering && this.detectionIndicatorTimer <= 0) {
-      return {
-        char: '...',
-        color: '#aaaaaa',
         offsetY: -GRID.CELL_SIZE  // Position above enemy
       };
     }
@@ -3450,11 +3247,9 @@ export class Enemy {
 
   getDetectionIndicator() {
     if (this.detectionIndicatorTimer > 0 && !this.aggroMemoryActive) {
-      // Red indicator during aggressive attack rush, yellow otherwise
-      const isAttackingRush = this.isAttacking && this.packBehavior && this.packBehavior.enabled;
       return {
         char: '!',
-        color: isAttackingRush ? '#ff0000' : '#ffff00',
+        color: '#ffff00',
         offsetY: -GRID.CELL_SIZE  // Position above enemy
       };
     }

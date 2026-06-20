@@ -1,0 +1,61 @@
+{
+  "name": "sac/gen/perc/fm-tom",
+  "totalDuration": 0.3,
+  "bpm": 120,
+  "snapMode": "none",
+  "instrument": {
+    "masterGain": 0.8,
+    "chip": "GEN",
+    "type": "fm",
+    "fm": {
+      "ratio": 1,
+      "index": 6,
+      "carrier": "sine",
+      "modWave": "sine"
+    }
+  },
+  "volumeEnvelope": [
+    {
+      "t": 0,
+      "v": 1
+    },
+    {
+      "t": 0.12,
+      "v": 0.35
+    },
+    {
+      "t": 1,
+      "v": 0
+    }
+  ],
+  "pitchEnvelope": [
+    {
+      "t": 0,
+      "semitones": 8
+    },
+    {
+      "t": 0.4,
+      "semitones": -6
+    },
+    {
+      "t": 1,
+      "semitones": -18
+    }
+  ],
+  "notes": [
+    {
+      "id": "n136",
+      "time": 0,
+      "duration": 0.28,
+      "frequency": 130.81,
+      "volume": 0.9,
+      "muted": false
+    }
+  ],
+  "echo": {
+    "enabled": false,
+    "delay": 0.12,
+    "scale": 0.55,
+    "count": 4
+  }
+}

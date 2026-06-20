@@ -1,5 +1,5 @@
 import { GRID } from '../../game/GameConfig.js';
-import { isSpectaclesActive } from '../../data/cipher.js';
+import { isSpectaclesActive, spectaclesTransformString } from '../../data/cipher.js';
 
 /**
  * MazeInteriorOverlay — picture-in-picture renderer for the Maze maze.
@@ -214,13 +214,15 @@ export class MazeInteriorOverlay {
       const timeLeft = Math.ceil(mi.timer.time);
       const g        = Math.round(frac * 200);
       ctx.fillStyle  = `rgb(255,${g},0)`;
-      ctx.fillText(`⌛ ${timeLeft}`, GRID.WIDTH / 2, offsetY + 4);
+      // U+FE0E forces text presentation so the hourglass renders as a
+      // monochrome glyph instead of the system color-emoji fallback.
+      ctx.fillText(`⌛︎ ${timeLeft}`, GRID.WIDTH / 2, offsetY + 4);
     }
 
     // Label
     ctx.textAlign  = 'center';
     ctx.fillStyle  = '#7755aa';
-    ctx.fillText('[ MAZE ]', GRID.WIDTH / 2, offsetY + panelH - CS - 2);
+    ctx.fillText(spectaclesTransformString('[ MAZE ]', spectaclesOn), GRID.WIDTH / 2, offsetY + panelH - CS - 2);
 
     ctx.restore();
   }

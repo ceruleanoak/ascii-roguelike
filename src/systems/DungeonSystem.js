@@ -2,18 +2,24 @@ import { GRID, PHYSICS } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
+import { Ingredient } from '../entities/Ingredient.js';
 import { Particle } from '../entities/Particle.js';
 import { getZoneRandomEnemy } from '../data/enemies.js';
-import { pickRandomTemplateName, applyTemplateToCollisionMap } from '../data/dungeonFloorTemplates.js';
+import { applyZoneCombatModifiers } from '../data/zones.js';
+import { pickRandomTemplateName, applyTemplateToCollisionMap, getTemplateWaterCells } from '../data/dungeonFloorTemplates.js';
 
-// Reward weapons by floor (1-indexed in design talk, 0-indexed here).
-// Only the puzzle floor (index 2) and the deepest hidden floor (index 4) drop a reward;
-// the other floors have no weapon pickup, making the dungeon's rewards feel earned.
+// Reward by floor (1-indexed in design talk, 0-indexed here). Weapon rewards
+// stay scarce so the dungeon's payoffs feel earned; floor 2's plank is a
+// utility, not a weapon.
+//   Floor 2 (index 1) — '=' Platform plank: the only source of deep-water
+//                       crossing (KeyItemSystem) — deterministic, every dungeon
 //   Floor 3 (index 2) — Tier 3: top-tier craftable weapons
-//   Floor 5 (index 4) — Tier 4: § Sword of the Letter (uncraftable legendary)
+//   Floor 5 (index 4) — '⚜' Artifact ingredient (spawned separately below;
+//                       replaced § Sword of the Letter, which now sleeps past
+//                       the black water in green L rooms)
 const REWARD_BY_FLOOR = {
+  1: ['='],
   2: ['⚔', '⚒', '☼'],
-  4: ['§'],
 };
 
 function _getFloorRewardItem(floorIndex) {
@@ -90,6 +96,8 @@ export class DungeonSystem {
     // a clean playfield.
     const zoneForTemplate = this.game.currentRoom?.zone || 'gray';
     const isCompanionPuzzleFloor = floorIndex === 2 && zoneForTemplate === 'green';
+    let templateName = null;
+    let templateReserved = [];
     if (!isCompanionPuzzleFloor) {
       const reserved = [];
       // Col 12 stair corridor (rows 3..21 covers both stair pairs + spawn)
@@ -100,20 +108,34 @@ export class DungeonSystem {
         reserved.push({ row: sr, col: STAIRS_COL - 1 });
         reserved.push({ row: sr, col: STAIRS_COL + 1 });
       }
-      const templateName = pickRandomTemplateName();
+      templateName = pickRandomTemplateName();
+      templateReserved = reserved;
       applyTemplateToCollisionMap(collisionMap, templateName, reserved);
     }
 
     const backgroundObjects = [];
 
-    // Pick a random open cell (not a wall, not the staircase column). Used for
-    // decor and enemy spawns so the template's walls don't trap entities.
+    // Template water channels ('~' cells, e.g. the sewer) — walkable Puddle
+    // objects placed before decor so spawn rolls can avoid them.
+    if (templateName) {
+      for (const { row, col } of getTemplateWaterCells(templateName, templateReserved)) {
+        if (collisionMap[row]?.[col]) continue;
+        backgroundObjects.push(new BackgroundObject('~', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
+      }
+    }
+
+    // Pick a random open cell (not a wall, not the staircase column, not a
+    // cell already holding a background object such as a water channel).
+    // Used for decor and enemy spawns so templates don't trap entities.
     const pickOpenCell = (minRow, maxRow, minCol, maxCol) => {
       for (let attempt = 0; attempt < 20; attempt++) {
         const r = minRow + Math.floor(Math.random() * (maxRow - minRow + 1));
         const c = minCol + Math.floor(Math.random() * (maxCol - minCol + 1));
         if (collisionMap[r]?.[c]) continue;
         if (c === STAIRS_COL) continue;
+        const x = c * GRID.CELL_SIZE;
+        const y = r * GRID.CELL_SIZE;
+        if (backgroundObjects.some(o => o.position.x === x && o.position.y === y)) continue;
         return { row: r, col: c };
       }
       return null;
@@ -155,10 +177,14 @@ export class DungeonSystem {
       backgroundObjects.push(stairsDown);
     }
 
-    // Reward item — only on floors 2 (puzzle) and 4 (deepest hidden); other floors have no pickup.
+    // Reward item — see REWARD_BY_FLOOR; other floors have no pickup.
     const rewardChar = _getFloorRewardItem(floorIndex);
     const rewardItem = rewardChar
       ? Object.assign(new Item(rewardChar, 4 * GRID.CELL_SIZE, 12 * GRID.CELL_SIZE), { hutPlane: true })
+      : null;
+    // Deepest floor: Artifact is an ingredient, not an Item.
+    const rewardIngredient = floorIndex === 4
+      ? Object.assign(new Ingredient('⚜', 4 * GRID.CELL_SIZE, 12 * GRID.CELL_SIZE), { hutPlane: true })
       : null;
 
     // Enemies — scale count and difficulty with floor depth
@@ -174,6 +200,7 @@ export class DungeonSystem {
       const enemy = new Enemy(enemyChar, cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE, depth + floorIndex);
       enemy.setCollisionMap(collisionMap);
       enemy.setBackgroundObjects(backgroundObjects);
+      applyZoneCombatModifiers(enemy, zone);
       enemies.push(enemy);
     }
 
@@ -255,7 +282,7 @@ export class DungeonSystem {
       backgroundObjects,
       enemies,
       items: rewardItem ? [rewardItem] : [],
-      ingredients: [],
+      ingredients: rewardIngredient ? [rewardIngredient] : [],
       npcs: [],
       doors: [],
       viewport,

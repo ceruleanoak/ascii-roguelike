@@ -16,7 +16,7 @@ const DETACH_SHOT_COOLDOWN = 3.0;                  // seconds between goo shots
 const DETACH_SHOT_SPEED    = 95;                   // px/s
 
 const HEAD_DATA = {
-  char: 'ω',
+  char: 'ⲱ',
   name: 'Goo Head',
   hp: 20,
   speed: 90,
@@ -37,7 +37,7 @@ export class GooHead extends Enemy {
     super('?', x, y, 0);
 
     // ── Identity ──────────────────────────────────────────────────────────────
-    this.char      = 'ω';
+    this.char      = 'ⲱ';
     this.data      = HEAD_DATA;
     this.hp        = HEAD_DATA.hp;
     this.maxHp     = HEAD_DATA.hp;
@@ -269,7 +269,7 @@ export class GooHead extends Enemy {
   }
 
   getHitbox() {
-    // Center the hitbox on the rendered ω position (drawn at position + cs/2)
+    // Center the hitbox on the rendered ⲱ position (drawn at position + cs/2)
     const cs = GRID.CELL_SIZE;
     return {
       x: this.position.x + cs / 2 - this.width / 2,

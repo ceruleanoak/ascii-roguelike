@@ -47,6 +47,61 @@ button.active { background: #1a3a1a; border-color: #4a8a4a; color: #8f8; }
 button.primary { border-color: #4a7a4a; color: #8f8; }
 button.danger { border-color: #7a4a4a; color: #f88; }
 
+/* ── Layer strip ─────────────────────────────────────────────── */
+.layer-tab {
+  flex: 1 1 auto; min-width: 0; padding: 5px 4px;
+  text-align: left; font-size: 11px; line-height: 1.15;
+  border-bottom: 2px solid transparent;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.layer-tab b { font-weight: bold; color: #ccc; }
+.layer-tab .lt-src { color: #777; font-size: 9px; }
+.layer-tab.active { background: #16331b; border-color: #4a8a4a; border-bottom-color: #6fd06f; }
+.layer-tab.active b { color: #9f9; }
+.layer-tab.muted { opacity: 0.45; }
+.layer-add { flex: 0 0 26px; text-align: center; color: #888; font-weight: bold; }
+.layer-row { display: flex; gap: 4px; margin-bottom: 6px; }
+.layer-row button { flex: 1; padding: 4px; }
+.layer-row #layer-remove { flex: 0 0 30px; }
+#layer-mute.active { background: #2a1a00; border-color: #cc7722; color: #fa6; }  /* amber = attenuated */
+#layer-solo.active { background: #16331b; border-color: #4a8a4a; color: #9f8; }
+#layers-title.all-muted { color: #d66; }
+
+/* ── Toast ───────────────────────────────────────────────────── */
+#toast {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%) translateY(6px);
+  background: #16291a; border: 1px solid #4a8a4a; color: #9f9;
+  font-size: 12px; padding: 6px 14px; border-radius: 4px;
+  opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s; z-index: 300;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#toast.warn { background: #2a1a00; border-color: #cc7722; color: #fc8; }
+
+/* ── On-screen keyboard ─────────────────────────────────────── */
+#keyboard-panel {
+  display: none;
+  position: fixed; left: 0; right: 0; bottom: 0;
+  background: #0e0e12; border-top: 1px solid #333;
+  padding: 8px 12px 12px; z-index: 150;
+  box-shadow: 0 -6px 18px rgba(0,0,0,0.5);
+}
+#keyboard-panel.open { display: block; }
+#kbd-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 11px; color: #aaa; }
+#kbd-bar .grow { flex: 1; }
+#kbd-keys { position: relative; height: 104px; margin: 0 auto; user-select: none; }
+.wkey, .bkey { position: absolute; top: 0; box-sizing: border-box; cursor: pointer; }
+.wkey {
+  width: 28px; height: 104px; background: linear-gradient(#f4f4f4,#dcdcdc);
+  border: 1px solid #555; border-radius: 0 0 4px 4px; color: #999;
+}
+.bkey {
+  width: 18px; height: 64px; background: linear-gradient(#2a2a2a,#101010);
+  border: 1px solid #000; border-radius: 0 0 3px 3px; z-index: 2; color: #777;
+}
+.wkey.active { background: linear-gradient(#9cc8ff,#6aa6f0); }
+.bkey.active { background: linear-gradient(#5a8ad8,#2f5fa8); }
+.kbd-tag { position: absolute; bottom: 4px; left: 0; right: 0; text-align: center; font-size: 9px; pointer-events: none; }
+
 /* ── Render overlay ──────────────────────────────────────────── */
 #render-overlay {
   display: none;
@@ -122,12 +177,12 @@ optgroup option { color: #ccc; }
   padding: 10px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .section-title {
   font-size: 10px;
-  color: #555;
+  color: #6a6a6a;
   letter-spacing: 2px;
   text-transform: uppercase;
   margin-bottom: 6px;
@@ -200,6 +255,14 @@ input[type=range]::-webkit-slider-thumb {
 #piano-roll {
   display: block;
   cursor: crosshair;
+}
+
+#pr-legend {
+  position: absolute; left: 8px; bottom: 6px;
+  font-size: 10px; color: #6a6a6a; letter-spacing: 0.5px;
+  background: rgba(10,10,10,0.62); padding: 2px 7px; border-radius: 3px;
+  pointer-events: none; max-width: calc(100% - 16px);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 /* ── Right panel ─────────────────────────────────────────────── */
@@ -348,7 +411,7 @@ input[type=range]::-webkit-slider-thumb {
   <button id="btn-undo" disabled title="Undo (Ctrl+Z)">↩ UNDO</button>
   <div class="sep"></div>
   <span style="color:#888;font-size:11px">PRESET</span>
-  <select id="preset-select">
+  <select id="preset-select" style="max-width:170px" title="Built-ins load on select; templates need the LOAD button">
     <option value="">— select —</option>
     <optgroup label="BUILT-IN">
       <option value="HIT">HIT</option>
@@ -378,6 +441,12 @@ input[type=range]::-webkit-slider-thumb {
   <label>DURATION <input type="number" id="total-duration" value="0.5" min="0.05" max="10" step="0.05"> s</label>
   <div class="sep"></div>
   <button id="btn-export" class="primary">⬇ EXPORT WAV</button>
+  <!-- Live-input cluster pinned to the right edge -->
+  <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+    <button id="btn-keys" title="On-screen keyboard for live instrument testing (click keys or type Z–M / Q–U)">🎹 KEYS</button>
+    <span id="midi-status" title="Connected MIDI input — play to audition the current instrument" style="color:#666;font-size:11px">♪ MIDI: off</span>
+    <button id="btn-midi-rec" class="danger" title="Record played notes (MIDI or on-screen keyboard) into the piano roll">● REC</button>
+  </div>
 </div>
 
 <!-- ── Main ──────────────────────────────────────────────────── -->
@@ -386,14 +455,66 @@ input[type=range]::-webkit-slider-thumb {
   <!-- Left: instrument + envelopes -->
   <div id="panel-left">
 
+    <!-- Layer strip — stacked voices (A–D), all triggered together -->
+    <div>
+      <div class="section-title" id="layers-title" title="Up to 4 stacked voices (A–D). Every note plays all un-muted layers together. [ ] = switch · Alt+[ ] = reorder">Layers</div>
+      <div id="layer-tabs" style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px"></div>
+      <div class="layer-row">
+        <button id="layer-mute" title="Silence this layer">MUTE</button>
+        <button id="layer-solo" title="Hear only soloed layers (Shift-click = add to solo)">SOLO</button>
+        <button id="layer-copyall" title="Copy this layer's voice to all layers (keeps each layer's octave/detune/envelopes)">→ALL</button>
+        <button id="layer-remove" class="danger" title="Remove this layer">✕</button>
+      </div>
+      <div class="param-row">
+        <label>Octave <span id="layer-octave-val">0</span></label>
+        <input type="range" id="layer-octave" min="-3" max="3" step="1" value="0" title="Transpose this layer in octaves (playback only — not shown on the roll)">
+      </div>
+      <div class="param-row">
+        <label>Detune <span id="layer-detune-val">0¢</span></label>
+        <input type="range" id="layer-detune" min="-100" max="100" step="1" value="0" title="Fine-detune this layer in cents — stack with another layer for a fatter unison">
+      </div>
+    </div>
+
     <div>
       <div class="section-title">Instrument</div>
-      <div class="toggle-group" style="margin-bottom:8px">
-        <button id="type-square" class="active">SQUARE</button>
-        <button id="type-noise">NOISE</button>
+
+      <!-- Chip / console flavor -->
+      <div class="param-row">
+        <label>Chip</label>
+        <select id="chip-select" style="width:100%">
+          <option value="">— none —</option>
+          <option value="2600">Atari 2600 (TIA)</option>
+          <option value="C64">Commodore 64 (SID)</option>
+          <option value="SMS">Master System (SN76489)</option>
+          <option value="GB">Game Boy (DMG)</option>
+          <option value="NES">NES (2A03)</option>
+          <option value="GEN">Genesis (YM2612)</option>
+          <option value="SNES">SNES (S-DSP)</option>
+        </select>
       </div>
 
-      <!-- Square params -->
+      <!-- Sound source (cycles authentic voices within the selected chip) -->
+      <div class="param-row" id="source-row" style="display:none">
+        <label>Source</label>
+        <div style="display:flex;align-items:center;gap:4px;width:100%">
+          <button id="source-prev" style="padding:3px 8px" title="Previous voice for this chip">◀</button>
+          <span id="source-name" title="Current voice — shows (custom) once you hand-edit away from a catalog preset" style="flex:1;text-align:center;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">—</span>
+          <button id="source-next" style="padding:3px 8px" title="Next voice for this chip">▶</button>
+        </div>
+      </div>
+
+      <!-- Waveform selector -->
+      <div class="toggle-group" style="margin-bottom:8px;flex-wrap:wrap;gap:3px">
+        <button id="type-square" title="Pulse / square wave (adjustable duty)">PULSE</button>
+        <button id="type-triangle" title="Triangle wave">TRI</button>
+        <button id="type-sawtooth" title="Sawtooth wave">SAW</button>
+        <button id="type-sine" title="Sine wave">SINE</button>
+        <button id="type-wave" title="Wavetable voice (pick a table below)">WAVE</button>
+        <button id="type-fm" title="2-operator FM synthesis">FM</button>
+        <button id="type-noise" title="Noise generator">NOISE</button>
+      </div>
+
+      <!-- Pulse params -->
       <div id="sq-params">
         <div class="param-row">
           <label>Duty cycle <span id="duty-val">0.50</span></label>
@@ -401,22 +522,70 @@ input[type=range]::-webkit-slider-thumb {
         </div>
       </div>
 
-      <!-- Noise params -->
-      <div id="noise-params" style="display:none">
-        <div class="toggle-group" style="margin-bottom:8px">
-          <button id="noise-white" class="active">WHITE</button>
-          <button id="noise-pink">PINK</button>
+      <!-- Wavetable params -->
+      <div id="wave-params" style="display:none">
+        <div class="param-row">
+          <label>Wavetable</label>
+          <select id="wave-table" style="width:100%"></select>
+        </div>
+      </div>
+
+      <!-- FM params -->
+      <div id="fm-params" style="display:none">
+        <div class="param-row">
+          <label>Ratio <span id="fm-ratio-val">2.00</span></label>
+          <input type="range" id="fm-ratio" min="0.25" max="12" step="0.25" value="2">
         </div>
         <div class="param-row">
-          <label>Filter Hz <span id="noise-filter-val">2000</span></label>
-          <input type="range" id="noise-filter" min="100" max="8000" step="100" value="2000">
+          <label>Index <span id="fm-index-val">4.0</span></label>
+          <input type="range" id="fm-index" min="0" max="20" step="0.1" value="4">
+        </div>
+        <div class="param-row">
+          <label>Carrier</label>
+          <select id="fm-carrier" style="width:100%">
+            <option value="sine">sine</option>
+            <option value="triangle">triangle</option>
+            <option value="sawtooth">sawtooth</option>
+            <option value="square">square</option>
+          </select>
+        </div>
+        <div class="param-row">
+          <label>Mod wave</label>
+          <select id="fm-modwave" style="width:100%">
+            <option value="sine">sine</option>
+            <option value="triangle">triangle</option>
+            <option value="sawtooth">sawtooth</option>
+            <option value="square">square</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Noise params -->
+      <div id="noise-params" style="display:none">
+        <div class="toggle-group" style="margin-bottom:8px;flex-wrap:wrap;gap:3px">
+          <button id="noise-white" class="active" title="Full-spectrum white noise">WHITE</button>
+          <button id="noise-pink" title="Softer pink (1/f) noise">PINK</button>
+          <button id="noise-metallic" title="Short-tap LFSR — metallic/ringing (NES short noise)">METAL</button>
+          <button id="noise-lfsr" title="Long-tap LFSR — hiss (NES long noise)">LFSR</button>
+        </div>
+        <div class="param-row">
+          <label>Noise color <span id="noise-filter-val">2000</span></label>
+          <input type="range" id="noise-filter" min="100" max="8000" step="100" value="2000" title="Lowpass on the noise — lower = darker">
         </div>
       </div>
 
       <!-- Shared -->
       <div class="param-row">
-        <label>Master vol <span id="master-gain-val">0.80</span></label>
-        <input type="range" id="master-gain" min="0.0" max="1.0" step="0.01" value="0.8">
+        <label>Lowpass Hz <span id="filter-freq-val">off</span></label>
+        <input type="range" id="filter-freq" min="0" max="12000" step="100" value="0" title="Lowpass filter on the whole voice (0 = off) — SID/SNES character">
+      </div>
+      <div class="param-row">
+        <label>Crush bits <span id="crush-bits-val">off</span></label>
+        <input type="range" id="crush-bits" min="0" max="16" step="1" value="0">
+      </div>
+      <div class="param-row">
+        <label>Layer vol <span id="master-gain-val">0.80</span></label>
+        <input type="range" id="master-gain" min="0.0" max="1.0" step="0.01" value="0.8" title="Level of THIS layer in the stack (export is peak-normalized)">
       </div>
     </div>
 
@@ -424,7 +593,7 @@ input[type=range]::-webkit-slider-thumb {
     <div>
       <div class="section-title" style="display:flex;align-items:center;justify-content:space-between">
         Echo
-        <button id="echo-toggle" style="padding:1px 7px;font-size:10px;letter-spacing:1px">OFF</button>
+        <button id="echo-toggle" title="Tap-delay echo (repeats each note)" style="padding:1px 7px;font-size:10px;letter-spacing:1px">OFF</button>
       </div>
       <div id="echo-params" style="display:none">
         <div class="param-row">
@@ -505,6 +674,7 @@ input[type=range]::-webkit-slider-thumb {
     <div id="piano-roll-wrap">
       <canvas id="piano-roll"></canvas>
     </div>
+    <div id="pr-legend">drag grid = add note · drag note = move · edge = resize · right-click = delete · alt-click = mute · shift = multi-select · scroll/⌘scroll = zoom</div>
   </div>
 
   <!-- Right: randomizer -->
@@ -562,8 +732,8 @@ input[type=range]::-webkit-slider-thumb {
     </div>
 
     <div class="rand-btns">
-      <button id="btn-generate">⚄ GENERATE</button>
-      <button id="btn-subtle">~ SUBTLE</button>
+      <button id="btn-generate" title="Randomize within the ranges above (locked rows stay fixed)">⚄ GENERATE</button>
+      <button id="btn-subtle" title="Small random nudge to the current sound">~ SUBTLE</button>
     </div>
   </div>
 
@@ -578,6 +748,23 @@ input[type=range]::-webkit-slider-thumb {
   </div>
 </div>
 
+<!-- Transient status toast -->
+<div id="toast"></div>
+
+<!-- On-screen keyboard (live instrument testing) -->
+<div id="keyboard-panel">
+  <div id="kbd-bar">
+    <strong style="color:#ccc;letter-spacing:1px">KEYBOARD</strong>
+    <button id="kbd-oct-down" title="Octave down">◀ OCT</button>
+    <span id="kbd-oct-label" style="min-width:34px;text-align:center">C4</span>
+    <button id="kbd-oct-up" title="Octave up">OCT ▶</button>
+    <span style="color:#666">click keys or type (Z–M lower row · Q–U upper row) · REC to capture</span>
+    <span class="grow"></span>
+    <button id="kbd-close">✕ CLOSE</button>
+  </div>
+  <div id="kbd-keys"></div>
+</div>
+
 <script>
 'use strict';
 
@@ -588,6 +775,7 @@ input[type=range]::-webkit-slider-thumb {
 const appState = {
   sfx: createDefaultSFX(),
   isPlaying: false,
+  activeLayer: 0,                  // index of the layer being edited
   selectedNoteIds: new Set(),
   zoom: { xPixPerSec: 400, yPixPerRow: 9 },
   scroll: { xSec: 0, yMidi: 84 }, // yMidi = top visible midi note (C6 default)
@@ -601,12 +789,10 @@ const appState = {
   }
 };
 
-function createDefaultSFX() {
+// A layer = one stacked voice: its own instrument + envelopes + per-layer
+// octave/detune/mute/solo. Notes and echo are shared across layers (sfx level).
+function makeLayer() {
   return {
-    name: 'untitled',
-    totalDuration: 0.5,
-    bpm: 120,
-    snapMode: 'none',
     instrument: {
       type: 'square',
       duty: 0.5,
@@ -624,6 +810,20 @@ function createDefaultSFX() {
       { t: 0.3, semitones: 0 },
       { t: 1.0, semitones: -2 }
     ],
+    octave: 0,
+    detune: 0,   // cents
+    mute: false,
+    solo: false
+  };
+}
+
+function createDefaultSFX() {
+  return {
+    name: 'untitled',
+    totalDuration: 0.5,
+    bpm: 120,
+    snapMode: 'none',
+    layers: [makeLayer()],
     notes: [
       { id: uid(), time: 0.0, duration: 0.12, frequency: midiToFreq(69), volume: 0.9, muted: false }
     ],
@@ -634,6 +834,52 @@ function createDefaultSFX() {
       count: 4       // number of repeats
     }
   };
+}
+
+// Backward-compat shim: wrap a legacy single-instrument sfx into a layered one.
+// Idempotent — safe to call on already-layered sfx. Applied at every entry point
+// (load, preset, render) so the 66 SAC templates + game SFX keep working.
+function normalizeSfx(sfx) {
+  if (!sfx) return sfx;
+  if (!Array.isArray(sfx.layers)) {
+    sfx.layers = [{
+      instrument: sfx.instrument || makeLayer().instrument,
+      volumeEnvelope: sfx.volumeEnvelope || makeLayer().volumeEnvelope,
+      pitchEnvelope: sfx.pitchEnvelope || makeLayer().pitchEnvelope,
+      octave: 0, detune: 0, mute: false, solo: false
+    }];
+    delete sfx.instrument;
+    delete sfx.volumeEnvelope;
+    delete sfx.pitchEnvelope;
+  }
+  // Fill any missing per-layer fields (older layered saves)
+  for (const L of sfx.layers) {
+    if (L.octave == null) L.octave = 0;
+    if (L.detune == null) L.detune = 0;
+    if (L.mute == null) L.mute = false;
+    if (L.solo == null) L.solo = false;
+    if (!L.instrument) L.instrument = makeLayer().instrument;
+    if (!L.volumeEnvelope) L.volumeEnvelope = makeLayer().volumeEnvelope;
+    if (!L.pitchEnvelope) L.pitchEnvelope = makeLayer().pitchEnvelope;
+  }
+  if (!sfx.layers.length) sfx.layers.push(makeLayer());
+  return sfx;
+}
+
+// The layer currently being edited.
+function getActiveLayer() {
+  const sfx = appState.sfx;
+  if (!sfx.layers || !sfx.layers.length) normalizeSfx(sfx);
+  if (appState.activeLayer >= sfx.layers.length) appState.activeLayer = sfx.layers.length - 1;
+  if (appState.activeLayer < 0) appState.activeLayer = 0;
+  return sfx.layers[appState.activeLayer];
+}
+
+// Layers that should sound: soloed layers if any are soloed, else all unmuted.
+function playableLayers(sfx) {
+  const layers = sfx.layers || [];
+  const soloed = layers.filter(L => L.solo);
+  return soloed.length ? soloed : layers.filter(L => !L.mute);
 }
 
 function uid() {
@@ -652,6 +898,102 @@ function midiToName(midi) {
   const names = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
   return names[midi % 12] + Math.floor(midi / 12 - 1);
 }
+
+// ═══════════════════════════════════════════════════════════════
+// WAVETABLES — time-domain custom waves (Game Boy / C64-style wave
+// channel). Each is an array of -1..1 steps; the synth turns it into
+// a band-limited PeriodicWave. Used by instrument.type === 'wave'.
+// ═══════════════════════════════════════════════════════════════
+
+const WAVE_TABLES = (() => {
+  const N = 32;
+  const t = { sine: [], triangle: [], saw: [], organ: [], bowl: [], hollow: [], reso: [], spike: [] };
+  for (let i = 0; i < N; i++) {
+    const p = i / N, a = 2 * Math.PI * p;
+    t.sine.push(Math.sin(a));
+    t.triangle.push(p < 0.5 ? 4 * p - 1 : 3 - 4 * p);
+    t.saw.push(2 * p - 1);
+    t.organ.push((Math.sin(a) + 0.5 * Math.sin(2 * a) + 0.33 * Math.sin(3 * a)) / 1.83);
+    t.bowl.push(2 * Math.sin(Math.PI * p) - 1);            // half-sine hump (GB "bowl")
+    t.hollow.push((Math.sin(a) + 0.35 * Math.sin(5 * a)) / 1.35); // clarinet-ish odd harmonics
+    t.reso.push(Math.sin(a) * (1 - p) + Math.sin(3 * a) * p * 0.5); // sweeping formant
+    t.spike.push(p < 0.12 ? 1 : (p < 0.24 ? -1 : 0));      // narrow bipolar spike
+  }
+  // NES triangle: 4-bit, 16-step staircase (subtly buzzy vs a pure triangle)
+  t.nesTri = [];
+  const steps16 = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0];
+  for (const s of steps16) t.nesTri.push(s / 7.5 - 1);
+  // FDS-style soft wavetable (richer than the stock NES channels)
+  t.fds = [];
+  for (let i = 0; i < 64; i++) { const a = 2 * Math.PI * i / 64; t.fds.push((Math.sin(a) + 0.25 * Math.sin(3 * a) + 0.12 * Math.sin(5 * a)) / 1.37); }
+  return t;
+})();
+const WAVE_TABLE_NAMES = Object.keys(WAVE_TABLES);
+
+// ═══════════════════════════════════════════════════════════════
+// CHIP SOUND SOURCES — mirrors Super Audio Cart's model: a chip
+// (console/"system") exposes a set of authentic sound sources; you
+// pick one and shape it with the generic engine (filter/crush/env).
+// Each source's `patch` holds only the voice-defining instrument
+// fields (see VOICE_FIELDS). Values track templates/sac/<chip>/ and
+// SAC-REFERENCE.md. GEN/SNES are approximations (no real samples).
+// ═══════════════════════════════════════════════════════════════
+
+const CHIP_SOURCES = {
+  '2600': [ // TIA — coarse distortion tones; approximate with square + crush
+    { name: 'Square Lead', patch: { type: 'square', duty: 0.5,  crushBits: 5 } },
+    { name: 'Buzz Lead',   patch: { type: 'square', duty: 0.15, crushBits: 4 } },
+    { name: 'Buzz Bass',   patch: { type: 'square', duty: 0.5,  crushBits: 4 } },
+    { name: 'Noise Hit',   patch: { type: 'noise', noiseType: 'metallic', noiseFilterFreq: 3000, crushBits: 4 } },
+  ],
+  'C64': [ // SID — pulse(PWM)/saw/tri/noise + resonant lowpass
+    { name: 'Pulse (PWM)', patch: { type: 'square',   duty: 0.2, filterFreq: 3000, filterQ: 3 } },
+    { name: 'Sawtooth',    patch: { type: 'sawtooth', filterFreq: 4000, filterQ: 2 } },
+    { name: 'Triangle',    patch: { type: 'triangle' } },
+    { name: 'Reso Sweep',  patch: { type: 'sawtooth', filterFreq: 1200, filterQ: 8 } },
+    { name: 'Noise',       patch: { type: 'noise', noiseType: 'white', noiseFilterFreq: 4000 } },
+  ],
+  'SMS': [ // SN76489 — 3 square (fixed 50%) + 1 noise
+    { name: 'Square',       patch: { type: 'square', duty: 0.5 } },
+    { name: 'Noise (hiss)', patch: { type: 'noise', noiseType: 'lfsr',     noiseFilterFreq: 6000 } },
+    { name: 'Noise (tone)', patch: { type: 'noise', noiseType: 'metallic', noiseFilterFreq: 3000 } },
+  ],
+  'GB': [ // DMG — 2 pulse (4 duties), 1 wave, 1 noise
+    { name: 'Pulse 12.5%', patch: { type: 'square', duty: 0.125 } },
+    { name: 'Pulse 25%',   patch: { type: 'square', duty: 0.25 } },
+    { name: 'Pulse 50%',   patch: { type: 'square', duty: 0.5 } },
+    { name: 'Pulse 75%',   patch: { type: 'square', duty: 0.75 } },
+    { name: 'Wave',        patch: { type: 'wave', wavetable: 'organ' } },
+    { name: 'Noise',       patch: { type: 'noise', noiseType: 'lfsr', noiseFilterFreq: 5000 } },
+  ],
+  'NES': [ // 2A03 — the canonical roster (matches SAC-REFERENCE.md)
+    { name: 'Pulse 12.5%', patch: { type: 'square', duty: 0.125 } },
+    { name: 'Pulse 25%',   patch: { type: 'square', duty: 0.25 } },
+    { name: 'Pulse 50%',   patch: { type: 'square', duty: 0.5 } },
+    { name: 'Triangle',    patch: { type: 'wave',  wavetable: 'nesTri' } },
+    { name: 'Long Noise',  patch: { type: 'noise', noiseType: 'lfsr',     noiseFilterFreq: 7000 } },
+    { name: 'Short Noise', patch: { type: 'noise', noiseType: 'metallic', noiseFilterFreq: 3000 } },
+    { name: 'FDS',         patch: { type: 'wave',  wavetable: 'fds' } },
+  ],
+  'GEN': [ // YM2612 — 6-op FM; approximate with the editor's 2-op FM
+    { name: 'FM Bass',    patch: { type: 'fm', fm: { ratio: 1,   index: 3, carrier: 'sine',     modWave: 'sine' } } },
+    { name: 'FM Lead',    patch: { type: 'fm', fm: { ratio: 2,   index: 5, carrier: 'sine',     modWave: 'sine' } } },
+    { name: 'FM Brass',   patch: { type: 'fm', fm: { ratio: 1,   index: 6, carrier: 'sawtooth', modWave: 'sine' } } },
+    { name: 'FM Bell',    patch: { type: 'fm', fm: { ratio: 3.5, index: 8, carrier: 'sine',     modWave: 'sine' } } },
+    { name: 'FM E-Piano', patch: { type: 'fm', fm: { ratio: 1,   index: 4, carrier: 'sine',     modWave: 'sine' } } },
+  ],
+  'SNES': [ // S-DSP — sample-based; editor can only approximate (saw/FM/wave + LP + crush 12)
+    { name: 'Piano',   patch: { type: 'fm', fm: { ratio: 1, index: 3, carrier: 'sine', modWave: 'sine' }, filterFreq: 5000, crushBits: 12 } },
+    { name: 'Strings', patch: { type: 'sawtooth', filterFreq: 3500, crushBits: 12 } },
+    { name: 'Brass',   patch: { type: 'fm', fm: { ratio: 1, index: 6, carrier: 'sawtooth', modWave: 'sine' }, filterFreq: 4500, crushBits: 12 } },
+    { name: 'Guitar',  patch: { type: 'wave', wavetable: 'hollow', filterFreq: 4000, crushBits: 12 } },
+    { name: 'Choir',   patch: { type: 'wave', wavetable: 'organ',  filterFreq: 3000, crushBits: 12 } },
+    { name: 'Mallet',  patch: { type: 'fm', fm: { ratio: 3.5, index: 6, carrier: 'sine', modWave: 'sine' }, filterFreq: 6000, crushBits: 12 } },
+    { name: 'Organ',   patch: { type: 'wave', wavetable: 'organ',  filterFreq: 6000, crushBits: 12 } },
+    { name: 'Bass',    patch: { type: 'fm', fm: { ratio: 1, index: 2, carrier: 'sine', modWave: 'sine' }, filterFreq: 3000, crushBits: 12 } },
+    { name: 'Synth',   patch: { type: 'sawtooth', filterFreq: 4000, crushBits: 12 } },
+  ],
+};
 
 // ═══════════════════════════════════════════════════════════════
 // PRESETS
@@ -798,17 +1140,15 @@ async function refreshTemplateIndex() {
 // ═══════════════════════════════════════════════════════════════
 
 const undoStack = [];
+const redoStack = [];
 const MAX_UNDO = 50;
 
-function pushUndo() {
-  undoStack.push(JSON.parse(JSON.stringify(appState.sfx)));
-  if (undoStack.length > MAX_UNDO) undoStack.shift();
-  updateUndoButton();
+function _snapshot() {
+  return { sfx: JSON.parse(JSON.stringify(appState.sfx)), activeLayer: appState.activeLayer };
 }
-
-function undo() {
-  if (!undoStack.length) return;
-  appState.sfx = undoStack.pop();
+function _restore(snap) {
+  appState.sfx = snap.sfx;
+  appState.activeLayer = snap.activeLayer || 0;
   clearSelection();
   syncAllUI();
   scrollToFitNotes();
@@ -816,9 +1156,40 @@ function undo() {
   updateUndoButton();
 }
 
+function pushUndo() {
+  undoStack.push(_snapshot());
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+  redoStack.length = 0; // a new action invalidates the redo chain
+  updateUndoButton();
+}
+
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(_snapshot());
+  _restore(undoStack.pop());
+}
+
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(_snapshot());
+  _restore(redoStack.pop());
+}
+
 function updateUndoButton() {
   const btn = document.getElementById('btn-undo');
   if (btn) btn.disabled = undoStack.length === 0;
+}
+
+// Transient status message (SAVE confirmations, record state, warnings).
+let _toastTimer = null;
+function showToast(msg, warn) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.toggle('warn', !!warn);
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 1900);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -884,10 +1255,29 @@ class SFXSynthesizer {
     if (this.ctx) return;
     this.ctx = new AudioContext({ sampleRate: 44100 });
     this.masterGain = this.ctx.createGain();
-    this.masterGain.connect(this.ctx.destination);
+    // Soft limiter on the LIVE output only — stacking several layers can exceed
+    // 0 dBFS and hard-clip during audition; this saturates gently instead.
+    // Offline render (export) builds its own master and peak-normalizes, so the
+    // exported WAV is unaffected.
+    const limiter = this.ctx.createWaveShaper();
+    limiter.curve = this._softClipCurve();
+    this.masterGain.connect(limiter);
+    limiter.connect(this.ctx.destination);
+  }
+
+  // Linear below ±0.8, soft-knee saturation above — single layers pass through
+  // untouched, dense stacks compress instead of clipping.
+  _softClipCurve() {
+    const n = 2048, c = new Float32Array(n), t = 0.8;
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * 2 - 1, a = Math.abs(x);
+      c[i] = a <= t ? x : Math.sign(x) * (t + (1 - t) * Math.tanh((a - t) / (1 - t)));
+    }
+    return c;
   }
 
   play(sfx) {
+    normalizeSfx(sfx);
     this.ensureContext();
     this.stop();
     appState.isPlaying = true;
@@ -917,6 +1307,7 @@ class SFXSynthesizer {
     if (this._stopTimer) { clearTimeout(this._stopTimer); this._stopTimer = null; }
     for (const n of this.activeNodes) {
       try { n.source.stop(); } catch(e) {}
+      if (n.extra) for (const ex of n.extra) { try { ex.stop(); } catch(e) {} }
       try { n.gain.disconnect(); } catch(e) {}
     }
     this.activeNodes = [];
@@ -946,88 +1337,166 @@ class SFXSynthesizer {
   _scheduleNote(note, sfx, baseTime, ctx) {
     const when = baseTime + note.time;
     const dur = Math.max(0.005, note.duration);
-    const inst = sfx.instrument;
+    // Every note triggers all playable layers, stacked and summed.
+    for (const layer of playableLayers(sfx)) {
+      this._scheduleLayerVoice(layer, note, sfx, when, dur, ctx);
+    }
+  }
+
+  // Schedule one layer's voice for a note (own instrument, envelope, octave/detune).
+  _scheduleLayerVoice(layer, note, sfx, when, dur, ctx) {
+    const inst = layer.instrument;
+    const masterGain = inst.masterGain != null ? inst.masterGain : 0.8;
+    const pitchMult = Math.pow(2, layer.octave || 0) * Math.pow(2, (layer.detune || 0) / 1200);
 
     const gainNode = ctx.createGain();
     gainNode.gain.setValueAtTime(0.0001, when);
 
-    // Volume envelope automation
-    const volPts = sfx.volumeEnvelope;
+    // Per-layer volume envelope automation
+    const volPts = layer.volumeEnvelope || [];
     for (let i = 0; i < volPts.length; i++) {
       const absT = when + volPts[i].t * sfx.totalDuration;
-      const val = Math.max(0.0001, volPts[i].v * note.volume * inst.masterGain);
+      const val = Math.max(0.0001, volPts[i].v * note.volume * masterGain);
       if (i === 0) gainNode.gain.setValueAtTime(val, Math.max(when, absT));
       else gainNode.gain.linearRampToValueAtTime(val, Math.max(when + 0.001, absT));
     }
     gainNode.gain.setValueAtTime(0.0001, when + dur);
 
-    let source;
+    const vctx = { pitchEnv: layer.pitchEnvelope, totalDuration: sfx.totalDuration, pitchMult };
+    const { sources, output } = this._buildVoice(inst, note, vctx, when, dur, ctx);
 
-    if (inst.type === 'square') {
-      source = ctx.createOscillator();
-      if (Math.abs(inst.duty - 0.5) < 0.01) {
-        source.type = 'square';
-      } else {
-        source.setPeriodicWave(this._makePeriodicWave(ctx, inst.duty));
-      }
-
-      // Apply pitch envelope — set t=0 value first, then ramp
-      const pitchPts = sfx.pitchEnvelope;
-      if (pitchPts.length > 0) {
-        const f0 = note.frequency * Math.pow(2, pitchPts[0].semitones / 12);
-        source.frequency.setValueAtTime(Math.max(1, f0), when);
-        for (let i = 1; i < pitchPts.length; i++) {
-          const absT = when + pitchPts[i].t * sfx.totalDuration;
-          const targetFreq = note.frequency * Math.pow(2, pitchPts[i].semitones / 12);
-          source.frequency.linearRampToValueAtTime(Math.max(1, targetFreq), Math.max(when + 0.001, absT));
-        }
-      } else {
-        source.frequency.setValueAtTime(note.frequency, when);
-      }
-
-      source.connect(gainNode);
-    } else {
-      // Noise — fill a buffer with white or pink noise
-      const sampleRate = ctx.sampleRate;
-      const numSamples = Math.ceil(sampleRate * dur);
-      const buf = ctx.createBuffer(1, numSamples, sampleRate);
-      const data = buf.getChannelData(0);
-      if (inst.noiseType === 'pink') {
-        let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
-        for (let i = 0; i < numSamples; i++) {
-          const w = Math.random() * 2 - 1;
-          b0=0.99886*b0+w*0.0555179; b1=0.99332*b1+w*0.0750759;
-          b2=0.96900*b2+w*0.1538520; b3=0.86650*b3+w*0.3104856;
-          b4=0.55000*b4+w*0.5329522; b5=-0.7616*b5-w*0.0168980;
-          data[i] = (b0+b1+b2+b3+b4+b5+b6+w*0.5362)*0.11;
-          b6 = w*0.115926;
-        }
-      } else {
-        for (let i = 0; i < numSamples; i++) data[i] = Math.random() * 2 - 1;
-      }
-
-      source = ctx.createBufferSource();
-      source.buffer = buf;
-
-      if (inst.noiseFilterFreq && inst.noiseType === 'pink') {
-        const filt = ctx.createBiquadFilter();
-        filt.type = 'lowpass';
-        filt.frequency.value = inst.noiseFilterFreq;
-        source.connect(filt);
-        filt.connect(gainNode);
-      } else {
-        source.connect(gainNode);
-      }
-    }
-
+    // Optional lowpass filter (SID / S-DSP character) + bit-crush
+    const tail = this._applyFilterCrush(inst, output, ctx);
+    tail.connect(gainNode);
     gainNode.connect(this.masterGain);
 
-    source.start(when);
-    source.stop(when + dur + 0.01);
-    this.activeNodes.push({ source, gain: gainNode });
+    for (const s of sources) {
+      s.start(when);
+      s.stop(when + dur + 0.05);
+    }
+    this.activeNodes.push({ source: sources[0], gain: gainNode, extra: sources.slice(1) });
   }
 
-  _makePeriodicWave(ctx, duty) {
+  // ── Voice construction ────────────────────────────────────────
+  // vctx = { pitchEnv, totalDuration, pitchMult }. Returns { sources, output }.
+  _buildVoice(inst, note, vctx, when, dur, ctx) {
+    const type = inst.type || 'square';
+
+    if (type === 'noise') return this._buildNoise(inst, note, dur, ctx, vctx.pitchMult);
+    if (type === 'fm')    return this._buildFM(inst, note, vctx, when, ctx);
+
+    // Single-oscillator pitched voices: square/pulse, triangle, sawtooth, sine, wave
+    const osc = ctx.createOscillator();
+    if (type === 'triangle' || type === 'sawtooth' || type === 'sine') {
+      osc.type = type;
+    } else if (type === 'wave') {
+      const tbl = typeof inst.wavetable === 'string'
+        ? (WAVE_TABLES[inst.wavetable] || WAVE_TABLES.organ)
+        : (Array.isArray(inst.wavetable) ? inst.wavetable : WAVE_TABLES.organ);
+      osc.setPeriodicWave(this._waveFromTable(ctx, tbl));
+    } else { // square / pulse
+      const duty = inst.duty != null ? inst.duty : 0.5;
+      if (Math.abs(duty - 0.5) < 0.01) osc.type = 'square';
+      else osc.setPeriodicWave(this._makePulseWave(ctx, duty));
+    }
+    this._applyPitchEnv(osc.frequency, note.frequency, vctx.pitchEnv, vctx.totalDuration, when, vctx.pitchMult);
+    return { sources: [osc], output: osc };
+  }
+
+  _buildFM(inst, note, vctx, when, ctx) {
+    const fm = inst.fm || {};
+    const ratio = fm.ratio != null ? fm.ratio : 2.0;
+    const index = fm.index != null ? fm.index : 4.0;
+    const mult = vctx.pitchMult;
+
+    const carrier = ctx.createOscillator();
+    carrier.type = ['sine','triangle','sawtooth','square'].includes(fm.carrier) ? fm.carrier : 'sine';
+    this._applyPitchEnv(carrier.frequency, note.frequency, vctx.pitchEnv, vctx.totalDuration, when, mult);
+
+    const mod = ctx.createOscillator();
+    mod.type = ['sine','triangle','sawtooth','square'].includes(fm.modWave) ? fm.modWave : 'sine';
+    this._applyPitchEnv(mod.frequency, note.frequency, vctx.pitchEnv, vctx.totalDuration, when, mult * ratio);
+
+    // Modulation depth (in Hz) ≈ index × modulator frequency
+    const modGain = ctx.createGain();
+    modGain.gain.value = index * note.frequency * mult * ratio;
+    mod.connect(modGain);
+    modGain.connect(carrier.frequency);
+
+    return { sources: [carrier, mod], output: carrier };
+  }
+
+  _buildNoise(inst, note, dur, ctx, pitchMult) {
+    pitchMult = pitchMult || 1;
+    const sampleRate = ctx.sampleRate;
+    const numSamples = Math.ceil(sampleRate * dur);
+    const noiseType = inst.noiseType || 'white';
+    const buf = ctx.createBuffer(1, numSamples, sampleRate);
+    const data = buf.getChannelData(0);
+
+    if (noiseType === 'pink') {
+      let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+      for (let i = 0; i < numSamples; i++) {
+        const w = Math.random() * 2 - 1;
+        b0=0.99886*b0+w*0.0555179; b1=0.99332*b1+w*0.0750759;
+        b2=0.96900*b2+w*0.1538520; b3=0.86650*b3+w*0.3104856;
+        b4=0.55000*b4+w*0.5329522; b5=-0.7616*b5-w*0.0168980;
+        data[i] = (b0+b1+b2+b3+b4+b5+b6+w*0.5362)*0.11;
+        b6 = w*0.115926;
+      }
+    } else if (noiseType === 'metallic' || noiseType === 'lfsr') {
+      // Chip-style LFSR noise: short tap (bit 6) = tonal/metallic, long tap (bit 1) = hiss.
+      // The shift clock tracks the note pitch, so the noise is "tuned" like NES/GB.
+      let reg = 0x7FFF;
+      const tapBit = noiseType === 'metallic' ? 6 : 1;
+      const clock = Math.max(220, note.frequency * pitchMult * 12);
+      const hold = Math.max(1, Math.round(sampleRate / clock));
+      let cnt = 0, cur = 0;
+      for (let i = 0; i < numSamples; i++) {
+        if (cnt === 0) {
+          const fb = (reg ^ (reg >> tapBit)) & 1;
+          reg = (reg >> 1) | (fb << 14);
+          cur = (reg & 1) ? 1 : -1;
+          cnt = hold;
+        }
+        cnt--;
+        data[i] = cur;
+      }
+    } else { // white
+      for (let i = 0; i < numSamples; i++) data[i] = Math.random() * 2 - 1;
+    }
+
+    const source = ctx.createBufferSource();
+    source.buffer = buf;
+
+    if (inst.noiseFilterFreq && noiseType !== 'white') {
+      const filt = ctx.createBiquadFilter();
+      filt.type = 'lowpass';
+      filt.frequency.value = inst.noiseFilterFreq;
+      source.connect(filt);
+      return { sources: [source], output: filt };
+    }
+    return { sources: [source], output: source };
+  }
+
+  // Apply a pitch envelope to a frequency AudioParam; mult scales (octave/detune/FM ratio).
+  _applyPitchEnv(param, baseFreq, pitchEnv, totalDuration, when, mult) {
+    const pts = pitchEnv;
+    if (pts && pts.length > 0) {
+      const f0 = baseFreq * Math.pow(2, pts[0].semitones / 12) * mult;
+      param.setValueAtTime(Math.max(1, f0), when);
+      for (let i = 1; i < pts.length; i++) {
+        const absT = when + pts[i].t * totalDuration;
+        const f = baseFreq * Math.pow(2, pts[i].semitones / 12) * mult;
+        param.linearRampToValueAtTime(Math.max(1, f), Math.max(when + 0.001, absT));
+      }
+    } else {
+      param.setValueAtTime(baseFreq * mult, when);
+    }
+  }
+
+  // Band-limited pulse wave at an arbitrary duty cycle.
+  _makePulseWave(ctx, duty) {
     const N = 64;
     const real = new Float32Array(N);
     const imag = new Float32Array(N);
@@ -1037,7 +1506,127 @@ class SFXSynthesizer {
     return ctx.createPeriodicWave(real, imag, { disableNormalization: false });
   }
 
+  // PeriodicWave built from a time-domain wavetable (array of -1..1 steps),
+  // e.g. the Game Boy 4-bit / C64-style custom waves. Cached by table identity.
+  _waveFromTable(ctx, table) {
+    if (!this._waveCache) this._waveCache = new Map();
+    const key = table.join(',');
+    if (this._waveCache.has(key)) return this._waveCache.get(key);
+    const N = table.length;
+    const real = new Float32Array(N);
+    const imag = new Float32Array(N);
+    for (let k = 0; k < N; k++) {
+      let re = 0, im = 0;
+      for (let n = 0; n < N; n++) {
+        const ang = -2 * Math.PI * k * n / N;
+        re += table[n] * Math.cos(ang);
+        im += table[n] * Math.sin(ang);
+      }
+      real[k] = re / N; imag[k] = im / N;
+    }
+    const wave = ctx.createPeriodicWave(real, imag, { disableNormalization: false });
+    this._waveCache.set(key, wave);
+    return wave;
+  }
+
+  // Amplitude quantization curve for N-bit crush (lo-fi console character).
+  _crushCurve(bits) {
+    const levels = Math.pow(2, bits);
+    const n = 1024;
+    const curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * 2 - 1;
+      curve[i] = Math.round(x * levels / 2) / (levels / 2);
+    }
+    return curve;
+  }
+
+  // Insert the shared lowpass + bit-crush chain after a voice's output node.
+  _applyFilterCrush(inst, node, ctx) {
+    let tail = node;
+    const fHz = inst.filterFreq || 0;
+    if (fHz > 0 && fHz < 20000) {
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = fHz;
+      lp.Q.value = inst.filterQ != null ? inst.filterQ : 0.7;
+      tail.connect(lp);
+      tail = lp;
+    }
+    const bits = inst.crushBits || 0;
+    if (bits > 0 && bits < 16) {
+      const shaper = ctx.createWaveShaper();
+      shaper.curve = this._crushCurve(bits);
+      tail.connect(shaper);
+      tail = shaper;
+    }
+    return tail;
+  }
+
+  // ── Live MIDI voices ──────────────────────────────────────────
+  // noteOn plays the full composite instrument (all playable layers, stacked)
+  // at a pitch, sustained until noteOff. Polyphonic.
+  noteOn(midi, velocity) {
+    this.ensureContext();
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    if (!this.liveVoices) this.liveVoices = new Map();
+    this.noteOff(midi); // retrigger if already held
+
+    const sfx = normalizeSfx(appState.sfx);
+    const ctx = this.ctx;
+    const when = ctx.currentTime + 0.004;
+    const freq = midiToFreq(midi);
+    const voices = [];
+
+    for (const layer of playableLayers(sfx)) {
+      const inst = layer.instrument;
+      const pitchMult = Math.pow(2, layer.octave || 0) * Math.pow(2, (layer.detune || 0) / 1200);
+      const peak = Math.max(0.0008, (inst.masterGain != null ? inst.masterGain : 0.8) * (velocity / 127));
+
+      const gainNode = ctx.createGain();
+      gainNode.gain.setValueAtTime(0.0001, when);
+      gainNode.gain.exponentialRampToValueAtTime(peak, when + 0.01); // quick attack
+
+      // Noise voices need a looped finite buffer (oscillators can run indefinitely).
+      const isNoise = (inst.type || 'square') === 'noise';
+      const liveNote = { frequency: freq, volume: 1, duration: isNoise ? 2.0 : 999, time: 0 };
+      const vctx = { pitchEnv: layer.pitchEnvelope, totalDuration: sfx.totalDuration, pitchMult };
+      const { sources, output } = this._buildVoice(inst, liveNote, vctx, when, liveNote.duration, ctx);
+      if (isNoise && sources[0]) sources[0].loop = true;
+
+      const tail = this._applyFilterCrush(inst, output, ctx);
+      tail.connect(gainNode);
+      gainNode.connect(this.masterGain);
+      for (const s of sources) s.start(when);
+      voices.push({ sources, gain: gainNode });
+    }
+
+    this.liveVoices.set(midi, voices);
+  }
+
+  noteOff(midi) {
+    if (!this.liveVoices) return;
+    const voices = this.liveVoices.get(midi);
+    if (!voices) return;
+    this.liveVoices.delete(midi);
+    const t = this.ctx.currentTime;
+    for (const v of voices) {
+      try {
+        v.gain.gain.cancelScheduledValues(t);
+        v.gain.gain.setValueAtTime(Math.max(0.0001, v.gain.gain.value), t);
+        v.gain.gain.linearRampToValueAtTime(0.0001, t + 0.08); // release
+      } catch (e) {}
+      for (const s of v.sources) { try { s.stop(t + 0.1); } catch (e) {} }
+    }
+  }
+
+  allNotesOff() {
+    if (!this.liveVoices) return;
+    for (const midi of Array.from(this.liveVoices.keys())) this.noteOff(midi);
+  }
+
   async renderOffline(sfx) {
+    normalizeSfx(sfx);
     const sampleRate = 44100;
 
     // Trim leading silence: shift all notes so the earliest starts at t=0
@@ -1087,7 +1676,7 @@ class EnvelopeEditor {
     this._bind();
   }
 
-  get points() { return appState.sfx[this.key]; }
+  get points() { return getActiveLayer()[this.key]; }
   get isVol()  { return this.key === 'volumeEnvelope'; }
 
   _yRange() { return this.isVol ? { min: 0, max: 1 } : { min: -24, max: 24 }; }
@@ -1313,6 +1902,16 @@ class PianoRoll {
     this._drawNotes(c);
     this._drawPlayhead(c, H);
     this._drawMarquee(c);
+
+    // Empty-state hint
+    if (!appState.sfx.notes.length) {
+      c.save();
+      c.fillStyle = '#555';
+      c.font = '13px monospace';
+      c.textAlign = 'center';
+      c.fillText('drag here to add a note  ·  or play 🎹 KEYS / MIDI', (W + this.LABEL_W) / 2, H / 2);
+      c.restore();
+    }
   }
 
   _drawNoteGrid(c, W, H) {
@@ -1410,8 +2009,8 @@ class PianoRoll {
 
   _drawNotes(c) {
     const rowH = appState.zoom.yPixPerRow;
-    const inst = appState.sfx.instrument;
-    const isSquare = inst.type === 'square';
+    const inst = getActiveLayer().instrument;
+    const isSquare = inst.type !== 'noise'; // pitched voices blue, noise orange
 
     for (const note of appState.sfx.notes) {
       const x = this.timeToX(note.time);
@@ -1742,6 +2341,7 @@ class PianoRoll {
 // Mutates and returns sfx. Without levers, everything is unlocked with the
 // default ±12 st sweep range.
 function applySubtleVariation(sfx, factor = 0.15, levers = null) {
+  normalizeSfx(sfx);
   const lev = levers || {
     freqRange:  { locked: false },
     decaySpeed: { locked: false },
@@ -1761,18 +2361,18 @@ function applySubtleVariation(sfx, factor = 0.15, levers = null) {
     note.volume = Math.max(0.1, Math.min(1, note.volume + (Math.random()-0.5) * factor * 0.5));
   }
 
-  // Nudge volume envelope (skip if decaySpeed locked)
-  if (!lev.decaySpeed.locked) {
-    for (const pt of sfx.volumeEnvelope) {
-      pt.v = Math.max(0, Math.min(1, pt.v + (Math.random()-0.5) * factor));
+  // Nudge each layer's envelopes (variants differ across the whole stack)
+  for (const layer of sfx.layers) {
+    if (!lev.decaySpeed.locked) {
+      for (const pt of layer.volumeEnvelope) {
+        pt.v = Math.max(0, Math.min(1, pt.v + (Math.random()-0.5) * factor));
+      }
     }
-  }
-
-  // Nudge pitch envelope (skip if pitchSweep locked)
-  if (!lev.pitchSweep.locked) {
-    for (const pt of sfx.pitchEnvelope) {
-      const sweepRange = lev.pitchSweep.max - lev.pitchSweep.min;
-      pt.semitones = Math.max(-36, Math.min(36, pt.semitones + (Math.random()-0.5) * factor * sweepRange));
+    if (!lev.pitchSweep.locked) {
+      for (const pt of layer.pitchEnvelope) {
+        const sweepRange = lev.pitchSweep.max - lev.pitchSweep.min;
+        pt.semitones = Math.max(-36, Math.min(36, pt.semitones + (Math.random()-0.5) * factor * sweepRange));
+      }
     }
   }
 
@@ -1834,10 +2434,13 @@ class Randomizer {
       }
     }
 
+    // Envelopes apply to the active layer being edited
+    const layer = getActiveLayer();
+
     // Volume envelope — shaped by decaySpeed lever (skip if locked)
     if (!lev.decaySpeed.locked) {
       const decay = this._rand(lev.decaySpeed.min, lev.decaySpeed.max);
-      sfx.volumeEnvelope = [
+      layer.volumeEnvelope = [
         { t: 0,   v: 1.0 },
         { t: Math.min(0.2,  decay / sfx.totalDuration),     v: 0.8 },
         { t: Math.min(0.99, decay * 2 / sfx.totalDuration), v: 0.2 },
@@ -1845,12 +2448,12 @@ class Randomizer {
       ];
     }
 
-    // Pitch envelope — only for square; skip if locked
-    if (sfx.instrument.type === 'square' && !lev.pitchSweep.locked) {
+    // Pitch envelope — only for pitched voices; skip if locked
+    if (layer.instrument.type !== 'noise' && !lev.pitchSweep.locked) {
       const sweepLo = lev.pitchSweep.min, sweepHi = lev.pitchSweep.max;
       const sweepStart = this._rand(Math.max(-1, sweepLo), sweepHi);
       const sweepEnd   = this._rand(sweepLo, Math.min(1, sweepHi));
-      sfx.pitchEnvelope = [
+      layer.pitchEnvelope = [
         { t: 0,   semitones: sweepStart },
         { t: 0.3, semitones: sweepStart * 0.3 },
         { t: 1.0, semitones: sweepEnd }
@@ -1873,12 +2476,7 @@ class Randomizer {
   _logRandFreq(min, max) { return min * Math.pow(max / min, Math.random()); }
 
   _syncInstrumentUI() {
-    const type = appState.sfx.instrument.type;
-    document.getElementById('type-square').classList.toggle('active', type === 'square');
-    document.getElementById('type-noise').classList.toggle('active', type === 'noise');
-    document.getElementById('sq-params').style.display = type === 'square' ? '' : 'none';
-    document.getElementById('noise-params').style.display = type === 'noise' ? '' : 'none';
-    document.getElementById('pitch-env-section').style.display = type === 'square' ? '' : 'none';
+    applyInstrumentTypeUI(getActiveLayer().instrument.type);
   }
 }
 
@@ -1907,8 +2505,10 @@ class Exporter {
       overlay.classList.remove('visible');
       btn.disabled = false;
 
+      let saved = true;
       if (window.electronAPI) {
-        await window.electronAPI.exportWAV(wav, name + '.wav');
+        const res = await window.electronAPI.exportWAV(wav, name + '.wav');
+        saved = !res || res.success !== false;
       } else {
         const blob = new Blob([wav], { type: 'audio/wav' });
         const url = URL.createObjectURL(blob);
@@ -1916,10 +2516,15 @@ class Exporter {
         a.href = url; a.download = name + '.wav'; a.click();
         setTimeout(() => URL.revokeObjectURL(url), 10000);
       }
+      if (saved) {
+        const clipped = this._lastPeak > 1.001;
+        showToast('Exported ' + name + '.wav' + (clipped ? ' · normalized (peak ' + this._lastPeak.toFixed(1) + '×)' : ''), clipped);
+      }
     } catch(e) {
       console.error('Export failed:', e);
       overlay.classList.remove('visible');
       btn.disabled = false;
+      showToast('Export failed: ' + (e && e.message || e), true);
     }
   }
 
@@ -1932,6 +2537,7 @@ class Exporter {
     let peak = 0;
     for (let i = 0; i < numSamples; i++) peak = Math.max(peak, Math.abs(data[i]));
     const gain = peak > 0.001 ? 0.95 / peak : 1;
+    this._lastPeak = peak; // surfaced by the export toast
 
     const bufSize = 44 + numSamples * 2;
     const ab = new ArrayBuffer(bufSize);
@@ -1978,10 +2584,289 @@ async function __cliRender(sfx) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// MIDI INPUT — Web MIDI keyboard support (Electron/Chromium).
+// Plays the current instrument live; optionally records into the piano roll.
+// ═══════════════════════════════════════════════════════════════
+
+class MidiInput {
+  constructor(synth) {
+    this.synth = synth;
+    this.access = null;
+    this.recordMode = false;
+    this.recT0 = null;                 // ctx time of the first note in a take
+    this.pendingNotes = new Map();     // midi -> { note, startCtx }
+    this._flashT = null;
+  }
+
+  async init() {
+    const statusEl = document.getElementById('midi-status');
+    if (!navigator.requestMIDIAccess) { statusEl.textContent = '♪ MIDI: unsupported'; return; }
+    try {
+      this.access = await navigator.requestMIDIAccess({ sysex: false });
+    } catch (e) {
+      statusEl.textContent = '♪ MIDI: blocked';
+      return;
+    }
+    this.access.onstatechange = () => this._refresh();
+    this._refresh();
+  }
+
+  _refresh() {
+    const statusEl = document.getElementById('midi-status');
+    const inputs = this.access ? Array.from(this.access.inputs.values()) : [];
+    for (const inp of inputs) inp.onmidimessage = e => this._onMessage(e);
+    if (inputs.length) {
+      statusEl.textContent = '♪ MIDI: ' + (inputs.length > 1 ? inputs.length + ' inputs' : (inputs[0].name || 'device'));
+      statusEl.style.color = '#6c6';
+    } else {
+      statusEl.textContent = '♪ MIDI: none';
+      statusEl.style.color = this.recordMode ? '#c66' : '#666';
+    }
+  }
+
+  _onMessage(e) {
+    const [status, d1, d2] = e.data;
+    const cmd = status & 0xf0;
+    if (cmd === 0x90 && d2 > 0) this.inputNoteOn(d1, d2);
+    else if (cmd === 0x80 || (cmd === 0x90 && d2 === 0)) this.inputNoteOff(d1);
+    else if (cmd === 0xB0 && (d1 === 123 || d1 === 120)) this.synth.allNotesOff();
+  }
+
+  // Public entry point used by BOTH hardware MIDI and the on-screen keyboard.
+  inputNoteOn(midi, vel) {
+    this.synth.noteOn(midi, vel);
+    this._flash();
+    if (this.recordMode) this._recordOn(midi, vel);
+  }
+
+  inputNoteOff(midi) {
+    this.synth.noteOff(midi);
+    if (this.recordMode) this._recordOff(midi);
+  }
+
+  setRecord(on) {
+    const was = this.recordMode;
+    this.recordMode = !!on;
+    const btn = document.getElementById('btn-midi-rec');
+    if (btn) btn.classList.toggle('active', this.recordMode);
+    const statusEl = document.getElementById('midi-status');
+    if (statusEl) statusEl.style.color = this.recordMode ? '#c66' : (this.access && Array.from(this.access.inputs).length ? '#6c6' : '#666');
+    if (this.recordMode) {
+      this.recT0 = null; this.pendingNotes.clear(); this.recCount = 0;
+      showToast('● Recording — play to capture');
+    } else if (was) {
+      showToast(this.recCount ? ('Captured ' + this.recCount + ' note' + (this.recCount === 1 ? '' : 's')) : 'Recording stopped');
+    }
+  }
+
+  _recordOn(midi, vel) {
+    const now = this.synth.ctx ? this.synth.ctx.currentTime : 0;
+    if (this.recT0 === null) { this.recT0 = now; pushUndo(); } // one undo per take
+    this.recCount = (this.recCount || 0) + 1;
+    const t = Math.max(0, now - this.recT0);
+    const note = { id: uid(), time: +t.toFixed(3), duration: 0.1, frequency: midiToFreq(midi), volume: +(vel / 127).toFixed(2), muted: false };
+    appState.sfx.notes.push(note);
+    this.pendingNotes.set(midi, { note, startCtx: now });
+    requestRedraw();
+  }
+
+  _recordOff(midi) {
+    const p = this.pendingNotes.get(midi);
+    if (!p) return;
+    this.pendingNotes.delete(midi);
+    const now = this.synth.ctx ? this.synth.ctx.currentTime : 0;
+    p.note.duration = Math.max(0.03, +(now - p.startCtx).toFixed(3));
+    const end = p.note.time + p.note.duration;
+    if (end > appState.sfx.totalDuration) {
+      appState.sfx.totalDuration = +Math.min(10, end + 0.05).toFixed(2);
+      const durEl = document.getElementById('total-duration');
+      if (durEl) durEl.value = appState.sfx.totalDuration.toFixed(2);
+    }
+    scrollToFitNotes();
+    requestRedraw();
+  }
+
+  _flash() {
+    const el = document.getElementById('midi-status');
+    if (!el) return;
+    el.style.color = '#9f9';
+    clearTimeout(this._flashT);
+    this._flashT = setTimeout(() => { el.style.color = this.recordMode ? '#c66' : '#6c6'; }, 120);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ON-SCREEN KEYBOARD — clickable + computer-key piano for live
+// instrument testing. Routes through MidiInput so audition + record
+// both work, exactly like a hardware MIDI keyboard.
+// ═══════════════════════════════════════════════════════════════
+
+// Tracker-style computer-key layout: Z–M = lower octave, Q–U = upper.
+const COMP_KEYMAP = { z:0, s:1, x:2, d:3, c:4, v:5, g:6, b:7, h:8, n:9, j:10, m:11,
+  q:12, '2':13, w:14, '3':15, e:16, r:17, '5':18, t:19, '6':20, y:21, '7':22, u:23, i:24 };
+
+class VirtualKeyboard {
+  constructor(midi) {
+    this.midi = midi;
+    this.octaves = 3;
+    this.playOctave = 4;          // C of this octave = computer-key base
+    this.baseOctave = 3;          // lowest octave drawn
+    this.WW = 28;                 // white-key width (matches CSS)
+    this.mouseDown = false;
+    this.mouseMidi = null;
+    this.held = new Set();        // sounding notes (any source via this kbd)
+    this.compHeld = new Set();    // computer keys currently down
+    this._bound = false;
+  }
+
+  get isOpen() { return document.getElementById('keyboard-panel').classList.contains('open'); }
+  toggle() { this.isOpen ? this.close() : this.open(); }
+
+  open() {
+    document.getElementById('keyboard-panel').classList.add('open');
+    document.getElementById('btn-keys').classList.add('active');
+    this.build();
+    this._bindGlobal();
+  }
+  close() {
+    document.getElementById('keyboard-panel').classList.remove('open');
+    document.getElementById('btn-keys').classList.remove('active');
+    this._allUp();
+  }
+
+  build() {
+    const wrap = document.getElementById('kbd-keys');
+    wrap.innerHTML = '';
+    const whiteSemis = [0, 2, 4, 5, 7, 9, 11];
+    const blackSemis = [1, 3, 6, 8, 10];
+    const afterWhite = { 1: 0, 3: 1, 6: 3, 8: 4, 10: 5 }; // white index a black key follows
+    const baseMidi = 12 * (this.baseOctave + 1);
+    const WW = this.WW;
+    const tagFor = (midi) => {
+      const off = midi - 12 * (this.playOctave + 1);
+      const inv = Object.entries(COMP_KEYMAP).find(([, v]) => v === off);
+      return inv ? inv[0].toUpperCase() : '';
+    };
+
+    let wi = 0;
+    for (let o = 0; o < this.octaves; o++) {
+      for (const s of whiteSemis) {
+        const midi = baseMidi + o * 12 + s;
+        const k = document.createElement('div');
+        k.className = 'wkey'; k.dataset.midi = midi;
+        k.style.left = (wi * WW) + 'px';
+        const tag = tagFor(midi);
+        const noteLabel = (midi % 12 === 0) ? ('C' + (Math.floor(midi / 12) - 1)) : '';
+        k.innerHTML = `<span class="kbd-tag" style="color:#999">${noteLabel}</span>` +
+                      (tag ? `<span class="kbd-tag" style="bottom:16px;color:#5a8">${tag}</span>` : '');
+        wrap.appendChild(k);
+        wi++;
+      }
+    }
+    wrap.style.width = (wi * WW) + 'px';
+
+    for (let o = 0; o < this.octaves; o++) {
+      for (const s of blackSemis) {
+        const midi = baseMidi + o * 12 + s;
+        const k = document.createElement('div');
+        k.className = 'bkey'; k.dataset.midi = midi;
+        const wIndexGlobal = o * 7 + afterWhite[s];
+        k.style.left = ((wIndexGlobal + 1) * WW - 9) + 'px';
+        const tag = tagFor(midi);
+        if (tag) k.innerHTML = `<span class="kbd-tag" style="bottom:6px;color:#5a8">${tag}</span>`;
+        wrap.appendChild(k);
+      }
+    }
+    this._bindMouse();
+    document.getElementById('kbd-oct-label').textContent = 'C' + this.playOctave;
+  }
+
+  _bindMouse() {
+    const wrap = document.getElementById('kbd-keys');
+    wrap.onmousedown = (e) => {
+      const k = e.target.closest('[data-midi]'); if (!k) return;
+      e.preventDefault();
+      this.mouseDown = true;
+      this._mouseTo(+k.dataset.midi);
+    };
+    wrap.onmouseover = (e) => {
+      if (!this.mouseDown) return;
+      const k = e.target.closest('[data-midi]'); if (!k) return;
+      this._mouseTo(+k.dataset.midi);
+    };
+  }
+
+  _mouseTo(midi) {
+    if (this.mouseMidi === midi) return;
+    if (this.mouseMidi != null) this._up(this.mouseMidi);
+    this.mouseMidi = midi;
+    this._down(midi);
+  }
+
+  _bindGlobal() {
+    if (this._bound) return;
+    this._bound = true;
+    window.addEventListener('mouseup', () => {
+      if (this.mouseMidi != null) { this._up(this.mouseMidi); this.mouseMidi = null; }
+      this.mouseDown = false;
+    });
+    window.addEventListener('keydown', (e) => {
+      if (!this.isOpen || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+      const tag = (e.target.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+      const key = e.key.toLowerCase();
+      if (key === 'arrowleft')  { this.shiftOctave(-1); e.preventDefault(); return; }
+      if (key === 'arrowright') { this.shiftOctave(1);  e.preventDefault(); return; }
+      const off = COMP_KEYMAP[key];
+      if (off == null || this.compHeld.has(key)) return;
+      this.compHeld.add(key);
+      this._down(12 * (this.playOctave + 1) + off);
+      e.preventDefault();
+    });
+    window.addEventListener('keyup', (e) => {
+      const key = e.key.toLowerCase();
+      if (!this.compHeld.has(key)) return;
+      this.compHeld.delete(key);
+      const off = COMP_KEYMAP[key];
+      if (off != null) this._up(12 * (this.playOctave + 1) + off);
+    });
+  }
+
+  shiftOctave(d) {
+    this.playOctave = Math.max(0, Math.min(8, this.playOctave + d));
+    this.baseOctave = Math.max(0, this.playOctave - 1);
+    this._allUp();
+    this.build();
+  }
+
+  _down(midi) {
+    if (this.held.has(midi)) return;
+    this.held.add(midi);
+    this.midi.inputNoteOn(midi, 100);
+    this._setActive(midi, true);
+  }
+  _up(midi) {
+    if (!this.held.has(midi)) return;
+    this.held.delete(midi);
+    this.midi.inputNoteOff(midi);
+    this._setActive(midi, false);
+  }
+  _allUp() {
+    for (const m of Array.from(this.held)) this._up(m);
+    this.compHeld.clear();
+    this.mouseMidi = null; this.mouseDown = false;
+  }
+  _setActive(midi, on) {
+    const el = document.querySelector('#kbd-keys [data-midi="' + midi + '"]');
+    if (el) el.classList.toggle('active', on);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // INIT & WIRING
 // ═══════════════════════════════════════════════════════════════
 
-let pianoRoll, volEnvEditor, pitchEnvEditor, synth, exporter, randomizer;
+let pianoRoll, volEnvEditor, pitchEnvEditor, synth, exporter, randomizer, midiInput, virtualKeyboard;
 
 function initDualRange(idPrefix, lbl, lblEl, min, max, step, fmt, leverKey) {
   const minEl = document.getElementById(idPrefix + '-min');
@@ -2147,7 +3032,32 @@ function bindNoteInspector() {
     const tag = document.activeElement.tagName;
     if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
 
+    // When the on-screen keyboard is open, let it own its piano keys (Z–M/Q–U)
+    // so e.g. 'm' plays note B instead of triggering the mute shortcut.
+    if (virtualKeyboard && virtualKeyboard.isOpen && COMP_KEYMAP[e.key.toLowerCase()] != null) return;
+
+    // Space = play / stop toggle
+    if (e.code === 'Space') {
+      e.preventDefault();
+      if (appState.isPlaying) { synth.stop(); synth.allNotesOff(); }
+      else synth.play(appState.sfx);
+      return;
+    }
+
+    // [ / ] = switch layer · Alt+[ / Alt+] = reorder active layer
+    if (e.key === '[' || e.key === ']') {
+      const d = e.key === ']' ? 1 : -1;
+      if (e.altKey) { moveLayer(d); }
+      else {
+        appState.activeLayer = Math.max(0, Math.min(appState.sfx.layers.length - 1, appState.activeLayer + d));
+        syncAllUI();
+        requestRedraw();
+      }
+      return;
+    }
+
     if (e.key === 'Escape') {
+      if (appState.isPlaying) { synth.stop(); synth.allNotesOff(); }
       clearSelection();
       requestRedraw();
       return;
@@ -2199,35 +3109,269 @@ function bindNoteInspector() {
 // SYNC UI ← sfx STATE
 // ═══════════════════════════════════════════════════════════════
 
+// Waveform types + their contextual param groups (single source of truth)
+const INSTRUMENT_TYPES = ['square', 'triangle', 'sawtooth', 'sine', 'wave', 'fm', 'noise'];
+const NOISE_TYPES = ['white', 'pink', 'metallic', 'lfsr'];
+
+function applyInstrumentTypeUI(type) {
+  for (const t of INSTRUMENT_TYPES) {
+    const btn = document.getElementById('type-' + t);
+    if (btn) btn.classList.toggle('active', t === type);
+  }
+  document.getElementById('sq-params').style.display    = type === 'square' ? '' : 'none';
+  document.getElementById('wave-params').style.display  = type === 'wave'   ? '' : 'none';
+  document.getElementById('fm-params').style.display    = type === 'fm'     ? '' : 'none';
+  document.getElementById('noise-params').style.display = type === 'noise'  ? '' : 'none';
+  document.getElementById('pitch-env-section').style.display = type === 'noise' ? 'none' : '';
+}
+
+// ── Chip sound-source selection (SAC "system → sound source" model) ──
+// Voice-defining instrument fields a source owns. applySource resets ALL of
+// these, then sets the source's — so switching sources is deterministic.
+// Everything else (masterGain, chip, source, envelopes, echo, notes) is preserved.
+const VOICE_FIELDS = ['type', 'duty', 'wavetable', 'fm', 'noiseType', 'noiseFilterFreq', 'filterFreq', 'filterQ', 'crushBits'];
+
+function applySource(name, opts = {}) {
+  const inst = getActiveLayer().instrument;
+  const list = CHIP_SOURCES[inst.chip] || [];
+  const src = list.find(s => s.name === name);
+  if (!src) return;
+  if (opts.undo !== false) pushUndo();
+  for (const f of VOICE_FIELDS) delete inst[f];
+  Object.assign(inst, JSON.parse(JSON.stringify(src.patch))); // deep copy: never mutate the catalog
+  inst.source = src.name;
+  syncAllUI();
+  requestRedraw();
+}
+
+function applyChip(chip, opts = {}) {
+  const inst = getActiveLayer().instrument;
+  if (opts.undo !== false) pushUndo();
+  if (!chip) { // "— none —": freeform mode
+    inst.chip = undefined;
+    inst.source = undefined;
+    syncAllUI();
+    requestRedraw();
+    return;
+  }
+  inst.chip = chip;
+  const list = CHIP_SOURCES[chip] || [];
+  if (list.length) applySource(list[0].name, { undo: false }); // default source → audible change
+  else { inst.source = undefined; syncAllUI(); requestRedraw(); }
+}
+
+function cycleSource(dir) {
+  const inst = getActiveLayer().instrument;
+  const list = CHIP_SOURCES[inst.chip] || [];
+  if (!list.length) return;
+  let i = list.findIndex(s => s.name === inst.source);
+  if (i < 0) i = 0; // currently custom → start from the first source
+  i = (i + dir + list.length) % list.length;
+  applySource(list[i].name);
+}
+
+// Best-effort match for patches lacking a `source` field (legacy templates).
+// Compares only the discriminating voice fields the source pins (not filter/crush,
+// so user fine-tuning of those doesn't force "(custom)").
+function detectSource(inst) {
+  const list = CHIP_SOURCES[inst.chip] || [];
+  for (const s of list) {
+    const p = s.patch;
+    if ((p.type || '') !== (inst.type || '')) continue;
+    let ok = true;
+    for (const k of ['duty', 'wavetable', 'noiseType']) {
+      if (p[k] != null && p[k] !== inst[k]) { ok = false; break; }
+    }
+    if (ok && p.fm && JSON.stringify(p.fm) !== JSON.stringify(inst.fm)) ok = false;
+    if (ok) return s.name;
+  }
+  return null; // → "(custom)"
+}
+
+// A discrete voice control was hand-edited: re-resolve which source this is.
+// If the edited voice still matches a catalog source it stays locked to it;
+// otherwise it becomes "(custom)".
+function markSourceCustom() {
+  const inst = getActiveLayer().instrument;
+  inst.source = detectSource(inst) || undefined;
+  const list = CHIP_SOURCES[inst.chip] || [];
+  if (inst.chip && list.length) {
+    const el = document.getElementById('source-name');
+    if (el) el.textContent = inst.source || '(custom)';
+  }
+}
+
+// ── Layer strip ───────────────────────────────────────────────
+const LAYER_LETTERS = ['A', 'B', 'C', 'D'];
+
+// Adding a layer copies the active one (deep) so you can quickly stack a
+// detuned/octave variant — the core composite-instrument move. Alt-click the
+// '+' for a blank square layer instead.
+function addLayer(blank) {
+  const sfx = appState.sfx;
+  if (sfx.layers.length >= 4) { showToast('Max 4 layers', true); return; }
+  pushUndo();
+  const nl = blank ? makeLayer() : JSON.parse(JSON.stringify(getActiveLayer()));
+  nl.solo = false; // don't inherit solo (would mute the layer you copied from)
+  sfx.layers.push(nl);
+  appState.activeLayer = sfx.layers.length - 1;
+  syncAllUI();
+  requestRedraw();
+}
+
+// Short label for a layer's voice (chip + source/type) used on the tabs.
+function layerLabel(L) {
+  const inst = L.instrument || {};
+  return inst.source || (inst.chip ? inst.chip : (inst.type || 'square'));
+}
+
+// Reorder the active layer left/right (A↔B↔C↔D). Pure array swap; order is
+// for legibility (the mix is summed), so this never changes the sound.
+function moveLayer(dir) {
+  const sfx = appState.sfx;
+  const i = appState.activeLayer;
+  const j = i + dir;
+  if (j < 0 || j >= sfx.layers.length) return;
+  pushUndo();
+  const tmp = sfx.layers[i]; sfx.layers[i] = sfx.layers[j]; sfx.layers[j] = tmp;
+  appState.activeLayer = j;
+  syncAllUI();
+  requestRedraw();
+}
+
+// Copy the active layer's instrument (chip/source/waveform/filter/crush) onto
+// every other layer — fast way to build a same-timbre, different-octave stack.
+// Per-layer envelopes/octave/detune/mute/solo are preserved.
+function copyVoiceToAll() {
+  const sfx = appState.sfx;
+  if (sfx.layers.length < 2) { showToast('Only one layer', true); return; }
+  pushUndo();
+  const src = JSON.stringify(getActiveLayer().instrument);
+  sfx.layers.forEach((L, i) => { if (i !== appState.activeLayer) L.instrument = JSON.parse(src); });
+  syncAllUI();
+  requestRedraw();
+  showToast('Copied voice to all layers');
+}
+
+function removeLayer() {
+  const sfx = appState.sfx;
+  if (sfx.layers.length <= 1) return;
+  pushUndo();
+  sfx.layers.splice(appState.activeLayer, 1);
+  if (appState.activeLayer >= sfx.layers.length) appState.activeLayer = sfx.layers.length - 1;
+  syncAllUI();
+  requestRedraw();
+}
+
+function syncLayerUI() {
+  const sfx = appState.sfx;
+  getActiveLayer(); // clamps appState.activeLayer into range (e.g. after undo/remove)
+  const tabs = document.getElementById('layer-tabs');
+  tabs.innerHTML = '';
+  sfx.layers.forEach((L, i) => {
+    const b = document.createElement('button');
+    b.className = 'layer-tab';
+    const xpose = (L.octave ? (L.octave > 0 ? '+' : '') + L.octave + 'o' : '') +
+                  (L.detune ? ' ' + (L.detune > 0 ? '+' : '') + L.detune + '¢' : '');
+    b.innerHTML = '<b>' + LAYER_LETTERS[i] + (L.solo ? ' •' : '') + '</b> <span class="lt-src">' + layerLabel(L) +
+                  (xpose ? '<span style="color:#c95">' + xpose + '</span>' : '') + '</span>';
+    const state = L.solo ? ' (solo)' : (L.mute ? ' (muted)' : '');
+    b.title = (L.instrument.chip ? L.instrument.chip + ' · ' : '') + (L.instrument.source || L.instrument.type || '') + state;
+    b.classList.toggle('active', i === appState.activeLayer);
+    if (L.mute && !L.solo) b.classList.add('muted');
+    b.addEventListener('click', () => { appState.activeLayer = i; syncAllUI(); requestRedraw(); });
+    tabs.appendChild(b);
+  });
+  if (sfx.layers.length < 4) {
+    const add = document.createElement('button');
+    add.className = 'layer-tab layer-add';
+    add.textContent = '+';
+    add.title = 'Add a layer (copies the current one · Alt-click = blank square)';
+    add.addEventListener('click', (e) => addLayer(e.altKey));
+    tabs.appendChild(add);
+  }
+  const L = getActiveLayer();
+  document.getElementById('layer-octave').value = L.octave || 0;
+  document.getElementById('layer-octave-val').textContent = (L.octave > 0 ? '+' : '') + (L.octave || 0);
+  document.getElementById('layer-detune').value = L.detune || 0;
+  document.getElementById('layer-detune-val').textContent = (L.detune > 0 ? '+' : '') + (L.detune || 0) + '¢';
+  document.getElementById('layer-mute').classList.toggle('active', !!L.mute);
+  document.getElementById('layer-solo').classList.toggle('active', !!L.solo);
+  const multi = sfx.layers.length > 1;
+  document.getElementById('layer-remove').style.display = multi ? '' : 'none';
+  document.getElementById('layer-copyall').style.display = multi ? '' : 'none';
+
+  // Warn when the whole stack is inaudible
+  const silent = playableLayers(sfx).length === 0;
+  const title = document.getElementById('layers-title');
+  title.classList.toggle('all-muted', silent);
+  title.textContent = silent ? 'Layers — all muted' : 'Layers';
+}
+
 function syncAllUI() {
   const sfx  = appState.sfx;
-  const inst = sfx.instrument;
+  normalizeSfx(sfx);
+  syncLayerUI();
+  const inst = getActiveLayer().instrument;
 
   document.getElementById('sfx-name').value       = sfx.name || 'untitled';
   document.getElementById('bpm').value             = sfx.bpm;
   document.getElementById('snap-mode').value       = sfx.snapMode;
   document.getElementById('total-duration').value  = sfx.totalDuration.toFixed(2);
 
-  // Instrument type
-  const isSquare = inst.type === 'square';
-  document.getElementById('type-square').classList.toggle('active', isSquare);
-  document.getElementById('type-noise').classList.toggle('active', !isSquare);
-  document.getElementById('sq-params').style.display        = isSquare ? '' : 'none';
-  document.getElementById('noise-params').style.display     = isSquare ? 'none' : '';
-  document.getElementById('pitch-env-section').style.display = isSquare ? '' : 'none';
+  // Instrument type + contextual param groups
+  applyInstrumentTypeUI(inst.type);
+  document.getElementById('chip-select').value = inst.chip || '';
+
+  // Sound-source cycler (shown only when a chip with sources is selected)
+  const srcRow = document.getElementById('source-row');
+  const srcList = CHIP_SOURCES[inst.chip] || [];
+  if (inst.chip && srcList.length) {
+    srcRow.style.display = '';
+    const matched = inst.source && srcList.some(s => s.name === inst.source)
+      ? inst.source
+      : detectSource(inst);
+    document.getElementById('source-name').textContent = matched || '(custom)';
+  } else {
+    srcRow.style.display = 'none';
+  }
 
   // Noise subtype
-  const isPink = inst.noiseType === 'pink';
-  document.getElementById('noise-white').classList.toggle('active', !isPink);
-  document.getElementById('noise-pink').classList.toggle('active', isPink);
+  const noiseType = inst.noiseType || 'white';
+  for (const nt of NOISE_TYPES) {
+    const btn = document.getElementById('noise-' + nt);
+    if (btn) btn.classList.toggle('active', nt === noiseType);
+  }
+
+  // Wavetable
+  document.getElementById('wave-table').value =
+    typeof inst.wavetable === 'string' ? inst.wavetable : 'organ';
+
+  // FM
+  const fm = inst.fm || {};
+  document.getElementById('fm-ratio').value = fm.ratio != null ? fm.ratio : 2;
+  document.getElementById('fm-ratio-val').textContent = (fm.ratio != null ? fm.ratio : 2).toFixed(2);
+  document.getElementById('fm-index').value = fm.index != null ? fm.index : 4;
+  document.getElementById('fm-index-val').textContent = (fm.index != null ? fm.index : 4).toFixed(1);
+  document.getElementById('fm-carrier').value = fm.carrier || 'sine';
+  document.getElementById('fm-modwave').value = fm.modWave || 'sine';
 
   // Sliders
-  document.getElementById('duty').value         = inst.duty;
-  document.getElementById('duty-val').textContent = inst.duty.toFixed(2);
-  document.getElementById('noise-filter').value        = inst.noiseFilterFreq;
-  document.getElementById('noise-filter-val').textContent = Math.round(inst.noiseFilterFreq);
-  document.getElementById('master-gain').value        = inst.masterGain;
-  document.getElementById('master-gain-val').textContent = inst.masterGain.toFixed(2);
+  const duty = inst.duty != null ? inst.duty : 0.5;
+  document.getElementById('duty').value         = duty;
+  document.getElementById('duty-val').textContent = duty.toFixed(2);
+  const nFilt = inst.noiseFilterFreq != null ? inst.noiseFilterFreq : 2000;
+  document.getElementById('noise-filter').value        = nFilt;
+  document.getElementById('noise-filter-val').textContent = Math.round(nFilt);
+  const fFreq = inst.filterFreq || 0;
+  document.getElementById('filter-freq').value = fFreq;
+  document.getElementById('filter-freq-val').textContent = fFreq === 0 ? 'off' : Math.round(fFreq) + ' Hz';
+  const crush = inst.crushBits || 0;
+  document.getElementById('crush-bits').value = crush;
+  document.getElementById('crush-bits-val').textContent = crush === 0 ? 'off' : crush + '-bit';
+  const mg = inst.masterGain != null ? inst.masterGain : 0.8;
+  document.getElementById('master-gain').value        = mg;
+  document.getElementById('master-gain-val').textContent = mg.toFixed(2);
 
   // Echo
   const echoBtn = document.getElementById('echo-toggle');
@@ -2251,6 +3395,18 @@ document.addEventListener('DOMContentLoaded', () => {
   volEnvEditor   = new EnvelopeEditor(document.getElementById('vol-env-canvas'),   'volumeEnvelope');
   pitchEnvEditor = new EnvelopeEditor(document.getElementById('pitch-env-canvas'), 'pitchEnvelope');
 
+  // MIDI keyboard input (audition + optional record into the piano roll)
+  midiInput = new MidiInput(synth);
+  midiInput.init();
+  document.getElementById('btn-midi-rec').addEventListener('click', () => midiInput.setRecord(!midiInput.recordMode));
+
+  // On-screen keyboard popup (live instrument testing)
+  virtualKeyboard = new VirtualKeyboard(midiInput);
+  document.getElementById('btn-keys').addEventListener('click', () => virtualKeyboard.toggle());
+  document.getElementById('kbd-close').addEventListener('click', () => virtualKeyboard.close());
+  document.getElementById('kbd-oct-down').addEventListener('click', () => virtualKeyboard.shiftOctave(-1));
+  document.getElementById('kbd-oct-up').addEventListener('click', () => virtualKeyboard.shiftOctave(1));
+
   // Load template index from templates/
   refreshTemplateIndex();
 
@@ -2262,13 +3418,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-play').addEventListener('click', () => {
     synth.play(appState.sfx);
   });
-  document.getElementById('btn-stop').addEventListener('click', () => synth.stop());
+  document.getElementById('btn-stop').addEventListener('click', () => { synth.stop(); synth.allNotesOff(); });
   document.getElementById('btn-undo').addEventListener('click', () => undo());
   document.getElementById('btn-export').addEventListener('click', () => exporter.exportWAV());
 
-  // Undo via Ctrl+Z (handled before the focus-guarded keydown below)
+  // Undo / Redo (handled before the focus-guarded keydown below)
   document.addEventListener('keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
+    if (!(e.ctrlKey || e.metaKey)) return;
+    if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+    else if ((e.key === 'z' && e.shiftKey) || e.key === 'y') { e.preventDefault(); redo(); }
   }, true);
 
   // Snapshot before any slider drag (fires once per mousedown on a range input)
@@ -2306,9 +3464,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Built-in: auto-load immediately
     if (!PRESETS[val]) return;
     pushUndo();
-    const preset = JSON.parse(JSON.stringify(PRESETS[val]));
+    const preset = normalizeSfx(JSON.parse(JSON.stringify(PRESETS[val])));
     for (const note of preset.notes) note.id = uid();
     appState.sfx = preset;
+    appState.activeLayer = 0;
     clearSelection();
     syncAllUI();
     scrollToFitNotes();
@@ -2327,9 +3486,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const preset = await window.electronAPI.loadTemplate(rel);
     if (!preset) return;
     pushUndo();
+    normalizeSfx(preset);
     for (const note of preset.notes) note.id = uid();
     preset.name = rel; // round-trip: SAVE writes back to the same template path
     appState.sfx = preset;
+    appState.activeLayer = 0;
     clearSelection();
     syncAllUI();
     scrollToFitNotes();
@@ -2339,15 +3500,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Save current SFX as a template — NAME may include folders (enemy/magic/zap)
   document.getElementById('btn-save-preset').addEventListener('click', async () => {
-    if (!window.electronAPI) return;
+    if (!window.electronAPI) { showToast('Save needs the desktop app', true); return; }
     const rel = (appState.sfx.name || 'untitled').trim().replace(/^\/+|\/+$/g, '');
-    if (!rel) return;
-    await window.electronAPI.saveTemplate(rel, JSON.parse(JSON.stringify(appState.sfx)));
+    if (!rel) { showToast('Name the sound first', true); return; }
+    try {
+      await window.electronAPI.saveTemplate(rel, JSON.parse(JSON.stringify(appState.sfx)));
+    } catch (err) {
+      showToast('Save failed: ' + (err && err.message || err), true);
+      return;
+    }
     await refreshTemplateIndex();
     document.getElementById('preset-select').value = '__tpl__' + rel;
     document.getElementById('btn-del-preset').disabled = false;
     document.getElementById('btn-load-preset').style.display = '';
     document.getElementById('btn-load-preset').disabled = false;
+    showToast('Saved ' + rel);
   });
 
   // Delete the currently selected template
@@ -2376,40 +3543,114 @@ document.addEventListener('DOMContentLoaded', () => {
     if (v > 0) { appState.sfx.totalDuration = v; requestRedraw(); }
   });
 
-  // Instrument type
-  document.getElementById('type-square').addEventListener('click', () => {
-    pushUndo();
-    appState.sfx.instrument.type = 'square';
-    document.getElementById('type-square').classList.add('active');
-    document.getElementById('type-noise').classList.remove('active');
-    document.getElementById('sq-params').style.display = '';
-    document.getElementById('noise-params').style.display = 'none';
-    document.getElementById('pitch-env-section').style.display = '';
-    requestRedraw();
+  // Populate wavetable dropdown from WAVE_TABLES
+  const waveSel = document.getElementById('wave-table');
+  for (const name of WAVE_TABLE_NAMES) {
+    const opt = document.createElement('option');
+    opt.value = name; opt.textContent = name;
+    waveSel.appendChild(opt);
+  }
+
+  // Instrument waveform type — one handler per button
+  for (const t of INSTRUMENT_TYPES) {
+    const btn = document.getElementById('type-' + t);
+    if (!btn) continue;
+    btn.addEventListener('click', () => {
+      pushUndo();
+      const inst = getActiveLayer().instrument;
+      inst.type = t;
+      // Lazily seed type-specific defaults so the voice is audible immediately
+      if (t === 'wave' && typeof inst.wavetable !== 'string') inst.wavetable = 'organ';
+      if (t === 'fm' && !inst.fm) inst.fm = { ratio: 2, index: 4, carrier: 'sine', modWave: 'sine' };
+      if (t === 'noise' && !inst.noiseType) inst.noiseType = 'white';
+      inst.source = detectSource(inst) || undefined; // re-resolve named source vs custom
+      syncAllUI();
+      requestRedraw();
+    });
+  }
+
+  // Chip (console) — selects a system and loads its default sound source
+  document.getElementById('chip-select').addEventListener('change', e => {
+    applyChip(e.target.value || '');
   });
-  document.getElementById('type-noise').addEventListener('click', () => {
+  document.getElementById('source-prev').addEventListener('click', () => cycleSource(-1));
+  document.getElementById('source-next').addEventListener('click', () => cycleSource(1));
+
+  // Layer controls
+  document.getElementById('layer-remove').addEventListener('click', removeLayer);
+  document.getElementById('layer-copyall').addEventListener('click', copyVoiceToAll);
+  document.getElementById('layer-mute').addEventListener('click', () => {
+    pushUndo(); const L = getActiveLayer(); L.mute = !L.mute; syncLayerUI();
+  });
+  document.getElementById('layer-solo').addEventListener('click', (e) => {
     pushUndo();
-    appState.sfx.instrument.type = 'noise';
-    document.getElementById('type-noise').classList.add('active');
-    document.getElementById('type-square').classList.remove('active');
-    document.getElementById('sq-params').style.display = 'none';
-    document.getElementById('noise-params').style.display = '';
-    document.getElementById('pitch-env-section').style.display = 'none';
-    requestRedraw();
+    const L = getActiveLayer();
+    const on = !L.solo;
+    // Exclusive solo by default; Shift-click adds to the solo set
+    if (on && !e.shiftKey) appState.sfx.layers.forEach(o => { o.solo = false; });
+    L.solo = on;
+    syncLayerUI();
+  });
+  document.getElementById('layer-octave').addEventListener('input', e => {
+    const L = getActiveLayer(); L.octave = parseInt(e.target.value, 10) || 0;
+    document.getElementById('layer-octave-val').textContent = (L.octave > 0 ? '+' : '') + L.octave;
+  });
+  document.getElementById('layer-detune').addEventListener('input', e => {
+    const L = getActiveLayer(); L.detune = parseInt(e.target.value, 10) || 0;
+    document.getElementById('layer-detune-val').textContent = (L.detune > 0 ? '+' : '') + L.detune + '¢';
   });
 
-  // Noise subtype
-  document.getElementById('noise-white').addEventListener('click', () => {
+  // Noise subtype — one handler per button
+  for (const nt of NOISE_TYPES) {
+    const btn = document.getElementById('noise-' + nt);
+    if (!btn) continue;
+    btn.addEventListener('click', () => {
+      pushUndo();
+      getActiveLayer().instrument.noiseType = nt;
+      markSourceCustom();
+      for (const other of NOISE_TYPES) {
+        const b = document.getElementById('noise-' + other);
+        if (b) b.classList.toggle('active', other === nt);
+      }
+    });
+  }
+
+  // Wavetable selector
+  document.getElementById('wave-table').addEventListener('change', e => {
     pushUndo();
-    appState.sfx.instrument.noiseType = 'white';
-    document.getElementById('noise-white').classList.add('active');
-    document.getElementById('noise-pink').classList.remove('active');
+    getActiveLayer().instrument.wavetable = e.target.value;
+    markSourceCustom();
   });
-  document.getElementById('noise-pink').addEventListener('click', () => {
-    pushUndo();
-    appState.sfx.instrument.noiseType = 'pink';
-    document.getElementById('noise-pink').classList.add('active');
-    document.getElementById('noise-white').classList.remove('active');
+
+  // FM controls
+  function ensureFM() {
+    const inst = getActiveLayer().instrument;
+    if (!inst.fm) inst.fm = { ratio: 2, index: 4, carrier: 'sine', modWave: 'sine' };
+    return inst.fm;
+  }
+  document.getElementById('fm-ratio').addEventListener('input', e => {
+    ensureFM().ratio = parseFloat(e.target.value);
+    document.getElementById('fm-ratio-val').textContent = parseFloat(e.target.value).toFixed(2);
+  });
+  document.getElementById('fm-index').addEventListener('input', e => {
+    ensureFM().index = parseFloat(e.target.value);
+    document.getElementById('fm-index-val').textContent = parseFloat(e.target.value).toFixed(1);
+  });
+  document.getElementById('fm-carrier').addEventListener('change', e => { ensureFM().carrier = e.target.value; markSourceCustom(); });
+  document.getElementById('fm-modwave').addEventListener('change', e => { ensureFM().modWave = e.target.value; markSourceCustom(); });
+
+  // Shared lowpass filter cutoff (0 = off)
+  document.getElementById('filter-freq').addEventListener('input', e => {
+    const v = parseInt(e.target.value, 10) || 0;
+    getActiveLayer().instrument.filterFreq = v;
+    document.getElementById('filter-freq-val').textContent = v === 0 ? 'off' : v + ' Hz';
+  });
+
+  // Crush bits
+  document.getElementById('crush-bits').addEventListener('input', e => {
+    const v = parseInt(e.target.value, 10) || 0;
+    getActiveLayer().instrument.crushBits = v;
+    document.getElementById('crush-bits-val').textContent = v === 0 ? 'off' : v + '-bit';
   });
 
   // Param sliders
@@ -2417,9 +3658,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById(id);
     el.addEventListener('input', () => {
       const v = transform ? transform(parseFloat(el.value)) : parseFloat(el.value);
-      // Set nested key
+      // Set nested key on the active layer (keys are like 'instrument.duty')
       const parts = key.split('.');
-      let obj = appState.sfx;
+      let obj = getActiveLayer();
       for (let i = 0; i < parts.length - 1; i++) obj = obj[parts[i]];
       obj[parts[parts.length-1]] = v;
       document.getElementById(valId).textContent = v.toFixed(2);
@@ -2487,6 +3728,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('btn-generate').addEventListener('click', () => { pushUndo(); randomizer.generate(); });
   document.getElementById('btn-subtle').addEventListener('click',   () => { pushUndo(); randomizer.subtle(); });
+
+  // Initial UI sync (builds the layer strip + reflects default state)
+  syncAllUI();
 });
 </script>
 </body>

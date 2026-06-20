@@ -231,6 +231,13 @@ export class AudioSystem {
       return false;
     }
 
+    // Placeholder registration: a null path marks the name as known so call
+    // sites can ship before the asset exists. playSFX silently no-ops on it.
+    if (path === null) {
+      this.sfxBuffers[name] = null;
+      return true;
+    }
+
     try {
       const audioData = await this.fetchAudioBuffer(path);
       const buffer = await this.audioContext.decodeAudioData(audioData);
@@ -259,6 +266,8 @@ export class AudioSystem {
    * @param {number} volume - Volume multiplier 0.0 to 1.0 (default 1.0)
    */
   playSFX(name, volume = 1.0) {
+    // Registered placeholder (asset not authored yet) — silent no-op.
+    if (name in this.sfxBuffers && this.sfxBuffers[name] === null) return;
     if (!this.sfxBuffers[name] || !this.audioContext || !this.sfxGain) {
       console.warn(`[Audio] Cannot play SFX: ${name} (not loaded or context unavailable)`);
       return;
@@ -810,6 +819,15 @@ export class AudioSystem {
     this.loadSFX('crow_takeoff_2', `${base}assets/audio/sfx-crow-2.wav`);
     this.loadSFX('magic_death', `${base}assets/audio/sfx-magic-death.wav`);
     this.loadSFX('ingredient_pickup', `${base}assets/audio/sfx-ingredient-pickup.wav`);
+    // Gray zone — placeholder names, no assets yet (playSFX no-ops on null).
+    this.loadSFX('mist_take', null);   // depth-10 mist-out sequence
+    this.loadSFX('bone_rise', null);   // Risen reassembling from its bone pile
+    // P-room puzzles + key items — placeholder names, no assets yet.
+    this.loadSFX('puzzle_pulse', null);  // correct listening-stone strike
+    this.loadSFX('puzzle_fizzle', null); // wrong stone — sequence reset
+    this.loadSFX('puzzle_solve', null);  // puzzle solved, spirit rises
+    this.loadSFX('plank_place', null);   // Platform plank laid over deep water
+    this.loadSFX('sword_draw', null);    // § drawn from the islet stone
   }
 
   /**

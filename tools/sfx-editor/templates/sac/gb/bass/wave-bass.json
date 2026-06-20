@@ -1,0 +1,56 @@
+{
+  "name": "sac/gb/bass/wave-bass",
+  "totalDuration": 1.2,
+  "bpm": 120,
+  "snapMode": "none",
+  "instrument": {
+    "masterGain": 0.8,
+    "chip": "GB",
+    "type": "wave",
+    "wavetable": "triangle"
+  },
+  "volumeEnvelope": [
+    {
+      "t": 0,
+      "v": 0
+    },
+    {
+      "t": 0.02,
+      "v": 1
+    },
+    {
+      "t": 0.6,
+      "v": 0.8
+    },
+    {
+      "t": 1,
+      "v": 0
+    }
+  ],
+  "pitchEnvelope": [
+    {
+      "t": 0,
+      "semitones": 0
+    },
+    {
+      "t": 1,
+      "semitones": 0
+    }
+  ],
+  "notes": [
+    {
+      "id": "n61",
+      "time": 0,
+      "duration": 1.1,
+      "frequency": 65.41,
+      "volume": 0.9,
+      "muted": false
+    }
+  ],
+  "echo": {
+    "enabled": false,
+    "delay": 0.12,
+    "scale": 0.55,
+    "count": 4
+  }
+}

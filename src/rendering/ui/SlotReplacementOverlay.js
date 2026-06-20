@@ -1,4 +1,5 @@
 import { GRID } from '../../game/GameConfig.js';
+import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher.js';
 
 /**
  * SlotReplacementOverlay — centered popup for SlotReplacementSystem.
@@ -97,7 +98,7 @@ export class SlotReplacementOverlay {
       ctx.fillText('▼', boxX + boxW / 2, storeY - cs);
     }
     ctx.fillStyle = storeSelected ? '#ffff00' : '#999999';
-    ctx.fillText('STORE IN CHEST', boxX + boxW / 2, storeY);
+    ctx.fillText(spectaclesTransformString('STORE IN CHEST', isSpectaclesActive(game)), boxX + boxW / 2, storeY);
 
     ctx.restore();
   }

@@ -202,10 +202,10 @@ export class BossRenderer {
     // head.position is top-left of 2×2; center = (position.x + cs, position.y + cs)
     const hcx = head.position.x + cs;
     const hcy = head.position.y + cs;
-    this.renderer.drawEntity(hcx - cs / 2, hcy - cs / 2, 'Θ', headColor);
-    this.renderer.drawEntity(hcx + cs / 2, hcy - cs / 2, 'Θ', headColor);
-    this.renderer.drawEntity(hcx - cs / 2, hcy + cs / 2, 'Θ', headColor);
-    this.renderer.drawEntity(hcx + cs / 2, hcy + cs / 2, 'Θ', headColor);
+    this.renderer.drawEntity(hcx - cs / 2, hcy - cs / 2, 'Ⲑ', headColor);
+    this.renderer.drawEntity(hcx + cs / 2, hcy - cs / 2, 'Ⲑ', headColor);
+    this.renderer.drawEntity(hcx - cs / 2, hcy + cs / 2, 'Ⲑ', headColor);
+    this.renderer.drawEntity(hcx + cs / 2, hcy + cs / 2, 'Ⲑ', headColor);
   }
 
   _renderTurtleHeadP2(ctx, shell, head, cs) {
@@ -215,10 +215,10 @@ export class BossRenderer {
     const headColor     = (headHitFlash || preFireFlash) ? '#ffffff' : head.color;
     const hcx = head.position.x + cs;
     const hcy = head.position.y + cs;
-    this.renderer.drawEntity(hcx - cs / 2, hcy - cs / 2, 'Θ', headColor);
-    this.renderer.drawEntity(hcx + cs / 2, hcy - cs / 2, 'Θ', headColor);
-    this.renderer.drawEntity(hcx - cs / 2, hcy + cs / 2, 'Θ', headColor);
-    this.renderer.drawEntity(hcx + cs / 2, hcy + cs / 2, 'Θ', headColor);
+    this.renderer.drawEntity(hcx - cs / 2, hcy - cs / 2, 'Ⲑ', headColor);
+    this.renderer.drawEntity(hcx + cs / 2, hcy - cs / 2, 'Ⲑ', headColor);
+    this.renderer.drawEntity(hcx - cs / 2, hcy + cs / 2, 'Ⲑ', headColor);
+    this.renderer.drawEntity(hcx + cs / 2, hcy + cs / 2, 'Ⲑ', headColor);
   }
 
   renderLakeBossComposite(game) {
@@ -334,8 +334,8 @@ export class BossRenderer {
 
   /**
    * Draw a 3-char head for the given entity.
-   * Middle head: <Ω> (main weak point), red eye circle when vulnerable.
-   * Side heads:  (ω) normally, >ω< when actively grabbing.
+   * Middle head: <Ⲱ> (main weak point), red eye circle when vulnerable.
+   * Side heads:  (ⲱ) normally, >ⲱ< when actively grabbing.
    */
   // Lerp from #22cc44 (full health) toward #cc3300 (empty) as HP drops
   _bossHeadHealthColor(entity) {
@@ -366,7 +366,7 @@ export class BossRenderer {
             : healthColor;
       const spread = mouthOpen ? cs * 1 : cs * 0.5;
       this.renderer.drawEntity(hx - spread, hy, '<', color);
-      this.renderer.drawEntity(hx,          hy, 'Ω', color);
+      this.renderer.drawEntity(hx,          hy, 'Ⲱ', color);
       this.renderer.drawEntity(hx + spread, hy, '>', color);
     } else {
       const grabbing  = entity.isGrabbing;
@@ -377,10 +377,10 @@ export class BossRenderer {
             : isStunned               ? '#88bbff'
             : grabbing                ? '#44ff66'
             : healthColor;
-      // Open mouth: brackets wide; closed: brackets tucked inside the ω glyph
+      // Open mouth: brackets wide; closed: brackets tucked inside the ⲱ glyph
       const spread = mouthOpen ? cs * 1.2 : cs * 0.5;
       this.renderer.drawEntity(hx - spread, hy, '<', color);
-      this.renderer.drawEntity(hx,          hy, 'ω', color);
+      this.renderer.drawEntity(hx,          hy, 'ⲱ', color);
       this.renderer.drawEntity(hx + spread, hy, '>', color);
     }
 

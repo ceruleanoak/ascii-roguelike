@@ -1,4 +1,5 @@
 import { GRID, COLORS } from '../../game/GameConfig.js';
+import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher.js';
 
 /**
  * NeutralRenderer - Renders NEUTRAL state (Leshy Grove, future shops/puzzles)
@@ -46,17 +47,38 @@ export class NeutralRenderer {
     const centerX = Math.floor(GRID.COLS / 2);
     const centerY = Math.floor(GRID.ROWS / 2);
 
-    // Draw south exit warp zone (always present in neutral rooms)
-    if (game.currentRoom.exits.south) {
+    // Draw return-exit warp zone on the entry edge (south / west / east)
+    const returnExit = game.currentRoom.returnExit || 'south';
+    if (game.currentRoom.exits[returnExit]) {
       const warpZoneColor = 'rgba(100, 150, 255, 0.15)';
-      this.renderer.drawRect(
-        (centerX - 1) * GRID.CELL_SIZE,
-        (GRID.ROWS - 3) * GRID.CELL_SIZE,
-        3 * GRID.CELL_SIZE,
-        2 * GRID.CELL_SIZE,
-        warpZoneColor,
-        true
-      );
+      if (returnExit === 'south') {
+        this.renderer.drawRect(
+          (centerX - 1) * GRID.CELL_SIZE,
+          (GRID.ROWS - 3) * GRID.CELL_SIZE,
+          3 * GRID.CELL_SIZE,
+          2 * GRID.CELL_SIZE,
+          warpZoneColor,
+          true
+        );
+      } else if (returnExit === 'west') {
+        this.renderer.drawRect(
+          1 * GRID.CELL_SIZE,
+          (centerY - 1) * GRID.CELL_SIZE,
+          2 * GRID.CELL_SIZE,
+          3 * GRID.CELL_SIZE,
+          warpZoneColor,
+          true
+        );
+      } else if (returnExit === 'east') {
+        this.renderer.drawRect(
+          (GRID.COLS - 3) * GRID.CELL_SIZE,
+          (centerY - 1) * GRID.CELL_SIZE,
+          2 * GRID.CELL_SIZE,
+          3 * GRID.CELL_SIZE,
+          warpZoneColor,
+          true
+        );
+      }
     }
 
     // Draw animating background objects
@@ -152,7 +174,7 @@ export class NeutralRenderer {
       const label = nrState.cutsRemaining > 0
         ? `[ choose ${nrState.cutsRemaining} ]`
         : `[ done ]`;
-      ctx.fillText(label, GRID.WIDTH / 2, GRID.CELL_SIZE * 1.5);
+      ctx.fillText(spectaclesTransformString(label, isSpectaclesActive(game)), GRID.WIDTH / 2, GRID.CELL_SIZE * 1.5);
       ctx.restore();
     }
 
@@ -164,7 +186,7 @@ export class NeutralRenderer {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = COLORS.ITEM;
-      this.renderer.drawWrappedText(ctx, game.pickupMessage, GRID.WIDTH / 2, GRID.HEIGHT / 2, GRID.WIDTH * 0.8, GRID.CELL_SIZE * 2.5);
+      this.renderer.drawWrappedText(ctx, spectaclesTransformString(game.pickupMessage, isSpectaclesActive(game)), GRID.WIDTH / 2, GRID.HEIGHT / 2, GRID.WIDTH * 0.8, GRID.CELL_SIZE * 2.5);
       ctx.restore();
     }
 

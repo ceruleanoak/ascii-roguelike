@@ -113,10 +113,6 @@ export const TrapLayerMechanic = {
     enemy.velocity.vy = vy * speedMult;
     enemy.targetVelocity.vx = enemy.velocity.vx;
     enemy.targetVelocity.vy = enemy.velocity.vy;
-    enemy.hoverLocked = false;
-    enemy.isHovering = false;
-    enemy.isAttacking = false;
-    enemy.attackRushTimer = 0;
 
     return trapDropResult;
   }

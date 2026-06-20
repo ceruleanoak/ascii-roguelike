@@ -3,6 +3,7 @@ import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Leshy } from '../entities/Leshy.js';
 import { Fairy } from '../entities/Fairy.js';
 import { isIngredient, isItem, generateEnemyDrops } from '../data/items.js';
+import { getZoneRandomEnemy } from '../data/enemies.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
 import { createDebris } from '../entities/Debris.js';
 import { createIceBurst, Particle } from '../entities/Particle.js';
@@ -387,7 +388,7 @@ export class InteractionSystem {
       // Guaranteed Rock + a ~7% zone mineral (each zone's rocks hide a different
       // rare: knowledge of WHERE to smash rocks is the gate) + 3% Artifact.
       const rolls = [
-        { char: '0', chance: 1.00 },
+        { char: '0', chance: 0.50 },
         { char: '⚜', chance: 0.03 }
       ];
       const zoneMineral = this.getZoneMineral(game.currentRoom?.zone);
@@ -444,7 +445,7 @@ export class InteractionSystem {
 
       // Tree harvest mirrors rockHarvest: guaranteed Stick above, plus a 15%
       // sap bonus (red/cyan zones carry rare elemental saps; others common ŝ).
-      if (obj.originalChar === '&' && Math.random() < 0.15) {
+      if (obj.originalChar === 'Y' && Math.random() < 0.15) {
         const zone = game.currentRoom?.zone;
         const sapChar = zone === 'red' ? 'š' : zone === 'cyan' ? 'ş' : 'ŝ';
         const angle = Math.random() * Math.PI * 2;
@@ -498,12 +499,42 @@ export class InteractionSystem {
           obj.position.y + GRID.CELL_SIZE / 2
         ));
       }
-      // Cut tall grass has a small chance of yielding Pollen (raw oil).
-      // Cap to one pollen per swing — a single blade swing can hit multiple
-      // grass tiles via AOE, and rolling per-tile multiplies the perceived rate.
-      if (!attack?.droppedPollen && Math.random() < 0.01) {
-        game.lootSystem.spawnIngredientDrop('ł', obj.position.x, obj.position.y, null, obj);
-        if (attack) attack.droppedPollen = true;
+      // Grass drop table — rolled independently per grass object cut.
+      // Thresholds are 1/8 of the per-swing values so that ~8 blades per swing
+      // yields the same expected drop rate as before.
+      {
+        const roll = Math.random();
+        if (roll < 0.0006) {
+          // Very rare: chest
+          const chest = new BackgroundObject('⊞', obj.position.x, obj.position.y);
+          chest.spawnImmunityTimer = 1.0;
+          game.currentRoom.backgroundObjects.push(chest);
+          game.renderer.markBackgroundDirty();
+        } else if (roll < 0.0013) {
+          // Very rare: coin
+          game.lootSystem.spawnIngredientDrop('c', obj.position.x, obj.position.y, null, obj);
+        } else if (roll < 0.01) {
+          // Uncommon: beast lurking in the grass
+          if (game.currentRoom.enemies.length < 10) {
+            const beastChar = getZoneRandomEnemy(game.currentDepth, game.currentRoom?.zone);
+            const spawned = game.roomGenerator.spawnEnemiesFrom(game, obj, {
+              spawnChar: beastChar,
+              spawnCount: 1,
+              spawnRange: GRID.CELL_SIZE * 2,
+              spawnerPosition: { x: obj.position.x, y: obj.position.y }
+            });
+            game.currentRoom.enemies.push(...spawned);
+          }
+        } else if (roll < 0.0144) {
+          // Uncommon: stick
+          game.lootSystem.spawnIngredientDrop('|', obj.position.x, obj.position.y, null, obj);
+        } else if (roll < 0.0188) {
+          // Uncommon: rock
+          game.lootSystem.spawnIngredientDrop('0', obj.position.x, obj.position.y, null, obj);
+        } else if (roll < 0.0219) {
+          // Uncommon: pollen (raw oil)
+          game.lootSystem.spawnIngredientDrop('ł', obj.position.x, obj.position.y, null, obj);
+        }
       }
       // Fairy grass: blade-cut releases the fairy. Multiple grass tiles in the
       // room are marked; the first one cut spawns the fairy, the rest are inert.

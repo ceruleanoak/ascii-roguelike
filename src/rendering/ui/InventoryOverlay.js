@@ -10,6 +10,7 @@
  */
 
 import { GRID, COLORS, GAME_STATES } from '../../game/GameConfig.js';
+import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher.js';
 
 export class InventoryOverlay {
   constructor(renderer) {
@@ -17,6 +18,7 @@ export class InventoryOverlay {
   }
 
   render(game) {
+    const spectaclesOn = isSpectaclesActive(game);
     this.renderer.fgCtx.save();
 
     // Draw semi-transparent background
@@ -44,7 +46,7 @@ export class InventoryOverlay {
     this.renderer.drawEntity(
       GRID.WIDTH / 2,
       GRID.CELL_SIZE * 3,
-      title,
+      spectaclesTransformString(title, spectaclesOn),
       COLORS.TEXT
     );
 
@@ -65,7 +67,7 @@ export class InventoryOverlay {
       this.renderer.drawEntity(
         GRID.WIDTH / 2,
         GRID.HEIGHT / 2,
-        emptyMsg,
+        spectaclesTransformString(emptyMsg, spectaclesOn),
         COLORS.TEXT
       );
     } else {
@@ -74,7 +76,7 @@ export class InventoryOverlay {
         // Section header
         this.renderer.fgCtx.fillStyle = COLORS.INGREDIENT;
         this.renderer.fgCtx.textAlign = 'left';
-        this.renderer.fgCtx.fillText('INGREDIENTS', GRID.CELL_SIZE * 4, startY + index * lineHeight);
+        this.renderer.fgCtx.fillText(spectaclesTransformString('INGREDIENTS', spectaclesOn), GRID.CELL_SIZE * 4, startY + index * lineHeight);
         this.renderer.fgCtx.textAlign = 'center';
         index++;
 
@@ -101,7 +103,7 @@ export class InventoryOverlay {
           const text = `${data.name} x${count}`;
           this.renderer.fgCtx.fillStyle = COLORS.TEXT;
           this.renderer.fgCtx.textAlign = 'left';
-          this.renderer.fgCtx.fillText(text, GRID.CELL_SIZE * 7, y);
+          this.renderer.fgCtx.fillText(spectaclesTransformString(text, spectaclesOn), GRID.CELL_SIZE * 7, y);
           this.renderer.fgCtx.textAlign = 'center';
 
           index++;
@@ -114,7 +116,7 @@ export class InventoryOverlay {
         // Section header
         this.renderer.fgCtx.fillStyle = '#aaaaff';
         this.renderer.fgCtx.textAlign = 'left';
-        this.renderer.fgCtx.fillText('ARMOR', GRID.CELL_SIZE * 4, startY + index * lineHeight);
+        this.renderer.fgCtx.fillText(spectaclesTransformString('ARMOR', spectaclesOn), GRID.CELL_SIZE * 4, startY + index * lineHeight);
         this.renderer.fgCtx.textAlign = 'center';
         index++;
 
@@ -133,7 +135,7 @@ export class InventoryOverlay {
           // Draw armor name
           this.renderer.fgCtx.fillStyle = COLORS.TEXT;
           this.renderer.fgCtx.textAlign = 'left';
-          this.renderer.fgCtx.fillText(armor.data.name, GRID.CELL_SIZE * 7, y);
+          this.renderer.fgCtx.fillText(spectaclesTransformString(armor.data.name, spectaclesOn), GRID.CELL_SIZE * 7, y);
           this.renderer.fgCtx.textAlign = 'center';
 
           index++;
@@ -146,7 +148,7 @@ export class InventoryOverlay {
         // Section header
         this.renderer.fgCtx.fillStyle = '#ffaa00';
         this.renderer.fgCtx.textAlign = 'left';
-        this.renderer.fgCtx.fillText('CONSUMABLES', GRID.CELL_SIZE * 4, startY + index * lineHeight);
+        this.renderer.fgCtx.fillText(spectaclesTransformString('CONSUMABLES', spectaclesOn), GRID.CELL_SIZE * 4, startY + index * lineHeight);
         this.renderer.fgCtx.textAlign = 'center';
         index++;
 
@@ -165,7 +167,7 @@ export class InventoryOverlay {
           // Draw consumable name
           this.renderer.fgCtx.fillStyle = COLORS.TEXT;
           this.renderer.fgCtx.textAlign = 'left';
-          this.renderer.fgCtx.fillText(consumable.data.name, GRID.CELL_SIZE * 7, y);
+          this.renderer.fgCtx.fillText(spectaclesTransformString(consumable.data.name, spectaclesOn), GRID.CELL_SIZE * 7, y);
           this.renderer.fgCtx.textAlign = 'center';
 
           index++;

@@ -1,0 +1,59 @@
+{
+  "name": "sac/snes/guitar/clean",
+  "totalDuration": 1.4,
+  "bpm": 120,
+  "snapMode": "none",
+  "instrument": {
+    "masterGain": 0.8,
+    "chip": "SNES",
+    "type": "fm",
+    "fm": {
+      "ratio": 1,
+      "index": 4,
+      "carrier": "sawtooth",
+      "modWave": "sine"
+    },
+    "filterFreq": 4000,
+    "crushBits": 12
+  },
+  "volumeEnvelope": [
+    {
+      "t": 0,
+      "v": 1
+    },
+    {
+      "t": 0.28,
+      "v": 0.32
+    },
+    {
+      "t": 1,
+      "v": 0
+    }
+  ],
+  "pitchEnvelope": [
+    {
+      "t": 0,
+      "semitones": 0
+    },
+    {
+      "t": 1,
+      "semitones": 0
+    }
+  ],
+  "notes": [
+    {
+      "id": "n36",
+      "time": 0,
+      "duration": 1.288,
+      "frequency": 261.63,
+      "volume": 0.9,
+      "muted": false
+    }
+  ],
+  "echo": {
+    "enabled": false,
+    "delay": 0.12,
+    "scale": 0.55,
+    "count": 4
+  }
+}

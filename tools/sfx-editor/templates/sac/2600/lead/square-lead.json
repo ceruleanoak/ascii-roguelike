@@ -1,0 +1,57 @@
+{
+  "name": "sac/2600/lead/square-lead",
+  "totalDuration": 1.2,
+  "bpm": 120,
+  "snapMode": "none",
+  "instrument": {
+    "masterGain": 0.8,
+    "chip": "2600",
+    "type": "square",
+    "duty": 0.5,
+    "crushBits": 5
+  },
+  "volumeEnvelope": [
+    {
+      "t": 0,
+      "v": 0
+    },
+    {
+      "t": 0.04,
+      "v": 1
+    },
+    {
+      "t": 0.75,
+      "v": 0.85
+    },
+    {
+      "t": 1,
+      "v": 0
+    }
+  ],
+  "pitchEnvelope": [
+    {
+      "t": 0,
+      "semitones": 0
+    },
+    {
+      "t": 1,
+      "semitones": 0
+    }
+  ],
+  "notes": [
+    {
+      "id": "n2",
+      "time": 0,
+      "duration": 1.1,
+      "frequency": 523.25,
+      "volume": 0.9,
+      "muted": false
+    }
+  ],
+  "echo": {
+    "enabled": false,
+    "delay": 0.12,
+    "scale": 0.55,
+    "count": 4
+  }
+}

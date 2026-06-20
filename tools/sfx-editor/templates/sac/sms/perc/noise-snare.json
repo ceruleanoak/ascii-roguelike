@@ -1,0 +1,53 @@
+{
+  "name": "sac/sms/perc/noise-snare",
+  "totalDuration": 0.2,
+  "bpm": 120,
+  "snapMode": "none",
+  "instrument": {
+    "masterGain": 0.8,
+    "chip": "SMS",
+    "type": "noise",
+    "noiseType": "lfsr",
+    "noiseFilterFreq": 5000
+  },
+  "volumeEnvelope": [
+    {
+      "t": 0,
+      "v": 1
+    },
+    {
+      "t": 0.12,
+      "v": 0.35
+    },
+    {
+      "t": 1,
+      "v": 0
+    }
+  ],
+  "pitchEnvelope": [
+    {
+      "t": 0,
+      "semitones": 0
+    },
+    {
+      "t": 1,
+      "semitones": 0
+    }
+  ],
+  "notes": [
+    {
+      "id": "n55",
+      "time": 0,
+      "duration": 0.18,
+      "frequency": 261.63,
+      "volume": 0.9,
+      "muted": false
+    }
+  ],
+  "echo": {
+    "enabled": false,
+    "delay": 0.12,
+    "scale": 0.55,
+    "count": 4
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "name": "sac/nes/fx/laser",
+  "totalDuration": 0.35,
+  "bpm": 120,
+  "snapMode": "none",
+  "instrument": {
+    "masterGain": 0.8,
+    "chip": "NES",
+    "type": "square",
+    "duty": 0.5
+  },
+  "volumeEnvelope": [
+    {
+      "t": 0,
+      "v": 1
+    },
+    {
+      "t": 0.5,
+      "v": 0.6
+    },
+    {
+      "t": 1,
+      "v": 0
+    }
+  ],
+  "pitchEnvelope": [
+    {
+      "t": 0,
+      "semitones": 12
+    },
+    {
+      "t": 1,
+      "semitones": -24
+    }
+  ],
+  "notes": [
+    {
+      "id": "n23",
+      "time": 0,
+      "duration": 0.33,
+      "frequency": 523.25,
+      "volume": 0.9,
+      "muted": false
+    }
+  ],
+  "echo": {
+    "enabled": false,
+    "delay": 0.12,
+    "scale": 0.55,
+    "count": 4
+  }
+}

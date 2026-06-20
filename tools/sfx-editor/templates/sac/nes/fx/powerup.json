@@ -1,0 +1,104 @@
+{
+  "name": "sac/nes/fx/powerup",
+  "totalDuration": 0.55,
+  "bpm": 120,
+  "snapMode": "none",
+  "instrument": {
+    "masterGain": 0.8,
+    "chip": "NES",
+    "type": "square",
+    "duty": 0.25
+  },
+  "volumeEnvelope": [
+    {
+      "t": 0,
+      "v": 0
+    },
+    {
+      "t": 0.02,
+      "v": 1
+    },
+    {
+      "t": 0.95,
+      "v": 1
+    },
+    {
+      "t": 1,
+      "v": 0
+    }
+  ],
+  "pitchEnvelope": [
+    {
+      "t": 0,
+      "semitones": 0
+    },
+    {
+      "t": 1,
+      "semitones": 0
+    }
+  ],
+  "notes": [
+    {
+      "id": "n16",
+      "time": 0,
+      "duration": 0.075,
+      "frequency": 261.63,
+      "volume": 0.9,
+      "muted": false
+    },
+    {
+      "id": "n17",
+      "time": 0.075,
+      "duration": 0.075,
+      "frequency": 329.63,
+      "volume": 0.9,
+      "muted": false
+    },
+    {
+      "id": "n18",
+      "time": 0.15,
+      "duration": 0.075,
+      "frequency": 392,
+      "volume": 0.9,
+      "muted": false
+    },
+    {
+      "id": "n19",
+      "time": 0.225,
+      "duration": 0.075,
+      "frequency": 523.25,
+      "volume": 0.9,
+      "muted": false
+    },
+    {
+      "id": "n20",
+      "time": 0.3,
+      "duration": 0.075,
+      "frequency": 329.63,
+      "volume": 0.9,
+      "muted": false
+    },
+    {
+      "id": "n21",
+      "time": 0.375,
+      "duration": 0.075,
+      "frequency": 392,
+      "volume": 0.9,
+      "muted": false
+    },
+    {
+      "id": "n22",
+      "time": 0.45,
+      "duration": 0.075,
+      "frequency": 1318.51,
+      "volume": 0.9,
+      "muted": false
+    }
+  ],
+  "echo": {
+    "enabled": false,
+    "delay": 0.12,
+    "scale": 0.55,
+    "count": 4
+  }
+}

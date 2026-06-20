@@ -1,6 +1,7 @@
 // Dungeon floor interior wall layouts — 24×24 grids.
 //
 // # = solid wall cell    . = floor (walkable)
+// ~ = water channel (walkable; DungeonSystem places a Puddle object on it)
 //
 // Coordinate contract:
 //   The grid is 24 cols × 24 rows. Row 0, row 23, col 0, col 23 are the
@@ -129,29 +130,31 @@ const TEMPLATE_SEPARATED_ZONES = [
   '########################',
 ];
 
-// Narrow vertical channels with cross-passages at rows 6, 13, 19. Col 12 clear.
+// Narrow vertical water channels running between the block pairs, with dry
+// cross-passages at rows 6, 12, 18 (the water flows through them — step over).
+// Col 12 stair corridor stays dry. The '~' cells are what make it a sewer.
 const TEMPLATE_SEWER = [
   '########################',
   '#......................#',
-  '#..##.##.##..##.##.##..#',
-  '#..##.##.##..##.##.##..#',
-  '#..##.##.##..##.##.##..#',
-  '#..##.##.##..##.##.##..#',
-  '#......................#',
-  '#..##.##.##..##.##.##..#',
-  '#..##.##.##..##.##.##..#',
-  '#..##.##.##..##.##.##..#',
-  '#..##.##.##..##.##.##..#',
-  '#..##.##.##..##.##.##..#',
-  '#......................#',
-  '#..##.##.##..##.##.##..#',
-  '#..##.##.##..##.##.##..#',
-  '#..##.##.##..##.##.##..#',
-  '#..##.##.##..##.##.##..#',
-  '#..##.##.##..##.##.##..#',
-  '#......................#',
-  '#..##.##.##..##.##.##..#',
-  '#..##.##.##..##.##.##..#',
+  '#..##~##~##..##~##~##..#',
+  '#..##~##~##..##~##~##..#',
+  '#..##~##~##..##~##~##..#',
+  '#..##~##~##..##~##~##..#',
+  '#....~..~......~..~....#',
+  '#..##~##~##..##~##~##..#',
+  '#..##~##~##..##~##~##..#',
+  '#..##~##~##..##~##~##..#',
+  '#..##~##~##..##~##~##..#',
+  '#..##~##~##..##~##~##..#',
+  '#....~..~......~..~....#',
+  '#..##~##~##..##~##~##..#',
+  '#..##~##~##..##~##~##..#',
+  '#..##~##~##..##~##~##..#',
+  '#..##~##~##..##~##~##..#',
+  '#..##~##~##..##~##~##..#',
+  '#....~..~......~..~....#',
+  '#..##~##~##..##~##~##..#',
+  '#..##~##~##..##~##~##..#',
   '#......................#',
   '#......................#',
   '########################',
@@ -205,4 +208,24 @@ export function applyTemplateToCollisionMap(collisionMap, templateName, reserved
       collisionMap[r][c] = true;
     }
   }
+}
+
+/**
+ * Interior cells a template marks as water ('~'). Walkable — the generator
+ * places a Puddle background object on each. Reserved cells are excluded so
+ * stair corridors always stay dry.
+ */
+export function getTemplateWaterCells(templateName, reservedCells = []) {
+  const grid = DUNGEON_FLOOR_TEMPLATES[templateName] ?? DUNGEON_FLOOR_TEMPLATES.open;
+  const reserved = new Set(reservedCells.map(({ row, col }) => `${row},${col}`));
+  const cells = [];
+  for (let r = 0; r < grid.length; r++) {
+    const line = grid[r];
+    for (let c = 0; c < line.length; c++) {
+      if (line[c] !== '~') continue;
+      if (reserved.has(`${r},${c}`)) continue;
+      cells.push({ row: r, col: c });
+    }
+  }
+  return cells;
 }

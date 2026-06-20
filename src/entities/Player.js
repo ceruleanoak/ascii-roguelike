@@ -42,6 +42,8 @@ export class Player {
     this.poisonImmune = false;
     this.slimeImmune = false;
     this.reflectDamage = 0;
+    this.smokeOnHit = false;    // Bloom Mantle: bursts a pollen smoke screen when struck
+    this.smokeBurstPending = false; // one-frame signal consumed by main.js to spawn the cloud
     this.speedBoost = 0;
     this.speedPenalty = 0;
     this.slowEnemies = false;
@@ -223,7 +225,7 @@ export class Player {
     // CombatSystem._applyCritIfLucky forces a guaranteed crit while >0.
     this.postDodgeCritTimer = 0;
 
-    // Moss Cloak ✿: armed by dodge-end transition, active while no WASD input.
+    // Moss Cloak 𐤒: armed by dodge-end transition, active while no WASD input.
     // Drives bush-render override and the enemy detection skip in Enemy.update().
     this.mossCloakArmed = false;
     this.mossCloakActive = false;
@@ -914,6 +916,12 @@ export class Player {
       this.invulnerabilityTimer = this.invulnerabilityDuration;
     }
 
+    // Bloom Mantle: a landed hit bursts a pollen smoke screen. Flag is consumed
+    // once per frame by main.js, which owns the steamClouds array and plane.
+    if (this.smokeOnHit) {
+      this.smokeBurstPending = true;
+    }
+
     // Damage reflection
     if (this.reflectDamage > 0 && damageSource.attacker) {
       const reflectedAmount = Math.ceil(actualDamage * this.reflectDamage);
@@ -1158,6 +1166,7 @@ export class Player {
     this.poisonImmune = false;
     this.slimeImmune = false;
     this.reflectDamage = 0;
+    this.smokeOnHit = false;
     this.speedBoost = 0;
     this.speedPenalty = 0;
     this.slowEnemies = false;

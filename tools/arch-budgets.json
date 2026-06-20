@@ -1,10 +1,10 @@
 {
-  "src/main.js": 6172,
-  "src/systems/RoomGenerator.js": 4585,
-  "src/entities/Enemy.js": 3847,
-  "src/rendering/state/ExploreRenderer.js": 2751,
-  "src/systems/CombatSystem.js": 2598,
-  "src/systems/InventorySystem.js": 1739,
-  "src/entities/Item.js": 1561,
-  "src/entities/Player.js": 1305
+  "src/main.js": 254761,
+  "src/systems/RoomGenerator.js": 182661,
+  "src/entities/Enemy.js": 148366,
+  "src/rendering/state/ExploreRenderer.js": 112396,
+  "src/systems/CombatSystem.js": 109522,
+  "src/systems/InventorySystem.js": 65332,
+  "src/entities/Item.js": 57363,
+  "src/entities/Player.js": 49678
 }

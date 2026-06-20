@@ -273,7 +273,6 @@ export class TurtleShell extends Enemy {
 
     // Flesh-colored — whole body is now vulnerable in P2
     this.color             = '#ffaa66';
-    this.boulderRainTimer  = P2_BOULDER_INTERVAL;
     this.invulnerabilityTimer = 0.6;
     this.hitFlash          = false;
   }

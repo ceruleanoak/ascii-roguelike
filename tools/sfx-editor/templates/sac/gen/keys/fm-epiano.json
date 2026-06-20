@@ -1,0 +1,57 @@
+{
+  "name": "sac/gen/keys/fm-epiano",
+  "totalDuration": 1.2,
+  "bpm": 120,
+  "snapMode": "none",
+  "instrument": {
+    "masterGain": 0.8,
+    "chip": "GEN",
+    "type": "fm",
+    "fm": {
+      "ratio": 1,
+      "index": 2.5,
+      "carrier": "sine",
+      "modWave": "sine"
+    }
+  },
+  "volumeEnvelope": [
+    {
+      "t": 0,
+      "v": 1
+    },
+    {
+      "t": 0.25,
+      "v": 0.35
+    },
+    {
+      "t": 1,
+      "v": 0
+    }
+  ],
+  "pitchEnvelope": [
+    {
+      "t": 0,
+      "semitones": 0
+    },
+    {
+      "t": 1,
+      "semitones": 0
+    }
+  ],
+  "notes": [
+    {
+      "id": "n134",
+      "time": 0,
+      "duration": 1.104,
+      "frequency": 261.63,
+      "volume": 0.9,
+      "muted": false
+    }
+  ],
+  "echo": {
+    "enabled": false,
+    "delay": 0.12,
+    "scale": 0.55,
+    "count": 4
+  }
+}

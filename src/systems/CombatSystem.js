@@ -2,6 +2,7 @@ import { GRID } from '../game/GameConfig.js';
 import { planeOf, inSamePlane, objectOnPlane } from './PlaneSystem.js';
 import { cycleExitLetter, findExitAtPoint, mutateExitLetter } from './ExitSystem.js';
 import { BoomerangMechanic } from './BoomerangMechanic.js';
+import { BackgroundObject } from '../entities/BackgroundObject.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
 // room — keeps cross-room sniping in check while still feeling powerful.
@@ -439,7 +440,10 @@ export class CombatSystem {
               this.createDamageNumber('⚡', obj.position.x, obj.position.y, '#cccc00');
             } else if (proj.onHit === 'burn') {
               if (obj.getWaterState() === 'frozen') {
-                obj.setWaterState('normal', 0); // Melt ice
+                // Fire + frozen water/ice → create obsidian rock
+                const obsidianRock = new BackgroundObject('0', obj.position.x, obj.position.y, { obsidian: true });
+                backgroundObjects.push(obsidianRock);
+                this.createDamageNumber('◆', obj.position.x, obj.position.y, '#333333');
               } else {
                 // Fire hits liquid water → steam cloud
                 this.newSteamClouds.push({
@@ -773,16 +777,32 @@ export class CombatSystem {
               continue;
             }
 
-            // Rocks only yield to pickaxe or hammer — everything else clinks off
+            // Obsidian rocks are unbreakable
+            if (obj.obsidian) {
+              this.createDamageNumber('!', obj.position.x, obj.position.y, '#aaaaaa');
+              continue;
+            }
+
+            // Regular rocks (0) only yield to pickaxe or hammer — everything else clinks off
             if (obj.char === '0' && !attack.isPickaxe && !attack.canSmash) {
               this.createDamageNumber('!', obj.position.x, obj.position.y, '#aaaaaa');
               continue;
             }
 
+            // Boulders (Q) require level 2+ hammer or pickaxe
+            if (obj.char === 'Q') {
+              const hasPickaxe = attack.isPickaxe;
+              const hasHighLevelHammer = attack.canSmash && attack.weaponLevel >= 2;
+              if (!hasPickaxe && !hasHighLevelHammer) {
+                this.createDamageNumber('!', obj.position.x, obj.position.y, '#aaaaaa');
+                continue;
+              }
+            }
+
             // Trees only fall to axes — blades, hammers, and the pickaxe (rocks
             // are its specialty) thunk off. Fire weapons still ignite them
             // (burning ≠ chopping).
-            if (obj.char === '&' && attack.weaponSubtype !== 'axe') {
+            if (obj.char === 'Y' && attack.weaponSubtype !== 'axe') {
               if (attack.onHit === 'burn' && obj.isFlammable() && this._ignite(obj)) {
                 this.createDamageNumber('!', obj.position.x, obj.position.y, '#ff4400');
               } else {
@@ -791,9 +811,9 @@ export class CombatSystem {
               continue;
             }
 
-            // Blunt weapons can't damage objects, but still rustle grass
-            if (!attack.isBlunt) {
-              const smashDamage = attack.canSmash ? attack.damage * 2 : attack.damage;
+            // Blunt weapons can't damage objects, but still rustle grass; bushes yield to anything
+            if (!attack.isBlunt || obj.char === '%') {
+              const smashDamage = (obj.char === '%' && (attack.isBlunt || attack.weaponSubtype === 'axe')) ? obj.hp : attack.canSmash ? attack.damage * 2 : attack.damage;
               const result = obj.takeDamage(smashDamage, attack.isBlade);
 
               // Queue any effect (destructive or not — non-destructive effects like

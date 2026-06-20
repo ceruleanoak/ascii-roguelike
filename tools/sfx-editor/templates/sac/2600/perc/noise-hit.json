@@ -1,0 +1,54 @@
+{
+  "name": "sac/2600/perc/noise-hit",
+  "totalDuration": 0.22,
+  "bpm": 120,
+  "snapMode": "none",
+  "instrument": {
+    "masterGain": 0.8,
+    "chip": "2600",
+    "type": "noise",
+    "noiseType": "lfsr",
+    "noiseFilterFreq": 4000,
+    "crushBits": 4
+  },
+  "volumeEnvelope": [
+    {
+      "t": 0,
+      "v": 1
+    },
+    {
+      "t": 0.12,
+      "v": 0.35
+    },
+    {
+      "t": 1,
+      "v": 0
+    }
+  ],
+  "pitchEnvelope": [
+    {
+      "t": 0,
+      "semitones": 0
+    },
+    {
+      "t": 1,
+      "semitones": 0
+    }
+  ],
+  "notes": [
+    {
+      "id": "n4",
+      "time": 0,
+      "duration": 0.2,
+      "frequency": 261.63,
+      "volume": 0.9,
+      "muted": false
+    }
+  ],
+  "echo": {
+    "enabled": false,
+    "delay": 0.12,
+    "scale": 0.55,
+    "count": 4
+  }
+}

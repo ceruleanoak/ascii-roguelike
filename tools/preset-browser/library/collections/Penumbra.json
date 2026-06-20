@@ -1,0 +1,209 @@
+{
+  "name": "Penumbra",
+  "voices": [
+    {
+      "pid": "9e450a7ddb9d1f45",
+      "name": " ASCENT"
+    },
+    {
+      "pid": "1d0408bb3663915f",
+      "name": " FAT MAN"
+    },
+    {
+      "pid": "3a25f79122b51b0c",
+      "name": " Swirls"
+    },
+    {
+      "pid": "fe62aee14664de45",
+      "name": " Terice"
+    },
+    {
+      "pid": "697cfeeff5654686",
+      "name": "_MOOG BASS"
+    },
+    {
+      "pid": "bc32c1b5da001de5",
+      "name": "-IRGINBASS"
+    },
+    {
+      "pid": "c44035044c9b2b07",
+      "name": "....BELLS"
+    },
+    {
+      "pid": "76521251ccf37dd3",
+      "name": "..Brass.12"
+    },
+    {
+      "pid": "1757ae6b07376a31",
+      "name": "..JUICE.."
+    },
+    {
+      "pid": "dcd8f1eda3cb9de8",
+      "name": "'WhirlerHM"
+    },
+    {
+      "pid": "c02c4028b47cd84c",
+      "name": "'WiredB'HM"
+    },
+    {
+      "pid": "d5068e2c8d1a2acf",
+      "name": "\"Asia\"   5"
+    },
+    {
+      "pid": "6ddfa333047ff4fa",
+      "name": "\"Asia\"   6"
+    },
+    {
+      "pid": "885216d2341cb91c",
+      "name": "\"Asia\"   7"
+    },
+    {
+      "pid": "1b9c8fbe5754c203",
+      "name": "\"AsiaKoor\""
+    },
+    {
+      "pid": "e725d701377a3b07",
+      "name": "\"c+c!c#c#c"
+    },
+    {
+      "pid": "8fdcb7f0eb37aaff",
+      "name": "\"Caribian\""
+    },
+    {
+      "pid": "7e59a38677b4f127",
+      "name": "\"Clown\"  1"
+    },
+    {
+      "pid": "00604dcf27cfcec6",
+      "name": "\"Clown\"  3"
+    },
+    {
+      "pid": "91cf6c4c28124b8a",
+      "name": "\"DMC-Blz\"3"
+    },
+    {
+      "pid": "80b101c16ac639da",
+      "name": "\"DMC-Blz\"6"
+    },
+    {
+      "pid": "57e3854ed7a4a840",
+      "name": "\"FunkOrg\"1"
+    },
+    {
+      "pid": "5ca9ae1d6e2d3f50",
+      "name": "\"Hancock\""
+    },
+    {
+      "pid": "3cf1fdd80e52f7ac",
+      "name": "\"Movie\"  2"
+    },
+    {
+      "pid": "ff31e8f925152b66",
+      "name": "\"Reli-Org\""
+    },
+    {
+      "pid": "18915292bab24267",
+      "name": "\"Snowbell\""
+    },
+    {
+      "pid": "211e1e4dfa1aab5a",
+      "name": "\"Stoned\" 1"
+    },
+    {
+      "pid": "8fbb0b5c4a848d30",
+      "name": "\"Tender\""
+    },
+    {
+      "pid": "173a9c2ebe230666",
+      "name": "[BASS]   7"
+    },
+    {
+      "pid": "39a42e57425426a2",
+      "name": "[BOW BASS]"
+    },
+    {
+      "pid": "d678b63b8ca62872",
+      "name": "{E.Bass.E}"
+    },
+    {
+      "pid": "add8d56390e2b746",
+      "name": "{E.Bass.H}"
+    },
+    {
+      "pid": "d635c4e34f481958",
+      "name": "{E.Bass.J}"
+    },
+    {
+      "pid": "7bdcebd9445b6f9b",
+      "name": "{E.Bass.N}"
+    },
+    {
+      "pid": "b85d144e31790d4b",
+      "name": "{E.Bass.X}"
+    },
+    {
+      "pid": "6df1977015614d31",
+      "name": "{E.Bass.Z}"
+    },
+    {
+      "pid": "d31e79c1b47cdaf1",
+      "name": "{KC Ep.}3\\"
+    },
+    {
+      "pid": "43479b03b4e20cba",
+      "name": "* 2001"
+    },
+    {
+      "pid": "6b17b5d7ca727843",
+      "name": "*AAUUUU"
+    },
+    {
+      "pid": "935507ff7211efca",
+      "name": "*ALIEN X"
+    },
+    {
+      "pid": "d4e790e820afc14f",
+      "name": "*ANALOG 2"
+    },
+    {
+      "pid": "5bfd9df3e24f7ecd",
+      "name": "*Analogic"
+    },
+    {
+      "pid": "908b23e3ebe0b88c",
+      "name": "*Attack  1"
+    },
+    {
+      "pid": "ef05408ae9c2844a",
+      "name": "*AUSTRALIA"
+    },
+    {
+      "pid": "0c415e4dce816eaa",
+      "name": "CASCADE 21"
+    },
+    {
+      "pid": "0849658f113347d2",
+      "name": "DESCENT"
+    },
+    {
+      "pid": "04ae998f649863e7",
+      "name": "BAS-AC.PN2"
+    },
+    {
+      "pid": "f3c74c28cd66d7fc",
+      "name": "BASEFLUTE2"
+    },
+    {
+      "pid": "04a4f180484df3db",
+      "name": "   Styx"
+    },
+    {
+      "pid": "fd3872adf0f28d35",
+      "name": "  SDS 7"
+    },
+    {
+      "pid": "1cb96a8a9b8c1c56",
+      "name": "--Carlos--"
+    }
+  ]
+}

@@ -406,7 +406,7 @@ export class Item {
     if (!player) return null;
     // Call the shockwave creator directly — avoids mutating the shared data object.
     // Inject the same subtype props that injectSubtype() would apply in createMeleeAttack,
-    // so canSmash, electric, isBlade, isBlunt, isPickaxe, cyclesExitLetter are preserved.
+    // so canSmash, electric, isBlade, isBlunt, isPickaxe, weaponLevel, cyclesExitLetter are preserved.
     const attacks = this.createMeleeShockwave(player);
     const props = {};
     if (this.data.weaponSubtype) props.weaponSubtype = this.data.weaponSubtype;
@@ -415,6 +415,7 @@ export class Item {
     if (this.data.isBlunt) props.isBlunt = this.data.isBlunt;
     if (this.data.canSmash) props.canSmash = this.data.canSmash;
     if (this.data.isPickaxe) props.isPickaxe = this.data.isPickaxe;
+    if (this.data.weaponLevel) props.weaponLevel = this.data.weaponLevel;
     if (this.data.cyclesExitLetter) props.cyclesExitLetter = this.data.cyclesExitLetter;
     const result = Array.isArray(attacks)
       ? attacks.map((a, idx) => {
@@ -783,6 +784,7 @@ export class Item {
       if (this.data.isBlunt) props.isBlunt = this.data.isBlunt;
       if (this.data.canSmash) props.canSmash = this.data.canSmash;
       if (this.data.isPickaxe) props.isPickaxe = this.data.isPickaxe;
+      if (this.data.weaponLevel) props.weaponLevel = this.data.weaponLevel;
       if (this.data.cyclesExitLetter) props.cyclesExitLetter = this.data.cyclesExitLetter;
       if (this.data.poisonStacks) props.poisonStacks = true;
       if (this.data.acidBlade) props.acidBlade = true;

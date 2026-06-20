@@ -8,6 +8,27 @@ export const ZONE_COLORS = {
   blue: '#66aaff'
 };
 
+// Fresh per-zone depth tracker, derived from the zone list itself so a new
+// zone can never be missed at a reset site again (resolved bug #100: three
+// hand-written literals dropped the `blue` key).
+export function freshZoneDepths() {
+  const depths = {};
+  for (const zone of Object.keys(ZONES)) depths[zone] = 0;
+  return depths;
+}
+
+// Zone-flagged combat scaling (`hardMode`: +50% hp/damage). Applied to every
+// enemy entering a room — generation, boss encounters, runtime summons, and
+// interior spawns alike. The _zoneBuffed guard keeps saved-room restores and
+// repeat passes from compounding the buff.
+export function applyZoneCombatModifiers(enemy, zoneType) {
+  if (!ZONES[zoneType]?.hardMode || enemy._zoneBuffed) return;
+  enemy.hp = Math.ceil(enemy.hp * 1.5);
+  enemy.maxHp = Math.ceil(enemy.maxHp * 1.5);
+  enemy.damage = Math.ceil(enemy.damage * 1.5);
+  enemy._zoneBuffed = true;
+}
+
 export const ZONES = {
   'green': {
     name: 'Verdant Wilds',
@@ -32,6 +53,8 @@ export const ZONES = {
     borderColor: '#00ff00',
     exitColor: ZONE_COLORS.green,
     alternativeZones: ['red', 'cyan', 'yellow'],
+    // Depth-1 weapon offering pool — one floating pickup per L1 room (RoomGenerator).
+    l1WeaponPool: ['↾', '†', '⊥', ')', '⊸', '/'], // dagger, sword, hammer, bow, sling, staff
     bossDepth: 15,
     bossPool: ['giant_slime', 'goblin_army'],
     environmentColors: {
@@ -44,11 +67,12 @@ export const ZONES = {
     movementProfiles: ['chaser', 'keeper', 'kiter'],
     spawnTables: ['basic', 'forest'],
     objectWeights: {
-      '%': 0.25, // Bush
-      '&': 0.40, // Tree
+      '%': 0.25, // Shrub
+      '&': 0.15, // Bush
+      'Y': 0.40, // Tree
       '0': 0.20, // Rock
       '=': 0.10, // Water
-      'Y': 0.15, // Stump
+      'ŋ': 0.15, // Stump
       'n': 0.10, // Mushroom
       '⊞': 0.02  // Chest (rare)
     }
@@ -74,6 +98,8 @@ export const ZONES = {
     borderColor: '#ff4400',
     exitColor: ZONE_COLORS.red,
     alternativeZones: ['green', 'cyan', 'yellow'],
+    // Depth-1 weapon offering pool — one floating pickup per L1 room (RoomGenerator).
+    l1WeaponPool: ['¬', '¡', '†', '⊥', '⛏'], // gun, bat, sword, hammer, pickaxe
     bossDepth: 15,
     environmentColors: {
       grass: '#664422', // Burned grass
@@ -115,7 +141,7 @@ export const ZONES = {
       '0': 0.15,  // Scorched rocks
       'Q': 0.05,  // Obsidian boulders
       '*': 0.05,  // Lava crystals
-      'Y': 0.15,  // Charred stumps
+      'ŋ': 0.15,  // Charred stumps
       '⊞': 0.02   // Chest (rare)
     },
     preSpawnBurned: true // Background objects spawn pre-burned
@@ -141,6 +167,8 @@ export const ZONES = {
     borderColor: '#44ffff',
     exitColor: ZONE_COLORS.cyan,
     alternativeZones: ['green', 'red', 'yellow'],
+    // Depth-1 weapon offering pool — one floating pickup per L1 room (RoomGenerator).
+    l1WeaponPool: ['ߒ', ')', '⊸', '↾', '↑'], // fishing pole, bow, sling, dagger, spear
     bossDepth: 15,
     environmentColors: {
       grass: '#aaffff',
@@ -181,6 +209,8 @@ export const ZONES = {
     borderColor: '#ffff44',
     exitColor: ZONE_COLORS.yellow,
     alternativeZones: ['green', 'red', 'cyan'],
+    // Depth-1 weapon offering pool — one floating pickup per L1 room (RoomGenerator).
+    l1WeaponPool: ['/', 'Ⲯ', '≋', '¬', '↑'], // staff, thick staff, whip, gun, spear
     bossDepth: 15,
     environmentColors: {
       grass: '#888844',
@@ -196,7 +226,7 @@ export const ZONES = {
       'B': 0.15, // Metal Box
       '~': 0.15, // Puddle (electrified)
       '0': 0.25, // Rock
-      '&': 0.45, // Tree
+      'Y': 0.45, // Tree
       '⊞': 0.02  // Chest (rare)
     }
   },
@@ -213,9 +243,23 @@ export const ZONES = {
       'THE MIST KNOWS YOUR NAME.',
       'NO SHRINE ANSWERS HERE.'
     ],
+    // Rare-tier sayings — the gray zone's are the run-defining ones: the mist
+    // radius, the depth-10 finish line, and the snapshot rule.
+    rareSayings: [
+      'THE MIST GRANTS TEN PACES. COUNT THEM.',
+      'THE TENTH ROOM TAKES THE WALKER.',
+      'WHAT THE MIST TAKES, IT KEEPS. CARRY YOUR BEST.'
+    ],
     borderColor: '#888888',
     exitColor: ZONE_COLORS.gray,
     alternativeZones: [], // Gray zone has no alternative colors
+    // No bossDepth — gray has no zone boss. Its finish line is maxDepth:
+    // at depth 10 the mist takes the character (GrayZoneSystem).
+    maxDepth: 10,
+    bossPool: ['bone_legion', 'grave_tyrant'],
+    // Mist: vision is clamped to this many cells around the player
+    // ("TEN STEPS AND THEN NOTHING."). Rendered by GrayZoneSystem.
+    mist: { radius: 10 },
     environmentColors: {
       grass: '#333333',
       tree: '#222222',
@@ -225,11 +269,20 @@ export const ZONES = {
     // Overwhelming pressure from every direction; no clever tactics, just endurance.
     movementProfiles: ['chaser', 'keeper'],
     spawnTables: ['undead', 'boss'],
+    environmentalFeatures: {
+      grassDensity: 0.15,           // Dead land — 15% of green-zone grass
+      rockVariants: [
+        { char: '0', name: 'Grave Rock', dropTable: 'grave' },
+        { char: 'Q', name: 'Barrow Stone', dropTable: 'grave' }
+      ]
+    },
     objectWeights: {
       '8': 0.40, // Bones (everywhere)
       '$': 0.10, // Shrine
       '0': 0.30, // Rock
-      'Y': 0.20  // Stump (dead trees)
+      'Q': 0.08, // Barrow Stone (grave goods)
+      'ŋ': 0.20, // Stump (dead trees)
+      '⊞': 0.02  // Chest (rare) — better gear in = better snapshot out
     },
     hardMode: true, // All enemies +50% stats
     noRest: true // Cannot return to base from gray zone

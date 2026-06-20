@@ -1,0 +1,58 @@
+{
+  "name": "sac/snes/organ/drawbar",
+  "totalDuration": 1.2,
+  "bpm": 120,
+  "snapMode": "none",
+  "instrument": {
+    "masterGain": 0.8,
+    "chip": "SNES",
+    "type": "wave",
+    "wavetable": "organ",
+    "filterFreq": 4500,
+    "crushBits": 12
+  },
+  "volumeEnvelope": [
+    {
+      "t": 0,
+      "v": 0
+    },
+    {
+      "t": 0.02,
+      "v": 1
+    },
+    {
+      "t": 0.95,
+      "v": 1
+    },
+    {
+      "t": 1,
+      "v": 0
+    }
+  ],
+  "pitchEnvelope": [
+    {
+      "t": 0,
+      "semitones": 0
+    },
+    {
+      "t": 1,
+      "semitones": 0
+    }
+  ],
+  "notes": [
+    {
+      "id": "n29",
+      "time": 0,
+      "duration": 1.104,
+      "frequency": 261.63,
+      "volume": 0.9,
+      "muted": false
+    }
+  ],
+  "echo": {
+    "enabled": false,
+    "delay": 0.12,
+    "scale": 0.55,
+    "count": 4
+  }
+}

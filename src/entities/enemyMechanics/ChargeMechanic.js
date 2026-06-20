@@ -28,6 +28,14 @@ export const ChargeMechanic = {
     if (!cfg?.enabled) return;
     const { deltaTime, distance, effectiveVisionLength } = ctx;
 
+    // Wet/goo block charging entirely — a soaked or slimed boar can't get
+    // traction. Abort an in-progress windup/charge and pay the full cooldown.
+    if ((enemy.isWet() || enemy.isGooey())
+        && (enemy.chargeState === 'windup' || enemy.chargeState === 'charging')) {
+      enemy.chargeState = 'idle';
+      enemy.chargeTimer = cfg.cooldown;
+    }
+
     if (enemy.chargeState === 'stunned') {
       enemy.chargeStunTimer -= deltaTime;
       enemy.targetVelocity.vx = 0;
@@ -80,6 +88,8 @@ export const ChargeMechanic = {
           && enemy.target
           && !enemy.isStunned()
           && !enemy.isFrozen()
+          && !enemy.isWet()
+          && !enemy.isGooey()
           && enemy.hasVision(enemy.position, enemy.target.position, effectiveVisionLength, { ignoreCone: true })) {
         enemy.chargeState = 'windup';
         enemy.chargeWindupTimer = cfg.chargeWindup;

@@ -1,4 +1,5 @@
 import { GRID } from '../../game/GameConfig.js';
+import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher.js';
 
 /**
  * DialogueBox — bordered bottom-center panel for NPC speech.
@@ -24,7 +25,10 @@ export class DialogueBox {
     const boxY = GRID.HEIGHT - boxH - Math.floor(cs * 1.5);
 
     const npc = state.npc;
-    const line = state.lines[state.lineIndex] ?? '';
+    const line = spectaclesTransformString(
+      state.lines[state.lineIndex] ?? '',
+      isSpectaclesActive(game)
+    );
     const hasMore = state.lineIndex < state.lines.length - 1;
 
     ctx.save();

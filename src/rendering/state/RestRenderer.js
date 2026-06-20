@@ -17,7 +17,7 @@
 import { GRID, COLORS, EQUIPMENT, CRAFTING } from '../../game/GameConfig.js';
 import { getItemData } from '../../data/items.js';
 import { PixelatedDissolve } from '../effects/TextEffects.js';
-import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE } from '../../data/cipher.js';
+import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
 
 export class RestRenderer {
   constructor(renderer, renderController) {
@@ -392,7 +392,10 @@ export class RestRenderer {
       game.player.position.x - stationPx,
       game.player.position.y - stationPy
     );
-    const nearCraft = craftDist < GRID.CELL_SIZE * 3;
+    // Extend the trigger one cell downward so it reaches the satchel cell below
+    // the station, but keep the tighter radius in every other direction.
+    const belowStation = game.player.position.y > stationPy ? GRID.CELL_SIZE : 0;
+    const nearCraft = craftDist < GRID.CELL_SIZE * 3 + belowStation;
 
     const craftFont = spectaclesOn
       ? `${Math.round(GRID.CELL_SIZE * CIPHER_FONT_SCALE)}px 'Unifont', monospace`
@@ -562,22 +565,22 @@ export class RestRenderer {
     if (game.pickupMessage && game.pickupMessageTimer > 0) {
       const ctx = this.renderer.fgCtx;
       ctx.save();
-      ctx.font = `${GRID.CELL_SIZE * 2}px 'VentureArcade', 'Unifont', monospace`;
+      ctx.font = cipherFont(GRID.CELL_SIZE * 2, spectaclesOn);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = COLORS.ITEM;
-      this.renderer.drawWrappedText(ctx, game.pickupMessage, GRID.WIDTH / 2, GRID.HEIGHT / 2 - 100, GRID.WIDTH * 0.8, GRID.CELL_SIZE * 2.5);
+      this.renderer.drawWrappedText(ctx, spectaclesTransformString(game.pickupMessage, spectaclesOn), GRID.WIDTH / 2, GRID.HEIGHT / 2 - 100, GRID.WIDTH * 0.8, GRID.CELL_SIZE * 2.5);
       ctx.restore();
     }
 
     // Draw path announcement if active (Path Amulet)
     if (game.pathAnnouncement && game.pathAnnouncementTimer > 0) {
       this.renderer.fgCtx.save();
-      this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 2}px 'VentureArcade', 'Unifont', monospace`;
+      this.renderer.fgCtx.font = cipherFont(GRID.CELL_SIZE * 2, spectaclesOn);
       this.renderer.fgCtx.textAlign = 'center';
       this.renderer.fgCtx.textBaseline = 'middle';
       this.renderer.fgCtx.fillStyle = '#ffaa00'; // Yellow-orange for path
-      this.renderer.fgCtx.fillText(game.pathAnnouncement, GRID.WIDTH / 2, GRID.HEIGHT / 2 - 100);
+      this.renderer.fgCtx.fillText(spectaclesTransformString(game.pathAnnouncement, spectaclesOn), GRID.WIDTH / 2, GRID.HEIGHT / 2 - 100);
       this.renderer.fgCtx.restore();
     }
 
@@ -746,18 +749,19 @@ export class RestRenderer {
       const padX = 14;
       const padY = 14;
       const textMaxW = w - padX * 2;
+      const spectaclesOn = isSpectaclesActive(game);
 
       // Header: "ended by [Name]"
-      ctx.font = `${GRID.CELL_SIZE * 0.85}px 'VentureArcade', 'Unifont', monospace`;
+      ctx.font = cipherFont(GRID.CELL_SIZE * 0.85, spectaclesOn);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       ctx.fillStyle = '#cccccc';
-      ctx.fillText('ended by', cx, y + padY);
+      ctx.fillText(spectaclesTransformString('ended by', spectaclesOn), cx, y + padY);
 
-      ctx.font = `${GRID.CELL_SIZE}px 'VentureArcade', 'Unifont', monospace`;
+      ctx.font = cipherFont(GRID.CELL_SIZE, spectaclesOn);
       ctx.fillStyle = cause.color || '#ffffff';
       const nameY = y + padY + GRID.CELL_SIZE * 0.9;
-      ctx.fillText(cause.name.toUpperCase(), cx, nameY);
+      ctx.fillText(spectaclesTransformString(cause.name.toUpperCase(), spectaclesOn), cx, nameY);
 
       // Separator line
       const sepY = nameY + GRID.CELL_SIZE + 4;
@@ -774,7 +778,7 @@ export class RestRenderer {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
         ctx.fillStyle = '#999999';
-        this.renderer.drawWrappedText(ctx, cause.description, cx, sepY + 10, textMaxW, 14);
+        this.renderer.drawWrappedText(ctx, spectaclesTransformString(cause.description, spectaclesOn), cx, sepY + 10, textMaxW, 14);
       }
     }
 

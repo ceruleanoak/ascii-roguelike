@@ -7,6 +7,8 @@
  * pixel density; drawImage handles the mapping automatically).
  */
 
+import { installRetroAlphaQuantization } from '../ASCIIRenderer.js';
+
 // ---------------------------------------------------------------------------
 // ScreenShake
 //
@@ -308,6 +310,7 @@ export class PixelatedDissolve {
     if (!this._offscreen) {
       this._offscreen = document.createElement('canvas');
       this._offCtx = this._offscreen.getContext('2d');
+      installRetroAlphaQuantization(this._offCtx);
     }
     if (this._offscreen.width !== w || this._offscreen.height !== h) {
       this._offscreen.width = w;

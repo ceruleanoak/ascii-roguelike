@@ -13,7 +13,7 @@ const BURST_SHOT_INTERVAL = 0.09;  // seconds between shots within a burst
 const FIRE_PROJ_SPEED     = 140;   // px/s
 
 const HEAD_DATA = {
-  char: 'Θ',
+  char: 'Ⲑ',
   name: 'Turtle Head',
   hp:   1,   // stub — canonical HP lives on TurtleShell
   speed: 0,
@@ -34,7 +34,7 @@ export class TurtleHead extends Enemy {
     super('?', x, y, 0);
 
     // ── Identity ──────────────────────────────────────────────────────────────
-    this.char          = 'Θ';
+    this.char          = 'Ⲑ';
     this.data          = HEAD_DATA;
     this.hp            = 1;
     this.maxHp         = 1;

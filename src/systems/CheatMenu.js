@@ -1,4 +1,5 @@
 import { ITEMS, INGREDIENTS, ITEM_TYPES, WEAPON_TYPES } from '../data/items.js';
+import { Item } from '../entities/Item.js';
 import { ENEMIES, ZONE_SPAWN_TABLES } from '../data/enemies.js';
 import { GRID } from '../game/GameConfig.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
@@ -60,10 +61,10 @@ export class CheatMenu {
     ] : [];
 
     const bossItems = (this.game && this.game.zoneDepths) ? [
-      { char: 'Ω', name: 'GOO DRAGON (green)',  type: 'boss_test', zone: 'green',  color: '#22cc44' },
+      { char: 'Ⲱ', name: 'GOO DRAGON (green)',  type: 'boss_test', zone: 'green',  color: '#22cc44' },
       { char: '@', name: 'ANCIENT SHELL (red)', type: 'boss_test', zone: 'red',    color: '#ff4400' },
       { char: '~', name: 'FROSTED MAW (cyan)',  type: 'boss_test', zone: 'cyan',   color: '#44ffff' },
-      { char: 'Ω', name: 'BOSS (yellow)',       type: 'boss_test', zone: 'yellow', color: '#ffff44' }
+      { char: 'Ⲱ', name: 'BOSS (yellow)',       type: 'boss_test', zone: 'yellow', color: '#ffff44' }
     ] : [];
 
     // BOULDER TEST — debug placement for the Red deflect puzzle. Spawn the 4
@@ -410,6 +411,54 @@ export class CheatMenu {
     }
 
     return null;
+  }
+
+  /**
+   * Add a spawned item to the right inventory. Armor/consumables always equip
+   * immediately for fast gear testing — an occupied slot is displaced into the
+   * matching inventory pool (never lost), not left in storage. Cheat spawns
+   * skip the SlotReplacementSystem prompt by design (the cheat menu is itself a
+   * modal; equip-and-displace is the useful behavior here). Weapons/traps go to
+   * the item chest as before.
+   */
+  spawnItem(itemData) {
+    const game = this.game;
+    const { char, type, name } = itemData;
+    console.log('[CHEAT] Spawning item:', name, type);
+
+    if (type === ITEM_TYPES.INGREDIENT) {
+      // Add ingredient to active pool (banked in REST, carried in EXPLORE)
+      game.addIngredient(char);
+      console.log(`[CHEAT] ✓ Added ingredient: ${name}`);
+    } else if (type === ITEM_TYPES.WEAPON || type === ITEM_TYPES.TRAP) {
+      // Add weapon/trap to item chest
+      const item = new Item(char, 0, 0);
+      game.inventorySystem.addToChest(item);
+      console.log(`[CHEAT] ✓ Added ${type === ITEM_TYPES.TRAP ? 'trap' : 'weapon'} to chest: ${name}`);
+    } else if (type === ITEM_TYPES.ARMOR) {
+      const item = new Item(char, 0, 0);
+      // Always equip: equipArmor returns any previously-equipped armor to
+      // armorInventory, so the old piece is kept, not lost.
+      game.inventorySystem.armorInventory.push(item);
+      game.inventorySystem.equipArmor(item);
+      game.inventorySystem.applyEquipmentEffectsToPlayer(game.player);
+      console.log(`[CHEAT] ✓ Equipped armor: ${name}`);
+    } else if (type === ITEM_TYPES.CONSUMABLE) {
+      const item = new Item(char, 0, 0);
+      const inv = game.inventorySystem;
+      // First empty slot, or replace slot 0 when all are full. equipConsumable
+      // returns the displaced consumable to consumableInventory.
+      let slot = inv.equippedConsumables.findIndex(s => s === null);
+      if (slot === -1) slot = 0;
+      inv.consumableInventory.push(item);
+      inv.equipConsumable(slot, item);
+      game.player.equippedConsumables = [...inv.equippedConsumables];
+      console.log(`[CHEAT] ✓ Equipped consumable: ${name}`);
+    }
+
+    game.saveGameState();
+    game.renderer.markBackgroundDirty();
+    game.updateUI();
   }
 
   _activateItem(selected) {

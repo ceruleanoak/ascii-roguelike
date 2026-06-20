@@ -1,0 +1,57 @@
+{
+  "name": "sac/gen/bell/fm-bell",
+  "totalDuration": 1.5,
+  "bpm": 120,
+  "snapMode": "none",
+  "instrument": {
+    "masterGain": 0.8,
+    "chip": "GEN",
+    "type": "fm",
+    "fm": {
+      "ratio": 3.5,
+      "index": 8,
+      "carrier": "sine",
+      "modWave": "sine"
+    }
+  },
+  "volumeEnvelope": [
+    {
+      "t": 0,
+      "v": 1
+    },
+    {
+      "t": 0.25,
+      "v": 0.35
+    },
+    {
+      "t": 1,
+      "v": 0
+    }
+  ],
+  "pitchEnvelope": [
+    {
+      "t": 0,
+      "semitones": 0
+    },
+    {
+      "t": 1,
+      "semitones": 0
+    }
+  ],
+  "notes": [
+    {
+      "id": "n133",
+      "time": 0,
+      "duration": 1.45,
+      "frequency": 523.25,
+      "volume": 0.9,
+      "muted": false
+    }
+  ],
+  "echo": {
+    "enabled": false,
+    "delay": 0.12,
+    "scale": 0.55,
+    "count": 4
+  }
+}

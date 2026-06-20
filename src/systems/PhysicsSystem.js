@@ -360,6 +360,7 @@ export class PhysicsSystem {
       inLiquid = false;
       damagingLiquid = null;
       inGrass = false;
+      slowingMultiplier = 1.0; // airborne — bushes/trees/stumps pass underneath
     }
 
     // Apply velocity multiplier for liquid water, grass, and slowing objects

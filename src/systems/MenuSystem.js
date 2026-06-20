@@ -162,6 +162,25 @@ export class MenuSystem {
     }
   }
 
+  /**
+   * The center crafting slot is interactive only when there's something to do
+   * with it: a finished item to claim, or — with both ingredient slots empty —
+   * at least one crafted item in inventory to place there. Otherwise it offers
+   * no action and should not highlight or show a hint.
+   */
+  isCenterCraftingSlotInteractive() {
+    const game = this.game;
+    const cs = game.craftingSystem;
+    if (cs.hasCenterContent()) return true;
+    if (cs.leftSlot || cs.rightSlot) return false;
+
+    const inv = game.inventorySystem;
+    const hasWeapon = game.player.quickSlots.some(i => i) || inv.itemChest.length > 0;
+    const hasArmor = !!inv.equippedArmor || inv.armorInventory.length > 0;
+    const hasConsumable = inv.equippedConsumables.some(i => i) || inv.consumableInventory.length > 0;
+    return hasWeapon || hasArmor || hasConsumable;
+  }
+
   getNearestInteractiveSlot() {
     const game = this.game;
     if (!game.player) return null;
@@ -199,13 +218,15 @@ export class MenuSystem {
     // are display-only and must not accept SPACE / show the proximity highlight.
     const meter = game.player?.magicMeter;
     const meterSlots = (meter?.active && Array.isArray(meter.slots)) ? new Set(meter.slots) : null;
-    const filteredSlots = meterSlots
-      ? slots.filter(s => {
-          const m = s.type.match(/^equipment-consumable(\d)$/);
-          if (!m) return true;
-          return !meterSlots.has(parseInt(m[1], 10) - 1);
-        })
-      : slots;
+    const centerInteractive = this.isCenterCraftingSlotInteractive();
+    const filteredSlots = slots.filter(s => {
+      if (s.type === 'crafting-center' && !centerInteractive) return false;
+      if (meterSlots) {
+        const m = s.type.match(/^equipment-consumable(\d)$/);
+        if (m && meterSlots.has(parseInt(m[1], 10) - 1)) return false;
+      }
+      return true;
+    });
 
     let nearestSlot = null;
     let minDistance = Infinity;
@@ -561,12 +582,19 @@ export class MenuSystem {
 
     if (slotType === 'center') {
       game.menuColumns = [weaponsList, armorList, consumableList];
-      game.disabledColumns = [false, false, false];
       game.selectedColumn = 1;
     } else {
       game.menuColumns = [weaponsList, armorList, ingredientList, consumableList];
-      game.disabledColumns = [false, false, false, false];
       game.selectedColumn = 2;
+    }
+
+    // Empty columns are non-navigable — moveColumn skips them and the overlay
+    // hides their side arrows. If every column is empty, the overlay shows the
+    // "need ingredients" message instead of a column.
+    game.disabledColumns = game.menuColumns.map(list => list.length === 0);
+    if (game.disabledColumns[game.selectedColumn]) {
+      const firstEnabled = game.disabledColumns.findIndex(d => !d);
+      if (firstEnabled !== -1) game.selectedColumn = firstEnabled;
     }
 
     game.menuItems = game.menuColumns[game.selectedColumn];
@@ -856,9 +884,24 @@ export class MenuSystem {
         );
         if (item) {
           if (item.data.type === 'ARMOR') {
+            // Mirror world-pickup behavior: auto-equip, or prompt when occupied
+            if (game.inventorySystem.equippedArmor !== null) {
+              game.slotReplacementSystem.open(item, 'armor');
+              game.renderer.markBackgroundDirty();
+              return;
+            }
             game.inventorySystem.armorInventory.push(item);
+            game.inventorySystem.equipArmor(item);
+            game.inventorySystem.applyEquipmentEffectsToPlayer(game.player);
           } else if (item.data.type === 'CONSUMABLE') {
+            const emptySlot = game.inventorySystem.equippedConsumables.findIndex(s => s === null);
+            if (emptySlot === -1) {
+              game.slotReplacementSystem.open(item, 'consumable');
+              game.renderer.markBackgroundDirty();
+              return;
+            }
             game.inventorySystem.consumableInventory.push(item);
+            game.inventorySystem.equipConsumable(emptySlot, item);
           } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
             const dropped = game.player.pickupItem(item);
             if (dropped) game.inventorySystem.addToChest(dropped);

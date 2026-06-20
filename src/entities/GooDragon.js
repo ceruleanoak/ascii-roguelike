@@ -22,7 +22,7 @@ const FLOAT_RADIUS = GRID.CELL_SIZE * 1.5;  // hover amplitude
 const FLOAT_SPEED  = 0.55;                   // hover cycle (rad/s)
 
 const BOSS_DATA = {
-  char: 'Ω',
+  char: 'Ⲱ',
   name: 'Goo Dragon',
   hp:   GOO_DRAGON_MAX_HP,
   speed: 20,
@@ -44,7 +44,7 @@ export class GooDragon extends Enemy {
     super('?', x, y, 0); // dummy char; we override everything below
 
     // ── Identity ──────────────────────────────────────────────────────────────
-    this.char      = 'Ω';
+    this.char      = 'Ⲱ';
     this.data      = BOSS_DATA;
     this.hp        = BOSS_DATA.hp;
     this.maxHp     = BOSS_DATA.hp;

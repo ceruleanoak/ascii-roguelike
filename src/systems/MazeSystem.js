@@ -52,10 +52,49 @@ const TIMER_DURATION = 5.0; // s per countdown
 // pairing learned.
 const OBJ_COLOR  = '#9977aa';
 
-// Hidden ingredient rewards — tiered by depth
-const REWARDS_COMMON   = ['c', 'b', 'd', 'a', 'l', 'r', 'h', 'f', 't', 'm', '0'];
-const REWARDS_UNCOMMON = ['g', 'w', 's', 'e', 'k', 'o', 'v', 'F', 'M', 'j', 'i'];
-const REWARDS_RARE     = ['1', '9', '`', '_', '?', '(', '6'];
+// Maze loot table — each entry has a baseWeight (at depth 0) and a depthBonus
+// added per zone-depth level.  Commons stay flat so basic ingredients are always
+// reliably available; uncommons grow steadily; gems start at zero and only
+// appear once the player has gone deep enough to earn the risk vs. reward.
+//
+// Effective weight at depth d: max(0, baseWeight + d * depthBonus)
+const MAZE_LOOT_TABLE = [
+  // ── Common ──────────────────────────────────────────────────────────────────
+  { char: 'c', baseWeight: 18, depthBonus: 0.0 }, // Coin
+  { char: 'b', baseWeight: 16, depthBonus: 0.0 }, // Bone
+  { char: 'd', baseWeight: 14, depthBonus: 0.0 }, // Dust
+  { char: 'a', baseWeight: 14, depthBonus: 0.0 }, // Ash
+  { char: 'l', baseWeight: 14, depthBonus: 0.0 }, // Leaf
+  { char: 'r', baseWeight: 12, depthBonus: 0.0 }, // Root
+  { char: 'h', baseWeight: 12, depthBonus: 0.0 }, // Herb
+  { char: 'f', baseWeight: 10, depthBonus: 0.0 }, // Fur
+  { char: 't', baseWeight: 10, depthBonus: 0.0 }, // Teeth
+  { char: 'm', baseWeight: 10, depthBonus: 0.0 }, // Meat
+  { char: '0', baseWeight:  8, depthBonus: 0.0 }, // Rock
+  { char: 'g', baseWeight: 12, depthBonus: 0.0 }, // Goo
+
+  // ── Uncommon ─────────────────────────────────────────────────────────────────
+  { char: 'w', baseWeight:  5, depthBonus: 0.8 }, // Wing
+  { char: 's', baseWeight:  5, depthBonus: 0.8 }, // Scale
+  { char: 'e', baseWeight:  4, depthBonus: 0.8 }, // Eye
+  { char: 'k', baseWeight:  4, depthBonus: 0.8 }, // Silk
+  { char: 'o', baseWeight:  4, depthBonus: 0.8 }, // Oil
+  { char: 'v', baseWeight:  4, depthBonus: 0.8 }, // Venom
+  { char: 'F', baseWeight:  3, depthBonus: 1.0 }, // Fire Essence
+  { char: 'M', baseWeight:  3, depthBonus: 1.0 }, // Metal
+  { char: 'j', baseWeight:  3, depthBonus: 1.0 }, // Jaw
+  { char: 'i', baseWeight:  3, depthBonus: 1.0 }, // Ice
+
+  // ── Rare (gemstones) ─────────────────────────────────────────────────────────
+  // Zero at depth 0 — only appear once you've gone deep enough.
+  { char: '1', baseWeight:  0, depthBonus: 1.5 }, // Topaz
+  { char: '9', baseWeight:  0, depthBonus: 1.5 }, // Garnet
+  { char: '`', baseWeight:  0, depthBonus: 1.5 }, // Emerald
+  { char: '_', baseWeight:  0, depthBonus: 1.2 }, // Diamond
+  { char: '?', baseWeight:  0, depthBonus: 1.8 }, // Ruby  — "ruby is the stone of flame"
+  { char: '(', baseWeight:  0, depthBonus: 1.5 }, // Sapphire
+  { char: '6', baseWeight:  0, depthBonus: 1.2 }, // Onyx
+];
 
 // ─── MazeObject ────────────────────────────────────────────────────────────
 
@@ -132,12 +171,11 @@ export class MazeSystem {
 
     // Place maze objects at dead-end logical cells (degree 1)
     const mazeObjects = [];
-    const depth   = this.game.getCurrentZoneDepth?.() ?? 0;
-    const rewards = this._shuffledRewards(depth);
+    const depth = this.game.getCurrentZoneDepth?.() ?? 0;
     for (let lr = 0; lr < LOGICAL_SIZE; lr++) {
       for (let lc = 0; lc < LOGICAL_SIZE; lc++) {
         if (degrees[lr][lc] !== 1) continue; // only dead ends
-        const hidden = rewards.shift() || 'c';
+        const hidden = this._weightedLootPick(depth);
         const char   = coverFor(hidden);
         mazeObjects.push(new MazeObject(char, physC(lc), physR(lr), hidden));
         // Object is solid — player must hit it, not walk through it
@@ -170,23 +208,18 @@ export class MazeSystem {
     };
   }
 
-  _shuffledRewards(depth = 0) {
-    let pool;
-    if (depth <= 3) {
-      // Early: mostly common, small uncommon sprinkling
-      pool = [...REWARDS_COMMON, ...REWARDS_COMMON, ...REWARDS_UNCOMMON];
-    } else if (depth <= 6) {
-      // Mid: balanced
-      pool = [...REWARDS_COMMON, ...REWARDS_UNCOMMON, ...REWARDS_UNCOMMON, ...REWARDS_RARE];
-    } else {
-      // Deep: uncommon + rare dominant
-      pool = [...REWARDS_UNCOMMON, ...REWARDS_UNCOMMON, ...REWARDS_RARE, ...REWARDS_RARE];
+  _weightedLootPick(depth) {
+    let total = 0;
+    for (const entry of MAZE_LOOT_TABLE) {
+      total += Math.max(0, entry.baseWeight + depth * entry.depthBonus);
     }
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
+    let roll = Math.random() * total;
+    for (const entry of MAZE_LOOT_TABLE) {
+      const w = Math.max(0, entry.baseWeight + depth * entry.depthBonus);
+      roll -= w;
+      if (roll <= 0) return entry.char;
     }
-    return pool;
+    return MAZE_LOOT_TABLE[0].char;
   }
 
   // ─── Entry / Exit ────────────────────────────────────────────────────────

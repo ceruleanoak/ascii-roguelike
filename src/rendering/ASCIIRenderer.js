@@ -1,5 +1,51 @@
 import { GRID, COLORS } from '../game/GameConfig.js';
 
+// ── Retro alpha quantization ─────────────────────────────────────────────────
+// Game-wide policy: every alpha value renders in hard 10% increments — fades
+// and falloffs band instead of blending, like fixed-palette hardware. One
+// chokepoint: instance-level accessors installed on each game context catch
+// every `globalAlpha` write and every rgba()/hsla() fillStyle/strokeStyle
+// string. Gradient objects bypass this (their stops interpolate internally) —
+// anything that wants a smooth alpha ramp must draw stepped bands instead
+// (see GrayZoneSystem mist veil).
+
+const quantizeAlpha = (v) => Math.round(v * 10) / 10;
+
+// rgba()/hsla() alpha component: last numeric before ')', preceded by ',' or '/'.
+// Only matches 0/1/decimal forms, so rgb() blue components can't false-match.
+const STYLE_ALPHA_RE = /([,/]\s*)(0?\.\d+|[01](?:\.0+)?)(\s*\))/g;
+const styleCache = new Map();
+
+function quantizeStyleAlpha(style) {
+  if (typeof style !== 'string' || !(style.includes('rgba') || style.includes('hsla'))) {
+    return style; // Plain colors, gradients, patterns pass through
+  }
+  let out = styleCache.get(style);
+  if (out === undefined) {
+    out = style.replace(STYLE_ALPHA_RE, (_, pre, a, post) => pre + quantizeAlpha(parseFloat(a)) + post);
+    if (styleCache.size < 1000) styleCache.set(style, out);
+  }
+  return out;
+}
+
+export function installRetroAlphaQuantization(ctx) {
+  const proto = CanvasRenderingContext2D.prototype;
+  const ga = Object.getOwnPropertyDescriptor(proto, 'globalAlpha');
+  Object.defineProperty(ctx, 'globalAlpha', {
+    configurable: true,
+    get() { return ga.get.call(this); },
+    set(v) { ga.set.call(this, quantizeAlpha(v)); }
+  });
+  for (const prop of ['fillStyle', 'strokeStyle']) {
+    const desc = Object.getOwnPropertyDescriptor(proto, prop);
+    Object.defineProperty(ctx, prop, {
+      configurable: true,
+      get() { return desc.get.call(this); },
+      set(v) { desc.set.call(this, quantizeStyleAlpha(v)); }
+    });
+  }
+}
+
 export class ASCIIRenderer {
   constructor(backgroundCanvas, foregroundCanvas) {
     this.bgCanvas = backgroundCanvas;
@@ -27,6 +73,7 @@ export class ASCIIRenderer {
   }
 
   setupContext(ctx) {
+    installRetroAlphaQuantization(ctx);
     ctx.scale(this.dpr, this.dpr);
     ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
     ctx.textAlign = 'center';

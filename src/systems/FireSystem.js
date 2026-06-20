@@ -252,15 +252,10 @@ export class FireSystem {
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
-  // Mirrors main.js._activeBackgroundObjects but tolerates a null player
-  // (headless harnesses) — fire follows whichever layer the player is in.
+  // Delegates to the canonical game accessor (single source of truth, null-safe).
+  // Fire follows whichever layer the player is in.
   _activeObjects() {
-    const game = this.game;
-    if (game.player?.inMaze && game.mazeInterior) return [];
-    if ((game.player?.inHut || game.player?.inDungeon) && game.activeFloor) {
-      return game.activeFloor.backgroundObjects;
-    }
-    return game.currentRoom ? game.currentRoom.backgroundObjects : [];
+    return this.game._activeBackgroundObjects();
   }
 
   // Cell-keyed map of ignition candidates (flammable, not yet burning).

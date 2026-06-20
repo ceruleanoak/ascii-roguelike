@@ -3,6 +3,7 @@ import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
 import { getZoneRandomEnemy } from '../data/enemies.js';
+import { applyZoneCombatModifiers } from '../data/zones.js';
 import { WiseFellow } from '../entities/WiseFellow.js';
 import { Fisherman } from '../entities/Fisherman.js';
 import { Witch } from '../entities/Witch.js';
@@ -34,7 +35,7 @@ export class HutSystem {
 
   // ─── Interior Generation ─────────────────────────────────────────────────
 
-  generateHutInterior(hutKind, depth, pressBias = false) {
+  generateHutInterior(hutKind, depth) {
     const cols = INTERIOR_COLS;
     const rows = INTERIOR_ROWS;
 
@@ -63,9 +64,10 @@ export class HutSystem {
     };
 
     // ── Fixed-position background objects first ──
-    // Oil press: P-flagged huts always get one; other huts have a small chance.
+    // Oil press: any hut can roll one. Rate bumped 0.10 → 0.12 when the old
+    // guaranteed-press P room became the puzzle room.
     // Placed BEFORE decor/bread so those spawn loops can reject the press cell.
-    const hasPress = pressBias || Math.random() < 0.10;
+    const hasPress = Math.random() < 0.12;
     if (hasPress) {
       backgroundObjects.push(new BackgroundObject(
         '⊓',
@@ -109,6 +111,7 @@ export class HutSystem {
         const enemy = new Enemy(enemyChar, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE, depth);
         enemy.setCollisionMap(collisionMap);
         enemy.setBackgroundObjects(backgroundObjects);
+        applyZoneCombatModifiers(enemy, zone);
         enemies.push(enemy);
       }
 
@@ -431,7 +434,7 @@ export class HutSystem {
       game.activeFloor = hut.interiorState;
     } else {
       const depth = game.getCurrentZoneDepth ? game.getCurrentZoneDepth() : 1;
-      game.activeFloor = this.generateHutInterior(hut.hutKind, depth, hut.pressBias === true);
+      game.activeFloor = this.generateHutInterior(hut.hutKind, depth);
       hut.interiorState = game.activeFloor;
       hut.interiorGenerated = true;
     }

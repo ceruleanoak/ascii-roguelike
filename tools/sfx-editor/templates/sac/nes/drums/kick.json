@@ -1,0 +1,56 @@
+{
+  "name": "sac/nes/drums/kick",
+  "totalDuration": 0.2,
+  "bpm": 120,
+  "snapMode": "none",
+  "instrument": {
+    "masterGain": 0.8,
+    "chip": "NES",
+    "type": "wave",
+    "wavetable": "nesTri"
+  },
+  "volumeEnvelope": [
+    {
+      "t": 0,
+      "v": 1
+    },
+    {
+      "t": 0.12,
+      "v": 0.32
+    },
+    {
+      "t": 1,
+      "v": 0
+    }
+  ],
+  "pitchEnvelope": [
+    {
+      "t": 0,
+      "semitones": 10
+    },
+    {
+      "t": 0.35,
+      "semitones": -8
+    },
+    {
+      "t": 1,
+      "semitones": -20
+    }
+  ],
+  "notes": [
+    {
+      "id": "n9",
+      "time": 0,
+      "duration": 0.18,
+      "frequency": 130.81,
+      "volume": 0.9,
+      "muted": false
+    }
+  ],
+  "echo": {
+    "enabled": false,
+    "delay": 0.12,
+    "scale": 0.55,
+    "count": 4
+  }
+}

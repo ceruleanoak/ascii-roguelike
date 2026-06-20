@@ -1,0 +1,184 @@
+{
+  "name": "sac/sms/arp/arp",
+  "totalDuration": 1,
+  "bpm": 120,
+  "snapMode": "none",
+  "instrument": {
+    "masterGain": 0.8,
+    "chip": "SMS",
+    "type": "square",
+    "duty": 0.5
+  },
+  "volumeEnvelope": [
+    {
+      "t": 0,
+      "v": 0
+    },
+    {
+      "t": 0.03,
+      "v": 1
+    },
+    {
+      "t": 0.92,
+      "v": 1
+    },
+    {
+      "t": 1,
+      "v": 0
+    }
+  ],
+  "pitchEnvelope": [
+    {
+      "t": 0,
+      "semitones": 0
+    },
+    {
+      "t": 1,
+      "semitones": 0
+    }
+  ],
+  "notes": [
+    {
+      "id": "n37",
+      "time": 0,
+      "duration": 0.06,
+      "frequency": 261.63,
+      "volume": 0.85,
+      "muted": false
+    },
+    {
+      "id": "n38",
+      "time": 0.06,
+      "duration": 0.06,
+      "frequency": 329.63,
+      "volume": 0.85,
+      "muted": false
+    },
+    {
+      "id": "n39",
+      "time": 0.12,
+      "duration": 0.06,
+      "frequency": 392,
+      "volume": 0.85,
+      "muted": false
+    },
+    {
+      "id": "n40",
+      "time": 0.18,
+      "duration": 0.06,
+      "frequency": 261.63,
+      "volume": 0.85,
+      "muted": false
+    },
+    {
+      "id": "n41",
+      "time": 0.24,
+      "duration": 0.06,
+      "frequency": 329.63,
+      "volume": 0.85,
+      "muted": false
+    },
+    {
+      "id": "n42",
+      "time": 0.3,
+      "duration": 0.06,
+      "frequency": 392,
+      "volume": 0.85,
+      "muted": false
+    },
+    {
+      "id": "n43",
+      "time": 0.36,
+      "duration": 0.06,
+      "frequency": 261.63,
+      "volume": 0.85,
+      "muted": false
+    },
+    {
+      "id": "n44",
+      "time": 0.42,
+      "duration": 0.06,
+      "frequency": 329.63,
+      "volume": 0.85,
+      "muted": false
+    },
+    {
+      "id": "n45",
+      "time": 0.48,
+      "duration": 0.06,
+      "frequency": 392,
+      "volume": 0.85,
+      "muted": false
+    },
+    {
+      "id": "n46",
+      "time": 0.54,
+      "duration": 0.06,
+      "frequency": 261.63,
+      "volume": 0.85,
+      "muted": false
+    },
+    {
+      "id": "n47",
+      "time": 0.6,
+      "duration": 0.06,
+      "frequency": 329.63,
+      "volume": 0.85,
+      "muted": false
+    },
+    {
+      "id": "n48",
+      "time": 0.66,
+      "duration": 0.06,
+      "frequency": 392,
+      "volume": 0.85,
+      "muted": false
+    },
+    {
+      "id": "n49",
+      "time": 0.72,
+      "duration": 0.06,
+      "frequency": 261.63,
+      "volume": 0.85,
+      "muted": false
+    },
+    {
+      "id": "n50",
+      "time": 0.78,
+      "duration": 0.06,
+      "frequency": 329.63,
+      "volume": 0.85,
+      "muted": false
+    },
+    {
+      "id": "n51",
+      "time": 0.84,
+      "duration": 0.06,
+      "frequency": 392,
+      "volume": 0.85,
+      "muted": false
+    },
+    {
+      "id": "n52",
+      "time": 0.9,
+      "duration": 0.06,
+      "frequency": 261.63,
+      "volume": 0.85,
+      "muted": false
+    },
+    {
+      "id": "n53",
+      "time": 0.96,
+      "duration": 0.03999999999999959,
+      "frequency": 329.63,
+      "volume": 0.85,
+      "muted": false
+    }
+  ],
+  "echo": {
+    "enabled": false,
+    "delay": 0.12,
+    "scale": 0.55,
+    "count": 4
+  }
+}

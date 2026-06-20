@@ -18,36 +18,11 @@ export const WEAPON_TYPES = {
   FISHING_ROD: 'FISHING_ROD'
 };
 
-// Tier pools for duplicate-upgrade crafting. Normal recipes take priority.
-// Organized by weaponSubtype so two staffs can't produce a sword result.
-// Weapons not listed here (spear, staff, whip, flail, dagger) have no upgrade path.
-export const WEAPON_TIERS = {
-  GUN: [
-    ['¬'],
-    ['⌂', 'X'],
-    ['⌐', '❄', 'ϟ', '⊕', '═', '◙', '⊞', '☣', '╬', '⊿', '☼']
-  ],
-  BOW: [
-    [')'],
-    ['⟩'],
-    ['❅', '⋙', '⊛', '◈', '⇶', '≈', '⋰', '⋯']
-  ],
-  sword: [
-    ['†'],
-    ['‡', '⌘', '╪'],
-    ['⚔', '♠', '◇']
-  ],
-  axe: [
-    ['⛏', '⊦'],
-    ['⊤'],
-    ['⚯']
-  ],
-  hammer: [
-    ['⊥'],
-    ['⟘', '☃', '◉', '⬢'],
-    ['▼', '⚒']
-  ]
-};
+// WEAPON_TIERS is derived from the `tier` field on each weapon definition
+// (see buildWeaponTiers below, exported after ITEMS). Defining the ladder on
+// the items themselves keeps the fountain upgrade and duplicate-upgrade
+// crafting in sync automatically — a new weapon participates the moment it
+// declares a `tier`, with no separate table to keep current.
 
 // Item definitions
 // Item definitions are organized by class → type → tier:
@@ -65,6 +40,7 @@ export const ITEMS = {
   // ── GUN — Tier 1 ──────────────────────────────────────────────────────────
   '¬': {
     char: '¬',
+    tier: 1,
     name: 'Gun',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
@@ -78,6 +54,7 @@ export const ITEMS = {
   },
   '⊸': {
     char: '⊸',
+    tier: 1,
     name: 'Sling',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
@@ -95,8 +72,9 @@ export const ITEMS = {
   },
 
   // ── GUN — Tier 2 ──────────────────────────────────────────────────────────
-  '⌂': {
-    char: '⌂',
+  'ᛉ': {
+    char: 'ᛉ',
+    tier: 2,
     name: 'Shotgun',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
@@ -112,6 +90,7 @@ export const ITEMS = {
   },
   'X': {
     char: 'X',
+    tier: 2,
     name: 'Dual Pistols',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
@@ -124,8 +103,9 @@ export const ITEMS = {
     reloadType: 'magazine',
     color: COLORS.ITEM
   },
-  '※': {
-    char: '※',
+  'ᚷ': {
+    char: 'ᚷ',
+    tier: 2,
     name: 'Heavy Pistols',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
@@ -138,6 +118,7 @@ export const ITEMS = {
   },
   'ƒ': {
     char: 'ƒ',
+    tier: 2,
     name: "Fester's Gun",
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
@@ -158,6 +139,7 @@ export const ITEMS = {
   // ── GUN — Tier 3 ──────────────────────────────────────────────────────────
   '⌐': {
     char: '⌐',
+    tier: 3,
     name: 'Machine Gun',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
@@ -170,23 +152,25 @@ export const ITEMS = {
     reloadType: 'magazine',
     color: '#888888'
   },
-  '❄': {
-    char: '❄',
+  'ᛁ': {
+    char: 'ᛁ',
+    tier: 3,
     name: 'Freeze Ray',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
     damage: 0,
     cooldown: 2,
     bulletSpeed: 150,
-    bulletChar: '❄',
+    bulletChar: 'ᛁ',
     onHit: 'freeze',
     maxUses: 4,
     reloadTime: 6,
     reloadType: 'energy',
     color: '#00ffff'
   },
-  'ϟ': {
-    char: 'ϟ',
+  '↯': {
+    char: '↯',
+    tier: 3,
     name: 'Lightning Gun',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
@@ -197,14 +181,15 @@ export const ITEMS = {
     onHit: 'stun',
     electric: true,
     requiresCharge: true,
-    bulletChar: 'ϟ',
+    bulletChar: '↯',
     maxUses: 5,
     reloadTime: 7,
     reloadType: 'energy',
     color: '#ffff00'
   },
-  '⊕': {
-    char: '⊕',
+  '⟰': {
+    char: '⟰',
+    tier: 3,
     name: 'Rocket Launcher',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
@@ -219,22 +204,24 @@ export const ITEMS = {
     reloadType: 'magazine',
     color: '#ff4400'
   },
-  '═': {
-    char: '═',
+  'ᛞ': {
+    char: 'ᛞ',
+    tier: 3,
     name: 'Plasma Rifle',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
     damage: 2,
     cooldown: 0.7,
     pierce: true,
-    bulletChar: '═',
+    bulletChar: 'ᛞ',
     maxUses: 8,
     reloadTime: 6,
     reloadType: 'energy',
     color: '#00ff88'
   },
-  '◙': {
-    char: '◙',
+  'ᛋ': {
+    char: 'ᛋ',
+    tier: 3,
     name: 'Laser Cannon',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
@@ -247,8 +234,9 @@ export const ITEMS = {
     reloadType: 'energy',
     color: '#ff0088'
   },
-  '⊞': {
-    char: '⊞',
+  'ᚺ': {
+    char: 'ᚺ',
+    tier: 3,
     name: 'Scatter Gun',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
@@ -261,8 +249,9 @@ export const ITEMS = {
     reloadType: 'magazine',
     color: '#cccccc'
   },
-  '☣': {
-    char: '☣',
+  'ᚦ': {
+    char: 'ᚦ',
+    tier: 3,
     name: 'Venom Pistol',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
@@ -277,8 +266,9 @@ export const ITEMS = {
     reloadType: 'magazine',
     color: '#88ff00'
   },
-  '╬': {
-    char: '╬',
+  'ᚾ': {
+    char: 'ᚾ',
+    tier: 3,
     name: 'Stun Gun',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
@@ -286,14 +276,15 @@ export const ITEMS = {
     cooldown: 0.9,
     onHit: 'stun',
     electric: true,
-    bulletChar: '╬',
+    bulletChar: 'ᚾ',
     maxUses: 6,
     reloadTime: 6,
     reloadType: 'energy',
     color: '#8888ff'
   },
-  '⊿': {
-    char: '⊿',
+  'ᚱ': {
+    char: 'ᚱ',
+    tier: 3,
     name: 'Ricochet Rifle',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
@@ -307,8 +298,9 @@ export const ITEMS = {
     reloadType: 'magazine',
     color: '#ff88ff'
   },
-  '☼': {
-    char: '☼',
+  'ᚲ': {
+    char: 'ᚲ',
+    tier: 3,
     name: 'Dragon Shotgun',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
@@ -330,6 +322,7 @@ export const ITEMS = {
   // ── BOW — Tier 1 ──────────────────────────────────────────────────────────
   ')': {
     char: ')',
+    tier: 1,
     name: 'Bow',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
@@ -343,6 +336,7 @@ export const ITEMS = {
   // ── BOW — Tier 2 ──────────────────────────────────────────────────────────
   '⟩': {
     char: '⟩',
+    tier: 2,
     name: 'Fire Bow',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
@@ -355,6 +349,7 @@ export const ITEMS = {
   },
   '⇒': {
     char: '⇒',
+    tier: 2,
     name: 'Sky Bow',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
@@ -366,6 +361,7 @@ export const ITEMS = {
   },
   '⋙': {
     char: '⋙',
+    tier: 3,
     name: 'Multi-Shot Bow',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
@@ -378,8 +374,9 @@ export const ITEMS = {
   },
 
   // ── BOW — Tier 3 ──────────────────────────────────────────────────────────
-  '❅': {
-    char: '❅',
+  'ᛇ': {
+    char: 'ᛇ',
+    tier: 3,
     name: 'Ice Bow',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
@@ -388,11 +385,12 @@ export const ITEMS = {
     maxUses: 5,  // Fewer uses for elemental bow
     onHit: 'freeze',
     critChance: 0.15,
-    arrowChar: '❅',
+    arrowChar: 'ᛇ',
     color: '#00ddff'
   },
-  '⊛': {
-    char: '⊛',
+  'ᛒ': {
+    char: 'ᛒ',
+    tier: 3,
     name: 'Explosive Bow',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
@@ -405,8 +403,9 @@ export const ITEMS = {
     color: '#ff4400'
     // no critChance — AoE + 1.5× damage would be too powerful
   },
-  '◈': {
-    char: '◈',
+  'ᛟ': {
+    char: 'ᛟ',
+    tier: 3,
     name: 'Homing Bow',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
@@ -415,11 +414,12 @@ export const ITEMS = {
     maxUses: 5,
     homing: true,
     critChance: 0.12,  // compensates for the auto-aim skill trade-off
-    arrowChar: '◈',
+    arrowChar: 'ᛟ',
     color: '#ff00ff'
   },
-  '⇶': {
-    char: '⇶',
+  'ᛏ': {
+    char: 'ᛏ',
+    tier: 3,
     name: 'Piercing Bow',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
@@ -428,11 +428,12 @@ export const ITEMS = {
     maxUses: 5,
     pierce: true,
     critChance: 0.15,  // crit propagates through pierced enemies
-    arrowChar: '⇶',
+    arrowChar: 'ᛏ',
     color: '#00ff00'
   },
-  '≈': {
-    char: '≈',
+  'ᛚ': {
+    char: 'ᛚ',
+    tier: 3,
     name: 'Chain Bow',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
@@ -447,8 +448,9 @@ export const ITEMS = {
     arrowChar: '~',
     color: '#ffff00'
   },
-  '⋰': {
-    char: '⋰',
+  'ᛃ': {
+    char: 'ᛃ',
+    tier: 3,
     name: 'Split Bow',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
@@ -461,8 +463,9 @@ export const ITEMS = {
     arrowChar: '→',
     color: '#00ffff'
   },
-  '⋯': {
-    char: '⋯',
+  'ᛈ': {
+    char: 'ᛈ',
+    tier: 3,
     name: 'Burst Bow',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
@@ -478,6 +481,7 @@ export const ITEMS = {
   // nearby enemies in a tight radius. One shot per room.
   '↩': {
     char: '↩',
+    tier: 1,
     name: 'Boomerang',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
@@ -501,6 +505,7 @@ export const ITEMS = {
   // ── MELEE / sword — Tier 1 ────────────────────────────────────────────────
   '†': {
     char: '†',
+    tier: 1,
     name: 'Sword',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -518,6 +523,7 @@ export const ITEMS = {
   // striking an exit letter cycles it forward through EXIT_LETTERS.
   '§': {
     char: '§',
+    tier: 1,
     name: 'Sword of the Letter',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -534,6 +540,7 @@ export const ITEMS = {
   // ── MELEE / sword — Tier 2 ────────────────────────────────────────────────
   '⫯': {
     char: '⫯',
+    tier: 1,
     name: 'Longsword',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -549,6 +556,7 @@ export const ITEMS = {
   },
   '‡': {
     char: '‡',
+    tier: 2,
     name: 'Flame Sword',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -561,8 +569,9 @@ export const ITEMS = {
     onHit: 'burn',
     color: '#ff4400'
   },
-  '⌘': {
-    char: '⌘',
+  'ᛖ': {
+    char: 'ᛖ',
+    tier: 2,
     name: 'Dragon Blade',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -574,8 +583,9 @@ export const ITEMS = {
     range: 24,
     color: '#ff00ff'
   },
-  '╪': {
-    char: '╪',
+  'ᚠ': {
+    char: 'ᚠ',
+    tier: 2,
     name: 'Lava Sword',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -590,8 +600,9 @@ export const ITEMS = {
     placesLava: true,
     color: '#ff6600'
   },
-  'Ϟ': {
-    char: 'Ϟ',
+  'Ꞩ': {
+    char: 'Ꞩ',
+    tier: 2,
     name: 'Lightning Sword',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -611,6 +622,7 @@ export const ITEMS = {
   // ── MELEE / sword — Tier 3 ────────────────────────────────────────────────
   '⚔': {
     char: '⚔',
+    tier: 3,
     name: 'Legendary Flame Sword',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -623,8 +635,9 @@ export const ITEMS = {
     onHit: 'burn',
     color: '#ffaa00'
   },
-  '☤': {
-    char: '☤',
+  'ᛡ': {
+    char: 'ᛡ',
+    tier: 2,
     name: 'Venom Blade',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -638,8 +651,9 @@ export const ITEMS = {
     poisonStacks: true,
     color: '#00ff00'
   },
-  '♠': {
-    char: '♠',
+  'ᚢ': {
+    char: 'ᚢ',
+    tier: 2,
     name: 'Acid Blade',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -653,8 +667,9 @@ export const ITEMS = {
     acidBlade: true,
     color: '#44ff00'
   },
-  '◇': {
-    char: '◇',
+  'ᛠ': {
+    char: 'ᛠ',
+    tier: 3,
     name: 'Chaos Blade',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -681,11 +696,13 @@ export const ITEMS = {
     attackPattern: 'axe',
     range: 22,
     isPickaxe: true,
+    weaponLevel: 1,
     color: '#aaaaaa'
   },
 
   '⊦': {
     char: '⊦',
+    tier: 1,
     name: 'Axe',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -701,6 +718,7 @@ export const ITEMS = {
   // ── MELEE / axe — Tier 2 ──────────────────────────────────────────────────
   '⊤': {
     char: '⊤',
+    tier: 2,
     name: 'Bone Axe',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -714,8 +732,9 @@ export const ITEMS = {
   },
 
   // ── MELEE / axe — Tier 3 ──────────────────────────────────────────────────
-  '⚯': {
-    char: '⚯',
+  'ᚨ': {
+    char: 'ᚨ',
+    tier: 3,
     name: 'Thunder Axe',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -735,6 +754,7 @@ export const ITEMS = {
   // ── MELEE / hammer — Tier 1 ───────────────────────────────────────────────
   '⊥': {
     char: '⊥',
+    tier: 1,
     name: 'Hammer',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -745,12 +765,14 @@ export const ITEMS = {
     range: 20,
     attackPattern: 'hammerRing',
     locksMovement: true,
+    weaponLevel: 1,
     color: COLORS.ITEM
   },
 
   // ── MELEE / hammer — Tier 2 ───────────────────────────────────────────────
   '⟘': {
     char: '⟘',
+    tier: 2,
     name: 'Maul',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -762,10 +784,12 @@ export const ITEMS = {
     attackPattern: 'hammerRing',
     locksMovement: true,
     knockback: 140,
+    weaponLevel: 2,
     color: '#bb9966'
   },
-  '☃': {
-    char: '☃',
+  'ᛜ': {
+    char: 'ᛜ',
+    tier: 2,
     name: 'Ice Hammer',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -777,10 +801,12 @@ export const ITEMS = {
     range: 18,
     onHit: 'freeze',
     knockback: 250,
+    weaponLevel: 2,
     color: '#00ddff'
   },
   '⬢': {
     char: '⬢',
+    tier: 2,
     name: 'Onyx Hammer',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -792,10 +818,12 @@ export const ITEMS = {
     attackPattern: 'hammerRing',
     locksMovement: true,
     critChance: 0.35,
+    weaponLevel: 2,
     color: '#666666'
   },
-  '◉': {
-    char: '◉',
+  '✺': {
+    char: '✺',
+    tier: 2,
     name: 'Exploding Mace',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -807,12 +835,14 @@ export const ITEMS = {
     range: 20,
     explode: true,
     explodeRadius: 45,
+    weaponLevel: 2,
     color: '#ff6600'
   },
 
   // ── MELEE / hammer — Tier 3 ───────────────────────────────────────────────
-  '▼': {
-    char: '▼',
+  '⏚': {
+    char: '⏚',
+    tier: 3,
     name: 'Earthquake Hammer',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -825,10 +855,12 @@ export const ITEMS = {
     knockback: 350,
     explode: true,
     explodeRadius: 60,
+    weaponLevel: 3,
     color: '#8b6914'
   },
   '⚒': {
     char: '⚒',
+    tier: 3,
     name: 'Bone Crusher',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -840,6 +872,7 @@ export const ITEMS = {
     patternSpeed: 0.17,
     knockback: 380,
     locksMovement: true,
+    weaponLevel: 3,
     range: 26,
     color: '#ffffff'
   },
@@ -847,6 +880,7 @@ export const ITEMS = {
   // ── MELEE / hammer — Tier 4 (secret vein drop, U room only) ─────────────
   '⬡': {
     char: '⬡',
+    tier: 4,
     name: 'Crystal Maul',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -860,6 +894,7 @@ export const ITEMS = {
     chargeHammer: true,               // enables hold-to-charge system in Item.js
     patternSpeed: .2,
     knockback: 480,
+    weaponLevel: 4,
     range: 15,
     color: '#88eeff'
   },
@@ -886,6 +921,7 @@ export const ITEMS = {
   // ── MELEE / spear ─────────────────────────────────────────────────────────
   '↑': {
     char: '↑',
+    tier: 1,
     name: 'Spear',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -903,6 +939,7 @@ export const ITEMS = {
   // ── MELEE / spear — Tier 2 ────────────────────────────────────────────────
   '↟': {
     char: '↟',
+    tier: 2,
     name: 'Venom Lance',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -916,8 +953,9 @@ export const ITEMS = {
   },
 
   // ── MELEE / spear — Tier 3 ────────────────────────────────────────────────
-  'ψ': {
-    char: 'ψ',
+  'ⲯ': {
+    char: 'ⲯ',
+    tier: 3,
     name: 'Trident',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -933,6 +971,7 @@ export const ITEMS = {
   },
   '⇑': {
     char: '⇑',
+    tier: 3,
     name: 'War Spear',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -948,6 +987,7 @@ export const ITEMS = {
   // ── MELEE / staff ─────────────────────────────────────────────────────────
   '/': {
     char: '/',
+    tier: 1,
     name: 'Staff',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -960,10 +1000,11 @@ export const ITEMS = {
     range: 28,
     color: COLORS.ITEM
   },
-  'Ψ': {
+  'Ⲯ': {
     // Identical to Staff — same swing, same block stance, same release sweep —
     // except higher swing damage and the block-release sweep deals 1 dmg.
-    char: 'Ψ',
+    char: 'Ⲯ',
+    tier: 2,
     name: 'Thick Staff',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -1002,6 +1043,7 @@ export const ITEMS = {
   // launch force scale with windup level.
   '¡': {
     char: '¡',
+    tier: 1,
     name: 'Bat',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -1020,6 +1062,7 @@ export const ITEMS = {
     // Metal Bat (Bat + Metal) — Tier 3 of the windup slugger: double damage,
     // same windup/launch behavior.
     char: '⸘',
+    tier: 2,
     name: 'Metal Bat',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -1038,6 +1081,7 @@ export const ITEMS = {
     // Rubber Bat — identical windup/launch to the Bat, but deals no damage.
     // Pure crowd-control: launching (and the knocked-away chain) is the payoff.
     char: '‖',
+    tier: 1,
     name: 'Rubber Bat',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -1145,6 +1189,7 @@ export const ITEMS = {
   // ── MELEE / dagger ────────────────────────────────────────────────────────
   '↾': {
     char: '↾',
+    tier: 1,
     name: 'Dagger',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -1156,8 +1201,9 @@ export const ITEMS = {
     patternSpeed: 0.05,
     color: '#cccccc'
   },
-  '♣': {
-    char: '♣',
+  'ᛘ': {
+    char: 'ᛘ',
+    tier: 2,
     name: 'Vampire Dagger',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -1174,6 +1220,7 @@ export const ITEMS = {
   // ── MELEE / whip ──────────────────────────────────────────────────────────
   '≋': {
     char: '≋',
+    tier: 1,
     name: 'Whip',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -1191,6 +1238,7 @@ export const ITEMS = {
   // Elemental whipcracks: long-range lash inherits the gem's status effect.
   '∿': {
     char: '∿',
+    tier: 2,
     name: 'Ruby Whip',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -1206,6 +1254,7 @@ export const ITEMS = {
   },
   '≀': {
     char: '≀',
+    tier: 2,
     name: 'Sapphire Whip',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -1221,6 +1270,7 @@ export const ITEMS = {
   },
   '⤳': {
     char: '⤳',
+    tier: 2,
     name: 'Topaz Whip',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -1237,6 +1287,7 @@ export const ITEMS = {
   },
   '∽': {
     char: '∽',
+    tier: 2,
     name: 'Emerald Whip',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -1263,7 +1314,7 @@ export const ITEMS = {
     recovery: 0.15,
     cooldown: 1.0,
     patternSpeed: 0.2,
-    range: 26,
+    range: 16,
     color: '#aaaaaa'
   },
 
@@ -1307,16 +1358,16 @@ export const ITEMS = {
   //   speedBoost / speedPenalty  movement speed modifiers
 
   // ── Tier 1: common drops / basic crafts ───────────────────────────────────
-  'V': {
-    char: 'V', name: 'Fur Vest', type: ITEM_TYPES.ARMOR,
+  '𐤀': {
+    char: '𐤀', name: 'Fur Vest', type: ITEM_TYPES.ARMOR,
     defense: 1,
     speedBoost: 0.1,        // light — slight movement bonus
     rollCooldownMult: 0.75, // fast dodge recharge; rolls feel snappy
     spellDescription: 'SIMPLE AND NIMBLE.',
     color: '#8b4513'
   },
-  '2': {
-    char: '2', name: 'Stitched Vest', type: ITEM_TYPES.ARMOR,
+  '𐤅': {
+    char: '𐤅', name: 'Stitched Vest', type: ITEM_TYPES.ARMOR,
     defense: 2,
     speedBoost: 0.05,
     rollCooldownMult: 0.8,
@@ -1324,8 +1375,8 @@ export const ITEMS = {
     spellDescription: 'REFINED AGILITY.',
     color: '#aa6633'
   },
-  'O': {
-    char: 'O', name: 'Slime Suit', type: ITEM_TYPES.ARMOR,
+  '𐤌': {
+    char: '𐤌', name: 'Slime Suit', type: ITEM_TYPES.ARMOR,
     defense: 1,
     slimeImmune: true,
     meleeResist: 0.2,       // goo coating absorbs blunt and blade impacts
@@ -1333,8 +1384,8 @@ export const ITEMS = {
     spellDescription: 'SLIPPERY AND MOIST.',
     color: '#00ff00'
   },
-  '3': {
-    char: '3', name: 'Reinforced Slime Suit', type: ITEM_TYPES.ARMOR,
+  '𐤎': {
+    char: '𐤎', name: 'Reinforced Slime Suit', type: ITEM_TYPES.ARMOR,
     defense: 2,
     slimeImmune: true,
     meleeResist: 0.3,
@@ -1342,8 +1393,8 @@ export const ITEMS = {
     spellDescription: 'EMBRACE WETNESS.',
     color: '#44ff44'
   },
-  'A': {
-    char: 'A', name: 'Bone Armor', type: ITEM_TYPES.ARMOR,
+  '𐤔': {
+    char: '𐤔', name: 'Bone Armor', type: ITEM_TYPES.ARMOR,
     defense: 2,
     meleeResist: 0.25,      // bone plates deflect strikes
     massBonus: 1.0,         // heavier — noticeably less knockback
@@ -1351,8 +1402,8 @@ export const ITEMS = {
     spellDescription: 'STURDY, BUT SLOW.',
     color: '#cccccc'
   },
-  '4': {
-    char: '4', name: 'Padded Bone Armor', type: ITEM_TYPES.ARMOR,
+  '𐤊': {
+    char: '𐤊', name: 'Padded Bone Armor', type: ITEM_TYPES.ARMOR,
     defense: 3,
     meleeResist: 0.3,
     massBonus: 1.5,
@@ -1362,8 +1413,8 @@ export const ITEMS = {
   },
 
   // ── Tier 2: craftable mid-game ────────────────────────────────────────────
-  'L': {
-    char: 'L', name: 'Leather Armor', type: ITEM_TYPES.ARMOR,
+  '𐤂': {
+    char: '𐤂', name: 'Leather Armor', type: ITEM_TYPES.ARMOR,
     defense: 1,
     speedBoost: 0.2,        // lightest proper armor
     rollCooldownMult: 0.65, // fastest dodge recharge of any armor
@@ -1371,6 +1422,14 @@ export const ITEMS = {
     dodgeChance: 0.08,      // physical evasion — lower than Robe's magic dodge
     spellDescription: 'TUCK AND ROLL.',
     color: '#8b6914'
+  },
+  '𐤖': {
+    char: '𐤖', name: 'Bloom Mantle', type: ITEM_TYPES.ARMOR,
+    defense: 1,
+    speedBoost: 0.1,        // light woven fur + pollen
+    smokeOnHit: true,       // taking a hit bursts a pollen smoke screen that blocks enemy sight lines
+    spellDescription: 'POLLEN SCREEN.',
+    color: '#ffe566'
   },
   '⛓': {
     char: '⛓', name: 'Chain Mail', type: ITEM_TYPES.ARMOR,
@@ -1381,8 +1440,8 @@ export const ITEMS = {
     spellDescription: 'ARROW PROTECTION.',
     color: '#aaaaaa'
   },
-  'R': {
-    char: 'R', name: 'Robe', type: ITEM_TYPES.ARMOR,
+  '𐤄': {
+    char: '𐤄', name: 'Robe', type: ITEM_TYPES.ARMOR,
     armorClass: 'robe',
     defense: 1,
     dodgeChance: 0.15,      // magically treats luck as defense
@@ -1393,8 +1452,8 @@ export const ITEMS = {
     spellDescription: 'LUCK IS ARMOR.',
     color: '#9370db'
   },
-  'W': {
-    char: 'W', name: 'Warplate', type: ITEM_TYPES.ARMOR,
+  '𐤆': {
+    char: '𐤆', name: 'Warplate', type: ITEM_TYPES.ARMOR,
     defense: 4,
     bulletResist: 0.5,
     meleeResist: 0.3,       // thick plate absorbs all physical damage types
@@ -1406,8 +1465,8 @@ export const ITEMS = {
   },
 
   // ── Tier 3: exotic / late-game ────────────────────────────────────────────
-  'N': {
-    char: 'N', name: 'Ninja Garb', type: ITEM_TYPES.ARMOR,
+  '𐤏': {
+    char: '𐤏', name: 'Ninja Garb', type: ITEM_TYPES.ARMOR,
     defense: 2,
     poisonImmune: true,
     dodgeChance: 0.15,
@@ -1416,8 +1475,8 @@ export const ITEMS = {
     spellDescription: 'MOVE IN SHADOW.',
     color: '#2f2f2f'
   },
-  'E': {
-    char: 'E', name: 'Ember Cloak', type: ITEM_TYPES.ARMOR,
+  '𐤉': {
+    char: '𐤉', name: 'Ember Cloak', type: ITEM_TYPES.ARMOR,
     defense: 3,
     fireImmune: true,
     burnResist: 1.0,        // no burn DoT can penetrate the cloak
@@ -1426,8 +1485,8 @@ export const ITEMS = {
     spellDescription: 'RETURNS PAIN.',
     color: '#ff4500'
   },
-  'I': {
-    char: 'I', name: 'Ice Plate', type: ITEM_TYPES.ARMOR,
+  '𐤍': {
+    char: '𐤍', name: 'Ice Plate', type: ITEM_TYPES.ARMOR,
     defense: 4,
     freezeImmune: true,
     slowEnemies: true,      // cold radiates outward, chilling nearby enemies
@@ -1437,8 +1496,8 @@ export const ITEMS = {
     spellDescription: 'ICY TO TOUCH.',
     color: '#87ceeb'
   },
-  'K': {
-    char: 'K', name: 'Dragon Scale Armor', type: ITEM_TYPES.ARMOR,
+  '𐤓': {
+    char: '𐤓', name: 'Dragon Scale Armor', type: ITEM_TYPES.ARMOR,
     defense: 5,
     bulletResist: 0.25,     // scales shed projectiles
     meleeResist: 0.3,       // overlapping scales deflect strikes
@@ -1451,8 +1510,8 @@ export const ITEMS = {
 
   // ── Infused robes: Robe + elemental gemstone ──────────────────────────────
   // Pulse triggers on dodge roll, once per room — not a passive timer.
-  'ℜ': {
-    char: 'ℜ', name: 'Frost Robe', type: ITEM_TYPES.ARMOR,
+  '𐤇': {
+    char: '𐤇', name: 'Frost Robe', type: ITEM_TYPES.ARMOR,
     armorClass: 'robe',
     defense: 1,
     dodgeChance: 0.18,
@@ -1467,8 +1526,8 @@ export const ITEMS = {
     spellDescription: 'THE COLD IS ARMOR.',
     color: '#88ddff'
   },
-  'ℛ': {
-    char: 'ℛ', name: 'Flame Robe', type: ITEM_TYPES.ARMOR,
+  '𐤋': {
+    char: '𐤋', name: 'Flame Robe', type: ITEM_TYPES.ARMOR,
     armorClass: 'robe',
     defense: 1,
     dodgeChance: 0.18,
@@ -1483,8 +1542,8 @@ export const ITEMS = {
     spellDescription: 'FIRE FEARS NOTHING.',
     color: '#ff6600'
   },
-  'ℝ': {
-    char: 'ℝ', name: 'Storm Robe', type: ITEM_TYPES.ARMOR,
+  '𐤈': {
+    char: '𐤈', name: 'Storm Robe', type: ITEM_TYPES.ARMOR,
     armorClass: 'robe',
     defense: 1,
     dodgeChance: 0.18,
@@ -1499,8 +1558,8 @@ export const ITEMS = {
     spellDescription: 'STATIC IS KARMA.',
     color: '#88ffff'
   },
-  'ℰ': {
-    char: 'ℰ', name: 'Emerald Robe', type: ITEM_TYPES.ARMOR,
+  '𐤐': {
+    char: '𐤐', name: 'Emerald Robe', type: ITEM_TYPES.ARMOR,
     armorClass: 'robe',
     defense: 1,
     dodgeChance: 0.18,
@@ -1512,8 +1571,8 @@ export const ITEMS = {
     spellDescription: 'THE SWAMP GIVES BACK.',
     color: '#44cc44'
   },
-  'ℬ': {
-    char: 'ℬ', name: 'Blood Robe', type: ITEM_TYPES.ARMOR,
+  '𐤁': {
+    char: '𐤁', name: 'Blood Robe', type: ITEM_TYPES.ARMOR,
     armorClass: 'robe',
     defense: 1,
     dodgeChance: 0.18,
@@ -1525,8 +1584,8 @@ export const ITEMS = {
     spellDescription: 'BLADES REPAY.',
     color: '#cc2222'
   },
-  'ℌ': {
-    char: 'ℌ', name: 'Shadow Robe', type: ITEM_TYPES.ARMOR,
+  '𐤃': {
+    char: '𐤃', name: 'Shadow Robe', type: ITEM_TYPES.ARMOR,
     armorClass: 'robe',
     defense: 1,
     dodgeChance: 0.25,
@@ -1557,15 +1616,15 @@ export const ITEMS = {
     spellDescription: 'DIVE AND STRIKE.',
     color: '#88aacc'
   },
-  '❖': {
-    char: '❖', name: 'Coral Crown', type: ITEM_TYPES.ARMOR,
+  '𐤕': {
+    char: '𐤕', name: 'Coral Crown', type: ITEM_TYPES.ARMOR,
     defense: 1,
     coralCrown: true,      // standing on water tile → tile becomes crystallized (walkable, blocks bullets, 6s decay, 8-stack cap)
     spellDescription: 'THE TIDE LAYS A PATH.',
     color: '#ff99bb'
   },
-  'Ϡ': {
-    char: 'Ϡ', name: 'Stingray Mantle', type: ITEM_TYPES.ARMOR,
+  '⚲': {
+    char: '⚲', name: 'Stingray Mantle', type: ITEM_TYPES.ARMOR,
     defense: 1,
     stingrayMantle: true,  // moving in water → leaves 4s electric wake in vacated cells; wearer is shock-immune; chains 2× shock on wet
     spellDescription: 'LEAVE A LIVE WAKE.',
@@ -1576,8 +1635,8 @@ export const ITEMS = {
   // After a dodge roll ends, the player becomes "armed". Staying still (no WASD)
   // activates the cloak: player renders as a bush `%`, and enemies that haven't
   // already aggro'd cannot detect the player at any range. Moving cancels it.
-  '✿': {
-    char: '✿', name: 'Moss Cloak', type: ITEM_TYPES.ARMOR,
+  '𐤒': {
+    char: '𐤒', name: 'Moss Cloak', type: ITEM_TYPES.ARMOR,
     defense: 1,
     mossCloak: true,
     spellDescription: 'STILL AS A BUSH.',
@@ -1585,10 +1644,10 @@ export const ITEMS = {
   },
 
   // ── Spectacles: cipher decoder, no defense ────────────────────────────────
-  // Occupies the armor slot. While equipped, the render hooks in cipher.js
-  // toggle the Greek↔Latin substitution OFF wherever the cipher is applied:
-  // exit letters, REST label, recipe hints, maze object covers, dungeon
-  // ciphered hints. Trades all physical protection for total cipher decoding.
+  // Occupies the armor slot. While equipped, every spectacles-aware render
+  // call site flips perception both ways: Greek glyphs (maze covers, ciphered
+  // hints) decode to Latin, and Latin text (labels, prompts, item names)
+  // encodes to Greek. Trades all physical protection for cipher decoding.
   '⊙': {
     char: '⊙', name: 'Spectacles', type: ITEM_TYPES.ARMOR,
     defense: 0,
@@ -1712,8 +1771,8 @@ export const ITEMS = {
     cooldown: 20, // Reusable with 20s cooldown
     color: '#00ffff'
   },
-  'Ω': {
-    char: 'Ω',
+  'ѡ': {
+    char: 'ѡ',
     name: 'Floating Boots',
     type: ITEM_TYPES.CONSUMABLE,
     effect: 'float',
@@ -1771,8 +1830,8 @@ export const ITEMS = {
     duration: 10.0,
     color: '#8b6914'
   },
-  'ω': {
-    char: 'ω',
+  '𐤑': {
+    char: '𐤑',
     name: 'Smoke Bomb',
     type: ITEM_TYPES.CONSUMABLE,
     effect: 'invuln',
@@ -2033,6 +2092,17 @@ export const ITEMS = {
     effectDuration: 12.0,
     color: '#9944ff'
   },
+  '∩': {
+    char: '∩',
+    name: 'Snare Trap',
+    type: ITEM_TYPES.TRAP,
+    oneShot: true,
+    charges: 3,
+    triggerRadius: 24,
+    effectRadius: 48,
+    effect: 'snare',        // beast-affinity enemies are rooted in place permanently; others unaffected
+    color: '#8b6914'
+  },
   "'": {
     char: "'",
     name: 'Charm Lure',
@@ -2124,6 +2194,12 @@ export const ITEMS = {
   },
 
   // ── Intermediate crafting materials ─────────────────────────────────────────
+  '⊿': {
+    char: '⊿',
+    name: 'Axe head',
+    type: ITEM_TYPES.INGREDIENT,
+    color: '#aaaaaa'
+  },
   '△': {
     char: '△',
     name: 'Arrowhead',
@@ -2131,6 +2207,36 @@ export const ITEMS = {
     color: '#aaaaaa'
   }
 };
+
+// Tier pools for the fountain upgrade and duplicate-upgrade crafting, derived
+// from the `tier` field on each weapon. Shape mirrors the old hand-maintained
+// table: { family: [ [tier-1 chars], [tier-2 chars], ... ] }, where family is
+// the weapon's subtype (or weaponType for GUN/BOW/WAND). Grouping by subtype
+// keeps two staffs from producing a sword result. A weapon with no `tier`
+// (gem wands, pickaxe, scythe, flail, fishing pole, …) is absent here, so it
+// has no upgrade path and the fountain hands it back. Tier gaps collapse, so
+// the "next tier" is always the next populated rung.
+function buildWeaponTiers() {
+  const families = {};
+  for (const weapon of Object.values(ITEMS)) {
+    if (weapon.type !== ITEM_TYPES.WEAPON) continue;
+    if (typeof weapon.tier !== 'number') continue;
+    const family = weapon.weaponSubtype || weapon.weaponType;
+    if (!family) continue;
+    const byTier = (families[family] ||= {});
+    (byTier[weapon.tier] ||= []).push(weapon.char);
+  }
+  const tiers = {};
+  for (const [family, byTier] of Object.entries(families)) {
+    tiers[family] = Object.keys(byTier)
+      .map(Number)
+      .sort((a, b) => a - b)
+      .map(t => byTier[t]);
+  }
+  return tiers;
+}
+
+export const WEAPON_TIERS = buildWeaponTiers();
 
 // Ingredients (crafting materials)
 export const INGREDIENTS = {
@@ -2187,6 +2293,7 @@ export const INGREDIENTS = {
   // Rock-harvest ingredients — drop from `0` Rock bg objects (rock harvest table).
   // △ Arrowhead also crafts into bows/axes/spears. ⚜ Artifact drops from rocks/chests;
   // trades to errand NPC (2 coins) or wise fellow (unlocks rare hint). ❦ Moss → Moss Cloak.
+  '⊿': { char: '⊿', name: 'Axe head',        color: '#aaaaaa' },
   '△': { char: '△', name: 'Arrowhead',       color: '#aaaaaa' },
   '⚜': { char: '⚜', name: 'Artifact',        color: '#d4af37' },
   '❦': { char: '❦', name: 'Moss',           color: '#5a8a3a' }
@@ -2195,7 +2302,7 @@ export const INGREDIENTS = {
 // Subtype defaults — explicit weapon properties override these
 export const SUBTYPE_DEFAULTS = {
   sword:   { attackPattern: 'arc',       isBlade: true },
-  axe:     { attackPattern: 'sweep',     isBlade: true },
+  axe:     { attackPattern: 'sweep',     isBlade: false, isBlunt: true },
   scythe:  { attackPattern: 'sweep',     isBlade: true },
   spear:   { attackPattern: 'thrust',    isBlade: true, range: 28, distanceCrit: true },
   dagger:  { attackPattern: 'multistab', isBlade: true, range: 16 },
@@ -2278,7 +2385,7 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     ['"']              // Music Box
     },
     armor: {
-      [RARITY.UNCOMMON]: ['A'],              // Bone Armor
+      [RARITY.UNCOMMON]: ['𐤔'],              // Bone Armor
       [RARITY.RARE]:     []
     },
     consumables: {
@@ -2303,7 +2410,7 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     []
     },
     armor: {
-      [RARITY.UNCOMMON]: ['O'],              // Slime Suit
+      [RARITY.UNCOMMON]: ['𐤌'],              // Slime Suit
       [RARITY.RARE]:     []
     },
     consumables: {
@@ -2328,13 +2435,13 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     []
     },
     armor: {
-      [RARITY.UNCOMMON]: ['V', 'L'],         // Fur Vest, Leather Armor
-      [RARITY.RARE]:     ['N']              // Ninja Garb
+      [RARITY.UNCOMMON]: ['𐤀', '𐤂'],         // Fur Vest, Leather Armor
+      [RARITY.RARE]:     ['𐤏']              // Ninja Garb
     },
     consumables: {
       [RARITY.COMMON]:   ['G'],              // Base Potion
       [RARITY.UNCOMMON]: ['∞', 'y'],         // Wings, Firecracker
-      [RARITY.RARE]:     ['♥', 'Ω']        // Heart, Floating Boots
+      [RARITY.RARE]:     ['♥', 'ѡ']        // Heart, Floating Boots
     }
   },
 
@@ -2346,17 +2453,17 @@ export const AFFINITY_POOLS = {
     },
     weapons: {
       [RARITY.COMMON]:   ['†', ')', '↑', '≋', '○', '⊥', '⊸'],         // Sword, Bow, Spear, Whip, Flail, Hammer, Sling
-      [RARITY.UNCOMMON]: ['¬', '⋙', '⫯', '↟', 'Ψ', 'ߒ'],              // Gun, Multi-Shot Bow, Longsword, Venom Lance, Thick Staff, Fishing Pole
-      [RARITY.RARE]:     ['߃', '⇑', '◉', '◈', '⇶', '⌂', '⌐']         // Vault Key, War Spear, Exploding Mace, Homing Bow, Piercing Bow, Shotgun, Machine Gun
+      [RARITY.UNCOMMON]: ['¬', '⋙', '⫯', '↟', 'Ⲯ', 'ߒ'],              // Gun, Multi-Shot Bow, Longsword, Venom Lance, Thick Staff, Fishing Pole
+      [RARITY.RARE]:     ['߃', '⇑', '✺', 'ᛟ', 'ᛏ', 'ᛉ', '⌐']         // Vault Key, War Spear, Exploding Mace, Homing Bow, Piercing Bow, Shotgun, Machine Gun
     },
     traps: {
       [RARITY.UNCOMMON]: ['{'],              // Stun Trap
       [RARITY.RARE]:     [']']             // Tesla Coil
     },
     armor: {
-      [RARITY.UNCOMMON]: ['L', '⛓'],        // Leather Armor, Chain Mail
-      [RARITY.RARE]:     ['W'],             // Warplate
-      [RARITY.EPIC]:     ['K']             // Dragon Scale Armor
+      [RARITY.UNCOMMON]: ['𐤂', '⛓'],        // Leather Armor, Chain Mail
+      [RARITY.RARE]:     ['𐤆'],             // Warplate
+      [RARITY.EPIC]:     ['𐤓']             // Dragon Scale Armor
     },
     consumables: {
       [RARITY.COMMON]:   ['G'],              // Base Potion
@@ -2373,17 +2480,17 @@ export const AFFINITY_POOLS = {
     },
     weapons: {
       [RARITY.UNCOMMON]: ['‡'],              // Flame Sword
-      [RARITY.RARE]:     ['⊕', '╪', '⚝']  // Rocket Launcher, Lava Sword, Ruby Staff
+      [RARITY.RARE]:     ['⟰', 'ᚠ', '⚝']  // Rocket Launcher, Lava Sword, Ruby Staff
     },
     traps: {
       [RARITY.UNCOMMON]: ['^'],              // Fire Trap
       [RARITY.RARE]:     [']']             // Tesla Coil
     },
     armor: {
-      [RARITY.RARE]:     ['E']             // Ember Cloak
+      [RARITY.RARE]:     ['𐤉']             // Ember Cloak
     },
     consumables: {
-      [RARITY.UNCOMMON]: ['Ω']             // Floating Boots
+      [RARITY.UNCOMMON]: ['ѡ']             // Floating Boots
     }
   },
 
@@ -2394,7 +2501,7 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     []
     },
     weapons: {
-      [RARITY.UNCOMMON]: ['❄', '☃', '❅'],   // Freeze Ray, Ice Hammer, Ice Bow
+      [RARITY.UNCOMMON]: ['ᛁ', 'ᛜ', 'ᛇ'],   // Freeze Ray, Ice Hammer, Ice Bow
       [RARITY.RARE]:     ['⚹']             // Sapphire Staff
     },
     traps: {
@@ -2402,7 +2509,7 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     []
     },
     armor: {
-      [RARITY.RARE]:     ['I']             // Ice Plate
+      [RARITY.RARE]:     ['𐤍']             // Ice Plate
     },
     consumables: {}
   },
@@ -2414,8 +2521,8 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     ['h']               // Herb
     },
     weapons: {
-      [RARITY.UNCOMMON]: ['☣'],              // Venom Pistol
-      [RARITY.RARE]:     ['♣', '☤', '⚭']  // Vampire Dagger, Venom Blade, Garnet Staff
+      [RARITY.UNCOMMON]: ['ᚦ'],              // Venom Pistol
+      [RARITY.RARE]:     ['ᛘ', 'ᛡ', '⚭']  // Vampire Dagger, Venom Blade, Garnet Staff
     },
     traps: {
       [RARITY.UNCOMMON]: ["'"],              // Charm Lure
@@ -2432,12 +2539,12 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     ['M']               // Metal
     },
     weapons: {
-      [RARITY.UNCOMMON]: ['⌘'],              // Dragon Blade
-      [RARITY.RARE]:     ['☼', '◇']        // Dragon Shotgun, Chaos Blade
+      [RARITY.UNCOMMON]: ['ᛖ'],              // Dragon Blade
+      [RARITY.RARE]:     ['ᚲ', 'ᛠ']        // Dragon Shotgun, Chaos Blade
     },
     traps: {},
     armor: {
-      [RARITY.UNCOMMON]: ['K'],              // Dragon Scale Armor
+      [RARITY.UNCOMMON]: ['𐤓'],              // Dragon Scale Armor
       [RARITY.RARE]:     []
     },
     consumables: {
@@ -2471,6 +2578,21 @@ export const AFFINITY_POOLS = {
     consumables: {}
   },
 
+  // Grave goods from GRAY zone rocks and barrow stones. Gray's mineral
+  // identity is the Artifact — the only renewable ⚜ source, and Artifacts buy
+  // rare sayings in every zone. A reason to brave the mist early.
+  grave: {
+    ingredients: {
+      [RARITY.COMMON]:   ['b', 'd'],         // Bone, Dust
+      [RARITY.UNCOMMON]: ['e', 'j'],         // Eye, Jaw
+      [RARITY.RARE]:     ['⚜']               // Artifact
+    },
+    weapons: {},
+    traps: {},
+    armor: {},
+    consumables: {}
+  },
+
   // Yellow zone / lightning enemies
   electric: {
     ingredients: {
@@ -2479,15 +2601,15 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     ['e'],              // Eye (luminescent orb)
     },
     weapons: {
-      [RARITY.UNCOMMON]: ['ϟ', '⚯', '╬'],   // Lightning Gun, Thunder Axe, Stun Gun
-      [RARITY.RARE]:     ['≈', '⚶'],       // Chain Bow, Topaz Staff
+      [RARITY.UNCOMMON]: ['↯', 'ᚨ', 'ᚾ'],   // Lightning Gun, Thunder Axe, Stun Gun
+      [RARITY.RARE]:     ['ᛚ', '⚶'],       // Chain Bow, Topaz Staff
     },
     traps: {
       [RARITY.UNCOMMON]: ['{'],             // Stun Trap
       [RARITY.RARE]:     [']'],            // Tesla Coil
     },
     armor: {
-      [RARITY.RARE]:     ['ℝ'],            // Storm Robe
+      [RARITY.RARE]:     ['𐤈'],            // Storm Robe
     },
     consumables: {
       [RARITY.UNCOMMON]: ['J'],             // Jolt Jar
@@ -2502,7 +2624,7 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     ['k', 'n', 'Y'],    // Silk, Sharkbone, Stingray Barb
     },
     weapons: {
-      [RARITY.UNCOMMON]: ['≋', 'ψ'],        // Whip (water-lash), Trident
+      [RARITY.UNCOMMON]: ['≋', 'ⲯ'],        // Whip (water-lash), Trident
       [RARITY.RARE]:     [],
     },
     traps: {
@@ -2510,7 +2632,7 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     []
     },
     armor: {
-      [RARITY.UNCOMMON]: ['O'],             // Slime Suit (water-resistant)
+      [RARITY.UNCOMMON]: ['𐤌'],             // Slime Suit (water-resistant)
       [RARITY.RARE]:     []
     },
     consumables: {
@@ -2535,8 +2657,8 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     []
     },
     armor: {
-      [RARITY.UNCOMMON]: ['V'],             // Fur Vest
-      [RARITY.RARE]:     ['N'],            // Ninja Garb (forest stealth)
+      [RARITY.UNCOMMON]: ['𐤀'],             // Fur Vest
+      [RARITY.RARE]:     ['𐤏'],            // Ninja Garb (forest stealth)
     },
     consumables: {
       [RARITY.COMMON]:   ['G'],
@@ -2561,14 +2683,14 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     [']', ';']        // Tesla Coil, Sleep Bomb
     },
     armor: {
-      [RARITY.UNCOMMON]: ['V', 'A', 'L'],    // Fur Vest, Bone Armor, Leather Armor
-      [RARITY.RARE]:     ['W', 'N', 'R'],  // Warplate, Ninja Garb, Robe
-      [RARITY.EPIC]:     ['E', 'I', 'K']  // Ember Cloak, Ice Plate, Dragon Scale
+      [RARITY.UNCOMMON]: ['𐤀', '𐤔', '𐤂'],    // Fur Vest, Bone Armor, Leather Armor
+      [RARITY.RARE]:     ['𐤆', '𐤏', '𐤄'],  // Warplate, Ninja Garb, Robe
+      [RARITY.EPIC]:     ['𐤉', '𐤍', '𐤓']  // Ember Cloak, Ice Plate, Dragon Scale
     },
     consumables: {
       [RARITY.COMMON]:   ['G', '⌬'],         // Base Potion, Bread
       [RARITY.UNCOMMON]: ['y'],              // Firecracker
-      [RARITY.RARE]:     ['♥', '★', '∞', '♦', 'Ω']
+      [RARITY.RARE]:     ['♥', '★', '∞', '♦', 'ѡ']
     }
   }
 };

@@ -1,0 +1,60 @@
+{
+  "name": "sac/nes/fx/coin",
+  "totalDuration": 0.22,
+  "bpm": 120,
+  "snapMode": "none",
+  "instrument": {
+    "masterGain": 0.8,
+    "chip": "NES",
+    "type": "square",
+    "duty": 0.5
+  },
+  "volumeEnvelope": [
+    {
+      "t": 0,
+      "v": 1
+    },
+    {
+      "t": 0.5,
+      "v": 0.6
+    },
+    {
+      "t": 1,
+      "v": 0
+    }
+  ],
+  "pitchEnvelope": [
+    {
+      "t": 0,
+      "semitones": 0
+    },
+    {
+      "t": 1,
+      "semitones": 0
+    }
+  ],
+  "notes": [
+    {
+      "id": "n13",
+      "time": 0,
+      "duration": 0.06,
+      "frequency": 987.77,
+      "volume": 0.9,
+      "muted": false
+    },
+    {
+      "id": "n14",
+      "time": 0.06,
+      "duration": 0.06,
+      "frequency": 1318.51,
+      "volume": 0.9,
+      "muted": false
+    }
+  ],
+  "echo": {
+    "enabled": false,
+    "delay": 0.12,
+    "scale": 0.55,
+    "count": 4
+  }
+}

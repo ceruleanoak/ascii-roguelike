@@ -1,0 +1,210 @@
+{
+  "metallic-decay-wide": {
+    "count": 963,
+    "exemplars": [
+      "MIRIDOR 1",
+      "*Horn 1",
+      "*Trumpet 1",
+      "*Fanfare",
+      "ROBIN HOOD",
+      "POSAUNEN",
+      "JAZZ3BRAZZ",
+      "I.BRASS  2"
+    ]
+  },
+  "metallic-decay-wide-2": {
+    "count": 2621,
+    "exemplars": [
+      "*Sax 1",
+      "*Sax 2",
+      "*Piccolo",
+      "*Whistling",
+      "*Oboe",
+      "*Clarinet2",
+      "*bass-Clar",
+      "'8-Brs.'HM"
+    ]
+  },
+  "metallic-pluck": {
+    "count": 3651,
+    "exemplars": [
+      "Kick-SnrC2",
+      "W.Block 1",
+      "CongaDrum",
+      "PEC BRASS",
+      "BRASS 20",
+      "CLAV-BRASS",
+      "MELLOWPAD",
+      "OCTBRASS 8"
+    ]
+  },
+  "metallic-sustained-wide": {
+    "count": 1578,
+    "exemplars": [
+      "----------",
+      "*engl.Horn",
+      "*I feel",
+      "*Zhamfir",
+      "*Flute",
+      "LYRICON BC",
+      "LYRICON1BC",
+      "SYN-BRA.Y2"
+    ]
+  },
+  "metallic-pluck-wide": {
+    "count": 1398,
+    "exemplars": [
+      "Snare Snap",
+      "Snare Shot",
+      "Open HiHat",
+      "Close Hat",
+      "Bass Drum1",
+      "Bass Drum2",
+      "Finger Clp",
+      "Agogo"
+    ]
+  },
+  "bright-sustained-wide": {
+    "count": 1791,
+    "exemplars": [
+      "*Isn't she",
+      "*Rondo",
+      "'GateSn'HM",
+      "'Birdld'HM",
+      "'Polytn'HM",
+      "*Wah Brass",
+      "BASS-BRASS",
+      "FANFARE  A"
+    ]
+  },
+  "bright-sustained": {
+    "count": 2995,
+    "exemplars": [
+      "Squares 1",
+      "ACCORDION",
+      "ACCORDION",
+      "ACCORDION",
+      "AKKORDEON",
+      "*Trombone",
+      "*Horn 2",
+      "*sol.Bra2"
+    ]
+  },
+  "bright-pluck-wide": {
+    "count": 3917,
+    "exemplars": [
+      "*Harmonica",
+      "'Polyfs'HM",
+      "*Brass 5+",
+      "HORNOLKY",
+      "SPLIT 1",
+      "SYNBRASSDW",
+      "FANFARE H1",
+      "JAPAN"
+    ]
+  },
+  "low-bright-sustained-wide": {
+    "count": 3973,
+    "exemplars": [
+      "WarmKS1...",
+      "JX-10   1",
+      "CASCADE 21",
+      "Slow3D Pad",
+      "ACCORDION1",
+      "*Trumpet 2",
+      "*Panflute1",
+      "*Panflute2"
+    ]
+  },
+  "metallic-sustained-wide-2": {
+    "count": 2658,
+    "exemplars": [
+      "Timbali",
+      "SAX KS 1.4",
+      "Accordion1",
+      "ACCORDION2",
+      "*sexy Sax",
+      "Trumpet  B",
+      "Syn  Brass",
+      "BACK BRAS1"
+    ]
+  },
+  "bright-pluck-wide-2": {
+    "count": 2666,
+    "exemplars": [
+      "MODE-BR. M",
+      "Bs Brs  2a",
+      "Bs Brs  3a",
+      "BASSCLARNT",
+      "Chariots",
+      "E.P.-HORN",
+      "EEYGEE",
+      "EP/MAR/HRN"
+    ]
+  },
+  "metallic-decay-wide-vibrato": {
+    "count": 587,
+    "exemplars": [
+      "Toms C3-C4",
+      "Maracas",
+      "Fox Horn",
+      "Synbrs M50",
+      "TRUMPET",
+      "`s`o````",
+      "`m`Bw",
+      "QwerDaLune"
+    ]
+  },
+  "low-bright-pluck-wide": {
+    "count": 2666,
+    "exemplars": [
+      "Cool Vibes",
+      "PERCHORNS",
+      "STRNG-HORN",
+      "ORGANBRASS",
+      "WOODHORN",
+      "AERIELBOND",
+      "BRASS",
+      "EBRITEBOW"
+    ]
+  },
+  "low-metallic-decay-wide": {
+    "count": 520,
+    "exemplars": [
+      "Stac.Heav1",
+      "GLASS HORN",
+      "GLASS HORN",
+      "SYNBRASS 1",
+      "S-H NOISDR",
+      "VAPOR-S-HD",
+      "WAVES",
+      "30'-N:-P-*"
+    ]
+  },
+  "metallic-sustained-wide-3": {
+    "count": 681,
+    "exemplars": [
+      "PIANO-BRS",
+      "```",
+      "HockyOrg1a",
+      "BUSY",
+      "C,D,Eb,F",
+      "CALLME",
+      "DIAL TONE",
+      "DRIPORD"
+    ]
+  },
+  "bright-sustained-wide-2": {
+    "count": 1356,
+    "exemplars": [
+      "*the Whist",
+      "*Bassoon 2",
+      "'VelPol'HM",
+      "'Folder'HM",
+      "MellowHorn",
+      "B.TRP  5.8",
+      "I.BRASS  1",
+      "BRASS"
+    ]
+  }
+}

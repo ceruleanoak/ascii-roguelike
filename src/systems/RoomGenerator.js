@@ -1,7 +1,7 @@
 import { GRID, ROOM_TYPES, BACKGROUND_OBJECTS, WALL_STRUCTURES, WATER_STRUCTURES } from '../game/GameConfig.js';
 import { ENEMIES, getRandomEnemy, getZoneRandomEnemy, createBossEnemy, BOSS_ENCOUNTERS } from '../data/enemies.js';
 import { RECIPES } from '../data/recipes.js';
-import { ZONES } from '../data/zones.js';
+import { ZONES, applyZoneCombatModifiers } from '../data/zones.js';
 import { LETTER_TEMPLATES } from '../data/letterTemplates.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
@@ -11,7 +11,7 @@ import { getDungeonDesign } from '../data/dungeonDesigns.js';
 import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
-import { maybeSpawnPeacefulFishingRoom, buildVaultInteriorLoot, protectRegion, cleanupStrayBackgroundObjects, darkenColor } from './roomFeatures.js';
+import { maybeSpawnPeacefulFishingRoom, buildVaultInteriorLoot, protectRegion, cleanupStrayBackgroundObjects, darkenColor, spawnBatFlock, spawnBelfryBats } from './roomFeatures.js';
 
 // Zone-boss arena → letter template key. Boss rooms are entered without a
 // letter (cheat warp) or with an arbitrary one (normal progression), so we
@@ -97,7 +97,7 @@ export class RoomGenerator {
       type = ROOM_TYPES.DUNGEON;
     }
     if (exitLetter === 'P') {
-      type = ROOM_TYPES.HUT; // Press hut — guaranteed press inside
+      type = ROOM_TYPES.PUZZLE; // Zone-specific puzzle room (PuzzleSystem)
     }
     if (exitLetter === 'R') {
       type = ROOM_TYPES.RIDGE;
@@ -203,6 +203,9 @@ export class RoomGenerator {
       case ROOM_TYPES.FOUNTAIN:
         this.generateFountainRoom(room);
         break;
+      case ROOM_TYPES.PUZZLE:
+        this.game?.puzzleSystem?.generatePuzzleRoom(room);
+        break;
     }
 
     // Note: Secret events (shaking bushes) are applied at runtime when room is cleared
@@ -283,6 +286,10 @@ export class RoomGenerator {
     // idempotent — no-op when a dropper survived).
     this.ensureKeyDroppers(room);
 
+    // Key-item sites (deep-water gated § / ⊙ placements) — KeyItemSystem owns
+    // the logic; runs after cleanup so its objects can't be stripped.
+    this.game?.keyItemSystem?.placeSites(room);
+
     return room;
   }
 
@@ -358,7 +365,7 @@ export class RoomGenerator {
     const candidates = [];
     for (const obj of room.backgroundObjects) {
       if (obj.destroyed) continue;
-      if (obj.char !== '&' && obj.char !== 'Y') continue;
+      if (obj.char !== 'Y' && obj.char !== 'ŋ') continue;
       const cx = obj.position.x;
       const cy = obj.position.y - GRID.CELL_SIZE;
       if (isClear(cx, cy)) candidates.push({ x: cx, y: cy });
@@ -574,8 +581,14 @@ export class RoomGenerator {
     const islandConfig = this.currentLetterTemplate?.islandZone?.enabled ? this.currentLetterTemplate.islandZone : null;
     const clusterAnchors = this.pickEnemyClusterAnchors(room, 3, { islandConfig });
 
+    let batFlockSpawned = false;
     for (let i = 0; i < enemyCount; i++) {
       const enemyChar = getZoneRandomEnemy(this.currentDepth, room.zone);
+      // Bats spawn as one depth-scaled flock per room (roomFeatures.js), not singles
+      if (enemyChar === '^') {
+        if (!batFlockSpawned) batFlockSpawned = spawnBatFlock(this, room, clusterAnchors, islandConfig);
+        continue;
+      }
       const allowLiquid = ENEMIES[enemyChar]?.waterAffinity === true;
       let pos = null;
       if (clusterAnchors.length > 0 && !allowLiquid) {
@@ -611,21 +624,9 @@ export class RoomGenerator {
       }
     }
 
-    // Add starting weapons in first room for combat demo
+    // Depth-1 rooms offer a single floating weapon from the zone's L1 pool.
     if (this.currentDepth === 1) {
-      // Add gun
-      const gunPos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
-      if (gunPos) {
-        const gun = new Item('/', gunPos.x, gunPos.y);
-        room.items.push(gun);
-
-        // Add sword
-        const swordPos = this.getRandomPosition(room.collisionMap, [...room.enemies, gun], room.playerStartPos);
-        if (swordPos) {
-          const sword = new Item('†', swordPos.x, swordPos.y);
-          room.items.push(sword);
-        }
-      }
+      this.offerL1Weapon(room);
     }
 
     // Ensure K rooms have at least one guaranteed key dropper
@@ -636,6 +637,18 @@ export class RoomGenerator {
 
     // Exits are locked until all enemies defeated
     room.exitsLocked = true;
+  }
+
+  // Depth-1 weapon offering: place a single floating pickup drawn from the zone's
+  // l1WeaponPool (zones.js). One item per L1 room — the player's first choice of arm.
+  offerL1Weapon(room) {
+    const pool = ZONES[room.zone]?.l1WeaponPool;
+    if (!pool || pool.length === 0) return;
+    const itemChar = pool[Math.floor(Math.random() * pool.length)];
+    const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
+    if (pos) {
+      room.items.push(new Item(itemChar, pos.x, pos.y));
+    }
   }
 
   generateBossRoom(room) {
@@ -679,7 +692,7 @@ export class RoomGenerator {
       }
     } else if (!this.isZoneBossRoom) {
       // Fallback for zones without a bossPool: single buffed enemy
-      const boss = createBossEnemy(this.currentDepth);
+      const boss = createBossEnemy(this.currentDepth, room.zone);
       const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects);
       if (pos) {
         const enemy = new Enemy(boss.char, pos.x, pos.y, this.currentDepth);
@@ -691,15 +704,9 @@ export class RoomGenerator {
       }
     }
 
-    // Ensure first room always has at least one item
+    // Depth-1 rooms offer a single floating weapon from the zone's L1 pool.
     if (this.currentDepth === 1) {
-      const basicItems = ['/', '†'];
-      const itemChar = basicItems[Math.floor(Math.random() * basicItems.length)];
-      const itemPos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
-      if (itemPos) {
-        const item = new Item(itemChar, itemPos.x, itemPos.y);
-        room.items.push(item);
-      }
+      this.offerL1Weapon(room);
     }
 
     // Ensure K rooms have at least one guaranteed key dropper
@@ -807,7 +814,7 @@ export class RoomGenerator {
 
   generateDiscoveryRoom(room) {
     // No enemies, guaranteed rare item
-    const rareItems = ['⌂', '‡', ')', 'X', '⌘', '⟩', '⊤', 'ƒ'];
+    const rareItems = ['ᛉ', '‡', ')', 'X', 'ᛖ', '⟩', '⊤', 'ƒ'];
     const itemChar = rareItems[Math.floor(Math.random() * rareItems.length)];
     const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
     if (pos) {
@@ -1154,22 +1161,18 @@ export class RoomGenerator {
     const isInRestCorridor = (col, row) =>
       row >= 26 && col >= 10 && col <= 20;
 
-    const pickWallChar = () => {
-      const r = Math.random();
-      if (r < 0.10) return 'Q';   // boulder — large, fills 14×14
-      if (r < 0.16) return '*';   // crystal — accent
-      return '0';                 // rock — primary
-    };
-
+    // Layer 0 (surface) is entirely obsidian — unbreakable rock, dark rendering.
+    // A hidden trail of ordinary breakable rock is carved later (after the
+    // secret vein position is chosen) so the only way through is finding it.
     for (let r = 1; r < ROWS - 1; r++) {
       for (let c = 1; c < COLS - 1; c++) {
         if (isInClearing(c, r)) continue;
         if (isInRestCorridor(c, r)) continue;
-        const char = pickWallChar();
         const obj = new BackgroundObject(
-          char,
+          '0',
           c * GRID.CELL_SIZE,
-          r * GRID.CELL_SIZE
+          r * GRID.CELL_SIZE,
+          { obsidian: true }
         );
         // Hide the surface wall when the player descends into the cave.
         // (ExploreRenderer's shouldRenderBackgroundObject defaults to "render
@@ -1386,6 +1389,7 @@ export class RoomGenerator {
     // drops a Crystal Maul (T4 weapon). Candidate cells are taken from the portion of
     // passageCells not used by glittering rocks or enemies.
     const veinCandidates = passageCells.slice(rockCount + enemyCount);
+    let veinCell = null;
     for (const cell of veinCandidates) {
       const veinX = cell.col * GRID.CELL_SIZE;
       const veinY = cell.row * GRID.CELL_SIZE;
@@ -1406,7 +1410,49 @@ export class RoomGenerator {
       room.backgroundObjects[surfaceIdx] = secretSurface;
       // Place the underground red marker at the same grid position.
       room.backgroundObjects.push(new BackgroundObject('⊙', veinX, veinY));
+      veinCell = cell;
       break;
+    }
+
+    // ── Carve a hidden breakable trail through the obsidian field ────────────
+    // Single-cell-wide path from the nearest clearing's inner edge to the vein,
+    // left visually identical to surrounding obsidian (dark rock, same char) so
+    // the route can only be found by mining, not by looking at it.
+    if (veinCell) {
+      const clearingEdges = [
+        { col: 15, row: 5 },  // north
+        { col: 15, row: 24 }, // south
+        { col: 24, row: 15 }, // east
+        { col: 5,  row: 15 }  // west
+      ];
+      const nearestEdge = clearingEdges.reduce((best, edge) => {
+        const dist = Math.abs(edge.col - veinCell.col) + Math.abs(edge.row - veinCell.row);
+        return (!best || dist < best.dist) ? { edge, dist } : best;
+      }, null).edge;
+
+      const trailCells = [];
+      let tc = nearestEdge.col, tr = nearestEdge.row;
+      while (tc !== veinCell.col) {
+        trailCells.push({ col: tc, row: tr });
+        tc += tc < veinCell.col ? 1 : -1;
+      }
+      while (tr !== veinCell.row) {
+        trailCells.push({ col: tc, row: tr });
+        tr += tr < veinCell.row ? 1 : -1;
+      }
+
+      for (const { col, row } of trailCells) {
+        const tx = col * GRID.CELL_SIZE, ty = row * GRID.CELL_SIZE;
+        const obj = room.backgroundObjects.find(
+          o => o.surfaceOnly && !o.destroyed && o.char === '0' &&
+               o.position.x === tx && o.position.y === ty
+        );
+        if (obj) {
+          // Breakable again, but keeps the dark obsidian color so the trail stays hidden.
+          obj.obsidian = false;
+          obj.indestructible = false;
+        }
+      }
     }
 
     // ── Store underground metadata ────────────────────────────────────────────
@@ -1572,25 +1618,10 @@ export class RoomGenerator {
       rocksPlaced++;
     }
 
-    // Spawn 15 bats in cave passages (plane 1, rest state — same as underground)
+    // 15 dormant bats in cave passages (plane 1) — roomFeatures.js
     const batCandidates = passageCells.slice(rockCount);
     this._shuffleArray(batCandidates);
-    const usedCells = new Set();
-    let batsSpawned = 0;
-    for (const cell of batCandidates) {
-      if (batsSpawned >= 15) break;
-      const key = `${cell.col},${cell.row}`;
-      if (usedCells.has(key)) continue;
-      if (isInClearing(cell.col, cell.row)) continue;
-      usedCells.add(key);
-      const bat = new Enemy('^', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE, this.currentDepth);
-      bat.plane = 1;
-      bat.state = 'rest';
-      bat.setCollisionMap(room.collisionMap);
-      bat.setBackgroundObjects(room.backgroundObjects);
-      this.addEnemyToRoom(room, bat);
-      batsSpawned++;
-    }
+    spawnBelfryBats(this, room, batCandidates, isInClearing);
 
     room.isBatBelfry = true;
     room.underground = {
@@ -1864,6 +1895,7 @@ export class RoomGenerator {
         newEnemy.setGame(game);
         newEnemy.setRoom(game.currentRoom);
         newEnemy.enraged = true;
+        applyZoneCombatModifiers(newEnemy, game.currentRoom.zone);
         game.physicsSystem.addEntity(newEnemy);
         newEnemies.push(newEnemy);
       }
@@ -2401,11 +2433,11 @@ export class RoomGenerator {
 
   generateOrganicClusters(room) {
     const clusterCount = this.currentDepth < 5 ? this.randInt(3, 4) : this.randInt(4, 6);
-    // Trees dominate the organic mix; the letter template's '&' bias multiplies
+    // Trees dominate the organic mix; the letter template's 'Y' bias multiplies
     // on top, so tree-biased rooms (forest perimeters, hut groves, well
     // clearings) read denser while low-tree templates stay sparse.
-    const treeBias = this.currentLetterTemplate?.bgObjectRules?.objectBias?.['&'] ?? 1;
-    const organicWeights = { '%': 1, '&': 3 * treeBias, '+': 1, 'Y': 1 };
+    const treeBias = this.currentLetterTemplate?.bgObjectRules?.objectBias?.['Y'] ?? 1;
+    const organicWeights = { '%': 1, '&': 1, 'Y': 3 * treeBias, '+': 1, 'ŋ': 1 };
     const zone = ZONES[room.zone];
     const preSpawnBurned = zone?.preSpawnBurned || false;
 
@@ -2462,7 +2494,7 @@ export class RoomGenerator {
   // the returned list is 4-adjacent to the next — required so electrified-water
   // conduction propagates the full length of the flow.
   //
-  // Rivers stamp the centerline as directional flow tiles (`< > v Λ` for
+  // Rivers stamp the centerline as directional flow tiles (`< > v ∧` for
   // cardinals, `↗ ↖ ↘ ↙` for diagonals) and thicken by filling every cardinal
   // neighbor of the centerline as plain water. Side fill auto-resolves any
   // visual gaps at turns or diagonals. Dry beds use the same footprint with
@@ -2508,9 +2540,9 @@ export class RoomGenerator {
   }
 
   _dirChar(dir) {
-    // 'Λ' (Greek capital lambda) — upside-down V, matches the Ascend-room idiom.
+    // '∧' (logical AND, U+2227) — upside-down V, matches the Ascend-room idiom.
     return {
-      right: '>', left: '<', down: 'v', up: 'Λ',
+      right: '>', left: '<', down: 'v', up: '∧',
       ne:    '↗', nw:   '↖', se:   '↘', sw: '↙'
     }[dir];
   }
@@ -3117,7 +3149,9 @@ export class RoomGenerator {
 
         if (pos.x >= GRID.CELL_SIZE && pos.x < GRID.WIDTH - GRID.CELL_SIZE &&
             pos.y >= GRID.CELL_SIZE && pos.y < GRID.HEIGHT - GRID.CELL_SIZE) {
-          const bgObject = new BackgroundObject(rockVariant.char, pos.x, pos.y);
+          // 30% of rocks generate as unbreakable obsidian variants.
+          const isObsidian = rockVariant.char === '0' && Math.random() < 0.3;
+          const bgObject = new BackgroundObject(rockVariant.char, pos.x, pos.y, { obsidian: isObsidian });
           bgObject.dropTable = rockVariant.dropTable;  // Set drop table for zone-specific drops
           this.applyZoneProperties(bgObject, room.zone);
           room.backgroundObjects.push(bgObject);
@@ -3327,15 +3361,15 @@ export class RoomGenerator {
       weights = this.currentZoneWeights;
     } else if (depth < 5) {
       // Fallback to depth-based weights for backwards compatibility
-      weights = { '%': 0.25, '&': 0.20, '0': 0.20, '=': 0.10, '#': 0.15, '+': 0.10 };
+      weights = { '%': 0.15, '&': 0.15, 'Y': 0.20, '0': 0.20, '=': 0.10, '#': 0.15, '+': 0.10 };
     } else if (depth < 10) {
       weights = {
-        '%': 0.15, '&': 0.15, '0': 0.10, '#': 0.10, '+': 0.10, 'Y': 0.10,
+        '%': 0.10, '&': 0.10, 'Y': 0.15, '0': 0.10, '#': 0.10, '+': 0.10, 'ŋ': 0.10,
         'n': 0.10, '*': 0.05, 'p': 0.05, '~': 0.10, '⊞': 0.02
       };
     } else {
       weights = {
-        '0': 0.10, '#': 0.05, 'Y': 0.10, 'n': 0.10, '*': 0.15, 'B': 0.10,
+        '0': 0.10, '#': 0.05, 'ŋ': 0.10, 'n': 0.10, '*': 0.15, 'B': 0.10,
         'Q': 0.10, '~': 0.10, 'p': 0.10, '8': 0.05, 'i': 0.05, '⊞': 0.03
       };
     }
@@ -3495,6 +3529,7 @@ export class RoomGenerator {
       case ROOM_TYPES.BAT_BELFRY:  return 0; // Bat belfry generates its own cave terrain
       case ROOM_TYPES.WELL:        return 0; // Well room places its own central structure
       case ROOM_TYPES.FOUNTAIN:    return 0; // Fountain places its own pool + waterfall structure
+      case ROOM_TYPES.PUZZLE:      return 0; // PuzzleSystem places its own arena layout
       default:
         console.warn(`[RoomGenerator] getStructureCount: no case for room type "${roomType}". ` +
           'Add an explicit case to RoomGenerator.getStructureCount(). Returning 0 as safe fallback.');
@@ -3643,10 +3678,10 @@ export class RoomGenerator {
 
     // Apply zone-specific colors to organic objects (trees, bushes, etc.)
     if (this.currentEnvironmentColors) {
-      if (obj.char === '&') {  // Tree
+      if (obj.char === 'Y') {  // Tree
         obj.color = this.currentEnvironmentColors.tree;
         obj.animationColor = this.currentEnvironmentColors.tree;
-      } else if (obj.char === '%' || obj.char === '+' || obj.char === 'Y') {  // Bush, Brambles, Stump
+      } else if (obj.char === '%' || obj.char === '&' || obj.char === '+' || obj.char === 'ŋ') {  // Shrub, Bush, Brambles, Stump
         // Use tree color for organic objects (could add separate colors later)
         obj.color = this.currentEnvironmentColors.tree;
         obj.animationColor = this.currentEnvironmentColors.tree;
@@ -3655,12 +3690,12 @@ export class RoomGenerator {
 
     // RED zone: trees and bushes are brittle (1-hit) and non-flammable
     if (zoneType === 'red') {
-      if (obj.char === '&') {  // Tree
+      if (obj.char === 'Y') {  // Tree
         obj.hp = 1;
         obj.maxHp = 1;
         obj.flammability = 'none';
         obj.name = 'Charred Tree';
-      } else if (obj.char === '%') {  // Bush
+      } else if (obj.char === '%' || obj.char === '&') {  // Shrub, Bush
         obj.hp = 1;
         obj.maxHp = 1;
         obj.flammability = 'none';
@@ -3768,7 +3803,7 @@ export class RoomGenerator {
         },
         eligibleObjects: (room) => {
           return room.backgroundObjects.filter(obj =>
-            obj.char === '%' || obj.char === '&'
+            obj.char === '%' || obj.char === '&' || obj.char === 'Y'
           );
         },
         mark: (selectedObject) => {
@@ -3871,9 +3906,9 @@ export class RoomGenerator {
    * Now handled by secret event system
    */
   markRandomBushShaking(room) {
-    // Filter background objects to bushes ('%') and trees ('&')
+    // Filter background objects to shrubs ('%'), bushes ('&'), and trees ('Y')
     const bushesAndTrees = room.backgroundObjects.filter(obj =>
-      obj.char === '%' || obj.char === '&'
+      obj.char === '%' || obj.char === '&' || obj.char === 'Y'
     );
 
     if (bushesAndTrees.length === 0) {
@@ -3903,13 +3938,13 @@ export class RoomGenerator {
     } else if (itemConfig.itemPool === 'rare_epic') {
       // High-tier weapons, armor, and consumables
       itemPool = [
-        '⌘', // Dragon Blade (damage 5)
-        '☼', // Dragon Shotgun
+        'ᛖ', // Dragon Blade (damage 5)
+        'ᚲ', // Dragon Shotgun
         '⚔', // Legendary Flame Sword (damage 6)
         '♦', // Dragon Heart (max HP consumable)
-        'K', // Dragon Scale Armor (defense 5)
+        '𐤓', // Dragon Scale Armor (defense 5)
         '^', // Hammer (damage 7)
-        '℧', // Ice Hammer (damage 6)
+        'ᛜ', // Ice Hammer (damage 6)
       ];
     }
 
@@ -4028,16 +4063,11 @@ export class RoomGenerator {
     // to make room for chicken legs underneath. Cheat override:
     //   game.cheat_forceHutKind = 'witch' | 'enemy_encounter' | 'neutral_npc'
     // forces every subsequent hut roll to that kind.
-    // P-rooms (Press Hut) always get a guaranteed press inside, which means
-    // the player must be able to reach the door — so we never roll witch.
-    const isPressHut = room.exitLetter === 'P';
     const cheatKind = this.game?.cheat_forceHutKind;
     const validKinds = new Set(['enemy_encounter', 'neutral_npc', 'wise_man', 'fisherman', 'witch']);
     let hutKind;
     if (cheatKind && validKinds.has(cheatKind)) {
       hutKind = cheatKind;
-    } else if (isPressHut) {
-      hutKind = Math.random() < 0.5 ? 'enemy_encounter' : 'neutral_npc';
     } else {
       const r = Math.random();
       hutKind =
@@ -4100,7 +4130,7 @@ export class RoomGenerator {
       for (const lc of legCols) {
         for (const lr of legRows) {
           if (lr >= GRID.ROWS - 1) continue;
-          const leg = new BackgroundObject('λ', lc * GRID.CELL_SIZE, lr * GRID.CELL_SIZE);
+          const leg = new BackgroundObject('ⲗ', lc * GRID.CELL_SIZE, lr * GRID.CELL_SIZE);
           leg.structural = true;
           room.backgroundObjects.push(leg);
           legObjects.push(leg);
@@ -4113,7 +4143,6 @@ export class RoomGenerator {
       doorPosition: { col: doorCol, row: doorRow },
       hutKind,
       interiorGenerated: false,
-      pressBias: isPressHut, // HutSystem reads this when generating interior
       raised: isWitchRaised,
       verticalShift,
       wallObjects,
@@ -4121,16 +4150,6 @@ export class RoomGenerator {
       interiorObjects,
       legObjects
     };
-
-    // Press Hut: P-marker glyph on the exterior north wall (above the door
-    // alignment) so the player can identify the room from outside.
-    if (isPressHut) {
-      const marker = new BackgroundObject('P', centerCol * GRID.CELL_SIZE, minRow * GRID.CELL_SIZE);
-      marker.color = '#ffd54a';
-      marker.indestructible = true;
-      marker.structural = true;
-      room.backgroundObjects.push(marker);
-    }
 
     // Effective vertical bounds include chicken legs for witch huts so that
     // background-object clearing and enemy spacing treat the legs as part
@@ -4218,9 +4237,11 @@ export class RoomGenerator {
     room.ravineRows = RAVINE_ROW_MAX;
 
     // North exit always reads as "gray zone" from a Ridge room — the ridge
-    // climbs into the misted high country.
+    // climbs into the misted high country. forceZone makes the transition
+    // immediate (single exit), not the procedural 3-consecutive-color rule.
     if (room.exits?.north) {
       room.exits.north.color = '#888888';
+      room.exits.north.forceZone = 'gray';
     }
 
     // Bridge state — donations + worker reference. main.js reads bridgeWorker
@@ -4571,6 +4592,8 @@ export class RoomGenerator {
    * Also adds to legacy room.enemies for backwards compatibility
    */
   addEnemyToRoom(room, enemy) {
+    applyZoneCombatModifiers(enemy, room.zone);
+
     const plane = enemy.plane !== undefined ? enemy.plane : 0;
 
     if (plane === 0) {

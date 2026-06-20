@@ -17,6 +17,7 @@ export class GooBlob {
     this.creationTime = creationTime; // Used for FIFO queue management
     this.lifetime = 0;
     this.maxLifetime = 5.0;
+    this.spawnInvulnDuration = 0.5; // Cannot be destroyed by player attacks just after spawn
     this.expired = false;
 
     // Visual effects
@@ -72,6 +73,10 @@ export class GooBlob {
         this.velocity.vy = -Math.abs(this.velocity.vy) * 0.5;
       }
     }
+  }
+
+  isInvulnerable() {
+    return this.lifetime < this.spawnInvulnDuration;
   }
 
   getCurrentScale() {

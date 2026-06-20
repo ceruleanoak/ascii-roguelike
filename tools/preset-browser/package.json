@@ -1,0 +1,9 @@
+{
+  "name": "preset-browser",
+  "version": "0.1.0",
+  "description": "DX7/.syx preset librarian + FM player for game sound design",
+  "main": "main.js",
+  "scripts": {
+    "start": "../sfx-editor/node_modules/.bin/electron ."
+  }
+}

@@ -14,9 +14,13 @@ export class NeutralRoomSystem {
   /**
    * Generate a neutral room from script
    * @param {string} scriptName - Name of script in NEUTRAL_ROOMS
+   * @param {string} entryDirection - Exit direction taken to reach the room
+   *                                  ('north' | 'east' | 'west'); the return
+   *                                  exit sits on the edge the player entered
+   *                                  through (north→south, east→west, west→east)
    * @returns {object} - Room object with exits, backgroundObjects, state
    */
-  generateNeutralRoom(scriptName) {
+  generateNeutralRoom(scriptName, entryDirection = 'north') {
     const script = NEUTRAL_ROOMS[scriptName];
     if (!script) {
       console.error(`[NeutralRoomSystem] Script not found: ${scriptName}`);
@@ -26,7 +30,9 @@ export class NeutralRoomSystem {
     this.currentScript = script;
     this.state = {}; // Reset state for new room
 
-    // Create base room structure (always has south exit for return)
+    // Return exit mirrors the entry: the door home is the edge you walked in from.
+    const returnExit = { north: 'south', east: 'west', west: 'east' }[entryDirection] || 'south';
+
     const room = {
       type: ROOM_TYPES.DISCOVERY, // Neutral rooms use discovery room type
       depth: 0, // Neutral rooms don't count toward depth
@@ -36,7 +42,8 @@ export class NeutralRoomSystem {
       enemies: [],
       items: [],
       backgroundObjects: [],
-      exits: { north: false, east: false, west: false, south: true },
+      exits: { north: false, east: false, west: false, south: false, [returnExit]: true },
+      returnExit,
       exitsLocked: false,
       cleared: true // Always cleared (no enemies)
     };

@@ -325,7 +325,7 @@ export class CharacterSystem {
             game.audioSystem.playSFX('roll');
             // Resolve yellow mage blink (deferred for collision checking + trail)
             if (player.pendingBlink) {
-              game._resolveBlinkTeleport(player.pendingBlink);
+              game.warpSystem.resolveBlinkTeleport(player.pendingBlink);
               player.pendingBlink = null;
             }
           }

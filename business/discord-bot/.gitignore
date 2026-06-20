@@ -1,0 +1,5 @@
+# Secrets and collected data never go in the repo.
+.env
+data/
+node_modules/
+*.log

@@ -1,0 +1,19 @@
+{
+  "name": "ceruleanoak-discord-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "CeruleanOak / Pure Rogue ops bot — passive engagement-analytics collector. Invisible to members; logical/operational only, no generative output.",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node bot.js",
+    "backfill": "node backfill.js",
+    "report": "node report.js",
+    "check": "node --check bot.js && node --check backfill.js && node --check report.js && node --check src/store.js && node --check src/classify.js && node --check src/collector.js && node --check src/config.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3"
+  }
+}

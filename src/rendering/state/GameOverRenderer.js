@@ -127,6 +127,13 @@ export class GameOverRenderer {
       }
     }
 
+    // Gray zone: the mist swallows the death site — the vision hole lingers
+    // over the body (death effects stay visible), then closes; the death text
+    // waits until the mist has fully taken the field.
+    game.grayZoneSystem?.renderMistDeath(this.renderer.fgCtx, game);
+    const mistSwallowing = game.grayZoneSystem?.isSwallowing() ?? false;
+    if (mistSwallowing) return;
+
     // Draw main death text
     const isCharacterDeath = game.characterDeathPending;
     const deathText = isCharacterDeath ? `${game.characterDeathName} lost` : 'GAME OVER';

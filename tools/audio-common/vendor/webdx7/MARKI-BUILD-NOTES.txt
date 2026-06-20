@@ -1,0 +1,1 @@
+Mark I build: WebDX7 (MIT) + Dexed EngineMkI (Apache-2.0, Pascal Gauthier). Rebuilt with emscripten; controllers.core = EngineMkI; HEAPF32 exported.

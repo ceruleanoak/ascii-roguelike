@@ -289,20 +289,15 @@ export class MagicSystem {
 
   // ─── Spell effects ──────────────────────────────────────────────────────
 
-  // Returns the enemy list active for the player's current layer.
+  // Layer routing delegates to the canonical game accessors (single source of truth).
+  // These previously checked only inHut (missing inDungeon) and read the surface mirror,
+  // so magic leaked to the surface when cast in a dungeon. Maze is suppressed by design.
   _activeEnemies() {
-    const game = this.game;
-    if (game.player?.inMaze && game.mazeInterior) return game.mazeInterior.ghosts || [];
-    if (game.player?.inHut && game.activeFloor) return game.activeFloor.enemies;
-    return game.currentRoom?.enemies ?? [];
+    return this.game._activeEnemies();
   }
 
-  // Returns the background-object list active for the player's current layer.
   _activeBackgroundObjects() {
-    const game = this.game;
-    if (game.player?.inMaze && game.mazeInterior) return game.mazeInterior.mazeObjects || [];
-    if (game.player?.inHut && game.activeFloor) return game.activeFloor.backgroundObjects;
-    return game.backgroundObjects ?? [];
+    return this.game._activeBackgroundObjects();
   }
 
   // Ruby Staff — fire blast at player location. Burn applied across radius.

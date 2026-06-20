@@ -78,7 +78,8 @@ export const ROOM_TYPES = {
   MAZE: 'MAZE',
   RIDGE: 'RIDGE',
   WELL: 'WELL',
-  FOUNTAIN: 'FOUNTAIN'
+  FOUNTAIN: 'FOUNTAIN',
+  PUZZLE: 'PUZZLE'
 };
 
 export const COLORS = {
@@ -144,10 +145,11 @@ export const INTERACTION_TYPES = {
 
 export const BACKGROUND_OBJECTS = {
   '%': {
-    name: 'Bush',
+    name: 'Shrub',
     color: '#228822',
-    hp: 1,
-    dropEffect: 'destroyObject',
+    hp: 3,
+    dropEffect: 'destroyObject:spawnIngredient:|',
+    dropChance: 0.40,
     bulletInteraction: 'pass-through',
     flammability: 'high',
     conductivity: 'none',
@@ -169,6 +171,20 @@ export const BACKGROUND_OBJECTS = {
     }
   },
   '&': {
+    name: 'Bush',
+    color: '#336633',
+    hp: 3,
+    dropEffect: 'destroyObject:spawnIngredient:|',
+    dropChance: 0.40,
+    bulletInteraction: 'pass-through',
+    flammability: 'high',
+    conductivity: 'none',
+    slowing: 0.8,
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
+  'Y': {
     name: 'Tree',
     color: '#336633',
     hp: 3,
@@ -240,7 +256,7 @@ export const BACKGROUND_OBJECTS = {
       default: { animation: 'shake', message: null }
     }
   },
-  'Y': {
+  'ŋ': {
     name: 'Stump',
     color: '#664422',
     hp: 2,
@@ -692,7 +708,7 @@ export const BACKGROUND_OBJECTS = {
       default: { animation: 'bounce', message: null }
     }
   },
-  'λ': {
+  'ⲗ': {
     name: 'Chicken Leg',
     color: '#c8a35c',
     bulletInteraction: 'block',
@@ -1149,7 +1165,7 @@ export const INTERACTION_RANGE = 24; // pixels
 export const POLYMORPH_OUTCOMES = {
   backgroundObject: {
     weight: 20,
-    objects: ['%', '&', '0', 'Y', '*', '#', 'p', '=', 'i', '!', 'B', 'Q', '~'] // Various background objects
+    objects: ['%', '&', '0', 'Y', 'ŋ', '*', '#', 'p', '=', 'i', '!', 'B', 'Q', '~'] // Various background objects
   },
   lesserEnemy: {
     weight: 20,

@@ -442,6 +442,7 @@ export class InventorySystem {
     player.poisonImmune = false;
     player.slimeImmune = false;
     player.reflectDamage = 0;
+    player.smokeOnHit = false;
     player.speedBoost = 0;
     player.speedPenalty = 0;
     player.slowEnemies = false;
@@ -469,6 +470,7 @@ export class InventorySystem {
       player.poisonImmune = a.poisonImmune || false;
       player.slimeImmune = a.slimeImmune || false;
       player.reflectDamage = a.reflectDamage || 0;
+      player.smokeOnHit = a.smokeOnHit || false;
       player.speedBoost = a.speedBoost || 0;
       player.speedPenalty = a.speedPenalty || 0;
       player.slowEnemies = a.slowEnemies || false;
@@ -485,16 +487,14 @@ export class InventorySystem {
       player.stingrayMantle = a.stingrayMantle || false;
     }
 
-    // massBonus adds to base mass so PhysicsSystem reads the correct value
-    player.mass = 1 + player.massBonus;
+    player.mass = 1 + player.massBonus; // base mass + massBonus, read by PhysicsSystem
 
     // Add temporary block boost from Metal Block consumable
     if (player.blockBoostTimer > 0) {
       player.defense += player.blockBoostAmount;
     }
 
-    // Apply passive consumable bonuses (Lucky Coin). luckBlessed is a separate
-    // run-flag set by the well ritual and is not touched here.
+    // Apply passive consumable bonuses (Lucky Coin). luckBlessed (well ritual) is separate, untouched here.
     player.luckActive = false;
     player.critChance = 0;
     player.luckDodgeBonus = 0;
@@ -1617,7 +1617,7 @@ export class InventorySystem {
     return menuOptions;
   }
 
-  // Moss Cloak ✿ stealth state machine. Armed by the active→inactive dodge
+  // Moss Cloak 𐤒 stealth state machine. Armed by the active→inactive dodge
   // transition; becomes active when the player stops issuing WASD input.
   // Any WASD held cancels.
   updateMossCloak() {

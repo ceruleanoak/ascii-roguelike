@@ -8,6 +8,12 @@ import { GRID } from '../game/GameConfig.js';
 // the loot table.
 const LUCKY_BOOST = { 'V': 2.5, 'K': 2.0, '?': 2.0, 'C': 1.5 };
 
+// Green is the starting zone — it always dangles an alternative-color exit to
+// teach the player that color = destination. Every other zone tempts more
+// rarely: only SOMETIMES does an un-progressed room offer a way out of the
+// current color, so staying put feels like the default rather than a refusal.
+const ALT_EXIT_CHANCE_NON_GREEN = 0.5;
+
 // Walks the alphabet forward from `currentLetter`, returning the first letter
 // that is a defined entry in EXIT_LETTERS. Wraps A→...→Z→A. Non-alphabet
 // inputs (e.g. '?') start the search from before 'A'. Used by the
@@ -55,6 +61,37 @@ export function findExitAtPoint(room, x, y, width = 0, height = 0) {
     }
   }
   return null;
+}
+
+// Lenient exit trigger. Each exit gap is exactly one cell (player-width) wide,
+// so the positional crossing checks in updateExploreState only fire once the
+// player squeezes pixel-perfectly into the opening. This catches the common
+// case where the player is pressed against the wall beside the gap and actively
+// holding the key toward it — "close enough, touching the gap, pressing the
+// right way" leaves the room without fiddly alignment. `keys` is the WASD
+// intent map; callers still apply the exit guards (locked exits, plane, exit
+// existence) at the call site.
+export function isPressingIntoExitGap(player, keys, direction) {
+  if (!player || !keys) return false;
+  const cs = GRID.CELL_SIZE;
+  const centerX = Math.floor(GRID.COLS / 2);
+  const centerY = Math.floor(GRID.ROWS / 2);
+  const left = player.position.x;
+  const right = player.position.x + player.width;
+  const top = player.position.y;
+  const bottom = player.position.y + player.height;
+  const TOL = 3; // px of slack for "touching" the wall
+  // Player box must overlap the gap lane on the perpendicular axis (horizontal
+  // for N/S, vertical for E/W) — i.e. genuinely touching the gap.
+  const overlapsCol = left < (centerX + 1) * cs && right > centerX * cs;
+  const overlapsRow = top < (centerY + 1) * cs && bottom > centerY * cs;
+  switch (direction) {
+    case 'north': return keys.w && overlapsCol && top <= cs + TOL;
+    case 'south': return keys.s && overlapsCol && bottom >= (GRID.ROWS - 1) * cs - TOL;
+    case 'east':  return keys.d && overlapsRow && right >= (GRID.COLS - 1) * cs - TOL;
+    case 'west':  return keys.a && overlapsRow && left <= cs + TOL;
+    default: return false;
+  }
 }
 
 // Mutates an exit's letter in place and tags the mutation so the renderer
@@ -110,7 +147,7 @@ export class ExitSystem {
       north: { letter: letters[0], color: colors[0] },
       east: { letter: letters[1], color: colors[1] },
       west: { letter: letters[2], color: colors[2] },
-      south: zoneType !== 'gray'  // South is boolean (return to REST)
+      south: !ZONES[zoneType]?.noRest  // South is boolean (return to REST); noRest zones have no way back
     };
 
     return exits;
@@ -136,8 +173,9 @@ export class ExitSystem {
     if (progressionColor && progressionColor !== zone.exitColor) {
       // Mid-progression: use progression color
       colors[altIndex] = progressionColor;
-    } else {
-      // No progression: use random alternative, excluding zones whose boss is defeated
+    } else if (zoneType === 'green' || Math.random() < ALT_EXIT_CHANCE_NON_GREEN) {
+      // No progression: use random alternative, excluding zones whose boss is defeated.
+      // Green always offers one; other zones only sometimes (gate above).
       const available = zone.alternativeZones.filter(
         z => !this.zoneSystem.isZoneDefeated(z)
       );
@@ -159,8 +197,9 @@ export class ExitSystem {
     for (const [letter, data] of Object.entries(EXIT_LETTERS)) {
       let weight = data.weight;
 
-      // Apply zone boosts if defined
-      if (data.zoneBoosts && data.zoneBoosts[zoneType]) {
+      // Apply zone boosts if defined. A boost of 0 is a hard zone gate, so the
+      // check must be !== undefined, not truthy (resolved bug #103).
+      if (data.zoneBoosts && data.zoneBoosts[zoneType] !== undefined) {
         weight *= data.zoneBoosts[zoneType];
       }
 

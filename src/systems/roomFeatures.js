@@ -1,6 +1,8 @@
 import { GRID } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Fisherman } from '../entities/Fisherman.js';
+import { Enemy } from '../entities/Enemy.js';
+import { ENEMIES } from '../data/enemies.js';
 
 // Room-generation feature helpers extracted from RoomGenerator (arch budget).
 // Each takes the generator instance (`gen`) for its placement utilities.
@@ -189,4 +191,65 @@ export function buildVaultInteriorLoot(bounds, shuffleFn) {
     loot.push(obj);
   }
   return loot;
+}
+
+/**
+ * Bats spawn as one flock per room: depth-scaled size (max 5), clustered
+ * around a single anchor, sharing one roost/flight mode roll. Perched flocks
+ * start dormant ('rest') and settle onto trees/stumps via FlockMechanic;
+ * airborne flocks swirl as a group that drifts across the player's path.
+ * Returns true when at least one bat spawned (caller skips further '^' picks).
+ */
+export function spawnBatFlock(gen, room, clusterAnchors, islandConfig) {
+  const flockSize = Math.min(1 + Math.floor(gen.currentDepth / 2), 5);
+  const perched = Math.random() < (ENEMIES['^'].flockBehavior?.perchChance ?? 0.5);
+  const anchor = clusterAnchors.length > 0
+    ? clusterAnchors[Math.floor(Math.random() * clusterAnchors.length)]
+    : null;
+  let spawned = 0;
+  for (let i = 0; i < flockSize; i++) {
+    let pos = anchor
+      ? gen.getClusteredPosition(anchor, room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, false)
+      : null;
+    if (!pos) {
+      pos = islandConfig
+        ? gen.getIslandPosition(islandConfig, room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects)
+        : gen.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, false);
+    }
+    if (!pos) continue;
+    const bat = new Enemy('^', pos.x, pos.y, gen.currentDepth);
+    bat.flockMode = perched ? 'perch' : 'swirl';
+    if (perched) bat.state = 'rest';
+    bat.setCollisionMap(room.collisionMap);
+    bat.setBackgroundObjects(room.backgroundObjects);
+    gen.addEnemyToRoom(room, bat);
+    spawned++;
+  }
+  return spawned > 0;
+}
+
+/**
+ * Bat Belfry set piece: 15 dormant bats in cave passages (plane 1).
+ * flockNoCascade keeps the room's designed pacing — belfry bats wake
+ * individually by proximity instead of the flock take-off cascade.
+ */
+export function spawnBelfryBats(gen, room, batCandidates, isInClearing) {
+  const usedCells = new Set();
+  let batsSpawned = 0;
+  for (const cell of batCandidates) {
+    if (batsSpawned >= 15) break;
+    const key = `${cell.col},${cell.row}`;
+    if (usedCells.has(key)) continue;
+    if (isInClearing(cell.col, cell.row)) continue;
+    usedCells.add(key);
+    const bat = new Enemy('^', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE, gen.currentDepth);
+    bat.plane = 1;
+    bat.state = 'rest';
+    bat.flockMode = 'perch';
+    bat.flockNoCascade = true;
+    bat.setCollisionMap(room.collisionMap);
+    bat.setBackgroundObjects(room.backgroundObjects);
+    gen.addEnemyToRoom(room, bat);
+    batsSpawned++;
+  }
 }

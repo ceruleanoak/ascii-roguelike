@@ -76,17 +76,34 @@ export class MenuOverlay {
     };
 
     const totalColumns = game.menuColumns.length;
+    const disabled = game.disabledColumns ?? [];
 
-    // Always show 3 columns with active column in center (circular wrapping)
-    const prevCol = (game.selectedColumn - 1 + totalColumns) % totalColumns;
+    // Every column empty — nothing to craft with.
+    if (disabled.length === totalColumns && disabled.every(Boolean)) {
+      game.ui.menu.innerHTML =
+        '<div style="text-align: center; color: #888; padding: 12px; min-width: 280px;">need ingredients to craft</div>';
+      game.ui.menu.classList.remove('hidden');
+      return;
+    }
+
+    // Walk to the nearest non-empty column on either side (skip disabled ones),
+    // so the side arrows never point at an empty column.
+    const adjacent = (start, dir) => {
+      let col = start;
+      for (let i = 0; i < totalColumns; i++) {
+        col = (col + dir + totalColumns) % totalColumns;
+        if (!disabled[col]) return col;
+      }
+      return start;
+    };
     const centerCol = game.selectedColumn;
-    const nextCol = (game.selectedColumn + 1) % totalColumns;
+    const prevCol = adjacent(centerCol, -1);
+    const nextCol = adjacent(centerCol, 1);
 
-    const visibleColumns = [
-      { index: prevCol, position: 'left' },
-      { index: centerCol, position: 'center' },
-      { index: nextCol, position: 'right' }
-    ];
+    const visibleColumns = [{ index: centerCol, position: 'center' }];
+    // Only show a side column when it's a distinct, non-empty neighbor.
+    if (prevCol !== centerCol) visibleColumns.unshift({ index: prevCol, position: 'left' });
+    if (nextCol !== centerCol && nextCol !== prevCol) visibleColumns.push({ index: nextCol, position: 'right' });
 
     let html = '<h3 style="text-align: center;">Select Item</h3>';
     html += '<div style="display: flex; gap: 10px; margin-top: 10px; align-items: stretch; min-width: 420px;">';

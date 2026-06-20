@@ -4,6 +4,26 @@
 
 Browser-based roguelike, vanilla JavaScript + Vite. `npm run dev` / `npm run build`. Dev/debug tooling: see "Dev & Debug Tools" below.
 
+## Ubiquitous Language (Glossary)
+
+`GLOSSARY.md` (repo root) is the canonical source of truth for what domain concepts are called and what they mean.
+
+- **Use the exact terms** defined there in type names, function names, variables, comments, and commit messages.
+- **Do not introduce synonyms or generic substitutes** (no `Manager`/`Handler`/`Helper`/`data`/`info` for a concept that has a glossary term).
+- **Need a concept that isn't in the glossary?** Stop and propose a term — don't invent one silently. New terms are an authorial act; the user names them and adds the entry.
+- Correct off-vocabulary naming on sight before it spreads.
+
+## Architecture Decision Records (ADRs)
+
+Significant, hard-to-reverse decisions are recorded in `docs/adr/` (Nygard lightweight form; see `docs/adr/README.md`).
+
+- **The reasoning in an ADR is the user's to author** — the *why*, priorities, and trade-offs are human judgment. Do **not** fabricate ADR content or write one on the user's behalf without being asked.
+- **Before implementing** an architecturally significant change, check for a relevant ADR and implement per its constraints.
+- **When proposing an architectural direction**, if it's a real decision, surface that it warrants an ADR and let the user ratify it in their own words — don't bake the decision into code silently.
+- **When code would violate an ADR**, flag it rather than proceeding.
+
+**Surface ADR gaps to prompt the user's effort.** When you make, propose, or encounter an architecturally significant decision (hard to reverse, shapes the architecture, or future-you would ask "why is it this way") that has **no ADR and no backlog entry**, append a candidate row to `docs/adr/BACKLOG.md` and mention it in your reply so the user can prioritize. Apply the same bar as `docs/adr/README.md` — only weighty decisions, never routine/easily-reversed ones (don't pad the backlog). Check the backlog before adding so you don't duplicate. The user writes the actual ADR; your job is to make the gap visible, not to fill it.
+
 ## Deploying
 
 ```
@@ -25,11 +45,13 @@ Three tiers — pick the right one; don't reach for the CheatMenu when a headles
 - `npm run build` — production build; runs `check:arch` first. Primary verification step after code changes.
 - `npm run check:arch` — architecture budget check alone (faster than full build when that's all you need).
 - `node playtesting/simulator.js [--runs N --zone X]` — headless balance/TTK simulation; see `playtesting/README.md`. Weapon timing data is in double-seconds (÷2 vs. real game).
-- `tools/sfx-editor/` — SFX authoring. GUI: `npm start` inside that folder. Headless CLI: `tools/sfx-editor/sfx list | render <name> | render all | vary <name> --count N` (run `sfx help`). Templates live in `tools/sfx-editor/templates/` as git-tracked JSON; sub-folders are categories (e.g. `enemy/magic/fairy`). CLI output goes to `tools/sfx-editor/renders/` (gitignored) — audition there, promote a variant by copying its `.json` into `templates/`, and ship audio by rendering with `--out public/assets/audio/<name>.wav`. Grow the template tree over time: save new sounds under a category path rather than loose names.
+- `tools/sfx-editor/` — SFX authoring. GUI: `npm start` inside that folder. MIDI keyboard support (Web MIDI) + on-screen keyboard (`🎹 KEYS` — clickable + computer keys Z–M/Q–U, octave shift): play to audition the current instrument across the keyboard; toggle `● REC` to capture played notes (real timing + velocity) into the piano roll. Headless CLI: `tools/sfx-editor/sfx list | render <name> | render all | vary <name> --count N` (run `sfx help`). Templates live in `tools/sfx-editor/templates/` as git-tracked JSON; sub-folders are categories (e.g. `enemy/magic/fairy`). CLI output goes to `tools/sfx-editor/renders/` (gitignored) — audition there, promote a variant by copying its `.json` into `templates/`, and ship audio by rendering with `--out public/assets/audio/<name>.wav`. Grow the template tree over time: save new sounds under a category path rather than loose names. Synth engine voices (`instrument.type`): `square` (duty), `triangle`, `sawtooth`, `sine`, `wave` (wavetable, `instrument.wavetable` names a `WAVE_TABLES` entry), `fm` (2-op, `instrument.fm = {ratio,index,carrier,modWave}`), `noise` (`noiseType`: white/pink/metallic/lfsr). Optional per-voice `instrument.filterFreq`/`filterQ` (lowpass) and `crushBits` (bit-crush). **Layered voices** (SAC's core value — composite instruments): `appState.sfx.layers[]` holds up to 4 stacked voices (A–D), each with its own instrument + envelopes + `octave`/`detune`/`mute`/`solo`; `notes`/`echo` are shared and every note triggers all playable layers summed; editing targets the active layer (Layer strip: tabs show source + octave/detune, MUTE/SOLO [exclusive; Shift=additive], →ALL copies the voice to every layer, +=add/copy [Alt=blank]) while PLAY/MIDI auditions the full stack through a soft-limiter; `normalizeSfx()` migrates legacy single-instrument templates (no rewrites needed). Shortcuts: Space=play/stop, `[`/`]`=switch layer, Alt+`[`/`]`=reorder, Ctrl+Z/Ctrl+Shift+Z=undo/redo. Export is peak-normalized (toast flags when a stacked render clipped). The **Super Audio Cart** library lives under `templates/sac/<chip>/<category>/` — a synth recreation of the 7 original SAC chips (2600, c64, sms, gb, nes, gen, snes); `instrument.chip` tags the console and the **Chip** dropdown + **Source** ◀ ▶ cycler select a console then cycle its authentic sound sources (the `CHIP_SOURCES` catalog, `instrument.source`), mirroring SAC's "system → sound source" model — hand-edits show "(custom)". NES is chip-accurate (true parity: pulse duties, `nesTri`/`fds` wavetables, long/short LFSR noise); SNES and other sample-based voices are synth approximations, not recorded samples. See `tools/sfx-editor/SAC-REFERENCE.md` for the SAC engine spec, exact NES/SNES roster mapping, and the Kontakt-render path for bit-perfect SNES WAVs.
 
 **Ad-hoc debug scripts** (bug repro, state-dump one-offs): write them to `tools/debug/*.mjs` — never the project root. The directory is gitignored. Delete the script when the bug closes; promote anything durable into `playtesting/` or a named `tools/` script.
 
 ## Design Philosophy
+
+**Cosmology doc**: `claudedocs/zone-cosmology.md` — **Read whenever making design decisions** (new content, zone features, enemies, items, endings, narrative beats). It is the decision lens: the Power of 3 layer (experience/instinct/convention + hidden canon, Triangle Room, endings, the Infinite Loop) and each zone's word/verb. A feature that doesn't pass its checks belongs in a different zone — or nowhere.
 
 Pure roguelike — death is a full reset. The "save file" is mental: recipe memory, zone knowledge, pattern recognition.
 
@@ -155,7 +177,7 @@ main.js reached ~8,000 lines because behavior with "no obvious home" defaulted i
 2. **No home exists? Create a system.** A 60-line `src/systems/XxxSystem.js` always beats 60 inline lines in main.js — there is no "too small for a system" threshold.
 3. **Input handlers are dispatch-only for new code.** A new branch in `setupInput()` / `handleSpacePress()` / `handleShiftPress()` may only translate the input into a single system call. The behavior lives in the system.
 4. **Extend, don't mirror.** If new code would "mirror the X pattern" inline (e.g. re-implementing the MagicSystem auto-cast lifecycle for a new weapon), extend system X or add a mechanic file (`entities/enemyMechanics/`-style composition) instead.
-5. **Budgets are enforced.** `npm run build` runs `tools/check-architecture.js` against `tools/arch-budgets.json`. Budgets only ratchet down — after an extraction shrinks a file, run `node tools/check-architecture.js --update` to lock in the new ceiling. If the check fails, route the code out; never raise a budget to pass.
+5. **Budgets are enforced.** `npm run build` runs `tools/check-architecture.js` against `tools/arch-budgets.json`. Budgets only ratchet down — after an extraction shrinks a file, run `node tools/check-architecture.js --update` to lock in the new character-count ceiling. If the check fails, route the code out; never raise a budget to pass.
 
 ## Architectural Compromises
 

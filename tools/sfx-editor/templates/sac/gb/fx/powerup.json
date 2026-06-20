@@ -1,0 +1,88 @@
+{
+  "name": "sac/gb/fx/powerup",
+  "totalDuration": 0.5,
+  "bpm": 120,
+  "snapMode": "none",
+  "instrument": {
+    "masterGain": 0.8,
+    "chip": "GB",
+    "type": "square",
+    "duty": 0.5
+  },
+  "volumeEnvelope": [
+    {
+      "t": 0,
+      "v": 0
+    },
+    {
+      "t": 0.03,
+      "v": 1
+    },
+    {
+      "t": 0.92,
+      "v": 1
+    },
+    {
+      "t": 1,
+      "v": 0
+    }
+  ],
+  "pitchEnvelope": [
+    {
+      "t": 0,
+      "semitones": 0
+    },
+    {
+      "t": 1,
+      "semitones": 0
+    }
+  ],
+  "notes": [
+    {
+      "id": "n87",
+      "time": 0,
+      "duration": 0.09,
+      "frequency": 261.63,
+      "volume": 0.9,
+      "muted": false
+    },
+    {
+      "id": "n88",
+      "time": 0.09,
+      "duration": 0.09,
+      "frequency": 329.63,
+      "volume": 0.9,
+      "muted": false
+    },
+    {
+      "id": "n89",
+      "time": 0.18,
+      "duration": 0.09,
+      "frequency": 392,
+      "volume": 0.9,
+      "muted": false
+    },
+    {
+      "id": "n90",
+      "time": 0.27,
+      "duration": 0.09,
+      "frequency": 523.25,
+      "volume": 0.9,
+      "muted": false
+    },
+    {
+      "id": "n91",
+      "time": 0.36,
+      "duration": 0.09,
+      "frequency": 1318.51,
+      "volume": 0.9,
+      "muted": false
+    }
+  ],
+  "echo": {
+    "enabled": false,
+    "delay": 0.12,
+    "scale": 0.55,
+    "count": 4
+  }
+}

@@ -35,6 +35,13 @@ export class BackgroundObject {
     this.color = this.data.color;
     this.destroyed = false;
 
+    // Obsidian flag — unbreakable rock (darker gray rendering)
+    this.obsidian = options.obsidian || false;
+    if (this.obsidian && char === '0') {
+      this.color = '#333333';
+      this.indestructible = true;
+    }
+
     // Rock poke drop ('/' interaction → zone mineral) is claimable once per rock.
     this.pokeMineralClaimed = false;
 
@@ -56,7 +63,7 @@ export class BackgroundObject {
     // data-driven hitbox (from BACKGROUND_OBJECTS), then to the render-size default.
     const isGroundLiquid = char === '=' || char === '~' || char === '!';
     const isRock = char === '0';
-    const isTreeOrStump = char === '&' || char === 'Y';
+    const isTreeOrStump = char === 'Y' || char === 'ŋ';
 
     if (isRock) {
       // Narrow elliptical collision — rock is round, not square.
@@ -136,6 +143,10 @@ export class BackgroundObject {
     // Drop tracking - prevents duplicate drops from same object
     this.hasDropped = false;
 
+    // Spawn immunity — new chests (from grass drops) are briefly unhittable so
+    // the swing that spawned them can't immediately open them.
+    this.spawnImmunityTimer = 0;
+
     // Leshy chase event flags (set by RoomGenerator for secret events)
     this.isShaking = false;
     this.leshyBush = false;
@@ -177,6 +188,10 @@ export class BackgroundObject {
   takeDamage(amount, isBlade = false) {
     // Block damage if already queued for destruction (prevents animation spam)
     if (this.destroyAfterAnimation) {
+      return { destroyed: false, effect: null };
+    }
+
+    if (this.spawnImmunityTimer > 0) {
       return { destroyed: false, effect: null };
     }
 
@@ -266,6 +281,10 @@ export class BackgroundObject {
   }
 
   update(deltaTime) {
+    if (this.spawnImmunityTimer > 0) {
+      this.spawnImmunityTimer = Math.max(0, this.spawnImmunityTimer - deltaTime);
+    }
+
     // Update fire state
     if (this.onFire) {
       this.fireTimer += deltaTime;

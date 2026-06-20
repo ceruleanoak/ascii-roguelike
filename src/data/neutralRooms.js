@@ -41,7 +41,7 @@ export const NEUTRAL_ROOMS = {
       ];
 
       for (const pos of treePositions) {
-        const tree = new BackgroundObject('&', pos.x * GRID.CELL_SIZE, pos.y * GRID.CELL_SIZE);
+        const tree = new BackgroundObject('Y', pos.x * GRID.CELL_SIZE, pos.y * GRID.CELL_SIZE);
         tree.indestructible = true; // Decorative only
         room.backgroundObjects.push(tree);
       }
@@ -96,7 +96,7 @@ export const NEUTRAL_ROOMS = {
       ];
 
       for (const pos of stumpPositions) {
-        const stump = new BackgroundObject('Y', pos.x * GRID.CELL_SIZE, pos.y * GRID.CELL_SIZE);
+        const stump = new BackgroundObject('ŋ', pos.x * GRID.CELL_SIZE, pos.y * GRID.CELL_SIZE);
         stump.indestructible = true; // Decorative only
         room.backgroundObjects.push(stump);
       }

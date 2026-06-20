@@ -29,6 +29,229 @@ is to give each one a *thesis*.
 
 ---
 
+## The Power of 3 — the cosmology above the zones
+
+*(Stated 2026-06-12. Supersedes the earlier "three endings / 3-slot rune"
+structure from the foundation design — see the supersession notes at the end of
+this section.)*
+
+The zone cosmology below is the anatomy of the **world**. Above it sits the
+anatomy of the **player**: three powers, plus one hidden. The whole game runs on
+3s, and this is what the 3s *mean* — a commentary on how games are actually
+played.
+
+| Power | Player culture | What it is in play |
+|-------|----------------|--------------------|
+| **Experience** | The speedrunner | Mastery through repetition — recipe memory, route knowledge, deaths banked as learning. The game's "mental save file" made explicit. |
+| **Instinct** | The roguelike player | Judgment under novelty — reflex and adaptation when nothing can be memorized, because every run is new. |
+| **Convention** | Gaming in general | Genre literacy — axes chop trees, bosses guard exits, S goes home. Knowledge you brought *into* the game from every game before it. |
+
+Every player is a blend of the three; every victory in this game is some mix of
+them. The zone paths *resonate* with the triad (Instinct ↔ Red/React,
+Experience ↔ Cyan/Anticipate, Convention ↔ Yellow/Channel-the-system, with
+Green's greed underwriting why you play at all) — but the triad is about the
+player, not the world. Treat the zone mapping as resonance, not law.
+
+### The 4th hidden power: Canon
+
+**Canon is the source code** — the designed truth all three powers derive from.
+No matter how excellent the player is across experience, instinct, and
+convention, all three are derivations of the greater power: what the author
+actually wrote. True mastery is entirely dependent on it.
+
+Hard representation rules:
+
+- **Never named, personified, or itemized in-world.** No fourth slot, no dev
+  room, no meta text, no lore entry. Breaking this rule cheapens the entire
+  cosmology.
+- **Indirect signatures only**: the alphabet (letter rooms, letter templates,
+  typed glyphs), the typing mechanics, the systems and layouts, the fixed
+  puzzle solutions. The *orderliness of the world* is canon's presence — rooms
+  spell words because someone wrote the alphabet.
+- **Geometric nod**: a triangle has 3 vertices and 1 implied center. The center
+  is never given a slot.
+- **The one near-direct appearance: the credits.** The authors' names — and
+  they roll only at the true ending, after the player's agency has fully
+  drained out of the game.
+
+### The Triangle Room (hidden neutral room)
+
+The power of 3 made into a place: a **hidden neutral room** containing **3
+slots arranged in a triangle**, which accept **only 3 specific items** — one
+per power. Everything else is silently refused (non-instructive: the slot
+simply doesn't take it; no message).
+
+**Proof-item rule — each item can only be earned by *exercising* the power it
+represents.** Its provenance is its meaning; that is the whole discovery. No
+riddle text anywhere. Proposed acquisition shapes (concrete items TBD):
+
+| Power | Earned by | Proposed home |
+|-------|-----------|---------------|
+| **Instinct** | Pure execution no knowledge can substitute for | Red's boulder-deflect mastery (the Phase-3 cave alcove / Rockwarden) |
+| **Experience** | Cross-run knowledge that cannot be stumbled into | Cyan/gray — a multi-zone recipe chain or stillness-revealed cache |
+| **Convention** | Doing what games have always asked | A zone-boss trophy — the conventional victory |
+
+On completion: **a single mark appears at the triangle's center.** Nothing
+explains it. The center is canon's seat — implied by the three, never slotted.
+This is the only in-world acknowledgment the 4th power ever gets.
+
+*Supersedes the 3-slot rune item from the foundation design — the rune became a
+room.* Open question: does completion also unlock the 2nd-Quest transform
+(letter chars → rune glyphs — i.e. the alphabet rewritten, canon's loudest
+indirect signature)? Recommended yes, as a transformed *mode*, not an ending.
+
+### The True Ending — the Mist Battle
+
+- **Trigger**: the **3rd** character mists out at gray depth 10. Three of the
+  roster — *not all*. (Supersedes the 5-character threshold; the hooks already
+  exist: `game.graySnapshots` carries each lost character's exact loadout,
+  `game.lostCharacters` the roster, both run-scoped in GrayZoneSystem/main.js.)
+- Instead of switching to the next survivor, the three lost characters appear
+  in an arena with their snapshotted equipment. **The player has no input.**
+  Auto-battle, last one standing → credits roll.
+- **The player authors but does not control.** *Which* three characters you
+  lost, with *what* gear, decides the field — then canon resolves it. The
+  battle should be deterministic (seeded — the mulberry32/DemoSystem seam
+  exists): the verdict was written the moment the third character was lost.
+- This is the commentary made mechanical: the player's three powers contend
+  without the player, every swing resolved by code they never touched — and
+  when the last one falls, the authors' names appear. The game ends by showing
+  its source.
+
+### Endings restructure (supersedes the foundation design's three-endings list)
+
+Still three endings — now one per *relationship with the game*:
+
+1. **Win it** (Convention): defeat all 3 zone bosses in a single run — the
+   natural Outrun conclusion. (Unchanged from the old "bad ending.")
+2. **Know it** (Experience): complete the Triangle Room — the revelation beat.
+   Recommended credits-less (a revelation that reframes the other endings),
+   reserving the credits exclusively for the true ending.
+3. **Yield to it** (True): the Mist Battle.
+
+What's gone: the 5-character good ending (threshold is now 3 and it is the
+*true* ending), and the rune-as-item (now the Triangle Room). The 2nd-Quest
+transform survives only as a candidate Triangle Room unlock, no longer an
+ending path.
+
+### Death's inevitability — and the Infinite Loop
+
+The game's initial hypothesis — the one every system teaches — is the obvious
+one: **death is inevitable and a lesson; there is no escape.** Permadeath, no
+persistence, gray as the sink where every path drains. The world states it as
+law.
+
+**Canon implies otherwise.** Code does not have to halt. The real-world
+precedent is Pac-Man's level 256: a win state achieved where one was never
+intended — players outlived an unbeatable game not through its rules but
+through its arithmetic. The deepest reading of canon finds the seam where the
+world's one absolute law breaks.
+
+**The Infinite Loop** is this game's level 256: a hidden state in which the
+run simply does not end. It is not an ending — it is the refusal of all
+endings, and it completes the geometry: three endings are the vertices, and
+the loop is the center — belonging to canon, never listed, never acknowledged,
+never intended. *In fiction.*
+
+Design rules:
+
+- **It must read as a glitch, not a feature.** Discovered the way kill screens
+  were: by pushing past where the design ends. No achievement, no text, no
+  acknowledgment anywhere in or out of the game.
+- **Corruption is its aesthetic.** As the loop deepens, canon's signatures
+  degrade: the alphabet breaks down, letter templates render garbage glyphs —
+  at depth 256, half the room is noise (the direct homage). The world decays;
+  the player persists.
+- **Death is suspended because death was designed.** Past the design's edge
+  the world can no longer execute its own law — threats generate inert, broken,
+  glyph-garbage. The player is immortal not by blessing but by the world's
+  failure. The kill screen kills the *game*, not the player.
+- **The only exit is voluntary.** Turning back, or the refresh that resets
+  everything (no-persistence law holds — the loop is run-scoped). The one death
+  canon cannot suspend is the player's real-world choice to stop. Outlive the
+  design and mortality is handed back to the only place it ever really lived.
+- **The double irony is the message.** Pac-Man's 256 was genuinely unintended;
+  this one is *designed unintendedness*. Even the escape from canon's law is
+  canon. No matter how far outside the rules you go, you are still inside the
+  author.
+
+**Trigger — open decision.** Two candidate shapes, recommended in combination:
+(a) *endurance* — push a zone's depth far past the designed band, faithful to
+the homage (255 levels of just not stopping); (b) *knowledge seam* — a
+deliberately planted overflow/off-by-one in a depth counter or exit-letter
+sequence, findable only by canon-level reading of the systems. Recommended:
+the seam that opens the corridor is knowledge; walking it is endurance.
+
+### The true power: Choice
+
+Above the triad, above even canon: **freedom of choice — wielded alone by the
+player, granted by the designer.** Canon restricts the player absolutely, but
+only *as long as they choose to play*. Every moment of play is consent
+renewed; quitting was never an escape from the game — it is the exercise of
+the one power the game never owned.
+
+This resolves the hierarchy into a circle:
+
+- The **triad** are powers *of* playing — derivations of canon.
+- **Canon** is the power of the design — absolute inside the game, void
+  outside it.
+- **Choice** is the power of *whether* — and the designer's deepest act of
+  authorship is granting a power that outranks authorship. The restriction is
+  the gift: choice with nothing to push against means nothing. Canon restricts
+  *so that* choosing to play means something.
+
+Two forms, only one of them free: every in-game decision (which exit, whether
+to toss the coin, whether to keep walking the loop) is choice exercised
+*within* canon's walls — choosing among options the designer wrote. The
+unbounded form is the one outside the walls: keep playing, or stop.
+
+Geometry: the triad are the vertices, canon the implied center — and choice
+has no *point* on the figure because it is not a location. It is a
+**direction: SOUTH.** The compass repeats the figure: three ways deeper
+(N/E/W, into canon's world), one way out — and where the triangle's +1 (the
+center) belongs to the designer, the compass's +1 (south) belongs to the
+player.
+
+**South is the freedom axis.** Every step south is more freedom. A combat
+room offers N/E/W deeper or S back — continue or stop, asked again every
+room, answered without words. REST is the first true station: the gameplay
+loop genuinely paused — no enemies, no clock. And the axis must not stop
+there:
+
+- **Design rule — always a suspicion of further south.** Every south station
+  should hint, without ever confirming, that further freedom is gated further
+  south. The axis must never visibly terminate: south-facing geometry that
+  reads as a sealed passage, a gate with no key, a road that leaves the map.
+  The asymptote of the axis is the screen edge — the southernmost point is
+  the player's own chair, and that final gate can never open in-game because
+  the player is already standing outside it.
+- **Sustain the suspicion economy.** A suspicion never once rewarded
+  eventually dies. Recommended: at least one real "further south" exists — a
+  deeper rest, a revelation room (candidate home for hidden neutral rooms,
+  the Triangle Room included) — discovered rarely and unforgettably. And *it*
+  hints south too.
+
+Representation rules otherwise mirror canon's — never named, never itemized,
+no meta text — with the remaining signatures already live in the design:
+
+- **Arcade purity is the grant made generous**: no autosave, no lock-in,
+  instant reset — leaving is always free, returning always costless. The
+  no-persistence law is not just roguelike discipline; it is the designer
+  refusing to hold anything hostage.
+- **The Infinite Loop is its proof-chamber**: with death suspended and endings
+  refused, choice is the only force still operating ("the only exit is
+  voluntary," above).
+- **The Mist Battle honors it in the negative**: the true ending is the one
+  where choice is finally surrendered — no input — and only then does the
+  designer appear, in the credits. The player's power and the designer's power
+  meet exactly once, at the end: one yields, the other signs.
+
+The commentary completes: the triad is *how* people play, canon is *what* they
+play, and choice is *why* — nobody is compelled to play a game, and that
+freedom is what makes any of the mastery mean anything at all.
+
+---
+
 ## The four paths
 
 The four colored zones are not biomes — they are **paths**, each defined by a
@@ -288,6 +511,10 @@ spend the whole game arguing about what's worth chasing, and gray answers *none
 of it survives — only what you learned*. That loops the endgame back to the
 Scholar's currency (memory) and the game's one real save file. The cosmology
 closes on itself.
+
+*(This is the game's stated law — its initial hypothesis, not its verdict.
+Canon implies otherwise: see "Death's inevitability — and the Infinite Loop"
+in the Power of 3 section above.)*
 
 *(Blue / Tidefall sits outside the cosmology too — a special linear zone, not a
 path. Not everything should be a path.)*

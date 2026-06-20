@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>DX7 Preset Browser</title>
+<style>
+  :root { --bg:#15151b; --panel:#1e1e28; --panel2:#262633; --fg:#d8d8e4; --dim:#8a8aa0;
+          --accent:#7aa2ff; --accent2:#3a3a55; --warn:#e0a040; --star:#ffd24a; --chip:#33334a; }
+  * { box-sizing: border-box; }
+  body { margin:0; height:100vh; display:flex; flex-direction:column; font-family:-apple-system,Segoe UI,sans-serif;
+         background:var(--bg); color:var(--fg); font-size:13px; overflow:hidden; }
+  button { background:var(--accent2); color:var(--fg); border:1px solid #000; border-radius:5px;
+           padding:5px 10px; cursor:pointer; font-size:12px; }
+  button:hover { background:#4a4a6a; }
+  button.sm { padding:2px 7px; font-size:11px; }
+  label.small { color:var(--dim); font-size:11px; }
+  input, textarea { background:var(--panel2); color:var(--fg); border:1px solid #000; border-radius:5px;
+                    padding:6px 9px; font-size:12px; outline:none; font-family:inherit; }
+  input:focus, textarea:focus { border-color:var(--accent); }
+  .topbar { display:flex; align-items:center; gap:12px; padding:9px 13px; background:var(--panel2); border-bottom:1px solid #000; }
+  .topbar .patch { font-size:15px; font-weight:600; color:var(--accent); min-width:150px; }
+  .topbar .spacer { flex:1; }
+  .main { flex:1; display:flex; min-height:0; }
+  .col { display:flex; flex-direction:column; min-height:0; border-right:1px solid #000; }
+  .col h3 { margin:0; padding:7px 12px; font-size:10px; text-transform:uppercase; letter-spacing:.08em;
+            color:var(--dim); background:var(--panel); border-bottom:1px solid #000; display:flex; justify-content:space-between; align-items:center; }
+  .sidebar { width:248px; overflow:auto; }
+  .sidebar .navitem { padding:6px 12px; cursor:pointer; display:flex; justify-content:space-between; }
+  .sidebar .navitem:hover { background:var(--panel2); }
+  .sidebar .navitem.sel { background:var(--accent2); }
+  .sidebar .section { padding:6px 0; border-top:1px solid #000; }
+  .sidebar .secttitle { padding:5px 12px; color:var(--dim); font-size:10px; text-transform:uppercase; letter-spacing:.06em; display:flex; justify-content:space-between; }
+  .chips { padding:2px 8px; display:flex; flex-wrap:wrap; gap:4px; }
+  .chip { background:var(--chip); color:var(--fg); border-radius:10px; padding:2px 8px; font-size:11px; cursor:pointer; border:1px solid transparent; white-space:nowrap; }
+  .chip:hover { border-color:var(--accent); }
+  .chip.on { background:var(--accent); color:#0a0a12; }
+  .chip .ct { color:var(--dim); margin-left:4px; }
+  .chip.on .ct { color:#0a0a12cc; }
+  .chip.cls { background:#2c3a2c; }
+  .tree { font-size:12px; }
+  .tree .folder { padding:4px 12px; color:var(--dim); font-weight:600; }
+  .tree .coll { padding:4px 12px; cursor:pointer; display:flex; justify-content:space-between; }
+  .tree .coll:hover { background:var(--panel2); }
+  .tree .coll.sel { background:var(--accent2); }
+  .voices { width:430px; }
+  .searchbar { padding:8px 10px; background:var(--panel); border-bottom:1px solid #000; }
+  .searchbar input { width:100%; }
+  .list { overflow:auto; flex:1; }
+  .row { height:26px; padding:0 10px; cursor:pointer; display:flex; align-items:center; gap:8px; border-bottom:1px solid #000a; overflow:hidden; }
+  .row:hover { background:var(--panel2); }
+  .row.multisel { background:#26354f; }
+  .row.sel { background:var(--accent); color:#0a0a12; }
+  .row.multisel.sel { background:var(--accent); }
+  .row .star { color:#555; flex:0 0 auto; width:14px; text-align:center; }
+  .row .star.on { color:var(--star); }
+  .row.sel .star { color:#0a0a12; } .row.sel .star.on { color:#7a5a00; }
+  .row .vname { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row .rchips { flex:0 0 auto; display:flex; gap:3px; max-width:150px; overflow:hidden; }
+  .row .rchip { background:var(--chip); border-radius:8px; padding:0 6px; font-size:10px; color:var(--dim); }
+  .row.sel .rchip { background:#0a0a1233; color:#0a0a12; }
+  .row .cnt { flex:0 0 auto; color:var(--dim); font-size:10px; }
+  .row.sel .cnt { color:#0a0a12aa; }
+  .detail { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .info { padding:11px 15px; color:var(--dim); line-height:1.7; }
+  .info b { color:var(--fg); }
+  .dsect { padding:8px 15px; border-top:1px solid #000; }
+  .dsect h4 { margin:0 0 6px; font-size:10px; text-transform:uppercase; color:var(--dim); letter-spacing:.06em; }
+  .tagrow { display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
+  .tagrow .chip .x { margin-left:5px; color:#0a0a12aa; }
+  textarea#notes { width:100%; height:42px; resize:vertical; }
+  .kbdwrap { padding:12px 14px; background:var(--panel); border-top:1px solid #000; margin-top:auto; }
+  .piano { position:relative; height:96px; user-select:none; }
+  .key { position:absolute; bottom:0; border:1px solid #000; border-radius:0 0 4px 4px; cursor:pointer; }
+  .key.white { background:#e8e8f0; height:96px; z-index:1; }
+  .key.black { background:#2a2a38; height:60px; z-index:2; }
+  .key.white.on, .key.black.on { background:var(--accent); }
+  .hint { color:var(--dim); font-size:11px; margin-top:7px; }
+  .status { padding:6px 14px; background:#000; color:var(--dim); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .status.warn { color:var(--warn); }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="patch" id="patchName">— no patch —</div>
+    <span id="engineBadge" class="small" style="color:var(--dim);border:1px solid #000;border-radius:4px;padding:2px 6px">engine: —</span>
+    <button id="btnOpen" class="sm">Open .syx…</button>
+    <button id="btnReindex" class="sm">Reindex</button>
+    <div class="spacer"></div>
+    <label class="small"><input type="checkbox" id="autoAud" checked /> auto-audition</label>
+    <label class="small"><input type="checkbox" id="hideDead" /> hide dead/unnamed</label>
+    <label class="small" title="When on, a–; play the synth; when off, they are browse shortcuts (F/T/C…)"><input type="checkbox" id="qwertyPlay" /> ⌨ keys play</label>
+    <label class="small">test</label>
+    <select id="testNote"></select>
+    <label class="small">vel <span id="velLabel">100</span></label>
+    <input type="range" id="auditVel" min="1" max="127" value="100" style="width:66px" title="Audition velocity — DX7 patches get brighter at higher velocity; match how you play it in Dexed" />
+    <label class="small">oct <span id="octLabel">4</span></label>
+    <button id="octDown" class="sm">−</button><button id="octUp" class="sm">+</button>
+    <label class="small" title="Engine sample rate — match your Logic/Dexed session (bright patches alias differently at 44.1 vs 48)">SR</label>
+    <select id="srSel"><option value="48000">48k</option><option value="44100">44.1k</option></select>
+    <label class="small">vol</label>
+    <input type="range" id="vol" min="0" max="1" step="0.01" value="0.5" style="width:80px" />
+    <button id="panic" class="sm">Panic</button>
+  </div>
+
+  <div class="main">
+    <div class="col sidebar" id="sidebar">
+      <div class="navitem sel" data-view="all"><span>All voices</span><span class="ct" id="cntAll"></span></div>
+      <div class="navitem" data-view="favorites"><span>★ Favorites</span><span class="ct" id="cntFav"></span></div>
+      <div class="navitem" data-view="rated"><span>★ Rated ≥4</span><span class="ct" id="cntRated"></span></div>
+      <div class="section">
+        <div class="secttitle"><span>My tags</span></div>
+        <div class="chips" id="tagChips"></div>
+      </div>
+      <div id="derivedSections"></div>
+      <div class="section">
+        <div class="secttitle"><span>Collections</span><button id="btnNewColl" class="sm">+ New</button></div>
+        <div class="tree" id="collTree"></div>
+      </div>
+    </div>
+
+    <div class="col voices">
+      <h3><span>Voices <span class="ct" id="voiceCount"></span></span>
+          <span id="viewLabel" style="text-transform:none;color:var(--accent)"></span></h3>
+      <div class="searchbar" style="display:flex;gap:6px;align-items:center">
+        <input type="text" id="search" placeholder="name…  or  inst:bell author:yamaha flag:metallic" autocomplete="off" spellcheck="false" style="flex:1" />
+        <select id="sortBy" title="sort order"><option value="name">A–Z</option><option value="banks">popular</option><option value="bright">bright</option><option value="rating">rating</option></select>
+      </div>
+      <div id="bulkBar" style="display:none;padding:6px 10px;background:var(--accent2);border-bottom:1px solid #000;font-size:12px"></div>
+      <div class="list" id="voiceList"><div class="info">Indexing…</div></div>
+    </div>
+
+    <div class="detail">
+      <h3><span>Patch</span><span id="collActions"></span></h3>
+      <div class="info" id="patchInfo">Select a voice. ↑/↓ to scan, F to favorite. Plays on select (auto-audition).</div>
+      <div class="dsect">
+        <h4>Tags</h4>
+        <div class="tagrow" id="tagEditor"></div>
+        <input id="tagInput" list="tagSuggest" placeholder="add tag + Enter" style="margin-top:6px;width:60%" />
+        <datalist id="tagSuggest"></datalist>
+      </div>
+      <div class="dsect">
+        <h4>Rating <span class="meta">(keys 1–5, 0 clears)</span></h4>
+        <div id="ratingWidget"></div>
+      </div>
+      <div class="dsect">
+        <h4>Notes</h4>
+        <textarea id="notes" placeholder="notes for this patch…"></textarea>
+      </div>
+      <div class="dsect">
+        <button id="btnMoreLike" class="sm">More like this ▸</button>
+        <button id="btnAddColl" class="sm">+ Add to collection ▸</button>
+        <select id="addCollSelect" style="display:none"></select>
+      </div>
+      <div class="kbdwrap">
+        <div class="piano" id="piano"></div>
+        <div class="hint" id="kbdHint"></div>
+      </div>
+    </div>
+  </div>
+  <div id="modal" style="display:none;position:fixed;inset:0;background:#000a;z-index:100;align-items:center;justify-content:center">
+    <div style="background:var(--panel2);border:1px solid #000;border-radius:8px;padding:16px;width:400px">
+      <div id="modalMsg" style="margin-bottom:8px;white-space:pre-line"></div>
+      <input id="modalInput" style="width:100%" />
+      <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+        <button id="modalCancel">Cancel</button><button id="modalOk">OK</button>
+      </div>
+    </div>
+  </div>
+  <div class="status" id="status">Initializing…</div>
+
+  <script>
+  (function () {
+    'use strict';
+    var statusEl = document.getElementById('status');
+    function status(msg, warn) { statusEl.textContent = msg; statusEl.className = 'status' + (warn ? ' warn' : ''); }
+    function inject(src) { var s = document.createElement('script'); s.textContent = src; document.head.appendChild(s); }
+
+    if (!window.api) { status('preload bridge not available', true); return; }
+    status('Loading engine…');
+    window.api.sources().then(function (libs) {
+      inject(libs.syx); inject(libs.fmEngine); inject(libs.msfaEngine);
+      if (!window.SyxParser || !window.FMEngine) { status('Failed to load syx / fm-engine sources', true); return; }
+      start(libs.worklet);
+    }).catch(function (e) { status('Failed to load libraries: ' + e.message, true); });
+
+    function start(workletSource) {
+    // ───── state ─────
+    var engine = null, currentVCED = null, currentPid = null, baseOctave = 4;
+    var qwertyDown = {}, auditionTimer = null;
+    var INDEX = { banks: [], voices: [] };
+    var byPid = new Map();
+    var META = { favorites: new Set(), tags: {}, notes: {}, ratings: {}, derived: {}, taxonomy: {} };
+    var FEATURES = null;
+    var view = { mode: 'all', collRel: null, collVoices: null, similarPid: null };
+    var activeFilters = new Set();        // 'tagname' or 'class:clsname'
+    var filtered = [];                    // current filtered voice list (for kbd nav)
+    var selIndex = -1, selectedRowEl = null;
+    var selection = new Set();            // multi-select pids (⌘/ctrl-click toggle, shift-click range)
+
+    var els = {
+      patchName: document.getElementById('patchName'), patchInfo: document.getElementById('patchInfo'),
+      voiceList: document.getElementById('voiceList'), voiceCount: document.getElementById('voiceCount'),
+      viewLabel: document.getElementById('viewLabel'), search: document.getElementById('search'),
+      tagChips: document.getElementById('tagChips'), derivedSections: document.getElementById('derivedSections'),
+      collTree: document.getElementById('collTree'), tagEditor: document.getElementById('tagEditor'),
+      tagInput: document.getElementById('tagInput'), tagSuggest: document.getElementById('tagSuggest'),
+      notes: document.getElementById('notes'), addCollSelect: document.getElementById('addCollSelect'),
+      collActions: document.getElementById('collActions'), autoAud: document.getElementById('autoAud'),
+      testNote: document.getElementById('testNote'), vol: document.getElementById('vol'),
+      octLabel: document.getElementById('octLabel'), cntAll: document.getElementById('cntAll'),
+      cntFav: document.getElementById('cntFav')
+    };
+
+    // ───── audio ─────
+    var initPromise = null, engineName = '', renderEngine = null, chosenSR = 48000;
+    function setEngineBadge(t, warn) { var b = document.getElementById('engineBadge'); if (b) { b.textContent = 'engine: ' + t; b.style.color = warn ? 'var(--warn)' : 'var(--accent)'; } }
+    function initJS(reason) {
+      engine = new window.FMEngine();
+      return engine.init({ workletSource: workletSource, masterGain: parseFloat(els.vol.value) })
+        .then(function () { engineName = 'js'; setEngineBadge('JS fallback' + (reason ? ' — ' + reason : ''), true); if (currentVCED) engine.loadVCED(currentVCED); });
+    }
+    function ensureAudio() {
+      if (initPromise) return initPromise;
+      setEngineBadge('loading…');
+      initPromise = (window.MsfaEngine ? window.api.msfaSources().then(function (ms) {
+        engine = new window.MsfaEngine();
+        return engine.init({ sources: ms, masterGain: parseFloat(els.vol.value), sampleRate: chosenSR });
+      }).then(function () { engineName = 'msfa'; setEngineBadge('Dexed Mark I @ ' + Math.round((engine._sr || chosenSR) / 1000) + 'k'); if (currentVCED) engine.loadVCED(currentVCED); })
+        : Promise.reject(new Error('no MsfaEngine')))
+        .catch(function (e) { status('msfa engine failed: ' + e.message + ' — JS fallback', true); return initJS(e.message.slice(0, 40)); });
+      return initPromise;
+    }
+    function setSampleRate(sr) {
+      chosenSR = sr;
+      try { if (engine) engine.allNotesOff(); } catch (e) {}
+      try { if (engine && engine.ctx) engine.ctx.close(); } catch (e) {}
+      try { if (engine && engine._worker) engine._worker.terminate(); } catch (e) {}
+      try { if (renderEngine && renderEngine.ctx) renderEngine.ctx.close(); } catch (e) {}
+      engine = null; renderEngine = null; initPromise = null;
+      status('Sample rate → ' + Math.round(sr / 1000) + 'k; re-initializing…');
+      if (currentVCED) audition(); else ensureAudio();
+    }
+    // Render engine: use msfa (parity) when it's the active engine, else a JS FMEngine.
+    function getRenderEngine() {
+      return ensureAudio().then(function () {
+        if (engine && engine.renderVCED && engineName === 'msfa') return engine;
+        if (renderEngine && renderEngine.ready) return renderEngine;
+        renderEngine = new window.FMEngine();
+        return renderEngine.init({ workletSource: workletSource }).then(function () { return renderEngine; });
+      });
+    }
+    function noteOn(note, vel) { ensureAudio().then(function () { engine.resume(); engine.noteOn(note, vel || 100); }); setKeyVisual(note, true); }
+    function noteOff(note) { if (engine) engine.noteOff(note); setKeyVisual(note, false); }
+    function panic() {
+      if (engine) {
+        engine.allNotesOff();
+        if (previewNote != null) engine.noteOff(previewNote);
+        Object.keys(qwertyDown).forEach(function (k) { if (QWERTY[k] !== undefined) engine.noteOff((baseOctave + 1) * 12 + QWERTY[k]); });
+      }
+      previewNote = null; qwertyDown = {};
+      document.querySelectorAll('.key.on').forEach(function (k){k.classList.remove('on');});
+      status('Panic — all notes off.');
+    }
+    var auditionToken = 0, playVel = 100, previewNote = null;   // global play velocity + the note currently previewing
+    function stopPreview() {                  // synchronously stop the prior preview note (so switching kills it now)
+      clearTimeout(auditionTimer);
+      if (engine) { engine.allNotesOff(); if (previewNote != null) engine.noteOff(previewNote); }
+      if (previewNote != null) setKeyVisual(previewNote, false);
+      previewNote = null;
+    }
+    function playSelected(force) {            // (re)play the selected patch at playVel
+      if (!currentVCED || (!force && !els.autoAud.checked)) return;
+      stopPreview();                          // kill whatever's sounding NOW, before the async/token step
+      var n = parseInt(els.testNote.value, 10);
+      var hold = (currentPid && derivedTags(currentPid).indexOf('flag:slow-attack') >= 0) ? 3500 : 1900;
+      var token = ++auditionToken;
+      ensureAudio().then(function () {
+        if (token !== auditionToken) return;  // a newer selection superseded this one
+        engine.resume();
+        engine.noteOn(n, playVel); previewNote = n; setKeyVisual(n, true);
+        auditionTimer = setTimeout(function () { if (token !== auditionToken) return; engine.noteOff(n); setKeyVisual(n, false); if (previewNote === n) previewNote = null; }, hold);
+      });
+    }
+    function audition() { playSelected(false); }   // auto-audition on select (respects toggle)
+
+    // ───── metadata helpers (debounced persist) ─────
+    var saveT = {};
+    function debounce(key, fn) { clearTimeout(saveT[key]); saveT[key] = setTimeout(fn, 300); }
+    function onSaveErr(e) { status('save failed: ' + e.message, true); }
+    function saveFavorites() { debounce('fav', function () { window.api.favoritesSave([].concat(Array.from(META.favorites))).catch(onSaveErr); }); }
+    function saveTags() { debounce('tags', function () { window.api.tagsSave(META.tags).catch(onSaveErr); }); }
+    function saveNotes() { debounce('notes', function () { window.api.notesSave(META.notes).catch(onSaveErr); }); }
+    function saveRatings() { debounce('rat', function () { window.api.ratingsSave(META.ratings).catch(onSaveErr); }); }
+    function flushSaves() {  // fire pending debounced writes before the window closes
+      Object.keys(saveT).forEach(function (k) { clearTimeout(saveT[k]); });
+      window.api.favoritesSave([].concat(Array.from(META.favorites)));
+      window.api.tagsSave(META.tags); window.api.notesSave(META.notes); window.api.ratingsSave(META.ratings);
+    }
+    function ratingOf(pid) { return META.ratings[pid] || 0; }
+    function setRating(pid, n) { if (n) META.ratings[pid] = n; else delete META.ratings[pid]; saveRatings(); renderRating(pid); renderWindow(); refreshCounts(); if (view.mode === 'rated') renderList(); }
+    window.addEventListener('beforeunload', flushSaves);
+    function manualTags(pid) { return META.tags[pid] || []; }
+    function derivedTags(pid) { return META.derived[pid] || []; }   // prefixed: class:/inst:/author:/source:/flag:
+    function stripPrefix(t) { var i = t.indexOf(':'); return i < 0 ? t : t.slice(i + 1); }
+    function isFav(pid) { return META.favorites.has(pid); }
+    var DIMS = [
+      { p: 'inst', title: 'Real-world instrument', cls: 'cls' },
+      { p: 'class', title: 'Synthesis class', cls: 'cls' },
+      { p: 'flag', title: 'Character', cls: 'cls' },
+      { p: 'author', title: 'Authors', cls: '' }
+    ];
+
+    // ───── filtering + list render ─────
+    function baseSet() {
+      if (view.mode === 'favorites') return INDEX.voices.filter(function (v) { return isFav(v.pid); });
+      if (view.mode === 'rated') return INDEX.voices.filter(function (v) { return ratingOf(v.pid) >= 4; });
+      if (view.mode === 'collection') return view.collVoices || [];
+      if (view.mode === 'similar') return view.collVoices || [];
+      return INDEX.voices;
+    }
+    var tagSetCache = new Map();   // pid -> Set(all tags); invalidated on manual-tag edits
+    function tagsSet(pid) { var s = tagSetCache.get(pid); if (!s) { s = new Set(manualTags(pid).concat(derivedTags(pid))); tagSetCache.set(pid, s); } return s; }
+    function passesFilters(v) {
+      if (!activeFilters.size) return true;
+      var have = tagsSet(v.pid), ok = true;
+      activeFilters.forEach(function (f) { if (ok && !have.has(f)) ok = false; });
+      return ok;
+    }
+    var hideDead = false, sortBy = 'name';
+    function isNoName(nm) { var t = (nm || '').trim(); if (!t) return true; var d = new Set(t.replace(/\s/g, '').toLowerCase()).size; var a = (t.match(/[a-z0-9]/gi) || []).length; return (d <= 2 && t.length >= 3) || a < t.length * 0.4; }
+    // "dead" = truly non-functional. Slow-attack pads (e.g. CASCADE 21) are NOT dead — they play fine, just swell in.
+    function isDead(v) { var d = derivedTags(v.pid); return d.indexOf('flag:silent') >= 0 || d.indexOf('flag:dead') >= 0 || isNoName(v.n); }
+    // search supports bare name terms + prefixed terms: tag:/inst:/class:/author:/flag:
+    function parseSearch(q) {
+      return q.trim().toLowerCase().split(/\s+/).filter(Boolean).map(function (tok) {
+        var m = tok.match(/^(tag|inst|class|author|flag):(.+)$/);
+        return m ? { k: m[1], v: m[2] } : { v: tok };
+      });
+    }
+    function matchSearch(v, terms) {
+      for (var i = 0; i < terms.length; i++) {
+        var t = terms[i];
+        if (!t.k) { if ((v.n || '').toLowerCase().indexOf(t.v) === -1) return false; continue; }
+        var have = tagsSet(v.pid), hit = false;
+        have.forEach(function (tag) {
+          if (t.k === 'tag') { if (tag.indexOf(':') < 0 && tag.indexOf(t.v) >= 0) hit = true; }
+          else if (tag.indexOf(t.k + ':') === 0 && stripPrefix(tag).indexOf(t.v) >= 0) hit = true;
+        });
+        if (!hit) return false;
+      }
+      return true;
+    }
+    function sortFiltered() {
+      if (sortBy === 'banks') filtered.sort(function (a, b) { return (b.c - a.c) || a.n.toLowerCase().localeCompare(b.n.toLowerCase()); });
+      else if (sortBy === 'bright' && FEATURES) filtered.sort(function (a, b) { return ((FEATURES[b.pid] || [])[3] || 0) - ((FEATURES[a.pid] || [])[3] || 0); });
+      else if (sortBy === 'rating') filtered.sort(function (a, b) { return ratingOf(b.pid) - ratingOf(a.pid) || a.n.toLowerCase().localeCompare(b.n.toLowerCase()); });
+      // 'name' → INDEX.voices is already name-sorted; keep insertion order
+    }
+    function computeFiltered() {
+      var terms = parseSearch(els.search.value);
+      var searching = els.search.value.trim().length > 0;  // an explicit search overrides hide-dead
+      var set = baseSet();
+      filtered = [];
+      for (var i = 0; i < set.length; i++) {
+        var v = set[i];
+        if (terms.length && !matchSearch(v, terms)) continue;
+        if (hideDead && !searching && isDead(v)) continue;
+        if (!passesFilters(v)) continue;
+        filtered.push(v);
+      }
+      sortFiltered();
+    }
+    // Virtualized list: all `filtered` rows are scrollable; only the visible
+    // window is in the DOM. Rows are fixed-height (ROW_H) so geometry is exact.
+    var vlWindow = null, ROW_H = 26, OVERSCAN = 10;
+    function emptyMsg() {
+      if (els.search.value.trim() || activeFilters.size || hideDead) return 'No matches. <a href="#" id="clrF" style="color:var(--accent)">clear filters &amp; search</a>';
+      if (view.mode === 'favorites') return 'No favorites yet — press <b>F</b> on any patch.';
+      if (view.mode === 'collection') return 'Empty collection. Select voices, then “+ Add to collection”.';
+      if (view.mode === 'similar') return 'No similar patches (run analyze-library.cjs for features).';
+      return 'No voices.';
+    }
+    function renderList() {
+      computeFiltered();
+      selIndex = -1; selectedRowEl = null;
+      els.voiceCount.textContent = filtered.length;
+      if (!filtered.length) {
+        els.voiceList.innerHTML = '<div class="info">' + emptyMsg() + '</div>'; vlWindow = null;
+        var clr = document.getElementById('clrF');
+        if (clr) clr.onclick = function (e) { e.preventDefault(); activeFilters.clear(); els.search.value = ''; renderSidebarTags(); renderList(); };
+        return;
+      }
+      els.voiceList.innerHTML = '<div style="position:relative;height:' + (filtered.length * ROW_H) + 'px"><div id="vlWindow" style="position:absolute;left:0;right:0;top:0"></div></div>';
+      vlWindow = document.getElementById('vlWindow');
+      els.voiceList.scrollTop = 0;
+      renderWindow();
+    }
+    function renderWindow() {
+      if (!vlWindow) return;
+      var st = els.voiceList.scrollTop, h = els.voiceList.clientHeight || 600;
+      var first = Math.max(0, Math.floor(st / ROW_H) - OVERSCAN);
+      var last = Math.min(filtered.length, Math.ceil((st + h) / ROW_H) + OVERSCAN);
+      vlWindow.style.top = (first * ROW_H) + 'px';
+      var frag = document.createDocumentFragment();
+      for (var i = first; i < last; i++) frag.appendChild(buildRow(filtered[i], i));
+      vlWindow.innerHTML = ''; vlWindow.appendChild(frag);
+      selectedRowEl = (selIndex >= first && selIndex < last) ? vlWindow.querySelector('.row[data-i="' + selIndex + '"]') : null;
+      if (selectedRowEl) selectedRowEl.classList.add('sel');
+    }
+    function buildRow(v, i) {
+      var row = document.createElement('div');
+      row.className = 'row' + (i === selIndex ? ' sel' : '') + (selection.has(v.pid) ? ' multisel' : ''); row.dataset.i = i;
+      var chips = manualTags(v.pid).concat(derivedTags(v.pid)).slice(0, 3).map(function (t) {
+        return '<span class="rchip">' + esc(stripPrefix(t)) + '</span>'; }).join('');
+      row.innerHTML =
+        '<span class="star' + (isFav(v.pid) ? ' on' : '') + '">' + (isFav(v.pid) ? '★' : '☆') + '</span>' +
+        '<span class="vname">' + esc(v.n || '(unnamed)') + '</span>' +
+        '<span class="rchips">' + chips + '</span>' +
+        (ratingOf(v.pid) ? '<span class="cnt" style="color:var(--star)">' + ratingOf(v.pid) + '★</span>' : '') +
+        (v.c > 1 ? '<span class="cnt">×' + v.c + '</span>' : '');
+      row.querySelector('.star').onclick = function (e) { e.stopPropagation(); toggleFav(v.pid); };
+      row.onclick = function (e) { onRowClick(e, i); };
+      return row;
+    }
+    function onRowClick(e, i) {
+      var pid = filtered[i].pid;
+      if (e.metaKey || e.ctrlKey) { if (selection.has(pid)) selection.delete(pid); else selection.add(pid); selIndex = i; renderWindow(); updateBulkBar(); return; }
+      if (e.shiftKey && selIndex >= 0) { var a = Math.min(selIndex, i), b = Math.max(selIndex, i); for (var k = a; k <= b; k++) selection.add(filtered[k].pid); renderWindow(); updateBulkBar(); return; }
+      if (selection.size) { selection.clear(); updateBulkBar(); }
+      selectAt(i);
+    }
+    function updateBulkBar() {
+      var bb = document.getElementById('bulkBar');
+      if (!selection.size) { bb.style.display = 'none'; return; }
+      bb.style.display = 'block';
+      bb.innerHTML = '<b>' + selection.size + ' selected</b> &nbsp; ' +
+        '<button class="sm" id="bkFav">★ Favorite</button> <button class="sm" id="bkTag">Tag…</button> ' +
+        '<button class="sm" id="bkColl">+ Collection…</button> <button class="sm" id="bkClear">Clear</button>';
+      document.getElementById('bkFav').onclick = function () { selection.forEach(function (p) { META.favorites.add(p); }); saveFavorites(); refreshCounts(); renderWindow(); status(selection.size + ' favorited'); };
+      document.getElementById('bkTag').onclick = function () {
+        var n = selection.size;
+        promptModal('Tag to add to ' + n + ' patches:', '').then(function (t) {
+          if (!t) return; t = t.trim().toLowerCase();
+          selection.forEach(function (p) { META.tags[p] = META.tags[p] || []; if (META.tags[p].indexOf(t) < 0) META.tags[p].push(t); tagSetCache.delete(p); });
+          saveTags(); renderSidebarTags(); renderList(); status('Tagged ' + n + ' with “' + t + '”');
+        });
+      };
+      document.getElementById('bkColl').onclick = function () {
+        var n = selection.size;
+        promptModal('Add ' + n + ' patches to collection path:', '').then(function (rel) {
+          if (!rel) return;
+          window.api.collectionLoad(rel).catch(function () { return { name: rel.split('/').pop(), voices: [] }; }).then(function (data) {
+            data = data || { name: rel.split('/').pop(), voices: [] }; data.voices = data.voices || [];
+            var have = {}; data.voices.forEach(function (e) { have[e.pid] = 1; });
+            selection.forEach(function (p) { if (!have[p]) data.voices.push({ pid: p, name: (byPid.get(p) || {}).n || p }); });
+            return window.api.collectionSave(rel, data);
+          }).then(function () { return window.api.collectionList(); })
+            .then(function (list) { META.collections = list; renderCollTree(); status('Added ' + n + ' to ' + rel); })
+            .catch(function (e) { status('Bulk add failed: ' + e.message, true); });
+        });
+      };
+      document.getElementById('bkClear').onclick = function () { selection.clear(); renderWindow(); updateBulkBar(); };
+    }
+    function selectAt(i) {
+      if (i < 0 || i >= filtered.length) return;
+      selIndex = i;
+      var st = els.voiceList.scrollTop, h = els.voiceList.clientHeight, top = i * ROW_H;
+      if (top < st) els.voiceList.scrollTop = top;
+      else if (top + ROW_H > st + h) els.voiceList.scrollTop = top + ROW_H - h;
+      renderWindow();
+      selectVoice(filtered[i]);
+    }
+
+    // ───── voice selection / detail ─────
+    function selectVoice(v) {
+      currentPid = v.pid;
+      if (v.missing || (!v.params && v.b == null)) {   // collection/similar placeholder not in current index
+        currentVCED = null; els.patchName.textContent = v.n || '(missing)';
+        els.patchInfo.innerHTML = '<span style="color:var(--warn)">Voice not in current index — Reindex to load it.</span>';
+        return;
+      }
+      var loc = v; // {b,i} for indexed; opened voices carry params
+      function show(params, struct, name) {
+        currentVCED = params;
+        els.patchName.textContent = name || '(unnamed)';
+        renderPatchInfo(name, struct, v.pid);
+        renderTagEditor(v.pid); renderNotes(v.pid); renderRating(v.pid);
+        if (engine) engine.loadVCED(currentVCED);
+        audition();
+      }
+      if (v.params) { show(v.params, v.struct, v.n); return; }
+      window.api.loadVoice(INDEX.banks[loc.b].path, loc.i)
+        .then(function (r) { show(r.params, r.struct, r.name); })
+        .catch(function (e) { status('Load failed: ' + e.message, true); });
+    }
+    function renderPatchInfo(name, s, pid) {
+      var dv = derivedTags(pid);
+      function dim(p) { return dv.filter(function (t) { return t.indexOf(p + ':') === 0; }).map(stripPrefix); }
+      var inst = dim('inst'), cls = dim('class'), auth = dim('author');
+      var prov = (inst.length ? '  ·  inst: ' + inst.join('/') : '') + (cls.length ? '  ·  class: ' + cls.join(', ') : '') +
+                 (auth.length ? '  ·  by: ' + auth.slice(0, 3).join(', ') : '');
+      var warn = dv.indexOf('flag:silent') >= 0 ? ' <span style="color:var(--warn)">⚠ no output (init/empty patch)</span>'
+               : dv.indexOf('flag:slow-attack') >= 0 ? ' <span style="color:var(--warn)">⚠ slow attack — hold/auto-audition to hear it swell</span>' : '';
+      els.patchInfo.innerHTML =
+        '<b>' + esc(name) + '</b> &nbsp; algorithm <b>' + s.algorithm + '</b> · feedback <b>' + s.feedback + '</b>' +
+        ' · transpose <b>' + (s.transpose >= 0 ? '+' : '') + s.transpose + '</b>' + esc(prov) + warn + '<br>' +
+        'LFO: ' + s.lfo.waveform + ' @ ' + s.lfo.speed + (s.lfo.sync ? ' (sync)' : '') +
+        ' · pmod ' + s.lfo.pitchModDepth + ' · amod ' + s.lfo.ampModDepth + '<br>' +
+        'Ops (ratio·level): ' + s.operators.map(function (op) {
+          return 'OP' + op.op + ' ' + (op.oscMode === 'fixed' ? 'fix' : op.freqCoarse + (op.freqFine ? '.' + op.freqFine : '')) + '·' + op.outputLevel;
+        }).join('  ');
+    }
+
+    // ───── favorites ─────
+    function toggleFav(pid) {
+      if (META.favorites.has(pid)) META.favorites.delete(pid); else META.favorites.add(pid);
+      saveFavorites(); refreshCounts();
+      if (view.mode === 'favorites') renderList(); else renderWindow(); // re-render visible window (virtualized)
+    }
+    function refreshCounts() {
+      els.cntAll.textContent = INDEX.voices.length;
+      els.cntFav.textContent = META.favorites.size;
+      var rc = document.getElementById('cntRated');
+      if (rc) rc.textContent = Object.keys(META.ratings).filter(function (p) { return META.ratings[p] >= 4; }).length;
+    }
+
+    // ───── tags ─────
+    function renderTagEditor(pid) {
+      var tags = manualTags(pid);
+      els.tagEditor.innerHTML = tags.map(function (t) {
+        return '<span class="chip" data-t="' + esc(t) + '">' + esc(t) + '<span class="x">✕</span></span>'; }).join('')
+        + derivedTags(pid).map(function (c) { return '<span class="chip cls" title="' + esc(c) + '">' + esc(stripPrefix(c)) + '</span>'; }).join('');
+      els.tagEditor.querySelectorAll('.chip[data-t] .x').forEach(function (x) {
+        x.onclick = function () { removeTag(pid, x.parentElement.dataset.t); };
+      });
+    }
+    function addTag(pid, t) {
+      t = t.trim().toLowerCase(); if (!t) return;
+      META.tags[pid] = META.tags[pid] || [];
+      if (META.tags[pid].indexOf(t) === -1) { META.tags[pid].push(t); tagSetCache.delete(pid); saveTags(); renderTagEditor(pid); renderSidebarTags(); renderWindow(); }
+    }
+    function removeTag(pid, t) {
+      META.tags[pid] = (META.tags[pid] || []).filter(function (x) { return x !== t; });
+      if (!META.tags[pid].length) delete META.tags[pid];
+      tagSetCache.delete(pid);
+      saveTags(); renderTagEditor(pid); renderSidebarTags(); renderList();
+    }
+    els.tagInput.onkeydown = function (e) { if (e.key === 'Enter' && currentPid) { addTag(currentPid, els.tagInput.value); els.tagInput.value = ''; } };
+
+    function renderRating(pid) {
+      var w = document.getElementById('ratingWidget'); if (!w) return;
+      var r = ratingOf(pid), h = '';
+      for (var i = 1; i <= 5; i++) h += '<span class="rstar" data-n="' + i + '" style="cursor:pointer;font-size:18px;color:' + (i <= r ? 'var(--star)' : '#555') + '">★</span>';
+      h += ' <a href="#" id="rclr" style="font-size:11px;color:var(--dim);margin-left:8px">clear</a>';
+      w.innerHTML = h;
+      w.querySelectorAll('.rstar').forEach(function (s) { s.onclick = function () { setRating(pid, +s.dataset.n); }; });
+      var c = document.getElementById('rclr'); if (c) c.onclick = function (e) { e.preventDefault(); setRating(pid, 0); };
+    }
+    function renderNotes(pid) { els.notes.value = META.notes[pid] || ''; }
+    els.notes.oninput = function () { if (!currentPid) return; if (els.notes.value) META.notes[currentPid] = els.notes.value; else delete META.notes[currentPid]; saveNotes(); };
+
+    // ───── sidebar: tag/class chips ─────
+    function countTags(map) {
+      var counts = {};
+      for (var pid in map) (map[pid] || []).forEach(function (t) { counts[t] = (counts[t] || 0) + 1; });
+      return counts;
+    }
+    function chipHtml(full, label, count, extraCls) {
+      return '<span class="chip ' + (extraCls || '') + (activeFilters.has(full) ? ' on' : '') + '" data-f="' + esc(full) + '">' +
+             esc(label) + '<span class="ct">' + count + '</span></span>';
+    }
+    function renderSidebarTags() {
+      var mc = countTags(META.tags);
+      els.tagChips.innerHTML = Object.keys(mc).sort().map(function (t) { return chipHtml(t, t, mc[t]); }).join('')
+        || '<span class="info" style="padding:2px 8px">no tags yet</span>';
+      var dc = META.derivedCounts || (META.derivedCounts = countTags(META.derived));
+      var html = '';
+      DIMS.forEach(function (dim) {
+        var keys = Object.keys(dc).filter(function (k) { return k.indexOf(dim.p + ':') === 0; })
+                         .sort(function (a, b) { return dc[b] - dc[a]; }).slice(0, 40);
+        if (!keys.length) return;
+        html += '<div class="section"><div class="secttitle"><span>' + dim.title + '</span></div><div class="chips">' +
+          keys.map(function (k) { return chipHtml(k, stripPrefix(k), dc[k], dim.cls); }).join('') + '</div></div>';
+      });
+      els.derivedSections.innerHTML = html;
+      document.querySelectorAll('#tagChips .chip, #derivedSections .chip').forEach(function (c) { c.onclick = function () { toggleFilter(c.dataset.f); }; });
+      els.tagSuggest.innerHTML = Object.keys(mc).map(function (t) { return '<option value="' + esc(t) + '">'; }).join('');
+    }
+    function toggleFilter(f) { if (activeFilters.has(f)) activeFilters.delete(f); else activeFilters.add(f); renderSidebarTags(); renderList(); }
+
+    // ───── views ─────
+    function setView(mode, label) {
+      view.mode = mode; view.collRel = null; view.collVoices = null; view.similarPid = null;
+      document.querySelectorAll('.sidebar .navitem').forEach(function (n) { n.classList.toggle('sel', n.dataset.view === mode); });
+      document.querySelectorAll('.tree .coll').forEach(function (n) { n.classList.remove('sel'); });
+      els.viewLabel.textContent = label || '';
+      els.collActions.innerHTML = '';
+      selection.clear(); updateBulkBar();
+      renderList();
+    }
+    document.querySelectorAll('.sidebar .navitem').forEach(function (n) {
+      n.onclick = function () { setView(n.dataset.view, n.dataset.view === 'favorites' ? '★ favorites' : ''); };
+    });
+
+    // ───── collections ─────
+    function renderCollTree() {
+      // build nested tree from rel paths "a/b/name"
+      var tree = {};
+      META.collections.forEach(function (rel) {
+        var parts = rel.split('/'); var node = tree;
+        for (var i = 0; i < parts.length; i++) {
+          var leaf = (i === parts.length - 1);
+          if (leaf) { node[parts[i]] = { __rel: rel }; }
+          else { node[parts[i]] = node[parts[i]] || {}; node = node[parts[i]]; }
+        }
+      });
+      var html = '';
+      (function rec(node, depth) {
+        Object.keys(node).sort().forEach(function (k) {
+          if (k === '__rel') return;
+          var child = node[k];
+          if (child.__rel) html += '<div class="coll" data-rel="' + esc(child.__rel) + '" style="padding-left:' + (12 + depth * 12) + 'px">▸ ' + esc(k) + '</div>';
+          else { html += '<div class="folder" style="padding-left:' + (12 + depth * 12) + 'px">' + esc(k) + '</div>'; rec(child, depth + 1); }
+        });
+      })(tree, 0);
+      els.collTree.innerHTML = html || '<div class="info" style="padding:2px 12px">no collections</div>';
+      els.collTree.querySelectorAll('.coll').forEach(function (c) { c.onclick = function () { openCollection(c.dataset.rel, c); }; });
+    }
+    function openCollection(rel, rowEl) {
+      window.api.collectionLoad(rel).then(function (data) {
+        var voices = (data.voices || []).map(function (e) {
+          var v = byPid.get(e.pid);
+          return v || { pid: e.pid, n: e.name || '(missing)', c: 0, missing: true };
+        });
+        view.mode = 'collection'; view.collRel = rel; view.collVoices = voices;
+        document.querySelectorAll('.sidebar .navitem').forEach(function (n) { n.classList.remove('sel'); });
+        document.querySelectorAll('.tree .coll').forEach(function (n) { n.classList.remove('sel'); });
+        if (rowEl) rowEl.classList.add('sel');
+        els.viewLabel.textContent = '▸ ' + (data.name || rel);
+        els.collActions.innerHTML = '<button class="sm" id="btnRender">Render → WAV</button> <button class="sm" id="btnDelColl">Delete</button>';
+        document.getElementById('btnRender').onclick = function () { renderCollection(rel, data); };
+        document.getElementById('btnDelColl').onclick = function () {
+          window.api.collectionDelete(rel).then(function () { return window.api.collectionList(); })
+            .then(function (list) { META.collections = list; renderCollTree(); setView('all', ''); })
+            .catch(function (e) { status('Delete failed: ' + e.message, true); });
+        };
+        renderList();
+      }).catch(function (e) { status('Open collection failed: ' + e.message, true); });
+    }
+    // In-app prompt (Electron has no window.prompt). Resolves to trimmed string or null.
+    function promptModal(msg, def) {
+      return new Promise(function (resolve) {
+        var ov = document.getElementById('modal'), inp = document.getElementById('modalInput');
+        document.getElementById('modalMsg').textContent = msg;
+        inp.value = def || ''; ov.style.display = 'flex'; setTimeout(function () { inp.focus(); inp.select(); }, 0);
+        function done(val) { ov.style.display = 'none'; inp.onkeydown = okB.onclick = canB.onclick = null; resolve(val); }
+        var okB = document.getElementById('modalOk'), canB = document.getElementById('modalCancel');
+        okB.onclick = function () { done(inp.value.trim() || null); };
+        canB.onclick = function () { done(null); };
+        inp.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); okB.onclick(); } else if (e.key === 'Escape') { canB.onclick(); } e.stopPropagation(); };
+      });
+    }
+    document.getElementById('btnNewColl').onclick = function () {
+      promptModal('New collection path (folders with /):\ne.g. Game1/Boss/intro', '').then(function (name) {
+        if (!name) return;
+        window.api.collectionSave(name, { name: name.split('/').pop(), voices: [] })
+          .then(function () { return window.api.collectionList(); })
+          .then(function (list) { META.collections = list; renderCollTree(); status('Created ' + name); })
+          .catch(function (e) { status('Create failed: ' + e.message, true); });
+      });
+    };
+    function refreshAddCollSelect() {
+      els.addCollSelect.innerHTML = '<option value="">— pick collection —</option>' +
+        META.collections.map(function (rel) { return '<option value="' + esc(rel) + '">' + esc(rel) + '</option>'; }).join('') +
+        '<option value="__new">+ New collection…</option>';
+    }
+    document.getElementById('btnAddColl').onclick = function () {
+      if (!currentPid) return;
+      refreshAddCollSelect();
+      els.addCollSelect.style.display = 'inline-block'; els.addCollSelect.focus();
+    };
+    function addCurrentToCollection(rel) {
+      var pid = currentPid, name = els.patchName.textContent;
+      window.api.collectionLoad(rel).catch(function () { return { name: rel.split('/').pop(), voices: [] }; })
+        .then(function (data) {
+          data = data || { name: rel.split('/').pop(), voices: [] };
+          data.voices = data.voices || [];
+          if (!data.voices.some(function (e) { return e.pid === pid; })) data.voices.push({ pid: pid, name: name });
+          return window.api.collectionSave(rel, data);
+        }).then(function () { return window.api.collectionList(); })
+        .then(function (list) { META.collections = list; renderCollTree(); status('Added “' + name + '” to ' + rel); })
+        .catch(function (e) { status('Add to collection failed: ' + e.message, true); });
+    }
+    els.addCollSelect.onchange = function () {
+      var rel = els.addCollSelect.value; els.addCollSelect.style.display = 'none';
+      if (!rel || !currentPid) return;
+      if (rel === '__new') promptModal('New collection path:', '').then(function (r) { if (r) addCurrentToCollection(r); });
+      else addCurrentToCollection(rel);
+    };
+
+    // ───── render bridge (L6) ─────
+    function renderCollection(rel, data) {
+      window.api.pickOutputDir().then(function (dir) {
+        if (!dir) return;
+        getRenderEngine().then(function (re) {
+          var voices = data.voices || []; var i = 0;
+          (function next() {
+            if (i >= voices.length) { status('Rendered ' + voices.length + ' WAVs → ' + dir); return; }
+            var e = voices[i]; var v = byPid.get(e.pid);
+            status('Rendering ' + (i + 1) + '/' + voices.length + ': ' + (e.name || e.pid));
+            var p = v ? window.api.loadVoice(INDEX.banks[v.b].path, v.i).then(function (r) { return r.params; })
+                      : Promise.reject(new Error('missing'));
+            p.then(function (params) { return re.renderVCED(params, { note: parseInt(els.testNote.value, 10), vel: parseInt((document.getElementById('auditVel') || {}).value, 10) || 100, dur: 1.2, release: 0.6 }); })
+             .then(function (wavBytes) {
+               var fname = (e.name || e.pid).replace(/[^\w\-]+/g, '_') + '.wav';
+               return window.api.writeWav(dir + '/' + fname, Array.from(wavBytes));
+             }).then(function () { i++; next(); })
+             .catch(function (err) { status('Render error on ' + (e.name || e.pid) + ': ' + err.message, true); i++; next(); });
+          })();
+        });
+      });
+    }
+
+    // ───── more like this (L5) ─────
+    document.getElementById('btnMoreLike').onclick = function () {
+      if (!currentPid) return;
+      var go = FEATURES ? Promise.resolve(FEATURES) : window.api.featuresLoad().then(function (f) { FEATURES = f; return f; });
+      go.then(function (F) {
+        var base = F[currentPid];
+        if (!base) { status('No feature vector — run analyze-library.cjs', true); return; }
+        var scored = [];
+        for (var pid in F) { if (pid === currentPid) continue; var fv = F[pid]; if (!fv || fv.length !== base.length) continue; scored.push([pid, dist(base, fv)]); }
+        scored.sort(function (a, b) { return a[1] - b[1]; });
+        var top = scored.slice(0, 200).map(function (s) { return byPid.get(s[0]); }).filter(Boolean);
+        view.mode = 'similar'; view.collVoices = top; view.similarPid = currentPid;
+        document.querySelectorAll('.sidebar .navitem').forEach(function (n) { n.classList.remove('sel'); });
+        els.viewLabel.textContent = '≈ like ' + els.patchName.textContent; els.collActions.innerHTML = '';
+        renderList();
+      });
+    };
+    function dist(a, b) { var s = 0; for (var i = 0; i < a.length; i++) { var d = a[i] - b[i]; s += d * d; } return s; }
+
+    // ───── open external .syx ─────
+    document.getElementById('btnReindex').onclick = function () { loadIndex(true); };
+    document.getElementById('btnOpen').onclick = function () {
+      window.api.openSyx().then(function (r) {
+        if (!r) return;
+        var res = window.SyxParser.parseSyx(Uint8Array.from(r.bytes));
+        if (!res.count) { status('“' + r.name + '”: no voices', true); return; }
+        var added = res.voices.map(function (vv) { return { pid: 'opened:' + r.name + '#' + vv.index, n: vv.name, c: 0, params: vv.params, struct: vv.struct }; });
+        added.forEach(function (v) { byPid.set(v.pid, v); });
+        INDEX.voices = added.concat(INDEX.voices);
+        setView('all', 'opened: ' + r.name); els.search.value = ''; renderList();
+      });
+    };
+
+    // ───── master / octave / test note ─────
+    els.vol.oninput = function () { if (engine) engine.setMasterGain(parseFloat(els.vol.value)); };
+    document.getElementById('srSel').onchange = function (e) { setSampleRate(parseInt(e.target.value, 10)); };
+    function setOctave(o) { baseOctave = Math.max(0, Math.min(7, o)); els.octLabel.textContent = baseOctave; buildPiano(); }
+    document.getElementById('octUp').onclick = function () { setOctave(baseOctave + 1); };
+    document.getElementById('octDown').onclick = function () { setOctave(baseOctave - 1); };
+    document.getElementById('panic').onclick = panic;
+    (function fillTestNotes() {
+      var names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+      var html = '';
+      for (var n = 36; n <= 84; n++) html += '<option value="' + n + '"' + (n === 60 ? ' selected' : '') + '>' + names[n % 12] + (Math.floor(n / 12) - 1) + '</option>';
+      els.testNote.innerHTML = html;
+    })();
+    els.testNote.onchange = function () { audition(); };
+    // update the value live while dragging, but only preview once on release (change event)
+    document.getElementById('auditVel').oninput = function (e) { playVel = parseInt(e.target.value, 10) || 100; document.getElementById('velLabel').textContent = playVel; };
+    document.getElementById('auditVel').onchange = function () { playSelected(true); };
+    document.getElementById('hideDead').onchange = function (e) { hideDead = e.target.checked; renderList(); };
+
+    // ───── on-screen piano ─────
+    var piano = document.getElementById('piano'), keyEls = {};
+    // click-and-hold to drag/glissando across keys (monophonic while dragging)
+    var pianoDrag = false, dragNote = null;
+    function pianoPlay(note) { if (dragNote === note) return; if (dragNote != null) noteOff(dragNote); noteOn(note, playVel); dragNote = note; }
+    function pianoStop() { if (dragNote != null) { noteOff(dragNote); dragNote = null; } pianoDrag = false; }
+    document.addEventListener('mouseup', function () { if (pianoDrag) pianoStop(); });
+    function isBlack(n) { var m = n % 12; return m === 1 || m === 3 || m === 6 || m === 8 || m === 10; }
+    function buildPiano() {
+      piano.innerHTML = ''; keyEls = {};
+      var startNote = 12 * baseOctave, endNote = startNote + 36, whiteW = 26, wi = 0;
+      for (var note = startNote; note <= endNote; note++) {
+        var k = document.createElement('div'), black = isBlack(note);
+        k.className = 'key ' + (black ? 'black' : 'white');
+        if (black) { k.style.left = (wi * whiteW - whiteW * 0.3) + 'px'; k.style.width = (whiteW * 0.6) + 'px'; }
+        else { k.style.left = (wi * whiteW) + 'px'; k.style.width = whiteW + 'px'; wi++; }
+        (function (nn, el) {
+          el.addEventListener('mousedown', function (e) { e.preventDefault(); pianoDrag = true; pianoPlay(nn); });
+          el.addEventListener('mouseenter', function () { if (pianoDrag) pianoPlay(nn); });
+        })(note, k);
+        keyEls[note] = k; piano.appendChild(k);
+      }
+      piano.style.width = (wi * whiteW) + 'px';
+    }
+    function setKeyVisual(note, on) { var k = keyEls[note]; if (k) k.classList.toggle('on', on); }
+
+    // ───── keyboard: QWERTY + nav ─────
+    // Full 2-octave "musical typing" layout: bottom rows = lower octave, top rows = upper octave
+    // (semitone offset from C of the base octave). White keys on z-row/q-row, sharps on the row above.
+    var QWERTY = {
+      z:0, s:1, x:2, d:3, c:4, v:5, g:6, b:7, h:8, n:9, j:10, m:11, ',':12, l:13, '.':14, ';':16,
+      q:12, '2':13, w:14, '3':15, e:16, r:17, '5':18, t:19, '6':20, y:21, '7':22, u:23, i:24
+    };
+    var qwertyPlay = false;
+    function setQwertyPlay(on) { qwertyPlay = on; document.getElementById('qwertyPlay').checked = on; panic(); updateHint(); }
+    document.getElementById('qwertyPlay').onchange = function (e) { setQwertyPlay(e.target.checked); e.target.blur(); };
+    function updateHint() {
+      document.getElementById('kbdHint').textContent = qwertyPlay
+        ? '⌨ playing — bottom row z…m = lower octave, q…i = upper (s d g h j / 2 3 5 6 7 = sharps) · − = octave · ` to browse · Space panic'
+        : '↑/↓ scan · F favorite · T tag · C collect · 1–5 rate · −/= octave · ` toggle keyboard · Space panic';
+    }
+    document.addEventListener('keydown', function (e) {
+      var _t = e.target, _isText = _t.tagName === 'TEXTAREA' || (_t.tagName === 'INPUT' && /^(text|search|number|email|password|url|tel)$/i.test(_t.getAttribute('type') || 'text'));
+      if (_isText) return;  // only text fields (search/tag/notes) swallow keys — checkboxes/sliders/selects don't block playing
+      // universal (never musical) — work in both modes
+      if (e.key === 'ArrowDown') { e.preventDefault(); selectAt(Math.min(filtered.length - 1, selIndex + 1)); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); selectAt(Math.max(0, selIndex - 1)); return; }
+      if (e.code === 'Space') { e.preventDefault(); panic(); return; }
+      if (e.key === '`') { e.preventDefault(); setQwertyPlay(!qwertyPlay); return; }
+      if (e.key === '-' || e.key === '_') { setOctave(baseOctave - 1); return; }
+      if (e.key === '=' || e.key === '+') { setOctave(baseOctave + 1); return; }
+      if (qwertyPlay) {                       // play mode — keys are the synth keyboard
+        var key = e.key.toLowerCase();
+        if (e.repeat || qwertyDown[key] || QWERTY[key] === undefined) return;
+        qwertyDown[key] = true; noteOn((baseOctave + 1) * 12 + QWERTY[key], e.ctrlKey ? 127 : playVel);
+        return;
+      }
+      // browse-mode shortcuts (suspended in play mode, so no conflict)
+      if (!currentPid) return;
+      if (e.key === 'f') { toggleFav(currentPid); return; }
+      if (e.key === 't') { e.preventDefault(); els.tagInput.focus(); return; }
+      if (e.key === 'c') { e.preventDefault(); document.getElementById('btnAddColl').onclick(); return; }
+      if (/^[0-5]$/.test(e.key)) { setRating(currentPid, +e.key); return; }
+    });
+    document.addEventListener('keyup', function (e) {
+      var key = e.key.toLowerCase(); if (QWERTY[key] === undefined || !qwertyDown[key]) return;
+      qwertyDown[key] = false; noteOff((baseOctave + 1) * 12 + QWERTY[key]);
+    });
+    els.search.oninput = (function () { var t; return function () { clearTimeout(t); t = setTimeout(renderList, 110); }; })();
+    els.search.onkeydown = function (e) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter') { e.preventDefault(); els.search.blur(); selectAt(0); }
+      else if (e.key === 'Escape') { els.search.value = ''; renderList(); }
+    };
+    els.voiceList.onscroll = function () { renderWindow(); };
+    document.getElementById('sortBy').onchange = function (e) {
+      sortBy = e.target.value;
+      if (sortBy === 'bright' && !FEATURES) window.api.featuresLoad().then(function (f) { FEATURES = f; renderList(); });
+      else renderList();
+    };
+
+    // ───── Web MIDI ─────
+    if (navigator.requestMIDIAccess) {
+      navigator.requestMIDIAccess({ sysex: false }).then(function (access) {
+        function bind() { var names = []; access.inputs.forEach(function (inp) { inp.onmidimessage = onMIDI; names.push(inp.name); }); }
+        bind(); access.onstatechange = bind;
+      }).catch(function () {});
+    }
+    function onMIDI(e) { var d = e.data, cmd = d[0] & 0xf0; if (cmd === 0x90 && d[2] > 0) noteOn(d[1], d[2]); else if (cmd === 0x80 || (cmd === 0x90 && d[2] === 0)) noteOff(d[1]); else if (cmd === 0xb0 && d[1] === 123) panic(); }
+
+    // ───── boot ─────
+    function loadIndex(refresh) {
+      els.voiceList.innerHTML = '<div class="info">Indexing all banks…</div>';
+      window.api.indexAll(refresh ? { refresh: true } : null).then(function (ix) {
+        INDEX = ix; byPid = new Map(); ix.voices.forEach(function (v) { byPid.set(v.pid, v); });
+        refreshCounts(); renderList();
+        status('Indexed ' + ix.unique + ' unique patches (' + ix.total + ' voices, ' + ix.banks.length + ' banks).' + (ix.failed ? '  ' + ix.failed + ' skipped.' : ''));
+      }).catch(function (e) { els.voiceList.innerHTML = '<div class="info warn">Index failed: ' + e.message + '</div>'; });
+    }
+    function loadMeta() {
+      return window.api.libraryLoad().then(function (m) {
+        META.favorites = new Set(m.favorites || []); META.tags = m.tags || {}; META.notes = m.notes || {};
+        META.derived = m.derived || {}; META.taxonomy = m.taxonomy || {}; META.collections = m.collections || [];
+        META.ratings = m.ratings || {};
+        META.derivedCounts = null;
+        renderSidebarTags(); renderCollTree();
+      }).catch(function () {});
+    }
+    buildPiano();
+    updateHint();
+    loadMeta().then(function () { loadIndex(false); });
+    ensureAudio().catch(function () {}); // init engine now so the badge shows the real engine (audio stays suspended until a gesture)
+
+    function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]; }); }
+    } // end start()
+  })();
+  </script>
+</body>
+</html>

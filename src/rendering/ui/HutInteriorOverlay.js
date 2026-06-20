@@ -1,4 +1,5 @@
 import { GRID } from '../../game/GameConfig.js';
+import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher.js';
 
 /**
  * HutInteriorOverlay — picture-in-picture rendering for both Hut and Dungeon interiors.
@@ -163,8 +164,12 @@ export class HutInteriorOverlay {
     // ── 10. Enemy projectiles (interior coords) ────────────────────────────────
     this.renderController.exploreRenderer.drawEnemyProjectiles(game, true);
 
-    // ── 10b. Player tongue attacks (frog form) ─────────────────────────────────
+    // ── 10b. Player tongue attacks (frog form) + enemy frog/mimic tongues ──────
+    // Enemy + mimic tongue helpers read game._activeEnemies() (= activeFloor here),
+    // so they render the interior layer's tongues under the overlay translate.
     this.renderController.exploreRenderer.drawPlayerTongueAttacks(game, true);
+    this.renderController.exploreRenderer.drawEnemyTongues(game);
+    this.renderController.exploreRenderer.drawMimicTongues(game);
 
     // ── 11. Player melee attacks ───────────────────────────────────────────────
     this.renderController.exploreRenderer.drawMeleeAttacks(game, true);
@@ -184,6 +189,10 @@ export class HutInteriorOverlay {
 
     // ── 15. Particles ─────────────────────────────────────────────────────────
     this.renderController.exploreRenderer.drawParticles(game, true);
+
+    // ── 15b. Sticky triplines (committed segments + live preview + red-X) ──────
+    // Interior-coord variant: reads activeFloor.triplines; ctx translate already applied.
+    this.renderController.exploreRenderer._drawWires(game, true);
 
     // ── 16. Player ────────────────────────────────────────────────────────────
     const playerAlpha = game.player.getVisibilityAlpha?.() ?? 1.0;
@@ -246,7 +255,10 @@ export class HutInteriorOverlay {
     if (game.dungeonSystem) {
       const stairsType = game.dungeonSystem.nearStairsType();
       if (stairsType) {
-        const label = stairsType === 'down' ? 'SPACE  DESCEND' : 'SPACE  ASCEND';
+        const label = spectaclesTransformString(
+          stairsType === 'down' ? 'SPACE  DESCEND' : 'SPACE  ASCEND',
+          isSpectaclesActive(game)
+        );
         const floor = game.activeFloor;
         const col = stairsType === 'down' ? floor.stairsDownCol : floor.stairsUpCol;
         const row = stairsType === 'down' ? floor.stairsDownRow : floor.stairsUpRow;
@@ -278,7 +290,7 @@ export class HutInteriorOverlay {
           ctx.textBaseline = 'middle';
           ctx.fillStyle = '#ccccaa';
           ctx.fillText(
-            'SPACE  EXIT',
+            spectaclesTransformString('SPACE  EXIT', isSpectaclesActive(game)),
             exitCol * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
             exitRow * GRID.CELL_SIZE - GRID.CELL_SIZE * 0.75
           );
@@ -304,7 +316,7 @@ export class HutInteriorOverlay {
       const floorNum = (game.dungeonCurrentFloor ?? 0) + 1;
       label = `[ DUNGEON  FLOOR ${floorNum} ]`;
     }
-    ctx.fillText(label, GRID.WIDTH / 2, offsetY + 2);
+    ctx.fillText(spectaclesTransformString(label, isSpectaclesActive(game)), GRID.WIDTH / 2, offsetY + 2);
     ctx.restore();
   }
 }

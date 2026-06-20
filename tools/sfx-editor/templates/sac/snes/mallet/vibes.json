@@ -1,0 +1,59 @@
+{
+  "name": "sac/snes/mallet/vibes",
+  "totalDuration": 1.8,
+  "bpm": 120,
+  "snapMode": "none",
+  "instrument": {
+    "masterGain": 0.8,
+    "chip": "SNES",
+    "type": "fm",
+    "fm": {
+      "ratio": 4,
+      "index": 3,
+      "carrier": "sine",
+      "modWave": "sine"
+    },
+    "filterFreq": 6000,
+    "crushBits": 12
+  },
+  "volumeEnvelope": [
+    {
+      "t": 0,
+      "v": 1
+    },
+    {
+      "t": 0.5,
+      "v": 0.45
+    },
+    {
+      "t": 1,
+      "v": 0
+    }
+  ],
+  "pitchEnvelope": [
+    {
+      "t": 0,
+      "semitones": 0
+    },
+    {
+      "t": 1,
+      "semitones": 0
+    }
+  ],
+  "notes": [
+    {
+      "id": "n42",
+      "time": 0,
+      "duration": 1.7,
+      "frequency": 523.25,
+      "volume": 0.9,
+      "muted": false
+    }
+  ],
+  "echo": {
+    "enabled": false,
+    "delay": 0.12,
+    "scale": 0.55,
+    "count": 4
+  }
+}

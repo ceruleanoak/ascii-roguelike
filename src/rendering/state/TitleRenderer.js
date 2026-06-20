@@ -104,7 +104,7 @@ export class TitleRenderer {
             baseColor = '#666666'; // Medium dark
           } else if (char === 'x' || char === 'X') {
             baseColor = '#999999'; // Medium
-          } else if (char === '$' || char === '&') {
+          } else if (char === '$' || char === 'Y' || char === '&') {
             baseColor = '#cccccc'; // Light
           }
 

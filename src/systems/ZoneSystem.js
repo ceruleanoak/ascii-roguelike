@@ -66,12 +66,26 @@ export class ZoneSystem {
     this._forcedZone = zone;
   }
 
+  // Consuming read: clears any forced zone. Only the room-generation path in
+  // enterExploreState may call this — every other reader (renderers, blend
+  // helpers, room counters) must use peekZoneTransition() or the force set for
+  // the NEXT room gets eaten mid-warp by a render frame.
   checkZoneTransition() {
+    const zone = this.peekZoneTransition();
+    this._forcedZone = null;
+    return zone;
+  }
+
+  peekZoneTransition() {
     // Forced override (e.g. ridge north exit → gray zone)
     if (this._forcedZone) {
-      const forced = this._forcedZone;
-      this._forcedZone = null;
-      return forced;
+      return this._forcedZone;
+    }
+
+    // Gray zone is sticky: once entered, every transition stays gray until
+    // resetOnRest()/resetOnDeath() restore green ("RETURN IS NOT GIVEN HERE.")
+    if (this.currentZone === 'gray') {
+      return 'gray';
     }
 
     // Gray zone: 10 consecutive rooms in green zone only
@@ -92,7 +106,7 @@ export class ZoneSystem {
   }
 
   getProgressionColor() {
-    const currentZone = this.checkZoneTransition();
+    const currentZone = this.peekZoneTransition();
     const currentZoneColor = ZONES[currentZone].exitColor;
 
     if (this.pathHistory.length === 0) return null;
@@ -119,7 +133,7 @@ export class ZoneSystem {
   // Get progression blend data for visual transitions
   // Returns: { targetZone: string, blendPercent: number } or null
   getProgressionBlend() {
-    const currentZone = this.checkZoneTransition();
+    const currentZone = this.peekZoneTransition();
     const currentZoneColor = ZONES[currentZone].exitColor;
 
     if (this.pathHistory.length === 0) {
@@ -180,7 +194,7 @@ export class ZoneSystem {
     this.roomsSinceRest++;
 
     // Track consecutive green zone rooms for gray zone unlock
-    const currentZone = this.checkZoneTransition();
+    const currentZone = this.peekZoneTransition();
     if (currentZone === 'green') {
       this.consecutiveGreenRooms++;
     } else if (currentZone !== 'gray') {
@@ -367,7 +381,9 @@ export class ZoneSystem {
 
   incrementZoneDepth(zoneDepths) {
     const zone = this.currentZone;
-    const cap = ZONES[zone]?.bossDepth;
+    // bossDepth caps boss zones; maxDepth caps bossless zones (gray's mist
+    // takes the character at maxDepth instead — GrayZoneSystem).
+    const cap = ZONES[zone]?.bossDepth ?? ZONES[zone]?.maxDepth;
     if (zoneDepths[zone] === 0) {
       zoneDepths[zone] = 1;
     } else if (cap == null || zoneDepths[zone] < cap) {

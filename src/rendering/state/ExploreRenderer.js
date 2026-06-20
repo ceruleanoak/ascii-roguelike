@@ -24,7 +24,7 @@ import { INGREDIENTS } from '../../data/items.js';
 import { BRIDGE_MATERIALS } from '../../systems/RidgeSystem.js';
 import { PixelatedDissolve, SplitReveal } from '../effects/TextEffects.js';
 import { BossRenderer } from './BossRenderer.js';
-import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE } from '../../data/cipher.js';
+import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
 
 function drawDizzyOrbitals(ctx, cx, cy, timer) {
   const r = 6;
@@ -723,59 +723,11 @@ export class ExploreRenderer {
     // Surface enemy melee — interior versions routed via overlay.
     this.drawEnemyMeleeAttacks(game, false);
 
-    // Draw frog tongue attacks — extending/retracting lines
-    if (!inHut && !inMaze && !inDungeon) for (const tongue of game.combatSystem.getTongueAttacks()) {
-      if (tongue.currentLength <= 0) continue;
-      const owner = tongue.owner;
-      const sx = owner.position.x + GRID.CELL_SIZE / 2;
-      const sy = owner.position.y + GRID.CELL_SIZE / 2;
-      const ex = sx + tongue.direction.x * tongue.currentLength;
-      const ey = sy + tongue.direction.y * tongue.currentLength;
-      const ctx = this.renderer.fgCtx;
-      ctx.save();
-      ctx.strokeStyle = tongue.color;
-      ctx.lineWidth = 2.5;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(sx, sy);
-      ctx.lineTo(ex, ey);
-      ctx.stroke();
-      // Small circle at tip
-      ctx.fillStyle = tongue.color;
-      ctx.beginPath();
-      ctx.arc(ex, ey, 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-
-    // Draw mimic tongue attacks — extends toward player then tracks them when hooked
-    if (!inHut && !inMaze && !inDungeon) for (const enemy of game.activeRoom?.enemies ?? []) {
-      if (!enemy.mimicTongue || !enemy.mimicRevealed) continue;
-      const tongue = enemy.mimicTongue;
-      const sx = enemy.position.x + GRID.CELL_SIZE / 2;
-      const sy = enemy.position.y + GRID.CELL_SIZE / 2;
-      let ex, ey;
-      if (tongue.phase === 'hooked') {
-        ex = game.player.position.x + game.player.width / 2;
-        ey = game.player.position.y + game.player.height / 2;
-      } else {
-        ex = sx + tongue.direction.x * tongue.currentLength;
-        ey = sy + tongue.direction.y * tongue.currentLength;
-      }
-      const tctx = this.renderer.fgCtx;
-      tctx.save();
-      tctx.strokeStyle = '#ff8866';
-      tctx.lineWidth = 2.5;
-      tctx.lineCap = 'round';
-      tctx.beginPath();
-      tctx.moveTo(sx, sy);
-      tctx.lineTo(ex, ey);
-      tctx.stroke();
-      tctx.fillStyle = '#ff8866';
-      tctx.beginPath();
-      tctx.arc(ex, ey, 3, 0, Math.PI * 2);
-      tctx.fill();
-      tctx.restore();
+    // Enemy frog tongues + mimic tongues — interior versions routed via overlay
+    // (both helpers read game._activeEnemies(), so they resolve to the active layer).
+    if (!inHut && !inMaze && !inDungeon) {
+      this.drawEnemyTongues(game);
+      this.drawMimicTongues(game);
     }
 
     // Surface frog-tongue attacks — interior versions routed via overlay.
@@ -858,7 +810,7 @@ export class ExploreRenderer {
     const concealAlpha = this._stepConcealmentAlpha(game.player, !playerHidden);
     if (concealAlpha > 0.005) {
     const playerAlpha = game.player.getVisibilityAlpha();
-    // Moss Cloak ✿ active: render the player as a bush `%` in moss-green.
+    // Moss Cloak 𐤒 active: render the player as a bush `%` in moss-green.
     const mossActive = game.player.mossCloakActive === true;
     const playerChar = mossActive ? '%' : game.player.char;
     const playerColor = mossActive ? '#228822' : game.player.getDisplayColor();
@@ -1081,6 +1033,12 @@ export class ExploreRenderer {
       ctx.restore();
     }
 
+    // Gray zone mist: surface-plane '~' glyph field (cave fog above owns plane 1).
+    // After entities — mist hangs in front of them — before Tab overlay and PiPs.
+    if (!inHut && !inMaze && !inDungeon) {
+      game.grayZoneSystem?.renderMist(this.renderer.fgCtx, game);
+    }
+
     // Draw inventory overlay when Tab is held
     if (game.keys.tab) {
       this.renderController.inventoryOverlay.render(game);
@@ -1102,12 +1060,13 @@ export class ExploreRenderer {
     // Pickup/notification message — drawn last so it sits above hut/maze overlays
     if (game.pickupMessage && game.pickupMessageTimer > 0) {
       const ctx = this.renderer.fgCtx;
+      const spectaclesOn = isSpectaclesActive(game);
       ctx.save();
-      ctx.font = `${GRID.CELL_SIZE * 2}px 'VentureArcade', Unifont, monospace`;
+      ctx.font = cipherFont(GRID.CELL_SIZE * 2, spectaclesOn);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = COLORS.ITEM;
-      this.renderer.drawWrappedText(ctx, game.pickupMessage, GRID.WIDTH / 2, GRID.HEIGHT / 2 - 100, GRID.WIDTH * 0.8, GRID.CELL_SIZE * 2.5);
+      this.renderer.drawWrappedText(ctx, spectaclesTransformString(game.pickupMessage, spectaclesOn), GRID.WIDTH / 2, GRID.HEIGHT / 2 - 100, GRID.WIDTH * 0.8, GRID.CELL_SIZE * 2.5);
       ctx.restore();
     }
 
@@ -1468,6 +1427,20 @@ export class ExploreRenderer {
       return; // Skip normal enemy indicators while disguised
     }
 
+    // Collapsed Risen: inert bone pile; a last-second shiver is the only tell.
+    if (enemy.collapsed && enemy.data?.riseAgain) {
+      const shiverX = enemy.riseTimer < 1.0
+        ? Math.round(Math.sin(Date.now() / 40) * 1.5)
+        : 0;
+      this.renderer.drawEntity(
+        enemy.position.x + GRID.CELL_SIZE / 2 + shiverX,
+        enemy.position.y + GRID.CELL_SIZE / 2,
+        enemy.data.riseAgain.pileChar || '8',
+        '#998877'
+      );
+      return; // Skip normal enemy indicators while collapsed
+    }
+
     if (enemy.shouldRenderVisible()) {
       // iframe flash (white) takes priority, then DOT blink, then base color
       const iframeColor = enemy.getIframeFlashColor();
@@ -1651,17 +1624,6 @@ export class ExploreRenderer {
         enemy.position.y + GRID.CELL_SIZE / 2 + detectionIndicator.offsetY,
         detectionIndicator.char,
         detectionIndicator.color
-      );
-    }
-
-    // Draw hover indicator (... when pack hunting)
-    const hoverIndicator = enemy.getHoverIndicator();
-    if (hoverIndicator) {
-      this.renderer.drawEntity(
-        enemy.position.x + GRID.CELL_SIZE / 2,
-        enemy.position.y + GRID.CELL_SIZE / 2 + hoverIndicator.offsetY,
-        hoverIndicator.char,
-        hoverIndicator.color
       );
     }
 
@@ -2098,8 +2060,7 @@ export class ExploreRenderer {
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#ffff66';
     ctx.globalAlpha = 0.55;
-    const coinTxt = isSpectaclesActive(game) ? spectaclesTransform('C', true) : 'c';
-    ctx.fillText(coinTxt, cx, cy);
+    ctx.fillText(spectaclesTransform('c', isSpectaclesActive(game)), cx, cy);
     ctx.restore();
   }
 
@@ -2542,7 +2503,7 @@ export class ExploreRenderer {
         const jy = cloud.y + (Math.random() - 0.5) * cloud.radius * 1.6;
         const dx = jx - cloud.x, dy = jy - cloud.y;
         if (dx * dx + dy * dy <= cloud.radius * cloud.radius) {
-          this.renderer.drawTextWithAlpha(jx, jy, steamChars[s % steamChars.length], '#8c8c8c', alpha);
+          this.renderer.drawTextWithAlpha(jx, jy, steamChars[s % steamChars.length], cloud.color || '#8c8c8c', alpha);
         }
       }
     }
@@ -2661,14 +2622,18 @@ export class ExploreRenderer {
       }
       item._concealedSince = undefined;
       const useDithering = itemPlane === 1 && game.player.plane === 1;
-      const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
-      this.renderer[drawMethod](cx, cy, item.char, item.color);
+      const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity'; // bob = SPACE-pickup float cue (satchel/crows), position-phased to avoid lockstep
+      this.renderer[drawMethod](cx, cy + Math.sin(performance.now() / 400 + (item.position.x + item.position.y) * 0.01) * 3, item.char, item.color);
     }
   }
 
-  _drawWires(game) {
+  // Sticky triplines. `interior=true` is called from HutInteriorOverlay with the
+  // interior-coord translate already applied to fgCtx, so triplines come from
+  // activeFloor (where WireSystem commits them) and player/preview coords —
+  // also interior-space — need no remapping.
+  _drawWires(game, interior = false) {
     const ctx = this.renderer.fgCtx;
-    const triplines = game.currentRoom?.triplines || [];
+    const triplines = (interior ? game.activeFloor?.triplines : game.currentRoom?.triplines) || [];
     const drawSeg = (seg, alpha) => {
       ctx.save();
       ctx.globalAlpha = alpha;
@@ -2700,6 +2665,61 @@ export class ExploreRenderer {
         game.player.position.y - GRID.CELL_SIZE * 0.6
       );
       ctx.restore();
+    }
+  }
+
+  // Shared tongue stroke: line from (sx,sy) to tip (ex,ey) + a small tip circle.
+  _drawTongueSegment(sx, sy, ex, ey, color) {
+    const ctx = this.renderer.fgCtx;
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(ex, ey, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Enemy frog-form tongues. The tongue list is global, so filter to owners on
+  // the active layer (_activeEnemies resolves to activeFloor in interiors); the
+  // interior overlay applies its coord translate before calling this.
+  drawEnemyTongues(game) {
+    const enemies = game._activeEnemies?.() ?? [];
+    for (const tongue of game.combatSystem.getTongueAttacks()) {
+      if (tongue.currentLength <= 0) continue;
+      const owner = tongue.owner;
+      if (!owner || !enemies.includes(owner)) continue;
+      const sx = owner.position.x + GRID.CELL_SIZE / 2;
+      const sy = owner.position.y + GRID.CELL_SIZE / 2;
+      const ex = sx + tongue.direction.x * tongue.currentLength;
+      const ey = sy + tongue.direction.y * tongue.currentLength;
+      this._drawTongueSegment(sx, sy, ex, ey, tongue.color);
+    }
+  }
+
+  // Mimic tongues — extend toward the player, then track them once hooked.
+  drawMimicTongues(game) {
+    const enemies = game._activeEnemies?.() ?? [];
+    for (const enemy of enemies) {
+      if (!enemy.mimicTongue || !enemy.mimicRevealed) continue;
+      const tongue = enemy.mimicTongue;
+      const sx = enemy.position.x + GRID.CELL_SIZE / 2;
+      const sy = enemy.position.y + GRID.CELL_SIZE / 2;
+      let ex, ey;
+      if (tongue.phase === 'hooked') {
+        ex = game.player.position.x + game.player.width / 2;
+        ey = game.player.position.y + game.player.height / 2;
+      } else {
+        ex = sx + tongue.direction.x * tongue.currentLength;
+        ey = sy + tongue.direction.y * tongue.currentLength;
+      }
+      this._drawTongueSegment(sx, sy, ex, ey, '#ff8866');
     }
   }
 

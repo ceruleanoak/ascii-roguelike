@@ -12,19 +12,19 @@ const STAGE_CONFIG = [
   {
     // Stage 0: rare ingredient for a solid tier-2 weapon or armor
     requestPool: ['M', 't', 'e', 's', 'F', 'k'], // Metal, Teeth, Eye, Scale, Fire Essence, Silk
-    rewardPool:  ['‡', '⌂', '⟩', '⊤', 'X', '⛓', 'R', 'L'],
+    rewardPool:  ['‡', 'ᛉ', '⟩', '⊤', 'X', '⛓', '𐤄', '𐤂'],
     isIngredient: true
   },
   {
     // Stage 1: starter weapon for a strong mid-tier weapon or armor
     requestPool: ['¬', '†', ')', '/', '↑'],       // tier-1 starters
-    rewardPool:  ['⌐', '❄', 'ϟ', '═', '⊞', '◈', '⇶', '◉', 'W'],
+    rewardPool:  ['⌐', 'ᛁ', '↯', 'ᛞ', 'ᚺ', 'ᛟ', 'ᛏ', '✺', '𐤆'],
     isIngredient: false
   },
   {
     // Stage 2: mid-tier item for legendary — repeats on subsequent trades
-    requestPool: ['‡', '⌂', '⟩', '⊤', 'X', '⌐', 'R', '⛓', 'L', 'W'],
-    rewardPool:  ['⚔', '▼', '⚒', '◙', '⚯', '⊕', '⇒', '✦', '♦', '∞', 'K', 'E', 'N', '☼'],
+    requestPool: ['‡', 'ᛉ', '⟩', '⊤', 'X', '⌐', '𐤄', '⛓', '𐤂', '𐤆'],
+    rewardPool:  ['⚔', '⏚', '⚒', 'ᛋ', 'ᚨ', '⟰', '⇒', '✦', '♦', '∞', '𐤓', '𐤉', '𐤏', 'ᚲ'],
     isIngredient: false
   }
 ];

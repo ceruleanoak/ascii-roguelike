@@ -5,6 +5,19 @@
   font-style: normal;
 }
 
+/* Phoenician glyph coverage (deep-canon item chars, U+10900 block).
+   Registered under the 'Unifont' family with a restricted unicode-range so
+   every existing canvas font stack resolves Phoenician codepoints to this
+   face without touching any fillText font string. Base Unifont (cdnfonts)
+   is BMP-only and would render these as tofu. */
+@font-face {
+  font-family: 'Unifont';
+  src: url('/assets/fonts/NotoSansPhoenician-Regular.ttf') format('truetype');
+  unicode-range: U+10900-1091F;
+  font-weight: normal;
+  font-style: normal;
+}
+
 * {
   margin: 0;
   padding: 0;

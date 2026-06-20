@@ -1,0 +1,57 @@
+{
+  "name": "sac/c64/pad/saw-pad",
+  "totalDuration": 2.2,
+  "bpm": 120,
+  "snapMode": "none",
+  "instrument": {
+    "masterGain": 0.8,
+    "chip": "C64",
+    "type": "sawtooth",
+    "filterFreq": 2200,
+    "filterQ": 2
+  },
+  "volumeEnvelope": [
+    {
+      "t": 0,
+      "v": 0
+    },
+    {
+      "t": 0.35,
+      "v": 0.9
+    },
+    {
+      "t": 0.82,
+      "v": 0.85
+    },
+    {
+      "t": 1,
+      "v": 0
+    }
+  ],
+  "pitchEnvelope": [
+    {
+      "t": 0,
+      "semitones": 0
+    },
+    {
+      "t": 1,
+      "semitones": 0
+    }
+  ],
+  "notes": [
+    {
+      "id": "n11",
+      "time": 0,
+      "duration": 2.1,
+      "frequency": 130.81,
+      "volume": 0.9,
+      "muted": false
+    }
+  ],
+  "echo": {
+    "enabled": false,
+    "delay": 0.12,
+    "scale": 0.55,
+    "count": 4
+  }
+}

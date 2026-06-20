@@ -1,9 +1,10 @@
 import { GRID } from '../../game/GameConfig.js';
 
-// Giant Slime goo spew cone: damage-accumulator triggers windup (set elsewhere
-// on takeDamage); windup ticks down here and emits a fan of blobs aimed at the
-// target. Suspends Enemy.update() and hands the blob list back to the
-// orchestrator so main.js can spawn them as projectiles.
+// Giant Slime goo spew cone: damage accumulates via onDamaged() (called from
+// takeDamage) until it crosses the threshold and triggers a windup; the windup
+// ticks down here and emits a fan of blobs aimed at the target. Suspends
+// Enemy.update() and hands the blob list back to the orchestrator so main.js
+// can spawn them as projectiles.
 
 export const GooSpewMechanic = {
   isEnabled(enemy) {
@@ -14,6 +15,18 @@ export const GooSpewMechanic = {
     enemy.spewDamageAccum = 0;
     enemy.spewWindupActive = false;
     enemy.spewWindupTimer = 0;
+  },
+
+  // takeDamage hook: accumulate damage toward the next spew windup.
+  onDamaged(enemy, amount) {
+    const cfg = enemy.data.gooSpewCone;
+    if (!cfg?.enabled) return;
+    enemy.spewDamageAccum = (enemy.spewDamageAccum || 0) + amount;
+    if (!enemy.spewWindupActive && enemy.spewDamageAccum >= cfg.damageThreshold) {
+      enemy.spewDamageAccum -= cfg.damageThreshold;
+      enemy.spewWindupActive = true;
+      enemy.spewWindupTimer = cfg.chargeUpTime;
+    }
   },
 
   update(enemy, ctx) {

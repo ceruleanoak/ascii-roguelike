@@ -124,14 +124,17 @@ export const EXIT_LETTERS = {
     spellDescription: 'THE MARINER PATH.'
   },
   'P': {
-    name: 'Press Hut',
-    roomType: 'HUT',
-    weight: 0.04,
+    name: 'Puzzle',
+    roomType: 'PUZZLE',
+    weight: 0.05,
     zoneBoosts: {
-      red: 2.0,
-      yellow: 1.5
+      green: 1.5,
+      yellow: 1.5,
+      red: 0,
+      cyan: 0,
+      gray: 0
     },
-    spellDescription: 'THE PRESS WITHIN.'
+    spellDescription: 'THE STONES REMEMBER.'
   },
   'R': {
     name: 'Ridge',

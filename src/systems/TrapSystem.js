@@ -154,6 +154,7 @@ export class TrapSystem {
         hitEnemies: new Set(),
         plane: game.player.plane ?? 0,
         inHut: game.player.inHut === true,
+        inDungeon: game.player.inDungeon === true,
         inMaze: game.player.inMaze === true,
         interior,
       });
@@ -373,7 +374,11 @@ export class TrapSystem {
     // would otherwise carry the stale flag and confuse plane-aware scans
     // (e.g. surface rats ignoring SHIFT-thrown bread that was originally a
     // hut loaf).
-    item.hutPlane = t.inHut === true;
+    // hutPlane is the shared interior-floor tag (huts AND dungeons render off
+    // game.activeFloor via the same overlay + hutPlane item filter), so a weapon
+    // landing in a dungeon must carry it too — otherwise it reads as surface loot
+    // and the interior overlay never draws it.
+    item.hutPlane = t.inHut === true || t.inDungeon === true;
     item.mazePlane = t.inMaze === true;
     game.items.push(item);
     game.physicsSystem.addEntity(item);
@@ -421,11 +426,9 @@ export class TrapSystem {
     });
   }
 
+  // Delegates to the canonical game accessor (single source of truth).
   _getActiveEnemies() {
-    const game = this.game;
-    if (game.player?.inMaze && game.mazeInterior) return game.mazeInterior.enemies || [];
-    if ((game.player?.inHut || game.player?.inDungeon) && game.activeFloor) return game.activeFloor.enemies;
-    return game.currentRoom?.enemies ?? [];
+    return this.game._activeEnemies();
   }
 
   // Apply a trap hit to one enemy, respecting `trapData.affinity`. Affinity uses the
@@ -630,7 +633,8 @@ export class TrapSystem {
       }
 
       const C = GRID.CELL_SIZE;
-      const room = game.currentRoom;
+      // Active layer — ice tiles must land in the hut/dungeon the trap fired in, not the surface.
+      const room = game.activeRoom;
       if (room?.backgroundObjects) {
         // Structural/special chars that shouldn't be visually frozen
         const SKIP_FREEZE = new Set(['!', '$', '.', '-', 'I', '<', '>', '^', 'v', '≡', '∩', '2', '3', '}', 'x']);
@@ -746,6 +750,25 @@ export class TrapSystem {
           isImpact: true
         });
       }
+    } else if (trapData.effect === 'snare') {
+      // Snare Trap: a beast-affinity enemy caught in the radius is rooted in place
+      // permanently (reuses the Trident-pin immobilizer). Non-beasts walk through it
+      // untouched — this is a hunter's snare, not a blast. No damage; the catch is the point.
+      let caught = false;
+      for (const enemy of enemies) {
+        const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - cx;
+        const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - cy;
+        if (Math.sqrt(dx * dx + dy * dy) > r) continue;
+        if (!enemy.data?.affinities?.includes('beast')) continue;
+        enemy.pinnedDuration = Infinity;
+        enemy.velocity.vx = 0;
+        enemy.velocity.vy = 0;
+        caught = true;
+        game.combatSystem.createDamageNumber('SNARED', enemy.position.x, enemy.position.y, '#8b6914');
+      }
+      if (!caught) {
+        // Snapped shut on nothing it could hold — still consume the charge.
+      }
     } else {
       // All other one-shot effects (burn, stun, sleep, charm): _applyTrapHit gates on affinity
       // (fire-immune enemies block the Fire Trap, electric-immune block Stun, etc.) — then
@@ -756,8 +779,9 @@ export class TrapSystem {
 
       // Fire Trap also ignites flammable bg objects in radius — environmental, not per-enemy.
       // Routed through FireSystem (owns spread + render dirty flag).
-      if (trapData.effect === 'burn' && game.currentRoom.backgroundObjects) {
-        for (const obj of game.currentRoom.backgroundObjects) {
+      const burnObjects = game._activeBackgroundObjects();
+      if (trapData.effect === 'burn' && burnObjects) {
+        for (const obj of burnObjects) {
           if (obj.destroyed || !obj.isFlammable) continue;
           const odx = obj.position.x - tx;
           const ody = obj.position.y - ty;

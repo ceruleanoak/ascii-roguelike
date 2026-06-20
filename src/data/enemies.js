@@ -56,9 +56,20 @@ export const ENEMIES = {
     movementConfig: {
       kiteDistance: GRID.CELL_SIZE * 3,
       retreatThreshold: GRID.CELL_SIZE * 1.5,
-      hoverTime: 1.2   // Orbits then dives — the hover is the tell
     },
-    packCoordination: true,   // Multiple bats dive in sequence, not simultaneously
+    flockBehavior: {           // Idle: roost on trees or fly as a flock (FlockMechanic)
+      perchChance: 0.5,                     // per-flock roll: roosting colony vs airborne flock
+      perchObjects: ['Y', 'ŋ'],             // trees and stumps — crow-style perches
+      perchSearchRadius: GRID.CELL_SIZE * 6,
+      rePerchChance: 0.02,                  // per-second odds a calm flyer settles back onto a perch
+      swirlRadius: GRID.CELL_SIZE * 2,      // innermost follower orbit; each layer +70%
+      swirlTurnRate: 2.2,                   // rad/sec follower orbit / leader weave
+      swirlSpeed: 55,                       // idle flight speed (chase speed is 70)
+      sweepPlayerEvery: 3,                  // every 3rd sweep crosses the player; rest roam wide
+      sweepOvershoot: GRID.CELL_SIZE * 8,   // player-sweep waypoint lands this far past them
+      sweepJitter: GRID.CELL_SIZE * 4,      // player-sweep perpendicular scatter
+      sweepWeaveRatio: 0.5                  // sine weave along the sweep (0 = beeline)
+    },
     knockbackMultiplier: 0.4, // Barely moves you — it wants to stick, not knock
     affinities: ['beast'],
     tier: 'weak'
@@ -562,7 +573,7 @@ export const ENEMIES = {
       enabled: true,
       canPickup: true,
       pickupRange: GRID.CELL_SIZE * 2,
-      preferredItems: ['-', '/', '|', 'H', 'A'],  // Swords, health, armor
+      preferredItems: ['-', '/', '|', 'H', '𐤔'],  // Swords, health, armor (𐤔 Bone Armor)
       useRange: GRID.CELL_SIZE * 3,
       useCooldown: 1.5,
       maxItems: 2,
@@ -739,7 +750,6 @@ export const ENEMIES = {
     movementConfig: {
       kiteDistance: GRID.CELL_SIZE * 3.2,       // Tight orbit: 3 cells, close enough to threaten
       retreatThreshold: GRID.CELL_SIZE * 2.0,   // Retreats if player steps inside 2 cells
-      hoverTime: 1.8                            // Commits to orbit, then dashes inward
     },
     trailMechanic: {
       enabled: true,
@@ -840,7 +850,6 @@ export const ENEMIES = {
     movementConfig: {
       kiteDistance: GRID.CELL_SIZE * 4,
       retreatThreshold: GRID.CELL_SIZE * 2.5,
-      hoverTime: 1.5
     },
     acceleration: 500,
     decisionInterval: 0.3,
@@ -1101,7 +1110,6 @@ export const ENEMIES = {
     movementConfig: {
       kiteDistance: GRID.CELL_SIZE * 3.5,    // Orbiting radius — just outside melee
       retreatThreshold: GRID.CELL_SIZE * 2,  // Scoots back if player rushes
-      hoverTime: 1.5                         // Hover, then commit to push rush
     },
     packCoordination: true,   // Wisps triangulate from different angles — chain-push emerges naturally
     knockbackMultiplier: 5.0,
@@ -1286,7 +1294,6 @@ export const ENEMIES = {
     movementConfig: {
       kiteDistance: GRID.CELL_SIZE * 4,     // Maintain 4 units from player
       retreatThreshold: GRID.CELL_SIZE * 3, // Retreat if player within 3 units during hover
-      hoverTime: 2.5                        // Hover for 2.5s before committing to attack rush
     },
     packCoordination: true,  // Shares detection & memory marks with all wolves in room
     elementalAffinity: {
@@ -1358,7 +1365,6 @@ export const ENEMIES = {
     movementConfig: {
       kiteDistance: GRID.CELL_SIZE * 5,
       retreatThreshold: GRID.CELL_SIZE * 3,
-      hoverTime: 2.5
     },
     decisionInterval: 0.35,
     color: '#66ccff',
@@ -1413,7 +1419,6 @@ export const ENEMIES = {
     movementConfig: {
       kiteDistance: GRID.CELL_SIZE * 5,       // Retreat distance after burst
       retreatThreshold: GRID.CELL_SIZE * 2,
-      hoverTime: 2.0                          // Hovers at kite distance before next approach
     },
     steamCloud: {
       enabled: true,
@@ -1655,7 +1660,6 @@ export const ENEMIES = {
     movementConfig: {
       kiteDistance: GRID.CELL_SIZE * 3.5,     // Maintain 3.5 units from player
       retreatThreshold: GRID.CELL_SIZE * 2.5, // Retreat if player within 2.5 units during hover
-      hoverTime: 2.0                          // Hover for 2s before committing to attack rush
     },
     packCoordination: true,  // Shares detection & memory marks with all spiders in room
     elementalAffinity: {
@@ -1686,7 +1690,6 @@ export const ENEMIES = {
     movementConfig: {
       kiteDistance: GRID.CELL_SIZE * 6,
       retreatThreshold: GRID.CELL_SIZE * 4,
-      hoverTime: 2.0
     },
     chargeMechanic: {
       enabled: true,
@@ -1725,7 +1728,7 @@ export const ENEMIES = {
     movementConfig: {
       kiteDistance: GRID.CELL_SIZE * 7,    // Wider orbit — seeding more trap arc per circuit
       retreatThreshold: GRID.CELL_SIZE * 6, // Contiguous with the hover band — no "approach gap" where kiter pulls back in
-      hoverTime: Infinity                  // Trap Goblin never commits to the kiter rush — it has no attack to deliver
+      dive: false                          // Trap Goblin never dives — it has no attack to deliver
     },
     decisionInterval: 0.25,
     color: '#ccaa00',
@@ -1770,7 +1773,6 @@ export const ENEMIES = {
     movementConfig: {
       kiteDistance: GRID.CELL_SIZE * 5.5,   // One unit outside AOE radius
       retreatThreshold: GRID.CELL_SIZE * 3.5,
-      hoverTime: 2.0   // Circles for 2s before committing to throw
     },
     decisionInterval: 0.4,
     color: '#ddaa00',
@@ -1811,7 +1813,6 @@ export const ENEMIES = {
     movementConfig: {
       kiteDistance: GRID.CELL_SIZE * 6,
       retreatThreshold: GRID.CELL_SIZE * 3,
-      hoverTime: 3.5   // Waits 3.5s — nearly matches 4s curse duration, returns just as curse expires
     },
     decisionInterval: 0.3,
     color: '#cc44cc',
@@ -1884,6 +1885,106 @@ export const ENEMIES = {
     },
     affinities: ['undead', 'humanoid'],
     tier: 'elite'  // Same table as Skeleton, better rare drop chance
+  },
+
+  'Z': {
+    char: 'Z',
+    name: 'Risen',
+    description: 'It falls, and then it gets back up.',
+    spellDescription: 'KILL IT TWICE.',
+    hp: 8,
+    speed: 22,                         // Shambling — slow but it never stops coming
+    damage: 3,
+    attackRange: GRID.CELL_SIZE * 2,   // 2 units
+    aggroRange: GRID.CELL_SIZE * 12,   // 12 units — relentless, spots you across the room
+    attackCooldown: 1.4,
+    attackWindup: 1.0,  // Minimum 1 second telegraph
+    attackType: 'melee',
+    decisionInterval: 0.6,  // Dim — easy to juke, impossible to discourage
+    color: '#ccddcc',
+    // First death collapses it into a bone pile that rises again at half HP
+    // unless the pile is destroyed (or burned out by DoT) before the timer.
+    riseAgain: {
+      riseDelay: 4.0,
+      riseHpFraction: 0.5,
+      pileChar: '8'        // Renders as the zone's bone piles — hide in plain sight
+    },
+    elementalAffinity: {
+      weakness: { 'burn': 1.5 }   // Fire lays the dead to rest for good
+    },
+    affinities: ['undead'],
+    tier: 'weak'
+  },
+
+  'A': {
+    char: 'A',
+    name: 'Mourner',
+    description: 'Where it grieves, the mist closes in.',
+    spellDescription: 'THE MIST FOLLOWS IT.',
+    hp: 7,
+    speed: 30,
+    damage: 2,
+    attackRange: GRID.CELL_SIZE * 5,   // 5 units (magic)
+    aggroRange: GRID.CELL_SIZE * 10,   // 10 units
+    attackCooldown: 2.2,
+    attackWindup: 1.2,
+    attackType: 'magic',
+    movementStyle: 'keeper',
+    decisionInterval: 0.4,
+    color: '#9999bb',
+    float: true,  // Ghostly — drifts over ground hazards
+    mistThicken: 2,  // Each living Mourner pulls the gray-zone mist in by 2 cells (GrayZoneSystem)
+    affinities: ['undead'],
+    tier: 'weak'
+  },
+
+  'J': {
+    char: 'J',
+    name: 'Gravejumper',
+    description: 'It does not walk. It pounces from plot to plot.',
+    spellDescription: 'NEVER A STRAIGHT LINE.',
+    hp: 4,
+    speed: 48,
+    damage: 2,
+    attackRange: GRID.CELL_SIZE * 2,   // 2 units
+    aggroRange: GRID.CELL_SIZE * 10,   // 10 units
+    attackCooldown: 1.1,
+    attackWindup: 1.0,
+    attackType: 'melee',
+    movementStyle: 'jumper',
+    movementConfig: {
+      jumpInterval: 0.9,
+      jumpSpeed: 230,
+      jumpDuration: 0.4,
+      arcHeight: GRID.CELL_SIZE * 1.4,  // Parabolic visual lift — peaks mid-flight
+      zigzagStrength: 0.9   // Hard deterministic zigzag — learn the rhythm or get flanked
+    },
+    decisionInterval: 0.3,
+    color: '#aaffcc',
+    affinities: ['undead'],
+    tier: 'weak'
+  },
+
+  'Y': {
+    char: 'Y',
+    name: 'Barrow Tyrant',
+    description: 'An old king of the mound. Nothing staggers it.',
+    spellDescription: 'IT DOES NOT FLINCH.',
+    mass: 3.0,            // Barrow-heavy — shrugs off most knockback
+    hp: 14,
+    speed: 26,
+    damage: 4,
+    attackRange: GRID.CELL_SIZE * 7,   // 7 units (hurled bone)
+    aggroRange: GRID.CELL_SIZE * 11,   // 11 units
+    attackCooldown: 2.0,
+    attackWindup: 1.3,
+    windupImmune: true,   // Cannot be interrupted — reposition, don't trade
+    attackType: 'ranged',
+    movementStyle: 'keeper',
+    decisionInterval: 0.4,
+    color: '#ffffcc',     // Bright bone — deliberately contrasts the dark 'Y' stumps
+    affinities: ['undead', 'humanoid'],
+    tier: 'elite'
   },
 
 
@@ -1973,12 +2074,12 @@ export const ZONE_SPAWN_TABLES = {
   },
 
   'gray': {
-    // Undead theme - Undead enemies only
-    0: ['S'],                               // L1-2: Skeletons
-    3: ['S', 'N'],                          // L3-5: Add Necromancers
-    6: ['S', 'N', 'Q'],                     // L6-8: Add Queen Spiders (undead variant)
-    9: ['N', 'Q'],                          // L9-11: Elite undead only
-    12: ['N', 'Q']                          // L12+: Boss-tier undead
+    // Undead theme — the zone caps at depth 10 (lost in the mist), so the
+    // bands compress: every tier matters.
+    0: ['S', 'Z'],                          // L1-2: Skeletons, Risen (intro rise-again)
+    3: ['S', 'Z', 'N', 'A'],                // L3-5: Add Necromancers, Mourners (mist pressure)
+    6: ['Z', 'N', 'A', 'J'],                // L6-8: Add Gravejumpers
+    9: ['N', 'A', 'J', 'Y']                 // L9-10: Elite undead — Barrow Tyrants
   }
 };
 
@@ -2031,9 +2132,10 @@ export function getZoneRandomEnemy(depth, zoneType) {
   return table[Math.floor(Math.random() * table.length)];
 }
 
-// Boss enemies (2x stats)
-export function createBossEnemy(depth) {
-  const baseChar = getRandomEnemy(depth);
+// Boss enemies (2x stats). Zone-aware: B-room fallbacks must pull from the
+// zone's own table, not the legacy depth table (off-theme spawns otherwise).
+export function createBossEnemy(depth, zoneType = null) {
+  const baseChar = zoneType ? getZoneRandomEnemy(depth, zoneType) : getRandomEnemy(depth);
   const baseData = getEnemyData(baseChar);
 
   return {
@@ -2074,5 +2176,23 @@ export const BOSS_ENCOUNTERS = {
       { char: 'G', count: 1, role: 'follower', equippedWeapon: ')' }    // Bow (ranged)
     ],
     arenaSpacing: 'formation'
+  },
+
+  // ── Gray zone mini-bosses ─────────────────────────────────────────────────
+  bone_legion: {
+    // Necromancer at the center of a skeleton ring. Skeletons have no
+    // followLeader data so they break formation and chase immediately —
+    // the wall lunges while the Necromancer keeps raising more.
+    spawns: [
+      { char: 'N', count: 1, role: 'leader' },
+      { char: 'S', count: 4, role: 'follower' }
+    ],
+    arenaSpacing: 'formation'
+  },
+  grave_tyrant: {
+    spawns: [
+      { char: 'Y', count: 1, role: 'boss' }
+    ],
+    arenaSpacing: 'center'
   }
 };

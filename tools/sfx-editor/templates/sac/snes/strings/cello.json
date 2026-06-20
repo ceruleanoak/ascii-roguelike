@@ -1,0 +1,58 @@
+{
+  "name": "sac/snes/strings/cello",
+  "totalDuration": 2.2,
+  "bpm": 120,
+  "snapMode": "none",
+  "instrument": {
+    "masterGain": 0.8,
+    "chip": "SNES",
+    "type": "sawtooth",
+    "filterFreq": 1600,
+    "filterQ": 1,
+    "crushBits": 12
+  },
+  "volumeEnvelope": [
+    {
+      "t": 0,
+      "v": 0
+    },
+    {
+      "t": 0.18,
+      "v": 0.95
+    },
+    {
+      "t": 0.8,
+      "v": 0.85
+    },
+    {
+      "t": 1,
+      "v": 0
+    }
+  ],
+  "pitchEnvelope": [
+    {
+      "t": 0,
+      "semitones": 0
+    },
+    {
+      "t": 1,
+      "semitones": 0
+    }
+  ],
+  "notes": [
+    {
+      "id": "n31",
+      "time": 0,
+      "duration": 2.1,
+      "frequency": 65.41,
+      "volume": 0.9,
+      "muted": false
+    }
+  ],
+  "echo": {
+    "enabled": false,
+    "delay": 0.12,
+    "scale": 0.55,
+    "count": 4
+  }
+}

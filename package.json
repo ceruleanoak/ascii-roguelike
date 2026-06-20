@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "enemy-editor": "vite --open /tools/enemy-editor/index.html",
     "check:arch": "node tools/check-architecture.js",
     "build": "npm run check:arch && NODE_ENV=production vite build",
     "preview": "vite preview",

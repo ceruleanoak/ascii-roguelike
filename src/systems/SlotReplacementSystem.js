@@ -141,7 +141,10 @@ export class SlotReplacementSystem {
       inv.armorInventory.push(item);
       inv.equipArmor(item);
       inv.applyEquipmentEffectsToPlayer(game.player);
-      if (displaced) this._routeToChest(displaced);
+      // Displaced armor returns to the armor inventory — NOT the chest, which is
+      // weapon-only storage (openCraftingMenu reads it into the weapons column,
+      // so a chest-routed armor/consumable would show up under weapons).
+      if (displaced) inv.armorInventory.push(displaced);
     } else if (this.slotType === 'consumable') {
       const inv = game.inventorySystem;
       // Grab old before equip; null it out so equipConsumable won't push it to consumableInventory
@@ -150,7 +153,8 @@ export class SlotReplacementSystem {
       inv.consumableInventory.push(item);
       inv.equipConsumable(slotIdx, item);
       inv.applyEquipmentEffectsToPlayer(game.player);
-      if (displaced) this._routeToChest(displaced);
+      // Displaced consumable returns to the consumable inventory, not the chest.
+      if (displaced) inv.consumableInventory.push(displaced);
     } else {
       // Weapon/trap: reuse Player.pickupItem
       game.player.activeSlotIndex = slotIdx;
@@ -163,6 +167,11 @@ export class SlotReplacementSystem {
 
     game.showPickupMessage(item.data.name);
     game.updateUI();
+    // REST equipment slots draw their glyphs to the background layer, which is
+    // only cleared on a dirty mark. Without this, the displaced item's glyph
+    // lingers under the newly-equipped one (both render). Mirrors the
+    // markBackgroundDirty() every MenuSystem equip path already issues.
+    game.renderer.markBackgroundDirty();
     game.pauseSystem.closeModal();
   }
 

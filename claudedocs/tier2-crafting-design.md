@@ -26,7 +26,7 @@ Pairwise recipe coverage among the six satchel chars:
 |       | g | 0 | \| | ~ | f | M |
 |-------|---|---|----|---|---|---|
 | **g** | ●¹ | — | — | ⌇ Sticky Tripline | — | — |
-| **0** |   | △ Arrowhead | ⊥ Hammer | ⊸ Sling | — | — |
+| **0** |   | ⊿ Axe head | ⊥ Hammer | ⊸ Sling | — | — |
 | **\|**|   |   | / Staff | ) Bow | — | ↾ Dagger |
 | **~** |   |   |    | ≋ Whip | R Rope/Robe | ⛓ Chain Mail |
 | **f** |   |   |    |   | ᐤ¹ | [ Freeze Trap |
