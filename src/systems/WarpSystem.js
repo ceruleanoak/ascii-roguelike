@@ -5,7 +5,8 @@ export class WarpSystem {
     this.game = game;
   }
 
-  // Check if a candidate position is free of walls, objects, and exit zones
+  // Check if a candidate position is free of perimeter walls and exit zones
+  // (allows warping over background object walls like vault doors)
   isValidBlinkPosition(x, y) {
     const player = this.game.player;
     const w = player.width;
@@ -17,7 +18,7 @@ export class WarpSystem {
     if (x < margin || x + w > GRID.WIDTH - margin) return false;
     if (y < margin || y + h > GRID.HEIGHT - margin) return false;
 
-    // Wall collision map check
+    // Wall collision map check (perimeter/room walls only — allows warping over background objects)
     if (player.collisionMap) {
       const cx1 = Math.floor(x / C);
       const cy1 = Math.floor(y / C);
@@ -28,14 +29,6 @@ export class WarpSystem {
           if (player.collisionMap[cy]?.[cx]) return false;
         }
       }
-    }
-
-    // Solid background object check
-    const bgObjects = this.game._activeBackgroundObjects();
-    for (const obj of bgObjects) {
-      if (obj.destroyed || !obj.data?.solid) continue;
-      if (x < obj.position.x + GRID.CELL_SIZE && x + w > obj.position.x &&
-          y < obj.position.y + GRID.CELL_SIZE && y + h > obj.position.y) return false;
     }
 
     return true;
