@@ -52,6 +52,7 @@ export const CHARACTER_TYPES = {
     rollDuration: 0, // Instant
     rollCooldown: 0.8,
     rollSpeed: 0, // Teleports instantly
+    blinkDistance: 256, // Allow warping over background object walls (4 cells)
     weaponAffinities: {
       'gun': { fireRateBonus: 0.2 } // 20% faster gun fire rate
     }

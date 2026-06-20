@@ -449,6 +449,9 @@ export class CharacterSystem {
     game.player.dodgeRoll.cooldown = charData.rollCooldown;
     game.player.dodgeRoll.speed = charData.rollSpeed;
     game.player.dodgeRoll.hideDuration = charData.hideDuration || 0;
+    if (charData.blinkDistance) {
+      game.player.dodgeRoll.distance = charData.blinkDistance;
+    }
 
     // Apply weapon affinities
     game.player.weaponAffinities = charData.weaponAffinities;
