@@ -108,6 +108,144 @@ programming terms.
 - **In code:** not a runtime construct; lives in `claudedocs/zone-cosmology.md`.
 - **Not:** surfaced in-world text (the hidden canon is never spoken in-game).
 
+### NPC
+- **Definition:** A non-hostile character that inhabits NEUTRAL rooms and interacts with the
+  player through dialogue or errands. Each NPC has a unique archetype and role.
+- **In code:** base class `NeutralCharacter` in `src/entities/NeutralCharacter.js`; subclasses
+  include `Leshy`, `Rusalka`, `Witch`, `Fisherman`, `WiseFellow`, `Fairy`, and others. Defined
+  in `src/data/neutralRooms.js`; spawned via `NeutralRoomSystem`.
+- **Not:** an Enemy (NPCs are non-hostile); not a Companion (NPCs don't follow the player).
+
+### Boss
+- **Definition:** An Enemy that appears at a zone-specific depth threshold and must be defeated
+  to progress deeper. Bosses have enhanced drops (guaranteed Mana) and special behavior.
+- **In code:** `enemy.data.isBoss` flag; checked via `ZoneSystem.isBossReady(zone, depth)`;
+  room type `BOSS_ROOM` generated when conditions are met. Boss-spawned enemies carry
+  `isBossEntity` flag.
+- **Not:** just a difficult Enemy; a Boss is a gated milestone tied to zone depth.
+
+### Status Effect
+- **Definition:** A temporary condition applied to a character (player or enemy) that modifies
+  behavior, movement, or damage. Effects have a duration and wear off over time.
+- **In code:** `Character.applyStatusEffect(name, duration)` in `src/entities/` (Player,
+  Enemy). Active effects tracked in `statusEffects` object. Examples: `'burn'`, `'poison'`,
+  `'freeze'`, `'stun'`, `'dizzy'`, `'goo'`.
+- **Not:** permanent attributes (like health or stats); a temporary modifier only.
+
+### Companion
+- **Definition:** A persistent non-player character that follows the player across rooms and
+  states. Companions offer passive support and interact with the environment.
+- **In code:** managed by `CompanionSystem`; currently crows (`companionCrows`, `followerCrows`);
+  also tamed rats (`tamedRats`, fed via bread consumable). State lives on `game`; logic in
+  `src/systems/CompanionSystem.js`.
+- **Not:** an Enemy; not an NPC (Companions don't initiate dialogue).
+
+### Spell
+- **Definition:** A magical effect cast by the player through word input. Spells are discovered
+  through gameplay and can be cancelled mid-cast.
+- **In code:** `SPELLS` registry in `src/data/spells.js`; cast via `SpellSystem` which reads
+  the player's typed word input. Known spells tracked in `game.knownSpells` Set. Entry/effect
+  logic defined per spell in the registry.
+- **Not:** a Crafted item; never equipped. A transient magical action, not an inventory object.
+
+### Consumable
+- **Definition:** A single-use Crafted item that can be equipped in a consumable slot or used
+  directly, applying an instant or temporary effect to the player.
+- **In code:** `type: ITEM_TYPES.CONSUMABLE` in `src/data/items.js`; subtypes include roles
+  (heal, buff, movement, defensive, throwable, utility, oil). Used via `InventorySystem`;
+  removed from inventory on consumption.
+- **Not:** an Ingredient (raw drop) or an equipped weapon/armor. Consumables are crafted via
+  recipes.
+
+### Key Item
+- **Definition:** A unique, run-scoped item that unlocks progression and enables access to
+  new areas or mechanics. Persists across death within a single run.
+- **In code:** tracked via flags on `game` (e.g. `swordDrawnThisRun`, `spectaclesTakenThisRun`);
+  managed by `KeyItemSystem`. Visual representation: § (sword, green zone) and ⊙ (spectacles,
+  yellow zone). Checked via condition gates in room generation.
+- **Not:** a regular Ingredient or Crafted item; not persistent across runs.
+
+### Loot Table
+- **Definition:** A zone/enemy-specific definition of what Ingredients drop on enemy defeat and
+  at what frequency.
+- **In code:** `ZONE_SPAWN_TABLES` per zone in `src/data/enemies.js`; individual enemy data
+  references spawn tables. Populated by weighted drop chance (`dropChance` property) and item
+  ID. Used by `LootSystem` on death.
+- **Not:** inventory (player's bag). Loot is what enemies distribute; Inventory is what the
+  player carries.
+
+### Death / Permadeath
+- **Definition:** The core roguelike reset mechanic — when the player dies, all Inventory,
+  Quick slots (except crafting knowledge), and position are lost. Only run-scoped Key Items
+  and mental knowledge (recipes, zone layout) persist.
+- **In code:** death triggers `enterGameOverState()` → full game reset via `createNewGame()`;
+  `PersistenceSystem` is permanently disabled to enforce full reset. Design philosophy in
+  `claudedocs/zone-cosmology.md`.
+- **Not:** soft-lock or save-scumming. Death is final and intentional; mental progression is
+  the reward, not inventory accumulation.
+
+### Room Type
+- **Definition:** The category of surface room (EXPLORE or NEUTRAL) that determines its
+  procedural layout, enemy spawn, and mechanics.
+- **In code:** `ROOM_TYPES` enum in `src/GameConfig.js` (COMBAT, BOSS, DISCOVERY, CAMP,
+  TUNNEL, ASCENT, UNDERGROUND, BAT_BELFRY, RIDGE, WELL, FOUNTAIN, PUZZLE, etc.). Generated
+  by `RoomGenerator` based on zone/depth/special conditions.
+- **Not:** Interior (which are Hut, Dungeon, Maze) or game State.
+
+### Background Object
+- **Definition:** A non-entity environmental object that occupies a room tile, can be destroyed
+  (by fire, water, impact), and may have interactive effects or drop items.
+- **In code:** class `BackgroundObject` in `src/entities/BackgroundObject.js`; data and
+  properties in `src/data/backgroundObjects.js`. Properties include flammability,
+  conductivity, interaction type, drop chance/table. Managed by collision and elemental
+  systems (FireSystem, ElectricitySystem, WorldEffectsSystem).
+- **Not:** an Enemy or Ingredient. Objects are static/semi-static environmental features, not
+  autonomous or droppable initially.
+
+### Weapon Timing
+- **Definition:** The multi-phase cycle of a melee/ranged weapon attack: Windup (startup delay
+  before damage), Recovery (cooldown after impact), and optional Reload/Charge phases for
+  certain weapon types. All values are in Double-seconds.
+- **In code:** weapon data fields: `windup`, `recovery`, `reload`, `charge` in `src/data/items.js`.
+  Weapon ticks at `PHYSICS.WEAPON_TIMER_RATE` (= 2). Compare to playtesting simulator by ÷2.
+- **Not:** just damage or accuracy. Timing defines weapon feel and combat rhythm.
+
+### Gemstone
+- **Definition:** A special Ingredient that crafts with a base weapon to produce a gem-infused
+  Crafted item with enhanced effects (Gem Staves, Gem Whips, etc.).
+- **In code:** Gems (Sapphire, Ruby, Topaz, Onyx, Emerald, Garnet, Force Wand) defined in
+  `src/data/items.js` as Ingredients; recipes in `src/data/recipes.js` combine gem + base
+  weapon.
+- **Not:** a regular Ingredient or Crafted item; a special upgrade path for weapons.
+
+### Errand
+- **Definition:** An NPC-initiated task that the player can accept and complete (e.g., fetch
+  an item, defeat an enemy type). Completion may unlock new zones or grant rewards.
+- **In code:** managed by `ErrandSystem`; NPC data includes errand definitions; state tracked
+  on `game.activeErrand`. NPCs spawn errand offer messages in NEUTRAL rooms.
+- **Not:** a dialogue choice (errands are transactional); not automatic (player must accept).
+
+### Fishing
+- **Definition:** An alternative gameplay mode where the player casts a line (Bobber) into
+  water, catches fish, and may encounter special NPCs (Rusalka).
+- **In code:** triggered in NEUTRAL rooms with water; `FishingSystem` handles Bobber physics
+  and catch mechanics. Uses `fishingSpots` data per zone.
+- **Not:** combat. Fishing is a non-violent, skill-based mini-game.
+
+### Polymorph
+- **Definition:** A special mechanic that temporarily transforms the player or enemies into a
+  different form with altered stats, movement, and abilities.
+- **In code:** `PolymorphSystem` in `src/systems/PolymorphSystem.js`; transformation state
+  tracked on entity. Can be applied by spells or consumables.
+- **Not:** a permanent stat change. Polymorph effects wear off or are explicitly reversed.
+
+### Warp
+- **Definition:** A mechanic that teleports the player or enemies to a different location
+  (room, zone, or special area) instantly, bypassing normal movement.
+- **In code:** `WarpSystem` in `src/systems/WarpSystem.js`; triggered by spells, special tiles,
+  or NPC interactions. Updates player position and triggers room entry logic.
+- **Not:** normal movement or pathfinding. Warp is instantaneous spatial displacement.
+
 ## Conventions
 
 - **Casing:** types/classes PascalCase; functions/variables camelCase; constants
