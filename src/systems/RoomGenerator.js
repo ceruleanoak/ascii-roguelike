@@ -1400,13 +1400,17 @@ export class RoomGenerator {
       );
       if (surfaceIdx === -1) continue;
       // Replace the surface rock with the secret vein rock.
-      // Override char/color so it renders identically to a regular '0' rock.
+      // Override char/color so it renders identically to the surrounding
+      // obsidian field (false obsidian — looks unbreakable, mines like a
+      // normal rock). The data-driven hp/indestructible/dropEffect for '@'
+      // are left untouched, so it stays mechanically a regular breakable rock.
       const secretSurface = new BackgroundObject('@', veinX, veinY);
       secretSurface.surfaceOnly = true;
+      secretSurface.falseObsidian = true;
       secretSurface.char = '0';
       secretSurface.animationChar = '0';
-      secretSurface.color = '#888888';
-      secretSurface.animationColor = '#888888';
+      secretSurface.color = '#333333';
+      secretSurface.animationColor = '#333333';
       room.backgroundObjects[surfaceIdx] = secretSurface;
       // Place the underground red marker at the same grid position.
       room.backgroundObjects.push(new BackgroundObject('⊙', veinX, veinY));
@@ -1414,10 +1418,11 @@ export class RoomGenerator {
       break;
     }
 
-    // ── Carve a hidden breakable trail through the obsidian field ────────────
-    // Single-cell-wide path from the nearest clearing's inner edge to the vein,
-    // left visually identical to surrounding obsidian (dark rock, same char) so
-    // the route can only be found by mining, not by looking at it.
+    // ── Carve a hidden trail of false obsidian through the field ─────────────
+    // Single-cell-wide path from the nearest clearing's inner edge to the vein.
+    // False obsidian renders identically to real obsidian (dark rock, same
+    // char) but mines like a normal rock — the route can only be found by
+    // mining, never by looking at it.
     if (veinCell) {
       const clearingEdges = [
         { col: 15, row: 5 },  // north
@@ -1443,14 +1448,17 @@ export class RoomGenerator {
 
       for (const { col, row } of trailCells) {
         const tx = col * GRID.CELL_SIZE, ty = row * GRID.CELL_SIZE;
+        // Only convert real obsidian fill rocks — never an entrance cap rock
+        // (those are deliberately indestructible and not flagged obsidian).
         const obj = room.backgroundObjects.find(
-          o => o.surfaceOnly && !o.destroyed && o.char === '0' &&
+          o => o.surfaceOnly && !o.destroyed && o.char === '0' && o.obsidian === true &&
                o.position.x === tx && o.position.y === ty
         );
         if (obj) {
-          // Breakable again, but keeps the dark obsidian color so the trail stays hidden.
+          // Breakable again, but keeps the dark obsidian color — false obsidian.
           obj.obsidian = false;
           obj.indestructible = false;
+          obj.falseObsidian = true;
         }
       }
     }
