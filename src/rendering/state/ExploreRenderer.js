@@ -20,11 +20,15 @@
  */
 
 import { GRID, COLORS, ROOM_TYPES } from '../../game/GameConfig.js';
+import { drawOffscreenEnemyIndicators } from '../ui/OffscreenEnemyIndicators.js';
+import { drawTamedRats } from '../ui/CompanionRenderers.js';
 import { INGREDIENTS } from '../../data/items.js';
 import { BRIDGE_MATERIALS } from '../../systems/RidgeSystem.js';
 import { PixelatedDissolve, SplitReveal } from '../effects/TextEffects.js';
 import { BossRenderer } from './BossRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
+import { isInteriorActive } from '../../systems/PlaneSystem.js';
+import { isWieldingTorch, drawPlayerTorchLight } from '../ui/torchLight.js';
 
 function drawDizzyOrbitals(ctx, cx, cy, timer) {
   const r = 6;
@@ -268,6 +272,32 @@ export class ExploreRenderer {
       this._updateAndDrawSouthVacuumParticles(_svpDt);
     }
 
+    // Settlement room: a wooden sign hovering above each hut's door, a
+    // smaller capital letter centered on it identifying the hut kind.
+    if (game.currentRoom.huts?.length) {
+      const HUT_DOOR_LABELS = { press: 'P', wise_man: 'W', alchemy: 'A', neutral_npc: 'E', fisherman: 'F', weapons_master: 'M' };
+      const CS = GRID.CELL_SIZE;
+      const ctx = this.renderer.fgCtx;
+      for (const hut of game.currentRoom.huts) {
+        const label = HUT_DOOR_LABELS[hut.hutKind];
+        if (!label || !hut.doorPosition) continue;
+        const cx = hut.doorPosition.col * CS + CS / 2;
+        const cy = (hut.doorPosition.row - 1) * CS + CS / 2;
+        ctx.save();
+        ctx.fillStyle = '#5a3a22';
+        ctx.fillRect(cx - CS / 2 + 1, cy - CS / 2 + 1, CS - 2, CS - 2);
+        ctx.strokeStyle = '#2e1f12';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cx - CS / 2 + 1, cy - CS / 2 + 1, CS - 2, CS - 2);
+        ctx.font = `${Math.round(CS * 0.65)}px 'VentureArcade', monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#00ff00';
+        ctx.fillText(label, cx, cy);
+        ctx.restore();
+      }
+    }
+
     // Draw exit letters (if exits are unlocked) - only for north/east/west
     // South is boolean (returns to REST), not a letter
     if (!game.currentRoom.exitsLocked) {
@@ -322,7 +352,7 @@ export class ExploreRenderer {
         const ex = game.currentRoom.exits.north;
         const { letter, color: baseColor } = ex;
         let displayColor;
-        if (game.preBossGateActive && letter === 'B') {
+        if ((game.preBossGateActive || game.preMinibossGateActive) && letter === 'B') {
           // Sinusoidal orange-to-red pulse (~3s period)
           const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 160);
           displayColor = `rgb(255,${Math.round(80 + 80 * pulse)},0)`;
@@ -617,12 +647,10 @@ export class ExploreRenderer {
     // When player is inside a hut, all interior-coord entities (player, combat,
     // particles) are rendered by HutInteriorOverlay at the correct canvas offset.
     // Skip them here to prevent ghosting at unshifted positions.
-    const inHut     = game.player.inHut;
-    const inDungeon = game.player.inDungeon ?? false;
-    const inMaze = game.player.inMaze;
+    const playerInInterior = isInteriorActive(game);
 
     // Draw consumable windups (dropped items during charge-up)
-    for (const windup of !inHut && !inMaze && !inDungeon ? game.inventorySystem.consumableWindups : []) {
+    for (const windup of !playerInInterior ? game.inventorySystem.consumableWindups : []) {
       // Blink effect: show/hide every 0.15 seconds, faster as timer runs out
       const blinkSpeed = Math.max(0.1, windup.timer * 0.15);
       const shouldShow = Math.floor(windup.blinkTimer / blinkSpeed) % 2 === 0;
@@ -695,17 +723,18 @@ export class ExploreRenderer {
 
     // Draw non-sapping enemies first (so they render behind player)
     // Skip when interior (overlay calls drawNonSappingEnemies after translate with activeFloor enemies)
-    if (!inHut && !inMaze && !inDungeon) {
+    if (!playerInInterior) {
       this.drawNonSappingEnemies(game, game.activeRoom.enemies);
+      drawOffscreenEnemyIndicators(this.renderer, game, game.activeRoom.enemies);
       // Tamed rats render through a dedicated minimal path — NPCRat doesn't
       // implement the full Enemy indicator surface (windup/memory/detection
       // /hover/sapping/spawn/blind indicators) so reusing the Enemy renderer
-      // would crash. See _renderTamedRats below.
-      if (game.tamedRats?.length) this._renderTamedRats(game);
+      // would crash. See CompanionRenderers.drawTamedRats.
+      if (game.tamedRats?.length) drawTamedRats(this.renderer, game, this.shouldRenderEntity);
     }
 
     // Detection system overlay (toggle with 'v' key)
-    if (game.showVectors && !inHut && !inMaze && !inDungeon) {
+    if (game.showVectors && !playerInInterior) {
       this._renderDetectionVisuals(game);
     }
 
@@ -725,7 +754,7 @@ export class ExploreRenderer {
 
     // Enemy frog tongues + mimic tongues — interior versions routed via overlay
     // (both helpers read game._activeEnemies(), so they resolve to the active layer).
-    if (!inHut && !inMaze && !inDungeon) {
+    if (!playerInInterior) {
       this.drawEnemyTongues(game);
       this.drawMimicTongues(game);
     }
@@ -735,10 +764,10 @@ export class ExploreRenderer {
 
     // Sticky triplines: permanent committed segments + live preview from player
     // to pendingAnchor. Red X above player when wire equipped but not over an anchor.
-    if (!inHut && !inMaze && !inDungeon) this._drawWires(game);
+    if (!playerInInterior) this._drawWires(game);
 
     // Draw cure Rusalka (polymorph reversal, Lake rooms) — skip when inHut/inMaze
-    if (!inHut && !inMaze && !inDungeon && game.cureRusalka) {
+    if (!playerInInterior && game.cureRusalka) {
       const r = game.cureRusalka;
       const ra = r.getPulseAlpha ? r.getPulseAlpha() : 1.0;
       this.renderer.drawTextWithAlpha(
@@ -754,7 +783,7 @@ export class ExploreRenderer {
     this.drawStuckArrows(game, false);
 
     // Draw wand proximity failure indicators — skip when inHut
-    if (!inHut && !inMaze && !inDungeon && game.combatSystem.wandProximityFailures) {
+    if (!playerInInterior && game.combatSystem.wandProximityFailures) {
       const blinkOn = Math.floor(performance.now() / 1000 * 8) % 2 === 0; // 8 Hz blink
       if (blinkOn) {
         for (const failure of game.combatSystem.wandProximityFailures) {
@@ -772,7 +801,7 @@ export class ExploreRenderer {
     }
 
     // Draw wand AOE effects — skip when inHut
-    if (!inHut && !inMaze && !inDungeon && game.combatSystem.aoeEffects) {
+    if (!playerInInterior && game.combatSystem.aoeEffects) {
       const fgCtx = this.renderer.fgCtx;
       for (const effect of game.combatSystem.aoeEffects) {
         const alpha = effect.maxTimer
@@ -805,7 +834,7 @@ export class ExploreRenderer {
     // Draw player — skip when inHut (overlay renders player at correct interior offset)
     // Tall-grass concealment fades rapidly in/out so stepping into cover
     // doesn't pop the player sprite.
-    if (!inHut && !inMaze && !inDungeon) {
+    if (!playerInInterior) {
     const playerHidden = this._isOnTallGrass(game, game.player.position.x, game.player.position.y);
     const concealAlpha = this._stepConcealmentAlpha(game.player, !playerHidden);
     if (concealAlpha > 0.005) {
@@ -852,7 +881,7 @@ export class ExploreRenderer {
     } // end player render block
 
     // Dizzy orbital particles — player
-    if (!inHut && !inMaze && !inDungeon && game.player.isDizzy()) {
+    if (!playerInInterior && game.player.isDizzy()) {
       drawDizzyOrbitals(
         this.renderer.fgCtx,
         game.player.position.x + GRID.CELL_SIZE / 2,
@@ -863,7 +892,7 @@ export class ExploreRenderer {
 
     // Draw staff-block stance: staff held perpendicular to facing direction,
     // ~1 cell forward from player center.
-    if (!inHut && !inMaze && !inDungeon && game.player.isStaffBlocking && game.player.heldItem) {
+    if (!playerInInterior && game.player.isStaffBlocking && game.player.heldItem) {
       const facingAngle = Math.atan2(game.player.facing.y, game.player.facing.x);
       const offset = GRID.CELL_SIZE * 0.9;
       const cx = game.player.position.x + GRID.CELL_SIZE / 2 + Math.cos(facingAngle) * offset;
@@ -875,23 +904,23 @@ export class ExploreRenderer {
     }
 
     // Draw known-spell indicators above player
-    if (!inHut && !inMaze && !inDungeon && game.knownSpells?.size > 0) {
+    if (!playerInInterior && game.knownSpells?.size > 0) {
       this._renderKnownSpellHints(game);
     }
 
     // Coin-in-pocket hint when standing in a usable W room. Tells the player
     // they have something coin-shaped without explaining what it's for.
-    if (!inHut && !inMaze && !inDungeon) {
+    if (!playerInInterior) {
       this._renderWellCoinHint(game);
     }
 
     // Draw "SPACE ENTER" prompt near exterior hut/dungeon/maze doors
-    if (!inHut && !inMaze && !inDungeon) {
+    if (!playerInInterior) {
       this._renderDoorPrompts(game);
     }
 
     // Draw gem wand held aloft (with shake) while charging
-    if (!inHut && !inMaze && !inDungeon) {
+    if (!playerInInterior) {
       const held = game.player.heldItem;
       if (held?.data?.gemWand && held.isCharging) {
         const C = GRID.CELL_SIZE;
@@ -916,7 +945,7 @@ export class ExploreRenderer {
     }
 
     // Draw blinking trap charge count above player (hidden during charge-up)
-    if (!inHut && !inMaze && !inDungeon && !game.trapCharging) {
+    if (!playerInInterior && !game.trapCharging) {
       const held = game.player.heldItem;
       if (held?.charges != null && held.charges > 0 && Math.floor(performance.now() / 200) % 2 === 0) {
         const C = GRID.CELL_SIZE;
@@ -932,16 +961,16 @@ export class ExploreRenderer {
     }
 
     // Draw trap throw reticule while charging (traps only — weapons use bow charge bar)
-    if (!inHut && !inMaze && !inDungeon) this.drawTrapReticule(game);
+    if (!playerInInterior) this.drawTrapReticule(game);
 
     // Draw in-flight throwables (traps + thrown weapons).
-    if (!inHut && !inMaze && !inDungeon) this.drawInFlightTraps(game, false);
+    if (!playerInInterior) this.drawInFlightTraps(game, false);
 
     // Draw sapping enemies on top of player — skip when interior (overlay handles via its own drawSappingEnemies call)
-    if (!inHut && !inMaze && !inDungeon) this.drawSappingEnemies(game, game.activeRoom.enemies);
+    if (!playerInInterior) this.drawSappingEnemies(game, game.activeRoom.enemies);
 
     // Draw boss composite (body + necks + multi-char heads) — skips individual entity rendering
-    if (!inHut && !inMaze && !inDungeon && game.bossSystem?.active) {
+    if (!playerInInterior && game.bossSystem?.active) {
       this.bossRenderer.renderBossComposite(game);
     }
 
@@ -949,7 +978,7 @@ export class ExploreRenderer {
     // Includes tall grass (|, \, /) and cut grass (,)
     // Only draw exterior grass when player is NOT inside a PiP interior — interiors
     // render their own foreground layer, and exterior grass must not bleed over the overlay.
-    if (!inHut && !inMaze && !inDungeon) {
+    if (!playerInInterior) {
       for (const obj of game.backgroundObjects) {
         if (obj.onFire) continue; // burning grass is drawn by the flicker pass below
         const isGrass = obj.char === '|' || obj.char === '\\' || obj.char === '/' || obj.char === ',';
@@ -972,7 +1001,7 @@ export class ExploreRenderer {
     }
 
     // Draw rolling rocks and edge-warning arrows (red zone only)
-    if (!inHut && !inMaze && !inDungeon && game.boulderSystem) {
+    if (!playerInInterior && game.boulderSystem) {
       const { rocks, warnings } = game.boulderSystem.getRenderData();
       const BOULDER_COLOR = '#aa7744';
       const WARN_COLOR = '#ffff00';
@@ -1001,14 +1030,14 @@ export class ExploreRenderer {
     }
 
     // Draw bow charge indicator — skip when inHut (overlay renders these)
-    if (!inHut && !inMaze && !inDungeon) this.renderController.bowChargeIndicator.render(game);
+    if (!playerInInterior) this.renderController.bowChargeIndicator.render(game);
 
     // Draw green ranger action cooldown indicator — skip when inHut
-    if (!inHut && !inMaze && !inDungeon) this.renderController.greenRangerIndicator.render(game);
+    if (!playerInInterior) this.renderController.greenRangerIndicator.render(game);
 
     // Sandstorm sand motes — yellow zone wind. Drawn over entities so motes
     // pass in front, under interior overlays so they don't bleed into the PiP.
-    if (!inHut && !inMaze && !inDungeon) {
+    if (!playerInInterior) {
       game.sandstormSystem?.render(this.renderer.fgCtx);
     }
 
@@ -1019,7 +1048,8 @@ export class ExploreRenderer {
     // Drawn after all entities so it clips both fg content and the bg canvas beneath.
     // Uses evenodd fill rule to punch a transparent hole at the player's position.
     if (game.currentRoom?.underground && game.player?.plane === 1) {
-      const fogRadius = (game.currentRoom.underground.caveFogRadius || 5) * GRID.CELL_SIZE;
+      const torchLit = isWieldingTorch(game);
+      const fogRadius = (game.currentRoom.underground.caveFogRadius || 5) * GRID.CELL_SIZE * (torchLit ? 1.5 : 1);
       const px = game.player.position.x + GRID.CELL_SIZE / 2;
       const py = game.player.position.y + GRID.CELL_SIZE / 2;
       const envColors = game.zoneSystem.getBlendedEnvironmentColors(game.currentRoom.zone);
@@ -1031,11 +1061,12 @@ export class ExploreRenderer {
       ctx.arc(px, py, fogRadius, 0, Math.PI * 2);
       ctx.fill('evenodd');
       ctx.restore();
+      if (torchLit) drawPlayerTorchLight(this.renderer, px, py);
     }
 
     // Gray zone mist: surface-plane '~' glyph field (cave fog above owns plane 1).
     // After entities — mist hangs in front of them — before Tab overlay and PiPs.
-    if (!inHut && !inMaze && !inDungeon) {
+    if (!playerInInterior) {
       game.grayZoneSystem?.renderMist(this.renderer.fgCtx, game);
     }
 
@@ -1044,15 +1075,9 @@ export class ExploreRenderer {
       this.renderController.inventoryOverlay.render(game);
     }
 
-    // Render hut interior overlay (picture-in-picture) when player is inside a hut or dungeon
-    if (game.player.inHut || game.player.inDungeon) {
-      this.renderController.hutInteriorOverlay.render(game);
-    }
-
-    // Render maze interior overlay (scrolling viewport) when player is inside a maze
-    if (game.player.inMaze) {
-      this.renderController.mazeInteriorOverlay.render(game);
-    }
+    // Render the active interior overlay (picture-in-picture). Single dispatch
+    // point — routes to hut/dungeon/maze (and future pond) by active kind.
+    this.renderController.interiorOverlay.render(game);
 
     // Well ritual: spinning coin arc + post-ritual screen flash
     this._renderWellRitual(game);
@@ -1171,7 +1196,7 @@ export class ExploreRenderer {
     const companion = game.companion;
     // When the player is inside a hut/dungeon PiP, the companion is rendered
     // by HutInteriorOverlay instead of the main fg pass.
-    if (companion && !drawn.has(companion) && !game.player?.inHut) {
+    if (companion && !drawn.has(companion) && !game.player?.inHut && !game.player?.inDungeon) {
       companion.render(ctx, gridToPixel);
     }
 
@@ -1387,7 +1412,7 @@ export class ExploreRenderer {
     // variants. Use the active layer's background objects so interior enemies
     // check interior grass, not exterior grass.
     const groundEnemy = enemy.data?.float !== true;
-    const applyGrass = enemy.data?.grassStealth || groundEnemy;
+    const applyGrass = !enemy.data?.isDummy && (enemy.data?.grassStealth || groundEnemy);
     let concealAlpha = 1;
     if (applyGrass) {
       const hidden = this._isOnTallGrass(game, enemy.position.x, enemy.position.y);
@@ -1490,9 +1515,21 @@ export class ExploreRenderer {
         displayColor = Math.floor(Date.now() / 120) % 2 === 0 ? deathColor : displayColor;
       }
 
-      // Giant Slime renders as a huge 'o' (same as regular slime, just enormous).
-      // Lift visually during the leap arc; compress slightly during windup so the player reads the telegraph.
-      if (enemy.char === 'M') {
+      if (enemy.data?.isDummy) {
+        const pos = enemy.position;
+        let wobbleX = 0;
+        if (enemy.invulnerabilityTimer > 0) {
+          const t = Date.now() / 1000;
+          wobbleX = Math.round(Math.sin(t * 90 + pos.x) * 2);
+        }
+        const cx = pos.x + GRID.CELL_SIZE / 2 + wobbleX;
+        const cy = pos.y + GRID.CELL_SIZE / 2;
+        this.renderer[drawMethod](cx, cy + GRID.CELL_SIZE, '|', displayColor);
+        this.renderer[drawMethod](cx, cy, '@', displayColor);
+      } else if (enemy.char === 'M' && enemy.data?.splitOnDamage?.enabled) {
+        // Giant Slime renders as a huge 'o' (same as regular slime, just enormous).
+        // Gated on splitOnDamage, not just char 'M' — Moose (HuntingSystem) shares it.
+        // Lift visually during the leap arc; compress slightly during windup so the player reads the telegraph.
         const liftY = enemy.leapArcLift || 0;
         const windupSquash = enemy.leapWindupActive ? Math.min(0.85, 1 - (enemy.leapWindupTimer / (enemy.data.leapAttack?.windupTime || 1)) * 0.15) : 1;
         this.renderer.fgCtx.save();
@@ -1851,16 +1888,17 @@ export class ExploreRenderer {
    * - Tunnel walls: Always rendered (handled separately as background objects)
    */
   shouldRenderEntity(entity, player, room) {
-    // No tunnel/underground room - always render
-    if (!room.tunnel && !room.underground) return true;
-
-    const playerPlane = player.plane !== undefined ? player.plane : 0;
     const entityPlane = entity.plane !== undefined ? entity.plane : 0;
 
     // Standard plane (0) ALWAYS renders
     if (entityPlane === 0) {
       return true;
     }
+
+    // No tunnel/underground room - plane 1 still hides (e.g. burrowed game animals)
+    if (!room.tunnel && !room.underground) return false;
+
+    const playerPlane = player.plane !== undefined ? player.plane : 0;
 
     // Tunnel plane (1) ONLY renders if player is in tunnel
     if (entityPlane === 1) {
@@ -2362,23 +2400,6 @@ export class ExploreRenderer {
     }
   }
 
-  // Minimal NPCRat render: char + color + iframe white-flash. NPCRats don't
-  // carry the full Enemy indicator surface (windup, sapping, hover, etc.) so
-  // we don't try to reuse renderEnemy.
-  _renderTamedRats(game) {
-    for (const rat of game.tamedRats) {
-      if (!this.shouldRenderEntity(rat, game.player, game.currentRoom)) continue;
-      const flash = rat.getIframeFlashColor?.();
-      const color = flash !== null && flash !== undefined ? flash : rat.color;
-      this.renderer.drawEntity(
-        rat.position.x + GRID.CELL_SIZE / 2,
-        rat.position.y + GRID.CELL_SIZE / 2,
-        rat.char,
-        color
-      );
-    }
-  }
-
   drawSappingEnemies(game, enemies) {
     for (const enemy of enemies) {
       if (!enemy.sapping) continue;
@@ -2626,6 +2647,7 @@ export class ExploreRenderer {
       this.renderer[drawMethod](cx, cy + Math.sin(performance.now() / 400 + (item.position.x + item.position.y) * 0.01) * 3, item.char, item.color);
     }
   }
+
 
   // Sticky triplines. `interior=true` is called from HutInteriorOverlay with the
   // interior-coord translate already applied to fgCtx, so triplines come from

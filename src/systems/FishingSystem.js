@@ -84,6 +84,9 @@ export class FishingSystem {
   }
 
   roomCleared(game) {
+    // A frozen room (player inside a hut/dungeon/maze) has its enemies parked
+    // on _frozenEnemies, not actually defeated — don't read it as cleared.
+    if (game.currentRoom?._frozenEnemies) return false;
     return game.currentRoom?.enemies?.length === 0;
   }
 
@@ -498,6 +501,23 @@ export class FishingSystem {
           reward.position.x + scatter(),
           reward.position.y + scatter()
         );
+      }
+    }
+  }
+
+  checkRewardObjectHits(meleeAttacks, spawnIngredientFn, spawnSpecialFn) {
+    if (!this.rewardObjects.length || !meleeAttacks.length) return;
+    for (const attack of meleeAttacks) {
+      if (!attack.isBlade) continue;
+      const atkX = attack.position.x, atkY = attack.position.y;
+      const atkR = (attack.radius || GRID.CELL_SIZE) + GRID.CELL_SIZE;
+      for (const reward of this.rewardObjects) {
+        if (!reward.alive) continue;
+        const dx = reward.position.x + GRID.CELL_SIZE / 2 - atkX;
+        const dy = reward.position.y + GRID.CELL_SIZE / 2 - atkY;
+        if (dx * dx + dy * dy < atkR * atkR) {
+          this.hitRewardObject(reward, spawnIngredientFn, spawnSpecialFn);
+        }
       }
     }
   }

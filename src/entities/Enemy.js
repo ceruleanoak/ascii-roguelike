@@ -1,5 +1,5 @@
 import { GRID, COLORS, PHYSICS } from '../game/GameConfig.js';
-import { ENEMIES } from '../data/enemies.js';
+import { ENEMIES, resolveHitSfx } from '../data/enemies.js';
 
 // Effect → affinity mapping. An effect with a mapped affinity is auto-immuned when the
 // receiving enemy's `data.affinities` includes that affinity (no explicit immunity needed).
@@ -37,6 +37,8 @@ import { ArmorMechanic } from './enemyMechanics/ArmorMechanic.js';
 import { PotionMechanic } from './enemyMechanics/PotionMechanic.js';
 import { SplitOnDamageMechanic } from './enemyMechanics/SplitOnDamageMechanic.js';
 import { RiseAgainMechanic } from './enemyMechanics/RiseAgainMechanic.js';
+import { PatrolMechanic } from './enemyMechanics/PatrolMechanic.js';
+import { GameAnimalMechanic } from './enemyMechanics/GameAnimalMechanic.js';
 
 // ─── Enemy AI Debug Logger ─────────────────────────────────────────────────
 // Toggle in browser console: window.ENEMY_AI_DEBUG = true
@@ -63,9 +65,10 @@ const ENEMY_BLINK_FREQUENCY = 0.05; // blink every 0.05 seconds
 const DOT_BLINK_FREQUENCY = 0.2; // DOT blink every 0.2 seconds (slower than i-frames)
 
 export class Enemy {
-  constructor(char, x, y, depth = 0) {
+  constructor(char, x, y, depth = 0, dataOverride = null) {
     this.char = char;
-    this.data = ENEMIES[char] || {
+    // dataOverride: for enemies spawned outside the ENEMIES char registry (e.g. Eel, Moose, Rabbit).
+    this.data = dataOverride || ENEMIES[char] || {
       char,
       name: 'Unknown',
       hp: 1,
@@ -88,6 +91,7 @@ export class Enemy {
     this.hp = Math.ceil(this.data.hp * depthMultiplier);
     this.maxHp = this.hp;
     this.mass = this.data.mass ?? 1;
+    this.knockbackResistance = this.data.knockbackResistance ?? 0;
     this.speed = this.data.speed;
     this.accelRate = this.data.acceleration || PHYSICS.ENEMY_ACCELERATION;
     this.damage = Math.ceil(this.data.damage * depthMultiplier);
@@ -331,6 +335,10 @@ export class Enemy {
     if (RiseAgainMechanic.isEnabled(this)) RiseAgainMechanic.init(this);
 
     if (GooSpewMechanic.isEnabled(this)) GooSpewMechanic.init(this);
+
+    if (PatrolMechanic.isEnabled(this)) PatrolMechanic.init(this);
+
+    GameAnimalMechanic.init(this);
 
     if (LeapAttackMechanic.isEnabled(this)) LeapAttackMechanic.init(this);
 
@@ -612,6 +620,7 @@ export class Enemy {
     // (Earlier impl multiplied raw velocity post-blend, which compounded each frame
     // against any large velocity impulse — e.g. the melee leap — into a runaway.)
     if (this.rallyBoostTimer > 0) m *= (this._rallyBoostMultiplier ?? 1.3);
+    if (this.gaSlowStacks) m *= Math.max(0.25, 1 - this.gaSlowStacks * 0.1);
     return m;
   }
 
@@ -802,6 +811,14 @@ export class Enemy {
     // Knockback overrides AI (keeps velocity set by knockback)
     if (this.isKnockedBack()) {
       this.state = 'idle';
+      return { dotDamage: dotDamageEvents };
+    }
+
+    // Pacifist designation: never enters the combat aggro/chase/attack state
+    // machine below — movement is fully owned by the enemy's own mechanic(s)
+    // (e.g. GameAnimalMechanic's flee/burrow for Moose/Rabbit).
+    if (this.data.pacifist) {
+      GameAnimalMechanic.update(this, { deltaTime });
       return { dotDamage: dotDamageEvents };
     }
 
@@ -1392,6 +1409,8 @@ export class Enemy {
     JumpMechanic.update(this, { deltaTime });
 
     FlockMechanic.updateSwirl(this, { deltaTime });
+
+    PatrolMechanic.update(this, { deltaTime });
 
     // State transition logging (only fires when state actually changes)
     if (this.state !== this._prevState) {
@@ -3008,6 +3027,9 @@ export class Enemy {
   }
 
   takeDamage(amount, attackId = null) {
+    // Training dummy: indestructible, but still runs the hit SFX/blink pipeline below.
+    if (this.data?.isDummy) amount = 0;
+
     // Shell form: immune to all damage; knockback still applies via physics
     if (this.inShellForm) return false;
 
@@ -3031,7 +3053,7 @@ export class Enemy {
     // main.js so it isn't doubled up here. `sfx.hit` may be a string or an
     // array of strings (random pick).
     if (this.hp > 0) {
-      const hitSfx = this.data?.sfx?.hit ?? 'enemy_hit';
+      const hitSfx = this.data?.sfx?.hit ?? resolveHitSfx(this.data);
       const name = Array.isArray(hitSfx)
         ? hitSfx[Math.floor(Math.random() * hitSfx.length)]
         : hitSfx;
@@ -3326,6 +3348,7 @@ export class Enemy {
         childHp
       }
     });
+    this.game?.audioSystem?.playSFX('goo_split');
   }
 
   registerSplitChild(child, cfg) {
@@ -3357,7 +3380,7 @@ export class Enemy {
     if (!value) return;
     const max = this.data.hp;
     this.hp = Math.min(max, this.hp + value);
-    this.game?.audioSystem?.playSFX('goo_hit');
+    this.game?.audioSystem?.playSFX('goo_reabsorb');
   }
 
   getSpawnIndicator() {

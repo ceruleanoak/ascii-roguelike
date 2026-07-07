@@ -112,7 +112,8 @@ export const EXIT_LETTERS = {
     weight: 0.08,
     zoneBoosts: {
       yellow: 1.3,
-      red: 1.2
+      red: 1.2,
+      cyan: 2.0
     },
     spellDescription: 'A TRAP FOR FOOLS.'
   },
@@ -136,11 +137,35 @@ export const EXIT_LETTERS = {
     },
     spellDescription: 'THE STONES REMEMBER.'
   },
+  'Q': {
+    name: 'Quagmire',
+    roomType: 'COMBAT',
+    // Rare and green-only: low base weight, all non-green boosts zeroed.
+    weight: 0.04,
+    zoneBoosts: {
+      green: 1.5,
+      yellow: 0,
+      red: 0,
+      cyan: 0,
+      gray: 0
+    },
+    spellDescription: 'THE MIRE REMEMBERS HER.'
+  },
   'R': {
     name: 'Ridge',
     roomType: 'RIDGE',
     weight: 0.10,
     spellDescription: 'HIGH GROUND AHEAD.'
+  },
+  'S': {
+    name: 'Settlement',
+    roomType: 'SETTLEMENT',
+    weight: 0.10,
+    zoneBoosts: {
+      green: 1.5,
+      yellow: 1.2
+    },
+    spellDescription: 'WHERE PATHS GATHER.'
   },
   'T': {
     name: 'Tunnel',

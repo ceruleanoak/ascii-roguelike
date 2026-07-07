@@ -73,8 +73,8 @@ export class TitleRenderer {
     // Animation phases
     const SHIMMER_DURATION = 2.0;
     const FADE_START = 2.0;
-    const FADE_DURATION = 3.0;
-    const TITLE_START = 5.0;
+    const FADE_DURATION = 2.0;
+    const TITLE_START = 4.5;
     const TITLE_DURATION = 4.0;
     const PRESS_SPACE_START = 10.0;
 
@@ -245,21 +245,25 @@ export class TitleRenderer {
       const titleText = "PURE ROGUE";
       const titleLength = titleText.length;
 
-      // Number of letters to show
-      const lettersToShow = Math.floor(titleProgress * titleLength);
+      // Number of letters to show (ceil so the currently-brightening letter renders too)
+      const lettersToShow = Math.min(Math.ceil(titleProgress * titleLength), titleLength);
 
-      // Draw letters vertically on far right
+      // Draw letters vertically on far right, kerned with a blank row between each
       const titleX = GRID.WIDTH - GRID.CELL_SIZE * 2;
-      const titleStartY = GRID.HEIGHT / 2 - (titleLength * GRID.CELL_SIZE) / 2;
+      const letterSpacing = GRID.CELL_SIZE * 2;
+      const totalSpan = (titleLength - 1) * letterSpacing;
+      const titleStartY = GRID.HEIGHT / 2 - totalSpan / 2 - GRID.CELL_SIZE;
 
       for (let i = 0; i < lettersToShow; i++) {
         const letter = titleText[i];
-        const letterY = titleStartY + i * GRID.CELL_SIZE;
+        const letterY = titleStartY + i * letterSpacing;
 
-        // Each letter fades in completely before next starts
-        const letterFadeProgress = Math.min((titleProgress * titleLength - i), 1.0);
+        // Two-step reveal: letter snaps in dark gray, then snaps to white
+        // the instant the next letter appears dark gray.
+        const letterProgress = titleProgress * titleLength - i;
+        const isCurrent = letterProgress < 1.0;
 
-        this.renderer.fgCtx.fillStyle = `rgba(255, 255, 255, ${letterFadeProgress})`;
+        this.renderer.fgCtx.fillStyle = isCurrent ? '#404040' : '#ffffff';
         this.renderer.fgCtx.fillText(letter, titleX, letterY);
       }
     }

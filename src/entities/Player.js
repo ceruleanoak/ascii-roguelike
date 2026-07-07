@@ -1,8 +1,10 @@
 import { PHYSICS, GRID, COLORS, PLAYER_STATS } from '../game/GameConfig.js';
 
-const INVULNERABILITY_DURATION = 1.0; // seconds
-const BLINK_FREQUENCY = 0.1; // blink every 0.1 seconds
-const DAGGER_POST_DODGE_CRIT_WINDOW = 0.6; // seconds of guaranteed-crit after a dodge for any dagger
+const INVULNERABILITY_DURATION = 1.0;
+const BLINK_FREQUENCY = 0.1;
+const SPAWN_FADE_DURATION = 0.9;
+const EXIT_FADE_DURATION = 0.3;
+const DAGGER_POST_DODGE_CRIT_WINDOW = 0.6;
 
 // Additively blend a tint color onto a base hex color. factor 0–1 controls tint intensity.
 function additiveTint(base, tint, factor = 0.5) {
@@ -49,24 +51,24 @@ export class Player {
     this.slowEnemies = false;
     this.burnResist = 0;        // 0–1 fraction of burn DoT damage absorbed (stackable with fireImmune)
     this.massBonus = 0;         // added to base mass; higher mass = less knockback received
-    this.rollCooldownMult = 1.0; // multiplier on dodge cooldown (< 1 = faster recharge, > 1 = slower)
+    this.rollCooldownMult = 1.15; // multiplier on dodge cooldown (< 1 = faster recharge, > 1 = slower); baseline nudged up from 1.0 — unarmored rolling was too frequent
     this.extraIframes = 0;      // extra seconds of invulnerability granted after a dodge roll
 
     this.quickSlots = [null, null, null]; // 3-slot loadout
     this.activeSlotIndex = 0; // Currently selected slot (0-2)
     this.destroyedSlots = [false, false, false]; // Slots permanently disabled by wish use
+    this.selectedConsumableIndex = -1; // armed consumable slot; -1 = weapon controls SPACE
 
     // Magic meter — converted consumable slot(s) used as a mana gauge.
-    // Activated via well/cauldron or cheat menu (per-slot upgrade), or auto-
-    // activated for the Yellow Mage (all consumable slots locked to mana on
-    // character select). slots holds the indices into equippedConsumables that
-    // currently display the mana fill. active is true iff slots.length > 0.
-    // Resets on death.
+    // slots holds indices into equippedConsumables showing the mana fill.
+    // active reflects MagicSystem.effectiveManaSlotCount() (applies the
+    // per-character Yellow/Red modifier). Resets on death.
     this.magicMeter = {
       active: false,
       slots: [],
       current: 0,
-      max: 10
+      max: 10,
+      freeSlotGranted: false
     };
     this.inventory = []; // Ingredients only
     this.activeSappingBats = []; // Bats currently latched to this player (up to 3)
@@ -78,6 +80,10 @@ export class Player {
     this.invulnerabilityTimer = 0;
     this.invulnerabilityDuration = INVULNERABILITY_DURATION;
     this.attackBlockTimer = 0; // Blocks attacks during extended iframe period (cyan rogue)
+    this.spawnFadeTimer = SPAWN_FADE_DURATION;
+    this.spawnFadeDuration = SPAWN_FADE_DURATION;
+    this.spawnFadeHeld = false;
+    this.exitFadeTimer = 0;
 
     // Physics flags
     this.mass = 1; // Affects knockback received. Armor/character type may modify this.
@@ -85,9 +91,9 @@ export class Player {
     this.boundToGrid = true;
     this.collisionMap = null; // Set by game state
     this.plane = 0; // 0=normal plane, 1=tunnel plane
-    this.inHut = false; // true while inside a hut interior overlay
+    // Interior membership (ADR-0001); accessors on prototype (InteriorManager.js).
+    this._activeInteriorKind = null; // null | 'hut' | 'dungeon' | 'maze'
     this.hutExitPosition = null; // saved exterior position when entering a hut
-    this.inMaze = false; // true while inside a maze interior
     this.mazeExitPosition = null; // saved exterior position when entering a maze
 
     // Polymorph state (managed by PolymorphSystem)
@@ -106,8 +112,7 @@ export class Player {
     this.grabbed   = false; // true while a GooHead has the player in its grip
     this.grabbedBy = null;  // reference to the GooHead holding the player
 
-    // Interior state
-    this.inDungeon = false;        // true while inside a dungeon interior
+    // Interior state (inDungeon derived from _activeInteriorKind; see ADR-0001)
     this.dungeonExitPosition = null; // saved exterior position when entering a dungeon
 
     // Wet status
@@ -218,7 +223,8 @@ export class Player {
       slopeFreeTime: 5 / 60, // seconds of unimpeded roll on a slope (~20 frames at 60fps)
       slopeTimer:    0,        // countdown for the remaining slope-roll window
       slopeActive:   false,    // true once a slope tile was detected during this roll
-      slopeLocked:   false     // true during mercy phase: roll velocity zeroed, slope takes over
+      slopeLocked:   false,    // true during mercy phase: roll velocity zeroed, slope takes over
+      daggerAutoFire: false
     };
 
     // Post-dodge crit window — set when dodge ends if equipped weapon has critAfterDodge.
@@ -296,10 +302,10 @@ export class Player {
       return;
     }
 
-    // Check if charging a bow (for movement slowdown). Bat windup (batCharge)
-    // is exempt from the full stop — it moves at half speed instead (see the
-    // batChargeMult max-speed clamp below).
-    const isChargingBow = this.heldItem && this.heldItem.isCharging && !this.heldItem.data?.batCharge;
+    // Check if charging a bow (for movement slowdown). Bat/flail charges are
+    // exempt from the full stop — reduced speed instead (see mult below).
+    const isChargingBow = this.heldItem && this.heldItem.isCharging
+      && !this.heldItem.data?.batCharge && !this.heldItem.data?.flailSpin;
 
     // Calculate target acceleration based on input (1.5x acceleration when unarmed)
     // Polymorph speed/accel overrides (set by PolymorphSystem when in frog form)
@@ -377,9 +383,11 @@ export class Player {
     const batMax = this.batFormTimer > 0 ? armorModified * 1.8 : armorModified;
     const boostedMax = this.speedBoostTimer > 0 ? Math.max(batMax, armorModified * this.speedBoostMultiplier) : batMax;
     const firingMult = this.firingSlowTimer > 0 ? 0.35 : 1; // Dramatic ~65% slow while firing a gun
-    // Bat windup: half speed while charging — slowed like other charge weapons, but not the bow's full stop
-    const batChargeMult = (this.heldItem?.isCharging && this.heldItem.data?.batCharge) ? 0.5 : 1;
-    const finalMax = boostedMax * this.getStatusSpeedMultiplier() * firingMult * batChargeMult; // Apply status effect slows (goo, freeze)
+    // Bat: half speed while charging. Flail: 1/8 speed while spinning up.
+    const chargeMult = !this.heldItem?.isCharging ? 1
+      : this.heldItem.data?.batCharge ? 0.5
+      : this.heldItem.data?.flailSpin ? 0.05 : 1;
+    const finalMax = boostedMax * this.getStatusSpeedMultiplier() * firingMult * chargeMult;
     const speed = Math.sqrt(this.velocity.vx ** 2 + this.velocity.vy ** 2);
     if (speed > finalMax) {
       this.velocity.vx = (this.velocity.vx / speed) * finalMax;
@@ -408,7 +416,10 @@ export class Player {
   applyWet(duration) { this.wetDuration = Math.max(this.wetDuration, duration); }
 
   isBurning() { return this.burnDuration > 0; }
-  applyBurn(duration) { this.burnDuration = Math.max(this.burnDuration, duration); }
+  applyBurn(duration) {
+    if (this.burnDuration <= 0) this.burnTickTimer = this.burnTickRate;
+    this.burnDuration = Math.max(this.burnDuration, duration);
+  }
 
   applySpeedBoost(duration) { this.speedBoostTimer = Math.max(this.speedBoostTimer, duration); }
   applyStoneSkin(duration, bonus) {
@@ -540,6 +551,7 @@ export class Player {
   }
 
   update(deltaTime) {
+    this.dodgeRoll.justEnded = false;
     // Update status effects
     this.updateStatusEffects(deltaTime);
 
@@ -549,6 +561,9 @@ export class Player {
     this.updateDodgeRoll(deltaTime);
     // Update Shark Mask dive (auto-ends on timer expire or leaving water)
     this.updateSharkDive(deltaTime);
+
+    if (!this.spawnFadeHeld) this.spawnFadeTimer = Math.max(0, this.spawnFadeTimer - deltaTime);
+    this.exitFadeTimer = Math.max(0, this.exitFadeTimer - deltaTime);
 
     // Update invulnerability timer
     if (this.invulnerabilityTimer > 0) {
@@ -788,7 +803,7 @@ export class Player {
 
     // Active roll movement
     if (this.dodgeRoll.active) {
-      // ── Slope / ice lock phase ─────────────────────────────────────────────
+      // Slope / ice lock phase
       // When the player enters a slope or frozen-ice tile during a roll, a
       // free-time window opens (slopeFreeTime ≈ 20 frames).  During that window
       // the roll velocity drives movement as normal ("burst").  Once the window
@@ -807,13 +822,13 @@ export class Player {
           }
         }
       }
-      // ──────────────────────────────────────────────────────────────────────
 
       this.dodgeRoll.timer -= deltaTime;
 
       if (this.dodgeRoll.timer <= 0) {
         // Roll complete — zero out velocity and deactivate
         this.dodgeRoll.active = false;
+        this.dodgeRoll.justEnded = true;
         this.velocity.vx = 0;
         this.velocity.vy = 0;
         this.acceleration.ax = 0;
@@ -824,6 +839,7 @@ export class Player {
         const activeWeapon = this.quickSlots?.[this.activeSlotIndex];
         if (activeWeapon?.data?.weaponSubtype === 'dagger') {
           this.postDodgeCritTimer = DAGGER_POST_DODGE_CRIT_WINDOW;
+          this.dodgeRoll.daggerAutoFire = true;
         }
       } else if (this.dodgeRoll.type !== 'blink') {
         if (this.dodgeRoll.slopeLocked) {
@@ -943,6 +959,7 @@ export class Player {
 
   canAttack() {
     if (this.attackBlockTimer > 0) return false;
+    if (this.dodgeRoll.justEnded) return false;
     if (this.characterType === 'green' && this.actionCooldown > 0) return false;
     if (this.characterType === 'green' && this.continuousRollActive) return false;
     return true;
@@ -957,11 +974,9 @@ export class Player {
   }
 
   getVisibilityAlpha() {
-    // Fade to 40% alpha during invulnerability frames (instead of blinking)
-    if (this.invulnerabilityTimer > 0) {
-      return 0.4;
-    }
-    return 1.0;
+    const base = this.invulnerabilityTimer > 0 ? 0.4 : 1;
+    const p = Math.floor((this.exitFadeTimer > 0 ? this.exitFadeTimer / EXIT_FADE_DURATION : 1 - this.spawnFadeTimer / this.spawnFadeDuration) * 5) / 5;
+    return base * p;
   }
 
   shouldRenderVisible() {
@@ -985,29 +1000,25 @@ export class Player {
     }
   }
 
-  pickupItem(item) {
+  pickupItem(item, selectedSlotIdx = 0) {
     // Apply trap capacity affinity (e.g. Gray Assassin: +1 trap charge on pickup)
-    if (item && item.data && item.data.type === 'TRAP' && item.charges != null) {
-      const trapAffinity = this.weaponAffinities && this.weaponAffinities['trap'];
-      if (trapAffinity && trapAffinity.additionalCharge) {
-        item.charges += trapAffinity.additionalCharge;
-      }
+    if (item?.data?.type === 'TRAP' && item.charges != null) {
+      const affinity = this.weaponAffinities?.['trap'];
+      if (affinity?.additionalCharge) item.charges += affinity.additionalCharge;
     }
 
-    // Find first empty, non-destroyed slot
-    const emptySlotIdx = this.quickSlots.findIndex(
-      (slot, i) => slot === null && !this.destroyedSlots[i]
-    );
+    // Prefer selected slot if empty, else first empty
+    const empty = (i) => this.quickSlots[i] === null && !this.destroyedSlots[i];
+    const targetSlot = (empty(selectedSlotIdx) ? selectedSlotIdx : this.quickSlots.findIndex((_, i) => empty(i)));
 
-    if (emptySlotIdx !== -1) {
-      this.quickSlots[emptySlotIdx] = item;
-      return null; // No item dropped
+    if (targetSlot !== -1) {
+      this.quickSlots[targetSlot] = item;
+      return null;
     } else {
-      // All usable slots full - swap with active slot (prefer non-destroyed)
       let swapIdx = this.activeSlotIndex;
       if (this.destroyedSlots[swapIdx]) {
         swapIdx = this.quickSlots.findIndex((_, i) => !this.destroyedSlots[i]);
-        if (swapIdx === -1) return item; // all slots destroyed, can't pick up
+        if (swapIdx === -1) return item;
       }
       const droppedItem = this.quickSlots[swapIdx];
       this.quickSlots[swapIdx] = item;
@@ -1122,12 +1133,24 @@ export class Player {
   }
 
   // Reset trap charges for each trap in quick slots (called on room entry).
-  resetTrapsForNewRoom() {
+  // Charges = total copies of that trap type currently held (equipped + chest/pending),
+  // so crafting more of a trap increases how many can be deployed per room.
+  resetTrapsForNewRoom(inventorySystem) {
     for (const slot of this.quickSlots) {
       if (slot?.data?.type === 'TRAP') {
-        slot.charges = slot.data.charges ?? 3;
+        slot.charges = this.countHeldTraps(slot.char, inventorySystem);
       }
     }
+  }
+
+  countHeldTraps(char, inventorySystem) {
+    let count = this.quickSlots.filter((s) => s?.char === char).length;
+    if (inventorySystem) {
+      const sumStacked = (arr) => arr.reduce((sum, i) => (i.char === char ? sum + (i.count || 1) : sum), 0);
+      count += sumStacked(inventorySystem.itemChest);
+      count += sumStacked(inventorySystem.pendingChestDeposits);
+    }
+    return count;
   }
 
   reset() {
@@ -1138,8 +1161,9 @@ export class Player {
     this.quickSlots = [null, null, null];
     this.activeSlotIndex = 0;
     this.destroyedSlots = [false, false, false];
+    this.selectedConsumableIndex = -1;
     this.inventory = [];
-    this.magicMeter = { active: false, slots: [], current: 0, max: 10 };
+    this.magicMeter = { active: false, slots: [], current: 0, max: 10, freeSlotGranted: false };
 
     // Reset new buff timers
     this.stoneSkinTimer = 0; this.stoneSkinBonus = 0;
@@ -1173,7 +1197,7 @@ export class Player {
     this.burnResist = 0;
     this.massBonus = 0;
     this.mass = 1;
-    this.rollCooldownMult = 1.0;
+    this.rollCooldownMult = 1.15;
     this.extraIframes = 0;
     this.fishingLocked = false;
     this.rusalkaInputScale = 1.0;
@@ -1259,11 +1283,9 @@ export class Player {
 
     // Reset plane and interior state
     this.plane = 0;
-    this.inHut = false;
+    this._activeInteriorKind = null;
     this.hutExitPosition = null;
-    this.inMaze = false;
     this.mazeExitPosition = null;
-    this.inDungeon = false;
     this.dungeonExitPosition = null;
 
     // Polymorph state

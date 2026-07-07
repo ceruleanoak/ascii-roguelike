@@ -26,14 +26,19 @@ export const INGREDIENT_MANA_VALUES = {
   r: 1,   // Root
   v: 2,   // Venom
   // Gems
-  '1': 4, // Topaz
-  '9': 4, // Garnet
-  '`': 5, // Emerald
-  '?': 5, // Ruby
-  '(': 5, // Sapphire
-  '6': 6, // Onyx
-  '_': 8  // Diamond
+  '◇': 4, // Topaz
+  '⬥': 4, // Garnet
+  '⬦': 5, // Emerald
+  '◈': 5, // Ruby
+  '⬨': 5, // Sapphire
+  '⬧': 6, // Onyx
+  '⧫': 8  // Diamond
 };
+
+// Capacity contributed by each converted mana slot. The pool is cumulative —
+// two slots hold twice the mana of one — rather than a fixed total split
+// across however many slots are active.
+const PER_SLOT_MANA_MAX = 10;
 
 export class MagicSystem {
   constructor(game) {
@@ -41,6 +46,15 @@ export class MagicSystem {
   }
 
   // ─── Meter activation ────────────────────────────────────────────────────
+
+  // Recompute meter.max from the current slot count and clamp current to it.
+  // Call after any mutation of meter.slots — this is the single source of
+  // truth for pool capacity (never set meter.max directly elsewhere).
+  recalcMax(meter) {
+    if (!meter) return;
+    meter.max = PER_SLOT_MANA_MAX * Math.max(1, meter.slots?.length || 0);
+    meter.current = Math.min(meter.current || 0, meter.max);
+  }
 
   // Add a single consumable slot to the magic meter. Called by the well
   // ritual, cauldron hex, or cheat menu — the per-slot upgrade path.
@@ -53,64 +67,61 @@ export class MagicSystem {
 
     let target = slotIndex;
     if (target == null) {
-      const destroyed = player.destroyedSlots || [];
-      // Find lowest non-destroyed slot that isn't already mana
-      const limit = Math.max(destroyed.length, meter.slots.length, 1);
-      for (let i = 0; i < limit + 5; i++) {
-        if (destroyed[i]) continue;
-        if (meter.slots.includes(i)) continue;
-        target = i;
-        break;
-      }
+      // Lowest consumable-slot index not already claimed as mana. This index
+      // is unrelated to the weapon quick-slot array — consumable slots have
+      // no "destroyed" concept of their own.
+      target = 0;
+      while (meter.slots.includes(target)) target++;
     }
     if (target == null || target < 0) return false;
     if (meter.slots.includes(target)) return false;
 
-    const wasEmpty = meter.slots.length === 0;
+    const wasActive = this.effectiveManaSlotCount(player) > 0;
     meter.slots.push(target);
     meter.slots.sort((a, b) => a - b);
-    meter.active = true;
-    if (wasEmpty) meter.current = 0;
+    meter.active = this.effectiveManaSlotCount(player) > 0;
+    if (!wasActive && meter.active) meter.current = 0;
+    this.recalcMax(meter);
     return true;
   }
 
-  // Yellow Mage auto-conversion: lock every available consumable slot into
-  // mana mode and return any currently-equipped consumables to inventory.
-  // Idempotent — safe to call on room transitions while already yellow.
-  activateAllMagicMeterSlots(player) {
-    if (!player) return false;
-    const inv = this.game.inventorySystem;
-    const maxSlots = inv?.maxConsumableSlots ?? player.equippedConsumables?.length ?? 2;
-
-    const meter = player.magicMeter;
-    if (!meter.slots) meter.slots = [];
-    const wasEmpty = meter.slots.length === 0;
-
-    for (let i = 0; i < maxSlots; i++) {
-      // Unequip whatever's currently in this slot back to consumable inventory.
-      const equipped = inv?.equippedConsumables?.[i];
-      if (equipped) {
-        inv.consumableInventory.push(equipped);
-        inv.equippedConsumables[i] = null;
-      }
-      if (player.equippedConsumables && player.equippedConsumables[i]) {
-        player.equippedConsumables[i] = null;
-      }
-      if (!meter.slots.includes(i)) meter.slots.push(i);
-    }
-    meter.slots.sort((a, b) => a - b);
-    meter.active = meter.slots.length > 0;
-    if (wasEmpty) meter.current = 0;
-    return true;
+  // Per-slot fill for rendering: slots fill front-to-back (lowest equipment
+  // index first) and drain back-to-front, purely as a function of where each
+  // slot sits in the sorted meter.slots array and the single current/max
+  // scalar pool — no separate per-slot state to keep in sync.
+  getSlotFill(player, slotIndex) {
+    const meter = player?.magicMeter;
+    if (!meter?.active || !meter.slots) return null;
+    const position = meter.slots.indexOf(slotIndex);
+    if (position === -1) return null;
+    const perSlotMax = meter.max / meter.slots.length;
+    const filledBefore = perSlotMax * position;
+    const current = Math.max(0, Math.min(perSlotMax, meter.current - filledBefore));
+    return { current, max: perSlotMax };
   }
 
-  // Clear all mana slots — used when swapping away from Yellow Mage so the
-  // next character starts from their own (well/hut-earned) state.
-  deactivateAllMagicMeterSlots(player) {
-    if (!player?.magicMeter) return;
-    player.magicMeter.slots = [];
-    player.magicMeter.active = false;
-    player.magicMeter.current = 0;
+  // Yellow Mage's one free mana slot — granted once, the moment they become
+  // Yellow. Any further mana slots are earned the same way as every other
+  // character (well ritual / infused coin) via activateMagicMeter above.
+  grantYellowFreeManaSlot(player) {
+    if (!player?.magicMeter) return false;
+    if (player.magicMeter.freeSlotGranted) return false;
+    const granted = this.activateMagicMeter(player);
+    if (granted) player.magicMeter.freeSlotGranted = true;
+    return granted;
+  }
+
+  // Character-specific modifier applied on top of earned mana-slot conversions.
+  // Yellow's +1 is granted directly as a real converted slot (see
+  // grantYellowFreeManaSlot) so it isn't double-counted here — only Red
+  // Warrior's -1 penalty applies, delaying when the mana meter goes active.
+  characterManaModifier(characterType) {
+    return characterType === 'red' ? -1 : 0;
+  }
+
+  effectiveManaSlotCount(player) {
+    const raw = player?.magicMeter?.slots?.length || 0;
+    return Math.max(0, raw + this.characterManaModifier(player?.characterType));
   }
 
   // ─── Mana mutation ───────────────────────────────────────────────────────
@@ -123,6 +134,38 @@ export class MagicSystem {
     if (!this.hasMana(player, cost)) return false;
     player.magicMeter.current -= cost;
     return true;
+  }
+
+  // Mana Potion auto-trigger: the only way to gain a mana slot without a true
+  // (well/cauldron/Yellow-Mage) slot. While it's running, meter.active is true
+  // just like a real slot, so the mana spawn trigger (main.js kill drops) and
+  // the mana refill mechanic (LootSystem/CraftingSystem bypass-to-addMana)
+  // apply identically — they only ever gate on meter.active.
+  grantTempManaSlot(player, cd) {
+    if (player?.magicMeter?.active) return false;
+    this.activateTemporaryManaSlot(player, cd.duration ?? 30);
+    return true;
+  }
+
+  activateTemporaryManaSlot(player, duration) {
+    const meter = player?.magicMeter;
+    if (!meter) return;
+    meter.tempTimer = Math.max(meter.tempTimer || 0, duration);
+    meter.active = true;
+    meter.current = 0;
+  }
+
+  // Reverts to the true-slot state (or fully inactive) once the temporary
+  // slot's timer runs out. Called every frame from update().
+  _updateTempManaSlot(dt) {
+    const meter = this.game.player?.magicMeter;
+    if (!meter?.tempTimer) return;
+    meter.tempTimer -= dt;
+    if (meter.tempTimer <= 0) {
+      meter.tempTimer = 0;
+      meter.active = this.effectiveManaSlotCount(this.game.player) > 0;
+      if (!meter.active) meter.current = 0;
+    }
   }
 
   addMana(player, amount) {
@@ -175,9 +218,10 @@ export class MagicSystem {
   }
 
   // Per-frame: complete any gem-wand cast whose charge has finished.
-  update(_dt) {
+  update(dt) {
     this._updateGemWandAutoCast();
     this._updateChargeHammer();
+    this._updateTempManaSlot(dt);
   }
 
   _updateGemWandAutoCast() {
@@ -384,7 +428,7 @@ export class MagicSystem {
     });
 
     const source = { damage, chainCount: 4 };
-    this.game.combatSystem.createChainLightning(source, nearest, enemies);
+    this.game.lightningStrikeSystem.createChainLightning(source, nearest, enemies);
   }
 
   // Onyx Staff — blinds enemies in a forward cone (90° spread, ~120px reach).

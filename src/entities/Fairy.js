@@ -200,6 +200,7 @@ export class Fairy extends NeutralCharacter {
       const exit = room?.exits?.[this.targetExitDir];
       if (exit && exit.letter) {
         if (mutateExitLetter(exit, 'F', { source: 'fairyDust' })) {
+          game?.audioSystem?.playSFX?.('fairy_transform');
           if (typeof this.onDust === 'function') this.onDust(this.targetExitDir, exit);
         }
       }

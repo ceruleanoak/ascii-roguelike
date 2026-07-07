@@ -64,6 +64,18 @@ export class PhysicsSystem {
   }
 
   /**
+   * Knockback for a player damage event, using the shared default force unless
+   * the caller tunes its own. Skips no-ops (dodge/block/immune/invulnerable)
+   * so a miss never shoves the player. Call at every player.takeDamage() site
+   * unless the source has no meaningful origin (DoT ticks, self-inflicted) or
+   * already applies its own custom knockback.
+   */
+  applyDamageKnockback(player, result, sourceX, sourceY, force = PHYSICS.DEFAULT_DAMAGE_KNOCKBACK) {
+    if (!result || result === false || result.dodged || result.blocked || result.immune) return;
+    this.applyKnockback(player, sourceX, sourceY, force);
+  }
+
+  /**
    * Additive velocity impulse, mass-scaled. Unlike applyKnockback this does not
    * override existing velocity — it nudges it. Used for recoil and soft contact.
    */
@@ -80,7 +92,8 @@ export class PhysicsSystem {
    * Call once per frame after the main physics update.
    */
   resolveEntityContacts(player, enemies) {
-    if (player.dodgeRoll?.active && player.dodgeRoll.type === 'whirlwind') return; // pass through enemies during spin
+    // Pass through enemies during roll (all types except 'damage' — red character rams enemies intentionally)
+    if (player.dodgeRoll?.active && player.dodgeRoll.type !== 'damage') return;
     const MIN_DIST = GRID.CELL_SIZE * 1.2;
     const FORCE = 120;
     for (const enemy of enemies) {
@@ -876,13 +889,37 @@ export class PhysicsSystem {
     const entityH = entity.height || GRID.CELL_SIZE;
     const CELL = GRID.CELL_SIZE;
     const OVERLAP_THRESHOLD = CELL * CELL * 0.6; // 60% of entrance cell area — must commit before plane flips
-    const onEntrance = entrances.find(e => {
-      const ex = e.col * CELL;
-      const ey = e.row * CELL;
-      const overlapX = Math.max(0, Math.min(entity.position.x + entityW, ex + CELL) - Math.max(entity.position.x, ex));
-      const overlapY = Math.max(0, Math.min(entity.position.y + entityH, ey + CELL) - Math.max(entity.position.y, ey));
-      return overlapX * overlapY >= OVERLAP_THRESHOLD;
-    });
+
+    // Group entrance cells by direction and test overlap against the union
+    // bounding box of the whole gate, not each cell individually. A gate can
+    // span multiple contiguous cells (e.g. a 3-wide U-room entrance strip);
+    // per-cell testing let an entity straddling the boundary between two
+    // adjacent cells fall under the threshold on both simultaneously, never
+    // registering as "on" any entrance and bypassing the plane flip entirely.
+    const gateGroups = new Map();
+    for (const e of entrances) {
+      if (!gateGroups.has(e.direction)) gateGroups.set(e.direction, []);
+      gateGroups.get(e.direction).push(e);
+    }
+
+    let onEntrance = null;
+    for (const cells of gateGroups.values()) {
+      const minCol = Math.min(...cells.map(c => c.col));
+      const maxCol = Math.max(...cells.map(c => c.col));
+      const minRow = Math.min(...cells.map(c => c.row));
+      const maxRow = Math.max(...cells.map(c => c.row));
+      const gx = minCol * CELL;
+      const gy = minRow * CELL;
+      const gw = (maxCol - minCol + 1) * CELL;
+      const gh = (maxRow - minRow + 1) * CELL;
+
+      const overlapX = Math.max(0, Math.min(entity.position.x + entityW, gx + gw) - Math.max(entity.position.x, gx));
+      const overlapY = Math.max(0, Math.min(entity.position.y + entityH, gy + gh) - Math.max(entity.position.y, gy));
+      if (overlapX * overlapY >= OVERLAP_THRESHOLD) {
+        onEntrance = cells[0];
+        break;
+      }
+    }
 
     if (!onEntrance) {
       // Not on an entrance - no plane switch possible

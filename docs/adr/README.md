@@ -32,4 +32,4 @@ the game's life is normal — if you're writing one a day, the bar is too low.
 
 | ADR | Title | Status | Date |
 |-----|-------|--------|------|
-| _none yet_ | | | |
+| [0001](0001-unified-interior-manager.md) | Unified interior layer under a single InteriorManager | Accepted | 2026-06-26 |

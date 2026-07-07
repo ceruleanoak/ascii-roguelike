@@ -33,6 +33,7 @@ const SPREAD_INTERVAL = 0.08; // seconds per ring (~12.5 tiles/sec down a channe
 const TILE_DURATION = 2.5;    // seconds a tile stays electrified after the front passes
 const SCAN_INTERVAL = 0.25;   // ambient electric-source contact scan cadence
 const MAX_RING_PARTICLES = 4; // spark particles spawned per ring advance (visual cap)
+const CHARGE_DECAY_PER_RING = 2; // charge diminished per ring expansion; spread stops at ≤0
 
 const PARTICLE_CHARS = ['·', '`', "'", '.'];
 const PARTICLE_COLORS = ['#ffff88', '#ffffff', '#cccc00'];
@@ -52,6 +53,28 @@ export class ElectricitySystem {
   // ── Seeding ──────────────────────────────────────────────────────────────
 
   /**
+   * Seed electricity from a weapon hitting water. Routes to seedFromObject
+   * with the weapon's electricityCharge value for cascade range control.
+   */
+  seedFromWeapon(obj, backgroundObjects, weapon, opts = {}) {
+    return this.seedFromObject(obj, backgroundObjects, {
+      ...opts,
+      initialCharge: weapon?.electricityCharge
+    });
+  }
+
+  /**
+   * Seed electricity from a player effect (e.g., Stingray Mantle wake).
+   * Uses provided charge value, defaults to armor's electricityCharge or 10.
+   */
+  seedFromArmor(obj, backgroundObjects, armor, opts = {}) {
+    return this.seedFromObject(obj, backgroundObjects, {
+      ...opts,
+      initialCharge: armor?.electricityCharge ?? 10
+    });
+  }
+
+  /**
    * Start a cascade from a specific water tile. `backgroundObjects` is the
    * array the tile lives in (surface room or interior floor) — the cascade
    * conducts only through tiles of that same array.
@@ -66,6 +89,7 @@ export class ElectricitySystem {
 
     const waterMap = this._buildWaterMap(backgroundObjects);
     const tileDuration = opts.tileDuration ?? TILE_DURATION;
+    const initialCharge = opts.initialCharge ?? Infinity; // unlimited range if not specified
     const seedKey = this._key(obj);
 
     obj.setWaterState('electrified', tileDuration);
@@ -80,6 +104,7 @@ export class ElectricitySystem {
       timer: opts.interval ?? SPREAD_INTERVAL,
       interval: opts.interval ?? SPREAD_INTERVAL,
       tileDuration,
+      charge: initialCharge,
       hutPlane: opts.hutPlane ?? false
     });
     return true;
@@ -177,6 +202,14 @@ export class ElectricitySystem {
   }
 
   _advanceRing(c) {
+    // Apply charge decay before expanding
+    c.charge -= CHARGE_DECAY_PER_RING;
+    // Stop spreading if charge depleted
+    if (c.charge <= 0) {
+      c.frontier = [];
+      return;
+    }
+
     const next = [];
     for (const obj of c.frontier) {
       const cx = Math.round(obj.position.x / GRID.CELL_SIZE);

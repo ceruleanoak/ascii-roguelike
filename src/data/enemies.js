@@ -1,8 +1,110 @@
 import { COLORS, GRID } from '../game/GameConfig.js';
 
+// Enemies that play the magical SFX (hit/death) when no per-enemy sfx
+// override is set. Covers arcane casters and pure elemental beings;
+// element-tinted beasts (Fire Bat, Frost Wolf, etc.) keep the generic sound.
+export const MAGIC_SFX_NAMES = new Set([
+  'Wizard', 'Shaman', 'Necromancer', 'Hex Witch', 'Alchemist',
+  'Cryomancer', 'Storm Caller',
+  'Ember Sprite', 'Pyroclast', 'Fire Elemental',
+  'Breeze Wisp', 'Ice Wraith', 'Frozen Construct', 'Steam Specter',
+  'Spark', 'Voltaic Golem', 'Mirror Imp'
+]);
+
+// Fallback hit SFX when an enemy has no data.sfx.hit override.
+export function resolveHitSfx(data) {
+  if (MAGIC_SFX_NAMES.has(data?.name)) return 'magic_hit';
+  if (data?.affinities?.includes('beast')) return 'beast_hit';
+  return 'enemy_hit';
+}
+
+// Aquifer eel — a fixed-pattern underwater hazard (Quagmire dive). Not in the
+// ENEMIES registry: every letter/digit key is taken, and the eel is a contained
+// plane-1 spawn AquiferSystem injects via the Enemy dataOverride. It never aggros
+// (pure patrol via PatrolMechanic); contact damage is applied by AquiferSystem.
+export const EEL = {
+  char: 'e',
+  name: 'Eel',
+  description: 'Coils through the deep on a set path.',
+  hp: 9999,            // hazard, not a kill target
+  mass: 1.4,
+  speed: 55,
+  acceleration: 300,
+  damage: 2,           // contact damage (read + applied by AquiferSystem)
+  attackRange: 0,
+  aggroRange: 0.01,    // effectively never aggros — see Enemy.js aggroRange fallback (0 is falsy)
+  attackCooldown: Infinity,
+  idleBehavior: 'stationary',
+  color: '#5fae7a',    // murky green
+  patrol: { loop: false },
+  drops: []
+};
+
+// Huntable game (rooms with letterTemplates.js huntableGame: true, HuntingSystem
+// stillness trigger). Not in the ENEMIES registry: they're injected by
+// HuntingSystem, never by normal room generation. See GameAnimalMechanic for
+// flee/burrow behavior.
+export const MOOSE = {
+  char: 'M',
+  name: 'Moose',
+  description: 'Grazes in the quiet. Bolts for the nearest way out once it notices you.',
+  hp: 10,
+  mass: 1.6,
+  speed: 70,
+  acceleration: 260,
+  damage: 0,
+  attackRange: 0,
+  aggroRange: GRID.CELL_SIZE * 6,
+  attackCooldown: Infinity,
+  idleBehavior: 'stationary',
+  color: '#8b6b4a',
+  pacifist: true, // never enters Enemy's combat aggro/chase/attack state machine
+  gameAnimal: { role: 'moose', fleeSpeedMult: 1.4 },
+  affinities: ['beast'],
+  tier: 'elite' // generous drop count/rarity — "bountiful meat", rare Thick Fur
+};
+
+export const RABBIT = {
+  char: 'r',
+  name: 'Rabbit',
+  description: 'Burrows out of sight when it spots you. Emerges once you\'re still again — unless it\'s already been hurt.',
+  hp: 3,
+  mass: 0.5,
+  speed: 90,
+  acceleration: 400,
+  damage: 0,
+  attackRange: 0,
+  aggroRange: GRID.CELL_SIZE * 3,
+  attackCooldown: Infinity,
+  idleBehavior: 'stationary',
+  color: '#dddddd',
+  pacifist: true, // never enters Enemy's combat aggro/chase/attack state machine
+  gameAnimal: { role: 'rabbit', fleeSpeedMult: 1.6, idleTwitch: true },
+  affinities: ['beast'],
+  tier: 'weak' // "1 meat, chance of fur" — modest drop count/rarity
+};
+
 // Enemy definitions
 // Note: 1 unit = GRID.CELL_SIZE = 16 pixels
 export const ENEMIES = {
+
+  // --- Training dummy (pacifist, indestructible; see Enemy.js pacifist branch) ---
+  '@': {
+    char: '@',
+    name: 'Training Dummy',
+    description: 'Doesn\'t hit back.',
+    hp: 20,
+    speed: 0,
+    damage: 0,
+    attackRange: 0,
+    attackCooldown: Infinity,
+    color: COLORS.PLAYER,
+    idleBehavior: 'stationary',
+    isDummy: true,
+    pacifist: true, // never enters Enemy's combat aggro/chase/attack state machine
+    knockbackResistance: 1, // immune to hit knockback — stays pinned to its stick
+    drops: []
+  },
 
   // ============================================================
   // GREEN ZONE — forest / verdant
@@ -299,7 +401,7 @@ export const ENEMIES = {
       windupTime: 1.2,                         // Compression telegraph before launch
       airTime: 1.4,                            // Seconds airborne — long enough for the player to read the arc and reposition
       arcLift: GRID.CELL_SIZE * 5,             // Peak visual lift height during arc — clearly above other entities
-      landRadius: GRID.CELL_SIZE * 2.2,        // Direct-hit impact zone on landing
+      landRadius: GRID.CELL_SIZE * 1.4,        // Direct-hit impact zone on landing — kept tight to the rendered body so a hit always looks earned
       landDamage: 3,
       landKnockback: 320,                      // Px/s for the direct landing contact hit
       shockwaveMaxRadius: GRID.CELL_SIZE * 8,
@@ -366,6 +468,7 @@ export const ENEMIES = {
       weapons: [')', ')', ')', ')', ')', ')', ')', '†', '⊤', '↑']
     },
     affinities: ['humanoid'],
+    sfx: { aggro: 'goblin_aggro' },
     tier: 'normal'
   },
 
@@ -678,7 +781,7 @@ export const ENEMIES = {
       weakness: { 'stun': 2.0 },              // Shapeshifter's weakness: locked in one form
       resistance: { 'burn': 0.5, 'freeze': 0.5 }  // Adapts to temperature
     },
-    affinities: ['aberration'],
+    affinities: ['generic'],
     tier: 'elite'
   },
 

@@ -21,7 +21,10 @@ export const LETTER_TEMPLATES = {
         allowObjects: false
       },
       grassDensity: 0.8
-    }
+    },
+
+    // Eligible for HuntingSystem's stillness-triggered moose/rabbit encounter.
+    huntableGame: true
   },
 
   B: {
@@ -124,7 +127,10 @@ export const LETTER_TEMPLATES = {
     enemySpawnRule: {
       spawnZone: 'perimeter',  // Enemies spawn outside vault
       preventVaultSpawn: true  // Never spawn inside vault
-    }
+    },
+
+    // Eligible for HuntingSystem's stillness-triggered moose/rabbit encounter.
+    huntableGame: true
   },
 
   K: {
@@ -160,7 +166,10 @@ export const LETTER_TEMPLATES = {
       dropChance: 0.4,  // 40% chance per destructible
       keyChar: '߃',     // Key item character (Unicode U+07C3)
       eligibleObjects: ['p', '#', '0', 'B', '8'] // Barrels, crates, rocks, metal boxes, bones
-    }
+    },
+
+    // Eligible for HuntingSystem's stillness-triggered moose/rabbit encounter.
+    huntableGame: true
   },
 
   G: {
@@ -203,7 +212,10 @@ export const LETTER_TEMPLATES = {
       enabled: true,
       position: 'clearing_center',
       itemPool: ['Ƨ'] // Scythe
-    }
+    },
+
+    // Eligible for HuntingSystem's stillness-triggered moose/rabbit encounter.
+    huntableGame: true
   },
 
   T: {
@@ -235,7 +247,10 @@ export const LETTER_TEMPLATES = {
       spawnMode: 'TUNNEL', // Special flag for tunnel enemy placement
       minEnemies: 2,
       maxEnemies: 4
-    }
+    },
+
+    // Eligible for HuntingSystem's stillness-triggered moose/rabbit encounter.
+    huntableGame: true
   },
 
   E: {
@@ -291,7 +306,10 @@ export const LETTER_TEMPLATES = {
       minCount: 1,
       maxCount: 2,
       preferLiquid: true
-    }
+    },
+
+    // Eligible for HuntingSystem's stillness-triggered moose/rabbit encounter.
+    huntableGame: true
   },
 
   L: {
@@ -324,7 +342,10 @@ export const LETTER_TEMPLATES = {
       minCount: 1,
       maxCount: 2,
       preferLiquid: true
-    }
+    },
+
+    // Eligible for HuntingSystem's stillness-triggered moose/rabbit encounter.
+    huntableGame: true
   },
 
   L_BOSS: {
@@ -350,6 +371,51 @@ export const LETTER_TEMPLATES = {
     bgObjectRules: {
       grassDensity: 0.5,
       objectBias: { '%': 1.2, '0': 0.8, 'Y': 0.6 }
+    }
+  },
+
+  // Quagmire (Q) — rare green-zone water arena. Dispersed pools (reusing the
+  // lakeZone blob carver) host escalating round combat; a Rusalka surfaces after
+  // the final clear. Frog-only Ponds are seeded into these pools in a later phase.
+  Q: {
+    name: 'Quagmire',
+    description: 'A rare green mire of scattered pools — combat rises in rounds, then the Rusalka',
+
+    wallStructures: {
+      allow: false
+    },
+
+    // Several smaller, scattered pools (vs. the L room's few large nodes).
+    lakeZone: {
+      enabled: true,
+      nodes: [
+        { col: 8,  row: 9,  radius: 3.5 },
+        { col: 20, row: 10, radius: 3.5 },
+        { col: 13, row: 15, radius: 4 },
+        { col: 7,  row: 20, radius: 3 },
+        { col: 22, row: 19, radius: 3 }
+      ],
+      edgeNoise: 2.2,
+      waterDensity: 0.85
+    },
+
+    bgObjectRules: {
+      grassDensity: 0.45,
+      objectBias: { '%': 1.2, '0': 0.8, 'Y': 0.6, 'n': 0.8 }
+    },
+
+    // Combat (when present) escalates over 3 rounds — RoundCombatSystem.
+    roundCombat: { enabled: true, rounds: 3 },
+
+    // Marks the room a Quagmire for the post-clear Rusalka + (later) Pond seeding.
+    quagmire: true,
+
+    // Frogs near the pools, like the Lake room.
+    enemyInjection: {
+      char: 'g',
+      minCount: 1,
+      maxCount: 2,
+      preferLiquid: true
     }
   },
 
@@ -398,7 +464,10 @@ export const LETTER_TEMPLATES = {
       minCount: 1,
       maxCount: 2,
       preferLiquid: true   // Sea snakes spawn in/near water
-    }
+    },
+
+    // Eligible for HuntingSystem's stillness-triggered moose/rabbit encounter.
+    huntableGame: true
   },
 
   H: {
@@ -432,9 +501,32 @@ export const LETTER_TEMPLATES = {
     hutKind: 'random' // 'enemy_encounter' | 'neutral_npc' | 'random'
   },
 
+  S: {
+    name: 'Settlement',
+    description: 'A small cluster of neutral huts — press, wise man, alchemist',
+
+    wallStructures: {
+      allow: false // Each hut generates its own wall structure
+    },
+
+    bgObjectRules: {
+      grassDensity: 0.7,
+      objectBias: {
+        '%': 1.2,
+        'Y': 2.0,
+        '0': 0.6
+      }
+    },
+
+    // Pool of available hut kinds — generateSettlementRoom (roomFeatures.js)
+    // picks 2-3 of these at random and places them at random non-overlapping
+    // positions, unlike hutStructure's single fixed footprint above.
+    settlementHutPool: ['press', 'wise_man', 'alchemy', 'neutral_npc', 'fisherman', 'weapons_master']
+  },
+
   M: {
     name: 'Maze',
-    description: 'A crumbling maze — 4×4 grid of maze-like rooms hiding precious loot behind a rising ghost curse',
+    description: 'A crumbling maze — a single winding corridor hiding loot behind cipher-covered objects; one blinks a warning at a time, and if it isn\'t broken open in time it turns into a ghost',
 
     wallStructures: {
       allow: false // Maze generates its own exterior structure
@@ -602,7 +694,10 @@ export const LETTER_TEMPLATES = {
       centerCol: 15,
       centerRow: 15,
       ringRadius: 2  // 5x5 footprint with circular ring of stones
-    }
+    },
+
+    // Eligible for HuntingSystem's stillness-triggered moose/rabbit encounter.
+    huntableGame: true
   },
 
   // ── Stub templates — prevent undefined lookups from RoomGenerator ──────────
@@ -666,7 +761,10 @@ export const LETTER_TEMPLATES = {
 
     bgObjectRules: {
       grassDensity: 0.5
-    }
+    },
+
+    // Eligible for HuntingSystem's stillness-triggered moose/rabbit encounter.
+    huntableGame: true
   },
 
   X: {
@@ -697,7 +795,10 @@ export const LETTER_TEMPLATES = {
         '%': 0.6, // sparse bushes
         '0': 0.4  // sparse rocks
       }
-    }
+    },
+
+    // Eligible for HuntingSystem's stillness-triggered moose/rabbit encounter.
+    huntableGame: true
   },
 
   // ── Blue-zone (Tidefall) tutorial rooms ────────────────────────────────────

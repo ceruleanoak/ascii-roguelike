@@ -34,21 +34,22 @@ export const ZONES = {
     name: 'Verdant Wilds',
     spellDescription: 'THE PATH BEGINS.',
     wiseSayings: [
-      'BRING A BLADE WHEN YOU FISH.',
       'WHERE DID I PUT MY OIL PRESS?',
       'THE LESHY HIDES IN GREEN THINGS.',
       'THERE ARE MULTIPLE PATHS.',
       'BEWARE THE RUSALKA.',
-      'SPEAK AND THE HUT WILL SIT.',
+      'BRING AN ARTIFACT FOR ME TO INSPECT.',
       'GOO IS IMMUNE TO GOO.',
-      'THREE HEADS ARE FAR WORSE THAN ONE.'
+      'THREE HEADS ARE FAR WORSE THAN ONE.',
+      'ONLY FOOLS VENTURE INTO THE QUAGMIRE.',
+      'DO NOT BE STINGY WITH BREAD.'
     ],
     // Rare-tier sayings — unlocked by giving an Artifact ⚜ to the wise fellow.
     // Content should reveal genuinely game-changing info, not flavor.
     rareSayings: [
-      'A BUSH DOES NOT FEAR THE WOLF.',
-      'STONE GIVES MORE THAN STONE.',
-      'THE FAIRY KNOWS THE WAY TO DUST.'
+      'SPEAK AND THE HUT WILL SIT.',
+      'THE GREAT SLIME YIELDS TO A LONG BLADE.',
+      'THE MAGE FINDS HIS WAY THROUGH ASH.'
     ],
     borderColor: '#00ff00',
     exitColor: ZONE_COLORS.green,
@@ -82,25 +83,23 @@ export const ZONES = {
     spellDescription: 'THE BURNING PLACE.',
     wiseSayings: [
       'PREPARE FOR HARSE CONDITIONS.',
-      'WATER CAN BE A WEAPON.',
-      'TO DESCEND FURTHER, SPEAK THE MAGIC WORD.',
-      'GHOSTS CAN BE LAID TO REST WITH FIRE.',
-      'SEEK THE PATH OF THE MAGE.',
+      'THE UNDEAD FEAR FIRE.',
+      'SEEK HERE THE PATH OF THE MAGE.',
       'RUBY IS THE STONE OF FLAME.',
       'THE TREES HERE CARRY A RARE SAP.',
-      'RESCUE THE BRUTAL WARRIOR.'
+      'THE BRUTAL WARRIOR WIELDS A POWERFUL DASH.'
     ],
     rareSayings: [
-      'THE INFUSED COIN TURNS THE WELL.',
-      'OBSIDIAN HIDES THE GEMSTONE.',
-      'A QUENCHED FLAME BECOMES A STONE.'
+      'BRING THE INFUSED COIN TO THE WELL.',
+      'A SHREWD TACTIC IS REFLECTING BULLETS.',
+      'STRIKE BRAVELY AT THE ROLLING STONE.'
     ],
     borderColor: '#ff4400',
     exitColor: ZONE_COLORS.red,
     alternativeZones: ['green', 'cyan', 'yellow'],
     // Depth-1 weapon offering pool — one floating pickup per L1 room (RoomGenerator).
     l1WeaponPool: ['¬', '¡', '†', '⊥', '⛏'], // gun, bat, sword, hammer, pickaxe
-    bossDepth: 15,
+    bossDepth: 10,
     environmentColors: {
       grass: '#664422', // Burned grass
       tree: '#332211', // Charred
@@ -150,26 +149,26 @@ export const ZONES = {
     name: 'Frozen Peaks',
     spellDescription: 'COLD AND ANCIENT.',
     wiseSayings: [
-      'THE COLD DOES NOT TIRE.',
-      'ICE HIDES BUT NEVER FORGETS.',
+      'LISTEN CLOSELY TO THE STILLNESS.',
+      'FOG AND STEAM WILL CONFOUND YOUR ENEMIES.',
       'CRYSTALS HOLD STOLEN WORDS.',
-      'STILLNESS IS NOT SAFETY.',
-      'WHAT FREEZES CAN BE BROKEN.',
-      'LISTEN FOR THE CRACK.',
-      'THE PEAKS REMEMBER EVERY STEP.',
-      'WARMTH IS A WEAPON HERE.'
+      'THE WOLVES WILL HOWL FOR THEIR BRETHREN.',
+      'BE STILL WHEN HUNTING GAME.',
+      'IF I CALL, WILL I HEAR AN ANSWER?',
+      'WHAT LIES ACROSS THE RIDGE?',
+      'THE MAZE HIDES RARE TREASURES.'
     ],
     rareSayings: [
-      'FROZEN WATER FORGETS THE SPARK.',
-      'THE CRYSTAL ANSWERS THE BULLET.',
-      'BREAK ICE TO DRINK THE PEAK.'
+      'A STUNNED FOE WILL NOT LEAP.',
+      'BRING LIGHT TO THE DARK TOMBS.',
+      'OBSERVE THE ICE FOR THE HIDDEN SAPPHIRE.'
     ],
     borderColor: '#44ffff',
     exitColor: ZONE_COLORS.cyan,
     alternativeZones: ['green', 'red', 'yellow'],
     // Depth-1 weapon offering pool — one floating pickup per L1 room (RoomGenerator).
     l1WeaponPool: ['ߒ', ')', '⊸', '↾', '↑'], // fishing pole, bow, sling, dagger, spear
-    bossDepth: 15,
+    bossDepth: 10,
     environmentColors: {
       grass: '#aaffff',
       tree: '#6699aa',
@@ -190,19 +189,19 @@ export const ZONES = {
   },
   'yellow': {
     name: 'Stormlands',
-    spellDescription: 'THE STORM WATCHES.',
+    spellDescription: 'THE LAND OF EVERLASTING STORMS.',
     wiseSayings: [
-      'IT STRIKES BEFORE YOU SEE.',
-      'METAL CALLS THE SKY.',
-      'COUNT BETWEEN FLASH AND ROAR.',
-      'THE STORM HAS NO PATIENCE.',
-      'SAND REMEMBERS LIGHTNING.',
-      'STAND APART FROM IRON.',
-      'THE SKY CHOOSES ITS MARK.',
-      'WET GROUND CARRIES THE SPARK.'
+      'WHERE DOES THE WATER FLOW?',
+      'THE SCHOLAR SHOULD SEEK THE LIBRARY.',
+      'AN ALCHEMIST ALWAYS BRINGS AN EMPTY BOTTLE.',
+      'TEMPT THE FLEA WITH A STRAY OBJECT.',
+      'COULD LIGHTNING BE CAPTURED?',
+      'LOST MY SPECTACLES...',
+      'THERE ARE THREE DIFFERENT BASE POTIONS.',
+      'BEWARE THE ANTLION.'
     ],
     rareSayings: [
-      'IRON IN HAND IS IRON IN SKY.',
+      'LETTERS AND WORDS CONTAIN UNSEEN POWER.',
       'THE BOX CONDUCTS, THE WOOD DOES NOT.',
       'A WET FOE IS A LIT FOE.'
     ],
@@ -211,7 +210,7 @@ export const ZONES = {
     alternativeZones: ['green', 'red', 'cyan'],
     // Depth-1 weapon offering pool — one floating pickup per L1 room (RoomGenerator).
     l1WeaponPool: ['/', 'Ⲯ', '≋', '¬', '↑'], // staff, thick staff, whip, gun, spear
-    bossDepth: 15,
+    bossDepth: 10,
     environmentColors: {
       grass: '#888844',
       tree: '#666633',

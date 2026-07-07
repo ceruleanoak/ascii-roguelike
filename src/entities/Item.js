@@ -6,7 +6,7 @@ import { ITEMS, WEAPON_TYPES, resolveWeaponDefaults } from '../data/items.js';
  *
  * The melee/bow/gun attack-creation methods below (createMeleeAttack, createMeleeArc,
  * createMeleeSweep, createMeleeThrust, createMeleeMultistab, createMeleeSlam,
- * createMeleeRing, createMeleeHammerRing, createMeleeShockwave, createMeleeWhipcrack, createBullets,
+ * createMeleeHammerRing, createMeleeShockwave, createMeleeWhipcrack, createBullets,
  * createBurstPattern, createRingPattern, createSpiralPattern, createWavePattern,
  * createArrow, createSingleArrow) accept any object shaped like:
  *
@@ -102,6 +102,16 @@ export class Item {
       width: this.width,
       height: this.height
     };
+  }
+
+  getDisplayName() {
+    let name = this.data.name;
+    if (this.potionModifier === 'buff') {
+      name += ' +';
+    } else if (this.potionModifier === 'unstable') {
+      name += ' ?';
+    }
+    return name;
   }
 
   update(deltaTime) {
@@ -242,6 +252,18 @@ export class Item {
     // Release before full charge cancels — no attack. Auto-fires shockwave when complete.
     // If the mega-attack has already been used this room, fall through to the normal melee path.
     if (this.data.chargeHammer && !this.chargeAttackUsed) {
+      if (!this.isCharging) {
+        this.isCharging = true;
+        this.chargeTime = 0;
+        this.chargingPlayer = player;
+      }
+      return null;
+    }
+
+    // Flail: hold-to-spin. FlailSystem drives the ramping orbit and applies
+    // damage directly while held — no release attack (handleSpaceRelease just
+    // stops the spin).
+    if (this.data.flailSpin) {
       if (!this.isCharging) {
         this.isCharging = true;
         this.chargeTime = 0;
@@ -818,8 +840,6 @@ export class Item {
         return injectSubtype(this.createMeleeMultistab(player));
       case 'whipcrack':
         return injectSubtype(this.createMeleeWhipcrack(player));
-      case 'ring':
-        return injectSubtype(this.createMeleeRing(player));
       case 'slam':
         return injectSubtype(this.createMeleeSlam(player));
       default:
@@ -854,45 +874,6 @@ export class Item {
         shooterPlane: player.plane
         });
     }
-  }
-
-  createMeleeRing(player) {
-    // Create sequential circular sweep attack (like a spinning flail)
-    const attacks = [];
-    const count = 8;
-    const sweepDuration = 0.4; // Total time for full circle sweep
-    const delayPerStep = sweepDuration / count;
-
-    const ringChar = this.data.meleeChar || '~';
-    for (let i = 0; i < count; i++) {
-      const angle = (Math.PI * 2 / count) * i;
-      const distance = this.data.range || 20;
-      const relX = Math.cos(angle) * distance;
-      const relY = Math.sin(angle) * distance;
-
-      attacks.push({
-        type: 'melee',
-        char: ringChar,
-        drawAngle: this.getMeleeDrawAngle(ringChar, angle),
-        position: {
-          x: player.position.x + relX,
-          y: player.position.y + relY
-        },
-        relX, relY,
-        width: GRID.CELL_SIZE,
-        height: GRID.CELL_SIZE,
-        damage: this.data.damage,
-        duration: 0.1,
-        delay: i * delayPerStep,
-        color: this.color,
-        onHit: this.data.onHit,
-        knockback: this.data.knockback || 300,
-        owner: player,
-        shooterPlane: player.plane
-      });
-    }
-
-    return attacks;
   }
 
   createMeleeArc(player) {
@@ -1257,12 +1238,16 @@ export class Item {
     const spawnY = player.position.y + player.height / 2 + Math.sin(finalAngle) * spawnOffset;
 
     const isBoomerang = !!this.data.boomerang;
-    // Outbound duration and enemy-to-enemy ricochet budget both scale with bow
-    // charge (speedMultiplier = 1 + chargeRatio).
+    // Outbound travel distance and enemy-to-enemy ricochet budget both scale with
+    // bow charge (speedMultiplier = 1 + chargeRatio). Duration is derived from the
+    // desired cell-distance divided by the actual flight speed, so the throw
+    // distance is exact regardless of charge/oil speed effects on finalSpeed.
     const chargeRatio = Math.max(0, Math.min(1, speedMultiplier - 1));
-    const boomerangTimer = isBoomerang
-      ? (this.data.boomerangBaseDuration ?? 0.45) + chargeRatio * (this.data.boomerangChargeBonus ?? 0.55)
-      : 0;
+    const boomerangMinCells = this.data.boomerangMinCells ?? 1;
+    const boomerangMaxCells = this.data.boomerangMaxCells ?? 5;
+    const boomerangTravelDistance =
+      (boomerangMinCells + chargeRatio * (boomerangMaxCells - boomerangMinCells)) * GRID.CELL_SIZE;
+    const boomerangTimer = isBoomerang ? boomerangTravelDistance / finalSpeed : 0;
     const boomerangBounces = isBoomerang
       ? Math.round(chargeRatio * (this.data.boomerangMaxRicochets ?? 3))
       : 0;

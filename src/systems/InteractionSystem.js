@@ -17,6 +17,14 @@ export class InteractionSystem {
     this._lavaWaterCheckTimer = 0;
   }
 
+  // SPACE in REST with nothing nearby to interact with — expanding fade-out
+  // ring at the player as feedback. Tracks the player's live position (see
+  // RestRenderer), so no position is captured here. Decayed/removed in
+  // WorldEffectsSystem.
+  spawnIdleEcho() {
+    this.game.idleEchoes.push({ age: 0 });
+  }
+
   // Each zone's rocks hide a different mineral (rock-harvest rare slot and the
   // once-per-rock poke drop). Red owns Metal; yellow is the gem/magic zone;
   // cyan feeds the bow path. Unlisted zones (gray, blue) hide nothing extra.
@@ -252,6 +260,44 @@ export class InteractionSystem {
   //
   // Only fires while the fairy is in 'flutter' state. Fleeing/dusting/
   // delivering fairies don't react to touch.
+  // Shared by Game.updateExploreState and Game.updateNeutralState — handles
+  // Leshy (chase-start on reaching an exit) and Fairy (bottle-catch via
+  // checkFairyTouch) neutral characters. The Leshy branch is a no-op in
+  // NEUTRAL state since no Leshy is ever pushed into neutralCharacters there.
+  updateNeutralCharacters(deltaTime) {
+    const game = this.game;
+    for (let i = game.neutralCharacters.length - 1; i >= 0; i--) {
+      const char = game.neutralCharacters[i];
+      char.update(deltaTime, game);
+
+      if (char instanceof Leshy && char.reachedExit) {
+        const exitDirection = char.targetExit;
+        if (game.currentRoom.exits[exitDirection]) {
+          if (typeof game.currentRoom.exits[exitDirection] === 'object') {
+            game.currentRoom.exits[exitDirection].chaseEvent = true;
+          } else {
+            game.currentRoom.exits[exitDirection] = {
+              chaseEvent: true,
+              letter: game.currentRoom.exits[exitDirection].letter || '?',
+              color: game.currentRoom.exits[exitDirection].color || '#00ff00'
+            };
+          }
+          game.zoneSystem.startLeshyChase(exitDirection);
+        }
+        game.neutralCharacters.splice(i, 1);
+        continue;
+      }
+
+      if (char instanceof Fairy) {
+        this.checkFairyTouch?.(char);
+        if (char.consumed || char.state === 'exited') {
+          game.neutralCharacters.splice(i, 1);
+          continue;
+        }
+      }
+    }
+  }
+
   checkFairyTouch(fairy) {
     const game = this.game;
     const player = game.player;
@@ -287,7 +333,7 @@ export class InteractionSystem {
             this._fallbackReplaceConsumableSlot(i, '⚱');
           }
           game.menuSystem?.showPickupMessage?.('CAUGHT A FAIRY!');
-          game.audioSystem?.playSFX?.('pickup');
+          game.audioSystem?.playSFX?.('fairy_pickup');
           game.menuSystem?.updateUI?.();
           fairy.consume();
           return true;
@@ -297,7 +343,7 @@ export class InteractionSystem {
 
     // Default: full heal. No text — the HP readout blinks instead.
     player.hp = player.maxHp;
-    game.audioSystem?.playSFX?.('pickup');
+    game.audioSystem?.playSFX?.('fairy_pickup');
     game.menuSystem?.updateUI?.();
     this._blinkHPDisplay();
     fairy.consume();
@@ -343,6 +389,16 @@ export class InteractionSystem {
   interactWithObject(obj) {
     const game = this.game;
     const heldItemChar = game.player.heldItem ? game.player.heldItem.char : null;
+
+    // Liquid discovery: check if player has empty bottle and is interacting with liquid tile
+    if (heldItemChar === 'B' && this._isLiquidTile(obj)) {
+      const liquidChar = this._getLiquidType(obj);
+      if (liquidChar) {
+        this._discoverLiquidBottle(liquidChar);
+        return;
+      }
+    }
+
     const result = obj.interact(heldItemChar);
 
     // Leshy spawn event: trigger on ANY interaction with shaking bush (not just destruction)
@@ -362,6 +418,36 @@ export class InteractionSystem {
     if (result.message) {
       console.log(result.message);
     }
+  }
+
+  _isLiquidTile(obj) {
+    return obj.isWater?.() || obj.isLava?.() || obj.isMud?.();
+  }
+
+  _getLiquidType(obj) {
+    if (obj.isWater?.() && obj.waterState === 'electrified') return 'ε';
+    if (obj.isLava?.()) return '◆';
+    if (obj.isMud?.()) return '◐';
+    if (obj.isWater?.() && obj.waterState === 'normal') return '🜉';
+    return null;
+  }
+
+  _discoverLiquidBottle(liquidChar) {
+    const game = this.game;
+    const slots = game.player.equippedConsumables;
+    const slotIndex = slots?.findIndex(s => s?.char === 'B') ?? -1;
+    if (slotIndex === -1) return;
+
+    game.inventorySystem.replaceConsumableSlot(slotIndex, liquidChar);
+    const liquidNames = {
+      '🜉': 'BOTTLE OF WATER',
+      'ε': 'BOTTLE OF ELECTRIFIED WATER',
+      '◆': 'BOTTLE OF MAGMA',
+      '◐': 'BOTTLE OF MUD'
+    };
+    game.menuSystem.showPickupMessage(liquidNames[liquidChar] || 'LIQUID');
+    game.audioSystem?.playSFX?.('pickup');
+    game.updateUI();
   }
 
   handleObjectEffect(effect, obj, attack = null) {
@@ -558,10 +644,10 @@ export class InteractionSystem {
         game.lootSystem.spawnIngredientDrop('0', obj.position.x, obj.position.y, angle, obj);
       }
       // Gem drop: 25% chance per rock; guaranteed on the last rock if none found yet.
-      const GEM_CHARS = ['1', '9', '`', '_', '6', '?', '('];
+      const GEM_CHARS = ['◇', '⬥', '⬦', '⧫', '⬧', '◈', '⬨'];
       if (!game.currentRoom.miningGemDropped) {
         const rocksRemaining = game._activeBackgroundObjects().filter(
-          o => !o.destroyed && o.glitteringRock && o !== obj
+          o => !o.destroyed && o.data?.glitteringRock && o !== obj
         ).length;
         if (rocksRemaining === 0 || Math.random() < 0.25) {
           game.currentRoom.miningGemDropped = true;

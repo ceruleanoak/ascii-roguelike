@@ -383,6 +383,7 @@ export class CompanionSystem {
             drop.startDropBounce(0.55);
             game.ingredients.push(drop);
             game.physicsSystem.addEntity(drop);
+            game.audioSystem?.playSFX?.('crow_drop');
           }
           break;
         }
@@ -484,6 +485,8 @@ export class CompanionSystem {
         if (typeof hitEnemy.takeDamage === 'function') {
           hitEnemy.takeDamage(dmg, game);
         }
+        const attackVariant = `crow_attack_${1 + Math.floor(Math.random() * 3)}`;
+        game.audioSystem?.playSFX?.(attackVariant);
         game.combatSystem.createDamageNumber(dmg, hitEnemy.position.x, hitEnemy.position.y, '#ffdd66');
         // Small impact burst
         const ix = hitEnemy.position.x + GRID.CELL_SIZE / 2;

@@ -19,6 +19,9 @@ import { getItemData } from '../../data/items.js';
 import { PixelatedDissolve } from '../effects/TextEffects.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
 
+const IDLE_ECHO_DURATION = 0.5;          // seconds — must match WorldEffectsSystem's IDLE_ECHO_DURATION
+const IDLE_ECHO_MAX_RADIUS = GRID.CELL_SIZE * 1.5;
+
 export class RestRenderer {
   constructor(renderer, renderController) {
     this.renderer = renderer;
@@ -90,6 +93,33 @@ export class RestRenderer {
       this.renderer.fgCtx.fillText(']', (EQUIPMENT.CHEST_X + 1) * GRID.CELL_SIZE + halfCell, chestBaseY);
       this.renderer.fgCtx.fillStyle = item ? (item.color || '#ffffff') : '#ffffff';
       this.renderer.fgCtx.fillText(char, EQUIPMENT.CHEST_X * GRID.CELL_SIZE + halfCell, chestBaseY);
+      this.renderer.fgCtx.restore();
+    }
+
+    // Draw armed consumable slot's chest in white on foreground (parity with weapon highlight)
+    const selectedConsumableIdx = game.player?.selectedConsumableIndex ?? -1;
+    if (selectedConsumableIdx >= 0) {
+      const consumableYs = [
+        EQUIPMENT.CONSUMABLE1_Y, EQUIPMENT.CONSUMABLE2_Y, EQUIPMENT.CONSUMABLE3_Y,
+        EQUIPMENT.CONSUMABLE4_Y, EQUIPMENT.CONSUMABLE5_Y
+      ];
+      const consumableY = consumableYs[selectedConsumableIdx];
+      const consumable = game.player.equippedConsumables?.[selectedConsumableIdx];
+
+      this.renderer.fgCtx.save();
+      this.renderer.fgCtx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
+      this.renderer.fgCtx.textAlign = 'center';
+      this.renderer.fgCtx.textBaseline = 'middle';
+      const halfCell = GRID.CELL_SIZE / 2;
+      const consumableBaseY = consumableY * GRID.CELL_SIZE + halfCell;
+
+      this.renderer.fgCtx.fillStyle = '#ffffff';
+      this.renderer.fgCtx.fillText('[', (EQUIPMENT.CONSUMABLE1_X - 1) * GRID.CELL_SIZE + halfCell, consumableBaseY);
+      this.renderer.fgCtx.fillText(']', (EQUIPMENT.CONSUMABLE1_X + 1) * GRID.CELL_SIZE + halfCell, consumableBaseY);
+      if (consumable) {
+        this.renderer.fgCtx.fillStyle = consumable.color || '#ffffff';
+        this.renderer.fgCtx.fillText(consumable.char, EQUIPMENT.CONSUMABLE1_X * GRID.CELL_SIZE + halfCell, consumableBaseY);
+      }
       this.renderer.fgCtx.restore();
     }
 
@@ -186,6 +216,21 @@ export class RestRenderer {
           particle.color,
           alpha
         );
+      }
+    }
+
+    // Draw thrown weapons in-flight (SHIFT throw from REST mode)
+    this.renderController.exploreRenderer.drawInFlightTraps(game, false);
+
+    // Draw idle echoes — expanding fade-out ring shown when SPACE had nothing to interact
+    // with. Tracks the player's live position rather than a captured spawn point, so the
+    // ring follows the player if they move while it's still fading.
+    if (game.idleEchoes.length) {
+      const echoX = game.player.position.x + GRID.CELL_SIZE / 2;
+      const echoY = game.player.position.y + GRID.CELL_SIZE / 2;
+      for (const echo of game.idleEchoes) {
+        const t = echo.age / IDLE_ECHO_DURATION;
+        this.renderer.drawCircle(echoX, echoY, IDLE_ECHO_MAX_RADIUS * t, COLORS.ITEM, false, 1.0 - t);
       }
     }
 
@@ -357,15 +402,6 @@ export class RestRenderer {
           game.player.position.x + GRID.CELL_SIZE / 2,
           floatingTextY
         );
-      } else {
-        // Slot is empty — show interaction hint
-        this.renderer.fgCtx.fillStyle = COLORS.TEXT;
-        const hintText = nearestSlot.type.startsWith('crafting-') ? 'SPACE / SHIFT' : 'SPACE';
-        this.renderer.fgCtx.fillText(
-          spectaclesTransformString(hintText, spectaclesOn),
-          game.player.position.x + GRID.CELL_SIZE / 2,
-          floatingTextY
-        );
       }
 
       this.renderer.fgCtx.restore();
@@ -437,7 +473,7 @@ export class RestRenderer {
     }
 
     // === LEFT SIDE: WASD KEYS WITH "M O V E" ===
-    const wasdY = GRID.HEIGHT - GRID.CELL_SIZE * 5;
+    const wasdY = GRID.HEIGHT - GRID.CELL_SIZE * 7.5;
     const wasdCenterX = GRID.WIDTH / 4; // Left quarter of screen
 
     // Determine colors and sizes based on key state (highlight when pressed) and inactivity blinking
@@ -459,6 +495,7 @@ export class RestRenderer {
     const aStyle = getWasdStyle(game.keys.a);
     const sStyle = getWasdStyle(game.keys.s);
     const dStyle = getWasdStyle(game.keys.d);
+    const spaceStyle = getWasdStyle(game.keys.space);
 
     // Draw using foreground context for proper layering with variable font sizes
     const wasdCtx = this.renderer.fgCtx;
@@ -506,24 +543,36 @@ export class RestRenderer {
     wasdCtx.fillStyle = dStyle.color;
     wasdCtx.fillText(spectaclesTransform('D', spectaclesOn), (wasdCenterCol + 4) * GRID.CELL_SIZE + half, wasdBottomRow * GRID.CELL_SIZE + half);
 
+    // Draw "M O V E" label below WASD
+    const moveY = wasdY + GRID.CELL_SIZE * 2.5;
+    wasdCtx.font = spectaclesOn
+      ? `${Math.round(GRID.CELL_SIZE * 0.7 * CIPHER_FONT_SCALE)}px 'Unifont', monospace`
+      : `${GRID.CELL_SIZE * 0.7}px 'VentureArcade', 'Unifont', monospace`;
+    wasdCtx.fillStyle = '#666666';
+    wasdCtx.fillText(spectaclesTransformString('M O V E', spectaclesOn), wasdCenterCol * GRID.CELL_SIZE + half, moveY);
+
+    // SPACE key with INTERACT label (on same line or very close)
+    const spaceY = moveY + GRID.CELL_SIZE * 1.5;
+    const spaceRow = Math.floor(spaceY / GRID.CELL_SIZE);
+    wasdCtx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
+    wasdCtx.fillStyle = COLORS.BORDER;
+    wasdCtx.fillText('[', (wasdCenterCol - 6) * GRID.CELL_SIZE + half, spaceY);
+    wasdCtx.fillText(']', (wasdCenterCol + 6) * GRID.CELL_SIZE + half, spaceY);
+    wasdCtx.font = `${spaceStyle.fontSize}px 'Unifont', monospace`;
+    wasdCtx.fillStyle = spaceStyle.color;
+    wasdCtx.fillText('SPACE', wasdCenterCol * GRID.CELL_SIZE + half, spaceY);
+
+    // INTERACT label right below SPACE
+    wasdCtx.font = spectaclesOn
+      ? `${Math.round(GRID.CELL_SIZE * 0.7 * CIPHER_FONT_SCALE)}px 'Unifont', monospace`
+      : `${GRID.CELL_SIZE * 0.7}px 'VentureArcade', 'Unifont', monospace`;
+    wasdCtx.fillStyle = '#666666';
+    wasdCtx.fillText(spectaclesTransformString('I N T E R A C T', spectaclesOn), wasdCenterCol * GRID.CELL_SIZE + half, spaceY + GRID.CELL_SIZE * 1.3);
+
     wasdCtx.restore();
 
     // === RIGHT SIDE: ARROW KEYS WITH "D O D G E" ===
     this.renderController.arrowKeyIndicators.render(game);
-
-    // Draw "M O V E" text below WASD (left side)
-    this.renderer.fgCtx.save();
-    this.renderer.fgCtx.font = spectaclesOn
-      ? `${Math.round(GRID.CELL_SIZE * 0.7 * CIPHER_FONT_SCALE)}px 'Unifont', monospace`
-      : `${GRID.CELL_SIZE * 0.7}px 'VentureArcade', 'Unifont', monospace`;
-    this.renderer.fgCtx.textBaseline = 'middle';
-    this.renderer.fgCtx.textAlign = 'center';
-    const labelY = GRID.HEIGHT - GRID.CELL_SIZE * 2;
-
-    this.renderer.fgCtx.fillStyle = COLORS.TEXT;
-    this.renderer.fgCtx.fillText(spectaclesTransformString('M O V E', spectaclesOn), wasdCenterX, labelY);
-
-    this.renderer.fgCtx.restore();
 
     // Draw pickup message if active (crafted items)
     if (game.pickupMessage && game.pickupMessageTimer > 0) {

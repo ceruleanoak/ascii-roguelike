@@ -42,12 +42,64 @@ programming terms.
 - **Not:** "interior slot" as a variable, "level", or Depth.
 
 ### Interior
-- **Definition:** A self-contained sub-space entered from the surface — Hut, Dungeon, or Maze.
-  Each follows the shared Interior System Pattern (`generateXxxInterior` / door entry /
-  PiP overlay).
-- **In code:** `HutSystem`, `DungeonSystem`, `MazeSystem`; `player.inHut` / `inDungeon` /
-  `inMaze`; overlays in `src/rendering/ui/XxxInteriorOverlay.js`.
-- **Not:** "room" (an Interior contains its own space; a Room is the surface unit).
+- **Definition:** A self-contained sub-space entered from the surface — Hut, Dungeon, Maze, or
+  Pond. Each is a controller registered with the InteriorManager, which owns the shared
+  lifecycle (enter/exit, surface freeze/thaw, reset, active-source accessors, PiP frame).
+- **In code:** `InteriorManager` (ADR-0001) + `HutSystem` / `DungeonSystem` / `MazeSystem`
+  (+ planned `PondSystem`). Membership is the single field `player._activeInteriorKind`, with
+  `inHut` / `inDungeon` / `inMaze` as derived accessors; overlays dispatch through
+  `InteriorOverlay` (shared frame in `interiorFrame.js`).
+- **Not:** "room" (an Interior contains its own space; a Room is the surface unit); a fourth
+  bespoke copy of the lifecycle (the duplication ADR-0001 retired).
+
+### Maze
+- **Definition:** An Interior built from a single continuous DFS-generated corridor. Loot hides
+  behind cipher-covered breakable objects; one blinks a warning at a time, and letting it
+  expire spawns a Ghost. Clearing every object and collecting every dropped Ingredient without
+  ever spawning a Ghost grants Spectacles at the maze center.
+- **In code:** `MazeSystem` (`generateMazeInterior`, `MazeObject`, `MazeGhost`); interior state
+  on `game.mazeInterior` (a deliberate exception to the `activeFloor` convention — see Floor).
+  Rendered via `MazeInteriorOverlay`.
+- **Not:** the Aquifer or a generic combat Room; re-entry is permanently sealed after exit.
+
+### Ghost
+- **Definition:** An immune enemy spawned inside a Maze when a blinking cover object's warning
+  expires. Deals contact damage on touch; cannot be fought or destroyed. Once 2 Ghosts have
+  spawned in one Maze, every remaining cover object Blinks at once and all Ghosts (existing and
+  future) pass through walls.
+- **In code:** `MazeGhost` class in `MazeSystem.js` — bespoke, not built on the shared `Enemy`/
+  `Mechanic` composition system.
+- **Not:** a regular Enemy (immune to damage, no drops); the "ghostly" flavor-text adjective
+  used elsewhere in `src/data/enemies.js`.
+
+### Blink
+- **Definition:** The warning state of a Maze cover object about to convert into a Ghost —
+  toggles visibly 5 times before conversion unless broken open first. Breaking it cancels the
+  threat and starts a cooldown before a different object begins blinking.
+- **In code:** `MazeObject.blinking`/`blinkOn`/`blinkCount` fields; state machine in
+  `MazeSystem._selectBlinkCandidate` / `_tickBlink` / `_convertToGhost`.
+- **Not:** the on/off toggle used for UI cooldown indicators (`BowChargeIndicator.js`); the
+  Yellow Mage's teleport-dash (`WarpSystem.resolveBlinkTeleport`) — unrelated naming collision.
+
+### Pond
+- **Definition:** The **surface entrance** in a Quagmire: a small body of water shaped from
+  water background objects with a conspicuous **dark water tile in the middle** that marks the
+  frog-only way down. The Pond is the doorway, *not* the space below it.
+- **In code:** built by `roomFeatures.placePondEntries` (disc of `~` objects + dark center
+  tagged `pondEntry`, stored as `room.pondEntry`). Entered by a Frog (see Polymorph) via SPACE.
+- **Not:** the Aquifer it leads to, nor a Lake (an open-water Room).
+
+### Aquifer
+- **Definition:** The plane-1 underwater interior reached through a Pond. A **free-form, organic**
+  (not square) system of walled passages the frog swims through with **flowing** movement and
+  limited vision (lighting parity with the underground/tunnel system). Underwater **platforming**:
+  static / simple fixed-pattern hazards (e.g. an eel on a strict point path) deal contact damage;
+  passage ends hold discoveries (rare Ingredients + a Key Item).
+- **In code:** to be built on the **underground tunnel** render/physics path — walls are
+  `tunnelWall` objects (solid on plane 1), lighting is the cave-fog overlay, rendered full-screen
+  (no PiP). (The failed first attempt — `PondSystem`/`PondInteriorOverlay`, a square PiP maze with
+  no real collision — is being replaced; see `claudedocs/quagmire-handover.md`.)
+- **Not:** the Pond (its surface entrance), a PiP panel, a square maze, or open collision-free water.
 
 ### Plane
 - **Definition:** Which interaction layer an entity lives on — surface (0) vs. interior (1).
@@ -160,9 +212,9 @@ programming terms.
 ### Key Item
 - **Definition:** A unique, run-scoped item that unlocks progression and enables access to
   new areas or mechanics. Persists across death within a single run.
-- **In code:** tracked via flags on `game` (e.g. `swordDrawnThisRun`, `spectaclesTakenThisRun`);
-  managed by `KeyItemSystem`. Visual representation: § (sword, green zone) and ⊙ (spectacles,
-  yellow zone). Checked via condition gates in room generation.
+- **In code:** tracked via a flag on `game` (e.g. `spectaclesObtainedThisRun`). Spectacles (⊙)
+  are obtained by clearing a Maze — breaking every cover object and collecting every dropped
+  Ingredient — without ever letting a Ghost spawn; granted via `MazeSystem._checkMazeCleared`.
 - **Not:** a regular Ingredient or Crafted item; not persistent across runs.
 
 ### Loot Table
@@ -183,6 +235,47 @@ programming terms.
   `claudedocs/zone-cosmology.md`.
 - **Not:** soft-lock or save-scumming. Death is final and intentional; mental progression is
   the reward, not inventory accumulation.
+
+### Quagmire
+- **Definition:** A rare green-zone Room (exit letter Q): a water-dispersed arena. Mostly not
+  generic combat; when combat occurs it runs in escalating rounds, and a Rusalka may appear
+  after the final clear. Holds Ponds (Frog-only Interiors). Variants may instead present the
+  Witch as a roaming enemy or a witch's hut.
+- **In code:** exit letter `'Q'` in `src/data/exitLetters.js` (green-only weighting); template
+  in `letterTemplates.js`; built via `RoomGenerator`. (Phase 1+, planned.)
+- **Not:** a Lake (L — open water + fishing), a generic combat Room, or a Hut (H).
+
+### Game (Animal)
+- **Definition:** A huntable, non-hostile wild animal — Moose or Rabbit — that appears in a
+  huntable-game-eligible Room (see `letterTemplates.js` `huntableGame: true`) once a Hunt
+  triggers. Never attacks; flees, or Burrows (Rabbit only), once it detects the player.
+- **In code:** `MOOSE` / `RABBIT` non-registry entries in `src/data/enemies.js` (`data.gameAnimal`
+  config, EEL-style — not in the letter/digit `ENEMIES` registry); behavior in
+  `GameAnimalMechanic`.
+- **Not:** an Enemy in the combat sense (zero damage, zero aggro range for attack); not a
+  Companion.
+
+### Hunt
+- **Definition:** The encounter in a huntable-game-eligible Room: as soon as the room has no live
+  enemies (never had any, or just cleared), one Game animal spawns immediately, already idling in
+  the open — it flees or hides only once it gets line of sight on the player. One Hunt resolves
+  per room visit. Not restricted to any single zone or letter — any Room whose letter template
+  sets `huntableGame: true` qualifies.
+- **In code:** `HuntingSystem`; eligibility gated on `LETTER_TEMPLATES[exitLetter]?.huntableGame`
+  plus zero live enemies; resolution tracked via `currentRoom.huntResolved` (same shape as
+  `fairySpawned`). The player-stillness timer (grid-cell diffed via `player.getGridPosition()`)
+  no longer gates the spawn — it only feeds the Rabbit's post-Burrow re-emergence check.
+- **Not:** a fixed/guaranteed spawn or a Boss encounter; the animal flees/hides on sight
+  regardless of whether the player is moving.
+
+### Burrow
+- **Definition:** The Rabbit's pre-damage evasion: on detecting the player it runs directly
+  away for one second, then digs in and disappears at that spot, re-emerging there once the
+  player is still again. Ends permanently the first time the Rabbit takes damage — from then on
+  it flees toward an exit like a Moose instead.
+- **In code:** `GameAnimalMechanic._updateRabbitBurrow` / `_fleeFromPlayer`; hidden via
+  `enemy.plane = 1` (see Plane); reappearance gated on `HuntingSystem.stillnessTimer`.
+- **Not:** death or despawn — the rabbit persists, just hidden and non-interactable.
 
 ### Room Type
 - **Definition:** The category of surface room (EXPLORE or NEUTRAL) that determines its

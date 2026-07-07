@@ -20,7 +20,7 @@ export class WiseFellow extends NeutralCharacter {
     if (Array.isArray(sayings) && sayings.length > 0) {
       this.hintText = sayings[Math.floor(Math.random() * sayings.length)];
     } else {
-      this.hintText = 'KNOWLEDGE IS POWER.';
+      this.hintText = 'TELL THE DEVELOPER TO DO HIS JOB.';
     }
   }
 
@@ -34,7 +34,7 @@ export class WiseFellow extends NeutralCharacter {
     if (Array.isArray(rare) && rare.length > 0) {
       this.hintText = rare[Math.floor(Math.random() * rare.length)];
     } else {
-      this.hintText = 'NO SECRETS HERE.';
+      this.hintText = 'WE WILL SPEAK IN ANOTHER PLACE.';
     }
   }
 

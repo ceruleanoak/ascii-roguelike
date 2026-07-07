@@ -344,6 +344,11 @@ export class CampNPCSystem {
       const base = weapon.data.cooldown || weapon.data.recovery || 0.5;
       npc._attackCooldown = base * COMPANION_ATTACK_SPEED_MULT;
     };
+    // Route attacks to the active enemy list (interior or surface) so the
+    // companion's hits register against dungeon enemies, not the surface room.
+    const activeEnemies = ((game.player?.inDungeon || game.player?.inHut) && game.activeFloor)
+      ? game.activeFloor.enemies
+      : game.currentRoom?.enemies || [];
 
     // Bow charge release: when fully charged, release toward target
     if (wt === 'BOW') {
@@ -351,7 +356,7 @@ export class CampNPCSystem {
         if (weapon.chargeTime >= weapon.maxChargeTime * 0.85) {
           const arrows = weapon.releaseBow();
           if (arrows) {
-            game.combatSystem.createAttack(arrows, game.currentRoom?.enemies || []);
+            game.combatSystem.createAttack(arrows, activeEnemies);
             setCooldown();
           }
         }
@@ -365,7 +370,7 @@ export class CampNPCSystem {
       if (weapon.canUse() && distToTarget < ENEMY_AGGRO_RANGE) {
         const attack = weapon.use(npc);
         if (attack) {
-          game.combatSystem.createAttack(attack, game.currentRoom?.enemies || []);
+          game.combatSystem.createAttack(attack, activeEnemies);
           setCooldown();
         }
       }
@@ -379,7 +384,7 @@ export class CampNPCSystem {
         // Bypass windup for predictable companion swing timing
         const attack = weapon.executeAttack(npc, 0);
         if (attack) {
-          game.combatSystem.createAttack(attack, game.currentRoom?.enemies || []);
+          game.combatSystem.createAttack(attack, activeEnemies);
           weapon.cooldownTimer = weapon.data.recovery || weapon.data.cooldown || 0.5;
           setCooldown();
         }
@@ -473,6 +478,10 @@ export class CampNPCSystem {
     const game = this.game;
     const player = game.player;
     if (!player) return false;
+    // Coin interactions are surface-only — inside hut/dungeon the player can't
+    // see or reach the C-room campfire, so swallow nothing and let the interior
+    // system handle SPACE instead.
+    if (player.inDungeon || player.inHut) return false;
 
     const npc = game.companion ?? game.currentRoom?.campNPC;
     if (!npc) return false;
@@ -498,7 +507,7 @@ export class CampNPCSystem {
       endX: ncx,   endY: ncy,
       t: 0, spinPhase: 0,
       intent, target: npc,
-      room: game.currentRoom
+      zone: game.currentRoom?.zone || 'green'
     };
     return true;
   }
@@ -506,8 +515,13 @@ export class CampNPCSystem {
   _completeCoinOffering(anim) {
     const game = this.game;
     if (!anim?.target) return;
-    if (anim.room && anim.room !== game.currentRoom) return; // player warped out
 
+    // Note: the room the toss started in may already be gone by the time the
+    // arc finishes (rooms are regenerated fresh on every transition, and the
+    // ~0.55s coin arc leaves enough time to walk into the next one). The
+    // offering must still resolve against the captured npc/zone rather than
+    // bailing out on a stale game.currentRoom reference — bailing here used
+    // to spend the coin and silently drop the NPC with nothing to show for it.
     const npc = anim.target;
     game.audioSystem?.playSFX?.('coin_plink');
 
@@ -523,12 +537,14 @@ export class CampNPCSystem {
       // phase or a previous owner.
       if (npc.weapon) this._sanitizeWeaponForCarrier(npc.weapon);
       npc._attackCooldown = 0;
+      // The room.campNPC was never added to physicsSystem (only game.companion
+      // gets registered). Register now so the companion can move immediately.
+      this.registerWithPhysics(game.physicsSystem);
       game.menuSystem?.showPickupMessage?.('AT YOUR SIDE.');
     } else {
       // Hint — the NPC speaks a zone wise-saying through the dialogue box.
       // Never center-screen text: that's the narrator's voice, not an NPC's.
-      const zone = game.currentRoom?.zone || 'green';
-      const sayings = ZONES[zone]?.wiseSayings || [];
+      const sayings = ZONES[anim.zone]?.wiseSayings || [];
       const text = sayings.length > 0
         ? sayings[Math.floor(Math.random() * sayings.length)]
         : 'KEEP MOVING.';

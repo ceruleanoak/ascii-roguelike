@@ -15,8 +15,8 @@ const MOTE_EMIT_INTERVAL = 0.045;
  * PuzzleSystem — P-room zone puzzles (Level-2 knowledge tier).
  *
  * Owns generation and per-frame logic for the per-zone puzzles defined in
- * data/puzzles.js. Solving a puzzle raises a PuzzleSpirit whose dialogue
- * hints at the zone key item's location (KeyItemSystem owns the item side).
+ * data/puzzles.js. Solving a puzzle raises a PuzzleSpirit whose dialogue is a
+ * lore hint (see each zone's `spirit.lines`).
  * Zones without a puzzle get a dormant stone circle + normal combat spawns.
  *
  * Puzzle state lives on room.puzzle; nothing persists across runs.

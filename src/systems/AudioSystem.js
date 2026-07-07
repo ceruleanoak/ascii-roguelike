@@ -819,6 +819,19 @@ export class AudioSystem {
     this.loadSFX('crow_takeoff_2', `${base}assets/audio/sfx-crow-2.wav`);
     this.loadSFX('magic_death', `${base}assets/audio/sfx-magic-death.wav`);
     this.loadSFX('ingredient_pickup', `${base}assets/audio/sfx-ingredient-pickup.wav`);
+    this.loadSFX('fairy_pickup', `${base}assets/audio/sfx-fairy-pickup.wav`);
+    this.loadSFX('fairy_transform', `${base}assets/audio/sfx-fairy-transform.wav`);
+    this.loadSFX('slime_jump', `${base}assets/audio/sfx-slime-jump.wav`);
+    this.loadSFX('crow_drop', `${base}assets/audio/sfx-crow-drop.wav`);
+    this.loadSFX('crow_attack_1', `${base}assets/audio/sfx-crow-attack-1.wav`);
+    this.loadSFX('crow_attack_2', `${base}assets/audio/sfx-crow-attack-2.wav`);
+    this.loadSFX('crow_attack_3', `${base}assets/audio/sfx-crow-attack-3.wav`);
+    this.loadSFX('goo_split', `${base}assets/audio/sfx-goo-split.wav`);
+    this.loadSFX('goo_reabsorb', `${base}assets/audio/sfx-goo-reabsorb.wav`);
+    this.loadSFX('beast_hit', `${base}assets/audio/sfx-beast-hit.wav`);
+    this.loadSFX('goblin_aggro', `${base}assets/audio/sfx-goblin-aggro.wav`);
+    this.loadSFX('slot_swap', `${base}assets/audio/sfx-slot-swap.wav`);
+    this.loadSFX('magic_hit', `${base}assets/audio/sfx-magic-hit.wav`);
     // Gray zone — placeholder names, no assets yet (playSFX no-ops on null).
     this.loadSFX('mist_take', null);   // depth-10 mist-out sequence
     this.loadSFX('bone_rise', null);   // Risen reassembling from its bone pile

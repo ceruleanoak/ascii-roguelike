@@ -139,6 +139,14 @@ export class ExitSystem {
       letters.push(letter);
     }
 
+    // Guarantee the miniboss ('B') exit is always on offer from L5 onward
+    // until this zone's miniboss has been cleared this run (gray excluded,
+    // same as the miniboss gating elsewhere).
+    if (currentDepth >= 5 && zoneType !== 'gray' && currentLetter !== 'B' &&
+        !letters.includes('B') && !this.zoneSystem?.clearedZones?.has(zoneType)) {
+      letters[Math.floor(Math.random() * letters.length)] = 'B';
+    }
+
     // Assign colors based on zone and progression state
     const colors = this.assignExitColors(letters, zoneType, progressionColor);
 
@@ -203,10 +211,15 @@ export class ExitSystem {
         weight *= data.zoneBoosts[zoneType];
       }
 
-      // Boss mini-room: locked out before L5, doubled from L5 onward
+      // Boss mini-room: locked out before L5, then ramps from x2 at L5 up to
+      // x8 at L9, where the miniboss becomes mandatory (see main.js).
       if (letter === 'B') {
-        if (depth < 5) weight = 0;
-        else weight *= 2;
+        if (depth < 5) {
+          weight = 0;
+        } else {
+          const t = Math.min(depth, 9) - 5; // 0 at depth 5, 4 at depth 9+
+          weight *= 2 + (6 * t / 4);        // 2 -> 8 linearly over depths 5..9
+        }
       }
 
       // Lucky blessing reshapes the route: more vaults, key rooms, mystery,

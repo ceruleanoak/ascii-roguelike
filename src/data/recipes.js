@@ -13,7 +13,7 @@ export const RECIPES = [
   { left: '⊿', right: '0', result: '△', name: 'Arrowhead' },      // Axe head + Rock = Arrowhead
   { left: '0', right: '|', result: '⊥', name: 'Hammer' },        // Rock + Stick = Hammer
   { left: '⊥', right: '⊥', result: '⟘', name: 'Maul' },          // Hammer + Hammer = Maul (radial knockback; explicit so T1 never slot-machines)
-  { left: '⊥', right: '6', result: '⬢', name: 'Onyx Hammer' },   // Hammer + Onyx = Onyx Hammer (crit + faster windup)
+  { left: '⊥', right: '⬧', result: '⬢', name: 'Onyx Hammer' },   // Hammer + Onyx = Onyx Hammer (crit + faster windup)
   { left: '0', right: '~', result: '⊸', name: 'Sling' },         // Rock + String = Sling
   { left: '|', right: '△', result: '⇈', name: 'Fletch of Arrows' }, // Stick + Arrowhead = Fletch of Arrows
   { left: '⊿', right: '|', result: '⊦', name: 'Axe' },           // Axe head + Stick = Axe (distinct ingredients now — no slot-order clash with Fletch)
@@ -22,6 +22,8 @@ export const RECIPES = [
   // Basic weapon upgrades
   { left: '¬', right: 'M', result: 'ᛉ', name: 'Shotgun' },       // Gun + Metal = Shotgun
   { left: '†', right: 'F', result: '‡', name: 'Flame Sword' },   // Sword + Fire = Flame Sword
+  { left: 'F', right: '|', result: '♨', name: 'Torch' },         // Fire Essence + Stick = Torch
+  { left: 'o', right: '|', result: '♨', name: 'Torch' },         // Oil + Stick = Torch (alt)
   { left: '†', right: '†', result: '⫯', name: 'Longsword' },     // Sword + Sword = Longsword
   { left: '|', right: '~', result: ')', name: 'Bow' },           // Stick + String = Bow
   { left: '|', right: '|', result: '/', name: 'Staff' },         // Stick + Stick = Staff
@@ -32,19 +34,19 @@ export const RECIPES = [
   { left: 'M', right: '|', result: '↾', name: 'Dagger' },      // Metal + Stick = Dagger
 
   // === GEM WANDS (Staff + gemstone) ===
-  { left: '/', right: '?', result: '⚝', name: 'Ruby Staff' },     // Staff + Ruby
-  { left: '/', right: '(', result: '⚹', name: 'Sapphire Staff' }, // Staff + Sapphire
-  { left: '/', right: '1', result: '⚶', name: 'Topaz Staff' },    // Staff + Topaz
-  { left: '/', right: '6', result: '⚸', name: 'Onyx Staff' },     // Staff + Onyx
-  { left: '/', right: '`', result: '⚘', name: 'Emerald Staff' },  // Staff + Emerald
-  { left: '/', right: '9', result: '⚭', name: 'Garnet Staff' },   // Staff + Garnet
-  { left: '/', right: '_', result: '⚳', name: 'Force Wand' },    // Staff + Diamond
+  { left: '/', right: '◈', result: '⚝', name: 'Ruby Staff' },     // Staff + Ruby
+  { left: '/', right: '⬨', result: '⚹', name: 'Sapphire Staff' }, // Staff + Sapphire
+  { left: '/', right: '◇', result: '⚶', name: 'Topaz Staff' },    // Staff + Topaz
+  { left: '/', right: '⬧', result: '⚸', name: 'Onyx Staff' },     // Staff + Onyx
+  { left: '/', right: '⬦', result: '⚘', name: 'Emerald Staff' },  // Staff + Emerald
+  { left: '/', right: '⬥', result: '⚭', name: 'Garnet Staff' },   // Staff + Garnet
+  { left: '/', right: '⧫', result: '⚳', name: 'Force Wand' },    // Staff + Diamond
 
   // === GEM WHIPS (Whip + gemstone) — magic-infused whipcrack ===
-  { left: '≋', right: '?', result: '∿', name: 'Ruby Whip' },      // Whip + Ruby     = burn lash
-  { left: '≋', right: '(', result: '≀', name: 'Sapphire Whip' },  // Whip + Sapphire = freeze lash
-  { left: '≋', right: '1', result: '⤳', name: 'Topaz Whip' },     // Whip + Topaz    = electric stun lash
-  { left: '≋', right: '`', result: '∽', name: 'Emerald Whip' },   // Whip + Emerald  = poison lash
+  { left: '≋', right: '◈', result: '∿', name: 'Ruby Whip' },      // Whip + Ruby     = burn lash
+  { left: '≋', right: '⬨', result: '≀', name: 'Sapphire Whip' },  // Whip + Sapphire = freeze lash
+  { left: '≋', right: '◇', result: '⤳', name: 'Topaz Whip' },     // Whip + Topaz    = electric stun lash
+  { left: '≋', right: '⬦', result: '∽', name: 'Emerald Whip' },   // Whip + Emerald  = poison lash
 
 
   // Dual wielding
@@ -65,6 +67,23 @@ export const RECIPES = [
   { left: 'G', right: 'b', result: 'x', name: 'Stone Skin' },     // Base Potion + Bone = Stone Skin
   { left: 'G', right: 't', result: 'u', name: 'Battle Elixir' },  // Base Potion + Teeth = Battle Elixir
   { left: 'G', right: 'h', result: 'z', name: 'Mending Brew' },   // Base Potion + Herb = Mending Brew
+  { left: 'G', right: '𝑚', result: '🜛', name: 'Mana Potion' },   // Base Potion + Mana = Mana Potion
+
+  // Purified Potion true-potion recipes — same results as Base Potion;
+  // AlchemySystem stamps the buffed potionModifier onto the result instance.
+  { left: '🜅', right: 'm', result: 'H', name: 'Health Potion' },
+  { left: '🜅', right: 'w', result: 'q', name: 'Haste Draught' },
+  { left: '🜅', right: 'b', result: 'x', name: 'Stone Skin' },
+  { left: '🜅', right: 't', result: 'u', name: 'Battle Elixir' },
+  { left: '🜅', right: 'h', result: 'z', name: 'Mending Brew' },
+
+  // Unstable Potion true-potion recipes — same results as Base Potion;
+  // AlchemySystem stamps the unstable potionModifier onto the result instance.
+  { left: '🜆', right: 'm', result: 'H', name: 'Health Potion' },
+  { left: '🜆', right: 'w', result: 'q', name: 'Haste Draught' },
+  { left: '🜆', right: 'b', result: 'x', name: 'Stone Skin' },
+  { left: '🜆', right: 't', result: 'u', name: 'Battle Elixir' },
+  { left: '🜆', right: 'h', result: 'z', name: 'Mending Brew' },
 
   // Advanced weapons
   { left: '†', right: 's', result: 'ᛖ', name: 'Dragon Blade' },  // Sword + Scale = Dragon Blade
@@ -114,7 +133,7 @@ export const RECIPES = [
 
   // === NEW GUN RECIPES (10) ===
   { left: 'ᛉ', right: 'j', result: '⌐', name: 'Machine Gun' },     // Shotgun + Goo = Machine Gun
-  { left: '¬', right: 'g', result: 'ᛁ', name: 'Freeze Ray' },      // Gun + Goo = Freeze Ray
+  { left: '¬', right: '⬨', result: 'ᛁ', name: 'Freeze Ray' },      // Gun + Sapphire = Freeze Ray
   { left: '¬', right: 'F', result: '↯', name: 'Lightning Gun' },   // Gun + Fire = Lightning Gun
   { left: 'ᛉ', right: 'F', result: '⟰', name: 'Rocket Launcher' }, // Shotgun + Fire = Rocket Launcher
   { left: '¬', right: 's', result: 'ᛞ', name: 'Plasma Rifle' },    // Gun + Scale = Plasma Rifle
@@ -125,7 +144,7 @@ export const RECIPES = [
   { left: 'ᚷ', right: 'M', result: 'ᚱ', name: 'Ricochet Rifle' },  // Heavy Pistols + Metal = Ricochet Rifle
 
   // === NEW MELEE RECIPES (10) ===
-  { left: '⊤', right: 'g', result: 'ᛜ', name: 'Ice Hammer' },      // Bone Axe + Goo = Ice Hammer
+  { left: '⊤', right: '⬨', result: 'ᛜ', name: 'Ice Hammer' },      // Bone Axe + Sapphire = Ice Hammer
   { left: '~', right: '~', result: '≋', name: 'Whip' },            // String + String = Whip
   { left: 'j', right: '~', result: '○', name: 'Flail' },           // Jaw + String = Flail
   { left: '⊤', right: 'F', result: 'ᚨ', name: 'Thunder Axe' },     // Bone Axe + Fire = Thunder Axe
@@ -136,7 +155,7 @@ export const RECIPES = [
   { left: 'ᛖ', right: 'F', result: 'ᛠ', name: 'Chaos Blade' },     // Dragon Blade + Fire = Chaos Blade
 
   // === NEW BOW RECIPES (8) ===
-  { left: ')', right: 'g', result: 'ᛇ', name: 'Ice Bow' },         // Bow + Goo = Ice Bow
+  { left: ')', right: '⬨', result: 'ᛇ', name: 'Ice Bow' },         // Bow + Sapphire = Ice Bow
   { left: ')', right: ')', result: '⋙', name: 'Multi-Shot Bow' },  // Bow + Bow = Multi-Shot Bow
   { left: ')', right: '@', result: 'ᛒ', name: 'Explosive Bow' },   // Bow + Bomb = Explosive Bow
   { left: ')', right: 'w', result: 'ᛟ', name: 'Homing Bow' },      // Bow + Wing = Homing Bow
@@ -151,7 +170,7 @@ export const RECIPES = [
 
   // === TRAP RECIPES ===
   // One-time traps
-  { left: 'f', right: 'M', result: '[', name: 'Freeze Trap' },     // Fur + Metal = Freeze Trap
+  { left: 'i', right: 'M', result: '[', name: 'Freeze Trap' },     // Ice + Metal = Freeze Trap
   { left: 'M', right: 'c', result: '{', name: 'Stun Trap' },       // Metal + Coin = Stun Trap
   { left: '~', right: 'F', result: '^', name: 'Fire Trap' },       // String + Fire = Fire Trap
   { left: 'w', right: 'm', result: ';', name: 'Sleep Bomb' },      // Wing + Meat = Sleep Bomb
@@ -176,16 +195,16 @@ export const RECIPES = [
   { left: 'M', right: 'b', result: '𐤆', name: 'Warplate' },        // Metal + Bone = Warplate
   { left: 'k', right: 'v', result: '𐤏', name: 'Ninja Garb' },      // Silk + Venom = Ninja Garb
   { left: 'a', right: 'M', result: '𐤉', name: 'Ember Cloak' },     // Ash + Metal = Ember Cloak
-  { left: 'g', right: 's', result: '𐤍', name: 'Ice Plate' },       // Goo + Scale = Ice Plate
+  { left: 'i', right: 's', result: '𐤍', name: 'Ice Plate' },       // Ice + Scale = Ice Plate
   { left: 'ł', right: 'f', result: '𐤖', name: 'Bloom Mantle' },    // Pollen + Fur = Bloom Mantle (on-hit pollen smoke screen)
 
   // === INFUSED ROBES (Robe + elemental gemstone) ===
-  { left: '𐤄', right: '(', result: '𐤇', name: 'Frost Robe' },   // Robe + Sapphire = Frost Robe
-  { left: '𐤄', right: '?', result: '𐤋', name: 'Flame Robe' },   // Robe + Ruby     = Flame Robe
-  { left: '𐤄', right: '1', result: '𐤈', name: 'Storm Robe' },   // Robe + Topaz    = Storm Robe
-  { left: '𐤄', right: '9', result: '𐤁', name: 'Blood Robe' },   // Robe + Garnet   = Blood Robe
-  { left: '𐤄', right: '`', result: '𐤐', name: 'Emerald Robe' }, // Robe + Emerald  = Emerald Robe
-  { left: '𐤄', right: '6', result: '𐤃', name: 'Shadow Robe' },  // Robe + Onyx     = Shadow Robe
+  { left: '𐤄', right: '⬨', result: '𐤇', name: 'Frost Robe' },   // Robe + Sapphire = Frost Robe
+  { left: '𐤄', right: '◈', result: '𐤋', name: 'Flame Robe' },   // Robe + Ruby     = Flame Robe
+  { left: '𐤄', right: '◇', result: '𐤈', name: 'Storm Robe' },   // Robe + Topaz    = Storm Robe
+  { left: '𐤄', right: '⬥', result: '𐤁', name: 'Blood Robe' },   // Robe + Garnet   = Blood Robe
+  { left: '𐤄', right: '⬦', result: '𐤐', name: 'Emerald Robe' }, // Robe + Emerald  = Emerald Robe
+  { left: '𐤄', right: '⬧', result: '𐤃', name: 'Shadow Robe' },  // Robe + Onyx     = Shadow Robe
   { left: '𐤄', right: 's', result: '⊛', name: 'Whirlwind Cape' }, // Robe + Scale    = Whirlwind Cape
 
   // === FISHING ===
@@ -197,10 +216,38 @@ export const RECIPES = [
   // === BLUE-ZONE ARMOR (water-only mechanics) ===
   { left: 'p', right: 'n', result: '∆', name: 'Shark Mask' },       // Pearl Shard + Sharkbone = Shark Mask
   { left: 'p', right: 'C', result: '𐤕', name: 'Coral Crown' },      // Pearl Shard + Coral Cluster = Coral Crown
-  { left: 'p', right: 'Y', result: '⚲', name: 'Stingray Mantle' }   // Pearl Shard + Stingray Barb = Stingray Mantle
+  { left: 'p', right: 'Y', result: '⚲', name: 'Stingray Mantle' },  // Pearl Shard + Stingray Barb = Stingray Mantle
 
-  // Spectacles (⊙) are no longer craftable — they wait past the black water
-  // on the yellow Mariner Path (KeyItemSystem; hinted by the yellow P-room puzzle).
+  // Charged Potion true-potion recipes (from Charged Starter '!');
+  // AlchemySystem stamps the charge potionModifier onto the result instance.
+  { left: '!', right: 'm', result: 'H', name: 'Health Potion' },
+  { left: '!', right: 'w', result: 'q', name: 'Haste Draught' },
+  { left: '!', right: 'b', result: 'x', name: 'Stone Skin' },
+  { left: '!', right: 't', result: 'u', name: 'Battle Elixir' },
+  { left: '!', right: 'h', result: 'z', name: 'Mending Brew' },
+
+  // Burning Potion true-potion recipes (from Burning Starter '«');
+  // AlchemySystem stamps the burn potionModifier onto the result instance.
+  { left: '«', right: 'm', result: 'H', name: 'Health Potion' },
+  { left: '«', right: 'w', result: 'q', name: 'Haste Draught' },
+  { left: '«', right: 'b', result: 'x', name: 'Stone Skin' },
+  { left: '«', right: 't', result: 'u', name: 'Battle Elixir' },
+  { left: '«', right: 'h', result: 'z', name: 'Mending Brew' },
+
+  // Primal Potion true-potion recipes (from Primal Starter '∿');
+  // AlchemySystem stamps the primal potionModifier onto the result instance.
+  { left: '∿', right: 'm', result: 'H', name: 'Health Potion' },
+  { left: '∿', right: 'w', result: 'q', name: 'Haste Draught' },
+  { left: '∿', right: 'b', result: 'x', name: 'Stone Skin' },
+  { left: '∿', right: 't', result: 'u', name: 'Battle Elixir' },
+  { left: '∿', right: 'h', result: 'z', name: 'Mending Brew' },
+
+  // Jolt Jar: charged potion + coin
+  { left: '!', right: 'c', result: 'J', name: 'Jolt Jar' },          // Charged Potion + Coin
+
+  // Spectacles (⊙) are not craftable. Obtained by clearing a Maze (M room) —
+  // breaking every cover object and collecting every dropped ingredient —
+  // without ever letting one blink out into a ghost. See MazeSystem.js.
 ];
 
 export function findRecipe(leftChar, rightChar) {

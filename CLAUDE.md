@@ -187,7 +187,13 @@ main.js reached ~8,000 lines because behavior with "no obvious home" defaulted i
 2. **No home exists? Create a system.** A 60-line `src/systems/XxxSystem.js` always beats 60 inline lines in main.js — there is no "too small for a system" threshold.
 3. **Input handlers are dispatch-only for new code.** A new branch in `setupInput()` / `handleSpacePress()` / `handleShiftPress()` may only translate the input into a single system call. The behavior lives in the system.
 4. **Extend, don't mirror.** If new code would "mirror the X pattern" inline (e.g. re-implementing the MagicSystem auto-cast lifecycle for a new weapon), extend system X or add a mechanic file (`entities/enemyMechanics/`-style composition) instead.
-5. **Budgets are enforced.** `npm run build` runs `tools/check-architecture.js` against `tools/arch-budgets.json`. Budgets only ratchet down — after an extraction shrinks a file, run `node tools/check-architecture.js --update` to lock in the new character-count ceiling. If the check fails, route the code out; never raise a budget to pass.
+5. **Budgets are enforced.** `npm run build` runs `tools/check-architecture.js` against `tools/arch-budgets.json`. The check exists to force a real look for an extraction candidate, not to be an absolute ceiling — a failure is a routing signal, not a line-count problem.
+   - **Never shrink comments, rename things tersely, or otherwise golf the diff to dodge the number.** Comments and naming are written for the next reader, not for the linter; trimming them to squeeze under a budget makes the code worse to save a `check:arch` run, which is the wrong trade every time.
+   - **On failure, extract first.** Search for logic in the over-budget file that can move to a system (per steps 1-4 above) — including logic that predates this change and was merely adjacent to it. Moving an existing method/block out is just as valid as routing the new code out; either can close the gap.
+   - Write the extracted code and its comments at their natural, undiminished length. Budget pressure is never a reason to under-document.
+   - After extracting, run `node tools/check-architecture.js --update` to lock in the new, smaller ceiling.
+   - **Only raise a budget when the extraction search comes up genuinely empty** — the addition is dispatch-only/data-only glue with nothing left to route out — and say so explicitly rather than silently padding the number.
+   - **When moving a subsystem or method, grep for every call site first** (not just the one you're touching) and update all of them in the same pass — a partial move leaves stale duplicate logic behind, which is worse than not moving it at all.
 
 ## Architectural Compromises
 

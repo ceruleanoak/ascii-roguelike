@@ -8,9 +8,9 @@
  *
  * Spread model (replaces the old 15%/s adjacency roll + 5% ember-ignition
  * roll that lived in main.js): every IGNITE_INTERVAL, each burning object
- * ignites flammable, non-burning neighbors within 1 cell (diagonals
- * included so dense grass fields burn as a contiguous front). Net front
- * speed ≈ 2.5 tiles/s — slow enough to outwalk, fast enough to feel alive.
+ * rolls SPREAD_CHANCE against flammable, non-burning orthogonal neighbors
+ * (no diagonals — lets a single burnt/cut tile act as a real firebreak
+ * instead of being flanked at the corners).
  *
  * Counterplay / propagation rules:
  *   - Burnt grass (flammability 'none' after burnGrass) never re-ignites —
@@ -34,7 +34,8 @@
 
 import { GRID } from '../game/GameConfig.js';
 
-const IGNITE_INTERVAL = 0.4;  // seconds per spread step (~2.5 tiles/s front)
+const IGNITE_INTERVAL = 0.4;  // seconds per spread step
+const SPREAD_CHANCE = 0.5;    // per-neighbor ignition chance each spread step
 const SCAN_INTERVAL = 0.25;   // burning-entity contact scan cadence
 const PARTICLE_BUDGET = 200;  // shared particle cap (same as the old main.js code)
 
@@ -133,16 +134,14 @@ export class FireSystem {
     if (burning.length === 0) return;
 
     const flammableMap = this._buildFlammableMap(objects);
+    const orthogonal = [[1, 0], [-1, 0], [0, 1], [0, -1]];
     for (const obj of burning) {
       const cx = Math.round(obj.position.x / GRID.CELL_SIZE);
       const cy = Math.round(obj.position.y / GRID.CELL_SIZE);
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          if (dx === 0 && dy === 0) continue;
-          const n = flammableMap.get(`${cx + dx},${cy + dy}`);
-          if (!n || n.destroyed || n.onFire) continue;
-          this.igniteObject(n);
-        }
+      for (const [dx, dy] of orthogonal) {
+        const n = flammableMap.get(`${cx + dx},${cy + dy}`);
+        if (!n || n.destroyed || n.onFire) continue;
+        if (Math.random() < SPREAD_CHANCE) this.igniteObject(n);
       }
     }
   }

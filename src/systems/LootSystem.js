@@ -3,6 +3,7 @@ import { Item } from '../entities/Item.js';
 import { isIngredient, isItem, generateEnemyDrops } from '../data/items.js';
 import { planeOf } from './PlaneSystem.js';
 import { GRID } from '../game/GameConfig.js';
+import { STARTER_POTION_CHARS, starterPotionIngredientsFor } from '../data/alchemy.js';
 
 export class LootSystem {
   constructor(game) {
@@ -13,6 +14,40 @@ export class LootSystem {
   // active-meter mana refill), otherwise banks/carries via game.addIngredient,
   // then removes the ingredient from the world. Shared by the player attraction
   // pickup in all three states and the boomerang fetch.
+  updateIngredientSeparation(deltaTime) {
+    const game = this.game;
+    const ingredients = game.ingredients;
+    const player = game.player;
+    const sep = GRID.CELL_SIZE * 1.2;
+    for (let i = ingredients.length - 1; i >= 0; i--) {
+      const ingredient = ingredients[i];
+      if (ingredient.pickupCooldown > 0) {
+        ingredient.pickupCooldown = Math.max(0, ingredient.pickupCooldown - deltaTime);
+      }
+      if (ingredient.dropBounceTimer > 0) {
+        ingredient.dropBounceTimer = Math.max(0, ingredient.dropBounceTimer - deltaTime);
+      }
+      for (let j = i - 1; j >= 0; j--) {
+        const other = ingredients[j];
+        const dx = ingredient.position.x - other.position.x;
+        const dy = ingredient.position.y - other.position.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq < sep * sep && distSq > 0.01) {
+          const dist = Math.sqrt(distSq);
+          const force = (sep - dist) * 40;
+          const nx = dx / dist, ny = dy / dist;
+          ingredient.velocity.vx += nx * force * deltaTime;
+          ingredient.velocity.vy += ny * force * deltaTime;
+          other.velocity.vx -= nx * force * deltaTime;
+          other.velocity.vy -= ny * force * deltaTime;
+        }
+      }
+      if (game.physicsSystem.applyAttraction(ingredient, player)) {
+        this.collectIngredient(ingredient);
+      }
+    }
+  }
+
   collectIngredient(ingredient) {
     const game = this.game;
     const player = game.player;
@@ -144,6 +179,15 @@ export class LootSystem {
 
   spawnItemDrop(char, x, y, angle = null, source = null) {
     const item = new Item(char, x, y);
+    // Found starter potions get the same hidden-ingredient hook as
+    // player-crafted ones (Condenser reveal) — random member of the
+    // matching ingredient set since the actual brew ingredient is unknown.
+    if (STARTER_POTION_CHARS.has(char)) {
+      const ingredients = [...starterPotionIngredientsFor(char)];
+      const baseIng = ingredients[Math.floor(Math.random() * ingredients.length)];
+      item.hiddenIngredient = baseIng;
+      item.baseIngredient = baseIng;
+    }
     if (source) item.plane = planeOf(source);
     if (this.game.activeFloor) item.hutPlane = true;
     if (this.game.player?.inMaze) item.mazePlane = true;

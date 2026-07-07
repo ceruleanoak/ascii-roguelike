@@ -1,6 +1,6 @@
 import { findRecipe } from '../data/recipes.js';
 import { Item } from '../entities/Item.js';
-import { WEAPON_TIERS, ITEMS } from '../data/items.js';
+import { WEAPON_TIERS, ITEMS, isIngredient } from '../data/items.js';
 
 /**
  * Returns the next-tier pool for a given weapon char, or null if none exists.
@@ -118,6 +118,21 @@ export class CraftingSystem {
 
   hasCenterContent() {
     return !!(this.centerSlot || this.cycleState);
+  }
+
+  /**
+   * Claim a center-slot result that is itself a raw ingredient (e.g. Mana) —
+   * these bank straight into inventory rather than becoming an equippable
+   * Item, since ingredients have no equipment slot to occupy. Returns the
+   * ingredient char, or null if the center slot holds a real crafted item.
+   */
+  claimCraftedIngredient() {
+    if (this.cycleState || !this.centerSlot || !isIngredient(this.centerSlot)) return null;
+    const char = this.centerSlot;
+    this.leftSlot = null;
+    this.rightSlot = null;
+    this.centerSlot = null;
+    return char;
   }
 
   claimCraftedItem(x, y) {

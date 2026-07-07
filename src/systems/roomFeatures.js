@@ -8,6 +8,99 @@ import { ENEMIES } from '../data/enemies.js';
 // Each takes the generator instance (`gen`) for its placement utilities.
 
 /**
+ * Derives the compass direction a carved river flows toward, based on the
+ * edge its path terminates at. Never returns 'south' — south is the return
+ * exit in this generator's convention, not a valid forward-progression
+ * direction for the river-follow chase to key off of.
+ */
+export function deriveRiverFlowDirection(path) {
+  const last = path && path[path.length - 1];
+  if (!last) return null;
+  if (last.row <= 1) return 'north';
+  if (last.col <= 1) return 'west';
+  if (last.col >= GRID.COLS - 2) return 'east';
+  return null;
+}
+
+/**
+ * Maps the direction the player just exited via to the next room's forced
+ * river geometry: the entry wall (opposite the exit direction) is where the
+ * river must start, and the allowed flow-out edges exclude both south (never
+ * a valid flow direction) and the entry wall itself (flowing back out the
+ * way the player came isn't forward progress).
+ */
+export function buildForcedRiverParams(exitDirection) {
+  const ENTRY_EDGE = { north: 'bottom', east: 'left', west: 'right' };
+  const startEdge = ENTRY_EDGE[exitDirection];
+  if (!startEdge) return null;
+  const allowedFlowEdges = ['top', 'left', 'right'].filter(e => e !== startEdge);
+  return { startEdge, allowedFlowEdges };
+}
+
+/**
+ * Carves a river pinned to `forced.startEdge`, retrying each allowed
+ * flow-out edge until one actually spans there. Falls back to an
+ * unconstrained river (still yellow-zone water, just not guaranteed to
+ * match an allowed direction) if the room's geometry can't satisfy the pin.
+ */
+export function carveForcedRiver(gen, room, forced) {
+  const start = gen._pickEdgePoint(forced.startEdge);
+  const edgeOrder = [...forced.allowedFlowEdges].sort(() => Math.random() - 0.5);
+
+  let path = null;
+  for (const edge of edgeOrder) {
+    const end = gen._pickEdgePoint(edge);
+    const attempt = gen._buildPath(room, 'river', start, end);
+    if (deriveRiverFlowDirection(attempt)) { path = attempt; break; }
+  }
+  if (!path) path = gen._buildPath(room, 'river');
+
+  const dir = deriveRiverFlowDirection(path);
+  if (dir && room.zone === 'yellow') room.riverFlowDirection = dir;
+}
+
+/**
+ * Cellular-automata cave grid. Returns grid[row][col] where 1 = wall, 0 = open.
+ * Borders are always wall; `isOpen(col, row)` cells are forced open (clearings,
+ * dive pockets). Shared by underground, bat belfry, and the Aquifer.
+ */
+export function cellularCaveGrid(cols, rows, isOpen, seedChance = 0.45, generations = 5) {
+  const grid = Array.from({ length: rows }, (_, r) =>
+    Array.from({ length: cols }, (_, c) => {
+      if (c === 0 || c === cols - 1 || r === 0 || r === rows - 1) return 1;
+      if (isOpen(c, r)) return 0;
+      return Math.random() < seedChance ? 1 : 0;
+    })
+  );
+  const countNeighbors = (g, col, row) => {
+    let count = 0;
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if (dr === 0 && dc === 0) continue;
+        const nr = row + dr, nc = col + dc;
+        if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) { count++; continue; }
+        if (g[nr][nc]) count++;
+      }
+    }
+    return count;
+  };
+  for (let gen = 0; gen < generations; gen++) {
+    const next = grid.map(r => [...r]);
+    for (let r = 1; r < rows - 1; r++) {
+      for (let c = 1; c < cols - 1; c++) {
+        if (isOpen(c, r)) { next[r][c] = 0; continue; }
+        const n = countNeighbors(grid, c, r);
+        next[r][c] = grid[r][c] === 1 ? (n >= 4 ? 1 : 0) : (n === 3 ? 1 : 0);
+      }
+    }
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) grid[r][c] = next[r][c];
+    }
+  }
+  return grid;
+}
+
+/**
  * Low-depth Lake/Ocean rooms: decent chance the water is peaceful — no
  * enemies, just a Fisherman on the shore teaching the fishing loop. The NPC
  * is stored on room.lakeFisherman and pushed into game.neutralCharacters at
@@ -82,6 +175,41 @@ export function spawnShoreFisherman(gen, room) {
 export function protectRegion(room, region) {
   if (!room.protectedRegions) room.protectedRegions = [];
   room.protectedRegions.push(region);
+}
+
+// Quagmire Pond: shape a small round body of water (from '~' bg objects) at the
+// largest pool's center with a conspicuous dark water tile in the middle — the
+// frog-only Pond entrance. AquiferSystem reads room.pondEntry to dive.
+export function placePondEntries(gen, room) {
+  const nodes = gen.currentLetterTemplate?.lakeZone?.nodes;
+  if (!nodes?.length) return;
+  const C = GRID.CELL_SIZE;
+  const node = nodes.reduce((a, b) => (b.radius > a.radius ? b : a));
+  const R = 2; // pond radius in cells
+
+  const waterAt = (col, row) => room.backgroundObjects.find(o =>
+    o.char === '~' && Math.round(o.position.x / C) === col && Math.round(o.position.y / C) === row);
+
+  // Fill a circular disc of water around the node center.
+  for (let dr = -R; dr <= R; dr++) {
+    for (let dc = -R; dc <= R; dc++) {
+      if (dc * dc + dr * dr > R * R) continue;
+      const col = node.col + dc, row = node.row + dr;
+      if (col < 1 || row < 1 || col >= GRID.COLS - 1 || row >= GRID.ROWS - 1) continue;
+      if (room.collisionMap[row]?.[col]) continue;
+      if (!waterAt(col, row)) {
+        room.backgroundObjects.push(new BackgroundObject('~', col * C, row * C));
+      }
+    }
+  }
+
+  // Dark water in the middle = the unique entrance.
+  const center = waterAt(node.col, node.row);
+  if (!center) return;
+  center.pondEntry = true;
+  center.color = '#0a3050';
+  center.animationColor = '#0a3050';
+  room.pondEntry = center;
 }
 
 function cellInRegion(col, row, region) {
@@ -252,4 +380,134 @@ export function spawnBelfryBats(gen, room, batCandidates, isInClearing) {
     gen.addEnemyToRoom(room, bat);
     batsSpawned++;
   }
+}
+
+/**
+ * Stamps one hut's footprint (walls, door, interior dark-fill, optional
+ * witch chicken-legs) onto `room` and returns the hut record. Shared by
+ * RoomGenerator.generateHutRoom() (single random hut) and
+ * generateSettlementRoom() below (fixed press/wise_man/alchemy trio).
+ */
+export function stampHutFootprint(room, { centerCol, centerRow, hutKind, raised = false }) {
+  const halfW = 2;
+  const halfH = 2;
+  const minCol = centerCol - halfW;
+  const maxCol = centerCol + halfW;
+  const minRow = centerRow - halfH;
+  const maxRow = centerRow + halfH;
+
+  const wallObjects = [];
+  const interiorObjects = [];
+  for (let row = minRow; row <= maxRow; row++) {
+    for (let col = minCol; col <= maxCol; col++) {
+      room.collisionMap[row][col] = true;
+      const isWall = row === minRow || row === maxRow || col === minCol || col === maxCol;
+      if (!isWall) {
+        const fill = new BackgroundObject('█', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+        fill.structural = true;
+        room.backgroundObjects.push(fill);
+        interiorObjects.push(fill);
+        continue;
+      }
+      if (row === maxRow && col === centerCol) continue;
+      const wallObj = new BackgroundObject('≡', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+      wallObj.structural = true;
+      room.backgroundObjects.push(wallObj);
+      wallObjects.push(wallObj);
+    }
+  }
+
+  const doorCol = centerCol;
+  const doorRow = maxRow;
+  const doorObj = new BackgroundObject('∩', doorCol * GRID.CELL_SIZE, doorRow * GRID.CELL_SIZE);
+  doorObj.structural = true;
+  room.backgroundObjects.push(doorObj);
+
+  // Witch huts rest atop two chicken legs: door unreachable until SIT/SITDOWN
+  // lowers the hut. Legs are passable but bullet-blocking, so they shake when struck.
+  const legObjects = [];
+  if (raised) {
+    const legCols = [centerCol - 1, centerCol + 1];
+    const legRows = [maxRow + 1, maxRow + 2];
+    for (const lc of legCols) {
+      for (const lr of legRows) {
+        if (lr >= GRID.ROWS - 1) continue;
+        const leg = new BackgroundObject('ⲗ', lc * GRID.CELL_SIZE, lr * GRID.CELL_SIZE);
+        leg.structural = true;
+        room.backgroundObjects.push(leg);
+        legObjects.push(leg);
+      }
+    }
+  }
+
+  return {
+    exteriorBounds: { minCol, maxCol, minRow, maxRow },
+    doorPosition: { col: doorCol, row: doorRow },
+    hutKind,
+    interiorGenerated: false,
+    raised,
+    verticalShift: raised ? 2 : 0,
+    wallObjects,
+    doorObject: doorObj,
+    interiorObjects,
+    legObjects
+  };
+}
+
+function shuffled(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Footprint bounding boxes overlap (or sit closer than `buffer` cells apart).
+function footprintsTooClose(a, b, buffer) {
+  return !(a.maxCol + buffer < b.minCol || b.maxCol + buffer < a.minCol ||
+           a.maxRow + buffer < b.minRow || b.maxRow + buffer < a.minRow);
+}
+
+// Center-position range for randomized hut placement — keeps every
+// footprint (half-width 2) well clear of the room border and south exit.
+const SETTLEMENT_CENTER_MIN = 4;
+const SETTLEMENT_CENTER_SPAN = 22; // centers land in [4, 25]
+const SETTLEMENT_HUT_BUFFER = 1; // min empty-cell gap between hut footprints
+
+/**
+ * Settlement room ('S') — 2-3 neutral huts drawn at random from
+ * `template.settlementHutPool`, placed at random non-overlapping positions
+ * (never enemy_encounter or witch). Builds `room.huts[]` (plural — see
+ * HutSystem._findNearbyHut) and never locks exits since Settlement is
+ * always neutral.
+ */
+export function generateSettlementRoom(gen, room) {
+  const pool = gen.currentLetterTemplate?.settlementHutPool ?? [];
+  const hutCount = Math.min(pool.length, 2 + Math.floor(Math.random() * 2)); // 2-3
+  const chosenKinds = shuffled(pool).slice(0, hutCount);
+
+  const placedBounds = [];
+  room.huts = [];
+  for (const hutKind of chosenKinds) {
+    let chosenCenter = null;
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const centerCol = SETTLEMENT_CENTER_MIN + Math.floor(Math.random() * SETTLEMENT_CENTER_SPAN);
+      const centerRow = SETTLEMENT_CENTER_MIN + Math.floor(Math.random() * SETTLEMENT_CENTER_SPAN);
+      const candidate = { minCol: centerCol - 2, maxCol: centerCol + 2, minRow: centerRow - 2, maxRow: centerRow + 2 };
+      if (placedBounds.some(b => footprintsTooClose(candidate, b, SETTLEMENT_HUT_BUFFER))) continue;
+      chosenCenter = { centerCol, centerRow };
+      break;
+    }
+    if (!chosenCenter) continue; // no free spot found — skip rather than overlap
+
+    const hut = stampHutFootprint(room, { ...chosenCenter, hutKind });
+    const { minCol, maxCol, minRow, maxRow } = hut.exteriorBounds;
+    placedBounds.push({ minCol, maxCol, minRow, maxRow });
+    protectRegion(room, { kind: 'rect', minCol, maxCol, minRow, maxRow });
+    room.huts.push(hut);
+  }
+
+  gen.generateBackgroundObjects(room);
+  room.exitsLocked = false;
 }

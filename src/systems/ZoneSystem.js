@@ -1,4 +1,5 @@
 import { ZONES, ZONE_COLORS } from '../data/zones.js';
+import { ROOM_TYPES } from '../game/GameConfig.js';
 
 // Utility function to blend two hex colors
 function blendColors(color1, color2, percent) {
@@ -45,6 +46,13 @@ export class ZoneSystem {
     this.leshyChaseActive = false;
     this.leshyChaseCount = 0;
     this.leshyLastExitDirection = null; // 'north', 'east', 'west'
+
+    // River-follow chase tracking (yellow zone only) — independent of Leshy's
+    // fields above; tracks a distinct trigger (matching a room's river flow
+    // direction on exit) and must not cross-contaminate with Leshy's state.
+    this.riverChaseActive = false;
+    this.riverChaseCount = 0;
+    this.riverLastExitDirection = null; // 'north', 'east', 'west'
 
     // Boss tracking — persists for the entire run
     this.defeatedBosses = new Set(); // zones whose boss has been killed this run
@@ -202,6 +210,13 @@ export class ZoneSystem {
       // Don't reset if already in gray zone (allow staying in gray)
       this.consecutiveGreenRooms = 0;
     }
+
+    // River-follow chase must be completed within one continuous yellow-zone
+    // visit — leaving yellow zone mid-streak drops the progress rather than
+    // letting it resume later.
+    if (currentZone !== 'yellow') {
+      this.resetRiverChase();
+    }
   }
 
   recordRoomClear(currentZone) {
@@ -220,14 +235,14 @@ export class ZoneSystem {
     }
   }
 
-  shouldSpawnCaptive(currentZone) {
+  shouldSpawnCaptive(currentZone, room) {
     // Gray zone doesn't have captive tracking
     if (currentZone === 'gray') {
       return false;
     }
 
-    // Must have cleared 5 rooms in this zone
-    if (this.roomsClearedInCurrentZone < 5) {
+    // Must have just defeated a miniboss (not the zone-ending boss)
+    if (!room?.isMiniboss) {
       return false;
     }
 
@@ -266,6 +281,64 @@ export class ZoneSystem {
     return this.defeatedBosses.has(zone);
   }
 
+  // ── Miniboss gating (depth 9 mandatory encounter) ──────────────────────────
+
+  /** True when the room being generated must be a forced miniboss room. */
+  isMinibossRequired(zone, depth) {
+    return zone !== 'gray' && depth === 9 && !this.clearedZones.has(zone);
+  }
+
+  /**
+   * Zone-boss / miniboss room-type override, evaluated on every fresh room
+   * entry — mid-EXPLORE transitions AND leaving REST. The leavingRest case
+   * matters because a character-swap respawn preserves zoneDepths, so a
+   * player who died in the boss room must walk straight back into it rather
+   * than into a regular room at the same depth.
+   *
+   * Returns { roomType, isZoneBossRoom } when an override applies, else null.
+   */
+  resolveForcedRoomType(game, currentZone, roomTransition, leavingRest) {
+    const enteringFreshRoom = roomTransition || leavingRest;
+    if (!enteringFreshRoom) return null;
+    const depth = game.zoneDepths[currentZone];
+
+    if (this.isBossReady(currentZone, depth)) {
+      console.log(`[Boss] Zone boss triggered for ${currentZone} at depth ${depth}`);
+      // Transition boss music: anticipation mini-loop → full 5-track sequence.
+      // If anticipation is running, bossSequencePending queues the switch at
+      // the next track boundary; otherwise (fresh entry, e.g. post-respawn or
+      // cheat menu) it starts immediately.
+      game.audioSystem.scheduleBossSequence();
+      return { roomType: ROOM_TYPES.BOSS, isZoneBossRoom: true };
+    }
+
+    if (this.isMinibossRequired(currentZone, depth)) {
+      return { roomType: ROOM_TYPES.BOSS, isZoneBossRoom: false };
+    }
+
+    return null;
+  }
+
+  /**
+   * Depth-8 room clear steers the exit toward the depth-9 mandatory miniboss,
+   * mirroring the pre-boss gate's north-only 'B' exit forcing.
+   */
+  applyPreMinibossGate(game) {
+    const zone = game.currentRoom.zone || 'green';
+    const depth = game.zoneDepths[zone] || 0;
+    if (zone === 'gray' || depth !== 8 || game.preBossGateActive || this.clearedZones.has(zone)) return;
+    game.preMinibossGateActive = true;
+    game.currentRoom.exits.east = null;
+    game.currentRoom.exits.west = null;
+    game.currentRoom.exits.north = { letter: 'B', color: ZONES[zone].exitColor };
+  }
+
+  /** Clears both zone-boss and miniboss exit-forcing flags on room transition. */
+  resetGates(game) {
+    game.preBossGateActive = false;
+    game.preMinibossGateActive = false;
+  }
+
   resetOnRest() {
     this.roomsSinceRest = 0;
     this.consecutiveGreenRooms = 0; // Reset gray zone progress on rest
@@ -273,6 +346,7 @@ export class ZoneSystem {
     this.lastColoredZone = null;
     this.roomsClearedInCurrentZone = 0;
     this.resetLeshyChase(); // Reset chase tracking on rest
+    this.resetRiverChase();
     // pathHistory persists (allows for letter pattern secrets)
     // clearedZones persists (captive rescues are permanent per run)
   }
@@ -289,6 +363,7 @@ export class ZoneSystem {
     this.defeatedBosses.clear();
     this.bossRoomPending = false;
     this.resetLeshyChase();
+    this.resetRiverChase();
   }
 
   // Get blended environment colors for current zone with progression
@@ -358,6 +433,41 @@ export class ZoneSystem {
     this.leshyChaseActive = false;
     this.leshyChaseCount = 0;
     this.leshyLastExitDirection = null;
+  }
+
+  // ===== River-Follow Chase System (Yellow Zone Secret) =====
+
+  /**
+   * Record whether the player exited a river room along its flow direction.
+   * Unlike Leshy (started externally when the NPC reaches an exit), this
+   * chase only ever advances from a successful follow — there's no separate
+   * "start" call, since the room's own riverFlowDirection is the trigger.
+   * @param {boolean} followed - true if the exit taken matched the room's riverFlowDirection
+   * @param {string} exitDirection - the direction taken; informs the next room's forced river
+   * @returns {string} - 'oasis' (3rd consecutive follow), 'continue' (1st/2nd), or 'failed'
+   */
+  recordRiverFollow(followed, exitDirection) {
+    if (followed) {
+      this.riverChaseCount++;
+      if (this.riverChaseCount >= 3) {
+        this.resetRiverChase();
+        return 'oasis';
+      }
+      this.riverChaseActive = true;
+      this.riverLastExitDirection = exitDirection;
+      return 'continue';
+    }
+    this.resetRiverChase();
+    return 'failed';
+  }
+
+  /**
+   * Reset all river-follow chase tracking
+   */
+  resetRiverChase() {
+    this.riverChaseActive = false;
+    this.riverChaseCount = 0;
+    this.riverLastExitDirection = null;
   }
 
   /**

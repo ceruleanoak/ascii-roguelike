@@ -2,7 +2,8 @@ import { GRID } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Item } from '../entities/Item.js';
 import { Ingredient } from '../entities/Ingredient.js';
-import { ITEMS, INGREDIENTS, getItemData, isIngredient } from './items.js';
+import { Fairy } from '../entities/Fairy.js';
+import { ITEMS, ITEM_TYPES, INGREDIENTS, getItemData, isIngredient } from './items.js';
 
 /**
  * Neutral Room Scripts
@@ -347,6 +348,50 @@ export const NEUTRAL_ROOMS = {
     onExit(room, player, state) {
       // Clean exit - no special logic needed
     }
+  },
+
+  /**
+   * Oasis — yellow-zone secret reached by following a river's flow direction
+   * for 3 consecutive rooms (see ZoneSystem.recordRiverFollow / main.js exit
+   * handlers). Lake-style water terrain, a random tier-3 weapon, and fairies
+   * to catch in bottles. No enemies.
+   */
+  oasis: {
+    onGenerate(room, state, roomGenerator) {
+      const nodes = [
+        { col: 13, row: 14, radius: 7 },
+        { col: 18, row: 17, radius: 5.5 }
+      ];
+      roomGenerator?.stampWaterBlobs(room, nodes, 2.0, 0.9);
+
+      const centerX = Math.floor(GRID.COLS / 2) * GRID.CELL_SIZE;
+      const centerY = Math.floor(GRID.ROWS / 2) * GRID.CELL_SIZE;
+
+      // Random tier-3 weapon, uniformly chosen — no thematic curation.
+      const tier3Weapons = Object.values(ITEMS).filter(
+        item => item.type === ITEM_TYPES.WEAPON && item.tier === 3
+      );
+      if (tier3Weapons.length > 0) {
+        const chosen = tier3Weapons[Math.floor(Math.random() * tier3Weapons.length)];
+        const weapon = new Item(chosen.char, centerX, centerY - GRID.CELL_SIZE * 2);
+        room.items.push(weapon);
+      }
+
+      // Fairies flutter indefinitely (no room-clear gate here — Oasis has no
+      // enemies) and hold still since exits are always unlocked; touching one
+      // with an equipped Empty Bottle catches it (InteractionSystem.checkFairyTouch).
+      state.fairies = [
+        new Fairy(centerX - GRID.CELL_SIZE * 3, centerY, room.exits, { flutterDuration: Infinity }),
+        new Fairy(centerX + GRID.CELL_SIZE * 3, centerY, room.exits, { flutterDuration: Infinity })
+      ];
+      room.pendingNeutralCharacters = state.fairies;
+    },
+
+    onInteract(target, player, room, state) { return null; },
+
+    onUpdate(dt, room, player, state) {},
+
+    onExit(room, player, state) {}
   },
 
   /**

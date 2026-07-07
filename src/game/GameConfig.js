@@ -37,7 +37,24 @@ export const PHYSICS = {
   // is gone; the single canonical tick multiplies deltaTime by this rate to
   // preserve the tuned pacing. Effective seconds = data value / 2. Do NOT
   // remove without halving all enemy timing data in the same pass.
-  ENEMY_TIMER_RATE: 2
+  ENEMY_TIMER_RATE: 2,
+
+  // Default knockback applied to the player on damage so a hit reads clearly
+  // and buys distance to decide fight-or-flight. Sources with their own tuned
+  // knockback (melee windups, charges, leap landings, rock projectiles) pass
+  // an explicit force instead; this is the floor for everything else.
+  DEFAULT_DAMAGE_KNOCKBACK: 220
+};
+
+// Combat-proximity camera zoom: tightens the view when an enemy closes in,
+// pivoted on the player, eased with a cubic bezier. See CameraZoomSystem.
+export const ZOOM = {
+  SCALE: 2.0,                 // 200% zoom when triggered
+  TRIGGER_RANGE_CELLS: 6,     // enemy/ghost within this many cells triggers zoom
+  RELEASE_RANGE_CELLS: 7,     // once zoomed, enemy must clear this range before zoom releases (hysteresis — prevents flicker at the trigger boundary)
+  ZOOM_OUT_DELAY_MS: 500,     // hold the zoom this long after the last detected enemy before actually releasing
+  TRANSITION_IN_MS: 700,      // duration of the eased zoom-in transition (slower, deliberate)
+  TRANSITION_OUT_MS: 700      // duration of the eased zoom-out transition (matches zoom-in)
 };
 
 export const GAME_STATES = {
@@ -74,6 +91,7 @@ export const ROOM_TYPES = {
   UNDERGROUND: 'UNDERGROUND',
   BAT_BELFRY: 'BAT_BELFRY',
   HUT: 'HUT',
+  SETTLEMENT: 'SETTLEMENT',
   DUNGEON: 'DUNGEON',
   MAZE: 'MAZE',
   RIDGE: 'RIDGE',
@@ -738,7 +756,7 @@ export const BACKGROUND_OBJECTS = {
       default: { animation: 'none', message: null }
     }
   },
-  '2': {
+  '5': {
     name: 'Glittering Rock',
     color: '#aaddff',
     hp: 3,

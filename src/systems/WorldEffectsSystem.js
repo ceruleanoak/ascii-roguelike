@@ -1,8 +1,10 @@
 import { GRID } from '../game/GameConfig.js';
 import { GooBlob } from '../entities/GooBlob.js';
 import { createDebris } from '../entities/Debris.js';
+import { createFootstep, createWetDrop, createSteamPuff, createChaff } from '../entities/Particle.js';
 
 const MAX_GOO_BLOBS = 20;
+const IDLE_ECHO_DURATION = 0.5; // seconds — must match the radius/alpha envelope in RestRenderer
 
 // Shared transient world-effect ticker — runs in REST and EXPLORE alike.
 // Owns the per-frame lifecycle of: ember stack decay + ember contact ignition,
@@ -141,6 +143,12 @@ export class WorldEffectsSystem {
       }
     }
 
+    // Update idle echoes (REST "nothing to interact with" feedback ring)
+    for (let i = game.idleEchoes.length - 1; i >= 0; i--) {
+      game.idleEchoes[i].age += deltaTime;
+      if (game.idleEchoes[i].age >= IDLE_ECHO_DURATION) game.idleEchoes.splice(i, 1);
+    }
+
     // Update puddles — age timed puddles and remove expired ones (persistent puddles tick no-op)
     for (let i = game.puddles.length - 1; i >= 0; i--) {
       const p = game.puddles[i];
@@ -246,6 +254,190 @@ export class WorldEffectsSystem {
    * hutPlane: pass true from interior death loops (hut/dungeon) so overlays
    * render the pieces; surface deaths tag the enemy's plane instead.
    */
+  checkGooBlobHits() {
+    const game = this.game;
+    if (!game.gooBlobs.length) return;
+    const meleeAttacks = game.combatSystem.meleeAttacks;
+    for (let bi = game.gooBlobs.length - 1; bi >= 0; bi--) {
+      const blob = game.gooBlobs[bi];
+      let hit = false;
+      for (const attack of meleeAttacks) {
+        const atkR = (attack.radius || GRID.CELL_SIZE) + blob.radius;
+        const dx = blob.position.x - attack.position.x;
+        const dy = blob.position.y - attack.position.y;
+        if (dx * dx + dy * dy < atkR * atkR) {
+          if (attack.isBlade) hit = true;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          blob.velocity.vx += (dx / dist) * 50;
+          blob.velocity.vy += (dy / dist) * 50;
+          const speed = Math.sqrt(blob.velocity.vx ** 2 + blob.velocity.vy ** 2);
+          if (speed > 150) {
+            blob.velocity.vx = (blob.velocity.vx / speed) * 300;
+            blob.velocity.vy = (blob.velocity.vy / speed) * 300;
+          }
+          blob.stationary = false;
+          break;
+        }
+      }
+      if (blob.expired) { game.gooBlobs.splice(bi, 1); continue; }
+      if (hit && !blob.isInvulnerable()) {
+        game.gooBlobs.splice(bi, 1);
+        if (Math.random() < 0.05) {
+          game.lootSystem.spawnIngredientDrop('g', blob.position.x, blob.position.y, null, null);
+        }
+      }
+    }
+  }
+
+  updateEntityTrails(deltaTime) {
+    const game = this.game;
+    const player = game.player;
+    if (!player) return;
+    const enemies = game.currentRoom?.enemies ?? [];
+    const steamClouds = game.steamClouds;
+    const particles = game.particles;
+
+    // Sprint footstep trail: dots while unarmed and moving
+    {
+      const isSprinting = !player.heldItem && !player.dodgeRoll.active;
+      const speed = Math.sqrt(player.velocity.vx ** 2 + player.velocity.vy ** 2);
+      if (isSprinting && speed > 30) {
+        player.footstepTimer -= deltaTime;
+        if (player.footstepTimer <= 0) {
+          const f = player.facing;
+          const cx = player.position.x, cy = player.position.y;
+          const side = player.footstepSide === 0 ? 0.5 : -0.5;
+          const ox = -f.y * GRID.CELL_SIZE * 0.3 * side;
+          const oy =  f.x * GRID.CELL_SIZE * 0.3 * side;
+          particles.push(createFootstep(cx + ox, cy + oy));
+          player.footstepSide = 1 - player.footstepSide;
+          player.footstepTimer = 0.10;
+        }
+      } else {
+        player.footstepTimer = 0;
+      }
+    }
+
+    // Wet trail: player
+    if (player.isWet()) {
+      player.wetDropTimer -= deltaTime;
+      if (player.wetDropTimer <= 0) {
+        const dropCount = Math.random() < 0.4 ? 2 : 1;
+        for (let d = 0; d < dropCount; d++) {
+          particles.push(createWetDrop(player.position.x, player.position.y));
+        }
+        const wet = player.wetDuration;
+        player.wetDropTimer = wet > 4 ? 0.10 : wet > 2 ? 0.14 : 0.20;
+      }
+    } else {
+      player.wetDropTimer = 0;
+    }
+
+    // Wet trail: enemies
+    for (const enemy of enemies) {
+      if (enemy.isWet()) {
+        enemy.wetDropTimer -= deltaTime;
+        if (enemy.wetDropTimer <= 0) {
+          const dropCount = Math.random() < 0.4 ? 2 : 1;
+          for (let d = 0; d < dropCount; d++) {
+            particles.push(createWetDrop(enemy.position.x, enemy.position.y));
+          }
+          const wet = enemy.statusEffects.wet.duration;
+          enemy.wetDropTimer = wet > 4 ? 0.10 : wet > 2 ? 0.14 : 0.20;
+        }
+      } else {
+        enemy.wetDropTimer = 0;
+      }
+    }
+
+    // Steam trail: player
+    {
+      let playerInSteam = false;
+      const px = player.position.x + GRID.CELL_SIZE / 2;
+      const py = player.position.y + GRID.CELL_SIZE / 2;
+      for (const cloud of steamClouds) {
+        const dx = px - cloud.x, dy = py - cloud.y;
+        if (dx * dx + dy * dy <= cloud.radius * cloud.radius) { playerInSteam = true; break; }
+      }
+      if (playerInSteam) {
+        player.steamTrailTimer -= deltaTime;
+        if (player.steamTrailTimer <= 0) {
+          particles.push(createSteamPuff(player.position.x, player.position.y));
+          player.steamTrailTimer = 0.12 + Math.random() * 0.06;
+        }
+      } else {
+        player.steamTrailTimer = 0;
+      }
+    }
+
+    // Steam trail: enemies
+    for (const enemy of enemies) {
+      let enemyInSteam = false;
+      const ex = enemy.position.x + GRID.CELL_SIZE / 2;
+      const ey = enemy.position.y + GRID.CELL_SIZE / 2;
+      for (const cloud of steamClouds) {
+        const dx = ex - cloud.x, dy = ey - cloud.y;
+        if (dx * dx + dy * dy <= cloud.radius * cloud.radius) { enemyInSteam = true; break; }
+      }
+      if (enemyInSteam) {
+        enemy.steamTrailTimer = (enemy.steamTrailTimer || 0) - deltaTime;
+        if (enemy.steamTrailTimer <= 0) {
+          particles.push(createSteamPuff(enemy.position.x, enemy.position.y));
+          enemy.steamTrailTimer = 0.15 + Math.random() * 0.07;
+        }
+      } else {
+        enemy.steamTrailTimer = 0;
+      }
+    }
+  }
+
+  spawnImpactEffects(impactEffects) {
+    if (!impactEffects || !impactEffects.length) return;
+    const particles = this.game.particles;
+    const IMPACT_CHARS = {
+      burn:   ['!', '+', '.'],
+      stun:   ['+', '*', '.'],
+      freeze: ['*', '+', '.'],
+      poison: ['+', '.', 'o']
+    };
+    for (const fx of impactEffects) {
+      if (fx.effect === 'chaff') {
+        const chaffParticles = createChaff(fx.x + GRID.CELL_SIZE / 2, fx.y + GRID.CELL_SIZE / 2);
+        for (const particle of chaffParticles) {
+          particles.push({
+            x: particle.position.x,
+            y: particle.position.y,
+            vx: particle.velocity.vx,
+            vy: particle.velocity.vy,
+            life: particle.lifetime,
+            maxLife: particle.maxLifetime,
+            char: particle.char,
+            color: particle.color,
+            isImpact: true
+          });
+        }
+      } else {
+        const chars = IMPACT_CHARS[fx.onHit] || ['+', '.'];
+        for (let i = 0; i < 5; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 40 + Math.random() * 60;
+          const life = 0.2 + Math.random() * 0.3;
+          particles.push({
+            x: fx.x + GRID.CELL_SIZE / 2,
+            y: fx.y + GRID.CELL_SIZE / 2,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life,
+            maxLife: life,
+            char: chars[Math.floor(Math.random() * chars.length)],
+            color: fx.color || '#ffffff',
+            isImpact: true
+          });
+        }
+      }
+    }
+  }
+
   spawnDeathDetritus(enemy, { hutPlane = false } = {}) {
     const game = this.game;
     const cx = enemy.position.x + GRID.CELL_SIZE / 2;

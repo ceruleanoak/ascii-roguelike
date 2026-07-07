@@ -76,9 +76,13 @@ export class CampNPC extends NeutralCharacter {
     this.campfirePos = { x: campfirePos.x, y: campfirePos.y };
     this.tetherRadius = TETHER_RADIUS;
 
-    // Movement
+    // Movement — CampNPCSystem drives velocity directly every frame (no
+    // acceleration ramp), so this entity intentionally carries no
+    // `acceleration` field. PhysicsSystem.updateEntity() only applies
+    // acceleration integration when `entity.acceleration` is truthy and
+    // expects the `{ax, ay}` shape (see Player.js/Enemy.js) — a stray
+    // scalar here silently NaN's velocity every tick once physics-registered.
     this.speed = 90; // slightly slower than player
-    this.acceleration = 800;
 
     // Flee state
     this.fleeTargetExit = null;

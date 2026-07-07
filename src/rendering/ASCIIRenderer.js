@@ -47,18 +47,20 @@ export function installRetroAlphaQuantization(ctx) {
 }
 
 export class ASCIIRenderer {
-  constructor(backgroundCanvas, foregroundCanvas) {
+  constructor(backgroundCanvas, foregroundCanvas, uiCanvas) {
     this.bgCanvas = backgroundCanvas;
     this.fgCanvas = foregroundCanvas;
+    this.uiCanvas = uiCanvas;
     this.bgCtx = backgroundCanvas.getContext('2d');
     this.fgCtx = foregroundCanvas.getContext('2d');
+    this.uiCtx = uiCanvas.getContext('2d');
 
     // Scale canvas buffer to physical device pixels so pixel fonts render
     // at 1:1 device pixels instead of being upscaled and blurred by the OS.
     // All game coordinates remain in logical (480px) space via ctx.scale().
     const dpr = window.devicePixelRatio || 1;
     this.dpr = dpr;
-    for (const canvas of [this.bgCanvas, this.fgCanvas]) {
+    for (const canvas of [this.bgCanvas, this.fgCanvas, this.uiCanvas]) {
       canvas.width  = GRID.WIDTH  * dpr;
       canvas.height = GRID.HEIGHT * dpr;
       canvas.style.width  = GRID.WIDTH  + 'px';
@@ -68,6 +70,7 @@ export class ASCIIRenderer {
     // Configure rendering contexts
     this.setupContext(this.bgCtx);
     this.setupContext(this.fgCtx);
+    this.setupContext(this.uiCtx);
 
     this.backgroundDirty = true;
   }
@@ -113,6 +116,11 @@ export class ASCIIRenderer {
     this.fgCtx.clearRect(0, 0, GRID.WIDTH, GRID.HEIGHT);
   }
 
+  // Zoom-exempt layer: spell response text, swap menu, cheat menu
+  clearUI() {
+    this.uiCtx.clearRect(0, 0, GRID.WIDTH, GRID.HEIGHT);
+  }
+
   // Draw grid-aligned cell (background layer)
   drawCell(x, y, char, color = COLORS.TEXT) {
     const pixelX = x * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
@@ -143,6 +151,21 @@ export class ASCIIRenderer {
     this.fgCtx.restore();
   }
 
+  // Draw pixel-positioned entity (zoom-exempt UI layer — see clearUI)
+  drawUIEntity(x, y, char, color = COLORS.TEXT) {
+    this.uiCtx.fillStyle = color;
+    this.uiCtx.fillText(char, x, y);
+  }
+
+  drawUIEntityScaled(x, y, char, color = COLORS.TEXT, scale = 1.0) {
+    this.uiCtx.save();
+    this.uiCtx.translate(x, y);
+    this.uiCtx.scale(scale, scale);
+    this.uiCtx.fillStyle = color;
+    this.uiCtx.fillText(char, 0, 0);
+    this.uiCtx.restore();
+  }
+
   // Draw entity using VentureArcade pixel font (for zone exit letters)
   drawEntityVA(x, y, char, color = COLORS.TEXT) {
     this.fgCtx.save();
@@ -150,6 +173,18 @@ export class ASCIIRenderer {
     this.fgCtx.fillStyle = color;
     this.fgCtx.fillText(char, x, y);
     this.fgCtx.restore();
+  }
+
+  // Draw a pixel-positioned entity rotated by angle (radians) around its center
+  // (zoom-exempt UI layer — see clearUI)
+  drawUIEntityRotated(x, y, char, color, angle, scale = 1.0) {
+    this.uiCtx.save();
+    this.uiCtx.translate(x, y);
+    this.uiCtx.rotate(angle);
+    if (scale !== 1.0) this.uiCtx.scale(scale, scale);
+    this.uiCtx.fillStyle = color;
+    this.uiCtx.fillText(char, 0, 0);
+    this.uiCtx.restore();
   }
 
   // Draw a pixel-positioned entity rotated by angle (radians) around its center
@@ -345,6 +380,18 @@ export class ASCIIRenderer {
       this.fgCtx.fillRect(x, y, width, height);
     } else {
       this.fgCtx.strokeRect(x, y, width, height);
+    }
+  }
+
+  // Draw rectangle (zoom-exempt UI layer — see clearUI)
+  drawUIRect(x, y, width, height, color, filled = false) {
+    this.uiCtx.strokeStyle = color;
+    this.uiCtx.fillStyle = color;
+
+    if (filled) {
+      this.uiCtx.fillRect(x, y, width, height);
+    } else {
+      this.uiCtx.strokeRect(x, y, width, height);
     }
   }
 

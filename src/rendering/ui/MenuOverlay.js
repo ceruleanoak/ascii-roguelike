@@ -13,6 +13,16 @@ export class MenuOverlay {
     this.renderer = renderer;
   }
 
+  // Empty-slot message tailored to what's missing, instead of a generic
+  // "Chest is empty" that doesn't fit armor/weapon/consumable slot menus.
+  emptyMessage(game) {
+    const slot = game.currentMenuSlot;
+    if (slot === 'chest') return 'You have no weapons';
+    if (slot === 'armor') return 'You have no armor';
+    if (slot?.startsWith('consumable')) return 'You have no consumables';
+    return 'Chest is empty';
+  }
+
   render(game) {
     if (!game.menuOpen) return;
 
@@ -26,12 +36,13 @@ export class MenuOverlay {
     let title = 'Select Item';
     if (game.currentMenuSlot === 'chest') title = 'Item Chest';
     else if (game.currentMenuSlot === 'press') title = 'PRESS';
+    else if (game.currentMenuSlot === 'alchemy') title = game.alchemyMenuTitle ?? 'CAULDRON';
 
     let html = `<h3 style="text-align: center;">${title}</h3>`;
     html += '<div style="max-height: 300px; overflow-y: auto; overflow-x: hidden;">';
 
     if (game.menuItems.length === 0) {
-      html += '<div style="margin: 8px 0; color: #888;">Chest is empty</div>';
+      html += `<div style="margin: 8px 0; color: #888;">${this.emptyMessage(game)}</div>`;
     }
 
     for (let i = 0; i < game.menuItems.length; i++) {
@@ -48,7 +59,8 @@ export class MenuOverlay {
         html += `<div class="menu-item ${selected}">${item} - ${data.name}</div>`;
       } else {
         // Equipment item (has char and data.name)
-        html += `<div class="menu-item ${selected}">${item.char} - ${item.data.name}</div>`;
+        const displayName = item.getDisplayName?.() ?? item.data.name;
+        html += `<div class="menu-item ${selected}">${item.char} - ${displayName}</div>`;
       }
     }
 
@@ -142,7 +154,8 @@ export class MenuOverlay {
               const isEquipped = game.equippedMenuItems?.has(item);
               const itemColor = isEquipped ? '#ffdd88' : '#ffffff';
               const equippedStr = isEquipped ? ' (E)' : '';
-              html += `<div class="menu-item ${selected}" style="color: ${itemColor};">${item.char} - ${item.data.name}${equippedStr}</div>`;
+              const displayName = item.getDisplayName?.() ?? item.data.name;
+              html += `<div class="menu-item ${selected}" style="color: ${itemColor};">${item.char} - ${displayName}${equippedStr}</div>`;
             }
           }
         }

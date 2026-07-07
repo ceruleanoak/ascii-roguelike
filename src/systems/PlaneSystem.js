@@ -93,3 +93,50 @@ export function filterObjectsByPlane(objects, observer) {
   const p = planeOf(observer);
   return objects.filter(o => objectOnPlane(o, p));
 }
+
+/**
+ * True when the player is inside a hut/dungeon/maze interior (a PiP overlay
+ * layer, distinct from the surface/tunnel/submerged plane system above).
+ * Canonical replacement for the scattered `player.inHut || player.inDungeon ||
+ * player.inMaze` boolean chains — use this everywhere a system needs to know
+ * whether the surface room is the active layer.
+ */
+export function isInteriorActive(game) {
+  const p = game?.player;
+  // Canonical single field (ADR-0001) — covers hut/dungeon/maze/pond.
+  return !!(p && p._activeInteriorKind != null);
+}
+
+/**
+ * Tag a transient effect/entity (particle, puddle, goo blob, steam cloud, ...)
+ * with the interior plane it was spawned on, so render filtering (hutPlane)
+ * matches the layer the player was in at spawn time. Call this at every
+ * effect-creation site instead of writing `entity.hutPlane = !!game.activeFloor`
+ * by hand — a missed manual tag is exactly what caused the dodge-trail leak
+ * (bug #107).
+ */
+export function tagInteriorPlane(game, entity) {
+  entity.hutPlane = !!game.activeFloor;
+  return entity;
+}
+
+/**
+ * Freeze the surface room's enemies on interior entry: unregister them from
+ * PhysicsSystem (so velocity/knockback/friction stop integrating, not just AI)
+ * and empty currentRoom.enemies (so the many loops that iterate it directly
+ * naturally no-op). Object references are preserved, not destroyed — thaw
+ * restores the exact same instances with all state intact.
+ */
+export function freezeSurfaceRoom(game) {
+  if (!game.currentRoom || game.currentRoom._frozenEnemies) return;
+  game.currentRoom._frozenEnemies = game.currentRoom.enemies;
+  for (const e of game.currentRoom.enemies) game.physicsSystem.removeEntity(e);
+  game.currentRoom.enemies = [];
+}
+
+export function thawSurfaceRoom(game) {
+  if (!game.currentRoom?._frozenEnemies) return;
+  game.currentRoom.enemies = game.currentRoom._frozenEnemies;
+  for (const e of game.currentRoom.enemies) game.physicsSystem.addEntity(e);
+  game.currentRoom._frozenEnemies = null;
+}

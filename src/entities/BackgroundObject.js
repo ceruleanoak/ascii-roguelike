@@ -600,7 +600,7 @@ export class BackgroundObject {
     this.animationColor = '#888888';
     this.animationChar = '0';
     this.bulletInteraction = this.data.bulletInteraction || 'interact-preserve';
-    this.indestructible = false;
+    this.indestructible = true;
     this.conductivity = 'none';
     this.flammability = 'none';
     this.collisionShape = 'ellipse';

@@ -108,6 +108,14 @@ export class NeutralRenderer {
       this.renderer.drawEntity(x, y, ingredient.char, ingredient.color);
     }
 
+    // Draw neutral characters (Leshy, Fairy, etc.)
+    for (const neutralChar of game.neutralCharacters) {
+      neutralChar.render(this.renderer.fgCtx, (gx, gy) => ({
+        x: gx * GRID.CELL_SIZE,
+        y: gy * GRID.CELL_SIZE
+      }));
+    }
+
     // Script-specific rendering before player (background-layer content e.g. draw canvas)
     if (game.neutralRoomSystem.currentScript?.onRenderBefore) {
       game.neutralRoomSystem.currentScript.onRenderBefore(

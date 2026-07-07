@@ -1,7 +1,9 @@
 import { findRecipe, findRecipeByResult } from '../data/recipes.js';
 import { CRAFTING, EQUIPMENT, COLORS, GRID } from '../game/GameConfig.js';
 import { Item } from '../entities/Item.js';
-import { isIngredient, isItem } from '../data/items.js';
+import { isIngredient, isItem, getItemData } from '../data/items.js';
+import { ZONES } from '../data/zones.js';
+import { trapAlreadyEquipped } from './TrapSystem.js';
 
 export class MenuSystem {
   constructor(game) {
@@ -282,18 +284,29 @@ export class MenuSystem {
     } else if (game.ui.hp.style.color) {
       game.ui.hp.style.color = '';
     }
-    game.ui.depth.textContent = game.getCurrentZoneDepth();
+    const currentDepth = game.getCurrentZoneDepth();
+    game.ui.depth.textContent = currentDepth;
 
-    const inventoryCount = game.player.inventory.length + game.inventorySystem.armorInventory.length + game.inventorySystem.consumableInventory.length;
+    // At max depth: color L# to match the zone, unless its boss is still
+    // undefeated — then pulse like the north-exit 'B' letter (preBossGateActive).
+    if (game.ui.depthDisplay) {
+      const currentZone = game.zoneSystem.currentZone;
+      const zoneData = ZONES[currentZone];
+      const cap = zoneData?.bossDepth ?? zoneData?.maxDepth;
+      const atMaxDepth = cap != null && currentDepth >= cap;
+      const bossPending = atMaxDepth && zoneData?.bossDepth != null &&
+        !game.zoneSystem.defeatedBosses?.has(currentZone);
+
+      game.ui.depthDisplay.classList.toggle('boss-pending', bossPending);
+      game.ui.depthDisplay.style.color = bossPending
+        ? ''
+        : (atMaxDepth ? zoneData.exitColor : '');
+    }
+
     if (game.keys.tab) {
-      game.ui.inventory.innerHTML = `<span style="color: ${COLORS.ITEM}">${inventoryCount}</span>`;
-    } else if (inventoryCount > 20) {
-      // Over-capacity warning: blink yellow to hint the player should bank by returning to REST.
-      const blinkCycle = Math.floor((game.player.statusBlinkTimer ?? 0) / 0.35);
-      const color = blinkCycle % 2 === 0 ? COLORS.ITEM : '#665500';
-      game.ui.inventory.innerHTML = `<span style="color: ${color}">${inventoryCount}</span>`;
+      game.ui.inventory.innerHTML = `<span style="color: ${COLORS.ITEM}">[TAB]</span>`;
     } else {
-      game.ui.inventory.textContent = inventoryCount;
+      game.ui.inventory.textContent = '[TAB]';
     }
 
     // Individual slot elements — each pinned to a static position in CSS
@@ -317,7 +330,8 @@ export class MenuSystem {
       }
 
       const item = game.player.quickSlots[i];
-      const isActive = i === game.player.activeSlotIndex;
+      const consumableSelected = (game.player.selectedConsumableIndex ?? -1) >= 0;
+      const isActive = i === game.player.activeSlotIndex && !consumableSelected;
       const color = isActive ? '#ffffff' : INACTIVE_WEAPON;
 
       charEl.textContent = item ? item.char : SUBSCRIPTS[i];
@@ -349,6 +363,7 @@ export class MenuSystem {
       game.ui.cslot1, game.ui.cslot2, game.ui.cslot3,
       game.ui.cslot4, game.ui.cslot5
     ];
+    const CONSUMABLE_SUBSCRIPTS = ['₄', '₅', '₆', '₇', '₈'];
 
     const meter = game.player?.magicMeter;
     for (let i = 0; i < 5; i++) {
@@ -356,11 +371,14 @@ export class MenuSystem {
       const cslotEl = cslotEls[i];
       if (!el) continue;
 
-      // Magic-meter slot: render a mana fill block instead of a consumable char
+      // Magic-meter slot: render a mana fill block instead of a consumable
+      // char. Fill is this slot's share of the cumulative pool (front slots
+      // fill first, back slots drain first) — see MagicSystem.getSlotFill.
       if (meter?.active && meter.slots?.includes(i)) {
+        const fill = game.magicSystem.getSlotFill(game.player, i);
         if (cslotEl) cslotEl.style.color = '#9966cc';
-        el.textContent = _manaFillChar(meter.current, meter.max);
-        el.style.color = _manaFillColor(meter.current, meter.max);
+        el.textContent = _manaFillChar(fill.current, fill.max);
+        el.style.color = _manaFillColor(fill.current, fill.max);
         el.style.opacity = '1';
         continue;
       }
@@ -374,8 +392,10 @@ export class MenuSystem {
         continue;
       }
 
-      // Functional slot — reset bracket color to CSS default (yellow)
-      if (cslotEl) cslotEl.style.color = '';
+      // Functional slot — highlight bracket white when armed for SPACE (keys 4-8),
+      // otherwise reset to CSS default (yellow)
+      const isSelected = i === (game.player?.selectedConsumableIndex ?? -1);
+      if (cslotEl) cslotEl.style.color = isSelected ? '#ffffff' : '';
 
       // Functional unlocked slots
       if (consumables[i]) {
@@ -412,14 +432,38 @@ export class MenuSystem {
           }
         }
       } else if (game.inventorySystem.spentConsumableSlots[i]) {
-        el.textContent = ' ';
+        el.textContent = CONSUMABLE_SUBSCRIPTS[i];
         el.style.color = '#333';
         el.style.opacity = '1';
       } else {
-        el.textContent = ' ';
+        el.textContent = CONSUMABLE_SUBSCRIPTS[i];
         el.style.color = '#555';
         el.style.opacity = '1';
       }
+    }
+
+    this._fitStatusBar();
+  }
+
+  // Status bar content (HP/depth/slots/equipment/inventory hint) is laid out
+  // with a flexible, content-sized row rather than hand-picked pixel
+  // offsets — arcade-font glyph widths aren't reliably knowable ahead of
+  // time (see git history: two rounds of hand-tuned `left:` values both
+  // produced wrong spacing or overflow). This measures the row's actual
+  // rendered width every frame and scales it down from the left edge
+  // whenever it would exceed the bar, so content can never bleed past the
+  // game's width no matter what font/string lengths end up on screen.
+  // #ui-overlay also carries `overflow: hidden` as a hard backstop.
+  _fitStatusBar() {
+    const inner = this.game.ui.overlayInner;
+    if (!inner) return;
+
+    inner.style.transform = '';
+    const available = inner.parentElement.clientWidth;
+    const needed = inner.getBoundingClientRect().width;
+
+    if (available > 0 && needed > available) {
+      inner.style.transform = `scaleX(${available / needed})`;
     }
   }
 
@@ -485,6 +529,7 @@ export class MenuSystem {
     game.currentMenuSlot = 'chest';
     game.chestTargetSlot = slotIdx;
     game.selectedMenuIndex = 0;
+    if (slotIdx !== null) game.selectedWeaponSlotIndex = slotIdx;
 
     game.menuItems = game.inventorySystem.getChestContents();
     game.renderController.menuOverlay.render(game);
@@ -603,6 +648,10 @@ export class MenuSystem {
 
   closeMenu() {
     const game = this.game;
+    // Handle alchemy cancellation (Shift key closes menu without selection)
+    if (game.currentMenuSlot === 'alchemy') {
+      game.alchemySystem?.cancelCauldron();
+    }
     game.menuOpen = false;
     game.currentMenuSlot = null;
     game.menuColumns = null;
@@ -612,6 +661,7 @@ export class MenuSystem {
     game.ingredientCounts = null;
     game.equippedMenuItems = null;
     game.manaConversionSlot = null;
+    game.alchemyMenuTitle = null;
     game.ui.menu.classList.add('hidden');
   }
 
@@ -650,13 +700,27 @@ export class MenuSystem {
       return;
     }
 
+    // Handle alchemy cauldron operations (water → starter potion → true potion)
+    if (game.currentMenuSlot === 'alchemy') {
+      game.alchemySystem?.commitSelection(selectedItem);
+      return;
+    }
+
+    // Handle condenser potion selection menu (when multiple potions equipped)
+    if (game.currentMenuSlot === 'condenser') {
+      game.alchemySystem?.commitCondenserSelection(selectedItem);
+      game.closeMenu();
+      game.updateUI();
+      return;
+    }
+
     // Handle chest operations
     if (game.currentMenuSlot === 'chest') {
       if (selectedItem.action === 'retrieve') {
-        const item = selectedItem.item;
         const targetIdx = game.chestTargetSlot;
 
-        game.inventorySystem.retrieveFromChest(item);
+        const item = game.inventorySystem.retrieveFromChest(selectedItem.item);
+        if (!item) return;
 
         if (targetIdx !== null && targetIdx !== undefined) {
           // Place into the specific slot this chest corresponds to
@@ -692,6 +756,7 @@ export class MenuSystem {
 
     if (game.currentMenuSlot === 'armor') {
       game.inventorySystem.equipArmor(selectedItem);
+      game.inventorySystem.applyEquipmentEffectsToPlayer(game.player);
       game.saveGameState();
       game.renderer.markBackgroundDirty();
       game.closeMenu();
@@ -878,6 +943,25 @@ export class MenuSystem {
     if (slotType === 'crafting-center') {
       if (game.craftingSystem.hasCenterContent()) {
         game.audioSystem.stopSFXByName('craft_cycle');
+
+        // Ingredient-result recipes (e.g. Mana) bank straight into inventory —
+        // they're raw ingredients, not equippable items, and must never
+        // occupy a weapon/consumable slot.
+        const ingredientChar = game.craftingSystem.claimCraftedIngredient();
+        if (ingredientChar) {
+          // Mirror LootSystem.collectIngredient: once the meter is active,
+          // Mana bypasses inventory entirely and tops the meter up directly.
+          if (ingredientChar === '𝑚' && game.player.magicMeter?.active) {
+            game.magicSystem.addMana(game.player, 2);
+          } else {
+            game.addIngredient(ingredientChar);
+          }
+          game.showPickupMessage(getItemData(ingredientChar)?.name ?? ingredientChar);
+          game.renderer.markBackgroundDirty();
+          game.updateUI();
+          return;
+        }
+
         const item = game.craftingSystem.claimCraftedItem(
           game.player.position.x,
           game.player.position.y
@@ -894,7 +978,7 @@ export class MenuSystem {
             game.inventorySystem.equipArmor(item);
             game.inventorySystem.applyEquipmentEffectsToPlayer(game.player);
           } else if (item.data.type === 'CONSUMABLE') {
-            const emptySlot = game.inventorySystem.equippedConsumables.findIndex(s => s === null);
+            const emptySlot = game.inventorySystem.firstFreeConsumableSlot(game.player);
             if (emptySlot === -1) {
               game.slotReplacementSystem.open(item, 'consumable');
               game.renderer.markBackgroundDirty();
@@ -903,8 +987,12 @@ export class MenuSystem {
             game.inventorySystem.consumableInventory.push(item);
             game.inventorySystem.equipConsumable(emptySlot, item);
           } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
-            const dropped = game.player.pickupItem(item);
-            if (dropped) game.inventorySystem.addToChest(dropped);
+            if (trapAlreadyEquipped(game.player, item)) {
+              game.inventorySystem.addToChest(item);
+            } else {
+              const dropped = game.player.pickupItem(item);
+              if (dropped) game.inventorySystem.addToChest(dropped);
+            }
           } else if (item.data.type === 'INGREDIENT') {
             game.addIngredient(item.char);
           }
@@ -932,8 +1020,12 @@ export class MenuSystem {
       } else if (item.data.type === 'CONSUMABLE') {
         game.inventorySystem.consumableInventory.push(item);
       } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
-        const dropped = game.player.pickupItem(item);
-        if (dropped) game.inventorySystem.addToChest(dropped);
+        if (trapAlreadyEquipped(game.player, item)) {
+          game.inventorySystem.addToChest(item);
+        } else {
+          const dropped = game.player.pickupItem(item);
+          if (dropped) game.inventorySystem.addToChest(dropped);
+        }
       } else if (item.data.type === 'INGREDIENT') {
         game.addIngredient(char);
       }
@@ -965,17 +1057,30 @@ export class MenuSystem {
 
   handleCraftingSlotPlace(slotType) {
     const game = this.game;
-    if (!game.player.heldItem) return;
+    const consumableIdx = game.player.selectedConsumableIndex;
+    const usingConsumable = consumableIdx >= 0 && !!game.player.equippedConsumables?.[consumableIdx];
+    const item = usingConsumable ? game.player.equippedConsumables[consumableIdx] : game.player.heldItem;
+    if (!item) return;
+
+    const clearSource = () => {
+      if (usingConsumable) {
+        game.inventorySystem.equippedConsumables[consumableIdx] = null;
+        game.player.equippedConsumables[consumableIdx] = null;
+        game.player.selectedConsumableIndex = -1;
+      } else {
+        game.player.quickSlots[game.player.activeSlotIndex] = null;
+      }
+    };
 
     if (slotType === 'crafting-center' && !game.craftingSystem.centerSlot &&
         !game.craftingSystem.leftSlot && !game.craftingSystem.rightSlot) {
-      const itemChar = game.player.heldItem.char;
+      const itemChar = item.char;
       const recipe = findRecipeByResult(itemChar);
       if (recipe) {
         game.craftingSystem.leftSlot = recipe.left;
         game.craftingSystem.rightSlot = recipe.right;
         game.craftingSystem.centerSlot = itemChar;
-        game.player.quickSlots[game.player.activeSlotIndex] = null;
+        clearSource();
         game.saveGameState();
         game.renderer.markBackgroundDirty();
         game.updateUI();
@@ -984,8 +1089,8 @@ export class MenuSystem {
     }
 
     if (slotType === 'crafting-left' && !game.craftingSystem.leftSlot) {
-      game.craftingSystem.setLeftSlot(game.player.heldItem.char);
-      game.player.quickSlots[game.player.activeSlotIndex] = null;
+      game.craftingSystem.setLeftSlot(item.char);
+      clearSource();
       if (game.craftingSystem.cycleState) {
         game.audioSystem.playStoppableSFX('craft_cycle', 0.6);
       }
@@ -995,8 +1100,8 @@ export class MenuSystem {
     }
 
     if (slotType === 'crafting-right' && !game.craftingSystem.rightSlot) {
-      game.craftingSystem.setRightSlot(game.player.heldItem.char);
-      game.player.quickSlots[game.player.activeSlotIndex] = null;
+      game.craftingSystem.setRightSlot(item.char);
+      clearSource();
       if (game.craftingSystem.cycleState) {
         game.audioSystem.playStoppableSFX('craft_cycle', 0.6);
       }

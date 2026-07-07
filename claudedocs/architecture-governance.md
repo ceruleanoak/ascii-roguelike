@@ -47,3 +47,93 @@ The #4 extraction audit surfaced **bug #88**: `updatePlayerMechanics` and `updat
 - Splitting `Enemy.js` — the `enemyMechanics/` composition is already the relief valve.
 - Physics broadphase, per-frame allocation micro-optimizations — no measured need at current entity counts.
 - Moving companion/trap/menu *data* off `game` — documented compromise; renderers read it directly.
+
+## Character Budget Policy
+
+Established 2026-06-20. Supplements G5 (enforcement) and the Code Placement Procedure (routing) with decision rules for when budgets move and when net-new systems are created.
+
+### Decision gate (mandatory before touching any budgeted file)
+
+Before writing logic that lives in a budgeted file, ask: **will this exceed the budget?**
+
+Run `npm run check:arch` to see current headroom. If the answer is yes, choose one path **before writing the code**:
+
+| Path | When to use | Action |
+|------|-------------|--------|
+| A — Extract first | New logic fits the file's domain but the file is overfull | Identify an extraction candidate, move it, run `--update`, then add the feature. Net size ≤ 0. |
+| B — New system | Logic is behavior-bearing and its concept is separable from this file's core domain | Create `src/systems/XxxSystem.js`. No "too small" threshold applies. |
+| C — Raise budget | Logic genuinely expands the file's own domain AND both A and B would be artificial fragmentation | Hand-edit `tools/arch-budgets.json` with a justification. Treat as rare. See criteria below. |
+
+**When unsure between B and C: default to B.** Net-new systems are reversible; budget raises accumulate.
+
+**2026-07-05 revision**: `main.js` previously had a blanket "no raise, ever" rule instead of
+a domain criterion like every other file. In practice that made the policy unsustainable —
+main.js legitimately grows a little on every new system's wiring (import + instantiate +
+one `update()`/dispatch call), and that growth has nowhere else to go; it isn't a Path B
+candidate because it isn't a behavior cluster, just glue. The absolute ban meant genuine
+wiring growth had no legal path forward. main.js now uses the same Path C mechanism as
+every other budgeted file, gated by the same test: does the new code expand the file's own
+domain (orchestration) or is it actual behavior that belongs in a system. The bar for "own
+domain" is narrower for main.js than any other file (wiring/dispatch only, never logic) —
+that's what keeps this from re-opening the original G1-G5 drift.
+
+### Budget raise criteria
+
+A raise is only justified when the new code **expands the file's own legitimate domain**.
+
+| File | Raise ok | Use path B instead |
+|------|----------|--------------------|
+| `ExploreRenderer.js` | New rendering passes, HUD elements, visual modes | Game logic, state mutation, AI |
+| `CombatSystem.js` | New attack resolution, hit detection, damage types | Loot spawning, UI, physics |
+| `RoomGenerator.js` | New room layouts, spawn templates, procedural passes | Trap logic, entity AI, crafting |
+| `Enemy.js` | AI behaviours, status-effect responses, item usage | Combat resolution (that belongs in CombatSystem) |
+| `InventorySystem.js` | Item effect application, slot management, crafting | Rendering, physics, world effects |
+| `Item.js` | New attack patterns (pattern count justifies size) | State mutation, UI |
+| `Player.js` | Stats, dodge roll, status tracking | Input logic beyond dispatch, game flow |
+| `main.js` | Pure orchestration growth: wiring/instantiating a new system, adding a state-transition function, a new dispatch branch that's a single call-out | Any actual behavior — game logic, state mutation, AI, effect resolution (that belongs in a system) |
+
+### Net-new system trigger rules
+
+Create a new `src/systems/XxxSystem.js` when **any** of these are true:
+
+- Behavior has no existing owner in the routing table (CLAUDE.md §main.js rules) and would otherwise land in main.js.
+- Adding to an existing file would push it over budget AND the concept is separable.
+- A second distinct behavior cluster is being added to the same budgeted file in the same session — even if each individually fits.
+- The feature introduces its own per-frame `update(dt)` lifecycle that isn't a sub-call of an existing system.
+
+A 40-line system that keeps main.js clean is correct architecture.
+
+### Pre-implementation planning protocol
+
+Answer these before touching any budgeted file within 5,000 chars of its ceiling:
+
+1. **What is the owning concept?** Name the system or entity class.
+2. **What is the current headroom?** (`npm run check:arch`)
+3. **Estimated added characters?** (rough: lines × 50)
+4. **Will it exceed the budget?** If yes — choose path A, B, or C now.
+5. **Does it introduce a new behavior lifecycle?** If yes → new system.
+6. **Anything in the target file extractable first?** List candidates before writing.
+
+If question 4 is "yes" and no path is chosen: **stop. Do not write the implementation.**
+
+### `--update` hygiene
+
+| Situation | Run `--update`? |
+|-----------|----------------|
+| After a successful extraction that shrank a file | YES — lock in the saving |
+| After a bug fix that incidentally trims a few chars | NO |
+| After a feature addition that stayed within budget | NO |
+| After a manual budget raise (path C) | NO — the hand-edit IS the new ceiling |
+| After a refactor with no net deletion | NO — wait for real shrinkage |
+
+### Budget raise diff template
+
+When path C is taken, the commit message or PR description must include:
+
+```
+budget(<file>): +<N> — <one-sentence domain justification>
+```
+
+Example: `budget(ExploreRenderer.js): +12000 — new minimap rendering pass (zoom/pan/fog-of-war)`
+
+No justification = the raise should not have happened.

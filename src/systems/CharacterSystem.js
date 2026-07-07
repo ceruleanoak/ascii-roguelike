@@ -2,10 +2,74 @@ import { CharacterNPC } from '../entities/CharacterNPC.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
 import { GRID, INTERACTION_RANGE } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
+import { Captive } from '../entities/Captive.js';
+import { isCellProtected } from './roomFeatures.js';
 
 export class CharacterSystem {
   constructor(game) {
     this.game = game;
+  }
+
+  spawnCaptive(characterType) {
+    const game = this.game;
+    if (!game.currentRoom) return null;
+
+    const centerX = GRID.WIDTH / 2;
+    const centerY = GRID.HEIGHT / 2;
+
+    // Fast path: two tries to find a clear cell — open in the collision map,
+    // outside every protected structure region (hut/maze/dungeon footprints,
+    // well ring, fountain pool, ravine band, wall blocks), and away from the
+    // player.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      // Random position in the center area of the room
+      const spawnX = centerX + (Math.random() - 0.5) * GRID.WIDTH * 0.5;
+      const spawnY = centerY + (Math.random() - 0.5) * GRID.HEIGHT * 0.5;
+      const gridX = Math.floor(spawnX / GRID.CELL_SIZE);
+      const gridY = Math.floor(spawnY / GRID.CELL_SIZE);
+
+      if (gridX <= 0 || gridX >= GRID.COLS - 1 || gridY <= 0 || gridY >= GRID.ROWS - 1) continue;
+      if (game.currentRoom.collisionMap[gridY][gridX]) continue;
+      if (isCellProtected(game.currentRoom, gridX, gridY)) continue;
+
+      const distToPlayer = Math.hypot(
+        game.player.position.x - spawnX,
+        game.player.position.y - spawnY
+      );
+      if (distToPlayer <= GRID.CELL_SIZE * 5) continue;
+
+      return new Captive(characterType, spawnX, spawnY);
+    }
+
+    // Guaranteed fallback: the miniboss reward must appear this room, since
+    // zone-cleared tracking is keyed off a captive actually spawning. Scan
+    // every interior cell for open, unprotected floor and place the captive
+    // at whichever one is farthest from the player — covers the cluttered
+    // small-room case where two random tries can both whiff.
+    let bestCell = null;
+    let bestDist = -1;
+    for (let gridY = 1; gridY < GRID.ROWS - 1; gridY++) {
+      for (let gridX = 1; gridX < GRID.COLS - 1; gridX++) {
+        if (game.currentRoom.collisionMap[gridY][gridX]) continue;
+        if (isCellProtected(game.currentRoom, gridX, gridY)) continue;
+
+        const cellX = gridX * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+        const cellY = gridY * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+        const distToPlayer = Math.hypot(game.player.position.x - cellX, game.player.position.y - cellY);
+        if (distToPlayer > bestDist) {
+          bestDist = distToPlayer;
+          bestCell = { x: cellX, y: cellY };
+        }
+      }
+    }
+
+    if (bestCell) {
+      console.log('[Captive] fallback: placed at farthest open cell after random tries failed');
+      return new Captive(characterType, bestCell.x, bestCell.y);
+    }
+
+    console.log('[Captive] no open cell found anywhere in room — could not spawn captive');
+    return null;
   }
 
   // REST: swap with the first character NPC within interaction range.
@@ -122,6 +186,7 @@ export class CharacterSystem {
       damage: weaponData.lightningDamage ?? 4,
       hitsPlayer: false,
       plane: player.plane ?? 0,
+      electricityCharge: weaponData.electricityCharge,
       source: 'lightning_sword'
     });
   }
@@ -302,11 +367,18 @@ export class CharacterSystem {
 
           // maze returns [] (ghosts aren't enemies); hut/dungeon returns activeFloor.enemies; surface returns currentRoom.enemies
           const enemies = game._activeEnemies();
+          player.dodgeRoll.queuedAttack = false;
           const rollStarted = player.batTransform
             ? false // bat form replaces the roll
             : player.startDodgeRoll(dodgeDirection, enemies);
 
           if (rollStarted) {
+            // Cancel an in-progress bow charge so the player can't fire on roll exit
+            if (player.heldItem?.isCharging && (player.heldItem.data?.weaponType === 'BOW' || player.heldItem.data?.requiresCharge)) {
+              player.heldItem.cancelChargeAndReload();
+              game.audioSystem.stopSFXByName('charge_bow');
+            }
+
             // Whirlwind Cape: transform roll into a spinning dash — covers distance, dizzies nearby enemies, no iframes
             if (player.whirlwindCape) {
               player.dodgeRoll.type = 'whirlwind';
@@ -350,6 +422,52 @@ export class CharacterSystem {
           player.dodgeRoll.direction = dodgeDirection;
         }
       }
+    }
+  }
+
+  // Dagger roll auto-attack: fires immediately on roll completion, bypassing cooldown and windup.
+  // Direction from current WASD input, falling back to player facing.
+  triggerDaggerRollAttack() {
+    const game = this.game;
+    const player = game.player;
+    if (!player.dodgeRoll.daggerAutoFire) return;
+    player.dodgeRoll.daggerAutoFire = false;
+    const daggerItem = player.quickSlots?.[player.activeSlotIndex];
+    if (daggerItem?.data?.weaponSubtype !== 'dagger') return;
+    const dx = (game.keys.d ? 1 : 0) - (game.keys.a ? 1 : 0);
+    const dy = (game.keys.s ? 1 : 0) - (game.keys.w ? 1 : 0);
+    if (dx !== 0 || dy !== 0) {
+      player.facing.x = dx;
+      player.facing.y = dy;
+    }
+    daggerItem.windupActive = false;
+    daggerItem.windupTimer = 0;
+    daggerItem.cooldownTimer = 0;
+    const rollAutoAttack = daggerItem.executeAttack(player);
+    if (rollAutoAttack) {
+      const attacks = Array.isArray(rollAutoAttack) ? rollAutoAttack : [rollAutoAttack];
+      const enemies = game.currentRoom ? game.currentRoom.enemies : [];
+      for (const atk of attacks) {
+        game.combatSystem.createAttack(game.applyGreenDamageModifier(atk), enemies);
+      }
+      game.playWeaponAttackSFX(daggerItem);
+      daggerItem.cooldownTimer = daggerItem.data.recovery || daggerItem.data.cooldown || 0.5;
+    }
+  }
+
+  // Fire one attack queued during a dodge roll (non-dagger weapons).
+  triggerQueuedRollAttack() {
+    const game = this.game;
+    const player = game.player;
+    if (!player.dodgeRoll.justEnded || !player.dodgeRoll.queuedAttack) return;
+    player.dodgeRoll.queuedAttack = false;
+    const weapon = player.heldItem;
+    if (!weapon || weapon.data.weaponSubtype === 'dagger' || weapon.data.weaponType === 'BOW' || weapon.data.weaponType === 'UTILITY' || !player.canAttack()) return;
+    const attack = player.useHeldItem();
+    if (attack) {
+      game.combatSystem.createAttack(game.applyGreenDamageModifier(attack), game.currentRoom ? game.currentRoom.enemies : []);
+      game.triggerGreenActionCooldown();
+      game._emitSoundEvent();
     }
   }
 
@@ -405,8 +523,7 @@ export class CharacterSystem {
     }
 
     // Save the outgoing character's magic-meter state so it's restored on a
-    // future swap-back. Yellow's all-slots state is regenerated on demand and
-    // doesn't need persistence, but we still snapshot it for consistency.
+    // future swap-back.
     const inv = game.inventorySystem;
     const prevType = inv._activeCharacterType;
     if (prevType && game.player?.magicMeter) {
@@ -416,7 +533,8 @@ export class CharacterSystem {
         prevEntry.manaState = {
           slots: [...(m.slots || [])],
           current: m.current,
-          max: m.max
+          max: m.max,
+          freeSlotGranted: !!m.freeSlotGranted
         };
       }
     }
@@ -431,12 +549,14 @@ export class CharacterSystem {
       if (saved) {
         m.slots = [...saved.slots];
         m.current = saved.current;
-        m.max = saved.max;
+        m.freeSlotGranted = !!saved.freeSlotGranted;
       } else {
         m.slots = [];
         m.current = 0;
+        m.freeSlotGranted = false;
       }
-      m.active = m.slots.length > 0;
+      game.magicSystem.recalcMax(m);
+      m.active = game.magicSystem.effectiveManaSlotCount(game.player) > 0;
     }
 
     // Update player visual
@@ -467,12 +587,29 @@ export class CharacterSystem {
     game.player.rollCharge = game.player.actionCooldownMax; // Start with full charge
     game.player.continuousRollActive = false;
 
-    // Yellow Mage is always "on with mana" — auto-lock every consumable slot
-    // into mana mode and unequip anything currently sitting there. All other
-    // characters use the well/hut upgrade path to convert slots one at a time.
+    // Yellow Mage gets one free mana slot the moment they become Yellow.
+    // Further mana slots (Yellow or otherwise) are earned via the well/hut
+    // upgrade path, one slot at a time — same mechanism for every character.
     if (type === 'yellow') {
-      game.magicSystem?.activateAllMagicMeterSlots(game.player);
+      game.magicSystem?.grantYellowFreeManaSlot(game.player);
     }
+  }
+
+  // Snapshot the player's magic meter (+ owning character) before a room
+  // transition reconstructs the Player instance, so mana can persist across
+  // rooms for the SAME character without clobbering a swap that happened
+  // first (applyCharacterType already restores the correct per-character
+  // meter — this snapshot must not paste over it).
+  captureMagicMeterForRoomTransition(player) {
+    if (!player?.magicMeter) return null;
+    return { characterType: player.characterType, meter: { ...player.magicMeter } };
+  }
+
+  // Restore a captured meter only if the active character hasn't changed
+  // since capture — otherwise applyCharacterType's own restore stands.
+  restoreMagicMeterForRoomTransition(player, captured, activeCharacterType) {
+    if (!captured || captured.characterType !== activeCharacterType) return;
+    player.magicMeter = captured.meter;
   }
 
   applyGreenDamageModifier(attack) {
@@ -480,14 +617,22 @@ export class CharacterSystem {
     if (!attack) return attack;
     // Green idle/combat bonus is applied at hit time (per-enemy) in CombatSystem.
     // Only bake in shrine/consumable damage bonuses here.
-    let bonus = 0;
-    if (game.player.damageBonusTimer > 0) bonus += game.player.damageBonusAmount;
-    if (game.player.wellDamageBlessed) bonus += 1; // red well coin blessing
+    let baseBonus = 0;
+    if (game.player.damageBonusTimer > 0) baseBonus += game.player.damageBonusAmount;
+    if (game.player.wellDamageBlessed) baseBonus += 1; // red well coin blessing
 
-    if (bonus === 0) return attack;
+    // Weapons Master training — permanent per-character, per-weapon-category bonus.
+    const trained = game.inventorySystem?.characterInventories?.[game.activeCharacterType]?.trainedWeapons;
+    const trainingBonus = (a) => {
+      const category = a?.weaponSubtype || a?.weaponType;
+      return (trained && category && trained[category]) ? 1 : 0;
+    };
+
     if (Array.isArray(attack)) {
-      return attack.map(a => ({ ...a, damage: Math.max(1, (a.damage || 1) + bonus) }));
+      return attack.map(a => ({ ...a, damage: Math.max(1, (a.damage || 1) + baseBonus + trainingBonus(a)) }));
     }
+    const bonus = baseBonus + trainingBonus(attack);
+    if (bonus === 0) return attack;
     return { ...attack, damage: Math.max(1, (attack.damage || 1) + bonus) };
   }
 
@@ -498,6 +643,38 @@ export class CharacterSystem {
       const heldItem = game.player.heldItem;
       if (heldItem && (heldItem.data.weaponType === 'GUN' || heldItem.data.weaponType === 'BOW')) return;
       game.player.actionCooldown = game.player.actionCooldownMax;
+    }
+  }
+
+  handleAutoAttack() {
+    const game = this.game;
+    const player = game.player;
+    const weapon = player.heldItem;
+    if (!game.keys.space || !game.attackSequenceActive || !weapon) return;
+    if (weapon.data.weaponType === 'BOW' || weapon.data.weaponType === 'WAND' ||
+        weapon.data.weaponType === 'UTILITY' || weapon.data.chargeHammer) return;
+    if (player.fishingLocked || game.menuOpen || game.bridgeMenuOpen || game.cheatMenu.isOpen) return;
+
+    if (player.dodgeRoll.active) {
+      player.dodgeRoll.queuedAttack = true;
+    } else if (player.canAttack()) {
+      if (this.isBlockingStaff(weapon) && player.staffSwingHasFired && weapon.canUse()) {
+        if (!player.isStaffBlocking) player.isStaffBlocking = true;
+      } else if (this.isBlockingStaff(weapon) && player.isStaffBlocking) {
+        // sustained block — suppress swing
+      } else {
+        const attack = player.useHeldItem();
+        if (attack) {
+          const enemies = game.currentRoom ? game.currentRoom.enemies : [];
+          const succeeded = game.combatSystem.createAttack(this.applyGreenDamageModifier(attack), enemies);
+          if (weapon.data.weaponType === 'WAND' && succeeded === false) {
+            weapon.cooldownTimer = 0;
+          } else {
+            this.triggerGreenActionCooldown();
+            game._emitSoundEvent();
+          }
+        }
+      }
     }
   }
 

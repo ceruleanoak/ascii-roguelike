@@ -86,6 +86,7 @@ export const LeapAttackMechanic = {
         enemy.leapAirDuration = cfg.airTime;
         enemy.leapAirTimer = enemy.leapAirDuration;
         enemy.leapAirborneActive = true;
+        enemy.game?.audioSystem?.playSFX?.('slime_jump');
       }
       return { suspend: true, result: { dotDamage: dotDamageEvents } };
     }

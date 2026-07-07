@@ -1,5 +1,11 @@
 import { GRID } from '../../game/GameConfig.js';
 import { isSpectaclesActive, spectaclesTransformString } from '../../data/cipher.js';
+import { drawInteriorFrame } from './interiorFrame.js';
+import {
+  TORCH_LIGHT_RADIUS, TORCH_ALPHA_HIGH, TORCH_ALPHA_LOW,
+  TORCH_PULSE_SPEED, TORCH_LIT_COLOR, TORCH_UNLIT_COLOR,
+} from '../../systems/MazeSystem.js';
+import { isWieldingTorch, drawPlayerTorchLight } from './torchLight.js';
 
 /**
  * MazeInteriorOverlay — picture-in-picture renderer for the Maze maze.
@@ -10,18 +16,18 @@ import { isSpectaclesActive, spectaclesTransformString } from '../../data/cipher
  * Rendering layers (all in interior-translated coordinates):
  *   1. Dim exterior + floor panel
  *   2. Wall cells
+ *   2b. Maze torches (fixture glyph + pulsing light when lit)
  *   3. Exit indicator
- *   4. Maze objects (3-hit breakables, hit flash, adjacent reveal)
+ *   4. Maze objects (3-hit breakables, hit flash, blink warning)
  *   5. Dropped ingredients / items (mazePlane)
  *   6. Ghosts
  *   7. Player attacks (projectiles, melee, arrows, damage numbers)
  *   8. Particles
  *   9. Player
- *  10. HUD: timer, ghost count, label  (absolute canvas coords)
+ *  10. HUD: label  (absolute canvas coords)
  */
 
 const CS          = GRID.CELL_SIZE; // 16
-const DIM_ALPHA   = 0.55;
 const FLOOR_COLOR = '#100d18';
 const WALL_COLOR  = '#2a2233';
 const WALL_GLYPH  = '#';
@@ -39,32 +45,13 @@ export class MazeInteriorOverlay {
     const mi  = game.mazeInterior;
     const ctx = this.renderer.fgCtx;
 
-    // Panel size / offset (auto-sized from grid dimensions, same as HutInteriorOverlay)
-    const panelW  = mi.gridCols * CS; // 304
-    const panelH  = mi.gridRows * CS; // 304
-    const offsetX = Math.floor((GRID.WIDTH  - panelW) / 2); // 88
-    const offsetY = Math.floor((GRID.HEIGHT - panelH) / 2); // 88
-
-    ctx.save();
-
-    // ── 1. Dim exterior ────────────────────────────────────────────────────
-    ctx.fillStyle = `rgba(0,0,0,${DIM_ALPHA})`;
-    ctx.fillRect(0, 0, GRID.WIDTH, GRID.HEIGHT);
-
-    // Interior background
-    ctx.fillStyle = FLOOR_COLOR;
-    ctx.fillRect(offsetX, offsetY, panelW, panelH);
-
-    // Border
-    ctx.strokeStyle = '#7755aa';
-    ctx.lineWidth   = 2;
-    ctx.strokeRect(offsetX - 1, offsetY - 1, panelW + 2, panelH + 2);
-
-    // Translate so interior pixel (x, y) → canvas (offsetX+x, offsetY+y)
-    ctx.translate(offsetX, offsetY);
-    ctx.font        = `${CS}px 'Unifont', monospace`;
-    ctx.textAlign   = 'center';
-    ctx.textBaseline = 'middle';
+    // Shared PiP frame (no clip — maze walls already bound the content).
+    const { offsetY, panelH } = drawInteriorFrame(ctx, {
+      gridCols: mi.gridCols,
+      gridRows: mi.gridRows,
+      panelColor: FLOOR_COLOR,
+      borderColor: '#7755aa',
+    });
 
     // ── 2. Wall cells ──────────────────────────────────────────────────────
     for (let r = 0; r < mi.gridRows; r++) {
@@ -77,6 +64,22 @@ export class MazeInteriorOverlay {
         ctx.fillStyle = WALL_GLYPH_COLOR;
         ctx.fillText(WALL_GLYPH, c * CS + CS / 2, r * CS + CS / 2);
       }
+    }
+
+    // ── 2b. Maze torches (fixture glyph + pulsing light) ───────────────────
+    for (const torch of mi.torches) {
+      if (torch.destroyed) continue;
+      const cx = torch.col * CS + CS / 2;
+      const cy = torch.row * CS + CS / 2;
+
+      if (torch.lit) {
+        const s = 0.5 + 0.5 * Math.sin(torch.pulseTimer * TORCH_PULSE_SPEED);
+        const alpha = TORCH_ALPHA_LOW + (TORCH_ALPHA_HIGH - TORCH_ALPHA_LOW) * s;
+        this.renderer.drawCircle(cx, cy, TORCH_LIGHT_RADIUS, TORCH_LIT_COLOR, true, alpha);
+      }
+
+      ctx.fillStyle = torch.lit ? TORCH_LIT_COLOR : TORCH_UNLIT_COLOR;
+      ctx.fillText(torch.char, cx, cy);
     }
 
     // ── 3. Exit indicator ──────────────────────────────────────────────────
@@ -95,9 +98,11 @@ export class MazeInteriorOverlay {
       const cx = obj.col * CS + CS / 2;
       const cy = obj.row * CS + CS / 2;
 
-      // Color: white flash on hit, shade by remaining HP otherwise
+      // Color: white flash on hit, blink warning, else shade by remaining HP
       if (obj.hitFlash > 0) {
         ctx.fillStyle = '#ffffff';
+      } else if (obj.blinking && obj.blinkOn) {
+        ctx.fillStyle = '#ff4444';
       } else {
         const t = (obj.hp - 1) / (obj.maxHp - 1); // 1.0=full, 0.0=last hp
         ctx.fillStyle = obj.hp < obj.maxHp
@@ -111,17 +116,6 @@ export class MazeInteriorOverlay {
       for (let i = 0; i < obj.maxHp; i++) {
         ctx.fillStyle = i < obj.hp ? '#cc88ff' : '#333333';
         ctx.fillRect(cx - 4 + i * 4, cy - CS - 2, 3, 3);
-      }
-
-      // Adjacent reveal: ghost-like preview of the hidden ingredient
-      if (obj.revealed && obj.hiddenChar) {
-        ctx.save();
-        ctx.globalAlpha = 0.75;
-        ctx.fillStyle   = '#ffee88';
-        ctx.font        = `${CS * 0.75}px 'Unifont', monospace`;
-        ctx.fillText(obj.hiddenChar, cx + CS * 0.85, cy - CS * 0.7);
-        ctx.restore();
-        ctx.font = `${CS}px 'Unifont', monospace`;
       }
     }
 
@@ -138,41 +132,22 @@ export class MazeInteriorOverlay {
 
     // ── 6. Ghosts ──────────────────────────────────────────────────────────
     for (const ghost of mi.ghosts) {
-      if (ghost.phasesWalls) {
-        ctx.save();
-        ctx.globalAlpha = 0.7;
-        ctx.fillStyle   = ghost.color;
-        ctx.fillText(ghost.char, ghost.position.x + CS / 2, ghost.position.y + CS / 2);
-        ctx.restore();
-        ctx.font = `${CS}px 'Unifont', monospace`;
-      } else {
-        ctx.fillStyle = ghost.color;
-        ctx.fillText(ghost.char, ghost.position.x + CS / 2, ghost.position.y + CS / 2);
-      }
+      ctx.fillStyle = ghost.color;
+      ctx.fillText(ghost.char, ghost.position.x + CS / 2, ghost.position.y + CS / 2);
     }
 
-    // ── 7. Player attacks ──────────────────────────────────────────────────
-    for (const proj of game.combatSystem.getProjectiles()) {
-      const cx = proj.position.x + CS / 2;
-      const cy = proj.position.y + CS / 2;
-      if (proj.drawAngle != null) {
-        this.renderer.drawEntityRotated(cx, cy, proj.char, proj.color, proj.drawAngle);
-      } else {
-        this.renderer.drawEntity(cx, cy, proj.char, proj.color);
-      }
-    }
-    for (const atk of game.combatSystem.getMeleeAttacks()) {
-      const cx2 = atk.position.x + CS / 2, cy2 = atk.position.y + CS / 2;
-      atk.drawAngle != null
-        ? this.renderer.drawEntityRotated(cx2, cy2, atk.char, atk.color, atk.drawAngle)
-        : this.renderer.drawEntity(cx2, cy2, atk.char, atk.color);
-    }
-    for (const arrow of game.combatSystem.getStuckArrows()) {
-      this.renderer.drawEntity(arrow.position.x + CS / 2, arrow.position.y + CS / 2, arrow.char, arrow.color);
-    }
-    for (const dmg of game.combatSystem.getDamageNumbers()) {
-      this.renderer.drawTextWithAlpha(dmg.x, dmg.y, dmg.value.toString(), dmg.color, dmg.alpha);
-    }
+    // ── 7. Player attacks (shared with surface/hut via hutPlane=true filter;
+    //      see render_helper_pattern — keeps maze combat draw in sync with
+    //      the surface pass instead of reimplementing an unfiltered copy) ──
+    this.renderController.exploreRenderer.drawProjectiles(game, true);
+    this.renderController.exploreRenderer.drawEnemyProjectiles(game, true);
+    this.renderController.exploreRenderer.drawPlayerTongueAttacks(game, true);
+    this.renderController.exploreRenderer.drawEnemyTongues(game);
+    this.renderController.exploreRenderer.drawMimicTongues(game);
+    this.renderController.exploreRenderer.drawMeleeAttacks(game, true);
+    this.renderController.exploreRenderer.drawEnemyMeleeAttacks(game, true);
+    this.renderController.exploreRenderer.drawStuckArrows(game, true);
+    this.renderController.exploreRenderer.drawDamageNumbers(game, true);
 
     // ── 8. Particles ───────────────────────────────────────────────────────
     for (const p of game.particles) {
@@ -181,6 +156,15 @@ export class MazeInteriorOverlay {
       } else {
         this.renderer.drawTextWithAlpha(p.x, p.y, p.char, p.color, Math.max(0, p.life / p.maxLife));
       }
+    }
+
+    // ── 8b. Torch light (cosmetic glow when Torch equipped) ────────────────
+    if (isWieldingTorch(game)) {
+      drawPlayerTorchLight(
+        this.renderer,
+        game.player.position.x + CS / 2,
+        game.player.position.y + CS / 2
+      );
     }
 
     // ── 9. Player ──────────────────────────────────────────────────────────
@@ -207,17 +191,6 @@ export class MazeInteriorOverlay {
     ctx.font        = `${CS}px 'Unifont', monospace`;
     ctx.textAlign   = 'center';
     ctx.textBaseline = 'top';
-
-    // Countdown timer — turns red as it depletes
-    if (mi.timer.active) {
-      const frac     = Math.max(0, mi.timer.time / 5.0);
-      const timeLeft = Math.ceil(mi.timer.time);
-      const g        = Math.round(frac * 200);
-      ctx.fillStyle  = `rgb(255,${g},0)`;
-      // U+FE0E forces text presentation so the hourglass renders as a
-      // monochrome glyph instead of the system color-emoji fallback.
-      ctx.fillText(`⌛︎ ${timeLeft}`, GRID.WIDTH / 2, offsetY + 4);
-    }
 
     // Label
     ctx.textAlign  = 'center';

@@ -160,10 +160,8 @@ export class PolymorphSystem {
     const player = game.player;
     if (!player?.polymorphed) return;
 
-    // Find enemies based on whether we're inside a hut interior
-    const enemies = (player.inHut && game.activeFloor)
-      ? game.activeFloor.enemies
-      : (game.currentRoom?.enemies ?? []);
+    // Find enemies for whichever layer the player currently occupies.
+    const enemies = game._activeEnemies();
 
     // Pick nearest enemy for direction; fall back to facing direction
     let nearestEnemy = null;
@@ -205,6 +203,7 @@ export class PolymorphSystem {
       hasHit:         false,
       color:          '#ff88aa',
       targetEnemies:  enemies,
+      hutPlane:       !!(game.activeFloor || player.inMaze),
     });
   }
 
@@ -243,32 +242,62 @@ export class PolymorphSystem {
 
   _updateFrogMovement(dt, game) {
     const player = game.player;
+    const swimming = player.inLiquid || player.inAquifer;
+
+    // Read movement intent (shared by both gaits).
+    const keys = game.keys ?? {};
+    let dx = 0, dy = 0;
+    if (keys.a) dx -= 1;
+    if (keys.d) dx += 1;
+    if (keys.w) dy -= 1;
+    if (keys.s) dy += 1;
+    const hasInput = dx !== 0 || dy !== 0;
+    if (!hasInput) { dx = player.facing?.x ?? 0; dy = player.facing?.y ?? 1; }
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    dx /= len; dy /= len;
+
+    if (swimming) {
+      // Flowing swim: periodic stroke pulses with a residual glide carried between
+      // them, so a moving frog reads as continuous gliding (a *slow* between
+      // strokes, never a dead stop). Releasing input lets the glide ease off so
+      // the player can still hold position to platform around hazards.
+      const STROKE_INTERVAL = 0.42;  // time between stroke pulses
+      const STROKE_SPEED    = 175;   // peak speed at the start of a stroke
+      const GLIDE_SPEED     = 95;    // residual drift maintained between strokes
+      if (hasInput) player._frogSwimDir = { x: dx, y: dy };
+      const sdir = player._frogSwimDir ?? { x: dx, y: dy };
+
+      player._frogJumpTimer -= dt;
+      if (player._frogJumpTimer <= 0) {
+        player.velocity.vx = sdir.x * STROKE_SPEED;
+        player.velocity.vy = sdir.y * STROKE_SPEED;
+        player._frogJumpTimer = STROKE_INTERVAL * (0.85 + Math.random() * 0.3);
+      } else if (hasInput) {
+        // Ease toward the glide floor along the swim direction — keeps the frog
+        // drifting forward instead of decaying to a stop between strokes.
+        const gx = sdir.x * GLIDE_SPEED, gy = sdir.y * GLIDE_SPEED;
+        const k = Math.min(1, dt * 4);
+        if (Math.hypot(player.velocity.vx, player.velocity.vy) < GLIDE_SPEED) {
+          player.velocity.vx += (gx - player.velocity.vx) * k;
+          player.velocity.vy += (gy - player.velocity.vy) * k;
+        }
+      }
+      player._frogJumpActive = false;
+      return;
+    }
+
+    // Land hop: discrete jump bursts with dead stops between (the original gait).
     const JUMP_INTERVAL = 0.85 / 3;
     const JUMP_SPEED    = 130;
     const JUMP_DURATION = 0.17;
-
     if (!player._frogJumpActive) {
       player._frogJumpTimer -= dt;
       if (player._frogJumpTimer <= 0) {
-        // Determine jump direction from current input or last facing
-        const keys = game.keys ?? {};
-        let dx = 0, dy = 0;
-        if (keys.a) dx -= 1;
-        if (keys.d) dx += 1;
-        if (keys.w) dy -= 1;
-        if (keys.s) dy += 1;
-        if (dx === 0 && dy === 0) {
-          dx = player.facing?.x ?? 0;
-          dy = player.facing?.y ?? 1;
-        }
-        const len = Math.sqrt(dx * dx + dy * dy) || 1;
-        dx /= len; dy /= len;
-
         player.velocity.vx = dx * JUMP_SPEED;
         player.velocity.vy = dy * JUMP_SPEED;
-        player._frogJumpActive       = true;
+        player._frogJumpActive        = true;
         player._frogJumpDurationTimer = JUMP_DURATION;
-        player._frogJumpTimer        = JUMP_INTERVAL * (0.7 + Math.random() * 0.6);
+        player._frogJumpTimer         = JUMP_INTERVAL * (0.7 + Math.random() * 0.6);
       }
     } else {
       player._frogJumpDurationTimer -= dt;

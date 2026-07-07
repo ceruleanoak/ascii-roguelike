@@ -42,8 +42,22 @@ body {
   border: 2px solid #0f0;
 }
 
+/* Clips the zoomed canvases (CameraZoomSystem) to the border. Scoped to just
+   the canvas layers — not #game-container itself — because #ui-overlay
+   deliberately rests outside the container's box (top: -40px) once slid up;
+   clipping the container would hide it. */
+#canvas-clip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
 #background-layer,
-#foreground-layer {
+#foreground-layer,
+#ui-layer {
   position: absolute;
   top: 0;
   left: 0;
@@ -59,6 +73,14 @@ body {
 
 #foreground-layer {
   z-index: 2;
+}
+
+/* Sits inside #canvas-clip but is deliberately never CSS-transformed by
+   RenderController.applyCameraEffects (unlike bg/fg) — combat-proximity
+   zoom must not scale spell text, the swap menu, or the cheat menu. */
+#ui-layer {
+  z-index: 3;
+  pointer-events: none;
 }
 
 #ui-overlay {
@@ -77,21 +99,58 @@ body {
   white-space: nowrap;
   transform: translateY(40px);
   transition: transform 0.7s ease-out 1s;
+  display: flex;
+  align-items: center;
+  /* Hard guarantee, independent of JS: content can never bleed past the
+     game's width. #ui-overlay-inner is measured every frame in
+     MenuSystem.updateUI() and scaled down to fit before this would ever
+     need to clip anything. */
+  overflow: hidden;
 }
 
 #ui-overlay.slide-up {
   transform: translateY(0);
 }
 
-/* Each element pinned to an exact pixel column */
-#ui-overlay > div {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  line-height: 1;
+/* Shrink-to-fit sizing (inline-flex, not flex) so its natural width
+   reflects true content size for the fit check in MenuSystem.updateUI() —
+   a flex/block child would just report the parent's width instead.
+   transform-origin left: MenuSystem scales this down from the left edge
+   if content is ever wider than the bar, so HP/DEPTH stay put and the
+   rest compresses rather than bleeding off the right edge. */
+#ui-overlay-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px;
+  line-height: 1; /* inherits to every nested label/slot div below */
+  transform-origin: left center;
 }
 
-.ui-sep             { color: #444; position: absolute; top: 50%; transform: translateY(-50%); }
+.ui-sep { color: #444; }
+
+/* Weapon quick-slots read as one cluster with a small internal gap */
+#weapon-slots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Armor + consumable brackets read as one continuous equipment row
+   (mirrors the REST-mode canvas layout) — no internal gap */
+#equipment-display {
+  display: flex;
+  align-items: center;
+}
+
+/* Inventory hint stays anchored to the right edge of the bar, separate
+   from the left-aligned stat/equipment cluster */
+#inventory-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
 
 /* Unifont for equippable item chars only — full Unicode coverage required */
 #weapon-char-1, #weapon-char-2, #weapon-char-3,
@@ -102,19 +161,19 @@ body {
   vertical-align: middle;
 }
 
-#hp-display         { left:   5px; }
 #hp-display.heal-blink { animation: hp-heal-blink 0.18s steps(1, end) 4; }
 @keyframes hp-heal-blink {
   0%, 100% { color: #0f0; }
   50%      { color: #ffaaff; }
 }
-#depth-display      { left:  82px; }
-#slot-1             { left: 125px; }
-#slot-2             { left: 150px; }
-#slot-3             { left: 175px; }
-#armor-display      { left: 245px; }
-#consumable-display { left: 272px; }
-#inventory-display  { left: 430px; }
+
+/* Max-depth boss-pending pulse — matches the north-exit 'B' letter pulse
+   (orange-to-red, ~3s period) painted by ExploreRenderer while preBossGateActive. */
+#depth-display.boss-pending { animation: depth-boss-pulse 3s ease-in-out infinite; }
+@keyframes depth-boss-pulse {
+  0%, 100% { color: rgb(255, 80, 0); }
+  50%      { color: rgb(255, 160, 0); }
+}
 
 #ui-overlay.hidden {
   display: none;

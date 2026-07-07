@@ -20,6 +20,7 @@
 
 import { GRID } from '../game/GameConfig.js';
 import { ZONES } from '../data/zones.js';
+import { isInteriorActive } from './PlaneSystem.js';
 
 const GRACE_DURATION = 1.0;   // See the tenth room before the mist moves
 const SHRINK_DURATION = 5.0;  // Vision radius 10 → 0 cells
@@ -281,8 +282,7 @@ export class GrayZoneSystem {
       return;
     }
 
-    const p = game.player;
-    if (p && (p.inHut || p.inDungeon || p.inMaze)) return; // PiP owns the view until closed
+    if (isInteriorActive(game)) return; // PiP owns the view until closed
     this.renderMist(ctx, game);
   }
 

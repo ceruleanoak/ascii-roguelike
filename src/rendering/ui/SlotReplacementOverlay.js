@@ -18,7 +18,7 @@ export class SlotReplacementOverlay {
     const item = state.pendingItem;
     if (!item) return;
 
-    const ctx = renderer.fgCtx;
+    const ctx = renderer.uiCtx;
     const cs = GRID.CELL_SIZE;
 
     const boxW = cs * 12;
@@ -63,11 +63,15 @@ export class SlotReplacementOverlay {
     const rowX = boxX + (boxW - rowW) / 2;
     const rowY = boxY + cs * 3;
     const player = game.player;
+    const reservedManaSlots = (slotType === 'consumable' && player.magicMeter?.active)
+      ? (player.magicMeter.slots || [])
+      : [];
 
     for (let i = 0; i < slots.length; i++) {
       const x = rowX + i * (cellSize + gap);
       const slot = slots[i];
-      const destroyed = slotType === 'weapon' && player.destroyedSlots?.[i];
+      const destroyed = (slotType === 'weapon' && player.destroyedSlots?.[i])
+        || reservedManaSlots.includes(i);
       const selected = state.selection === i;
 
       ctx.strokeStyle = selected ? '#ffff00' : '#666666';
@@ -87,10 +91,16 @@ export class SlotReplacementOverlay {
         ctx.fillStyle = slot.data?.color || '#ffffff';
         ctx.fillText(slot.char, x + cellSize / 2, rowY + cellSize / 2);
       }
+
+      // Small number indicator below slot
+      ctx.font = `${cs * 0.5}px 'Unifont', monospace`;
+      ctx.fillStyle = '#888888';
+      ctx.fillText((i + 1).toString(), x + cellSize / 2, rowY + cellSize + cs * 0.3);
     }
 
     // STORE IN CHEST option
-    const storeSelected = state.selection === 3;
+    const storeIndex = state.slotType === 'armor' ? 1 : state.slotType === 'consumable' ? slots.length : 3;
+    const storeSelected = state.selection === storeIndex;
     const storeY = rowY + cellSize + cs * 1.4;
     ctx.font = `${cs}px 'Unifont', monospace`;
     if (storeSelected) {
@@ -99,6 +109,11 @@ export class SlotReplacementOverlay {
     }
     ctx.fillStyle = storeSelected ? '#ffff00' : '#999999';
     ctx.fillText(spectaclesTransformString('STORE IN CHEST', isSpectaclesActive(game)), boxX + boxW / 2, storeY);
+
+    // Small number indicator for STORE option
+    ctx.font = `${cs * 0.5}px 'Unifont', monospace`;
+    ctx.fillStyle = '#888888';
+    ctx.fillText((storeIndex + 1).toString(), boxX + boxW / 2, storeY + cs * 0.6);
 
     ctx.restore();
   }

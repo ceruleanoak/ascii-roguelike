@@ -26,6 +26,7 @@ import { DemoRenderer } from './state/DemoRenderer.js';
 import { HutInteriorOverlay } from './ui/HutInteriorOverlay.js';
 import { DialogueBox } from './ui/DialogueBox.js';
 import { MazeInteriorOverlay } from './ui/MazeInteriorOverlay.js';
+import { InteriorOverlay } from './ui/InteriorOverlay.js';
 import { PixelatedDissolve, ScreenShake } from './effects/TextEffects.js';
 import { GRID } from '../game/GameConfig.js';
 
@@ -51,6 +52,10 @@ export class RenderController {
     // Maze interior overlay (scrolling viewport)
     this.mazeInteriorOverlay = new MazeInteriorOverlay(renderer, this);
 
+    // Single PiP dispatch point for all interiors (ADR-0001) — routes to the
+    // per-kind overlay above based on game.interiorManager.activeKind.
+    this.interiorOverlay = new InteriorOverlay(renderer, this);
+
     // State renderers (pass renderController for component access)
     this.titleRenderer = new TitleRenderer(renderer);
     this.gameOverRenderer = new GameOverRenderer(renderer, this);
@@ -67,12 +72,27 @@ export class RenderController {
     this.screenShake = new ScreenShake();
   }
 
-  /** Apply horizontal screen shake by CSS-translating both canvas layers. */
-  applyShake() {
+  /**
+   * Apply screen shake + combat-proximity camera zoom by CSS-transforming both
+   * canvas layers. Translate is composed before scale so the shake's pixel
+   * magnitude stays constant on screen regardless of zoom level. transform-origin
+   * is driven by CameraZoomSystem so the zoom pivots on the player.
+   */
+  applyCameraEffects(game) {
     const offsetX = this.screenShake.getOffsetX();
-    const transform = offsetX ? `translateX(${offsetX.toFixed(2)}px)` : '';
+    const zoom = game.cameraZoomSystem.getScale();
+    const origin = game.cameraZoomSystem.getOriginPercent();
+
+    const parts = [];
+    if (offsetX) parts.push(`translateX(${offsetX.toFixed(2)}px)`);
+    if (zoom !== 1) parts.push(`scale(${zoom.toFixed(4)})`);
+    const transform = parts.join(' ');
+    const transformOrigin = `${origin.x.toFixed(2)}% ${origin.y.toFixed(2)}%`;
+
     this.renderer.bgCanvas.style.transform = transform;
     this.renderer.fgCanvas.style.transform = transform;
+    this.renderer.bgCanvas.style.transformOrigin = transformOrigin;
+    this.renderer.fgCanvas.style.transformOrigin = transformOrigin;
   }
 
   renderTitleState(game) {
@@ -163,6 +183,19 @@ export class RenderController {
     ctx.restore();
   }
 
+  /** Full-screen black overlay for the TITLE → REST transition (see Game.updateScreenFade). */
+  renderScreenFade(game) {
+    if (!game.screenFade) return;
+
+    const ctx = this.renderer.fgCtx;
+    ctx.save();
+    ctx.globalAlpha = game.screenFade.opacity;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, GRID.WIDTH, GRID.HEIGHT);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
   renderSpellResponse(game) {
     if (!game.spellResponse) return;
 
@@ -195,7 +228,7 @@ export class RenderController {
       return;
     }
 
-    const ctx = this.renderer.fgCtx;
+    const ctx = this.renderer.uiCtx;
     const MAX_TEXT_W = GRID.WIDTH * 0.92;
 
     // Start at 2× cell size, scale down if the text would overflow the canvas.

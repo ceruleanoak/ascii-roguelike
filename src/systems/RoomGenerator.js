@@ -11,7 +11,7 @@ import { getDungeonDesign } from '../data/dungeonDesigns.js';
 import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
-import { maybeSpawnPeacefulFishingRoom, buildVaultInteriorLoot, protectRegion, cleanupStrayBackgroundObjects, darkenColor, spawnBatFlock, spawnBelfryBats } from './roomFeatures.js';
+import { maybeSpawnPeacefulFishingRoom, buildVaultInteriorLoot, protectRegion, cleanupStrayBackgroundObjects, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, deriveRiverFlowDirection, buildForcedRiverParams, carveForcedRiver, cellularCaveGrid } from './roomFeatures.js';
 
 // Zone-boss arena → letter template key. Boss rooms are entered without a
 // letter (cheat warp) or with an arbitrary one (normal progression), so we
@@ -111,6 +111,9 @@ export class RoomGenerator {
     if (exitLetter === 'F') {
       type = ROOM_TYPES.FOUNTAIN;
     }
+    if (exitLetter === 'S') {
+      type = ROOM_TYPES.SETTLEMENT; // 2-3 fixed neutral huts: press, wise man, alchemy
+    }
 
     // Determine room type if not specified
     if (!type) {
@@ -166,6 +169,7 @@ export class RoomGenerator {
       case ROOM_TYPES.BOSS:
         this.generateBossRoom(room);
         room.isZoneBossRoom = !!this.isZoneBossRoom;
+        room.isMiniboss = !room.isZoneBossRoom;
         break;
       case ROOM_TYPES.DISCOVERY:
         this.generateDiscoveryRoom(room);
@@ -187,6 +191,9 @@ export class RoomGenerator {
         break;
       case ROOM_TYPES.HUT:
         this.generateHutRoom(room);
+        break;
+      case ROOM_TYPES.SETTLEMENT:
+        this.generateSettlementRoom(room);
         break;
       case ROOM_TYPES.DUNGEON:
         this.generateDungeonRoom(room);
@@ -286,10 +293,6 @@ export class RoomGenerator {
     // idempotent — no-op when a dropper survived).
     this.ensureKeyDroppers(room);
 
-    // Key-item sites (deep-water gated § / ⊙ placements) — KeyItemSystem owns
-    // the logic; runs after cleanup so its objects can't be stripped.
-    this.game?.keyItemSystem?.placeSites(room);
-
     return room;
   }
 
@@ -317,13 +320,13 @@ export class RoomGenerator {
   // matching color from data/items.js so the dropped "pixel" matches the gem.
   static CROW_HOARD_POOL = [
     '●', // Pearl
-    '1', // Topaz
-    '9', // Garnet
-    '`', // Emerald
-    '_', // Diamond
-    '6', // Onyx
-    '?', // Ruby
-    '(', // Sapphire
+    '◇', // Topaz
+    '⬥', // Garnet
+    '⬦', // Emerald
+    '⧫', // Diamond
+    '⬧', // Onyx
+    '◈', // Ruby
+    '⬨', // Sapphire
     'c'  // Coin
   ];
 
@@ -572,6 +575,19 @@ export class RoomGenerator {
     if (this.currentLetterTemplate?.lakeZone?.enabled) {
       this.generateLakeTerrain(room);
     }
+    // Quagmire: mark a conspicuous frog-only Pond entrance in the largest pool.
+    if (this.currentLetterTemplate?.quagmire) placePondEntries(this, room);
+
+    // Spawn training dummy in Green zone L1 (a pacifist Enemy — see data/enemies.js '@')
+    if (this.currentDepth === 1 && room.zone === 'green') {
+      const p = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects);
+      if (p) {
+        const dummy = new Enemy('@', p.x, p.y, this.currentDepth);
+        dummy.setCollisionMap(room.collisionMap);
+        dummy.setBackgroundObjects(room.backgroundObjects);
+        this.addEnemyToRoom(room, dummy);
+      }
+    }
 
     // Spawn 1-6 enemies based on depth, avoiding liquid tiles.
     // Cluster spawns around 3 anchor points so heavy enemy counts feel like
@@ -634,6 +650,12 @@ export class RoomGenerator {
 
     // Low-depth L/O rooms may roll peaceful (shore Fisherman) — roomFeatures.js
     if (maybeSpawnPeacefulFishingRoom(this, room)) return;
+
+    // Quagmire-style escalating rounds: round 1 is the spawn above; later waves
+    // are driven by RoundCombatSystem off the room-cleared hook.
+    if (this.currentLetterTemplate?.roundCombat?.enabled) {
+      this.game?.roundCombatSystem?.initRoom(room, this.currentLetterTemplate.roundCombat.rounds);
+    }
 
     // Exits are locked until all enemies defeated
     room.exitsLocked = true;
@@ -1184,48 +1206,9 @@ export class RoomGenerator {
     }
 
     // ── Cellular automata cave generation ────────────────────────────────────
-    const SEED_CHANCE = 0.45;
-    // caveGrid[row][col] = 1 → wall, 0 → passage
-    const caveGrid = Array.from({ length: ROWS }, (_, r) =>
-      Array.from({ length: COLS }, (_, c) => {
-        if (c === 0 || c === COLS - 1 || r === 0 || r === ROWS - 1) return 1; // border
-        if (isInClearing(c, r)) return 0; // clearings are open
-        return Math.random() < SEED_CHANCE ? 1 : 0;
-      })
-    );
-
-    const countNeighbors = (grid, col, row) => {
-      let count = 0;
-      for (let dr = -1; dr <= 1; dr++) {
-        for (let dc = -1; dc <= 1; dc++) {
-          if (dr === 0 && dc === 0) continue;
-          const nr = row + dr, nc = col + dc;
-          if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) { count++; continue; }
-          if (grid[nr][nc]) count++;
-        }
-      }
-      return count;
-    };
-
-    for (let gen = 0; gen < 5; gen++) {
-      const next = caveGrid.map(r => [...r]);
-      for (let r = 1; r < ROWS - 1; r++) {
-        for (let c = 1; c < COLS - 1; c++) {
-          if (isInClearing(c, r)) { next[r][c] = 0; continue; }
-          const n = countNeighbors(caveGrid, c, r);
-          if (caveGrid[r][c] === 1) {
-            next[r][c] = (n >= 4) ? 1 : 0; // survival: S45678
-          } else {
-            next[r][c] = (n === 3) ? 1 : 0; // birth: B3
-          }
-        }
-      }
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
-          caveGrid[r][c] = next[r][c];
-        }
-      }
-    }
+    // caveGrid[row][col] = 1 → wall, 0 → passage. Shared with the bat belfry and
+    // the Aquifer (Quagmire dive) via _cellularCaveGrid.
+    const caveGrid = cellularCaveGrid(COLS, ROWS, isInClearing);
 
     // ── Carve corridors from center to each clearing entrance ────────────────
     const centerCol = Math.floor(COLS / 2);
@@ -1328,7 +1311,7 @@ export class RoomGenerator {
     let rocksPlaced = 0;
     for (const cell of passageCells) {
       if (rocksPlaced >= rockCount) break;
-      const obj = new BackgroundObject('2', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
+      const obj = new BackgroundObject('5', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
       room.backgroundObjects.push(obj);
       rocksPlaced++;
     }
@@ -1504,48 +1487,8 @@ export class RoomGenerator {
     const isInClearing = (col, row) =>
       clearings.some(c => col >= c.minCol && col <= c.maxCol && row >= c.minRow && row <= c.maxRow);
 
-    // Cellular automata cave generation (same as underground)
-    const SEED_CHANCE = 0.45;
-    const caveGrid = Array.from({ length: ROWS }, (_, r) =>
-      Array.from({ length: COLS }, (_, c) => {
-        if (c === 0 || c === COLS - 1 || r === 0 || r === ROWS - 1) return 1;
-        if (isInClearing(c, r)) return 0;
-        return Math.random() < SEED_CHANCE ? 1 : 0;
-      })
-    );
-
-    const countNeighbors = (grid, col, row) => {
-      let count = 0;
-      for (let dr = -1; dr <= 1; dr++) {
-        for (let dc = -1; dc <= 1; dc++) {
-          if (dr === 0 && dc === 0) continue;
-          const nr = row + dr, nc = col + dc;
-          if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) { count++; continue; }
-          if (grid[nr][nc]) count++;
-        }
-      }
-      return count;
-    };
-
-    for (let gen = 0; gen < 5; gen++) {
-      const next = caveGrid.map(r => [...r]);
-      for (let r = 1; r < ROWS - 1; r++) {
-        for (let c = 1; c < COLS - 1; c++) {
-          if (isInClearing(c, r)) { next[r][c] = 0; continue; }
-          const n = countNeighbors(caveGrid, c, r);
-          if (caveGrid[r][c] === 1) {
-            next[r][c] = (n >= 4) ? 1 : 0;
-          } else {
-            next[r][c] = (n === 3) ? 1 : 0;
-          }
-        }
-      }
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
-          caveGrid[r][c] = next[r][c];
-        }
-      }
-    }
+    // Cellular automata cave generation (shared helper; same as underground)
+    const caveGrid = cellularCaveGrid(COLS, ROWS, isInClearing);
 
     // Carve corridors from center to each clearing
     const centerCol = Math.floor(COLS / 2);
@@ -1621,7 +1564,7 @@ export class RoomGenerator {
     let rocksPlaced = 0;
     for (const cell of passageCells) {
       if (rocksPlaced >= rockCount) break;
-      const obj = new BackgroundObject('2', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
+      const obj = new BackgroundObject('5', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
       room.backgroundObjects.push(obj);
       rocksPlaced++;
     }
@@ -1643,6 +1586,7 @@ export class RoomGenerator {
     this.ensureKeyDroppers(room);
     room.exitsLocked = true;
   }
+
 
   // Fisher-Yates shuffle (in-place)
   _shuffleArray(arr) {
@@ -1776,8 +1720,11 @@ export class RoomGenerator {
 
   generateLakeTerrain(room) {
     const config = this.currentLetterTemplate.lakeZone;
-    const { nodes, edgeNoise, waterDensity } = config;
+    this.stampWaterBlobs(room, config.nodes, config.edgeNoise, config.waterDensity);
+  }
 
+  // Blob-fill + shoreline decoration; shared by generateLakeTerrain and Oasis.
+  stampWaterBlobs(room, nodes, edgeNoise, waterDensity) {
     // For each grid cell, check if it falls inside any blob node
     for (let col = 1; col < GRID.COLS - 1; col++) {
       for (let row = 1; row < GRID.ROWS - 1; row++) {
@@ -1903,6 +1850,10 @@ export class RoomGenerator {
         newEnemy.setGame(game);
         newEnemy.setRoom(game.currentRoom);
         newEnemy.enraged = true;
+        // Spawn iframes: a swing that just destroyed the spawner (grass, barrel,
+        // dying enemy) is often still active on the same frame — without this the
+        // newly spawned enemy dies instantly to the attack that created it.
+        newEnemy.invulnerabilityTimer = 1.0;
         applyZoneCombatModifiers(newEnemy, game.currentRoom.zone);
         game.physicsSystem.addEntity(newEnemy);
         newEnemies.push(newEnemy);
@@ -2265,9 +2216,15 @@ export class RoomGenerator {
 
     if (effectiveZone === 'yellow') {
       // Stormlands: every room gets one water template (stream / river / dry bed /
-      // river+river / river+2 streams / oasis). Contiguous 4-adjacent water cells
+      // river+river / river+2 streams / pond). Contiguous 4-adjacent water cells
       // so a single zap conducts down the whole flow.
-      this.generateYellowWaterTemplate(room);
+      //
+      // River-follow chase active (ZoneSystem.riverChaseActive) → force a river
+      // pinned to the entry wall, flowing forward-only (never south/back out).
+      const forced = this.zoneSystem?.riverChaseActive
+        ? buildForcedRiverParams(this.zoneSystem.riverLastExitDirection)
+        : null;
+      this.generateYellowWaterTemplate(room, forced);
     } else {
       // Structured liquid (depth 3+, or always in zones with special liquids like lava)
       if (this.currentDepth >= 3 || zoneHasSpecialLiquid) {
@@ -2509,22 +2466,32 @@ export class RoomGenerator {
   // mud tiles (no conduction). Streams are just the centerline.
   // ──────────────────────────────────────────────────────────────────────────
 
-  generateYellowWaterTemplate(room) {
-    const templates = ['stream', 'river', 'dry', 'river_river', 'river_streams', 'oasis'];
+  generateYellowWaterTemplate(room, forced = null) {
+    if (forced) {
+      carveForcedRiver(this, room, forced);
+      return;
+    }
+
+    const templates = ['stream', 'river', 'dry', 'river_river', 'river_streams', 'pond'];
     const choice = templates[Math.floor(Math.random() * templates.length)];
 
     switch (choice) {
       case 'stream':
         this._buildPath(room, 'stream');
         break;
-      case 'river':
-        this._buildPath(room, 'river');
+      case 'river': {
+        const path = this._buildPath(room, 'river');
+        const dir = deriveRiverFlowDirection(path);
+        if (dir && room.zone === 'yellow') room.riverFlowDirection = dir;
         break;
+      }
       case 'dry':
         this._buildPath(room, 'dry');
         break;
       case 'river_river': {
         const main = this._buildPath(room, 'river');
+        const dir = deriveRiverFlowDirection(main);
+        if (dir && room.zone === 'yellow') room.riverFlowDirection = dir;
         if (main && main.length > 6) {
           const tap = main[Math.floor(main.length / 2)];
           this._buildPath(room, 'river', tap, this._pickEdgePoint());
@@ -2533,6 +2500,8 @@ export class RoomGenerator {
       }
       case 'river_streams': {
         const main = this._buildPath(room, 'river');
+        const dir = deriveRiverFlowDirection(main);
+        if (dir && room.zone === 'yellow') room.riverFlowDirection = dir;
         if (main && main.length > 8) {
           for (let i = 0; i < 2; i++) {
             const j = Math.floor((i + 1) * main.length / 3);
@@ -2541,8 +2510,8 @@ export class RoomGenerator {
         }
         break;
       }
-      case 'oasis':
-        this._placeOasis(room);
+      case 'pond':
+        this._placePond(room);
         break;
     }
   }
@@ -2567,10 +2536,11 @@ export class RoomGenerator {
     return 'right';
   }
 
-  // Pick a cell on a random edge of the room, avoiding the center exit bands.
-  _pickEdgePoint() {
+  // Pick a cell on a random edge of the room (or a specific `forcedEdge`),
+  // avoiding the center exit bands.
+  _pickEdgePoint(forcedEdge = null) {
     const edges = ['top', 'bottom', 'left', 'right'];
-    const e = edges[Math.floor(Math.random() * 4)];
+    const e = forcedEdge || edges[Math.floor(Math.random() * 4)];
     const centerC = Math.floor(GRID.COLS / 2);
     const centerR = Math.floor(GRID.ROWS / 2);
     if (e === 'top' || e === 'bottom') {
@@ -2841,7 +2811,7 @@ export class RoomGenerator {
     }
   }
 
-  _placeOasis(room) {
+  _placePond(room) {
     // Pond: blob of water roughly 3 cells across.
     let centerCol = 0, centerRow = 0;
     for (let attempt = 0; attempt < 30; attempt++) {
@@ -4062,10 +4032,8 @@ export class RoomGenerator {
     const template = this.currentLetterTemplate?.hutStructure;
     const centerCol = template?.centerCol ?? 15;
     const baseCenterRow = template?.centerRow ?? 15;
-    const extW = template?.exteriorWidth ?? 5;   // half-extents
+    const extW = template?.exteriorWidth ?? 5;
     const extH = template?.exteriorHeight ?? 5;
-    const halfW = Math.floor(extW / 2);           // 2
-    const halfH = Math.floor(extH / 2);           // 2
 
     // Roll hut scenario first — witch huts shift the structure up by 2 rows
     // to make room for chicken legs underneath. Cheat override:
@@ -4090,74 +4058,8 @@ export class RoomGenerator {
     const verticalShift = isWitchRaised ? 2 : 0;
     const centerRow = baseCenterRow - verticalShift;
 
-    const minCol = centerCol - halfW;
-    const maxCol = centerCol + halfW;
-    const minRow = centerRow - halfH;
-    const maxRow = centerRow + halfH;
-
-    // The entire hut footprint is solid — walls, door cell, and the interior
-    // dark fill cells — so nothing can occupy any cell of the building from
-    // the exterior room. Entry is SPACE-only via proximity check.
-    const wallObjects = [];
-    const interiorObjects = [];
-    for (let row = minRow; row <= maxRow; row++) {
-      for (let col = minCol; col <= maxCol; col++) {
-        room.collisionMap[row][col] = true;
-        const isWall = row === minRow || row === maxRow || col === minCol || col === maxCol;
-        if (!isWall) {
-          // Interior cell: paint with dark fill so the hut reads as enclosed.
-          const fill = new BackgroundObject('█', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
-          fill.structural = true;
-          room.backgroundObjects.push(fill);
-          interiorObjects.push(fill);
-          continue;
-        }
-        // Door cell: mark solid (above) but skip the wall glyph; door overlays.
-        if (row === maxRow && col === centerCol) continue;
-        const wallObj = new BackgroundObject('≡', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
-        wallObj.structural = true;
-        room.backgroundObjects.push(wallObj);
-        wallObjects.push(wallObj);
-      }
-    }
-
-    // Place door (∩) at south-center of hut footprint
-    const doorCol = centerCol;
-    const doorRow = maxRow;
-    const doorObj = new BackgroundObject('∩', doorCol * GRID.CELL_SIZE, doorRow * GRID.CELL_SIZE);
-    doorObj.structural = true;
-    room.backgroundObjects.push(doorObj);
-
-    // Witch huts rest atop two chicken legs: the door is unreachable until the
-    // SIT/SITDOWN spell lowers the hut. Legs are passable (player walks under)
-    // but bullet-blocking, so they shake when struck.
-    const legObjects = [];
-    if (isWitchRaised) {
-      const legCols = [centerCol - 1, centerCol + 1];
-      const legRows = [maxRow + 1, maxRow + 2];
-      for (const lc of legCols) {
-        for (const lr of legRows) {
-          if (lr >= GRID.ROWS - 1) continue;
-          const leg = new BackgroundObject('ⲗ', lc * GRID.CELL_SIZE, lr * GRID.CELL_SIZE);
-          leg.structural = true;
-          room.backgroundObjects.push(leg);
-          legObjects.push(leg);
-        }
-      }
-    }
-
-    room.hut = {
-      exteriorBounds: { minCol, maxCol, minRow, maxRow },
-      doorPosition: { col: doorCol, row: doorRow },
-      hutKind,
-      interiorGenerated: false,
-      raised: isWitchRaised,
-      verticalShift,
-      wallObjects,
-      doorObject: doorObj,
-      interiorObjects,
-      legObjects
-    };
+    room.hut = stampHutFootprint(room, { centerCol, centerRow, hutKind, raised: isWitchRaised });
+    const { minCol, maxCol, minRow, maxRow } = room.hut.exteriorBounds;
 
     // Effective vertical bounds include chicken legs for witch huts so that
     // background-object clearing and enemy spacing treat the legs as part
@@ -4208,6 +4110,11 @@ export class RoomGenerator {
     }
 
     room.exitsLocked = room.enemies.length > 0;
+  }
+
+  // Settlement room ('S') — see generateSettlementRoom in roomFeatures.js.
+  generateSettlementRoom(room) {
+    generateSettlementRoomImpl(this, room);
   }
 
   /**

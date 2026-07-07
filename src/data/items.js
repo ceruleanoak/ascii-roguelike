@@ -180,6 +180,7 @@ export const ITEMS = {
     chainCount: 1,
     onHit: 'stun',
     electric: true,
+    electricityCharge: 20,
     requiresCharge: true,
     bulletChar: '↯',
     maxUses: 5,
@@ -276,6 +277,7 @@ export const ITEMS = {
     cooldown: 0.9,
     onHit: 'stun',
     electric: true,
+    electricityCharge: 12,
     bulletChar: 'ᚾ',
     maxUses: 6,
     reloadTime: 6,
@@ -326,7 +328,7 @@ export const ITEMS = {
     name: 'Bow',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
-    damage: 2,
+    damage: 3,
     cooldown: 1.5,
     maxUses: 10,  // 10 arrows per room
     critChance: 0.10,
@@ -353,7 +355,7 @@ export const ITEMS = {
     name: 'Sky Bow',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
-    damage: 3,
+    damage: 5,
     cooldown: 1.2,
     maxUses: 10,
     critChance: 0.10,
@@ -365,7 +367,7 @@ export const ITEMS = {
     name: 'Multi-Shot Bow',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
-    damage: 2,
+    damage: 3,
     cooldown: 2.2,
     maxUses: 9,  // 3 trigger pulls × 3 arrows
     arrowCount: 3,
@@ -380,7 +382,7 @@ export const ITEMS = {
     name: 'Ice Bow',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
-    damage: 2,
+    damage: 3,
     cooldown: 1.8,
     maxUses: 5,  // Fewer uses for elemental bow
     onHit: 'freeze',
@@ -423,7 +425,7 @@ export const ITEMS = {
     name: 'Piercing Bow',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
-    damage: 3,
+    damage: 4,
     cooldown: 1.8,
     maxUses: 5,
     pierce: true,
@@ -437,13 +439,14 @@ export const ITEMS = {
     name: 'Chain Bow',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
-    damage: 2,
+    damage: 4,
     cooldown: 2.2,
     maxUses: 5,  // Limited uses for chain lightning bow
     chain: true,
     chainCount: 2,
     onHit: 'stun',
     electric: true,
+    electricityCharge: 18,
     critChance: 0.12,
     arrowChar: '~',
     color: '#ffff00'
@@ -454,7 +457,7 @@ export const ITEMS = {
     name: 'Split Bow',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
-    damage: 2,
+    damage: 4,
     cooldown: 2.0,
     maxUses: 5,
     split: true,
@@ -469,7 +472,7 @@ export const ITEMS = {
     name: 'Burst Bow',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
-    damage: 2,
+    damage: 4,
     cooldown: 1.8,
     maxUses: 30,  // 10 trigger pulls × 3 arrows
     attackPattern: 'burst',
@@ -490,8 +493,8 @@ export const ITEMS = {
     maxUses: 1,
     critChance: 0.10,
     boomerang: true,
-    boomerangBaseDuration: 0.45,  // seconds before return triggers (no-charge)
-    boomerangChargeBonus: 0.55,   // additional seconds at full charge
+    boomerangMinCells: 1,         // outbound travel distance at no charge (cells)
+    boomerangMaxCells: 5,         // outbound travel distance at full charge (cells)
     boomerangHitDefer: 0.18,      // seconds added to the return timer per enemy hit
     boomerangMaxRicochets: 3,     // enemy-to-enemy bounces at full charge (0 at no charge)
     chainRadius: 32,              // ~1 cell — chain damage radius around first hit
@@ -516,6 +519,23 @@ export const ITEMS = {
     patternSpeed: 0.05,
     range: 20,
     color: COLORS.ITEM
+  },
+
+  // ── MELEE / torch — Tier 1 ────────────────────────────────────────────────
+  '♨': {
+    char: '♨',
+    tier: 1,
+    name: 'Torch',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'torch',
+    damage: 1,
+    windup: 0.3,
+    recovery: 0.8,
+    patternSpeed: 0.05,
+    range: 16,
+    onHit: 'burn',
+    color: '#ff8800',
   },
 
   // ── MELEE / sword — Legendary (uncraftable) ──────────────────────────────
@@ -616,6 +636,7 @@ export const ITEMS = {
     lightningDelay: 0.6,
     lightningDamage: 4,
     lightningRadius: 19,        // ~1.2 cells
+    electricityCharge: 16,
     color: '#ffee44'
   },
 
@@ -708,10 +729,10 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'axe',
     damage: 2,
-    windup: 0.5,
-    recovery: 0.6,
+    windup: 0.7,
+    recovery: 0.9,
     patternSpeed: 0.04,
-    range: 22,
+    range: 12,
     color: COLORS.ITEM
   },
 
@@ -725,7 +746,7 @@ export const ITEMS = {
     weaponSubtype: 'axe',
     damage: 3,
     windup: 0.6,
-    recovery: 0.5,
+    recovery: 0.8,
     patternSpeed: 0.04,
     range: 22,
     color: '#cccccc'
@@ -746,6 +767,7 @@ export const ITEMS = {
     range: 24,
     onHit: 'stun',
     electric: true,
+    electricityCharge: 20,
     chain: true,
     chainCount: 2,
     color: '#ffff00'
@@ -1283,6 +1305,7 @@ export const ITEMS = {
     meleeChar: '~',
     onHit: 'stun',
     electric: true,
+    electricityCharge: 14,
     color: '#ffcc00'
   },
   '∽': {
@@ -1303,17 +1326,23 @@ export const ITEMS = {
   },
 
   // ── MELEE / flail ─────────────────────────────────────────────────────────
+  // Hold-to-spin (FlailSystem): a single orbiting hit point ramps from 0 to
+  // spinMaxSpeed over spinRampTime while SPACE is held. No damage below half
+  // ramp, half damage from half ramp up to (not including) top speed, full
+  // damage only at top speed. Landing a hit drops the ramp back to 0 (plus
+  // spinStagger), so the flail can't wall off a crowd the way a one-shot
+  // 360° ring could.
   '○': {
     char: '○',
     name: 'Flail',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'flail',
+    flailSpin: true,
     damage: 2,
-    windup: 0.45,
-    recovery: 0.15,
-    cooldown: 1.0,
-    patternSpeed: 0.2,
+    spinRampTime: 0.9,
+    spinMaxSpeed: 15,
+    spinStagger: 0.15,
     range: 16,
     color: '#aaaaaa'
   },
@@ -1362,7 +1391,7 @@ export const ITEMS = {
     char: '𐤀', name: 'Fur Vest', type: ITEM_TYPES.ARMOR,
     defense: 1,
     speedBoost: 0.1,        // light — slight movement bonus
-    rollCooldownMult: 0.75, // fast dodge recharge; rolls feel snappy
+    rollCooldownMult: 0.9, // fast dodge recharge; rolls feel snappy
     spellDescription: 'SIMPLE AND NIMBLE.',
     color: '#8b4513'
   },
@@ -1370,7 +1399,7 @@ export const ITEMS = {
     char: '𐤅', name: 'Stitched Vest', type: ITEM_TYPES.ARMOR,
     defense: 2,
     speedBoost: 0.05,
-    rollCooldownMult: 0.8,
+    rollCooldownMult: 0.95,
     extraIframes: 0.1,      // tighter stitching trains the roll timing
     spellDescription: 'REFINED AGILITY.',
     color: '#aa6633'
@@ -1398,7 +1427,7 @@ export const ITEMS = {
     defense: 2,
     meleeResist: 0.25,      // bone plates deflect strikes
     massBonus: 1.0,         // heavier — noticeably less knockback
-    rollCooldownMult: 1.25, // rigid and bulky; dodge recharge is slower
+    rollCooldownMult: 1.4, // rigid and bulky; dodge recharge is slower
     spellDescription: 'STURDY, BUT SLOW.',
     color: '#cccccc'
   },
@@ -1407,7 +1436,7 @@ export const ITEMS = {
     defense: 3,
     meleeResist: 0.3,
     massBonus: 1.5,
-    rollCooldownMult: 1.35,
+    rollCooldownMult: 1.5,
     spellDescription: 'NOT EASILY MOVED.',
     color: '#ddddcc'
   },
@@ -1417,7 +1446,7 @@ export const ITEMS = {
     char: '𐤂', name: 'Leather Armor', type: ITEM_TYPES.ARMOR,
     defense: 1,
     speedBoost: 0.2,        // lightest proper armor
-    rollCooldownMult: 0.65, // fastest dodge recharge of any armor
+    rollCooldownMult: 0.8, // fastest dodge recharge of any armor
     extraIframes: 0.15,     // trained roll technique extends protection window
     dodgeChance: 0.08,      // physical evasion — lower than Robe's magic dodge
     spellDescription: 'TUCK AND ROLL.',
@@ -1436,7 +1465,7 @@ export const ITEMS = {
     defense: 3,
     bulletResist: 0.3,      // interlocked rings shed projectiles
     massBonus: 2.0,         // heavy metal — excellent knockback resistance
-    rollCooldownMult: 1.5,  // rolling in chain mail is a commitment
+    rollCooldownMult: 1.65,  // rolling in chain mail is a commitment
     spellDescription: 'ARROW PROTECTION.',
     color: '#aaaaaa'
   },
@@ -1447,7 +1476,7 @@ export const ITEMS = {
     dodgeChance: 0.15,      // magically treats luck as defense
     fireImmune: true,
     freezeImmune: true,
-    rollCooldownMult: 0.8,  // floaty — decent recharge
+    rollCooldownMult: 0.95,  // floaty — decent recharge
     extraIframes: 0.35,     // magical ward extends post-roll protection
     spellDescription: 'LUCK IS ARMOR.',
     color: '#9370db'
@@ -1459,7 +1488,7 @@ export const ITEMS = {
     meleeResist: 0.3,       // thick plate absorbs all physical damage types
     massBonus: 3.0,         // near-immovable; knockback barely registers
     speedPenalty: 0.2,
-    rollCooldownMult: 1.8,  // dodging in full plate is nearly impossible
+    rollCooldownMult: 1.95,  // dodging in full plate is nearly impossible
     spellDescription: 'A WALKING WALL.',
     color: '#4a4a4a'
   },
@@ -1470,7 +1499,7 @@ export const ITEMS = {
     defense: 2,
     poisonImmune: true,
     dodgeChance: 0.15,
-    rollCooldownMult: 0.5,  // fastest dodge recharge in the game — ninja specialty
+    rollCooldownMult: 0.65,  // fastest dodge recharge in the game — ninja specialty
     extraIframes: 0.3,      // extended post-roll window for precise counters
     spellDescription: 'MOVE IN SHADOW.',
     color: '#2f2f2f'
@@ -1492,7 +1521,7 @@ export const ITEMS = {
     slowEnemies: true,      // cold radiates outward, chilling nearby enemies
     meleeResist: 0.25,      // thick frozen plates absorb strikes
     massBonus: 2.5,
-    rollCooldownMult: 1.6,  // frozen bulk — slow to recover between rolls
+    rollCooldownMult: 1.75,  // frozen bulk — slow to recover between rolls
     spellDescription: 'ICY TO TOUCH.',
     color: '#87ceeb'
   },
@@ -1503,7 +1532,7 @@ export const ITEMS = {
     meleeResist: 0.3,       // overlapping scales deflect strikes
     burnResist: 0.8,        // dragon scales resist fire by nature
     massBonus: 2.0,
-    rollCooldownMult: 1.3,
+    rollCooldownMult: 1.45,
     spellDescription: 'ELEMENTAL RESISTANCE.',
     color: '#ff00ff'
   },
@@ -1517,7 +1546,7 @@ export const ITEMS = {
     dodgeChance: 0.18,
     fireImmune: true,
     freezeImmune: true,
-    rollCooldownMult: 0.75,
+    rollCooldownMult: 0.9,
     extraIframes: 0.35,
     particleAura: 'frost',        // ambient ice crystal particles
     rollPulse: 'freeze',          // dodge roll pulses freeze in radius (once per room)
@@ -1533,7 +1562,7 @@ export const ITEMS = {
     dodgeChance: 0.18,
     fireImmune: true,
     freezeImmune: true,
-    rollCooldownMult: 0.75,
+    rollCooldownMult: 0.9,
     extraIframes: 0.35,
     particleAura: 'flame',        // rising ember particles
     rollPulse: 'burn',            // dodge roll ignites enemies in radius (once per room)
@@ -1549,7 +1578,7 @@ export const ITEMS = {
     dodgeChance: 0.18,
     fireImmune: true,
     freezeImmune: true,
-    rollCooldownMult: 0.75,
+    rollCooldownMult: 0.9,
     extraIframes: 0.35,
     particleAura: 'shock',        // crackling electric spark particles
     rollPulse: 'stun',            // dodge roll discharges stun in radius (once per room)
@@ -1564,7 +1593,7 @@ export const ITEMS = {
     defense: 1,
     dodgeChance: 0.18,
     freezeImmune: true,
-    rollCooldownMult: 0.75,
+    rollCooldownMult: 0.9,
     extraIframes: 0.35,
     particleAura: 'nature',       // soft green wisps
     gooConsume: true,             // goo pickups heal 1HP instead of going to inventory
@@ -1577,7 +1606,7 @@ export const ITEMS = {
     defense: 1,
     dodgeChance: 0.18,
     fireImmune: true,
-    rollCooldownMult: 0.75,
+    rollCooldownMult: 0.9,
     extraIframes: 0.35,
     particleAura: 'blood',        // dark crimson droplets
     bladeKillHeal: true,          // heal 1HP when a blade kills an enemy
@@ -1589,7 +1618,7 @@ export const ITEMS = {
     armorClass: 'robe',
     defense: 1,
     dodgeChance: 0.25,
-    rollCooldownMult: 0.65,
+    rollCooldownMult: 0.8,
     extraIframes: 0.35,
     particleAura: 'shadow',       // dark drifting specks
     batTransform: true,           // dodge roll becomes rapid bat-form dash
@@ -1600,7 +1629,7 @@ export const ITEMS = {
   '⊛': {
     char: '⊛', name: 'Whirlwind Cape', type: ITEM_TYPES.ARMOR,
     defense: 1,
-    rollCooldownMult: 0.7,
+    rollCooldownMult: 0.85,
     whirlwindCape: true,   // dodge roll becomes a spinning attack that dizzies nearby enemies
     spellDescription: 'SPIN. DISRUPT. SURVIVE.',
     color: '#77ddff'
@@ -1627,6 +1656,7 @@ export const ITEMS = {
     char: '⚲', name: 'Stingray Mantle', type: ITEM_TYPES.ARMOR,
     defense: 1,
     stingrayMantle: true,  // moving in water → leaves 4s electric wake in vacated cells; wearer is shock-immune; chains 2× shock on wet
+    electricityCharge: 10,  // modest charge for small cascades in the wake
     spellDescription: 'LEAVE A LIVE WAKE.',
     color: '#ccddee'
   },
@@ -1664,7 +1694,7 @@ export const ITEMS = {
   'G': {
     char: 'G', name: 'Base Potion', type: ITEM_TYPES.CONSUMABLE,
     effect: 'heal', amount: 1, oneShot: true,
-    autoTriggerHP: 0.20, color: '#88aaff',
+    autoTriggerHP: 0.12, color: '#88aaff',
     leavesBottle: true
   },
   'H': {
@@ -1674,7 +1704,7 @@ export const ITEMS = {
     effect: 'heal',
     amount: 3,
     oneShot: true,
-    autoTriggerHP: 0.5,
+    autoTriggerHP: 0.12,  // Only trigger at red blinking state (HP <= 3)
     color: '#ff00ff',
     leavesBottle: true
   },
@@ -1685,13 +1715,13 @@ export const ITEMS = {
     effect: 'heal',
     amount: 2,
     oneShot: true,
-    autoTriggerHP: 0.3,
+    autoTriggerHP: 0.18,
     color: '#aa4422'
   },
   'z': {
     char: 'z', name: 'Mending Brew', type: ITEM_TYPES.CONSUMABLE,
-    effect: 'regen', regenAmount: 1, regenInterval: 1.0, duration: 5, oneShot: true,
-    autoTriggerHP: 0.50, color: '#88ffaa',
+    effect: 'regen', permanentUntilRoomExit: true, regenAmount: 1, regenInterval: 1.0, oneShot: true,
+    autoTriggerHP: 0.30, color: '#88ffaa',
     leavesBottle: true
   },
   '♥': {
@@ -1701,6 +1731,7 @@ export const ITEMS = {
     effect: 'heal',
     amount: 10,
     cooldown: 20, // Reusable with 20s cooldown
+    autoTriggerHP: 0.15,
     color: '#ff0000'
   },
   '♦': {
@@ -1716,21 +1747,21 @@ export const ITEMS = {
   // ── Buffs ─────────────────────────────────────────────────────────────────
   'q': {
     char: 'q', name: 'Haste Draught', type: ITEM_TYPES.CONSUMABLE,
-    effect: 'speed', duration: 8, oneShot: true,
-    autoTriggerHP: 0.40, color: '#00ffcc',
+    effect: 'speed', permanentUntilRoomExit: true, oneShot: true,
+    autoTriggerHP: 0.24, color: '#00ffcc',
     leavesBottle: true
   },
   'x': {
     char: 'x', name: 'Stone Skin', type: ITEM_TYPES.CONSUMABLE,
-    effect: 'stoneskin', duration: 10, defenseBonus: 3, oneShot: true,
-    autoTrigger: { condition: 'low_hp_or_surrounded', criticalHP: 0.35, nearbyEnemies: 2 },
+    effect: 'stoneskin', permanentUntilRoomExit: true, defenseBonus: 3, oneShot: true,
+    autoTrigger: { criticalHP: 0.20 },
     color: '#aabb88',
     leavesBottle: true
   },
   'u': {
     char: 'u', name: 'Battle Elixir', type: ITEM_TYPES.CONSUMABLE,
-    effect: 'damageBuff', damageBonus: 2, duration: 8, oneShot: true,
-    autoTrigger: { condition: 'nearest_enemy', range: 80 }, color: '#ff6644',
+    effect: 'damageBuff', permanentUntilRoomExit: true, damageBonus: 2, oneShot: true,
+    manualOnly: true, color: '#ff6644',
     leavesBottle: true
   },
   '★': {
@@ -1750,6 +1781,15 @@ export const ITEMS = {
     type: ITEM_TYPES.CONSUMABLE,
     effect: 'wellOffering',  // Consumed by WellSystem when tossed into a W-room well
     color: '#ffcc66'
+  },
+  '🜛': {
+    char: '🜛',
+    name: 'Mana Potion',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'manaSlot',   // Grants a temporary mana slot (no true slot required)
+    oneShot: true,
+    duration: 30,
+    color: '#8866ff'
   },
   'ᑕ': {
     char: 'ᑕ',
@@ -1815,6 +1855,7 @@ export const ITEMS = {
     type: ITEM_TYPES.CONSUMABLE,
     effect: 'block',
     cooldown: 15, // Reusable with 15s cooldown
+    autoTriggerHP: 0.30,
     color: '#888888'
   },
   'ᐤ': {
@@ -1825,7 +1866,8 @@ export const ITEMS = {
     oneShot: true,
     autoTrigger: {
       condition: 'taking_damage',
-      dodgeNext: 1
+      dodgeNext: 1,
+      criticalHP: 0.20
     },
     duration: 10.0,
     color: '#8b6914'
@@ -1843,7 +1885,7 @@ export const ITEMS = {
   // ── Throwables ────────────────────────────────────────────────────────────
   'y': {
     char: 'y', name: 'Firecracker', type: ITEM_TYPES.CONSUMABLE,
-    effect: 'firecracker', radius: 40, oneShot: true, color: '#ff8800'
+    effect: 'firecracker', radius: 40, oneShot: true, manualOnly: true, color: '#ff8800'
   },
   '@': {
     char: '@',
@@ -1853,6 +1895,7 @@ export const ITEMS = {
     damage: 5,
     radius: 40,
     oneShot: true, // Consumed permanently
+    manualOnly: true,
     color: '#ff0000'
   },
   '☠': {
@@ -1863,6 +1906,7 @@ export const ITEMS = {
     damage: 10,
     radius: 60,
     oneShot: true, // Powerful one-time nuke
+    manualOnly: true,
     color: '#ffffff'
   },
   'ᐧ': {
@@ -1874,9 +1918,7 @@ export const ITEMS = {
     radius: 96,
     duration: 4.0,
     autoTrigger: {
-      condition: 'surrounded_or_critical',
-      nearbyEnemies: 3,
-      criticalHP: 0.2
+      criticalHP: 0.12
     },
     color: '#cccccc'
   },
@@ -1886,6 +1928,7 @@ export const ITEMS = {
     type: ITEM_TYPES.CONSUMABLE,
     effect: 'poison',
     cooldown: 10, // Reusable with 10s cooldown
+    manualOnly: true,
     color: '#44ff44'
   },
   'Z': {
@@ -1894,6 +1937,7 @@ export const ITEMS = {
     type: ITEM_TYPES.CONSUMABLE,
     effect: 'venomcloud',
     cooldown: 12, // Reusable with 12s cooldown
+    manualOnly: true,
     color: '#00ff44'
   },
   'J': {
@@ -1904,6 +1948,7 @@ export const ITEMS = {
     radius: 80,   // Large AoE at impact (was room-wide)
     damage: 4,
     cooldown: 15, // Reusable with 15s cooldown
+    manualOnly: true,
     color: '#ffff00'
   },
   'v': {
@@ -1914,6 +1959,7 @@ export const ITEMS = {
     radius: 64,
     duration: 8.0,
     cooldown: 10, // Reusable with 10s cooldown
+    manualOnly: true,
     color: '#aaaaaa'
   },
 
@@ -1925,13 +1971,6 @@ export const ITEMS = {
     effect: 'arrowRefill',
     amount: 5,
     oneShot: true,
-    color: '#8b4513'
-  },
-  '=': {
-    char: '=',
-    name: 'Platform',
-    type: ITEM_TYPES.CONSUMABLE,
-    effect: 'platform',
     color: '#8b4513'
   },
   'T': {
@@ -2015,6 +2054,89 @@ export const ITEMS = {
     oneShot: true,
     color: '#ffaaff'
   },
+  // 'Bottle of Water' — filled at a hut water trough (equipped Empty Bottle
+  // + interact). Pure crafting input for the Alchemy Cauldron; not a drink.
+  '🜉': {
+    char: '🜉',
+    name: 'Bottle of Water',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'cauldronInput',
+    color: '#aaddff'
+  },
+  // Starter potions (Alchemy Cauldron stage 1: Bottle of Water + raw
+  // ingredient). Base Potion 'G' (above, in the main potion block) is the
+  // third starter. potionModifier carries through to the true potion made
+  // from this starter at Cauldron stage 2 — see AlchemySystem.
+  '🜅': {
+    char: '🜅', name: 'Purified Potion', type: ITEM_TYPES.CONSUMABLE,
+    effect: 'heal', amount: 1, oneShot: true,
+    autoTriggerHP: 0.12, color: '#ffffaa',
+    leavesBottle: true,
+    potionModifier: 'buff'
+  },
+  '🜆': {
+    char: '🜆', name: 'Unstable Potion', type: ITEM_TYPES.CONSUMABLE,
+    effect: 'heal', amount: 1, oneShot: true,
+    autoTriggerHP: 0.12, color: '#ff66ff',
+    leavesBottle: true,
+    potionModifier: 'unstable'
+  },
+
+  // Special liquid bottles — discovered by interacting with background tiles
+  // while holding an empty bottle (e.g., electrified water pool, magma vent, mud pit).
+  'ε': {
+    char: 'ε',
+    name: 'Bottle of Electrified Water',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'cauldronInput',
+    color: '#ffff00'
+  },
+  '◆': {
+    char: '◆',
+    name: 'Bottle of Magma',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'cauldronInput',
+    color: '#ff5500'
+  },
+  '◐': {
+    char: '◐',
+    name: 'Bottle of Mud',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'cauldronInput',
+    color: '#6b4423'
+  },
+
+  // Special potions — crafted at the cauldron from special liquid bottles
+  // Charged Potion: nascent attack speed bonus
+  '!': {
+    char: '!',
+    name: 'Charged Potion',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'heal', amount: 1, oneShot: true,
+    autoTriggerHP: 0.12, color: '#ffff88',
+    leavesBottle: true,
+    potionModifier: 'charge'
+  },
+  // Burning Potion: apply burn to enemies that hit the player
+  '«': {
+    char: '«',
+    name: 'Burning Potion',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'heal', amount: 1, oneShot: true,
+    autoTriggerHP: 0.12, color: '#ff8844',
+    leavesBottle: true,
+    potionModifier: 'burn'
+  },
+  // Primal Potion: half damage repeat attack 0.5s later
+  '∿': {
+    char: '∿',
+    name: 'Primal Potion',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'heal', amount: 1, oneShot: true,
+    autoTriggerHP: 0.12, color: '#886644',
+    leavesBottle: true,
+    potionModifier: 'primal'
+  },
 
   // Bread: equippable utility consumable. Use action drops the loaf on the
   // ground (handled in Item.use via effect: 'dropBread'). Idle crows in the
@@ -2064,6 +2186,7 @@ export const ITEMS = {
     effect: 'zap',
     affinity: 'electric',
     electric: true,
+    electricityCharge: 24,
     effectDuration: 6.0,
     color: '#ffff00'
   },
@@ -2174,6 +2297,7 @@ export const ITEMS = {
     effect: 'zap',
     affinity: 'electric',
     electric: true,
+    electricityCharge: 20,
     tickInterval: 2.5,
     damage: 2,
     stunDuration: 0.8,
@@ -2265,13 +2389,13 @@ export const INGREDIENTS = {
   'r': { char: 'r', name: 'Root', color: '#996633' },
   'v': { char: 'v', name: 'Venom', color: '#00ff44' },
   '0': { char: '0', name: 'Rock', color: '#888888' },
-  '1': { char: '1', name: 'Topaz',    color: '#ffcc00' },
-  '9': { char: '9', name: 'Garnet',   color: '#cc2222' },
-  '`': { char: '`', name: 'Emerald',  color: '#00cc44' },
-  '_': { char: '_', name: 'Diamond',  color: '#eeeeff' },
-  '6': { char: '6', name: 'Onyx',     color: '#333344' },
-  '?': { char: '?', name: 'Ruby',     color: '#ff2244' },
-  '(': { char: '(', name: 'Sapphire', color: '#2244ff' },
+  '◇': { char: '◇', name: 'Topaz',    color: '#ffcc00' },
+  '⬥': { char: '⬥', name: 'Garnet',   color: '#cc2222' },
+  '⬦': { char: '⬦', name: 'Emerald',  color: '#00cc44' },
+  '⧫': { char: '⧫', name: 'Diamond',  color: '#eeeeff' },
+  '⬧': { char: '⬧', name: 'Onyx',     color: '#333344' },
+  '◈': { char: '◈', name: 'Ruby',     color: '#ff2244' },
+  '⬨': { char: '⬨', name: 'Sapphire', color: '#2244ff' },
   '𝑚': { char: '𝑚', name: 'Mana', color: '#8866ff' },
 
   // Raw oils — pressed at a hut press into oil consumables (bow/dagger augments).
@@ -2290,6 +2414,9 @@ export const INGREDIENTS = {
   'C': { char: 'C', name: 'Coral Cluster',  color: '#ff88aa' },
   'Y': { char: 'Y', name: 'Stingray Barb',  color: '#aabbcc' },
 
+  // Huntable game (HuntingSystem) — rare Moose drop.
+  'K': { char: 'K', name: 'Thick Fur', color: '#c9a876' },
+
   // Rock-harvest ingredients — drop from `0` Rock bg objects (rock harvest table).
   // △ Arrowhead also crafts into bows/axes/spears. ⚜ Artifact drops from rocks/chests;
   // trades to errand NPC (2 coins) or wise fellow (unlocks rare hint). ❦ Moss → Moss Cloak.
@@ -2302,7 +2429,7 @@ export const INGREDIENTS = {
 // Subtype defaults — explicit weapon properties override these
 export const SUBTYPE_DEFAULTS = {
   sword:   { attackPattern: 'arc',       isBlade: true },
-  axe:     { attackPattern: 'sweep',     isBlade: false, isBlunt: true },
+  axe:     { attackPattern: 'sweep' },
   scythe:  { attackPattern: 'sweep',     isBlade: true },
   spear:   { attackPattern: 'thrust',    isBlade: true, range: 28, distanceCrit: true },
   dagger:  { attackPattern: 'multistab', isBlade: true, range: 16 },
@@ -2424,7 +2551,7 @@ export const AFFINITY_POOLS = {
     ingredients: {
       [RARITY.COMMON]:   ['f', 't', 'm', 'w'], // Fur, Teeth, Meat, Wing
       [RARITY.UNCOMMON]: ['b', 'j'],           // Bone, Jaw
-      [RARITY.RARE]:     ['e']                 // Eye
+      [RARITY.RARE]:     ['e', 'K']            // Eye, Thick Fur
     },
     weapons: {
       [RARITY.UNCOMMON]: [],                 // beasts don't carry crafted weapons
@@ -2556,9 +2683,9 @@ export const AFFINITY_POOLS = {
   // Gemstone drops from RED zone boulders and crystal outcrops
   gemstone: {
     ingredients: {
-      [RARITY.COMMON]:   ['9', '1'],         // Garnet, Topaz
-      [RARITY.UNCOMMON]: ['`', '?', '('],    // Emerald, Ruby, Sapphire
-      [RARITY.RARE]:     ['_', '6']          // Diamond, Onyx
+      [RARITY.COMMON]:   ['⬥', '◇'],         // Garnet, Topaz
+      [RARITY.UNCOMMON]: ['⬦', '◈', '⬨'],    // Emerald, Ruby, Sapphire
+      [RARITY.RARE]:     ['⧫', '⬧']          // Diamond, Onyx
     },
     weapons: {},
     traps: {},
@@ -2568,9 +2695,9 @@ export const AFFINITY_POOLS = {
 
   rare_gemstone: {
     ingredients: {
-      [RARITY.COMMON]:   ['_', '6'],         // Diamond, Onyx
-      [RARITY.UNCOMMON]: ['?'],              // Ruby
-      [RARITY.RARE]:     ['`']               // Emerald
+      [RARITY.COMMON]:   ['⧫', '⬧'],         // Diamond, Onyx
+      [RARITY.UNCOMMON]: ['◈'],              // Ruby
+      [RARITY.RARE]:     ['⬦']               // Emerald
     },
     weapons: {},
     traps: {},
@@ -2596,7 +2723,7 @@ export const AFFINITY_POOLS = {
   // Yellow zone / lightning enemies
   electric: {
     ingredients: {
-      [RARITY.COMMON]:   ['1'],              // Topaz (yellow's stone — magic zone identity)
+      [RARITY.COMMON]:   ['◇'],              // Topaz (yellow's stone — magic zone identity)
       [RARITY.UNCOMMON]: ['M', 'c'],         // Metal, Coin (conductors; red zone owns Metal)
       [RARITY.RARE]:     ['e'],              // Eye (luminescent orb)
     },
@@ -2862,8 +2989,8 @@ export function generateEnemyDrops(affinities, tier = 'normal', dropCount = null
     if      (categoryRoll < 0.77) category = 'ingredients';
     else if (categoryRoll < 0.87) category = 'consumables';
     else if (categoryRoll < 0.92) category = 'weapons';
-    else if (categoryRoll < 0.97) category = 'traps';
-    else                          category = 'armor';
+    else if (categoryRoll < 0.97) category = 'armor';
+    else                          category = 'traps';
 
     const drop = getWeightedRandomFromPool(mergedTable[category] ?? {}, profile);
     if (drop) drops.push(drop);

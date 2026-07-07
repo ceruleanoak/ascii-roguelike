@@ -14,6 +14,7 @@
 import { inSamePlane } from './PlaneSystem.js';
 import { Item } from '../entities/Item.js';
 import { GRID } from '../game/GameConfig.js';
+import { addItemToChestArray, removeItemFromChestArray, chestEntryLabel, trapAlreadyEquipped } from './TrapSystem.js';
 
 export class InventorySystem {
   constructor() {
@@ -34,7 +35,8 @@ export class InventorySystem {
       'default': {
         quickSlots: [null, null, null],  // Weapons only
         activeSlotIndex: 0,   // Persistent active slot index
-        manaState: null       // { slots, current, max } — survives character swaps
+        manaState: null,      // { slots, current, max } — survives character swaps
+        trainedWeapons: {}    // { [weaponCategory]: true } — Weapons Master training, per character
       }
     };
 
@@ -60,12 +62,12 @@ export class InventorySystem {
 
     // Equipment slots (lost on death)
     this.equippedArmor = null; // Single armor slot
-    this.equippedConsumables = [null, null]; // 2 consumable slots (can expand to 5)
-    this.maxConsumableSlots = 2; // Unlockable up to 5; resets on death
+    this.equippedConsumables = [null]; // 1 consumable slot to start (can expand to 5)
+    this.maxConsumableSlots = 1; // Unlockable up to 5; resets on death
 
     // Consumable HUD feedback state
-    this.spentConsumableSlots = [false, false]; // tracks ONE-SHOT used slots this run
-    this.consumableCooldowns = [0, 0]; // cooldown timers for reusable consumables
+    this.spentConsumableSlots = [false]; // tracks ONE-SHOT used slots this run
+    this.consumableCooldowns = [0]; // cooldown timers for reusable consumables
     this.consumableFlashTimer = 0; // HUD flash duration in seconds (kept for compat)
     this.consumableFlashSlot = -1; // which slot is flashing (-1 = none)
     // Blink animation: alternates solid block ↔ normal char
@@ -131,6 +133,14 @@ export class InventorySystem {
     return this.equippedConsumables;
   }
 
+  // First equippedConsumables index that's both unoccupied AND not claimed by
+  // the magic meter (magicMeter.slots reserves indices for mana but never
+  // writes a non-null value there, so a naive null-check reads them as free).
+  firstFreeConsumableSlot(player) {
+    const reserved = player?.magicMeter?.active ? (player.magicMeter.slots || []) : [];
+    return this.equippedConsumables.findIndex((s, idx) => s === null && !reserved.includes(idx));
+  }
+
   getItemChest() {
     return this.itemChest;
   }
@@ -173,7 +183,8 @@ export class InventorySystem {
       this.characterInventories[characterType] = {
         quickSlots: [null, null, null],
         activeSlotIndex: 0,
-        manaState: null
+        manaState: null,
+        trainedWeapons: {}
       };
     }
 
@@ -205,7 +216,8 @@ export class InventorySystem {
       'default': {
         quickSlots: [null, null, null],
         activeSlotIndex: 0,
-        manaState: null
+        manaState: null,
+        trainedWeapons: {}
       }
     };
 
@@ -229,9 +241,10 @@ export class InventorySystem {
    * @param {boolean} allowSlotChoice - When true, a weapon/trap pickup with all
    *   usable quick slots full returns { needsSlotChoice, pendingItem } instead
    *   of auto-displacing the active slot (caller opens SlotReplacementSystem)
+   * @param {number} selectedWeaponSlotIdx - Currently selected weapon slot (0-2)
    * @returns {Object} - { success: boolean, droppedItem: Item|null, message: string|null, removedTrap: boolean }
    */
-  tryPickupItem(items, placedTraps, player, physicsSystem, allowSlotChoice = false) {
+  tryPickupItem(items, placedTraps, player, physicsSystem, allowSlotChoice = false, _unused = 0, selectedWeaponSlotIdx = 0) {
     // NOTE: Placed traps (activated with SPACE) are NOT pickable - they're active traps
     // Only dropped traps (swapped from quick slots) in the items array can be picked up
 
@@ -257,7 +270,7 @@ export class InventorySystem {
           items.splice(i, 1);
         } else if (item.data.type === 'CONSUMABLE') {
           if (allowSlotChoice) {
-            const emptySlot = this.equippedConsumables.findIndex(s => s === null);
+            const emptySlot = this.firstFreeConsumableSlot(player);
             if (emptySlot === -1) return { success: false, needsSlotChoice: true, slotType: 'consumable', pendingItem: item, droppedItem: null, message: null, removedTrap: false };
             this.consumableInventory.push(item);
             this.equipConsumable(emptySlot, item);
@@ -265,6 +278,12 @@ export class InventorySystem {
           physicsSystem.removeEntity(item);
           items.splice(i, 1);
         } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
+          // Already-equipped trap stacks into held count; skip slot-choice.
+          if (trapAlreadyEquipped(player, item)) {
+            physicsSystem.removeEntity(item);
+            items.splice(i, 1);
+            return { success: true, droppedItem: item, message: item.data.name, removedTrap: false, pickedUpType: item.data.type };
+          }
           // Full quick slots: don't silently displace the loadout — signal the
           // caller to open the paused slot-choice prompt (SlotReplacementSystem).
           // The item stays on the ground until the player confirms a destination.
@@ -285,7 +304,7 @@ export class InventorySystem {
             }
           }
           // Add to quick slots (weapons and traps)
-          droppedItem = player.pickupItem(item);
+          droppedItem = player.pickupItem(item, selectedWeaponSlotIdx);
           physicsSystem.removeEntity(item);
           items.splice(i, 1);
         } else if (item.data.type === 'BLESSING') {
@@ -448,7 +467,7 @@ export class InventorySystem {
     player.slowEnemies = false;
     player.burnResist = 0;
     player.massBonus = 0;
-    player.rollCooldownMult = 1.0;
+    player.rollCooldownMult = 1.15;
     player.extraIframes = 0;
     player.gooConsume = false;
     player.bladeKillHeal = false;
@@ -476,7 +495,7 @@ export class InventorySystem {
       player.slowEnemies = a.slowEnemies || false;
       player.burnResist = a.burnResist || 0;
       player.massBonus = a.massBonus || 0;
-      player.rollCooldownMult = a.rollCooldownMult || 1.0;
+      player.rollCooldownMult = a.rollCooldownMult || 1.15;
       player.extraIframes = a.extraIframes || 0;
       player.gooConsume = a.gooConsume || false;
       player.bladeKillHeal = a.bladeKillHeal || false;
@@ -768,8 +787,12 @@ export class InventorySystem {
       // and never auto-trigger on their own.
       if (cd.oilEffect) continue;
 
+      // Tactical items (proximity/count-gated) auto-trigger is for emergencies
+      // only; manualOnly items only fire via ConsumableTriggerSystem.manualTrigger (SPACE).
+      if (cd.manualOnly) continue;
+
       // Check trigger condition based on effect type
-      shouldTrigger = this._checkTriggerCondition(cd, player, currentRoom, steamClouds);
+      shouldTrigger = this.game.consumableTriggerSystem.checkTriggerCondition(cd, player, currentRoom, steamClouds, consumable);
       if (shouldTrigger && shouldTrigger.windup) {
         triggerData = shouldTrigger;
         shouldTrigger = true;
@@ -778,305 +801,6 @@ export class InventorySystem {
       if (shouldTrigger) {
         this._triggerConsumable(i, consumable, triggerData, player, combatSystem, particles);
       }
-    }
-  }
-
-  /**
-   * Check if consumable trigger condition is met
-   * @private
-   */
-  _checkTriggerCondition(cd, player, currentRoom, steamClouds) {
-    const enemies = currentRoom ? currentRoom.enemies : [];
-
-    switch (cd.effect) {
-      case 'heal': {
-        // Use item's autoTriggerHP if defined; otherwise fall back to amount-based threshold
-        const threshold = cd.autoTriggerHP !== undefined
-          ? cd.autoTriggerHP
-          : (cd.amount >= 10 ? 0.25 : 0.5);
-        if (player.hp < player.maxHp * threshold) {
-          player.heal(cd.amount);
-          return true;
-        }
-        return false;
-      }
-      case 'maxhp': {
-        // Dragon Heart: immediately on first active frame
-        player.maxHp += cd.amount;
-        player.hp = player.maxHp;
-        return true;
-      }
-      case 'speed': {
-        const threshold = cd.autoTriggerHP !== undefined ? cd.autoTriggerHP : 0.4;
-        if (player.hp < player.maxHp * threshold) {
-          player.applySpeedBoost(cd.duration);
-          return true;
-        }
-        return false;
-      }
-      case 'explode': {
-        // Bomb: nearest enemy within 60px — START WINDUP
-        let nearestDist = Infinity;
-        for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - (player.position.x + 20);
-          const dy = (enemy.position.y + 20) - (player.position.y + 20);
-          nearestDist = Math.min(nearestDist, Math.sqrt(dx * dx + dy * dy));
-        }
-        if (nearestDist <= 60) {
-          return { windup: 1.5, effectType: 'explode' };
-        }
-        return false;
-      }
-      case 'curse': {
-        // Cursed Skull: 3+ enemies within 80px — START WINDUP
-        const px = player.position.x + 20;
-        const py = player.position.y + 20;
-        let nearbyCount = 0;
-        for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px;
-          const dy = (enemy.position.y + 20) - py;
-          if (Math.sqrt(dx * dx + dy * dy) <= 80) nearbyCount++;
-        }
-        if (nearbyCount >= 3) {
-          return { windup: 1.2, effectType: 'curse' };
-        }
-        return false;
-      }
-      case 'luck': {
-        // Lucky Coin is now a pure passive — bonuses are applied via
-        // applyEquipmentEffectsToPlayer when the slot is equipped. Never
-        // auto-fires, never oneShots.
-        return false;
-      }
-      case 'block': {
-        // Metal Block: HP < 50%
-        if (player.hp < player.maxHp * 0.5) {
-          player.applyBlockBoost(8, 5);
-          return true;
-        }
-        return false;
-      }
-      case 'slow': {
-        // Slime Ball: nearest enemy within 50px — START WINDUP
-        const px = player.position.x + 20;
-        const py = player.position.y + 20;
-        let nearestDist = Infinity;
-        for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px;
-          const dy = (enemy.position.y + 20) - py;
-          nearestDist = Math.min(nearestDist, Math.sqrt(dx * dx + dy * dy));
-        }
-        if (nearestDist <= 50) {
-          return { windup: 0.8, effectType: 'slow' };
-        }
-        return false;
-      }
-      case 'poison': {
-        // Poison Flask: nearest enemy within 55px — START WINDUP
-        const px = player.position.x + 20;
-        const py = player.position.y + 20;
-        let nearestDist = Infinity;
-        for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px;
-          const dy = (enemy.position.y + 20) - py;
-          nearestDist = Math.min(nearestDist, Math.sqrt(dx * dx + dy * dy));
-        }
-        if (nearestDist <= 55) {
-          return { windup: 1.0, effectType: 'poison' };
-        }
-        return false;
-      }
-      case 'cleanse': {
-        // Tonic: player has burn or wet
-        if (player.burnDuration > 0 || player.wetDuration > 0) {
-          player.burnDuration = 0;
-          player.wetDuration = 0;
-          return true;
-        }
-        return false;
-      }
-      case 'invuln': {
-        // Smoke Bomb: HP < 25%
-        if (player.hp < player.maxHp * 0.25) {
-          const duration = cd.duration || 3.5;
-          player.invulnerabilityTimer = Math.max(player.invulnerabilityTimer, duration);
-
-          // Create smoke cloud — only push when the caller provided a valid array.
-          // Rebinding the local parameter has no effect on the caller's reference.
-          if (steamClouds) {
-            steamClouds.push({
-              x: player.position.x + 20,
-              y: player.position.y + 20,
-              radius: 20 * 3.5, // GRID.CELL_SIZE * 3.5
-              timer: duration
-            });
-          }
-
-          return true;
-        }
-        return false;
-      }
-      case 'venomcloud': {
-        // Venom Vial: 2+ enemies within 60px — START WINDUP
-        const px = player.position.x + 20;
-        const py = player.position.y + 20;
-        let nearbyCount = 0;
-        for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px;
-          const dy = (enemy.position.y + 20) - py;
-          if (Math.sqrt(dx * dx + dy * dy) <= 60) nearbyCount++;
-        }
-        if (nearbyCount >= 2) {
-          return { windup: 1.0, effectType: 'venomcloud' };
-        }
-        return false;
-      }
-      case 'jolt': {
-        // Jolt Jar: 2+ enemies in room — throw at the nearest one and explode on impact
-        if (enemies.length < 2) return false;
-        const px = player.position.x + 20;
-        const py = player.position.y + 20;
-        let nearest = null;
-        let bestDist = Infinity;
-        for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px;
-          const dy = (enemy.position.y + 20) - py;
-          const d2 = dx * dx + dy * dy;
-          if (d2 < bestDist) { bestDist = d2; nearest = enemy; }
-        }
-        if (!nearest) return false;
-        return {
-          windup: 0.7,
-          effectType: 'jolt',
-          targetX: nearest.position.x + 20,
-          targetY: nearest.position.y + 20,
-        };
-      }
-      case 'shield': {
-        // Activates immediately — grants bullet-blocking charges
-        if (player.shieldMaxCharges === 0) {
-          player.shieldCharges = cd.charges || 3;
-          player.shieldMaxCharges = cd.charges || 3;
-          player.shieldCooldownMax = cd.rechargeCooldown || 5;
-          player.shieldCooldown = 0;
-          player.shieldBlocksAll = false;
-          return true;
-        }
-        return false;
-      }
-      case 'bulwark': {
-        // Activates immediately — grants all-hit-blocking charges
-        if (player.shieldMaxCharges === 0) {
-          player.shieldCharges = cd.charges || 2;
-          player.shieldMaxCharges = cd.charges || 2;
-          player.shieldCooldownMax = cd.rechargeCooldown || 8;
-          player.shieldCooldown = 0;
-          player.shieldBlocksAll = true;
-          return true;
-        }
-        return false;
-      }
-      case 'waterImmunity': {
-        // Rubber Boots: only fires on first contact with liquid terrain
-        if (!player.inLiquid && !player.inDamagingLiquid) return false;
-        player.waterImmunityTimer = cd.duration;
-        return true;
-      }
-      case 'float': {
-        // Floating Boots: only fires on first contact with liquid or damaging liquid terrain
-        if (!player.inLiquid && !player.inDamagingLiquid) return false;
-        player.floatTimer = cd.duration;
-        return true;
-      }
-      case 'throwSteam': {
-        // Steam Vial: creates a steam cloud — START WINDUP
-        return { windup: 0.6, effectType: 'throwSteam' };
-      }
-      case 'firecracker': {
-        const px = player.position.x + 20, py = player.position.y + 20;
-        for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px, dy = (enemy.position.y + 20) - py;
-          if (Math.sqrt(dx * dx + dy * dy) <= 50) return { windup: 0.5, effectType: 'firecracker' };
-        }
-        return false;
-      }
-      case 'stoneskin': {
-        const px = player.position.x + 20, py = player.position.y + 20;
-        let nearbyCount = 0;
-        for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px, dy = (enemy.position.y + 20) - py;
-          if (Math.sqrt(dx * dx + dy * dy) <= 80) nearbyCount++;
-        }
-        if (player.hp < player.maxHp * (cd.autoTrigger?.criticalHP ?? 0.35) || nearbyCount >= (cd.autoTrigger?.nearbyEnemies ?? 2)) {
-          player.applyStoneSkin(cd.duration || 10, cd.defenseBonus || 3);
-          return true;
-        }
-        return false;
-      }
-      case 'regen': {
-        const threshold = cd.autoTriggerHP ?? 0.50;
-        if (player.hp < player.maxHp * threshold) {
-          player.applyRegen(cd.duration || 5, cd.regenAmount || 1, cd.regenInterval || 1.0);
-          return true;
-        }
-        return false;
-      }
-      case 'damageBuff': {
-        if (cd.duration && !cd.passive) {
-          const px = player.position.x + 20, py = player.position.y + 20;
-          for (const enemy of enemies) {
-            const dx = (enemy.position.x + 20) - px, dy = (enemy.position.y + 20) - py;
-            if (Math.sqrt(dx * dx + dy * dy) <= (cd.autoTrigger?.range ?? 80)) {
-              player.applyDamageBuff(cd.duration, cd.damageBonus || 2);
-              return true;
-            }
-          }
-        }
-        return false;
-      }
-      case 'auto_dodge': {
-        // Fur Cloak: grants a brief invulnerability window when HP is critically low (< 30%).
-        // Fires above the Smoke Bomb threshold (25%) so it acts as a first line of defense.
-        const threshold = cd.autoTrigger?.criticalHP ?? 0.30;
-        if (player.hp < player.maxHp * threshold) {
-          player.invulnerabilityTimer = Math.max(player.invulnerabilityTimer, cd.duration || 10.0);
-          return true;
-        }
-        return false;
-      }
-      case 'arrowRefill': {
-        const emptyBow = player.quickSlots.find(s => s?.data?.weaponType === 'BOW' && s.usesRemaining <= 0);
-        if (!emptyBow) return false;
-        emptyBow.usesRemaining = Math.min(emptyBow.usesRemaining + (cd.amount || 5), emptyBow.maxUses ?? Infinity);
-        return true;
-      }
-      case 'panic_blind': {
-        // Bone Dust: blinds nearby enemies when surrounded (3+ within radius) or at critical HP.
-        const px = player.position.x + 20;
-        const py = player.position.y + 20;
-        const blindRadius = cd.radius ?? 96;
-        const critThreshold = cd.autoTrigger?.criticalHP ?? 0.2;
-        const nearbyThreshold = cd.autoTrigger?.nearbyEnemies ?? 3;
-        let nearbyCount = 0;
-        for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px;
-          const dy = (enemy.position.y + 20) - py;
-          if (Math.sqrt(dx * dx + dy * dy) <= blindRadius) nearbyCount++;
-        }
-        if (player.hp < player.maxHp * critThreshold || nearbyCount >= nearbyThreshold) {
-          for (const enemy of enemies) {
-            const dx = (enemy.position.x + 20) - px;
-            const dy = (enemy.position.y + 20) - py;
-            if (Math.sqrt(dx * dx + dy * dy) <= blindRadius) {
-              enemy.applyStatusEffect('blind', cd.duration || 4.0);
-            }
-          }
-          return true;
-        }
-        return false;
-      }
-      default:
-        return false;
     }
   }
 
@@ -1444,7 +1168,7 @@ export class InventorySystem {
 
     // Flush deferred EXPLORE chest deposits — survived the run, now banked.
     if (this.pendingChestDeposits.length > 0) {
-      this.itemChest.push(...this.pendingChestDeposits);
+      this.pendingChestDeposits.forEach((item) => this.addToChest(item));
       this.pendingChestDeposits.length = 0;
     }
   }
@@ -1465,12 +1189,12 @@ export class InventorySystem {
     this.consumableInventory = [];
     this.coinWallet = 0;
     this.equippedArmor = null;
-    this.equippedConsumables = [null, null];
+    this.equippedConsumables = [null];
 
     // Clear consumable state and reset unlocked slots
-    this.maxConsumableSlots = 2;
-    this.spentConsumableSlots = [false, false];
-    this.consumableCooldowns = [0, 0];
+    this.maxConsumableSlots = 1;
+    this.spentConsumableSlots = [false];
+    this.consumableCooldowns = [0];
     this.consumableFlashTimer = 0;
     this.consumableFlashSlot = -1;
     this.consumableBlinkSlot = -1;
@@ -1571,50 +1295,23 @@ export class InventorySystem {
 
   // ========== CHEST SYSTEM ==========
 
-  /**
-   * Add item to chest storage
-   *
-   * @param {Item} item - Weapon/trap item to store
-   */
+  // Traps merge into an existing same-char stack instead of a new chest slot.
   addToChest(item) {
-    this.itemChest.push(item);
+    addItemToChestArray(this.itemChest, item);
   }
 
-  /**
-   * EXPLORE-time deferred chest deposit. Item is held in pendingChestDeposits
-   * until bankLoot() flushes it on safe REST return; cleared on death so
-   * displaced weapons don't survive a wipe.
-   */
+  // EXPLORE-time deferred deposit; flushed to itemChest by bankLoot().
   deferToChest(item) {
-    this.pendingChestDeposits.push(item);
+    addItemToChestArray(this.pendingChestDeposits, item);
   }
 
-  /**
-   * Remove item from chest storage
-   *
-   * @param {Item} item - Item to remove from chest
-   * @returns {boolean} - True if item was found and removed
-   */
+  // Removes one unit of `item`; returns the instance to use, or null if absent.
   retrieveFromChest(item) {
-    const chestIndex = this.itemChest.indexOf(item);
-    if (chestIndex > -1) {
-      this.itemChest.splice(chestIndex, 1);
-      return true;
-    }
-    return false;
+    return removeItemFromChestArray(this.itemChest, item);
   }
 
-  /**
-   * Get chest contents formatted for menu display
-   *
-   * @returns {Array} - Menu options array
-   */
   getChestContents() {
-    const menuOptions = [];
-    for (const item of this.itemChest) {
-      menuOptions.push({ action: 'retrieve', item: item, label: `${item.char} - ${item.data.name}` });
-    }
-    return menuOptions;
+    return this.itemChest.map((item) => ({ action: 'retrieve', item, label: chestEntryLabel(item) }));
   }
 
   // Moss Cloak 𐤒 stealth state machine. Armed by the active→inactive dodge
@@ -1700,7 +1397,10 @@ export class InventorySystem {
         for (const obj of game.currentRoom.backgroundObjects) {
           if (obj.destroyed || obj.char !== '~') continue;
           if (Math.abs(obj.position.x - prevX) < 4 && Math.abs(obj.position.y - prevY) < 4) {
-            if (obj.waterState === 'normal') obj.setWaterState('electrified', 4.0);
+            if (obj.waterState === 'normal') {
+              game.electricitySystem?.seedFromArmor(obj, game.currentRoom.backgroundObjects,
+                p.heldItem?.data, { tileDuration: 4.0 });
+            }
             break;
           }
         }

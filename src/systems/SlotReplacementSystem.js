@@ -35,8 +35,14 @@ export class SlotReplacementSystem {
 
   get storeIndex() {
     if (this.slotType === 'armor') return 1;
-    if (this.slotType === 'consumable') return 2;
+    if (this.slotType === 'consumable') return this.game.inventorySystem.equippedConsumables.length;
     return 3;
+  }
+
+  /** Indices in equippedConsumables currently claimed by the magic meter — not real consumable slots. */
+  _reservedManaSlots() {
+    const meter = this.game.player.magicMeter;
+    return meter?.active ? (meter.slots || []) : [];
   }
 
   /** Dispatch helper for main.js: opens the prompt when a pickup result asks for it. */
@@ -57,6 +63,13 @@ export class SlotReplacementSystem {
         start = player.quickSlots.findIndex((_, i) => !player.destroyedSlots?.[i]);
         if (start === -1) return;
       }
+    } else if (slotType === 'consumable') {
+      const reserved = this._reservedManaSlots();
+      const equipped = this.game.inventorySystem.equippedConsumables;
+      start = equipped.findIndex((_, i) => !reserved.includes(i));
+      // Every real slot is a mana slot (e.g. Yellow Mage's single starting
+      // slot) — land on STORE IN CHEST, the only real destination.
+      if (start === -1) start = this.storeIndex;
     }
     if (!this.game.pauseSystem.openModal(this)) return;
     this.pendingItem = item;
@@ -69,6 +82,23 @@ export class SlotReplacementSystem {
   handleKey(key, event) {
     if (event?.repeat) return; // held SPACE/SHIFT from the pickup press must not auto-confirm
     const intent = menuIntent(event);
+
+    // Number key shortcuts: 1-4 for slot selection
+    if (key >= '1' && key <= '4') {
+      const slotNum = parseInt(key) - 1;
+      const reserved = this.slotType === 'consumable' ? this._reservedManaSlots() : [];
+      if (slotNum <= this.storeIndex && !reserved.includes(slotNum)) {
+        this.selection = slotNum;
+        if (this.selection !== this.storeIndex) {
+          this.lastSlotSelection = slotNum;
+        }
+        // Confirm immediately on number press
+        if (this.selection === this.storeIndex) this._confirmStore();
+        else this._confirmSlot(this.selection);
+      }
+      return;
+    }
+
     if (intent === 'shift') {
       this._confirmStore(); // fast path: straight to chest, no navigation
     } else if (intent === 'left') {
@@ -103,6 +133,11 @@ export class SlotReplacementSystem {
       const destroyed = this.game.player.destroyedSlots || [];
       for (let idx = this.selection + dir; idx >= 0 && idx <= maxSlot; idx += dir) {
         if (!destroyed[idx]) { this.selection = idx; return; }
+      }
+    } else if (this.slotType === 'consumable') {
+      const reserved = this._reservedManaSlots();
+      for (let idx = this.selection + dir; idx >= 0 && idx <= maxSlot; idx += dir) {
+        if (!reserved.includes(idx)) { this.selection = idx; return; }
       }
     } else {
       const next = this.selection + dir;
@@ -144,7 +179,10 @@ export class SlotReplacementSystem {
       // Displaced armor returns to the armor inventory — NOT the chest, which is
       // weapon-only storage (openCraftingMenu reads it into the weapons column,
       // so a chest-routed armor/consumable would show up under weapons).
-      if (displaced) inv.armorInventory.push(displaced);
+      if (displaced) {
+        inv.armorInventory.push(displaced);
+        game.audioSystem.playSFX('slot_swap');
+      }
     } else if (this.slotType === 'consumable') {
       const inv = game.inventorySystem;
       // Grab old before equip; null it out so equipConsumable won't push it to consumableInventory
@@ -154,12 +192,18 @@ export class SlotReplacementSystem {
       inv.equipConsumable(slotIdx, item);
       inv.applyEquipmentEffectsToPlayer(game.player);
       // Displaced consumable returns to the consumable inventory, not the chest.
-      if (displaced) inv.consumableInventory.push(displaced);
+      if (displaced) {
+        inv.consumableInventory.push(displaced);
+        game.audioSystem.playSFX('slot_swap');
+      }
     } else {
       // Weapon/trap: reuse Player.pickupItem
       game.player.activeSlotIndex = slotIdx;
       const displaced = game.player.pickupItem(item);
-      if (displaced) this._routeToChest(displaced);
+      if (displaced) {
+        this._routeToChest(displaced);
+        game.audioSystem.playSFX('slot_swap');
+      }
       if (item.data.type === 'WEAPON' && game.stateMachine.getCurrentState() === GAME_STATES.EXPLORE) {
         game.audioSystem.playSFX('weapon_pickup');
       }
@@ -178,7 +222,16 @@ export class SlotReplacementSystem {
   _confirmStore() {
     // No pickup message — the popup interaction itself is the feedback
     // (non-instructive UI compliance: no "X → Y" text).
-    this._routeToChest(this._takeFromWorld());
+    const item = this._takeFromWorld();
+    const inv = this.game.inventorySystem;
+    if (this.slotType === 'armor') {
+      // Armor inventory feeds the armor equipment slot — NOT itemChest (weapon-only).
+      inv.armorInventory.push(item);
+    } else if (this.slotType === 'consumable') {
+      inv.consumableInventory.push(item);
+    } else {
+      this._routeToChest(item);
+    }
     this.game.updateUI();
     this.game.pauseSystem.closeModal();
   }

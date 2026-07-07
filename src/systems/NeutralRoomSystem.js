@@ -18,9 +18,12 @@ export class NeutralRoomSystem {
    *                                  ('north' | 'east' | 'west'); the return
    *                                  exit sits on the edge the player entered
    *                                  through (north→south, east→west, west→east)
+   * @param {RoomGenerator} [roomGenerator] - passed through to onGenerate for
+   *   scripts that need terrain helpers (e.g. Oasis's stampWaterBlobs) but
+   *   have no `game` reference of their own.
    * @returns {object} - Room object with exits, backgroundObjects, state
    */
-  generateNeutralRoom(scriptName, entryDirection = 'north') {
+  generateNeutralRoom(scriptName, entryDirection = 'north', roomGenerator = null) {
     const script = NEUTRAL_ROOMS[scriptName];
     if (!script) {
       console.error(`[NeutralRoomSystem] Script not found: ${scriptName}`);
@@ -50,7 +53,7 @@ export class NeutralRoomSystem {
 
     // Call script's onGenerate hook
     if (script.onGenerate) {
-      script.onGenerate(room, this.state);
+      script.onGenerate(room, this.state, roomGenerator);
     }
 
     return room;

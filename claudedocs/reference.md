@@ -430,13 +430,13 @@ Inactive by default. `slot` = index into `player.equippedConsumables`. Resets on
 | Char | Ingredient | Mana | Char | Ingredient | Mana |
 |------|-----------|------|------|-----------|------|
 | `g` | Goo | 1 | `F` | Fire Essence | 3 |
-| `d` | Dust/Ash | 1 | `1` | Topaz | 4 |
-| `h` | Herb | 1 | `9` | Garnet | 4 |
-| `r` | Root | 1 | `` ` `` | Emerald | 5 |
-| `s` | Scale | 2 | `?` | Ruby | 5 |
-| `e` | Eye | 2 | `(` | Sapphire | 5 |
-| `v` | Venom | 2 | `6` | Onyx | 6 |
-| | | | `_` | Diamond | 8 |
+| `d` | Dust/Ash | 1 | `◇` | Topaz | 4 |
+| `h` | Herb | 1 | `⬥` | Garnet | 4 |
+| `r` | Root | 1 | `⬦` | Emerald | 5 |
+| `s` | Scale | 2 | `◈` | Ruby | 5 |
+| `e` | Eye | 2 | `⬨` | Sapphire | 5 |
+| `v` | Venom | 2 | `⬧` | Onyx | 6 |
+| | | | `⧫` | Diamond | 8 |
 
 Only Goo (`g`) is currently exposed in the conversion UI. Others reserved for Phase 2.
 
@@ -446,14 +446,14 @@ Only Goo (`g`) is currently exposed in the conversion UI. Others reserved for Ph
 
 | Char | Item | Recipe | Charge | Mana | Effect |
 |------|------|--------|--------|------|--------|
-| `⚝` | Ruby Staff | `/` + `?` | 3.0s | 4 | `fire_aoe` — explosion + burn in 60px radius |
-| `⚹` | Sapphire Staff | `/` + `(` | 5.0s | 5 | `blizzard` — freeze all in 90px radius for 5s |
-| `⚶` | Topaz Staff | `/` + `1` | 2.0s | 3 | `chain_stun` — lightning from nearest, stuns chain |
-| `⚸` | Onyx Staff | `/` + `6` | 3.0s | 2 | `blind_cone` — blinds in 90° forward cone, 120px |
-| `⚘` | Emerald Staff | `/` + `` ` `` | 2.0s | 1 | `grass_circle` — tall grass in 3-cell radius |
-| `⚭` | Garnet Staff | `/` + `9` | 3.0s | 3 | `charm_aoe` — charms in 80px radius for 10s |
+| `⚝` | Ruby Staff | `/` + `◈` | 3.0s | 4 | `fire_aoe` — explosion + burn in 60px radius |
+| `⚹` | Sapphire Staff | `/` + `⬨` | 5.0s | 5 | `blizzard` — freeze all in 90px radius for 5s |
+| `⚶` | Topaz Staff | `/` + `◇` | 2.0s | 3 | `chain_stun` — lightning from nearest, stuns chain |
+| `⚸` | Onyx Staff | `/` + `⬧` | 3.0s | 2 | `blind_cone` — blinds in 90° forward cone, 120px |
+| `⚘` | Emerald Staff | `/` + `⬦` | 2.0s | 1 | `grass_circle` — tall grass in 3-cell radius |
+| `⚭` | Garnet Staff | `/` + `⬥` | 3.0s | 3 | `charm_aoe` — charms in 80px radius for 10s |
 
-Diamond (`_`) feeds the mana meter; no gem wand intentionally.
+Diamond (`⧫`) feeds the mana meter; no gem wand intentionally.
 
 **Adding a new gem wand:**
 1. Item entry in `items.js`: `gemWand: true`, `chargeTime`, `manaCost`, `spellEffect`.

@@ -113,7 +113,8 @@ export const MimicMechanic = {
       const dy = sy - py;
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist < CELL * 0.15) {
-        player.takeDamage(5, { isBullet: false, attacker: enemy });
+        const result = player.takeDamage(5, { isBullet: false, attacker: enemy });
+        enemy.game?.physicsSystem?.applyDamageKnockback(player, result, sx, sy);
         player.hookedByMimic = null;
         enemy.mimicTongue = null;
         enemy.mimicTongueCooldown = 8.0;

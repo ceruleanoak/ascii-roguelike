@@ -710,11 +710,6 @@ export class BossSystem {
   /** Grant +1 consumable slot, screen flash, and announce. */
   _grantBossReward() {
     this.game.inventorySystem.unlockConsumableSlot();
-    // Yellow Mage's slots are always mana — re-run the activate sweep so the
-    // freshly unlocked slot enters mana mode instead of staying a normal slot.
-    if (this.game.activeCharacterType === 'yellow') {
-      this.game.magicSystem?.activateAllMagicMeterSlots(this.game.player);
-    }
     this.game.bossDefeatFlash = { startTime: performance.now(), duration: 600 };
     this.game.menuSystem.showPickupMessage('Your power has grown');
     this.game.audioSystem.playSFX('boss_defeat');

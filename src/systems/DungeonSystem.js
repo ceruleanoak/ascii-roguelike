@@ -7,18 +7,13 @@ import { Particle } from '../entities/Particle.js';
 import { getZoneRandomEnemy } from '../data/enemies.js';
 import { applyZoneCombatModifiers } from '../data/zones.js';
 import { pickRandomTemplateName, applyTemplateToCollisionMap, getTemplateWaterCells } from '../data/dungeonFloorTemplates.js';
+import { freezeSurfaceRoom, thawSurfaceRoom } from './PlaneSystem.js';
 
 // Reward by floor (1-indexed in design talk, 0-indexed here). Weapon rewards
-// stay scarce so the dungeon's payoffs feel earned; floor 2's plank is a
-// utility, not a weapon.
-//   Floor 2 (index 1) — '=' Platform plank: the only source of deep-water
-//                       crossing (KeyItemSystem) — deterministic, every dungeon
+// stay scarce so the dungeon's payoffs feel earned.
 //   Floor 3 (index 2) — Tier 3: top-tier craftable weapons
-//   Floor 5 (index 4) — '⚜' Artifact ingredient (spawned separately below;
-//                       replaced § Sword of the Letter, which now sleeps past
-//                       the black water in green L rooms)
+//   Floor 5 (index 4) — '⚜' Artifact ingredient (spawned separately below)
 const REWARD_BY_FLOOR = {
-  1: ['='],
   2: ['⚔', '⚒', '☼'],
 };
 
@@ -427,6 +422,7 @@ export class DungeonSystem {
     game.player._hutEntryCooldown = 0.5;
 
     if (!game.player.inDungeon) game.player.inDungeon = true;
+    freezeSurfaceRoom(game);
 
     // Bring camp companion (if any) into the dungeon floor
     game.campNPCSystem?.snapCompanionToPlayer?.();
@@ -435,6 +431,9 @@ export class DungeonSystem {
       // New floor = fresh room → fully sanitize the companion's weapon state.
       game.campNPCSystem?._sanitizeWeaponForCarrier?.(game.companion.weapon);
       game.companion._attackCooldown = 0;
+      // Sync collision map to the floor so the companion resolves walls
+      // correctly inside the dungeon (surface map has different geometry).
+      game.companion.collisionMap = floor.collisionMap;
     }
 
     game.renderer.backgroundDirty = true;
@@ -540,6 +539,8 @@ export class DungeonSystem {
     }
 
     game.player.inDungeon = false;
+    game.player.hookedByMimic = null;
+    thawSurfaceRoom(game);
     game.player._hutEntryCooldown = 0.5;
 
     // Bring the companion back outside beside the player
@@ -589,7 +590,7 @@ export class DungeonSystem {
         const r = enemy.update(dt * PHYSICS.ENEMY_TIMER_RATE);
         enemy._frameUpdateResult = r;
         if (!r) continue;
-        if (r.justAggrod) game.audioSystem?.playSFX('aggro');
+        if (r.justAggrod) game.audioSystem?.playSFX(enemy.data?.sfx?.aggro ?? 'aggro');
         if (r.itemAttack) game.combatSystem.createEnemyAttack(r.itemAttack);
         if (r.shouldDropSlimeTrail) {
           const t = r.shouldDropSlimeTrail;

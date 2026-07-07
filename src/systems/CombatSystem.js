@@ -1,8 +1,9 @@
-import { GRID } from '../game/GameConfig.js';
+import { GRID, PHYSICS } from '../game/GameConfig.js';
 import { planeOf, inSamePlane, objectOnPlane } from './PlaneSystem.js';
 import { cycleExitLetter, findExitAtPoint, mutateExitLetter } from './ExitSystem.js';
 import { BoomerangMechanic } from './BoomerangMechanic.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
+import { GameAnimalMechanic } from '../entities/enemyMechanics/GameAnimalMechanic.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
 // room — keeps cross-room sniping in check while still feeling powerful.
@@ -435,7 +436,7 @@ export class CombatSystem {
               obj.setWaterState('poisoned', 8.0);
               this.createDamageNumber('☠', obj.position.x, obj.position.y, '#44bb44');
             } else if (proj.onHit === 'stun' && proj.electric) {
-              this.game?.electricitySystem?.seedFromObject(obj, backgroundObjects,
+              this.game?.electricitySystem?.seedFromWeapon(obj, backgroundObjects, proj,
                 { tileDuration: 4.0, hutPlane: !!this.game?.activeFloor });
               this.createDamageNumber('⚡', obj.position.x, obj.position.y, '#cccc00');
             } else if (proj.onHit === 'burn') {
@@ -596,8 +597,8 @@ export class CombatSystem {
           if (proj.electric) elementalMod *= enemy.getElementalModifier('shock');
           if (proj.isBlade) elementalMod *= enemy.getElementalModifier('blade');
           let adjustedDamage = Math.ceil(proj.damage * elementalMod * speedMultiplier);
-          // Green Ranger flat modifier applied after multipliers so it isn't scaled by speed falloff
-          if (proj.owner && proj.owner.characterType === 'green') {
+          // Green Ranger flat modifier (not scaled by speed falloff); excludes boomerangs.
+          if (proj.owner && proj.owner.characterType === 'green' && !proj.boomerang) {
             const enemyUndetected = enemy.detectionIndicatorTimer <= 0;
             const greenBonus = enemyUndetected ? proj.owner.greenIdleDamageBonus : -proj.owner.greenCombatDamagePenalty;
             adjustedDamage = Math.max(1, adjustedDamage + greenBonus);
@@ -635,6 +636,11 @@ export class CombatSystem {
             // Show weakness indicator
             if (elementalMod > 1.0) {
               this.createDamageNumber('!', enemy.position.x, enemy.position.y - 12, '#ff4400');
+            }
+
+            // Moose (game animal): every arrow or bullet strike stacks a slowing effect
+            if ((proj.type === 'arrow' || proj.type === 'bullet') && enemy.data?.gameAnimal?.role === 'moose') {
+              GameAnimalMechanic.registerSlowHit(enemy);
             }
 
             // Apply status effects with affinity-modified duration.
@@ -680,7 +686,7 @@ export class CombatSystem {
 
             // Chain lightning effect
             if (proj.chain && proj.chainCount > 0) {
-              this.createChainLightning(proj, enemy, enemies);
+              this.game.lightningStrikeSystem.createChainLightning(proj, enemy, enemies);
             }
 
             // Explosion effect
@@ -868,7 +874,7 @@ export class CombatSystem {
                   obj.setWaterState('poisoned', 8.0);
                   this.createDamageNumber('☠', obj.position.x, obj.position.y, '#44bb44');
                 } else if (attack.onHit === 'stun' && attack.electric) {
-                  this.game?.electricitySystem?.seedFromObject(obj, backgroundObjects,
+                  this.game?.electricitySystem?.seedFromWeapon(obj, backgroundObjects, attack,
                     { tileDuration: 4.0, hutPlane: !!this.game?.activeFloor });
                   this.createDamageNumber('⚡', obj.position.x, obj.position.y, '#cccc00');
                 } else if (attack.onHit === 'burn') {
@@ -1013,6 +1019,8 @@ export class CombatSystem {
             const damaged = enemy.takeDamage(finalDamage);
             if (damaged === true && attack.isBlade) enemy.killedByBlade = true;
             if (damaged !== false) {
+              // Generic hit-landed signal — FlailSystem resets its spin ramp on this.
+              attack.hitConnected = true;
               // Show damage number with color based on affinity (crit overrides color + scale)
               const damageColor = critRoll.isCrit ? '#ffff66' :
                                  elementalMod < 1.0 ? '#888888' :   // Resisted
@@ -1112,9 +1120,12 @@ export class CombatSystem {
               this.physicsSystem.applyHitstop(enemy, attack.hitstop ?? 0.06);
               if (attack.owner) {
                 this.physicsSystem.applyHitstop(attack.owner, 0.04);
-                const dx = attack.owner.position.x - enemy.position.x;
-                const dy = attack.owner.position.y - enemy.position.y;
-                this.physicsSystem.applyImpulse(attack.owner, dx, dy, 60);
+                // Whips have no knockback recoil
+                if (attack.weaponSubtype !== 'whip') {
+                  const dx = attack.owner.position.x - enemy.position.x;
+                  const dy = attack.owner.position.y - enemy.position.y;
+                  this.physicsSystem.applyImpulse(attack.owner, dx, dy, 60);
+                }
               }
 
               // Apply lifesteal
@@ -1124,7 +1135,7 @@ export class CombatSystem {
 
               // Chain lightning effect
               if (attack.chain) {
-                this.createChainLightning(attack, enemy, enemies);
+                this.game.lightningStrikeSystem.createChainLightning(attack, enemy, enemies);
               }
 
               // Explosion effect
@@ -1238,10 +1249,8 @@ export class CombatSystem {
             } else {
               this.createDamageNumber(result.actualDamage ?? proj.damage, player.position.x, player.position.y, player.color);
 
-              // Rock projectile: extra knockback force
-              if (proj.knockbackForce) {
-                this.physicsSystem.applyKnockback(player, proj.position.x, proj.position.y, proj.knockbackForce);
-              }
+              // Rock projectiles tune their own force; everything else gets the default
+              this.physicsSystem.applyKnockback(player, proj.position.x, proj.position.y, proj.knockbackForce || PHYSICS.DEFAULT_DAMAGE_KNOCKBACK);
 
               // Potion projectile: apply elemental status effect
               if (proj.type === 'potion_projectile' && proj.potionEffect) {
@@ -1434,7 +1443,9 @@ export class CombatSystem {
         }
       }
 
-      // Handle sap damage
+      // Handle sap damage — no knockback here: the sapping enemy locks its
+      // position to the player every frame, so any push is immediately undone
+      // and would just cause jitter instead of a readable hit.
       if (updateResult && updateResult.sapDamage) {
         const sapData = updateResult.sapDamage;
         if (player.isStaffBlocking) {
@@ -1619,6 +1630,7 @@ export class CombatSystem {
                                         result.lucky ? '#ffff66' : '#ffff00');
               } else if (result !== false) {
                 this.createDamageNumber(result.actualDamage ?? tongue.damage, player.position.x, player.position.y, player.color);
+                this.physicsSystem.applyDamageKnockback(player, result, sx, sy);
               }
               tongue.hasHit = true;
             }
@@ -1662,12 +1674,6 @@ export class CombatSystem {
     if (player.heldItem.data?.gemWand && !game.magicSystem.tryStartCharge(player)) {
       return;
     }
-    // Bread is a targeted feed, not a free drop. Without an eligible
-    // eater in the current room, SPACE is a no-op (loaf stays in the slot).
-    if (player.heldItem.data?.effect === 'dropBread'
-        && !game.companionSystem.hasBreadEligibleTarget()) {
-      return;
-    }
     // Attack — melee AoE handles object damage directly via CombatSystem
     game.attackSequenceActive = true; // Mark that attack was initiated by button press (even if windup delays it)
     const wasBowCharging = player.heldItem.data.weaponType === 'BOW' && player.heldItem.isCharging;
@@ -1682,11 +1688,16 @@ export class CombatSystem {
       game.audioSystem.playStoppableSFXStretched('wand_charge', player.heldItem.data.chargeTime);
     }
     if (attack) {
-      // Bread "use" is really a drop: spawn the loaf at the player's feet
-      // and skip the attack pipeline. The slot was already cleared inside
+      // Bread "use" skips the attack pipeline entirely: feed a nearby
+      // crow/rat if one is eligible (dropBreadAtPlayer), otherwise eat it
+      // directly for 2 HP. The slot was already cleared inside
       // Player.useHeldItem because the result was { consumed: true }.
       if (attack.dropBread) {
-        game.companionSystem.dropBreadAtPlayer();
+        if (game.companionSystem.hasBreadEligibleTarget()) {
+          game.companionSystem.dropBreadAtPlayer();
+        } else {
+          player.hp = Math.min(player.hp + 2, player.maxHp);
+        }
       } else {
         this.createAttack(game.applyGreenDamageModifier(attack), game.currentRoom ? game.currentRoom.enemies : []);
         game.triggerGreenActionCooldown();
@@ -2151,67 +2162,6 @@ export class CombatSystem {
     }
   }
 
-  createChainLightning(source, hitEnemy, enemies) {
-    this.game.audioSystem?.playSFX('lightning');
-    const chainRange = 80;
-    const chainDamage = source.damage * 0.5;
-    const maxChains = source.chainCount || 3;
-
-    let chained = 0;
-    const alreadyHit = new Set([hitEnemy]);
-
-    let currentEnemy = hitEnemy;
-    while (chained < maxChains) {
-      let nearestEnemy = null;
-      let nearestDist = Infinity;
-
-      for (const enemy of enemies) {
-        if (alreadyHit.has(enemy)) continue;
-        if (!inSamePlane(hitEnemy, enemy)) continue;
-
-        const dx = enemy.position.x - currentEnemy.position.x;
-        const dy = enemy.position.y - currentEnemy.position.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        if (dist < chainRange && dist < nearestDist) {
-          nearestEnemy = enemy;
-          nearestDist = dist;
-        }
-      }
-
-      if (!nearestEnemy) break;
-
-      const isWet = nearestEnemy.isWet && nearestEnemy.isWet();
-      const actualDamage = isWet ? chainDamage * 2 : chainDamage;
-      const stunDur = isWet ? 3.5 : 2.0;
-
-      nearestEnemy.takeDamage(actualDamage);
-      // Chain lightning is electric — 'zap', not generic 'stun'.
-      nearestEnemy.applyStatusEffect('zap', stunDur);
-      this.createDamageNumber(actualDamage, nearestEnemy.position.x, nearestEnemy.position.y, '#00ffff');
-      if (isWet) {
-        this.createDamageNumber('⚡', nearestEnemy.position.x, nearestEnemy.position.y - 12, '#ffff00');
-      }
-
-      // Visual arc between source and chained target
-      const cs = (currentEnemy.width || GRID.CELL_SIZE) / 2;
-      const ns = (nearestEnemy.width || GRID.CELL_SIZE) / 2;
-      this.chainArcs.push({
-        x1: currentEnemy.position.x + cs,
-        y1: currentEnemy.position.y + cs,
-        x2: nearestEnemy.position.x + ns,
-        y2: nearestEnemy.position.y + ns,
-        color: isWet ? '#ffff66' : '#88ddff',
-        timer: 0.18,
-        duration: 0.18
-      });
-
-      alreadyHit.add(nearestEnemy);
-      currentEnemy = nearestEnemy;
-      chained++;
-    }
-  }
-
   getChainArcs() {
     return this.chainArcs;
   }
@@ -2378,7 +2328,8 @@ export class CombatSystem {
     }
     if (!(critChance > 0)) return { damage, isCrit: false };
     if (Math.random() >= critChance) return { damage, isCrit: false };
-    return { damage: Math.ceil(damage * 1.5), isCrit: true, isLucky };
+    const critMult = activeWeapon?.data?.weaponSubtype === 'dagger' ? 2 : 1.5;
+    return { damage: Math.ceil(damage * critMult), isCrit: true, isLucky };
   }
 
   createDamageNumber(damage, x, y, color, scale = 1, duration = 1.0) {
@@ -2413,13 +2364,12 @@ export class CombatSystem {
     this.objectDestroyEvents = [];
   }
 
-  // Tag all combat entities with hutPlane based on current game.activeFloor state.
-  // Called at the end of update() so newly-spawned entities (this frame) get tagged
-  // before render. Existing tagged entities are skipped (idempotent). Lets render
-  // helpers filter by hutPlane without touching every push site (20+ in this file
-  // plus more in main.js / Enemy.js callbacks).
+  // Tag all combat entities with hutPlane based on current interior state
+  // (game.activeFloor for hut/dungeon, player.inMaze for the maze — it has no
+  // activeFloor of its own). Called at the end of update() so newly-spawned
+  // entities get tagged before render; existing tags are left alone.
   _tagCombatHutPlane() {
-    const hp = !!this.game?.activeFloor;
+    const hp = !!(this.game?.activeFloor || this.game?.player?.inMaze);
     const arrays = [
       this.projectiles, this.enemyProjectiles,
       this.meleeAttacks, this.enemyMeleeAttacks,
@@ -2596,7 +2546,9 @@ export class CombatSystem {
       }
     }
 
-    // Also damage wet player (they're in the electrical field)
+    // Also damage wet player (they're in the electrical field) — no knockback:
+    // this fires every tick the player stands in the field, and a per-frame
+    // push would fight the player's own movement instead of reading as a hit.
     if (player && player.isWet && player.isWet()) {
       const dx = player.position.x - sourceObj.position.x;
       const dy = player.position.y - sourceObj.position.y;

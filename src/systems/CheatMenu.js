@@ -37,7 +37,7 @@ export class CheatMenu {
 
   buildTree() {
     const godMode = this.godMode;
-    const meterActive = !!this.game?.player?.magicMeter?.active;
+    const manaSlotCount = this.game?.player?.magicMeter?.slots?.length ?? 0;
 
     const demoRecording = !!this.game?.demoSystem?.recording;
     const recordHotkey = !!this.game?.demoSystem?.hotkeyEnabled;
@@ -45,7 +45,7 @@ export class CheatMenu {
     const deathCount = sessionDeaths.filter(r => r.event !== 'revive').length;
     const togglesItems = [
       { char: godMode ? '✓' : '○', name: `GOD MODE [${godMode ? 'ON' : 'OFF'}]`, type: 'toggle_god_mode', color: godMode ? '#00ff88' : '#888888' },
-      { char: meterActive ? '✓' : '○', name: `MAGIC METER [${meterActive ? 'ON' : 'OFF'}]`, type: 'activate_magic_meter', color: meterActive ? '#cc66ff' : '#888888' },
+      { char: '+', name: `MANA SLOT +1 (${manaSlotCount})`, type: 'activate_magic_meter', color: manaSlotCount > 0 ? '#cc66ff' : '#888888' },
       { char: demoRecording ? '●' : '○', name: `RECORD DEMO [${demoRecording ? 'ON' : 'OFF'}]`, type: 'toggle_demo_recording', color: demoRecording ? '#ff4444' : '#888888' },
       { char: recordHotkey ? 'R' : '○', name: `R RECORD KEY [${recordHotkey ? 'ON' : 'OFF'}]`, type: 'toggle_record_hotkey', color: recordHotkey ? '#ff8844' : '#888888' },
       { char: fireworks ? '✶' : '○', name: `PARTICLE FIREWORKS [${fireworks ? 'ON' : 'OFF'}]`, type: 'toggle_particle_fireworks', color: fireworks ? '#ffaa44' : '#888888' },
@@ -525,10 +525,10 @@ export class CheatMenu {
     const x = CELL * 3;
     const y = CELL * 3;
 
-    renderer.drawRect(x, y, width, height, 'rgba(0, 0, 0, 0.9)', true);
-    renderer.drawRect(x, y, width, height, '#ffff00', false);
+    renderer.drawUIRect(x, y, width, height, 'rgba(0, 0, 0, 0.9)', true);
+    renderer.drawUIRect(x, y, width, height, '#ffff00', false);
 
-    const ctx = renderer.fgCtx;
+    const ctx = renderer.uiCtx;
     ctx.save();
     ctx.fillStyle = '#ffff00';
     ctx.textAlign = 'center';
@@ -557,8 +557,8 @@ export class CheatMenu {
     // Depth-jump input bar
     if (this.depthMode) {
       const barY = y + CELL * 2.6;
-      renderer.drawRect(x + CELL, barY - CELL * 0.6, width - CELL * 2, CELL * 1.1, 'rgba(255,255,0,0.15)', true);
-      renderer.drawRect(x + CELL, barY - CELL * 0.6, width - CELL * 2, CELL * 1.1, '#ffff00', false);
+      renderer.drawUIRect(x + CELL, barY - CELL * 0.6, width - CELL * 2, CELL * 1.1, 'rgba(255,255,0,0.15)', true);
+      renderer.drawUIRect(x + CELL, barY - CELL * 0.6, width - CELL * 2, CELL * 1.1, '#ffff00', false);
       ctx.fillStyle = '#888888';
       ctx.textAlign = 'left';
       ctx.fillText('JUMP TO LEVEL:', x + CELL * 2, barY);
@@ -593,7 +593,7 @@ export class CheatMenu {
 
   _renderGrid(renderer, entries, x, top, width, availH) {
     const CELL = GRID.CELL_SIZE;
-    const ctx = renderer.fgCtx;
+    const ctx = renderer.uiCtx;
 
     const tileW = CELL * TILE_COLS;
     const tileH = CELL * TILE_ROWS;
@@ -626,13 +626,13 @@ export class CheatMenu {
       // Tile background + border
       const fillStyle = isSelected ? 'rgba(255, 255, 0, 0.18)' : 'rgba(255, 255, 255, 0.04)';
       const borderStyle = isSelected ? '#ffff00' : '#444444';
-      renderer.drawRect(tx + 2, ty + 2, tileW - 4, tileH - 4, fillStyle, true);
-      renderer.drawRect(tx + 2, ty + 2, tileW - 4, tileH - 4, borderStyle, false);
+      renderer.drawUIRect(tx + 2, ty + 2, tileW - 4, tileH - 4, fillStyle, true);
+      renderer.drawUIRect(tx + 2, ty + 2, tileW - 4, tileH - 4, borderStyle, false);
 
       // Glyph (scaled up)
       const glyphX = tx + tileW / 2;
       const glyphY = ty + CELL * 1.1;
-      renderer.drawEntityScaled(glyphX, glyphY, icon.char, icon.color, 1.6);
+      renderer.drawUIEntityScaled(glyphX, glyphY, icon.char, icon.color, 1.6);
 
       // Folder indicator (small marker bottom-right)
       if (isFolder) {
@@ -664,7 +664,7 @@ export class CheatMenu {
 
   _renderList(renderer, entries, x, top, width, availH) {
     const CELL = GRID.CELL_SIZE;
-    const ctx = renderer.fgCtx;
+    const ctx = renderer.uiCtx;
     const lineHeight = CELL * 1.5;
     const maxVisible = Math.max(1, Math.floor(availH / lineHeight));
 
@@ -688,7 +688,7 @@ export class CheatMenu {
       const isFolder = !!(entry.children || entry.items);
 
       if (isSelected) {
-        renderer.drawRect(
+        renderer.drawUIRect(
           x + CELL,
           itemY - lineHeight / 2,
           width - CELL * 2,
@@ -699,7 +699,7 @@ export class CheatMenu {
       }
 
       const icon = this._getNodeIcon(entry);
-      renderer.drawEntity(x + CELL * 2, itemY, icon.char, icon.color);
+      renderer.drawUIEntity(x + CELL * 2, itemY, icon.char, icon.color);
 
       ctx.fillStyle = isSelected ? '#ffffff' : '#cccccc';
       ctx.textAlign = 'left';

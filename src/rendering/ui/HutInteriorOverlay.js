@@ -1,5 +1,7 @@
 import { GRID } from '../../game/GameConfig.js';
 import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher.js';
+import { drawInteriorFrame } from './interiorFrame.js';
+import { isWieldingTorch, drawPlayerTorchLight } from './torchLight.js';
 
 /**
  * HutInteriorOverlay — picture-in-picture rendering for both Hut and Dungeon interiors.
@@ -15,7 +17,6 @@ import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher
  */
 
 const BORDER_COLOR = '#c8a96e';
-const DIM_ALPHA = 0.55;
 
 export class HutInteriorOverlay {
   constructor(renderer, renderController) {
@@ -26,41 +27,19 @@ export class HutInteriorOverlay {
   render(game) {
     if ((!game.player?.inHut && !game.player?.inDungeon) || !game.activeFloor) return;
 
-    // Compute panel dimensions from interior grid size (auto-sizes for hut vs dungeon)
-    const interiorPxW = game.activeFloor.gridCols * GRID.CELL_SIZE;
-    const interiorPxH = game.activeFloor.gridRows * GRID.CELL_SIZE;
-    const offsetX = Math.floor((GRID.WIDTH  - interiorPxW) / 2);
-    const offsetY = Math.floor((GRID.HEIGHT - interiorPxH) / 2);
-
     const ctx = this.renderer.fgCtx;
-    ctx.save(); // outer save — protects all global canvas state
 
-    // ── 1. Dim exterior (absolute coords) ─────────────────────────────────────
-    ctx.fillStyle = `rgba(0,0,0,${DIM_ALPHA})`;
-    ctx.fillRect(0, 0, GRID.WIDTH, GRID.HEIGHT);
-
-    // ── 2. Interior background panel ──────────────────────────────────────────
-    ctx.fillStyle = '#111108';
-    ctx.fillRect(offsetX, offsetY, interiorPxW, interiorPxH);
-
-    // ── 3. Decorative border ──────────────────────────────────────────────────
-    ctx.strokeStyle = BORDER_COLOR;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(offsetX - 1, offsetY - 1, interiorPxW + 2, interiorPxH + 2);
-
-    // ── Apply interior-coordinate offset for all entity rendering ─────────────
-    // After this point, drawing at (x, y) appears at canvas (offsetX+x, offsetY+y).
-    // Clip to the interior grid so any surface-coord content that leaks past
-    // hutPlane filters (e.g. puddles/gooBlobs missing the tag) gets clipped out
-    // rather than rendering on top of the PiP frame.
-    ctx.translate(offsetX, offsetY);
-    ctx.beginPath();
-    ctx.rect(0, 0, interiorPxW, interiorPxH);
-    ctx.clip();
-
-    ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
+    // Shared PiP frame: dim + panel + border + interior-coord translate + clip +
+    // font (auto-sizes for hut vs dungeon from the active floor's grid). The clip
+    // keeps any surface-coord content that leaked past hutPlane filters (e.g.
+    // untagged puddles/gooBlobs) from drawing on top of the PiP frame.
+    const { offsetY } = drawInteriorFrame(ctx, {
+      gridCols: game.activeFloor.gridCols,
+      gridRows: game.activeFloor.gridRows,
+      panelColor: '#111108',
+      borderColor: BORDER_COLOR,
+      clip: true,
+    });
 
     // ── 3a. Interior puddles + goo blobs + steam clouds (slime trails, etc.) ───
     // hutPlane=true selects only entries tagged with hutPlane=true on spawn,
@@ -97,6 +76,17 @@ export class HutInteriorOverlay {
         renderData.x + GRID.CELL_SIZE / 2,
         renderData.y + GRID.CELL_SIZE / 2
       );
+    }
+
+    // Condenser reveal — base ingredient as Greek symbol, floating upward with dissolve
+    // (AlchemySystem.revealCondenser/update animates position and alpha).
+    const reveal = game.activeFloor.condenserReveal;
+    if (reveal) {
+      ctx.save();
+      ctx.globalAlpha = reveal.alpha;
+      ctx.fillStyle = reveal.color;
+      ctx.fillText(reveal.baseChar, reveal.x, reveal.y);
+      ctx.restore();
     }
 
     // Burning interior objects flicker per-frame via the shared helper
@@ -146,6 +136,10 @@ export class HutInteriorOverlay {
     const coinAnim = game.fishermanDemoSystem?.getCoinAnim?.();
     if (coinAnim) this.renderController.exploreRenderer.drawCoinArc(coinAnim);
 
+    // Weapons Master coin pay — same shared spinning-arc draw helper.
+    const weaponsMasterCoinAnim = game.weaponsMasterSystem?.getCoinAnim?.();
+    if (weaponsMasterCoinAnim) this.renderController.exploreRenderer.drawCoinArc(weaponsMasterCoinAnim);
+
     // Fisherman coin-demo fish — transient marker beside the NPC while he
     // demonstrates cutting the catch open.
     const demoFish = game.fishermanDemoSystem?.getFishMarker();
@@ -193,6 +187,15 @@ export class HutInteriorOverlay {
     // ── 15b. Sticky triplines (committed segments + live preview + red-X) ──────
     // Interior-coord variant: reads activeFloor.triplines; ctx translate already applied.
     this.renderController.exploreRenderer._drawWires(game, true);
+
+    // ── 15c. Torch light (cosmetic glow when Torch equipped) ───────────────────
+    if (isWieldingTorch(game)) {
+      drawPlayerTorchLight(
+        this.renderer,
+        game.player.position.x + GRID.CELL_SIZE / 2,
+        game.player.position.y + GRID.CELL_SIZE / 2
+      );
+    }
 
     // ── 16. Player ────────────────────────────────────────────────────────────
     const playerAlpha = game.player.getVisibilityAlpha?.() ?? 1.0;

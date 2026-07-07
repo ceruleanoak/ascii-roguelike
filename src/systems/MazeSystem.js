@@ -1,7 +1,9 @@
 import { GRID } from '../game/GameConfig.js';
 import { Ingredient } from '../entities/Ingredient.js';
+import { Item } from '../entities/Item.js';
 import { INGREDIENTS } from '../data/items.js';
 import { coverFor } from '../data/cipher.js';
+import { freezeSurfaceRoom, thawSurfaceRoom } from './PlaneSystem.js';
 
 /**
  * MazeSystem — manages the Maze (M) room interior.
@@ -10,20 +12,33 @@ import { coverFor } from '../data/cipher.js';
  * At 16 px/cell this is 304×304 px, rendered as a PiP centered on the 480×480 canvas.
  *
  * Maze objects are placed at dead-end corridors (degree-1 nodes in the maze).
- * Each takes 3 hits to break; standing adjacent reveals the hidden ingredient beneath.
+ * Each takes 3 hits to break, dropping the hidden ingredient beneath its cipher cover.
  *
- * Countdown timer (5 s):
- *   - Starts when the first object is broken.
- *   - Each expiry: 1 ghost spawns (converted from a random surviving object, or
- *     at a random open cell if none remain), then the timer resets.
- *   - After 4 cumulative ghost spawns all ghosts become "phasing" (pass through walls,
- *     move 2× faster). They continue to multiply every 5 s indefinitely.
+ * Blink warning:
+ *   - Nothing blinks until the first maze object is broken open — that
+ *     disturbance is what summons the doom system.
+ *   - One object at a time (the "candidate") blinks — a visible on/off toggle.
+ *   - After 5 completed blinks unbroken, the candidate converts into a ghost.
+ *   - Breaking the candidate before its 5th blink cancels the threat; a 5 s
+ *     cooldown follows before a different surviving object becomes the candidate.
+ *   - Once 2 ghosts have spawned this way ("doom"), every surviving object blinks
+ *     simultaneously with no cooldown/candidate gating.
+ *   - Clearing every object AND collecting every dropped ingredient without ever
+ *     spawning a ghost grants Spectacles at the maze center.
  *
  * Ghosts (U+2689 '⚉'):
  *   - Immune to all damage; no knockback on player contact.
  *   - 1 damage per 0.75 s touch.
- *   - Normal mode: slide around walls toward player.
- *   - Phasing mode: move directly through walls at 2× speed.
+ *   - Pac-man style pathing toward the player; always blocked by walls.
+ *
+ * Maze Torches (5 per maze, distributed at non-dead-end cells):
+ *   - Lit by walking near one while wielding the Torch item — permanent once lit.
+ *   - A lit torch's light radius fully shields nearby tombs from ever spawning
+ *     a ghost (never selected as blink candidate, immune even in doom mode).
+ *   - Once all 5 are lit, every tomb's blink persists 3x as long (same
+ *     flicker cadence, 3x the completed blinks required) before conversion.
+ *   - Ghosts destroy any torch they touch — snuffed out for the rest of the
+ *     run, losing its shielding/all-lit contribution.
  *
  * Re-entry: once the player exits the maze door is permanently sealed.
  */
@@ -33,19 +48,32 @@ import { coverFor } from '../data/cipher.js';
 const LOGICAL_SIZE = 9;                              // 9×9 logical maze cells
 const PHYS         = LOGICAL_SIZE * 2 + 1;           // 19×19 physical grid
 const CS           = GRID.CELL_SIZE;                 // 16 px per cell
+const MAZE_CENTER_CELL = Math.floor(LOGICAL_SIZE / 2) * 2 + 1; // logical-center room cell (phys coords)
 
 // Proximity radius for exterior door interaction (px from door center)
 const DOOR_INTERACT_RADIUS = CS * 2;
 
 const GHOST_CHAR           = '⚉';  // U+2689
-const GHOST_COLOR_NORMAL   = '#9988cc';
-const GHOST_COLOR_PHASING  = '#ccbbff';
-const GHOST_SPEED_NORMAL   = 35;   // px/s
-const GHOST_SPEED_PHASING  = 35;   // px/s — same speed; phasing grants wall-pass only
+const GHOST_COLOR          = '#9988cc';
+const GHOST_SPEED          = 35;   // px/s
 const GHOST_DAMAGE         = 1;
 const GHOST_DAMAGE_INTERVAL = 0.75; // s between damage ticks
 
-const TIMER_DURATION = 5.0; // s per countdown
+const BLINK_INTERVAL  = 0.4; // s per on/off toggle
+const BLINKS_TO_GHOST = 5;   // completed on-blinks before conversion
+const BLINK_COOLDOWN  = 5.0; // s pause before the next single candidate blinks
+const DOOM_THRESHOLD  = 2;   // ghosts spawned before all-remaining-blink mode
+
+export const TORCH_COUNT           = 5;
+export const TORCH_LIGHT_RADIUS    = CS * 3.5;   // "decent sized radius" of a lit torch's glow
+const TORCH_INTERACT_RADIUS = CS * 1.2;   // proximity needed to ignite
+const GHOST_TORCH_DESTROY_RADIUS = CS * 1.0; // ghost proximity that destroys a torch
+export const TORCH_ALPHA_HIGH      = 0.3;
+export const TORCH_ALPHA_LOW       = 0.1;
+export const TORCH_PULSE_SPEED     = 2.0;        // rad/s
+export const TORCH_LIT_COLOR       = '#ffaa33';
+export const TORCH_UNLIT_COLOR     = '#664422';
+const DISTURBED_BLINKS_MULT = 3;          // blink duration multiplier once all torches lit — same flicker cadence, 3x more blinks required
 
 // Maze object cover color — actual cover glyph is derived from the hidden
 // ingredient via the cipher (see coverFor). Each cover taught is a cipher
@@ -87,13 +115,13 @@ const MAZE_LOOT_TABLE = [
 
   // ── Rare (gemstones) ─────────────────────────────────────────────────────────
   // Zero at depth 0 — only appear once you've gone deep enough.
-  { char: '1', baseWeight:  0, depthBonus: 1.5 }, // Topaz
-  { char: '9', baseWeight:  0, depthBonus: 1.5 }, // Garnet
-  { char: '`', baseWeight:  0, depthBonus: 1.5 }, // Emerald
-  { char: '_', baseWeight:  0, depthBonus: 1.2 }, // Diamond
-  { char: '?', baseWeight:  0, depthBonus: 1.8 }, // Ruby  — "ruby is the stone of flame"
-  { char: '(', baseWeight:  0, depthBonus: 1.5 }, // Sapphire
-  { char: '6', baseWeight:  0, depthBonus: 1.2 }, // Onyx
+  { char: '◇', baseWeight:  0, depthBonus: 1.5 }, // Topaz
+  { char: '⬥', baseWeight:  0, depthBonus: 1.5 }, // Garnet
+  { char: '⬦', baseWeight:  0, depthBonus: 1.5 }, // Emerald
+  { char: '⧫', baseWeight:  0, depthBonus: 1.2 }, // Diamond
+  { char: '◈', baseWeight:  0, depthBonus: 1.8 }, // Ruby  — "ruby is the stone of flame"
+  { char: '⬨', baseWeight:  0, depthBonus: 1.5 }, // Sapphire
+  { char: '⬧', baseWeight:  0, depthBonus: 1.2 }, // Onyx
 ];
 
 // ─── MazeObject ────────────────────────────────────────────────────────────
@@ -111,7 +139,10 @@ class MazeObject {
     this.destroyed  = false;
     this.hitFlash   = 0;     // white flash (s) when struck
     this.hitCooldown = 0;    // prevent same-attack double-hit
-    this.revealed   = false; // true when player is adjacent → show hidden char
+    this.blinking   = false; // true while this object is the blink candidate
+    this.blinkOn    = false; // current on/off toggle state
+    this.blinkTimer = 0;     // s until next toggle
+    this.blinkCount = 0;     // completed on-blinks (0..BLINKS_TO_GHOST)
   }
 }
 
@@ -120,14 +151,27 @@ class MazeObject {
 class MazeGhost {
   constructor(x, y) {
     this.char           = GHOST_CHAR;
-    this.color          = GHOST_COLOR_NORMAL;
+    this.color          = GHOST_COLOR;
     this.position       = { x, y };
-    this.speed          = GHOST_SPEED_NORMAL;
+    this.speed          = GHOST_SPEED;
     this.damageCooldown = 0;
-    this.phasesWalls    = false;
     // Immune — absorbs all weapon hits silently
     this.hp             = Infinity;
     this.takeDamage     = () => 0;
+  }
+}
+
+// ─── MazeTorch ─────────────────────────────────────────────────────────────
+
+class MazeTorch {
+  constructor(col, row) {
+    this.char       = '!';           // ASCII, per background-object char rule (flame-over-post)
+    this.col        = col;
+    this.row        = row;
+    this.position   = { x: col * CS, y: row * CS };
+    this.lit        = false;
+    this.pulseTimer = 0;
+    this.destroyed  = false;
   }
 }
 
@@ -183,6 +227,32 @@ export class MazeSystem {
       }
     }
 
+    // Place 5 Maze Torches at non-dead-end cells, spread across the maze —
+    // one per corner region plus the center, nearest available cell to each anchor.
+    const torches = [];
+    const torchAnchors = [
+      [1, 1], [1, LOGICAL_SIZE - 2],
+      [Math.floor(LOGICAL_SIZE / 2), Math.floor(LOGICAL_SIZE / 2)],
+      [LOGICAL_SIZE - 2, 1], [LOGICAL_SIZE - 2, LOGICAL_SIZE - 2],
+    ];
+    const usedTorchCells = new Set();
+    for (const [alr, alc] of torchAnchors) {
+      let best = null, bestDist = Infinity;
+      for (let lr = 0; lr < LOGICAL_SIZE; lr++) {
+        for (let lc = 0; lc < LOGICAL_SIZE; lc++) {
+          if (degrees[lr][lc] === 1) continue; // leave dead ends to the tombs
+          const key = `${lr},${lc}`;
+          if (usedTorchCells.has(key)) continue;
+          const dist = (lr - alr) ** 2 + (lc - alc) ** 2;
+          if (dist < bestDist) { bestDist = dist; best = { lr, lc, key }; }
+        }
+      }
+      if (best) {
+        usedTorchCells.add(best.key);
+        torches.push(new MazeTorch(physC(best.lc), physR(best.lr)));
+      }
+    }
+
     // Exit/entrance: open bottom-right corner cell (logical [8][8])
     const exitRow = physR(LOGICAL_SIZE - 1); // 17
     const exitCol = physC(LOGICAL_SIZE - 1); // 17
@@ -198,9 +268,13 @@ export class MazeSystem {
       gridRows: PHYS,
       collisionMap,
       mazeObjects,
+      torches,
       ghosts: [],
-      timer:      { active: false, time: 0 },
-      spawnCount: 0,   // cumulative ghosts spawned by timer
+      spawnCount: 0,        // cumulative ghosts spawned via blink expiry
+      blinkCooldown: 0,     // s before the next single candidate may blink
+      disturbed: false,     // true once the first object is broken open — arms the blink system
+      doomMode: false,      // spawnCount >= DOOM_THRESHOLD: all survivors blink
+      spectaclesGranted: false,
       exitsSealed: false,
       exitRow: PHYS - 1, // outer south wall row (player steps here to exit)
       exitCol,
@@ -246,6 +320,7 @@ export class MazeSystem {
     game.player.position.x = game.mazeInterior.spawnPoint.x;
     game.player.position.y = game.mazeInterior.spawnPoint.y;
     game.player.inMaze = true;
+    freezeSurfaceRoom(game);
     game.renderer.backgroundDirty = true;
   }
 
@@ -291,6 +366,8 @@ export class MazeSystem {
     }
 
     game.player.inMaze = false;
+    game.player.hookedByMimic = null;
+    thawSurfaceRoom(game);
 
     // Drop maze-plane loot (abandoned on exit)
     game.ingredients = game.ingredients.filter(i => !i.mazePlane);
@@ -319,23 +396,61 @@ export class MazeSystem {
     // Hit detection: player attacks vs maze objects
     this._checkObjectHits(mi);
 
-    // Per-object flash/cooldown/reveal
+    // Per-object flash/cooldown
     for (const obj of mi.mazeObjects) {
       if (obj.hitFlash    > 0) obj.hitFlash    -= dt;
       if (obj.hitCooldown > 0) obj.hitCooldown -= dt;
-      if (!obj.destroyed) obj.revealed = this._isAdjacentToPlayer(obj);
     }
 
-    // Countdown timer
-    if (mi.timer.active) {
-      mi.timer.time -= dt;
-      if (mi.timer.time <= 0) this._onTimerExpired(mi);
+    // Maze Torches: pulse while lit; ignite on proximity while wielding Torch
+    for (const torch of mi.torches) {
+      if (torch.destroyed) continue;
+      torch.pulseTimer += dt;
+      if (torch.lit) continue;
+      if (game.player.heldItem?.data?.name !== 'Torch') continue;
+      if (this._within(game.player.position, torch.position, TORCH_INTERACT_RADIUS)) {
+        torch.lit = true;
+      }
     }
+
+    // Ghosts destroy any torch they touch — snuffs it out and removes its
+    // shielding/slowdown contribution for good.
+    for (const ghost of mi.ghosts) {
+      for (const torch of mi.torches) {
+        if (torch.destroyed) continue;
+        if (this._within(ghost.position, torch.position, GHOST_TORCH_DESTROY_RADIUS)) {
+          torch.destroyed = true;
+          torch.lit = false;
+        }
+      }
+    }
+
+    // Blink candidate selection (single-candidate mode only — doom mode keeps
+    // every survivor blinking continuously, set once on doom entry). Nothing
+    // blinks until the first object is broken open — that disturbance is what
+    // summons the doom system.
+    if (mi.disturbed && !mi.doomMode) {
+      if (mi.blinkCooldown > 0) {
+        mi.blinkCooldown -= dt;
+      } else if (!mi.mazeObjects.some(o => o.blinking)) {
+        this._selectBlinkCandidate(mi);
+      }
+    }
+
+    // Tick every currently-blinking object toward ghost conversion
+    const activeTorches = mi.torches.filter(t => !t.destroyed);
+    const allTorchesLit = activeTorches.length > 0 && activeTorches.every(t => t.lit);
+    for (const obj of mi.mazeObjects) {
+      if (obj.destroyed || !obj.blinking) continue;
+      this._tickBlink(obj, mi, dt, allTorchesLit);
+    }
+
+    // Win condition: every object destroyed, every dropped ingredient/item
+    // actually collected, and no ghost ever spawned → grant Spectacles
+    this._checkMazeCleared(mi);
 
     // Ghost AI
     for (const ghost of mi.ghosts) {
-      ghost.speed = ghost.phasesWalls ? GHOST_SPEED_PHASING : GHOST_SPEED_NORMAL;
-      ghost.color = ghost.phasesWalls ? GHOST_COLOR_PHASING : GHOST_COLOR_NORMAL;
       this._updateGhost(ghost, dt, mi);
     }
 
@@ -386,7 +501,15 @@ export class MazeSystem {
   _destroyObject(obj, mi) {
     const { game } = this;
     obj.destroyed = true;
+    mi.disturbed = true; // breaking any tomb arms the blink/doom system
     mi.collisionMap[obj.row][obj.col] = false; // clear solid cell
+
+    // Breaking the blink candidate defuses it — no ghost. Outside doom mode,
+    // pause before a different survivor picks up the warning.
+    if (obj.blinking) {
+      obj.blinking = false;
+      if (!mi.doomMode) mi.blinkCooldown = BLINK_COOLDOWN;
+    }
 
     // Drop hidden ingredient
     if (INGREDIENTS[obj.hiddenChar]) {
@@ -395,47 +518,81 @@ export class MazeSystem {
       game.ingredients.push(ing);
       game.physicsSystem.addEntity(ing);
     }
+  }
 
-    // Start timer on first break
-    if (!mi.timer.active) {
-      mi.timer.active = true;
-      mi.timer.time   = TIMER_DURATION;
+  // ─── Blink / Ghost Conversion ────────────────────────────────────────────
+
+  _selectBlinkCandidate(mi) {
+    const alive = mi.mazeObjects.filter(o => !o.destroyed && !this._nearLitTorch(o, mi));
+    if (alive.length === 0) return;
+    const obj = alive[Math.floor(Math.random() * alive.length)];
+    obj.blinking   = true;
+    obj.blinkOn    = false;
+    obj.blinkTimer = BLINK_INTERVAL;
+    obj.blinkCount = 0;
+  }
+
+  _tickBlink(obj, mi, dt, allTorchesLit) {
+    // A tomb shielded by a lit torch's light is defused mid-blink — no ghost.
+    if (this._nearLitTorch(obj, mi)) {
+      obj.blinking  = false;
+      obj.blinkOn   = false;
+      obj.blinkCount = 0;
+      return;
+    }
+    obj.blinkTimer -= dt;
+    if (obj.blinkTimer > 0) return;
+    obj.blinkTimer = BLINK_INTERVAL;
+    obj.blinkOn = !obj.blinkOn;
+    if (obj.blinkOn) {
+      obj.blinkCount++;
+      const blinksNeeded = allTorchesLit ? BLINKS_TO_GHOST * DISTURBED_BLINKS_MULT : BLINKS_TO_GHOST;
+      if (obj.blinkCount >= blinksNeeded) this._convertToGhost(obj, mi);
     }
   }
 
-  // ─── Timer Expiry ────────────────────────────────────────────────────────
-
-  _onTimerExpired(mi) {
+  _convertToGhost(obj, mi) {
+    obj.destroyed = true;
+    obj.blinking  = false;
+    mi.collisionMap[obj.row][obj.col] = false;
+    mi.ghosts.push(new MazeGhost(obj.position.x, obj.position.y));
     mi.spawnCount++;
+    this.game.audioSystem?.playSFX('ghost_spawn');
 
-    if (mi.spawnCount < 3) {
-      // 1st and 2nd expiry: spawn 1 ghost from a random surviving object
-      const alive = mi.mazeObjects.filter(o => !o.destroyed);
-      if (alive.length > 0) {
-        const src = alive[Math.floor(Math.random() * alive.length)];
-        mi.ghosts.push(new MazeGhost(src.position.x, src.position.y));
-        src.destroyed = true;
-        mi.collisionMap[src.row][src.col] = false;
-        this.game.audioSystem?.playSFX('ghost_spawn');
+    if (!mi.doomMode && mi.spawnCount >= DOOM_THRESHOLD) {
+      mi.doomMode = true;
+      mi.blinkCooldown = 0;
+      // Every surviving object now blinks simultaneously — no more cooldown gating,
+      // except tombs shielded by a lit torch's light, which stay immune.
+      for (const survivor of mi.mazeObjects) {
+        if (survivor.destroyed || this._nearLitTorch(survivor, mi)) continue;
+        survivor.blinking   = true;
+        survivor.blinkOn    = false;
+        survivor.blinkTimer = BLINK_INTERVAL;
+        survivor.blinkCount = 0;
       }
-      mi.timer.time = TIMER_DURATION; // restart
-    } else {
-      // 3rd expiry: doom — ALL remaining objects become ghosts, all phase through walls
-      let doomSpawned = false;
-      for (const obj of mi.mazeObjects) {
-        if (obj.destroyed) continue;
-        mi.ghosts.push(new MazeGhost(obj.position.x, obj.position.y));
-        obj.destroyed = true;
-        mi.collisionMap[obj.row][obj.col] = false;
-        doomSpawned = true;
-      }
-      if (doomSpawned) this.game.audioSystem?.playSFX('ghost_spawn');
-      // Activate phasing on every ghost (including the 2 spawned earlier)
-      for (const ghost of mi.ghosts) {
-        ghost.phasesWalls = true;
-      }
-      mi.timer.active = false; // no more countdowns after doom
     }
+  }
+
+  // ─── Win Condition ───────────────────────────────────────────────────────
+
+  _checkMazeCleared(mi) {
+    const { game } = this;
+    if (mi.spectaclesGranted || mi.spawnCount !== 0) return;
+    if (game.spectaclesObtainedThisRun) return;
+    if (!mi.mazeObjects.every(o => o.destroyed)) return;
+    if (game.ingredients.some(i => i.mazePlane)) return;
+    if (game.items.some(i => i.mazePlane)) return;
+
+    mi.spectaclesGranted = true;
+    game.spectaclesObtainedThisRun = true;
+
+    const x = MAZE_CENTER_CELL * CS;
+    const y = MAZE_CENTER_CELL * CS;
+    const glasses = new Item('⊙', x, y);
+    glasses.mazePlane = true;
+    game.items.push(glasses);
+    game.physicsSystem.addEntity(glasses);
   }
 
   // ─── Space Interaction ───────────────────────────────────────────────────
@@ -494,13 +651,6 @@ export class MazeSystem {
     const dy = game.player.position.y - ghost.position.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist < 1) return;
-
-    if (ghost.phasesWalls) {
-      // Phasing ghosts move directly through walls
-      ghost.position.x += (dx / dist) * ghost.speed * dt;
-      ghost.position.y += (dy / dist) * ghost.speed * dt;
-      return;
-    }
 
     // Pac-man style: commit to a target cell, only choose next direction on arrival
     if (!ghost._targetCell) {
@@ -605,7 +755,8 @@ export class MazeSystem {
       const gx = ghost.position.x + CS / 2, gy = ghost.position.y + CS / 2;
       if ((px - gx) ** 2 + (py - gy) ** 2 < (CS * 1.2) ** 2) {
         const hpBefore = player.hp;
-        player.takeDamage(GHOST_DAMAGE); // no knockback args — Player.takeDamage doesn't apply knockback
+        const result = player.takeDamage(GHOST_DAMAGE);
+        game.physicsSystem.applyDamageKnockback(player, result, gx, gy);
         ghost.damageCooldown = GHOST_DAMAGE_INTERVAL;
         game.audioSystem?.playSFX('hit');
         if (hpBefore > 0 && player.hp <= 0) player._killedByGhost = true;
@@ -615,12 +766,13 @@ export class MazeSystem {
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
-  _isAdjacentToPlayer(obj) {
-    const { game } = this;
-    if (!game.player) return false;
-    const dx = Math.abs(game.player.position.x + CS / 2 - (obj.position.x + CS / 2));
-    const dy = Math.abs(game.player.position.y + CS / 2 - (obj.position.y + CS / 2));
-    return dx < CS * 2.5 && dy < CS * 2.5;
+  _within(posA, posB, radius) {
+    const dx = posA.x - posB.x, dy = posA.y - posB.y;
+    return dx * dx + dy * dy < radius * radius;
+  }
+
+  _nearLitTorch(obj, mi) {
+    return mi.torches.some(t => t.lit && this._within(obj.position, t.position, TORCH_LIGHT_RADIUS));
   }
 
   _nearCell(player, cellPx, cellPy) {

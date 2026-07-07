@@ -1,14 +1,11 @@
 /**
- * Per-zone P-room puzzle definitions + key-item site configs.
+ * Per-zone P-room puzzle definitions.
  *
  * Each zone with an entry here gets a unique Level-2 puzzle in its P room
  * (PuzzleSystem owns generation and per-frame logic). Solving the puzzle
- * raises a PuzzleSpirit whose dialogue hints at the location of the zone's
- * key item — the item itself is placed elsewhere (KEY_ITEM_SITES) behind a
- * deep-water gate that only the dungeon Platform plank can cross.
+ * raises a PuzzleSpirit whose dialogue is a lore hint (see each `spirit.lines`).
  *
- * Zones without an entry fall back to a dormant stone circle (the puzzle
- * room can still be reached there via Sword-of-the-Letter exit cycling).
+ * Zones without an entry fall back to a dormant stone circle.
  *
  * Nothing here persists between runs — the hint lives in the player's head.
  */
@@ -79,35 +76,3 @@ export const DORMANT_PUZZLE = {
   stoneChar: '0',
   stoneColor: '#777777'
 };
-
-/**
- * Key-item sites — deterministic placements gated by deep water ('black
- * water', impassable without a Platform plank). KeyItemSystem.placeSites
- * applies these at room generation when zone + exitLetter match and the
- * per-run flag hasn't been set yet.
- */
-export const KEY_ITEM_SITES = {
-  // Sword of the Letter sleeps in a dull stone on a moated islet at the
-  // lake's largest node (L template node {11,12}). SPACE beside the stone
-  // draws it.
-  green: {
-    exitLetter: 'L',
-    item: '§',
-    takenFlag: 'swordDrawnThisRun',
-    isletCol: 11,
-    isletRow: 12,
-    stoneColor: '#9988aa'
-  },
-  // Spectacles wait on the far shore of the ocean, past a deep-water band.
-  yellow: {
-    exitLetter: 'O',
-    item: '⊙',
-    takenFlag: 'spectaclesTakenThisRun',
-    deepStartCol: 23,
-    deepEndCol: 24,
-    shoreCol: 28
-  }
-};
-
-export const DEEP_WATER_COLOR = '#102035';
-export const PLANK_COLOR = '#8b4513';

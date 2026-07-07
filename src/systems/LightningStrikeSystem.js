@@ -20,7 +20,7 @@
  */
 
 import { GRID } from '../game/GameConfig.js';
-import { planeOf } from './PlaneSystem.js';
+import { planeOf, inSamePlane } from './PlaneSystem.js';
 
 const FLASH_DURATION = 0.12;
 const DEFAULT_RADIUS = GRID.CELL_SIZE * 1.2;
@@ -107,13 +107,14 @@ export class LightningStrikeSystem {
       const dx = px - s.x;
       const dy = py - s.y;
       if (Math.sqrt(dx * dx + dy * dy) <= s.radius) {
-        game.player.takeDamage(s.damage);
+        const result = game.player.takeDamage(s.damage);
+        game.physicsSystem.applyDamageKnockback(game.player, result, s.x, s.y);
       }
     }
 
     // Strike on (or near) water: charge the body of water — the cascade
     // spreads tile-to-tile from the impact point at a fixed rate.
-    game.electricitySystem?.seedNear(s.x, s.y, s.radius, { hutPlane: s.hutPlane });
+    game.electricitySystem?.seedNear(s.x, s.y, s.radius, { initialCharge: s.electricityCharge, hutPlane: s.hutPlane });
 
     // Spark burst — simple particles with gravity, parabolic arc
     const sparks = createLightningSparks(s.x, s.y);
@@ -124,6 +125,61 @@ export class LightningStrikeSystem {
 
     // Audio — silently no-ops until a 'thunder' buffer is loaded
     game.audioSystem?.playSFX?.('thunder');
+  }
+
+  createChainLightning(source, hitEnemy, enemies) {
+    const game = this.game;
+    game.audioSystem?.playSFX('lightning');
+    const chainRange = 80;
+    const chainDamage = source.damage * 0.5;
+    const maxChains = source.chainCount || 3;
+
+    let chained = 0;
+    const alreadyHit = new Set([hitEnemy]);
+    let currentEnemy = hitEnemy;
+
+    while (chained < maxChains) {
+      let nearestEnemy = null;
+      let nearestDist = Infinity;
+      for (const enemy of enemies) {
+        if (alreadyHit.has(enemy)) continue;
+        if (!inSamePlane(hitEnemy, enemy)) continue;
+        const dx = enemy.position.x - currentEnemy.position.x;
+        const dy = enemy.position.y - currentEnemy.position.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < chainRange && dist < nearestDist) {
+          nearestEnemy = enemy;
+          nearestDist = dist;
+        }
+      }
+      if (!nearestEnemy) break;
+
+      const isWet = nearestEnemy.isWet && nearestEnemy.isWet();
+      const actualDamage = isWet ? chainDamage * 2 : chainDamage;
+      const stunDur = isWet ? 3.5 : 2.0;
+      nearestEnemy.takeDamage(actualDamage);
+      nearestEnemy.applyStatusEffect('zap', stunDur);
+      game.combatSystem.createDamageNumber(actualDamage, nearestEnemy.position.x, nearestEnemy.position.y, '#00ffff');
+      if (isWet) {
+        game.combatSystem.createDamageNumber('⚡', nearestEnemy.position.x, nearestEnemy.position.y - 12, '#ffff00');
+      }
+
+      const cs = (currentEnemy.width || GRID.CELL_SIZE) / 2;
+      const ns = (nearestEnemy.width || GRID.CELL_SIZE) / 2;
+      game.combatSystem.chainArcs.push({
+        x1: currentEnemy.position.x + cs,
+        y1: currentEnemy.position.y + cs,
+        x2: nearestEnemy.position.x + ns,
+        y2: nearestEnemy.position.y + ns,
+        color: isWet ? '#ffff66' : '#88ddff',
+        timer: 0.18,
+        duration: 0.18
+      });
+
+      alreadyHit.add(nearestEnemy);
+      currentEnemy = nearestEnemy;
+      chained++;
+    }
   }
 
   reset() {

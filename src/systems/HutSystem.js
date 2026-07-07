@@ -8,6 +8,8 @@ import { WiseFellow } from '../entities/WiseFellow.js';
 import { Fisherman } from '../entities/Fisherman.js';
 import { Witch } from '../entities/Witch.js';
 import { ErrandCharacter } from '../entities/ErrandCharacter.js';
+import { WeaponsMaster } from '../entities/WeaponsMaster.js';
+import { freezeSurfaceRoom, thawSurfaceRoom } from './PlaneSystem.js';
 
 /**
  * HutSystem — manages hut interior entry/exit and interior state.
@@ -21,9 +23,17 @@ import { ErrandCharacter } from '../entities/ErrandCharacter.js';
  */
 
 // Hut interior is intentionally small — a cozy 10×10 space (playable 8×8 cells).
-// Dungeon interiors (DungeonSystem) use the full 24×24 grid.
+// Dungeon interiors (DungeonSystem) use the full 24×24 grid. The Alchemy Hut
+// is larger (12×12, to fit its 3 stations + 2 bottles) but still reads as a
+// "hut" floor, not a dungeon — see isHutFloor().
 const INTERIOR_COLS = 10;
 const INTERIOR_ROWS = 10;
+
+// Any floor at or under this size is a hut interior (HutSystem.update/
+// nearInteriorExit/handleSpacePress all gate on this, not the literal 10×10
+// default) — matches the threshold HutInteriorOverlay.js already uses to
+// distinguish hut-style rendering from dungeon-style rendering.
+const isHutFloor = (floor) => floor != null && floor.gridCols <= 12;
 
 // Proximity radius for door interaction (px from door center)
 const DOOR_INTERACT_RADIUS = GRID.CELL_SIZE * 2;
@@ -35,9 +45,9 @@ export class HutSystem {
 
   // ─── Interior Generation ─────────────────────────────────────────────────
 
-  generateHutInterior(hutKind, depth) {
-    const cols = INTERIOR_COLS;
-    const rows = INTERIOR_ROWS;
+  generateHutInterior(hutKind, depth, sizeOverride = null) {
+    const cols = sizeOverride?.cols ?? INTERIOR_COLS;
+    const rows = sizeOverride?.rows ?? INTERIOR_ROWS;
 
     // Build collision map: border solid, interior open
     const collisionMap = [];
@@ -65,15 +75,42 @@ export class HutSystem {
 
     // ── Fixed-position background objects first ──
     // Oil press: any hut can roll one. Rate bumped 0.10 → 0.12 when the old
-    // guaranteed-press P room became the puzzle room.
+    // guaranteed-press P room became the puzzle room. Settlement's dedicated
+    // 'press' hut guarantees one instead (see branch below) and skips the
+    // random roll so it never gets a second; the Alchemy Hut never rolls one.
     // Placed BEFORE decor/bread so those spawn loops can reject the press cell.
-    const hasPress = Math.random() < 0.12;
-    if (hasPress) {
+    const hasPress = hutKind !== 'press' && hutKind !== 'alchemy' && Math.random() < 0.12;
+    if (hasPress || hutKind === 'press') {
       backgroundObjects.push(new BackgroundObject(
         '⊓',
         2 * GRID.CELL_SIZE,
         2 * GRID.CELL_SIZE
       ));
+    }
+
+    // Alchemy Hut: Water Trough (2x2, top-left), Cauldron (center, white),
+    // Condenser (lower-left, purple), 2 pre-placed Empty Bottles. Stations
+    // are read by AlchemySystem via proximity to these chars.
+    if (hutKind === 'alchemy') {
+      // Create 2x2 trough with still water appearance
+      for (let ty = 0; ty < 2; ty++) {
+        for (let tx = 0; tx < 2; tx++) {
+          const trough = new BackgroundObject('≈', (2 + tx) * GRID.CELL_SIZE, (2 + ty) * GRID.CELL_SIZE);
+          trough.isTrough = true;
+          // Gentle still water: light blue with subtle white tint for reflection
+          trough.color = '#5588dd';
+          trough.animationColor = '#5588dd';
+          backgroundObjects.push(trough);
+        }
+      }
+
+      const cauldron = new BackgroundObject('Ω', Math.floor(cols / 2) * GRID.CELL_SIZE, Math.floor(rows / 2) * GRID.CELL_SIZE);
+      cauldron.color = '#ffffff';
+      backgroundObjects.push(cauldron);
+
+      const condenser = new BackgroundObject('Ψ', 2 * GRID.CELL_SIZE, (rows - 4) * GRID.CELL_SIZE);
+      condenser.color = '#cc88ff';
+      backgroundObjects.push(condenser);
     }
 
     // Interior floor decor (very sparse — hut is small)
@@ -153,6 +190,12 @@ export class HutSystem {
       const centerRow = Math.floor(rows / 2) - 1;
       npcs.push(new Witch(centerCol * GRID.CELL_SIZE, centerRow * GRID.CELL_SIZE));
 
+    } else if (hutKind === 'weapons_master') {
+      // Weapons Master at interior center
+      const centerCol = Math.floor(cols / 2);
+      const centerRow = Math.floor(rows / 2) - 1;
+      npcs.push(new WeaponsMaster(centerCol * GRID.CELL_SIZE, centerRow * GRID.CELL_SIZE));
+
     } else if (hutKind === 'neutral_npc') {
       // Placeholder NPC: spawn the errand traveler. Seeds an errand if none active
       // so the room never feels empty.
@@ -180,7 +223,18 @@ export class HutSystem {
     // activeFloor.items and pushed into game.items on entry by _enterHut
     // (marked hutPlane).
     const breadItems = [];
-    if (hutKind !== 'witch' && Math.random() < 0.40) {
+    if (hutKind === 'alchemy') {
+      // 2 pre-placed Empty Bottles so the player can start brewing without
+      // already owning one.
+      let placed = 0;
+      for (let attempt = 0; placed < 2 && attempt < 24; attempt++) {
+        const col = 2 + Math.floor(Math.random() * (cols - 4));
+        const row = 2 + Math.floor(Math.random() * (rows - 5));
+        if (cellOccupied(col, row, breadItems)) continue;
+        breadItems.push(new Item('B', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
+        placed++;
+      }
+    } else if (hutKind !== 'witch' && Math.random() < 0.40) {
       const loafCount = 1 + (Math.random() < 0.15 ? 1 : 0);
       for (let i = 0; i < loafCount; i++) {
         for (let attempt = 0; attempt < 12; attempt++) {
@@ -240,16 +294,30 @@ export class HutSystem {
 
   // ─── Proximity Checks ────────────────────────────────────────────────────
 
-  /** Returns true if player is close enough to the exterior hut door to interact. */
-  nearExteriorDoor() {
+  /**
+   * Resolves which hut (if any) the player is near the exterior door of.
+   * Settlement rooms hold several huts (`room.huts`); every other hut-bearing
+   * room type still has the single `room.hut`. Normalizing here lets entry
+   * logic stay a single loop regardless of room shape.
+   */
+  _findNearbyHut() {
     const { game } = this;
-    if (!game.player || game.player.inHut) return false;
-    if (!game.currentRoom?.hut?.doorPosition) return false;
-    // Witch huts on chicken legs are inaccessible until SIT/SITDOWN lowers them.
-    if (game.currentRoom.hut.raised) return false;
-    if ((game.player._hutEntryCooldown ?? 0) > 0) return false;
-    const { col, row } = game.currentRoom.hut.doorPosition;
-    return this._nearCell(game.player, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+    if (!game.player || game.player.inHut) return null;
+    if ((game.player._hutEntryCooldown ?? 0) > 0) return null;
+    const huts = game.currentRoom?.huts ?? (game.currentRoom?.hut ? [game.currentRoom.hut] : []);
+    for (const hut of huts) {
+      if (!hut?.doorPosition) continue;
+      // Witch huts on chicken legs are inaccessible until SIT/SITDOWN lowers them.
+      if (hut.raised) continue;
+      const { col, row } = hut.doorPosition;
+      if (this._nearCell(game.player, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE)) return hut;
+    }
+    return null;
+  }
+
+  /** Returns true if player is close enough to any exterior hut door to interact. */
+  nearExteriorDoor() {
+    return !!this._findNearbyHut();
   }
 
   /**
@@ -379,7 +447,7 @@ export class HutSystem {
   nearInteriorExit() {
     const { game } = this;
     if (!game.player?.inHut || !game.activeFloor) return false;
-    if (game.activeFloor.gridCols !== INTERIOR_COLS) return false;
+    if (!isHutFloor(game.activeFloor)) return false;
     const { exitCol, exitRow } = game.activeFloor;
     return this._nearCell(game.player, exitCol * GRID.CELL_SIZE, exitRow * GRID.CELL_SIZE);
   }
@@ -397,13 +465,16 @@ export class HutSystem {
     if ((game.player._hutEntryCooldown ?? 0) > 0) return false;
 
     // Entry from exterior
-    if (!game.player.inHut && this.nearExteriorDoor()) {
-      this._enterHut();
-      return true;
+    if (!game.player.inHut) {
+      const hut = this._findNearbyHut();
+      if (hut) {
+        this._enterHut(hut);
+        return true;
+      }
     }
 
     // Exit from interior (hut only — dungeon handled by DungeonSystem)
-    if (game.player.inHut && game.activeFloor?.gridCols === INTERIOR_COLS && this.nearInteriorExit()) {
+    if (game.player.inHut && isHutFloor(game.activeFloor) && this.nearInteriorExit()) {
       this._exitHut();
       return true;
     }
@@ -413,9 +484,8 @@ export class HutSystem {
 
   // ─── Entry / Exit ────────────────────────────────────────────────────────
 
-  _enterHut() {
+  _enterHut(hut) {
     const { game } = this;
-    const hut = game.currentRoom.hut;
 
     // Save exterior position
     game.player.hutExitPosition = {
@@ -434,7 +504,8 @@ export class HutSystem {
       game.activeFloor = hut.interiorState;
     } else {
       const depth = game.getCurrentZoneDepth ? game.getCurrentZoneDepth() : 1;
-      game.activeFloor = this.generateHutInterior(hut.hutKind, depth);
+      const sizeOverride = hut.hutKind === 'alchemy' ? { cols: 12, rows: 12 } : null;
+      game.activeFloor = this.generateHutInterior(hut.hutKind, depth, sizeOverride);
       hut.interiorState = game.activeFloor;
       hut.interiorGenerated = true;
     }
@@ -463,9 +534,16 @@ export class HutSystem {
     game.player.position.x = game.activeFloor.spawnPoint.x;
     game.player.position.y = game.activeFloor.spawnPoint.y;
     game.player.inHut = true;
+    freezeSurfaceRoom(game);
 
     // Bring the camp companion (if any) along — snap it beside the player
     game.campNPCSystem?.snapCompanionToPlayer?.();
+    if (game.companion) {
+      // Sync collision map to the interior so the companion resolves walls
+      // correctly inside the hut (surface map has different geometry).
+      // Mirrors DungeonSystem._activateFloor's identical sync (bug #116).
+      game.companion.collisionMap = game.activeFloor.collisionMap;
+    }
 
     // Force background redraw so the overlay paints immediately
     game.renderer.backgroundDirty = true;
@@ -495,6 +573,7 @@ export class HutSystem {
       game.player.position.y = game.player.hutExitPosition.y;
     }
     game.player._hutEntryCooldown = 0.5;
+    game.player.hookedByMimic = null;
 
     // Restore player collision map to exterior room
     if (game.currentRoom?.collisionMap) {
@@ -502,9 +581,13 @@ export class HutSystem {
     }
 
     game.player.inHut = false;
+    thawSurfaceRoom(game);
 
     // Bring the companion back outside beside the player
     game.campNPCSystem?.snapCompanionToPlayer?.();
+    if (game.companion && game.currentRoom?.collisionMap) {
+      game.companion.collisionMap = game.currentRoom.collisionMap;
+    }
 
     // Clear hutPlane loot (ingredients/items spawned inside are abandoned on exit)
     game.ingredients = game.ingredients.filter(i => !i.hutPlane);
@@ -528,8 +611,8 @@ export class HutSystem {
     }
 
     if (game.player.inHut && game.activeFloor) {
-      // Only process if this is a hut interior (10 cols), not a dungeon (24 cols)
-      if (game.activeFloor.gridCols !== INTERIOR_COLS) return;
+      // Only process if this is a hut interior (10-12 cols), not a dungeon (24 cols)
+      if (!isHutFloor(game.activeFloor)) return;
 
       // Update interior enemies. The return value carries side-effect requests
       // (slime trail, fire/ice trail, goo spew, item attacks, aggro sound) that
@@ -545,7 +628,7 @@ export class HutSystem {
         const r = enemy.update(dt * PHYSICS.ENEMY_TIMER_RATE);
         enemy._frameUpdateResult = r;
         if (!r) continue;
-        if (r.justAggrod) game.audioSystem?.playSFX('aggro');
+        if (r.justAggrod) game.audioSystem?.playSFX(enemy.data?.sfx?.aggro ?? 'aggro');
         if (r.itemAttack) game.combatSystem.createEnemyAttack(r.itemAttack);
         if (r.shouldDropSlimeTrail) {
           const t = r.shouldDropSlimeTrail;

@@ -12,6 +12,7 @@
  */
 
 import { GRID } from '../game/GameConfig.js';
+import { isInteriorActive } from './PlaneSystem.js';
 
 const DIRECTIONS = [
   { dx:  0, dy: -1 }, // N
@@ -120,7 +121,7 @@ export class SandstormSystem {
     if (!this.active) return;
 
     const game = this.game;
-    const playerInside = !!(game.player && (game.player.inHut || game.player.inDungeon || game.player.inMaze));
+    const playerInside = isInteriorActive(game);
 
     if (!playerInside) {
       const p = game.player;

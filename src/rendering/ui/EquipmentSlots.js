@@ -111,10 +111,13 @@ export class EquipmentSlots {
       const isMagicMeter = meter?.active && meter.slots?.includes(i);
 
       if (isMagicMeter) {
-        // Magic-meter slot: violet brackets framing a fill block
-        const fillColor = _manaColor(meter.current, meter.max);
+        // Magic-meter slot: violet brackets framing a fill block. Fill is
+        // this slot's share of the cumulative pool (front slots fill first,
+        // back slots drain first) — see MagicSystem.getSlotFill.
+        const fill = game.magicSystem.getSlotFill(game.player, i);
+        const fillColor = _manaColor(fill.current, fill.max);
         this.renderer.drawCell(x - 1, y, '[', '#9966cc');
-        this.renderer.drawCell(x,     y, _manaBlock(meter.current, meter.max), fillColor);
+        this.renderer.drawCell(x,     y, _manaBlock(fill.current, fill.max), fillColor);
         this.renderer.drawCell(x + 1, y, ']', '#9966cc');
         continue;
       }
@@ -125,9 +128,10 @@ export class EquipmentSlots {
       // on the off-phase so the blink reads as "off/on" rather than a brighter
       // yellow on top of yellow (which is invisible against the base).
       const color = (shouldBlink && !blinkOn(consumableBlinkOffsets[i])) ? DARK_YELLOW : baseColor;
+      const char = equipped ? equipped.char : (isLocked ? ' ' : String(i + 4));
 
       this.renderer.drawCell(x - 1, y, '[', color);
-      this.renderer.drawCell(x,     y, ' ', color);
+      this.renderer.drawCell(x,     y, char, color);
       this.renderer.drawCell(x + 1, y, ']', color);
 
       if (!isLocked && equipped) {

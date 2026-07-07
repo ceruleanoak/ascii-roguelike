@@ -39,8 +39,8 @@ const STAGE_CONFIG = [
  *   2. Room cleared → onRoomClear(player): starts first errand, returns ErrandCharacter.
  *   3. Player re-enters any E room with active errand → main.js calls
  *      spawnErrandCharacter() after clearing enemies from the room.
- *   4. Player holds requested item (or ingredient), walks close, presses SHIFT →
- *      checkGive(player, neutralCharacters): removes item, returns reward data.
+ *   4. Player holds requested item (or ingredient), walks close, presses SPACE →
+ *      checkGive(player, neutralCharacters, inventorySystem): removes item, returns reward data.
  *   5. Stage advances (capped at 2); ErrandCharacter requests the next item.
  *   6. Death → resetOnDeath(): wipes state for a clean new run.
  */
@@ -87,10 +87,12 @@ export class ErrandSystem {
    *
    * @param {Player} player
    * @param {Array}  neutralCharacters  – game.neutralCharacters
+   * @param {InventorySystem} inventorySystem  – needed to check/consume equipped
+   *   or carried armor for stage 1-2 armor requests (not reachable via quickSlots)
    * @returns {{ rewardChar, x, y }|null}
    *   Non-null means a give occurred; caller should spawn the reward Item.
    */
-  checkGive(player, neutralCharacters) {
+  checkGive(player, neutralCharacters, inventorySystem) {
     if (!this.activeErrand) return null;
 
     const errandChar = neutralCharacters.find(nc => nc instanceof ErrandCharacter);
@@ -113,15 +115,28 @@ export class ErrandSystem {
       player.inventory.splice(idx, 1);
       givenChar = requestedChar;
     } else {
-      // Stages 1-2: consume from active quick slot
-      const heldItem = player.heldItem;
-      if (!heldItem || heldItem.char !== requestedChar) return null;
-      givenChar = heldItem.char;
-      player.quickSlots[player.activeSlotIndex] = null;
-      const nextFilled = player.quickSlots.findIndex(
-        (slot, idx) => idx !== player.activeSlotIndex && slot !== null
-      );
-      if (nextFilled !== -1) player.activeSlotIndex = nextFilled;
+      // Stages 1-2: item can be in any quick slot (not just the active one),
+      // equipped as armor, or sitting in the carried armor spares — scan all
+      // of them rather than only the active held item.
+      const slotIdx = player.quickSlots.findIndex(slot => slot?.char === requestedChar);
+      if (slotIdx !== -1) {
+        givenChar = requestedChar;
+        player.quickSlots[slotIdx] = null;
+        if (slotIdx === player.activeSlotIndex) {
+          const nextFilled = player.quickSlots.findIndex(
+            (slot, idx) => idx !== player.activeSlotIndex && slot !== null
+          );
+          if (nextFilled !== -1) player.activeSlotIndex = nextFilled;
+        }
+      } else if (inventorySystem?.equippedArmor?.char === requestedChar) {
+        givenChar = requestedChar;
+        inventorySystem.equippedArmor = null;
+      } else {
+        const armorIdx = inventorySystem?.armorInventory?.findIndex(a => a.char === requestedChar) ?? -1;
+        if (armorIdx === -1) return null;
+        givenChar = requestedChar;
+        inventorySystem.armorInventory.splice(armorIdx, 1);
+      }
     }
 
     // Collect reward before advancing stage

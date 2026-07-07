@@ -3,6 +3,7 @@ import { Puddle } from '../entities/Puddle.js';
 import { createActivationBurst, createEmberBurst, createIceBurst } from '../entities/Particle.js';
 import { GRID } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
+import { isInteriorActive } from './PlaneSystem.js';
 
 const MAX_CHARGE_TIME = 0.7; // seconds to reach max throw distance
 const MIN_DIST = GRID.CELL_SIZE;       // 16px — tap distance
@@ -39,6 +40,51 @@ function getThrowProfile(item) {
   return THROW_PROFILES[data.weaponSubtype] || THROW_PROFILES.default;
 }
 
+// Traps stack by char in chest storage instead of occupying separate slots.
+function mergeTrapIntoChest(arr, item) {
+  const amount = item.count || 1;
+  const existing = arr.find((i) => i !== item && i.char === item.char);
+  if (existing) {
+    existing.count = (existing.count || 1) + amount;
+    return;
+  }
+  item.count = amount;
+  arr.push(item);
+}
+
+// Splits one unit off a stacked trap entry: decrements in place and returns
+// a fresh Item instance for the caller to equip/place.
+function splitTrapFromStack(item) {
+  item.count -= 1;
+  return new Item(item.char, item.position.x, item.position.y);
+}
+
+// True if a trap of this char is already sitting in a quick slot — pickup
+// should stack into held count rather than contest a slot.
+export function trapAlreadyEquipped(player, item) {
+  return item.data.type === 'TRAP' && player.quickSlots.some((slot) => slot?.char === item.char);
+}
+
+// Chest storage helpers shared by InventorySystem — traps merge/split by
+// stack count, other item types behave as plain array entries.
+export function addItemToChestArray(arr, item) {
+  if (item?.data?.type === 'TRAP') mergeTrapIntoChest(arr, item);
+  else arr.push(item);
+}
+
+export function removeItemFromChestArray(arr, item) {
+  const idx = arr.indexOf(item);
+  if (idx === -1) return null;
+  if (item.data?.type === 'TRAP' && (item.count || 1) > 1) return splitTrapFromStack(item);
+  arr.splice(idx, 1);
+  return item;
+}
+
+export function chestEntryLabel(item) {
+  const suffix = item.data?.type === 'TRAP' && item.count > 1 ? ` x${item.count}` : '';
+  return `${item.char} - ${item.data.name}${suffix}`;
+}
+
 export class TrapSystem {
   constructor(game) {
     this.game = game;
@@ -56,6 +102,11 @@ export class TrapSystem {
   // Cancel charge without throwing (state change, death, etc.).
   cancelTrapCharge() {
     this.game.trapCharging = null;
+  }
+
+  update(deltaTime) {
+    this.updateTrapCharge(deltaTime);
+    this.updateInFlightTraps(deltaTime);
   }
 
   // Advance charge timer each frame.
@@ -113,7 +164,7 @@ export class TrapSystem {
     const v0 = Math.sqrt(2 * THROW_DECEL * dist);
     const profile = getThrowProfile(heldItem);
 
-    const interior = !!(game.player.inHut || game.player.inDungeon || game.player.inMaze);
+    const interior = isInteriorActive(game);
 
     if (armsOnLanding) {
       game.inFlightTraps.push({
@@ -166,7 +217,7 @@ export class TrapSystem {
   updateInFlightTraps(deltaTime) {
     const game = this.game;
     const C = GRID.CELL_SIZE;
-    const playerInInterior = !!(game.player?.inHut || game.player?.inDungeon || game.player?.inMaze);
+    const playerInInterior = isInteriorActive(game);
     for (let i = game.inFlightTraps.length - 1; i >= 0; i--) {
       const t = game.inFlightTraps[i];
       if ((t.interior === true) !== playerInInterior) continue;
@@ -342,14 +393,19 @@ export class TrapSystem {
       }
       t.hitEnemies.add(enemy);
 
-      // Pinning spear: carry the enemy with the spear instead of landing immediately
+      // Pinning spear (Trident only): carry the enemy with the spear instead of landing immediately
       if (t.weaponItem?.data?.pinning) {
         t.carriedEnemy = enemy;
         enemy.carriedBySpear = true;
         return;
       }
 
-      t.landed = true; // non-pinning weapon stops on first enemy
+      // All other spears root the hit enemy in place on impact — no carry, just pin.
+      if (t.weaponItem?.data?.weaponSubtype === 'spear') {
+        enemy.pinnedDuration = 2.0;
+      }
+
+      t.landed = true; // spear/non-spear alike stop on first enemy hit
       t.x = ex;
       t.y = ey;
       return;
@@ -455,7 +511,7 @@ export class TrapSystem {
     if (!game.currentRoom) return;
     const enemies = this._getActiveEnemies();
     game.activeNoiseSource = null; // reset each frame
-    const playerInInterior = !!(game.player?.inHut || game.player?.inDungeon || game.player?.inMaze);
+    const playerInInterior = isInteriorActive(game);
 
     for (let i = game.placedTraps.length - 1; i >= 0; i--) {
       const entry = game.placedTraps[i];
@@ -637,7 +693,7 @@ export class TrapSystem {
       const room = game.activeRoom;
       if (room?.backgroundObjects) {
         // Structural/special chars that shouldn't be visually frozen
-        const SKIP_FREEZE = new Set(['!', '$', '.', '-', 'I', '<', '>', '^', 'v', '≡', '∩', '2', '3', '}', 'x']);
+        const SKIP_FREEZE = new Set(['!', '$', '.', '-', 'I', '<', '>', '^', 'v', '≡', '∩', '5', '3', '}', 'x']);
         const newObjects = [];
 
         for (const obj of room.backgroundObjects) {
@@ -730,8 +786,9 @@ export class TrapSystem {
         const pdx = (game.player.position.x + GRID.CELL_SIZE / 2) - cx;
         const pdy = (game.player.position.y + GRID.CELL_SIZE / 2) - cy;
         if (Math.sqrt(pdx * pdx + pdy * pdy) <= r) {
-          game.player.takeDamage(dmg, { type: 'explosion' });
+          const result = game.player.takeDamage(dmg, { type: 'explosion' });
           game.combatSystem.createDamageNumber(dmg, game.player.position.x, game.player.position.y, '#ff6600');
+          game.physicsSystem.applyDamageKnockback(game.player, result, cx, cy, 300);
         }
       }
       // Radial fire particle burst
