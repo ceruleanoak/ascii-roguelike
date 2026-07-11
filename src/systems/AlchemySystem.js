@@ -99,6 +99,28 @@ export class AlchemySystem {
       this.revealCondenser();
       return true;
     }
+    if (this.nearHotSpring()) {
+      this.fillHotWaterBottle();
+      return true;
+    }
+    return false;
+  }
+
+  // Red Zone caldera hot spring — outdoor equivalent of the hut trough.
+  // Unlike _nearStation, this checks the active outdoor/interior background
+  // objects directly (not hut-gated) for a '~' tile with typeId 'hot_water'.
+  nearHotSpring() {
+    const game = this.game;
+    const C = GRID.CELL_SIZE;
+    const px = game.player.position.x + C / 2;
+    const py = game.player.position.y + C / 2;
+    for (const obj of game._activeBackgroundObjects()) {
+      if (obj.typeId !== 'hot_water' || obj.destroyed) continue;
+      const cx = obj.position.x + C / 2;
+      const cy = obj.position.y + C / 2;
+      const dx = px - cx, dy = py - cy;
+      if (Math.sqrt(dx * dx + dy * dy) < INTERACT_RADIUS) return true;
+    }
     return false;
   }
 
@@ -114,6 +136,25 @@ export class AlchemySystem {
     }
     game.inventorySystem.replaceConsumableSlot(slotIndex, '🜉');
     game.menuSystem.showPickupMessage('BOTTLE OF WATER');
+    game.audioSystem?.playSFX?.('pickup');
+    game.updateUI();
+  }
+
+  // ─── Caldera Hot Spring ──────────────────────────────────────────────────
+
+  fillHotWaterBottle() {
+    const game = this.game;
+    const slots = game.player.equippedConsumables;
+    const slotIndex = slots?.findIndex(s => s?.char === 'B') ?? -1;
+    if (slotIndex === -1) {
+      game.menuSystem.showPickupMessage('NO EMPTY BOTTLE EQUIPPED');
+      return;
+    }
+    game.inventorySystem.replaceConsumableSlot(slotIndex, '🜊');
+    // Reverts to a regular Bottle of Water after 3 room exits — decremented
+    // in main.js's room-transition reset block.
+    game.player.equippedConsumables[slotIndex].hotWaterRoomsLeft = 3;
+    game.menuSystem.showPickupMessage('BOTTLE OF HOT WATER');
     game.audioSystem?.playSFX?.('pickup');
     game.updateUI();
   }

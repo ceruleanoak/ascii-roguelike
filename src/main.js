@@ -252,9 +252,6 @@ class Game {
     this.dungeonCurrentFloor = -1; // -1 = not in dungeon
     this.companion = null;         // Active camp NPC companion (promoted from room.campNPC)
 
-    // Tracks which zone's music is currently loaded (for zone-specific music switching)
-    this.currentMusicZone = 'green';
-
     // Pre-boss gate: set at depth 14 room clear, cleared on room transition
     this.preBossGateActive = false;
     this.preMinibossGateActive = false;
@@ -852,7 +849,7 @@ class Game {
     this.items = [];
     this.ingredients = [];
     this.placedTraps = [];
-    this.currentMusicZone = 'green';
+    this.audioSystem.currentMusicZone = 'green';
     this.preBossGateActive = false;
     this.preMinibossGateActive = false;
     this.knownSpells?.clear?.();
@@ -1159,7 +1156,7 @@ class Game {
       this.audioSystem.stopBossMusic(); // mode → 'dual', isPlaying = false
       this.preBossGateActive = false;
       this.preMinibossGateActive = false;
-      this.currentMusicZone = 'green';
+      this.audioSystem.currentMusicZone = 'green';
       const base = import.meta.env.BASE_URL;
       this.audioSystem.switchMusic(
         `${base}assets/audio/layer1.mp3`,
@@ -2008,6 +2005,16 @@ class Game {
       }
     }
 
+    // Bottle of Hot Water reverts to a regular Bottle of Water after 3 room
+    // exits (caldera capture — see AlchemySystem.fillHotWaterBottle).
+    this.player.equippedConsumables?.forEach((item, idx) => {
+      if (!item || item.hotWaterRoomsLeft === undefined) return;
+      item.hotWaterRoomsLeft -= 1;
+      if (item.hotWaterRoomsLeft <= 0) {
+        this.inventorySystem.replaceConsumableSlot(idx, '🜉');
+      }
+    });
+
     // Apply equipment effects
     this.applyEquipmentEffects();
 
@@ -2019,7 +2026,7 @@ class Game {
     // Leshy chase rooms will get shaking bush AFTER clearing (same as first encounter)
 
     // Switch music based on zone (covers all entry paths: new room, restore, and leavingRest)
-    this.switchZoneMusic(this.currentRoom?.zone || 'green');
+    this.audioSystem.switchZoneMusic(this.currentRoom?.zone || 'green', import.meta.env.BASE_URL);
 
     // Set layer 2 (bassline) based on enemy presence
     // Always check for enemies, regardless of how we entered EXPLORE
@@ -2469,6 +2476,8 @@ class Game {
 
     // Update player state (i-frames, dodge roll, wet, burn DoT, etc)
     const playerUpdateResult = this.player.update(deltaTime);
+    // Shark Mask dive (auto-ends on timer expire or leaving water)
+    this.characterSystem.updateSharkDive(this.player, deltaTime);
 
     // Handle burn DoT damage
     let burnKilledPlayer = false;
@@ -2792,7 +2801,7 @@ class Game {
     }
 
     // Update physics — collision source follows activeRoom (interior takes priority)
-    const waterResults = this.physicsSystem.update(deltaTime, this._activeBackgroundObjects(), this.activeRoom);
+    const waterResults = this.physicsSystem.update(deltaTime, this._activeBackgroundObjects(), this.activeRoom, this.combatSystem);
 
     // Soft contact: gently separate player from overlapping enemies to prevent stacking
     if (!this.player.inHut && !this.player.inDungeon && !this.player.inMaze) {
@@ -2801,6 +2810,10 @@ class Game {
 
     // Knocked-away chain: enemies sent flying bowl over enemies they hit
     this.physicsSystem.propagateKnockAway(this.currentRoom.enemies);
+
+    // Speed collisions: fast-moving enemies that ram another enemy deal
+    // damage and knockback (wall ricochets are handled in physicsSystem.update)
+    this.physicsSystem.resolveSpeedCollisions(this.currentRoom.enemies, this.combatSystem);
 
     // Apply liquid results: lava destroys ingredients/items + ticks damage;
     // water applies bob/wet/status effects. True return = lava killed player.
@@ -4110,7 +4123,7 @@ class Game {
 
     // Reset all zone depths on death
     this.zoneDepths = freshZoneDepths();
-    this.currentMusicZone = 'green';
+    this.audioSystem.currentMusicZone = 'green';
 
     // Clear held items on death (but keep crafting slots)
     this.inventorySystem.restQuickSlots = [null, null, null];
@@ -4415,6 +4428,11 @@ class Game {
         this.neutralCharacters.push(room.lakeFisherman);
       }
 
+      // Rare Red Zone caldera Weapons Master
+      if (room.calderaWeaponsMaster) {
+        this.neutralCharacters.push(room.calderaWeaponsMaster);
+      }
+
       // Errand room: active errand + E room clears enemies and spawns the
       // traveler immediately (they remember what they wanted last time)
       if (this.errandSystem.activeErrand && room.exitLetter === 'E') {
@@ -4487,32 +4505,6 @@ class Game {
     this.renderer.markBackgroundDirty();
   }
 
-  // Zone-music switcher shared by enterExploreState and handleZoneTeleport
-  // (was hand-copied; same warp/natural-divergence category as applyRoomSwap).
-  // Skipped while boss sequence mode is active (anticipation or full fight).
-  switchZoneMusic(zone) {
-    if (this.audioSystem.mode !== 'dual' && this.audioSystem.mode !== 'red') return;
-    const base = import.meta.env.BASE_URL;
-    if (zone === 'red' && this.currentMusicZone !== 'red') {
-      if (this.audioSystem.switchToRedSequence()) {
-        this.currentMusicZone = 'red';
-      }
-    } else if (zone === 'cyan' && this.currentMusicZone !== 'cyan') {
-      this.currentMusicZone = 'cyan';
-      this.audioSystem.switchMusic(
-        `${base}assets/audio/cyan-layer1.mp3`,
-        `${base}assets/audio/cyan-layer2.mp3`
-      );
-    } else if (zone !== 'cyan' && zone !== 'red'
-               && (this.currentMusicZone === 'cyan' || this.currentMusicZone === 'red')) {
-      this.currentMusicZone = 'green';
-      this.audioSystem.switchMusic(
-        `${base}assets/audio/layer1.mp3`,
-        `${base}assets/audio/layer2.mp3`
-      );
-    }
-  }
-
   handleZoneTeleport(targetZone) {
     console.log(`[CHEAT] Teleporting to ${targetZone} zone`);
 
@@ -4556,7 +4548,7 @@ class Game {
     this.applyRoomSwap(newRoom);
 
     // Switch music if entering/leaving a zone with custom music
-    this.switchZoneMusic(targetZone);
+    this.audioSystem.switchZoneMusic(targetZone, import.meta.env.BASE_URL);
 
     // Update UI
     this.updateUI();

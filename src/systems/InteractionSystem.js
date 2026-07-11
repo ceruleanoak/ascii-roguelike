@@ -527,7 +527,13 @@ export class InteractionSystem {
 
       obj.destroyAfterAnimation = true;
       game.renderer.markBackgroundDirty();
-      game.lootSystem.spawnIngredientDrop(ingredientChar, obj.position.x, obj.position.y, null, obj);
+      // Not always an ingredient char — e.g. the caldera Ember Bush drops the
+      // Unicode/CONSUMABLE Fire Berry, which needs the Item pickup pipeline.
+      if (isIngredient(ingredientChar)) {
+        game.lootSystem.spawnIngredientDrop(ingredientChar, obj.position.x, obj.position.y, null, obj);
+      } else {
+        game.lootSystem.spawnItemDrop(ingredientChar, obj.position.x, obj.position.y, null, obj);
+      }
 
       // Tree harvest mirrors rockHarvest: guaranteed Stick above, plus a 15%
       // sap bonus (red/cyan zones carry rare elemental saps; others common ŝ).
@@ -599,8 +605,8 @@ export class InteractionSystem {
         } else if (roll < 0.0013) {
           // Very rare: coin
           game.lootSystem.spawnIngredientDrop('c', obj.position.x, obj.position.y, null, obj);
-        } else if (roll < 0.01) {
-          // Uncommon: beast lurking in the grass
+        } else if (roll < 0.00739) {
+          // Uncommon: beast lurking in the grass (spawn chance reduced 30% from baseline)
           if (game.currentRoom.enemies.length < 10) {
             const beastChar = getZoneRandomEnemy(game.currentDepth, game.currentRoom?.zone);
             const spawned = game.roomGenerator.spawnEnemiesFrom(game, obj, {
@@ -611,15 +617,21 @@ export class InteractionSystem {
             });
             game.currentRoom.enemies.push(...spawned);
           }
-        } else if (roll < 0.0144) {
+        } else if (roll < 0.01179) {
           // Uncommon: stick
           game.lootSystem.spawnIngredientDrop('|', obj.position.x, obj.position.y, null, obj);
-        } else if (roll < 0.0188) {
+        } else if (roll < 0.01619) {
           // Uncommon: rock
           game.lootSystem.spawnIngredientDrop('0', obj.position.x, obj.position.y, null, obj);
-        } else if (roll < 0.0219) {
+        } else if (roll < 0.01929) {
           // Uncommon: pollen (raw oil)
           game.lootSystem.spawnIngredientDrop('ł', obj.position.x, obj.position.y, null, obj);
+        } else if (roll < 0.01979) {
+          // Rare: axe head
+          game.lootSystem.spawnIngredientDrop('⊿', obj.position.x, obj.position.y, null, obj);
+        } else if (roll < 0.02029) {
+          // Rare: arrowhead
+          game.lootSystem.spawnIngredientDrop('△', obj.position.x, obj.position.y, null, obj);
         }
       }
       // Fairy grass: blade-cut releases the fairy. Multiple grass tiles in the

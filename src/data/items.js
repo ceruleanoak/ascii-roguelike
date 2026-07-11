@@ -61,7 +61,7 @@ export const ITEMS = {
     damage: 1,
     cooldown: 2,
     windup: .5,
-    bulletSpeed: 200,
+    bulletSpeed: 400,
     bulletSize: 0.6,
     bulletRange: 240,
     maxUses: 5,
@@ -130,9 +130,7 @@ export const ITEMS = {
     loopRadius: 10,
     loopLinearSpeed: 130,
     accuracy: 0.9,
-    maxUses: 6,
-    reloadTime: 7,
-    reloadType: 'magazine',
+    maxUses: null,
     color: '#bb88ff'
   },
 
@@ -679,9 +677,9 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'dagger',
-    damage: 3,
-    windup: 0.2,
-    recovery: 0.4,
+    damage: 1,
+    windup: 0.4,
+    recovery: 0.6,
     patternSpeed: 0.05,
     range: 20,
     onHit: 'poison',
@@ -1110,7 +1108,7 @@ export const ITEMS = {
     weaponSubtype: 'bat',
     batCharge: true,
     damage: 0,
-    chargeTime: 2.4,
+    chargeTime: 1.4,
     recovery: 0.9,
     meleeChar: '❙',
     range: 20,
@@ -1230,9 +1228,9 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'dagger',
-    damage: 3,
-    windup: 0.2,
-    recovery: 0.4,
+    damage: 1,
+    windup: 0.4,
+    recovery: 0.6,
     range: 20,
     patternSpeed: 0.05,
     lifesteal: 1.0,
@@ -1718,6 +1716,23 @@ export const ITEMS = {
     autoTriggerHP: 0.18,
     color: '#aa4422'
   },
+  // Dropped by cutting a Red Zone caldera Ember Bush. Unicode/CONSUMABLE
+  // (not the letter/digit ingredient tier) because it needs full consumable
+  // behavior: passive torch-light while equipped+unspent (fireBerryLight,
+  // see InventorySystem.applyEquipmentEffectsToPlayer) plus a manual-only
+  // heal-and-consume. autoTriggerHP: 0 disables the emergency auto-trigger
+  // entirely — manual SPACE-consume still bypasses the threshold check.
+  '❋': {
+    char: '❋',
+    name: 'Fire Berry',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'heal',
+    amount: 1,
+    oneShot: true,
+    autoTriggerHP: 0,
+    fireBerryLight: true,
+    color: '#ff6633'
+  },
   'z': {
     char: 'z', name: 'Mending Brew', type: ITEM_TYPES.CONSUMABLE,
     effect: 'regen', permanentUntilRoomExit: true, regenAmount: 1, regenInterval: 1.0, oneShot: true,
@@ -2062,6 +2077,17 @@ export const ITEMS = {
     type: ITEM_TYPES.CONSUMABLE,
     effect: 'cauldronInput',
     color: '#aaddff'
+  },
+  // 'Bottle of Hot Water' — filled at the Red Zone caldera's hot spring
+  // (equipped Empty Bottle + interact, see AlchemySystem.fillHotWaterBottle).
+  // Reverts to a regular Bottle of Water after 3 room exits (instance field
+  // hotWaterRoomsLeft, decremented in main.js's room-transition reset block).
+  '🜊': {
+    char: '🜊',
+    name: 'Bottle of Hot Water',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'cauldronInput',
+    color: '#ff8855'
   },
   // Starter potions (Alchemy Cauldron stage 1: Bottle of Water + raw
   // ingredient). Base Potion 'G' (above, in the main potion block) is the
@@ -2843,24 +2869,27 @@ export function getWeightedRandomFromPool(rarityPool, weights = {}) {
 
   const finalWeights = { ...defaultWeights, ...weights };
 
-  // Build weighted array of all possible drops
-  const weightedItems = [];
+  // Cumulative-weight selection: each char's share of the total is its exact
+  // fractional weight, so profiles like weak.RARE = 0.02 stay meaningful
+  // instead of rounding away to zero (bug #65).
+  const entries = [];
+  let total = 0;
 
   for (const [rarity, chars] of Object.entries(rarityPool)) {
     const weight = finalWeights[rarity] || 0;
     const baseWeight = RARITY_WEIGHTS[rarity] || 1;
-    const finalWeight = Math.round(baseWeight * weight);
+    const finalWeight = baseWeight * weight;
+    if (finalWeight <= 0) continue;
 
-    // Add each char multiple times based on weight
     for (const char of chars) {
-      for (let i = 0; i < finalWeight; i++) {
-        weightedItems.push(char);
-      }
+      total += finalWeight;
+      entries.push({ char, cumulative: total });
     }
   }
 
-  if (weightedItems.length === 0) return null;
-  return weightedItems[Math.floor(Math.random() * weightedItems.length)];
+  if (total <= 0) return null;
+  const roll = Math.random() * total;
+  return entries.find(entry => roll < entry.cumulative).char;
 }
 
 /**

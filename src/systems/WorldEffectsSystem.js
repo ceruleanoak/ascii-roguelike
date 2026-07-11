@@ -6,6 +6,29 @@ import { createFootstep, createWetDrop, createSteamPuff, createChaff } from '../
 const MAX_GOO_BLOBS = 20;
 const IDLE_ECHO_DURATION = 0.5; // seconds — must match the radius/alpha envelope in RestRenderer
 
+// Rapidly interpolate `entity._concealmentAlpha` toward 1 (visible) or 0
+// (hidden). Smooths the transition when a player or enemy steps in or out
+// of grass cover so visibility doesn't pop. ~0.125s for a full transition.
+// Pure per-entity timer, not tied to a game instance — exported standalone
+// so renderers can call it without routing through the system instance.
+export function stepConcealmentAlpha(entity, targetVisible) {
+  const now = performance.now() / 1000;
+  const FADE_SPEED = 8;
+  if (entity._concealmentAlpha === undefined) {
+    entity._concealmentAlpha = targetVisible ? 1 : 0;
+    entity._concealmentLastT = now;
+    return entity._concealmentAlpha;
+  }
+  const dt = Math.max(0, Math.min(0.1, now - entity._concealmentLastT));
+  entity._concealmentLastT = now;
+  const target = targetVisible ? 1 : 0;
+  const diff = target - entity._concealmentAlpha;
+  const maxStep = FADE_SPEED * dt;
+  if (Math.abs(diff) <= maxStep) entity._concealmentAlpha = target;
+  else entity._concealmentAlpha += Math.sign(diff) * maxStep;
+  return entity._concealmentAlpha;
+}
+
 // Shared transient world-effect ticker — runs in REST and EXPLORE alike.
 // Owns the per-frame lifecycle of: ember stack decay + ember contact ignition,
 // particles, timed puddles, enemy shockwave rings, goo blobs (incl. slime
@@ -34,6 +57,21 @@ export class WorldEffectsSystem {
         color: '#ffe566',
         hutPlane: !!game.activeFloor
       });
+    }
+
+    // Caldera hot spring: occasional ambient steam puff off a random pool tile.
+    // Minimal/rare by design — a decorative tell, not a hazard indicator.
+    game._hotSpringSteamTimer = (game._hotSpringSteamTimer ?? 3) - deltaTime;
+    if (game._hotSpringSteamTimer <= 0) {
+      game._hotSpringSteamTimer = 3 + Math.random() * 4;
+      const hotWaterTiles = game._activeBackgroundObjects().filter(o => o.typeId === 'hot_water');
+      if (hotWaterTiles.length > 0) {
+        const tile = hotWaterTiles[Math.floor(Math.random() * hotWaterTiles.length)];
+        game.particles.push(createSteamPuff(
+          tile.position.x + GRID.CELL_SIZE / 2,
+          tile.position.y + GRID.CELL_SIZE / 2
+        ));
+      }
     }
 
     // Decay ember stacks and cooldowns each frame

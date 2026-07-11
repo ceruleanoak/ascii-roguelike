@@ -1,7 +1,7 @@
 import { GRID } from '../../game/GameConfig.js';
 import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher.js';
 import { drawInteriorFrame } from './interiorFrame.js';
-import { isWieldingTorch, drawPlayerTorchLight } from './torchLight.js';
+import { hasTorchLight, drawPlayerTorchLight } from './torchLight.js';
 
 /**
  * HutInteriorOverlay — picture-in-picture rendering for both Hut and Dungeon interiors.
@@ -189,7 +189,7 @@ export class HutInteriorOverlay {
     this.renderController.exploreRenderer._drawWires(game, true);
 
     // ── 15c. Torch light (cosmetic glow when Torch equipped) ───────────────────
-    if (isWieldingTorch(game)) {
+    if (hasTorchLight(game)) {
       drawPlayerTorchLight(
         this.renderer,
         game.player.position.x + GRID.CELL_SIZE / 2,
@@ -225,6 +225,7 @@ export class HutInteriorOverlay {
 
     // ── 16d. Trap throw reticule + in-flight throwables (interior plane) ──────
     this.renderController.exploreRenderer.drawTrapReticule(game);
+    this.renderController.exploreRenderer.drawThrowPreview(game);
     this.renderController.exploreRenderer.drawInFlightTraps(game, true);
 
     // ── 17. Bow charge indicator (reads game.player.position — offset applies) ─

@@ -1,6 +1,22 @@
 import { getPotionEffectParams } from '../data/alchemy.js';
 import { GAME_STATES } from '../game/GameConfig.js';
 
+// Every consumable use is a throw: the item arcs up and lands before its
+// effect resolves (checkTriggerCondition only gates whether it CAN fire;
+// applyEffect() does the actual mutation once the throw animation lands).
+// A uniform windup duration doubles as the flight time for self-targeted
+// items (heal, buffs, etc) — the offensive items below keep their own
+// tuned windup/flight times.
+const THROW_DURATION = 0.45;
+
+// Effect types with no AoE landing zone — the windup renderer skips the
+// pulsing radius ring for these (they always resolve on the player).
+const SELF_ONLY_EFFECTS = new Set([
+  'heal', 'manaSlot', 'maxhp', 'speed', 'block', 'cleanse', 'invuln',
+  'shield', 'bulwark', 'waterImmunity', 'float', 'stoneskin', 'regen',
+  'damageBuff', 'auto_dodge', 'arrowRefill',
+]);
+
 // Evaluates and dispatches consumable trigger conditions (auto and manual),
 // and owns the keys-4-8-select / SPACE-fires manual consumable flow.
 // Auto-trigger = emergency gate; manual (SPACE) trigger = tactics, bypasses
@@ -30,16 +46,13 @@ export class ConsumableTriggerSystem {
     const validState = state === GAME_STATES.EXPLORE || state === GAME_STATES.REST
       || state === GAME_STATES.NEUTRAL || state === GAME_STATES.ARCADE_DEMO;
     if (!validState || (game.player?.selectedConsumableIndex ?? -1) < 0) return false;
-    this.manualTrigger(
-      game.player.selectedConsumableIndex, game.player, game.currentRoom,
-      game.combatSystem, game.steamClouds, game.particles
-    );
+    this.manualTrigger(game.player.selectedConsumableIndex, game.player, game.currentRoom);
     game.player.selectedConsumableIndex = -1;
     game.updateUI();
     return true;
   }
 
-  manualTrigger(slotIndex, player, currentRoom, combatSystem, steamClouds, particles) {
+  manualTrigger(slotIndex, player, currentRoom) {
     const inv = this.game.inventorySystem;
     const consumable = player.equippedConsumables?.[slotIndex];
     if (!consumable) return false;
@@ -50,44 +63,40 @@ export class ConsumableTriggerSystem {
     const cd = consumable.data;
     if (cd.oilEffect) return false;
 
-    const result = this.checkTriggerCondition(cd, player, currentRoom, steamClouds, consumable, true);
+    const result = this.checkTriggerCondition(cd, player, currentRoom, consumable, true);
     if (!result) return false;
 
     const triggerData = result.windup ? result : null;
-    inv._triggerConsumable(slotIndex, consumable, triggerData, player, combatSystem, particles);
+    inv._triggerConsumable(slotIndex, consumable, triggerData, player);
     return true;
   }
 
   // `manual` bypasses HP/proximity/count emergency gates (manual trigger =
   // tactics), but NOT physical preconditions like liquid contact or an empty
   // bow slot — those stay absolute.
-  checkTriggerCondition(cd, player, currentRoom, steamClouds, consumable, manual = false) {
+  checkTriggerCondition(cd, player, currentRoom, consumable, manual = false) {
     const enemies = currentRoom ? currentRoom.enemies : [];
 
     switch (cd.effect) {
       case 'heal': {
         const threshold = cd.autoTriggerHP !== undefined ? cd.autoTriggerHP : (cd.amount >= 10 ? 0.25 : 0.5);
         if (manual || player.hp < player.maxHp * threshold) {
-          const modifier = consumable?.potionModifier ?? cd.potionModifier;
-          const params = getPotionEffectParams(consumable?.char || cd.char, modifier);
-          player.heal(params?.amount ?? cd.amount);
-          if (params?.isUnstableBadRoll) player.takeDamage?.(Math.abs(Math.round(params.unstableRoll) - cd.amount));
-          return true;
+          return { windup: THROW_DURATION, effectType: 'heal' };
         }
         return false;
       }
-      case 'manaSlot': return this.game.magicSystem.grantTempManaSlot(player, cd);
+      case 'manaSlot': {
+        if (player?.magicMeter?.active) return false;
+        return { windup: THROW_DURATION, effectType: 'manaSlot' };
+      }
       case 'maxhp': {
-        // Dragon Heart: immediately on first active frame
-        player.maxHp += cd.amount;
-        player.hp = player.maxHp;
-        return true;
+        // Dragon Heart
+        return { windup: THROW_DURATION, effectType: 'maxhp' };
       }
       case 'speed': {
         const threshold = cd.autoTriggerHP !== undefined ? cd.autoTriggerHP : 0.4;
         if (manual || player.hp < player.maxHp * threshold) {
-          player.applySpeedBoost(cd.duration || 8);
-          return true;
+          return { windup: THROW_DURATION, effectType: 'speed' };
         }
         return false;
       }
@@ -129,8 +138,7 @@ export class ConsumableTriggerSystem {
         // Metal Block: HP < threshold (emergency); manual bypasses
         const blockThreshold = cd.autoTriggerHP ?? 0.30;
         if (manual || player.hp < player.maxHp * blockThreshold) {
-          player.applyBlockBoost(8, 5);
-          return true;
+          return { windup: THROW_DURATION, effectType: 'block' };
         }
         return false;
       }
@@ -167,30 +175,14 @@ export class ConsumableTriggerSystem {
       case 'cleanse': {
         // Tonic: player has burn or wet; manual force-cleanses regardless
         if (manual || player.burnDuration > 0 || player.wetDuration > 0) {
-          player.burnDuration = 0;
-          player.wetDuration = 0;
-          return true;
+          return { windup: THROW_DURATION, effectType: 'cleanse' };
         }
         return false;
       }
       case 'invuln': {
         // Smoke Bomb: HP < 25%
         if (manual || player.hp < player.maxHp * 0.25) {
-          const duration = cd.duration || 3.5;
-          player.invulnerabilityTimer = Math.max(player.invulnerabilityTimer, duration);
-
-          // Create smoke cloud — only push when the caller provided a valid array.
-          // Rebinding the local parameter has no effect on the caller's reference.
-          if (steamClouds) {
-            steamClouds.push({
-              x: player.position.x + 20,
-              y: player.position.y + 20,
-              radius: 20 * 3.5, // GRID.CELL_SIZE * 3.5
-              timer: duration
-            });
-          }
-
-          return true;
+          return { windup: THROW_DURATION, effectType: 'invuln' };
         }
         return false;
       }
@@ -233,26 +225,16 @@ export class ConsumableTriggerSystem {
         };
       }
       case 'shield': {
-        // Activates immediately — grants bullet-blocking charges
+        // Grants bullet-blocking charges once the throw lands
         if (player.shieldMaxCharges === 0) {
-          player.shieldCharges = cd.charges || 3;
-          player.shieldMaxCharges = cd.charges || 3;
-          player.shieldCooldownMax = cd.rechargeCooldown || 5;
-          player.shieldCooldown = 0;
-          player.shieldBlocksAll = false;
-          return true;
+          return { windup: THROW_DURATION, effectType: 'shield' };
         }
         return false;
       }
       case 'bulwark': {
-        // Activates immediately — grants all-hit-blocking charges
+        // Grants all-hit-blocking charges once the throw lands
         if (player.shieldMaxCharges === 0) {
-          player.shieldCharges = cd.charges || 2;
-          player.shieldMaxCharges = cd.charges || 2;
-          player.shieldCooldownMax = cd.rechargeCooldown || 8;
-          player.shieldCooldown = 0;
-          player.shieldBlocksAll = true;
-          return true;
+          return { windup: THROW_DURATION, effectType: 'bulwark' };
         }
         return false;
       }
@@ -260,14 +242,12 @@ export class ConsumableTriggerSystem {
         // Rubber Boots: only makes sense in liquid — a physical precondition,
         // not an emergency gate, so this stays absolute even under manual.
         if (!player.inLiquid && !player.inDamagingLiquid) return false;
-        player.waterImmunityTimer = cd.duration;
-        return true;
+        return { windup: THROW_DURATION, effectType: 'waterImmunity' };
       }
       case 'float': {
         // Floating Boots: same physical-precondition exception as waterImmunity.
         if (!player.inLiquid && !player.inDamagingLiquid) return false;
-        player.floatTimer = cd.duration;
-        return true;
+        return { windup: THROW_DURATION, effectType: 'float' };
       }
       case 'throwSteam': {
         // Steam Vial: creates a steam cloud — START WINDUP
@@ -285,39 +265,25 @@ export class ConsumableTriggerSystem {
       case 'stoneskin': {
         const threshold = cd.autoTrigger?.criticalHP ?? 0.20;
         if (manual || player.hp < player.maxHp * threshold) {
-          const modifier = consumable?.potionModifier ?? cd.potionModifier;
-          const params = getPotionEffectParams(consumable?.char || cd.char, modifier);
-          player.applyStoneSkin(cd.duration || 10, params?.defenseBonus ?? cd.defenseBonus ?? 3);
-          return true;
+          return { windup: THROW_DURATION, effectType: 'stoneskin' };
         }
         return false;
       }
       case 'regen': {
         const threshold = cd.autoTriggerHP ?? 0.50;
         if (manual || player.hp < player.maxHp * threshold) {
-          const modifier = consumable?.potionModifier ?? cd.potionModifier;
-          const params = getPotionEffectParams(consumable?.char || cd.char, modifier);
-          player.applyRegen(cd.duration || 5, params?.regenAmount ?? cd.regenAmount ?? 1, cd.regenInterval || 1.0);
-          return true;
+          return { windup: THROW_DURATION, effectType: 'regen' };
         }
         return false;
       }
       case 'damageBuff': {
         if (cd.duration && !cd.passive) {
+          if (manual) return { windup: THROW_DURATION, effectType: 'damageBuff' };
           const px = player.position.x + 20, py = player.position.y + 20;
-          if (manual) {
-            const modifier = consumable?.potionModifier ?? cd.potionModifier;
-            const params = getPotionEffectParams(consumable?.char || cd.char, modifier);
-            player.applyDamageBuff(cd.duration, params?.damageBonus ?? cd.damageBonus ?? 2);
-            return true;
-          }
           for (const enemy of enemies) {
             const dx = (enemy.position.x + 20) - px, dy = (enemy.position.y + 20) - py;
             if (Math.sqrt(dx * dx + dy * dy) <= (cd.autoTrigger?.range ?? 80)) {
-              const modifier = consumable?.potionModifier ?? cd.potionModifier;
-              const params = getPotionEffectParams(consumable?.char || cd.char, modifier);
-              player.applyDamageBuff(cd.duration, params?.damageBonus ?? cd.damageBonus ?? 2);
-              return true;
+              return { windup: THROW_DURATION, effectType: 'damageBuff' };
             }
           }
         }
@@ -327,8 +293,7 @@ export class ConsumableTriggerSystem {
         // Fur Cloak: grants a brief invulnerability window when HP is critically low.
         const threshold = cd.autoTrigger?.criticalHP ?? 0.20;
         if (manual || player.hp < player.maxHp * threshold) {
-          player.invulnerabilityTimer = Math.max(player.invulnerabilityTimer, cd.duration || 10.0);
-          return true;
+          return { windup: THROW_DURATION, effectType: 'auto_dodge' };
         }
         return false;
       }
@@ -337,8 +302,7 @@ export class ConsumableTriggerSystem {
         // physical precondition, stays absolute even under manual.
         const emptyBow = player.quickSlots.find(s => s?.data?.weaponType === 'BOW' && s.usesRemaining <= 0);
         if (!emptyBow) return false;
-        emptyBow.usesRemaining = Math.min(emptyBow.usesRemaining + (cd.amount || 5), emptyBow.maxUses ?? Infinity);
-        return true;
+        return { windup: THROW_DURATION, effectType: 'arrowRefill' };
       }
       case 'panic_blind': {
         // Bone Dust: blinds nearby enemies at critical HP (emergency); the
@@ -352,16 +316,147 @@ export class ConsumableTriggerSystem {
           for (const enemy of enemies) {
             const dx = (enemy.position.x + 20) - px;
             const dy = (enemy.position.y + 20) - py;
-            if (Math.sqrt(dx * dx + dy * dy) <= blindRadius) {
-              enemy.applyStatusEffect('blind', cd.duration || 4.0);
-            }
+            if (Math.sqrt(dx * dx + dy * dy) <= blindRadius) return { windup: THROW_DURATION, effectType: 'panic_blind' };
           }
-          return true;
+          // No enemies in radius — still let the throw land (bone dust puffs
+          // harmlessly) so a manual trigger doesn't silently no-op.
+          if (manual) return { windup: THROW_DURATION, effectType: 'panic_blind' };
         }
         return false;
       }
       default:
         return false;
+    }
+  }
+
+  // Applies a self/AoE-around-player consumable's effect once its throw
+  // animation lands. The eight offensive items with their own fixed AoE
+  // landing spot (explode, curse, slow, poison, venomcloud, jolt,
+  // throwSteam, firecracker) stay in InventorySystem._executeWindupEffect —
+  // this covers everything else, resolved against the player's CURRENT
+  // position/state at landing time rather than at throw time.
+  applyEffect(windup, player, enemies, steamClouds) {
+    const consumable = windup.consumable;
+    const cd = consumable.data;
+    const modifier = consumable?.potionModifier ?? cd.potionModifier;
+    const params = () => getPotionEffectParams(consumable?.char || cd.char, modifier);
+
+    switch (windup.effectType) {
+      case 'heal': {
+        const p = params();
+        const healAmount = p?.amount ?? cd.amount;
+        player.heal(healAmount);
+        this.game.combatSystem.showHeal(healAmount, player.position.x, player.position.y);
+        if (p?.isUnstableBadRoll) player.takeDamage?.(Math.abs(Math.round(p.unstableRoll) - cd.amount));
+        break;
+      }
+      case 'manaSlot':
+        this.game.magicSystem.grantTempManaSlot(player, cd);
+        break;
+      case 'maxhp':
+        player.maxHp += cd.amount;
+        player.hp = player.maxHp;
+        break;
+      case 'speed':
+        player.applySpeedBoost(cd.duration || 8);
+        break;
+      case 'block':
+        player.applyBlockBoost(8, 5);
+        break;
+      case 'cleanse':
+        player.burnDuration = 0;
+        player.wetDuration = 0;
+        break;
+      case 'invuln': {
+        const duration = cd.duration || 3.5;
+        player.invulnerabilityTimer = Math.max(player.invulnerabilityTimer, duration);
+        if (steamClouds) {
+          steamClouds.push({
+            x: player.position.x + 20,
+            y: player.position.y + 20,
+            radius: 20 * 3.5, // GRID.CELL_SIZE * 3.5
+            timer: duration
+          });
+        }
+        break;
+      }
+      case 'shield':
+        player.shieldCharges = cd.charges || 3;
+        player.shieldMaxCharges = cd.charges || 3;
+        player.shieldCooldownMax = cd.rechargeCooldown || 5;
+        player.shieldCooldown = 0;
+        player.shieldBlocksAll = false;
+        break;
+      case 'bulwark':
+        player.shieldCharges = cd.charges || 2;
+        player.shieldMaxCharges = cd.charges || 2;
+        player.shieldCooldownMax = cd.rechargeCooldown || 8;
+        player.shieldCooldown = 0;
+        player.shieldBlocksAll = true;
+        break;
+      case 'waterImmunity':
+        player.waterImmunityTimer = cd.duration;
+        break;
+      case 'float':
+        player.floatTimer = cd.duration;
+        break;
+      case 'stoneskin': {
+        const p = params();
+        player.applyStoneSkin(cd.duration || 10, p?.defenseBonus ?? cd.defenseBonus ?? 3);
+        break;
+      }
+      case 'regen': {
+        const p = params();
+        player.applyRegen(cd.duration || 5, p?.regenAmount ?? cd.regenAmount ?? 1, cd.regenInterval || 1.0);
+        break;
+      }
+      case 'damageBuff': {
+        const p = params();
+        player.applyDamageBuff(cd.duration, p?.damageBonus ?? cd.damageBonus ?? 2);
+        break;
+      }
+      case 'auto_dodge':
+        player.invulnerabilityTimer = Math.max(player.invulnerabilityTimer, cd.duration || 10.0);
+        break;
+      case 'arrowRefill': {
+        const emptyBow = player.quickSlots.find(s => s?.data?.weaponType === 'BOW' && s.usesRemaining <= 0);
+        if (emptyBow) emptyBow.usesRemaining = Math.min(emptyBow.usesRemaining + (cd.amount || 5), emptyBow.maxUses ?? Infinity);
+        break;
+      }
+      case 'panic_blind': {
+        const px = player.position.x + 20;
+        const py = player.position.y + 20;
+        const blindRadius = cd.radius ?? 96;
+        for (const enemy of enemies) {
+          const dx = (enemy.position.x + 20) - px;
+          const dy = (enemy.position.y + 20) - py;
+          if (Math.sqrt(dx * dx + dy * dy) <= blindRadius) enemy.applyStatusEffect('blind', cd.duration || 4.0);
+        }
+        break;
+      }
+    }
+  }
+
+  // Effect types that have no AoE landing zone (always resolve on the
+  // player) — the windup renderer skips the pulsing radius ring for these.
+  static isSelfOnlyEffect(effectType) {
+    return SELF_ONLY_EFFECTS.has(effectType);
+  }
+
+  // Actual AoE radius for a windup's effectType — single source of truth for the
+  // damage-radius numbers so the windup-ring renderer doesn't keep its own copy.
+  getWindupAoeRadius(windup) {
+    const cd = windup.consumable.data;
+    switch (windup.effectType) {
+      case 'explode':     return cd.radius * 2; // Bomb uses 2x radius
+      case 'curse':       return cd.radius;     // Cursed Skull
+      case 'slow':        return 50;            // Slime Ball
+      case 'poison':      return 55;            // Poison Flask
+      case 'venomcloud':  return 60;            // Venom Vial
+      case 'jolt':        return cd.radius || 80; // Drawn at target position
+      case 'throwSteam':  return cd.radius;     // Steam Vial
+      case 'panic_blind': return cd.radius ?? 96; // Bone Dust
+      default:            return 40;
     }
   }
 }

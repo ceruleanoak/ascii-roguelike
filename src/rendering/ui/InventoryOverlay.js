@@ -56,9 +56,10 @@ export class InventoryOverlay {
 
     // Active ingredient pool: banked in REST, unbanked carried otherwise.
     const activeIngredients = game.getActiveIngredients();
+    const coinCount = game.inventorySystem.getCoinCount();
 
     // Check if all inventories are empty
-    const totalItems = activeIngredients.length + game.inventorySystem.armorInventory.length + game.inventorySystem.consumableInventory.length;
+    const totalItems = activeIngredients.length + coinCount + game.inventorySystem.armorInventory.length + game.inventorySystem.consumableInventory.length;
 
     if (totalItems === 0) {
       const emptyMsg = game.stateMachine.getCurrentState() === GAME_STATES.REST
@@ -72,7 +73,7 @@ export class InventoryOverlay {
       );
     } else {
       // Draw ingredients section
-      if (activeIngredients.length > 0) {
+      if (activeIngredients.length > 0 || coinCount > 0) {
         // Section header
         this.renderer.fgCtx.fillStyle = COLORS.INGREDIENT;
         this.renderer.fgCtx.textAlign = 'left';
@@ -84,6 +85,9 @@ export class InventoryOverlay {
         const ingredientCounts = {};
         for (const ingredient of activeIngredients) {
           ingredientCounts[ingredient] = (ingredientCounts[ingredient] || 0) + 1;
+        }
+        if (coinCount > 0) {
+          ingredientCounts['c'] = coinCount;
         }
 
         // Draw each unique ingredient with count

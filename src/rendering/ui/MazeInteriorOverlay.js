@@ -5,7 +5,7 @@ import {
   TORCH_LIGHT_RADIUS, TORCH_ALPHA_HIGH, TORCH_ALPHA_LOW,
   TORCH_PULSE_SPEED, TORCH_LIT_COLOR, TORCH_UNLIT_COLOR,
 } from '../../systems/MazeSystem.js';
-import { isWieldingTorch, drawPlayerTorchLight } from './torchLight.js';
+import { hasTorchLight, drawPlayerTorchLight } from './torchLight.js';
 
 /**
  * MazeInteriorOverlay — picture-in-picture renderer for the Maze maze.
@@ -159,7 +159,7 @@ export class MazeInteriorOverlay {
     }
 
     // ── 8b. Torch light (cosmetic glow when Torch equipped) ────────────────
-    if (isWieldingTorch(game)) {
+    if (hasTorchLight(game)) {
       drawPlayerTorchLight(
         this.renderer,
         game.player.position.x + CS / 2,

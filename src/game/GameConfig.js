@@ -43,13 +43,23 @@ export const PHYSICS = {
   // and buys distance to decide fight-or-flight. Sources with their own tuned
   // knockback (melee windups, charges, leap landings, rock projectiles) pass
   // an explicit force instead; this is the floor for everything else.
-  DEFAULT_DAMAGE_KNOCKBACK: 220
+  DEFAULT_DAMAGE_KNOCKBACK: 220,
+
+  // Speed collisions: an enemy moving at/above this speed that hits a wall or
+  // another enemy takes 1 damage and halves its own velocity (wall hits also
+  // reflect the blocked axis — see PhysicsSystem.updateEntity/resolveSpeedCollisions).
+  // Comfortably above ENEMY_SPEED_BASE (80) so normal movement never triggers
+  // it; sits within the charge-dash range (~100-200) so charging/knocked-back
+  // enemies are the ones that plow hard enough to hurt themselves.
+  HIGH_SPEED_COLLISION_THRESHOLD: 140,
+  // Force applied to the enemy struck in a speed collision (not the fast one).
+  SPEED_COLLISION_KNOCKBACK: 180
 };
 
 // Combat-proximity camera zoom: tightens the view when an enemy closes in,
 // pivoted on the player, eased with a cubic bezier. See CameraZoomSystem.
 export const ZOOM = {
-  SCALE: 2.0,                 // 200% zoom when triggered
+  SCALE: 1.75,                // 175% zoom when triggered
   TRIGGER_RANGE_CELLS: 6,     // enemy/ghost within this many cells triggers zoom
   RELEASE_RANGE_CELLS: 7,     // once zoomed, enemy must clear this range before zoom releases (hysteresis — prevents flicker at the trigger boundary)
   ZOOM_OUT_DELAY_MS: 500,     // hold the zoom this long after the last detected enemy before actually releasing
@@ -109,7 +119,8 @@ export const COLORS = {
   ITEM: '#ffff00',
   INGREDIENT: '#ff00ff',
   TEXT: '#00ff00',
-  HIGHLIGHT: '#00ff0066'
+  HIGHLIGHT: '#00ff0066',
+  HEAL: '#33ff66'
 };
 
 export const CRAFTING = {
@@ -791,6 +802,23 @@ export const BACKGROUND_OBJECTS = {
       default: { animation: 'bounce', message: null }
     }
   },
+  // Ember Bush — Red Zone caldera-only harvestable. Glowing brown bush that
+  // drops Fire Berry (Unicode/CONSUMABLE, see items.js) instead of a letter
+  // ingredient, since Fire Berry needs the Item pickup pipeline.
+  'e': {
+    name: 'Ember Bush',
+    color: '#cc7733',
+    hp: 3,
+    dropEffect: 'destroyObject:spawnIngredient:❋',
+    dropChance: 0.40,
+    bulletInteraction: 'pass-through',
+    flammability: 'high',
+    conductivity: 'none',
+    slowing: 0.8,
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
   // Red vein marker — underground only (plane 1). Floats above the cave floor as a visual hint
   // that a secret vein rock exists directly above on the surface. Indestructible and non-solid.
   '⊙': {
@@ -854,6 +882,20 @@ export const BACKGROUND_OBJECT_VARIANTS = {
     damaging:    false,
     damage:      0,
     slowing:     true,
+  },
+  'hot_water': {
+    char: '~',
+    name: 'Hot Water',
+    color: '#33e6ff', // cyan — deliberately distinct from red-zone lava's orange
+    makesWet:    false,
+    steamOnFire: false,
+    conductivity: 'none',
+    damaging:    false,
+    damage:      0,
+    slowing:     false,
+    healing:     true,
+    healAmount:  1,
+    healInterval: 3.0,
   },
 };
 

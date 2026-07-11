@@ -109,10 +109,17 @@ export class ErrandSystem {
     let givenChar;
 
     if (stageConfig.isIngredient) {
-      // Stage 0: consume from player.inventory
+      // Stage 0: consume from player.inventory (current EXPLORE run) or, failing
+      // that, restInventory (banked REST-mode ingredients) — the errand doesn't
+      // care which pool the ingredient came from.
       const idx = player.inventory.findIndex(ing => ing === requestedChar);
-      if (idx === -1) return null;
-      player.inventory.splice(idx, 1);
+      if (idx !== -1) {
+        player.inventory.splice(idx, 1);
+      } else {
+        const restIdx = inventorySystem?.restInventory.findIndex(ing => ing === requestedChar) ?? -1;
+        if (restIdx === -1) return null;
+        inventorySystem.restInventory.splice(restIdx, 1);
+      }
       givenChar = requestedChar;
     } else {
       // Stages 1-2: item can be in any quick slot (not just the active one),

@@ -3,10 +3,12 @@ import { GRID, GAME_STATES, ZOOM } from '../game/GameConfig.js';
 /**
  * CameraZoomSystem — combat-proximity camera zoom.
  *
- * Zooms the view to ZOOM.SCALE, pivoted on the player, whenever an enemy (or
- * Maze Ghost) is within ZOOM.TRIGGER_RANGE_CELLS of the player during EXPLORE.
- * Once zoomed, stays zoomed until the nearest threat clears the wider
+ * Zooms the view to ZOOM.SCALE, pivoted on the player, whenever an enemy is
+ * within ZOOM.TRIGGER_RANGE_CELLS of the player during EXPLORE. Once zoomed,
+ * stays zoomed until the nearest threat clears the wider
  * ZOOM.RELEASE_RANGE_CELLS (hysteresis, avoids flicker at the boundary).
+ * Inside the Maze interior, zoom is forced on permanently regardless of
+ * ghost proximity — the corridor is narrow enough that it's always relevant.
  * Runs on the surface and inside every Interior (Hut/Dungeon/Maze) alike, since
  * all of them render onto the same two canvas elements the zoom transform
  * scales (RenderController.applyCameraEffects).
@@ -61,6 +63,9 @@ export class CameraZoomSystem {
         this._noEnemyElapsedMs += deltaTime * 1000;
       }
       wantsZoom = enemyDetected || this._noEnemyElapsedMs < ZOOM.ZOOM_OUT_DELAY_MS;
+
+      // Maze interiors stay permanently zoomed in, regardless of ghost proximity.
+      if (player.inMaze) wantsZoom = true;
     } else {
       this._noEnemyElapsedMs = Infinity;
     }
@@ -100,6 +105,7 @@ export class CameraZoomSystem {
     const py = player.position.y + player.height / 2;
     return entities.some((e) => {
       if (e.hp !== undefined && e.hp <= 0) return false;
+      if (e.data?.pacifist) return false;
       const ex = e.position.x + (e.width ?? GRID.CELL_SIZE) / 2;
       const ey = e.position.y + (e.height ?? GRID.CELL_SIZE) / 2;
       return Math.hypot(ex - px, ey - py) <= range;

@@ -201,18 +201,18 @@ export class MenuSystem {
       { type: 'equipment-chest2', x: EQUIPMENT.CHEST_X, y: EQUIPMENT.CHEST2_Y },
       { type: 'equipment-chest3', x: EQUIPMENT.CHEST_X, y: EQUIPMENT.CHEST3_Y },
       { type: 'equipment-armor',       x: EQUIPMENT.ARMOR_X,       y: EQUIPMENT.ARMOR_Y },
-      { type: 'equipment-consumable1', x: EQUIPMENT.CONSUMABLE1_X, y: EQUIPMENT.CONSUMABLE1_Y },
-      { type: 'equipment-consumable2', x: EQUIPMENT.CONSUMABLE2_X, y: EQUIPMENT.CONSUMABLE2_Y }
+      { type: 'equipment-consumable1', x: EQUIPMENT.CONSUMABLE1_X, y: EQUIPMENT.CONSUMABLE1_Y }
     ];
 
-    // Dynamically add unlocked consumable slots 3-5
-    const maxSlots = game.inventorySystem?.maxConsumableSlots ?? 2;
+    // Dynamically add unlocked consumable slots 2-5
+    const maxSlots = game.inventorySystem?.maxConsumableSlots ?? 1;
     const extraSlotDefs = [
+      { type: 'equipment-consumable2', x: EQUIPMENT.CONSUMABLE2_X, y: EQUIPMENT.CONSUMABLE2_Y },
       { type: 'equipment-consumable3', x: EQUIPMENT.CONSUMABLE3_X, y: EQUIPMENT.CONSUMABLE3_Y },
       { type: 'equipment-consumable4', x: EQUIPMENT.CONSUMABLE4_X, y: EQUIPMENT.CONSUMABLE4_Y },
       { type: 'equipment-consumable5', x: EQUIPMENT.CONSUMABLE5_X, y: EQUIPMENT.CONSUMABLE5_Y }
     ];
-    for (let i = 0; i < maxSlots - 2; i++) {
+    for (let i = 0; i < maxSlots - 1; i++) {
       if (extraSlotDefs[i]) slots.push(extraSlotDefs[i]);
     }
 

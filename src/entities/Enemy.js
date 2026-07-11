@@ -109,6 +109,12 @@ export class Enemy {
     this.invulnerabilityDuration = ENEMY_INVULNERABILITY_DURATION;
     this.lastHitAttackId = null; // tracks the burst attackId that triggered the current iframe
 
+    // Speed-collision grace: frames (not seconds) to skip enemy-on-enemy speed
+    // collision after taking damage — see PhysicsSystem.resolveSpeedCollisions.
+    // Prevents a just-hit enemy's still-overlapping hitbox from re-triggering
+    // knockback/damage against the same neighbor before it has moved away.
+    this.speedCollisionGraceFrames = 0; // set to 2 on hit; see takeDamage()
+
     // Rendering
     this.color = this.data.color;
     this.baseColor = this.data.color; // Store original color
@@ -116,6 +122,7 @@ export class Enemy {
     this.height = GRID.CELL_SIZE;
 
     // Physics flags
+    this.isEnemy = true; // lets PhysicsSystem distinguish enemies from player/projectiles without an import
     this.hasCollision = true;
     this.boundToGrid = true;
     this.collisionMap = null;
@@ -180,7 +187,7 @@ export class Enemy {
     // Status effects
     this.statusEffects = {
       burn: { active: false, duration: 5, damage: 1, tickRate: 1.25, tickTimer: 0 }, // ~4 ticks of 1 over 5s — short, punchy, readable
-      poison: { active: false, duration: 0, damage: 0.3, tickRate: 0.3, tickTimer: 0 },
+      poison: { active: false, duration: 0, damage: 1, tickRate: 3.0, tickTimer: 0 },
       freeze: { active: false, duration: 0, slowAmount: 0.5, frozen: false, shuddering: false },
       stun: { active: false, duration: 0 },
       zap: { active: false, duration: 0 }, // electric-affinity stun; renders with rapid shake
@@ -440,7 +447,7 @@ export class Enemy {
     this.statusEffects[effect].active = true;
     this.statusEffects[effect].duration = Math.max(this.statusEffects[effect].duration, duration);
     if (this.statusEffects[effect].tickTimer !== undefined) {
-      this.statusEffects[effect].tickTimer = 0;
+      this.statusEffects[effect].tickTimer = this.statusEffects[effect].tickRate;
     }
 
     // Electric shock jolts carried items loose. 'zap' is the electric effect;
@@ -3043,6 +3050,10 @@ export class Enemy {
     this.hp -= amount;
     if (this.hp < 0) this.hp = 0;
 
+    // 2-frame grace from enemy-on-enemy speed collisions — see field comment
+    // in the constructor and PhysicsSystem.resolveSpeedCollisions.
+    this.speedCollisionGraceFrames = 2;
+
     // Risen: first lethal hit collapses into a bone pile (no iframes — smashable); collapsed dies for real
     if (this.hp <= 0 && this.data.riseAgain && !this.riseUsed && !this.collapsed) {
       RiseAgainMechanic.collapse(this);
@@ -3115,8 +3126,11 @@ export class Enemy {
       }
     }
 
-    // Flash ! when hit (overrides ? indicator)
-    this.detectionIndicatorTimer = this.detectionIndicatorDuration;
+    // Flash ! when hit (overrides ? indicator) — skip for the training dummy,
+    // which never detects/aggroes and shouldn't show a combat reaction.
+    if (!this.data?.isDummy) {
+      this.detectionIndicatorTimer = this.detectionIndicatorDuration;
+    }
 
     // Start (or refresh) invulnerability frames and record the triggering burst
     if (this.hp > 0) {

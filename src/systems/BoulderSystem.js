@@ -197,7 +197,10 @@ export class BoulderSystem {
         const dy = (game.player.position.y + GRID.CELL_SIZE / 2) - r.y;
         if (dx * dx + dy * dy < HIT_RADIUS * HIT_RADIUS) {
           const dmg = r.empowered ? BOULDER_DAMAGE * 2 : BOULDER_DAMAGE;
-          game.player.takeDamage(dmg, { type: 'boulder' });
+          const damageResult = game.player.takeDamage(dmg, { type: 'boulder' });
+          if (damageResult === true || (damageResult && damageResult.damaged)) {
+            game.combatSystem.createDamageNumber(dmg, game.player.position.x, game.player.position.y, '#ff4400');
+          }
           r.hitCooldowns.set(game.player, HIT_COOLDOWN);
           // Knock player in the rock's travel direction (harder when empowered)
           game.physicsSystem.applyKnockbackDir(game.player, r.vx, r.vy, r.empowered ? 400 : 250);
@@ -211,7 +214,9 @@ export class BoulderSystem {
         const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - r.x;
         const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - r.y;
         if (dx * dx + dy * dy < HIT_RADIUS * HIT_RADIUS) {
-          enemy.takeDamage(r.empowered ? BOULDER_DAMAGE * 2 : BOULDER_DAMAGE, null);
+          const enemyDmg = r.empowered ? BOULDER_DAMAGE * 2 : BOULDER_DAMAGE;
+          enemy.takeDamage(enemyDmg, null);
+          game.combatSystem.createDamageNumber(enemyDmg, enemy.position.x, enemy.position.y, '#ff4400');
           r.hitCooldowns.set(enemy, HIT_COOLDOWN);
         }
       }

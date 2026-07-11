@@ -29,6 +29,15 @@ export function drawOffscreenEnemyIndicators(renderer, game, enemies) {
     if (enemy.hp !== undefined && enemy.hp <= 0) continue;
     if (enemy.sapping || enemy.isBossEntity) continue;
 
+    // Don't spoil enemies the surface render is actively concealing: fully
+    // faded into tall grass (renderEnemy sets _concealmentAlpha before this
+    // runs), shell-camouflaged turtles disguised as a rock, or a mimic still
+    // disguised as an item. The arrow should only ever point at threats the
+    // player could otherwise perceive as enemies.
+    if (enemy._concealmentAlpha !== undefined && enemy._concealmentAlpha < 0.005) continue;
+    if (enemy.data?.shellCamouflage && enemy.inShellForm) continue;
+    if (enemy.data?.mimicMechanic?.enabled && !enemy.mimicRevealed) continue;
+
     const ex = enemy.position.x + (enemy.width ?? GRID.CELL_SIZE) / 2;
     const ey = enemy.position.y + (enemy.height ?? GRID.CELL_SIZE) / 2;
     const dx = ex - ox;

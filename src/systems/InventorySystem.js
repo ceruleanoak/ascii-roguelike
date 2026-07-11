@@ -77,8 +77,9 @@ export class InventorySystem {
     this.consumableBlinkShowBlock = false; // true = show '█', false = show normal char
     this.activeEffectTimers = [0, 0, 0, 0, 0]; // per-slot countdown while effect is active
 
-    // Consumable windup system (for offensive items)
-    this.consumableWindups = []; // { consumable, slotIndex, timer, maxTimer, x, y, blinkTimer }
+    // Consumable windup system — every consumable use throws the item into
+    // the air before its effect resolves on landing.
+    this.consumableWindups = []; // { consumable, slotIndex, timer, maxTimer, x, y }
 
     // Room persistence (anti-cheat - prevents room cycling)
     this.savedExploreRoom = null; // Last explore room before returning to REST
@@ -421,6 +422,8 @@ export class InventorySystem {
    * @returns {Item|null} - Previously equipped consumable (if any)
    */
   equipConsumable(slotIndex, selectedItem) {
+    if (slotIndex >= this.maxConsumableSlots) return null;
+
     const previousConsumable = this.equippedConsumables[slotIndex];
 
     // If there was previously equipped consumable, return it to inventory
@@ -517,15 +520,21 @@ export class InventorySystem {
     player.luckActive = false;
     player.critChance = 0;
     player.luckDodgeBonus = 0;
-    for (const slot of this.equippedConsumables) {
+    player.fireBerryLit = false;
+    this.equippedConsumables.forEach((slot, idx) => {
       const cd = slot?.data;
-      if (!cd) continue;
+      if (!cd) return;
       if (cd.luckPassive) {
         player.luckActive = true;
         player.critChance = Math.max(player.critChance, cd.critChance || 0);
         player.luckDodgeBonus = Math.max(player.luckDodgeBonus, cd.dodgeBonus || 0);
       }
-    }
+      // Fire Berry: passive torch-light while equipped and unspent. Consuming
+      // it (SPACE) empties the slot, which naturally stops the light.
+      if (cd.fireBerryLight && !this.spentConsumableSlots[idx]) {
+        player.fireBerryLit = true;
+      }
+    });
 
     // Store equipped consumables for condition checking during gameplay
     player.equippedConsumables = [...this.equippedConsumables];
@@ -552,7 +561,7 @@ export class InventorySystem {
     this.updateConsumableFlash(deltaTime);
 
     // Check if consumables should activate
-    this.checkConsumableActivation(player, currentRoom, combatSystem, steamClouds, particles);
+    this.checkConsumableActivation(player, currentRoom);
 
     // Update active windups
     this.updateConsumableWindups(deltaTime, player, currentRoom, combatSystem, steamClouds, particles);
@@ -765,7 +774,7 @@ export class InventorySystem {
   /**
    * Check if equipped consumables should activate based on conditions
    */
-  checkConsumableActivation(player, currentRoom, combatSystem, steamClouds, particles) {
+  checkConsumableActivation(player, currentRoom) {
     if (!player.equippedConsumables) return;
 
     for (let i = 0; i < player.equippedConsumables.length; i++) {
@@ -792,14 +801,14 @@ export class InventorySystem {
       if (cd.manualOnly) continue;
 
       // Check trigger condition based on effect type
-      shouldTrigger = this.game.consumableTriggerSystem.checkTriggerCondition(cd, player, currentRoom, steamClouds, consumable);
+      shouldTrigger = this.game.consumableTriggerSystem.checkTriggerCondition(cd, player, currentRoom, consumable);
       if (shouldTrigger && shouldTrigger.windup) {
         triggerData = shouldTrigger;
         shouldTrigger = true;
       }
 
       if (shouldTrigger) {
-        this._triggerConsumable(i, consumable, triggerData, player, combatSystem, particles);
+        this._triggerConsumable(i, consumable, triggerData, player);
       }
     }
   }
@@ -844,82 +853,37 @@ export class InventorySystem {
     }
   }
 
-  _triggerConsumable(slotIndex, consumable, triggerData, player, combatSystem, particles) {
+  _triggerConsumable(slotIndex, consumable, triggerData, player) {
     const cd = consumable.data;
 
     // Check if this is a one-shot or reusable consumable
     const isShield = cd.effect === 'shield' || cd.effect === 'bulwark';
     const isOneShot = cd.oneShot === true && !isShield;
 
-    if (triggerData && triggerData.windup) {
-      // Start windup for offensive consumables
-      const startX = player.position.x + 20;
-      const startY = player.position.y + 20;
-      this.consumableWindups.push({
-        consumable: consumable,
-        slotIndex: slotIndex,
-        timer: triggerData.windup,
-        maxTimer: triggerData.windup,
-        effectType: triggerData.effectType,
-        x: startX, // GRID.CELL_SIZE / 2
-        y: startY,
-        startX,
-        startY,
-        targetX: triggerData.targetX ?? null,
-        targetY: triggerData.targetY ?? null,
-        blinkTimer: 0,
-        isOneShot: isOneShot
-      });
+    // Every consumable use is a throw — arc up and land before the effect
+    // resolves. `triggerData.windup` is always set by checkTriggerCondition
+    // when it approves a trigger (see ConsumableTriggerSystem).
+    const startX = player.position.x + 20;
+    const startY = player.position.y + 20;
+    this.consumableWindups.push({
+      consumable: consumable,
+      slotIndex: slotIndex,
+      timer: triggerData.windup,
+      maxTimer: triggerData.windup,
+      effectType: triggerData.effectType,
+      x: startX,
+      y: startY,
+      startX,
+      startY,
+      targetX: triggerData.targetX ?? null,
+      targetY: triggerData.targetY ?? null,
+      isOneShot: isOneShot
+    });
 
-      // Handle consumption
-      if (isOneShot) {
-        this._consumeOneShotSlot(slotIndex, consumable, player);
-      } else {
-        this.consumableCooldowns[slotIndex] = cd.cooldown || 10;
-      }
+    if (isOneShot) {
+      this._consumeOneShotSlot(slotIndex, consumable, player);
     } else {
-      // Instant activation — show consumable char at 2x size above player
-      combatSystem.createDamageNumber(
-        consumable.char,
-        player.position.x,
-        player.position.y - 20 * 0.5,
-        consumable.color || '#ffaa00',
-        2
-      );
-      // Start slot blink: 4 half-cycles × 100ms = 0.4s
-      this.consumableBlinkSlot = slotIndex;
-      this.consumableBlinkTimer = 0.4;
-      this.consumableBlinkPhase = 0.1;
-      this.consumableBlinkShowBlock = true; // start with solid block
-
-      // Mark effect as active for the full duration (drives slow bar blink)
-      if (cd.duration > 0) {
-        this.activeEffectTimers[slotIndex] = cd.duration;
-      }
-
-      // Import createActivationBurst dynamically - assume particles array accepts it
-      // Note: This requires createActivationBurst import at top of file
-      // For now, create simple particles
-      const burstChars = ['+', '*', 'o', '.'];
-      for (let i = 0; i < 10; i++) {
-        particles.push({
-          x: player.position.x + Math.random() * 40 - 20,
-          y: player.position.y + Math.random() * 40 - 20,
-          vx: Math.random() * 60 - 30,
-          vy: Math.random() * 60 - 30,
-          life: 0.5,
-          maxLife: 0.5,
-          char: burstChars[Math.floor(Math.random() * burstChars.length)],
-          color: consumable.color || '#ffaa00'
-        });
-      }
-
-      // Handle consumption
-      if (isOneShot) {
-        this._consumeOneShotSlot(slotIndex, consumable, player);
-      } else {
-        this.consumableCooldowns[slotIndex] = cd.cooldown || 10;
-      }
+      this.consumableCooldowns[slotIndex] = cd.cooldown || 10;
     }
   }
 
@@ -932,7 +896,6 @@ export class InventorySystem {
     for (let i = this.consumableWindups.length - 1; i >= 0; i--) {
       const windup = this.consumableWindups[i];
       windup.timer -= deltaTime;
-      windup.blinkTimer += deltaTime;
 
       // Jolt Jar throw arc: interpolate jar position from player to target,
       // with a small parabolic lift so it reads as a throw.
@@ -944,7 +907,7 @@ export class InventorySystem {
 
       // Windup complete — trigger effect
       if (windup.timer <= 0) {
-        this._executeWindupEffect(windup, enemies, combatSystem, steamClouds, particles);
+        this._executeWindupEffect(windup, player, enemies, combatSystem, steamClouds, particles);
         this.consumableWindups.splice(i, 1);
       }
     }
@@ -954,7 +917,7 @@ export class InventorySystem {
    * Execute windup effect when timer completes
    * @private
    */
-  _executeWindupEffect(windup, enemies, combatSystem, steamClouds, particles) {
+  _executeWindupEffect(windup, player, enemies, combatSystem, steamClouds, particles) {
     const cd = windup.consumable.data;
     const px = windup.x;
     const py = windup.y;
@@ -1079,6 +1042,33 @@ export class InventorySystem {
         this._createExplosion(particles, px, py, 25, '#aaaaaa');
         break;
       }
+      default: {
+        // Self/AoE-around-player consumables (heal, buffs, shields, etc) —
+        // ConsumableTriggerSystem owns the per-effect mutation.
+        this.game.consumableTriggerSystem.applyEffect(windup, player, enemies, steamClouds);
+
+        // Landing burst — same feedback the old instant-trigger path showed.
+        const burstChars = ['+', '*', 'o', '.'];
+        for (let i = 0; i < 10; i++) {
+          particles.push({
+            x: px + Math.random() * 40 - 20,
+            y: py + Math.random() * 40 - 20,
+            vx: Math.random() * 60 - 30,
+            vy: Math.random() * 60 - 30,
+            life: 0.5,
+            maxLife: 0.5,
+            char: burstChars[Math.floor(Math.random() * burstChars.length)],
+            color: windup.consumable.color || '#ffaa00',
+            hutPlane: !!this.game.activeFloor
+          });
+        }
+
+        // Mark effect as active for the full duration (drives slow bar blink)
+        if (cd.duration > 0) {
+          this.activeEffectTimers[windup.slotIndex] = cd.duration;
+        }
+        break;
+      }
     }
 
     // Blink HUD slot
@@ -1099,6 +1089,7 @@ export class InventorySystem {
    */
   _createExplosion(particles, x, y, count, color) {
     const chars = ['*', '+', 'x', '.', 'o'];
+    const hutPlane = !!this.game.activeFloor;
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 50 + Math.random() * 50;
@@ -1110,7 +1101,8 @@ export class InventorySystem {
         life: 0.5 + Math.random() * 0.5,
         maxLife: 1.0,
         char: chars[Math.floor(Math.random() * chars.length)],
-        color: color
+        color: color,
+        hutPlane
       });
     }
   }
@@ -1120,6 +1112,7 @@ export class InventorySystem {
    * @private
    */
   _createSparkBurst(particles, x, y) {
+    const hutPlane = !!this.game.activeFloor;
     for (let i = 0; i < 12; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 80 + Math.random() * 120;
@@ -1131,7 +1124,8 @@ export class InventorySystem {
         life: 0.2 + Math.random() * 0.2,
         maxLife: 0.4,
         char: Math.random() < 0.5 ? '*' : '.',
-        color: Math.random() < 0.6 ? '#ff8800' : '#ffff00'
+        color: Math.random() < 0.6 ? '#ff8800' : '#ffff00',
+        hutPlane
       });
     }
   }

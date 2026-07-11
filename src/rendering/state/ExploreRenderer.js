@@ -28,7 +28,15 @@ import { PixelatedDissolve, SplitReveal } from '../effects/TextEffects.js';
 import { BossRenderer } from './BossRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
 import { isInteriorActive } from '../../systems/PlaneSystem.js';
-import { isWieldingTorch, drawPlayerTorchLight } from '../ui/torchLight.js';
+import { hasTorchLight, drawPlayerTorchLight } from '../ui/torchLight.js';
+import { stepConcealmentAlpha } from '../../systems/WorldEffectsSystem.js';
+import { ConsumableTriggerSystem } from '../../systems/ConsumableTriggerSystem.js';
+
+// Peak height (px) of a thrown consumable's toss arc, and how many full
+// spins it completes over the flight — shared by every consumable windup so
+// heal potions and bombs read as the same "thrown object" motion.
+const THROW_ARC_HEIGHT = 46;
+const THROW_SPINS = 2;
 
 function drawDizzyOrbitals(ctx, cx, cy, timer) {
   const r = 6;
@@ -649,76 +657,57 @@ export class ExploreRenderer {
     // Skip them here to prevent ghosting at unshifted positions.
     const playerInInterior = isInteriorActive(game);
 
-    // Draw consumable windups (dropped items during charge-up)
+    // Draw consumable windups — every consumable throw arcs up and spins
+    // before landing, where its effect resolves (ConsumableTriggerSystem).
     for (const windup of !playerInInterior ? game.inventorySystem.consumableWindups : []) {
-      // Blink effect: show/hide every 0.15 seconds, faster as timer runs out
-      const blinkSpeed = Math.max(0.1, windup.timer * 0.15);
-      const shouldShow = Math.floor(windup.blinkTimer / blinkSpeed) % 2 === 0;
+      const progress = 1 - (windup.timer / windup.maxTimer);
 
-      if (shouldShow) {
-        // Draw dropped consumable
-        this.renderer.drawEntity(
-          windup.x,
-          windup.y,
-          windup.consumable.char,
-          windup.consumable.color
-        );
+      // Jolt Jar bakes its own arc lift into windup.y (see InventorySystem
+      // updateConsumableWindups) since it's also interpolating toward a
+      // fixed target — don't double-apply the lift for it.
+      const arcLift = windup.effectType === 'jolt'
+        ? 0
+        : Math.sin(Math.min(1, Math.max(0, progress)) * Math.PI) * THROW_ARC_HEIGHT;
+      const spinAngle = progress * Math.PI * 2 * THROW_SPINS;
 
-        // Calculate actual AoE radius based on effect type
-        const cd = windup.consumable.data;
-        let aoeRadius = 0;
-        switch (windup.effectType) {
-          case 'explode':
-            aoeRadius = cd.radius * 2; // Bomb uses 2x radius
-            break;
-          case 'curse':
-            aoeRadius = cd.radius; // Cursed Skull
-            break;
-          case 'slow':
-            aoeRadius = 50; // Slime Ball
-            break;
-          case 'poison':
-            aoeRadius = 55; // Poison Flask
-            break;
-          case 'venomcloud':
-            aoeRadius = 60; // Venom Vial
-            break;
-          case 'jolt':
-            aoeRadius = cd.radius || 80; // Drawn at target position below
-            break;
-          case 'throwSteam':
-            aoeRadius = cd.radius; // Steam Vial
-            break;
-          default:
-            aoeRadius = 40;
-        }
+      this.renderer.drawEntityRotated(
+        windup.x,
+        windup.y - arcLift,
+        windup.consumable.char,
+        windup.consumable.color,
+        spinAngle
+      );
 
-        // Draw pulsing ring to show AoE damage radius.
-        // Jolt Jar is a thrown projectile — show the ring at the locked impact
-        // target, not around the moving jar.
-        const progress = 1 - (windup.timer / windup.maxTimer);
-        const pulse = Math.sin(progress * Math.PI * 6) * 0.15; // Subtle pulse
-        const displayRadius = aoeRadius * (1 + pulse);
-        const ringX = (windup.effectType === 'jolt' && windup.targetX != null) ? windup.targetX : windup.x;
-        const ringY = (windup.effectType === 'jolt' && windup.targetY != null) ? windup.targetY : windup.y;
+      // Self-targeted potions (heal, buffs, shields, ...) have no AoE landing
+      // zone to telegraph — skip the ring entirely for those.
+      if (ConsumableTriggerSystem.isSelfOnlyEffect(windup.effectType)) continue;
 
-        this.renderer.fgCtx.save();
-        this.renderer.fgCtx.strokeStyle = windup.consumable.color;
-        this.renderer.fgCtx.globalAlpha = 0.4 + Math.sin(progress * Math.PI * 8) * 0.2;
-        this.renderer.fgCtx.lineWidth = 2;
-        this.renderer.fgCtx.beginPath();
-        this.renderer.fgCtx.arc(ringX, ringY, displayRadius, 0, Math.PI * 2);
-        this.renderer.fgCtx.stroke();
+      const aoeRadius = game.consumableTriggerSystem.getWindupAoeRadius(windup);
 
-        // Draw inner ring at 50% radius for better depth perception
-        this.renderer.fgCtx.globalAlpha = 0.2;
-        this.renderer.fgCtx.lineWidth = 1;
-        this.renderer.fgCtx.beginPath();
-        this.renderer.fgCtx.arc(ringX, ringY, displayRadius * 0.5, 0, Math.PI * 2);
-        this.renderer.fgCtx.stroke();
+      // Draw pulsing ring to show AoE damage radius.
+      // Jolt Jar is a thrown projectile — show the ring at the locked impact
+      // target, not around the moving jar.
+      const pulse = Math.sin(progress * Math.PI * 6) * 0.15; // Subtle pulse
+      const displayRadius = aoeRadius * (1 + pulse);
+      const ringX = (windup.effectType === 'jolt' && windup.targetX != null) ? windup.targetX : windup.x;
+      const ringY = (windup.effectType === 'jolt' && windup.targetY != null) ? windup.targetY : windup.y;
 
-        this.renderer.fgCtx.restore();
-      }
+      this.renderer.fgCtx.save();
+      this.renderer.fgCtx.strokeStyle = windup.consumable.color;
+      this.renderer.fgCtx.globalAlpha = 0.4 + Math.sin(progress * Math.PI * 8) * 0.2;
+      this.renderer.fgCtx.lineWidth = 2;
+      this.renderer.fgCtx.beginPath();
+      this.renderer.fgCtx.arc(ringX, ringY, displayRadius, 0, Math.PI * 2);
+      this.renderer.fgCtx.stroke();
+
+      // Draw inner ring at 50% radius for better depth perception
+      this.renderer.fgCtx.globalAlpha = 0.2;
+      this.renderer.fgCtx.lineWidth = 1;
+      this.renderer.fgCtx.beginPath();
+      this.renderer.fgCtx.arc(ringX, ringY, displayRadius * 0.5, 0, Math.PI * 2);
+      this.renderer.fgCtx.stroke();
+
+      this.renderer.fgCtx.restore();
     }
 
     // Draw non-sapping enemies first (so they render behind player)
@@ -836,7 +825,7 @@ export class ExploreRenderer {
     // doesn't pop the player sprite.
     if (!playerInInterior) {
     const playerHidden = this._isOnTallGrass(game, game.player.position.x, game.player.position.y);
-    const concealAlpha = this._stepConcealmentAlpha(game.player, !playerHidden);
+    const concealAlpha = stepConcealmentAlpha(game.player, !playerHidden);
     if (concealAlpha > 0.005) {
     const playerAlpha = game.player.getVisibilityAlpha();
     // Moss Cloak 𐤒 active: render the player as a bush `%` in moss-green.
@@ -960,8 +949,12 @@ export class ExploreRenderer {
       }
     }
 
-    // Draw trap throw reticule while charging (traps only — weapons use bow charge bar)
-    if (!playerInInterior) this.drawTrapReticule(game);
+    // Draw trap throw reticule while charging (traps only) or a translucent weapon
+    // ghost at the estimated landing spot (thrown weapons only).
+    if (!playerInInterior) {
+      this.drawTrapReticule(game);
+      this.drawThrowPreview(game);
+    }
 
     // Draw in-flight throwables (traps + thrown weapons).
     if (!playerInInterior) this.drawInFlightTraps(game, false);
@@ -1048,7 +1041,7 @@ export class ExploreRenderer {
     // Drawn after all entities so it clips both fg content and the bg canvas beneath.
     // Uses evenodd fill rule to punch a transparent hole at the player's position.
     if (game.currentRoom?.underground && game.player?.plane === 1) {
-      const torchLit = isWieldingTorch(game);
+      const torchLit = hasTorchLight(game);
       const fogRadius = (game.currentRoom.underground.caveFogRadius || 5) * GRID.CELL_SIZE * (torchLit ? 1.5 : 1);
       const px = game.player.position.x + GRID.CELL_SIZE / 2;
       const py = game.player.position.y + GRID.CELL_SIZE / 2;
@@ -1286,27 +1279,6 @@ export class ExploreRenderer {
     }
   }
 
-  // Rapidly interpolate `entity._concealmentAlpha` toward 1 (visible) or 0
-  // (hidden). Smooths the transition when a player or enemy steps in or out
-  // of grass cover so visibility doesn't pop. ~0.125s for a full transition.
-  _stepConcealmentAlpha(entity, targetVisible) {
-    const now = performance.now() / 1000;
-    const FADE_SPEED = 8;
-    if (entity._concealmentAlpha === undefined) {
-      entity._concealmentAlpha = targetVisible ? 1 : 0;
-      entity._concealmentLastT = now;
-      return entity._concealmentAlpha;
-    }
-    const dt = Math.max(0, Math.min(0.1, now - entity._concealmentLastT));
-    entity._concealmentLastT = now;
-    const target = targetVisible ? 1 : 0;
-    const diff = target - entity._concealmentAlpha;
-    const maxStep = FADE_SPEED * dt;
-    if (Math.abs(diff) <= maxStep) entity._concealmentAlpha = target;
-    else entity._concealmentAlpha += Math.sign(diff) * maxStep;
-    return entity._concealmentAlpha;
-  }
-
   // Returns true if (x, y) sits inside a tall-grass cluster dense enough to
   // act as cover. RoomGenerator emits two BackgroundObject instances per
   // visual blade (6px apart, so each blade can straddle two grid cells), so
@@ -1416,7 +1388,7 @@ export class ExploreRenderer {
     let concealAlpha = 1;
     if (applyGrass) {
       const hidden = this._isOnTallGrass(game, enemy.position.x, enemy.position.y);
-      concealAlpha = this._stepConcealmentAlpha(enemy, !hidden);
+      concealAlpha = stepConcealmentAlpha(enemy, !hidden);
       if (concealAlpha < 0.005) return;
     }
     const _enemyCtx = this.renderer.fgCtx;
@@ -2546,6 +2518,38 @@ export class ExploreRenderer {
     ctx.textBaseline = 'middle';
     ctx.fillStyle = blink ? (held?.color || '#ffffff') : '#555555';
     ctx.fillText('x', pos.x, pos.y);
+    ctx.restore();
+  }
+
+  // Ghost of the held weapon at its current estimated landing spot while charging
+  // a throw (non-trap items only — traps show the 'x' reticule instead). Reuses
+  // TrapSystem's cheap trig landing calc (no wall raycast) and the same
+  // facing-based rotation formula TrapSystem.releaseTrapThrow uses for spears, so
+  // the preview always matches the actual throw exactly.
+  drawThrowPreview(game) {
+    if (!game.trapCharging) return;
+    const held = game.player?.heldItem;
+    if (!held || held.data?.type === 'TRAP') return;
+    const pos = game.trapSystem.getTrapReticulePos();
+    if (!pos) return;
+    const f = game.player.facing;
+    const rotation = held.data?.weaponSubtype === 'spear'
+      ? Math.atan2(f.y, f.x) + Math.PI / 2
+      : 0;
+    const ctx = this.renderer.fgCtx;
+    ctx.save();
+    ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = held.color || '#ffffff';
+    if (rotation) {
+      ctx.translate(pos.x, pos.y);
+      ctx.rotate(rotation);
+      ctx.fillText(held.char, 0, 0);
+    } else {
+      ctx.fillText(held.char, pos.x, pos.y);
+    }
     ctx.restore();
   }
 

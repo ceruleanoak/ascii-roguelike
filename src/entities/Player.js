@@ -218,6 +218,8 @@ export class Player {
       iframes: true, // invulnerability during roll (for 'dodge' type)
       hideDuration: 0, // Cyan rogue: how long `hidden` flag persists after roll start (0 = roll-only)
       hideTimer: 0,    // Active countdown of the hide window
+      invisRecoveryDuration: 10, // Cyan rogue: cooldown before invisibility can trigger again
+      invisRecoveryTimer: 0,     // Countdown; while >0 the roll still works but grants no invisibility
 
       // Slope interaction — see updateDodgeRoll for full mechanic description
       slopeFreeTime: 5 / 60, // seconds of unimpeded roll on a slope (~20 frames at 60fps)
@@ -559,8 +561,6 @@ export class Player {
     this.statusBlinkTimer += deltaTime;
     // Update dodge roll state
     this.updateDodgeRoll(deltaTime);
-    // Update Shark Mask dive (auto-ends on timer expire or leaving water)
-    this.updateSharkDive(deltaTime);
 
     if (!this.spawnFadeHeld) this.spawnFadeTimer = Math.max(0, this.spawnFadeTimer - deltaTime);
     this.exitFadeTimer = Math.max(0, this.exitFadeTimer - deltaTime);
@@ -715,15 +715,22 @@ export class Player {
         this.invulnerabilityTimer = this.dodgeRoll.duration + 0.5 + this.extraIframes;
         break;
       case 'hide':
-        // Invisible to enemies + extended i-frames (cyan rogue specialty)
-        this.hidden = true;
-        // Extended i-frames: 0.25s roll + 1.25s = 1.5s total invulnerability
-        this.invulnerabilityTimer = this.dodgeRoll.duration + 1.25;
-        // Attacks blocked for entire extended iframe duration
-        this.attackBlockTimer = this.invulnerabilityTimer;
-        // Hide persists past the roll itself — enemies actively forget the player while hidden,
-        // giving room to reposition and set up a backstab.
-        this.dodgeRoll.hideTimer = this.dodgeRoll.hideDuration || this.invulnerabilityTimer;
+        if (this.dodgeRoll.invisRecoveryTimer > 0) {
+          // Recovering from a recent invisibility trigger: roll works normally, no invis effect
+          this.invulnerabilityTimer = this.dodgeRoll.duration + 0.5 + this.extraIframes;
+        } else {
+          // Invisible to enemies + extended i-frames (cyan rogue specialty)
+          this.hidden = true;
+          // Extended i-frames: 0.25s roll + 1.25s = 1.5s total invulnerability
+          this.invulnerabilityTimer = this.dodgeRoll.duration + 1.25;
+          // Attacks blocked for entire extended iframe duration
+          this.attackBlockTimer = this.invulnerabilityTimer;
+          // Hide persists past the roll itself — enemies actively forget the player while hidden,
+          // giving room to reposition and set up a backstab.
+          this.dodgeRoll.hideTimer = this.dodgeRoll.hideDuration || this.invulnerabilityTimer;
+          // Recovery gate: invisibility can't trigger again for 10s (plain dodge still available)
+          this.dodgeRoll.invisRecoveryTimer = this.dodgeRoll.invisRecoveryDuration;
+        }
         break;
       case 'damage':
         // Minimal i-frames — only for the roll duration itself, no buffer (requires precision)
@@ -742,54 +749,15 @@ export class Player {
     return true;
   }
 
-  // ── Shark Mask: dive + emerge ─────────────────────────────────────────────
-  // Activated by main.js when dodge-roll is pressed in water while Shark Mask
-  // is equipped. Player swims at 1.8× speed on plane PLANE_SUBMERGED (= 2),
-  // invisible to surface enemies via PlaneSystem.canInteract. Re-rolling
-  // during a dive triggers the emerge attack (handled in main.js with access
-  // to room enemies + combat system).
-  startSharkDive(direction) {
-    this.diving = true;
-    this.diveTimer = this.diveDuration;
-    this.plane = 2; // PLANE_SUBMERGED — surface enemies stop seeing the player
-    this.char = '^'; // fin glyph
-    // 1.8× speed via existing speedBoost system; resets in updateSharkDive on end.
-    this._diveSavedSpeedBoost = this.speedBoost;
-    this.speedBoost = 0.8; // additive → +80% (1.8× base)
-    // Give the dive an initial directional kick so the player visibly enters.
-    const baseMax = (this.heldItem ? 110 : 165) * (1 + this.speedBoost);
-    this.velocity.vx = direction.x * baseMax;
-    this.velocity.vy = direction.y * baseMax;
-    // Brief iframe on entry so contact damage doesn't trigger as the dive starts.
-    this.invulnerabilityTimer = Math.max(this.invulnerabilityTimer, 0.3);
-    // Brief cooldown so the same press-and-release doesn't immediately emerge.
-    this.dodgeRoll.cooldownTimer = 0.2;
-  }
-
-  endSharkDive() {
-    if (!this.diving) return;
-    this.diving = false;
-    this.diveTimer = 0;
-    this.plane = 0;
-    this.char = '@';
-    this.speedBoost = this._diveSavedSpeedBoost || 0;
-    this._diveSavedSpeedBoost = 0;
-  }
-
-  // Tick called from update(). Auto-ends the dive on timer expire or when the
-  // player exits water (the fin only swims through liquid).
-  updateSharkDive(deltaTime) {
-    if (!this.diving) return;
-    this.diveTimer -= deltaTime;
-    if (this.diveTimer <= 0 || !this.inLiquid) {
-      this.endSharkDive();
-    }
-  }
-
   updateDodgeRoll(deltaTime) {
     // Cooldown tick
     if (this.dodgeRoll.cooldownTimer > 0) {
       this.dodgeRoll.cooldownTimer -= deltaTime;
+    }
+
+    // Invisibility recovery tick (cyan rogue) — while active, rolls are dodge-only, no hide
+    if (this.dodgeRoll.invisRecoveryTimer > 0) {
+      this.dodgeRoll.invisRecoveryTimer -= deltaTime;
     }
 
     // Hide window tick (cyan rogue) — persists past the roll itself
@@ -1277,6 +1245,7 @@ export class Player {
     // Reset hide-roll hidden flag
     this.hidden = false;
     this.dodgeRoll.hideTimer = 0;
+    this.dodgeRoll.invisRecoveryTimer = 0;
 
     // Reset inLiquid (set per-frame by main.js)
     this.inLiquid = false;

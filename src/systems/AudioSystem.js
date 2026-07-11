@@ -76,6 +76,9 @@ export class AudioSystem {
     this.autoResumeListener = null;
     this.visibilityChangeListener = null;
     this.masterVolume = 0.7;
+
+    // Tracks which zone's music is currently loaded (for zone-specific music switching)
+    this.currentMusicZone = 'green';
   }
 
   /**
@@ -707,6 +710,39 @@ export class AudioSystem {
       this.layer2Gain.gain.value = 0;
     }
     return this.switchMusic(layer1Path, layer2Path);
+  }
+
+  /**
+   * Switch music to match a zone (green/cyan/red), skipping the swap when
+   * already on that zone's track. Skipped entirely while boss sequence mode
+   * is active (anticipation or full fight).
+   * `force` bypasses the currentMusicZone equality checks — used by interior
+   * exits (e.g. the maze) to restore zone music after a non-zone override,
+   * since currentMusicZone is never touched while inside the interior.
+   * @param {string} zone - 'green' | 'cyan' | 'red' (any other value maps to green)
+   * @param {string} base - BASE_URL prefix
+   * @param {boolean} force - bypass the already-on-this-zone check
+   */
+  switchZoneMusic(zone, base, force = false) {
+    if (this.mode !== 'dual' && this.mode !== 'red') return;
+    if (zone === 'red' && (force || this.currentMusicZone !== 'red')) {
+      if (this.switchToRedSequence()) {
+        this.currentMusicZone = 'red';
+      }
+    } else if (zone === 'cyan' && (force || this.currentMusicZone !== 'cyan')) {
+      this.currentMusicZone = 'cyan';
+      this.switchMusic(
+        `${base}assets/audio/cyan-layer1.mp3`,
+        `${base}assets/audio/cyan-layer2.mp3`
+      );
+    } else if (zone !== 'cyan' && zone !== 'red'
+               && (force || this.currentMusicZone === 'cyan' || this.currentMusicZone === 'red')) {
+      this.currentMusicZone = 'green';
+      this.switchMusic(
+        `${base}assets/audio/layer1.mp3`,
+        `${base}assets/audio/layer2.mp3`
+      );
+    }
   }
 
   /**

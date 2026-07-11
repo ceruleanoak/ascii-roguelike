@@ -155,6 +155,53 @@ export class PhysicsSystem {
     }
   }
 
+  /**
+   * Speed collision: an enemy moving at/above PHYSICS.HIGH_SPEED_COLLISION_THRESHOLD
+   * that runs into another enemy deals 1 damage to both and knocks the struck
+   * enemy away; the fast enemy halves its own velocity (its wall-hit counterpart
+   * lives in updateEntity's collision block). Unlike propagateKnockAway this
+   * doesn't require the flyer to be in a knockback state — any fast-moving
+   * enemy (charge dash, knockback, etc.) can trigger it. Resolves at most one
+   * collision per fast enemy per frame. Call once per frame after physics update.
+   */
+  resolveSpeedCollisions(enemies, combatSystem = null) {
+    const CONTACT_DIST = GRID.CELL_SIZE * 1.1;
+    const { HIGH_SPEED_COLLISION_THRESHOLD: THRESHOLD, SPEED_COLLISION_KNOCKBACK: KNOCKBACK } = PHYSICS;
+
+    // Tick down the grace window once per frame for every enemy, regardless
+    // of whether it participates in a collision below.
+    for (const enemy of enemies) {
+      if (enemy.speedCollisionGraceFrames > 0) enemy.speedCollisionGraceFrames--;
+    }
+
+    for (const enemy of enemies) {
+      if (enemy.dead) continue;
+      if (enemy.speedCollisionGraceFrames > 0) continue; // just hit — skip as driver
+      const speed = Math.sqrt(enemy.velocity.vx ** 2 + enemy.velocity.vy ** 2);
+      if (speed < THRESHOLD) continue;
+      for (const other of enemies) {
+        if (other === enemy || other.dead) continue;
+        if (other.speedCollisionGraceFrames > 0) continue; // just hit — skip as target
+        if (!inSamePlane(enemy, other)) continue;
+        const dx = other.position.x - enemy.position.x;
+        const dy = other.position.y - enemy.position.y;
+        if (!Number.isFinite(dx) || !Number.isFinite(dy)) continue;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist >= CONTACT_DIST) continue;
+
+        const enemyDamaged = enemy.takeDamage(1);
+        const otherDamaged = other.takeDamage(1);
+        if (enemyDamaged) combatSystem?.createDamageNumber(1, enemy.position.x, enemy.position.y, '#ff4444');
+        if (otherDamaged) combatSystem?.createDamageNumber(1, other.position.x, other.position.y, '#ff4444');
+        const nx = dist > 0 ? dx / dist : 1;
+        const ny = dist > 0 ? dy / dist : 0;
+        this._applyKnockbackForce(other, nx, ny, KNOCKBACK, 0.2);
+        this._applyKnockbackForce(enemy, -nx, -ny, KNOCKBACK, 0.2);
+        break; // one collision resolved per fast enemy per frame
+      }
+    }
+  }
+
   _applyKnockbackForce(entity, nx, ny, force, duration) {
     const massResistance = 1 - (1 / (entity.mass ?? 1));
     const resistance = Math.max(massResistance, entity.knockbackResistance ?? 0);
@@ -177,16 +224,16 @@ export class PhysicsSystem {
     }
   }
 
-  update(deltaTime, backgroundObjects = [], room = null) {
+  update(deltaTime, backgroundObjects = [], room = null, combatSystem = null) {
     const waterResults = [];
     for (const entity of this.entities) {
-      const result = this.updateEntity(entity, deltaTime, backgroundObjects, room);
+      const result = this.updateEntity(entity, deltaTime, backgroundObjects, room, combatSystem);
       if (result) waterResults.push({ entity, ...result });
     }
     return waterResults;
   }
 
-  updateEntity(entity, deltaTime, backgroundObjects = [], room = null) {
+  updateEntity(entity, deltaTime, backgroundObjects = [], room = null, combatSystem = null) {
     if (!entity.position || !entity.velocity) return null;
 
     // Hitstop: freeze position integration, tick timer
@@ -223,6 +270,7 @@ export class PhysicsSystem {
     let inGrass = false;
     let slowingMultiplier = 1.0; // For numeric slowing values (trees, stumps)
     let damagingLiquid = null; // Track lava damage
+    let healingLiquid = null; // Track hot spring heal
     let onSlopeDirection = null; // Ascent room slope push direction
     let onCurrentDirection = null; // Yellow zone river current push direction
     const isProjectile = entity.type === 'bullet' || entity.type === 'arrow';
@@ -263,6 +311,7 @@ export class PhysicsSystem {
                                          : (obj.damaging && obj.damage);
             const isMudObj  = obj.typeId ? (obj.typeId === 'mud_dry' || obj.typeId === 'mud_wet')
                                          : (obj.isDryMud || obj.slowing === true);
+            const isHotWaterObj = obj.typeId === 'hot_water';
 
             // Mud activation: dry → wet on first step
             if (obj.typeId === 'mud_dry') {
@@ -282,6 +331,12 @@ export class PhysicsSystem {
               const dmg = obj._variantData ? obj._variantData.damage : obj.damage;
               damagingLiquid = { damage: dmg, name: obj.name || 'Lava' };
               // Lava does NOT set inLiquid — no wet status
+            } else if (isHotWaterObj) {
+              healingLiquid = {
+                amount: obj._variantData?.healAmount ?? 1,
+                interval: obj._variantData?.healInterval ?? 3.0
+              };
+              // Hot water does NOT set inLiquid — no wet status (makesWet: false)
             } else if (isMudObj) {
               inGrass = true; // 75% speed, same path as grass — but NOT inLiquid
               // Mud does NOT set inLiquid — no wet status, no water state transitions
@@ -402,15 +457,27 @@ export class PhysicsSystem {
     // Collision detection (if entity has collision)
     if (entity.hasCollision) {
       const collision = this.checkCollision(entity, newX, newY, backgroundObjects, room);
+      // Speed-collision ricochet: a fast enemy hitting a wall bounces off
+      // (reflect + halve) instead of just stopping, and takes 1 damage.
+      const speedSq = entity.velocity.vx ** 2 + entity.velocity.vy ** 2;
+      const highSpeed = entity.isEnemy && speedSq >= PHYSICS.HIGH_SPEED_COLLISION_THRESHOLD ** 2;
       if (!collision.x) {
         entity.position.x = newX;
+      } else if (highSpeed) {
+        entity.velocity.vx *= -0.5;
       } else {
         entity.velocity.vx = 0;
       }
       if (!collision.y) {
         entity.position.y = newY;
+      } else if (highSpeed) {
+        entity.velocity.vy *= -0.5;
       } else {
         entity.velocity.vy = 0;
+      }
+      if (highSpeed && (collision.x || collision.y)) {
+        entity.takeDamage(1);
+        combatSystem?.createDamageNumber(1, entity.position.x, entity.position.y, '#ff4444');
       }
       if (entity.pinOnWallContact && (collision.x || collision.y)) {
         entity.pinnedDuration = 2.0;
@@ -454,7 +521,7 @@ export class PhysicsSystem {
       this.resolveTunnelWallOverlap(entity, room.tunnel, backgroundObjects, deltaTime);
     }
 
-    return { inLiquid, liquidState, damagingLiquid };
+    return { inLiquid, liquidState, damagingLiquid, healingLiquid };
   }
 
   checkCollision(entity, newX, newY, backgroundObjects = [], room = null) {
@@ -1194,7 +1261,7 @@ export class PhysicsSystem {
       ingredient.inWater = false;
     }
 
-    for (const { entity, inLiquid, liquidState, damagingLiquid } of waterResults) {
+    for (const { entity, inLiquid, liquidState, damagingLiquid, healingLiquid } of waterResults) {
       // Ingredients: lava destroys them, water makes them bob
       if (entity.pickupCooldown !== undefined) {
         if (damagingLiquid) {
@@ -1279,6 +1346,22 @@ export class PhysicsSystem {
           }
         }
         // Lava doesn't apply water effects - skip rest of loop
+        continue;
+      }
+
+      // Hot spring (Red Zone caldera): slow passive heal for the player only.
+      // Per-entity cooldown timer mirrors lavaDamageTimer — NOT applyRegen(),
+      // which would reset its own interval timer every frame if called here.
+      if (healingLiquid && entity === game.player) {
+        if (!entity.hotWaterHealTimer) entity.hotWaterHealTimer = 0;
+        entity.hotWaterHealTimer -= deltaTime;
+        if (entity.hotWaterHealTimer <= 0) {
+          if (entity.hp < entity.maxHp) {
+            entity.heal(healingLiquid.amount);
+            game.combatSystem.showHeal(healingLiquid.amount, entity.position.x, entity.position.y);
+          }
+          entity.hotWaterHealTimer = healingLiquid.interval;
+        }
         continue;
       }
 

@@ -263,7 +263,7 @@ export class CharacterSystem {
                  player.dodgeRoll.cooldownTimer <= 0 &&
                  !player.dodgeRoll.active &&
                  !player.continuousRollActive) {
-        player.startSharkDive(dodgeDirection);
+        this.startSharkDive(player, dodgeDirection);
         game.audioSystem.playSFX('roll');
       }
 
@@ -510,8 +510,51 @@ export class CharacterSystem {
       });
     }
     game.audioSystem?.playSFX?.('roll');
-    game.player.endSharkDive();
+    this.endSharkDive(game.player);
     game.player.dodgeRoll.cooldownTimer = 0.5;
+  }
+
+  // ── Shark Mask: dive + emerge ─────────────────────────────────────────────
+  // Activated when dodge-roll is pressed in water while Shark Mask is equipped
+  // (see updateDodge above). Player swims at 1.8× speed on plane PLANE_SUBMERGED
+  // (= 2), invisible to surface enemies via PlaneSystem.canInteract. Re-rolling
+  // during a dive triggers the emerge attack (_sharkEmergeAttack above).
+  startSharkDive(player, direction) {
+    player.diving = true;
+    player.diveTimer = player.diveDuration;
+    player.plane = 2; // PLANE_SUBMERGED — surface enemies stop seeing the player
+    player.char = '^'; // fin glyph
+    // 1.8× speed via existing speedBoost system; resets in endSharkDive.
+    player._diveSavedSpeedBoost = player.speedBoost;
+    player.speedBoost = 0.8; // additive → +80% (1.8× base)
+    // Give the dive an initial directional kick so the player visibly enters.
+    const baseMax = (player.heldItem ? 110 : 165) * (1 + player.speedBoost);
+    player.velocity.vx = direction.x * baseMax;
+    player.velocity.vy = direction.y * baseMax;
+    // Brief iframe on entry so contact damage doesn't trigger as the dive starts.
+    player.invulnerabilityTimer = Math.max(player.invulnerabilityTimer, 0.3);
+    // Brief cooldown so the same press-and-release doesn't immediately emerge.
+    player.dodgeRoll.cooldownTimer = 0.2;
+  }
+
+  endSharkDive(player) {
+    if (!player.diving) return;
+    player.diving = false;
+    player.diveTimer = 0;
+    player.plane = 0;
+    player.char = '@';
+    player.speedBoost = player._diveSavedSpeedBoost || 0;
+    player._diveSavedSpeedBoost = 0;
+  }
+
+  // Tick called from main.js each frame. Auto-ends the dive on timer expire
+  // or when the player exits water (the fin only swims through liquid).
+  updateSharkDive(player, deltaTime) {
+    if (!player.diving) return;
+    player.diveTimer -= deltaTime;
+    if (player.diveTimer <= 0 || !player.inLiquid) {
+      this.endSharkDive(player);
+    }
   }
 
   applyCharacterType(type) {

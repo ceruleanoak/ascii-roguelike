@@ -1,9 +1,10 @@
-import { GRID, PHYSICS } from '../game/GameConfig.js';
+import { GRID, PHYSICS, COLORS } from '../game/GameConfig.js';
 import { planeOf, inSamePlane, objectOnPlane } from './PlaneSystem.js';
 import { cycleExitLetter, findExitAtPoint, mutateExitLetter } from './ExitSystem.js';
 import { BoomerangMechanic } from './BoomerangMechanic.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { GameAnimalMechanic } from '../entities/enemyMechanics/GameAnimalMechanic.js';
+import { conductElectricity as conductElectricityImpl } from './ElectricConduction.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
 // room — keeps cross-room sniping in check while still feeling powerful.
@@ -1131,6 +1132,14 @@ export class CombatSystem {
               // Apply lifesteal
               if (attack.lifesteal && attack.owner) {
                 attack.owner.hp = Math.min(attack.owner.hp + attack.damage * attack.lifesteal, attack.owner.maxHp);
+              }
+
+              // Dagger: a confirmed hit immediately refreshes both the attack
+              // cooldown and the dodge-roll cooldown, rewarding aggressive stab-roll chaining.
+              if (attack.weaponSubtype === 'dagger' && attack.owner) {
+                const activeWeapon = attack.owner.quickSlots?.[attack.owner.activeSlotIndex];
+                if (activeWeapon) activeWeapon.cooldownTimer = 0;
+                if (attack.owner.dodgeRoll) attack.owner.dodgeRoll.cooldownTimer = 0;
               }
 
               // Chain lightning effect
@@ -2346,6 +2355,12 @@ export class CombatSystem {
     });
   }
 
+  // Shared entry point for every heal source (hot spring, consumables, …) so
+  // healing always shows the same green "+N" feedback damage number shows for damage.
+  showHeal(amount, x, y) {
+    this.createDamageNumber(`+${amount}`, x, y, COLORS.HEAL);
+  }
+
   clear() {
     this.projectiles = [];
     this.enemyProjectiles = [];
@@ -2523,44 +2538,6 @@ export class CombatSystem {
   }
 
   conductElectricity(sourceObj, damage, enemies, player = null) {
-    const BASE_RANGE = 48;
-    const WET_RANGE = 80;
-    const WET_MULT = 2.0;
-
-    for (const enemy of enemies) {
-      if (!enemy.isWet || !enemy.isWet()) continue;
-      if (!inSamePlane(sourceObj, enemy)) continue;
-
-      const dx = enemy.position.x - sourceObj.position.x;
-      const dy = enemy.position.y - sourceObj.position.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist <= WET_RANGE) {
-        const dmg = Math.ceil(damage * WET_MULT);
-        enemy.takeDamage(dmg);
-        // 'zap', not 'stun' — electric immobilization with the shake visual;
-        // electric-affinity enemies are auto-immune via EFFECT_AFFINITY.
-        enemy.applyStatusEffect('zap', 3.5);
-        this.createDamageNumber(dmg, enemy.position.x, enemy.position.y, '#00ffff');
-        this.createDamageNumber('⚡', enemy.position.x, enemy.position.y - 10, '#ffff00');
-      }
-    }
-
-    // Also damage wet player (they're in the electrical field) — no knockback:
-    // this fires every tick the player stands in the field, and a per-frame
-    // push would fight the player's own movement instead of reading as a hit.
-    if (player && player.isWet && player.isWet()) {
-      const dx = player.position.x - sourceObj.position.x;
-      const dy = player.position.y - sourceObj.position.y;
-      if (Math.sqrt(dx * dx + dy * dy) <= WET_RANGE) {
-        const dead = player.takeDamage(Math.ceil(damage * WET_MULT));
-        if (dead === true) {
-          this.createDamageNumber(Math.ceil(damage * WET_MULT), player.position.x, player.position.y, player.color);
-          return { playerDead: true };
-        }
-      }
-    }
-
-    return null;
+    return conductElectricityImpl(this, sourceObj, damage, enemies, player);
   }
 }

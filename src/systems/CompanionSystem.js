@@ -303,13 +303,21 @@ export class CompanionSystem {
       ? { x: game.player.position.x, y: game.player.position.y }
       : null;
 
-    // Weapon threats apply to fed and unfed crows alike.
+    // Weapon threats apply to fed and unfed crows alike. Covers melee/projectile
+    // contact, in-flight thrown consumables (bombs, jars, flasks, skulls), and
+    // fire (embers) — anything that reads as "under attack" scares the crow off.
     const weaponThreats = [];
     for (const atk of game.combatSystem.getMeleeAttacks()) {
       weaponThreats.push({ x: atk.position.x, y: atk.position.y });
     }
     for (const proj of game.combatSystem.getProjectiles()) {
       weaponThreats.push({ x: proj.position.x, y: proj.position.y });
+    }
+    for (const windup of game.inventorySystem.consumableWindups) {
+      weaponThreats.push({ x: windup.x, y: windup.y });
+    }
+    for (const particle of game.particles) {
+      if (particle.isEmber) weaponThreats.push({ x: particle.x, y: particle.y });
     }
 
     // Eat handler: remove the loaf, promote the eater to companion. Every

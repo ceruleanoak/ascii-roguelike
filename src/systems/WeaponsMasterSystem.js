@@ -27,9 +27,12 @@ export class WeaponsMasterSystem {
   trySpacePress() {
     const game = this.game;
     const player = game.player;
-    if (!player?.inHut || !game.activeFloor) return false;
 
-    const master = game.activeFloor.npcs?.find(n => n instanceof WeaponsMaster);
+    // Hut Weapons Master (Settlement S room) or the rare outdoor Red Zone
+    // caldera Weapons Master — same training flow either way.
+    const master = (player?.inHut && game.activeFloor)
+      ? game.activeFloor.npcs?.find(n => n instanceof WeaponsMaster)
+      : game.neutralCharacters?.find(n => n instanceof WeaponsMaster);
     if (!master) return false;
 
     const dist = Math.hypot(
@@ -68,8 +71,13 @@ export class WeaponsMasterSystem {
     if (!this.coinAnim) return;
     const game = this.game;
 
-    // Player left the hut mid-trade — cancel quietly, coin is already spent.
-    if (!game.player?.inHut || !game.activeFloor) {
+    // Player left the hut, or the outdoor master's room was left behind —
+    // cancel quietly, coin is already spent.
+    const { master } = this.coinAnim;
+    const stillPresent = game.player?.inHut
+      ? game.activeFloor?.npcs?.includes(master)
+      : game.neutralCharacters?.includes(master);
+    if (!stillPresent) {
       this.coinAnim = null;
       return;
     }
@@ -78,7 +86,7 @@ export class WeaponsMasterSystem {
     this.coinAnim.spinPhase += dt * 12;
     if (this.coinAnim.t < COIN_ARC_DURATION) return;
 
-    const { master, category } = this.coinAnim;
+    const { category } = this.coinAnim;
     this.coinAnim = null;
 
     const charType = game.activeCharacterType;

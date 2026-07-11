@@ -34,6 +34,13 @@ export class ArrowKeyIndicators {
     const cooldownColor = '#ff6666'; // Dim red when on cooldown
     const readyColor = COLORS.ITEM; // Bright yellow when ready
 
+    // Cyan rogue: invisibility recharge is a distinct cooldown from the roll cooldown itself —
+    // dodge still works, only the invis effect is down — so it gets its own color, not red.
+    const invisRecovering = game.player
+      && game.player.characterType === 'cyan'
+      && game.player.dodgeRoll.invisRecoveryTimer > 0;
+    const invisRecoveryColor = '#44ffff';
+
     // Check if player has an item to throw
     const hasItemToThrow = game.player && game.player.heldItem;
 
@@ -46,6 +53,8 @@ export class ArrowKeyIndicators {
         return { fontSize: GRID.CELL_SIZE * 1.4, color: readyColor };
       } else if (onCooldown) {
         return { fontSize: GRID.CELL_SIZE, color: cooldownColor };
+      } else if (invisRecovering) {
+        return { fontSize: GRID.CELL_SIZE, color: invisRecoveryColor };
       } else if (isInactive) {
         return { fontSize: GRID.CELL_SIZE, color: inactiveColor };
       } else {
