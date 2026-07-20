@@ -11,6 +11,15 @@
  * Both modes use Web Audio API exclusively — no HTML5 Audio elements.
  */
 
+// Zones with a dedicated REST-mode track. A zone with no entry here falls
+// back to the existing behavior: REST keeps the zone's EXPLORE dual-layer
+// track loaded and mutes layer 2, so layer 1 alone serves as the "peaceful"
+// fallback (see AudioSystem.switchRestMusic / enterRestState in main.js).
+const REST_MUSIC_PATHS = {
+  green: 'assets/audio/rest-green.mp3',
+  cyan: 'assets/audio/rest-cyan.mp3'
+};
+
 export class AudioSystem {
   constructor() {
     // Mode: 'single' (title screen) or 'dual' (gameplay)
@@ -79,6 +88,21 @@ export class AudioSystem {
 
     // Tracks which zone's music is currently loaded (for zone-specific music switching)
     this.currentMusicZone = 'green';
+
+    // True when the currently loaded dual-layer buffers are a dedicated
+    // REST track (rather than the zone's EXPLORE track). Lets switchZoneMusic
+    // know to force a reload back to the EXPLORE track even when the zone
+    // itself hasn't changed (e.g. green REST → green EXPLORE).
+    this.inRestMode = false;
+  }
+
+  /**
+   * Path to a zone's dedicated REST track, or undefined if the zone has no
+   * dedicated REST music (caller should keep the EXPLORE-track fallback).
+   * @param {string} zone - 'green' | 'cyan' | 'red'
+   */
+  getRestMusicPath(zone) {
+    return REST_MUSIC_PATHS[zone];
   }
 
   /**
@@ -725,24 +749,137 @@ export class AudioSystem {
    */
   switchZoneMusic(zone, base, force = false) {
     if (this.mode !== 'dual' && this.mode !== 'red') return;
+    // Leaving a dedicated REST track always requires a reload, even when the
+    // zone itself didn't change (green REST → green EXPLORE both report
+    // currentMusicZone === 'green', so the equality checks below would
+    // otherwise skip the swap back to the EXPLORE track). That swap rides
+    // switchMusicAtLoopEnd so it lands on the REST track's loop boundary
+    // instead of cutting it off mid-loop.
+    const cameFromRest = this.inRestMode;
+    if (cameFromRest) {
+      this.inRestMode = false;
+      force = true;
+    }
+    const swap = (l1, l2) => cameFromRest ? this.switchMusicAtLoopEnd(l1, l2) : this.switchMusic(l1, l2);
     if (zone === 'red' && (force || this.currentMusicZone !== 'red')) {
       if (this.switchToRedSequence()) {
         this.currentMusicZone = 'red';
       }
     } else if (zone === 'cyan' && (force || this.currentMusicZone !== 'cyan')) {
       this.currentMusicZone = 'cyan';
-      this.switchMusic(
-        `${base}assets/audio/cyan-layer1.mp3`,
-        `${base}assets/audio/cyan-layer2.mp3`
-      );
+      swap(`${base}assets/audio/cyan-layer1.mp3`, `${base}assets/audio/cyan-layer2.mp3`);
     } else if (zone !== 'cyan' && zone !== 'red'
                && (force || this.currentMusicZone === 'cyan' || this.currentMusicZone === 'red')) {
       this.currentMusicZone = 'green';
-      this.switchMusic(
-        `${base}assets/audio/layer1.mp3`,
-        `${base}assets/audio/layer2.mp3`
-      );
+      swap(`${base}assets/audio/layer1.mp3`, `${base}assets/audio/layer2.mp3`);
     }
+  }
+
+  /**
+   * Seamlessly swap the currently playing dual-layer track for another,
+   * scheduling the old sources to stop and the new ones to start exactly at
+   * the current track's loop boundary rather than cutting it off mid-loop.
+   * Falls back to an immediate switchMusic() when nothing is currently
+   * playing to synchronize against.
+   * @param {string} layer1Path
+   * @param {string} layer2Path
+   */
+  async switchMusicAtLoopEnd(layer1Path, layer2Path) {
+    if (this.mode !== 'dual' || !this.layer1Buffer || !this.isPlaying) {
+      return this.switchMusic(layer1Path, layer2Path);
+    }
+
+    const loopDuration = this.layer1Buffer.duration;
+    const currentTime = this.audioContext.currentTime;
+    const elapsed = currentTime - this.playbackStartTime;
+    const posInLoop = ((elapsed % loopDuration) + loopDuration) % loopDuration;
+    const swapTime = currentTime + (loopDuration - posInLoop);
+
+    try {
+      const [layer1Data, layer2Data] = await Promise.all([
+        this.fetchAudioBuffer(layer1Path),
+        this.fetchAudioBuffer(layer2Path)
+      ]);
+      const [newLayer1Buffer, newLayer2Buffer] = await Promise.all([
+        this.audioContext.decodeAudioData(layer1Data),
+        this.audioContext.decodeAudioData(layer2Data)
+      ]);
+
+      // Land on the boundary computed above unless decoding overran it, in
+      // which case start immediately rather than scheduling into the past.
+      const startAt = Math.max(swapTime, this.audioContext.currentTime);
+
+      const oldLayer1Source = this.layer1Source;
+      const oldLayer2Source = this.layer2Source;
+      if (oldLayer1Source) {
+        oldLayer1Source.onended = () => oldLayer1Source.disconnect();
+        try { oldLayer1Source.stop(startAt); } catch (_) {}
+      }
+      if (oldLayer2Source) {
+        oldLayer2Source.onended = () => oldLayer2Source.disconnect();
+        try { oldLayer2Source.stop(startAt); } catch (_) {}
+      }
+
+      this.layer1Buffer = newLayer1Buffer;
+      this.layer2Buffer = newLayer2Buffer;
+
+      this.layer1Source = this.audioContext.createBufferSource();
+      this.layer2Source = this.audioContext.createBufferSource();
+      this.layer1Source.buffer = newLayer1Buffer;
+      this.layer2Source.buffer = newLayer2Buffer;
+      this.layer1Source.loop = true;
+      this.layer2Source.loop = true;
+      this.layer1Source.connect(this.layer1Gain);
+      this.layer2Source.connect(this.layer2Gain);
+      this.layer1Source.start(startAt);
+      this.layer2Source.start(startAt);
+
+      this.playbackStartTime = startAt;
+      return true;
+    } catch (error) {
+      console.error('[Audio] Failed to switch music at loop end:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Resolve a zone's dual-layer buffer paths for REST: its dedicated REST
+   * track (used for both layers — layer 2 stays muted) if one exists,
+   * otherwise the zone's EXPLORE track as the "peaceful" fallback. Sets
+   * inRestMode accordingly and switches to it immediately (used only for the
+   * boss-retreat path, where the prior 'sequence' mode has no loop position
+   * to synchronize against).
+   * @param {string} zone
+   * @param {string} base - BASE_URL prefix
+   */
+  loadRestBuffers(zone, base) {
+    const restPath = this.getRestMusicPath(zone);
+    this.inRestMode = !!restPath;
+    const [l1, l2] = restPath
+      ? [`${base}${restPath}`, `${base}${restPath}`]
+      : [`${base}assets/audio/layer1.mp3`, `${base}assets/audio/layer2.mp3`];
+    return this.switchMusic(l1, l2);
+  }
+
+  /**
+   * Switch to a zone's dedicated REST track, if one exists, waiting for the
+   * currently playing EXPLORE track to finish its loop before cutting over
+   * (via switchMusicAtLoopEnd). No-ops (leaving the current EXPLORE buffers
+   * with layer 2 muted as the fallback) when the zone has no REST track —
+   * see REST_MUSIC_PATHS. Layer 2 muting is left to the caller's existing
+   * setLayer2Enabled(false) (enterRestState), which — called synchronously
+   * right after this, before the swap's fetch/decode resolves — schedules
+   * against the still-current EXPLORE buffer and lands on the same boundary.
+   * @param {string} zone - 'green' | 'cyan' | 'red'
+   * @param {string} base - BASE_URL prefix
+   */
+  switchRestMusic(zone, base) {
+    if (this.mode !== 'dual') return;
+    const restPath = this.getRestMusicPath(zone);
+    if (!restPath || (this.inRestMode && this.currentMusicZone === zone)) return;
+    this.inRestMode = true;
+    this.currentMusicZone = zone;
+    this.switchMusicAtLoopEnd(`${base}${restPath}`, `${base}${restPath}`);
   }
 
   /**
