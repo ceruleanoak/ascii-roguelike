@@ -21,6 +21,9 @@
 
 import { GRID, COLORS, ROOM_TYPES } from '../../game/GameConfig.js';
 import { drawOffscreenEnemyIndicators } from '../ui/OffscreenEnemyIndicators.js';
+import { drawPlayerFacingIndicator } from '../ui/PlayerFacingIndicator.js';
+import { drawSniperIndicators, drawSniperBeams, drawSniperReticules, sniperHidingConcealAlpha } from '../effects/SniperEffects.js';
+import { drawSinkholes } from '../effects/SinkholeEffects.js';
 import { drawTamedRats } from '../ui/CompanionRenderers.js';
 import { INGREDIENTS } from '../../data/items.js';
 import { BRIDGE_MATERIALS } from '../../systems/RidgeSystem.js';
@@ -28,7 +31,7 @@ import { PixelatedDissolve, SplitReveal } from '../effects/TextEffects.js';
 import { BossRenderer } from './BossRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
 import { isInteriorActive } from '../../systems/PlaneSystem.js';
-import { hasTorchLight, drawPlayerTorchLight } from '../ui/torchLight.js';
+import { drawUndergroundFogOverlay } from '../ui/torchLight.js';
 import { stepConcealmentAlpha } from '../../systems/WorldEffectsSystem.js';
 import { ConsumableTriggerSystem } from '../../systems/ConsumableTriggerSystem.js';
 
@@ -184,13 +187,15 @@ export class ExploreRenderer {
       }
     }
 
-    // Draw static background objects (exclude water, grass, tunnel walls, and
-    // campfires — those animate each frame and are drawn on the foreground)
+    // Draw static background objects (exclude water, grass, tunnel walls,
+    // campfires, and Sinkholes — those animate/highlight each frame and are
+    // drawn on the foreground)
     for (const obj of game.backgroundObjects) {
       const isGrass = obj.char === '|' || obj.char === '\\' || obj.char === '/' || obj.char === ',';
       const isTunnelWall = obj.data && obj.data.tunnelWall;
       if (obj.isCampfire) continue;
       if (obj.onFire) continue; // burning objects flicker on the foreground (drawBurningObjects)
+      if (obj.char === '⬤') continue; // Sinkhole: foreground draw, see drawSinkholes
       if (!obj.currentAnimation && obj.char !== '~' && !isGrass && !isTunnelWall) {
         // Check plane-aware rendering (tunnel entrances, etc.)
         if (!this.shouldRenderBackgroundObject(obj, game.player)) continue;
@@ -440,6 +445,10 @@ export class ExploreRenderer {
       );
     }
 
+    // Draw revealed Sinkholes on foreground each frame so the in-range
+    // highlight (SPACE would trigger a dive) tracks player movement live.
+    drawSinkholes(this.renderer, game);
+
     // Draw water tiles on foreground so state changes (frozen '=', electrified blink) render each frame
     for (const obj of game.backgroundObjects) {
       if (obj.char === '~' && !obj.currentAnimation) {
@@ -471,6 +480,7 @@ export class ExploreRenderer {
     // hutPlane=false here selects the surface set; hutPlane=true is called by HutInteriorOverlay.
     this.drawPuddles(game, false);
     this.drawGooBlobs(game, false);
+    drawSniperBeams(this.renderer, game);
 
     // Draw debris + ingredients (surface entries only — interior entries routed via overlay).
     this.drawDebris(game, false);
@@ -879,6 +889,9 @@ export class ExploreRenderer {
       );
     }
 
+    // Attack-direction indicator: small '^' orbiting tight around the player.
+    if (!playerInInterior) drawPlayerFacingIndicator(this.renderer, game);
+
     // Draw staff-block stance: staff held perpendicular to facing direction,
     // ~1 cell forward from player center.
     if (!playerInInterior && game.player.isStaffBlocking && game.player.heldItem) {
@@ -962,6 +975,10 @@ export class ExploreRenderer {
     // Draw sapping enemies on top of player — skip when interior (overlay handles via its own drawSappingEnemies call)
     if (!playerInInterior) this.drawSappingEnemies(game, game.activeRoom.enemies);
 
+    // Sniper reticule on top of player (see SniperEffects.js — was previously
+    // drawn in the enemy pass, before the player, so it rendered behind them).
+    if (!playerInInterior) drawSniperReticules(this.renderer, game.activeRoom.enemies);
+
     // Draw boss composite (body + necks + multi-char heads) — skips individual entity rendering
     if (!playerInInterior && game.bossSystem?.active) {
       this.bossRenderer.renderBossComposite(game);
@@ -1030,32 +1047,16 @@ export class ExploreRenderer {
 
     // Sandstorm sand motes — yellow zone wind. Drawn over entities so motes
     // pass in front, under interior overlays so they don't bleed into the PiP.
-    if (!playerInInterior) {
+    // Also suppressed underground (Aquifer tunnel plane), separate from interior state.
+    if (!playerInInterior && game.player?.plane !== 1) {
       game.sandstormSystem?.render(this.renderer.fgCtx);
     }
 
     // Old exit indicator system removed - now using colored exit letters
     // (Letters render at actual exit positions when exits unlock)
 
-    // Underground fog-of-war overlay: darken everything outside the player's visibility circle.
-    // Drawn after all entities so it clips both fg content and the bg canvas beneath.
-    // Uses evenodd fill rule to punch a transparent hole at the player's position.
-    if (game.currentRoom?.underground && game.player?.plane === 1) {
-      const torchLit = hasTorchLight(game);
-      const fogRadius = (game.currentRoom.underground.caveFogRadius || 5) * GRID.CELL_SIZE * (torchLit ? 1.5 : 1);
-      const px = game.player.position.x + GRID.CELL_SIZE / 2;
-      const py = game.player.position.y + GRID.CELL_SIZE / 2;
-      const envColors = game.zoneSystem.getBlendedEnvironmentColors(game.currentRoom.zone);
-      const ctx = this.renderer.fgCtx;
-      ctx.save();
-      ctx.fillStyle = envColors.background || '#000000';
-      ctx.beginPath();
-      ctx.rect(0, 0, GRID.WIDTH, GRID.HEIGHT);
-      ctx.arc(px, py, fogRadius, 0, Math.PI * 2);
-      ctx.fill('evenodd');
-      ctx.restore();
-      if (torchLit) drawPlayerTorchLight(this.renderer, px, py);
-    }
+    // Underground fog-of-war overlay (cave fog radius + torch glow boost).
+    drawUndergroundFogOverlay(this.renderer, game);
 
     // Gray zone mist: surface-plane '~' glyph field (cave fog above owns plane 1).
     // After entities — mist hangs in front of them — before Tab overlay and PiPs.
@@ -1383,12 +1384,22 @@ export class ExploreRenderer {
     // flag is now redundant for ground enemies but kept for future flying
     // variants. Use the active layer's background objects so interior enemies
     // check interior grass, not exterior grass.
+    //
+    // Sniper hidden-state shares this same fade timer — see SniperEffects.js
+    // (sniperHidingConcealAlpha) for the 'hiding' telegraph ramp and
+    // SniperMechanic._updateHidden for the post-vanish travel it leads into.
     const groundEnemy = enemy.data?.float !== true;
     const applyGrass = !enemy.data?.isDummy && (enemy.data?.grassStealth || groundEnemy);
+    const isHidingTelegraph = enemy.sniperState === 'hiding';
+    const applyConceal = applyGrass || enemy.sniperHidden || isHidingTelegraph;
     let concealAlpha = 1;
-    if (applyGrass) {
-      const hidden = this._isOnTallGrass(game, enemy.position.x, enemy.position.y);
-      concealAlpha = stepConcealmentAlpha(enemy, !hidden);
+    if (applyConceal) {
+      if (isHidingTelegraph) {
+        concealAlpha = sniperHidingConcealAlpha(enemy);
+      } else {
+        const grassHidden = applyGrass && this._isOnTallGrass(game, enemy.position.x, enemy.position.y);
+        concealAlpha = stepConcealmentAlpha(enemy, !(grassHidden || enemy.sniperHidden));
+      }
       if (concealAlpha < 0.005) return;
     }
     const _enemyCtx = this.renderer.fgCtx;
@@ -1613,6 +1624,9 @@ export class ExploreRenderer {
         windupIndicator.color
       );
     }
+
+    // Sniper reticule + telegraph/dagger-windup indicator
+    drawSniperIndicators(this.renderer, enemy);
 
     // Draw memory/vision lost indicator
     const memoryIndicator = enemy.getMemoryIndicator();
@@ -1912,13 +1926,7 @@ export class ExploreRenderer {
     const ctx = this.renderer.fgCtx;
     const room = game.currentRoom;
     const donated = room.bridgeDonated ?? { stick: 0, metal: 0, rock: 0 };
-    const inv = game.player?.inventory ?? [];
-
-    // Count player inventory for each material (inventory stores plain char strings)
-    const have = {};
-    for (const mat of BRIDGE_MATERIALS) {
-      have[mat.key] = inv.filter(i => i === mat.char).length;
-    }
+    const have = game.ridgeSystem.getHaveCounts();
 
     const PAN_W = 208;
     const ROW_H = 18;

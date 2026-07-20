@@ -260,6 +260,76 @@ export function generateCalderaRoom(gen, room) {
   // No need to override them here
 }
 
+// Red Zone's A-room (Ascent) addition: seeds the mud floor ring outside the
+// plateau and captures the slope belt's original glyph/direction so
+// LavaAscentSystem can flood both to lava (and revert) over time. Called
+// from RoomGenerator.generateAscentRoom() right after its normal slope-belt
+// loop finishes, so slope tiles already have their final char/slopeDirection
+// set by the time this runs.
+//
+// Floor tiles convert in `floorFillOrder`, ascending distance from a
+// handful of random seed tiles — the flood spreads from a few sources
+// instead of popping at random, which reads as directional and gives the
+// player something to route around. Slope tiles are grouped into whole
+// radius rings in `slopeFillGroups` (outermost ring first) so a ring floods
+// as one unit — "all r=8 tiles turn to lava at once" — rather than
+// trickling tile by tile. LavaAscentSystem walks both orderings forward to
+// fill and backward to drain.
+export function seedMoltenAscentCycle(gen, room, centerCol, centerRow, innerRadius, outerRadius) {
+  const C = GRID.CELL_SIZE;
+  const floorMudTiles = [];
+
+  for (let col = 1; col < GRID.COLS - 1; col++) {
+    for (let row = 1; row < GRID.ROWS - 1; row++) {
+      const dx = col - centerCol;
+      const dy = row - centerRow;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist <= outerRadius) continue;
+      if (!gen.isValidPosition(col, row, room)) continue;
+      const mudTile = BackgroundObject.createVariant('mud_dry', col * C, row * C);
+      mudTile._ascentCol = col;
+      mudTile._ascentRow = row;
+      room.backgroundObjects.push(mudTile);
+      floorMudTiles.push(mudTile);
+    }
+  }
+
+  const seedCount = Math.min(3, floorMudTiles.length);
+  const seedPool = [...floorMudTiles];
+  const seeds = [];
+  for (let i = 0; i < seedCount && seedPool.length; i++) {
+    const idx = Math.floor(Math.random() * seedPool.length);
+    seeds.push(seedPool.splice(idx, 1)[0]);
+  }
+  const distToNearestSeed = (tile) =>
+    Math.min(...seeds.map(s => Math.hypot(tile._ascentCol - s._ascentCol, tile._ascentRow - s._ascentRow)));
+  const floorFillOrder = [...floorMudTiles].sort((a, b) => distToNearestSeed(a) - distToNearestSeed(b));
+
+  const ringGroups = new Map();
+  for (const obj of room.backgroundObjects) {
+    if (!obj.slope) continue;
+    obj.originalSlopeChar = obj.char;
+    obj.originalSlopeDirection = obj.slopeDirection;
+    const col = Math.round(obj.position.x / C);
+    const row = Math.round(obj.position.y / C);
+    const dist = Math.sqrt((col - centerCol) ** 2 + (row - centerRow) ** 2);
+    const ring = Math.min(outerRadius, Math.max(innerRadius, Math.round(dist)));
+    if (!ringGroups.has(ring)) ringGroups.set(ring, []);
+    ringGroups.get(ring).push(obj);
+  }
+  const slopeFillGroups = [...ringGroups.keys()]
+    .sort((a, b) => b - a) // outermost radius first
+    .map(ring => ringGroups.get(ring));
+
+  room.ascentLava = {
+    phase: 'fillingFloor', // fillingFloor -> fillingSlopes -> drainingSlopes -> drainingFloor -> complete
+    timer: 0,
+    floorFillOrder,
+    slopeFillGroups,
+    plateau: { centerCol, centerRow, radius: innerRadius }
+  };
+}
+
 // Quagmire Pond: shape a small round body of water (from '~' bg objects) at the
 // largest pool's center with a conspicuous dark water tile in the middle — the
 // frog-only Pond entrance. AquiferSystem reads room.pondEntry to dive.
@@ -293,6 +363,160 @@ export function placePondEntries(gen, room) {
   center.color = '#0a3050';
   center.animationColor = '#0a3050';
   room.pondEntry = center;
+}
+
+// Seeds 0-2 concealed Sinkholes into a G room's already-placed grass swaths.
+// Grass is scattered as continuous pixel positions in circular clusters (not
+// grid cells), so adjacency is measured by pixel radius around a randomly
+// chosen anchor grass tile rather than an 8-neighborhood grid check. The
+// anchor cell itself is ordinary grass pre-reveal — cutting it is no
+// different from cutting any neighbor, so it isn't tracked specially.
+export function seedSinkholes(gen, room) {
+  if (room.exitLetter !== 'G') return;
+  room.sinkholes = [];
+
+  const grassObjects = room.backgroundObjects.filter(obj => obj.char === '|');
+  if (grassObjects.length < 3) return;
+
+  const siteCount = Math.floor(Math.random() * 3); // 0-2
+  const adjacencyRadius = GRID.CELL_SIZE * 1.5;
+  const usedAnchors = new Set();
+
+  for (let i = 0; i < siteCount; i++) {
+    const candidates = grassObjects.filter(g => !usedAnchors.has(g));
+    if (!candidates.length) break;
+    const anchor = candidates[Math.floor(Math.random() * candidates.length)];
+    usedAnchors.add(anchor);
+
+    const adjacentGrass = grassObjects.filter(g => {
+      if (g === anchor) return false;
+      const dx = g.position.x - anchor.position.x;
+      const dy = g.position.y - anchor.position.y;
+      return Math.sqrt(dx * dx + dy * dy) <= adjacencyRadius;
+    });
+
+    // Too few neighbors to ever reach majority-cut — skip so every seeded
+    // Sinkhole is guaranteed revealable.
+    if (adjacentGrass.length < 3) continue;
+
+    room.sinkholes.push({
+      col: anchor.position.x,
+      row: anchor.position.y,
+      anchor,
+      revealed: false,
+      adjacentGrass,
+      cutSet: new Set(),
+      glyphObj: null,
+      cave: null
+    });
+  }
+}
+
+// BFS over a cave grid's open cells (0 = passage, 1 = wall) from a start
+// cell, returning the farthest reachable cell and the path to it. Unweighted
+// BFS visits cells in strict distance order, so the last cell dequeued is
+// guaranteed farthest from the start — the standard trick for carving a
+// guaranteed river/trail that never crosses a wall (a straight Manhattan
+// line, as used elsewhere for the false-obsidian vein trail, can't make that
+// guarantee against an irregular cellular-automata cave).
+export function bfsFarthestOpenPath(caveGrid, startCol, startRow, isBlockedExtra) {
+  const ROWS = caveGrid.length, COLS = caveGrid[0].length;
+  const isOpen = (col, row) =>
+    row > 0 && row < ROWS - 1 && col > 0 && col < COLS - 1 &&
+    caveGrid[row][col] === 0 && !(isBlockedExtra && isBlockedExtra(col, row));
+
+  const key = (c, r) => `${c},${r}`;
+  const visited = new Set([key(startCol, startRow)]);
+  const prev = new Map();
+  const queue = [{ col: startCol, row: startRow }];
+  let far = { col: startCol, row: startRow };
+
+  while (queue.length) {
+    const cur = queue.shift();
+    far = cur;
+    const neighbors = [
+      { col: cur.col + 1, row: cur.row }, { col: cur.col - 1, row: cur.row },
+      { col: cur.col, row: cur.row + 1 }, { col: cur.col, row: cur.row - 1 }
+    ];
+    for (const n of neighbors) {
+      if (!isOpen(n.col, n.row)) continue;
+      const k = key(n.col, n.row);
+      if (visited.has(k)) continue;
+      visited.add(k);
+      prev.set(k, cur);
+      queue.push(n);
+    }
+  }
+
+  const path = [];
+  let cur = far;
+  while (cur && !(cur.col === startCol && cur.row === startRow)) {
+    path.push(cur);
+    cur = prev.get(key(cur.col, cur.row));
+  }
+  path.push({ col: startCol, row: startRow });
+  path.reverse();
+
+  return { farCell: far, path };
+}
+
+// Force-injects a guaranteed lake + river trail into a yellow-zone
+// underground room, gated by RoomGenerator._forceSinkholeArrival (set only
+// by SinkholeSystem's cross-zone hand-off, cleared immediately on read).
+// Normal yellow U rooms reached via ordinary exits never call this.
+export function injectSinkholeLake(gen, room) {
+  const underground = room.underground;
+  if (!underground) return;
+  const { caveGrid, clearings } = underground;
+  const COLS = GRID.COLS, ROWS = GRID.ROWS;
+  const isInClearing = (col, row) =>
+    clearings.some(c => col >= c.minCol && col <= c.maxCol && row >= c.minRow && row <= c.maxRow);
+  const occupied = (col, row) => {
+    const x = col * GRID.CELL_SIZE, y = row * GRID.CELL_SIZE;
+    return room.backgroundObjects.some(o => !o.surfaceOnly && o.position.x === x && o.position.y === y);
+  };
+  const canStampWater = (col, row) =>
+    caveGrid[row]?.[col] === 0 && !isInClearing(col, row) && !occupied(col, row);
+
+  const openCells = [];
+  for (let r = 1; r < ROWS - 1; r++) {
+    for (let c = 1; c < COLS - 1; c++) {
+      if (canStampWater(c, r)) openCells.push({ col: c, row: r });
+    }
+  }
+  // Too little open cave to safely carve a lake — leave the room as a normal
+  // (lakeless) underground room rather than risk stamping into a wall.
+  if (openCells.length < 8) return;
+
+  const centerCol = Math.floor(COLS / 2), centerRow = Math.floor(ROWS / 2);
+  const lakeCenter = openCells.reduce((best, cell) => {
+    const dist = Math.abs(cell.col - centerCol) + Math.abs(cell.row - centerRow);
+    return (!best || dist < best.dist) ? { cell, dist } : best;
+  }, null).cell;
+
+  const LAKE_RADIUS = 2;
+  const lakeKeys = new Set();
+  for (let dr = -LAKE_RADIUS; dr <= LAKE_RADIUS; dr++) {
+    for (let dc = -LAKE_RADIUS; dc <= LAKE_RADIUS; dc++) {
+      if (dc * dc + dr * dr > LAKE_RADIUS * LAKE_RADIUS) continue;
+      const col = lakeCenter.col + dc, row = lakeCenter.row + dr;
+      if (!canStampWater(col, row)) continue;
+      lakeKeys.add(`${col},${row}`);
+      room.backgroundObjects.push(new BackgroundObject('≈', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
+    }
+  }
+
+  // River trail: guaranteed-open BFS path from the lake out to the farthest
+  // reachable cave cell — that far end is where the player arrives.
+  const { farCell, path } = bfsFarthestOpenPath(caveGrid, lakeCenter.col, lakeCenter.row, isInClearing);
+  for (const { col, row } of path) {
+    const k = `${col},${row}`;
+    if (lakeKeys.has(k) || !canStampWater(col, row)) continue;
+    lakeKeys.add(k);
+    room.backgroundObjects.push(new BackgroundObject('≈', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
+  }
+
+  room._sinkholeArrivalSpawn = { x: farCell.col * GRID.CELL_SIZE, y: farCell.row * GRID.CELL_SIZE };
 }
 
 function cellInRegion(col, row, region) {

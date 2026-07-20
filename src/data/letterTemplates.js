@@ -174,14 +174,14 @@ export const LETTER_TEMPLATES = {
 
   G: {
     name: 'Grass',
-    description: 'Overgrown meadow — tall grass conceals ground enemies, items, and the player. Flying enemies remain above the canopy. A Scythe waits in a small clearing.',
+    description: 'Overgrown meadow — tall grass conceals ground enemies, items, and the player. Flying enemies remain above the canopy.',
 
     wallStructures: {
       allow: false // Open meadow — no walls
     },
 
     bgObjectRules: {
-      // Small central clearing where the Scythe spawns
+      // Small central clearing — grass-free breathing room in the meadow
       clearingZone: {
         centerCol: 15,
         centerRow: 15,
@@ -205,13 +205,6 @@ export const LETTER_TEMPLATES = {
 
       // Water breaks the grass coverage — keep it out
       suppressLiquid: true
-    },
-
-    // Always drop a Scythe in the clearing
-    guaranteedItems: {
-      enabled: true,
-      position: 'clearing_center',
-      itemPool: ['Ƨ'] // Scythe
     },
 
     // Eligible for HuntingSystem's stillness-triggered moose/rabbit encounter.

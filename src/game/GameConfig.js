@@ -671,6 +671,37 @@ export const BACKGROUND_OBJECTS = {
       default: { animation: 'bounce', message: null }
     }
   },
+  '⬤': {
+    name: 'Sinkhole',
+    color: '#4a2f6b',
+    highlightColor: '#b088ff',
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    solid: false,
+    acceptsInteractions: ['spacebar'],
+    interactions: {
+      default: { animation: 'none', message: null, effect: 'sinkholeDive' }
+    }
+  },
+  // Plane-1-only decorative river/lake water for the Sinkhole cave system.
+  // Deliberately not wired into the '~' water state machine (wetness, freezing,
+  // flow animation) — this phase only needs a walkable, visually distinct trail;
+  // full water parity is out of scope until the cave gets real content.
+  '≈': {
+    name: 'Cave River',
+    color: '#3366ff',
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'water',
+    indestructible: true,
+    solid: false,
+    renderOnlyOnPlane: 1,
+    interactions: {
+      default: { animation: 'ripple', message: null }
+    }
+  },
   '≡': {
     name: 'Hut Wall',
     color: '#5c4a2a',
@@ -1220,6 +1251,10 @@ export const OBJECT_ANIMATIONS = {
 };
 
 export const INTERACTION_RANGE = 24; // pixels
+
+// Shared interaction radius for all NPC classes (dialogue, errands, character
+// swap) — one cell tighter than the old per-file 2.5-cell TALK_RANGE.
+export const NPC_INTERACTION_RANGE = GRID.CELL_SIZE * 1.5;
 
 // Polymorph transformation outcomes for Transmutation Wand
 export const POLYMORPH_OUTCOMES = {

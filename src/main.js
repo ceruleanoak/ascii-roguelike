@@ -35,6 +35,7 @@ import { InteriorManager } from './systems/InteriorManager.js';
 import { CameraZoomSystem } from './systems/CameraZoomSystem.js';
 import { RoundCombatSystem } from './systems/RoundCombatSystem.js';
 import { AquiferSystem } from './systems/AquiferSystem.js';
+import { SinkholeSystem } from './systems/SinkholeSystem.js';
 import { BossSystem } from './systems/BossSystem.js';
 import { BoulderSystem } from './systems/BoulderSystem.js';
 import { SpellSystem } from './systems/SpellSystem.js';
@@ -44,6 +45,7 @@ import { MagicSystem } from './systems/MagicSystem.js';
 import { BatSystem } from './systems/BatSystem.js';
 import { FlailSystem } from './systems/FlailSystem.js';
 import { WellSystem } from './systems/WellSystem.js';
+import { LavaAscentSystem } from './systems/LavaAscentSystem.js';
 import { HuntingSystem } from './systems/HuntingSystem.js';
 import { WarpSystem } from './systems/WarpSystem.js';
 import { PuzzleSystem } from './systems/PuzzleSystem.js';
@@ -165,6 +167,7 @@ class Game {
     this.cameraZoomSystem = new CameraZoomSystem(this); // combat-proximity zoom
     this.roundCombatSystem = new RoundCombatSystem(this); // Quagmire wave combat
     this.aquiferSystem = new AquiferSystem(this);         // frog-only plane-1 Aquifer (Quagmire dive)
+    this.sinkholeSystem = new SinkholeSystem(this);       // concealed G-room shortcut → yellow-zone U room
     this.bossSystem = new BossSystem(this);
     this.boulderSystem = new BoulderSystem(this);
     this.spellSystem = new SpellSystem(this);
@@ -174,6 +177,7 @@ class Game {
     this.batSystem = new BatSystem(this);
     this.flailSystem = new FlailSystem(this);
     this.wellSystem = new WellSystem(this);
+    this.lavaAscentSystem = new LavaAscentSystem(this);
     this.huntingSystem = new HuntingSystem(this);
     this.warpSystem = new WarpSystem(this);
     this.fountainSystem = new FountainSystem(this);
@@ -238,6 +242,7 @@ class Game {
     this.gooBlobs = []; // Goo blobs from Goo Dispenser
     this.puddles = []; // Persistent slime puddles from Slime Bomb
     this.enemyShockwaves = []; // Invisible expanding rings from enemy attacks (e.g., Giant Slime leap landing)
+    this.sniperBeams = []; // Fading red line renders from the Sniper's fired shot
     this.idleEchoes = []; // REST: SPACE-with-nothing-to-do feedback rings
     this.wishesUsed = 0; // CLEANSE spell wishes used this run (max 3)
     this.cleanseWave = null; // Active wave animation { startTime, duration }
@@ -1158,15 +1163,20 @@ class Game {
       this.preMinibossGateActive = false;
       this.audioSystem.currentMusicZone = 'green';
       const base = import.meta.env.BASE_URL;
-      this.audioSystem.switchMusic(
-        `${base}assets/audio/layer1.mp3`,
-        `${base}assets/audio/layer2.mp3`
-      ).then(() => this.audioSystem.setLayer2Enabled(false));
+      this.audioSystem.loadRestBuffers('green', base)
+        .then(() => this.audioSystem.setLayer2Enabled(false));
+    } else if (this.audioSystem.mode === 'dual') {
+      // Common case: retreating south from EXPLORE straight into REST.
+      // Swap to the current zone's dedicated REST track if it has one;
+      // zones without one keep their EXPLORE track loaded (layer 2 muted
+      // below serves as the "peaceful" fallback).
+      this.audioSystem.switchRestMusic(this.audioSystem.currentMusicZone, import.meta.env.BASE_URL);
     }
-    // Note: when entering REST from a non-green zone (cyan, red), the current
-    // zone music carries over instead of resetting to green. The death-reset
-    // path (hardResetDualLayers, ~line 4908) is the only thing that forces a
-    // hard return to green.
+    // Note: when entering REST from a non-green zone (cyan, red) with no
+    // dedicated REST track, the current zone's EXPLORE music carries over
+    // instead of resetting to green. The death-reset path
+    // (hardResetDualLayers, ~line 4908) is the only thing that forces a hard
+    // return to green.
 
     // Reset zone system on rest
     this.zoneSystem.resetOnRest();
@@ -2223,7 +2233,8 @@ class Game {
 
   // Enemies that count toward "room cleared". Hidden mimics are excluded
   // so they don't block exits — the player can't reasonably find them
-  // until they reveal themselves on approach.
+  // until they reveal themselves on approach. Sniper's `sniperHidden` is
+  // deliberately NOT here — it's still alive/threatening while repositioning.
   _isHiddenEnemy(e) {
     if (e.data?.mimicMechanic?.enabled && !e.mimicRevealed) return true;
     if (e.data?.shellCamouflage && e.inShellForm && !e.hasBeenActivated) return true;
@@ -2241,6 +2252,7 @@ class Game {
     this.gooBlobs = [];
     this.puddles = [];
     this.enemyShockwaves = [];
+    this.sniperBeams = [];
     this.debris = [];
     this.particles = [];
     this.steamClouds = [];
@@ -2764,6 +2776,9 @@ class Game {
     // Drive Infused Coin → well arc animation + post-ritual flash
     this.wellSystem.update(deltaTime);
 
+    // Drive the red-zone Ascent mud→lava flood/recede cycle
+    this.lavaAscentSystem.update(deltaTime);
+
     // Drive room-stillness timer + huntable game (moose/rabbit) lifecycle
     this.huntingSystem.update(deltaTime);
 
@@ -3046,6 +3061,7 @@ class Game {
     // Update hut/dungeon/maze systems (door entry/exit and interior entity logic)
     this.interiorManager.update(deltaTime);
     this.aquiferSystem.update(deltaTime); // Quagmire dive: entry cooldown + plane-1 pickup
+    this.sinkholeSystem.update(deltaTime); // Sinkhole cave: river-exit → cross-zone transition
     this.alchemySystem.update(deltaTime);
 
     // Update polymorph system (tongue attacks, cure Rusalka contact, Lake room spawn)
@@ -3464,7 +3480,9 @@ class Game {
     // in the enemies array, so if they reveal post-clear they fight normally,
     // but exits and clear-side effects fire on visible-enemy defeat.
     // Skip while diving the Aquifer: defer wave advance until the frog surfaces.
-    if (!this.player.inAquifer && this._countedEnemies(this.currentRoom.enemies).length === 0) {
+    const ascentLavaPhase = this.currentRoom.ascentLava?.phase;
+    const ascentLavaActive = ascentLavaPhase === 'fillingFloor' || ascentLavaPhase === 'fillingSlopes';
+    if (!this.player.inAquifer && !ascentLavaActive && this._countedEnemies(this.currentRoom.enemies).length === 0) {
       // Quagmire: spawn the next wave instead of clearing while rounds remain.
       if (this.currentRoom.cleared || !this.roundCombatSystem.advanceIfPending(this.currentRoom)) {
       // Only process room clear once
@@ -3870,7 +3888,7 @@ class Game {
 
       // Artifact → errand traveler: consume ⚜, spawn 2 coin ingredients at NPC.
       // Side trade — does not advance or alter the active stage errand.
-      const artifactResult = this.errandSystem.tryGiveArtifact(this.player, npcArray);
+      const artifactResult = this.errandSystem.tryGiveArtifact(this.player, npcArray, this.inventorySystem);
       if (artifactResult) {
         for (let i = 0; i < artifactResult.coins; i++) {
           const angle = (i / artifactResult.coins) * Math.PI * 2 + Math.random() * 0.4;
@@ -4013,6 +4031,13 @@ class Game {
         this.interactionSystem.openContainer(nearbyContainer);
         return;
       }
+
+      // Revealed Sinkhole supersedes attacking too (SPACE action, not a swing).
+      // Checked independently of nearbyContainer above so no unrelated
+      // background object can block it — only uncut grass ('|'), which is
+      // still meant to conceal it, is allowed to pre-empt this.
+      const blockedByGrass = nearbyContainer?.char === '|';
+      if (!blockedByGrass && this.sinkholeSystem.handleSpacePress()) return;
 
       // If player has a weapon and can attack, attack (gem/bread gating +
       // charge SFX + attack creation live in CombatSystem.tryUseHeldWeapon)
@@ -4356,7 +4381,7 @@ class Game {
       console.log(`[CHEAT] ⚠ No spawn position found for ${name}`);
       return;
     }
-    const enemy = new Enemy(char, pos.x, pos.y, this.currentDepth);
+    const enemy = new Enemy(char, pos.x, pos.y, this.getCurrentZoneDepth());
     enemy.setCollisionMap(room.collisionMap);
     enemy.setBackgroundObjects(room.backgroundObjects);
     enemy.setSteamClouds(this.steamClouds);
@@ -4730,7 +4755,8 @@ class Game {
       // slot-choice prompt off during demo playback (recordings expect auto-swap)
       this.stateMachine.getCurrentState() !== GAME_STATES.ARCADE_DEMO,
       0, // unused parameter kept for backwards compatibility
-      this.selectedWeaponSlotIndex
+      this.selectedWeaponSlotIndex,
+      this.renderer
     );
 
     // Full quick slots: paused slot-choice prompt instead of auto-displacement
@@ -4767,32 +4793,8 @@ class Game {
 
   // Apply blessing (permanent buff from Leshy Grove)
   applyBlessing(blessingItem) {
-    const blessing = blessingItem.data;
-
-    // Track collected blessing
-    this.blessingsCollected.push(blessing.char);
-
-    // Apply permanent buff based on effect type
-    switch (blessing.effect.type) {
-      case 'damageBuff':
-        this.player.damageBuff = (this.player.damageBuff || 0) + blessing.effect.value;
-        this.showPickupMessage(`${blessing.name} (+${blessing.effect.value} damage)`);
-        break;
-
-      case 'hpBuff':
-        this.player.maxHp += blessing.effect.value;
-        this.player.hp = Math.min(this.player.hp + blessing.effect.value, this.player.maxHp); // Heal to new max
-        this.showPickupMessage(`${blessing.name} (+${blessing.effect.value} HP)`);
-        break;
-
-      case 'speedBuff':
-        this.player.speed += blessing.effect.value;
-        this.showPickupMessage(`${blessing.name} (+${blessing.effect.value} speed)`);
-        break;
-
-      default:
-        console.warn(`[Blessing] Unknown effect type: ${blessing.effect.type}`);
-    }
+    const message = this.inventorySystem.applyBlessing(this.player, blessingItem, this.blessingsCollected);
+    if (message) this.showPickupMessage(message);
   }
 
   updatePlacedTraps(deltaTime) {

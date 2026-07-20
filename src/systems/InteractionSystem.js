@@ -3,7 +3,7 @@ import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Leshy } from '../entities/Leshy.js';
 import { Fairy } from '../entities/Fairy.js';
 import { isIngredient, isItem, generateEnemyDrops } from '../data/items.js';
-import { getZoneRandomEnemy } from '../data/enemies.js';
+import { getZoneRandomEnemy, ENEMIES } from '../data/enemies.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
 import { createDebris } from '../entities/Debris.js';
 import { createIceBurst, Particle } from '../entities/Particle.js';
@@ -142,8 +142,13 @@ export class InteractionSystem {
       );
       if (dist > GRID.CELL_SIZE * 2) continue;
       const idx = game.player.inventory.indexOf('⚜');
-      if (idx === -1) continue;
-      game.player.inventory.splice(idx, 1);
+      if (idx !== -1) {
+        game.player.inventory.splice(idx, 1);
+      } else {
+        const restIdx = game.inventorySystem?.restInventory.indexOf('⚜') ?? -1;
+        if (restIdx === -1) continue;
+        game.inventorySystem.restInventory.splice(restIdx, 1);
+      }
       npc.unlockRareHint(game.currentRoom?.zone || 'green');
       return true;
     }
@@ -241,6 +246,12 @@ export class InteractionSystem {
     const playerPlane = planeOf(game.player);
     for (const obj of objects) {
       if (!objectOnPlane(obj, playerPlane)) continue;
+      // Cut grass (',') is inert decoration with no spacebar interaction of
+      // its own — it must not intercept the scan ahead of a real
+      // interactable (e.g. a revealed Sinkhole '⬤' sitting among its
+      // now-cut neighbor tiles). Uncut grass ('|') is left alone: it's
+      // meant to hide what's underneath until cut.
+      if (obj.char === ',') continue;
       const distance = game.physicsSystem.getDistance(game.player, obj);
       if (distance < INTERACTION_RANGE) {
         return obj;
@@ -583,6 +594,8 @@ export class InteractionSystem {
     } else if (effect === 'destroyObject') {
       obj.destroyAfterAnimation = true;
       game.renderer.markBackgroundDirty();
+    } else if (effect === 'sinkholeDive') {
+      game.sinkholeSystem?.dive(game.currentRoom, obj.sinkholeRef);
     } else if (effect === 'cutGrass') {
       // Frozen grass (tinted by a Freeze Trap) emits an ice burst when sliced.
       if (obj.frozen) {
@@ -606,14 +619,22 @@ export class InteractionSystem {
           // Very rare: coin
           game.lootSystem.spawnIngredientDrop('c', obj.position.x, obj.position.y, null, obj);
         } else if (roll < 0.00739) {
-          // Uncommon: beast lurking in the grass (spawn chance reduced 30% from baseline)
+          // Uncommon: beast lurking in the grass (spawn chance reduced 30% from baseline).
+          // Fully respects the zone's normal depth-gated spawn table — no
+          // separate/guaranteed roll. If the roll happens to land on Goblin,
+          // it carries a Scythe (the item's sole source, since Goblin no
+          // longer drops it as a ground spawn).
           if (game.currentRoom.enemies.length < 10) {
-            const beastChar = getZoneRandomEnemy(game.currentDepth, game.currentRoom?.zone);
+            const beastChar = getZoneRandomEnemy(game.getCurrentZoneDepth(), game.currentRoom?.zone);
+            const dataOverride = beastChar === 'G'
+              ? { ...ENEMIES['G'], spawnEquipment: { chance: 1.0, weapons: ['Ƨ'] } }
+              : undefined;
             const spawned = game.roomGenerator.spawnEnemiesFrom(game, obj, {
               spawnChar: beastChar,
               spawnCount: 1,
               spawnRange: GRID.CELL_SIZE * 2,
-              spawnerPosition: { x: obj.position.x, y: obj.position.y }
+              spawnerPosition: { x: obj.position.x, y: obj.position.y },
+              dataOverride
             });
             game.currentRoom.enemies.push(...spawned);
           }
@@ -645,6 +666,19 @@ export class InteractionSystem {
         );
         game.neutralCharacters.push(fairy);
         console.log('[Secret] Fairy discovered!');
+      }
+      // Sinkhole reveal: majority of the grass tiles touching a concealed
+      // Sinkhole must be cut before it surfaces as a ⬤ glyph.
+      const sinkholes = game.currentRoom?.sinkholes;
+      if (sinkholes?.length) {
+        for (const sink of sinkholes) {
+          if (sink.revealed) continue;
+          if (!sink.adjacentGrass.includes(obj)) continue;
+          sink.cutSet.add(obj);
+          if (sink.cutSet.size / sink.adjacentGrass.length > 0.5) {
+            game.sinkholeSystem?.reveal(sink);
+          }
+        }
       }
     } else if (effect === 'destroyObject:spawnGemstone') {
       obj.destroyAfterAnimation = true;
