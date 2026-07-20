@@ -62,23 +62,35 @@ export class RidgeSystem {
     return Math.sqrt(dx * dx + dy * dy);
   }
 
+  /** Returns { [materialKey]: count } combining current-run + banked REST inventory. */
+  getHaveCounts() {
+    const inv = this.game.player?.inventory ?? [];
+    const restInv = this.game.inventorySystem?.restInventory ?? [];
+    const have = {};
+    for (const mat of BRIDGE_MATERIALS) {
+      have[mat.key] = inv.filter(i => i === mat.char).length + restInv.filter(i => i === mat.char).length;
+    }
+    return have;
+  }
+
   /** Returns { sufficient, missing } accounting for already-donated amounts. */
   _checkMaterials() {
     const room = this.game.currentRoom;
     const donated = room?.bridgeDonated ?? { stick: 0, metal: 0, rock: 0 };
-    const inv = this.game.player?.inventory ?? [];
+    const have = this.getHaveCounts();
     const missing = [];
     for (const mat of BRIDGE_MATERIALS) {
       const stillNeeded = mat.need - (donated[mat.key] ?? 0);
       if (stillNeeded <= 0) continue;
-      const have = inv.filter(i => i === mat.char).length;
-      if (have < stillNeeded) missing.push(`${mat.char} x${stillNeeded - have}`);
+      if (have[mat.key] < stillNeeded) missing.push(`${mat.char} x${stillNeeded - have[mat.key]}`);
     }
     return { sufficient: missing.length === 0, missing };
   }
 
   /**
    * Donate whatever the player currently has toward unmet requirements.
+   * Draws from the current-run inventory first, then banked REST inventory —
+   * materials gathered on an earlier run and stored should still count.
    * Returns true if the bridge completed (animation will begin).
    */
   donateAvailable() {
@@ -86,6 +98,7 @@ export class RidgeSystem {
     if (!room || room.bridgeBuilt || room.bridgeAnimating) return false;
 
     const inv = this.game.player.inventory;
+    const restInv = this.game.inventorySystem?.restInventory ?? [];
     const donated = room.bridgeDonated;
     let anyDonated = false;
     let firstDonatedChar = null;
@@ -97,6 +110,15 @@ export class RidgeSystem {
       for (let i = inv.length - 1; i >= 0 && remaining > 0; i--) {
         if (inv[i] === mat.char) {
           inv.splice(i, 1);
+          donated[mat.key]++;
+          remaining--;
+          if (!anyDonated) firstDonatedChar = mat.char;
+          anyDonated = true;
+        }
+      }
+      for (let i = restInv.length - 1; i >= 0 && remaining > 0; i--) {
+        if (restInv[i] === mat.char) {
+          restInv.splice(i, 1);
           donated[mat.key]++;
           remaining--;
           if (!anyDonated) firstDonatedChar = mat.char;
@@ -212,11 +234,15 @@ export class RidgeSystem {
     const room = this.game.currentRoom;
     if (!room || room.bridgeBuilt || room.bridgeAnimating) return;
     const inv = this.game.player.inventory;
+    const restInv = this.game.inventorySystem?.restInventory ?? [];
     const donated = room.bridgeDonated;
     for (const mat of BRIDGE_MATERIALS) {
       let remaining = mat.need - (donated[mat.key] ?? 0);
       for (let i = inv.length - 1; i >= 0 && remaining > 0; i--) {
         if (inv[i] === mat.char) { inv.splice(i, 1); donated[mat.key]++; remaining--; }
+      }
+      for (let i = restInv.length - 1; i >= 0 && remaining > 0; i--) {
+        if (restInv[i] === mat.char) { restInv.splice(i, 1); donated[mat.key]++; remaining--; }
       }
     }
     this._startBridgeAnimation(room);

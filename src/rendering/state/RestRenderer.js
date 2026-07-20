@@ -16,7 +16,7 @@
 
 import { GRID, COLORS, EQUIPMENT, CRAFTING } from '../../game/GameConfig.js';
 import { getItemData } from '../../data/items.js';
-import { PixelatedDissolve } from '../effects/TextEffects.js';
+import { PixelatedDissolve, TextSwapDissolve } from '../effects/TextEffects.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
 
 const IDLE_ECHO_DURATION = 0.5;          // seconds — must match WorldEffectsSystem's IDLE_ECHO_DURATION
@@ -28,6 +28,8 @@ export class RestRenderer {
     this.renderController = renderController;
     // Dissolve effect for the CRAFT label (fades in/out based on proximity)
     this._craftDissolve = new PixelatedDissolve({ speed: 1.5, blockSize: 6 });
+    // Dissolve transition for the dynamic SPACE label (INTERACT/PICK UP/SELECT)
+    this._spaceLabelDissolve = new TextSwapDissolve({ speed: 8, blockSize: 4 });
     // Vacuum particle state — pixel motes cycling upward into the north exit
     this._vacuumParticles = [];
     this._lastVacuumTime = 0;
@@ -481,9 +483,11 @@ export class RestRenderer {
     const blinkWhite = isInactive && game.wasdBlinkState;
     const inactiveColor = blinkWhite ? '#FFFFFF' : COLORS.TEXT;
 
-    const getWasdStyle = (isPressed) => {
+    const getWasdStyle = (isPressed, slotAvailable = false) => {
       if (isPressed) {
         return { fontSize: GRID.CELL_SIZE * 1.4, color: COLORS.ITEM };
+      } else if (slotAvailable) {
+        return { fontSize: GRID.CELL_SIZE, color: slotBlinkColor };
       } else if (isInactive) {
         return { fontSize: GRID.CELL_SIZE, color: inactiveColor };
       } else {
@@ -491,11 +495,64 @@ export class RestRenderer {
       }
     };
 
+    // Dynamic SPACE label: default INTERACT, swaps to draw the player's eye to
+    // a slot action (crafted item ready to grab, or an ingredient slot to pick).
+    const hasNearbyRestItem = game.items.some(
+      item => game.physicsSystem.getDistance(game.player, item) < 20
+    );
+    const centerHasContent = nearestSlot && nearestSlot.type === 'crafting-center'
+      && game.craftingSystem.hasCenterContent();
+    let spaceLabel = 'INTERACT';
+    let spaceSlotAvailable = false;
+    if (hasNearbyRestItem || centerHasContent) {
+      spaceLabel = 'PICK UP';
+      spaceSlotAvailable = true;
+    } else if (nearestSlot && nearestSlot.type === 'crafting-left') {
+      spaceLabel = game.craftingSystem.leftSlot ? 'PICK UP' : 'SELECT';
+      spaceSlotAvailable = true;
+    } else if (nearestSlot && nearestSlot.type === 'crafting-right') {
+      spaceLabel = game.craftingSystem.rightSlot ? 'PICK UP' : 'SELECT';
+      spaceSlotAvailable = true;
+    } else if (nearestSlot && nearestSlot.type.startsWith('equipment-chest')) {
+      // Same "item available to equip" condition that drives the chest blink in EquipmentSlots.js.
+      const chestIdx = parseInt(nearestSlot.type.slice(-1), 10) - 1;
+      const chestOccupied = !!game.player?.quickSlots?.[chestIdx];
+      const chestHasItems = game.inventorySystem.itemChest.length > 0;
+      if (!chestOccupied && chestHasItems) {
+        spaceLabel = 'SELECT';
+        spaceSlotAvailable = true;
+      }
+    } else if (nearestSlot && nearestSlot.type === 'equipment-armor') {
+      // Same condition that drives the armor slot blink in EquipmentSlots.js.
+      const armorEquipped = game.inventorySystem.equippedArmor;
+      const armorAvailable = (game.inventorySystem.armorInventory?.length ?? 0) > 0;
+      if (!armorEquipped && armorAvailable) {
+        spaceLabel = 'SELECT';
+        spaceSlotAvailable = true;
+      }
+    } else if (nearestSlot && nearestSlot.type.startsWith('equipment-consumable')) {
+      // Same condition that drives the consumable slot blink in EquipmentSlots.js.
+      const consumableIdx = parseInt(nearestSlot.type.slice('equipment-consumable'.length), 10) - 1;
+      const equipped = game.inventorySystem.equippedConsumables[consumableIdx];
+      const consumableAvailable = (game.inventorySystem.consumableInventory?.length ?? 0) > 0;
+      const meter = game.player?.magicMeter;
+      const isMagicMeter = meter?.active && meter.slots?.includes(consumableIdx);
+      if (!equipped && consumableAvailable && !isMagicMeter) {
+        spaceLabel = 'SELECT';
+        spaceSlotAvailable = true;
+      }
+    }
+    // Blink is independent of the idle-inactivity timer — it fires whenever the
+    // slot action itself is available, to draw attention regardless of how
+    // recently the player moved.
+    const slotBlinkOn = (performance.now() % 1000) < 500;
+    const slotBlinkColor = slotBlinkOn ? '#FFFFFF' : COLORS.TEXT;
+
     const wStyle = getWasdStyle(game.keys.w);
     const aStyle = getWasdStyle(game.keys.a);
     const sStyle = getWasdStyle(game.keys.s);
     const dStyle = getWasdStyle(game.keys.d);
-    const spaceStyle = getWasdStyle(game.keys.space);
+    const spaceStyle = getWasdStyle(game.keys.space, spaceSlotAvailable);
 
     // Draw using foreground context for proper layering with variable font sizes
     const wasdCtx = this.renderer.fgCtx;
@@ -562,12 +619,18 @@ export class RestRenderer {
     wasdCtx.fillStyle = spaceStyle.color;
     wasdCtx.fillText('SPACE', wasdCenterCol * GRID.CELL_SIZE + half, spaceY);
 
-    // INTERACT label right below SPACE
-    wasdCtx.font = spectaclesOn
+    // INTERACT label right below SPACE — dissolves fully out then in when the
+    // action changes (e.g. INTERACT -> PICK UP), same pixelated effect as CRAFT.
+    const spaceLabelFont = spectaclesOn
       ? `${Math.round(GRID.CELL_SIZE * 0.7 * CIPHER_FONT_SCALE)}px 'Unifont', monospace`
       : `${GRID.CELL_SIZE * 0.7}px 'VentureArcade', 'Unifont', monospace`;
-    wasdCtx.fillStyle = '#666666';
-    wasdCtx.fillText(spectaclesTransformString('I N T E R A C T', spectaclesOn), wasdCenterCol * GRID.CELL_SIZE + half, spaceY + GRID.CELL_SIZE * 1.3);
+    this._spaceLabelDissolve.render(wasdCtx, {
+      text: spectaclesTransformString(spaceLabel.split('').join(' '), spectaclesOn),
+      font: spaceLabelFont,
+      color: '#666666',
+      x: wasdCenterCol * GRID.CELL_SIZE + half,
+      y: spaceY + GRID.CELL_SIZE * 1.3,
+    });
 
     wasdCtx.restore();
 

@@ -11,10 +11,13 @@
 
 import { GRID, COLORS } from '../../game/GameConfig.js';
 import { spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE } from '../../data/cipher.js';
+import { TextSwapDissolve } from '../effects/TextEffects.js';
 
 export class ArrowKeyIndicators {
   constructor(renderer) {
     this.renderer = renderer;
+    // Dissolve transition for the dynamic SHIFT label (THROW/DISMANTLE/DROP)
+    this._shiftLabelDissolve = new TextSwapDissolve({ speed: 8, blockSize: 4 });
   }
 
   render(game) {
@@ -44,6 +47,24 @@ export class ArrowKeyIndicators {
     // Check if player has an item to throw
     const hasItemToThrow = game.player && game.player.heldItem;
 
+    // Dynamic SHIFT label: default THROW, swaps to DISMANTLE when a held item
+    // is near the empty crafting center slot. Equipment slots don't accept a
+    // SHIFT drop action, so they never override the label here.
+    const nearestSlot = game.getNearestInteractiveSlot ? game.getNearestInteractiveSlot() : null;
+    let shiftLabel = 'THROW';
+    let shiftSlotAvailable = false;
+    const cs = game.craftingSystem;
+    const craftingSlotsEmpty = cs && !cs.centerSlot && !cs.leftSlot && !cs.rightSlot;
+    if (hasItemToThrow && nearestSlot && nearestSlot.type === 'crafting-center' && craftingSlotsEmpty) {
+      shiftLabel = 'DISMANTLE';
+      shiftSlotAvailable = true;
+    }
+    // Blink is independent of the idle-inactivity timer — it fires whenever the
+    // slot action itself is available, to draw attention regardless of how
+    // recently the player moved.
+    const slotBlinkOn = (performance.now() % 1000) < 500;
+    const slotBlinkColor = slotBlinkOn ? '#FFFFFF' : COLORS.TEXT;
+
     // Determine font sizes: pressed keys get larger font
     const getArrowStyle = (isPressed, isShift = false) => {
       if (isShift && !hasItemToThrow && isPressed) {
@@ -51,6 +72,8 @@ export class ArrowKeyIndicators {
       }
       if (isPressed) {
         return { fontSize: GRID.CELL_SIZE * 1.4, color: readyColor };
+      } else if (isShift && shiftSlotAvailable) {
+        return { fontSize: GRID.CELL_SIZE, color: slotBlinkColor };
       } else if (onCooldown) {
         return { fontSize: GRID.CELL_SIZE, color: cooldownColor };
       } else if (invisRecovering) {
@@ -132,12 +155,18 @@ export class ArrowKeyIndicators {
     ctx.fillStyle = shiftStyle.color;
     ctx.fillText('SHIFT', centerCol * GRID.CELL_SIZE + half, shiftY);
 
-    // THROW label right below SHIFT
-    ctx.font = spectaclesOn
+    // THROW label right below SHIFT — dissolves fully out then in when the
+    // action changes (e.g. THROW -> DISMANTLE), same pixelated effect as CRAFT.
+    const shiftLabelFont = spectaclesOn
       ? `${Math.round(GRID.CELL_SIZE * 0.7 * CIPHER_FONT_SCALE)}px 'Unifont', monospace`
       : `${GRID.CELL_SIZE * 0.7}px 'VentureArcade', 'Unifont', monospace`;
-    ctx.fillStyle = '#666666';
-    ctx.fillText(spectaclesTransformString('T H R O W', spectaclesOn), centerCol * GRID.CELL_SIZE + half, shiftY + GRID.CELL_SIZE * 1.3);
+    this._shiftLabelDissolve.render(ctx, {
+      text: spectaclesTransformString(shiftLabel.split('').join(' '), spectaclesOn),
+      font: shiftLabelFont,
+      color: '#666666',
+      x: centerCol * GRID.CELL_SIZE + half,
+      y: shiftY + GRID.CELL_SIZE * 1.3,
+    });
 
     ctx.restore();
   }

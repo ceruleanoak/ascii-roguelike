@@ -8,8 +8,13 @@ import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher
  *
  * COMPLIANCE RULE (non-instructive UI): no key hints, no explanatory labels,
  * no "X → Y" messages. The visuals speak for themselves — the incoming item
- * glyph, the three slot cells, the ▼ cursor, and the STORE IN CHEST option
- * label are the only content allowed. Do not add instructional text here.
+ * glyph, the three slot cells, the ▼ cursor, and the STORE IN CHEST / DISMANTLE
+ * option labels are the only content allowed. Do not add instructional text here.
+ *
+ * The options (slots, STORE IN CHEST, DISMANTLE) fade in over the system's
+ * input lockout window so the brief unresponsive period reads as an
+ * intentional beat rather than a stuck menu. The incoming item glyph is
+ * drawn at full opacity immediately — it's the "you picked this up" feedback.
  *
  * Unifont throughout — item glyphs need full Unicode coverage.
  */
@@ -21,8 +26,9 @@ export class SlotReplacementOverlay {
     const ctx = renderer.uiCtx;
     const cs = GRID.CELL_SIZE;
 
+    const hasDismantle = state.dismantleIndex !== -1;
     const boxW = cs * 12;
-    const boxH = cs * 7.5;
+    const boxH = cs * (hasDismantle ? 9 : 7.5);
     const boxX = Math.floor((GRID.WIDTH - boxW) / 2);
     const boxY = Math.floor((GRID.HEIGHT - boxH) / 2);
 
@@ -44,6 +50,15 @@ export class SlotReplacementOverlay {
     ctx.font = `${cs * 1.3}px 'Unifont', monospace`;
     ctx.fillStyle = item.data?.color || '#ffffff';
     ctx.fillText(item.char, boxX + boxW / 2, boxY + cs * 1.2);
+
+    // Fade the selectable options in over the input-lockout window.
+    const now = performance.now();
+    const openedAt = state.openedAt ?? now;
+    const readyAt = state.inputReadyAt ?? now;
+    const fadeProgress = readyAt > openedAt
+      ? Math.min(1, Math.max(0, (now - openedAt) / (readyAt - openedAt)))
+      : 1;
+    ctx.globalAlpha = fadeProgress;
 
     const slotType = state.slotType || 'weapon';
     const cellSize = cs * 2;
@@ -114,6 +129,25 @@ export class SlotReplacementOverlay {
     ctx.font = `${cs * 0.5}px 'Unifont', monospace`;
     ctx.fillStyle = '#888888';
     ctx.fillText((storeIndex + 1).toString(), boxX + boxW / 2, storeY + cs * 0.6);
+
+    // DISMANTLE option — only offered when the pending item has a known recipe
+    if (hasDismantle) {
+      const dismantleIndex = state.dismantleIndex;
+      const dismantleSelected = state.selection === dismantleIndex;
+      const dismantleY = storeY + cs * 1.5;
+      ctx.font = `${cs}px 'Unifont', monospace`;
+      if (dismantleSelected) {
+        ctx.fillStyle = '#ffff00';
+        ctx.fillText('▼', boxX + boxW / 2, dismantleY - cs);
+      }
+      ctx.fillStyle = dismantleSelected ? '#ffff00' : '#999999';
+      ctx.fillText(spectaclesTransformString('DISMANTLE', isSpectaclesActive(game)), boxX + boxW / 2, dismantleY);
+
+      // Small number indicator for DISMANTLE option
+      ctx.font = `${cs * 0.5}px 'Unifont', monospace`;
+      ctx.fillStyle = '#888888';
+      ctx.fillText((dismantleIndex + 1).toString(), boxX + boxW / 2, dismantleY + cs * 0.6);
+    }
 
     ctx.restore();
   }

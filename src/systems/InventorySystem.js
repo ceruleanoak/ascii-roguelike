@@ -15,6 +15,7 @@ import { inSamePlane } from './PlaneSystem.js';
 import { Item } from '../entities/Item.js';
 import { GRID } from '../game/GameConfig.js';
 import { addItemToChestArray, removeItemFromChestArray, chestEntryLabel, trapAlreadyEquipped } from './TrapSystem.js';
+import { makeAuraParticle } from './WorldEffectsSystem.js';
 
 export class InventorySystem {
   constructor() {
@@ -245,7 +246,7 @@ export class InventorySystem {
    * @param {number} selectedWeaponSlotIdx - Currently selected weapon slot (0-2)
    * @returns {Object} - { success: boolean, droppedItem: Item|null, message: string|null, removedTrap: boolean }
    */
-  tryPickupItem(items, placedTraps, player, physicsSystem, allowSlotChoice = false, _unused = 0, selectedWeaponSlotIdx = 0) {
+  tryPickupItem(items, placedTraps, player, physicsSystem, allowSlotChoice = false, _unused = 0, selectedWeaponSlotIdx = 0, renderer = null) {
     // NOTE: Placed traps (activated with SPACE) are NOT pickable - they're active traps
     // Only dropped traps (swapped from quick slots) in the items array can be picked up
 
@@ -325,6 +326,11 @@ export class InventorySystem {
           physicsSystem.removeEntity(item);
           items.splice(i, 1);
         }
+
+        // REST equipment slots draw glyphs to the background layer, which only
+        // clears on a dirty mark — without this, the empty slot's number
+        // placeholder lingers under the newly-picked-up item's glyph.
+        renderer?.markBackgroundDirty();
 
         return {
           success: true,
@@ -543,6 +549,39 @@ export class InventorySystem {
   // ========== CONSUMABLE AUTO-TRIGGER SYSTEM ==========
 
   /**
+   * Apply a permanent blessing buff (Leshy Grove) to the player, track it in
+   * the caller's blessingsCollected array, and return the pickup message.
+   *
+   * @param {Player} player - Player entity to buff
+   * @param {Item} blessingItem - Blessing item picked up
+   * @param {Array} blessingsCollected - Caller's collected-blessing tracker
+   * @returns {string|null} Pickup message, or null for an unknown effect type
+   */
+  applyBlessing(player, blessingItem, blessingsCollected) {
+    const blessing = blessingItem.data;
+    blessingsCollected.push(blessing.char);
+
+    switch (blessing.effect.type) {
+      case 'damageBuff':
+        player.damageBuff = (player.damageBuff || 0) + blessing.effect.value;
+        return `${blessing.name} (+${blessing.effect.value} damage)`;
+
+      case 'hpBuff':
+        player.maxHp += blessing.effect.value;
+        player.hp = Math.min(player.hp + blessing.effect.value, player.maxHp); // Heal to new max
+        return `${blessing.name} (+${blessing.effect.value} HP)`;
+
+      case 'speedBuff':
+        player.speed += blessing.effect.value;
+        return `${blessing.name} (+${blessing.effect.value} speed)`;
+
+      default:
+        console.warn(`[Blessing] Unknown effect type: ${blessing.effect.type}`);
+        return null;
+    }
+  }
+
+  /**
    * Main update loop for consumable system
    * Call this from Game.update() in EXPLORE state
    *
@@ -585,7 +624,7 @@ export class InventorySystem {
       const emitInterval = auraType === 'shock' ? 0.07 : auraType === 'shadow' ? 0.12 : 0.10;
       if (player._auraParticleTimer >= emitInterval) {
         player._auraParticleTimer = 0;
-        const p = this._makeAuraParticle(cx, cy, auraType);
+        const p = makeAuraParticle(cx, cy, auraType);
         if (p) particles.push(p);
       }
     }
@@ -614,7 +653,7 @@ export class InventorySystem {
       for (let i = 0; i < blastCount; i++) {
         const angle = (i / blastCount) * Math.PI * 2;
         const speed = 80 + Math.random() * 80;
-        const p = this._makeAuraParticle(cx, cy, auraType);
+        const p = makeAuraParticle(cx, cy, auraType);
         if (p) {
           p.vx = Math.cos(angle) * speed;
           p.vy = Math.sin(angle) * speed;
@@ -626,98 +665,6 @@ export class InventorySystem {
     }
 
     player._lastAuraDodgeActive = isRolling;
-  }
-
-  _makeAuraParticle(cx, cy, type) {
-    const CELL = 16;
-    const ox = (Math.random() - 0.5) * CELL * 1.6;
-    const oy = (Math.random() - 0.5) * CELL * 1.6;
-
-    if (type === 'frost') {
-      const chars = ['*', '+', '.', '*'];
-      const colors = ['#aaddff', '#88ccff', '#cceeff', '#ffffff'];
-      const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.4;
-      const speed = 10 + Math.random() * 22;
-      return {
-        x: cx + ox, y: cy + oy,
-        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-        life: 0.55 + Math.random() * 0.35, maxLife: 0.9,
-        char: chars[Math.floor(Math.random() * chars.length)],
-        color: colors[Math.floor(Math.random() * colors.length)],
-        decayRate: 0.87
-      };
-    }
-    if (type === 'flame') {
-      const chars = ['!', '.', "'", '!'];
-      const colors = ['#ff4400', '#ff8800', '#ffcc00', '#ff6600'];
-      const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.9;
-      const speed = 20 + Math.random() * 35;
-      return {
-        x: cx + ox * 0.75, y: cy + oy * 0.5,
-        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-        life: 0.3 + Math.random() * 0.25, maxLife: 0.55,
-        char: chars[Math.floor(Math.random() * chars.length)],
-        color: colors[Math.floor(Math.random() * colors.length)],
-        decayRate: 0.90
-      };
-    }
-    if (type === 'shock') {
-      const chars = ['|', '-', '+', '.'];
-      const colors = ['#00ffff', '#88ffff', '#aaffff', '#ffffff'];
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 35 + Math.random() * 55;
-      return {
-        x: cx + ox, y: cy + oy,
-        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-        life: 0.15 + Math.random() * 0.2, maxLife: 0.35,
-        char: chars[Math.floor(Math.random() * chars.length)],
-        color: colors[Math.floor(Math.random() * colors.length)],
-        decayRate: 0.78
-      };
-    }
-    if (type === 'nature') {
-      const chars = ["'", '.', ',', "'"];
-      const colors = ['#44cc44', '#33aa33', '#88dd44', '#66bb44'];
-      const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.6;
-      const speed = 8 + Math.random() * 18;
-      return {
-        x: cx + ox, y: cy + oy,
-        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-        life: 0.7 + Math.random() * 0.5, maxLife: 1.2,
-        char: chars[Math.floor(Math.random() * chars.length)],
-        color: colors[Math.floor(Math.random() * colors.length)],
-        decayRate: 0.91
-      };
-    }
-    if (type === 'blood') {
-      const chars = ['.', "'", '.', ','];
-      const colors = ['#cc2222', '#aa1111', '#dd3333', '#881111'];
-      const angle = Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.8; // mostly downward
-      const speed = 12 + Math.random() * 22;
-      return {
-        x: cx + ox * 0.8, y: cy + oy * 0.5,
-        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-        life: 0.45 + Math.random() * 0.35, maxLife: 0.8,
-        char: chars[Math.floor(Math.random() * chars.length)],
-        color: colors[Math.floor(Math.random() * colors.length)],
-        decayRate: 0.88
-      };
-    }
-    if (type === 'shadow') {
-      const chars = ['.', '·', '.', '-'];
-      const colors = ['#444466', '#333355', '#555577', '#222244'];
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 5 + Math.random() * 15;
-      return {
-        x: cx + ox, y: cy + oy,
-        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-        life: 0.4 + Math.random() * 0.4, maxLife: 0.8,
-        char: chars[Math.floor(Math.random() * chars.length)],
-        color: colors[Math.floor(Math.random() * colors.length)],
-        decayRate: 0.92
-      };
-    }
-    return null;
   }
 
   /**

@@ -1,6 +1,7 @@
 import { GAME_STATES } from '../game/GameConfig.js';
 import { menuIntent } from './MenuInput.js';
 import { SlotReplacementOverlay } from '../rendering/ui/SlotReplacementOverlay.js';
+import { findRecipeByResult } from '../data/recipes.js';
 
 /**
  * SlotReplacementSystem — paused slot-choice prompt for full quick slots.
@@ -31,12 +32,19 @@ export class SlotReplacementSystem {
     this.slotType = 'weapon';   // 'weapon' | 'armor' | 'consumable'
     this.selection = 0;
     this.lastSlotSelection = 0;
+    this.inputReadyAt = 0;
   }
 
   get storeIndex() {
     if (this.slotType === 'armor') return 1;
     if (this.slotType === 'consumable') return this.game.inventorySystem.equippedConsumables.length;
     return 3;
+  }
+
+  /** DISMANTLE option index — only present when the pending item has a known recipe. */
+  get dismantleIndex() {
+    if (!this.pendingItem) return -1;
+    return findRecipeByResult(this.pendingItem.char) ? this.storeIndex + 1 : -1;
   }
 
   /** Indices in equippedConsumables currently claimed by the magic meter — not real consumable slots. */
@@ -75,27 +83,36 @@ export class SlotReplacementSystem {
     this.pendingItem = item;
     this.selection = start;
     this.lastSlotSelection = start;
+    // Ignore input for a beat so the pickup's own keypress (or any residual
+    // held key) can't immediately confirm a slot and replace an item by accident.
+    // The overlay fades the options in over this same window so the delay reads
+    // as intentional rather than an unresponsive menu.
+    this.openedAt = performance.now();
+    this.inputReadyAt = this.openedAt + 1000;
   }
 
   // ── PauseSystem modal contract ───────────────────────────────────────────
 
   handleKey(key, event) {
     if (event?.repeat) return; // held SPACE/SHIFT from the pickup press must not auto-confirm
+    if (performance.now() < this.inputReadyAt) return; // brief lockout guards against accidental replacement
     const intent = menuIntent(event);
 
-    // Number key shortcuts: 1-4 for slot selection
-    if (key >= '1' && key <= '4') {
-      const slotNum = parseInt(key) - 1;
+    // Number key shortcuts: slots, then STORE IN CHEST, then DISMANTLE (if available)
+    if (key >= '1' && key <= '5') {
+      const optionIdx = parseInt(key) - 1;
+      const maxIdx = this.dismantleIndex !== -1 ? this.dismantleIndex : this.storeIndex;
+      if (optionIdx > maxIdx) return;
       const reserved = this.slotType === 'consumable' ? this._reservedManaSlots() : [];
-      if (slotNum <= this.storeIndex && !reserved.includes(slotNum)) {
-        this.selection = slotNum;
-        if (this.selection !== this.storeIndex) {
-          this.lastSlotSelection = slotNum;
-        }
-        // Confirm immediately on number press
-        if (this.selection === this.storeIndex) this._confirmStore();
-        else this._confirmSlot(this.selection);
+      if (optionIdx < this.storeIndex && reserved.includes(optionIdx)) return;
+      this.selection = optionIdx;
+      if (optionIdx < this.storeIndex) {
+        this.lastSlotSelection = optionIdx;
       }
+      // Confirm immediately on number press
+      if (optionIdx === this.storeIndex) this._confirmStore();
+      else if (optionIdx === this.dismantleIndex) this._confirmDismantle();
+      else this._confirmSlot(optionIdx);
       return;
     }
 
@@ -105,13 +122,22 @@ export class SlotReplacementSystem {
       this._moveSlot(-1);
     } else if (intent === 'right') {
       this._moveSlot(1);
-    } else if (intent === 'down' && this.selection !== this.storeIndex) {
-      this.lastSlotSelection = this.selection;
-      this.selection = this.storeIndex;
-    } else if (intent === 'up' && this.selection === this.storeIndex) {
-      this.selection = this.lastSlotSelection;
+    } else if (intent === 'down') {
+      if (this.selection === this.storeIndex && this.dismantleIndex !== -1) {
+        this.selection = this.dismantleIndex;
+      } else if (this.selection !== this.storeIndex && this.selection !== this.dismantleIndex) {
+        this.lastSlotSelection = this.selection;
+        this.selection = this.storeIndex;
+      }
+    } else if (intent === 'up') {
+      if (this.selection === this.dismantleIndex) {
+        this.selection = this.storeIndex;
+      } else if (this.selection === this.storeIndex) {
+        this.selection = this.lastSlotSelection;
+      }
     } else if (intent === 'confirm') {
       if (this.selection === this.storeIndex) this._confirmStore();
+      else if (this.selection === this.dismantleIndex) this._confirmDismantle();
       else this._confirmSlot(this.selection);
     }
   }
@@ -231,6 +257,18 @@ export class SlotReplacementSystem {
       inv.consumableInventory.push(item);
     } else {
       this._routeToChest(item);
+    }
+    this.game.updateUI();
+    this.game.pauseSystem.closeModal();
+  }
+
+  /** Break the pending item back down into its recipe ingredients instead of keeping it. */
+  _confirmDismantle() {
+    const item = this._takeFromWorld();
+    const recipe = findRecipeByResult(item.char);
+    if (recipe) {
+      this.game.addIngredient(recipe.left);
+      this.game.addIngredient(recipe.right);
     }
     this.game.updateUI();
     this.game.pauseSystem.closeModal();

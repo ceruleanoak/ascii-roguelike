@@ -173,7 +173,7 @@ export class ErrandSystem {
    * the active stage errand. Returns spawn data ({coins, x, y}) on success.
    * Active errand is untouched — the player can still complete the stage trade.
    */
-  tryGiveArtifact(player, neutralCharacters) {
+  tryGiveArtifact(player, neutralCharacters, inventorySystem) {
     const errandChar = neutralCharacters?.find(nc => nc instanceof ErrandCharacter);
     if (!errandChar) return null;
 
@@ -184,8 +184,13 @@ export class ErrandSystem {
     if (dist > errandChar.getInteractionDistance()) return null;
 
     const idx = player.inventory.indexOf('⚜');
-    if (idx === -1) return null;
-    player.inventory.splice(idx, 1);
+    if (idx !== -1) {
+      player.inventory.splice(idx, 1);
+    } else {
+      const restIdx = inventorySystem?.restInventory.indexOf('⚜') ?? -1;
+      if (restIdx === -1) return null;
+      inventorySystem.restInventory.splice(restIdx, 1);
+    }
 
     return {
       coins: 2,

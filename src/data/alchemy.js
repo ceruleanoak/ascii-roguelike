@@ -26,6 +26,12 @@ export function starterPotionForIngredient(ingredientChar) {
   return null;
 }
 
+// Any raw ingredient that can be combined at the Cauldron to start a potion —
+// the "Components" designation used by the Tab inventory overlay.
+export function isPotionIngredient(ingredientChar) {
+  return starterPotionForIngredient(ingredientChar) !== null;
+}
+
 // Ingredient letter → Greek symbol using the game's cipher system
 export function ingredientToGreek(char) {
   return applyCipher(char);

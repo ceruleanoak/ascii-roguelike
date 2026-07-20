@@ -1,4 +1,5 @@
 import { COLORS, GRID } from '../game/GameConfig.js';
+import { isPotionIngredient } from './alchemy.js';
 
 // Item types
 export const ITEM_TYPES = {
@@ -921,8 +922,10 @@ export const ITEMS = {
 
   // ── MELEE / scythe ────────────────────────────────────────────────────────
   // Slow, wide reaper sweep. Wide-arc cleave (sweep pattern), modest damage.
-  // Guaranteed to spawn in Grass (G) rooms; also craftable. Cuts grass like
-  // any blade — that's the trick to revealing what's concealed beneath it.
+  // Also craftable. Guaranteed drop of the grass-cut-only grass-Goblin
+  // encounter (InteractionSystem's cutGrass branch) — no longer a ground
+  // spawn. Cuts grass like any blade — that's the trick to revealing what's
+  // concealed beneath it (see GLOSSARY.md "Sinkhole").
   'Ƨ': {
     char: 'Ƨ',
     name: 'Scythe',
@@ -947,9 +950,9 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'spear',
     damage: 2,
-    windup: 0.15,
-    recovery: 0.45,
-    patternSpeed: 0.05,
+    windup: 0.25,
+    recovery: 0.55,
+    patternSpeed: 0.06,
     // Needle-thin thrust hitbox — 50% narrower than the default cell.
     attackWidth: GRID.CELL_SIZE * 0.5,
     attackHeight: GRID.CELL_SIZE * 0.5,
@@ -1030,8 +1033,8 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'staff',
     damage: 2,
-    windup: 0.15,
-    recovery: 0.45,
+    windup: 0.25,
+    recovery: 0.75,
     patternSpeed: 0.05,
     meleeChar: '|',
     range: 28,
@@ -1047,7 +1050,7 @@ export const ITEMS = {
     isFishingRod: true,           // Enables fishing minigame when conditions are met
     damage: 1,
     windup: 0.35,
-    recovery: 0.55,
+    recovery: 0.75,
     range: 32,
     knockback: 25,
     color: '#8b4513'
@@ -2489,6 +2492,24 @@ export function isIngredient(char) {
 
 export function isItem(char) {
   return ITEMS[char] !== undefined;
+}
+
+// Gemstones — raw ingredients (Unicode-symbol legacy exception, see CLAUDE.md
+// Character Encoding Rule) that read as Treasure rather than crafting Materials.
+export const TREASURE_GEM_CHARS = new Set(['◇', '⬥', '⬦', '⧫', '⬧', '◈', '⬨']);
+
+/**
+ * Classifies a pickup char for the Tab inventory overlay's grouping:
+ * 'treasure' (coin + gems), 'components' (raw ingredients usable as potion
+ * recipe inputs, see data/alchemy.js), 'materials' (everything else raw), or
+ * null (weapons/armor/traps — not shown in that overlay).
+ */
+export function getPickupCategory(char) {
+  if (char === 'c' || TREASURE_GEM_CHARS.has(char)) return 'treasure';
+  if (isIngredient(char)) {
+    return isPotionIngredient(char) ? 'components' : 'materials';
+  }
+  return null;
 }
 
 // ============================================================================

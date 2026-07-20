@@ -318,3 +318,55 @@ export class PixelatedDissolve {
     }
   }
 }
+
+// ---------------------------------------------------------------------------
+// TextSwapDissolve
+//
+// Wraps PixelatedDissolve to animate a label whose *content* changes over
+// time (e.g. "INTERACT" -> "PICK UP" -> "SELECT") rather than one that only
+// toggles visible/hidden. When the requested text differs from what's
+// currently shown, the old text dissolves fully out (alpha -> 0), then the
+// new text dissolves in — never a crossfade between two different strings.
+//
+// Usage:
+//   const effect = new TextSwapDissolve({ speed: 8, blockSize: 4 });
+//
+//   // Each frame — pass whatever the label should currently read:
+//   effect.render(ctx, { text, font, color, x, y });
+// ---------------------------------------------------------------------------
+export class TextSwapDissolve {
+  /** @param {object} [opts] Forwarded to the internal PixelatedDissolve. */
+  constructor(opts) {
+    this._dissolve = new PixelatedDissolve(opts);
+    this._currentText = null;
+    this._targetText = null;
+  }
+
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {object} opts
+   * @param {string} opts.text   Desired label text for this frame.
+   * @param {string} opts.font
+   * @param {string} opts.color
+   * @param {number} opts.x
+   * @param {number} opts.y
+   * @returns {boolean} Whether anything was drawn.
+   */
+  render(ctx, { text, font, color, x, y }) {
+    if (this._currentText === null) {
+      this._currentText = text;
+    } else if (text !== this._currentText && text !== this._targetText) {
+      this._targetText = text;
+    }
+
+    const swapping = this._targetText !== null && this._targetText !== this._currentText;
+    const drew = this._dissolve.render(ctx, { text: this._currentText, font, color, x, y, visible: !swapping });
+
+    if (swapping && this._dissolve.alpha <= 0) {
+      this._currentText = this._targetText;
+      this._targetText = null;
+    }
+
+    return drew;
+  }
+}
