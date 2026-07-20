@@ -1,4 +1,4 @@
-import { GRID } from '../game/GameConfig.js';
+import { GRID, NPC_INTERACTION_RANGE } from '../game/GameConfig.js';
 
 /**
  * Base class for non-hostile entities (Captives, Leshy, future NPCs)
@@ -42,16 +42,23 @@ export class NeutralCharacter {
     this.indicator = { char, color, offsetY };
   }
 
-  // Speaking NPCs (those with getDialogueLines) call this each frame: shows a
-  // '!' affordance in talk range, hidden while the dialogue box is open.
-  updateTalkIndicator(game, range = GRID.CELL_SIZE * 2.5) {
-    const player = game?.player;
-    if (!player) return;
+  // Single source of truth for "is the player close enough to interact with
+  // this NPC" — used for dialogue, training, fishing, and every other
+  // NPC-initiated SPACE interaction.
+  isInRange(player, range = NPC_INTERACTION_RANGE) {
+    if (!player) return false;
     const dist = Math.hypot(
       player.position.x - this.position.x,
       player.position.y - this.position.y
     );
-    if (dist < range && !game.dialogueSystem?.isOpen()) {
+    return dist < range;
+  }
+
+  // Speaking NPCs (those with getDialogueLines) call this each frame: shows a
+  // '!' affordance in talk range, hidden while the dialogue box is open.
+  updateTalkIndicator(game, range = NPC_INTERACTION_RANGE) {
+    const player = game?.player;
+    if (this.isInRange(player, range) && !game.dialogueSystem?.isOpen()) {
       this.setIndicator('!', '#ffffff');
     } else {
       this.clearIndicator();
@@ -60,6 +67,12 @@ export class NeutralCharacter {
 
   clearIndicator() {
     this.indicator = null;
+  }
+
+  // Overridable render color hook (e.g. CampNPC's low-HP blink). Defaults to
+  // the entity's base color.
+  getDisplayColor() {
+    return this.color;
   }
 
   getHitbox() {
@@ -86,7 +99,7 @@ export class NeutralCharacter {
 
     // Render main character with pulse
     ctx.globalAlpha = pulseAlpha;
-    ctx.fillStyle = this.color;
+    ctx.fillStyle = this.getDisplayColor();
     ctx.fillText(
       this.char,
       centerPixelPos.x + GRID.CELL_SIZE / 2,

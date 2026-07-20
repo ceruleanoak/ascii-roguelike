@@ -1,7 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { WeaponsMaster, resolveWeaponCategory } from '../entities/WeaponsMaster.js';
 
-const TALK_RANGE = GRID.CELL_SIZE * 2.5;
 const COIN_ARC_DURATION = 0.55; // matches the well/camp-NPC/fisherman coin arcs
 
 /**
@@ -35,11 +34,7 @@ export class WeaponsMasterSystem {
       : game.neutralCharacters?.find(n => n instanceof WeaponsMaster);
     if (!master) return false;
 
-    const dist = Math.hypot(
-      player.position.x - master.position.x,
-      player.position.y - master.position.y
-    );
-    if (dist > TALK_RANGE) return false;
+    if (!master.isInRange(player)) return false;
 
     // Training in progress — swallow the press so SPACE can't reopen advice.
     if (this.coinAnim) return true;

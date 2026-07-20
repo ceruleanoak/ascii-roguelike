@@ -1,6 +1,6 @@
 import { CharacterNPC } from '../entities/CharacterNPC.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
-import { GRID, INTERACTION_RANGE } from '../game/GameConfig.js';
+import { GRID, NPC_INTERACTION_RANGE } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Captive } from '../entities/Captive.js';
 import { isCellProtected } from './roomFeatures.js';
@@ -81,7 +81,7 @@ export class CharacterSystem {
         game.player.position.x - npc.position.x,
         game.player.position.y - npc.position.y
       );
-      if (dist < INTERACTION_RANGE) {
+      if (dist < NPC_INTERACTION_RANGE) {
         this.swapWithCharacter(npc.characterType);
         return true;
       }

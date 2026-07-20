@@ -65,6 +65,8 @@ export class CampNPC extends NeutralCharacter {
     this.invulnerabilityTimer = 0;
     this.invulnerabilityDuration = 0.5;
     this._lastAttacker = null;
+    // True while a COMPANION has an enemy target — blocks coin offerings.
+    this.inCombat = false;
 
     // State machine
     this.state = CAMP_NPC_STATE.IDLE;
@@ -110,6 +112,16 @@ export class CampNPC extends NeutralCharacter {
 
   isInvulnerable() {
     return this.invulnerabilityTimer > 0;
+  }
+
+  // Low-HP warning: blink dark red at ≤30% HP — same near-death signal as
+  // the player (Player.getDisplayColor) and bosses (Enemy.getNearDeathBlinkColor).
+  getDisplayColor() {
+    if (this.state !== CAMP_NPC_STATE.FLEEING && this.hp > 0 && this.hp <= this.maxHp * 0.3) {
+      const blinkOn = Math.floor(Date.now() / 250) % 2 === 0;
+      if (blinkOn) return '#660000';
+    }
+    return this.color;
   }
 
   // ─── State transitions ──────────────────────────────────────────────────
@@ -164,6 +176,16 @@ export class CampNPC extends NeutralCharacter {
     // Exclude staff/wand melee subtypes — those rely on hold-to-block / cast pipelines.
     if (t === 'MELEE' && REJECTED_MELEE_SUBTYPES.has(item.data.weaponSubtype)) return false;
     return true;
+  }
+
+  /**
+   * Returns true if the dropped item is a heal source the NPC will pick up
+   * (bread loaf or any heal-effect potion). Thrown/dropped only — never
+   * handed over directly.
+   */
+  static acceptsHeal(item) {
+    if (!item?.data) return false;
+    return item.char === '⌬' /* Bread */ || item.data.effect === 'heal';
   }
 
   // ─── Fleeing (Leshy pattern) ────────────────────────────────────────────

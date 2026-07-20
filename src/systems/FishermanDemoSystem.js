@@ -2,7 +2,6 @@ import { GRID } from '../game/GameConfig.js';
 import { pickRandomCatch } from '../data/fishingTables.js';
 import { Fisherman } from '../entities/Fisherman.js';
 
-const TALK_RANGE = GRID.CELL_SIZE * 2.5;
 const COIN_ARC_DURATION = 0.55; // matches the well/camp-NPC coin arcs
 const CAST_DELAY = 0.9;  // coin lands → fish appears
 const CUT_DELAY  = 1.2;  // fish on display → fisherman cuts it open
@@ -41,11 +40,7 @@ export class FishermanDemoSystem {
     const fisherman = game.activeFloor.npcs?.find(n => n instanceof Fisherman);
     if (!fisherman || !fisherman.coinDemoEnabled) return false;
 
-    const dist = Math.hypot(
-      player.position.x - fisherman.position.x,
-      player.position.y - fisherman.position.y
-    );
-    if (dist > TALK_RANGE) return false;
+    if (!fisherman.isInRange(player)) return false;
 
     // Demo already running (or coin in flight) — swallow the press so SPACE
     // can't reopen tips dialogue over the demonstration.

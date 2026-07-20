@@ -1,7 +1,5 @@
 import { GRID } from '../game/GameConfig.js';
 
-// How close the player must stand to open dialogue with SPACE.
-const TALK_RANGE = GRID.CELL_SIZE * 2.5;
 // Walking this far from the speaker closes the box automatically.
 const BREAK_RANGE = GRID.CELL_SIZE * 4;
 
@@ -61,11 +59,7 @@ export class DialogueSystem {
 
     for (const npc of npcs ?? []) {
       if (typeof npc.getDialogueLines !== 'function') continue;
-      const dist = Math.hypot(
-        player.position.x - npc.position.x,
-        player.position.y - npc.position.y
-      );
-      if (dist > TALK_RANGE) continue;
+      if (!npc.isInRange(player)) continue;
       const lines = npc.getDialogueLines(game);
       if (this.open(npc, lines)) return true;
     }

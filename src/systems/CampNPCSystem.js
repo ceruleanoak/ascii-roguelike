@@ -20,6 +20,7 @@ import { CampNPC, CAMP_NPC_STATE } from '../entities/CampNPC.js';
 const COIN_INTERACT_RADIUS = GRID.CELL_SIZE * 1.25;
 const WEAPON_PICKUP_RADIUS = GRID.CELL_SIZE * 4;
 const WEAPON_SCAN_RADIUS   = GRID.CELL_SIZE * 10; // IDLE NPC walks toward weapons within this
+const HEAL_PICKUP_RADIUS   = GRID.CELL_SIZE * 4;  // thrown/dropped bread or potion within this heals
 const COMPANION_ATTACK_SPEED_MULT = 2.0;          // 50% slower than the player would attack
 const COMPANION_FOLLOW_SPEED_MULT = 0.75;         // companion trails a bit slower than its combat speed
 const COIN_ARC_DURATION = 0.55;
@@ -86,6 +87,10 @@ export class CampNPCSystem {
     }
 
     if (npc.state === CAMP_NPC_STATE.FLEEING) return;
+
+    // Thrown/dropped bread or potion within range fully heals — any state,
+    // but only while actually hurt (won't pick up at full health).
+    this._tryConsumablePickup(npc);
 
     // Idle/interested room NPC: walk toward and pick up nearby weapon drops
     if (!isCompanion && (npc.state === CAMP_NPC_STATE.IDLE || npc.state === CAMP_NPC_STATE.INTERESTED)) {
@@ -204,6 +209,8 @@ export class CampNPCSystem {
     }
 
     const hasEnemy = !!target && targetDist < ENEMY_AGGRO_RANGE;
+    // Coin offering is blocked while aggro'd — see handleSpacePress.
+    npc.inCombat = hasEnemy;
 
     // Aggro acquisition timer — counts up while a target is in range, resets
     // the moment the companion has no target. _tryAttack gates on this.
@@ -471,6 +478,37 @@ export class CampNPCSystem {
     }
   }
 
+  // ─── Consumable pickup (thrown/dropped bread or potion → full heal) ────
+
+  // Bread and potions must actually be thrown/dropped onto the ground for the
+  // NPC to notice them (SHIFT-throw or bread's own SPACE-drop) — handing them
+  // over isn't a thing the NPC does. Only picked up while hurt; at full
+  // health the item is left alone for the player to reclaim.
+  _tryConsumablePickup(npc) {
+    if (npc.hp >= npc.maxHp) return;
+    const game = this.game;
+    const items = game.items;
+    if (!items || items.length === 0) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.pickupReadyAt && item.pickupReadyAt > performance.now()) continue;
+      if (!CampNPC.acceptsHeal(item)) continue;
+
+      const dx = item.position.x - npc.position.x;
+      const dy = item.position.y - npc.position.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > HEAL_PICKUP_RADIUS) continue;
+
+      npc.hp = npc.maxHp;
+      items.splice(i, 1);
+      if (game.physicsSystem) game.physicsSystem.removeEntity(item);
+      game.audioSystem?.playSFX?.('pickup');
+      game.menuSystem?.showPickupMessage?.('HEALED.');
+      return;
+    }
+  }
+
   // ─── Coin offering (SPACE near NPC with `c` ingredient) ─────────────────
 
   /** Returns true if SPACE was handled by the camp NPC system. */
@@ -486,6 +524,8 @@ export class CampNPCSystem {
     const npc = game.companion ?? game.currentRoom?.campNPC;
     if (!npc) return false;
     if (npc.state === CAMP_NPC_STATE.FLEEING) return false;
+    // No coin offerings while aggro'd — the NPC is busy fighting.
+    if (npc.inCombat) return false;
     if (this.coinAnim) return true; // ritual in progress, swallow
 
     const pcx = player.position.x + GRID.CELL_SIZE / 2;
@@ -498,8 +538,16 @@ export class CampNPCSystem {
     // Player must have a coin in the passive wallet
     if (!game.inventorySystem?.hasCoin()) return false;
 
-    // Determine intent: hire if INTERESTED + has weapon, otherwise hint
-    const intent = (npc.state === CAMP_NPC_STATE.INTERESTED && npc.weapon) ? 'hire' : 'hint';
+    // Determine intent: heal takes priority when hurt, then hire (INTERESTED
+    // + armed), otherwise hint.
+    let intent;
+    if (npc.hp < npc.maxHp) {
+      intent = 'heal';
+    } else if (npc.state === CAMP_NPC_STATE.INTERESTED && npc.weapon) {
+      intent = 'hire';
+    } else {
+      intent = 'hint';
+    }
 
     game.inventorySystem.removeCoin();
     this.coinAnim = {
@@ -525,7 +573,10 @@ export class CampNPCSystem {
     const npc = anim.target;
     game.audioSystem?.playSFX?.('coin_plink');
 
-    if (anim.intent === 'hire') {
+    if (anim.intent === 'heal') {
+      npc.hp = npc.maxHp;
+      game.menuSystem?.showPickupMessage?.('HEALED.');
+    } else if (anim.intent === 'hire') {
       // Promote to companion. Move from room.campNPC to game.companion.
       if (game.currentRoom && game.currentRoom.campNPC === npc) {
         game.currentRoom.campNPC = null;
