@@ -253,6 +253,16 @@ export class EnemyUpdateSystem {
       game.audioSystem?.playSFX('goo_hit');
     }
 
+    if (updateResult.sniperGooDrop) {
+      const g = updateResult.sniperGooDrop;
+      const blob = new GooBlob(g.x, g.y, performance.now(), true);
+      blob.plane = g.plane ?? 0;
+      tagInteriorPlane(game, blob);
+      game.gooBlobs.push(blob);
+      while (game.gooBlobs.length > MAX_GOO_BLOBS) game.gooBlobs.shift();
+      game.audioSystem?.playSFX('goo_hit');
+    }
+
     if (updateResult.shouldDropSlimeTrail) {
       const t = updateResult.shouldDropSlimeTrail;
       game._dropSlimeTrail(t.x, t.y, t.plane);

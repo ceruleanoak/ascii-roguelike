@@ -66,6 +66,12 @@ export class CameraZoomSystem {
 
       // Maze interiors stay permanently zoomed in, regardless of ghost proximity.
       if (player.inMaze) wantsZoom = true;
+
+      // On the surface, no weapon equipped means no combat to zoom in on.
+      // Interiors (Maze/Hut/Dungeon) are exempt — their zoom isn't threat-driven.
+      if (!player.heldItem && !player.inMaze && !player.inHut && !player.inDungeon) {
+        wantsZoom = false;
+      }
     } else {
       this._noEnemyElapsedMs = Infinity;
     }

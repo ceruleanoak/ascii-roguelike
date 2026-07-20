@@ -1358,7 +1358,7 @@ export class PhysicsSystem {
         if (entity.hotWaterHealTimer <= 0) {
           if (entity.hp < entity.maxHp) {
             entity.heal(healingLiquid.amount);
-            game.combatSystem.showHeal(healingLiquid.amount, entity.position.x, entity.position.y);
+            game.combatSystem.showHeal(healingLiquid.amount, entity.position.x, entity.position.y, entity);
           }
           entity.hotWaterHealTimer = healingLiquid.interval;
         }

@@ -29,6 +29,104 @@ export function stepConcealmentAlpha(entity, targetVisible) {
   return entity._concealmentAlpha;
 }
 
+// Elemental robe aura particle factory — one ambient/blast particle for the
+// given aura type (frost/flame/shock/nature/blood/shadow), centered on
+// (cx, cy) with a small random offset. Pure per-call factory, not tied to a
+// game instance — exported standalone so InventorySystem's robe-aura tick
+// can call it without routing through the system instance, same convention
+// as stepConcealmentAlpha above.
+export function makeAuraParticle(cx, cy, type) {
+  const CELL = 16;
+  const ox = (Math.random() - 0.5) * CELL * 1.6;
+  const oy = (Math.random() - 0.5) * CELL * 1.6;
+
+  if (type === 'frost') {
+    const chars = ['*', '+', '.', '*'];
+    const colors = ['#aaddff', '#88ccff', '#cceeff', '#ffffff'];
+    const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.4;
+    const speed = 10 + Math.random() * 22;
+    return {
+      x: cx + ox, y: cy + oy,
+      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+      life: 0.55 + Math.random() * 0.35, maxLife: 0.9,
+      char: chars[Math.floor(Math.random() * chars.length)],
+      color: colors[Math.floor(Math.random() * colors.length)],
+      decayRate: 0.87
+    };
+  }
+  if (type === 'flame') {
+    const chars = ['!', '.', "'", '!'];
+    const colors = ['#ff4400', '#ff8800', '#ffcc00', '#ff6600'];
+    const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.9;
+    const speed = 20 + Math.random() * 35;
+    return {
+      x: cx + ox * 0.75, y: cy + oy * 0.5,
+      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+      life: 0.3 + Math.random() * 0.25, maxLife: 0.55,
+      char: chars[Math.floor(Math.random() * chars.length)],
+      color: colors[Math.floor(Math.random() * colors.length)],
+      decayRate: 0.90
+    };
+  }
+  if (type === 'shock') {
+    const chars = ['|', '-', '+', '.'];
+    const colors = ['#00ffff', '#88ffff', '#aaffff', '#ffffff'];
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 35 + Math.random() * 55;
+    return {
+      x: cx + ox, y: cy + oy,
+      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+      life: 0.15 + Math.random() * 0.2, maxLife: 0.35,
+      char: chars[Math.floor(Math.random() * chars.length)],
+      color: colors[Math.floor(Math.random() * colors.length)],
+      decayRate: 0.78
+    };
+  }
+  if (type === 'nature') {
+    const chars = ["'", '.', ',', "'"];
+    const colors = ['#44cc44', '#33aa33', '#88dd44', '#66bb44'];
+    const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.6;
+    const speed = 8 + Math.random() * 18;
+    return {
+      x: cx + ox, y: cy + oy,
+      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+      life: 0.7 + Math.random() * 0.5, maxLife: 1.2,
+      char: chars[Math.floor(Math.random() * chars.length)],
+      color: colors[Math.floor(Math.random() * colors.length)],
+      decayRate: 0.91
+    };
+  }
+  if (type === 'blood') {
+    const chars = ['.', "'", '.', ','];
+    const colors = ['#cc2222', '#aa1111', '#dd3333', '#881111'];
+    const angle = Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 0.8; // mostly downward
+    const speed = 12 + Math.random() * 22;
+    return {
+      x: cx + ox * 0.8, y: cy + oy * 0.5,
+      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+      life: 0.45 + Math.random() * 0.35, maxLife: 0.8,
+      char: chars[Math.floor(Math.random() * chars.length)],
+      color: colors[Math.floor(Math.random() * colors.length)],
+      decayRate: 0.88
+    };
+  }
+  if (type === 'shadow') {
+    const chars = ['.', '·', '.', '-'];
+    const colors = ['#444466', '#333355', '#555577', '#222244'];
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 5 + Math.random() * 15;
+    return {
+      x: cx + ox, y: cy + oy,
+      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+      life: 0.4 + Math.random() * 0.4, maxLife: 0.8,
+      char: chars[Math.floor(Math.random() * chars.length)],
+      color: colors[Math.floor(Math.random() * colors.length)],
+      decayRate: 0.92
+    };
+  }
+  return null;
+}
+
 // Shared transient world-effect ticker — runs in REST and EXPLORE alike.
 // Owns the per-frame lifecycle of: ember stack decay + ember contact ignition,
 // particles, timed puddles, enemy shockwave rings, goo blobs (incl. slime
@@ -239,6 +337,16 @@ export class WorldEffectsSystem {
         for (const enemy of game.currentRoom.enemies) apply(enemy);
 
         if (sw.radius >= sw.maxRadius) game.enemyShockwaves.splice(i, 1);
+      }
+    }
+
+    // Sniper beam fade — instant-hit line render that ages out over its life window.
+    if (game.sniperBeams && game.sniperBeams.length) {
+      const now = Date.now();
+      for (let i = game.sniperBeams.length - 1; i >= 0; i--) {
+        if (now - game.sniperBeams[i].createdAt >= game.sniperBeams[i].life) {
+          game.sniperBeams.splice(i, 1);
+        }
       }
     }
 

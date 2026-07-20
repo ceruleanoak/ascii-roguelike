@@ -2119,6 +2119,51 @@ export const ENEMIES = {
     },
     affinities: ['venom', 'aquatic'],
     tier: 'weak'
+  },
+
+  // --- Cyan mini-boss ---
+
+  '1': {
+    char: '1',
+    name: 'Sniper',
+    description: 'Watches from a distance. Vanishes when approached, fires an instant line shot after tracking you.',
+    spellDescription: 'FIRES FROM AFAR.',
+    mass: 4.0,
+    hp: 22,
+    speed: 18,
+    acceleration: 40,
+    damage: 4,
+    attackRange: GRID.CELL_SIZE * 40,   // vision-gated, not range-gated — see sniperMechanic.visionRange
+    aggroRange: GRID.CELL_SIZE * 40,
+    attackType: 'custom',               // fully driven by SniperMechanic; standard attack pipeline no-ops
+    decisionInterval: 0.9,
+    color: '#44ffff',
+    idleBehavior: 'stationary',
+    sniperMechanic: {
+      enabled: true,
+      nearRange: GRID.CELL_SIZE * 5,
+      hideDelay: 0.5,
+      hiddenMoveSpeed: 54,             // 3x base speed while repositioning unseen
+      visionRange: GRID.CELL_SIZE * 40,
+      visionLockTime1: 2.0,
+      visionLockTime2: 1.0,
+      telegraphTime: 0.5,
+      beamFadeTime: 0.6,
+      beamDamage: 4,
+      reticuleSpeed: 220,              // faster than player move (180), slower than dodge roll (~297)
+      disturbRadius: GRID.CELL_SIZE * 2,
+      cooldownAfterFire: 2.0,
+      meleeRange: GRID.CELL_SIZE * 1.5,
+      daggerDamage: 3,
+      daggerWindup: 0.4,
+      daggerCooldown: 1.2
+    },
+    elementalAffinity: {
+      resistance: { 'freeze': 0.5 },
+      weakness: { 'burn': 1.5 }
+    },
+    affinities: ['frost'],
+    tier: 'boss'
   }
 };
 
@@ -2136,7 +2181,7 @@ export const SPAWN_TABLES = {
 export const ZONE_SPAWN_TABLES = {
   'green': {
     // Forest/verdant theme - NO fire/ice/lightning enemies
-    0: ['r', 'o'],                                     // L1-2: Rats, Slimes
+    0: ['r', 'o'],                                       // L1-2: Rats, Slimes (Boar too common at 1-in-3; first appears L3+)
     3: ['r', 'o', '^', 'G', 'g', 'b'],                // L3-5: Add Bats, Goblins, Frogs, Boars
     6: ['o', '^', 'G', 'S', 'P', 'g', 'b', 'm'],      // L6-8: Add Skeletons, Poison Spiders, Mimics ('M' Giant Slime is now boss-only)
     9: ['G', 'S', 'O', 'W', 'P', 'g', 'a', 'd'],     // L9-11: Add Ogres, Wizards, Shamans, Duelists
@@ -2264,6 +2309,12 @@ export const BOSS_ENCOUNTERS = {
   giant_slime: {
     spawns: [
       { char: 'M', count: 1, role: 'boss' }
+    ],
+    arenaSpacing: 'center'
+  },
+  sniper: {
+    spawns: [
+      { char: '1', count: 1, role: 'boss' }
     ],
     arenaSpacing: 'center'
   },

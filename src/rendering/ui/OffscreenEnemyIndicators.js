@@ -37,6 +37,7 @@ export function drawOffscreenEnemyIndicators(renderer, game, enemies) {
     if (enemy._concealmentAlpha !== undefined && enemy._concealmentAlpha < 0.005) continue;
     if (enemy.data?.shellCamouflage && enemy.inShellForm) continue;
     if (enemy.data?.mimicMechanic?.enabled && !enemy.mimicRevealed) continue;
+    if (enemy.sniperHidden) continue;
 
     const ex = enemy.position.x + (enemy.width ?? GRID.CELL_SIZE) / 2;
     const ey = enemy.position.y + (enemy.height ?? GRID.CELL_SIZE) / 2;

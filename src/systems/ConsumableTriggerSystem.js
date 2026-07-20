@@ -346,7 +346,7 @@ export class ConsumableTriggerSystem {
         const p = params();
         const healAmount = p?.amount ?? cd.amount;
         player.heal(healAmount);
-        this.game.combatSystem.showHeal(healAmount, player.position.x, player.position.y);
+        this.game.combatSystem.showHeal(healAmount, player.position.x, player.position.y, player);
         if (p?.isUnstableBadRoll) player.takeDamage?.(Math.abs(Math.round(p.unstableRoll) - cd.amount));
         break;
       }

@@ -895,9 +895,11 @@ export class Player {
       this._lastAttacker = damageSource.attacker;
     }
 
-    // Start invulnerability frames
+    // Start invulnerability frames. damageSource.iframeDuration lets a
+    // specific attacker grant a longer window than the default (e.g. the
+    // Sniper's armor-piercing beam/dagger — see SniperMechanic.consumeResult).
     if (this.hp > 0) {
-      this.invulnerabilityTimer = this.invulnerabilityDuration;
+      this.invulnerabilityTimer = damageSource.iframeDuration ?? this.invulnerabilityDuration;
     }
 
     // Bloom Mantle: a landed hit bursts a pollen smoke screen. Flag is consumed

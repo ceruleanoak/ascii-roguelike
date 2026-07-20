@@ -169,6 +169,7 @@ export const ZONES = {
     // Depth-1 weapon offering pool — one floating pickup per L1 room (RoomGenerator).
     l1WeaponPool: ['ߒ', ')', '⊸', '↾', '↑'], // fishing pole, bow, sling, dagger, spear
     bossDepth: 10,
+    bossPool: ['sniper'],
     environmentColors: {
       grass: '#aaffff',
       tree: '#6699aa',

@@ -39,6 +39,7 @@ import { SplitOnDamageMechanic } from './enemyMechanics/SplitOnDamageMechanic.js
 import { RiseAgainMechanic } from './enemyMechanics/RiseAgainMechanic.js';
 import { PatrolMechanic } from './enemyMechanics/PatrolMechanic.js';
 import { GameAnimalMechanic } from './enemyMechanics/GameAnimalMechanic.js';
+import { SniperMechanic } from './enemyMechanics/SniperMechanic.js';
 
 // ─── Enemy AI Debug Logger ─────────────────────────────────────────────────
 // Toggle in browser console: window.ENEMY_AI_DEBUG = true
@@ -348,6 +349,7 @@ export class Enemy {
     GameAnimalMechanic.init(this);
 
     if (LeapAttackMechanic.isEnabled(this)) LeapAttackMechanic.init(this);
+    if (SniperMechanic.isEnabled(this)) SniperMechanic.init(this);
 
     if (SlimeTrailDropMechanic.isEnabled(this)) SlimeTrailDropMechanic.init(this);
 
@@ -828,6 +830,12 @@ export class Enemy {
       GameAnimalMechanic.update(this, { deltaTime });
       return { dotDamage: dotDamageEvents };
     }
+
+    // Sniper: fully owns movement/state while enabled — vision-gated ranged
+    // attacker that never chases, so it must never reach the aggro/chase/attack
+    // state machine below.
+    const sniperActive = SniperMechanic.updateActive(this, { deltaTime, distance, effectiveDistance, dotDamageEvents });
+    if (sniperActive?.suspend) return sniperActive.result;
 
     // Sapping behavior (locks to target position and deals periodic damage)
     if (this.sapping && this.sappingTarget) {

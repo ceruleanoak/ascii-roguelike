@@ -4,6 +4,8 @@ import { cycleExitLetter, findExitAtPoint, mutateExitLetter } from './ExitSystem
 import { BoomerangMechanic } from './BoomerangMechanic.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { GameAnimalMechanic } from '../entities/enemyMechanics/GameAnimalMechanic.js';
+import { SniperMechanic } from '../entities/enemyMechanics/SniperMechanic.js';
+import { queueDamageNumber as queueDamageNumberImpl, ageDamageTextQueue, reportDamageResult as reportDamageResultImpl } from './DamageNumberQueue.js';
 import { conductElectricity as conductElectricityImpl } from './ElectricConduction.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
@@ -30,6 +32,8 @@ export class CombatSystem {
     this.aoeEffects = [];          // { type, x, y, radius, timer, color } — AOE visual effects (wand explosions)
     this.tongueAttacks = [];       // { owner, direction, maxLength, currentLength, phase, ... }
     this.chainArcs = [];           // { x1, y1, x2, y2, color, timer, duration } — chain lightning visuals
+    this.pendingDamageTexts = [];  // staggered floating text queue, see queueDamageNumber()
+    this._textCooldowns = new Map(); // target (player) -> seconds until its next queued text can show
   }
 
   // Route object ignitions through FireSystem (owns spread + render dirty flag).
@@ -81,6 +85,25 @@ export class CombatSystem {
     return false;
   }
 
+  // Shared dodge/block/pierce/reflect damage-number reporting for enemy-initiated
+  // hits that bypass the standard attack-object pipeline (sap, sniper beam/dagger).
+  // See DamageNumberQueue.js for the full behavior — kept here as a thin
+  // dispatch to stay under the architecture budget.
+  _reportDamageResult(result, fallbackDamage, player, opts = {}) {
+    return reportDamageResultImpl(this, result, fallbackDamage, player, opts);
+  }
+
+  // Staff-block-respecting damage application for enemy-initiated hits outside
+  // the attack-object pipeline. Returns true if the hit killed the player.
+  _applyBlockableEnemyDamage(player, enemy, damage, damageSource) {
+    if (player.isStaffBlocking) {
+      this.queueDamageNumber(player, 'BLOCK', player.position.x, player.position.y - GRID.CELL_SIZE, '#aaaaaa');
+      return false;
+    }
+    const result = player.takeDamage(damage, damageSource);
+    return this._reportDamageResult(result, damage, player);
+  }
+
   update(deltaTime, player, enemies, backgroundObjects = [], room = null) {
     // Red warrior damage roll: hits and knocks back enemies, smashes background objects
     this.updateRollDamage(player, enemies, backgroundObjects);
@@ -127,6 +150,9 @@ export class CombatSystem {
         this.damageNumbers.splice(i, 1);
       }
     }
+
+    // Staggered player combat text (CAN'T BLOCK/PIERCE/damage/heal) — see DamageNumberQueue.js.
+    ageDamageTextQueue(this, deltaTime);
 
     // Update wand proximity failure indicators
     if (!this.wandProximityFailures) {
@@ -532,6 +558,9 @@ export class CombatSystem {
       let hit = false;
       for (const enemy of enemies) {
         if (!inSamePlane(proj, enemy)) continue;
+        // Sniper stays hittable while sniperHidden (invisible, not intangible) — a
+        // player who tracks/guesses its position via the disturbed-object tell can
+        // still land a hit; only the render layer conceals it (ExploreRenderer.renderEnemy).
         // Boomerang gating: normal return is inert; ricochet return stuns but deals no damage.
         if (proj.boomerang) {
           if (proj.boomerangReturning && !proj.boomerangRicochetReturn) continue;
@@ -924,6 +953,7 @@ export class CombatSystem {
       if (!attack.hasHit) {
         for (const enemy of enemies) {
           if (planeOf(enemy) !== (attack.shooterPlane ?? 0)) continue;
+          // Sniper stays hittable while sniperHidden — see the projectile-loop comment above.
 
           if (this.checkMeleeCollision(attack, enemy)) {
             // Parry mechanic (Duelist): reflect melee back at player
@@ -1456,37 +1486,18 @@ export class CombatSystem {
       // position to the player every frame, so any push is immediately undone
       // and would just cause jitter instead of a readable hit.
       if (updateResult && updateResult.sapDamage) {
-        const sapData = updateResult.sapDamage;
-        if (player.isStaffBlocking) {
-          this.createDamageNumber('BLOCK', player.position.x, player.position.y, '#aaaaaa');
-        } else {
-        const damageSource = {
-          isBullet: false,
-          element: null,
-          attacker: enemy
-        };
-        const result = player.takeDamage(sapData.damage, damageSource);
-
-        if (result.dodged) {
-          this.createDamageNumber(result.lucky ? 'LUCKY DODGE' : 'DODGE',
-                                  player.position.x, player.position.y,
-                                  result.lucky ? '#ffff66' : '#ffff00');
-        } else if (result.blocked) {
-          this.createDamageNumber('BLOCK', player.position.x, player.position.y, '#aaaaaa');
-        } else if (result !== false) {
-          this.createDamageNumber(result.actualDamage ?? sapData.damage, player.position.x, player.position.y, '#cc0000');
-
-          // Handle reflection
-          if (result.reflect && result.attacker) {
-            result.attacker.takeDamage(result.reflect);
-            this.createDamageNumber(result.reflect, result.attacker.position.x, result.attacker.position.y, '#ff8800');
-          }
-        }
-
-        if (result === true) {
+        if (this._applyBlockableEnemyDamage(player, enemy, updateResult.sapDamage.damage,
+            { isBullet: false, element: null, attacker: enemy })) {
           return { playerDead: true };
         }
-        } // end else (!player.isStaffBlocking)
+      }
+
+      // Sniper: beam VFX spawn + beam/dagger damage resolution (kept in
+      // SniperMechanic.js for cohesion; this file only owns dispatch).
+      if (updateResult && (updateResult.sniperBeamFired || updateResult.sniperBeamHit || updateResult.sniperDaggerHit)) {
+        if (SniperMechanic.consumeResult(this, enemy, updateResult, player)) {
+          return { playerDead: true };
+        }
       }
 
       // Handle melee attack windup visualization
@@ -2082,12 +2093,14 @@ export class CombatSystem {
       if (hitbox.x < eb.x + eb.width && hitbox.x + hitbox.width > eb.x &&
           hitbox.y < eb.y + eb.height && hitbox.y + hitbox.height > eb.y) {
         this._rollHitEnemies.add(enemy);
-        enemy.takeDamage(1);
-        this.createDamageNumber(1, enemy.position.x, enemy.position.y, '#ff4444');
-        // Knockback in the roll direction
-        enemy.velocity.vx = dir.x * 300;
-        enemy.velocity.vy = dir.y * 300;
-        if (enemy.applyStatusEffect) enemy.applyStatusEffect('knockback', 0.25);
+        const result = enemy.takeDamage(1);
+        if (result) {
+          this.createDamageNumber(1, enemy.position.x, enemy.position.y, '#ff4444');
+          // Knockback in the roll direction
+          enemy.velocity.vx = dir.x * 300;
+          enemy.velocity.vy = dir.y * 300;
+          if (enemy.applyStatusEffect) enemy.applyStatusEffect('knockback', 0.25);
+        }
       }
     }
 
@@ -2355,10 +2368,18 @@ export class CombatSystem {
     });
   }
 
+  // Staggered player combat text — see DamageNumberQueue.js.
+  queueDamageNumber(target, damage, x, y, color, scale = 1, duration = 1.0) {
+    queueDamageNumberImpl(this, target, damage, x, y, color, scale, duration);
+  }
+
   // Shared entry point for every heal source (hot spring, consumables, …) so
   // healing always shows the same green "+N" feedback damage number shows for damage.
-  showHeal(amount, x, y) {
-    this.createDamageNumber(`+${amount}`, x, y, COLORS.HEAL);
+  // `target` opts into the stagger queue (queueDamageNumber) — omit for a one-off
+  // heal with nothing else competing for the same frame.
+  showHeal(amount, x, y, target = null) {
+    if (target) this.queueDamageNumber(target, `+${amount}`, x, y, COLORS.HEAL);
+    else this.createDamageNumber(`+${amount}`, x, y, COLORS.HEAL);
   }
 
   clear() {
