@@ -24,6 +24,14 @@ Significant, hard-to-reverse decisions are recorded in `docs/adr/` (Nygard light
 
 **Surface ADR gaps to prompt the user's effort.** When you make, propose, or encounter an architecturally significant decision (hard to reverse, shapes the architecture, or future-you would ask "why is it this way") that has **no ADR and no backlog entry**, append a candidate row to `docs/adr/BACKLOG.md` and mention it in your reply so the user can prioritize. Apply the same bar as `docs/adr/README.md` — only weighty decisions, never routine/easily-reversed ones (don't pad the backlog). Check the backlog before adding so you don't duplicate. The user writes the actual ADR; your job is to make the gap visible, not to fill it.
 
+## Git Workflow
+
+Single dev, no PR review — commits and pushes exist for the audit trail, so keep them granular.
+
+- **Commit and push after each feature/fix is complete and validated** (build passes), not batched into large multi-feature drops. One logical change per commit.
+- Work happens directly on `main` (no feature-branch requirement for this project) — push straight after validating.
+- Don't hold commits back to bundle "related" work unless it's genuinely one atomic change — prefer more, smaller commits over fewer, larger ones.
+
 ## Deploying
 
 ```

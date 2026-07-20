@@ -33,3 +33,24 @@ export function drawPlayerTorchLight(renderer, x, y) {
   const alpha = PLAYER_TORCH_ALPHA_LOW + (PLAYER_TORCH_ALPHA_HIGH - PLAYER_TORCH_ALPHA_LOW) * s;
   renderer.drawCircle(x, y, PLAYER_TORCH_LIGHT_RADIUS, PLAYER_TORCH_COLOR, true, alpha);
 }
+
+// Underground fog-of-war overlay: darken everything outside the player's visibility
+// circle. Drawn after all entities so it clips both fg content and the bg canvas
+// beneath. Uses evenodd fill rule to punch a transparent hole at the player's position.
+export function drawUndergroundFogOverlay(renderer, game) {
+  if (!(game.currentRoom?.underground && game.player?.plane === 1)) return;
+  const torchLit = hasTorchLight(game);
+  const fogRadius = (game.currentRoom.underground.caveFogRadius || 5) * GRID.CELL_SIZE * (torchLit ? 1.5 : 1);
+  const px = game.player.position.x + GRID.CELL_SIZE / 2;
+  const py = game.player.position.y + GRID.CELL_SIZE / 2;
+  const envColors = game.zoneSystem.getBlendedEnvironmentColors(game.currentRoom.zone);
+  const ctx = renderer.fgCtx;
+  ctx.save();
+  ctx.fillStyle = envColors.background || '#000000';
+  ctx.beginPath();
+  ctx.rect(0, 0, GRID.WIDTH, GRID.HEIGHT);
+  ctx.arc(px, py, fogRadius, 0, Math.PI * 2);
+  ctx.fill('evenodd');
+  ctx.restore();
+  if (torchLit) drawPlayerTorchLight(renderer, px, py);
+}

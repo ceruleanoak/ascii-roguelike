@@ -101,6 +101,20 @@ programming terms.
   no real collision — is being replaced; see `claudedocs/quagmire-handover.md`.)
 - **Not:** the Pond (its surface entrance), a PiP panel, a square maze, or open collision-free water.
 
+### Sinkhole
+- **Definition:** A concealed hole in a Grass (`G`) Room, disguised as ordinary tall grass
+  until a majority of the grass tiles touching it have been cut. Once revealed, SPACE dives
+  the player to that Room's own plane-1 cave — a guaranteed river leads to a one-way shortcut
+  into a freshly generated Room in another Zone, arriving already on plane 1 inside the river's
+  trail.
+- **In code:** `SinkholeSystem`; `room.sinkholes[]` (site + adjacency-cut tracking); reveal
+  glyph `⬤`, plane-1 water glyph `≈`.
+- **Not:** the Pond (a fixed, always-visible Quagmire entrance reached by a Frog only) or the
+  Aquifer (Pond's underwater destination); the Sinkhole is concealed until earned by cutting
+  grass, is entered by the player directly (no Polymorph required), and its plane-1 space is a
+  one-way cross-Zone shortcut rather than a self-contained interior loop. Also not a Burrow
+  (an enemy hiding mechanic, not a player-enterable space).
+
 ### Plane
 - **Definition:** Which interaction layer an entity lives on — surface (0) vs. interior (1).
   The single predicate that decides combat, vision, pickup, and collision eligibility.

@@ -102,7 +102,7 @@ export class HuntingSystem {
     const spawnPos = isMoose ? this._farthestExitSpawnPoint() : this._randomOpenPoint();
     if (!spawnPos) return false;
 
-    const enemy = new Enemy(data.char, spawnPos.x, spawnPos.y, game.currentDepth, data);
+    const enemy = new Enemy(data.char, spawnPos.x, spawnPos.y, game.getCurrentZoneDepth(), data);
     enemy.setCollisionMap(game.currentRoom.collisionMap);
     enemy.setBackgroundObjects(game.currentRoom.backgroundObjects);
     enemy.setTarget(game.player);

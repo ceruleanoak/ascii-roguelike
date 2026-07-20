@@ -185,6 +185,10 @@ export class TrapSystem {
       // Weapon throw: clear the active slot, item flies until it hits an enemy or stops
       const thrownItem = game.player.dropItem();
       if (!thrownItem) return;
+      // REST equipment slots draw glyphs to the background layer, which only
+      // clears on a dirty mark — without this, the thrown item's glyph lingers
+      // over the now-empty slot's number placeholder.
+      game.renderer.markBackgroundDirty();
       // Directional glyphs (currently spear ↑) rotate to face throw direction.
       // ↑ points at -π/2 in canvas space, so add π/2 to the velocity angle.
       const subtype = thrownItem.data?.weaponSubtype;

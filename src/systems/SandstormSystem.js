@@ -121,7 +121,9 @@ export class SandstormSystem {
     if (!this.active) return;
 
     const game = this.game;
-    const playerInside = isInteriorActive(game);
+    // Interior (hut/dungeon/maze) OR the Aquifer underground tunnel (separate
+    // plane system, see PlaneSystem.js) both mean wind shouldn't act on the player.
+    const playerInside = isInteriorActive(game) || game.player?.plane === 1;
 
     if (!playerInside) {
       const p = game.player;
