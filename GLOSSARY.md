@@ -142,6 +142,63 @@ programming terms.
   `PackBehaviorMechanic`); selected via enemy `data`.
 - **Not:** a `switch` on enemy type inside `Enemy.js`; a one-off meta-state.
 
+### Telegraph
+- **Definition:** The projected warning shape of an incoming enemy attack — what the player
+  *reads* — as distinct from the shape that actually deals damage. A Telegraph's warn shape may
+  be wider than its hit shape (the warning aids anticipation; it is not a 1:1 damage outline),
+  and may carry multiple timed damage pulses.
+- **In code:** enemy data block `telegraph: { warnShape, hitShape, pulses }`; shared geometry
+  module `src/game/Telegraph.js` (shape descriptors `rect`/`cone`/`ring`/`circle`, `hitTest`,
+  `rasterizeToCells`) consumed by CombatSystem, ExploreRenderer, and the enemy-editor sandbox.
+- **Not:** "windup" (the timing phase of Weapon Timing — a Telegraph is the projected *shape*
+  shown during a windup); the legacy single-rect windup visual (which is both warning and
+  hitbox at once).
+
+### Rage
+- **Definition:** A Mechanic state in which an Enemy becomes dramatically more dangerous after
+  taking its first hit (or crossing an HP threshold) — punishing reckless engagement and
+  rewarding tactical first strikes.
+- **In code:** `RageMechanic` gated by `data.rageMechanic`; active state field `rageActive`.
+- **Not:** `enraged` (the pre-existing aggro/alert flag on Enemy — an awareness state, not a
+  power-up).
+
+### Sprint
+- **Definition:** A Mechanic where an alerted Enemy ramps to a sustained speed the player
+  cannot outrun — once engaged, disengaging is no longer free. Contests gun/bow self-root and
+  reload windows.
+- **In code:** `SprintMechanic` gated by `data.sprintMechanic`; continuous ramp, no discrete
+  dash state.
+- **Not:** Charge (`ChargeMechanic`'s telegraphed straight-line dash FSM).
+
+### Crowder
+- **Definition:** A Mechanic where an Enemy deliberately holds sub-melee distance — pressing
+  inside the player's weapon minimum range to deny spear-tip crits and the whip band.
+- **In code:** `CrowderMechanic` gated by `data.crowderMechanic`; velocity-override, not a
+  movement style.
+- **Not:** a chaser (which closes to attack range and stops); the Crowder's goal is denial of
+  the player's spacing, held continuously.
+
+### Bomb Carrier
+- **Definition:** An urgency Mechanic: the Enemy carries a fused bomb with a visible countdown
+  overhead and chases the player; on zero it detonates. Forces target prioritization.
+- **In code:** `BombCarrierMechanic` gated by `data.bombCarrierMechanic`; detonation reuses
+  `deathExplosion` plumbing.
+- **Not:** a suicide bomber triggered by proximity — the fuse is time-driven and readable.
+
+### Thief
+- **Definition:** An urgency Mechanic: the Enemy steals the player's held weapon on contact,
+  flees, and despawns shortly after — taking the item with it unless killed first.
+- **In code:** `ThiefMechanic` gated by `data.thiefMechanic`.
+- **Not:** Looter (an Enemy that picks items up off the ground; it never takes from the player).
+
+### Watcher
+- **Definition:** A Mechanic for a wide-vision alarm Enemy: on spotting the player it marks
+  them — clearing backstab eligibility — and alerts its roommates. Contests the
+  burst-from-stealth economy.
+- **In code:** `WatcherMechanic` gated by `data.watcherMechanic`; marking acts through the
+  `detectionIndicatorTimer` gate that backstabs check.
+- **Not:** a sentry turret or a damage threat in itself; the Watcher's weapon is information.
+
 ### Ingredient
 - **Definition:** A raw drop from enemies/environment. Never crafted.
 - **In code:** rendered as a **letter** (`a–z`, `A–Z`) or **digit** (`0–9`).
