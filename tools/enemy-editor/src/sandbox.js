@@ -7,6 +7,7 @@ import { Enemy } from '../../../src/entities/Enemy.js';
 import { PhysicsSystem } from '../../../src/systems/PhysicsSystem.js';
 import { ENEMIES } from '../../../src/data/enemies.js';
 import { GRID, PHYSICS } from '../../../src/game/GameConfig.js';
+import { updateEnemyMeleeAttack, syncWindupVisual, attackHitsBox, telegraphRenderCells } from '../../../src/game/Telegraph.js';
 
 const CELL = GRID.CELL_SIZE;
 const FONT = "px 'Unifont', monospace";
@@ -254,24 +255,11 @@ export class Sandbox {
     }
   }
 
-  // Mirror of CombatSystem's enemy-attack emission (the subset that produces
-  // visible attacks): melee windup-visual flow + canAttack()->createAttack().
+  // Enemy attack emission: the melee windup-visual lifecycle runs through the
+  // shared Telegraph module (the same code CombatSystem steps — no mirrored
+  // copy to drift), plus canAttack()->createAttack() for everything else.
   handleEnemyAttacks(enemy) {
-    if (enemy.attackType === 'melee' && enemy.isWindingUp && enemy.isWindingUp()) {
-      if (!enemy.windupAttackVisual && enemy.createWindupAttackVisual) {
-        const v = enemy.createWindupAttackVisual();
-        if (v) { v._owner = enemy; this.attacks.push(v); enemy.windupAttackVisual = v; }
-      }
-    } else if (enemy.windupAttackVisual) {
-      const v = enemy.windupAttackVisual;
-      if (enemy.canAttack && enemy.canAttack()) {
-        v.windupPhase = false; v.hasHit = false; v.flashWhite = true; v.duration = 0.15;
-        enemy.attackTimer = enemy.attackCooldown; enemy.state = 'idle';
-      } else {
-        this.attacks = this.attacks.filter(a => a !== v);
-      }
-      enemy.windupAttackVisual = null;
-    }
+    syncWindupVisual(enemy, this.attacks);
 
     if (enemy.canAttack && enemy.canAttack() && !enemy.windupAttackVisual) {
       const data = enemy.createAttack && enemy.createAttack();
@@ -285,27 +273,42 @@ export class Sandbox {
 
   stepAttacks(dt) {
     const p = this.player;
+    const expired = new Set();
     for (const a of this.attacks) {
-      if (a.velocity) {
-        a.position.x += a.velocity.vx * dt;
-        a.position.y += a.velocity.vy * dt;
+      if (a.type === 'enemy_melee') {
+        // Shared Telegraph lifecycle: timers, windup blink, owner tracking,
+        // pulse re-arming — same code the real combat loop runs.
+        if (updateEnemyMeleeAttack(a, dt)) { expired.add(a); continue; }
+      } else {
+        if (a.velocity) {
+          a.position.x += a.velocity.vx * dt;
+          a.position.y += a.velocity.vy * dt;
+        }
+        if (a.duration !== undefined) a.duration -= dt;
+        if (a.flashTimer !== undefined) a.flashTimer -= dt;
+        a._life = (a._life ?? 3) - dt;
       }
-      if (a.duration !== undefined) a.duration -= dt;
-      if (a.flashTimer !== undefined) a.flashTimer -= dt;
-      a._life = (a._life ?? 3) - dt;
 
       // contact damage to player (windup visuals don't bite)
       if (!a.hasHit && !a.windupPhase && a.damage) {
-        const dx = (a.position?.x ?? -999) - p.position.x;
-        const dy = (a.position?.y ?? -999) - p.position.y;
-        if (Math.hypot(dx, dy) < CELL * 0.7) {
+        const playerBox = { x: p.position.x - CELL / 2, y: p.position.y - CELL / 2, width: CELL, height: CELL };
+        const legacyContact = () => {
+          const dx = (a.position?.x ?? -999) - p.position.x;
+          const dy = (a.position?.y ?? -999) - p.position.y;
+          return Math.hypot(dx, dy) < CELL * 0.7;
+        };
+        if (attackHitsBox(a, playerBox, legacyContact)) {
           const res = p.takeDamage(a.damage);
           this.addFloater(res.actualDamage, p.position, '#cc4444');
           a.hasHit = true;
         }
+        // Melee attacks get exactly one test frame per pulse (legacy contract).
+        if (a.type === 'enemy_melee') a.hasHit = true;
       }
     }
     this.attacks = this.attacks.filter(a => {
+      if (expired.has(a)) return false;
+      if (a.type === 'enemy_melee') return true; // lifecycle handled above
       if (a.duration !== undefined && a.duration <= -0.2) return false;
       if (a._life <= 0) return false;
       const x = a.position?.x, y = a.position?.y;
@@ -445,6 +448,18 @@ export class Sandbox {
   }
 
   drawAttack(c, a) {
+    // Telegraph-shaped attacks draw their rasterized warn/hit cells — the
+    // shared module resolves what to show so this matches ExploreRenderer.
+    const shaped = telegraphRenderCells(a);
+    if (shaped) {
+      c.font = `${CELL}${FONT}`;
+      c.fillStyle = shaped.color || '#ff5533';
+      c.globalAlpha = shaped.alpha;
+      for (const cell of shaped.cells) c.fillText(shaped.char, cell.x, cell.y);
+      c.globalAlpha = 1;
+      return;
+    }
+
     const x = a.position?.x, y = a.position?.y;
     if (x == null) return;
     const glyph = a.char || (a.windupPhase ? '▒' : '█');

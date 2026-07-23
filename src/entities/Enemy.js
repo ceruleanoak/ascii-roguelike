@@ -14,6 +14,7 @@ export const EFFECT_AFFINITY = {
   goo:    'goo',
 };
 import { Item } from './Item.js';
+import { attachTelegraph } from '../game/Telegraph.js';
 import { inSamePlane, planeOf, objectOnPlane } from '../systems/PlaneSystem.js';
 import { EXIT_SLOT_POSITIONS } from '../systems/ExitSystem.js';
 import { LureMechanic } from './enemyMechanics/LureMechanic.js';
@@ -2777,7 +2778,10 @@ export class Enemy {
 
     const attackDistance = GRID.CELL_SIZE + (this.attackRange - GRID.CELL_SIZE) * 0.5;
 
-    return {
+    // If the enemy data declares a Telegraph, attachTelegraph adds the shape
+    // fields (warnShape/hitShape/facing/pulses); shapeless enemies keep the
+    // legacy single-rect visual unchanged.
+    return attachTelegraph({
       type: 'enemy_melee',
       char: '█',
       position: {
@@ -2803,7 +2807,7 @@ export class Enemy {
       ownerOffsetX: dirX * attackDistance,
       ownerOffsetY: dirY * attackDistance,
       shooterPlane: this.plane
-    };
+    }, this, dirX, dirY);
   }
 
   createProjectile() {

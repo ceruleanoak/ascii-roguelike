@@ -6,6 +6,7 @@ import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { GameAnimalMechanic } from '../entities/enemyMechanics/GameAnimalMechanic.js';
 import { SniperMechanic } from '../entities/enemyMechanics/SniperMechanic.js';
 import { queueDamageNumber as queueDamageNumberImpl, ageDamageTextQueue, reportDamageResult as reportDamageResultImpl } from './DamageNumberQueue.js';
+import { updateEnemyMeleeAttack, syncWindupVisual, attackHitsBox } from '../game/Telegraph.js';
 import { conductElectricity as conductElectricityImpl } from './ElectricConduction.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
@@ -1340,44 +1341,13 @@ export class CombatSystem {
       }
     }
 
-    // Update enemy melee attacks
+    // Update enemy melee attacks. Timers, windup blink, owner tracking, and
+    // Telegraph pulse re-arming all live in the shared Telegraph module (the
+    // enemy-editor sandbox steps the same code).
     for (let i = this.enemyMeleeAttacks.length - 1; i >= 0; i--) {
       const attack = this.enemyMeleeAttacks[i];
 
-      attack.duration -= deltaTime;
-
-      // Update windup alpha (blink effect via transparency)
-      if (attack.windupPhase && attack.windupDuration !== undefined) {
-        attack.windupElapsed += deltaTime;
-        const progress = attack.windupElapsed / attack.windupDuration;
-
-        // Track the owner's position so the hitbox follows knockback during windup.
-        if (attack.owner && attack.ownerOffsetX !== undefined) {
-          attack.position.x = attack.owner.position.x + attack.ownerOffsetX;
-          attack.position.y = attack.owner.position.y + attack.ownerOffsetY;
-        }
-
-        // Alpha pattern: 0%=1.0, 25%=0.25, 50%=1.0, 75%=0.25, 100%=white
-        if (progress < 0.25) {
-          attack.alpha = 1.0; // Fully visible
-        } else if (progress < 0.5) {
-          attack.alpha = 0.25; // Dimmed (first dip)
-        } else if (progress < 0.75) {
-          attack.alpha = 1.0; // Fully visible
-        } else {
-          attack.alpha = 0.25; // Dimmed (second dip)
-        }
-      }
-
-      // Update flash timer
-      if (attack.flashTimer !== undefined && attack.flashTimer > 0) {
-        attack.flashTimer -= deltaTime;
-        if (attack.flashTimer <= 0) {
-          attack.flashWhite = false;
-        }
-      }
-
-      if (attack.duration <= 0) {
+      if (updateEnemyMeleeAttack(attack, deltaTime)) {
         this.enemyMeleeAttacks.splice(i, 1);
         continue;
       }
@@ -1387,7 +1357,8 @@ export class CombatSystem {
 
         if (attack.isCharmedAttack && attack.charmedTarget && attack.charmedTarget !== player) {
           // Charmed attack hits the charmed target enemy
-          if (this.checkMeleeCollision(attack, attack.charmedTarget)) {
+          if (attackHitsBox(attack, attack.charmedTarget.getHitbox(),
+                            () => this.checkMeleeCollision(attack, attack.charmedTarget))) {
             attack.charmedTarget.takeDamage(attack.damage);
             this.createDamageNumber(attack.damage, attack.charmedTarget.position.x, attack.charmedTarget.position.y, '#ff44ff');
           }
@@ -1398,7 +1369,8 @@ export class CombatSystem {
           }
 
           // Normal attack (or charmed fallback targeting player)
-          if (this.checkMeleeCollisionWithPlayer(attack, player)) {
+          if (attackHitsBox(attack, player.getHitbox(),
+                            () => this.checkMeleeCollisionWithPlayer(attack, player))) {
             if (player.isStaffBlocking && !attack.isImpact) {
               this.createDamageNumber('BLOCK', player.position.x, player.position.y, '#aaaaaa');
               attack.hasHit = true;
@@ -1500,39 +1472,10 @@ export class CombatSystem {
         }
       }
 
-      // Handle melee attack windup visualization
-      if (enemy.attackType === 'melee' && enemy.isWindingUp && enemy.isWindingUp()) {
-        // Enemy is winding up a melee attack - create/update windup visual
-        if (!enemy.windupAttackVisual) {
-          const windupVisual = enemy.createWindupAttackVisual();
-          if (windupVisual) {
-            this.enemyMeleeAttacks.push(windupVisual);
-            enemy.windupAttackVisual = windupVisual; // Track on enemy
-          }
-        }
-      } else if (enemy.windupAttackVisual) {
-        // Windup ended - convert visual to real attack or remove it
-        if (enemy.canAttack()) {
-          // Activate the attack (make it deal damage and flash white)
-          enemy.windupAttackVisual.windupPhase = false;
-          enemy.windupAttackVisual.hasHit = false; // Allow damage
-          enemy.windupAttackVisual.flashWhite = true; // Flash white on activation
-          enemy.windupAttackVisual.flashTimer = 0.1; // Flash for 0.1 seconds
-          enemy.windupAttackVisual.duration = 0.15; // Reset to normal attack duration
-          enemy.windupAttackVisual.alpha = 1.0; // Ensure fully visible when activated
-
-          // Set attack cooldown (same as createAttack does)
-          enemy.attackTimer = enemy.attackCooldown;
-          enemy.state = 'idle';
-        } else {
-          // Windup was interrupted - remove the visual
-          const index = this.enemyMeleeAttacks.indexOf(enemy.windupAttackVisual);
-          if (index > -1) {
-            this.enemyMeleeAttacks.splice(index, 1);
-          }
-        }
-        enemy.windupAttackVisual = null;
-      }
+      // Handle melee attack windup visualization — create/activate/interrupt
+      // lives in the shared Telegraph module (single canonical implementation,
+      // also stepped by the enemy-editor sandbox).
+      syncWindupVisual(enemy, this.enemyMeleeAttacks);
 
       if (enemy.canAttack() && !enemy.windupAttackVisual) {
         const attackData = enemy.createAttack();
