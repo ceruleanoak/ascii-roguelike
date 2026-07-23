@@ -94,6 +94,18 @@ export class AudioSystem {
     // know to force a reload back to the EXPLORE track even when the zone
     // itself hasn't changed (e.g. green REST → green EXPLORE).
     this.inRestMode = false;
+
+    // Generation counter claimed by switchMusic/switchMusicAtLoopEnd before
+    // their async fetch+decode. Two of these can be issued back-to-back
+    // (e.g. the death/restart path fires hardResetDualLayers, then
+    // enterRestState synchronously fires a second switch before the first
+    // has resolved) — without this guard, whichever call resolves later
+    // calls startDualSources() on top of the other's still-playing sources
+    // instead of replacing them, producing doubled/overlapping music.
+    // Each call captures the post-increment value and checks it again after
+    // its await; a mismatch means a newer call has taken over, so it bails
+    // out before touching the audio graph.
+    this._musicLoadId = 0;
   }
 
   /**
@@ -694,15 +706,26 @@ export class AudioSystem {
     this.stop();
     this.mode = 'dual';
 
+    // Claim this load — see _musicLoadId in the constructor for why.
+    const loadId = ++this._musicLoadId;
+
     try {
       const [layer1Data, layer2Data] = await Promise.all([
         this.fetchAudioBuffer(layer1Path),
         this.fetchAudioBuffer(layer2Path)
       ]);
-      [this.layer1Buffer, this.layer2Buffer] = await Promise.all([
+      const [newLayer1Buffer, newLayer2Buffer] = await Promise.all([
         this.audioContext.decodeAudioData(layer1Data),
         this.audioContext.decodeAudioData(layer2Data)
       ]);
+
+      // Superseded by a newer switchMusic/switchMusicAtLoopEnd call while we
+      // were fetching/decoding — let that call own playback instead of
+      // stacking a second pair of sources on top of it.
+      if (loadId !== this._musicLoadId) return false;
+
+      this.layer1Buffer = newLayer1Buffer;
+      this.layer2Buffer = newLayer2Buffer;
 
       this.startDualSources();
       if (wasLayer2Enabled) {
@@ -795,6 +818,9 @@ export class AudioSystem {
     const posInLoop = ((elapsed % loopDuration) + loopDuration) % loopDuration;
     const swapTime = currentTime + (loopDuration - posInLoop);
 
+    // Claim this load — see _musicLoadId in the constructor for why.
+    const loadId = ++this._musicLoadId;
+
     try {
       const [layer1Data, layer2Data] = await Promise.all([
         this.fetchAudioBuffer(layer1Path),
@@ -804,6 +830,10 @@ export class AudioSystem {
         this.audioContext.decodeAudioData(layer1Data),
         this.audioContext.decodeAudioData(layer2Data)
       ]);
+
+      // Superseded while fetching/decoding (see switchMusic) — bail out
+      // before scheduling stops/starts against a graph a newer call now owns.
+      if (loadId !== this._musicLoadId) return false;
 
       // Land on the boundary computed above unless decoding overran it, in
       // which case start immediately rather than scheduling into the past.
@@ -1316,6 +1346,9 @@ export class AudioSystem {
     this.stop();
     this.removeAutoplayUnblock();
     this.disarmAutoResume();
+    // Invalidate any in-flight switchMusic/switchMusicAtLoopEnd load so its
+    // resolution (against a context we're about to close) is a no-op.
+    this._musicLoadId++;
 
     if (this.audioContext) {
       this.audioContext.close();
