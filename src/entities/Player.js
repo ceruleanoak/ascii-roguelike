@@ -215,7 +215,16 @@ export class Player {
       cooldownTimer: 0,
       distance: GRID.CELL_SIZE * 2, // roll distance (reduced)
       speed: 200, // pixels per second during roll (1/3 of original 600)
-      iframes: true, // invulnerability during roll (for 'dodge' type)
+      // Does this roll grant invulnerability at all? False for a roll that is
+      // movement rather than evasion (Green Ranger's sprint), which gets no
+      // i-frames even while the roll is running.
+      iframes: true,
+      // Seconds of invulnerability that persist AFTER the roll finishes. Per
+      // character (characters.js `rollIframes`) — every character's roll is
+      // meant to feel different. Keep it well under that character's roll
+      // cooldown: if the tail outlasts the cooldown, mashing dodge becomes
+      // uninterrupted invulnerability and nothing can punish it.
+      postRollIframes: 0.1,
       hideDuration: 0, // Cyan rogue: how long `hidden` flag persists after roll start (0 = roll-only)
       hideTimer: 0,    // Active countdown of the hide window
       invisRecoveryDuration: 10, // Cyan rogue: cooldown before invisibility can trigger again
@@ -711,13 +720,16 @@ export class Player {
     // Apply roll-specific effects based on type
     switch (this.dodgeRoll.type) {
       case 'dodge':
-        // Grant i-frames for duration + 0.5s extra, plus any armor bonus
-        this.invulnerabilityTimer = this.dodgeRoll.duration + 0.5 + this.extraIframes;
+        // Roll duration plus this character's brief post-roll tail, plus any
+        // armor bonus. A roll with `iframes: false` (sprint) grants none.
+        this.invulnerabilityTimer = this.dodgeRoll.iframes
+          ? this.dodgeRoll.duration + this.dodgeRoll.postRollIframes + this.extraIframes
+          : 0;
         break;
       case 'hide':
         if (this.dodgeRoll.invisRecoveryTimer > 0) {
           // Recovering from a recent invisibility trigger: roll works normally, no invis effect
-          this.invulnerabilityTimer = this.dodgeRoll.duration + 0.5 + this.extraIframes;
+          this.invulnerabilityTimer = this.dodgeRoll.duration + this.dodgeRoll.postRollIframes + this.extraIframes;
         } else {
           // Invisible to enemies + extended i-frames (cyan rogue specialty)
           this.hidden = true;

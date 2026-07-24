@@ -6,6 +6,7 @@ export const CHARACTER_TYPES = {
     rollDuration: 0.15,
     rollCooldown: 0.5,
     rollSpeed: 600,
+    rollIframes: 0.1, // Brief tail after the roll — the baseline evade, not a safety blanket
     weaponAffinities: {} // No bonuses
   },
   'green': {
@@ -15,6 +16,10 @@ export const CHARACTER_TYPES = {
     rollDuration: 0.18,
     rollCooldown: 0.45,
     rollSpeed: 580,
+    // The Ranger's roll is a sprint — repositioning, not evasion. It grants no
+    // invulnerability at any point, so distance is the only defense it offers.
+    rollInvulnerable: false,
+    rollIframes: 0,
     actionCooldownMax: 2.5,   // Shared cooldown for attacks and dodge roll
     idleDamageBonus: 2,        // +2 flat damage when all enemies are idle (or no enemies)
     combatDamagePenalty: 1,    // -1 flat damage when any enemy is not idle
@@ -64,6 +69,7 @@ export const CHARACTER_TYPES = {
     rollDuration: 0.12, // Faster dodge
     rollCooldown: 0.35,
     rollSpeed: 700,
+    rollIframes: 0.08, // Tightest tail — the Assassin rolls often and precisely
     weaponAffinities: {
       'trap': { additionalCharge: 1 } // +1 trap capacity (if traps exist)
     }

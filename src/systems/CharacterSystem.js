@@ -612,6 +612,11 @@ export class CharacterSystem {
     game.player.dodgeRoll.cooldown = charData.rollCooldown;
     game.player.dodgeRoll.speed = charData.rollSpeed;
     game.player.dodgeRoll.hideDuration = charData.hideDuration || 0;
+    // Roll i-frames are per character: `rollInvulnerable: false` means the roll
+    // grants none at all (Green Ranger's sprint); `rollIframes` is the brief
+    // window that persists after the roll ends.
+    game.player.dodgeRoll.iframes = charData.rollInvulnerable !== false;
+    game.player.dodgeRoll.postRollIframes = charData.rollIframes ?? 0.1;
     if (charData.blinkDistance) {
       game.player.dodgeRoll.distance = charData.blinkDistance;
     }
