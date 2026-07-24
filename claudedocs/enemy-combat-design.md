@@ -75,19 +75,24 @@ per the cosmology verbs.
 - **Adopters**: Troll first (the motivating case); then every melee elite/boss.
 - **Zone fit**: system-level, all zones.
 
-### 5. Anti-dodge (`pulses` + ring shapes)
-- **Contests**: the near-free dodge roll (i-frame window ~0.65s ÷ 2 real, cooldown 0.5 ÷ 2).
-  Slime goo taught "preserve your dodge" passively; these contest it actively.
-- **Shape** (two concrete forms):
-  - **Two-pulse melee**: pulse 2 lands after one i-frame window expires — a single
-    reflex-dodge eats pulse 1 and gets clipped by pulse 2; the answer is dodging *late* or
-    *out of the shape*.
-  - **Ring with inner-safe zone**: the safe answer is dodging *into* the enemy —
-    knowledge-rewarding, terrifying the first time, trivial once learned (the game's core
-    test: rewards knowledge).
+### 5. Anti-dodge (ring shapes)
+- **Contests**: the dodge roll as a reflex button. Slime goo taught "preserve your dodge"
+  passively; this family contests it actively — but *positionally*, not by timing.
+- **Shape**: **ring with an inner-safe zone**. The safe answer is dodging *into* the enemy —
+  knowledge-rewarding, terrifying the first time, trivial once learned (the game's core
+  test: rewards knowledge). The `warnShape`/`hitShape` split does the work: the ring's
+  warning covers the whole annulus, and the inner disc is simply not in the hit shape.
+- **Deliberately not built — timed two-pulse melee**: the rejected form was a second pulse
+  landing just after an i-frame window expires, so a reflex-dodge eats pulse 1 and gets
+  clipped by pulse 2. It was cut in favor of the positional answer, which teaches a
+  *place* rather than a *frame count*. Note that the premise has since shifted: resolved
+  bug #152 cut the universal post-roll i-frame tail, so every character now has a real
+  vulnerable gap between rolls (gold 0.250s i-frames vs 0.575s cooldown) and a pulse delay
+  *could* now be tuned to land in it. The form is tunable again if it's ever wanted; it
+  remains unbuilt by choice, not by constraint.
 - **Adopters**: elites and bosses only at first — this family raises the skill floor and
   should stay rare below elite tier.
-- **Zone fit**: Red (*React*) for pulse timing; Cyan (*Anticipate*) for the inner-safe ring.
+- **Zone fit**: Cyan (*Anticipate*) — reading the shape before it resolves is the whole beat.
 
 ### 6. Parry readability (`ParryMechanic` extension)
 - **Contests / teaches**: attack timing itself. The Duelist idea is good; the window is
@@ -158,4 +163,13 @@ Tools".
   **invisible to it** — a green simulator run validates nothing about them. Behavioral
   validation happens in the enemy-editor sandbox and in-game via CheatMenu spawns.
 - All new timer fields are in **double-seconds** (`ENEMY_TIMER_RATE = 2`), same as weapon
-  data.
+  data. This includes everything the `Telegraph` module touches — `windupDuration`, pulse
+  `delay`, the melee-visual `duration`. `CombatSystem` steps that list with
+  `deltaTime * ENEMY_TIMER_RATE` (resolved bug #150); if you author a value there against
+  real seconds it will run at half speed, silently.
+- **Player timers are real seconds** — the player's melee list, dodge-roll duration,
+  i-frames and roll cooldown all tick at raw `deltaTime`. When comparing an enemy timing
+  value against a player one, halve the enemy value; do *not* double the player's. Current
+  player dodge windows (real seconds, per character, post bug #152): gold 0.250s i-frames /
+  0.575s cooldown, gray 0.200/0.402, red 0.200/0.690, cyan 1.500/2.300, yellow 0/0.920,
+  green 0/0.517.
