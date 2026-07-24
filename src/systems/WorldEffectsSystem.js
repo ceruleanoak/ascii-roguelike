@@ -6,6 +6,12 @@ import { createFootstep, createWetDrop, createSteamPuff, createChaff } from '../
 const MAX_GOO_BLOBS = 20;
 const IDLE_ECHO_DURATION = 0.5; // seconds — must match the radius/alpha envelope in RestRenderer
 
+// A melee swing bats a settled goo blob along. GOO_BLOB_MAX_SPEED is a ceiling,
+// not a target: a blob already travelling faster than it (a death blob still
+// carrying the killing blow's momentum) is slowed to it, never sped up to it.
+const GOO_BLOB_PUSH_FORCE = 50;   // px/s added per swing
+const GOO_BLOB_MAX_SPEED = 300;   // px/s — 480px room, so ~1.6s corner to corner
+
 // Rapidly interpolate `entity._concealmentAlpha` toward 1 (visible) or 0
 // (hidden). Smooths the transition when a player or enemy steps in or out
 // of grass cover so visibility doesn't pop. ~0.125s for a full transition.
@@ -393,12 +399,12 @@ export class WorldEffectsSystem {
   }
 
   /**
-   * Enemy death detritus: gray debris pieces, or GooBlobs for goo-affinity
-   * enemies (slimes). If the killing blow carried knockback, the enemy's
-   * launch velocity is still on it (knockback status outlives the hit), so
-   * the pieces inherit it and spray in the hit direction.
-   * hutPlane: pass true from interior death loops (hut/dungeon) so overlays
-   * render the pieces; surface deaths tag the enemy's plane instead.
+   * Melee interaction with loose goo blobs: a swing shoves a blob away from the
+   * impact point, and a blade pops it. Both are gated on the blob's spawn
+   * invulnerability — during that window a death blob is still flying on the
+   * momentum it inherited from the killing blow, and the swing that produced it
+   * is usually still alive and overlapping it. Shoving there overwrote the
+   * inherited spray with a radial push away from the player's own weapon.
    */
   checkGooBlobHits() {
     const game = this.game;
@@ -406,6 +412,9 @@ export class WorldEffectsSystem {
     const meleeAttacks = game.combatSystem.meleeAttacks;
     for (let bi = game.gooBlobs.length - 1; bi >= 0; bi--) {
       const blob = game.gooBlobs[bi];
+      if (blob.expired) { game.gooBlobs.splice(bi, 1); continue; }
+      if (blob.isInvulnerable()) continue;
+
       let hit = false;
       for (const attack of meleeAttacks) {
         const atkR = (attack.radius || GRID.CELL_SIZE) + blob.radius;
@@ -413,20 +422,23 @@ export class WorldEffectsSystem {
         const dy = blob.position.y - attack.position.y;
         if (dx * dx + dy * dy < atkR * atkR) {
           if (attack.isBlade) hit = true;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          blob.velocity.vx += (dx / dist) * 50;
-          blob.velocity.vy += (dy / dist) * 50;
-          const speed = Math.sqrt(blob.velocity.vx ** 2 + blob.velocity.vy ** 2);
-          if (speed > 150) {
-            blob.velocity.vx = (blob.velocity.vx / speed) * 300;
-            blob.velocity.vy = (blob.velocity.vy / speed) * 300;
+          // One shove per swing, not one per frame the swing is alive.
+          if (blob.lastPushAttack !== attack) {
+            blob.lastPushAttack = attack;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            blob.velocity.vx += (dx / dist) * GOO_BLOB_PUSH_FORCE;
+            blob.velocity.vy += (dy / dist) * GOO_BLOB_PUSH_FORCE;
+            const speed = Math.sqrt(blob.velocity.vx ** 2 + blob.velocity.vy ** 2);
+            if (speed > GOO_BLOB_MAX_SPEED) {
+              blob.velocity.vx = (blob.velocity.vx / speed) * GOO_BLOB_MAX_SPEED;
+              blob.velocity.vy = (blob.velocity.vy / speed) * GOO_BLOB_MAX_SPEED;
+            }
+            blob.stationary = false;
           }
-          blob.stationary = false;
           break;
         }
       }
-      if (blob.expired) { game.gooBlobs.splice(bi, 1); continue; }
-      if (hit && !blob.isInvulnerable()) {
+      if (hit) {
         game.gooBlobs.splice(bi, 1);
         if (Math.random() < 0.05) {
           game.lootSystem.spawnIngredientDrop('g', blob.position.x, blob.position.y, null, null);
@@ -584,6 +596,14 @@ export class WorldEffectsSystem {
     }
   }
 
+  /**
+   * Enemy death detritus: gray debris pieces, or GooBlobs for goo-affinity
+   * enemies (slimes). If the killing blow carried knockback, the enemy's
+   * launch velocity is still on it (knockback status outlives the hit), so
+   * the pieces inherit it and spray in the hit direction.
+   * hutPlane: pass true from interior death loops (hut/dungeon) so overlays
+   * render the pieces; surface deaths tag the enemy's plane instead.
+   */
   spawnDeathDetritus(enemy, { hutPlane = false } = {}) {
     const game = this.game;
     const cx = enemy.position.x + GRID.CELL_SIZE / 2;

@@ -29,6 +29,11 @@ export class GooBlob {
     // Slime trail drop tracking (distance-based stamps along the blob's path)
     this.trailLastX = x;
     this.trailLastY = y;
+
+    // Last melee attack that shoved this blob. A swing lives for several frames
+    // (0.08-0.15s), so without this the shove re-applied on every one of them —
+    // the equivalent of the `attack.hasHit` guard enemies already get.
+    this.lastPushAttack = null;
   }
 
   update(deltaTime) {
