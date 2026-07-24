@@ -7,8 +7,11 @@ weapon rhythm, and the enemy editor.
 ## The problem this baseline answers
 
 Combat rhythm is one-sided. Enemies threaten only through telegraphed attack objects, and
-the player's loop — **read telegraph → dodge (~0.65s near-free i-frames on a 0.5s
-cooldown) → punish** — is never contested. Weapons are mature and each class demands a
+the player's loop — **read telegraph → dodge → punish** — is never contested. (This
+originally read "~0.65s near-free i-frames on a 0.5s cooldown", which was itself the
+symptom of resolved bug #152 — the roll returned before its own invulnerability ended.
+Post-fix the dodge is no longer *free*, but it is still *uncontested*: nothing in the
+roster attacks the loop, which is what this baseline is about.) Weapons are mature and each class demands a
 discipline; no enemy attacks any of those disciplines:
 
 | Weapon class | Discipline it demands | Currently contested by |
