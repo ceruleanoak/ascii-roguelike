@@ -1344,10 +1344,15 @@ export class CombatSystem {
     // Update enemy melee attacks. Timers, windup blink, owner tracking, and
     // Telegraph pulse re-arming all live in the shared Telegraph module (the
     // enemy-editor sandbox steps the same code).
+    //
+    // Stepped on the enemy double-second clock, same as Enemy.update() — so an
+    // attack's windupDuration (copied straight from the double-second
+    // `attackWindup`) is measured against a clock that agrees with it, and an
+    // authored Telegraph pulse delay means what the data says it means.
     for (let i = this.enemyMeleeAttacks.length - 1; i >= 0; i--) {
       const attack = this.enemyMeleeAttacks[i];
 
-      if (updateEnemyMeleeAttack(attack, deltaTime)) {
+      if (updateEnemyMeleeAttack(attack, deltaTime * PHYSICS.ENEMY_TIMER_RATE)) {
         this.enemyMeleeAttacks.splice(i, 1);
         continue;
       }

@@ -277,8 +277,9 @@ export class Sandbox {
     for (const a of this.attacks) {
       if (a.type === 'enemy_melee') {
         // Shared Telegraph lifecycle: timers, windup blink, owner tracking,
-        // pulse re-arming — same code the real combat loop runs.
-        if (updateEnemyMeleeAttack(a, dt)) { expired.add(a); continue; }
+        // pulse re-arming — same code the real combat loop runs, stepped on the
+        // same enemy double-second clock CombatSystem uses.
+        if (updateEnemyMeleeAttack(a, dt * PHYSICS.ENEMY_TIMER_RATE)) { expired.add(a); continue; }
       } else {
         if (a.velocity) {
           a.position.x += a.velocity.vx * dt;

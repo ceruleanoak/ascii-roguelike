@@ -41,9 +41,17 @@ import { GRID } from './GameConfig.js';
 
 const CELL = GRID.CELL_SIZE;
 
+// Every timer in this module — and every `duration`/`flashTimer` on an entry in
+// the enemy melee attack list — runs on the enemy double-second clock: callers
+// step it with `deltaTime * PHYSICS.ENEMY_TIMER_RATE`, matching Enemy.update().
+// A value here is therefore half as many real seconds. Anything entering that
+// list from a real-second source (player-weapon attacks routed through
+// Enemy.convertToEnemyAttack) is converted at the boundary, not here.
+//
 // Duration of the visible "live" hit flash — the legacy active-attack window.
-const ACTIVE_DURATION = 0.15;
-const FLASH_DURATION = 0.1;
+// 0.30 dbl-sec = the same 0.15s real this has always been.
+const ACTIVE_DURATION = 0.30;
+const FLASH_DURATION = 0.20;
 
 // ── geometry ────────────────────────────────────────────────────────────────
 

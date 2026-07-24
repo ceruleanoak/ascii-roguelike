@@ -2751,7 +2751,7 @@ export class Enemy {
       width: GRID.CELL_SIZE,
       height: GRID.CELL_SIZE,
       damage: this.getEffectiveDamage(),
-      duration: 0.15,
+      duration: 0.30, // dbl-sec (enemy melee list clock) = 0.15s real
       color: this.color,
       knockback: knockback ? 300 * (this.knockbackMultiplier ?? 1.0) : 0,
       isImpact: this.data.isImpact === true,
@@ -2791,7 +2791,10 @@ export class Enemy {
       width: GRID.CELL_SIZE,
       height: GRID.CELL_SIZE,
       damage: this.getEffectiveDamage(),
-      duration: this.attackWindup + 0.15, // Windup + actual attack duration
+      // Windup + actual attack duration. Both terms are now double-seconds on
+      // the same clock the melee list is stepped with, so this is a true
+      // "windup then one active window" lifetime rather than a loose upper bound.
+      duration: this.attackWindup + 0.30,
       color: this.color,
       knockback: 300,
       owner: this,
@@ -3589,7 +3592,15 @@ export class Enemy {
     // a player swinging the same weapon.
     const remap = (a) => {
       const out = { ...a, owner: this, shooterPlane: this.plane };
-      if (out.type === 'melee') out.type = 'enemy_melee';
+      if (out.type === 'melee') {
+        out.type = 'enemy_melee';
+        // Unit boundary: Item.createMeleeAttack authors `duration` against the
+        // player melee list, which is stepped with raw deltaTime. The enemy
+        // melee list runs on the double-second clock, so convert here or the
+        // swing would live half as long in the goblin's hands as in the
+        // player's.
+        if (out.duration !== undefined) out.duration *= PHYSICS.ENEMY_TIMER_RATE;
+      }
       return out;
     };
     if (Array.isArray(attack)) return attack.map(remap);
