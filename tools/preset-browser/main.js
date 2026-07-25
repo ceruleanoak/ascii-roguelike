@@ -173,6 +173,13 @@ ipcMain.handle('open-syx', async () => {
   return { name: path.basename(filePaths[0]), path: filePaths[0], bytes: Array.from(buf) };
 });
 
+// ───────────────────── live link to the FMVoice AU plugin ────────────────────
+// The plugin (tools/fm-au-plugin) is a player only — it has no patch browser.
+// Selecting a voice here pushes it to the running plugin as a DX7 single-voice
+// (VCED) SysEx dump over a virtual MIDI port, so all filtering, favorites, tags,
+// notes, ratings and clustering stay here and are never duplicated in the plugin.
+ipcMain.handle('voice-sysex', async (_e, params) => Array.from(Syx.buildVoiceSysEx(params)));
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1280, height: 820, title: 'DX7 Preset Browser',
@@ -182,6 +189,11 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true
     }
+  });
+  // Web MIDI *with sysex* is what carries patches to the plugin; everything else
+  // stays denied.
+  win.webContents.session.setPermissionRequestHandler((_wc, permission, callback) => {
+    callback(permission === 'midi' || permission === 'midiSysex');
   });
   win.loadFile('index.html');
   win.setMenuBarVisibility(false);

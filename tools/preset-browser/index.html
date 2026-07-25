@@ -85,6 +85,8 @@
     <span id="engineBadge" class="small" style="color:var(--dim);border:1px solid #000;border-radius:4px;padding:2px 6px">engine: —</span>
     <button id="btnOpen" class="sm">Open .syx…</button>
     <button id="btnReindex" class="sm">Reindex</button>
+    <label class="small" title="Push the selected patch to the FMVoice Audio Unit as a DX7 SysEx dump. Pick a virtual MIDI port (macOS IAC Driver) that Logic's instrument track receives on — browse here, play in Logic.">→ AU</label>
+    <select id="auOut" class="sm" style="max-width:160px"><option value="">off</option></select>
     <div class="spacer"></div>
     <label class="small"><input type="checkbox" id="autoAud" checked /> auto-audition</label>
     <label class="small"><input type="checkbox" id="hideDead" /> hide dead/unnamed</label>
@@ -208,7 +210,7 @@
       collActions: document.getElementById('collActions'), autoAud: document.getElementById('autoAud'),
       testNote: document.getElementById('testNote'), vol: document.getElementById('vol'),
       octLabel: document.getElementById('octLabel'), cntAll: document.getElementById('cntAll'),
-      cntFav: document.getElementById('cntFav')
+      cntFav: document.getElementById('cntFav'), auOut: document.getElementById('auOut')
     };
 
     // ───── audio ─────
@@ -486,6 +488,7 @@
         renderPatchInfo(name, struct, v.pid);
         renderTagEditor(v.pid); renderNotes(v.pid); renderRating(v.pid);
         if (engine) engine.loadVCED(currentVCED);
+        sendToPlugin(currentVCED);
         audition();
       }
       if (v.params) { show(v.params, v.struct, v.n); return; }
@@ -854,12 +857,52 @@
     };
 
     // ───── Web MIDI ─────
+    // Inputs play the local engine. Outputs drive the live link to the FMVoice
+    // Audio Unit: the selected patch is pushed to it as a DX7 VCED SysEx dump, so
+    // Logic plays exactly what is selected here and the plugin needs no browser
+    // of its own. sysex:true is required for that, and main.js grants it.
+    var midiOutputs = [];
     if (navigator.requestMIDIAccess) {
-      navigator.requestMIDIAccess({ sysex: false }).then(function (access) {
-        function bind() { var names = []; access.inputs.forEach(function (inp) { inp.onmidimessage = onMIDI; names.push(inp.name); }); }
+      navigator.requestMIDIAccess({ sysex: true }).then(function (access) {
+        function bind() {
+          access.inputs.forEach(function (inp) { inp.onmidimessage = onMIDI; });
+          midiOutputs = [];
+          access.outputs.forEach(function (out) { midiOutputs.push(out); });
+          renderAuOutputs();
+        }
         bind(); access.onstatechange = bind;
-      }).catch(function () {});
+      }).catch(function (e) { status('Web MIDI unavailable — AU live link off (' + e.message + ')', true); });
     }
+    function renderAuOutputs() {
+      var prev = els.auOut.value;
+      els.auOut.innerHTML = '<option value="">off</option>';
+      midiOutputs.forEach(function (out) {
+        var opt = document.createElement('option');
+        opt.value = out.id; opt.textContent = out.name;
+        els.auOut.appendChild(opt);
+      });
+      // Keep the chosen port across hot-plug rescans, matching by id not position.
+      if (prev && els.auOut.querySelector('option[value="' + prev + '"]')) els.auOut.value = prev;
+    }
+    function auPort() {
+      var id = els.auOut.value;
+      if (!id) return null;
+      for (var i = 0; i < midiOutputs.length; i++) if (midiOutputs[i].id === id) return midiOutputs[i];
+      return null;
+    }
+    // Guarded by a sequence number: arrowing quickly through the list fires many
+    // async builds, and only the newest may reach the plugin.
+    var auSendSeq = 0;
+    function sendToPlugin(vced) {
+      var port = auPort();
+      if (!port || !vced) return;
+      var seq = ++auSendSeq;
+      window.api.voiceSysEx(vced).then(function (bytes) {
+        if (seq !== auSendSeq) return;
+        port.send(new Uint8Array(bytes));
+      }).catch(function (e) { status('AU link send failed: ' + e.message, true); });
+    }
+    els.auOut.onchange = function () { if (currentVCED) sendToPlugin(currentVCED); };
     function onMIDI(e) { var d = e.data, cmd = d[0] & 0xf0; if (cmd === 0x90 && d[2] > 0) noteOn(d[1], d[2]); else if (cmd === 0x80 || (cmd === 0x90 && d[2] === 0)) noteOff(d[1]); else if (cmd === 0xb0 && d[1] === 123) panic(); }
 
     // ───── boot ─────

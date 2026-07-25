@@ -21,5 +21,7 @@ contextBridge.exposeInMainWorld('api', {
   collectionDelete: (rel) => ipcRenderer.invoke('collection-delete', rel),
   // render bridge
   pickOutputDir: () => ipcRenderer.invoke('pick-output-dir'),
-  writeWav: (filePath, bytes) => ipcRenderer.invoke('write-wav', filePath, bytes)
+  writeWav: (filePath, bytes) => ipcRenderer.invoke('write-wav', filePath, bytes),
+  // live link: 155 VCED params -> DX7 single-voice SysEx bytes for the AU plugin
+  voiceSysEx: (params) => ipcRenderer.invoke('voice-sysex', params)
 });
