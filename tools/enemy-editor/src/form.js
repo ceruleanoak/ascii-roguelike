@@ -122,6 +122,10 @@ export class EnemyForm {
     row.appendChild(label);
 
     const value = getPath(this.def, field.key);
+    // A field may derive its options from the rest of the def (the animation
+    // list narrows to what the chosen shape supports). Such a field pairs the
+    // function with `rerender` so the list is rebuilt when its input changes.
+    const options = typeof field.options === 'function' ? field.options(this.def) : field.options;
     let input;
 
     switch (field.type) {
@@ -134,7 +138,7 @@ export class EnemyForm {
       }
       case 'select': {
         input = document.createElement('select');
-        for (const opt of field.options) {
+        for (const opt of options) {
           const o = document.createElement('option');
           o.value = opt; o.textContent = opt === '' ? '(none)' : opt;
           if (opt === value) o.selected = true;
@@ -175,7 +179,7 @@ export class EnemyForm {
         const grp = document.createElement('div');
         grp.className = 'tagset';
         const sel = new Set(Array.isArray(value) ? value : []);
-        for (const opt of field.options) {
+        for (const opt of options) {
           const chip = document.createElement('button');
           chip.type = 'button';
           chip.className = 'chip' + (sel.has(opt) ? ' on' : '');

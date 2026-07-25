@@ -130,9 +130,10 @@ export const ENEMIES = {
     decisionInterval: 0.4,  // Moderately smart (reassess every 0.4s)
     color: '#888888',
     grassStealth: true,  // Invisible in tall grass
-    // Same AoE as the Slime — the shape is the shared lesson at depth 1. Only
-    // the choreography differs: the rat's danger runs out along its lunge.
-    telegraph: { shape: 'basic', animation: 'vertical' },
+    // Same Area as the Slime — one cell of ground is the shared lesson at depth
+    // 1. Only the choreography differs: the rat's danger runs out along its
+    // lunge. No `size`, so the small box: a rat threatens where it bites.
+    telegraph: { area: 'box', animation: 'vertical' },
     affinities: ['beast'],
     tier: 'weak'
   },
@@ -263,7 +264,7 @@ export const ENEMIES = {
     // Melee only. The charge runs on its own `chargeState` machine in
     // EnemyUpdateSystem and resolves damage directly, so it never reaches the
     // melee attack list and is untouched by this block.
-    telegraph: { shape: 'basic', animation: 'slap' },
+    telegraph: { area: 'box', animation: 'slap' },
     chargeMechanic: {
       enabled: true,
       chargeSpeed: 160,       // ~2.5× base speed
@@ -361,9 +362,9 @@ export const ENEMIES = {
     color: '#00ff00',
     // The player's first Telegraph. `blink` is stated rather than left to
     // default: the still tell is the choice, not an oversight. windupImmune
-    // means reading the shape is the only answer, which is why this is the
-    // enemy that teaches the shape at all.
-    telegraph: { shape: 'basic', animation: 'blink' },
+    // means reading the Area is the only answer, which is why this is the
+    // enemy that teaches the Area at all.
+    telegraph: { area: 'box', animation: 'blink' },
     elementalAffinity: { weakness: { freeze: 2.0 } },
     freezePermanent: true,
     affinities: ['goo'],

@@ -27,12 +27,14 @@
 //                      that can be absent entirely, with a presence toggle.
 //   emitDefaults     — codegen keeps default-valued keys inside the block. For
 //                      an optional block a default is load-bearing: pruning
-//                      `telegraph.shape: 'basic'` would leave `telegraph: {}`,
+//                      `telegraph.area: 'box'` would leave `telegraph: {}`,
 //                      which means "no shape" and silently reverts to the
 //                      legacy visual.
 //   note(def)        — live authoring feedback rendered under the fields.
 
-import { SHAPE_OPTIONS, ANIMATION_OPTIONS, telegraphNotes } from './telegraph.js';
+import {
+  AREA_OPTIONS, SIZE_OPTIONS, animationOptionsFor, telegraphNotes,
+} from './telegraph.js';
 
 export const GRID_CELL = 16;
 
@@ -92,7 +94,7 @@ export const SECTIONS = [
     ]
   },
   {
-    // The projected warning shape of the melee windup, plus the animation whose
+    // The projected warning Area of the melee windup, plus the animation whose
     // beats define when damage lands (GLOSSARY "Telegraph"). Optional: absent,
     // the enemy keeps the legacy single-rect windup, so the whole block is
     // presence-gated rather than defaulted on.
@@ -103,21 +105,26 @@ export const SECTIONS = [
     emitDefaults: true,
     note: telegraphNotes,
     fields: [
-      { key: 'telegraph.shape', label: 'Shape preset', type: 'select', options: SHAPE_OPTIONS,
-        default: 'basic', rerender: true,
-        help: 'Named warn/hit shape pair from SHAPE_PRESETS. (none) = author explicit shapes below.' },
-      { key: 'telegraph.animation', label: 'Animation', type: 'select', options: ANIMATION_OPTIONS,
+      { key: 'telegraph.area', label: 'Area', type: 'select', options: AREA_OPTIONS,
+        default: 'box', rerender: true,
+        help: 'The warned region — a named warn/hit shape pair from AREA_PRESETS. (none) = author explicit shapes below.' },
+      { key: 'telegraph.size', label: 'Size', type: 'select', options: SIZE_OPTIONS,
+        default: '', rerender: true,
+        help: 'box / circle / trapezoid only. Blank = small, one cell of ground. big is the AoE. The slices and the ring carry fixed dimensions and ignore this.' },
+      { key: 'telegraph.animation', label: 'Animation', type: 'select', options: animationOptionsFor,
         default: 'blink', rerender: true,
-        help: 'Choreography + beats. Declaring one compiles its own pulses. Blank = blink (the legacy four-phase look).' },
+        help: 'Choreography + beats, filtered to the ones the chosen Area supports. Declaring one compiles its own pulses. Blank = blink (the legacy four-phase look).' },
+      { key: 'telegraph.attackShape', label: 'Attack shape', type: 'char', default: '', rerender: true,
+        help: "One character the strike carries instead of the default hairline stroke, turned to face the swing (e.g. '/'). Blank = the stroke." },
       { key: 'telegraph.beatDamage', label: 'Beat damage ×', type: 'json', default: null, rerender: true,
         placeholder: '[1.0, 0.5]',
         help: 'One damage multiplier per beat, e.g. [1.0, 0.5]. Multi-beat animations only.' },
       { key: 'telegraph.warnShape', label: 'Warn shape (explicit)', type: 'json', default: null, rerender: true,
         placeholder: '{"kind":"rect","length":2,"width":2.5}',
-        help: "Overrides the preset's warn shape. Dimensions are in cells. offset = cells out along facing." },
+        help: "Overrides the Area's warn shape. Dimensions are in cells. offset = cells out along facing. Kinds: rect, trapezoid, circle, ring, cone." },
       { key: 'telegraph.hitShape', label: 'Hit shape (explicit)', type: 'json', default: null, rerender: true,
         placeholder: '{"kind":"cone","angleDeg":60,"range":3}',
-        help: "Overrides the preset's hit shape. Defaults to the warn shape when absent." },
+        help: "Overrides the Area's hit shape. Defaults to the warn shape when absent." },
       { key: 'telegraph.pulses', label: 'Pulses (no animation)', type: 'json', default: null, rerender: true,
         placeholder: '[{"delay":0},{"delay":1.5,"damageMult":0.5}]',
         help: 'Hand-authored rhythm for the animation-less form; delays are double-seconds. Conflicts with an animation.' },

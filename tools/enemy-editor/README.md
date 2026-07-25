@@ -26,12 +26,15 @@ npm run enemy-editor      # opens http://localhost:3000/tools/enemy-editor/index
     absence of a `telegraph` key is itself meaningful (the enemy keeps the legacy
     single-rect windup visual). Toggling it off removes the block entirely rather
     than zeroing it. Pick a shape preset + animation, or author an explicit
-    `warnShape`/`hitShape`/`pulses`. Authoring notes under the section report what
-    the data compiles to (how many hits land, when, how hard) and flag mismatches
-    while you choose: animation not designed for that shape, `pulses` fighting a
-    declared animation, beat damage on a one-beat animation, shapes below the
-    ~1.25-cell raster floor that damage without drawing, and a hit shape reaching
-    past its own warning.
+    `warnShape`/`hitShape`/`pulses`. The animation list filters to the motions the
+    chosen shape declares support for, so a bad pairing is hard to make in the
+    first place; an already-selected animation is never dropped by a shape switch,
+    and an explicit shape (no preset) has nothing to pair against so all are
+    offered. Authoring notes under the section report what the data compiles to
+    (how many hits land, when, how hard) and flag the rest: an animation left on
+    an incompatible shape, `pulses` fighting a declared animation, beat damage on
+    a one-beat animation, dimensions under the legibility floor that read as a
+    line rather than an area, and a hit shape reaching past its own warning.
 - **Center — live sandbox.** The real `Enemy` instance against `@` (you). Move
   with the mouse (or WASD with mouse-follow off); Space pauses. Green ring =
   aggro range, red ring = attack range. Telegraphs (`!` windup, `?` memory,
@@ -76,8 +79,8 @@ When the enemy contract changes in `src/data/enemies.js` / `Enemy.js` /
 the real code, so behavior never drifts; only the form/codegen field catalog is
 hand-maintained.
 
-Telegraph shape presets and animations are the exception: `src/telegraph.js`
-imports `SHAPE_PRESETS` / `ANIMATIONS` from `src/game/TelegraphAnimation.js`, so
-adding a preset or animation to the library makes it selectable here with no edit
+Telegraph Areas and animations are the exception: `src/telegraph.js` imports
+`AREA_PRESETS` / `ANIMATIONS` / `SIZES` from `src/game/TelegraphAnimation.js`, so
+adding an Area or animation to the library makes it selectable here with no edit
 to the editor. The validation notes read the same catalogs (an animation's own
-`shapes` list), so a compatibility rule is only ever stated once.
+`areas` list), so a compatibility rule is only ever stated once.

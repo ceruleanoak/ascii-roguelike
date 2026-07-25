@@ -26,7 +26,7 @@ const ORDER = ['char', 'name', 'description', 'spellDescription', 'tier', 'affin
 const MECH_KEYS = new Set(MECHANICS.map(m => m.id));
 
 // Sections whose keys are emitted even when they equal their default. Inside an
-// optional block a default is load-bearing: pruning `telegraph.shape: 'basic'`
+// optional block a default is load-bearing: pruning `telegraph.area: 'box'`
 // would leave `telegraph: {}`, which resolves to no shape at all and silently
 // reverts the enemy to the legacy windup visual.
 const EXPLICIT_BLOCKS = new Set(SECTIONS.filter(s => s.emitDefaults).map(s => s.id));

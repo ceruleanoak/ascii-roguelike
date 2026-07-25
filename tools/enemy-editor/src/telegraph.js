@@ -1,29 +1,57 @@
 // Telegraph authoring support for the editor: option lists and authoring
 // validation, read straight off the real library (src/game/TelegraphAnimation.js)
-// so a new shape preset or animation appears in the form the moment it is added
-// to the catalog — no hand-maintained list to fall behind.
+// so a new Area or animation appears in the form the moment it is added to the
+// catalog — no hand-maintained list to fall behind.
 //
 // The validation here mirrors what `resolveTelegraph` reports to the console at
 // runtime. The point of duplicating the checks is timing, not logic: in the
-// editor a mismatch should be visible while you are choosing the shape, not
+// editor a mismatch should be visible while you are choosing the Area, not
 // after the enemy happens to swing. Both read the same catalogs, so a rule can
-// only be stated in one place — the animation's own `shapes` list.
-import { SHAPE_PRESETS, ANIMATIONS } from '../../../src/game/TelegraphAnimation.js';
+// only be stated in one place — the animation's own `areas` list.
+import {
+  AREA_PRESETS, ANIMATIONS, SIZES, DEFAULT_SIZE, areaIsSized, resolveArea,
+} from '../../../src/game/TelegraphAnimation.js';
 
-// '' = no preset. Authoring an explicit warn/hit shape is the escape hatch when
-// no preset fits, and absent both the enemy keeps the legacy rect windup.
-export const SHAPE_OPTIONS = ['', ...Object.keys(SHAPE_PRESETS)];
+// '' = no Area. Authoring an explicit warn/hit shape is the escape hatch when
+// no Area fits, and absent both the enemy keeps the legacy rect windup.
+export const AREA_OPTIONS = ['', ...Object.keys(AREA_PRESETS)];
+
+// '' = take the default Size, which is `small`. Only the sized Areas (box,
+// circle, trapezoid) read this at all; the slices and the ring carry fixed
+// dimensions, and `telegraphNotes` says so rather than the field vanishing.
+export const SIZE_OPTIONS = ['', ...SIZES];
 
 // '' = declare no animation, which resolves to `blink` (the legacy four-phase
 // look). Left blank so an author of an explicit `pulses` list can avoid the
 // pulses/animation conflict, which only triggers on a *declared* animation.
 export const ANIMATION_OPTIONS = ['', ...Object.keys(ANIMATIONS)];
 
-// rasterizeToCells keeps a cell only when its center is inside the shape, so a
-// dimension thinner than this can rasterize to nothing while still dealing
-// damage (hitTest samples the AABB) — an invisible hit. Same floor the presets
-// are built to clear; see the sizing note in TelegraphAnimation.js.
-const RASTER_FLOOR = 1.25;
+// Each animation declares the Areas it was choreographed for, so that list is
+// the valid-pairings map and the dropdown filters on it directly — an author
+// picks an Area and then sees only motions that read correctly on it, instead of
+// picking a bad pair and being told afterward.
+//
+// Two deliberate escapes from the filter: an explicit warn/hit shape has no
+// Area to pair against, so every animation stays offered; and whatever is
+// already selected is always listed, so switching Areas never silently drops an
+// authored animation. That case is exactly what `telegraphNotes` still warns
+// about — the filter is guidance for new choices, not a lock on existing data.
+export function animationOptionsFor(def) {
+  const t = def.telegraph;
+  const area = t?.area;
+  if (!area || !AREA_PRESETS[area]) return ANIMATION_OPTIONS;
+
+  const compatible = Object.keys(ANIMATIONS).filter(
+    (name) => ANIMATIONS[name].areas.includes(area) || name === t.animation);
+  return ['', ...compatible];
+}
+
+// Telegraphs are filled in pixel space, so there is no longer a raster floor
+// where a shape damages without drawing at all — any size draws faithfully.
+// What survives is legibility: the strike stroke is 3px wide, so an area much
+// thinner than this (0.25 cell = 4px) reads as a line rather than as ground the
+// player is meant to leave.
+const LEGIBILITY_FLOOR = 0.25;
 
 // Authoring feedback for the current def's telegraph block, as
 // [{ level: 'warn' | 'info', text }]. Empty when there is no block at all.
@@ -33,7 +61,7 @@ export function telegraphNotes(def) {
   const notes = [];
 
   // Only the melee windup visual carries a Telegraph (Enemy.createWindupAttackVisual
-  // is the sole attachTelegraph call site), so a shape on a ranged enemy is
+  // is the sole attachTelegraph call site), so an Area on a ranged enemy is
   // data that will never draw.
   if (def.attackType !== 'melee') {
     notes.push({
@@ -42,17 +70,48 @@ export function telegraphNotes(def) {
     });
   }
 
-  const preset = t.shape ? SHAPE_PRESETS[t.shape] : null;
-  if (t.shape && !preset) {
-    notes.push({ level: 'warn', text: `Unknown shape preset '${t.shape}'.` });
+  const known = t.area ? !!AREA_PRESETS[t.area] : false;
+  if (t.area && !known) {
+    notes.push({ level: 'warn', text: `Unknown area '${t.area}'.` });
+  }
+  // An Area with fixed dimensions (the slices, the ring) ignores Size: its reach
+  // and thickness are its identity, and an animation sweeps along them.
+  if (known && t.size && !areaIsSized(t.area)) {
+    notes.push({
+      level: 'warn',
+      text: `Area '${t.area}' carries fixed dimensions — Size is ignored. Clear it, or switch to box / circle / trapezoid.`,
+    });
+  }
+  const sized = known ? resolveArea(t.area, t.size) : null;
+  if (known && !sized) {
+    notes.push({
+      level: 'warn',
+      text: `Unknown size '${t.size}' for area '${t.area}' — expected one of ${SIZES.join(', ')}.`,
+    });
+  }
+  if (sized && areaIsSized(t.area) && !t.size) {
+    notes.push({
+      level: 'info',
+      text: `Size defaults to '${DEFAULT_SIZE}' — one cell of ground. 'big' is the AoE and has to be asked for.`,
+    });
   }
 
-  const warnShape = nonEmpty(t.warnShape) || preset?.warnShape;
-  const hitShape = nonEmpty(t.hitShape) || preset?.hitShape || warnShape;
+  const warnShape = nonEmpty(t.warnShape) || sized?.warnShape;
+  const hitShape = nonEmpty(t.hitShape) || sized?.hitShape || warnShape;
   if (!warnShape) {
     notes.push({
       level: 'warn',
-      text: 'No shape — the enemy keeps the legacy single-rect windup visual. Pick a preset, or author an explicit warn shape.',
+      text: 'No shape — the enemy keeps the legacy single-rect windup visual. Pick an Area, or author an explicit warn shape.',
+    });
+  }
+
+  // The Attack Shape is one character carried by the strike. More than one is
+  // the mistake worth catching: fillText draws all of it and the extra glyphs
+  // ride along as a word, which is not what "attack shape" means anywhere.
+  if (t.attackShape != null && t.attackShape !== '' && [...t.attackShape].length !== 1) {
+    notes.push({
+      level: 'warn',
+      text: `Attack shape must be exactly one character — '${t.attackShape}' is ${[...t.attackShape].length}.`,
     });
   }
 
@@ -71,10 +130,10 @@ export function telegraphNotes(def) {
     notes.push({ level: 'warn', text: `Unknown animation '${animName}'.` });
     return notes;
   }
-  if (t.shape && preset && !anim.shapes.includes(t.shape)) {
+  if (known && !anim.areas.includes(t.area)) {
     notes.push({
       level: 'warn',
-      text: `'${animName}' is not designed for shape '${t.shape}' — designed for: ${anim.shapes.join(', ')}.`,
+      text: `'${animName}' is not choreographed for area '${t.area}' — designed for: ${anim.areas.join(', ')}.`,
     });
   }
   if (pulses && t.animation) {
@@ -90,7 +149,7 @@ export function telegraphNotes(def) {
   if (warnShape) {
     notes.push(pulses && !t.animation
       ? { level: 'info', text: pulseSummary(pulses, animName) }
-      : { level: 'info', text: beatSummary(animName, anim, t.beatDamage) });
+      : { level: 'info', text: beatSummary(animName, anim, t.beatDamage, t.attackShape) });
   }
 
   // beatDamage only reaches the pulse list through compiled beats, and a
@@ -114,7 +173,7 @@ export function telegraphNotes(def) {
   // only the inverse is worth flagging: a hit reaching past its own warning.
   // Skipped when either shape is unmeasurable, where a reach of 0 would only add
   // noise on top of the real problem already reported above. A sub-floor shape
-  // still measures fine, so that warning survives alongside the raster note.
+  // still measures fine, so that warning survives alongside the legibility note.
   const measurable = warnShape && hitShape && isMeasurable(warnShape) && isMeasurable(hitShape);
   if (measurable && reach(hitShape) > reach(warnShape) + 0.001) {
     notes.push({
@@ -145,7 +204,7 @@ function pulseSummary(pulses, animName) {
 // One line describing the rhythm the animation compiles: how many hits land,
 // when, and how hard. This is the authoring payoff of declaring an animation —
 // the beats ARE the pulses, so what you read here is what will connect.
-function beatSummary(name, anim, beatDamage) {
+function beatSummary(name, anim, beatDamage, attackShape) {
   let delay = 0;
   const beats = anim.beats.map((beat, i) => {
     delay += beat.gap;
@@ -154,24 +213,35 @@ function beatSummary(name, anim, beatDamage) {
     return mult != null && mult !== 1 ? `${when} ×${mult}` : when;
   });
   const plural = anim.beats.length === 1 ? 'hit' : 'hits';
-  return `${name} — ${anim.beats.length} ${plural}: ${beats.join(', ')} · sweeps along ${anim.axis}`;
+  // `flash` has no travelling stroke, so naming an axis for it would describe
+  // motion that never happens. With an Attack Shape it has somewhere to put the
+  // glyph even so — the centre of the area — and that is worth saying, because
+  // otherwise an author pairing the two would expect nothing to draw.
+  const still = anim.motion === 'flash';
+  const move = still
+    ? (attackShape ? `'${attackShape}' plants at the centre of the area` : 'the area flashes in place')
+    : `${anim.motion} along ${anim.axis}${attackShape ? `, carrying '${attackShape}'` : ''}`;
+  return `${name} — ${anim.beats.length} ${plural}: ${beats.join(', ')} · ${move}`;
 }
 
 // The dimensions each shape kind must carry to be drawable (and measurable).
 const SHAPE_DIMS = {
   rect: ['length', 'width'],
+  trapezoid: ['length', 'nearWidth', 'farWidth'],
   cone: ['angleDeg', 'range'],
   circle: ['radius'],
   ring: ['innerRadius', 'outerRadius'],
 };
 
+const KIND_LIST = Object.keys(SHAPE_DIMS).join(', ');
+
 function shapeIssues(shape) {
   const issues = [];
   const kind = shape.kind;
-  if (!kind) return ['no `kind` — needs one of rect, cone, circle, ring.'];
+  if (!kind) return [`no \`kind\` — needs one of ${KIND_LIST}.`];
 
   const dims = SHAPE_DIMS[kind];
-  if (!dims) return [`unknown kind '${kind}' — use rect, cone, circle, or ring.`];
+  if (!dims) return [`unknown kind '${kind}' — use one of ${KIND_LIST}.`];
 
   for (const d of dims) {
     if (typeof shape[d] !== 'number' || Number.isNaN(shape[d])) {
@@ -180,24 +250,31 @@ function shapeIssues(shape) {
   }
   if (issues.length > 0) return issues;
 
-  // Sub-floor dimensions damage without drawing — the invisible hit.
+  // Dimensions too thin to read as an area rather than a line.
   const thin = [];
   if (kind === 'rect') {
-    if (shape.length < RASTER_FLOOR) thin.push(`length ${shape.length}`);
-    if (shape.width < RASTER_FLOOR) thin.push(`width ${shape.width}`);
+    if (shape.length < LEGIBILITY_FLOOR) thin.push(`length ${shape.length}`);
+    if (shape.width < LEGIBILITY_FLOOR) thin.push(`width ${shape.width}`);
+  } else if (kind === 'trapezoid') {
+    if (shape.length < LEGIBILITY_FLOOR) thin.push(`length ${shape.length}`);
+    // Only the widest end has to clear the floor — a trapezoid that starts as a
+    // point and opens up is the intended shape, not a mistake.
+    if (Math.max(shape.nearWidth, shape.farWidth) < LEGIBILITY_FLOOR) {
+      thin.push(`widest end ${Math.max(shape.nearWidth, shape.farWidth)}`);
+    }
   } else if (kind === 'circle') {
-    if (shape.radius * 2 < RASTER_FLOOR) thin.push(`diameter ${shape.radius * 2}`);
+    if (shape.radius * 2 < LEGIBILITY_FLOOR) thin.push(`diameter ${shape.radius * 2}`);
   } else if (kind === 'ring') {
     const band = shape.outerRadius - shape.innerRadius;
-    if (band < RASTER_FLOOR) thin.push(`ring band ${band.toFixed(2)}`);
+    if (band < LEGIBILITY_FLOOR) thin.push(`ring band ${band.toFixed(2)}`);
     if (shape.outerRadius <= shape.innerRadius) {
       issues.push('outerRadius must exceed innerRadius.');
     }
   } else if (kind === 'cone') {
-    if (shape.range < RASTER_FLOOR) thin.push(`range ${shape.range}`);
+    if (shape.range < LEGIBILITY_FLOOR) thin.push(`range ${shape.range}`);
   }
   if (thin.length > 0) {
-    issues.push(`${thin.join(', ')} below the ${RASTER_FLOOR}-cell raster floor — it will damage without drawing.`);
+    issues.push(`${thin.join(', ')} below the ${LEGIBILITY_FLOOR}-cell legibility floor — it will draw as a line, not an area.`);
   }
   return issues;
 }
@@ -218,6 +295,8 @@ function reach(shape) {
     case 'ring': return shape.outerRadius;
     case 'cone': return shape.range;
     case 'rect': return (shape.offset ?? 0) + shape.length + shape.width / 2;
+    // The far edge is the widest, so it is the corner that reaches furthest.
+    case 'trapezoid': return (shape.offset ?? 0) + shape.length + shape.farWidth / 2;
     default: return 0;
   }
 }

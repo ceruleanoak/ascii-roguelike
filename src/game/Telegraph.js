@@ -19,27 +19,33 @@
 //     ],
 //   }
 //
-// Preferred authoring form — a named shape preset plus a Telegraph Animation,
-// which declares the beats and therefore compiles its own pulses (see
+// Preferred authoring form — a named Area at a Size, plus a Telegraph
+// Animation, which declares the beats and therefore compiles its own pulses (see
 // TelegraphAnimation.js; that module is the reason a `doubleSweep` cannot show
 // two passes and land one hit):
 //
 //   telegraph: {
-//     shape: 'horizontalSliceThin',
+//     area: 'trapezoid',
+//     size: 'big',
 //     animation: 'doubleSweep',
+//     attackShape: '/',      // optional: the strike rides this glyph, not a stroke
 //     beatDamage: [1.0, 0.5],
 //   }
 //
 // Shape kinds (anchored at the attack owner's center, oriented by `facing`
 // radians locked at windup start — the aim snapshot, matching
 // markedTargetPosition semantics):
-//   rect   { length, width, offset? }  — extends `length` cells along facing,
-//                                        `width` cells across it, starting
-//                                        `offset` cells out (default 0)
-//   cone   { angleDeg, range }         — apex at owner, symmetric about facing
-//   circle { radius, offset? }         — centered `offset` cells along facing
-//   ring   { innerRadius, outerRadius }— centered on owner; the inner disc is
-//                                        the safe zone (dodge *into* the enemy)
+//   rect      { length, width, offset? }  — extends `length` cells along facing,
+//                                           `width` cells across it, starting
+//                                           `offset` cells out (default 0)
+//   trapezoid { length, nearWidth, farWidth, offset? }
+//                                         — a rect that widens away from the
+//                                           owner: `nearWidth` at `offset`,
+//                                           `farWidth` at full extent
+//   cone      { angleDeg, range }         — apex at owner, symmetric about facing
+//   circle    { radius, offset? }         — centered `offset` cells along facing
+//   ring      { innerRadius, outerRadius }— centered on owner; the inner disc is
+//                                           the safe zone (dodge *into* the enemy)
 //
 // Absent `telegraph` data, enemies keep the legacy single-rect windup visual,
 // byte-identical to pre-Telegraph behavior.
@@ -49,7 +55,9 @@
 // exactly one frame (the legacy melee contract) so positional dodges work.
 
 import { GRID } from './GameConfig.js';
-import { resolveTelegraph, strikeGeometry } from './TelegraphAnimation.js';
+import {
+  resolveTelegraph, strikeGeometry, strikeAnchors, shapeCenter, halfWidthAt,
+} from './TelegraphAnimation.js';
 
 const CELL = GRID.CELL_SIZE;
 
@@ -109,6 +117,17 @@ export function pointInShape(shape, origin, facing, px, py) {
       return along >= start && along <= start + shape.length * CELL &&
              Math.abs(across) <= (shape.width * CELL) / 2;
     }
+    case 'trapezoid': {
+      // Same frame as the rect, but the width is a function of how far out the
+      // point is — halfWidthAt owns that taper so hit testing and the strike's
+      // own rails cannot disagree about where the edges are.
+      const cos = Math.cos(facing), sin = Math.sin(facing);
+      const along = dx * cos + dy * sin;
+      const across = -dx * sin + dy * cos;
+      const start = (shape.offset ?? 0) * CELL;
+      if (along < start || along > start + shape.length * CELL) return false;
+      return Math.abs(across) <= halfWidthAt(shape, along);
+    }
     default:
       return false;
   }
@@ -146,6 +165,9 @@ export function attachTelegraph(attack, enemy, dirX, dirY) {
   // the same choreography off the same object.
   attack.animation = resolved.animation;
   attack.animationName = resolved.animationName;
+  // The character the strike rides on, or null for the default hairline. Set
+  // unconditionally so the field is never introduced lazily later.
+  attack.attackShape = resolved.attackShape;
   return attack;
 }
 
@@ -294,11 +316,23 @@ export function attackHitsBox(attack, box, legacyCheck) {
 // read as blocks stuttering across the shape rather than a blade passing
 // through it. Raw-canvas drawing for combat cues is house idiom — see
 // BossRenderer's charge cone, which this follows.
-const AREA_FILL = 0.25;   // the warning's fill, at full blink brightness
-const AREA_EDGE = 0.7;    // its outline — enough to define the boundary crisply
+//
+// The warned area is never outlined. A filled region already states its own
+// boundary, and an outline competes with the strike stroke for the reading
+// "this is the line that hurts" — the strike is the only line a Telegraph draws.
+// Losing the edge costs some crispness at the boundary, which is why the fill
+// blinks between two solid values instead of fading toward nothing.
+const AREA_FILL = 0.40;      // the warning's fill at the top of the blink
+const AREA_FILL_DIM = 0.15;  // ...and at the bottom of the dip
+const FLASH_FILL = 0.70;     // a `blink` strike: the area itself, hit-bright
 const STRIKE_WIDTH = 3;   // px. The whole point: a few pixels across, not a cell
 const TRAIL_STEPS = 3;    // ghosts drawn behind the stroke, for a fluid pass
 const TRAIL_SPACING = 0.08;
+
+// An Attack Shape needs far less tail than a hairline: a character is already a
+// mark, so three ghosts of one read as four glyphs rather than as one in motion.
+const GLYPH_TRAIL_STEPS = 1;
+const GLYPH_TRAIL_SPACING = 0.10;
 
 // Draw one shaped attack. Returns false for legacy (shapeless) attacks so
 // callers fall through to their own rect path. Every consumer — surface, PiP
@@ -314,33 +348,41 @@ export function drawTelegraph(ctx, attack) {
   // the one cue the player has for "now".
   if (attack.windupPhase) {
     const a = attack.alpha ?? 1.0;
-    drawArea(ctx, attack.warnShape, origin, attack.facing, color, AREA_FILL * a, AREA_EDGE * a);
+    drawArea(ctx, attack.warnShape, origin, attack.facing, color,
+      AREA_FILL_DIM + (AREA_FILL - AREA_FILL_DIM) * a);
     return true;
   }
 
-  // The strike runs across the beat's active window. Drawing is tied to
-  // ACTIVE_DURATION rather than the shorter white-flash timer so a pass gets
-  // the whole live window to cross the shape; the flash still decides the
-  // colour, so the "now" cue is unchanged.
+  // From release onward the area is gone and the strike is the entire picture.
+  // The warning has already been read; leaving it up buries the one moving mark
+  // that says the hit is landing now, and the player's attention is on the mark.
+  // Nothing draws between the beats of a multi-hit attack for the same reason —
+  // the pause is silence on purpose, and re-showing the area there would read as
+  // a fresh warning for a commitment already made.
+  //
+  // Drawing is tied to ACTIVE_DURATION rather than the shorter white-flash timer
+  // so a pass gets the whole live window to cross the shape; the flash still
+  // decides the colour, so the "now" cue is unchanged.
   const beatProgress = (attack.beatElapsed ?? 0) / ACTIVE_DURATION;
-  if (beatProgress <= 1) {
-    const strikeColor = (attack.flashWhite && attack.flashTimer > 0) ? '#ffffff' : color;
-    const geo = strikeGeometry(attack.animation, attack.hitShape, attack.beatIndex ?? 0, beatProgress);
-    const still = geo.lines.length === 0 && geo.circles.length === 0;
-    // `blink` has no stroke, so for it the area *is* the strike and has to carry
-    // the whole hit on its own. Everything else drops the area back to a hint of
-    // context so the stroke is unmistakably the thing that happened.
-    drawArea(ctx, attack.hitShape, origin, attack.facing, strikeColor,
-      still ? 0.75 : 0.15, still ? 1.0 : 0.4);
-    if (!still) drawStrike(ctx, attack, origin, beatProgress, strikeColor);
-    return true;
-  }
+  if (beatProgress > 1) return true;
 
-  // Past the strike, still on the attack list: either waiting on a later beat or
-  // running out the last frames of the final one. Either way the area stays up,
-  // dim — the threat has not left, and dropping it here put a one-frame hole at
-  // the tail of every single-beat attack.
-  drawArea(ctx, attack.warnShape, origin, attack.facing, color, 0.1, 0.3);
+  const strikeColor = (attack.flashWhite && attack.flashTimer > 0) ? '#ffffff' : color;
+  const geo = strikeGeometry(attack.animation, attack.hitShape, attack.beatIndex ?? 0, beatProgress);
+  const travels = geo.lines.length > 0 || geo.circles.length > 0 || geo.arcs.length > 0;
+
+  if (attack.attackShape) {
+    // An authored glyph replaces the stroke wherever the strike is — including
+    // on `blink`, which has nowhere to travel and plants it at the centre of the
+    // area instead. Authored data that silently drew nothing would be worse than
+    // having no glyph at all.
+    drawAttackShape(ctx, attack, origin, beatProgress, strikeColor, travels);
+  } else if (travels) {
+    drawStrike(ctx, attack, origin, beatProgress, strikeColor);
+  } else {
+    // `blink` has no stroke, so for it the area *is* the strike and has to carry
+    // the whole hit on its own — bright, in place, for the live window.
+    drawArea(ctx, attack.hitShape, origin, attack.facing, strikeColor, FLASH_FILL);
+  }
   return true;
 }
 
@@ -360,6 +402,18 @@ function pathShape(ctx, shape, origin, facing) {
       ctx.lineTo(wx(end, -half), wy(end, -half));
       ctx.lineTo(wx(end, half), wy(end, half));
       ctx.lineTo(wx(start, half), wy(start, half));
+      ctx.closePath();
+      break;
+    }
+    case 'trapezoid': {
+      const start = (shape.offset ?? 0) * CELL;
+      const end = start + shape.length * CELL;
+      const near = (shape.nearWidth * CELL) / 2;
+      const far = (shape.farWidth * CELL) / 2;
+      ctx.moveTo(wx(start, -near), wy(start, -near));
+      ctx.lineTo(wx(end, -far), wy(end, -far));
+      ctx.lineTo(wx(end, far), wy(end, far));
+      ctx.lineTo(wx(start, near), wy(start, near));
       ctx.closePath();
       break;
     }
@@ -387,20 +441,17 @@ function pathShape(ctx, shape, origin, facing) {
   }
 }
 
-// Alphas multiply into whatever the caller already had set, so an outer fade
-// (tall-grass concealment, PiP dimming) composes instead of being clobbered —
-// the same contract ASCIIRenderer.drawTextWithAlpha honours.
-function drawArea(ctx, shape, origin, facing, color, fillAlpha, edgeAlpha) {
+// A fill and nothing else — see the no-outline note above. Alpha multiplies into
+// whatever the caller already had set, so an outer fade (tall-grass concealment,
+// PiP dimming) composes instead of being clobbered — the same contract
+// ASCIIRenderer.drawTextWithAlpha honours.
+function drawArea(ctx, shape, origin, facing, color, fillAlpha) {
   const base = ctx.globalAlpha;
   ctx.save();
   pathShape(ctx, shape, origin, facing);
   ctx.globalAlpha = base * fillAlpha;
   ctx.fillStyle = color;
   ctx.fill();
-  ctx.globalAlpha = base * edgeAlpha;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1;
-  ctx.stroke();
   ctx.restore();
 }
 
@@ -439,5 +490,56 @@ function traceStrike(ctx, geo, origin, facing) {
     ctx.moveTo(origin.x + r, origin.y);
     ctx.arc(origin.x, origin.y, r, 0, Math.PI * 2);
   }
+  for (const { radius, from, to } of geo.arcs) {
+    // Arc angles are measured off facing, so the stretch turns with the enemy
+    // exactly like every other piece of local-frame geometry here.
+    const a0 = facing + from, a1 = facing + to;
+    ctx.moveTo(origin.x + radius * Math.cos(a0), origin.y + radius * Math.sin(a0));
+    ctx.arc(origin.x, origin.y, radius, a0, a1);
+  }
   ctx.stroke();
+}
+
+// The Attack Shape: a single authored character carried by the strike instead of
+// the hairline. Same path, same timing, same anchors — only the mark changes, so
+// an enemy can swing a '/' without any of the choreography knowing about it.
+function drawAttackShape(ctx, attack, origin, progress, color, travels) {
+  const base = ctx.globalAlpha;
+  ctx.save();
+  // Unifont, per the font rules: complete coverage, so any authored glyph draws.
+  ctx.font = `${CELL}px 'Unifont', monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = color;
+
+  if (!travels) {
+    const [along, across] = shapeCenter(attack.hitShape);
+    stampGlyph(ctx, attack.attackShape, origin, attack.facing, along, across);
+    ctx.restore();
+    return;
+  }
+
+  // Back to front, so the head stamps over its own ghost.
+  for (let i = GLYPH_TRAIL_STEPS; i >= 0; i--) {
+    const p = progress - i * GLYPH_TRAIL_SPACING;
+    if (p < 0) continue;
+    ctx.globalAlpha = base * (i === 0 ? 1.0 : 0.3);
+    const geo = strikeGeometry(attack.animation, attack.hitShape, attack.beatIndex ?? 0, p);
+    for (const [along, across] of strikeAnchors(geo)) {
+      stampGlyph(ctx, attack.attackShape, origin, attack.facing, along, across);
+    }
+  }
+  ctx.restore();
+}
+
+// One character planted at a local-frame point and turned to face the swing, so
+// a '/' is the same stroke whichever way the enemy is aimed — the glyph reads as
+// part of the attack rather than as a symbol sitting on top of it.
+function stampGlyph(ctx, glyph, origin, facing, along, across) {
+  const cos = Math.cos(facing), sin = Math.sin(facing);
+  ctx.save();
+  ctx.translate(origin.x + along * cos - across * sin, origin.y + along * sin + across * cos);
+  ctx.rotate(facing);
+  ctx.fillText(glyph, 0, 0);
+  ctx.restore();
 }

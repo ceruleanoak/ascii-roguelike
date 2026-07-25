@@ -7,16 +7,20 @@
 //   the tell    — the warned area, drawn plainly and blinking in place. It says
 //                 *where*, and deliberately nothing else. Every animation shows
 //                 the same still shape here, because a warning the player has to
-//                 decode is not a warning.
+//                 decode is not a warning. It is filled, never outlined, and it
+//                 ends the instant the strike begins.
 //   the strike  — a stroke a few pixels wide sweeping through that area in one
-//                 continuous motion. It says *now*, and it is the only part of a
-//                 Telegraph that moves.
+//                 continuous motion. It says *now*, and it is the only thing on
+//                 screen while it runs: the warning has already been read, and
+//                 leaving it up buries the one moving mark that matters.
 //
-// The strike is geometry, not glyphs. An earlier version masked the character
-// grid and could only ever snap a whole cell at a time, which reads as a block
-// stuttering across the shape rather than a blade passing through it. Nothing
-// in this module knows about cells: it reports line segments in the shape's own
-// local frame and Telegraph.js draws them in pixel space.
+// The strike's *path* is geometry, not glyphs. An earlier version masked the
+// character grid and could only ever snap a whole cell at a time, which reads as
+// a block stuttering across the shape rather than a blade passing through it.
+// Nothing in this module knows about cells: it reports line segments in the
+// shape's own local frame and Telegraph.js draws them in pixel space. What rides
+// that path is a hairline by default, or — when the enemy declares an Attack
+// Shape — a single character carried along it.
 //
 // The animation is the single source of truth for an attack's rhythm. A
 // `doubleSweep` *means* two hits: its beats are compiled into the pulse list
@@ -26,12 +30,14 @@
 // Data contract (enemy data, inside the `telegraph` block):
 //
 //   telegraph: {
-//     shape: 'horizontalSliceThin',   // a SHAPE_PRESETS name — expands to warn/hit shapes
+//     area: 'box',                    // an AREA_PRESETS name — the warned region
+//     size: 'small',                  // 'small' (one cell, the default) | 'big' (the AoE)
 //     animation: 'doubleSweep',       // an ANIMATIONS name — declares the beats
+//     attackShape: '/',               // optional glyph drawn instead of the strike stroke
 //     beatDamage: [1.0, 0.5],         // optional per-beat damage multipliers
 //   }
 //
-// The explicit form still works and is what presets expand into — author
+// The explicit form still works and is what areas expand into — author
 // `warnShape`/`hitShape` directly when no preset fits. An explicit `pulses`
 // list alongside an `animation` is an authoring conflict: the animation wins
 // and the conflict is reported, because two sources of rhythm is the exact
@@ -57,23 +63,78 @@ const EASE_OUT = (p) => 1 - (1 - p) * (1 - p);
 const lerp = (a, b, t) => a + (b - a) * t;
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 
-// ── shape presets ───────────────────────────────────────────────────────────
+// ── area presets ────────────────────────────────────────────────────────────
 
-// Named shapes over the existing rect/ring primitives. Each preset's warn
-// shape is deliberately a little larger than its hit shape — a Telegraph aids
-// anticipation and is not a 1:1 damage outline (see GLOSSARY "Telegraph").
+// The Area is the ground a Telegraph warns about: a named region built over the
+// rect/trapezoid/circle/ring primitives. Each Area's warn shape is deliberately
+// a little larger than its hit shape — a Telegraph aids anticipation and is not
+// a 1:1 damage outline (see GLOSSARY "Telegraph").
 //
-// The ring is the exception worth reading twice: its *hit* inner radius is
-// larger than its *warn* inner radius, so the safe disc is bigger than it
-// looks. Dodging into the enemy is the answer, and the warning overstates the
-// danger inward to make that answer feel like a discovery.
+// The three basic Areas — `box`, `circle`, `trapezoid` — come in two Sizes.
+// `small` is one cell, the original single-cell windup box, and the default: one
+// cell of ground taken away is already a complete instruction, and it is what an
+// enemy that simply swings at you should say. `big` is the AoE, ~2.5 cells
+// across, and has to be asked for by name so that reaching for it is a decision
+// rather than what happens if nobody chooses. The trapezoid widens as it leaves
+// the enemy, so its far edge threatens ground its near edge does not — the Area
+// to reach for when backing straight up should not be the answer.
+//
+// At `small` the warn and hit shapes are identical. One cell is too little
+// ground to overstate: a warning larger than the cell it warns about would be
+// pointing at the cell next door.
+//
+// The slices and the ring carry fixed dimensions instead of Sizes — their whole
+// identity is a specific reach and thickness, which is what an animation sweeps
+// along. The ring is the one worth reading twice: its *hit* inner radius is
+// larger than its *warn* inner radius, so the safe disc is bigger than it looks.
+// Dodging into the enemy is the answer, and the warning overstates the danger
+// inward to make that answer feel like a discovery.
+//
 // These are gameplay dimensions, not drawing dimensions: shapes are filled in
 // pixel space, so any size draws faithfully and nothing here is rounded up to
 // suit the renderer. Tune them against reach and dodge distance alone.
-export const SHAPE_PRESETS = {
-  basic: {
-    warnShape: { kind: 'rect', length: 2.0, width: 2.5 },
-    hitShape: { kind: 'rect', length: 1.75, width: 2.0 },
+export const AREA_PRESETS = {
+  // One cell of ground, a cell's reach out along the swing — where the legacy
+  // windup box sat, which is why `small` reads as "the same attack as always".
+  box: {
+    sizes: {
+      small: {
+        warnShape: { kind: 'rect', length: 1.0, width: 1.0, offset: 0.6 },
+        hitShape: { kind: 'rect', length: 1.0, width: 1.0, offset: 0.6 },
+      },
+      big: {
+        warnShape: { kind: 'rect', length: 2.0, width: 2.5 },
+        hitShape: { kind: 'rect', length: 1.75, width: 2.0 },
+      },
+    },
+  },
+  // Same footprint as the box at each Size, with the corners taken off: it
+  // threatens straight ahead and forgives the diagonals.
+  circle: {
+    sizes: {
+      small: {
+        warnShape: { kind: 'circle', radius: 0.5, offset: 1.1 },
+        hitShape: { kind: 'circle', radius: 0.5, offset: 1.1 },
+      },
+      big: {
+        warnShape: { kind: 'circle', radius: 1.25, offset: 1.0 },
+        hitShape: { kind: 'circle', radius: 1.0, offset: 1.0 },
+      },
+    },
+  },
+  // Narrow at the enemy, wide where it lands. Stepping sideways close in beats
+  // it; sideways at the far edge does not.
+  trapezoid: {
+    sizes: {
+      small: {
+        warnShape: { kind: 'trapezoid', length: 1.0, nearWidth: 0.5, farWidth: 1.0, offset: 0.6 },
+        hitShape: { kind: 'trapezoid', length: 1.0, nearWidth: 0.5, farWidth: 1.0, offset: 0.6 },
+      },
+      big: {
+        warnShape: { kind: 'trapezoid', length: 2.25, nearWidth: 0.75, farWidth: 3.0, offset: 0.2 },
+        hitShape: { kind: 'trapezoid', length: 2.0, nearWidth: 0.6, farWidth: 2.5, offset: 0.25 },
+      },
+    },
   },
   verticalSlice: {
     warnShape: { kind: 'rect', length: 3.5, width: 2.0 },
@@ -93,6 +154,26 @@ export const SHAPE_PRESETS = {
   },
 };
 
+// Sizes, smallest first. `small` is the default everywhere — an Area that says
+// nothing about its size means the single cell, never the AoE.
+export const SIZES = ['small', 'big'];
+export const DEFAULT_SIZE = 'small';
+
+// Does this Area come in Sizes, or are its dimensions its identity?
+export function areaIsSized(name) {
+  return !!AREA_PRESETS[name]?.sizes;
+}
+
+// An Area name + Size to the warn/hit pair it stands for. Fixed Areas ignore
+// the Size; a sized Area given an unknown one returns null so the caller can
+// report it rather than silently drawing the default.
+export function resolveArea(name, size) {
+  const area = AREA_PRESETS[name];
+  if (!area) return null;
+  if (!area.sizes) return area;
+  return area.sizes[size || DEFAULT_SIZE] || null;
+}
+
 // ── animation catalog ───────────────────────────────────────────────────────
 
 // Each animation declares:
@@ -109,14 +190,16 @@ export const SHAPE_PRESETS = {
 //   beats   — one entry per damage hit. `gap` is double-seconds since the
 //             previous beat (beat 0 is the activation hit, gap always 0);
 //             `reverse` flips that beat against the animation's direction.
-//   shapes  — presets this animation is designed for, for authoring validation
+//   areas   — Areas this animation is choreographed for, for authoring
+//             validation (and the editor's animation list filters on it)
 //
 // `blink` is the default: no stroke at all, so a Telegraph that declares no
 // animation keeps the original still-area look end to end.
 export const ANIMATIONS = {
   blink: {
     axis: 'across', motion: 'flash', ease: LINEAR,
-    shapes: ['basic', 'verticalSlice', 'horizontalSliceThin', 'horizontalSliceThick', 'ring'],
+    areas: ['box', 'circle', 'trapezoid', 'verticalSlice', 'horizontalSliceThin',
+            'horizontalSliceThick', 'ring'],
     beats: [{ gap: 0 }],
   },
 
@@ -124,7 +207,7 @@ export const ANIMATIONS = {
   // in means they drift, then snap together — the moment is the meeting.
   clap: {
     axis: 'across', motion: 'converge', ease: EASE_IN,
-    shapes: ['basic', 'horizontalSliceThin', 'horizontalSliceThick'],
+    areas: ['box', 'circle', 'trapezoid', 'horizontalSliceThin', 'horizontalSliceThick'],
     beats: [{ gap: 0 }],
   },
 
@@ -133,7 +216,7 @@ export const ANIMATIONS = {
   // naming note above).
   vertical: {
     axis: 'along', motion: 'pass', ease: LINEAR,
-    shapes: ['basic', 'verticalSlice'],
+    areas: ['box', 'circle', 'trapezoid', 'verticalSlice'],
     beats: [{ gap: 0 }],
   },
 
@@ -142,7 +225,7 @@ export const ANIMATIONS = {
   // the other as a blade.
   slap: {
     axis: 'across', motion: 'pass', ease: EASE_OUT,
-    shapes: ['basic', 'horizontalSliceThin', 'horizontalSliceThick'],
+    areas: ['box', 'circle', 'trapezoid', 'horizontalSliceThin', 'horizontalSliceThick'],
     beats: [{ gap: 0 }],
   },
 
@@ -150,14 +233,14 @@ export const ANIMATIONS = {
   // than crossing it. The only animation whose stroke changes length.
   bloom: {
     axis: 'along', motion: 'grow', ease: LINEAR,
-    shapes: ['basic', 'verticalSlice'],
+    areas: ['box', 'circle', 'trapezoid', 'verticalSlice'],
     beats: [{ gap: 0 }],
   },
 
   // One clean pass across the swing, even speed throughout.
   sweep: {
     axis: 'across', motion: 'pass', ease: LINEAR,
-    shapes: ['horizontalSliceThin', 'horizontalSliceThick'],
+    areas: ['horizontalSliceThin', 'horizontalSliceThick'],
     beats: [{ gap: 0 }],
   },
 
@@ -165,7 +248,7 @@ export const ANIMATIONS = {
   // a player who dodges the first pass and stops moving eats the return.
   doubleSweep: {
     axis: 'across', motion: 'pass', ease: LINEAR,
-    shapes: ['horizontalSliceThin', 'horizontalSliceThick'],
+    areas: ['horizontalSliceThin', 'horizontalSliceThick'],
     beats: [
       { gap: 0 },
       { gap: 0.5, reverse: true },
@@ -175,7 +258,7 @@ export const ANIMATIONS = {
   // Driven out along the facing axis, accelerating — a stab, not a swing.
   thrust: {
     axis: 'along', motion: 'pass', ease: EASE_IN,
-    shapes: ['verticalSlice'],
+    areas: ['verticalSlice'],
     beats: [{ gap: 0 }],
   },
 
@@ -183,14 +266,14 @@ export const ANIMATIONS = {
   // decelerating as it arrives.
   recoil: {
     axis: 'along', motion: 'pass', ease: EASE_OUT, reverse: true,
-    shapes: ['verticalSlice'],
+    areas: ['verticalSlice'],
     beats: [{ gap: 0 }],
   },
 
   // Expands outward through the annulus: the danger leaves the centre.
   radiate: {
     axis: 'radius', motion: 'pass', ease: LINEAR,
-    shapes: ['ring'],
+    areas: ['ring'],
     beats: [{ gap: 0 }],
   },
 
@@ -198,14 +281,14 @@ export const ANIMATIONS = {
   // closes on the place that is actually safe, which is the whole lesson.
   closeIn: {
     axis: 'radius', motion: 'pass', ease: LINEAR, reverse: true,
-    shapes: ['ring'],
+    areas: ['ring'],
     beats: [{ gap: 0 }],
   },
 
   // Travels around the annulus rather than through it.
   revolve: {
     axis: 'angle', motion: 'pass', ease: LINEAR,
-    shapes: ['ring'],
+    areas: ['ring'],
     beats: [{ gap: 0 }],
   },
 };
@@ -220,14 +303,26 @@ export function resolveTelegraph(t, describe = 'telegraph') {
 
   let warnShape = t.warnShape;
   let hitShape = t.hitShape;
-  if (t.shape) {
-    const preset = SHAPE_PRESETS[t.shape];
-    if (!preset) {
-      console.error(`[Telegraph] ${describe}: unknown shape preset '${t.shape}'`);
+  if (t.area) {
+    if (!AREA_PRESETS[t.area]) {
+      console.error(`[Telegraph] ${describe}: unknown area '${t.area}'`);
       return null;
     }
-    warnShape = t.warnShape || preset.warnShape;
-    hitShape = t.hitShape || preset.hitShape;
+    if (t.size && !areaIsSized(t.area)) {
+      console.error(
+        `[Telegraph] ${describe}: area '${t.area}' carries fixed dimensions — 'size' is ignored.`
+      );
+    }
+    const sized = resolveArea(t.area, t.size);
+    if (!sized) {
+      console.error(
+        `[Telegraph] ${describe}: unknown size '${t.size}' for area '${t.area}' ` +
+        `(expected one of ${SIZES.join(', ')})`
+      );
+      return null;
+    }
+    warnShape = t.warnShape || sized.warnShape;
+    hitShape = t.hitShape || sized.hitShape;
   }
   if (!warnShape) return null;
 
@@ -237,10 +332,10 @@ export function resolveTelegraph(t, describe = 'telegraph') {
     console.error(`[Telegraph] ${describe}: unknown animation '${animName}'`);
     return null;
   }
-  if (t.shape && !animation.shapes.includes(t.shape)) {
+  if (t.area && !animation.areas.includes(t.area)) {
     console.error(
-      `[Telegraph] ${describe}: animation '${animName}' is not designed for shape ` +
-      `'${t.shape}' (expected one of ${animation.shapes.join(', ')})`
+      `[Telegraph] ${describe}: animation '${animName}' is not choreographed for area ` +
+      `'${t.area}' (expected one of ${animation.areas.join(', ')})`
     );
   }
   if (t.pulses && t.animation) {
@@ -255,6 +350,9 @@ export function resolveTelegraph(t, describe = 'telegraph') {
     hitShape: hitShape || warnShape,
     animationName: animName,
     animation,
+    // The glyph the strike rides on, when one is authored. Null keeps the
+    // default hairline stroke.
+    attackShape: t.attackShape || null,
     // Beats compiled to the pulse contract CombatSystem already resolves:
     // cumulative delay from activation, with an optional per-beat multiplier.
     pulses: t.animation
@@ -282,11 +380,18 @@ function compilePulses(animation, beatDamage) {
 // the owner; nothing here knows where on screen any of it ends up, which is why
 // the same numbers serve the game renderer and the editor sandbox.
 //
-// Returns { lines, circles }: `lines` are [along0, across0, along1, across1]
-// segments, `circles` are radii centred on the owner. Both empty means nothing
-// travels this frame — that is `blink`, whose strike is the area itself.
+// Returns { lines, circles, arcs, anchors? }: `lines` are [along0, across0,
+// along1, across1] segments, `circles` are radii centred on the owner, `arcs`
+// are { radius, from, to } stretches of a circumference (angles measured off
+// facing). All three empty means nothing travels this frame — that is `blink`,
+// whose strike is the area itself.
+//
+// `anchors` is optional and only matters to an Attack Shape glyph: it says where
+// the mark rides when the strokes' own midpoints are the wrong answer. A `grow`
+// outline is three sides but only one advancing edge, and the glyph belongs on
+// that edge rather than smeared one-per-side.
 export function strikeGeometry(animation, shape, beatIndex, progress) {
-  if (!animation || animation.motion === 'flash') return { lines: [], circles: [] };
+  if (!animation || animation.motion === 'flash') return EMPTY_GEOMETRY;
 
   const beat = animation.beats[Math.min(beatIndex, animation.beats.length - 1)];
   // The animation sets a base direction and a beat may flip it — that XOR is
@@ -297,31 +402,38 @@ export function strikeGeometry(animation, shape, beatIndex, progress) {
   switch (animation.axis) {
     case 'radius': {
       const [lo, hi] = axisSpan(shape, 'radius');
-      return { lines: [], circles: [lerp(lo, hi, t)] };
+      return { lines: [], circles: [lerp(lo, hi, t)], arcs: [] };
     }
     case 'angle': {
-      // A radial spoke swinging around the annulus, drawn from its inner edge
-      // to its outer one.
+      // Around the annulus rather than across it, riding the circumference
+      // through the middle of the band — the line the eye follows when a ring
+      // sweeps. A radial spoke was the earlier reading and it was wrong: a spoke
+      // covers the whole band at once and so has nowhere left to travel.
       const [lo, hi] = axisSpan(shape, 'radius');
+      const radius = (lo + hi) / 2;
       const a = -Math.PI + t * 2 * Math.PI;
-      const cos = Math.cos(a), sin = Math.sin(a);
-      return { lines: [[lo * cos, lo * sin, hi * cos, hi * sin]], circles: [] };
+      const half = ARC_SWEEP / 2;
+      return { lines: [], circles: [], arcs: [{ radius, from: a - half, to: a + half }] };
     }
     case 'along': {
       const [lo, hi] = axisSpan(shape, 'along');
       const [c0, c1] = axisSpan(shape, 'across');
       if (animation.motion === 'grow') {
-        // Three sides of a box whose far edge advances: the two rails stay put
-        // and lengthen while the leading edge does the travelling.
+        // Three sides of a box whose far edge advances: the rails follow the
+        // shape's own taper (they diverge on a trapezoid, bulge on a circle,
+        // stay parallel on a rect) while the leading edge does the travelling.
         const head = lerp(lo, hi, t);
+        const [n0, n1] = acrossSpanAt(shape, lo, c0, c1);
+        const [h0, h1] = acrossSpanAt(shape, head, c0, c1);
         return {
-          lines: [[lo, c0, head, c0], [lo, c1, head, c1], [head, c0, head, c1]],
-          circles: [],
+          lines: [[lo, n0, head, h0], [lo, n1, head, h1], [head, h0, head, h1]],
+          circles: [], arcs: [],
+          anchors: [[head, (h0 + h1) / 2]],
         };
       }
       const a = lerp(lo, hi, t);
       const [w0, w1] = acrossSpanAt(shape, a, c0, c1);
-      return { lines: [[a, w0, a, w1]], circles: [] };
+      return { lines: [[a, w0, a, w1]], circles: [], arcs: [] };
     }
     default: { // 'across'
       const [a0, a1] = axisSpan(shape, 'along');
@@ -330,18 +442,48 @@ export function strikeGeometry(animation, shape, beatIndex, progress) {
       if (shape.kind === 'cone') {
         const half = (shape.angleDeg * Math.PI / 180) / 2;
         const a = lerp(-half, half, t);
-        return { lines: [[0, 0, a1 * Math.cos(a), a1 * Math.sin(a)]], circles: [] };
+        return { lines: [[0, 0, a1 * Math.cos(a), a1 * Math.sin(a)]], circles: [], arcs: [] };
       }
       const [lo, hi] = axisSpan(shape, 'across');
       if (animation.motion === 'converge') {
         const mid = (lo + hi) / 2;
         const near = lerp(lo, mid, t), far = lerp(hi, mid, t);
-        return { lines: [[a0, near, a1, near], [a0, far, a1, far]], circles: [] };
+        return { lines: [[a0, near, a1, near], [a0, far, a1, far]], circles: [], arcs: [] };
       }
       const c = lerp(lo, hi, t);
-      return { lines: [[a0, c, a1, c]], circles: [] };
+      return { lines: [[a0, c, a1, c]], circles: [], arcs: [] };
     }
   }
+}
+
+const EMPTY_GEOMETRY = { lines: [], circles: [], arcs: [] };
+
+// How much of a ring's circumference the travelling mark occupies, in radians.
+// Long enough to read as a blade with a direction, short enough that most of the
+// band is still empty ground the player can be standing on.
+const ARC_SWEEP = 0.35;
+
+// The points a strike can be reduced to, in the shape's local frame — where an
+// Attack Shape glyph rides. Segments and arcs report their midpoint; a circle
+// reports the point on the facing spoke; a geometry that named its own anchors
+// (see `grow`) is taken at its word.
+export function strikeAnchors(geo) {
+  if (geo.anchors) return geo.anchors;
+  const anchors = [];
+  for (const [a0, c0, a1, c1] of geo.lines) anchors.push([(a0 + a1) / 2, (c0 + c1) / 2]);
+  for (const { radius, from, to } of geo.arcs) {
+    const mid = (from + to) / 2;
+    anchors.push([radius * Math.cos(mid), radius * Math.sin(mid)]);
+  }
+  for (const r of geo.circles) anchors.push([r, 0]);
+  return anchors;
+}
+
+// The centre of a shape along its own facing axis — where a still strike (an
+// Attack Shape on `blink`, which has no travel) plants its mark.
+export function shapeCenter(shape) {
+  const [lo, hi] = axisSpan(shape, 'along');
+  return [(lo + hi) / 2, 0];
 }
 
 // The shape's extent along one local axis, in pixels.
@@ -350,6 +492,7 @@ export function axisSpan(shape, axis) {
   switch (axis) {
     case 'along':
       if (shape.kind === 'rect') return [off, off + shape.length * CELL];
+      if (shape.kind === 'trapezoid') return [off, off + shape.length * CELL];
       if (shape.kind === 'cone') return [0, shape.range * CELL];
       if (shape.kind === 'circle') return [off - shape.radius * CELL, off + shape.radius * CELL];
       return [-shape.outerRadius * CELL, shape.outerRadius * CELL];
@@ -357,9 +500,16 @@ export function axisSpan(shape, axis) {
       if (shape.kind === 'ring') return [shape.innerRadius * CELL, shape.outerRadius * CELL];
       if (shape.kind === 'circle') return [0, shape.radius * CELL];
       if (shape.kind === 'cone') return [0, shape.range * CELL];
+      if (shape.kind === 'trapezoid') return [0, off + shape.length * CELL];
       return [0, off + shape.length * CELL];
     default: { // 'across'
       if (shape.kind === 'rect') return [-shape.width * CELL / 2, shape.width * CELL / 2];
+      // The widest the trapezoid ever gets — its far edge. Anything travelling
+      // between the two ends narrows to the local width via acrossSpanAt.
+      if (shape.kind === 'trapezoid') {
+        const half = Math.max(shape.nearWidth, shape.farWidth) * CELL / 2;
+        return [-half, half];
+      }
       if (shape.kind === 'circle') return [-shape.radius * CELL, shape.radius * CELL];
       if (shape.kind === 'ring') return [-shape.outerRadius * CELL, shape.outerRadius * CELL];
       return [-shape.range * CELL, shape.range * CELL];
@@ -367,13 +517,32 @@ export function axisSpan(shape, axis) {
   }
 }
 
-// How wide the shape is at one point down its facing axis. Only a circle
-// actually narrows toward its ends; everything else the presets use is a
-// constant width, so this is the chord and a passthrough.
+// Half the shape's width at one point down its facing axis, in pixels, or null
+// for the kinds with no flat across-extent (ring, cone). A trapezoid widens
+// linearly away from the enemy and a circle narrows toward its ends; a rect is
+// the same width the whole way out.
+export function halfWidthAt(shape, along) {
+  switch (shape.kind) {
+    case 'rect':
+      return shape.width * CELL / 2;
+    case 'trapezoid': {
+      const start = (shape.offset ?? 0) * CELL;
+      const t = clamp01((along - start) / (shape.length * CELL));
+      return lerp(shape.nearWidth, shape.farWidth, t) * CELL / 2;
+    }
+    case 'circle': {
+      const r = shape.radius * CELL;
+      const d = along - (shape.offset ?? 0) * CELL;
+      return Math.sqrt(Math.max(0, r * r - d * d));
+    }
+    default:
+      return null;
+  }
+}
+
+// The chord the shape spans at one point down its facing axis — a passthrough of
+// the caller's full extent for the kinds that have no local width.
 function acrossSpanAt(shape, along, c0, c1) {
-  if (shape.kind !== 'circle') return [c0, c1];
-  const r = shape.radius * CELL;
-  const d = along - (shape.offset ?? 0) * CELL;
-  const half = Math.sqrt(Math.max(0, r * r - d * d));
-  return [-half, half];
+  const half = halfWidthAt(shape, along);
+  return half == null ? [c0, c1] : [-half, half];
 }
