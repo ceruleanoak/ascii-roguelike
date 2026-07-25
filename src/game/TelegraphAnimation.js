@@ -120,6 +120,26 @@ export const ANIMATIONS = {
     beats: [{ gap: 0, sweep: () => FULL }],
   },
 
+  // Runs outward along the attack direction during the tell, then the whole
+  // area lands. Reads as a lunge lining itself up. "Vertical" is relative to
+  // the attack direction, not the screen (see the naming note above).
+  vertical: {
+    axis: 'along',
+    shapes: ['basic', 'verticalSlice'],
+    windup: (p) => travel(p),
+    beats: [{ gap: 0, sweep: () => FULL }],
+  },
+
+  // The hand swings across during the tell and then connects flat. The
+  // distinction from `sweep` is where the motion lives: a sweep's *hit*
+  // travels, a slap's hit is the full palm arriving at once.
+  slap: {
+    axis: 'across',
+    shapes: ['basic', 'horizontalSliceThin', 'horizontalSliceThick'],
+    windup: (p) => travel(p),
+    beats: [{ gap: 0, sweep: () => FULL }],
+  },
+
   // Grows out of the enemy — the threat expanding into the space it will own.
   bloom: {
     axis: 'along',
@@ -274,12 +294,35 @@ export function maskCells(cells, bands, animation, shape, origin, facing) {
   if (bands === FULL || !animation) return cells;
   if (!bands || bands.length === 0) return [];
   const axis = animation.axis;
+  bands = widenBands(bands, shape, axis);
   return cells.filter((cell) => {
     const v = cellAxisValue(shape, axis, origin, facing, cell.x, cell.y);
     for (const [lo, hi] of bands) {
       if (v >= lo && v <= hi) return true;
     }
     return false;
+  });
+}
+
+// A band thinner than about a cell can fall entirely between cell centres and
+// light nothing — the same failure the shape sizing floor guards against, one
+// level down. Bands are authored as a fraction of their axis, so a *short* axis
+// produces a band too thin to draw: `basic` is 2 cells deep, and BAND_HALF
+// there works out to 0.72 cells. Widen every band to this many cells before
+// masking. The animation keeps its motion; it just never blinks out mid-travel.
+const MIN_BAND_CELLS = 1.2;
+
+function widenBands(bands, shape, axis) {
+  // An angular axis measures radians, not cells — arc length varies with radius,
+  // so there is no single cell width to widen toward.
+  if (axis === 'angle') return bands;
+  const [lo, hi] = axisRange(shape, axis);
+  const extent = hi - lo;
+  if (extent <= 0) return bands;
+  const minWidth = (MIN_BAND_CELLS * CELL) / extent; // back into normalized units
+  return bands.map(([a, b]) => {
+    const grow = Math.max(0, minWidth - (b - a)) / 2;
+    return [a - grow, b + grow];
   });
 }
 
