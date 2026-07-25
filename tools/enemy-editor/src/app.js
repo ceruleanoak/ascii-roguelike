@@ -18,6 +18,7 @@ function init() {
     el('error').textContent = msg || '';
     el('error').style.display = msg ? 'block' : 'none';
   });
+  sandbox.onNotice = (msg) => flash(el('telegraph'), msg);
   form = new EnemyForm(el('form'), def, onDefChange);
   sandbox.loadDef(def);
   refreshOutput();
@@ -90,6 +91,11 @@ function bindControls() {
     sandbox.paused = !sandbox.paused;
     e.target.textContent = sandbox.paused ? '▶ Resume' : '⏸ Pause';
   });
+
+  // Fires the melee windup the Telegraph rides on, so the shape + animation can
+  // be reviewed without waiting on an AI attack decision.
+  el('telegraph').addEventListener('click', () => sandbox.triggerTelegraph());
+  el('speed').addEventListener('change', (e) => { sandbox.timeScale = Number(e.target.value) || 1; });
 
   el('mouseFollow').addEventListener('change', (e) => { sandbox.mouseFollow = e.target.checked; });
   el('showRanges').addEventListener('change', (e) => { sandbox.showRanges = e.target.checked; });

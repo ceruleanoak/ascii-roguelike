@@ -20,11 +20,20 @@ export class Sandbox {
     canvas.height = GRID.HEIGHT;
     this.physics = new PhysicsSystem();
     this.onError = onError;
+    // Transient feedback for an action the sim declined to take (as opposed to
+    // onError, which is a thrown frame). Set by the host.
+    this.onNotice = null;
 
     this.depth = 0;
     this.paused = false;
     this.mouseFollow = true;
     this.showRanges = true;
+    // Whole-sim time scale. A Telegraph beat's active window is 0.30 dbl-sec
+    // (0.15s real), so a sweep animation crosses its shape faster than the eye
+    // can follow at 1× — slowing the clock is what makes the choreography
+    // authorable. Scales the frame delta, so AI, physics, and the telegraph
+    // lifecycle all stay in step with each other.
+    this.timeScale = 1;
     this.keys = {};
 
     this.player = this.makePlayer();
@@ -143,6 +152,7 @@ export class Sandbox {
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
       this.keys[e.key.toLowerCase()] = true;
       if (e.key === ' ') { this.paused = !this.paused; e.preventDefault(); }
+      if (e.key.toLowerCase() === 't') this.triggerTelegraph();
     });
     window.addEventListener('keyup', (e) => { this.keys[e.key.toLowerCase()] = false; });
     const toArena = (e) => {
@@ -180,6 +190,27 @@ export class Sandbox {
     if (e.state === 'idle' || e.state === 'wander' || e.state === 'rest') e.state = 'chase';
   }
 
+  // Force the melee windup that carries the Telegraph, so the shape and its
+  // animation can be watched on demand instead of waiting for the AI to decide
+  // to swing. Replicates the AI's windup entry exactly (the attack branch of
+  // updateAI): state, timer, and the aim snapshot the shape's facing is locked
+  // from. Reports through onNotice when the enemy can't wind up at all.
+  triggerTelegraph() {
+    const e = this.enemies[0];
+    if (!e) return;
+    if (e.attackType !== 'melee') {
+      this.onNotice?.(`'${e.attackType}' has no windup`);
+      return;
+    }
+    if (e.isWindingUp() || e.state === 'attack') return; // already committed
+    e.state = 'windup';
+    e.windupTimer = e.attackWindup;
+    e.attackTimer = 0;
+    e.markedTargetPosition = { x: this.player.position.x, y: this.player.position.y };
+    e.targetVelocity.vx = 0;
+    e.targetVelocity.vy = 0;
+  }
+
   cellBlocked(x, y) {
     const col = Math.floor(x / CELL), row = Math.floor(y / CELL);
     return !!(this.collisionMap[row] && this.collisionMap[row][col]);
@@ -215,7 +246,7 @@ export class Sandbox {
   loop(now) {
     let dt = (now - this.last) / 1000;
     this.last = now;
-    dt = clamp(dt, 0, 0.05);
+    dt = clamp(dt, 0, 0.05) * this.timeScale;
 
     if (!this.paused) {
       try {
@@ -332,6 +363,10 @@ export class Sandbox {
     const c = this.ctx2d;
     c.fillStyle = '#05060a';
     c.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    // Cell-centered text for everything below, set before the first fillText:
+    // telegraph cells are positioned by their center, so a default 'start'
+    // alignment would draw the whole shape offset by half a cell.
+    c.textAlign = 'center'; c.textBaseline = 'middle';
     this.drawGrid(c);
     this.drawWalls(c);
     this.drawMemoryMark(c);
@@ -341,7 +376,6 @@ export class Sandbox {
 
     // player
     c.font = `${CELL}${FONT}`;
-    c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillStyle = '#00ffff';
     c.fillText('@', this.player.position.x, this.player.position.y);
 

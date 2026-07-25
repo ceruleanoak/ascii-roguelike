@@ -2,7 +2,7 @@
 // container, binds inputs to the live def object, and calls onChange() after
 // any edit so the sandbox + codegen can refresh.
 import { SECTIONS, MECHANICS } from './schema.js';
-import { getPath, setPath, seedMechanic, clearMechanic, isMechanicOn } from './util.js';
+import { getPath, setPath, seedBlock, clearBlock, isBlockOn } from './util.js';
 
 export class EnemyForm {
   constructor(container, def, onChange) {
@@ -25,7 +25,7 @@ export class EnemyForm {
     this.container.innerHTML = '';
     for (const section of SECTIONS) {
       if (section.showIf && !section.showIf(this.def)) continue;
-      this.container.appendChild(this.renderSection(section, false));
+      this.container.appendChild(this.renderSection(section));
     }
     const mechHeader = document.createElement('div');
     mechHeader.className = 'mech-header';
@@ -36,40 +36,36 @@ export class EnemyForm {
     }
   }
 
-  renderSection(section, collapsible) {
+  // A section is always-on unless it declares a gate, in which case its heading
+  // carries the presence toggle (Telegraph) — absent means the enemy keeps the
+  // legacy behavior, so the block has to be removable, not just zeroed.
+  renderSection(section) {
     const wrap = document.createElement('section');
     wrap.className = 'section';
-    const h = document.createElement('h3');
-    h.textContent = section.title;
-    wrap.appendChild(h);
+    const on = !section.gate || isBlockOn(this.def, section);
+
+    if (section.gate) {
+      wrap.appendChild(this.renderGateHead(section, on, 'section-toggle'));
+    } else {
+      const h = document.createElement('h3');
+      h.textContent = section.title;
+      wrap.appendChild(h);
+    }
+
+    if (!on) return wrap;
     for (const field of section.fields) {
       if (field.showIf && !field.showIf(this.def)) continue;
       wrap.appendChild(this.renderField(field));
     }
+    this.appendNotes(wrap, section);
     return wrap;
   }
 
   renderMechanic(mech) {
     const wrap = document.createElement('section');
     wrap.className = 'section mech';
-    const on = isMechanicOn(this.def, mech);
-
-    const head = document.createElement('label');
-    head.className = 'mech-toggle';
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = on;
-    cb.addEventListener('change', () => {
-      if (cb.checked) seedMechanic(this.def, mech);
-      else clearMechanic(this.def, mech);
-      this.emit();
-      this.render();
-    });
-    head.appendChild(cb);
-    const title = document.createElement('span');
-    title.textContent = mech.title;
-    head.appendChild(title);
-    wrap.appendChild(head);
+    const on = isBlockOn(this.def, mech);
+    wrap.appendChild(this.renderGateHead(mech, on, 'mech-toggle'));
 
     if (on) {
       const body = document.createElement('div');
@@ -78,9 +74,43 @@ export class EnemyForm {
         if (field.showIf && !field.showIf(this.def)) continue;
         body.appendChild(this.renderField(field));
       }
+      this.appendNotes(body, mech);
       wrap.appendChild(body);
     }
     return wrap;
+  }
+
+  // Presence toggle for a gated block (mechanic or section).
+  renderGateHead(block, on, className) {
+    const head = document.createElement('label');
+    head.className = className;
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = on;
+    cb.addEventListener('change', () => {
+      if (cb.checked) seedBlock(this.def, block);
+      else clearBlock(this.def, block);
+      this.emit();
+      this.render();
+    });
+    head.appendChild(cb);
+    const title = document.createElement('span');
+    title.textContent = block.title;
+    head.appendChild(title);
+    return head;
+  }
+
+  // Live authoring feedback from the block's note(def): warnings for conflicts
+  // the game would only report to the console at swing time, and info lines that
+  // spell out what the current data compiles to.
+  appendNotes(parent, block) {
+    if (!block.note) return;
+    for (const note of block.note(this.def)) {
+      const div = document.createElement('div');
+      div.className = `note ${note.level}`;
+      div.textContent = note.text;
+      parent.appendChild(div);
+    }
   }
 
   renderField(field) {
@@ -164,7 +194,10 @@ export class EnemyForm {
         input = document.createElement('textarea');
         input.className = 'json';
         input.rows = 2;
-        input.value = JSON.stringify(value ?? (Array.isArray(field.default) ? [] : {}));
+        // Unset reads as blank rather than "null": for an optional shape or
+        // pulse list, empty is the meaningful state and should look empty.
+        input.value = value == null ? '' : JSON.stringify(value);
+        if (field.placeholder) input.placeholder = field.placeholder;
         input.addEventListener('change', () => {
           try {
             setPath(this.def, field.key, JSON.parse(input.value || 'null'));
@@ -220,9 +253,10 @@ export class EnemyForm {
     return row;
   }
 
-  // Heavy edit (structural / showIf-affecting): re-render whole form.
+  // Heavy edit (structural / showIf- or note-affecting): re-render whole form.
   afterEdit(field) {
     this.emit();
+    if (field.rerender) { this.render(); return; }
     if (field.rerenders !== false && this.fieldAffectsVisibility(field)) this.render();
   }
 

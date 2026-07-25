@@ -37,11 +37,14 @@ export function allFields() {
   return out;
 }
 
-// A fresh enemy definition seeded with the core-section defaults only.
-// Mechanic sub-fields are written lazily when a mechanic is toggled on.
+// A fresh enemy definition seeded with the core-section defaults only. Gated
+// blocks — every mechanic, plus optional sections like Telegraph — are written
+// lazily when their toggle is enabled, because for those the absence of the key
+// is itself meaningful behavior.
 export function buildDefaultDef() {
   const def = {};
   for (const s of SECTIONS) {
+    if (s.gate) continue;
     for (const f of s.fields) {
       setPath(def, f.key, deepClone(f.default));
     }
@@ -49,25 +52,29 @@ export function buildDefaultDef() {
   return def;
 }
 
-// Seed a mechanic's defaults onto the def (called when its toggle is enabled).
-export function seedMechanic(def, mechanic) {
-  for (const f of mechanic.fields) {
+// A "block" is any gated group of fields: a mechanic, or a section that can be
+// absent entirely (Telegraph). Both carry { id, gate, bareGate, fields }, so one
+// set of toggle helpers serves both.
+
+// Seed a block's defaults onto the def (called when its toggle is enabled).
+export function seedBlock(def, block) {
+  for (const f of block.fields) {
     if (getPath(def, f.key) === undefined) setPath(def, f.key, deepClone(f.default));
   }
-  if (mechanic.bareGate) {
-    // bare-gate mechanics (spawnEquipment, flockBehavior, riseAgain) have no
-    // `.enabled`; their presence is the gate — ensure the root object exists.
-    if (getPath(def, mechanic.id) === undefined) setPath(def, mechanic.id, {});
+  if (block.bareGate) {
+    // bare-gate blocks (spawnEquipment, flockBehavior, riseAgain, telegraph)
+    // have no `.enabled`; their presence is the gate — ensure the root exists.
+    if (getPath(def, block.id) === undefined) setPath(def, block.id, {});
   } else {
-    setPath(def, mechanic.gate, true);
+    setPath(def, block.gate, true);
   }
 }
 
-export function clearMechanic(def, mechanic) {
-  deletePath(def, mechanic.id);
+export function clearBlock(def, block) {
+  deletePath(def, block.id);
 }
 
-export function isMechanicOn(def, mechanic) {
-  if (mechanic.bareGate) return getPath(def, mechanic.id) !== undefined;
-  return getPath(def, mechanic.gate) === true;
+export function isBlockOn(def, block) {
+  if (block.bareGate) return getPath(def, block.id) !== undefined;
+  return getPath(def, block.gate) === true;
 }

@@ -2,7 +2,7 @@
 // src/data/enemies.js, factoring out GRID.CELL_SIZE on pixel fields and
 // pruning noise defaults, and (b) a plain JSON draft for save/load.
 import { allFields, getPath } from './util.js';
-import { MECHANICS } from './schema.js';
+import { MECHANICS, SECTIONS } from './schema.js';
 
 const PX_PATHS = new Set(allFields().filter(f => f.type === 'px').map(f => f.key));
 const DEFAULTS = new Map(allFields().map(f => [f.key, f.default]));
@@ -14,7 +14,7 @@ const REQUIRED = new Set(['char', 'name', 'hp', 'speed', 'damage', 'attackType',
 // Top-level emit order; unknown keys appended after in insertion order.
 const ORDER = ['char', 'name', 'description', 'spellDescription', 'tier', 'affinities',
   'hp', 'speed', 'damage', 'color', 'attackType', 'attackRange', 'aggroRange',
-  'attackCooldown', 'attackWindup', 'projectileType', 'isImpact',
+  'attackCooldown', 'attackWindup', 'projectileType', 'isImpact', 'telegraph',
   'mass', 'acceleration', 'knockbackMultiplier',
   'decisionInterval', 'idleBehavior', 'windupMovement', 'windupImmune',
   'movementStyle', 'movementConfig',
@@ -24,6 +24,12 @@ const ORDER = ['char', 'name', 'description', 'spellDescription', 'tier', 'affin
   ...MECHANICS.map(m => m.id)];
 
 const MECH_KEYS = new Set(MECHANICS.map(m => m.id));
+
+// Sections whose keys are emitted even when they equal their default. Inside an
+// optional block a default is load-bearing: pruning `telegraph.shape: 'basic'`
+// would leave `telegraph: {}`, which resolves to no shape at all and silently
+// reverts the enemy to the legacy windup visual.
+const EXPLICIT_BLOCKS = new Set(SECTIONS.filter(s => s.emitDefaults).map(s => s.id));
 
 function isEmpty(v) {
   if (v == null || v === '') return true;
@@ -100,6 +106,8 @@ function shouldOmit(childPath, key, v, insideMechanic) {
   if (isTopLevel && REQUIRED.has(key)) return false;
   // Prune empties (e.g. movementConfig: {}, immunity: []) and noise defaults.
   if (isEmpty(v)) return true;
+  // An explicit block still drops unset keys, but keeps default-valued ones.
+  if (EXPLICIT_BLOCKS.has(childPath.split('.')[0])) return false;
   if (eqDefault(childPath, v)) return true;
   return false;
 }

@@ -43,6 +43,14 @@
 
   /* form */
   .section { border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+  /* Gated section: the heading itself is the presence toggle. */
+  .section-toggle { display: flex; align-items: center; gap: 7px; cursor: pointer; margin: 14px 0 6px; }
+  .section-toggle span { font-size: 11px; letter-spacing: 0.08em; color: var(--accent);
+                         text-transform: uppercase; font-weight: bold; }
+  .note { font-size: 10.5px; line-height: 1.5; padding: 3px 0 1px 6px; margin-top: 3px;
+          border-left: 2px solid var(--line); }
+  .note.info { color: var(--dim); }
+  .note.warn { color: var(--warn); border-left-color: var(--warn); }
   .section.mech { padding-bottom: 4px; }
   .mech-header { margin: 16px 0 4px; color: var(--amber); font-weight: bold; letter-spacing: 0.1em; }
   .mech-toggle { display: flex; align-items: center; gap: 7px; cursor: pointer; padding: 5px 0; color: var(--fg); }
@@ -98,6 +106,15 @@
     <div class="arena-controls">
       <button id="pause">⏸ Pause</button>
       <button id="respawn">⟲ Respawn</button>
+      <button id="telegraph">⚡ Telegraph</button>
+      <label>speed
+        <select id="speed">
+          <option value="1">1×</option>
+          <option value="0.5">0.5×</option>
+          <option value="0.25">0.25×</option>
+          <option value="0.1">0.1×</option>
+        </select>
+      </label>
       <label><input type="checkbox" id="mouseFollow" checked /> mouse-follow</label>
       <label><input type="checkbox" id="showRanges" checked /> ranges</label>
       <label>depth <input type="number" id="depth" value="0" min="0" style="width:48px" /></label>
@@ -105,7 +122,9 @@
     <div class="hint">
       <b>@</b> is you. Move with the mouse (or WASD when mouse-follow is off). Space pauses.<br />
       Green ring = aggro range · red ring = attack range. Duck behind a wall to break sight.<br />
-      <b>Click</b> the arena to drop a memory mark the enemy investigates (Shift-click = confirmed sighting).
+      <b>Click</b> the arena to drop a memory mark the enemy investigates (Shift-click = confirmed sighting).<br />
+      <b>⚡ Telegraph</b> (or <b>T</b>) forces the melee windup so you can watch the shape and its animation —
+      stand inside aggro range, and drop <b>speed</b> to 0.25× to read a sweep.
     </div>
   </div>
 
