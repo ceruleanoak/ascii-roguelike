@@ -19,6 +19,17 @@
 //     ],
 //   }
 //
+// Preferred authoring form — a named shape preset plus a Telegraph Animation,
+// which declares the beats and therefore compiles its own pulses (see
+// TelegraphAnimation.js; that module is the reason a `doubleSweep` cannot show
+// two passes and land one hit):
+//
+//   telegraph: {
+//     shape: 'horizontalSliceThin',
+//     animation: 'doubleSweep',
+//     beatDamage: [1.0, 0.5],
+//   }
+//
 // Shape kinds (anchored at the attack owner's center, oriented by `facing`
 // radians locked at windup start — the aim snapshot, matching
 // markedTargetPosition semantics):
@@ -38,6 +49,7 @@
 // exactly one frame (the legacy melee contract) so positional dodges work.
 
 import { GRID } from './GameConfig.js';
+import { resolveTelegraph, animationBands, maskCells } from './TelegraphAnimation.js';
 
 const CELL = GRID.CELL_SIZE;
 
@@ -152,12 +164,17 @@ function shapeReach(shape) {
 // Facing is locked here — the shape aims where the enemy aimed, and stays
 // aimed there for the whole windup (a readable commitment).
 export function attachTelegraph(attack, enemy, dirX, dirY) {
-  const t = enemy.data.telegraph;
-  if (!t || !t.warnShape) return attack;
-  attack.warnShape = t.warnShape;
-  attack.hitShape = t.hitShape || t.warnShape;
+  const resolved = resolveTelegraph(enemy.data.telegraph, enemy.data.name || enemy.char);
+  if (!resolved) return attack;
+  attack.warnShape = resolved.warnShape;
+  attack.hitShape = resolved.hitShape;
   attack.facing = Math.atan2(dirY, dirX);
-  attack.telegraphPulses = t.pulses || null;
+  attack.telegraphPulses = resolved.pulses;
+  // The animation drives both what is drawn and — via the pulses compiled from
+  // its beats — when damage lands. Held on the attack so every consumer reads
+  // the same choreography off the same object.
+  attack.animation = resolved.animation;
+  attack.animationName = resolved.animationName;
   return attack;
 }
 
@@ -198,6 +215,13 @@ export function updateEnemyMeleeAttack(attack, deltaTime) {
     }
   }
 
+  // Track time within the current beat so an animation's sweep knows how far
+  // through its pass it is. Runs for every activated attack, including
+  // single-beat ones — the first beat is the activation hit itself.
+  if (!attack.windupPhase && attack.beatElapsed !== undefined) {
+    attack.beatElapsed += deltaTime;
+  }
+
   // Advance the pulse clock on an activated multi-pulse attack: when the next
   // pulse comes due, re-arm the hit for exactly one more test frame.
   if (!attack.windupPhase && attack.pulseQueue && attack.pulseQueue.length > 0) {
@@ -210,6 +234,9 @@ export function updateEnemyMeleeAttack(attack, deltaTime) {
       attack.flashWhite = true;
       attack.flashTimer = FLASH_DURATION;
       attack.alpha = 1.0;
+      // A new pulse is a new beat: restart the sweep for the next pass.
+      attack.beatIndex = (attack.beatIndex ?? 0) + 1;
+      attack.beatElapsed = 0;
     }
   }
 
@@ -257,6 +284,11 @@ export function activateWindupVisual(attack) {
   attack.flashTimer = FLASH_DURATION;
   attack.alpha = 1.0; // Ensure fully visible when activated
 
+  // Beat 0 is the activation hit. Set even for shapeless attacks so the field
+  // is never lazily introduced later (see CLAUDE.md anti-patterns).
+  attack.beatIndex = 0;
+  attack.beatElapsed = 0;
+
   if (attack.telegraphPulses && attack.telegraphPulses.length > 0) {
     // Pulse 0 is the activation hit itself; later pulses re-arm on delay.
     const [first, ...rest] = attack.telegraphPulses;
@@ -286,30 +318,55 @@ export function attackHitsBox(attack, box, legacyCheck) {
 
 // What a shaped attack should draw this frame, resolved once so every
 // renderer (surface, PiP overlays, editor sandbox) shows the same thing:
-//   windup           → warn shape, blinking alpha
-//   pulse flash      → hit shape, white
-//   between pulses   → warn shape, dim steady (the threat is still live)
+//   windup           → warn shape, masked by the animation's windup bands
+//   beat             → hit shape, masked by that beat's sweep, white while flashing
+//   between beats    → warn shape, dim steady (the threat is still live)
 // Returns null for legacy (shapeless) attacks — callers keep their rect path.
+//
+// The animation only ever *narrows* what the shape already covers, so it can
+// never light a cell outside the warn/hit geometry. The default `blink`
+// animation returns FULL at every moment, which is how a Telegraph that
+// declares no animation keeps the original four-phase look.
 export function telegraphRenderCells(attack) {
   if (!attack.warnShape) return null;
   const origin = attack.owner ? entityCenter(attack.owner) : attack.position;
+  const anim = attack.animation;
+
   if (attack.windupPhase) {
+    const progress = attack.windupDuration
+      ? (attack.windupElapsed ?? 0) / attack.windupDuration
+      : 1;
+    const bands = animationBands(anim, 'windup', progress);
     return {
-      cells: rasterizeToCells(attack.warnShape, origin, attack.facing),
+      cells: maskCells(
+        rasterizeToCells(attack.warnShape, origin, attack.facing),
+        bands, anim, attack.warnShape, origin, attack.facing
+      ),
       char: '▒',
       color: attack.color,
       alpha: attack.alpha ?? 1.0,
     };
   }
-  if (attack.flashWhite && attack.flashTimer > 0) {
+
+  // Mid-beat: the sweep runs across the beat's active window. Drawing is tied
+  // to ACTIVE_DURATION rather than the shorter white-flash timer so a sweep
+  // gets the whole live window to cross the shape; the flash still decides the
+  // colour, so the "now" cue is unchanged.
+  const beatProgress = (attack.beatElapsed ?? 0) / ACTIVE_DURATION;
+  if (beatProgress <= 1) {
+    const bands = animationBands(anim, 'beat', beatProgress, attack.beatIndex ?? 0);
     return {
-      cells: rasterizeToCells(attack.hitShape, origin, attack.facing),
+      cells: maskCells(
+        rasterizeToCells(attack.hitShape, origin, attack.facing),
+        bands, anim, attack.hitShape, origin, attack.facing
+      ),
       char: '█',
-      color: '#ffffff',
+      color: (attack.flashWhite && attack.flashTimer > 0) ? '#ffffff' : attack.color,
       alpha: 1.0,
     };
   }
-  // Activated, waiting on a later pulse.
+
+  // Activated, waiting on a later beat.
   if (attack.pulseQueue && attack.pulseQueue.length > 0) {
     return {
       cells: rasterizeToCells(attack.warnShape, origin, attack.facing),
