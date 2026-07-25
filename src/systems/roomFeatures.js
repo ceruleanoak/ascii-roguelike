@@ -629,6 +629,66 @@ export function buildVaultInteriorLoot(bounds, shuffleFn) {
 }
 
 /**
+ * Can this object carry a vault key? The key only reaches the player when the
+ * object is destroyed, so the letter template's eligible-char list is necessary
+ * but not sufficient — an eligible char can still be an unbreakable *instance*,
+ * which would strand the key inside a rock nothing can break:
+ *   - obsidian rock variants ('0' with obsidian: true — 30% of formation rocks)
+ *   - tunnel entrance cap rocks (indestructible '0' structure)
+ * Obsidian is checked on its own because CombatSystem's melee path gates on
+ * obj.obsidian, not on the indestructible flag.
+ */
+export function isKeyDropEligible(obj, keyDropConfig) {
+  if (!keyDropConfig.eligibleObjects.includes(obj.char)) return false;
+  if (obj.indestructible || obj.obsidian || obj.hp === null || obj.destroyed) return false;
+  return true;
+}
+
+/**
+ * Roll a single freshly generated object for vault-key duty in K rooms.
+ */
+export function applyKeyDropLogic(gen, obj) {
+  const keyDropConfig = gen.currentLetterTemplate?.keyDrops;
+  if (!keyDropConfig?.enabled) return; // Not a K room
+
+  if (isKeyDropEligible(obj, keyDropConfig) && Math.random() < keyDropConfig.dropChance) {
+    // Mark this object as a key dropper
+    obj.dropsKey = true;
+    obj.keyChar = keyDropConfig.keyChar;
+  }
+}
+
+/**
+ * Ensure K rooms always have at least one key dropper (post-generation
+ * guarantee). Only objects that went through generation paths calling
+ * applyKeyDropLogic can already be marked, so this sweeps the whole room.
+ */
+export function ensureKeyDroppers(gen, room) {
+  const keyDropConfig = gen.currentLetterTemplate?.keyDrops;
+  if (!keyDropConfig?.enabled) return; // Not a K room
+
+  // Already have at least one key dropper — nothing to guarantee
+  if (room.backgroundObjects.some(obj => obj.dropsKey === true)) return;
+
+  // No key droppers yet — find all eligible objects. Char match alone is not
+  // enough: mineral formations mix unbreakable obsidian rocks in with normal
+  // ones under the same '0' char, and picking one here hides the key forever.
+  const eligibleObjects = room.backgroundObjects.filter(obj =>
+    isKeyDropEligible(obj, keyDropConfig)
+  );
+
+  if (eligibleObjects.length === 0) {
+    console.warn(`[Key Room] No breakable objects found for key drops! Room may be un-completable.`);
+    return;
+  }
+
+  // Mark 1 random eligible object as guaranteed key dropper
+  const obj = eligibleObjects[Math.floor(Math.random() * eligibleObjects.length)];
+  obj.dropsKey = true;
+  obj.keyChar = keyDropConfig.keyChar;
+}
+
+/**
  * Bats spawn as one flock per room: depth-scaled size (max 5), clustered
  * around a single anchor, sharing one roost/flight mode roll. Perched flocks
  * start dormant ('rest') and settle onto trees/stumps via FlockMechanic;
