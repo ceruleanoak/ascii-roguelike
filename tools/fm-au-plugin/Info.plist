@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hand-written, complete AUv2 Info.plist.
+
+  Apple's AudioUnitSDK ships only an .xcodeproj, and its demo Info.plist is
+  Xcode-variable-templated ($(EXECUTABLE_NAME) etc.) and omits the AudioComponents
+  array entirely, because Xcode's AU target injects that from project build
+  settings. We have no Xcode, so every key here is spelled out literally.
+
+  `factoryFunction` must match the symbol AUSDK_COMPONENT_ENTRY generates in
+  Source/PluginEntry.cpp: the class name with "Factory" appended.
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>FMVoice</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.ceruleanoak.fmvoice</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>FMVoice</string>
+	<key>CFBundlePackageType</key>
+	<string>BNDL</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+	<key>CFBundleVersion</key>
+	<string>65536</string>
+	<key>AudioComponents</key>
+	<array>
+		<dict>
+			<key>type</key>
+			<string>aumu</string>
+			<key>subtype</key>
+			<string>Fmv1</string>
+			<key>manufacturer</key>
+			<string>Cok1</string>
+			<key>name</key>
+			<string>CeruleanOak: FMVoice</string>
+			<key>description</key>
+			<string>DX7 6-operator FM synthesis instrument</string>
+			<key>factoryFunction</key>
+			<string>DX7AudioUnitFactory</string>
+			<key>version</key>
+			<integer>65536</integer>
+			<key>sandboxSafe</key>
+			<true/>
+		</dict>
+	</array>
+</dict>
+</plist>
