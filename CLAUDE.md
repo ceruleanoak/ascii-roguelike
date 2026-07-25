@@ -213,6 +213,7 @@ main.js reached ~8,000 lines because behavior with "no obvious home" defaulted i
    - After extracting, run `node tools/check-architecture.js --update` to lock in the new, smaller ceiling.
    - **Only raise a budget when the extraction search comes up genuinely empty** — the addition is dispatch-only/data-only glue with nothing left to route out — and say so explicitly rather than silently padding the number.
    - **When moving a subsystem or method, grep for every call site first** (not just the one you're touching) and update all of them in the same pass — a partial move leaves stale duplicate logic behind, which is worse than not moving it at all.
+   - **Libraries are not budgeted** and must never be added to `arch-budgets.json` — `src/data/*.js`, `src/entities/Item.js` (attack-pattern factory), and any other file that is a catalogue rather than an owner of live behavior. A library grows with the amount of content it catalogues, so capping it only pushes new content somewhere less obvious. Budgets exist to catch behavior defaulting into a file that has no business owning it; that failure mode doesn't apply to a catalogue. Budget orchestrators, systems, renderers, and entities that own live state.
 
 ## Architectural Compromises
 

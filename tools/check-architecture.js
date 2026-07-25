@@ -10,6 +10,14 @@
 // - `npm run build` runs this check; exceeding any budget fails the build.
 // - The fix for a failure is to route the new code into a system file —
 //   never to raise the budget by hand.
+// - Libraries are NOT budgeted and must not be added to arch-budgets.json.
+//   A library grows with the amount of content it catalogues, not with drifting
+//   behavior — Item.js, for instance, is an attack-pattern factory whose size
+//   tracks the number of weapon patterns, so capping it would only push new
+//   patterns somewhere less obvious. Budgets exist to catch behavior defaulting
+//   into a file that has no business owning it; that failure mode doesn't apply
+//   to a catalogue. Budget orchestrators, systems, renderers and entities that
+//   own live state instead.
 // - Budgets only move DOWN: after an extraction shrinks a file, run
 //   `node tools/check-architecture.js --update` to lock in the new ceiling
 //   (current char count + HEADROOM, never above the old budget).
