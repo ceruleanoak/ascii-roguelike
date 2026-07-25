@@ -147,12 +147,39 @@ programming terms.
   *reads* — as distinct from the shape that actually deals damage. A Telegraph's warn shape may
   be wider than its hit shape (the warning aids anticipation; it is not a 1:1 damage outline),
   and may carry multiple timed damage pulses.
-- **In code:** enemy data block `telegraph: { warnShape, hitShape, pulses }`; shared geometry
-  module `src/game/Telegraph.js` (shape descriptors `rect`/`cone`/`ring`/`circle`, `hitTest`,
-  `rasterizeToCells`) consumed by CombatSystem, ExploreRenderer, and the enemy-editor sandbox.
+- **In code:** enemy data block `telegraph: { shape, animation, beatDamage }` naming a preset
+  and a Telegraph Animation, or `{ warnShape, hitShape, pulses }` written out longhand when no
+  preset fits; shared module `src/game/Telegraph.js` (shape descriptors
+  `rect`/`cone`/`ring`/`circle`, `hitTest`, `drawTelegraph`) consumed by CombatSystem,
+  ExploreRenderer, and the enemy-editor sandbox.
 - **Not:** "windup" (the timing phase of Weapon Timing — a Telegraph is the projected *shape*
   shown during a windup); the legacy single-rect windup visual (which is both warning and
   hitbox at once).
+
+### Telegraph Animation
+- **Definition:** The named choreography of a Telegraph, in two halves: the **tell** — the
+  warned area, still and blinking in place, which says *where* — and the **strike**, a thin
+  stroke sweeping through that area, which says *now*. Motion belongs to the strike alone.
+  Because an Animation declares its Beats, choosing one is a balance decision, not an art
+  decision: `doubleSweep` damages twice where `sweep` damages once.
+- **In code:** the `ANIMATIONS` catalog in `src/game/TelegraphAnimation.js` (`blink`, `clap`,
+  `vertical`, `slap`, `bloom`, `sweep`, `doubleSweep`, `thrust`, `recoil`, `radiate`,
+  `closeIn`, `revolve`), named in data as `telegraph.animation`; `strikeGeometry` reports the
+  stroke in the shape's local frame and `Telegraph.drawTelegraph` draws both halves.
+- **Not:** decoration layered over a separately authored rhythm — declaring `pulses` alongside
+  an Animation is an authoring conflict, and the Animation wins. Not "sweep" as a generic word
+  for Telegraph motion (`sweep` is one specific Animation).
+
+### Beat
+- **Definition:** One damage hit within a Telegraph Animation. Beat 0 lands on release; each
+  later Beat re-arms the attack after its gap. Beats are the authored rhythm and compile
+  directly into the pulses combat resolves against, so what the player watches and what
+  connects cannot drift apart.
+- **In code:** `animation.beats[]` (`gap` in double-seconds, `reverse` to flip that Beat's
+  direction); `compilePulses` turns them into `attack.telegraphPulses`; per-Beat damage via
+  `telegraph.beatDamage[]`; live state `attack.beatIndex` / `attack.beatElapsed`.
+- **Not:** "pulse" — that is the compiled runtime form a Beat becomes; Beat is the authoring
+  term. Not a frame or a timer tick.
 
 ### Rage
 - **Definition:** A Mechanic state in which an Enemy becomes dramatically more dangerous after
