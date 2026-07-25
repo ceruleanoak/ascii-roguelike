@@ -16,7 +16,7 @@
   // Web Worker that runs the same msfa module headless for sample-exact offline
   // render (workers permit synchronous WASM compile; the main thread does not).
   var MSFA_WORKER_SRC = [
-    'var W, inst, audiobus, out0, BUF=128, on_patch, on_midi, on_process;',
+    'var W, inst, audiobus, out0, BUF=128, on_patch, on_midi, on_process, lastNote=null;',
     'self.onmessage=function(e){var d=e.data;try{',
     '  if(d.type==="init"){',
     '    self.AudioWorkletGlobalScope={};',
@@ -33,7 +33,7 @@
     '    for(var c=0;c<2;c++){var b=W._malloc(BUF*4); W.setValue(obufs+c*4,b,"i32"); if(c===0)out0=b/4;}',
     '    self.postMessage({type:"ready"});',
     '  } else if(d.type==="render"){',
-    '    on_midi(inst,0xB0,123,0);',                       // reset any lingering voices
+    '    if(lastNote!=null) on_midi(inst,0x80,lastNote,0); lastNote=d.note;',   // release the prior render's note (CC 123 is ignored by this engine)
     '    var pk=d.packed, pb=W._malloc(pk.length); for(var i=0;i<pk.length;i++) W.setValue(pb+i,pk[i],"i8"); on_patch(inst,pb,pk.length); W._free(pb);',
     '    on_midi(inst,0x90,d.note,d.vel);',
     '    var total=Math.ceil((d.dur+d.release)*d.sr), offN=Math.floor(d.dur*d.sr), pcm=new Float32Array(total), pos=0, off=false;',
@@ -43,7 +43,7 @@
     '}catch(err){ self.postMessage({type:"error",message:String(err&&err.message||err)}); }};'
   ].join('\n');
 
-  function MsfaEngine() { this.ctx = null; this.node = null; this.master = null; this.ready = false; }
+  function MsfaEngine() { this.ctx = null; this.node = null; this.master = null; this.ready = false; this._sounding = {}; }
 
   // opts: { context?, sources:{wasm,dx7,wamproc,awp}, masterGain? }
   MsfaEngine.prototype.init = function (opts) {
@@ -77,11 +77,25 @@
     this.node.port.postMessage({ type: 'patch', data: Syx.packVoice(v) }); // 128-byte packed voice
   };
   MsfaEngine.prototype.loadPatch = function (v) { this.loadVCED(v); };
+  // Sounding-note bookkeeping exists purely so allNotesOff can work — see below.
   MsfaEngine.prototype.noteOn = function (note, vel) {
-    if (this.node) this.node.port.postMessage({ type: 'midi', data: [0x90, note & 0x7f, (vel == null ? 100 : Math.max(1, Math.min(127, vel | 0)))] });
+    if (!this.node) return;
+    this._sounding[note & 0x7f] = true;
+    this.node.port.postMessage({ type: 'midi', data: [0x90, note & 0x7f, (vel == null ? 100 : Math.max(1, Math.min(127, vel | 0)))] });
   };
-  MsfaEngine.prototype.noteOff = function (note) { if (this.node) this.node.port.postMessage({ type: 'midi', data: [0x80, note & 0x7f, 0] }); };
-  MsfaEngine.prototype.allNotesOff = function () { if (this.node) this.node.port.postMessage({ type: 'midi', data: [0xB0, 123, 0] }); };
+  MsfaEngine.prototype.noteOff = function (note) {
+    delete this._sounding[note & 0x7f];
+    if (this.node) this.node.port.postMessage({ type: 'midi', data: [0x80, note & 0x7f, 0] });
+  };
+  // The vendored WebDX7 WASM ignores CC 123 (All Notes Off) entirely — verified by
+  // holding a sustaining voice and sending it: the tail stays at 100% of the held
+  // level, while an explicit 0x80 releases normally. So panic has to be one
+  // note-off per sounding note, which is why noteOn/noteOff keep the set above.
+  MsfaEngine.prototype.allNotesOff = function () {
+    var self = this, notes = Object.keys(this._sounding);
+    this._sounding = {};
+    if (this.node) notes.forEach(function (n) { self.node.port.postMessage({ type: 'midi', data: [0x80, n & 0x7f, 0] }); });
+  };
   MsfaEngine.prototype.setMasterGain = function (g) { if (this.master) this.master.gain.value = g; };
 
   MsfaEngine.prototype._ensureRenderWorker = function () {

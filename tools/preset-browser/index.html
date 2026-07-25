@@ -254,20 +254,20 @@
     function noteOn(note, vel) { ensureAudio().then(function () { engine.resume(); engine.noteOn(note, vel || 100); }); setKeyVisual(note, true); }
     function noteOff(note) { if (engine) engine.noteOff(note); setKeyVisual(note, false); }
     function panic() {
-      if (engine) {
-        engine.allNotesOff();
-        if (previewNote != null) engine.noteOff(previewNote);
-        Object.keys(qwertyDown).forEach(function (k) { if (QWERTY[k] !== undefined) engine.noteOff((baseOctave + 1) * 12 + QWERTY[k]); });
-      }
-      previewNote = null; qwertyDown = {};
+      clearTimeout(auditionTimer); auditionToken++;   // cancel any pending audition note-on/off
+      // The engine releases every voice it has sounding, so this also clears notes
+      // the UI has lost track of — no need to replay our own note bookkeeping at it.
+      if (engine) engine.allNotesOff();
+      previewNote = null; qwertyDown = {}; dragNote = null; pianoDrag = false;
       document.querySelectorAll('.key.on').forEach(function (k){k.classList.remove('on');});
       status('Panic — all notes off.');
     }
     var auditionToken = 0, playVel = 100, previewNote = null;   // global play velocity + the note currently previewing
     function stopPreview() {                  // synchronously stop the prior preview note (so switching kills it now)
       clearTimeout(auditionTimer);
-      if (engine) { engine.allNotesOff(); if (previewNote != null) engine.noteOff(previewNote); }
-      if (previewNote != null) setKeyVisual(previewNote, false);
+      // Only the preview note — allNotesOff would also cut keys the player is
+      // holding down while they scan through the list. Panic is the wide hammer.
+      if (previewNote != null) { if (engine) engine.noteOff(previewNote); setKeyVisual(previewNote, false); }
       previewNote = null;
     }
     function playSelected(force) {            // (re)play the selected patch at playVel
@@ -799,6 +799,11 @@
         keyEls[note] = k; piano.appendChild(k);
       }
       piano.style.width = (wi * whiteW) + 'px';
+      // The rebuild discards the old key elements, so re-light anything still held
+      // (an octave switch mid-note leaves the note sounding — it releases on keyup).
+      Object.keys(qwertyDown).forEach(function (k) { setKeyVisual(qwertyDown[k], true); });
+      if (dragNote != null) setKeyVisual(dragNote, true);
+      if (previewNote != null) setKeyVisual(previewNote, true);
     }
     function setKeyVisual(note, on) { var k = keyEls[note]; if (k) k.classList.toggle('on', on); }
 
@@ -829,8 +834,12 @@
       if (e.key === '=' || e.key === '+') { setOctave(baseOctave + 1); return; }
       if (qwertyPlay) {                       // play mode — keys are the synth keyboard
         var key = e.key.toLowerCase();
-        if (e.repeat || qwertyDown[key] || QWERTY[key] === undefined) return;
-        qwertyDown[key] = true; noteOn((baseOctave + 1) * 12 + QWERTY[key], e.ctrlKey ? 127 : playVel);
+        if (e.repeat || qwertyDown[key] != null || QWERTY[key] === undefined) return;
+        // Remember the note this key actually sounded — the octave can change while
+        // it is held, and keyup must release what was played, not what the key maps
+        // to now (otherwise the original note is stranded, sounding forever).
+        qwertyDown[key] = (baseOctave + 1) * 12 + QWERTY[key];
+        noteOn(qwertyDown[key], e.ctrlKey ? 127 : playVel);
         return;
       }
       // browse-mode shortcuts (suspended in play mode, so no conflict)
@@ -841,8 +850,8 @@
       if (/^[0-5]$/.test(e.key)) { setRating(currentPid, +e.key); return; }
     });
     document.addEventListener('keyup', function (e) {
-      var key = e.key.toLowerCase(); if (QWERTY[key] === undefined || !qwertyDown[key]) return;
-      qwertyDown[key] = false; noteOff((baseOctave + 1) * 12 + QWERTY[key]);
+      var key = e.key.toLowerCase(); if (qwertyDown[key] == null) return;
+      var note = qwertyDown[key]; delete qwertyDown[key]; noteOff(note);
     });
     els.search.oninput = (function () { var t; return function () { clearTimeout(t); t = setTimeout(renderList, 110); }; })();
     els.search.onkeydown = function (e) {
