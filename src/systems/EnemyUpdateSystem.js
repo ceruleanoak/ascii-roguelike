@@ -294,7 +294,7 @@ export class EnemyUpdateSystem {
     }
 
     if (updateResult.shouldBuff) {
-      game._applyShamanBuff(updateResult.buffData, game._activeEnemies());
+      this._applyShamanBuff(updateResult.buffData, game._activeEnemies());
     }
 
     if (updateResult.shouldLure) {
@@ -328,6 +328,27 @@ export class EnemyUpdateSystem {
             && Math.abs(ecy - p.position.y) < halfBody + p.radius;
       });
       enemy.speed = onGoo ? baseSpeed * 2 : baseSpeed;
+    }
+  }
+
+  // Apply Shaman buff to nearby allied enemies
+  _applyShamanBuff(buffData, allEnemies) {
+    const { position, radius, buffs, speedMultiplier, damageMultiplier, buffDuration, caster } = buffData;
+    const buff = buffs[Math.floor(Math.random() * buffs.length)];
+
+    for (const enemy of allEnemies) {
+      if (enemy === caster) continue;
+      const dx = enemy.position.x - position.x;
+      const dy = enemy.position.y - position.y;
+      if (Math.sqrt(dx * dx + dy * dy) > radius) continue;
+
+      if (buff === 'speed') {
+        enemy._shamBuff = { type: 'speed', multiplier: speedMultiplier, timer: buffDuration, baseSpeed: enemy.speed };
+        enemy.speed = enemy.data.speed * speedMultiplier;
+      } else if (buff === 'damage') {
+        enemy._shamBuff = { type: 'damage', multiplier: damageMultiplier, timer: buffDuration, baseDamage: enemy.damage };
+        enemy.damage = Math.ceil(enemy.data.damage * damageMultiplier);
+      }
     }
   }
 

@@ -7,6 +7,7 @@
  *   columns, widening to 3 columns if the roster won't fit in 2
  * - Rows that still don't fit the box are dropped in favor of a "+N MORE"
  *   indicator rather than overflowing past the border
+ * - Show the run timer (RunTimerSystem) in the top-right corner
  * - Identical in EXPLORE and REST — always the combined pool
  */
 
@@ -152,6 +153,18 @@ export class InventoryOverlay {
       spectaclesTransformString('INVENTORY', spectaclesOn),
       COLORS.TEXT
     );
+
+    // Run timer, top-right of the box on the title row. Bare digits, no label —
+    // the overlay is non-instructive. Not run through the Spectacles cipher:
+    // that mapping is letters-only, so digits and ':' would pass through as-is.
+    this.renderer.fgCtx.fillStyle = COLORS.TEXT;
+    this.renderer.fgCtx.textAlign = 'right';
+    this.renderer.fgCtx.fillText(
+      game.runTimerSystem.format(),
+      GRID.WIDTH - GRID.CELL_SIZE * 3,
+      GRID.CELL_SIZE * 3
+    );
+    this.renderer.fgCtx.textAlign = 'center';
 
     const startY = GRID.CELL_SIZE * 5;
     const lineHeight = GRID.CELL_SIZE * 1.5;

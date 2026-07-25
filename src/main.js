@@ -48,6 +48,7 @@ import { WellSystem } from './systems/WellSystem.js';
 import { LavaAscentSystem } from './systems/LavaAscentSystem.js';
 import { HuntingSystem } from './systems/HuntingSystem.js';
 import { WarpSystem } from './systems/WarpSystem.js';
+import { RunTimerSystem } from './systems/RunTimerSystem.js';
 import { PuzzleSystem } from './systems/PuzzleSystem.js';
 import { LightningStrikeSystem } from './systems/LightningStrikeSystem.js';
 import { SandstormSystem } from './systems/SandstormSystem.js';
@@ -180,6 +181,7 @@ class Game {
     this.lavaAscentSystem = new LavaAscentSystem(this);
     this.huntingSystem = new HuntingSystem(this);
     this.warpSystem = new WarpSystem(this);
+    this.runTimerSystem = new RunTimerSystem();
     this.fountainSystem = new FountainSystem(this);
     this.puzzleSystem = new PuzzleSystem(this);
     this.lightningStrikeSystem = new LightningStrikeSystem(this);
@@ -859,6 +861,7 @@ class Game {
     this.preMinibossGateActive = false;
     this.knownSpells?.clear?.();
     this.blueZoneRoom = 0;
+    this.runTimerSystem.clear(); // No run in progress on TITLE — next REST entry starts a fresh timer
 
     // No player needed for title screen
     this.player = null;
@@ -1116,6 +1119,9 @@ class Game {
 
   enterRestState() {
     // Note: exitPathHistory persists for future secret pattern tracking
+
+    // First REST of a run starts the run timer; later returns from EXPLORE leave it running
+    this.runTimerSystem.beginIfIdle();
 
     // Cancel any in-progress trap throw
     this.trapSystem.cancelTrapCharge();
@@ -2315,27 +2321,6 @@ class Game {
     for (let i = 0; i < RING_TILES; i++) {
       const a = (i / RING_TILES) * Math.PI * 2;
       this._dropTrailTile(x + Math.cos(a) * RING_RADIUS, y + Math.sin(a) * RING_RADIUS, type, p, life);
-    }
-  }
-
-  // Apply Shaman buff to nearby allied enemies
-  _applyShamanBuff(buffData, allEnemies) {
-    const { position, radius, buffs, speedMultiplier, damageMultiplier, buffDuration, caster } = buffData;
-    const buff = buffs[Math.floor(Math.random() * buffs.length)];
-
-    for (const enemy of allEnemies) {
-      if (enemy === caster) continue;
-      const dx = enemy.position.x - position.x;
-      const dy = enemy.position.y - position.y;
-      if (Math.sqrt(dx * dx + dy * dy) > radius) continue;
-
-      if (buff === 'speed') {
-        enemy._shamBuff = { type: 'speed', multiplier: speedMultiplier, timer: buffDuration, baseSpeed: enemy.speed };
-        enemy.speed = enemy.data.speed * speedMultiplier;
-      } else if (buff === 'damage') {
-        enemy._shamBuff = { type: 'damage', multiplier: damageMultiplier, timer: buffDuration, baseDamage: enemy.damage };
-        enemy.damage = Math.ceil(enemy.data.damage * damageMultiplier);
-      }
     }
   }
 
@@ -4175,6 +4160,9 @@ class Game {
     // on, since cheatMenu.godMode persists and is reapplied to the new Player.
     this.runId = newRunId();
     this.cheatUsed = !!this.cheatMenu.godMode;
+
+    // New run → clock back to zero; the REST transition at the end restarts it
+    this.runTimerSystem.clear();
 
     // Reset Spectacles key-item run-flag (Maze clear-without-a-ghost reward)
     this.spectaclesObtainedThisRun = false;
