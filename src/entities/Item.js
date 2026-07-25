@@ -1080,7 +1080,14 @@ export class Item {
     const baseAngle = Math.atan2(player.facing.y, player.facing.x);
     const distance = this.data.range ?? GRID.CELL_SIZE * 0.5;
     const patternSpeed = this.data.patternSpeed || 0.05;
-    const stabs = 3;
+    // A stab is a single strike by default. `doubleHit` is the opt-in weapon
+    // variable that turns one swing into a two-stab combo — it is deliberately
+    // off on the base dagger, which stabs once like any other melee weapon.
+    const stabs = this.data.doubleHit ? 2 : 1;
+    // Both stabs of a double-hit share one burst id so the follow-up lands
+    // inside the enemy iframes the first stab opened (same mechanism the
+    // multi-bullet weapons use). Without it the second stab is cosmetic.
+    const attackId = stabs > 1 ? `burst_${_nextAttackId++}` : undefined;
 
     // Daggers benefit from oil augments (onHit override only — speed is bow-specific)
     const isDagger = this.data.weaponSubtype === 'dagger';
@@ -1091,8 +1098,8 @@ export class Item {
     const multistabChar = this.data.meleeChar || this.char;
     const multistabDrawAngle = this.getMeleeDrawAngle(multistabChar, baseAngle);
     // Combo finisher: only the final stab applies knockback (and full hitstop).
-    // The earlier stabs use a light hitstop so they don't eat the finisher's
-    // 0.2s knockback window the way 3 full hitstops do.
+    // Any earlier stab uses a light hitstop so it doesn't eat the finisher's
+    // 0.2s knockback window the way stacked full hitstops do.
     for (let i = 0; i < stabs; i++) {
       const isFinisher = (i === stabs - 1);
       attacks.push({
@@ -1112,7 +1119,8 @@ export class Item {
         hitstop: isFinisher ? 0.06 : 0.02,
         lifesteal: this.data.lifesteal,
         owner: player,
-        shooterPlane: player.plane
+        shooterPlane: player.plane,
+        attackId
       });
     }
 

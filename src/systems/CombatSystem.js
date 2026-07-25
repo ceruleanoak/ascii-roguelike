@@ -1048,7 +1048,10 @@ export class CombatSystem {
 
             const critRoll = this._applyCritIfLucky(totalDamage, attack.owner);
             const finalDamage = critRoll.damage;
-            const damaged = enemy.takeDamage(finalDamage);
+            // Melee hitboxes normally carry no burst id (undefined → iframes
+            // block every follow-up), so only an explicitly-bursted pattern
+            // like the doubleHit stab combo can land more than once per swing.
+            const damaged = enemy.takeDamage(finalDamage, attack.attackId);
             if (damaged === true && attack.isBlade) enemy.killedByBlade = true;
             if (damaged !== false) {
               // Generic hit-landed signal — FlailSystem resets its spin ramp on this.
