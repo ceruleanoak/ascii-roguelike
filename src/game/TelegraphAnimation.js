@@ -322,7 +322,17 @@ function widenBands(bands, shape, axis) {
   const minWidth = (MIN_BAND_CELLS * CELL) / extent; // back into normalized units
   return bands.map(([a, b]) => {
     const grow = Math.max(0, minWidth - (b - a)) / 2;
-    return [a - grow, b + grow];
+    let lo2 = a - grow, hi2 = b + grow;
+    // Whatever hangs off the end of the axis is width spent on nothing, and on
+    // a short axis the remainder is again too thin to catch a cell centre. Slide
+    // the band back inside instead of letting it bleed off the edge. `travel`
+    // therefore reads as a short dwell at each end rather than a hole in the
+    // tell — the only honest option when the whole axis is two cells wide.
+    if (hi2 - lo2 <= 1) {
+      if (lo2 < 0) { hi2 -= lo2; lo2 = 0; }
+      else if (hi2 > 1) { lo2 -= hi2 - 1; hi2 = 1; }
+    }
+    return [lo2, hi2];
   });
 }
 
