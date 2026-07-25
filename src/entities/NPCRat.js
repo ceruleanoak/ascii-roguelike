@@ -24,6 +24,10 @@ const MAX_HP = 5;                          // 3 hits to flee + 2 hp buffer
 const HIT_FLEE_DURATION = 1.5;             // short retreat after each hit
 const PERMA_FLEE_HIT_THRESHOLD = 3;
 const INVULNERABILITY_DURATION = 0.5;
+// Hard cap on the perma-flee run. permaFlee gates both takeDamage and enemy
+// targeting, so a rat that never arrives is a permanently invulnerable prop
+// standing in the room — this guarantees the despawn regardless of arrival.
+const PERMA_FLEE_TIMEOUT = 4.0;
 
 const SPEED = 110;                         // > wild rat (50) so it catches up and disengages cleanly
 // Match wild-rat range so closing distance feels honest. No windup (unlike
@@ -64,8 +68,10 @@ export class NPCRat {
     this.state = 'idle';
     this.target = null;
     this.fleeTimer = 0;
+    this.fleeFromPos = null;
     this.fleeTargetPos = null;
     this.fleeReached = false;
+    this.permaFleeTimer = 0;
 
     // Physics flags so PhysicsSystem treats us like a normal collide-able mover.
     this.hasCollision = true;
@@ -110,8 +116,10 @@ export class NPCRat {
     this.state = 'idle';
     this.target = null;
     this.fleeTimer = 0;
+    this.fleeFromPos = null;
     this.fleeTargetPos = null;
     this.fleeReached = false;
+    this.permaFleeTimer = 0;
     if (game) {
       this.game = game;
       this.room = game.currentRoom;
@@ -140,8 +148,9 @@ export class NPCRat {
       if (this.fleeTimer <= 0) {
         this.state = 'idle';
         this.target = null;
-      } else if (this.target) {
-        this._fleeFromTarget(deltaTime);
+        this.fleeFromPos = null;
+      } else if (this.fleeFromPos || this.target) {
+        this._fleeFromThreat();
         this._applySeparation(siblings);
         return null;
       }
@@ -197,11 +206,18 @@ export class NPCRat {
 
   // Damage handler — counts hits, triggers flee, returns truthy on damage.
   // 3rd hit kicks the rat into permaFlee; below that, 1.5s short retreat.
-  takeDamage(amount) {
+  //
+  // `attacker` is the entity that landed the hit (enemy melee/projectile owner).
+  // The retreat needs its own direction: `this.target` is only the nearest
+  // hostile inside AGGRO_RANGE, so a rat shot from further out — or one whose
+  // target just died — used to have nothing to run from and simply stood there.
+  takeDamage(amount, attacker = null) {
     if (this.invulnerabilityTimer > 0) return false;
     if (this.state === 'permaFlee') return false;
     this.hitsThisRoom++;
     this.invulnerabilityTimer = INVULNERABILITY_DURATION;
+    const from = attacker?.position || this.target?.position || null;
+    this.fleeFromPos = from ? { x: from.x, y: from.y } : null;
     this.game?.audioSystem?.playSFX?.('enemy_hit');
     if (this.hitsThisRoom >= PERMA_FLEE_HIT_THRESHOLD) {
       this._startPermaFlee();
@@ -270,15 +286,30 @@ export class NPCRat {
     return null;
   }
 
-  _fleeFromTarget(deltaTime) {
-    const t = this.target;
-    if (!t) return;
-    const dx = this.position.x - t.position.x;
-    const dy = this.position.y - t.position.y;
-    const d = Math.hypot(dx, dy) || 1;
+  // Retreat straight away from the recorded hit origin, falling back to the
+  // current target so a rat that re-acquires mid-retreat still runs the right
+  // way.
+  _fleeFromThreat() {
+    const from = this.fleeFromPos || this.target?.position;
+    if (!from) return;
+    const dx = this.position.x - from.x;
+    const dy = this.position.y - from.y;
+    const d = Math.hypot(dx, dy);
+    let dirX;
+    let dirY;
+    if (d < 0.001) {
+      // Struck from exactly on top of us — no usable direction, so hold the
+      // heading we already had rather than normalizing zero into garbage.
+      const vd = Math.hypot(this.velocity.vx, this.velocity.vy) || 1;
+      dirX = this.velocity.vx / vd;
+      dirY = this.velocity.vy / vd;
+    } else {
+      dirX = dx / d;
+      dirY = dy / d;
+    }
     const speed = SPEED * FLEE_SPEED_MULT;
-    this.targetVelocity.vx = (dx / d) * speed;
-    this.targetVelocity.vy = (dy / d) * speed;
+    this.targetVelocity.vx = dirX * speed;
+    this.targetVelocity.vy = dirY * speed;
     this.velocity.vx = this.targetVelocity.vx;
     this.velocity.vy = this.targetVelocity.vy;
   }
@@ -309,9 +340,10 @@ export class NPCRat {
   _startPermaFlee() {
     this.state = 'permaFlee';
     this.fleeReached = false;
+    this.permaFleeTimer = 0;
     const exits = this.game?.currentRoom?.exits;
     if (!exits) {
-      this.fleeTargetPos = null;
+      this.fleeTargetPos = this._nearestEdgePoint();
       return;
     }
     const centerX = Math.floor(GRID.COLS / 2);
@@ -332,10 +364,39 @@ export class NPCRat {
       const d = dx * dx + dy * dy;
       if (d < nearestDist) { nearestDist = d; nearest = ep; }
     }
-    this.fleeTargetPos = nearest;
+    // Rooms can have every exit closed (linear-spine blue rooms kill east/west
+    // and can kill north; noRest zones have no south). Head for the nearest
+    // wall instead — the rat can't leave through it, but the run reads as
+    // fleeing rather than freezing mid-room, and the timeout ends it either way.
+    this.fleeTargetPos = nearest || this._nearestEdgePoint();
+  }
+
+  // Nearest point on the room's inner border, using the same one-cell inset as
+  // the exit positions above.
+  _nearestEdgePoint() {
+    const minX = 2 * GRID.CELL_SIZE;
+    const minY = 2 * GRID.CELL_SIZE;
+    const maxX = (GRID.COLS - 3) * GRID.CELL_SIZE;
+    const maxY = (GRID.ROWS - 3) * GRID.CELL_SIZE;
+    const { x, y } = this.position;
+    const candidates = [
+      { d: x - minX, p: { x: minX, y } },
+      { d: maxX - x, p: { x: maxX, y } },
+      { d: y - minY, p: { x, y: minY } },
+      { d: maxY - y, p: { x, y: maxY } }
+    ];
+    return candidates.reduce((a, b) => (b.d < a.d ? b : a)).p;
   }
 
   _updatePermaFlee(deltaTime) {
+    // The exit run is a straight steer with no pathfinding — PhysicsSystem just
+    // zeroes the blocked axis — so scenery on the way can park the rat short of
+    // its target forever. Since permaFlee gates takeDamage and enemy targeting,
+    // that leaves an invulnerable rat standing in the room until the player
+    // changes rooms. Time-box the run so the despawn always happens.
+    this.permaFleeTimer += deltaTime;
+    if (this.permaFleeTimer >= PERMA_FLEE_TIMEOUT) this.fleeReached = true;
+
     if (!this.fleeTargetPos || this.fleeReached) {
       this.velocity.vx = 0;
       this.velocity.vy = 0;

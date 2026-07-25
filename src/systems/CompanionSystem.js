@@ -218,7 +218,7 @@ export class CompanionSystem {
         const dy = p.position.y - cy;
         const r = GRID.CELL_SIZE * 0.6 + Math.min(rat.width, rat.height) / 2;
         if (dx * dx + dy * dy < r * r) {
-          rat.takeDamage(p.damage || 1);
+          rat.takeDamage(p.damage || 1, p.owner);
           projs.splice(i, 1);
           cs.createDamageNumber?.(p.damage || 1, rat.position.x, rat.position.y, rat.color);
           break;
@@ -240,7 +240,9 @@ export class CompanionSystem {
           ay < rat.position.y + rat.height && ay + ah > rat.position.y
         ) {
           m.hasHit = true;
-          rat.takeDamage(m.damage || 1);
+          // Pass the swinging enemy, not the hitbox: the hitbox sits on top of
+          // the rat, which gives the retreat no direction to run in.
+          rat.takeDamage(m.damage || 1, m.owner);
           cs.createDamageNumber?.(m.damage || 1, rat.position.x, rat.position.y, rat.color);
           break;
         }
