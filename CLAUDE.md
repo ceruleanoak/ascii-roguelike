@@ -32,6 +32,17 @@ Single dev, no PR review — commits and pushes exist for the audit trail, so ke
 - Work happens directly on `main` (no feature-branch requirement for this project) — push straight after validating.
 - Don't hold commits back to bundle "related" work unless it's genuinely one atomic change — prefer more, smaller commits over fewer, larger ones.
 
+### Push only your own work
+
+The user edits files in this repo **in parallel** with the agent, so the working tree routinely holds changes the agent did not make. Since git pushes *commits*, not files, the safeguard is narrow staging plus checking what is actually outgoing:
+
+1. **Run `git status --short` and account for every entry** before staging. Anything you cannot attribute to your own edits stays unstaged.
+2. **Stage by explicit path** — `git add <paths>`. Never `git add -A`, `git add .`, or `git commit -a`.
+3. **Verify the outgoing list**: `git log origin/main..HEAD --oneline` must contain nothing but your own commits. If it doesn't, stop and ask.
+4. **Push with an explicit refspec**: `git push origin HEAD:main`, not a bare `git push`.
+5. **A file that mixes your change with the user's in-flight edit is not yours to commit.** Leave it in the working tree and say so in your reply — don't partially stage it, and don't commit around it in a way that leaves a broken intermediate commit.
+6. Mention any unstaged leftovers explicitly so the user knows what's still pending.
+
 ## Deploying
 
 ```
