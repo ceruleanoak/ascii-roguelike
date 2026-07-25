@@ -86,6 +86,15 @@ export class AudioSystem {
     this.visibilityChangeListener = null;
     this.masterVolume = 0.7;
 
+    // Auto-resume throttle — see armAutoResume for why both guards exist.
+    this._resumeInFlight = false;
+    this._lastResumeAttempt = 0;
+
+    // Wedged-context watchdog — see armStallWatchdog.
+    this._stallWatchdogTimer = null;
+    this._lastWatchdogTime = -1;
+    this._stallReported = false;
+
     // Tracks which zone's music is currently loaded (for zone-specific music switching)
     this.currentMusicZone = 'green';
 
@@ -141,6 +150,7 @@ export class AudioSystem {
     this.sfxGain.connect(this.audioContext.destination);
 
     this.armAutoResume();
+    this.armStallWatchdog();
 
     try {
       const audioData = await this.fetchAudioBuffer(audioPath);
@@ -166,9 +176,26 @@ export class AudioSystem {
     // particular) re-suspend the context when the tab is hidden or backgrounded,
     // so a one-shot listener that disarms on first success will miss future
     // suspensions. The listener is cheap — it only calls resume() when needed.
+    // Throttled: at most one resume() attempt per RESUME_RETRY_MS, and never a
+    // second while the first is still pending. Both guards matter because the
+    // listener is bound to keydown — keyboard auto-repeat fires ~30 events/sec
+    // while a movement key is held, so a context that gets suspended mid-session
+    // (device change, power event) would otherwise receive an unbounded stream
+    // of concurrent resume() calls against the very stream we're trying to
+    // recover, for as long as the player keeps holding a key.
+    const RESUME_RETRY_MS = 1000;
     const tryResume = () => {
       if (!this.audioContext || this.audioContext.state === 'running') return;
-      this.audioContext.resume().catch(() => {});
+      if (this._resumeInFlight) return;
+
+      const now = performance.now();
+      if (now - this._lastResumeAttempt < RESUME_RETRY_MS) return;
+      this._lastResumeAttempt = now;
+      this._resumeInFlight = true;
+
+      this.audioContext.resume()
+        .then(() => { this._resumeInFlight = false; })
+        .catch(() => { this._resumeInFlight = false; });
     };
 
     // Also resume when the tab becomes visible again (covers browser-initiated
@@ -183,6 +210,77 @@ export class AudioSystem {
     document.addEventListener('keydown', tryResume);
     document.addEventListener('touchstart', tryResume, { passive: true });
     document.addEventListener('visibilitychange', onVisibilityChange);
+  }
+
+  /**
+   * Watchdog for a wedged AudioContext.
+   *
+   * Chrome can leave a tab's audio output dead for the rest of the tab's life:
+   * a faint click, then silence for both music and SFX, not restored by a
+   * reload — only a new window brings audio back. Because a reload builds a
+   * brand-new document *and* a brand-new AudioContext and still comes up
+   * silent, the broken state lives below the page (renderer process / audio
+   * stream), not in anything this class holds.
+   *
+   * The failure is invisible from JS: the context keeps reporting
+   * state === 'running' while its clock stops advancing, so every call site
+   * here goes on happily scheduling sources into a stream nobody hears. This
+   * samples currentTime on a slow interval and logs one diagnostic line the
+   * first time the clock stalls, so the next occurrence leaves evidence
+   * (frozen clock vs. suspended state vs. graph problem) instead of a
+   * mystery. No recovery is attempted: a reload is a stronger reset than
+   * anything this class could do in-page and it doesn't help, so rebuilding
+   * the context here would be re-decoding every buffer for no known gain.
+   */
+  armStallWatchdog() {
+    if (this._stallWatchdogTimer || !this.audioContext) return;
+
+    // Long enough that a sample is never confused with a normal render hiccup;
+    // short enough to land within a few seconds of the player noticing.
+    const SAMPLE_MS = 4000;
+
+    this._lastWatchdogTime = this.audioContext.currentTime;
+    this._stallWatchdogTimer = setInterval(() => {
+      const ctx = this.audioContext;
+      if (!ctx) return;
+
+      const now = ctx.currentTime;
+      const stalled = ctx.state === 'running' && now === this._lastWatchdogTime;
+      this._lastWatchdogTime = now;
+
+      if (!stalled) {
+        // Clock is advancing again (or the context is legitimately suspended) —
+        // re-arm the report so a second stall in the same session is also logged.
+        this._stallReported = false;
+        return;
+      }
+
+      if (this._stallReported) return;
+      this._stallReported = true;
+      console.error(
+        '[Audio] AudioContext clock has stalled while state === "running" — ' +
+        'tab audio is wedged below the page. Diagnostics:',
+        {
+          currentTime: now,
+          sampleRate: ctx.sampleRate,
+          // Chrome reports 0 output latency once the output stream is gone.
+          outputLatency: ctx.outputLatency,
+          baseLatency: ctx.baseLatency,
+          mode: this.mode,
+          isPlaying: this.isPlaying,
+          uptimeMinutes: +(performance.now() / 60000).toFixed(1)
+        }
+      );
+    }, SAMPLE_MS);
+  }
+
+  disarmStallWatchdog() {
+    if (this._stallWatchdogTimer) {
+      clearInterval(this._stallWatchdogTimer);
+      this._stallWatchdogTimer = null;
+    }
+    this._lastWatchdogTime = -1;
+    this._stallReported = false;
   }
 
   disarmAutoResume() {
@@ -218,6 +316,7 @@ export class AudioSystem {
     this.sfxGain.connect(this.audioContext.destination);
 
     this.armAutoResume();
+    this.armStallWatchdog();
 
     try {
       const [layer1Data, layer2Data] = await Promise.all([
@@ -1346,6 +1445,9 @@ export class AudioSystem {
     this.stop();
     this.removeAutoplayUnblock();
     this.disarmAutoResume();
+    this.disarmStallWatchdog();
+    this._resumeInFlight = false;
+    this._lastResumeAttempt = 0;
     // Invalidate any in-flight switchMusic/switchMusicAtLoopEnd load so its
     // resolution (against a context we're about to close) is a no-op.
     this._musicLoadId++;
