@@ -137,6 +137,15 @@ if(LIBCXX_FALLBACK_INCLUDE)
   target_include_directories(parity-render SYSTEM PRIVATE ${LIBCXX_FALLBACK_INCLUDE})
 endif()
 
+# Drives the *installed* component through the real AudioUnit C API, to establish
+# whether a patch-loading path works in the plugin before blaming a host for it.
+add_executable(host-test EXCLUDE_FROM_ALL tests/host-test.cpp)
+target_link_libraries(host-test PRIVATE
+  "-framework AudioToolbox" "-framework AudioUnit" "-framework CoreFoundation")
+if(LIBCXX_FALLBACK_INCLUDE)
+  target_include_directories(host-test SYSTEM PRIVATE ${LIBCXX_FALLBACK_INCLUDE})
+endif()
+
 # ---- install / validate -----------------------------------------------------
 set(AU_INSTALL_DIR $ENV{HOME}/Library/Audio/Plug-Ins/Components)
 
