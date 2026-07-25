@@ -28,7 +28,7 @@ import { drawTamedRats } from '../ui/CompanionRenderers.js';
 import { INGREDIENTS } from '../../data/items.js';
 import { BRIDGE_MATERIALS } from '../../systems/RidgeSystem.js';
 import { PixelatedDissolve, SplitReveal } from '../effects/TextEffects.js';
-import { telegraphRenderCells } from '../../game/Telegraph.js';
+import { drawTelegraph } from '../../game/Telegraph.js';
 import { BossRenderer } from './BossRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
 import { isInteriorActive } from '../../systems/PlaneSystem.js';
@@ -2230,15 +2230,9 @@ export class ExploreRenderer {
     for (const attack of game.combatSystem.getEnemyMeleeAttacks()) {
       if (!!attack.hutPlane !== hutPlane) continue;
 
-      // Telegraph-shaped attacks draw their rasterized warn/hit cells; the
-      // shared module resolves what to show so the editor sandbox matches.
-      const shaped = telegraphRenderCells(attack);
-      if (shaped) {
-        for (const cell of shaped.cells) {
-          this.renderer.drawTextWithAlpha(cell.x, cell.y, shaped.char, shaped.color, shaped.alpha);
-        }
-        continue;
-      }
+      // Telegraph-shaped attacks draw themselves in pixel space, off the shared
+      // module, so the editor sandbox shows the identical thing.
+      if (drawTelegraph(this.renderer.fgCtx, attack)) continue;
 
       const displayColor = attack.flashWhite ? '#ffffff' : attack.color;
       const alpha = attack.alpha !== undefined ? attack.alpha : 1.0;

@@ -49,7 +49,7 @@
 // exactly one frame (the legacy melee contract) so positional dodges work.
 
 import { GRID } from './GameConfig.js';
-import { resolveTelegraph, animationBands, maskCells } from './TelegraphAnimation.js';
+import { resolveTelegraph, strikeGeometry } from './TelegraphAnimation.js';
 
 const CELL = GRID.CELL_SIZE;
 
@@ -126,35 +126,6 @@ export function hitTest(shape, origin, facing, box) {
     }
   }
   return false;
-}
-
-// Cells (pixel centers) covered by the shape, for ASCII rendering. Bounded by
-// the shape's own reach so the scan never walks the whole grid.
-export function rasterizeToCells(shape, origin, facing) {
-  const reach = shapeReach(shape) * CELL;
-  const minCol = Math.max(0, Math.floor((origin.x - reach) / CELL));
-  const maxCol = Math.min(GRID.COLS - 1, Math.floor((origin.x + reach) / CELL));
-  const minRow = Math.max(0, Math.floor((origin.y - reach) / CELL));
-  const maxRow = Math.min(GRID.ROWS - 1, Math.floor((origin.y + reach) / CELL));
-  const cells = [];
-  for (let row = minRow; row <= maxRow; row++) {
-    for (let col = minCol; col <= maxCol; col++) {
-      const cx = col * CELL + CELL / 2;
-      const cy = row * CELL + CELL / 2;
-      if (pointInShape(shape, origin, facing, cx, cy)) cells.push({ col, row, x: cx, y: cy });
-    }
-  }
-  return cells;
-}
-
-function shapeReach(shape) {
-  switch (shape.kind) {
-    case 'circle': return (shape.offset ?? 0) + shape.radius;
-    case 'ring': return shape.outerRadius;
-    case 'cone': return shape.range;
-    case 'rect': return (shape.offset ?? 0) + shape.length + shape.width / 2;
-    default: return 0;
-  }
 }
 
 // ── windup attack lifecycle (shared system half) ────────────────────────────
@@ -314,66 +285,159 @@ export function attackHitsBox(attack, box, legacyCheck) {
   return legacyCheck();
 }
 
-// ── shared render data ──────────────────────────────────────────────────────
+// ── shared rendering ────────────────────────────────────────────────────────
 
-// What a shaped attack should draw this frame, resolved once so every
-// renderer (surface, PiP overlays, editor sandbox) shows the same thing:
-//   windup           → warn shape, masked by the animation's windup bands
-//   beat             → hit shape, masked by that beat's sweep, white while flashing
-//   between beats    → warn shape, dim steady (the threat is still live)
-// Returns null for legacy (shapeless) attacks — callers keep their rect path.
-//
-// The animation only ever *narrows* what the shape already covers, so it can
-// never light a cell outside the warn/hit geometry. The default `blink`
-// animation returns FULL at every moment, which is how a Telegraph that
-// declares no animation keeps the original four-phase look.
-export function telegraphRenderCells(attack) {
-  if (!attack.warnShape) return null;
+// Telegraphs are drawn in pixel space, not as characters. The warning is a
+// plain filled area and the strike is a thin stroke sweeping through it; both
+// are continuous, so neither snaps to the character grid. An earlier version
+// masked a cell rasterization and could only move a whole cell at a time, which
+// read as blocks stuttering across the shape rather than a blade passing
+// through it. Raw-canvas drawing for combat cues is house idiom — see
+// BossRenderer's charge cone, which this follows.
+const AREA_FILL = 0.25;   // the warning's fill, at full blink brightness
+const AREA_EDGE = 0.7;    // its outline — enough to define the boundary crisply
+const STRIKE_WIDTH = 3;   // px. The whole point: a few pixels across, not a cell
+const TRAIL_STEPS = 3;    // ghosts drawn behind the stroke, for a fluid pass
+const TRAIL_SPACING = 0.08;
+
+// Draw one shaped attack. Returns false for legacy (shapeless) attacks so
+// callers fall through to their own rect path. Every consumer — surface, PiP
+// overlays, editor sandbox — goes through here, which is what keeps the editor
+// showing the game rather than an imitation of it.
+export function drawTelegraph(ctx, attack) {
+  if (!attack.warnShape) return false;
   const origin = attack.owner ? entityCenter(attack.owner) : attack.position;
-  const anim = attack.animation;
+  const color = attack.color || '#ff5533';
 
+  // The tell: the area alone, blinking on the shared windup alpha. Nothing
+  // moves — motion is what the strike means, and spending it here would spend
+  // the one cue the player has for "now".
   if (attack.windupPhase) {
-    const progress = attack.windupDuration
-      ? (attack.windupElapsed ?? 0) / attack.windupDuration
-      : 1;
-    const bands = animationBands(anim, 'windup', progress);
-    return {
-      cells: maskCells(
-        rasterizeToCells(attack.warnShape, origin, attack.facing),
-        bands, anim, attack.warnShape, origin, attack.facing
-      ),
-      char: '▒',
-      color: attack.color,
-      alpha: attack.alpha ?? 1.0,
-    };
+    const a = attack.alpha ?? 1.0;
+    drawArea(ctx, attack.warnShape, origin, attack.facing, color, AREA_FILL * a, AREA_EDGE * a);
+    return true;
   }
 
-  // Mid-beat: the sweep runs across the beat's active window. Drawing is tied
-  // to ACTIVE_DURATION rather than the shorter white-flash timer so a sweep
-  // gets the whole live window to cross the shape; the flash still decides the
+  // The strike runs across the beat's active window. Drawing is tied to
+  // ACTIVE_DURATION rather than the shorter white-flash timer so a pass gets
+  // the whole live window to cross the shape; the flash still decides the
   // colour, so the "now" cue is unchanged.
   const beatProgress = (attack.beatElapsed ?? 0) / ACTIVE_DURATION;
   if (beatProgress <= 1) {
-    const bands = animationBands(anim, 'beat', beatProgress, attack.beatIndex ?? 0);
-    return {
-      cells: maskCells(
-        rasterizeToCells(attack.hitShape, origin, attack.facing),
-        bands, anim, attack.hitShape, origin, attack.facing
-      ),
-      char: '█',
-      color: (attack.flashWhite && attack.flashTimer > 0) ? '#ffffff' : attack.color,
-      alpha: 1.0,
-    };
+    const strikeColor = (attack.flashWhite && attack.flashTimer > 0) ? '#ffffff' : color;
+    const geo = strikeGeometry(attack.animation, attack.hitShape, attack.beatIndex ?? 0, beatProgress);
+    const still = geo.lines.length === 0 && geo.circles.length === 0;
+    // `blink` has no stroke, so for it the area *is* the strike and has to carry
+    // the whole hit on its own. Everything else drops the area back to a hint of
+    // context so the stroke is unmistakably the thing that happened.
+    drawArea(ctx, attack.hitShape, origin, attack.facing, strikeColor,
+      still ? 0.75 : 0.15, still ? 1.0 : 0.4);
+    if (!still) drawStrike(ctx, attack, origin, beatProgress, strikeColor);
+    return true;
   }
 
-  // Activated, waiting on a later beat.
-  if (attack.pulseQueue && attack.pulseQueue.length > 0) {
-    return {
-      cells: rasterizeToCells(attack.warnShape, origin, attack.facing),
-      char: '▒',
-      color: attack.color,
-      alpha: 0.25,
-    };
+  // Past the strike, still on the attack list: either waiting on a later beat or
+  // running out the last frames of the final one. Either way the area stays up,
+  // dim — the threat has not left, and dropping it here put a one-frame hole at
+  // the tail of every single-beat attack.
+  drawArea(ctx, attack.warnShape, origin, attack.facing, color, 0.1, 0.3);
+  return true;
+}
+
+// Trace a shape's outline into the current path, oriented by facing.
+function pathShape(ctx, shape, origin, facing) {
+  const cos = Math.cos(facing), sin = Math.sin(facing);
+  const wx = (along, across) => origin.x + along * cos - across * sin;
+  const wy = (along, across) => origin.y + along * sin + across * cos;
+
+  ctx.beginPath();
+  switch (shape.kind) {
+    case 'rect': {
+      const start = (shape.offset ?? 0) * CELL;
+      const end = start + shape.length * CELL;
+      const half = (shape.width * CELL) / 2;
+      ctx.moveTo(wx(start, -half), wy(start, -half));
+      ctx.lineTo(wx(end, -half), wy(end, -half));
+      ctx.lineTo(wx(end, half), wy(end, half));
+      ctx.lineTo(wx(start, half), wy(start, half));
+      ctx.closePath();
+      break;
+    }
+    case 'cone': {
+      const half = (shape.angleDeg * Math.PI / 180) / 2;
+      ctx.moveTo(origin.x, origin.y);
+      ctx.arc(origin.x, origin.y, shape.range * CELL, facing - half, facing + half);
+      ctx.closePath();
+      break;
+    }
+    case 'circle': {
+      const off = (shape.offset ?? 0) * CELL;
+      ctx.arc(wx(off, 0), wy(off, 0), shape.radius * CELL, 0, Math.PI * 2);
+      break;
+    }
+    case 'ring': {
+      // Wound in opposite directions so the nonzero fill rule punches the inner
+      // disc out — that hole is the safe ground, and it has to look empty.
+      const inner = shape.innerRadius * CELL;
+      ctx.arc(origin.x, origin.y, shape.outerRadius * CELL, 0, Math.PI * 2, false);
+      ctx.moveTo(origin.x + inner, origin.y);
+      ctx.arc(origin.x, origin.y, inner, 0, Math.PI * 2, true);
+      break;
+    }
   }
-  return { cells: [], char: '▒', color: attack.color, alpha: 0 };
+}
+
+// Alphas multiply into whatever the caller already had set, so an outer fade
+// (tall-grass concealment, PiP dimming) composes instead of being clobbered —
+// the same contract ASCIIRenderer.drawTextWithAlpha honours.
+function drawArea(ctx, shape, origin, facing, color, fillAlpha, edgeAlpha) {
+  const base = ctx.globalAlpha;
+  ctx.save();
+  pathShape(ctx, shape, origin, facing);
+  ctx.globalAlpha = base * fillAlpha;
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.globalAlpha = base * edgeAlpha;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.restore();
+}
+
+// The stroke, plus a short tail of dimmer thinner samples taken from earlier in
+// the same pass. The tail is what makes a 0.15s crossing read as one continuous
+// motion instead of a line teleporting — it costs three extra strokes and does
+// the entire job of "fluid".
+function drawStrike(ctx, attack, origin, progress, color) {
+  const base = ctx.globalAlpha;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = color;
+  // Back to front, so the head draws over its own tail.
+  for (let i = TRAIL_STEPS; i >= 0; i--) {
+    const p = progress - i * TRAIL_SPACING;
+    if (p < 0) continue;
+    ctx.globalAlpha = base * (i === 0 ? 1.0 : 0.4 - (i - 1) * 0.12);
+    ctx.lineWidth = Math.max(1, STRIKE_WIDTH - i);
+    traceStrike(ctx, strikeGeometry(attack.animation, attack.hitShape, attack.beatIndex ?? 0, p),
+      origin, attack.facing);
+  }
+  ctx.restore();
+}
+
+// Strike geometry arrives in the shape's local frame; rotate it onto the screen.
+function traceStrike(ctx, geo, origin, facing) {
+  const cos = Math.cos(facing), sin = Math.sin(facing);
+  ctx.beginPath();
+  for (const [a0, c0, a1, c1] of geo.lines) {
+    ctx.moveTo(origin.x + a0 * cos - c0 * sin, origin.y + a0 * sin + c0 * cos);
+    ctx.lineTo(origin.x + a1 * cos - c1 * sin, origin.y + a1 * sin + c1 * cos);
+  }
+  for (const r of geo.circles) {
+    // Move to the circle's own start point first, or the path drags a line in
+    // from wherever the previous segment ended.
+    ctx.moveTo(origin.x + r, origin.y);
+    ctx.arc(origin.x, origin.y, r, 0, Math.PI * 2);
+  }
+  ctx.stroke();
 }

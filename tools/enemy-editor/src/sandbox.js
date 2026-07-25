@@ -7,7 +7,7 @@ import { Enemy } from '../../../src/entities/Enemy.js';
 import { PhysicsSystem } from '../../../src/systems/PhysicsSystem.js';
 import { ENEMIES } from '../../../src/data/enemies.js';
 import { GRID, PHYSICS } from '../../../src/game/GameConfig.js';
-import { updateEnemyMeleeAttack, syncWindupVisual, attackHitsBox, telegraphRenderCells } from '../../../src/game/Telegraph.js';
+import { updateEnemyMeleeAttack, syncWindupVisual, attackHitsBox, drawTelegraph } from '../../../src/game/Telegraph.js';
 
 const CELL = GRID.CELL_SIZE;
 const FONT = "px 'Unifont', monospace";
@@ -483,17 +483,9 @@ export class Sandbox {
   }
 
   drawAttack(c, a) {
-    // Telegraph-shaped attacks draw their rasterized warn/hit cells — the
-    // shared module resolves what to show so this matches ExploreRenderer.
-    const shaped = telegraphRenderCells(a);
-    if (shaped) {
-      c.font = `${CELL}${FONT}`;
-      c.fillStyle = shaped.color || '#ff5533';
-      c.globalAlpha = shaped.alpha;
-      for (const cell of shaped.cells) c.fillText(shaped.char, cell.x, cell.y);
-      c.globalAlpha = 1;
-      return;
-    }
+    // Telegraph-shaped attacks draw themselves off the shared module, so what
+    // shows here is the same pixel-space area and strike ExploreRenderer draws.
+    if (drawTelegraph(c, a)) return;
 
     const x = a.position?.x, y = a.position?.y;
     if (x == null) return;

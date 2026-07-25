@@ -1,6 +1,22 @@
-// Telegraph Animation — the choreography of a Telegraph: which part of the
-// shape is lit at each moment, and (because the animation declares the beats)
-// when damage actually lands.
+// Telegraph Animation — the choreography of a Telegraph: how the strike moves
+// through the warned area, and (because the animation declares the beats) when
+// damage actually lands.
+//
+// Two halves, and the split between them is the whole design:
+//
+//   the tell    — the warned area, drawn plainly and blinking in place. It says
+//                 *where*, and deliberately nothing else. Every animation shows
+//                 the same still shape here, because a warning the player has to
+//                 decode is not a warning.
+//   the strike  — a stroke a few pixels wide sweeping through that area in one
+//                 continuous motion. It says *now*, and it is the only part of a
+//                 Telegraph that moves.
+//
+// The strike is geometry, not glyphs. An earlier version masked the character
+// grid and could only ever snap a whole cell at a time, which reads as a block
+// stuttering across the shape rather than a blade passing through it. Nothing
+// in this module knows about cells: it reports line segments in the shape's own
+// local frame and Telegraph.js draws them in pixel space.
 //
 // The animation is the single source of truth for an attack's rhythm. A
 // `doubleSweep` *means* two hits: its beats are compiled into the pulse list
@@ -29,23 +45,17 @@ import { GRID } from './GameConfig.js';
 
 const CELL = GRID.CELL_SIZE;
 
-// Everything is lit. Distinct from an empty band list (nothing lit) — the two
-// are opposite ends of the same signal, so they must not both be "falsy".
-export const FULL = 'full';
+// Easing is what separates two strikes that travel the same axis. A slap
+// decelerates into the moment it lands; a thrust accelerates out of the enemy.
+// The distinction is legible even at a 0.15s pass, and it is the only thing
+// distinguishing some otherwise-identical animations — deliberately, because
+// "how it moves" is the whole vocabulary once the stroke is thin.
+const LINEAR = (p) => p;
+const EASE_IN = (p) => p * p;
+const EASE_OUT = (p) => 1 - (1 - p) * (1 - p);
 
-// Normalized half-width of a travelling band, as a fraction of the axis it
-// runs along. Wide enough to read as a moving slab of danger at cell scale
-// rather than a one-cell scanline.
-const BAND_HALF = 0.18;
-
-// A band that enters from before the start of the axis and exits past the end,
-// so the leading and trailing edges both sweep fully off the shape.
-function travel(p, reverse = false) {
-  const w = BAND_HALF * 2;
-  const t = reverse ? 1 - p : p;
-  const center = -w / 2 + t * (1 + w);
-  return [[center - w / 2, center + w / 2]];
-}
+const lerp = (a, b, t) => a + (b - a) * t;
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
 
 // ── shape presets ───────────────────────────────────────────────────────────
 
@@ -57,12 +67,9 @@ function travel(p, reverse = false) {
 // larger than its *warn* inner radius, so the safe disc is bigger than it
 // looks. Dodging into the enemy is the answer, and the warning overstates the
 // danger inward to make that answer feel like a discovery.
-// Sizing floor: `rasterizeToCells` keeps a cell only when its *center* falls
-// inside the shape, so any dimension thinner than about 1.25 cells can
-// rasterize to nothing depending on where the enemy happens to stand. Damage
-// would still land (hitTest samples the box, not cell centers) while the strike
-// drew nothing — an invisible hit. Every preset dimension below clears that
-// floor; keep it that way when tuning.
+// These are gameplay dimensions, not drawing dimensions: shapes are filled in
+// pixel space, so any size draws faithfully and nothing here is rounded up to
+// suit the renderer. Tune them against reach and dodge distance alone.
 export const SHAPE_PRESETS = {
   basic: {
     warnShape: { kind: 'rect', length: 2.0, width: 2.5 },
@@ -89,124 +96,117 @@ export const SHAPE_PRESETS = {
 // ── animation catalog ───────────────────────────────────────────────────────
 
 // Each animation declares:
-//   axis    — the local coordinate a band travels along: 'across' (perpendicular
-//             to facing), 'along' (down the facing axis), 'radius', or 'angle'
-//   windup  — bands lit while winding up, as a function of windup progress 0→1
+//   axis    — the local coordinate the stroke travels along: 'across'
+//             (perpendicular to facing), 'along' (down the facing axis),
+//             'radius', or 'angle'
+//   motion  — how the stroke occupies that axis:
+//               'pass'     one line crossing the shape
+//               'converge' two lines closing on the centre
+//               'grow'     an outline expanding out of the enemy
+//               'flash'    nothing travels; the area itself is the strike
+//   ease    — the speed curve of the pass (see the easing note above)
+//   reverse — run the axis backwards (inward, or right-to-left)
 //   beats   — one entry per damage hit. `gap` is double-seconds since the
 //             previous beat (beat 0 is the activation hit, gap always 0);
-//             `sweep` is the band lit across that beat's active window.
+//             `reverse` flips that beat against the animation's direction.
 //   shapes  — presets this animation is designed for, for authoring validation
 //
-// `blink` is the default and reproduces the legacy four-phase windup exactly,
-// so a Telegraph that declares no animation behaves as it always has.
+// `blink` is the default: no stroke at all, so a Telegraph that declares no
+// animation keeps the original still-area look end to end.
 export const ANIMATIONS = {
   blink: {
-    axis: 'across',
+    axis: 'across', motion: 'flash', ease: LINEAR,
     shapes: ['basic', 'verticalSlice', 'horizontalSliceThin', 'horizontalSliceThick', 'ring'],
-    windup: () => FULL,
-    beats: [{ gap: 0, sweep: () => FULL }],
+    beats: [{ gap: 0 }],
   },
 
-  // Two bands close in from opposite edges and meet where the hit will land —
-  // the shape tells you the place, the closing tells you the moment.
+  // Two strokes close from opposite edges and meet where the hit lands. Easing
+  // in means they drift, then snap together — the moment is the meeting.
   clap: {
-    axis: 'across',
+    axis: 'across', motion: 'converge', ease: EASE_IN,
     shapes: ['basic', 'horizontalSliceThin', 'horizontalSliceThick'],
-    windup: (p) => {
-      const w = BAND_HALF * 2;
-      const lead = p * (0.5 - w / 2);
-      return [[lead, lead + w], [1 - lead - w, 1 - lead]];
-    },
-    beats: [{ gap: 0, sweep: () => FULL }],
+    beats: [{ gap: 0 }],
   },
 
-  // Runs outward along the attack direction during the tell, then the whole
-  // area lands. Reads as a lunge lining itself up. "Vertical" is relative to
-  // the attack direction, not the screen (see the naming note above).
+  // A flat pass out along the attack direction — the lunge, seen edge-on.
+  // "Vertical" is relative to the attack direction, not the screen (see the
+  // naming note above).
   vertical: {
-    axis: 'along',
+    axis: 'along', motion: 'pass', ease: LINEAR,
     shapes: ['basic', 'verticalSlice'],
-    windup: (p) => travel(p),
-    beats: [{ gap: 0, sweep: () => FULL }],
+    beats: [{ gap: 0 }],
   },
 
-  // The hand swings across during the tell and then connects flat. The
-  // distinction from `sweep` is where the motion lives: a sweep's *hit*
-  // travels, a slap's hit is the full palm arriving at once.
+  // The palm swings across and decelerates into contact. Same axis as `sweep`;
+  // the easing is the difference, and it is what makes one read as a slap and
+  // the other as a blade.
   slap: {
-    axis: 'across',
+    axis: 'across', motion: 'pass', ease: EASE_OUT,
     shapes: ['basic', 'horizontalSliceThin', 'horizontalSliceThick'],
-    windup: (p) => travel(p),
-    beats: [{ gap: 0, sweep: () => FULL }],
+    beats: [{ gap: 0 }],
   },
 
-  // Grows out of the enemy — the threat expanding into the space it will own.
+  // The outline grows out of the enemy — the threat claiming the space rather
+  // than crossing it. The only animation whose stroke changes length.
   bloom: {
-    axis: 'along',
+    axis: 'along', motion: 'grow', ease: LINEAR,
     shapes: ['basic', 'verticalSlice'],
-    windup: (p) => [[0, p]],
-    beats: [{ gap: 0, sweep: () => FULL }],
+    beats: [{ gap: 0 }],
   },
 
-  // One clean pass across the swing.
+  // One clean pass across the swing, even speed throughout.
   sweep: {
-    axis: 'across',
+    axis: 'across', motion: 'pass', ease: LINEAR,
     shapes: ['horizontalSliceThin', 'horizontalSliceThick'],
-    windup: () => FULL,
-    beats: [{ gap: 0, sweep: (p) => travel(p) }],
+    beats: [{ gap: 0 }],
   },
 
   // Across, pause, back — two hits in one commitment. The pause is the tell:
   // a player who dodges the first pass and stops moving eats the return.
   doubleSweep: {
-    axis: 'across',
+    axis: 'across', motion: 'pass', ease: LINEAR,
     shapes: ['horizontalSliceThin', 'horizontalSliceThick'],
-    windup: () => FULL,
     beats: [
-      { gap: 0, sweep: (p) => travel(p) },
-      { gap: 0.5, sweep: (p) => travel(p, true) },
+      { gap: 0 },
+      { gap: 0.5, reverse: true },
     ],
   },
 
-  // Held back near the enemy, then driven out along the facing axis.
+  // Driven out along the facing axis, accelerating — a stab, not a swing.
   thrust: {
-    axis: 'along',
+    axis: 'along', motion: 'pass', ease: EASE_IN,
     shapes: ['verticalSlice'],
-    windup: () => [[0, 0.3]],
-    beats: [{ gap: 0, sweep: (p) => travel(p) }],
+    beats: [{ gap: 0 }],
   },
 
-  // Pulls in before it goes out — the wind-up you can see gathering.
+  // The same axis pulled the other way: the danger retreats into the enemy,
+  // decelerating as it arrives.
   recoil: {
-    axis: 'along',
+    axis: 'along', motion: 'pass', ease: EASE_OUT, reverse: true,
     shapes: ['verticalSlice'],
-    windup: (p) => [[0, 1 - p * 0.75]],
-    beats: [{ gap: 0, sweep: (p) => travel(p) }],
+    beats: [{ gap: 0 }],
   },
 
   // Expands outward through the annulus: the danger leaves the centre.
   radiate: {
-    axis: 'radius',
+    axis: 'radius', motion: 'pass', ease: LINEAR,
     shapes: ['ring'],
-    windup: () => FULL,
-    beats: [{ gap: 0, sweep: (p) => travel(p) }],
+    beats: [{ gap: 0 }],
   },
 
   // Contracts inward. Pairs with the ring's inner-safe disc — the danger
   // closes on the place that is actually safe, which is the whole lesson.
   closeIn: {
-    axis: 'radius',
+    axis: 'radius', motion: 'pass', ease: LINEAR, reverse: true,
     shapes: ['ring'],
-    windup: () => FULL,
-    beats: [{ gap: 0, sweep: (p) => travel(p, true) }],
+    beats: [{ gap: 0 }],
   },
 
   // Travels around the annulus rather than through it.
   revolve: {
-    axis: 'angle',
+    axis: 'angle', motion: 'pass', ease: LINEAR,
     shapes: ['ring'],
-    windup: () => FULL,
-    beats: [{ gap: 0, sweep: (p) => travel(p) }],
+    beats: [{ gap: 0 }],
   },
 };
 
@@ -274,97 +274,78 @@ function compilePulses(animation, beatDamage) {
   });
 }
 
-// ── per-frame masking ───────────────────────────────────────────────────────
+// ── strike geometry ─────────────────────────────────────────────────────────
 
-// Which bands are lit right now. `phase` is 'windup' or 'beat'; `progress` is
-// 0→1 within that phase.
-export function animationBands(animation, phase, progress, beatIndex = 0) {
-  if (!animation) return FULL;
-  const p = Math.max(0, Math.min(1, progress));
-  if (phase === 'windup') return animation.windup(p);
+// Where the strike is at `progress` through a beat, in the shape's own local
+// frame: `along` runs down the facing axis, `across` perpendicular to it, both
+// in pixels and both continuous. The caller rotates by facing and translates to
+// the owner; nothing here knows where on screen any of it ends up, which is why
+// the same numbers serve the game renderer and the editor sandbox.
+//
+// Returns { lines, circles }: `lines` are [along0, across0, along1, across1]
+// segments, `circles` are radii centred on the owner. Both empty means nothing
+// travels this frame — that is `blink`, whose strike is the area itself.
+export function strikeGeometry(animation, shape, beatIndex, progress) {
+  if (!animation || animation.motion === 'flash') return { lines: [], circles: [] };
+
   const beat = animation.beats[Math.min(beatIndex, animation.beats.length - 1)];
-  return beat ? beat.sweep(p) : FULL;
-}
+  // The animation sets a base direction and a beat may flip it — that XOR is
+  // what lets `doubleSweep` reuse one pass definition for the return trip.
+  let t = (animation.ease || LINEAR)(clamp01(progress));
+  if (!!animation.reverse !== !!beat?.reverse) t = 1 - t;
 
-// Keep only the cells whose position along the animation's axis falls inside a
-// lit band. Cells arrive from Telegraph.rasterizeToCells, so this narrows the
-// shape rather than redefining it — the animation can never light a cell the
-// shape does not cover.
-export function maskCells(cells, bands, animation, shape, origin, facing) {
-  if (bands === FULL || !animation) return cells;
-  if (!bands || bands.length === 0) return [];
-  const axis = animation.axis;
-  bands = widenBands(bands, shape, axis);
-  return cells.filter((cell) => {
-    const v = cellAxisValue(shape, axis, origin, facing, cell.x, cell.y);
-    for (const [lo, hi] of bands) {
-      if (v >= lo && v <= hi) return true;
+  switch (animation.axis) {
+    case 'radius': {
+      const [lo, hi] = axisSpan(shape, 'radius');
+      return { lines: [], circles: [lerp(lo, hi, t)] };
     }
-    return false;
-  });
-}
-
-// A band thinner than about a cell can fall entirely between cell centres and
-// light nothing — the same failure the shape sizing floor guards against, one
-// level down. Bands are authored as a fraction of their axis, so a *short* axis
-// produces a band too thin to draw: `basic` is 2 cells deep, and BAND_HALF
-// there works out to 0.72 cells. Widen every band to this many cells before
-// masking. The animation keeps its motion; it just never blinks out mid-travel.
-const MIN_BAND_CELLS = 1.2;
-
-function widenBands(bands, shape, axis) {
-  // An angular axis measures radians, not cells — arc length varies with radius,
-  // so there is no single cell width to widen toward.
-  if (axis === 'angle') return bands;
-  const [lo, hi] = axisRange(shape, axis);
-  const extent = hi - lo;
-  if (extent <= 0) return bands;
-  const minWidth = (MIN_BAND_CELLS * CELL) / extent; // back into normalized units
-  return bands.map(([a, b]) => {
-    const grow = Math.max(0, minWidth - (b - a)) / 2;
-    let lo2 = a - grow, hi2 = b + grow;
-    // Whatever hangs off the end of the axis is width spent on nothing, and on
-    // a short axis the remainder is again too thin to catch a cell centre. Slide
-    // the band back inside instead of letting it bleed off the edge. `travel`
-    // therefore reads as a short dwell at each end rather than a hole in the
-    // tell — the only honest option when the whole axis is two cells wide.
-    if (hi2 - lo2 <= 1) {
-      if (lo2 < 0) { hi2 -= lo2; lo2 = 0; }
-      else if (hi2 > 1) { lo2 -= hi2 - 1; hi2 = 1; }
+    case 'angle': {
+      // A radial spoke swinging around the annulus, drawn from its inner edge
+      // to its outer one.
+      const [lo, hi] = axisSpan(shape, 'radius');
+      const a = -Math.PI + t * 2 * Math.PI;
+      const cos = Math.cos(a), sin = Math.sin(a);
+      return { lines: [[lo * cos, lo * sin, hi * cos, hi * sin]], circles: [] };
     }
-    return [lo2, hi2];
-  });
+    case 'along': {
+      const [lo, hi] = axisSpan(shape, 'along');
+      const [c0, c1] = axisSpan(shape, 'across');
+      if (animation.motion === 'grow') {
+        // Three sides of a box whose far edge advances: the two rails stay put
+        // and lengthen while the leading edge does the travelling.
+        const head = lerp(lo, hi, t);
+        return {
+          lines: [[lo, c0, head, c0], [lo, c1, head, c1], [head, c0, head, c1]],
+          circles: [],
+        };
+      }
+      const a = lerp(lo, hi, t);
+      const [w0, w1] = acrossSpanAt(shape, a, c0, c1);
+      return { lines: [[a, w0, a, w1]], circles: [] };
+    }
+    default: { // 'across'
+      const [a0, a1] = axisSpan(shape, 'along');
+      // A cone has no flat across-extent — its width is angular, so crossing it
+      // means swinging a spoke through its arc rather than sliding a line.
+      if (shape.kind === 'cone') {
+        const half = (shape.angleDeg * Math.PI / 180) / 2;
+        const a = lerp(-half, half, t);
+        return { lines: [[0, 0, a1 * Math.cos(a), a1 * Math.sin(a)]], circles: [] };
+      }
+      const [lo, hi] = axisSpan(shape, 'across');
+      if (animation.motion === 'converge') {
+        const mid = (lo + hi) / 2;
+        const near = lerp(lo, mid, t), far = lerp(hi, mid, t);
+        return { lines: [[a0, near, a1, near], [a0, far, a1, far]], circles: [] };
+      }
+      const c = lerp(lo, hi, t);
+      return { lines: [[a0, c, a1, c]], circles: [] };
+    }
+  }
 }
 
-// Where a point sits along the given local axis, normalized to 0→1 across the
-// shape's own extent, so one animation reads the same on any shape it is
-// declared for.
-export function cellAxisValue(shape, axis, origin, facing, px, py) {
-  const dx = px - origin.x;
-  const dy = py - origin.y;
-  const cos = Math.cos(facing), sin = Math.sin(facing);
-
-  if (axis === 'angle') {
-    return (normalizeAngle(Math.atan2(dy, dx) - facing) + Math.PI) / (2 * Math.PI);
-  }
-  // A cone has no flat "across" extent — its width is angular, so sweeping
-  // across it means sweeping through its arc.
-  if (axis === 'across' && shape.kind === 'cone') {
-    const half = (shape.angleDeg * Math.PI / 180) / 2;
-    const a = normalizeAngle(Math.atan2(dy, dx) - facing);
-    return half === 0 ? 0.5 : (a + half) / (2 * half);
-  }
-
-  let value;
-  if (axis === 'radius') value = Math.hypot(dx, dy);
-  else if (axis === 'along') value = dx * cos + dy * sin;
-  else value = -dx * sin + dy * cos; // 'across'
-
-  const [lo, hi] = axisRange(shape, axis);
-  return hi === lo ? 0.5 : (value - lo) / (hi - lo);
-}
-
-function axisRange(shape, axis) {
+// The shape's extent along one local axis, in pixels.
+export function axisSpan(shape, axis) {
   const off = (shape.offset ?? 0) * CELL;
   switch (axis) {
     case 'along':
@@ -376,7 +357,7 @@ function axisRange(shape, axis) {
       if (shape.kind === 'ring') return [shape.innerRadius * CELL, shape.outerRadius * CELL];
       if (shape.kind === 'circle') return [0, shape.radius * CELL];
       if (shape.kind === 'cone') return [0, shape.range * CELL];
-      return [0, (off + shape.length * CELL)];
+      return [0, off + shape.length * CELL];
     default: { // 'across'
       if (shape.kind === 'rect') return [-shape.width * CELL / 2, shape.width * CELL / 2];
       if (shape.kind === 'circle') return [-shape.radius * CELL, shape.radius * CELL];
@@ -386,8 +367,13 @@ function axisRange(shape, axis) {
   }
 }
 
-function normalizeAngle(a) {
-  while (a > Math.PI) a -= 2 * Math.PI;
-  while (a < -Math.PI) a += 2 * Math.PI;
-  return a;
+// How wide the shape is at one point down its facing axis. Only a circle
+// actually narrows toward its ends; everything else the presets use is a
+// constant width, so this is the chord and a passthrough.
+function acrossSpanAt(shape, along, c0, c1) {
+  if (shape.kind !== 'circle') return [c0, c1];
+  const r = shape.radius * CELL;
+  const d = along - (shape.offset ?? 0) * CELL;
+  const half = Math.sqrt(Math.max(0, r * r - d * d));
+  return [-half, half];
 }
