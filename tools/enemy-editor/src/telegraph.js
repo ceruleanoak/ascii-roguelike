@@ -10,6 +10,7 @@
 // only be stated in one place — the animation's own `areas` list.
 import {
   AREA_PRESETS, ANIMATIONS, SIZES, DEFAULT_SIZE, areaIsSized, resolveArea,
+  ATTACK_SHAPE_TURNS,
 } from '../../../src/game/TelegraphAnimation.js';
 
 // '' = no Area. Authoring an explicit warn/hit shape is the escape hatch when
@@ -26,16 +27,22 @@ export const SIZE_OPTIONS = ['', ...SIZES];
 // pulses/animation conflict, which only triggers on a *declared* animation.
 export const ANIMATION_OPTIONS = ['', ...Object.keys(ANIMATIONS)];
 
+// '' = no turn, which is the same picture as 0 but leaves the key out of the
+// emitted data. Only the quarter-turns are offered: the mark already carries an
+// angle of its own, and a free-form second angle would let an author aim the
+// glyph away from the stroke it is drawn on.
+export const TURN_OPTIONS = ['', ...ATTACK_SHAPE_TURNS.filter(deg => deg !== 0)];
+
 // Each animation declares the Areas it was choreographed for, so that list is
 // the valid-pairings map and the dropdown filters on it directly — an author
 // picks an Area and then sees only motions that read correctly on it, instead of
 // picking a bad pair and being told afterward.
 //
-// Two deliberate escapes from the filter: an explicit warn/hit shape has no
-// Area to pair against, so every animation stays offered; and whatever is
-// already selected is always listed, so switching Areas never silently drops an
-// authored animation. That case is exactly what `telegraphNotes` still warns
-// about — the filter is guidance for new choices, not a lock on existing data.
+// One deliberate escape from the filter: an explicit warn/hit shape has no Area
+// to pair against, so every animation stays offered. The current selection is
+// also listed even when it does not fit, so the dropdown always shows what the
+// data actually says — but `reconcileAnimation` clears that case the moment the
+// Area changes, so it can only be reached by hand-authored data.
 export function animationOptionsFor(def) {
   const t = def.telegraph;
   const area = t?.area;
@@ -44,6 +51,27 @@ export function animationOptionsFor(def) {
   const compatible = Object.keys(ANIMATIONS).filter(
     (name) => ANIMATIONS[name].areas.includes(area) || name === t.animation);
   return ['', ...compatible];
+}
+
+// Switching Area used to leave the animation where it was, stranding it on a
+// motion the new Area was never choreographed for: box + `slap` switched to
+// `ring` kept `slap`, and a straight pass across a ring draws a line over the
+// whole area instead of anything ring-shaped. The pairing rule already existed
+// — the dropdown filters on it — but nothing applied it to the value already
+// held, so the invalid pair survived every render.
+//
+// The replacement is the first motion the new Area supports rather than a
+// mapping from the old one. Any such mapping would be a guess about intent, and
+// the correct motion is one dropdown away and now visible in it.
+//
+// Returns true when it changed something, so the caller knows to re-render.
+export function reconcileAnimation(def) {
+  const t = def.telegraph;
+  if (!t?.area || !AREA_PRESETS[t.area]) return false;
+  const anim = ANIMATIONS[t.animation];
+  if (!anim || anim.areas.includes(t.area)) return false;
+  t.animation = Object.keys(ANIMATIONS).find((name) => ANIMATIONS[name].areas.includes(t.area)) || '';
+  return true;
 }
 
 // Telegraphs are filled in pixel space, so there is no longer a raster floor

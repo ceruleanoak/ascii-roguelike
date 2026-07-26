@@ -13,14 +13,17 @@
 //   'char'    — single glyph (enemy char / spawn char etc.)
 //   'bool'    — checkbox
 //   'color'   — hex color picker + text
-//   'select'  — one-of options[]
+//   'select'  — one-of options[]; add `numeric: true` when the options are
+//               numbers, so the stored value is the number and not its text
 //   'tags'    — comma-separated string[] (free)
 //   'tagset'  — multi-select from options[] -> string[]
 //   'json'    — raw JSON value (objects/arrays too irregular for a widget)
 //
 // `px: true` is implied by type 'px'. `showIf(def)` hides a field unless true.
 // `rerender: true` re-renders the form after an edit (for fields other fields
-// or a section note depend on).
+// or a section note depend on). `default: null` on a number marks it optional,
+// so an empty box stays unset instead of reading as 0. `reconcile(def)` repairs
+// other fields this one just invalidated; return true if it changed anything.
 //
 // Section descriptor extras:
 //   gate / bareGate  — same contract as MECHANICS below: the section is a block
@@ -33,7 +36,8 @@
 //   note(def)        — live authoring feedback rendered under the fields.
 
 import {
-  AREA_OPTIONS, SIZE_OPTIONS, animationOptionsFor, telegraphNotes,
+  AREA_OPTIONS, SIZE_OPTIONS, TURN_OPTIONS, animationOptionsFor, reconcileAnimation,
+  telegraphNotes,
 } from './telegraph.js';
 
 export const GRID_CELL = 16;
@@ -106,7 +110,7 @@ export const SECTIONS = [
     note: telegraphNotes,
     fields: [
       { key: 'telegraph.area', label: 'Area', type: 'select', options: AREA_OPTIONS,
-        default: 'box', rerender: true,
+        default: 'box', rerender: true, reconcile: reconcileAnimation,
         help: 'The warned region — a named warn/hit shape pair from AREA_PRESETS. (none) = author explicit shapes below.' },
       { key: 'telegraph.size', label: 'Size', type: 'select', options: SIZE_OPTIONS,
         default: '', rerender: true,
@@ -116,6 +120,12 @@ export const SECTIONS = [
         help: 'Choreography + beats, filtered to the ones the chosen Area supports. Declaring one compiles its own pulses. Blank = blink (the legacy four-phase look).' },
       { key: 'telegraph.attackShape', label: 'Attack shape', type: 'char', default: '', rerender: true,
         help: "One character the strike carries instead of the default hairline stroke, turned to face the swing (e.g. '/'). Blank = the stroke." },
+      { key: 'telegraph.attackShapeTurn', label: 'Attack shape turn', type: 'select',
+        options: TURN_OPTIONS, numeric: true, default: '', rerender: true,
+        help: 'Quarter-turn of that glyph within the strike, in degrees — for characters that point somewhere, like a brace that should open up rather than sideways. Blank = upright.' },
+      { key: 'telegraph.attackShapeCount', label: 'Attack shape count', type: 'number',
+        min: 0, default: null, rerender: true,
+        help: 'How many copies of that glyph spread along the strike — round a ring, or along a revolving arc. Blank = each animation\'s own reading (one per mark, a character-width spacing round a circle).' },
       { key: 'telegraph.beatDamage', label: 'Beat damage ×', type: 'json', default: null, rerender: true,
         placeholder: '[1.0, 0.5]',
         help: 'One damage multiplier per beat, e.g. [1.0, 0.5]. Multi-beat animations only.' },

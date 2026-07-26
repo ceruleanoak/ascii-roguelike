@@ -45,6 +45,8 @@
 //     size: 'small',                  // 'small' (one cell, the default) | 'big' (the AoE)
 //     animation: 'doubleSweep',       // an ANIMATIONS name — declares the beats
 //     attackShape: '/',               // optional glyph drawn instead of the strike stroke
+//     attackShapeTurn: 90,            // optional quarter-turn of that glyph (0|90|180|270)
+//     attackShapeCount: 8,            // optional: spread that many copies along the strike
 //     beatDamage: [1.0, 0.5],         // optional per-beat damage multipliers
 //   }
 //
@@ -364,12 +366,51 @@ export function resolveTelegraph(t, describe = 'telegraph') {
     // The glyph the strike rides on, when one is authored. Null keeps the
     // default hairline stroke.
     attackShape: t.attackShape || null,
+    // A quarter-turn of that glyph within the mark, for characters whose
+    // meaning is directional: a '{' laid along a horizontal slap wants to open
+    // upward or downward, and no amount of choosing a different character says
+    // that. Quarter-turns only — anything finer would be a second angle
+    // competing with the mark's own, and the mark is what the glyph must match.
+    attackShapeTurn: normalizeTurn(t.attackShapeTurn, describe),
+    // How many copies of that glyph the strike spreads along itself. 0 leaves
+    // each animation at its own natural reading — one glyph per mark, and a
+    // character-width spacing round a circle — which is what every telegraph
+    // authored before this field existed still gets.
+    attackShapeCount: normalizeCount(t.attackShapeCount, describe),
     // Beats compiled to the pulse contract CombatSystem already resolves:
     // cumulative delay from activation, with an optional per-beat multiplier.
     pulses: t.animation
       ? compilePulses(animation, t.beatDamage)
       : (t.pulses || null),
   };
+}
+
+// The four turns an Attack Shape may take, in degrees clockwise within the
+// mark. Exported so the editor can offer exactly these — a free-form angle
+// field would let an author aim the glyph away from the stroke it is drawn on.
+export const ATTACK_SHAPE_TURNS = [0, 90, 180, 270];
+
+function normalizeTurn(value, describe) {
+  // '' is what an unset dropdown in the editor hands over; it means no turn.
+  if (value === undefined || value === null || value === '') return 0;
+  if (!ATTACK_SHAPE_TURNS.includes(value)) {
+    console.error(
+      `[Telegraph] ${describe}: attackShapeTurn '${value}' is not one of ` +
+      `${ATTACK_SHAPE_TURNS.join('/')}. Falling back to 0.`
+    );
+    return 0;
+  }
+  return value;
+}
+
+function normalizeCount(value, describe) {
+  if (value === undefined || value === null || value === '') return 0;
+  const count = Math.round(Number(value));
+  if (!Number.isFinite(count) || count < 0) {
+    console.error(`[Telegraph] ${describe}: attackShapeCount '${value}' is not a count. Falling back to 0.`);
+    return 0;
+  }
+  return count;
 }
 
 function compilePulses(animation, beatDamage) {
@@ -499,7 +540,7 @@ const ARC_SWEEP = 0.35;
 // it spans, and `mirror` whether it is the reflected half of a pair. A glyph
 // stretched to `length` covers exactly the ground the stroke covers, which is
 // the ground that damages — the whole reason marks carry a span at all.
-export function strikeMarks(geo) {
+export function strikeMarks(geo, count = 0) {
   const marks = [];
   const mirrorFrom = geo.mirrorFrom ?? Infinity;
   const indices = geo.markLines ?? geo.lines.map((_, i) => i);
@@ -512,32 +553,58 @@ export function strikeMarks(geo) {
       mirror: i >= mirrorFrom,
     });
   }
-  // An arc is short enough to read as one mark, so it takes one glyph laid along
-  // its chord and turned tangent to the curve.
+  // An arc reads as one mark by default — it is short enough that a single
+  // glyph laid along its chord covers it. An authored count breaks that chord
+  // into that many glyphs instead, each spanning its own share of the curve.
   for (const { radius, from, to } of geo.arcs) {
-    const mid = (from + to) / 2;
-    marks.push({
-      along: radius * Math.cos(mid), across: radius * Math.sin(mid),
-      angle: mid + Math.PI / 2,
-      length: 2 * radius * Math.sin(Math.abs(to - from) / 2),
-      mirror: false,
-    });
-  }
-  // A circle damages the whole way round, so it gets marks the whole way round —
-  // one glyph on the facing spoke would leave the rest of a band that hurts
-  // completely unlabelled. Spaced about a character apart, laid tangentially.
-  for (const r of geo.circles) {
-    const count = Math.max(6, Math.round((2 * Math.PI * r) / CELL));
-    const chord = 2 * r * Math.sin(Math.PI / count);
-    for (let i = 0; i < count; i++) {
-      const a = (i / count) * 2 * Math.PI;
+    const n = count > 0 ? count : 1;
+    const step = (to - from) / n;
+    const chord = 2 * radius * Math.sin(Math.abs(step) / 2);
+    for (let i = 0; i < n; i++) {
+      const mid = from + step * (i + 0.5);
       marks.push({
-        along: r * Math.cos(a), across: r * Math.sin(a),
-        angle: a + Math.PI / 2, length: chord, mirror: false,
+        along: radius * Math.cos(mid), across: radius * Math.sin(mid),
+        angle: mid + Math.PI / 2, length: chord, mirror: false,
       });
     }
   }
+  // A circle damages the whole way round, so it gets marks the whole way round —
+  // one glyph on the facing spoke would leave the rest of a band that hurts
+  // completely unlabelled. Spaced about a character apart unless the enemy
+  // authored a count, laid tangentially either way.
+  for (const r of geo.circles) {
+    marks.push(...ringMarks(r, count > 0 ? count : Math.max(6, Math.round((2 * Math.PI * r) / CELL))));
+  }
   return marks;
+}
+
+// Glyph marks laid evenly around a circle, each turned tangent to it and given
+// its own share of the circumference to span. Shared by the circles a radial
+// animation produces and by `blink`, which has no travelling geometry of its own
+// but can still spread its character round the shape.
+function ringMarks(radius, count) {
+  const marks = [];
+  const chord = 2 * radius * Math.sin(Math.PI / count);
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * 2 * Math.PI;
+    marks.push({
+      along: radius * Math.cos(a), across: radius * Math.sin(a),
+      angle: a + Math.PI / 2, length: chord, mirror: false,
+    });
+  }
+  return marks;
+}
+
+// Where `blink` puts its Attack Shape when a count is authored: spread around
+// the shape rather than planted once at its middle. Empty when no count is
+// authored, which is the caller's signal to draw the single centred glyph.
+export function spreadMarks(shape, count) {
+  if (!(count > 0)) return [];
+  const [lo, hi] = axisSpan(shape, 'radius');
+  // A band has a middle to ride; every other shape has only an edge, and its
+  // edge is where it stops damaging.
+  const radius = shape.kind === 'ring' ? (lo + hi) / 2 : hi;
+  return radius > 0 ? ringMarks(radius, count) : [];
 }
 
 // The centre of a shape along its own facing axis — where a still strike (an

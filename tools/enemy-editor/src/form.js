@@ -141,10 +141,19 @@ export class EnemyForm {
         for (const opt of options) {
           const o = document.createElement('option');
           o.value = opt; o.textContent = opt === '' ? '(none)' : opt;
-          if (opt === value) o.selected = true;
+          // Compared as text because a `numeric` select's options are numbers
+          // while the element only ever hands back strings.
+          if (String(opt) === String(value ?? '')) o.selected = true;
           input.appendChild(o);
         }
-        input.addEventListener('change', () => { setPath(this.def, field.key, input.value); this.afterEdit(field); });
+        input.addEventListener('change', () => {
+          // `numeric` selects store the number, not its text, so the value that
+          // reaches the enemy data is the same type the library validates.
+          // Blank stays blank — it means "unset", which is not the number zero.
+          const raw = input.value;
+          setPath(this.def, field.key, field.numeric && raw !== '' ? Number(raw) : raw);
+          this.afterEdit(field);
+        });
         break;
       }
       case 'color': {
@@ -239,8 +248,16 @@ export class EnemyForm {
           if (field.min !== undefined) input.min = field.min;
           if (field.max !== undefined) input.max = field.max;
           input.step = field.step ?? 1;
-          input.value = value ?? 0;
-          input.addEventListener('input', () => { setPath(this.def, field.key, Number(input.value)); this.afterEditLight(field); });
+          // A field declared with a null default distinguishes "unset" from
+          // zero, so an empty box stays empty instead of quietly becoming a 0
+          // the codegen would then emit as a deliberate value.
+          const optional = field.default === null;
+          input.value = value ?? (optional ? '' : 0);
+          input.addEventListener('input', () => {
+            const raw = input.value;
+            setPath(this.def, field.key, optional && raw === '' ? null : Number(raw));
+            this.afterEditLight(field);
+          });
           input.addEventListener('change', () => this.afterEdit(field));
         } else {
           input = document.createElement('input');
@@ -259,8 +276,12 @@ export class EnemyForm {
 
   // Heavy edit (structural / showIf- or note-affecting): re-render whole form.
   afterEdit(field) {
+    // A field can invalidate another — switching a telegraph's Area strands an
+    // animation that Area cannot express. The reconciler runs before the emit
+    // so the sandbox is never handed the inconsistent pair, even briefly.
+    const reconciled = field.reconcile ? field.reconcile(this.def) : false;
     this.emit();
-    if (field.rerender) { this.render(); return; }
+    if (field.rerender || reconciled) { this.render(); return; }
     if (field.rerenders !== false && this.fieldAffectsVisibility(field)) this.render();
   }
 

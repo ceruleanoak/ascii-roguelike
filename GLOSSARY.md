@@ -212,11 +212,17 @@ programming terms.
   floating in the middle of a strike that damages end to end would be a picture of the wrong
   thing. Where an Animation's marks are mirror halves of each other (`clap`), the far one is
   drawn flipped, so a pair reads as jaws closing rather than as two copies sliding the same way.
-  Optional and per-enemy: absent, the strike is the hairline.
+  Optional and per-enemy: absent, the strike is the hairline. Two modifiers, both optional: a
+  **turn** — a quarter-turn of the character within the mark, for glyphs whose meaning points
+  somewhere — and a **count** — how many copies spread along the strike, which is what makes a
+  ring read as a ring of teeth rather than as one glyph on a spoke.
 - **In code:** `telegraph.attackShape` in enemy data → `attack.attackShape`; drawn by
   `Telegraph.drawAttackShape` / `stampGlyph` along each mark `strikeMarks` reports (its `angle`,
-  `length`, and `mirror`), in Unifont. On `blink` (which has nowhere to travel) it plants at
-  `shapeCenter` over the lit area instead.
+  `length`, and `mirror`), in Unifont. `telegraph.attackShapeTurn` (`0|90|180|270`) rotates the
+  character underneath the stretch, so a turned glyph still spans its mark; `attackShapeCount`
+  sets how many marks a circle or arc is divided into, and 0 leaves each animation at its own
+  natural reading. On `blink` (which has nowhere to travel) it plants at `shapeCenter` over the
+  lit area, or spreads round the shape via `spreadMarks` when a count is authored.
 - **Not:** the enemy's own char, or an item char — an Attack Shape is a combat cue and is exempt
   from the two-tier Character Encoding Rule. Not a sprite or an animation frame sequence.
 

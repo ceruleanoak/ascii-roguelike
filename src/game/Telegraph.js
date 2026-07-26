@@ -29,6 +29,8 @@
 //     size: 'big',
 //     animation: 'doubleSweep',
 //     attackShape: '/',      // optional: the strike rides this glyph, not a stroke
+//     attackShapeTurn: 90,   // optional quarter-turn of that glyph (0|90|180|270)
+//     attackShapeCount: 8,   // optional: copies of that glyph spread along the strike
 //     beatDamage: [1.0, 0.5],
 //   }
 //
@@ -68,7 +70,7 @@
 
 import { GRID } from './GameConfig.js';
 import {
-  resolveTelegraph, strikeGeometry, strikeMarks, shapeCenter, halfWidthAt,
+  resolveTelegraph, strikeGeometry, strikeMarks, spreadMarks, shapeCenter, halfWidthAt,
 } from './TelegraphAnimation.js';
 
 const CELL = GRID.CELL_SIZE;
@@ -304,6 +306,8 @@ export function attachTelegraph(attack, enemy, dirX, dirY) {
   // The character the strike rides on, or null for the default hairline. Set
   // unconditionally so the field is never introduced lazily later.
   attack.attackShape = resolved.attackShape;
+  attack.attackShapeTurn = resolved.attackShapeTurn;
+  attack.attackShapeCount = resolved.attackShapeCount;
   return attack;
 }
 
@@ -676,9 +680,16 @@ function drawAttackShape(ctx, attack, origin, progress, color, travels) {
     // hitbox. It is drawn bright underneath the glyph — the glyph alone would be
     // one cell of picture for a shape that damages several cells wide.
     drawArea(ctx, attack.hitShape, origin, attack.facing, color, FLASH_FILL);
-    const [along, across] = shapeCenter(attack.hitShape);
-    stampGlyph(ctx, attack.attackShape, origin, attack.facing,
-      { along, across, angle: 0, length: 0, mirror: false });
+    // With a count authored, the glyph spreads round the shape the way a radial
+    // animation's does — the same picture, held still.
+    const spread = spreadMarks(attack.hitShape, attack.attackShapeCount);
+    if (spread.length === 0) {
+      const [along, across] = shapeCenter(attack.hitShape);
+      spread.push({ along, across, angle: 0, length: 0, mirror: false });
+    }
+    for (const mark of spread) {
+      stampGlyph(ctx, attack.attackShape, origin, attack.facing, mark, attack.attackShapeTurn);
+    }
     ctx.restore();
     return;
   }
@@ -689,8 +700,8 @@ function drawAttackShape(ctx, attack, origin, progress, color, travels) {
     if (p < 0) continue;
     ctx.globalAlpha = base * (i === 0 ? 1.0 : 0.3);
     const geo = strikeGeometry(attack.animation, attack.hitShape, attack.beatIndex ?? 0, p);
-    for (const mark of strikeMarks(geo)) {
-      stampGlyph(ctx, attack.attackShape, origin, attack.facing, mark);
+    for (const mark of strikeMarks(geo, attack.attackShapeCount)) {
+      stampGlyph(ctx, attack.attackShape, origin, attack.facing, mark, attack.attackShapeTurn);
     }
   }
   ctx.restore();
@@ -707,7 +718,13 @@ function drawAttackShape(ctx, attack, origin, progress, color, travels) {
 // Turning with the mark (and so with `facing`) means a '/' is the same stroke
 // whichever way the enemy is aimed — the glyph reads as part of the attack
 // rather than as a symbol sitting on top of it.
-function stampGlyph(ctx, glyph, origin, facing, mark) {
+//
+// `turn` is the author's own quarter-turn of the character within that mark, in
+// degrees, for glyphs whose meaning points somewhere: a '{' on a horizontal
+// slap opens left or right by default and may want to open up or down instead.
+// It is applied last — that is, innermost, underneath the stretch — so a turned
+// glyph still spans the mark rather than being stretched off it.
+function stampGlyph(ctx, glyph, origin, facing, mark, turn = 0) {
   const cos = Math.cos(facing), sin = Math.sin(facing);
   ctx.save();
   ctx.translate(origin.x + mark.along * cos - mark.across * sin,
@@ -715,11 +732,27 @@ function stampGlyph(ctx, glyph, origin, facing, mark) {
   ctx.rotate(facing + mark.angle);
   if (mark.mirror) ctx.scale(1, -1);
   if (mark.length > 0) {
-    // measureText is unaffected by the transform, so this is the glyph's own
-    // advance at the current font — the divisor that makes the stretch exact.
-    const width = ctx.measureText(glyph).width;
-    if (width > 0) ctx.scale(mark.length / width, 1);
+    const extent = glyphExtentAlongMark(ctx, glyph, turn);
+    if (extent > 0) ctx.scale(mark.length / extent, 1);
   }
+  if (turn) ctx.rotate(turn * Math.PI / 180);
   ctx.fillText(glyph, 0, 0);
   ctx.restore();
+}
+
+// How much of the mark the glyph covers before stretching — the divisor that
+// makes the stretch exact. Upright and upside-down, that is the character's own
+// advance; on its side, the mark runs along what was the character's height, so
+// the two measurements are not interchangeable and using width for both would
+// stretch a quarter-turned glyph by the wrong factor.
+//
+// measureText is unaffected by the current transform, so both readings are the
+// glyph's untransformed size at the current font.
+function glyphExtentAlongMark(ctx, glyph, turn) {
+  const metrics = ctx.measureText(glyph);
+  if (turn % 180 === 0) return metrics.width;
+  const height = (metrics.actualBoundingBoxAscent || 0) + (metrics.actualBoundingBoxDescent || 0);
+  // Not every canvas implementation reports the bounding box; one cell is the
+  // font size, which is the right order of magnitude when it does not.
+  return height > 0 ? height : CELL;
 }
