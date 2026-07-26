@@ -30,7 +30,7 @@
 //     animation: 'doubleSweep',
 //     attackShape: '/',      // optional: the strike rides this glyph, not a stroke
 //     attackShapeTurn: 90,   // optional quarter-turn of that glyph (0|90|180|270)
-//     attackShapeCount: 8,   // optional: copies of that glyph spread along the strike
+//     attackShapeCount: 8,   // optional: how many copies of that glyph the strike carries
 //     beatDamage: [1.0, 0.5],
 //   }
 //
@@ -214,7 +214,7 @@ export function strikeHitsBox(attack, box, from, to) {
     Math.max(1, Math.ceil(Math.abs(to - from) / SWEEP_STEP)));
   for (let i = 0; i <= steps; i++) {
     const p = from + (to - from) * (i / steps);
-    const geo = strikeGeometry(attack.animation, attack.hitShape, attack.beatIndex ?? 0, p);
+    const geo = strikeGeometry(attack.animation, attack.hitShape, attack.beatIndex ?? 0, p, attack.attackShapeCount);
     if (geometryHitsRect(geo, origin, attack.facing, padded)) return true;
   }
   return false;
@@ -530,7 +530,7 @@ export function drawTelegraph(ctx, attack) {
   if (beatProgress > 1) return true;
 
   const strikeColor = (attack.flashWhite && attack.flashTimer > 0) ? '#ffffff' : color;
-  const geo = strikeGeometry(attack.animation, attack.hitShape, attack.beatIndex ?? 0, beatProgress);
+  const geo = strikeGeometry(attack.animation, attack.hitShape, attack.beatIndex ?? 0, beatProgress, attack.attackShapeCount);
   const travels = geo.lines.length > 0 || geo.circles.length > 0 || geo.arcs.length > 0;
 
   if (attack.attackShape) {
@@ -633,7 +633,7 @@ function drawStrike(ctx, attack, origin, progress, color) {
     if (p < 0) continue;
     ctx.globalAlpha = base * (i === 0 ? 1.0 : 0.4 - (i - 1) * 0.12);
     ctx.lineWidth = Math.max(1, STRIKE_WIDTH - i);
-    traceStrike(ctx, strikeGeometry(attack.animation, attack.hitShape, attack.beatIndex ?? 0, p),
+    traceStrike(ctx, strikeGeometry(attack.animation, attack.hitShape, attack.beatIndex ?? 0, p, attack.attackShapeCount),
       origin, attack.facing);
   }
   ctx.restore();
@@ -699,7 +699,7 @@ function drawAttackShape(ctx, attack, origin, progress, color, travels) {
     const p = progress - i * GLYPH_TRAIL_SPACING;
     if (p < 0) continue;
     ctx.globalAlpha = base * (i === 0 ? 1.0 : 0.3);
-    const geo = strikeGeometry(attack.animation, attack.hitShape, attack.beatIndex ?? 0, p);
+    const geo = strikeGeometry(attack.animation, attack.hitShape, attack.beatIndex ?? 0, p, attack.attackShapeCount);
     for (const mark of strikeMarks(geo, attack.attackShapeCount)) {
       stampGlyph(ctx, attack.attackShape, origin, attack.facing, mark, attack.attackShapeTurn);
     }

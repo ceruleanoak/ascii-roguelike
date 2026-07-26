@@ -125,7 +125,7 @@ export const SECTIONS = [
         help: 'Quarter-turn of that glyph within the strike, in degrees — for characters that point somewhere, like a brace that should open up rather than sideways. Blank = upright.' },
       { key: 'telegraph.attackShapeCount', label: 'Attack shape count', type: 'number',
         min: 0, default: null, rerender: true,
-        help: 'How many copies of that glyph spread along the strike — round a ring, or along a revolving arc. Blank = each animation\'s own reading (one per mark, a character-width spacing round a circle).' },
+        help: 'How many copies of that glyph the strike carries — teeth spaced around the ring for revolve (each one a full-size arc that damages), or how densely a radiating circle is sampled. Blank = each animation\'s own reading (one per mark, a character-width spacing round a circle).' },
       { key: 'telegraph.beatDamage', label: 'Beat damage ×', type: 'json', default: null, rerender: true,
         placeholder: '[1.0, 0.5]',
         help: 'One damage multiplier per beat, e.g. [1.0, 0.5]. Multi-beat animations only.' },

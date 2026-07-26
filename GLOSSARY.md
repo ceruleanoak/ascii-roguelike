@@ -198,9 +198,15 @@ programming terms.
   later Beat re-arms the attack after its gap. Beats are the authored rhythm and compile
   directly into the pulses combat resolves against, so what the player watches and what
   connects cannot drift apart.
+  A `reverse` Beat is the return trip of the Beat before it, so it also draws its Attack Shape
+  mirrored — `doubleSweep` comes home as the same swing turned around, not as a second identical
+  one. An Animation whose *base* direction is reversed (`recoil`, `closeIn`) is not returning
+  from anywhere and is not mirrored.
 - **In code:** `animation.beats[]` (`gap` in double-seconds, `reverse` to flip that Beat's
   direction); `compilePulses` turns them into `attack.telegraphPulses`; per-Beat damage via
-  `telegraph.beatDamage[]`; live state `attack.beatIndex` / `attack.beatElapsed`.
+  `telegraph.beatDamage[]`; live state `attack.beatIndex` / `attack.beatElapsed`. The mirror
+  keys on `beat.reverse` alone (`strikeGeometry`'s `mirrorAll`), never on the animation/beat XOR
+  that sets travel direction.
 - **Not:** "pulse" — that is the compiled runtime form a Beat becomes; Beat is the authoring
   term. Not a frame or a timer tick.
 
@@ -211,16 +217,21 @@ programming terms.
   and **stretched to span the whole mark**, because the mark is the hitbox and a one-cell glyph
   floating in the middle of a strike that damages end to end would be a picture of the wrong
   thing. Where an Animation's marks are mirror halves of each other (`clap`), the far one is
-  drawn flipped, so a pair reads as jaws closing rather than as two copies sliding the same way.
+  drawn flipped, so a pair reads as jaws closing rather than as two copies sliding the same way;
+  a return-trip Beat (`doubleSweep`'s second stroke) is flipped for the same reason, and the two
+  reasons compose — a returning far half is the unflipped glyph again.
   Optional and per-enemy: absent, the strike is the hairline. Two modifiers, both optional: a
   **turn** — a quarter-turn of the character within the mark, for glyphs whose meaning points
-  somewhere — and a **count** — how many copies spread along the strike, which is what makes a
-  ring read as a ring of teeth rather than as one glyph on a spoke.
+  somewhere — and a **count** — how many copies the strike carries, which is what makes a ring
+  read as a ring of teeth rather than as one glyph on a spoke. A count never shrinks the glyph:
+  on `revolve` it repeats the whole travelling arc around the ring, so five is five full-size
+  teeth going round together and all five damage.
 - **In code:** `telegraph.attackShape` in enemy data → `attack.attackShape`; drawn by
   `Telegraph.drawAttackShape` / `stampGlyph` along each mark `strikeMarks` reports (its `angle`,
   `length`, and `mirror`), in Unifont. `telegraph.attackShapeTurn` (`0|90|180|270`) rotates the
   character underneath the stretch, so a turned glyph still spans its mark; `attackShapeCount`
-  sets how many marks a circle or arc is divided into, and 0 leaves each animation at its own
+  multiplies `strikeGeometry`'s arcs (so the extra teeth are hitboxes, not decoration) and sets
+  how densely an already-continuous circle is sampled, and 0 leaves each animation at its own
   natural reading. On `blink` (which has nowhere to travel) it plants at `shapeCenter` over the
   lit area, or spreads round the shape via `spreadMarks` when a count is authored.
 - **Not:** the enemy's own char, or an item char — an Attack Shape is a combat cue and is exempt

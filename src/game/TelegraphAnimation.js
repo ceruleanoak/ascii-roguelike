@@ -46,7 +46,7 @@
 //     animation: 'doubleSweep',       // an ANIMATIONS name — declares the beats
 //     attackShape: '/',               // optional glyph drawn instead of the strike stroke
 //     attackShapeTurn: 90,            // optional quarter-turn of that glyph (0|90|180|270)
-//     attackShapeCount: 8,            // optional: spread that many copies along the strike
+//     attackShapeCount: 8,            // optional: how many copies of that glyph the strike carries
 //     beatDamage: [1.0, 0.5],         // optional per-beat damage multipliers
 //   }
 //
@@ -372,10 +372,14 @@ export function resolveTelegraph(t, describe = 'telegraph') {
     // that. Quarter-turns only — anything finer would be a second angle
     // competing with the mark's own, and the mark is what the glyph must match.
     attackShapeTurn: normalizeTurn(t.attackShapeTurn, describe),
-    // How many copies of that glyph the strike spreads along itself. 0 leaves
-    // each animation at its own natural reading — one glyph per mark, and a
-    // character-width spacing round a circle — which is what every telegraph
-    // authored before this field existed still gets.
+    // How many copies of that glyph the strike carries. What that multiplies
+    // depends on what the animation has to multiply: `revolve` gets that many
+    // teeth spaced around the ring, each a full-size arc that damages (see
+    // `strikeGeometry`), while an animation whose stroke is already continuous
+    // — the circle a `radiate` expands — is merely sampled that many times.
+    // 0 leaves each animation at its own natural reading: one glyph per mark,
+    // and a character-width spacing round a circle. That is what every
+    // telegraph authored before this field existed still gets.
     attackShapeCount: normalizeCount(t.attackShapeCount, describe),
     // Beats compiled to the pulse contract CombatSystem already resolves:
     // cumulative delay from activation, with an optional per-beat multiplier.
@@ -432,13 +436,13 @@ function compilePulses(animation, beatDamage) {
 // the owner; nothing here knows where on screen any of it ends up, which is why
 // the same numbers serve the game renderer and the editor sandbox.
 //
-// Returns { lines, circles, arcs, markLines?, mirrorFrom? }: `lines` are
+// Returns { lines, circles, arcs, markLines?, mirrorFrom?, mirrorAll? }: `lines` are
 // [along0, across0, along1, across1] segments, `circles` are radii centred on
 // the owner, `arcs` are { radius, from, to } stretches of a circumference
 // (angles measured off facing). All three empty means nothing travels this
 // frame — that is `blink`, whose strike is the area itself.
 //
-// The two optional fields only matter to an Attack Shape glyph (see
+// The three optional fields only matter to an Attack Shape glyph (see
 // `strikeMarks`), because a hairline has neither a preferred side nor anything
 // to leave out:
 //   markLines  — indices of the lines that carry a glyph, when not all of them
@@ -448,7 +452,18 @@ function compilePulses(animation, beatDamage) {
 //   mirrorFrom — the index from which marks are the reflected half of a pair.
 //                Two strokes closing on each other are one shape and its mirror;
 //                drawing the same glyph twice reads as one chasing the other.
-export function strikeGeometry(animation, shape, beatIndex, progress) {
+//   mirrorAll  — this whole beat is a return trip, so its mark is the previous
+//                beat's reflection. `doubleSweep` comes back the way it went,
+//                and a glyph that does not turn around with it reads as a second
+//                identical swing rather than as the same one coming home.
+//
+// `count` is the telegraph's Attack Shape count, and it is a *geometry* input
+// rather than a drawing one only where it multiplies the strike itself: a
+// `revolve` with a count of five is five arcs going round the ring together,
+// and all five have to damage or the ring is showing teeth it does not have.
+// Everywhere else the count changes nothing here and only decides how densely
+// `strikeMarks` samples what is already one continuous stroke.
+export function strikeGeometry(animation, shape, beatIndex, progress, count = 0) {
   if (!animation || animation.motion === 'flash') return EMPTY_GEOMETRY;
 
   const beat = animation.beats[Math.min(beatIndex, animation.beats.length - 1)];
@@ -456,11 +471,16 @@ export function strikeGeometry(animation, shape, beatIndex, progress) {
   // what lets `doubleSweep` reuse one pass definition for the return trip.
   let t = (animation.ease || LINEAR)(clamp01(progress));
   if (!!animation.reverse !== !!beat?.reverse) t = 1 - t;
+  // Only the beat's own flag mirrors the glyph, not the XOR. An animation whose
+  // base direction is reversed (`recoil`) is not coming back from anywhere — it
+  // is a first stroke that happens to travel inward, and reflecting it would be
+  // describing a return trip that never happened.
+  const back = !!beat?.reverse;
 
   switch (animation.axis) {
     case 'radius': {
       const [lo, hi] = axisSpan(shape, 'radius');
-      return { lines: [], circles: [lerp(lo, hi, t)], arcs: [] };
+      return { lines: [], circles: [lerp(lo, hi, t)], arcs: [], mirrorAll: back };
     }
     case 'angle': {
       // Around the annulus rather than across it, riding the circumference
@@ -471,7 +491,19 @@ export function strikeGeometry(animation, shape, beatIndex, progress) {
       const radius = (lo + hi) / 2;
       const a = -Math.PI + t * 2 * Math.PI;
       const half = ARC_SWEEP / 2;
-      return { lines: [], circles: [], arcs: [{ radius, from: a - half, to: a + half }] };
+      // A count repeats the travelling arc evenly around the ring rather than
+      // subdividing it: five is five teeth going round together, each the same
+      // size as the lone one, not one tooth chopped into five slivers crammed
+      // into the same 20°. It repeats here in the geometry rather than at draw
+      // time because the strike is the hitbox — teeth that are drawn but do not
+      // damage would be the exact drift this module exists to prevent.
+      const n = count > 0 ? count : 1;
+      const arcs = [];
+      for (let i = 0; i < n; i++) {
+        const spoke = a + (i / n) * 2 * Math.PI;
+        arcs.push({ radius, from: spoke - half, to: spoke + half });
+      }
+      return { lines: [], circles: [], arcs, mirrorAll: back };
     }
     case 'along': {
       const [lo, hi] = axisSpan(shape, 'along');
@@ -485,7 +517,7 @@ export function strikeGeometry(animation, shape, beatIndex, progress) {
         const [h0, h1] = acrossSpanAt(shape, head, c0, c1);
         return {
           lines: [[lo, n0, head, h0], [lo, n1, head, h1], [head, h0, head, h1]],
-          circles: [], arcs: [],
+          circles: [], arcs: [], mirrorAll: back,
           // The rails are where the threat has already been; the leading edge is
           // the threat. Only it carries the mark.
           markLines: [2],
@@ -493,7 +525,7 @@ export function strikeGeometry(animation, shape, beatIndex, progress) {
       }
       const a = lerp(lo, hi, t);
       const [w0, w1] = acrossSpanAt(shape, a, c0, c1);
-      return { lines: [[a, w0, a, w1]], circles: [], arcs: [] };
+      return { lines: [[a, w0, a, w1]], circles: [], arcs: [], mirrorAll: back };
     }
     default: { // 'across'
       const [a0, a1] = axisSpan(shape, 'along');
@@ -502,7 +534,7 @@ export function strikeGeometry(animation, shape, beatIndex, progress) {
       if (shape.kind === 'cone') {
         const half = (shape.angleDeg * Math.PI / 180) / 2;
         const a = lerp(-half, half, t);
-        return { lines: [[0, 0, a1 * Math.cos(a), a1 * Math.sin(a)]], circles: [], arcs: [] };
+        return { lines: [[0, 0, a1 * Math.cos(a), a1 * Math.sin(a)]], circles: [], arcs: [], mirrorAll: back };
       }
       const [lo, hi] = axisSpan(shape, 'across');
       if (animation.motion === 'converge') {
@@ -510,7 +542,7 @@ export function strikeGeometry(animation, shape, beatIndex, progress) {
         const near = lerp(lo, mid, t), far = lerp(hi, mid, t);
         return {
           lines: [[a0, near, a1, near], [a0, far, a1, far]],
-          circles: [], arcs: [],
+          circles: [], arcs: [], mirrorAll: back,
           // The far half is the near half seen in a mirror — that is what makes
           // a pair of Attack Shapes read as jaws closing rather than as two
           // copies of one glyph sliding the same way.
@@ -518,7 +550,7 @@ export function strikeGeometry(animation, shape, beatIndex, progress) {
         };
       }
       const c = lerp(lo, hi, t);
-      return { lines: [[a0, c, a1, c]], circles: [], arcs: [] };
+      return { lines: [[a0, c, a1, c]], circles: [], arcs: [], mirrorAll: back };
     }
   }
 }
@@ -543,6 +575,11 @@ const ARC_SWEEP = 0.35;
 export function strikeMarks(geo, count = 0) {
   const marks = [];
   const mirrorFrom = geo.mirrorFrom ?? Infinity;
+  // Two independent reasons a mark can be reflected — it is the far half of a
+  // converging pair, or its whole beat is a return trip — and they compose by
+  // XOR: a returning half of a pair is the *un*mirrored glyph again, because
+  // reflecting a reflection is the original.
+  const back = !!geo.mirrorAll;
   const indices = geo.markLines ?? geo.lines.map((_, i) => i);
   for (const i of indices) {
     const [a0, c0, a1, c1] = geo.lines[i];
@@ -550,30 +587,28 @@ export function strikeMarks(geo, count = 0) {
       along: (a0 + a1) / 2, across: (c0 + c1) / 2,
       angle: Math.atan2(c1 - c0, a1 - a0),
       length: Math.hypot(a1 - a0, c1 - c0),
-      mirror: i >= mirrorFrom,
+      mirror: (i >= mirrorFrom) !== back,
     });
   }
-  // An arc reads as one mark by default — it is short enough that a single
-  // glyph laid along its chord covers it. An authored count breaks that chord
-  // into that many glyphs instead, each spanning its own share of the curve.
+  // One glyph per arc, laid along its chord — an arc is short enough that a
+  // single stretched character covers it. A count does not multiply glyphs here:
+  // it has already multiplied the arcs themselves back in `strikeGeometry`, so
+  // every tooth of a `revolve` arrives as its own arc and gets its own glyph
+  // without this loop knowing a count exists.
   for (const { radius, from, to } of geo.arcs) {
-    const n = count > 0 ? count : 1;
-    const step = (to - from) / n;
-    const chord = 2 * radius * Math.sin(Math.abs(step) / 2);
-    for (let i = 0; i < n; i++) {
-      const mid = from + step * (i + 0.5);
-      marks.push({
-        along: radius * Math.cos(mid), across: radius * Math.sin(mid),
-        angle: mid + Math.PI / 2, length: chord, mirror: false,
-      });
-    }
+    const mid = (from + to) / 2;
+    const chord = 2 * radius * Math.sin(Math.abs(to - from) / 2);
+    marks.push({
+      along: radius * Math.cos(mid), across: radius * Math.sin(mid),
+      angle: mid + Math.PI / 2, length: chord, mirror: back,
+    });
   }
   // A circle damages the whole way round, so it gets marks the whole way round —
   // one glyph on the facing spoke would leave the rest of a band that hurts
   // completely unlabelled. Spaced about a character apart unless the enemy
   // authored a count, laid tangentially either way.
   for (const r of geo.circles) {
-    marks.push(...ringMarks(r, count > 0 ? count : Math.max(6, Math.round((2 * Math.PI * r) / CELL))));
+    marks.push(...ringMarks(r, count > 0 ? count : Math.max(6, Math.round((2 * Math.PI * r) / CELL)), back));
   }
   return marks;
 }
@@ -582,14 +617,14 @@ export function strikeMarks(geo, count = 0) {
 // its own share of the circumference to span. Shared by the circles a radial
 // animation produces and by `blink`, which has no travelling geometry of its own
 // but can still spread its character round the shape.
-function ringMarks(radius, count) {
+function ringMarks(radius, count, mirror = false) {
   const marks = [];
   const chord = 2 * radius * Math.sin(Math.PI / count);
   for (let i = 0; i < count; i++) {
     const a = (i / count) * 2 * Math.PI;
     marks.push({
       along: radius * Math.cos(a), across: radius * Math.sin(a),
-      angle: a + Math.PI / 2, length: chord, mirror: false,
+      angle: a + Math.PI / 2, length: chord, mirror,
     });
   }
   return marks;
