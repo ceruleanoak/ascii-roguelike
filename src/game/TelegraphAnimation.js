@@ -14,13 +14,24 @@
 //                 screen while it runs: the warning has already been read, and
 //                 leaving it up buries the one moving mark that matters.
 //
+// The strike is also the hitbox. The Area is a danger *zone* — the ground the
+// player is told to leave — and standing in it costs nothing on its own; what
+// damages is the mark passing through, tested where it actually is (see
+// `Telegraph.strikeHitsBox`). A `doubleSweep` therefore has to catch the player
+// twice with two separate passes to land two hits, which is what the animation
+// has always claimed on screen and now what it means. `blink` is the exception
+// that proves the rule: it has no travelling mark, so for it the area *is* the
+// strike and the whole shape damages.
+//
 // The strike's *path* is geometry, not glyphs. An earlier version masked the
 // character grid and could only ever snap a whole cell at a time, which reads as
 // a block stuttering across the shape rather than a blade passing through it.
 // Nothing in this module knows about cells: it reports line segments in the
 // shape's own local frame and Telegraph.js draws them in pixel space. What rides
 // that path is a hairline by default, or — when the enemy declares an Attack
-// Shape — a single character carried along it.
+// Shape — a single character stretched to span it. The glyph stretches because
+// the mark is the hitbox: a one-cell character sitting at the middle of a strike
+// that damages end to end would be a picture of the wrong thing.
 //
 // The animation is the single source of truth for an attack's rhythm. A
 // `doubleSweep` *means* two hits: its beats are compiled into the pulse list
@@ -380,16 +391,22 @@ function compilePulses(animation, beatDamage) {
 // the owner; nothing here knows where on screen any of it ends up, which is why
 // the same numbers serve the game renderer and the editor sandbox.
 //
-// Returns { lines, circles, arcs, anchors? }: `lines` are [along0, across0,
-// along1, across1] segments, `circles` are radii centred on the owner, `arcs`
-// are { radius, from, to } stretches of a circumference (angles measured off
-// facing). All three empty means nothing travels this frame — that is `blink`,
-// whose strike is the area itself.
+// Returns { lines, circles, arcs, markLines?, mirrorFrom? }: `lines` are
+// [along0, across0, along1, across1] segments, `circles` are radii centred on
+// the owner, `arcs` are { radius, from, to } stretches of a circumference
+// (angles measured off facing). All three empty means nothing travels this
+// frame — that is `blink`, whose strike is the area itself.
 //
-// `anchors` is optional and only matters to an Attack Shape glyph: it says where
-// the mark rides when the strokes' own midpoints are the wrong answer. A `grow`
-// outline is three sides but only one advancing edge, and the glyph belongs on
-// that edge rather than smeared one-per-side.
+// The two optional fields only matter to an Attack Shape glyph (see
+// `strikeMarks`), because a hairline has neither a preferred side nor anything
+// to leave out:
+//   markLines  — indices of the lines that carry a glyph, when not all of them
+//                should. A `grow` outline is three sides but only one advancing
+//                edge, and the mark belongs on that edge rather than smeared
+//                one-per-side.
+//   mirrorFrom — the index from which marks are the reflected half of a pair.
+//                Two strokes closing on each other are one shape and its mirror;
+//                drawing the same glyph twice reads as one chasing the other.
 export function strikeGeometry(animation, shape, beatIndex, progress) {
   if (!animation || animation.motion === 'flash') return EMPTY_GEOMETRY;
 
@@ -428,7 +445,9 @@ export function strikeGeometry(animation, shape, beatIndex, progress) {
         return {
           lines: [[lo, n0, head, h0], [lo, n1, head, h1], [head, h0, head, h1]],
           circles: [], arcs: [],
-          anchors: [[head, (h0 + h1) / 2]],
+          // The rails are where the threat has already been; the leading edge is
+          // the threat. Only it carries the mark.
+          markLines: [2],
         };
       }
       const a = lerp(lo, hi, t);
@@ -448,7 +467,14 @@ export function strikeGeometry(animation, shape, beatIndex, progress) {
       if (animation.motion === 'converge') {
         const mid = (lo + hi) / 2;
         const near = lerp(lo, mid, t), far = lerp(hi, mid, t);
-        return { lines: [[a0, near, a1, near], [a0, far, a1, far]], circles: [], arcs: [] };
+        return {
+          lines: [[a0, near, a1, near], [a0, far, a1, far]],
+          circles: [], arcs: [],
+          // The far half is the near half seen in a mirror — that is what makes
+          // a pair of Attack Shapes read as jaws closing rather than as two
+          // copies of one glyph sliding the same way.
+          mirrorFrom: 1,
+        };
       }
       const c = lerp(lo, hi, t);
       return { lines: [[a0, c, a1, c]], circles: [], arcs: [] };
@@ -463,20 +489,55 @@ const EMPTY_GEOMETRY = { lines: [], circles: [], arcs: [] };
 // band is still empty ground the player can be standing on.
 const ARC_SWEEP = 0.35;
 
-// The points a strike can be reduced to, in the shape's local frame — where an
-// Attack Shape glyph rides. Segments and arcs report their midpoint; a circle
-// reports the point on the facing spoke; a geometry that named its own anchors
-// (see `grow`) is taken at its word.
-export function strikeAnchors(geo) {
-  if (geo.anchors) return geo.anchors;
-  const anchors = [];
-  for (const [a0, c0, a1, c1] of geo.lines) anchors.push([(a0 + a1) / 2, (c0 + c1) / 2]);
+// The strike broken into marks — one per piece of it an Attack Shape glyph can
+// be laid onto, in the shape's local frame:
+//
+//   { along, across, angle, length, mirror }
+//
+// `along`/`across` is the mark's midpoint, `angle` the direction it runs
+// (measured off facing, so the caller adds its own rotation), `length` how far
+// it spans, and `mirror` whether it is the reflected half of a pair. A glyph
+// stretched to `length` covers exactly the ground the stroke covers, which is
+// the ground that damages — the whole reason marks carry a span at all.
+export function strikeMarks(geo) {
+  const marks = [];
+  const mirrorFrom = geo.mirrorFrom ?? Infinity;
+  const indices = geo.markLines ?? geo.lines.map((_, i) => i);
+  for (const i of indices) {
+    const [a0, c0, a1, c1] = geo.lines[i];
+    marks.push({
+      along: (a0 + a1) / 2, across: (c0 + c1) / 2,
+      angle: Math.atan2(c1 - c0, a1 - a0),
+      length: Math.hypot(a1 - a0, c1 - c0),
+      mirror: i >= mirrorFrom,
+    });
+  }
+  // An arc is short enough to read as one mark, so it takes one glyph laid along
+  // its chord and turned tangent to the curve.
   for (const { radius, from, to } of geo.arcs) {
     const mid = (from + to) / 2;
-    anchors.push([radius * Math.cos(mid), radius * Math.sin(mid)]);
+    marks.push({
+      along: radius * Math.cos(mid), across: radius * Math.sin(mid),
+      angle: mid + Math.PI / 2,
+      length: 2 * radius * Math.sin(Math.abs(to - from) / 2),
+      mirror: false,
+    });
   }
-  for (const r of geo.circles) anchors.push([r, 0]);
-  return anchors;
+  // A circle damages the whole way round, so it gets marks the whole way round —
+  // one glyph on the facing spoke would leave the rest of a band that hurts
+  // completely unlabelled. Spaced about a character apart, laid tangentially.
+  for (const r of geo.circles) {
+    const count = Math.max(6, Math.round((2 * Math.PI * r) / CELL));
+    const chord = 2 * r * Math.sin(Math.PI / count);
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * 2 * Math.PI;
+      marks.push({
+        along: r * Math.cos(a), across: r * Math.sin(a),
+        angle: a + Math.PI / 2, length: chord, mirror: false,
+      });
+    }
+  }
+  return marks;
 }
 
 // The centre of a shape along its own facing axis — where a still strike (an

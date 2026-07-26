@@ -221,7 +221,15 @@ function beatSummary(name, anim, beatDamage, attackShape) {
   const move = still
     ? (attackShape ? `'${attackShape}' plants at the centre of the area` : 'the area flashes in place')
     : `${anim.motion} along ${anim.axis}${attackShape ? `, carrying '${attackShape}'` : ''}`;
-  return `${name} — ${anim.beats.length} ${plural}: ${beats.join(', ')} · ${move}`;
+  // Which shape damages is the thing an author most needs stated, because the
+  // two answers look identical in the data. A travelling strike hits only where
+  // its mark is, so the hit shape describes the ground the mark crosses rather
+  // than a region that damages by containment; `blink` is the one that damages
+  // everywhere inside its shape at once.
+  const bites = still
+    ? 'the whole hit shape damages on release'
+    : `only the ${attackShape ? 'glyph' : 'stroke'} damages — the hit shape is the ground it crosses`;
+  return `${name} — ${anim.beats.length} ${plural}: ${beats.join(', ')} · ${move} · ${bites}`;
 }
 
 // The dimensions each shape kind must carry to be drawable (and measurable).

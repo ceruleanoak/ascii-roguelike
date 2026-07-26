@@ -144,14 +144,16 @@ programming terms.
 
 ### Telegraph
 - **Definition:** The projected warning shape of an incoming enemy attack — what the player
-  *reads* — as distinct from the shape that actually deals damage. A Telegraph's warn shape may
-  be wider than its hit shape (the warning aids anticipation; it is not a 1:1 damage outline),
-  and may carry multiple timed damage pulses.
+  *reads* — as distinct from what actually deals damage. For an Animation with a travelling
+  strike, what damages is the mark itself, tested where it is on the frame; the shapes are the
+  ground it crosses, and standing on that ground costs nothing until the mark arrives. `blink` is
+  the exception that proves the rule: with no travelling mark, its hit shape damages by
+  containment on release.
 - **In code:** enemy data block `telegraph: { area, size, animation, attackShape, beatDamage }`
   naming an Area and a Telegraph Animation, or `{ warnShape, hitShape, pulses }` written out
   longhand when no Area fits; shared module `src/game/Telegraph.js` (shape descriptors
-  `rect`/`trapezoid`/`cone`/`ring`/`circle`, `hitTest`, `drawTelegraph`) consumed by
-  CombatSystem, ExploreRenderer, and the enemy-editor sandbox.
+  `rect`/`trapezoid`/`cone`/`ring`/`circle`, `attackHitsBox` / `strikeHitsBox`, `drawTelegraph`)
+  consumed by CombatSystem, ExploreRenderer, and the enemy-editor sandbox.
 - **Not:** "windup" (the timing phase of Weapon Timing — a Telegraph is the projected *shape*
   shown during a windup); the legacy single-rect windup visual (which is both warning and
   hitbox at once).
@@ -170,21 +172,23 @@ programming terms.
   expand a name into the warn/hit pair. Each Animation lists the Areas it is choreographed for
   in its own `areas`, which is what the editor's Animation dropdown filters on.
 - **Not:** "shape" — that word is reserved for the geometric descriptor an Area expands into
-  (`warnShape.kind`). Not a hitbox: the Area is the warning, and its hit shape is usually
-  smaller.
+  (`warnShape.kind`). Not a hitbox: an Area is the danger *zone*, the ground the strike will
+  cross, and being inside one is not by itself being hit.
 
 ### Telegraph Animation
 - **Definition:** The named choreography of a Telegraph, in two halves: the **tell** — the Area,
   still and blinking in place, which says *where* — and the **strike**, a thin stroke sweeping
   through that Area, which says *now*. Motion belongs to the strike alone. The two halves never
   share the screen: the tell ends the instant the strike begins, because the warning has already
-  been read and leaving it up buries the one moving mark that matters. Because an Animation
-  declares its Beats, choosing one is a balance decision, not an art decision: `doubleSweep`
-  damages twice where `sweep` damages once.
+  been read and leaving it up buries the one moving mark that matters. The strike is also the
+  hitbox, so a Beat only lands if its pass actually crosses the player: `doubleSweep` damages
+  twice only when both passes catch them. Choosing an Animation is therefore a balance decision,
+  not an art decision.
 - **In code:** the `ANIMATIONS` catalog in `src/game/TelegraphAnimation.js` (`blink`, `clap`,
   `vertical`, `slap`, `bloom`, `sweep`, `doubleSweep`, `thrust`, `recoil`, `radiate`,
   `closeIn`, `revolve`), named in data as `telegraph.animation`; `strikeGeometry` reports the
-  stroke in the shape's local frame and `Telegraph.drawTelegraph` draws each half in its phase.
+  stroke in the shape's local frame, `strikeMarks` reduces it to the mark(s) that carry the
+  glyph, and `Telegraph.drawTelegraph` draws each half in its phase.
 - **Not:** decoration layered over a separately authored rhythm — declaring `pulses` alongside
   an Animation is an authoring conflict, and the Animation wins. Not "sweep" as a generic word
   for Telegraph motion (`sweep` is one specific Animation).
@@ -203,11 +207,16 @@ programming terms.
 ### Attack Shape
 - **Definition:** A single character an enemy's strike carries instead of the default hairline
   stroke — the swing drawn as a glyph rather than as a line. It rides the same path, at the same
-  timing, turned to face the swing, so a `/` is the same stroke whichever way the enemy is aimed.
+  timing, turned to face the swing, so a `/` is the same stroke whichever way the enemy is aimed,
+  and **stretched to span the whole mark**, because the mark is the hitbox and a one-cell glyph
+  floating in the middle of a strike that damages end to end would be a picture of the wrong
+  thing. Where an Animation's marks are mirror halves of each other (`clap`), the far one is
+  drawn flipped, so a pair reads as jaws closing rather than as two copies sliding the same way.
   Optional and per-enemy: absent, the strike is the hairline.
 - **In code:** `telegraph.attackShape` in enemy data → `attack.attackShape`; drawn by
-  `Telegraph.drawAttackShape` / `stampGlyph` at the points `strikeAnchors` reports, in Unifont
-  at one cell. On `blink` (which has nowhere to travel) it plants at `shapeCenter` instead.
+  `Telegraph.drawAttackShape` / `stampGlyph` along each mark `strikeMarks` reports (its `angle`,
+  `length`, and `mirror`), in Unifont. On `blink` (which has nowhere to travel) it plants at
+  `shapeCenter` over the lit area instead.
 - **Not:** the enemy's own char, or an item char — an Attack Shape is a combat cue and is exempt
   from the two-tier Character Encoding Rule. Not a sprite or an animation frame sequence.
 

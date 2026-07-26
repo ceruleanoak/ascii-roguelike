@@ -7,7 +7,7 @@ import { Enemy } from '../../../src/entities/Enemy.js';
 import { PhysicsSystem } from '../../../src/systems/PhysicsSystem.js';
 import { ENEMIES } from '../../../src/data/enemies.js';
 import { GRID, PHYSICS } from '../../../src/game/GameConfig.js';
-import { updateEnemyMeleeAttack, syncWindupVisual, attackHitsBox, drawTelegraph } from '../../../src/game/Telegraph.js';
+import { updateEnemyMeleeAttack, syncWindupVisual, attackHitsBox, retireAfterTest, drawTelegraph } from '../../../src/game/Telegraph.js';
 
 const CELL = GRID.CELL_SIZE;
 const FONT = "px 'Unifont', monospace";
@@ -309,8 +309,11 @@ export class Sandbox {
       if (a.type === 'enemy_melee') {
         // Shared Telegraph lifecycle: timers, windup blink, owner tracking,
         // pulse re-arming — same code the real combat loop runs, stepped on the
-        // same enemy double-second clock CombatSystem uses.
-        if (updateEnemyMeleeAttack(a, dt * PHYSICS.ENEMY_TIMER_RATE)) { expired.add(a); continue; }
+        // same enemy double-second clock CombatSystem uses. Expiry is recorded
+        // and acted on after the contact test below, matching CombatSystem: a
+        // travelling strike's last slice of travel lands on the frame its
+        // duration runs out.
+        if (updateEnemyMeleeAttack(a, dt * PHYSICS.ENEMY_TIMER_RATE)) expired.add(a);
       } else {
         if (a.velocity) {
           a.position.x += a.velocity.vx * dt;
@@ -329,13 +332,15 @@ export class Sandbox {
           const dy = (a.position?.y ?? -999) - p.position.y;
           return Math.hypot(dx, dy) < CELL * 0.7;
         };
-        if (attackHitsBox(a, playerBox, legacyContact)) {
+        const connected = attackHitsBox(a, playerBox, legacyContact);
+        if (connected) {
           const res = p.takeDamage(a.damage);
           this.addFloater(res.actualDamage, p.position, '#cc4444');
-          a.hasHit = true;
         }
-        // Melee attacks get exactly one test frame per pulse (legacy contract).
-        if (a.type === 'enemy_melee') a.hasHit = true;
+        // How long a melee attack stays armed is the Telegraph module's call: one
+        // test frame for a still attack, the whole pass for a travelling strike.
+        if (a.type === 'enemy_melee') retireAfterTest(a, connected);
+        else if (connected) a.hasHit = true;
       }
     }
     this.attacks = this.attacks.filter(a => {

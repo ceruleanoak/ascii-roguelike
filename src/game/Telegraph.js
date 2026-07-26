@@ -51,15 +51,39 @@
 // byte-identical to pre-Telegraph behavior.
 //
 // The warning may be wider than the damage shape on purpose: a Telegraph aids
-// anticipation, it is not a 1:1 damage outline. Each pulse tests collision on
-// exactly one frame (the legacy melee contract) so positional dodges work.
+// anticipation, it is not a 1:1 damage outline.
+//
+// What damages depends on whether the animation travels:
+//
+//   travelling  — the strike itself is the hitbox, tested where the mark
+//                 actually is on each frame of its pass (`strikeHitsBox`). The
+//                 hit shape is the ground the mark crosses, not a region that
+//                 damages by containment: standing inside a `doubleSweep` costs
+//                 nothing until a pass reaches you, and eating both hits means
+//                 being caught by both passes. Each beat still lands at most
+//                 once, so the pass is an opportunity window, not a damage tick.
+//   `blink`     — nothing travels, so the area *is* the strike and the whole hit
+//                 shape damages on its one test frame (the legacy contract).
+//   shapeless   — the caller's legacy rect check, unchanged.
 
 import { GRID } from './GameConfig.js';
 import {
-  resolveTelegraph, strikeGeometry, strikeAnchors, shapeCenter, halfWidthAt,
+  resolveTelegraph, strikeGeometry, strikeMarks, shapeCenter, halfWidthAt,
 } from './TelegraphAnimation.js';
 
 const CELL = GRID.CELL_SIZE;
+
+// How thick the strike's mark is, in pixels, measured perpendicular to its own
+// path — the half-width, so a hairline spans twice this. Damage and drawing read
+// the same numbers on purpose: the player dodges the mark they can see, so there
+// is exactly one set of dimensions for what it is.
+const STRIKE_WIDTH = 3;   // px. The whole point: a few pixels across, not a cell
+const STRIKE_HALF = STRIKE_WIDTH / 2;
+
+// An Attack Shape is a character, so its mark is about a character thick. Short
+// of a full cell because ink never fills the em box — a glyph whose band matched
+// the font size would hit on whitespace above and below the mark.
+const GLYPH_HALF = CELL * 0.35;
 
 // Every timer in this module — and every `duration`/`flashTimer` on an entry in
 // the enemy melee attack list — runs on the enemy double-second clock: callers
@@ -147,6 +171,118 @@ export function hitTest(shape, origin, facing, box) {
   return false;
 }
 
+// ── strike hit geometry ─────────────────────────────────────────────────────
+
+// Does this attack resolve damage against its travelling mark rather than its
+// whole hit shape? Everything that moves does. `blink` does not — it has no mark
+// to dodge inside the area, so the area has to carry the hit itself.
+export function isSweptStrike(attack) {
+  return !!attack.animation && attack.animation.motion !== 'flash';
+}
+
+// Half the mark's thickness, perpendicular to its path.
+export function strikeHalfThickness(attack) {
+  return attack.attackShape ? GLYPH_HALF : STRIKE_HALF;
+}
+
+// How far through a pass the strike may advance between two samples. A mark 3px
+// wide crossing a 4-cell shape in one active window moves further between two
+// frames than it is thick, so testing only where it landed would let it tunnel
+// clean through the player. Sub-sampling the slice of travel that happened this
+// frame is what makes a thin hitbox honest at any framerate.
+const SWEEP_STEP = 0.04;        // progress per sample — ~25 samples per pass
+const SWEEP_MAX_STEPS = 32;     // ceiling, so a stalled frame can't run away
+
+// Arc segments are tessellated at this angular step for hit testing; ARC_SWEEP
+// is 0.35 rad, so a revolve's mark resolves to three chords.
+const ARC_STEP = 0.12;
+
+// Does the strike touch the box anywhere between two points in its pass? The box
+// is padded by the mark's half-thickness so the mark itself can be tested as a
+// zero-width path — the standard trick, and it keeps every primitive below a
+// plain segment/curve test with no thickness of its own to reason about.
+export function strikeHitsBox(attack, box, from, to) {
+  const origin = attack.owner ? entityCenter(attack.owner) : attack.position;
+  const half = strikeHalfThickness(attack);
+  const padded = {
+    x: box.x - half, y: box.y - half,
+    width: box.width + half * 2, height: box.height + half * 2,
+  };
+  const steps = Math.min(SWEEP_MAX_STEPS,
+    Math.max(1, Math.ceil(Math.abs(to - from) / SWEEP_STEP)));
+  for (let i = 0; i <= steps; i++) {
+    const p = from + (to - from) * (i / steps);
+    const geo = strikeGeometry(attack.animation, attack.hitShape, attack.beatIndex ?? 0, p);
+    if (geometryHitsRect(geo, origin, attack.facing, padded)) return true;
+  }
+  return false;
+}
+
+// One frozen frame of strike geometry against an axis-aligned rect, in world
+// space. Mirrors traceStrike's transform exactly — the same numbers that get
+// stroked are the ones tested.
+function geometryHitsRect(geo, origin, facing, rect) {
+  const cos = Math.cos(facing), sin = Math.sin(facing);
+  const wx = (a, c) => origin.x + a * cos - c * sin;
+  const wy = (a, c) => origin.y + a * sin + c * cos;
+
+  for (const [a0, c0, a1, c1] of geo.lines) {
+    if (segmentHitsRect(wx(a0, c0), wy(a0, c0), wx(a1, c1), wy(a1, c1), rect)) return true;
+  }
+  for (const r of geo.circles) {
+    if (circleEdgeHitsRect(origin.x, origin.y, r, rect)) return true;
+  }
+  for (const { radius, from, to } of geo.arcs) {
+    const steps = Math.max(1, Math.ceil(Math.abs(to - from) / ARC_STEP));
+    for (let i = 0; i < steps; i++) {
+      const t0 = facing + from + (to - from) * (i / steps);
+      const t1 = facing + from + (to - from) * ((i + 1) / steps);
+      if (segmentHitsRect(
+        origin.x + radius * Math.cos(t0), origin.y + radius * Math.sin(t0),
+        origin.x + radius * Math.cos(t1), origin.y + radius * Math.sin(t1),
+        rect)) return true;
+    }
+  }
+  return false;
+}
+
+// Liang–Barsky: clip the segment against the rect's four slabs and see whether
+// any of it survives. Exact, branch-cheap, and no sampling to fall between.
+function segmentHitsRect(x0, y0, x1, y1, rect) {
+  const dx = x1 - x0, dy = y1 - y0;
+  const p = [-dx, dx, -dy, dy];
+  const q = [x0 - rect.x, rect.x + rect.width - x0, y0 - rect.y, rect.y + rect.height - y0];
+  let t0 = 0, t1 = 1;
+  for (let i = 0; i < 4; i++) {
+    if (p[i] === 0) {
+      if (q[i] < 0) return false;   // parallel to this slab and outside it
+      continue;
+    }
+    const t = q[i] / p[i];
+    if (p[i] < 0) {
+      if (t > t1) return false;
+      if (t > t0) t0 = t;
+    } else {
+      if (t < t0) return false;
+      if (t < t1) t1 = t;
+    }
+  }
+  return true;
+}
+
+// The circle's *outline*, not its disc: the rect has to straddle the rim, so the
+// nearest point on it must be no further out than the radius and the furthest
+// corner no closer in. A box sitting wholly inside the circle is a miss, which
+// is the entire point of an expanding ring.
+function circleEdgeHitsRect(cx, cy, radius, rect) {
+  const nx = Math.max(rect.x, Math.min(cx, rect.x + rect.width));
+  const ny = Math.max(rect.y, Math.min(cy, rect.y + rect.height));
+  const near = Math.hypot(cx - nx, cy - ny);
+  const fx = Math.max(Math.abs(cx - rect.x), Math.abs(cx - (rect.x + rect.width)));
+  const fy = Math.max(Math.abs(cy - rect.y), Math.abs(cy - (rect.y + rect.height)));
+  return near <= radius && Math.hypot(fx, fy) >= radius;
+}
+
 // ── windup attack lifecycle (shared system half) ────────────────────────────
 
 // Attach Telegraph fields to a freshly created windup visual. Called from
@@ -210,8 +346,11 @@ export function updateEnemyMeleeAttack(attack, deltaTime) {
 
   // Track time within the current beat so an animation's sweep knows how far
   // through its pass it is. Runs for every activated attack, including
-  // single-beat ones — the first beat is the activation hit itself.
+  // single-beat ones — the first beat is the activation hit itself. The previous
+  // value is kept because the strike's hitbox is swept across the whole slice of
+  // travel a frame covers, not sampled at the point it ended on.
   if (!attack.windupPhase && attack.beatElapsed !== undefined) {
+    attack.beatElapsedPrev = attack.beatElapsed;
     attack.beatElapsed += deltaTime;
   }
 
@@ -230,6 +369,7 @@ export function updateEnemyMeleeAttack(attack, deltaTime) {
       // A new pulse is a new beat: restart the sweep for the next pass.
       attack.beatIndex = (attack.beatIndex ?? 0) + 1;
       attack.beatElapsed = 0;
+      attack.beatElapsedPrev = 0;
     }
   }
 
@@ -281,6 +421,7 @@ export function activateWindupVisual(attack) {
   // is never lazily introduced later (see CLAUDE.md anti-patterns).
   attack.beatIndex = 0;
   attack.beatElapsed = 0;
+  attack.beatElapsedPrev = 0;
 
   if (attack.telegraphPulses && attack.telegraphPulses.length > 0) {
     // Pulse 0 is the activation hit itself; later pulses re-arm on delay.
@@ -296,15 +437,34 @@ export function activateWindupVisual(attack) {
   }
 }
 
-// Does this melee attack currently reach the target hitbox? Shaped attacks
-// resolve against the hit shape anchored at the owner's live center; legacy
-// attacks fall back to the caller's rect check.
+// Does this melee attack currently reach the target hitbox? A travelling strike
+// resolves against the mark itself, swept across the travel this frame covered;
+// a still one (`blink`) resolves against the whole hit shape anchored at the
+// owner's live center; legacy attacks fall back to the caller's rect check.
 export function attackHitsBox(attack, box, legacyCheck) {
+  if (isSweptStrike(attack) && !attack.windupPhase) {
+    const from = (attack.beatElapsedPrev ?? 0) / ACTIVE_DURATION;
+    if (from > 1) return false;   // the pass is over; the beat is spent
+    const to = Math.min((attack.beatElapsed ?? 0) / ACTIVE_DURATION, 1);
+    return strikeHitsBox(attack, box, from, to);
+  }
   if (attack.hitShape) {
     const origin = attack.owner ? entityCenter(attack.owner) : attack.position;
     return hitTest(attack.hitShape, origin, attack.facing, box);
   }
   return legacyCheck();
+}
+
+// One contact test has resolved — decide whether the attack stays armed.
+//
+// A still attack gets exactly one test frame per beat (the legacy melee
+// contract): it fills its whole shape at once, so a second frame could only ever
+// find the same answer. A travelling strike is the opposite case — its mark
+// covers a sliver of the shape per frame, so latching on the first miss would
+// mean nearly every strike whiffed. It stays armed for the rest of its pass and
+// latches the moment it connects, which is what keeps a beat to one hit.
+export function retireAfterTest(attack, connected) {
+  if (connected || !isSweptStrike(attack)) attack.hasHit = true;
 }
 
 // ── shared rendering ────────────────────────────────────────────────────────
@@ -325,7 +485,6 @@ export function attackHitsBox(attack, box, legacyCheck) {
 const AREA_FILL = 0.40;      // the warning's fill at the top of the blink
 const AREA_FILL_DIM = 0.15;  // ...and at the bottom of the dip
 const FLASH_FILL = 0.70;     // a `blink` strike: the area itself, hit-bright
-const STRIKE_WIDTH = 3;   // px. The whole point: a few pixels across, not a cell
 const TRAIL_STEPS = 3;    // ghosts drawn behind the stroke, for a fluid pass
 const TRAIL_SPACING = 0.08;
 
@@ -501,8 +660,8 @@ function traceStrike(ctx, geo, origin, facing) {
 }
 
 // The Attack Shape: a single authored character carried by the strike instead of
-// the hairline. Same path, same timing, same anchors — only the mark changes, so
-// an enemy can swing a '/' without any of the choreography knowing about it.
+// the hairline. Same path, same timing, same marks — only the mark changes, so an
+// enemy can swing a '/' without any of the choreography knowing about it.
 function drawAttackShape(ctx, attack, origin, progress, color, travels) {
   const base = ctx.globalAlpha;
   ctx.save();
@@ -513,8 +672,13 @@ function drawAttackShape(ctx, attack, origin, progress, color, travels) {
   ctx.fillStyle = color;
 
   if (!travels) {
+    // `blink` has nowhere to carry a mark, so the area is both the strike and the
+    // hitbox. It is drawn bright underneath the glyph — the glyph alone would be
+    // one cell of picture for a shape that damages several cells wide.
+    drawArea(ctx, attack.hitShape, origin, attack.facing, color, FLASH_FILL);
     const [along, across] = shapeCenter(attack.hitShape);
-    stampGlyph(ctx, attack.attackShape, origin, attack.facing, along, across);
+    stampGlyph(ctx, attack.attackShape, origin, attack.facing,
+      { along, across, angle: 0, length: 0, mirror: false });
     ctx.restore();
     return;
   }
@@ -525,21 +689,37 @@ function drawAttackShape(ctx, attack, origin, progress, color, travels) {
     if (p < 0) continue;
     ctx.globalAlpha = base * (i === 0 ? 1.0 : 0.3);
     const geo = strikeGeometry(attack.animation, attack.hitShape, attack.beatIndex ?? 0, p);
-    for (const [along, across] of strikeAnchors(geo)) {
-      stampGlyph(ctx, attack.attackShape, origin, attack.facing, along, across);
+    for (const mark of strikeMarks(geo)) {
+      stampGlyph(ctx, attack.attackShape, origin, attack.facing, mark);
     }
   }
   ctx.restore();
 }
 
-// One character planted at a local-frame point and turned to face the swing, so
-// a '/' is the same stroke whichever way the enemy is aimed — the glyph reads as
-// part of the attack rather than as a symbol sitting on top of it.
-function stampGlyph(ctx, glyph, origin, facing, along, across) {
+// One character laid onto a mark: turned to run along it, stretched to span its
+// full length, and flipped when the mark is the reflected half of a pair.
+//
+// The stretch is what makes the glyph an honest picture of the hitbox. A strike
+// across a big box damages the whole width of the box; an unstretched character
+// sitting at the middle of that span shows the player a mark narrower than the
+// thing about to hit them, and they dodge the picture, not the data.
+//
+// Turning with the mark (and so with `facing`) means a '/' is the same stroke
+// whichever way the enemy is aimed — the glyph reads as part of the attack
+// rather than as a symbol sitting on top of it.
+function stampGlyph(ctx, glyph, origin, facing, mark) {
   const cos = Math.cos(facing), sin = Math.sin(facing);
   ctx.save();
-  ctx.translate(origin.x + along * cos - across * sin, origin.y + along * sin + across * cos);
-  ctx.rotate(facing);
+  ctx.translate(origin.x + mark.along * cos - mark.across * sin,
+                origin.y + mark.along * sin + mark.across * cos);
+  ctx.rotate(facing + mark.angle);
+  if (mark.mirror) ctx.scale(1, -1);
+  if (mark.length > 0) {
+    // measureText is unaffected by the transform, so this is the glyph's own
+    // advance at the current font — the divisor that makes the stretch exact.
+    const width = ctx.measureText(glyph).width;
+    if (width > 0) ctx.scale(mark.length / width, 1);
+  }
   ctx.fillText(glyph, 0, 0);
   ctx.restore();
 }
