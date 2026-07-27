@@ -2,7 +2,7 @@
 // container, binds inputs to the live def object, and calls onChange() after
 // any edit so the sandbox + codegen can refresh.
 import { SECTIONS, MECHANICS, GRID_CELL } from './schema.js';
-import { getPath, setPath, deletePath, seedBlock, clearBlock, isBlockOn, defaultFor, fieldApplies, newListItem } from './util.js';
+import { getPath, setPath, deletePath, seedBlock, clearBlock, isBlockOn, defaultFor, fieldApplies, newListItem, allFields } from './util.js';
 
 export class EnemyForm {
   constructor(container, def, onChange) {
@@ -23,6 +23,9 @@ export class EnemyForm {
 
   render() {
     this.container.innerHTML = '';
+    // Remembered so the next edit can tell whether it changed what should be on
+    // screen — see visibilitySignature().
+    this.renderedVisibility = this.visibilitySignature();
     for (const section of SECTIONS) {
       if (section.showIf && !section.showIf(this.def)) continue;
       this.container.appendChild(this.renderSection(section));
@@ -402,7 +405,7 @@ export class EnemyForm {
     const reconciled = field.reconcile ? field.reconcile(this.def) : false;
     this.emit();
     if (field.rerender || reconciled) { this.render(); return; }
-    if (field.rerenders !== false && this.fieldAffectsVisibility(field)) this.render();
+    if (field.rerenders !== false && this.visibilitySignature() !== this.renderedVisibility) this.render();
   }
 
   // Light edit (live number drag): update sandbox without re-rendering inputs.
@@ -410,9 +413,22 @@ export class EnemyForm {
     this.emit();
   }
 
-  fieldAffectsVisibility(field) {
-    // movementStyle / attackType toggle conditional sections & fields.
-    return field.key === 'movementStyle' || field.key === 'attackType';
+  // Which conditional fields the def currently calls for, as a comparable string.
+  //
+  // Asked after every edit and diffed against the answer the visible form was
+  // built from: a difference means some field just appeared or disappeared, so
+  // re-render. Derived rather than declared, which is the point — a field that
+  // gates another needs no bookkeeping and cannot be forgotten. What this
+  // replaced was a hardcoded pair of keys (movementStyle, attackType) that any
+  // third gating field had to be remembered into; `gameAnimal.role` is one, and
+  // it only works today because it separately carries `rerender: true`, a flag
+  // meant for notes doing double duty. The eight `showIf`-gated State blocks
+  // would each have needed the same remembering.
+  visibilitySignature() {
+    const bits = [];
+    for (const s of SECTIONS) if (s.showIf) bits.push(`${s.id}:${s.showIf(this.def) ? 1 : 0}`);
+    for (const f of allFields()) if (f.showIf) bits.push(`${f.key}:${fieldApplies(f, this.def) ? 1 : 0}`);
+    return bits.join('|');
   }
 }
 
