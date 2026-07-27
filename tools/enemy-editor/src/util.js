@@ -29,6 +29,21 @@ export function deepClone(v) {
   return v == null ? v : JSON.parse(JSON.stringify(v));
 }
 
+// A field's default may be written as a function of the def, for the cases where
+// the game's own fallback is derived rather than constant (keeper preferred
+// range is `attackRange * 0.8`). Every read of a default goes through here so
+// the form, the seeder, and codegen all resolve it the same way.
+export function defaultFor(field, def) {
+  return typeof field.default === 'function' ? field.default(def ?? {}) : deepClone(field.default);
+}
+
+// Whether a field applies to this def at all. A hidden field is not part of the
+// enemy — the form skips it and codegen prunes it, rather than emitting an
+// archetype's parameters onto an enemy of a different archetype.
+export function fieldApplies(field, def) {
+  return !field.showIf || field.showIf(def);
+}
+
 // Every field descriptor across core sections + mechanics.
 export function allFields() {
   const out = [];
@@ -45,8 +60,10 @@ export function buildDefaultDef() {
   const def = {};
   for (const s of SECTIONS) {
     if (s.gate) continue;
+    // Seeded in declaration order so a derived default (preferred range reads
+    // attackRange) sees the fields it depends on already written.
     for (const f of s.fields) {
-      setPath(def, f.key, deepClone(f.default));
+      setPath(def, f.key, defaultFor(f, def));
     }
   }
   return def;
@@ -59,7 +76,7 @@ export function buildDefaultDef() {
 // Seed a block's defaults onto the def (called when its toggle is enabled).
 export function seedBlock(def, block) {
   for (const f of block.fields) {
-    if (getPath(def, f.key) === undefined) setPath(def, f.key, deepClone(f.default));
+    if (getPath(def, f.key) === undefined) setPath(def, f.key, defaultFor(f, def));
   }
   if (block.bareGate) {
     // bare-gate blocks (spawnEquipment, flockBehavior, riseAgain, telegraph)

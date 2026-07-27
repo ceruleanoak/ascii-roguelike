@@ -1,11 +1,17 @@
 // Turns a live enemy def into (a) a paste-ready JS object literal for
 // src/data/enemies.js, factoring out GRID.CELL_SIZE on pixel fields and
 // pruning noise defaults, and (b) a plain JSON draft for save/load.
-import { allFields, getPath } from './util.js';
-import { MECHANICS, SECTIONS } from './schema.js';
+import { allFields, defaultFor, fieldApplies } from './util.js';
+import { MECHANICS, SECTIONS, GRID_CELL } from './schema.js';
 
 const PX_PATHS = new Set(allFields().filter(f => f.type === 'px').map(f => f.key));
-const DEFAULTS = new Map(allFields().map(f => [f.key, f.default]));
+const FIELDS = new Map(allFields().map(f => [f.key, f]));
+
+// The def currently being serialized. A derived default (keeper preferred range
+// = attackRange × 0.8) and a `showIf` both need the whole enemy, not the value
+// at hand, and threading it through every serialize() frame would touch each
+// recursive call for one shallow read.
+let emitting = null;
 
 // Always emitted at top level even when equal to default.
 const REQUIRED = new Set(['char', 'name', 'hp', 'speed', 'damage', 'attackType',
@@ -39,8 +45,9 @@ function isEmpty(v) {
 }
 
 function eqDefault(path, v) {
-  if (!DEFAULTS.has(path)) return false;
-  return JSON.stringify(DEFAULTS.get(path)) === JSON.stringify(v);
+  const field = FIELDS.get(path);
+  if (!field) return false;
+  return JSON.stringify(defaultFor(field, emitting)) === JSON.stringify(v);
 }
 
 function quoteKey(k) {
@@ -53,10 +60,11 @@ function quoteStr(s) {
 
 function pxExpr(v) {
   if (v === 0) return '0';
-  if (v % 16 === 0) {
-    const n = v / 16;
-    return n === 1 ? 'GRID.CELL_SIZE' : `GRID.CELL_SIZE * ${n}`;
-  }
+  // Halves read as cells too — a 1.5-cell tolerance is authored that way in
+  // enemies.js, and rounding it to a bare pixel count hides the intent.
+  const n = v / GRID_CELL;
+  if (Number.isInteger(n)) return n === 1 ? 'GRID.CELL_SIZE' : `GRID.CELL_SIZE * ${n}`;
+  if (Number.isInteger(n * 2)) return `GRID.CELL_SIZE * ${n}`;
   return String(v);
 }
 
@@ -99,6 +107,12 @@ function serialize(value, path, indent, insideMechanic) {
 }
 
 function shouldOmit(childPath, key, v, insideMechanic) {
+  const field = FIELDS.get(childPath);
+  // A field its `showIf` excludes belongs to a different archetype, so it is not
+  // this enemy's to carry — drop it whatever it holds. Without this, the jumper
+  // parameters below (which must never be pruned when they *do* apply) would
+  // leak onto every keeper and chaser.
+  if (field && !fieldApplies(field, emitting)) return true;
   // Inside a mechanic config, keep every knob explicit (don't prune defaults).
   if (insideMechanic) return false;
   // Required top-level fields are always emitted.
@@ -108,6 +122,9 @@ function shouldOmit(childPath, key, v, insideMechanic) {
   if (isEmpty(v)) return true;
   // An explicit block still drops unset keys, but keeps default-valued ones.
   if (EXPLICIT_BLOCKS.has(childPath.split('.')[0])) return false;
+  // The game reads this key with no fallback of its own — pruning it to match a
+  // default would hand the runtime `undefined`, not the default.
+  if (field?.noPrune) return false;
   if (eqDefault(childPath, v)) return true;
   return false;
 }
@@ -127,13 +144,24 @@ function orderedEntries(obj, path) {
 // Paste-ready entry: `  'r': { ... },` keyed by char, matching enemies.js.
 export function toEntryLiteral(def) {
   const char = def.char || '?';
-  const body = serialize(def, '', 1, false);
+  const body = emit(def, 1);
   return `${quoteStr(char)}: ${body},`;
 }
 
 // Bare object literal (no key) — for inspecting the full shape.
 export function toObjectLiteral(def) {
-  return serialize(def, '', 0, false);
+  return emit(def, 0);
+}
+
+// Single entry point for a whole-def serialization, so the def every derived
+// default and `showIf` reads is always the one being written.
+function emit(def, indent) {
+  emitting = def;
+  try {
+    return serialize(def, '', indent, false);
+  } finally {
+    emitting = null;
+  }
 }
 
 // Plain JSON for the draft store (lossless round-trip).

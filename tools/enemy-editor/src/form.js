@@ -1,8 +1,8 @@
 // Schema-driven form. Renders the core sections + mechanic blocks into a
 // container, binds inputs to the live def object, and calls onChange() after
 // any edit so the sandbox + codegen can refresh.
-import { SECTIONS, MECHANICS } from './schema.js';
-import { getPath, setPath, seedBlock, clearBlock, isBlockOn } from './util.js';
+import { SECTIONS, MECHANICS, GRID_CELL } from './schema.js';
+import { getPath, setPath, seedBlock, clearBlock, isBlockOn, defaultFor, fieldApplies } from './util.js';
 
 export class EnemyForm {
   constructor(container, def, onChange) {
@@ -54,7 +54,7 @@ export class EnemyForm {
 
     if (!on) return wrap;
     for (const field of section.fields) {
-      if (field.showIf && !field.showIf(this.def)) continue;
+      if (!fieldApplies(field, this.def)) continue;
       wrap.appendChild(this.renderField(field));
     }
     this.appendNotes(wrap, section);
@@ -71,7 +71,7 @@ export class EnemyForm {
       const body = document.createElement('div');
       body.className = 'mech-body';
       for (const field of mech.fields) {
-        if (field.showIf && !field.showIf(this.def)) continue;
+        if (!fieldApplies(field, this.def)) continue;
         body.appendChild(this.renderField(field));
       }
       this.appendNotes(body, mech);
@@ -225,11 +225,19 @@ export class EnemyForm {
         grp.className = 'px-grp';
         input = document.createElement('input');
         input.type = 'number';
-        input.value = value ?? 0;
+        // An unset key is not a zero — the game falls back to a real number, so
+        // the box stays empty and shows that number as its placeholder rather
+        // than reading "0 px" for a keeper that actually holds at 1.5 cells.
+        const fallback = defaultFor(field, this.def);
+        input.value = value ?? '';
+        input.placeholder = String(fallback);
         if (field.step) input.step = field.step;
         const hint = document.createElement('span');
         hint.className = 'px-hint';
-        const setHint = () => { hint.textContent = `${(Number(input.value) / 16).toFixed(2)} cells`; };
+        const setHint = () => {
+          const px = input.value === '' ? fallback : Number(input.value);
+          hint.textContent = `${(px / GRID_CELL).toFixed(2)} cells${input.value === '' ? ' (default)' : ''}`;
+        };
         setHint();
         input.addEventListener('input', () => {
           setPath(this.def, field.key, Number(input.value)); setHint(); this.afterEditLight(field);
@@ -248,14 +256,18 @@ export class EnemyForm {
           if (field.min !== undefined) input.min = field.min;
           if (field.max !== undefined) input.max = field.max;
           input.step = field.step ?? 1;
-          // A field declared with a null default distinguishes "unset" from
-          // zero, so an empty box stays empty instead of quietly becoming a 0
-          // the codegen would then emit as a deliberate value.
+          // An empty box always means "unset", and shows what the game falls
+          // back to as its placeholder. A field declared with a null default is
+          // one the game has no fallback for at all, so there is nothing to show.
           const optional = field.default === null;
-          input.value = value ?? (optional ? '' : 0);
+          const fallback = defaultFor(field, this.def);
+          input.value = value ?? '';
+          if (!optional) input.placeholder = String(fallback);
           input.addEventListener('input', () => {
             const raw = input.value;
-            setPath(this.def, field.key, optional && raw === '' ? null : Number(raw));
+            // Clearing the box unsets the key rather than writing a zero the
+            // codegen would then emit as a deliberate value.
+            setPath(this.def, field.key, raw === '' ? null : Number(raw));
             this.afterEditLight(field);
           });
           input.addEventListener('change', () => this.afterEdit(field));

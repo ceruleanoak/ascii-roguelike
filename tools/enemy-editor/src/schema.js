@@ -19,11 +19,24 @@
 //   'tagset'  — multi-select from options[] -> string[]
 //   'json'    — raw JSON value (objects/arrays too irregular for a widget)
 //
-// `px: true` is implied by type 'px'. `showIf(def)` hides a field unless true.
+// `px: true` is implied by type 'px'. `showIf(def)` hides a field unless true —
+// and codegen prunes a hidden field outright, because a field the archetype
+// doesn't apply to is not part of that enemy.
 // `rerender: true` re-renders the form after an edit (for fields other fields
 // or a section note depend on). `default: null` on a number marks it optional,
 // so an empty box stays unset instead of reading as 0. `reconcile(def)` repairs
 // other fields this one just invalidated; return true if it changed anything.
+//
+// `default` MUST equal the value the game falls back to when the key is absent,
+// because codegen prunes a key that equals its default — so a default that
+// disagrees with the runtime silently retunes the enemy on the way out of the
+// editor. Where the runtime fallback is derived from another field (keeper
+// preferred range is `attackRange * 0.8`), write `default` as a function of the
+// def and it is resolved wherever a default is read.
+//
+// `noPrune: true` marks a field the runtime has NO fallback for — absent, it
+// reads `undefined` and NaNs the velocity. Such a key is always emitted while
+// its `showIf` holds.
 //
 // Section descriptor extras:
 //   gate / bareGate  — same contract as MECHANICS below: the section is a block
@@ -172,34 +185,49 @@ export const SECTIONS = [
     title: 'Movement archetype',
     fields: [
       { key: 'movementStyle', label: 'Movement style', type: 'select', options: MOVEMENT_STYLES, default: 'chaser' },
-      // keeper / kiter
-      { key: 'movementConfig.preferredRange', label: 'Preferred range', type: 'px', default: GRID_CELL * 5,
+      // keeper / kiter — defaults mirror Enemy._moveKeeper / _moveKiter exactly.
+      { key: 'movementConfig.preferredRange', label: 'Preferred range', type: 'px',
+        default: (d) => (d.attackRange ?? GRID_CELL * 2) * 0.8,
+        showIf: isKeeperKiter,
+        help: 'Unset falls back to attackRange × 0.8 (Enemy._moveKeeper).' },
+      { key: 'movementConfig.rangeTolerance', label: 'Range tolerance', type: 'px', default: GRID_CELL * 1.5,
         showIf: isKeeperKiter },
-      { key: 'movementConfig.rangeTolerance', label: 'Range tolerance', type: 'px', default: GRID_CELL * 1,
-        showIf: isKeeperKiter },
-      { key: 'movementConfig.retreatThreshold', label: 'Retreat threshold', type: 'px', default: GRID_CELL * 3,
+      { key: 'movementConfig.retreatThreshold', label: 'Retreat threshold', type: 'px', default: GRID_CELL * 2,
         showIf: isKeeperKiter },
       { key: 'movementConfig.kiteDistance', label: 'Kite distance', type: 'px', default: GRID_CELL * 4,
         showIf: (d) => d.movementStyle === 'kiter' },
       { key: 'movementConfig.dive', label: 'Dive at player', type: 'bool', default: true,
         showIf: isKeeperKiter },
-      // jumper
+      // jumper — JumpMechanic has no numeric fallback for interval/speed/duration
+      // (they chain to legacy `jumpBehavior`, then to undefined, which NaNs the
+      // jump velocity), so those three are noPrune.
       { key: 'movementConfig.jumpInterval', label: 'Jump interval (dbl-sec)', type: 'number', min: 0.1, step: 0.1, default: 1.2,
-        showIf: (d) => d.movementStyle === 'jumper' },
+        noPrune: true, showIf: (d) => d.movementStyle === 'jumper' },
       { key: 'movementConfig.jumpSpeed', label: 'Jump speed (px/s)', type: 'number', default: 220,
-        showIf: (d) => d.movementStyle === 'jumper' },
+        noPrune: true, showIf: (d) => d.movementStyle === 'jumper' },
       { key: 'movementConfig.jumpDuration', label: 'Jump duration (dbl-sec)', type: 'number', min: 0.05, step: 0.05, default: 0.35,
+        noPrune: true, showIf: (d) => d.movementStyle === 'jumper' },
+      { key: 'movementConfig.zigzagStrength', label: 'Zigzag strength (0-1)', type: 'number', min: 0, max: 1, step: 0.05, default: 0.75,
         showIf: (d) => d.movementStyle === 'jumper' },
-      { key: 'movementConfig.zigzagStrength', label: 'Zigzag strength (0-1)', type: 'number', min: 0, max: 1, step: 0.05, default: 0.5,
+      { key: 'movementConfig.arcHeight', label: 'Arc height (px)', type: 'number', default: 0,
+        showIf: (d) => d.movementStyle === 'jumper',
+        help: 'Purely visual parabolic lift, peaking mid-flight. 0 = flat hop.' },
+      // Optional water overrides — a jumper crossing water swims instead of
+      // hopping. Unset, each falls back to its land counterpart.
+      { key: 'movementConfig.waterJumpInterval', label: 'Water jump interval (dbl-sec)', type: 'number', min: 0.1, step: 0.1, default: null,
         showIf: (d) => d.movementStyle === 'jumper' },
-      { key: 'movementConfig.arcHeight', label: 'Arc height (px)', type: 'number', default: 6,
+      { key: 'movementConfig.waterJumpSpeed', label: 'Water jump speed (px/s)', type: 'number', default: null,
+        showIf: (d) => d.movementStyle === 'jumper' },
+      { key: 'movementConfig.waterJumpDuration', label: 'Water jump duration (dbl-sec)', type: 'number', min: 0.05, step: 0.05, default: null,
         showIf: (d) => d.movementStyle === 'jumper' },
       // ambusher
-      { key: 'movementConfig.wakeRadius', label: 'Wake radius', type: 'px', default: GRID_CELL * 3,
+      { key: 'movementConfig.wakeRadius', label: 'Wake radius', type: 'px', default: GRID_CELL * 4,
         showIf: (d) => d.movementStyle === 'ambusher' },
-      { key: 'movementConfig.burstSpeed', label: 'Burst speed (px/s)', type: 'number', default: 200,
-        showIf: (d) => d.movementStyle === 'ambusher' },
-      { key: 'movementConfig.burstDuration', label: 'Burst duration (dbl-sec)', type: 'number', min: 0.1, step: 0.1, default: 0.6,
+      { key: 'movementConfig.burstSpeed', label: 'Burst speed (px/s)', type: 'number',
+        default: (d) => (d.speed ?? 60) * 2.5,
+        showIf: (d) => d.movementStyle === 'ambusher',
+        help: 'Unset falls back to speed × 2.5.' },
+      { key: 'movementConfig.burstDuration', label: 'Burst duration (dbl-sec)', type: 'number', min: 0.1, step: 0.1, default: 1.0,
         showIf: (d) => d.movementStyle === 'ambusher' },
     ]
   },
