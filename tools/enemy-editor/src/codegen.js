@@ -21,12 +21,13 @@ const REQUIRED = new Set(['char', 'name', 'hp', 'speed', 'damage', 'attackType',
 const ORDER = ['char', 'name', 'description', 'spellDescription', 'tier', 'affinities',
   'hp', 'speed', 'damage', 'color', 'attackType', 'attackRange', 'aggroRange',
   'attackCooldown', 'attackWindup', 'projectileType', 'isImpact', 'telegraph',
-  'mass', 'acceleration', 'knockbackMultiplier',
+  'mass', 'acceleration', 'knockbackMultiplier', 'knockbackResistance',
   'decisionInterval', 'idleBehavior', 'windupMovement', 'windupImmune',
   'movementStyle', 'movementConfig',
+  'pacifist', 'isDummy',
   'float', 'lavaImmune', 'grassStealth', 'shellCamouflage', 'waterAffinity',
   'swimAffinity', 'freezePermanent', 'packCoordination', 'mistThicken',
-  'sapDamage', 'sapDamageInterval', 'elementalAffinity', 'sfx',
+  'sapDamage', 'sapDamageInterval', 'elementalAffinity', 'drops', 'sfx',
   ...MECHANICS.map(m => m.id)];
 
 const MECH_KEYS = new Set(MECHANICS.map(m => m.id));

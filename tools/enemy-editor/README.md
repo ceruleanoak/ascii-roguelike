@@ -79,6 +79,17 @@ When the enemy contract changes in `src/data/enemies.js` / `Enemy.js` /
 the real code, so behavior never drifts; only the form/codegen field catalog is
 hand-maintained.
 
+**A field's `default` is a contract with the runtime, not documentation.**
+Codegen prunes any key equal to its default, so a default that disagrees with
+what the game falls back to silently retunes the enemy on the way out of the
+editor. Copy the fallback from the read site — write it as a function of the def
+when the game derives it (`preferredRange` is `attackRange * 0.8`), and mark the
+field `noPrune` when the game has no fallback at all and would read `undefined`.
+A field that only applies to some enemies carries a `showIf`, which both hides it
+in the form and prunes it from the output, so one archetype's parameters never
+land on another's. `tools/debug/editor-roundtrip.mjs` checks all of this against
+the whole registry.
+
 Telegraph Areas and animations are the exception: `src/telegraph.js` imports
 `AREA_PRESETS` / `ANIMATIONS` / `SIZES` from `src/game/TelegraphAnimation.js`, so
 adding an Area or animation to the library makes it selectable here with no edit

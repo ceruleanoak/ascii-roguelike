@@ -61,8 +61,11 @@ export function buildDefaultDef() {
   for (const s of SECTIONS) {
     if (s.gate) continue;
     // Seeded in declaration order so a derived default (preferred range reads
-    // attackRange) sees the fields it depends on already written.
+    // attackRange) sees the fields it depends on already written — and so a
+    // `showIf` reading an earlier field in the same section (the movement
+    // parameters read movementStyle) is answered against a def that has it.
     for (const f of s.fields) {
+      if (!fieldApplies(f, def)) continue;
       setPath(def, f.key, defaultFor(f, def));
     }
   }
@@ -76,6 +79,10 @@ export function buildDefaultDef() {
 // Seed a block's defaults onto the def (called when its toggle is enabled).
 export function seedBlock(def, block) {
   for (const f of block.fields) {
+    // A field the block's own shape excludes (the rabbit-only burrow timer on a
+    // moose) is not seeded — it appears, already answered by its runtime
+    // fallback, only once the choice that needs it is made.
+    if (!fieldApplies(f, def)) continue;
     if (getPath(def, f.key) === undefined) setPath(def, f.key, defaultFor(f, def));
   }
   if (block.bareGate) {

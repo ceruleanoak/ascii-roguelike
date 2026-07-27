@@ -65,12 +65,17 @@ export const EFFECT_OPTIONS = [
   'charm', 'blind', 'dizzy', 'physical'
 ];
 
-export const ATTACK_TYPES = ['melee', 'ranged', 'magic', 'fire', 'sap', 'tongue', 'none'];
+// 'custom' means the standard attack pipeline no-ops and a Mechanic drives the
+// strike entirely (the Sniper). It is a real authored value, not a placeholder —
+// without it in the list the Sniper loads showing 'melee' and the first touch of
+// the form rewrites the def.
+export const ATTACK_TYPES = ['melee', 'ranged', 'magic', 'fire', 'sap', 'tongue', 'none', 'custom'];
 export const PROJECTILE_TYPES = ['', 'arrow', 'rock', 'potion', 'magic', 'fire'];
 export const MOVEMENT_STYLES = ['chaser', 'keeper', 'kiter', 'jumper', 'ambusher'];
 export const IDLE_BEHAVIORS = ['wander', 'stationary'];
 export const WINDUP_MOVEMENTS = ['stop', 'advance', 'retreat'];
 export const TIER_OPTIONS = ['weak', 'normal', 'elite', 'boss'];
+export const GAME_ANIMAL_ROLES = ['moose', 'rabbit'];
 
 const isKeeperKiter = (d) => d.movementStyle === 'keeper' || d.movementStyle === 'kiter';
 
@@ -98,7 +103,8 @@ export const SECTIONS = [
       { key: 'hp', label: 'HP', type: 'number', min: 1, default: 3 },
       { key: 'speed', label: 'Speed (px/s)', type: 'number', min: 0, default: 60 },
       { key: 'damage', label: 'Damage', type: 'number', min: 0, default: 1 },
-      { key: 'attackType', label: 'Attack type', type: 'select', options: ATTACK_TYPES, default: 'melee' },
+      { key: 'attackType', label: 'Attack type', type: 'select', options: ATTACK_TYPES, default: 'melee',
+        help: "'custom' hands the whole strike to a mechanic — the standard windup/attack pipeline no-ops." },
       { key: 'attackRange', label: 'Attack range', type: 'px', default: GRID_CELL * 2 },
       { key: 'aggroRange', label: 'Aggro range', type: 'px', default: GRID_CELL * 8 },
       { key: 'attackCooldown', label: 'Attack cooldown (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 1.5,
@@ -168,6 +174,8 @@ export const SECTIONS = [
         help: 'Inertia multiplier. 0.3 light, 5 heavy.' },
       { key: 'acceleration', label: 'Acceleration (px/s²)', type: 'number', min: 0, default: 600 },
       { key: 'knockbackMultiplier', label: 'Knockback multiplier', type: 'number', min: 0, step: 0.1, default: 1 },
+      { key: 'knockbackResistance', label: 'Knockback resistance (0-1)', type: 'number', min: 0, max: 1, step: 0.05, default: 0,
+        help: 'Fraction of incoming hit knockback absorbed. 1 = pinned in place (the training dummy on its stick).' },
     ]
   },
   {
@@ -234,7 +242,15 @@ export const SECTIONS = [
   {
     id: 'flags',
     title: 'Interaction flags',
+    note: pacifistNotes,
     fields: [
+      // The two flags that suppress whole systems rather than tune one. They sit
+      // first because everything below them is conditional on the enemy actually
+      // fighting or actually taking damage.
+      { key: 'pacifist', label: 'Pacifist (never fights)', type: 'bool', default: false,
+        help: 'Skips the aggro/chase/attack state machine entirely (Enemy.update). The enemy still moves — a mechanic has to drive it (gameAnimal, patrol).' },
+      { key: 'isDummy', label: 'Dummy (takes no damage)', type: 'bool', default: false,
+        help: 'takeDamage() zeroes the amount, so the enemy is indestructible and shows hit feedback only. The training post.' },
       { key: 'float', label: 'Float (over hazards)', type: 'bool', default: false },
       { key: 'lavaImmune', label: 'Lava immune', type: 'bool', default: false },
       { key: 'grassStealth', label: 'Grass stealth', type: 'bool', default: false },
@@ -267,12 +283,28 @@ export const SECTIONS = [
     ]
   },
   {
+    id: 'loot',
+    title: 'Loot',
+    note: lootNotes,
+    fields: [
+      // Default is the empty list, not null: LootSystem reads `drops && length`,
+      // so an absent key and an authored empty list are the same instruction —
+      // nothing fixed drops. Writing it that way lets codegen prune the marker
+      // without the schema claiming a fallback the game doesn't have.
+      { key: 'drops', label: 'Fixed drops', type: 'json', default: [],
+        placeholder: '[{"char":"m","chance":0.5}]',
+        help: 'An explicit drop list, each rolled independently against its own chance (luck scales it). Only consulted when the affinity/tier generator has nothing to work with.' },
+    ]
+  },
+  {
     id: 'sfx',
     title: 'Audio (SFX)',
     fields: [
       { key: 'sfx.hit', label: 'Hit SFX', type: 'text', default: '' },
       { key: 'sfx.death', label: 'Death SFX', type: 'text', default: '',
         help: 'Single name, or comma list for random pick.' },
+      { key: 'sfx.aggro', label: 'Aggro SFX', type: 'text', default: '',
+        help: "Played the moment the enemy notices the player. Unset plays the shared 'aggro' cue." },
     ]
   },
 ];
@@ -532,4 +564,106 @@ export const MECHANICS = [
       { key: 'armorMechanic.armorChunks', label: 'Armor chunks', type: 'number', default: 3 },
     ]
   },
+  {
+    // Waypoint path-follower. The waypoints themselves are not authored here —
+    // the spawning system writes `enemy.patrolWaypoints` in pixel space (the
+    // Aquifer eel), so this block only tunes how the path is walked.
+    id: 'patrol', title: 'Patrol path', gate: 'patrol',
+    bareGate: true,
+    fields: [
+      { key: 'patrol.speed', label: 'Patrol speed (px/s)', type: 'number', min: 0,
+        default: (d) => d.speed ?? 60,
+        help: 'Unset cruises at the enemy\'s own speed.' },
+      { key: 'patrol.loop', label: 'Loop (else ping-pong)', type: 'bool', default: false },
+      { key: 'patrol.arriveGap', label: 'Arrive gap', type: 'px', default: GRID_CELL * 0.5,
+        help: 'How close counts as having reached a waypoint.' },
+    ]
+  },
+  {
+    // Huntable game — flee behavior for animals the player stalks rather than
+    // fights. Pairs with `pacifist`, which is what keeps the combat FSM out of
+    // the way so this mechanic owns the movement.
+    id: 'gameAnimal', title: 'Game animal (huntable)', gate: 'gameAnimal',
+    bareGate: true,
+    fields: [
+      { key: 'gameAnimal.role', label: 'Role', type: 'select', options: GAME_ANIMAL_ROLES, default: 'moose', rerender: true,
+        help: 'moose bolts for the nearest exit on sight. rabbit runs, then burrows until you hold still — until its first wound, after which it flees like the moose.' },
+      { key: 'gameAnimal.fleeSpeedMult', label: 'Flee speed ×', type: 'number', min: 0, step: 0.1, default: 1.4 },
+      { key: 'gameAnimal.preBurrowRunTime', label: 'Pre-burrow run (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 1.0,
+        showIf: (d) => d.gameAnimal?.role === 'rabbit',
+        help: 'How long the rabbit runs before it goes to ground.' },
+      { key: 'gameAnimal.idleTwitch', label: 'Idle twitch (small hops)', type: 'bool', default: false,
+        help: 'Brief hops every couple of seconds while idling, overriding a stationary idle for that window.' },
+    ]
+  },
+  {
+    // The Sniper's whole behavior: it suspends the core FSM every frame and owns
+    // velocity, position, and state outright, so every knob it reads lives here
+    // rather than in the core sections. Timers are double-seconds like the rest.
+    id: 'sniperMechanic', title: 'Sniper', gate: 'sniperMechanic.enabled',
+    fields: [
+      { key: 'sniperMechanic.visionRange', label: 'Vision range', type: 'px', default: GRID_CELL * 40 },
+      { key: 'sniperMechanic.visionLockTime1', label: 'Track → aim (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 2.0,
+        help: 'Obstructed line of sight builds this 3× slower but never resets it — breaking sight delays the lock, it does not break it.' },
+      { key: 'sniperMechanic.visionLockTime2', label: 'Aim → fire (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 1.0 },
+      { key: 'sniperMechanic.reticuleSpeed', label: 'Reticule speed (px/s)', type: 'number', min: 0, default: 220,
+        help: 'How fast the aim point chases the player. Above player walk speed (180) and below a dodge roll (~297) is what makes rolling the answer.' },
+      { key: 'sniperMechanic.telegraphTime', label: 'Telegraph (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 0.5,
+        help: 'Committed — the shot cannot be interrupted once this starts.' },
+      { key: 'sniperMechanic.beamDamage', label: 'Beam damage', type: 'number', min: 0, default: 4 },
+      { key: 'sniperMechanic.beamFadeTime', label: 'Beam fade (sec)', type: 'number', min: 0, step: 0.1, default: 0.6,
+        help: 'Purely the VFX lifetime of the fired beam. Real seconds — the beam is a game-side effect, not an enemy timer.' },
+      { key: 'sniperMechanic.cooldownAfterFire', label: 'Cooldown after fire (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 2.0 },
+      { key: 'sniperMechanic.nearRange', label: 'Near range (vanish trigger)', type: 'px', default: GRID_CELL * 5,
+        help: 'Closer than this and the Sniper hides rather than shoots.' },
+      { key: 'sniperMechanic.hideDelay', label: 'Hide delay (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 0.5 },
+      { key: 'sniperMechanic.hiddenMoveSpeed', label: 'Hidden move speed (px/s)', type: 'number', min: 0,
+        default: (d) => (d.speed ?? 60) * 3,
+        help: 'Speed while invisible and repositioning. Unset falls back to speed × 3.' },
+      { key: 'sniperMechanic.disturbRadius', label: 'Disturb radius', type: 'px', default: GRID_CELL * 2,
+        help: 'Background objects it brushes past while hidden shake — the only tell for where it went.' },
+      { key: 'sniperMechanic.meleeRange', label: 'Melee range', type: 'px', default: GRID_CELL * 1.5,
+        help: 'Below half HP, a player inside this range triggers the cornered dagger instead.' },
+      { key: 'sniperMechanic.daggerDamage', label: 'Dagger damage', type: 'number', min: 0, default: 3 },
+      { key: 'sniperMechanic.daggerWindup', label: 'Dagger windup (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 0.4 },
+      { key: 'sniperMechanic.daggerCooldown', label: 'Dagger cooldown (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 1.2 },
+    ]
+  },
 ];
+
+// ── SECTION NOTES ───────────────────────────────────────────────────────────
+
+// Both suppression flags hide a whole system, and each one is only coherent in
+// company: a pacifist with nothing driving it stands still forever, and a dummy
+// that can still fight is a training post that hits back.
+function pacifistNotes(def) {
+  const notes = [];
+  if (def.pacifist && !def.gameAnimal && !def.patrol) {
+    notes.push({
+      level: 'warn',
+      text: 'Pacifist with no gameAnimal or patrol block — the combat FSM is skipped and nothing else moves this enemy, so it will idle in place.',
+    });
+  }
+  if (def.isDummy && !def.pacifist) {
+    notes.push({
+      level: 'warn',
+      text: 'Dummy without pacifist — it takes no damage but still chases and attacks.',
+    });
+  }
+  return notes;
+}
+
+// The affinity/tier generator and the fixed list are alternatives, not a blend:
+// an enemy carrying both affinities and a tier never reaches its `drops`.
+function lootNotes(def) {
+  if (!Array.isArray(def.drops) || def.drops.length === 0) return [];
+  const affinities = def.affinities?.length ? def.affinities : (def.dropTable ? [def.dropTable] : null);
+  const tier = def.tier || def.rarityProfile;
+  if (affinities && tier) {
+    return [{
+      level: 'warn',
+      text: `Affinities + tier are set, so loot is generated from them and this fixed list never rolls. Clear the affinities or the tier to use it.`,
+    }];
+  }
+  return [];
+}
