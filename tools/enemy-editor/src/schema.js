@@ -193,11 +193,11 @@ export const SECTIONS = [
     title: 'Movement archetype',
     fields: [
       { key: 'movementStyle', label: 'Movement style', type: 'select', options: MOVEMENT_STYLES, default: 'chaser' },
-      // keeper / kiter — defaults mirror Enemy._moveKeeper / _moveKiter exactly.
+      // keeper / kiter — defaults mirror enemyMovement.moveKeeper / moveKiter exactly.
       { key: 'movementConfig.preferredRange', label: 'Preferred range', type: 'px',
         default: (d) => (d.attackRange ?? GRID_CELL * 2) * 0.8,
         showIf: isKeeperKiter,
-        help: 'Unset falls back to attackRange × 0.8 (Enemy._moveKeeper).' },
+        help: 'Unset falls back to attackRange × 0.8 (enemyMovement.moveKeeper).' },
       { key: 'movementConfig.rangeTolerance', label: 'Range tolerance', type: 'px', default: GRID_CELL * 1.5,
         showIf: isKeeperKiter },
       { key: 'movementConfig.retreatThreshold', label: 'Retreat threshold', type: 'px', default: GRID_CELL * 2,

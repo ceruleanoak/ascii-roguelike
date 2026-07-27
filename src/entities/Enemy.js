@@ -41,6 +41,7 @@ import { RiseAgainMechanic } from './enemyMechanics/RiseAgainMechanic.js';
 import { PatrolMechanic } from './enemyMechanics/PatrolMechanic.js';
 import { GameAnimalMechanic } from './enemyMechanics/GameAnimalMechanic.js';
 import { SniperMechanic } from './enemyMechanics/SniperMechanic.js';
+import { updateMovement, updateWanderMovement, applyWindupMovement } from './enemyMovement.js';
 
 // ─── Enemy AI Debug Logger ─────────────────────────────────────────────────
 // Toggle in browser console: window.ENEMY_AI_DEBUG = true
@@ -1030,7 +1031,7 @@ export class Enemy {
               // Reached the mark — wander while the search timer ticks down.
               // Stationary enemies still hold position; everyone else drifts.
               this.state = 'idle';
-              this._updateWanderMovement(speedMultiplier, deltaTime);
+              updateWanderMovement(this, speedMultiplier, deltaTime);
             } else {
               // Chase to memory mark using vector navigation
               this.state = 'chase';
@@ -1048,10 +1049,10 @@ export class Enemy {
       } else {
         // Too far and not enraged, no memory - passive idle behavior
         this.state = 'idle';
-        this._updateWanderMovement(speedMultiplier, deltaTime);
+        updateWanderMovement(this, speedMultiplier, deltaTime);
       }
     } else if (this.state === 'windup') {
-      this._applyWindupMovement(speedMultiplier);
+      applyWindupMovement(this, speedMultiplier);
     } else if ((this.attackType === 'melee' || this.attackType === 'item_melee') && effectiveDistance < this.attackRange && this.attackTimer > 0 && (this.enraged || effectiveDistance <= effectiveAggroRange)) {
       // Player is inside melee AOE range while on cooldown — back away so the next
       // attack hits. The enemy retreats until it reaches its natural attack distance.
@@ -1298,7 +1299,7 @@ export class Enemy {
         }
       } else if (canSeePlayer) {
         // Direct chase — dispatch through movement archetype
-        this._updateMovement(speedMultiplier, this.target.position, deltaTime);
+        updateMovement(this, speedMultiplier, this.target.position, deltaTime);
       } else {
         // In aggro range but can't see player and no memory mark — stop and wait.
         // Only zero velocity on transition from chase; preserve natural idle movement.
@@ -1497,254 +1498,12 @@ export class Enemy {
     this.velocity.vy += (dvy / mag) * step;
   }
 
-  // ── Movement Archetype Dispatch ───────────────────────────────────────────
-
-  /**
-   * Called from update() when enemy has line-of-sight to player and is chasing.
-   * Routes to the correct movement implementation based on movementStyle.
-   */
-  _updateMovement(speedMultiplier, targetPos, deltaTime) {
-    // Trap Goblin state (windup hold / post-trap flee / proactive flee) is fully
-    // handled in the trap-layer block in update() — those overrides run after
-    // this dispatch and unconditionally, so they're safe even if _updateMovement
-    // is skipped (e.g. when vision is lost).
-
-    // Shield phase movement: Mirror Imp retreats while its reflect shield is active
-    if (this.shieldActive && this.data.reflectShield?.shieldPhaseMovement) {
-      const dx = this.position.x - targetPos.x;
-      const dy = this.position.y - targetPos.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist > 0) {
-        this.targetVelocity.vx = (dx / dist) * this.speed * speedMultiplier;
-        this.targetVelocity.vy = (dy / dist) * this.speed * speedMultiplier;
-      }
-      return;
-    }
-
-    switch (this.movementStyle) {
-      case 'keeper':   return this._moveKeeper(speedMultiplier, targetPos, deltaTime);
-      case 'kiter':    return this._moveKiter(speedMultiplier, targetPos, deltaTime);
-      case 'ambusher': return this._moveAmbusher(speedMultiplier, targetPos, deltaTime);
-      case 'jumper':   return this._moveChaser(speedMultiplier, targetPos, deltaTime); // jump override applied post-update
-      default:         return this._moveChaser(speedMultiplier, targetPos, deltaTime);
-    }
-  }
-
-  /** chaser: direct pursuit using vector navigation */
-  _moveChaser(speedMultiplier, targetPos, deltaTime) {
-    if (this.collisionMap) {
-      this.updateVectorNavigation(speedMultiplier, targetPos, deltaTime);
-    } else {
-      const dx = targetPos.x - this.position.x;
-      const dy = targetPos.y - this.position.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist > 0) {
-        this.targetVelocity.vx = (dx / dist) * this.speed * speedMultiplier;
-        this.targetVelocity.vy = (dy / dist) * this.speed * speedMultiplier;
-      }
-    }
-  }
-
-  /**
-   * keeper: maintain preferred range, sidestep while at range, backpedal if crowded.
-   * Ranged/magic enemies use this so they fire from effective distance rather than
-   * chasing into melee range.
-   *
-   * Config (all optional — defaults shown):
-   *   preferredRange     = attackRange * 0.8
-   *   rangeTolerance     = GRID.CELL_SIZE * 1.5
-   */
-  _moveKeeper(speedMultiplier, targetPos, deltaTime) {
-    const dx = targetPos.x - this.position.x;
-    const dy = targetPos.y - this.position.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist === 0) return;
-
-    const cfg = this.movementConfig;
-    const preferred  = cfg.preferredRange  ?? (this.attackRange * 0.8);
-    const tolerance  = cfg.rangeTolerance  ?? (GRID.CELL_SIZE * 1.5);
-
-    const dirX = dx / dist;
-    const dirY = dy / dist;
-    // Perpendicular axis for circle-strafing
-    const perpX = -dirY * this.keeperStrafeDir;
-    const perpY =  dirX * this.keeperStrafeDir;
-
-    if (dist < preferred - tolerance) {
-      // Too close — back away at full speed
-      this.targetVelocity.vx = -dirX * this.speed * speedMultiplier;
-      this.targetVelocity.vy = -dirY * this.speed * speedMultiplier;
-    } else if (dist > preferred + tolerance) {
-      // Too far — approach using nav system to route around walls
-      this._moveChaser(speedMultiplier, targetPos, deltaTime);
-    } else {
-      // In preferred range — sidestep at 60% speed to avoid being a stationary target
-      this.targetVelocity.vx = perpX * this.speed * speedMultiplier * 0.6;
-      this.targetVelocity.vy = perpY * this.speed * speedMultiplier * 0.6;
-    }
-  }
-
-  /**
-   * kiter: hold kiteDistance and circle-strafe while the core attack cooldown
-   * ticks; when the attack is ready, dive straight in and let the core
-   * windup → attack states deliver the hit (the windup '!' is the tell).
-   * The dive cadence IS attackCooldown — there is no separate hover/rush
-   * sub-state. Pack dive desync emerges from per-enemy cooldown timing.
-   *
-   * Config (all optional — defaults shown):
-   *   kiteDistance       = GRID.CELL_SIZE * 4
-   *   retreatThreshold   = GRID.CELL_SIZE * 2
-   *   dive               = true   (false: never dive — e.g. Trap Goblin)
-   */
-  _moveKiter(speedMultiplier, targetPos, deltaTime) {
-    // Only activate kite tactics if this enemy or a packmate has detected the player
-    const packDetected = this.detectionIndicatorTimer > 0 ||
-      (this.packmates && this.packmates.some(m => m.detectionIndicatorTimer > 0));
-
-    if (!packDetected) {
-      return this._moveChaser(speedMultiplier, targetPos, deltaTime);
-    }
-
-    const cfg = this.movementConfig;
-    const dx = targetPos.x - this.position.x;
-    const dy = targetPos.y - this.position.y;
-    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-
-    // DIVE: attack off cooldown — close in; windup triggers at attackRange
-    if (cfg.dive !== false && this.attackTimer <= 0) {
-      this.targetVelocity.vx = (dx / dist) * this.speed * speedMultiplier * 1.2;
-      this.targetVelocity.vy = (dy / dist) * this.speed * speedMultiplier * 1.2;
-      return;
-    }
-
-    // On cooldown: hold the kite ring with packmate separation
-    const kiteDistance = cfg.kiteDistance ?? GRID.CELL_SIZE * 4;
-    const retreatThreshold = cfg.retreatThreshold ?? GRID.CELL_SIZE * 2;
-    let sepX = 0, sepY = 0;
-    const sepDist = GRID.CELL_SIZE * 2;
-    if (this.packmates) {
-      for (const mate of this.packmates) {
-        const mx = this.position.x - mate.position.x;
-        const my = this.position.y - mate.position.y;
-        const md = Math.sqrt(mx * mx + my * my);
-        if (md < sepDist && md > 0) {
-          const f = (sepDist - md) / sepDist;
-          sepX += (mx / md) * f;
-          sepY += (my / md) * f;
-        }
-      }
-    }
-
-    let vx, vy;
-    if (dist < retreatThreshold) {
-      // Too close — retreat
-      vx = (-dx / dist) * 0.8 + sepX * 0.2;
-      vy = (-dy / dist) * 0.8 + sepY * 0.2;
-    } else if (dist <= kiteDistance + GRID.CELL_SIZE * 2) {
-      // At kite distance — circle-strafe
-      vx = (-dy / dist) * 0.6 + sepX * 0.4;
-      vy = (dx / dist) * 0.6 + sepY * 0.4;
-    } else {
-      // Too far — approach player
-      vx = (dx / dist) * 0.8 + sepX * 0.2;
-      vy = (dy / dist) * 0.8 + sepY * 0.2;
-    }
-
-    const mag = Math.sqrt(vx * vx + vy * vy) || 1;
-    this.targetVelocity.vx = (vx / mag) * this.speed * speedMultiplier * 0.8;
-    this.targetVelocity.vy = (vy / mag) * this.speed * speedMultiplier * 0.8;
-  }
-
-  /**
-   * ambusher: stays dormant (rest state) until player enters wakeRadius,
-   * then bursts at high speed before falling back to chaser behavior.
-   *
-   * Config (all optional — defaults shown):
-   *   wakeRadius         = GRID.CELL_SIZE * 4  (used in rest-state check above)
-   *   burstSpeed         = speed * 2.5
-   *   burstDuration      = 1.0
-   */
-  _moveAmbusher(speedMultiplier, targetPos, deltaTime) {
-    if (this.burstActive) {
-      this.burstTimer -= deltaTime;
-      const dx = targetPos.x - this.position.x;
-      const dy = targetPos.y - this.position.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist > 0) {
-        const burstSpeed = this.movementConfig.burstSpeed ?? (this.speed * 2.5);
-        this.targetVelocity.vx = (dx / dist) * burstSpeed * speedMultiplier;
-        this.targetVelocity.vy = (dy / dist) * burstSpeed * speedMultiplier;
-      }
-      if (this.burstTimer <= 0) this.burstActive = false;
-      return;
-    }
-    // Post-burst: behave like a normal chaser
-    this._moveChaser(speedMultiplier, targetPos, deltaTime);
-  }
-
-  /**
-   * Idle wander movement. Drives targetVelocity each frame; picks a new direction
-   * when wanderTimer expires. Stationary enemies hold position.
-   * Player-position-agnostic — safe to call in any non-aggro state, including
-   * "lingering at memory mark" so enemies don't freeze waiting for the timer.
-   */
-  _updateWanderMovement(speedMultiplier, deltaTime) {
-    if (this.idleBehavior === 'stationary') {
-      this.targetVelocity.vx = 0;
-      this.targetVelocity.vy = 0;
-      return;
-    }
-
-    this.wanderTimer -= deltaTime;
-    if (this.wanderTimer <= 0) {
-      const hasWaterAffinity = this.data.waterAffinity === true;
-      let chosenAngle = Math.random() * Math.PI * 2;
-
-      if (this.backgroundObjects && this.backgroundObjects.length > 0) {
-        if (!hasWaterAffinity) {
-          for (let attempt = 0; attempt < 8; attempt++) {
-            const testAngle = Math.random() * Math.PI * 2;
-            const lookDist = this.wanderSpeed * 0.5;
-            const testX = this.position.x + Math.cos(testAngle) * lookDist;
-            const testY = this.position.y + Math.sin(testAngle) * lookDist;
-            const wouldHitWater = this.backgroundObjects.some(obj =>
-              (obj.char === '=' || obj.char === '~') &&
-              Math.abs(obj.position.x - testX) < GRID.CELL_SIZE &&
-              Math.abs(obj.position.y - testY) < GRID.CELL_SIZE
-            );
-            if (!wouldHitWater) {
-              chosenAngle = testAngle;
-              break;
-            }
-          }
-        } else {
-          let nearestWaterAngle = null;
-          let nearestWaterDist = Infinity;
-          for (const obj of this.backgroundObjects) {
-            if (obj.char === '=' || obj.char === '~') {
-              const wdx = obj.position.x - this.position.x;
-              const wdy = obj.position.y - this.position.y;
-              const wDist = Math.sqrt(wdx * wdx + wdy * wdy);
-              if (wDist < nearestWaterDist) {
-                nearestWaterDist = wDist;
-                nearestWaterAngle = Math.atan2(wdy, wdx);
-              }
-            }
-          }
-          if (nearestWaterAngle !== null && nearestWaterDist < GRID.CELL_SIZE * 12 && Math.random() < 0.6) {
-            chosenAngle = nearestWaterAngle + (Math.random() - 0.5) * Math.PI * 0.4;
-          }
-        }
-      }
-
-      this.wanderDirection.x = Math.cos(chosenAngle);
-      this.wanderDirection.y = Math.sin(chosenAngle);
-      this.wanderTimer = 2 + Math.random() * 2;
-    }
-
-    this.targetVelocity.vx = this.wanderDirection.x * this.wanderSpeed * speedMultiplier;
-    this.targetVelocity.vy = this.wanderDirection.y * this.wanderSpeed * speedMultiplier;
-  }
+  // ── Movement ──────────────────────────────────────────────────────────────
+  // The archetype movements, the idle wander, and the windup hold live in
+  // enemyMovement.js: they only ever write targetVelocity, so none of them has
+  // any business being a method with access to the whole enemy. What stays here
+  // is the navigation they call into (updateVectorNavigation, below) and the
+  // pack memory they don't touch.
 
   /** Clears shared memory marks across the pack and stands everyone down to idle. */
   _resetPackMemory() {
@@ -1757,32 +1516,6 @@ export class Enemy {
       mate.currentDirection = { x: 0, y: 0 };
       mate.enraged = false;
       mate.state = 'idle';
-    }
-  }
-
-  /**
-   * Handles movement during the windup state.
-   * windupMovement: 'stop' (default) | 'advance' | 'retreat'
-   */
-  _applyWindupMovement(speedMultiplier) {
-    if (this.windupMovement === 'stop' || !this.target) {
-      this.targetVelocity.vx = 0;
-      this.targetVelocity.vy = 0;
-      return;
-    }
-    const dx = this.target.position.x - this.position.x;
-    const dy = this.target.position.y - this.position.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist === 0) { this.targetVelocity.vx = 0; this.targetVelocity.vy = 0; return; }
-    const dirX = dx / dist;
-    const dirY = dy / dist;
-    const windupSpeed = this.speed * speedMultiplier * 0.4; // 40% speed during windup
-    if (this.windupMovement === 'advance') {
-      this.targetVelocity.vx = dirX * windupSpeed;
-      this.targetVelocity.vy = dirY * windupSpeed;
-    } else if (this.windupMovement === 'retreat') {
-      this.targetVelocity.vx = -dirX * windupSpeed;
-      this.targetVelocity.vy = -dirY * windupSpeed;
     }
   }
 
