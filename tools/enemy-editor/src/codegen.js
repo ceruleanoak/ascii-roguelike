@@ -4,7 +4,15 @@
 import { allFields, defaultFor, fieldApplies } from './util.js';
 import { MECHANICS, SECTIONS, GRID_CELL } from './schema.js';
 
-const PX_PATHS = new Set(allFields().filter(f => f.type === 'px').map(f => f.key));
+// `[]` is how serialize() addresses an element's children, so a pixel column
+// inside a list registers under that form and gets the same GRID factoring as
+// any other pixel field. List columns are deliberately absent from FIELDS: a
+// row has to be emitted whole, and a column matched to a default would be
+// pruned out of the middle of one.
+const PX_PATHS = new Set(allFields().flatMap(f =>
+  f.type === 'px' ? [f.key]
+  : f.type === 'list' ? f.itemFields.filter(c => c.type === 'px').map(c => `${f.key}[].${c.key}`)
+  : []));
 const FIELDS = new Map(allFields().map(f => [f.key, f]));
 
 // The def currently being serialized. A derived default (keeper preferred range
@@ -114,6 +122,11 @@ function shouldOmit(childPath, key, v, insideMechanic) {
   // parameters below (which must never be pruned when they *do* apply) would
   // leak onto every keeper and chaser.
   if (field && !fieldApplies(field, emitting)) return true;
+  // `[]` in the path means this key is a column of a list row. A row is emitted
+  // whole: the read sites for these lists index straight into a row and have no
+  // fallback for a missing column, so pruning a blank char or a zero delay out
+  // of the middle of one would hand the game a malformed row.
+  if (childPath.includes('[]')) return false;
   // Inside a mechanic config, keep every knob explicit (don't prune defaults).
   if (insideMechanic) return false;
   // Required top-level fields are always emitted.

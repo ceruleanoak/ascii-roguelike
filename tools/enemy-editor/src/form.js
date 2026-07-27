@@ -2,7 +2,7 @@
 // container, binds inputs to the live def object, and calls onChange() after
 // any edit so the sandbox + codegen can refresh.
 import { SECTIONS, MECHANICS, GRID_CELL } from './schema.js';
-import { getPath, setPath, seedBlock, clearBlock, isBlockOn, defaultFor, fieldApplies } from './util.js';
+import { getPath, setPath, deletePath, seedBlock, clearBlock, isBlockOn, defaultFor, fieldApplies, newListItem } from './util.js';
 
 export class EnemyForm {
   constructor(container, def, onChange) {
@@ -113,7 +113,115 @@ export class EnemyForm {
     }
   }
 
+  // A list of uniform rows — a potion table, a pulse rhythm, a drop table.
+  // Each row's columns are ordinary fields addressed by an indexed path, so
+  // every input type already in renderField works inside one for free.
+  renderList(field) {
+    const wrap = document.createElement('div');
+    wrap.className = 'field field-list';
+
+    const head = document.createElement('div');
+    head.className = 'list-head';
+    const label = document.createElement('label');
+    label.textContent = field.label;
+    if (field.help) label.title = field.help;
+    head.appendChild(label);
+
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'list-add';
+    add.textContent = '+';
+    add.title = 'Add a row';
+    add.addEventListener('click', () => {
+      const list = getPath(this.def, field.key);
+      // An absent list is the same instruction as an empty one, so the first
+      // add is also what materializes the key.
+      if (Array.isArray(list)) list.push(newListItem(field));
+      else setPath(this.def, field.key, [newListItem(field)]);
+      this.afterStructuralEdit(field);
+    });
+    head.appendChild(add);
+    wrap.appendChild(head);
+
+    const items = getPath(this.def, field.key);
+    if (!Array.isArray(items) || items.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'list-empty';
+      empty.textContent = field.emptyLabel ?? '(none)';
+      wrap.appendChild(empty);
+      return wrap;
+    }
+
+    items.forEach((_, i) => wrap.appendChild(this.renderListRow(field, i, items.length)));
+    return wrap;
+  }
+
+  renderListRow(field, i, count) {
+    const row = document.createElement('div');
+    row.className = 'list-row';
+
+    const bar = document.createElement('div');
+    bar.className = 'list-row-bar';
+    const n = document.createElement('span');
+    n.className = 'list-row-n';
+    n.textContent = String(i + 1);
+    bar.appendChild(n);
+
+    // Order is meaningful in every list this serves — pulse 0 is the activation
+    // hit, and a strike's bands are read nearest-first — so reordering is a
+    // first-class edit, not a nicety.
+    const move = (to) => {
+      const list = getPath(this.def, field.key);
+      list.splice(to, 0, list.splice(i, 1)[0]);
+      this.afterStructuralEdit(field);
+    };
+    bar.appendChild(this.rowButton('↑', 'Move up', i === 0, () => move(i - 1)));
+    bar.appendChild(this.rowButton('↓', 'Move down', i === count - 1, () => move(i + 1)));
+    bar.appendChild(this.rowButton('✕', 'Remove', false, () => {
+      deletePath(this.def, `${field.key}[${i}]`);
+      this.afterStructuralEdit(field);
+    }));
+    row.appendChild(bar);
+
+    const body = document.createElement('div');
+    body.className = 'list-row-body';
+    for (const col of field.itemFields) {
+      // The column is rendered against its absolute path, which is what makes
+      // the ordinary binding work: the input writes straight into the row.
+      // A list whose authoring notes read its contents (the pulse rhythm
+      // summary) declares `rerender` once, and every column inherits it.
+      body.appendChild(this.renderField({
+        ...col,
+        key: `${field.key}[${i}].${col.key}`,
+        rerender: col.rerender ?? field.rerender,
+      }));
+    }
+    row.appendChild(body);
+    return row;
+  }
+
+  rowButton(glyph, title, disabled, onClick) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'list-btn';
+    b.textContent = glyph;
+    b.title = title;
+    b.disabled = disabled;
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  // Adding, removing, or reordering shifts every row's index, so the rendered
+  // paths are stale the moment it happens — always re-render.
+  afterStructuralEdit(field) {
+    field.reconcile?.(this.def);
+    this.emit();
+    this.render();
+  }
+
   renderField(field) {
+    if (field.type === 'list') return this.renderList(field);
+
     const row = document.createElement('div');
     row.className = 'field';
     const label = document.createElement('label');

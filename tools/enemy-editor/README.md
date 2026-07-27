@@ -90,6 +90,14 @@ in the form and prunes it from the output, so one archetype's parameters never
 land on another's. `tools/debug/editor-roundtrip.mjs` checks all of this against
 the whole registry.
 
+**A `list` field's rows are the exception to pruning.** A list (`itemFields: [...]`
+— a potion table, a telegraph's pulse rhythm, a fixed drop list) is authored as
+rows of real widgets rather than raw JSON, and every column of a row is emitted
+even when it equals its default. The read sites for these lists index straight
+into a row and have no fallback to offer, so a column pruned out of the middle of
+one would hand the game a malformed row. Reach for `list` over `json` whenever the
+array's shape is actually known.
+
 Telegraph Areas and animations are the exception: `src/telegraph.js` imports
 `AREA_PRESETS` / `ANIMATIONS` / `SIZES` from `src/game/TelegraphAnimation.js`, so
 adding an Area or animation to the library makes it selectable here with no edit

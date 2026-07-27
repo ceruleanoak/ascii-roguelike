@@ -17,7 +17,13 @@
 //               numbers, so the stored value is the number and not its text
 //   'tags'    — comma-separated string[] (free)
 //   'tagset'  — multi-select from options[] -> string[]
-//   'json'    — raw JSON value (objects/arrays too irregular for a widget)
+//   'list'    — an array of uniform rows, described by `itemFields: [...]`;
+//               add/remove/reorder in the form. A column is an ordinary field
+//               descriptor whose `key` is relative to the row. Reach for this
+//               over 'json' whenever the array's shape is actually known —
+//               a row is then authored with real widgets and cannot be
+//               malformed. Rows are emitted whole; columns are never pruned.
+//   'json'    — raw JSON value (objects too irregular for a widget)
 //
 // `px: true` is implied by type 'px'. `showIf(def)` hides a field unless true —
 // and codegen prunes a hidden field outright, because a field the archetype
@@ -76,6 +82,21 @@ export const IDLE_BEHAVIORS = ['wander', 'stationary'];
 export const WINDUP_MOVEMENTS = ['stop', 'advance', 'retreat'];
 export const TIER_OPTIONS = ['weak', 'normal', 'elite', 'boss'];
 export const GAME_ANIMAL_ROLES = ['moose', 'rabbit'];
+
+// What a thrown potion applies on impact. All four are shipped on the Alchemist,
+// but only two of them do anything: `Player.applyStatusEffect` returns early for
+// any effect the player has no slot for, and the player's slots are goo, freeze,
+// slimeBoost, dizzy. `confusion` works because CombatSystem intercepts it before
+// that call. `burn` and `poison` land nothing — known bug #166. They stay
+// selectable because they are authored in enemies.js today; dropping them would
+// make the Alchemist load showing the wrong effect. POTION_NO_OP is what the
+// section note reads to say so at authoring time.
+export const POTION_EFFECTS = ['freeze', 'confusion', 'burn', 'poison'];
+export const POTION_NO_OP = new Set(['burn', 'poison']);
+
+// Effects that `dropLastThrown` can turn into an ingredient on death, mirroring
+// the map at main.js:3304. An effect missing from here drops nothing.
+export const POTION_DROPS = new Set(['burn', 'freeze', 'poison', 'confusion']);
 
 const isKeeperKiter = (d) => d.movementStyle === 'keeper' || d.movementStyle === 'kiter';
 
@@ -154,9 +175,14 @@ export const SECTIONS = [
       { key: 'telegraph.hitShape', label: 'Hit shape (explicit)', type: 'json', default: null, rerender: true,
         placeholder: '{"kind":"cone","angleDeg":60,"range":3}',
         help: "Overrides the Area's hit shape. Defaults to the warn shape when absent." },
-      { key: 'telegraph.pulses', label: 'Pulses (no animation)', type: 'json', default: null, rerender: true,
-        placeholder: '[{"delay":0},{"delay":1.5,"damageMult":0.5}]',
-        help: 'Hand-authored rhythm for the animation-less form; delays are double-seconds. Conflicts with an animation.' },
+      { key: 'telegraph.pulses', label: 'Pulses (no animation)', type: 'list', default: null, rerender: true,
+        emptyLabel: '(no pulses — single hit)',
+        help: 'Hand-authored rhythm for the animation-less form; delays are double-seconds. Conflicts with an animation. Row 1 is the activation hit.',
+        itemFields: [
+          { key: 'delay', label: 'Delay (dbl-sec)', type: 'number', step: 0.1, default: 0,
+            help: 'Double-seconds after the activation hit. Row 1 is the hit itself, so its delay is 0.' },
+          { key: 'damageMult', label: 'Damage ×', type: 'number', step: 0.1, default: 1 },
+        ] },
     ]
   },
   {
@@ -291,9 +317,15 @@ export const SECTIONS = [
       // so an absent key and an authored empty list are the same instruction —
       // nothing fixed drops. Writing it that way lets codegen prune the marker
       // without the schema claiming a fallback the game doesn't have.
-      { key: 'drops', label: 'Fixed drops', type: 'json', default: [],
-        placeholder: '[{"char":"m","chance":0.5}]',
-        help: 'An explicit drop list, each rolled independently against its own chance (luck scales it). Only consulted when the affinity/tier generator has nothing to work with.' },
+      { key: 'drops', label: 'Fixed drops', type: 'list', default: [], rerender: true,
+        emptyLabel: '(none — loot comes from affinities + tier)',
+        help: 'An explicit drop list, each rolled independently against its own chance (luck scales it). Only consulted when the affinity/tier generator has nothing to work with.',
+        itemFields: [
+          { key: 'char', label: 'Char', type: 'char', default: '',
+            help: 'The ingredient or item glyph to drop. Anything that is neither is silently skipped.' },
+          { key: 'chance', label: 'Chance (0-1)', type: 'number', min: 0, max: 1, step: 0.05, default: 1,
+            help: 'Rolled on its own, so several rows can land from one kill. Luck multiplies it.' },
+        ] },
     ]
   },
   {
@@ -491,10 +523,18 @@ export const MECHANICS = [
     ]
   },
   {
-    id: 'potionMechanic', title: 'Potion thrower', gate: 'potionMechanic.enabled',
+    id: 'potionMechanic', title: 'Potion thrower', gate: 'potionMechanic.enabled', note: potionNotes,
     fields: [
-      { key: 'potionMechanic.potionTable', label: 'Potion table', type: 'json', default: [],
-        help: '[{ "color":"#ff4400", "effect":"burn", "label":"Fire" }]' },
+      { key: 'potionMechanic.potionTable', label: 'Potion table', type: 'list', default: [],
+        emptyLabel: '(no potions — the thrower has nothing to throw)',
+        help: 'One row is rolled per throw. The colour tints the projectile; the effect is what lands on the player.',
+        itemFields: [
+          { key: 'color', label: 'Color', type: 'color', default: '#ff4400' },
+          { key: 'effect', label: 'Effect', type: 'select', options: POTION_EFFECTS, default: 'freeze',
+            help: "Applied via Player.applyStatusEffect on impact, except 'confusion', which CombatSystem handles on its own." },
+          { key: 'label', label: 'Label', type: 'text', default: '',
+            help: 'Authoring note only — nothing reads it. The effect alone decides what the potion does and what it drops.' },
+        ] },
       { key: 'potionMechanic.aoeRadius', label: 'AoE radius', type: 'px', default: GRID_CELL * 2 },
       { key: 'potionMechanic.dropLastThrown', label: 'Drop last thrown', type: 'bool', default: false },
     ]
@@ -666,4 +706,33 @@ function lootNotes(def) {
     }];
   }
   return [];
+}
+
+// Two of the four shipped potion effects land nothing on the player (bug #166).
+// The editor is the only place that can say so before the potion is thrown, so
+// it says so here rather than letting a new thrower inherit the same dud.
+function potionNotes(def) {
+  const table = def.potionMechanic?.potionTable;
+  if (!Array.isArray(table) || table.length === 0) return [];
+  const notes = [];
+  const dud = [...new Set(table.map(p => p.effect).filter(e => POTION_NO_OP.has(e)))];
+  if (dud.length) {
+    notes.push({
+      level: 'warn',
+      text: `${dud.join(' and ')} land no status on the player — Player.applyStatusEffect has no slot for ${dud.length > 1 ? 'them' : 'it'} and returns early (bug #166). ${dud.length > 1 ? 'Those potions' : 'That potion'} still deals damage and knockback.`,
+    });
+  }
+  // The death drop is keyed off the effect through a map hardcoded in main.js,
+  // so an effect outside that map yields no drop at all — silently, at the one
+  // moment the player was promised one.
+  if (def.potionMechanic?.dropLastThrown) {
+    const unmapped = [...new Set(table.map(p => p.effect).filter(e => e && !POTION_DROPS.has(e)))];
+    if (unmapped.length) {
+      notes.push({
+        level: 'warn',
+        text: `Drop-last-thrown is on, but ${unmapped.join(' and ')} ${unmapped.length > 1 ? 'have' : 'has'} no ingredient in main.js's effect→ingredient map, so dying on ${unmapped.length > 1 ? 'those throws' : 'that throw'} drops nothing.`,
+      });
+    }
+  }
+  return notes;
 }
