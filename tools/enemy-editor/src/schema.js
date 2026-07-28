@@ -58,8 +58,12 @@ import {
   AREA_OPTIONS, SIZE_OPTIONS, TURN_OPTIONS, animationOptionsFor, reconcileAnimation,
   telegraphNotes,
 } from './telegraph.js';
+import { GRID } from '../../../src/game/GameConfig.js';
 
-export const GRID_CELL = 16;
+// Imported, never restated. Every px default below is a multiple of it, and
+// codegen divides by it to emit `GRID.CELL_SIZE * n` — so a copy that drifted
+// from the game's would silently rescale every range in the catalog.
+export const GRID_CELL = GRID.CELL_SIZE;
 
 export const AFFINITY_OPTIONS = [
   'beast', 'venom', 'goo', 'humanoid', 'aberration', 'fire', 'ice',
