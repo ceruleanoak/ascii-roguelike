@@ -54,17 +54,24 @@ const LAYER_GUARD_FILES = [
   'src/systems/WorldEffectsSystem.js',
   'src/systems/FireSystem.js',
 ];
-const LAYER_GUARD_GLOB_DIR = 'src/entities/enemyMechanics';
+// Whole directories of composition files, every one of them enrolled. enemyStates
+// joins on the same grounds as enemyMechanics: a State runs per-frame against
+// whatever layer the enemy is on, and the sandbox's game stub provides
+// `backgroundObjects` but not `_activeBackgroundObjects()`, so a State that
+// reached for the surface mirror would work in the editor and leak in the game.
+const LAYER_GUARD_GLOB_DIRS = ['src/entities/enemyMechanics', 'src/entities/enemyStates'];
 const FORBIDDEN_BG_ACCESS = /(currentRoom\.backgroundObjects|(?:game|this)\.backgroundObjects)/;
 
 function checkLayerGuard() {
   let guardFailed = false;
   const files = [...LAYER_GUARD_FILES];
-  try {
-    for (const f of readdirSync(join(root, LAYER_GUARD_GLOB_DIR))) {
-      if (f.endsWith('.js')) files.push(`${LAYER_GUARD_GLOB_DIR}/${f}`);
-    }
-  } catch { /* dir may not exist */ }
+  for (const dir of LAYER_GUARD_GLOB_DIRS) {
+    try {
+      for (const f of readdirSync(join(root, dir))) {
+        if (f.endsWith('.js')) files.push(`${dir}/${f}`);
+      }
+    } catch { /* dir may not exist */ }
+  }
 
   for (const file of files) {
     let src;

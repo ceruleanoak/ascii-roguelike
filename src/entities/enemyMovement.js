@@ -285,3 +285,50 @@ export function applyWindupMovement(enemy, speedMultiplier) {
     enemy.targetVelocity.vy = -dirY * windupSpeed;
   }
 }
+
+// ── Movement verbs ──────────────────────────────────────────────────────────
+// The vocabulary a State's `movement` field names. Six verbs, each usable in any
+// State, each taking a speed multiplier — which is where the hardcoded constants
+// scattered through the legacy ladder go (0.6× strafe, 0.8× ring, 1.2× dive,
+// 0.4× windup, 0.5× back-off, 0.3× wander were all un-tunable literals).
+//
+// This is what stops the movement archetypes from being archetypes. `close` is
+// what a chaser did in every state; now any State can call for it, so a kiter
+// can orbit while approaching and close while striking. The archetype survives
+// only as an authoring preset that picks the default verb per State.
+
+// Straight back from the target. The legacy ladder open-codes this at 0.5× as
+// the melee back-off, where it is reached only while on cooldown.
+export function moveBack(enemy, speedMultiplier, targetPos) {
+  const dx = targetPos.x - enemy.position.x;
+  const dy = targetPos.y - enemy.position.y;
+  const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+  enemy.targetVelocity.vx = -(dx / dist) * enemy.speed * speedMultiplier;
+  enemy.targetVelocity.vy = -(dy / dist) * enemy.speed * speedMultiplier;
+}
+
+export function moveStill(enemy) {
+  enemy.targetVelocity.vx = 0;
+  enemy.targetVelocity.vy = 0;
+}
+
+const VERBS = {
+  close:  (enemy, mult, targetPos, dt) => moveChaser(enemy, mult, targetPos, dt),
+  hold:   (enemy, mult, targetPos, dt) => moveKeeper(enemy, mult, targetPos, dt),
+  orbit:  (enemy, mult, targetPos, dt) => moveKiter(enemy, mult, targetPos, dt),
+  back:   (enemy, mult, targetPos) => moveBack(enemy, mult, targetPos),
+  still:  (enemy) => moveStill(enemy),
+  wander: (enemy, mult, targetPos, dt) => updateWanderMovement(enemy, mult, dt),
+};
+
+// Run a State's movement. `cfg.speed` multiplies the enemy's own speed on top of
+// whatever the frame's status/terrain multiplier already is, so a State can be
+// slower or faster than the enemy's baseline without touching its stats.
+//
+// An unknown verb holds position rather than falling through to a default, so a
+// typo in authored data is visible as an enemy that does not move — not as one
+// that silently chases.
+export function applyStateMovement(enemy, cfg, speedMultiplier, targetPos, deltaTime) {
+  const verb = VERBS[cfg?.movement] ?? moveStill;
+  verb(enemy, speedMultiplier * (cfg?.speed ?? 1), targetPos, deltaTime);
+}
