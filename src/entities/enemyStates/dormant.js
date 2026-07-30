@@ -35,14 +35,17 @@ export default {
   },
 
   exit(enemy, ctx, machine) {
-    // Waking is what arms the ambusher's burst — the one-shot speed window that
-    // makes the ambush worth the wait.
+    // Waking is what arms the burst — the one-shot speed window that makes the
+    // ambush worth the wait. The burst's own numbers live on Approach, which is
+    // where they are spent; only the arming belongs here, because waking is the
+    // moment the window opens. Reading them across States keeps them in one
+    // place rather than splitting speed from duration.
     enemy.enraged = true;
-    const cfg = machine.configFor('dormant') ?? {};
-    if (cfg.burst) {
+    const burst = machine.configFor('approach')?.burst;
+    if (burst) {
       enemy.hasBeenActivated = true;
       enemy.burstActive = true;
-      enemy.burstTimer = cfg.burst.duration ?? 1.0;
+      enemy.burstTimer = burst.duration ?? 1.0;
     }
     if (enemy.inShellForm !== undefined) {
       enemy.inShellForm = false;

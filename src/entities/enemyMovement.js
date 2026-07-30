@@ -312,6 +312,23 @@ export function moveStill(enemy) {
   enemy.targetVelocity.vy = 0;
 }
 
+// Straight at the target at an *absolute* speed, ignoring the enemy's own. Split
+// out of moveAmbusher, whose burst branch is exactly this: the four ambushers set
+// `burstSpeed` to 165/120/160/70, flat values that replace `enemy.speed` rather
+// than scaling it, so a speed multiplier could not reproduce them.
+//
+// Deliberately not routed through vector navigation even when a collisionMap is
+// present — a lunge that pathfinds around a corner is not a lunge, and the legacy
+// burst went straight too.
+export function moveLunge(enemy, absoluteSpeed, speedMultiplier, targetPos) {
+  const dx = targetPos.x - enemy.position.x;
+  const dy = targetPos.y - enemy.position.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist === 0) return;
+  enemy.targetVelocity.vx = (dx / dist) * absoluteSpeed * speedMultiplier;
+  enemy.targetVelocity.vy = (dy / dist) * absoluteSpeed * speedMultiplier;
+}
+
 const VERBS = {
   close:  (enemy, mult, targetPos, dt) => moveChaser(enemy, mult, targetPos, dt),
   hold:   (enemy, mult, targetPos, dt) => moveKeeper(enemy, mult, targetPos, dt),
@@ -325,10 +342,23 @@ const VERBS = {
 // whatever the frame's status/terrain multiplier already is, so a State can be
 // slower or faster than the enemy's baseline without touching its stats.
 //
+// `cfg.burst` is the first movement *modifier*: a one-shot window, armed
+// elsewhere and consumed here, that overrides the verb entirely for its duration.
+// A modifier composes with any verb in any State, which is the difference between
+// this and the archetype it came from — `moveAmbusher` hardcoded both the wake
+// and the chase, so only an ambusher could ever burst. `hop` will attach the same
+// way.
+//
 // An unknown verb holds position rather than falling through to a default, so a
 // typo in authored data is visible as an enemy that does not move — not as one
 // that silently chases.
 export function applyStateMovement(enemy, cfg, speedMultiplier, targetPos, deltaTime) {
+  if (cfg?.burst && enemy.burstActive) {
+    enemy.burstTimer -= deltaTime;
+    if (enemy.burstTimer <= 0) enemy.burstActive = false;
+    moveLunge(enemy, cfg.burst.speed ?? enemy.speed * 2.5, speedMultiplier, targetPos);
+    return;
+  }
   const verb = VERBS[cfg?.movement] ?? moveStill;
   verb(enemy, speedMultiplier * (cfg?.speed ?? 1), targetPos, deltaTime);
 }
