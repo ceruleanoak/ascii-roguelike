@@ -43,6 +43,8 @@ import { PatrolMechanic } from './enemyMechanics/PatrolMechanic.js';
 import { GameAnimalMechanic } from './enemyMechanics/GameAnimalMechanic.js';
 import { SniperMechanic } from './enemyMechanics/SniperMechanic.js';
 import { updateMovement, updateWanderMovement, applyWindupMovement } from './enemyMovement.js';
+import { EnemyStateMachine, SPINE, legacyStateFor } from './EnemyStateMachine.js';
+import { statesFor } from '../data/stateDefaults.js';
 
 // ─── Enemy AI Debug Logger ─────────────────────────────────────────────────
 // Toggle in browser console: window.ENEMY_AI_DEBUG = true
@@ -314,6 +316,13 @@ export class Enemy {
       this.burstActive = false;
       this.state = 'rest'; // Ambushers start dormant
     }
+
+    // The State spine. Built for every enemy whether or not SPINE.enabled reads
+    // it, because the parity harness flips the flag between runs on an enemy that
+    // is already constructed — a machine built lazily on first use would start
+    // from a different State than one built at spawn, and the traces would
+    // diverge for that reason rather than a real one.
+    this.stateMachine = new EnemyStateMachine(this, statesFor(this.data));
 
     if (ShellFormMechanic.isEnabled(this)) ShellFormMechanic.init(this);
 
@@ -921,8 +930,33 @@ export class Enemy {
       }
     }
 
-    // AI behavior - only engage within aggro range (unless enraged or has memory)
-    if (effectiveDistance > effectiveAggroRange && !this.enraged) {
+    // AI behavior — the State spine, or the legacy ladder below it.
+    //
+    // The two are mutually exclusive and the ladder is untouched, so parity is
+    // diffable: the harness runs the same enemy down each side and compares the
+    // traces. The ladder goes when the diff is empty, not before.
+    if (SPINE.enabled) {
+      this.stateMachine.update(this, deltaTime, {
+        distance,
+        effectiveDistance,
+        effectiveAggroRange,
+        effectiveVisionLength,
+        canSee: this.hasVision(this.position, this.target.position, effectiveVisionLength),
+        // Deciding to swing is not the same question as deciding to give chase,
+        // and the roster depends on the difference: facing is a detection
+        // concept, so a keeper that sidesteps perpendicular to its target would
+        // never once be facing it at the moment it is finally in range. Both
+        // checks are carried because both are asked.
+        canStrike: this.hasVision(this.position, this.target.position, effectiveVisionLength, { ignoreCone: true }),
+        samePlane: inSamePlane(this, this.target),
+        speedMultiplier,
+        deltaTime,
+        targetPos: this.target.position,
+      });
+      // Everything still reading `enemy.state` — the renderer's indicator picker,
+      // TrailMechanic, Telegraph — keeps working through the translation.
+      this.state = legacyStateFor(this.stateMachine, this);
+    } else if (effectiveDistance > effectiveAggroRange && !this.enraged) {
       // Player left aggro range - activate memory mode if we have a last known position
       if (this.lastKnownPosition && !this.aggroMemoryActive) {
         // Cancel the mark if it is now beyond vision range (e.g. enemy was knocked far away).

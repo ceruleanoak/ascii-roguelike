@@ -20,7 +20,40 @@ export default {
   enter(enemy, ctx, machine) {
     const cfg = machine.configFor('search') ?? {};
     machine.marksInvestigated = machine.marksInvestigated ?? 0;
+
+    // Already searching — Search is re-entered constantly while contact
+    // flickers, and none of the below should re-arm on those. Only the entry
+    // that actually *begins* a hunt sets it up.
+    if (enemy.aggroMemoryActive) return;
+
+    // `aggroMemoryActive` is not bookkeeping. `hasVision` skips the ±65° cone
+    // for an enemy carrying this flag (enemyVision.js) on the reasoning that
+    // something already hunting you has turned to face you — so a searcher hears
+    // in every direction and a merely-alert one does not. Without it a searcher
+    // can never re-acquire anything outside the arc it happened to be facing
+    // when it lost you, which reads as an enemy that has gone blind rather than
+    // one that is looking for you.
+    enemy.aggroMemoryActive = true;
+
+    // Lead the mark by where the target was heading, capped so a dodge-rolling
+    // player does not fling it across the room. The searcher goes to where you
+    // were *going*, not the pixel you vanished on — which is the difference
+    // between being hunted and being followed.
+    if (enemy.target) {
+      const lookahead = 0.35;
+      const maxLead = GRID.CELL_SIZE * 4;
+      const tv = enemy.target.velocity ?? { vx: 0, vy: 0 };
+      let leadX = tv.vx * lookahead;
+      let leadY = tv.vy * lookahead;
+      const mag = Math.sqrt(leadX * leadX + leadY * leadY);
+      if (mag > maxLead) { leadX = (leadX / mag) * maxLead; leadY = (leadY / mag) * maxLead; }
+      enemy.lastKnownPosition = { x: enemy.target.position.x + leadX, y: enemy.target.position.y + leadY };
+    }
+
     enemy.memoryMoveDelayTimer = cfg.moveDelay ?? enemy.memoryMoveDelay ?? 0;
+    // Force the cached steering direction to be recomputed toward the mark
+    // rather than coasting on the heading the chase left behind.
+    enemy.currentDirection = { x: 0, y: 0 };
     // Store the *target's* plane, not the enemy's. Three of the four legacy
     // write sites store `this.plane`, and the staleness check at Enemy.js:901 is
     // only correct for the fourth — so a mark made by an enemy that then changed
@@ -55,6 +88,17 @@ export default {
   next(enemy, ctx, machine) {
     const cfg = machine.configFor('search') ?? {};
 
+    // Something within arm's reach gets hit, hunt or no hunt. The legacy ladder
+    // gets this for free by being almost stateless — its attack branch is keyed
+    // on distance and cooldown and sits above the chase branch, so it fires no
+    // matter what the enemy was doing. A machine has to say it out loud, and
+    // saying it here is the difference between a searcher that swings at what it
+    // stumbles into and one that walks past you because it is busy looking.
+    if (ctx.effectiveDistance <= enemy.attackRange && enemy.attackTimer <= 0 && ctx.canStrike
+        && (enemy.enraged || ctx.effectiveDistance <= ctx.effectiveAggroRange)) {
+      return { id: 'anticipate', cause: 'searcher walked into attack range' };
+    }
+
     if (ctx.canSee && ctx.effectiveDistance <= ctx.effectiveAggroRange) {
       machine.marksInvestigated = 0;
       return { id: 'approach', cause: 'reacquired target' };
@@ -71,6 +115,11 @@ export default {
     if (atMark || stale) {
       machine.marksInvestigated = (machine.marksInvestigated ?? 0) + 1;
       enemy.lastKnownPosition = null;
+      // The hunt is over, so the omnidirectional hearing that came with it ends
+      // too — leaving the flag set would make an enemy that gave up permanently
+      // better at noticing you than one that never started.
+      enemy.aggroMemoryActive = false;
+      enemy.memoryMarkSuspected = false;
       // Abandonment is a count the enemy carries, not a global constant — which
       // is what the design question asked for. A wolf gives up after two; a
       // hound could be authored to never give up at all.

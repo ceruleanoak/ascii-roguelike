@@ -23,17 +23,7 @@ export function updateMovement(enemy, speedMultiplier, targetPos, deltaTime) {
   // this dispatch and unconditionally, so they're safe even if updateMovement
   // is skipped (e.g. when vision is lost).
 
-  // Shield phase movement: Mirror Imp retreats while its reflect shield is active
-  if (enemy.shieldActive && enemy.data.reflectShield?.shieldPhaseMovement) {
-    const dx = enemy.position.x - targetPos.x;
-    const dy = enemy.position.y - targetPos.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist > 0) {
-      enemy.targetVelocity.vx = (dx / dist) * enemy.speed * speedMultiplier;
-      enemy.targetVelocity.vy = (dy / dist) * enemy.speed * speedMultiplier;
-    }
-    return;
-  }
+  if (applyShieldPhase(enemy, speedMultiplier, targetPos)) return;
 
   switch (enemy.movementStyle) {
     case 'keeper':   return moveKeeper(enemy, speedMultiplier, targetPos, deltaTime);
@@ -42,6 +32,31 @@ export function updateMovement(enemy, speedMultiplier, targetPos, deltaTime) {
     case 'jumper':   return moveChaser(enemy, speedMultiplier, targetPos, deltaTime); // jump override applied post-update
     default:         return moveChaser(enemy, speedMultiplier, targetPos, deltaTime);
   }
+}
+
+// The Mirror Imp's shield phase: while the shield is up it walks straight
+// backwards, whatever else it was doing. Returns true when it took the frame.
+//
+// This sits beside the archetype dispatch rather than inside it because it is a
+// movement *modifier* — the same shape as `burst`, a condition that overrides
+// the verb for as long as it holds. Both the legacy dispatch and the State
+// spine's `applyStateMovement` call it, so the imp's whole identity ("shield up
+// — it retreats and reflects") is described exactly once.
+//
+// A modifier applies where a State asks for it (`shieldPhase: true`), not
+// everywhere. Legacy reaches it only through the chase dispatch, so an imp
+// wandering out of aggro range does not back away from a target it has not
+// noticed — and an imp that did would look like it was fleeing on sight.
+export function applyShieldPhase(enemy, speedMultiplier, targetPos) {
+  if (!enemy.shieldActive || !enemy.data.reflectShield?.shieldPhaseMovement) return false;
+  const dx = enemy.position.x - targetPos.x;
+  const dy = enemy.position.y - targetPos.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist > 0) {
+    enemy.targetVelocity.vx = (dx / dist) * enemy.speed * speedMultiplier;
+    enemy.targetVelocity.vy = (dy / dist) * enemy.speed * speedMultiplier;
+  }
+  return true;
 }
 
 /** chaser: direct pursuit using vector navigation */
@@ -353,6 +368,7 @@ const VERBS = {
 // typo in authored data is visible as an enemy that does not move — not as one
 // that silently chases.
 export function applyStateMovement(enemy, cfg, speedMultiplier, targetPos, deltaTime) {
+  if (cfg?.shieldPhase && applyShieldPhase(enemy, speedMultiplier, targetPos)) return;
   if (cfg?.burst && enemy.burstActive) {
     enemy.burstTimer -= deltaTime;
     if (enemy.burstTimer <= 0) enemy.burstActive = false;

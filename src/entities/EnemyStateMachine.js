@@ -13,9 +13,9 @@
 // the enemyStates/ filenames — and nothing outside this directory references them
 // yet, so renaming is a find-and-replace plus the glossary.
 //
-// Nothing calls this yet. `USE_STATE_SPINE` is false and the legacy ladder in
-// Enemy.update() is still the live path; the parity harness is the only consumer
-// until it proves the two agree across all 56 enemies.
+// `SPINE.enabled` is false, so the legacy ladder in Enemy.update() is still the
+// live path; the parity harness is the only thing that turns this on, and it
+// stays off until the two paths are proven to agree across all 56 enemies.
 import dormant from './enemyStates/dormant.js';
 import alert from './enemyStates/alert.js';
 import approach from './enemyStates/approach.js';
@@ -25,8 +25,39 @@ import recover from './enemyStates/recover.js';
 import search from './enemyStates/search.js';
 import withdraw from './enemyStates/withdraw.js';
 
-// Flipping this is commit 5, and only once the parity harness is green.
-export const USE_STATE_SPINE = false;
+// An object rather than a bare boolean so the parity harness can flip it between
+// runs and drive the same Enemy down both paths. A module const would have to be
+// read at import time, which makes A/B-ing one enemy impossible — and A/B-ing one
+// enemy is the only way to prove the two paths agree.
+export const SPINE = { enabled: false };
+
+// What the spine's current State looks like to everything still reading
+// `enemy.state`: ExploreRenderer's indicator picker, TrailMechanic, Telegraph.
+// This is a translation layer with an expiry date — it exists so the flag can be
+// flipped without touching the renderers, and it goes away with the last reader.
+//
+// Strike maps to two legacy ids because legacy split one event across them; the
+// windup timer is what decides which half it is currently in.
+export const LEGACY_STATE = {
+  dormant: 'rest',
+  alert: 'idle',
+  approach: 'chase',
+  anticipate: 'windup',
+  strike: 'attack',
+  // Never reached by an un-re-authored enemy (no enemy declares Recover yet), so
+  // the choice only matters once one does. 'chase' rather than 'idle' because a
+  // recovering enemy is still engaged, and 'idle' would make the renderer drop
+  // its aggro indicator mid-fight.
+  recover: 'chase',
+  search: 'chase',
+  withdraw: 'idle',
+};
+
+// The legacy id for a State, resolving Strike's two halves by its windup timer.
+export function legacyStateFor(machine, enemy) {
+  if (machine.current === 'strike') return enemy.windupTimer > 0 ? 'windup' : 'attack';
+  return LEGACY_STATE[machine.current] ?? 'idle';
+}
 
 export const STATES = { dormant, alert, approach, anticipate, strike, recover, search, withdraw };
 
@@ -168,7 +199,26 @@ export class EnemyStateMachine {
     const state = STATES[this.current];
     state?.update?.(enemy, ctx, this);
     const to = state?.next?.(enemy, ctx, this);
-    if (to) this.transition(enemy, ctx, to.id ?? to, to.cause ?? 'condition');
+    if (!to) return;
+
+    // The State just entered acts on the frame it was entered. Without this the
+    // machine costs a frame of frozen velocity per transition, because the
+    // outgoing State's movement is the last thing written and the incoming State
+    // does not move until next frame — a visible stutter at exactly the moments
+    // the player is reading, the commit to a swing and the turn to flee.
+    //
+    // Exactly one follow-up update, never a chain. Letting the new State run its
+    // own `next()` too looks like it would match the legacy ladder more closely,
+    // since that ladder is one `if/else if` and lands on its final branch in a
+    // single pass. Measured across all 56 enemies it is a wash — it fixes the two
+    // enemies that enter Strike a frame late and breaks two others the same way —
+    // so the simpler rule wins on the tie. One transition per frame is also the
+    // honest description of a machine that is genuinely stateful, where the
+    // legacy ladder is almost stateless: its branches key on distance and
+    // cooldown, not on what the enemy was doing last frame.
+    if (this.transition(enemy, ctx, to.id ?? to, to.cause ?? 'condition')) {
+      STATES[this.current]?.update?.(enemy, ctx, this);
+    }
   }
 
   // Every distance threshold this enemy actually uses, for the sandbox's range

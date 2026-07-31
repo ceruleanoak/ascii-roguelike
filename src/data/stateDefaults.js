@@ -72,6 +72,11 @@ export function defaultStates(data) {
     search: {},
   };
 
+  // The Mirror Imp's shield phase overrides the verb while the shield is up.
+  // Declared on Approach alone because that is the only place legacy reaches it —
+  // an imp that has not noticed you has nothing to back away from.
+  if (data.reflectShield?.shieldPhaseMovement) states.approach.shieldPhase = true;
+
   if (style === 'ambusher') {
     // The two halves of an ambush, finally separate: when it wakes, and how it
     // moves once woken.
