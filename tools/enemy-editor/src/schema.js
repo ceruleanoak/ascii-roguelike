@@ -86,6 +86,7 @@ export const IDLE_BEHAVIORS = ['wander', 'stationary'];
 export const WINDUP_MOVEMENTS = ['stop', 'advance', 'retreat'];
 export const TIER_OPTIONS = ['weak', 'normal', 'elite', 'boss'];
 export const GAME_ANIMAL_ROLES = ['moose', 'rabbit'];
+export const RECOVER_VARIANTS = ['retreat', 'stationary', 'jumpBack', 'knockback', 'lockPlayer', 'hide'];
 
 // What a thrown potion applies on impact. All four are shipped on the Alchemist,
 // but only two of them do anything: `Player.applyStatusEffect` returns early for
@@ -104,7 +105,18 @@ export const POTION_DROPS = new Set(['burn', 'freeze', 'poison', 'confusion']);
 
 const isKeeperKiter = (d) => d.movementStyle === 'keeper' || d.movementStyle === 'kiter';
 
-// ── CORE / VISUAL / STAT SECTIONS ──────────────────────────────────────────
+// ── SECTIONS ────────────────────────────────────────────────────────────────
+// Three tiers, top to bottom:
+//   1. Key data — identity + core combat stats, the essential definition of
+//      the enemy.
+//   2. Stateful data, in State-spine order (GLOSSARY "Enemy State": Dormant,
+//      Alert, Approach, Anticipate, Strike, Recover, Search, Withdraw). Only
+//      the states with an authored block appear — Alert/Search/Withdraw have
+//      no dedicated fields in this editor today, so the spine order below
+//      just skips them: behavior (Dormant idle/decision + Anticipate windup),
+//      movement (Approach archetype, plus the ambusher's Dormant wake),
+//      telegraph (Strike), recover (Recover).
+//   3. Everything else — attributes that aren't tied to a specific State.
 export const SECTIONS = [
   {
     id: 'identity',
@@ -139,73 +151,6 @@ export const SECTIONS = [
         showIf: (d) => d.attackType === 'ranged',
         help: "For ranged: 'arrow' | 'rock' | 'potion' | blank (bullet)." },
       { key: 'isImpact', label: 'Impact (bypasses staff block)', type: 'bool', default: false },
-    ]
-  },
-  {
-    // The projected warning Area of the melee windup, plus the animation whose
-    // beats define when damage lands (GLOSSARY "Telegraph"). Optional: absent,
-    // the enemy keeps the legacy single-rect windup, so the whole block is
-    // presence-gated rather than defaulted on.
-    id: 'telegraph',
-    title: 'Telegraph',
-    gate: 'telegraph',
-    bareGate: true,
-    emitDefaults: true,
-    note: telegraphNotes,
-    fields: [
-      { key: 'telegraph.area', label: 'Area', type: 'select', options: AREA_OPTIONS,
-        default: 'box', rerender: true, reconcile: reconcileAnimation,
-        help: 'The warned region — a named warn/hit shape pair from AREA_PRESETS. (none) = author explicit shapes below.' },
-      { key: 'telegraph.size', label: 'Size', type: 'select', options: SIZE_OPTIONS,
-        default: '', rerender: true,
-        help: 'box / circle / trapezoid only. Blank = small, one cell of ground. big is the AoE. The slices and the ring carry fixed dimensions and ignore this.' },
-      { key: 'telegraph.animation', label: 'Animation', type: 'select', options: animationOptionsFor,
-        default: 'blink', rerender: true,
-        help: 'Choreography + beats, filtered to the ones the chosen Area supports. Declaring one compiles its own pulses. Blank = blink (the legacy four-phase look).' },
-      { key: 'telegraph.attackShape', label: 'Attack shape', type: 'char', default: '', rerender: true,
-        help: "One character the strike carries instead of the default hairline stroke, turned to face the swing (e.g. '/'). Blank = the stroke." },
-      { key: 'telegraph.attackShapeTurn', label: 'Attack shape turn', type: 'select',
-        options: TURN_OPTIONS, numeric: true, default: '', rerender: true,
-        help: 'Quarter-turn of that glyph within the strike, in degrees — for characters that point somewhere, like a brace that should open up rather than sideways. Blank = upright.' },
-      { key: 'telegraph.attackShapeCount', label: 'Attack shape count', type: 'number',
-        min: 0, default: null, rerender: true,
-        help: 'How many copies of that glyph the strike carries — teeth spaced around the ring for revolve (each one a full-size arc that damages), or how densely a radiating circle is sampled. Blank = each animation\'s own reading (one per mark, a character-width spacing round a circle).' },
-      { key: 'telegraph.beatDamage', label: 'Beat damage ×', type: 'json', default: null, rerender: true,
-        placeholder: '[1.0, 0.5]',
-        help: 'One damage multiplier per beat, e.g. [1.0, 0.5]. Multi-beat animations only.' },
-      { key: 'telegraph.warnShape', label: 'Warn shape (explicit)', type: 'json', default: null, rerender: true,
-        placeholder: '{"kind":"rect","length":2,"width":2.5}',
-        help: "Overrides the Area's warn shape. Dimensions are in cells. offset = cells out along facing. Kinds: rect, trapezoid, circle, ring, cone." },
-      { key: 'telegraph.hitShape', label: 'Hit shape (explicit)', type: 'json', default: null, rerender: true,
-        placeholder: '{"kind":"cone","angleDeg":60,"range":3}',
-        help: "Overrides the Area's hit shape. Defaults to the warn shape when absent." },
-      { key: 'telegraph.pulses', label: 'Pulses (no animation)', type: 'list', default: null, rerender: true,
-        emptyLabel: '(no pulses — single hit)',
-        help: 'Hand-authored rhythm for the animation-less form; delays are double-seconds. Conflicts with an animation. Row 1 is the activation hit.',
-        itemFields: [
-          { key: 'delay', label: 'Delay (dbl-sec)', type: 'number', step: 0.1, default: 0,
-            help: 'Double-seconds after the activation hit. Row 1 is the hit itself, so its delay is 0.' },
-          { key: 'damageMult', label: 'Damage ×', type: 'number', step: 0.1, default: 1 },
-        ] },
-    ]
-  },
-  {
-    id: 'visual',
-    title: 'Visual',
-    fields: [
-      { key: 'color', label: 'Color', type: 'color', default: '#888888' },
-    ]
-  },
-  {
-    id: 'physics',
-    title: 'Physics',
-    fields: [
-      { key: 'mass', label: 'Mass', type: 'number', min: 0.1, step: 0.1, default: 1,
-        help: 'Inertia multiplier. 0.3 light, 5 heavy.' },
-      { key: 'acceleration', label: 'Acceleration (px/s²)', type: 'number', min: 0, default: 600 },
-      { key: 'knockbackMultiplier', label: 'Knockback multiplier', type: 'number', min: 0, step: 0.1, default: 1 },
-      { key: 'knockbackResistance', label: 'Knockback resistance (0-1)', type: 'number', min: 0, max: 1, step: 0.05, default: 0,
-        help: 'Fraction of incoming hit knockback absorbed. 1 = pinned in place (the training dummy on its stick).' },
     ]
   },
   {
@@ -267,6 +212,87 @@ export const SECTIONS = [
         help: 'Unset falls back to speed × 2.5.' },
       { key: 'movementConfig.burstDuration', label: 'Burst duration (dbl-sec)', type: 'number', min: 0.1, step: 0.1, default: 1.0,
         showIf: (d) => d.movementStyle === 'ambusher' },
+    ]
+  },
+  {
+    // The projected warning Area of the melee windup, plus the animation whose
+    // beats define when damage lands (GLOSSARY "Telegraph"). Optional: absent,
+    // the enemy keeps the legacy single-rect windup, so the whole block is
+    // presence-gated rather than defaulted on.
+    id: 'telegraph',
+    title: 'Telegraph',
+    gate: 'telegraph',
+    bareGate: true,
+    emitDefaults: true,
+    note: telegraphNotes,
+    fields: [
+      { key: 'telegraph.area', label: 'Area', type: 'select', options: AREA_OPTIONS,
+        default: 'box', rerender: true, reconcile: reconcileAnimation,
+        help: 'The warned region — a named warn/hit shape pair from AREA_PRESETS. (none) = author explicit shapes below.' },
+      { key: 'telegraph.size', label: 'Size', type: 'select', options: SIZE_OPTIONS,
+        default: '', rerender: true,
+        help: 'box / circle / trapezoid only. Blank = small, one cell of ground. big is the AoE. The slices and the ring carry fixed dimensions and ignore this.' },
+      { key: 'telegraph.animation', label: 'Animation', type: 'select', options: animationOptionsFor,
+        default: 'blink', rerender: true,
+        help: 'Choreography + beats, filtered to the ones the chosen Area supports. Declaring one compiles its own pulses. Blank = blink (the legacy four-phase look).' },
+      { key: 'telegraph.attackShape', label: 'Attack shape', type: 'char', default: '', rerender: true,
+        help: "One character the strike carries instead of the default hairline stroke, turned to face the swing (e.g. '/'). Blank = the stroke." },
+      { key: 'telegraph.attackShapeTurn', label: 'Attack shape turn', type: 'select',
+        options: TURN_OPTIONS, numeric: true, default: '', rerender: true,
+        help: 'Quarter-turn of that glyph within the strike, in degrees — for characters that point somewhere, like a brace that should open up rather than sideways. Blank = upright.' },
+      { key: 'telegraph.attackShapeCount', label: 'Attack shape count', type: 'number',
+        min: 0, default: null, rerender: true,
+        help: 'How many copies of that glyph the strike carries — teeth spaced around the ring for revolve (each one a full-size arc that damages), or how densely a radiating circle is sampled. Blank = each animation\'s own reading (one per mark, a character-width spacing round a circle).' },
+      { key: 'telegraph.beatDamage', label: 'Beat damage ×', type: 'json', default: null, rerender: true,
+        placeholder: '[1.0, 0.5]',
+        help: 'One damage multiplier per beat, e.g. [1.0, 0.5]. Multi-beat animations only.' },
+      { key: 'telegraph.warnShape', label: 'Warn shape (explicit)', type: 'json', default: null, rerender: true,
+        placeholder: '{"kind":"rect","length":2,"width":2.5}',
+        help: "Overrides the Area's warn shape. Dimensions are in cells. offset = cells out along facing. Kinds: rect, trapezoid, circle, ring, cone." },
+      { key: 'telegraph.hitShape', label: 'Hit shape (explicit)', type: 'json', default: null, rerender: true,
+        placeholder: '{"kind":"cone","angleDeg":60,"range":3}',
+        help: "Overrides the Area's hit shape. Defaults to the warn shape when absent." },
+      { key: 'telegraph.pulses', label: 'Pulses (no animation)', type: 'list', default: null, rerender: true,
+        emptyLabel: '(no pulses — single hit)',
+        help: 'Hand-authored rhythm for the animation-less form; delays are double-seconds. Conflicts with an animation. Row 1 is the activation hit.',
+        itemFields: [
+          { key: 'delay', label: 'Delay (dbl-sec)', type: 'number', step: 0.1, default: 0,
+            help: 'Double-seconds after the activation hit. Row 1 is the hit itself, so its delay is 0.' },
+          { key: 'damageMult', label: 'Damage ×', type: 'number', step: 0.1, default: 1 },
+        ] },
+    ]
+  },
+  {
+    // The post-strike vulnerability window (recover.js). Absent entirely means
+    // chaser/keeper archetypes still get the runtime's own retreat fallback
+    // (stateDefaults.js) — this block only needs seeding to pick a different
+    // variant, or to tune duration/speed on the default retreat.
+    id: 'recover', title: 'Recover (post-strike window)', gate: 'recover', bareGate: true,
+    fields: [
+      { key: 'recover.variant', label: 'Variant', type: 'select', options: RECOVER_VARIANTS, default: 'retreat' },
+      { key: 'recover.duration', label: 'Duration (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 0.4 },
+      { key: 'recover.speed', label: 'Speed (px/s or ×)', type: 'number', min: 0, step: 0.1, default: 0.5,
+        help: 'Meaning depends on variant: retreat/jumpBack walk speed, knockback recoil speed. Unused by stationary/lockPlayer/hide.' },
+    ]
+  },
+  // ── Everything else — not tied to a specific State ──────────────────────
+  {
+    id: 'visual',
+    title: 'Visual',
+    fields: [
+      { key: 'color', label: 'Color', type: 'color', default: '#888888' },
+    ]
+  },
+  {
+    id: 'physics',
+    title: 'Physics',
+    fields: [
+      { key: 'mass', label: 'Mass', type: 'number', min: 0.1, step: 0.1, default: 1,
+        help: 'Inertia multiplier. 0.3 light, 5 heavy.' },
+      { key: 'acceleration', label: 'Acceleration (px/s²)', type: 'number', min: 0, default: 600 },
+      { key: 'knockbackMultiplier', label: 'Knockback multiplier', type: 'number', min: 0, step: 0.1, default: 1 },
+      { key: 'knockbackResistance', label: 'Knockback resistance (0-1)', type: 'number', min: 0, max: 1, step: 0.05, default: 0,
+        help: 'Fraction of incoming hit knockback absorbed. 1 = pinned in place (the training dummy on its stick).' },
     ]
   },
   {
@@ -346,8 +372,9 @@ export const SECTIONS = [
 ];
 
 // ── MECHANICS ───────────────────────────────────────────────────────────────
-// Each mechanic is a collapsible block gated by a toggle. `gate` is the path
-// that turns it on ('<key>.enabled' for most; bare presence for a few).
+// The "more specific options" tier: every optional block gated by a presence
+// toggle that isn't tied to a specific State. `gate` is the path that turns it
+// on ('<key>.enabled' for most; bare presence for a few).
 export const MECHANICS = [
   {
     id: 'chargeMechanic', title: 'Charge', gate: 'chargeMechanic.enabled',

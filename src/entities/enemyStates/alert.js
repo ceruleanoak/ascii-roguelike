@@ -8,6 +8,7 @@
 // of being a free-floating timer (`detectionIndicatorTimer`).
 import { GRID } from '../../game/GameConfig.js';
 import { applyStateMovement, moveStill } from '../enemyMovement.js';
+import { isTargetInTallGrass } from '../enemyVision.js';
 
 // How close the target has to be before tall grass stops concealing it. You
 // cannot hide from something standing next to you.
@@ -67,7 +68,7 @@ export default {
     // reaches a stale mark immediately senses the target again, marks its current
     // position, and oscillates forever.
     if (inRange && ctx.samePlane && !enemy.lastKnownPosition && !enemy.hadVisualContact) {
-      const concealed = enemy.isTargetInTallGrass() && ctx.effectiveDistance > CLOSE_RANGE;
+      const concealed = isTargetInTallGrass(enemy) && ctx.effectiveDistance > CLOSE_RANGE;
       // Deciding is all this does — the mark, the flags and the hesitation
       // before setting off are Search's to arm, and arming them here as well
       // would leave Search's own entry looking like a re-entry and skipping it.

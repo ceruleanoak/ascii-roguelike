@@ -1,11 +1,11 @@
 // Strike — the attack, from its opening beat to its last.
 //
 // Collapses `'windup'` and `'attack'`, which are two state ids for one event and
-// the source of the messiest corner of the legacy ladder: `attack → idle` has
-// three closers, one of them dead; melee actually closes via
-// `Telegraph.syncWindupVisual` rather than through the ladder at all; non-melee
-// never leaves `'attack'` on its own; and `Enemy.attack()` has zero callers.
-// Here the runner owns closure — Strike ends when its beats end.
+// were the messiest corner of the legacy ladder: `attack → idle` had three
+// closers that disagreed, one of them dead. Here Strike ends when its beats end,
+// and the one thing that happens outside those beats — paying for the swing —
+// happens in `Enemy.resolveStrike()`, at the single moment the attack becomes
+// real.
 //
 // `bands` is the answer to "do attacks differ based on distance". Evaluated
 // nearest-first, it generalizes the five bespoke versions currently open-coded
@@ -36,6 +36,9 @@ export default {
     machine.band = pickBand(cfg.bands, ctx.effectiveDistance);
     machine.struck = false;
     enemy.windupTimer = machine.band?.windup ?? enemy.attackWindup;
+    // Total for this windup, captured once at entry so Enemy.isInCritWindow()
+    // can scale the guaranteed-crit back half to it as windupTimer counts down.
+    enemy.windupDuration = enemy.windupTimer;
     if (enemy.target && !enemy.markedTargetPosition) {
       enemy.markedTargetPosition = { x: enemy.target.position.x, y: enemy.target.position.y };
     }
@@ -96,13 +99,12 @@ export default {
   },
 
   exit(enemy, ctx, machine) {
-    // The cooldown is deliberately not charged here. Telegraph's
-    // `syncWindupVisual` sets it, and only on the path where the swing actually
-    // becomes a real attack — a windup the target walked out of costs the enemy
-    // nothing and it may immediately try again. Charging it here instead would
-    // silently tax every aborted swing, which is a balance change wearing a
-    // refactor's clothes. Ownership moves in here with contradiction #9, where
-    // Strike takes over closure from Telegraph and the two can move together.
+    // The cooldown is deliberately not charged here, and this is the one place
+    // that distinction is visible. `Enemy.resolveStrike()` charges it, on the
+    // single path where the swing actually became an attack — so a windup the
+    // target walked out of costs the enemy nothing and it may immediately try
+    // again. Charging on exit instead would tax every aborted swing, which is a
+    // balance change wearing a refactor's clothes.
     enemy.markedTargetPosition = null;
     machine.band = null;
     machine.struck = false;

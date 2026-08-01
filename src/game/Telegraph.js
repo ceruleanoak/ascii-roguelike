@@ -287,6 +287,28 @@ function circleEdgeHitsRect(cx, cy, radius, rect) {
 
 // ── windup attack lifecycle (shared system half) ────────────────────────────
 
+// Where a melee swing lands, decided once from wherever the target actually
+// is — the same aim contract Enemy.createProjectile() already uses for
+// arrows and bolts — rather than a fixed stand-off distance derived from
+// attackRange alone. Shared by createMeleeAttack and createWindupAttackVisual
+// so the real hit and its windup visual can never disagree about where the
+// swing is aimed. Capped at attackRange for when the enemy's own position has
+// since drifted (windup movement, knockback) and the aim point is now further
+// out than the swing can reach. Null when the target is standing exactly on
+// the enemy — there is no direction to aim.
+export function meleeAimOffset(enemy) {
+  const aimPos = enemy.markedTargetPosition || enemy.target.position;
+  const dx = aimPos.x - enemy.position.x;
+  const dy = aimPos.y - enemy.position.y;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  if (distance === 0) return null;
+  return {
+    dirX: dx / distance,
+    dirY: dy / distance,
+    attackDistance: Math.min(distance, enemy.attackRange)
+  };
+}
+
 // Attach Telegraph fields to a freshly created windup visual. Called from
 // Enemy.createWindupAttackVisual when the enemy data declares `telegraph`.
 // Facing is locked here — the shape aims where the enemy aimed, and stays
@@ -382,9 +404,9 @@ export function updateEnemyMeleeAttack(attack, deltaTime) {
 
 // The windup-visual state machine: create the visual while the enemy winds
 // up, then either activate it (windup completed) or discard it (interrupted).
-// This is the single canonical implementation — CombatSystem and the
-// enemy-editor sandbox both call it against their own attack list.
-export function syncWindupVisual(enemy, attackList) {
+// Private to this module — `resolveEnemyAttack` below is the entry point, so a
+// caller cannot step the visual without also closing the Strike behind it.
+function syncWindupVisual(enemy, attackList) {
   if (enemy.attackType === 'melee' && enemy.isWindingUp && enemy.isWindingUp()) {
     // Enemy is winding up a melee attack - create/update windup visual
     if (!enemy.windupAttackVisual && enemy.createWindupAttackVisual) {
@@ -398,9 +420,13 @@ export function syncWindupVisual(enemy, attackList) {
     // Windup ended - convert visual to real attack or remove it
     if (enemy.canAttack()) {
       activateWindupVisual(enemy.windupAttackVisual);
-      // Set attack cooldown (same as createAttack does)
-      enemy.attackTimer = enemy.attackCooldown;
-      enemy.state = 'idle';
+      // The windup became a real swing. What that costs the enemy — the
+      // cooldown, and leaving the attack state — is the enemy's own business;
+      // this module owns the shape on screen and nothing else. Setting both
+      // fields from here made a renderer-side helper the only thing in the
+      // codebase that could end a melee attack, and left every other attackType
+      // with no ending at all.
+      enemy.resolveStrike();
     } else {
       // Windup was interrupted - remove the visual
       const index = attackList.indexOf(enemy.windupAttackVisual);
@@ -410,6 +436,29 @@ export function syncWindupVisual(enemy, attackList) {
     }
     enemy.windupAttackVisual = null;
   }
+}
+
+// One frame of an enemy's attack emission, from the windup visual through to the
+// attack itself. Returns the attack data the caller should spawn into the world,
+// or null when nothing fires this frame.
+//
+// The caller spawns; this decides. CombatSystem and the enemy-editor sandbox each
+// open-coded the same four lines around `canAttack()` and differed only in what
+// they did with the result — which meant a Strike could end one way in play and
+// another way in the tool used to verify it. Sharing the decision is what makes
+// the sandbox trustworthy for authoring States.
+export function resolveEnemyAttack(enemy, attackList) {
+  syncWindupVisual(enemy, attackList);
+  // A melee windup visual *is* the attack, so activating it above already fired
+  // this Strike; building another here would double every telegraphed swing.
+  if (!enemy.canAttack?.() || enemy.windupAttackVisual) return null;
+  const attack = enemy.createAttack?.() ?? null;
+  // The Strike closes whether or not an attack came out of it. An enemy whose
+  // picked-up weapon is still on its own cooldown produces nothing and has always
+  // paid the attack cooldown regardless; what is new is that it also stops being
+  // in `'attack'` instead of waiting for an unrelated branch to notice.
+  enemy.resolveStrike?.();
+  return attack;
 }
 
 // Flip a windup visual live: it can now deal damage, flashes white as the

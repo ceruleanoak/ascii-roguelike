@@ -17,9 +17,18 @@
 // grew real timed variants (enemyStates/recover.js): the legacy ladder's melee
 // back-off was a bare distance flip with no minimum-commit timer, which is the
 // Chase-state waggle bug, and the fix belongs here, not in the ladder. Pre-Strike
-// motion is certified identical to the legacy ladder by the parity harness;
-// post-Strike cadence is expected to differ now for every melee enemy — that
-// divergence is the fix, not a regression.
+// motion is certified identical to the legacy ladder by the parity harness,
+// with one deliberate exception: Approach and Search used to hand off to each
+// other every single frame once engaged, because canSee's facing cone (a
+// detection concept) was still gating contact a keeper had already made — a
+// keeper strafing to hold its band constantly drags its velocity-derived facing
+// off the player, failing the cone on alternating frames forever. `spineCanSee`
+// (enemyVision.js) now ignores the cone once a State from Approach through
+// Recover already has the target. The legacy ladder's own `canSeePlayer` has the
+// identical cone check and was never given the same fix, so the two paths now
+// legitimately diverge pre-Strike for keeper-heavy enemies — that divergence is
+// also the fix, not a regression. Post-Strike cadence is expected to differ now
+// for every melee enemy on top of that.
 import dormant from './enemyStates/dormant.js';
 import alert from './enemyStates/alert.js';
 import approach from './enemyStates/approach.js';

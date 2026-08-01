@@ -291,3 +291,55 @@ export function hasVision(enemy, start, end, maxLength, { ignoreCone = false } =
 
   return true; // Clear vision
 }
+
+// States where the target is already acquired, not merely being noticed.
+const IN_COMBAT_STATES = ['approach', 'anticipate', 'strike', 'recover'];
+
+/**
+ * The spine's `canSee` — same ray-cast as `hasVision`, except the facing cone
+ * only applies before contact is made.
+ *
+ * Approach through Recover already have the target — the facing cone is a
+ * detection concept for an enemy deciding whether it has noticed you
+ * (Alert/Dormant), not one for maintaining contact once it has. Gating canSee
+ * on it during combat was feeding Approach and Search into each other every
+ * frame: Approach clears aggroMemoryActive the instant it sees the target,
+ * which re-arms the cone; velocity-derived facingAngle lags a tight turn and
+ * fails that cone on the very next frame; the failure reads as lost sight and
+ * hands off to Search, which grants cone-free vision via aggroMemoryActive and
+ * hands straight back — one flip per frame, forever.
+ */
+export function spineCanSee(enemy, currentState, targetPos, maxLength) {
+  const ignoreCone = IN_COMBAT_STATES.includes(currentState);
+  return hasVision(enemy, enemy.position, targetPos, maxLength, { ignoreCone });
+}
+
+/**
+ * Whether the target is standing in tall grass thick enough to hide in.
+ *
+ * Concealment is a vision question, not a terrain one — it is the only reason an
+ * enemy with a clear line and an in-range target still fails to notice it — so it
+ * belongs beside the ray-casts rather than beside the enemy's own footing checks.
+ */
+export function isTargetInTallGrass(enemy) {
+  if (!enemy.target || !enemy.backgroundObjects) return false;
+  const cs = GRID.CELL_SIZE;
+  const px = Math.floor(enemy.target.position.x / cs);
+  const py = Math.floor(enemy.target.position.y / cs);
+  // RoomGenerator emits two '|' BackgroundObjects per visual blade, so we
+  // count raw instances in target's cell + 4 cardinal neighbours. ≥ 6
+  // means ~3 visual blades, matching the renderer's concealment rule so
+  // idle proximity detection lines up with what the player can see.
+  let onCell = 0;
+  let nearby = 0;
+  for (const obj of enemy.backgroundObjects) {
+    if (obj.destroyed || obj.char !== '|') continue;
+    const ox = Math.floor(obj.position.x / cs);
+    const oy = Math.floor(obj.position.y / cs);
+    const dx = Math.abs(ox - px);
+    const dy = Math.abs(oy - py);
+    if (dx === 0 && dy === 0) onCell++;
+    if (dx + dy <= 1) nearby++;
+  }
+  return onCell > 0 && nearby >= 6;
+}

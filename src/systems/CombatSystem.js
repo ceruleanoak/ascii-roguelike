@@ -6,8 +6,9 @@ import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { GameAnimalMechanic } from '../entities/enemyMechanics/GameAnimalMechanic.js';
 import { SniperMechanic } from '../entities/enemyMechanics/SniperMechanic.js';
 import { queueDamageNumber as queueDamageNumberImpl, ageDamageTextQueue, reportDamageResult as reportDamageResultImpl } from './DamageNumberQueue.js';
-import { updateEnemyMeleeAttack, syncWindupVisual, attackHitsBox } from '../game/Telegraph.js';
+import { updateEnemyMeleeAttack, resolveEnemyAttack, attackHitsBox, retireAfterTest } from '../game/Telegraph.js';
 import { conductElectricity as conductElectricityImpl } from './ElectricConduction.js';
+import { acidFloodFillWater } from './AcidWaterSpread.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
 // room — keeps cross-room sniping in check while still feeling powerful.
@@ -648,7 +649,7 @@ export class CombatSystem {
             continue;
           }
 
-          const critRoll = this._applyCritIfLucky(adjustedDamage, proj.owner);
+          const critRoll = this._applyCritIfLucky(adjustedDamage, proj.owner, enemy);
           const finalDamage = critRoll.damage;
           const damaged = enemy.takeDamage(finalDamage, proj.attackId);
           if (damaged !== false) {
@@ -893,7 +894,7 @@ export class CombatSystem {
                   // Out of charges — Acid Blade swings still land but don't
                   // convert water (and skip the 8s poisoned-water fallback below).
                 } else if (acidActive) {
-                  this._acidFloodFillWater(obj, backgroundObjects);
+                  acidFloodFillWater(obj, backgroundObjects);
                   this.createDamageNumber('☠', obj.position.x, obj.position.y, '#44bb44');
                   if (!attack._acidChargeDepleted) {
                     attack._acidChargeDepleted = true;
@@ -1046,7 +1047,7 @@ export class CombatSystem {
               continue;
             }
 
-            const critRoll = this._applyCritIfLucky(totalDamage, attack.owner);
+            const critRoll = this._applyCritIfLucky(totalDamage, attack.owner, enemy);
             const finalDamage = critRoll.damage;
             // Melee hitboxes normally carry no burst id (undefined → iframes
             // block every follow-up), so only an explicitly-bursted pattern
@@ -1108,6 +1109,14 @@ export class CombatSystem {
                 this.impactEffects.push({ x: enemy.position.x, y: enemy.position.y, onHit: attack.onHit, color: attack.color });
               } else if (attack.onHit && !acidOutOfCharges && !enemy.shouldApplyStatusEffect(attackStatus)) {
                 this.createDamageNumber('RESIST', enemy.position.x, enemy.position.y - 12, '#888888');
+              }
+
+              // Whip disarm — the lash rips carried gear out of an armed
+              // enemy's hands. Sets the same flag the electric jolt uses;
+              // EnemyUpdateSystem polls it and scatters the inventory.
+              if (attack.disarm && enemy.itemUsage && enemy.inventory?.length) {
+                enemy.shouldDropItems = true;
+                this.createDamageNumber('DISARM', enemy.position.x, enemy.position.y - 14, '#ffcc66');
               }
 
               // Show electric indicator for wet-boosted hits
@@ -1355,36 +1364,37 @@ export class CombatSystem {
     for (let i = this.enemyMeleeAttacks.length - 1; i >= 0; i--) {
       const attack = this.enemyMeleeAttacks[i];
 
-      if (updateEnemyMeleeAttack(attack, deltaTime * PHYSICS.ENEMY_TIMER_RATE)) {
-        this.enemyMeleeAttacks.splice(i, 1);
-        continue;
-      }
+      // Expiry is resolved *after* the contact test, not before. A travelling
+      // strike's final slice of travel lands on the same frame its duration runs
+      // out, so dropping the attack first would silently discard the end of
+      // every pass. Nothing changes for still attacks — they latch on their one
+      // test frame long before this.
+      const expired = updateEnemyMeleeAttack(attack, deltaTime * PHYSICS.ENEMY_TIMER_RATE);
 
-      // Check collision with player or charmed target (only on first frame, not during windup)
+      // Check collision with the player or the charmed target. A still attack
+      // gets one test frame; a travelling strike keeps testing for the whole
+      // pass, which retireAfterTest decides.
       if (!attack.hasHit && !attack.windupPhase) {
+        let connected = false;
 
         if (attack.isCharmedAttack && attack.charmedTarget && attack.charmedTarget !== player) {
           // Charmed attack hits the charmed target enemy
-          if (attackHitsBox(attack, attack.charmedTarget.getHitbox(),
-                            () => this.checkMeleeCollision(attack, attack.charmedTarget))) {
+          connected = attackHitsBox(attack, attack.charmedTarget.getHitbox(),
+                                    () => this.checkMeleeCollision(attack, attack.charmedTarget));
+          if (connected) {
             attack.charmedTarget.takeDamage(attack.damage);
             this.createDamageNumber(attack.damage, attack.charmedTarget.position.x, attack.charmedTarget.position.y, '#ff44ff');
           }
+        } else if (planeOf(player) !== (attack.shooterPlane ?? 0)) {
+          attack.hasHit = true; // Mark as processed so it doesn't linger
         } else {
-          if (planeOf(player) !== (attack.shooterPlane ?? 0)) {
-            attack.hasHit = true; // Mark as processed so it doesn't linger
-            continue;
-          }
-
           // Normal attack (or charmed fallback targeting player)
-          if (attackHitsBox(attack, player.getHitbox(),
-                            () => this.checkMeleeCollisionWithPlayer(attack, player))) {
+          connected = attackHitsBox(attack, player.getHitbox(),
+                                    () => this.checkMeleeCollisionWithPlayer(attack, player));
+          if (connected) {
             if (player.isStaffBlocking && !attack.isImpact) {
               this.createDamageNumber('BLOCK', player.position.x, player.position.y, '#aaaaaa');
-              attack.hasHit = true;
-              continue;
-            }
-            if (player.tryShieldBlock && player.tryShieldBlock(false)) {
+            } else if (player.tryShieldBlock && player.tryShieldBlock(false)) {
               // Tower Shield absorbed the melee hit
               this.createDamageNumber('*', player.position.x, player.position.y, '#8888ff');
             } else {
@@ -1434,8 +1444,10 @@ export class CombatSystem {
             }
           }
         }
-        attack.hasHit = true;
+        retireAfterTest(attack, connected);
       }
+
+      if (expired) this.enemyMeleeAttacks.splice(i, 1);
     }
 
     // DOT effect colors
@@ -1480,16 +1492,13 @@ export class CombatSystem {
         }
       }
 
-      // Handle melee attack windup visualization — create/activate/interrupt
-      // lives in the shared Telegraph module (single canonical implementation,
-      // also stepped by the enemy-editor sandbox).
-      syncWindupVisual(enemy, this.enemyMeleeAttacks);
-
-      if (enemy.canAttack() && !enemy.windupAttackVisual) {
-        const attackData = enemy.createAttack();
-        if (attackData) {
-          this.createEnemyAttack(attackData);
-        }
+      // Whether the enemy attacks this frame, and the windup visual's lifecycle
+      // behind it, both live in the shared Telegraph module (single canonical
+      // implementation, also stepped by the enemy-editor sandbox). This file
+      // spawns what comes back and owns nothing else about the decision.
+      const attackData = resolveEnemyAttack(enemy, this.enemyMeleeAttacks);
+      if (attackData) {
+        this.createEnemyAttack(attackData);
       }
     }
 
@@ -2287,7 +2296,7 @@ export class CombatSystem {
   // by player.critChance (Lucky Coin / well ritual) or weapon's own critChance.
   // isLucky=true when the Lucky Coin/well is the crit source (shows "LUCKY CRIT");
   // isLucky=false when the weapon alone provides the chance (shows "CRIT").
-  _applyCritIfLucky(damage, owner) {
+  _applyCritIfLucky(damage, owner, enemy) {
     if (!owner?.quickSlots) return { damage, isCrit: false };
     let critChance = owner.critChance || 0;
     const isLucky = critChance > 0; // Lucky Coin or well is contributing
@@ -2297,6 +2306,11 @@ export class CombatSystem {
     }
     // Post-dodge crit window: dagger-class weapons force a guaranteed crit.
     if (activeWeapon?.data?.weaponSubtype === 'dagger' && owner.postDodgeCritTimer > 0) {
+      critChance = 1;
+    }
+    // Punishing a telegraphed swing: a hit that lands in the back half of the
+    // enemy's windup is a guaranteed crit.
+    if (enemy?.isInCritWindow?.()) {
       critChance = 1;
     }
     if (!(critChance > 0)) return { damage, isCrit: false };
@@ -2467,46 +2481,6 @@ export class CombatSystem {
 
     // Placeholder ricochet SFX — wired via main.js; silently no-ops if unloaded.
     this.audioSystem?.playSFX?.('ricochet', 0.6);
-  }
-
-  // Acid Blade: flood-fill connected water tiles, permanently converting the
-  // entire pond to acid (modelled as the existing 'poisoned' waterState with
-  // Infinity duration). 4-connected adjacency on the cell grid.
-  // (Electrify is NOT instant like this — shock-on-water routes through
-  // ElectricitySystem so the charge spreads tile-by-tile at a fixed rate.)
-  _acidFloodFillWater(startObj, backgroundObjects) {
-    const CELL = GRID.CELL_SIZE;
-    const key = (x, y) => `${Math.round(x / CELL)},${Math.round(y / CELL)}`;
-
-    const waterMap = new Map();
-    for (const obj of backgroundObjects) {
-      if (obj.destroyed) continue;
-      if (!obj.isWater || !obj.isWater()) continue;
-      waterMap.set(key(obj.position.x, obj.position.y), obj);
-    }
-
-    const visited = new Set();
-    const queue = [startObj];
-    visited.add(key(startObj.position.x, startObj.position.y));
-
-    while (queue.length > 0) {
-      const obj = queue.shift();
-      obj.setWaterState('poisoned', Infinity);
-
-      const cx = Math.round(obj.position.x / CELL);
-      const cy = Math.round(obj.position.y / CELL);
-      const neighborKeys = [
-        `${cx - 1},${cy}`, `${cx + 1},${cy}`,
-        `${cx},${cy - 1}`, `${cx},${cy + 1}`
-      ];
-      for (const nk of neighborKeys) {
-        if (visited.has(nk)) continue;
-        const neighbor = waterMap.get(nk);
-        if (!neighbor) continue;
-        visited.add(nk);
-        queue.push(neighbor);
-      }
-    }
   }
 
   conductElectricity(sourceObj, damage, enemies, player = null) {

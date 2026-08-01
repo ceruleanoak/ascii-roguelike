@@ -14,9 +14,9 @@ export const EFFECT_AFFINITY = {
   goo:    'goo',
 };
 import { Item } from './Item.js';
-import { attachTelegraph } from '../game/Telegraph.js';
+import { attachTelegraph, meleeAimOffset } from '../game/Telegraph.js';
 import { inSamePlane, planeOf, objectOnPlane } from '../systems/PlaneSystem.js';
-import { hasLineOfSight, getVisionObstructionPoint, hasVision } from './enemyVision.js';
+import { hasLineOfSight, getVisionObstructionPoint, hasVision, isTargetInTallGrass, spineCanSee } from './enemyVision.js';
 import { EXIT_SLOT_POSITIONS } from '../systems/ExitSystem.js';
 import { LureMechanic } from './enemyMechanics/LureMechanic.js';
 import { ParryMechanic } from './enemyMechanics/ParryMechanic.js';
@@ -37,6 +37,7 @@ import { FlockMechanic } from './enemyMechanics/FlockMechanic.js';
 import { ShellFormMechanic } from './enemyMechanics/ShellFormMechanic.js';
 import { ArmorMechanic } from './enemyMechanics/ArmorMechanic.js';
 import { PotionMechanic } from './enemyMechanics/PotionMechanic.js';
+import { WindupTelegraphMechanic } from './enemyMechanics/WindupTelegraphMechanic.js';
 import { SplitOnDamageMechanic } from './enemyMechanics/SplitOnDamageMechanic.js';
 import { RiseAgainMechanic } from './enemyMechanics/RiseAgainMechanic.js';
 import { PatrolMechanic } from './enemyMechanics/PatrolMechanic.js';
@@ -941,7 +942,7 @@ export class Enemy {
         effectiveDistance,
         effectiveAggroRange,
         effectiveVisionLength,
-        canSee: this.hasVision(this.position, this.target.position, effectiveVisionLength),
+        canSee: spineCanSee(this, this.stateMachine.current, this.target.position, effectiveVisionLength),
         // Deciding to swing is not the same question as deciding to give chase,
         // and the roster depends on the difference: facing is a detection
         // concept, so a keeper that sidesteps perpendicular to its target would
@@ -1112,6 +1113,9 @@ export class Enemy {
         if (canSeeTarget && this.state !== 'windup' && this.state !== 'attack') {
           this.state = 'windup';
           this.windupTimer = this.attackWindup;
+          // Total for this windup, captured once at the start so the crit
+          // window (back half only) can scale to it as windupTimer counts down.
+          this.windupDuration = this.attackWindup;
           // Snapshot target position at windup start so attacks aim at where
           // the player WAS, not where they are when the windup completes.
           this.markedTargetPosition = { x: this.target.position.x, y: this.target.position.y };
@@ -1254,7 +1258,7 @@ export class Enemy {
             // a stale memory mark and immediately setting a new one at the player's current spot.
             if (distance <= effectiveAggroRange && inSamePlane(this, this.target)) {
               const closeRange = GRID.CELL_SIZE * 3;
-              if (this.isTargetInTallGrass() && distance > closeRange) {
+              if (isTargetInTallGrass(this) && distance > closeRange) {
                 // Player is hidden in tall grass — idle enemies can't detect by proximity alone.
                 // Exception: within close range the player is too near to hide (can't conceal yourself
                 // from something standing right next to you).
@@ -1970,10 +1974,6 @@ export class Enemy {
     return hasVision(this, start, end, maxLength, opts);
   }
 
-  /**
-   * Returns true if the target (player) is currently overlapping a tall grass tile.
-   * Used to suppress idle proximity detection — grass conceals the player from unaware enemies.
-   */
   _isOnWater() {
     if (!this.backgroundObjects) return false;
     const ex = Math.floor(this.position.x / GRID.CELL_SIZE);
@@ -1988,28 +1988,6 @@ export class Enemy {
     return false;
   }
 
-  isTargetInTallGrass() {
-    if (!this.target || !this.backgroundObjects) return false;
-    const cs = GRID.CELL_SIZE;
-    const px = Math.floor(this.target.position.x / cs);
-    const py = Math.floor(this.target.position.y / cs);
-    // RoomGenerator emits two '|' BackgroundObjects per visual blade, so we
-    // count raw instances in target's cell + 4 cardinal neighbours. ≥ 6
-    // means ~3 visual blades, matching the renderer's concealment rule so
-    // idle proximity detection lines up with what the player can see.
-    let onCell = 0;
-    let nearby = 0;
-    for (const obj of this.backgroundObjects) {
-      if (obj.destroyed || obj.char !== '|') continue;
-      const ox = Math.floor(obj.position.x / cs);
-      const oy = Math.floor(obj.position.y / cs);
-      const dx = Math.abs(ox - px);
-      const dy = Math.abs(oy - py);
-      if (dx === 0 && dy === 0) onCell++;
-      if (dx + dy <= 1) nearby++;
-    }
-    return onCell > 0 && nearby >= 6;
-  }
 
   canAttack() {
     // Blind enemies can still attack, but will miss (damage set to 0 in createAttack)
@@ -2023,10 +2001,24 @@ export class Enemy {
     return this.state === 'attack' && this.attackTimer <= 0 && this.windupTimer <= 0;
   }
 
-  attack() {
+  // The end of a Strike: the attack has left the enemy's hands, so the cooldown
+  // starts and the attack state is over.
+  //
+  // Every path that fires an attack ends here. It used to end in three places
+  // that did not agree. A melee swing closed inside `Telegraph.syncWindupVisual`
+  // — outside the enemy entirely, and only for `attackType: 'melee'`. Everything
+  // else charged its cooldown inside `createAttack()` and never left `'attack'`
+  // on its own; it sat there until some unrelated ladder branch happened to
+  // overwrite the field, which is why a bow enemy reads as attacking on frames
+  // it is plainly just walking. And `attack()`, the one that did both correctly,
+  // was called by nobody at all.
+  resolveStrike() {
     this.attackTimer = this.attackCooldown;
-    this.state = 'idle'; // Reset to idle after attack
-    return this.damage;
+    // Only the legacy ladder reads this. The State spine writes `state` from its
+    // own current State every frame and reads it for nothing, so under the spine
+    // this line is stomped a frame later and costs nothing; it is here so the
+    // ladder sees the same ending, and it goes when the ladder does.
+    this.state = 'idle';
   }
 
   _dizzyAngleOffset() {
@@ -2057,10 +2049,12 @@ export class Enemy {
     this.velocity.vy = (ly / ld) * leapSpeed;
   }
 
+  // Builds the attack; it does not end the Strike. The cooldown it used to charge
+  // here is `resolveStrike()`'s, so that a swing costs the same whether it left
+  // as a telegraphed melee visual or as an arrow — see `resolveEnemyAttack` in
+  // Telegraph.js, which is the only thing that calls this in play.
   createAttack() {
     if (!this.canAttack() || !this.target) return null;
-
-    this.attackTimer = this.attackCooldown;
 
     // Use equipped weapon if available
     if (this.equippedWeapon && this.attackType.startsWith('item_')) {
@@ -2233,19 +2227,9 @@ export class Enemy {
   }
 
   createMeleeAttack(knockback = true) {
-    const aimPos = this.markedTargetPosition || this.target.position;
-    const dx = aimPos.x - this.position.x;
-    const dy = aimPos.y - this.position.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    if (distance === 0) return null;
-
-    let dirX = dx / distance;
-    let dirY = dy / distance;
-
-    // Create attack zone extending toward player (full attack range)
-    // Position it 1 unit away from enemy, extending to attack range
-    const attackDistance = GRID.CELL_SIZE + (this.attackRange - GRID.CELL_SIZE) * 0.5;
+    const aim = meleeAimOffset(this);
+    if (!aim) return null;
+    const { dirX, dirY, attackDistance } = aim;
 
     return {
       type: 'enemy_melee',
@@ -2272,17 +2256,9 @@ export class Enemy {
   createWindupAttackVisual() {
     if (!this.target) return null;
 
-    const aimPos = this.markedTargetPosition || this.target.position;
-    const dx = aimPos.x - this.position.x;
-    const dy = aimPos.y - this.position.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    if (distance === 0) return null;
-
-    const dirX = dx / distance;
-    const dirY = dy / distance;
-
-    const attackDistance = GRID.CELL_SIZE + (this.attackRange - GRID.CELL_SIZE) * 0.5;
+    const aim = meleeAimOffset(this);
+    if (!aim) return null;
+    const { dirX, dirY, attackDistance } = aim;
 
     // If the enemy data declares a Telegraph, attachTelegraph adds the shape
     // fields (warnShape/hitShape/facing/pulses); shapeless enemies keep the
@@ -2764,18 +2740,19 @@ export class Enemy {
   }
 
   isWindingUp() {
-    return this.state === 'windup' && this.windupTimer > 0;
+    return WindupTelegraphMechanic.isWindingUp(this);
+  }
+
+  isInCritWindow() {
+    return WindupTelegraphMechanic.isInCritWindow(this);
+  }
+
+  getWindupFlashColor() {
+    return WindupTelegraphMechanic.getWindupFlashColor(this);
   }
 
   getWindupIndicator() {
-    if (this.isWindingUp()) {
-      return {
-        char: '!',
-        color: '#ff0000',
-        offsetY: -GRID.CELL_SIZE  // Position above enemy
-      };
-    }
-    return null;
+    return WindupTelegraphMechanic.getWindupIndicator(this);
   }
 
   getMemoryIndicator() {

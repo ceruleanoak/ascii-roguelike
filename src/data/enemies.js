@@ -133,7 +133,8 @@ export const ENEMIES = {
     // Same Area as the Slime — one cell of ground is the shared lesson at depth
     // 1. Only the choreography differs: the rat's danger runs out along its
     // lunge. No `size`, so the small box: a rat threatens where it bites.
-    telegraph: { area: 'box', animation: 'vertical' },
+    telegraph: { area: 'box', animation: 'clap', attackShape: 'v' },
+    recover: { variant: 'jumpBack' },  // Darty and skittish — flinches off after biting
     affinities: ['beast'],
     tier: 'weak'
   },
@@ -218,6 +219,7 @@ export const ENEMIES = {
     },
     affinities: ['beast', 'aquatic'],
     sfx: { hit: 'frog', death: 'frog' },
+    recover: { variant: 'lockPlayer', duration: 0.5 },  // Tongue holds you while it reels back in
     tier: 'weak'
   },
 
@@ -239,6 +241,7 @@ export const ENEMIES = {
     attackType: 'melee',
     decisionInterval: 0.75,  // Dumb brute (very slow reactions)
     color: '#00aa00',
+    recover: { variant: 'knockback', duration: 0.6 },  // Staggers off its own heavy swing
     affinities: ['beast'],
     tier: 'normal'
   },
@@ -1546,6 +1549,7 @@ export const ENEMIES = {
     elementalAffinity: {
       weakness: { 'wet': 1.8 }
     },
+    recover: { variant: 'hide', duration: 0.8 },  // "Retreats through the cloud" — vanishes into it
     affinities: ['fire', 'ice'],
     tier: 'normal'
   },
