@@ -178,6 +178,11 @@ export class Enemy {
     this.memoryMarkPlane = 0;  // Plane player was on when memory mark was created
     this.memoryStaleTimer = 2.0; // Countdown (sec) before a cross-plane-stale mark expires
 
+    // Flee state — running from a memory mark rather than pursuing one.
+    this.fleeing = false; // Whether Flee has armed its mark (mirrors aggroMemoryActive's role for Search)
+    this.fleeReachedBarrier = false; // Line of sight from the mark to here is broken
+    this.fleeBarrierPauseTimer = null; // Countdown held at a barrier before whatever reacts to it fires
+
     // Unified AI decision-making (intelligence system)
     this.decisionInterval = this.data.decisionInterval || 0.5; // How often to reassess (smarter = lower)
     this.decisionTimer = Math.random() * this.decisionInterval; // Time until next decision (randomized start)
@@ -1818,6 +1823,11 @@ export class Enemy {
     const aim = meleeAimOffset(this);
     if (!aim) return null;
     const { dirX, dirY, attackDistance } = aim;
+    // Strike's picked band (strike.js `enter()`), if the enemy authors bands —
+    // a band overrides damage/knockback/duration the same way it already
+    // overrides windup, so distance can change what the swing IS, not just
+    // how long it takes to arrive.
+    const band = this.stateMachine?.band;
 
     return {
       type: 'enemy_melee',
@@ -1828,10 +1838,10 @@ export class Enemy {
       },
       width: GRID.CELL_SIZE,
       height: GRID.CELL_SIZE,
-      damage: this.getEffectiveDamage(),
-      duration: 0.30, // dbl-sec (enemy melee list clock) = 0.15s real
+      damage: band?.damage ?? this.getEffectiveDamage(),
+      duration: band?.duration ?? 0.30, // dbl-sec (enemy melee list clock) = 0.15s real
       color: this.color,
-      knockback: knockback ? 300 * (this.knockbackMultiplier ?? 1.0) : 0,
+      knockback: knockback ? (band?.knockback ?? 300 * (this.knockbackMultiplier ?? 1.0)) : 0,
       isImpact: this.data.isImpact === true,
       owner: this,
       isCharmedAttack: this.isCharmed(),
@@ -1847,6 +1857,12 @@ export class Enemy {
     const aim = meleeAimOffset(this);
     if (!aim) return null;
     const { dirX, dirY, attackDistance } = aim;
+    // strike.js `enter()` already resolved the picked band into windupDuration
+    // before this can be called (isWindingUp() requires windupTimer > 0, which
+    // only holds after that assignment), so it — not attackWindup — is the
+    // band-aware windup length for this swing.
+    const band = this.stateMachine?.band;
+    const windup = this.windupDuration ?? this.attackWindup;
 
     // If the enemy data declares a Telegraph, attachTelegraph adds the shape
     // fields (warnShape/hitShape/facing/pulses); shapeless enemies keep the
@@ -1860,19 +1876,19 @@ export class Enemy {
       },
       width: GRID.CELL_SIZE,
       height: GRID.CELL_SIZE,
-      damage: this.getEffectiveDamage(),
+      damage: band?.damage ?? this.getEffectiveDamage(),
       // Windup + actual attack duration. Both terms are now double-seconds on
       // the same clock the melee list is stepped with, so this is a true
       // "windup then one active window" lifetime rather than a loose upper bound.
-      duration: this.attackWindup + 0.30,
+      duration: windup + (band?.duration ?? 0.30),
       color: this.color,
-      knockback: 300,
+      knockback: band?.knockback ?? 300,
       owner: this,
       isCharmedAttack: this.isCharmed(),
       charmedTarget: this.isCharmed() ? this.target : null,
       windupPhase: true, // Mark as windup - cannot deal damage yet
       hasHit: true, // Prevent damage during windup
-      windupDuration: this.attackWindup, // Store total windup time
+      windupDuration: windup, // Store total windup time
       windupElapsed: 0, // Track time elapsed in windup
       alpha: 1.0, // Start at full visibility
       // Offset from owner's position so the hitbox tracks the enemy if it

@@ -392,6 +392,28 @@ export const ENEMIES = {
     attackType: 'melee',
     decisionInterval: 0.7,
     color: '#00cc00',
+    // Re-authored rather than left on the chaser preset (stateDefaults.js) so
+    // the bite is a real strike.bands entry, not the empty `{}` every
+    // un-re-authored melee chaser gets. One band today — `within` matches
+    // attackRange and the array's lone entry is always picked regardless of
+    // distance (strike.js pickBand's last-band fallback), so this changes
+    // nothing observable; it's the wiring landing on the enemy the ADR
+    // backlog row (2026-08-01, strike.bands damage/knockback/duration) named
+    // as its motivating case, not a second attack. leapAttack below stays a
+    // separate Mechanic — it has its own airborne arc and shockwave that a
+    // Strike band cannot express, and collapsing it into the spine is out of
+    // scope for this pass (spine plan §4).
+    states: {
+      alert: { movement: 'wander' },
+      approach: { movement: 'close' },
+      strike: {
+        bands: [
+          { within: GRID.CELL_SIZE * 2.5, attack: 'bite', windup: 1.0 }
+        ]
+      },
+      recover: { duration: 0.4, variant: 'retreat', speed: 0.5 },
+      search: {}
+    },
     splitOnDamage: {
       enabled: true,
       spawnChar: 'o',

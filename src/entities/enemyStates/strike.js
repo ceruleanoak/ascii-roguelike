@@ -11,7 +11,10 @@
 // nearest-first, it generalizes the five bespoke versions currently open-coded
 // in LakeBoss, GooDragon, GooHead, Sniper, and Giant Slime, and gives the eleven
 // different names for "a distance threshold" scattered across enemies.js one
-// shape to share.
+// shape to share. A band can override `windup`/`movement`/`speed` (read here)
+// and `damage`/`knockback`/`duration` (read at the point the attack itself is
+// built — Enemy.createMeleeAttack/createWindupAttackVisual — since those are
+// properties of the swing, not of standing still before it).
 import { applyStateMovement } from '../enemyMovement.js';
 
 // `windupMovement` was the one place the codebase already let a State pick its
