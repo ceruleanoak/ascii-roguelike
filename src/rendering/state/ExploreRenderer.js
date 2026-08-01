@@ -24,6 +24,7 @@ import { drawOffscreenEnemyIndicators } from '../ui/OffscreenEnemyIndicators.js'
 import { drawPlayerFacingIndicator } from '../ui/PlayerFacingIndicator.js';
 import { drawSniperIndicators, drawSniperBeams, drawSniperReticules, sniperHidingConcealAlpha } from '../effects/SniperEffects.js';
 import { drawSinkholes } from '../effects/SinkholeEffects.js';
+import { drawWires } from '../effects/WireEffects.js';
 import { drawTamedRats } from '../ui/CompanionRenderers.js';
 import { INGREDIENTS } from '../../data/items.js';
 import { BRIDGE_MATERIALS } from '../../systems/RidgeSystem.js';
@@ -762,9 +763,8 @@ export class ExploreRenderer {
     // Surface frog-tongue attacks — interior versions routed via overlay.
     this.drawPlayerTongueAttacks(game, false);
 
-    // Sticky triplines: permanent committed segments + live preview from player
-    // to pendingAnchor. Red X above player when wire equipped but not over an anchor.
-    if (!playerInInterior) this._drawWires(game);
+    // Triplines: committed segments + the live half-strung preview.
+    if (!playerInInterior) drawWires(this.renderer, game);
 
     // Draw cure Rusalka (polymorph reversal, Lake rooms) — skip when inHut/inMaze
     if (!playerInInterior && game.cureRusalka) {
@@ -1451,10 +1451,13 @@ export class ExploreRenderer {
     }
 
     if (enemy.shouldRenderVisible()) {
-      // iframe flash (white) takes priority, then DOT blink, then base color
+      // iframe flash (white) takes priority, then windup (also white, but
+      // solid rather than blinking), then DOT blink, then base color
       const iframeColor = enemy.getIframeFlashColor();
-      const dotColor = iframeColor === null ? enemy.getDOTBlinkColor() : null;
+      const windupColor = iframeColor === null ? enemy.getWindupFlashColor() : null;
+      const dotColor = (iframeColor === null && windupColor === null) ? enemy.getDOTBlinkColor() : null;
       let displayColor = iframeColor !== null ? iframeColor
+                       : windupColor !== null  ? windupColor
                        : dotColor !== null     ? dotColor
                        : enemy.color;
       // Blink red when standing in lava (lava-immune enemies only)
@@ -2392,8 +2395,10 @@ export class ExploreRenderer {
       if (enemy.isBossEntity) continue;
       if (enemy.shouldRenderVisible()) {
         const iframeColor = enemy.getIframeFlashColor();
-        const dotColor = iframeColor === null ? enemy.getDOTBlinkColor() : null;
+        const windupColor = iframeColor === null ? enemy.getWindupFlashColor() : null;
+        const dotColor = (iframeColor === null && windupColor === null) ? enemy.getDOTBlinkColor() : null;
         const displayColor = iframeColor !== null ? iframeColor
+                           : windupColor !== null  ? windupColor
                            : dotColor !== null     ? dotColor
                            : enemy.color;
         this.renderer.drawEntity(
@@ -2666,47 +2671,6 @@ export class ExploreRenderer {
     }
   }
 
-
-  // Sticky triplines. `interior=true` is called from HutInteriorOverlay with the
-  // interior-coord translate already applied to fgCtx, so triplines come from
-  // activeFloor (where WireSystem commits them) and player/preview coords —
-  // also interior-space — need no remapping.
-  _drawWires(game, interior = false) {
-    const ctx = this.renderer.fgCtx;
-    const triplines = (interior ? game.activeFloor?.triplines : game.currentRoom?.triplines) || [];
-    const drawSeg = (seg, alpha) => {
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.strokeStyle = seg.wireType === 'slime' ? '#88dd88' : '#88ccff';
-      ctx.lineWidth = 1.5;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(seg.x1, seg.y1);
-      ctx.lineTo(seg.x2, seg.y2);
-      ctx.stroke();
-      ctx.restore();
-    };
-    for (const seg of triplines) drawSeg(seg, 1.0);
-
-    const preview = game.wireSystem?.getPreviewSegment();
-    if (preview) drawSeg(preview, 0.7);
-
-    // Red X above player — only flashes after the player pressed SPACE without
-    // a nearby anchor. WireSystem sets a brief timer; it ticks down each frame.
-    if (game.wireSystem?.redXTimer > 0) {
-      ctx.save();
-      ctx.font = `${GRID.CELL_SIZE * 0.9}px 'Unifont', monospace`;
-      ctx.fillStyle = '#ff0000';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(
-        'X',
-        game.player.position.x + game.player.width / 2,
-        game.player.position.y - GRID.CELL_SIZE * 0.6
-      );
-      ctx.restore();
-    }
-  }
 
   // Shared tongue stroke: line from (sx,sy) to tip (ex,ey) + a small tip circle.
   _drawTongueSegment(sx, sy, ex, ey, color) {

@@ -1,10 +1,16 @@
-// WireSystem — two-stage placeable wires (Sticky Tripline, etc.) anchored
-// between two eligible background objects.
+// WireSystem — two-stage placeable wires (Sticky Tripline, Electric Tripline)
+// anchored between two points in the room.
 //
-// Flow: player stands on an eligible bg object → SPACE anchors point 1 (live
-// preview segment from player → point 1 already applies the wire's status).
-// Player walks to a second eligible bg object → SPACE anchors point 2 and
-// commits the segment to the room. One use per room.
+// Flow: SPACE anchors one end, SPACE anchors the other and commits the segment
+// to the room (one use per room). Each end is placed one of two ways:
+//   - standing next to an eligible anchor (bg object or wall) → the end bites
+//     onto that anchor directly.
+//   - standing nowhere near one → SPACE charges a throw instead (TrapSystem's
+//     'wire' throw), and the end sticks wherever it comes to rest. Either end
+//     can be thrown, so a wire can be strung entirely at range.
+// Between the two placements the player carries the loose end: the live preview
+// segment runs from the anchored end to the player (or to the end in mid-air)
+// and already applies the wire's status to enemies.
 //
 // Extensibility: each wire item defines a `wireType` (e.g. 'slime'); the
 // applyStatus() switch maps types to status calls. Add new types by extending
@@ -28,9 +34,13 @@ export class WireSystem {
     this.pendingAnchor = null;
     // Last layer reference seen, for detecting room/floor changes.
     this._lastLayer = null;
-    // Brief countdown shown as a red X above the player after a failed SPACE
-    // (no eligible anchor under them). Cleared on success or when it expires.
+    // Brief countdown shown as a red X above the player after a SPACE that could
+    // neither anchor nor throw (mazes). Cleared on success or when it expires.
     this.redXTimer = 0;
+    // The thrown end while it is still in the air — the TrapSystem inFlightTraps
+    // entry itself, so the preview segment can track it and a landing from a
+    // room the player has already left can be recognized as stale.
+    this.flyingEnd = null;
   }
 
   // Surface room or interior floor — whichever holds the live bg-object list.
@@ -115,44 +125,59 @@ export class WireSystem {
   }
 
   // Called from handleSpacePress when a wire is held. Returns true if SPACE was consumed.
-  // Wires fully claim SPACE while equipped: on-anchor SPACE places a point, off-anchor SPACE
-  // is a no-op (with the red X above the player communicating the lockout). Lets the player
-  // swap quick slots to interact with anything else.
+  // Wires fully claim SPACE while equipped: next to an anchor SPACE bites the end onto it,
+  // away from one SPACE charges a throw of that end instead. Lets the player swap quick
+  // slots to interact with anything else.
   handleSpacePress() {
     const player = this.game.player;
     const held = player?.heldItem;
     if (!held?.data?.wire) return false;
     if (held.charges != null && held.charges <= 0) return true;
+    if (this.flyingEnd) return true; // an end is already in the air — wait for it to land
 
     const anchor = this.getEligibleAnchor(player);
-    if (!anchor) {
-      this.redXTimer = 0.6; // flash the red-X feedback above the player
+    if (anchor) {
+      this._attachEnd(anchor.x, anchor.y, anchor.plane ?? 0, held);
       return true;
     }
 
-    const cx = anchor.x;
-    const cy = anchor.y;
-    const plane = anchor.plane ?? 0;
+    // Nothing in reach: throw this end instead. TrapSystem charges the arc off
+    // held SPACE and calls attachThrownEnd() when it comes to rest. Mazes are the
+    // one place a wire can't be placed at all (see getEligibleAnchor), so the red
+    // X keeps its old meaning there rather than launching an unanchorable end.
+    if (player?.inMaze) {
+      this.redXTimer = 0.6;
+      return true;
+    }
+    this.game.trapSystem.startTrapCharge('deploy');
+    return true;
+  }
+
+  // Anchor one end of the wire at (x, y). The first call arms the pending anchor
+  // (the player walks off carrying the loose end); the second commits the finished
+  // segment to the layer. Shared by both placement routes — standing next to an
+  // anchor and landing a thrown end — so they can't drift apart.
+  _attachEnd(x, y, plane, held) {
     const wireChar = held.char;
     const wireType = held.data.wireType || 'slime';
 
     if (!this.pendingAnchor) {
       // Place point 1; preview segment goes live from player → anchor.
-      this.pendingAnchor = { x: cx, y: cy, plane, wireChar, wireType };
-      return true;
+      this.pendingAnchor = { x, y, plane, wireChar, wireType };
+      return;
     }
 
-    // Point 2: commit a permanent tripline to the layer if same anchor wasn't reused.
-    if (Math.hypot(cx - this.pendingAnchor.x, cy - this.pendingAnchor.y) < GRID.CELL_SIZE * 0.5) {
-      return true; // same anchor — swallow but don't commit
+    // Point 2: commit a permanent tripline to the layer if the same point wasn't reused.
+    if (Math.hypot(x - this.pendingAnchor.x, y - this.pendingAnchor.y) < GRID.CELL_SIZE * 0.5) {
+      return; // same spot — swallow but don't commit a zero-length wire
     }
     const triplines = this._activeTriplines();
     if (triplines) {
       triplines.push({
         x1: this.pendingAnchor.x,
         y1: this.pendingAnchor.y,
-        x2: cx,
-        y2: cy,
+        x2: x,
+        y2: y,
         plane,
         wireType
       });
@@ -160,8 +185,25 @@ export class WireSystem {
     this.pendingAnchor = null;
     // Consume one charge through the standard trap path — updates slot UI and
     // advances activeSlotIndex when depleted.
-    player.markTrapUsed();
-    return true;
+    this.game.trapSystem.markTrapUsed();
+  }
+
+  // TrapSystem hands the in-flight entry over the moment the throw fires.
+  onWireThrown(entry) {
+    this.flyingEnd = entry;
+  }
+
+  // The thrown end came to rest — anchor it there. TrapSystem stops the flight on
+  // walls and solid objects, so a throw into a wall sticks against it and an
+  // unobstructed throw sticks where it lands.
+  attachThrownEnd(entry) {
+    if (entry !== this.flyingEnd) return; // stale — the player left the room mid-flight
+    this.flyingEnd = null;
+    const held = this.game.player?.heldItem;
+    // The player swapped the wire away mid-flight: the end has nothing to connect
+    // back to, so it simply doesn't land.
+    if (!held?.data?.wire || held.char !== entry.char) return;
+    this._attachEnd(entry.x, entry.y, entry.plane ?? 0, held);
   }
 
   // Distance from point (px, py) to segment (x1,y1)-(x2,y2).
@@ -178,12 +220,19 @@ export class WireSystem {
   }
 
   _applyStatus(entity, wireType) {
+    if (wireType === 'electric') {
+      // Route through the canonical electric-contact path rather than applying
+      // 'zap' here: shockEntity() carries the electric-affinity auto-immunity,
+      // the Stingray Mantle exemption, and the same iframe-gated contact damage
+      // electrified water uses. Electric-affinity enemies walk it for free.
+      this.game.electricitySystem?.shockEntity(entity);
+      return;
+    }
     if (!entity || typeof entity.applyStatusEffect !== 'function') return;
     if (wireType === 'slime') {
       if (entity.data?.affinities?.includes('goo')) return; // goo-affinity immune
       entity.applyStatusEffect('goo', 5.0);
     }
-    // Future wire types (e.g. 'electric') wire in here.
   }
 
   // Test a segment against player + enemies on its plane, apply status on contact.
@@ -195,7 +244,11 @@ export class WireSystem {
     const HIT = GRID.CELL_SIZE * 0.45;
     const segPlane = seg.plane ?? 0;
 
-    if (!seg.isPreview && player && !player.isDead && (player.plane ?? 0) === segPlane) {
+    // A dodge roll clears the wire: the roll is the answer to a strung room, the
+    // same way its iframes answer a telegraphed hit.
+    const playerExempt = !player || player.isDead || player.dodgeRoll?.active;
+
+    if (!seg.isPreview && !playerExempt && (player.plane ?? 0) === segPlane) {
       const px = player.position.x + player.width / 2;
       const py = player.position.y + player.height / 2;
       if (this._distToSegment(px, py, seg.x1, seg.y1, seg.x2, seg.y2) < HIT) {
@@ -214,21 +267,44 @@ export class WireSystem {
     }
   }
 
-  // Preview segment from player → pendingAnchor (live status on enemies; player exempt).
+  // The half-placed wire, drawn and ticked live (status on enemies; player exempt).
+  // Its far end is whichever end isn't settled yet — an end in mid-air while a throw
+  // is running, otherwise the loose end in the player's hand. `anchoredN` tells the
+  // renderer which ends have actually bitten and so earn an origin bead.
   _previewSegment() {
-    if (!this.pendingAnchor) return null;
     const player = this.game.player;
     if (!player) return null;
     const held = player.heldItem;
-    if (!held?.data?.wire || held.char !== this.pendingAnchor.wireChar) return null;
+    if (!held?.data?.wire) return null;
+    const flying = this.flyingEnd;
+    if (!this.pendingAnchor && !flying) return null;
+    if (this.pendingAnchor && held.char !== this.pendingAnchor.wireChar) return null;
+
+    // With an anchor already placed AND an end in the air, the player is out of the
+    // picture entirely — the wire runs anchor → airborne end. Otherwise one end is
+    // still in hand.
+    const fromAnchor = !!(this.pendingAnchor && flying);
+    const near = fromAnchor
+      ? { x: this.pendingAnchor.x, y: this.pendingAnchor.y, anchored: true }
+      : {
+        x: player.position.x + player.width / 2,
+        y: player.position.y + player.height / 2,
+        anchored: false
+      };
+    const far = flying
+      ? { x: flying.x, y: flying.y, anchored: false }
+      : { x: this.pendingAnchor.x, y: this.pendingAnchor.y, anchored: true };
+
     return {
-      x1: player.position.x + player.width / 2,
-      y1: player.position.y + player.height / 2,
-      x2: this.pendingAnchor.x,
-      y2: this.pendingAnchor.y,
-      plane: this.pendingAnchor.plane,
-      wireType: this.pendingAnchor.wireType,
-      isPreview: true
+      x1: near.x,
+      y1: near.y,
+      x2: far.x,
+      y2: far.y,
+      plane: this.pendingAnchor?.plane ?? (player.plane ?? 0),
+      wireType: this.pendingAnchor?.wireType ?? (held.data.wireType || 'slime'),
+      isPreview: true,
+      anchored1: near.anchored,
+      anchored2: far.anchored
     };
   }
 
@@ -242,9 +318,12 @@ export class WireSystem {
     if (this.redXTimer > 0) this.redXTimer = Math.max(0, this.redXTimer - deltaTime);
 
     // Clear pendingAnchor if layer (room/floor) changed or wire was unequipped.
+    // Dropping flyingEnd here is what marks a still-airborne end as stale, so it
+    // can't anchor itself into whatever room the player walked into.
     const layer = this._activeLayer();
     if (this._lastLayer !== null && layer !== this._lastLayer) {
       this.pendingAnchor = null;
+      this.flyingEnd = null;
       this.redXTimer = 0;
     }
     this._lastLayer = layer;

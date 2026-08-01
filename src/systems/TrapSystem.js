@@ -17,8 +17,13 @@ const THROW_DECEL = 350;               // px/s² deceleration
 // - `minVelForDamage`: velocity below which a flight hit deals no damage
 // - `maxDamageVel`: velocity at which damageMult is fully applied; falls off linearly toward minVel
 const TRAP_MAX_DIST = GRID.CELL_SIZE * 4; // 64px — preserves prior trap behavior
+// A thrown wire end reaches further than a thrown trap: the throw exists to span
+// a gap the player can't walk, so at full charge it strings about a quarter of
+// the room. Carries no damage — it's a rope end, not a projectile.
+const WIRE_MAX_DIST = GRID.CELL_SIZE * 8; // 128px
 const THROW_PROFILES = {
   trap:    { maxDist: TRAP_MAX_DIST,      damageMult: 0,   minVelForDamage: 0,   maxDamageVel: 1 },
+  wire:    { maxDist: WIRE_MAX_DIST,      damageMult: 0,   minVelForDamage: 0,   maxDamageVel: 1 },
   spear:   { maxDist: GRID.CELL_SIZE * 16, damageMult: 1.5, minVelForDamage: 120, maxDamageVel: 550 },
   dagger:  { maxDist: GRID.CELL_SIZE * 12, damageMult: 1.0, minVelForDamage: 100, maxDamageVel: 480 },
   sword:   { maxDist: GRID.CELL_SIZE * 8,  damageMult: 0.7, minVelForDamage: 100, maxDamageVel: 390 },
@@ -36,6 +41,7 @@ const THROW_PROFILES = {
 function getThrowProfile(item) {
   const data = item?.data;
   if (!data) return THROW_PROFILES.default;
+  if (data.wire) return THROW_PROFILES.wire; // wires are TRAP-typed but throw further
   if (data.type === 'TRAP') return THROW_PROFILES.trap;
   return THROW_PROFILES[data.weaponSubtype] || THROW_PROFILES.default;
 }
@@ -104,6 +110,59 @@ export class TrapSystem {
     this.game.trapCharging = null;
   }
 
+  // ── Trap charges ──────────────────────────────────────────────────────────
+  // A trap in a quick slot carries a per-room charge count rather than being
+  // consumed outright. Charges are refilled on room entry from every copy the
+  // player owns, so crafting more of a trap raises how many can be deployed.
+
+  // Can the held item be deployed right now?
+  canUseTrap() {
+    const item = this.game.player?.heldItem;
+    if (!item || !item.data || item.data.type !== 'TRAP') return false;
+    return item.charges > 0;
+  }
+
+  // Spend one charge, and advance to the next filled slot once they run out.
+  markTrapUsed() {
+    const player = this.game.player;
+    const item = player?.heldItem;
+    if (item?.charges != null) item.charges--;
+    // Only advance to next slot when charges are depleted
+    if (item?.charges === 0) {
+      const nextFilled = player.quickSlots.findIndex((slot, idx) =>
+        idx !== player.activeSlotIndex && slot !== null
+      );
+      if (nextFilled !== -1) {
+        player.activeSlotIndex = nextFilled;
+      }
+    }
+  }
+
+  // Refill every quick-slotted trap's charges (called on room entry).
+  resetTrapsForNewRoom() {
+    const player = this.game.player;
+    if (!player) return;
+    for (const slot of player.quickSlots) {
+      if (slot?.data?.type === 'TRAP') {
+        slot.charges = this.countHeldTraps(slot.char);
+      }
+    }
+  }
+
+  // Total copies of a trap the player owns: quick slots plus chest storage
+  // (including deposits still pending at the end of the room).
+  countHeldTraps(char) {
+    const player = this.game.player;
+    const inventorySystem = this.game.inventorySystem;
+    let count = player?.quickSlots.filter((s) => s?.char === char).length ?? 0;
+    if (inventorySystem) {
+      const sumStacked = (arr) => arr.reduce((sum, i) => (i.char === char ? sum + (i.count || 1) : sum), 0);
+      count += sumStacked(inventorySystem.itemChest);
+      count += sumStacked(inventorySystem.pendingChestDeposits);
+    }
+    return count;
+  }
+
   update(deltaTime) {
     this.updateTrapCharge(deltaTime);
     this.updateInFlightTraps(deltaTime);
@@ -135,7 +194,8 @@ export class TrapSystem {
   }
 
   // Execute the throw on key release. Mode decides the landing behavior:
-  //   deploy → trap arms where it lands (non-wire traps only).
+  //   deploy → trap arms where it lands; a wire instead throws one end of itself,
+  //            which anchors on landing (WireSystem.attachThrownEnd).
   //   drop   → item lands on the ground as a pickup (any item type).
   releaseTrapThrow() {
     const game = this.game;
@@ -144,13 +204,14 @@ export class TrapSystem {
     if (!heldItem) { game.trapCharging = null; return; }
 
     const mode = game.trapCharging.mode || 'deploy';
-    // Wires are TRAP-typed but never arm on landing — WireSystem handles their
-    // placement via two-stage SPACE anchoring.
+    // Wires are TRAP-typed but never arm on landing — the item stays in hand and
+    // only the thrown end travels, so WireSystem owns what happens where it stops.
+    const throwsWireEnd = mode === 'deploy' && heldItem.data?.wire === true;
     const armsOnLanding = mode === 'deploy'
       && heldItem.data?.type === 'TRAP'
       && !heldItem.data?.wire;
 
-    if (armsOnLanding && !game.player.canUseTrap()) { game.trapCharging = null; return; }
+    if (armsOnLanding && !this.canUseTrap()) { game.trapCharging = null; return; }
 
     const pos = this.getTrapReticulePos();
     game.trapCharging = null;
@@ -166,7 +227,25 @@ export class TrapSystem {
 
     const interior = isInteriorActive(game);
 
-    if (armsOnLanding) {
+    if (throwsWireEnd) {
+      // The wire itself stays in the quick slot — the player is paying out one end
+      // of it, not letting go of the item. No damage, no arming: it flies until a
+      // wall or its own decel stops it, then WireSystem anchors it there.
+      const wireEnd = {
+        kind: 'wire',
+        x: px, y: py,
+        vx: (dx / dist) * v0,
+        vy: (dy / dist) * v0,
+        decel: THROW_DECEL,
+        targetX: pos.x, targetY: pos.y,
+        char: heldItem.char,
+        color: heldItem.color,
+        plane: game.player.plane ?? 0,
+        interior,
+      };
+      game.inFlightTraps.push(wireEnd);
+      game.wireSystem?.onWireThrown(wireEnd);
+    } else if (armsOnLanding) {
       game.inFlightTraps.push({
         kind: 'trap',
         x: px, y: py,
@@ -180,7 +259,7 @@ export class TrapSystem {
         plane: game.player.plane ?? 0,
         interior,
       });
-      game.player.markTrapUsed();
+      this.markTrapUsed();
     } else {
       // Weapon throw: clear the active slot, item flies until it hits an enemy or stops
       const thrownItem = game.player.dropItem();
@@ -227,6 +306,10 @@ export class TrapSystem {
       if ((t.interior === true) !== playerInInterior) continue;
       const speed = Math.sqrt(t.vx * t.vx + t.vy * t.vy);
       const decelThisFrame = t.decel * deltaTime;
+      // Thrown weapons and wire ends both stop dead at walls — a weapon would
+      // otherwise land off-screen, and a wire end is meant to bite into the wall
+      // it hits. Deployed traps still sail over and arm at the target.
+      const stopsAtWalls = t.kind === 'weapon' || t.kind === 'wire';
 
       // Weapon mid-flight: enemy collision check against current position
       if (t.kind === 'weapon' && speed > 0) {
@@ -263,8 +346,8 @@ export class TrapSystem {
         const prevX = t.x, prevY = t.y;
         t.x = t.targetX;
         t.y = t.targetY;
-        // Snap to target, but don't land weapons inside walls
-        if (t.kind === 'weapon' && this._spearHitsWall(t)) {
+        // Snap to target, but don't land weapons or wire ends inside walls
+        if (stopsAtWalls && this._spearHitsWall(t)) {
           t.x = prevX;
           t.y = prevY;
         }
@@ -273,11 +356,7 @@ export class TrapSystem {
           t.carriedEnemy.carriedBySpear = false;
           t.carriedEnemy = null;
         }
-        if (t.kind === 'weapon') {
-          this._landThrownWeapon(t);
-        } else {
-          this._armTrap(t);
-        }
+        this._resolveLanding(t);
         game.inFlightTraps.splice(i, 1);
       } else {
         const prevX = t.x, prevY = t.y;
@@ -287,8 +366,9 @@ export class TrapSystem {
         t.x += t.vx * deltaTime;
         t.y += t.vy * deltaTime;
 
-        // Thrown weapons stop at walls instead of passing through and landing off-screen
-        if (t.kind === 'weapon' && this._spearHitsWall(t)) {
+        // Thrown weapons stop at walls instead of passing through and landing
+        // off-screen; wire ends stop there because that wall is their anchor.
+        if (stopsAtWalls && this._spearHitsWall(t)) {
           t.x = prevX;
           t.y = prevY;
           // Pinning spear: enemy is already at safe position from carry block drag — just release it
@@ -297,11 +377,19 @@ export class TrapSystem {
             t.carriedEnemy.carriedBySpear = false;
             t.carriedEnemy = null;
           }
-          this._landThrownWeapon(t);
+          this._resolveLanding(t);
           game.inFlightTraps.splice(i, 1);
         }
       }
     }
+  }
+
+  // Dispatch a throwable that has come to rest: weapons drop as pickups, wire ends
+  // anchor into the tripline being strung, traps arm where they land.
+  _resolveLanding(t) {
+    if (t.kind === 'weapon') this._landThrownWeapon(t);
+    else if (t.kind === 'wire') this.game.wireSystem?.attachThrownEnd(t);
+    else this._armTrap(t);
   }
 
   // Bend a thrown weapon off a deflector triangle by cell occupancy. Mirrors

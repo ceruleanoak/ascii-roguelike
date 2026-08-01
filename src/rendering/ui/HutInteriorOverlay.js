@@ -2,6 +2,7 @@ import { GRID } from '../../game/GameConfig.js';
 import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher.js';
 import { drawInteriorFrame } from './interiorFrame.js';
 import { hasTorchLight, drawPlayerTorchLight } from './torchLight.js';
+import { drawWires } from '../effects/WireEffects.js';
 
 /**
  * HutInteriorOverlay — picture-in-picture rendering for both Hut and Dungeon interiors.
@@ -184,9 +185,9 @@ export class HutInteriorOverlay {
     // ── 15. Particles ─────────────────────────────────────────────────────────
     this.renderController.exploreRenderer.drawParticles(game, true);
 
-    // ── 15b. Sticky triplines (committed segments + live preview + red-X) ──────
+    // ── 15b. Triplines (committed segments + live preview + red-X) ────────────
     // Interior-coord variant: reads activeFloor.triplines; ctx translate already applied.
-    this.renderController.exploreRenderer._drawWires(game, true);
+    drawWires(this.renderer, game, true);
 
     // ── 15c. Torch light (cosmetic glow when Torch equipped) ───────────────────
     if (hasTorchLight(game)) {
