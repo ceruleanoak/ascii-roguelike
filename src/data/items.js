@@ -309,7 +309,7 @@ export const ITEMS = {
     cooldown: 3,
     bulletCount: 8,
     attackPattern: 'ring',
-    accuracy: 0.65,
+    accuracy: 0.75,
     maxUses: 2,
     reloadTime: 8,
     reloadType: 'magazine',
@@ -2135,6 +2135,41 @@ export const ITEMS = {
     color: '#6b4423'
   },
 
+  // Fountain waters — filled from an F-room pool with an equipped Empty Bottle.
+  // Which one you get depends on the fountain's attunement: unattuned water is
+  // plain fairy water, and each elemental gem offering re-flavours the pool
+  // (electric reuses the existing 'ε' Bottle of Electrified Water). Filling is
+  // free and repeatable — it neither spends the attunement nor the one treasure
+  // offering per visit, so the only limit is how many Empty Bottles you carry.
+  '🜈': {
+    char: '🜈',
+    name: 'Bottle of Fairy Water',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'cauldronInput',
+    color: '#ffaaff'
+  },
+  '🜍': {
+    char: '🜍',
+    name: 'Bottle of Ember Water',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'cauldronInput',
+    color: '#ff6633'
+  },
+  '🜗': {
+    char: '🜗',
+    name: 'Bottle of Frost Water',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'cauldronInput',
+    color: '#bbeeff'
+  },
+  '🜩': {
+    char: '🜩',
+    name: 'Bottle of Blight Water',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'cauldronInput',
+    color: '#66cc44'
+  },
+
   // Special potions — crafted at the cauldron from special liquid bottles
   // Charged Potion: nascent attack speed bonus
   '!': {
@@ -2332,10 +2367,11 @@ export const ITEMS = {
     stunDuration: 0.8,
     color: '#00ffff'
   },
-  // Sticky Tripline: SPACE on an eligible bg object anchors point 1, SPACE on a
-  // second anchors point 2. The segment slows entities (goo status). One per room.
-  // WireSystem handles placement; uses the standard trap `charges` mechanism so
-  // resetTrapsForNewRoom() refills it each new EXPLORE room.
+  // Sticky Tripline: SPACE next to an eligible anchor bites one end onto it, SPACE
+  // away from one throws that end instead; the second placement commits the wire.
+  // The segment slows entities (goo status). One per room. WireSystem handles
+  // placement; uses the standard trap `charges` mechanism so resetTrapsForNewRoom()
+  // refills it each new EXPLORE room.
   '⌇': {
     char: '⌇',
     name: 'Sticky Tripline',
@@ -2344,6 +2380,19 @@ export const ITEMS = {
     wireType: 'slime',
     charges: 1,
     color: '#88dd88'
+  },
+  // Electric Tripline: the Sticky Tripline infused with Topaz. Same two-end
+  // placement, but the segment shocks on contact instead of gumming entities up —
+  // WireSystem routes it through ElectricitySystem.shockEntity, so it carries the
+  // zap stun, the contact damage, and electric-affinity immunity for free.
+  '⏦': {
+    char: '⏦',
+    name: 'Electric Tripline',
+    type: ITEM_TYPES.TRAP,
+    wire: true,
+    wireType: 'electric',
+    charges: 1,
+    color: '#00ffff'
   },
 
   // ── Intermediate crafting materials ─────────────────────────────────────────
@@ -2455,7 +2504,11 @@ export const INGREDIENTS = {
   '❦': { char: '❦', name: 'Moss',           color: '#5a8a3a' }
 };
 
-// Subtype defaults — explicit weapon properties override these
+// Subtype defaults — explicit weapon properties override these.
+// The 'multistab' pattern stabs once per swing; add `doubleHit: true` to a
+// weapon's own data to upgrade it into a two-stab combo.
+// `disarm: true` makes a hit knock an armed enemy's carried gear loose — the
+// whip's signature, and the reason a plain whip carries no status effect.
 export const SUBTYPE_DEFAULTS = {
   sword:   { attackPattern: 'arc',       isBlade: true },
   axe:     { attackPattern: 'sweep' },
@@ -2464,9 +2517,22 @@ export const SUBTYPE_DEFAULTS = {
   dagger:  { attackPattern: 'multistab', isBlade: true, range: 16 },
   hammer:  { attackPattern: 'shockwave', canSmash: true },
   flail:   { attackPattern: 'ring',      isBlunt: true },
-  whip:    { attackPattern: 'whipcrack', onHit: 'stun' },
+  whip:    { attackPattern: 'whipcrack', disarm: true },
   staff:   { attackPattern: 'thrust',    isBlunt: true },
   pickaxe: { attackPattern: 'thrust',    isBlade: false, isBlunt: false },
+};
+
+// Weapons Master training rewards. Training a weapon category grants +1 damage
+// by default; a category listed here trades that bonus for a technique instead.
+// A technique is interpreted by the pattern builder that owns the category:
+//   dagger → 'doubleHit'  multistab becomes a two-stab combo rather than a
+//                         single, harder stab (Item.createMeleeMultistab).
+//   whip   → 'stun'       the lash gains the stun it used to have by default
+//                         (Item.createMeleeWhipcrack). A gem whip already
+//                         carries its own status effect, which still wins.
+export const TRAINING_TECHNIQUES = {
+  dagger: 'doubleHit',
+  whip: 'stun'
 };
 
 export function resolveWeaponDefaults(data) {
@@ -2497,6 +2563,42 @@ export function isItem(char) {
 // Gemstones — raw ingredients (Unicode-symbol legacy exception, see CLAUDE.md
 // Character Encoding Rule) that read as Treasure rather than crafting Materials.
 export const TREASURE_GEM_CHARS = new Set(['◇', '⬥', '⬦', '⧫', '⬧', '◈', '⬨']);
+
+/**
+ * What each treasure does when offered to a fairy fountain (FountainSystem).
+ *
+ * Four of them have an elemental affinity, and that affinity is not invented
+ * here — it is the same gem→element pairing the gem whips and infused robes in
+ * recipes.js already use. Offering one attunes the pool to that element, which
+ * is what unlocks elemental weapon upgrades (see FountainSystem._findNextTierChar).
+ *
+ * The other four have no affinity, so they leave the water alone and pay out
+ * immediately as a permanent run blessing instead.
+ */
+export const TREASURE_OFFERINGS = {
+  '◈': { element: 'fire' },      // Ruby
+  '⬨': { element: 'ice' },       // Sapphire
+  '◇': { element: 'electric' },  // Topaz
+  '⬦': { element: 'poison' },    // Emerald
+  'c': { blessing: 'luck' },     // Coin
+  '⬥': { blessing: 'maxHp' },    // Garnet
+  '⧫': { blessing: 'sprint' },   // Diamond
+  '⬧': { blessing: 'armor' },    // Onyx
+};
+
+/**
+ * The element a weapon carries, or null if it is plain. Electric is checked
+ * first because electric weapons also carry `onHit: 'stun'` — the stun is the
+ * shock's side effect, not a separate affinity.
+ */
+export function weaponElement(data) {
+  if (!data) return null;
+  if (data.electric === true) return 'electric';
+  if (data.onHit === 'burn') return 'fire';
+  if (data.onHit === 'freeze') return 'ice';
+  if (data.onHit === 'poison') return 'poison';
+  return null;
+}
 
 /**
  * Classifies a pickup char for the Tab inventory overlay's grouping:

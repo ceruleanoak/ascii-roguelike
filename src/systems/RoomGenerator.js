@@ -278,8 +278,7 @@ export class RoomGenerator {
     // hidden blue-zone exit. If the player ignores it through the fight, the
     // fairy reveals a pedestal at room-clear (see main.js updateExploreState).
     if (exitLetter === 'O' && !this.game?.fairiesAngered) {
-      const playerInv = this.game?.player?.inventory;
-      if (playerInv && playerInv.includes('●')) {
+      if (this.game?.hasIngredient?.('●')) {
         this.spawnPearlFairy(room);
       }
     }
@@ -416,10 +415,16 @@ export class RoomGenerator {
     // Mini-boss rooms gated to L5+, same threshold as the 'B' exit letter.
     // Below L5 the BOSS slice rolls into COMBAT instead.
     const bossAllowed = this.currentDepth >= 5;
+    // Camp is gated out of L1 — the depth-1 room is the opening screen of a run
+    // (the L1 weapon offer, and in green the training dummy), and a camp has no
+    // enemies, hands out a weapon from its own basic pool instead of the zone's
+    // L1 pool, and puts the CampNPC's weapon upgrade in front of a player who
+    // has nothing to upgrade. Below L2 the CAMP slice rolls into COMBAT.
+    const campAllowed = this.currentDepth >= 2;
     if (roll < 0.7) return ROOM_TYPES.COMBAT;
     if (roll < 0.8) return bossAllowed ? ROOM_TYPES.BOSS : ROOM_TYPES.COMBAT;
     if (roll < 0.9) return ROOM_TYPES.DISCOVERY;
-    return ROOM_TYPES.CAMP;
+    return campAllowed ? ROOM_TYPES.CAMP : ROOM_TYPES.COMBAT;
   }
 
   // Determine which zone's features to use based on progression blend
@@ -4292,7 +4297,11 @@ export class RoomGenerator {
       centerY: centerRow * CS + CS / 2,
       poolRadius,
       padRadius,
-      corrupted: false
+      corrupted: false,
+      upgradeUsed: false,   // one weapon upgrade per visit
+      offeringUsed: false,  // one treasure offering per visit, independent of the above
+      activeRitual: false,  // a fairy is mid-carry — no second ritual until it lands
+      attunement: null      // 'fire' | 'ice' | 'electric' | 'poison' once a gem is offered
     };
   }
 

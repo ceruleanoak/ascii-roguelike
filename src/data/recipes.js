@@ -182,6 +182,7 @@ export const RECIPES = [
   { left: 'M', right: 'F', result: ']', name: 'Tesla Coil' },      // Metal + Fire = Tesla Coil
   { left: '|', right: 'w', result: '↩', name: 'Boomerang' },       // Stick + Wing = Boomerang
   { left: 'g', right: '~', result: '⌇', name: 'Sticky Tripline' }, // Goo + String = Sticky Tripline
+  { left: '⌇', right: '◇', result: '⏦', name: 'Electric Tripline' }, // Sticky Tripline + Topaz = Electric Tripline (gem infusion: base left, gem right)
 
   // === ARMOR UPGRADES (basic ingredient + base armor) ===
   { left: '𐤀', right: '~', result: '𐤅', name: 'Stitched Vest' },        // Fur Vest + String = Stitched Vest

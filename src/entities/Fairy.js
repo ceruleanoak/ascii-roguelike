@@ -63,15 +63,16 @@ export class Fairy extends NeutralCharacter {
     this.wanderHoldTimer = 0;
     this.wanderHoldDuration = 1.0 + Math.random() * 1.5;
 
-    // Carry ritual (fountain weapon throw)
+    // Carry ritual (fountain weapon throw / treasure offering)
     this.carryPhase = null;   // 'approach' | 'toPool' | 'process' | 'deliver'
-    this.carryKind = null;    // 'accept' | 'refuse'
+    this.carryKind = null;    // 'accept' | 'refuse' | 'offering'
     this.carriedChar = null;
     this.carryNextChar = null;
     this.carriedItem = null;  // original Item ref (refuse case)
     this.carryTarget = null;
     this.carryPool = null;
     this.carryProcessTimer = 0;
+    this.carryOnComplete = null; // fired once the pool swallows an offering
 
     // Faster pulse than default Leshy/captive for sparkle feel
     this.pulseSpeed = 6.0;
@@ -99,11 +100,14 @@ export class Fairy extends NeutralCharacter {
     this.onDeliver = onDeliver || this.onDeliver;
   }
 
-  // Begin the fountain weapon ritual. The fairy will fly to the weapon's
-  // landing point, carry it to the pool, and (accept) swap-and-deliver an
-  // upgraded weapon, or (refuse) immediately turn around at the pool and
-  // hand the same weapon back to the player.
-  startCarry({ landingX, landingY, weaponChar, item, kind, nextChar, poolX, poolY }) {
+  // Begin a fountain carry ritual. The fairy flies to the pickup point, lifts
+  // the glyph, and carries it to the pool. What happens there depends on kind:
+  //
+  //   accept   — weapon goes in, an upgraded weapon comes back out
+  //   refuse   — fairy turns around at the pool and hands the weapon straight back
+  //   offering — treasure goes in and stays in; `onComplete` fires once the pool
+  //              has swallowed it (the fountain applies the blessing/attunement)
+  startCarry({ landingX, landingY, weaponChar, item, kind, nextChar, poolX, poolY, onComplete }) {
     this.state = 'carrying';
     this.carryPhase = 'approach';
     this.carryKind = kind;
@@ -113,6 +117,7 @@ export class Fairy extends NeutralCharacter {
     this.carryTarget = { x: landingX, y: landingY };
     this.carryPool = { x: poolX, y: poolY };
     this.carryProcessTimer = 0;
+    this.carryOnComplete = onComplete || null;
     this.speed = 200;
     this.clearIndicator();
   }
@@ -358,6 +363,14 @@ export class Fairy extends NeutralCharacter {
       case 'process':
         this.carryProcessTimer += deltaTime;
         if (this.carryProcessTimer >= 0.6) {
+          // An offering is one-way: the pool keeps it, and the fountain resolves
+          // the gift right here rather than flying anything back to the player.
+          if (this.carryKind === 'offering') {
+            const onComplete = this.carryOnComplete;
+            this._returnToAmbient(game);
+            if (typeof onComplete === 'function') onComplete(this, game);
+            break;
+          }
           this.carriedChar = this.carryNextChar || this.carriedChar;
           this.setIndicator(this.carriedChar, '#ffffff', GRID.CELL_SIZE * 0.55);
           this.carryPhase = 'deliver';
@@ -405,6 +418,7 @@ export class Fairy extends NeutralCharacter {
     this.carriedChar = null;
     this.carryNextChar = null;
     this.carryKind = null;
+    this.carryOnComplete = null;
     this.speed = 90;
     this.wanderTarget = null;
     this.wanderHoldTimer = 0;

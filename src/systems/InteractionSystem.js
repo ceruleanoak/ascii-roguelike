@@ -141,14 +141,7 @@ export class InteractionSystem {
         game.player.position.y - npc.position.y
       );
       if (dist > GRID.CELL_SIZE * 2) continue;
-      const idx = game.player.inventory.indexOf('⚜');
-      if (idx !== -1) {
-        game.player.inventory.splice(idx, 1);
-      } else {
-        const restIdx = game.inventorySystem?.restInventory.indexOf('⚜') ?? -1;
-        if (restIdx === -1) continue;
-        game.inventorySystem.restInventory.splice(restIdx, 1);
-      }
+      if (!game.removeIngredient('⚜')) continue;
       npc.unlockRareHint(game.currentRoom?.zone || 'green');
       return true;
     }
@@ -400,6 +393,12 @@ export class InteractionSystem {
   interactWithObject(obj) {
     const game = this.game;
     const heldItemChar = game.player.heldItem ? game.player.heldItem.char : null;
+
+    // Fountain water is its own liquid family — fairy water when the pool is
+    // unattuned, the matching elemental bottle once a gem has coloured it.
+    // Checked before the generic liquid path, which would otherwise read the
+    // pool as ordinary water and hand back a plain 🜉 bottle.
+    if (game.fountainSystem.tryBottleFountainWater(obj)) return;
 
     // Liquid discovery: check if player has empty bottle and is interacting with liquid tile
     if (heldItemChar === 'B' && this._isLiquidTile(obj)) {

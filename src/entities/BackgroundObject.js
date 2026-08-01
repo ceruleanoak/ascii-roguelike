@@ -164,6 +164,11 @@ export class BackgroundObject {
     this._flickerTimer = 0;         // Campfire flicker countdown
     this.fountainWater = false;     // F-room water tile — drives shimmer cycle
     this.fountainWaterfall = false; // F-room waterfall tile — drives downward char cycle
+    // Attunement colour for F-room pool/waterfall tiles, set by FountainSystem when
+    // an elemental gem is offered. Deliberately NOT expressed as a waterState:
+    // FountainSystem reads waterState to detect elemental corruption, so tinting
+    // through it would anger the flock the moment the pool changed colour.
+    this.fountainTint = null;
     this._fountainShimmerTimer = 0;
     this._fountainWaterfallTimer = 0;
     this._fountainWaterfallPhase = Math.floor(Math.random() * 4);
@@ -450,6 +455,13 @@ export class BackgroundObject {
       if (this.waterState === 'frozen' && this.animationChar === this.originalChar) {
         return { x: this.position.x, y: this.position.y, char: '=', color };
       }
+    }
+
+    // Fountain attunement tint. Applied last so it wins over the water-state
+    // colour above, but only while the pool is uncorrupted — once an element
+    // actually touches the water, the corruption colour must show through.
+    if (this.fountainTint && !this.onFire && this.waterState === 'normal') {
+      color = this.fountainTint;
     }
 
     return {
