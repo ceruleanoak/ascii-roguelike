@@ -91,6 +91,24 @@
   #error { display: none; color: var(--warn); background: #1a0d0d; border: 1px solid var(--warn);
            padding: 5px 8px; border-radius: 3px; max-width: 600px; white-space: pre-wrap; font-size: 11px; }
 
+  /* state spine panel */
+  .state-readout { background: #0c0e14; border: 1px solid var(--line); border-radius: 4px;
+                   padding: 7px 9px; font-size: 11.5px; }
+  .state-now { color: var(--fg); }
+  .state-now span { color: var(--accent); font-weight: bold; }
+  .state-timer { color: var(--dim); font-size: 10.5px; margin-top: 2px; }
+  .state-interrupt { color: var(--warn); font-size: 10.5px; margin-top: 2px; min-height: 1.4em; }
+  .state-sub { font-size: 10px; letter-spacing: 0.08em; color: var(--dim); text-transform: uppercase;
+               margin: 8px 0 3px; }
+  .state-ranges { font-size: 10.5px; max-height: 90px; overflow-y: auto; }
+  .range-row { display: flex; align-items: center; gap: 5px; padding: 1px 0; }
+  .swatch { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+  .state-log { font-size: 10.5px; max-height: 180px; overflow-y: auto; border-top: 1px solid var(--line); }
+  .log-row { padding: 4px 0; border-bottom: 1px solid var(--line); }
+  .log-t { color: var(--dim); margin-right: 5px; }
+  .log-row b { color: var(--accent); }
+  .log-cause { color: var(--dim); font-size: 10px; padding-left: 2px; }
+
   /* output */
   .out-head { display: flex; justify-content: space-between; align-items: center; }
   pre#code { flex: 1; overflow: auto; background: #0c0e14; border: 1px solid var(--line);
@@ -119,6 +137,7 @@
     <div id="error"></div>
     <div class="arena-controls">
       <button id="pause">⏸ Pause</button>
+      <button id="step">⏭ Step</button>
       <button id="respawn">⟲ Respawn</button>
       <button id="telegraph">⚡ Telegraph</button>
       <label>speed
@@ -134,15 +153,28 @@
       <label>depth <input type="number" id="depth" value="0" min="0" style="width:48px" /></label>
     </div>
     <div class="hint">
-      <b>@</b> is you. Move with the mouse (or WASD when mouse-follow is off). Space pauses.<br />
-      Green ring = aggro range · red ring = attack range. Duck behind a wall to break sight.<br />
+      <b>@</b> is you. Move with the mouse (or WASD when mouse-follow is off). Space pauses,
+      <b>⏭ Step</b> (or <b>.</b>) advances exactly one frame while paused.<br />
+      Range rings are whatever the enemy's declared States actually use — see the legend
+      in the State spine panel. Duck behind a wall to break sight.<br />
       <b>Click</b> the arena to drop a memory mark the enemy investigates (Shift-click = confirmed sighting).<br />
-      <b>⚡ Telegraph</b> (or <b>T</b>) forces the melee windup so you can watch the shape and its animation —
+      <b>⚡ Telegraph</b> (or <b>T</b>) forces a Strike so you can watch the windup shape and its animation —
       stand inside aggro range, and drop <b>speed</b> to 0.25× to read a sweep.
     </div>
   </div>
 
   <div class="col right">
+    <h3>State spine</h3>
+    <div id="stateReadout" class="state-readout">
+      <div class="state-now">state — <span id="stateNow">–</span></div>
+      <div id="stateTimer" class="state-timer"></div>
+      <div id="stateInterrupt" class="state-interrupt"></div>
+    </div>
+    <div class="state-sub">ranges</div>
+    <div id="stateRanges" class="state-ranges"></div>
+    <div class="state-sub">transitions</div>
+    <div id="stateLog" class="state-log"></div>
+
     <div class="out-head">
       <h3>enemies.js entry</h3>
       <button id="copy">Copy</button>

@@ -19,6 +19,7 @@ function init() {
     el('error').style.display = msg ? 'block' : 'none';
   });
   sandbox.onNotice = (msg) => flash(el('telegraph'), msg);
+  sandbox.onStateChange = renderStateReadout;
   form = new EnemyForm(el('form'), def, onDefChange);
   sandbox.loadDef(def);
   refreshOutput();
@@ -91,6 +92,7 @@ function bindControls() {
     sandbox.paused = !sandbox.paused;
     e.target.textContent = sandbox.paused ? '▶ Resume' : '⏸ Pause';
   });
+  el('step').addEventListener('click', () => sandbox.stepOnce());
 
   // Fires the melee windup the Telegraph rides on, so the shape + animation can
   // be reviewed without waiting on an AI attack decision.
@@ -144,6 +146,37 @@ function flash(button, text) {
   const orig = button.textContent;
   button.textContent = text;
   setTimeout(() => { button.textContent = orig; }, 1100);
+}
+
+// The State spine panel: live state + timer, the interrupt if one is holding
+// the machine, the declared-States' range legend, and the transition log
+// (most recent first) with its cause — the "why did it stop chasing" that a
+// bare from→to can't answer on its own.
+function renderStateReadout(s) {
+  const now = el('stateNow'), timer = el('stateTimer'), interrupt = el('stateInterrupt');
+  const ranges = el('stateRanges'), log = el('stateLog');
+  if (!s) {
+    now.textContent = '–'; timer.textContent = ''; interrupt.textContent = '';
+    ranges.innerHTML = '<div class="list-empty">no enemy</div>';
+    log.innerHTML = '<div class="list-empty">no enemy</div>';
+    return;
+  }
+
+  now.textContent = s.id;
+  timer.textContent = `t=${s.timer.toFixed(2)}s · elapsed=${s.elapsed.toFixed(1)}s`;
+  interrupt.textContent = s.interrupt ? `⚠ ${s.interrupt}` : '';
+
+  ranges.innerHTML = s.thresholds.length
+    ? s.thresholds.map(t => `<div class="range-row"><span class="swatch" style="background:${escapeHtml(t.color || '#888')}"></span>${escapeHtml(String(t.label))} — ${Math.round(t.px ?? 0)}px</div>`).join('')
+    : '<div class="list-empty">none declared</div>';
+
+  log.innerHTML = s.log.length
+    ? [...s.log].reverse().map(e => `<div class="log-row"><span class="log-t">${e.elapsed.toFixed(1)}s</span>${escapeHtml(e.from)} → <b>${escapeHtml(e.to)}</b><div class="log-cause">${escapeHtml(e.cause ?? '')}</div></div>`).join('')
+    : '<div class="list-empty">no transitions yet</div>';
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 // Debug handle (mirrors the game's window.game convention).

@@ -7,7 +7,8 @@ import { Enemy } from '../../../src/entities/Enemy.js';
 import { PhysicsSystem } from '../../../src/systems/PhysicsSystem.js';
 import { ENEMIES } from '../../../src/data/enemies.js';
 import { GRID, PHYSICS } from '../../../src/game/GameConfig.js';
-import { updateEnemyMeleeAttack, syncWindupVisual, attackHitsBox, retireAfterTest, drawTelegraph } from '../../../src/game/Telegraph.js';
+import { updateEnemyMeleeAttack, resolveEnemyAttack, attackHitsBox, retireAfterTest, drawTelegraph } from '../../../src/game/Telegraph.js';
+import { SPINE } from '../../../src/entities/EnemyStateMachine.js';
 
 const CELL = GRID.CELL_SIZE;
 const FONT = "px 'Unifont', monospace";
@@ -23,6 +24,12 @@ export class Sandbox {
     // Transient feedback for an action the sim declined to take (as opposed to
     // onError, which is a thrown frame). Set by the host.
     this.onNotice = null;
+    // Fired once a frame (from draw(), so it keeps reporting while paused) with
+    // the main enemy's live State-spine readout, or null when there is none.
+    // The host renders it into DOM — a 10-entry log with cause strings doesn't
+    // fit as canvas text, so this is the one piece of instrumentation that
+    // isn't drawn into the arena.
+    this.onStateChange = null;
 
     this.depth = 0;
     this.paused = false;
@@ -153,6 +160,7 @@ export class Sandbox {
       this.keys[e.key.toLowerCase()] = true;
       if (e.key === ' ') { this.paused = !this.paused; e.preventDefault(); }
       if (e.key.toLowerCase() === 't') this.triggerTelegraph();
+      if (e.key === '.' && this.paused) this.stepOnce();
     });
     window.addEventListener('keyup', (e) => { this.keys[e.key.toLowerCase()] = false; });
     const toArena = (e) => {
@@ -192,9 +200,7 @@ export class Sandbox {
 
   // Force the melee windup that carries the Telegraph, so the shape and its
   // animation can be watched on demand instead of waiting for the AI to decide
-  // to swing. Replicates the AI's windup entry exactly (the attack branch of
-  // updateAI): state, timer, and the aim snapshot the shape's facing is locked
-  // from. Reports through onNotice when the enemy can't wind up at all.
+  // to swing. Reports through onNotice when the enemy can't wind up at all.
   triggerTelegraph() {
     const e = this.enemies[0];
     if (!e) return;
@@ -203,12 +209,41 @@ export class Sandbox {
       return;
     }
     if (e.isWindingUp() || e.state === 'attack') return; // already committed
+
+    if (SPINE.enabled) {
+      // Poking `e.state`/`e.windupTimer` directly (the legacy approach below)
+      // gets stomped the very next frame: Enemy.update() rewrites `state` from
+      // `stateMachine.current` every tick under the spine, so the only way to
+      // force a windup is to force the machine itself into Strike. `dx`, `dy`
+      // are what Strike.enter's band picker reads as ctx.effectiveDistance —
+      // an approximation (no status/terrain modifiers applied), fine for a
+      // manual editor trigger.
+      const dx = e.position.x - this.player.position.x;
+      const dy = e.position.y - this.player.position.y;
+      const ok = e.stateMachine.transition(e, { effectiveDistance: Math.hypot(dx, dy), targetPos: this.player.position }, 'strike', 'manual trigger (editor)');
+      if (!ok) this.onNotice?.('strike not declared for this enemy');
+      return;
+    }
     e.state = 'windup';
     e.windupTimer = e.attackWindup;
     e.attackTimer = 0;
     e.markedTargetPosition = { x: this.player.position.x, y: this.player.position.y };
     e.targetVelocity.vx = 0;
     e.targetVelocity.vy = 0;
+  }
+
+  // One real frame of simulation regardless of pause state — the "single-frame
+  // stepping" the plan calls for. Uses a fixed 1/60s tick rather than measuring
+  // wall-clock time, since the point is a repeatable step, not real-time pacing.
+  stepOnce() {
+    const dt = (1 / 60) * this.timeScale;
+    try {
+      this.updatePlayer(dt);
+      this.step(dt);
+    } catch (e) {
+      this.reportError('frame', e);
+    }
+    this.draw();
   }
 
   cellBlocked(x, y) {
@@ -286,19 +321,15 @@ export class Sandbox {
     }
   }
 
-  // Enemy attack emission: the melee windup-visual lifecycle runs through the
-  // shared Telegraph module (the same code CombatSystem steps — no mirrored
-  // copy to drift), plus canAttack()->createAttack() for everything else.
+  // Enemy attack emission runs through the shared Telegraph module — the same
+  // code CombatSystem steps, no mirrored copy to drift. That includes how a
+  // Strike ends, which is the part that has to match if the sandbox is going to
+  // be believed about authored States.
   handleEnemyAttacks(enemy) {
-    syncWindupVisual(enemy, this.attacks);
-
-    if (enemy.canAttack && enemy.canAttack() && !enemy.windupAttackVisual) {
-      const data = enemy.createAttack && enemy.createAttack();
-      if (data) {
-        for (const a of (Array.isArray(data) ? data : [data])) {
-          if (a) { a._owner = enemy; a._life = a._life ?? 3; this.attacks.push(a); }
-        }
-      }
+    const data = resolveEnemyAttack(enemy, this.attacks);
+    if (!data) return;
+    for (const a of (Array.isArray(data) ? data : [data])) {
+      if (a) { a._owner = enemy; a._life = a._life ?? 3; this.attacks.push(a); }
     }
   }
 
@@ -394,6 +425,27 @@ export class Sandbox {
       c.fillStyle = f.color; c.fillText(f.text, f.x, f.y);
     }
     c.globalAlpha = 1;
+
+    this.reportState();
+  }
+
+  // Fired every draw (so it keeps reporting while paused) with the main
+  // enemy's live State-spine readout. `thresholds()` is safe to call whether
+  // or not SPINE.enabled — Enemy always builds a stateMachine from its declared
+  // states, spine flag or not.
+  reportState() {
+    if (!this.onStateChange) return;
+    const e = this.enemies[0];
+    const m = e?.stateMachine;
+    if (!e || !m) { this.onStateChange(null); return; }
+    this.onStateChange({
+      id: m.current,
+      timer: m.timer,
+      elapsed: m.elapsed,
+      interrupt: m.interrupt,
+      log: m.log,
+      thresholds: m.thresholds(e),
+    });
   }
 
   drawGrid(c) {
@@ -437,8 +489,13 @@ export class Sandbox {
     const x = enemy.position.x, y = enemy.position.y;
 
     if (this.showRanges && isMain) {
-      this.drawRange(c, x, y, enemy.data?.aggroRange, '#2a3a2a');
-      this.drawRange(c, x, y, enemy.data?.attackRange, '#4a2a2a');
+      // Every distance threshold the enemy's *declared* States actually use —
+      // not a fixed aggro/attack pair. An ambusher shows a wake ring, a keeper
+      // shows its band, a re-authored Strike shows its bands; the machine
+      // decides what's relevant, the sandbox just draws what it's handed.
+      for (const t of (enemy.stateMachine?.thresholds?.(enemy) ?? [])) {
+        this.drawRange(c, x, y, t.px, t.color);
+      }
     }
 
     let color = enemy.color || '#cccccc';
@@ -476,8 +533,11 @@ export class Sandbox {
     }
 
     if (isMain) {
-      c.font = '9px monospace'; c.fillStyle = '#667';
-      c.fillText(enemy.state || '', x, y + CELL);
+      c.font = '9px monospace'; c.fillStyle = enemy.stateMachine?.interrupt ? '#e0664a' : '#667';
+      const label = enemy.stateMachine
+        ? `${enemy.stateMachine.interrupt ?? enemy.stateMachine.current} ${enemy.stateMachine.timer.toFixed(1)}s`
+        : (enemy.state || '');
+      c.fillText(label, x, y + CELL);
     }
   }
 
