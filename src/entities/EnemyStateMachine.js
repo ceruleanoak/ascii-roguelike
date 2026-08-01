@@ -13,9 +13,13 @@
 // the enemyStates/ filenames — and nothing outside this directory references them
 // yet, so renaming is a find-and-replace plus the glossary.
 //
-// `SPINE.enabled` is false, so the legacy ladder in Enemy.update() is still the
-// live path; the parity harness is the only thing that turns this on, and it
-// stays off until the two paths are proven to agree across all 56 enemies.
+// `SPINE.enabled` is true — this is the live path. It flipped on once Recover
+// grew real timed variants (enemyStates/recover.js): the legacy ladder's melee
+// back-off was a bare distance flip with no minimum-commit timer, which is the
+// Chase-state waggle bug, and the fix belongs here, not in the ladder. Pre-Strike
+// motion is certified identical to the legacy ladder by the parity harness;
+// post-Strike cadence is expected to differ now for every melee enemy — that
+// divergence is the fix, not a regression.
 import dormant from './enemyStates/dormant.js';
 import alert from './enemyStates/alert.js';
 import approach from './enemyStates/approach.js';
@@ -29,7 +33,7 @@ import withdraw from './enemyStates/withdraw.js';
 // runs and drive the same Enemy down both paths. A module const would have to be
 // read at import time, which makes A/B-ing one enemy impossible — and A/B-ing one
 // enemy is the only way to prove the two paths agree.
-export const SPINE = { enabled: false };
+export const SPINE = { enabled: true };
 
 // What the spine's current State looks like to everything still reading
 // `enemy.state`: ExploreRenderer's indicator picker, TrailMechanic, Telegraph.

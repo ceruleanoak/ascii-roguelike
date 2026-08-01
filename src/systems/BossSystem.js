@@ -404,6 +404,11 @@ export class BossSystem {
     if (!player || !player.grabbed || !player.grabbedBy) return;
 
     const head = player.grabbedBy;
+    // `grabbedBy` is no longer GooHead-exclusive — a regular Enemy's Recover
+    // `lockPlayer` variant sets it too, and that root is a plain timer, not a
+    // struggle mechanic, so it has no `releaseGrab`/boss `takeDamage` to escape
+    // via a melee hit. Without this guard a swing during that lock would throw.
+    if (typeof head.releaseGrab !== 'function') return;
     // Check if any active melee attack from the player is facing toward the head
     for (const atk of this.game.combatSystem.getMeleeAttacks()) {
       if (!this._meleeFacingToward(atk, player, head)) continue;

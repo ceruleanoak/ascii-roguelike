@@ -40,8 +40,11 @@ const APPROACH_VERB = {
  *
  *   - No `anticipate` — nothing hesitates before striking today, so Approach
  *     resolves the skip straight through to Strike.
- *   - No `recover` — Strike resolves back to Approach, which is the legacy
- *     `attack → idle → chase` round trip minus the frame it wasted in idle.
+ *   - `recover` declared only for chaser/keeper — melee archetypes are exactly
+ *     where the legacy ladder's "back off while on cooldown" branch is a bare
+ *     distance flip with no timer, which is what makes it oscillate. Kiters and
+ *     jumpers get no default Recover; Strike resolves straight back to Approach
+ *     for them, same as before.
  *   - No `withdraw` — abandoning a Search resolves to Alert and the enemy wanders,
  *     which is precisely what it does now.
  *
@@ -71,6 +74,22 @@ export function defaultStates(data) {
     // first time.
     search: {},
   };
+
+  // The actual fix for the Chase-state waggle: melee enemies (chaser/keeper)
+  // get a real timed Recover instead of resolving straight back to Approach.
+  // 0.4s retreat @ 0.5x matches the legacy back-off's own feel — just as a
+  // committed window instead of a bare distance flip that re-triggers itself.
+  //
+  // `data.recover` lets any enemy opt into one of the other named variants
+  // (jumpBack/knockback/lockPlayer/hide) regardless of archetype — the same
+  // "read a semantic field off the data" shape as `reflectShield` below,
+  // rather than requiring a full hand-authored `states` block just to change
+  // one State.
+  if (data.recover) {
+    states.recover = { duration: 0.4, variant: 'retreat', speed: 0.5, ...data.recover };
+  } else if (style === 'chaser' || style === 'keeper') {
+    states.recover = { duration: 0.4, variant: 'retreat', speed: 0.5 };
+  }
 
   // The Mirror Imp's shield phase overrides the verb while the shield is up.
   // Declared on Approach alone because that is the only place legacy reaches it —

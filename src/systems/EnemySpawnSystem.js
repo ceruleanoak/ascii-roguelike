@@ -74,5 +74,14 @@ export class EnemySpawnSystem {
       enemy.parentRef.notifySplitChildGone(enemy, false);
       enemy.parentRef = null;
     }
+
+    // Release a grab this enemy was holding — Recover's `lockPlayer` variant
+    // (enemyStates/recover.js) has no death hook of its own, and without this
+    // a killed grabber leaves the player permanently rooted.
+    const player = this.game.player;
+    if (player?.grabbedBy === enemy) {
+      player.grabbed = false;
+      player.grabbedBy = null;
+    }
   }
 }

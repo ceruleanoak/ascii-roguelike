@@ -335,13 +335,17 @@ export function moveStill(enemy) {
 // Deliberately not routed through vector navigation even when a collisionMap is
 // present — a lunge that pathfinds around a corner is not a lunge, and the legacy
 // burst went straight too.
-export function moveLunge(enemy, absoluteSpeed, speedMultiplier, targetPos) {
+//
+// `away` negates the direction so the same primitive drives a lunge away from the
+// target (Recover's `jumpBack` variant) as well as toward it.
+export function moveLunge(enemy, absoluteSpeed, speedMultiplier, targetPos, away = false) {
   const dx = targetPos.x - enemy.position.x;
   const dy = targetPos.y - enemy.position.y;
   const dist = Math.sqrt(dx * dx + dy * dy);
   if (dist === 0) return;
-  enemy.targetVelocity.vx = (dx / dist) * absoluteSpeed * speedMultiplier;
-  enemy.targetVelocity.vy = (dy / dist) * absoluteSpeed * speedMultiplier;
+  const sign = away ? -1 : 1;
+  enemy.targetVelocity.vx = sign * (dx / dist) * absoluteSpeed * speedMultiplier;
+  enemy.targetVelocity.vy = sign * (dy / dist) * absoluteSpeed * speedMultiplier;
 }
 
 const VERBS = {
@@ -351,6 +355,10 @@ const VERBS = {
   back:   (enemy, mult, targetPos) => moveBack(enemy, mult, targetPos),
   still:  (enemy) => moveStill(enemy),
   wander: (enemy, mult, targetPos, dt) => updateWanderMovement(enemy, mult, dt),
+  // A sharper `back` — a one-shot lunge away rather than a steady walk. `mult`
+  // (speedMultiplier × cfg.speed) applies the same way it does for every other
+  // verb; the 2× base is what makes it read as a jump rather than a backpedal.
+  lungeBack: (enemy, mult, targetPos) => moveLunge(enemy, enemy.speed * 2, mult, targetPos, true),
 };
 
 // Run a State's movement. `cfg.speed` multiplies the enemy's own speed on top of
