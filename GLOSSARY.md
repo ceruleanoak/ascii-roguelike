@@ -135,6 +135,115 @@ programming terms.
 - **In code:** `Enemy` base in `src/entities/`; data in `src/data/enemies.js`.
 - **Not:** "foe", "hostile", "mob", "monster", "NPC" (an NPC is non-hostile and distinct).
 
+### Enemy State
+- **Definition:** The AI State spine — a single closed, named set of behavioral States
+  (Dormant, Alert, Approach, Anticipate, Strike, Recover, Search, Withdraw) that every Enemy
+  walks, one State current at a time. An Enemy declares only the States it uses; an undeclared
+  State is **skipped**, not an error — the runner walks a fallback chain forward until it
+  reaches one the Enemy does declare. Movement archetypes (`chaser`/`keeper`/`kiter`/`jumper`/
+  `ambusher`) are not Enemy States — they are an authoring preset that expands into a default
+  `states` block naming a movement verb (`close`/`hold`/`orbit`/`back`/`still`/`wander`) per
+  State, so the archetype survives only as shorthand, not as a behavior of its own.
+- **In code:** `EnemyStateMachine` (`src/entities/EnemyStateMachine.js`) is the runner; `STATES`
+  maps ids to the files in `src/entities/enemyStates/`; `FALLBACK` is the skip-forward chain.
+  An Enemy's declared block is `data.states`, defaulted from `movementStyle`/`movementConfig`
+  by `stateDefaults.js#defaultStates` when absent. Live behind `SPINE.enabled`; parity with the
+  legacy ladder it replaces is certified by `tools/debug/fsm-parity.mjs`.
+- **Not:** Game State (the top-level game mode — REST/EXPLORE/NEUTRAL; unrelated concept despite
+  the shared word); a free-form per-enemy state graph (explicitly rejected — the named set is
+  closed, and extending it is authorial, never data-only); a Mechanic (composable behavior
+  layered on top of whichever State is current, not a State itself).
+
+### Dormant
+- **Definition:** Asleep until something wakes it — damage, or the target coming within a wake
+  radius. The one State an interrupt (stun, freeze, knockback, etc.) does not knock an Enemy
+  out of, so a stunned ambusher stays asleep instead of the interrupt destroying the ambush.
+- **In code:** `src/entities/enemyStates/dormant.js`; wake condition is
+  `data.states.dormant.wake` (`onDamage`, `radius`); declared by default only by the `ambusher`
+  movement-style preset.
+- **Not:** the REST Game State (unrelated); the Sniper's private `hidden` sub-state or the
+  Flock's `perch` (candidates to fold in later, not yet migrated).
+
+### Alert
+- **Definition:** Aware the target may be nearby but not committed to engaging it — the
+  "listening" half of what the legacy `'idle'` state id conflated with "wandering." Holds
+  position if the target is within aggro range but undetected; wanders otherwise. Exits toward
+  Approach on sight, or toward Search on proximity-only detection.
+- **In code:** `src/entities/enemyStates/alert.js`; must be declared by every Enemy — it is the
+  only State Approach can hand back to when the target leaves aggro range.
+- **Not:** the legacy `'idle'` state id, which this and Approach's holding behavior jointly
+  replace; Dormant (nothing wakes an Enemy toward Alert — waking is Dormant's own transition).
+
+### Approach
+- **Definition:** Closing on, holding a preferred band from, or orbiting the target — whichever
+  movement verb (`close`/`hold`/`orbit`) the Enemy's data names. The State every movement
+  archetype used to be a property of; now the archetype is only which verb Approach defaults to.
+- **In code:** `src/entities/enemyStates/approach.js`; verb comes from
+  `data.states.approach.movement`, defaulted per archetype by `stateDefaults.js#APPROACH_VERB`.
+  Commits to Anticipate (or straight to Strike, if Anticipate is undeclared) once in range and
+  off cooldown.
+- **Not:** a movement archetype itself — `chaser`/`keeper`/`kiter`/`jumper`/`ambusher` are
+  presets that configure Approach, not States of their own.
+
+### Anticipate
+- **Definition:** A visible hesitation before committing to Strike — the tell. Undeclared by
+  default, so an un-re-authored Enemy skips straight to Strike, unchanged from today's
+  behavior. Not committed by default, so the hesitation is punishable unless an Enemy
+  explicitly authors otherwise.
+- **In code:** `src/entities/enemyStates/anticipate.js`; `data.states.anticipate.tell` names
+  the visual cue, `breakIf` lets the tell be aborted, `requirePack` gates it on packmate
+  readiness (the Frost Wolf's use case).
+- **Not:** `attackWindup` / the Windup phase of Weapon Timing — that is Strike's own opening
+  beat, not a separate hesitation before Strike begins. Conflating the two would change
+  behavior across the whole roster.
+
+### Strike
+- **Definition:** The attack itself, from its opening beat through its last — collapses the
+  legacy `'windup'` and `'attack'` state ids, two ids for one event. Committed: once entered,
+  only a hard interrupt (stun, freeze, etc.) can cut it short, not damage. `bands` lets the
+  attack vary by distance, generalizing the bespoke per-enemy distance checks several bosses
+  hardcoded.
+- **In code:** `src/entities/enemyStates/strike.js`; the swing's cost (cooldown) is charged by
+  `Enemy.resolveStrike()`, called only on the path where the swing actually connects or
+  completes — never on exit, so a Strike the target walks out of costs nothing.
+- **Not:** Anticipate (the tell that may precede it); the legacy `'windup'`/`'attack'` state ids
+  it replaces, still surfaced to renderers via `LEGACY_STATE`'s translation layer.
+
+### Recover
+- **Definition:** The window after a Strike where the Enemy is not yet dangerous again — a
+  real, timed vulnerability window, unlike the legacy ladder's melee back-off (a positional
+  correction with no timer, not a vulnerability window, and never applied to ranged Enemies at
+  all). Six named variants (`retreat`, `stationary`, `jumpBack`, `knockback`, `lockPlayer`,
+  `hide`) cover everything from a plain backpedal to briefly rooting the player or vanishing.
+- **In code:** `src/entities/enemyStates/recover.js`; variant selected by
+  `data.states.recover.variant` (default `retreat`); declared by default only for
+  `chaser`/`keeper` archetypes (the fix for the Chase-state waggle), opt-in for any archetype
+  via `data.recover`.
+- **Not:** Recovery, the Weapon Timing phase (`items.js` `recovery` field — a weapon-data
+  cooldown-after-impact value). **These are two different domains — weapon data vs. Enemy
+  State — that ended up one letter apart. Flagging rather than resolving silently; this needs
+  your call** (rename one, or accept the collision since neither is a code identifier the other
+  could be confused with).
+
+### Search
+- **Definition:** Pursuing the target's last known position after losing contact. Leads the
+  mark by the target's velocity at the moment contact was lost, then holds at the mark once
+  reached rather than resuming any other behavior. Abandons after `abandonAfter` marks
+  investigated — a count, not a fixed timeout.
+- **In code:** `src/entities/enemyStates/search.js`; sets `enemy.aggroMemoryActive`, which also
+  widens vision to omnidirectional (`hasVision` skips the cone check) for the hunt's duration.
+- **Not:** Alert (which carries no mark); a fixed 5-second timeout (the literal the legacy
+  ladder wrote at six separate sites — replaced by a mark count).
+
+### Withdraw
+- **Definition:** Disengaging on purpose, visibly — the answer to "what happens when a Search
+  is abandoned," instead of the Enemy just stopping and idling on the spot. Optional:
+  undeclared, abandonment resolves straight to Alert, which is every Enemy's current behavior.
+- **In code:** `src/entities/enemyStates/withdraw.js`; re-engages back to Approach if the
+  target reappears mid-withdrawal.
+- **Not:** Search (still actively hunting); permanent disengagement — withdrawal ends at
+  `cfg.to ?? 'alert'`.
+
 ### Mechanic
 - **Definition:** A composable enemy behavior added by data, not by branching in `Enemy.js`.
   New enemy behaviors are authored as Mechanics.
