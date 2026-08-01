@@ -40,11 +40,15 @@ const APPROACH_VERB = {
  *
  *   - No `anticipate` — nothing hesitates before striking today, so Approach
  *     resolves the skip straight through to Strike.
- *   - `recover` declared only for chaser/keeper — melee archetypes are exactly
- *     where the legacy ladder's "back off while on cooldown" branch is a bare
- *     distance flip with no timer, which is what makes it oscillate. Kiters and
- *     jumpers get no default Recover; Strike resolves straight back to Approach
- *     for them, same as before.
+ *   - `recover` declared for chaser/keeper and for any enemy whose attack is
+ *     melee, regardless of archetype — a melee ambusher or kiter overlaps and
+ *     whiffs on cooldown exactly the same way a chaser does, and Approach no
+ *     longer carries a fallback for that (see approach.js history: it used to
+ *     have its own inline back-off branch, removed once Recover was made to
+ *     hold through the full cooldown rather than a fixed animation length).
+ *     Non-melee kiters/keepers/jumpers (bow, spell, breath) get no default
+ *     Recover; Strike resolves straight back to Approach for them, same as
+ *     before — nothing about a ranged attack can be too close to use.
  *   - No `withdraw` — abandoning a Search resolves to Alert and the enemy wanders,
  *     which is precisely what it does now.
  *
@@ -75,21 +79,38 @@ export function defaultStates(data) {
     search: {},
   };
 
-  // The actual fix for the Chase-state waggle: melee enemies (chaser/keeper)
-  // get a real timed Recover instead of resolving straight back to Approach.
-  // 0.4s retreat @ 0.5x matches the legacy back-off's own feel — just as a
-  // committed window instead of a bare distance flip that re-triggers itself.
+  // The actual fix for the Chase-state waggle: melee enemies get a real timed
+  // Recover instead of resolving straight back to Approach. 0.4s retreat @
+  // 0.5x matches the legacy back-off's own feel — just as a committed window
+  // instead of a bare distance flip that re-triggers itself. Gated on the
+  // attack being melee (chaser/keeper defaults to melee same as Enemy.js's
+  // own `data.attackType || 'melee'` fallback), not on archetype — a melee
+  // ambusher or kiter needs the exact same overlap protection a chaser does.
   //
   // `data.recover` lets any enemy opt into one of the other named variants
   // (jumpBack/knockback/lockPlayer/hide) regardless of archetype — the same
   // "read a semantic field off the data" shape as `reflectShield` below,
   // rather than requiring a full hand-authored `states` block just to change
   // one State.
+  const isMeleeAttacker = (data.attackType ?? 'melee') === 'melee';
   if (data.recover) {
     states.recover = { duration: 0.4, variant: 'retreat', speed: 0.5, ...data.recover };
-  } else if (style === 'chaser' || style === 'keeper') {
+  } else if (style === 'chaser' || style === 'keeper' || isMeleeAttacker) {
     states.recover = { duration: 0.4, variant: 'retreat', speed: 0.5 };
   }
+
+  // The other four shorthands, same shape as `data.recover` above but with no
+  // non-empty baseline to merge onto — `anticipate` and `withdraw` are absent
+  // until opted into (nothing hesitates or disengages on purpose today), and
+  // `search`/`strike` are already the empty object every enemy gets, so
+  // authoring the shorthand simply replaces it with the tuned one. This is what
+  // lets the enemy editor's dedicated State sections write somewhere real: a
+  // form field with nowhere for its value to land is worse than no field at
+  // all, because it looks authorable and silently isn't.
+  if (data.anticipate) states.anticipate = { ...data.anticipate };
+  if (data.search) states.search = { ...data.search };
+  if (data.withdraw) states.withdraw = { ...data.withdraw };
+  if (data.strike) states.strike = { ...data.strike };
 
   // The Mirror Imp's shield phase overrides the verb while the shield is up.
   // Declared on Approach alone because that is the only place legacy reaches it —

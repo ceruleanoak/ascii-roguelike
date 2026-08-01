@@ -32,6 +32,7 @@ import strike from './enemyStates/strike.js';
 import recover from './enemyStates/recover.js';
 import search from './enemyStates/search.js';
 import withdraw from './enemyStates/withdraw.js';
+import flee from './enemyStates/flee.js';
 
 // What the spine's current State looks like to everything still reading
 // `enemy.state`: ExploreRenderer's indicator picker, TrailMechanic, Telegraph.
@@ -53,6 +54,8 @@ export const LEGACY_STATE = {
   recover: 'chase',
   search: 'chase',
   withdraw: 'idle',
+  // A fleeing enemy is running, same visual language as a chase.
+  flee: 'chase',
 };
 
 // The legacy id for a State, resolving Strike's two halves by its windup timer.
@@ -61,7 +64,7 @@ export function legacyStateFor(machine, enemy) {
   return LEGACY_STATE[machine.current] ?? 'idle';
 }
 
-export const STATES = { dormant, alert, approach, anticipate, strike, recover, search, withdraw };
+export const STATES = { dormant, alert, approach, anticipate, strike, recover, search, withdraw, flee };
 
 // Where a transition lands when its target State is not one this enemy declares.
 //
@@ -71,14 +74,20 @@ export const STATES = { dormant, alert, approach, anticipate, strike, recover, s
 // enemy with no Anticipate has no hesitation before a strike (today's behavior
 // for all 56), and an enemy with no Search does not investigate, so losing
 // contact means disengaging rather than standing still.
+//
+// `flee` leads both Approach's and Search's chains — a wildcard the enemy
+// opts into by declaring `flee` and omitting `approach`/`search` entirely, so
+// both of Alert's transition doors (sight, proximity) land on it instead of
+// hunting. Inert for every enemy that keeps declaring Approach/Search, which
+// is all 56 today — the trap goblin is the first to take this path.
 const FALLBACK = {
   dormant:    ['alert'],
   alert:      ['approach'],
-  approach:   ['alert'],
+  approach:   ['flee', 'alert'],
   anticipate: ['strike'],
   strike:     ['approach'],
   recover:    ['approach'],
-  search:     ['withdraw', 'alert'],
+  search:     ['flee', 'withdraw', 'alert'],
   withdraw:   ['alert'],
 };
 

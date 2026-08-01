@@ -88,6 +88,21 @@ export const TIER_OPTIONS = ['weak', 'normal', 'elite', 'boss'];
 export const GAME_ANIMAL_ROLES = ['moose', 'rabbit'];
 export const RECOVER_VARIANTS = ['retreat', 'stationary', 'jumpBack', 'knockback', 'lockPlayer', 'hide'];
 
+// Every State id, for the two fields that name one as a transition target
+// (`search.onAbandon`, `withdraw.to`). `EnemyStateMachine.resolve()` walks
+// FALLBACK from whatever is named here, so any of the eight is a valid target
+// even for an enemy that does not declare it directly.
+export const STATE_IDS = ['dormant', 'alert', 'approach', 'anticipate', 'strike', 'recover', 'search', 'withdraw', 'flee'];
+
+// The movement-verb vocabulary a State's `movement` key selects from
+// (enemyMovement.js VERBS). No blank option: `applyStateMovement` resolves an
+// unrecognized verb — including '' — to `moveStill` outright, it does not fall
+// through to whatever the State would otherwise have picked (only an absent
+// *key* does that, via `??`, and a list row can't emit "absent", only a value —
+// see the Strike bands section). Every row's movement is therefore a real,
+// working verb, never a silent freeze standing in for "unset".
+export const MOVEMENT_VERBS = ['close', 'hold', 'orbit', 'back', 'still', 'wander', 'lungeBack', 'flee'];
+
 // What a thrown potion applies on impact. All four are shipped on the Alchemist,
 // but only two of them do anything: `Player.applyStatusEffect` returns early for
 // any effect the player has no slot for, and the player's slots are goo, freeze,
@@ -110,12 +125,14 @@ const isKeeperKiter = (d) => d.movementStyle === 'keeper' || d.movementStyle ===
 //   1. Key data — identity + core combat stats, the essential definition of
 //      the enemy.
 //   2. Stateful data, in State-spine order (GLOSSARY "Enemy State": Dormant,
-//      Alert, Approach, Anticipate, Strike, Recover, Search, Withdraw). Only
-//      the states with an authored block appear — Alert/Search/Withdraw have
-//      no dedicated fields in this editor today, so the spine order below
-//      just skips them: behavior (Dormant idle/decision + Anticipate windup),
-//      movement (Approach archetype, plus the ambusher's Dormant wake),
-//      telegraph (Strike), recover (Recover).
+//      Alert, Approach, Anticipate, Strike, Recover, Search, Withdraw). Alert
+//      alone has no dedicated section — it is just the archetype's wander,
+//      nothing to tune. Every other State does: behavior (windupMovement /
+//      windupImmune — Strike's own opening beat, not Anticipate's tell) +
+//      movement (Approach archetype, plus the ambusher's Dormant wake) +
+//      anticipate (the pre-strike tell) + telegraph (Strike's warned area) +
+//      strike (distance bands) + recover (the post-strike window) + search
+//      (last-known-position pursuit) + withdraw (disengaging on purpose).
 //   3. Everything else — attributes that aren't tied to a specific State.
 export const SECTIONS = [
   {
@@ -215,6 +232,28 @@ export const SECTIONS = [
     ]
   },
   {
+    // The pre-strike tell (anticipate.js). Absent by default — nothing
+    // hesitates before striking today, so Approach resolves straight through
+    // to Strike; the old `attackWindup`/`windupMovement` above are Strike's
+    // own opening beat and a different thing entirely.
+    id: 'anticipate', title: 'Anticipate (pre-strike tell)', gate: 'anticipate', bareGate: true,
+    note: anticipateNotes,
+    fields: [
+      { key: 'anticipate.tell', label: 'Tell glyph', type: 'char', default: '',
+        help: 'Shown via enemy.stateTell while the enemy hesitates. Blank = no glyph.' },
+      { key: 'anticipate.duration', label: 'Duration (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 0,
+        help: "How long the tell holds before Strike. An enemy that never resolves without breakIf firing (duration: Infinity, e.g. a Trap Goblin that never commits to the rush) isn't authorable here yet — hand-edit enemies.js for that case." },
+      { key: 'anticipate.committed', label: 'Committed (uninterruptible)', type: 'bool', default: false,
+        help: 'Off: the enemy can be punished for visibly hesitating. On: the hesitation is safe.' },
+      { key: 'anticipate.requirePack', label: 'Require pack (min ready)', type: 'number', min: 1, step: 1, default: null,
+        help: 'Minimum enraged packmates, including self, before Strike is allowed. Needs Pack coordination (Interaction flags) so enemy.packmates is actually populated.' },
+      { key: 'anticipate.breakIf.targetLost', label: 'Break if target lost', type: 'bool', default: false,
+        help: 'Break back to Approach if line of sight is lost mid-tell.' },
+      { key: 'anticipate.breakIf.outOfBand', label: 'Break if out of band', type: 'bool', default: false,
+        help: 'Break back to Approach if the target leaves attackRange mid-tell.' },
+    ]
+  },
+  {
     // The projected warning Area of the melee windup, plus the animation whose
     // beats define when damage lands (GLOSSARY "Telegraph"). Optional: absent,
     // the enemy keeps the legacy single-rect windup, so the whole block is
@@ -273,6 +312,73 @@ export const SECTIONS = [
       { key: 'recover.duration', label: 'Duration (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 0.4 },
       { key: 'recover.speed', label: 'Speed (px/s or ×)', type: 'number', min: 0, step: 0.1, default: 0.5,
         help: 'Meaning depends on variant: retreat/jumpBack walk speed, knockback recoil speed. Unused by stationary/lockPlayer/hide.' },
+    ]
+  },
+  {
+    // Distance-banded attacks (strike.js `bands`). Empty by default — the
+    // enemy strikes once, at the top-level attackRange/attackWindup/
+    // attackCooldown. Authoring bands generalizes the five bespoke
+    // distance-banded attacks already open-coded elsewhere in the roster
+    // (LakeBoss, GooDragon, GooHead, Sniper, Giant Slime) into data.
+    id: 'strike', title: 'Strike (distance bands)', gate: 'strike', bareGate: true,
+    fields: [
+      { key: 'strike.bands', label: 'Bands', type: 'list', default: [],
+        emptyLabel: '(no bands — single attack at attackRange/attackWindup)',
+        help: 'Evaluated nearest-first: the first band whose "within" contains the current distance wins, so author close-to-far. Picked once on entering Strike, not re-picked per frame.',
+        itemFields: [
+          { key: 'within', label: 'Within', type: 'px', default: GRID_CELL * 2 },
+          { key: 'attack', label: 'Attack name', type: 'text', default: '',
+            help: 'Authoring label only — shown on the sandbox range ring, not read by combat logic. The columns below are what actually differ per band.' },
+          { key: 'windup', label: 'Windup (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 0.3,
+            help: "This band's own windup, overriding attackWindup while it's the picked band. Defaulted to a real number rather than 0 or attackWindup's own value — a list row is always emitted whole, key-for-key, so an unedited row would otherwise ship an instant, windup-less hit for that band." },
+          { key: 'movement', label: 'Movement', type: 'select', options: MOVEMENT_VERBS, default: 'still',
+            help: "This band's own verb while its windup is active. No inherit option — a list row always emits every column, so 'blank' would freeze the enemy (moveStill) rather than fall back to windupMovement." },
+          { key: 'speed', label: 'Speed (px/s or ×)', type: 'number', step: 0.1, default: null },
+        ] },
+      { key: 'strike.duration', label: 'Post-windup duration (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 0,
+        help: "Extends the swing after the windup ends and before Recover, added to whichever windup was used (the picked band's, or attackWindup if no band matched)." },
+    ]
+  },
+  {
+    // Pursuit of the last known position after losing contact (search.js).
+    // Every enemy already gets an empty Search — this block only tunes it
+    // away from that State's own baked-in defaults, it does not turn Search
+    // on or off.
+    id: 'search', title: 'Search (last-known-position pursuit)', gate: 'search', bareGate: true,
+    fields: [
+      { key: 'search.moveDelay', label: 'Move delay (dbl-sec)', type: 'number', min: 0, step: 0.1, default: null,
+        help: "Pause before setting off toward the mark. Unset falls back to the enemy's own memoryMoveDelay (1.0, not authorable here)." },
+      { key: 'search.staleAfter', label: 'Stale after (dbl-sec)', type: 'number', min: 0, step: 0.1, default: null,
+        help: 'How long a mark stays worth investigating. Unset applies two different literals depending on the moment read: 2.0 on entering Search (memory staleness), 5.0 when deciding whether to move on (search patience). Authoring a value here uses it for both.' },
+      { key: 'search.abandonAfter', label: 'Abandon after (marks)', type: 'number', min: 1, step: 1, default: 1,
+        help: 'Marks investigated and exhausted, not seconds, before the hunt is given up entirely.' },
+      { key: 'search.onAbandon', label: 'On abandon → State', type: 'select', options: STATE_IDS, default: 'withdraw' },
+    ]
+  },
+  {
+    // Disengaging on purpose (withdraw.js). Absent by default — abandoning a
+    // Search resolves straight to Alert, same as every enemy does today.
+    // Authoring this only matters once something actually transitions here —
+    // typically Search's onAbandon above.
+    id: 'withdraw', title: 'Withdraw (disengaging)', gate: 'withdraw', bareGate: true,
+    fields: [
+      { key: 'withdraw.duration', label: 'Duration (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 0 },
+      { key: 'withdraw.to', label: 'Resolves to → State', type: 'select', options: STATE_IDS, default: 'alert' },
+    ]
+  },
+  {
+    // Running from a memory mark (flee.js). Wildcard: an enemy that declares
+    // this but omits both Approach and Search has both of Alert's transition
+    // doors fall through to it instead of hunting — the trap goblin's use.
+    id: 'flee', title: 'Flee (running from a memory mark)', gate: 'flee', bareGate: true,
+    fields: [
+      { key: 'flee.barrierPause', label: 'Barrier pause (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 0.4,
+        help: 'Held still once a barrier breaks line of sight to the mark, before whatever reacts to it (e.g. a trap-laying Mechanic) fires.' },
+      { key: 'flee.clearAfter', label: 'Clear after (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 1,
+        help: 'Only meaningful once a Mechanic has acted on the barrier — counts down before Flee breaks off.' },
+      { key: 'flee.maxDuration', label: 'Max duration (dbl-sec)', type: 'number', min: 0, step: 0.5, default: 6,
+        help: 'Safety net: gives up fleeing after this long even if no barrier is ever found.' },
+      { key: 'flee.to', label: 'Resolves to → State', type: 'select', options: STATE_IDS, default: 'withdraw' },
     ]
   },
   // ── Everything else — not tied to a specific State ──────────────────────
@@ -571,16 +677,12 @@ export const MECHANICS = [
     ]
   },
   {
+    // Purely reactive now — the drop decision (when, whether at all) lives in
+    // the Flee State's flags; this Mechanic only turns them into a trap once.
+    // See the Flee section above for the timing knobs (barrierPause, etc).
     id: 'trapLayerMechanic', title: 'Trap layer', gate: 'trapLayerMechanic.enabled',
     fields: [
       { key: 'trapLayerMechanic.trapTypes', label: 'Trap types', type: 'tags', default: ['slow'] },
-      { key: 'trapLayerMechanic.trapCooldown', label: 'Cooldown (dbl-sec)', type: 'number', step: 0.1, default: 4 },
-      { key: 'trapLayerMechanic.trapCooldownVisibleMult', label: 'Visible cooldown ×', type: 'number', step: 0.1, default: 0.4 },
-      { key: 'trapLayerMechanic.trapWindup', label: 'Windup (dbl-sec)', type: 'number', step: 0.1, default: 0.6 },
-      { key: 'trapLayerMechanic.trapSafeRange', label: 'Safe range', type: 'px', default: GRID_CELL * 2 },
-      { key: 'trapLayerMechanic.fleeSpeedMult', label: 'Flee speed ×', type: 'number', step: 0.1, default: 1.5 },
-      { key: 'trapLayerMechanic.postTrapBurstDuration', label: 'Burst duration (dbl-sec)', type: 'number', step: 0.1, default: 1 },
-      { key: 'trapLayerMechanic.postTrapBurstSpeed', label: 'Burst speed ×', type: 'number', step: 0.1, default: 1.4 },
     ]
   },
   {
@@ -722,6 +824,20 @@ function pacifistNotes(def) {
     });
   }
   return notes;
+}
+
+// `requirePack` reads `enemy.packmates`, which only gets populated by
+// EnemyUpdateSystem when Pack coordination is on (or a packBehavior mechanic
+// this editor doesn't author) — without it the gate compares against an empty
+// list forever and Strike can never fire.
+function anticipateNotes(def) {
+  if (def.anticipate?.requirePack && !def.packCoordination) {
+    return [{
+      level: 'warn',
+      text: 'requirePack is set but Pack coordination (Interaction flags) is off — enemy.packmates stays empty, so the pack gate can never pass.',
+    }];
+  }
+  return [];
 }
 
 // The affinity/tier generator and the fixed list are alternatives, not a blend:

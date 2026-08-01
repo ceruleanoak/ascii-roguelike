@@ -1835,8 +1835,8 @@ export const ENEMIES = {
   'n': {
     char: 'n',
     name: 'Trap Goblin',
-    description: 'Circles you. The floor behind it is the danger.',
-    spellDescription: 'TRAPS THE PATH.',
+    description: 'Runs at the sight of you. The floor behind it is the danger.',
+    spellDescription: 'FLEES AND TRAPS.',
     mass: 0.6,
     hp: 4,
     speed: 72,            // Fast enough to keep distance — has no attack of its own
@@ -1844,24 +1844,19 @@ export const ENEMIES = {
     attackType: 'none',   // No direct attack — traps are the entire threat
     attackRange: 0,
     aggroRange: GRID.CELL_SIZE * 12,
-    movementStyle: 'kiter',
-    movementConfig: {
-      kiteDistance: GRID.CELL_SIZE * 7,    // Wider orbit — seeding more trap arc per circuit
-      retreatThreshold: GRID.CELL_SIZE * 6, // Contiguous with the hover band — no "approach gap" where kiter pulls back in
-      dive: false                          // Trap Goblin never dives — it has no attack to deliver
-    },
     decisionInterval: 0.25,
     color: '#ccaa00',
+    // No `approach`/`search` — both of Alert's transition doors fall through
+    // to `flee` instead (EnemyStateMachine's FALLBACK), the wildcard-state
+    // mechanism that makes a coward run rather than hunt.
+    states: {
+      alert: {},
+      flee: {},
+      withdraw: { duration: 0.6 }
+    },
     trapLayerMechanic: {
       enabled: true,
-      trapTypes: ['slow', 'slow', 'fire'],  // 2:1 bias: slow sets up, fire punishes stopping
-      trapCooldown: 5.0,                    // Base cooldown while not seeing player
-      trapCooldownVisibleMult: 0.4,         // 2.5× faster when the player is in sight (~2s effective)
-      trapWindup: 0.5,                      // '...' telegraph before placing; player gets a beat to back off
-      trapSafeRange: GRID.CELL_SIZE * 2,    // Within 2 cells: drop is held, '!' flee kicks in. Otherwise orbit naturally and place traps freely.
-      fleeSpeedMult: 1.8,                   // Active flee speed while player breaches safe range
-      postTrapBurstDuration: 1.5,           // Scuttles away fast immediately after dropping
-      postTrapBurstSpeed: 1.8               // Speed multiplier during burst retreat
+      trapTypes: ['slow', 'slow', 'fire']  // 2:1 bias: slow sets up, fire punishes stopping
     },
     idleBehavior: 'wander',
     elementalAffinity: {

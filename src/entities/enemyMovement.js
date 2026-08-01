@@ -302,8 +302,8 @@ export function applyWindupMovement(enemy, speedMultiplier) {
 }
 
 // ── Movement verbs ──────────────────────────────────────────────────────────
-// The vocabulary a State's `movement` field names. Six verbs, each usable in any
-// State, each taking a speed multiplier — which is where the hardcoded constants
+// The vocabulary a State's `movement` field names. Seven verbs, each usable in
+// any State, each taking a speed multiplier — which is where the hardcoded constants
 // scattered through the legacy ladder go (0.6× strafe, 0.8× ring, 1.2× dive,
 // 0.4× windup, 0.5× back-off, 0.3× wander were all un-tunable literals).
 //
@@ -348,6 +348,53 @@ export function moveLunge(enemy, absoluteSpeed, speedMultiplier, targetPos, away
   enemy.targetVelocity.vy = sign * (dy / dist) * absoluteSpeed * speedMultiplier;
 }
 
+// Straight away from a mark, routed around walls, never strafing — Flee's
+// verb. Unlike `back` (a steady retreat while still facing the target,
+// `keeper`'s crowded-range response) this turns its back entirely: it
+// projects a point beyond the enemy on the far side of the mark and hands it
+// to `moveChaser`, so a fleeing enemy still routes around obstacles on its
+// way out instead of running face-first into them.
+//
+// Also steers clear of `enemy.ownTrapPositions` (maintained by whatever
+// Mechanic drops them, e.g. TrapLayerMechanic) — the direct fix for a trap
+// goblin fleeing straight into a trap it just laid.
+export function moveFlee(enemy, speedMultiplier, markPos, deltaTime) {
+  const dx = enemy.position.x - markPos.x;
+  const dy = enemy.position.y - markPos.y;
+  const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+  let dirX = dx / dist;
+  let dirY = dy / dist;
+
+  if (enemy.ownTrapPositions?.length) {
+    const avoidRadius = GRID.CELL_SIZE * 3;
+    let avoidX = 0, avoidY = 0;
+    for (const trap of enemy.ownTrapPositions) {
+      const tx = enemy.position.x - trap.x;
+      const ty = enemy.position.y - trap.y;
+      const td = Math.sqrt(tx * tx + ty * ty);
+      if (td > 0 && td < avoidRadius) {
+        const strength = (avoidRadius - td) / avoidRadius;
+        avoidX += (tx / td) * strength;
+        avoidY += (ty / td) * strength;
+      }
+    }
+    if (avoidX !== 0 || avoidY !== 0) {
+      dirX += avoidX;
+      dirY += avoidY;
+      const mag = Math.sqrt(dirX * dirX + dirY * dirY) || 1;
+      dirX /= mag;
+      dirY /= mag;
+    }
+  }
+
+  const runDistance = GRID.CELL_SIZE * 20;
+  const awayPoint = {
+    x: enemy.position.x + dirX * runDistance,
+    y: enemy.position.y + dirY * runDistance,
+  };
+  moveChaser(enemy, speedMultiplier, awayPoint, deltaTime);
+}
+
 const VERBS = {
   close:  (enemy, mult, targetPos, dt) => moveChaser(enemy, mult, targetPos, dt),
   hold:   (enemy, mult, targetPos, dt) => moveKeeper(enemy, mult, targetPos, dt),
@@ -359,6 +406,7 @@ const VERBS = {
   // (speedMultiplier × cfg.speed) applies the same way it does for every other
   // verb; the 2× base is what makes it read as a jump rather than a backpedal.
   lungeBack: (enemy, mult, targetPos) => moveLunge(enemy, enemy.speed * 2, mult, targetPos, true),
+  flee: (enemy, mult, targetPos, dt) => moveFlee(enemy, mult, targetPos, dt),
 };
 
 // Run a State's movement. `cfg.speed` multiplies the enemy's own speed on top of

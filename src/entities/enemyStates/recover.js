@@ -144,6 +144,14 @@ export default {
   next(enemy, ctx, machine) {
     const cfg = machine.configFor('recover') ?? {};
     if (machine.timer < (cfg.duration ?? 0)) return null;
+    // `duration` is the animation's own length, not the attack's — a 0.4s
+    // retreat authored against a 1.6s attackCooldown left a gap Approach had
+    // to spend gating on `attackTimer` itself, backing off and re-closing for
+    // however long remained. Holding here until the cooldown is actually spent
+    // is what makes Recover match its own header comment ("the window after a
+    // strike where the enemy is not yet dangerous again") and lets Approach's
+    // `next()` fire on the very next frame, straight through to a commit.
+    if (enemy.attackTimer > 0) return null;
     if (!ctx.canSee) {
       return enemy.lastKnownPosition
         ? { id: 'search', cause: 'lost sight while recovering' }

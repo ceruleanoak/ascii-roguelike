@@ -137,13 +137,15 @@ programming terms.
 
 ### Enemy State
 - **Definition:** The AI State spine — a single closed, named set of behavioral States
-  (Dormant, Alert, Approach, Anticipate, Strike, Recover, Search, Withdraw) that every Enemy
-  walks, one State current at a time. An Enemy declares only the States it uses; an undeclared
-  State is **skipped**, not an error — the runner walks a fallback chain forward until it
-  reaches one the Enemy does declare. Movement archetypes (`chaser`/`keeper`/`kiter`/`jumper`/
+  (Dormant, Alert, Approach, Anticipate, Strike, Recover, Search, Withdraw, Flee) that every
+  Enemy walks, one State current at a time. An Enemy declares only the States it uses; an
+  undeclared State is **skipped**, not an error — the runner walks a fallback chain forward until
+  it reaches one the Enemy does declare. Movement archetypes (`chaser`/`keeper`/`kiter`/`jumper`/
   `ambusher`) are not Enemy States — they are an authoring preset that expands into a default
   `states` block naming a movement verb (`close`/`hold`/`orbit`/`back`/`still`/`wander`) per
-  State, so the archetype survives only as shorthand, not as a behavior of its own.
+  State, so the archetype survives only as shorthand, not as a behavior of its own. `flee` is an
+  eighth verb in that same vocabulary, but State-only — no movement archetype defaults to it, so
+  it only appears where an Enemy's own `states` block names it.
 - **In code:** `EnemyStateMachine` (`src/entities/EnemyStateMachine.js`) is the runner; `STATES`
   maps ids to the files in `src/entities/enemyStates/`; `FALLBACK` is the skip-forward chain.
   An Enemy's declared block is `data.states`, defaulted from `movementStyle`/`movementConfig`
@@ -242,6 +244,25 @@ programming terms.
   target reappears mid-withdrawal.
 - **Not:** Search (still actively hunting); permanent disengagement — withdrawal ends at
   `cfg.to ?? 'alert'`.
+
+### Flee
+- **Definition:** Running from a memory mark rather than pursuing one — the wildcard State a
+  coward Enemy opts into by declaring `flee` and omitting both Approach and Search, so both of
+  Alert's transition doors (sight, proximity) resolve through to it instead of hunting. The mark
+  is frozen at the position of whatever detection triggered flight, not led by target velocity
+  like Search's, and holds until the target is sighted again. Deliberately keeps the detection
+  cone active rather than widening to omnidirectional — an Enemy that has turned its back on the
+  target should only re-notice it by chance, the point of running rather than hunting.
+- **In code:** `src/entities/enemyStates/flee.js`; `moveFlee` (`enemyMovement.js`) is its verb —
+  projects a point beyond the Enemy on the far side of the mark and routes to it via the same
+  wall-aware navigation Approach uses, so it turns its back and runs rather than strafing. Sets
+  `enemy.fleeing` (the re-entry guard, playing `aggroMemoryActive`'s role without the vision
+  side effect) and `enemy.fleeReachedBarrier` (recomputed every frame via line-of-sight from the
+  mark) for a Mechanic such as `TrapLayerMechanic` to react to. `FALLBACK.approach` and
+  `FALLBACK.search` both lead with `'flee'` in `EnemyStateMachine.js`.
+- **Not:** Search (which pursues a led mark with omnidirectional hearing); Withdraw
+  (disengagement after a hunt ends, not a reaction to sighting the target); a movement archetype
+  — no archetype defaults to declaring it, an Enemy must author it explicitly.
 
 ### Mechanic
 - **Definition:** A composable enemy behavior added by data, not by branching in `Enemy.js`.
