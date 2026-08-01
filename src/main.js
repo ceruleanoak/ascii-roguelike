@@ -11,6 +11,7 @@ import { ZoneSystem } from './systems/ZoneSystem.js';
 import { ExitSystem, isPressingIntoExitGap } from './systems/ExitSystem.js';
 import { PersistenceSystem } from './systems/PersistenceSystem.js';
 import { InventorySystem } from './systems/InventorySystem.js';
+import { ArmorEffectsSystem } from './systems/ArmorEffectsSystem.js';
 import { ConsumableTriggerSystem } from './systems/ConsumableTriggerSystem.js';
 import { NeutralRoomSystem } from './systems/NeutralRoomSystem.js';
 import { ErrandSystem } from './systems/ErrandSystem.js';
@@ -66,6 +67,7 @@ import { WorldEffectsSystem } from './systems/WorldEffectsSystem.js';
 import { EnemyUpdateSystem } from './systems/EnemyUpdateSystem.js';
 import { PauseSystem } from './systems/PauseSystem.js';
 import { SlotReplacementSystem } from './systems/SlotReplacementSystem.js';
+import { TreasureOfferingSystem } from './systems/TreasureOfferingSystem.js';
 import { ScreenFadeSystem } from './systems/ScreenFadeSystem.js';
 import { menuIntent } from './systems/MenuInput.js';
 import { CAMP_NPC_STATE } from './entities/CampNPC.js';
@@ -143,6 +145,7 @@ class Game {
     this.cheatMenu = new CheatMenu(this);
     this.persistenceSystem = new PersistenceSystem();
     this.inventorySystem = new InventorySystem();
+    this.armorEffectsSystem = new ArmorEffectsSystem(this);
     this.audioSystem = new AudioSystem();
     this.combatSystem.audioSystem = this.audioSystem;
     this.combatSystem.game = this;
@@ -202,6 +205,7 @@ class Game {
     this.weaponsMasterSystem = new WeaponsMasterSystem(this);
     this.pauseSystem = new PauseSystem(this);
     this.slotReplacementSystem = new SlotReplacementSystem(this);
+    this.treasureOfferingSystem = new TreasureOfferingSystem(this);
     this.screenFadeSystem = new ScreenFadeSystem(this);
     this.bridgeMenuOpen = false;
 
@@ -209,6 +213,9 @@ class Game {
     this.player = null;
     this.previousPlayerPosition = { x: 0, y: 0 }; // Track previous position for exit zone crossing detection
     this.currentRoom = null;
+    // Ingredient entities lying on the floor of the current room — NOT the
+    // player's pile. Picking one up moves its glyph into the pile via
+    // addIngredient() below; the two never hold the same thing.
     this.ingredients = [];
     this.items = [];
     this.placedTraps = []; // Placed trap items { item, tickTimer, activeDuration, affectedEnemies }
@@ -1215,10 +1222,8 @@ class Game {
     // Apply active character type
     this.applyCharacterType(this.activeCharacterType);
 
-    // Restore quick slots (not lost on death). Banked ingredients stay in
-    // inventorySystem.restInventory (the crafting-table store) and are NOT
-    // copied into player.inventory — player.inventory is "unbanked carried"
-    // only, so the top-bar "I" count reflects at-risk items.
+    // Restore quick slots (not lost on death). Ingredients need no restoring —
+    // the pile lives on InventorySystem and a new Player never held it.
     this.player.quickSlots = [...this.inventorySystem.restQuickSlots];
     this.player.activeSlotIndex = this.inventorySystem.restActiveSlotIndex;
     this.player.destroyedSlots = [...(this._savedDestroyedSlots ?? [false, false, false])];
@@ -1741,9 +1746,9 @@ class Game {
 
 
     // Save player state from previous room
-    // Inventory: Always carry ingredients forward (REST or EXPLORE rooms)
+    // Ingredients need no saving — the pile is on InventorySystem, which no
+    // room transition touches
     // Quick slots: ALWAYS persist (both from REST and between rooms)
-    const savedInventory = this.player ? [...this.player.inventory] : [];
     const savedQuickSlots = this.player ? [...this.player.quickSlots] : [null, null, null]; // Always save quick slots
     const savedActiveSlotIndex = this.player ? this.player.activeSlotIndex : 0; // Always save active slot
     const savedHp = this.player ? this.player.hp : null; // Always save HP
@@ -1932,7 +1937,7 @@ class Game {
 
       // Reset trap charges for new room
       if (this.player) {
-        this.player.resetTrapsForNewRoom(this.inventorySystem);
+        this.trapSystem.resetTrapsForNewRoom();
       }
 
       // Reset charge-hammer once-per-room usage for new room
@@ -1999,7 +2004,6 @@ class Game {
     this.roomEntryY = startY;
 
     // Restore player state
-    this.player.inventory = savedInventory;
     this.player.quickSlots = savedQuickSlots;
     this.player.activeSlotIndex = savedActiveSlotIndex;
     this.player.destroyedSlots = savedDestroyedSlots;
@@ -2011,7 +2015,7 @@ class Game {
 
     // Reset trap charges when entering from REST or restoring saved room
     if (leavingRest || shouldRestoreExploreRoom) {
-      this.player.resetTrapsForNewRoom(this.inventorySystem);
+      this.trapSystem.resetTrapsForNewRoom();
     }
 
     // Reset bow uses for all equipped weapons (new room = fresh arrows)
@@ -2159,11 +2163,12 @@ class Game {
       // Call neutral room exit hook
       this.neutralRoomSystem.onExit(this.currentRoom, this.player);
 
-      // Restore saved explore state (no ingredient banking - just restore the room)
+      // Restore saved explore state (room contents only — the ingredient pile
+      // is untouched by room transitions)
       if (this.savedExploreState) {
         this.currentRoom = this.savedExploreState.room;
         this.items = [...this.savedExploreState.items];
-        this.ingredients = [...this.savedExploreState.ingredients]; // Ground ingredients NOT banked
+        this.ingredients = [...this.savedExploreState.ingredients]; // floor entities, not the pile
         this.placedTraps = [...this.savedExploreState.placedTraps];
         this.backgroundObjects = [...this.savedExploreState.backgroundObjects];
         this.captives = [...this.savedExploreState.captives];
@@ -2488,7 +2493,7 @@ class Game {
       }
     }
 
-    this.inventorySystem.updateMossCloak();
+    this.armorEffectsSystem.updateMossCloak();
 
     this.characterSystem.triggerDaggerRollAttack();
 
@@ -2701,7 +2706,7 @@ class Game {
   updateExploreState(deltaTime) {
     if (!this.currentRoom) return;
 
-    // Keep the south escape-route wall in sync with the player's inventory:
+    // Keep the south escape-route wall in sync with the player's quick slots:
     // picking up or dropping the last item flips playerHasNoItems(), and the
     // physical wall must match the renderer's open-door visual.
     this.updateExitCollisions();
@@ -2737,7 +2742,7 @@ class Game {
     // Blue-zone water armor tick — Coral Crown crystallizes the tile underfoot,
     // Stingray Mantle drops an electrified wake in vacated cells + damages
     // enemies standing in any electrified water within reach.
-    this.inventorySystem.updateBlueArmorEffects(deltaTime);
+    this.armorEffectsSystem.updateBlueArmorEffects(deltaTime);
 
     // Tick room-entry detection grace period
     if (this.roomEntryGraceTimer > 0) {
@@ -3037,6 +3042,11 @@ class Game {
       this.steamClouds,
       this.particles
     );
+
+    // Elemental robe aura: particle emission + dodge-roll status pulse. Runs
+    // right after the consumable tick, where it used to sit inside
+    // InventorySystem.update, so frame ordering is unchanged.
+    this.armorEffectsSystem.updateRobeAura(deltaTime, this.player, this.currentRoom, this.particles);
 
     // Drive per-frame HUD update while consumable slot is blinking
     if (this.inventorySystem.consumableBlinkTimer > 0) {
@@ -3858,6 +3868,11 @@ class Game {
         return;
       }
 
+      // Fairy fountain: offer a treasure to the pool. Sits below fishing (a rod
+      // in hand means you came to fish) but above every other pool interaction —
+      // notably bottling, which resolves further down through interactWithObject.
+      if (this.treasureOfferingSystem.handleSpacePress()) return;
+
       // NPC interactions (errand traveler + wise fellow). Resolve which list
       // to scan once — interior NPCs live on activeFloor.npcs; surface NPCs on
       // neutralCharacters.
@@ -3921,7 +3936,7 @@ class Game {
       const hasNearbyPickup = this.items.some(
         item => this.physicsSystem.getDistance(this.player, item) < 20
       );
-      if (this.player.canUseTrap() && !hasNearbyPickup) {
+      if (this.trapSystem.canUseTrap() && !hasNearbyPickup) {
         this.trapSystem.startTrapCharge('deploy');
         return;
       }
@@ -4105,13 +4120,10 @@ class Game {
     this.activeCharacterType = nextType;
     console.log(`🔄 Continuing as ${CHARACTER_TYPES[this.activeCharacterType].name}`);
 
-    // Bank the departing character's carried ingredients instead of losing
-    // them — ingredients no longer require a safe walk back to REST to
-    // survive a character swap. Full game over (_resetRunToRest) still wipes
-    // restInventory too, preserving the true-roguelike full reset.
-    if (this.player && this.player.inventory.length > 0) {
-      this.inventorySystem.restInventory.push(...this.player.inventory);
-    }
+    // The departing character's ingredients need no rescuing — the pile is on
+    // InventorySystem and is shared across characters, so a swap leaves it
+    // untouched. Full game over (_resetRunToRest) still wipes it, preserving
+    // the true-roguelike full reset.
     if (this.player) {
       this.player.reset();
     }
@@ -4971,50 +4983,44 @@ class Game {
   }
 
   bankLoot() {
-    // Player successfully returned to REST with loot
+    // Player successfully returned to REST. Ingredients are already in the one
+    // pile, so only the quick-slot loadout is saved.
     if (this.player) {
-      this.inventorySystem.bankLoot(
-        this.player.inventory,
-        this.player.quickSlots,
-        this.player.activeSlotIndex
-      );
+      this.inventorySystem.bankLoot(this.player.quickSlots, this.player.activeSlotIndex);
     }
   }
 
-  // Active ingredient pool by state:
-  //   REST    → banked (inventorySystem.restInventory, the crafting table)
-  //   else    → unbanked carried (player.inventory)
-  // Crafting/mana menus and the Tab overlay use this so banked ingredients
-  // remain available in REST without polluting the unbanked "I" count.
-  getActiveIngredients() {
-    if (this.stateMachine.getCurrentState() === GAME_STATES.REST) {
-      return this.inventorySystem.restInventory;
-    }
-    return this.player?.inventory ?? [];
+  // The ingredient pile — one array, every game state, no banked/carried split.
+  // Everything that reads, counts or spends an ingredient goes through these
+  // five; InventorySystem owns the storage. Not to be confused with
+  // `this.ingredients`, which is the loose ingredients on the room floor.
+  getIngredients() {
+    return this.inventorySystem.getIngredients();
+  }
+
+  hasIngredient(char) {
+    if (char === 'c') return this.inventorySystem.getCoinCount() > 0;
+    return this.inventorySystem.hasIngredient(char);
+  }
+
+  countIngredient(char) {
+    if (char === 'c') return this.inventorySystem.getCoinCount();
+    return this.inventorySystem.countIngredient(char);
   }
 
   addIngredient(char) {
-    // Coins live in a passive wallet, not in either ingredient pool, so they
-    // remain spendable at wells / NPCs / crafting even after banking.
+    // Coins live in a passive wallet rather than the pile, so they remain
+    // spendable at wells / NPCs / crafting.
     if (char === 'c') {
       this.inventorySystem.addCoin();
       return;
     }
-    if (this.stateMachine.getCurrentState() === GAME_STATES.REST) {
-      this.inventorySystem.restInventory.push(char);
-    } else if (this.player) {
-      this.player.addIngredient(char);
-    }
+    this.inventorySystem.addIngredient(char);
   }
 
   removeIngredient(char) {
-    if (char === 'c') {
-      this.inventorySystem.removeCoin();
-      return;
-    }
-    const pool = this.getActiveIngredients();
-    const idx = pool.indexOf(char);
-    if (idx > -1) pool.splice(idx, 1);
+    if (char === 'c') return this.inventorySystem.removeCoin();
+    return this.inventorySystem.removeIngredient(char);
   }
 
   render(alpha) {
@@ -5096,7 +5102,7 @@ class Game {
     const room = this.currentRoom;
     const pedestal = room?.pearlPedestal;
     if (!pedestal || pedestal.activated) return false;
-    if (!this.player?.inventory?.includes('●')) return false;
+    if (!this.hasIngredient('●')) return false;
 
     const CS = GRID.CELL_SIZE;
     const px = this.player.position.x + CS / 2;
@@ -5106,7 +5112,7 @@ class Game {
     // Adjacency: within ~1.5 cells of the pedestal center
     if (dx * dx + dy * dy > (CS * 1.5) * (CS * 1.5)) return false;
 
-    this.player.removeIngredient('●');
+    this.removeIngredient('●');
     pedestal.activated = true;
     // Visually crown the pedestal with the pearl glyph by swapping the bg char.
     if (pedestal.obj) {
@@ -5176,14 +5182,10 @@ class Game {
       pedestal.obj.color = '#f4f4f8';
     }
 
-    // Drop the bundle straight into the player's inventory.
+    // Drop the bundle straight into the ingredient pile.
     const bundle = ['p', 'p', 'n', 'C', 'Y'];
     for (const ch of bundle) {
-      if (this.player.addIngredient) {
-        this.player.addIngredient(ch);
-      } else {
-        this.player.inventory.push(ch);
-      }
+      this.addIngredient(ch);
     }
 
     // Open the west exit so the player can return to an O room in whatever
@@ -5216,7 +5218,7 @@ class Game {
     const fairy = room.pearlFairy;
     if (!fairy || fairy.consumed) return;
     if (room.pearlPedestal) return; // already revealed
-    if (!this.player?.inventory?.includes('●')) return;
+    if (!this.hasIngredient('●')) return;
 
     const CS = GRID.CELL_SIZE;
     // Search dry-side cells (cols 12-16) for an open, non-water spot near
