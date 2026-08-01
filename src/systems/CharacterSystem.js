@@ -1,5 +1,6 @@
 import { CharacterNPC } from '../entities/CharacterNPC.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
+import { TRAINING_TECHNIQUES } from '../data/items.js';
 import { GRID, NPC_INTERACTION_RANGE } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Captive } from '../entities/Captive.js';
@@ -624,6 +625,13 @@ export class CharacterSystem {
     // Apply weapon affinities
     game.player.weaponAffinities = charData.weaponAffinities;
 
+    // Point the player at this character's Weapons Master training map. It's a
+    // live reference, so training earned mid-run is visible to Item.js without
+    // a second write — but the player is rebuilt across rooms and swaps, which
+    // is why it is re-pointed here rather than copied once.
+    game.player.trainedWeapons =
+      game.inventorySystem?.characterInventories?.[type]?.trainedWeapons || null;
+
     // Store character type and apply character-specific properties
     game.player.characterType = type;
     game.player.actionCooldownMax = charData.actionCooldownMax || 0;
@@ -670,10 +678,13 @@ export class CharacterSystem {
     if (game.player.wellDamageBlessed) baseBonus += 1; // red well coin blessing
 
     // Weapons Master training — permanent per-character, per-weapon-category bonus.
+    // Categories with a training technique (TRAINING_TECHNIQUES) traded the
+    // damage bonus away for that technique, so they add nothing here.
     const trained = game.inventorySystem?.characterInventories?.[game.activeCharacterType]?.trainedWeapons;
     const trainingBonus = (a) => {
       const category = a?.weaponSubtype || a?.weaponType;
-      return (trained && category && trained[category]) ? 1 : 0;
+      if (!trained || !category || !trained[category]) return 0;
+      return TRAINING_TECHNIQUES[category] ? 0 : 1;
     };
 
     if (Array.isArray(attack)) {

@@ -30,8 +30,9 @@ export function resolveWeaponCategory(weapon) {
 /**
  * WeaponsMaster — hut interior NPC who advises on the player's currently
  * equipped weapon and, for a coin, permanently trains that weapon's category
- * (+1 damage) for the current character. See WeaponsMasterSystem for the
- * paid training flow; this class only speaks (DialogueSystem).
+ * for the current character (+1 damage, or that category's training technique
+ * where one is defined). See WeaponsMasterSystem for the paid training flow;
+ * this class only speaks (DialogueSystem).
  */
 export class WeaponsMaster extends NeutralCharacter {
   constructor(x, y) {

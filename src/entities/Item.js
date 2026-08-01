@@ -1,5 +1,5 @@
 import { GRID, COLORS } from '../game/GameConfig.js';
-import { ITEMS, WEAPON_TYPES, resolveWeaponDefaults } from '../data/items.js';
+import { ITEMS, WEAPON_TYPES, TRAINING_TECHNIQUES, resolveWeaponDefaults } from '../data/items.js';
 
 /**
  * Carrier interface (duck-typed)
@@ -11,7 +11,8 @@ import { ITEMS, WEAPON_TYPES, resolveWeaponDefaults } from '../data/items.js';
  * createArrow, createSingleArrow) accept any object shaped like:
  *
  *   { position: {x,y}, facing: {x,y}, width, height, plane,
- *     weaponAffinities? (optional), equippedConsumables? (optional) }
+ *     weaponAffinities? (optional), equippedConsumables? (optional),
+ *     trainedWeapons? (optional) }
  *
  * Player entities fit this naturally. CampNPC also fits it so the companion can
  * borrow the full sword/bow/gun pipeline. Wand methods are NOT part of this
@@ -876,6 +877,19 @@ export class Item {
     }
   }
 
+  /**
+   * The Weapons Master technique this carrier has earned for the weapon's
+   * category, or null. Training is per-character and per-category; a category
+   * with a technique trades away the usual +1 damage to get it (see
+   * TRAINING_TECHNIQUES and CharacterSystem.applyGreenDamageModifier). Each
+   * pattern builder decides what its own technique means.
+   */
+  trainedTechnique(player) {
+    const subtype = this.data.weaponSubtype;
+    if (!subtype || !player?.trainedWeapons?.[subtype]) return null;
+    return TRAINING_TECHNIQUES[subtype] || null;
+  }
+
   createMeleeArc(player) {
     // 3-hit arc slash pattern (swords)
     const attacks = [];
@@ -1080,17 +1094,20 @@ export class Item {
     const baseAngle = Math.atan2(player.facing.y, player.facing.x);
     const distance = this.data.range ?? GRID.CELL_SIZE * 0.5;
     const patternSpeed = this.data.patternSpeed || 0.05;
-    // A stab is a single strike by default. `doubleHit` is the opt-in weapon
-    // variable that turns one swing into a two-stab combo — it is deliberately
-    // off on the base dagger, which stabs once like any other melee weapon.
-    const stabs = this.data.doubleHit ? 2 : 1;
+    // A stab is a single strike by default. `doubleHit` is the opt-in variable
+    // that turns one swing into a two-stab combo — deliberately off on the base
+    // dagger, which stabs once like any other melee weapon. A weapon can carry
+    // the flag in its own data, or the carrier can earn it for the whole
+    // category from the Weapons Master.
+    const subtype = this.data.weaponSubtype;
+    const stabs = (this.data.doubleHit || this.trainedTechnique(player) === 'doubleHit') ? 2 : 1;
     // Both stabs of a double-hit share one burst id so the follow-up lands
     // inside the enemy iframes the first stab opened (same mechanism the
     // multi-bullet weapons use). Without it the second stab is cosmetic.
     const attackId = stabs > 1 ? `burst_${_nextAttackId++}` : undefined;
 
     // Daggers benefit from oil augments (onHit override only — speed is bow-specific)
-    const isDagger = this.data.weaponSubtype === 'dagger';
+    const isDagger = subtype === 'dagger';
     const oilOnHit = isDagger ? _readEquippedOilEffect(player).onHit : null;
 
     const relX = Math.cos(baseAngle) * distance;
@@ -1134,6 +1151,13 @@ export class Item {
     const patternSpeed = this.data.patternSpeed || 0.02;
     const reach = 5;
 
+    // What a plain whip does is take the weapon out of their hands (`disarm`);
+    // it applies no status effect of its own. The stun is the whip category's
+    // Weapons Master technique, earned in place of the usual +1 damage — and a
+    // gem whip's own onHit (burn/freeze/poison/stun) always wins over it.
+    const onHit = this.data.onHit
+      || (this.trainedTechnique(player) === 'stun' ? 'stun' : undefined);
+
     const whipChar = this.data.meleeChar || '~';
     const whipDrawAngle = this.getMeleeDrawAngle(whipChar, baseAngle);
     for (let i = 1; i <= reach; i++) {
@@ -1153,7 +1177,9 @@ export class Item {
         duration: 0.08,
         delay: (i - 1) * patternSpeed,
         color: this.color,
-        onHit: this.data.onHit,
+        onHit,
+        electric: this.data.electric,
+        disarm: this.data.disarm,
         knockback: this.data.knockback || 300,
         owner: player,
         shooterPlane: player.plane

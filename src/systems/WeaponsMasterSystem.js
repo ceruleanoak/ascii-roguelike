@@ -1,16 +1,26 @@
 import { GRID } from '../game/GameConfig.js';
 import { WeaponsMaster, resolveWeaponCategory } from '../entities/WeaponsMaster.js';
+import { TRAINING_TECHNIQUES } from '../data/items.js';
 
 const COIN_ARC_DURATION = 0.55; // matches the well/camp-NPC/fisherman coin arcs
+
+// How each training technique reads back to the player on the training message.
+const TRAINING_TECHNIQUE_LABELS = {
+  doubleHit: 'DOUBLE HIT',
+  stun: 'STUN LASH'
+};
 
 /**
  * WeaponsMasterSystem — the hut Weapons Master's paid training.
  *
  * SPACE near the hut WeaponsMaster (after advice has been heard once) spends
  * a wallet coin to permanently train the player's currently held weapon
- * category (+1 damage), for the active character only, once per category per
- * character. See CharacterSystem.applyGreenDamageModifier for where the
- * bonus is actually applied.
+ * category, for the active character only, once per category per character.
+ *
+ * Training grants +1 damage by default — see CharacterSystem.applyGreenDamageModifier
+ * for where that bonus is applied. Categories listed in TRAINING_TECHNIQUES get
+ * that category's technique instead of the damage: the dagger earns `doubleHit`
+ * (Item.createMeleeMultistab), the whip earns `stun` (Item.createMeleeWhipcrack).
  */
 export class WeaponsMasterSystem {
   constructor(game) {
@@ -89,10 +99,14 @@ export class WeaponsMasterSystem {
     if (entry) {
       if (!entry.trainedWeapons) entry.trainedWeapons = {};
       entry.trainedWeapons[category] = true;
+      // The player holds a live reference to this map (CharacterSystem points
+      // it there). Re-point it in case the guard above created a fresh one.
+      if (game.player) game.player.trainedWeapons = entry.trainedWeapons;
     }
 
+    const reward = TRAINING_TECHNIQUE_LABELS[TRAINING_TECHNIQUES[category]] || '+1 DAMAGE';
     game.audioSystem?.playSFX?.('coin_plink');
-    game.menuSystem?.showPickupMessage?.(`TRAINED IN ${category.toUpperCase()}. +1 DAMAGE.`);
+    game.menuSystem?.showPickupMessage?.(`TRAINED IN ${category.toUpperCase()}. ${reward}.`);
     game.dialogueSystem?.open(master, ['TRAINED.']);
   }
 }
