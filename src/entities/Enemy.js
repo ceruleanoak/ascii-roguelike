@@ -16,7 +16,7 @@ export const EFFECT_AFFINITY = {
 import { Item } from './Item.js';
 import { attachTelegraph, meleeAimOffset } from '../game/Telegraph.js';
 import { inSamePlane, planeOf, objectOnPlane } from '../systems/PlaneSystem.js';
-import { hasLineOfSight, getVisionObstructionPoint, hasVision, isTargetInTallGrass, spineCanSee } from './enemyVision.js';
+import { hasLineOfSight, getVisionObstructionPoint, hasVision, spineCanSee } from './enemyVision.js';
 import { EXIT_SLOT_POSITIONS } from '../systems/ExitSystem.js';
 import { LureMechanic } from './enemyMechanics/LureMechanic.js';
 import { ParryMechanic } from './enemyMechanics/ParryMechanic.js';
@@ -43,8 +43,7 @@ import { RiseAgainMechanic } from './enemyMechanics/RiseAgainMechanic.js';
 import { PatrolMechanic } from './enemyMechanics/PatrolMechanic.js';
 import { GameAnimalMechanic } from './enemyMechanics/GameAnimalMechanic.js';
 import { SniperMechanic } from './enemyMechanics/SniperMechanic.js';
-import { updateMovement, updateWanderMovement, applyWindupMovement } from './enemyMovement.js';
-import { EnemyStateMachine, SPINE, legacyStateFor } from './EnemyStateMachine.js';
+import { EnemyStateMachine, legacyStateFor } from './EnemyStateMachine.js';
 import { statesFor } from '../data/stateDefaults.js';
 
 // ─── Enemy AI Debug Logger ─────────────────────────────────────────────────
@@ -318,11 +317,7 @@ export class Enemy {
       this.state = 'rest'; // Ambushers start dormant
     }
 
-    // The State spine. Built for every enemy whether or not SPINE.enabled reads
-    // it, because the parity harness flips the flag between runs on an enemy that
-    // is already constructed — a machine built lazily on first use would start
-    // from a different State than one built at spawn, and the traces would
-    // diverge for that reason rather than a real one.
+    // The State spine — every enemy's AI, from spawn.
     this.stateMachine = new EnemyStateMachine(this, statesFor(this.data));
 
     if (ShellFormMechanic.isEnabled(this)) ShellFormMechanic.init(this);
@@ -931,434 +926,27 @@ export class Enemy {
       }
     }
 
-    // AI behavior — the State spine, or the legacy ladder below it.
-    //
-    // The two are mutually exclusive and the ladder is untouched, so parity is
-    // diffable: the harness runs the same enemy down each side and compares the
-    // traces. The ladder goes when the diff is empty, not before.
-    if (SPINE.enabled) {
-      this.stateMachine.update(this, deltaTime, {
-        distance,
-        effectiveDistance,
-        effectiveAggroRange,
-        effectiveVisionLength,
-        canSee: spineCanSee(this, this.stateMachine.current, this.target.position, effectiveVisionLength),
-        // Deciding to swing is not the same question as deciding to give chase,
-        // and the roster depends on the difference: facing is a detection
-        // concept, so a keeper that sidesteps perpendicular to its target would
-        // never once be facing it at the moment it is finally in range. Both
-        // checks are carried because both are asked.
-        canStrike: this.hasVision(this.position, this.target.position, effectiveVisionLength, { ignoreCone: true }),
-        samePlane: inSamePlane(this, this.target),
-        speedMultiplier,
-        deltaTime,
-        targetPos: this.target.position,
-      });
-      // Everything still reading `enemy.state` — the renderer's indicator picker,
-      // TrailMechanic, Telegraph — keeps working through the translation.
-      this.state = legacyStateFor(this.stateMachine, this);
-    } else if (effectiveDistance > effectiveAggroRange && !this.enraged) {
-      // Player left aggro range - activate memory mode if we have a last known position
-      if (this.lastKnownPosition && !this.aggroMemoryActive) {
-        // Cancel the mark if it is now beyond vision range (e.g. enemy was knocked far away).
-        // Pack members are exempt — they receive marks via communication, not direct sight.
-        const markDx = this.lastKnownPosition.x - this.position.x;
-        const markDy = this.lastKnownPosition.y - this.position.y;
-        const markDist = Math.sqrt(markDx * markDx + markDy * markDy);
-        this.memoryMarkSuspected = markDist > effectiveVisionLength;
-        EnemyDebug.log(this, 'MEMORY', 'Activating memory mode — player left aggro range', {
-          distToPlayer: distance.toFixed(1),
-          aggroRange: effectiveAggroRange,
-          suspected: this.memoryMarkSuspected,
-          memoryMark: { x: this.lastKnownPosition.x.toFixed(1), y: this.lastKnownPosition.y.toFixed(1) }
-        });
-        this.aggroMemoryActive = true;
-        this.memoryChaseTimer = 5.0; // Give up if mark unreachable within 5 seconds
-        this.memoryMoveDelayTimer = this.memoryMoveDelay; // Start delay timer
-        this.memoryMarkPlane = this.plane; // Track enemy's plane so stale timer fires if player goes underground
-        this.memoryStaleTimer = 2.0;
-        // Reset cached direction to force immediate recalculation towards memory mark
-        this.currentDirection = { x: 0, y: 0 };
-
-        // Only share confirmed marks with packmates — suspected marks are not communicated
-        if (!this.memoryMarkSuspected && this.packmates && this.packmates.length > 0) {
-          for (const mate of this.packmates) {
-            mate.target = this.target; // Share player target
-            mate.lastKnownPosition = { x: this.lastKnownPosition.x, y: this.lastKnownPosition.y };
-            mate.aggroMemoryActive = true;
-            mate.memoryChaseTimer = 5.0;
-            mate.memoryMoveDelayTimer = this.memoryMoveDelay;
-            mate.memoryMarkPlane = this.memoryMarkPlane;
-            mate.memoryStaleTimer = 2.0;
-            mate.currentDirection = { x: 0, y: 0 };
-            mate.enraged = true; // Pack member becomes enraged when pack detects player
-            mate.state = 'chase'; // Ensure chase state is set
-          }
-        }
-      }
-
-      // Pursue memory mark
-      if (this.aggroMemoryActive && this.lastKnownPosition) {
-        // Periodically check if player is back in range and visible (decision-based)
-        if (this.decisionTimer <= 0) {
-          // If player is within aggro range again, check if we can see them
-          if (distance <= effectiveAggroRange) {
-            const canSeePlayer = this.hasVision(this.position, this.target.position, effectiveVisionLength);
-            if (canSeePlayer) {
-              EnemyDebug.log(this, 'MEMORY', 'Reacquired player — exiting memory mode', {
-                distToPlayer: distance.toFixed(1)
-              });
-              // Regained vision - exit memory mode and resume normal chase
-              this.aggroMemoryActive = false;
-              this.memoryMarkSuspected = false;
-              this.memoryMoveDelayTimer = 0; // Reset delay timer
-              this.lastKnownPosition = { x: this.target.position.x, y: this.target.position.y };
-              this.state = 'chase';
-              // Show detection indicator (reacquired target!)
-              this.detectionIndicatorTimer = this.detectionIndicatorDuration;
-
-              // Share reacquisition with packmates (pack coordination)
-              if (this.packmates && this.packmates.length > 0) {
-                for (const mate of this.packmates) {
-                  mate.target = this.target; // Share player target
-                  mate.lastKnownPosition = { x: this.target.position.x, y: this.target.position.y };
-                  mate.detectionIndicatorTimer = this.detectionIndicatorDuration;
-                  mate.aggroMemoryActive = false;
-                  mate.memoryMoveDelayTimer = 0;
-                  mate.currentDirection = { x: 0, y: 0 };
-                  mate.enraged = true;
-                  mate.state = 'chase'; // Ensure chase state is set
-                }
-              }
-            }
-          }
-        }
-
-        // Continue pursuing memory mark if still in memory mode
-        if (this.aggroMemoryActive) {
-          const memDx = this.lastKnownPosition.x - this.position.x;
-          const memDy = this.lastKnownPosition.y - this.position.y;
-          const memDistance = Math.sqrt(memDx * memDx + memDy * memDy);
-
-          // Tick down memory move delay timer
-          if (this.memoryMoveDelayTimer > 0) {
-            this.memoryMoveDelayTimer -= deltaTime;
-            // Stand still during delay
-            this.targetVelocity.vx = 0;
-            this.targetVelocity.vy = 0;
-            this.state = 'chase';
-          } else {
-            // Delay elapsed - start moving
-
-            // Tick down the stuck-guard timer; give up if it expires
-            this.memoryChaseTimer -= deltaTime;
-            if (this.memoryChaseTimer <= 0) {
-              this.aggroMemoryActive = false;
-              this.lastKnownPosition = null;
-              this.memoryMoveDelayTimer = 0;
-              this.memoryChaseTimer = 0;
-              this.state = 'idle';
-              this.enraged = false;
-              this._resetPackMemory();
-            // Reached the mark — linger and search until memoryChaseTimer expires.
-            // Abandoning on arrival made the timer meaningless when the mark was placed
-            // close to the enemy (the common case when vision is briefly lost).
-            } else if (memDistance < GRID.CELL_SIZE) {
-              // Reached the mark — wander while the search timer ticks down.
-              // Stationary enemies still hold position; everyone else drifts.
-              this.state = 'idle';
-              updateWanderMovement(this, speedMultiplier, deltaTime);
-            } else {
-              // Chase to memory mark using vector navigation
-              this.state = 'chase';
-              if (this.collisionMap) {
-                this.updateVectorNavigation(speedMultiplier, this.lastKnownPosition, deltaTime);
-              } else {
-                const dirX = memDx / memDistance;
-                const dirY = memDy / memDistance;
-                this.targetVelocity.vx = dirX * this.speed * speedMultiplier;
-                this.targetVelocity.vy = dirY * this.speed * speedMultiplier;
-              }
-            }
-          }
-        }
-      } else {
-        // Too far and not enraged, no memory - passive idle behavior
-        this.state = 'idle';
-        updateWanderMovement(this, speedMultiplier, deltaTime);
-      }
-    } else if (this.state === 'windup') {
-      applyWindupMovement(this, speedMultiplier);
-    } else if ((this.attackType === 'melee' || this.attackType === 'item_melee') && effectiveDistance < this.attackRange && this.attackTimer > 0 && (this.enraged || effectiveDistance <= effectiveAggroRange)) {
-      // Player is inside melee AOE range while on cooldown — back away so the next
-      // attack hits. The enemy retreats until it reaches its natural attack distance.
-      // Applies to enemies wielding a picked-up melee weapon (item_melee) too:
-      // without this they creep into point-blank overlap, where the swing arc
-      // (offset by weapon range in the facing direction) overshoots and whiffs.
-      this.state = 'chase';
-      const dirX = dx / distance;
-      const dirY = dy / distance;
-      this.targetVelocity.vx = -dirX * this.speed * speedMultiplier * 0.5;
-      this.targetVelocity.vy = -dirY * this.speed * speedMultiplier * 0.5;
-    } else if (effectiveDistance <= this.attackRange && this.attackTimer <= 0) {
-      // CRITICAL: Can only attack if aggro'd (enraged) OR within aggro range
-      const isAggrod = this.enraged || effectiveDistance <= effectiveAggroRange;
-
-      if (isAggrod) {
-        // In range and aggro'd - check vision before attacking.
-        // ignoreCone=true: facing direction is for detection, not attack decisions.
-        // Keeper enemies sidestep perpendicular to the player and would never attack with cone on.
-        const canSeeTarget = this.hasVision(this.position, this.target.position, effectiveVisionLength, { ignoreCone: true });
-
-        if (canSeeTarget && this.state !== 'windup' && this.state !== 'attack') {
-          this.state = 'windup';
-          this.windupTimer = this.attackWindup;
-          // Total for this windup, captured once at the start so the crit
-          // window (back half only) can scale to it as windupTimer counts down.
-          this.windupDuration = this.attackWindup;
-          // Snapshot target position at windup start so attacks aim at where
-          // the player WAS, not where they are when the windup completes.
-          this.markedTargetPosition = { x: this.target.position.x, y: this.target.position.y };
-          this.targetVelocity.vx = 0;
-          this.targetVelocity.vy = 0;
-        } else if (!canSeeTarget) {
-          // Can't see target (wrong plane or obstructed) - go into memory/chase mode
-          // Let the chase logic below handle it
-          // Do nothing here, fall through to chase condition
-        }
-      }
-      // If not aggro'd, don't attack - fall through to other behaviors
-    } else if ((effectiveDistance > this.attackRange && effectiveDistance <= effectiveAggroRange) || (this.enraged && effectiveDistance > this.attackRange)) {
-      // Within aggro range OR enraged and outside attack range
-      // But first check if we're on the same plane - can't chase across planes unless already enraged/memory
-      const onSamePlane = inSamePlane(this, this.target);
-      const canChase = onSamePlane || this.enraged || this.aggroMemoryActive;
-      // Hoisted so it's in scope for the memory-vs-direct-chase branch below
-      const canSeePlayer = canChase && this.hasVision(this.position, this.target.position, effectiveVisionLength);
-      // Hoisted so it's accessible to all movement branches below (memory, chase, idle fallback)
-      const wasIdle = this.state === 'idle';
-
-      if (!canChase) {
-        // Different plane and not already chasing - remain idle
-        this.state = 'idle';
-      } else {
-        // Can chase - either same plane, or already aggro'd/memory from before
-        const wasInMemoryMode = this.aggroMemoryActive;
-        this.state = 'chase';
-
-        EnemyDebug.log(this, 'AI', 'In-range branch entered', {
-          wasIdle, canSeePlayer, aggroMemoryActive: this.aggroMemoryActive,
-          enraged: this.enraged, lastKnownPosition: !!this.lastKnownPosition,
-          hadVisualContact: this.hadVisualContact,
-          effectiveDistance: effectiveDistance.toFixed(1), aggroRange: effectiveAggroRange
-        });
-
-        if (canSeePlayer) {
-          // Vision is clear - update last known position and deactivate memory
-          this.lastKnownPosition = { x: this.target.position.x, y: this.target.position.y };
-
-          // Check if this is a NEW detection (transition from not detecting to detecting)
-          const isNewDetection = this.detectionIndicatorTimer <= 0;
-
-          if (isNewDetection) {
-            EnemyDebug.log(this, 'AGGRO', 'New detection — player spotted in aggro range', {
-              distToPlayer: distance.toFixed(1),
-              aggroRange: this.aggroRange,
-              enraged: this.enraged
-            });
-          }
-
-          this.hadVisualContact = true; // confirmed sighting — enable vision-only re-aggro
-          // Always refresh detection indicator when player is in sight (ensures ! overrides ?)
-          this.detectionIndicatorTimer = this.detectionIndicatorDuration;
-
-          // Flag for aggro SFX
-          if (isNewDetection) {
-            justAggrod = true;
-          }
-
-          this.aggroMemoryActive = false;
-          this.memoryMarkSuspected = false;
-          this.memoryMoveDelayTimer = 0; // Reset delay timer
-
-          // Share NEW detection with packmates (pack coordination)
-          if (isNewDetection && this.packmates && this.packmates.length > 0) {
-            for (const mate of this.packmates) {
-              mate.target = this.target; // Share player target
-              mate.lastKnownPosition = { x: this.target.position.x, y: this.target.position.y };
-              mate.detectionIndicatorTimer = this.detectionIndicatorDuration;
-              mate.aggroMemoryActive = false;
-              mate.memoryMoveDelayTimer = 0;
-              mate.currentDirection = { x: 0, y: 0 };
-              mate.enraged = true;
-              mate.state = 'chase'; // Ensure chase state is set
-            }
-          }
-
-        } else {
-          // Lost vision - activate memory mode if not already active
-          if (this.lastKnownPosition && !this.aggroMemoryActive) {
-            // TRANSITION: Just lost vision — lead the mark by the player's current velocity
-            // so it lands "in front of" a fleeing player rather than at their exact
-            // disappearance pixel. Cap the lead so high-speed states don't fling the mark
-            // an unreasonable distance.
-            const _lookahead = 0.35;
-            const _maxLead = GRID.CELL_SIZE * 4;
-            const _tvx = this.target.velocity ? this.target.velocity.vx : 0;
-            const _tvy = this.target.velocity ? this.target.velocity.vy : 0;
-            let _leadX = _tvx * _lookahead;
-            let _leadY = _tvy * _lookahead;
-            const _leadMag = Math.sqrt(_leadX * _leadX + _leadY * _leadY);
-            if (_leadMag > _maxLead) {
-              _leadX = (_leadX / _leadMag) * _maxLead;
-              _leadY = (_leadY / _leadMag) * _maxLead;
-            }
-            this.lastKnownPosition = {
-              x: this.target.position.x + _leadX,
-              y: this.target.position.y + _leadY,
-            };
-            EnemyDebug.log(this, 'MEMORY', 'Lost vision — activating memory mode (in-range branch)', {
-              distToPlayer: distance.toFixed(1),
-              aggroRange: this.aggroRange,
-              memoryMark: { x: this.lastKnownPosition.x.toFixed(1), y: this.lastKnownPosition.y.toFixed(1) },
-              lead: { x: _leadX.toFixed(1), y: _leadY.toFixed(1) }
-            });
-            // Track the player's plane at mark creation so the stale timer only fires
-            // if the player subsequently changes planes (not while enemy is crossing).
-            this.memoryMarkPlane = this.target.plane;
-            this.memoryStaleTimer = 2.0;
-
-            this.aggroMemoryActive = true;
-            this.memoryChaseTimer = 5.0;
-            this.memoryMoveDelayTimer = this.memoryMoveDelay; // Start delay timer
-            // Reset cached direction to force immediate recalculation towards memory mark
-            this.currentDirection = { x: 0, y: 0 };
-
-            // Share memory mark with all packmates (pack communication)
-            if (this.packmates && this.packmates.length > 0) {
-              for (const mate of this.packmates) {
-                mate.target = this.target; // Share player target
-                mate.lastKnownPosition = { x: this.lastKnownPosition.x, y: this.lastKnownPosition.y };
-                mate.aggroMemoryActive = true;
-                mate.memoryChaseTimer = 5.0;
-                mate.memoryMoveDelayTimer = this.memoryMoveDelay;
-                mate.memoryMarkPlane = this.memoryMarkPlane;
-                mate.memoryStaleTimer = 2.0;
-                mate.currentDirection = { x: 0, y: 0 };
-                mate.enraged = true; // Pack member becomes enraged when pack detects player
-                mate.state = 'chase'; // Ensure chase state is set
-              }
-            }
-          }
-          // If already in memory mode, do nothing here - keep pursuing the existing memory mark
-          else if (!this.lastKnownPosition && !this.hadVisualContact) {
-            // Never had vision of player (spawned blind behind a wall) — sense by proximity only.
-            // Guarded by hadVisualContact: once an enemy has actually seen the player it must
-            // re-acquire through vision, not proximity, to prevent oscillation after reaching
-            // a stale memory mark and immediately setting a new one at the player's current spot.
-            if (distance <= effectiveAggroRange && inSamePlane(this, this.target)) {
-              const closeRange = GRID.CELL_SIZE * 3;
-              if (isTargetInTallGrass(this) && distance > closeRange) {
-                // Player is hidden in tall grass — idle enemies can't detect by proximity alone.
-                // Exception: within close range the player is too near to hide (can't conceal yourself
-                // from something standing right next to you).
-                this.state = 'idle';
-              } else {
-                this.lastKnownPosition = { x: this.target.position.x, y: this.target.position.y };
-                this.aggroMemoryActive = true;
-                this.memoryChaseTimer = 5.0;
-                this.memoryMoveDelayTimer = this.memoryMoveDelay; // Start delay timer
-                this.memoryMarkPlane = this.plane;
-                this.memoryStaleTimer = 2.0;
-                // Reset cached direction to force immediate recalculation towards memory mark
-                this.currentDirection = { x: 0, y: 0 };
-              }
-            }
-          } else {
-            // No vision, no memory mark, and proximity detection is gated off (hadVisualContact).
-            // Nothing to pursue — go idle rather than freezing in chase state.
-            // Only zero velocity if we were actively chasing; don't interrupt natural idle behavior.
-            this.state = 'idle';
-            if (!wasIdle) {
-              this.targetVelocity.vx = 0;
-              this.targetVelocity.vy = 0;
-            }
-          }
-        }
-      }
-
-      // Check if pursuing memory mark while within aggro range
-      if (this.aggroMemoryActive && this.lastKnownPosition) {
-        // Calculate distance to memory mark
-        const memDx = this.lastKnownPosition.x - this.position.x;
-        const memDy = this.lastKnownPosition.y - this.position.y;
-        const memDistance = Math.sqrt(memDx * memDx + memDy * memDy);
-
-        // Tick down memory move delay timer
-        if (this.memoryMoveDelayTimer > 0) {
-          this.memoryMoveDelayTimer -= deltaTime;
-          // Stand still during delay
-          this.targetVelocity.vx = 0;
-          this.targetVelocity.vy = 0;
-          this.state = 'chase';
-        } else {
-          // Delay elapsed - start moving / search
-
-          // Tick the chase timer here too so the mark expires after ~5s whether
-          // or not the enemy ever crosses out of aggro range. Path A (out of
-          // aggro range) was the only ticker, leaving this branch silent.
-          this.memoryChaseTimer -= deltaTime;
-          if (this.memoryChaseTimer <= 0) {
-            this.aggroMemoryActive = false;
-            this.memoryMarkSuspected = false;
-            this.lastKnownPosition = null;
-            this.memoryMoveDelayTimer = 0;
-            this.memoryChaseTimer = 0;
-            this.state = 'idle';
-            this.targetVelocity.vx = 0;
-            this.targetVelocity.vy = 0;
-            this.enraged = false;
-            this._resetPackMemory();
-          } else if (memDistance < GRID.CELL_SIZE) {
-            // Reached the mark — linger and search until the timer expires.
-            this.state = 'chase';
-            this.targetVelocity.vx = 0;
-            this.targetVelocity.vy = 0;
-          } else {
-            // Still pursuing memory mark
-            if (this.collisionMap) {
-              this.updateVectorNavigation(speedMultiplier, this.lastKnownPosition, deltaTime);
-            } else {
-              const dirX = memDx / memDistance;
-              const dirY = memDy / memDistance;
-              this.targetVelocity.vx = dirX * this.speed * speedMultiplier;
-              this.targetVelocity.vy = dirY * this.speed * speedMultiplier;
-            }
-          }
-        }
-      } else if (canSeePlayer) {
-        // Direct chase — dispatch through movement archetype
-        updateMovement(this, speedMultiplier, this.target.position, deltaTime);
-      } else {
-        // In aggro range but can't see player and no memory mark — stop and wait.
-        // Only zero velocity on transition from chase; preserve natural idle movement.
-        EnemyDebug.log(this, 'STATE', 'No vision, no memory — going idle', {
-          wasIdle, canSeePlayer, aggroMemoryActive: this.aggroMemoryActive,
-          lastKnownPosition: !!this.lastKnownPosition, hadVisualContact: this.hadVisualContact
-        });
-        this.state = 'idle';
-        if (!wasIdle) {
-          this.targetVelocity.vx = 0;
-          this.targetVelocity.vy = 0;
-        }
-      } // Close the canChase else block
-    } // Close the aggro range else if block
-    else {
-      // Between attack range and aggro range, but conditions not met
-      this.state = 'idle';
-      this.targetVelocity.vx = 0;
-      this.targetVelocity.vy = 0;
-    }
+    // AI behavior — the State spine.
+    this.stateMachine.update(this, deltaTime, {
+      distance,
+      effectiveDistance,
+      effectiveAggroRange,
+      effectiveVisionLength,
+      canSee: spineCanSee(this, this.stateMachine.current, this.target.position, effectiveVisionLength),
+      // Deciding to swing is not the same question as deciding to give chase,
+      // and the roster depends on the difference: facing is a detection
+      // concept, so a keeper that sidesteps perpendicular to its target would
+      // never once be facing it at the moment it is finally in range. Both
+      // checks are carried because both are asked.
+      canStrike: this.hasVision(this.position, this.target.position, effectiveVisionLength, { ignoreCone: true }),
+      samePlane: inSamePlane(this, this.target),
+      speedMultiplier,
+      deltaTime,
+      targetPos: this.target.position,
+    });
+    // Everything still reading `enemy.state` — the renderer's indicator picker,
+    // TrailMechanic, Telegraph — keeps working through the translation.
+    this.state = legacyStateFor(this.stateMachine, this);
 
     // Cut grass when searching with blade weapons
     if (this.aggroMemoryActive && this.backgroundObjects && this.equippedWeapon) {
@@ -3028,6 +2616,16 @@ export class Enemy {
       // grabbed a melee weapon kept their original (slower) chase speed and
       // were trivially kited.
       this.speed = this._baseSpeed * 1.3;
+      // The state machine's declared States are fixed at construction from
+      // this enemy's original archetype (stateDefaults.js), so a kiter/jumper/
+      // ambusher whose native attack isn't melee was never given a Recover —
+      // there was nothing to overlap and whiff on. Now that it is wielding a
+      // swung weapon, it needs the exact same overlap protection a born
+      // melee enemy gets, and there is no later point that re-derives
+      // declared States to pick it up on its own.
+      if (!this.stateMachine.has('recover')) {
+        this.stateMachine.declared.recover = { duration: 0.4, variant: 'retreat', speed: 0.5 };
+      }
     }
   }
 

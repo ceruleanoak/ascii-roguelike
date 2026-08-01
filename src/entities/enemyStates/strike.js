@@ -35,7 +35,7 @@ export default {
     // swap which attack lands.
     machine.band = pickBand(cfg.bands, ctx.effectiveDistance);
     machine.struck = false;
-    enemy.windupTimer = machine.band?.windup ?? enemy.attackWindup;
+    enemy.windupTimer = machine.band?.windup ?? enemy.attackWindup ?? 0;
     // Total for this windup, captured once at entry so Enemy.isInCritWindow()
     // can scale the guaranteed-crit back half to it as windupTimer counts down.
     enemy.windupDuration = enemy.windupTimer;
@@ -49,8 +49,7 @@ export default {
 
     // `windupTimer` is ticked by Enemy.update() above the spine call, so Strike
     // must not tick it too — doing both retires the opening beat a frame early
-    // and every telegraph reads short. The tick moves in here when the legacy
-    // ladder goes; until then the countdown has exactly one owner.
+    // and every telegraph reads short. The countdown has exactly one owner.
 
     // The enemy plants its feet before it swings. `machine.timer` is exactly 0
     // only on the frame Strike was entered, so this is that frame and no other:
@@ -93,7 +92,7 @@ export default {
     // The whole event is over once the windup and the attack's own duration have
     // both elapsed. Recover is skipped when undeclared, resolving to Approach,
     // which is what every enemy does today.
-    const total = (machine.band?.windup ?? enemy.attackWindup) + (cfg.duration ?? 0);
+    const total = (machine.band?.windup ?? enemy.attackWindup ?? 0) + (cfg.duration ?? 0);
     if (machine.timer < total) return null;
     return { id: 'recover', cause: 'strike complete' };
   },

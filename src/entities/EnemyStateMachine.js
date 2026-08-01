@@ -13,22 +13,17 @@
 // the enemyStates/ filenames — and nothing outside this directory references them
 // yet, so renaming is a find-and-replace plus the glossary.
 //
-// `SPINE.enabled` is true — this is the live path. It flipped on once Recover
-// grew real timed variants (enemyStates/recover.js): the legacy ladder's melee
-// back-off was a bare distance flip with no minimum-commit timer, which is the
-// Chase-state waggle bug, and the fix belongs here, not in the ladder. Pre-Strike
-// motion is certified identical to the legacy ladder by the parity harness,
-// with one deliberate exception: Approach and Search used to hand off to each
-// other every single frame once engaged, because canSee's facing cone (a
-// detection concept) was still gating contact a keeper had already made — a
-// keeper strafing to hold its band constantly drags its velocity-derived facing
-// off the player, failing the cone on alternating frames forever. `spineCanSee`
-// (enemyVision.js) now ignores the cone once a State from Approach through
-// Recover already has the target. The legacy ladder's own `canSeePlayer` has the
-// identical cone check and was never given the same fix, so the two paths now
-// legitimately diverge pre-Strike for keeper-heavy enemies — that divergence is
-// also the fix, not a regression. Post-Strike cadence is expected to differ now
-// for every melee enemy on top of that.
+// This is the only AI path — the legacy `if/else if` ladder it replaced in
+// Enemy.js is deleted, certified pre-Strike-identical by the (now-retired)
+// fsm-parity harness with one deliberate exception, kept here because it is the
+// reason `spineCanSee` exists: a keeper sidestepping perpendicular to its target
+// to hold a preferred-range band constantly drags its velocity-derived facing
+// off the player, failing the ladder's cone check on alternating frames forever
+// and handing off between Approach and Search every single frame once engaged.
+// `spineCanSee` (enemyVision.js) ignores the cone once a State from Approach
+// through Recover already has the target — facing is a detection concept, and
+// once contact is made, continued contact should not depend on which way the
+// enemy happens to be moving.
 import dormant from './enemyStates/dormant.js';
 import alert from './enemyStates/alert.js';
 import approach from './enemyStates/approach.js';
@@ -37,12 +32,6 @@ import strike from './enemyStates/strike.js';
 import recover from './enemyStates/recover.js';
 import search from './enemyStates/search.js';
 import withdraw from './enemyStates/withdraw.js';
-
-// An object rather than a bare boolean so the parity harness can flip it between
-// runs and drive the same Enemy down both paths. A module const would have to be
-// read at import time, which makes A/B-ing one enemy impossible — and A/B-ing one
-// enemy is the only way to prove the two paths agree.
-export const SPINE = { enabled: true };
 
 // What the spine's current State looks like to everything still reading
 // `enemy.state`: ExploreRenderer's indicator picker, TrailMechanic, Telegraph.

@@ -8,7 +8,6 @@ import { PhysicsSystem } from '../../../src/systems/PhysicsSystem.js';
 import { ENEMIES } from '../../../src/data/enemies.js';
 import { GRID, PHYSICS } from '../../../src/game/GameConfig.js';
 import { updateEnemyMeleeAttack, resolveEnemyAttack, attackHitsBox, retireAfterTest, drawTelegraph } from '../../../src/game/Telegraph.js';
-import { SPINE } from '../../../src/entities/EnemyStateMachine.js';
 
 const CELL = GRID.CELL_SIZE;
 const FONT = "px 'Unifont', monospace";
@@ -210,26 +209,16 @@ export class Sandbox {
     }
     if (e.isWindingUp() || e.state === 'attack') return; // already committed
 
-    if (SPINE.enabled) {
-      // Poking `e.state`/`e.windupTimer` directly (the legacy approach below)
-      // gets stomped the very next frame: Enemy.update() rewrites `state` from
-      // `stateMachine.current` every tick under the spine, so the only way to
-      // force a windup is to force the machine itself into Strike. `dx`, `dy`
-      // are what Strike.enter's band picker reads as ctx.effectiveDistance —
-      // an approximation (no status/terrain modifiers applied), fine for a
-      // manual editor trigger.
-      const dx = e.position.x - this.player.position.x;
-      const dy = e.position.y - this.player.position.y;
-      const ok = e.stateMachine.transition(e, { effectiveDistance: Math.hypot(dx, dy), targetPos: this.player.position }, 'strike', 'manual trigger (editor)');
-      if (!ok) this.onNotice?.('strike not declared for this enemy');
-      return;
-    }
-    e.state = 'windup';
-    e.windupTimer = e.attackWindup;
-    e.attackTimer = 0;
-    e.markedTargetPosition = { x: this.player.position.x, y: this.player.position.y };
-    e.targetVelocity.vx = 0;
-    e.targetVelocity.vy = 0;
+    // Poking `e.state`/`e.windupTimer` directly gets stomped the very next
+    // frame: Enemy.update() rewrites `state` from `stateMachine.current` every
+    // tick, so the only way to force a windup is to force the machine itself
+    // into Strike. `dx`, `dy` are what Strike.enter's band picker reads as
+    // ctx.effectiveDistance — an approximation (no status/terrain modifiers
+    // applied), fine for a manual editor trigger.
+    const dx = e.position.x - this.player.position.x;
+    const dy = e.position.y - this.player.position.y;
+    const ok = e.stateMachine.transition(e, { effectiveDistance: Math.hypot(dx, dy), targetPos: this.player.position }, 'strike', 'manual trigger (editor)');
+    if (!ok) this.onNotice?.('strike not declared for this enemy');
   }
 
   // One real frame of simulation regardless of pause state — the "single-frame
@@ -430,9 +419,7 @@ export class Sandbox {
   }
 
   // Fired every draw (so it keeps reporting while paused) with the main
-  // enemy's live State-spine readout. `thresholds()` is safe to call whether
-  // or not SPINE.enabled — Enemy always builds a stateMachine from its declared
-  // states, spine flag or not.
+  // enemy's live State-spine readout.
   reportState() {
     if (!this.onStateChange) return;
     const e = this.enemies[0];

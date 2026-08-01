@@ -220,10 +220,9 @@ programming terms.
   `chaser`/`keeper` archetypes (the fix for the Chase-state waggle), opt-in for any archetype
   via `data.recover`.
 - **Not:** Recovery, the Weapon Timing phase (`items.js` `recovery` field — a weapon-data
-  cooldown-after-impact value). **These are two different domains — weapon data vs. Enemy
-  State — that ended up one letter apart. Flagging rather than resolving silently; this needs
-  your call** (rename one, or accept the collision since neither is a code identifier the other
-  could be confused with).
+  cooldown-after-impact value). Two different domains — weapon data vs. Enemy State — one
+  letter apart; kept distinct on purpose, since the contexts never overlap and neither is a
+  code identifier the other could be confused with.
 
 ### Search
 - **Definition:** Pursuing the target's last known position after losing contact. Leads the
