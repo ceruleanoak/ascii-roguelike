@@ -427,7 +427,7 @@ export class CheatMenu {
     console.log('[CHEAT] Spawning item:', name, type);
 
     if (type === ITEM_TYPES.INGREDIENT) {
-      // Add ingredient to active pool (banked in REST, carried in EXPLORE)
+      // Add ingredient to the one pile — same in every game state
       game.addIngredient(char);
       console.log(`[CHEAT] ✓ Added ingredient: ${name}`);
     } else if (type === ITEM_TYPES.WEAPON || type === ITEM_TYPES.TRAP) {

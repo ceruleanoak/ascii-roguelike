@@ -11,9 +11,9 @@ export class LootSystem {
   }
 
   // Canonical ingredient grant — routes special pickups (Emerald Robe goo heal,
-  // active-meter mana refill), otherwise banks/carries via game.addIngredient,
-  // then removes the ingredient from the world. Shared by the player attraction
-  // pickup in all three states and the boomerang fetch.
+  // active-meter mana refill), otherwise drops the glyph into the one pile via
+  // game.addIngredient, then removes the ingredient from the world. Shared by
+  // the player attraction pickup in all three states and the boomerang fetch.
   updateIngredientSeparation(deltaTime) {
     const game = this.game;
     const ingredients = game.ingredients;

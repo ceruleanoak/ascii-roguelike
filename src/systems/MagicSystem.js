@@ -181,11 +181,10 @@ export class MagicSystem {
     if (!player?.magicMeter?.active) return 0;
     const yieldAmount = INGREDIENT_MANA_VALUES[ingredientChar];
     if (!yieldAmount) return 0;
-    const idx = player.inventory.indexOf(ingredientChar);
-    if (idx === -1) return 0;
+    if (!this.game.hasIngredient(ingredientChar)) return 0;
     if (player.magicMeter.current >= player.magicMeter.max) return 0;
 
-    player.inventory.splice(idx, 1);
+    this.game.removeIngredient(ingredientChar);
     return this.addMana(player, yieldAmount);
   }
 

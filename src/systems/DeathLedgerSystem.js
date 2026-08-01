@@ -50,7 +50,7 @@ export function captureDeath(game, { event = 'death', revivedBy = null } = {}) {
       ),
     },
     inventory: {
-      ingredients: [...player.inventory],
+      ingredients: [...inv.getIngredients()],
       armorCollected: inv.armorInventory.map(a => ({
         char: a.char, name: a.data?.name ?? null,
       })),

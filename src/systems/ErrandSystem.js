@@ -109,17 +109,10 @@ export class ErrandSystem {
     let givenChar;
 
     if (stageConfig.isIngredient) {
-      // Stage 0: consume from player.inventory (current EXPLORE run) or, failing
-      // that, restInventory (banked REST-mode ingredients) — the errand doesn't
-      // care which pool the ingredient came from.
-      const idx = player.inventory.findIndex(ing => ing === requestedChar);
-      if (idx !== -1) {
-        player.inventory.splice(idx, 1);
-      } else {
-        const restIdx = inventorySystem?.restInventory.findIndex(ing => ing === requestedChar) ?? -1;
-        if (restIdx === -1) return null;
-        inventorySystem.restInventory.splice(restIdx, 1);
-      }
+      // Stage 0: spend the ingredient out of the one pile. Where the player
+      // picked it up — this run or an earlier one — never mattered to the
+      // errand, and now there is nowhere else it could be.
+      if (!inventorySystem?.removeIngredient(requestedChar)) return null;
       givenChar = requestedChar;
     } else {
       // Stages 1-2: item can be in any quick slot (not just the active one),
@@ -183,14 +176,7 @@ export class ErrandSystem {
     );
     if (dist > errandChar.getInteractionDistance()) return null;
 
-    const idx = player.inventory.indexOf('⚜');
-    if (idx !== -1) {
-      player.inventory.splice(idx, 1);
-    } else {
-      const restIdx = inventorySystem?.restInventory.indexOf('⚜') ?? -1;
-      if (restIdx === -1) return null;
-      inventorySystem.restInventory.splice(restIdx, 1);
-    }
+    if (!inventorySystem?.removeIngredient('⚜')) return null;
 
     return {
       coins: 2,

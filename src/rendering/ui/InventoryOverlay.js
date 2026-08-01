@@ -170,14 +170,11 @@ export class InventoryOverlay {
     const lineHeight = GRID.CELL_SIZE * 1.5;
     let index = 0;
 
-    // Combined ingredient pool — banked REST + unbanked carried, always together.
-    const combinedIngredients = [
-      ...game.inventorySystem.restInventory,
-      ...(game.player?.inventory ?? [])
-    ];
+    // The whole ingredient pile — one array in every game state.
+    const ingredients = game.getIngredients();
     const coinCount = game.inventorySystem.getCoinCount();
 
-    const totalItems = combinedIngredients.length + coinCount;
+    const totalItems = ingredients.length + coinCount;
 
     if (totalItems === 0) {
       const emptyMsg = game.stateMachine.getCurrentState() === GAME_STATES.REST
@@ -195,7 +192,7 @@ export class InventoryOverlay {
 
     // ── Treasure (coins + gems) ─────────────────────────────────────────────
     const treasureCounts = {};
-    for (const char of combinedIngredients) {
+    for (const char of ingredients) {
       if (getPickupCategory(char) === 'treasure') {
         treasureCounts[char] = (treasureCounts[char] || 0) + 1;
       }
@@ -204,7 +201,7 @@ export class InventoryOverlay {
 
     // ── Components (raw ingredients usable as potion recipe inputs) ─────────
     const componentCounts = {};
-    for (const char of combinedIngredients) {
+    for (const char of ingredients) {
       if (getPickupCategory(char) === 'components') {
         componentCounts[char] = (componentCounts[char] || 0) + 1;
       }
@@ -212,7 +209,7 @@ export class InventoryOverlay {
 
     // ── Materials (remaining raw ingredients) ───────────────────────────────
     const materialCounts = {};
-    for (const char of combinedIngredients) {
+    for (const char of ingredients) {
       if (getPickupCategory(char) === 'materials') {
         materialCounts[char] = (materialCounts[char] || 0) + 1;
       }

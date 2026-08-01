@@ -198,7 +198,7 @@ export class AlchemySystem {
     const game = this.game;
     const counts = new Map();
     const valid = [];
-    for (const ch of game.player.inventory) {
+    for (const ch of game.getIngredients()) {
       if (!validSet.has(ch)) continue;
       counts.set(ch, (counts.get(ch) ?? 0) + 1);
       if (!valid.includes(ch)) valid.push(ch);
@@ -240,7 +240,7 @@ export class AlchemySystem {
       // liquid → starter ingredient → starter potion → true ingredient → final potion
       const counts = new Map();
       const valid = [];
-      for (const ch of game.player.inventory) {
+      for (const ch of game.getIngredients()) {
         if (!ALL_STARTER_INGREDIENTS.has(ch)) continue;
         counts.set(ch, (counts.get(ch) ?? 0) + 1);
         if (!valid.includes(ch)) valid.push(ch);
@@ -272,7 +272,7 @@ export class AlchemySystem {
 
   _commitStarter(ingredientChar) {
     const game = this.game;
-    if (!game.player.inventory.includes(ingredientChar)) return;
+    if (!game.hasIngredient(ingredientChar)) return;
 
     let starterChar;
     if (this.cauldronInputType === 'liquid') {
@@ -286,7 +286,7 @@ export class AlchemySystem {
 
     if (!starterChar) return;
 
-    game.player.removeIngredient(ingredientChar);
+    game.removeIngredient(ingredientChar);
     this._pendingBaseIngredient = ingredientChar;
     this._pendingHiddenIngredient = ingredientChar;
 
@@ -305,11 +305,11 @@ export class AlchemySystem {
 
   _commitTrue(ingredientChar) {
     const game = this.game;
-    if (!game.player.inventory.includes(ingredientChar)) return;
+    if (!game.hasIngredient(ingredientChar)) return;
     const recipe = findRecipe(this.cauldronStarterChar, ingredientChar);
     if (!recipe) return;
 
-    game.player.removeIngredient(ingredientChar);
+    game.removeIngredient(ingredientChar);
 
     const result = new Item(recipe.result, game.player.position.x, game.player.position.y);
 

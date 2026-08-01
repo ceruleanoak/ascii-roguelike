@@ -497,7 +497,7 @@ export class MenuSystem {
     const PHASE_1_INGREDIENTS = ['g'];
 
     const counts = new Map();
-    for (const ch of game.getActiveIngredients()) {
+    for (const ch of game.getIngredients()) {
       counts.set(ch, (counts.get(ch) ?? 0) + 1);
     }
 
@@ -589,7 +589,7 @@ export class MenuSystem {
 
     const ingredientCounts = new Map();
     const ingredientList = [];
-    for (const ingredientChar of game.getActiveIngredients()) {
+    for (const ingredientChar of game.getIngredients()) {
       ingredientCounts.set(ingredientChar, (ingredientCounts.get(ingredientChar) ?? 0) + 1);
       if (!ingredientList.includes(ingredientChar)) {
         ingredientList.push(ingredientChar);

@@ -51,7 +51,7 @@ export class PressSystem {
     const game = this.game;
     const counts = new Map();
     const pressable = [];
-    for (const ch of game.player.inventory) {
+    for (const ch of game.getIngredients()) {
       if (!PRESS_TABLE[ch]) continue;
       counts.set(ch, (counts.get(ch) ?? 0) + 1);
       if (!pressable.includes(ch)) pressable.push(ch);
@@ -77,8 +77,7 @@ export class PressSystem {
     const oilChar = PRESS_TABLE[rawChar];
     if (!oilChar) return;
 
-    if (!game.player.inventory.includes(rawChar)) return;
-    game.player.removeIngredient(rawChar);
+    if (!game.removeIngredient(rawChar)) return;
 
     const oil = new Item(oilChar, game.player.position.x, game.player.position.y);
     game.inventorySystem.consumableInventory.push(oil);

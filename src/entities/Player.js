@@ -70,7 +70,11 @@ export class Player {
       max: 10,
       freeSlotGranted: false
     };
-    this.inventory = []; // Ingredients only
+    // No ingredient array here. Ingredients live in one pile on InventorySystem
+    // (see its constructor) and are reached through game.getIngredients() /
+    // hasIngredient() / addIngredient() / removeIngredient(). A carried array on
+    // the player was the second half of the old two-pool split, which halved the
+    // inventory for every feature that read the wrong one.
     this.activeSappingBats = []; // Bats currently latched to this player (up to 3)
     this.hookedByMimic = null; // Enemy instance when mimic tongue has grabbed player
     this.facing = { x: 0, y: 1 }; // Direction player is facing
@@ -169,6 +173,10 @@ export class Player {
     // (`c`) into a well. Booleans, so they cannot stack.
     this.wellDamageBlessed = false; // red zone well: +1 damage on all attacks
     this.stealthBlessed = false;    // cyan zone well: enemies detect at reduced radius
+    // Fairy fountain treasure blessings — permanent run-flags granted by offering
+    // a non-elemental treasure to the pool. Also booleans, also non-stacking.
+    this.fountainSprintBlessed = false; // Diamond: unarmed sprint speed even while armed
+    this.fountainArmorBonus = 0;        // Onyx: +1 defense, folded in on every equip recompute
     this.blockBoostTimer = 0;
     this.blockBoostAmount = 0;
     this.stoneSkinTimer = 0;
@@ -290,6 +298,15 @@ export class Player {
     this.collisionMap = collisionMap;
   }
 
+  // Unarmed sprint multiplier, applied to both acceleration and max speed.
+  // Empty hands normally mean 1.5x; a Diamond offered to a fairy fountain
+  // (fountainSprintBlessed) keeps that speed even with a weapon out. Every
+  // speed and roll calculation routes through here so the blessing can't miss
+  // a site.
+  getSprintMultiplier() {
+    return (!this.heldItem || this.fountainSprintBlessed) ? 1.5 : 1;
+  }
+
   updateInput(inputState, lockFacing = false) {
     this.inputState = inputState;
 
@@ -318,10 +335,10 @@ export class Player {
     const isChargingBow = this.heldItem && this.heldItem.isCharging
       && !this.heldItem.data?.batCharge && !this.heldItem.data?.flailSpin;
 
-    // Calculate target acceleration based on input (1.5x acceleration when unarmed)
+    // Calculate target acceleration based on input (1.5x acceleration when sprinting)
     // Polymorph speed/accel overrides (set by PolymorphSystem when in frog form)
     const accelBase = this._polymorphAccelOverride
-      ?? (this.heldItem ? PHYSICS.PLAYER_ACCELERATION : PHYSICS.PLAYER_ACCELERATION * 1.5);
+      ?? (PHYSICS.PLAYER_ACCELERATION * this.getSprintMultiplier());
     const baseAcceleration = accelBase;
     const batAccel = this.batFormTimer > 0 ? 1.8 : 1.0; // Bat form: noticeably faster acceleration
     const acceleration = baseAcceleration * (1 + this.speedBoost - this.speedPenalty) * batAccel;
@@ -387,9 +404,9 @@ export class Player {
       this.facing.y = Math.sign(targetAy);
     }
 
-    // Cap velocity to max speed (1.5x speed when unarmed, boosted when speed buff active, armor modifiers, status effects)
+    // Cap velocity to max speed (1.5x speed when sprinting, boosted when speed buff active, armor modifiers, status effects)
     const baseMaxSpeed = this._polymorphSpeedOverride
-      ?? (this.heldItem ? PHYSICS.PLAYER_SPEED : PHYSICS.PLAYER_SPEED * 1.5);
+      ?? (PHYSICS.PLAYER_SPEED * this.getSprintMultiplier());
     const armorModified = baseMaxSpeed * (1 + this.speedBoost - this.speedPenalty);
     const batMax = this.batFormTimer > 0 ? armorModified * 1.8 : armorModified;
     const boostedMax = this.speedBoostTimer > 0 ? Math.max(batMax, armorModified * this.speedBoostMultiplier) : batMax;
@@ -686,7 +703,7 @@ export class Player {
     }
 
     // Calculate current max movement speed (from updateInput logic)
-    const baseMaxSpeed = this.heldItem ? PHYSICS.PLAYER_SPEED : PHYSICS.PLAYER_SPEED * 1.5;
+    const baseMaxSpeed = PHYSICS.PLAYER_SPEED * this.getSprintMultiplier();
     const armorModified = baseMaxSpeed * (1 + this.speedBoost - this.speedPenalty);
     const currentMaxSpeed = this.speedBoostTimer > 0 ? armorModified * this.speedBoostMultiplier : armorModified;
 
@@ -949,7 +966,7 @@ export class Player {
 
   // Returns current roll speed (matching startDodgeRoll calculation)
   getRollSpeed() {
-    const baseMaxSpeed = this.heldItem ? PHYSICS.PLAYER_SPEED : PHYSICS.PLAYER_SPEED * 1.5;
+    const baseMaxSpeed = PHYSICS.PLAYER_SPEED * this.getSprintMultiplier();
     const armorModified = baseMaxSpeed * (1 + this.speedBoost - this.speedPenalty);
     const currentMaxSpeed = this.speedBoostTimer > 0 ? armorModified * this.speedBoostMultiplier : armorModified;
     return currentMaxSpeed * 1.1;
@@ -969,17 +986,6 @@ export class Player {
   heal(amount) {
     this.hp += amount;
     if (this.hp > this.maxHp) this.hp = this.maxHp;
-  }
-
-  addIngredient(ingredient) {
-    this.inventory.push(typeof ingredient === 'string' ? ingredient : ingredient.char);
-  }
-
-  removeIngredient(ingredient) {
-    const index = this.inventory.indexOf(ingredient);
-    if (index > -1) {
-      this.inventory.splice(index, 1);
-    }
   }
 
   pickupItem(item, selectedSlotIdx = 0) {
@@ -1093,48 +1099,6 @@ export class Player {
   }
 
   // Check if active slot has a trap with charges remaining
-  canUseTrap() {
-    const item = this.heldItem;
-    if (!item || !item.data || item.data.type !== 'TRAP') return false;
-    return item.charges > 0;
-  }
-
-  // Mark trap as used: decrement charge and advance to next filled slot.
-  markTrapUsed() {
-    const item = this.heldItem;
-    if (item?.charges != null) item.charges--;
-    // Only advance to next slot when charges are depleted
-    if (item?.charges === 0) {
-      const nextFilled = this.quickSlots.findIndex((slot, idx) =>
-        idx !== this.activeSlotIndex && slot !== null
-      );
-      if (nextFilled !== -1) {
-        this.activeSlotIndex = nextFilled;
-      }
-    }
-  }
-
-  // Reset trap charges for each trap in quick slots (called on room entry).
-  // Charges = total copies of that trap type currently held (equipped + chest/pending),
-  // so crafting more of a trap increases how many can be deployed per room.
-  resetTrapsForNewRoom(inventorySystem) {
-    for (const slot of this.quickSlots) {
-      if (slot?.data?.type === 'TRAP') {
-        slot.charges = this.countHeldTraps(slot.char, inventorySystem);
-      }
-    }
-  }
-
-  countHeldTraps(char, inventorySystem) {
-    let count = this.quickSlots.filter((s) => s?.char === char).length;
-    if (inventorySystem) {
-      const sumStacked = (arr) => arr.reduce((sum, i) => (i.char === char ? sum + (i.count || 1) : sum), 0);
-      count += sumStacked(inventorySystem.itemChest);
-      count += sumStacked(inventorySystem.pendingChestDeposits);
-    }
-    return count;
-  }
-
   reset() {
     this.hp = PLAYER_STATS.START_HP;
     this.maxHp = PLAYER_STATS.MAX_HP;
@@ -1144,7 +1108,8 @@ export class Player {
     this.activeSlotIndex = 0;
     this.destroyedSlots = [false, false, false];
     this.selectedConsumableIndex = -1;
-    this.inventory = [];
+    // Ingredients are not reset here — the pile belongs to InventorySystem, and
+    // a character swap deliberately keeps it (game over clears it instead).
     this.magicMeter = { active: false, slots: [], current: 0, max: 10, freeSlotGranted: false };
 
     // Reset new buff timers
@@ -1161,6 +1126,10 @@ export class Player {
     // Reset well coin blessings
     this.wellDamageBlessed = false;
     this.stealthBlessed = false;
+
+    // Reset fairy fountain treasure blessings
+    this.fountainSprintBlessed = false;
+    this.fountainArmorBonus = 0;
 
     // Reset armor properties
     this.defense = 0;

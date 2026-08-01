@@ -62,13 +62,11 @@ export class RidgeSystem {
     return Math.sqrt(dx * dx + dy * dy);
   }
 
-  /** Returns { [materialKey]: count } combining current-run + banked REST inventory. */
+  /** Returns { [materialKey]: count } over the whole ingredient pile. */
   getHaveCounts() {
-    const inv = this.game.player?.inventory ?? [];
-    const restInv = this.game.inventorySystem?.restInventory ?? [];
     const have = {};
     for (const mat of BRIDGE_MATERIALS) {
-      have[mat.key] = inv.filter(i => i === mat.char).length + restInv.filter(i => i === mat.char).length;
+      have[mat.key] = this.game.countIngredient(mat.char);
     }
     return have;
   }
@@ -89,41 +87,25 @@ export class RidgeSystem {
 
   /**
    * Donate whatever the player currently has toward unmet requirements.
-   * Draws from the current-run inventory first, then banked REST inventory —
-   * materials gathered on an earlier run and stored should still count.
+   * Materials gathered on an earlier run count the same as ones picked up this
+   * run — there is one pile, so the worker sees everything the player holds.
    * Returns true if the bridge completed (animation will begin).
    */
   donateAvailable() {
     const room = this.game.currentRoom;
     if (!room || room.bridgeBuilt || room.bridgeAnimating) return false;
 
-    const inv = this.game.player.inventory;
-    const restInv = this.game.inventorySystem?.restInventory ?? [];
     const donated = room.bridgeDonated;
     let anyDonated = false;
     let firstDonatedChar = null;
 
     for (const mat of BRIDGE_MATERIALS) {
-      const stillNeeded = mat.need - (donated[mat.key] ?? 0);
-      if (stillNeeded <= 0) continue;
-      let remaining = stillNeeded;
-      for (let i = inv.length - 1; i >= 0 && remaining > 0; i--) {
-        if (inv[i] === mat.char) {
-          inv.splice(i, 1);
-          donated[mat.key]++;
-          remaining--;
-          if (!anyDonated) firstDonatedChar = mat.char;
-          anyDonated = true;
-        }
-      }
-      for (let i = restInv.length - 1; i >= 0 && remaining > 0; i--) {
-        if (restInv[i] === mat.char) {
-          restInv.splice(i, 1);
-          donated[mat.key]++;
-          remaining--;
-          if (!anyDonated) firstDonatedChar = mat.char;
-          anyDonated = true;
-        }
+      let remaining = mat.need - (donated[mat.key] ?? 0);
+      while (remaining > 0 && this.game.removeIngredient(mat.char)) {
+        donated[mat.key]++;
+        remaining--;
+        if (!anyDonated) firstDonatedChar = mat.char;
+        anyDonated = true;
       }
     }
 
@@ -233,16 +215,12 @@ export class RidgeSystem {
   buildBridge() {
     const room = this.game.currentRoom;
     if (!room || room.bridgeBuilt || room.bridgeAnimating) return;
-    const inv = this.game.player.inventory;
-    const restInv = this.game.inventorySystem?.restInventory ?? [];
     const donated = room.bridgeDonated;
     for (const mat of BRIDGE_MATERIALS) {
       let remaining = mat.need - (donated[mat.key] ?? 0);
-      for (let i = inv.length - 1; i >= 0 && remaining > 0; i--) {
-        if (inv[i] === mat.char) { inv.splice(i, 1); donated[mat.key]++; remaining--; }
-      }
-      for (let i = restInv.length - 1; i >= 0 && remaining > 0; i--) {
-        if (restInv[i] === mat.char) { restInv.splice(i, 1); donated[mat.key]++; remaining--; }
+      while (remaining > 0 && this.game.removeIngredient(mat.char)) {
+        donated[mat.key]++;
+        remaining--;
       }
     }
     this._startBridgeAnimation(room);

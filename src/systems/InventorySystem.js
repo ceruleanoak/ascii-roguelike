@@ -15,17 +15,25 @@ import { inSamePlane } from './PlaneSystem.js';
 import { Item } from '../entities/Item.js';
 import { GRID } from '../game/GameConfig.js';
 import { addItemToChestArray, removeItemFromChestArray, chestEntryLabel, trapAlreadyEquipped } from './TrapSystem.js';
-import { makeAuraParticle } from './WorldEffectsSystem.js';
 
 export class InventorySystem {
   constructor() {
-    // SHARED banked ingredients (one pile for all characters — ingredients have
-    // no character affinity, so there's no situation where per-character
-    // partitioning makes sense). Persists through death; cleared on game over.
-    this.restInventory = [];
+    // THE ingredient pile — every raw ingredient the player is holding, in one
+    // array, in every game state. One pile for all characters (ingredients have
+    // no character affinity) and one pile across REST and EXPLORE.
+    //
+    // This used to be two arrays — a banked `restInventory` here and a carried
+    // `player.inventory` on the entity — with a state switch picking which one
+    // a given feature could see. That split had no mechanical stake behind it
+    // (game over wipes both, so "banked" was never safer than "carried") and it
+    // silently halved the player's inventory for anything that read the wrong
+    // one: the cauldron, the press, and the fairy fountain's treasure offering
+    // all did. Everything reads this array now, and nothing else stores
+    // ingredients. Do not reintroduce a second pool.
+    this.ingredients = [];
 
-    // Coins are passive: never enter restInventory or player.inventory. Picked
-    // up directly into this wallet, spendable from anywhere (well, NPC, crafting).
+    // Coins are passive: they never enter the ingredient pile. Picked up
+    // directly into this wallet, spendable from anywhere (well, NPC, crafting).
     // Persists through banking and death; cleared only on full game over.
     this.coinWallet = 0;
 
@@ -97,8 +105,34 @@ export class InventorySystem {
 
   // ========== GETTERS (for UI access) ==========
 
-  getRestInventory() {
-    return this.restInventory;
+  // ─── Ingredient pile ──────────────────────────────────────────────────────
+  // The whole pile, live. Callers may read and iterate it; mutate through the
+  // methods below so there is one place to look when a count goes wrong.
+  getIngredients() {
+    return this.ingredients;
+  }
+
+  hasIngredient(char) {
+    return this.ingredients.includes(char);
+  }
+
+  countIngredient(char) {
+    let n = 0;
+    for (const c of this.ingredients) if (c === char) n++;
+    return n;
+  }
+
+  addIngredient(char) {
+    this.ingredients.push(char);
+  }
+
+  // Spends one. Returns whether there was one to spend, so callers that pay a
+  // cost can bail instead of handing out the reward for free.
+  removeIngredient(char) {
+    const idx = this.ingredients.indexOf(char);
+    if (idx === -1) return false;
+    this.ingredients.splice(idx, 1);
+    return true;
   }
 
   // ─── Coin wallet ──────────────────────────────────────────────────────────
@@ -191,17 +225,20 @@ export class InventorySystem {
     }
 
     // Update legacy property pointers to active character's data.
-    // restInventory (ingredients) is shared across characters and not touched here.
+    // The ingredient pile is shared across characters and not touched here.
     this.restQuickSlots = this.characterInventories[characterType].quickSlots;
     this.restActiveSlotIndex = this.characterInventories[characterType].activeSlotIndex;
     this._activeCharacterType = characterType;
   }
 
   /**
-   * Get character's inventory data
+   * Get a character's stored quick slots.
+   *
+   * Quick slots are the only thing kept per character — the ingredient pile is
+   * shared by all of them and lives in `this.ingredients`.
    *
    * @param {string} characterType - Character type
-   * @returns {Object} - { inventory, quickSlots, activeSlotIndex }
+   * @returns {Object} - { quickSlots, activeSlotIndex }
    */
   getCharacterInventory(characterType) {
     if (!this.characterInventories[characterType]) {
@@ -224,7 +261,7 @@ export class InventorySystem {
     };
 
     // Clear shared ingredients pile (in-place so external references stay valid).
-    this.restInventory.length = 0;
+    this.ingredients.length = 0;
 
     // Reset legacy pointers to default
     this.setActiveCharacter('default');
@@ -522,6 +559,11 @@ export class InventorySystem {
       player.defense += player.blockBoostAmount;
     }
 
+    // Onyx offered to a fairy fountain. Folded in here rather than written once
+    // at the pool, because line 464 zeroes defense on every equip — a bonus set
+    // outside this function is erased the next time armor changes.
+    player.defense += player.fountainArmorBonus;
+
     // Apply passive consumable bonuses (Lucky Coin). luckBlessed (well ritual) is separate, untouched here.
     player.luckActive = false;
     player.critChance = 0;
@@ -604,67 +646,6 @@ export class InventorySystem {
 
     // Update active windups
     this.updateConsumableWindups(deltaTime, player, currentRoom, combatSystem, steamClouds, particles);
-
-    // Elemental robe aura: particle emission + contact status pulses
-    this._updateRobeAura(deltaTime, player, currentRoom, particles);
-  }
-
-  _updateRobeAura(deltaTime, player, currentRoom, particles) {
-    const armorData = this.equippedArmor?.data;
-    const auraType = armorData?.particleAura;
-    if (!auraType) return;
-
-    const cx = player.position.x + 8;
-    const cy = player.position.y + 8;
-
-    // Ambient particle emission — only while charge is available (or for non-pulse robes)
-    const chargeSpent = armorData.rollPulse && player._auraRollPulseUsed;
-    if (!chargeSpent) {
-      player._auraParticleTimer = (player._auraParticleTimer || 0) + deltaTime;
-      const emitInterval = auraType === 'shock' ? 0.07 : auraType === 'shadow' ? 0.12 : 0.10;
-      if (player._auraParticleTimer >= emitInterval) {
-        player._auraParticleTimer = 0;
-        const p = makeAuraParticle(cx, cy, auraType);
-        if (p) particles.push(p);
-      }
-    }
-
-    // Roll pulse: triggers on the first frame of a dodge roll, once per room
-    if (!armorData.rollPulse || !currentRoom?.enemies) return;
-
-    const isRolling = player.dodgeRoll.active;
-    const rollJustStarted = isRolling && !player._lastAuraDodgeActive;
-
-    if (rollJustStarted && !player._auraRollPulseUsed) {
-      player._auraRollPulseUsed = true;
-
-      const radius = (armorData.rollPulseRadius || 3) * 16;
-      const duration = armorData.rollPulseDuration || 2.0;
-
-      for (const enemy of currentRoom.enemies) {
-        if (enemy.hp <= 0) continue;
-        if (Math.hypot(enemy.position.x + 8 - cx, enemy.position.y + 8 - cy) <= radius) {
-          enemy.applyStatusEffect(armorData.rollPulse, duration);
-        }
-      }
-
-      // Radial blast — particles spread outward in all directions
-      const blastCount = 20;
-      for (let i = 0; i < blastCount; i++) {
-        const angle = (i / blastCount) * Math.PI * 2;
-        const speed = 80 + Math.random() * 80;
-        const p = makeAuraParticle(cx, cy, auraType);
-        if (p) {
-          p.vx = Math.cos(angle) * speed;
-          p.vy = Math.sin(angle) * speed;
-          p.life = 0.4 + Math.random() * 0.3;
-          p.maxLife = p.life;
-          particles.push(p);
-        }
-      }
-    }
-
-    player._lastAuraDodgeActive = isRolling;
   }
 
   /**
@@ -1080,22 +1061,16 @@ export class InventorySystem {
   // ========== DEATH & BANKING MECHANICS ==========
 
   /**
-   * Bank loot when returning from EXPLORE to REST
-   * Transfers player inventory (ingredients) to the active character's REST inventory
-   * Saves quick slots and active slot index for the active character
+   * Save the loadout when returning from EXPLORE to REST.
    *
-   * @param {Array} playerInventory - Player's inventory (ingredients)
+   * Ingredients no longer move here: there is one pile and the player has been
+   * adding to it all along, so arriving in REST transfers nothing. Only the
+   * quick slots need copying, because those are per-character.
+   *
    * @param {Array} playerQuickSlots - Player's quick slots (weapons)
    * @param {number} playerActiveSlotIndex - Active slot index
    */
-  bankLoot(playerInventory, playerQuickSlots, playerActiveSlotIndex) {
-    // ADD collected ingredients to active character's REST inventory
-    // Note: restInventory points to the active character's inventory
-    this.restInventory.push(...playerInventory);
-    // Clear the player-carried inventory — items are now banked. Without this,
-    // re-entering REST after another EXPLORE run would double-bank everything.
-    playerInventory.length = 0;
-
+  bankLoot(playerQuickSlots, playerActiveSlotIndex) {
     // Save quick slots and active index to active character.
     // restQuickSlots is a live reference to the character's array, so length/push
     // writes through correctly. restActiveSlotIndex is a scalar copy, so we must
@@ -1253,128 +1228,5 @@ export class InventorySystem {
 
   getChestContents() {
     return this.itemChest.map((item) => ({ action: 'retrieve', item, label: chestEntryLabel(item) }));
-  }
-
-  // Moss Cloak 𐤒 stealth state machine. Armed by the active→inactive dodge
-  // transition; becomes active when the player stops issuing WASD input.
-  // Any WASD held cancels.
-  updateMossCloak() {
-    const game = this.game;
-    const player = game.player;
-    const cloakEquipped = this.equippedArmor?.data?.mossCloak === true;
-    if (cloakEquipped) {
-      const wasdHeld = game.keys.w || game.keys.a || game.keys.s || game.keys.d;
-      if (player._lastDodgeActive && !player.dodgeRoll.active) {
-        player.mossCloakArmed = true;
-      }
-      player._lastDodgeActive = player.dodgeRoll.active;
-      if (wasdHeld || player.dodgeRoll.active) {
-        player.mossCloakArmed = false;
-        player.mossCloakActive = false;
-      } else if (player.mossCloakArmed) {
-        player.mossCloakActive = true;
-      }
-    } else {
-      player.mossCloakArmed = false;
-      player.mossCloakActive = false;
-      player._lastDodgeActive = player.dodgeRoll.active;
-    }
-  }
-
-  // ── Blue-zone armor world-effects ──────────────────────────────────────────
-  // Per-frame EXPLORE ticks for water-interaction armor. Called from
-  // updateExploreState; both bail unless the relevant piece is equipped.
-
-  updateBlueArmorEffects(deltaTime) {
-    this._updateCoralCrown();
-    this._updateStingrayMantle(deltaTime);
-  }
-
-  // Coral Crown: while wearing the crown and standing on a water tile, that
-  // tile becomes 'crystallized' — walkable, blocks contact slowdown, lasts 6s.
-  // Tiles auto-expire via BackgroundObject.waterStateTimer.
-  _updateCoralCrown() {
-    const game = this.game;
-    const p = game.player;
-    if (!p?.coralCrown || !p.inLiquid || !game.currentRoom) return;
-    const CS = GRID.CELL_SIZE;
-    const px = p.position.x + CS / 2;
-    const py = p.position.y + CS / 2;
-    const half = CS / 2;
-    for (const obj of game.currentRoom.backgroundObjects) {
-      if (obj.destroyed || obj.char !== '~') continue;
-      if (obj.waterState !== 'normal') continue;
-      const cx = obj.position.x + half;
-      const cy = obj.position.y + half;
-      if (Math.abs(cx - px) < half && Math.abs(cy - py) < half) {
-        obj.setWaterState('crystallized', 6.0);
-        break;
-      }
-    }
-  }
-
-  // Stingray Mantle: moving through water leaves an electrified wake. Each
-  // vacated water cell flips to 'electrified' for 4s — long enough to form a
-  // visible trail behind the player and keep zapping enemies that wander in.
-  // While the player is in water, ticks damage on enemies standing on any
-  // electrified cell — wet enemies take 2× via the existing wet+shock
-  // interaction (we apply the 2× directly here since this is the wake's own
-  // damage source).
-  _updateStingrayMantle(deltaTime) {
-    const game = this.game;
-    const p = game.player;
-    if (!p?.stingrayMantle || !game.currentRoom) return;
-    const CS = GRID.CELL_SIZE;
-    const px = p.position.x + CS / 2;
-    const py = p.position.y + CS / 2;
-    const col = Math.floor(px / CS);
-    const row = Math.floor(py / CS);
-
-    if (p.inLiquid) {
-      if (p._wakePrevCol === undefined) { p._wakePrevCol = col; p._wakePrevRow = row; }
-      if (col !== p._wakePrevCol || row !== p._wakePrevRow) {
-        const prevX = p._wakePrevCol * CS;
-        const prevY = p._wakePrevRow * CS;
-        for (const obj of game.currentRoom.backgroundObjects) {
-          if (obj.destroyed || obj.char !== '~') continue;
-          if (Math.abs(obj.position.x - prevX) < 4 && Math.abs(obj.position.y - prevY) < 4) {
-            if (obj.waterState === 'normal') {
-              game.electricitySystem?.seedFromArmor(obj, game.currentRoom.backgroundObjects,
-                p.heldItem?.data, { tileDuration: 4.0 });
-            }
-            break;
-          }
-        }
-        p._wakePrevCol = col;
-        p._wakePrevRow = row;
-      }
-    } else {
-      p._wakePrevCol = undefined;
-      p._wakePrevRow = undefined;
-    }
-
-    // Damage tick — 0.25s interval
-    p._wakeTickTimer = (p._wakeTickTimer || 0) - deltaTime;
-    if (p._wakeTickTimer > 0) return;
-    p._wakeTickTimer = 0.25;
-    const half = CS / 2;
-    for (const enemy of game.currentRoom.enemies) {
-      if (enemy.hp <= 0) continue;
-      const ex = enemy.position.x + half;
-      const ey = enemy.position.y + half;
-      for (const obj of game.currentRoom.backgroundObjects) {
-        if (obj.destroyed || obj.char !== '~') continue;
-        if (obj.waterState !== 'electrified') continue;
-        const cx = obj.position.x + half;
-        const cy = obj.position.y + half;
-        if (Math.abs(cx - ex) < half && Math.abs(cy - ey) < half) {
-          const wet = (enemy.wetDuration || 0) > 0;
-          const dmg = wet ? 2 : 1;
-          enemy.takeDamage(dmg);
-          game.combatSystem?.createDamageNumber(dmg, enemy.position.x, enemy.position.y, wet ? '#ffff66' : '#88ddff', 1.0, 0.6);
-          break;
-        }
-      }
-    }
   }
 }
