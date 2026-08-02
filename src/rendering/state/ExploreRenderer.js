@@ -25,6 +25,7 @@ import { drawPlayerFacingIndicator } from '../ui/PlayerFacingIndicator.js';
 import { drawSniperIndicators, drawSniperBeams, drawSniperReticules, sniperHidingConcealAlpha } from '../effects/SniperEffects.js';
 import { drawSinkholes } from '../effects/SinkholeEffects.js';
 import { drawWires } from '../effects/WireEffects.js';
+import { renderBombEnemy } from '../effects/BombEffects.js';
 import { drawTamedRats } from '../ui/CompanionRenderers.js';
 import { INGREDIENTS } from '../../data/items.js';
 import { BRIDGE_MATERIALS } from '../../systems/RidgeSystem.js';
@@ -1539,6 +1540,8 @@ export class ExploreRenderer {
           displayColor
         );
         this.renderer.fgCtx.restore();
+      } else if (enemy.char === '6' && enemy.data?.ripenMechanic?.enabled) {
+        renderBombEnemy(this.renderer, enemy, drawMethod, displayColor, shakeX, shakeY);
       } else {
         const arcLift = enemy.jumpArcLift || 0;
         this.renderer[drawMethod](

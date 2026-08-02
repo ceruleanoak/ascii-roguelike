@@ -18,6 +18,10 @@
 // world can read. It sets flags (`fleeReachedBarrier`, `fleeBarrierPauseTimer`,
 // `fleeTrapPlaced`) that a reactive Mechanic (TrapLayerMechanic) reads, because
 // only a Mechanic's `{suspend, result}` contract can actually spawn something.
+// `fleeLookbackFired` is the same idiom for a second consumer (RipenMechanic):
+// a one-frame edge on the lookback interval itself, since `fleeReachedBarrier`
+// alone is a level (persists across frames) and a reactive Mechanic wants to
+// know exactly when a glance-back just happened, not just its last result.
 import { applyStateMovement, moveStill } from '../enemyMovement.js';
 import { hasVision } from '../enemyVision.js';
 
@@ -65,6 +69,8 @@ export default {
       enemy.memoryMarkPlane = enemy.target.plane;
     }
 
+    enemy.fleeLookbackFired = false;
+
     const mark = enemy.lastKnownPosition;
 
     // How long this flight has run — read by moveFlee (enemyMovement.js) to
@@ -93,6 +99,7 @@ export default {
       : enemy.fleeLookbackTimer - ctx.deltaTime;
     if (enemy.fleeLookbackTimer <= 0) {
       enemy.fleeLookbackTimer = cfg.lookbackInterval ?? 2.0;
+      enemy.fleeLookbackFired = true;   // one-frame edge for reactive Mechanics (e.g. RipenMechanic)
       const visionLength = ctx.effectiveVisionLength ?? enemy.visionLength;
       enemy.fleeReachedBarrier = !!(enemy.target &&
         !hasVision(enemy, enemy.position, enemy.target.position, visionLength, { ignoreCone: true }));

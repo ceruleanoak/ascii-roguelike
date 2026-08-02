@@ -2198,6 +2198,53 @@ export const ENEMIES = {
     },
     affinities: ['frost'],
     tier: 'boss'
+  },
+
+  '6': {
+    char: '6',
+    name: 'Bomb',
+    description: 'Flees at the sight of you, swelling fatter every time it slips away. Corner it enough times and it stops running.',
+    spellDescription: 'GROWS UNSEEN. EXPLODES CORNERED.',
+    mass: 0.7,
+    hp: 5,
+    speed: 58,             // faster than Magma Slug's kite (38), slower than Trap Goblin's flee (72) —
+                            // has to actually break sightlines to earn lookback growth
+    acceleration: 380,
+    attackType: 'none',    // no ordinary attack — detonation is entirely RipenMechanic-owned
+    attackRange: 0,
+    aggroRange: GRID.CELL_SIZE * 9,
+    decisionInterval: 0.3,
+    color: '#dd3333',
+    lavaImmune: true,
+    // No `approach`/`search` — both of Alert's transition doors fall through
+    // to `flee` (EnemyStateMachine's FALLBACK), same wildcard Trap Goblin
+    // uses. RipenMechanic retroactively declares both once growth maxes at
+    // 3 — the one-time archetype flip from prey to predator.
+    states: {
+      alert: {},
+      flee: { lookbackInterval: 1.6 },   // snappier than the 2.0 default so growth reads responsively
+      withdraw: { duration: 0.6 }
+    },
+    ripenMechanic: {
+      enabled: true,
+      growDuration: 3.0,        // double-seconds (1.5s real) — waggle+expand animation per attempt
+      waggleAngle: 15,          // degrees, spec-literal
+      waggleCycles: 3,
+      growthScales: [1.0, 1.2, 1.45, 1.75],   // render scale at growth level 0..3
+      blinkDelay: 1.0,          // double-seconds (0.5s real), spec-literal
+      detonateRange: GRID.CELL_SIZE * 1.25,
+      detonateDamage: 5,        // spec-literal
+      shockwaveMaxRadius: GRID.CELL_SIZE * 3.5,
+      shockwaveSpeed: 220,
+      shockwaveDamage: 5,
+      shockwaveKnockback: 260
+    },
+    idleBehavior: 'wander',
+    elementalAffinity: {
+      weakness: { 'freeze': 2.0 }
+    },
+    affinities: ['beast'],
+    tier: 'weak'
   }
 };
 
@@ -2230,11 +2277,11 @@ export const ZONE_SPAWN_TABLES = {
 
   'red': {
     // Fire/scorched theme - NO green/ice enemies
-    0: ['E', 'l'],                            // L1-2: Ember Sprites, Magma Slugs (intro trail mechanic)
-    3: ['E', 'f', 't', 'p', 'l'],             // L3-5: Add Fire Bats, Tortoises, Pyroclasts, Magma Slugs
-    6: ['f', '0', 'F', 't', 'k', 'p', 'l'],  // L6-8: Add Living Rocks, Fire Elementals, Miners, Pyroclasts
-    9: ['f', '0', 'F', 'S', 't', 'k', 'l'],  // L9-11: Add Skeletons (charred bones), Miners
-    12: ['0', 'F', 'T', 'O', 't', 'k', 'R']  // L12+: Living Rocks, Trolls, Ogres, Miners, Rockwardens
+    0: ['E', 'l'],                                 // L1-2: Ember Sprites, Magma Slugs (intro trail mechanic)
+    3: ['E', 'f', 't', 'p', 'l', '6'],             // L3-5: Add Fire Bats, Tortoises, Pyroclasts, Magma Slugs, Bombs
+    6: ['f', '0', 'F', 't', 'k', 'p', 'l', '6'],  // L6-8: Add Living Rocks, Fire Elementals, Miners, Pyroclasts
+    9: ['f', '0', 'F', 'S', 't', 'k', 'l', '6'],  // L9-11: Add Skeletons (charred bones), Miners
+    12: ['0', 'F', 'T', 'O', 't', 'k', 'R']        // L12+: Living Rocks, Trolls, Ogres, Miners, Rockwardens
   },
 
   'cyan': {

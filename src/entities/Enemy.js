@@ -43,6 +43,7 @@ import { RiseAgainMechanic } from './enemyMechanics/RiseAgainMechanic.js';
 import { PatrolMechanic } from './enemyMechanics/PatrolMechanic.js';
 import { GameAnimalMechanic } from './enemyMechanics/GameAnimalMechanic.js';
 import { SniperMechanic } from './enemyMechanics/SniperMechanic.js';
+import { RipenMechanic } from './enemyMechanics/RipenMechanic.js';
 import { EnemyStateMachine, legacyStateFor } from './EnemyStateMachine.js';
 import { statesFor } from '../data/stateDefaults.js';
 
@@ -367,6 +368,7 @@ export class Enemy {
 
     if (LeapAttackMechanic.isEnabled(this)) LeapAttackMechanic.init(this);
     if (SniperMechanic.isEnabled(this)) SniperMechanic.init(this);
+    if (RipenMechanic.isEnabled(this)) RipenMechanic.init(this);
 
     if (SlimeTrailDropMechanic.isEnabled(this)) SlimeTrailDropMechanic.init(this);
 
@@ -744,6 +746,10 @@ export class Enemy {
     const collapsedResult = RiseAgainMechanic.update(this, { deltaTime, dotDamageEvents });
     if (collapsedResult?.suspend) return collapsedResult.result;
 
+    // Primed Bomb: AI suspended while it holds still and blinks toward detonation
+    const ripenBlinkResult = RipenMechanic.updateBlink(this, { deltaTime, dotDamageEvents });
+    if (ripenBlinkResult?.suspend) return ripenBlinkResult.result;
+
     // Force Wand root: tick timer; on expiry hurl enemy in stored facing direction
     if (this.forceRootTimer > 0) {
       this.forceRootTimer -= deltaTime;
@@ -794,6 +800,9 @@ export class Enemy {
 
     const leapTrigger = LeapAttackMechanic.tryTrigger(this, { effectiveDistance, dotDamageEvents });
     if (leapTrigger?.suspend) return leapTrigger.result;
+
+    const ripenDetonateTrigger = RipenMechanic.tryDetonateTrigger(this, { effectiveDistance, dotDamageEvents });
+    if (ripenDetonateTrigger?.suspend) return ripenDetonateTrigger.result;
 
     // Update attack timer
     if (this.attackTimer > 0) {
@@ -1056,6 +1065,8 @@ export class Enemy {
 
     const trapResult = TrapLayerMechanic.update(this, { deltaTime, dotDamageEvents });
     if (trapResult?.suspend) return trapResult.result;
+
+    RipenMechanic.updateGrowth(this, { deltaTime, dotDamageEvents });
 
     ChargeMechanic.update(this, { deltaTime, distance, effectiveVisionLength });
 
@@ -2181,6 +2192,7 @@ export class Enemy {
     if (this.hp > 0) {
       if (this.data.splitOnDamage?.enabled) this._trySplitOnDamage(amount);
       GooSpewMechanic.onDamaged(this, amount);
+      RipenMechanic.onDamaged(this);
     }
 
     // Sleep breaks on damage

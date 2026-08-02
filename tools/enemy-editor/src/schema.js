@@ -810,6 +810,27 @@ export const MECHANICS = [
       { key: 'sniperMechanic.daggerCooldown', label: 'Dagger cooldown (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 1.2 },
     ]
   },
+  {
+    // Flee → grow-through-four-stages → permanent chaser → blink → detonate.
+    // Growth advances on a Flee lookback that finds the player out of sight,
+    // or on being attacked (interruptible mid-attempt); never regresses once
+    // locked. See Enemy.js's RipenMechanic for the full lifecycle.
+    id: 'ripenMechanic', title: 'Ripen (grow & detonate)', gate: 'ripenMechanic.enabled',
+    fields: [
+      { key: 'ripenMechanic.growDuration', label: 'Grow duration (dbl-sec)', type: 'number', step: 0.1, default: 3.0 },
+      { key: 'ripenMechanic.waggleAngle', label: 'Waggle angle (deg)', type: 'number', default: 15 },
+      { key: 'ripenMechanic.waggleCycles', label: 'Waggle cycles', type: 'number', default: 3 },
+      { key: 'ripenMechanic.growthScales', label: 'Growth scales', type: 'json', default: [1.0, 1.2, 1.45, 1.75],
+        help: 'One scale per stage (0-3) — stage 3 is the locked, fully-grown size.' },
+      { key: 'ripenMechanic.blinkDelay', label: 'Blink delay (dbl-sec)', type: 'number', step: 0.1, default: 1.0 },
+      { key: 'ripenMechanic.detonateRange', label: 'Detonate range', type: 'px', default: GRID_CELL * 1.25 },
+      { key: 'ripenMechanic.detonateDamage', label: 'Detonate damage', type: 'number', default: 5 },
+      { key: 'ripenMechanic.shockwaveMaxRadius', label: 'Shockwave radius', type: 'px', default: GRID_CELL * 3.5 },
+      { key: 'ripenMechanic.shockwaveSpeed', label: 'Shockwave speed', type: 'number', default: 220 },
+      { key: 'ripenMechanic.shockwaveDamage', label: 'Shockwave damage', type: 'number', default: 5 },
+      { key: 'ripenMechanic.shockwaveKnockback', label: 'Shockwave knockback', type: 'number', default: 260 },
+    ]
+  },
 ];
 
 // ── SECTION NOTES ───────────────────────────────────────────────────────────

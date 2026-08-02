@@ -279,6 +279,10 @@ export class EnemyUpdateSystem {
       this._handleLeapLand(player, updateResult.leapLandData);
     }
 
+    if (updateResult.shouldExplode && updateResult.explodeData) {
+      this._handleBombExplode(player, updateResult.explodeData);
+    }
+
     if (enemy._shamBuff) {
       enemy._shamBuff.timer -= deltaTime;
       if (enemy._shamBuff.timer <= 0) {
@@ -381,6 +385,34 @@ export class EnemyUpdateSystem {
       }
     }
     game.audioSystem?.playSFX('goo_hit');
+  }
+
+  // Bomb ('6', RipenMechanic) detonation: direct point-blank hit against the
+  // player plus an indiscriminate shockwave ring, same shape as _handleLeapLand
+  // — the shockwave sweep in WorldEffectsSystem naturally excludes the Bomb
+  // itself, since it's already spliced out of currentRoom.enemies (hp was set
+  // to 0 synchronously in RipenMechanic.updateBlink) by the time that sweep runs.
+  _handleBombExplode(player, ed) {
+    const game = this.game;
+    const cfg = ed.cfg;
+    const hitEntities = new Set();
+    if (player && (player.plane ?? 0) === ed.plane) {
+      const pcx = player.position.x + GRID.CELL_SIZE / 2;
+      const pcy = player.position.y + GRID.CELL_SIZE / 2;
+      if (Math.hypot(pcx - ed.x, pcy - ed.y) <= cfg.detonateRange) {
+        player.takeDamage(cfg.detonateDamage);
+        game.combatSystem.createDamageNumber(cfg.detonateDamage, player.position.x, player.position.y, player.color);
+        game.physicsSystem.applyKnockback(player, ed.x, ed.y, cfg.shockwaveKnockback, 0.12);
+        hitEntities.add(player);
+      }
+    }
+    game.enemyShockwaves.push({
+      x: ed.x, y: ed.y, plane: ed.plane,
+      radius: cfg.detonateRange, maxRadius: cfg.shockwaveMaxRadius,
+      speed: cfg.shockwaveSpeed, damage: cfg.shockwaveDamage,
+      knockback: cfg.shockwaveKnockback, hitEntities
+    });
+    game.audioSystem?.playSFX('destroy');
   }
 
   _handleEnemyItemPickup(enemies) {
