@@ -4,7 +4,7 @@
 // still and waits; TrapLayerMechanic watches for `stateMachine.current ===
 // 'useTrap'` and is the one thing that can actually spawn something, since
 // only a Mechanic's `{suspend, result}` contract reaches TrapSystem.
-import { moveStill } from '../enemyMovement.js';
+import { moveStill, moveBack } from '../enemyMovement.js';
 
 export default {
   id: 'useTrap',
@@ -14,14 +14,27 @@ export default {
   },
 
   update(enemy, ctx, machine) {
-    moveStill(enemy);
-
-    if (!enemy.fleeTrapPlaced) return;
+    if (!enemy.fleeTrapPlaced) {
+      moveStill(enemy);
+      return;
+    }
 
     const cfg = machine.configFor('useTrap') ?? {};
     enemy.fleeClearTimer = enemy.fleeClearTimer == null
       ? (cfg.clearAfter ?? 1.0)
       : enemy.fleeClearTimer - ctx.deltaTime;
+
+    // Step back from the trap just laid, not the player. TrapSystem's timed
+    // fuse (TRAP_FUSE_TOTAL) has no owner-immunity check — only the
+    // proximity-trigger path does — so standing on the trap when the fuse
+    // force-fires hurts the goblin that set it. This clearAfter window is the
+    // only chance to clear the blast radius before that happens.
+    const trapPos = enemy.ownTrapPositions[enemy.ownTrapPositions.length - 1];
+    if (trapPos) {
+      moveBack(enemy, cfg.speed ?? 1, trapPos);
+    } else {
+      moveStill(enemy);
+    }
   },
 
   next(enemy, ctx, machine) {
