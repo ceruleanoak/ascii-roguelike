@@ -3,6 +3,7 @@ import { inSamePlane, tagInteriorPlane } from './PlaneSystem.js';
 import { CAMP_NPC_STATE } from '../entities/CampNPC.js';
 import { GooBlob } from '../entities/GooBlob.js';
 import { createEmberBurst, createExplosion } from '../entities/Particle.js';
+import { findNearbyOpenExitDirection, getExitDespawnPoint } from './ExitSystem.js';
 
 const MAX_GOO_BLOBS = 20;
 const SLIME_COLLISION_DISTANCE = 16;
@@ -37,8 +38,65 @@ export class EnemyUpdateSystem {
     this._tickSlowTimers(deltaTime, enemies);
     this._updatePackBehavior(enemies);
     this._runEnemyLoop(deltaTime, player, enemies);
+    this._checkExitDespawn(enemies);
     game.enemySpawnSystem.flush();
     this._handleEnemyItemPickup(enemies);
+  }
+
+  // Rooms lock their exits while any counted enemy remains (RoomGenerator/main.js),
+  // so this is normally only reachable by pacifist/hidden stragglers left behind
+  // after a room clears (e.g. a fleeing Moose/Rabbit — see GameAnimalMechanic).
+  // Deliberately enemy-agnostic: it keys off exit proximity only, not enemy type,
+  // so any enemy that legitimately ends up next to an open exit is handled the
+  // same way rather than needing its own bespoke despawn path.
+  _checkExitDespawn(enemies) {
+    const game = this.game;
+    const room = game.currentRoom;
+    if (!room || room.exitsLocked) return;
+
+    for (const enemy of enemies) {
+      if (enemy.isDying || game.animationSystem.isAnimating(enemy)) continue;
+      const cx = enemy.position.x + GRID.CELL_SIZE / 2;
+      const cy = enemy.position.y + GRID.CELL_SIZE / 2;
+      const direction = findNearbyOpenExitDirection(room, cx, cy);
+      if (direction) this._beginExitDespawn(enemy, direction);
+    }
+  }
+
+  // Plays the same AnimationSystem step-sequence approach the player's own
+  // exit-warp (main.js animateExitWarp) uses — a single moveTo carrying the
+  // enemy a few cells past the doorway — then removes it from the room's
+  // enemy list and physics once the walk completes.
+  _beginExitDespawn(enemy, direction) {
+    const game = this.game;
+    const target = getExitDespawnPoint(direction);
+    if (!target) return;
+
+    const dx = target.x - enemy.position.x;
+    const dy = target.y - enemy.position.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const speed = Math.max(enemy.speed || 0, 40);
+    if (enemy.facing) { enemy.facing.x = Math.sign(dx); enemy.facing.y = Math.sign(dy); }
+
+    // The despawn point sits past the room's edge by design (so the walk reads
+    // as leaving through the door, not stopping at it) — PhysicsSystem.
+    // enforceGridBounds would otherwise clamp the enemy back inside every tick,
+    // fighting the animation until it snapped away on the final frame. The
+    // player's own exit-warp avoids this by never leaving grid bounds (it
+    // teleports mid-animation instead); a despawning enemy has no next room to
+    // teleport into, so it just walks off unclamped and is removed on arrival.
+    enemy.boundToGrid = false;
+
+    game.animationSystem.play(enemy, [
+      { type: 'moveTo', x: target.x, y: target.y, duration: dist / speed, easing: 'linear' }
+    ], {
+      onComplete: () => {
+        const list = game.currentRoom?.enemies;
+        const idx = list ? list.indexOf(enemy) : -1;
+        if (idx !== -1) list.splice(idx, 1);
+        game.physicsSystem.removeEntity(enemy);
+      }
+    });
   }
 
   _applySlimeContact(player, enemies) {

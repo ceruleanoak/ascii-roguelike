@@ -37,11 +37,59 @@ export function cycleExitLetter(currentLetter) {
 export const EXIT_SLOT_POSITIONS = {
   north: { col: Math.floor(GRID.COLS / 2), row: 1 },
   east:  { col: GRID.COLS - 2,             row: Math.floor(GRID.ROWS / 2) },
-  west:  { col: 1,                         row: Math.floor(GRID.ROWS / 2) }
+  west:  { col: 1,                         row: Math.floor(GRID.ROWS / 2) },
+  south: { col: Math.floor(GRID.COLS / 2), row: GRID.ROWS - 2 }
 };
 
 export function getExitSlotPosition(direction) {
   return EXIT_SLOT_POSITIONS[direction] || null;
+}
+
+// How close (pixels, center-to-center) an entity must get to an open exit's
+// doorway before it counts as "at the exit" for despawn purposes — same
+// tolerance as the player's own lenient exit-crossing checks.
+export const EXIT_DESPAWN_REACH = GRID.CELL_SIZE * 1.5;
+
+// How many cells past the doorway an exit-despawn walk animation lands
+// before the walker is considered offscreen and safe to remove.
+const EXIT_DESPAWN_OFFSET_CELLS = 3;
+
+// Returns the direction ('north'/'south'/'east'/'west') of the nearest open
+// exit within EXIT_DESPAWN_REACH of (x, y) in pixels, or null if none
+// qualifies. Lock-agnostic like findExitAtPoint — callers gate on
+// room.exitsLocked themselves. Used by the generic enemy exit-despawn check
+// (EnemyUpdateSystem) so any enemy that ends up next to an open exit can be
+// routed through it, not just a specific mechanic.
+export function findNearbyOpenExitDirection(room, x, y) {
+  if (!room?.exits) return null;
+  let best = null, bestDist = Infinity;
+  for (const dir of ['north', 'south', 'east', 'west']) {
+    const exit = room.exits[dir];
+    if (dir === 'south' ? !exit : !exit?.letter) continue;
+    const slot = EXIT_SLOT_POSITIONS[dir];
+    const sx = slot.col * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+    const sy = slot.row * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+    const d = Math.hypot(x - sx, y - sy);
+    if (d < bestDist) { bestDist = d; best = dir; }
+  }
+  return bestDist <= EXIT_DESPAWN_REACH ? best : null;
+}
+
+// A point several cells beyond the doorway in `direction` — where a
+// walk-through-the-exit despawn animation should land before the walker is
+// removed from play.
+export function getExitDespawnPoint(direction) {
+  const slot = EXIT_SLOT_POSITIONS[direction];
+  if (!slot) return null;
+  const cs = GRID.CELL_SIZE;
+  const offset = EXIT_DESPAWN_OFFSET_CELLS;
+  switch (direction) {
+    case 'north': return { x: slot.col * cs, y: (slot.row - offset) * cs };
+    case 'south': return { x: slot.col * cs, y: (slot.row + offset) * cs };
+    case 'east':  return { x: (slot.col + offset) * cs, y: slot.row * cs };
+    case 'west':  return { x: (slot.col - offset) * cs, y: slot.row * cs };
+    default: return null;
+  }
 }
 
 // Returns { direction, exit } for the first exit letter slot whose cell

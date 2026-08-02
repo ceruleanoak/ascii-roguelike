@@ -657,6 +657,11 @@ export class Enemy {
   }
 
   update(deltaTime) {
+    // Mid exit-despawn walk (EnemyUpdateSystem._beginExitDespawn) — AnimationSystem
+    // owns position exclusively until the walk completes and the enemy is removed,
+    // so every AI branch below must be skipped rather than fighting it.
+    if (this._animLock) return { dotDamage: [] };
+
     // Track if this enemy just detected player (for aggro SFX)
     let justAggrod = false;
 

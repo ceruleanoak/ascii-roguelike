@@ -235,28 +235,18 @@ export const GameAnimalMechanic = {
     return best;
   },
 
+  // Steers toward the exit point picked by _farthestExitPoint. Arrival and
+  // removal are NOT handled here — once the animal is actually within reach
+  // of an open exit, EnemyUpdateSystem._checkExitDespawn (generic, not
+  // specific to game animals) takes over: it locks the enemy into an
+  // AnimationSystem walk-through-the-doorway animation, which short-circuits
+  // Enemy.update() before this method is ever called again.
   _fleeTowardTarget(enemy, cfg) {
     const target = enemy.gaFleeTarget;
     if (!target) return;
     const dx = target.x - enemy.position.x;
     const dy = target.y - enemy.position.y;
-    const dist = Math.hypot(dx, dy);
-    // Wide enough that getting jostled off the exact exit slot by a collision
-    // nudge still counts as "made it to the door" — a tight gap combined with
-    // straight-line movement left it pacing at obstacles just short of arriving.
-    const arriveGap = GRID.CELL_SIZE * 1.5;
-
-    if (dist <= arriveGap) {
-      // HuntingSystem.update() sweeps for this flag each frame and performs
-      // the actual array/physics removal — the enemies array may be mid-
-      // iteration elsewhere in this same frame's update pass.
-      enemy.shouldRemove = true;
-      if (enemy.game?.currentRoom) enemy.game.currentRoom.huntResolved = true;
-      if (enemy.game?.huntingSystem) enemy.game.huntingSystem.activeGameAnimal = null;
-      enemy.velocity.vx = 0; enemy.velocity.vy = 0;
-      enemy.targetVelocity.vx = 0; enemy.targetVelocity.vy = 0;
-      return;
-    }
+    const dist = Math.hypot(dx, dy) || 1;
 
     const fleeSpeed = enemy.speed * (cfg.fleeSpeedMult ?? 1.4) * this._slowFactor(enemy);
     const dir = this._steerDirection(enemy, target.x, target.y, dist);

@@ -57,16 +57,15 @@ export class HuntingSystem {
   update(dt) {
     const game = this.game;
 
-    // Sweep for a game animal that fled off-room or died — actual removal
-    // deferred here since GameAnimalMechanic.update() runs mid-iteration over
-    // the enemies array.
-    if (this.activeGameAnimal?.shouldRemove) {
-      const enemy = this.activeGameAnimal;
-      const list = game.currentRoom?.enemies;
-      const idx = list ? list.indexOf(enemy) : -1;
-      if (idx !== -1) list.splice(idx, 1);
-      game.physicsSystem.removeEntity(enemy);
+    // The active animal's actual removal happens elsewhere — the generic
+    // exit-despawn system (EnemyUpdateSystem) once it walks off through an
+    // open exit, or the normal death-processing loop if the player kills it
+    // first. Either way, once it's no longer in the room's enemy list, drop
+    // the stale reference and mark the hunt resolved so this room doesn't
+    // try to spawn a second animal on the same visit.
+    if (this.activeGameAnimal && !game.currentRoom?.enemies?.includes(this.activeGameAnimal)) {
       this.activeGameAnimal = null;
+      if (game.currentRoom) game.currentRoom.huntResolved = true;
     }
 
     if (!game.player || !game.currentRoom) return;
