@@ -21,6 +21,19 @@ const TRAP_MAX_DIST = GRID.CELL_SIZE * 4; // 64px — preserves prior trap behav
 // a gap the player can't walk, so at full charge it strings about a quarter of
 // the room. Carries no damage — it's a rope end, not a projectile.
 const WIRE_MAX_DIST = GRID.CELL_SIZE * 8; // 128px
+
+// Fuse timing for enemy-placed traps (placeTrapAtPosition only — player-thrown
+// traps arm via _armTrap and are out of scope). Real seconds: TrapSystem.update
+// runs off the raw, undoubled deltaTime, unlike Enemy.update's ENEMY_TIMER_RATE
+// doubling. Idle and unarmed for FUSE_IDLE, then blinks as a warning until it
+// force-fires at FUSE_TOTAL — caps how many traps a Trap Goblin can stack, and
+// since `_fireOneShotTrap` has no owner-immunity check (unlike the proximity
+// path in updatePlacedTraps), a goblin that lingers next to its own trap gets
+// caught by the very fuse it set, giving it a reason to retreat immediately
+// after placing.
+const TRAP_FUSE_IDLE = 5;
+const TRAP_FUSE_TOTAL = 7;
+const TRAP_FUSE_BLINK_INTERVAL = 0.4;
 const THROW_PROFILES = {
   trap:    { maxDist: TRAP_MAX_DIST,      damageMult: 0,   minVelForDamage: 0,   maxDamageVel: 1 },
   wire:    { maxDist: WIRE_MAX_DIST,      damageMult: 0,   minVelForDamage: 0,   maxDamageVel: 1 },
@@ -570,7 +583,8 @@ export class TrapSystem {
       owner,
       tickTimer: trapItem.data?.tickInterval || 0,
       activeDuration: trapItem.data?.activeDuration != null ? trapItem.data.activeDuration : Infinity,
-      affectedEnemies: new Set()
+      affectedEnemies: new Set(),
+      fuseTimer: 0
     });
   }
 
@@ -621,6 +635,23 @@ export class TrapSystem {
           entry.blinkVisible = !entry.blinkVisible;
         }
         continue; // Remote traps are only triggered by player, not by proximity
+      }
+
+      // Timed fuse — only enemy-placed traps carry one (entry.owner set by
+      // placeTrapAtPosition; player-thrown traps never get a fuseTimer field).
+      if (entry.fuseTimer != null) {
+        entry.fuseTimer += deltaTime;
+        if (entry.fuseTimer >= TRAP_FUSE_TOTAL) {
+          this._fireOneShotTrap(entry, i, enemies);
+          continue;
+        }
+        if (entry.fuseTimer >= TRAP_FUSE_IDLE) {
+          entry.blinkTimer = (entry.blinkTimer || 0) + deltaTime;
+          if (entry.blinkTimer >= TRAP_FUSE_BLINK_INTERVAL) {
+            entry.blinkTimer -= TRAP_FUSE_BLINK_INTERVAL;
+            entry.blinkVisible = !entry.blinkVisible;
+          }
+        }
       }
 
       if (trapData.oneShot) {
