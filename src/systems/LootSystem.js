@@ -1,6 +1,6 @@
 import { Ingredient } from '../entities/Ingredient.js';
 import { Item } from '../entities/Item.js';
-import { isIngredient, isItem, generateEnemyDrops } from '../data/items.js';
+import { isIngredient, isItem, generateEnemyDrops, resolvePickupSfx } from '../data/items.js';
 import { planeOf } from './PlaneSystem.js';
 import { GRID } from '../game/GameConfig.js';
 import { STARTER_POTION_CHARS, starterPotionIngredientsFor } from '../data/alchemy.js';
@@ -61,7 +61,7 @@ export class LootSystem {
     } else {
       game.addIngredient(ingredient.char);
     }
-    game.audioSystem?.playSFX('ingredient_pickup');
+    game.audioSystem?.playSFX(resolvePickupSfx(ingredient.char));
     game.physicsSystem.removeEntity(ingredient);
     const idx = game.ingredients.indexOf(ingredient);
     if (idx !== -1) game.ingredients.splice(idx, 1);

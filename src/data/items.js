@@ -2614,6 +2614,19 @@ export function getPickupCategory(char) {
   return null;
 }
 
+/**
+ * Ground-pickup SFX for an ingredient char (LootSystem.collectIngredient).
+ * A per-char `sfx` field on that char's INGREDIENTS entry always wins — the
+ * hook for giving an individual gem its own sound later — otherwise treasure
+ * (coin + gems) shares 'coin_pickup' and everything else falls back to the
+ * generic 'ingredient_pickup'.
+ */
+export function resolvePickupSfx(char) {
+  const data = getItemData(char);
+  if (data?.sfx) return data.sfx;
+  return getPickupCategory(char) === 'treasure' ? 'coin_pickup' : 'ingredient_pickup';
+}
+
 // ============================================================================
 // RARITY SYSTEM
 // ============================================================================

@@ -1121,6 +1121,7 @@ export class AudioSystem {
     this.loadSFX('crow_takeoff_2', `${base}assets/audio/sfx-crow-2.wav`);
     this.loadSFX('magic_death', `${base}assets/audio/sfx-magic-death.wav`);
     this.loadSFX('ingredient_pickup', `${base}assets/audio/sfx-ingredient-pickup.wav`);
+    this.loadSFX('coin_pickup', `${base}assets/audio/sfx-coin-pickup.wav`);
     this.loadSFX('fairy_pickup', `${base}assets/audio/sfx-fairy-pickup.wav`);
     this.loadSFX('fairy_transform', `${base}assets/audio/sfx-fairy-transform.wav`);
     this.loadSFX('slime_jump', `${base}assets/audio/sfx-slime-jump.wav`);
