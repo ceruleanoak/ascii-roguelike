@@ -289,60 +289,8 @@ export const ENEMIES = {
 
   // --- Venom ---
 
-  'P': {
-    char: 'P',
-    name: 'Poison Spider',
-    description: 'Fast and venomous. One bite starts a slow clock.',
-    spellDescription: 'VENOM TICKS DOWN.',
-    hp: 6,
-    speed: 45,
-    damage: 2,
-    attackRange: GRID.CELL_SIZE * 2,  // 2 units (melee with poison)
-    aggroRange: GRID.CELL_SIZE * 9,   // 9 units
-    attackCooldown: 1.2,
-    attackWindup: 1.0,  // Minimum 1 second telegraph
-    attackType: 'melee',
-    decisionInterval: 0.35,
-    color: '#44bb44',
-    elementalAffinity: {
-      weakness: { 'burn': 1.5, 'freeze': 1.3 }
-    },
-    affinities: ['venom', 'beast'],
-    tier: 'weak'
-  },
-
-  'Q': {
-    char: 'Q',
-    name: 'Queen Spider',
-    description: 'The egg-bearer. Her death releases a brood.',
-    spellDescription: 'BREEDING ON DEATH.',
-    hp: 11,
-    speed: 30,
-    damage: 3,
-    attackRange: GRID.CELL_SIZE * 3,  // 3 units
-    aggroRange: GRID.CELL_SIZE * 10,  // 10 units
-    attackCooldown: 1.5,
-    attackWindup: 1.0,  // Minimum 1 second telegraph
-    attackType: 'melee',
-    decisionInterval: 0.45,
-    color: '#6633aa',
-    spawning: {
-      enabled: true,
-      spawnChar: 'P',
-      spawnCooldown: 10.0,
-      maxSpawns: 4,
-      maxLifetimeSpawns: 8,
-      spawnRange: GRID.CELL_SIZE * 5,
-      spawnWindup: 1.2,
-      spawnCount: 2,
-      spawnOnDeath: true,
-      spawnOnDeathCount: 3
-    },
-    affinities: ['venom', 'beast'],
-    tier: 'elite'
-  },
-
-
+  // No enemies built at this time
+  
   // --- Goo ---
 
   'o': {
@@ -2256,10 +2204,10 @@ export const ENEMIES = {
 export const SPAWN_TABLES = {
   0: ['r', 'o'],                              // Depth 0-1: Easy enemies
   2: ['r', 'o', '^', 'G'],                    // Depth 2-4: Add bats and goblins (G has item pickup)
-  5: ['o', '^', 'G', 'S', 'P', 'L'],          // Depth 5-7: Add poison spider, looter
+  5: ['o', '^', 'G', 'S', 'L'],                // Depth 5-7: Add looter
   8: ['G', 'S', 'O', 'W', 'F', 'N'],          // Depth 8-10: Add fire elemental, necromancer
   11: ['S', 'O', 'W', 'K', 'I', 'N', 'G'],    // Depth 11-14: Add ice golem, knight (K has item pickup)
-  15: ['O', 'W', 'K', 'T', 'D', 'F', 'I', 'N', 'Q', 'G', 'L']  // Depth 15+: All enemies
+  15: ['O', 'W', 'K', 'T', 'D', 'F', 'I', 'N', 'G', 'L']  // Depth 15+: All enemies
 };
 
 // Zone-specific spawn tables (independent difficulty progression per zone)
@@ -2268,8 +2216,8 @@ export const ZONE_SPAWN_TABLES = {
     // Forest/verdant theme - NO fire/ice/lightning enemies
     0: ['r', 'o'],                                       // L1-2: Rats, Slimes (Boar too common at 1-in-3; first appears L3+)
     3: ['r', 'o', '^', 'G', 'g', 'b'],                // L3-5: Add Bats, Goblins, Frogs, Boars
-    6: ['o', '^', 'G', 'S', 'P', 'g', 'b', 'm'],      // L6-8: Add Skeletons, Poison Spiders, Mimics ('M' Giant Slime is now boss-only)
-    9: ['G', 'S', 'O', 'W', 'P', 'g', 'a', 'd'],     // L9-11: Add Ogres, Wizards, Shamans, Duelists
+    6: ['o', '^', 'G', 'S', 'g', 'b', 'm'],           // L6-8: Add Skeletons, Mimics ('M' Giant Slime is now boss-only)
+    9: ['G', 'S', 'O', 'W', 'g', 'a', 'd'],          // L9-11: Add Ogres, Wizards, Shamans, Duelists
     12: ['S', 'O', 'G', 'W', 'K', 'T', 'L', 'a', 'd'] // L12+: Add Knights, Trolls, Looters, Shamans, Duelists
   },
 
