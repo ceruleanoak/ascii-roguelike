@@ -53,12 +53,16 @@ export const RipenMechanic = {
 
     if (enemy.ripenGrowing) {
       // Interrupt: deflate without animation, back to the last locked size.
+      // Cuts the in-progress ripen SFX rather than letting it play out over
+      // a windup that no longer exists.
       enemy.ripenGrowing = false;
       enemy.ripenGrowTimer = 0;
+      enemy.game?.audioSystem?.stopSFXByName('bomb_ripen');
     } else {
       // Being attacked also attempts a growth — same windup a lookback starts.
       enemy.ripenGrowing = true;
       enemy.ripenGrowTimer = 0;
+      enemy.game?.audioSystem?.playStoppableSFX('bomb_ripen');
     }
   },
 
@@ -77,6 +81,7 @@ export const RipenMechanic = {
     if (enemy.fleeLookbackFired && enemy.fleeReachedBarrier && !enemy.ripenGrowing) {
       enemy.ripenGrowing = true;
       enemy.ripenGrowTimer = 0;
+      enemy.game?.audioSystem?.playStoppableSFX('bomb_ripen');
     }
 
     if (!enemy.ripenGrowing) return;
@@ -88,7 +93,6 @@ export const RipenMechanic = {
     enemy.ripenGrowing = false;
     enemy.ripenGrowTimer = 0;
     enemy.ripenGrowth = Math.min(enemy.ripenGrowth + 1, 3);
-    enemy.game?.audioSystem?.playSFX('bomb_ripen');
 
     if (enemy.ripenGrowth >= 3) {
       // Archetype flip: permanent chaser. `enraged` bypasses approach.js's
