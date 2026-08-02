@@ -1,0 +1,105 @@
+{
+  "name": "bomb_explode",
+  "totalDuration": 0.43559038650934745,
+  "bpm": 120,
+  "snapMode": "none",
+  "notes": [
+    {
+      "id": "4eudq6hswavmscbral3",
+      "time": 0,
+      "duration": 0.1414348212715699,
+      "frequency": 130.8127826502993,
+      "volume": 0.822510943694307
+    },
+    {
+      "id": "tkr5ysydspnmscbral3",
+      "time": 0.08641672145982765,
+      "duration": 0.13494436183236058,
+      "frequency": 391.99543598174927,
+      "volume": 0.7702674840509139
+    },
+    {
+      "id": "ge8pooan26kmscbral3",
+      "time": 0.10290110699674648,
+      "duration": 0.07364533499724633,
+      "frequency": 466.1637615180899,
+      "volume": 0.8554463258334104
+    },
+    {
+      "id": "is20vjmifomscbral3",
+      "time": 0.15152898024915976,
+      "duration": 0.09636135271015454,
+      "frequency": 440,
+      "volume": 0.8124734071744923
+    },
+    {
+      "id": "5kporsy6xe3mscbral3",
+      "time": 0.22469088875736704,
+      "duration": 0.12240933240303443,
+      "frequency": 130.8127826502993,
+      "volume": 0.8431104218210582
+    },
+    {
+      "id": "yazjt29254rmscbral3",
+      "time": 0.17607399084056666,
+      "duration": 0.08696011828428579,
+      "frequency": 174.61411571650194,
+      "volume": 0.8689144086551536
+    }
+  ],
+  "echo": {
+    "enabled": true,
+    "delay": 0.11,
+    "scale": 0.08,
+    "count": 3
+  },
+  "layers": [
+    {
+      "instrument": {
+        "masterGain": 0.8,
+        "type": "noise",
+        "duty": 0.5,
+        "noiseType": "metallic",
+        "crushBits": 9,
+        "filterFreq": 1900,
+        "noiseFilterFreq": 8000
+      },
+      "volumeEnvelope": [
+        {
+          "t": 0,
+          "v": 1
+        },
+        {
+          "t": 0.2,
+          "v": 0.8
+        },
+        {
+          "t": 0.7740112994350282,
+          "v": 0.13010817307692313
+        },
+        {
+          "t": 1,
+          "v": 0
+        }
+      ],
+      "pitchEnvelope": [
+        {
+          "t": 0,
+          "semitones": 10
+        },
+        {
+          "t": 0.35,
+          "semitones": -8
+        },
+        {
+          "t": 1,
+          "semitones": -20
+        }
+      ],
+      "octave": 0,
+      "detune": 0,
+      "mute": false,
+      "solo": true
+    }
+  ]
+}
