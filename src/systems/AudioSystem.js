@@ -1134,6 +1134,7 @@ export class AudioSystem {
     this.loadSFX('goblin_aggro', `${base}assets/audio/sfx-goblin-aggro.wav`);
     this.loadSFX('slot_swap', `${base}assets/audio/sfx-slot-swap.wav`);
     this.loadSFX('magic_hit', `${base}assets/audio/sfx-magic-hit.wav`);
+    this.loadSFX('bomb_ripen', `${base}assets/audio/sfx-bomb-ripen.wav`);
     // Gray zone — placeholder names, no assets yet (playSFX no-ops on null).
     this.loadSFX('mist_take', null);   // depth-10 mist-out sequence
     this.loadSFX('bone_rise', null);   // Risen reassembling from its bone pile

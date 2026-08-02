@@ -88,6 +88,7 @@ export const RipenMechanic = {
     enemy.ripenGrowing = false;
     enemy.ripenGrowTimer = 0;
     enemy.ripenGrowth = Math.min(enemy.ripenGrowth + 1, 3);
+    enemy.game?.audioSystem?.playSFX('bomb_ripen');
 
     if (enemy.ripenGrowth >= 3) {
       // Archetype flip: permanent chaser. `enraged` bypasses approach.js's
