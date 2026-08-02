@@ -824,11 +824,13 @@ export const MECHANICS = [
         help: 'One scale per stage (0-3) — stage 3 is the locked, fully-grown size.' },
       { key: 'ripenMechanic.blinkDelay', label: 'Blink delay (dbl-sec)', type: 'number', step: 0.1, default: 1.0 },
       { key: 'ripenMechanic.detonateRange', label: 'Detonate range', type: 'px', default: GRID_CELL * 1.25 },
-      { key: 'ripenMechanic.detonateDamage', label: 'Detonate damage', type: 'number', default: 5 },
-      { key: 'ripenMechanic.shockwaveMaxRadius', label: 'Shockwave radius', type: 'px', default: GRID_CELL * 3.5 },
+      { key: 'ripenMechanic.detonateDamage', label: 'Detonate damage', type: 'number', default: 8 },
+      { key: 'ripenMechanic.shockwaveMaxRadius', label: 'Shockwave radius', type: 'px', default: GRID_CELL * 5 },
       { key: 'ripenMechanic.shockwaveSpeed', label: 'Shockwave speed', type: 'number', default: 220 },
-      { key: 'ripenMechanic.shockwaveDamage', label: 'Shockwave damage', type: 'number', default: 5 },
-      { key: 'ripenMechanic.shockwaveKnockback', label: 'Shockwave knockback', type: 'number', default: 260 },
+      { key: 'ripenMechanic.shockwaveDamage', label: 'Shockwave damage', type: 'number', default: 6 },
+      { key: 'ripenMechanic.shockwaveKnockback', label: 'Shockwave knockback', type: 'number', default: 320 },
+      { key: 'ripenMechanic.burnDuration', label: 'Burn duration (real sec)', type: 'number', step: 0.1, default: 3.0,
+        help: 'Ignites entities caught in the point-blank hit or shockwave sweep. 0/omitted = no burn.' },
     ]
   },
 ];

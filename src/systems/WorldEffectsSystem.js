@@ -338,6 +338,15 @@ export class WorldEffectsSystem {
               game.combatSystem.createDamageNumber(sw.damage, entity.position.x, entity.position.y, '#ffffff');
             }
           }
+          // Optional ignite (e.g. Bomb's RipenMechanic detonation) — opt-in via
+          // sw.burnDuration so unrelated shockwaves (Giant Slime's leap ring) stay unaffected.
+          if (!isSlime && sw.burnDuration > 0) {
+            if (entity === game.player) {
+              entity.applyBurn(sw.burnDuration);
+            } else {
+              entity.applyStatusEffect('burn', sw.burnDuration);
+            }
+          }
         };
         apply(game.player);
         for (const enemy of game.currentRoom.enemies) apply(enemy);

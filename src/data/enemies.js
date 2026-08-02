@@ -2233,11 +2233,12 @@ export const ENEMIES = {
       growthScales: [1.0, 1.2, 1.45, 1.75],   // render scale at growth level 0..3
       blinkDelay: 1.0,          // double-seconds (0.5s real), spec-literal
       detonateRange: GRID.CELL_SIZE * 1.25,
-      detonateDamage: 5,        // spec-literal
-      shockwaveMaxRadius: GRID.CELL_SIZE * 3.5,
+      detonateDamage: 8,        // point-blank hit — bumped from the spec-literal 5 per playtest feedback ("should be... devastating")
+      shockwaveMaxRadius: GRID.CELL_SIZE * 5,   // was 3.5 — reads as a large blast, not a puff
       shockwaveSpeed: 220,
-      shockwaveDamage: 5,
-      shockwaveKnockback: 260
+      shockwaveDamage: 6,       // falls off slightly vs. the point-blank hit
+      shockwaveKnockback: 320,
+      burnDuration: 3.0         // real seconds — ignites anything caught in the blast (matches Firecracker's burn duration)
     },
     idleBehavior: 'wander',
     elementalAffinity: {

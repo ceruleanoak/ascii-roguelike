@@ -1541,7 +1541,7 @@ export class ExploreRenderer {
         );
         this.renderer.fgCtx.restore();
       } else if (enemy.char === '6' && enemy.data?.ripenMechanic?.enabled) {
-        renderBombEnemy(this.renderer, enemy, drawMethod, displayColor, shakeX, shakeY);
+        renderBombEnemy(this.renderer, enemy, displayColor, shakeX, shakeY);
       } else {
         const arcLift = enemy.jumpArcLift || 0;
         this.renderer[drawMethod](

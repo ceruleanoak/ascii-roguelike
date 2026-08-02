@@ -2,6 +2,7 @@ import { GRID, PHYSICS } from '../game/GameConfig.js';
 import { inSamePlane, tagInteriorPlane } from './PlaneSystem.js';
 import { CAMP_NPC_STATE } from '../entities/CampNPC.js';
 import { GooBlob } from '../entities/GooBlob.js';
+import { createEmberBurst, createExplosion } from '../entities/Particle.js';
 
 const MAX_GOO_BLOBS = 20;
 const SLIME_COLLISION_DISTANCE = 16;
@@ -403,6 +404,7 @@ export class EnemyUpdateSystem {
         player.takeDamage(cfg.detonateDamage);
         game.combatSystem.createDamageNumber(cfg.detonateDamage, player.position.x, player.position.y, player.color);
         game.physicsSystem.applyKnockback(player, ed.x, ed.y, cfg.shockwaveKnockback, 0.12);
+        if (cfg.burnDuration > 0) player.applyBurn(cfg.burnDuration);
         hitEntities.add(player);
       }
     }
@@ -410,8 +412,15 @@ export class EnemyUpdateSystem {
       x: ed.x, y: ed.y, plane: ed.plane,
       radius: cfg.detonateRange, maxRadius: cfg.shockwaveMaxRadius,
       speed: cfg.shockwaveSpeed, damage: cfg.shockwaveDamage,
-      knockback: cfg.shockwaveKnockback, hitEntities
+      knockback: cfg.shockwaveKnockback, burnDuration: cfg.burnDuration, hitEntities
     });
+    // Large fire-flavored burst (flame blast + rising embers, layered with a
+    // wide radial scatter) plus a screen shake — the shockwave ring itself is
+    // invisible by design (WorldEffectsSystem), so the detonation needs its
+    // own visual payoff to read as "large and devastating."
+    game.particles.push(...createEmberBurst(ed.x, ed.y));
+    game.particles.push(...createExplosion(ed.x, ed.y, 24, '#ff6600'));
+    game.renderController?.screenShake.trigger(10, 0.5);
     game.audioSystem?.playSFX('destroy');
   }
 
