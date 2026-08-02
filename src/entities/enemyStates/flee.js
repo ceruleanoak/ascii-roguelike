@@ -34,6 +34,8 @@ export default {
     enemy.fleeReachedBarrier = false;
     enemy.fleeBarrierPauseTimer = null;
     enemy.fleeLookbackTimer = null;
+    enemy.fleeHeadingTimer = 0;
+    enemy.fleeHeadingAngle = null;
 
     if (enemy.target) {
       // Frozen, not led — the opposite of Search's velocity-lookahead mark.

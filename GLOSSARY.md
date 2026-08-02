@@ -257,12 +257,21 @@ programming terms.
   projects a point beyond the Enemy on the far side of the mark and routes to it via the same
   wall-aware navigation Approach uses, so it turns its back and runs rather than strafing. Two
   distinct mechanisms, kept deliberately separate because they answer different questions:
-  - **Barrier-seeking** — frame-by-frame, lives in `moveFlee`. Fans out candidate headings
-    around the away direction and prefers the one that already puts terrain (a wall, tree, or
-    other vision-blocking background object — via the new pure-geometry `hasVisionBarrier` in
-    `enemyVision.js`) between the mark and the Enemy, so every step of the run actively steers
-    toward cover rather than just increasing distance. This only steers; it doesn't know whether
-    the steering actually worked.
+  - **Barrier-seeking** — a *decision*, not a per-frame roll: `moveFlee` holds a locked heading
+    (`enemy.fleeHeadingAngle`) and only re-rolls it once per `enemy.decisionInterval`
+    (`enemy.fleeHeadingTimer`), matching the cadence `updateVectorNavigation` recalcs on. Fans out
+    candidate headings around the (jittered) away direction, but a candidate is only eligible at
+    all if it first clears a short self-position `hasVisionBarrier` probe — can the Enemy actually
+    step that way, not just "does the mark's view of it happen to be blocked" — before preferring
+    the narrowest-deviation candidate that also puts terrain (a wall, tree, or other
+    vision-blocking background object, via the pure-geometry `hasVisionBarrier` in
+    `enemyVision.js`) between the mark and the Enemy. Falls back to the nearest merely-clear
+    candidate when no cover is available, and to the raw jittered heading only when every scanned
+    angle is blocked (boxed in). Re-rolling every frame instead of once per decision was the
+    original corner-sticking/thrashing bug: a fresh random jitter could get locked in by
+    `updateVectorNavigation` at an unrelated instant, and the old scan never checked the Enemy's
+    own immediate footing, so near a corner it could readily lock onto a heading aimed straight
+    into an adjacent wall. This only steers; it doesn't know whether the steering actually worked.
   - **Lookback** — periodic, lives in `flee.js` (`flee.lookbackInterval`, default 2 dbl-sec ≈
     every ~1 real second). A deliberate glance back that checks whether the target can *actually*
     still see the Enemy right now, through the real vision system (`hasVision` with the cone

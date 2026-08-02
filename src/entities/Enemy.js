@@ -184,6 +184,8 @@ export class Enemy {
     this.fleeBarrierPauseTimer = null; // Countdown held at a barrier before whatever reacts to it fires
     this.fleeLookbackTimer = null; // Countdown to the next lookback beat — fleeReachedBarrier only updates on this tick
     this.fleeElapsedTime = 0; // Time spent in the current flight (mirrors machine.timer) — tapers moveFlee's scatter jitter
+    this.fleeHeadingTimer = 0; // Countdown to the next heading decision — moveFlee only re-jitters/re-scans on this tick, not every frame
+    this.fleeHeadingAngle = null; // Locked heading (radians), held stable between decisions
 
     // Unified AI decision-making (intelligence system)
     this.decisionInterval = this.data.decisionInterval || 0.5; // How often to reassess (smarter = lower)

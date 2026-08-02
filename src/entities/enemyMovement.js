@@ -356,38 +356,66 @@ export function moveLunge(enemy, absoluteSpeed, speedMultiplier, targetPos, away
 // to `moveChaser`, so a fleeing enemy still routes around obstacles on its
 // way out instead of running face-first into them.
 //
-// Also steers clear of `enemy.ownTrapPositions` (maintained by whatever
-// Mechanic drops them, e.g. TrapLayerMechanic) — the direct fix for a trap
-// goblin fleeing straight into a trap it just laid.
-//
-// Scatter: the away heading gets random jitter before anything else, widest
-// right when the flight starts and narrowing over `enemy.fleeElapsedTime`
-// (set by flee.js each frame from the state machine's own timer) — so
-// several enemies fleeing the same spot fan out into a scramble rather than
-// stacking on one reciprocal line, and each settles toward straight-away as
-// the flight goes on.
-//
-// Wall-seeking: this is the frame-by-frame barrier check — running directly
-// away rarely puts a wall between the enemy and the mark, so an open room
-// stays open no matter how far the enemy backs into it. Fan out candidate
-// headings around the (jittered) away direction and prefer the narrowest
-// deviation that already puts a wall, tree, or other vision-blocking object
-// between the mark and the candidate — cover over raw distance. This only
-// steers; whether the mark's owner (the player) can actually still see the
-// enemy is a separate question `flee.js`'s periodic lookback checks against
-// the real vision system. Recomputed every frame, but `updateVectorNavigation`'s
-// own decisionTimer throttle (not this function) decides how often a new
-// heading is actually acted on — which is also the cadence the scatter jitter
-// rides, matching "randomness at each decision" rather than per-frame noise.
+// Heading is a *decision*, not a per-frame roll: `enemy.fleeHeadingAngle` is
+// held stable and only re-rolled (jitter, own-trap avoidance, wall-hugging
+// scan — all in `computeFleeHeading`) once every `enemy.decisionInterval`,
+// tracked by `enemy.fleeHeadingTimer`. Re-jittering every frame used to fight
+// `updateVectorNavigation`'s own ~decisionInterval recalc cadence: whichever
+// random heading happened to exist at the instant a recalc landed got locked
+// in, so the enemy's actual motion swung between unrelated headings every
+// decision — reading as dithering in place rather than a directed flight, and
+// letting the fan-scan (below) hand it a heading that pointed into a wall it
+// was already standing next to. Throttling here means one heading persists
+// across several navigation recalcs, same as any other movement verb.
 export function moveFlee(enemy, speedMultiplier, markPos, deltaTime) {
   const dx = enemy.position.x - markPos.x;
   const dy = enemy.position.y - markPos.y;
   const awayAngle = Math.atan2(dy, dx);
 
-  // Scatter falloff — wide right after the flee starts, settling to a small
-  // wobble by ~2.5 dbl-sec (~1.25s real) in. Values are chosen to stay on the
-  // "away" side even at maximum jitter (well under the ±90° that would start
-  // angling back toward the mark).
+  enemy.fleeHeadingTimer = (enemy.fleeHeadingTimer ?? 0) - deltaTime;
+  if (enemy.fleeHeadingAngle == null || enemy.fleeHeadingTimer <= 0) {
+    enemy.fleeHeadingTimer = enemy.decisionInterval ?? 0.5;
+    enemy.fleeHeadingAngle = computeFleeHeading(enemy, awayAngle, markPos);
+  }
+
+  const dirX = Math.cos(enemy.fleeHeadingAngle);
+  const dirY = Math.sin(enemy.fleeHeadingAngle);
+
+  const runDistance = GRID.CELL_SIZE * 20;
+  const awayPoint = {
+    x: enemy.position.x + dirX * runDistance,
+    y: enemy.position.y + dirY * runDistance,
+  };
+  moveChaser(enemy, speedMultiplier, awayPoint, deltaTime);
+}
+
+// One flee heading decision, called from `moveFlee` at most once per
+// `decisionInterval`. Resolves jitter, own-trap avoidance, and the
+// wall-hugging cover scan into a single angle held until the next decision.
+//
+// Scatter: the away heading gets random jitter first, widest right when the
+// flight starts and narrowing over `enemy.fleeElapsedTime` (set by flee.js
+// each frame from the state machine's own timer) — so several enemies
+// fleeing the same spot fan out into a scramble rather than stacking on one
+// reciprocal line, and each settles toward straight-away as the flight goes
+// on.
+//
+// Wall-seeking: running directly away rarely puts a wall between the enemy
+// and the mark, so an open room would stay open no matter how far the enemy
+// backs into it without this. Fan out candidate headings around the
+// (jittered) away direction, but first require self-clearance — a short
+// `hasVisionBarrier` probe from the enemy's OWN position, not the mark's —
+// before a candidate is eligible at all. The old scan only asked whether the
+// mark could see past the candidate, which near a corner is trivially true
+// for almost every angle, including ones aimed straight into an adjacent
+// wall; that's what produced the corner-sticking. Among self-clear
+// candidates, prefer the narrowest deviation that also puts a wall, tree, or
+// other vision-blocking object between the mark and the candidate — cover
+// over raw distance — falling back to the narrowest merely-clear candidate
+// when no cover is available, and to the raw jittered heading (deferring to
+// `updateVectorNavigation`'s own stuck-recovery) only when every scanned
+// angle is blocked, i.e. fully boxed in.
+function computeFleeHeading(enemy, awayAngle, markPos) {
   const elapsed = enemy.fleeElapsedTime ?? 0;
   const scatterDeg = 12 + 48 * Math.max(0, 1 - elapsed / 2.5);
   const jitteredAngle = awayAngle + (Math.random() - 0.5) * 2 * scatterDeg * Math.PI / 180;
@@ -416,36 +444,45 @@ export function moveFlee(enemy, speedMultiplier, markPos, deltaTime) {
     }
   }
 
-  if (enemy.collisionMap) {
-    const baseAngle = Math.atan2(dirY, dirX);
-    const scanDist = enemy.navigationLength ?? GRID.CELL_SIZE * 6;
-    let bestAngle = null;
-    let bestDeviation = Infinity;
-    for (let deg = -75; deg <= 75; deg += 15) {
-      const angle = baseAngle + deg * Math.PI / 180;
-      const candidate = {
-        x: enemy.position.x + Math.cos(angle) * scanDist,
-        y: enemy.position.y + Math.sin(angle) * scanDist,
-      };
-      const segDist = Math.hypot(candidate.x - markPos.x, candidate.y - markPos.y);
-      const blocked = hasVisionBarrier(enemy, markPos, candidate, segDist);
-      if (blocked && Math.abs(deg) < bestDeviation) {
-        bestDeviation = Math.abs(deg);
-        bestAngle = angle;
-      }
+  if (!enemy.collisionMap) {
+    return Math.atan2(dirY, dirX);
+  }
+
+  const baseAngle = Math.atan2(dirY, dirX);
+  const scanDist = enemy.navigationLength ?? GRID.CELL_SIZE * 6;
+  const clearDist = GRID.CELL_SIZE * 2;
+  let bestCoverAngle = null, bestCoverDeviation = Infinity;
+  let bestClearAngle = null, bestClearDeviation = Infinity;
+  for (let deg = -75; deg <= 75; deg += 15) {
+    const angle = baseAngle + deg * Math.PI / 180;
+
+    // Self-clearance gate: can the enemy actually step this way at all?
+    const nearPoint = {
+      x: enemy.position.x + Math.cos(angle) * clearDist,
+      y: enemy.position.y + Math.sin(angle) * clearDist,
+    };
+    if (hasVisionBarrier(enemy, enemy.position, nearPoint, clearDist)) continue;
+
+    if (Math.abs(deg) < bestClearDeviation) {
+      bestClearDeviation = Math.abs(deg);
+      bestClearAngle = angle;
     }
-    if (bestAngle !== null) {
-      dirX = Math.cos(bestAngle);
-      dirY = Math.sin(bestAngle);
+
+    const candidate = {
+      x: enemy.position.x + Math.cos(angle) * scanDist,
+      y: enemy.position.y + Math.sin(angle) * scanDist,
+    };
+    const segDist = Math.hypot(candidate.x - markPos.x, candidate.y - markPos.y);
+    const blocked = hasVisionBarrier(enemy, markPos, candidate, segDist);
+    if (blocked && Math.abs(deg) < bestCoverDeviation) {
+      bestCoverDeviation = Math.abs(deg);
+      bestCoverAngle = angle;
     }
   }
 
-  const runDistance = GRID.CELL_SIZE * 20;
-  const awayPoint = {
-    x: enemy.position.x + dirX * runDistance,
-    y: enemy.position.y + dirY * runDistance,
-  };
-  moveChaser(enemy, speedMultiplier, awayPoint, deltaTime);
+  if (bestCoverAngle !== null) return bestCoverAngle;
+  if (bestClearAngle !== null) return bestClearAngle;
+  return jitteredAngle;
 }
 
 const VERBS = {
