@@ -136,7 +136,21 @@ export function defaultStates(data) {
  * whole skip semantics. Authoring States is therefore all-or-nothing per enemy,
  * which also means the re-authored four can be read without cross-referencing
  * this file.
+ *
+ * Always returns a fresh top-level object, even for an authored `states`
+ * block. `EnemyStateMachine` treats the object it's given (`declared`) as its
+ * own private, mutable set — Enemy.js's `equipWeapon()` and RipenMechanic's
+ * archetype flip both add keys to it after construction (`declared.recover
+ * = {...}`, `declared.approach = {}`). `data.states` is the shared catalogue
+ * entry every instance of that enemy type reads from; handing it out by
+ * reference let one enemy's runtime mutation corrupt every future spawn of
+ * the same type for the rest of the session (surfaced by Bomb: one Bomb
+ * flipping to its permanent-chaser state retroactively declared `approach`/
+ * `search` on the shared object, so freshly spawned Bombs afterward skipped
+ * Flee entirely). The clone is shallow — nested state configs (e.g.
+ * `states.flee`) are still shared, which is fine since nothing mutates them
+ * in place, only adds sibling top-level keys.
  */
 export function statesFor(data) {
-  return data.states ?? defaultStates(data);
+  return data.states ? { ...data.states } : defaultStates(data);
 }
