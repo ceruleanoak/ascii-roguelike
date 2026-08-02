@@ -1878,7 +1878,7 @@ export const ENEMIES = {
     },
     trapLayerMechanic: {
       enabled: true,
-      trapTypes: ['slow', 'slow', 'fire']  // 2:1 bias: slow sets up, fire punishes stopping
+      trapTypes: ['slow', 'slow', 'fire', 'freeze', 'stun']  // slow sets up; fire/freeze/stun punish stopping
     },
     idleBehavior: 'wander',
     elementalAffinity: {
