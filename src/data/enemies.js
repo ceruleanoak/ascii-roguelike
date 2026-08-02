@@ -1874,6 +1874,8 @@ export const ENEMIES = {
     states: {
       alert: {},
       flee: {},
+      lookback: {},
+      useTrap: { to: 'alert' },  // unique to the trap goblin — settles back to idle, not withdraw
       withdraw: { duration: 0.6 }
     },
     trapLayerMechanic: {
@@ -2223,6 +2225,7 @@ export const ENEMIES = {
     states: {
       alert: {},
       flee: { lookbackInterval: 1.6 },   // snappier than the 2.0 default so growth reads responsively
+      lookback: {},   // required — see EnemyStateMachine's FALLBACK comment on the flee/lookback asymmetry
       withdraw: { duration: 0.6 }
     },
     ripenMechanic: {

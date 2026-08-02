@@ -33,6 +33,8 @@ import recover from './enemyStates/recover.js';
 import search from './enemyStates/search.js';
 import withdraw from './enemyStates/withdraw.js';
 import flee from './enemyStates/flee.js';
+import lookback from './enemyStates/lookback.js';
+import useTrap from './enemyStates/useTrap.js';
 
 // What the spine's current State looks like to everything still reading
 // `enemy.state`: ExploreRenderer's indicator picker, TrailMechanic, Telegraph.
@@ -64,7 +66,7 @@ export function legacyStateFor(machine, enemy) {
   return LEGACY_STATE[machine.current] ?? 'idle';
 }
 
-export const STATES = { dormant, alert, approach, anticipate, strike, recover, search, withdraw, flee };
+export const STATES = { dormant, alert, approach, anticipate, strike, recover, search, withdraw, flee, lookback, useTrap };
 
 // Where a transition lands when its target State is not one this enemy declares.
 //
@@ -79,7 +81,19 @@ export const STATES = { dormant, alert, approach, anticipate, strike, recover, s
 // opts into by declaring `flee` and omitting `approach`/`search` entirely, so
 // both of Alert's transition doors (sight, proximity) land on it instead of
 // hunting. Inert for every enemy that keeps declaring Approach/Search, which
-// is all 56 today — the trap goblin is the first to take this path.
+// is all but two of the roster today.
+//
+// `lookback` and `useTrap` both fall back to `flee` if undeclared — but this
+// is asymmetric in a way that matters. `useTrap` undeclared is a safe
+// degrade: Lookback's `next()` resolves to `flee` (a *different* state than
+// the current `lookback`), so the enemy simply resumes running without ever
+// laying a trap (Bomb's case). `lookback` undeclared is not safe: Flee's
+// `next()` also resolves the fallback to `flee` — but that's already the
+// *current* state, and `transition()` no-ops when the target equals the
+// current state, so the enemy silently never glances back at all. Not
+// engine-guarded on purpose (an enemy declaring `flee` is expected to also
+// declare `lookback`); the enemy-editor schema warns at authoring time
+// instead (`fleeNotes` in `tools/enemy-editor/src/schema.js`).
 const FALLBACK = {
   dormant:    ['alert'],
   alert:      ['approach'],
@@ -89,6 +103,8 @@ const FALLBACK = {
   recover:    ['approach'],
   search:     ['flee', 'withdraw', 'alert'],
   withdraw:   ['alert'],
+  lookback:   ['flee'],
+  useTrap:    ['flee'],
 };
 
 // Conditions that preempt whatever State is current, in the order they are

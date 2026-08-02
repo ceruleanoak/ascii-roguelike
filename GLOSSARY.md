@@ -137,8 +137,9 @@ programming terms.
 
 ### Enemy State
 - **Definition:** The AI State spine — a single closed, named set of behavioral States
-  (Dormant, Alert, Approach, Anticipate, Strike, Recover, Search, Withdraw, Flee) that every
-  Enemy walks, one State current at a time. An Enemy declares only the States it uses; an
+  (Dormant, Alert, Approach, Anticipate, Strike, Recover, Search, Withdraw, Flee, Lookback,
+  Use Trap) that every Enemy walks, one State current at a time. An Enemy declares only the
+  States it uses; an
   undeclared State is **skipped**, not an error — the runner walks a fallback chain forward until
   it reaches one the Enemy does declare. Movement archetypes (`chaser`/`keeper`/`kiter`/`jumper`/
   `ambusher`) are not Enemy States — they are an authoring preset that expands into a default
@@ -272,15 +273,8 @@ programming terms.
     `updateVectorNavigation` at an unrelated instant, and the old scan never checked the Enemy's
     own immediate footing, so near a corner it could readily lock onto a heading aimed straight
     into an adjacent wall. This only steers; it doesn't know whether the steering actually worked.
-  - **Lookback** — periodic, lives in `flee.js` (`flee.lookbackInterval`, default 2 dbl-sec ≈
-    every ~1 real second). A deliberate glance back that checks whether the target can *actually*
-    still see the Enemy right now, through the real vision system (`hasVision` with the cone
-    ignored) against the target's live current position — not the frozen mark, and not a raw
-    line check, so both "obstructed" and "simply out of vision range" count as "lost me." This is
-    what sets `enemy.fleeReachedBarrier`, validating whether the barrier-seeking movement
-    succeeded, and it's the only thing that flag updates on — a Mechanic such as
-    `TrapLayerMechanic` sees a discrete "just glanced back and confirmed" moment, not a
-    continuous per-frame flicker.
+  - **Lookback** — its own State now, entered on `flee.lookbackInterval` (default 2 dbl-sec ≈
+    every ~1 real second); see the **Lookback** entry below.
   - **Scatter** — the away heading `moveFlee` computes gets random angular jitter before
     barrier-seeking or trap-avoidance run, widest right when the flight starts and narrowing over
     `enemy.fleeElapsedTime` (fed each frame from `machine.timer`). Several Enemies fleeing the
@@ -293,6 +287,45 @@ programming terms.
 - **Not:** Search (which pursues a led mark with omnidirectional hearing); Withdraw
   (disengagement after a hunt ends, not a reaction to sighting the target); a movement archetype
   — no archetype defaults to declaring it, an Enemy must author it explicitly.
+
+### Lookback
+- **Definition:** A deliberate glance back while fleeing, reached only from Flee's own `next()`
+  on its `lookbackInterval`. Checks whether the target can *actually* still see the Enemy right
+  now, through the real vision system (`hasVision` with the cone ignored) against the target's
+  live current position — not the frozen mark, and not a raw line check, so both "obstructed"
+  and "simply out of vision range" count as "lost me." Holds still; if the target can still see
+  the Enemy, resolves straight back to Flee. If not, holds a `pause` beat — laying a trap should
+  read as a decision the Enemy visibly stops for, not an instant reflex the moment sight
+  breaks — then resolves to Use Trap.
+- **In code:** `src/entities/enemyStates/lookback.js`; sets `enemy.fleeReachedBarrier`
+  (the confirmed-lost-sight flag) and `enemy.fleeLookbackFired` (a one-frame edge a reactive
+  Mechanic, e.g. `RipenMechanic`, can key off). `FALLBACK.lookback` leads with `'flee'` in
+  `EnemyStateMachine.js` — declaring Flee without also declaring Lookback is not a safe
+  omission: the fallback resolves back to Flee's own already-current state, which
+  `transition()` treats as a no-op, so the glance-back silently never fires. Not
+  engine-guarded; the enemy-editor schema warns at authoring time instead (`fleeNotes` in
+  `tools/enemy-editor/src/schema.js`).
+- **Not:** the continuous barrier-seeking `moveFlee` already does every frame while running
+  (that only steers; it doesn't know whether the steering actually worked) — Lookback is the
+  discrete sensory check of the result.
+
+### Use Trap
+- **Definition:** The cornered beat once Lookback confirms a barrier separates the Enemy from
+  its target — holds still and waits. Placing the trap itself is not this State's job: a State
+  has no return value the outside world can read, so a reactive Mechanic (`TrapLayerMechanic`)
+  watches for this State becoming current and is the one thing that can actually spawn
+  something, since only a Mechanic's `{suspend, result}` contract reaches `TrapSystem`. Resolves
+  onward once the Mechanic's `clearAfter` beat elapses, or on a `timeout` safety net if no trap
+  ever gets placed.
+- **In code:** `src/entities/enemyStates/useTrap.js`; paired data lives on
+  `data.trapLayerMechanic`. `FALLBACK.useTrap` leads with `'flee'` — a safe degrade, since
+  Lookback's fallback to Use Trap resolves to a State genuinely different from Lookback's own
+  current one, so an Enemy with Flee + Lookback but no Use Trap (Bomb) simply resumes fleeing
+  forever instead of ever cornering. The Trap Goblin's `useTrap.to` is authored as `'alert'`
+  rather than the default `'withdraw'` — unique to it: it settles back to idle after laying its
+  trap, not disengagement.
+- **Not:** Lookback (the sensory check that leads here); a general escape-and-hide State — this
+  is specifically the trap-laying beat, named for its one shipped user.
 
 ### Mechanic
 - **Definition:** A composable enemy behavior added by data, not by branching in `Enemy.js`.

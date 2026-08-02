@@ -92,7 +92,7 @@ export const RECOVER_VARIANTS = ['retreat', 'stationary', 'jumpBack', 'knockback
 // (`search.onAbandon`, `withdraw.to`). `EnemyStateMachine.resolve()` walks
 // FALLBACK from whatever is named here, so any of the eight is a valid target
 // even for an enemy that does not declare it directly.
-export const STATE_IDS = ['dormant', 'alert', 'approach', 'anticipate', 'strike', 'recover', 'search', 'withdraw', 'flee'];
+export const STATE_IDS = ['dormant', 'alert', 'approach', 'anticipate', 'strike', 'recover', 'search', 'withdraw', 'flee', 'lookback', 'useTrap'];
 
 // The movement-verb vocabulary a State's `movement` key selects from
 // (enemyMovement.js VERBS). No blank option: `applyStateMovement` resolves an
@@ -377,16 +377,40 @@ export const SECTIONS = [
     // this but omits both Approach and Search has both of Alert's transition
     // doors fall through to it instead of hunting — the trap goblin's use.
     id: 'flee', title: 'Flee (running from a memory mark)', gate: 'flee', bareGate: true,
+    note: fleeNotes,
     fields: [
       { key: 'flee.lookbackInterval', label: 'Lookback interval (dbl-sec)', type: 'number', min: 0, step: 0.5, default: 2,
-        help: 'How often the enemy turns to check whether the player can still see it (real vision system, not a raw line check — range or an obstruction both count as "lost me"). fleeReachedBarrier only updates on this beat — 2 dbl-sec ≈ every second at real speed. Running (moveFlee) already steers toward cover every frame; this just confirms it worked.' },
-      { key: 'flee.barrierPause', label: 'Barrier pause (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 0.4,
-        help: 'Held still once a lookback confirms the player can\'t see it, before whatever reacts to that (e.g. a trap-laying Mechanic) fires.' },
-      { key: 'flee.clearAfter', label: 'Clear after (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 1,
-        help: 'Only meaningful once a Mechanic has acted on the barrier — counts down before Flee breaks off.' },
+        help: 'How often Flee hands off to the Lookback State to check whether the player can still see it. 2 dbl-sec ≈ every second at real speed. Running (moveFlee) already steers toward cover every frame; Lookback just confirms it worked.' },
       { key: 'flee.maxDuration', label: 'Max duration (dbl-sec)', type: 'number', min: 0, step: 0.5, default: 6,
         help: 'Safety net: gives up fleeing after this long even if the player is never lost.' },
       { key: 'flee.to', label: 'Resolves to → State', type: 'select', options: STATE_IDS, default: 'withdraw' },
+    ]
+  },
+  {
+    // The deliberate glance-back Flee hands off to on its lookbackInterval —
+    // requires Flee itself (see fleeNotes: declaring Flee without this means
+    // the glance-back FALLBACK silently resolves back to Flee's own current
+    // state and never fires at all).
+    id: 'lookback', title: 'Lookback (glance back while fleeing)', gate: 'lookback', bareGate: true,
+    showIf: (d) => d.flee !== undefined,
+    fields: [
+      { key: 'lookback.pause', label: 'Pause (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 0.4,
+        help: "Held still once the glance-back confirms the player can't see it, before resuming Flee or (if Use Trap is declared) moving on to it." },
+    ]
+  },
+  {
+    // The cornered hold once Lookback confirms a barrier — paired with the
+    // Trap layer Mechanic specifically (not every Flee/Lookback user; Bomb
+    // flees and glances back but never lays a trap), since placing the trap
+    // itself is that Mechanic's job, not this State's.
+    id: 'useTrap', title: 'Use Trap (cornered, laying a trap)', gate: 'useTrap', bareGate: true,
+    showIf: (d) => d.trapLayerMechanic?.enabled === true,
+    fields: [
+      { key: 'useTrap.clearAfter', label: 'Clear after (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 1,
+        help: 'Counts down after the Trap layer Mechanic places its trap, before breaking off.' },
+      { key: 'useTrap.timeout', label: 'Timeout (dbl-sec)', type: 'number', min: 0, step: 0.5, default: 3,
+        help: 'Safety net: breaks off even if no trap ever gets placed (Mechanic disabled or misconfigured).' },
+      { key: 'useTrap.to', label: 'Resolves to → State', type: 'select', options: STATE_IDS, default: 'withdraw' },
     ]
   },
   // ── Everything else — not tied to a specific State ──────────────────────
@@ -685,9 +709,10 @@ export const MECHANICS = [
     ]
   },
   {
-    // Purely reactive now — the drop decision (when, whether at all) lives in
-    // the Flee State's flags; this Mechanic only turns them into a trap once.
-    // See the Flee section above for the timing knobs (barrierPause, etc).
+    // Purely reactive — the cornered hold is the Use Trap State's job; this
+    // Mechanic only watches for that State becoming current and turns it into
+    // an actual trap once per visit. See the Use Trap section above for the
+    // timing knobs (clearAfter, timeout).
     id: 'trapLayerMechanic', title: 'Trap layer', gate: 'trapLayerMechanic.enabled',
     fields: [
       { key: 'trapLayerMechanic.trapTypes', label: 'Trap types', type: 'tags', default: ['slow'] },
@@ -855,6 +880,21 @@ function pacifistNotes(def) {
     });
   }
   return notes;
+}
+
+// `lookback` undeclared is not a safe degrade the way `useTrap` undeclared
+// is — EnemyStateMachine's FALLBACK resolves Flee's lookback fallback back to
+// `flee` itself, and a transition to the already-current state silently
+// no-ops, so the enemy would never glance back at all (see EnemyStateMachine's
+// FALLBACK comment for the full asymmetry).
+function fleeNotes(def) {
+  if (def.flee && !def.lookback) {
+    return [{
+      level: 'warn',
+      text: 'Flee is set but Lookback is not — the periodic glance-back silently never fires (fallback resolves back to Flee itself, which is a no-op transition). Declare Lookback too.',
+    }];
+  }
+  return [];
 }
 
 // `requirePack` reads `enemy.packmates`, which only gets populated by
