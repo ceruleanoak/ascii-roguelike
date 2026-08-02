@@ -378,12 +378,14 @@ export const SECTIONS = [
     // doors fall through to it instead of hunting — the trap goblin's use.
     id: 'flee', title: 'Flee (running from a memory mark)', gate: 'flee', bareGate: true,
     fields: [
+      { key: 'flee.lookbackInterval', label: 'Lookback interval (dbl-sec)', type: 'number', min: 0, step: 0.5, default: 2,
+        help: 'How often the enemy turns to check whether the player can still see it (real vision system, not a raw line check — range or an obstruction both count as "lost me"). fleeReachedBarrier only updates on this beat — 2 dbl-sec ≈ every second at real speed. Running (moveFlee) already steers toward cover every frame; this just confirms it worked.' },
       { key: 'flee.barrierPause', label: 'Barrier pause (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 0.4,
-        help: 'Held still once a barrier breaks line of sight to the mark, before whatever reacts to it (e.g. a trap-laying Mechanic) fires.' },
+        help: 'Held still once a lookback confirms the player can\'t see it, before whatever reacts to that (e.g. a trap-laying Mechanic) fires.' },
       { key: 'flee.clearAfter', label: 'Clear after (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 1,
         help: 'Only meaningful once a Mechanic has acted on the barrier — counts down before Flee breaks off.' },
       { key: 'flee.maxDuration', label: 'Max duration (dbl-sec)', type: 'number', min: 0, step: 0.5, default: 6,
-        help: 'Safety net: gives up fleeing after this long even if no barrier is ever found.' },
+        help: 'Safety net: gives up fleeing after this long even if the player is never lost.' },
       { key: 'flee.to', label: 'Resolves to → State', type: 'select', options: STATE_IDS, default: 'withdraw' },
     ]
   },

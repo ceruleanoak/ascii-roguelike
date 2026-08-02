@@ -19,7 +19,7 @@
 // `fleeTrapPlaced`) that a reactive Mechanic (TrapLayerMechanic) reads, because
 // only a Mechanic's `{suspend, result}` contract can actually spawn something.
 import { applyStateMovement, moveStill } from '../enemyMovement.js';
-import { hasLineOfSight } from '../enemyVision.js';
+import { hasVision } from '../enemyVision.js';
 
 export default {
   id: 'flee',
@@ -33,6 +33,7 @@ export default {
     enemy.fleeing = true;
     enemy.fleeReachedBarrier = false;
     enemy.fleeBarrierPauseTimer = null;
+    enemy.fleeLookbackTimer = null;
 
     if (enemy.target) {
       // Frozen, not led — the opposite of Search's velocity-lookahead mark.
@@ -47,6 +48,7 @@ export default {
   exit(enemy) {
     enemy.fleeing = false;
     enemy.fleeBarrierPauseTimer = null;
+    enemy.fleeLookbackTimer = null;
   },
 
   update(enemy, ctx, machine) {
@@ -62,9 +64,37 @@ export default {
     }
 
     const mark = enemy.lastKnownPosition;
-    const visionLength = ctx.effectiveVisionLength ?? enemy.visionLength;
-    enemy.fleeReachedBarrier = !!(mark && enemy.collisionMap &&
-      !hasLineOfSight(enemy, mark, enemy.position, visionLength));
+
+    // How long this flight has run — read by moveFlee (enemyMovement.js) to
+    // taper its scatter jitter from wide-at-the-start down to a small wobble.
+    // machine.timer already tracks "time actually spent in this state" (next()
+    // reads the same field for maxDuration), so this just makes it visible to
+    // the movement layer, which only receives the mark position, not the machine.
+    enemy.fleeElapsedTime = machine.timer;
+
+    // Lookback — a deliberate glance back, not the continuous barrier-seeking
+    // `moveFlee` already does every frame while running. Where that steers
+    // toward cover, this is the sensory check of whether it worked: can the
+    // player, right now, actually see the enemy? Runs through the real vision
+    // system (hasVision) rather than a raw line check, against the player's
+    // actual current position rather than the frozen mark — obstruction and
+    // simply having run out of vision range both count as "lost me," and the
+    // cone is ignored because turning to look is the entire point of a
+    // lookback. Only turns to check once per interval, not every frame — a
+    // Mechanic reacting to it (TrapLayerMechanic) sees a discrete "just
+    // glanced back and confirmed" moment, not a flag that could flicker.
+    // Default is double-seconds (ctx.deltaTime already carries ENEMY_TIMER_RATE,
+    // same as barrierPause/clearAfter/maxDuration below) — 2.0 reads as "every
+    // second" at real speed.
+    enemy.fleeLookbackTimer = enemy.fleeLookbackTimer == null
+      ? (cfg.lookbackInterval ?? 2.0)
+      : enemy.fleeLookbackTimer - ctx.deltaTime;
+    if (enemy.fleeLookbackTimer <= 0) {
+      enemy.fleeLookbackTimer = cfg.lookbackInterval ?? 2.0;
+      const visionLength = ctx.effectiveVisionLength ?? enemy.visionLength;
+      enemy.fleeReachedBarrier = !!(enemy.target &&
+        !hasVision(enemy, enemy.position, enemy.target.position, visionLength, { ignoreCone: true }));
+    }
 
     // Only one trap per flee episode — once placed, the barrier pause never
     // re-arms, so reaching a second barrier later in the same flight is inert.

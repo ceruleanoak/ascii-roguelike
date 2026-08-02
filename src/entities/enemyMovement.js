@@ -1,4 +1,5 @@
 import { GRID } from '../game/GameConfig.js';
+import { hasVisionBarrier } from './enemyVision.js';
 
 // Every way an Enemy can drive its own targetVelocity, in one place.
 //
@@ -358,12 +359,40 @@ export function moveLunge(enemy, absoluteSpeed, speedMultiplier, targetPos, away
 // Also steers clear of `enemy.ownTrapPositions` (maintained by whatever
 // Mechanic drops them, e.g. TrapLayerMechanic) — the direct fix for a trap
 // goblin fleeing straight into a trap it just laid.
+//
+// Scatter: the away heading gets random jitter before anything else, widest
+// right when the flight starts and narrowing over `enemy.fleeElapsedTime`
+// (set by flee.js each frame from the state machine's own timer) — so
+// several enemies fleeing the same spot fan out into a scramble rather than
+// stacking on one reciprocal line, and each settles toward straight-away as
+// the flight goes on.
+//
+// Wall-seeking: this is the frame-by-frame barrier check — running directly
+// away rarely puts a wall between the enemy and the mark, so an open room
+// stays open no matter how far the enemy backs into it. Fan out candidate
+// headings around the (jittered) away direction and prefer the narrowest
+// deviation that already puts a wall, tree, or other vision-blocking object
+// between the mark and the candidate — cover over raw distance. This only
+// steers; whether the mark's owner (the player) can actually still see the
+// enemy is a separate question `flee.js`'s periodic lookback checks against
+// the real vision system. Recomputed every frame, but `updateVectorNavigation`'s
+// own decisionTimer throttle (not this function) decides how often a new
+// heading is actually acted on — which is also the cadence the scatter jitter
+// rides, matching "randomness at each decision" rather than per-frame noise.
 export function moveFlee(enemy, speedMultiplier, markPos, deltaTime) {
   const dx = enemy.position.x - markPos.x;
   const dy = enemy.position.y - markPos.y;
-  const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-  let dirX = dx / dist;
-  let dirY = dy / dist;
+  const awayAngle = Math.atan2(dy, dx);
+
+  // Scatter falloff — wide right after the flee starts, settling to a small
+  // wobble by ~2.5 dbl-sec (~1.25s real) in. Values are chosen to stay on the
+  // "away" side even at maximum jitter (well under the ±90° that would start
+  // angling back toward the mark).
+  const elapsed = enemy.fleeElapsedTime ?? 0;
+  const scatterDeg = 12 + 48 * Math.max(0, 1 - elapsed / 2.5);
+  const jitteredAngle = awayAngle + (Math.random() - 0.5) * 2 * scatterDeg * Math.PI / 180;
+  let dirX = Math.cos(jitteredAngle);
+  let dirY = Math.sin(jitteredAngle);
 
   if (enemy.ownTrapPositions?.length) {
     const avoidRadius = GRID.CELL_SIZE * 3;
@@ -384,6 +413,30 @@ export function moveFlee(enemy, speedMultiplier, markPos, deltaTime) {
       const mag = Math.sqrt(dirX * dirX + dirY * dirY) || 1;
       dirX /= mag;
       dirY /= mag;
+    }
+  }
+
+  if (enemy.collisionMap) {
+    const baseAngle = Math.atan2(dirY, dirX);
+    const scanDist = enemy.navigationLength ?? GRID.CELL_SIZE * 6;
+    let bestAngle = null;
+    let bestDeviation = Infinity;
+    for (let deg = -75; deg <= 75; deg += 15) {
+      const angle = baseAngle + deg * Math.PI / 180;
+      const candidate = {
+        x: enemy.position.x + Math.cos(angle) * scanDist,
+        y: enemy.position.y + Math.sin(angle) * scanDist,
+      };
+      const segDist = Math.hypot(candidate.x - markPos.x, candidate.y - markPos.y);
+      const blocked = hasVisionBarrier(enemy, markPos, candidate, segDist);
+      if (blocked && Math.abs(deg) < bestDeviation) {
+        bestDeviation = Math.abs(deg);
+        bestAngle = angle;
+      }
+    }
+    if (bestAngle !== null) {
+      dirX = Math.cos(bestAngle);
+      dirY = Math.sin(bestAngle);
     }
   }
 

@@ -167,6 +167,56 @@ export function getVisionObstructionPoint(enemy, start, end, maxLength) {
   return { x: end.x, y: end.y, blocked: false };
 }
 
+// Whether a single sampled point along a ray is obstructed by terrain — solid
+// walls (collisionMap) or a vision-blocking background object (trees/solid
+// props outright via bulletInteraction; tall grass only within its close-range
+// rule). Shared by `hasVision` (which layers the facing cone, range cap and
+// target-specific gates on top) and `hasVisionBarrier` (the bare geometry
+// question, asked between two arbitrary points that aren't necessarily the
+// enemy's target).
+function obstructsPoint(enemy, checkX, checkY, gridX, gridY, distanceFromStart) {
+  const mapRows = enemy.collisionMap ? enemy.collisionMap.length : GRID.ROWS;
+  const mapCols = enemy.collisionMap?.[0]?.length ?? GRID.COLS;
+  if (gridX < 0 || gridX >= mapCols || gridY < 0 || gridY >= mapRows) return true;
+  if (enemy.collisionMap && enemy.collisionMap[gridY][gridX]) return true;
+
+  if (enemy.backgroundObjects) {
+    const myPlane = planeOf(enemy);
+    for (const obj of enemy.backgroundObjects) {
+      if (obj.destroyed) continue;
+      // Skip objects not present on this enemy's plane (e.g. surfaceOnly when underground).
+      if (!objectOnPlane(obj, myPlane)) continue;
+
+      // Vision-blockers (grass) use a half-cell × half-cell pixel hitbox
+      // centered on the grass so dense swaths form a real visual barrier
+      // rather than a sparse 1-cell-aligned check.
+      const blocksV = obj.blocksVision && obj.blocksVision();
+      if (blocksV) {
+        const halfExtent = GRID.CELL_SIZE * 0.25;
+        const cx = obj.position.x + GRID.CELL_SIZE / 2;
+        const cy = obj.position.y + GRID.CELL_SIZE / 2;
+        if (Math.abs(checkX - cx) <= halfExtent &&
+            Math.abs(checkY - cy) <= halfExtent) {
+          // Grass doesn't block vision at close range — enemy can sense nearby player.
+          // 3-cell threshold: you can't hide from something standing right next to you.
+          if (distanceFromStart > GRID.CELL_SIZE * 3) return true;
+        }
+      }
+
+      const objGridX = Math.floor(obj.position.x / GRID.CELL_SIZE);
+      const objGridY = Math.floor(obj.position.y / GRID.CELL_SIZE);
+      if (objGridX === gridX && objGridY === gridY) {
+        if (obj.bulletInteraction === 'block' ||
+            obj.bulletInteraction === 'interact-preserve') {
+          return true; // Solid object blocks vision
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
 /**
  * Check if enemy can see the target (vision check)
  * More restrictive than hasLineOfSight - includes background objects
@@ -228,54 +278,13 @@ export function hasVision(enemy, start, end, maxLength, { ignoreCone = false } =
     const gridX = Math.floor(checkX / GRID.CELL_SIZE);
     const gridY = Math.floor(checkY / GRID.CELL_SIZE);
 
-    // Check if out of bounds — use the actual collision map dimensions so dungeon/hut
-    // interiors (24×24, 10×10) bound correctly instead of falling through to GRID.COLS/ROWS
-    // and hitting undefined cells (which evaluate falsy and silently skip the wall check).
-    const mapRows = enemy.collisionMap ? enemy.collisionMap.length : GRID.ROWS;
-    const mapCols = enemy.collisionMap?.[0]?.length ?? GRID.COLS;
-    if (gridX < 0 || gridX >= mapCols || gridY < 0 || gridY >= mapRows) {
+    // Check if out of bounds, walls, and background objects (trees, boulders,
+    // tall grass, etc.) — use the actual collision map dimensions so dungeon/hut
+    // interiors (24×24, 10×10) bound correctly instead of falling through to
+    // GRID.COLS/ROWS and hitting undefined cells (which evaluate falsy and
+    // silently skip the wall check).
+    if (obstructsPoint(enemy, checkX, checkY, gridX, gridY, distance)) {
       return false;
-    }
-
-    // Check collision map (solid walls)
-    if (enemy.collisionMap && enemy.collisionMap[gridY][gridX]) {
-      return false; // Wall blocks vision
-    }
-
-    // Check background objects (trees, boulders, tall grass, etc.)
-    if (enemy.backgroundObjects) {
-      const myPlane = planeOf(enemy);
-      for (const obj of enemy.backgroundObjects) {
-        if (obj.destroyed) continue;
-        // Skip objects not present on this enemy's plane (e.g. surfaceOnly when underground).
-        if (!objectOnPlane(obj, myPlane)) continue;
-
-        // Check if this sample point intersects with a background object.
-        // Vision-blockers (grass) use a half-cell × half-cell pixel hitbox
-        // centered on the grass so dense swaths form a real visual barrier
-        // rather than a sparse 1-cell-aligned check.
-        const blocksV = obj.blocksVision && obj.blocksVision();
-        if (blocksV) {
-          const halfExtent = GRID.CELL_SIZE * 0.25;
-          const cx = obj.position.x + GRID.CELL_SIZE / 2;
-          const cy = obj.position.y + GRID.CELL_SIZE / 2;
-          if (Math.abs(checkX - cx) <= halfExtent &&
-              Math.abs(checkY - cy) <= halfExtent) {
-            // Grass doesn't block vision at close range — enemy can sense nearby player.
-            // 3-cell threshold: you can't hide from something standing right next to you.
-            if (distance > GRID.CELL_SIZE * 3) return false;
-          }
-        }
-
-        const objGridX = Math.floor(obj.position.x / GRID.CELL_SIZE);
-        const objGridY = Math.floor(obj.position.y / GRID.CELL_SIZE);
-        if (objGridX === gridX && objGridY === gridY) {
-          if (obj.bulletInteraction === 'block' ||
-              obj.bulletInteraction === 'interact-preserve') {
-            return false; // Solid object blocks vision
-          }
-        }
-      }
     }
 
     // Check steam clouds (block vision through steam)
@@ -290,6 +299,36 @@ export function hasVision(enemy, start, end, maxLength, { ignoreCone = false } =
   }
 
   return true; // Clear vision
+}
+
+/**
+ * Whether terrain — a wall, or a vision-blocking background object (trees and
+ * other solid props outright; tall grass within its close-range rule) — sits
+ * anywhere between two arbitrary points. The pure geometry question, with none
+ * of `hasVision`'s facing cone, range-as-visibility, or target-specific gates
+ * (hidden/mossCloak/plane): those all describe whether the enemy has *noticed*
+ * something, which doesn't apply when the two points aren't the enemy and its
+ * target — e.g. Flee's wall-seeking scan, asking whether a candidate heading
+ * would put cover between the mark and the enemy.
+ */
+export function hasVisionBarrier(enemy, start, end, maxLength) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  if (distance === 0) return false;
+  const checkDistance = Math.min(distance, maxLength);
+
+  const samples = Math.ceil(checkDistance / (GRID.CELL_SIZE / 2));
+  for (let i = 1; i <= samples; i++) {
+    const t = i / samples;
+    const checkX = start.x + dx * t;
+    const checkY = start.y + dy * t;
+    const gridX = Math.floor(checkX / GRID.CELL_SIZE);
+    const gridY = Math.floor(checkY / GRID.CELL_SIZE);
+    if (obstructsPoint(enemy, checkX, checkY, gridX, gridY, distance)) return true;
+  }
+
+  return false;
 }
 
 // States where the target is already acquired, not merely being noticed.

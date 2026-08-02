@@ -255,11 +255,32 @@ programming terms.
   target should only re-notice it by chance, the point of running rather than hunting.
 - **In code:** `src/entities/enemyStates/flee.js`; `moveFlee` (`enemyMovement.js`) is its verb —
   projects a point beyond the Enemy on the far side of the mark and routes to it via the same
-  wall-aware navigation Approach uses, so it turns its back and runs rather than strafing. Sets
-  `enemy.fleeing` (the re-entry guard, playing `aggroMemoryActive`'s role without the vision
-  side effect) and `enemy.fleeReachedBarrier` (recomputed every frame via line-of-sight from the
-  mark) for a Mechanic such as `TrapLayerMechanic` to react to. `FALLBACK.approach` and
-  `FALLBACK.search` both lead with `'flee'` in `EnemyStateMachine.js`.
+  wall-aware navigation Approach uses, so it turns its back and runs rather than strafing. Two
+  distinct mechanisms, kept deliberately separate because they answer different questions:
+  - **Barrier-seeking** — frame-by-frame, lives in `moveFlee`. Fans out candidate headings
+    around the away direction and prefers the one that already puts terrain (a wall, tree, or
+    other vision-blocking background object — via the new pure-geometry `hasVisionBarrier` in
+    `enemyVision.js`) between the mark and the Enemy, so every step of the run actively steers
+    toward cover rather than just increasing distance. This only steers; it doesn't know whether
+    the steering actually worked.
+  - **Lookback** — periodic, lives in `flee.js` (`flee.lookbackInterval`, default 2 dbl-sec ≈
+    every ~1 real second). A deliberate glance back that checks whether the target can *actually*
+    still see the Enemy right now, through the real vision system (`hasVision` with the cone
+    ignored) against the target's live current position — not the frozen mark, and not a raw
+    line check, so both "obstructed" and "simply out of vision range" count as "lost me." This is
+    what sets `enemy.fleeReachedBarrier`, validating whether the barrier-seeking movement
+    succeeded, and it's the only thing that flag updates on — a Mechanic such as
+    `TrapLayerMechanic` sees a discrete "just glanced back and confirmed" moment, not a
+    continuous per-frame flicker.
+  - **Scatter** — the away heading `moveFlee` computes gets random angular jitter before
+    barrier-seeking or trap-avoidance run, widest right when the flight starts and narrowing over
+    `enemy.fleeElapsedTime` (fed each frame from `machine.timer`). Several Enemies fleeing the
+    same spot fan out into a scramble instead of stacking on one reciprocal line, settling toward
+    straight-away as the flight continues.
+
+  Also sets `enemy.fleeing` (the re-entry guard, playing `aggroMemoryActive`'s role without the
+  vision side effect). `FALLBACK.approach` and `FALLBACK.search` both lead with `'flee'` in
+  `EnemyStateMachine.js`.
 - **Not:** Search (which pursues a led mark with omnidirectional hearing); Withdraw
   (disengagement after a hunt ends, not a reaction to sighting the target); a movement archetype
   — no archetype defaults to declaring it, an Enemy must author it explicitly.

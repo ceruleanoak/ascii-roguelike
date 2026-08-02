@@ -180,8 +180,10 @@ export class Enemy {
 
     // Flee state — running from a memory mark rather than pursuing one.
     this.fleeing = false; // Whether Flee has armed its mark (mirrors aggroMemoryActive's role for Search)
-    this.fleeReachedBarrier = false; // Line of sight from the mark to here is broken
+    this.fleeReachedBarrier = false; // Lookback found the player can't currently see this enemy
     this.fleeBarrierPauseTimer = null; // Countdown held at a barrier before whatever reacts to it fires
+    this.fleeLookbackTimer = null; // Countdown to the next lookback beat — fleeReachedBarrier only updates on this tick
+    this.fleeElapsedTime = 0; // Time spent in the current flight (mirrors machine.timer) — tapers moveFlee's scatter jitter
 
     // Unified AI decision-making (intelligence system)
     this.decisionInterval = this.data.decisionInterval || 0.5; // How often to reassess (smarter = lower)
