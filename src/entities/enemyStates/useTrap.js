@@ -40,4 +40,23 @@ export default {
     }
     return null;
   },
+
+  // Reaching this State at all required Lookback to confirm a broken
+  // sightline, so leaving it — trap laid or not — is a clean getaway, not a
+  // mid-chase pause. Reset detection the same way a freshly-spawned enemy
+  // starts: without this, `lastKnownPosition` (the frozen flee mark) and
+  // `hadVisualContact` (alert.js's permanent proximity-door slam, set the
+  // instant Flee first saw its target) both stay set, closing every one of
+  // Alert's re-engage doors at once — sight is cone-gated and this enemy is
+  // now facing away from the chase, proximity is slammed shut, and the
+  // "already have a mark" door needs `aggroMemoryActive`, which Flee
+  // deliberately never sets (flee.js). Trap Goblin's aggro range (12 cells)
+  // means the pursuing player almost never leaves Alert's hold-still radius
+  // in the meantime, so without this reset the goblin freezes in place,
+  // facing the wrong way, until the player simply walks up and kills it —
+  // the opposite of "runs at the sight of you."
+  exit(enemy) {
+    enemy.lastKnownPosition = null;
+    enemy.hadVisualContact = false;
+  },
 };
