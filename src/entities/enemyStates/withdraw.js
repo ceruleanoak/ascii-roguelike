@@ -10,6 +10,7 @@
 // abandons a search simply stops and starts wandering on the spot, which reads
 // as a bug rather than as a decision.
 import { applyStateMovement } from '../enemyMovement.js';
+import { armPursuitGate, isPursuing } from '../enemyPursuit.js';
 
 export default {
   id: 'withdraw',
@@ -18,6 +19,9 @@ export default {
     enemy.enraged = false;
     enemy.aggroMemoryActive = false;
     enemy.lastKnownPosition = null;
+    // Arm `requirePursuit` below — see enemyPursuit.js and alert.js's own
+    // copy of this gate for the full reasoning.
+    armPursuitGate(enemy, '_withdrawPursuitGate');
   },
 
   update(enemy, ctx, machine) {
@@ -29,8 +33,11 @@ export default {
     const cfg = machine.configFor('withdraw') ?? {};
     // Re-engaging mid-withdrawal is allowed: walking away is a decision, not a
     // commitment, and an enemy that ignored the player reappearing in front of
-    // it would read as broken.
-    if (ctx.canSee && ctx.effectiveDistance <= ctx.effectiveAggroRange && enemy.target) {
+    // it would read as broken. `requirePursuit` narrows "reappeared" to mean
+    // "is actually closing the distance" rather than merely visible — see
+    // alert.js's own copy of this gate for the full reasoning.
+    const pursuing = isPursuing(enemy, '_withdrawPursuitGate', cfg);
+    if (pursuing && ctx.canSee && ctx.effectiveDistance <= ctx.effectiveAggroRange && enemy.target) {
       return { id: 'approach', cause: 'target reappeared during withdrawal' };
     }
     if (machine.timer >= (cfg.duration ?? 0)) {

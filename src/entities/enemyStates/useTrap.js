@@ -11,11 +11,14 @@
 // radius. Not a timer — a timer can't tell "far enough" from "still standing
 // on it," and standing on it is exactly what killed this enemy before.
 //
-// This State never transitions back to `flee`. Reaching it at all already
-// required Lookback to confirm the target can't see this enemy, and the only
-// way out is forward, to `alert`. That is what makes "flee only re-triggers
-// from idle" true structurally, not by convention: nothing between Flee and
-// Alert ever reopens the door.
+// This State never transitions back to `flee` directly. Reaching it at all
+// already required Lookback to confirm the target can't see this enemy, and
+// the only way out is forward, to `withdraw` — a real non-frozen gap before
+// anything re-checks for the target (see withdraw.js and Trap Goblin's data
+// comment on `useTrap.to`). Nothing between Flee and that gap ever reopens
+// the door, so a second trap only happens once the gap has genuinely
+// elapsed and the player is still there — active pursuit, not a same-tick
+// coincidence.
 import { moveStill, moveFlee } from '../enemyMovement.js';
 import { GRID } from '../../game/GameConfig.js';
 

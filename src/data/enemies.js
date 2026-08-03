@@ -1820,11 +1820,28 @@ export const ENEMIES = {
     // to `flee` instead (EnemyStateMachine's FALLBACK), the wildcard-state
     // mechanism that makes a coward run rather than hunt.
     states: {
-      alert: {},
+      // `requirePursuit` on alert/withdraw: the flee -> lookback -> useTrap
+      // episode is meant to be one-shot — lay the trap, get clear, settle —
+      // and repeat only for a player who is genuinely still chasing, not one
+      // who merely happens to still be visible or in range. useTrap.exit()
+      // resets detection flags to look like a freshly-spawned enemy (so the
+      // goblin can still notice a target it isn't facing), which reopens
+      // both of Alert's doors — sight *and* proximity, the latter needing no
+      // facing at all — the instant the next state is entered. Against a
+      // stationary player that's a false positive: `requirePursuit` makes
+      // both doors additionally require the target to have closed real
+      // distance since the current alert/withdraw visit began, so "still
+      // there" no longer reads as "still coming."
+      alert: { requirePursuit: true },
       flee: {},
       lookback: {},
-      useTrap: { to: 'alert' },  // unique to the trap goblin — settles back to idle, not withdraw
-      withdraw: { duration: 0.6 }
+      // useTrap hands off to withdraw, not straight to alert, so there is a
+      // real non-frozen gap (movement: 'back', never moveStill regardless of
+      // range — withdraw.js) before anything re-checks for the player at
+      // all, rather than the same-tick re-check landing directly in alert
+      // used to allow.
+      useTrap: { to: 'withdraw' },
+      withdraw: { duration: 1.4, requirePursuit: true }  // 0.7 real seconds
     },
     trapLayerMechanic: {
       enabled: true,
