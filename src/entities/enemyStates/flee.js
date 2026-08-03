@@ -32,6 +32,7 @@ export default {
     enemy.fleeLookbackTimer = null;
     enemy.fleeHeadingTimer = 0;
     enemy.fleeHeadingAngle = null;
+    enemy.fleeElapsedTime = 0;
 
     if (enemy.target) {
       // Frozen, not led — the opposite of Search's velocity-lookahead mark.
@@ -62,10 +63,16 @@ export default {
 
     // How long this flight has run — read by moveFlee (enemyMovement.js) to
     // taper its scatter jitter from wide-at-the-start down to a small wobble.
-    // machine.timer already tracks "time actually spent in this state" (next()
-    // reads the same field for maxDuration), so this just makes it visible to
-    // the movement layer, which only receives the mark position, not the machine.
-    enemy.fleeElapsedTime = machine.timer;
+    // Accumulated here rather than mirrored from `machine.timer`: this state
+    // is bounced out to `lookback` and back on every glance-back (every
+    // `lookbackInterval`), and `machine.timer` resets on every transition —
+    // mirroring it re-widened the scatter back to maximum on each bounce,
+    // so a sustained chase never converged on a clean away-heading and kept
+    // re-rolling wide, reading as exactly the "erratically moving around"
+    // the whole fix was for. `enter()` only zeroes this on a genuine new
+    // flight (the `if (enemy.fleeing) return` guard above), so it now
+    // survives lookback round-trips and narrows for real.
+    enemy.fleeElapsedTime = (enemy.fleeElapsedTime ?? 0) + ctx.deltaTime;
 
     // Ticks down toward the next deliberate glance back (the `lookback`
     // State). Default is double-seconds (ctx.deltaTime already carries

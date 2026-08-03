@@ -4,13 +4,31 @@
 // still and waits; TrapLayerMechanic watches for `stateMachine.current ===
 // 'useTrap'` and is the one thing that can actually spawn something, since
 // only a Mechanic's `{suspend, result}` contract reaches TrapSystem.
-import { moveStill, moveBack } from '../enemyMovement.js';
+//
+// Once the trap is down, this State also owns the getaway: a real Flee-style
+// path away from the trap (corner-seeking, jittered, same movement as
+// flee.js's own run), held until real distance clears the trap's blast
+// radius. Not a timer — a timer can't tell "far enough" from "still standing
+// on it," and standing on it is exactly what killed this enemy before.
+//
+// This State never transitions back to `flee`. Reaching it at all already
+// required Lookback to confirm the target can't see this enemy, and the only
+// way out is forward, to `alert`. That is what makes "flee only re-triggers
+// from idle" true structurally, not by convention: nothing between Flee and
+// Alert ever reopens the door.
+import { moveStill, moveFlee } from '../enemyMovement.js';
+import { GRID } from '../../game/GameConfig.js';
 
 export default {
   id: 'useTrap',
 
   enter(enemy) {
-    enemy.fleeClearTimer = null;
+    // Forces moveFlee to pick a fresh heading off the trap position on the
+    // first retreat frame, instead of coasting on whatever heading was still
+    // active from fleeing the player a moment ago — a stale heading here can
+    // point back toward the trap it's meant to be clearing.
+    enemy.fleeHeadingAngle = null;
+    enemy.fleeHeadingTimer = 0;
   },
 
   update(enemy, ctx, machine) {
@@ -19,19 +37,13 @@ export default {
       return;
     }
 
-    const cfg = machine.configFor('useTrap') ?? {};
-    enemy.fleeClearTimer = enemy.fleeClearTimer == null
-      ? (cfg.clearAfter ?? 1.0)
-      : enemy.fleeClearTimer - ctx.deltaTime;
+    // Read by moveFlee/computeFleeHeading to taper scatter jitter over the
+    // life of this retreat — same convention flee.js uses for its own run.
+    enemy.fleeElapsedTime = machine.timer;
 
-    // Step back from the trap just laid, not the player. TrapSystem's timed
-    // fuse (TRAP_FUSE_TOTAL) has no owner-immunity check — only the
-    // proximity-trigger path does — so standing on the trap when the fuse
-    // force-fires hurts the goblin that set it. This clearAfter window is the
-    // only chance to clear the blast radius before that happens.
     const trapPos = enemy.ownTrapPositions[enemy.ownTrapPositions.length - 1];
     if (trapPos) {
-      moveBack(enemy, cfg.speed ?? 1, trapPos);
+      moveFlee(enemy, ctx.speedMultiplier, trapPos, ctx.deltaTime);
     } else {
       moveStill(enemy);
     }
@@ -39,17 +51,39 @@ export default {
 
   next(enemy, ctx, machine) {
     const cfg = machine.configFor('useTrap') ?? {};
+    if (!enemy.fleeTrapPlaced) return null; // still waiting on TrapLayerMechanic to fire
 
-    if (enemy.fleeTrapPlaced && enemy.fleeClearTimer != null && enemy.fleeClearTimer <= 0) {
-      enemy.fleeing = false;
-      return { id: cfg.to ?? 'withdraw', cause: 'trap laid, breaking off' };
+    const trapPos = enemy.ownTrapPositions[enemy.ownTrapPositions.length - 1];
+    if (trapPos) {
+      // Center-to-center, matching TrapSystem's own cx/cy blast math — the
+      // margin exists because the trap's fuse can force-fire before this
+      // enemy is fully clear, and a hairline pass is not a safe distance.
+      const ex = enemy.position.x + enemy.width / 2;
+      const ey = enemy.position.y + enemy.height / 2;
+      const dist = Math.hypot(ex - trapPos.x, ey - trapPos.y);
+      const clearDistance = trapPos.radius + (cfg.clearMargin ?? GRID.CELL_SIZE * 1.5);
+      if (dist >= clearDistance) {
+        enemy.fleeing = false;
+        return { id: cfg.to ?? 'withdraw', cause: 'clear of the trap radius' };
+      }
     }
-    // Safety net — if TrapLayerMechanic never fires (data misconfigured, or
-    // this State reached without the Mechanic enabled), don't strand the
-    // enemy here forever.
-    if (machine.timer >= (cfg.timeout ?? 3.0)) {
+    // Safety net — if TrapLayerMechanic never fires (data misconfigured), or
+    // the retreat can't reach clear ground in time (boxed in), don't strand
+    // the enemy here forever. TrapSystem's owner-immunity means a timeout
+    // here is no longer a death sentence, just an early handoff to Alert.
+    // `machine.timer` runs in double-seconds like every other State's timer
+    // (flee.js's own `maxDuration ?? 6.0` is the same convention) — 7.0 here
+    // is 3.5 real seconds, sized against the largest configured trap radius
+    // (Fire Trap, 112px): a headless repro (tools/debug/trapgoblin-repro.mjs)
+    // clocked a real retreat at ~70px/s under continuous pursuit, so the old
+    // default of 3.5 (1.75 real seconds, ~126px of travel) fell just short of
+    // that trap's 136px clear distance and hit this net on nearly every run
+    // instead of the real clearance check above — a fallback firing that
+    // often isn't a safety net, it's the common case. This value leaves
+    // headroom instead.
+    if (machine.timer >= (cfg.timeout ?? 7.0)) {
       enemy.fleeing = false;
-      return { id: cfg.to ?? 'withdraw', cause: 'useTrap timed out without a trap' };
+      return { id: cfg.to ?? 'withdraw', cause: 'useTrap timed out before clearing the blast radius' };
     }
     return null;
   },

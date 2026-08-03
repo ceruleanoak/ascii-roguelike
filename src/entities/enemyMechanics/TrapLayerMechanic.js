@@ -1,3 +1,7 @@
+import { TRAP_TYPE_CHAR } from '../../systems/TrapSystem.js';
+import { getItemData } from '../../data/items.js';
+import { GRID } from '../../game/GameConfig.js';
+
 // Trap Goblin's trap drop — a reaction to the `useTrap` State, not a state of
 // its own. `useTrap` (enemyStates/useTrap.js) owns the cornered hold; this
 // Mechanic only watches for that State becoming current and, once per visit,
@@ -12,8 +16,9 @@ export const TrapLayerMechanic = {
 
   init(enemy) {
     enemy.fleeTrapPlaced = false; // One trap per `useTrap` visit
-    enemy.fleeClearTimer = null; // Counts down after placing, before useTrap breaks off
-    enemy.ownTrapPositions = []; // This enemy's own traps, so moveFlee can steer around them
+    enemy.ownTrapPositions = []; // This enemy's own traps — {x, y, radius} — so
+    // moveFlee can steer around them and useTrap.js can distance-gate its
+    // post-placement retreat against the real blast radius.
   },
 
   update(enemy, ctx) {
@@ -32,11 +37,14 @@ export const TrapLayerMechanic = {
     enemy.fleeTrapPlaced = true;
     const x = enemy.position.x + enemy.width / 2;
     const y = enemy.position.y + enemy.height / 2;
-    enemy.ownTrapPositions.push({ x, y });
-    if (enemy.ownTrapPositions.length > 5) enemy.ownTrapPositions.shift();
 
     const types = cfg.trapTypes ?? ['slow'];
     const trapType = types[Math.floor(Math.random() * types.length)];
+    const trapChar = TRAP_TYPE_CHAR[trapType] ?? '●';
+    const radius = getItemData(trapChar)?.effectRadius ?? GRID.CELL_SIZE * 2;
+
+    enemy.ownTrapPositions.push({ x, y, radius });
+    if (enemy.ownTrapPositions.length > 5) enemy.ownTrapPositions.shift();
 
     return {
       suspend: true,

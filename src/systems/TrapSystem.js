@@ -26,14 +26,18 @@ const WIRE_MAX_DIST = GRID.CELL_SIZE * 8; // 128px
 // traps arm via _armTrap and are out of scope). Real seconds: TrapSystem.update
 // runs off the raw, undoubled deltaTime, unlike Enemy.update's ENEMY_TIMER_RATE
 // doubling. Idle and unarmed for FUSE_IDLE, then blinks as a warning until it
-// force-fires at FUSE_TOTAL — caps how many traps a Trap Goblin can stack, and
-// since `_fireOneShotTrap` has no owner-immunity check (unlike the proximity
-// path in updatePlacedTraps), a goblin that lingers next to its own trap gets
-// caught by the very fuse it set, giving it a reason to retreat immediately
-// after placing.
+// force-fires at FUSE_TOTAL — caps how many traps a Trap Goblin can stack.
+// `_fireOneShotTrap` excludes `entry.owner` from every damage/status loop (see
+// below), same as the proximity-trigger path in updatePlacedTraps — an
+// enemy-placed trap never hurts the enemy that placed it, however it fires.
 const TRAP_FUSE_IDLE = 5;
 const TRAP_FUSE_TOTAL = 7;
 const TRAP_FUSE_BLINK_INTERVAL = 0.4;
+
+// Trap type → placed Item char. Shared with TrapLayerMechanic so an enemy
+// deciding what trap it just committed to can look up the same item data
+// (effectRadius, etc.) that placeTrapAtPosition will spawn.
+export const TRAP_TYPE_CHAR = { slow: '●', fire: '^', freeze: '[', stun: '{' };
 const THROW_PROFILES = {
   trap:    { maxDist: TRAP_MAX_DIST,      damageMult: 0,   minVelForDamage: 0,   maxDamageVel: 1 },
   wire:    { maxDist: WIRE_MAX_DIST,      damageMult: 0,   minVelForDamage: 0,   maxDamageVel: 1 },
@@ -571,8 +575,7 @@ export class TrapSystem {
   // type: 'slow' → Slime Bomb (●), 'fire' → Fire Trap (^)
   placeTrapAtPosition(x, y, type, plane = 0, owner = null) {
     const game = this.game;
-    const charMap = { slow: '●', fire: '^', freeze: '[', stun: '{' };
-    const char = charMap[type] || '●';
+    const char = TRAP_TYPE_CHAR[type] || '●';
 
     const trapItem = new Item(char, x - GRID.CELL_SIZE / 2, y - GRID.CELL_SIZE / 2);
     trapItem.isPlaced = true;
@@ -763,12 +766,17 @@ export class TrapSystem {
     const cx = tx + GRID.CELL_SIZE / 2;
     const cy = ty + GRID.CELL_SIZE / 2;
     const r = trapData.effectRadius;
+    // However this trap fires — proximity, weapon, or the timed fuse — it
+    // never hurts the enemy that placed it. The proximity-trigger path
+    // (updatePlacedTraps) already exempts entry.owner; every loop below does
+    // the same so the exemption holds regardless of firing path.
+    const targets = entry.owner ? enemies.filter((e) => e !== entry.owner) : enemies;
 
     if (trapData.effect === 'slow') {
       // Slime Bomb: blast deals 1+ damage and applies goo to enemies in radius. Slime-immune
       // enemies are filtered by _applyTrapHit via trapData.affinity='slime' (shows IMMUNE).
       const slowDmg = trapData.damage || 1;
-      for (const enemy of enemies) {
+      for (const enemy of targets) {
         const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - cx;
         const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - cy;
         if (Math.sqrt(dx * dx + dy * dy) > r) continue;
@@ -800,7 +808,7 @@ export class TrapSystem {
       // are filtered by _applyTrapHit via trapData.affinity='freeze'.
       game.particles.push(...createIceBurst(cx, cy));
       const freezeDmg = trapData.damage || 1;
-      for (const enemy of enemies) {
+      for (const enemy of targets) {
         const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - cx;
         const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - cy;
         if (Math.sqrt(dx * dx + dy * dy) > r) continue;
@@ -895,7 +903,7 @@ export class TrapSystem {
       // concussive damage — no affinity gate, so fire-affinity enemies still take it.
       // The burn status follows but is also unconditional (lore: shrapnel ignites).
       const dmg = trapData.damage || 6;
-      for (const enemy of enemies) {
+      for (const enemy of targets) {
         const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - cx;
         const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - cy;
         if (Math.sqrt(dx * dx + dy * dy) <= r) {
@@ -935,7 +943,7 @@ export class TrapSystem {
       // permanently (reuses the Trident-pin immobilizer). Non-beasts walk through it
       // untouched — this is a hunter's snare, not a blast. No damage; the catch is the point.
       let caught = false;
-      for (const enemy of enemies) {
+      for (const enemy of targets) {
         const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - cx;
         const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - cy;
         if (Math.sqrt(dx * dx + dy * dy) > r) continue;
@@ -972,7 +980,7 @@ export class TrapSystem {
         }
       }
 
-      for (const enemy of enemies) {
+      for (const enemy of targets) {
         const dx = enemy.position.x - tx;
         const dy = enemy.position.y - ty;
         if (Math.sqrt(dx * dx + dy * dy) > r) continue;
