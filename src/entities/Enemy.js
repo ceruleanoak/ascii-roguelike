@@ -271,17 +271,6 @@ export class Enemy {
       this.shouldDropItems = false;
     }
 
-    // Optional random spawn loadout (e.g. goblins arrive with a basic weapon).
-    // Skipped silently if itemUsage isn't enabled or the roll fails.
-    if (this.itemUsage && this.itemUsage.enabled && this.data.spawnEquipment) {
-      const cfg = this.data.spawnEquipment;
-      if (Math.random() < (cfg.chance ?? 1.0) && Array.isArray(cfg.weapons) && cfg.weapons.length > 0) {
-        const choice = cfg.weapons[Math.floor(Math.random() * cfg.weapons.length)];
-        const weapon = new Item(choice, x, y);
-        this.pickupItem(weapon);
-      }
-    }
-
     // Sapping system (for bat enemy)
     this.sapping = false;
     this.sappingTarget = null;
@@ -329,6 +318,18 @@ export class Enemy {
 
     // The State spine — every enemy's AI, from spawn.
     this.stateMachine = new EnemyStateMachine(this, statesFor(this.data));
+
+    // Optional random spawn loadout (e.g. goblins arrive with a basic weapon).
+    // Skipped silently if itemUsage isn't enabled or the roll fails. Must run
+    // after stateMachine init — equipWeapon's melee branch reads it.
+    if (this.itemUsage && this.itemUsage.enabled && this.data.spawnEquipment) {
+      const cfg = this.data.spawnEquipment;
+      if (Math.random() < (cfg.chance ?? 1.0) && Array.isArray(cfg.weapons) && cfg.weapons.length > 0) {
+        const choice = cfg.weapons[Math.floor(Math.random() * cfg.weapons.length)];
+        const weapon = new Item(choice, x, y);
+        this.pickupItem(weapon);
+      }
+    }
 
     if (ShellFormMechanic.isEnabled(this)) ShellFormMechanic.init(this);
 
