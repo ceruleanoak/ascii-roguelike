@@ -5,6 +5,7 @@ import { BoomerangMechanic } from './BoomerangMechanic.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { GameAnimalMechanic } from '../entities/enemyMechanics/GameAnimalMechanic.js';
 import { SniperMechanic } from '../entities/enemyMechanics/SniperMechanic.js';
+import { ThiefMechanic } from '../entities/enemyMechanics/ThiefMechanic.js';
 import { queueDamageNumber as queueDamageNumberImpl, ageDamageTextQueue, reportDamageResult as reportDamageResultImpl } from './DamageNumberQueue.js';
 import { updateEnemyMeleeAttack, resolveEnemyAttack, attackHitsBox, retireAfterTest } from '../game/Telegraph.js';
 import { conductElectricity as conductElectricityImpl } from './ElectricConduction.js';
@@ -1417,7 +1418,11 @@ export class CombatSystem {
               } else if (result.immune) {
                 this.createDamageNumber('IMMUNE', player.position.x, player.position.y, '#00ffff');
               } else if (result !== false) {
-                this.createDamageNumber(result.actualDamage ?? attack.damage, player.position.x, player.position.y, player.color);
+                if (attack.steal) {
+                  ThiefMechanic.resolveTheft(attack, player, this);
+                } else {
+                  this.createDamageNumber(result.actualDamage ?? attack.damage, player.position.x, player.position.y, player.color);
+                }
 
                 // Apply knockback to player
                 if (attack.knockback) {
@@ -1430,6 +1435,11 @@ export class CombatSystem {
 
                 // Hitstop on confirmed player hit
                 this.physicsSystem.applyHitstop(player, 0.06);
+
+                // Enemy melee elemental follow-through (e.g. Plague Rat's poison bite)
+                if (attack.onHit === 'poison') {
+                  player.applyPoison(attack.poisonDuration ?? 4.0);
+                }
 
                 // Handle reflection
                 if (result.reflect && result.attacker) {

@@ -1547,7 +1547,7 @@ export class ExploreRenderer {
         this.renderer[drawMethod](
           enemy.position.x + GRID.CELL_SIZE / 2 + shakeX,
           enemy.position.y + GRID.CELL_SIZE / 2 + shakeY - arcLift,
-          enemy.char,
+          enemy.displayChar,
           displayColor
         );
       }

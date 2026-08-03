@@ -119,7 +119,7 @@ export const ENEMIES = {
     spellDescription: 'IT WILL SERVE.',
     mass: 0.5,
     hp: 2,
-    speed: 50,
+    speed: 100,
     acceleration: 400,  // Darty, reactive — changes direction quickly
     damage: 1,
     attackRange: GRID.CELL_SIZE * 1.75,  // Closes a touch tighter than 2u — was missing too often
@@ -136,7 +136,42 @@ export const ENEMIES = {
     telegraph: { area: 'box', animation: 'clap', attackShape: 'v' },
     recover: { variant: 'jumpBack' },  // Darty and skittish — flinches off after biting
     affinities: ['beast'],
-    tier: 'weak'
+    tier: 'weak',
+    // Steals coin instead of biting whenever the player is carrying any (see
+    // ThiefMechanic) — bite is untouched otherwise. Taking damage OR a
+    // successful grab permanently flips the rat to pure flight.
+    thiefMechanic: { enabled: true }
+  },
+
+  'P': {
+    char: 'P',
+    // Renders as a green-tinted 'r' rather than a new glyph — same family,
+    // signaled tougher by color alone, so the player's rat-shape memory
+    // carries straight over. See Enemy.js's `displayChar` field.
+    displayChar: 'r',
+    name: 'Plague Rat',
+    description: 'A rat whose bite festers.',
+    spellDescription: 'IT WILL ROT.',
+    mass: 0.5,
+    hp: 4,
+    speed: 100,
+    acceleration: 400,
+    damage: 2,
+    attackRange: GRID.CELL_SIZE * 1.75,
+    aggroRange: GRID.CELL_SIZE * 8,
+    attackCooldown: 1.0,
+    attackWindup: 1.0,
+    attackType: 'melee',
+    decisionInterval: 0.4,
+    color: '#9acd32',   // sickly yellow-green — the tier tell, glyph stays 'r'
+    grassStealth: true,
+    telegraph: { area: 'box', animation: 'clap', attackShape: 'v' },
+    recover: { variant: 'jumpBack' },
+    affinities: ['beast', 'venom'],
+    tier: 'normal',
+    onHit: 'poison',
+    poisonDuration: 4.0,
+    thiefMechanic: { enabled: true }
   },
 
   '^': {
@@ -2232,9 +2267,9 @@ export const ZONE_SPAWN_TABLES = {
   'green': {
     // Forest/verdant theme - NO fire/ice/lightning enemies
     0: ['r', 'o'],                                       // L1-2: Rats, Slimes (Boar too common at 1-in-3; first appears L3+)
-    3: ['r', 'o', '^', 'G', 'g', 'b'],                // L3-5: Add Bats, Goblins, Frogs, Boars
-    6: ['o', '^', 'G', 'S', 'g', 'b', 'm'],           // L6-8: Add Skeletons, Mimics ('M' Giant Slime is now boss-only)
-    9: ['G', 'S', 'O', 'W', 'g', 'a', 'd'],          // L9-11: Add Ogres, Wizards, Shamans, Duelists
+    3: ['r', 'o', '^', 'G', 'g', 'b', 'P'],           // L3-5: Add Bats, Goblins, Frogs, Boars, Plague Rats
+    6: ['o', '^', 'G', 'S', 'g', 'b', 'm', 'P'],      // L6-8: Add Skeletons, Mimics ('M' Giant Slime is now boss-only)
+    9: ['G', 'S', 'O', 'W', 'g', 'a', 'd', 'P'],     // L9-11: Add Ogres, Wizards, Shamans, Duelists
     12: ['S', 'O', 'G', 'W', 'K', 'T', 'L', 'a', 'd'] // L12+: Add Knights, Trolls, Looters, Shamans, Duelists
   },
 

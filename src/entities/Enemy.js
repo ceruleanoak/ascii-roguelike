@@ -44,6 +44,7 @@ import { PatrolMechanic } from './enemyMechanics/PatrolMechanic.js';
 import { GameAnimalMechanic } from './enemyMechanics/GameAnimalMechanic.js';
 import { SniperMechanic } from './enemyMechanics/SniperMechanic.js';
 import { RipenMechanic } from './enemyMechanics/RipenMechanic.js';
+import { ThiefMechanic } from './enemyMechanics/ThiefMechanic.js';
 import { EnemyStateMachine, legacyStateFor } from './EnemyStateMachine.js';
 import { statesFor } from '../data/stateDefaults.js';
 
@@ -86,6 +87,10 @@ export class Enemy {
       color: COLORS.ENEMY,
       drops: []
     };
+    // Rendered glyph — defaults to `char`. A tougher variant (e.g. Plague Rat)
+    // can set `data.displayChar` to read as its base family's letter, so the
+    // player's glyph→family memory carries over; only color signals the tier.
+    this.displayChar = this.data.displayChar ?? char;
 
     // Pixel-based position
     this.position = { x, y };
@@ -370,6 +375,7 @@ export class Enemy {
     if (LeapAttackMechanic.isEnabled(this)) LeapAttackMechanic.init(this);
     if (SniperMechanic.isEnabled(this)) SniperMechanic.init(this);
     if (RipenMechanic.isEnabled(this)) RipenMechanic.init(this);
+    if (ThiefMechanic.isEnabled(this)) ThiefMechanic.init(this);
 
     if (SlimeTrailDropMechanic.isEnabled(this)) SlimeTrailDropMechanic.init(this);
 
@@ -1073,6 +1079,7 @@ export class Enemy {
     if (trapResult?.suspend) return trapResult.result;
 
     RipenMechanic.updateGrowth(this, { deltaTime, dotDamageEvents });
+    ThiefMechanic.update(this, { deltaTime, dotDamageEvents, targetPos: this.target?.position });
 
     ChargeMechanic.update(this, { deltaTime, distance, effectiveVisionLength });
 
@@ -1733,6 +1740,8 @@ export class Enemy {
         return this.createSapAttack();
       case 'tongue':
         return this.createTongueAttack();
+      case 'thief':
+        return this.createStealAttack();
       default:
         return null;
     }
@@ -1867,6 +1876,37 @@ export class Enemy {
       owner: this,
       isCharmedAttack: this.isCharmed(),
       charmedTarget: this.isCharmed() ? this.target : null,
+      shooterPlane: this.plane,
+      onHit: this.data.onHit,
+      poisonDuration: this.data.poisonDuration
+    };
+  }
+
+  // Steal attack (ThiefMechanic) — a zero-damage melee swing that lands like
+  // any other hit (dodge/block/i-frames all resolve normally through
+  // takeDamage) but triggers a coin theft instead of a damage number. See
+  // ThiefMechanic.resolveTheft, called from CombatSystem once this attack
+  // actually connects.
+  createStealAttack() {
+    const aim = meleeAimOffset(this);
+    if (!aim) return null;
+    const { dirX, dirY, attackDistance } = aim;
+
+    return {
+      type: 'enemy_melee',
+      char: '█',
+      position: {
+        x: this.position.x + dirX * attackDistance,
+        y: this.position.y + dirY * attackDistance
+      },
+      width: GRID.CELL_SIZE,
+      height: GRID.CELL_SIZE,
+      damage: 0,
+      steal: true,
+      duration: 0.30,
+      color: this.color,
+      knockback: 0,
+      owner: this,
       shooterPlane: this.plane
     };
   }
@@ -2199,6 +2239,7 @@ export class Enemy {
       if (this.data.splitOnDamage?.enabled) this._trySplitOnDamage(amount);
       GooSpewMechanic.onDamaged(this, amount);
       RipenMechanic.onDamaged(this);
+      ThiefMechanic.onDamaged(this);
     }
 
     // Sleep breaks on damage

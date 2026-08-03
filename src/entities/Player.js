@@ -1,4 +1,5 @@
 import { PHYSICS, GRID, COLORS, PLAYER_STATS } from '../game/GameConfig.js';
+import { StatusEffectSystem } from '../systems/StatusEffectSystem.js';
 
 const INVULNERABILITY_DURATION = 1.0;
 const BLINK_FREQUENCY = 0.1;
@@ -132,6 +133,12 @@ export class Player {
     this.burnTickTimer = 0;
     this.burnTickRate = 1.5; // deal damage every 1.5s
     this.burnDamage = 1;    // damage per tick
+
+    // Poison status (Plague Rat bite) — mirrors burn's shape exactly
+    this.poisonDuration = 0;
+    this.poisonTickTimer = 0;
+    this.poisonTickRate = 1.5; // deal damage every 1.5s
+    this.poisonDamage = 1;    // damage per tick
 
     // Ember accumulation (cumulative burn resistance — 3 hits within window to ignite)
     this.emberStacks = 0;
@@ -449,6 +456,12 @@ export class Player {
     this.burnDuration = Math.max(this.burnDuration, duration);
   }
 
+  isPoisoned() { return this.poisonDuration > 0; }
+  applyPoison(duration) {
+    if (this.poisonDuration <= 0) this.poisonTickTimer = this.poisonTickRate;
+    this.poisonDuration = Math.max(this.poisonDuration, duration);
+  }
+
   applySpeedBoost(duration) { this.speedBoostTimer = Math.max(this.speedBoostTimer, duration); }
   applyStoneSkin(duration, bonus) {
     this.stoneSkinTimer = Math.max(this.stoneSkinTimer, duration);
@@ -655,19 +668,9 @@ export class Player {
       }
     }
 
-    // Burn DoT — returns damage amount if a tick fired (damage applied in main.js via takeDamage)
-    if (this.burnDuration > 0) {
-      this.burnDuration -= deltaTime;
-      this.burnTickTimer -= deltaTime;
-      if (this.burnTickTimer <= 0) {
-        this.burnTickTimer = this.burnTickRate;
-        return { burnDamage: this.burnDamage };
-      }
-    } else {
-      this.burnTickTimer = 0;
-    }
-
-    return null;
+    // Burn/poison DoT ticking — StatusEffectSystem.js (damage applied back
+    // in main.js via takeDamage, once immunity/i-frames have their say).
+    return StatusEffectSystem.tickPlayerDot(this, deltaTime);
   }
 
   startDodgeRoll(direction, enemies = []) {
@@ -1163,6 +1166,10 @@ export class Player {
     // Reset burn state
     this.burnDuration = 0;
     this.burnTickTimer = 0;
+
+    // Reset poison state
+    this.poisonDuration = 0;
+    this.poisonTickTimer = 0;
 
     // Reset wet state
     this.wetDuration = 0;

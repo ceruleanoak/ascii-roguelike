@@ -69,6 +69,7 @@ import { PauseSystem } from './systems/PauseSystem.js';
 import { SlotReplacementSystem } from './systems/SlotReplacementSystem.js';
 import { TreasureOfferingSystem } from './systems/TreasureOfferingSystem.js';
 import { ScreenFadeSystem } from './systems/ScreenFadeSystem.js';
+import { StatusEffectSystem } from './systems/StatusEffectSystem.js';
 import { menuIntent } from './systems/MenuInput.js';
 import { CAMP_NPC_STATE } from './entities/CampNPC.js';
 import { Player } from './entities/Player.js';
@@ -2481,17 +2482,8 @@ class Game {
     // Shark Mask dive (auto-ends on timer expire or leaving water)
     this.characterSystem.updateSharkDive(this.player, deltaTime);
 
-    // Handle burn DoT damage
-    let burnKilledPlayer = false;
-    if (playerUpdateResult?.burnDamage) {
-      const burnDead = this.player.takeDamage(playerUpdateResult.burnDamage, {
-        isBullet: false,
-        element: 'burn'
-      });
-      if (burnDead === true) {
-        burnKilledPlayer = true;
-      }
-    }
+    // Handle burn/poison DoT damage
+    const dotKilledPlayer = StatusEffectSystem.applyPlayerDot(this, playerUpdateResult);
 
     this.armorEffectsSystem.updateMossCloak();
 
@@ -2571,7 +2563,7 @@ class Game {
     // Flail spin ramp + hitbox
     this.flailSystem.update(deltaTime);
 
-    return { burnKilledPlayer };
+    return { dotKilledPlayer };
   }
 
   updateRestState(deltaTime) {
@@ -2737,7 +2729,7 @@ class Game {
 
     // Update all shared player mechanics
     const playerMechanicsResult = this.updatePlayerMechanics(deltaTime);
-    const burnKilledPlayer = playerMechanicsResult?.burnKilledPlayer || false;
+    const dotKilledPlayer = playerMechanicsResult?.dotKilledPlayer || false;
 
     // Blue-zone water armor tick — Coral Crown crystallizes the tile underfoot,
     // Stingray Mantle drops an electrified wake in vacated cells + damages
@@ -3076,7 +3068,7 @@ class Game {
 
     // If a heal consumable fired and restored HP, treat the player as alive
     // hp <= 0 catch-all covers Rusalka, burn-through-invuln, and any direct hp writes
-    const playerDied = combatResult.playerDead || burnKilledPlayer || lavaKilledPlayer || this.player.hp <= 0;
+    const playerDied = combatResult.playerDead || dotKilledPlayer || lavaKilledPlayer || this.player.hp <= 0;
     if (playerDied && this.player.hp > 0) {
       // Give brief invuln so the restored player doesn't instantly die again
       this.player.invulnerabilityTimer = Math.max(this.player.invulnerabilityTimer, 1.0);
