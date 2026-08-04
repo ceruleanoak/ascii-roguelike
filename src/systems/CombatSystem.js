@@ -10,6 +10,7 @@ import { queueDamageNumber as queueDamageNumberImpl, ageDamageTextQueue, reportD
 import { updateEnemyMeleeAttack, resolveEnemyAttack, attackHitsBox, retireAfterTest } from '../game/Telegraph.js';
 import { conductElectricity as conductElectricityImpl } from './ElectricConduction.js';
 import { acidFloodFillWater } from './AcidWaterSpread.js';
+import { TongueAttackSystem } from './TongueAttackSystem.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
 // room — keeps cross-room sniping in check while still feeling powerful.
@@ -33,7 +34,7 @@ export class CombatSystem {
     this.stuckArrows = [];         // { char, position, stuckTo, offset, color, isBurning }
     this.polymorphEvents = [];     // { enemy, outcome } — polymorph transformations to process
     this.aoeEffects = [];          // { type, x, y, radius, timer, color } — AOE visual effects (wand explosions)
-    this.tongueAttacks = [];       // { owner, direction, maxLength, currentLength, phase, ... }
+    this.tongueAttackSystem = new TongueAttackSystem(this); // frog tongue: extend/hold/retract + hit resolution
     this.chainArcs = [];           // { x1, y1, x2, y2, color, timer, duration } — chain lightning visuals
     this.pendingDamageTexts = [];  // staggered floating text queue, see queueDamageNumber()
     this._textCooldowns = new Map(); // target (player) -> seconds until its next queued text can show
@@ -1580,65 +1581,9 @@ export class CombatSystem {
       }
     }
 
-    // Update tongue attacks (frog)
-    for (let i = this.tongueAttacks.length - 1; i >= 0; i--) {
-      const tongue = this.tongueAttacks[i];
-      tongue.timer += deltaTime;
-
-      if (tongue.phase === 'extending') {
-        const t = Math.min(tongue.timer / tongue.extendDuration, 1);
-        tongue.currentLength = tongue.maxLength * t;
-        if (tongue.timer >= tongue.extendDuration) {
-          tongue.currentLength = tongue.maxLength;
-          tongue.phase = 'hold';
-          tongue.timer = 0;
-
-          // Collision check at full extension — damage player if tongue tip reaches them
-          if (!tongue.hasHit) {
-            const owner = tongue.owner;
-            const sx = owner.position.x + GRID.CELL_SIZE / 2;
-            const sy = owner.position.y + GRID.CELL_SIZE / 2;
-            const tipX = sx + tongue.direction.x * tongue.maxLength;
-            const tipY = sy + tongue.direction.y * tongue.maxLength;
-            const playerBox = player.getHitbox();
-            const half = GRID.CELL_SIZE * 0.5;
-            if (tipX + half > playerBox.x && tipX - half < playerBox.x + playerBox.width &&
-                tipY + half > playerBox.y && tipY - half < playerBox.y + playerBox.height) {
-              if (player.isStaffBlocking) {
-                this.createDamageNumber('BLOCK', player.position.x, player.position.y, '#aaaaaa');
-                tongue.hasHit = true;
-                continue;
-              }
-              const result = player.takeDamage(tongue.damage, { isBullet: false, attacker: owner });
-              if (result === true) {
-                this.tongueAttacks.splice(i, 1);
-                return { playerDead: true, objectEffects: this.objectDestroyEvents.splice(0), impactEffects: this.impactEffects.splice(0), newSteamClouds: this.newSteamClouds.splice(0), polymorphEvents: this.polymorphEvents.splice(0) };
-              }
-              if (result?.dodged) {
-                this.createDamageNumber(result.lucky ? 'LUCKY DODGE' : 'DODGE',
-                                        player.position.x, player.position.y,
-                                        result.lucky ? '#ffff66' : '#ffff00');
-              } else if (result !== false) {
-                this.createDamageNumber(result.actualDamage ?? tongue.damage, player.position.x, player.position.y, player.color);
-                this.physicsSystem.applyDamageKnockback(player, result, sx, sy);
-              }
-              tongue.hasHit = true;
-            }
-          }
-        }
-      } else if (tongue.phase === 'hold') {
-        if (tongue.timer >= tongue.holdDuration) {
-          tongue.phase = 'retracting';
-          tongue.timer = 0;
-        }
-      } else if (tongue.phase === 'retracting') {
-        const t = Math.min(tongue.timer / tongue.retractDuration, 1);
-        tongue.currentLength = tongue.maxLength * (1 - t);
-        if (tongue.timer >= tongue.retractDuration) {
-          this.tongueAttacks.splice(i, 1);
-        }
-      }
-    }
+    // Update tongue attacks (frog) — extend/hold/retract + hit resolution lives in TongueAttackSystem
+    const tongueResult = this.tongueAttackSystem.update(deltaTime, player);
+    if (tongueResult) return tongueResult;
 
     const objectEffects = this.objectDestroyEvents.splice(0);
     const impactEffects = this.impactEffects.splice(0);
@@ -1975,7 +1920,7 @@ export class CombatSystem {
     }
 
     if (attackData.type === 'tongue') {
-      this.tongueAttacks.push(attackData);
+      this.tongueAttackSystem.spawn(attackData);
       return;
     }
 
@@ -2366,7 +2311,7 @@ export class CombatSystem {
     this.pendingEnemyProjectiles = [];
     this.damageNumbers = [];
     this.stuckArrows = [];
-    this.tongueAttacks = [];
+    this.tongueAttackSystem.reset();
     this.aoeEffects = [];
     this.chainArcs = [];
     this.polymorphEvents = [];
@@ -2384,7 +2329,7 @@ export class CombatSystem {
     const arrays = [
       this.projectiles, this.enemyProjectiles,
       this.meleeAttacks, this.enemyMeleeAttacks,
-      this.stuckArrows, this.tongueAttacks,
+      this.stuckArrows, this.tongueAttackSystem.tongueAttacks,
       this.chainArcs, this.aoeEffects,
       this.damageNumbers,
     ];
@@ -2420,7 +2365,7 @@ export class CombatSystem {
   }
 
   getTongueAttacks() {
-    return this.tongueAttacks;
+    return this.tongueAttackSystem.tongueAttacks;
   }
 
   cancelPendingAttacksFrom(owner) {

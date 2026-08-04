@@ -254,7 +254,7 @@ export const ENEMIES = {
     },
     affinities: ['beast', 'aquatic'],
     sfx: { hit: 'frog', death: 'frog' },
-    recover: { variant: 'lockPlayer', duration: 0.5 },  // Tongue holds you while it reels back in
+    recover: { variant: 'retreat', duration: 0.5 },  // Hops back after the snap; the slow-on-hit lives in CombatSystem's tongue collision, not here
     tier: 'weak'
   },
 
