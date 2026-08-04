@@ -2,6 +2,7 @@ import { GRID } from '../game/GameConfig.js';
 import { FISHING_TABLES, pickRandomCatch } from '../data/fishingTables.js';
 import { Bobber } from '../entities/Bobber.js';
 import { FishEntity } from '../entities/FishEntity.js';
+import { Item } from '../entities/Item.js';
 import { RewardObject } from '../entities/RewardObject.js';
 import { Rusalka } from '../entities/Rusalka.js';
 
@@ -520,6 +521,29 @@ export class FishingSystem {
         }
       }
     }
+  }
+
+  // Direct SPACE pickup for catches flagged directPickupItem (currently just
+  // "Fish") — grabbed straight out of the air like Bread, no blade needed.
+  // Returns the granted ITEMS key, or null if nothing was in range.
+  trySpacePickup(game) {
+    if (!game.player) return false;
+    const px = game.player.position.x, py = game.player.position.y;
+    const radius = GRID.CELL_SIZE * 1.5;
+    for (let i = 0; i < this.rewardObjects.length; i++) {
+      const reward = this.rewardObjects[i];
+      if (!reward.alive || !reward.directPickupItem) continue;
+      const dx = reward.position.x - px, dy = reward.position.y - py;
+      if (dx * dx + dy * dy > radius * radius) continue;
+      reward.alive = false;
+      this.rewardObjects.splice(i, 1);
+      const grabbed = new Item(reward.directPickupItem, game.player.position.x, game.player.position.y);
+      game.items.push(grabbed);
+      game.physicsSystem.addEntity(grabbed);
+      game.tryPickupItem();
+      return true;
+    }
+    return false;
   }
 
   resetForNewRoom(player = null) {

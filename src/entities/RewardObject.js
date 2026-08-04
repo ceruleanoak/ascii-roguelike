@@ -16,6 +16,10 @@ export class RewardObject {
     this.color = catchData.color;
     this.name = catchData.name;
     this.drops = catchData.drops; // array of ingredient chars
+    // ITEMS key for catches that skip the "a blade opens the catch" rule
+    // (currently just Fish) — grabbed directly via FishingSystem.trySpacePickup
+    // instead of requiring a melee hit.
+    this.directPickupItem = catchData.directPickupItem || null;
     this.alive = true;
     this.canPickUp = false;       // Excluded from magnet / pickup loops
     this.velocity = { x: 0, y: 0 };

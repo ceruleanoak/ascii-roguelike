@@ -3815,6 +3815,11 @@ class Game {
         return;
       }
 
+      // Direct-pickup fishing catches (currently just "Fish") — grabbed
+      // straight out of the air like Bread, no blade needed. Same priority
+      // tier as ground-item pickup above.
+      if (this.fishingSystem.trySpacePickup(this)) return;
+
       // Interior systems (dungeon/hut/maze entry, exit, staircase, item-slot,
       // maze-object hit) via the InteriorManager registry (ADR-0001).
       if (this.interiorManager.handleSpacePress()) return;

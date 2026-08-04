@@ -1719,6 +1719,20 @@ export const ITEMS = {
     autoTriggerHP: 0.18,
     color: '#aa4422'
   },
+  // Granted by the "Fish" fishing catch (all zones except Fountain) via SPACE
+  // pickup — see FishingSystem.trySpacePickup / fishingTables.js's
+  // directPickupItem. The one catch that skips "a blade opens the catch":
+  // cutting a Fish instead of grabbing it just wastes the catch.
+  '♓': {
+    char: '♓',
+    name: 'Caught Fish',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'heal',
+    amount: 3,
+    oneShot: true,
+    autoTriggerHP: 0.12,
+    color: '#7ec8e3'
+  },
   // Dropped by cutting a Red Zone caldera Ember Bush. Unicode/CONSUMABLE
   // (not the letter/digit ingredient tier) because it needs full consumable
   // behavior: passive torch-light while equipped+unspent (fireBerryLight,

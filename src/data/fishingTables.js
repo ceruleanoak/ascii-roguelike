@@ -6,6 +6,9 @@
 // FishingSystem looks these up via spawnItemFn so non-ingredient items (e.g.
 // empty bottle, fairy) can come out of catches. Distinct from 'drops' because
 // drops use the INGREDIENTS char namespace and would collide otherwise.
+// 'directPickupItem' (optional) is an ITEMS key granted straight to the
+// player on SPACE — the one exception to "a blade opens the catch" (Fish:
+// cutting it wastes it instead, same as any other catch with no drops).
 
 export const FISHING_TABLES = {
   green: {
@@ -16,6 +19,7 @@ export const FISHING_TABLES = {
       { name: 'Crayfish',    char: 'ծ', color: '#ff9966', drops: ['b'],             weight: 20 },
       { name: 'Newt',        char: 'ծ', color: '#44ffaa', drops: ['v'],             weight: 15 },
       { name: 'Giant Turtle',char: 'ծ', color: '#88cc44', drops: ['b', 's', 'm'],   weight: 10 },
+      { name: 'Fish',        char: 'ծ', color: '#7ec8e3', drops: [], directPickupItem: '♓', weight: 20 },
       { name: 'Empty Bottle',char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 },
       // Blue-zone supply line: rare catches that gate the water-armor recipes.
       // Drop weights are low; the blue-zone Pearl Cache gives a bundle as the
@@ -38,6 +42,7 @@ export const FISHING_TABLES = {
       { name: 'Oyster',       char: 'ծ', color: '#ddeeff', drops: ['p'],            weight: 12 },
       { name: 'Sharkbone',    char: 'ծ', color: '#ccd8e8', drops: ['n'],            weight: 5 },
       { name: 'Ray Tail',     char: 'ծ', color: '#aabbcc', drops: ['Y'],            weight: 5 },
+      { name: 'Fish',         char: 'ծ', color: '#7ec8e3', drops: [], directPickupItem: '♓', weight: 20 },
       { name: 'Empty Bottle', char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 }
     ]
   },
@@ -49,6 +54,7 @@ export const FISHING_TABLES = {
       { name: 'Lava Eel',    char: 'ծ', color: '#ff3300', drops: ['s', 'F'],        weight: 25 },
       { name: 'Charfish',    char: 'ծ', color: '#cc4400', drops: ['a', 'm'],        weight: 25 },
       { name: 'Ember Toad',  char: 'ծ', color: '#ff8800', drops: ['F', 'g'],        weight: 20 },
+      { name: 'Fish',        char: 'ծ', color: '#7ec8e3', drops: [], directPickupItem: '♓', weight: 20 },
       { name: 'Empty Bottle',char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 }
     ]
   },
@@ -60,6 +66,7 @@ export const FISHING_TABLES = {
       { name: 'Frost Crab',     char: 'ծ', color: '#cceeff', drops: ['i', 'b'],     weight: 25 },
       { name: 'Glacial Carp',   char: 'ծ', color: '#88ccff', drops: ['s', 'm'],     weight: 25 },
       { name: 'Snow Salamander',char: 'ծ', color: '#eeeeff', drops: ['i', 'v'],     weight: 20 },
+      { name: 'Fish',           char: 'ծ', color: '#7ec8e3', drops: [], directPickupItem: '♓', weight: 20 },
       { name: 'Empty Bottle',   char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 }
     ]
   },
@@ -71,6 +78,7 @@ export const FISHING_TABLES = {
       { name: 'Thunder Toad',   char: 'ծ', color: '#ffffaa', drops: ['g', '1'],     weight: 25 },
       { name: 'Charged Catfish',char: 'ծ', color: '#ffee00', drops: ['1'],          weight: 25 },
       { name: 'Spark Minnow',   char: 'ծ', color: '#ccff44', drops: ['k', '1'],     weight: 20 },
+      { name: 'Fish',           char: 'ծ', color: '#7ec8e3', drops: [], directPickupItem: '♓', weight: 20 },
       { name: 'Empty Bottle',   char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 }
     ]
   },
@@ -82,6 +90,7 @@ export const FISHING_TABLES = {
       { name: 'Soul Carp',   char: 'ծ', color: '#aaaacc', drops: ['e', 'b'],        weight: 25 },
       { name: 'Phantom Eel', char: 'ծ', color: '#8888aa', drops: ['d', 'e'],        weight: 25 },
       { name: 'Dead Weight', char: 'ծ', color: '#666677', drops: ['b', 'd'],        weight: 20 },
+      { name: 'Fish',        char: 'ծ', color: '#7ec8e3', drops: [], directPickupItem: '♓', weight: 20 },
       { name: 'Empty Bottle', char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 }
     ]
   },
