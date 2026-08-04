@@ -119,7 +119,7 @@ export const ENEMIES = {
     spellDescription: 'IT WILL SERVE.',
     mass: 0.5,
     hp: 2,
-    speed: 100,
+    speed: 80,
     acceleration: 400,  // Darty, reactive — changes direction quickly
     damage: 1,
     attackRange: GRID.CELL_SIZE * 1.75,  // Closes a touch tighter than 2u — was missing too often
@@ -154,7 +154,7 @@ export const ENEMIES = {
     spellDescription: 'IT WILL ROT.',
     mass: 0.5,
     hp: 4,
-    speed: 100,
+    speed: 80,
     acceleration: 400,
     damage: 2,
     attackRange: GRID.CELL_SIZE * 1.75,
@@ -2245,7 +2245,7 @@ export const ENEMIES = {
       waggleAngle: 15,          // degrees, spec-literal
       waggleCycles: 3,
       growthScales: [1.0, 1.2, 1.45, 1.75],   // render scale at growth level 0..3
-      blinkDelay: 1.0,          // double-seconds (0.5s real), spec-literal
+      blinkDelay: 2.0,          // double-seconds (1.0s real) — doubled from the spec-literal 1.0
       detonateRange: GRID.CELL_SIZE * 1.25,
       detonateDamage: 8,        // point-blank hit — bumped from the spec-literal 5 per playtest feedback ("should be... devastating")
       shockwaveMaxRadius: GRID.CELL_SIZE * 5,   // was 3.5 — reads as a large blast, not a puff

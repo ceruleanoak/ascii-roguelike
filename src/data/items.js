@@ -83,7 +83,7 @@ export const ITEMS = {
     cooldown: 2.0,
     bulletCount: 3,
     bulletRange: 120,
-    accuracy: 0.7,
+    accuracy: 0.8,
     maxUses: 2,
     reloadTime: 6,
     reloadType: 'magazine',
@@ -97,8 +97,8 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.GUN,
     damage: 1,
     cooldown: 0.8,
-    inaccuracy: 0.5,
-    accuracy: 0.65,
+    inaccuracy: 0.7,
+    accuracy: 0.75,
     maxUses: 12,
     reloadTime: 7,
     reloadType: 'magazine',
@@ -492,8 +492,8 @@ export const ITEMS = {
     maxUses: 1,
     critChance: 0.10,
     boomerang: true,
-    boomerangMinCells: 1,         // outbound travel distance at no charge (cells)
-    boomerangMaxCells: 5,         // outbound travel distance at full charge (cells)
+    boomerangMinCells: 2,         // outbound travel distance at no charge (cells)
+    boomerangMaxCells: 8,         // outbound travel distance at full charge (cells)
     boomerangHitDefer: 0.18,      // seconds added to the return timer per enemy hit
     boomerangMaxRicochets: 3,     // enemy-to-enemy bounces at full charge (0 at no charge)
     chainRadius: 32,              // ~1 cell — chain damage radius around first hit
