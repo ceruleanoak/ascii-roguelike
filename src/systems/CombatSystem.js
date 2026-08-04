@@ -2,6 +2,7 @@ import { GRID, PHYSICS, COLORS } from '../game/GameConfig.js';
 import { planeOf, inSamePlane, objectOnPlane } from './PlaneSystem.js';
 import { cycleExitLetter, findExitAtPoint, mutateExitLetter } from './ExitSystem.js';
 import { BoomerangMechanic } from './BoomerangMechanic.js';
+import { WallRicochetMechanic } from './WallRicochetMechanic.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { GameAnimalMechanic } from '../entities/enemyMechanics/GameAnimalMechanic.js';
 import { SniperMechanic } from '../entities/enemyMechanics/SniperMechanic.js';
@@ -314,16 +315,19 @@ export class CombatSystem {
       }
 
       // Check collision with room walls via collisionMap.
-      // Ricochet projectiles skip this — they use checkRicochet() for canvas-edge bouncing.
-      if (!proj.ricochet && this._hitsWall(proj, room)) {
+      // Ricochet projectiles skip this — they use checkRicochet() to bounce off
+      // the room's border wall instead.
+      if (!proj.ricochet && WallRicochetMechanic.hitsWall(proj, room)) {
         // Boomerangs bounce off walls into return mode instead of dying.
         if (proj.boomerang) {
           BoomerangMechanic.onWallHit(proj, deltaTime);
           continue;
         }
         // Bullets ricochet off interior structure walls (flat axis-aligned surfaces).
-        // Border walls and out-of-grid still destroy.
-        if (proj.type === 'bullet' && this._tryStructureWallRicochet(proj, room, deltaTime)) {
+        // Border walls and out-of-grid still destroy. Fester's Gun's orbital-loop
+        // bullets (loopOmega) are excluded — the analytic loop velocity recomputed
+        // each frame fights the ricochet flip, so any wall kills the bullet instead.
+        if (proj.type === 'bullet' && !proj.loopOmega && WallRicochetMechanic.tryStructureWallRicochet(proj, room, deltaTime, this)) {
           continue;
         }
         // Arrows stick to walls in the main room; in interior rooms (hut/dungeon) just destroy.
@@ -542,7 +546,7 @@ export class CombatSystem {
 
       // Ricochet behavior
       if (proj.ricochet) {
-        const bounced = this.checkRicochet(proj);
+        const bounced = WallRicochetMechanic.checkRicochet(proj, room);
         if (bounced) {
           proj.ricochetCount = (proj.ricochetCount || 0) + 1;
           if (proj.ricochetCount >= (proj.maxRicochets || 3)) {
@@ -553,7 +557,7 @@ export class CombatSystem {
       }
 
       // Check bounds
-      if (this.isOutOfBounds(proj)) {
+      if (WallRicochetMechanic.isOutOfBounds(proj)) {
         this.projectiles.splice(i, 1);
         continue;
       }
@@ -1245,13 +1249,13 @@ export class CombatSystem {
       }
 
       // Check collision with room walls via collisionMap
-      if (this._hitsWall(proj, room)) {
+      if (WallRicochetMechanic.hitsWall(proj, room)) {
         this.enemyProjectiles.splice(i, 1);
         continue;
       }
 
       // Check bounds
-      if (this.isOutOfBounds(proj)) {
+      if (WallRicochetMechanic.isOutOfBounds(proj)) {
         this.enemyProjectiles.splice(i, 1);
         continue;
       }
@@ -1794,116 +1798,6 @@ export class CombatSystem {
            attackBox.x + attackBox.width > objBox.x &&
            attackBox.y < objBox.y + objBox.height &&
            attackBox.y + attackBox.height > objBox.y;
-  }
-
-  checkRicochet(proj) {
-    let bounced = false;
-
-    if (proj.position.x < 0) {
-      proj.position.x = 0;
-      proj.velocity.vx = Math.abs(proj.velocity.vx);
-      bounced = true;
-    } else if (proj.position.x > GRID.WIDTH) {
-      proj.position.x = GRID.WIDTH;
-      proj.velocity.vx = -Math.abs(proj.velocity.vx);
-      bounced = true;
-    }
-
-    if (proj.position.y < 0) {
-      proj.position.y = 0;
-      proj.velocity.vy = Math.abs(proj.velocity.vy);
-      bounced = true;
-    } else if (proj.position.y > GRID.HEIGHT) {
-      proj.position.y = GRID.HEIGHT;
-      proj.velocity.vy = -Math.abs(proj.velocity.vy);
-      bounced = true;
-    }
-
-    if (bounced && proj.drawAngle != null) {
-      proj.drawAngle = Math.atan2(proj.velocity.vy, proj.velocity.vx);
-    }
-
-    return bounced;
-  }
-
-  isOutOfBounds(proj) {
-    return proj.position.x < 0 ||
-           proj.position.y < 0 ||
-           proj.position.x > GRID.WIDTH ||
-           proj.position.y > GRID.HEIGHT;
-  }
-
-  // Returns true if `proj` occupies a solid cell in `room.collisionMap`, or is outside
-  // the map's grid boundaries. Works for both normal rooms (30×30) and interior rooms
-  // (hut 10×10, dungeon 24×24). Returns false when room has no collisionMap.
-  _hitsWall(proj, room) {
-    if (!room?.collisionMap) return false;
-    // proj.position is the cell top-left of the glyph; the visible bullet sits
-    // at +CELL_SIZE/2. Check the wall under the bullet's visual center so
-    // collisions are symmetric on all four sides (left/right/top/bottom).
-    const cs = GRID.CELL_SIZE;
-    const col = Math.floor((proj.position.x + cs / 2) / cs);
-    const row = Math.floor((proj.position.y + cs / 2) / cs);
-    const map = room.collisionMap;
-    if (row < 0 || row >= map.length) return true;
-    const rowArr = map[row];
-    return !rowArr || col < 0 || col >= rowArr.length || rowArr[col] === true;
-  }
-
-  // Ricochet bullets off interior structure walls. Border-wall cells and
-  // out-of-grid positions return false so the caller falls through to destroy.
-  _tryStructureWallRicochet(proj, room, deltaTime) {
-    const map = room?.collisionMap;
-    if (!map) return false;
-    const cs = GRID.CELL_SIZE;
-    const rows = map.length;
-    const cols = map[0]?.length || 0;
-
-    // Use the bullet's visual center so left/right and top/bottom collide
-    // symmetrically. proj.position is the cell top-left.
-    const centerX = proj.position.x + cs / 2;
-    const centerY = proj.position.y + cs / 2;
-    const col = Math.floor(centerX / cs);
-    const row = Math.floor(centerY / cs);
-
-    // Out-of-grid → treat as border
-    if (row < 0 || row >= rows || col < 0 || col >= cols) return false;
-    // Border-wall cell → no ricochet
-    if (row === 0 || row === rows - 1 || col === 0 || col === cols - 1) return false;
-    // Not actually a wall cell (defensive) → no ricochet
-    if (!map[row][col]) return false;
-
-    // Reconstruct the bullet's pre-move position (also center) to determine the surface normal.
-    const prevX = centerX - proj.velocity.vx * deltaTime;
-    const prevY = centerY - proj.velocity.vy * deltaTime;
-    const prevCol = Math.floor(prevX / cs);
-    const prevRow = Math.floor(prevY / cs);
-
-    const enteredFromFreeCol = prevCol !== col && prevCol >= 0 && prevCol < cols && !map[row]?.[prevCol];
-    const enteredFromFreeRow = prevRow !== row && prevRow >= 0 && prevRow < rows && !map[prevRow]?.[col];
-
-    let flipX = enteredFromFreeCol;
-    let flipY = enteredFromFreeRow;
-    // Pure diagonal entry through a corner — flip both
-    if (!flipX && !flipY) {
-      flipX = true;
-      flipY = true;
-    }
-
-    if (flipX) proj.velocity.vx = -proj.velocity.vx;
-    if (flipY) proj.velocity.vy = -proj.velocity.vy;
-
-    // Step back to the previously-free cell so the bullet doesn't re-collide
-    // next frame. prevX/Y are in center-space; subtract the cell half to convert
-    // back to the top-left convention proj.position uses.
-    proj.position.x = prevX - cs / 2;
-    proj.position.y = prevY - cs / 2;
-
-    if (proj.drawAngle != null) {
-      proj.drawAngle = Math.atan2(proj.velocity.vy, proj.velocity.vx);
-    }
-    this.audioSystem?.playSFX?.('ricochet', 0.6);
-    return true;
   }
 
   createEnemyAttack(attackData) {

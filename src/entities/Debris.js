@@ -20,6 +20,11 @@ export class Debris {
     this.isPushable = true; // Can be pushed by major objects
     this.mass = 0.1; // Light, easily pushed
 
+    // Wall-overlap ejection (border/interior walls) keys off collisionMap
+    // presence, not hasCollision — see PhysicsSystem.updateEntity — so debris
+    // still gets pushed out of walls without being a solid obstacle to others.
+    this.collisionMap = null;
+
     // Push cooldown (5 frames at 60 FPS = ~0.083 seconds)
     this.pushCooldown = 0;
     this.pushCooldownDuration = 40 / 60; // 40 frames
@@ -37,6 +42,10 @@ export class Debris {
         this.pushCooldown = 0;
       }
     }
+  }
+
+  setCollisionMap(collisionMap) {
+    this.collisionMap = collisionMap;
   }
 
   applyPushForce(pusherVelocity, pusherMass = 1.0) {

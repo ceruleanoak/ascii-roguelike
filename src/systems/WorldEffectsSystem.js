@@ -645,6 +645,10 @@ export class WorldEffectsSystem {
     for (const piece of pieces) {
       if (hutPlane) piece.hutPlane = true;
       else piece.plane = enemy.plane ?? 0;
+      // Reuse the dying enemy's already-resolved collisionMap so pieces get
+      // pushed out of border/interior walls in whatever room (surface or
+      // interior) the enemy actually died in.
+      piece.setCollisionMap(enemy.collisionMap);
       game.debris.push(piece);
       game.physicsSystem.addEntity(piece);
     }

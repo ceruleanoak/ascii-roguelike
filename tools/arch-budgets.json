@@ -3,7 +3,7 @@
   "src/systems/RoomGenerator.js": 180357,
   "src/entities/Enemy.js": 113396,
   "src/rendering/state/ExploreRenderer.js": 113252,
-  "src/systems/CombatSystem.js": 106481,
+  "src/systems/CombatSystem.js": 102700,
   "src/systems/InventorySystem.js": 46776,
   "src/entities/Player.js": 49236
 }

@@ -495,7 +495,11 @@ export class PhysicsSystem {
     }
 
     // Eject entity from any wall cells it currently overlaps (knockback / spawn-inside fix).
-    if (!isProjectile && entity.hasCollision) {
+    // Keyed off collisionMap presence rather than hasCollision so entities that
+    // don't block movement/others (e.g. Debris) still get pushed out of walls
+    // instead of drifting through them — resolveCollisionMapOverlap already
+    // no-ops without a collisionMap, so this only widens who gets ejected.
+    if (!isProjectile && entity.collisionMap) {
       this.resolveCollisionMapOverlap(entity, room);
     }
 
