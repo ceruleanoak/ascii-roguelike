@@ -28,6 +28,7 @@ export function drawOffscreenEnemyIndicators(renderer, game, enemies) {
   for (const enemy of enemies) {
     if (enemy.hp !== undefined && enemy.hp <= 0) continue;
     if (enemy.sapping || enemy.isBossEntity) continue;
+    if (enemy.boundToGrid === false) continue; // mid exit-despawn walk out of the room
 
     // Don't spoil enemies the surface render is actively concealing: fully
     // faded into tall grass (renderEnemy sets _concealmentAlpha before this
