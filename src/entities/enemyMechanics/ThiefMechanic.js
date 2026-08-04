@@ -5,7 +5,10 @@
 // state-mutation pattern (deleting hunting States from `declared` so the
 // EnemyStateMachine FALLBACK can no longer resolve them) is RipenMechanic's,
 // run in reverse: Ripen adds hunting States to a passive enemy, this removes
-// them from a hunting one.
+// them from a hunting one. The flip is one-way toward flight, not toward
+// helplessness, though: `strike` stays declared and flee.js's `cornered`
+// opt-in reaches it, so a cowardly rat still bites back if the player
+// corners it — it just never again closes distance on its own.
 export const ThiefMechanic = {
   isEnabled(enemy) {
     return enemy.data.thiefMechanic?.enabled === true;
@@ -57,11 +60,28 @@ export const ThiefMechanic = {
     delete declared.approach;
     delete declared.search;
     delete declared.anticipate;
-    delete declared.strike;
     delete declared.recover;
+    // Strike stays declared — a flipped rat no longer hunts, but it isn't
+    // defenseless: flee.js's `cornered` branch reaches this same State
+    // (undeclared `anticipate`/`recover` fall back through it to `flee`,
+    // exactly the path a normal un-flipped bite already resolves through
+    // when neither is authored) so the bite fires only when the player
+    // closes the distance, never on the rat's own initiative.
     if (!enemy.stateMachine.has('flee')) declared.flee = {};
+    declared.flee.cornered = true;
     if (!enemy.stateMachine.has('lookback')) declared.lookback = {};
     if (!enemy.stateMachine.has('withdraw')) declared.withdraw = { duration: 1.2 };
+    // Strike's default windup movement is 'still' — correct for the normal
+    // approach-then-strike flow, where Approach already turned the enemy to
+    // face its target before Strike holds that stance. A flipped rat never
+    // runs that approach anymore: it arrives at Strike straight from Flee,
+    // so 'still' would hold the away-facing the flight left behind and the
+    // bite would read as landing while still running from the player. Safe
+    // to set unconditionally rather than gate it on the cornered branch,
+    // because Approach is deleted above — the cornered path in flee.js is
+    // the only way this rat ever reaches Strike again.
+    if (!declared.strike) declared.strike = {};
+    declared.strike.movement = 'close';
 
     enemy.stateMachine.transition(enemy, ctx, 'flee', 'coward flip');
   },

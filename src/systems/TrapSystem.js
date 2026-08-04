@@ -34,6 +34,13 @@ const TRAP_FUSE_IDLE = 5;
 const TRAP_FUSE_TOTAL = 7;
 const TRAP_FUSE_BLINK_INTERVAL = 0.4;
 
+// An enemy-placed trap (Trap Goblin) can't be set off by any trigger path —
+// proximity, melee, or projectile — for a beat after it lands. The goblin
+// drops it mid-retreat, often right where the player (or another enemy)
+// already is, and without this window the trap detonates on contact that
+// predates the trap existing, not a real encounter with it.
+const TRAP_SPAWN_IMMUNITY_MS = 1000;
+
 // Trap type → placed Item char. Shared with TrapLayerMechanic so an enemy
 // deciding what trap it just committed to can look up the same item data
 // (effectRadius, etc.) that placeTrapAtPosition will spawn.
@@ -587,13 +594,23 @@ export class TrapSystem {
       tickTimer: trapItem.data?.tickInterval || 0,
       activeDuration: trapItem.data?.activeDuration != null ? trapItem.data.activeDuration : Infinity,
       affectedEnemies: new Set(),
-      fuseTimer: 0
+      fuseTimer: 0,
+      spawnedAt: performance.now(),
     });
   }
 
   // Delegates to the canonical game accessor (single source of truth).
   _getActiveEnemies() {
     return this.game._activeEnemies();
+  }
+
+  // True while an enemy-placed trap is still within its post-spawn grace
+  // window — checked by every trigger path (proximity, melee, projectile)
+  // so nothing can set it off in the instant it lands. The timed fuse
+  // (TRAP_FUSE_TOTAL, far beyond this window) is unaffected — that's a
+  // forced detonation, not a trigger.
+  _isSpawnImmune(entry) {
+    return entry.spawnedAt != null && performance.now() - entry.spawnedAt < TRAP_SPAWN_IMMUNITY_MS;
   }
 
   // Apply a trap hit to one enemy, respecting `trapData.affinity`. Affinity uses the
@@ -657,7 +674,7 @@ export class TrapSystem {
         }
       }
 
-      if (trapData.oneShot) {
+      if (trapData.oneShot && !this._isSpawnImmune(entry)) {
         // One-shot trap: triggered by enemy or player proximity (owner is immune)
         let triggered = false;
         for (const enemy of enemies) {
@@ -1039,6 +1056,7 @@ export class TrapSystem {
       const entry = game.placedTraps[i];
       const trapData = entry.item.data;
       if (!trapData.oneShot) continue; // Only throwable one-shots can be weapon-detonated
+      if (this._isSpawnImmune(entry)) continue;
 
       const tx = entry.item.position.x + C / 2;
       const ty = entry.item.position.y + C / 2;

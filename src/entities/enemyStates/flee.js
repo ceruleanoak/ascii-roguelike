@@ -94,6 +94,29 @@ export default {
 
     if (!enemy.target) return { id: cfg.to ?? 'withdraw', cause: 'lost target while fleeing' };
 
+    // Cornered — the player closed the distance while the enemy was already
+    // running, close enough that flight alone stops being an answer. This is
+    // a standard feature of the Flee State, but a silent one: `cornered` is
+    // an explicit opt-in (Bomb's plain `flee: { lookbackInterval: 1.6 }`
+    // leaves it off on purpose — RipenMechanic already owns Bomb's own
+    // proximity reaction, ahead of the spine, at `Enemy.js`'s
+    // `tryDetonateTrigger` call). What "fighting back" means is per-enemy:
+    // Rat/Plague Rat (ThiefMechanic's coward flip) resolve `cornerTo`'s
+    // default of `anticipate` through to `strike` — a bite, the same
+    // fallback chain a normal un-flipped attack already uses when neither is
+    // authored. Trap Goblin instead names `cornerTo: 'useTrap'` — its bite is
+    // a trap dropped at its own feet — with an explicit `cornerRange` since
+    // it has no `attackRange` of its own (`attackType: 'none'`) for the
+    // default to fall back on. Same commit condition as approach.js's own —
+    // `canStrike` rather than `canSee` because being cornered doesn't
+    // require the enemy to be facing its pursuer.
+    if (cfg.cornered) {
+      const cornerRange = cfg.cornerRange ?? enemy.attackRange;
+      if (ctx.effectiveDistance <= cornerRange && enemy.attackTimer <= 0 && ctx.canStrike) {
+        return { id: cfg.cornerTo ?? 'anticipate', cause: 'cornered' };
+      }
+    }
+
     // A dead end with no barrier ever found would otherwise run forever —
     // bounded the same way Search bounds an unreachable mark, just on time
     // instead of a mark count, since Flee has nothing to count.
@@ -109,7 +132,11 @@ export default {
     return null;
   },
 
-  thresholds(enemy) {
-    return [{ label: 'vision', px: enemy.visionLength ?? enemy.aggroRange, color: '#8089a0' }];
+  thresholds(enemy, cfg) {
+    const out = [{ label: 'vision', px: enemy.visionLength ?? enemy.aggroRange, color: '#8089a0' }];
+    if (cfg?.cornered) {
+      out.push({ label: 'cornered', px: cfg.cornerRange ?? enemy.attackRange, color: '#e0664a' });
+    }
+    return out;
   },
 };

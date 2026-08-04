@@ -1868,7 +1868,18 @@ export const ENEMIES = {
       // distance since the current alert/withdraw visit began, so "still
       // there" no longer reads as "still coming."
       alert: { requirePursuit: true },
-      flee: {},
+      // `cornered` covers the gap Lookback doesn't: Lookback only fires a
+      // trap once the goblin has actually broken line of sight, so a player
+      // fast or cornering enough to close to point-blank range while still
+      // plainly visible got no reaction at all — free hits on a "runs at the
+      // sight of you" enemy. `cornerTo: 'useTrap'` forces the same trap-lay
+      // Lookback already grants on a confirmed barrier; TrapLayerMechanic
+      // only watches for `stateMachine.current === 'useTrap'`; it doesn't
+      // care how that State was reached. `cornerRange` is explicit (unlike
+      // Rat/Plague Rat, which default to their own `attackRange`) since this
+      // goblin's `attackRange` is 0 — first-pass value, needs playtest (see
+      // pinboard).
+      flee: { cornered: true, cornerTo: 'useTrap', cornerRange: GRID.CELL_SIZE * 1.5 },
       lookback: {},
       // useTrap hands off to withdraw, not straight to alert, so there is a
       // real non-frozen gap (movement: 'back', never moveStill regardless of
