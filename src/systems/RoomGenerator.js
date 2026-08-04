@@ -11,7 +11,7 @@ import { getDungeonDesign } from '../data/dungeonDesigns.js';
 import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
-import { maybeSpawnPeacefulFishingRoom, buildVaultInteriorLoot, applyKeyDropLogic, ensureKeyDroppers, protectRegion, cleanupStrayBackgroundObjects, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, deriveRiverFlowDirection, buildForcedRiverParams, carveForcedRiver, cellularCaveGrid, generateCalderaRoom, seedMoltenAscentCycle, seedSinkholes, injectSinkholeLake } from './roomFeatures.js';
+import { maybeSpawnPeacefulFishingRoom, buildVaultInteriorLoot, applyKeyDropLogic, ensureKeyDroppers, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, deriveRiverFlowDirection, buildForcedRiverParams, carveForcedRiver, cellularCaveGrid, generateCalderaRoom, seedMoltenAscentCycle, seedSinkholes, injectSinkholeLake } from './roomFeatures.js';
 
 // Zone-boss arena → letter template key. Boss rooms are entered without a
 // letter (cheat warp) or with an arbitrary one (normal progression), so we
@@ -288,8 +288,13 @@ export class RoomGenerator {
     // border walls / wall-block cells — roomFeatures.js.
     cleanupStrayBackgroundObjects(room);
 
-    // Re-mark a key dropper if the cleanup stripped the chosen one (K rooms;
-    // idempotent — no-op when a dropper survived).
+    // Resolve any lava that landed on/near water or flammable bg objects
+    // (zone-agnostic — can happen via effectiveZone blending or depth-based
+    // water→lava conversion regardless of room.zone) — roomFeatures.js.
+    resolveLavaHazards(room);
+
+    // Re-mark a key dropper if either pass above stripped the chosen one
+    // (K rooms; idempotent — no-op when a dropper survived).
     ensureKeyDroppers(this, room);
 
     return room;
@@ -2948,7 +2953,7 @@ export class RoomGenerator {
     for (let i = 0; i < count; i++) {
       const structure = this._pickWeightedWaterStructure(eligible);
       const rotations = structure.allowRotation ? this.randInt(0, 3) * 90 : 0;
-      const pattern = this.rotatePattern(structure.pattern, rotations);
+      const pattern = rotatePattern(structure.pattern, rotations);
 
       let placed = false;
       for (let attempt = 0; attempt < 50 && !placed; attempt++) {
@@ -3034,7 +3039,7 @@ export class RoomGenerator {
     for (let i = 0; i < count; i++) {
       const structure = this._pickWeightedWaterStructure(eligible);
       const rotations = structure.allowRotation ? this.randInt(0, 3) * 90 : 0;
-      const pattern = this.rotatePattern(structure.pattern, rotations);
+      const pattern = rotatePattern(structure.pattern, rotations);
 
       let placed = false;
       for (let attempt = 0; attempt < 50 && !placed; attempt++) {
@@ -3421,7 +3426,7 @@ export class RoomGenerator {
     for (let i = 0; i < structureCount; i++) {
       const structure = this.selectWeightedStructure(availableStructures);
       const rotation = structure.allowRotation ? this.randomRotation() : 0;
-      const rotatedPattern = this.rotatePattern(structure.pattern, rotation);
+      const rotatedPattern = rotatePattern(structure.pattern, rotation);
 
       // Try up to 50 positions
       let placed = false;
@@ -3622,32 +3627,6 @@ export class RoomGenerator {
         }
       }
     }
-  }
-
-  rotatePattern(pattern, degrees) {
-    if (degrees === 0) return pattern;
-
-    let rotated = pattern;
-    const times = degrees / 90;
-
-    for (let i = 0; i < times; i++) {
-      const height = rotated.length;
-      const width = rotated[0].length;
-      const newPattern = [];
-
-      // Rotate 90 degrees clockwise
-      for (let x = 0; x < width; x++) {
-        const newRow = [];
-        for (let y = height - 1; y >= 0; y--) {
-          newRow.push(rotated[y][x]);
-        }
-        newPattern.push(newRow);
-      }
-
-      rotated = newPattern;
-    }
-
-    return rotated;
   }
 
   randomRotation() {

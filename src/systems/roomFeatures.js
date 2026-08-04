@@ -519,6 +519,33 @@ export function injectSinkholeLake(gen, room) {
   room._sinkholeArrivalSpawn = { x: farCell.col * GRID.CELL_SIZE, y: farCell.row * GRID.CELL_SIZE };
 }
 
+/** Rotates a 2D boolean/char pattern clockwise by 0/90/180/270 degrees. */
+export function rotatePattern(pattern, degrees) {
+  if (degrees === 0) return pattern;
+
+  let rotated = pattern;
+  const times = degrees / 90;
+
+  for (let i = 0; i < times; i++) {
+    const height = rotated.length;
+    const width = rotated[0].length;
+    const newPattern = [];
+
+    // Rotate 90 degrees clockwise
+    for (let x = 0; x < width; x++) {
+      const newRow = [];
+      for (let y = height - 1; y >= 0; y--) {
+        newRow.push(rotated[y][x]);
+      }
+      newPattern.push(newRow);
+    }
+
+    rotated = newPattern;
+  }
+
+  return rotated;
+}
+
 function cellInRegion(col, row, region) {
   switch (region.kind) {
     case 'rect':
@@ -567,6 +594,44 @@ export function cleanupStrayBackgroundObjects(room) {
       }
     }
     return true;
+  });
+}
+
+// Same adjacency radius InteractionSystem.update() uses for its throttled
+// lava/water solidify + lava-ignites-flammable-neighbor checks. Reused here
+// so generation resolves a room to the same end state that runtime would
+// converge to anyway, instead of the room visibly igniting/solidifying
+// within the first 0.5s after the player walks in.
+const LAVA_ADJACENT_PX = GRID.CELL_SIZE * 1.5;
+
+function withinLavaRadius(a, b) {
+  const dx = a.position.x - b.position.x;
+  const dy = a.position.y - b.position.y;
+  return dx * dx + dy * dy <= LAVA_ADJACENT_PX * LAVA_ADJACENT_PX;
+}
+
+// Final pass: resolve lava that generation placed on/near water or flammable
+// background objects — zone-agnostic, since lava can land in a room whose
+// room.zone isn't red (effectiveZone blending, W→R depth conversions, etc).
+// Mirrors InteractionSystem's runtime rules exactly (water quenches lava;
+// lava burns flammable neighbors) so nothing needs to react on room entry.
+export function resolveLavaHazards(room) {
+  const lavas = room.backgroundObjects.filter(obj => obj.isLava && obj.isLava());
+  for (const lava of lavas) {
+    const nearWater = room.backgroundObjects.some(other =>
+      other !== lava && !other.destroyed &&
+      ((other.isWater && other.isWater()) || other.char === '=') &&
+      withinLavaRadius(lava, other)
+    );
+    if (nearWater) lava.solidifyToRock();
+  }
+
+  // Re-check isLava() per lava below: solidified ones no longer qualify, so
+  // flammable objects only near a solidified (now-rock) tile are spared.
+  room.backgroundObjects = room.backgroundObjects.filter(obj => {
+    if (obj.structural) return true;
+    if (!obj.isFlammable || !obj.isFlammable()) return true;
+    return !lavas.some(lava => lava.isLava() && withinLavaRadius(lava, obj));
   });
 }
 
