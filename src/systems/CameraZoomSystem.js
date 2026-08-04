@@ -147,6 +147,24 @@ export class CameraZoomSystem {
   getOriginPercent() {
     return { x: this.originXPercent, y: this.originYPercent };
   }
+
+  // Whether `entity` falls inside the visible canvas under the current zoom
+  // transform. At scale 1 (no zoom) everything is on-screen by definition.
+  // Same projection OffscreenEnemyIndicators uses to place its edge arrows —
+  // kept here as the single source of truth so combat code (committed
+  // windups/telegraphs that must not fire on an enemy the player can't see)
+  // and that renderer agree on what "visible" means.
+  isEntityOnScreen(entity) {
+    const scale = this.currentZoom;
+    if (scale <= 1) return true;
+    const ox = (this.originXPercent / 100) * GRID.WIDTH;
+    const oy = (this.originYPercent / 100) * GRID.HEIGHT;
+    const ex = entity.position.x + (entity.width ?? GRID.CELL_SIZE) / 2;
+    const ey = entity.position.y + (entity.height ?? GRID.CELL_SIZE) / 2;
+    const screenX = ox + (ex - ox) * scale;
+    const screenY = oy + (ey - oy) * scale;
+    return screenX >= 0 && screenX <= GRID.WIDTH && screenY >= 0 && screenY <= GRID.HEIGHT;
+  }
 }
 
 // Standard CSS "ease-in-out" cubic bezier — control points (0.42, 0), (0.58, 1).

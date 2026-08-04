@@ -100,12 +100,13 @@ export const SniperMechanic = {
   updateActive(enemy, ctx) {
     const cfg = enemy.data.sniperMechanic;
     if (!cfg?.enabled) return;
-    const { deltaTime, distance, dotDamageEvents } = ctx;
+    const { deltaTime, distance, dotDamageEvents, onScreen } = ctx;
     const meleeRange = cfg.meleeRange ?? GRID.CELL_SIZE * 1.5;
 
     // Cornered dagger override: HP <= 50% and the player is in melee range.
     // Only preempts states that haven't already committed to something else.
-    if (enemy.hp <= enemy.maxHp * 0.5 && distance <= meleeRange
+    // Gated on onScreen too — no starting a windup the player can't see.
+    if (enemy.hp <= enemy.maxHp * 0.5 && distance <= meleeRange && onScreen
         && DAGGER_INTERRUPTIBLE.has(enemy.sniperState)) {
       this._resetRangedSequence(enemy);
       enemy.sniperState = 'daggerWindup';
@@ -113,13 +114,13 @@ export const SniperMechanic = {
     }
 
     switch (enemy.sniperState) {
-      case 'daggerWindup': return this._updateDaggerWindup(enemy, cfg, deltaTime, dotDamageEvents);
+      case 'daggerWindup': return this._updateDaggerWindup(enemy, cfg, deltaTime, dotDamageEvents, onScreen);
       case 'daggerCooldown': return this._updateDaggerCooldown(enemy, cfg, deltaTime, dotDamageEvents);
       case 'hiding': return this._updateHiding(enemy, cfg, deltaTime, dotDamageEvents);
       case 'hidden': return this._updateHidden(enemy, cfg, deltaTime, dotDamageEvents);
       case 'tracking': return this._updateTracking(enemy, cfg, deltaTime, distance, dotDamageEvents);
       case 'aiming': return this._updateAiming(enemy, cfg, deltaTime, distance, dotDamageEvents);
-      case 'telegraph': return this._updateTelegraph(enemy, cfg, deltaTime, dotDamageEvents);
+      case 'telegraph': return this._updateTelegraph(enemy, cfg, deltaTime, dotDamageEvents, onScreen);
       case 'cooldown': return this._updateCooldown(enemy, cfg, deltaTime, distance, dotDamageEvents);
       case 'idle':
       default: return this._updateIdle(enemy, cfg, deltaTime, distance, dotDamageEvents);
@@ -298,8 +299,16 @@ export const SniperMechanic = {
   },
 
   // Committed — cannot be interrupted by proximity or vision loss once started.
-  _updateTelegraph(enemy, cfg, deltaTime, dotDamageEvents) {
+  // Off-screen is the one exception: a beam the player never saw the '!' for
+  // isn't fair to fire, so losing the zoomed frame restarts the lock instead.
+  _updateTelegraph(enemy, cfg, deltaTime, dotDamageEvents, onScreen) {
     this._stand(enemy);
+    if (!onScreen) {
+      enemy.sniperIndicator = null;
+      enemy.sniperState = 'tracking';
+      this._resetRangedSequence(enemy);
+      return { suspend: true, result: { dotDamage: dotDamageEvents } };
+    }
     enemy.sniperIndicator = { char: '!', color: '#ff0000', offsetY: -GRID.CELL_SIZE };
     enemy.sniperTimer -= deltaTime;
     if (enemy.sniperTimer <= 0) {
@@ -392,8 +401,13 @@ export const SniperMechanic = {
     return { suspend: true, result: { dotDamage: dotDamageEvents } };
   },
 
-  _updateDaggerWindup(enemy, cfg, deltaTime, dotDamageEvents) {
+  _updateDaggerWindup(enemy, cfg, deltaTime, dotDamageEvents, onScreen) {
     this._stand(enemy);
+    if (!onScreen) {
+      enemy.sniperIndicator = null;
+      enemy.sniperState = 'idle';
+      return { suspend: true, result: { dotDamage: dotDamageEvents } };
+    }
     enemy.sniperIndicator = { char: '!', color: '#ffaa00', offsetY: -GRID.CELL_SIZE };
     enemy.sniperTimer -= deltaTime;
     if (enemy.sniperTimer <= 0) {

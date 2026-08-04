@@ -75,6 +75,14 @@ export const LeapAttackMechanic = {
     }
 
     if (enemy.leapWindupActive) {
+      // Lost visibility mid-windup — cancel rather than let the leap fire
+      // unseen. Free retry (no cooldown charge), same idiom as an aborted
+      // Strike windup: nothing was actually spent.
+      if (!ctx.onScreen) {
+        enemy.leapWindupActive = false;
+        enemy.leapWindupTimer = 0;
+        return { suspend: true, result: { dotDamage: dotDamageEvents } };
+      }
       enemy.leapWindupTimer -= deltaTime;
       enemy.velocity.vx = 0;
       enemy.velocity.vy = 0;
@@ -99,6 +107,7 @@ export const LeapAttackMechanic = {
     if (enemy.spewWindupActive) return;
     if (enemy.leapCooldown > 0) return;
     if (!inSamePlane(enemy, enemy.target)) return;
+    if (!ctx.onScreen) return; // no ambushing from outside the zoomed frame
 
     const { effectiveDistance, dotDamageEvents } = ctx;
     if (effectiveDistance >= cfg.triggerRangeMin && effectiveDistance <= cfg.triggerRangeMax) {

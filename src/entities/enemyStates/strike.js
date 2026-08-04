@@ -81,6 +81,12 @@ export default {
   },
 
   next(enemy, ctx, machine) {
+    // The player has no rendered telegraph to read for an enemy the zoomed
+    // viewport is clipping out — bail out rather than let the windup or the
+    // swing itself resolve unseen. `enter()` always rolls a fresh windup on
+    // re-entry, so nothing needs to be reset here.
+    if (!ctx.onScreen) return { id: 'approach', cause: 'offscreen' };
+
     if (enemy.windupTimer > 0) return null;
     const cfg = machine.configFor('strike') ?? {};
 

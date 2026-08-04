@@ -39,18 +39,13 @@ export function drawOffscreenEnemyIndicators(renderer, game, enemies) {
     if (enemy.data?.shellCamouflage && enemy.inShellForm) continue;
     if (enemy.data?.mimicMechanic?.enabled && !enemy.mimicRevealed) continue;
     if (enemy.sniperHidden) continue;
+    if (game.cameraZoomSystem.isEntityOnScreen(enemy)) continue;
 
     const ex = enemy.position.x + (enemy.width ?? GRID.CELL_SIZE) / 2;
     const ey = enemy.position.y + (enemy.height ?? GRID.CELL_SIZE) / 2;
     const dx = ex - ox;
     const dy = ey - oy;
     if (dx === 0 && dy === 0) continue;
-
-    // Enemy's screen-space position under the current zoom transform.
-    // Skip it if that position already falls within the visible viewport.
-    const screenX = ox + dx * scale;
-    const screenY = oy + dy * scale;
-    if (screenX >= 0 && screenX <= GRID.WIDTH && screenY >= 0 && screenY <= GRID.HEIGHT) continue;
 
     const edge = rayToInsetBoxEdge(ox, oy, dx, dy, minB, minB, maxB, maxB);
     const angle = Math.atan2(dx, -dy);

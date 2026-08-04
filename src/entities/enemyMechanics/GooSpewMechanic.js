@@ -32,7 +32,16 @@ export const GooSpewMechanic = {
   update(enemy, ctx) {
     const cfg = enemy.data.gooSpewCone;
     if (!cfg?.enabled || !enemy.spewWindupActive) return;
-    const { deltaTime, dotDamageEvents } = ctx;
+    const { deltaTime, dotDamageEvents, onScreen } = ctx;
+
+    // Lost visibility mid-windup — cancel rather than fan blobs the player
+    // never saw charging up. Free retry: spewDamageAccum was already spent
+    // starting this attempt, so re-triggering costs a fresh threshold anyway.
+    if (!onScreen) {
+      enemy.spewWindupActive = false;
+      enemy.spewWindupTimer = 0;
+      return;
+    }
 
     enemy.spewWindupTimer -= deltaTime;
     if (enemy.spewWindupTimer > 0) return;

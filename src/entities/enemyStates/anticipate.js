@@ -35,6 +35,10 @@ export default {
   },
 
   next(enemy, ctx, machine) {
+    // Same off-screen bail as Strike (see its `next()`) — a tell the player
+    // can't see is not a tell, and Anticipate leads straight into Strike.
+    if (!ctx.onScreen) return { id: 'approach', cause: 'offscreen' };
+
     const cfg = machine.configFor('anticipate') ?? {};
 
     // `breakIf` is what keeps an uncommitted tell honest — the enemy can think

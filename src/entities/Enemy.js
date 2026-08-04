@@ -727,6 +727,12 @@ export class Enemy {
       }
     }
 
+    // Whether this enemy currently falls inside the zoomed viewport. Committed,
+    // timing-critical actions (strike, leap, charge, ranged windups) must not
+    // start or complete while the player has no rendered telegraph to read —
+    // see CameraZoomSystem.isEntityOnScreen.
+    const onScreen = this.game?.cameraZoomSystem?.isEntityOnScreen(this) ?? true;
+
     ShellFormMechanic.update(this, { deltaTime });
 
     // Update DOT blink timer
@@ -743,7 +749,7 @@ export class Enemy {
     // Update status effects and capture DOT damage events
     const dotDamageEvents = this.updateStatusEffects(deltaTime);
 
-    const leapActive = LeapAttackMechanic.updateActive(this, { deltaTime, dotDamageEvents });
+    const leapActive = LeapAttackMechanic.updateActive(this, { deltaTime, dotDamageEvents, onScreen });
     if (leapActive?.suspend) return leapActive.result;
 
     // While being carried by a thrown spear, TrapSystem owns position — skip all movement AI
@@ -810,7 +816,7 @@ export class Enemy {
     // Cyan well blessing shrinks the aggro radius (boss parts use Infinity aggro — unaffected)
     const effectiveAggroRange = this.target?.stealthBlessed ? this.aggroRange * 0.65 : this.aggroRange;
 
-    const leapTrigger = LeapAttackMechanic.tryTrigger(this, { effectiveDistance, dotDamageEvents });
+    const leapTrigger = LeapAttackMechanic.tryTrigger(this, { effectiveDistance, dotDamageEvents, onScreen });
     if (leapTrigger?.suspend) return leapTrigger.result;
 
     const ripenDetonateTrigger = RipenMechanic.tryDetonateTrigger(this, { effectiveDistance, dotDamageEvents });
@@ -872,7 +878,7 @@ export class Enemy {
     // Sniper: fully owns movement/state while enabled — vision-gated ranged
     // attacker that never chases, so it must never reach the aggro/chase/attack
     // state machine below.
-    const sniperActive = SniperMechanic.updateActive(this, { deltaTime, distance, effectiveDistance, dotDamageEvents });
+    const sniperActive = SniperMechanic.updateActive(this, { deltaTime, distance, effectiveDistance, dotDamageEvents, onScreen });
     if (sniperActive?.suspend) return sniperActive.result;
 
     // Sapping behavior (locks to target position and deals periodic damage)
@@ -973,6 +979,7 @@ export class Enemy {
       speedMultiplier,
       deltaTime,
       targetPos: this.target.position,
+      onScreen,
     });
     // Everything still reading `enemy.state` — the renderer's indicator picker,
     // TrailMechanic, Telegraph — keeps working through the translation.
@@ -1053,7 +1060,7 @@ export class Enemy {
       }
     }
 
-    const gooSpewResult = GooSpewMechanic.update(this, { deltaTime, dotDamageEvents });
+    const gooSpewResult = GooSpewMechanic.update(this, { deltaTime, dotDamageEvents, onScreen });
     if (gooSpewResult?.suspend) return gooSpewResult.result;
 
     const reformResult = ReformMechanic.update(this, { deltaTime, dotDamageEvents });
@@ -1081,7 +1088,7 @@ export class Enemy {
     RipenMechanic.updateGrowth(this, { deltaTime, dotDamageEvents });
     ThiefMechanic.update(this, { deltaTime, dotDamageEvents, targetPos: this.target?.position });
 
-    ChargeMechanic.update(this, { deltaTime, distance, effectiveVisionLength });
+    ChargeMechanic.update(this, { deltaTime, distance, effectiveVisionLength, onScreen });
 
     JumpMechanic.update(this, { deltaTime });
 
@@ -1612,6 +1619,15 @@ export class Enemy {
 
   canAttack() {
     // Blind enemies can still attack, but will miss (damage set to 0 in createAttack)
+
+    // Off-screen: nothing this enemy does should be able to actually land while
+    // the player has no rendered telegraph to read. Covers every attack path —
+    // melee (Telegraph.syncWindupVisual discards the swing when this goes
+    // false), ranged/magic/fire/sap/tongue/thief, and equipped-weapon use
+    // (createAttack's bow path) — since they all funnel through this one gate.
+    if (this.game?.cameraZoomSystem && !this.game.cameraZoomSystem.isEntityOnScreen(this)) {
+      return false;
+    }
 
     // Sap attacks can start when within range, not already sapping, and target has room for another bat
     if (this.attackType === 'sap') {

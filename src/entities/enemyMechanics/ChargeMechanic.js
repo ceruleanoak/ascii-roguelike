@@ -26,11 +26,16 @@ export const ChargeMechanic = {
   update(enemy, ctx) {
     const cfg = enemy.data.chargeMechanic;
     if (!cfg?.enabled) return;
-    const { deltaTime, distance, effectiveVisionLength } = ctx;
+    const { deltaTime, distance, effectiveVisionLength, onScreen } = ctx;
 
     // Wet/goo block charging entirely — a soaked or slimed boar can't get
-    // traction. Abort an in-progress windup/charge and pay the full cooldown.
-    if ((enemy.isWet() || enemy.isGooey())
+    // traction. Off-screen joins the same abort: charging is a continuous
+    // dash, not a single precomputed landing point (unlike Leap), so it can
+    // close the last stretch to the player between one off-screen frame and
+    // the next — the windup was the player's only chance to see it coming,
+    // so losing the frame mid-charge is just as unfair as losing it mid-windup.
+    // Abort an in-progress windup/charge and pay the full cooldown.
+    if ((enemy.isWet() || enemy.isGooey() || !onScreen)
         && (enemy.chargeState === 'windup' || enemy.chargeState === 'charging')) {
       enemy.chargeState = 'idle';
       enemy.chargeTimer = cfg.cooldown;
@@ -90,6 +95,7 @@ export const ChargeMechanic = {
           && !enemy.isFrozen()
           && !enemy.isWet()
           && !enemy.isGooey()
+          && onScreen
           && enemy.hasVision(enemy.position, enemy.target.position, effectiveVisionLength, { ignoreCone: true })) {
         enemy.chargeState = 'windup';
         enemy.chargeWindupTimer = cfg.chargeWindup;
