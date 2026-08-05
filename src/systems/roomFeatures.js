@@ -969,10 +969,11 @@ const CENTIPEDE_DEFLECTOR_CYCLE = ['◣', '◢', '◥', '◤'];
 // a given lattice cell, so it can end up perpetually retracing a short loop.
 // Replaced with a per-cell random roll — still grid-aligned ("fixed grid
 // positions" per spec, decided once at generation time, not per-frame — the
-// object never moves after placement) but no longer periodic, and denser
-// (~32% of eligible cells vs. the prior ~9%) per the "large amount of
-// reflectors and other background objects" / "high concentration" ask.
-const CENTIPEDE_OBJECT_DENSITY = 0.32;
+// object never moves after placement) but no longer periodic. Density was
+// tuned up to ~32% for spread/variety, then halved back down after playtest
+// feedback that it was too dense to traverse (the wider spread from the
+// randomized roll was the actual win, not the raw count).
+const CENTIPEDE_OBJECT_DENSITY = 0.16;
 const CENTIPEDE_OBJECT_ROLL_TABLE = [
   { upTo: 0.45, char: null },   // deflector — resolved per-roll below (random elbow)
   { upTo: 0.65, char: '0' },    // Rock

@@ -21,6 +21,10 @@ function rotate90CW(dir) {
   return { dx: -dir.dy, dy: dir.dx };
 }
 
+function rotate90CCW(dir) {
+  return { dx: dir.dy, dy: -dir.dx };
+}
+
 function reverseDir(dir) {
   return { dx: -dir.dx, dy: -dir.dy };
 }
@@ -69,6 +73,7 @@ export class CentipedeSystem {
       currentCell: { ...spawnCell },
       targetCell: null,
       hitCooldowns: new Map(),
+      turnBias: 1,
     };
     // Set before resolving direction so the cross-chain occupancy check in
     // _resolveNextDirection (which reads room.centipedeChains) has something
@@ -153,13 +158,28 @@ export class CentipedeSystem {
   // Called whenever a head arrives at a new cell (or, for a freshly-promoted
   // head, at the moment of promotion). Deflector redirect reuses the real
   // reflector logic (BoulderSystem.deflectVelocity) rather than a
-  // reimplementation. Obstacle/border handling is unified — border walls hit
-  // the same _cellIsOpen check as any other blocking object, per spec
-  // ("movement logic is the same with border walls"). Also treats every
-  // other chain's units as blocking obstacles — without this, two chains'
-  // heads (created by a mid-fight split) had no way to notice each other and
-  // would walk straight through one another, which in a dense/looping arena
-  // read as the pair getting stuck cycling the same handful of cells forever.
+  // reimplementation — but only for a genuine hypotenuse hit (a real 90°
+  // bounce). A deflector's two flat legs are pre-filtered out by
+  // _cellIsOpen below, so the head never steps onto a leg-hit deflector cell
+  // in the first place; it routes around it via the same obstacle-turn
+  // branch a Rock or Tree would trigger. (BoulderSystem still gives a leg
+  // hit a straight U-turn for boulders/bullets — fine for a single point,
+  // but for a 13-part chain a U-turn walks the head straight back into its
+  // own trailing body and reads as getting stuck in place.)
+  // Obstacle/border handling is unified — border walls hit the same
+  // _cellIsOpen check as any other blocking object, per spec ("movement
+  // logic is the same with border walls"). Also treats every other chain's
+  // units as blocking obstacles — without this, two chains' heads (created
+  // by a mid-fight split) had no way to notice each other and would walk
+  // straight through one another, which in a dense/looping arena read as the
+  // pair getting stuck cycling the same handful of cells forever.
+  //
+  // The obstacle-turn itself alternates handedness (right-turn vs. left-turn)
+  // every time it fires, via chain.turnBias — always turning the same way
+  // around a static obstacle field can settle into a small closed loop (e.g.
+  // bouncing around the same four deflectors forever); flipping the bias
+  // each time breaks that periodicity and guarantees the chain keeps
+  // covering new ground.
   _resolveNextDirection(chain, cell, room) {
     let facing = chain.pendingTurn || chain.facing;
     chain.pendingTurn = null;
@@ -170,21 +190,23 @@ export class CentipedeSystem {
       if (out) facing = { dx: Math.sign(out.vx), dy: Math.sign(out.vy) };
     }
 
-    if (!this._cellIsOpen(room, cell.x + facing.dx, cell.y + facing.dy, chain)) {
-      const right = rotate90CW(facing);
-      if (this._cellIsOpen(room, cell.x + right.dx, cell.y + right.dy, chain)) {
-        facing = right;
-        chain.pendingTurn = rotate90CW(right);
+    if (!this._cellIsOpen(room, cell.x + facing.dx, cell.y + facing.dy, chain, facing)) {
+      const turnFn = chain.turnBias > 0 ? rotate90CW : rotate90CCW;
+      const turned = turnFn(facing);
+      if (this._cellIsOpen(room, cell.x + turned.dx, cell.y + turned.dy, chain, turned)) {
+        facing = turned;
+        chain.pendingTurn = turnFn(turned);
       } else {
         facing = reverseDir(facing);
       }
+      chain.turnBias *= -1;
     }
 
     chain.facing = facing;
     chain.targetCell = { x: cell.x + facing.dx, y: cell.y + facing.dy };
   }
 
-  _cellIsOpen(room, cellX, cellY, chain) {
+  _cellIsOpen(room, cellX, cellY, chain, incomingDir) {
     const bounds = this.game.activeGridBounds();
     if (cellX < 0 || cellY < 0 || cellX >= bounds.cols || cellY >= bounds.rows) return false;
     // Room border walls carry no BackgroundObject — collisionMap is the only
@@ -194,9 +216,23 @@ export class CentipedeSystem {
     // obstacle-turn branch below, not just for placed objects.
     if (bounds.collisionMap?.[cellY]?.[cellX]) return false;
     const obj = this._objectAt(room, cellX, cellY);
-    if (obj && !obj.destroyed && !obj.data?.boulderDeflector) return false;
+    if (obj && !obj.destroyed) {
+      if (obj.data?.boulderDeflector) {
+        if (incomingDir && this._isDeflectorLegHit(obj.data.deflectorElbow, incomingDir)) return false;
+      } else {
+        return false;
+      }
+    }
     if (chain && this._cellHeldByOtherChain(room, chain, cellX, cellY)) return false;
     return true;
+  }
+
+  // True when approaching a deflector along `dir` would hit one of its two
+  // solid legs (flat side) rather than the open hypotenuse — BoulderSystem's
+  // _deflect maps a leg hit to the exact reverse of the incoming direction.
+  _isDeflectorLegHit(elbow, dir) {
+    const out = this.game.boulderSystem.deflectVelocity(elbow, dir.dx, dir.dy);
+    return !out || (out.vx === -dir.dx && out.vy === -dir.dy);
   }
 
   // Is (cellX,cellY) currently occupied by a unit belonging to some chain
@@ -274,6 +310,7 @@ export class CentipedeSystem {
         currentCell: this._cellOf(newHead.position),
         targetCell: null,
         hitCooldowns: new Map(),
+        turnBias: 1,
       };
       this._resolveNextDirection(newChain, newChain.currentCell, room);
       survivors.push(newChain);
