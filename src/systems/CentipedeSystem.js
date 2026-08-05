@@ -16,6 +16,13 @@ const CENTIPEDE_CONTACT_COOLDOWN = 0.5; // seconds between contact-damage ticks
 // the stored timer must be pre-scaled by the same factor to actually cover 10
 // real frames' worth of decrement.
 const CENTIPEDE_SPLIT_IFRAMES = (10 / 60) * PHYSICS.ENEMY_TIMER_RATE;
+// A narrow channel between two parallel walls can trap a chain in an
+// infinite reversal loop: reversing flips both facing and turnBias, and
+// those two flips cancel out (CW from the new facing lands on the exact
+// same perpendicular cell CCW did from the old facing), so the bias toggle
+// alone can never break out. A turn forced on a fixed cadence, independent
+// of obstacle detection, guarantees an exit within one interval.
+const CENTIPEDE_FORCED_TURN_INTERVAL = 20;
 
 function rotate90CW(dir) {
   return { dx: -dir.dy, dy: dir.dx };
@@ -74,6 +81,7 @@ export class CentipedeSystem {
       targetCell: null,
       hitCooldowns: new Map(),
       turnBias: 1,
+      cellMoveCount: 0,
     };
     // Set before resolving direction so the cross-chain occupancy check in
     // _resolveNextDirection (which reads room.centipedeChains) has something
@@ -226,6 +234,20 @@ export class CentipedeSystem {
       chain.turnBias *= -1;
     }
 
+    // Fixed-cadence anti-loop turn, independent of obstacle detection — see
+    // CENTIPEDE_FORCED_TURN_INTERVAL. Applied on top of whatever facing was
+    // just resolved; skipped (and the interval just rearms) if the turn
+    // isn't currently open.
+    chain.cellMoveCount = (chain.cellMoveCount || 0) + 1;
+    if (chain.cellMoveCount >= CENTIPEDE_FORCED_TURN_INTERVAL) {
+      chain.cellMoveCount = 0;
+      const forcedRight = rotate90CW(facing);
+      if (this._cellIsOpen(room, cell.x + forcedRight.dx, cell.y + forcedRight.dy, chain, forcedRight)) {
+        facing = forcedRight;
+        chain.pendingTurn = null;
+      }
+    }
+
     chain.facing = facing;
     chain.targetCell = { x: cell.x + facing.dx, y: cell.y + facing.dy };
   }
@@ -335,6 +357,7 @@ export class CentipedeSystem {
         targetCell: null,
         hitCooldowns: new Map(),
         turnBias: 1,
+        cellMoveCount: 0,
       };
       this._resolveNextDirection(newChain, newChain.currentCell, room);
       survivors.push(newChain);
