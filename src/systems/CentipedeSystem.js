@@ -181,13 +181,37 @@ export class CentipedeSystem {
   // each time breaks that periodicity and guarantees the chain keeps
   // covering new ground.
   _resolveNextDirection(chain, cell, room) {
-    let facing = chain.pendingTurn || chain.facing;
+    // arrivedFacing is the direction that actually carried the head into
+    // this cell (last resolution's final facing) — the true incoming
+    // direction, used for deflector mirroring and as the fallback when a
+    // scheduled forced turn can't fire.
+    const arrivedFacing = chain.facing;
+    const forcedTurn = chain.pendingTurn;
     chain.pendingTurn = null;
 
+    let facing = arrivedFacing;
     const obj = this._objectAt(room, cell.x, cell.y);
+    let deflected = false;
     if (obj?.data?.boulderDeflector) {
-      const out = this.game.boulderSystem.deflectVelocity(obj.data.deflectorElbow, facing.dx, facing.dy);
-      if (out) facing = { dx: Math.sign(out.vx), dy: Math.sign(out.vy) };
+      const out = this.game.boulderSystem.deflectVelocity(obj.data.deflectorElbow, arrivedFacing.dx, arrivedFacing.dy);
+      if (out) {
+        facing = { dx: Math.sign(out.vx), dy: Math.sign(out.vy) };
+        deflected = true;
+      }
+    }
+
+    // The scheduled "turn again" from a previous obstacle-turn maneuver
+    // fires here, but only if it's actually possible — an impossible forced
+    // turn is ignored (continue straight in arrivedFacing) rather than
+    // cascading into a fresh obstacle-turn attempt. Without this, a blocked
+    // forced turn triggered a second full turn-or-reverse resolution (with
+    // its own bias flip) on top of the first, which in a dense obstacle
+    // cluster produced rapid direction thrashing that never reached a new
+    // row — the maneuver kept re-resolving itself before the head ever
+    // committed to the second leg of the original turn.
+    if (!deflected && forcedTurn
+      && this._cellIsOpen(room, cell.x + forcedTurn.dx, cell.y + forcedTurn.dy, chain, forcedTurn)) {
+      facing = forcedTurn;
     }
 
     if (!this._cellIsOpen(room, cell.x + facing.dx, cell.y + facing.dy, chain, facing)) {
@@ -376,8 +400,12 @@ export class CentipedeSystem {
       if (chain.hitCooldowns.has(player)) continue;
 
       for (const unit of chain.units) {
-        const ux = unit.position.x, uy = unit.position.y;
-        const uw = unit.width ?? GRID.CELL_SIZE, uh = unit.height ?? GRID.CELL_SIZE;
+        // Contact hitbox is half the unit's full footprint, centered — a
+        // segment-length chain brushing past the player shouldn't tag them
+        // on every near-miss.
+        const fullW = unit.width ?? GRID.CELL_SIZE, fullH = unit.height ?? GRID.CELL_SIZE;
+        const uw = fullW / 2, uh = fullH / 2;
+        const ux = unit.position.x + (fullW - uw) / 2, uy = unit.position.y + (fullH - uh) / 2;
         const overlapX = Math.min(px + pw, ux + uw) - Math.max(px, ux);
         const overlapY = Math.min(py + ph, uy + uh) - Math.max(py, uy);
         if (overlapX > 0 && overlapY > 0) {
