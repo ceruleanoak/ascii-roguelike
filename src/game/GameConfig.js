@@ -248,6 +248,20 @@ export const BACKGROUND_OBJECTS = {
       '/': { animation: 'flash', message: null, effect: 'spawnIngredient:M' }
     }
   },
+  '9': {
+    name: 'Fractured Rock',
+    color: '#8B5A2B', // brown, distinct from Rock's gray — custom-sprite identity char only
+    solid: true,
+    hp: 5,
+    customSprite: 'fracturedRock', // render-branch discriminator; see ExploreRenderer + fracturedRockSprite.js
+    dropEffect: 'destroyObject:rockHarvest',
+    bulletInteraction: 'interact-preserve',
+    flammability: 'none',
+    conductivity: 'none',
+    interactions: {
+      default: { animation: 'bounce', message: null }
+    }
+  },
   '=': {
     name: 'Water',
     color: '#4444ff',

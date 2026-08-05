@@ -72,6 +72,13 @@ export class CameraZoomSystem {
       if (!player.heldItem && !player.inMaze && !player.inHut && !player.inDungeon) {
         wantsZoom = false;
       }
+
+      // Centipede miniboss: the arena is large and densely packed with fixed
+      // obstacles, and the encounter can span many on-screen chain segments
+      // at once — zooming in would clip parts of the chain off-screen
+      // (isEntityOnScreen gates committed attacks) and shrink the player's
+      // view of the obstacle field the chain is bouncing around in.
+      if (game.currentRoom?.centipedeChains?.length) wantsZoom = false;
     } else {
       this._noEnemyElapsedMs = Infinity;
     }

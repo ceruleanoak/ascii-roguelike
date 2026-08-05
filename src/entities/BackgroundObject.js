@@ -131,6 +131,10 @@ export class BackgroundObject {
     this.maxHp = this.data.hp !== undefined ? this.data.hp : null;
     this.hp = this.maxHp;
 
+    // Custom-sprite damage staging (e.g. Fractured Rock) — separate from the
+    // single-threshold animationChar swap below; recomputed in takeDamage().
+    this.damageStage = 0;
+
     // Fire propagation state
     this.onFire = false;
     this.fireDuration = 0;
@@ -221,6 +225,10 @@ export class BackgroundObject {
     }
 
     this.hp = Math.max(0, this.hp - amount);
+
+    if (this.data.customSprite) {
+      this.damageStage = Math.min(4, Math.floor((this.maxHp - this.hp) / this.maxHp * 5));
+    }
 
     if (this.hp <= 0) {
       this.destroyAfterAnimation = true;

@@ -37,6 +37,7 @@ import { isInteriorActive } from '../../systems/PlaneSystem.js';
 import { drawUndergroundFogOverlay } from '../ui/torchLight.js';
 import { stepConcealmentAlpha } from '../../systems/WorldEffectsSystem.js';
 import { ConsumableTriggerSystem } from '../../systems/ConsumableTriggerSystem.js';
+import { drawFracturedRock } from '../sprites/fracturedRockSprite.js';
 
 // Peak height (px) of a thrown consumable's toss arc, and how many full
 // spins it completes over the flight — shared by every consumable windup so
@@ -211,6 +212,8 @@ export class ExploreRenderer {
         // with the visible hypotenuse and legs.
         if (obj.data?.boulderDeflector) {
           this._drawDeflectorTriangle(this.renderer.bgCtx, x, y, obj.data.deflectorElbow, obj.color);
+        } else if (obj.data?.customSprite === 'fracturedRock') {
+          drawFracturedRock(this.renderer.bgCtx, x, y, obj.damageStage, obj.color);
         } else {
           this.renderer.bgCtx.fillText(obj.char, x, y);
         }

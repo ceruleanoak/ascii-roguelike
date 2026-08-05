@@ -943,3 +943,92 @@ export function generateSettlementRoom(gen, room) {
   gen.generateBackgroundObjects(room);
   room.exitsLocked = false;
 }
+
+// ── Centipede miniboss arena (red zone) ─────────────────────────────────────
+// Fixed-grid stamp for the Centipede encounter. Spec requires "a large amount
+// of reflectors and other background objects to impede the player and enable
+// interesting Centipede direction changes" at fixed (not random) positions,
+// using only reflectors, rocks, trees, and Fractured Rock. There's no
+// existing literal-grid-stamp precedent to reuse wholesale (LETTER_TEMPLATES'
+// 'B'/'V' entries are declarative rule-sets for procedural placement, not
+// literal per-cell layouts — closest actual precedent is the {col,row} array
+// shape used by PuzzleSystem's three_conductors config), so this composes its
+// layout from two small deterministic lattices rather than inventing a new
+// generic ascii-grid template DSL for a single consumer.
+// Mirrors CentipedeSystem.js's own CENTIPEDE_BODY_COUNT — duplicated rather
+// than imported to avoid a roomFeatures.js -> CentipedeSystem.js dependency
+// for one shared number; only used here to size the spawn-row reservation.
+const CENTIPEDE_BODY_COUNT = 12;
+const CENTIPEDE_ARENA_BOUNDS = { minCol: 2, maxCol: 27, minRow: 2, maxRow: 27 };
+const CENTIPEDE_SPAWN_CELL = { col: 15, row: 15 };
+const CENTIPEDE_SPAWN_FACING = { dx: 1, dy: 0 };
+const CENTIPEDE_DEFLECTOR_CYCLE = ['◣', '◢', '◥', '◤'];
+// Playtest feedback: the original layout stamped deflectors/fillers on two
+// perfectly regular 4-cell lattices, which (a) reads as visibly uniform and
+// (b) tends to hand a chain the exact same bounce cycle every time it enters
+// a given lattice cell, so it can end up perpetually retracing a short loop.
+// Replaced with a per-cell random roll — still grid-aligned ("fixed grid
+// positions" per spec, decided once at generation time, not per-frame — the
+// object never moves after placement) but no longer periodic, and denser
+// (~32% of eligible cells vs. the prior ~9%) per the "large amount of
+// reflectors and other background objects" / "high concentration" ask.
+const CENTIPEDE_OBJECT_DENSITY = 0.32;
+const CENTIPEDE_OBJECT_ROLL_TABLE = [
+  { upTo: 0.45, char: null },   // deflector — resolved per-roll below (random elbow)
+  { upTo: 0.65, char: '0' },    // Rock
+  { upTo: 0.85, char: 'Y' },    // Tree
+  { upTo: 1.00, char: '9' },    // Fractured Rock
+];
+
+function buildCentipedeArenaLayout() {
+  const { minCol, maxCol, minRow, maxRow } = CENTIPEDE_ARENA_BOUNDS;
+  const placements = [];
+
+  // Reserve the spawn cell and the full initial body span (spawn facing is
+  // horizontal, body trails leftward from the head) so the centipede never
+  // spawns embedded in an obstacle on its first frame.
+  const reserved = new Set();
+  for (let i = 0; i <= CENTIPEDE_BODY_COUNT; i++) {
+    reserved.add(`${CENTIPEDE_SPAWN_CELL.col - i},${CENTIPEDE_SPAWN_CELL.row}`);
+  }
+
+  for (let row = minRow; row <= maxRow; row++) {
+    for (let col = minCol; col <= maxCol; col++) {
+      if (reserved.has(`${col},${row}`)) continue;
+      if (Math.random() >= CENTIPEDE_OBJECT_DENSITY) continue;
+
+      const roll = Math.random();
+      const entry = CENTIPEDE_OBJECT_ROLL_TABLE.find(e => roll < e.upTo);
+      const char = entry.char ?? CENTIPEDE_DEFLECTOR_CYCLE[Math.floor(Math.random() * CENTIPEDE_DEFLECTOR_CYCLE.length)];
+      placements.push({ col, row, char });
+    }
+  }
+
+  return placements;
+}
+
+// Clears whatever generateBackgroundObjects() already placed inside the arena
+// footprint, stamps the fixed Centipede layout on top, and returns the head's
+// spawn cell + facing for CentipedeSystem.spawn(). Mirrors PuzzleSystem's
+// _clearArena (filter-by-rounded-cell, preserve structural) for the clear
+// step, and stampHutFootprint's "structural = true" convention so the stamped
+// objects survive the later cleanupStrayBackgroundObjects generation pass.
+export function stampCentipedeArena(room) {
+  const CS = GRID.CELL_SIZE;
+  const { minCol, maxCol, minRow, maxRow } = CENTIPEDE_ARENA_BOUNDS;
+
+  room.backgroundObjects = room.backgroundObjects.filter(obj => {
+    if (obj.structural) return true;
+    const col = Math.round(obj.position.x / CS);
+    const row = Math.round(obj.position.y / CS);
+    return col < minCol || col > maxCol || row < minRow || row > maxRow;
+  });
+
+  for (const { col, row, char } of buildCentipedeArenaLayout()) {
+    const obj = new BackgroundObject(char, col * CS, row * CS);
+    obj.structural = true;
+    room.backgroundObjects.push(obj);
+  }
+
+  return { spawnCell: { x: CENTIPEDE_SPAWN_CELL.col, y: CENTIPEDE_SPAWN_CELL.row }, facing: { ...CENTIPEDE_SPAWN_FACING } };
+}

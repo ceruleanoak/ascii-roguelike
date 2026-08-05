@@ -11,7 +11,7 @@ import { getDungeonDesign } from '../data/dungeonDesigns.js';
 import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
-import { maybeSpawnPeacefulFishingRoom, buildVaultInteriorLoot, applyKeyDropLogic, ensureKeyDroppers, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, deriveRiverFlowDirection, buildForcedRiverParams, carveForcedRiver, cellularCaveGrid, generateCalderaRoom, seedMoltenAscentCycle, seedSinkholes, injectSinkholeLake } from './roomFeatures.js';
+import { maybeSpawnPeacefulFishingRoom, buildVaultInteriorLoot, applyKeyDropLogic, ensureKeyDroppers, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, deriveRiverFlowDirection, buildForcedRiverParams, carveForcedRiver, cellularCaveGrid, generateCalderaRoom, seedMoltenAscentCycle, seedSinkholes, injectSinkholeLake, stampCentipedeArena } from './roomFeatures.js';
 
 // Zone-boss arena → letter template key. Boss rooms are entered without a
 // letter (cheat warp) or with an arbitrary one (normal progression), so we
@@ -711,9 +711,17 @@ export class RoomGenerator {
 
     if (useMiniBossPool) {
       const encounterId = pool[Math.floor(Math.random() * pool.length)];
-      const encounter = BOSS_ENCOUNTERS[encounterId];
-      if (encounter) {
-        this.spawnBossEncounter(room, encounter);
+      if (encounterId === 'centipede') {
+        // Bespoke multi-instance encounter — outside the single/formation
+        // BOSS_ENCOUNTERS data model, so it gets its own arena stamp + system
+        // spawn rather than a BOSS_ENCOUNTERS entry.
+        const { spawnCell, facing } = stampCentipedeArena(room);
+        this.game.centipedeSystem.spawn(room, spawnCell, facing);
+      } else {
+        const encounter = BOSS_ENCOUNTERS[encounterId];
+        if (encounter) {
+          this.spawnBossEncounter(room, encounter);
+        }
       }
     } else if (!this.isZoneBossRoom) {
       // Fallback for zones without a bossPool: single buffed enemy
