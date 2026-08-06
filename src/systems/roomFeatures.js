@@ -2,6 +2,7 @@ import { GRID, BACKGROUND_OBJECT_VARIANTS } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Fisherman } from '../entities/Fisherman.js';
 import { Enemy } from '../entities/Enemy.js';
+import { Item } from '../entities/Item.js';
 import { ENEMIES } from '../data/enemies.js';
 import { WeaponsMaster } from '../entities/WeaponsMaster.js';
 
@@ -958,7 +959,7 @@ export function generateSettlementRoom(gen, room) {
 // Mirrors CentipedeSystem.js's own CENTIPEDE_BODY_COUNT — duplicated rather
 // than imported to avoid a roomFeatures.js -> CentipedeSystem.js dependency
 // for one shared number; only used here to size the spawn-row reservation.
-const CENTIPEDE_BODY_COUNT = 12;
+const CENTIPEDE_BODY_COUNT = 14;
 const CENTIPEDE_ARENA_BOUNDS = { minCol: 2, maxCol: 27, minRow: 2, maxRow: 27 };
 const CENTIPEDE_SPAWN_CELL = { col: 15, row: 15 };
 const CENTIPEDE_SPAWN_FACING = { dx: 1, dy: 0 };
@@ -1028,8 +1029,25 @@ export function stampCentipedeArena(room) {
   for (const { col, row, char } of buildCentipedeArenaLayout()) {
     const obj = new BackgroundObject(char, col * CS, row * CS);
     obj.structural = true;
+    // Arena obstacle rocks are a unique instance, not normal Rock/Fractured Rock:
+    // the player must never get walled in against one for lacking a pickaxe/hammer,
+    // so every weapon type (melee or ranged) can break them.
+    if (char === '0' || char === '9') {
+      obj.allWeaponsDamage = true;
+      obj.bulletInteraction = 'interact-destroy';
+    }
     room.backgroundObjects.push(obj);
   }
 
   return { spawnCell: { x: CENTIPEDE_SPAWN_CELL.col, y: CENTIPEDE_SPAWN_CELL.row }, facing: { ...CENTIPEDE_SPAWN_FACING } };
+}
+
+// Centipede arena is a long horizontal gauntlet that rewards a ranged option —
+// guarantee a Gun pickup ('¬') regardless of depth, independent of the
+// depth-1-only offerL1Weapon roll in generateBossRoom.
+export function spawnCentipedeGunDrop(gen, room) {
+  const pos = gen.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects);
+  if (pos) {
+    room.items.push(new Item('¬', pos.x, pos.y));
+  }
 }

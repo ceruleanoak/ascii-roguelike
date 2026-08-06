@@ -11,7 +11,7 @@ import { getDungeonDesign } from '../data/dungeonDesigns.js';
 import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
-import { maybeSpawnPeacefulFishingRoom, buildVaultInteriorLoot, applyKeyDropLogic, ensureKeyDroppers, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, deriveRiverFlowDirection, buildForcedRiverParams, carveForcedRiver, cellularCaveGrid, generateCalderaRoom, seedMoltenAscentCycle, seedSinkholes, injectSinkholeLake, stampCentipedeArena } from './roomFeatures.js';
+import { maybeSpawnPeacefulFishingRoom, buildVaultInteriorLoot, applyKeyDropLogic, ensureKeyDroppers, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, deriveRiverFlowDirection, buildForcedRiverParams, carveForcedRiver, cellularCaveGrid, generateCalderaRoom, seedMoltenAscentCycle, seedSinkholes, injectSinkholeLake, stampCentipedeArena, spawnCentipedeGunDrop } from './roomFeatures.js';
 
 // Zone-boss arena → letter template key. Boss rooms are entered without a
 // letter (cheat warp) or with an arbitrary one (normal progression), so we
@@ -717,6 +717,7 @@ export class RoomGenerator {
         // spawn rather than a BOSS_ENCOUNTERS entry.
         const { spawnCell, facing } = stampCentipedeArena(room);
         this.game.centipedeSystem.spawn(room, spawnCell, facing);
+        spawnCentipedeGunDrop(this, room);
       } else {
         const encounter = BOSS_ENCOUNTERS[encounterId];
         if (encounter) {

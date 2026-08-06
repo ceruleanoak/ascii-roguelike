@@ -4,12 +4,13 @@ import { BackgroundObject } from '../entities/BackgroundObject.js';
 
 // Tuning placeholders pending playtesting — isolated as named constants for
 // easy adjustment.
-const CENTIPEDE_BODY_COUNT = 12;
+const CENTIPEDE_BODY_COUNT = 14;
 const CENTIPEDE_BASE_SPEED = 180;        // px/s, top speed at 0 attached segments (doubled per playtest feedback)
 const CENTIPEDE_SPEED_PER_SEGMENT = 10;  // px/s reduction per attached body part (doubled in lockstep)
-const CENTIPEDE_MIN_SPEED = 80;          // px/s floor at 12 segments (doubled in lockstep)
+const CENTIPEDE_MIN_SPEED = 80;          // px/s floor at 14 segments (doubled in lockstep)
 const CENTIPEDE_CONTACT_DAMAGE = 3;
 const CENTIPEDE_CONTACT_COOLDOWN = 0.5; // seconds between contact-damage ticks
+const CENTIPEDE_CONTACT_HITBOX_RATIO = 0.625; // fraction of full footprint (0.5 base, +25% per playtest feedback)
 // "10 frames" per spec means 10 real display frames. Enemy.update() (and thus
 // CentipedeUnit's invulnerabilityTimer decrement) runs on a deltaTime already
 // scaled by PHYSICS.ENEMY_TIMER_RATE (bug #92's canonical single-tick fix), so
@@ -385,6 +386,11 @@ export class CentipedeSystem {
     const cx = Math.round(unit.position.x / cell) * cell;
     const cy = Math.round(unit.position.y / cell) * cell;
     const rock = new BackgroundObject('9', cx, cy);
+    // Same arena-obstacle override as stampCentipedeArena(): a segment can
+    // petrify anywhere, including a spot the player's current weapon can't
+    // normally break, so this must yield to any weapon type.
+    rock.allWeaponsDamage = true;
+    rock.bulletInteraction = 'interact-destroy';
     room.backgroundObjects.push(rock);
   }
 
@@ -423,11 +429,11 @@ export class CentipedeSystem {
       if (chain.hitCooldowns.has(player)) continue;
 
       for (const unit of chain.units) {
-        // Contact hitbox is half the unit's full footprint, centered — a
-        // segment-length chain brushing past the player shouldn't tag them
-        // on every near-miss.
+        // Contact hitbox is a fraction of the unit's full footprint, centered
+        // — a segment-length chain brushing past the player shouldn't tag
+        // them on every near-miss.
         const fullW = unit.width ?? GRID.CELL_SIZE, fullH = unit.height ?? GRID.CELL_SIZE;
-        const uw = fullW / 2, uh = fullH / 2;
+        const uw = fullW * CENTIPEDE_CONTACT_HITBOX_RATIO, uh = fullH * CENTIPEDE_CONTACT_HITBOX_RATIO;
         const ux = unit.position.x + (fullW - uw) / 2, uy = unit.position.y + (fullH - uh) / 2;
         const overlapX = Math.min(px + pw, ux + uw) - Math.max(px, ux);
         const overlapY = Math.min(py + ph, uy + uh) - Math.max(py, uy);

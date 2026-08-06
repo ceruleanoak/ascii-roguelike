@@ -39,6 +39,7 @@ import { AquiferSystem } from './systems/AquiferSystem.js';
 import { SinkholeSystem } from './systems/SinkholeSystem.js';
 import { BossSystem } from './systems/BossSystem.js';
 import { BoulderSystem } from './systems/BoulderSystem.js';
+import { CentipedeSystem } from './systems/CentipedeSystem.js';
 import { SpellSystem } from './systems/SpellSystem.js';
 import { RidgeSystem } from './systems/RidgeSystem.js';
 import { PolymorphSystem } from './systems/PolymorphSystem.js';
@@ -175,6 +176,7 @@ class Game {
     this.sinkholeSystem = new SinkholeSystem(this);       // concealed G-room shortcut → yellow-zone U room
     this.bossSystem = new BossSystem(this);
     this.boulderSystem = new BoulderSystem(this);
+    this.centipedeSystem = new CentipedeSystem(this);
     this.spellSystem = new SpellSystem(this);
     this.ridgeSystem = new RidgeSystem(this);
     this.polymorphSystem = new PolymorphSystem();
@@ -3062,6 +3064,7 @@ class Game {
 
     // Update boulder system (red zone rolling boulder hazard)
     this.boulderSystem.update(deltaTime);
+    this.centipedeSystem.update(deltaTime);
 
     // Update fishing system before death check so Rusalka kills are caught this frame
     this.fishingSystem.update(deltaTime, this);
@@ -3831,24 +3834,8 @@ class Game {
       if (this.handlePearlCachePedestalSpace()) return;
       if (this.wireSystem?.handleSpacePress()) return;
 
-      // Bridge donation menu
-      if (this.currentRoom?.type === ROOM_TYPES.RIDGE && !this.currentRoom?.bridgeBuilt) {
-        if (this.bridgeMenuOpen) {
-          // SPACE while menu open: donate then close
-          this.ridgeSystem.donateAvailable();
-          this.ridgeSystem.closeMenu();
-          return;
-        }
-        if (this.ridgeSystem.getWorkerDistance() < this.ridgeSystem.CLOSE_RANGE) {
-          this.ridgeSystem.openMenu();
-          return;
-        }
-      }
-      // Safety: close bridge menu if somehow still open outside RIDGE context
-      if (this.bridgeMenuOpen) {
-        this.ridgeSystem.closeMenu();
-        return;
-      }
+      // Bridge donation menu — delegated to RidgeSystem's own handleSpacePress().
+      if (this.ridgeSystem.handleSpacePress()) return;
 
       // Fishing: resolve bite window OR cancel bobbing on space press
       if (
@@ -4243,11 +4230,8 @@ class Game {
     }
 
     if (state === GAME_STATES.EXPLORE || state === GAME_STATES.ARCADE_DEMO || state === GAME_STATES.REST) {
-      // Close bridge menu on SHIFT (no donation)
-      if (this.bridgeMenuOpen) {
-        this.ridgeSystem.closeMenu();
-        return;
-      }
+      // Close bridge menu on SHIFT (no donation) — delegated to RidgeSystem.
+      if (this.ridgeSystem.handleShiftPress()) return;
 
       // Interior SHIFT actions (dungeon item-slot sacrifice → unlock stairs) via InteriorManager.
       if (this.interiorManager.isActive && this.interiorManager.handleShiftPress()) return;

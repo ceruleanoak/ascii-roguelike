@@ -1,4 +1,4 @@
-import { GRID } from '../game/GameConfig.js';
+import { GRID, ROOM_TYPES } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 
 export const BRIDGE_MATERIALS = [
@@ -237,5 +237,40 @@ export class RidgeSystem {
 
   closeMenu() {
     this.game.bridgeMenuOpen = false;
+  }
+
+  // SPACE handling for the bridge donation flow, moved out of main.js's
+  // handleSpacePress() to match every other system's own handleSpacePress()
+  // convention (aquiferSystem, interiorManager, pressSystem, wellSystem, ...).
+  handleSpacePress() {
+    const room = this.game.currentRoom;
+    if (room?.type === ROOM_TYPES.RIDGE && !room?.bridgeBuilt) {
+      if (this.game.bridgeMenuOpen) {
+        // SPACE while menu open: donate then close
+        this.donateAvailable();
+        this.closeMenu();
+        return true;
+      }
+      if (this.getWorkerDistance() < this.CLOSE_RANGE) {
+        this.openMenu();
+        return true;
+      }
+    }
+    // Safety: close bridge menu if somehow still open outside RIDGE context
+    if (this.game.bridgeMenuOpen) {
+      this.closeMenu();
+      return true;
+    }
+    return false;
+  }
+
+  // SHIFT closes the bridge menu without donating. Mirrors handleSpacePress()
+  // above for the same reason.
+  handleShiftPress() {
+    if (this.game.bridgeMenuOpen) {
+      this.closeMenu();
+      return true;
+    }
+    return false;
   }
 }

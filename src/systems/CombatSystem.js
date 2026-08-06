@@ -827,8 +827,10 @@ export class CombatSystem {
               continue;
             }
 
-            // Regular rocks (0) only yield to pickaxe or hammer — everything else clinks off
-            if (obj.char === '0' && !attack.isPickaxe && !attack.canSmash) {
+            // Regular rocks (0) only yield to pickaxe or hammer — everything else clinks off.
+            // allWeaponsDamage is a per-instance escape hatch (e.g. the Centipede arena's
+            // obstacle rocks) that ignores this gate so no weapon loadout can strand the player.
+            if (obj.char === '0' && !attack.isPickaxe && !attack.canSmash && !obj.allWeaponsDamage) {
               this.createDamageNumber('!', obj.position.x, obj.position.y, '#aaaaaa');
               continue;
             }
@@ -855,8 +857,9 @@ export class CombatSystem {
               continue;
             }
 
-            // Blunt weapons can't damage objects, but still rustle grass; bushes yield to anything
-            if (!attack.isBlunt || obj.char === '%') {
+            // Blunt weapons can't damage objects, but still rustle grass; bushes yield to
+            // anything, and allWeaponsDamage-flagged instances yield to anything too.
+            if (!attack.isBlunt || obj.char === '%' || obj.allWeaponsDamage) {
               const smashDamage = (obj.char === '%' && (attack.isBlunt || attack.weaponSubtype === 'axe')) ? obj.hp : attack.canSmash ? attack.damage * 2 : attack.damage;
               const result = obj.takeDamage(smashDamage, attack.isBlade);
 

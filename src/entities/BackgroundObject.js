@@ -157,6 +157,12 @@ export class BackgroundObject {
     this.fairyGrass = false;
     this.shakeTimer = 0;
 
+    // Per-instance override: ignores the normal rock/blunt-weapon damage gates
+    // entirely (melee and bullet). Set by room generation for obstacles that must
+    // never wall off the player regardless of loadout (e.g. the Centipede arena's
+    // obstacle rocks) — see CombatSystem's melee gates and handleBulletCollision below.
+    this.allWeaponsDamage = false;
+
     // Wand system properties
     this.rock = this.data.rock || false; // Negates magic/elemental effects
     this.electrified = false; // Electrical infusion trap
@@ -497,7 +503,9 @@ export class BackgroundObject {
 
     // Rocks are nigh-indestructible — bullets ricochet with halved remaining range;
     // arrows simply stop. Neither drops M ingredient (only pickaxe/hammer melee can).
-    if (this.char === '0') {
+    // allWeaponsDamage instances skip this and fall through to the standard
+    // bulletInteraction switch below (room generation points them at 'interact-destroy').
+    if (this.char === '0' && !this.allWeaponsDamage) {
       this._playAnimation('bounce');
       if (bullet.type === 'bullet') {
         return {
