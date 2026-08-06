@@ -430,12 +430,19 @@ export class ExploreRenderer {
         if (!this.shouldRenderBackgroundObject(obj, game.player)) continue;
 
         const renderData = obj.getRenderPosition();
-        this.renderer.drawEntity(
-          renderData.x + GRID.CELL_SIZE / 2 + obj.animationOffset.x,
-          renderData.y + GRID.CELL_SIZE / 2 + obj.animationOffset.y,
-          renderData.char,
-          renderData.color
-        );
+        const rx = renderData.x + GRID.CELL_SIZE / 2 + obj.animationOffset.x;
+        const ry = renderData.y + GRID.CELL_SIZE / 2 + obj.animationOffset.y;
+        // Deflectors and Fractured Rock render at custom, larger-than-glyph
+        // sizes (see the static draw pass above) — routing them through the
+        // plain drawEntity glyph fallback here made them visibly shrink to
+        // normal character size for the duration of any hit/interact animation.
+        if (obj.data?.boulderDeflector) {
+          this._drawDeflectorTriangle(this.renderer.fgCtx, rx, ry, obj.data.deflectorElbow, renderData.color);
+        } else if (obj.data?.customSprite === 'fracturedRock') {
+          drawFracturedRock(this.renderer.fgCtx, rx, ry, obj.damageStage, renderData.color);
+        } else {
+          this.renderer.drawEntity(rx, ry, renderData.char, renderData.color);
+        }
       }
     }
 
