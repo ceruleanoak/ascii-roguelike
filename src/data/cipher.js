@@ -16,14 +16,32 @@
  *   3. Dungeon ciphered recipe hints — Greek-encoded recipe words like the
  *      DRAW sequence. (Wired in a later step.)
  *
- * The mapping is the standard English↔Greek equivalence (Beta Code, the
- * scheme English speakers use to type Greek): A-alpha, B-beta, C-xi,
- * D-delta, E-epsilon, F-phi, G-gamma, H-eta, I-iota, K-kappa, L-lambda,
- * M-mu, N-nu, O-omicron, P-pi, Q-theta, R-rho, S-sigma, T-tau, U-upsilon,
- * W-omega, X-chi, Y-psi, Z-zeta. The equivalences are shape- and
- * name-intuitive: ω↔w, χ↔x, ψ↔y, θ↔q. Only J and V have no standard
- * Greek letter: J takes yot (Ϳ/ϳ, the Greek letter for /j/) and V takes
- * digamma (Ϝ/ϝ, Beta Code's own V).
+ * The mapping starts from Beta Code (the scheme English speakers use to
+ * type Greek) and corrects four pairings where Beta Code's ASCII-slot
+ * convenience diverges from actual alphabet lineage: A-alpha, B-beta,
+ * C-chi, D-delta, E-epsilon, F-digamma, G-gamma, H-eta, I-iota, K-kappa,
+ * L-lambda, M-mu, N-nu, O-omicron, P-pi, Q-qoppa, R-rho, S-sigma, T-tau,
+ * U-upsilon, V-phi, W-omega, X-xi, Y-psi, Z-zeta.
+ *
+ * The four corrections, and why Beta Code's originals (C-xi, F-phi,
+ * Q-theta, X-chi) don't hold up:
+ *   - C↔chi, X↔xi (swapped from Beta Code's C-xi/X-chi): standard
+ *     Romanization renders Ξ as "x" (Xerxes, Alexander) and Χ as "ch"
+ *     (Christ, character) — X belongs on xi, and chi's digraph starts
+ *     with C.
+ *   - F↔digamma, V↔phi (swapped from Beta Code's F-phi/V-digamma):
+ *     Latin F is a direct shape-descendant of digamma (Ϝ ≈ F, same
+ *     alphabet slot); Beta Code had them backwards. V takes phi instead
+ *     — no lineage claim there, just Phi's leftover "f"-adjacent sound.
+ *   - Q↔qoppa (was Beta Code's Q-theta): Latin Q's real Greek ancestor
+ *     is Qoppa (Ϙ), not Theta — Theta Romanizes "th" and has no Latin
+ *     letter of its own. See the Phoenician layer below: Qoph fathers
+ *     Qoppa, which fathers Q.
+ * ω↔w remains a pure shape/name mnemonic, not a lineage claim (real W
+ * descends from doubled upsilon). J, F, and Q are the three letters that
+ * reach outside the classical 24-letter alphabet: J takes yot (Ϳ/ϳ, the
+ * Greek letter for /j/), F takes digamma (Ϝ/ϝ), Q takes qoppa (Ϙ/ϙ) —
+ * all archaic/marginal letters absent from the standard alphabet.
  *
  * Greek codepoints are reserved EXCLUSIVELY for this cipher. Game content
  * that previously used Greek glyphs was evacuated in Wave 1 of the glyph
@@ -39,16 +57,16 @@
  * the iconic, distinct ones.
  */
 
-// English uppercase → Greek uppercase (Beta Code). Lowercase pairs are
-// derived below via toLowerCase(), which maps every glyph here to its
-// proper lowercase form (Σ→σ, Ϳ→ϳ, Ϝ→ϝ).
+// English uppercase → Greek uppercase (corrected Beta Code, see above).
+// Lowercase pairs are derived below via toLowerCase(), which maps every
+// glyph here to its proper lowercase form (Σ→σ, Ϳ→ϳ, Ϝ→ϝ, Ϙ→ϙ).
 const UPPER_CIPHER = {
-  A: 'Α',  B: 'Β',  C: 'Ξ',  D: 'Δ',
-  E: 'Ε',  F: 'Φ',  G: 'Γ',  H: 'Η',
+  A: 'Α',  B: 'Β',  C: 'Χ',  D: 'Δ',
+  E: 'Ε',  F: 'Ϝ',  G: 'Γ',  H: 'Η',
   I: 'Ι',  J: 'Ϳ',  K: 'Κ',  L: 'Λ',
   M: 'Μ',  N: 'Ν',  O: 'Ο',  P: 'Π',
-  Q: 'Θ',  R: 'Ρ',  S: 'Σ',  T: 'Τ',
-  U: 'Υ',  V: 'Ϝ',  W: 'Ω',  X: 'Χ',
+  Q: 'Ϙ',  R: 'Ρ',  S: 'Σ',  T: 'Τ',
+  U: 'Υ',  V: 'Φ',  W: 'Ω',  X: 'Ξ',
   Y: 'Ψ',  Z: 'Ζ',
 };
 
@@ -71,12 +89,16 @@ export const REVERSE_CIPHER = Object.fromEntries(
  * This is ancestry, not a cipher — it is deliberately many-to-one and has
  * no reverse table. Phoenician is caseless, so both Greek cases share one
  * ancestor (lowercase keys added below). Three lineages are shared:
- *   𐤅 waw  → Ϝ digamma AND Υ upsilon
+ *   𐤅 waw  → Ϝ digamma AND Υ upsilon (so English F and U share an
+ *            ancestor — this one lineage claim actually holds in real
+ *            alphabet history too, not just in this cipher)
  *   𐤏 ayin → Ο omicron AND Ω omega
  *   𐤉 yodh → Ι iota    AND Ϳ yot (yodh is the /j/ consonant)
- * Greek innovations Φ, Χ, Ψ have NO Phoenician ancestor (English F, X, Y
- * are therefore canon-rootless). 𐤑 tsade and 𐤒 qoph fathered no letter in
- * this cipher — they are free canon glyphs for future content.
+ * Greek innovations Φ, Χ, Ψ have NO Phoenician ancestor (English V, C, Y
+ * are therefore canon-rootless — chi and phi's Latin-letter assignments
+ * above are phonetic conveniences, not lineage claims). 𐤑 tsade fathered
+ * no letter in this cipher — a free canon glyph for future content. 𐤒
+ * qoph fathers Ϙ qoppa, which is why English Q traces to qoph.
  *
  * NOTE: Phoenician codepoints are astral-plane (SMP) — two UTF-16 units.
  * Iterate with `for...of`, never index with str[i]. Base Unifont does not
@@ -102,6 +124,7 @@ const GREEK_TO_PHOENICIAN_UPPER = {
   'Ο': '𐤏', // ayin   U+1090F
   'Ω': '𐤏', // ayin   U+1090F (shared with omicron)
   'Π': '𐤐', // pe     U+10910
+  'Ϙ': '𐤒', // qoph   U+10912
   'Ρ': '𐤓', // resh   U+10913
   'Σ': '𐤔', // shin   U+10914
   'Τ': '𐤕', // taw    U+10915
@@ -119,7 +142,7 @@ for (const [greek, phoenician] of Object.entries(GREEK_TO_PHOENICIAN_UPPER)) {
 /**
  * Full canon chain for an English letter: English → Greek (cipher) →
  * Phoenician (ancestor). Returns undefined for canon-rootless letters
- * (F, X, Y → Greek innovations) and non-letters.
+ * (C, V, Y → Greek innovations) and non-letters.
  */
 export function phoenicianFor(englishCh) {
   return GREEK_TO_PHOENICIAN[CIPHER[englishCh]];
