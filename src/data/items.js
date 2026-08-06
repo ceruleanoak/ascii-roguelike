@@ -46,7 +46,7 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
     damage: 1,
-    cooldown: 1.5,
+    cooldown: 1.2,
     maxUses: 6,
     accuracy: .85,
     reloadTime: 5,
