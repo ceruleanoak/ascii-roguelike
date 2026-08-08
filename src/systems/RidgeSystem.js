@@ -1,10 +1,10 @@
-import { GRID, ROOM_TYPES } from '../game/GameConfig.js';
+import { GRID, ROOM_TYPES, NPC_INTERACTION_RANGE } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 
 export const BRIDGE_MATERIALS = [
-  { key: 'stick', char: '|', need: 20 },
+  { key: 'stick', char: '|', need: 15 },
   { key: 'metal', char: 'M', need: 5  },
-  { key: 'rock',  char: '0', need: 5  },
+  { key: 'rock',  char: '0', need: 15 },
 ];
 
 // How long each bridge row takes to appear during the build animation
@@ -18,7 +18,9 @@ const BRIDGE_ROW_MAX = 9; // bottom row (appears first)
 export class RidgeSystem {
   constructor(game) {
     this.game = game;
-    this.CLOSE_RANGE = GRID.CELL_SIZE * 4;
+    // Matches the standard NPC talk range (BridgeWorker.getInteractionDistance
+    // mirrors this) — was a wider hand-rolled 4-cell radius.
+    this.CLOSE_RANGE = NPC_INTERACTION_RANGE;
     // Animation state
     this._animRoom     = null;
     this._animRow      = BRIDGE_ROW_MAX; // next row to place (counts down)

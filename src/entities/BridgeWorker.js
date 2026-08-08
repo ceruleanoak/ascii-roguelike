@@ -1,7 +1,9 @@
-import { GRID } from '../game/GameConfig.js';
+import { GRID, NPC_INTERACTION_RANGE } from '../game/GameConfig.js';
 import { NeutralCharacter } from './NeutralCharacter.js';
 
-const CLOSE_RANGE = GRID.CELL_SIZE * 4;
+// Matches the standard NPC talk range (RidgeSystem.CLOSE_RANGE mirrors this)
+// — was a wider hand-rolled 4-cell radius.
+const CLOSE_RANGE = NPC_INTERACTION_RANGE;
 const HOP_PERIOD  = 2.2;
 const HOP_ACTIVE  = 0.38;
 

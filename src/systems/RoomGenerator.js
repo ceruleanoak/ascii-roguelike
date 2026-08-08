@@ -3956,6 +3956,10 @@ export class RoomGenerator {
    * The dark cliff visual is painted by ExploreRenderer's ravine gradient
    * (rows 0..ravineRows). Background objects in those rows are stripped so
    * trees/grass don't poke through the ravine fill.
+   *
+   * Combat-free by design (room.noCombat — see addEnemyToRoom): the room is
+   * a construction errand, and a fight on the cliff-edge approach would
+   * fight the bridge-building beat rather than support it.
    */
   generateRidgeRoom(room) {
     const CS = GRID.CELL_SIZE;
@@ -3980,6 +3984,12 @@ export class RoomGenerator {
 
     // Tell ExploreRenderer how tall the ravine is (paints the cliff gradient).
     room.ravineRows = RAVINE_ROW_MAX;
+
+    // Ridge is a construction errand, not a fight — no enemy source targets
+    // it today, but this flag makes that a locked contract rather than an
+    // absence of code: addEnemyToRoom() refuses any enemy pushed at a
+    // noCombat room instead of silently accepting one from a future spawner.
+    room.noCombat = true;
 
     // North exit always reads as "gray zone" from a Ridge room — the ridge
     // climbs into the misted high country. forceZone makes the transition
@@ -4341,6 +4351,11 @@ export class RoomGenerator {
    * Also adds to legacy room.enemies for backwards compatibility
    */
   addEnemyToRoom(room, enemy) {
+    if (room.noCombat) {
+      console.warn(`[RoomGenerator] addEnemyToRoom: refused to add "${enemy.char}" — room.noCombat is set (${room.type}).`);
+      return;
+    }
+
     applyZoneCombatModifiers(enemy, room.zone);
 
     const plane = enemy.plane !== undefined ? enemy.plane : 0;
