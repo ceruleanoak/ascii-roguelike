@@ -2250,9 +2250,9 @@ export class Enemy {
     }
 
     // Giant Slime on-damage hooks: child split (one blob per HP lost — see
-    // _trySplitOnDamage) and goo-spew damage accumulation (GooSpewMechanic).
+    // SplitOnDamageMechanic.onDamaged) and goo-spew damage accumulation (GooSpewMechanic).
     if (this.hp > 0) {
-      if (this.data.splitOnDamage?.enabled) this._trySplitOnDamage(amount);
+      SplitOnDamageMechanic.onDamaged(this, amount);
       GooSpewMechanic.onDamaged(this, amount);
       RipenMechanic.onDamaged(this);
       ThiefMechanic.onDamaged(this);
@@ -2352,6 +2352,20 @@ export class Enemy {
     if (!(this.isBoss || this.isBossEntity || this.data?.tier === 'boss')) return null;
     if (this.hp <= 0 || this.hp > this.maxHp * 0.3) return null;
     return Math.floor(Date.now() / 250) % 2 === 0 ? '#660000' : null;
+  }
+
+  // Goo-affinity render scale: Slime and Giant Slime render at a size that
+  // tracks current HP against max — a slime chipped down reads as a visibly
+  // smaller blob, and a Giant Slime split child (registerSplitChild sets its
+  // hp to the damage the boss just took, uncapped by maxHp) reads as a chunk
+  // sized to match. sqrt keeps rendered AREA roughly proportional to the HP
+  // fraction rather than just glyph height; clamped so a near-dead slime
+  // stays legible and an overdamaged child doesn't blow out the layout.
+  getGooRenderScale() {
+    if (!this.data?.affinities?.includes('goo')) return 1;
+    if (!(this.maxHp > 0)) return 1;
+    const frac = Math.max(0, this.hp) / this.maxHp;
+    return Math.min(1.5, Math.max(0.45, Math.sqrt(frac)));
   }
 
   getDOTBlinkColor() {
@@ -2517,65 +2531,6 @@ export class Enemy {
       this.spawnedEnemies.delete(spawnedEnemy);
       this.activeSpawnCount--;
     }
-  }
-
-  // ── Giant Slime: split-on-damage ─────────────────────────────────────────────
-  _trySplitOnDamage(damageAmount = 1) {
-    const cfg = this.data.splitOnDamage;
-    if (!cfg?.enabled) return;
-    if (!this.splitChildren) this.splitChildren = new Set();
-    if (!this.game?.enemySpawnSystem) return;
-
-    // One child per attack; its HP equals the damage the boss just took. Kill
-    // the child before mergeCooldown elapses to make the damage stick — otherwise
-    // colliding with the boss re-merges it and restores the HP.
-    const childHp = Math.max(1, Math.floor(damageAmount));
-    // Child spawns at the boss's center and is launched outward in a random
-    // direction by registerSplitChild — no placement search needed.
-    this.game.enemySpawnSystem.queueRequest(this, {
-      spawnChar: cfg.spawnChar,
-      spawnCount: 1,
-      exactPosition: true,
-      spawnerPosition: { x: this.position.x, y: this.position.y },
-      _splitChildLink: {
-        parent: this,
-        mergeCooldown: cfg.mergeCooldown,
-        childHp
-      }
-    });
-    this.game?.audioSystem?.playSFX('goo_split');
-  }
-
-  registerSplitChild(child, cfg) {
-    if (!this.splitChildren) this.splitChildren = new Set();
-    child.parentRef = this;
-    child.mergeCooldownTimer = cfg.mergeCooldown ?? 0;
-    child.reformValue = cfg.childHp; // Absorbing returns exactly the HP the player failed to remove
-    child.hp = cfg.childHp;
-    // Launch the child away from the boss center in a random direction;
-    // knockback status keeps AI from overriding the velocity mid-flight.
-    const launchAngle = Math.random() * Math.PI * 2;
-    child.velocity.vx = Math.cos(launchAngle) * 300;
-    child.velocity.vy = Math.sin(launchAngle) * 300;
-    child.applyStatusEffect('knockback', 0.35);
-    // Spawn iframes: the child appears at the boss center, inside whatever
-    // attack just split it off — without these it dies instantly. 2 real
-    // seconds (timer is in double-seconds, ENEMY_TIMER_RATE = 2).
-    child.invulnerabilityTimer = 4.0;
-    this.splitChildren.add(child);
-  }
-
-  notifySplitChildGone(child, absorbed) {
-    if (!this.splitChildren) return;
-    if (this.splitChildren.has(child)) this.splitChildren.delete(child);
-    if (absorbed) this.absorbChild(child.reformValue || 0);
-  }
-
-  absorbChild(value) {
-    if (!value) return;
-    const max = this.data.hp;
-    this.hp = Math.min(max, this.hp + value);
-    this.game?.audioSystem?.playSFX('goo_reabsorb');
   }
 
   getSpawnIndicator() {

@@ -1,4 +1,5 @@
 import { GRID } from '../../game/GameConfig.js';
+import { SplitOnDamageMechanic } from './SplitOnDamageMechanic.js';
 
 // Giant Slime split-child passive re-merge. The child behaves like a normal
 // slime; once mergeCooldownTimer expires, contact with the parent absorbs
@@ -32,7 +33,7 @@ export const ReformMechanic = {
     const dy = enemy.parentRef.position.y - enemy.position.y;
     const contactDist = GRID.CELL_SIZE * 1.5;
     if (dx * dx + dy * dy <= contactDist * contactDist) {
-      enemy.parentRef.notifySplitChildGone(enemy, true);
+      SplitOnDamageMechanic.notifySplitChildGone(enemy.parentRef, enemy, true);
       const ref = enemy.parentRef;
       enemy.parentRef = null;
       enemy.hp = 0;

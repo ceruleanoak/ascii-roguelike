@@ -1526,11 +1526,22 @@ export class ExploreRenderer {
         const liftY = enemy.leapArcLift || 0;
         const windupSquash = enemy.leapWindupActive ? Math.min(0.85, 1 - (enemy.leapWindupTimer / (enemy.data.leapAttack?.windupTime || 1)) * 0.15) : 1;
         this.renderer.fgCtx.save();
-        this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 3 * windupSquash}px 'Unifont', monospace`;
+        this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 3 * windupSquash * enemy.getGooRenderScale()}px 'Unifont', monospace`;
         this.renderer[drawMethod](
           enemy.position.x + GRID.CELL_SIZE / 2 + shakeX,
           enemy.position.y + GRID.CELL_SIZE / 2 + shakeY - liftY,
           'o',
+          displayColor
+        );
+        this.renderer.fgCtx.restore();
+      } else if (enemy.data?.affinities?.includes('goo')) {
+        // Slime, and Giant Slime's split-off children — see getGooRenderScale().
+        this.renderer.fgCtx.save();
+        this.renderer.fgCtx.font = `${Math.round(GRID.CELL_SIZE * enemy.getGooRenderScale())}px 'Unifont', monospace`;
+        this.renderer[drawMethod](
+          enemy.position.x + GRID.CELL_SIZE / 2 + shakeX,
+          enemy.position.y + GRID.CELL_SIZE / 2 + shakeY,
+          enemy.displayChar,
           displayColor
         );
         this.renderer.fgCtx.restore();

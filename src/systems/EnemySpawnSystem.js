@@ -8,6 +8,8 @@
  * - Notify parent spawners when a spawned enemy dies
  */
 
+import { SplitOnDamageMechanic } from '../entities/enemyMechanics/SplitOnDamageMechanic.js';
+
 export class EnemySpawnSystem {
   constructor(game) {
     this.game = game;
@@ -41,8 +43,8 @@ export class EnemySpawnSystem {
         }
         // Giant Slime split linkage: tag child with parent + reform fields
         const link = request.spawnData._splitChildLink;
-        if (link && typeof link.parent.registerSplitChild === 'function') {
-          link.parent.registerSplitChild(newEnemy, link);
+        if (link) {
+          SplitOnDamageMechanic.registerSplitChild(link.parent, newEnemy, link);
         }
       }
       this.game.currentRoom.enemies.push(...newEnemies);
@@ -70,8 +72,8 @@ export class EnemySpawnSystem {
     }
 
     // Split-child notifies parent so reform tracking stays accurate
-    if (enemy.parentRef && typeof enemy.parentRef.notifySplitChildGone === 'function') {
-      enemy.parentRef.notifySplitChildGone(enemy, false);
+    if (enemy.parentRef) {
+      SplitOnDamageMechanic.notifySplitChildGone(enemy.parentRef, enemy, false);
       enemy.parentRef = null;
     }
 
