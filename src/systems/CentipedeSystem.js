@@ -11,12 +11,16 @@ const CENTIPEDE_MIN_SPEED = 80;          // px/s floor at 14 segments (doubled i
 const CENTIPEDE_CONTACT_DAMAGE = 3;
 const CENTIPEDE_CONTACT_COOLDOWN = 0.5; // seconds between contact-damage ticks
 const CENTIPEDE_CONTACT_HITBOX_RATIO = 0.625; // fraction of full footprint (0.5 base, +25% per playtest feedback)
-// "10 frames" per spec means 10 real display frames. Enemy.update() (and thus
-// CentipedeUnit's invulnerabilityTimer decrement) runs on a deltaTime already
-// scaled by PHYSICS.ENEMY_TIMER_RATE (bug #92's canonical single-tick fix), so
-// the stored timer must be pre-scaled by the same factor to actually cover 10
-// real frames' worth of decrement.
-const CENTIPEDE_SPLIT_IFRAMES = (10 / 60) * PHYSICS.ENEMY_TIMER_RATE;
+// Post-split "white" state: every surviving segment (not the one just struck)
+// blinks white and is immune to contact with the player for this long. Also
+// blocks further takeDamage() hits outright (see CentipedeUnit.takeDamage) —
+// bullets are the one exception, since that block lives in takeDamage(), not
+// here, and this system never touches it. 2 real seconds. Enemy.update() (and
+// thus CentipedeUnit's invulnerabilityTimer decrement) runs on a deltaTime
+// already scaled by PHYSICS.ENEMY_TIMER_RATE (bug #92's canonical single-tick
+// fix), so the stored timer must be pre-scaled by the same factor to actually
+// cover 2 real seconds' worth of decrement.
+const CENTIPEDE_WHITE_STATE_DURATION = 2 * PHYSICS.ENEMY_TIMER_RATE;
 // A narrow channel between two parallel walls can trap a chain in an
 // infinite reversal loop: reversing flips both facing and turnBias, and
 // those two flips cancel out (CW from the new facing lands on the exact
@@ -376,7 +380,7 @@ export class CentipedeSystem {
   _broadcastInvulnerability(room, hitUnit) {
     for (const chain of room.centipedeChains) {
       for (const u of chain.units) {
-        if (u !== hitUnit) u.invulnerabilityTimer = CENTIPEDE_SPLIT_IFRAMES;
+        if (u !== hitUnit) u.invulnerabilityTimer = CENTIPEDE_WHITE_STATE_DURATION;
       }
     }
   }
@@ -429,6 +433,12 @@ export class CentipedeSystem {
       if (chain.hitCooldowns.has(player)) continue;
 
       for (const unit of chain.units) {
+        // White-state segments (post-split invulnerability broadcast, see
+        // _broadcastInvulnerability) pass through the player harmlessly — no
+        // contact damage, no blocking. Bullets are unaffected by this; that's
+        // a separate immunity enforced in CentipedeUnit.takeDamage().
+        if (unit.invulnerabilityTimer > 0) continue;
+
         // Contact hitbox is a fraction of the unit's full footprint, centered
         // — a segment-length chain brushing past the player shouldn't tag
         // them on every near-miss.
