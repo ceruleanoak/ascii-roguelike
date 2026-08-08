@@ -234,6 +234,7 @@ class Game {
     this.companionCrows = [];       // Run-scoped: crows that ate bread; act as combat companions across rooms
     this.followerCrows = [];        // Room-scoped: bystander crows that joined a feed event in the current room
     this.tamedRats = [];            // Run-scoped: rats that ate bread; companion mode driven by Enemy.tamed
+    this.ridgeBridgeBuilt = false;  // Run-scoped: set once any Ridge bridge is built; future Ridge rooms skip the BridgeWorker errand entirely
 
     // Selectors that return arrays of entities eligible to eat a dropped loaf.
     // SPACE with bread equipped is a no-op unless at least one selector returns
@@ -4170,6 +4171,7 @@ class Game {
     this.companionCrows = [];
     this.followerCrows = [];
     this.tamedRats = [];
+    this.ridgeBridgeBuilt = false;
 
     // Reset character system for new run
     this.deadCharacters = [];
@@ -4415,12 +4417,9 @@ class Game {
       // Clear sound events from any previous room
       this.soundEvents = [];
 
-      // Ridge room: attach ridge system and push bridge worker if not yet built
+      // Ridge room: attach ridge system (registers the bridge worker too).
       if (room.type === ROOM_TYPES.RIDGE) {
         this.ridgeSystem.attachToRoom(room);
-        if (room.bridgeWorker && !room.bridgeBuilt) {
-          this.neutralCharacters.push(room.bridgeWorker);
-        }
       }
 
       // Pearl-guide fairy (O room + pearl in inventory): pre-spawned at room

@@ -6,7 +6,7 @@ import { LETTER_TEMPLATES } from '../data/letterTemplates.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
-import { BridgeWorker } from '../entities/BridgeWorker.js';
+import { generateRidgeRoomImpl } from './RidgeSystem.js';
 import { getDungeonDesign } from '../data/dungeonDesigns.js';
 import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
@@ -3947,81 +3947,9 @@ export class RoomGenerator {
     generateSettlementRoomImpl(this, room);
   }
 
-  /**
-   * Ridge room ('R') — the entire top 9 rows are an impassable ravine.
-   * A BridgeWorker NPC stands south of the cliff; donating sticks/metal/rocks
-   * (or casting BRIDGE with a wish) builds planks row-by-row across cols
-   * 14-16, opening a 3-cell-wide path to the north exit.
-   *
-   * The dark cliff visual is painted by ExploreRenderer's ravine gradient
-   * (rows 0..ravineRows). Background objects in those rows are stripped so
-   * trees/grass don't poke through the ravine fill.
-   *
-   * Combat-free by design (room.noCombat — see addEnemyToRoom): the room is
-   * a construction errand, and a fight on the cliff-edge approach would
-   * fight the bridge-building beat rather than support it.
-   */
+  // Ridge room ('R') — see generateRidgeRoomImpl in RidgeSystem.js.
   generateRidgeRoom(room) {
-    const CS = GRID.CELL_SIZE;
-    const RAVINE_ROW_MAX = 9; // last row of the ravine; player ground starts at row 10
-
-    // Standard background pass for terrain/decor on the player's side.
-    this.generateBackgroundObjects(room);
-
-    // Protect the ravine band so the cleanup pass strips anything dropped
-    // into it — the ravine gradient covers stray objects visually but they'd
-    // flicker through animations and confuse pathing.
-    protectRegion(room, { kind: 'rows', minRow: 1, maxRow: RAVINE_ROW_MAX });
-
-    // Solidify the entire ravine band (excluding border columns, which are
-    // already solid). RidgeSystem._placeBridgeRow opens cols 14-16 of rows
-    // 2-9 as planks are placed.
-    for (let r = 1; r <= RAVINE_ROW_MAX; r++) {
-      for (let c = 1; c < GRID.COLS - 1; c++) {
-        room.collisionMap[r][c] = true;
-      }
-    }
-
-    // Tell ExploreRenderer how tall the ravine is (paints the cliff gradient).
-    room.ravineRows = RAVINE_ROW_MAX;
-
-    // Ridge is a construction errand, not a fight — no enemy source targets
-    // it today, but this flag makes that a locked contract rather than an
-    // absence of code: addEnemyToRoom() refuses any enemy pushed at a
-    // noCombat room instead of silently accepting one from a future spawner.
-    room.noCombat = true;
-
-    // North exit always reads as "gray zone" from a Ridge room — the ridge
-    // climbs into the misted high country. forceZone makes the transition
-    // immediate (single exit), not the procedural 3-consecutive-color rule.
-    if (room.exits?.north) {
-      room.exits.north.color = '#888888';
-      room.exits.north.forceZone = 'gray';
-    }
-
-    // Bridge state — donations + worker reference. main.js reads bridgeWorker
-    // on room entry to register the NPC into game.neutralCharacters.
-    room.bridgeDonated = { stick: 0, metal: 0, rock: 0 };
-    room.bridgeBuilt = false;
-    room.bridgeAnimating = false;
-
-    // Place worker south of the cliff lip, on the bridge-approach centerline.
-    const workerCol = 15;
-    const workerRow = 14;
-    room.bridgeWorker = new BridgeWorker(workerCol * CS, workerRow * CS);
-
-    // Spawn zones — keep the player south of the cliff regardless of which
-    // direction they warped in from.
-    const safeY = (RAVINE_ROW_MAX + 6) * CS; // row 15
-    room.spawnZones = {
-      north:   { x: 15 * CS, y: safeY }, // bridge approach
-      south:   { x: 15 * CS, y: (GRID.ROWS - 3) * CS },
-      east:    { x: 2 * CS,  y: safeY },
-      west:    { x: (GRID.COLS - 3) * CS, y: safeY },
-      default: { x: 15 * CS, y: safeY },
-    };
-
-    room.exitsLocked = false;
+    generateRidgeRoomImpl(this, room);
   }
 
   generateWellRoom(room) {
