@@ -2355,17 +2355,16 @@ export class Enemy {
   }
 
   // Goo-affinity render scale: Slime and Giant Slime render at a size that
-  // tracks current HP against max — a slime chipped down reads as a visibly
-  // smaller blob, and a Giant Slime split child (registerSplitChild sets its
-  // hp to the damage the boss just took, uncapped by maxHp) reads as a chunk
-  // sized to match. sqrt keeps rendered AREA roughly proportional to the HP
-  // fraction rather than just glyph height; clamped so a near-dead slime
-  // stays legible and an overdamaged child doesn't blow out the layout.
+  // tracks current HP — a Giant Slime split child (registerSplitChild sets
+  // its hp to the damage the boss just took, uncapped by maxHp) reads as a
+  // chunk sized to match the hit that knocked it off. 1-2 HP is the original
+  // design size (never smaller); every HP above that scales the glyph up.
+  // sqrt keeps rendered AREA roughly proportional to HP rather than just
+  // glyph height; capped so an outlier one-hit chunk doesn't blow out the layout.
   getGooRenderScale() {
     if (!this.data?.affinities?.includes('goo')) return 1;
-    if (!(this.maxHp > 0)) return 1;
-    const frac = Math.max(0, this.hp) / this.maxHp;
-    return Math.min(1.5, Math.max(0.45, Math.sqrt(frac)));
+    const hp = Math.max(0, this.hp);
+    return Math.min(2.5, Math.max(1, Math.sqrt(hp / 2)));
   }
 
   getDOTBlinkColor() {
