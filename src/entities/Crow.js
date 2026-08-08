@@ -1,4 +1,5 @@
 import { GRID } from '../game/GameConfig.js';
+import { INGREDIENTS } from '../data/items.js';
 
 const SCARE_RADIUS = GRID.CELL_SIZE * 1.6;
 const FLEE_SPEED = 90;
@@ -13,6 +14,14 @@ const IDLE_BOB_FREQ = 1.8;
 // handful of bread items dropped at once.
 const BREAD_SEEK_SPEED = 55;
 const BREAD_EAT_DIST = GRID.CELL_SIZE * 0.7;
+
+// Loot-seeking (nuisance theft) — an idle wild crow that spots a dropped
+// ingredient or item nearby swoops down and steals it. Radius is bounded
+// (unlike bread's whole-room search) so it reads as "noticed something
+// shiny close by," not a room-wide magnet on every combat drop.
+const LOOT_SEEK_RADIUS = GRID.CELL_SIZE * 6;
+const LOOT_SEEK_SPEED = 60;
+const LOOT_GRAB_DIST = GRID.CELL_SIZE * 0.7;
 
 // Companion tuning. Orbit radius is wider for enemies (don't crowd combat)
 // and tighter for pickup items (so the visual cue reads clearly).
@@ -101,7 +110,22 @@ export class Crow {
     // Carried ingredient glyph; set when a companion grabs a shiny off the
     // ground, cleared when it perches on the player and "gives" it over.
     // Only one at a time — a carrying companion ignores other ingredients.
+    // Wild crows reuse this same field for stolen ground ingredients (see
+    // loot-seeking below) — the beak render and the scare-drop path don't
+    // need to care which case put a glyph here.
     this.carriedIngredient = null;
+
+    // Stolen ground Item (weapon/armor/consumable) reference — wild-crow
+    // theft only. Kept as the actual entity (removed from game.items while
+    // carried) rather than a glyph so the original identity survives the
+    // steal-and-recover round trip; a re-glyphed Ingredient wouldn't be the
+    // same thing. Only one carried slot total: this, carriedIngredient, and
+    // an un-dropped hoardItem are mutually exclusive.
+    this.carriedItem = null;
+
+    // Target of an in-progress loot theft ('seekingLoot' state); cleared on
+    // grab or if something else consumes/removes the target first.
+    this.lootTarget = null;
 
     // Follower mode — flock that trails the player after a feeding event.
     // becomeFollower() flips this on; followers live on game.followerCrows.
@@ -174,21 +198,17 @@ export class Crow {
   }
 
   // isAttack: true for weapon contact (melee/projectile), false for passive
-  // proximity (player nearby). Only attacks knock the hoard loose; spooking
-  // a crow off a perch just by walking past shouldn't shake out loot.
+  // proximity (player nearby). Only attacks knock a carried item loose;
+  // spooking a crow off a perch just by walking past shouldn't shake out loot.
   scare(fromX, fromY, isAttack = false) {
     const wasIdle = this.state === 'idle';
 
     // Already airborne? Refresh the flee timer and reflag as fleeing,
-    // but don't drop a hoard item twice and don't bother repicking direction unless idle.
+    // but don't drop twice and don't bother repicking direction unless idle.
     if (!wasIdle) {
       this.state = 'fleeing';
       this.fleeTimer = FLEE_DURATION;
-      if (isAttack && this.hoardItem && !this.droppedHoard) {
-        this.droppedHoard = true;
-        return this.hoardItem;
-      }
-      return null;
+      return isAttack ? this._takeCarriedItem() : null;
     }
 
     const dx = this.position.x - fromX;
@@ -206,15 +226,35 @@ export class Crow {
     this.fleeTimer = FLEE_DURATION;
     this.takeoffPending = true;
 
-    const shouldDrop = isAttack && this.hoardItem && !this.droppedHoard;
-    if (shouldDrop) {
+    return isAttack ? this._takeCarriedItem() : null;
+  }
+
+  // Whatever this crow is currently holding — a preset spawn hoard glyph, a
+  // stolen ground ingredient glyph, or a stolen ground Item entity — as a
+  // small descriptor so the caller knows how to materialize the drop.
+  // Checked in priority order; only one slot is ever occupied at a time, and
+  // taking clears it so a second call (or a second scare) returns null.
+  // Shared by scare() (weapon knocks it loose) and companion promotion
+  // (a freshly-tamed crow hands over whatever it was still carrying).
+  _takeCarriedItem() {
+    if (this.hoardItem && !this.droppedHoard) {
       this.droppedHoard = true;
-      return this.hoardItem;
+      return { kind: 'ingredient', glyph: this.hoardItem };
+    }
+    if (this.carriedIngredient) {
+      const glyph = this.carriedIngredient;
+      this.carriedIngredient = null;
+      return { kind: 'ingredient', glyph };
+    }
+    if (this.carriedItem) {
+      const ref = this.carriedItem;
+      this.carriedItem = null;
+      return { kind: 'item', ref };
     }
     return null;
   }
 
-  update(deltaTime, backgroundObjects = [], otherCrows = [], breadItems = [], onAteBread = null) {
+  update(deltaTime, backgroundObjects = [], otherCrows = [], breadItems = [], onAteBread = null, lootItems = [], onGrabLoot = null) {
     this.wingPhase += deltaTime * 10;
 
     // Bread sighting overrides idle/returning. Fleeing crows still finish
@@ -225,6 +265,52 @@ export class Crow {
         this.breadTarget = nearest;
         this.state = 'seekingBread';
       }
+    }
+
+    // Loot sighting (nuisance theft) — wild-only, and only from a standing
+    // idle perch (bread above and an active flee/return both take priority).
+    // One carried slot at a time: a beak already full of hoard or a previous
+    // grab ignores further loot until it's handed off or scared loose.
+    if (
+      this.mode === 'wild' &&
+      this.state === 'idle' &&
+      lootItems.length &&
+      !(this.hoardItem && !this.droppedHoard) &&
+      !this.carriedIngredient &&
+      !this.carriedItem
+    ) {
+      const nearest = this._pickClosestLoot(lootItems);
+      if (nearest) {
+        this.lootTarget = nearest;
+        this.state = 'seekingLoot';
+      }
+    }
+
+    if (this.state === 'seekingLoot') {
+      const target = this.lootTarget;
+      if (!target || target.consumed || target.destroyed) {
+        this.lootTarget = null;
+        this.state = 'returning';
+      } else {
+        const dx = target.position.x - this.position.x;
+        const dy = target.position.y - this.position.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < LOOT_GRAB_DIST) {
+          this.lootTarget = null;
+          target.consumed = true;
+          if (onGrabLoot) onGrabLoot(target, this);
+          // Settle in place — caller can recycle a perch on next idle cycle.
+          this.homePosition = { x: this.position.x, y: this.position.y };
+          this.state = 'returning';
+        } else {
+          const speed = LOOT_SEEK_SPEED;
+          this.velocity.vx = (dx / dist) * speed;
+          this.velocity.vy = (dy / dist) * speed;
+          this.position.x += this.velocity.vx * deltaTime;
+          this.position.y += this.velocity.vy * deltaTime;
+        }
+      }
+      return;
     }
 
     if (this.state === 'seekingBread') {
@@ -734,6 +820,21 @@ export class Crow {
     return best;
   }
 
+  // Like _pickClosestBread, but bounded to LOOT_SEEK_RADIUS — theft should
+  // read as "spotted something nearby," not a whole-room magnet.
+  _pickClosestLoot(lootItems) {
+    let best = null;
+    let bestDistSq = LOOT_SEEK_RADIUS * LOOT_SEEK_RADIUS;
+    for (const it of lootItems) {
+      if (!it || it.consumed || it.destroyed) continue;
+      const dx = it.position.x - this.position.x;
+      const dy = it.position.y - this.position.y;
+      const d = dx * dx + dy * dy;
+      if (d < bestDistSq) { bestDistSq = d; best = it; }
+    }
+    return best;
+  }
+
   // Renderer reads this to nudge the y position. Idle = subtle bob; flying = wing-flap waver.
   // Companion perched on the player's shoulder rides 1:1 with the player —
   // an idle bob would visually decouple the crow from its perch.
@@ -743,6 +844,24 @@ export class Crow {
       return Math.sin(this.bobPhase) * IDLE_BOB_AMP;
     }
     return Math.sin(this.wingPhase) * 2;
+  }
+
+  // Renderer reads this for the beak-carry pixel: resolves whichever slot is
+  // occupied (spawn hoard, ferried/stolen ingredient, or a stolen Item) into
+  // a single { glyph, color } pair, or null when the beak is empty. Mirrors
+  // _takeCarriedItem()'s priority order — colocated here rather than
+  // duplicated in the renderer.
+  getBeakVisual() {
+    if (this.hoardItem && !this.droppedHoard) {
+      return { glyph: this.hoardItem, color: INGREDIENTS[this.hoardItem]?.color || '#ffffff' };
+    }
+    if (this.carriedIngredient) {
+      return { glyph: this.carriedIngredient, color: INGREDIENTS[this.carriedIngredient]?.color || '#ffffff' };
+    }
+    if (this.carriedItem) {
+      return { glyph: this.carriedItem.char, color: this.carriedItem.color || '#ffffff' };
+    }
+    return null;
   }
 
   // True when an attack point is within scare distance.

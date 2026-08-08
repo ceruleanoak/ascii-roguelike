@@ -27,7 +27,6 @@ import { drawSinkholes } from '../effects/SinkholeEffects.js';
 import { drawWires } from '../effects/WireEffects.js';
 import { renderBombEnemy } from '../effects/BombEffects.js';
 import { drawTamedRats } from '../ui/CompanionRenderers.js';
-import { INGREDIENTS } from '../../data/items.js';
 import { BRIDGE_MATERIALS } from '../../systems/RidgeSystem.js';
 import { PixelatedDissolve, SplitReveal } from '../effects/TextEffects.js';
 import { drawTelegraph } from '../../game/Telegraph.js';
@@ -1370,17 +1369,13 @@ export class ExploreRenderer {
       crow.char,
       crow.color
     );
-    // Beak pixel: shown for either the wild hoard glyph or a companion's
-    // ferried ingredient. Same visual language — single colored pixel
-    // matched to the glyph — so the player reads both cases as "this crow
-    // is holding something."
-    const beakGlyph = (crow.hoardItem && !crow.droppedHoard)
-      ? crow.hoardItem
-      : crow.carriedIngredient;
-    if (beakGlyph) {
-      const dot = INGREDIENTS[beakGlyph]?.color || '#ffffff';
+    // Beak pixel: shown for whatever the crow is currently carrying (spawn
+    // hoard, ferried/stolen ingredient, or a stolen ground Item) — a single
+    // colored pixel so the player reads it as "this crow is holding something."
+    const beak = crow.getBeakVisual();
+    if (beak) {
       const prev = this.renderer.fgCtx.fillStyle;
-      this.renderer.fgCtx.fillStyle = dot;
+      this.renderer.fgCtx.fillStyle = beak.color;
       this.renderer.fgCtx.fillRect(
         Math.round(crow.position.x + GRID.CELL_SIZE / 2 + 3),
         Math.round(crow.position.y + GRID.CELL_SIZE / 2 + offsetY + 1),

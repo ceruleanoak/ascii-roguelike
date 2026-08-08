@@ -2,6 +2,7 @@ import { GRID } from '../game/GameConfig.js';
 import { Item } from '../entities/Item.js';
 import { NPCRat } from '../entities/NPCRat.js';
 import { Ingredient } from '../entities/Ingredient.js';
+import { planeOf, PLANE_SURFACE } from './PlaneSystem.js';
 
 // Companion behavior: the bread-feed pipeline and per-frame drivers for every
 // befriendable creature — wild rat → NPCRat companion, wild crow → follower
@@ -287,13 +288,83 @@ export class CompanionSystem {
     // Pull all on-ground bread loaves so crows can target them.
     const breadItems = game.items.filter(it => it && it.char === '⌬' && !it.consumed);
 
-    // Skip the whole pipeline when nothing eligible can react to bread or
-    // threats. Followers without bread are handled by updateFollowerCrows.
-    if (crows.length === 0 && !(followers.length > 0 && breadItems.length > 0)) {
+    // Skip the whole pipeline when there's nothing to drive. Followers
+    // without bread still need the weapon-threat scare pass below, so this
+    // only short-circuits when both rosters are empty.
+    if (crows.length === 0 && followers.length === 0) {
       return;
     }
 
     const bgObjects = game.currentRoom?.backgroundObjects || [];
+
+    // Ground loot (nuisance theft target list): dropped ingredients plus
+    // non-bread ground items. Bread is excluded — it has its own dedicated
+    // seek/eat/promotion path below rather than being "stolen." Wild crows
+    // are always plane 0 (surface) — gate through PlaneSystem so a crow
+    // never "sees" loot sitting inside a tunnel/interior plane.
+    const lootItems = [];
+    for (const ing of game.ingredients) {
+      if (!ing || ing.consumed || ing.destroyed) continue;
+      if (ing.pickupReadyAt && ing.pickupReadyAt > performance.now()) continue;
+      if (planeOf(ing) !== PLANE_SURFACE) continue;
+      lootItems.push(ing);
+    }
+    for (const it of game.items) {
+      if (!it || it.consumed || it.destroyed || it.char === '⌬') continue;
+      if (it.pickupReadyAt && it.pickupReadyAt > performance.now()) continue;
+      if (planeOf(it) !== PLANE_SURFACE) continue;
+      lootItems.push(it);
+    }
+
+    // Grab handler: pull the stolen entity out of whichever roster it came
+    // from and physics, then hand it to the crow's carry slot. Ingredients
+    // stay glyph-only (carriedIngredient, same field a companion uses to
+    // ferry a pickup back); a ground Item is kept as the live entity
+    // (carriedItem) so its identity survives the steal-and-recover round trip.
+    const onGrabLoot = (target, crow) => {
+      const iIdx = game.ingredients.indexOf(target);
+      if (iIdx !== -1) {
+        game.ingredients.splice(iIdx, 1);
+        game.physicsSystem.removeEntity(target);
+        crow.carriedIngredient = target.char;
+        return;
+      }
+      const tIdx = game.items.indexOf(target);
+      if (tIdx !== -1) {
+        game.items.splice(tIdx, 1);
+        game.physicsSystem.removeEntity(target);
+        crow.carriedItem = target;
+      }
+    };
+
+    // Sets a stolen Item back down on the ground as itself (not re-wrapped
+    // as an Ingredient) — used both when a weapon knocks it loose and when a
+    // crow carrying one gets promoted to companion mid-theft.
+    const dropItemToGround = (ref, x, y) => {
+      ref.position.x = x;
+      ref.position.y = y;
+      // Brief grace so the drop-in-progress crow scare animation doesn't get
+      // instantly re-vacuumed by the player's own pickup magnetism.
+      ref.pickupReadyAt = performance.now() + 300;
+      game.items.push(ref);
+      game.physicsSystem.addEntity(ref);
+    };
+
+    // Materializes whatever _takeCarriedItem()/scare() handed back: a plain
+    // glyph respawns as a fresh bounced Ingredient, an Item goes back down
+    // as itself via dropItemToGround.
+    const materializeDrop = (carried, crow) => {
+      if (!carried) return;
+      if (carried.kind === 'item') {
+        dropItemToGround(carried.ref, crow.position.x, crow.position.y);
+      } else {
+        const drop = new Ingredient(carried.glyph, crow.position.x, crow.position.y);
+        drop.startDropBounce(0.55);
+        game.ingredients.push(drop);
+        game.physicsSystem.addEntity(drop);
+      }
+      game.audioSystem?.playSFX?.('crow_drop');
+    };
 
     // Player-as-threat: scares unfed crows on proximity. Fed crows (already
     // tame) skip this — they only flee actual weapon contact.
@@ -354,6 +425,20 @@ export class CompanionSystem {
       const fIdx = game.followerCrows.indexOf(crow);
       if (fIdx !== -1) game.followerCrows.splice(fIdx, 1);
       crow.becomeCompanion();
+
+      // A companion is never scared, so scare()'s drop path can never fire
+      // again — hand over whatever this crow was still carrying (a spawn
+      // hoard, or a stolen ingredient/item from loot-seeking) right now, or
+      // it would hang undropped forever. Ingredients go straight into the
+      // player's pile like a stray ground pickup; a stolen Item is set back
+      // down rather than silently force-equipped.
+      const carried = crow._takeCarriedItem();
+      if (carried?.kind === 'ingredient') {
+        game.addIngredient(carried.glyph);
+      } else if (carried) {
+        materializeDrop(carried, crow);
+      }
+
       crow.companionShoulderIndex = game.companionCrows.length;
       game.companionCrows.push(crow);
       game.fedCrowCount = Math.min(3, (game.fedCrowCount || 0) + 1);
@@ -378,23 +463,17 @@ export class CompanionSystem {
     };
 
     for (const crow of crows) {
-      crow.update(deltaTime, bgObjects, crows, breadItems, onAteBread);
+      crow.update(deltaTime, bgObjects, crows, breadItems, onAteBread, lootItems, onGrabLoot);
 
-      // Tagged threats: weapon contact counts as an attack and shakes the
-      // hoard loose; player proximity only spooks the crow into the air.
+      // Tagged threats: weapon contact counts as an attack and shakes
+      // whatever the crow is carrying loose; player proximity only spooks
+      // the crow into the air.
       const threats = [];
       if (playerThreat) threats.push({ x: playerThreat.x, y: playerThreat.y, isAttack: false });
       for (const t of weaponThreats) threats.push({ x: t.x, y: t.y, isAttack: true });
       for (const t of threats) {
         if (crow.isWithinScareRange(t.x, t.y)) {
-          const droppedGlyph = crow.scare(t.x, t.y, t.isAttack);
-          if (droppedGlyph) {
-            const drop = new Ingredient(droppedGlyph, crow.position.x, crow.position.y);
-            drop.startDropBounce(0.55);
-            game.ingredients.push(drop);
-            game.physicsSystem.addEntity(drop);
-            game.audioSystem?.playSFX?.('crow_drop');
-          }
+          materializeDrop(crow.scare(t.x, t.y, t.isAttack), crow);
           break;
         }
       }
@@ -413,6 +492,28 @@ export class CompanionSystem {
     if (breadItems.length > 0 && followers.length > 0) {
       for (const f of [...followers]) {
         f.update(deltaTime, bgObjects, followers, breadItems, onAteBread);
+      }
+    }
+
+    // Followers are already tame — no proximity scare (the flock trusts the
+    // player) — but a weapon actually connecting is still an attack. Without
+    // this, a crow that joined the flock (but hasn't personally eaten bread
+    // yet, so it's still holding its spawn hoard or a stolen pickup) could
+    // never be struck into dropping it: updateFollowerCrows drives followers
+    // through updateAsFollower, which has no scare/threat handling at all.
+    if (weaponThreats.length > 0 && followers.length > 0) {
+      for (const crow of followers) {
+        for (const t of weaponThreats) {
+          if (crow.isWithinScareRange(t.x, t.y)) {
+            materializeDrop(crow.scare(t.x, t.y, true), crow);
+            break;
+          }
+        }
+        if (crow.takeoffPending) {
+          const variant = Math.random() < 0.5 ? 'crow_takeoff_1' : 'crow_takeoff_2';
+          game.audioSystem?.playSFX(variant);
+          crow.takeoffPending = false;
+        }
       }
     }
   }
