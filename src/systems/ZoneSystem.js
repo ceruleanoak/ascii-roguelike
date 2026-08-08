@@ -42,6 +42,12 @@ export class ZoneSystem {
     this.roomsClearedInCurrentZone = 0; // Rooms cleared in current colored zone
     this.clearedZones = new Set(); // Zones that have given their captive
 
+    // Specific miniboss encounters (zone.bossPool entry IDs, e.g. 'giant_slime',
+    // 'bone_legion') defeated this run. Persists across REST like clearedZones —
+    // a beaten miniboss stays beaten until death resets the run. Encounter IDs
+    // are unique across zones in BOSS_ENCOUNTERS, so a flat set is sufficient.
+    this.defeatedMinibossEncounters = new Set();
+
     // Leshy chase tracking (green zone only)
     this.leshyChaseActive = false;
     this.leshyChaseCount = 0;
@@ -258,6 +264,47 @@ export class ZoneSystem {
     this.clearedZones.add(currentZone);
   }
 
+  // ── Specific miniboss lockout ───────────────────────────────────────────────
+  // Distinct from clearedZones (which only tracks the one-time captive reward,
+  // set after the FIRST miniboss win). This tracks each individual bossPool
+  // encounter so a zone with multiple minibosses (e.g. green's Giant Slime +
+  // Goblin Army) keeps offering B rooms for the ones not yet beaten, and only
+  // stops entirely once every pool entry has fallen.
+
+  /** Record a specific bossPool encounter (e.g. 'giant_slime') as defeated this run. */
+  markMinibossEncounterDefeated(encounterId) {
+    if (encounterId) this.defeatedMinibossEncounters.add(encounterId);
+  }
+
+  /**
+   * Dispatch hook for the room-clear handler: locks out the room's specific
+   * miniboss encounter, if it had one. Separate from the one-time captive
+   * award (shouldSpawnCaptive/markZoneCleared) — this fires on every miniboss
+   * clear, not just the zone's first.
+   */
+  recordMinibossRoomClear(room) {
+    if (room?.isMiniboss && room.bossEncounterId) {
+      this.markMinibossEncounterDefeated(room.bossEncounterId);
+    }
+  }
+
+  /** The zone's bossPool entries not yet defeated this run. */
+  getAvailableBossPool(zone) {
+    const pool = ZONES[zone]?.bossPool;
+    if (!pool) return [];
+    return pool.filter(id => !this.defeatedMinibossEncounters.has(id));
+  }
+
+  /**
+   * True once a zone that HAS a defined bossPool has had every entry defeated
+   * this run. Zones with no bossPool (e.g. yellow) are never "exhausted" —
+   * they rely on the generic fallback boss instead, which isn't tracked here.
+   */
+  isMinibossPoolExhausted(zone) {
+    const pool = ZONES[zone]?.bossPool;
+    return !!pool && pool.length > 0 && this.getAvailableBossPool(zone).length === 0;
+  }
+
   // ── Boss tracking ──────────────────────────────────────────────────────────
 
   /**
@@ -360,6 +407,7 @@ export class ZoneSystem {
     this.lastColoredZone = null;
     this.roomsClearedInCurrentZone = 0;
     this.clearedZones.clear();
+    this.defeatedMinibossEncounters.clear();
     this.defeatedBosses.clear();
     this.bossRoomPending = false;
     this.resetLeshyChase();

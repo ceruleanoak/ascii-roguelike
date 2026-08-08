@@ -260,9 +260,12 @@ export class ExitSystem {
       }
 
       // Boss mini-room: locked out before L5, then ramps from x2 at L5 up to
-      // x8 at L9, where the miniboss becomes mandatory (see main.js).
+      // x8 at L9, where the miniboss becomes mandatory (see main.js). Also
+      // locked out once every bossPool encounter for this zone has been
+      // beaten this run — zones with no bossPool (e.g. yellow) are never
+      // "exhausted" and keep the normal ramp (generic fallback boss).
       if (letter === 'B') {
-        if (depth < 5) {
+        if (depth < 5 || this.zoneSystem?.isMinibossPoolExhausted(zoneType)) {
           weight = 0;
         } else {
           const t = Math.min(depth, 9) - 5; // 0 at depth 5, 4 at depth 9+

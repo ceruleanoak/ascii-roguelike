@@ -1,5 +1,5 @@
 import { GRID, ROOM_TYPES, BACKGROUND_OBJECTS, WALL_STRUCTURES, WATER_STRUCTURES } from '../game/GameConfig.js';
-import { ENEMIES, getRandomEnemy, getZoneRandomEnemy, createBossEnemy, BOSS_ENCOUNTERS } from '../data/enemies.js';
+import { ENEMIES, getRandomEnemy, getZoneRandomEnemy } from '../data/enemies.js';
 import { RECIPES } from '../data/recipes.js';
 import { ZONES, applyZoneCombatModifiers } from '../data/zones.js';
 import { LETTER_TEMPLATES } from '../data/letterTemplates.js';
@@ -11,7 +11,7 @@ import { getDungeonDesign } from '../data/dungeonDesigns.js';
 import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
-import { maybeSpawnPeacefulFishingRoom, buildVaultInteriorLoot, applyKeyDropLogic, ensureKeyDroppers, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, deriveRiverFlowDirection, buildForcedRiverParams, carveForcedRiver, cellularCaveGrid, generateCalderaRoom, seedMoltenAscentCycle, seedSinkholes, injectSinkholeLake, stampCentipedeArena, spawnCentipedeGunDrop } from './roomFeatures.js';
+import { maybeSpawnPeacefulFishingRoom, buildVaultInteriorLoot, applyKeyDropLogic, ensureKeyDroppers, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, deriveRiverFlowDirection, buildForcedRiverParams, carveForcedRiver, cellularCaveGrid, generateCalderaRoom, seedMoltenAscentCycle, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback } from './roomFeatures.js';
 
 // Zone-boss arena → letter template key. Boss rooms are entered without a
 // letter (cheat warp) or with an arbitrary one (normal progression), so we
@@ -703,39 +703,12 @@ export class RoomGenerator {
       this.generateLakeTerrain(room);
     }
 
-    const zone = ZONES[room.zone];
-    const pool = zone?.bossPool;
     // Zone boss rooms get their unique encounter from BossSystem.activate() —
-    // skip bossPool here so it isn't spawned on top of the zone boss.
-    const useMiniBossPool = !this.isZoneBossRoom && pool && pool.length > 0;
-
-    if (useMiniBossPool) {
-      const encounterId = pool[Math.floor(Math.random() * pool.length)];
-      if (encounterId === 'centipede') {
-        // Bespoke multi-instance encounter — outside the single/formation
-        // BOSS_ENCOUNTERS data model, so it gets its own arena stamp + system
-        // spawn rather than a BOSS_ENCOUNTERS entry.
-        const { spawnCell, facing } = stampCentipedeArena(room);
-        this.game.centipedeSystem.spawn(room, spawnCell, facing);
-        spawnCentipedeGunDrop(this, room);
-      } else {
-        const encounter = BOSS_ENCOUNTERS[encounterId];
-        if (encounter) {
-          this.spawnBossEncounter(room, encounter);
-        }
-      }
-    } else if (!this.isZoneBossRoom) {
-      // Fallback for zones without a bossPool: single buffed enemy
-      const boss = createBossEnemy(this.currentDepth, room.zone);
-      const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects);
-      if (pos) {
-        const enemy = new Enemy(boss.char, pos.x, pos.y, this.currentDepth);
-        // maxHp must track the buffed hp (constructor set it from base data); isBoss drives the near-death blink
-        Object.assign(enemy, { hp: boss.hp, maxHp: boss.hp, damage: boss.damage, color: boss.color, isBoss: true });
-        enemy.setCollisionMap(room.collisionMap);
-        enemy.setBackgroundObjects(room.backgroundObjects);
-        this.addEnemyToRoom(room, enemy);
-      }
+    // skip miniboss content entirely so it isn't spawned on top of the zone
+    // boss. Otherwise pick from the zone's undefeated bossPool, the generic
+    // fallback boss, or a defensive plain-combat spawn — see roomFeatures.js.
+    if (!this.isZoneBossRoom) {
+      spawnMinibossOrFallback(this, room);
     }
 
     // Depth-1 rooms offer a single floating weapon from the zone's L1 pool.
@@ -748,102 +721,6 @@ export class RoomGenerator {
 
     // Exits are locked until all enemies defeated
     room.exitsLocked = true;
-  }
-
-  /**
-   * Place a boss encounter from BOSS_ENCOUNTERS into a room.
-   * - 'center'    : boss placed at room center (single-entity bosses like Giant Slime)
-   * - 'formation' : leader at center, followers placed in a ring at the leader's
-   *                 followLeader.formationRadius. Followers are linked to their leader
-   *                 via enemy.leaderRef so the followLeader behavior can find them.
-   *                 Spawns with `equippedWeapon` get the matching Item pre-equipped.
-   */
-  spawnBossEncounter(room, encounter) {
-    const centerX = (GRID.COLS / 2) * GRID.CELL_SIZE;
-    const centerY = (GRID.ROWS / 2) * GRID.CELL_SIZE;
-
-    const placedFollowerSpawns = [];
-    let leader = null;
-    let leaderFormationRadius = GRID.CELL_SIZE * 3;
-    let followerOrbitIndex = 0;
-
-    // Count total followers across spawn entries for ring placement
-    let totalFollowers = 0;
-    for (const spawn of encounter.spawns) {
-      if (spawn.role === 'follower') totalFollowers += spawn.count;
-    }
-
-    for (const spawn of encounter.spawns) {
-      for (let i = 0; i < spawn.count; i++) {
-        let x, y;
-        let mySlot = -1;
-
-        if (spawn.role === 'boss' || spawn.role === 'leader') {
-          x = centerX;
-          y = centerY;
-        } else if (spawn.role === 'follower' && leader) {
-          // Initial placement is a tidy ring; runtime formation state machine
-          // takes over from there (encircle → line). Slot index is preserved
-          // on the enemy so the line formation can give each follower a stable
-          // lateral position in the wall.
-          mySlot = followerOrbitIndex;
-          const angle = (followerOrbitIndex / Math.max(totalFollowers, 1)) * Math.PI * 2;
-          x = leader.position.x + Math.cos(angle) * leaderFormationRadius;
-          y = leader.position.y + Math.sin(angle) * leaderFormationRadius;
-          followerOrbitIndex++;
-        } else {
-          // Fallback: random valid position
-          const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects);
-          if (!pos) continue;
-          x = pos.x;
-          y = pos.y;
-        }
-
-        const enemy = new Enemy(spawn.char, x, y, this.currentDepth);
-        enemy.setCollisionMap(room.collisionMap);
-        enemy.setBackgroundObjects(room.backgroundObjects);
-
-        if (spawn.equippedWeapon) {
-          const weapon = new Item(spawn.equippedWeapon, x, y);
-          if (enemy.itemUsage) {
-            // Encounter-scripted equipment overrides any random spawn loadout
-            // the constructor rolled (e.g. goblin spawnEquipment).
-            enemy.inventory = [];
-            enemy.equippedWeapon = null;
-            enemy.pickupItem(weapon);
-          }
-        }
-
-        if (spawn.role === 'leader') {
-          leader = enemy;
-          if (enemy.data.followLeader?.formationRadius) {
-            leaderFormationRadius = enemy.data.followLeader.formationRadius;
-          } else if (enemy.data.rallyCall) {
-            // Leaders define orbit radius via their followers; fall back to default
-            leaderFormationRadius = GRID.CELL_SIZE * 3;
-          }
-        } else if (spawn.role === 'follower' && leader) {
-          enemy.leaderRef = leader;
-          // Provisional slot — corrected in the second pass below so the line
-          // formation only counts melee followers (ranged ones stand back).
-          enemy.formationSlot = mySlot;
-          enemy.formationCount = totalFollowers;
-        }
-
-        this.addEnemyToRoom(room, enemy);
-      }
-    }
-
-    // Renumber formation slots for melee followers only; ranged followers
-    // (bow/gun) keep their leaderRef but are excluded from the line so we
-    // don't end up with gaps in the wall.
-    const meleeFollowers = room.enemies.filter(
-      e => e.leaderRef === leader && e.attackType !== 'item_ranged' && e.movementStyle !== 'keeper'
-    );
-    meleeFollowers.forEach((e, idx) => {
-      e.formationSlot = idx;
-      e.formationCount = meleeFollowers.length;
-    });
   }
 
   generateDiscoveryRoom(room) {

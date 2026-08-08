@@ -3482,6 +3482,7 @@ class Game {
         // Track room clear in current zone (for per-zone captive spawning)
         const currentZone = this.currentRoom.zone || 'green';
         this.zoneSystem.recordRoomClear(currentZone);
+        this.zoneSystem.recordMinibossRoomClear(this.currentRoom);
 
         // Check if we should spawn a captive (miniboss just defeated in this zone)
         if (this.zoneSystem.shouldSpawnCaptive(currentZone, this.currentRoom)) {
