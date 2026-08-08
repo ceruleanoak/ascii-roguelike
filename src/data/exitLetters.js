@@ -109,11 +109,14 @@ export const EXIT_LETTERS = {
   'M': {
     name: 'Maze',
     roomType: 'MAZE',
+    // Green and yellow only; yellow is the maze's home zone (resolved 2026-08-08).
     weight: 0.08,
     zoneBoosts: {
-      yellow: 1.3,
-      red: 1.2,
-      cyan: 2.0
+      green: 1.0,
+      yellow: 3.0,
+      red: 0,
+      cyan: 0,
+      gray: 0
     },
     spellDescription: 'A TRAP FOR FOOLS.'
   },
