@@ -10,6 +10,13 @@ import {
 // New code should import directly from PlaneSystem.
 export { inSamePlane };
 
+// Deflector triangles collide at 80% of the drawn cell, centered — a forgiving
+// hitbox so the player isn't stopped by a hair's-width graze of the hypotenuse
+// while still reading as "the same triangle" visually. Rendering (see
+// ExploreRenderer._drawDeflectorTriangle) intentionally stays at full cell
+// size; only the collision box is inset.
+const DEFLECTOR_TRIANGLE_HITBOX_SCALE = 0.8;
+
 export class PhysicsSystem {
   constructor() {
     this.entities = [];
@@ -714,13 +721,12 @@ export class PhysicsSystem {
 
       const objBox = obj.getHitbox();
 
-      // Right-triangle collision for deflector tiles. The triangle's bounding
-      // box is the deflector cell itself, matching the drawn shape so the
-      // player stops at the visible edge on every side. `data.deflectorElbow`
-      // names the right-angle corner.
+      // Right-triangle collision for deflector tiles. `data.deflectorElbow`
+      // names the right-angle corner; the triangle's bounding box is the
+      // (inset) deflector cell, matching the drawn shape's orientation so the
+      // player stops at the visible hypotenuse/legs, not the full cell.
       if (obj.collisionShape === 'triangle') {
-        const cs = GRID.CELL_SIZE;
-        const triBox = { x: obj.position.x, y: obj.position.y, width: cs, height: cs };
+        const triBox = this._deflectorTriBox(obj);
         const elbow = obj.data.deflectorElbow;
         const xCollision = this._rectVsRightTriangle(
           { x: newX, y: entity.position.y, w: width, h: height }, triBox, elbow
@@ -791,6 +797,17 @@ export class PhysicsSystem {
     return collision;
   }
 
+  // Deflector collision box: the cell inset to DEFLECTOR_TRIANGLE_HITBOX_SCALE
+  // and re-centered, so every triangle-shape consumer (movement sweep here,
+  // the already-overlapping eject pass in resolveSolidObjectOverlap) agrees on
+  // the same smaller box instead of each hand-rolling the inset.
+  _deflectorTriBox(obj) {
+    const cs = GRID.CELL_SIZE;
+    const size = cs * DEFLECTOR_TRIANGLE_HITBOX_SCALE;
+    const inset = (cs - size) / 2;
+    return { x: obj.position.x + inset, y: obj.position.y + inset, width: size, height: size };
+  }
+
   /**
    * Check collision between an ellipse and a rectangle (AABB)
    * Ellipse is defined by its bounding box (center and semi-axes from width/height)
@@ -835,7 +852,17 @@ export class PhysicsSystem {
       f = th * dx + tw * dy - tw * th;
       if (elbow === 'NW') f = -f;
     }
-    return f <= 0;
+    // Strict, epsilon-guarded inequality — not `f <= 0`. The chosen (px, py) is
+    // the intersection-box corner that MINIMIZES f, so f === 0 means that single
+    // corner grazes the hypotenuse line exactly while the rest of the rect ∩
+    // triBox region sits strictly outside — i.e. true overlap AREA is zero. This
+    // is the diagonal-hypotenuse analog of the AABB path's SKIN inset above: a
+    // rect sliding along a deflector's open edge (or snapped flush against a
+    // neighboring solid's face by prior collision resolution) lands exactly on
+    // this f===0 boundary every frame, since CELL_SIZE-scaled positions hit it
+    // exactly in float math. Treating that as a collision blocked all upward/
+    // diagonal movement through visibly-open corner gaps between deflectors.
+    return f < -1e-6;
   }
 
   checkEllipseRectCollision(ellipseBox, rectBox) {
@@ -1210,9 +1237,23 @@ export class PhysicsSystem {
           if (!isSolid) continue;
         }
 
-        const objBox = obj.getHitbox();
         const ex = entity.position.x;
         const ey = entity.position.y;
+
+        // Deflector tiles: this pass used to treat them as a plain rectangle
+        // via getHitbox(), which meant merely standing in the OPEN half of a
+        // triangle cell (no real overlap at all) still got shoved back out —
+        // the entity never got a chance to occupy that legitimately walkable
+        // space in the first place. Gate on the same half-plane test the
+        // movement sweep uses, and push out of the (smaller, inset) triangle
+        // box rather than the full cell.
+        const isTriangle = obj.collisionShape === 'triangle';
+        if (isTriangle) {
+          const triBox = this._deflectorTriBox(obj);
+          if (!this._rectVsRightTriangle({ x: ex, y: ey, w: width, h: height }, triBox, obj.data.deflectorElbow)) continue;
+        }
+
+        const objBox = isTriangle ? this._deflectorTriBox(obj) : obj.getHitbox();
 
         // Compute overlap on each axis
         const overlapX = Math.min(ex + width, objBox.x + objBox.width) - Math.max(ex, objBox.x);
