@@ -287,6 +287,15 @@ export class InventorySystem {
     // NOTE: Placed traps (activated with SPACE) are NOT pickable - they're active traps
     // Only dropped traps (swapped from quick slots) in the items array can be picked up
 
+    // Every branch below that actually removes an item sets `item.consumed = true`
+    // alongside the splice. Companion AI (Crow bread/loot seeking, wild rat bread
+    // seeking) grabs a direct object reference to a ground item and re-checks
+    // `.consumed`/`.destroyed` each frame to notice it's gone — splicing it out of
+    // `items` alone leaves those stale references looking perfectly valid, so a
+    // crow/rat already inbound to a loaf the player just picked up would arrive at
+    // its last position and "eat" the phantom, wrongly promoting/taming (bug: bread
+    // picked back up before a crow reached it still resulted in the crow taming).
+
     // Check ground items
     const now = performance.now();
     for (let i = 0; i < items.length; i++) {
@@ -305,6 +314,7 @@ export class InventorySystem {
           this.armorInventory.push(item);
           this.equipArmor(item);
           this.applyEquipmentEffectsToPlayer(player);
+          item.consumed = true;
           physicsSystem.removeEntity(item);
           items.splice(i, 1);
         } else if (item.data.type === 'CONSUMABLE') {
@@ -314,11 +324,13 @@ export class InventorySystem {
             this.consumableInventory.push(item);
             this.equipConsumable(emptySlot, item);
           } else this.consumableInventory.push(item);
+          item.consumed = true;
           physicsSystem.removeEntity(item);
           items.splice(i, 1);
         } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
           // Already-equipped trap stacks into held count; skip slot-choice.
           if (trapAlreadyEquipped(player, item)) {
+            item.consumed = true;
             physicsSystem.removeEntity(item);
             items.splice(i, 1);
             return { success: true, droppedItem: item, message: item.data.name, removedTrap: false, pickedUpType: item.data.type };
@@ -344,10 +356,12 @@ export class InventorySystem {
           }
           // Add to quick slots (weapons and traps)
           droppedItem = player.pickupItem(item, selectedWeaponSlotIdx);
+          item.consumed = true;
           physicsSystem.removeEntity(item);
           items.splice(i, 1);
         } else if (item.data.type === 'BLESSING') {
           // Blessings are handled by caller (applyBlessing in main.js)
+          item.consumed = true;
           physicsSystem.removeEntity(item);
           items.splice(i, 1);
           return {
@@ -360,6 +374,7 @@ export class InventorySystem {
         } else if (item.data.type === 'NEUTRAL') {
           // Neutral items just show message (lore/flavor)
           customMessage = item.data.name;
+          item.consumed = true;
           physicsSystem.removeEntity(item);
           items.splice(i, 1);
         }
