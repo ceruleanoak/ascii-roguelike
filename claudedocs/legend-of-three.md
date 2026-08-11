@@ -30,7 +30,7 @@ table yet. Treat this file as the design source, not an implementation.
 
 | Register | Item | Status | Why |
 |---|---|---|---|
-| **Justice** | Freeze Ray `ᛁ` | existing | Reframed explicitly through **time**, per Cyan's own spine (Anticipate = "before," the slow tempo you set): it arrests time for the target — the consequence for moving when the zone asked you to hold still. |
+| **Justice** | Haunted Clock | **NEW**, effect TBD | A literal time object — no reframing needed, Cyan's own spine (Anticipate = "before," the slow tempo you set) speaks for itself. Name is settled; mechanic isn't. |
 | **Truth** | Spectacles `⊙` | existing | "SEE THE WORLD RELABELED" — decodes what's hidden in plain sight. *Caveat: currently obtained via Maze, which isn't mechanically exclusive to Cyan today — thematic fit, not a hard gate.* |
 | **Help** | Prayer Beads | **NEW** | Equips as **armor**; effect deliberately **unknown** — no stat readout on pickup or equip. *Author's inference, confirm before building: this takes Cyan's "reward for stillness is seeing what the hurried miss" and extends it to the game's own UI — you wear it and observe, same as the rabbit.* |
 
@@ -63,6 +63,7 @@ table yet. Treat this file as the design source, not an implementation.
 ## Open threads
 
 - **Green Truth vs. Path Amulet** — likely a reskin, not a new build.
+- **Cyan Justice (Haunted Clock)** — name only; effect undefined. Design it before it's anything more than a placeholder.
 - **Cyan Truth (Spectacles) zone-exclusivity** — not enforced today; decide if it should be.
 - **Gray Justice (Bone Dust)** — the one pick nobody should treat as settled.
 - **Gray Help** — interacts with the True Ending trigger; design it deliberately, not casually.
