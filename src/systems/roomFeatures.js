@@ -6,6 +6,7 @@ import { Item } from '../entities/Item.js';
 import { ENEMIES, getZoneRandomEnemy, createBossEnemy, BOSS_ENCOUNTERS } from '../data/enemies.js';
 import { ZONES } from '../data/zones.js';
 import { WeaponsMaster } from '../entities/WeaponsMaster.js';
+import { HOT_WATER_CHAR } from '../data/alchemy.js';
 
 // Room-generation feature helpers extracted from RoomGenerator (arch budget).
 // Each takes the generator instance (`gen`) for its placement utilities.
@@ -160,6 +161,49 @@ export function spawnShoreFisherman(gen, room) {
     return fisherman;
   }
   return null;
+}
+
+/**
+ * Post-lesson roaming placement for the rescued Alchemist (see
+ * AlchemistNPC.js). Once he's taught the Hot Water lesson, he only sits in
+ * his hut while the player is currently carrying a Bottle of Hot Water —
+ * otherwise he roams one fixed room per zone (Red-L, Yellow-O, Cyan-T)
+ * sharing zone-flavored alchemy lore. Only one room ever hosts him at a
+ * time, guarded by `!alchemist.placement`; released back to null in
+ * main.js applyRoomSwap() when the player leaves that room (fresh combat
+ * rooms are generated per visit, never revisited, so without that release
+ * he'd be stuck "placed" in a room nothing can reach again).
+ * Returns true when he was placed, mirroring maybeSpawnPeacefulFishingRoom's
+ * boolean-return convention (though this never overrides room content).
+ */
+export function maybeSpawnRoamingAlchemist(gen, room) {
+  const game = gen.game;
+  const alchemist = game?.alchemistNPC;
+  if (!alchemist?.rescued || !alchemist.lessonGiven || alchemist.placement) return false;
+
+  const placement =
+    (room.exitLetter === 'L' && room.zone === 'red') ? 'red-L' :
+    (room.exitLetter === 'O' && room.zone === 'yellow') ? 'yellow-O' :
+    (room.exitLetter === 'T' && room.zone === 'cyan') ? 'cyan-T' : null;
+  if (!placement) return false;
+
+  const carryingHotWater =
+    game.player?.equippedConsumables?.some(it => it?.char === HOT_WATER_CHAR) ||
+    game.inventorySystem?.consumableInventory?.some(it => it?.char === HOT_WATER_CHAR);
+  if (carryingHotWater) return false;
+
+  // Simple open-floor-cell search (same style as spawnShoreFisherman's ocean
+  // fallback) rather than zone-specific placement — T rooms in particular
+  // have no lake-node-style config to key off of.
+  const pos = gen.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects);
+  if (!pos) return false;
+
+  alchemist.position.x = pos.x;
+  alchemist.position.y = pos.y;
+  alchemist.placement = placement;
+  alchemist.setLocation(placement);
+  room.alchemistNPC = alchemist;
+  return true;
 }
 
 // ── Post-generation background-object cleanup ───────────────────────────────

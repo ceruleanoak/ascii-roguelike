@@ -2,6 +2,7 @@ import { GRID } from '../game/GameConfig.js';
 import { Enemy } from '../entities/Enemy.js';
 import { getZoneRandomEnemy, ENEMIES } from '../data/enemies.js';
 import { applyZoneCombatModifiers } from '../data/zones.js';
+import { AlchemistNPC } from '../entities/AlchemistNPC.js';
 
 /**
  * RoundCombatSystem — escalating wave combat for rooms that request it
@@ -34,8 +35,9 @@ export class RoundCombatSystem {
     const rc = room?.roundCombat;
     if (!rc) return false;
     if (rc.current >= rc.total) {
-      // Final round down — the Rusalka surfaces once, then the room clears normally.
-      if (!rc.rusalkaSpawned) { rc.rusalkaSpawned = true; this._spawnRusalka(); }
+      // Final round down — one weighted outcome surfaces once, then the room
+      // clears normally (see _spawnFinalEncounter).
+      if (!rc.finalEncounterSpawned) { rc.finalEncounterSpawned = true; this._spawnFinalEncounter(room); }
       return false;
     }
     rc.current++;
@@ -45,19 +47,82 @@ export class RoundCombatSystem {
   }
 
   /**
-   * The Quagmire Rusalka, post-combat. A frog player gets the silent healer
-   * (cure on contact, via PolymorphSystem); anyone else faces the lethal lure
-   * (reusing FishingSystem's Rusalka slot for update/render/cleanup).
+   * The Quagmire's final-round outcome. A frog player gets the silent healer
+   * (cure on contact, via PolymorphSystem) unconditionally — that branch is
+   * deterministic and never rolled. Anyone else draws from a weighted table:
+   * the rescued Alchemist (the game's namesake NPC finally freed), the Hag
+   * who kept him (a hostile roaming-style enemy, see enemies.js 'Q'), or the
+   * lethal Rusalka lure (reusing FishingSystem's Rusalka slot for
+   * update/render/cleanup) — the original, pre-Alchemist behavior.
    */
-  _spawnRusalka() {
+  _spawnFinalEncounter(room) {
     const game = this.game;
     if (game.player?.polymorphed) {
       game.polymorphSystem?.spawnCureRusalka(game);
-    } else {
-      const x = GRID.WIDTH  / 2 - GRID.CELL_SIZE / 2;
-      const y = GRID.HEIGHT / 2 - GRID.CELL_SIZE / 2;
-      game.fishingSystem?.spawnRusalkaAt(game, x, y);
+      return;
     }
+    const x = GRID.WIDTH  / 2 - GRID.CELL_SIZE / 2;
+    const y = GRID.HEIGHT / 2 - GRID.CELL_SIZE / 2;
+    const outcome = this._rollQuagmireFinalEncounter();
+    if (outcome === 'alchemist') this._spawnAlchemistRescue(x, y);
+    else if (outcome === 'hag') this._spawnHag(room, x, y);
+    else game.fishingSystem?.spawnRusalkaAt(game, x, y);
+  }
+
+  /**
+   * Weighted roll over the Quagmire's final-round outcomes. First-pass
+   * weights, needs playtest tuning. 'alchemist' drops out once he's already
+   * been rescued (a one-time event) — the remaining two entries renormalize
+   * automatically since the roll is bounded by their own summed weight.
+   */
+  _rollQuagmireFinalEncounter() {
+    const weights = { hag: 0.3, rusalka: 0.2 };
+    if (!this.game.alchemistNPC?.rescued) weights.alchemist = 0.5;
+    const total = Object.values(weights).reduce((sum, w) => sum + w, 0);
+    let roll = Math.random() * total;
+    for (const [outcome, weight] of Object.entries(weights)) {
+      if (roll < weight) return outcome;
+      roll -= weight;
+    }
+    return 'rusalka'; // fallback (floating-point edge case)
+  }
+
+  /**
+   * Rescue outcome — creates the AlchemistNPC singleton (once, ever) and
+   * drops him into the room as a plain dialogue NPC, mirroring how the
+   * Rusalka slot places its own entity. He delivers his rescue dialogue the
+   * next time the player opens him (AlchemistNPC.getDialogueLines).
+   */
+  _spawnAlchemistRescue(x, y) {
+    const game = this.game;
+    game.alchemistNPC = new AlchemistNPC(x, y);
+    game.alchemistNPC.rescued = true;
+    game.alchemistNPC.placement = null;
+    game.neutralCharacters.push(game.alchemistNPC);
+  }
+
+  /**
+   * Hag outcome — a hostile 'Q' enemy ("the Hag keeps whatever wanders too
+   * far south"), wired identically to _spawnWave's per-enemy block. Counted
+   * like any other enemy; the room still clears this same frame (matches the
+   * existing lethal-Rusalka precedent of a post-clear hazard that outlives
+   * the clear flag).
+   */
+  _spawnHag(room, x, y) {
+    const game = this.game;
+    const depth = game?.getCurrentZoneDepth?.() ?? 1;
+    const enemy = new Enemy('Q', x, y, depth);
+    enemy.setCollisionMap(room.collisionMap);
+    enemy.setBackgroundObjects(room.backgroundObjects);
+    enemy.setSteamClouds?.(game.steamClouds);
+    enemy.setTarget?.(game.player);
+    enemy.setGame?.(game);
+    enemy.setRoom?.(room);
+    applyZoneCombatModifiers(enemy, room.zone);
+    if (enemy.plane === 1) room.enemiesPlane1.push(enemy);
+    else room.enemiesPlane0.push(enemy);
+    room.enemies.push(enemy);
+    game.physicsSystem.addEntity(enemy);
   }
 
   /** Each round fields more bodies than the last; base scales with depth. */

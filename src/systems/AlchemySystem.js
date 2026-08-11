@@ -2,11 +2,10 @@ import { GRID } from '../game/GameConfig.js';
 import { Item } from '../entities/Item.js';
 import { findRecipe } from '../data/recipes.js';
 import {
-  BASE_POTION_INGREDIENTS,
-  PURIFIED_POTION_INGREDIENTS,
-  UNSTABLE_POTION_INGREDIENTS,
+  ALL_STARTER_INGREDIENTS,
   starterPotionForIngredient,
-  ingredientToGreek
+  ingredientToGreek,
+  applyPotionModifierColor
 } from '../data/alchemy.js';
 
 /**
@@ -32,12 +31,11 @@ import {
  */
 
 const INTERACT_RADIUS = GRID.CELL_SIZE * 1.2;
-const ALL_STARTER_INGREDIENTS = new Set([
-  ...BASE_POTION_INGREDIENTS,
-  ...PURIFIED_POTION_INGREDIENTS,
-  ...UNSTABLE_POTION_INGREDIENTS
-]);
-const STARTER_POTION_CHARS = new Set(['G', '🜅', '🜆']);
+// Bottle-filling sources (trough, hot spring) use a tighter "one cell" radius —
+// filling is now an armed-slot action (see tryFillArmedBottle) rather than a
+// bare SPACE press, so the looser station radius isn't needed here.
+const LIQUID_SOURCE_RADIUS = GRID.CELL_SIZE;
+const STARTER_POTION_CHARS = new Set(['🜄', '🜅', '🜆']);
 const LIQUID_BOTTLE_CHARS = new Set(['🜉', 'ε', '◆', '◐']);  // Water, Electrified, Magma, Mud
 
 // Map liquid tile states to liquid bottle types
@@ -50,9 +48,19 @@ const LIQUID_TILE_TO_BOTTLE = {
 };
 
 const STARTER_NAMES = {
-  'G': 'BASE POTION',
+  '🜄': 'BASE POTION',
   '🜅': 'PURIFIED POTION',
   '🜆': 'UNSTABLE POTION'
+};
+
+// Single source of truth for pickup-message names — used by fillLiquidBottle
+// below; previously duplicated in InteractionSystem's now-removed
+// _discoverLiquidBottle (the old heldItem-based bottling path this replaces).
+const LIQUID_BOTTLE_NAMES = {
+  '🜉': 'BOTTLE OF WATER',
+  'ε': 'BOTTLE OF ELECTRIFIED WATER',
+  '◆': 'BOTTLE OF MAGMA',
+  '◐': 'BOTTLE OF MUD'
 };
 
 export class AlchemySystem {
@@ -65,7 +73,7 @@ export class AlchemySystem {
     this.cauldronSlotIndex = -1;
   }
 
-  _nearStation(char) {
+  _nearStation(char, radius = INTERACT_RADIUS) {
     const game = this.game;
     if (!game.player?.inHut || !game.activeFloor) return false;
     const C = GRID.CELL_SIZE;
@@ -76,31 +84,28 @@ export class AlchemySystem {
       const cx = obj.position.x + C / 2;
       const cy = obj.position.y + C / 2;
       const dx = px - cx, dy = py - cy;
-      if (Math.sqrt(dx * dx + dy * dy) < INTERACT_RADIUS) return true;
+      if (Math.sqrt(dx * dx + dy * dy) < radius) return true;
     }
     return false;
   }
 
-  nearTrough() { return this._nearStation('≈'); }
+  nearTrough() { return this._nearStation('≈', LIQUID_SOURCE_RADIUS); }
   nearCauldron() { return this._nearStation('Ω'); }
   nearCondenser() { return this._nearStation('Ψ'); }
 
-  /** SPACE near a station → trough fills, cauldron opens its menu, condenser reveals. */
+  /**
+   * SPACE near a station → cauldron opens its menu, condenser reveals.
+   * Bottle-filling is NOT handled here — it requires the Bottle slot to be
+   * armed first (number key), then fires through tryFillArmedBottle(), which
+   * main.js checks ahead of the generic consumable-fire path.
+   */
   handleSpacePress() {
-    if (this.nearTrough()) {
-      this.fillBottle();
-      return true;
-    }
     if (this.nearCauldron()) {
       this.openCauldronMenu();
       return true;
     }
     if (this.nearCondenser()) {
       this.revealCondenser();
-      return true;
-    }
-    if (this.nearHotSpring()) {
-      this.fillHotWaterBottle();
       return true;
     }
     return false;
@@ -119,22 +124,98 @@ export class AlchemySystem {
       const cx = obj.position.x + C / 2;
       const cy = obj.position.y + C / 2;
       const dx = px - cx, dy = py - cy;
-      if (Math.sqrt(dx * dx + dy * dy) < INTERACT_RADIUS) return true;
+      if (Math.sqrt(dx * dx + dy * dy) < LIQUID_SOURCE_RADIUS) return true;
     }
     return false;
   }
 
+  /**
+   * SPACE with the Bottle slot armed (selected via number key) and the player
+   * within one cell of a liquid source. Must be checked BEFORE
+   * ConsumableTriggerSystem.fireSelected() — an armed Empty Bottle has no
+   * consumable effect of its own, so the generic fire path would just
+   * silently swallow the SPACE press and clear the selection.
+   */
+  tryFillArmedBottle() {
+    const game = this.game;
+    const idx = game.player?.selectedConsumableIndex ?? -1;
+    if (idx < 0) return false;
+    const slots = game.player.equippedConsumables;
+    if (slots?.[idx]?.char !== 'B') return false;
+
+    if (this.nearTrough()) {
+      this.fillBottle(idx);
+      game.player.selectedConsumableIndex = -1;
+      return true;
+    }
+    if (this.nearHotSpring()) {
+      this.fillHotWaterBottle(idx);
+      game.player.selectedConsumableIndex = -1;
+      return true;
+    }
+    const worldLiquid = this._nearWorldLiquid();
+    if (worldLiquid) {
+      this.fillLiquidBottle(idx, worldLiquid);
+      game.player.selectedConsumableIndex = -1;
+      return true;
+    }
+    return false;
+  }
+
+  // ─── World liquid tiles (open water, electrified water, lava, mud) ────────
+  // The armed-slot mechanic's third source, alongside the trough and hot
+  // spring: any in-world liquid background object, not just the hut's
+  // dedicated stations. Replaces the old heldItem-based discovery path
+  // (formerly InteractionSystem._isLiquidTile/_getLiquidType/
+  // _discoverLiquidBottle) — that path checked `player.heldItem`, the 3-slot
+  // weapon loadout, but Empty Bottle is a CONSUMABLE and is never routed
+  // into that loadout (InventorySystem.tryPickupItem), so it was already
+  // unreachable dead code.
+
+  _liquidStateOf(obj) {
+    if (obj.destroyed) return null;
+    if (obj.isLava?.()) return 'lava';
+    if (obj.isMud?.()) return obj.typeId === 'mud_dry' ? 'mud_dry' : 'mud_wet';
+    if (obj.isWater?.()) return obj.waterState === 'electrified' ? 'electrified' : 'normal';
+    return null;
+  }
+
+  /** Nearest in-world liquid tile within one cell — returns the bottle char to fill, or null. */
+  _nearWorldLiquid() {
+    const game = this.game;
+    const C = GRID.CELL_SIZE;
+    const px = game.player.position.x + C / 2;
+    const py = game.player.position.y + C / 2;
+    for (const obj of game._activeBackgroundObjects()) {
+      const state = this._liquidStateOf(obj);
+      if (!state) continue;
+      const cx = obj.position.x + C / 2;
+      const cy = obj.position.y + C / 2;
+      const dx = px - cx, dy = py - cy;
+      if (Math.sqrt(dx * dx + dy * dy) < LIQUID_SOURCE_RADIUS) return LIQUID_TILE_TO_BOTTLE[state];
+    }
+    return null;
+  }
+
+  fillLiquidBottle(slotIndex, liquidChar) {
+    const game = this.game;
+    game.inventorySystem.replaceConsumableSlot(slotIndex, liquidChar);
+    game.menuSystem.showPickupMessage(LIQUID_BOTTLE_NAMES[liquidChar] ?? 'LIQUID');
+    game.audioSystem?.playSFX?.('pickup');
+    game.updateUI();
+  }
+
   // ─── Trough ──────────────────────────────────────────────────────────────
 
-  fillBottle() {
+  fillBottle(slotIndex = null) {
     const game = this.game;
     const slots = game.player.equippedConsumables;
-    const slotIndex = slots?.findIndex(s => s?.char === 'B') ?? -1;
-    if (slotIndex === -1) {
+    const idx = slotIndex ?? (slots?.findIndex(s => s?.char === 'B') ?? -1);
+    if (idx === -1) {
       game.menuSystem.showPickupMessage('NO EMPTY BOTTLE EQUIPPED');
       return;
     }
-    game.inventorySystem.replaceConsumableSlot(slotIndex, '🜉');
+    game.inventorySystem.replaceConsumableSlot(idx, '🜉');
     game.menuSystem.showPickupMessage('BOTTLE OF WATER');
     game.audioSystem?.playSFX?.('pickup');
     game.updateUI();
@@ -142,18 +223,18 @@ export class AlchemySystem {
 
   // ─── Caldera Hot Spring ──────────────────────────────────────────────────
 
-  fillHotWaterBottle() {
+  fillHotWaterBottle(slotIndex = null) {
     const game = this.game;
     const slots = game.player.equippedConsumables;
-    const slotIndex = slots?.findIndex(s => s?.char === 'B') ?? -1;
-    if (slotIndex === -1) {
+    const idx = slotIndex ?? (slots?.findIndex(s => s?.char === 'B') ?? -1);
+    if (idx === -1) {
       game.menuSystem.showPickupMessage('NO EMPTY BOTTLE EQUIPPED');
       return;
     }
-    game.inventorySystem.replaceConsumableSlot(slotIndex, '🜊');
+    game.inventorySystem.replaceConsumableSlot(idx, '🜊');
     // Reverts to a regular Bottle of Water after 3 room exits — decremented
     // in main.js's room-transition reset block.
-    game.player.equippedConsumables[slotIndex].hotWaterRoomsLeft = 3;
+    game.player.equippedConsumables[idx].hotWaterRoomsLeft = 3;
     game.menuSystem.showPickupMessage('BOTTLE OF HOT WATER');
     game.audioSystem?.playSFX?.('pickup');
     game.updateUI();
@@ -276,11 +357,16 @@ export class AlchemySystem {
 
     let starterChar;
     if (this.cauldronInputType === 'liquid') {
-      // Map liquid type to starter potion type
-      const liquidToStarter = { '🜉': 'G', 'ε': '!', '◆': '«', '◐': '∿' };
-      starterChar = liquidToStarter[this.cauldronLiquidType];
+      if (this.cauldronLiquidType === '🜉') {
+        // Plain Water: category-aware — Base/Purified/Unstable depends on the ingredient
+        starterChar = starterPotionForIngredient(ingredientChar);
+      } else {
+        // Electrified/Magma/Mud: still liquid-determined, ingredient-agnostic
+        const liquidToStarter = { 'ε': '!', '◆': '«', '◐': '∿' };
+        starterChar = liquidToStarter[this.cauldronLiquidType];
+      }
     } else {
-      // Water path (legacy) - use the standard starter potion mapping
+      // Starter potion path (legacy) - use the standard starter potion mapping
       starterChar = starterPotionForIngredient(ingredientChar);
     }
 
@@ -313,17 +399,9 @@ export class AlchemySystem {
 
     const result = new Item(recipe.result, game.player.position.x, game.player.position.y);
 
-    // Apply potion modifier based on starter type
-    const starterModifiers = {
-      'G': null,           // Base Potion: no modifier
-      '🜅': 'buff',        // Purified Potion: buff modifier
-      '🜆': 'unstable',    // Unstable Potion: unstable modifier
-      '!': 'charge',       // Charged Potion: charge modifier
-      '«': 'burn',         // Burning Potion: burn modifier
-      '∿': 'primal'        // Primal Potion: primal modifier
-    };
-    const starterData = starterModifiers[this.cauldronStarterChar];
-    if (starterData) result.potionModifier = starterData;
+    // The Alchemist's Path — color/purity is fixed at the starter tier and
+    // persists to the true potion, rather than resetting to a static color.
+    applyPotionModifierColor(result, this.cauldronStarterChar);
 
     if (this.cauldronInputType === 'liquid') {
       // Liquid path: use pending ingredients from starter creation
@@ -366,7 +444,7 @@ export class AlchemySystem {
 
     // Find all equipped potions with ingredient data (starter or true potions)
     const potionsWithData = slots.filter(s =>
-      s && (s.baseIngredient || (s.hiddenIngredient && ['G', '🜅', '🜆'].includes(s.char)))
+      s && (s.baseIngredient || (s.hiddenIngredient && ['🜄', '🜅', '🜆'].includes(s.char)))
     );
 
     if (potionsWithData.length === 0) {

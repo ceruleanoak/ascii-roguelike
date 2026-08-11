@@ -43,6 +43,7 @@ import { CentipedeSystem } from './systems/CentipedeSystem.js';
 import { SpellSystem } from './systems/SpellSystem.js';
 import { RidgeSystem } from './systems/RidgeSystem.js';
 import { PolymorphSystem } from './systems/PolymorphSystem.js';
+import { TransmutationSystem } from './systems/TransmutationSystem.js';
 import { MagicSystem } from './systems/MagicSystem.js';
 import { BatSystem } from './systems/BatSystem.js';
 import { FlailSystem } from './systems/FlailSystem.js';
@@ -180,6 +181,7 @@ class Game {
     this.spellSystem = new SpellSystem(this);
     this.ridgeSystem = new RidgeSystem(this);
     this.polymorphSystem = new PolymorphSystem();
+    this.transmutationSystem = new TransmutationSystem(this);
     this.magicSystem = new MagicSystem(this);
     this.batSystem = new BatSystem(this);
     this.flailSystem = new FlailSystem(this);
@@ -2451,7 +2453,7 @@ class Game {
     } else if (this.player.continuousRollActive) {
       // Green ranger continuous roll: velocity is managed directly above, skip updateInput
       // (calling updateInput would cap velocity to normal walk speed)
-    } else if (!this.menuOpen && !this.bridgeMenuOpen && !this.player.dodgeRoll.active) {
+    } else if (!this.menuOpen && !this.bridgeMenuOpen && !this.errandSystem.isMenuOpen() && !this.player.dodgeRoll.active) {
       // Lock movement during fishing cast/wait
       const fishingBlocked = this.player.fishingLocked;
       // Lock movement during windup and attack flash for weapons that require a planted stance
@@ -2866,6 +2868,11 @@ class Game {
       captive.update(deltaTime);
     }
 
+    // Close errand confirm popup when player walks out of interaction range
+    if (this.errandSystem.isMenuOpen() && this.errandSystem.isOutOfRange(this.player, this.neutralCharacters)) {
+      this.errandSystem.closeMenu();
+    }
+
     // Close bridge menu when player walks out of interaction range
     if (this.bridgeMenuOpen && this.ridgeSystem.getWorkerDistance() > this.ridgeSystem.CLOSE_RANGE * 1.5) {
       this.ridgeSystem.closeMenu();
@@ -2948,82 +2955,10 @@ class Game {
       }
     }
 
-    // Process polymorph transformations (Transmutation Wand)
-    if (combatResult.polymorphEvents && combatResult.polymorphEvents.length > 0) {
-      for (const event of combatResult.polymorphEvents) {
-        const enemy = event.enemy;
-        const pos = event.position;
-
-        // Active layer — interior enemies live in activeFloor.enemies, not the surface.
-        const polyEnemies = this._activeEnemies();
-        const polyRoom = this.activeRoom;
-        const enemyIndex = polyEnemies.indexOf(enemy);
-        if (enemyIndex !== -1) {
-          polyEnemies.splice(enemyIndex, 1);
-
-          // Create transformation particle effect
-          for (let i = 0; i < 20; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const speed = 50 + Math.random() * 100;
-            this.particles.push({
-              x: pos.x + GRID.CELL_SIZE / 2,
-              y: pos.y + GRID.CELL_SIZE / 2,
-              vx: Math.cos(angle) * speed,
-              vy: Math.sin(angle) * speed,
-              life: 0.5 + Math.random() * 0.5,
-              maxLife: 1.0,
-              char: '*',
-              color: '#ff00ff',
-              isImpact: true
-            });
-          }
-
-          // Polymorph transformation - weighted random outcome
-          const roll = Math.random() * 100; // 0-100
-          let outcome = null;
-
-          if (roll < 20) {
-            // 20% - Background object (removes enemy)
-            const objects = ['%', '&', '0', 'Y', 'ŋ', '*', '#', 'p', '=', 'i', '!', 'B', 'Q', '~'];
-            const randomObj = objects[Math.floor(Math.random() * objects.length)];
-            this._activeBackgroundObjects().push(new BackgroundObject(randomObj, pos.x, pos.y));
-            outcome = `background object (${randomObj})`;
-          } else if (roll < 40) {
-            // 20% - Lesser enemy (weaker enemy spawn)
-            const lesserEnemies = ['o', 'g']; // Slime, Goblin (basic enemies)
-            const randomEnemy = lesserEnemies[Math.floor(Math.random() * lesserEnemies.length)];
-            polyEnemies.push(new Enemy(randomEnemy, pos.x, pos.y));
-            outcome = `lesser enemy (${randomEnemy})`;
-          } else if (roll < 60) {
-            // 20% - Item drop (random weapon/armor/consumable)
-            const allItems = Object.keys(ITEMS).filter(char =>
-              ITEMS[char].type === ITEM_TYPES.WEAPON ||
-              ITEMS[char].type === ITEM_TYPES.ARMOR ||
-              ITEMS[char].type === ITEM_TYPES.CONSUMABLE
-            );
-            if (allItems.length > 0) {
-              const randomItem = allItems[Math.floor(Math.random() * allItems.length)];
-              polyRoom.items.push(new Item(randomItem, pos.x, pos.y));
-              outcome = `item drop (${ITEMS[randomItem].name})`;
-            }
-          } else if (roll < 80) {
-            // 20% - Equivalent enemy (different enemy of similar strength)
-            const equivalentEnemies = ['o', 'g', 's', 'b', 'r', 't', 'w']; // Various enemies
-            const randomEnemy = equivalentEnemies[Math.floor(Math.random() * equivalentEnemies.length)];
-            polyEnemies.push(new Enemy(randomEnemy, pos.x, pos.y));
-            outcome = `equivalent enemy (${randomEnemy})`;
-          } else {
-            // 20% - BOSS! (dangerous outcome)
-            const bossEnemies = ['D', 'W', 'G', 'S']; // Dragon, Wizard, Golem, etc.
-            const randomBoss = bossEnemies[Math.floor(Math.random() * bossEnemies.length)];
-            const boss = new Enemy(randomBoss, pos.x, pos.y);
-            polyEnemies.push(boss);
-            outcome = `BOSS! (${randomBoss})`;
-          }
-
-        }
-      }
-    }
+    // Process polymorph transformations (Transmutation Wand) — resolution
+    // logic lives in TransmutationSystem, a separate mechanic from
+    // polymorphSystem (player frog-curse).
+    this.transmutationSystem.processPolymorphEvents(combatResult);
 
     // Check consumable activation and update windups (delegated to InventorySystem)
     // Check activation AFTER combat so damage-reactive thresholds (heal, speed, block)
@@ -3791,6 +3726,9 @@ class Game {
       }
     }
 
+    // Armed Bottle near trough/spring — precedes fireSelected() (AlchemySystem.tryFillArmedBottle).
+    if (this.alchemySystem?.tryFillArmedBottle()) return;
+
     // Consumable slot armed (keys 4-8) — SPACE fires it, priority over pickup/attack.
     if (this.consumableTriggerSystem.fireSelected(state)) return;
 
@@ -3866,6 +3804,11 @@ class Game {
         ? this.activeFloor.npcs
         : this.neutralCharacters;
 
+      // Errand confirm popup already open: SPACE confirms the trade. This
+      // owns SPACE outright while open — checked before the artifact/wise
+      // fellow flows below so a stray press can't slip past the popup.
+      if (this.errandSystem.handleConfirmMenuSpacePress(this, npcArray)) return;
+
       // Artifact → wise fellow: consume ⚜, unlock rare-tier hint for this zone.
       // Checked before the errand path so the wise man (when nearby) wins the
       // give; they're in different rooms in practice so this only matters when
@@ -3874,24 +3817,13 @@ class Game {
 
       // Artifact → errand traveler: consume ⚜, spawn 2 coin ingredients at NPC.
       // Side trade — does not advance or alter the active stage errand.
-      const artifactResult = this.errandSystem.tryGiveArtifact(this.player, npcArray, this.inventorySystem);
-      if (artifactResult) {
-        for (let i = 0; i < artifactResult.coins; i++) {
-          const angle = (i / artifactResult.coins) * Math.PI * 2 + Math.random() * 0.4;
-          this.lootSystem.spawnIngredientDrop('c', artifactResult.x, artifactResult.y, angle, null);
-        }
-        return;
-      }
+      if (this.errandSystem.handleArtifactGiveSpacePress(this, npcArray)) return;
 
-      // Errand traveler interaction (SPACE = give item/ingredient)
-      const giveResult = this.errandSystem.checkGive(this.player, npcArray, this.inventorySystem);
-      if (giveResult) {
-        const rewardItem = new Item(giveResult.rewardChar, giveResult.x, giveResult.y);
-        if (this.activeFloor) rewardItem.hutPlane = true;
-        this.items.push(rewardItem);
-        this.physicsSystem.addEntity(rewardItem);
-        return;
-      }
+      // Errand traveler interaction: SPACE opens a confirm popup (instead of
+      // trading immediately) when the player holds/carries the requested item.
+      // Falls through to dialogueSystem.tryOpenNearby() below when not eligible
+      // — the traveler just states what they're after.
+      if (this.errandSystem.tryOpenMenu(this.player, npcArray, this.inventorySystem)) return;
 
       // Hut fisherman coin trade (gated on tips heard — see FishermanDemoSystem)
       if (this.fishermanDemoSystem.trySpacePress()) return;
@@ -4233,6 +4165,12 @@ class Game {
     }
 
     if (state === GAME_STATES.EXPLORE || state === GAME_STATES.ARCADE_DEMO || state === GAME_STATES.REST) {
+      // Close errand confirm popup on SHIFT (no trade) — delegated to ErrandSystem.
+      if (this.errandSystem.isMenuOpen()) {
+        this.errandSystem.closeMenu();
+        return;
+      }
+
       // Close bridge menu on SHIFT (no donation) — delegated to RidgeSystem.
       if (this.ridgeSystem.handleShiftPress()) return;
 
@@ -4411,7 +4349,10 @@ class Game {
       this._resetEnvironmentalEffects();
       this.captives = [];
       this.neutralCharacters = [];
+      // Roaming Alchemist: release placement on room exit (AlchemistNPC.releaseIfLeftRoom).
+      this.alchemistNPC?.releaseIfLeftRoom(room);
       this.bridgeMenuOpen = false;
+      this.errandSystem.closeMenu();
       this.backgroundObjects = room.backgroundObjects || [];
 
       // Clear sound events from any previous room
@@ -4437,6 +4378,12 @@ class Game {
       // Rare Red Zone caldera Weapons Master
       if (room.calderaWeaponsMaster) {
         this.neutralCharacters.push(room.calderaWeaponsMaster);
+      }
+
+      // Roaming Alchemist (Red-L / Yellow-O / Cyan-T, post-lesson) — see
+      // roomFeatures.maybeSpawnRoamingAlchemist.
+      if (room.alchemistNPC) {
+        this.neutralCharacters.push(room.alchemistNPC);
       }
 
       // Errand room: active errand + E room clears enemies and spawns the

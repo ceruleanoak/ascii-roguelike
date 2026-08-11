@@ -1,5 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { ErrandCharacter } from '../entities/ErrandCharacter.js';
+import { Item } from '../entities/Item.js';
 
 /**
  * Three-stage trade progression.
@@ -39,15 +40,23 @@ const STAGE_CONFIG = [
  *   2. Room cleared → onRoomClear(player): starts first errand, returns ErrandCharacter.
  *   3. Player re-enters any E room with active errand → main.js calls
  *      spawnErrandCharacter() after clearing enemies from the room.
- *   4. Player holds requested item (or ingredient), walks close, presses SPACE →
- *      checkGive(player, neutralCharacters, inventorySystem): removes item, returns reward data.
- *   5. Stage advances (capped at 2); ErrandCharacter requests the next item.
- *   6. Death → resetOnDeath(): wipes state for a clean new run.
+ *   4. Player without the requested item, close enough to talk → SPACE opens
+ *      ErrandCharacter's dialogue (flavor text naming the request).
+ *   5. Player holding the requested item (or ingredient), close, presses SPACE →
+ *      tryOpenMenu() opens a bare confirm popup instead of trading immediately
+ *      (simplified version of RidgeSystem's bridge-donation confirm). SPACE
+ *      again (menu open) → confirmGive(): removes item, returns reward data.
+ *      SHIFT, or walking out of range, → closeMenu(): cancels, no trade.
+ *   6. Stage advances (capped at 2); ErrandCharacter requests the next item.
+ *   7. Death → resetOnDeath(): wipes state for a clean new run.
  */
 export class ErrandSystem {
   constructor() {
     this.activeErrand = null; // { requestedItem: char, rewardIndex: number, stage: number }
     this.stage = 0;           // 0 | 1 | 2
+    this.menuOpen = false;    // Confirm popup gate — mirrors game.bridgeMenuOpen,
+                               // but kept internal since ErrandSystem already
+                               // owns activeErrand/stage itself rather than on `game`.
   }
 
   // ── Hooks called by main.js ─────────────────────────────────────────────────
@@ -80,10 +89,122 @@ export class ErrandSystem {
     return new ErrandCharacter(centerX, centerY, this.activeErrand.requestedItem, this.activeErrand.stage);
   }
 
+  // ── Confirm-menu gate ───────────────────────────────────────────────────────
+  // A simplified version of RidgeSystem's bridge-donation confirm: SPACE opens
+  // a bare popup instead of trading immediately, a second SPACE confirms.
+  // Unlike Ridge's multi-material checklist, this is a single yes/no gate, so
+  // there's no on-screen cursor to move — SPACE always means "give", SHIFT (or
+  // walking away) always means "cancel". See ExploreRenderer._renderErrandConfirmPanel
+  // for the non-instructive-compliant rendering (glyph + bare labels, no key hints).
+
+  isMenuOpen() {
+    return this.menuOpen;
+  }
+
   /**
-   * Called from the SHIFT handler in EXPLORE mode.
-   * Checks whether the player is close to the traveler and holds (or carries as ingredient)
-   * the requested item.
+   * Non-mutating eligibility check shared by tryOpenMenu() and main.js's
+   * walk-away auto-close — does the player currently hold (or carry, for the
+   * ingredient stage) the active errand's requested item, within range?
+   * Mirrors checkGive()'s own lookup but doesn't consume anything; keep the
+   * two in sync if the request/give rules change.
+   */
+  canGive(player, neutralCharacters, inventorySystem) {
+    if (!this.activeErrand) return false;
+    const errandChar = neutralCharacters?.find(nc => nc instanceof ErrandCharacter);
+    if (!errandChar) return false;
+
+    const dist = Math.hypot(
+      player.position.x - errandChar.position.x,
+      player.position.y - errandChar.position.y
+    );
+    if (dist > errandChar.getInteractionDistance()) return false;
+
+    const stageConfig = STAGE_CONFIG[this.activeErrand.stage];
+    const requestedChar = this.activeErrand.requestedItem;
+
+    if (stageConfig.isIngredient) {
+      return !!inventorySystem?.hasIngredient(requestedChar);
+    }
+    if (player.quickSlots?.some(slot => slot?.char === requestedChar)) return true;
+    if (inventorySystem?.equippedArmor?.char === requestedChar) return true;
+    if (inventorySystem?.armorInventory?.some(a => a.char === requestedChar)) return true;
+    return false;
+  }
+
+  /**
+   * SPACE near the traveler while eligible: opens the confirm popup instead of
+   * trading immediately. Returns whether the press was consumed (menu opened)
+   * — false leaves the press to fall through to dialogue (nothing to give yet).
+   */
+  tryOpenMenu(player, neutralCharacters, inventorySystem) {
+    if (this.menuOpen) return false; // already open — caller routes SPACE to confirmGive() instead
+    if (!this.canGive(player, neutralCharacters, inventorySystem)) return false;
+    this.menuOpen = true;
+    return true;
+  }
+
+  /** SPACE while the confirm popup is open: perform the trade and close either way. */
+  confirmGive(player, neutralCharacters, inventorySystem) {
+    this.menuOpen = false;
+    return this.checkGive(player, neutralCharacters, inventorySystem);
+  }
+
+  /**
+   * main.js SPACE-handler entry point for the confirm popup. Owns SPACE
+   * outright while the popup is open — checked before the wise-fellow/
+   * artifact flows in main.js so a stray press can't slip past it. Returns
+   * false (unconsumed) when the popup isn't open, letting the press fall
+   * through to those checks.
+   */
+  handleConfirmMenuSpacePress(game, npcArray) {
+    if (!this.menuOpen) return false;
+    const giveResult = this.confirmGive(game.player, npcArray, game.inventorySystem);
+    if (giveResult) this._spawnReward(game, giveResult);
+    return true;
+  }
+
+  /**
+   * main.js SPACE-handler entry point for the Artifact ⚜ → coins side trade.
+   * Returns whether the press was consumed.
+   */
+  handleArtifactGiveSpacePress(game, npcArray) {
+    const artifactResult = this.tryGiveArtifact(game.player, npcArray, game.inventorySystem);
+    if (!artifactResult) return false;
+    for (let i = 0; i < artifactResult.coins; i++) {
+      const angle = (i / artifactResult.coins) * Math.PI * 2 + Math.random() * 0.4;
+      game.lootSystem.spawnIngredientDrop('c', artifactResult.x, artifactResult.y, angle, null);
+    }
+    return true;
+  }
+
+  /** Spawns the reward Item from a checkGive() result — shared glue for handleConfirmMenuSpacePress(). */
+  _spawnReward(game, giveResult) {
+    const rewardItem = new Item(giveResult.rewardChar, giveResult.x, giveResult.y);
+    if (game.activeFloor) rewardItem.hutPlane = true;
+    game.items.push(rewardItem);
+    game.physicsSystem.addEntity(rewardItem);
+  }
+
+  /** SHIFT, or walking out of range, while the confirm popup is open: cancel without trading. */
+  closeMenu() {
+    this.menuOpen = false;
+  }
+
+  /** True once the player has wandered far enough that the open confirm popup should auto-close. */
+  isOutOfRange(player, neutralCharacters) {
+    const errandChar = neutralCharacters?.find(nc => nc instanceof ErrandCharacter);
+    if (!errandChar || !player) return true;
+    const dist = Math.hypot(
+      player.position.x - errandChar.position.x,
+      player.position.y - errandChar.position.y
+    );
+    return dist > errandChar.getInteractionDistance() * 1.5; // matches RidgeSystem's own 1.5x slack
+  }
+
+  /**
+   * Executes the trade: removes the requested item, advances the stage, and
+   * returns the reward spawn data. Called only from confirmGive() — the
+   * confirm popup is what SPACE opens first; this is the actual exchange.
    *
    * @param {Player} player
    * @param {Array}  neutralCharacters  – game.neutralCharacters
@@ -189,6 +310,7 @@ export class ErrandSystem {
   resetOnDeath() {
     this.activeErrand = null;
     this.stage = 0;
+    this.menuOpen = false;
   }
 
   // ── Internal ────────────────────────────────────────────────────────────────
