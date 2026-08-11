@@ -2,6 +2,7 @@ import { GRID } from '../game/GameConfig.js';
 import { GooBlob } from '../entities/GooBlob.js';
 import { createDebris } from '../entities/Debris.js';
 import { createFootstep, createWetDrop, createSteamPuff, createChaff } from '../entities/Particle.js';
+import { inSamePlane } from './PlaneSystem.js';
 
 const MAX_GOO_BLOBS = 20;
 const IDLE_ECHO_DURATION = 0.5; // seconds — must match the radius/alpha envelope in RestRenderer
@@ -404,6 +405,99 @@ export class WorldEffectsSystem {
         majorObjects.push(...game.currentRoom.enemies);
       }
       game.physicsSystem.updateDebris(game.debris.filter(d => d), majorObjects.filter(o => o));
+    }
+  }
+
+  /**
+   * Per-frame background object animation tick, plus tall-grass bending: grass
+   * bends toward whichever entity (player, or nearest enemy if the player isn't
+   * close) is passing through it, springs back after a beat, and imprints
+   * permanently on a dodge roll.
+   *
+   * Grass is plane-0-only (see PlaneSystem) — the bend/imprint sources are each
+   * gated on inSamePlane(entity, obj) so a Sinkhole dive (player on plane 1,
+   * same room/grid as the surface grass) can't bend or imprint grass it isn't
+   * actually standing in. Same layer separation as tunnel/underground.
+   */
+  updateBackgroundObjects(deltaTime) {
+    const game = this.game;
+    const activeBgObjects = game._activeBackgroundObjects();
+    for (const obj of activeBgObjects) {
+      if (obj.update) {
+        obj.update(deltaTime);
+      }
+
+      // Grass bending: animate tall grass as player passes through; imprint on dodge roll.
+      // Identity check uses cuttable+cutState so bent chars (/ \) don't break the gate.
+      if (!(obj.data && obj.data.cuttable && obj.data.cutState === ',')) continue;
+
+      // Lazy-init grass state
+      if (obj.grassImprinted === undefined) {
+        obj.grassImprinted = false;
+        obj.grassResetTimer = 0;
+        if (!obj.grassRenderOffset) obj.grassRenderOffset = { x: 0, y: 0 };
+      }
+
+      // Imprinted grass stays bent — dodge-roll footprint, never auto-resets
+      if (obj.grassImprinted) continue; // char and offset remain as stamped
+
+      // Player proximity (highest priority — controls imprint)
+      const pdx = obj.position.x - game.player.position.x;
+      const pdy = obj.position.y - game.player.position.y;
+      const playerInRange = inSamePlane(game.player, obj) &&
+        Math.sqrt(pdx * pdx + pdy * pdy) < GRID.CELL_SIZE * 0.7;
+
+      // Find closest enemy in range if player isn't bending this blade
+      let bendDx = pdx;
+      let entityInRange = playerInRange;
+      if (!playerInRange) {
+        let closestDist = Infinity;
+        for (const enemy of game._activeEnemies()) {
+          if (!inSamePlane(enemy, obj)) continue;
+          const edx = obj.position.x - enemy.position.x;
+          const edy = obj.position.y - enemy.position.y;
+          const eDist = Math.sqrt(edx * edx + edy * edy);
+          if (eDist < GRID.CELL_SIZE * 0.7 && eDist < closestDist) {
+            closestDist = eDist;
+            bendDx = edx;
+            entityInRange = true;
+          }
+        }
+      }
+
+      if (entityInRange) {
+        // Determine bend direction based on whichever entity is bending this blade
+        let newChar, newOffset;
+        if (bendDx > GRID.CELL_SIZE * 0.25) {
+          newChar = '/';
+          newOffset = GRID.CELL_SIZE * 0.25;
+        } else if (bendDx < -GRID.CELL_SIZE * 0.25) {
+          newChar = '\\';
+          newOffset = -GRID.CELL_SIZE * 0.25;
+        } else {
+          newChar = '|';
+          newOffset = 0;
+        }
+
+        obj.char = newChar;
+        obj.grassRenderOffset.x = newOffset;
+        obj.grassResetTimer = 0.18; // brief spring-back delay
+
+        // Stamp imprint only for player dodge roll
+        if (playerInRange && game.player.dodgeRoll.active && newChar !== '|') {
+          obj.grassImprinted = true;
+        }
+      } else if (obj.grassResetTimer > 0) {
+        // Spring-back: hold the bent char a moment before snapping straight
+        obj.grassResetTimer -= deltaTime;
+        if (obj.grassResetTimer <= 0) {
+          obj.char = '|';
+          obj.grassRenderOffset.x = 0;
+        }
+      } else {
+        obj.char = '|';
+        obj.grassRenderOffset.x = 0;
+      }
     }
   }
 

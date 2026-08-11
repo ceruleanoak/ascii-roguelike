@@ -3,7 +3,7 @@ import { GameStateMachine } from './game/GameStateMachine.js';
 import { ASCIIRenderer } from './rendering/ASCIIRenderer.js';
 import { RenderController } from './rendering/RenderController.js';
 import { PhysicsSystem } from './systems/PhysicsSystem.js';
-import { inSamePlane, tagInteriorPlane } from './systems/PlaneSystem.js';
+import { tagInteriorPlane } from './systems/PlaneSystem.js';
 import { CraftingSystem } from './systems/CraftingSystem.js';
 import { CombatSystem } from './systems/CombatSystem.js';
 import { RoomGenerator } from './systems/RoomGenerator.js';
@@ -3267,86 +3267,8 @@ class Game {
       this.audioSystem.muteLayer2Immediately();
     }
 
-    // Update background object animations and fire propagation
-    const activeBgObjects = this._activeBackgroundObjects();
-    for (const obj of activeBgObjects) {
-      if (obj.update) {
-        obj.update(deltaTime);
-      }
-
-      // Grass bending: animate tall grass as player passes through; imprint on dodge roll.
-      // Identity check uses cuttable+cutState so bent chars (/ \) don't break the gate.
-      if (obj.data && obj.data.cuttable && obj.data.cutState === ',') {
-        // Lazy-init grass state
-        if (obj.grassImprinted === undefined) {
-          obj.grassImprinted = false;
-          obj.grassResetTimer = 0;
-          if (!obj.grassRenderOffset) obj.grassRenderOffset = { x: 0, y: 0 };
-        }
-
-        // Imprinted grass stays bent — dodge-roll footprint, never auto-resets
-        if (obj.grassImprinted) {
-          // Nothing to do; char and offset remain as stamped
-        } else {
-          // Player proximity (highest priority — controls imprint)
-          const pdx = obj.position.x - this.player.position.x;
-          const pdy = obj.position.y - this.player.position.y;
-          const playerInRange = Math.sqrt(pdx * pdx + pdy * pdy) < GRID.CELL_SIZE * 0.7;
-
-          // Find closest enemy in range if player isn't bending this blade
-          let bendDx = pdx;
-          let entityInRange = playerInRange;
-          if (!playerInRange) {
-            let closestDist = Infinity;
-            for (const enemy of this._activeEnemies()) {
-              const edx = obj.position.x - enemy.position.x;
-              const edy = obj.position.y - enemy.position.y;
-              const eDist = Math.sqrt(edx * edx + edy * edy);
-              if (eDist < GRID.CELL_SIZE * 0.7 && eDist < closestDist) {
-                closestDist = eDist;
-                bendDx = edx;
-                entityInRange = true;
-              }
-            }
-          }
-
-          if (entityInRange) {
-            // Determine bend direction based on whichever entity is bending this blade
-            let newChar, newOffset;
-            if (bendDx > GRID.CELL_SIZE * 0.25) {
-              newChar = '/';
-              newOffset = GRID.CELL_SIZE * 0.25;
-            } else if (bendDx < -GRID.CELL_SIZE * 0.25) {
-              newChar = '\\';
-              newOffset = -GRID.CELL_SIZE * 0.25;
-            } else {
-              newChar = '|';
-              newOffset = 0;
-            }
-
-            obj.char = newChar;
-            obj.grassRenderOffset.x = newOffset;
-            obj.grassResetTimer = 0.18; // brief spring-back delay
-
-            // Stamp imprint only for player dodge roll
-            if (playerInRange && this.player.dodgeRoll.active && newChar !== '|') {
-              obj.grassImprinted = true;
-            }
-          } else if (obj.grassResetTimer > 0) {
-            // Spring-back: hold the bent char a moment before snapping straight
-            obj.grassResetTimer -= deltaTime;
-            if (obj.grassResetTimer <= 0) {
-              obj.char = '|';
-              obj.grassRenderOffset.x = 0;
-            }
-          } else {
-            obj.char = '|';
-            obj.grassRenderOffset.x = 0;
-          }
-        }
-      }
-
-    }
+    // Update background object animations (incl. tall-grass bending/imprint) and fire propagation
+    this.worldEffectsSystem.updateBackgroundObjects(deltaTime);
 
     // Fire propagation, ember visuals, and player fire contact live in
     // FireSystem (updated alongside the other element systems above).

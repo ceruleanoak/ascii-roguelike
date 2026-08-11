@@ -411,6 +411,96 @@ export function placePondEntries(gen, room) {
   room.pondEntry = center;
 }
 
+// Scatters 4-7 dense circular clusters of tall grass across the room (density
+// scaled by zone/letter-template rules; pre-burned zones seed cut grass
+// instead). Returns the cluster centers/radii so the caller can place the
+// recipe sign inside natural cover. Sinkholes (seedSinkholes below) are
+// seeded after this, against the grass it places.
+export function generateGrassSwaths(gen, room) {
+  // Check grass density: template overrides zone (default 100%)
+  const zone = ZONES[room.zone];
+  const features = zone?.environmentalFeatures;
+  let grassDensity = features?.grassDensity !== undefined ? features.grassDensity : 1.0;
+
+  // Letter template grass density overrides zone density
+  if (gen.currentLetterTemplate?.bgObjectRules?.grassDensity !== undefined) {
+    grassDensity = gen.currentLetterTemplate.bgObjectRules.grassDensity;
+  }
+
+  const grassPreburned = features?.grassPreburned || false;
+
+  // Generate 4-7 dense clusters of tall grass (scaled by density)
+  const baseSwathCount = gen.randInt(4, 7);
+  const swathCount = Math.max(1, Math.round(baseSwathCount * grassDensity));
+  const clusters = []; // Track cluster positions for recipe sign placement
+
+  for (let i = 0; i < swathCount; i++) {
+    const centerPos = gen.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
+    if (!centerPos) continue;
+    const baseSwathSize = gen.randInt(20, 40);
+    const swathSize = Math.round(baseSwathSize * grassDensity); // Scale by density
+    const swathRadius = gen.randInt(32, 64); // Tight clustering
+
+    // Store cluster info
+    clusters.push({ center: centerPos, radius: swathRadius });
+
+    for (let j = 0; j < swathSize; j++) {
+      const angle = Math.random() * Math.PI * 2;
+      // Square root for more even distribution
+      const dist = Math.sqrt(Math.random()) * swathRadius;
+      const pos = {
+        x: centerPos.x + Math.cos(angle) * dist,
+        y: centerPos.y + Math.sin(angle) * dist
+      };
+
+      // Check bounds
+      if (pos.x >= GRID.CELL_SIZE && pos.x < GRID.WIDTH - GRID.CELL_SIZE &&
+          pos.y >= GRID.CELL_SIZE && pos.y < GRID.HEIGHT - GRID.CELL_SIZE) {
+        // Create grass (use cut grass ',' for pre-burned zones)
+        const grassChar = grassPreburned ? ',' : '|';
+        const grass1 = new BackgroundObject(grassChar, pos.x, pos.y);
+        const grass2 = new BackgroundObject(grassChar, pos.x + 6, pos.y);
+
+        // Hide surface grass when the player descends into a plane-1 cave
+        // (Sinkhole dive in a Grass room reuses this same grid — see
+        // SinkholeSystem). ExploreRenderer's shouldRenderBackgroundObject
+        // defaults to "render on both planes"; without this flag, plane-0
+        // grass would draw on top of/inside the plane-1 cave. Same fix
+        // already applied to the surface rock layer above dungeon caves.
+        grass1.surfaceOnly = true;
+        grass2.surfaceOnly = true;
+
+        // Apply zone grass color (or burned color for pre-burned)
+        if (grassPreburned) {
+          // Burned grass color
+          grass1.color = '#443322';
+          grass1.animationColor = '#443322';
+          grass1.flammability = 'none';
+          grass1.burnt = true;
+          grass2.color = '#443322';
+          grass2.animationColor = '#443322';
+          grass2.flammability = 'none';
+          grass2.burnt = true;
+        } else if (gen.currentEnvironmentColors) {
+          // Normal zone grass color
+          grass1.color = gen.currentEnvironmentColors.grass;
+          grass1.animationColor = gen.currentEnvironmentColors.grass;
+          grass2.color = gen.currentEnvironmentColors.grass;
+          grass2.animationColor = gen.currentEnvironmentColors.grass;
+        }
+
+        // Check clearing zone before placing grass
+        if (!gen.isInClearingZone(pos.x, pos.y)) {
+          room.backgroundObjects.push(grass1);
+          room.backgroundObjects.push(grass2);
+        }
+      }
+    }
+  }
+
+  return clusters; // Return cluster positions for recipe sign placement
+}
+
 // Seeds 0-2 concealed Sinkholes into a G room's already-placed grass swaths.
 // Grass is scattered as continuous pixel positions in circular clusters (not
 // grid cells), so adjacency is measured by pixel radius around a randomly
