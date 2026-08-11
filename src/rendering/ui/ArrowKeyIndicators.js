@@ -48,8 +48,9 @@ export class ArrowKeyIndicators {
     const hasItemToThrow = game.player && game.player.heldItem;
 
     // Dynamic SHIFT label: default THROW, swaps to DISMANTLE when a held item
-    // is near the empty crafting center slot. Equipment slots don't accept a
-    // SHIFT drop action, so they never override the label here.
+    // is near the empty crafting center slot, or PLACE near an empty left/right
+    // ingredient slot. Equipment slots don't accept a SHIFT drop action, so
+    // they never override the label here.
     const nearestSlot = game.getNearestInteractiveSlot ? game.getNearestInteractiveSlot() : null;
     let shiftLabel = 'THROW';
     let shiftSlotAvailable = false;
@@ -57,6 +58,12 @@ export class ArrowKeyIndicators {
     const craftingSlotsEmpty = cs && !cs.centerSlot && !cs.leftSlot && !cs.rightSlot;
     if (hasItemToThrow && nearestSlot && nearestSlot.type === 'crafting-center' && craftingSlotsEmpty) {
       shiftLabel = 'DISMANTLE';
+      shiftSlotAvailable = true;
+    } else if (hasItemToThrow && nearestSlot && nearestSlot.type === 'crafting-left' && !cs.leftSlot) {
+      shiftLabel = 'PLACE';
+      shiftSlotAvailable = true;
+    } else if (hasItemToThrow && nearestSlot && nearestSlot.type === 'crafting-right' && !cs.rightSlot) {
+      shiftLabel = 'PLACE';
       shiftSlotAvailable = true;
     }
     // Blink is independent of the idle-inactivity timer — it fires whenever the
