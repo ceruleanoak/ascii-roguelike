@@ -74,6 +74,37 @@ Hard representation rules:
   they roll only at the true ending, after the player's agency has fully
   drained out of the game.
 
+### The Legend of Three — Canon speaking
+
+*(Stated 2026-08-10.)* Canon doesn't speak directly — the hard rules above
+still hold — but the world's grammar has three registers, not one. This is the
+incantation:
+
+> *"Everything is Three. Three weapons. Three directions. Three wishes...
+> Three all end the same. Three all begin again the same. Can all three
+> mistakes be corrected?"*
+
+- **Justice** — order, purpose; the law the world enforces on you.
+- **Truth** — the way toward it; concealment lifted, sight restored.
+- **Help** — the aid that gets you there.
+
+This is not a layer stacked above Canon — it **is** Canon's content, spoken in
+three registers. Every zone marries its own word/verb to all three, expressed
+as a matched set of three inventory items (one Justice item, one Truth item,
+one Help item). Full per-zone list, kept as its own doc so this section stays
+readable: **[`legend-of-three.md`](./legend-of-three.md)**.
+
+The Legend has **two sides**. Pursuing the 3 as conquest — mastering a zone,
+completing the set, beating the boss — is the achieving side, and like
+everything else in the game it terminates in Gray no matter how well it's
+played. Carrying what Justice/Truth/Help *mean* out of the game, after the
+screen goes dark, is the other side — the one the game can never score. That
+isn't a new pillar; it's what **Choice** (below) was always a choice *about*.
+
+Same non-instructive rule as everywhere else in this doc: nothing on screen
+ever spells out "Justice." The item — and its provenance — is the statement,
+same discipline as the Triangle Room's proof-items below.
+
 ### The Triangle Room (hidden neutral room)
 
 The power of 3 made into a place: a **hidden neutral room** containing **3
