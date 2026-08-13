@@ -1,0 +1,9 @@
+{
+  "name": "dungeon-editor",
+  "version": "0.1.0",
+  "description": "Dungeon layout editor — interior floor templates + zone exterior designs",
+  "main": "main.js",
+  "scripts": {
+    "start": "../sfx-editor/node_modules/.bin/electron ."
+  }
+}
