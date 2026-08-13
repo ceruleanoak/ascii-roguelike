@@ -1,0 +1,11 @@
+{
+  "cols": 24,
+  "rows": 24,
+  "STAIRS_COL": 12,
+  "STAIRS_UP_ROW": 3,
+  "NORTH_ROW": 4,
+  "SPINE_ROW": 12,
+  "WEST_COL": 4,
+  "EAST_COL": 19,
+  "EXIT_ROW": 23
+}

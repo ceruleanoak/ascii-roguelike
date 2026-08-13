@@ -26,17 +26,32 @@
 // This is what makes "every template keeps the staircase area walkable" true
 // by construction rather than by per-floor bookkeeping. See
 // getReservedFootprintCells() below — the single source of truth, shared by
-// DungeonFloorGenerator and (eventually) the dungeon layout editor.
+// DungeonFloorGenerator and the dungeon layout editor (tools/dungeon-editor/).
 //
 // All templates keep the full cross clear to guarantee reachability.
+//
+// ── Data storage (Phase 0.4 of the dungeon-rework plan) ────────────────────
+// The footprint numbers below and every named template's grid live in
+// git-tracked JSON under src/data/dungeon/ (footprintContract.json,
+// floorTemplates/*.json) rather than as JS template literals — that is what
+// lets tools/dungeon-editor/ read and write them as plain data files instead
+// of parsing JS source. This file's exported function signatures are
+// unchanged from before the migration, so no call site elsewhere had to move.
 
-export const STAIRS_COL    = 12;  // vertical spine column (up-stairs, North descent, exit door)
-export const STAIRS_UP_ROW = 3;   // ^ up-stairs row (floors 1+)
-export const NORTH_ROW     = 4;   // North descent footprint row
-export const SPINE_ROW     = 12;  // horizontal spine row (West/East descent footprints)
-export const WEST_COL      = 4;
-export const EAST_COL      = 19;
-export const EXIT_ROW      = 23;  // floor 0 exterior exit door (border row)
+import FOOTPRINT_CONTRACT from './dungeon/footprintContract.json';
+import openTemplate from './dungeon/floorTemplates/open.json';
+import pillarRowsTemplate from './dungeon/floorTemplates/pillar_rows.json';
+import mildMazeTemplate from './dungeon/floorTemplates/mild_maze.json';
+import separatedZonesTemplate from './dungeon/floorTemplates/separated_zones.json';
+import sewerTemplate from './dungeon/floorTemplates/sewer.json';
+
+export const STAIRS_COL    = FOOTPRINT_CONTRACT.STAIRS_COL;     // vertical spine column (up-stairs, North descent, exit door)
+export const STAIRS_UP_ROW = FOOTPRINT_CONTRACT.STAIRS_UP_ROW;  // ^ up-stairs row (floors 1+)
+export const NORTH_ROW     = FOOTPRINT_CONTRACT.NORTH_ROW;      // North descent footprint row
+export const SPINE_ROW     = FOOTPRINT_CONTRACT.SPINE_ROW;      // horizontal spine row (West/East descent footprints)
+export const WEST_COL      = FOOTPRINT_CONTRACT.WEST_COL;
+export const EAST_COL      = FOOTPRINT_CONTRACT.EAST_COL;
+export const EXIT_ROW      = FOOTPRINT_CONTRACT.EXIT_ROW;       // floor 0 exterior exit door (border row)
 
 /**
  * The full set of cells that must stay walkable on every floor/side-room,
@@ -86,162 +101,26 @@ export function paintStairsUpVisual(obj, locked) {
   obj.animationColor = color;
 }
 
-const TEMPLATE_OPEN = [
-  '########################',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '########################',
-];
-
-// Single-cell pillars in a regular grid, col 12 kept clear.
-const TEMPLATE_PILLAR_ROWS = [
-  '########################',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#...#...#...#...#...#..#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#...#...#...#...#...#..#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#...#...#...#...#...#..#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#...#...#...#...#...#..#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '########################',
-];
-
-// Short L-shaped wall segments, leaving open ground for combat. Col 12 clear.
-const TEMPLATE_MILD_MAZE = [
-  '########################',
-  '#......................#',
-  '#..###.........###.....#',
-  '#....#.........#.......#',
-  '#....#.........#.......#',
-  '#......................#',
-  '#.......####.####......#',
-  '#..........#.#.........#',
-  '#..........#.#.........#',
-  '#......................#',
-  '#..####..........####..#',
-  '#.....#..........#.....#',
-  '#.....#..........#.....#',
-  '#......................#',
-  '#..........#.#.........#',
-  '#..........#.#.........#',
-  '#.......####.####......#',
-  '#......................#',
-  '#....#.........#.......#',
-  '#....#.........#.......#',
-  '#..###.........###.....#',
-  '#......................#',
-  '#......................#',
-  '########################',
-];
-
-// Horizontal wall splits the room in two; col-12 gap connects halves.
-const TEMPLATE_SEPARATED_ZONES = [
-  '########################',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '############.###########',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '#......................#',
-  '########################',
-];
-
-// Narrow vertical water channels running between the block pairs, with dry
-// cross-passages at rows 6, 12, 18 (the water flows through them — step over).
-// Col 12 stair corridor stays dry. The '~' cells are what make it a sewer.
-const TEMPLATE_SEWER = [
-  '########################',
-  '#......................#',
-  '#..##~##~##..##~##~##..#',
-  '#..##~##~##..##~##~##..#',
-  '#..##~##~##..##~##~##..#',
-  '#..##~##~##..##~##~##..#',
-  '#....~..~......~..~....#',
-  '#..##~##~##..##~##~##..#',
-  '#..##~##~##..##~##~##..#',
-  '#..##~##~##..##~##~##..#',
-  '#..##~##~##..##~##~##..#',
-  '#..##~##~##..##~##~##..#',
-  '#....~..~......~..~....#',
-  '#..##~##~##..##~##~##..#',
-  '#..##~##~##..##~##~##..#',
-  '#..##~##~##..##~##~##..#',
-  '#..##~##~##..##~##~##..#',
-  '#..##~##~##..##~##~##..#',
-  '#....~..~......~..~....#',
-  '#..##~##~##..##~##~##..#',
-  '#..##~##~##..##~##~##..#',
-  '#......................#',
-  '#......................#',
-  '########################',
-];
-
+// Named templates, loaded from src/data/dungeon/floorTemplates/*.json. Each
+// file is { weight, grid }; weight feeds pickRandomTemplateName below, so
+// adding a new template (via the editor or by hand) only needs a JSON file
+// plus one import + map entry here — nothing else in the codebase changes.
 export const DUNGEON_FLOOR_TEMPLATES = {
-  open:             TEMPLATE_OPEN,
-  pillar_rows:      TEMPLATE_PILLAR_ROWS,
-  mild_maze:        TEMPLATE_MILD_MAZE,
-  separated_zones:  TEMPLATE_SEPARATED_ZONES,
-  sewer:            TEMPLATE_SEWER,
+  open:             openTemplate.grid,
+  pillar_rows:      pillarRowsTemplate.grid,
+  mild_maze:        mildMazeTemplate.grid,
+  separated_zones:  separatedZonesTemplate.grid,
+  sewer:            sewerTemplate.grid,
 };
 
-// Selection weights — 'open' is rare so most floors have some structure.
+// Selection weights, read from each template's own JSON — 'open' is rare so
+// most floors have some structure.
 const TEMPLATE_WEIGHTS = [
-  { name: 'open',            weight: 1 },
-  { name: 'pillar_rows',     weight: 3 },
-  { name: 'mild_maze',       weight: 3 },
-  { name: 'separated_zones', weight: 2 },
-  { name: 'sewer',           weight: 2 },
+  { name: 'open',            weight: openTemplate.weight },
+  { name: 'pillar_rows',     weight: pillarRowsTemplate.weight },
+  { name: 'mild_maze',       weight: mildMazeTemplate.weight },
+  { name: 'separated_zones', weight: separatedZonesTemplate.weight },
+  { name: 'sewer',           weight: sewerTemplate.weight },
 ];
 
 const TOTAL_WEIGHT = TEMPLATE_WEIGHTS.reduce((s, t) => s + t.weight, 0);
