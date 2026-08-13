@@ -1145,6 +1145,12 @@ export class AudioSystem {
     this.loadSFX('puzzle_solve', null);  // puzzle solved, spirit rises
     this.loadSFX('plank_place', null);   // Platform plank laid over deep water
     this.loadSFX('sword_draw', null);    // § drawn from the islet stone
+    // Dungeon 6-floor rework — placeholder names, no assets yet.
+    this.loadSFX('dungeon_key_pickup', null); // Skull destroyed, key obtained
+    this.loadSFX('dungeon_key_use', null);    // Key consumed at the Vault door
+    this.loadSFX('compass_beep', null);       // Compass ping (item present on floor)
+    this.loadSFX('pyramid_fill', null);       // Legend of Three slot filled
+    this.loadSFX('pyramid_solve', null);      // All 3 slots filled
   }
 
   /**

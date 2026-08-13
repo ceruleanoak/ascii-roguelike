@@ -88,6 +88,12 @@ export class InteriorManager {
     g.mazeInterior = null;
     g.dungeonFloors = [];
     g.dungeonCurrentFloor = -1;
+    // Floor 3 Key Vault run-flags (DungeonPuzzleSystem). -1 = skull floor not
+    // yet rolled this visit; rolled lazily on dungeon entry.
+    g.dungeonKeySkullFloor = -1;
+    g.dungeonKeyObtainedThisRun = false;
+    g.dungeonKeyUsedThisRun = false;
+    g.dungeonRareItemObtainedThisRun = false;
     if (g.player) {
       g.player._activeInteriorKind = null;
       g.player.hutExitPosition = null;

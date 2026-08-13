@@ -31,6 +31,8 @@ import { HutSystem } from './systems/HutSystem.js';
 import { PressSystem } from './systems/PressSystem.js';
 import { AlchemySystem } from './systems/AlchemySystem.js';
 import { DungeonSystem } from './systems/DungeonSystem.js';
+import { DungeonFloorGenerator } from './systems/DungeonFloorGenerator.js';
+import { DungeonPuzzleSystem } from './systems/DungeonPuzzleSystem.js';
 import { MazeSystem } from './systems/MazeSystem.js';
 import { InteriorManager } from './systems/InteriorManager.js';
 import { CameraZoomSystem } from './systems/CameraZoomSystem.js';
@@ -167,6 +169,12 @@ class Game {
     this.pressSystem = new PressSystem(this);
     this.alchemySystem = new AlchemySystem(this);
     this.dungeonSystem = new DungeonSystem(this);
+    // Internal collaborators DungeonSystem calls directly — not registered with
+    // InteriorManager (only DungeonSystem itself is a controller; see ADR-0001
+    // and CLAUDE.md's Code Placement Procedure — extracted so floor-content and
+    // puzzle-gating logic don't default back into the orchestrator).
+    this.dungeonFloorGenerator = new DungeonFloorGenerator(this);
+    this.dungeonPuzzleSystem = new DungeonPuzzleSystem(this);
     this.mazeSystem = new MazeSystem(this);
     // Interior lifecycle host (ADR-0001). Created after its controllers so it can
     // register them; also defines the Player interior-membership accessors.
@@ -270,6 +278,11 @@ class Game {
     this.mazeInterior = null;   // Active maze interior (MazeSystem)
     this.dungeonFloors = [];       // Persistent dungeon floor states for current visit
     this.dungeonCurrentFloor = -1; // -1 = not in dungeon
+    // Floor 3 Key Vault run-flags (DungeonPuzzleSystem) — mirrors InteriorManager.reset().
+    this.dungeonKeySkullFloor = -1;
+    this.dungeonKeyObtainedThisRun = false;
+    this.dungeonKeyUsedThisRun = false;
+    this.dungeonRareItemObtainedThisRun = false;
     this.companion = null;         // Active camp NPC companion (promoted from room.campNPC)
 
     // Pre-boss gate: set at depth 14 room clear, cleared on room transition

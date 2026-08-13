@@ -8,16 +8,83 @@
 //   outer border (always walls — the generator stamps these unconditionally).
 //   Templates can override interior cells (rows 1–22, cols 1–22).
 //
-// Reserved cells (NEVER stamp as walls — these must remain walkable):
-//   Floor 0:        (STAIRS_COL=12, STAIRS_DOWN_ROW=4)  — v stairs
-//                   (STAIRS_COL=12, EXIT_ROW=23)        — exit door (on border)
-//                   col 12, rows 21..4                  — spawn-to-stairs corridor
-//   Floor 1+:       (STAIRS_COL=12, STAIRS_UP_ROW=3)    — ^ stairs
-//                   (STAIRS_COL=12, STAIRS_DEEP_ROW=20) — v stairs (non-last floors)
-//                   col 12, rows 3..20                  — between-stairs corridor
+// ── Staircase footprint contract (6-floor rework) ──────────────────────────
+// Every floor (numbered floor or side room) has up to 4 fixed cells, laid out
+// in a cross centered on (STAIRS_COL, SPINE_ROW):
+//   ^ up-stairs      (STAIRS_COL, STAIRS_UP_ROW)  — floors 1+ only (floor 0
+//                     has the exterior exit door instead, see below)
+//   v North descent  (STAIRS_COL, NORTH_ROW)
+//   v West descent   (WEST_COL,   SPINE_ROW)
+//   v East descent   (EAST_COL,   SPINE_ROW)
+//   ∩ exit door      (STAIRS_COL, EXIT_ROW)       — floor 0 only, border cell
 //
-// All templates keep col 12 fully clear to guarantee staircase reachability.
-// Companion-puzzle floor (green zone, floor 2) skips templates and uses 'open'.
+// Not every floor uses all 3 descent footprints (e.g. floor 0 has only North
+// active). Inactive footprints still render — as an inert/locked-looking
+// placeholder, never absent — so the reservation below is UNCONDITIONAL: the
+// full cross (both spines + every footprint's step-off neighbors) is always
+// kept clear, regardless of which cells a given floor actually activates.
+// This is what makes "every template keeps the staircase area walkable" true
+// by construction rather than by per-floor bookkeeping. See
+// getReservedFootprintCells() below — the single source of truth, shared by
+// DungeonFloorGenerator and (eventually) the dungeon layout editor.
+//
+// All templates keep the full cross clear to guarantee reachability.
+
+export const STAIRS_COL    = 12;  // vertical spine column (up-stairs, North descent, exit door)
+export const STAIRS_UP_ROW = 3;   // ^ up-stairs row (floors 1+)
+export const NORTH_ROW     = 4;   // North descent footprint row
+export const SPINE_ROW     = 12;  // horizontal spine row (West/East descent footprints)
+export const WEST_COL      = 4;
+export const EAST_COL      = 19;
+export const EXIT_ROW      = 23;  // floor 0 exterior exit door (border row)
+
+/**
+ * The full set of cells that must stay walkable on every floor/side-room,
+ * regardless of which descent footprints that floor activates. Callers pass
+ * this straight through to applyTemplateToCollisionMap's reservedCells.
+ */
+export function getReservedFootprintCells() {
+  const cells = [];
+  // Vertical spine: up-stairs down through the exit-door approach.
+  for (let r = STAIRS_UP_ROW; r <= EXIT_ROW - 1; r++) cells.push({ row: r, col: STAIRS_COL });
+  // Horizontal spine: West footprint through East footprint.
+  for (let c = WEST_COL; c <= EAST_COL; c++) cells.push({ row: SPINE_ROW, col: c });
+  // Step-off neighbors so the player can leave each footprint tile.
+  cells.push({ row: STAIRS_UP_ROW, col: STAIRS_COL - 1 }, { row: STAIRS_UP_ROW, col: STAIRS_COL + 1 });
+  cells.push({ row: NORTH_ROW,     col: STAIRS_COL - 1 }, { row: NORTH_ROW,     col: STAIRS_COL + 1 });
+  cells.push({ row: SPINE_ROW - 1, col: WEST_COL }, { row: SPINE_ROW + 1, col: WEST_COL });
+  cells.push({ row: SPINE_ROW - 1, col: EAST_COL }, { row: SPINE_ROW + 1, col: EAST_COL });
+  return cells;
+}
+
+// ── Footprint visual contract (3-state model) ───────────────────────────────
+// Shared by DungeonFloorGenerator (initial paint) and DungeonPuzzleSystem
+// (repaint on state change — key consumed, companion joins, puzzle solved).
+// inactive: footprint isn't live this floor, but still rendered (never
+// absent — non-instructive "show don't tell": players see all 3 possible
+// branch positions even when only some are usable).
+export const FOOTPRINT_LOCKED_COLOR   = '#cc3333';
+export const FOOTPRINT_UNLOCKED_COLOR = '#8b7355';
+export const FOOTPRINT_INACTIVE_COLOR = '#333333';
+
+/** Paint a descent footprint tile per its active/locked state. */
+export function paintDescentVisual(obj, { active, locked }) {
+  let char, color;
+  if (!active) { char = 'x'; color = FOOTPRINT_INACTIVE_COLOR; }
+  else if (locked) { char = 'x'; color = FOOTPRINT_LOCKED_COLOR; }
+  else { char = 'v'; color = FOOTPRINT_UNLOCKED_COLOR; }
+  obj.char = char;
+  obj.color = color;
+  obj.animationChar = char;
+  obj.animationColor = color;
+}
+
+/** Paint an up-stairs tile's locked/unlocked color (side rooms with a lockable exit). */
+export function paintStairsUpVisual(obj, locked) {
+  const color = locked ? FOOTPRINT_LOCKED_COLOR : FOOTPRINT_UNLOCKED_COLOR;
+  obj.color = color;
+  obj.animationColor = color;
+}
 
 const TEMPLATE_OPEN = [
   '########################',
