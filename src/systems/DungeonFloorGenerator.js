@@ -6,7 +6,7 @@ import { getZoneRandomEnemy } from '../data/enemies.js';
 import { applyZoneCombatModifiers } from '../data/zones.js';
 import {
   pickRandomTemplateName, applyTemplateToCollisionMap, getTemplateWaterCells,
-  getReservedFootprintCells, paintDescentVisual, paintStairsUpVisual,
+  getTemplateSpawnCells, getReservedFootprintCells, paintDescentVisual, paintStairsUpVisual,
   STAIRS_COL, STAIRS_UP_ROW, NORTH_ROW, SPINE_ROW, WEST_COL, EAST_COL, EXIT_ROW,
 } from '../data/dungeonFloorTemplates.js';
 import { getLegendOfThree } from '../data/legendOfThree.js';
@@ -55,8 +55,11 @@ export class DungeonFloorGenerator {
   // Border + template walls + water channels. Every numbered floor and side
   // room builds on this; only footprint placement, enemy density and reward
   // content differ per room kind. useTemplate:false skips wall generation
-  // for rooms whose puzzle assumes a clean playfield (Pyramid, Companion Gate).
-  _buildScaffold({ useTemplate = true } = {}) {
+  // for rooms whose puzzle assumes a clean playfield (Pyramid). extraReservedCells
+  // lets a room protect its own fixed-position content (e.g. Companion Gate's
+  // switches) from ever getting a template wall stamped on top of it, the same
+  // way the 4 staircase footprints are protected.
+  _buildScaffold({ useTemplate = true, extraReservedCells = [] } = {}) {
     const cols = INTERIOR_COLS;
     const rows = INTERIOR_ROWS;
     const collisionMap = [];
@@ -67,7 +70,7 @@ export class DungeonFloorGenerator {
       }
     }
 
-    const reservedCells = getReservedFootprintCells();
+    const reservedCells = [...getReservedFootprintCells(), ...extraReservedCells];
     let templateName = null;
     if (useTemplate) {
       templateName = pickRandomTemplateName();
@@ -75,11 +78,17 @@ export class DungeonFloorGenerator {
     }
 
     const backgroundObjects = [];
+    let spawnCells = [];
     if (templateName) {
       for (const { row, col } of getTemplateWaterCells(templateName, reservedCells)) {
         if (collisionMap[row]?.[col]) continue;
         backgroundObjects.push(new BackgroundObject('~', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
       }
+      // Author-marked enemy spawn points ('E' in the template grid) — optional;
+      // _spawnEnemies() prefers these before falling back to pickOpenCell's
+      // randomness, so a template with none behaves exactly as before this existed.
+      spawnCells = getTemplateSpawnCells(templateName, reservedCells)
+        .filter(({ row, col }) => !collisionMap[row]?.[col]);
     }
 
     // Random open cell (not a wall, not a reserved footprint cell, not
@@ -99,7 +108,18 @@ export class DungeonFloorGenerator {
       return null;
     };
 
-    return { cols, rows, collisionMap, backgroundObjects, pickOpenCell };
+    return { cols, rows, collisionMap, backgroundObjects, pickOpenCell, spawnCells };
+  }
+
+  // Fisher-Yates — used to consume template-authored spawn points in random
+  // order rather than always filling them top-to-bottom / left-to-right.
+  _shuffled(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
   }
 
   _addDecor(backgroundObjects, pickOpenCell, rows, cols) {
@@ -113,12 +133,18 @@ export class DungeonFloorGenerator {
     }
   }
 
-  _spawnEnemies(count, depth, zone, { collisionMap, backgroundObjects, pickOpenCell, rows, cols }) {
+  _spawnEnemies(count, depth, zone, { collisionMap, backgroundObjects, pickOpenCell, rows, cols, spawnCells }) {
     const enemies = [];
+    // Author-marked spots (template 'E' cells) go first, shuffled so a
+    // template with more marks than the room's enemy count doesn't always
+    // fill the same subset; once exhausted, fall back to pickOpenCell's
+    // full-random placement — the pre-existing behavior for every template
+    // that has no 'E' marks at all.
+    const pool = this._shuffled(spawnCells || []);
     for (let i = 0; i < count; i++) {
       const enemyChar = getZoneRandomEnemy(depth, zone);
       if (!enemyChar) continue;
-      const cell = pickOpenCell(7, rows - 5, 3, cols - 4);
+      const cell = pool.length ? pool.pop() : pickOpenCell(7, rows - 5, 3, cols - 4);
       if (!cell) continue;
       const enemy = new Enemy(enemyChar, cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE, depth);
       enemy.setCollisionMap(collisionMap);
@@ -153,16 +179,22 @@ export class DungeonFloorGenerator {
     return { id, row, col, obj, active, locked, destination };
   }
 
-  // One skull (Ω, hp:2, dropsDungeonKey) per dungeon visit — floor chosen at
-  // entry (game.dungeonKeySkullFloor, see DungeonSystem._enterDungeon). Only
-  // placed while the key hasn't already been obtained or spent this run.
+  // One key-carrying bone pile ('8', the existing Bones background object —
+  // NOT a bespoke glyph; 'Ω' was already claimed by the hut Cauldron, see
+  // resolved-bugs.md) per dungeon visit — floor chosen at entry
+  // (game.dungeonKeySkullFloor, see DungeonSystem._enterDungeon). Only
+  // placed while the key hasn't already been obtained or spent this run. It
+  // renders identically to ordinary Bones decor — dropsDungeonKey (set on
+  // the instance, mirrors obj.dropsKey's K-room pattern) is what makes THIS
+  // one grant the key on destruction, same "which one is it?" find as the K
+  // room's vault key.
   _placeSkullIfDue(floorIndex, { backgroundObjects, pickOpenCell, rows, cols }) {
     const game = this.game;
     if (game.dungeonKeyObtainedThisRun || game.dungeonKeyUsedThisRun) return;
     if (game.dungeonKeySkullFloor !== floorIndex) return;
     const cell = pickOpenCell(6, rows - 5, 3, cols - 4);
     if (!cell) return;
-    const skull = new BackgroundObject('Ω', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
+    const skull = new BackgroundObject('8', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
     skull.dropsDungeonKey = true;
     backgroundObjects.push(skull);
   }
@@ -181,7 +213,7 @@ export class DungeonFloorGenerator {
   }
 
   _generateEntrance(depth, zone) {
-    const { cols, rows, collisionMap, backgroundObjects, pickOpenCell } = this._buildScaffold();
+    const { cols, rows, collisionMap, backgroundObjects, pickOpenCell, spawnCells } = this._buildScaffold();
     this._addDecor(backgroundObjects, pickOpenCell, rows, cols);
     this._placeSkullIfDue(0, { backgroundObjects, pickOpenCell, rows, cols });
 
@@ -195,7 +227,7 @@ export class DungeonFloorGenerator {
     backgroundObjects.push(north.obj, west.obj, east.obj);
 
     const enemies = this._spawnEnemies(2 + Math.floor(Math.random() * 3), depth, zone,
-      { collisionMap, backgroundObjects, pickOpenCell, rows, cols });
+      { collisionMap, backgroundObjects, pickOpenCell, rows, cols, spawnCells });
 
     return {
       type: 'DUNGEON_FLOOR',
@@ -212,7 +244,7 @@ export class DungeonFloorGenerator {
   }
 
   _generateCorridor(depth, zone) {
-    const { cols, rows, collisionMap, backgroundObjects, pickOpenCell } = this._buildScaffold();
+    const { cols, rows, collisionMap, backgroundObjects, pickOpenCell, spawnCells } = this._buildScaffold();
     this._addDecor(backgroundObjects, pickOpenCell, rows, cols);
     this._placeSkullIfDue(1, { backgroundObjects, pickOpenCell, rows, cols });
 
@@ -229,7 +261,7 @@ export class DungeonFloorGenerator {
     backgroundObjects.push(north.obj, west.obj, east.obj);
 
     const enemies = this._spawnEnemies(3 + Math.floor(Math.random() * 3), depth, zone,
-      { collisionMap, backgroundObjects, pickOpenCell, rows, cols });
+      { collisionMap, backgroundObjects, pickOpenCell, rows, cols, spawnCells });
 
     return {
       type: 'DUNGEON_FLOOR',
@@ -247,7 +279,7 @@ export class DungeonFloorGenerator {
   }
 
   _generateBranch(depth, zone) {
-    const { cols, rows, collisionMap, backgroundObjects, pickOpenCell } = this._buildScaffold();
+    const { cols, rows, collisionMap, backgroundObjects, pickOpenCell, spawnCells } = this._buildScaffold();
     this._addDecor(backgroundObjects, pickOpenCell, rows, cols);
     this._placeSkullIfDue(2, { backgroundObjects, pickOpenCell, rows, cols });
 
@@ -271,7 +303,7 @@ export class DungeonFloorGenerator {
     backgroundObjects.push(north.obj, west.obj, east.obj);
 
     const enemies = this._spawnEnemies(4 + Math.floor(Math.random() * 3), depth, zone,
-      { collisionMap, backgroundObjects, pickOpenCell, rows, cols });
+      { collisionMap, backgroundObjects, pickOpenCell, rows, cols, spawnCells });
 
     return {
       type: 'DUNGEON_FLOOR',
@@ -345,7 +377,7 @@ export class DungeonFloorGenerator {
 
   generateTrapRoom(depth, originFloorIndex) {
     const zone = this.game.currentRoom?.zone || 'gray';
-    const { cols, rows, collisionMap, backgroundObjects, pickOpenCell } = this._buildScaffold();
+    const { cols, rows, collisionMap, backgroundObjects, pickOpenCell, spawnCells } = this._buildScaffold();
 
     // Locked exit until every enemy is cleared — same "all-N-cleared" shape
     // as MazeSystem._checkMazeCleared. DungeonPuzzleSystem unlocks it.
@@ -353,7 +385,7 @@ export class DungeonFloorGenerator {
     backgroundObjects.push(stairsUpObj);
 
     const enemies = this._spawnEnemies(5 + Math.floor(Math.random() * 3), depth, zone,
-      { collisionMap, backgroundObjects, pickOpenCell, rows, cols });
+      { collisionMap, backgroundObjects, pickOpenCell, rows, cols, spawnCells });
 
     const rewardChar = TRAP_ROOM_REWARD_POOL[Math.floor(Math.random() * TRAP_ROOM_REWARD_POOL.length)];
     const rewardItem = Object.assign(
@@ -378,7 +410,7 @@ export class DungeonFloorGenerator {
 
   generateKeyVault(depth, originFloorIndex) {
     const zone = this.game.currentRoom?.zone || 'gray';
-    const { cols, rows, collisionMap, backgroundObjects, pickOpenCell } = this._buildScaffold();
+    const { cols, rows, collisionMap, backgroundObjects, pickOpenCell, spawnCells } = this._buildScaffold();
 
     // Always-open exit — the lock lives on the Branch floor's West descent,
     // not here (plan Phase 2.2).
@@ -386,7 +418,7 @@ export class DungeonFloorGenerator {
     backgroundObjects.push(stairsUpObj);
 
     const enemies = this._spawnEnemies(2 + Math.floor(Math.random() * 2), depth, zone,
-      { collisionMap, backgroundObjects, pickOpenCell, rows, cols });
+      { collisionMap, backgroundObjects, pickOpenCell, rows, cols, spawnCells });
 
     const rewardChar = this.game.dungeonRareItemObtainedThisRun ? null : KEY_VAULT_REWARD;
     const rewardItem = rewardChar
@@ -409,16 +441,21 @@ export class DungeonFloorGenerator {
   }
 
   generateCompanionGate(depth, originFloorIndex) {
-    // Bare layout — the switch puzzle assumes a clean playfield (relocated
-    // from the old floor-2 companion-switch mechanic; plan Phase 2.3).
-    const { cols, rows, collisionMap, backgroundObjects } = this._buildScaffold({ useTemplate: false });
+    const SWITCH_ROW = 11;
+    const SWITCH_A_COL = 7;
+    const SWITCH_B_COL = 17;
+    // Routed through the shared templates like every other room (dungeon
+    // editor follow-up — this used to be a hardcoded bare box the editor
+    // had no effect on). The two switch cells are reserved the same way the
+    // 4 staircase footprints are, so a template's walls/water can never land
+    // on top of them regardless of which one gets picked.
+    const { cols, rows, collisionMap, backgroundObjects } = this._buildScaffold({
+      extraReservedCells: [{ row: SWITCH_ROW, col: SWITCH_A_COL }, { row: SWITCH_ROW, col: SWITCH_B_COL }],
+    });
 
     const stairsUpObj = this._makeStairsUp(false);
     backgroundObjects.push(stairsUpObj);
 
-    const SWITCH_ROW = 11;
-    const SWITCH_A_COL = 7;
-    const SWITCH_B_COL = 17;
     const switchAObj = new BackgroundObject('○', SWITCH_A_COL * GRID.CELL_SIZE, SWITCH_ROW * GRID.CELL_SIZE);
     switchAObj.color = '#888888';
     switchAObj.animationChar = '○';

@@ -9,8 +9,8 @@
 //   Templates can override interior cells (rows 1–22, cols 1–22).
 //
 // ── Staircase footprint contract (6-floor rework) ──────────────────────────
-// Every floor (numbered floor or side room) has up to 4 fixed cells, laid out
-// in a cross centered on (STAIRS_COL, SPINE_ROW):
+// Every floor (numbered floor or side room) has up to 4 fixed single-cell
+// footprints:
 //   ^ up-stairs      (STAIRS_COL, STAIRS_UP_ROW)  — floors 1+ only (floor 0
 //                     has the exterior exit door instead, see below)
 //   v North descent  (STAIRS_COL, NORTH_ROW)
@@ -20,15 +20,17 @@
 //
 // Not every floor uses all 3 descent footprints (e.g. floor 0 has only North
 // active). Inactive footprints still render — as an inert/locked-looking
-// placeholder, never absent — so the reservation below is UNCONDITIONAL: the
-// full cross (both spines + every footprint's step-off neighbors) is always
+// placeholder, never absent — so each footprint's own single cell is always
 // kept clear, regardless of which cells a given floor actually activates.
-// This is what makes "every template keeps the staircase area walkable" true
-// by construction rather than by per-floor bookkeeping. See
+// Reservation is deliberately just those 4 cells, not a connecting corridor
+// between them — a forced-open spine constrained template wall layouts more
+// than the walkability guarantee was worth, so a template's walls are free
+// to route however the author likes between footprints (including cutting
+// one off from another, if that's the intended layout). See
 // getReservedFootprintCells() below — the single source of truth, shared by
-// DungeonFloorGenerator and the dungeon layout editor (tools/dungeon-editor/).
-//
-// All templates keep the full cross clear to guarantee reachability.
+// DungeonFloorGenerator and the dungeon layout editor (tools/dungeon-editor/,
+// which also runs a live reachability check as an authoring aid — advisory
+// only, not a save-blocking rule).
 //
 // ── Data storage (Phase 0.4 of the dungeon-rework plan) ────────────────────
 // The footprint numbers below and every named template's grid live in
@@ -54,22 +56,19 @@ export const EAST_COL      = FOOTPRINT_CONTRACT.EAST_COL;
 export const EXIT_ROW      = FOOTPRINT_CONTRACT.EXIT_ROW;       // floor 0 exterior exit door (border row)
 
 /**
- * The full set of cells that must stay walkable on every floor/side-room,
- * regardless of which descent footprints that floor activates. Callers pass
- * this straight through to applyTemplateToCollisionMap's reservedCells.
+ * The 4 single-cell footprints that must stay walkable on every floor/side-
+ * room, regardless of which descent footprints that floor activates. Callers
+ * pass this straight through to applyTemplateToCollisionMap's reservedCells.
+ * Deliberately just the 4 points — see the file header for why no connecting
+ * corridor is reserved between them.
  */
 export function getReservedFootprintCells() {
-  const cells = [];
-  // Vertical spine: up-stairs down through the exit-door approach.
-  for (let r = STAIRS_UP_ROW; r <= EXIT_ROW - 1; r++) cells.push({ row: r, col: STAIRS_COL });
-  // Horizontal spine: West footprint through East footprint.
-  for (let c = WEST_COL; c <= EAST_COL; c++) cells.push({ row: SPINE_ROW, col: c });
-  // Step-off neighbors so the player can leave each footprint tile.
-  cells.push({ row: STAIRS_UP_ROW, col: STAIRS_COL - 1 }, { row: STAIRS_UP_ROW, col: STAIRS_COL + 1 });
-  cells.push({ row: NORTH_ROW,     col: STAIRS_COL - 1 }, { row: NORTH_ROW,     col: STAIRS_COL + 1 });
-  cells.push({ row: SPINE_ROW - 1, col: WEST_COL }, { row: SPINE_ROW + 1, col: WEST_COL });
-  cells.push({ row: SPINE_ROW - 1, col: EAST_COL }, { row: SPINE_ROW + 1, col: EAST_COL });
-  return cells;
+  return [
+    { row: STAIRS_UP_ROW, col: STAIRS_COL },
+    { row: NORTH_ROW,     col: STAIRS_COL },
+    { row: SPINE_ROW,     col: WEST_COL },
+    { row: SPINE_ROW,     col: EAST_COL },
+  ];
 }
 
 // ── Footprint visual contract (3-state model) ───────────────────────────────
@@ -169,6 +168,28 @@ export function getTemplateWaterCells(templateName, reservedCells = []) {
     const line = grid[r];
     for (let c = 0; c < line.length; c++) {
       if (line[c] !== '~') continue;
+      if (reserved.has(`${r},${c}`)) continue;
+      cells.push({ row: r, col: c });
+    }
+  }
+  return cells;
+}
+
+/**
+ * Interior cells a template marks as a preferred enemy spawn point ('E').
+ * Optional per-template authoring — _spawnEnemies() in DungeonFloorGenerator
+ * shuffles and prefers these before falling back to its own random open-cell
+ * placement, so a template with none of these behaves exactly as before this
+ * marker existed.
+ */
+export function getTemplateSpawnCells(templateName, reservedCells = []) {
+  const grid = DUNGEON_FLOOR_TEMPLATES[templateName] ?? DUNGEON_FLOOR_TEMPLATES.open;
+  const reserved = new Set(reservedCells.map(({ row, col }) => `${row},${col}`));
+  const cells = [];
+  for (let r = 0; r < grid.length; r++) {
+    const line = grid[r];
+    for (let c = 0; c < line.length; c++) {
+      if (line[c] !== 'E') continue;
       if (reserved.has(`${r},${c}`)) continue;
       cells.push({ row: r, col: c });
     }

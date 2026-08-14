@@ -40,6 +40,7 @@
   #gridCanvas { display:block; cursor:crosshair; }
   .canvasFooter { margin-top:12px; display:flex; align-items:center; gap:12px; }
   .validationMsg { color:var(--bad); font-size:12px; max-width:520px; }
+  .reachabilityMsg { color:var(--warn); font-size:12px; max-width:520px; }
 
   .propsPanel { width:260px; border-left:1px solid #000; background:var(--panel); overflow:auto; padding:12px; }
   .propsPanel h4 { margin:14px 0 8px; font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); }
@@ -90,6 +91,7 @@
       <div class="canvasFooter">
         <button id="btnSave">Save</button>
         <span id="validationMsg" class="validationMsg"></span>
+        <span id="reachabilityMsg" class="reachabilityMsg"></span>
       </div>
     </div>
 
@@ -99,9 +101,10 @@
         <button class="tool" data-tool="wall">#  Wall</button>
         <button class="tool" data-tool="floor">.  Floor</button>
         <button class="tool" data-tool="water">~  Water</button>
+        <button class="tool" data-tool="enemy">E  Enemy Spawn</button>
         <h4>Weight</h4>
         <input id="weightInput" type="number" min="0" step="1" style="width:100%" />
-        <div class="hint">Higher weight = picked more often by the random-template roll. The 4 red-hatched cells are the fixed staircase footprints — always kept walkable, not paintable here.</div>
+        <div class="hint">Higher weight = picked more often by the random-template roll. The 4 red-hatched cells are the fixed staircase footprints — always kept walkable, not paintable here. Enemy Spawn marks a preferred spot for enemies to appear; the generator falls back to random placement past however many spots you've marked, and to fully random if you mark none.</div>
       </div>
       <div id="exteriorPalette" style="display:none">
         <h4>Palette</h4>
@@ -158,6 +161,7 @@
   const exteriorPalette = document.getElementById('exteriorPalette');
   const statusEl = document.getElementById('status');
   const validationEl = document.getElementById('validationMsg');
+  const reachabilityEl = document.getElementById('reachabilityMsg');
   const weightInput = document.getElementById('weightInput');
   const wallColorInput = document.getElementById('wallColorInput');
   const doorColorInput = document.getElementById('doorColorInput');
@@ -234,6 +238,7 @@
   function interiorVisual(ch) {
     if (ch === '#') return { bg: '#3a3a3a' };
     if (ch === '~') return { bg: '#1c3d5c' };
+    if (ch === 'E') return { bg: '#161616', fg: '#e05a5a', glyph: 'E' };
     return { bg: '#161616' }; // floor
   }
   function exteriorVisual(ch) {
@@ -284,6 +289,45 @@
       }
     }
     updateDoorCount();
+    checkReachability();
+  }
+
+  // Advisory only — never blocks Save. With the footprint reservation now
+  // just 4 single cells (no forced connecting corridor, by design — see
+  // dungeonFloorTemplates.js's header), a template's walls CAN wall off one
+  // footprint from another. That's allowed, but easy to do by accident, so
+  // flag it here rather than silently shipping an unreachable descent.
+  function checkReachability() {
+    if (mode !== 'interior' || !currentData) { reachabilityEl.textContent = ''; return; }
+    const rows = contract.rows, cols = contract.cols;
+    const points = [...reservedSet].map(key => {
+      const [row, col] = key.split(',').map(Number);
+      return { row, col };
+    });
+    if (!points.length) { reachabilityEl.textContent = ''; return; }
+    const grid = currentData.grid;
+    function isOpen(r, c) {
+      if (r <= 0 || r >= rows - 1 || c <= 0 || c >= cols - 1) return false; // border always wall
+      if (reservedSet.has(r + ',' + c)) return true; // footprint cells stay force-open regardless of grid data
+      return (grid[r][c] || '#') !== '#';
+    }
+    const start = points[0];
+    const visited = new Set([start.row + ',' + start.col]);
+    const queue = [start];
+    while (queue.length) {
+      const { row, col } = queue.shift();
+      for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nr = row + dr, nc = col + dc;
+        const key = nr + ',' + nc;
+        if (nr < 0 || nr >= rows || nc < 0 || nc >= cols || visited.has(key) || !isOpen(nr, nc)) continue;
+        visited.add(key);
+        queue.push({ row: nr, col: nc });
+      }
+    }
+    const cutOff = points.filter(p => !visited.has(p.row + ',' + p.col)).length;
+    reachabilityEl.textContent = cutOff
+      ? '⚠ ' + cutOff + ' of ' + points.length + ' footprint cells cut off from the rest — no forced path anymore, check by eye.'
+      : '';
   }
 
   function updateDoorCount() {
@@ -298,7 +342,7 @@
   function applyTool(row, col) {
     if (mode === 'interior') {
       if (isLockedInterior(row, col)) return;
-      const ch = activeTool === 'wall' ? '#' : activeTool === 'water' ? '~' : '.';
+      const ch = activeTool === 'wall' ? '#' : activeTool === 'water' ? '~' : activeTool === 'enemy' ? 'E' : '.';
       setCharAt(currentData.grid, row, col, ch);
     } else {
       let ch;

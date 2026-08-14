@@ -54,22 +54,21 @@ function listFloorTemplates() {
     .sort((a, b) => a.localeCompare(b));
 }
 
-// Same cross-shaped reservation algorithm as
-// src/data/dungeonFloorTemplates.js's getReservedFootprintCells() — kept as
-// a small, obviously-equivalent duplicate rather than importing that ES
-// module into this CommonJS main process. Both read the one JSON contract
-// file, so the *numbers* never drift; only this ~10-line geometry loop is
-// mirrored.
+// Same 4-point reservation algorithm as src/data/dungeonFloorTemplates.js's
+// getReservedFootprintCells() — kept as a small, obviously-equivalent
+// duplicate rather than importing that ES module into this CommonJS main
+// process. Both read the one JSON contract file, so the *numbers* never
+// drift; only this handful-of-lines geometry is mirrored. Deliberately just
+// the 4 single-cell footprints, no connecting corridor between them — see
+// that file's header for why.
 function reservedFootprintCells(contract) {
-  const { STAIRS_COL, STAIRS_UP_ROW, NORTH_ROW, SPINE_ROW, WEST_COL, EAST_COL, EXIT_ROW } = contract;
-  const cells = [];
-  for (let r = STAIRS_UP_ROW; r <= EXIT_ROW - 1; r++) cells.push({ row: r, col: STAIRS_COL });
-  for (let c = WEST_COL; c <= EAST_COL; c++) cells.push({ row: SPINE_ROW, col: c });
-  cells.push({ row: STAIRS_UP_ROW, col: STAIRS_COL - 1 }, { row: STAIRS_UP_ROW, col: STAIRS_COL + 1 });
-  cells.push({ row: NORTH_ROW,     col: STAIRS_COL - 1 }, { row: NORTH_ROW,     col: STAIRS_COL + 1 });
-  cells.push({ row: SPINE_ROW - 1, col: WEST_COL }, { row: SPINE_ROW + 1, col: WEST_COL });
-  cells.push({ row: SPINE_ROW - 1, col: EAST_COL }, { row: SPINE_ROW + 1, col: EAST_COL });
-  return cells;
+  const { STAIRS_COL, STAIRS_UP_ROW, NORTH_ROW, SPINE_ROW, WEST_COL, EAST_COL } = contract;
+  return [
+    { row: STAIRS_UP_ROW, col: STAIRS_COL },
+    { row: NORTH_ROW,     col: STAIRS_COL },
+    { row: SPINE_ROW,     col: WEST_COL },
+    { row: SPINE_ROW,     col: EAST_COL },
+  ];
 }
 
 // Defense in depth against hand-edited files — the renderer already makes
@@ -88,7 +87,7 @@ function validateFloorTemplate(data) {
       return `row ${r} must be exactly ${cols} chars.`;
     }
     for (const ch of line) {
-      if (ch !== '#' && ch !== '.' && ch !== '~') return `row ${r} has invalid char "${ch}" (only # . ~ allowed).`;
+      if (ch !== '#' && ch !== '.' && ch !== '~' && ch !== 'E') return `row ${r} has invalid char "${ch}" (only # . ~ E allowed).`;
     }
     const isBorderRow = r === 0 || r === rows - 1;
     if (isBorderRow && [...line].some(ch => ch !== '#')) return `row ${r} is a border row — every cell must be #.`;
