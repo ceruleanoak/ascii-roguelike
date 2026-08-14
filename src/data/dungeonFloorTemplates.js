@@ -19,9 +19,10 @@
 //   ∩ exit door      (STAIRS_COL, EXIT_ROW)       — floor 0 only, border cell
 //
 // Not every floor uses all 3 descent footprints (e.g. floor 0 has only North
-// active). Inactive footprints still render — as an inert/locked-looking
-// placeholder, never absent — so each footprint's own single cell is always
-// kept clear, regardless of which cells a given floor actually activates.
+// active). Inactive footprints render nothing (see paintDescentVisual below)
+// — but each footprint's own single cell is still always kept clear,
+// regardless of which cells a given floor actually activates, since a later
+// state change (e.g. the Companion Gate) can flip one live without moving it.
 // Reservation is deliberately just those 4 cells, not a connecting corridor
 // between them — a forced-open spine constrained template wall layouts more
 // than the walkability guarantee was worth, so a template's walls are free
@@ -74,9 +75,11 @@ export function getReservedFootprintCells() {
 // ── Footprint visual contract (3-state model) ───────────────────────────────
 // Shared by DungeonFloorGenerator (initial paint) and DungeonPuzzleSystem
 // (repaint on state change — key consumed, companion joins, puzzle solved).
-// inactive: footprint isn't live this floor, but still rendered (never
-// absent — non-instructive "show don't tell": players see all 3 possible
-// branch positions even when only some are usable).
+// inactive: footprint isn't live this floor — renders nothing (a blank
+// space glyph), same "fades to nothing" idiom as the crack/scatter animation
+// frames in GameConfig.js. The cell itself stays reserved/walkable (see
+// getReservedFootprintCells above) so a later state flip can activate it in
+// place without moving anything.
 export const FOOTPRINT_LOCKED_COLOR   = '#cc3333';
 export const FOOTPRINT_UNLOCKED_COLOR = '#8b7355';
 export const FOOTPRINT_INACTIVE_COLOR = '#333333';
@@ -84,8 +87,8 @@ export const FOOTPRINT_INACTIVE_COLOR = '#333333';
 /** Paint a descent footprint tile per its active/locked state. */
 export function paintDescentVisual(obj, { active, locked }) {
   let char, color;
-  if (!active) { char = 'x'; color = FOOTPRINT_INACTIVE_COLOR; }
-  else if (locked) { char = 'x'; color = FOOTPRINT_LOCKED_COLOR; }
+  if (!active) { char = ' '; color = FOOTPRINT_INACTIVE_COLOR; }  // renders nothing — see file header
+  else if (locked) { char = '⚿'; color = FOOTPRINT_LOCKED_COLOR; }  // squared key — reads as "needs a key"
   else { char = 'v'; color = FOOTPRINT_UNLOCKED_COLOR; }
   obj.char = char;
   obj.color = color;
@@ -124,14 +127,26 @@ const TEMPLATE_WEIGHTS = [
 
 const TOTAL_WEIGHT = TEMPLATE_WEIGHTS.reduce((s, t) => s + t.weight, 0);
 
-/** Pick a random template name using the configured weights. */
-export function pickRandomTemplateName() {
-  let r = Math.random() * TOTAL_WEIGHT;
-  for (const t of TEMPLATE_WEIGHTS) {
+/**
+ * Pick a random template name using the configured weights. `excludeNames`
+ * (a Set) is used to keep every floor's layout distinct within one dungeon
+ * visit — DungeonFloorGenerator passes the set of templates already used
+ * this run, so a repeat only happens once every named template has already
+ * appeared (more template-consuming rooms than templates exist).
+ */
+export function pickRandomTemplateName(excludeNames = null) {
+  let pool = TEMPLATE_WEIGHTS;
+  if (excludeNames && excludeNames.size > 0) {
+    const remaining = TEMPLATE_WEIGHTS.filter(t => !excludeNames.has(t.name));
+    if (remaining.length > 0) pool = remaining;
+  }
+  const total = pool.reduce((s, t) => s + t.weight, 0);
+  let r = Math.random() * total;
+  for (const t of pool) {
     r -= t.weight;
     if (r < 0) return t.name;
   }
-  return 'open';
+  return pool[0]?.name ?? 'open';
 }
 
 /**

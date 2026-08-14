@@ -1,5 +1,6 @@
 import { GRID, PHYSICS } from '../game/GameConfig.js';
 import { freezeSurfaceRoom, thawSurfaceRoom } from './PlaneSystem.js';
+import { NORTH_ROW, SPINE_ROW, WEST_COL, EAST_COL, STAIRS_COL } from '../data/dungeonFloorTemplates.js';
 
 /**
  * DungeonSystem — dungeon interior lifecycle (6-floor rework, plan Phase 0).
@@ -175,6 +176,23 @@ export class DungeonSystem {
   }
 
   /**
+   * Every floor/side-room shares the same 24×24 footprint geometry (see
+   * dungeonFloorTemplates.js's staircase footprint contract), so a descent's
+   * id ('north'/'west'/'east') names the same physical side on every floor.
+   * Used by _descend() to land the player near the side of the DESTINATION
+   * floor that corresponds to which staircase they took, instead of always
+   * the single fixed up-stairs point — so two different descents to the same
+   * floor (e.g. Corridor's North + West both → Branch) feel spatially
+   * distinct rather than funneling everyone to one identical spawn.
+   */
+  _landingAnchorFor(id) {
+    if (id === 'north') return { row: NORTH_ROW, col: STAIRS_COL };
+    if (id === 'west')  return { row: SPINE_ROW, col: WEST_COL };
+    if (id === 'east')  return { row: SPINE_ROW, col: EAST_COL };
+    return null;
+  }
+
+  /**
    * Activate a floor, positioning the player at the provided spawn point.
    */
   _activateFloor(floor, spawn) {
@@ -239,7 +257,14 @@ export class DungeonSystem {
     const nextFloor = this.ensureFloorGenerated(descent.destination);
     if (!nextFloor) return;
 
-    const spawnCell = this._spawnOffsetFor(nextFloor.stairsUpRow, nextFloor.stairsUpCol);
+    // Remember which staircase led here so _ascend() can reverse it exactly,
+    // and land near the correspondingly-named footprint on the new floor
+    // rather than always its single fixed up-stairs point (bug: Corridor's
+    // North + West both → Branch used to funnel to one identical spawn).
+    nextFloor._enteredViaId = descent.id;
+    const anchor = this._landingAnchorFor(descent.id)
+      ?? { row: nextFloor.stairsUpRow, col: nextFloor.stairsUpCol };
+    const spawnCell = this._spawnOffsetFor(anchor.row, anchor.col);
     this._activateFloor(nextFloor, {
       x: spawnCell.col * GRID.CELL_SIZE,
       y: spawnCell.row * GRID.CELL_SIZE,
@@ -250,6 +275,7 @@ export class DungeonSystem {
     const { game } = this;
     const current = game.activeFloor;
     if (!current) return;
+    if (current.stairsUpLocked) return; // e.g. Trap Room mid-clear
 
     if (!current.ascendTo) {
       this._exitDungeon();
@@ -259,11 +285,18 @@ export class DungeonSystem {
     const prevFloor = this.getFloorByDest(current.ascendTo);
     if (!prevFloor) return;
 
-    // Land on the origin descent that points back at the floor we're
-    // leaving — the first match wins when a floor has multiple descents to
-    // the same destination (e.g. Corridor's North + West both → Branch).
-    const fromDest = this._destinationOf(current);
-    const origin = prevFloor.descents.find(d => this.sameDestination(d.destination, fromDest));
+    // Land on the exact descent used to enter `current` this visit (set by
+    // _descend), not just the first descent that happens to point at the
+    // same destination — a floor can have multiple descents to the same
+    // destination (e.g. Corridor's North + West both → Branch) that must
+    // reverse independently. Falls back to a destination match, then to the
+    // floor's up-stairs point, for the should-be-impossible case a floor was
+    // activated without going through _descend().
+    let origin = prevFloor.descents.find(d => d.id === current._enteredViaId);
+    if (!origin) {
+      const fromDest = this._destinationOf(current);
+      origin = prevFloor.descents.find(d => this.sameDestination(d.destination, fromDest));
+    }
     const originRow = origin ? origin.row : prevFloor.stairsUpRow;
     const originCol = origin ? origin.col : prevFloor.stairsUpCol;
 
@@ -446,7 +479,7 @@ export class DungeonSystem {
       this._descend(transition.descent);
       return true;
     }
-    if (transition?.kind === 'ascend') {
+    if (transition?.kind === 'ascend' && !game.activeFloor.stairsUpLocked) {
       this._ascend();
       return true;
     }

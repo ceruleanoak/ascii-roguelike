@@ -283,6 +283,7 @@ class Game {
     this.dungeonKeyObtainedThisRun = false;
     this.dungeonKeyUsedThisRun = false;
     this.dungeonRareItemObtainedThisRun = false;
+    this.dungeonTemplatesUsedThisRun = new Set(); // no floor-layout repeats within one dungeon visit
     this.companion = null;         // Active camp NPC companion (promoted from room.campNPC)
 
     // Pre-boss gate: set at depth 14 room clear, cleared on room transition
@@ -2939,8 +2940,12 @@ class Game {
           console.log(`[Secret] Leshy discovered! Fleeing to ${leshy.targetExit} exit`);
         }
 
-        // Key droppers always drop (bypass dropChance)
-        if (obj.dropsKey) {
+        // Key droppers always drop (bypass dropChance) — dungeon key skulls
+        // are visually identical Bones ('8') objects with dropChance 0.2, so
+        // without this they'd usually be destroyed with no drop at all,
+        // silently losing the run's only key (bug: "dungeon key never
+        // appeared" after clearing every skull).
+        if (obj.dropsKey || obj.dropsDungeonKey) {
           this.handleObjectEffect(effect, obj, attack);
         } else {
           // Normal drop chance logic

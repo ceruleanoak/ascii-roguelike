@@ -73,7 +73,14 @@ export class DungeonFloorGenerator {
     const reservedCells = [...getReservedFootprintCells(), ...extraReservedCells];
     let templateName = null;
     if (useTemplate) {
-      templateName = pickRandomTemplateName();
+      // Excludes templates already used elsewhere this dungeon visit, so no
+      // layout repeats within a single dungeon until every named template
+      // has appeared once (game.dungeonTemplatesUsedThisRun, reset by
+      // InteriorManager.reset() alongside the other run-scoped dungeon flags).
+      const used = this.game.dungeonTemplatesUsedThisRun
+        ?? (this.game.dungeonTemplatesUsedThisRun = new Set());
+      templateName = pickRandomTemplateName(used);
+      used.add(templateName);
       applyTemplateToCollisionMap(collisionMap, templateName, reservedCells);
     }
 

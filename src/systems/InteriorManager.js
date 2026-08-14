@@ -94,6 +94,10 @@ export class InteriorManager {
     g.dungeonKeyObtainedThisRun = false;
     g.dungeonKeyUsedThisRun = false;
     g.dungeonRareItemObtainedThisRun = false;
+    // Templates already used this visit (dungeonFloorTemplates.js's
+    // pickRandomTemplateName excludes these) — a fresh Set per visit so no
+    // floor layout repeats within one dungeon until every template has appeared.
+    g.dungeonTemplatesUsedThisRun = new Set();
     if (g.player) {
       g.player._activeInteriorKind = null;
       g.player.hutExitPosition = null;
