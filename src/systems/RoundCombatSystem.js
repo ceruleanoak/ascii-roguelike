@@ -103,10 +103,12 @@ export class RoundCombatSystem {
 
   /**
    * Hag outcome — a hostile 'Q' enemy ("the Hag keeps whatever wanders too
-   * far south"), wired identically to _spawnWave's per-enemy block. Counted
-   * like any other enemy; the room still clears this same frame (matches the
-   * existing lethal-Rusalka precedent of a post-clear hazard that outlives
-   * the clear flag).
+   * far south"), wired identically to _spawnWave's per-enemy block. `uncounted`
+   * keeps her out of `_countedEnemies` so the room stays cleared and exits stay
+   * open despite her being alive (matches the existing lethal-Rusalka precedent
+   * of a post-clear hazard that outlives the clear flag) — without this she'd
+   * trip the generic "counted enemy appeared → re-lock exits" check in
+   * main.js's updateExploreState and trap the player in with her.
    */
   _spawnHag(room, x, y) {
     const game = this.game;
@@ -119,6 +121,7 @@ export class RoundCombatSystem {
     enemy.setGame?.(game);
     enemy.setRoom?.(room);
     applyZoneCombatModifiers(enemy, room.zone);
+    enemy.uncounted = true; // post-clear hazard — see doc comment above
     if (enemy.plane === 1) room.enemiesPlane1.push(enemy);
     else room.enemiesPlane0.push(enemy);
     room.enemies.push(enemy);

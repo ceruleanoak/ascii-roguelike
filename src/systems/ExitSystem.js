@@ -356,4 +356,116 @@ export class ExitSystem {
       player.setCollisionMap(room.collisionMap);
     }
   }
+
+  /**
+   * Per-frame room-clear / exit-lock transition, called every ExploreState
+   * frame from main.js's updateExploreState. Hidden mimics don't block clear
+   * — they're still in the enemies array, so if they reveal post-clear they
+   * fight normally, but exits and clear-side effects fire on visible-enemy
+   * defeat. Skips entirely while diving the Aquifer (defer wave advance
+   * until the frog surfaces) or mid ascent-lava fill (own state machine).
+   *
+   * Two directions:
+   *  - Counted enemies hit zero → unlock exits. One-time clear rewards
+   *    (captive spawn, secret events, bat belfry, pre-boss/pre-miniboss
+   *    gates) fire the first time only; Quagmire wave escalation defers
+   *    unlocking while rounds remain (RoundCombatSystem.advanceIfPending).
+   *  - A counted enemy appears after exits already opened (revealed mimic,
+   *    grass-ambush beast — see InteractionSystem, etc.) → re-lock, matching
+   *    the invariant EnemyUpdateSystem's exit-despawn guard already assumes
+   *    ("Rooms lock their exits while any counted enemy remains"). Pacifist
+   *    game animals (Hunting) and uncounted post-clear hazards (Quagmire
+   *    Hag) are excluded from _countedEnemies specifically so they don't
+   *    trip this branch. `cleared` is left untouched on re-lock — one-time
+   *    reward logic above must never re-fire; only physical passage re-locks.
+   */
+  updateRoomClearState() {
+    const game = this.game;
+    const room = game.currentRoom;
+    const ascentLavaPhase = room.ascentLava?.phase;
+    const ascentLavaActive = ascentLavaPhase === 'fillingFloor' || ascentLavaPhase === 'fillingSlopes';
+    if (game.player.inAquifer || ascentLavaActive) return;
+
+    if (game._countedEnemies(room.enemies).length === 0) {
+      // Quagmire: spawn the next wave instead of clearing while rounds remain.
+      if (room.cleared || !game.roundCombatSystem.advanceIfPending(room)) {
+        // Only process room clear once
+        if (!room.cleared) {
+          room.cleared = true;
+
+          // Track room clear in current zone (for per-zone captive spawning)
+          const currentZone = room.zone || 'green';
+          game.zoneSystem.recordRoomClear(currentZone);
+          game.zoneSystem.recordMinibossRoomClear(room);
+
+          // Check if we should spawn a captive (miniboss just defeated in this zone)
+          if (game.zoneSystem.shouldSpawnCaptive(currentZone, room)) {
+            const captive = game.characterSystem.spawnCaptive(currentZone); // Spawn captive matching zone
+            if (captive) {
+              game.captives.push(captive);
+              game.zoneSystem.markZoneCleared(currentZone);
+              console.log(`Spawned ${currentZone} captive! (miniboss defeated in ${currentZone} zone)`);
+            }
+          }
+
+          // Apply secret events (key glitter, leshy chase, etc.)
+          // Uses priority system - only 1 event per room
+          game.roomGenerator.applySecretEvents(room);
+
+          // E-room: spawn the errand traveler after enemies are cleared
+          if (room.letterTemplate?.neutralAfterClear) {
+            const errandChar = game.errandSystem.onRoomClear(game.player);
+            if (errandChar) game.neutralCharacters.push(errandChar);
+          }
+
+          // Bat belfry reward: unlock a new consumable slot
+          if (room.isBatBelfry) {
+            game.inventorySystem.unlockConsumableSlot();
+            if (game.player) {
+              game.player.equippedConsumables = [...game.inventorySystem.equippedConsumables];
+            }
+            game.menuSystem.showPickupMessage('NEW CONSUMABLE SLOT');
+            game.renderer.markBackgroundDirty();
+            game.updateUI();
+          }
+
+          // Pearl-guide fairy: if it's still around at room clear, the player
+          // missed (or skipped) the heal/bottle touch. Reveal the pedestal so
+          // they can complete the offering and unlock the blue-zone exit.
+          game.revealPearlPedestal();
+
+          // Pre-boss gate: depth (bossDepth - 1) cleared → north-only 'B' exit + anticipation music.
+          // Uses >= (not ===) as a self-correcting safety net: if the player somehow
+          // ends up clearing a non-boss room at or past bossDepth with the boss still
+          // undefeated (e.g. depth-jump cheat, corrupted state), the very next room is
+          // still forced to the boss via the same gate rather than staying stuck.
+          const preBossZone = room.zone || 'green';
+          const preBossDepth = game.zoneDepths[preBossZone] || 0;
+          const preBossZoneBossDepth = ZONES[preBossZone]?.bossDepth;
+          if (preBossZoneBossDepth != null && preBossDepth >= preBossZoneBossDepth - 1 && !game.zoneSystem.defeatedBosses?.has(preBossZone)) {
+            game.preBossGateActive = true;
+            room.exits.east = null;
+            room.exits.west = null;
+            // Color MUST match the current zone's exitColor so recordExit keeps
+            // the streak intact in checkZoneTransition. ExploreRenderer paints
+            // the pulse from preBossGateActive, not from this stored color.
+            room.exits.north = { letter: 'B', color: ZONES[preBossZone].exitColor };
+            game.audioSystem.startBossAnticipation();
+          }
+
+          // Pre-miniboss gate: depth 8 cleared → north-only 'B' exit steering
+          // toward the depth-9 mandatory miniboss.
+          game.zoneSystem.applyPreMinibossGate(game);
+        }
+
+        // Unlock exits (letters are already generated)
+        room.exitsLocked = false;
+        // Update collision map to open exits
+        game.updateExitCollisions();
+      } // end finalize (no pending wave)
+    } else if (!room.exitsLocked) {
+      room.exitsLocked = true;
+      game.updateExitCollisions();
+    }
+  }
 }
