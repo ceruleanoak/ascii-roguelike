@@ -61,10 +61,20 @@ export class GameOverRenderer {
     // Render foreground
     this.renderer.clearForeground();
 
-    if (game.player.inHut) {
-      // Player died inside a hut/dungeon — delegate foreground to the hut overlay
-      // so the death explosion renders at the correct PIP position.
-      this.renderController.hutInteriorOverlay.render(game);
+    // Interior deaths (hut/dungeon/maze) hold their PIP view up for the full
+    // 2-second death delay so the death reads in place — the interior scene
+    // stays visible, then the view cuts to the plain GAME OVER screen at the
+    // same moment the "GAME OVER" text appears, rather than the two being
+    // superimposed instantly.
+    const isCharacterDeath = game.characterDeathPending;
+    const timerExpired = isCharacterDeath ? game.characterDeathTimer <= 0 : game.gameOverDeathTimer <= 0;
+    const holdInterior = (game.interiorManager?.isActive ?? false) && !timerExpired;
+
+    if (holdInterior) {
+      // Delegate to the matching interior overlay (hut/dungeon/maze — see
+      // InteriorOverlay/ADR-0001) so the death explosion renders at the
+      // correct PIP position instead of the frozen, empty surface room.
+      this.renderController.interiorOverlay.render(game);
     } else {
       // Draw water tiles (dynamic state changes each frame)
       for (const obj of game.backgroundObjects) {
@@ -134,11 +144,13 @@ export class GameOverRenderer {
     const mistSwallowing = game.grayZoneSystem?.isSwallowing() ?? false;
     if (mistSwallowing) return;
 
+    // Still inside the interior hold window — no GAME OVER text yet, just the
+    // interior PIP rendered above.
+    if (holdInterior) return;
+
     // Draw main death text
-    const isCharacterDeath = game.characterDeathPending;
     const deathText = isCharacterDeath ? `${game.characterDeathName} lost` : 'GAME OVER';
     const deathColor = isCharacterDeath ? '#ffaa00' : '#ff0000';
-    const timerExpired = isCharacterDeath ? game.characterDeathTimer <= 0 : game.gameOverDeathTimer <= 0;
 
     this.renderer.fgCtx.save();
     this.renderer.fgCtx.font = `${GRID.CELL_SIZE * 2}px 'VentureArcade', monospace`;

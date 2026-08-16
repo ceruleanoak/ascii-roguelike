@@ -3118,6 +3118,13 @@ class Game {
           this.particles.push(...explosion);
           for (const particle of explosion) {
             this.physicsSystem.addEntity(particle);
+            // Tag hutPlane so HutInteriorOverlay's filtered drawParticles(game, true)
+            // picks the explosion up when the death happens inside a hut/dungeon —
+            // otherwise GameOverRenderer's interior hold window renders the PIP with
+            // no visible death animation. Same activeFloor-presence check used
+            // elsewhere (LootSystem/HutSystem). Maze doesn't need this: its overlay
+            // draws game.particles unfiltered.
+            if (this.activeFloor) particle.hutPlane = true;
           }
         }
 
@@ -3906,7 +3913,16 @@ class Game {
     if (this.player) {
       this.player.reset();
     }
-    this.audioSystem.play();
+    // No audioSystem.play() here — enterRestState() (triggered by the
+    // transition below) is mode-aware and always loads the correct zone/REST
+    // track itself. Calling play() first used to resume whatever buffers were
+    // still loaded (e.g. a maze/hut interior override, since the death path's
+    // audioSystem.stop() only halts playback, it doesn't clear the loaded
+    // buffers) as if they were legitimate music, which then tricked
+    // enterRestState()'s switchRestMusic() into treating them as "already
+    // playing" and cross-fading at their loop boundary instead of cutting
+    // over immediately — the maze track would audibly keep playing past
+    // death until its loop finished. Bug #184.
     this.stateMachine.transition(GAME_STATES.REST);
   }
 
