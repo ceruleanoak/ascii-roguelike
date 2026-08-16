@@ -9,6 +9,11 @@
  *   indicator rather than overflowing past the border
  * - Show the run timer (RunTimerSystem) in the top-right corner
  * - Identical in EXPLORE and REST — always the combined pool
+ *
+ * Drawn on the zoom-exempt UI layer (renderer.uiCtx, see ASCIIRenderer.clearUI)
+ * rather than fgCtx — CameraZoomSystem's combat-proximity zoom CSS-transforms
+ * only the bg/fg canvases, so the overlay must live off that layer to stay a
+ * constant on-screen size regardless of the current zoom level.
  */
 
 import { GRID, COLORS, GAME_STATES } from '../../game/GameConfig.js';
@@ -45,7 +50,7 @@ export class InventoryOverlay {
   // layout, where a column's text would otherwise run into the next column
   // or past the box border.
   _fitText(text, maxWidth) {
-    const ctx = this.renderer.fgCtx;
+    const ctx = this.renderer.uiCtx;
     if (ctx.measureText(text).width <= maxWidth) return text;
     let truncated = text;
     while (truncated.length > 1 && ctx.measureText(truncated + '…').width > maxWidth) {
@@ -79,10 +84,10 @@ export class InventoryOverlay {
       return index;
     }
 
-    this.renderer.fgCtx.fillStyle = color;
-    this.renderer.fgCtx.textAlign = 'left';
-    this.renderer.fgCtx.fillText(spectaclesTransformString(title, spectaclesOn), GRID.CELL_SIZE * 4, startY + index * lineHeight);
-    this.renderer.fgCtx.textAlign = 'center';
+    this.renderer.uiCtx.fillStyle = color;
+    this.renderer.uiCtx.textAlign = 'left';
+    this.renderer.uiCtx.fillText(spectaclesTransformString(title, spectaclesOn), GRID.CELL_SIZE * 4, startY + index * lineHeight);
+    this.renderer.uiCtx.textAlign = 'center';
     index++;
 
     const rows = Math.ceil(entries.length / columns.length);
@@ -107,13 +112,13 @@ export class InventoryOverlay {
         const nextColX = columns[col + 1] ? columns[col + 1].iconX : CONTENT_RIGHT_CELL + 1;
         const maxTextWidth = (nextColX - textX) * GRID.CELL_SIZE - GRID.CELL_SIZE * 0.5;
 
-        this.renderer.drawEntity(GRID.CELL_SIZE * iconX, y, char, color);
+        this.renderer.drawUIEntity(GRID.CELL_SIZE * iconX, y, char, color);
 
         const text = this._fitText(`${data.name} x${count}`, maxTextWidth);
-        this.renderer.fgCtx.fillStyle = COLORS.TEXT;
-        this.renderer.fgCtx.textAlign = 'left';
-        this.renderer.fgCtx.fillText(spectaclesTransformString(text, spectaclesOn), GRID.CELL_SIZE * textX, y);
-        this.renderer.fgCtx.textAlign = 'center';
+        this.renderer.uiCtx.fillStyle = COLORS.TEXT;
+        this.renderer.uiCtx.textAlign = 'left';
+        this.renderer.uiCtx.fillText(spectaclesTransformString(text, spectaclesOn), GRID.CELL_SIZE * textX, y);
+        this.renderer.uiCtx.textAlign = 'center';
       }
       index++;
     }
@@ -123,10 +128,10 @@ export class InventoryOverlay {
 
   render(game) {
     const spectaclesOn = isSpectaclesActive(game);
-    this.renderer.fgCtx.save();
+    this.renderer.uiCtx.save();
 
     // Draw semi-transparent background
-    this.renderer.drawRect(
+    this.renderer.drawUIRect(
       GRID.CELL_SIZE * 2,
       GRID.CELL_SIZE * 2,
       GRID.WIDTH - GRID.CELL_SIZE * 4,
@@ -136,7 +141,7 @@ export class InventoryOverlay {
     );
 
     // Draw border
-    this.renderer.drawRect(
+    this.renderer.drawUIRect(
       GRID.CELL_SIZE * 2,
       GRID.CELL_SIZE * 2,
       GRID.WIDTH - GRID.CELL_SIZE * 4,
@@ -147,7 +152,7 @@ export class InventoryOverlay {
 
     // Title is state-independent — the overlay shows the same combined pool
     // in EXPLORE and REST, so there's no "FINDINGS vs INVENTORY" split.
-    this.renderer.drawEntity(
+    this.renderer.drawUIEntity(
       GRID.WIDTH / 2,
       GRID.CELL_SIZE * 3,
       spectaclesTransformString('INVENTORY', spectaclesOn),
@@ -157,14 +162,14 @@ export class InventoryOverlay {
     // Run timer, top-right of the box on the title row. Bare digits, no label —
     // the overlay is non-instructive. Not run through the Spectacles cipher:
     // that mapping is letters-only, so digits and ':' would pass through as-is.
-    this.renderer.fgCtx.fillStyle = COLORS.TEXT;
-    this.renderer.fgCtx.textAlign = 'right';
-    this.renderer.fgCtx.fillText(
+    this.renderer.uiCtx.fillStyle = COLORS.TEXT;
+    this.renderer.uiCtx.textAlign = 'right';
+    this.renderer.uiCtx.fillText(
       game.runTimerSystem.format(),
       GRID.WIDTH - GRID.CELL_SIZE * 3,
       GRID.CELL_SIZE * 3
     );
-    this.renderer.fgCtx.textAlign = 'center';
+    this.renderer.uiCtx.textAlign = 'center';
 
     const startY = GRID.CELL_SIZE * 5;
     const lineHeight = GRID.CELL_SIZE * 1.5;
@@ -180,13 +185,13 @@ export class InventoryOverlay {
       const emptyMsg = game.stateMachine.getCurrentState() === GAME_STATES.REST
         ? 'explore to gather ingredients'
         : 'Empty';
-      this.renderer.drawEntity(
+      this.renderer.drawUIEntity(
         GRID.WIDTH / 2,
         GRID.HEIGHT / 2,
         spectaclesTransformString(emptyMsg, spectaclesOn),
         COLORS.TEXT
       );
-      this.renderer.fgCtx.restore();
+      this.renderer.uiCtx.restore();
       return;
     }
 
@@ -234,7 +239,7 @@ export class InventoryOverlay {
     index = this._renderCategorySection(game, 'MATERIALS', COLORS.INGREDIENT, materialCounts, startY, index, spectaclesOn, maxIndex, overflow, columnCount);
 
     if (overflow.count > 0) {
-      this.renderer.drawEntity(
+      this.renderer.drawUIEntity(
         GRID.WIDTH / 2,
         startY + (maxIndex + 1) * lineHeight,
         spectaclesTransformString(`+${overflow.count} MORE`, spectaclesOn),
@@ -242,6 +247,6 @@ export class InventoryOverlay {
       );
     }
 
-    this.renderer.fgCtx.restore();
+    this.renderer.uiCtx.restore();
   }
 }
