@@ -16,8 +16,9 @@ import { NORTH_ROW, SPINE_ROW, WEST_COL, EAST_COL, STAIRS_COL } from '../data/du
  * ───────────
  * Floors are addressed either by numeric index (game.dungeonFloors[0..3],
  * the "spine" — Entrance → Corridor → Branch → Pyramid) or by string key
- * (game.dungeonFloors.trapRoom / .keyVault / .companionGate, the Branch
- * floor's three side rooms). Every floor/room object carries its own
+ * (game.dungeonFloors.whipTrial, off Corridor's North descent; .trapRoom
+ * and .companionGate, off Branch's North and East descents). Every
+ * floor/room object carries its own
  * `descents[]` (down-transitions) and `ascendTo` (up-transition target) as
  * `{ kind: 'numbered', floorIndex } | { kind: 'side', key }` destination
  * descriptors — see DungeonFloorGenerator's file header for the full shape.
@@ -59,9 +60,9 @@ export class DungeonSystem {
     // Side room — generated fresh only once per visit, keyed by string.
     if (!game.dungeonFloors[destination.key]) {
       const gen = game.dungeonFloorGenerator;
-      if (destination.key === 'trapRoom')      game.dungeonFloors.trapRoom      = gen.generateTrapRoom(depth, 2);
-      else if (destination.key === 'keyVault')      game.dungeonFloors.keyVault      = gen.generateKeyVault(depth, 2);
-      else if (destination.key === 'companionGate') game.dungeonFloors.companionGate = gen.generateCompanionGate(depth, 2);
+      if (destination.key === 'whipTrial')          game.dungeonFloors.whipTrial      = gen.generateWhipTrial(depth, 1);
+      else if (destination.key === 'trapRoom')      game.dungeonFloors.trapRoom       = gen.generateTrapRoom(depth, 2);
+      else if (destination.key === 'companionGate') game.dungeonFloors.companionGate  = gen.generateCompanionGate(depth, 2);
     }
     return this.getFloorByDest(destination);
   }
@@ -147,9 +148,11 @@ export class DungeonSystem {
     };
 
     // One skull key per visit — rolled once, on first entry (not re-rolled
-    // on exit/re-entry within the same D-room visit).
+    // on exit/re-entry within the same D-room visit). Must be findable
+    // before the lock it opens (Corridor's West descent into Branch), so
+    // it only rolls onto Entrance or Corridor, never past the gate itself.
     if (game.dungeonKeySkullFloor < 0) {
-      game.dungeonKeySkullFloor = Math.floor(Math.random() * 3); // floor 0, 1, or 2
+      game.dungeonKeySkullFloor = Math.floor(Math.random() * 2); // floor 0 or 1
     }
 
     const entrance = this.ensureFloorGenerated({ kind: 'numbered', floorIndex: 0 });
@@ -344,6 +347,7 @@ export class DungeonSystem {
 
     game.player.inDungeon = false;
     game.player.hookedByMimic = null;
+    game.player.hookedByWhip = null;
     thawSurfaceRoom(game);
     game.player._hutEntryCooldown = 0.5;
 

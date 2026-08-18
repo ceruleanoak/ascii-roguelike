@@ -10,6 +10,9 @@ const INTERACT_RADIUS = GRID.CELL_SIZE * 2;
 
 const SFX_BEEP_INTERVAL = 2.0; // Compass ping throttle, seconds
 
+// Whip Trial — see plan doc and DungeonFloorGenerator.generateWhipTrial.
+const WHIP_TRIAL_STRUCK_WINDOW = 0.25; // seconds — simultaneity window for the two switches
+
 /**
  * DungeonPuzzleSystem — gating and puzzle logic for the 6-floor dungeon
  * rework (plan Phase 2/3). DungeonSystem owns lifecycle (enter/exit/ascend/
@@ -35,6 +38,8 @@ export class DungeonPuzzleSystem {
 
     if (floor.roomKind === 'numbered' && floor.floorIndex === 2) {
       this._updateBranchFloor(floor);
+    } else if (floor.roomKind === 'whipTrial') {
+      this._updateWhipTrial(floor, dt);
     } else if (floor.roomKind === 'trapRoom') {
       this._updateTrapRoom(floor);
     } else if (floor.roomKind === 'companionGate') {
@@ -73,8 +78,62 @@ export class DungeonPuzzleSystem {
     }
   }
 
-  // Trap Room — exit unlocks once every enemy is cleared (same "all-N-
-  // cleared" shape as MazeSystem._checkMazeCleared).
+  // Whip Trial — exit unlocks once both switches are struck within the
+  // same swing. Reuses the puzzleSignal/glitterHit strike contract (see
+  // PuzzleSystem.js's Listening Stones): switches/posts are indestructible,
+  // each hit pulses glitterHit for one tick. Two posts, one on each bank of
+  // the gap — each pulls the player to its own fixed position, no "which
+  // side are they on" branching needed. The south post is the required
+  // crossing; the north post is a pure non-softlock safety valve (the real
+  // exit is south of the switches, not back at the entrance — see
+  // generateWhipTrial). The pull itself (traversal, arrival, i-frames) is
+  // owned by PhysicsSystem.updateEntity's hookedByWhip handling — this only
+  // sets the target, same contract CombatSystem uses for the Stump/Tree
+  // generalization of this same trick.
+  _updateWhipTrial(room, dt) {
+    const { game } = this;
+    const player = game.player;
+
+    // Post strikes — each pulls the player to that post's own position.
+    for (const post of [room.postNorthObj, room.postSouthObj]) {
+      if (post.glitterHit) {
+        post.glitterHit = false;
+        if (!player.hookedByWhip) {
+          player.hookedByWhip = { targetX: post.position.x, targetY: post.position.y };
+        }
+      }
+    }
+
+    // Switch strikes — simultaneity window, then permanent unlock.
+    if (!room.puzzleSolved) {
+      for (const sw of [room.switchAObj, room.switchBObj]) {
+        if (sw.recentlyStruck) {
+          sw._struckTimer += dt;
+          if (sw._struckTimer >= WHIP_TRIAL_STRUCK_WINDOW) {
+            sw.recentlyStruck = false;
+            this._setSwitchVisual(sw, false);
+          }
+        }
+        if (sw.glitterHit) {
+          sw.glitterHit = false;
+          sw.recentlyStruck = true;
+          sw._struckTimer = 0;
+          this._setSwitchVisual(sw, true);
+        }
+      }
+
+      if (room.switchAObj.recentlyStruck && room.switchBObj.recentlyStruck) {
+        room.puzzleSolved = true;
+        room.stairsUpLocked = false;
+        paintStairsUpVisual(room.stairsUpObj, false);
+        this._spawnUnlockEffect(room.stairsUpObj);
+      }
+    }
+  }
+
+  // Trap Room — sealed enemy gauntlet off Branch's North descent. Exit
+  // unlocks once every spawned enemy is cleared; see
+  // DungeonFloorGenerator.generateTrapRoom.
   _updateTrapRoom(room) {
     if (!room.stairsUpLocked) return;
     if (room.enemies.length > 0) return;
@@ -155,8 +214,8 @@ export class DungeonPuzzleSystem {
     const floor = game.activeFloor;
     if (!floor) return false;
 
-    if (floor.roomKind === 'numbered' && floor.floorIndex === 2) {
-      if (this._tryUnlockKeyVault(floor)) return true;
+    if (floor.roomKind === 'numbered' && floor.floorIndex === 1) {
+      if (this._tryUnlockCorridorGate(floor)) return true;
     }
     if (floor.roomKind === 'numbered' && floor.floorIndex === 3) {
       if (this._tryDepositPyramid(floor)) return true;
@@ -164,10 +223,11 @@ export class DungeonPuzzleSystem {
     return false;
   }
 
-  // Branch floor's West descent — SPACE while locked, key in hand, standing
-  // on the footprint: consumes the key and unlocks it. A subsequent SPACE
-  // (now unlocked) is a normal descend, handled by DungeonSystem.
-  _tryUnlockKeyVault(floor) {
+  // Corridor floor's West descent — SPACE while locked, key in hand,
+  // standing on the footprint: consumes the key and unlocks the path down
+  // to Branch. A subsequent SPACE (now unlocked) is a normal descend,
+  // handled by DungeonSystem.
+  _tryUnlockCorridorGate(floor) {
     const { game } = this;
     const west = floor.descents.find(d => d.id === 'west');
     if (!west || !west.locked) return false;
