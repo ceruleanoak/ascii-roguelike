@@ -299,6 +299,20 @@ export class BackgroundObject {
     }
   }
 
+  // Briefly tints the object to `color` then reverts — the interaction cue
+  // for effects whose highlight color is decided by the caller (e.g. the
+  // equipped weapon's own color) rather than one of OBJECT_ANIMATIONS'
+  // fixed palettes. Held flat rather than faded so the color reads clearly
+  // for the full duration; the currentAnimation machinery above already
+  // restores this.color on expiry, same as any other animation ending.
+  flashColor(color, duration = 0.25) {
+    this.currentAnimation = {
+      type: 'flashColor',
+      data: { duration, colorFrames: [color, color, color] },
+      elapsed: 0
+    };
+  }
+
   update(deltaTime) {
     if (this.spawnImmunityTimer > 0) {
       this.spawnImmunityTimer = Math.max(0, this.spawnImmunityTimer - deltaTime);

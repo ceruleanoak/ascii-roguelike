@@ -15,6 +15,7 @@ import { inSamePlane } from './PlaneSystem.js';
 import { Item } from '../entities/Item.js';
 import { GRID } from '../game/GameConfig.js';
 import { addItemToChestArray, removeItemFromChestArray, chestEntryLabel, trapAlreadyEquipped } from './TrapSystem.js';
+import { createBurstParticles, createSparkBurst } from './WorldEffectsSystem.js';
 
 export class InventorySystem {
   constructor() {
@@ -777,6 +778,25 @@ export class InventorySystem {
     return true;
   }
 
+  // Water washes any equipped Oil augment (oilEffect) off the bow/dagger it's
+  // coating — called by PhysicsSystem.applyLiquidResults on the player's
+  // dry→wet transition. Clears the slot to null exactly like a spent
+  // non-leavesBottle consumable (oils never carry leavesBottle); the new `wet`
+  // status pip (StatusEffectVisuals.js/StatusPipEffects.js) is the only
+  // feedback needed to tell the player why, per the non-instructive UI rule.
+  destroyWetOils(player) {
+    for (let i = 0; i < this.equippedConsumables.length; i++) {
+      const oil = this.equippedConsumables[i];
+      if (!oil?.data?.oilEffect) continue;
+      if (this.game?.particles) {
+        createBurstParticles(this.game, this.game.particles, player.position.x + 20, player.position.y + 20, 10, oil.color || '#a07040');
+      }
+      this.equippedConsumables[i] = null;
+      if (player.equippedConsumables) player.equippedConsumables[i] = null;
+      this.spentConsumableSlots[i] = true;
+    }
+  }
+
   // Centralized slot-consumption for one-shot consumables. Honors leavesBottle:
   // magic potions tagged with leavesBottle: true convert the spent slot to an
   // Empty Bottle ('B') instead of clearing to null. Sources: magic-potion
@@ -878,7 +898,7 @@ export class InventorySystem {
           }
         }
         // Explosion particles
-        this._createExplosion(particles, px, py, 20, windup.consumable.color || '#ff4400');
+        createBurstParticles(this.game, particles, px, py, 20, windup.consumable.color || '#ff4400');
         break;
       }
       case 'curse': {
@@ -891,7 +911,7 @@ export class InventorySystem {
             combatSystem.createDamageNumber(cd.damage, enemy.position.x, enemy.position.y, '#ffffff');
           }
         }
-        this._createExplosion(particles, px, py, 25, '#9900ff');
+        createBurstParticles(this.game, particles, px, py, 25, '#9900ff');
         break;
       }
       case 'slow': {
@@ -904,7 +924,7 @@ export class InventorySystem {
             combatSystem.createDamageNumber('~', enemy.position.x, enemy.position.y, '#00ff00');
           }
         }
-        this._createExplosion(particles, px, py, 15, '#00ff00');
+        createBurstParticles(this.game, particles, px, py, 15, '#00ff00');
         break;
       }
       case 'poison': {
@@ -917,7 +937,7 @@ export class InventorySystem {
             combatSystem.createDamageNumber('☠', enemy.position.x, enemy.position.y, '#44ff44');
           }
         }
-        this._createExplosion(particles, px, py, 18, '#44ff44');
+        createBurstParticles(this.game, particles, px, py, 18, '#44ff44');
         break;
       }
       case 'venomcloud': {
@@ -932,7 +952,7 @@ export class InventorySystem {
             combatSystem.createDamageNumber(3, enemy.position.x, enemy.position.y, '#00ff44');
           }
         }
-        this._createExplosion(particles, px, py, 22, '#00ff44');
+        createBurstParticles(this.game, particles, px, py, 22, '#00ff44');
         break;
       }
       case 'jolt': {
@@ -952,12 +972,12 @@ export class InventorySystem {
           }
         }
         // Spark burst at impact + four ring offsets so the AoE reads "large"
-        this._createSparkBurst(particles, ix, iy);
+        createSparkBurst(this.game, particles, ix, iy);
         const ring = radius * 0.55;
-        this._createSparkBurst(particles, ix + ring, iy);
-        this._createSparkBurst(particles, ix - ring, iy);
-        this._createSparkBurst(particles, ix, iy + ring);
-        this._createSparkBurst(particles, ix, iy - ring);
+        createSparkBurst(this.game, particles, ix + ring, iy);
+        createSparkBurst(this.game, particles, ix - ring, iy);
+        createSparkBurst(this.game, particles, ix, iy + ring);
+        createSparkBurst(this.game, particles, ix, iy - ring);
         break;
       }
       case 'firecracker': {
@@ -968,7 +988,7 @@ export class InventorySystem {
             enemy.applyStatusEffect('burn', 3.0);
           }
         }
-        this._createSparkBurst(particles, px, py);
+        createSparkBurst(this.game, particles, px, py);
         break;
       }
       case 'throwSteam': {
@@ -982,7 +1002,7 @@ export class InventorySystem {
             timer: cd.duration || 8.0
           });
         }
-        this._createExplosion(particles, px, py, 25, '#aaaaaa');
+        createBurstParticles(this.game, particles, px, py, 25, '#aaaaaa');
         break;
       }
       default: {
@@ -1026,52 +1046,6 @@ export class InventorySystem {
     }
   }
 
-  /**
-   * Create simple explosion particles
-   * @private
-   */
-  _createExplosion(particles, x, y, count, color) {
-    const chars = ['*', '+', 'x', '.', 'o'];
-    const hutPlane = !!this.game.activeFloor;
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 50 + Math.random() * 50;
-      particles.push({
-        x: x,
-        y: y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 0.5 + Math.random() * 0.5,
-        maxLife: 1.0,
-        char: chars[Math.floor(Math.random() * chars.length)],
-        color: color,
-        hutPlane
-      });
-    }
-  }
-
-  /**
-   * Create spark burst particles for firecracker effect
-   * @private
-   */
-  _createSparkBurst(particles, x, y) {
-    const hutPlane = !!this.game.activeFloor;
-    for (let i = 0; i < 12; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 80 + Math.random() * 120;
-      particles.push({
-        x: x + (Math.random() - 0.5) * 8,
-        y: y + (Math.random() - 0.5) * 8,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 0.2 + Math.random() * 0.2,
-        maxLife: 0.4,
-        char: Math.random() < 0.5 ? '*' : '.',
-        color: Math.random() < 0.6 ? '#ff8800' : '#ffff00',
-        hutPlane
-      });
-    }
-  }
 
   // ========== DEATH & BANKING MECHANICS ==========
 

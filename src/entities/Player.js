@@ -1,5 +1,7 @@
 import { PHYSICS, GRID, COLORS, PLAYER_STATS } from '../game/GameConfig.js';
 import { StatusEffectSystem } from '../systems/StatusEffectSystem.js';
+import { computePlayerPipRows } from '../systems/StatusEffectVisuals.js';
+import { PlayerDamageSystem } from '../systems/PlayerDamageSystem.js';
 
 const INVULNERABILITY_DURATION = 1.0;
 const BLINK_FREQUENCY = 0.1;
@@ -59,6 +61,8 @@ export class Player {
     this.activeSlotIndex = 0; // Currently selected slot (0-2)
     this.destroyedSlots = [false, false, false]; // Slots permanently disabled by wish use
     this.selectedConsumableIndex = -1; // armed consumable slot; -1 = weapon controls SPACE
+    this.seenTroughFillHint = false; // trough arm-slot hint (HutInteriorOverlay) shows once per run
+    this._troughHintShown = false; // transient: hint is mid-display this encounter — see HutInteriorOverlay
 
     // Magic meter — converted consumable slot(s) used as a mana gauge.
     // slots holds indices into equippedConsumables showing the mana fill.
@@ -78,6 +82,7 @@ export class Player {
     // inventory for every feature that read the wrong one.
     this.activeSappingBats = []; // Bats currently latched to this player (up to 3)
     this.hookedByMimic = null; // Enemy instance when mimic tongue has grabbed player
+    this.hookedByWhip = null; // {targetX, targetY} when a whip strike (hook post, Stump, or Tree) has grabbed player — see PhysicsSystem.updateEntity
     this.facing = { x: 0, y: 1 }; // Direction player is facing
 
     // Invulnerability frames
@@ -133,6 +138,11 @@ export class Player {
     this.burnTickTimer = 0;
     this.burnTickRate = 1.5; // deal damage every 1.5s
     this.burnDamage = 1;    // damage per tick
+
+    // Lava contact (PhysicsSystem.applyLiquidResults sets this every frame).
+    // Lava deals its own damage tick rather than the burn DOT above, but
+    // reads as "burning" for the status pip — see StatusEffectVisuals.js.
+    this.inDamagingLiquid = false;
 
     // Poison status (Plague Rat bite) — mirrors burn's shape exactly
     this.poisonDuration = 0;
@@ -371,8 +381,10 @@ export class Player {
       return;
     }
 
-    // Grabbed by boss head: lock movement but allow facing/attack input
-    if (this.grabbed) {
+    // Grabbed by boss head, or mid-flight on a whip pull (hook post/Stump/Tree —
+    // PhysicsSystem.updateEntity owns position for the duration): lock movement
+    // but allow facing/attack input
+    if (this.grabbed || this.hookedByWhip) {
       this.acceleration.ax = 0;
       this.acceleration.ay = 0;
       this.velocity.vx *= 0.75;
@@ -552,6 +564,12 @@ export class Player {
   }
 
   isDizzy() { return this.statusEffects.dizzy.active; }
+
+  // Stack-count pip rows for StatusPipEffects.js (see computePlayerPipRows —
+  // the enemy version of this indicator, extended to the player because the
+  // glyph blink alone doesn't surface burn/poison/wet/freeze the way it does
+  // for gooey/dizzy).
+  getStatusPipRows() { return computePlayerPipRows(this); }
 
   getStatusSpeedMultiplier() {
     if (this.isGooey()) return 1 - this.statusEffects.goo.slowAmount;
@@ -857,102 +875,10 @@ export class Player {
     }
   }
 
+  // Resolution logic (i-frames, dodge, resists, defense, reflect) lives in
+  // PlayerDamageSystem.applyDamage — see that file for why it was extracted.
   takeDamage(amount, damageSource = {}) {
-    // God mode — absorb all damage
-    if (this.godMode) {
-      return false;
-    }
-
-    // Can't take damage during invulnerability frames
-    if (this.invulnerabilityTimer > 0) {
-      // Active dodge roll: signal as a roll-dodge so call sites can show DODGE text
-      if (this.dodgeRoll.active && this.dodgeRoll.type !== 'whirlwind') {
-        return { dodged: true, roll: true };
-      }
-      return false;
-    }
-
-    const hpBefore = this.hp;
-
-    // Dodge check (all damage types). Two independent rolls so the floating-text
-    // call site can attribute "LUCKY DODGE" vs plain "DODGE". Luck rolls first
-    // so its prefix wins on overlap.
-    if (this.luckDodgeBonus > 0 && Math.random() < this.luckDodgeBonus) {
-      return { dodged: true, lucky: true };
-    }
-    if (this.dodgeChance > 0 && Math.random() < this.dodgeChance) {
-      return { dodged: true, lucky: false };
-    }
-
-    // Bullet resistance check (probabilistic block)
-    if (damageSource.isBullet && this.bulletResist > 0) {
-      if (Math.random() < this.bulletResist) {
-        return { blocked: true };
-      }
-    }
-
-    // Elemental immunity checks
-    if (damageSource.element) {
-      if (this.fireImmune && damageSource.element === 'burn') {
-        return { immune: true };
-      }
-      if (this.freezeImmune && damageSource.element === 'freeze') {
-        return { immune: true };
-      }
-      if (this.poisonImmune && damageSource.element === 'poison') {
-        return { immune: true };
-      }
-    }
-
-    // Apply defense (reduce damage, minimum 1)
-    const tempDefense = this.stoneSkinTimer > 0 ? this.stoneSkinBonus : 0;
-
-    // Melee resistance: flat damage absorption applied before final floor
-    const meleeAbsorb = damageSource.isMelee && this.meleeResist > 0
-      ? Math.floor(amount * this.meleeResist)
-      : 0;
-
-    // Burn resist: partial reduction of fire DoT when not fully immune
-    const burnAbsorb = damageSource.element === 'burn' && this.burnResist > 0
-      ? Math.floor(amount * this.burnResist)
-      : 0;
-
-    const actualDamage = Math.max(1, amount - this.defense - tempDefense - meleeAbsorb - burnAbsorb);
-
-    this.hp -= actualDamage;
-    if (this.hp < 0) this.hp = 0;
-
-    // Track last attacker for tombstone
-    if (damageSource.attacker) {
-      this._lastAttacker = damageSource.attacker;
-    }
-
-    // Start invulnerability frames. damageSource.iframeDuration lets a
-    // specific attacker grant a longer window than the default (e.g. the
-    // Sniper's armor-piercing beam/dagger — see SniperMechanic.consumeResult).
-    if (this.hp > 0) {
-      this.invulnerabilityTimer = damageSource.iframeDuration ?? this.invulnerabilityDuration;
-    }
-
-    // Bloom Mantle: a landed hit bursts a pollen smoke screen. Flag is consumed
-    // once per frame by main.js, which owns the steamClouds array and plane.
-    if (this.smokeOnHit) {
-      this.smokeBurstPending = true;
-    }
-
-    // Damage reflection
-    if (this.reflectDamage > 0 && damageSource.attacker) {
-      const reflectedAmount = Math.ceil(actualDamage * this.reflectDamage);
-      return this.hp <= 0 ? true : {
-        damaged: true,
-        actualDamage,
-        reflect: reflectedAmount,
-        attacker: damageSource.attacker
-      };
-    }
-
-    // Return true if dead, or a truthy value if damaged (for damage numbers)
-    return this.hp <= 0 ? true : { damaged: true, actualDamage };
+    return PlayerDamageSystem.applyDamage(this, amount, damageSource);
   }
 
   isInvulnerable() {
@@ -1111,6 +1037,8 @@ export class Player {
     this.activeSlotIndex = 0;
     this.destroyedSlots = [false, false, false];
     this.selectedConsumableIndex = -1;
+    this.seenTroughFillHint = false;
+    this._troughHintShown = false;
     // Ingredients are not reset here — the pile belongs to InventorySystem, and
     // a character swap deliberately keeps it (game over clears it instead).
     this.magicMeter = { active: false, slots: [], current: 0, max: 10, freeSlotGranted: false };
@@ -1213,6 +1141,7 @@ export class Player {
     // Reset sapping bats
     this.activeSappingBats = [];
     this.hookedByMimic = null;
+    this.hookedByWhip = null;
 
     // Reset character-specific state
     this.actionCooldown = 0;

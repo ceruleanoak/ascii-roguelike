@@ -239,6 +239,7 @@ export class NPCRat {
   }
 
   getDOTBlinkColor() { return null; }
+  getStatusPipRows() { return []; }
 
   // ─── Internals ──────────────────────────────────────────────────────────
 

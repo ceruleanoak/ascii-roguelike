@@ -25,7 +25,9 @@ import { drawPlayerFacingIndicator } from '../ui/PlayerFacingIndicator.js';
 import { drawSniperIndicators, drawSniperBeams, drawSniperReticules, sniperHidingConcealAlpha } from '../effects/SniperEffects.js';
 import { drawSinkholes } from '../effects/SinkholeEffects.js';
 import { drawWires } from '../effects/WireEffects.js';
+import { drawDonationArc, drawCoinArc, drawWellRitual } from '../effects/ArcTossEffects.js';
 import { renderBombEnemy } from '../effects/BombEffects.js';
+import { drawStatusPips } from '../effects/StatusPipEffects.js';
 import { drawTamedRats } from '../ui/CompanionRenderers.js';
 import { BRIDGE_MATERIALS } from '../../systems/RidgeSystem.js';
 import { PixelatedDissolve, SplitReveal } from '../effects/TextEffects.js';
@@ -562,7 +564,7 @@ export class ExploreRenderer {
 
     // ── Bridge donation arc ───────────────────────────────────────────────────
     const donAnim = game.ridgeSystem?.getDonationArc?.();
-    if (donAnim) this._renderDonationArc(donAnim);
+    if (donAnim) drawDonationArc(this.renderer, donAnim);
 
     // ── Fishing system render passes ──────────────────────────────────────────
     const fishingSystem = game.fishingSystem;
@@ -900,6 +902,11 @@ export class ExploreRenderer {
       );
     }
 
+    // Stack-count pips for the player's active status effects (wet, burn,
+    // poison, freeze, goo, dizzy) — same indicator as enemies get, see
+    // StatusEffectVisuals.computePlayerPipRows.
+    if (!playerInInterior) drawStatusPips(this.renderer, game.player);
+
     // Attack-direction indicator: small '^' orbiting tight around the player.
     if (!playerInInterior) drawPlayerFacingIndicator(this.renderer, game);
 
@@ -1075,17 +1082,19 @@ export class ExploreRenderer {
       game.grayZoneSystem?.renderMist(this.renderer.fgCtx, game);
     }
 
-    // Draw inventory overlay when Tab is held
-    if (game.keys.tab) {
-      this.renderController.inventoryOverlay.render(game);
-    }
-
     // Render the active interior overlay (picture-in-picture). Single dispatch
     // point — routes to hut/dungeon/maze (and future pond) by active kind.
     this.renderController.interiorOverlay.render(game);
 
+    // Draw inventory overlay when Tab is held — after the interior PiP so it
+    // isn't painted over by the PiP's full-canvas dim veil + opaque panel
+    // (drawInteriorFrame) when the player is inside a hut/dungeon/maze.
+    if (game.keys.tab) {
+      this.renderController.inventoryOverlay.render(game);
+    }
+
     // Well ritual: spinning coin arc + post-ritual screen flash
-    this._renderWellRitual(game);
+    drawWellRitual(this.renderer, game);
 
     // Pickup/notification message — drawn last so it sits above hut/maze overlays
     if (game.pickupMessage && game.pickupMessageTimer > 0) {
@@ -1102,82 +1111,6 @@ export class ExploreRenderer {
 
     // Render cheat menu overlay (if open)
     game.cheatMenu.render(this.renderer);
-  }
-
-  _renderDonationArc(anim) {
-    const ctx = this.renderer.fgCtx;
-    const dur = 0.55;
-    const peak = GRID.CELL_SIZE * 4;
-    const t = Math.min(1, anim.t / dur);
-    const x = anim.startX + (anim.endX - anim.startX) * t;
-    const arcLift = 4 * t * (1 - t);
-    const baseY = anim.startY + (anim.endY - anim.startY) * t;
-    const y = baseY - peak * arcLift;
-    const frames = [anim.char, 'O', '|', 'O'];
-    const frame = frames[Math.floor(anim.spinPhase) % frames.length];
-    ctx.save();
-    ctx.font = `${GRID.CELL_SIZE * 1.25}px 'Unifont', monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ccaa66';
-    ctx.shadowColor = '#aa8833';
-    ctx.shadowBlur = 6;
-    ctx.fillText(frame, x, y);
-    ctx.restore();
-  }
-
-  // Spinning Infused Coin in a north-peaked arc + the white flash that fires
-  // once the coin reaches the well center.
-  _renderWellRitual(game) {
-    const ctx = this.renderer.fgCtx;
-    const anim = game.wellCoinAnim;
-
-    if (anim) {
-      const dur = 0.55; // must match WellSystem.ARC_DURATION
-      const peak = GRID.CELL_SIZE * 4;
-      const t = Math.min(1, anim.t / dur);
-      const x = anim.startX + (anim.endX - anim.startX) * t;
-      // Parabolic arc peaking northward (negative y is up). 4t(1-t) hits 1 at t=0.5.
-      const arcLift = 4 * t * (1 - t);
-      const baseY = anim.startY + (anim.endY - anim.startY) * t;
-      const y = baseY - peak * arcLift;
-
-      // Spin frames + color depend on the offering type. Infused (¤) → warm gold;
-      // Lucky (★) → bright yellow with star frames; raw (c) → dull copper.
-      let frames, fillStyle, shadowColor;
-      if (anim.offeringType === 'lucky') {
-        frames = ['★', '✦', '|', '✦'];
-        fillStyle = '#ffff66';
-        shadowColor = '#ffdd33';
-      } else if (anim.offeringType === 'raw') {
-        frames = ['c', 'o', '|', 'o'];
-        fillStyle = '#cc9955';
-        shadowColor = '#aa6633';
-      } else {
-        frames = ['¤', 'O', '|', 'O'];
-        fillStyle = '#ffcc66';
-        shadowColor = '#ffaa33';
-      }
-      const frame = frames[Math.floor(anim.spinPhase) % frames.length];
-
-      ctx.save();
-      ctx.font = `${GRID.CELL_SIZE * 1.25}px 'Unifont', monospace`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = fillStyle;
-      ctx.shadowColor = shadowColor;
-      ctx.shadowBlur = 6;
-      ctx.fillText(frame, x, y);
-      ctx.restore();
-    }
-
-    if (game.wellFlashTimer > 0 && game.wellFlashDuration > 0) {
-      const alpha = (game.wellFlashTimer / game.wellFlashDuration) * 0.85;
-      ctx.save();
-      ctx.fillStyle = `rgba(255, 240, 200, ${alpha})`;
-      ctx.fillRect(0, 0, GRID.WIDTH, GRID.HEIGHT);
-      ctx.restore();
-    }
   }
 
   // Camp NPC rendering: idle/interested NPC in current room, hired companion,
@@ -1207,35 +1140,10 @@ export class ExploreRenderer {
 
     // Coin arc — north-peaked parabola from player → NPC, mirroring well ritual
     const anim = game.campNPCSystem?.getCoinAnim?.();
-    if (anim) this.drawCoinArc(anim);
+    if (anim) drawCoinArc(this.renderer, anim);
 
     // Camp NPC hints speak through the dialogue box (DialogueSystem), not
     // center-screen text — that style is reserved for the narrator voice.
-  }
-
-  // Spinning wallet-coin arc (player → recipient). Shared by the surface
-  // camp-NPC pass and the hut PiP (fisherman coin trade) — the PiP path works
-  // because fgCtx is already translated to interior coords when this runs.
-  drawCoinArc(anim) {
-    const ctx = this.renderer.fgCtx;
-    const dur = 0.55;
-    const peak = GRID.CELL_SIZE * 4;
-    const t = Math.min(1, anim.t / dur);
-    const x = anim.startX + (anim.endX - anim.startX) * t;
-    const arcLift = 4 * t * (1 - t);
-    const baseY = anim.startY + (anim.endY - anim.startY) * t;
-    const y = baseY - peak * arcLift;
-    const frames = ['c', 'O', '|', 'O'];
-    const frame = frames[Math.floor(anim.spinPhase) % frames.length];
-    ctx.save();
-    ctx.font = `${GRID.CELL_SIZE * 1.25}px 'Unifont', monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ffcc66';
-    ctx.shadowColor = '#ffaa33';
-    ctx.shadowBlur = 6;
-    ctx.fillText(frame, x, y);
-    ctx.restore();
   }
 
   _renderExitSplits(game, centerX, centerY) {
@@ -1567,6 +1475,10 @@ export class ExploreRenderer {
           displayColor
         );
       }
+
+      // Stack-count pips for active stackable status effects (burn, poison,
+      // drowse tiers, etc.) — rows stacked upward in application order.
+      drawStatusPips(this.renderer, enemy);
     }
 
     // Parry indicator (Duelist): show ']' above enemy when parry is active
@@ -2426,6 +2338,7 @@ export class ExploreRenderer {
           enemy.char,
           displayColor
         );
+        drawStatusPips(this.renderer, enemy);
       }
       // Sapping indicator (red * when latched to player; offset varies with bat count)
       const sappingIndicator = enemy.getSappingIndicator();

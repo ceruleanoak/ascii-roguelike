@@ -1,11 +1,12 @@
 import { GRID } from '../../game/GameConfig.js';
-import { isSpectaclesActive, spectaclesTransformString } from '../../data/cipher.js';
+import { isSpectaclesActive } from '../../data/cipher.js';
 import { drawInteriorFrame } from './interiorFrame.js';
 import {
   TORCH_LIGHT_RADIUS, TORCH_ALPHA_HIGH, TORCH_ALPHA_LOW,
   TORCH_PULSE_SPEED, TORCH_LIT_COLOR, TORCH_UNLIT_COLOR,
 } from '../../systems/MazeSystem.js';
 import { hasTorchLight, drawPlayerTorchLight } from './torchLight.js';
+import { drawStatusPips } from '../effects/StatusPipEffects.js';
 
 /**
  * MazeInteriorOverlay — picture-in-picture renderer for the Maze maze.
@@ -46,7 +47,7 @@ export class MazeInteriorOverlay {
     const ctx = this.renderer.fgCtx;
 
     // Shared PiP frame (no clip — maze walls already bound the content).
-    const { offsetY, panelH } = drawInteriorFrame(ctx, {
+    drawInteriorFrame(ctx, {
       gridCols: mi.gridCols,
       gridRows: mi.gridRows,
       panelColor: FLOOR_COLOR,
@@ -179,24 +180,12 @@ export class MazeInteriorOverlay {
       game.player.position.y + CS / 2,
       playerChar, playerColor, playerAlpha
     );
+    drawStatusPips(this.renderer, game.player);
 
     this.renderController.bowChargeIndicator.render(game);
     this.renderController.greenRangerIndicator.render(game);
 
     // ── Restore interior translate ────────────────────────────────────────
-    ctx.restore();
-
-    // ── 10. HUD (absolute canvas coords) ──────────────────────────────────
-    ctx.save();
-    ctx.font        = `${CS}px 'Unifont', monospace`;
-    ctx.textAlign   = 'center';
-    ctx.textBaseline = 'top';
-
-    // Label
-    ctx.textAlign  = 'center';
-    ctx.fillStyle  = '#7755aa';
-    ctx.fillText(spectaclesTransformString('[ MAZE ]', spectaclesOn), GRID.WIDTH / 2, offsetY + panelH - CS - 2);
-
     ctx.restore();
   }
 }

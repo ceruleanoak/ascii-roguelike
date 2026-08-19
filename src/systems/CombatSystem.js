@@ -10,8 +10,10 @@ import { ThiefMechanic } from '../entities/enemyMechanics/ThiefMechanic.js';
 import { queueDamageNumber as queueDamageNumberImpl, ageDamageTextQueue, reportDamageResult as reportDamageResultImpl } from './DamageNumberQueue.js';
 import { updateEnemyMeleeAttack, resolveEnemyAttack, attackHitsBox, retireAfterTest } from '../game/Telegraph.js';
 import { conductElectricity as conductElectricityImpl } from './ElectricConduction.js';
+import { checkProximity as checkProximityImpl, applyAOEStatus as applyAOEStatusImpl, createExplosion as createExplosionImpl } from './ExplosionEffects.js';
 import { acidFloodFillWater } from './AcidWaterSpread.js';
 import { TongueAttackSystem } from './TongueAttackSystem.js';
+import { applyExtraOnHitEffects, applyOnHitStatusEffect } from './ExtraOnHitEffects.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
 // room — keeps cross-room sniping in check while still feeling powerful.
@@ -657,7 +659,10 @@ export class CombatSystem {
 
           const critRoll = this._applyCritIfLucky(adjustedDamage, proj.owner, enemy);
           const finalDamage = critRoll.damage;
-          const damaged = enemy.takeDamage(finalDamage, proj.attackId);
+          // Told to takeDamage so its sleep-wake-on-damage rule doesn't clear
+          // stacks this same hit is about to (re)apply — see Enemy.js.
+          const reapplyingSleep = proj.onHit === 'sleep' || !!(proj.extraOnHit && proj.extraOnHit.includes('sleep'));
+          const damaged = enemy.takeDamage(finalDamage, proj.attackId, { reapplyingSleep });
           if (damaged !== false) {
             // Show damage number with color based on affinity (crit overrides color + scale)
             const damageColor = critRoll.isCrit ? '#ffff66' :
@@ -689,24 +694,17 @@ export class CombatSystem {
             if (proj.onHit && enemy.shouldApplyStatusEffect(projStatus)) {
               const baseDuration = 3.0;
               const modifiedDuration = baseDuration * elementalMod;
-
-              if (proj.onHit === 'freeze') {
-                // Freeze escalation: second ice hit while fully frozen → stun
-                if (enemy.isFrozen()) {
-                  enemy.applyStatusEffect('stun', 2.5 * elementalMod);
-                } else {
-                  const dur = enemy.data.freezePermanent ? Infinity : 8.0 * elementalMod;
-                  enemy.applyStatusEffect('freeze', dur);
-                  enemy.statusEffects.freeze.frozen = true;
-                }
-              } else {
-                enemy.applyStatusEffect(projStatus, modifiedDuration);
-              }
+              applyOnHitStatusEffect(enemy, projStatus, modifiedDuration, elementalMod);
               // Emit impact effect for visual feedback
               this.impactEffects.push({ x: enemy.position.x, y: enemy.position.y, onHit: proj.onHit, color: proj.color });
             } else if (proj.onHit && !enemy.shouldApplyStatusEffect(projStatus)) {
               this.createDamageNumber('RESIST', enemy.position.x, enemy.position.y - 12, '#888888');
             }
+
+            // Extra onHit effects from equipped oils beyond the primary (see
+            // Item.js's extraOnHit) — independent of the primary's own
+            // immunity outcome above, each extra gets its own elemental check.
+            applyExtraOnHitEffects(this, enemy, proj.extraOnHit, proj.color);
 
             // Apply knockback
             if (proj.knockback) {
@@ -843,6 +841,24 @@ export class CombatSystem {
                 this.createDamageNumber('!', obj.position.x, obj.position.y, '#aaaaaa');
                 continue;
               }
+            }
+
+            // Whip strikes on a Stump or Tree grab hold and reel the player in
+            // — the Whip Trial's hook-post pull, generalized to ordinary
+            // terrain once the player has learned the trick. Checked before
+            // the axe-only Tree gate and the general damage section below so
+            // a whip swing grabs on instead of thunking off (Tree) or
+            // chopping/harvesting (Stump); PhysicsSystem.updateEntity's
+            // hookedByWhip handling owns the actual traversal + i-frames,
+            // this only sets the target.
+            if (attack.weaponSubtype === 'whip' && (obj.char === 'Y' || obj.char === 'ŋ') && attack.owner) {
+              attack.owner.hookedByWhip = { targetX: obj.position.x, targetY: obj.position.y };
+              // Flash the grabbed object in the whip's own color — the
+              // interaction cue that this hit latched on rather than
+              // chopping/thunking (equipped whip variants each carry a
+              // distinct color; see items.js).
+              obj.flashColor(attack.color);
+              continue;
             }
 
             // Trees only fall to axes — blades, hammers, and the pickaxe (rocks
@@ -1061,7 +1077,10 @@ export class CombatSystem {
             // Melee hitboxes normally carry no burst id (undefined → iframes
             // block every follow-up), so only an explicitly-bursted pattern
             // like the doubleHit stab combo can land more than once per swing.
-            const damaged = enemy.takeDamage(finalDamage, attack.attackId);
+            // reapplyingSleep tells takeDamage its sleep-wake-on-damage rule
+            // shouldn't clear stacks this same hit is about to (re)apply.
+            const reapplyingSleep = attack.onHit === 'sleep' || !!(attack.extraOnHit && attack.extraOnHit.includes('sleep'));
+            const damaged = enemy.takeDamage(finalDamage, attack.attackId, { reapplyingSleep });
             if (damaged === true && attack.isBlade) enemy.killedByBlade = true;
             if (damaged !== false) {
               // Generic hit-landed signal — FlailSystem resets its spin ramp on this.
@@ -1101,24 +1120,20 @@ export class CombatSystem {
               const attackStatus = (attack.onHit === 'stun' && attack.electric) ? 'zap' : attack.onHit;
               if (attack.onHit && !acidOutOfCharges && enemy.shouldApplyStatusEffect(attackStatus)) {
                 const modifiedDuration = statusDuration * elementalMod;
-
-                if (attack.onHit === 'freeze') {
-                  // Freeze escalation: second ice hit while fully frozen → stun
-                  if (isFrozen) {
-                    enemy.applyStatusEffect('stun', 2.5 * elementalMod);
-                  } else {
-                    const dur = enemy.data.freezePermanent ? Infinity : 8.0 * elementalMod;
-                    enemy.applyStatusEffect('freeze', dur);
-                    enemy.statusEffects.freeze.frozen = true;
-                  }
-                } else {
-                  enemy.applyStatusEffect(attackStatus, modifiedDuration);
-                }
+                applyOnHitStatusEffect(enemy, attackStatus, modifiedDuration, elementalMod);
                 // Emit impact effect for visual feedback
                 this.impactEffects.push({ x: enemy.position.x, y: enemy.position.y, onHit: attack.onHit, color: attack.color });
               } else if (attack.onHit && !acidOutOfCharges && !enemy.shouldApplyStatusEffect(attackStatus)) {
                 this.createDamageNumber('RESIST', enemy.position.x, enemy.position.y - 12, '#888888');
               }
+
+              // Extra onHit effects from equipped oils beyond the primary (see
+              // Item.js's extraOnHit) — deliberately independent of both the
+              // primary's immunity outcome above and Acid Blade's charge gate
+              // (acidOutOfCharges): oils are a separate resource from Acid
+              // Blade's per-room charge counter, so running out of charges
+              // must not suppress an unrelated oil's effect.
+              applyExtraOnHitEffects(this, enemy, attack.extraOnHit, attack.color);
 
               // Whip disarm — the lash rips carried gear out of an armed
               // enemy's hands. Sets the same flag the electric jolt uses;
@@ -1317,6 +1332,10 @@ export class CombatSystem {
               if (proj.type === 'potion_projectile' && proj.potionEffect) {
                 if (proj.potionEffect === 'confusion') {
                   player.confusionTimer = (player.confusionTimer || 0) + 3.0;
+                } else if (proj.potionEffect === 'polymorph') {
+                  // Hag's curse — same generic entry point the stationary hut
+                  // Witch uses, cursed=true (deliberate hit, not accidental).
+                  this.game.polymorphSystem?.activatePolymorph(this.game, true);
                 } else {
                   player.applyStatusEffect?.(proj.potionEffect, 3.0);
                 }
@@ -1788,6 +1807,10 @@ export class CombatSystem {
   }
 
   checkMeleeCollisionWithObject(attack, obj) {
+    // Segment-gated fixtures (Whip Trial hook posts) only count a hit from
+    // the weapon's farthest reach segments — nearer segments miss outright.
+    if (obj.minAttackSegment && (attack.segmentIndex || 0) < obj.minAttackSegment) return false;
+
     const attackBox = {
       x: attack.position.x,
       y: attack.position.y,
@@ -2000,110 +2023,20 @@ export class CombatSystem {
     return this.chainArcs;
   }
 
-  // Check if at least one enemy is within proximity range
-  // position: player's center position
+  // Proximity check, AOE status application, and explosion damage/knockback
+  // — logic lives in ExplosionEffects.js (extracted for CombatSystem's size
+  // budget); these stay as public methods so existing callers (MagicSystem,
+  // etc.) are unaffected.
   checkProximity(position, proximityRange, enemies, sourcePlane = 0) {
-    for (const enemy of enemies) {
-      if (planeOf(enemy) !== sourcePlane) continue;
-
-      // Calculate enemy center position (enemy.position is top-left)
-      const enemyCenterX = enemy.position.x + (enemy.width || GRID.CELL_SIZE) / 2;
-      const enemyCenterY = enemy.position.y + (enemy.height || GRID.CELL_SIZE) / 2;
-
-      const dx = enemyCenterX - position.x;
-      const dy = enemyCenterY - position.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist <= proximityRange) {
-        return true; // At least one enemy in range
-      }
-    }
-    return false; // No enemies in range
+    return checkProximityImpl(position, proximityRange, enemies, sourcePlane);
   }
 
-  // Apply status effect to all enemies in radius
   applyAOEStatus(position, radius, statusType, duration, enemies, sourcePlane = 0) {
-    let affectedCount = 0;
-    for (const enemy of enemies) {
-      if (planeOf(enemy) !== sourcePlane) continue;
-
-      const dx = enemy.position.x - position.x;
-      const dy = enemy.position.y - position.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist <= radius) {
-        enemy.applyStatusEffect(statusType, duration);
-        affectedCount++;
-      }
-    }
-    return affectedCount;
+    return applyAOEStatusImpl(position, radius, statusType, duration, enemies, sourcePlane);
   }
 
   createExplosion(x, y, radius, damage, enemies, backgroundObjects = [], damageMin = 0, sourcePlane = 0) {
-    // Damage enemies in blast radius
-    // damageMin: minimum damage multiplier at edge (0 = full falloff, 0.25 = 25% damage at edge)
-    for (const enemy of enemies) {
-      if (planeOf(enemy) !== sourcePlane) continue;
-
-      const dx = enemy.position.x - x;
-      const dy = enemy.position.y - y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist <= radius) {
-        // Calculate damage falloff: ranges from 1.0 at center to damageMin at edge
-        const falloffRange = 1.0 - damageMin;
-        const damageFalloff = damageMin + falloffRange * (1 - dist / radius);
-        const explosionDamage = Math.ceil(damage * damageFalloff);
-
-        enemy.takeDamage(explosionDamage);
-        this.createDamageNumber(explosionDamage, enemy.position.x, enemy.position.y, '#ff8800');
-
-        // Knockback and hitstop from explosion center
-        if (dist > 0) {
-          this.physicsSystem.applyKnockback(enemy, x, y, 300 * damageFalloff);
-        }
-        this.physicsSystem.applyHitstop(enemy, 0.06);
-      }
-    }
-
-    // Affect background objects in blast radius
-    for (const obj of backgroundObjects) {
-      if (obj.destroyed || obj.isRecipeSign) continue; // Skip destroyed and recipe signs
-
-      const dx = obj.position.x - x;
-      const dy = obj.position.y - y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist <= radius) {
-        // Glittering rocks: explosions always destroy and drop gems
-        if (obj.data?.glitteringRock) {
-          const result = obj.takeDamage(9999);
-          if (result.effect) {
-            this.objectDestroyEvents.push({ obj, effect: result.effect });
-          }
-          continue;
-        }
-
-        const damageFalloff = 1 - (dist / radius);
-        const explosionDamage = Math.ceil(damage * damageFalloff);
-
-        // Ignite flammable objects (routed through FireSystem)
-        if (obj.isFlammable && obj.isFlammable()) {
-          this._ignite(obj);
-        }
-
-        // Damage destructible objects
-        if (!obj.indestructible && obj.hp !== null) {
-          const result = obj.takeDamage(explosionDamage);
-          if (result.effect) {
-            this.objectDestroyEvents.push({ obj, effect: result.effect });
-          }
-        }
-      }
-    }
-
-    // Create visual effect (you can enhance this later)
-    this.createDamageNumber('BOOM!', x, y, '#ff4400');
+    return createExplosionImpl(this, x, y, radius, damage, enemies, backgroundObjects, damageMin, sourcePlane);
   }
 
   createSplitProjectiles(originalProj) {

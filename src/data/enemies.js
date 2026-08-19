@@ -1944,6 +1944,51 @@ export const ENEMIES = {
     tier: 'normal'
   },
 
+  // Quagmire final-round outcome (RoundCombatSystem._spawnHag) — the "Hag
+  // keeps whatever wanders too far south" outcome the rescued Alchemist
+  // references. Copies the 'q' Alchemist's kiter+ranged-potion shape
+  // (kiter movement already reads as "roaming," ranged-potion mechanic
+  // already exists) rather than inventing new AI; only the potion table
+  // differs — one entry, a polymorph curse instead of an elemental debuff.
+  'Q': {
+    char: 'Q',
+    name: 'Hag',
+    description: 'Circles at range. Her potion doesn\'t burn or freeze — it curses.',
+    spellDescription: 'DON\'T LET THE CURSE LAND.',
+    hp: 6,
+    speed: 38,
+    acceleration: 260,
+    mass: 0.7,
+    damage: 2,
+    attackRange: GRID.CELL_SIZE * 6,
+    aggroRange: GRID.CELL_SIZE * 9,
+    attackCooldown: 2.4,     // Longer: the circle is the danger window
+    attackWindup: 1.2,
+    windupMovement: 'retreat',  // Backs away while holding the bottle — visible commit
+    attackType: 'ranged',
+    projectileType: 'potion',
+    movementStyle: 'kiter',
+    movementConfig: {
+      kiteDistance: GRID.CELL_SIZE * 5.5,   // One unit outside AOE radius
+      retreatThreshold: GRID.CELL_SIZE * 3.5,
+    },
+    decisionInterval: 0.4,
+    color: '#668833',
+    potionMechanic: {
+      enabled: true,
+      potionTable: [
+        { color: '#668833', effect: 'polymorph', label: 'curse' }
+      ],
+      aoeRadius: GRID.CELL_SIZE * 2.5,
+      dropLastThrown: true,     // On death: drops ingredient matching last thrown potion type
+    },
+    elementalAffinity: {
+      immunity: ['burn']
+    },
+    affinities: ['humanoid'],
+    tier: 'normal'
+  },
+
   'H': {
     char: 'H',
     name: 'Hex Witch',

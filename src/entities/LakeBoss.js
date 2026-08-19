@@ -1,4 +1,5 @@
 import { GRID } from '../game/GameConfig.js';
+import { isImmuneToEffect, getElementalModifierFor } from './elementalAffinity.js';
 
 export const LAKE_BOSS_MAX_HP  = 80;
 const ENRAGED_THRESHOLD        = 32;     // 40% — used only for color change
@@ -87,6 +88,16 @@ export class LakeBoss {
     };
     this.detectionIndicatorTimer = 0;
 
+    // Ice-affinity boss: immune to freeze, weak to burn. Data-driven so it reads the
+    // same as every other enemy's `elementalAffinity` (LakeBoss doesn't extend Enemy,
+    // but getElementalModifier/shouldApplyStatusEffect below route through the same
+    // shared rules via elementalAffinity.js).
+    this.elementalAffinity = {
+      immunity:   ['freeze'],
+      resistance: {},
+      weakness:   { burn: 2.0 }
+    };
+
     this._pickNewTarget();
   }
 
@@ -166,15 +177,11 @@ export class LakeBoss {
       height: 3 * cs,
     };
   }
-  // Ice-affinity boss: immune to ice-affinity effects (freeze), weak to fire-affinity (burn).
-  // Aligns with the EFFECT_AFFINITY model — accepts both effect names and affinity names.
   getElementalModifier(elementType) {
-    if (elementType === 'freeze' || elementType === 'ice')  return 0;    // immune
-    if (elementType === 'burn'   || elementType === 'fire') return 2.0;  // weak
-    return 1;
+    return getElementalModifierFor(this.elementalAffinity, null, elementType);
   }
   shouldApplyStatusEffect(effect) {
-    return effect !== 'freeze';
+    return !isImmuneToEffect(this.elementalAffinity, null, effect);
   }
   applyStatusEffect()     {}
   breakSapping()          {}

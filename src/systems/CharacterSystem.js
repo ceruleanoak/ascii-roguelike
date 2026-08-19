@@ -247,7 +247,7 @@ export class CharacterSystem {
     // Handle dodge rolling (continuous direction updates, supports diagonals and curving)
     // Disabled while Rusalka's charm is active or while polymorphed (frog form has no roll)
     const rusalkaActive = game.fishingSystem?.rusalka?.alive === true;
-    let dodgeDirection = (rusalkaActive || player.polymorphed || player.hookedByMimic) ? { x: 0, y: 0 } : game.getDodgeRollDirection();
+    let dodgeDirection = (rusalkaActive || player.polymorphed || player.hookedByMimic || player.hookedByWhip) ? { x: 0, y: 0 } : game.getDodgeRollDirection();
 
     // Shark Mask water dive/emerge — overrides standard dodge for ALL characters
     // (including Green Ranger continuous-roll). Edge detection on dodgeDirection
@@ -712,7 +712,7 @@ export class CharacterSystem {
     if (!game.keys.space || !game.attackSequenceActive || !weapon) return;
     if (weapon.data.weaponType === 'BOW' || weapon.data.weaponType === 'WAND' ||
         weapon.data.weaponType === 'UTILITY' || weapon.data.chargeHammer) return;
-    if (player.fishingLocked || game.menuOpen || game.bridgeMenuOpen || game.cheatMenu.isOpen) return;
+    if (player.fishingLocked || game.menuOpen || game.bridgeMenuOpen || game.errandSystem.isMenuOpen() || game.cheatMenu.isOpen) return;
 
     if (player.dodgeRoll.active) {
       player.dodgeRoll.queuedAttack = true;

@@ -17,6 +17,18 @@ export { inSamePlane };
 // size; only the collision box is inset.
 const DEFLECTOR_TRIANGLE_HITBOX_SCALE = 0.8;
 
+// entity.hookedByWhip traversal (px/sec) — a whip strike landing on a Stump,
+// Tree, or the Whip Trial's hook posts grabs on and reels the player in.
+// Originated as the Whip Trial's own WHIP_TRIAL_PULL_SPEED (DungeonPuzzleSystem);
+// moved here once CombatSystem grew a second trigger source (ordinary Stump/
+// Tree terrain) so every trigger shares one arrival/i-frame contract instead
+// of each reimplementing the traversal.
+const WHIP_PULL_SPEED = 280;
+// Momentum carried into normal movement on arrival (a "dash" continuation) —
+// half the pull speed, in the pull's final direction of travel; decays via
+// ordinary PHYSICS.FRICTION once hookedByWhip clears below.
+const WHIP_PULL_MOMENTUM_SPEED = WHIP_PULL_SPEED * 0.5;
+
 export class PhysicsSystem {
   constructor() {
     this.entities = [];
@@ -242,6 +254,53 @@ export class PhysicsSystem {
 
   updateEntity(entity, deltaTime, backgroundObjects = [], room = null, combatSystem = null) {
     if (!entity.position || !entity.velocity) return null;
+
+    // Whip-pull in progress: reel the entity toward the grabbed point,
+    // bypassing normal velocity integration entirely (same "external system
+    // owns position this frame" shape as carriedBySpear/pinnedDuration
+    // below). Trigger sites (DungeonPuzzleSystem's hook posts, CombatSystem's
+    // Stump/Tree whip hits) only ever set the target — arrival, cleanup, and
+    // the damage-immunity while airborne all live here so every trigger
+    // source behaves identically.
+    if (entity.hookedByWhip) {
+      const { targetX, targetY } = entity.hookedByWhip;
+      const dx = targetX - entity.position.x;
+      const dy = targetY - entity.position.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      // Re-armed every tick (rather than set once) so it can't lapse
+      // mid-pull regardless of frame ordering against a takeDamage call.
+      if (entity.invulnerabilityTimer !== undefined) {
+        entity.invulnerabilityTimer = Math.max(entity.invulnerabilityTimer, deltaTime + 0.05);
+      }
+      // Arrival is step-based (would this frame's move reach/pass the
+      // target?), not a fixed distance threshold — a threshold left the
+      // door open for a fast pull to overshoot past the target in one
+      // frame, landing within the threshold on the FAR side; dx/dy would
+      // then point backward (target minus an overshot position), handing
+      // the momentum dash below a reversed direction. Snapping as soon as
+      // the step would reach the target means dx/dy are always read while
+      // still approaching, so the direction can never flip.
+      const step = WHIP_PULL_SPEED * deltaTime;
+      if (dist <= step || dist < 0.001) {
+        entity.position.x = targetX;
+        entity.position.y = targetY;
+        entity.hookedByWhip = null;
+        // Carry a dash of momentum out of the pull instead of hard-stopping.
+        // Ordinary friction (below, once this early-return no longer
+        // applies) bleeds it off.
+        if (dist > 0.001) {
+          entity.velocity.vx = (dx / dist) * WHIP_PULL_MOMENTUM_SPEED;
+          entity.velocity.vy = (dy / dist) * WHIP_PULL_MOMENTUM_SPEED;
+        } else {
+          entity.velocity.vx = 0;
+          entity.velocity.vy = 0;
+        }
+      } else {
+        entity.position.x += (dx / dist) * step;
+        entity.position.y += (dy / dist) * step;
+      }
+      return null;
+    }
 
     // Hitstop: freeze position integration, tick timer
     if (entity.hitstopTimer > 0) {
@@ -506,6 +565,12 @@ export class PhysicsSystem {
     // don't block movement/others (e.g. Debris) still get pushed out of walls
     // instead of drifting through them — resolveCollisionMapOverlap already
     // no-ops without a collisionMap, so this only widens who gets ejected.
+    //
+    // No hookedByWhip guard needed here: a whip-pull in progress returns out
+    // of updateEntity entirely at the top of the function (it needs to drag
+    // the player straight through an impassable collisionMap gap band, e.g.
+    // the Whip Trial's pit, by direct position mutation), so this line never
+    // runs mid-pull in the first place.
     if (!isProjectile && entity.collisionMap) {
       this.resolveCollisionMapOverlap(entity, room);
     }
@@ -1299,9 +1364,11 @@ export class PhysicsSystem {
   applyLiquidResults(deltaTime, waterResults, game) {
     let lavaKilledPlayer = false;
 
-    // Reset per-frame liquid flags before processing
+    // Reset per-frame liquid flags before processing. inDamagingLiquid is
+    // reset per-entity below (every player/enemy gets exactly one waterResults
+    // entry per frame, so setting it there doubles as the reset for entities
+    // that left lava this frame).
     game.player.inLiquid = false;
-    game.player.inDamagingLiquid = false;
     for (const ingredient of game.ingredients) {
       ingredient.inWater = false;
     }
@@ -1341,9 +1408,12 @@ export class PhysicsSystem {
         // Lava-immune enemies (e.g. Tortoise) survive lava but track their state for behavior changes
         if (entity.data?.lavaImmune) {
           entity.inLava = true;
+          entity.inDamagingLiquid = false; // immune — not actually taking damage, no burn pip
           continue;
         }
-        if (entity === game.player) game.player.inDamagingLiquid = true;
+        // Lava contact reads as "burning" for the status pip (StatusEffectVisuals.js)
+        // even though the damage below is lava's own tick, not the burn DOT.
+        entity.inDamagingLiquid = true;
         // Apply lava damage (not affected by water immunity)
         if (entity.takeDamage) {
           // Initialize lava damage timer if needed
@@ -1356,34 +1426,34 @@ export class PhysicsSystem {
           if (entity.lavaDamageTimer <= 0) {
             const damageResult = entity.takeDamage(damagingLiquid.damage);
 
-            // Only create visual feedback if damage was actually dealt
-            if (entity === game.player) {
-              if (damageResult === true) {
-                // Player died from lava
-                lavaKilledPlayer = true;
-                game.combatSystem.createDamageNumber(
-                  damagingLiquid.damage,
-                  entity.position.x,
-                  entity.position.y,
-                  '#ff4400'
-                );
-                entity.hitFlashTimer = 0.15;
-              } else if (damageResult && damageResult.damaged) {
-                // Damage was dealt successfully
-                game.combatSystem.createDamageNumber(
-                  damagingLiquid.damage,
-                  entity.position.x,
-                  entity.position.y,
-                  '#ff4400'
-                );
-                entity.hitFlashTimer = 0.15;
-              } else if (damageResult && damageResult.dodged) {
-                game.combatSystem.createDamageNumber('DODGE', entity.position.x, entity.position.y, '#ffff00');
-              } else if (damageResult && damageResult.immune) {
-                game.combatSystem.createDamageNumber('IMMUNE', entity.position.x, entity.position.y, '#00ffff');
-              } else if (damageResult === false) {
-                // Blocked by invulnerability frames - no visual feedback
-              }
+            // Visual feedback for whichever entity took the hit — player or
+            // enemy (enemies used to take lava damage silently, no damage
+            // number and no hit flash).
+            if (damageResult === true) {
+              // Lethal hit
+              if (entity === game.player) lavaKilledPlayer = true;
+              game.combatSystem.createDamageNumber(
+                damagingLiquid.damage,
+                entity.position.x,
+                entity.position.y,
+                '#ff4400'
+              );
+              entity.hitFlashTimer = 0.15;
+            } else if (damageResult && damageResult.damaged) {
+              // Damage was dealt successfully
+              game.combatSystem.createDamageNumber(
+                damagingLiquid.damage,
+                entity.position.x,
+                entity.position.y,
+                '#ff4400'
+              );
+              entity.hitFlashTimer = 0.15;
+            } else if (damageResult && damageResult.dodged) {
+              game.combatSystem.createDamageNumber('DODGE', entity.position.x, entity.position.y, '#ffff00');
+            } else if (damageResult && damageResult.immune) {
+              game.combatSystem.createDamageNumber('IMMUNE', entity.position.x, entity.position.y, '#00ffff');
+            } else if (damageResult === false) {
+              // Blocked by invulnerability frames - no visual feedback
             }
 
             // Reset timer for next damage tick (1 second interval)
@@ -1392,6 +1462,8 @@ export class PhysicsSystem {
         }
         // Lava doesn't apply water effects - skip rest of loop
         continue;
+      } else {
+        entity.inDamagingLiquid = false; // left lava (or was never in it) this frame
       }
 
       // Hot spring (Red Zone caldera): slow passive heal for the player only.
@@ -1426,6 +1498,13 @@ export class PhysicsSystem {
       // Apply wet status (6s; Math.max in applyWet/applyStatusEffect refreshes while in water)
       if (!isImmune) {
         if (entity.applyWet) {
+          // Getting wet washes any equipped Oil augment off the weapon it's
+          // coating. Gate on the pre-applyWet dry state so this only fires on
+          // the dry→wet transition, not every frame the player lingers in
+          // water (the oil is already gone by the second frame).
+          if (entity === game.player && !entity.isWet()) {
+            game.inventorySystem.destroyWetOils(entity);
+          }
           entity.applyWet(6.0); // Player
           entity.burnDuration = 0;  // Water extinguishes burn
         } else if (entity.applyStatusEffect) {

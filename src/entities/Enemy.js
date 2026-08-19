@@ -1,18 +1,6 @@
 import { GRID, COLORS, PHYSICS } from '../game/GameConfig.js';
 import { ENEMIES, resolveHitSfx } from '../data/enemies.js';
-
-// Effect → affinity mapping. An effect with a mapped affinity is auto-immuned when the
-// receiving enemy's `data.affinities` includes that affinity (no explicit immunity needed).
-// Effects without an entry here are affinity-less (stun, sleep, charm, dizzy, blind, knockback)
-// and can only be blocked by an explicit `elementalAffinity.immunity` entry.
-export const EFFECT_AFFINITY = {
-  burn:   'fire',
-  freeze: 'ice',
-  zap:    'electric',
-  poison: 'venom',
-  wet:    'aquatic',
-  goo:    'goo',
-};
+import { isImmuneToEffect, getElementalModifierFor } from './elementalAffinity.js';
 import { Item } from './Item.js';
 import { attachTelegraph, meleeAimOffset } from '../game/Telegraph.js';
 import { inSamePlane, planeOf, objectOnPlane } from '../systems/PlaneSystem.js';
@@ -47,6 +35,12 @@ import { RipenMechanic } from './enemyMechanics/RipenMechanic.js';
 import { ThiefMechanic } from './enemyMechanics/ThiefMechanic.js';
 import { EnemyStateMachine, legacyStateFor } from './EnemyStateMachine.js';
 import { statesFor } from '../data/stateDefaults.js';
+import { computeBlinkColor, computePipRows } from '../systems/StatusEffectVisuals.js';
+import {
+  applyStatusEffect as applyStatusEffectImpl,
+  clearEffectOrder as clearEffectOrderImpl,
+  updateStatusEffects as updateStatusEffectsImpl
+} from '../systems/EnemyStatusEffects.js';
 
 // ─── Enemy AI Debug Logger ─────────────────────────────────────────────────
 // Toggle in browser console: window.ENEMY_AI_DEBUG = true
@@ -70,7 +64,6 @@ const EnemyDebug = {
 
 const ENEMY_INVULNERABILITY_DURATION = 0.3; // seconds
 const ENEMY_BLINK_FREQUENCY = 0.05; // blink every 0.05 seconds
-const DOT_BLINK_FREQUENCY = 0.2; // DOT blink every 0.2 seconds (slower than i-frames)
 
 export class Enemy {
   constructor(char, x, y, depth = 0, dataOverride = null) {
@@ -207,21 +200,39 @@ export class Enemy {
 
     // Status effects
     this.statusEffects = {
-      burn: { active: false, duration: 5, damage: 1, tickRate: 1.25, tickTimer: 0 }, // ~4 ticks of 1 over 5s — short, punchy, readable
-      poison: { active: false, duration: 0, damage: 1, tickRate: 3.0, tickTimer: 0 },
-      freeze: { active: false, duration: 0, slowAmount: 0.5, frozen: false, shuddering: false },
-      stun: { active: false, duration: 0 },
-      zap: { active: false, duration: 0 }, // electric-affinity stun; renders with rapid shake
-      sleep: { active: false, duration: 0 },
-      charm: { active: false, duration: 0 },
-      wet: { active: false, duration: 0 },
+      // `stacks` (capped at 3, see EnemyStatusEffects.js's MAX_STACKUP) counts
+      // how many times each of these 9 blink-capable effects has been freshly
+      // applied while still active — generic across every effect and every
+      // source (weapon, oil, any future onHit), not special-cased per effect
+      // name. Drives blink speed uniformly; poison and sleep layer additional
+      // stack-driven behavior (tick-rate scaling, tier escalation) elsewhere.
+      // knockback/blind/goo aren't blink-capable and don't track stacks.
+      burn: { active: false, duration: 5, damage: 1, tickRate: 1.25, tickTimer: 0, stacks: 0 }, // ~4 ticks of 1 over 5s — short, punchy, readable
+      poison: { active: false, duration: 0, damage: 1, tickRate: 3.0, tickTimer: 0, stacks: 0 },
+      freeze: { active: false, duration: 0, slowAmount: 0.5, frozen: false, shuddering: false, stacks: 0 },
+      stun: { active: false, duration: 0, stacks: 0 },
+      zap: { active: false, duration: 0, stacks: 0 }, // electric-affinity stun; renders with rapid shake
+      sleep: { active: false, duration: 0, stacks: 0 },
+      charm: { active: false, duration: 0, stacks: 0 },
+      wet: { active: false, duration: 0, stacks: 0 },
       knockback: { active: false, duration: 0 },
       blind: { active: false, duration: 0 }, // Attacks miss (0 damage)
-      dizzy: { active: false, duration: 0 },
+      dizzy: { active: false, duration: 0, stacks: 0 },
       goo: { active: false, duration: 0, slowAmount: 0.8 }
     };
 
-    // Venom Blade stack counter — resets when poison wears off
+    // Ordered list of currently-active blink-capable effect names, in the
+    // order they most recently transitioned inactive→active. Drives the
+    // round-robin blink color and stack-pip rows (StatusEffectVisuals.js) —
+    // read side re-filters by .active live, so a bypass that flips `.active`
+    // directly (e.g. PhysicsSystem.js's water-extinguishes-burn) can't leak
+    // a stale entry into what's actually shown.
+    this.effectApplicationOrder = [];
+
+    // Venom Blade stack counter — resets when poison wears off. Deliberately
+    // separate from statusEffects.poison.stacks above: this is a
+    // weapon-specific 3-hit burst-damage bonus (see CombatSystem.js), not the
+    // generic tick-rate/blink stacking every effect now has.
     this.poisonStackCount = 0;
 
     // Trident pin duration (seconds); non-zero = pinned to a wall/object
@@ -341,6 +352,11 @@ export class Enemy {
     // Lava state tracking (for lava-immune enemies that change behavior in lava)
     this.inLava = false;
 
+    // Lava contact for non-immune enemies (PhysicsSystem.applyLiquidResults
+    // sets this every frame). Lava deals its own damage tick rather than the
+    // burn DOT, but reads as "burning" for the status pip — StatusEffectVisuals.js.
+    this.inDamagingLiquid = false;
+
     if (PackBehaviorMechanic.isEnabled(this)) PackBehaviorMechanic.init(this);
 
     if (JumpMechanic.isEnabled(this)) JumpMechanic.init(this);
@@ -437,7 +453,7 @@ export class Enemy {
     this.target = target;
   }
 
-  // Immunity model:
+  // Immunity model (see elementalAffinity.js for the actual rules):
   //   - Explicit `elementalAffinity.immunity: [effect, ...]` blocks specific effects by name.
   //   - Affinity auto-immunity: if the effect maps to an affinity (EFFECT_AFFINITY) and the
   //     enemy's `data.affinities` includes that affinity, the effect is blocked. This way a
@@ -445,168 +461,34 @@ export class Enemy {
   //     no per-effect data needed.
   //   - Resistance/weakness lookup is keyed by effect name (not affinity).
   _isImmuneToEffect(effect) {
-    if (!effect) return false;
-    if (this.elementalAffinity?.immunity?.includes(effect)) return true;
-    const affinity = EFFECT_AFFINITY[effect];
-    if (affinity && this.data?.affinities?.includes(affinity)) return true;
-    return false;
+    return isImmuneToEffect(this.elementalAffinity, this.data?.affinities, effect);
   }
 
   getElementalModifier(elementType) {
-    if (!elementType) return 1.0;
-    if (this._isImmuneToEffect(elementType)) return 0.0;
-    if (!this.elementalAffinity) return 1.0;
-    if (this.elementalAffinity.resistance?.[elementType] !== undefined) {
-      return this.elementalAffinity.resistance[elementType];
-    }
-    if (this.elementalAffinity.weakness?.[elementType] !== undefined) {
-      return this.elementalAffinity.weakness[elementType];
-    }
-    return 1.0;
+    return getElementalModifierFor(this.elementalAffinity, this.data?.affinities, elementType);
   }
 
   shouldApplyStatusEffect(effect) {
     return !this._isImmuneToEffect(effect);
   }
 
+  // Activation + generic stack increment; ticking/expiry lives alongside it
+  // in EnemyStatusEffects.js (write side of statusEffects — the read side,
+  // blink color and stack pips, is StatusEffectVisuals.js). Kept as a thin
+  // delegating method so every existing `enemy.applyStatusEffect(...)` call
+  // site across the codebase is unaffected.
   applyStatusEffect(effect, duration = 3.0) {
-    if (!this.statusEffects[effect]) return;
+    applyStatusEffectImpl(this, effect, duration);
+  }
 
-    this.statusEffects[effect].active = true;
-    this.statusEffects[effect].duration = Math.max(this.statusEffects[effect].duration, duration);
-    if (this.statusEffects[effect].tickTimer !== undefined) {
-      this.statusEffects[effect].tickTimer = this.statusEffects[effect].tickRate;
-    }
-
-    // Electric shock jolts carried items loose. 'zap' is the electric effect;
-    // 'stun' kept for legacy stun-source parity (this hook predates zap).
-    if ((effect === 'stun' || effect === 'zap') && this.itemUsage && this.inventory.length > 0) {
-      this.shouldDropItems = true;
-    }
+  // Removes an effect from the round-robin blink/pip order. See
+  // EnemyStatusEffects.js's clearEffectOrder for the full explanation.
+  _clearEffectOrder(effect) {
+    clearEffectOrderImpl(this, effect);
   }
 
   updateStatusEffects(deltaTime) {
-    const damageEvents = []; // Track DOT damage for damage numbers
-
-    // DoT effects: burn, poison
-    for (const effect of ['burn', 'poison']) {
-      const status = this.statusEffects[effect];
-      if (!status.active) continue;
-
-      status.duration -= deltaTime;
-      status.tickTimer -= deltaTime;
-
-      if (status.tickTimer <= 0) {
-        // Apply DoT damage (bypasses invulnerability, minimum 1)
-        const actualDamage = Math.max(1, Math.ceil(status.damage));
-        this.hp -= actualDamage;
-        if (this.hp < 0) this.hp = 0;
-        status.tickTimer = status.tickRate;
-
-        // Record damage event for damage number
-        damageEvents.push({
-          damage: actualDamage,
-          effect: effect
-        });
-      }
-
-      if (status.duration <= 0) {
-        status.active = false;
-        status.duration = 0;
-        if (effect === 'poison') this.poisonStackCount = 0;
-      }
-    }
-
-    // Freeze effect (slow or full immobilization)
-    const freeze = this.statusEffects.freeze;
-    if (freeze.active) {
-      // Permanent freeze (slime-type enemies): don't tick down
-      if (!(freeze.frozen && this.data.freezePermanent)) {
-        freeze.duration -= deltaTime;
-      }
-      // Shudder phase: last 0.6s before breaking free from full freeze
-      if (freeze.frozen && !this.data.freezePermanent && freeze.duration < 0.6) {
-        freeze.shuddering = true;
-      }
-      if (freeze.duration <= 0) {
-        freeze.active = false;
-        freeze.duration = 0;
-        freeze.slowAmount = 0.5;
-        freeze.frozen = false;
-        freeze.shuddering = false;
-      }
-    }
-
-    // Stun + Zap (both disable movement and attacks; zap is the electric-affinity variant
-    // with a rapid-shake visual). Tick down identically.
-    for (const key of ['stun', 'zap']) {
-      const s = this.statusEffects[key];
-      if (s.active) {
-        s.duration -= deltaTime;
-        if (s.duration <= 0) { s.active = false; s.duration = 0; }
-      }
-    }
-
-    // Sleep effect (like stun but breaks on damage)
-    const sleep = this.statusEffects.sleep;
-    if (sleep.active) {
-      sleep.duration -= deltaTime;
-      if (sleep.duration <= 0) {
-        sleep.active = false;
-        sleep.duration = 0;
-      }
-    }
-
-    // Charm effect (enemy redirects to fight other enemies)
-    const charm = this.statusEffects.charm;
-    if (charm.active) {
-      charm.duration -= deltaTime;
-      if (charm.duration <= 0) {
-        charm.active = false;
-        charm.duration = 0;
-      }
-    }
-
-    // Wet (vulnerability modifier - not a DoT)
-    const wet = this.statusEffects.wet;
-    if (wet.active) {
-      wet.duration -= deltaTime;
-      if (wet.duration <= 0) { wet.active = false; wet.duration = 0; }
-    }
-
-    // Knockback effect (prevents AI from overriding velocity)
-    const knockback = this.statusEffects.knockback;
-    if (knockback.active) {
-      knockback.duration -= deltaTime;
-      if (knockback.duration <= 0) {
-        knockback.active = false;
-        knockback.duration = 0;
-      }
-    }
-
-    // Blind effect (prevents attacks)
-    const blind = this.statusEffects.blind;
-    if (blind.active) {
-      blind.duration -= deltaTime;
-      if (blind.duration <= 0) {
-        blind.active = false;
-        blind.duration = 0;
-      }
-    }
-
-    const dizzy = this.statusEffects.dizzy;
-    if (dizzy.active) {
-      dizzy.duration -= deltaTime;
-      if (dizzy.duration <= 0) { dizzy.active = false; dizzy.duration = 0; }
-    }
-
-    const goo = this.statusEffects.goo;
-    if (goo.active) {
-      goo.duration -= deltaTime;
-      if (goo.duration <= 0) { goo.active = false; goo.duration = 0; }
-    }
-
-    return damageEvents;
+    return updateStatusEffectsImpl(this, deltaTime);
   }
 
   isStunned() {
@@ -626,6 +508,11 @@ export class Enemy {
   isWet() { return this.statusEffects.wet.active; }
 
   isSleeping() { return this.statusEffects.sleep.active; }
+
+  // Drowse tiers: 1 stack = mild slow, 2 = severe slow (both still moving —
+  // see getSpeedMultiplier), 3 = fully asleep (AI halted). Only tier 3 halts
+  // the AI; isSleeping() above stays "any tier" for API parity.
+  isFullyAsleep() { return this.statusEffects.sleep.active && this.statusEffects.sleep.stacks >= 3; }
 
   isCharmed() { return this.statusEffects.charm.active; }
 
@@ -651,6 +538,9 @@ export class Enemy {
     if (this.statusEffects.freeze.active) m = 1 - this.statusEffects.freeze.slowAmount;
     else if (this.isGooey()) m = 1 - this.statusEffects.goo.slowAmount;
     else if (this.isDizzy()) m = 0.35;
+    // Drowse tiers 1-2 slow instead of halting (tier 3 already returns 0 via
+    // isFullyAsleep() short-circuiting the AI before this is even called).
+    else if (this.isSleeping()) m = this.statusEffects.sleep.stacks >= 2 ? 0.25 : 0.6;
     // Rally boost: scale chase target velocity so _blendVelocity converges cleanly.
     // (Earlier impl multiplied raw velocity post-blend, which compounded each frame
     // against any large velocity impulse — e.g. the melee leap — into a runaway.)
@@ -837,8 +727,10 @@ export class Enemy {
       }
     }
 
-    // Sleep overrides all AI (like stun, but breaks on damage — see takeDamage)
-    if (this.isSleeping()) {
+    // Full sleep (tier 3) overrides all AI (like stun, but breaks on damage —
+    // see takeDamage). Tiers 1-2 fall through to normal AI and are handled as
+    // a plain speed slow instead (getSpeedMultiplier).
+    if (this.isFullyAsleep()) {
       this.targetVelocity.vx = 0;
       this.targetVelocity.vy = 0;
       this.state = 'idle';
@@ -1629,10 +1521,24 @@ export class Enemy {
       return false;
     }
 
-    // Sap attacks can start when within range, not already sapping, and target has room for another bat
+    // Sap attacks can start when within range, not already sapping, and target has room for another bat.
+    // Strike is `committed: true` (enemyStates/strike.js), so nothing rechecks distance between the
+    // windup starting and this firing — without an explicit gate here, a bat that committed at point-blank
+    // still latches on even if the player sprinted clear across the room during the windup, because
+    // createSapAttack() doesn't spawn a hitbox the player has to be under (unlike melee/tongue, whose
+    // range is naturally enforced by their attack landing in a box near the enemy) — it just grabs
+    // `this.target` and teleports onto it. Re-checking real distance at this state change is the fix:
+    // out of range here means the strike whiffs instead of guaranteeing a hit no matter where the
+    // player ran.
     if (this.attackType === 'sap') {
       const targetFull = (this.target?.activeSappingBats?.length ?? 0) >= 3;
-      return !this.sapping && !targetFull && this.state === 'attack' && this.attackTimer <= 0 && this.windupTimer <= 0;
+      let inRange = true;
+      if (this.target) {
+        const dx = this.target.position.x - this.position.x;
+        const dy = this.target.position.y - this.position.y;
+        inRange = (dx * dx + dy * dy) <= (this.attackRange * this.attackRange);
+      }
+      return !this.sapping && !targetFull && inRange && this.state === 'attack' && this.attackTimer <= 0 && this.windupTimer <= 0;
     }
     // Can only attack after windup completes
     return this.state === 'attack' && this.attackTimer <= 0 && this.windupTimer <= 0;
@@ -2211,7 +2117,7 @@ export class Enemy {
     return null; // No attack object created - damage dealt in update()
   }
 
-  takeDamage(amount, attackId = null) {
+  takeDamage(amount, attackId = null, opts = {}) {
     // Training dummy: indestructible, but still runs the hit SFX/blink pipeline below.
     if (this.data?.isDummy) amount = 0;
 
@@ -2258,10 +2164,17 @@ export class Enemy {
       ThiefMechanic.onDamaged(this);
     }
 
-    // Sleep breaks on damage
-    if (this.statusEffects.sleep && this.statusEffects.sleep.active) {
+    // Sleep breaks on damage — full reset, not a tier step-down. Skipped when
+    // this same hit's onHit/extraOnHit is about to reapply sleep this frame
+    // (opts.reapplyingSleep, set by CombatSystem from attack.onHit/extraOnHit
+    // before calling takeDamage) — otherwise this wake-clear fires first every
+    // time (takeDamage always runs before the onHit block), capping Drowse
+    // Oil's stacks at 1 no matter how many consecutive hits land.
+    if (this.statusEffects.sleep && this.statusEffects.sleep.active && !opts.reapplyingSleep) {
       this.statusEffects.sleep.active = false;
       this.statusEffects.sleep.duration = 0;
+      this.statusEffects.sleep.stacks = 0;
+      this._clearEffectOrder('sleep');
     }
 
     // Sapping breaks on damage - enemy gets knocked away
@@ -2367,72 +2280,19 @@ export class Enemy {
     return Math.min(2.5, Math.max(1, Math.sqrt(hp / 2)));
   }
 
+  // Round-robins the glyph blink color across every currently-active
+  // blink-capable effect (burn/poison/zap/stun/sleep/charm/freeze/wet/dizzy)
+  // instead of a fixed priority chain — so e.g. Acid Blade poison and Drowse
+  // Oil sleep landing on the same swing both get visible time, not just
+  // whichever came first. See StatusEffectVisuals.js for the implementation.
   getDOTBlinkColor() {
-    // DOT effect colors (priority order: burn > poison)
-    const DOT_COLORS = {
-      burn: '#ff4400',
-      poison: '#88ff00'
-    };
+    return computeBlinkColor(this);
+  }
 
-    // Find first active DOT effect
-    for (const effect of ['burn', 'poison']) {
-      if (this.statusEffects[effect].active) {
-        // Blink between base color and DOT color
-        const blinkCycle = Math.floor(this.dotBlinkTimer / DOT_BLINK_FREQUENCY);
-        return blinkCycle % 2 === 0 ? DOT_COLORS[effect] : this.baseColor;
-      }
-    }
-
-    // Zap blink (cyan-electric) — checked before stun so the electric variant wins when both are active
-    if (this.statusEffects.zap && this.statusEffects.zap.active) {
-      const blinkCycle = Math.floor(this.dotBlinkTimer / DOT_BLINK_FREQUENCY);
-      return blinkCycle % 2 === 0 ? '#00ffff' : this.baseColor;
-    }
-
-    // Stun blink (yellow) — shows when stunned and no DoT active
-    if (this.statusEffects.stun && this.statusEffects.stun.active) {
-      const blinkCycle = Math.floor(this.dotBlinkTimer / DOT_BLINK_FREQUENCY);
-      return blinkCycle % 2 === 0 ? '#ffff00' : this.baseColor;
-    }
-
-    // Sleep blink (purple)
-    if (this.statusEffects.sleep && this.statusEffects.sleep.active) {
-      const blinkCycle = Math.floor(this.dotBlinkTimer / DOT_BLINK_FREQUENCY);
-      return blinkCycle % 2 === 0 ? '#9944ff' : this.baseColor;
-    }
-
-    // Charm blink (pink)
-    if (this.statusEffects.charm && this.statusEffects.charm.active) {
-      const blinkCycle = Math.floor(this.dotBlinkTimer / DOT_BLINK_FREQUENCY);
-      return blinkCycle % 2 === 0 ? '#ff44ff' : this.baseColor;
-    }
-
-    // Freeze visual
-    if (this.statusEffects.freeze && this.statusEffects.freeze.active) {
-      if (this.statusEffects.freeze.frozen) {
-        if (this.statusEffects.freeze.shuddering) {
-          // Rapid shudder flash between ice-white and ice-blue before breaking free
-          const shudderCycle = Math.floor(this.dotBlinkTimer / 0.06);
-          return shudderCycle % 2 === 0 ? '#ffffff' : '#aaffff';
-        }
-        return '#aaffff'; // Solid ice color — fully locked
-      }
-      // Puddle/slime slow: subtle cyan blink
-      const blinkCycle = Math.floor(this.dotBlinkTimer / DOT_BLINK_FREQUENCY);
-      return blinkCycle % 2 === 0 ? '#00ffff' : this.baseColor;
-    }
-
-    // Wet blink (blue, lowest priority - only shows when no DoT or stun active)
-    if (this.statusEffects.wet && this.statusEffects.wet.active) {
-      const blinkCycle = Math.floor(this.dotBlinkTimer / DOT_BLINK_FREQUENCY);
-      return blinkCycle % 2 === 0 ? '#4488ff' : this.baseColor;
-    }
-    // Dizzy blink (gold)
-    if (this.statusEffects.dizzy?.active) {
-      const blinkCycle = Math.floor(this.dotBlinkTimer / DOT_BLINK_FREQUENCY);
-      return blinkCycle % 2 === 0 ? '#ddbb00' : this.baseColor;
-    }
-    return null; // No active DOT
+  // Stack-count pip rows for on-glyph display (StatusPipEffects.js) — one row
+  // per active effect with stacks >= 1, in application order.
+  getStatusPipRows() {
+    return computePipRows(this);
   }
 
   isWindingUp() {

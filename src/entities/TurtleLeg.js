@@ -35,6 +35,14 @@ export class TurtleLeg extends Enemy {
 
     // Set by BossSystem after construction
     this.shellRef = null;
+
+    // Fire-affinity via LEG_DATA.affinities already auto-immunes burn; wet weakness
+    // needs its own entry since it doesn't map from any affinity this leg carries.
+    this.elementalAffinity = {
+      immunity:   [],
+      resistance: {},
+      weakness:   { wet: 2.0 }
+    };
   }
 
   update(deltaTime) {
@@ -52,13 +60,6 @@ export class TurtleLeg extends Enemy {
     this.velocity.vy       = 0;
 
     return { dotDamage: dotDamageEvents };
-  }
-
-  // Fire-affinity: immune to burn (and any future fire-affinity effect); aquatic weakness.
-  getElementalModifier(elementType) {
-    if (elementType === 'burn' || elementType === 'fire') return 0.0;
-    if (elementType === 'wet'  || elementType === 'aquatic') return 2.0;
-    return 1.0;
   }
 
   takeDamage(amount, attackId = null) {

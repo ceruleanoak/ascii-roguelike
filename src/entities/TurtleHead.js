@@ -85,13 +85,6 @@ export class TurtleHead extends Enemy {
     };
   }
 
-  // Fire-affinity: immune to burn (and any future fire-affinity effect); aquatic weakness.
-  getElementalModifier(elementType) {
-    if (elementType === 'burn' || elementType === 'fire') return 0.0;
-    if (elementType === 'wet'  || elementType === 'aquatic') return 2.0;
-    return 1.0;
-  }
-
   // ── Core update ───────────────────────────────────────────────────────────
   update(deltaTime) {
     // Tick i-frames
