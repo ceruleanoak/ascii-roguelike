@@ -3,8 +3,11 @@ import { GRID, GAME_STATES, ZOOM } from '../game/GameConfig.js';
 /**
  * CameraZoomSystem — combat-proximity camera zoom.
  *
- * Zooms the view to ZOOM.SCALE, pivoted on the player, whenever an enemy is
- * within ZOOM.TRIGGER_RANGE_CELLS of the player during EXPLORE. Once zoomed,
+ * Zooms the view to ZOOM.SCALE, pivoted on the player, whenever an aggro'd
+ * enemy is within ZOOM.TRIGGER_RANGE_CELLS of the player during EXPLORE —
+ * aggro, not mere proximity: an enemy currently fleeing (State Flee/Lookback
+ * — Rat post-steal, Trap Goblin, a still-growing Bomb) is a coward, not a
+ * threat, and wandering close to one shouldn't zoom the camera in. Once zoomed,
  * stays zoomed until the nearest threat clears the wider
  * ZOOM.RELEASE_RANGE_CELLS (hysteresis, avoids flicker at the boundary).
  * Inside the Maze interior, zoom is forced on permanently regardless of
@@ -119,6 +122,13 @@ export class CameraZoomSystem {
     return entities.some((e) => {
       if (e.hp !== undefined && e.hp <= 0) return false;
       if (e.data?.pacifist) return false;
+      // Cowards: an enemy currently running away (State Flee) or glancing
+      // back mid-flight (State Lookback) is disengaging, not aggro — it
+      // doesn't warrant the combat-tension zoom just because the player
+      // happens to be nearby. Entities without a spine (e.g. Maze ghosts)
+      // fall through unaffected via the optional chain.
+      const spineState = e.stateMachine?.current;
+      if (spineState === 'flee' || spineState === 'lookback') return false;
       const ex = e.position.x + (e.width ?? GRID.CELL_SIZE) / 2;
       const ey = e.position.y + (e.height ?? GRID.CELL_SIZE) / 2;
       return Math.hypot(ex - px, ey - py) <= range;

@@ -49,7 +49,7 @@ export function drawOffscreenEnemyIndicators(renderer, game, enemies) {
 
     const edge = rayToInsetBoxEdge(ox, oy, dx, dy, minB, minB, maxB, maxB);
     const angle = Math.atan2(dx, -dy);
-    renderer.drawUIEntityRotated(edge.x, edge.y, '^', COLORS.ENEMY, angle);
+    renderer.drawUIEntityRotated(edge.x, edge.y, '^', COLORS.ENEMY, angle, 1.3);
   }
 }
 

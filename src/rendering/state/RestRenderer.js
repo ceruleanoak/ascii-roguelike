@@ -98,9 +98,13 @@ export class RestRenderer {
       this.renderer.fgCtx.restore();
     }
 
-    // Draw armed consumable slot's chest in white on foreground (parity with weapon highlight)
+    // Draw armed consumable slot's chest in white on foreground, blinking —
+    // true on/off cadence (matches EquipmentSlots' blinkOn) reads as "armed,
+    // one-time SPACE action" rather than the plain solid highlight used for
+    // the always-on active weapon slot above.
     const selectedConsumableIdx = game.player?.selectedConsumableIndex ?? -1;
-    if (selectedConsumableIdx >= 0) {
+    const armedBlinkOn = (_vpNow % 800) < 400;
+    if (selectedConsumableIdx >= 0 && armedBlinkOn) {
       const consumableYs = [
         EQUIPMENT.CONSUMABLE1_Y, EQUIPMENT.CONSUMABLE2_Y, EQUIPMENT.CONSUMABLE3_Y,
         EQUIPMENT.CONSUMABLE4_Y, EQUIPMENT.CONSUMABLE5_Y

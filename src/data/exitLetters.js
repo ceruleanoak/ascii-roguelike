@@ -38,7 +38,7 @@ export const EXIT_LETTERS = {
       gray: 2.0,
       red: 1.5
     },
-    spellDescription: 'SEEK THE THIRD STAIR.'
+    spellDescription: 'An Auspicious Structure.'
   },
   'E': {
     name: 'Errand',
@@ -152,13 +152,13 @@ export const EXIT_LETTERS = {
       cyan: 0,
       gray: 0
     },
-    spellDescription: 'THE MIRE REMEMBERS HER.'
+    spellDescription: 'ENEMIES RISE FROM THE MIRE.'
   },
   'R': {
     name: 'Ridge',
     roomType: 'RIDGE',
     weight: 0.10,
-    spellDescription: 'HIGH GROUND AHEAD.'
+    spellDescription: 'HE CARRIES A WORRYING EXPRESSION.'
   },
   'S': {
     name: 'Settlement',

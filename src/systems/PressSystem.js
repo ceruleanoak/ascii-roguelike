@@ -12,7 +12,7 @@ import { Item } from '../entities/Item.js';
 const PRESS_TABLE = {
   'ŝ': '🜁',  // Sap        → Slick Oil
   'š': '🜂',  // Fire Sap   → Fire Oil
-  'ş': '🜄',  // Frost Sap  → Frost Oil
+  'ş': '❄',  // Frost Sap  → Frost Oil
   'ł': '🜔',  // Pollen     → Drowse Oil
 };
 

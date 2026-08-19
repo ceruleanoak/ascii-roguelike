@@ -60,7 +60,7 @@ export const PHYSICS = {
 // pivoted on the player, eased with a cubic bezier. See CameraZoomSystem.
 export const ZOOM = {
   SCALE: 1.75,                // 175% zoom when triggered
-  TRIGGER_RANGE_CELLS: 6,     // enemy/ghost within this many cells triggers zoom
+  TRIGGER_RANGE_CELLS: 6.6,   // enemy/ghost within this many cells triggers zoom (+10% over the original 6 — cowards no longer trigger it at all, see CameraZoomSystem)
   RELEASE_RANGE_CELLS: 7,     // once zoomed, enemy must clear this range before zoom releases (hysteresis — prevents flicker at the trigger boundary)
   ZOOM_OUT_DELAY_MS: 500,     // hold the zoom this long after the last detected enemy before actually releasing
   TRANSITION_IN_MS: 700,      // duration of the eased zoom-in transition (slower, deliberate)

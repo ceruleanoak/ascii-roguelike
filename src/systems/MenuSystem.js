@@ -392,10 +392,13 @@ export class MenuSystem {
         continue;
       }
 
-      // Functional slot — highlight bracket white when armed for SPACE (keys 4-8),
-      // otherwise reset to CSS default (yellow)
+      // Functional slot — blink bracket white when armed for SPACE (keys 4-8),
+      // otherwise reset to CSS default (yellow). True on/off (not a color swap)
+      // reads as "armed, one-time SPACE action" — same 800ms cadence as the
+      // isEffectActive pulse below, for one consistent blink rhythm on this bar.
       const isSelected = i === (game.player?.selectedConsumableIndex ?? -1);
-      if (cslotEl) cslotEl.style.color = isSelected ? '#ffffff' : '';
+      const armedBlinkOn = (performance.now() % 800) < 400;
+      if (cslotEl) cslotEl.style.color = (isSelected && armedBlinkOn) ? '#ffffff' : '';
 
       // Functional unlocked slots
       if (consumables[i]) {

@@ -25,20 +25,23 @@ import { ITEMS, WEAPON_TYPES, TRAINING_TECHNIQUES, resolveWeaponDefaults } from 
 let _nextAttackId = 0;
 
 // Aggregate oilEffect from any equipped consumables. Returns
-// { onHit: string|null, arrowSpeedMult: number }. First oil with onHit wins;
+// { onHits: string[], arrowSpeedMult: number }. onHits collects every
+// equipped oil's onHit in slot order (no dedup — a weapon's own effect and
+// an oil's effect, or two oils, may legitimately name the same effect; that
+// just means the swing grants extra stacks of it, not that one is dropped).
 // arrowSpeedMult multiplies across all oils (typically just one).
 function _readEquippedOilEffect(player) {
   const slots = player?.equippedConsumables;
-  if (!slots) return { onHit: null, arrowSpeedMult: 1 };
-  let onHit = null;
+  if (!slots) return { onHits: [], arrowSpeedMult: 1 };
+  const onHits = [];
   let arrowSpeedMult = 1;
   for (const c of slots) {
     const oe = c?.data?.oilEffect;
     if (!oe) continue;
-    if (oe.onHit && !onHit) onHit = oe.onHit;
+    if (oe.onHit) onHits.push(oe.onHit);
     if (oe.arrowSpeedMult) arrowSpeedMult *= oe.arrowSpeedMult;
   }
-  return { onHit, arrowSpeedMult };
+  return { onHits, arrowSpeedMult };
 }
 
 export class Item {
@@ -1106,13 +1109,23 @@ export class Item {
     // multi-bullet weapons use). Without it the second stab is cosmetic.
     const attackId = stabs > 1 ? `burst_${_nextAttackId++}` : undefined;
 
-    // Daggers benefit from oil augments (onHit override only — speed is bow-specific)
+    // Daggers benefit from oil augments (onHit only — speed is bow-specific).
+    // The weapon's own onHit is always primary; every equipped oil onHit
+    // applies too, as extraOnHit — spending a consumable slot on an oil must
+    // never cost the dagger its own effect (bug #183).
     const isDagger = subtype === 'dagger';
-    const oilOnHit = isDagger ? _readEquippedOilEffect(player).onHit : null;
+    const oilOnHits = isDagger ? _readEquippedOilEffect(player).onHits : [];
+    const primaryOnHit = this.data.onHit || oilOnHits[0] || null;
+    const extraOnHit = this.data.onHit ? oilOnHits : oilOnHits.slice(1);
 
     const relX = Math.cos(baseAngle) * distance;
     const relY = Math.sin(baseAngle) * distance;
-    const multistabChar = this.data.meleeChar || this.char;
+    // Fixed category default, matching every other pattern builder (sword
+    // '/', axe/pickaxe '═', spear '→', whip '~') — falling back to the
+    // weapon's own decorative pickup char (as this used to) breaks rotation
+    // for any dagger whose glyph isn't in getMeleeDrawAngle's NATURAL_ANGLES
+    // table (e.g. Acid Blade 'ᚢ', Vampire Dagger 'ᛘ' never rotated).
+    const multistabChar = this.data.meleeChar || '↾';
     const multistabDrawAngle = this.getMeleeDrawAngle(multistabChar, baseAngle);
     // Combo finisher: only the final stab applies knockback (and full hitstop).
     // Any earlier stab uses a light hitstop so it doesn't eat the finisher's
@@ -1131,7 +1144,8 @@ export class Item {
         duration: 0.08,
         delay: i * patternSpeed,
         color: this.color,
-        onHit: oilOnHit || this.data.onHit,
+        onHit: primaryOnHit,
+        extraOnHit,
         knockback: isFinisher ? (this.data.knockback || 350) : 0,
         hitstop: isFinisher ? 0.06 : 0.02,
         lifesteal: this.data.lifesteal,
@@ -1182,7 +1196,11 @@ export class Item {
         disarm: this.data.disarm,
         knockback: this.data.knockback || 300,
         owner: player,
-        shooterPlane: player.plane
+        shooterPlane: player.plane,
+        // 1-indexed reach segment (1=nearest, 5=farthest) — lets segment-gated
+        // fixtures (obj.minAttackSegment, CombatSystem's collision check)
+        // react only to the whip's farthest crack, not its near segments.
+        segmentIndex: i
       });
     }
 
@@ -1256,8 +1274,13 @@ export class Item {
     const randomness = (Math.random() - 0.5) * 0.1; // ±0.05 radians (~3 degrees)
     const finalAngle = angle + randomness;
 
-    // Equipped oil augment (Slick = +speed, Fire/Frost/Drowse = onHit override)
+    // Equipped oil augment (Slick = +speed, Fire/Frost/Drowse = onHit). The
+    // bow's own onHit is always primary; every equipped oil onHit applies too,
+    // as extraOnHit — spending a consumable slot on an oil must never cost
+    // the bow its own effect (bug #183).
     const oil = _readEquippedOilEffect(player);
+    const primaryOnHit = this.data.onHit || oil.onHits[0] || null;
+    const extraOnHit = this.data.onHit ? oil.onHits : oil.onHits.slice(1);
 
     // Apply speed multiplier from charge
     const baseSpeed = this.data.arrowSpeed || 250;
@@ -1300,7 +1323,8 @@ export class Item {
       },
       damage: this.data.damage,
       color: this.color,
-      onHit: oil.onHit || this.data.onHit,
+      onHit: primaryOnHit,
+      extraOnHit,
       electric: this.data.electric,
       homing: this.data.homing,
       pierce: this.data.pierce || isBoomerang,  // Boomerang: pierce so wall/single-hit doesn't despawn it
