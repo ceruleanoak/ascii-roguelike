@@ -124,6 +124,56 @@ export class DungeonFloorGenerator {
     return { cols, rows, collisionMap, backgroundObjects, pickOpenCell, spawnCells };
   }
 
+  // BFS-reachable interior cells from (startRow, startCol), 4-connected,
+  // treating any collisionMap-true cell as blocked. Unlike pickOpenCell
+  // (which only checks "not a wall"), this guarantees true graph
+  // reachability — needed because the Staircase footprint contract
+  // deliberately reserves only single cells, not a connecting corridor, so a
+  // template's walls/water may legally cut off a whole region (see the
+  // contract note in dungeonFloorTemplates.js). Used to keep fixed-position
+  // reward content out of a walled-off pocket the player can never reach.
+  _reachableCells(collisionMap, rows, cols, startRow, startCol) {
+    const visited = new Set();
+    if (collisionMap[startRow]?.[startCol]) return visited;
+    const key = (r, c) => `${r},${c}`;
+    const queue = [[startRow, startCol]];
+    visited.add(key(startRow, startCol));
+    while (queue.length) {
+      const [r, c] = queue.shift();
+      for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nr = r + dr, nc = c + dc;
+        if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+        if (collisionMap[nr]?.[nc]) continue;
+        const k = key(nr, nc);
+        if (visited.has(k)) continue;
+        visited.add(k);
+        queue.push([nr, nc]);
+      }
+    }
+    return visited;
+  }
+
+  // Random cell within bounds that's reachable (per _reachableCells),
+  // walkable, not a reserved footprint, and not already holding a background
+  // object. Falls back to the BFS start cell if nothing in bounds qualifies
+  // (last resort — keeps the caller from ever placing content that's
+  // provably unreachable).
+  _pickReachableCell(reachable, collisionMap, backgroundObjects, reservedCells, minRow, maxRow, minCol, maxCol, startRow, startCol) {
+    const candidates = [];
+    for (let r = minRow; r <= maxRow; r++) {
+      for (let c = minCol; c <= maxCol; c++) {
+        if (!reachable.has(`${r},${c}`)) continue;
+        if (collisionMap[r]?.[c]) continue;
+        if (reservedCells.some(cell => cell.row === r && cell.col === c)) continue;
+        const x = c * GRID.CELL_SIZE, y = r * GRID.CELL_SIZE;
+        if (backgroundObjects.some(o => o.position.x === x && o.position.y === y)) continue;
+        candidates.push({ row: r, col: c });
+      }
+    }
+    if (candidates.length === 0) return { row: startRow, col: startCol };
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
   // Fisher-Yates — used to consume template-authored spawn points in random
   // order rather than always filling them top-to-bottom / left-to-right.
   _shuffled(arr) {
@@ -568,9 +618,19 @@ export class DungeonFloorGenerator {
     const enemies = this._spawnEnemies(5 + Math.floor(Math.random() * 3), depth, zone,
       { collisionMap, backgroundObjects, pickOpenCell, rows, cols, spawnCells });
 
+    // Reward must be reachable from the room's entry point (the up-stairs the
+    // player spawns beside on descent into this side room) — templates are
+    // free to wall off regions elsewhere, so a fixed (STAIRS_COL, SPINE_ROW)
+    // coordinate could land inside a sealed pocket (e.g. a walled-off water
+    // pool). Bug report: reward spawned unreachable in exactly that shape.
+    const reachable = this._reachableCells(collisionMap, rows, cols, STAIRS_UP_ROW, STAIRS_COL);
+    const rewardCell = this._pickReachableCell(
+      reachable, collisionMap, backgroundObjects, getReservedFootprintCells(),
+      6, rows - 5, 3, cols - 4, STAIRS_UP_ROW, STAIRS_COL
+    );
     const rewardChar = TRAP_ROOM_REWARD_POOL[Math.floor(Math.random() * TRAP_ROOM_REWARD_POOL.length)];
     const rewardItem = Object.assign(
-      new Item(rewardChar, STAIRS_COL * GRID.CELL_SIZE, SPINE_ROW * GRID.CELL_SIZE),
+      new Item(rewardChar, rewardCell.col * GRID.CELL_SIZE, rewardCell.row * GRID.CELL_SIZE),
       { hutPlane: true }
     );
 

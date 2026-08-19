@@ -11,7 +11,7 @@ import { getDungeonDesign } from '../data/dungeonDesigns.js';
 import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
-import { maybeSpawnPeacefulFishingRoom, buildVaultInteriorLoot, applyKeyDropLogic, ensureKeyDroppers, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, deriveRiverFlowDirection, buildForcedRiverParams, carveForcedRiver, cellularCaveGrid, generateCalderaRoom, seedMoltenAscentCycle, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback } from './roomFeatures.js';
+import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, applyKeyDropLogic, ensureKeyDroppers, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, deriveRiverFlowDirection, buildForcedRiverParams, carveForcedRiver, cellularCaveGrid, generateCalderaRoom, seedMoltenAscentCycle, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths } from './roomFeatures.js';
 
 // Zone-boss arena → letter template key. Boss rooms are entered without a
 // letter (cheat warp) or with an arbitrary one (normal progression), so we
@@ -240,17 +240,20 @@ export class RoomGenerator {
       this.pendingVaultLoot = [];
     }
 
-    // First-room flourish: a small flock of idle crows in the very first
-    // green-zone explore room. Teaches the player that not all motion is hostile.
-    // One crow holds a pearl that drops the first time it's scared.
-    // Skip BOSS rooms (high-tension first impression would clash).
+    // First-room flourish: a single idle crow in the very first green-zone
+    // explore room, carrying a pearl it drops the first time it's scared.
+    // Teaches the player that not all motion is hostile. Solo (not a flock):
+    // extra wild crows this early have nothing to hoard and were free to
+    // loot-seek the player's own dropped starting gear before they could
+    // grab it back — a bad first impression. Skip BOSS rooms (high-tension
+    // first impression would clash).
     const introRoomEligible = type === ROOM_TYPES.COMBAT
       || type === ROOM_TYPES.DISCOVERY
       || type === ROOM_TYPES.CAMP;
     if (this.currentDepth === 1 && zoneType === 'green' && introRoomEligible) {
-      // Intro flock: one crow is guaranteed to carry the pearl — that drop
-      // gates the blue-zone Ocean exit, so the chance must be 100%.
-      this.spawnCrows(room, { guaranteedItem: '●' });
+      // Guaranteed to carry the pearl — that drop gates the blue-zone Ocean
+      // exit, so the chance must be 100%.
+      this.spawnCrows(room, { guaranteedItem: '●', count: 1 });
       console.log(`[Crows] spawned ${room.crows.length} in depth-1 ${type} room`);
     }
 
@@ -651,6 +654,12 @@ export class RoomGenerator {
     // Ensure K rooms have at least one guaranteed key dropper
     ensureKeyDroppers(this, room);
 
+    // Post-lesson roaming Alchemist (Red-L / Yellow-O) — Cyan-T is a TUNNEL
+    // room, handled separately in generateTunnelRoom(); independent of the
+    // peaceful-fishing roll below, so it must run before that early return
+    // can skip it.
+    maybeSpawnRoamingAlchemist(this, room);
+
     // Low-depth L/O rooms may roll peaceful (shore Fisherman) — roomFeatures.js
     if (maybeSpawnPeacefulFishingRoom(this, room)) return;
 
@@ -949,6 +958,14 @@ export class RoomGenerator {
       enemy.setBackgroundObjects(room.backgroundObjects);
       this.addEnemyToRoom(room, enemy);
     }
+
+    // Post-lesson roaming Alchemist (Cyan-T only — Red-L/Yellow-O are COMBAT
+    // rooms and handled in generateCombatRoom). Placed via the same generic
+    // open-floor search used there: tunnel wall chars are explicitly
+    // non-solid on plane 0 (see comments above), so room.collisionMap already
+    // reflects plane-0 passability with no bespoke plane-aware logic needed —
+    // he'll land on plane 0, same default as every other roaming placement.
+    maybeSpawnRoamingAlchemist(this, room);
 
     // Exits are locked until all enemies defeated
     room.exitsLocked = true;
@@ -2109,7 +2126,7 @@ export class RoomGenerator {
 
   generateBackgroundObjects(room) {
     // Generate tall grass (very common, large swaths)
-    const grassClusters = this.generateGrassSwaths(room);
+    const grassClusters = generateGrassSwaths(this, room);
 
     // Concealed Sinkholes (G rooms only) — seeded after grass so adjacency
     // can reference the placed grass objects directly.
@@ -2194,82 +2211,6 @@ export class RoomGenerator {
       this.applyZoneProperties(obj, 'red');
       room.backgroundObjects.push(obj);
     }
-  }
-
-  generateGrassSwaths(room) {
-    // Check grass density: template overrides zone (default 100%)
-    const zone = ZONES[room.zone];
-    const features = zone?.environmentalFeatures;
-    let grassDensity = features?.grassDensity !== undefined ? features.grassDensity : 1.0;
-
-    // Letter template grass density overrides zone density
-    if (this.currentLetterTemplate?.bgObjectRules?.grassDensity !== undefined) {
-      grassDensity = this.currentLetterTemplate.bgObjectRules.grassDensity;
-    }
-
-    const grassPreburned = features?.grassPreburned || false;
-
-    // Generate 4-7 dense clusters of tall grass (scaled by density)
-    const baseSwathCount = this.randInt(4, 7);
-    const swathCount = Math.max(1, Math.round(baseSwathCount * grassDensity));
-    const clusters = []; // Track cluster positions for recipe sign placement
-
-    for (let i = 0; i < swathCount; i++) {
-      const centerPos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
-      if (!centerPos) continue;
-      const baseSwathSize = this.randInt(20, 40);
-      const swathSize = Math.round(baseSwathSize * grassDensity); // Scale by density
-      const swathRadius = this.randInt(32, 64); // Tight clustering
-
-      // Store cluster info
-      clusters.push({ center: centerPos, radius: swathRadius });
-
-      for (let j = 0; j < swathSize; j++) {
-        const angle = Math.random() * Math.PI * 2;
-        // Square root for more even distribution
-        const dist = Math.sqrt(Math.random()) * swathRadius;
-        const pos = {
-          x: centerPos.x + Math.cos(angle) * dist,
-          y: centerPos.y + Math.sin(angle) * dist
-        };
-
-        // Check bounds
-        if (pos.x >= GRID.CELL_SIZE && pos.x < GRID.WIDTH - GRID.CELL_SIZE &&
-            pos.y >= GRID.CELL_SIZE && pos.y < GRID.HEIGHT - GRID.CELL_SIZE) {
-          // Create grass (use cut grass ',' for pre-burned zones)
-          const grassChar = grassPreburned ? ',' : '|';
-          const grass1 = new BackgroundObject(grassChar, pos.x, pos.y);
-          const grass2 = new BackgroundObject(grassChar, pos.x + 6, pos.y);
-
-          // Apply zone grass color (or burned color for pre-burned)
-          if (grassPreburned) {
-            // Burned grass color
-            grass1.color = '#443322';
-            grass1.animationColor = '#443322';
-            grass1.flammability = 'none';
-            grass1.burnt = true;
-            grass2.color = '#443322';
-            grass2.animationColor = '#443322';
-            grass2.flammability = 'none';
-            grass2.burnt = true;
-          } else if (this.currentEnvironmentColors) {
-            // Normal zone grass color
-            grass1.color = this.currentEnvironmentColors.grass;
-            grass1.animationColor = this.currentEnvironmentColors.grass;
-            grass2.color = this.currentEnvironmentColors.grass;
-            grass2.animationColor = this.currentEnvironmentColors.grass;
-          }
-
-          // Check clearing zone before placing grass
-          if (!this.isInClearingZone(pos.x, pos.y)) {
-            room.backgroundObjects.push(grass1);
-            room.backgroundObjects.push(grass2);
-          }
-        }
-      }
-    }
-
-    return clusters; // Return cluster positions for recipe sign placement
   }
 
   generateCornerClusters(room) {
@@ -3356,7 +3297,12 @@ export class RoomGenerator {
       minRow,
       maxRow,
       bottomWallRow: maxRow, // Bottom wall is at maxRow
-      unlocked: false
+      unlocked: false,
+      // Held, not equipped — set true when the key-dropping object is
+      // destroyed (InteractionSystem.handleObjectEffect), consumed back to
+      // false by unlockVault(). Never a slot-occupying Item; see
+      // canUnlockVault/unlockVault below and the KEY ITEMS inventory section.
+      keyHeld: false
     };
 
     for (let row = minRow; row <= maxRow; row++) {

@@ -1148,6 +1148,10 @@ export class AudioSystem {
     // Dungeon 6-floor rework — placeholder names, no assets yet.
     this.loadSFX('dungeon_key_pickup', null); // Skull destroyed, key obtained
     this.loadSFX('dungeon_key_use', null);    // Key consumed at the Vault door
+    // K room Vault Key — held, not equipped (same "held, not equipped"
+    // pattern as the dungeon key above; see InteractionSystem.canUnlockVault).
+    this.loadSFX('vault_key_pickup', null);   // Key-dropping object destroyed
+    this.loadSFX('vault_key_use', null);      // Key consumed unlocking the vault door
     this.loadSFX('compass_beep', null);       // Compass ping (item present on floor)
     this.loadSFX('pyramid_fill', null);       // Legend of Three slot filled
     this.loadSFX('pyramid_solve', null);      // All 3 slots filled

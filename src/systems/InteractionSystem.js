@@ -3,6 +3,7 @@ import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Leshy } from '../entities/Leshy.js';
 import { Fairy } from '../entities/Fairy.js';
 import { isIngredient, isItem, generateEnemyDrops } from '../data/items.js';
+import { pickQuagmireIngredient } from '../data/alchemy.js';
 import { getZoneRandomEnemy, ENEMIES } from '../data/enemies.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
 import { createDebris } from '../entities/Debris.js';
@@ -58,9 +59,10 @@ export class InteractionSystem {
       return false;
     }
 
-    // Check if player has the vault key equipped (in active quick slot)
-    const hasKey = game.player.heldItem && game.player.heldItem.char === '߃';
-    if (!hasKey) {
+    // Held, not equipped — the vault key is a flag on this room's vaultInfo,
+    // never a slot-occupying Item. Set by handleObjectEffect's dropsKey
+    // branch, cleared by unlockVault() below.
+    if (!vault.keyHeld) {
       return false;
     }
 
@@ -91,18 +93,9 @@ export class InteractionSystem {
     // Mark vault as unlocked
     vault.unlocked = true;
 
-    // Remove key from active quick slot (consumed)
-    if (game.player.heldItem && game.player.heldItem.char === '߃') {
-      game.player.quickSlots[game.player.activeSlotIndex] = null;
-
-      // Auto-switch to next filled slot if available
-      const nextFilled = game.player.quickSlots.findIndex((slot, idx) =>
-        idx !== game.player.activeSlotIndex && slot !== null
-      );
-      if (nextFilled !== -1) {
-        game.player.activeSlotIndex = nextFilled;
-      }
-    }
+    // Consume the held key flag (held, not equipped — no quick slot involved)
+    vault.keyHeld = false;
+    game.audioSystem?.playSFX?.('vault_key_use');
 
     // Mark background dirty to show wall removal
     game.renderer.markBackgroundDirty();
@@ -400,15 +393,6 @@ export class InteractionSystem {
     // pool as ordinary water and hand back a plain 🜉 bottle.
     if (game.fountainSystem.tryBottleFountainWater(obj)) return;
 
-    // Liquid discovery: check if player has empty bottle and is interacting with liquid tile
-    if (heldItemChar === 'B' && this._isLiquidTile(obj)) {
-      const liquidChar = this._getLiquidType(obj);
-      if (liquidChar) {
-        this._discoverLiquidBottle(liquidChar);
-        return;
-      }
-    }
-
     const result = obj.interact(heldItemChar);
 
     // Leshy spawn event: trigger on ANY interaction with shaking bush (not just destruction)
@@ -430,48 +414,31 @@ export class InteractionSystem {
     }
   }
 
-  _isLiquidTile(obj) {
-    return obj.isWater?.() || obj.isLava?.() || obj.isMud?.();
-  }
-
-  _getLiquidType(obj) {
-    if (obj.isWater?.() && obj.waterState === 'electrified') return 'ε';
-    if (obj.isLava?.()) return '◆';
-    if (obj.isMud?.()) return '◐';
-    if (obj.isWater?.() && obj.waterState === 'normal') return '🜉';
-    return null;
-  }
-
-  _discoverLiquidBottle(liquidChar) {
-    const game = this.game;
-    const slots = game.player.equippedConsumables;
-    const slotIndex = slots?.findIndex(s => s?.char === 'B') ?? -1;
-    if (slotIndex === -1) return;
-
-    game.inventorySystem.replaceConsumableSlot(slotIndex, liquidChar);
-    const liquidNames = {
-      '🜉': 'BOTTLE OF WATER',
-      'ε': 'BOTTLE OF ELECTRIFIED WATER',
-      '◆': 'BOTTLE OF MAGMA',
-      '◐': 'BOTTLE OF MUD'
-    };
-    game.menuSystem.showPickupMessage(liquidNames[liquidChar] || 'LIQUID');
-    game.audioSystem?.playSFX?.('pickup');
-    game.updateUI();
-  }
-
   handleObjectEffect(effect, obj, attack = null) {
     const game = this.game;
     if (!effect) return;
 
-    // Check for key drops in K rooms (vault key system)
+    // Vault key (K room): held, not equipped — a flag on this room's
+    // vaultInfo, not a slot-occupying Item. See canUnlockVault/unlockVault.
     if (obj.dropsKey && effect.includes('destroyObject')) {
       obj.destroyAfterAnimation = true;
       game.renderer.markBackgroundDirty();
+      if (game.currentRoom?.vaultInfo) {
+        game.currentRoom.vaultInfo.keyHeld = true;
+      }
+      game.audioSystem?.playSFX?.('vault_key_pickup');
+      return;
+    }
 
-      const key = new Item(obj.keyChar, obj.position.x, obj.position.y);
-      game.items.push(key);
-      game.physicsSystem.addEntity(key);
+    // Dungeon key skull (Floor 3 Key Vault): the key is "held, not equipped" —
+    // a run-scoped boolean flag, not a slot-occupying Item like the K-room key
+    // above. DungeonPuzzleSystem reads this flag at the Key Vault's locked
+    // descent; it never lives in an inventory slot.
+    if (obj.dropsDungeonKey && effect.includes('destroyObject')) {
+      obj.destroyAfterAnimation = true;
+      game.renderer.markBackgroundDirty();
+      game.dungeonKeyObtainedThisRun = true;
+      game.audioSystem?.playSFX?.('dungeon_key_pickup');
       return;
     }
 
@@ -533,7 +500,14 @@ export class InteractionSystem {
 
     // Handle destroy + spawn combined effects
     if (effect.startsWith('destroyObject:spawnIngredient:')) {
-      const ingredientChar = effect.split(':')[2];
+      let ingredientChar = effect.split(':')[2];
+
+      // Quagmire decor drops "1st ingredients" (any starter-potion ingredient)
+      // instead of its typical per-object drop — the room is an alchemy
+      // ingredient source before it's anything else.
+      if (game.currentRoom?.letterTemplate?.quagmire && isIngredient(ingredientChar)) {
+        ingredientChar = pickQuagmireIngredient();
+      }
 
       obj.destroyAfterAnimation = true;
       game.renderer.markBackgroundDirty();

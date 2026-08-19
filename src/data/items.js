@@ -241,7 +241,7 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
     damage: 1,
-    cooldown: 1.0,
+    cooldown: 2.0,
     bulletCount: 7,
     accuracy: 0.55,
     maxUses: 3,
@@ -566,7 +566,7 @@ export const ITEMS = {
     weaponSubtype: 'sword',
     damage: 2,
     windup: 0.5,
-    recovery: 1.0,
+    recovery: 1.65,
     patternSpeed: 0.07,
     range: 30,         // 1.5× base sword reach
     drawScale: 1.3,    // strike rendered larger to telegraph the longer reach
@@ -934,7 +934,7 @@ export const ITEMS = {
     weaponSubtype: 'scythe',
     damage: 2,
     windup: 0.7,
-    recovery: 1.1,
+    recovery: 1.95,
     patternSpeed: 0.03,
     range: 26,
     drawScale: 1.25,
@@ -1016,8 +1016,8 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'staff',
     damage: 1,
-    windup: 0.15,
-    recovery: 0.45,
+    windup: 0.35,
+    recovery: 0.55,
     patternSpeed: 0.05,
     meleeChar: '|',
     range: 28,
@@ -1250,7 +1250,7 @@ export const ITEMS = {
     weaponSubtype: 'whip',
     damage: 1,
     windup: 0.5,
-    recovery: 1.0,
+    recovery: 1.45,
     patternSpeed: 0.02,
     range: 40,
     meleeChar: '~',
@@ -1268,7 +1268,7 @@ export const ITEMS = {
     weaponSubtype: 'whip',
     damage: 2,
     windup: 0.5,
-    recovery: 1.0,
+    recovery: 1.85,
     patternSpeed: 0.02,
     range: 40,
     meleeChar: '~',
@@ -1284,7 +1284,7 @@ export const ITEMS = {
     weaponSubtype: 'whip',
     damage: 2,
     windup: 0.5,
-    recovery: 1.0,
+    recovery: 1.85,
     patternSpeed: 0.02,
     range: 40,
     meleeChar: '~',
@@ -1300,7 +1300,7 @@ export const ITEMS = {
     weaponSubtype: 'whip',
     damage: 2,
     windup: 0.5,
-    recovery: 1.0,
+    recovery: 1.85,
     patternSpeed: 0.02,
     range: 40,
     meleeChar: '~',
@@ -1318,7 +1318,7 @@ export const ITEMS = {
     weaponSubtype: 'whip',
     damage: 2,
     windup: 0.5,
-    recovery: 1.0,
+    recovery: 1.85,
     patternSpeed: 0.02,
     range: 40,
     meleeChar: '~',
@@ -1692,10 +1692,10 @@ export const ITEMS = {
   // ============================================================================
 
   // ── Heal ──────────────────────────────────────────────────────────────────
-  'G': {
-    char: 'G', name: 'Base Potion', type: ITEM_TYPES.CONSUMABLE,
+  '🜄': {
+    char: '🜄', name: 'Base Potion', type: ITEM_TYPES.CONSUMABLE,
     effect: 'heal', amount: 1, oneShot: true,
-    autoTriggerHP: 0.12, color: '#88aaff',
+    autoTriggerHP: 0.12, color: '#3355ff',
     leavesBottle: true
   },
   'H': {
@@ -1706,7 +1706,7 @@ export const ITEMS = {
     amount: 3,
     oneShot: true,
     autoTriggerHP: 0.12,  // Only trigger at red blinking state (HP <= 3)
-    color: '#ff00ff',
+    color: '#3355ff',
     leavesBottle: true
   },
   'ᒧ': {
@@ -1753,7 +1753,7 @@ export const ITEMS = {
   'z': {
     char: 'z', name: 'Mending Brew', type: ITEM_TYPES.CONSUMABLE,
     effect: 'regen', permanentUntilRoomExit: true, regenAmount: 1, regenInterval: 1.0, oneShot: true,
-    autoTriggerHP: 0.30, color: '#88ffaa',
+    autoTriggerHP: 0.30, color: '#3355ff',
     leavesBottle: true
   },
   '♥': {
@@ -1780,20 +1780,20 @@ export const ITEMS = {
   'q': {
     char: 'q', name: 'Haste Draught', type: ITEM_TYPES.CONSUMABLE,
     effect: 'speed', permanentUntilRoomExit: true, oneShot: true,
-    autoTriggerHP: 0.24, color: '#00ffcc',
+    autoTriggerHP: 0.24, color: '#3355ff',
     leavesBottle: true
   },
   'x': {
     char: 'x', name: 'Stone Skin', type: ITEM_TYPES.CONSUMABLE,
     effect: 'stoneskin', permanentUntilRoomExit: true, defenseBonus: 3, oneShot: true,
     autoTrigger: { criticalHP: 0.20 },
-    color: '#aabb88',
+    color: '#3355ff',
     leavesBottle: true
   },
   'u': {
     char: 'u', name: 'Battle Elixir', type: ITEM_TYPES.CONSUMABLE,
     effect: 'damageBuff', permanentUntilRoomExit: true, damageBonus: 2, oneShot: true,
-    manualOnly: true, color: '#ff6644',
+    manualOnly: true, color: '#3355ff',
     leavesBottle: true
   },
   '★': {
@@ -2049,8 +2049,8 @@ export const ITEMS = {
     oilEffect: { onHit: 'burn' },
     color: '#ff4400'
   },
-  '🜄': {
-    char: '🜄',
+  '❄': {
+    char: '❄',
     name: 'Frost Oil',
     type: ITEM_TYPES.CONSUMABLE,
     oilEffect: { onHit: 'freeze' },
@@ -2107,20 +2107,20 @@ export const ITEMS = {
     color: '#ff8855'
   },
   // Starter potions (Alchemy Cauldron stage 1: Bottle of Water + raw
-  // ingredient). Base Potion 'G' (above, in the main potion block) is the
+  // ingredient). Base Potion '🜄' (above, in the main potion block) is the
   // third starter. potionModifier carries through to the true potion made
   // from this starter at Cauldron stage 2 — see AlchemySystem.
   '🜅': {
     char: '🜅', name: 'Purified Potion', type: ITEM_TYPES.CONSUMABLE,
     effect: 'heal', amount: 1, oneShot: true,
-    autoTriggerHP: 0.12, color: '#ffffaa',
+    autoTriggerHP: 0.12, color: '#ffffff',
     leavesBottle: true,
     potionModifier: 'buff'
   },
   '🜆': {
     char: '🜆', name: 'Unstable Potion', type: ITEM_TYPES.CONSUMABLE,
     effect: 'heal', amount: 1, oneShot: true,
-    autoTriggerHP: 0.12, color: '#ff66ff',
+    autoTriggerHP: 0.12, color: '#8833cc',
     leavesBottle: true,
     potionModifier: 'unstable'
   },
@@ -2229,6 +2229,25 @@ export const ITEMS = {
     effect: 'dropBread',
     oneShot: true,
     color: '#daa520'
+  },
+
+  // Compass: equippable utility weapon, passive (no activation, no oneShot —
+  // contrast Bread above). Legend of Three green-zone "Truth" item
+  // (claudedocs/legend-of-three.md), pyramid slot in the Floor-4 dungeon
+  // puzzle. Scope note: this build implements only its dungeon behavior —
+  // DungeonPuzzleSystem polls for uncollected floor loot while equipped and
+  // beeps. The fuller Explore-mode mechanic the item's name implies
+  // (directional pointer toward room letters, "follow 3 times" for a
+  // guaranteed room-type choice) is explicitly out of scope here — see the
+  // docs/adr/BACKLOG.md row flagging it as a separate future system.
+  '⌖': {
+    char: '⌖',
+    name: 'Compass',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: 'UTILITY',
+    effect: 'compassBeep',
+    passive: true,
+    color: '#66ccff'
   },
 
   // ============================================================================
@@ -2574,9 +2593,13 @@ export function isItem(char) {
   return ITEMS[char] !== undefined;
 }
 
-// Gemstones — raw ingredients (Unicode-symbol legacy exception, see CLAUDE.md
-// Character Encoding Rule) that read as Treasure rather than crafting Materials.
-export const TREASURE_GEM_CHARS = new Set(['◇', '⬥', '⬦', '⧫', '⬧', '◈', '⬨']);
+// Gemstones + Pearl — raw ingredients (Unicode-symbol legacy exception, see
+// CLAUDE.md Character Encoding Rule) that read as Treasure in the Tab
+// inventory overlay rather than crafting Components/Materials. Purely a
+// display grouping: every char here still shows up in the crafting table
+// like any other ingredient (see MenuSystem.openCraftingMenu, which lists
+// game.getIngredients() unfiltered by category).
+export const TREASURE_CHARS = new Set(['◇', '⬥', '⬦', '⧫', '⬧', '◈', '⬨', '●']);
 
 /**
  * What each treasure does when offered to a fairy fountain (FountainSystem).
@@ -2616,12 +2639,12 @@ export function weaponElement(data) {
 
 /**
  * Classifies a pickup char for the Tab inventory overlay's grouping:
- * 'treasure' (coin + gems), 'components' (raw ingredients usable as potion
- * recipe inputs, see data/alchemy.js), 'materials' (everything else raw), or
- * null (weapons/armor/traps — not shown in that overlay).
+ * 'treasure' (coin + gems + pearl), 'components' (raw ingredients usable as
+ * potion recipe inputs, see data/alchemy.js), 'materials' (everything else
+ * raw), or null (weapons/armor/traps — not shown in that overlay).
  */
 export function getPickupCategory(char) {
-  if (char === 'c' || TREASURE_GEM_CHARS.has(char)) return 'treasure';
+  if (char === 'c' || TREASURE_CHARS.has(char)) return 'treasure';
   if (isIngredient(char)) {
     return isPotionIngredient(char) ? 'components' : 'materials';
   }
@@ -2632,8 +2655,8 @@ export function getPickupCategory(char) {
  * Ground-pickup SFX for an ingredient char (LootSystem.collectIngredient).
  * A per-char `sfx` field on that char's INGREDIENTS entry always wins — the
  * hook for giving an individual gem its own sound later — otherwise treasure
- * (coin + gems) shares 'coin_pickup' and everything else falls back to the
- * generic 'ingredient_pickup'.
+ * (coin + gems + pearl) shares 'coin_pickup' and everything else falls back
+ * to the generic 'ingredient_pickup'.
  */
 export function resolvePickupSfx(char) {
   const data = getItemData(char);
@@ -2692,7 +2715,7 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     []
     },
     consumables: {
-      [RARITY.COMMON]:   ['G'],              // Base Potion
+      [RARITY.COMMON]:   ['🜄'],              // Base Potion
       [RARITY.UNCOMMON]: [],
       [RARITY.RARE]:     []
     }
@@ -2717,7 +2740,7 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     []
     },
     consumables: {
-      [RARITY.COMMON]:   ['G'],              // Base Potion
+      [RARITY.COMMON]:   ['🜄'],              // Base Potion
       [RARITY.UNCOMMON]: ['y', 'B'],         // Firecracker, Empty Bottle
       [RARITY.RARE]:     []
     }
@@ -2742,7 +2765,7 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     ['𐤏']              // Ninja Garb
     },
     consumables: {
-      [RARITY.COMMON]:   ['G'],              // Base Potion
+      [RARITY.COMMON]:   ['🜄'],              // Base Potion
       [RARITY.UNCOMMON]: ['∞', 'y'],         // Wings, Firecracker
       [RARITY.RARE]:     ['♥', 'ѡ']        // Heart, Floating Boots
     }
@@ -2757,7 +2780,10 @@ export const AFFINITY_POOLS = {
     weapons: {
       [RARITY.COMMON]:   ['†', ')', '↑', '≋', '○', '⊥', '⊸'],         // Sword, Bow, Spear, Whip, Flail, Hammer, Sling
       [RARITY.UNCOMMON]: ['¬', '⋙', '⫯', '↟', 'Ⲯ', 'ߒ'],              // Gun, Multi-Shot Bow, Longsword, Venom Lance, Thick Staff, Fishing Pole
-      [RARITY.RARE]:     ['߃', '⇑', '✺', 'ᛟ', 'ᛏ', 'ᛉ', '⌐']         // Vault Key, War Spear, Exploding Mace, Homing Bow, Piercing Bow, Shotgun, Machine Gun
+      // Vault Key ('߃') intentionally excluded — it's a K-room-only "held,
+      // not equipped" pickup (InteractionSystem.dropsKey), never a generic
+      // enemy weapon drop.
+      [RARITY.RARE]:     ['⇑', '✺', 'ᛟ', 'ᛏ', 'ᛉ', '⌐']              // War Spear, Exploding Mace, Homing Bow, Piercing Bow, Shotgun, Machine Gun
     },
     traps: {
       [RARITY.UNCOMMON]: ['{'],              // Stun Trap
@@ -2769,7 +2795,7 @@ export const AFFINITY_POOLS = {
       [RARITY.EPIC]:     ['𐤓']             // Dragon Scale Armor
     },
     consumables: {
-      [RARITY.COMMON]:   ['G'],              // Base Potion
+      [RARITY.COMMON]:   ['🜄'],              // Base Potion
       [RARITY.UNCOMMON]: ['y'],              // Firecracker
       [RARITY.RARE]:     ['★']             // Lucky Coin
     }
@@ -2964,7 +2990,7 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     ['𐤏'],            // Ninja Garb (forest stealth)
     },
     consumables: {
-      [RARITY.COMMON]:   ['G'],
+      [RARITY.COMMON]:   ['🜄'],
       [RARITY.UNCOMMON]: ['z'],             // Mending Brew
       [RARITY.RARE]:     ['∞'],            // Wings
     }
@@ -2991,7 +3017,7 @@ export const AFFINITY_POOLS = {
       [RARITY.EPIC]:     ['𐤉', '𐤍', '𐤓']  // Ember Cloak, Ice Plate, Dragon Scale
     },
     consumables: {
-      [RARITY.COMMON]:   ['G', '⌬'],         // Base Potion, Bread
+      [RARITY.COMMON]:   ['🜄', '⌬'],         // Base Potion, Bread
       [RARITY.UNCOMMON]: ['y'],              // Firecracker
       [RARITY.RARE]:     ['♥', '★', '∞', '♦', 'ѡ']
     }

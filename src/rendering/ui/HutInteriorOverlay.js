@@ -3,6 +3,8 @@ import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher
 import { drawInteriorFrame } from './interiorFrame.js';
 import { hasTorchLight, drawPlayerTorchLight } from './torchLight.js';
 import { drawWires } from '../effects/WireEffects.js';
+import { drawCoinArc } from '../effects/ArcTossEffects.js';
+import { drawStatusPips } from '../effects/StatusPipEffects.js';
 
 /**
  * HutInteriorOverlay — picture-in-picture rendering for both Hut and Dungeon interiors.
@@ -34,7 +36,7 @@ export class HutInteriorOverlay {
     // font (auto-sizes for hut vs dungeon from the active floor's grid). The clip
     // keeps any surface-coord content that leaked past hutPlane filters (e.g.
     // untagged puddles/gooBlobs) from drawing on top of the PiP frame.
-    const { offsetY } = drawInteriorFrame(ctx, {
+    const { offsetX, offsetY } = drawInteriorFrame(ctx, {
       gridCols: game.activeFloor.gridCols,
       gridRows: game.activeFloor.gridRows,
       panelColor: '#111108',
@@ -55,9 +57,21 @@ export class HutInteriorOverlay {
     if (game.activeFloor.collisionMap && game.activeFloor.gridCols > 12) {
       const CS = GRID.CELL_SIZE;
       const cm = game.activeFloor.collisionMap;
+      const gapBand = game.activeFloor.gapBand;
       for (let r = 0; r < cm.length; r++) {
         for (let c = 0; c < (cm[r]?.length ?? 0); c++) {
           if (!cm[r][c]) continue;
+          // Whip Trial chasm — reads as a crossable-by-reach-only void rather
+          // than an ordinary blocked tile: true void (skip draw, bare panel
+          // background shows through) between two edge-glyph boundary rows.
+          if (gapBand) {
+            if (r > gapBand.rowStart && r < gapBand.rowEnd) continue;
+            if (r === gapBand.rowStart || r === gapBand.rowEnd) {
+              ctx.fillStyle = '#6a4830';
+              ctx.fillText(r === gapBand.rowStart ? '∧' : '∨', c * CS + CS / 2, r * CS + CS / 2);
+              continue;
+            }
+          }
           ctx.fillStyle = '#3a2a1c';
           ctx.fillRect(c * CS, r * CS, CS, CS);
           ctx.fillStyle = '#6a4830';
@@ -135,11 +149,11 @@ export class HutInteriorOverlay {
     // Fisherman coin pay — spinning arc from player to the fisherman
     // (interior coords; shared draw helper, ctx translate already applied).
     const coinAnim = game.fishermanDemoSystem?.getCoinAnim?.();
-    if (coinAnim) this.renderController.exploreRenderer.drawCoinArc(coinAnim);
+    if (coinAnim) drawCoinArc(this.renderer, coinAnim);
 
     // Weapons Master coin pay — same shared spinning-arc draw helper.
     const weaponsMasterCoinAnim = game.weaponsMasterSystem?.getCoinAnim?.();
-    if (weaponsMasterCoinAnim) this.renderController.exploreRenderer.drawCoinArc(weaponsMasterCoinAnim);
+    if (weaponsMasterCoinAnim) drawCoinArc(this.renderer, weaponsMasterCoinAnim);
 
     // Fisherman coin-demo fish — transient marker beside the NPC while he
     // demonstrates cutting the catch open.
@@ -212,6 +226,41 @@ export class HutInteriorOverlay {
       playerColor,
       playerAlpha
     );
+    drawStatusPips(this.renderer, game.player);
+
+    // ── 16a. Alchemy trough fill hint (armed-slot digit, shown once per run) ──
+    // Filling requires arming the Bottle slot first (AlchemySystem.tryFillArmedBottle);
+    // this surfaces which key to press the same way known-spell letters surface a
+    // typed sequence elsewhere — bare glyph, no explanatory text. Stays up for the
+    // whole first encounter (every frame the player lingers near the trough with
+    // an unarmed Bottle), not just one frame, then is retired for the rest of the
+    // run the moment that encounter ends (player leaves, arms the slot, or fills
+    // the bottle) — game.player.seenTroughFillHint, cleared on death/reset. The
+    // transient _troughHintShown tracks "currently mid-encounter" so the retire
+    // check below only fires on the trailing edge, not every not-shown frame.
+    const alchemy = game.alchemySystem;
+    if (alchemy && !game.player.seenTroughFillHint) {
+      const bottleIdx = game.player.equippedConsumables?.findIndex(s => s?.char === 'B') ?? -1;
+      const shouldShow = bottleIdx !== -1
+        && game.player.selectedConsumableIndex !== bottleIdx
+        && (alchemy.nearTrough() || alchemy.nearHotSpring());
+
+      if (shouldShow) {
+        const knownCount = game.knownSpells?.size || 0;
+        const hintCx = game.player.position.x + GRID.CELL_SIZE / 2;
+        const hintCy = game.player.position.y - GRID.CELL_SIZE * 0.9 - knownCount * (GRID.CELL_SIZE * 0.82);
+        ctx.save();
+        ctx.font = `${Math.round(GRID.CELL_SIZE * 0.65)}px 'Unifont', monospace`;
+        ctx.fillStyle = '#ffff66';
+        ctx.globalAlpha = 0.55;
+        ctx.fillText(spectaclesTransformString(String(bottleIdx + 4), isSpectaclesActive(game)), hintCx, hintCy);
+        ctx.restore();
+        ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`; // restore overlay font
+        game.player._troughHintShown = true;
+      } else if (game.player._troughHintShown) {
+        game.player.seenTroughFillHint = true; // encounter just ended — retire for the run
+      }
+    }
 
     // ── 16b. Camp companion (uses interior coords because it tracks player) ──
     if (game.companion) {
@@ -235,46 +284,98 @@ export class HutInteriorOverlay {
     // ── 18. Green ranger indicator ─────────────────────────────────────────────
     this.renderController.greenRangerIndicator.render(game);
 
-    // ── 19. Item sacrifice slot (dungeon lock condition) ────────────────────────
-    const uc = game.activeFloor.unlockCondition;
-    if (uc?.type === 'item_slot') {
+    // ── 19. Legend of Three pyramid — offer prompts (dungeon floor 4) ──────────
+    if (game.activeFloor.pyramidSlots) {
       const CS = GRID.CELL_SIZE;
-      const slotCx = uc.col * CS + CS / 2;
-      const slotCy = uc.row * CS + CS / 2;
-      const pdx = game.player.position.x + CS / 2 - slotCx;
-      const pdy = game.player.position.y + CS / 2 - slotCy;
-      const nearSlot = Math.sqrt(pdx * pdx + pdy * pdy) < CS * 2;
-      ctx.fillStyle = nearSlot ? '#ffffff' : '#888888';
-      ctx.fillText('[', slotCx - CS, slotCy);
-      ctx.fillText(']', slotCx, slotCy);
-      if (uc.slotItem) {
-        ctx.fillStyle = uc.slotItem.color || '#ffcc00';
-        ctx.fillText(uc.slotItem.char, slotCx - CS / 2, slotCy);
-      } else {
-        ctx.fillStyle = '#444444';
-        ctx.fillText('?', slotCx - CS / 2, slotCy);
-      }
-    }
-
-    // ── 20. Staircase prompt ───────────────────────────────────────────────────
-    if (game.dungeonSystem) {
-      const stairsType = game.dungeonSystem.nearStairsType();
-      if (stairsType) {
-        const label = spectaclesTransformString(
-          stairsType === 'down' ? 'SPACE  DESCEND' : 'SPACE  ASCEND',
-          isSpectaclesActive(game)
-        );
-        const floor = game.activeFloor;
-        const col = stairsType === 'down' ? floor.stairsDownCol : floor.stairsUpCol;
-        const row = stairsType === 'down' ? floor.stairsDownRow : floor.stairsUpRow;
+      for (const slot of Object.values(game.activeFloor.pyramidSlots)) {
+        if (slot.filled || !slot.requiredChar) continue;
+        const slotCx = slot.col * CS + CS / 2;
+        const slotCy = slot.row * CS + CS / 2;
+        const pdx = game.player.position.x + CS / 2 - slotCx;
+        const pdy = game.player.position.y + CS / 2 - slotCy;
+        if (Math.sqrt(pdx * pdx + pdy * pdy) >= CS * 3) continue;
         ctx.save();
         ctx.font = `10px 'Unifont', monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillStyle = '#ccccaa';
-        ctx.fillText(label, col * GRID.CELL_SIZE + GRID.CELL_SIZE / 2, row * GRID.CELL_SIZE - GRID.CELL_SIZE);
+        ctx.fillText(
+          spectaclesTransformString('SPACE  OFFER', isSpectaclesActive(game)),
+          slotCx, slot.row * CS - CS
+        );
         ctx.restore();
-        ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`; // restore font
+        ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
+      }
+    }
+
+    // ── 19b. Whip Trial pedestal — [x][x][x] slot chrome (same shared-
+    // divider bracket technique as CraftingStation.render(): three slots at
+    // a 2-col pitch, each '[' + content + ']', touching brackets land on the
+    // same column so the later draw wins). Grayed decorative ingredient
+    // glyphs fill the outer two slots; the center slot's content is the
+    // real pickup-able weapon, rendered separately by the normal Item loop
+    // above — not redrawn here. Drawn directly rather than as
+    // BackgroundObjects because '~' is real interactive water in
+    // BACKGROUND_OBJECTS — see generateWhipTrial.
+    if (game.activeFloor.weaponPedestal) {
+      const { row, leftX, centerX, rightX, leftChar, rightChar } = game.activeFloor.weaponPedestal;
+      const CS = GRID.CELL_SIZE;
+      const cy = row * CS + CS / 2;
+      ctx.save();
+      ctx.font = `${CS}px 'Unifont', monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#554f3d';
+      for (const slotX of [leftX, centerX, rightX]) {
+        ctx.fillText('[', slotX * CS + CS / 2, cy);
+        ctx.fillText(']', (slotX + 2) * CS + CS / 2, cy);
+      }
+      ctx.fillStyle = '#8a8470';
+      ctx.fillText(leftChar, (leftX + 1) * CS + CS / 2, cy);
+      ctx.fillText(rightChar, (rightX + 1) * CS + CS / 2, cy);
+      ctx.restore();
+    }
+
+    // ── 20. Descent / ascend / unlock prompt ────────────────────────────────────
+    if (game.dungeonSystem) {
+      const transition = game.dungeonSystem.nearTransition();
+      if (transition) {
+        let label = null;
+        let col, row;
+        if (transition.kind === 'ascend') {
+          col = game.activeFloor.stairsUpCol;
+          row = game.activeFloor.stairsUpRow;
+          // Locked (e.g. Trap Room mid-clear) stays silent — the red-tinted
+          // footprint is the only signal, same precedent as the Key Vault's
+          // locked-without-key case below.
+          if (!game.activeFloor.stairsUpLocked) {
+            label = 'SPACE  ASCEND';
+          }
+        } else {
+          col = transition.descent.col;
+          row = transition.descent.row;
+          if (!transition.descent.locked) {
+            label = 'SPACE  DESCEND';
+          } else if (game.dungeonKeyObtainedThisRun) {
+            // Key Vault door — only hinted once the player is actually
+            // carrying the key; a locked door with no key stays silent
+            // (the dimmed footprint itself is the only signal).
+            label = 'SPACE  UNLOCK';
+          }
+        }
+        if (label) {
+          ctx.save();
+          ctx.font = `10px 'Unifont', monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = '#ccccaa';
+          ctx.fillText(
+            spectaclesTransformString(label, isSpectaclesActive(game)),
+            col * GRID.CELL_SIZE + GRID.CELL_SIZE / 2, row * GRID.CELL_SIZE - GRID.CELL_SIZE
+          );
+          ctx.restore();
+          ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`; // restore font
+        }
       }
     }
 
@@ -323,5 +424,23 @@ export class HutInteriorOverlay {
     }
     ctx.fillText(spectaclesTransformString(label, isSpectaclesActive(game)), GRID.WIDTH / 2, offsetY + 2);
     ctx.restore();
+
+    // ── 19b. Held-key indicator — small corner glyph, non-instructive ─────────
+    // Skull key glyph. Uses '8' (the same Bones glyph the key-carrying object
+    // renders as in-world — 'Ω' is already claimed by the hut Cauldron, see
+    // resolved-bugs.md). True inventory visibility lives in the Tab overlay's
+    // KEY ITEMS section (InventoryOverlay.js); this is just an at-a-glance PiP cue.
+    if (game.player.inDungeon && game.dungeonKeyObtainedThisRun) {
+      ctx.save();
+      ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = '#cc3333';
+      ctx.fillText(
+        spectaclesTransformString('8', isSpectaclesActive(game)),
+        offsetX + GRID.CELL_SIZE, offsetY + 2
+      );
+      ctx.restore();
+    }
   }
 }

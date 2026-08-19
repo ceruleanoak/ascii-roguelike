@@ -22,6 +22,18 @@ import { getPickupCategory } from '../../data/items.js';
 
 const TREASURE_COLOR = '#ffd700';
 const COMPONENTS_COLOR = '#ffaa00';
+const KEY_ITEM_COLOR = '#ff5555';
+
+// KEY_ITEMS — declarative registry of narrative/puzzle keys that are held,
+// not equipped: never occupy a weapon/quick slot, surfaced only via this
+// dedicated inventory section. Add an entry here + flip its `held` source
+// true/false at the key's own pickup/consume site (e.g.
+// game.dungeonKeyObtainedThisRun, room.vaultInfo.keyHeld) — nothing else
+// here changes.
+const KEY_ITEM_DEFS = [
+  { char: '8', name: 'Skull Key', held: (game) => !!game.dungeonKeyObtainedThisRun },
+  { char: '߃', name: 'Vault Key', held: (game) => !!game.currentRoom?.vaultInfo?.keyHeld }
+];
 
 // Column start cells (icon, text), keyed by column count. Icon-text gap is
 // 1 cell (was 2) to leave more width for the name before the next column.
@@ -72,7 +84,7 @@ export class InventoryOverlay {
   // chosen column layout) and returns the updated row index. Rows past
   // maxIndex are skipped and their item counts folded into `overflow` for
   // the "+N MORE" indicator, rather than drawing outside the box.
-  _renderCategorySection(game, title, color, counts, startY, index, spectaclesOn, maxIndex, overflow, columnCount) {
+  _renderCategorySection(game, title, color, counts, startY, index, spectaclesOn, maxIndex, overflow, columnCount, nameOverrides = null) {
     const entries = Object.entries(counts);
     if (entries.length === 0) return index;
 
@@ -107,14 +119,17 @@ export class InventoryOverlay {
         const entry = entries[row * columns.length + col];
         if (!entry) continue;
         const [char, count] = entry;
-        const data = game.getIngredientData(char);
+        const overrideName = nameOverrides?.[char];
+        const data = overrideName ? { name: overrideName } : game.getIngredientData(char);
         const { iconX, textX } = columns[col];
         const nextColX = columns[col + 1] ? columns[col + 1].iconX : CONTENT_RIGHT_CELL + 1;
         const maxTextWidth = (nextColX - textX) * GRID.CELL_SIZE - GRID.CELL_SIZE * 0.5;
 
         this.renderer.drawUIEntity(GRID.CELL_SIZE * iconX, y, char, color);
 
-        const text = this._fitText(`${data.name} x${count}`, maxTextWidth);
+        // Key items are boolean-held (always exactly one) — omit the "xN"
+        // count suffix used by stackable treasure/components/materials.
+        const text = this._fitText(overrideName ? data.name : `${data.name} x${count}`, maxTextWidth);
         this.renderer.uiCtx.fillStyle = COLORS.TEXT;
         this.renderer.uiCtx.textAlign = 'left';
         this.renderer.uiCtx.fillText(spectaclesTransformString(text, spectaclesOn), GRID.CELL_SIZE * textX, y);
@@ -179,7 +194,18 @@ export class InventoryOverlay {
     const ingredients = game.getIngredients();
     const coinCount = game.inventorySystem.getCoinCount();
 
-    const totalItems = ingredients.length + coinCount;
+    // ── Key items (held, not equipped narrative/puzzle keys) ────────────────
+    const keyItemCounts = {};
+    const keyItemNames = {};
+    for (const def of KEY_ITEM_DEFS) {
+      if (def.held(game)) {
+        keyItemCounts[def.char] = 1;
+        keyItemNames[def.char] = def.name;
+      }
+    }
+    const keyItemCount = Object.keys(keyItemCounts).length;
+
+    const totalItems = ingredients.length + coinCount + keyItemCount;
 
     if (totalItems === 0) {
       const emptyMsg = game.stateMachine.getCurrentState() === GAME_STATES.REST
@@ -225,8 +251,8 @@ export class InventoryOverlay {
     const availableRows = Math.floor((contentBottom - startY) / lineHeight) + 1;
 
     // Prefer 2 columns; widen to 3 only if 2 wouldn't fit the roster.
-    const rowsFor2 = this._sectionRowCount(treasureCounts, 2) + this._sectionRowCount(componentCounts, 2) + this._sectionRowCount(materialCounts, 2);
-    const rowsFor3 = this._sectionRowCount(treasureCounts, 3) + this._sectionRowCount(componentCounts, 3) + this._sectionRowCount(materialCounts, 3);
+    const rowsFor2 = this._sectionRowCount(treasureCounts, 2) + this._sectionRowCount(componentCounts, 2) + this._sectionRowCount(materialCounts, 2) + this._sectionRowCount(keyItemCounts, 2);
+    const rowsFor3 = this._sectionRowCount(treasureCounts, 3) + this._sectionRowCount(componentCounts, 3) + this._sectionRowCount(materialCounts, 3) + this._sectionRowCount(keyItemCounts, 3);
     const columnCount = rowsFor2 <= availableRows ? 2 : 3;
     const fitsWithoutOverflow = (columnCount === 2 ? rowsFor2 : rowsFor3) <= availableRows;
 
@@ -237,6 +263,7 @@ export class InventoryOverlay {
     index = this._renderCategorySection(game, 'TREASURE', TREASURE_COLOR, treasureCounts, startY, index, spectaclesOn, maxIndex, overflow, columnCount);
     index = this._renderCategorySection(game, 'COMPONENTS', COMPONENTS_COLOR, componentCounts, startY, index, spectaclesOn, maxIndex, overflow, columnCount);
     index = this._renderCategorySection(game, 'MATERIALS', COLORS.INGREDIENT, materialCounts, startY, index, spectaclesOn, maxIndex, overflow, columnCount);
+    index = this._renderCategorySection(game, 'KEY ITEMS', KEY_ITEM_COLOR, keyItemCounts, startY, index, spectaclesOn, maxIndex, overflow, columnCount, keyItemNames);
 
     if (overflow.count > 0) {
       this.renderer.drawUIEntity(
