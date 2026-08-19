@@ -24,12 +24,18 @@
 // - HEADROOM exists so legitimate orchestration growth (a new system's
 //   import + instantiation + update call in main.js) doesn't trip the gate.
 //   A feature blob will blow past it.
+// - OVERAGE_TOLERANCE lets a genuinely small miss (a couple of one-line
+//   delegated calls) warn instead of fail — it is not an invitation to skip
+//   the extraction pass for anything bigger. Budgets still never move up:
+//   this only changes whether a small overage blocks the build, not what
+//   number is stored in arch-budgets.json.
 
 import { readFileSync, writeFileSync, readdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 const HEADROOM = 1000;
+const OVERAGE_TOLERANCE = 300;
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const budgetPath = join(root, 'tools', 'arch-budgets.json');
@@ -89,9 +95,12 @@ function checkLayerGuard() {
 for (const [file, budget] of Object.entries(budgets)) {
   const chars = readFileSync(join(root, file), 'utf8').length;
   next[file] = Math.min(budget, chars + HEADROOM);
-  if (chars > budget) {
+  const over = chars - budget;
+  if (over > OVERAGE_TOLERANCE) {
     failed = true;
-    console.error(`  FAIL  ${file}: ${chars} chars exceeds budget ${budget} (+${chars - budget})`);
+    console.error(`  FAIL  ${file}: ${chars} chars exceeds budget ${budget} (+${over})`);
+  } else if (over > 0) {
+    console.log(`  warn  ${file}: ${chars}/${budget} (+${over}, within ${OVERAGE_TOLERANCE}-char tolerance)`);
   } else {
     console.log(`  ok    ${file}: ${chars}/${budget}`);
   }

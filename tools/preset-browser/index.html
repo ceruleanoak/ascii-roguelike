@@ -33,10 +33,12 @@
   .chips { padding:2px 8px; display:flex; flex-wrap:wrap; gap:4px; }
   .chip { background:var(--chip); color:var(--fg); border-radius:10px; padding:2px 8px; font-size:11px; cursor:pointer; border:1px solid transparent; white-space:nowrap; }
   .chip:hover { border-color:var(--accent); }
-  .chip.on { background:var(--accent); color:#0a0a12; }
   .chip .ct { color:var(--dim); margin-left:4px; }
-  .chip.on .ct { color:#0a0a12cc; }
   .chip.cls { background:#2c3a2c; }
+  /* .on must come after .cls (equal specificity, later rule wins) — inst/class/flag
+     chips all carry .cls, and an active filter's highlight must never be masked by it. */
+  .chip.on { background:var(--accent); color:#0a0a12; }
+  .chip.on .ct { color:#0a0a12cc; }
   .tree { font-size:12px; }
   .tree .folder { padding:4px 12px; color:var(--dim); font-weight:600; }
   .tree .coll { padding:4px 12px; cursor:pointer; display:flex; justify-content:space-between; }
@@ -89,7 +91,7 @@
     <select id="auOut" class="sm" style="max-width:160px"><option value="">off</option></select>
     <div class="spacer"></div>
     <label class="small"><input type="checkbox" id="autoAud" checked /> auto-audition</label>
-    <label class="small"><input type="checkbox" id="hideDead" /> hide dead/unnamed</label>
+    <label class="small"><input type="checkbox" id="hideDead" checked /> hide dead/unnamed</label>
     <label class="small" title="When on, a–; play the synth; when off, they are browse shortcuts (F/T/C…)"><input type="checkbox" id="qwertyPlay" /> ⌨ keys play</label>
     <label class="small">test</label>
     <select id="testNote"></select>
@@ -101,7 +103,31 @@
     <select id="srSel"><option value="48000">48k</option><option value="44100">44.1k</option></select>
     <label class="small">vol</label>
     <input type="range" id="vol" min="0" max="1" step="0.01" value="0.5" style="width:80px" />
+    <button id="btnHW" class="sm">🎛 MPK</button>
     <button id="panic" class="sm">Panic</button>
+  </div>
+
+  <div id="hwPanel" style="display:none;padding:10px 14px;background:var(--panel);border-bottom:1px solid #000;font-size:12px">
+    <div style="display:flex;gap:28px;flex-wrap:wrap">
+      <div>
+        <div style="color:var(--dim);text-transform:uppercase;font-size:10px;letter-spacing:.06em;margin-bottom:5px">
+          Pads (Bank/Prog-change → recall patch)</div>
+        <div id="padList" style="display:flex;flex-direction:column;gap:2px;min-width:220px"></div>
+        <button id="btnAssignPad" class="sm" style="margin-top:5px">+ Assign selected patch to pad…</button>
+      </div>
+      <div>
+        <div style="color:var(--dim);text-transform:uppercase;font-size:10px;letter-spacing:.06em;margin-bottom:5px">Knobs (live)</div>
+        <div id="knobList" style="display:flex;flex-direction:column;gap:2px;min-width:230px"></div>
+        <button id="btnLearnKnobs" class="sm" style="margin-top:5px">Learn K1–K8 in order…</button>
+      </div>
+      <div>
+        <div style="color:var(--dim);text-transform:uppercase;font-size:10px;letter-spacing:.06em;margin-bottom:5px">Mod stick (live)</div>
+        <div id="modList" style="display:flex;flex-direction:column;gap:2px;min-width:230px"></div>
+      </div>
+      <div style="align-self:flex-end">
+        <button id="btnHWClear" class="sm">Clear all assignments</button>
+      </div>
+    </div>
   </div>
 
   <div class="main">
@@ -168,6 +194,16 @@
       </div>
     </div>
   </div>
+  <div id="hwLearnPopup" style="display:none;position:fixed;inset:0;background:#000a;z-index:100;align-items:center;justify-content:center">
+    <div style="background:var(--panel2);border:1px solid #000;border-radius:8px;padding:16px;width:340px">
+      <div id="hwLearnMsg" style="margin-bottom:12px;white-space:pre-line"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button id="hwLearnCancel" class="sm">Cancel</button>
+        <button id="hwLearnRetry" class="sm">Retry</button>
+        <button id="hwLearnConfirm" class="sm">Confirm</button>
+      </div>
+    </div>
+  </div>
   <div class="status" id="status">Initializing…</div>
 
   <script>
@@ -210,7 +246,11 @@
       collActions: document.getElementById('collActions'), autoAud: document.getElementById('autoAud'),
       testNote: document.getElementById('testNote'), vol: document.getElementById('vol'),
       octLabel: document.getElementById('octLabel'), cntAll: document.getElementById('cntAll'),
-      cntFav: document.getElementById('cntFav'), auOut: document.getElementById('auOut')
+      cntFav: document.getElementById('cntFav'), auOut: document.getElementById('auOut'),
+      btnHW: document.getElementById('btnHW'), hwPanel: document.getElementById('hwPanel'),
+      padList: document.getElementById('padList'), btnAssignPad: document.getElementById('btnAssignPad'),
+      knobList: document.getElementById('knobList'), btnLearnKnobs: document.getElementById('btnLearnKnobs'),
+      modList: document.getElementById('modList'), btnHWClear: document.getElementById('btnHWClear')
     };
 
     // ───── audio ─────
@@ -322,13 +362,17 @@
     }
     var tagSetCache = new Map();   // pid -> Set(all tags); invalidated on manual-tag edits
     function tagsSet(pid) { var s = tagSetCache.get(pid); if (!s) { s = new Set(manualTags(pid).concat(derivedTags(pid))); tagSetCache.set(pid, s); } return s; }
+    // Isolate, not narrow: with nothing selected everything shows; clicking a chip
+    // isolates to that tag, and each further click ADDS to the visible set (union,
+    // not intersection) rather than requiring all of them at once. Clearing the last
+    // active chip reverts to showing everything.
     function passesFilters(v) {
       if (!activeFilters.size) return true;
-      var have = tagsSet(v.pid), ok = true;
-      activeFilters.forEach(function (f) { if (ok && !have.has(f)) ok = false; });
+      var have = tagsSet(v.pid), ok = false;
+      activeFilters.forEach(function (f) { if (have.has(f)) ok = true; });
       return ok;
     }
-    var hideDead = false, sortBy = 'name';
+    var hideDead = true, sortBy = 'name';
     function isNoName(nm) { var t = (nm || '').trim(); if (!t) return true; var d = new Set(t.replace(/\s/g, '').toLowerCase()).size; var a = (t.match(/[a-z0-9]/gi) || []).length; return (d <= 2 && t.length >= 3) || a < t.length * 0.4; }
     // "dead" = truly non-functional. Slow-attack pads (e.g. CASCADE 21) are NOT dead — they play fine, just swell in.
     function isDead(v) { var d = derivedTags(v.pid); return d.indexOf('flag:silent') >= 0 || d.indexOf('flag:dead') >= 0 || isNoName(v.n); }
@@ -865,6 +909,209 @@
       else renderList();
     };
 
+    // ───── Hardware controller (MPK-style pads / knobs / mod stick) ─────
+    // MIDI-learn, not hardcoded to one controller's factory CC/PC numbering — Bank
+    // A/B + Prog Select behavior varies by firmware/editor config, so pads bind by
+    // capturing the actual (channel, bank, program) triple on the next Program
+    // Change rather than guessing Akai's convention.
+    var HW = { pads: {}, knobCCs: [null, null, null, null, null, null, null, null], modYCC: null, modYTarget: 'modwheel', modXTarget: 'bend' };
+    // {kind:'pad'|'knob'|'modY', idx?, pending} — `pending` holds a just-captured value
+    // awaiting user confirm; while it's set, further incoming MIDI is ignored so a
+    // knob's burst of CC ticks (or a slow pad release) can't blow past one capture.
+    var hwLearn = null;
+    var bankState = {};                // channel -> {msb, lsb}, tracked from CC0/CC32
+    var KNOB_LABELS = ['K1 → OP1 level', 'K2 → OP2 level', 'K3 → OP3 level', 'K4 → OP4 level',
+      'K5 → OP5 level', 'K6 → OP6 level', 'K7 → feedback', 'K8 → volume'];
+    var OP_LEVEL_OFFSET = [121, 100, 79, 58, 37, 16]; // OP1..OP6 output level — see syx.cjs unpackVoice
+    var FEEDBACK_OFFSET = 135;        // feedback (0-7) — see syx.cjs unpackVoice
+    // What a mod-stick axis actually drives — selectable per axis (not hardcoded)
+    // since both axes are just raw MIDI streams (Y = learned CC, X = pitch-bend
+    // messages) that can be reinterpreted as any depth-style target. Extend this
+    // list, not the axis wiring, when a new live-controllable target is needed.
+    // 'modwheel' forwards a real CC1 message live to the engine every tick — this is
+    // deliberately ONE target, not separate pitch/amp entries: on real DX7 hardware
+    // the mod wheel always drives pitch AND amp modulation together (scaled by each
+    // patch's own PMS/AMS sensitivity — see the "pmod"/"amod" sidebar filters for
+    // which patches respond at all); there's no wheel-only way to isolate one axis.
+    var MOD_TARGETS = [
+      { id: 'off', label: 'Off' },
+      { id: 'modwheel', label: 'Mod wheel — live vibrato/tremolo (needs flag:pmod/flag:amod patch)' },
+      { id: 'bend', label: 'Pitch bend' }
+    ];
+    function normalizeModTarget(t) { return (t === 'pmod' || t === 'amod') ? 'modwheel' : t; } // migrate pre-modwheel hardware.json values
+
+    function bankSig(ch) { var b = bankState[ch] || {}; return (b.msb == null ? 'x' : b.msb) + '.' + (b.lsb == null ? 'x' : b.lsb); }
+    function padSig(ch, program) { return ch + '|' + bankSig(ch) + '|' + program; }
+
+    function loadHW() {
+      window.api.hardwareLoad().then(function (d) {
+        HW.pads = d.pads || {};
+        HW.knobCCs = d.knobCCs || [null, null, null, null, null, null, null, null];
+        HW.modYCC = (d.modYCC != null) ? d.modYCC : null;
+        HW.modYTarget = normalizeModTarget(d.modYTarget) || 'modwheel';
+        HW.modXTarget = normalizeModTarget(d.modXTarget) || 'bend';
+        renderHwPanel();
+      }).catch(function () {});
+    }
+    function saveHW() { window.api.hardwareSave(HW); }
+
+    function renderHwPanel() {
+      var padKeys = Object.keys(HW.pads);
+      els.padList.innerHTML = padKeys.length ? padKeys.map(function (sig) {
+        var p = HW.pads[sig];
+        return '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center">' +
+          '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(p.name || p.pid) + '</span>' +
+          '<a href="#" data-sig="' + esc(sig) + '" class="hwClearPad" style="color:var(--dim)">×</a></div>';
+      }).join('') : '<span style="color:var(--dim)">no pads assigned</span>';
+      els.padList.querySelectorAll('.hwClearPad').forEach(function (a) {
+        a.onclick = function (e) { e.preventDefault(); delete HW.pads[a.dataset.sig]; saveHW(); renderHwPanel(); };
+      });
+
+      els.knobList.innerHTML = KNOB_LABELS.map(function (label, i) {
+        return '<div style="display:flex;justify-content:space-between;gap:8px">' +
+          '<span>' + esc(label) + '</span><span style="color:var(--dim)">' +
+          (HW.knobCCs[i] != null ? 'CC' + HW.knobCCs[i] : '—') + '</span></div>';
+      }).join('');
+
+      function targetSelect(id, current) {
+        return '<select id="' + id + '" class="sm" style="max-width:100%">' + MOD_TARGETS.map(function (t) {
+          return '<option value="' + t.id + '"' + (t.id === current ? ' selected' : '') + '>' + esc(t.label) + '</option>';
+        }).join('') + '</select>';
+      }
+      els.modList.innerHTML =
+        '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center">' +
+        '<span>Mod Y</span><span style="color:var(--dim)">' +
+        (HW.modYCC != null ? 'CC' + HW.modYCC : '—') + '</span>' +
+        '<button class="sm" id="btnLearnModY">Learn…</button></div>' +
+        '<div style="margin:2px 0 8px">' + targetSelect('modYTarget', HW.modYTarget) + '</div>' +
+        '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center">' +
+        '<span>Mod X</span><span style="color:var(--dim)">pitch-bend msgs</span></div>' +
+        '<div style="margin:2px 0">' + targetSelect('modXTarget', HW.modXTarget) + '</div>' +
+        '<div style="color:var(--dim);margin-top:3px">Live while a note is held — but only on patches tagged flag:pmod / flag:amod in the sidebar (others have no LFO sensitivity to respond with).</div>';
+      document.getElementById('btnLearnModY').onclick = function () {
+        hwLearn = { kind: 'modY', pending: null }; status('Move mod stick Y (or the CC you want to learn) now…');
+      };
+      document.getElementById('modYTarget').onchange = function (e) { HW.modYTarget = e.target.value; saveHW(); };
+      document.getElementById('modXTarget').onchange = function (e) { HW.modXTarget = e.target.value; saveHW(); };
+    }
+
+    // Confirm popup for the learn flow — shown only once a value has actually been
+    // captured (`hwLearn.pending`), never while still waiting for the first message.
+    function showHwLearnPopup(msg, onConfirm, onRetry, onCancel) {
+      var ov = document.getElementById('hwLearnPopup');
+      document.getElementById('hwLearnMsg').textContent = msg;
+      ov.style.display = 'flex';
+      document.getElementById('hwLearnConfirm').onclick = function () { ov.style.display = 'none'; onConfirm(); };
+      document.getElementById('hwLearnRetry').onclick = function () { ov.style.display = 'none'; onRetry(); };
+      document.getElementById('hwLearnCancel').onclick = function () { ov.style.display = 'none'; onCancel(); };
+    }
+
+    els.btnHW.onclick = function () { els.hwPanel.style.display = (els.hwPanel.style.display === 'none') ? 'block' : 'none'; };
+    els.btnAssignPad.onclick = function () {
+      if (!currentPid) { status('Select a patch first.', true); return; }
+      hwLearn = { kind: 'pad', pending: null };
+      status('Hit the pad now (with its Bank + Prog Select set)…');
+    };
+    els.btnLearnKnobs.onclick = function () {
+      hwLearn = { kind: 'knob', idx: 0, pending: null };
+      status('Turn ' + KNOB_LABELS[0] + '…');
+    };
+    els.btnHWClear.onclick = function () {
+      HW.pads = {}; HW.knobCCs = [null, null, null, null, null, null, null, null];
+      HW.modYCC = null; HW.modYTarget = 'modwheel'; HW.modXTarget = 'bend';
+      saveHW(); renderHwPanel(); status('Hardware assignments cleared.');
+    };
+
+    // Called from onMIDI once a CC arrives while a knob-learn slot is armed and
+    // unconfirmed. Pops a Confirm/Retry/Cancel dialog instead of committing straight
+    // away, so a knob's rapid multi-CC burst only ever produces one candidate value.
+    function captureKnobCC(cc) {
+      hwLearn.pending = cc;
+      showHwLearnPopup('Captured CC' + cc + ' for ' + KNOB_LABELS[hwLearn.idx] + '.',
+        function confirm() {
+          HW.knobCCs[hwLearn.idx] = hwLearn.pending;
+          hwLearn.idx++; hwLearn.pending = null;
+          if (hwLearn.idx >= 8) { hwLearn = null; saveHW(); renderHwPanel(); status('Knobs learned.'); }
+          else status('Turn ' + KNOB_LABELS[hwLearn.idx] + '…');
+        },
+        function retry() { hwLearn.pending = null; status('Turn ' + KNOB_LABELS[hwLearn.idx] + ' again…'); },
+        function cancel() { hwLearn = null; status('Knob learn cancelled.'); });
+    }
+    function captureModY(cc) {
+      hwLearn.pending = cc;
+      showHwLearnPopup('Captured CC' + cc + ' for Mod Y.',
+        function confirm() { HW.modYCC = hwLearn.pending; hwLearn = null; saveHW(); renderHwPanel(); status('Mod Y learned.'); },
+        function retry() { hwLearn.pending = null; status('Move mod stick Y again…'); },
+        function cancel() { hwLearn = null; status('Mod Y learn cancelled.'); });
+    }
+    function capturePad(ch, program) {
+      hwLearn.pending = { ch: ch, program: program };
+      showHwLearnPopup('Captured pad for "' + els.patchName.textContent + '".',
+        function confirm() {
+          HW.pads[padSig(hwLearn.pending.ch, hwLearn.pending.program)] = { pid: currentPid, name: els.patchName.textContent };
+          hwLearn = null; saveHW(); renderHwPanel(); status('Pad assigned.');
+        },
+        function retry() { hwLearn.pending = null; status('Hit the pad again…'); },
+        function cancel() { hwLearn = null; status('Pad learn cancelled.'); });
+    }
+
+    function applyKnob(idx, ccVal) {
+      var level = Math.round(ccVal * 99 / 127);   // DX7 param range is 0-99, MIDI CC is 0-127
+      if (idx < 6) {
+        if (!currentVCED) return;
+        currentVCED[OP_LEVEL_OFFSET[idx]] = level;
+        if (engine) engine.loadVCED(currentVCED);
+      } else if (idx === 6) {
+        if (!currentVCED) return;
+        currentVCED[FEEDBACK_OFFSET] = Math.round(ccVal * 7 / 127);
+        if (engine) engine.loadVCED(currentVCED);
+      } else if (idx === 7) {
+        els.vol.value = (ccVal / 127).toFixed(3);
+        els.vol.oninput();
+      }
+    }
+    // Shared by both mod-stick axes. `raw` is either a 7-bit CC value (Mod Y) or a
+    // 14-bit pitch-bend value (Mod X, `is14bit`) — normalized against whichever
+    // target is currently selected for that axis.
+    //
+    // 'modwheel' MUST be sent as a live MIDI CC1 message, not by mutating the
+    // patch's stored LFO depth (VCED bytes 139/140) and reloading it — an earlier
+    // version did that, and it's why the stick only ever seemed to work if pushed
+    // fully BEFORE striking a key: reloading the whole patch resets engine voice
+    // state and only takes effect for the next note-on, never for a note already
+    // sounding. A real mod wheel is a continuous, live input that the DX7 engine
+    // (msfa vendors the actual Dexed/msfa core) reads every block and applies to
+    // whichever notes are currently held, scaled by the patch's own PMS/AMS
+    // sensitivity — see MsfaEngine.prototype.controlChange.
+    function applyAxisTarget(target, raw, is14bit) {
+      if (target === 'off' || !engine) return;
+      if (target === 'bend') {
+        if (!engine.pitchBend) return;
+        engine.pitchBend(is14bit ? raw : Math.round(raw * 16383 / 127));
+        return;
+      }
+      if (target === 'modwheel') {
+        // Pitch-bend messages (Mod X) are bipolar — center-at-rest is 8192, not 0 —
+        // because the stick springs back through a full 360° of travel rather than
+        // resting at one extreme like a mod wheel. Mod wheel targets are unipolar (0
+        // at rest, rising with deflection in ANY direction), so measure distance
+        // from center rather than the raw value, or resting position would read as
+        // a constant ~50% depth. Mod Y (a learned CC) already reports an absolute
+        // value per AKAI's own joystick spec, so it needs no such conversion.
+        var value = is14bit ? Math.round(Math.abs(raw - 8192) / 8192 * 127) : raw;
+        if (engine.controlChange) engine.controlChange(1, value);       // msfa: real CC1
+        else if (engine.setMod) engine.setMod(value / 127);             // JS fallback: dx7-worklet controllerModVal
+        return;
+      }
+    }
+    function recallPad(ch, program) {
+      var p = HW.pads[padSig(ch, program)];
+      if (!p) return;
+      var v = byPid.get(p.pid);
+      if (v) selectVoice(v);
+    }
+    loadHW();
+
     // ───── Web MIDI ─────
     // Inputs play the local engine. Outputs drive the live link to the FMVoice
     // Audio Unit: the selected patch is pushed to it as a DX7 VCED SysEx dump, so
@@ -912,7 +1159,39 @@
       }).catch(function (e) { status('AU link send failed: ' + e.message, true); });
     }
     els.auOut.onchange = function () { if (currentVCED) sendToPlugin(currentVCED); };
-    function onMIDI(e) { var d = e.data, cmd = d[0] & 0xf0; if (cmd === 0x90 && d[2] > 0) noteOn(d[1], d[2]); else if (cmd === 0x80 || (cmd === 0x90 && d[2] === 0)) noteOff(d[1]); else if (cmd === 0xb0 && d[1] === 123) panic(); }
+    function onMIDI(e) {
+      var d = e.data, cmd = d[0] & 0xf0, ch = d[0] & 0x0f;
+      if (cmd === 0x90 && d[2] > 0) { noteOn(d[1], d[2]); return; }
+      if (cmd === 0x80 || (cmd === 0x90 && d[2] === 0)) { noteOff(d[1]); return; }
+      if (cmd === 0xb0) {
+        if (d[1] === 123) { panic(); return; }
+        if (d[1] === 0 || d[1] === 32) {          // Bank Select MSB/LSB — tracked for pad signatures, never itself learnable
+          bankState[ch] = bankState[ch] || {};
+          bankState[ch][d[1] === 0 ? 'msb' : 'lsb'] = d[2];
+          return;
+        }
+        if (hwLearn && hwLearn.kind === 'knob') {
+          if (hwLearn.pending == null) captureKnobCC(d[1]);   // else: still awaiting confirm — ignore the rest of this burst
+          return;
+        }
+        if (hwLearn && hwLearn.kind === 'modY') {
+          if (hwLearn.pending == null) captureModY(d[1]);
+          return;
+        }
+        for (var i = 0; i < 8; i++) if (HW.knobCCs[i] === d[1]) { applyKnob(i, d[2]); return; }
+        if (HW.modYCC === d[1]) { applyAxisTarget(HW.modYTarget, d[2], false); return; }
+        return;
+      }
+      if (cmd === 0xc0) {
+        if (hwLearn && hwLearn.kind === 'pad') {
+          if (hwLearn.pending == null) capturePad(ch, d[1]);
+          return;
+        }
+        recallPad(ch, d[1]);
+        return;
+      }
+      if (cmd === 0xe0) { applyAxisTarget(HW.modXTarget, (d[2] << 7) | d[1], true); return; }
+    }
 
     // ───── boot ─────
     function loadIndex(refresh) {

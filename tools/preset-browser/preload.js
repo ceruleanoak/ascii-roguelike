@@ -14,6 +14,9 @@ contextBridge.exposeInMainWorld('api', {
   tagsSave: (map) => ipcRenderer.invoke('tags-save', map),
   notesSave: (map) => ipcRenderer.invoke('notes-save', map),
   ratingsSave: (map) => ipcRenderer.invoke('ratings-save', map),
+  // hardware controller assignments (pads / knobs / mod stick — MIDI-learned)
+  hardwareLoad: () => ipcRenderer.invoke('hardware-load'),
+  hardwareSave: (data) => ipcRenderer.invoke('hardware-save', data),
   // collections (folders = nesting in relPath)
   collectionList: () => ipcRenderer.invoke('collection-list'),
   collectionLoad: (rel) => ipcRenderer.invoke('collection-load', rel),

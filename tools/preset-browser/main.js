@@ -118,6 +118,14 @@ ipcMain.handle('tags-save', async (_e, map) => { writeJSON(libFile('tags.json'),
 ipcMain.handle('notes-save', async (_e, map) => { writeJSON(libFile('notes.json'), map); return { ok: true }; });
 ipcMain.handle('ratings-save', async (_e, map) => { writeJSON(libFile('ratings.json'), map); return { ok: true }; });
 
+// hardware.json — MPK-Mini-style pad/knob/mod-stick assignments (MIDI-learned,
+// not hardcoded to one controller's factory CC/PC numbering). Flat file, same
+// pattern as favorites/tags/notes/ratings above.
+ipcMain.handle('hardware-load', async () => readJSON(libFile('hardware.json'), {
+  pads: {}, knobCCs: [null, null, null, null, null, null, null, null], modYCC: null, modYTarget: 'modwheel', modXTarget: 'bend'
+}));
+ipcMain.handle('hardware-save', async (_e, data) => { writeJSON(libFile('hardware.json'), data); return { ok: true }; });
+
 ipcMain.handle('collection-list', async () => listCollections());
 ipcMain.handle('collection-load', async (_e, rel) => JSON.parse(await fs.promises.readFile(resolveCollectionPath(rel), 'utf8')));
 ipcMain.handle('collection-save', async (_e, rel, data) => {

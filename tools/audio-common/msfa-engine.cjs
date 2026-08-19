@@ -97,6 +97,27 @@
     if (this.node) notes.forEach(function (n) { self.node.port.postMessage({ type: 'midi', data: [0x80, n & 0x7f, 0] }); });
   };
   MsfaEngine.prototype.setMasterGain = function (g) { if (this.master) this.master.gain.value = g; };
+  // Raw pitch-bend passthrough — same postMessage channel noteOn/noteOff already use to
+  // reach wam_onmidi. Whether the compiled WASM engine actually responds is unverified;
+  // there is no JS-fallback equivalent (dx7-worklet.js has no 'bend' case), so callers
+  // should feature-detect (`engine.pitchBend`) rather than assume every engine has it.
+  MsfaEngine.prototype.pitchBend = function (value14) {
+    if (!this.node) return;
+    var v = Math.max(0, Math.min(16383, value14 | 0));
+    this.node.port.postMessage({ type: 'midi', data: [0xe0, v & 0x7f, (v >> 7) & 0x7f] });
+  };
+  // Raw Control Change passthrough — same postMessage channel as pitchBend/noteOn.
+  // This is the correct way to drive live modulation (mod wheel = CC1): msfa vendors
+  // the actual Dexed/msfa C++ core (EngineMkI.h includes msfa/controllers.h), which
+  // reads controller values continuously every block and applies them to whichever
+  // notes are currently sounding via the patch's own PMS/per-op AMS sensitivity —
+  // unlike loadVCED, which replaces the whole patch and only affects notes struck
+  // after the reload. Do not "control" pmod/amod by mutating VCED bytes 139/140 and
+  // reloading; that was the bug behind "mod stick only works if pushed before the key".
+  MsfaEngine.prototype.controlChange = function (cc, value) {
+    if (!this.node) return;
+    this.node.port.postMessage({ type: 'midi', data: [0xb0, cc & 0x7f, Math.max(0, Math.min(127, value | 0))] });
+  };
 
   MsfaEngine.prototype._ensureRenderWorker = function () {
     var self = this;

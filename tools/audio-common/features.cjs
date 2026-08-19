@@ -94,7 +94,13 @@
     var subLow = cops.some(function (o) { return o.oscMode === 'fixed' && o.freqCoarse <= 1; });
     var peg = (struct.pitchEG && struct.pitchEG.level) || [0, 0, 0, 0];
     var pegRange = Math.max.apply(null, peg) - Math.min.apply(null, peg);
+    // Sensitivity, not stored depth — LFO depth is often driven live (mod wheel/
+    // hardware), so "will this patch respond at all" hinges on PMS/AMS alone.
+    var pms = (struct.lfo && struct.lfo.pitchModSens) || 0;
+    var amsMax = Math.max.apply(null, (struct.operators || []).map(function (o) { return o.ampModSens || 0; }).concat([0]));
     var f = [];
+    if (pms > 0) f.push('pmod');
+    if (amsMax > 0) f.push('amod');
     if (fixedC === carr.length) f.push('non-pitched');         // drums/SFX — ignores the key
     else if (fixedC > 0) f.push('fixed-pitch');                // partly ignores the key
     if (atk > 80 && sus < 45) f.push('percussive');
