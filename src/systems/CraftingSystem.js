@@ -1,6 +1,7 @@
 import { findRecipe } from '../data/recipes.js';
 import { Item } from '../entities/Item.js';
 import { WEAPON_TIERS, ITEMS, isIngredient } from '../data/items.js';
+import { POTION_STARTER_MODIFIERS, applyPotionModifierColor } from '../data/alchemy.js';
 
 /**
  * Returns the next-tier pool for a given weapon char, or null if none exists.
@@ -136,13 +137,20 @@ export class CraftingSystem {
   }
 
   claimCraftedItem(x, y) {
+    // The Alchemist's Path — a potion's color/purity is fixed at the starter
+    // tier and persists to the true potion, rather than resetting to a
+    // static per-recipe color. Applies to both the cycling and direct paths.
+    const starterChar = [this.leftSlot, this.rightSlot].find(ch => ch in POTION_STARTER_MODIFIERS);
+
     if (this.cycleState) {
       const result = this.cycleState.predeterminedResult;
       this._cancelCycling();
       this.leftSlot = null;
       this.rightSlot = null;
       this.centerSlot = null;
-      return new Item(result, x, y);
+      const item = new Item(result, x, y);
+      if (starterChar) applyPotionModifierColor(item, starterChar);
+      return item;
     }
 
     if (!this.centerSlot) return null;
@@ -151,6 +159,7 @@ export class CraftingSystem {
     this.leftSlot = null;
     this.rightSlot = null;
     this.centerSlot = null;
+    if (starterChar) applyPotionModifierColor(item, starterChar);
     return item;
   }
 

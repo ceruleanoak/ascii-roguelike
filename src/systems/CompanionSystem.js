@@ -4,6 +4,13 @@ import { NPCRat } from '../entities/NPCRat.js';
 import { Ingredient } from '../entities/Ingredient.js';
 import { planeOf, PLANE_SURFACE } from './PlaneSystem.js';
 
+// Grace period before a wild crow may loot-seek a piece of ground loot,
+// timed from the first frame it's observed as a valid target (effectively
+// its drop/spawn time, since eligibility doesn't flicker). Gives the player
+// first look at anything that just hit the ground — including their own
+// starting gear — instead of a crow instantly swooping on it.
+const LOOT_SEEK_DELAY_MS = 2000;
+
 // Companion behavior: the bread-feed pipeline and per-frame drivers for every
 // befriendable creature — wild rat → NPCRat companion, wild crow → follower
 // flock → shoulder companion. Companion rosters (game.tamedRats,
@@ -303,16 +310,21 @@ export class CompanionSystem {
     // are always plane 0 (surface) — gate through PlaneSystem so a crow
     // never "sees" loot sitting inside a tunnel/interior plane.
     const lootItems = [];
+    const lootNow = performance.now();
     for (const ing of game.ingredients) {
       if (!ing || ing.consumed || ing.destroyed) continue;
-      if (ing.pickupReadyAt && ing.pickupReadyAt > performance.now()) continue;
+      if (ing.pickupReadyAt && ing.pickupReadyAt > lootNow) continue;
       if (planeOf(ing) !== PLANE_SURFACE) continue;
+      if (ing._lootSeenAt == null) ing._lootSeenAt = lootNow;
+      if (lootNow - ing._lootSeenAt < LOOT_SEEK_DELAY_MS) continue;
       lootItems.push(ing);
     }
     for (const it of game.items) {
       if (!it || it.consumed || it.destroyed || it.char === '⌬') continue;
-      if (it.pickupReadyAt && it.pickupReadyAt > performance.now()) continue;
+      if (it.pickupReadyAt && it.pickupReadyAt > lootNow) continue;
       if (planeOf(it) !== PLANE_SURFACE) continue;
+      if (it._lootSeenAt == null) it._lootSeenAt = lootNow;
+      if (lootNow - it._lootSeenAt < LOOT_SEEK_DELAY_MS) continue;
       lootItems.push(it);
     }
 

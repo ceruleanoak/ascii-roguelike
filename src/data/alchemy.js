@@ -6,21 +6,41 @@ import { applyCipher } from './cipher.js';
 // LootSystem (found starter potions, which also need a hidden ingredient
 // stamped on spawn).
 
-export const BASE_POTION_INGREDIENTS = new Set(['b', 'd', 'l', 'r']);   // Bone, Dust, Leaf, Root -> Base Potion 'G'
+export const BASE_POTION_INGREDIENTS = new Set(['b', 'd', 'l', 'r']);   // Bone, Dust, Leaf, Root -> Base Potion '🜄'
 export const PURIFIED_POTION_INGREDIENTS = new Set(['s', 'a', 'h']);    // Scale, Ash, Herb -> Purified Potion
 export const UNSTABLE_POTION_INGREDIENTS = new Set(['e', 'v', 'w']);    // Eye, Venom, Wing -> Unstable Potion
 
-export const STARTER_POTION_CHARS = new Set(['G', '🜅', '🜆']);
+export const STARTER_POTION_CHARS = new Set(['🜄', '🜅', '🜆']);
+
+// Bottle of Hot Water — shared by HutSystem (Alchemist hut-presence gate)
+// and roomFeatures (roaming-placement gate). Single source of truth so the
+// char never drifts between the two "currently carrying" checks.
+export const HOT_WATER_CHAR = '🜊';
+
+// Union of every raw ingredient that can seed a starter potion — the
+// "1st ingredients" the Quagmire's decor drops from. Shared between
+// AlchemySystem (cauldron ingredient menu) and the Quagmire drop override.
+export const ALL_STARTER_INGREDIENTS = new Set([
+  ...BASE_POTION_INGREDIENTS,
+  ...PURIFIED_POTION_INGREDIENTS,
+  ...UNSTABLE_POTION_INGREDIENTS
+]);
+
+/** Uniform random pick from the 1st-ingredients pool (Quagmire decor drops). */
+export function pickQuagmireIngredient() {
+  const pool = [...ALL_STARTER_INGREDIENTS];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
 
 export function starterPotionIngredientsFor(starterChar) {
-  if (starterChar === 'G') return BASE_POTION_INGREDIENTS;
+  if (starterChar === '🜄') return BASE_POTION_INGREDIENTS;
   if (starterChar === '🜅') return PURIFIED_POTION_INGREDIENTS;
   if (starterChar === '🜆') return UNSTABLE_POTION_INGREDIENTS;
   return null;
 }
 
 export function starterPotionForIngredient(ingredientChar) {
-  if (BASE_POTION_INGREDIENTS.has(ingredientChar)) return 'G';
+  if (BASE_POTION_INGREDIENTS.has(ingredientChar)) return '🜄';
   if (PURIFIED_POTION_INGREDIENTS.has(ingredientChar)) return '🜅';
   if (UNSTABLE_POTION_INGREDIENTS.has(ingredientChar)) return '🜆';
   return null;
@@ -35,6 +55,44 @@ export function isPotionIngredient(ingredientChar) {
 // Ingredient letter → Greek symbol using the game's cipher system
 export function ingredientToGreek(char) {
   return applyCipher(char);
+}
+
+/**
+ * The Alchemist's Path — a potion's color/purity is fixed at the starter
+ * tier and must persist through to the true potion it becomes, rather than
+ * resetting to a fixed per-recipe color. Maps every starter char (water-path
+ * 🜄/🜅/🜆 plus the liquid-path charge/burn/primal starters !/«/∿) to the
+ * `potionModifier` it stamps, and each modifier to its canonical color.
+ */
+export const POTION_STARTER_MODIFIERS = {
+  '🜄': null,          // Base — unmodified
+  '🜅': 'buff',        // Purified
+  '🜆': 'unstable',    // Unstable
+  '!': 'charge',       // Charged (Electrified Water path)
+  '«': 'burn',         // Burning (Magma path)
+  '∿': 'primal'        // Primal (Mud path)
+};
+
+export const POTION_MODIFIER_COLORS = {
+  base: '#3355ff',      // blue
+  buff: '#ffffff',      // purified — devoid of color
+  unstable: '#8833cc',  // violet
+  charge: '#ffdd33',    // yellow
+  burn: '#ff3333',      // red
+  primal: '#33cc33'     // green
+};
+
+/**
+ * Stamps a crafted item with the potionModifier and color implied by the
+ * starter char that produced it. Called wherever a true potion (or a
+ * re-stamped starter) is constructed — the Cauldron's _commitTrue and the
+ * REST Combine Station's claimCraftedItem.
+ */
+export function applyPotionModifierColor(item, starterChar) {
+  const modifier = POTION_STARTER_MODIFIERS[starterChar] ?? null;
+  item.potionModifier = modifier;
+  item.color = POTION_MODIFIER_COLORS[modifier ?? 'base'];
+  return item;
 }
 
 /**

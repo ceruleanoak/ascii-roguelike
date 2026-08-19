@@ -62,12 +62,17 @@ export const RECIPES = [
   { left: 'F', right: 'g', result: '@', name: 'Bomb' },          // Fire + Goo = Bomb
   { left: 'm', right: 'F', result: 'H', name: 'Health Potion' }, // Meat + Fire = Health Potion
   { left: 'y', right: 'y', result: '@', name: 'Bomb' },           // Firecracker + Firecracker = Bomb
-  { left: 'G', right: 'm', result: 'H', name: 'Health Potion' },  // Base Potion + Meat = Health Potion
-  { left: 'G', right: 'w', result: 'q', name: 'Haste Draught' },  // Base Potion + Wing = Haste Draught
-  { left: 'G', right: 'b', result: 'x', name: 'Stone Skin' },     // Base Potion + Bone = Stone Skin
-  { left: 'G', right: 't', result: 'u', name: 'Battle Elixir' },  // Base Potion + Teeth = Battle Elixir
-  { left: 'G', right: 'h', result: 'z', name: 'Mending Brew' },   // Base Potion + Herb = Mending Brew
-  { left: 'G', right: '𝑚', result: '🜛', name: 'Mana Potion' },   // Base Potion + Mana = Mana Potion
+  { left: '🜄', right: 'm', result: 'H', name: 'Health Potion' },  // Base Potion + Meat = Health Potion
+  { left: '🜄', right: 'w', result: 'q', name: 'Haste Draught' },  // Base Potion + Wing = Haste Draught
+  { left: '🜄', right: 'b', result: 'x', name: 'Stone Skin' },     // Base Potion + Bone = Stone Skin
+  { left: '🜄', right: 't', result: 'u', name: 'Battle Elixir' },  // Base Potion + Teeth = Battle Elixir
+  { left: '🜄', right: 'h', result: 'z', name: 'Mending Brew' },   // Base Potion + Herb = Mending Brew
+  { left: '🜄', right: '𝑚', result: '🜛', name: 'Mana Potion' },   // Base Potion + Mana = Mana Potion
+
+  // Fire Essence + Bottle of Water = Bottle of Hot Water — a second, parallel
+  // path to the Caldera hot-spring fill (AlchemySystem.fillHotWaterBottle);
+  // zero shared code, both coexist by construction.
+  { left: 'F', right: '🜉', result: '🜊', name: 'Bottle of Hot Water' },
 
   // Purified Potion true-potion recipes — same results as Base Potion;
   // AlchemySystem stamps the buffed potionModifier onto the result instance.

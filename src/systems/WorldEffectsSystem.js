@@ -134,6 +134,51 @@ export function makeAuraParticle(cx, cy, type) {
   return null;
 }
 
+// Generic scatter-burst helpers (plain-object particles, hutPlane-tagged so
+// they render on the correct interior/exterior plane) — moved out of
+// InventorySystem.js, which used them only for consumable windup effects
+// (explosions, spark bursts) and the oil-destroyed-by-water splash, per
+// main.js's "transient world effects → WorldEffectsSystem.js" placement rule.
+// Distinct from Particle.js's own createExplosion(), which returns Particle
+// class instances and doesn't tag hutPlane — not a drop-in replacement here.
+export function createBurstParticles(game, particles, x, y, count, color) {
+  const chars = ['*', '+', 'x', '.', 'o'];
+  const hutPlane = !!game.activeFloor;
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 50 + Math.random() * 50;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 0.5 + Math.random() * 0.5,
+      maxLife: 1.0,
+      char: chars[Math.floor(Math.random() * chars.length)],
+      color,
+      hutPlane
+    });
+  }
+}
+
+export function createSparkBurst(game, particles, x, y) {
+  const hutPlane = !!game.activeFloor;
+  for (let i = 0; i < 12; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 80 + Math.random() * 120;
+    particles.push({
+      x: x + (Math.random() - 0.5) * 8,
+      y: y + (Math.random() - 0.5) * 8,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 0.2 + Math.random() * 0.2,
+      maxLife: 0.4,
+      char: Math.random() < 0.5 ? '*' : '.',
+      color: Math.random() < 0.6 ? '#ff8800' : '#ffff00',
+      hutPlane
+    });
+  }
+}
+
 // Shared transient world-effect ticker — runs in REST and EXPLORE alike.
 // Owns the per-frame lifecycle of: ember stack decay + ember contact ignition,
 // particles, timed puddles, enemy shockwave rings, goo blobs (incl. slime

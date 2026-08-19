@@ -10,6 +10,7 @@ import { Witch } from '../entities/Witch.js';
 import { ErrandCharacter } from '../entities/ErrandCharacter.js';
 import { WeaponsMaster } from '../entities/WeaponsMaster.js';
 import { freezeSurfaceRoom, thawSurfaceRoom } from './PlaneSystem.js';
+import { HOT_WATER_CHAR } from '../data/alchemy.js';
 
 /**
  * HutSystem — manages hut interior entry/exit and interior state.
@@ -545,8 +546,51 @@ export class HutSystem {
       game.companion.collisionMap = game.activeFloor.collisionMap;
     }
 
+    // Alchemist hut presence is re-evaluated live on every entry (unlike the
+    // rest of the cached interior) — see _syncAlchemistHutPresence.
+    if (hut.hutKind === 'alchemy') this._syncAlchemistHutPresence(hut);
+
     // Force background redraw so the overlay paints immediately
     game.renderer.backgroundDirty = true;
+  }
+
+  /**
+   * Live gate on whether the rescued Alchemist is currently standing in his
+   * hut. Unlike the rest of the cached interior (stations, decor), his
+   * presence depends on state that can change between visits — imperatively
+   * adds/removes the singleton from the cached floor's npcs array rather
+   * than regenerating the interior.
+   *
+   *   - Pre-rescue: absent (nothing to sync).
+   *   - Rescued, lesson not yet given: always present (first hut visit).
+   *   - Lesson given: present only while the player currently carries a
+   *     Bottle of Hot Water — otherwise he's out roaming (see roomFeatures
+   *     maybeSpawnRoamingAlchemist).
+   */
+  _syncAlchemistHutPresence(hut) {
+    const { game } = this;
+    const alchemist = game.alchemistNPC;
+    const floor = hut.interiorState;
+    if (!floor || !alchemist?.rescued) return;
+    floor.npcs = floor.npcs ?? [];
+
+    const carryingHotWater =
+      game.player.equippedConsumables?.some(it => it?.char === HOT_WATER_CHAR) ||
+      game.inventorySystem.consumableInventory?.some(it => it?.char === HOT_WATER_CHAR);
+    const shouldBePresent = !alchemist.lessonGiven || carryingHotWater;
+
+    const idx = floor.npcs.indexOf(alchemist);
+    if (shouldBePresent && idx === -1) {
+      const centerCol = Math.floor(floor.gridCols / 2);
+      const centerRow = Math.floor(floor.gridRows / 2) - 1;
+      alchemist.position.x = centerCol * GRID.CELL_SIZE;
+      alchemist.position.y = centerRow * GRID.CELL_SIZE;
+      alchemist.placement = 'hut';
+      floor.npcs.push(alchemist);
+    } else if (!shouldBePresent && idx !== -1) {
+      floor.npcs.splice(idx, 1);
+      if (alchemist.placement === 'hut') alchemist.placement = null;
+    }
   }
 
   _exitHut() {
@@ -574,6 +618,7 @@ export class HutSystem {
     }
     game.player._hutEntryCooldown = 0.5;
     game.player.hookedByMimic = null;
+    game.player.hookedByWhip = null;
 
     // Restore player collision map to exterior room
     if (game.currentRoom?.collisionMap) {

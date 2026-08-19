@@ -88,10 +88,8 @@ export class AlchemistNPC extends NeutralCharacter {
     if (!this._rescueDialogueGiven) {
       this._rescueDialogueGiven = true;
       return [
-        "AT LAST — SOMEONE WHO ISN'T MADE OF MUD.",
-        'I WAS GATHERING SPECIMENS WHEN THE BOG TOOK ME. THE HAG KEEPS WHATEVER WANDERS TOO FAR SOUTH.',
-        'I MUST RETURN TO MY HOUSE FIRST — MY NOTES, MY CAULDRON, EVERYTHING IS THERE.',
-        'COME FIND ME. BRING A MIND FOR SCIENCE.',
+        "I AM FREE! YOU HAVE MY THANKS",
+        'FIND ME IN THE ALCHEMY LAB.',
       ];
     }
 
@@ -99,10 +97,8 @@ export class AlchemistNPC extends NeutralCharacter {
     if (this.placement === 'hut' && !this.lessonGiven) {
       this.lessonGiven = true;
       return [
-        'MY HOUSE — SUCH AS IT IS. THANK YOU FOR NOT LEAVING ME TO THE HAG.',
-        "BEFORE THE BOG, I HAD CONCLUSIVE RESULTS. THE NOTE SURVIVED, BUT BARELY: \"CONCLUSIVE RESULTS... UNSTABLE BASE... CONFIRMED BY MY CONDENSER... [THE REST IS MUDDLED BY STAINS.]\"",
-        'I BELIEVE HOT WATER PURIFIES AN UNSTABLE INGREDIENT. IF YOU CAN BOTTLE SOME, BRING IT HERE.',
-        'HELP ME FINISH WHAT THE BOG INTERRUPTED.',
+        'THE CONDENSER REVEALS THE BASE.',
+        'BRING HOT WATER.',
       ];
     }
 
@@ -111,9 +107,9 @@ export class AlchemistNPC extends NeutralCharacter {
       this.pathUnlocked = true;
       return [
         'YOU BROUGHT IT. LET\'S SEE.',
-        "POUR HOT WATER OVER AN UNSTABLE BREW AND THE COLOR BURNS OFF — A PURIFIED POTION IS DEVOID OF COLOR, YET NO LESS POTENT. MORE, IF ANYTHING.",
-        "MY CONDENSER STILL FINDS WHAT'S INSIDE, COLOR OR NO COLOR. IMPURITY HIDES FROM THE EYE, NEVER FROM THE INSTRUMENT.",
-        "THIS IS THE ALCHEMIST'S PATH — WHAT A POTION STARTS AS, IT REMAINS, NO MATTER HOW FAR IT'S CARRIED.",
+        "HOT WATER PURIFIES THE BASE, YET NOTE THE CONDENSER",
+        "LIQUID. BASE. SUPPLEMENT.",
+        "THIS IS THE ALCHEMIST'S PATH.",
       ];
     }
 
@@ -126,22 +122,22 @@ export class AlchemistNPC extends NeutralCharacter {
     //    before placement is ever set to a roaming location.
     if (this.location === 'red-L') {
       return [Math.random() < 0.5
-        ? "THE RIDGE MUD IS RICHER THAN THE QUAGMIRE'S — I'VE BOTTLED SOME FOR STUDY."
-        : 'LAVA WOULD SHATTER ANY BOTTLE I OWN. I ADMIRE IT FROM A SAFE DISTANCE.'];
+        ? "A RELIABLE SOURCE OF MUD ALL AROUND."
+        : 'I AM NOT BRAVE ENOUGH TO BOTTLE LAVA.'];
     }
     if (this.location === 'yellow-O') {
       return [Math.random() < 0.5
-        ? "ELECTRIFIED WATER DOESN'T SIT STILL LONG ENOUGH TO BOTTLE PROPERLY. FASCINATING PROBLEM."
-        : "I'VE HEARD WHISPERS OF AN ALFALFA POTION SOMEWHERE IN THIS ZONE. I HAVEN'T FOUND THE RECIPE MYSELF."];
+        ? "HOW VOLATILE IS ELECTRIFIED WATER!"
+        : "LONG AGO ALFALFA WAS BOTTLED FOR SOME STRANGE PURPOSE."];
     }
     if (this.location === 'cyan-T') {
       return [Math.random() < 0.5
-        ? "THERE'S AN INDIGO FLOWER DOWN HERE THAT ONLY BLOOMS IN THE COLD. I'VE NEVER SEEN ITS LIKE ELSEWHERE."
-        : "I WONDER WHAT ICE WOULD DO TO A BREW, GIVEN WHAT HOT WATER DOES. THE OPPOSITE EFFECT, PERHAPS? I HAVEN'T TESTED IT."];
+        ? "THE RARE INDIGO FLOWER DOES NOT WILT IN THE COLD."
+        : "COULD ICE BE BOTTLED SOMEHOW?"];
     }
 
     // Fallback — still in the Quagmire room, or between placements.
-    return ["I'LL SEE YOU AT THE HOUSE."];
+    return ["I AM IN YOUR DEBT."];
   }
 
   update(dt, game) {
