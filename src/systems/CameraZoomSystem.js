@@ -18,7 +18,15 @@ import { GRID, GAME_STATES, ZOOM } from '../game/GameConfig.js';
  *
  * Updated unconditionally every frame (not gated inside updateExploreState) so
  * it can ease back to 1.0 if the player leaves EXPLORE or an Interior while
- * zoomed in, rather than leaving REST/NEUTRAL views stuck zoomed.
+ * zoomed in, rather than leaving REST/NEUTRAL views stuck zoomed. The pivot
+ * origin is only recomputed while actively tracking the player (EXPLORE/
+ * Interior); on leaving that state it holds its last value instead of
+ * snapping to canvas-center, so a still-elevated zoom eases from the pivot
+ * it was actually zoomed on rather than jump-cutting the framing on the same
+ * frame the state changes. Player death (GAME_OVER) additionally uses a
+ * much shorter transition (ZOOM.TRANSITION_DEATH_MS) than a normal combat
+ * disengage — the death screen needs to read at 1.0 quickly, not ease out
+ * at the same leisurely pace as walking away from a fight.
  */
 export class CameraZoomSystem {
   constructor(game) {
@@ -30,6 +38,7 @@ export class CameraZoomSystem {
     this.originXPercent = 50;
     this.originYPercent = 50;
     this._noEnemyElapsedMs = Infinity;
+    this._lastState = null;
   }
 
   update(deltaTime) {
@@ -37,17 +46,24 @@ export class CameraZoomSystem {
     const player = game.player;
     const state = game.stateMachine.getCurrentState();
 
+    // Freshly entering GAME_OVER forces a rapid restart of the zoom-out even
+    // if the target was already 1 (e.g. death interrupts a normal in-progress
+    // disengage) — without this, the leftover elapsed time from the slower
+    // transition would carry over and mis-time the rapid one.
+    const justDied = state === GAME_STATES.GAME_OVER && this._lastState !== GAME_STATES.GAME_OVER;
+    this._lastState = state;
+
     let wantsZoom = false;
-    let canvasX = GRID.WIDTH / 2;
-    let canvasY = GRID.HEIGHT / 2;
 
     if (state === GAME_STATES.EXPLORE && player) {
       const { entities, gridCols, gridRows } = this._resolveActiveLayer(game, player);
 
       const offsetX = Math.floor((GRID.WIDTH - gridCols * GRID.CELL_SIZE) / 2);
       const offsetY = Math.floor((GRID.HEIGHT - gridRows * GRID.CELL_SIZE) / 2);
-      canvasX = offsetX + player.position.x + player.width / 2;
-      canvasY = offsetY + player.position.y + player.height / 2;
+      const canvasX = offsetX + player.position.x + player.width / 2;
+      const canvasY = offsetY + player.position.y + player.height / 2;
+      this.originXPercent = (canvasX / GRID.WIDTH) * 100;
+      this.originYPercent = (canvasY / GRID.HEIGHT) * 100;
 
       // Hysteresis: once zoomed in, require the enemy to clear the wider
       // release range before we zoom back out, so it doesn't flicker in/out
@@ -84,11 +100,10 @@ export class CameraZoomSystem {
       if (game.currentRoom?.centipedeChains?.length) wantsZoom = false;
     } else {
       this._noEnemyElapsedMs = Infinity;
+      // Origin deliberately left untouched here — see class doc comment.
     }
 
-    this._tickZoom(wantsZoom, deltaTime);
-    this.originXPercent = (canvasX / GRID.WIDTH) * 100;
-    this.originYPercent = (canvasY / GRID.HEIGHT) * 100;
+    this._tickZoom(wantsZoom, deltaTime, state, justDied);
   }
 
   /** Live threat list + local grid size for the player's current layer. */
@@ -135,9 +150,9 @@ export class CameraZoomSystem {
     });
   }
 
-  _tickZoom(wantsZoom, deltaTime) {
+  _tickZoom(wantsZoom, deltaTime, state, forceRestart) {
     const newTarget = wantsZoom ? ZOOM.SCALE : 1;
-    if (newTarget !== this.targetZoom) {
+    if (newTarget !== this.targetZoom || forceRestart) {
       this.startZoom = this.currentZoom;
       this.targetZoom = newTarget;
       this.elapsedMs = 0;
@@ -145,11 +160,13 @@ export class CameraZoomSystem {
 
     if (this.currentZoom === this.targetZoom) return;
 
-    // Zoom in and zoom out now share the same eased transition duration
-    // (ZOOM.TRANSITION_IN_MS === ZOOM.TRANSITION_OUT_MS).
+    // Zoom-in and a normal zoom-out share the same eased duration. Player
+    // death is a rapid correction instead — see class doc comment.
     const durationMs = this.targetZoom === ZOOM.SCALE
       ? ZOOM.TRANSITION_IN_MS
-      : ZOOM.TRANSITION_OUT_MS;
+      : state === GAME_STATES.GAME_OVER
+        ? ZOOM.TRANSITION_DEATH_MS
+        : ZOOM.TRANSITION_OUT_MS;
 
     this.elapsedMs = Math.min(durationMs, this.elapsedMs + deltaTime * 1000);
     const t = this.elapsedMs / durationMs;

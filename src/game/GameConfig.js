@@ -64,7 +64,10 @@ export const ZOOM = {
   RELEASE_RANGE_CELLS: 7,     // once zoomed, enemy must clear this range before zoom releases (hysteresis — prevents flicker at the trigger boundary)
   ZOOM_OUT_DELAY_MS: 500,     // hold the zoom this long after the last detected enemy before actually releasing
   TRANSITION_IN_MS: 700,      // duration of the eased zoom-in transition (slower, deliberate)
-  TRANSITION_OUT_MS: 700      // duration of the eased zoom-out transition (matches zoom-in)
+  TRANSITION_OUT_MS: 700,     // duration of the eased zoom-out transition (matches zoom-in)
+  TRANSITION_DEATH_MS: 180    // rapid correction back to 1.0 on player death (GAME_OVER) — the
+                               // GAME_OVER screen needs to read at normal scale quickly, not ease
+                               // out at the same leisurely pace as a mid-combat disengage
 };
 
 export const GAME_STATES = {
