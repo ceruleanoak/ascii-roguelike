@@ -61,8 +61,6 @@ export class Player {
     this.activeSlotIndex = 0; // Currently selected slot (0-2)
     this.destroyedSlots = [false, false, false]; // Slots permanently disabled by wish use
     this.selectedConsumableIndex = -1; // armed consumable slot; -1 = weapon controls SPACE
-    this.seenTroughFillHint = false; // trough arm-slot hint (HutInteriorOverlay) shows once per run
-    this._troughHintShown = false; // transient: hint is mid-display this encounter — see HutInteriorOverlay
 
     // Magic meter — converted consumable slot(s) used as a mana gauge.
     // slots holds indices into equippedConsumables showing the mana fill.
@@ -1037,8 +1035,6 @@ export class Player {
     this.activeSlotIndex = 0;
     this.destroyedSlots = [false, false, false];
     this.selectedConsumableIndex = -1;
-    this.seenTroughFillHint = false;
-    this._troughHintShown = false;
     // Ingredients are not reset here — the pile belongs to InventorySystem, and
     // a character swap deliberately keeps it (game over clears it instead).
     this.magicMeter = { active: false, slots: [], current: 0, max: 10, freeSlotGranted: false };

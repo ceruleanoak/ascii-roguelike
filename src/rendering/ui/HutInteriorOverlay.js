@@ -1,5 +1,4 @@
 import { GRID } from '../../game/GameConfig.js';
-import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher.js';
 import { drawInteriorFrame } from './interiorFrame.js';
 import { hasTorchLight, drawPlayerTorchLight } from './torchLight.js';
 import { drawWires } from '../effects/WireEffects.js';
@@ -36,7 +35,7 @@ export class HutInteriorOverlay {
     // font (auto-sizes for hut vs dungeon from the active floor's grid). The clip
     // keeps any surface-coord content that leaked past hutPlane filters (e.g.
     // untagged puddles/gooBlobs) from drawing on top of the PiP frame.
-    const { offsetX, offsetY } = drawInteriorFrame(ctx, {
+    drawInteriorFrame(ctx, {
       gridCols: game.activeFloor.gridCols,
       gridRows: game.activeFloor.gridRows,
       panelColor: '#111108',
@@ -120,17 +119,6 @@ export class HutInteriorOverlay {
     // ── 8. Interior enemies (full indicator rendering) ─────────────────────────
     // Use the shared non-sapping pass, then redraw sapping ones on top of player below.
     this.renderController.exploreRenderer.drawNonSappingEnemies(game, game.activeFloor.enemies);
-    // Key indicator one full cell above hasKey enemies (vault key char '߃')
-    for (const enemy of game.activeFloor.enemies) {
-      if (enemy.hasKey) {
-        ctx.fillStyle = '#ffcc00';
-        ctx.fillText(
-          '߃',
-          enemy.position.x + GRID.CELL_SIZE / 2,
-          enemy.position.y - GRID.CELL_SIZE
-        );
-      }
-    }
 
     // ── 8b. Interior NPCs (WiseFellow, Witch, ErrandCharacter) ────────────────
     // Delegate to each NPC's own render() so ErrandCharacter draws its hop
@@ -228,40 +216,6 @@ export class HutInteriorOverlay {
     );
     drawStatusPips(this.renderer, game.player);
 
-    // ── 16a. Alchemy trough fill hint (armed-slot digit, shown once per run) ──
-    // Filling requires arming the Bottle slot first (AlchemySystem.tryFillArmedBottle);
-    // this surfaces which key to press the same way known-spell letters surface a
-    // typed sequence elsewhere — bare glyph, no explanatory text. Stays up for the
-    // whole first encounter (every frame the player lingers near the trough with
-    // an unarmed Bottle), not just one frame, then is retired for the rest of the
-    // run the moment that encounter ends (player leaves, arms the slot, or fills
-    // the bottle) — game.player.seenTroughFillHint, cleared on death/reset. The
-    // transient _troughHintShown tracks "currently mid-encounter" so the retire
-    // check below only fires on the trailing edge, not every not-shown frame.
-    const alchemy = game.alchemySystem;
-    if (alchemy && !game.player.seenTroughFillHint) {
-      const bottleIdx = game.player.equippedConsumables?.findIndex(s => s?.char === 'B') ?? -1;
-      const shouldShow = bottleIdx !== -1
-        && game.player.selectedConsumableIndex !== bottleIdx
-        && (alchemy.nearTrough() || alchemy.nearHotSpring());
-
-      if (shouldShow) {
-        const knownCount = game.knownSpells?.size || 0;
-        const hintCx = game.player.position.x + GRID.CELL_SIZE / 2;
-        const hintCy = game.player.position.y - GRID.CELL_SIZE * 0.9 - knownCount * (GRID.CELL_SIZE * 0.82);
-        ctx.save();
-        ctx.font = `${Math.round(GRID.CELL_SIZE * 0.65)}px 'Unifont', monospace`;
-        ctx.fillStyle = '#ffff66';
-        ctx.globalAlpha = 0.55;
-        ctx.fillText(spectaclesTransformString(String(bottleIdx + 4), isSpectaclesActive(game)), hintCx, hintCy);
-        ctx.restore();
-        ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`; // restore overlay font
-        game.player._troughHintShown = true;
-      } else if (game.player._troughHintShown) {
-        game.player.seenTroughFillHint = true; // encounter just ended — retire for the run
-      }
-    }
-
     // ── 16b. Camp companion (uses interior coords because it tracks player) ──
     if (game.companion) {
       game.companion.render(ctx, (gx, gy) => ({
@@ -283,30 +237,6 @@ export class HutInteriorOverlay {
 
     // ── 18. Green ranger indicator ─────────────────────────────────────────────
     this.renderController.greenRangerIndicator.render(game);
-
-    // ── 19. Legend of Three pyramid — offer prompts (dungeon floor 4) ──────────
-    if (game.activeFloor.pyramidSlots) {
-      const CS = GRID.CELL_SIZE;
-      for (const slot of Object.values(game.activeFloor.pyramidSlots)) {
-        if (slot.filled || !slot.requiredChar) continue;
-        const slotCx = slot.col * CS + CS / 2;
-        const slotCy = slot.row * CS + CS / 2;
-        const pdx = game.player.position.x + CS / 2 - slotCx;
-        const pdy = game.player.position.y + CS / 2 - slotCy;
-        if (Math.sqrt(pdx * pdx + pdy * pdy) >= CS * 3) continue;
-        ctx.save();
-        ctx.font = `10px 'Unifont', monospace`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#ccccaa';
-        ctx.fillText(
-          spectaclesTransformString('SPACE  OFFER', isSpectaclesActive(game)),
-          slotCx, slot.row * CS - CS
-        );
-        ctx.restore();
-        ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
-      }
-    }
 
     // ── 19b. Whip Trial pedestal — [x][x][x] slot chrome (same shared-
     // divider bracket technique as CraftingStation.render(): three slots at
@@ -336,111 +266,7 @@ export class HutInteriorOverlay {
       ctx.restore();
     }
 
-    // ── 20. Descent / ascend / unlock prompt ────────────────────────────────────
-    if (game.dungeonSystem) {
-      const transition = game.dungeonSystem.nearTransition();
-      if (transition) {
-        let label = null;
-        let col, row;
-        if (transition.kind === 'ascend') {
-          col = game.activeFloor.stairsUpCol;
-          row = game.activeFloor.stairsUpRow;
-          // Locked (e.g. Trap Room mid-clear) stays silent — the red-tinted
-          // footprint is the only signal, same precedent as the Key Vault's
-          // locked-without-key case below.
-          if (!game.activeFloor.stairsUpLocked) {
-            label = 'SPACE  ASCEND';
-          }
-        } else {
-          col = transition.descent.col;
-          row = transition.descent.row;
-          if (!transition.descent.locked) {
-            label = 'SPACE  DESCEND';
-          } else if (game.dungeonKeyObtainedThisRun) {
-            // Key Vault door — only hinted once the player is actually
-            // carrying the key; a locked door with no key stays silent
-            // (the dimmed footprint itself is the only signal).
-            label = 'SPACE  UNLOCK';
-          }
-        }
-        if (label) {
-          ctx.save();
-          ctx.font = `10px 'Unifont', monospace`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillStyle = '#ccccaa';
-          ctx.fillText(
-            spectaclesTransformString(label, isSpectaclesActive(game)),
-            col * GRID.CELL_SIZE + GRID.CELL_SIZE / 2, row * GRID.CELL_SIZE - GRID.CELL_SIZE
-          );
-          ctx.restore();
-          ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`; // restore font
-        }
-      }
-    }
-
-    // ── 21. Interior exit door prompt (hut/dungeon) ───────────────────────────
-    {
-      const isHut = game.activeFloor.gridCols <= 12;
-      const nearExit = isHut
-        ? game.hutSystem?.nearInteriorExit?.()
-        : game.dungeonSystem?.nearInteriorExit?.();
-
-      if (nearExit) {
-        const exitCol = game.activeFloor.exitCol;
-        const exitRow = game.activeFloor.exitRow;
-        if (exitCol != null && exitRow != null) {
-          ctx.save();
-          ctx.font = `10px 'Unifont', monospace`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillStyle = '#ccccaa';
-          ctx.fillText(
-            spectaclesTransformString('SPACE  EXIT', isSpectaclesActive(game)),
-            exitCol * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
-            exitRow * GRID.CELL_SIZE - GRID.CELL_SIZE * 0.75
-          );
-          ctx.restore();
-          ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
-        }
-      }
-    }
-
     // ── Restore interior offset ────────────────────────────────────────────────
     ctx.restore(); // removes translate + restores outer state
-
-    // ── 19. Label (absolute coords — drawn after restore) ─────────────────────
-    ctx.save();
-    ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillStyle = '#887755';
-    let label;
-    if (game.activeFloor.gridCols <= 12) {
-      label = '[ HUT ]';
-    } else {
-      const floorNum = (game.dungeonCurrentFloor ?? 0) + 1;
-      label = `[ DUNGEON  FLOOR ${floorNum} ]`;
-    }
-    ctx.fillText(spectaclesTransformString(label, isSpectaclesActive(game)), GRID.WIDTH / 2, offsetY + 2);
-    ctx.restore();
-
-    // ── 19b. Held-key indicator — small corner glyph, non-instructive ─────────
-    // Skull key glyph. Uses '8' (the same Bones glyph the key-carrying object
-    // renders as in-world — 'Ω' is already claimed by the hut Cauldron, see
-    // resolved-bugs.md). True inventory visibility lives in the Tab overlay's
-    // KEY ITEMS section (InventoryOverlay.js); this is just an at-a-glance PiP cue.
-    if (game.player.inDungeon && game.dungeonKeyObtainedThisRun) {
-      ctx.save();
-      ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-      ctx.fillStyle = '#cc3333';
-      ctx.fillText(
-        spectaclesTransformString('8', isSpectaclesActive(game)),
-        offsetX + GRID.CELL_SIZE, offsetY + 2
-      );
-      ctx.restore();
-    }
   }
 }
