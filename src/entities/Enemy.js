@@ -978,7 +978,7 @@ export class Enemy {
     if (trapResult?.suspend) return trapResult.result;
 
     RipenMechanic.updateGrowth(this, { deltaTime, dotDamageEvents });
-    ThiefMechanic.update(this, { deltaTime, dotDamageEvents, targetPos: this.target?.position });
+    ThiefMechanic.update(this, { deltaTime, dotDamageEvents, targetPos: this.target?.position, effectiveVisionLength });
 
     ChargeMechanic.update(this, { deltaTime, distance, effectiveVisionLength, onScreen });
 

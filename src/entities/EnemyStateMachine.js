@@ -83,17 +83,22 @@ export const STATES = { dormant, alert, approach, anticipate, strike, recover, s
 // hunting. Inert for every enemy that keeps declaring Approach/Search, which
 // is all but two of the roster today.
 //
-// `lookback` and `useTrap` both fall back to `flee` if undeclared — but this
-// is asymmetric in a way that matters. `useTrap` undeclared is a safe
-// degrade: Lookback's `next()` resolves to `flee` (a *different* state than
-// the current `lookback`), so the enemy simply resumes running without ever
-// laying a trap (Bomb's case). `lookback` undeclared is not safe: Flee's
-// `next()` also resolves the fallback to `flee` — but that's already the
-// *current* state, and `transition()` no-ops when the target equals the
-// current state, so the enemy silently never glances back at all. Not
-// engine-guarded on purpose (an enemy declaring `flee` is expected to also
-// declare `lookback`); the enemy-editor schema warns at authoring time
-// instead (`fleeNotes` in `tools/enemy-editor/src/schema.js`).
+// `lookback` and `useTrap` fall back differently, and the difference matters.
+// `useTrap` undeclared means this coward has nothing to lay once cornered
+// (Bomb's case) — Lookback's `next()` resolves to `withdraw` (a *different*
+// state than the current `lookback`, so a real transition happens), the same
+// hand-off Trap Goblin's own `useTrap` uses once its trap is down: a real
+// non-frozen gap before settling into `alert`. A confirmed-lost coward stops
+// running rather than looping the flee/lookback cycle forever — the plain
+// wildcard archetype (declares `flee` alone) is just Trap Goblin's chain
+// with the trap-laying beat skipped, not a different ending. `lookback`
+// undeclared is not safe the same way: Flee's `next()` also resolves its own
+// fallback to `flee` — but that's already the *current* state, and
+// `transition()` no-ops when the target equals the current state, so the
+// enemy silently never glances back at all. Not engine-guarded on purpose
+// (an enemy declaring `flee` is expected to also declare `lookback`); the
+// enemy-editor schema warns at authoring time instead (`fleeNotes` in
+// `tools/enemy-editor/src/schema.js`).
 const FALLBACK = {
   dormant:    ['alert'],
   alert:      ['approach'],
@@ -104,7 +109,7 @@ const FALLBACK = {
   search:     ['flee', 'withdraw', 'alert'],
   withdraw:   ['alert'],
   lookback:   ['flee'],
-  useTrap:    ['flee'],
+  useTrap:    ['withdraw'],
 };
 
 // Conditions that preempt whatever State is current, in the order they are

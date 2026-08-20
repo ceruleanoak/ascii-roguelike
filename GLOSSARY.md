@@ -318,12 +318,12 @@ programming terms.
   onward once the Mechanic's `clearAfter` beat elapses, or on a `timeout` safety net if no trap
   ever gets placed.
 - **In code:** `src/entities/enemyStates/useTrap.js`; paired data lives on
-  `data.trapLayerMechanic`. `FALLBACK.useTrap` leads with `'flee'` — a safe degrade, since
-  Lookback's fallback to Use Trap resolves to a State genuinely different from Lookback's own
-  current one, so an Enemy with Flee + Lookback but no Use Trap (Bomb) simply resumes fleeing
-  forever instead of ever cornering. The Trap Goblin's `useTrap.to` is authored as `'alert'`
-  rather than the default `'withdraw'` — unique to it: it settles back to idle after laying its
-  trap, not disengagement.
+  `data.trapLayerMechanic`. `FALLBACK.useTrap` leads with `'withdraw'` — a confirmed-lost coward
+  settles rather than loops, since Lookback's fallback to Use Trap resolves to a State genuinely
+  different from Lookback's own current one, so an Enemy with Flee + Lookback but no Use Trap
+  (Bomb) gives up and settles into `alert` the same way Trap Goblin's own `useTrap.to: 'withdraw'`
+  does once its trap is down — the plain wildcard archetype is that same chain with the
+  trap-laying beat skipped, not a different ending.
 - **Not:** Lookback (the sensory check that leads here); a general escape-and-hide State — this
   is specifically the trap-laying beat, named for its one shipped user.
 

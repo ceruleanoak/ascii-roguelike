@@ -1,14 +1,22 @@
 // Thief Mechanic — Rat's coin-grab kit: steal the player's coin instead of
-// biting when there's coin to take, and turn permanently cowardly the moment
-// either side of the exchange turns against it (the rat gets hurt, or the
-// rat gets what it came for). Once flipped there is no going back — the
-// state-mutation pattern (deleting hunting States from `declared` so the
-// EnemyStateMachine FALLBACK can no longer resolve them) is RipenMechanic's,
-// run in reverse: Ripen adds hunting States to a passive enemy, this removes
-// them from a hunting one. The flip is one-way toward flight, not toward
-// helplessness, though: `strike` stays declared and flee.js's `cornered`
-// opt-in reaches it, so a cowardly rat still bites back if the player
-// corners it — it just never again closes distance on its own.
+// biting when there's coin to take, and turn cowardly the moment either side
+// of the exchange turns against it (the rat gets hurt, or the rat gets what
+// it came for). The state-mutation pattern (deleting hunting States from
+// `declared` so the EnemyStateMachine FALLBACK can no longer resolve them)
+// is RipenMechanic's, run in reverse: Ripen adds hunting States to a passive
+// enemy, this removes them from a hunting one. The flip is one-way toward
+// flight, not toward helplessness, though: `strike` stays declared and
+// flee.js's `cornered` opt-in reaches it, so a cowardly rat still bites back
+// if the player corners it — it just never again closes distance on its own.
+//
+// Cowardice isn't permanent: a continuous run of lost sight — not merely one
+// successful lookback, the general coward's own `withdraw`/`alert` settling
+// already covers that — earns the rat its hunting states back (`_updateRecovery`
+// / `_unflip`), restoring the exact pre-flip config rather than reconstructing
+// archetype defaults, so a Rat and a re-authored Rat variant both recover
+// correctly without this file needing to know their defaults.
+import { hasVision } from '../enemyVision.js';
+
 export const ThiefMechanic = {
   isEnabled(enemy) {
     return enemy.data.thiefMechanic?.enabled === true;
@@ -17,6 +25,7 @@ export const ThiefMechanic = {
   init(enemy) {
     enemy.ratFlipped = false;
     enemy.ratFlipPending = false;
+    enemy.ratRecoverTimer = 0;
   },
 
   // Taking damage always wins the priority cascade over a theft in progress —
@@ -35,7 +44,12 @@ export const ThiefMechanic = {
   },
 
   update(enemy, ctx) {
-    if (!ThiefMechanic.isEnabled(enemy) || enemy.ratFlipped) return;
+    if (!ThiefMechanic.isEnabled(enemy)) return;
+
+    if (enemy.ratFlipped) {
+      ThiefMechanic._updateRecovery(enemy, ctx);
+      return;
+    }
 
     if (enemy.ratFlipPending) {
       ThiefMechanic._flipToCoward(enemy, ctx);
@@ -53,10 +67,25 @@ export const ThiefMechanic = {
   _flipToCoward(enemy, ctx) {
     enemy.ratFlipped = true;
     enemy.ratFlipPending = false;
+    enemy.ratRecoverTimer = 0;
     enemy.uncounted = true; // no longer blocks room-clear — reads as an NPC now
     enemy.attackType = enemy.data.attackType || 'melee';
 
     const declared = enemy.stateMachine.declared;
+    // Snapshotted before any of the mutations below touch `declared` — the
+    // rat's own recovery (`_unflip`) restores exactly this, rather than
+    // reconstructing the archetype's defaults from `movementStyle`.
+    enemy._ratPreFlipStates = {
+      approach: declared.approach,
+      search: declared.search,
+      anticipate: declared.anticipate,
+      recover: declared.recover,
+      flee: declared.flee ? { ...declared.flee } : undefined,
+      lookback: declared.lookback ? { ...declared.lookback } : undefined,
+      withdraw: declared.withdraw ? { ...declared.withdraw } : undefined,
+      strike: declared.strike ? { ...declared.strike } : undefined,
+    };
+
     delete declared.approach;
     delete declared.search;
     delete declared.anticipate;
@@ -84,6 +113,52 @@ export const ThiefMechanic = {
     declared.strike.movement = 'close';
 
     enemy.stateMachine.transition(enemy, ctx, 'flee', 'coward flip');
+  },
+
+  // Ticks while flipped, regardless of which State the coward wildcard chain
+  // (flee → lookback → withdraw → alert, per EnemyStateMachine's FALLBACK)
+  // currently has it in — a flipped rat settles into `alert` well before this
+  // fires, same as any other coward, but settling isn't recovering: this is
+  // the separate, longer clock on the flip itself. Resets on any frame the
+  // rat can actually see its target (the same `hasVision`/`ignoreCone` check
+  // Lookback uses to decide "lost me"), so only a continuous, uninterrupted
+  // stretch out of sight counts — a target that flickers in and out never
+  // accumulates toward recovery.
+  _updateRecovery(enemy, ctx) {
+    if (!enemy.target) return;
+
+    const visionLength = ctx.effectiveVisionLength ?? enemy.visionLength;
+    const canSee = hasVision(enemy, enemy.position, enemy.target.position, visionLength, { ignoreCone: true });
+    if (canSee) {
+      enemy.ratRecoverTimer = 0;
+      return;
+    }
+
+    const recoverAfter = enemy.data.thiefMechanic?.recoverAfter ?? 4.0; // double-seconds — 2 real seconds
+    enemy.ratRecoverTimer = (enemy.ratRecoverTimer ?? 0) + ctx.deltaTime;
+    if (enemy.ratRecoverTimer >= recoverAfter) {
+      ThiefMechanic._unflip(enemy, ctx);
+    }
+  },
+
+  // Restores exactly what `_flipToCoward` snapshotted — a key absent before
+  // the flip goes back to absent (undeclared), not to an empty `{}`, so an
+  // enemy that never declared `lookback`/`withdraw` on its own doesn't gain
+  // them permanently just because it was cowardly once.
+  _unflip(enemy, ctx) {
+    enemy.ratFlipped = false;
+    enemy.ratRecoverTimer = 0;
+    enemy.uncounted = false; // dangerous again — back to gating room-clear
+
+    const declared = enemy.stateMachine.declared;
+    const pre = enemy._ratPreFlipStates ?? {};
+    for (const key of ['approach', 'search', 'anticipate', 'recover', 'flee', 'lookback', 'withdraw', 'strike']) {
+      if (pre[key] === undefined) delete declared[key];
+      else declared[key] = pre[key];
+    }
+    enemy._ratPreFlipStates = null;
+
+    enemy.stateMachine.transition(enemy, ctx, 'alert', 'coward recovered');
   },
 
   // Runs from CombatSystem once a steal attack actually connects (i.e. after
