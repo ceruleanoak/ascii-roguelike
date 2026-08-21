@@ -871,7 +871,7 @@ class Game {
     // Idempotent on first boot — these fields are already in their initial
     // form set by the constructor.
     this.zoneDepths = freshZoneDepths();
-    this.zoneSystem.resetOnDeath();
+    this.zoneSystem.resetOnDeath(this);
     this.roomGenerator.setDepth(0);
     this.bossSystem.deactivate();
     this.physicsSystem.clear();
@@ -3991,7 +3991,7 @@ class Game {
     this.captives = []; // Clear active captives
     this.characterNPCs = []; // Clear character NPCs in REST
     this.errandSystem.resetOnDeath();
-    this.zoneSystem.resetOnDeath(); // Reset zone system and captive tracking
+    this.zoneSystem.resetOnDeath(this); // Reset zone system and captive tracking (incl. rescued-Alchemist singleton, bug #196)
     this.bossSystem.deactivate();   // Clean up any active boss fight
     // Reset boss music and pre-boss gate state for new run
     this.preBossGateActive = false;

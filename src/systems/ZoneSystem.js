@@ -398,7 +398,9 @@ export class ZoneSystem {
     // clearedZones persists (captive rescues are permanent per run)
   }
 
-  resetOnDeath() {
+  // `game` is optional (only needed to clear the rescued-Alchemist singleton
+  // it owns, not tracked here) so existing no-arg callers stay valid.
+  resetOnDeath(game) {
     // Full reset for new run
     this.roomsSinceRest = 0;
     this.consecutiveGreenRooms = 0;
@@ -412,6 +414,11 @@ export class ZoneSystem {
     this.bossRoomPending = false;
     this.resetLeshyChase();
     this.resetRiverChase();
+    // Quagmire captive reward (RoundCombatSystem._spawnAlchemistRescue) is a
+    // per-run singleton like clearedZones above — clearing it lets a new run
+    // roll the rescue outcome again instead of HutSystem finding him
+    // pre-flagged `.rescued` from a run that already ended (bug #196).
+    if (game) game.alchemistNPC = null;
   }
 
   // Get blended environment colors for current zone with progression
