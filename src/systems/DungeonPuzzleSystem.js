@@ -33,9 +33,7 @@ export class DungeonPuzzleSystem {
     if (!floor) return;
     this.updateCompassBeep(floor, dt);
 
-    if (floor.roomKind === 'numbered' && floor.floorIndex === 2) {
-      this._updateBranchFloor(floor);
-    } else if (floor.roomKind === 'whipTrial') {
+    if (floor.roomKind === 'whipTrial') {
       this._updateWhipTrial(floor, dt);
     } else if (floor.roomKind === 'trapRoom') {
       this._updateTrapRoom(floor);
@@ -61,19 +59,6 @@ export class DungeonPuzzleSystem {
     if (this._compassBeepTimer >= SFX_BEEP_INTERVAL) {
       this._compassBeepTimer = 0;
       game.audioSystem?.playSFX?.('compass_beep');
-    }
-  }
-
-  // Floor 3 (Branch) — Companion Gate visibility re-polls every tick so
-  // recruiting a companion mid-visit retroactively reveals the East
-  // descent without requiring dungeon re-entry (softlock fix, plan 2.3).
-  _updateBranchFloor(floor) {
-    const east = floor.descents.find(d => d.id === 'east');
-    if (!east) return;
-    const shouldBeActive = !!this.game.companion;
-    if (east.active !== shouldBeActive) {
-      east.active = shouldBeActive;
-      paintDescentVisual(east.obj, { active: east.active, locked: east.locked });
     }
   }
 

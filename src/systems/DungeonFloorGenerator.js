@@ -388,11 +388,21 @@ export class DungeonFloorGenerator {
     const north = this._makeDescent('north', NORTH_ROW, STAIRS_COL, {
       active: true, locked: false, destination: { kind: 'side', key: 'trapRoom' },
     });
-    // East → Companion Gate. Inert (not locked — gate visibility, not
-    // solvability) without a companion; DungeonPuzzleSystem re-polls
-    // game.companion every tick so recruiting one mid-visit reveals it.
+    // East → Companion Gate, always visible — matches the pre-rework 5-floor
+    // system, where the two switches sat unconditionally in the open on
+    // floor 2 (bug #209 git-archaeology: `SWITCH_A_COL`/`SWITCH_B_COL` on the
+    // bare 'open' layout, always rendered regardless of companion). Only
+    // *solving* the puzzle needs a companion
+    // (DungeonPuzzleSystem._updateCompanionGate); a solo player can walk in,
+    // see both switches sitting there, and read the puzzle before recruiting
+    // anyone — the same "visible landmark, brain does the rest" contract the
+    // non-instructive-UI rule expects. The room used to be gated invisible
+    // until a companion was already recruited, which hid the puzzle's very
+    // existence — that was the actual defect behind the "pressure plates are
+    // nowhere to be seen" report, not the dispatch-stickiness fix (#205)
+    // alone.
     const east = this._makeDescent('east', SPINE_ROW, EAST_COL, {
-      active: !!this.game.companion, locked: false, destination: { kind: 'side', key: 'companionGate' },
+      active: true, locked: false, destination: { kind: 'side', key: 'companionGate' },
     });
     backgroundObjects.push(north.obj, east.obj);
 
