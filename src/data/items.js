@@ -1762,7 +1762,7 @@ export const ITEMS = {
     name: 'Heart',
     type: ITEM_TYPES.CONSUMABLE,
     effect: 'heal',
-    amount: 10,
+    amount: 3,
     cooldown: 20, // Reusable with 20s cooldown
     autoTriggerHP: 0.15,
     color: '#ff0000'
