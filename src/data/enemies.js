@@ -351,7 +351,7 @@ export const ENEMIES = {
     // means reading the Area is the only answer, which is why this is the
     // enemy that teaches the Area at all.
     telegraph: { area: 'box', animation: 'blink' },
-    elementalAffinity: { weakness: { freeze: 2.0 } },
+    elementalAffinity: { immunity: ['poison'], weakness: { freeze: 2.0 } },
     freezePermanent: true,
     affinities: ['goo'],
     sfx: { hit: 'goo_hit', death: ['goo_death_1', 'goo_death_2'] },
@@ -431,7 +431,7 @@ export const ENEMIES = {
       shockwaveKnockback: 140,                 // Mild push as the ring sweeps past
       trailDropOnLanding: true                 // Spawn a slime trail puddle at the landing site
     },
-    elementalAffinity: { weakness: { freeze: 2.0, blade: 2.0 } },
+    elementalAffinity: { immunity: ['poison'], weakness: { freeze: 2.0, blade: 2.0 } },
     freezePermanent: true,
     affinities: ['goo'],
     sfx: { hit: 'goo_hit', death: ['goo_death_1', 'goo_death_2'] },
@@ -2047,6 +2047,7 @@ export const ENEMIES = {
     attackType: 'melee',
     decisionInterval: 0.5,  // Average intelligence
     color: '#eeeeee',
+    elementalAffinity: { immunity: ['poison'] },  // Bone — nothing left to poison
     affinities: ['undead'],
     tier: 'weak'
   },
