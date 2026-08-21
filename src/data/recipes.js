@@ -15,6 +15,7 @@ export const RECIPES = [
   { left: '⊥', right: '⊥', result: '⟘', name: 'Maul' },          // Hammer + Hammer = Maul (radial knockback; explicit so T1 never slot-machines)
   { left: '⊥', right: '⬧', result: '⬢', name: 'Onyx Hammer' },   // Hammer + Onyx = Onyx Hammer (crit + faster windup)
   { left: '0', right: '~', result: '⊸', name: 'Sling' },         // Rock + String = Sling
+  { left: '⊸', right: '|', result: 'Ψ', name: 'Slingshot' },     // Sling + Stick = Slingshot
   { left: '|', right: '△', result: '⇈', name: 'Fletch of Arrows' }, // Stick + Arrowhead = Fletch of Arrows
   { left: '⊿', right: '|', result: '⊦', name: 'Axe' },           // Axe head + Stick = Axe (distinct ingredients now — no slot-order clash with Fletch)
   { left: '/', right: '△', result: '↑', name: 'Spear' },         // Staff + Arrowhead = Spear

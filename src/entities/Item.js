@@ -90,7 +90,9 @@ export class Item {
     // Bow charging system (hold to charge)
     this.isCharging = false;
     this.chargeTime = 0;
-    this.maxChargeTime = 1.5; // 1.5 seconds to reach max charge (2x speed)
+    // 1.5s default draw to reach max charge (2x arrow speed). A weapon may override
+    // for a faster/slower draw feel — e.g. the Slingshot's near-instant snap shot.
+    this.maxChargeTime = this.data.maxChargeTime ?? 1.5;
     this.chargingPlayer = null;
     this.lastChargeRatio = 0; // Store charge level when fired (for cooldown indicator)
 
@@ -462,7 +464,13 @@ export class Item {
       case 'MELEE':
         return this.createMeleeAttack(player);
       case 'BOW':
-        return this.createArrow(player, chargeRatio);
+        // firesBullet: a bow-slot weapon (hold-to-draw, oil-compatible, equip-slot
+        // quiver icon) whose payload is a straight bullet rather than a directional
+        // arrow. Reuses the GUN bullet pipeline (ricochet, accuracy scatter, fixed
+        // bulletChar) instead of createArrow. First user: Slingshot.
+        return this.data.firesBullet
+          ? this.createBullets(player, chargeRatio)
+          : this.createArrow(player, chargeRatio);
       case 'WAND':
         return this.createWandAttack(player);
       default:
@@ -494,6 +502,14 @@ export class Item {
     if (this.data.requiresCharge && this.data.chain) {
       scaledChainCount = Math.round(chargeRatio * 3);
     }
+
+    // Oils apply to bows and daggers only (see _isOilInert in EquipmentSlots.js) —
+    // plain guns never read them. A BOW-classified weapon that fires bullets
+    // (firesBullet, e.g. Slingshot) still counts as a bow here, mirroring
+    // createSingleArrow's oil handling so an equipped oil isn't silently inert.
+    const oil = this.data.weaponType === 'BOW' ? _readEquippedOilEffect(player) : { onHits: [], arrowSpeedMult: 1 };
+    const primaryOnHit = this.data.onHit || oil.onHits[0] || null;
+    const extraOnHit = this.data.onHit ? oil.onHits : oil.onHits.slice(1);
 
     // Special attack patterns
     if (this.data.attackPattern === 'burst') {
@@ -528,12 +544,13 @@ export class Item {
           y: spawnY
         },
         velocity: {
-          vx: Math.cos(spreadAngle) * (this.data.bulletSpeed || 300),
-          vy: Math.sin(spreadAngle) * (this.data.bulletSpeed || 300)
+          vx: Math.cos(spreadAngle) * (this.data.bulletSpeed || 300) * oil.arrowSpeedMult,
+          vy: Math.sin(spreadAngle) * (this.data.bulletSpeed || 300) * oil.arrowSpeedMult
         },
         damage: this.data.damage,
         color: this.color,
-        onHit: this.data.onHit,
+        onHit: primaryOnHit,
+        extraOnHit,
         electric: this.data.electric,
         homing: this.data.homing,
         ricochet: this.data.ricochet,

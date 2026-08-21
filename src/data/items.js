@@ -504,6 +504,30 @@ export const ITEMS = {
     chainRadius: 32,              // ~1 cell — chain damage radius around first hit
     color: '#ffaa44'
   },
+  // Slingshot: the Sling strung onto a proper Y-frame. Still a bow-slot weapon
+  // (hold-to-draw, oil-compatible, quiver icon) but firesBullet routes it through
+  // Item.js's bullet pipeline instead of createArrow — a straight, non-directional
+  // shot rather than an arrow. maxChargeTime overrides the 1.5s default draw to
+  // near-zero: there's no meaningful hold-to-charge here (createBullets never reads
+  // chargeRatio), so the draw just snaps to "ready" almost instantly.
+  'Ψ': {
+    char: 'Ψ',
+    tier: 1,
+    name: 'Slingshot',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.BOW,
+    firesBullet: true,
+    damage: 1,
+    cooldown: 1,
+    maxChargeTime: 0.1,
+    bulletSpeed: 450,
+    bulletSize: 0.5,
+    bulletRange: 260,
+    maxUses: 8,
+    accuracy: .92,
+    critChance: 0.10,
+    color: '#aaaaaa'
+  },
 
   // ============================================================================
   // WEAPONS — MELEE
