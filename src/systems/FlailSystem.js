@@ -3,15 +3,17 @@ import { GRID } from '../game/GameConfig.js';
 // Flail weapon (data.flailSpin): hold-to-spin.
 //
 // Hold SPACE: a single hit point orbits the player, ramping angular speed
-// from 0 up to the weapon's spinMaxSpeed over spinRampTime. No damage below
-// half ramp, half damage from half ramp up to (not including) top speed,
-// full damage only once top speed is reached — a fast-approaching enemy
-// still has a window to close in before the spin does full damage. The
-// instant it lands a hit, the ramp drops back to 0 (plus a brief spinStagger
-// pause) and must build
-// back up from scratch, even though SPACE is still held. This is what keeps
-// the flail from walling off a crowd the old one-shot 360° ring could:
-// every connect buys the rest of the room a re-approach window.
+// linearly from 0 up to the weapon's spinMaxSpeed over spinRampTime. Below
+// half top speed the hit point is a pure visual — no collision check runs,
+// so it passes through enemies untouched. From half top speed up to top
+// speed, damage scales continuously with current speed (0 at half speed,
+// full damage only once top speed is reached) — a fast-approaching enemy
+// still has a window to close in before the spin does meaningful damage.
+// The instant it lands a hit, the ramp drops back to 0 (plus a brief
+// spinStagger pause) and must build back up from scratch, even though
+// SPACE is still held. This is what keeps the flail from walling off a
+// crowd the old one-shot 360° ring could: every connect buys the rest of
+// the room a re-approach window.
 //
 // Charge state (isCharging) lives on the Item like every other hold-to-charge
 // weapon; this system owns the ramp, the orbiting hitbox, and the visual.
@@ -69,17 +71,18 @@ export class FlailSystem {
 
     const rampDuration = weapon.data.spinRampTime || 0.45;
     this.rampTime = Math.min(rampDuration, this.rampTime + deltaTime);
-    const t = this.rampTime / rampDuration;
-    // Ease-out: reaches half speed quickly, then crawls the rest of the way
-    // to top speed — the back half of the windup is slower than the front.
-    const ratio = 1 - (1 - t) * (1 - t);
+    // Linear ramp: angular speed is a straight fraction of elapsed hold time,
+    // so "half top speed" genuinely means halfway through the windup — no
+    // front-loaded curve that reaches the damage threshold almost instantly.
+    const ratio = this.rampTime / rampDuration;
     const maxSpeed = weapon.data.spinMaxSpeed || 6;
     this.angle += ratio * maxSpeed * deltaTime;
 
-    // Stepped damage by ramp stage: none below half speed, half damage from
-    // half speed up to (not including) top speed, full damage at top speed.
+    // No damage (and no collision at all — see hasHit below) below half top
+    // speed. From half speed to top speed, damage scales continuously with
+    // current speed: 0 right at the threshold, full damage at top speed.
     const damaging = ratio >= 0.5;
-    const damageRatio = ratio >= 1 ? 1 : damaging ? 0.5 : 0;
+    const damageRatio = damaging ? (ratio - 0.5) / 0.5 : 0;
     this._updateVisual(player, weapon, damaging, damageRatio, ratio);
   }
 

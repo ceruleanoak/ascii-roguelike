@@ -1327,12 +1327,13 @@ export const ITEMS = {
   },
 
   // ── MELEE / flail ─────────────────────────────────────────────────────────
-  // Hold-to-spin (FlailSystem): a single orbiting hit point ramps from 0 to
-  // spinMaxSpeed over spinRampTime while SPACE is held. No damage below half
-  // ramp, half damage from half ramp up to (not including) top speed, full
-  // damage only at top speed. Landing a hit drops the ramp back to 0 (plus
-  // spinStagger), so the flail can't wall off a crowd the way a one-shot
-  // 360° ring could.
+  // Hold-to-spin (FlailSystem): a single orbiting hit point ramps linearly
+  // from 0 to spinMaxSpeed over spinRampTime while SPACE is held. Below half
+  // top speed it passes through enemies with no collision at all; from half
+  // speed to top speed, damage scales continuously with current speed (0 at
+  // the threshold, full damage at top speed). Landing a hit drops the ramp
+  // back to 0 (plus spinStagger), so the flail can't wall off a crowd the
+  // way a one-shot 360° ring could.
   '○': {
     char: '○',
     name: 'Flail',
@@ -1340,9 +1341,9 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'flail',
     flailSpin: true,
-    damage: 2,
-    spinRampTime: 0.9,
-    spinMaxSpeed: 15,
+    damage: 3,
+    spinRampTime: 0.7,
+    spinMaxSpeed: 18,
     spinStagger: 0.15,
     range: 16,
     color: '#aaaaaa'
