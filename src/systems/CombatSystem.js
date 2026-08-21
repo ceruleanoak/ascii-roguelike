@@ -54,17 +54,22 @@ export class CombatSystem {
   /**
    * Per-frame target overrides, applied by the canonical enemy tick BEFORE
    * enemy.update() (bug #92 — targeting must precede the single tick).
-   * Charm: fight the nearest non-charmed enemy. Noise-maker: keep the formal
+   * Charm: fight the nearest other enemy. Noise-maker: keep the formal
    * target on the player but pull aggro memory toward the noise source.
    * Returns true when it set the target (caller skips its own selection).
    */
   applyTargetOverrides(enemy, enemies, player, noiseSource = null) {
     if (enemy.isCharmed && enemy.isCharmed()) {
-      // Charmed: fight nearest non-charmed enemy
+      // Charmed: fight the nearest other enemy, charmed or not. Both charm
+      // sources (Garnet Staff AOE, Charm Lure trap) hit every enemy in a
+      // radius at once, so excluding charmed peers here meant a
+      // simultaneously-charmed cluster could never find each other as valid
+      // targets and all fell back to attacking the player instead of turning
+      // on one another (bug #202).
       let nearestEnemy = null;
       let nearestDist = Infinity;
       for (const other of enemies) {
-        if (other === enemy || (other.isCharmed && other.isCharmed())) continue;
+        if (other === enemy) continue;
         const dx = other.position.x - enemy.position.x;
         const dy = other.position.y - enemy.position.y;
         const d = Math.sqrt(dx * dx + dy * dy);
@@ -876,7 +881,7 @@ export class CombatSystem {
             // Blunt weapons can't damage objects, but still rustle grass; bushes yield to
             // anything, and allWeaponsDamage-flagged instances yield to anything too.
             if (!attack.isBlunt || obj.char === '%' || obj.allWeaponsDamage) {
-              const smashDamage = (obj.char === '%' && (attack.isBlunt || attack.weaponSubtype === 'axe')) ? obj.hp : attack.canSmash ? attack.damage * 2 : attack.damage;
+              const smashDamage = this.game.interactionSystem.resolveSmashDamage(attack, obj);
               const result = obj.takeDamage(smashDamage, attack.isBlade);
 
               // Queue any effect (destructive or not — non-destructive effects like
