@@ -8,7 +8,7 @@ import { applyCipher } from './cipher.js';
 
 export const BASE_POTION_INGREDIENTS = new Set(['b', 'd', 'l', 'r']);   // Bone, Dust, Leaf, Root -> Base Potion '🜄'
 export const PURIFIED_POTION_INGREDIENTS = new Set(['s', 'a', 'h']);    // Scale, Ash, Herb -> Purified Potion
-export const UNSTABLE_POTION_INGREDIENTS = new Set(['e', 'v', 'w']);    // Eye, Venom, Wing -> Unstable Potion
+export const UNSTABLE_POTION_INGREDIENTS = new Set(['e', 'v', 'w', '⚗']);    // Eye, Venom, Wing, Slurry -> Unstable Potion
 
 export const STARTER_POTION_CHARS = new Set(['🜄', '🜅', '🜆']);
 

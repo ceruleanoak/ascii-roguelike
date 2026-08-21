@@ -2526,6 +2526,11 @@ export const INGREDIENTS = {
   '⬨': { char: '⬨', name: 'Sapphire', color: '#2244ff' },
   '𝑚': { char: '𝑚', name: 'Mana', color: '#8866ff' },
 
+  // Slurry — crafted from Goo + Fur (recipes.js), like Mana above a pure
+  // recipe-intermediate rather than a standalone-use item. Registered as an
+  // Unstable Potion component (alchemy.js) alongside Eye/Venom/Wing.
+  '⚗': { char: '⚗', name: 'Slurry', color: '#6b8e23' },
+
   // Raw oils — pressed at a hut press into oil consumables (bow/dagger augments).
   // Sap variants drop from Trees; the rare red/cyan variants only spawn in
   // their respective zones (resolved in InteractionSystem).

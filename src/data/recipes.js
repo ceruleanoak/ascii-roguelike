@@ -130,7 +130,8 @@ export const RECIPES = [
   // New ingredient combinations
   { left: 'w', right: 'F', result: '✦', name: 'Phoenix Feather' }, // Wing + Fire = Phoenix Feather
   { left: 's', right: 'M', result: '𐤓', name: 'Dragon Scale Armor' }, // Scale + Metal = Dragon Scale Armor
-  { left: '↾', right: 'g', result: 'ᚢ', name: 'Acid Blade' },     // Dagger + Goo = Acid Blade
+  { left: 'g', right: 'f', result: '⚗', name: 'Slurry' },         // Goo + Fur = Slurry
+  { left: '↾', right: '⚗', result: 'ᚢ', name: 'Acid Blade' },     // Dagger + Slurry = Acid Blade
   { left: 'b', right: 'F', result: '☠', name: 'Cursed Skull' },   // Bone + Fire = Cursed Skull
   { left: 'm', right: '~', result: '♥', name: 'Heart' },          // Meat + String = Heart
   { left: 'c', right: 'F', result: '★', name: 'Lucky Coin' },     // Coin + Fire = Lucky Coin
