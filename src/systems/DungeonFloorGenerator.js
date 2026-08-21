@@ -11,6 +11,10 @@ import {
 } from '../data/dungeonFloorTemplates.js';
 import { getLegendOfThree } from '../data/legendOfThree.js';
 import { pickWeaponTutorial } from '../data/dungeon/weaponTutorials.js';
+import {
+  applyPuzzleTemplateToCollisionMap, getPuzzleTemplateWaterCells,
+  getPuzzleTemplateExitCell, getPuzzleTemplateTriggers,
+} from '../data/dungeonPuzzleTemplates.js';
 
 /**
  * DungeonFloorGenerator — content for every dungeon floor and side room
@@ -47,6 +51,16 @@ const INTERIOR_ROWS = 24;
 // bow (mirrors the pre-Whip-Trial pool's type variety). This is the payoff
 // for clearing the gauntlet; easy to swap, not load-bearing on any other system.
 const TRAP_ROOM_REWARD_POOL = ['‡', '⟘', '↟', '⟩']; // Flame Sword, Maul, Venom Lance, Fire Bow
+
+// Whip Trial's two switches — how long each stays "struck" after a hit
+// before reverting, absent a re-strike. Lives here (not DungeonPuzzleSystem)
+// because it's authored per-switch data (neutralizeSeconds), same as any
+// editor-built puzzle room's timed triggers — see generatePuzzleRoom below
+// and DungeonPuzzleSystem._advanceTrigger, the shared state machine both
+// this value and editor-authored triggers run through. Short rather than 0
+// ("instant") so a genuinely simultaneous two-post crack still counts, per
+// the room's intended solve — but still reads as "very fast", not lenient.
+const WHIP_TRIAL_STRUCK_WINDOW = 0.25; // seconds
 
 export class DungeonFloorGenerator {
   constructor(game) {
@@ -230,8 +244,15 @@ export class DungeonFloorGenerator {
     };
   }
 
-  _makeStairsUp(locked) {
-    const obj = new BackgroundObject('{', STAIRS_COL * GRID.CELL_SIZE, STAIRS_UP_ROW * GRID.CELL_SIZE);
+  // row/col default to the universal north-side up-stairs position — the
+  // right choice for every floor entered via a 'north' descent (Corridor,
+  // Trap Room, Pyramid). A floor entered via 'west' or 'east' must pass the
+  // matching footprint instead, so its up-stairs sits in the same room
+  // position as the descent that led there (see _generateBranch,
+  // generateCompanionGate) — "matching doors are always in the same room
+  // position" is the rule; the universal north point is just its default.
+  _makeStairsUp(locked, row = STAIRS_UP_ROW, col = STAIRS_COL) {
+    const obj = new BackgroundObject('{', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
     paintStairsUpVisual(obj, locked);
     return obj;
   }
@@ -353,7 +374,13 @@ export class DungeonFloorGenerator {
     // or Corridor (dungeonKeySkullFloor ∈ {0,1}), since it gates the door
     // *into* Branch and can't be found past its own lock.
 
-    const stairsUpObj = this._makeStairsUp(false);
+    // Branch is entered via Corridor's West descent (the skull key), not the
+    // universal north point — its up-stairs sits at the West footprint to
+    // match, so the door you came through is the door you leave through (the
+    // "matching doors are always in the same room position" rule). The old
+    // Key Vault this footprint used to gate is gone, so there's no longer a
+    // separate retired 'west' descent object competing for the same cell.
+    const stairsUpObj = this._makeStairsUp(false, SPINE_ROW, WEST_COL);
     backgroundObjects.push(stairsUpObj);
 
     // North → Trap Room, always open — sealed enemy gauntlet, tier-2 reward
@@ -361,16 +388,13 @@ export class DungeonFloorGenerator {
     const north = this._makeDescent('north', NORTH_ROW, STAIRS_COL, {
       active: true, locked: false, destination: { kind: 'side', key: 'trapRoom' },
     });
-    // West retired — the Key Vault it used to gate is gone; Corridor's West
-    // descent (the skull key) now gates entry into Branch itself.
-    const west = this._makeDescent('west', SPINE_ROW, WEST_COL, { active: false, locked: false, destination: null });
     // East → Companion Gate. Inert (not locked — gate visibility, not
     // solvability) without a companion; DungeonPuzzleSystem re-polls
     // game.companion every tick so recruiting one mid-visit reveals it.
     const east = this._makeDescent('east', SPINE_ROW, EAST_COL, {
       active: !!this.game.companion, locked: false, destination: { kind: 'side', key: 'companionGate' },
     });
-    backgroundObjects.push(north.obj, west.obj, east.obj);
+    backgroundObjects.push(north.obj, east.obj);
 
     const enemies = this._spawnEnemies(4 + Math.floor(Math.random() * 3), depth, zone,
       { collisionMap, backgroundObjects, pickOpenCell, rows, cols, spawnCells });
@@ -383,9 +407,9 @@ export class DungeonFloorGenerator {
       items: [], ingredients: [], npcs: [], doors: [],
       viewport: this._makeViewport(cols, rows),
       exitRow: null, exitCol: null,
-      stairsUpRow: STAIRS_UP_ROW, stairsUpCol: STAIRS_COL, stairsUpObj, stairsUpLocked: false,
+      stairsUpRow: SPINE_ROW, stairsUpCol: WEST_COL, stairsUpObj, stairsUpLocked: false,
       ascendTo: { kind: 'numbered', floorIndex: 1 },
-      descents: [north, west, east],
+      descents: [north, east],
     };
   }
 
@@ -464,9 +488,10 @@ export class DungeonFloorGenerator {
     const GAP_ROW_START = 14;
     const GAP_ROW_END = 16;
     const POST_NORTH_ROW = 13; // north bank — also where the player naturally stands to strike the south post
-    const POST_SOUTH_ROW = 17; // south bank
-    const SWITCH_A_ROW = 19;
-    const SWITCH_B_ROW = 21;
+    const POST_SOUTH_ROW = 17; // south bank — also the switches' row (see below)
+    const SWITCH_ROW = POST_SOUTH_ROW;
+    const SWITCH_A_COL = STAIRS_COL + 2;
+    const SWITCH_B_COL = STAIRS_COL + 4;
     const SOUTH_STAIRS_ROW = 22; // real ascend point — deliberately not the entry row (see header comment)
 
     // Impassable band spanning the full interior width — must cover every
@@ -554,14 +579,21 @@ export class DungeonFloorGenerator {
 
     // Switches — same ○/● glyph language as the Companion Gate, but strike-
     // based (puzzleSignal + glitterHit) rather than occupancy-based. Placed
-    // 2/4 cells south of the south post, matching the Whip's 5 straight-line
-    // hitbox segments — one southward crack from the post-landing spot hits
-    // both at once.
+    // 2/4 cells east of the south post on its own row (horizontal align, not
+    // vertical — a player standing at the post-landing spot faces east and
+    // one crack hits both at once), matching the Whip's 5 straight-line
+    // hitbox segments.
     // Same unregistered-char indestructible-fallback override as the posts
     // above — '○' isn't in BACKGROUND_OBJECTS either (Companion Gate's
     // switches of the same glyph never hit this path since they're
     // occupancy-based and never call takeDamage()).
-    const switchAObj = new BackgroundObject('○', STAIRS_COL * CS, SWITCH_A_ROW * CS);
+    // kind/activation/neutralizeSeconds/active/_timer are the generic
+    // trigger fields DungeonPuzzleSystem._advanceTrigger drives — the same
+    // shared state machine an editor-built Puzzle Room's switches/panels
+    // run through (generatePuzzleRoom below). 'timed' with a short window
+    // rather than 'permanent': a strike needs to STAY registered only long
+    // enough for the other switch to also be struck, not forever off one hit.
+    const switchAObj = new BackgroundObject('○', SWITCH_A_COL * CS, SWITCH_ROW * CS);
     switchAObj.color = '#888888';
     switchAObj.animationChar = '○';
     switchAObj.animationColor = '#888888';
@@ -569,11 +601,14 @@ export class DungeonFloorGenerator {
     switchAObj.indestructible = false;
     switchAObj.hp = 1;
     switchAObj.maxHp = 1;
-    switchAObj.recentlyStruck = false;
-    switchAObj._struckTimer = 0;
+    switchAObj.kind = 'switch';
+    switchAObj.activation = 'timed';
+    switchAObj.neutralizeSeconds = WHIP_TRIAL_STRUCK_WINDOW;
+    switchAObj.active = false;
+    switchAObj._timer = 0;
     backgroundObjects.push(switchAObj);
 
-    const switchBObj = new BackgroundObject('○', STAIRS_COL * CS, SWITCH_B_ROW * CS);
+    const switchBObj = new BackgroundObject('○', SWITCH_B_COL * CS, SWITCH_ROW * CS);
     switchBObj.color = '#888888';
     switchBObj.animationChar = '○';
     switchBObj.animationColor = '#888888';
@@ -581,8 +616,11 @@ export class DungeonFloorGenerator {
     switchBObj.indestructible = false;
     switchBObj.hp = 1;
     switchBObj.maxHp = 1;
-    switchBObj.recentlyStruck = false;
-    switchBObj._struckTimer = 0;
+    switchBObj.kind = 'switch';
+    switchBObj.activation = 'timed';
+    switchBObj.neutralizeSeconds = WHIP_TRIAL_STRUCK_WINDOW;
+    switchBObj.active = false;
+    switchBObj._timer = 0;
     backgroundObjects.push(switchBObj);
 
     return {
@@ -668,7 +706,10 @@ export class DungeonFloorGenerator {
     // any template with a wall between the switches — reverted here.
     const { cols, rows, collisionMap, backgroundObjects } = this._buildScaffold({ useTemplate: false });
 
-    const stairsUpObj = this._makeStairsUp(false);
+    // Entered via Branch's East descent, so the up-stairs sits at the East
+    // footprint to match (same "matching doors" rule as Branch's own West
+    // up-stairs above) rather than the universal north point.
+    const stairsUpObj = this._makeStairsUp(false, SPINE_ROW, EAST_COL);
     backgroundObjects.push(stairsUpObj);
 
     const switchAObj = new BackgroundObject('○', SWITCH_A_COL * GRID.CELL_SIZE, SWITCH_ROW * GRID.CELL_SIZE);
@@ -700,10 +741,89 @@ export class DungeonFloorGenerator {
       items: [], ingredients: [], npcs: [], doors: [],
       viewport: this._makeViewport(cols, rows),
       exitRow: null, exitCol: null,
-      stairsUpRow: STAIRS_UP_ROW, stairsUpCol: STAIRS_COL, stairsUpObj, stairsUpLocked: false,
+      stairsUpRow: SPINE_ROW, stairsUpCol: EAST_COL, stairsUpObj, stairsUpLocked: false,
       ascendTo: { kind: 'numbered', floorIndex: originFloorIndex },
       descents: [onward],
       switchAObj, switchBObj, puzzleSolved: false,
+    };
+  }
+
+  // Puzzle Room — generic template-driven puzzle side room, authored via
+  // tools/dungeon-editor/'s Puzzle mode rather than hand-coded geometry
+  // (contrast Whip Trial/Trap Room/Companion Gate above, each a bespoke,
+  // fully hardcoded layout). A template supplies its own wall/water/exit
+  // layout and any number of switches/panels (dungeonPuzzleTemplates.js);
+  // this method just instantiates that data as a live floor. No numbered
+  // floor or side-room key currently routes a descent to a Puzzle Room —
+  // this is authoring + generation infrastructure, ready for a future
+  // content decision to wire a specific template into the dungeon graph
+  // (call this with an explicit templateName from wherever that's decided).
+  //
+  // Exit unlock rule: every trigger in the template must be active at once
+  // (DungeonPuzzleSystem._updatePuzzleRoom) — the generalized form of the
+  // Whip Trial's "both switches struck together" and Companion Gate's "both
+  // switches pressed together" rules, extended to any trigger count/mix.
+  generatePuzzleRoom(templateName, depth, originFloorIndex) {
+    const CS = GRID.CELL_SIZE;
+    const { cols, rows, collisionMap, backgroundObjects } = this._buildScaffold({ useTemplate: false });
+
+    applyPuzzleTemplateToCollisionMap(collisionMap, templateName);
+
+    for (const { row, col } of getPuzzleTemplateWaterCells(templateName)) {
+      if (collisionMap[row]?.[col]) continue;
+      backgroundObjects.push(new BackgroundObject('~', col * CS, row * CS));
+    }
+
+    const exitCell = getPuzzleTemplateExitCell(templateName);
+    const exitRow = exitCell?.row ?? STAIRS_UP_ROW;
+    const exitCol = exitCell?.col ?? STAIRS_COL;
+    const stairsUpObj = new BackgroundObject('{', exitCol * CS, exitRow * CS);
+    paintStairsUpVisual(stairsUpObj, true);
+    backgroundObjects.push(stairsUpObj);
+
+    // Trigger fixtures — 'switch' reuses the Whip Trial's strike contract
+    // (puzzleSignal + glitterHit, indestructible override so a hit never
+    // destroys it, just pulses); 'panel' is occupancy-only and needs no
+    // override at all — its char is unregistered in BACKGROUND_OBJECTS, so
+    // BackgroundObject's constructor already falls back to
+    // indestructible:true/hp:null (see generateWhipTrial's post/switch
+    // comments for the full mechanism), which is exactly right for a
+    // floor panel: nothing should ever be able to attack it.
+    const triggers = [];
+    for (const t of getPuzzleTemplateTriggers(templateName)) {
+      const isSwitch = t.kind === 'switch';
+      const char = isSwitch ? '○' : '▭';
+      const obj = new BackgroundObject(char, t.col * CS, t.row * CS);
+      obj.color = '#888888';
+      obj.animationChar = char;
+      obj.animationColor = '#888888';
+      if (isSwitch) {
+        obj.puzzleSignal = true;
+        obj.indestructible = false;
+        obj.hp = 1;
+        obj.maxHp = 1;
+      }
+      obj.kind = t.kind;
+      obj.activation = t.activation;
+      obj.neutralizeSeconds = t.neutralizeSeconds;
+      obj.active = false;
+      obj._timer = 0;
+      backgroundObjects.push(obj);
+      triggers.push(obj);
+    }
+
+    return {
+      type: 'DUNGEON_FLOOR',
+      roomKind: 'puzzleRoom',
+      floorIndex: null,
+      gridCols: cols, gridRows: rows, collisionMap, backgroundObjects, enemies: [],
+      items: [], ingredients: [], npcs: [], doors: [],
+      viewport: this._makeViewport(cols, rows),
+      exitRow: null, exitCol: null,
+      stairsUpRow: exitRow, stairsUpCol: exitCol, stairsUpObj, stairsUpLocked: true,
+      ascendTo: { kind: 'numbered', floorIndex: originFloorIndex },
+      descents: [],
+      triggers, puzzleSolved: false,
     };
   }
 }
