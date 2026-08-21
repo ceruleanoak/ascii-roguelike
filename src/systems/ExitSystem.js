@@ -351,6 +351,15 @@ export class ExitSystem {
       room.collisionMap[centerY][0] = locked;
     }
 
+    // Escape route: south wall must be physically passable when the room is
+    // locked but the player has no items (matches the renderer's open-door
+    // visual at ExploreRenderer.js — otherwise the player walks into an
+    // invisible wall at row ROWS-1 col centerX). Overrides the south lock
+    // set above for this one case.
+    if (room.exits.south && locked && this.game?.playerHasNoItems()) {
+      room.collisionMap[GRID.ROWS - 1][centerX] = false;
+    }
+
     // Don't overwrite the player's collision map while inside a maze/hut/dungeon interior
     if (!player.inMaze && !player.inHut && !player.inDungeon) {
       player.setCollisionMap(room.collisionMap);

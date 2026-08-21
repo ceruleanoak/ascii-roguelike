@@ -231,10 +231,10 @@ export class DungeonPuzzleSystem {
     const { game } = this;
     const west = floor.descents.find(d => d.id === 'west');
     if (!west || !west.locked) return false;
-    if (!game.dungeonKeyObtainedThisRun) return false;
+    if (!game.inventorySystem.hasKeyItem('⚿')) return false;
     if (!this._overlapsCell(game.player, west.obj.position.x, west.obj.position.y)) return false;
 
-    game.dungeonKeyObtainedThisRun = false;
+    game.inventorySystem.consumeKeyItem('⚿');
     game.dungeonKeyUsedThisRun = true;
     west.locked = false;
     paintDescentVisual(west.obj, { active: west.active, locked: false });

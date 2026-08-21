@@ -24,16 +24,11 @@ const TREASURE_COLOR = '#ffd700';
 const COMPONENTS_COLOR = '#ffaa00';
 const KEY_ITEM_COLOR = '#ff5555';
 
-// KEY_ITEMS — declarative registry of narrative/puzzle keys that are held,
-// not equipped: never occupy a weapon/quick slot, surfaced only via this
-// dedicated inventory section. Add an entry here + flip its `held` source
-// true/false at the key's own pickup/consume site (e.g.
-// game.dungeonKeyObtainedThisRun, room.vaultInfo.keyHeld) — nothing else
-// here changes.
-const KEY_ITEM_DEFS = [
-  { char: '8', name: 'Skull Key', held: (game) => !!game.dungeonKeyObtainedThisRun },
-  { char: '߃', name: 'Vault Key', held: (game) => !!game.currentRoom?.vaultInfo?.keyHeld }
-];
+// Narrative/puzzle keys (Vault Key, Skull Key) are real Items — picked up
+// exactly like a weapon/armor drop, just routed by InventorySystem's
+// tryPickupItem into keyItemInventory instead of a quick/equip slot. This
+// section reads that array directly (see the KEY ITEMS block in render()
+// below); there is no separate flag or registry to keep in sync.
 
 // Column start cells (icon, text), keyed by column count. Icon-text gap is
 // 1 cell (was 2) to leave more width for the name before the next column.
@@ -127,8 +122,8 @@ export class InventoryOverlay {
 
         this.renderer.drawUIEntity(GRID.CELL_SIZE * iconX, y, char, color);
 
-        // Key items are boolean-held (always exactly one) — omit the "xN"
-        // count suffix used by stackable treasure/components/materials.
+        // Key items pass a nameOverride and, being single one-off pickups,
+        // omit the "xN" count suffix used by stackable treasure/components/materials.
         const text = this._fitText(overrideName ? data.name : `${data.name} x${count}`, maxTextWidth);
         this.renderer.uiCtx.fillStyle = COLORS.TEXT;
         this.renderer.uiCtx.textAlign = 'left';
@@ -197,13 +192,11 @@ export class InventoryOverlay {
     // ── Key items (held, not equipped narrative/puzzle keys) ────────────────
     const keyItemCounts = {};
     const keyItemNames = {};
-    for (const def of KEY_ITEM_DEFS) {
-      if (def.held(game)) {
-        keyItemCounts[def.char] = 1;
-        keyItemNames[def.char] = def.name;
-      }
+    for (const item of game.inventorySystem.keyItemInventory) {
+      keyItemCounts[item.char] = (keyItemCounts[item.char] || 0) + 1;
+      keyItemNames[item.char] = item.data.name;
     }
-    const keyItemCount = Object.keys(keyItemCounts).length;
+    const keyItemCount = game.inventorySystem.keyItemInventory.length;
 
     const totalItems = ingredients.length + coinCount + keyItemCount;
 
@@ -251,8 +244,8 @@ export class InventoryOverlay {
     const availableRows = Math.floor((contentBottom - startY) / lineHeight) + 1;
 
     // Prefer 2 columns; widen to 3 only if 2 wouldn't fit the roster.
-    const rowsFor2 = this._sectionRowCount(treasureCounts, 2) + this._sectionRowCount(componentCounts, 2) + this._sectionRowCount(materialCounts, 2) + this._sectionRowCount(keyItemCounts, 2);
-    const rowsFor3 = this._sectionRowCount(treasureCounts, 3) + this._sectionRowCount(componentCounts, 3) + this._sectionRowCount(materialCounts, 3) + this._sectionRowCount(keyItemCounts, 3);
+    const rowsFor2 = this._sectionRowCount(keyItemCounts, 2) + this._sectionRowCount(treasureCounts, 2) + this._sectionRowCount(componentCounts, 2) + this._sectionRowCount(materialCounts, 2);
+    const rowsFor3 = this._sectionRowCount(keyItemCounts, 3) + this._sectionRowCount(treasureCounts, 3) + this._sectionRowCount(componentCounts, 3) + this._sectionRowCount(materialCounts, 3);
     const columnCount = rowsFor2 <= availableRows ? 2 : 3;
     const fitsWithoutOverflow = (columnCount === 2 ? rowsFor2 : rowsFor3) <= availableRows;
 
@@ -260,10 +253,11 @@ export class InventoryOverlay {
     const maxIndex = fitsWithoutOverflow ? availableRows - 1 : availableRows - 2;
     const overflow = { count: 0 };
 
+    // KEY ITEMS leads, above Treasure — narrative/puzzle keys aren't loot.
+    index = this._renderCategorySection(game, 'KEY ITEMS', KEY_ITEM_COLOR, keyItemCounts, startY, index, spectaclesOn, maxIndex, overflow, columnCount, keyItemNames);
     index = this._renderCategorySection(game, 'TREASURE', TREASURE_COLOR, treasureCounts, startY, index, spectaclesOn, maxIndex, overflow, columnCount);
     index = this._renderCategorySection(game, 'COMPONENTS', COMPONENTS_COLOR, componentCounts, startY, index, spectaclesOn, maxIndex, overflow, columnCount);
     index = this._renderCategorySection(game, 'MATERIALS', COLORS.INGREDIENT, materialCounts, startY, index, spectaclesOn, maxIndex, overflow, columnCount);
-    index = this._renderCategorySection(game, 'KEY ITEMS', KEY_ITEM_COLOR, keyItemCounts, startY, index, spectaclesOn, maxIndex, overflow, columnCount, keyItemNames);
 
     if (overflow.count > 0) {
       this.renderer.drawUIEntity(

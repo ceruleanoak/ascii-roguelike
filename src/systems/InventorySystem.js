@@ -16,6 +16,7 @@ import { Item } from '../entities/Item.js';
 import { GRID } from '../game/GameConfig.js';
 import { addItemToChestArray, removeItemFromChestArray, chestEntryLabel, trapAlreadyEquipped } from './TrapSystem.js';
 import { createBurstParticles, createSparkBurst } from './WorldEffectsSystem.js';
+import { EquipmentEffectsSystem } from './EquipmentEffectsSystem.js';
 
 export class InventorySystem {
   constructor() {
@@ -61,6 +62,10 @@ export class InventorySystem {
 
     this.itemChest = []; // Storage for weapons (shared across all characters)
 
+    // Recomputes player stat fields from equipped armor/consumables — see
+    // applyEquipmentEffectsToPlayer, the sanctioned call point.
+    this.equipmentEffectsSystem = new EquipmentEffectsSystem();
+
     // Weapons displaced during EXPLORE pickup buffer here, not in itemChest.
     // Flushed to itemChest by bankLoot() on safe REST return. Discarded on
     // character/run death so EXPLORE-picked-up weapons don't survive a wipe.
@@ -69,6 +74,12 @@ export class InventorySystem {
     // EXPLORE inventory (lost on death)
     this.armorInventory = []; // All collected armor
     this.consumableInventory = []; // All collected consumables
+
+    // Narrative/puzzle keys (Vault Key, Skull Key) — held, not equipped.
+    // Real Items, populated by tryPickupItem's KEY branch below; never a
+    // quick/equip slot. hasKeyItem/consumeKeyItem are the only sanctioned
+    // way to read or spend one — do not re-derive a parallel boolean flag.
+    this.keyItemInventory = [];
 
     // Equipment slots (lost on death)
     this.equippedArmor = null; // Single armor slot
@@ -268,6 +279,28 @@ export class InventorySystem {
     this.setActiveCharacter('default');
   }
 
+  // ========== KEY ITEMS (held, not equipped) ==========
+
+  /**
+   * Is a key item with this char currently held? The single source of truth
+   * for every door/gate check (Vault door, dungeon Key Vault descent) — read
+   * this instead of re-deriving a parallel boolean flag.
+   */
+  hasKeyItem(char) {
+    return this.keyItemInventory.some(item => item.char === char);
+  }
+
+  /**
+   * Spend a held key item, e.g. on unlocking the door it opens. Returns
+   * true if one was found and removed, false if the player wasn't holding it.
+   */
+  consumeKeyItem(char) {
+    const idx = this.keyItemInventory.findIndex(item => item.char === char);
+    if (idx === -1) return false;
+    this.keyItemInventory.splice(idx, 1);
+    return true;
+  }
+
   // ========== PICKUP & DROP LOGIC ==========
 
   /**
@@ -360,6 +393,13 @@ export class InventorySystem {
           item.consumed = true;
           physicsSystem.removeEntity(item);
           items.splice(i, 1);
+        } else if (item.data.type === 'KEY') {
+          // Held, not equipped — never touches a quick/equip slot. See
+          // hasKeyItem/consumeKeyItem.
+          this.keyItemInventory.push(item);
+          item.consumed = true;
+          physicsSystem.removeEntity(item);
+          items.splice(i, 1);
         } else if (item.data.type === 'BLESSING') {
           // Blessings are handled by caller (applyBlessing in main.js)
           item.consumed = true;
@@ -390,7 +430,8 @@ export class InventorySystem {
           droppedItem: droppedItem,
           message: customMessage || item.data.name,
           removedTrap: false,
-          pickedUpType: item.data.type
+          pickedUpType: item.data.type,
+          pickedUpChar: item.char
         };
       }
     }
@@ -512,96 +553,12 @@ export class InventorySystem {
    *
    * @param {Player} player - Player entity to apply effects to
    */
+  // Recomputes player.defense/resists/immunities/etc. from currently-equipped
+  // armor + consumables. Logic lives in EquipmentEffectsSystem (extracted to
+  // stay under this file's architecture budget) — this stays the sanctioned
+  // call point so every caller keeps going through InventorySystem.
   applyEquipmentEffectsToPlayer(player) {
-    // Reset all armor properties
-    player.defense = 0;
-    player.bulletResist = 0;
-    player.meleeResist = 0;
-    player.dodgeChance = 0;
-    player.fireImmune = false;
-    player.freezeImmune = false;
-    player.poisonImmune = false;
-    player.slimeImmune = false;
-    player.reflectDamage = 0;
-    player.smokeOnHit = false;
-    player.speedBoost = 0;
-    player.speedPenalty = 0;
-    player.slowEnemies = false;
-    player.burnResist = 0;
-    player.massBonus = 0;
-    player.rollCooldownMult = 1.15;
-    player.extraIframes = 0;
-    player.gooConsume = false;
-    player.bladeKillHeal = false;
-    player.batTransform = false;
-    player.whirlwindCape = false;
-    player.sharkMask = false;
-    player.coralCrown = false;
-    player.stingrayMantle = false;
-
-    // Apply equipped armor properties
-    if (this.equippedArmor) {
-      const a = this.equippedArmor.data;
-      player.defense = a.defense || 0;
-      player.bulletResist = a.bulletResist || 0;
-      player.meleeResist = a.meleeResist || 0;
-      player.dodgeChance = a.dodgeChance || 0;
-      player.fireImmune = a.fireImmune || false;
-      player.freezeImmune = a.freezeImmune || false;
-      player.poisonImmune = a.poisonImmune || false;
-      player.slimeImmune = a.slimeImmune || false;
-      player.reflectDamage = a.reflectDamage || 0;
-      player.smokeOnHit = a.smokeOnHit || false;
-      player.speedBoost = a.speedBoost || 0;
-      player.speedPenalty = a.speedPenalty || 0;
-      player.slowEnemies = a.slowEnemies || false;
-      player.burnResist = a.burnResist || 0;
-      player.massBonus = a.massBonus || 0;
-      player.rollCooldownMult = a.rollCooldownMult || 1.15;
-      player.extraIframes = a.extraIframes || 0;
-      player.gooConsume = a.gooConsume || false;
-      player.bladeKillHeal = a.bladeKillHeal || false;
-      player.batTransform = a.batTransform || false;
-      player.whirlwindCape = a.whirlwindCape || false;
-      player.sharkMask = a.sharkMask || false;
-      player.coralCrown = a.coralCrown || false;
-      player.stingrayMantle = a.stingrayMantle || false;
-    }
-
-    player.mass = 1 + player.massBonus; // base mass + massBonus, read by PhysicsSystem
-
-    // Add temporary block boost from Metal Block consumable
-    if (player.blockBoostTimer > 0) {
-      player.defense += player.blockBoostAmount;
-    }
-
-    // Onyx offered to a fairy fountain. Folded in here rather than written once
-    // at the pool, because line 464 zeroes defense on every equip — a bonus set
-    // outside this function is erased the next time armor changes.
-    player.defense += player.fountainArmorBonus;
-
-    // Apply passive consumable bonuses (Lucky Coin). luckBlessed (well ritual) is separate, untouched here.
-    player.luckActive = false;
-    player.critChance = 0;
-    player.luckDodgeBonus = 0;
-    player.fireBerryLit = false;
-    this.equippedConsumables.forEach((slot, idx) => {
-      const cd = slot?.data;
-      if (!cd) return;
-      if (cd.luckPassive) {
-        player.luckActive = true;
-        player.critChance = Math.max(player.critChance, cd.critChance || 0);
-        player.luckDodgeBonus = Math.max(player.luckDodgeBonus, cd.dodgeBonus || 0);
-      }
-      // Fire Berry: passive torch-light while equipped and unspent. Consuming
-      // it (SPACE) empties the slot, which naturally stops the light.
-      if (cd.fireBerryLight && !this.spentConsumableSlots[idx]) {
-        player.fireBerryLit = true;
-      }
-    });
-
-    // Store equipped consumables for condition checking during gameplay
-    player.equippedConsumables = [...this.equippedConsumables];
+    this.equipmentEffectsSystem.apply(player, this);
   }
 
   // ========== CONSUMABLE AUTO-TRIGGER SYSTEM ==========
@@ -1092,6 +1049,7 @@ export class InventorySystem {
     this.pendingChestDeposits = [];
     this.armorInventory = [];
     this.consumableInventory = [];
+    this.keyItemInventory = [];
     this.coinWallet = 0;
     this.equippedArmor = null;
     this.equippedConsumables = [null];

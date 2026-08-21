@@ -4,6 +4,6 @@
   "src/entities/Enemy.js": 109220,
   "src/rendering/state/ExploreRenderer.js": 111058,
   "src/systems/CombatSystem.js": 101241,
-  "src/systems/InventorySystem.js": 46776,
+  "src/systems/InventorySystem.js": 45957,
   "src/entities/Player.js": 47838
 }

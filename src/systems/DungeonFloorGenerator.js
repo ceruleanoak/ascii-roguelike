@@ -250,15 +250,18 @@ export class DungeonFloorGenerator {
   // renders identically to ordinary Bones decor — dropsDungeonKey (set on
   // the instance, mirrors obj.dropsKey's K-room pattern) is what makes THIS
   // one grant the key on destruction, same "which one is it?" find as the K
-  // room's vault key.
+  // room's vault key. keyChar is the real Item it spawns on destruction
+  // (InteractionSystem.handleObjectEffect) — '⚿', distinct from the '8'
+  // decor char so the held item itself reads as a key, not a bone.
   _placeSkullIfDue(floorIndex, { backgroundObjects, pickOpenCell, rows, cols }) {
     const game = this.game;
-    if (game.dungeonKeyObtainedThisRun || game.dungeonKeyUsedThisRun) return;
+    if (game.inventorySystem.hasKeyItem('⚿') || game.dungeonKeyUsedThisRun) return;
     if (game.dungeonKeySkullFloor !== floorIndex) return;
     const cell = pickOpenCell(6, rows - 5, 3, cols - 4);
     if (!cell) return;
     const skull = new BackgroundObject('8', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
     skull.dropsDungeonKey = true;
+    skull.keyChar = '⚿';
     backgroundObjects.push(skull);
   }
 

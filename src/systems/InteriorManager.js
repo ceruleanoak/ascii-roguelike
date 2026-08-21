@@ -91,7 +91,10 @@ export class InteriorManager {
     // Floor 3 Key Vault run-flags (DungeonPuzzleSystem). -1 = skull floor not
     // yet rolled this visit; rolled lazily on dungeon entry.
     g.dungeonKeySkullFloor = -1;
-    g.dungeonKeyObtainedThisRun = false;
+    // An unspent Skull Key doesn't survive leaving the dungeon (matches the
+    // pre-Item flag this replaced) — drop it from keyItemInventory rather
+    // than let it carry into the next visit.
+    g.inventorySystem.consumeKeyItem('⚿');
     g.dungeonKeyUsedThisRun = false;
     g.dungeonRareItemObtainedThisRun = false;
     // Templates already used this visit (dungeonFloorTemplates.js's

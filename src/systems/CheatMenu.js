@@ -100,6 +100,7 @@ export class CheatMenu {
     const consumableItems = [];
     const trapItems = [];
     const ingredientItems = [];
+    const keyItems = [];
 
     const meleeSubtypeBuckets = {
       sword: 'SWORDS', axe: 'AXES', hammer: 'HAMMERS', spear: 'SPEARS',
@@ -126,6 +127,8 @@ export class CheatMenu {
         consumableItems.push(item);
       } else if (data.type === ITEM_TYPES.TRAP) {
         trapItems.push(item);
+      } else if (data.type === ITEM_TYPES.KEY) {
+        keyItems.push(item);
       }
     }
 
@@ -190,6 +193,7 @@ export class CheatMenu {
     if (boulderTestItems.length) children.push({ name: 'BOULDER TEST', items: boulderTestItems });
     if (characterItems.length) children.push({ name: 'CHARACTERS', items: characterItems });
     if (weaponChildren.length) children.push({ name: 'WEAPONS', children: weaponChildren });
+    if (keyItems.length) children.push({ name: 'KEY ITEMS', items: keyItems });
     if (armorItems.length) children.push({ name: 'ARMOR', items: armorItems });
     if (consumableItems.length) children.push({ name: 'CONSUMABLES', items: consumableItems });
     if (trapItems.length) children.push({ name: 'TRAPS', items: trapItems });
@@ -454,6 +458,12 @@ export class CheatMenu {
       inv.equipConsumable(slot, item);
       game.player.equippedConsumables = [...inv.equippedConsumables];
       console.log(`[CHEAT] ✓ Equipped consumable: ${name}`);
+    } else if (type === ITEM_TYPES.KEY) {
+      // Held, not equipped — goes straight into keyItemInventory, same pool
+      // a real world pickup lands in (InventorySystem.tryPickupItem).
+      const item = new Item(char, 0, 0);
+      game.inventorySystem.keyItemInventory.push(item);
+      console.log(`[CHEAT] ✓ Added key item: ${name}`);
     }
 
     game.saveGameState();

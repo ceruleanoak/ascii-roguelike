@@ -3297,12 +3297,11 @@ export class RoomGenerator {
       minRow,
       maxRow,
       bottomWallRow: maxRow, // Bottom wall is at maxRow
-      unlocked: false,
-      // Held, not equipped — set true when the key-dropping object is
-      // destroyed (InteractionSystem.handleObjectEffect), consumed back to
-      // false by unlockVault(). Never a slot-occupying Item; see
-      // canUnlockVault/unlockVault below and the KEY ITEMS inventory section.
-      keyHeld: false
+      unlocked: false
+      // Key possession is NOT tracked here — canUnlockVault/unlockVault
+      // (InteractionSystem.js) read/spend it via InventorySystem's
+      // keyItemInventory (hasKeyItem/consumeKeyItem), the same real-Item
+      // pickup as the K-room key-dropping object grants.
     };
 
     for (let row = minRow; row <= maxRow; row++) {

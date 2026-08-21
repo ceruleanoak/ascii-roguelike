@@ -42,6 +42,29 @@ export class InteractionSystem {
     }
   }
 
+  // Melee-vs-background-object damage for CombatSystem's generic object-smash
+  // path. Bushes always die in one hit to a blunt or axe strike. Cuttable
+  // growth (grass) is choosy about its cutters: axes deal half damage
+  // against it — they're blades, but clumsy ones for trimming; true blades
+  // (sword, scythe, spear, dagger — isBlade) never call this for cuttable
+  // objects at all, since CombatSystem routes them to an instant cutGrass()
+  // cut in BackgroundObject.takeDamage regardless of the damage number;
+  // hammers thump it for zero — a smashing tool has no business trimming or
+  // flattening a blade of grass, so it just rustles (chaff VFX still fires
+  // in CombatSystem) and leaves the grass standing. Everything else deals
+  // its normal damage against grass; hammers (canSmash) still double their
+  // damage against every other object.
+  resolveSmashDamage(attack, obj) {
+    if (obj.char === '%' && (attack.isBlunt || attack.weaponSubtype === 'axe')) {
+      return obj.hp;
+    }
+    if (obj.data.cuttable) {
+      if (attack.weaponSubtype === 'hammer') return 0;
+      if (attack.weaponSubtype === 'axe') return Math.max(1, Math.floor(attack.damage * 0.5));
+    }
+    return attack.canSmash ? attack.damage * 2 : attack.damage;
+  }
+
   // Vault (V room): true when the player stands south of the vault's bottom
   // wall, roughly centered, with the vault key ߃ held.
   canUnlockVault() {
@@ -59,10 +82,11 @@ export class InteractionSystem {
       return false;
     }
 
-    // Held, not equipped — the vault key is a flag on this room's vaultInfo,
-    // never a slot-occupying Item. Set by handleObjectEffect's dropsKey
-    // branch, cleared by unlockVault() below.
-    if (!vault.keyHeld) {
+    // Held, not equipped — the vault key is a real Item in
+    // InventorySystem.keyItemInventory, granted when the key-dropping
+    // object is destroyed and picked up (handleObjectEffect's dropsKey
+    // branch), spent by unlockVault() below.
+    if (!game.inventorySystem.hasKeyItem('߃')) {
       return false;
     }
 
@@ -93,8 +117,8 @@ export class InteractionSystem {
     // Mark vault as unlocked
     vault.unlocked = true;
 
-    // Consume the held key flag (held, not equipped — no quick slot involved)
-    vault.keyHeld = false;
+    // Spend the held key item (held, not equipped — no quick slot involved)
+    game.inventorySystem.consumeKeyItem('߃');
     game.audioSystem?.playSFX?.('vault_key_use');
 
     // Mark background dirty to show wall removal
@@ -418,27 +442,18 @@ export class InteractionSystem {
     const game = this.game;
     if (!effect) return;
 
-    // Vault key (K room): held, not equipped — a flag on this room's
-    // vaultInfo, not a slot-occupying Item. See canUnlockVault/unlockVault.
-    if (obj.dropsKey && effect.includes('destroyObject')) {
+    // Key items (K room Vault Key, dungeon Skull Key): destroying the
+    // carrying object spawns a real, pickup-able Item — held like any
+    // weapon/armor drop, just routed by InventorySystem.tryPickupItem's KEY
+    // branch into keyItemInventory instead of a quick/equip slot, so it
+    // never occupies a loadout slot. See canUnlockVault/unlockVault and
+    // DungeonPuzzleSystem's Key Vault gate, which read hasKeyItem/
+    // consumeKeyItem — the pickup sfx plays once it's actually held
+    // (main.js's tryPickupItem wrapper), not here at mere destruction.
+    if ((obj.dropsKey || obj.dropsDungeonKey) && effect.includes('destroyObject')) {
       obj.destroyAfterAnimation = true;
       game.renderer.markBackgroundDirty();
-      if (game.currentRoom?.vaultInfo) {
-        game.currentRoom.vaultInfo.keyHeld = true;
-      }
-      game.audioSystem?.playSFX?.('vault_key_pickup');
-      return;
-    }
-
-    // Dungeon key skull (Floor 3 Key Vault): the key is "held, not equipped" —
-    // a run-scoped boolean flag, not a slot-occupying Item like the K-room key
-    // above. DungeonPuzzleSystem reads this flag at the Key Vault's locked
-    // descent; it never lives in an inventory slot.
-    if (obj.dropsDungeonKey && effect.includes('destroyObject')) {
-      obj.destroyAfterAnimation = true;
-      game.renderer.markBackgroundDirty();
-      game.dungeonKeyObtainedThisRun = true;
-      game.audioSystem?.playSFX?.('dungeon_key_pickup');
+      game.lootSystem.spawnItemDrop(obj.keyChar, obj.position.x, obj.position.y, null, obj);
       return;
     }
 

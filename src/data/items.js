@@ -7,7 +7,12 @@ export const ITEM_TYPES = {
   ARMOR: 'ARMOR',
   CONSUMABLE: 'CONSUMABLE',
   INGREDIENT: 'INGREDIENT',
-  TRAP: 'TRAP'
+  TRAP: 'TRAP',
+  // Narrative/puzzle keys (Vault Key, Skull Key): real Items, spawned and
+  // picked up exactly like a weapon/armor drop, but routed by
+  // InventorySystem.tryPickupItem into keyItemInventory instead of a
+  // quick/equip slot — held, never equipped. See hasKeyItem/consumeKeyItem.
+  KEY: 'KEY'
 };
 
 // Weapon behaviors
@@ -1366,11 +1371,22 @@ export const ITEMS = {
     color: '#0088ff'
   },
 
-  // ── Misc weapons (no weaponType) ──────────────────────────────────────────
+  // ── Key items (held, not equipped) ────────────────────────────────────────
+  // Real Items — spawned and picked up exactly like a weapon/armor drop, but
+  // ITEM_TYPES.KEY routes them into InventorySystem.keyItemInventory instead
+  // of a quick/equip slot (see tryPickupItem). Surfaced in the Tab overlay's
+  // KEY ITEMS section, above Treasure.
   '߃': {
     char: '߃',
     name: 'Vault Key',
-    type: ITEM_TYPES.WEAPON,
+    type: ITEM_TYPES.KEY,
+    color: '#cc8844'
+  },
+  '⚿': {
+    char: '⚿',
+    name: 'Skull Key',
+    type: ITEM_TYPES.KEY,
+    color: '#cc3333'
   },
 
   // ============================================================================

@@ -279,8 +279,9 @@ class Game {
     this.dungeonFloors = [];       // Persistent dungeon floor states for current visit
     this.dungeonCurrentFloor = -1; // -1 = not in dungeon
     // Floor 3 Key Vault run-flags (DungeonPuzzleSystem) — mirrors InteriorManager.reset().
+    // Key possession itself is NOT a flag — see inventorySystem.keyItemInventory
+    // (hasKeyItem/consumeKeyItem), populated when the key-dropping skull is destroyed.
     this.dungeonKeySkullFloor = -1;
-    this.dungeonKeyObtainedThisRun = false;
     this.dungeonKeyUsedThisRun = false;
     this.dungeonRareItemObtainedThisRun = false;
     this.dungeonTemplatesUsedThisRun = new Set(); // no floor-layout repeats within one dungeon visit
@@ -4581,6 +4582,13 @@ class Game {
         this.audioSystem.playSFX('weapon_pickup');
       }
 
+      // Key items (Vault Key / Skull Key) — held-confirmation sfx fires here,
+      // at the moment it's actually picked up, not when the carrying object
+      // is merely destroyed (InteractionSystem.handleObjectEffect).
+      if (result.pickedUpType === 'KEY') {
+        this.audioSystem.playSFX(result.pickedUpChar === '⚿' ? 'dungeon_key_pickup' : 'vault_key_pickup');
+      }
+
       // Displaced item routes to REST chest instead of being dropped on the ground.
       // In EXPLORE, deposit is deferred — only banked on safe REST return,
       // discarded on death so displaced weapons don't survive a wipe.
@@ -4608,17 +4616,6 @@ class Game {
 
   updateExitCollisions() {
     this.exitSystem.updateExitCollisions(this.currentRoom, this.player);
-    // Escape route: south wall must be physically passable when the room is
-    // locked but the player has no items (matches the renderer's open-door
-    // visual at ExploreRenderer.js — otherwise the player walks into an
-    // invisible wall at row ROWS-1 col centerX).
-    if (this.currentRoom?.exits?.south && this.currentRoom.exitsLocked && this.playerHasNoItems()) {
-      const centerX = Math.floor(GRID.COLS / 2);
-      this.currentRoom.collisionMap[GRID.ROWS - 1][centerX] = false;
-      if (!this.player.inMaze && !this.player.inHut && !this.player.inDungeon) {
-        this.player.setCollisionMap(this.currentRoom.collisionMap);
-      }
-    }
   }
 
   findNearbyBackgroundObject() {
