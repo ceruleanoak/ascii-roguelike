@@ -91,6 +91,10 @@ export function paintDescentVisual(obj, { active, locked }) {
   else if (locked) { char = '⚿'; color = FOOTPRINT_LOCKED_COLOR; }  // squared key — reads as "needs a key"
   else { char = 'v'; color = FOOTPRINT_UNLOCKED_COLOR; }
   obj.char = char;
+  obj.originalChar = char;  // keep in sync — BackgroundObject.update() reverts animationChar to
+                             // originalChar when a transient animation (e.g. shake, from an attack
+                             // bouncing off this indestructible tile) ends; without this it snaps
+                             // back to the constructor's 'x' placeholder instead of the current glyph.
   obj.color = color;
   obj.animationChar = char;
   obj.animationColor = color;
