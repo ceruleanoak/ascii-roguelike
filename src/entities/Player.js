@@ -92,6 +92,9 @@ export class Player {
     this.spawnFadeTimer = SPAWN_FADE_DURATION;
     this.spawnFadeDuration = SPAWN_FADE_DURATION;
     this.spawnFadeHeld = false;
+    // Set by ScreenFadeSystem for the TITLE -> REST fade-in only; cleared in
+    // update() once spawnFadeTimer reaches 0 (getVisibilityAlpha() === 1).
+    this.titleSpawnMovementLocked = false;
     this.exitFadeTimer = 0;
 
     // Physics flags
@@ -620,6 +623,7 @@ export class Player {
     this.updateDodgeRoll(deltaTime);
 
     if (!this.spawnFadeHeld) this.spawnFadeTimer = Math.max(0, this.spawnFadeTimer - deltaTime);
+    if (this.titleSpawnMovementLocked && this.spawnFadeTimer <= 0) this.titleSpawnMovementLocked = false;
     this.exitFadeTimer = Math.max(0, this.exitFadeTimer - deltaTime);
 
     // Update invulnerability timer

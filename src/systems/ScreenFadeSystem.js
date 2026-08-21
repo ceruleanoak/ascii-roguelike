@@ -46,9 +46,12 @@ export class ScreenFadeSystem {
         // enterRestState() reconstructs game.player synchronously above —
         // hold its spawn fade at fully invisible until the screen has lifted
         // (whenComplete, same trigger as gameplay music start) so the player
-        // doesn't pop in while the overlay is still clearing.
+        // doesn't pop in while the overlay is still clearing. Movement stays
+        // locked (titleSpawnMovementLocked) until the fade-in alpha reaches 1,
+        // cleared by Player.update() — see updatePlayerMechanics in main.js.
         if (fade.pendingState === GAME_STATES.REST && this.game.player) {
           this.game.player.spawnFadeHeld = true;
+          this.game.player.titleSpawnMovementLocked = true;
           this.whenComplete(() => {
             if (this.game.player) this.game.player.spawnFadeHeld = false;
           });

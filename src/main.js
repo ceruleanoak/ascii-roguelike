@@ -2481,7 +2481,8 @@ class Game {
       const rs = this.player.rusalkaInputScale;
       const rng = () => Math.random() < rs; // probabilistic suppression
       const dizzy = this.player.isDizzy();
-      const moveLocked = fishingBlocked || windupLocked;
+      // Lock movement for the TITLE -> REST spawn fade-in, until alpha reaches 1
+      const moveLocked = fishingBlocked || windupLocked || this.player.titleSpawnMovementLocked;
       this.player.updateInput({
         up:    moveLocked ? false : (dizzy && Math.random() < 0.15 ? this.keys.s : (rs >= 1.0 ? this.keys.w : rng() && this.keys.w)),
         down:  moveLocked ? false : (dizzy && Math.random() < 0.15 ? this.keys.w : (rs >= 1.0 ? this.keys.s : rng() && this.keys.s)),
