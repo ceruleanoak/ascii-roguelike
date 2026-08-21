@@ -51,6 +51,11 @@
   .doorCount { font-size:12px; margin:6px 0 2px; color:var(--dim); }
   .doorCount.ok { color:var(--ok); }
   .doorCount.bad { color:var(--bad); }
+  .triggerRow { display:flex; align-items:center; gap:5px; margin-bottom:6px; flex-wrap:wrap; }
+  .triggerLabel { flex:1; font-size:11px; color:var(--dim); min-width:66px; }
+  .triggerRow select { font-size:11px; padding:3px 4px; }
+  .triggerRow input[type=number] { width:52px; }
+  .triggerRow button { padding:2px 8px; }
   .colorRow { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
   .colorRow label { flex:1; color:var(--dim); }
   .hint { color:var(--dim); font-size:11px; line-height:1.5; margin-top:10px; }
@@ -68,6 +73,7 @@
     <div class="modeToggle">
       <button id="modeInterior" class="sel">Interior</button>
       <button id="modeExterior">Exterior</button>
+      <button id="modePuzzle">Puzzle</button>
     </div>
     <div class="spacer"></div>
     <div id="status" class="status"></div>
@@ -122,6 +128,19 @@
         <div class="colorRow"><label>Door</label><input id="doorColorInput" type="color" /></div>
         <div class="hint">Every zone design needs exactly one door. Decorative-char color above is a preview only — it isn't written to the file.</div>
       </div>
+      <div id="puzzlePalette" style="display:none">
+        <h4>Palette</h4>
+        <button class="tool" data-tool="wall">#  Wall</button>
+        <button class="tool" data-tool="floor">.  Floor</button>
+        <button class="tool" data-tool="water">~  Water</button>
+        <button class="tool" data-tool="exit">X  Exit</button>
+        <button class="tool" data-tool="switch">○  Switch</button>
+        <button class="tool" data-tool="panel">▭  Floor Panel</button>
+        <div id="exitCount" class="doorCount"></div>
+        <h4>Triggers</h4>
+        <div id="triggerList"></div>
+        <div class="hint">Switch = struck by a weapon attack. Floor Panel = triggered by standing on it. With Switch/Panel selected, click an empty floor cell to place one, click an existing one to remove it. Permanent stays active forever once triggered; Timed reverts after its neutralize-seconds unless re-triggered. The exit unlocks once every trigger is active at the same time.</div>
+      </div>
     </div>
   </div>
 
@@ -140,13 +159,14 @@
   const CELL = 22;
   const DPR = window.devicePixelRatio || 1;
   const DESIGN_COLS = 30, DESIGN_ROWS = 30;
+  const PUZZLE_COLS = 24, PUZZLE_ROWS = 24;
 
-  let mode = 'interior';           // 'interior' | 'exterior'
+  let mode = 'interior';           // 'interior' | 'exterior' | 'puzzle'
   let contract = null;             // {cols, rows, STAIRS_COL, ...} — src/data/dungeon/footprintContract.json
   let reservedSet = new Set();     // "row,col" — fixed staircase footprint cells (interior only)
   let items = [];                  // template names or zone names, depending on mode
   let currentName = null;
-  let currentData = null;          // {weight, grid} (interior) or {wallColor, doorColor, grid} (exterior)
+  let currentData = null;          // {weight, grid} (interior), {wallColor, doorColor, grid} (exterior), or {grid, triggers} (puzzle)
   let dirty = false;
   let painting = false;
   let activeTool = 'wall';
@@ -159,6 +179,7 @@
   const interiorActions = document.getElementById('interiorActions');
   const interiorPalette = document.getElementById('interiorPalette');
   const exteriorPalette = document.getElementById('exteriorPalette');
+  const puzzlePalette = document.getElementById('puzzlePalette');
   const statusEl = document.getElementById('status');
   const validationEl = document.getElementById('validationMsg');
   const reachabilityEl = document.getElementById('reachabilityMsg');
@@ -168,6 +189,8 @@
   const decoCharInput = document.getElementById('decoChar');
   const decoPreviewColorInput = document.getElementById('decoPreviewColor');
   const doorCountEl = document.getElementById('doorCount');
+  const exitCountEl = document.getElementById('exitCount');
+  const triggerListEl = document.getElementById('triggerList');
   const modal = document.getElementById('modal');
   const modalMsg = document.getElementById('modalMsg');
   const modalInput = document.getElementById('modalInput');
@@ -230,6 +253,28 @@
     }
     return { weight: 1, grid };
   }
+  // Ships with one default trigger so a fresh template is immediately valid
+  // (validatePuzzleTemplate requires a non-empty triggers array) — mirrors
+  // how blankInteriorTemplate() always saves successfully out of the box.
+  function blankPuzzleTemplate() {
+    const rows = PUZZLE_ROWS, cols = PUZZLE_COLS;
+    const grid = [];
+    for (let r = 0; r < rows; r++) {
+      let line = '';
+      for (let c = 0; c < cols; c++) {
+        line += (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) ? '#' : '.';
+      }
+      grid.push(line);
+    }
+    const exitRow = rows - 4, exitCol = Math.floor(cols / 2);
+    setCharAt(grid, exitRow, exitCol, 'X');
+    return {
+      grid,
+      triggers: [
+        { row: Math.floor(rows / 2), col: Math.floor(cols / 2) - 3, kind: 'switch', activation: 'timed', neutralizeSeconds: 0.25 },
+      ],
+    };
+  }
 
   // ── Rendering ──────────────────────────────────────────────────────────
   // Interior is a solid-tile painter (3 states — block color is enough).
@@ -247,6 +292,26 @@
     if (ch === '#' || ch === '.' || !ch) return { bg: '#161616' };
     return { bg: '#161616', fg: decoPreviewColorInput.value, glyph: ch };
   }
+  function puzzleVisual(ch) {
+    if (ch === '#') return { bg: '#3a3a3a' };
+    if (ch === '~') return { bg: '#1c3d5c' };
+    if (ch === 'X') return { bg: '#161616', fg: '#5ad088', glyph: 'X' };
+    return { bg: '#161616' }; // floor
+  }
+  // Triggers aren't grid chars (validatePuzzleTemplate requires their cell
+  // stay plain '.') — drawn as a colored overlay on top of the grid pass so
+  // the underlying floor/wall/water paint stays the single source of truth.
+  function drawTriggerMarkers() {
+    if (!currentData || !currentData.triggers) return;
+    for (const t of currentData.triggers) {
+      const x = t.col * CELL, y = t.row * CELL;
+      const isSwitch = t.kind === 'switch';
+      ctx.fillStyle = isSwitch ? '#e0a040' : '#7aa2ff';
+      ctx.fillRect(x, y, CELL, CELL);
+      ctx.fillStyle = '#0a0a12';
+      ctx.fillText(isSwitch ? '○' : '▭', x + CELL / 2, y + CELL / 2 + 1);
+    }
+  }
   function drawLockHatch(x, y) {
     ctx.save();
     ctx.beginPath(); ctx.rect(x, y, CELL, CELL); ctx.clip();
@@ -258,8 +323,8 @@
   }
 
   function render() {
-    const rows = mode === 'interior' ? contract.rows : DESIGN_ROWS;
-    const cols = mode === 'interior' ? contract.cols : DESIGN_COLS;
+    const rows = mode === 'interior' ? contract.rows : mode === 'puzzle' ? PUZZLE_ROWS : DESIGN_ROWS;
+    const cols = mode === 'interior' ? contract.cols : mode === 'puzzle' ? PUZZLE_COLS : DESIGN_COLS;
     canvas.width = cols * CELL * DPR;
     canvas.height = rows * CELL * DPR;
     canvas.style.width = cols * CELL + 'px';
@@ -270,13 +335,18 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    if (!currentData) return;
+    if (!currentData) {
+      updateDoorCount();
+      updateExitCount();
+      renderTriggerList();
+      return;
+    }
 
     for (let r = 0; r < rows; r++) {
       const line = currentData.grid[r] || '';
       for (let c = 0; c < cols; c++) {
-        const ch = line[c] || (mode === 'interior' ? '.' : '');
-        const v = mode === 'interior' ? interiorVisual(ch) : exteriorVisual(ch);
+        const ch = line[c] || (mode === 'exterior' ? '' : '.');
+        const v = mode === 'interior' ? interiorVisual(ch) : mode === 'puzzle' ? puzzleVisual(ch) : exteriorVisual(ch);
         ctx.fillStyle = v.bg;
         ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
         if (v.glyph) {
@@ -288,8 +358,11 @@
         if (mode === 'interior' && isLockedInterior(r, c)) drawLockHatch(c * CELL, r * CELL);
       }
     }
+    if (mode === 'puzzle') drawTriggerMarkers();
     updateDoorCount();
+    updateExitCount();
     checkReachability();
+    renderTriggerList();
   }
 
   // Advisory only — never blocks Save. With the footprint reservation now
@@ -337,13 +410,79 @@
     doorCountEl.textContent = 'Doors: ' + n + ' / 1';
     doorCountEl.className = 'doorCount ' + (n === 1 ? 'ok' : 'bad');
   }
+  function updateExitCount() {
+    if (mode !== 'puzzle' || !currentData) { exitCountEl.textContent = ''; exitCountEl.className = 'doorCount'; return; }
+    let n = 0;
+    for (const line of currentData.grid) for (const ch of line) if (ch === 'X') n++;
+    exitCountEl.textContent = 'Exit: ' + n + ' / 1';
+    exitCountEl.className = 'doorCount ' + (n === 1 ? 'ok' : 'bad');
+  }
 
   // ── Painting ───────────────────────────────────────────────────────────
-  function applyTool(row, col) {
+  function isBorderRingPuzzle(row, col) {
+    return row === 0 || row === PUZZLE_ROWS - 1 || col === 0 || col === PUZZLE_COLS - 1;
+  }
+  function findTriggerAt(row, col) {
+    if (!currentData || !currentData.triggers) return null;
+    return currentData.triggers.find(t => t.row === row && t.col === col) || null;
+  }
+  // Switch/Panel are click-only toggles (place on an empty floor cell,
+  // click an existing one to remove it) — everything else is a normal
+  // continuous-paint tool. Painting a wall/water/exit over a trigger's
+  // cell removes that trigger (validatePuzzleTemplate requires triggers
+  // sit on plain floor, so a fixture can't survive under a wall).
+  function applyPuzzleTool(row, col, isClick) {
+    if (isBorderRingPuzzle(row, col)) return;
+    if (activeTool === 'switch' || activeTool === 'panel') {
+      if (!isClick) return; // ignore drag-continuation — this is a toggle, not a brush
+      const existing = findTriggerAt(row, col);
+      if (existing) {
+        currentData.triggers = currentData.triggers.filter(t => t !== existing);
+      } else if (currentData.grid[row][col] === '.') {
+        currentData.triggers.push(
+          activeTool === 'switch'
+            ? { row, col, kind: 'switch', activation: 'timed', neutralizeSeconds: 0.25 }
+            : { row, col, kind: 'panel', activation: 'permanent' }
+        );
+      } else {
+        return; // must sit on plain floor
+      }
+      dirty = true;
+      render();
+      return;
+    }
+
+    let ch;
+    if (activeTool === 'wall') ch = '#';
+    else if (activeTool === 'water') ch = '~';
+    else if (activeTool === 'exit') ch = 'X';
+    else ch = '.'; // floor
+
+    if (activeTool === 'exit') {
+      // Exactly one exit — clear any other X before placing this one.
+      for (let r = 1; r < PUZZLE_ROWS - 1; r++) {
+        for (let c = 1; c < PUZZLE_COLS - 1; c++) {
+          if ((r !== row || c !== col) && currentData.grid[r][c] === 'X') setCharAt(currentData.grid, r, c, '.');
+        }
+      }
+    }
+    if (ch !== '.') {
+      const existing = findTriggerAt(row, col);
+      if (existing) currentData.triggers = currentData.triggers.filter(t => t !== existing);
+    }
+    setCharAt(currentData.grid, row, col, ch);
+    dirty = true;
+    render();
+  }
+  function applyTool(row, col, isClick) {
     if (mode === 'interior') {
       if (isLockedInterior(row, col)) return;
       const ch = activeTool === 'wall' ? '#' : activeTool === 'water' ? '~' : activeTool === 'enemy' ? 'E' : '.';
       setCharAt(currentData.grid, row, col, ch);
+      dirty = true;
+      render();
+    } else if (mode === 'puzzle') {
+      applyPuzzleTool(row, col, isClick);
     } else {
       let ch;
       if (activeTool === 'wall') ch = '≡';
@@ -351,22 +490,22 @@
       else if (activeTool === 'deco') ch = decoChar || '*';
       else ch = isBorderRingExterior(row, col) ? '#' : '.'; // erase
       setCharAt(currentData.grid, row, col, ch);
+      dirty = true;
+      render();
     }
-    dirty = true;
-    render();
   }
-  function paintFromEvent(e) {
+  function paintFromEvent(e, isClick) {
     if (!currentData) return;
     const rect = canvas.getBoundingClientRect();
     const col = Math.floor((e.clientX - rect.left) / CELL);
     const row = Math.floor((e.clientY - rect.top) / CELL);
-    const rows = mode === 'interior' ? contract.rows : DESIGN_ROWS;
-    const cols = mode === 'interior' ? contract.cols : DESIGN_COLS;
+    const rows = mode === 'interior' ? contract.rows : mode === 'puzzle' ? PUZZLE_ROWS : DESIGN_ROWS;
+    const cols = mode === 'interior' ? contract.cols : mode === 'puzzle' ? PUZZLE_COLS : DESIGN_COLS;
     if (row < 0 || row >= rows || col < 0 || col >= cols) return;
-    applyTool(row, col);
+    applyTool(row, col, isClick);
   }
-  canvas.addEventListener('mousedown', e => { painting = true; paintFromEvent(e); });
-  canvas.addEventListener('mousemove', e => { if (painting) paintFromEvent(e); });
+  canvas.addEventListener('mousedown', e => { painting = true; paintFromEvent(e, true); });
+  canvas.addEventListener('mousemove', e => { if (painting) paintFromEvent(e, false); });
   window.addEventListener('mouseup', () => { painting = false; });
 
   // ── Tool buttons ───────────────────────────────────────────────────────
@@ -402,9 +541,76 @@
   function syncPropsPanel() {
     if (mode === 'interior') {
       weightInput.value = currentData ? currentData.weight : 1;
-    } else {
+    } else if (mode === 'exterior') {
       wallColorInput.value = currentData ? currentData.wallColor : '#888888';
       doorColorInput.value = currentData ? currentData.doorColor : '#888888';
+    }
+    // puzzle mode has no per-template scalar props — triggers are edited via renderTriggerList()
+  }
+
+  // Rebuilds the sidebar's per-trigger editor rows (kind/position label,
+  // activation dropdown, neutralize-seconds input when timed, delete). Called
+  // from render() on every repaint — mutations here just flip `dirty` and let
+  // the next render() call rebuild, rather than each handler managing DOM sync.
+  function renderTriggerList() {
+    if (mode !== 'puzzle') { triggerListEl.innerHTML = ''; return; }
+    triggerListEl.innerHTML = '';
+    const triggers = currentData && currentData.triggers ? currentData.triggers : [];
+    if (!triggers.length) {
+      const empty = document.createElement('div');
+      empty.className = 'triggerLabel';
+      empty.textContent = 'None placed yet.';
+      triggerListEl.appendChild(empty);
+      return;
+    }
+    for (const t of triggers) {
+      const row = document.createElement('div');
+      row.className = 'triggerRow';
+
+      const label = document.createElement('span');
+      label.className = 'triggerLabel';
+      label.textContent = (t.kind === 'switch' ? '○' : '▭') + ' ' + t.row + ',' + t.col;
+      row.appendChild(label);
+
+      const actSel = document.createElement('select');
+      for (const opt of ['permanent', 'timed']) {
+        const o = document.createElement('option');
+        o.value = opt; o.textContent = opt;
+        if (t.activation === opt) o.selected = true;
+        actSel.appendChild(o);
+      }
+      actSel.onchange = () => {
+        t.activation = actSel.value;
+        if (t.activation === 'timed' && !(Number.isFinite(t.neutralizeSeconds) && t.neutralizeSeconds > 0)) {
+          t.neutralizeSeconds = 0.25;
+        } else if (t.activation === 'permanent') {
+          delete t.neutralizeSeconds;
+        }
+        dirty = true;
+        renderTriggerList();
+      };
+      row.appendChild(actSel);
+
+      if (t.activation === 'timed') {
+        const secInput = document.createElement('input');
+        secInput.type = 'number';
+        secInput.min = '0.05';
+        secInput.step = '0.05';
+        secInput.value = t.neutralizeSeconds ?? 0.25;
+        secInput.oninput = () => { t.neutralizeSeconds = Number(secInput.value) || 0.05; dirty = true; };
+        row.appendChild(secInput);
+      }
+
+      const del = document.createElement('button');
+      del.textContent = '×';
+      del.onclick = () => {
+        currentData.triggers = currentData.triggers.filter(x => x !== t);
+        dirty = true;
+        render();
+      };
+      row.appendChild(del);
+
+      triggerListEl.appendChild(row);
     }
   }
 
@@ -416,6 +622,8 @@
     currentName = name;
     if (mode === 'interior') {
       currentData = await window.editorAPI.floorTemplateLoad(name);
+    } else if (mode === 'puzzle') {
+      currentData = await window.editorAPI.puzzleTemplateLoad(name);
     } else {
       // No load-time normalization — preserve exact byte fidelity. Rows
       // shorter/longer than DESIGN_COLS are legitimate (RoomGenerator walks
@@ -438,6 +646,8 @@
     if (mode === 'interior') {
       currentData.weight = Number(weightInput.value) || 0;
       result = await window.editorAPI.floorTemplateSave(currentName, currentData);
+    } else if (mode === 'puzzle') {
+      result = await window.editorAPI.puzzleTemplateSave(currentName, currentData);
     } else {
       currentData.wallColor = wallColorInput.value;
       currentData.doorColor = doorColorInput.value;
@@ -457,42 +667,68 @@
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(); }
   });
 
-  // ── New / Clone / Delete (interior only — exterior designs are a fixed set) ──
+  // ── New / Clone / Delete (interior + puzzle — exterior designs are a fixed set) ──
   const NAME_RE = /^[a-z0-9_]+$/i;
 
+  function apiFor(m) {
+    if (m === 'interior') return {
+      list: window.editorAPI.floorTemplatesList,
+      save: window.editorAPI.floorTemplateSave,
+      delete: window.editorAPI.floorTemplateDelete,
+    };
+    if (m === 'puzzle') return {
+      list: window.editorAPI.puzzleTemplatesList,
+      save: window.editorAPI.puzzleTemplateSave,
+      delete: window.editorAPI.puzzleTemplateDelete,
+    };
+    return null; // exterior — fixed zone set, no New/Clone/Delete
+  }
+
   document.getElementById('btnNew').onclick = async () => {
+    const api = apiFor(mode);
+    if (!api) return;
     const name = await askPrompt('New template name (letters, numbers, underscore):', '');
     if (!name) return;
     if (!NAME_RE.test(name)) { setStatus('Invalid name', true); return; }
     if (items.includes(name)) { setStatus('Already exists', true); return; }
-    const result = await window.editorAPI.floorTemplateSave(name, blankInteriorTemplate());
+    const blank = mode === 'interior' ? blankInteriorTemplate() : blankPuzzleTemplate();
+    const result = await api.save(name, blank);
     if (!result.ok) { setValidation(result.error); return; }
-    items = await window.editorAPI.floorTemplatesList();
+    items = await api.list();
     renderList();
     await selectItem(name);
   };
 
   document.getElementById('btnClone').onclick = async () => {
-    if (!currentName) return;
+    const api = apiFor(mode);
+    if (!api || !currentName) return;
     const name = await askPrompt('Clone "' + currentName + '" as:', currentName + '_copy');
     if (!name) return;
     if (!NAME_RE.test(name)) { setStatus('Invalid name', true); return; }
     if (items.includes(name)) { setStatus('Already exists', true); return; }
     const copy = JSON.parse(JSON.stringify(currentData));
-    const result = await window.editorAPI.floorTemplateSave(name, copy);
+    const result = await api.save(name, copy);
     if (!result.ok) { setValidation(result.error); return; }
-    items = await window.editorAPI.floorTemplatesList();
+    items = await api.list();
     renderList();
     await selectItem(name);
   };
 
   document.getElementById('btnDelete').onclick = async () => {
-    if (!currentName) return;
-    if (currentName === 'open') { setStatus('Cannot delete "open" — it\'s the code\'s hardcoded template fallback.', true); return; }
+    const api = apiFor(mode);
+    if (!api || !currentName) return;
+    if (mode === 'interior' && currentName === 'open') {
+      setStatus('Cannot delete "open" — it\'s the code\'s hardcoded template fallback.', true);
+      return;
+    }
+    if (mode === 'puzzle' && currentName === 'sample_two_triggers') {
+      setStatus('Cannot delete "sample_two_triggers" — it\'s statically imported by dungeonPuzzleTemplates.js.', true);
+      return;
+    }
     const ok = await askConfirm('Delete template "' + currentName + '"? This cannot be undone.');
     if (!ok) return;
-    await window.editorAPI.floorTemplateDelete(currentName);
-    items = await window.editorAPI.floorTemplatesList();
+    await api.delete(currentName);
+    items = await api.list();
     currentName = null; currentData = null; dirty = false;
     renderList();
     if (items.length) await selectItem(items[0]); else render();
@@ -502,6 +738,7 @@
   // ── Mode switch ────────────────────────────────────────────────────────
   document.getElementById('modeInterior').onclick = () => setMode('interior');
   document.getElementById('modeExterior').onclick = () => setMode('exterior');
+  document.getElementById('modePuzzle').onclick = () => setMode('puzzle');
 
   async function setMode(newMode) {
     if (mode === newMode) return;
@@ -512,15 +749,19 @@
     mode = newMode;
     document.getElementById('modeInterior').classList.toggle('sel', mode === 'interior');
     document.getElementById('modeExterior').classList.toggle('sel', mode === 'exterior');
+    document.getElementById('modePuzzle').classList.toggle('sel', mode === 'puzzle');
     interiorPalette.style.display = mode === 'interior' ? '' : 'none';
     exteriorPalette.style.display = mode === 'exterior' ? '' : 'none';
-    interiorActions.style.display = mode === 'interior' ? '' : 'none';
-    sidebarTitle.textContent = mode === 'interior' ? 'Floor Templates' : 'Zone Designs';
-    activeTool = mode === 'interior' ? 'wall' : 'erase';
+    puzzlePalette.style.display = mode === 'puzzle' ? '' : 'none';
+    interiorActions.style.display = mode !== 'exterior' ? '' : 'none';
+    sidebarTitle.textContent = mode === 'interior' ? 'Floor Templates' : mode === 'puzzle' ? 'Puzzle Rooms' : 'Zone Designs';
+    activeTool = mode === 'exterior' ? 'erase' : 'wall';
     syncToolButtons();
     currentName = null; currentData = null; dirty = false;
     setValidation('');
-    items = mode === 'interior' ? await window.editorAPI.floorTemplatesList() : await window.editorAPI.designsList();
+    items = mode === 'interior' ? await window.editorAPI.floorTemplatesList()
+      : mode === 'puzzle' ? await window.editorAPI.puzzleTemplatesList()
+      : await window.editorAPI.designsList();
     renderList();
     if (items.length) await selectItem(items[0]); else render();
   }

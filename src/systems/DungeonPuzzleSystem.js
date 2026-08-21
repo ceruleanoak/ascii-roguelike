@@ -10,9 +10,6 @@ const INTERACT_RADIUS = GRID.CELL_SIZE * 2;
 
 const SFX_BEEP_INTERVAL = 2.0; // Compass ping throttle, seconds
 
-// Whip Trial — see plan doc and DungeonFloorGenerator.generateWhipTrial.
-const WHIP_TRIAL_STRUCK_WINDOW = 0.25; // seconds — simultaneity window for the two switches
-
 /**
  * DungeonPuzzleSystem — gating and puzzle logic for the 6-floor dungeon
  * rework (plan Phase 2/3). DungeonSystem owns lifecycle (enter/exit/ascend/
@@ -44,6 +41,8 @@ export class DungeonPuzzleSystem {
       this._updateTrapRoom(floor);
     } else if (floor.roomKind === 'companionGate') {
       this._updateCompanionGate(floor);
+    } else if (floor.roomKind === 'puzzleRoom') {
+      this._updatePuzzleRoom(floor, dt);
     }
   }
 
@@ -104,25 +103,22 @@ export class DungeonPuzzleSystem {
       }
     }
 
-    // Switch strikes — simultaneity window, then permanent unlock.
+    // Switch strikes — each runs through the same generic timed-trigger
+    // state machine an editor-built Puzzle Room's switches/panels use (see
+    // _advanceTrigger/_updatePuzzleRoom below). Whip Trial's switches carry
+    // activation:'timed', neutralizeSeconds:WHIP_TRIAL_STRUCK_WINDOW
+    // (DungeonFloorGenerator.generateWhipTrial) — this is just the two-
+    // switch "both at once" solve check on top of that shared machinery.
     if (!room.puzzleSolved) {
       for (const sw of [room.switchAObj, room.switchBObj]) {
-        if (sw.recentlyStruck) {
-          sw._struckTimer += dt;
-          if (sw._struckTimer >= WHIP_TRIAL_STRUCK_WINDOW) {
-            sw.recentlyStruck = false;
-            this._setSwitchVisual(sw, false);
-          }
-        }
-        if (sw.glitterHit) {
-          sw.glitterHit = false;
-          sw.recentlyStruck = true;
-          sw._struckTimer = 0;
-          this._setSwitchVisual(sw, true);
-        }
+        const isTriggeredNow = !!sw.glitterHit;
+        sw.glitterHit = false;
+        const wasActive = sw.active;
+        this._advanceTrigger(sw, dt, isTriggeredNow);
+        if (sw.active !== wasActive) this._setTriggerVisual(sw, sw.active);
       }
 
-      if (room.switchAObj.recentlyStruck && room.switchBObj.recentlyStruck) {
+      if (room.switchAObj.active && room.switchBObj.active) {
         room.puzzleSolved = true;
         room.stairsUpLocked = false;
         paintStairsUpVisual(room.stairsUpObj, false);
@@ -193,6 +189,77 @@ export class DungeonPuzzleSystem {
     } else if (companion) {
       companion.commandTarget = null;
     }
+  }
+
+  // Puzzle Room — generic template-driven puzzle side room (see
+  // DungeonFloorGenerator.generatePuzzleRoom). Every trigger in room.triggers
+  // (a 'switch', strike-triggered via the puzzleSignal/glitterHit contract,
+  // or a 'panel', occupancy-triggered like the Companion Gate's switches)
+  // runs through the same _advanceTrigger state machine the Whip Trial's
+  // switches use; the exit unlocks once every trigger is active at once —
+  // the generalized form of both existing rooms' "all at once" solve rule,
+  // extended to any trigger count/mix.
+  _updatePuzzleRoom(room, dt) {
+    if (room.puzzleSolved) return;
+    const { game } = this;
+    const player = game.player;
+    const companion = game.companion;
+
+    for (const trigger of room.triggers) {
+      let isTriggeredNow;
+      if (trigger.kind === 'switch') {
+        isTriggeredNow = !!trigger.glitterHit;
+        trigger.glitterHit = false;
+      } else { // 'panel' — occupancy, same contract as the Companion Gate's switches
+        const px = trigger.position.x, py = trigger.position.y;
+        isTriggeredNow = this._overlapsCell(player, px, py)
+          || (companion ? this._overlapsCell(companion, px, py) : false);
+      }
+      const wasActive = trigger.active;
+      this._advanceTrigger(trigger, dt, isTriggeredNow);
+      if (trigger.active !== wasActive) this._setTriggerVisual(trigger, trigger.active);
+    }
+
+    if (room.triggers.length && room.triggers.every(t => t.active)) {
+      room.puzzleSolved = true;
+      room.stairsUpLocked = false;
+      paintStairsUpVisual(room.stairsUpObj, false);
+      this._spawnUnlockEffect(room.stairsUpObj);
+    }
+  }
+
+  // Generic per-trigger activation state machine — shared by every dungeon
+  // puzzle room's switches/panels (Whip Trial's two switches, and any
+  // editor-authored Puzzle Room trigger). `trigger` carries `activation`
+  // ('permanent' | 'timed'), `neutralizeSeconds` (timed only), and mutable
+  // `active`/`_timer` fields. `isTriggeredNow` is the caller's per-kind read
+  // of "is this trigger being hit/occupied THIS tick" — a one-tick pulse for
+  // a struck switch, a sustained level for an occupied floor panel.
+  _advanceTrigger(trigger, dt, isTriggeredNow) {
+    if (isTriggeredNow) {
+      trigger.active = true;
+      trigger._timer = 0;
+    } else if (trigger.active && trigger.activation === 'timed') {
+      trigger._timer += dt;
+      if (trigger._timer >= trigger.neutralizeSeconds) {
+        trigger.active = false;
+      }
+    }
+    // activation === 'permanent': once active, never reverts.
+  }
+
+  // Visual for a generic trigger — switches reuse the Companion Gate/Whip
+  // Trial's ○/● pair (one consistent "this is a switch" glyph language
+  // across every dungeon puzzle room); panels use their own ▭/▬ pair so the
+  // two trigger kinds always read as visually distinct fixtures.
+  _setTriggerVisual(trigger, active) {
+    const isSwitch = trigger.kind === 'switch';
+    const char = isSwitch ? (active ? '●' : '○') : (active ? '▬' : '▭');
+    const color = active ? '#ffcc44' : '#888888';
+    trigger.char = char;
+    trigger.color = color;
+    trigger.animationChar = char;
+    trigger.animationColor = color;
   }
 
   _setSwitchVisual(sw, pressed) {

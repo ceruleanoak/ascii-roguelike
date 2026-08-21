@@ -15,4 +15,10 @@ contextBridge.exposeInMainWorld('editorAPI', {
   designsList: () => ipcRenderer.invoke('designs-list'),
   designLoad: (zone) => ipcRenderer.invoke('design-load', zone),
   designSave: (zone, data) => ipcRenderer.invoke('design-save', zone, data),
+
+  // Puzzle — puzzle-room templates
+  puzzleTemplatesList: () => ipcRenderer.invoke('puzzle-templates-list'),
+  puzzleTemplateLoad: (name) => ipcRenderer.invoke('puzzle-template-load', name),
+  puzzleTemplateSave: (name, data) => ipcRenderer.invoke('puzzle-template-save', name, data),
+  puzzleTemplateDelete: (name) => ipcRenderer.invoke('puzzle-template-delete', name),
 });

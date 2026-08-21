@@ -2,10 +2,12 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
-// Dungeon layout editor — two edit modes, one tool (plan Phase 1, see
-// ~/.claude/plans/need-a-dungeon-layout-parallel-haven.md):
+// Dungeon layout editor — three edit modes, one tool (plan Phase 1, see
+// ~/.claude/plans/need-a-dungeon-layout-parallel-haven.md; Puzzle mode added
+// later for the generic puzzle-room authoring pathway):
 //   Interior: 24×24 floor-template painter (src/data/dungeon/floorTemplates/*.json)
 //   Exterior: 30×30 zone-design painter    (src/data/dungeon/designs/*.json)
+//   Puzzle:   24×24 puzzle-room painter    (src/data/dungeon/puzzleTemplates/*.json)
 // Structure mirrors tools/sfx-editor/ (main.js/preload.js/index.html) and
 // borrows tools/preset-browser/'s improvements: no own electron devDependency
 // (see package.json's start script), atomic writes, a static (not
@@ -14,7 +16,15 @@ const fs = require('fs');
 const DATA_ROOT = path.join(__dirname, '..', '..', 'src', 'data', 'dungeon');
 const FLOOR_TEMPLATES_DIR = path.join(DATA_ROOT, 'floorTemplates');
 const DESIGNS_DIR = path.join(DATA_ROOT, 'designs');
+const PUZZLE_TEMPLATES_DIR = path.join(DATA_ROOT, 'puzzleTemplates');
 const FOOTPRINT_CONTRACT_FILE = path.join(DATA_ROOT, 'footprintContract.json');
+
+// Puzzle rooms are a fixed 24×24, same as floor-template interiors, but a
+// wholly separate grid — no footprint contract, no reserved cells (a puzzle
+// room's exit is wherever its author places the single 'X' marker, not the
+// numbered-floor spine position).
+const PUZZLE_COLS = 24;
+const PUZZLE_ROWS = 24;
 
 // Exterior designs are a fixed set, one per zone — not a free collection.
 const DESIGN_COLS = 30;
@@ -184,6 +194,102 @@ ipcMain.handle('design-save', (_e, zone, data) => {
   const err = validateDesign(data);
   if (err) return { ok: false, error: err };
   writeJSONAtomic(resolveDesignPath(zone), data);
+  return { ok: true };
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Puzzle — puzzle-room templates (src/data/dungeon/puzzleTemplates/*.json)
+// Grid + a trigger list (switches/floor panels), consumed at runtime by
+// DungeonFloorGenerator.generatePuzzleRoom / DungeonPuzzleSystem.
+// ═══════════════════════════════════════════════════════════════
+
+function resolvePuzzleTemplatePath(name) {
+  let rel = String(name).trim().replace(/^\/+|\/+$/g, '');
+  if (!rel.endsWith('.json')) rel += '.json';
+  const abs = path.resolve(PUZZLE_TEMPLATES_DIR, rel);
+  if (!abs.startsWith(PUZZLE_TEMPLATES_DIR + path.sep)) {
+    throw new Error('Template path escapes puzzleTemplates/: ' + name);
+  }
+  return abs;
+}
+
+function listPuzzleTemplates() {
+  let entries = [];
+  try { entries = fs.readdirSync(PUZZLE_TEMPLATES_DIR, { withFileTypes: true }); } catch { return []; }
+  return entries
+    .filter(e => e.isFile() && e.name.endsWith('.json'))
+    .map(e => e.name.slice(0, -5))
+    .sort((a, b) => a.localeCompare(b));
+}
+
+// Defense in depth against hand-edited files — the renderer already makes
+// walls/the exit non-paintable over each other and keeps the trigger list
+// in sync with placed fixtures, but a save is re-validated here regardless
+// (same posture as validateFloorTemplate/validateDesign above).
+function validatePuzzleTemplate(data) {
+  if (!data || typeof data !== 'object') return 'Not an object.';
+  if (!Array.isArray(data.grid) || data.grid.length !== PUZZLE_ROWS) {
+    return `grid must be an array of ${PUZZLE_ROWS} rows.`;
+  }
+  let exitCount = 0;
+  for (let r = 0; r < PUZZLE_ROWS; r++) {
+    const line = data.grid[r];
+    if (typeof line !== 'string' || [...line].length !== PUZZLE_COLS) {
+      return `row ${r} must be exactly ${PUZZLE_COLS} chars.`;
+    }
+    for (const ch of line) {
+      if (ch !== '#' && ch !== '.' && ch !== '~' && ch !== 'X') {
+        return `row ${r} has invalid char "${ch}" (only # . ~ X allowed).`;
+      }
+      if (ch === 'X') exitCount++;
+    }
+    const isBorderRow = r === 0 || r === PUZZLE_ROWS - 1;
+    if (isBorderRow && [...line].some(ch => ch !== '#')) return `row ${r} is a border row — every cell must be #.`;
+  }
+  for (let r = 1; r < PUZZLE_ROWS - 1; r++) {
+    if (data.grid[r][0] !== '#' || data.grid[r][PUZZLE_COLS - 1] !== '#') {
+      return `row ${r} must have # at the left/right border columns.`;
+    }
+  }
+  if (exitCount !== 1) return `grid must contain exactly one exit (X) — found ${exitCount}.`;
+
+  if (!Array.isArray(data.triggers) || data.triggers.length < 1) {
+    return 'triggers must be a non-empty array — a puzzle room needs at least one switch or panel.';
+  }
+  const seen = new Set();
+  for (let i = 0; i < data.triggers.length; i++) {
+    const t = data.triggers[i];
+    if (!t || typeof t !== 'object') return `trigger ${i} must be an object.`;
+    if (!Number.isInteger(t.row) || t.row < 1 || t.row > PUZZLE_ROWS - 2) return `trigger ${i} row out of bounds.`;
+    if (!Number.isInteger(t.col) || t.col < 1 || t.col > PUZZLE_COLS - 2) return `trigger ${i} col out of bounds.`;
+    const key = `${t.row},${t.col}`;
+    if (seen.has(key)) return `trigger ${i} shares a cell with another trigger.`;
+    seen.add(key);
+    const cellChar = data.grid[t.row][t.col];
+    if (cellChar !== '.') return `trigger ${i} at (${t.row},${t.col}) must sit on plain floor ('.'), not "${cellChar}".`;
+    if (t.kind !== 'switch' && t.kind !== 'panel') return `trigger ${i} kind must be "switch" or "panel".`;
+    if (t.activation !== 'permanent' && t.activation !== 'timed') {
+      return `trigger ${i} activation must be "permanent" or "timed".`;
+    }
+    if (t.activation === 'timed' && !(Number.isFinite(t.neutralizeSeconds) && t.neutralizeSeconds > 0)) {
+      return `trigger ${i} is timed but neutralizeSeconds must be a number > 0.`;
+    }
+  }
+  return null;
+}
+
+ipcMain.handle('puzzle-templates-list', () => listPuzzleTemplates());
+ipcMain.handle('puzzle-template-load', (_e, name) => readJSON(resolvePuzzleTemplatePath(name)));
+
+ipcMain.handle('puzzle-template-save', (_e, name, data) => {
+  const err = validatePuzzleTemplate(data);
+  if (err) return { ok: false, error: err };
+  writeJSONAtomic(resolvePuzzleTemplatePath(name), data);
+  return { ok: true };
+});
+
+ipcMain.handle('puzzle-template-delete', (_e, name) => {
+  fs.unlinkSync(resolvePuzzleTemplatePath(name));
   return { ok: true };
 });
 
