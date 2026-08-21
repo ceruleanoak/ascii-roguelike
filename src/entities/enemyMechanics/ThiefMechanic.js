@@ -9,12 +9,14 @@
 // flee.js's `cornered` opt-in reaches it, so a cowardly rat still bites back
 // if the player corners it — it just never again closes distance on its own.
 //
-// Cowardice isn't permanent: a continuous run of lost sight — not merely one
-// successful lookback, the general coward's own `withdraw`/`alert` settling
-// already covers that — earns the rat its hunting states back (`_updateRecovery`
-// / `_unflip`), restoring the exact pre-flip config rather than reconstructing
-// archetype defaults, so a Rat and a re-authored Rat variant both recover
-// correctly without this file needing to know their defaults.
+// Cowardice's hunting behavior isn't permanent: a continuous run of lost
+// sight — not merely one successful lookback, the general coward's own
+// `withdraw`/`alert` settling already covers that — earns the rat its
+// hunting states back (`_updateRecovery` / `_unflip`), restoring the exact
+// pre-flip config rather than reconstructing archetype defaults, so a Rat
+// and a re-authored Rat variant both recover correctly without this file
+// needing to know their defaults. Room-clear status IS permanent, though:
+// `_unflip` never restores `enemy.uncounted` — see its own comment.
 import { hasVision } from '../enemyVision.js';
 
 export const ThiefMechanic = {
@@ -148,7 +150,12 @@ export const ThiefMechanic = {
   _unflip(enemy, ctx) {
     enemy.ratFlipped = false;
     enemy.ratRecoverTimer = 0;
-    enemy.uncounted = false; // dangerous again — back to gating room-clear
+    // `uncounted` stays true — recovery restores hunting/biting behavior but
+    // never restores room-clear gating. Every other `uncounted` user in the
+    // codebase (Aquifer eel, Quagmire Hag) is one-way for the same reason:
+    // once a room's exits have opened on this rat's account, a later change
+    // of heart shouldn't re-trap the player behind an already-earned-open
+    // door. Bug #195 — recovering rats were re-locking exits mid-flap.
 
     const declared = enemy.stateMachine.declared;
     const pre = enemy._ratPreFlipStates ?? {};
