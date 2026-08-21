@@ -60,6 +60,9 @@ export const PHYSICS = {
 // pivoted on the player, eased with a cubic bezier. See CameraZoomSystem.
 export const ZOOM = {
   SCALE: 1.75,                // 175% zoom when triggered
+  HALF_SCALE: 1.375,          // halfway between 1.0 and SCALE — used on the surface when an
+                               // aggro'd enemy is nearby but the player has no weapon equipped:
+                               // still some tension, but not the full combat commit (see CameraZoomSystem)
   TRIGGER_RANGE_CELLS: 6.6,   // enemy/ghost within this many cells triggers zoom (+10% over the original 6 — cowards no longer trigger it at all, see CameraZoomSystem)
   RELEASE_RANGE_CELLS: 7,     // once zoomed, enemy must clear this range before zoom releases (hysteresis — prevents flicker at the trigger boundary)
   ZOOM_OUT_DELAY_MS: 500,     // hold the zoom this long after the last detected enemy before actually releasing
@@ -545,7 +548,11 @@ export const BACKGROUND_OBJECTS = {
   '|': {
     name: 'Tall Grass',
     color: '#559944',
-    hp: 1,
+    // hp:2 only matters to non-blade cutters (axes, at half damage — see
+    // CombatSystem's smashDamage calc). True blades (isBlade: true) never
+    // touch this HP at all — BackgroundObject.takeDamage's isBlade branch
+    // routes them straight to cutGrass(), an instant cut regardless of hp.
+    hp: 2,
     bulletInteraction: 'pass-through',
     flammability: 'high',
     burnDuration: 1.5,
