@@ -8,6 +8,7 @@ const BLINK_FREQUENCY = 0.1;
 const SPAWN_FADE_DURATION = 0.9;
 const EXIT_FADE_DURATION = 0.3;
 const DAGGER_POST_DODGE_CRIT_WINDOW = 0.6;
+const STONE_SKIN_COLOR = '#8c7853'; // gray/bronze — Stone Skin glyph tint + pip color
 
 // Additively blend a tint color onto a base hex color. factor 0–1 controls tint intensity.
 function additiveTint(base, tint, factor = 0.5) {
@@ -195,7 +196,6 @@ export class Player {
     this.blockBoostTimer = 0;
     this.blockBoostAmount = 0;
     this.stoneSkinTimer = 0;
-    this.stoneSkinBonus = 0;
     this.damageBonusTimer = 0;
     this.damageBonusAmount = 0;
     this.regenTimer = 0;
@@ -473,9 +473,8 @@ export class Player {
   }
 
   applySpeedBoost(duration) { this.speedBoostTimer = Math.max(this.speedBoostTimer, duration); }
-  applyStoneSkin(duration, bonus) {
+  applyStoneSkin(duration) {
     this.stoneSkinTimer = Math.max(this.stoneSkinTimer, duration);
-    this.stoneSkinBonus = Math.max(this.stoneSkinBonus, bonus);
   }
   applyDamageBuff(duration, bonus) {
     this.damageBonusTimer = Math.max(this.damageBonusTimer, duration);
@@ -600,6 +599,9 @@ export class Player {
       const blinkCycle = Math.floor(this.statusBlinkTimer / 0.2);
       return blinkCycle % 2 === 0 ? '#ddbb00' : this.baseColor;
     }
+    // Solid gray/bronze while Stone Skin is active — a deliberate self-buff,
+    // reads as a full-body transformation and takes priority over ambient tints
+    if (this.stoneSkinTimer > 0) return STONE_SKIN_COLOR;
     // Red tint when accumulating ember stacks (proximity to fire)
     if (this.emberStacks > 0) return additiveTint(this.color, '#ff2200', 0.5);
     // Blue tint when standing in water (inLiquid resets each frame — distinct from lingering wet status)
@@ -655,7 +657,7 @@ export class Player {
     if (this.floatTimer > 0) this.floatTimer -= deltaTime;
     if (this.stoneSkinTimer > 0) {
       this.stoneSkinTimer -= deltaTime;
-      if (this.stoneSkinTimer <= 0) { this.stoneSkinTimer = 0; this.stoneSkinBonus = 0; }
+      if (this.stoneSkinTimer <= 0) this.stoneSkinTimer = 0;
     }
     if (this.damageBonusTimer > 0) this.damageBonusTimer -= deltaTime;
     if (this.regenTimer > 0) {
@@ -1040,7 +1042,7 @@ export class Player {
     this.magicMeter = { active: false, slots: [], current: 0, max: 10, freeSlotGranted: false };
 
     // Reset new buff timers
-    this.stoneSkinTimer = 0; this.stoneSkinBonus = 0;
+    this.stoneSkinTimer = 0;
     this.damageBonusTimer = 0; this.damageBonusAmount = 0;
     this.regenTimer = 0; this.regenAmount = 1; this.regenInterval = 1.0; this.regenTickTimer = 0;
 

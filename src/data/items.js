@@ -1786,7 +1786,7 @@ export const ITEMS = {
   },
   'x': {
     char: 'x', name: 'Stone Skin', type: ITEM_TYPES.CONSUMABLE,
-    effect: 'stoneskin', permanentUntilRoomExit: true, defenseBonus: 3, oneShot: true,
+    effect: 'stoneskin', permanentUntilRoomExit: true, duration: 10, oneShot: true,
     autoTrigger: { criticalHP: 0.20 },
     color: '#3355ff',
     leavesBottle: true
