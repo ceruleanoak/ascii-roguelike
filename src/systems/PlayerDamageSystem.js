@@ -55,8 +55,10 @@ export const PlayerDamageSystem = {
       }
     }
 
-    // Apply defense (reduce damage, minimum 1)
-    const tempDefense = player.stoneSkinTimer > 0 ? player.stoneSkinBonus : 0;
+    // Stone Skin: halves incoming damage, rounded down, applied before defense/resists
+    if (player.stoneSkinTimer > 0) {
+      amount = Math.floor(amount / 2);
+    }
 
     // Melee resistance: flat damage absorption applied before final floor
     const meleeAbsorb = damageSource.isMelee && player.meleeResist > 0
@@ -68,7 +70,8 @@ export const PlayerDamageSystem = {
       ? Math.floor(amount * player.burnResist)
       : 0;
 
-    const actualDamage = Math.max(1, amount - player.defense - tempDefense - meleeAbsorb - burnAbsorb);
+    // Apply defense (reduce damage, minimum 1)
+    const actualDamage = Math.max(1, amount - player.defense - meleeAbsorb - burnAbsorb);
 
     player.hp -= actualDamage;
     if (player.hp < 0) player.hp = 0;

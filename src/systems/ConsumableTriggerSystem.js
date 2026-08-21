@@ -402,7 +402,7 @@ export class ConsumableTriggerSystem {
         break;
       case 'stoneskin': {
         const p = params();
-        player.applyStoneSkin(cd.duration || 10, p?.defenseBonus ?? cd.defenseBonus ?? 3);
+        player.applyStoneSkin(p?.duration ?? cd.duration ?? 10);
         break;
       }
       case 'regen': {

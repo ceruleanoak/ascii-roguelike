@@ -122,12 +122,15 @@ export const POTION_MODIFIERS = {
     unstable: { isRandom: true, min: 1.10, max: 1.60 } // Random: -10% to +60% (bad roll = slow)
   },
 
-  // 'x' - Stone Skin: reworked to permanent until room exit
-  // Benefit is the defense bonus amount
+  // 'x' - Stone Skin: halves incoming damage (rounded down) while active — a
+  // fixed effect with no magnitude to scale (see PlayerDamageSystem.applyDamage),
+  // so purification differentiates by duration instead of amount. The general
+  // rule going forward: purification scales magnitude for additive effects
+  // (heal/haste/damage/regen amount above), duration for non-additive ones.
   'x': {
-    base: { defenseBonus: 3 },
-    buff: { defenseBonus: 5 },
-    unstable: { isRandom: true, min: 1, max: 6 } // Random defense bonus, bad roll = minimal protection
+    base: { duration: 10 },
+    buff: { duration: 16 },                       // Purified: longer protection window
+    unstable: { isRandom: true, min: 4, max: 20 }  // Random duration, bad roll = brief protection
   },
 
   // 'u' - Battle Elixir: reworked to permanent until room exit
@@ -181,9 +184,9 @@ export function getPotionEffectParams(potionChar, modifier = null) {
       // Try to extract the main numeric parameter
       if (baseDef.amount !== undefined) baselineValue = baseDef.amount;
       else if (baseDef.hasteAmount !== undefined) baselineValue = baseDef.hasteAmount;
-      else if (baseDef.defenseBonus !== undefined) baselineValue = baseDef.defenseBonus;
       else if (baseDef.damageBonus !== undefined) baselineValue = baseDef.damageBonus;
       else if (baseDef.regenAmount !== undefined) baselineValue = baseDef.regenAmount;
+      else if (baseDef.duration !== undefined) baselineValue = baseDef.duration;
 
       // Bad roll = significantly less than base
       if (baselineValue !== null && rollValue < baselineValue * 0.5) {
@@ -201,9 +204,9 @@ export function getPotionEffectParams(potionChar, modifier = null) {
         // Find which parameter was being rolled
         if (baseDef.amount !== undefined) params.amount = rollValue;
         else if (baseDef.hasteAmount !== undefined) params.hasteAmount = rollValue;
-        else if (baseDef.defenseBonus !== undefined) params.defenseBonus = Math.round(rollValue);
         else if (baseDef.damageBonus !== undefined) params.damageBonus = Math.round(rollValue);
         else if (baseDef.regenAmount !== undefined) params.regenAmount = Math.round(rollValue);
+        else if (baseDef.duration !== undefined) params.duration = Math.round(rollValue);
       }
     } else {
       params = unstableSpec;

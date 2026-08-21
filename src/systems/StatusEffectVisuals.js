@@ -121,10 +121,11 @@ const PLAYER_EFFECT_COLORS = {
   poison: EFFECT_COLORS.poison,
   dizzy: EFFECT_COLORS.dizzy,
   freeze: '#00ffff',
-  goo: '#00ff00'
+  goo: '#00ff00',
+  stoneskin: '#8c7853' // gray/bronze — must match Player.js's STONE_SKIN_COLOR
 };
 
-const PLAYER_PIP_ORDER = ['wet', 'burn', 'poison', 'freeze', 'goo', 'dizzy'];
+const PLAYER_PIP_ORDER = ['wet', 'burn', 'poison', 'freeze', 'goo', 'dizzy', 'stoneskin'];
 
 function _isPlayerEffectActive(player, effect) {
   switch (effect) {
@@ -137,6 +138,7 @@ function _isPlayerEffectActive(player, effect) {
     case 'freeze': return player.isFrozen();
     case 'goo':    return player.isGooey();
     case 'dizzy':  return player.isDizzy();
+    case 'stoneskin': return player.stoneSkinTimer > 0;
     default: return false;
   }
 }
