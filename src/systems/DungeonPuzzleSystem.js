@@ -178,14 +178,29 @@ export class DungeonPuzzleSystem {
     }
 
     // Dispatch companion to the unoccupied switch while player stands on one.
+    // Sticky once committed: the companion's crossing is a straight-line walk
+    // with no pathfinding, so it takes real time (the two switches are 10
+    // cols apart) — requiring the player to keep standing on their switch for
+    // the whole crossing made the puzzle unsolvable by anyone who moved
+    // afterward (very plausible: watching the companion walk, repositioning).
+    // Previously, the player stepping off before the companion arrived hit
+    // the `else` branch below, nulled commandTarget mid-walk, and permanently
+    // stranded the companion partway across the room — the puzzle could
+    // never solve for the rest of the run (bug #205). Re-deriving the target
+    // only while the companion isn't yet holding either switch (not on every
+    // tick) lets it keep walking — and then hold — once dispatched.
     if (!room.puzzleSolved && companion) {
-      if (playerOnA && !compOnA) {
-        companion.commandTarget = { x: bPx, y: bPy };
-      } else if (playerOnB && !compOnB) {
-        companion.commandTarget = { x: aPx, y: aPy };
-      } else {
-        companion.commandTarget = null;
+      if (!compOnA && !compOnB) {
+        if (playerOnA) {
+          companion.commandTarget = { x: bPx, y: bPy };
+        } else if (playerOnB) {
+          companion.commandTarget = { x: aPx, y: aPy };
+        }
+        // else: no assignment yet — leave commandTarget as-is (null before
+        // the first dispatch), companion just follows the player normally.
       }
+      // else: companion is already holding a switch — leave commandTarget
+      // alone so it stays put regardless of where the player wanders.
     } else if (companion) {
       companion.commandTarget = null;
     }
