@@ -990,6 +990,7 @@ export class RoomGenerator {
       flammability: 'none',
       conductivity: 'none',
       indestructible: true,
+      environmental: true, // terrain (push ramp), not a hittable prop — see BackgroundObject.isEnvironmental()
       interactions: { default: { animation: 'none', message: null } }
     });
 

@@ -465,23 +465,24 @@ export class CombatSystem {
             this.impactEffects.push({ x: obj.position.x, y: obj.position.y, onHit: proj.onHit, color: proj.color });
           }
 
-          // Water state transitions from projectiles
+          // Water state transitions from projectiles. Environmental terrain
+          // (BackgroundObject.isEnvironmental()) never spawns a damage number —
+          // each branch already has its own feedback: the tile's own color/char
+          // changes with waterState, a steam cloud puffs, or a new obsidian rock
+          // appears in place.
           if (obj.isWater && obj.isWater()) {
             if (proj.onHit === 'freeze') {
               obj.setWaterState('frozen', Infinity); // Stays frozen until thawed by fire
             } else if (proj.onHit === 'poison') {
               obj.setWaterState('poisoned', 8.0);
-              this.createDamageNumber('☠', obj.position.x, obj.position.y, '#44bb44');
             } else if (proj.onHit === 'stun' && proj.electric) {
               this.game?.electricitySystem?.seedFromWeapon(obj, backgroundObjects, proj,
                 { tileDuration: 4.0, hutPlane: !!this.game?.activeFloor });
-              this.createDamageNumber('⚡', obj.position.x, obj.position.y, '#cccc00');
             } else if (proj.onHit === 'burn') {
               if (obj.getWaterState() === 'frozen') {
                 // Fire + frozen water/ice → create obsidian rock
                 const obsidianRock = new BackgroundObject('0', obj.position.x, obj.position.y, { obsidian: true });
                 backgroundObjects.push(obsidianRock);
-                this.createDamageNumber('◆', obj.position.x, obj.position.y, '#333333');
               } else {
                 // Fire hits liquid water → steam cloud
                 this.newSteamClouds.push({
@@ -490,7 +491,6 @@ export class CombatSystem {
                   radius: GRID.CELL_SIZE * 3,
                   timer: 7.0
                 });
-                this.createDamageNumber('=', obj.position.x, obj.position.y, '#aaaaaa');
               }
             }
           }
@@ -912,7 +912,10 @@ export class CombatSystem {
                 this.conductElectricity(obj, attack.damage, enemies, player);
               }
 
-              // Water state transitions from melee
+              // Water state transitions from melee. Environmental terrain
+              // (BackgroundObject.isEnvironmental()) never spawns a damage
+              // number — each branch already has its own feedback: the flood
+              // fill / tile's own color-state change, a steam cloud puff.
               if (obj.isWater && obj.isWater()) {
                 const acidActive = attack.acidBlade && player && player._acidBladeChargesThisRoom > 0;
                 if (attack.acidBlade && !acidActive) {
@@ -920,7 +923,6 @@ export class CombatSystem {
                   // convert water (and skip the 8s poisoned-water fallback below).
                 } else if (acidActive) {
                   acidFloodFillWater(obj, backgroundObjects);
-                  this.createDamageNumber('☠', obj.position.x, obj.position.y, '#44bb44');
                   if (!attack._acidChargeDepleted) {
                     attack._acidChargeDepleted = true;
                     player._acidBladeChargesThisRoom = Math.max(0, player._acidBladeChargesThisRoom - 1);
@@ -929,11 +931,9 @@ export class CombatSystem {
                   obj.setWaterState('frozen', Infinity); // Stays frozen until thawed by fire
                 } else if (attack.onHit === 'poison') {
                   obj.setWaterState('poisoned', 8.0);
-                  this.createDamageNumber('☠', obj.position.x, obj.position.y, '#44bb44');
                 } else if (attack.onHit === 'stun' && attack.electric) {
                   this.game?.electricitySystem?.seedFromWeapon(obj, backgroundObjects, attack,
                     { tileDuration: 4.0, hutPlane: !!this.game?.activeFloor });
-                  this.createDamageNumber('⚡', obj.position.x, obj.position.y, '#cccc00');
                 } else if (attack.onHit === 'burn') {
                   if (obj.getWaterState() === 'frozen') {
                     obj.setWaterState('normal', 0); // Melt ice
@@ -945,7 +945,6 @@ export class CombatSystem {
                       radius: GRID.CELL_SIZE * 3,
                       timer: 7.0
                     });
-                    this.createDamageNumber('=', obj.position.x, obj.position.y, '#aaaaaa');
                   }
                 }
               }

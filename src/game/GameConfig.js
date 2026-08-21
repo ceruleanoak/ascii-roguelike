@@ -434,6 +434,7 @@ export const BACKGROUND_OBJECTS = {
     bulletInteraction: 'pass-through',
     flammability: 'none',
     conductivity: 'water',
+    environmental: true, // terrain, not a hittable prop — see BackgroundObject.isEnvironmental()
     interactions: {
       default: { animation: 'ripple', message: null }
     }
@@ -896,6 +897,7 @@ export const BACKGROUND_OBJECT_VARIANTS = {
     damaging:    false,
     damage:      0,
     slowing:     false,
+    environmental: true, // terrain, not a hittable prop — see BackgroundObject.isEnvironmental()
   },
   'lava': {
     char: '~',
@@ -907,6 +909,7 @@ export const BACKGROUND_OBJECT_VARIANTS = {
     damaging:    true,
     damage:      2,
     slowing:     false,
+    environmental: true,
   },
   'mud_dry': {
     char: '~',
@@ -919,6 +922,7 @@ export const BACKGROUND_OBJECT_VARIANTS = {
     damage:      0,
     slowing:     false,
     transitionsTo: 'mud_wet',
+    environmental: true,
   },
   'mud_wet': {
     char: '~',
@@ -930,6 +934,7 @@ export const BACKGROUND_OBJECT_VARIANTS = {
     damaging:    false,
     damage:      0,
     slowing:     true,
+    environmental: true,
   },
   'hot_water': {
     char: '~',
@@ -944,6 +949,7 @@ export const BACKGROUND_OBJECT_VARIANTS = {
     healing:     true,
     healAmount:  1,
     healInterval: 3.0,
+    environmental: true,
   },
 };
 

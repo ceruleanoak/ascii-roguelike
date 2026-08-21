@@ -210,6 +210,16 @@ export class BackgroundObject {
       return { destroyed: false, effect: null };
     }
 
+    // Environmental terrain (water, lava, mud, Ascent slopes) is not a
+    // hittable prop — a weapon passing through it never reacts (no shake,
+    // no damage number). Its real interaction logic (freeze/poison/burn/
+    // electrify/push) is handled by dedicated systems keying off
+    // isWater()/isLava()/isMud()/slope directly, entirely separate from
+    // this HP-based damage-number pipeline.
+    if (this.isEnvironmental()) {
+      return { destroyed: false, effect: null };
+    }
+
     if (this.indestructible || this.hp === null) {
       this._playAnimation('shake');
       return { destroyed: false, effect: null };
@@ -559,7 +569,9 @@ export class BackgroundObject {
     switch (this.bulletInteraction) {
       case 'pass-through':
         shouldDestroyBullet = false;
-        animation = 'shake';
+        // Environmental terrain (water, lava, mud, slopes) doesn't shake as
+        // if it were a hittable prop — see isEnvironmental().
+        animation = this.isEnvironmental() ? null : 'shake';
         break;
 
       case 'block':
@@ -659,6 +671,18 @@ export class BackgroundObject {
     if (this.destroyed) return false;
     if (this.typeId) return this.typeId === 'mud_dry' || this.typeId === 'mud_wet';
     return this.char === '~' && (!!this.isDryMud || this.slowing === true);
+  }
+
+  // Environmental terrain class — water, lava, mud (all via typeId variants
+  // or the legacy '~' fallback data), and Ascent slope tiles (via their
+  // hand-built `data`, see RoomGenerator.generateAscentRoom). Distinct from
+  // "typical" background objects (rocks, trees, barrels, …): terrain models
+  // the floor itself rather than a destructible/interactible prop, so it
+  // never participates in the generic hit-reaction/damage-number system —
+  // see the isEnvironmental() guard in takeDamage() and handleBulletCollision().
+  isEnvironmental() {
+    if (this._variantData) return !!this._variantData.environmental;
+    return !!this.data?.environmental;
   }
 
   // Used by CombatSystem to decide whether fire should suppress impact effects
