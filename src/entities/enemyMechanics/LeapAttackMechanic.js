@@ -111,8 +111,12 @@ export const LeapAttackMechanic = {
 
     const { effectiveDistance, dotDamageEvents } = ctx;
     if (effectiveDistance >= cfg.triggerRangeMin && effectiveDistance <= cfg.triggerRangeMax) {
+      // Windup scales down with lost HP — full HP leaps at cfg.windupTime,
+      // 0 HP leaps at half that, linear in between. Makes the boss leap
+      // noticeably more often as it's worn down instead of at a flat cadence.
+      const hpFraction = enemy.maxHp > 0 ? Math.max(0, Math.min(1, enemy.hp / enemy.maxHp)) : 1;
       enemy.leapWindupActive = true;
-      enemy.leapWindupTimer = cfg.windupTime;
+      enemy.leapWindupTimer = cfg.windupTime * (0.5 + 0.5 * hpFraction);
       enemy.leapTargetX = enemy.target.position.x;
       enemy.leapTargetY = enemy.target.position.y;
       enemy.velocity.vx = 0;
