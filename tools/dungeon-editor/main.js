@@ -228,6 +228,7 @@ function listPuzzleTemplates() {
 // (same posture as validateFloorTemplate/validateDesign above).
 function validatePuzzleTemplate(data) {
   if (!data || typeof data !== 'object') return 'Not an object.';
+  if (!Number.isFinite(data.weight) || data.weight < 0) return 'weight must be a number >= 0.';
   if (!Array.isArray(data.grid) || data.grid.length !== PUZZLE_ROWS) {
     return `grid must be an array of ${PUZZLE_ROWS} rows.`;
   }
@@ -238,8 +239,8 @@ function validatePuzzleTemplate(data) {
       return `row ${r} must be exactly ${PUZZLE_COLS} chars.`;
     }
     for (const ch of line) {
-      if (ch !== '#' && ch !== '.' && ch !== '~' && ch !== 'X') {
-        return `row ${r} has invalid char "${ch}" (only # . ~ X allowed).`;
+      if (ch !== '#' && ch !== '.' && ch !== '~' && ch !== 'X' && ch !== 'G') {
+        return `row ${r} has invalid char "${ch}" (only # . ~ X G allowed).`;
       }
       if (ch === 'X') exitCount++;
     }
@@ -256,6 +257,9 @@ function validatePuzzleTemplate(data) {
   if (!Array.isArray(data.triggers) || data.triggers.length < 1) {
     return 'triggers must be a non-empty array — a puzzle room needs at least one switch or panel.';
   }
+  // Cell uniqueness is tracked across ALL placeable categories (triggers,
+  // hook posts, torches, the pedestal) — two different fixtures sharing one
+  // cell is invalid regardless of which categories they come from.
   const seen = new Set();
   for (let i = 0; i < data.triggers.length; i++) {
     const t = data.triggers[i];
@@ -263,7 +267,7 @@ function validatePuzzleTemplate(data) {
     if (!Number.isInteger(t.row) || t.row < 1 || t.row > PUZZLE_ROWS - 2) return `trigger ${i} row out of bounds.`;
     if (!Number.isInteger(t.col) || t.col < 1 || t.col > PUZZLE_COLS - 2) return `trigger ${i} col out of bounds.`;
     const key = `${t.row},${t.col}`;
-    if (seen.has(key)) return `trigger ${i} shares a cell with another trigger.`;
+    if (seen.has(key)) return `trigger ${i} shares a cell with another fixture.`;
     seen.add(key);
     const cellChar = data.grid[t.row][t.col];
     if (cellChar !== '.') return `trigger ${i} at (${t.row},${t.col}) must sit on plain floor ('.'), not "${cellChar}".`;
@@ -275,6 +279,54 @@ function validatePuzzleTemplate(data) {
       return `trigger ${i} is timed but neutralizeSeconds must be a number > 0.`;
     }
   }
+
+  // Hook posts — optional, manually placed (not auto-derived from Gap
+  // cells); each sits on plain floor like a trigger.
+  if (data.hookPosts !== undefined) {
+    if (!Array.isArray(data.hookPosts)) return 'hookPosts must be an array.';
+    for (let i = 0; i < data.hookPosts.length; i++) {
+      const p = data.hookPosts[i];
+      if (!p || typeof p !== 'object') return `hookPost ${i} must be an object.`;
+      if (!Number.isInteger(p.row) || p.row < 1 || p.row > PUZZLE_ROWS - 2) return `hookPost ${i} row out of bounds.`;
+      if (!Number.isInteger(p.col) || p.col < 1 || p.col > PUZZLE_COLS - 2) return `hookPost ${i} col out of bounds.`;
+      const key = `${p.row},${p.col}`;
+      if (seen.has(key)) return `hookPost ${i} shares a cell with another fixture.`;
+      seen.add(key);
+      const cellChar = data.grid[p.row][p.col];
+      if (cellChar !== '.') return `hookPost ${i} at (${p.row},${p.col}) must sit on plain floor ('.'), not "${cellChar}".`;
+    }
+  }
+
+  // Torches — optional, maze-parity fixtures; also sit on plain floor.
+  if (data.torches !== undefined) {
+    if (!Array.isArray(data.torches)) return 'torches must be an array.';
+    for (let i = 0; i < data.torches.length; i++) {
+      const t = data.torches[i];
+      if (!t || typeof t !== 'object') return `torch ${i} must be an object.`;
+      if (!Number.isInteger(t.row) || t.row < 1 || t.row > PUZZLE_ROWS - 2) return `torch ${i} row out of bounds.`;
+      if (!Number.isInteger(t.col) || t.col < 1 || t.col > PUZZLE_COLS - 2) return `torch ${i} col out of bounds.`;
+      const key = `${t.row},${t.col}`;
+      if (seen.has(key)) return `torch ${i} shares a cell with another fixture.`;
+      seen.add(key);
+      const cellChar = data.grid[t.row][t.col];
+      if (cellChar !== '.') return `torch ${i} at (${t.row},${t.col}) must sit on plain floor ('.'), not "${cellChar}".`;
+    }
+  }
+
+  // Pedestal — optional, opt-in single marker (generalized off Whip Trial;
+  // any template may set one).
+  if (data.pedestal !== undefined && data.pedestal !== null) {
+    const p = data.pedestal;
+    if (typeof p !== 'object') return 'pedestal must be an object or null.';
+    if (!Number.isInteger(p.row) || p.row < 1 || p.row > PUZZLE_ROWS - 2) return 'pedestal row out of bounds.';
+    if (!Number.isInteger(p.col) || p.col < 1 || p.col > PUZZLE_COLS - 2) return 'pedestal col out of bounds.';
+    const key = `${p.row},${p.col}`;
+    if (seen.has(key)) return 'pedestal shares a cell with another fixture.';
+    seen.add(key);
+    const cellChar = data.grid[p.row][p.col];
+    if (cellChar !== '.') return `pedestal at (${p.row},${p.col}) must sit on plain floor ('.'), not "${cellChar}".`;
+  }
+
   return null;
 }
 

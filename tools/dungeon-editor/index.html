@@ -133,13 +133,19 @@
         <button class="tool" data-tool="wall">#  Wall</button>
         <button class="tool" data-tool="floor">.  Floor</button>
         <button class="tool" data-tool="water">~  Water</button>
+        <button class="tool" data-tool="gap">G  Gap</button>
         <button class="tool" data-tool="exit">X  Exit</button>
         <button class="tool" data-tool="switch">○  Switch</button>
         <button class="tool" data-tool="panel">▭  Floor Panel</button>
+        <button class="tool" data-tool="hookpost">•  Hook Post</button>
+        <button class="tool" data-tool="torch">!  Torch</button>
+        <button class="tool" data-tool="pedestal">P  Pedestal</button>
         <div id="exitCount" class="doorCount"></div>
+        <h4>Weight</h4>
+        <input id="puzzleWeightInput" type="number" min="0" step="1" style="width:100%" />
         <h4>Triggers</h4>
         <div id="triggerList"></div>
-        <div class="hint">Switch = struck by a weapon attack. Floor Panel = triggered by standing on it. With Switch/Panel selected, click an empty floor cell to place one, click an existing one to remove it. Permanent stays active forever once triggered; Timed reverts after its neutralize-seconds unless re-triggered. The exit unlocks once every trigger is active at the same time.</div>
+        <div class="hint">Switch = struck by a weapon attack. Floor Panel = triggered by standing on it. With Switch/Panel selected, click an empty floor cell to place one, click an existing one to remove it. Permanent stays active forever once triggered; Timed reverts after its neutralize-seconds unless re-triggered. The exit unlocks once every trigger is active at the same time. Gap is an impassable void — paints like Wall/Water. Hook Post and Torch are click-only toggles like Switch/Panel. Pedestal is a single opt-in weapon-tutorial marker (click to place, click again to remove). Every fixture must sit on plain floor and only one may occupy a cell.</div>
       </div>
     </div>
   </div>
@@ -184,6 +190,7 @@
   const validationEl = document.getElementById('validationMsg');
   const reachabilityEl = document.getElementById('reachabilityMsg');
   const weightInput = document.getElementById('weightInput');
+  const puzzleWeightInput = document.getElementById('puzzleWeightInput');
   const wallColorInput = document.getElementById('wallColorInput');
   const doorColorInput = document.getElementById('doorColorInput');
   const decoCharInput = document.getElementById('decoChar');
@@ -269,10 +276,14 @@
     const exitRow = rows - 4, exitCol = Math.floor(cols / 2);
     setCharAt(grid, exitRow, exitCol, 'X');
     return {
+      weight: 1,
       grid,
       triggers: [
         { row: Math.floor(rows / 2), col: Math.floor(cols / 2) - 3, kind: 'switch', activation: 'timed', neutralizeSeconds: 0.25 },
       ],
+      hookPosts: [],
+      torches: [],
+      pedestal: null,
     };
   }
 
@@ -295,6 +306,7 @@
   function puzzleVisual(ch) {
     if (ch === '#') return { bg: '#3a3a3a' };
     if (ch === '~') return { bg: '#1c3d5c' };
+    if (ch === 'G') return { bg: '#050506' }; // impassable gap — true void look, no glyph
     if (ch === 'X') return { bg: '#161616', fg: '#5ad088', glyph: 'X' };
     return { bg: '#161616' }; // floor
   }
@@ -311,6 +323,37 @@
       ctx.fillStyle = '#0a0a12';
       ctx.fillText(isSwitch ? '○' : '▭', x + CELL / 2, y + CELL / 2 + 1);
     }
+  }
+  // Hook posts / torches / the pedestal — same overlay-pass reasoning as
+  // drawTriggerMarkers above (none of these are grid chars either).
+  function drawHookPostMarkers() {
+    if (!currentData || !currentData.hookPosts) return;
+    for (const p of currentData.hookPosts) {
+      const x = p.col * CELL, y = p.row * CELL;
+      ctx.fillStyle = '#ddaa55';
+      ctx.fillRect(x, y, CELL, CELL);
+      ctx.fillStyle = '#0a0a12';
+      ctx.fillText('•', x + CELL / 2, y + CELL / 2 + 1);
+    }
+  }
+  function drawTorchMarkers() {
+    if (!currentData || !currentData.torches) return;
+    for (const t of currentData.torches) {
+      const x = t.col * CELL, y = t.row * CELL;
+      ctx.fillStyle = '#e0743a';
+      ctx.fillRect(x, y, CELL, CELL);
+      ctx.fillStyle = '#0a0a12';
+      ctx.fillText('!', x + CELL / 2, y + CELL / 2 + 1);
+    }
+  }
+  function drawPedestalMarker() {
+    if (!currentData || !currentData.pedestal) return;
+    const { row, col } = currentData.pedestal;
+    const x = col * CELL, y = row * CELL;
+    ctx.fillStyle = '#c99ad6';
+    ctx.fillRect(x, y, CELL, CELL);
+    ctx.fillStyle = '#0a0a12';
+    ctx.fillText('P', x + CELL / 2, y + CELL / 2 + 1);
   }
   function drawLockHatch(x, y) {
     ctx.save();
@@ -358,7 +401,12 @@
         if (mode === 'interior' && isLockedInterior(r, c)) drawLockHatch(c * CELL, r * CELL);
       }
     }
-    if (mode === 'puzzle') drawTriggerMarkers();
+    if (mode === 'puzzle') {
+      drawTriggerMarkers();
+      drawHookPostMarkers();
+      drawTorchMarkers();
+      drawPedestalMarker();
+    }
     updateDoorCount();
     updateExitCount();
     checkReachability();
@@ -426,11 +474,39 @@
     if (!currentData || !currentData.triggers) return null;
     return currentData.triggers.find(t => t.row === row && t.col === col) || null;
   }
-  // Switch/Panel are click-only toggles (place on an empty floor cell,
-  // click an existing one to remove it) — everything else is a normal
-  // continuous-paint tool. Painting a wall/water/exit over a trigger's
-  // cell removes that trigger (validatePuzzleTemplate requires triggers
-  // sit on plain floor, so a fixture can't survive under a wall).
+  function findHookPostAt(row, col) {
+    if (!currentData || !currentData.hookPosts) return null;
+    return currentData.hookPosts.find(p => p.row === row && p.col === col) || null;
+  }
+  function findTorchAt(row, col) {
+    if (!currentData || !currentData.torches) return null;
+    return currentData.torches.find(t => t.row === row && t.col === col) || null;
+  }
+  function isPedestalAt(row, col) {
+    return !!(currentData && currentData.pedestal && currentData.pedestal.row === row && currentData.pedestal.col === col);
+  }
+  // True if any fixture (trigger, hook post, torch, or the pedestal) already
+  // occupies this cell — cross-category placement is invalid the same way a
+  // trigger can't share a cell with another trigger (see validatePuzzleTemplate).
+  function anyFixtureAt(row, col) {
+    return !!findTriggerAt(row, col) || !!findHookPostAt(row, col) || !!findTorchAt(row, col) || isPedestalAt(row, col);
+  }
+  // Removes whichever fixture (if any) occupies this cell — used when
+  // painting a non-floor char (wall/water/gap/exit) over it, since every
+  // fixture must sit on plain floor and can't survive under one.
+  function clearFixturesAt(row, col) {
+    if (!currentData) return;
+    if (currentData.triggers) currentData.triggers = currentData.triggers.filter(t => !(t.row === row && t.col === col));
+    if (currentData.hookPosts) currentData.hookPosts = currentData.hookPosts.filter(p => !(p.row === row && p.col === col));
+    if (currentData.torches) currentData.torches = currentData.torches.filter(t => !(t.row === row && t.col === col));
+    if (isPedestalAt(row, col)) currentData.pedestal = null;
+  }
+  // Switch/Panel/Hook Post/Torch/Pedestal are all click-only toggles (place
+  // on an empty floor cell not already holding another fixture, click an
+  // existing one of the same category to remove it) — everything else is a
+  // normal continuous-paint tool. Painting a wall/water/gap/exit over a
+  // fixture's cell removes it (validatePuzzleTemplate requires every fixture
+  // sit on plain floor, so none can survive under one).
   function applyPuzzleTool(row, col, isClick) {
     if (isBorderRingPuzzle(row, col)) return;
     if (activeTool === 'switch' || activeTool === 'panel') {
@@ -438,14 +514,57 @@
       const existing = findTriggerAt(row, col);
       if (existing) {
         currentData.triggers = currentData.triggers.filter(t => t !== existing);
-      } else if (currentData.grid[row][col] === '.') {
+      } else if (currentData.grid[row][col] === '.' && !anyFixtureAt(row, col)) {
         currentData.triggers.push(
           activeTool === 'switch'
             ? { row, col, kind: 'switch', activation: 'timed', neutralizeSeconds: 0.25 }
             : { row, col, kind: 'panel', activation: 'permanent' }
         );
       } else {
-        return; // must sit on plain floor
+        return; // must sit on plain floor, and not already hold another fixture
+      }
+      dirty = true;
+      render();
+      return;
+    }
+    if (activeTool === 'hookpost') {
+      if (!isClick) return;
+      if (!currentData.hookPosts) currentData.hookPosts = [];
+      const existing = findHookPostAt(row, col);
+      if (existing) {
+        currentData.hookPosts = currentData.hookPosts.filter(p => p !== existing);
+      } else if (currentData.grid[row][col] === '.' && !anyFixtureAt(row, col)) {
+        currentData.hookPosts.push({ row, col });
+      } else {
+        return;
+      }
+      dirty = true;
+      render();
+      return;
+    }
+    if (activeTool === 'torch') {
+      if (!isClick) return;
+      if (!currentData.torches) currentData.torches = [];
+      const existing = findTorchAt(row, col);
+      if (existing) {
+        currentData.torches = currentData.torches.filter(t => t !== existing);
+      } else if (currentData.grid[row][col] === '.' && !anyFixtureAt(row, col)) {
+        currentData.torches.push({ row, col });
+      } else {
+        return;
+      }
+      dirty = true;
+      render();
+      return;
+    }
+    if (activeTool === 'pedestal') {
+      if (!isClick) return;
+      if (isPedestalAt(row, col)) {
+        currentData.pedestal = null;
+      } else if (currentData.grid[row][col] === '.' && !anyFixtureAt(row, col)) {
+        currentData.pedestal = { row, col };
+      } else {
+        return;
       }
       dirty = true;
       render();
@@ -455,6 +574,7 @@
     let ch;
     if (activeTool === 'wall') ch = '#';
     else if (activeTool === 'water') ch = '~';
+    else if (activeTool === 'gap') ch = 'G';
     else if (activeTool === 'exit') ch = 'X';
     else ch = '.'; // floor
 
@@ -466,10 +586,7 @@
         }
       }
     }
-    if (ch !== '.') {
-      const existing = findTriggerAt(row, col);
-      if (existing) currentData.triggers = currentData.triggers.filter(t => t !== existing);
-    }
+    if (ch !== '.') clearFixturesAt(row, col);
     setCharAt(currentData.grid, row, col, ch);
     dirty = true;
     render();
@@ -524,6 +641,7 @@
   wallColorInput.addEventListener('input', () => { if (currentData) { currentData.wallColor = wallColorInput.value; dirty = true; render(); } });
   doorColorInput.addEventListener('input', () => { if (currentData) { currentData.doorColor = doorColorInput.value; dirty = true; render(); } });
   weightInput.addEventListener('input', () => { if (currentData) { currentData.weight = Number(weightInput.value) || 0; dirty = true; } });
+  puzzleWeightInput.addEventListener('input', () => { if (currentData) { currentData.weight = Number(puzzleWeightInput.value) || 0; dirty = true; } });
   decoPreviewColorInput.addEventListener('input', render);
 
   // ── List / load / save ────────────────────────────────────────────────
@@ -544,8 +662,11 @@
     } else if (mode === 'exterior') {
       wallColorInput.value = currentData ? currentData.wallColor : '#888888';
       doorColorInput.value = currentData ? currentData.doorColor : '#888888';
+    } else if (mode === 'puzzle') {
+      puzzleWeightInput.value = currentData ? (currentData.weight ?? 1) : 1;
     }
-    // puzzle mode has no per-template scalar props — triggers are edited via renderTriggerList()
+    // Triggers/hook posts/torches/pedestal are edited directly on the canvas
+    // and via renderTriggerList() — no other scalar props in puzzle mode.
   }
 
   // Rebuilds the sidebar's per-trigger editor rows (kind/position label,
@@ -647,6 +768,7 @@
       currentData.weight = Number(weightInput.value) || 0;
       result = await window.editorAPI.floorTemplateSave(currentName, currentData);
     } else if (mode === 'puzzle') {
+      currentData.weight = Number(puzzleWeightInput.value) || 0;
       result = await window.editorAPI.puzzleTemplateSave(currentName, currentData);
     } else {
       currentData.wallColor = wallColorInput.value;
@@ -721,8 +843,8 @@
       setStatus('Cannot delete "open" — it\'s the code\'s hardcoded template fallback.', true);
       return;
     }
-    if (mode === 'puzzle' && currentName === 'sample_two_triggers') {
-      setStatus('Cannot delete "sample_two_triggers" — it\'s statically imported by dungeonPuzzleTemplates.js.', true);
+    if (mode === 'puzzle' && (currentName === 'sample_two_triggers' || currentName === 'whip_trial')) {
+      setStatus('Cannot delete "' + currentName + '" — it\'s statically imported by dungeonPuzzleTemplates.js.', true);
       return;
     }
     const ok = await askConfirm('Delete template "' + currentName + '"? This cannot be undone.');
