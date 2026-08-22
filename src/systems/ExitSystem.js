@@ -190,13 +190,24 @@ export class ExitSystem {
     // Guarantee the miniboss ('B') exit is always on offer from L5 onward
     // until this zone's miniboss has been cleared this run (gray excluded,
     // same as the miniboss gating elsewhere).
+    let forcedBossIndex = -1;
     if (currentDepth >= 5 && zoneType !== 'gray' && currentLetter !== 'B' &&
         !letters.includes('B') && !this.zoneSystem?.clearedZones?.has(zoneType)) {
-      letters[Math.floor(Math.random() * letters.length)] = 'B';
+      forcedBossIndex = Math.floor(Math.random() * letters.length);
+      letters[forcedBossIndex] = 'B';
     }
 
     // Assign colors based on zone and progression state
     const colors = this.assignExitColors(letters, zoneType, progressionColor);
+
+    // The guarantee is "this zone's miniboss is reachable" — room.zone (and
+    // therefore which zone's miniboss pool spawns) follows the exit's COLOR,
+    // not its letter, so assignExitColors' random alt-color pick must never
+    // land on the forced slot. Same fix already applied to the other two
+    // forced-'B' call sites (pre-boss/pre-miniboss gates below).
+    if (forcedBossIndex !== -1) {
+      colors[forcedBossIndex] = ZONES[zoneType].exitColor;
+    }
 
     // Return exit objects with letter + color
     const exits = {
