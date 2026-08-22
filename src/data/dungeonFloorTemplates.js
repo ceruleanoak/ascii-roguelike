@@ -22,7 +22,8 @@
 // active). Inactive footprints render nothing (see paintDescentVisual below)
 // — but each footprint's own single cell is still always kept clear,
 // regardless of which cells a given floor actually activates, since a later
-// state change (e.g. the Companion Gate) can flip one live without moving it.
+// state change (e.g. Branch's switch puzzle unlocking East) can flip one
+// live without moving it.
 // Reservation is deliberately just those 4 cells, not a connecting corridor
 // between them — a forced-open spine constrained template wall layouts more
 // than the walkability guarantee was worth, so a template's walls are free

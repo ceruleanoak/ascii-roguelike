@@ -37,8 +37,8 @@ export class DungeonPuzzleSystem {
       this._updateWhipTrial(floor, dt);
     } else if (floor.roomKind === 'trapRoom') {
       this._updateTrapRoom(floor);
-    } else if (floor.roomKind === 'companionGate') {
-      this._updateCompanionGate(floor);
+    } else if (floor.roomKind === 'numbered' && floor.floorIndex === 2) {
+      this._updateBranchSwitches(floor);
     } else if (floor.roomKind === 'puzzleRoom') {
       this._updatePuzzleRoom(floor, dt);
     }
@@ -123,15 +123,20 @@ export class DungeonPuzzleSystem {
     this._spawnUnlockEffect(room.stairsUpObj);
   }
 
-  // Companion Gate — relocated companion-switch puzzle (was Floor 2's own
-  // layout in the old 5-floor system). Solving unlocks the onward descent
-  // to the pyramid instead of a floor-level stairsLocked flag.
-  _updateCompanionGate(room) {
+  // Branch's companion-switch puzzle — lives directly on Branch's own floor
+  // (bug #209: previously relocated into a side room off Branch's East
+  // descent, gated on companion status, which hid the puzzle's very
+  // existence from a solo player; git-archaeology into the pre-rework
+  // 5-floor system showed Floor 2's switches were always rendered in the
+  // room regardless of companion status — only solving them needed one).
+  // Solving unlocks Branch's East descent (to the Pyramid) instead of a
+  // floor-level stairsLocked flag.
+  _updateBranchSwitches(floor) {
     const { game } = this;
     const player = game.player;
     const companion = game.companion;
-    const a = room.switchAObj;
-    const b = room.switchBObj;
+    const a = floor.switchAObj;
+    const b = floor.switchBObj;
     if (!a || !b) return;
 
     const aPx = a.position.x, aPy = a.position.y;
@@ -146,13 +151,13 @@ export class DungeonPuzzleSystem {
     const bPressed = playerOnB || compOnB;
 
     // Visual state — stay "pressed" once puzzle is solved
-    this._setSwitchVisual(a, aPressed || room.puzzleSolved);
-    this._setSwitchVisual(b, bPressed || room.puzzleSolved);
+    this._setSwitchVisual(a, aPressed || floor.puzzleSolved);
+    this._setSwitchVisual(b, bPressed || floor.puzzleSolved);
 
     // First simultaneous press → permanent unlock
-    if (!room.puzzleSolved && aPressed && bPressed) {
-      room.puzzleSolved = true;
-      const onward = room.descents[0];
+    if (!floor.puzzleSolved && aPressed && bPressed) {
+      floor.puzzleSolved = true;
+      const onward = floor.descents.find(d => d.id === 'east');
       if (onward) {
         onward.locked = false;
         paintDescentVisual(onward.obj, { active: onward.active, locked: false });
@@ -174,7 +179,7 @@ export class DungeonPuzzleSystem {
     // never solve for the rest of the run (bug #205). Re-deriving the target
     // only while the companion isn't yet holding either switch (not on every
     // tick) lets it keep walking — and then hold — once dispatched.
-    if (!room.puzzleSolved && companion) {
+    if (!floor.puzzleSolved && companion) {
       if (!compOnA && !compOnB) {
         if (playerOnA) {
           companion.commandTarget = { x: bPx, y: bPy };
@@ -194,7 +199,7 @@ export class DungeonPuzzleSystem {
   // Puzzle Room — generic template-driven puzzle side room (see
   // DungeonFloorGenerator.generatePuzzleRoom). Every trigger in room.triggers
   // (a 'switch', strike-triggered via the puzzleSignal/glitterHit contract,
-  // or a 'panel', occupancy-triggered like the Companion Gate's switches)
+  // or a 'panel', occupancy-triggered like Branch's own switches)
   // runs through the same _advanceTrigger state machine the Whip Trial's
   // switches use; the exit unlocks once every trigger is active at once —
   // the generalized form of both existing rooms' "all at once" solve rule,
@@ -210,7 +215,7 @@ export class DungeonPuzzleSystem {
       if (trigger.kind === 'switch') {
         isTriggeredNow = !!trigger.glitterHit;
         trigger.glitterHit = false;
-      } else { // 'panel' — occupancy, same contract as the Companion Gate's switches
+      } else { // 'panel' — occupancy, same contract as Branch's own switches
         const px = trigger.position.x, py = trigger.position.y;
         isTriggeredNow = this._overlapsCell(player, px, py)
           || (companion ? this._overlapsCell(companion, px, py) : false);
@@ -248,7 +253,7 @@ export class DungeonPuzzleSystem {
     // activation === 'permanent': once active, never reverts.
   }
 
-  // Visual for a generic trigger — switches reuse the Companion Gate/Whip
+  // Visual for a generic trigger — switches reuse Branch/Whip
   // Trial's ○/● pair (one consistent "this is a switch" glyph language
   // across every dungeon puzzle room); panels use their own ▭/▬ pair so the
   // two trigger kinds always read as visually distinct fixtures.

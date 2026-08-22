@@ -16,15 +16,20 @@ import { NORTH_ROW, SPINE_ROW, WEST_COL, EAST_COL, STAIRS_COL } from '../data/du
  * ───────────
  * Floors are addressed either by numeric index (game.dungeonFloors[0..3],
  * the "spine" — Entrance → Corridor → Branch → Pyramid) or by string key
- * (game.dungeonFloors.whipTrial, off Corridor's North descent; .trapRoom
- * and .companionGate, off Branch's North and East descents). Every
- * floor/room object carries its own
- * `descents[]` (down-transitions) and `ascendTo` (up-transition target) as
- * `{ kind: 'numbered', floorIndex } | { kind: 'side', key }` destination
+ * (game.dungeonFloors.whipTrial, off Corridor's North descent; .trapRoom,
+ * off Branch's North descent). Branch's East descent leads straight back
+ * onto the spine, to the Pyramid (numbered floorIndex 3) — gated by Branch's
+ * own in-room switch puzzle rather than a separate side room (bug #209:
+ * the switches used to live in a side room off Branch, gated on companion
+ * status; git-archaeology into the pre-rework implementation showed they
+ * were always visible in the same room as the Trap Room door, so that side
+ * room was folded back into Branch). Every floor/room object carries its
+ * own `descents[]` (down-transitions) and `ascendTo` (up-transition target)
+ * as `{ kind: 'numbered', floorIndex } | { kind: 'side', key }` destination
  * descriptors — see DungeonFloorGenerator's file header for the full shape.
- * This is what makes the Branch floor's 3-way fork (and the Companion
- * Gate's onward path to the Pyramid) representable without special-casing
- * floor-index arithmetic the way a strictly linear chain would need.
+ * This is what makes the Branch floor's 3-way fork representable without
+ * special-casing floor-index arithmetic the way a strictly linear chain
+ * would need.
  *
  * The Pyramid (floor index 3) is the terminal floor for this build — its
  * `descents` is empty by data, not by an explicit floor-count cap. There is
@@ -60,9 +65,8 @@ export class DungeonSystem {
     // Side room — generated fresh only once per visit, keyed by string.
     if (!game.dungeonFloors[destination.key]) {
       const gen = game.dungeonFloorGenerator;
-      if (destination.key === 'whipTrial')          game.dungeonFloors.whipTrial      = gen.generateWhipTrial(depth, 1);
-      else if (destination.key === 'trapRoom')      game.dungeonFloors.trapRoom       = gen.generateTrapRoom(depth, 2);
-      else if (destination.key === 'companionGate') game.dungeonFloors.companionGate  = gen.generateCompanionGate(depth, 2);
+      if (destination.key === 'whipTrial')      game.dungeonFloors.whipTrial = gen.generateWhipTrial(depth, 1);
+      else if (destination.key === 'trapRoom')  game.dungeonFloors.trapRoom  = gen.generateTrapRoom(depth, 2);
     }
     return this.getFloorByDest(destination);
   }

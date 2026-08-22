@@ -30,18 +30,28 @@ import {
  *   index2 Branch    — North → Trap Room (enemy gauntlet, always open, tier-2
  *                       reward on clear), West retired (inactive, no
  *                       destination — reaching Branch at all is the payoff
- *                       for spending the key), East → Companion Gate (inert
- *                       without a companion; DungeonPuzzleSystem re-polls
- *                       each tick)
- *   index3 Pyramid   — Legend of Three, reached only via the Companion Gate.
- *                       Terminal floor for this build (no floor 5/6 content
- *                       yet — see docs/adr/BACKLOG.md); solving it drops a
- *                       reward directly rather than unlocking a further
- *                       descent, so there is no stub floor to walk into.
+ *                       for spending the key), East → index3, locked until
+ *                       the companion-switch puzzle is solved. The two
+ *                       switches sit directly on Branch's own floor (bare
+ *                       layout, no wall template — see _generateBranch), not
+ *                       behind a separate door: bug #209 found that an
+ *                       earlier version of this rework had relocated them
+ *                       into their own side room gated invisible until a
+ *                       companion was already recruited, which hid the
+ *                       puzzle's existence entirely and diverged from the
+ *                       original 5-floor implementation, where the switches
+ *                       were always visible in the open regardless of
+ *                       companion status. Restored to match.
+ *   index3 Pyramid   — Legend of Three, reached directly from Branch's East
+ *                       descent once the switch puzzle is solved. Terminal
+ *                       floor for this build (no floor 5/6 content yet —
+ *                       see docs/adr/BACKLOG.md); solving it drops a reward
+ *                       directly rather than unlocking a further descent,
+ *                       so there is no stub floor to walk into.
  *
- * Side rooms (Whip Trial / Trap Room / Companion Gate) are stored on
- * game.dungeonFloors by string key, not numeric index — InteriorManager.reset()
- * clears them for free by replacing the whole array reference.
+ * Side rooms (Whip Trial / Trap Room) are stored on game.dungeonFloors by
+ * string key, not numeric index — InteriorManager.reset() clears them for
+ * free by replacing the whole array reference.
  */
 
 const INTERIOR_COLS = 24;
@@ -62,6 +72,17 @@ const TRAP_ROOM_REWARD_POOL = ['‡', '⟘', '↟', '⟩']; // Flame Sword, Maul
 // the room's intended solve — but still reads as "very fast", not lenient.
 const WHIP_TRIAL_STRUCK_WINDOW = 0.25; // seconds
 
+// Branch's companion-switch puzzle — position mirrors the pre-rework 5-floor
+// system's SWITCH_ROW/SWITCH_A_COL/SWITCH_B_COL (git-archaeology, bug #209).
+// Row 11 sits one cell off SPINE_ROW (12) so it doesn't collide with the
+// West/East footprints on that row; columns 7/17 clear both WEST_COL (4) and
+// EAST_COL (19) with room to spare for the straight-line companion walk
+// between them (see _generateBranch's bare-layout comment for why that walk
+// must never cross a wall).
+const BRANCH_SWITCH_ROW = 11;
+const BRANCH_SWITCH_A_COL = 7;
+const BRANCH_SWITCH_B_COL = 17;
+
 export class DungeonFloorGenerator {
   constructor(game) {
     this.game = game;
@@ -72,10 +93,10 @@ export class DungeonFloorGenerator {
   // room builds on this; only footprint placement, enemy density and reward
   // content differ per room kind. useTemplate:false skips wall generation
   // for rooms whose puzzle assumes a clean playfield (Pyramid, Whip Trial,
-  // Companion Gate — the latter's straight-line-only companion pathing
-  // can't tolerate a template wall between its two switches; see
-  // generateCompanionGate). extraReservedCells lets a room protect its own
-  // fixed-position content from ever getting a template wall stamped on top
+  // Branch — the latter's straight-line-only companion pathing between its
+  // two switches can't tolerate a template wall; see _generateBranch).
+  // extraReservedCells lets a room protect its own fixed-position content
+  // from ever getting a template wall stamped on top
   // of it, the same way the 4 staircase footprints are protected — no
   // current caller needs it, but it stays available for a future templated
   // room with fixed interior content.
@@ -246,11 +267,11 @@ export class DungeonFloorGenerator {
 
   // row/col default to the universal north-side up-stairs position — the
   // right choice for every floor entered via a 'north' descent (Corridor,
-  // Trap Room, Pyramid). A floor entered via 'west' or 'east' must pass the
-  // matching footprint instead, so its up-stairs sits in the same room
-  // position as the descent that led there (see _generateBranch,
-  // generateCompanionGate) — "matching doors are always in the same room
-  // position" is the rule; the universal north point is just its default.
+  // Trap Room). A floor entered via 'west' or 'east' must pass the matching
+  // footprint instead, so its up-stairs sits in the same room position as
+  // the descent that led there (see _generateBranch, _generatePyramid) —
+  // "matching doors are always in the same room position" is the rule; the
+  // universal north point is just its default.
   _makeStairsUp(locked, row = STAIRS_UP_ROW, col = STAIRS_COL) {
     const obj = new BackgroundObject('{', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
     paintStairsUpVisual(obj, locked);
@@ -368,7 +389,17 @@ export class DungeonFloorGenerator {
   }
 
   _generateBranch(depth, zone) {
-    const { cols, rows, collisionMap, backgroundObjects, pickOpenCell, spawnCells } = this._buildScaffold();
+    // Bare 'open' layout — no wall template. Matches the pre-rework 5-floor
+    // system's floor 2 (git-archaeology, bug #209: "companion-switch floor
+    // uses the bare 'open' layout — its puzzle assumes a clean playfield"),
+    // and is a hard requirement, not just fidelity: the companion's dispatch
+    // walk between the two switches (DungeonPuzzleSystem._updateBranchSwitches
+    // → CampNPCSystem._moveToTarget) is a straight-line, unpathed walk with
+    // no obstacle avoidance, so a template wall between the switches would
+    // silently strand it (the exact failure a shared-template experiment hit
+    // and reverted — see BRANCH_SWITCH_ROW/COL comment below for the columns
+    // this preserves clearance for).
+    const { cols, rows, collisionMap, backgroundObjects, pickOpenCell, spawnCells } = this._buildScaffold({ useTemplate: false });
     this._addDecor(backgroundObjects, pickOpenCell, rows, cols);
     // No _placeSkullIfDue here — the skull key now only rolls onto Entrance
     // or Corridor (dungeonKeySkullFloor ∈ {0,1}), since it gates the door
@@ -383,26 +414,36 @@ export class DungeonFloorGenerator {
     const stairsUpObj = this._makeStairsUp(false, SPINE_ROW, WEST_COL);
     backgroundObjects.push(stairsUpObj);
 
+    // Companion-switch puzzle — always visible, sitting directly in Branch
+    // alongside the Trap Room door (bug #209: previously relocated into an
+    // invisible-until-companion-recruited side room, which hid the puzzle's
+    // very existence; the pre-rework implementation always rendered these).
+    // Only *solving* it needs a companion (_updateBranchSwitches); a solo
+    // player can walk in, see both switches, and read the puzzle before
+    // recruiting anyone. Row/cols mirror the original floor 2 constants.
+    const switchAObj = new BackgroundObject('○', BRANCH_SWITCH_A_COL * GRID.CELL_SIZE, BRANCH_SWITCH_ROW * GRID.CELL_SIZE);
+    switchAObj.color = '#888888';
+    switchAObj.animationChar = '○';
+    switchAObj.animationColor = '#888888';
+    switchAObj.isPressed = false;
+    backgroundObjects.push(switchAObj);
+
+    const switchBObj = new BackgroundObject('○', BRANCH_SWITCH_B_COL * GRID.CELL_SIZE, BRANCH_SWITCH_ROW * GRID.CELL_SIZE);
+    switchBObj.color = '#888888';
+    switchBObj.animationChar = '○';
+    switchBObj.animationColor = '#888888';
+    switchBObj.isPressed = false;
+    backgroundObjects.push(switchBObj);
+
     // North → Trap Room, always open — sealed enemy gauntlet, tier-2 reward
     // on clear (real risk room; reaching Branch at all was the key-gated cost).
     const north = this._makeDescent('north', NORTH_ROW, STAIRS_COL, {
       active: true, locked: false, destination: { kind: 'side', key: 'trapRoom' },
     });
-    // East → Companion Gate, always visible — matches the pre-rework 5-floor
-    // system, where the two switches sat unconditionally in the open on
-    // floor 2 (bug #209 git-archaeology: `SWITCH_A_COL`/`SWITCH_B_COL` on the
-    // bare 'open' layout, always rendered regardless of companion). Only
-    // *solving* the puzzle needs a companion
-    // (DungeonPuzzleSystem._updateCompanionGate); a solo player can walk in,
-    // see both switches sitting there, and read the puzzle before recruiting
-    // anyone — the same "visible landmark, brain does the rest" contract the
-    // non-instructive-UI rule expects. The room used to be gated invisible
-    // until a companion was already recruited, which hid the puzzle's very
-    // existence — that was the actual defect behind the "pressure plates are
-    // nowhere to be seen" report, not the dispatch-stickiness fix (#205)
-    // alone.
+    // East → Pyramid, visible but locked until the switch puzzle is solved
+    // (same visible-but-locked contract as Corridor's West/skull-key door).
     const east = this._makeDescent('east', SPINE_ROW, EAST_COL, {
-      active: true, locked: false, destination: { kind: 'side', key: 'companionGate' },
+      active: true, locked: true, destination: { kind: 'numbered', floorIndex: 3 },
     });
     backgroundObjects.push(north.obj, east.obj);
 
@@ -420,6 +461,7 @@ export class DungeonFloorGenerator {
       stairsUpRow: SPINE_ROW, stairsUpCol: WEST_COL, stairsUpObj, stairsUpLocked: false,
       ascendTo: { kind: 'numbered', floorIndex: 1 },
       descents: [north, east],
+      switchAObj, switchBObj, puzzleSolved: false,
     };
   }
 
@@ -427,7 +469,10 @@ export class DungeonFloorGenerator {
     // Static edifice — zero enemies (plan Phase 3), bare playfield.
     const { cols, rows, collisionMap, backgroundObjects } = this._buildScaffold({ useTemplate: false });
 
-    const stairsUpObj = this._makeStairsUp(false);
+    // Entered directly via Branch's East descent (once the switch puzzle is
+    // solved), so the up-stairs sits at the East footprint to match — same
+    // "matching doors" rule as Branch's own West up-stairs.
+    const stairsUpObj = this._makeStairsUp(false, SPINE_ROW, EAST_COL);
     backgroundObjects.push(stairsUpObj);
 
     // Legend of Three slots — top (Justice), bottom-left (Truth), bottom-right (Help).
@@ -459,8 +504,8 @@ export class DungeonFloorGenerator {
       items: [], ingredients: [], npcs: [], doors: [],
       viewport: this._makeViewport(cols, rows),
       exitRow: null, exitCol: null,
-      stairsUpRow: STAIRS_UP_ROW, stairsUpCol: STAIRS_COL, stairsUpObj, stairsUpLocked: false,
-      ascendTo: { kind: 'side', key: 'companionGate' },
+      stairsUpRow: SPINE_ROW, stairsUpCol: EAST_COL, stairsUpObj, stairsUpLocked: false,
+      ascendTo: { kind: 'numbered', floorIndex: 2 },
       descents: [], // terminal floor for this build — see file header
       pyramidSlots,
       // Only zones with real legendOfThree.js content are solvable; unauthored
@@ -474,10 +519,11 @@ export class DungeonFloorGenerator {
   // ── Side rooms ──────────────────────────────────────────────────────────
   // Stored on game.dungeonFloors by string key (not numeric index) — see
   // file header. originFloorIndex varies by room: Whip Trial's origin is
-  // Corridor (index1), Trap Room's and Companion Gate's are Branch (index2).
-  // Always threaded through as a parameter rather than hardcoded, so a
-  // future branch elsewhere in the tree doesn't require touching these
-  // generators.
+  // Corridor (index1), Trap Room's is Branch (index2). (Branch's own
+  // companion-switch puzzle isn't a side room — see _generateBranch above —
+  // so it needs no originFloorIndex of its own.) Always threaded through as
+  // a parameter rather than hardcoded, so a future branch elsewhere in the
+  // tree doesn't require touching these generators.
 
   // Whip Trial — first entry in the Weapon Trial registry (weaponTutorials.js).
   // Teaches the Whip's actual utility (longest reach in the game) rather
@@ -587,16 +633,16 @@ export class DungeonFloorGenerator {
     postSouthObj.minAttackSegment = 4;
     backgroundObjects.push(postSouthObj);
 
-    // Switches — same ○/● glyph language as the Companion Gate, but strike-
-    // based (puzzleSignal + glitterHit) rather than occupancy-based. Placed
-    // 2/4 cells east of the south post on its own row (horizontal align, not
-    // vertical — a player standing at the post-landing spot faces east and
-    // one crack hits both at once), matching the Whip's 5 straight-line
-    // hitbox segments.
+    // Switches — same ○/● glyph language as Branch's own switches, but
+    // strike-based (puzzleSignal + glitterHit) rather than occupancy-based.
+    // Placed 2/4 cells east of the south post on its own row (horizontal
+    // align, not vertical — a player standing at the post-landing spot
+    // faces east and one crack hits both at once), matching the Whip's 5
+    // straight-line hitbox segments.
     // Same unregistered-char indestructible-fallback override as the posts
-    // above — '○' isn't in BACKGROUND_OBJECTS either (Companion Gate's
-    // switches of the same glyph never hit this path since they're
-    // occupancy-based and never call takeDamage()).
+    // above — '○' isn't in BACKGROUND_OBJECTS either (Branch's switches of
+    // the same glyph never hit this path since they're occupancy-based and
+    // never call takeDamage()).
     // kind/activation/neutralizeSeconds/active/_timer are the generic
     // trigger fields DungeonPuzzleSystem._advanceTrigger drives — the same
     // shared state machine an editor-built Puzzle Room's switches/panels
@@ -699,79 +745,21 @@ export class DungeonFloorGenerator {
     };
   }
 
-  generateCompanionGate(depth, originFloorIndex) {
-    const SWITCH_ROW = 11;
-    const SWITCH_A_COL = 7;
-    const SWITCH_B_COL = 17;
-    // Bare layout — the switch puzzle assumes a clean playfield. The
-    // companion's dispatch-to-switch movement (DungeonPuzzleSystem.
-    // _updateCompanionGate → CampNPCSystem._moveToTarget) is a straight-line
-    // walk with no pathfinding, so the two switches (10 cols apart on the
-    // same row) must always be reachable in a straight line — a shared wall
-    // template can't guarantee that (its reservation contract only keeps the
-    // switch cells themselves open, not a connecting corridor; see
-    // dungeonFloorTemplates.js's file header). This room briefly used the
-    // shared templates (commit 4429455, "template Companion Gate") for
-    // visual variety, which silently broke the autonomous companion walk on
-    // any template with a wall between the switches — reverted here.
-    const { cols, rows, collisionMap, backgroundObjects } = this._buildScaffold({ useTemplate: false });
-
-    // Entered via Branch's East descent, so the up-stairs sits at the East
-    // footprint to match (same "matching doors" rule as Branch's own West
-    // up-stairs above) rather than the universal north point.
-    const stairsUpObj = this._makeStairsUp(false, SPINE_ROW, EAST_COL);
-    backgroundObjects.push(stairsUpObj);
-
-    const switchAObj = new BackgroundObject('○', SWITCH_A_COL * GRID.CELL_SIZE, SWITCH_ROW * GRID.CELL_SIZE);
-    switchAObj.color = '#888888';
-    switchAObj.animationChar = '○';
-    switchAObj.animationColor = '#888888';
-    switchAObj.isPressed = false;
-    backgroundObjects.push(switchAObj);
-
-    const switchBObj = new BackgroundObject('○', SWITCH_B_COL * GRID.CELL_SIZE, SWITCH_ROW * GRID.CELL_SIZE);
-    switchBObj.color = '#888888';
-    switchBObj.animationChar = '○';
-    switchBObj.animationColor = '#888888';
-    switchBObj.isPressed = false;
-    backgroundObjects.push(switchBObj);
-
-    // Onward descent to the Legend of Three pyramid — locked until the
-    // switch puzzle is solved (DungeonPuzzleSystem).
-    const onward = this._makeDescent('north', NORTH_ROW, STAIRS_COL, {
-      active: true, locked: true, destination: { kind: 'numbered', floorIndex: 3 },
-    });
-    backgroundObjects.push(onward.obj);
-
-    return {
-      type: 'DUNGEON_FLOOR',
-      roomKind: 'companionGate',
-      floorIndex: null,
-      gridCols: cols, gridRows: rows, collisionMap, backgroundObjects, enemies: [],
-      items: [], ingredients: [], npcs: [], doors: [],
-      viewport: this._makeViewport(cols, rows),
-      exitRow: null, exitCol: null,
-      stairsUpRow: SPINE_ROW, stairsUpCol: EAST_COL, stairsUpObj, stairsUpLocked: false,
-      ascendTo: { kind: 'numbered', floorIndex: originFloorIndex },
-      descents: [onward],
-      switchAObj, switchBObj, puzzleSolved: false,
-    };
-  }
-
   // Puzzle Room — generic template-driven puzzle side room, authored via
   // tools/dungeon-editor/'s Puzzle mode rather than hand-coded geometry
-  // (contrast Whip Trial/Trap Room/Companion Gate above, each a bespoke,
-  // fully hardcoded layout). A template supplies its own wall/water/exit
-  // layout and any number of switches/panels (dungeonPuzzleTemplates.js);
-  // this method just instantiates that data as a live floor. No numbered
-  // floor or side-room key currently routes a descent to a Puzzle Room —
-  // this is authoring + generation infrastructure, ready for a future
-  // content decision to wire a specific template into the dungeon graph
-  // (call this with an explicit templateName from wherever that's decided).
+  // (contrast Whip Trial/Trap Room above, and Branch's own in-room switch
+  // puzzle in _generateBranch, each a bespoke, fully hardcoded layout). A
+  // template supplies its own wall/water/exit layout and any number of
+  // switches/panels (dungeonPuzzleTemplates.js); this method just
+  // instantiates that data as a live floor. No numbered floor or side-room
+  // key currently routes a descent to a Puzzle Room — this is authoring +
+  // generation infrastructure, ready for a future content decision to wire
+  // a specific template into the dungeon graph (call this with an explicit
+  // templateName from wherever that's decided).
   //
   // Exit unlock rule: every trigger in the template must be active at once
   // (DungeonPuzzleSystem._updatePuzzleRoom) — the generalized form of the
-  // Whip Trial's "both switches struck together" and Companion Gate's "both
+  // Whip Trial's "both switches struck together" and Branch's "both
   // switches pressed together" rules, extended to any trigger count/mix.
   generatePuzzleRoom(templateName, depth, originFloorIndex) {
     const CS = GRID.CELL_SIZE;

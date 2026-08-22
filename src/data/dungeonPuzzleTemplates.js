@@ -16,7 +16,7 @@
 // Triggers: { row, col, kind, activation, neutralizeSeconds }
 //   kind: 'switch' (strike-triggered, puzzleSignal+glitterHit — same
 //         contract as the Whip Trial's switches) or 'panel' (occupancy-
-//         triggered — same contract as the Companion Gate's switches,
+//         triggered — same contract as Branch's own switches,
 //         just renamed/generalized so it can coexist with 'switch' as a
 //         visually distinct element in the same room).
 //   activation: 'permanent' (once triggered, stays active forever) or
@@ -25,7 +25,7 @@
 // The room's exit unlocks once every trigger in the list is active at once
 // (DungeonPuzzleSystem._updatePuzzleRoom) — the generalized form of the
 // Whip Trial's "both switches struck within the same swing" rule and the
-// Companion Gate's "both switches pressed at once" rule.
+// Branch's own "both switches pressed at once" rule.
 //
 // Unlike floor templates, puzzle templates carry no `weight` — nothing
 // currently picks among multiple puzzle templates at random (each is
