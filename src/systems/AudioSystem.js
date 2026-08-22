@@ -1155,6 +1155,8 @@ export class AudioSystem {
     this.loadSFX('compass_beep', null);       // Compass ping (item present on floor)
     this.loadSFX('pyramid_fill', null);       // Legend of Three slot filled
     this.loadSFX('pyramid_solve', null);      // All 3 slots filled
+    // Shop — placeholder name, no asset yet. Purchase-confirm reuses 'coin_plink'.
+    this.loadSFX('shop_error', null);         // barter toggle rejected (can't afford/don't own)
   }
 
   /**

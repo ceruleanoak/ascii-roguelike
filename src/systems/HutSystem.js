@@ -9,6 +9,7 @@ import { Fisherman } from '../entities/Fisherman.js';
 import { Witch } from '../entities/Witch.js';
 import { ErrandCharacter } from '../entities/ErrandCharacter.js';
 import { WeaponsMaster } from '../entities/WeaponsMaster.js';
+import { Shopkeeper } from '../entities/Shopkeeper.js';
 import { freezeSurfaceRoom, thawSurfaceRoom } from './PlaneSystem.js';
 import { HOT_WATER_CHAR } from '../data/alchemy.js';
 
@@ -196,6 +197,12 @@ export class HutSystem {
       const centerCol = Math.floor(cols / 2);
       const centerRow = Math.floor(rows / 2) - 1;
       npcs.push(new WeaponsMaster(centerCol * GRID.CELL_SIZE, centerRow * GRID.CELL_SIZE));
+
+    } else if (hutKind === 'shopkeeper') {
+      // Shopkeeper at interior center — rolls its stock in its own constructor
+      const centerCol = Math.floor(cols / 2);
+      const centerRow = Math.floor(rows / 2) - 1;
+      npcs.push(new Shopkeeper(centerCol * GRID.CELL_SIZE, centerRow * GRID.CELL_SIZE));
 
     } else if (hutKind === 'neutral_npc') {
       // Placeholder NPC: spawn the errand traveler. Seeds an errand if none active

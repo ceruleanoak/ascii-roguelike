@@ -441,7 +441,7 @@ export class ExitSystem {
           // Pearl-guide fairy: if it's still around at room clear, the player
           // missed (or skipped) the heal/bottle touch. Reveal the pedestal so
           // they can complete the offering and unlock the blue-zone exit.
-          game.revealPearlPedestal();
+          game.pearlSystem.revealPearlPedestal();
 
           // Pre-boss gate: depth (bossDepth - 1) cleared → north-only 'B' exit + anticipation music.
           // Uses >= (not ===) as a self-correcting safety net: if the player somehow
