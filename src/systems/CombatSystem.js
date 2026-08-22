@@ -3,6 +3,7 @@ import { planeOf, inSamePlane, objectOnPlane } from './PlaneSystem.js';
 import { cycleExitLetter, findExitAtPoint, mutateExitLetter } from './ExitSystem.js';
 import { BoomerangMechanic } from './BoomerangMechanic.js';
 import { WallRicochetMechanic } from './WallRicochetMechanic.js';
+import { WaterLavaHitMechanic } from './WaterLavaHitMechanic.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { GameAnimalMechanic } from '../entities/enemyMechanics/GameAnimalMechanic.js';
 import { SniperMechanic } from '../entities/enemyMechanics/SniperMechanic.js';
@@ -367,6 +368,7 @@ export class CombatSystem {
       let bgObjectHit = false;
       for (const obj of backgroundObjects) {
         if (obj.destroyed || obj.isRecipeSign) continue; // Skip destroyed and recipe signs
+        if (proj.boomerang && proj._boomerangHitObjects?.has(obj)) continue; // already-struck switch — pass through
         if (!objectOnPlane(obj, planeOf(proj))) continue;
 
         if (this.checkProjectileCollisionWithObject(proj, obj)) {
@@ -470,49 +472,17 @@ export class CombatSystem {
             this.impactEffects.push({ x: obj.position.x, y: obj.position.y, onHit: proj.onHit, color: proj.color });
           }
 
-          // Water state transitions from projectiles. Environmental terrain
-          // (BackgroundObject.isEnvironmental()) never spawns a damage number —
-          // each branch already has its own feedback: the tile's own color/char
-          // changes with waterState, a steam cloud puffs, or a new obsidian rock
-          // appears in place.
-          if (obj.isWater && obj.isWater()) {
-            if (proj.onHit === 'freeze') {
-              obj.setWaterState('frozen', Infinity); // Stays frozen until thawed by fire
-            } else if (proj.onHit === 'poison') {
-              obj.setWaterState('poisoned', 8.0);
-            } else if (proj.onHit === 'stun' && proj.electric) {
-              this.game?.electricitySystem?.seedFromWeapon(obj, backgroundObjects, proj,
-                { tileDuration: 4.0, hutPlane: !!this.game?.activeFloor });
-            } else if (proj.onHit === 'burn') {
-              if (obj.getWaterState() === 'frozen') {
-                // Fire + frozen water/ice → create obsidian rock
-                const obsidianRock = new BackgroundObject('0', obj.position.x, obj.position.y, { obsidian: true });
-                backgroundObjects.push(obsidianRock);
-              } else {
-                // Fire hits liquid water → steam cloud
-                this.newSteamClouds.push({
-                  x: obj.position.x + GRID.CELL_SIZE / 2,
-                  y: obj.position.y + GRID.CELL_SIZE / 2,
-                  radius: GRID.CELL_SIZE * 3,
-                  timer: 7.0
-                });
-              }
-            }
-          }
-
-          // Water attack hits lava → solidify to rock
-          if (obj.isLava && obj.isLava() && proj.onHit === 'freeze') {
-            obj.solidifyToRock();
-            this.newSteamClouds.push({
-              x: obj.position.x + GRID.CELL_SIZE / 2,
-              y: obj.position.y + GRID.CELL_SIZE / 2,
-              radius: GRID.CELL_SIZE * 2,
-              timer: 3.0
-            });
-          }
+          // Water/lava elemental reactions (freeze/poison/electrify/steam, solidify-to-rock).
+          WaterLavaHitMechanic.applyHit(proj, obj, backgroundObjects, this);
 
           // Destroy bullet if needed
           if (result.shouldDestroyBullet) {
+            // Puzzle switches never destroy a boomerang — see BoomerangMechanic.onPuzzleSignalHit.
+            if (proj.boomerang && obj.puzzleSignal) {
+              BoomerangMechanic.onPuzzleSignalHit(proj, obj, backgroundObjects, this);
+              break;
+            }
+
             // Boomerangs bounce off blocking objects instead of being destroyed
             if (proj.boomerang && !proj.boomerangReturning) {
               proj.boomerangReturning = true;

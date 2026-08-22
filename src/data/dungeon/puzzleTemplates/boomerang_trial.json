@@ -1,0 +1,98 @@
+{
+  "weight": 1,
+  "grid": [
+    "########################",
+    "#.....GG........GG.....#",
+    "#.....GG........GG.....#",
+    "#.....GG........GG.....#",
+    "#.....GG........GG.....#",
+    "#.....GG........GG.....#",
+    "#GGGGGGG........GGGGGGG#",
+    "#GGGGGGG........GGGGGGG#",
+    "#.....GG........GG.....#",
+    "#.....GG........GG.....#",
+    "#.....GG........GG.....#",
+    "#.....GG........GG.....#",
+    "#.....GGGG....GGGG.....#",
+    "#.....GGGG....GGGG.....#",
+    "#.....GGGG....GGGG.....#",
+    "#.....GGGG....GGGG.....#",
+    "#.....GGGGG..GGGGG.....#",
+    "#.....GGGGG..GGGGG.....#",
+    "#.....GGGGG..GGGGG.....#",
+    "#.....GGGGG..GGGGG.....#",
+    "#.....GGGGG.XGGGGG.....#",
+    "#.....GGGGGGGGGGGG.....#",
+    "#.....GGGGGGGGGGGG.....#",
+    "########################"
+  ],
+  "triggers": [
+    {
+      "row": 3,
+      "col": 3,
+      "kind": "switch",
+      "activation": "permanent"
+    },
+    {
+      "row": 3,
+      "col": 20,
+      "kind": "switch",
+      "activation": "permanent"
+    },
+    {
+      "row": 10,
+      "col": 20,
+      "kind": "switch",
+      "activation": "permanent"
+    },
+    {
+      "row": 12,
+      "col": 20,
+      "kind": "switch",
+      "activation": "permanent"
+    },
+    {
+      "row": 14,
+      "col": 20,
+      "kind": "switch",
+      "activation": "permanent"
+    },
+    {
+      "row": 16,
+      "col": 20,
+      "kind": "switch",
+      "activation": "permanent"
+    },
+    {
+      "row": 10,
+      "col": 3,
+      "kind": "switch",
+      "activation": "permanent"
+    },
+    {
+      "row": 12,
+      "col": 3,
+      "kind": "switch",
+      "activation": "permanent"
+    },
+    {
+      "row": 14,
+      "col": 3,
+      "kind": "switch",
+      "activation": "permanent"
+    },
+    {
+      "row": 16,
+      "col": 3,
+      "kind": "switch",
+      "activation": "permanent"
+    }
+  ],
+  "hookPosts": [],
+  "torches": [],
+  "pedestal": {
+    "row": 9,
+    "col": 11,
+    "tutorial": "boomerang"
+  }
+}

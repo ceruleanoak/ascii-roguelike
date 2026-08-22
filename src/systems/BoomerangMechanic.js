@@ -1,6 +1,19 @@
 import { GRID } from '../game/GameConfig.js';
 import { inSamePlane } from './PlaneSystem.js';
 
+// Bounce-target search radius used only for puzzle-room switch chaining
+// (onObjectHit below) — deliberately its own constant rather than reusing
+// onEnemyHit's `proj.boomerangBounceRadius || 120` fallback, so tuning it
+// for a stationary, hand-authored switch layout can never buff/nerf the
+// boomerang's enemy-to-enemy ricochet range in ordinary combat rooms.
+// Sized with headroom over the widest gap a puzzle template is expected to
+// author between chainable switches (Boomerang Trial's own outlier-to-group
+// gap is 7 cells / 112px): collision fires the frame the projectile's AABB
+// first overlaps the target, which can land a few pixels past the target's
+// exact cell center, and the search origin is the projectile's own position
+// rather than the struck switch's, so a flat 120 leaves too thin a margin.
+const SWITCH_BOUNCE_RADIUS = 150;
+
 // Boomerang projectile behavior (Zelda-style: flies out, stuns the first enemy
 // it hits, ricochets between enemies on a charge-scaled budget, scoops up
 // ingredients, returns to the owner in a straight line). Composition module for
@@ -183,5 +196,63 @@ export const BoomerangMechanic = {
       proj.boomerangBounceTarget = null;
       proj.boomerangReturning = true;
     }
+  },
+
+  // Puzzle-room switch struck: unlike an enemy hit (stun + optional splash),
+  // a struck fixture only needs the flight itself extended — try to lock
+  // onto the nearest un-struck switch in range (same bounce-budget contract
+  // as onEnemyHit: consumes one boomerangBouncesLeft per link, so a
+  // charge-scaled chain of N switches needs N-1 bounces) using
+  // SWITCH_BOUNCE_RADIUS instead of the enemy bounceRadius. Returns true if
+  // a next target was locked (caller keeps flying outbound) or false if the
+  // chain is over (no target in range, or budget spent — caller falls back
+  // to its own return-mode flip). `objects` is the room's full
+  // backgroundObjects list; candidates are filtered to other live switches
+  // (kind === 'switch') this throw hasn't already struck.
+  onObjectHit(proj, obj, objects, combat) {
+    if (!proj._boomerangHitObjects) proj._boomerangHitObjects = new Set();
+    proj._boomerangHitObjects.add(obj);
+    if (proj.boomerangBounceTarget === obj) proj.boomerangBounceTarget = null;
+
+    if (!(proj.boomerangBouncesLeft > 0)) return false;
+    let bestTarget = null;
+    let bestDist = Infinity;
+    for (const other of objects) {
+      if (other === obj || other.destroyed || other.kind !== 'switch') continue;
+      if (!inSamePlane(proj, other)) continue;
+      if (proj._boomerangHitObjects.has(other)) continue;
+      const box = other.getHitbox();
+      const ddx = box.x + box.width / 2 - proj.position.x;
+      const ddy = box.y + box.height / 2 - proj.position.y;
+      const d = Math.hypot(ddx, ddy);
+      if (d > SWITCH_BOUNCE_RADIUS) continue;
+      if (d < bestDist) { bestDist = d; bestTarget = other; }
+    }
+    if (!bestTarget) return false;
+
+    proj.boomerangBouncesLeft--;
+    proj.boomerangBounceTarget = bestTarget;
+    const spd = Math.hypot(proj.velocity.vx, proj.velocity.vy) || 250;
+    const box = bestTarget.getHitbox();
+    const tx = box.x + box.width / 2 - proj.position.x;
+    const ty = box.y + box.height / 2 - proj.position.y;
+    const tdist = Math.hypot(tx, ty) || 1;
+    proj.velocity.vx = (tx / tdist) * spd;
+    proj.velocity.vy = (ty / tdist) * spd;
+    combat.audioSystem?.playSFX?.('ricochet', 0.5);
+    return true;
+  },
+
+  // CombatSystem's shouldDestroyBullet branch routes every puzzleSignal hit
+  // here instead of destroying the projectile: outbound, try onObjectHit's
+  // chain; once already returning, a re-crossed fixture is a no-op — it was
+  // already re-pulsed by handleBulletCollision (harmless; permanent switches
+  // ignore redundant pulses), and destroying the boomerang here would strand
+  // the player mid-puzzle with no way to finish the rest of the room.
+  onPuzzleSignalHit(proj, obj, objects, combat) {
+    if (proj.boomerangReturning) return;
+    if (this.onObjectHit(proj, obj, objects, combat)) return;
+    proj.boomerangReturning = true;
+    proj.boomerangRicochetReturn = true;
   }
 };
