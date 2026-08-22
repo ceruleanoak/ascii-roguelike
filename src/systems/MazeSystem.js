@@ -66,7 +66,8 @@ const DOOM_THRESHOLD  = 2;   // ghosts spawned before all-remaining-blink mode
 
 export const TORCH_COUNT           = 5;
 export const TORCH_LIGHT_RADIUS    = CS * 3.5;   // "decent sized radius" of a lit torch's glow
-const TORCH_INTERACT_RADIUS = CS * 1.2;   // proximity needed to ignite
+export const TORCH_INTERACT_RADIUS = CS * 1.2;   // proximity needed to ignite — also reused by
+                                                  // DungeonPuzzleSystem for maze-parity Puzzle Room torches
 const GHOST_TORCH_DESTROY_RADIUS = CS * 1.0; // ghost proximity that destroys a torch
 export const TORCH_ALPHA_HIGH      = 0.3;
 export const TORCH_ALPHA_LOW       = 0.1;

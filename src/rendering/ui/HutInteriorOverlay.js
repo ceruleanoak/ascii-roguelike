@@ -1,6 +1,10 @@
 import { GRID } from '../../game/GameConfig.js';
 import { drawInteriorFrame } from './interiorFrame.js';
 import { hasTorchLight, drawPlayerTorchLight } from './torchLight.js';
+import {
+  TORCH_LIGHT_RADIUS, TORCH_ALPHA_HIGH, TORCH_ALPHA_LOW,
+  TORCH_PULSE_SPEED, TORCH_LIT_COLOR, TORCH_UNLIT_COLOR,
+} from '../../systems/MazeSystem.js';
 import { drawWires } from '../effects/WireEffects.js';
 import { drawCoinArc } from '../effects/ArcTossEffects.js';
 import { drawStatusPips } from '../effects/StatusPipEffects.js';
@@ -56,18 +60,24 @@ export class HutInteriorOverlay {
     if (game.activeFloor.collisionMap && game.activeFloor.gridCols > 12) {
       const CS = GRID.CELL_SIZE;
       const cm = game.activeFloor.collisionMap;
-      const gapBand = game.activeFloor.gapBand;
+      const gapCells = game.activeFloor.gapCells;
       for (let r = 0; r < cm.length; r++) {
         for (let c = 0; c < (cm[r]?.length ?? 0); c++) {
           if (!cm[r][c]) continue;
-          // Whip Trial chasm — reads as a crossable-by-reach-only void rather
-          // than an ordinary blocked tile: true void (skip draw, bare panel
-          // background shows through) between two edge-glyph boundary rows.
-          if (gapBand) {
-            if (r > gapBand.rowStart && r < gapBand.rowEnd) continue;
-            if (r === gapBand.rowStart || r === gapBand.rowEnd) {
+          // Puzzle Room impassable gap (Whip Trial's chasm, and any other
+          // template's 'G' cells) — reads as a crossable-by-reach-only void
+          // rather than an ordinary blocked tile: true void (skip draw, bare
+          // panel background shows through) in the interior of a gap band;
+          // an edge glyph on the boundary row facing the walkable side (row
+          // above is non-gap → '∧' points up at it, else '∨' points down).
+          if (gapCells) {
+            const isGap = gapCells.has(`${r},${c}`);
+            if (isGap) {
+              const aboveGap = gapCells.has(`${r - 1},${c}`);
+              const belowGap = gapCells.has(`${r + 1},${c}`);
+              if (aboveGap && belowGap) continue; // interior of the gap — true void
               ctx.fillStyle = '#6a4830';
-              ctx.fillText(r === gapBand.rowStart ? '∧' : '∨', c * CS + CS / 2, r * CS + CS / 2);
+              ctx.fillText(aboveGap ? '∨' : '∧', c * CS + CS / 2, r * CS + CS / 2);
               continue;
             }
           }
@@ -76,6 +86,27 @@ export class HutInteriorOverlay {
           ctx.fillStyle = '#6a4830';
           ctx.fillText('≡', c * CS + CS / 2, r * CS + CS / 2);
         }
+      }
+    }
+
+    // ── 3c. Puzzle Room torch fixtures (fixture glyph + pulsing light) ────────
+    // Maze-parity rendering (mirrors MazeInteriorOverlay's own torch block
+    // exactly, reusing the same exported MazeSystem constants) minus
+    // ghost-shielding, which dungeons have no use for.
+    if (game.activeFloor.torches) {
+      const CS = GRID.CELL_SIZE;
+      for (const torch of game.activeFloor.torches) {
+        const cx = torch.col * CS + CS / 2;
+        const cy = torch.row * CS + CS / 2;
+
+        if (torch.lit) {
+          const s = 0.5 + 0.5 * Math.sin(torch.pulseTimer * TORCH_PULSE_SPEED);
+          const alpha = TORCH_ALPHA_LOW + (TORCH_ALPHA_HIGH - TORCH_ALPHA_LOW) * s;
+          this.renderer.drawCircle(cx, cy, TORCH_LIGHT_RADIUS, TORCH_LIT_COLOR, true, alpha);
+        }
+
+        ctx.fillStyle = torch.lit ? TORCH_LIT_COLOR : TORCH_UNLIT_COLOR;
+        ctx.fillText(torch.char, cx, cy);
       }
     }
 
@@ -142,6 +173,10 @@ export class HutInteriorOverlay {
     // Weapons Master coin pay — same shared spinning-arc draw helper.
     const weaponsMasterCoinAnim = game.weaponsMasterSystem?.getCoinAnim?.();
     if (weaponsMasterCoinAnim) drawCoinArc(this.renderer, weaponsMasterCoinAnim);
+
+    // Shopkeeper coin pay — same shared spinning-arc draw helper.
+    const shopCoinAnim = game.shopSystem?.getCoinAnim?.();
+    if (shopCoinAnim) drawCoinArc(this.renderer, shopCoinAnim);
 
     // Fisherman coin-demo fish — transient marker beside the NPC while he
     // demonstrates cutting the catch open.
@@ -238,15 +273,17 @@ export class HutInteriorOverlay {
     // ── 18. Green ranger indicator ─────────────────────────────────────────────
     this.renderController.greenRangerIndicator.render(game);
 
-    // ── 19b. Whip Trial pedestal — [x][x][x] slot chrome (same shared-
-    // divider bracket technique as CraftingStation.render(): three slots at
-    // a 2-col pitch, each '[' + content + ']', touching brackets land on the
-    // same column so the later draw wins). Grayed decorative ingredient
-    // glyphs fill the outer two slots; the center slot's content is the
-    // real pickup-able weapon, rendered separately by the normal Item loop
-    // above — not redrawn here. Drawn directly rather than as
+    // ── 19b. Puzzle Room weapon pedestal — [x][x][x] slot chrome (same
+    // shared-divider bracket technique as CraftingStation.render(): three
+    // slots at a 2-col pitch, each '[' + content + ']', touching brackets
+    // land on the same column so the later draw wins). Grayed decorative
+    // ingredient glyphs fill the outer two slots; the center slot's content
+    // is the real pickup-able weapon, rendered separately by the normal Item
+    // loop above — not redrawn here. Drawn directly rather than as
     // BackgroundObjects because '~' is real interactive water in
-    // BACKGROUND_OBJECTS — see generateWhipTrial.
+    // BACKGROUND_OBJECTS — see DungeonFloorGenerator.generatePuzzleRoom's
+    // opt-in pedestal handling (originated as Whip Trial's own pedestal,
+    // now any puzzle template can set one via a "pedestal" marker cell).
     if (game.activeFloor.weaponPedestal) {
       const { row, leftX, centerX, rightX, leftChar, rightChar } = game.activeFloor.weaponPedestal;
       const CS = GRID.CELL_SIZE;

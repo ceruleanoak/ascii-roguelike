@@ -1,13 +1,15 @@
 // Weapon Trial registry — data only. Each entry names a weapon-tutorial
 // dungeon room: which crafted weapon it teaches and the recipe pair its
 // pedestal displays (grayed, decorative — see DungeonFloorGenerator.js's
-// generateWhipTrial and HutInteriorOverlay.js's weaponPedestal render block).
+// generatePuzzleRoom pedestal handling and HutInteriorOverlay.js's
+// weaponPedestal render block).
 //
-// The room-construction logic (gap/post/switch geometry) stays hardcoded to
-// the Whip's actual shape in DungeonFloorGenerator.js rather than being
-// generalized here — with a sample size of one tutorial, a real "puzzle
-// shape" abstraction can't be honestly designed yet. This file exists so a
-// second tutorial is a data addition, not a rearchitecture, and so
+// The room's own geometry (gap/post/switch/torch placement) now lives as a
+// puzzle-room template (src/data/dungeon/puzzleTemplates/*.json, see
+// dungeonPuzzleTemplates.js) rather than hardcoded per-tutorial — this file
+// stays scoped to just the two things a template can't express: which
+// crafted weapon the pedestal spawns and what its decorative recipe glyphs
+// are. A second tutorial is still a data addition, not a rearchitecture, and
 // `pickWeaponTutorial()` becomes a real selection once there's more than one
 // entry to choose from.
 export const WEAPON_TUTORIALS = {

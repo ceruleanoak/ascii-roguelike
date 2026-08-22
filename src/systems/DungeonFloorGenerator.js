@@ -12,8 +12,9 @@ import {
 import { getLegendOfThree } from '../data/legendOfThree.js';
 import { pickWeaponTutorial } from '../data/dungeon/weaponTutorials.js';
 import {
-  applyPuzzleTemplateToCollisionMap, getPuzzleTemplateWaterCells,
-  getPuzzleTemplateExitCell, getPuzzleTemplateTriggers,
+  pickRandomPuzzleTemplateName, applyPuzzleTemplateToCollisionMap, getPuzzleTemplateWaterCells,
+  getPuzzleTemplateGapCells, getPuzzleTemplateExitCell, getPuzzleTemplateTriggers,
+  getPuzzleTemplateHookPosts, getPuzzleTemplateTorches, getPuzzleTemplatePedestal,
 } from '../data/dungeonPuzzleTemplates.js';
 
 /**
@@ -23,10 +24,13 @@ import {
  *
  * Floor map (see plan):
  *   index0 Entrance  — 1 active descent (North → index1)
- *   index1 Corridor  — North → Whip Trial (unlocked, weapon-tutorial side
- *                       room), West → index2 (locked until the skull key is
- *                       spent) — a quick low-tier grab vs. a real key-gated
- *                       choice to delve deeper, rather than two identical doors.
+ *   index1 Corridor  — North → a weighted-random Puzzle Room (unlocked;
+ *                       template picked once per dungeon visit from every
+ *                       named entry in dungeonPuzzleTemplates.js —
+ *                       pickRandomPuzzleTemplateName, see _generateCorridor),
+ *                       West → index2 (locked until the skull key is spent)
+ *                       — a quick low-tier grab vs. a real key-gated choice
+ *                       to delve deeper, rather than two identical doors.
  *   index2 Branch    — North → Trap Room (enemy gauntlet, always open, tier-2
  *                       reward on clear), West retired (inactive, no
  *                       destination — reaching Branch at all is the payoff
@@ -49,9 +53,13 @@ import {
  *                       directly rather than unlocking a further descent,
  *                       so there is no stub floor to walk into.
  *
- * Side rooms (Whip Trial / Trap Room) are stored on game.dungeonFloors by
+ * Side rooms (Puzzle Room / Trap Room) are stored on game.dungeonFloors by
  * string key, not numeric index — InteriorManager.reset() clears them for
- * free by replacing the whole array reference.
+ * free by replacing the whole array reference. A Puzzle Room's key is its
+ * own template name (e.g. 'whip_trial') — the picked template's identity
+ * doubles as its storage slot, same "key = content identity" convention
+ * 'trapRoom' already used, now extended to data-driven rooms too (see
+ * DungeonSystem.ensureFloorGenerated).
  */
 
 const INTERIOR_COLS = 24;
@@ -61,16 +69,6 @@ const INTERIOR_ROWS = 24;
 // bow (mirrors the pre-Whip-Trial pool's type variety). This is the payoff
 // for clearing the gauntlet; easy to swap, not load-bearing on any other system.
 const TRAP_ROOM_REWARD_POOL = ['‡', '⟘', '↟', '⟩']; // Flame Sword, Maul, Venom Lance, Fire Bow
-
-// Whip Trial's two switches — how long each stays "struck" after a hit
-// before reverting, absent a re-strike. Lives here (not DungeonPuzzleSystem)
-// because it's authored per-switch data (neutralizeSeconds), same as any
-// editor-built puzzle room's timed triggers — see generatePuzzleRoom below
-// and DungeonPuzzleSystem._advanceTrigger, the shared state machine both
-// this value and editor-authored triggers run through. Short rather than 0
-// ("instant") so a genuinely simultaneous two-post crack still counts, per
-// the room's intended solve — but still reads as "very fast", not lenient.
-const WHIP_TRIAL_STRUCK_WINDOW = 0.25; // seconds
 
 // Branch's companion-switch puzzle — position mirrors the pre-rework 5-floor
 // system's SWITCH_ROW/SWITCH_A_COL/SWITCH_B_COL (git-archaeology, bug #209).
@@ -82,6 +80,25 @@ const WHIP_TRIAL_STRUCK_WINDOW = 0.25; // seconds
 const BRANCH_SWITCH_ROW = 11;
 const BRANCH_SWITCH_A_COL = 7;
 const BRANCH_SWITCH_B_COL = 17;
+
+// Puzzle Room torch fixture — maze-parity ignite behavior (unlit until the
+// player approaches while wielding the Torch item, permanent once lit,
+// pulsing glow while lit), minus the ghost-shielding half of MazeSystem's
+// own MazeTorch (dungeons have no ghosts). A distinct, local class rather
+// than importing MazeTorch itself — MazeSystem/DungeonSystem are
+// independent siblings (Interior System Pattern, CLAUDE.md); only the
+// shared visual constants are reused (DungeonPuzzleSystem's ignite check,
+// HutInteriorOverlay's render block).
+class PuzzleTorch {
+  constructor(col, row) {
+    this.char       = '!';
+    this.col        = col;
+    this.row        = row;
+    this.position   = { x: col * GRID.CELL_SIZE, y: row * GRID.CELL_SIZE };
+    this.lit        = false;
+    this.pulseTimer = 0;
+  }
+}
 
 export class DungeonFloorGenerator {
   constructor(game) {
@@ -358,10 +375,16 @@ export class DungeonFloorGenerator {
     const stairsUpObj = this._makeStairsUp(false);
     backgroundObjects.push(stairsUpObj);
 
-    // North → Whip Trial, unlocked. Quick low-tier grab: teaches the Whip's
-    // reach and hands over a real weapon without demanding the skull key.
+    // North → a Puzzle Room, unlocked. Quick low-tier grab, no skull key
+    // needed. Rolled once here (weighted random across every named entry in
+    // dungeonPuzzleTemplates.js — user-ratified pool selection) and baked
+    // into the destination key, so re-entering Corridor later this same
+    // visit doesn't re-roll (descents persist on the cached floor object,
+    // same as every other descent). The picked template name IS the
+    // destination's storage key — see DungeonSystem.ensureFloorGenerated.
+    const puzzleTemplateName = pickRandomPuzzleTemplateName();
     const north = this._makeDescent('north', NORTH_ROW, STAIRS_COL, {
-      active: true, locked: false, destination: { kind: 'side', key: 'whipTrial' },
+      active: true, locked: false, destination: { kind: 'side', key: puzzleTemplateName },
     });
     // West → Branch, locked until the skull key is spent (DungeonPuzzleSystem).
     // The real choice this floor offers: quick grab vs. deeper delving.
@@ -518,186 +541,12 @@ export class DungeonFloorGenerator {
 
   // ── Side rooms ──────────────────────────────────────────────────────────
   // Stored on game.dungeonFloors by string key (not numeric index) — see
-  // file header. originFloorIndex varies by room: Whip Trial's origin is
+  // file header. originFloorIndex varies by room: a Puzzle Room's origin is
   // Corridor (index1), Trap Room's is Branch (index2). (Branch's own
   // companion-switch puzzle isn't a side room — see _generateBranch above —
   // so it needs no originFloorIndex of its own.) Always threaded through as
   // a parameter rather than hardcoded, so a future branch elsewhere in the
   // tree doesn't require touching these generators.
-
-  // Whip Trial — first entry in the Weapon Trial registry (weaponTutorials.js).
-  // Teaches the Whip's actual utility (longest reach in the game) rather
-  // than handing it over as a stat upgrade: a recipe pedestal shows what the
-  // room is about, then a gap only the Whip's reach can bridge (via a
-  // hook-post pull) leads to two switches struck simultaneously by one
-  // straight-line crack. One-way by design: the entrance (north) has no
-  // ascend fixture at all — the only way out is the stairsUp south of the
-  // switches, reachable only after crossing and solving. See the plan doc
-  // for the full geometry rationale.
-  generateWhipTrial(depth, originFloorIndex) {
-    const CS = GRID.CELL_SIZE;
-    const { cols, rows, collisionMap, backgroundObjects } = this._buildScaffold({ useTemplate: false });
-
-    // Fixed spine-column geometry — no template walls/water to fight around
-    // a room this precisely laid out (Pyramid's "clean playfield" mode).
-    const PEDESTAL_ROW = 7;
-    const GAP_ROW_START = 14;
-    const GAP_ROW_END = 16;
-    const POST_NORTH_ROW = 13; // north bank — also where the player naturally stands to strike the south post
-    const POST_SOUTH_ROW = 17; // south bank — also the switches' row (see below)
-    const SWITCH_ROW = POST_SOUTH_ROW;
-    const SWITCH_A_COL = STAIRS_COL + 2;
-    const SWITCH_B_COL = STAIRS_COL + 4;
-    const SOUTH_STAIRS_ROW = 22; // real ascend point — deliberately not the entry row (see header comment)
-
-    // Impassable band spanning the full interior width — must cover every
-    // column or the player just walks around it.
-    for (let r = GAP_ROW_START; r <= GAP_ROW_END; r++) {
-      for (let c = 1; c < cols - 1; c++) collisionMap[r][c] = true;
-    }
-
-    // No stairsUp fixture at the entry (north) end — entering via the Branch
-    // floor's north descent just lands the player in the room (DungeonSystem's
-    // landing-anchor logic), it doesn't drop them on an ascend trigger. The
-    // only functioning stairsUp is south of the switches (below), locked
-    // until the puzzle is solved.
-    const stairsUpObj = new BackgroundObject('{', STAIRS_COL * CS, SOUTH_STAIRS_ROW * CS);
-    paintStairsUpVisual(stairsUpObj, true);
-    backgroundObjects.push(stairsUpObj);
-
-    // Recipe pedestal — a real, pickup-able weapon flanked by grayed
-    // decorative ingredient glyphs. The glyphs are drawn directly by
-    // HutInteriorOverlay (weaponPedestal below), not as BackgroundObjects:
-    // '~' is real interactive water in BACKGROUND_OBJECTS, so a decorative
-    // instance would behave like actual water rather than inert chrome.
-    const tutorial = pickWeaponTutorial();
-    const weaponItem = Object.assign(
-      new Item(tutorial.weaponChar, STAIRS_COL * CS, PEDESTAL_ROW * CS),
-      { hutPlane: true }
-    );
-    // Slot geometry mirrors CraftingStation's shared-divider bracket technique
-    // (3 slots, 2-col pitch — each slot is '[' + content + ']', and adjacent
-    // slots' touching ']'+'[' land on the same column so the later draw wins,
-    // reading as one continuous [x][x][x] frame). Center slot's content column
-    // is STAIRS_COL — the real weapon Item's existing x-position, unchanged.
-    const weaponPedestal = {
-      row: PEDESTAL_ROW,
-      leftX: STAIRS_COL - 3, centerX: STAIRS_COL - 1, rightX: STAIRS_COL + 1,
-      leftChar: tutorial.recipe.left, rightChar: tutorial.recipe.right,
-    };
-
-    // Hook posts — one on each bank of the gap, mirrored. Each is strictly
-    // one-directional: striking a post pulls the player to *that post's own
-    // position* (DungeonPuzzleSystem reads post.position directly, no
-    // separate target data needed). The south post is the intended crossing
-    // — required to ever reach the switches. The north post is a pure
-    // non-softlock safety valve: nothing in the intended path needs it
-    // (the exit is south of the gap, not back at the entrance), but a player
-    // who crosses without finishing can always strike it to re-cross back
-    // rather than get stuck on the far bank. puzzleSignal so a hit never
-    // destroys either post, just pulses glitterHit for one tick.
-    // '•' (bullet) — prominent, round, human-readable at a glance; distinct
-    // from the switches' ○/● pair so "pull fixture" vs. "strike fixture"
-    // read as different symbol families. Unregistered in BACKGROUND_OBJECTS,
-    // so BackgroundObject's constructor falls back to synthetic data with
-    // indestructible:true, hp:null (src/entities/BackgroundObject.js's
-    // unregistered-char branch). takeDamage() checks
-    // `this.indestructible || this.hp === null` BEFORE it ever reaches the
-    // puzzleSignal/glitterHit branch, so that fallback would silently eat
-    // every strike. Registered catalog entries (e.g. '0' Rock, which
-    // Listening Stones use — PuzzleSystem.js) default to destructible with
-    // real hp, which is why that precedent didn't need this override.
-    // minAttackSegment gates on CombatSystem's collision check: the post
-    // sits at the player's own natural standing cell, so without this ANY
-    // swing (even the near segments) would trigger it by accident — only
-    // the whip's farthest 2 of 5 segments (its actual reach) should count.
-    const postNorthObj = new BackgroundObject('•', STAIRS_COL * CS, POST_NORTH_ROW * CS);
-    postNorthObj.color = '#ddaa55';
-    postNorthObj.animationChar = '•';
-    postNorthObj.animationColor = '#ddaa55';
-    postNorthObj.puzzleSignal = true;
-    postNorthObj.indestructible = false;
-    postNorthObj.hp = 1;
-    postNorthObj.maxHp = 1;
-    postNorthObj.minAttackSegment = 4;
-    backgroundObjects.push(postNorthObj);
-
-    const postSouthObj = new BackgroundObject('•', STAIRS_COL * CS, POST_SOUTH_ROW * CS);
-    postSouthObj.color = '#ddaa55';
-    postSouthObj.animationChar = '•';
-    postSouthObj.animationColor = '#ddaa55';
-    postSouthObj.puzzleSignal = true;
-    postSouthObj.indestructible = false;
-    postSouthObj.hp = 1;
-    postSouthObj.maxHp = 1;
-    postSouthObj.minAttackSegment = 4;
-    backgroundObjects.push(postSouthObj);
-
-    // Switches — same ○/● glyph language as Branch's own switches, but
-    // strike-based (puzzleSignal + glitterHit) rather than occupancy-based.
-    // Placed 2/4 cells east of the south post on its own row (horizontal
-    // align, not vertical — a player standing at the post-landing spot
-    // faces east and one crack hits both at once), matching the Whip's 5
-    // straight-line hitbox segments.
-    // Same unregistered-char indestructible-fallback override as the posts
-    // above — '○' isn't in BACKGROUND_OBJECTS either (Branch's switches of
-    // the same glyph never hit this path since they're occupancy-based and
-    // never call takeDamage()).
-    // kind/activation/neutralizeSeconds/active/_timer are the generic
-    // trigger fields DungeonPuzzleSystem._advanceTrigger drives — the same
-    // shared state machine an editor-built Puzzle Room's switches/panels
-    // run through (generatePuzzleRoom below). 'timed' with a short window
-    // rather than 'permanent': a strike needs to STAY registered only long
-    // enough for the other switch to also be struck, not forever off one hit.
-    const switchAObj = new BackgroundObject('○', SWITCH_A_COL * CS, SWITCH_ROW * CS);
-    switchAObj.color = '#888888';
-    switchAObj.animationChar = '○';
-    switchAObj.animationColor = '#888888';
-    switchAObj.puzzleSignal = true;
-    switchAObj.indestructible = false;
-    switchAObj.hp = 1;
-    switchAObj.maxHp = 1;
-    switchAObj.kind = 'switch';
-    switchAObj.activation = 'timed';
-    switchAObj.neutralizeSeconds = WHIP_TRIAL_STRUCK_WINDOW;
-    switchAObj.active = false;
-    switchAObj._timer = 0;
-    backgroundObjects.push(switchAObj);
-
-    const switchBObj = new BackgroundObject('○', SWITCH_B_COL * CS, SWITCH_ROW * CS);
-    switchBObj.color = '#888888';
-    switchBObj.animationChar = '○';
-    switchBObj.animationColor = '#888888';
-    switchBObj.puzzleSignal = true;
-    switchBObj.indestructible = false;
-    switchBObj.hp = 1;
-    switchBObj.maxHp = 1;
-    switchBObj.kind = 'switch';
-    switchBObj.activation = 'timed';
-    switchBObj.neutralizeSeconds = WHIP_TRIAL_STRUCK_WINDOW;
-    switchBObj.active = false;
-    switchBObj._timer = 0;
-    backgroundObjects.push(switchBObj);
-
-    return {
-      type: 'DUNGEON_FLOOR',
-      roomKind: 'whipTrial',
-      floorIndex: null,
-      gridCols: cols, gridRows: rows, collisionMap, backgroundObjects, enemies: [],
-      items: [weaponItem], ingredients: [], npcs: [], doors: [],
-      viewport: this._makeViewport(cols, rows),
-      exitRow: null, exitCol: null,
-      stairsUpRow: SOUTH_STAIRS_ROW, stairsUpCol: STAIRS_COL, stairsUpObj, stairsUpLocked: true,
-      ascendTo: { kind: 'numbered', floorIndex: originFloorIndex },
-      descents: [],
-      // Consulted by HutInteriorOverlay's wall-tile renderer to draw the gap
-      // as a chasm (edge glyphs on the boundary rows, true void between)
-      // instead of an ordinary solid wall — the collisionMap band itself is
-      // still full solid rows (see above), this is rendering-only metadata.
-      gapBand: { rowStart: GAP_ROW_START, rowEnd: GAP_ROW_END },
-      weaponPedestal, postNorthObj, postSouthObj, switchAObj, switchBObj, puzzleSolved: false,
-    };
-  }
 
   // Trap Room — sealed enemy gauntlet. Exit stays locked until every enemy
   // is cleared (same "all-N-cleared" shape as MazeSystem._checkMazeCleared;
@@ -747,20 +596,19 @@ export class DungeonFloorGenerator {
 
   // Puzzle Room — generic template-driven puzzle side room, authored via
   // tools/dungeon-editor/'s Puzzle mode rather than hand-coded geometry
-  // (contrast Whip Trial/Trap Room above, and Branch's own in-room switch
-  // puzzle in _generateBranch, each a bespoke, fully hardcoded layout). A
-  // template supplies its own wall/water/exit layout and any number of
-  // switches/panels (dungeonPuzzleTemplates.js); this method just
-  // instantiates that data as a live floor. No numbered floor or side-room
-  // key currently routes a descent to a Puzzle Room — this is authoring +
-  // generation infrastructure, ready for a future content decision to wire
-  // a specific template into the dungeon graph (call this with an explicit
-  // templateName from wherever that's decided).
+  // (contrast Trap Room above and Branch's own in-room switch puzzle in
+  // _generateBranch, each a bespoke, fully hardcoded layout). A template
+  // supplies its own wall/water/gap/exit layout, any number of
+  // switches/panels, and optionally hook posts / torches / a weapon-tutorial
+  // pedestal (dungeonPuzzleTemplates.js); this method just instantiates that
+  // data as a live floor. Every named template (including the original Whip
+  // Trial, now authored as whip_trial.json) is reachable this way, picked by
+  // weighted random per dungeon visit — see _generateCorridor.
   //
   // Exit unlock rule: every trigger in the template must be active at once
   // (DungeonPuzzleSystem._updatePuzzleRoom) — the generalized form of the
-  // Whip Trial's "both switches struck together" and Branch's "both
-  // switches pressed together" rules, extended to any trigger count/mix.
+  // original Whip Trial's "both switches struck together" and Branch's
+  // "both switches pressed together" rules, extended to any trigger count/mix.
   generatePuzzleRoom(templateName, depth, originFloorIndex) {
     const CS = GRID.CELL_SIZE;
     const { cols, rows, collisionMap, backgroundObjects } = this._buildScaffold({ useTemplate: false });
@@ -772,6 +620,17 @@ export class DungeonFloorGenerator {
       backgroundObjects.push(new BackgroundObject('~', col * CS, row * CS));
     }
 
+    // Gap cells ('G') — impassable, chasm-rendered (same "reach across, not
+    // walk around" mechanic as the original Whip Trial's hardcoded gap band,
+    // generalized to arbitrary per-cell shapes). Collision is already
+    // stamped solid by applyPuzzleTemplateToCollisionMap above; gapCells is
+    // rendering-only metadata (HutInteriorOverlay draws chasm edge glyphs +
+    // true void instead of an ordinary wall for any cell in this set).
+    const gapCellList = getPuzzleTemplateGapCells(templateName);
+    const gapCells = gapCellList.length
+      ? new Set(gapCellList.map(({ row, col }) => `${row},${col}`))
+      : null;
+
     const exitCell = getPuzzleTemplateExitCell(templateName);
     const exitRow = exitCell?.row ?? STAIRS_UP_ROW;
     const exitCol = exitCell?.col ?? STAIRS_COL;
@@ -779,13 +638,12 @@ export class DungeonFloorGenerator {
     paintStairsUpVisual(stairsUpObj, true);
     backgroundObjects.push(stairsUpObj);
 
-    // Trigger fixtures — 'switch' reuses the Whip Trial's strike contract
-    // (puzzleSignal + glitterHit, indestructible override so a hit never
-    // destroys it, just pulses); 'panel' is occupancy-only and needs no
-    // override at all — its char is unregistered in BACKGROUND_OBJECTS, so
-    // BackgroundObject's constructor already falls back to
-    // indestructible:true/hp:null (see generateWhipTrial's post/switch
-    // comments for the full mechanism), which is exactly right for a
+    // Trigger fixtures — 'switch' is strike-based (puzzleSignal + glitterHit,
+    // indestructible override so a hit never destroys it, just pulses);
+    // 'panel' is occupancy-only and needs no override at all — its char is
+    // unregistered in BACKGROUND_OBJECTS, so BackgroundObject's constructor
+    // already falls back to indestructible:true/hp:null (see the hook-post
+    // comment below for the full mechanism), which is exactly right for a
     // floor panel: nothing should ever be able to attack it.
     const triggers = [];
     for (const t of getPuzzleTemplateTriggers(templateName)) {
@@ -810,18 +668,96 @@ export class DungeonFloorGenerator {
       triggers.push(obj);
     }
 
+    // Hook posts — manually authored pull fixtures (independent of Gap
+    // placement; an author positions them anywhere). Same puzzleSignal/
+    // glitterHit strike contract as a switch, but pulls the player to the
+    // post's own position instead of arming a trigger (player.hookedByWhip;
+    // PhysicsSystem owns the actual traversal) — the mechanic the original
+    // Whip Trial used to cross its gap. '•' (bullet) — prominent, round,
+    // human-readable at a glance; distinct from the switches' ○/● pair so
+    // "pull fixture" vs. "strike fixture" read as different symbol
+    // families. Unregistered in BACKGROUND_OBJECTS, so BackgroundObject's
+    // constructor falls back to synthetic data with indestructible:true,
+    // hp:null (src/entities/BackgroundObject.js's unregistered-char
+    // branch). takeDamage() checks `this.indestructible || this.hp === null`
+    // BEFORE it ever reaches the puzzleSignal/glitterHit branch, so that
+    // fallback would silently eat every strike — hence the explicit
+    // override below. minAttackSegment gates on CombatSystem's per-segment
+    // collision check: a post commonly sits at the player's own natural
+    // standing cell, so without this ANY swing (even the near segments)
+    // would trigger it by accident — only a reach weapon's farthest
+    // segments (its actual reach) should count.
+    const hookPosts = [];
+    for (const { row, col } of getPuzzleTemplateHookPosts(templateName)) {
+      const obj = new BackgroundObject('•', col * CS, row * CS);
+      obj.color = '#ddaa55';
+      obj.animationChar = '•';
+      obj.animationColor = '#ddaa55';
+      obj.puzzleSignal = true;
+      obj.indestructible = false;
+      obj.hp = 1;
+      obj.maxHp = 1;
+      obj.minAttackSegment = 4;
+      backgroundObjects.push(obj);
+      hookPosts.push(obj);
+    }
+
+    // Torches — maze-parity fixture: unlit until the player approaches while
+    // wielding the Torch item, permanent once lit, pulsing glow while lit.
+    // Visual/lighting only (no ghost-shielding — dungeons have no ghosts;
+    // see MazeSystem's own MazeTorch for the maze's fuller mechanic). Reuses
+    // MazeSystem's exported visual constants directly — see PuzzleTorch
+    // above, DungeonPuzzleSystem._updatePuzzleRoom, and HutInteriorOverlay's
+    // torch render block.
+    const torches = getPuzzleTemplateTorches(templateName)
+      .map(({ row, col }) => new PuzzleTorch(col, row));
+
+    // Weapon-tutorial pedestal — opt-in per template (generalized from the
+    // original Whip Trial's own hardcoded version): a real pickup-able
+    // weapon flanked by grayed decorative recipe-ingredient chrome, drawn
+    // directly by HutInteriorOverlay (not a BackgroundObject — '~' is real
+    // interactive water in BACKGROUND_OBJECTS, so a decorative instance
+    // would behave like actual water). leftX/centerX/rightX mirror
+    // CraftingStation's shared-divider bracket technique (3 slots, 2-col
+    // pitch — each slot is '[' + content + ']', and adjacent slots'
+    // touching ']'+'[' land on the same column so the later draw wins,
+    // reading as one continuous [x][x][x] frame), anchored on the marker's
+    // own column so any template can place it anywhere.
+    const pedestalMarker = getPuzzleTemplatePedestal(templateName);
+    const items = [];
+    let weaponPedestal = null;
+    if (pedestalMarker) {
+      const tutorial = pickWeaponTutorial();
+      const weaponItem = Object.assign(
+        new Item(tutorial.weaponChar, pedestalMarker.col * CS, pedestalMarker.row * CS),
+        { hutPlane: true }
+      );
+      items.push(weaponItem);
+      weaponPedestal = {
+        row: pedestalMarker.row,
+        leftX: pedestalMarker.col - 3, centerX: pedestalMarker.col - 1, rightX: pedestalMarker.col + 1,
+        leftChar: tutorial.recipe.left, rightChar: tutorial.recipe.right,
+      };
+    }
+
     return {
       type: 'DUNGEON_FLOOR',
       roomKind: 'puzzleRoom',
+      // Every puzzle-pool room shares roomKind 'puzzleRoom' (that's what
+      // dispatches update() to _updatePuzzleRoom); templateName is what
+      // distinguishes which one this is — it's also this floor's own
+      // game.dungeonFloors storage key (see DungeonSystem.ensureFloorGenerated/
+      // _destinationOf).
+      templateName,
       floorIndex: null,
       gridCols: cols, gridRows: rows, collisionMap, backgroundObjects, enemies: [],
-      items: [], ingredients: [], npcs: [], doors: [],
+      items, ingredients: [], npcs: [], doors: [],
       viewport: this._makeViewport(cols, rows),
       exitRow: null, exitCol: null,
       stairsUpRow: exitRow, stairsUpCol: exitCol, stairsUpObj, stairsUpLocked: true,
       ascendTo: { kind: 'numbered', floorIndex: originFloorIndex },
       descents: [],
-      triggers, puzzleSolved: false,
+      triggers, hookPosts, torches, weaponPedestal, gapCells, puzzleSolved: false,
     };
   }
 }

@@ -3,6 +3,7 @@ import { Particle } from '../entities/Particle.js';
 import { Ingredient } from '../entities/Ingredient.js';
 import { ITEMS } from '../data/items.js';
 import { paintDescentVisual, paintStairsUpVisual } from '../data/dungeonFloorTemplates.js';
+import { TORCH_INTERACT_RADIUS } from './MazeSystem.js';
 
 // Proximity radius for door/switch/slot interaction (px from cell center) —
 // mirrors DungeonSystem's DOOR_INTERACT_RADIUS.
@@ -33,9 +34,7 @@ export class DungeonPuzzleSystem {
     if (!floor) return;
     this.updateCompassBeep(floor, dt);
 
-    if (floor.roomKind === 'whipTrial') {
-      this._updateWhipTrial(floor, dt);
-    } else if (floor.roomKind === 'trapRoom') {
+    if (floor.roomKind === 'trapRoom') {
       this._updateTrapRoom(floor);
     } else if (floor.roomKind === 'numbered' && floor.floorIndex === 2) {
       this._updateBranchSwitches(floor);
@@ -59,56 +58,6 @@ export class DungeonPuzzleSystem {
     if (this._compassBeepTimer >= SFX_BEEP_INTERVAL) {
       this._compassBeepTimer = 0;
       game.audioSystem?.playSFX?.('compass_beep');
-    }
-  }
-
-  // Whip Trial — exit unlocks once both switches are struck within the
-  // same swing. Reuses the puzzleSignal/glitterHit strike contract (see
-  // PuzzleSystem.js's Listening Stones): switches/posts are indestructible,
-  // each hit pulses glitterHit for one tick. Two posts, one on each bank of
-  // the gap — each pulls the player to its own fixed position, no "which
-  // side are they on" branching needed. The south post is the required
-  // crossing; the north post is a pure non-softlock safety valve (the real
-  // exit is south of the switches, not back at the entrance — see
-  // generateWhipTrial). The pull itself (traversal, arrival, i-frames) is
-  // owned by PhysicsSystem.updateEntity's hookedByWhip handling — this only
-  // sets the target, same contract CombatSystem uses for the Stump/Tree
-  // generalization of this same trick.
-  _updateWhipTrial(room, dt) {
-    const { game } = this;
-    const player = game.player;
-
-    // Post strikes — each pulls the player to that post's own position.
-    for (const post of [room.postNorthObj, room.postSouthObj]) {
-      if (post.glitterHit) {
-        post.glitterHit = false;
-        if (!player.hookedByWhip) {
-          player.hookedByWhip = { targetX: post.position.x, targetY: post.position.y };
-        }
-      }
-    }
-
-    // Switch strikes — each runs through the same generic timed-trigger
-    // state machine an editor-built Puzzle Room's switches/panels use (see
-    // _advanceTrigger/_updatePuzzleRoom below). Whip Trial's switches carry
-    // activation:'timed', neutralizeSeconds:WHIP_TRIAL_STRUCK_WINDOW
-    // (DungeonFloorGenerator.generateWhipTrial) — this is just the two-
-    // switch "both at once" solve check on top of that shared machinery.
-    if (!room.puzzleSolved) {
-      for (const sw of [room.switchAObj, room.switchBObj]) {
-        const isTriggeredNow = !!sw.glitterHit;
-        sw.glitterHit = false;
-        const wasActive = sw.active;
-        this._advanceTrigger(sw, dt, isTriggeredNow);
-        if (sw.active !== wasActive) this._setTriggerVisual(sw, sw.active);
-      }
-
-      if (room.switchAObj.active && room.switchBObj.active) {
-        room.puzzleSolved = true;
-        room.stairsUpLocked = false;
-        paintStairsUpVisual(room.stairsUpObj, false);
-        this._spawnUnlockEffect(room.stairsUpObj);
-      }
     }
   }
 
@@ -200,15 +149,47 @@ export class DungeonPuzzleSystem {
   // DungeonFloorGenerator.generatePuzzleRoom). Every trigger in room.triggers
   // (a 'switch', strike-triggered via the puzzleSignal/glitterHit contract,
   // or a 'panel', occupancy-triggered like Branch's own switches)
-  // runs through the same _advanceTrigger state machine the Whip Trial's
-  // switches use; the exit unlocks once every trigger is active at once —
-  // the generalized form of both existing rooms' "all at once" solve rule,
-  // extended to any trigger count/mix.
+  // runs through the shared _advanceTrigger state machine; the exit unlocks
+  // once every trigger is active at once — the generalized form of both
+  // Branch's own "all at once" solve rule and the original Whip Trial's
+  // "both switches struck together" rule (now itself just an
+  // editor-authored template, whip_trial.json), extended to any trigger
+  // count/mix. Hook posts and torches (below) are independent of the
+  // trigger/solve state — they keep working before, during, and after the
+  // room is solved (a hook post is a traversal aid, not a one-time gate; a
+  // torch is pure ambience) — so both run before the solved early-return.
   _updatePuzzleRoom(room, dt) {
-    if (room.puzzleSolved) return;
     const { game } = this;
     const player = game.player;
     const companion = game.companion;
+
+    // Hook posts — same pull contract as the original Whip Trial's posts:
+    // each strike pulls the player to that post's own position (see
+    // PhysicsSystem.updateEntity's hookedByWhip handling for the actual
+    // traversal).
+    for (const post of room.hookPosts) {
+      if (post.glitterHit) {
+        post.glitterHit = false;
+        if (!player.hookedByWhip) {
+          player.hookedByWhip = { targetX: post.position.x, targetY: post.position.y };
+        }
+      }
+    }
+
+    // Torches — maze-parity ignite: unlit until the player approaches while
+    // wielding the Torch item, permanent once lit (see PuzzleTorch in
+    // DungeonFloorGenerator.js / MazeSystem's own MazeTorch for the fuller
+    // maze mechanic this mirrors).
+    for (const torch of room.torches) {
+      torch.pulseTimer += dt;
+      if (torch.lit) continue;
+      if (player.heldItem?.data?.name !== 'Torch') continue;
+      if (this._within(player.position, torch.position, TORCH_INTERACT_RADIUS)) {
+        torch.lit = true;
+      }
+    }
+
+    if (room.puzzleSolved) return;
 
     for (const trigger of room.triggers) {
       let isTriggeredNow;
@@ -417,6 +398,15 @@ export class DungeonPuzzleSystem {
     const cy = cellPixelY + C / 2;
     const dx = px - cx, dy = py - cy;
     return Math.sqrt(dx * dx + dy * dy) < radius;
+  }
+
+  // Straight-line proximity between two {x,y} positions — used by the torch
+  // ignite check (mirrors MazeSystem's own private _within helper; distance
+  // here is between two positions directly, not entity-vs-cell like
+  // _nearCell above).
+  _within(a, b, radius) {
+    const dx = a.x - b.x, dy = a.y - b.y;
+    return dx * dx + dy * dy <= radius * radius;
   }
 
   _overlapsCell(entity, cellPixelX, cellPixelY) {

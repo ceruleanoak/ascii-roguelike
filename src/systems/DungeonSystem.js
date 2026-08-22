@@ -1,6 +1,7 @@
 import { GRID, PHYSICS } from '../game/GameConfig.js';
 import { freezeSurfaceRoom, thawSurfaceRoom } from './PlaneSystem.js';
 import { NORTH_ROW, SPINE_ROW, WEST_COL, EAST_COL, STAIRS_COL } from '../data/dungeonFloorTemplates.js';
+import { PUZZLE_ROOM_TEMPLATES } from '../data/dungeonPuzzleTemplates.js';
 
 /**
  * DungeonSystem — dungeon interior lifecycle (6-floor rework, plan Phase 0).
@@ -16,8 +17,11 @@ import { NORTH_ROW, SPINE_ROW, WEST_COL, EAST_COL, STAIRS_COL } from '../data/du
  * ───────────
  * Floors are addressed either by numeric index (game.dungeonFloors[0..3],
  * the "spine" — Entrance → Corridor → Branch → Pyramid) or by string key
- * (game.dungeonFloors.whipTrial, off Corridor's North descent; .trapRoom,
- * off Branch's North descent). Branch's East descent leads straight back
+ * (game.dungeonFloors[templateName], a weighted-random Puzzle Room off
+ * Corridor's North descent — the picked template's own name doubles as its
+ * storage key, e.g. 'whip_trial'; see DungeonFloorGenerator._generateCorridor
+ * and dungeonPuzzleTemplates.js. game.dungeonFloors.trapRoom, off Branch's
+ * North descent, is the one remaining bespoke side room). Branch's East descent leads straight back
  * onto the spine, to the Pyramid (numbered floorIndex 3) — gated by Branch's
  * own in-room switch puzzle rather than a separate side room (bug #209:
  * the switches used to live in a side room off Branch, gated on companion
@@ -62,11 +66,18 @@ export class DungeonSystem {
       }
       return game.dungeonFloors[destination.floorIndex];
     }
-    // Side room — generated fresh only once per visit, keyed by string.
+    // Side room — generated fresh only once per visit, keyed by string. A
+    // key matching a named entry in PUZZLE_ROOM_TEMPLATES is a Puzzle Room
+    // (checked first so adding a new template needs no change here — see
+    // dungeonPuzzleTemplates.js's file header); 'trapRoom' is the one
+    // remaining bespoke, non-template side room.
     if (!game.dungeonFloors[destination.key]) {
       const gen = game.dungeonFloorGenerator;
-      if (destination.key === 'whipTrial')      game.dungeonFloors.whipTrial = gen.generateWhipTrial(depth, 1);
-      else if (destination.key === 'trapRoom')  game.dungeonFloors.trapRoom  = gen.generateTrapRoom(depth, 2);
+      if (PUZZLE_ROOM_TEMPLATES[destination.key]) {
+        game.dungeonFloors[destination.key] = gen.generatePuzzleRoom(destination.key, depth, 1);
+      } else if (destination.key === 'trapRoom') {
+        game.dungeonFloors.trapRoom = gen.generateTrapRoom(depth, 2);
+      }
     }
     return this.getFloorByDest(destination);
   }
@@ -78,11 +89,17 @@ export class DungeonSystem {
       : game.dungeonFloors[destination.key];
   }
 
-  /** { kind, key/floorIndex } identity for a floor/room object — the inverse of getFloorByDest. */
+  /**
+   * { kind, key/floorIndex } identity for a floor/room object — the inverse
+   * of getFloorByDest. A Puzzle Room's storage key is its own template name
+   * (floor.templateName), not its shared roomKind ('puzzleRoom') — every
+   * puzzle-pool room carries the same roomKind, so roomKind alone can't
+   * distinguish e.g. 'whip_trial' from 'sample_two_triggers'.
+   */
   _destinationOf(floor) {
-    return floor.roomKind === 'numbered'
-      ? { kind: 'numbered', floorIndex: floor.floorIndex }
-      : { kind: 'side', key: floor.roomKind };
+    if (floor.roomKind === 'numbered') return { kind: 'numbered', floorIndex: floor.floorIndex };
+    const key = floor.roomKind === 'puzzleRoom' ? floor.templateName : floor.roomKind;
+    return { kind: 'side', key };
   }
 
   sameDestination(a, b) {
