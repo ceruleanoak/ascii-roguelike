@@ -15,6 +15,7 @@ import { inSamePlane } from './PlaneSystem.js';
 import { Item } from '../entities/Item.js';
 import { GRID } from '../game/GameConfig.js';
 import { addItemToChestArray, removeItemFromChestArray, chestEntryLabel, trapAlreadyEquipped } from './TrapSystem.js';
+import { saveExploreRoomState, getSavedExploreRoomState, clearSavedExploreRoomState, saveRestIngredientsState, getSavedRestIngredientsState, clearSavedRestIngredientsState } from './RoomStatePersistence.js';
 import { createBurstParticles, createSparkBurst } from './WorldEffectsSystem.js';
 import { EquipmentEffectsSystem } from './EquipmentEffectsSystem.js';
 
@@ -1074,86 +1075,34 @@ export class InventorySystem {
     this.clearSavedRestIngredients();
   }
 
-  /**
-   * Save EXPLORE room state before returning to REST
-   * Prevents room cycling cheat
-   *
-   * @param {Object} currentRoom - Current room object
-   * @param {Array} items - Items array
-   * @param {Array} ingredients - Ingredients array
-   * @param {Array} placedTraps - Placed traps array
-   * @param {Array} enemies - Enemies array (optional)
-   * @param {Array} backgroundObjects - Background objects array (optional)
-   * @param {Array} captives - Captives array (optional)
-   */
+  // Room/ingredient anti-cheat snapshots — logic lives in
+  // RoomStatePersistence.js (extracted to stay under the architecture
+  // budget); these are thin wrappers so every external call site is
+  // unchanged. See that file for the full behavior doc.
   saveExploreRoom(currentRoom, items, ingredients, placedTraps, enemies = [], backgroundObjects = [], captives = []) {
-    this.savedExploreRoom = currentRoom;
-    this.savedExploreItems = [...items];
-    this.savedExploreIngredients = [...ingredients];
-    this.savedExplorePlacedTraps = [...placedTraps];
-    this.savedExploreEnemies = [...enemies];
-    this.savedExploreBackgroundObjects = [...backgroundObjects];
-    this.savedExploreCaptives = [...captives];
+    saveExploreRoomState(this, currentRoom, items, ingredients, placedTraps, enemies, backgroundObjects, captives);
   }
 
-  /**
-   * Get saved EXPLORE room data for restoration
-   * Returns null if no saved room
-   *
-   * @returns {Object|null} - { room, items, ingredients, placedTraps, enemies, backgroundObjects, captives }
-   */
   getSavedExploreRoomData() {
-    if (!this.savedExploreRoom) return null;
-
-    return {
-      room: this.savedExploreRoom,
-      items: [...this.savedExploreItems],
-      ingredients: [...this.savedExploreIngredients],
-      placedTraps: [...this.savedExplorePlacedTraps],
-      enemies: [...this.savedExploreEnemies],
-      backgroundObjects: [...this.savedExploreBackgroundObjects],
-      captives: [...this.savedExploreCaptives]
-    };
+    return getSavedExploreRoomState(this);
   }
 
-  /**
-   * Clear saved EXPLORE room (called when generating new room or on death)
-   */
   clearSavedExploreRoom() {
-    this.savedExploreRoom = null;
-    this.savedExploreItems = [];
-    this.savedExploreIngredients = [];
-    this.savedExplorePlacedTraps = [];
-    this.savedExploreEnemies = [];
-    this.savedExploreBackgroundObjects = [];
-    this.savedExploreCaptives = [];
+    clearSavedExploreRoomState(this);
   }
 
   // ========== REST MODE PERSISTENCE ==========
 
-  /**
-   * Save REST mode ground ingredients when leaving for EXPLORE
-   *
-   * @param {Array} ingredients - Ingredients array from REST mode
-   */
   saveRestIngredients(ingredients) {
-    this.savedRestIngredients = [...ingredients];
+    saveRestIngredientsState(this, ingredients);
   }
 
-  /**
-   * Get saved REST ingredients for restoration
-   *
-   * @returns {Array} - Copy of saved REST ingredients
-   */
   getSavedRestIngredients() {
-    return [...this.savedRestIngredients];
+    return getSavedRestIngredientsState(this);
   }
 
-  /**
-   * Clear saved REST ingredients (called on game over)
-   */
   clearSavedRestIngredients() {
-    this.savedRestIngredients = [];
+    clearSavedRestIngredientsState(this);
   }
 
   // ========== CHEST SYSTEM ==========
