@@ -2311,6 +2311,10 @@ export class Enemy {
     return WindupTelegraphMechanic.getWindupIndicator(this);
   }
 
+  getBowChargeRatio() {
+    return WindupTelegraphMechanic.getBowChargeRatio(this);
+  }
+
   getMemoryIndicator() {
     if (this.aggroMemoryActive && this.state === 'chase' &&
         this.detectionIndicatorTimer <= 0) {

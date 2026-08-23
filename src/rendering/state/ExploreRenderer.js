@@ -1562,6 +1562,11 @@ export class ExploreRenderer {
       );
     }
 
+    // Bow-draw charge bar: an equipped-bow enemy's windup mirrors the
+    // player's own charge indicator (BowChargeIndicator), so the arrow's
+    // timing reads the same regardless of who's drawing the bow.
+    this.renderController.bowChargeIndicator.renderEnemy(enemy);
+
     // Sniper reticule + telegraph/dagger-windup indicator
     drawSniperIndicators(this.renderer, enemy);
 

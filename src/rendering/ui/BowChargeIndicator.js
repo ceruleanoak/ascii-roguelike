@@ -12,6 +12,10 @@
  *
  * Shows 1 state for GUNs with a magazine:
  * - Reloading: Growing yellow bar (same visual as bow charge)
+ *
+ * renderEnemy() reuses the Charging bar for equipped-bow enemies during their
+ * attack windup, so an incoming arrow reads the same whether the player or a
+ * goblin is drawing the bow.
  */
 
 import { GRID } from '../../game/GameConfig.js';
@@ -145,5 +149,29 @@ export class BowChargeIndicator {
       }
     }
     // State 3: Ready to attack - indicator disappears
+  }
+
+  // Enemy bow-draw bar: an equipped-bow enemy's windup gets the exact same
+  // growing bar as the player's own charge state (see State 1 above), driven
+  // by Enemy.getBowChargeRatio() instead of a held weapon's chargeTime — the
+  // ratio the enemy side already computes off its windup countdown. Reusing
+  // this class (rather than a parallel drawing path) is what keeps "an arrow
+  // is about to fire" looking identical no matter who's drawing the bow.
+  renderEnemy(enemy) {
+    const ratio = enemy.getBowChargeRatio();
+    if (ratio === null) return;
+
+    const barHeight = GRID.CELL_SIZE;
+    const barX = enemy.position.x + GRID.CELL_SIZE * 1.5;
+    const barY = enemy.position.y;
+    const filledHeight = barHeight * ratio;
+    this.renderer.drawRect(
+      barX,
+      barY + (barHeight - filledHeight),
+      4,
+      filledHeight,
+      '#ffdd44',
+      true
+    );
   }
 }
