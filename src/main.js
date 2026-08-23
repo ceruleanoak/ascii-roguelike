@@ -33,6 +33,7 @@ import { AlchemySystem } from './systems/AlchemySystem.js';
 import { DungeonSystem } from './systems/DungeonSystem.js';
 import { DungeonFloorGenerator } from './systems/DungeonFloorGenerator.js';
 import { DungeonPuzzleSystem } from './systems/DungeonPuzzleSystem.js';
+import { DungeonGhostSystem } from './systems/DungeonGhostSystem.js';
 import { MazeSystem } from './systems/MazeSystem.js';
 import { InteriorManager } from './systems/InteriorManager.js';
 import { CameraZoomSystem } from './systems/CameraZoomSystem.js';
@@ -55,6 +56,8 @@ import { HuntingSystem } from './systems/HuntingSystem.js';
 import { WarpSystem } from './systems/WarpSystem.js';
 import { RunTimerSystem } from './systems/RunTimerSystem.js';
 import { PuzzleSystem } from './systems/PuzzleSystem.js';
+import { ChiBladeSystem } from './systems/ChiBladeSystem.js';
+import { SecretEventSystem } from './systems/SecretEventSystem.js';
 import { LightningStrikeSystem } from './systems/LightningStrikeSystem.js';
 import { SandstormSystem } from './systems/SandstormSystem.js';
 import { GrayZoneSystem } from './systems/GrayZoneSystem.js';
@@ -147,6 +150,7 @@ class Game {
     this.zoneSystem = new ZoneSystem();
     this.exitSystem = new ExitSystem(this.zoneSystem, this);
     this.roomGenerator = new RoomGenerator(this.exitSystem, this.zoneSystem, this);
+    this.secretEventSystem = new SecretEventSystem(this);
     this.neutralRoomSystem = new NeutralRoomSystem();
     this.errandSystem = new ErrandSystem();
     this.cheatMenu = new CheatMenu(this);
@@ -173,10 +177,11 @@ class Game {
     this.dungeonSystem = new DungeonSystem(this);
     // Internal collaborators DungeonSystem calls directly — not registered with
     // InteriorManager (only DungeonSystem itself is a controller; see ADR-0001
-    // and CLAUDE.md's Code Placement Procedure — extracted so floor-content and
-    // puzzle-gating logic don't default back into the orchestrator).
+    // and CLAUDE.md's Code Placement Procedure — extracted so floor-content,
+    // puzzle-gating, and Tomb Ghost logic don't default back into the orchestrator).
     this.dungeonFloorGenerator = new DungeonFloorGenerator(this);
     this.dungeonPuzzleSystem = new DungeonPuzzleSystem(this);
+    this.dungeonGhostSystem = new DungeonGhostSystem(this);
     this.mazeSystem = new MazeSystem(this);
     // Interior lifecycle host (ADR-0001). Created after its controllers so it can
     // register them; also defines the Player interior-membership accessors.
@@ -202,6 +207,7 @@ class Game {
     this.runTimerSystem = new RunTimerSystem();
     this.fountainSystem = new FountainSystem(this);
     this.puzzleSystem = new PuzzleSystem(this);
+    this.chiBladeSystem = new ChiBladeSystem(this);
     this.lightningStrikeSystem = new LightningStrikeSystem(this);
     this.sandstormSystem = new SandstormSystem(this);
     this.grayZoneSystem = new GrayZoneSystem(this);
@@ -240,6 +246,7 @@ class Game {
     this.wellFlashTimer = 0;        // Post-ritual screen flash decay
     this.wellFlashDuration = 0;     // Initial flash duration (used for normalized alpha)
     this.fairiesAngered = false;    // Run-scoped: set when fountain is corrupted; suppresses all fairy spawns
+    this.chiBladeFound = false;     // Run-scoped: set once the X-room χ-blade secret resolves; gates chi_grass re-rolling
     this.graySnapshots = [];        // Run-scoped: loadouts of characters the mist took at gray L10 (future 5-character ending hook)
     this.lostCharacters = [];       // Run-scoped: characters lost in the mist — distinct from deadCharacters
     this.cheatUsed = false;         // Run-scoped: set when any gameplay-affecting cheat-menu action fires; reported in the death ledger
@@ -507,6 +514,11 @@ class Game {
         } else if (result && result.action === 'trigger_boulder') {
           this.boulderSystem?.triggerBoulderRain(1);
           this.cheatMenu.toggle();
+          e.preventDefault();
+          return;
+        } else if (result && result.action === 'dungeon_warp') {
+          this.dungeonSystem.debugWarpTo(result.destination, { forceRegenerate: result.forceRegenerate });
+          this.cheatMenu.toggle(); // Close menu after warp
           e.preventDefault();
           return;
         } else if (result && result.action === 'teleport_zone') {
@@ -2107,6 +2119,11 @@ class Game {
     // Update neutral room system script
     this.neutralRoomSystem.update(deltaTime, this.currentRoom, this.player);
 
+    // Wind (e.g. Oasis, flagged room.windThemed) — no-ops for rooms that
+    // aren't yellow/wind-themed, same guard as the EXPLORE loop.
+    this.sandstormSystem.bindToRoom(this.currentRoom);
+    this.sandstormSystem.update(deltaTime);
+
     this.interactionSystem.updateNeutralCharacters(deltaTime);
 
     // Update ingredient attraction, cooldown, and separation (same as EXPLORE/REST mode)
@@ -2210,8 +2227,11 @@ class Game {
       // Update collision map
       this.updateExitCollisions();
 
-      // Transition back to EXPLORE
-      this.stateMachine.transition(GAME_STATES.EXPLORE);
+      // Set state directly (don't call transition - the registered EXPLORE
+      // handler is enterExploreState(), which would treat this as a fresh
+      // arrival from REST and regenerate/restore over the room we just
+      // reinstated above, stranding the player in an unrelated room).
+      this.stateMachine.currentState = GAME_STATES.EXPLORE;
     }
 
     // Store previous position for next frame
@@ -2752,7 +2772,6 @@ class Game {
     this.dialogueSystem.update();
     this.fishermanDemoSystem.update(deltaTime);
     this.weaponsMasterSystem.update(deltaTime);
-    this.shopSystem.update(deltaTime);
 
     // Update all shared player mechanics
     const playerMechanicsResult = this.updatePlayerMechanics(deltaTime);
@@ -2796,6 +2815,9 @@ class Game {
 
     // Drive P-room puzzle demos/solve detection
     this.puzzleSystem.update(deltaTime);
+
+    // Drive X-room χ proximity buzz + strike resolution
+    this.chiBladeSystem.update(deltaTime);
 
     // Drive C-room camp NPC (idle/interested/companion/fleeing)
     this.campNPCSystem.update(deltaTime);
@@ -3306,12 +3328,9 @@ class Game {
     // Fire propagation, ember visuals, and player fire contact live in
     // FireSystem (updated alongside the other element systems above).
 
-    // Remove destroyed objects (exterior always; interior when active)
-    this.currentRoom.backgroundObjects = this.currentRoom.backgroundObjects.filter(obj => !obj.destroyed);
+    // Remove destroyed objects (exterior always; interior when active).
+    this.interiorManager.pruneDestroyedBackgroundObjects();
     this.backgroundObjects = this.currentRoom.backgroundObjects; // Update local reference
-    if (this.activeFloor) {
-      this.activeFloor.backgroundObjects = this.activeFloor.backgroundObjects.filter(obj => !obj.destroyed);
-    }
     this.renderer.markBackgroundDirty();
 
     // Update shared game elements (particles, debris, etc.)
@@ -3986,6 +4005,7 @@ class Game {
 
     // Reset fairy run-flag for new run
     this.fairiesAngered = false;
+    this.chiBladeFound = false;
     this.fedCrowCount = 0;
     this.companionCrows = [];
     this.followerCrows = [];
@@ -4280,7 +4300,7 @@ class Game {
         room.enemiesPlane0 = [];
         room.enemiesPlane1 = [];
         room.exitsLocked = false;
-        const errandChar = this.errandSystem.spawnErrandCharacter();
+        const errandChar = this.errandSystem.spawnErrandCharacter(room);
         if (errandChar) this.neutralCharacters.push(errandChar);
       }
 
