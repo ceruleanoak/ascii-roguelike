@@ -94,7 +94,7 @@ export class DungeonSystem {
    * of getFloorByDest. A Puzzle Room's storage key is its own template name
    * (floor.templateName), not its shared roomKind ('puzzleRoom') — every
    * puzzle-pool room carries the same roomKind, so roomKind alone can't
-   * distinguish e.g. 'whip_trial' from 'sample_two_triggers'.
+   * distinguish e.g. 'whip_trial' from 'boomerang_trial'.
    */
   _destinationOf(floor) {
     if (floor.roomKind === 'numbered') return { kind: 'numbered', floorIndex: floor.floorIndex };
@@ -313,7 +313,17 @@ export class DungeonSystem {
       return;
     }
 
-    const prevFloor = this.getFloorByDest(current.ascendTo);
+    // ensureFloorGenerated (not getFloorByDest) — mirrors _descend()'s own
+    // generate-on-demand call below. In normal play the floor being ascended
+    // to was always already cached (a real descend generates+caches it on
+    // the way down), so the two calls were interchangeable here. debugWarpTo
+    // breaks that invariant: it jumps straight to a floor without walking
+    // its ancestor chain, so ascendTo's target is never cached — getFloorByDest
+    // returned undefined, this bailed out with a silent no-op, and SPACE at
+    // an unlocked exit did nothing (handleSpacePress still reports handled:
+    // true and swallows the keypress, since it commits to calling _ascend()
+    // before knowing whether it succeeds).
+    const prevFloor = this.ensureFloorGenerated(current.ascendTo);
     if (!prevFloor) return;
 
     // Land on the exact descent used to enter `current` this visit (set by
@@ -399,6 +409,84 @@ export class DungeonSystem {
     game.activeFloor = null;
 
     game.renderer.backgroundDirty = true;
+  }
+
+  // ─── Debug Warp (Cheat Menu) ────────────────────────────────────────────
+
+  /**
+   * Cheat-menu-only: jump straight to any floor/side room in the dungeon
+   * tree from anywhere in the D room (exterior or already inside), bypassing
+   * the normal descent chain and any lock gating. `forceRegenerate` always
+   * builds a fresh floor and overwrites whatever was cached under
+   * `destination`'s key, instead of reusing ensureFloorGenerated's
+   * once-per-visit cache — the Puzzle Room and Trap Room entries use it so:
+   *   (a) picking a specific puzzle template is a genuine "brute force which
+   *       puzzle room generates" rather than replaying Corridor's one
+   *       weighted-random pick from first visit, and
+   *   (b) re-picking mid-visit resets that room's trigger/gap/solve state
+   *       instead of reactivating a stale, already-solved instance.
+   * Numbered floors skip forceRegenerate — no reason to nuke Corridor/
+   * Branch's enemies/loot for a plain floor jump.
+   */
+  debugWarpTo(destination, { forceRegenerate = false } = {}) {
+    const { game } = this;
+    if (!game.currentRoom?.dungeon || !game.player) return false;
+
+    // Mirror _enterDungeon()'s one-time setup when jumping in from outside
+    // the interior — same exit-position snapshot + skull-key roll a real
+    // door entry would produce, so ascend-to-exterior and the key hunt still
+    // behave normally after a debug jump.
+    if (!game.player.inDungeon) {
+      game.player.dungeonExitPosition = { x: game.player.position.x, y: game.player.position.y };
+      if (game.dungeonKeySkullFloor < 0) {
+        game.dungeonKeySkullFloor = Math.floor(Math.random() * 2);
+      }
+    }
+
+    const depth = game.getCurrentZoneDepth ? game.getCurrentZoneDepth() : 1;
+    let floor;
+    if (forceRegenerate && destination.kind === 'side') {
+      const gen = game.dungeonFloorGenerator;
+      if (PUZZLE_ROOM_TEMPLATES[destination.key]) {
+        floor = gen.generatePuzzleRoom(destination.key, depth, 1);
+      } else if (destination.key === 'trapRoom') {
+        floor = gen.generateTrapRoom(depth, 2);
+      }
+      if (!floor) return false;
+      game.dungeonFloors[destination.key] = floor;
+    } else {
+      floor = this.ensureFloorGenerated(destination);
+    }
+    if (!floor) return false;
+
+    // Entrance is the one floor with no parent descent (reached from the
+    // exterior door, not another floor) — land exactly where a real door
+    // entry does. Every other floor/side room in this tree has exactly one
+    // parent descent, so _debugEntryIdFor's fixed lookup + the existing
+    // landing-anchor/offset helpers reproduce a real playthrough's landing
+    // spot without needing a live descent object to mirror.
+    if (destination.kind === 'numbered' && destination.floorIndex === 0) {
+      this._activateFloor(floor, { x: floor.exitCol * GRID.CELL_SIZE, y: (floor.exitRow - 2) * GRID.CELL_SIZE });
+      return true;
+    }
+    const id = this._debugEntryIdFor(destination);
+    floor._enteredViaId = id;
+    const anchor = this._landingAnchorFor(id) ?? { row: floor.stairsUpRow, col: floor.stairsUpCol };
+    const spawnCell = this._spawnOffsetFor(anchor.row, anchor.col);
+    this._activateFloor(floor, { x: spawnCell.col * GRID.CELL_SIZE, y: spawnCell.row * GRID.CELL_SIZE });
+    return true;
+  }
+
+  /**
+   * Which descent id canonically leads to `destination` — every floor/side
+   * room in the tree has exactly one parent, so this is a fixed lookup
+   * (see this file's header for the graph), not a live search over descents.
+   */
+  _debugEntryIdFor(destination) {
+    if (destination.kind === 'numbered') {
+      return { 1: 'north', 2: 'west', 3: 'east' }[destination.floorIndex] ?? null;
+    }
+    return 'north'; // every side room (Puzzle Room pool + Trap Room) is reached via a north descent
   }
 
   // ─── Update ───────────────────────────────────────────────────────────────
