@@ -545,6 +545,42 @@ export const BACKGROUND_OBJECTS = {
       default: { animation: 'rattle', message: null }
     }
   },
+  'T': {
+    // Closed Tomb — dungeon-only stateful container (see openTomb() in
+    // BackgroundObject.js). Spacebar-only, indestructible, and never
+    // destroyed: opening flips it in place to the 't' (Open Tomb) entry
+    // below, mirroring the Tall Grass ('|' → ',') cutGrass() pattern rather
+    // than the shared destroy/'crack' path every HP-based container takes.
+    // dropEffect: 'openTomb' both marks it openable (main.js's spacebar
+    // container dispatch) and names the InteractionSystem.handleObjectEffect
+    // branch that rolls the independent 50% ingredient / 30% Tomb Ghost spawn.
+    name: 'Tomb',
+    color: '#8a9088',
+    hp: null,
+    indestructible: true,
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none',
+    acceptsInteractions: ['spacebar'],
+    dropEffect: 'openTomb',
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
+  't': {
+    // Open Tomb — post-interaction state. No dropEffect, so it's inert
+    // (spacebar dispatch and openContainer() both no-op on it).
+    name: 'Open Tomb',
+    color: '#565c56',
+    hp: null,
+    indestructible: true,
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none',
+    interactions: {
+      default: { animation: 'none', message: null }
+    }
+  },
   '|': {
     name: 'Tall Grass',
     color: '#559944',

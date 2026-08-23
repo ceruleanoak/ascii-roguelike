@@ -400,10 +400,20 @@ export class InteractionSystem {
   // any object whose acceptsInteractions includes 'spacebar' or 'all'.
   openContainer(obj) {
     if (!obj || obj.destroyed || obj.destroyAfterAnimation) return;
-    if (!obj.data.dropEffect) return;
-    obj.destroyAfterAnimation = true;
-    obj._playAnimation('crack');
-    this.handleObjectEffect(obj.data.dropEffect, obj);
+    const effect = obj.data.dropEffect;
+    if (!effect) return;
+
+    if (obj.originalChar === 'T') {
+      // Tomb is a stateful container — glyph flips closed→open in place via
+      // openTomb() instead of the shared destroy/'crack' path every other
+      // container takes. It is never destroyed, so it's exempt from the
+      // destroyAfterAnimation branch below.
+      obj.openTomb();
+    } else {
+      obj.destroyAfterAnimation = true;
+      obj._playAnimation('crack');
+    }
+    this.handleObjectEffect(effect, obj);
     this.game.renderer.markBackgroundDirty();
   }
 
@@ -578,6 +588,24 @@ export class InteractionSystem {
       // doesn't leak into barrels/crates (which share `generic`). 10% per chest.
       if (Math.random() < 0.10) {
         game.lootSystem.spawnIngredientDrop('⚜', obj.position.x, obj.position.y, null, obj);
+      }
+    } else if (effect === 'openTomb') {
+      // Two independent rolls, neither/either/both can land — the object
+      // itself was already state-swapped to 't' (Open Tomb) by openContainer()
+      // calling BackgroundObject.openTomb() before this ran, and is never
+      // destroyed here.
+      if (Math.random() < 0.5) {
+        const drops = generateEnemyDrops('generic', 'normal', 1);
+        for (const drop of drops) {
+          if (isIngredient(drop)) {
+            game.lootSystem.spawnIngredientDrop(drop, obj.position.x, obj.position.y, null, obj);
+          } else if (isItem(drop)) {
+            game.lootSystem.spawnItemDrop(drop, obj.position.x, obj.position.y, null, obj);
+          }
+        }
+      }
+      if (Math.random() < 0.3 && game.activeFloor) {
+        game.dungeonGhostSystem.spawnAt(game.activeFloor, obj.position.x, obj.position.y);
       }
     } else if (effect === 'destroyObject') {
       obj.destroyAfterAnimation = true;

@@ -281,6 +281,27 @@ export class BackgroundObject {
     this._playAnimation('cutgrass');
   }
 
+  // Open a closed Tomb ('T'): swap to the 't' (Open Tomb) state in place,
+  // same char/data/color reassignment shape as cutGrass() above. Unlike
+  // every other container, a Tomb is never destroyed — the loot/ghost rolls
+  // (InteractionSystem's 'openTomb' effect branch) fire once on this
+  // transition, but the object itself persists as inert dungeon dressing.
+  openTomb() {
+    const openChar = 't';
+    this.char = openChar;
+    this.data = BACKGROUND_OBJECTS[openChar];
+    this.animationChar = openChar;
+    this.color = this.data.color;
+    this.animationColor = this.color;
+
+    this.indestructible = this.data.indestructible || false;
+    this.bulletInteraction = this.data.bulletInteraction || 'block';
+    this.hp = null;
+    this.maxHp = null;
+
+    this._playAnimation('shake');
+  }
+
   acceptsInteraction(type) {
     return this.acceptsInteractions.includes('all') || this.acceptsInteractions.includes(type);
   }

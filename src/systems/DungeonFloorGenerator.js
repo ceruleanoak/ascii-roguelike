@@ -84,7 +84,9 @@ const BRANCH_SWITCH_B_COL = 17;
 // Puzzle Room torch fixture — maze-parity ignite behavior (unlit until the
 // player approaches while wielding the Torch item, permanent once lit,
 // pulsing glow while lit), minus the ghost-shielding half of MazeSystem's
-// own MazeTorch (dungeons have no ghosts). A distinct, local class rather
+// own MazeTorch (Puzzle Rooms have no ghosts — Tomb Ghosts, the dungeon's
+// only ghost type, spawn from Tombs on numbered floors only; see
+// DungeonGhostSystem, _addTombs below). A distinct, local class rather
 // than importing MazeTorch itself — MazeSystem/DungeonSystem are
 // independent siblings (Interior System Pattern, CLAUDE.md); only the
 // shared visual constants are reused (DungeonPuzzleSystem's ignite check,
@@ -248,6 +250,21 @@ export class DungeonFloorGenerator {
     }
   }
 
+  // One Tomb ('T' — stateful container, see BackgroundObject.openTomb and
+  // InteractionSystem's 'openTomb' effect branch) per eligible floor.
+  // Unconditional placement, same "always exactly one" shape as
+  // _placeSkullIfDue's single bone pile, but every eligible floor gets one
+  // rather than one per dungeon visit. Called from the same 3 numbered-floor
+  // generators that call _addDecor (Entrance/Corridor/Branch) — Pyramid is a
+  // bare static edifice with zero enemies (_generatePyramid) and the side
+  // rooms (Trap Room/Puzzle Room) are bespoke authored layouts, so neither
+  // calls _addDecor either; Tomb placement follows that same footprint.
+  _addTombs(backgroundObjects, pickOpenCell, rows, cols) {
+    const cell = pickOpenCell(6, rows - 5, 2, cols - 3);
+    if (!cell) return;
+    backgroundObjects.push(new BackgroundObject('T', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE));
+  }
+
   _spawnEnemies(count, depth, zone, { collisionMap, backgroundObjects, pickOpenCell, rows, cols, spawnCells }) {
     const enemies = [];
     // Author-marked spots (template 'E' cells) go first, shuffled so a
@@ -340,6 +357,7 @@ export class DungeonFloorGenerator {
   _generateEntrance(depth, zone) {
     const { cols, rows, collisionMap, backgroundObjects, pickOpenCell, spawnCells } = this._buildScaffold();
     this._addDecor(backgroundObjects, pickOpenCell, rows, cols);
+    this._addTombs(backgroundObjects, pickOpenCell, rows, cols);
     this._placeSkullIfDue(0, { backgroundObjects, pickOpenCell, rows, cols });
 
     backgroundObjects.push(new BackgroundObject('∩', STAIRS_COL * GRID.CELL_SIZE, EXIT_ROW * GRID.CELL_SIZE));
@@ -359,7 +377,7 @@ export class DungeonFloorGenerator {
       roomKind: 'numbered',
       floorIndex: 0,
       gridCols: cols, gridRows: rows, collisionMap, backgroundObjects, enemies,
-      items: [], ingredients: [], npcs: [], doors: [],
+      items: [], ingredients: [], npcs: [], doors: [], tombGhosts: [],
       viewport: this._makeViewport(cols, rows),
       exitRow: EXIT_ROW, exitCol: STAIRS_COL,
       stairsUpRow: null, stairsUpCol: null, stairsUpObj: null, stairsUpLocked: false, ascendTo: null,
@@ -370,6 +388,7 @@ export class DungeonFloorGenerator {
   _generateCorridor(depth, zone) {
     const { cols, rows, collisionMap, backgroundObjects, pickOpenCell, spawnCells } = this._buildScaffold();
     this._addDecor(backgroundObjects, pickOpenCell, rows, cols);
+    this._addTombs(backgroundObjects, pickOpenCell, rows, cols);
     this._placeSkullIfDue(1, { backgroundObjects, pickOpenCell, rows, cols });
 
     const stairsUpObj = this._makeStairsUp(false);
@@ -402,7 +421,7 @@ export class DungeonFloorGenerator {
       roomKind: 'numbered',
       floorIndex: 1,
       gridCols: cols, gridRows: rows, collisionMap, backgroundObjects, enemies,
-      items: [], ingredients: [], npcs: [], doors: [],
+      items: [], ingredients: [], npcs: [], doors: [], tombGhosts: [],
       viewport: this._makeViewport(cols, rows),
       exitRow: null, exitCol: null,
       stairsUpRow: STAIRS_UP_ROW, stairsUpCol: STAIRS_COL, stairsUpObj, stairsUpLocked: false,
@@ -424,6 +443,7 @@ export class DungeonFloorGenerator {
     // this preserves clearance for).
     const { cols, rows, collisionMap, backgroundObjects, pickOpenCell, spawnCells } = this._buildScaffold({ useTemplate: false });
     this._addDecor(backgroundObjects, pickOpenCell, rows, cols);
+    this._addTombs(backgroundObjects, pickOpenCell, rows, cols);
     // No _placeSkullIfDue here — the skull key now only rolls onto Entrance
     // or Corridor (dungeonKeySkullFloor ∈ {0,1}), since it gates the door
     // *into* Branch and can't be found past its own lock.
@@ -478,7 +498,7 @@ export class DungeonFloorGenerator {
       roomKind: 'numbered',
       floorIndex: 2,
       gridCols: cols, gridRows: rows, collisionMap, backgroundObjects, enemies,
-      items: [], ingredients: [], npcs: [], doors: [],
+      items: [], ingredients: [], npcs: [], doors: [], tombGhosts: [],
       viewport: this._makeViewport(cols, rows),
       exitRow: null, exitCol: null,
       stairsUpRow: SPINE_ROW, stairsUpCol: WEST_COL, stairsUpObj, stairsUpLocked: false,
@@ -524,7 +544,7 @@ export class DungeonFloorGenerator {
       roomKind: 'numbered',
       floorIndex: 3,
       gridCols: cols, gridRows: rows, collisionMap, backgroundObjects, enemies: [],
-      items: [], ingredients: [], npcs: [], doors: [],
+      items: [], ingredients: [], npcs: [], doors: [], tombGhosts: [],
       viewport: this._makeViewport(cols, rows),
       exitRow: null, exitCol: null,
       stairsUpRow: SPINE_ROW, stairsUpCol: EAST_COL, stairsUpObj, stairsUpLocked: false,
@@ -585,7 +605,7 @@ export class DungeonFloorGenerator {
       roomKind: 'trapRoom',
       floorIndex: null,
       gridCols: cols, gridRows: rows, collisionMap, backgroundObjects, enemies,
-      items: [rewardItem], ingredients: [], npcs: [], doors: [],
+      items: [rewardItem], ingredients: [], npcs: [], doors: [], tombGhosts: [],
       viewport: this._makeViewport(cols, rows),
       exitRow: null, exitCol: null,
       stairsUpRow: STAIRS_UP_ROW, stairsUpCol: STAIRS_COL, stairsUpObj, stairsUpLocked: true,
@@ -732,7 +752,7 @@ export class DungeonFloorGenerator {
     // exit). `lit` is an optional per-entry starting flag (author can place
     // a torch already burning); everything else about the fixture is
     // identical whether it started lit or was lit by the player.
-    // Visual/lighting only (no ghost-shielding — dungeons have no ghosts;
+    // Visual/lighting only (no ghost-shielding — Puzzle Rooms have no ghosts;
     // see MazeSystem's own MazeTorch for the maze's fuller mechanic). Reuses
     // MazeSystem's exported visual constants directly — see PuzzleTorch
     // above, DungeonPuzzleSystem._updatePuzzleRoom, and HutInteriorOverlay's
@@ -786,7 +806,7 @@ export class DungeonFloorGenerator {
       templateName,
       floorIndex: null,
       gridCols: cols, gridRows: rows, collisionMap, backgroundObjects, enemies: [],
-      items, ingredients: [], npcs: [], doors: [],
+      items, ingredients: [], npcs: [], doors: [], tombGhosts: [],
       viewport: this._makeViewport(cols, rows),
       exitRow: null, exitCol: null,
       stairsUpRow: exitRow, stairsUpCol: exitCol, stairsUpObj, stairsUpLocked: true,

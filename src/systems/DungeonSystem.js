@@ -257,6 +257,13 @@ export class DungeonSystem {
     // Cooldown prevents the staircase we just came from from re-triggering
     game.player._hutEntryCooldown = 0.5;
 
+    // Tomb Ghost sap has no duration — "leaving the room" is its only escape
+    // (see DungeonGhostSystem). Every floor activation, including the very
+    // first entry, counts as leaving whatever room the player was just in.
+    game.player.tombSapped = false;
+    game.player._tombSapTimer = 0;
+    game.player._tombSappingGhost = null;
+
     if (!game.player.inDungeon) game.player.inDungeon = true;
     freezeSurfaceRoom(game);
 
@@ -369,6 +376,11 @@ export class DungeonSystem {
     game.player.inDungeon = false;
     game.player.hookedByMimic = null;
     game.player.hookedByWhip = null;
+    // Leaving the dungeon entirely also clears Tomb Ghost sap (the other
+    // half of its only-escape rule — see _activateFloor's per-room clear).
+    game.player.tombSapped = false;
+    game.player._tombSapTimer = 0;
+    game.player._tombSappingGhost = null;
     thawSurfaceRoom(game);
     game.player._hutEntryCooldown = 0.5;
 
@@ -453,6 +465,13 @@ export class DungeonSystem {
 
       // Update background objects
       for (const obj of floor.backgroundObjects) obj.update(dt);
+
+      // Tomb Ghosts — bespoke, non-Enemy chasers spawned by opening a Tomb
+      // (see DungeonGhostSystem). Independent of floor.enemies: homing +
+      // lemniscate movement, contact-sap, and periodic sap damage all live
+      // there, not in the enemy loop above.
+      game.dungeonGhostSystem.update(floor, dt);
+      game.dungeonGhostSystem.tickSap(game.player, dt);
 
       // Clamp player within dungeon interior bounds.
       // High-velocity knockback can cause checkAxisCollision to overshoot the

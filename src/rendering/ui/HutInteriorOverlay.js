@@ -293,6 +293,23 @@ export class HutInteriorOverlay {
     // ── 16c. Sapping enemies on top of player (bats latched on player) ────────
     this.renderController.exploreRenderer.drawSappingEnemies(game, game.activeFloor.enemies);
 
+    // ── 16c2. Tomb Ghosts (DungeonGhostSystem) — bespoke, not part of
+    //      game.activeFloor.enemies, so drawSappingEnemies above never sees
+    //      them; drawn the same way MazeInteriorOverlay draws its own
+    //      MazeGhosts (see that file's "6. Ghosts" block). Guarded: this
+    //      overlay is shared with Hut (InteriorOverlay.js), whose floor
+    //      objects carry no tombGhosts field at all.
+    if (game.activeFloor.tombGhosts) {
+      for (const ghost of game.activeFloor.tombGhosts) {
+        this.renderer.drawEntity(
+          ghost.position.x + GRID.CELL_SIZE / 2,
+          ghost.position.y + GRID.CELL_SIZE / 2,
+          ghost.char,
+          ghost.color
+        );
+      }
+    }
+
     // ── 16d. Trap throw reticule + in-flight throwables (interior plane) ──────
     this.renderController.exploreRenderer.drawTrapReticule(game);
     this.renderController.exploreRenderer.drawThrowPreview(game);

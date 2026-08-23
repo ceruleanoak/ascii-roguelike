@@ -111,6 +111,15 @@ export class InteriorManager {
       g.player.inAquifer = false;
       g.player.aquiferExitPosition = null;
       g.player.plane = 0;
+      // Tomb Ghost sap (DungeonGhostSystem) — DungeonSystem's own
+      // _activateFloor/_exitDungeon hooks already clear this on the normal
+      // room-leave/dungeon-exit paths; this is the defensive third
+      // clear-point for every other route through reset() (REST entry,
+      // cheat-warp room swaps) so the flag can never survive past an
+      // interior reset by some path DungeonSystem didn't anticipate.
+      g.player.tombSapped = false;
+      g.player._tombSapTimer = 0;
+      g.player._tombSappingGhost = null;
     }
   }
 
@@ -141,6 +150,28 @@ export class InteriorManager {
     if (p?.inMaze && g.mazeInterior) return [];
     if ((p?.inHut || p?.inDungeon) && g.activeFloor) return g.activeFloor.enemies;
     return g.currentRoom ? g.currentRoom.enemies : [];
+  }
+
+  // Strips destroyed entries from the surface room's background-object list
+  // (and the active interior floor's, when one is loaded) — both, not just
+  // whichever layer is active, since a stray destroyed object on the inactive
+  // layer needs cleanup too. In place, NOT `list = list.filter(...)`: enemies
+  // cache their room's array by reference once at spawn (Enemy.setBackgroundObjects,
+  // read every frame by enemyVision.js's obstructsPoint for vision-blocking
+  // checks), so reassigning the array here would silently orphan that
+  // reference from that frame on — anything pushed into the list afterward
+  // (e.g. Emerald Staff grass cast mid-fight) would never reach an
+  // already-spawned enemy's vision check.
+  pruneDestroyedBackgroundObjects() {
+    const g = this.game;
+    this._pruneDestroyed(g.currentRoom.backgroundObjects);
+    if (g.activeFloor) this._pruneDestroyed(g.activeFloor.backgroundObjects);
+  }
+
+  _pruneDestroyed(list) {
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i].destroyed) list.splice(i, 1);
+    }
   }
 
   activeGridBounds() {
