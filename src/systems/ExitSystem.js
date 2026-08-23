@@ -430,11 +430,11 @@ export class ExitSystem {
 
           // Apply secret events (key glitter, leshy chase, etc.)
           // Uses priority system - only 1 event per room
-          game.roomGenerator.applySecretEvents(room);
+          game.secretEventSystem.applySecretEvents(room);
 
           // E-room: spawn the errand traveler after enemies are cleared
           if (room.letterTemplate?.neutralAfterClear) {
-            const errandChar = game.errandSystem.onRoomClear(game.player);
+            const errandChar = game.errandSystem.onRoomClear(game.player, room);
             if (errandChar) game.neutralCharacters.push(errandChar);
           }
 
