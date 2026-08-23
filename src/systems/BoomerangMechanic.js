@@ -12,13 +12,15 @@ import { inSamePlane } from './PlaneSystem.js';
 // first overlaps the target, which can land a few pixels past the target's
 // exact cell center, and the search origin is the projectile's own position
 // rather than the struck switch's, so a flat 120 leaves too thin a margin.
-const SWITCH_BOUNCE_RADIUS = 150;
+const SWITCH_BOUNCE_RADIUS = 80;
 
-// Boomerang projectile behavior (Zelda-style: flies out, stuns the first enemy
-// it hits, ricochets between enemies on a charge-scaled budget, scoops up
-// ingredients, returns to the owner in a straight line). Composition module for
-// CombatSystem — all hooks are called from the projectile update/collision paths;
-// `combat` is the CombatSystem instance (damage numbers, hitstop, game ref).
+// Boomerang projectile behavior (Zelda-style: flies out, stuns and damages the
+// first enemy it hits, then ricochets between enemies on a charge-scaled
+// budget — each ricocheted enemy only takes knockback, not damage or stun —
+// scoops up ingredients, and returns to the owner in a straight line).
+// Composition module for CombatSystem — all hooks are called from the
+// projectile update/collision paths; `combat` is the CombatSystem instance
+// (damage numbers, hitstop, game ref).
 // Boomerangs ignore terrain slow and arrow deceleration: constant flight speed
 // is core to the return loop.
 export const BoomerangMechanic = {
@@ -141,33 +143,12 @@ export const BoomerangMechanic = {
     if (proj.boomerangBounceTarget === enemy) proj.boomerangBounceTarget = null;
   },
 
-  // Damaging hit landed: record this enemy as hit, defer the return timer, and on
-  // the very first hit also chain-damage nearby enemies in a tight radius. Then,
-  // if the charge-scaled ricochet budget allows, lock onto the nearest un-hit
-  // enemy in bounce range (per-frame homing in updateFlight guarantees the bounce
-  // lands); otherwise flip to return mode.
-  onEnemyHit(proj, enemy, enemies, combat) {
-    if (!proj._boomerangHitEnemies) proj._boomerangHitEnemies = new Set();
-    proj._boomerangHitEnemies.add(enemy);
-    this._stun(proj, enemy, combat);
-    proj.boomerangTimer += proj.boomerangHitDefer || 0.18;
-    if (!proj.boomerangHasHitFirst) {
-      proj.boomerangHasHitFirst = true;
-      const r = proj.chainRadius || 32;
-      for (const other of enemies) {
-        if (other === enemy) continue;
-        if (!inSamePlane(proj, other)) continue;
-        const ddx = other.position.x - enemy.position.x;
-        const ddy = other.position.y - enemy.position.y;
-        if (Math.hypot(ddx, ddy) > r) continue;
-        const chainDamaged = other.takeDamage(proj.damage, proj.attackId);
-        if (chainDamaged !== false) {
-          combat.createDamageNumber(proj.damage, other.position.x, other.position.y, other.color);
-          combat.physicsSystem.applyHitstop(other, 0.04);
-          proj._boomerangHitEnemies.add(other);
-        }
-      }
-    }
+  // Shared bounce-target acquisition, used after both the first hit (onEnemyHit)
+  // and every later ricochet hit (onRicochetHit): if the charge-scaled bounce
+  // budget allows, lock onto the nearest un-hit enemy in range (per-frame
+  // homing in updateFlight guarantees the bounce lands); otherwise flip to
+  // return mode.
+  _lockNextBounceTarget(proj, enemy, enemies) {
     const bounceRadius = proj.boomerangBounceRadius || 120;
     let bestTarget = null;
     let bestDist = Infinity;
@@ -196,6 +177,49 @@ export const BoomerangMechanic = {
       proj.boomerangBounceTarget = null;
       proj.boomerangReturning = true;
     }
+  },
+
+  // First (and only) damaging hit of the throw: CombatSystem's collision loop
+  // routes every later ricochet hit to onRicochetHit instead, so this only
+  // ever runs once per throw. Record the enemy as hit, stun it, defer the
+  // return timer, chain-damage nearby enemies in a tight radius (the initial
+  // impact's splash — never knocked back, see onRicochetHit for the knockback
+  // side of the ricochet chain), then try to lock onto the nearest un-hit
+  // enemy in bounce range.
+  onEnemyHit(proj, enemy, enemies, combat) {
+    if (!proj._boomerangHitEnemies) proj._boomerangHitEnemies = new Set();
+    proj._boomerangHitEnemies.add(enemy);
+    this._stun(proj, enemy, combat);
+    proj.boomerangTimer += proj.boomerangHitDefer || 0.18;
+    proj.boomerangHasHitFirst = true;
+    const r = proj.chainRadius || 32;
+    for (const other of enemies) {
+      if (other === enemy) continue;
+      if (!inSamePlane(proj, other)) continue;
+      const ddx = other.position.x - enemy.position.x;
+      const ddy = other.position.y - enemy.position.y;
+      if (Math.hypot(ddx, ddy) > r) continue;
+      const chainDamaged = other.takeDamage(proj.damage, proj.attackId);
+      if (chainDamaged !== false) {
+        combat.createDamageNumber(proj.damage, other.position.x, other.position.y, other.color);
+        combat.physicsSystem.applyHitstop(other, 0.04);
+        proj._boomerangHitEnemies.add(other);
+      }
+    }
+    this._lockNextBounceTarget(proj, enemy, enemies);
+  },
+
+  // Outbound ricochet hit (every enemy the boomerang bounces into after the
+  // first): no damage, no stun — just a knockback bonk out of the flight
+  // path — then the same bounce-target search as the first hit to keep the
+  // chain going while budget remains.
+  onRicochetHit(proj, enemy, enemies, combat) {
+    if (!proj._boomerangHitEnemies) proj._boomerangHitEnemies = new Set();
+    proj._boomerangHitEnemies.add(enemy);
+    if (proj.knockback) combat.applyKnockback(enemy, proj);
+    combat.physicsSystem.applyHitstop(enemy, 0.06);
+    proj.boomerangTimer += proj.boomerangHitDefer || 0.18;
+    this._lockNextBounceTarget(proj, enemy, enemies);
   },
 
   // Puzzle-room switch struck: unlike an enemy hit (stun + optional splash),

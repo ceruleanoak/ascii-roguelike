@@ -600,6 +600,15 @@ export class CombatSystem {
             continue;
           }
 
+          // Boomerang outbound ricochet (every hit after the first): knockback
+          // only, no damage/stun. Only the very first enemy the boomerang
+          // connects with takes damage and gets stunned; everything it
+          // bounces into afterward just gets bonked out of the flight path.
+          if (proj.boomerang && !proj.boomerangReturning && proj.boomerangHasHitFirst) {
+            BoomerangMechanic.onRicochetHit(proj, enemy, enemies, this);
+            continue;
+          }
+
           // Calculate arrow speed falloff (damage decreases as arrow slows down)
           let speedMultiplier = 1.0;
           if (proj.type === 'arrow' && proj.initialSpeed) {
@@ -681,8 +690,10 @@ export class CombatSystem {
             // immunity outcome above, each extra gets its own elemental check.
             applyExtraOnHitEffects(this, enemy, proj.extraOnHit, proj.color);
 
-            // Apply knockback
-            if (proj.knockback) {
+            // Apply knockback — boomerangs are excluded here: BoomerangMechanic
+            // applies knockback itself, and only on ricochet hits (see
+            // onRicochetHit), never on the first enemy hit.
+            if (proj.knockback && !proj.boomerang) {
               this.applyKnockback(enemy, proj);
             }
 
@@ -705,8 +716,10 @@ export class CombatSystem {
               this.createExplosion(proj.position.x, proj.position.y, proj.explodeRadius || 30, proj.damage, enemies, backgroundObjects, 0, planeOf(proj));
             }
 
-            // Boomerang: record hit, defer return timer, first-hit chain damage,
-            // then lock onto the nearest un-hit enemy in range or flip to return.
+            // Boomerang first hit: record it, stun, defer return timer, chain
+            // splash damage, then lock onto the nearest un-hit enemy in range
+            // or flip to return. Every later ricochet hit is intercepted above
+            // and never reaches this damage path.
             if (proj.boomerang) {
               BoomerangMechanic.onEnemyHit(proj, enemy, enemies, this);
               break;

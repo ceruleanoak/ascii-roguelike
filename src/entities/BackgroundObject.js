@@ -549,6 +549,18 @@ export class BackgroundObject {
       };
     }
 
+    // Puzzle-signal fixtures (dungeon puzzle-room switches/hook posts) take a hit from
+    // any weapon, not just melee — takeDamage() itself short-circuits on puzzleSignal
+    // before any HP mutation, pulsing glitterHit instead (see takeDamage above). Checked
+    // ahead of the generic bulletInteraction switch below because these fixtures use
+    // unregistered chars ('○'/'•'), which default to bulletInteraction: 'pass-through'
+    // and would otherwise never call takeDamage() at all. shouldDestroyBullet: true so a
+    // boomerang bounces into return mode off a struck switch exactly like it does off a wall.
+    if (this.puzzleSignal) {
+      const result = this.takeDamage(1);
+      return { bulletBehavior: 'block', effect: result.effect, shouldDestroyBullet: true, message: null, object: this };
+    }
+
     // Pass-through and pass-through-slow always win, even for indestructible objects
     if (this.bulletInteraction === 'pass-through' || this.bulletInteraction === 'pass-through-slow') {
       // fall through to switch below

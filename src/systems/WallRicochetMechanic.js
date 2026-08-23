@@ -20,7 +20,16 @@ export const WallRicochetMechanic = {
     const map = room.collisionMap;
     if (row < 0 || row >= map.length) return true;
     const rowArr = map[row];
-    return !rowArr || col < 0 || col >= rowArr.length || rowArr[col] === true;
+    if (!rowArr || col < 0 || col >= rowArr.length) return true;
+    if (rowArr[col] !== true) return false;
+    // Boomerangs fly, they don't walk — a puzzle-room Gap chasm ('G' cells,
+    // stamped solid into collisionMap same as an ordinary wall by
+    // applyPuzzleTemplateToCollisionMap, but tracked separately in
+    // room.gapCells since the flat boolean map can't distinguish the two)
+    // blocks the player, enemies, and every other projectile, but arcs
+    // overhead for a thrown boomerang instead of bouncing it back early.
+    if (proj.boomerang && room.gapCells?.has(`${row},${col}`)) return false;
+    return true;
   },
 
   isOutOfBounds(proj) {

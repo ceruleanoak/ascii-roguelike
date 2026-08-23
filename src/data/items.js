@@ -502,6 +502,7 @@ export const ITEMS = {
     boomerangHitDefer: 0.18,      // seconds added to the return timer per enemy hit
     boomerangMaxRicochets: 3,     // enemy-to-enemy bounces at full charge (0 at no charge)
     chainRadius: 32,              // ~1 cell — chain damage radius around first hit
+    knockback: 150,               // ricochet-only bonk (see BoomerangMechanic.onRicochetHit) — first hit and chain splash never knock back
     color: '#ffaa44'
   },
   // Slingshot: the Sling strung onto a proper Y-frame. Still a bow-slot weapon

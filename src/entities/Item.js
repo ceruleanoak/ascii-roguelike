@@ -1344,6 +1344,7 @@ export class Item {
       extraOnHit,
       electric: this.data.electric,
       homing: this.data.homing,
+      knockback: this.data.knockback,
       pierce: this.data.pierce || isBoomerang,  // Boomerang: pierce so wall/single-hit doesn't despawn it
       split: this.data.split,
       splitCount: this.data.splitCount || 3,
