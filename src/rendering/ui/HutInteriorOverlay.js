@@ -68,16 +68,30 @@ export class HutInteriorOverlay {
           // template's 'G' cells) — reads as a crossable-by-reach-only void
           // rather than an ordinary blocked tile: true void (skip draw, bare
           // panel background shows through) in the interior of a gap band;
-          // an edge glyph on the boundary row facing the walkable side (row
-          // above is non-gap → '∧' points up at it, else '∨' points down).
+          // an edge glyph on the boundary cell facing the walkable side. All
+          // four orthogonal neighbors are checked (not just row-above/below)
+          // so gap shapes with a horizontal edge — e.g. Boomerang Trial's
+          // hourglass, which narrows and widens along columns rather than
+          // just rows — get an edge glyph instead of silently reading as
+          // void; vertical takes priority on the shape's outer corners
+          // (open on both axes at once) since '∧'/'∨' is the established
+          // look and a 5th diagonal glyph isn't worth the extra case.
           if (gapCells) {
             const isGap = gapCells.has(`${r},${c}`);
             if (isGap) {
               const aboveGap = gapCells.has(`${r - 1},${c}`);
               const belowGap = gapCells.has(`${r + 1},${c}`);
-              if (aboveGap && belowGap) continue; // interior of the gap — true void
+              const leftGap = gapCells.has(`${r},${c - 1}`);
+              const rightGap = gapCells.has(`${r},${c + 1}`);
+              if (aboveGap && belowGap && leftGap && rightGap) continue; // fully enclosed — true void
+              let glyph;
+              if (!aboveGap || !belowGap) {
+                glyph = aboveGap ? '∨' : '∧';
+              } else {
+                glyph = leftGap ? '>' : '<';
+              }
               ctx.fillStyle = '#6a4830';
-              ctx.fillText(aboveGap ? '∨' : '∧', c * CS + CS / 2, r * CS + CS / 2);
+              ctx.fillText(glyph, c * CS + CS / 2, r * CS + CS / 2);
               continue;
             }
           }
@@ -93,20 +107,38 @@ export class HutInteriorOverlay {
     // Maze-parity rendering (mirrors MazeInteriorOverlay's own torch block
     // exactly, reusing the same exported MazeSystem constants) minus
     // ghost-shielding, which dungeons have no use for.
-    if (game.activeFloor.torches) {
+    //
+    // Two independent torch sources share this exact glyph/glow draw:
+    // decorative ambient torches (game.activeFloor.torches, lit state on
+    // `.lit`, never gates anything) and torch-KIND puzzle triggers
+    // (game.activeFloor.triggers, lit state on `.active` — see
+    // DungeonPuzzleSystem._updatePuzzleRoom's torch branch, which feeds the
+    // exit-unlock check). Different field names because they're genuinely
+    // different lifecycles; drawTorchFixture takes the already-resolved lit
+    // boolean so the pulse/glow math lives in one place instead of twice.
+    {
       const CS = GRID.CELL_SIZE;
-      for (const torch of game.activeFloor.torches) {
-        const cx = torch.col * CS + CS / 2;
-        const cy = torch.row * CS + CS / 2;
+      const drawTorchFixture = (fixture, lit) => {
+        const cx = fixture.col * CS + CS / 2;
+        const cy = fixture.row * CS + CS / 2;
 
-        if (torch.lit) {
-          const s = 0.5 + 0.5 * Math.sin(torch.pulseTimer * TORCH_PULSE_SPEED);
+        if (lit) {
+          const s = 0.5 + 0.5 * Math.sin(fixture.pulseTimer * TORCH_PULSE_SPEED);
           const alpha = TORCH_ALPHA_LOW + (TORCH_ALPHA_HIGH - TORCH_ALPHA_LOW) * s;
           this.renderer.drawCircle(cx, cy, TORCH_LIGHT_RADIUS, TORCH_LIT_COLOR, true, alpha);
         }
 
-        ctx.fillStyle = torch.lit ? TORCH_LIT_COLOR : TORCH_UNLIT_COLOR;
-        ctx.fillText(torch.char, cx, cy);
+        ctx.fillStyle = lit ? TORCH_LIT_COLOR : TORCH_UNLIT_COLOR;
+        ctx.fillText(fixture.char, cx, cy);
+      };
+
+      if (game.activeFloor.torches) {
+        for (const torch of game.activeFloor.torches) drawTorchFixture(torch, torch.lit);
+      }
+      if (game.activeFloor.triggers) {
+        for (const trigger of game.activeFloor.triggers) {
+          if (trigger.kind === 'torch') drawTorchFixture(trigger, trigger.active);
+        }
       }
     }
 
@@ -174,9 +206,8 @@ export class HutInteriorOverlay {
     const weaponsMasterCoinAnim = game.weaponsMasterSystem?.getCoinAnim?.();
     if (weaponsMasterCoinAnim) drawCoinArc(this.renderer, weaponsMasterCoinAnim);
 
-    // Shopkeeper coin pay — same shared spinning-arc draw helper.
-    const shopCoinAnim = game.shopSystem?.getCoinAnim?.();
-    if (shopCoinAnim) drawCoinArc(this.renderer, shopCoinAnim);
+    // Shopkeeper purchases are menu-confirmed (ShopSystem's barter modal) —
+    // no coin-arc animation, just the shared coin_plink SFX for parity.
 
     // Fisherman coin-demo fish — transient marker beside the NPC while he
     // demonstrates cutting the catch open.

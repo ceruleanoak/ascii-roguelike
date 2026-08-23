@@ -147,17 +147,22 @@ export class DungeonPuzzleSystem {
 
   // Puzzle Room — generic template-driven puzzle side room (see
   // DungeonFloorGenerator.generatePuzzleRoom). Every trigger in room.triggers
-  // (a 'switch', strike-triggered via the puzzleSignal/glitterHit contract,
-  // or a 'panel', occupancy-triggered like Branch's own switches)
-  // runs through the shared _advanceTrigger state machine; the exit unlocks
-  // once every trigger is active at once — the generalized form of both
-  // Branch's own "all at once" solve rule and the original Whip Trial's
-  // "both switches struck together" rule (now itself just an
-  // editor-authored template, whip_trial.json), extended to any trigger
-  // count/mix. Hook posts and torches (below) are independent of the
-  // trigger/solve state — they keep working before, during, and after the
-  // room is solved (a hook post is a traversal aid, not a one-time gate; a
-  // torch is pure ambience) — so both run before the solved early-return.
+  // (a 'switch', strike-triggered via the puzzleSignal/glitterHit contract;
+  // a 'panel', occupancy-triggered like Branch's own switches; or a 'torch',
+  // ignited by the same proximity + held-Torch-item contract as a decorative
+  // PuzzleTorch below) runs through the shared _advanceTrigger state
+  // machine; the exit unlocks once every trigger is active at once — the
+  // generalized form of both Branch's own "all at once" solve rule and the
+  // original Whip Trial's "both switches struck together" rule (now itself
+  // just an editor-authored template, whip_trial.json), extended to any
+  // trigger count/mix. Hook posts and the DECORATIVE torches below
+  // (room.torches, not room.triggers) are independent of the trigger/solve
+  // state — they keep working before, during, and after the room is solved
+  // (a hook post is a traversal aid, not a one-time gate; a decorative torch
+  // is pure ambience) — so both run before the solved early-return. A
+  // torch-KIND trigger is the opposite of that decorative torch: it's a real
+  // gate, so it's handled in the triggers loop below like switch/panel, not
+  // up here.
   _updatePuzzleRoom(room, dt) {
     const { game } = this;
     const player = game.player;
@@ -196,14 +201,29 @@ export class DungeonPuzzleSystem {
       if (trigger.kind === 'switch') {
         isTriggeredNow = !!trigger.glitterHit;
         trigger.glitterHit = false;
-      } else { // 'panel' — occupancy, same contract as Branch's own switches
+      } else if (trigger.kind === 'panel') { // occupancy, same contract as Branch's own switches
         const px = trigger.position.x, py = trigger.position.y;
         isTriggeredNow = this._overlapsCell(player, px, py)
           || (companion ? this._overlapsCell(companion, px, py) : false);
+      } else { // 'torch' — ignite via proximity + held Torch item, same contract
+               // as a decorative PuzzleTorch; authored activation is always
+               // 'permanent' (validated at save time) since a lit torch never
+               // reverts, so once true this stays true regardless of dt below.
+        trigger.pulseTimer += dt;
+        isTriggeredNow = !trigger.active
+          && player.heldItem?.data?.name === 'Torch'
+          && this._within(player.position, trigger.position, TORCH_INTERACT_RADIUS);
       }
       const wasActive = trigger.active;
       this._advanceTrigger(trigger, dt, isTriggeredNow);
-      if (trigger.active !== wasActive) this._setTriggerVisual(trigger, trigger.active);
+      // Torch-kind triggers render themselves every frame from `.active`
+      // directly (HutInteriorOverlay's shared torch-fixture draw, same as a
+      // decorative torch) rather than mutating char/color fields on a
+      // BackgroundObject, so _setTriggerVisual — which only knows the
+      // switch ○/● and panel ▭/▬ glyph pairs — doesn't apply here.
+      if (trigger.active !== wasActive && trigger.kind !== 'torch') {
+        this._setTriggerVisual(trigger, trigger.active);
+      }
     }
 
     if (room.triggers.length && room.triggers.every(t => t.active)) {
@@ -284,7 +304,7 @@ export class DungeonPuzzleSystem {
     const { game } = this;
     const west = floor.descents.find(d => d.id === 'west');
     if (!west || !west.locked) return false;
-    if (!game.inventorySystem.hasKeyItem('⚿')) return false;
+    if (!game.inventorySystem.hasKeyItem('⚿', game)) return false;
     if (!this._overlapsCell(game.player, west.obj.position.x, west.obj.position.y)) return false;
 
     game.inventorySystem.consumeKeyItem('⚿');

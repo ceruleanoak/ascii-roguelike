@@ -54,6 +54,7 @@
   ],
   "pedestal": {
     "row": 7,
-    "col": 12
+    "col": 12,
+    "weaponChar": "≋"
   }
 }

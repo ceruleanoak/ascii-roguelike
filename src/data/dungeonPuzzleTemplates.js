@@ -19,13 +19,18 @@
 //
 // Triggers: { row, col, kind, activation, neutralizeSeconds }
 //   kind: 'switch' (strike-triggered, puzzleSignal+glitterHit — same
-//         contract as the Whip Trial's switches) or 'panel' (occupancy-
-//         triggered — same contract as Branch's own switches,
-//         just renamed/generalized so it can coexist with 'switch' as a
-//         visually distinct element in the same room).
+//         contract as the Whip Trial's switches), 'panel' (occupancy-
+//         triggered — same contract as Branch's own switches, just
+//         renamed/generalized so it can coexist with 'switch' as a visually
+//         distinct element in the same room), or 'torch' (ignite-triggered
+//         — same proximity + held-Torch-item contract as a decorative torch
+//         fixture below, but this one counts toward the exit-unlock check).
+//         A torch-kind trigger is always activation: 'permanent' (a lit
+//         torch never reverts) — 'timed' is rejected for this kind.
 //   activation: 'permanent' (once triggered, stays active forever) or
 //         'timed' (reverts to inactive neutralizeSeconds after the last
-//         trigger pulse/occupancy ends — required, > 0, when timed).
+//         trigger pulse/occupancy ends — required, > 0, when timed; not
+//         valid for kind:'torch', see above).
 // The room's exit unlocks once every trigger in the list is active at once
 // (DungeonPuzzleSystem._updatePuzzleRoom) — the generalized form of the
 // Whip Trial's "both switches struck within the same swing" rule and the
@@ -38,13 +43,19 @@
 //   PhysicsSystem owns the actual traversal) — the mechanic the original
 //   Whip Trial used to cross its gap.
 //
-// torches: [{ row, col }] — maze-parity ignite fixtures (unlit until the
-//   player approaches while wielding the Torch item, permanent once lit,
-//   pulsing glow). Visual/lighting only — no ghost-shielding, since
-//   dungeons have no ghosts (contrast MazeSystem's own MazeTorch).
+// torches: [{ row, col, lit }] — DECORATIVE maze-parity ignite fixtures,
+//   unrelated to the trigger system above (contrast kind:'torch' triggers,
+//   which look identical but do gate the exit). Unlit until the player
+//   approaches while wielding the Torch item, permanent once lit, pulsing
+//   glow. `lit` is optional (defaults false) — set true to author a torch
+//   that starts already burning. Visual/lighting only — no ghost-shielding,
+//   since dungeons have no ghosts (contrast MazeSystem's own MazeTorch).
 //
-// pedestal: { row, col } | absent — opt-in weapon-tutorial marker. When
-//   present, generatePuzzleRoom grants a real pickup-able weapon (via
+// pedestal: { row, col, weaponChar } | absent — opt-in weapon-tutorial
+//   marker. weaponChar is any character an existing recipe produces (typed
+//   freely in the dungeon editor's Pedestal tool, checked against
+//   recipes.js at save time — not a fixed list). When present,
+//   generatePuzzleRoom grants a real pickup-able copy of that weapon (via
 //   pickWeaponTutorial()) flanked by decorative recipe-ingredient chrome,
 //   anchored on this cell's column (mirrors the original Whip Trial's own
 //   hardcoded pedestal, now authorable by any template).
@@ -53,8 +64,9 @@
 // pickRandomPuzzleTemplateName below) — every named template participates,
 // same as dungeonFloorTemplates.js's numbered-floor pool.
 
-import sampleTwoTriggersTemplate from './dungeon/puzzleTemplates/sample_two_triggers.json';
 import whipTrialTemplate from './dungeon/puzzleTemplates/whip_trial.json';
+import boomerangTrialTemplate from './dungeon/puzzleTemplates/boomerang_trial.json';
+import torchTrialTemplate from './dungeon/puzzleTemplates/torch_trial.json';
 
 // Named templates, loaded from src/data/dungeon/puzzleTemplates/*.json.
 // Adding a new one (via the editor or by hand) needs a JSON file plus one
@@ -62,13 +74,14 @@ import whipTrialTemplate from './dungeon/puzzleTemplates/whip_trial.json';
 // weighted pool below and DungeonSystem.ensureFloorGenerated both discover
 // it automatically via this map).
 export const PUZZLE_ROOM_TEMPLATES = {
-  sample_two_triggers: sampleTwoTriggersTemplate,
   whip_trial: whipTrialTemplate,
+  boomerang_trial: boomerangTrialTemplate,
+  torch_trial: torchTrialTemplate,
 };
 
-/** Look up a template by name, falling back to the bundled sample if the name is unknown. */
+/** Look up a template by name, falling back to Whip Trial if the name is unknown. */
 export function getPuzzleTemplate(templateName) {
-  return PUZZLE_ROOM_TEMPLATES[templateName] ?? PUZZLE_ROOM_TEMPLATES.sample_two_triggers;
+  return PUZZLE_ROOM_TEMPLATES[templateName] ?? PUZZLE_ROOM_TEMPLATES.whip_trial;
 }
 
 // Selection weights, read from each template's own JSON — mirrors
@@ -96,7 +109,7 @@ export function pickRandomPuzzleTemplateName(excludeNames = null) {
     r -= t.weight;
     if (r < 0) return t.name;
   }
-  return pool[0]?.name ?? 'sample_two_triggers';
+  return pool[0]?.name ?? 'whip_trial';
 }
 
 /** Stamp a template's wall cells ('#') and gap cells ('G') onto an existing collisionMap — both solid. */

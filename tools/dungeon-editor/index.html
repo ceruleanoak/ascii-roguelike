@@ -137,15 +137,20 @@
         <button class="tool" data-tool="exit">X  Exit</button>
         <button class="tool" data-tool="switch">○  Switch</button>
         <button class="tool" data-tool="panel">▭  Floor Panel</button>
+        <button class="tool" data-tool="torchtrigger">!  Torch (Trigger)</button>
         <button class="tool" data-tool="hookpost">•  Hook Post</button>
-        <button class="tool" data-tool="torch">!  Torch</button>
+        <button class="tool" data-tool="torch">!  Torch (Ambient)</button>
         <button class="tool" data-tool="pedestal">P  Pedestal</button>
         <div id="exitCount" class="doorCount"></div>
         <h4>Weight</h4>
         <input id="puzzleWeightInput" type="number" min="0" step="1" style="width:100%" />
         <h4>Triggers</h4>
         <div id="triggerList"></div>
-        <div class="hint">Switch = struck by a weapon attack. Floor Panel = triggered by standing on it. With Switch/Panel selected, click an empty floor cell to place one, click an existing one to remove it. Permanent stays active forever once triggered; Timed reverts after its neutralize-seconds unless re-triggered. The exit unlocks once every trigger is active at the same time. Gap is an impassable void — paints like Wall/Water. Hook Post and Torch are click-only toggles like Switch/Panel. Pedestal is a single opt-in weapon-tutorial marker (click to place, click again to remove). Every fixture must sit on plain floor and only one may occupy a cell.</div>
+        <h4>Torches (Ambient)</h4>
+        <div id="torchList"></div>
+        <h4>Pedestal</h4>
+        <div id="pedestalEditor"></div>
+        <div class="hint">Switch = struck by a weapon attack. Floor Panel = triggered by standing on it. Torch (Trigger) = lit by approaching while holding a Torch, same as Torch (Ambient) below, but counts toward the exit unlock. With Switch/Panel/Torch (Trigger) selected, click an empty floor cell to place one, click an existing one to remove it. Permanent stays active forever once triggered; Timed reverts after its neutralize-seconds unless re-triggered (Torch triggers are always permanent). The exit unlocks once every trigger is active at the same time. Gap is an impassable void — paints like Wall/Water. Hook Post and Torch (Ambient) are click-only toggles like Switch/Panel — Torch (Ambient) never gates the exit, it's pure ambience, and can be authored already lit via the checkbox below. Pedestal is a single opt-in weapon-tutorial marker (click to place, click again to remove) — type the exact character of any existing crafted weapon into the field above; Save checks it against the recipe list. Every fixture must sit on plain floor and only one may occupy a cell.</div>
       </div>
     </div>
   </div>
@@ -198,6 +203,8 @@
   const doorCountEl = document.getElementById('doorCount');
   const exitCountEl = document.getElementById('exitCount');
   const triggerListEl = document.getElementById('triggerList');
+  const torchListEl = document.getElementById('torchList');
+  const pedestalEditorEl = document.getElementById('pedestalEditor');
   const modal = document.getElementById('modal');
   const modalMsg = document.getElementById('modalMsg');
   const modalInput = document.getElementById('modalInput');
@@ -317,11 +324,12 @@
     if (!currentData || !currentData.triggers) return;
     for (const t of currentData.triggers) {
       const x = t.col * CELL, y = t.row * CELL;
-      const isSwitch = t.kind === 'switch';
-      ctx.fillStyle = isSwitch ? '#e0a040' : '#7aa2ff';
+      const glyph = t.kind === 'switch' ? '○' : t.kind === 'torch' ? '!' : '▭';
+      const color = t.kind === 'switch' ? '#e0a040' : t.kind === 'torch' ? '#ffaa33' : '#7aa2ff';
+      ctx.fillStyle = color;
       ctx.fillRect(x, y, CELL, CELL);
       ctx.fillStyle = '#0a0a12';
-      ctx.fillText(isSwitch ? '○' : '▭', x + CELL / 2, y + CELL / 2 + 1);
+      ctx.fillText(glyph, x + CELL / 2, y + CELL / 2 + 1);
     }
   }
   // Hook posts / torches / the pedestal — same overlay-pass reasoning as
@@ -382,6 +390,8 @@
       updateDoorCount();
       updateExitCount();
       renderTriggerList();
+      renderTorchList();
+      renderPedestalEditor();
       return;
     }
 
@@ -411,6 +421,8 @@
     updateExitCount();
     checkReachability();
     renderTriggerList();
+    renderTorchList();
+    renderPedestalEditor();
   }
 
   // Advisory only — never blocks Save. With the footprint reservation now
@@ -509,16 +521,16 @@
   // sit on plain floor, so none can survive under one).
   function applyPuzzleTool(row, col, isClick) {
     if (isBorderRingPuzzle(row, col)) return;
-    if (activeTool === 'switch' || activeTool === 'panel') {
+    if (activeTool === 'switch' || activeTool === 'panel' || activeTool === 'torchtrigger') {
       if (!isClick) return; // ignore drag-continuation — this is a toggle, not a brush
       const existing = findTriggerAt(row, col);
       if (existing) {
         currentData.triggers = currentData.triggers.filter(t => t !== existing);
       } else if (currentData.grid[row][col] === '.' && !anyFixtureAt(row, col)) {
         currentData.triggers.push(
-          activeTool === 'switch'
-            ? { row, col, kind: 'switch', activation: 'timed', neutralizeSeconds: 0.25 }
-            : { row, col, kind: 'panel', activation: 'permanent' }
+          activeTool === 'switch' ? { row, col, kind: 'switch', activation: 'timed', neutralizeSeconds: 0.25 }
+          : activeTool === 'panel' ? { row, col, kind: 'panel', activation: 'permanent' }
+          : { row, col, kind: 'torch', activation: 'permanent' } // torch triggers are always permanent — a lit torch never reverts
         );
       } else {
         return; // must sit on plain floor, and not already hold another fixture
@@ -562,7 +574,11 @@
       if (isPedestalAt(row, col)) {
         currentData.pedestal = null;
       } else if (currentData.grid[row][col] === '.' && !anyFixtureAt(row, col)) {
-        currentData.pedestal = { row, col };
+        // weaponChar starts blank — typed in via the Pedestal field in the
+        // sidebar (renderPedestalEditor), same as a freshly-placed trigger
+        // defaults to timed/0.25s and gets refined there. Save will flag a
+        // still-blank weaponChar rather than silently accepting it.
+        currentData.pedestal = { row, col, weaponChar: '' };
       } else {
         return;
       }
@@ -665,8 +681,9 @@
     } else if (mode === 'puzzle') {
       puzzleWeightInput.value = currentData ? (currentData.weight ?? 1) : 1;
     }
-    // Triggers/hook posts/torches/pedestal are edited directly on the canvas
-    // and via renderTriggerList() — no other scalar props in puzzle mode.
+    // Triggers/hook posts/torches/pedestal are placed directly on the canvas
+    // and edited via renderTriggerList()/renderPedestalEditor() — no other
+    // scalar props in puzzle mode.
   }
 
   // Rebuilds the sidebar's per-trigger editor rows (kind/position label,
@@ -690,36 +707,46 @@
 
       const label = document.createElement('span');
       label.className = 'triggerLabel';
-      label.textContent = (t.kind === 'switch' ? '○' : '▭') + ' ' + t.row + ',' + t.col;
+      const glyph = t.kind === 'switch' ? '○' : t.kind === 'torch' ? '!' : '▭';
+      label.textContent = glyph + ' ' + t.row + ',' + t.col;
       row.appendChild(label);
 
-      const actSel = document.createElement('select');
-      for (const opt of ['permanent', 'timed']) {
-        const o = document.createElement('option');
-        o.value = opt; o.textContent = opt;
-        if (t.activation === opt) o.selected = true;
-        actSel.appendChild(o);
-      }
-      actSel.onchange = () => {
-        t.activation = actSel.value;
-        if (t.activation === 'timed' && !(Number.isFinite(t.neutralizeSeconds) && t.neutralizeSeconds > 0)) {
-          t.neutralizeSeconds = 0.25;
-        } else if (t.activation === 'permanent') {
-          delete t.neutralizeSeconds;
+      if (t.kind === 'torch') {
+        // Torch triggers are always permanent (ignite once, never revert) —
+        // no activation choice to offer, unlike Switch/Panel.
+        const note = document.createElement('span');
+        note.className = 'triggerLabel';
+        note.textContent = 'permanent (ignite)';
+        row.appendChild(note);
+      } else {
+        const actSel = document.createElement('select');
+        for (const opt of ['permanent', 'timed']) {
+          const o = document.createElement('option');
+          o.value = opt; o.textContent = opt;
+          if (t.activation === opt) o.selected = true;
+          actSel.appendChild(o);
         }
-        dirty = true;
-        renderTriggerList();
-      };
-      row.appendChild(actSel);
+        actSel.onchange = () => {
+          t.activation = actSel.value;
+          if (t.activation === 'timed' && !(Number.isFinite(t.neutralizeSeconds) && t.neutralizeSeconds > 0)) {
+            t.neutralizeSeconds = 0.25;
+          } else if (t.activation === 'permanent') {
+            delete t.neutralizeSeconds;
+          }
+          dirty = true;
+          renderTriggerList();
+        };
+        row.appendChild(actSel);
 
-      if (t.activation === 'timed') {
-        const secInput = document.createElement('input');
-        secInput.type = 'number';
-        secInput.min = '0.05';
-        secInput.step = '0.05';
-        secInput.value = t.neutralizeSeconds ?? 0.25;
-        secInput.oninput = () => { t.neutralizeSeconds = Number(secInput.value) || 0.05; dirty = true; };
-        row.appendChild(secInput);
+        if (t.activation === 'timed') {
+          const secInput = document.createElement('input');
+          secInput.type = 'number';
+          secInput.min = '0.05';
+          secInput.step = '0.05';
+          secInput.value = t.neutralizeSeconds ?? 0.25;
+          secInput.oninput = () => { t.neutralizeSeconds = Number(secInput.value) || 0.05; dirty = true; };
+          row.appendChild(secInput);
+        }
       }
 
       const del = document.createElement('button');
@@ -733,6 +760,103 @@
 
       triggerListEl.appendChild(row);
     }
+  }
+
+  // Sidebar editor rows for decorative ambient torches (placed via the
+  // "Torch (Ambient)" tool) — only property is the optional starting `lit`
+  // state (state 1: pre-lit / state 2: unlit, both never gate the exit —
+  // contrast the "Torch (Trigger)" tool's rows in renderTriggerList above,
+  // which do). Mirrors renderTriggerList's row-per-fixture pattern.
+  function renderTorchList() {
+    if (mode !== 'puzzle') { torchListEl.innerHTML = ''; return; }
+    torchListEl.innerHTML = '';
+    const torches = currentData && currentData.torches ? currentData.torches : [];
+    if (!torches.length) {
+      const empty = document.createElement('div');
+      empty.className = 'triggerLabel';
+      empty.textContent = 'None placed.';
+      torchListEl.appendChild(empty);
+      return;
+    }
+    for (const t of torches) {
+      const row = document.createElement('div');
+      row.className = 'triggerRow';
+
+      const label = document.createElement('span');
+      label.className = 'triggerLabel';
+      label.textContent = '! ' + t.row + ',' + t.col;
+      row.appendChild(label);
+
+      const litLabel = document.createElement('label');
+      litLabel.style.display = 'flex';
+      litLabel.style.alignItems = 'center';
+      litLabel.style.gap = '4px';
+      const litCheck = document.createElement('input');
+      litCheck.type = 'checkbox';
+      litCheck.checked = !!t.lit;
+      litCheck.onchange = () => { t.lit = litCheck.checked; dirty = true; };
+      litLabel.appendChild(litCheck);
+      litLabel.appendChild(document.createTextNode('start lit'));
+      row.appendChild(litLabel);
+
+      const del = document.createElement('button');
+      del.textContent = '×';
+      del.onclick = () => {
+        currentData.torches = currentData.torches.filter(x => x !== t);
+        dirty = true;
+        render();
+      };
+      row.appendChild(del);
+
+      torchListEl.appendChild(row);
+    }
+  }
+
+  // Free-text entry for the pedestal's granted weapon character — any
+  // character an existing recipe produces (checked by main.js's
+  // validatePuzzleTemplate against recipes.js at save time, not a fixed
+  // dropdown of pre-registered tutorials). Mirrors renderTriggerList's
+  // row-per-fixture pattern; only ever zero or one row since a template has
+  // at most one pedestal.
+  function renderPedestalEditor() {
+    if (mode !== 'puzzle') { pedestalEditorEl.innerHTML = ''; return; }
+    pedestalEditorEl.innerHTML = '';
+    const p = currentData && currentData.pedestal;
+    if (!p) {
+      const empty = document.createElement('div');
+      empty.className = 'triggerLabel';
+      empty.textContent = 'None placed.';
+      pedestalEditorEl.appendChild(empty);
+      return;
+    }
+
+    const row = document.createElement('div');
+    row.className = 'triggerRow';
+
+    const label = document.createElement('span');
+    label.className = 'triggerLabel';
+    label.textContent = 'P ' + p.row + ',' + p.col;
+    row.appendChild(label);
+
+    const charInput = document.createElement('input');
+    charInput.type = 'text';
+    charInput.maxLength = 2; // room for a single Unicode symbol outside the BMP
+    charInput.placeholder = 'char';
+    charInput.style.width = '48px';
+    charInput.value = p.weaponChar || '';
+    charInput.oninput = () => { p.weaponChar = charInput.value.trim(); dirty = true; };
+    row.appendChild(charInput);
+
+    const del = document.createElement('button');
+    del.textContent = '×';
+    del.onclick = () => {
+      currentData.pedestal = null;
+      dirty = true;
+      render();
+    };
+    row.appendChild(del);
+
+    pedestalEditorEl.appendChild(row);
   }
 
   async function selectItem(name) {
@@ -843,7 +967,7 @@
       setStatus('Cannot delete "open" — it\'s the code\'s hardcoded template fallback.', true);
       return;
     }
-    if (mode === 'puzzle' && (currentName === 'sample_two_triggers' || currentName === 'whip_trial')) {
+    if (mode === 'puzzle' && (currentName === 'whip_trial' || currentName === 'boomerang_trial' || currentName === 'torch_trial')) {
       setStatus('Cannot delete "' + currentName + '" — it\'s statically imported by dungeonPuzzleTemplates.js.', true);
       return;
     }

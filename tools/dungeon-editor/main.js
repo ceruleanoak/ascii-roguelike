@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { pathToFileURL } = require('url');
 
 // Dungeon layout editor — three edit modes, one tool (plan Phase 1, see
 // ~/.claude/plans/need-a-dungeon-layout-parallel-haven.md; Puzzle mode added
@@ -29,6 +30,23 @@ const PUZZLE_ROWS = 24;
 // Exterior designs are a fixed set, one per zone — not a free collection.
 const DESIGN_COLS = 30;
 const DESIGN_ROWS = 30;
+
+// Pedestal weaponChar validation reads recipes.js's own findRecipeByResult
+// live, via Node's dynamic import() of that ES module from this CommonJS
+// main process — unlike the small geometry helpers above (reservedFootprintCells),
+// hand-duplicating an entire recipe catalog here would silently drift from
+// the game's actual recipes as they're rebalanced. import() works regardless
+// of the importer's module type; recipes.js resolves as ESM from the
+// project root's own package.json ("type": "module"). Cached after first
+// load since recipes.js has no reason to change mid-session.
+let _recipesModulePromise = null;
+function loadRecipesModule() {
+  if (!_recipesModulePromise) {
+    const recipesPath = path.join(__dirname, '..', '..', 'src', 'data', 'recipes.js');
+    _recipesModulePromise = import(pathToFileURL(recipesPath).href);
+  }
+  return _recipesModulePromise;
+}
 
 function readJSON(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -199,8 +217,8 @@ ipcMain.handle('design-save', (_e, zone, data) => {
 
 // ═══════════════════════════════════════════════════════════════
 // Puzzle — puzzle-room templates (src/data/dungeon/puzzleTemplates/*.json)
-// Grid + a trigger list (switches/floor panels), consumed at runtime by
-// DungeonFloorGenerator.generatePuzzleRoom / DungeonPuzzleSystem.
+// Grid + a trigger list (switches/floor panels/torches), consumed at
+// runtime by DungeonFloorGenerator.generatePuzzleRoom / DungeonPuzzleSystem.
 // ═══════════════════════════════════════════════════════════════
 
 function resolvePuzzleTemplatePath(name) {
@@ -225,8 +243,9 @@ function listPuzzleTemplates() {
 // Defense in depth against hand-edited files — the renderer already makes
 // walls/the exit non-paintable over each other and keeps the trigger list
 // in sync with placed fixtures, but a save is re-validated here regardless
-// (same posture as validateFloorTemplate/validateDesign above).
-function validatePuzzleTemplate(data) {
+// (same posture as validateFloorTemplate/validateDesign above). Async
+// because the pedestal check below resolves recipes.js via dynamic import().
+async function validatePuzzleTemplate(data) {
   if (!data || typeof data !== 'object') return 'Not an object.';
   if (!Number.isFinite(data.weight) || data.weight < 0) return 'weight must be a number >= 0.';
   if (!Array.isArray(data.grid) || data.grid.length !== PUZZLE_ROWS) {
@@ -271,9 +290,17 @@ function validatePuzzleTemplate(data) {
     seen.add(key);
     const cellChar = data.grid[t.row][t.col];
     if (cellChar !== '.') return `trigger ${i} at (${t.row},${t.col}) must sit on plain floor ('.'), not "${cellChar}".`;
-    if (t.kind !== 'switch' && t.kind !== 'panel') return `trigger ${i} kind must be "switch" or "panel".`;
+    if (t.kind !== 'switch' && t.kind !== 'panel' && t.kind !== 'torch') {
+      return `trigger ${i} kind must be "switch", "panel", or "torch".`;
+    }
     if (t.activation !== 'permanent' && t.activation !== 'timed') {
       return `trigger ${i} activation must be "permanent" or "timed".`;
+    }
+    // A torch trigger ignites and stays lit — 'timed' would mean it
+    // extinguishes itself, which doesn't match the fixture's own visual
+    // (permanent flame) or DungeonPuzzleSystem's ignite-only update logic.
+    if (t.kind === 'torch' && t.activation !== 'permanent') {
+      return `trigger ${i} is a torch — activation must be "permanent" (a lit torch never reverts).`;
     }
     if (t.activation === 'timed' && !(Number.isFinite(t.neutralizeSeconds) && t.neutralizeSeconds > 0)) {
       return `trigger ${i} is timed but neutralizeSeconds must be a number > 0.`;
@@ -297,7 +324,9 @@ function validatePuzzleTemplate(data) {
     }
   }
 
-  // Torches — optional, maze-parity fixtures; also sit on plain floor.
+  // Torches — optional, DECORATIVE maze-parity fixtures (contrast the
+  // torch-KIND trigger above, which looks the same but gates the exit);
+  // also sit on plain floor. `lit` is an optional starting-state flag.
   if (data.torches !== undefined) {
     if (!Array.isArray(data.torches)) return 'torches must be an array.';
     for (let i = 0; i < data.torches.length; i++) {
@@ -310,11 +339,16 @@ function validatePuzzleTemplate(data) {
       seen.add(key);
       const cellChar = data.grid[t.row][t.col];
       if (cellChar !== '.') return `torch ${i} at (${t.row},${t.col}) must sit on plain floor ('.'), not "${cellChar}".`;
+      if (t.lit !== undefined && typeof t.lit !== 'boolean') return `torch ${i} lit must be a boolean.`;
     }
   }
 
   // Pedestal — optional, opt-in single marker (generalized off Whip Trial;
-  // any template may set one).
+  // any template may set one). weaponChar is free text (the dungeon editor's
+  // Pedestal tool no longer offers a fixed dropdown) — validated here
+  // against recipes.js's own findRecipeByResult rather than a hardcoded
+  // allow-list, so any current or future craftable weapon works without an
+  // editor code change.
   if (data.pedestal !== undefined && data.pedestal !== null) {
     const p = data.pedestal;
     if (typeof p !== 'object') return 'pedestal must be an object or null.';
@@ -325,6 +359,13 @@ function validatePuzzleTemplate(data) {
     seen.add(key);
     const cellChar = data.grid[p.row][p.col];
     if (cellChar !== '.') return `pedestal at (${p.row},${p.col}) must sit on plain floor ('.'), not "${cellChar}".`;
+    if (typeof p.weaponChar !== 'string' || !p.weaponChar) {
+      return 'pedestal weaponChar must be a non-empty string.';
+    }
+    const { findRecipeByResult } = await loadRecipesModule();
+    if (!findRecipeByResult(p.weaponChar)) {
+      return `pedestal weaponChar "${p.weaponChar}" doesn't match any recipe's result in recipes.js.`;
+    }
   }
 
   return null;
@@ -333,8 +374,8 @@ function validatePuzzleTemplate(data) {
 ipcMain.handle('puzzle-templates-list', () => listPuzzleTemplates());
 ipcMain.handle('puzzle-template-load', (_e, name) => readJSON(resolvePuzzleTemplatePath(name)));
 
-ipcMain.handle('puzzle-template-save', (_e, name, data) => {
-  const err = validatePuzzleTemplate(data);
+ipcMain.handle('puzzle-template-save', async (_e, name, data) => {
+  const err = await validatePuzzleTemplate(data);
   if (err) return { ok: false, error: err };
   writeJSONAtomic(resolvePuzzleTemplatePath(name), data);
   return { ok: true };

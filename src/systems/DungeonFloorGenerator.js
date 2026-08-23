@@ -90,12 +90,12 @@ const BRANCH_SWITCH_B_COL = 17;
 // shared visual constants are reused (DungeonPuzzleSystem's ignite check,
 // HutInteriorOverlay's render block).
 class PuzzleTorch {
-  constructor(col, row) {
+  constructor(col, row, lit = false) {
     this.char       = '!';
     this.col        = col;
     this.row        = row;
     this.position   = { x: col * GRID.CELL_SIZE, y: row * GRID.CELL_SIZE };
-    this.lit        = false;
+    this.lit        = lit;
     this.pulseTimer = 0;
   }
 }
@@ -634,7 +634,7 @@ export class DungeonFloorGenerator {
     const exitCell = getPuzzleTemplateExitCell(templateName);
     const exitRow = exitCell?.row ?? STAIRS_UP_ROW;
     const exitCol = exitCell?.col ?? STAIRS_COL;
-    const stairsUpObj = new BackgroundObject('{', exitCol * CS, exitRow * CS);
+    const stairsUpObj = new BackgroundObject('Ʌ', exitCol * CS, exitRow * CS);
     paintStairsUpVisual(stairsUpObj, true);
     backgroundObjects.push(stairsUpObj);
 
@@ -644,9 +644,32 @@ export class DungeonFloorGenerator {
     // unregistered in BACKGROUND_OBJECTS, so BackgroundObject's constructor
     // already falls back to indestructible:true/hp:null (see the hook-post
     // comment below for the full mechanism), which is exactly right for a
-    // floor panel: nothing should ever be able to attack it.
+    // floor panel: nothing should ever be able to attack it. 'torch' is a
+    // third kind, built as a plain object rather than a BackgroundObject —
+    // ignition is proximity + held-item (same contract as a decorative
+    // PuzzleTorch below), not a combat strike, so it needs none of
+    // BackgroundObject's hp/collision machinery, just the generic
+    // activation/active/_timer trio _advanceTrigger already reads. Kept
+    // deliberately distinct from PuzzleTorch (which uses `.lit`) rather than
+    // a shared class: a decorative torch and a torch-trigger are genuinely
+    // different lifecycles (ambience that never gates vs. a real trigger
+    // that feeds the exit-unlock check) and conflating them risks reading
+    // the wrong field from the wrong render/update path.
     const triggers = [];
     for (const t of getPuzzleTemplateTriggers(templateName)) {
+      if (t.kind === 'torch') {
+        triggers.push({
+          char: '!',
+          col: t.col, row: t.row,
+          position: { x: t.col * CS, y: t.row * CS },
+          kind: 'torch',
+          activation: 'permanent',
+          active: false,
+          _timer: 0,
+          pulseTimer: 0,
+        });
+        continue;
+      }
       const isSwitch = t.kind === 'switch';
       const char = isSwitch ? '○' : '▭';
       const obj = new BackgroundObject(char, t.col * CS, t.row * CS);
@@ -704,13 +727,18 @@ export class DungeonFloorGenerator {
 
     // Torches — maze-parity fixture: unlit until the player approaches while
     // wielding the Torch item, permanent once lit, pulsing glow while lit.
+    // Purely decorative — never gates anything (contrast the 'torch'-kind
+    // trigger above, a separate mechanic for a torch that DOES gate the
+    // exit). `lit` is an optional per-entry starting flag (author can place
+    // a torch already burning); everything else about the fixture is
+    // identical whether it started lit or was lit by the player.
     // Visual/lighting only (no ghost-shielding — dungeons have no ghosts;
     // see MazeSystem's own MazeTorch for the maze's fuller mechanic). Reuses
     // MazeSystem's exported visual constants directly — see PuzzleTorch
     // above, DungeonPuzzleSystem._updatePuzzleRoom, and HutInteriorOverlay's
     // torch render block.
     const torches = getPuzzleTemplateTorches(templateName)
-      .map(({ row, col }) => new PuzzleTorch(col, row));
+      .map(({ row, col, lit }) => new PuzzleTorch(col, row, !!lit));
 
     // Weapon-tutorial pedestal — opt-in per template (generalized from the
     // original Whip Trial's own hardcoded version): a real pickup-able
@@ -727,17 +755,24 @@ export class DungeonFloorGenerator {
     const items = [];
     let weaponPedestal = null;
     if (pedestalMarker) {
-      const tutorial = pickWeaponTutorial();
-      const weaponItem = Object.assign(
-        new Item(tutorial.weaponChar, pedestalMarker.col * CS, pedestalMarker.row * CS),
-        { hutPlane: true }
-      );
-      items.push(weaponItem);
-      weaponPedestal = {
-        row: pedestalMarker.row,
-        leftX: pedestalMarker.col - 3, centerX: pedestalMarker.col - 1, rightX: pedestalMarker.col + 1,
-        leftChar: tutorial.recipe.left, rightChar: tutorial.recipe.right,
-      };
+      // Character authored directly on the marker (dungeon editor's Pedestal
+      // tool — free text, not a dropdown), resolved against recipes.js
+      // rather than an id-indirection registry — see weaponTutorials.js.
+      const tutorial = pickWeaponTutorial(pedestalMarker.weaponChar);
+      if (tutorial) {
+        const weaponItem = Object.assign(
+          new Item(tutorial.weaponChar, pedestalMarker.col * CS, pedestalMarker.row * CS),
+          { hutPlane: true }
+        );
+        items.push(weaponItem);
+        weaponPedestal = {
+          row: pedestalMarker.row,
+          leftX: pedestalMarker.col - 3, centerX: pedestalMarker.col - 1, rightX: pedestalMarker.col + 1,
+          leftChar: tutorial.recipe.left, rightChar: tutorial.recipe.right,
+        };
+      } else {
+        console.warn(`[DungeonFloorGenerator] puzzle template "${templateName}" has a pedestal with weaponChar "${pedestalMarker.weaponChar}" that no recipe produces — skipping weapon grant.`);
+      }
     }
 
     return {
