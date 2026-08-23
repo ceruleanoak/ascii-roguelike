@@ -554,6 +554,23 @@ export class InventorySystem {
     return previousConsumable;
   }
 
+  // Removes `item` from armorInventory outright (not equipping it anywhere) —
+  // used by the Shopkeeper's Pawn sell flow. Returns whether it was present.
+  removeFromArmorInventory(item) {
+    const idx = this.armorInventory.indexOf(item);
+    if (idx === -1) return false;
+    this.armorInventory.splice(idx, 1);
+    return true;
+  }
+
+  // Same as removeFromArmorInventory, for consumableInventory.
+  removeFromConsumableInventory(item) {
+    const idx = this.consumableInventory.indexOf(item);
+    if (idx === -1) return false;
+    this.consumableInventory.splice(idx, 1);
+    return true;
+  }
+
   // ========== ARMOR EFFECTS APPLICATION ==========
 
   /**

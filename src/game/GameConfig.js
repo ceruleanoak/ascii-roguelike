@@ -205,6 +205,18 @@ export const BACKGROUND_OBJECTS = {
       default: { animation: 'shake', message: null }
     }
   },
+  'Π': {
+    name: 'Counter',
+    color: '#aa8855',
+    solid: true,
+    indestructible: true,
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
   '&': {
     name: 'Bush',
     color: '#336633',
@@ -1338,6 +1350,14 @@ export const INTERACTION_RANGE = 24; // pixels
 // Shared interaction radius for all NPC classes (dialogue, errands, character
 // swap) — one cell tighter than the old per-file 2.5-cell TALK_RANGE.
 export const NPC_INTERACTION_RANGE = GRID.CELL_SIZE * 1.5;
+
+// Shopkeeper-specific interaction radius: the Shopkeeper stands in a sealed
+// alcove behind an impassable Counter (see HutSystem.generateHutInterior),
+// so the closest the player can ever stand is ~2 cells away instead of
+// NPC_INTERACTION_RANGE's usual 1.5. Wide enough to cover straight-on and
+// one-cell-diagonal approaches to the counter, not so wide it triggers from
+// across the room.
+export const SHOP_INTERACTION_RANGE = GRID.CELL_SIZE * 2.5;
 
 // Polymorph transformation outcomes for Transmutation Wand
 export const POLYMORPH_OUTCOMES = {

@@ -295,7 +295,7 @@ export class ExploreRenderer {
     // Settlement room: a wooden sign hovering above each hut's door, a
     // smaller capital letter centered on it identifying the hut kind.
     if (game.currentRoom.huts?.length) {
-      const HUT_DOOR_LABELS = { press: 'P', wise_man: 'W', alchemy: 'A', neutral_npc: 'E', fisherman: 'F', weapons_master: 'M' };
+      const HUT_DOOR_LABELS = { press: 'P', wise_man: 'W', alchemy: 'A', neutral_npc: 'E', fisherman: 'F', weapons_master: 'M', shopkeeper: 'S' };
       const CS = GRID.CELL_SIZE;
       const ctx = this.renderer.fgCtx;
       for (const hut of game.currentRoom.huts) {

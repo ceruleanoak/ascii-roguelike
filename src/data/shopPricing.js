@@ -155,6 +155,24 @@ function computeCoinPrice(T, role) {
 }
 
 // ============================================================================
+// PAWN SELL VALUE
+// ============================================================================
+
+// Flat per-tier coin payout for the Shopkeeper's Pawn side (selling FROM the
+// player's own itemChest/armorInventory/consumableInventory — see ShopSystem's
+// 'pawn' mode), as opposed to the WARES buy side above. One flat scale
+// regardless of role: a payout doesn't need the WARES side's per-role skew,
+// just "worth more if rarer."
+const PAWN_SELL_BASE = 1;
+const PAWN_SELL_PER_TIER = 1;
+
+/** Coins paid out for selling one owned Item (weapon/armor/consumable/trap). */
+export function computePawnSellValue(itemData) {
+  const tier = deriveValueTier(itemData, itemData.type);
+  return PAWN_SELL_BASE + tier * PAWN_SELL_PER_TIER;
+}
+
+// ============================================================================
 // (c) TREASURE ASSIGNMENT
 // ============================================================================
 
@@ -165,11 +183,26 @@ function elementToGemChar(element) {
   return null;
 }
 
+// TREASURE_CHARS minus Artifact (⚜). Artifact lives in TREASURE_CHARS purely
+// for Tab-overlay display grouping, but it isn't a precious gem — it's not
+// in TREASURE_OFFERINGS (no fountain element/blessing), and it already has
+// its own modest economy (~3 coins via ErrandSystem.tryGiveArtifact, a Wise
+// Fellow hint trade). Full-price collateral in this lane should be an actual
+// gem, so Artifact is excluded from the pool the shop draws from.
+const SHOP_TREASURE_CHARS = [...TREASURE_CHARS].filter(c => c !== '⚜');
+
 /**
  * Elemental weapons (weaponElement() returns fire/ice/electric/poison) map to
  * their matching gem via the existing TREASURE_OFFERINGS table. Everything
- * else gets a uniform-random pick from TREASURE_CHARS. 'c' (Coin) is never a
- * candidate — it isn't in TREASURE_CHARS; that's the separate Coins lane.
+ * else gets a uniform-random pick from SHOP_TREASURE_CHARS. 'c' (Coin) is
+ * never a candidate — it isn't in TREASURE_CHARS; that's the separate Coins
+ * lane.
+ *
+ * Which gem gets picked doesn't track the listing's tier — how much of it is
+ * required does (see buildListing's treasureCount, and TIER_TREASURE_COUNT
+ * below). Scaling quantity instead of hunting for a rarer gem per tier keeps
+ * this to one rarity axis (the existing ingredient rarities) instead of
+ * inventing a second one across only 8 treasure chars.
  */
 function pickTreasureChar(itemData, role) {
   if (role === 'WEAPON') {
@@ -177,9 +210,15 @@ function pickTreasureChar(itemData, role) {
     const gem = element ? elementToGemChar(element) : null;
     if (gem) return gem;
   }
-  const pool = [...TREASURE_CHARS];
-  return pool[Math.floor(Math.random() * pool.length)];
+  return SHOP_TREASURE_CHARS[Math.floor(Math.random() * SHOP_TREASURE_CHARS.length)];
 }
+
+// How many copies of the same treasure char a listing's Treasure lane
+// requires, indexed by tier. Tier 0 has no entry — see buildListing, which
+// omits the Treasure lane entirely below tier 1: a single gem is
+// disproportionate collateral for the cheapest items, so there's nothing to
+// require a copy count of.
+const TIER_TREASURE_COUNT = [0, 1, 2, 3];
 
 // ============================================================================
 // LISTING / STOCK
@@ -191,6 +230,11 @@ function buildListing(itemData, role) {
   const padding = pickPaddingIngredients(tier, [recipe.left, recipe.right]);
   const { baseCoins, coinFloor } = computeCoinPrice(tier, role);
 
+  // Tier 0 has no Treasure lane at all (see TIER_TREASURE_COUNT); tier 1-3
+  // require 1/2/3 copies of the same picked treasure char respectively.
+  const treasureCount = TIER_TREASURE_COUNT[tier] ?? 0;
+  const treasureChar = treasureCount > 0 ? pickTreasureChar(itemData, role) : null;
+
   return {
     char: itemData.char,
     role,                         // 'ARMOR' | 'WEAPON' | 'CONSUMABLE'
@@ -200,7 +244,8 @@ function buildListing(itemData, role) {
     ingredientCost: [recipe.left, recipe.right, ...padding], // 3-5 chars
     baseCoins,
     coinFloor,
-    treasureChar: pickTreasureChar(itemData, role),
+    treasureChar,
+    treasureCount,
     sold: false,
   };
 }

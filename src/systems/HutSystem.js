@@ -37,6 +37,13 @@ const INTERIOR_ROWS = 10;
 // distinguish hut-style rendering from dungeon-style rendering.
 const isHutFloor = (floor) => floor != null && floor.gridCols <= 12;
 
+// Shopkeeper stall geometry: the alcove row (against the north wall, where
+// the Shopkeeper stands) and the Counter row directly south of it that seals
+// the alcove off. One constant shared between the two generateHutInterior
+// blocks that need it so the stall can't drift out of sync.
+const SHOPKEEPER_ALCOVE_ROW = 1;
+const SHOPKEEPER_COUNTER_ROW = SHOPKEEPER_ALCOVE_ROW + 1;
+
 // Proximity radius for door interaction (px from door center)
 const DOOR_INTERACT_RADIUS = GRID.CELL_SIZE * 2;
 
@@ -113,6 +120,22 @@ export class HutSystem {
       const condenser = new BackgroundObject('Ψ', 2 * GRID.CELL_SIZE, (rows - 4) * GRID.CELL_SIZE);
       condenser.color = '#cc88ff';
       backgroundObjects.push(condenser);
+    }
+
+    // Shopkeeper stall: a full-width Counter one row below the north wall
+    // seals row 1 into its own alcove — bounded by the north border wall
+    // above and the west/east border walls to the sides, the only remaining
+    // approach is straight through the counter, which is solid. This is the
+    // universal "NPC behind an impassable counter" shop convention: the
+    // player can never stand next to the Shopkeeper, only interact across
+    // the counter (see SHOP_INTERACTION_RANGE). Placed before the decor loop
+    // below so cellOccupied() keeps decor/bread off the counter's cells; the
+    // alcove row itself (row 1) is outside the decor loop's random row range
+    // already, so it never needs its own exclusion check.
+    if (hutKind === 'shopkeeper') {
+      for (let c = 1; c <= cols - 2; c++) {
+        backgroundObjects.push(new BackgroundObject('Π', c * GRID.CELL_SIZE, SHOPKEEPER_COUNTER_ROW * GRID.CELL_SIZE));
+      }
     }
 
     // Interior floor decor (very sparse — hut is small)
@@ -199,10 +222,12 @@ export class HutSystem {
       npcs.push(new WeaponsMaster(centerCol * GRID.CELL_SIZE, centerRow * GRID.CELL_SIZE));
 
     } else if (hutKind === 'shopkeeper') {
-      // Shopkeeper at interior center — rolls its stock in its own constructor
+      // Shopkeeper stands in the sealed alcove behind the Counter (row 1 —
+      // see the fixed-position block above) and rolls its stock in its own
+      // constructor. Never directly reachable; the player interacts across
+      // the counter from row 3+ via SHOP_INTERACTION_RANGE.
       const centerCol = Math.floor(cols / 2);
-      const centerRow = Math.floor(rows / 2) - 1;
-      npcs.push(new Shopkeeper(centerCol * GRID.CELL_SIZE, centerRow * GRID.CELL_SIZE));
+      npcs.push(new Shopkeeper(centerCol * GRID.CELL_SIZE, SHOPKEEPER_ALCOVE_ROW * GRID.CELL_SIZE));
 
     } else if (hutKind === 'neutral_npc') {
       // Placeholder NPC: spawn the errand traveler. Seeds an errand if none active
@@ -242,7 +267,9 @@ export class HutSystem {
         breadItems.push(new Item('B', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
         placed++;
       }
-    } else if (hutKind !== 'witch' && Math.random() < 0.40) {
+    } else if (hutKind !== 'witch' && hutKind !== 'shopkeeper' && Math.random() < 0.40) {
+      // Shopkeeper excluded: a free loaf on the floor of a paid shop reads
+      // wrong, and the alcove behind the counter is off-limits anyway.
       const loafCount = 1 + (Math.random() < 0.15 ? 1 : 0);
       for (let i = 0; i < loafCount; i++) {
         for (let attempt = 0; attempt < 12; attempt++) {

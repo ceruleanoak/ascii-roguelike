@@ -1,5 +1,6 @@
 import { NeutralCharacter } from './NeutralCharacter.js';
 import { rollShopStock } from '../data/shopPricing.js';
+import { SHOP_INTERACTION_RANGE } from '../game/GameConfig.js';
 
 /**
  * Shopkeeper — Settlement hut NPC who sells a random roll of 1 armor /
@@ -15,6 +16,12 @@ import { rollShopStock } from '../data/shopPricing.js';
  * stock + each listing's `sold` flag) alive across every re-entry into the
  * hut for the life of the run — the same mechanism WeaponsMaster.spokenOnce
  * already relies on.
+ *
+ * Stands in a sealed alcove behind an impassable Counter (see HutSystem.
+ * generateHutInterior) — the universal "NPC behind a counter" shop
+ * convention. isInRange() is overridden so every caller (ShopSystem's SPACE
+ * dispatch, the talk indicator) automatically uses the wider counter-gap
+ * radius without each call site needing to know about the layout.
  */
 export class Shopkeeper extends NeutralCharacter {
   constructor(x, y) {
@@ -22,8 +29,15 @@ export class Shopkeeper extends NeutralCharacter {
     this.stock = rollShopStock();
   }
 
+  isInRange(player, range = SHOP_INTERACTION_RANGE) {
+    return super.isInRange(player, range);
+  }
+
   update(dt, game) {
     super.update(dt); // pulse animation
-    this.updateTalkIndicator(game);
+    // Explicit range: updateTalkIndicator's own default param would otherwise
+    // pass the base NPC_INTERACTION_RANGE straight through to isInRange(),
+    // bypassing the override above.
+    this.updateTalkIndicator(game, SHOP_INTERACTION_RANGE);
   }
 }
