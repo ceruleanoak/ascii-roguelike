@@ -41,10 +41,17 @@ export class SlotReplacementSystem {
     return 3;
   }
 
-  /** DISMANTLE option index — only present when the pending item has a known recipe. */
+  /**
+   * DISMANTLE option index — only present when the pending item has a known
+   * recipe AND no enemies are active in the current room/floor. Dismantling
+   * mid-fight would let the player stall combat risk-free inside the paused
+   * modal, so the option simply doesn't appear while enemies are around.
+   */
   get dismantleIndex() {
     if (!this.pendingItem) return -1;
-    return findRecipeByResult(this.pendingItem.char) ? this.storeIndex + 1 : -1;
+    if (!findRecipeByResult(this.pendingItem.char)) return -1;
+    if (this.game._countedEnemies(this.game._activeEnemies()).length > 0) return -1;
+    return this.storeIndex + 1;
   }
 
   /** Indices in equippedConsumables currently claimed by the magic meter — not real consumable slots. */
