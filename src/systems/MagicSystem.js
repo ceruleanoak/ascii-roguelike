@@ -82,7 +82,37 @@ export class MagicSystem {
     meter.active = this.effectiveManaSlotCount(player) > 0;
     if (!wasActive && meter.active) meter.current = 0;
     this.recalcMax(meter);
+    this.evictReservedConsumables(player);
     return true;
+  }
+
+  // Auto-unequip any consumable currently sitting in a slot the magic meter
+  // has just claimed as a mana slot. Reserved mana slots are display-only
+  // (see SlotReplacementSystem._reservedManaSlots / MenuSystem's
+  // getNearestInteractiveSlot filter / InventorySystem.firstFreeConsumableSlot)
+  // — every one of those already refuses to EQUIP into a reserved index, but
+  // none of them can stop a slot that already held a real consumable from
+  // becoming reserved out from under it. equippedConsumables is shared across
+  // characters while magicMeter.slots is per-character (see
+  // CharacterSystem.applyCharacterType), so a character swap that restores a
+  // different mana loadout is the main way this happens; activateMagicMeter
+  // (well ritual / cauldron / Yellow Mage's free slot) is the other. Both
+  // call this after finalizing meter.slots/meter.active — do not call it
+  // speculatively, since it reads meter.active to decide what's reserved.
+  evictReservedConsumables(player) {
+    const meter = player?.magicMeter;
+    if (!meter?.active || !meter.slots?.length) return;
+    const inv = this.game.inventorySystem;
+    if (!inv) return;
+    for (const idx of meter.slots) {
+      const equipped = inv.equippedConsumables[idx];
+      if (!equipped) continue;
+      inv.consumableInventory.push(equipped);
+      inv.equippedConsumables[idx] = null;
+      if (player.equippedConsumables) player.equippedConsumables[idx] = null;
+      if (inv.spentConsumableSlots) inv.spentConsumableSlots[idx] = false;
+      if (inv.consumableCooldowns) inv.consumableCooldowns[idx] = 0;
+    }
   }
 
   // Per-slot fill for rendering: slots fill front-to-back (lowest equipment

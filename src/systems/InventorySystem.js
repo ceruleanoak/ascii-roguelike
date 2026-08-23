@@ -532,6 +532,13 @@ export class InventorySystem {
    */
   equipConsumable(slotIndex, selectedItem) {
     if (slotIndex >= this.maxConsumableSlots) return null;
+    // Mana slots are display-only for the magic meter (see
+    // MagicSystem.evictReservedConsumables) — every caller already routes
+    // around a reserved index via firstFreeConsumableSlot or a UI-level
+    // filter, but this is the one choke point every equip path funnels
+    // through, so refuse here too rather than trusting each call site.
+    const meter = this.game?.player?.magicMeter;
+    if (meter?.active && meter.slots?.includes(slotIndex)) return null;
 
     const previousConsumable = this.equippedConsumables[slotIndex];
 

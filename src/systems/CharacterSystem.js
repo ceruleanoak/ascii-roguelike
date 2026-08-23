@@ -601,6 +601,12 @@ export class CharacterSystem {
       }
       game.magicSystem.recalcMax(m);
       m.active = game.magicSystem.effectiveManaSlotCount(game.player) > 0;
+      // Mana slots are per-character (manaState above) but equippedConsumables
+      // is shared across every character — restoring a different mana loadout
+      // can claim an index that still holds a real consumable equipped under
+      // the outgoing character. Evict it back to the shared consumableInventory
+      // rather than leaving it invisibly stuck under the meter's slot fill.
+      game.magicSystem.evictReservedConsumables(game.player);
     }
 
     // Update player visual

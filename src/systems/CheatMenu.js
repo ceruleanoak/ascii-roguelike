@@ -470,14 +470,18 @@ export class CheatMenu {
     } else if (type === ITEM_TYPES.CONSUMABLE) {
       const item = new Item(char, 0, 0);
       const inv = game.inventorySystem;
-      // First empty slot, or replace slot 0 when all are full. equipConsumable
-      // returns the displaced consumable to consumableInventory.
-      let slot = inv.equippedConsumables.findIndex(s => s === null);
-      if (slot === -1) slot = 0;
+      // First empty slot not claimed by the magic meter (mana slots are
+      // display-only — see MagicSystem.evictReservedConsumables), or
+      // straight to inventory (unequipped) when none is free.
+      const slot = inv.firstFreeConsumableSlot(game.player);
       inv.consumableInventory.push(item);
-      inv.equipConsumable(slot, item);
+      if (slot !== -1) {
+        inv.equipConsumable(slot, item);
+        console.log(`[CHEAT] ✓ Equipped consumable: ${name}`);
+      } else {
+        console.log(`[CHEAT] ✓ Added consumable to inventory (no free slot): ${name}`);
+      }
       game.player.equippedConsumables = [...inv.equippedConsumables];
-      console.log(`[CHEAT] ✓ Equipped consumable: ${name}`);
     } else if (type === ITEM_TYPES.KEY) {
       // Held, not equipped — goes straight into keyItemInventory, same pool
       // a real world pickup lands in (InventorySystem.tryPickupItem).
