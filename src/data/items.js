@@ -519,12 +519,12 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.BOW,
     firesBullet: true,
     damage: 1,
-    cooldown: 1,
-    maxChargeTime: 0.1,
+    cooldown: .7,
+    maxChargeTime: 0.5,
     bulletSpeed: 450,
-    bulletSize: 0.5,
+    bulletSize: 0.6,
     bulletRange: 260,
-    maxUses: 8,
+    maxUses: 12,
     accuracy: .92,
     critChance: 0.10,
     color: '#aaaaaa'
@@ -2600,7 +2600,7 @@ export const INGREDIENTS = {
 
   // Rock-harvest ingredients — drop from `0` Rock bg objects (rock harvest table).
   // △ Arrowhead also crafts into bows/axes/spears. ⚜ Artifact drops from rocks/chests;
-  // trades to errand NPC (2 coins) or wise fellow (unlocks rare hint). ❦ Moss → Moss Cloak.
+  // trades to errand NPC (3 coins) or wise fellow (unlocks rare hint). ❦ Moss → Moss Cloak.
   '⊿': { char: '⊿', name: 'Axe head',        color: '#aaaaaa' },
   '△': { char: '△', name: 'Arrowhead',       color: '#aaaaaa' },
   '⚜': { char: '⚜', name: 'Artifact',        color: '#d4af37' },
@@ -2669,7 +2669,7 @@ export function isItem(char) {
 // display grouping: every char here still shows up in the crafting table
 // like any other ingredient (see MenuSystem.openCraftingMenu, which lists
 // game.getIngredients() unfiltered by category).
-export const TREASURE_CHARS = new Set(['◇', '⬥', '⬦', '⧫', '⬧', '◈', '⬨', '●']);
+export const TREASURE_CHARS = new Set(['◇', '⬥', '⬦', '⧫', '⬧', '◈', '⬨', '●', '⚜']);
 
 /**
  * What each treasure does when offered to a fairy fountain (FountainSystem).

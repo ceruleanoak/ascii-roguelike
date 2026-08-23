@@ -72,7 +72,7 @@ export const EXIT_LETTERS = {
   'H': {
     name: 'Hut',
     roomType: 'HUT',
-    weight: 0.12,
+    weight: 0.15,
     zoneBoosts: {
       green: 1.5,
       yellow: 1.2
@@ -220,7 +220,7 @@ export const EXIT_LETTERS = {
   // Weight 0: these only appear via the linear blue-zone progression (driven
   // by game.blueZoneRoom in main.js), never via the normal weighted picker.
   // The '~' entry exit is opened by the pearl pedestal in an Ocean room
-  // (main.js handlePearlPedestalSpace).
+  // (PearlSystem.handlePearlPedestalSpace).
   '~': {
     name: 'Shallows',
     roomType: 'COMBAT',

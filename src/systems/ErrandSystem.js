@@ -332,7 +332,7 @@ export class ErrandSystem {
   }
 
   /**
-   * Side-trade: hand the traveler an Artifact ⚜ for 2 coins, independent of
+   * Side-trade: hand the traveler an Artifact ⚜ for 3 coins, independent of
    * the active stage errand. Returns spawn data ({coins, x, y}) on success.
    * Active errand is untouched — the player can still complete the stage trade.
    */
@@ -349,7 +349,7 @@ export class ErrandSystem {
     if (!inventorySystem?.removeIngredient('⚜')) return null;
 
     return {
-      coins: 2,
+      coins: 3,
       x: errandChar.position.x,
       y: errandChar.position.y
     };

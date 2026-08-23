@@ -187,7 +187,7 @@ export const RECIPES = [
   { left: 'c', right: '~', result: '"', name: 'Music Box' },       // Coin + String = Music Box
   { left: 'b', right: '~', result: ':', name: 'Noise-maker' },     // Bone + String = Noise-maker
   { left: 'M', right: 'F', result: ']', name: 'Tesla Coil' },      // Metal + Fire = Tesla Coil
-  { left: '|', right: 'w', result: '↩', name: 'Boomerang' },       // Stick + Wing = Boomerang
+  { left: 'j', right: 'w', result: '↩', name: 'Boomerang' },       // Stick + Wing = Boomerang
   { left: 'g', right: '~', result: '⌇', name: 'Sticky Tripline' }, // Goo + String = Sticky Tripline
   { left: '⌇', right: '◇', result: '⏦', name: 'Electric Tripline' }, // Sticky Tripline + Topaz = Electric Tripline (gem infusion: base left, gem right)
 

@@ -160,7 +160,7 @@ export const ENEMIES = {
     attackRange: GRID.CELL_SIZE * 1.75,
     aggroRange: GRID.CELL_SIZE * 8,
     attackCooldown: 1.0,
-    attackWindup: 1.0,
+    attackWindup: 1.3,
     attackType: 'melee',
     decisionInterval: 0.4,
     color: '#9acd32',   // sickly yellow-green — the tier tell, glyph stays 'r'
