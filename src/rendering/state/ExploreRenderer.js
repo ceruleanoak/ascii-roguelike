@@ -1096,16 +1096,18 @@ export class ExploreRenderer {
     // Well ritual: spinning coin arc + post-ritual screen flash
     drawWellRitual(this.renderer, game);
 
-    // Pickup/notification message — drawn last so it sits above hut/maze overlays
+    // Pickup/notification message — drawn last so it sits above hut/maze overlays.
+    // Never ciphered: it's a direct system notification (what you just picked
+    // up), not in-world writing — otherwise equipping Spectacles would garble
+    // its own pickup announcement the instant it auto-equips.
     if (game.pickupMessage && game.pickupMessageTimer > 0) {
       const ctx = this.renderer.fgCtx;
-      const spectaclesOn = isSpectaclesActive(game);
       ctx.save();
-      ctx.font = cipherFont(GRID.CELL_SIZE * 2, spectaclesOn);
+      ctx.font = cipherFont(GRID.CELL_SIZE * 2, false);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = COLORS.ITEM;
-      this.renderer.drawWrappedText(ctx, spectaclesTransformString(game.pickupMessage, spectaclesOn), GRID.WIDTH / 2, GRID.HEIGHT / 2 - 100, GRID.WIDTH * 0.8, GRID.CELL_SIZE * 2.5);
+      this.renderer.drawWrappedText(ctx, game.pickupMessage, GRID.WIDTH / 2, GRID.HEIGHT / 2 - 100, GRID.WIDTH * 0.8, GRID.CELL_SIZE * 2.5);
       ctx.restore();
     }
 
