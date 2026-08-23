@@ -186,7 +186,10 @@ export class NeutralRenderer {
       ctx.restore();
     }
 
-    // Draw pickup message (identical to EXPLORE/REST states)
+    // Draw pickup message (identical to EXPLORE/REST states). Never ciphered:
+    // it's a direct system notification, not in-world writing — otherwise
+    // equipping Spectacles would garble its own pickup announcement the
+    // instant it auto-equips.
     if (game.pickupMessage && game.pickupMessageTimer > 0) {
       const ctx = this.renderer.fgCtx;
       ctx.save();
@@ -194,7 +197,7 @@ export class NeutralRenderer {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = COLORS.ITEM;
-      this.renderer.drawWrappedText(ctx, spectaclesTransformString(game.pickupMessage, isSpectaclesActive(game)), GRID.WIDTH / 2, GRID.HEIGHT / 2, GRID.WIDTH * 0.8, GRID.CELL_SIZE * 2.5);
+      this.renderer.drawWrappedText(ctx, game.pickupMessage, GRID.WIDTH / 2, GRID.HEIGHT / 2, GRID.WIDTH * 0.8, GRID.CELL_SIZE * 2.5);
       ctx.restore();
     }
 
