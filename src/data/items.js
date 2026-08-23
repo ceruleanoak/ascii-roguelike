@@ -586,6 +586,29 @@ export const ITEMS = {
     color: '#cc88ff'
   },
 
+  // ── MELEE / sword — Legendary (uncraftable) ──────────────────────────────
+  // Stats mirror Tier 1 Sword, same as '§'. Sole source: ChiBladeSystem's
+  // χ-room secret (X/Crossroads room) — strike the revealed χ while 3
+  // equipped items have 'x'/'X' in their char or name. opensAnyLock is read
+  // by InventorySystem.hasKeyItem as a universal-key alternative to holding
+  // the specific key char — never consumed, so it opens every lock/vault
+  // encountered for the rest of the run.
+  '☓': {
+    char: '☓',
+    tier: 1,
+    name: 'χ-blade',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'sword',
+    damage: 2,
+    windup: 0.3,
+    recovery: 0.5,
+    patternSpeed: 0.05,
+    range: 20,
+    opensAnyLock: true,
+    color: '#dd3355'
+  },
+
   // ── MELEE / sword — Tier 2 ────────────────────────────────────────────────
   '⫯': {
     char: '⫯',

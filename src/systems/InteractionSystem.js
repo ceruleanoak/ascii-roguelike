@@ -86,7 +86,7 @@ export class InteractionSystem {
     // InventorySystem.keyItemInventory, granted when the key-dropping
     // object is destroyed and picked up (handleObjectEffect's dropsKey
     // branch), spent by unlockVault() below.
-    if (!game.inventorySystem.hasKeyItem('߃')) {
+    if (!game.inventorySystem.hasKeyItem('߃', game)) {
       return false;
     }
 
@@ -670,6 +670,18 @@ export class InteractionSystem {
           // Rare: arrowhead
           game.lootSystem.spawnIngredientDrop('△', obj.position.x, obj.position.y, null, obj);
         }
+      }
+      // χ grass: blade-cut reveals the mysterious χ. Singular per room — only
+      // one tile is ever marked (RoomGenerator's chi_grass secret event).
+      // The marker is puzzleSignal (never destroyed by strikes); ChiBladeSystem
+      // polls its glitterHit pulse and resolves the χ-blade reveal.
+      if (obj.chiGrass && !game.currentRoom?.chiRevealed) {
+        game.currentRoom.chiRevealed = true;
+        const chi = new BackgroundObject('χ', obj.position.x, obj.position.y);
+        chi.spawnImmunityTimer = 1.0;
+        chi.puzzleSignal = true;
+        game.currentRoom.backgroundObjects.push(chi);
+        game.renderer.markBackgroundDirty();
       }
       // Fairy grass: blade-cut releases the fairy. Multiple grass tiles in the
       // room are marked; the first one cut spawns the fairy, the rest are inert.

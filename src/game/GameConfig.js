@@ -616,6 +616,23 @@ export const BACKGROUND_OBJECTS = {
       default: { animation: 'shake', message: null }
     }
   },
+  'χ': {
+    name: 'Mysterious χ',
+    color: '#cc2222',
+    // hp must be a real number, not null/indestructible — puzzleSignal's
+    // takeDamage short-circuit (BackgroundObject.js) is only reached past the
+    // `indestructible || hp === null` early-return, and never actually spends
+    // this hp. Spawned by InteractionSystem's cutGrass chiGrass reveal;
+    // ChiBladeSystem polls its glitterHit pulse to resolve the χ-blade reveal.
+    hp: 1,
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none',
+    blocksVision: false,
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
   '-': {
     name: 'Tunnel Wall (Horizontal)',
     color: '#666666',

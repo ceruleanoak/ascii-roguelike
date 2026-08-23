@@ -554,6 +554,68 @@ export class AudioSystem {
   }
 
   /**
+   * Play a looping sound effect (e.g. a proximity buzz). Loops until
+   * stopSFXByName(name) is called. Restarts the loop if it's already
+   * playing — call this once to start, then use setLoopingSFXVolume for
+   * per-frame volume updates without retriggering playback.
+   * @param {string} name - SFX identifier
+   * @param {number} volume - Volume multiplier 0.0 to 1.0 (default 1.0)
+   */
+  playLoopingSFX(name, volume = 1.0) {
+    if (!this.sfxBuffers[name] || !this.audioContext || !this.sfxGain) return;
+    if (this.audioContext.state !== 'running') return;
+
+    this.stopSFXByName(name);
+
+    try {
+      const source = this.audioContext.createBufferSource();
+      source.buffer = this.sfxBuffers[name];
+      source.loop = true;
+
+      const persistentGain = this.sfxNodeGains[name];
+      let gainNode;
+      if (persistentGain) {
+        persistentGain.gain.value = volume;
+        gainNode = persistentGain;
+        source.connect(gainNode);
+      } else {
+        gainNode = this.audioContext.createGain();
+        gainNode.gain.value = volume;
+        source.connect(gainNode);
+        gainNode.connect(this.sfxGain);
+      }
+
+      this.stoppableSources[name] = { source, gainNode: persistentGain ? null : gainNode };
+
+      source.onended = () => {
+        const entry = this.stoppableSources[name];
+        if (entry && entry.source === source) {
+          if (entry.gainNode) entry.gainNode.disconnect();
+          delete this.stoppableSources[name];
+        }
+        source.disconnect();
+      };
+
+      source.start(0);
+    } catch (error) {
+      console.error(`[Audio] Error playing looping SFX ${name}:`, error);
+    }
+  }
+
+  /**
+   * Adjust the live volume of an active looping SFX without retriggering
+   * playback. No-ops if the loop isn't currently running under this name.
+   * @param {string} name - SFX identifier
+   * @param {number} volume - Volume multiplier 0.0 to 1.0
+   */
+  setLoopingSFXVolume(name, volume) {
+    const entry = this.stoppableSources[name];
+    if (!entry) return;
+    const gainNode = this.sfxNodeGains[name] || entry.gainNode;
+    if (gainNode) gainNode.gain.value = volume;
+  }
+
+  /**
    * Stop a named stoppable SFX if it's currently playing.
    * @param {string} name - SFX identifier
    */
@@ -1157,6 +1219,7 @@ export class AudioSystem {
     this.loadSFX('pyramid_solve', null);      // All 3 slots filled
     // Shop — placeholder name, no asset yet. Purchase-confirm reuses 'coin_plink'.
     this.loadSFX('shop_error', null);         // barter toggle rejected (can't afford/don't own)
+    this.loadSFX('chi_buzz', null);           // proximity buzz — hidden χ in the X room
   }
 
   /**

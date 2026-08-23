@@ -286,9 +286,17 @@ export class InventorySystem {
    * Is a key item with this char currently held? The single source of truth
    * for every door/gate check (Vault door, dungeon Key Vault descent) — read
    * this instead of re-deriving a parallel boolean flag.
+   *
+   * Optional `game` param: when passed, also returns true if the player has
+   * a universal-key weapon (data.opensAnyLock, e.g. the χ-blade) equipped in
+   * a quick slot — "opens any lock" bypasses the per-char held-key check
+   * entirely. Never consumed by consumeKeyItem (it isn't in
+   * keyItemInventory), so it keeps opening locks for the rest of the run.
    */
-  hasKeyItem(char) {
-    return this.keyItemInventory.some(item => item.char === char);
+  hasKeyItem(char, game = null) {
+    if (this.keyItemInventory.some(item => item.char === char)) return true;
+    if (game?.player?.quickSlots?.some(item => item?.data?.opensAnyLock)) return true;
+    return false;
   }
 
   /**

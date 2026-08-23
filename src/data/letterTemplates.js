@@ -766,6 +766,9 @@ export const LETTER_TEMPLATES = {
     // trees and stumps so a flock of crows has somewhere to settle.
     description: 'Open central clearing ringed by trees — crows hoard shiny things here',
 
+    // Eligible for SecretEventSystem's chi_grass secret event — see getSecretEventTypes.
+    chiSecret: true,
+
     wallStructures: {
       allow: false // no random walls breaking the converging-paths read
     },
