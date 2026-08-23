@@ -102,9 +102,13 @@ export class LootSystem {
     // Luck has two tiers: full-power while Lucky Coin (★) is equipped, half-power
     // permanently after the coin is vested in a well. The flags are independent
     // (vested coin frees the slot) but luckActive takes priority on the math.
+    // Standing inside Emerald Staff grass (MagicSystem._updateStaffGrassEffects)
+    // doubles whatever luck tier is currently active — including the 1.0
+    // baseline with no Lucky Coin at all, a standalone loot buff from the grass.
     const player = game.player;
-    const luckMult   = player?.luckActive ? 1.75 : (player?.luckBlessed ? 1.375 : 1.0);
-    const bonusChance = player?.luckActive ? 0.40 : (player?.luckBlessed ? 0.20 : 0);
+    const grassLuckBoost = player?.inStaffGrass ? 2 : 1;
+    const luckMult    = (player?.luckActive ? 1.75 : (player?.luckBlessed ? 1.375 : 1.0)) * grassLuckBoost;
+    const bonusChance = (player?.luckActive ? 0.40 : (player?.luckBlessed ? 0.20 : 0)) * grassLuckBoost;
 
     let drops = [];
     const affinities = enemy.data.affinities || (enemy.data.dropTable ? [enemy.data.dropTable] : null);

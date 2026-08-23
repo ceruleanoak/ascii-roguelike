@@ -221,6 +221,45 @@ export class MagicSystem {
     this._updateGemWandAutoCast();
     this._updateChargeHammer();
     this._updateTempManaSlot(dt);
+    this._updateStaffGrassEffects(dt);
+  }
+
+  // Emerald Staff grass: standing inside a patch the player grew slowly heals
+  // them and doubles their loot luck (LootSystem.spawnLoot reads inStaffGrass
+  // directly) for as long as they stay on it. Recomputed fresh every frame —
+  // grass patches are decorative BackgroundObjects with no despawn hook of
+  // their own, so this is what notices the player has stepped off (or the
+  // room/floor has changed under them).
+  _updateStaffGrassEffects(dt) {
+    const game = this.game;
+    const player = game.player;
+    if (!player) return;
+
+    const objs = this._activeBackgroundObjects();
+    const C = GRID.CELL_SIZE;
+    const col = Math.floor((player.position.x + C / 2) / C);
+    const row = Math.floor((player.position.y + C / 2) / C);
+    const standing = !!objs && objs.some(o =>
+      o.staffGrass &&
+      Math.floor(o.position.x / C) === col &&
+      Math.floor(o.position.y / C) === row
+    );
+    player.inStaffGrass = standing;
+
+    if (!standing) return;
+
+    // Persistent tick timer (mirrors PhysicsSystem's hot-spring
+    // hotWaterHealTimer) — NOT player.applyRegen(), which resets its own
+    // interval timer on every call and would never let a tick land if driven
+    // from a per-frame "still standing here" check like this one.
+    player.staffGrassHealTimer -= dt;
+    if (player.staffGrassHealTimer <= 0) {
+      if (player.hp < player.maxHp) {
+        player.heal(1);
+        game.combatSystem.showHeal(1, player.position.x, player.position.y, player);
+      }
+      player.staffGrassHealTimer = 3.0;
+    }
   }
 
   _updateGemWandAutoCast() {
@@ -497,8 +536,13 @@ export class MagicSystem {
 
         // Paired stalks (mirrors RoomGenerator.generateGrassSwaths) — a single
         // blade looks too thin; the second blade at +6px gives the dense visual.
-        objs.push(new BackgroundObject('|', x, y));
-        objs.push(new BackgroundObject('|', x + 6, y));
+        // staffGrass tags both blades so _updateStaffGrassEffects (below) can
+        // tell this patch apart from ordinary decorative grass.
+        const blade1 = new BackgroundObject('|', x, y);
+        const blade2 = new BackgroundObject('|', x + 6, y);
+        blade1.staffGrass = true;
+        blade2.staffGrass = true;
+        objs.push(blade1, blade2);
       }
     }
     game.renderer?.markBackgroundDirty?.();
