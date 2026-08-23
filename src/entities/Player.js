@@ -1,6 +1,6 @@
 import { PHYSICS, GRID, COLORS, PLAYER_STATS } from '../game/GameConfig.js';
 import { StatusEffectSystem } from '../systems/StatusEffectSystem.js';
-import { computePlayerPipRows } from '../systems/StatusEffectVisuals.js';
+import { computePlayerPipRows, computePlayerDisplayColor } from '../systems/StatusEffectVisuals.js';
 import { PlayerDamageSystem } from '../systems/PlayerDamageSystem.js';
 
 const INVULNERABILITY_DURATION = 1.0;
@@ -8,18 +8,6 @@ const BLINK_FREQUENCY = 0.1;
 const SPAWN_FADE_DURATION = 0.9;
 const EXIT_FADE_DURATION = 0.3;
 const DAGGER_POST_DODGE_CRIT_WINDOW = 0.6;
-const STONE_SKIN_COLOR = '#8c7853'; // gray/bronze — Stone Skin glyph tint + pip color
-
-// Additively blend a tint color onto a base hex color. factor 0–1 controls tint intensity.
-function additiveTint(base, tint, factor = 0.5) {
-  const parse = h => { const n = parseInt(h.replace('#', ''), 16); return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff]; };
-  const [br, bg, bb] = parse(base);
-  const [tr, tg, tb] = parse(tint);
-  const r = Math.min(255, br + Math.round(tr * factor));
-  const g = Math.min(255, bg + Math.round(tg * factor));
-  const b = Math.min(255, bb + Math.round(tb * factor));
-  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
-}
 
 export class Player {
   constructor(x, y) {
@@ -80,6 +68,15 @@ export class Player {
     // the player was the second half of the old two-pool split, which halved the
     // inventory for every feature that read the wrong one.
     this.activeSappingBats = []; // Bats currently latched to this player (up to 3)
+    // Tomb Ghost sap — deliberately NOT added to activeSappingBats. Bat sap
+    // breaks on takeDamage() and on the dodge roll (Player.js roll code
+    // calls breakSapping() on every entry in that array); Tomb Ghost sap has
+    // no such interrupt and no duration — DungeonSystem clears it only on
+    // leaving the room (_activateFloor) or the dungeon (_exitDungeon). See
+    // DungeonGhostSystem.
+    this.tombSapped = false;
+    this._tombSapTimer = 0;
+    this._tombSappingGhost = null; // TombGhost instance passed as `attacker` to sap-damage calls (reflect target)
     this.hookedByMimic = null; // Enemy instance when mimic tongue has grabbed player
     this.hookedByWhip = null; // {targetX, targetY} when a whip strike (hook post, Stump, or Tree) has grabbed player — see PhysicsSystem.updateEntity
     this.facing = { x: 0, y: 1 }; // Direction player is facing
@@ -188,6 +185,13 @@ export class Player {
     this.luckBlessed = false;
     this.critChance = 0;        // chance to crit on player→enemy hits
     this.luckDodgeBonus = 0;    // additional dodge chance, distinct from armor dodgeChance
+    // Emerald Staff grass: recomputed every frame by MagicSystem._updateStaffGrassEffects.
+    // inStaffGrass doubles LootSystem's luck multiplier while true;
+    // staffGrassHealTimer is a persistent tick-timer (mirrors PhysicsSystem's
+    // hot-spring hotWaterHealTimer) for the slow passive heal, deliberately
+    // not driven through applyRegen — see that method's per-frame-call warning.
+    this.inStaffGrass = false;
+    this.staffGrassHealTimer = 0;
     // Well coin blessings — permanent run-flags granted by tossing a raw coin
     // (`c`) into a well. Booleans, so they cannot stack.
     this.wellDamageBlessed = false; // red zone well: +1 damage on all attacks
@@ -579,37 +583,11 @@ export class Player {
     return 1;
   }
 
+  // Blink/tint priority chain lives in StatusEffectVisuals.computePlayerDisplayColor
+  // (moved out to keep Player.js under its architecture budget — that file
+  // already tracked the two in lockstep by comment cross-reference).
   getDisplayColor() {
-    // Low-HP warning: blink dark red when at 3 or less. Highest-priority signal.
-    if (this.hp > 0 && this.hp <= 3) {
-      const blinkCycle = Math.floor(this.statusBlinkTimer / 0.25);
-      if (blinkCycle % 2 === 0) return '#660000';
-    }
-    // Blink green when gooey
-    if (this.isGooey()) {
-      const BLINK_FREQUENCY = 0.3;
-      const blinkCycle = Math.floor(this.statusBlinkTimer / BLINK_FREQUENCY);
-      return blinkCycle % 2 === 0 ? '#00ff00' : this.baseColor;
-    }
-    // Blink white when sapped by ice wraith(s)
-    if (this.activeSappingBats.length > 0) {
-      const BLINK_FREQUENCY = 0.25;
-      const blinkCycle = Math.floor(this.statusBlinkTimer / BLINK_FREQUENCY);
-      return blinkCycle % 2 === 0 ? '#ffffff' : this.baseColor;
-    }
-    // Blink gold when dizzy
-    if (this.isDizzy()) {
-      const blinkCycle = Math.floor(this.statusBlinkTimer / 0.2);
-      return blinkCycle % 2 === 0 ? '#ddbb00' : this.baseColor;
-    }
-    // Solid gray/bronze while Stone Skin is active — a deliberate self-buff,
-    // reads as a full-body transformation and takes priority over ambient tints
-    if (this.stoneSkinTimer > 0) return STONE_SKIN_COLOR;
-    // Red tint when accumulating ember stacks (proximity to fire)
-    if (this.emberStacks > 0) return additiveTint(this.color, '#ff2200', 0.5);
-    // Blue tint when standing in water (inLiquid resets each frame — distinct from lingering wet status)
-    if (this.inLiquid) return additiveTint(this.color, '#2266ff', 0.5);
-    return this.color;
+    return computePlayerDisplayColor(this);
   }
 
   update(deltaTime) {
@@ -1055,6 +1033,10 @@ export class Player {
     this.luckBlessed = false;
     this.critChance = 0;
     this.luckDodgeBonus = 0;
+
+    // Reset Emerald Staff grass state
+    this.inStaffGrass = false;
+    this.staffGrassHealTimer = 0;
 
     // Reset well coin blessings
     this.wellDamageBlessed = false;

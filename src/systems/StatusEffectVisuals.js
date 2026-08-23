@@ -13,13 +13,14 @@ const SLICE_DURATION = 0.6; // seconds each active effect gets the blink "turn"
 // tier (see computeBlinkColor/computePipRows below) so it isn't listed here.
 const EFFECT_COLORS = {
   burn: '#ff4400',
-  poison: '#88ff00',
+  poison: '#8a9a2e', // sickly olive-green — deliberately duller/muddier than goo's clean lime so the two read apart at pip size
   zap: '#00ffff',
   stun: '#ffff00',
   charm: '#ff44ff',
   freeze: '#aaffff',
   wet: '#4488ff',
-  dizzy: '#ddbb00'
+  dizzy: '#ddbb00',
+  goo: '#00ff00' // matches Player.getDisplayColor()'s own gooey blink color
 };
 
 const SLEEP_COLOR = '#ff66cc'; // pink, all three drowse tiers
@@ -110,18 +111,18 @@ export function computePipRows(enemy) {
 // effectApplicationOrder), so this is a fixed-priority list of 1-dot rows
 // instead of a generic stack-driven one. Reuses EFFECT_COLORS for the
 // effects whose meaning matches the enemy version exactly (burn, poison,
-// wet, dizzy); freeze and goo get their own colors because the player's
+// wet, dizzy, goo); freeze gets its own color because the player's
 // "freeze" (statusEffects.freeze) is always the slow tier — matching the
 // enemy's puddle-slow cyan, never the full ice-lock EFFECT_COLORS.freeze
-// represents — and goo has no enemy equivalent at all, so its color mirrors
-// the player's own gooey blink in Player.getDisplayColor().
+// represents. EFFECT_COLORS.goo itself mirrors the player's own gooey blink
+// in Player.getDisplayColor(), which predates the enemy-side goo pip.
 const PLAYER_EFFECT_COLORS = {
   wet: EFFECT_COLORS.wet,
   burn: EFFECT_COLORS.burn,
   poison: EFFECT_COLORS.poison,
   dizzy: EFFECT_COLORS.dizzy,
   freeze: '#00ffff',
-  goo: '#00ff00',
+  goo: EFFECT_COLORS.goo,
   stoneskin: '#8c7853' // gray/bronze — must match Player.js's STONE_SKIN_COLOR
 };
 
@@ -147,4 +148,57 @@ export function computePlayerPipRows(player) {
   return PLAYER_PIP_ORDER
     .filter(effect => _isPlayerEffectActive(player, effect))
     .map(effect => ({ effect, color: PLAYER_EFFECT_COLORS[effect], stacks: 1 }));
+}
+
+const STONE_SKIN_COLOR = '#8c7853'; // gray/bronze — must match the stoneskin pip color above
+
+// Additively blend a tint color onto a base hex color. factor 0–1 controls tint intensity.
+function additiveTint(base, tint, factor = 0.5) {
+  const parse = h => { const n = parseInt(h.replace('#', ''), 16); return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff]; };
+  const [br, bg, bb] = parse(base);
+  const [tr, tg, tb] = parse(tint);
+  const r = Math.min(255, br + Math.round(tr * factor));
+  const g = Math.min(255, bg + Math.round(tg * factor));
+  const b = Math.min(255, bb + Math.round(tb * factor));
+  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+
+// Player's glyph blink/tint color, in fixed-priority order (unlike the enemy
+// round-robin above — the player has no stacks/effectApplicationOrder to
+// cycle through, so the loudest signal simply wins). Moved out of
+// Player.getDisplayColor() to keep Player.js under its architecture budget;
+// this file already tracked the two in lockstep by comment cross-reference,
+// so this is the same "operates on player, holds no state" shape as
+// computePlayerPipRows above.
+export function computePlayerDisplayColor(player) {
+  // Low-HP warning: blink dark red when at 3 or less. Highest-priority signal.
+  if (player.hp > 0 && player.hp <= 3) {
+    const blinkCycle = Math.floor(player.statusBlinkTimer / 0.25);
+    if (blinkCycle % 2 === 0) return '#660000';
+  }
+  // Blink green when gooey
+  if (player.isGooey()) {
+    const BLINK_FREQUENCY = 0.3;
+    const blinkCycle = Math.floor(player.statusBlinkTimer / BLINK_FREQUENCY);
+    return blinkCycle % 2 === 0 ? '#00ff00' : player.baseColor;
+  }
+  // Blink white when sapped by ice wraith(s)
+  if (player.activeSappingBats.length > 0) {
+    const BLINK_FREQUENCY = 0.25;
+    const blinkCycle = Math.floor(player.statusBlinkTimer / BLINK_FREQUENCY);
+    return blinkCycle % 2 === 0 ? '#ffffff' : player.baseColor;
+  }
+  // Blink gold when dizzy
+  if (player.isDizzy()) {
+    const blinkCycle = Math.floor(player.statusBlinkTimer / 0.2);
+    return blinkCycle % 2 === 0 ? '#ddbb00' : player.baseColor;
+  }
+  // Solid gray/bronze while Stone Skin is active — a deliberate self-buff,
+  // reads as a full-body transformation and takes priority over ambient tints
+  if (player.stoneSkinTimer > 0) return STONE_SKIN_COLOR;
+  // Red tint when accumulating ember stacks (proximity to fire)
+  if (player.emberStacks > 0) return additiveTint(player.color, '#ff2200', 0.5);
+  // Blue tint when standing in water (inLiquid resets each frame — distinct from lingering wet status)
+  if (player.inLiquid) return additiveTint(player.color, '#2266ff', 0.5);
+  return player.color;
 }
