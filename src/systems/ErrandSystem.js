@@ -37,9 +37,9 @@ const STAGE_CONFIG = [
  *
  * Lifecycle:
  *   1. Player enters an E room → enemies spawn normally.
- *   2. Room cleared → onRoomClear(player): starts first errand, returns ErrandCharacter.
+ *   2. Room cleared → onRoomClear(player, room): starts first errand, returns ErrandCharacter.
  *   3. Player re-enters any E room with active errand → main.js calls
- *      spawnErrandCharacter() after clearing enemies from the room.
+ *      spawnErrandCharacter(room) after clearing enemies from the room.
  *   4. Player without the requested item, close enough to talk → SPACE opens
  *      ErrandCharacter's dialogue (flavor text naming the request).
  *   5. Player holding the requested item (or ingredient), close, presses SPACE →
@@ -67,26 +67,75 @@ export class ErrandSystem {
    * @param {Player} player
    * @returns {ErrandCharacter|null}
    */
-  onRoomClear(player) {
+  onRoomClear(player, room) {
     if (this.activeErrand) return null; // Already have an active quest
 
     this._pickRequest(player);
     if (!this.activeErrand) return null;
 
-    return this.spawnErrandCharacter();
+    return this.spawnErrandCharacter(room);
   }
 
   /**
-   * Spawn a new ErrandCharacter at room centre using the current request.
-   * (Used both by onRoomClear and by main.js on re-entering an E room.)
+   * Spawn a new ErrandCharacter at (or near) room centre using the current
+   * request. (Used both by onRoomClear and by main.js on re-entering an E
+   * room.)
+   * @param {object} [room] Current room — used to steer the spawn off
+   *   liquid/collision tiles (e.g. lava landing on room centre in RED zone).
+   *   Falls back to the raw centre point when omitted.
    * @returns {ErrandCharacter|null}
    */
-  spawnErrandCharacter() {
+  spawnErrandCharacter(room) {
     if (!this.activeErrand) return null;
 
-    const centerX = (GRID.COLS / 2) * GRID.CELL_SIZE;
-    const centerY = (GRID.ROWS / 2) * GRID.CELL_SIZE;
-    return new ErrandCharacter(centerX, centerY, this.activeErrand.requestedItem, this.activeErrand.stage);
+    const { x, y } = this._findSafeSpawnPosition(room);
+    return new ErrandCharacter(x, y, this.activeErrand.requestedItem, this.activeErrand.stage);
+  }
+
+  /**
+   * Room centre, nudged off collision/liquid tiles. Mirrors RoomGenerator's
+   * getRandomPosition() liquid rejection (water/lava/mud all render as '~';
+   * '=' is static water) rather than a fresh check, since a caldera/molten-
+   * ascent room can land lava directly on room centre and the traveler has
+   * no water/lava immunity of its own.
+   */
+  _findSafeSpawnPosition(room) {
+    const C = GRID.CELL_SIZE;
+    const centerCol = Math.floor(GRID.COLS / 2);
+    const centerRow = Math.floor(GRID.ROWS / 2);
+    const collisionMap = room?.collisionMap;
+    const backgroundObjects = room?.backgroundObjects || [];
+    const LIQUID_CHARS = new Set(['~', '=']);
+
+    const isBlocked = (col, row) => {
+      if (collisionMap?.[row]?.[col]) return true;
+      return backgroundObjects.some(obj =>
+        LIQUID_CHARS.has(obj.char) &&
+        Math.round(obj.position.x / C) === col &&
+        Math.round(obj.position.y / C) === row
+      );
+    };
+
+    if (!isBlocked(centerCol, centerRow)) {
+      return { x: centerCol * C, y: centerRow * C };
+    }
+
+    // Spiral outward ring-by-ring for the nearest clear tile.
+    const maxRadius = Math.max(GRID.COLS, GRID.ROWS);
+    for (let radius = 1; radius <= maxRadius; radius++) {
+      for (let dr = -radius; dr <= radius; dr++) {
+        for (let dc = -radius; dc <= radius; dc++) {
+          if (Math.max(Math.abs(dr), Math.abs(dc)) !== radius) continue; // ring only
+          const col = centerCol + dc;
+          const row = centerRow + dr;
+          if (col < 1 || row < 1 || col >= GRID.COLS - 1 || row >= GRID.ROWS - 1) continue;
+          if (!isBlocked(col, row)) return { x: col * C, y: row * C };
+        }
+      }
+    }
+
+    // Unreachable in practice (rooms always have open floor) — fall back to centre.
+    return { x: centerCol * C, y: centerRow * C };
   }
 
   // ── Confirm-menu gate ───────────────────────────────────────────────────────
