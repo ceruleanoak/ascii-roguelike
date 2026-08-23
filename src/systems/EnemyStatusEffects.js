@@ -17,7 +17,7 @@ const MAX_STACKUP = 3; // shared cap for every stackable effect (see Enemy.js's 
 const POISON_DECAY_INTERVAL = 3.0; // seconds bought back per stack lost during poison's step-down expiry
 
 // Applies `effect` to `enemy` for `duration`, activating it if it wasn't
-// already and — for any of the 9 blink-capable effects (those with a
+// already and — for any of the 10 blink-capable effects (those with a
 // `stacks` field) — incrementing a generic stack counter regardless of which
 // weapon/oil/source triggered it, capped at MAX_STACKUP. Poison additionally
 // recomputes its DOT tick rate from the new stack count; sleep's tier
@@ -71,7 +71,7 @@ export function clearEffectOrder(enemy, effect) {
 
 // Ticks every status effect down by deltaTime: DOT damage/expiry for
 // burn/poison, freeze's frozen/shuddering sub-states, stun/zap/sleep/charm/
-// wet/dizzy expiry, and knockback/blind/goo (no stacks, no order tracking).
+// wet/dizzy/goo expiry, and knockback/blind (no stacks, no order tracking).
 // Returns DOT damage events for the caller to spawn damage numbers from.
 export function updateStatusEffects(enemy, deltaTime) {
   const damageEvents = []; // Track DOT damage for damage numbers
@@ -227,7 +227,12 @@ export function updateStatusEffects(enemy, deltaTime) {
   const goo = enemy.statusEffects.goo;
   if (goo.active) {
     goo.duration -= deltaTime;
-    if (goo.duration <= 0) { goo.active = false; goo.duration = 0; }
+    if (goo.duration <= 0) {
+      goo.active = false;
+      goo.duration = 0;
+      goo.stacks = 0;
+      clearEffectOrder(enemy, 'goo');
+    }
   }
 
   return damageEvents;

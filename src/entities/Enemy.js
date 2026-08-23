@@ -201,12 +201,12 @@ export class Enemy {
     // Status effects
     this.statusEffects = {
       // `stacks` (capped at 3, see EnemyStatusEffects.js's MAX_STACKUP) counts
-      // how many times each of these 9 blink-capable effects has been freshly
+      // how many times each of these 10 blink-capable effects has been freshly
       // applied while still active — generic across every effect and every
       // source (weapon, oil, any future onHit), not special-cased per effect
       // name. Drives blink speed uniformly; poison and sleep layer additional
       // stack-driven behavior (tick-rate scaling, tier escalation) elsewhere.
-      // knockback/blind/goo aren't blink-capable and don't track stacks.
+      // knockback/blind aren't blink-capable and don't track stacks.
       burn: { active: false, duration: 5, damage: 1, tickRate: 1.25, tickTimer: 0, stacks: 0 }, // ~4 ticks of 1 over 5s — short, punchy, readable
       poison: { active: false, duration: 0, damage: 1, tickRate: 3.0, tickTimer: 0, stacks: 0 },
       freeze: { active: false, duration: 0, slowAmount: 0.5, frozen: false, shuddering: false, stacks: 0 },
@@ -218,7 +218,7 @@ export class Enemy {
       knockback: { active: false, duration: 0 },
       blind: { active: false, duration: 0 }, // Attacks miss (0 damage)
       dizzy: { active: false, duration: 0, stacks: 0 },
-      goo: { active: false, duration: 0, slowAmount: 0.8 }
+      goo: { active: false, duration: 0, slowAmount: 0.8, stacks: 0 }
     };
 
     // Ordered list of currently-active blink-capable effect names, in the
@@ -2281,7 +2281,7 @@ export class Enemy {
   }
 
   // Round-robins the glyph blink color across every currently-active
-  // blink-capable effect (burn/poison/zap/stun/sleep/charm/freeze/wet/dizzy)
+  // blink-capable effect (burn/poison/zap/stun/sleep/charm/freeze/wet/dizzy/goo)
   // instead of a fixed priority chain — so e.g. Acid Blade poison and Drowse
   // Oil sleep landing on the same swing both get visible time, not just
   // whichever came first. See StatusEffectVisuals.js for the implementation.
