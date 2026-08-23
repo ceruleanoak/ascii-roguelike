@@ -1982,7 +1982,7 @@ export const ITEMS = {
   // ── Throwables ────────────────────────────────────────────────────────────
   'y': {
     char: 'y', name: 'Firecracker', type: ITEM_TYPES.CONSUMABLE,
-    effect: 'firecracker', radius: 40, oneShot: true, manualOnly: true, color: '#ff8800'
+    effect: 'firecracker', radius: 64, oneShot: true, manualOnly: true, color: '#ff8800'
   },
   '@': {
     char: '@',
