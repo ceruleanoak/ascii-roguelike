@@ -1,5 +1,4 @@
 import { GRID } from '../../game/GameConfig.js';
-import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher.js';
 
 /**
  * DialogueBox — bordered bottom-center panel for NPC speech.
@@ -7,6 +6,10 @@ import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher
  * Deliberately styled apart from the narrator/genie voice: the narrator owns
  * large center-screen VentureArcade text; NPC lines sit in this framed box in
  * Unifont, led by the speaker's glyph in their own color.
+ *
+ * Never run through the Spectacles cipher. Spectacles decode what the player
+ * SEES (written glyphs, UI text, maze covers) — NPC lines represent speech
+ * the player HEARS, so they stay in plain Latin regardless of equip state.
  */
 export class DialogueBox {
   constructor(renderer) {
@@ -25,10 +28,7 @@ export class DialogueBox {
     const boxY = GRID.HEIGHT - boxH - Math.floor(cs * 1.5);
 
     const npc = state.npc;
-    const line = spectaclesTransformString(
-      state.lines[state.lineIndex] ?? '',
-      isSpectaclesActive(game)
-    );
+    const line = state.lines[state.lineIndex] ?? '';
     const hasMore = state.lineIndex < state.lines.length - 1;
 
     ctx.save();
