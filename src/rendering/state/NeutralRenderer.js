@@ -201,6 +201,10 @@ export class NeutralRenderer {
       ctx.restore();
     }
 
+    // Wind-themed rooms (e.g. Oasis) — drifting sand motes, same visual as
+    // the yellow zone's Sandstorm. No-ops when the current room isn't bound.
+    game.sandstormSystem?.render(this.renderer.fgCtx);
+
     // Draw inventory overlay (if player is holding 'i')
     if (game.showInventory) {
       this.renderController.inventoryOverlay.render(game);

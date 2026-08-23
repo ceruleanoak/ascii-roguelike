@@ -54,10 +54,13 @@ export class SandstormSystem {
   }
 
   // Re-roll storm state for a freshly entered room. Idempotent per room ref.
+  // `windThemed` lets a neutral room (e.g. Oasis, the river-follow secret)
+  // opt into the same wind as its home zone without actually being 'yellow'
+  // zone (neutral rooms carry zone: 'neutral' for unrelated systems).
   bindToRoom(room) {
     if (this.activeRoom === room) return;
     this.activeRoom = room;
-    if (!room || room.zone !== 'yellow') {
+    if (!room || (room.zone !== 'yellow' && !room.windThemed)) {
       this.deactivate();
       return;
     }
@@ -73,7 +76,10 @@ export class SandstormSystem {
     this.dirY /= m;
     this.pushForce = MIN_PUSH + Math.random() * (MAX_PUSH - MIN_PUSH);
     this.active = true;
-    this.lightningEnabled = Math.random() < LIGHTNING_ROOM_CHANCE;
+    // Lightning is a combat hazard — withhold it from windThemed-only rooms
+    // (e.g. Oasis) so the neutral "no enemies" contract holds; true yellow
+    // EXPLORE rooms still get the full storm.
+    this.lightningEnabled = this.activeRoom?.zone === 'yellow' && Math.random() < LIGHTNING_ROOM_CHANCE;
     this.lightningTimer = this.lightningEnabled
       ? (LIGHTNING_MIN + Math.random() * (LIGHTNING_MAX - LIGHTNING_MIN))
       : 0;

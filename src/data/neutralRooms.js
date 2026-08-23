@@ -4,6 +4,7 @@ import { Item } from '../entities/Item.js';
 import { Ingredient } from '../entities/Ingredient.js';
 import { Fairy } from '../entities/Fairy.js';
 import { ITEMS, ITEM_TYPES, INGREDIENTS, getItemData, isIngredient } from './items.js';
+import { ZONES } from './zones.js';
 
 /**
  * Neutral Room Scripts
@@ -358,11 +359,30 @@ export const NEUTRAL_ROOMS = {
    */
   oasis: {
     onGenerate(room, state, roomGenerator) {
+      // Yellow-zone cohesion: this secret is exclusive to the yellow zone's
+      // river-follow chase, so it reads as part of that zone rather than a
+      // disconnected green-bordered neutral room — same border color, same
+      // ambient wind (room.windThemed, see SandstormSystem.bindToRoom).
+      room.borderColor = ZONES.yellow.borderColor;
+      room.windThemed = true;
+
       const nodes = [
         { col: 13, row: 14, radius: 7 },
         { col: 18, row: 17, radius: 5.5 }
       ];
       roomGenerator?.stampWaterBlobs(room, nodes, 2.0, 0.9);
+
+      // Carve a river from the door the player entered through (mirrors
+      // room.returnExit) into the nearer lake blob, so the water that led
+      // here visually continues into the oasis instead of the lake looking
+      // like an unrelated pool. Reuses the same wall-to-wall carver as the
+      // yellow zone's forced river-follow chain (RoomGenerator._buildPath).
+      const ENTRY_EDGE = { south: 'bottom', west: 'left', east: 'right' };
+      const entryEdge = ENTRY_EDGE[room.returnExit] || 'bottom';
+      if (roomGenerator) {
+        const start = roomGenerator._pickEdgePoint(entryEdge);
+        roomGenerator._buildPath(room, 'river', start, { col: nodes[0].col, row: nodes[0].row });
+      }
 
       const centerX = Math.floor(GRID.COLS / 2) * GRID.CELL_SIZE;
       const centerY = Math.floor(GRID.ROWS / 2) * GRID.CELL_SIZE;
