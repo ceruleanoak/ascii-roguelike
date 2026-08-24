@@ -296,6 +296,7 @@ class Game {
     this.dungeonKeySkullFloor = -1;
     this.dungeonKeyUsedThisRun = false;
     this.dungeonRareItemObtainedThisRun = false;
+    this.spectaclesObtainedThisRun = false; // Maze clear reward flag — declared here, not lazily at first set
     this.dungeonTemplatesUsedThisRun = new Set(); // no floor-layout repeats within one dungeon visit
     this.companion = null;         // Active camp NPC companion (promoted from room.campNPC)
 
@@ -908,6 +909,11 @@ class Game {
     this.blueZoneRoom = 0;
     this.runTimerSystem.clear(); // No run in progress on TITLE — next REST entry starts a fresh timer
 
+    // Transient feedback dies with the session (bug #198; harness-enforced).
+    this.menuSystem.clearPickupFeedback();
+    this.restBundle = null;
+    this.hasLeftRestOnce = false;
+
     // No player needed for title screen
     this.player = null;
     this.renderer.markBackgroundDirty();
@@ -1234,7 +1240,9 @@ class Game {
 
     // Capture magic-meter state from prior player before reconstructing.
     // Cleared by the true-game-over reset block, so death wipes it correctly.
-    const savedMagicMeter = this.player?.magicMeter
+    // Only an ACTIVE meter is carried: stamping an inactive one from a dead
+    // run re-populated _savedMagicMeter after the reset nulled it.
+    const savedMagicMeter = this.player?.magicMeter?.active
       ? { ...this.player.magicMeter }
       : this._savedMagicMeter ?? null;
 
@@ -3968,6 +3976,11 @@ class Game {
     this.followerCrows = [];
     this.tamedRats = [];
     this.ridgeBridgeBuilt = false;
+
+    // Same transient-feedback clears as TITLE (bug #198 family).
+    this.menuSystem.clearPickupFeedback();
+    this.restBundle = null;
+    this.hasLeftRestOnce = false;
 
     // Reset character system for new run
     this.deadCharacters = [];

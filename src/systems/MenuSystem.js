@@ -261,6 +261,16 @@ export class MenuSystem {
     }
   }
 
+  // Symmetric clear for full state resets — pickup feedback must never cross
+  // a run/session boundary (bug #198: a demo-replay pickup left "SPEAR"
+  // showing on the first REST screen of the next real run). Enforced by
+  // tools/check-reset-parity.mjs on both reset paths.
+  clearPickupFeedback() {
+    this.game.pickupMessage = null;
+    this.game.pickupMessageTimer = 0;
+    this.game.pickupMessageQueue = [];
+  }
+
   showNextPickupMessage() {
     const game = this.game;
     if (game.pickupMessageQueue.length > 0) {
@@ -370,6 +380,23 @@ export class MenuSystem {
       const el      = consumableEls[i];
       const cslotEl = cslotEls[i];
       if (!el) continue;
+
+      // Gold Breath curse: the slots are coins — every functional slot
+      // renders `c` wired to the coin tally (bright while the wallet holds
+      // something, dry-dim when empty). Sits above the meter branch because
+      // the curse owns the whole row; locked slots fall through to their
+      // normal grey rendering below. The armed blink still runs: arming a
+      // slot (keys 4-8) and pressing SPACE/SHIFT is exactly what flips a
+      // coin now. Nothing explains this — the row simply became your hoard.
+      if (game.goldBreathCurseActive && i < maxConsumableSlots) {
+        const isSelected = i === (game.player?.selectedConsumableIndex ?? -1);
+        const armedBlinkOn = (performance.now() % 800) < 400;
+        if (cslotEl) cslotEl.style.color = (isSelected && armedBlinkOn) ? '#ffffff' : '';
+        el.textContent = 'c';
+        el.style.color = (game.inventorySystem?.getCoinCount?.() ?? 0) > 0 ? '#ffd700' : '#665500';
+        el.style.opacity = '1';
+        continue;
+      }
 
       // Magic-meter slot: render a mana fill block instead of a consumable
       // char. Fill is this slot's share of the cumulative pool (front slots
