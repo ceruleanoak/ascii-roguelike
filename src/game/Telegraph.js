@@ -314,7 +314,11 @@ export function meleeAimOffset(enemy) {
 // Facing is locked here — the shape aims where the enemy aimed, and stays
 // aimed there for the whole windup (a readable commitment).
 export function attachTelegraph(attack, enemy, dirX, dirY) {
-  const resolved = resolveTelegraph(enemy.data.telegraph, enemy.data.name || enemy.char);
+  // A Strike band can override which shape this windup telegraphs, the same
+  // way it already overrides damage/knockback/duration/windup — see
+  // Enemy.createMeleeAttack's `band?.damage ?? ...` for the identical pattern.
+  const band = enemy.stateMachine?.band;
+  const resolved = resolveTelegraph(band?.telegraph ?? enemy.data.telegraph, enemy.data.name || enemy.char);
   if (!resolved) return attack;
   attack.warnShape = resolved.warnShape;
   attack.hitShape = resolved.hitShape;

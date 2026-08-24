@@ -1149,7 +1149,10 @@ export const ENEMIES = {
     speed: 28,
     acceleration: 100,
     damage: 4,
-    attackRange: GRID.CELL_SIZE * 2.5,
+    // Grown to cover both Strike bands below — Strike is only ever entered
+    // within attackRange, so the far band's ring slam needs the range to
+    // reach past the old point-blank swing distance.
+    attackRange: GRID.CELL_SIZE * 4.5,
     aggroRange: GRID.CELL_SIZE * 7,
     attackCooldown: 1.8,
     attackWindup: 1.2,
@@ -1160,6 +1163,22 @@ export const ENEMIES = {
     knockbackMultiplier: 3.5,   // Very high knockback on hit
     isImpact: true,             // Heavy blow — bypasses staff block
     recover: { variant: 'stationary' },   // Plants after a swing — a heavy tool-user doesn't backpedal like a skittish beast
+    // Two attack choices by range: point-blank keeps the original pickaxe
+    // swing untouched; mid-range gets a big-windup ring slam whose safe
+    // dodge is INTO the Miner, not away — a stand-your-ground intelligent
+    // humanoid punishing both closeness (swing) and distance (slam).
+    strike: {
+      bands: [
+        { within: GRID.CELL_SIZE * 2.5 },   // point-blank: unchanged swing
+        {
+          telegraph: { area: 'ring', animation: 'radiate' },
+          movement: 'still',   // plants for the read instead of advancing through it
+          windup: 2.2,         // big windup — "get out of the way"
+          damage: 5,
+          knockback: 900
+        }
+      ]
+    },
     elementalAffinity: {
       resistance: { 'physical': 0.6, 'stun': 0.8 },
       weakness: { 'magic': 1.5 }
