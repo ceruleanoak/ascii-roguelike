@@ -66,6 +66,11 @@ export class NPCRat {
     this.invulnerabilityTimer = 0;
     this.attackTimer = 0;
 
+    // Gilded (dungeon-vault reward): HP-less helper form — damage immune,
+    // gold-tinted render, combat-elevated. Flipped only by CompanionSystem
+    // (setPetsGilded); initialized here, never lazy-assigned.
+    this.gilded = false;
+
     this.state = 'idle';
     this.target = null;
     this.fleeTimer = 0;
@@ -215,6 +220,8 @@ export class NPCRat {
   takeDamage(amount, attacker = null) {
     if (this.invulnerabilityTimer > 0) return false;
     if (this.state === 'permaFlee') return false;
+    // Gilded rats are the vault's reward — nothing can hurt them.
+    if (this.gilded) return false;
     this.hitsThisRoom++;
     this.invulnerabilityTimer = INVULNERABILITY_DURATION;
     const from = attacker?.position || this.target?.position || null;

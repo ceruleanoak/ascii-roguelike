@@ -51,6 +51,10 @@ export class CompanionSystem {
   // hostile Enemy AI cleanly out of the companion's behavior tree.
   updateBreadSeekingRats() {
     const game = this.game;
+    // Dungeons have no wild rats to tame, and dungeon loaves are the
+    // Hoardmaw's Help-register decoy material — the wild-taming pipeline
+    // stays surface-only.
+    if (game.player?.inDungeon) return;
     const enemies = game.currentRoom?.enemies;
     if (!enemies || enemies.length === 0) return;
 
@@ -185,7 +189,10 @@ export class CompanionSystem {
   updateTamedRats(deltaTime) {
     const game = this.game;
     if (!game.tamedRats || game.tamedRats.length === 0) return;
-    const enemies = game.currentRoom?.enemies || [];
+    // Canonical active-layer enemy list — inside a dungeon floor this is the
+    // floor's roster, so rats bite dungeon enemies instead of staring at the
+    // frozen surface room's cache (the #130/#131 layer-leak family).
+    const enemies = game._activeEnemies?.() || [];
     const siblings = game.tamedRats;
     for (let i = game.tamedRats.length - 1; i >= 0; i--) {
       const rat = game.tamedRats[i];
@@ -215,6 +222,8 @@ export class CompanionSystem {
     const projs = cs.enemyProjectiles || [];
     for (const rat of game.tamedRats) {
       if (rat.state === 'permaFlee') continue;
+      // Gilded rats are damage-immune by design — the vault's reward.
+      if (rat.gilded) continue;
       if (rat.invulnerabilityTimer > 0) continue;
       // Projectiles
       for (let i = projs.length - 1; i >= 0; i--) {
@@ -284,6 +293,68 @@ export class CompanionSystem {
     for (const rat of game.tamedRats) {
       game.physicsSystem.addEntity(rat);
     }
+  }
+
+  // ─── Dungeon descent: pets enter floors mortal, gild at the vault ──────────
+  // Companion presence across Interior types is an ADR-backlog candidate
+  // (2026-08-24). DungeonSystem._activateFloor/_exitDungeon call these around
+  // every floor swap, mirroring how the camp mercenary is snapped.
+
+  // Teleport pets onto the newly-activated floor beside the player WITHOUT
+  // healing — attrition persists across floors, which is what makes the
+  // mortal descent a real escort risk. Crows re-orbit on their own; rats
+  // need their collision/background references pointed at floor content.
+  snapPetsIntoFloor(floor) {
+    const game = this.game;
+    if (!game.player) return;
+    const total = (game.companionCrows?.length || 0) + (game.tamedRats?.length || 0);
+    let slot = 0;
+    for (const crow of game.companionCrows || []) {
+      this._placePetAtPlayerSlot(crow, game.player, slot++, total);
+    }
+    for (const rat of game.tamedRats || []) {
+      this._placePetAtPlayerSlot(rat, game.player, slot++, total);
+      rat.setCollisionMap(floor.collisionMap);
+      rat.setBackgroundObjects(floor.backgroundObjects); // layer-guard-ok: router-injected
+    }
+  }
+
+  // Dungeon exit: bring pets back to surface coordinates beside the player,
+  // restore their surface collision/background references (#141 discipline),
+  // and clear any gilded state — the vault's reward does not leave with you.
+  restorePetsFromFloor() {
+    const game = this.game;
+    if (!game.player) return;
+    const total = (game.companionCrows?.length || 0) + (game.tamedRats?.length || 0);
+    let slot = 0;
+    for (const crow of game.companionCrows || []) {
+      this._placePetAtPlayerSlot(crow, game.player, slot++, total);
+    }
+    for (const rat of game.tamedRats || []) {
+      this._placePetAtPlayerSlot(rat, game.player, slot++, total);
+      rat.setCollisionMap(game.currentRoom?.collisionMap || null);
+      rat.setBackgroundObjects(game.currentRoom?.backgroundObjects || null); // layer-guard-ok
+    }
+    this.setPetsGilded(false);
+  }
+
+  // Gilded flip for both pet rosters. Called by the dungeon boss system on
+  // vault-floor arrival; cleared on dungeon exit via restorePetsFromFloor.
+  setPetsGilded(gilded) {
+    const game = this.game;
+    for (const crow of game.companionCrows || []) crow.gilded = gilded;
+    for (const rat of game.tamedRats || []) rat.gilded = gilded;
+  }
+
+  // Radial placement around the player — same geometry as NPCRat.onRoomEnter,
+  // minus the full per-room reset (HP/state deliberately untouched).
+  _placePetAtPlayerSlot(pet, player, slot, total) {
+    const angle = (slot / Math.max(total, 1)) * Math.PI * 2;
+    const radius = GRID.CELL_SIZE * 1.1;
+    pet.position.x = player.position.x + Math.cos(angle) * radius;
+    pet.position.y = player.position.y + Math.sin(angle) * radius;
+    pet.velocity.vx = 0;
+    pet.velocity.vy = 0;
   }
 
   // Wild + follower crow driver: bread seeking, scare reactions, promotion.
@@ -536,7 +607,9 @@ export class CompanionSystem {
     const ctx = {
       player: game.player,
       ingredients: game.ingredients,
-      enemies: game.currentRoom?.enemies || [],
+      // Active-layer enemies (floor roster inside dungeons) — dive targeting
+      // must see the enemies the player is actually fighting.
+      enemies: game._activeEnemies?.() || [],
       items: game.items,
       // Lift the ingredient off the ground but DON'T credit the player —
       // the companion ferries it back and deposits on perch. Returns true if

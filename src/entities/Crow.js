@@ -79,6 +79,11 @@ export class Crow {
     this.height = GRID.CELL_SIZE;
     this.plane = 0;
 
+    // Gilded (dungeon-vault reward): gold-tinted render + combat elevation.
+    // Flipped only by CompanionSystem (setPetsGilded); initialized here,
+    // never lazy-assigned.
+    this.gilded = false;
+
     // State machine:
     //   'idle' → 'fleeing' (scared by weapon/player) → 'returning' → 'idle'
     //   'idle'/'returning'/'fleeing' → 'seekingBread' on bread sighted → eats → promoted to companion.

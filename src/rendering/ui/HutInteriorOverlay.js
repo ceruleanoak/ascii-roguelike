@@ -8,6 +8,7 @@ import {
 import { drawWires } from '../effects/WireEffects.js';
 import { drawCoinArc } from '../effects/ArcTossEffects.js';
 import { drawStatusPips } from '../effects/StatusPipEffects.js';
+import { drawTamedRats } from './CompanionRenderers.js';
 
 /**
  * HutInteriorOverlay — picture-in-picture rendering for both Hut and Dungeon interiors.
@@ -288,6 +289,22 @@ export class HutInteriorOverlay {
         x: gx * GRID.CELL_SIZE,
         y: gy * GRID.CELL_SIZE
       }));
+    }
+
+    // ── 16b-2. Pet companions (crows + tamed rats), dungeon descents only ────
+    // They snap onto each floor beside the player (CompanionSystem), so their
+    // coordinates are floor-space while inside — drawn here under the overlay
+    // translate, same as the camp companion above. Huts stay pet-free by
+    // design, hence the inDungeon guard rather than any-interior.
+    if (game.player?.inDungeon) {
+      if (game.tamedRats?.length) {
+        drawTamedRats(this.renderer, game, () => true);
+      }
+      if (game.companionCrows?.length) {
+        for (const crow of game.companionCrows) {
+          this.renderController.exploreRenderer._drawCrow(crow);
+        }
+      }
     }
 
     // ── 16c. Sapping enemies on top of player (bats latched on player) ────────

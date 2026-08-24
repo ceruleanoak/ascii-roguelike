@@ -514,7 +514,9 @@ export class ExploreRenderer {
       }
     }
 
-    if (game.companionCrows && game.companionCrows.length > 0) {
+    // Companion crows draw on the surface pass only — inside a dungeon their
+    // coordinates are floor-space and the interior overlay draws them there.
+    if (game.companionCrows && game.companionCrows.length > 0 && !isInteriorActive(game)) {
       for (const c of game.companionCrows) {
         this._drawCrow(c);
       }
@@ -1277,7 +1279,8 @@ export class ExploreRenderer {
       crow.position.x + GRID.CELL_SIZE / 2,
       crow.position.y + GRID.CELL_SIZE / 2 + offsetY,
       crow.char,
-      crow.color
+      // Gilded crows (dungeon-vault reward) read as gold at a glance.
+      crow.gilded ? '#ffd700' : crow.color
     );
     // Beak pixel: shown for whatever the crow is currently carrying (spawn
     // hoard, ferried/stolen ingredient, or a stolen ground Item) — a single

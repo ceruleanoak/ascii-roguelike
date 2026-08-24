@@ -279,6 +279,10 @@ export class DungeonSystem {
       game.companion.collisionMap = floor.collisionMap;
     }
 
+    // Pet companions (crows + tamed rats) descend with the player — mortal,
+    // no heal on floor swap. CompanionSystem owns the roster logic.
+    game.companionSystem?.snapPetsIntoFloor?.(floor);
+
     game.renderer.backgroundDirty = true;
   }
 
@@ -396,7 +400,19 @@ export class DungeonSystem {
 
     // Bring the companion back outside beside the player
     game.campNPCSystem?.snapCompanionToPlayer?.();
-    if (game.companion) game.companion.commandTarget = null;
+    if (game.companion) {
+      game.companion.commandTarget = null;
+      // Restore the surface collision map — the floor-synced map from
+      // _activateFloor has different geometry, and carrying it outside makes
+      // the companion collide with walls that no longer exist (#141;
+      // mirrors HutSystem's own exit path).
+      if (game.currentRoom?.collisionMap) {
+        game.companion.collisionMap = game.currentRoom.collisionMap;
+      }
+    }
+
+    // Pet companions: surface coordinates, surface maps, gilded cleared.
+    game.companionSystem?.restorePetsFromFloor?.();
 
     // Clear hutPlane loot from active globals (preserved on floor objects above)
     game.ingredients = game.ingredients.filter(i => !i.hutPlane);
