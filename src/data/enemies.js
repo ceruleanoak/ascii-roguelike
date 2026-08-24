@@ -1098,7 +1098,8 @@ export const ENEMIES = {
       cooldown: 5.0,
       wallStunDuration: 2.5,     // Generous safe window — primary counterplay
       chargeRange: GRID.CELL_SIZE * 10,
-      initialDelay: 1.2
+      initialDelay: 1.2,
+      nearDeathCooldownMultiplier: 0.5   // Below 30% HP (where the blink starts) it charges twice as often — cornered landslide
     },
     deathExplosion: {
       enabled: true,

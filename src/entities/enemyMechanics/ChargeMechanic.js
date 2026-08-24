@@ -7,6 +7,11 @@
 // Goblin Chief bash also drives this state machine (tuned via data values),
 // so all reads/writes go through `enemy.data.chargeMechanic`.
 
+// Near-death threshold shared with Enemy.getNearDeathBlinkColor (≤30% HP) so
+// an enemy's blink and its behavioral desperation start on the same hit —
+// opt-in per enemy via `nearDeathCooldownMultiplier` on this mechanic's data.
+const NEAR_DEATH_HP_FRACTION = 0.3;
+
 export const ChargeMechanic = {
   isEnabled(enemy) {
     return enemy.data.chargeMechanic?.enabled === true;
@@ -27,6 +32,13 @@ export const ChargeMechanic = {
     const cfg = enemy.data.chargeMechanic;
     if (!cfg?.enabled) return;
     const { deltaTime, distance, effectiveVisionLength, onScreen } = ctx;
+    // Cornered enemies charge more often — a landslide gains momentum as it's
+    // chipped away, it doesn't slow down. Applies at both cooldown sites
+    // (abort below and natural completion) so every path out of a charge
+    // pays the same desperate-cycle price.
+    const cooldownMult = cfg.nearDeathCooldownMultiplier
+      && enemy.hp <= enemy.maxHp * NEAR_DEATH_HP_FRACTION
+      ? cfg.nearDeathCooldownMultiplier : 1;
 
     // Wet/goo block charging entirely — a soaked or slimed boar can't get
     // traction. Off-screen joins the same abort: charging is a continuous
@@ -38,7 +50,7 @@ export const ChargeMechanic = {
     if ((enemy.isWet() || enemy.isGooey() || !onScreen)
         && (enemy.chargeState === 'windup' || enemy.chargeState === 'charging')) {
       enemy.chargeState = 'idle';
-      enemy.chargeTimer = cfg.cooldown;
+      enemy.chargeTimer = cfg.cooldown * cooldownMult;
     }
 
     if (enemy.chargeState === 'stunned') {
@@ -82,7 +94,7 @@ export const ChargeMechanic = {
       }
       if (enemy.chargeDurationTimer <= 0) {
         enemy.chargeState = 'idle';
-        enemy.chargeTimer = cfg.cooldown;
+        enemy.chargeTimer = cfg.cooldown * cooldownMult;
       }
     } else {
       // idle — count down to next charge whenever a target is engaged
