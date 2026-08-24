@@ -325,6 +325,9 @@ export class Enemy {
     if (this.movementStyle === 'keeper') {
       // Randomly pick strafe direction so grouped keepers orbit in different directions
       this.keeperStrafeDir = Math.random() < 0.5 ? 1 : -1;
+      // Countdown for the optional `strafeFlipInterval` flip (moveKeeper);
+      // seeded to the full interval so the first flip lands on cadence.
+      this.keeperFlipTimer = this.movementConfig?.strafeFlipInterval ?? 0;
     }
     if (this.movementStyle === 'ambusher') {
       this.burstTimer = 0;

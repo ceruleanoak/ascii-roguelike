@@ -913,6 +913,9 @@ export const ENEMIES = {
     attackWindup: 1.0,  // Minimum 1 second telegraph
     attackType: 'fire',
     movementStyle: 'keeper',  // Stays at flame range; too close and it backs off
+    movementConfig: {
+      strafeFlipInterval: 1.75,  // Reverses its orbit on a cadence — restless flame, not a wind-up toy
+    },
     decisionInterval: 0.4,
     color: '#ff4400',
     elementalAffinity: {

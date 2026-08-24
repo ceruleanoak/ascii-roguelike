@@ -94,6 +94,20 @@ export function moveKeeper(enemy, speedMultiplier, targetPos, deltaTime) {
   const preferred  = cfg.preferredRange  ?? (enemy.attackRange * 0.8);
   const tolerance  = cfg.rangeTolerance  ?? (GRID.CELL_SIZE * 1.5);
 
+  // Optional strafe flip: `keeperStrafeDir` is fixed at construction, so
+  // without this every keeper orbits one rotational direction for its entire
+  // life — a robot tell. `strafeFlipInterval` flips it on a timer; the same
+  // lever tuned fast reads twitchy/restless, tuned slow still reads deliberate.
+  // Timer field itself is initialized in Enemy's constructor next to
+  // `keeperStrafeDir` (no lazy init).
+  if (cfg.strafeFlipInterval) {
+    enemy.keeperFlipTimer -= deltaTime;
+    if (enemy.keeperFlipTimer <= 0) {
+      enemy.keeperFlipTimer = cfg.strafeFlipInterval;
+      enemy.keeperStrafeDir *= -1;
+    }
+  }
+
   const dirX = dx / dist;
   const dirY = dy / dist;
   // Perpendicular axis for circle-strafing
