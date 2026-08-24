@@ -36,6 +36,7 @@ export class LakeBoss {
     this.invulnerabilityDuration = 0.15;
     this.hitFlash = false; // true only when iframes were triggered by player damage
     this.hasTakenDamage = false;
+    this.enteredSlamming = false; // one-shot slam-entry signal drained by BossSystem
 
     // State machine: 'underwater' | 'surfaced' | 'slamming'
     this.state = 'underwater';
@@ -394,6 +395,10 @@ export class LakeBoss {
   _transitionTo(state) {
     this.state = state;
     this.hitFlash = false; // state transitions are never damage-triggered iframes
+    // Entering the slam is signalled here rather than sampled by BossSystem around
+    // the tick, because takeDamage() can trigger it from CombatSystem — outside
+    // update() entirely. BossSystem consumes and clears this flag (bug #216).
+    if (state === 'slamming') this.enteredSlamming = true;
     if (state === 'underwater') {
       this.hammerCountdown      = null;
       this._passiveHammerTimer  = 18.0;

@@ -18,7 +18,6 @@ import { LakeBoss } from '../entities/LakeBoss.js';
 import { TurtleShell, TURTLE_MAX_HP, TURTLE_PHASE2_HP } from '../entities/TurtleShell.js';
 import { Enemy } from '../entities/Enemy.js';
 import { TurtleHead } from '../entities/TurtleHead.js';
-import { assertSingleDrive } from './EnemyUpdateSystem.js';
 import { TurtleLeg } from '../entities/TurtleLeg.js';
 
 
@@ -91,6 +90,10 @@ export class BossSystem {
                      y: o.position.y + GRID.CELL_SIZE / 2 }));
       const cx = GRID.WIDTH / 2, cy = GRID.HEIGHT / 2;
       this.lakeBoss = new LakeBoss(cx, cy, waterTiles);
+      // Set once here rather than per-frame: the boss is driven by EnemyUpdateSystem
+      // before this system runs, so a per-frame assignment would always land a tick
+      // late, and the target never changes for the life of the encounter (bug #216).
+      this.lakeBoss.setTarget(this.game.player);
       room.enemies.push(this.lakeBoss);
       room.isBossRoom     = true;
       room.isLakeBossRoom = true;
@@ -210,19 +213,15 @@ export class BossSystem {
 
   _updateLakeBoss(deltaTime) {
     const boss = this.lakeBoss;
-    boss.target = this.game.player;
-    boss.shockwaveActive = !!this._iceShockwave;
-    const prevState = boss.state;
-    // Open bug #216: LakeBoss also sits in room.enemies, so EnemyUpdateSystem
-    // drives it on the enemy clock AND this raw drive advances every timer a
-    // second time (~3x authored speed). The tick-ledger makes the double drive
-    // loud until the canonical-driver decision is implemented; the rebalance
-    // must wait for that fix, not absorb the factor (see [clock-mismatch]).
-    boss.update(deltaTime);
-    assertSingleDrive(boss, this.game, 'BossSystem._updateLakeBoss');
-    // If the boss just transitioned to slamming (e.g. triggered by takeDamage this frame),
-    // purge any delayed ice shots already sitting in CombatSystem's pending queue.
-    if (prevState !== 'slamming' && boss.state === 'slamming') {
+    // Bug #216 fix: LakeBoss sits in room.enemies, so EnemyUpdateSystem already
+    // drove it on the canonical enemy clock earlier this frame. This method is a
+    // pure consumer of that tick — it must never call boss.update() again.
+    // Its per-frame inputs are staged at the end of this method for the next tick.
+
+    // If the boss entered the slam since we last looked (from its own tick, or from
+    // takeDamage() inside CombatSystem), purge delayed ice shots already queued.
+    if (boss.enteredSlamming) {
+      boss.enteredSlamming = false;
       this.game.combatSystem.cancelPendingAttacksFrom(boss);
     }
     this._drainPendingAttacks(boss);
@@ -321,11 +320,16 @@ export class BossSystem {
 
       if (sw.radius >= sw.maxRadius) {
         for (const obj of this.game._activeBackgroundObjects()) {
-          delete obj._shockwaveThawed;
+          delete obj._shockwaveTouched;
         }
         this._iceShockwave = null;
       }
     }
+
+    // Stage the boss's per-frame inputs for its next canonical tick. EnemyUpdateSystem
+    // drives the boss before this system runs, so anything assigned here is read on the
+    // following frame — which is why these are set last rather than first (bug #216).
+    boss.shockwaveActive = !!this._iceShockwave;
 
     if (boss.hp <= 0) this._onLakeBossDefeated();
   }
