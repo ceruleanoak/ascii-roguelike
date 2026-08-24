@@ -39,7 +39,7 @@ const GLINT_PULSE_PERIOD = 1.2; // seconds per breath pulse (the rhythm to read)
 
 // Phase-3 bribe: three offers; each refused escalates the convulsion.
 const BRIBE_OFFER_COUNT  = 3;
-const BRIBE_OFFER_WINDOW = 2.8;  // seconds the mound sits there, tempting
+export const BRIBE_OFFER_WINDOW = 2.8;  // seconds the mound sits there, tempting
 // Choke kill window once the pile is fed back into its own mouth.
 const CHOKE_WINDOW       = 4.5;
 
