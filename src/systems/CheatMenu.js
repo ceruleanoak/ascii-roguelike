@@ -89,6 +89,11 @@ export class CheatMenu {
       { char: '1', name: 'CORRIDOR', type: 'dungeon_warp', destination: { kind: 'numbered', floorIndex: 1 }, color: '#aaaaaa' },
       { char: '2', name: 'BRANCH', type: 'dungeon_warp', destination: { kind: 'numbered', floorIndex: 2 }, color: '#aaaaaa' },
       { char: '3', name: 'PYRAMID', type: 'dungeon_warp', destination: { kind: 'numbered', floorIndex: 3 }, color: '#aaaaaa' },
+      // Vault = the dungeon boss floor. Landing on it fires the encounter for
+      // free: _activateFloor calls dungeonBossSystem.onFloorActivated, which
+      // keys off floor.isVault — so this is a one-pick jump to the boss
+      // without walking the Legend of Three offering first.
+      { char: '4', name: 'VAULT (BOSS)', type: 'dungeon_warp', destination: { kind: 'numbered', floorIndex: 4 }, color: '#ffcc00' },
       { char: '!', name: 'TRAP ROOM', type: 'dungeon_warp', destination: { kind: 'side', key: 'trapRoom' }, forceRegenerate: true, color: '#ff8844' },
       ...Object.keys(PUZZLE_ROOM_TEMPLATES).map(name => ({
         char: '?', name: name.toUpperCase(), type: 'dungeon_warp',
