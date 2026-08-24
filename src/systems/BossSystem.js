@@ -18,6 +18,7 @@ import { LakeBoss } from '../entities/LakeBoss.js';
 import { TurtleShell, TURTLE_MAX_HP, TURTLE_PHASE2_HP } from '../entities/TurtleShell.js';
 import { Enemy } from '../entities/Enemy.js';
 import { TurtleHead } from '../entities/TurtleHead.js';
+import { assertSingleDrive } from './EnemyUpdateSystem.js';
 import { TurtleLeg } from '../entities/TurtleLeg.js';
 
 
@@ -212,7 +213,13 @@ export class BossSystem {
     boss.target = this.game.player;
     boss.shockwaveActive = !!this._iceShockwave;
     const prevState = boss.state;
+    // Open bug #216: LakeBoss also sits in room.enemies, so EnemyUpdateSystem
+    // drives it on the enemy clock AND this raw drive advances every timer a
+    // second time (~3x authored speed). The tick-ledger makes the double drive
+    // loud until the canonical-driver decision is implemented; the rebalance
+    // must wait for that fix, not absorb the factor (see [clock-mismatch]).
     boss.update(deltaTime);
+    assertSingleDrive(boss, this.game, 'BossSystem._updateLakeBoss');
     // If the boss just transitioned to slamming (e.g. triggered by takeDamage this frame),
     // purge any delayed ice shots already sitting in CombatSystem's pending queue.
     if (prevState !== 'slamming' && boss.state === 'slamming') {

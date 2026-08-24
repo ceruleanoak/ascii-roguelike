@@ -10,6 +10,26 @@ const SLIME_COLLISION_DISTANCE = 16;
 const SLIME_COLLISION_SQ = SLIME_COLLISION_DISTANCE * SLIME_COLLISION_DISTANCE;
 
 /**
+ * Single-drive assertion for the canonical-tick contract (bugs #88/#92/#216).
+ * Any system that drives an entity's update() outside this class's enemy loop
+ * must wrap the call in assertSingleDrive(entity, game) — a second drive of
+ * the same entity within one frame means its timers are advancing on two
+ * clocks at once. Reports once per entity per session; never throws (the
+ * misdrive itself is the bug to fix, not crash-shipping behavior).
+ */
+export function assertSingleDrive(entity, game, driver = 'unknown') {
+  const frame = game?._enemyTickFrame ?? -1;
+  if (entity._lastDriveFrame === frame && !entity._driveWarningShown) {
+    entity._driveWarningShown = true;
+    console.error(
+      `[tick-ledger] ${entity.char ?? entity.constructor?.name} driven twice in frame ${frame}` +
+      ` (second driver: ${driver}) — timers are double-advancing. See known-bugs [clock-mismatch].`
+    );
+  }
+  entity._lastDriveFrame = frame;
+}
+
+/**
  * EnemyUpdateSystem — owns all per-frame enemy preparation and post-tick dispatch
  * that would otherwise live inline in updateExploreState.
  *
@@ -30,10 +50,14 @@ export class EnemyUpdateSystem {
   update(deltaTime) {
     const game = this.game;
     if (!game.currentRoom) return;
-    // layer-guard-ok: deliberately surface-scoped - this is the surface
-  // per-frame ticker (bug #92); interior floor enemies are driven by the
-  // DungeonSystem/HutSystem interior loops instead.
-  const enemies = game.currentRoom.enemies; // layer-guard-ok: surface ticker (#92)
+    // Canonical frame counter for entity-drive accounting: exactly one bump
+    // per frame (this system runs once per EXPLORE frame); any other system
+    // that must drive an entity does so through assertSingleDrive().
+    game._enemyTickFrame = (game._enemyTickFrame ?? 0) + 1;
+    // layer-guard-ok: deliberately surface-scoped — this is the surface
+    // per-frame ticker (bug #92); interior floor enemies are driven by the
+    // DungeonSystem/HutSystem interior loops instead.
+    const enemies = game.currentRoom.enemies; // layer-guard-ok: surface ticker (#92)
     const player = game.player;
 
     this._applySlimeContact(player, enemies);
@@ -211,6 +235,7 @@ export class EnemyUpdateSystem {
         : null;
 
       const updateResult = enemy.update(deltaTime * PHYSICS.ENEMY_TIMER_RATE);
+      assertSingleDrive(enemy, game, 'EnemyUpdateSystem._runEnemyLoop');
       enemy._frameUpdateResult = updateResult;
 
       if (!enemy.data) continue;
