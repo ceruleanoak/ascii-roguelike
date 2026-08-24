@@ -30,7 +30,10 @@ export class EnemyUpdateSystem {
   update(deltaTime) {
     const game = this.game;
     if (!game.currentRoom) return;
-    const enemies = game.currentRoom.enemies;
+    // layer-guard-ok: deliberately surface-scoped - this is the surface
+  // per-frame ticker (bug #92); interior floor enemies are driven by the
+  // DungeonSystem/HutSystem interior loops instead.
+  const enemies = game.currentRoom.enemies; // layer-guard-ok: surface ticker (#92)
     const player = game.player;
 
     this._applySlimeContact(player, enemies);

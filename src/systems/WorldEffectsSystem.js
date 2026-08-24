@@ -237,8 +237,8 @@ export class WorldEffectsSystem {
         }
       }
     }
-    if (game.currentRoom && game.currentRoom.enemies) {
-      for (const enemy of game.currentRoom.enemies) {
+    if (game._activeEnemies().length) {
+      for (const enemy of game._activeEnemies()) {
         if ((enemy.emberStackCooldown || 0) > 0) {
           enemy.emberStackCooldown -= deltaTime;
         }
@@ -302,8 +302,8 @@ export class WorldEffectsSystem {
             }
 
             // Enemies — immune enemies silently skip; all others need 3 stacks with cooldown
-            if (game.currentRoom && game.currentRoom.enemies) {
-              for (const enemy of game.currentRoom.enemies) {
+            if (game._activeEnemies().length) {
+              for (const enemy of game._activeEnemies()) {
                 if (emberHitEntities.has(enemy)) continue;
                 if (!enemy.shouldApplyStatusEffect('burn')) continue;
                 if ((enemy.emberStackCooldown || 0) > 0) continue;
@@ -395,7 +395,7 @@ export class WorldEffectsSystem {
           }
         };
         apply(game.player);
-        for (const enemy of game.currentRoom.enemies) apply(enemy);
+        for (const enemy of game._activeEnemies()) apply(enemy);
 
         if (sw.radius >= sw.maxRadius) game.enemyShockwaves.splice(i, 1);
       }
@@ -433,8 +433,8 @@ export class WorldEffectsSystem {
 
       // Check collision with enemies (slimes are immune, must share plane).
       // Unified slime state: non-slime enemies also get the goo status (slow) — not freeze.
-      if (game.currentRoom && game.currentRoom.enemies) {
-        for (const enemy of game.currentRoom.enemies) {
+      if (game._activeEnemies().length) {
+        for (const enemy of game._activeEnemies()) {
           if (enemy.data?.affinities?.includes('goo')) continue; // goo-affinity enemies are immune to goo
           if ((gooBlob.plane ?? 0) === (enemy.plane ?? 0) && gooBlob.isNearEntity(enemy)) {
             enemy.applyStatusEffect('goo', 5.0);
@@ -446,8 +446,8 @@ export class WorldEffectsSystem {
     // Update debris physics
     if (game.debris.length > 0 && game.player) {
       const majorObjects = [game.player];
-      if (game.currentRoom && game.currentRoom.enemies) {
-        majorObjects.push(...game.currentRoom.enemies);
+      if (game._activeEnemies().length) {
+        majorObjects.push(...game._activeEnemies());
       }
       game.physicsSystem.updateDebris(game.debris.filter(d => d), majorObjects.filter(o => o));
     }

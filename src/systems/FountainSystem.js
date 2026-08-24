@@ -81,7 +81,7 @@ export class FountainSystem {
     // Corruption detection: scan flagged water tiles for elemental status.
     // First non-normal state we find triggers a one-shot corruption.
     if (!room.fountain.corrupted) {
-      const bgs = game.backgroundObjects || [];
+      const bgs = game._activeBackgroundObjects();
       for (const obj of bgs) {
         if (!obj.fountainWater) continue;
         if (obj.destroyed) continue;
@@ -326,7 +326,7 @@ export class FountainSystem {
     if (!room?.fountain) return null;
     room.fountain.attunement = element;
     const tint = ATTUNEMENT_COLORS[element] || null;
-    for (const obj of game.backgroundObjects || []) {
+    for (const obj of game._activeBackgroundObjects()) {
       if (obj.fountainWater || obj.fountainWaterfall) obj.fountainTint = tint;
     }
     game.renderer?.markBackgroundDirty?.();

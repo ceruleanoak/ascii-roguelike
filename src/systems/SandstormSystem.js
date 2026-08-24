@@ -142,7 +142,7 @@ export class SandstormSystem {
         this._pushEntity(p, deltaTime);
       }
       if (game.currentRoom?.enemies) {
-        for (const e of game.currentRoom.enemies) {
+        for (const e of game._activeEnemies()) {
           if (!e?.velocity || e.isDying) continue;
           // Same exclusion for enemies — anything riding the river current
           // (jumpers swimming, ground enemies wading) is owned by water physics.

@@ -30,7 +30,7 @@
 //   this only changes whether a small overage blocks the build, not what
 //   number is stored in arch-budgets.json.
 
-import { readFileSync, writeFileSync, readdirSync } from 'fs';
+import { readFileSync, writeFileSync, readdirSync, statSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -46,46 +46,96 @@ let failed = false;
 const next = {};
 
 // ── Combat layer-isolation guard ───────────────────────────────────────────
-// Combat/effect code must spawn through game._activeBackgroundObjects() so effects
-// land in whatever layer the player occupies (surface / hut / dungeon). Reaching for
-// currentRoom.backgroundObjects (or the game.backgroundObjects surface mirror) directly
-// leaks effects onto the surface while the player is inside an interior — a months-long
-// bug class. Generation code (RoomGenerator/HutSystem/DungeonSystem/etc.) legitimately
-// builds a specific room and is NOT in this list.
-const LAYER_GUARD_FILES = [
-  'src/systems/CharacterSystem.js',
-  'src/systems/MagicSystem.js',
-  'src/systems/TrapSystem.js',
-  'src/systems/CombatSystem.js',
-  'src/systems/WorldEffectsSystem.js',
-  'src/systems/FireSystem.js',
+// Combat/effect code must spawn through game._activeBackgroundObjects() /
+// game._activeEnemies() so effects land in whatever layer the player occupies
+// (surface / hut / dungeon / maze). Reaching for currentRoom.backgroundObjects,
+// currentRoom.enemies, or the game.backgroundObjects surface mirror directly
+// leaks effects onto the surface while the player is inside an interior — a
+// months-long bug class ([layer-leak]: resolved #107/#135, open #130/#131).
+//
+// DEFAULT-DENY since 2026-08-24: every file under src/systems and src/entities
+// is checked unless exempted below. The original allowlist rotted — new systems
+// (ArmorEffectsSystem) shipped after it and were never enrolled, which is
+// exactly the drift this guard exists to stop. Generation code legitimately
+// builds a specific room and is NOT subject to the rule.
+const LAYER_GUARD_DIRS = ['src/systems', 'src/entities'];
+
+// Generation/building code: constructs one specific room or floor and touches
+// its arrays directly by design. Runtime combat/effect code does not belong
+// here — adding a file here requires a sentence naming what it generates.
+const LAYER_GUARD_EXEMPT_FILES = new Set([
+  'src/systems/RoomGenerator.js',
+  'src/systems/roomFeatures.js',
+  'src/systems/HutSystem.js',            // builds hut interiors; interior enemy loop reads its own floor
+  'src/systems/DungeonSystem.js',        // floor-stack construction + activation
+  'src/systems/DungeonFloorGenerator.js',// dungeon floor content generation
+  'src/systems/MazeSystem.js',           // maze layout generation
+  'src/systems/InteriorManager.js',      // interior lifecycle host; owns the reset contract
+]);
+
+// Line-level escape for the canonical routing accessors themselves (the
+// definitions of _activeBackgroundObjects/_activeEnemies necessarily mention
+// the fields they abstract over).
+const LAYER_GUARD_OK_MARKER = 'layer-guard-ok';
+
+const FORBIDDEN_LAYER_ACCESS = [
+  /currentRoom\.backgroundObjects/,   // surface list reached past the router (any receiver)
+  /(?:game|this)\.backgroundObjects/, // surface mirror (divergent private copies, #107)
+  /currentRoom\.enemies/,             // surface enemy list reached past the router (#130)
 ];
-// Whole directories of composition files, every one of them enrolled. enemyStates
-// joins on the same grounds as enemyMechanics: a State runs per-frame against
-// whatever layer the enemy is on, and the sandbox's game stub provides
-// `backgroundObjects` but not `_activeBackgroundObjects()`, so a State that
-// reached for the surface mirror would work in the editor and leak in the game.
-const LAYER_GUARD_GLOB_DIRS = ['src/entities/enemyMechanics', 'src/entities/enemyStates'];
-const FORBIDDEN_BG_ACCESS = /(currentRoom\.backgroundObjects|(?:game|this)\.backgroundObjects)/;
+
+function stripComments(src) {
+  // Comment-aware scan: block comments tracked across lines, line comments
+  // trimmed — doc text mentioning e.g. currentRoom.enemies must not trip the
+  // guard, only executable access should.
+  return src.split('\n').map(line => {
+    let out = '';
+    let i = 0;
+    while (i < line.length) {
+      if (inBlock && line[i] === '*' && line[i + 1] === '/') { inBlock = false; i += 2; continue; }
+      if (inBlock) { i++; continue; }
+      if (line[i] === '/' && line[i + 1] === '*') { inBlock = true; i += 2; continue; }
+      if (line[i] === '/' && line[i + 1] === '/') break;
+      out += line[i];
+      i++;
+    }
+    return out;
+  }).join('\n');
+}
+let inBlock = false;
 
 function checkLayerGuard() {
   let guardFailed = false;
-  const files = [...LAYER_GUARD_FILES];
-  for (const dir of LAYER_GUARD_GLOB_DIRS) {
-    try {
-      for (const f of readdirSync(join(root, dir))) {
-        if (f.endsWith('.js')) files.push(`${dir}/${f}`);
+  const files = [];
+  const seen = new Set();
+  for (const dir of LAYER_GUARD_DIRS) {
+    (function walk(d) {
+      let entries;
+      try { entries = readdirSync(join(root, d)); } catch { return; }
+      for (const entry of entries) {
+        const full = join(d, entry);
+        if (seen.has(full)) continue;
+        seen.add(full);
+        let st;
+        try { st = statSync(join(root, full)); } catch { continue; }
+        if (st.isDirectory()) { walk(full); continue; }
+        if (!entry.endsWith('.js')) continue;
+        if (LAYER_GUARD_EXEMPT_FILES.has(full.replaceAll('\\', '/'))) continue;
+        files.push(full);
       }
-    } catch { /* dir may not exist */ }
+    })(dir);
   }
 
   for (const file of files) {
     let src;
     try { src = readFileSync(join(root, file), 'utf8'); } catch { continue; }
+    const strippedLines = stripComments(src).split('\n');
     src.split('\n').forEach((line, i) => {
-      if (FORBIDDEN_BG_ACCESS.test(line)) {
+      if (line.includes(LAYER_GUARD_OK_MARKER)) return;
+      const code = strippedLines[i];
+      if (FORBIDDEN_LAYER_ACCESS.some(re => re.test(code))) {
         guardFailed = true;
-        console.error(`  FAIL  ${file}:${i + 1}  direct surface bg-object access: ${line.trim()}`);
+        console.error(`  FAIL  ${file}:${i + 1}  direct surface-layer access: ${line.trim()}`);
       }
     });
   }

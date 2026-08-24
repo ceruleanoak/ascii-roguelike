@@ -165,7 +165,7 @@ export class CameraZoomSystem {
       };
     }
     return {
-      entities: game.currentRoom ? game.currentRoom.enemies : [],
+      entities: game._activeEnemies(),
       gridCols: GRID.COLS,
       gridRows: GRID.ROWS
     };

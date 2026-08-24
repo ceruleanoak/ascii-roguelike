@@ -129,14 +129,20 @@ export function tagInteriorPlane(game, entity) {
  */
 export function freezeSurfaceRoom(game) {
   if (!game.currentRoom || game.currentRoom._frozenEnemies) return;
-  game.currentRoom._frozenEnemies = game.currentRoom.enemies;
-  for (const e of game.currentRoom.enemies) game.physicsSystem.removeEntity(e);
-  game.currentRoom.enemies = [];
+  // layer-guard-ok: this IS the routing mechanism - freezing the surface
+  // list while an interior owns the frame is this function's entire job.
+  // layer-guard-ok: this IS the routing mechanism - freezing the surface
+  // list while an interior owns the frame is this function's entire job.
+  game.currentRoom._frozenEnemies = game.currentRoom.enemies; // layer-guard-ok
+  for (const e of game.currentRoom.enemies) game.physicsSystem.removeEntity(e); // layer-guard-ok
+  game.currentRoom.enemies = []; // layer-guard-ok
 }
 
 export function thawSurfaceRoom(game) {
   if (!game.currentRoom?._frozenEnemies) return;
-  game.currentRoom.enemies = game.currentRoom._frozenEnemies;
-  for (const e of game.currentRoom.enemies) game.physicsSystem.addEntity(e);
+  // layer-guard-ok: thaw restores exactly what freezeSurfaceRoom stashed.
+  // layer-guard-ok: thaw restores exactly what freezeSurfaceRoom stashed.
+  game.currentRoom.enemies = game.currentRoom._frozenEnemies; // layer-guard-ok
+  for (const e of game.currentRoom.enemies) game.physicsSystem.addEntity(e); // layer-guard-ok
   game.currentRoom._frozenEnemies = null;
 }

@@ -241,7 +241,7 @@ export class BossSystem {
       sw.radius += sw.speed * deltaTime;
 
       // Animate and thaw water tiles swept by the ring this frame
-      for (const obj of this.game.currentRoom.backgroundObjects) {
+      for (const obj of this.game._activeBackgroundObjects()) {
         if (obj.destroyed || !obj.isWater || !obj.isWater()) continue;
         const cx = obj.position.x + GRID.CELL_SIZE / 2;
         const cy = obj.position.y + GRID.CELL_SIZE / 2;
@@ -313,7 +313,7 @@ export class BossSystem {
       }
 
       if (sw.radius >= sw.maxRadius) {
-        for (const obj of this.game.currentRoom.backgroundObjects) {
+        for (const obj of this.game._activeBackgroundObjects()) {
           delete obj._shockwaveThawed;
         }
         this._iceShockwave = null;
@@ -325,7 +325,7 @@ export class BossSystem {
 
   _onLakeBossDefeated() {
     this.game.zoneSystem.markBossDefeated(this.zone);
-    const enemies = this.game.currentRoom.enemies;
+    const enemies = this.game._activeEnemies();
     for (let i = enemies.length - 1; i >= 0; i--)
       if (enemies[i] === this.lakeBoss) enemies.splice(i, 1);
     this.game.menuSystem.showPickupMessage('The Frosted Maw is defeated!', '#aaffff', 3.0);
@@ -673,7 +673,7 @@ export class BossSystem {
 
   _onTurtleDefeated() {
     this.game.zoneSystem.markBossDefeated(this.zone);
-    const enemies  = this.game.currentRoom.enemies;
+    const enemies  = this.game._activeEnemies();
     const bossSet  = new Set([this.turtleShell, this.turtleHead, ...this.turtleLegs]);
     for (let i = enemies.length - 1; i >= 0; i--) {
       if (bossSet.has(enemies[i])) enemies.splice(i, 1);
@@ -695,7 +695,7 @@ export class BossSystem {
     this.game.zoneSystem.markBossDefeated(this.zone);
 
     // Remove boss entities from enemies array (triggers normal room-clear logic)
-    const enemies = this.game.currentRoom.enemies;
+    const enemies = this.game._activeEnemies();
     const bossEntities = new Set([this.dragon, ...this.heads]);
     for (let i = enemies.length - 1; i >= 0; i--) {
       if (bossEntities.has(enemies[i])) {

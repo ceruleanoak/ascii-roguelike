@@ -77,7 +77,7 @@ export class NPCRat {
     this.hasCollision = true;
     this.boundToGrid = true;
     this.collisionMap = null;
-    this.backgroundObjects = null;
+    this.backgroundObjects = null; // layer-guard-ok: router-injected
 
     // Render-path compatibility: drawNonSappingEnemies checks these.
     this.sapping = false;
@@ -94,7 +94,7 @@ export class NPCRat {
   setGame(game) { this.game = game; }
   setRoom(room) { this.room = room; }
   setCollisionMap(collisionMap) { this.collisionMap = collisionMap; }
-  setBackgroundObjects(backgroundObjects) { this.backgroundObjects = backgroundObjects; }
+  setBackgroundObjects(backgroundObjects) { this.backgroundObjects = backgroundObjects; } // layer-guard-ok
 
   // Shared companion hook: snap to a radial slot around the player and reset
   // per-room state. Mirrors Crow.onRoomEnter / CampNPC.onRoomEnter so main.js
@@ -124,7 +124,7 @@ export class NPCRat {
       this.game = game;
       this.room = game.currentRoom;
       this.collisionMap = game.currentRoom?.collisionMap || null;
-      this.backgroundObjects = game.currentRoom?.backgroundObjects || null;
+      this.backgroundObjects = game._activeBackgroundObjects() || null; // layer-guard-ok: routed read
     }
   }
 

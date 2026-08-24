@@ -1647,7 +1647,7 @@ export class CombatSystem {
           player.hp = Math.min(player.hp + 2, player.maxHp);
         }
       } else {
-        this.createAttack(game.applyGreenDamageModifier(attack), game.currentRoom ? game.currentRoom.enemies : []);
+        this.createAttack(game.applyGreenDamageModifier(attack), game._activeEnemies());
         game.triggerGreenActionCooldown();
       }
     }

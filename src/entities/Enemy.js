@@ -131,7 +131,7 @@ export class Enemy {
     this.hasCollision = true;
     this.boundToGrid = true;
     this.collisionMap = null;
-    this.backgroundObjects = null; // Reference to background objects for vision checks
+    this.backgroundObjects = null; // layer-guard-ok: router-injected list
     this.plane = 0; // 0=normal plane, 1=tunnel plane
 
     // AI state
@@ -437,7 +437,7 @@ export class Enemy {
   }
 
   setBackgroundObjects(backgroundObjects) {
-    this.backgroundObjects = backgroundObjects;
+    this.backgroundObjects = backgroundObjects; // layer-guard-ok
   }
 
   setGame(game) {
@@ -881,11 +881,11 @@ export class Enemy {
     this.state = legacyStateFor(this.stateMachine, this);
 
     // Cut grass when searching with blade weapons
-    if (this.aggroMemoryActive && this.backgroundObjects && this.equippedWeapon) {
+    if (this.aggroMemoryActive && this.backgroundObjects && this.equippedWeapon) { // layer-guard-ok
       const weaponData = this.equippedWeapon.data;
       if (weaponData && weaponData.isBlade) {
         // Check if overlapping with tall grass
-        for (const obj of this.backgroundObjects) {
+        for (const obj of this.backgroundObjects) { // layer-guard-ok
           if (obj.destroyed || obj.char !== '|') continue;
 
           const dx = obj.position.x - this.position.x;
@@ -1498,10 +1498,10 @@ export class Enemy {
   }
 
   _isOnWater() {
-    if (!this.backgroundObjects) return false;
+    if (!this.backgroundObjects) return false; // layer-guard-ok
     const ex = Math.floor(this.position.x / GRID.CELL_SIZE);
     const ey = Math.floor(this.position.y / GRID.CELL_SIZE);
-    for (const obj of this.backgroundObjects) {
+    for (const obj of this.backgroundObjects) { // layer-guard-ok
       if (!obj.isWater || !obj.isWater()) continue;
       if (Math.floor(obj.position.x / GRID.CELL_SIZE) === ex &&
           Math.floor(obj.position.y / GRID.CELL_SIZE) === ey) {

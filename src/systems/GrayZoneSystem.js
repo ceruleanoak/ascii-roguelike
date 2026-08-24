@@ -146,7 +146,7 @@ export class GrayZoneSystem {
 
     // Mourner pressure: each living mistThicken enemy pulls the circle in.
     let target = this.baseRadiusCells;
-    for (const enemy of game.currentRoom.enemies || []) {
+    for (const enemy of game._activeEnemies()) {
       if (enemy.hp > 0 && !enemy.collapsed && enemy.data?.mistThicken) {
         target -= enemy.data.mistThicken;
       }

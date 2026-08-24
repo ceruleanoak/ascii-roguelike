@@ -59,12 +59,12 @@ export function captureExploreRoomForRest(game) {
     game.items,
     game.ingredients,
     game.placedTraps,
-    game.currentRoom.enemies,
-    game.currentRoom.backgroundObjects,
+    game.currentRoom.enemies, // layer-guard-ok: surface contract
+    game.currentRoom.backgroundObjects, // layer-guard-ok: surface contract
     game.captives
   );
-  game.savedExploreEnemies = [...game.currentRoom.enemies];
-  game.savedExploreBackgroundObjects = [...game.backgroundObjects];
+  game.savedExploreEnemies = [...game.currentRoom.enemies]; // layer-guard-ok: surface contract
+  game.savedExploreBackgroundObjects = [...game.backgroundObjects]; // layer-guard-ok: surface contract
   game.savedExploreCaptives = [...game.captives];
 }
 

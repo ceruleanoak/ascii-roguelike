@@ -57,7 +57,7 @@ export class ArmorEffectsSystem {
       const radius = (armorData.rollPulseRadius || 3) * 16;
       const duration = armorData.rollPulseDuration || 2.0;
 
-      for (const enemy of currentRoom.enemies) {
+      for (const enemy of game._activeEnemies()) {
         if (enemy.hp <= 0) continue;
         if (Math.hypot(enemy.position.x + 8 - cx, enemy.position.y + 8 - cy) <= radius) {
           enemy.applyStatusEffect(armorData.rollPulse, duration);
@@ -129,7 +129,7 @@ export class ArmorEffectsSystem {
     const px = p.position.x + CS / 2;
     const py = p.position.y + CS / 2;
     const half = CS / 2;
-    for (const obj of game.currentRoom.backgroundObjects) {
+    for (const obj of game._activeBackgroundObjects()) {
       if (obj.destroyed || obj.char !== '~') continue;
       if (obj.waterState !== 'normal') continue;
       const cx = obj.position.x + half;
@@ -163,11 +163,11 @@ export class ArmorEffectsSystem {
       if (col !== p._wakePrevCol || row !== p._wakePrevRow) {
         const prevX = p._wakePrevCol * CS;
         const prevY = p._wakePrevRow * CS;
-        for (const obj of game.currentRoom.backgroundObjects) {
+        for (const obj of game._activeBackgroundObjects()) {
           if (obj.destroyed || obj.char !== '~') continue;
           if (Math.abs(obj.position.x - prevX) < 4 && Math.abs(obj.position.y - prevY) < 4) {
             if (obj.waterState === 'normal') {
-              game.electricitySystem?.seedFromArmor(obj, game.currentRoom.backgroundObjects,
+              game.electricitySystem?.seedFromArmor(obj, game._activeBackgroundObjects(),
                 p.heldItem?.data, { tileDuration: 4.0 });
             }
             break;
@@ -186,11 +186,11 @@ export class ArmorEffectsSystem {
     if (p._wakeTickTimer > 0) return;
     p._wakeTickTimer = 0.25;
     const half = CS / 2;
-    for (const enemy of game.currentRoom.enemies) {
+    for (const enemy of game._activeEnemies()) {
       if (enemy.hp <= 0) continue;
       const ex = enemy.position.x + half;
       const ey = enemy.position.y + half;
-      for (const obj of game.currentRoom.backgroundObjects) {
+      for (const obj of game._activeBackgroundObjects()) {
         if (obj.destroyed || obj.char !== '~') continue;
         if (obj.waterState !== 'electrified') continue;
         const cx = obj.position.x + half;

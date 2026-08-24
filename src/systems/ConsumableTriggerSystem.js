@@ -75,7 +75,7 @@ export class ConsumableTriggerSystem {
   // tactics), but NOT physical preconditions like liquid contact or an empty
   // bow slot — those stay absolute.
   checkTriggerCondition(cd, player, currentRoom, consumable, manual = false) {
-    const enemies = currentRoom ? currentRoom.enemies : [];
+    const enemies = game._activeEnemies();
 
     switch (cd.effect) {
       case 'heal': {

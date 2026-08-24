@@ -247,12 +247,11 @@ export class InteractionSystem {
 
   findNearbyBackgroundObject() {
     const game = this.game;
-    // When inside a hut/dungeon/maze, search the appropriate objects
+    // When inside a hut/dungeon/maze, search the appropriate objects.
+    // Maze stays suppressed by design (MazeSystem owns its objects, #107).
     const objects = (game.player?.inMaze && game.mazeInterior)
-      ? [] // Maze objects handled by MazeSystem, not InteractionSystem
-      : ((game.player?.inHut || game.player?.inDungeon) && game.activeFloor)
-        ? game.activeFloor.backgroundObjects
-        : (game.currentRoom ? game.currentRoom.backgroundObjects : game.backgroundObjects);
+      ? []
+      : game._activeBackgroundObjects();
     const playerPlane = planeOf(game.player);
     for (const obj of objects) {
       if (!objectOnPlane(obj, playerPlane)) continue;
@@ -629,7 +628,7 @@ export class InteractionSystem {
           // Very rare: chest
           const chest = new BackgroundObject('⊞', obj.position.x, obj.position.y);
           chest.spawnImmunityTimer = 1.0;
-          game.currentRoom.backgroundObjects.push(chest);
+          game._activeBackgroundObjects().push(chest);
           game.renderer.markBackgroundDirty();
         } else if (roll < 0.0013) {
           // Very rare: coin
@@ -640,7 +639,7 @@ export class InteractionSystem {
           // separate/guaranteed roll. If the roll happens to land on Goblin,
           // it carries a Scythe (the item's sole source, since Goblin no
           // longer drops it as a ground spawn).
-          if (game.currentRoom.enemies.length < 10) {
+          if (game._activeEnemies().length < 10) {
             const beastChar = getZoneRandomEnemy(game.getCurrentZoneDepth(), game.currentRoom?.zone);
             const dataOverride = beastChar === 'G'
               ? { ...ENEMIES['G'], spawnEquipment: { chance: 1.0, weapons: ['Ƨ'] } }
@@ -652,7 +651,7 @@ export class InteractionSystem {
               spawnerPosition: { x: obj.position.x, y: obj.position.y },
               dataOverride
             });
-            game.currentRoom.enemies.push(...spawned);
+            game._activeEnemies().push(...spawned);
           }
         } else if (roll < 0.01179) {
           // Uncommon: stick
@@ -680,7 +679,7 @@ export class InteractionSystem {
         const chi = new BackgroundObject('χ', obj.position.x, obj.position.y);
         chi.spawnImmunityTimer = 1.0;
         chi.puzzleSignal = true;
-        game.currentRoom.backgroundObjects.push(chi);
+        game._activeBackgroundObjects().push(chi);
         game.renderer.markBackgroundDirty();
       }
       // Fairy grass: blade-cut releases the fairy. Multiple grass tiles in the

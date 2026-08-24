@@ -326,7 +326,7 @@ export class MagicSystem {
     const attacks = weapon.fireChargeHammerAttack();
     if (!attacks) return;
 
-    game.combatSystem.createAttack(game.applyGreenDamageModifier(attacks), game.currentRoom ? game.currentRoom.enemies : []);
+    game.combatSystem.createAttack(game.applyGreenDamageModifier(attacks), game._activeEnemies());
     game._emitSoundEvent();
     const hits = Array.isArray(attacks) ? attacks : [attacks];
     const trigger = hits.find(a => a?.triggerShockwave);

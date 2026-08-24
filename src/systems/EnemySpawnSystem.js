@@ -30,7 +30,7 @@ export class EnemySpawnSystem {
    */
   flush() {
     for (const request of this._pendingRequests) {
-      if (this.game.currentRoom.enemies.length >= 10) break;
+      if (this.game._activeEnemies().length >= 10) break;
       const newEnemies = this.game.roomGenerator.spawnEnemiesFrom(
         this.game,
         request.spawner,
@@ -47,7 +47,7 @@ export class EnemySpawnSystem {
           SplitOnDamageMechanic.registerSplitChild(link.parent, newEnemy, link);
         }
       }
-      this.game.currentRoom.enemies.push(...newEnemies);
+      this.game._activeEnemies().push(...newEnemies);
     }
     this._pendingRequests = [];
   }
@@ -64,7 +64,7 @@ export class EnemySpawnSystem {
         spawnRange: enemy.spawning.spawnRange,
         spawnerPosition: { x: enemy.position.x, y: enemy.position.y }
       });
-      this.game.currentRoom.enemies.push(...deathSpawns);
+      this.game._activeEnemies().push(...deathSpawns);
     }
 
     if (enemy.spawner) {

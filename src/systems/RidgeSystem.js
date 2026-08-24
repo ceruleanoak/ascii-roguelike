@@ -320,7 +320,7 @@ export class RidgeSystem {
         plank.indestructible = true;
         plank.solid = false;
         room.backgroundObjects.push(plank);
-        this.game.backgroundObjects.push(plank);
+        this.game._activeBackgroundObjects().push(plank);
       }
     }
 

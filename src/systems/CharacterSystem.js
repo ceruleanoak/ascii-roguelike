@@ -367,7 +367,7 @@ export class CharacterSystem {
               player.heldItem.chargingPlayer = null;
             }
             // Break any sapping enemies
-            const rollEnemies = game.currentRoom ? game.currentRoom.enemies : [];
+            const rollEnemies = game._activeEnemies();
             for (const enemy of rollEnemies) {
               if (enemy.sapping && enemy.sappingTarget === player) {
                 enemy.breakSapping(300);
@@ -500,7 +500,7 @@ export class CharacterSystem {
     const rollAutoAttack = daggerItem.executeAttack(player);
     if (rollAutoAttack) {
       const attacks = Array.isArray(rollAutoAttack) ? rollAutoAttack : [rollAutoAttack];
-      const enemies = game.currentRoom ? game.currentRoom.enemies : [];
+      const enemies = game._activeEnemies();
       for (const atk of attacks) {
         game.combatSystem.createAttack(game.applyGreenDamageModifier(atk), enemies);
       }
@@ -519,7 +519,7 @@ export class CharacterSystem {
     if (!weapon || weapon.data.weaponSubtype === 'dagger' || weapon.data.weaponType === 'BOW' || weapon.data.weaponType === 'UTILITY' || !player.canAttack()) return;
     const attack = player.useHeldItem();
     if (attack) {
-      game.combatSystem.createAttack(game.applyGreenDamageModifier(attack), game.currentRoom ? game.currentRoom.enemies : []);
+      game.combatSystem.createAttack(game.applyGreenDamageModifier(attack), game._activeEnemies());
       game.triggerGreenActionCooldown();
       game._emitSoundEvent();
     }
@@ -783,7 +783,7 @@ export class CharacterSystem {
       } else {
         const attack = player.useHeldItem();
         if (attack) {
-          const enemies = game.currentRoom ? game.currentRoom.enemies : [];
+          const enemies = game._activeEnemies();
           const succeeded = game.combatSystem.createAttack(this.applyGreenDamageModifier(attack), enemies);
           if (weapon.data.weaponType === 'WAND' && succeeded === false) {
             weapon.cooldownTimer = 0;

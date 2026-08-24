@@ -83,7 +83,7 @@ export class HuntingSystem {
 
     if (game.currentRoom.huntResolved) return;
     if (this.activeGameAnimal) return;
-    if (game._countedEnemies(game.currentRoom.enemies || []).length > 0) return;
+    if (game._countedEnemies(game._activeEnemies()).length > 0) return;
     if (this.stillnessTimer < this.requiredStillness) return;
 
     if (this._spawnGameAnimal()) {
@@ -103,7 +103,7 @@ export class HuntingSystem {
 
     const enemy = new Enemy(data.char, spawnPos.x, spawnPos.y, game.getCurrentZoneDepth(), data);
     enemy.setCollisionMap(game.currentRoom.collisionMap);
-    enemy.setBackgroundObjects(game.currentRoom.backgroundObjects);
+    enemy.setBackgroundObjects(game._activeBackgroundObjects());
     enemy.setTarget(game.player);
     enemy.setGame(game);
     enemy.setRoom(game.currentRoom);
@@ -140,6 +140,6 @@ export class HuntingSystem {
     const game = this.game;
     const center = { x: (GRID.COLS / 2) * GRID.CELL_SIZE, y: (GRID.ROWS / 2) * GRID.CELL_SIZE };
     const range = Math.min(GRID.COLS, GRID.ROWS) * GRID.CELL_SIZE * 0.4;
-    return game.roomGenerator.findSpawnPosition(center, range, game.currentRoom.collisionMap, game.currentRoom.enemies);
+    return game.roomGenerator.findSpawnPosition(center, range, game.activeRoom.collisionMap, game._activeEnemies());
   }
 }

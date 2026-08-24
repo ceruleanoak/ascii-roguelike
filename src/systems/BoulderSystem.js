@@ -142,7 +142,7 @@ export class BoulderSystem {
       const rCol = Math.floor(r.x / GRID.CELL_SIZE);
       const rRow = Math.floor(r.y / GRID.CELL_SIZE);
       let onLava = false;
-      for (const obj of game.backgroundObjects) {
+      for (const obj of game._activeBackgroundObjects()) {
         if (obj.char !== '~' || !obj.damaging || !obj.damage) continue;
         if (Math.floor(obj.position.x / GRID.CELL_SIZE) === rCol &&
             Math.floor(obj.position.y / GRID.CELL_SIZE) === rRow) {
@@ -208,7 +208,7 @@ export class BoulderSystem {
       }
 
       // Damage enemies
-      for (const enemy of game.currentRoom.enemies) {
+      for (const enemy of game._activeEnemies()) {
         if (r.hitCooldowns.has(enemy)) continue;
         if (enemy.isBossEntity) continue;   // boss immune to own summoned boulders
         const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - r.x;
@@ -254,8 +254,8 @@ export class BoulderSystem {
   // the same visible shape.
   findDeflectorAt(pixelX, pixelY) {
     const game = this.game;
-    if (!game.backgroundObjects) return null;
-    for (const obj of game.backgroundObjects) {
+    if (!game._activeBackgroundObjects()?.length) return null;
+    for (const obj of game._activeBackgroundObjects()) {
       if (!obj.data?.boulderDeflector || obj.destroyed) continue;
       if (pointInDeflector(obj, pixelX, pixelY)) return obj;
     }

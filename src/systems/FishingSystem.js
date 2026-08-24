@@ -419,7 +419,7 @@ export class FishingSystem {
    * the preferred cast distance derived from chargeRatio (0=near, 1=far).
    */
   findWaterTileAtDistance(game, chargeRatio) {
-    if (!game.backgroundObjects || !game.player) return null;
+    if (!game.player) return null;
 
     const playerX = game.player.position.x;
     const playerY = game.player.position.y;
@@ -429,7 +429,7 @@ export class FishingSystem {
     let best = null;
     let bestDelta = Infinity;
 
-    for (const obj of game.backgroundObjects) {
+    for (const obj of game._activeBackgroundObjects()) {
       if (obj.char !== '~') continue;
 
       const dx = obj.position.x - playerX;
@@ -451,7 +451,7 @@ export class FishingSystem {
   spawnAmbientFish(game) {
     if (this.fishEntities.length >= this.maxFishCount) return;
 
-    const allWater = (game.backgroundObjects || []).filter(o => o.char === '~' || o.char === '=');
+    const allWater = game._activeBackgroundObjects().filter(o => o.char === '~' || o.char === '=');
     if (allWater.length === 0) return;
 
     // Build a set of occupied grid cells for fast adjacency lookup

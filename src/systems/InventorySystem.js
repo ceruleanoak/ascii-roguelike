@@ -853,7 +853,7 @@ export class InventorySystem {
    * Update active consumable windups
    */
   updateConsumableWindups(deltaTime, player, currentRoom, combatSystem, steamClouds, particles) {
-    const enemies = currentRoom ? currentRoom.enemies : [];
+    const enemies = game._activeEnemies();
 
     for (let i = this.consumableWindups.length - 1; i >= 0; i--) {
       const windup = this.consumableWindups[i];
