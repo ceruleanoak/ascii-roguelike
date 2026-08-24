@@ -1,7 +1,7 @@
 import { CharacterNPC } from '../entities/CharacterNPC.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
 import { TRAINING_TECHNIQUES } from '../data/items.js';
-import { GRID, NPC_INTERACTION_RANGE } from '../game/GameConfig.js';
+import { GRID, NPC_INTERACTION_RANGE, GAME_STATES } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Captive } from '../entities/Captive.js';
 import { isCellProtected } from './roomFeatures.js';
@@ -9,6 +9,59 @@ import { isCellProtected } from './roomFeatures.js';
 export class CharacterSystem {
   constructor(game) {
     this.game = game;
+  }
+
+  // A character died but others remain: clear the dead character's gear,
+  // swap to the pending next character, and return to REST. Moved out of
+  // main.js (Code Placement Procedure) — character-death handoff is this
+  // system's domain, not orchestration.
+  respawnNextCharacter() {
+    const game = this.game;
+    game.characterDeathPending = false;
+    const next = game.pendingNextCharacter;
+    game.pendingNextCharacter = null;
+    game.characterDeathName = '';
+    this.switchToCharacterAtRest(next);
+  }
+
+  // Shared character-handoff: wipe the departing character's gear, swap to
+  // `nextType`, and return to REST. Used by respawnNextCharacter above and
+  // by the gray-zone mist-out (GrayZoneSystem), which loses a character
+  // without killing them.
+  switchToCharacterAtRest(nextType) {
+    const game = this.game;
+    game.gameOverWaitingForSpace = false;
+    game._resetEnvironmentalEffects();
+
+    // Clear active items lost with the departing character
+    game.inventorySystem.restQuickSlots = [null, null, null];
+    game.inventorySystem.restActiveSlotIndex = 0;
+    game.inventorySystem.equippedArmor = null;
+    game.inventorySystem.equippedConsumables = Array(game.inventorySystem.maxConsumableSlots).fill(null);
+    // Discard EXPLORE-deferred chest deposits — displaced weapons go with the character
+    game.inventorySystem.pendingChestDeposits = [];
+
+    game.activeCharacterType = nextType;
+    console.log(`🔄 Continuing as ${CHARACTER_TYPES[game.activeCharacterType].name}`);
+
+    // The departing character's ingredients need no rescuing — the pile is on
+    // InventorySystem and is shared across characters, so a swap leaves it
+    // untouched. Full game over (_resetRunToRest) still wipes it, preserving
+    // the true-roguelike full reset.
+    if (game.player) {
+      game.player.reset();
+    }
+    // No audioSystem.play() here — enterRestState() (triggered by the
+    // transition below) is mode-aware and always loads the correct zone/REST
+    // track itself. Calling play() first used to resume whatever buffers were
+    // still loaded (e.g. a maze/hut interior override, since the death path's
+    // audioSystem.stop() only halts playback, it doesn't clear the loaded
+    // buffers) as if they were legitimate music, which then tricked
+    // enterRestState()'s switchRestMusic() into treating them as "already
+    // playing" and cross-fading at their loop boundary instead of cutting
+    // over immediately — the maze track would audibly keep playing past
+    // death until its loop finished. Bug #184.
+    game.stateMachine.transition(GAME_STATES.REST);
   }
 
   spawnCaptive(characterType) {

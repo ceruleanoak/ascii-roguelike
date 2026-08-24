@@ -237,7 +237,7 @@ export class GrayZoneSystem {
     );
 
     if (living.length > 0) {
-      game._switchToCharacterAtRest(living[0]);
+      game.characterSystem.switchToCharacterAtRest(living[0]);
     } else {
       // The mist took the last walker — the run is over, snapshots and all.
       game._resetRunToRest();

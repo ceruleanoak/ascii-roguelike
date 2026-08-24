@@ -11,6 +11,7 @@ import { ZoneSystem } from './systems/ZoneSystem.js';
 import { ExitSystem, isPressingIntoExitGap } from './systems/ExitSystem.js';
 import { PersistenceSystem } from './systems/PersistenceSystem.js';
 import { InventorySystem } from './systems/InventorySystem.js';
+import { captureExploreRoomForRest } from './systems/RoomStatePersistence.js';
 import { ArmorEffectsSystem } from './systems/ArmorEffectsSystem.js';
 import { ConsumableTriggerSystem } from './systems/ConsumableTriggerSystem.js';
 import { NeutralRoomSystem } from './systems/NeutralRoomSystem.js';
@@ -3180,6 +3181,16 @@ class Game {
           this.pendingNextCharacter = nextCharacter;
           this.characterDeathName = diedCharData.name;
 
+          // Save EXPLORE room state before returning to REST, same as a
+          // voluntary south exit (prevents room cycling cheat) — a
+          // character-swap death still returns to REST via
+          // CharacterSystem.switchToCharacterAtRest, and without this the
+          // next hero's EXPLORE entry generated a brand-new room instead of
+          // resuming the exact room (enemies, items) the previous character
+          // died in. Skipped only when this was the last character (else
+          // branch below) since that path fully resets the run anyway.
+          captureExploreRoomForRest(this);
+
           // Clear combat system before transitioning
           this.combatSystem.clear();
 
@@ -3479,18 +3490,7 @@ class Game {
         this.bankLoot();
 
         // Save EXPLORE room state before returning to REST (prevents room cycling cheat)
-        this.inventorySystem.saveExploreRoom(
-          this.currentRoom,
-          this.items,
-          this.ingredients,
-          this.placedTraps,
-          this.currentRoom.enemies,
-          this.currentRoom.backgroundObjects,
-          this.captives
-        );
-        this.savedExploreEnemies = [...this.currentRoom.enemies];
-        this.savedExploreBackgroundObjects = [...this.backgroundObjects];
-        this.savedExploreCaptives = [...this.captives];
+        captureExploreRoomForRest(this);
 
         // Clear combat system (projectiles, melee attacks, etc.) before transitioning
         this.combatSystem.clear();
@@ -3765,7 +3765,7 @@ class Game {
       if (this.grayZoneSystem.isSwallowing()) return;
 
       if (this.characterDeathPending && this.characterDeathTimer <= 0) {
-        this._respawnNextCharacter();
+        this.characterSystem.respawnNextCharacter();
       } else if (this.gameOverWaitingForSpace && this.gameOverDeathTimer <= 0 && !this.characterDeathPending) {
         this._resetRunToRest();
       }
@@ -3904,56 +3904,6 @@ class Game {
     }
   }
 
-
-  // A character died but others remain: clear the dead character's gear,
-  // swap to the pending next character, and return to REST.
-  _respawnNextCharacter() {
-    // A character died but others remain — swap to next character and return to REST
-    this.characterDeathPending = false;
-    const next = this.pendingNextCharacter;
-    this.pendingNextCharacter = null;
-    this.characterDeathName = '';
-    this._switchToCharacterAtRest(next);
-  }
-
-  // Shared character-handoff: wipe the departing character's gear, swap to
-  // `nextType`, and return to REST. Used by the death flow above and by the
-  // gray-zone mist-out (GrayZoneSystem), which loses a character without
-  // killing them.
-  _switchToCharacterAtRest(nextType) {
-    this.gameOverWaitingForSpace = false;
-    this._resetEnvironmentalEffects();
-
-    // Clear active items lost with the departing character
-    this.inventorySystem.restQuickSlots = [null, null, null];
-    this.inventorySystem.restActiveSlotIndex = 0;
-    this.inventorySystem.equippedArmor = null;
-    this.inventorySystem.equippedConsumables = Array(this.inventorySystem.maxConsumableSlots).fill(null);
-    // Discard EXPLORE-deferred chest deposits — displaced weapons go with the character
-    this.inventorySystem.pendingChestDeposits = [];
-
-    this.activeCharacterType = nextType;
-    console.log(`🔄 Continuing as ${CHARACTER_TYPES[this.activeCharacterType].name}`);
-
-    // The departing character's ingredients need no rescuing — the pile is on
-    // InventorySystem and is shared across characters, so a swap leaves it
-    // untouched. Full game over (_resetRunToRest) still wipes it, preserving
-    // the true-roguelike full reset.
-    if (this.player) {
-      this.player.reset();
-    }
-    // No audioSystem.play() here — enterRestState() (triggered by the
-    // transition below) is mode-aware and always loads the correct zone/REST
-    // track itself. Calling play() first used to resume whatever buffers were
-    // still loaded (e.g. a maze/hut interior override, since the death path's
-    // audioSystem.stop() only halts playback, it doesn't clear the loaded
-    // buffers) as if they were legitimate music, which then tricked
-    // enterRestState()'s switchRestMusic() into treating them as "already
-    // playing" and cross-fading at their loop boundary instead of cutting
-    // over immediately — the maze track would audibly keep playing past
-    // death until its loop finished. Bug #184.
-    this.stateMachine.transition(GAME_STATES.REST);
-  }
 
   // True game over: full run reset (zones, inventories, spells, magic meter,
   // companions, characters, boss/audio state) and back to REST.

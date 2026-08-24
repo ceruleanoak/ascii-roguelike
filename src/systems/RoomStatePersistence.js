@@ -37,6 +37,37 @@ export function getSavedExploreRoomState(inv) {
   };
 }
 
+/**
+ * captureExploreRoomForRest(game)
+ *
+ * Snapshots the current EXPLORE room — via saveExploreRoomState above, plus
+ * the legacy game-level mirror fields (`savedExploreEnemies`/
+ * `savedExploreBackgroundObjects`/`savedExploreCaptives`) enterExploreState's
+ * restore branch actually reads — before the player leaves EXPLORE for REST.
+ * Shared by every EXPLORE→REST exit that should resume the same room
+ * verbatim rather than generate a new one on the way back in (the anti
+ * room-cycling-cheat this file exists for): the voluntary south exit, and a
+ * character-swap death (still others living) that returns to REST via
+ * `CharacterSystem.switchToCharacterAtRest`. A full game-over (all
+ * characters dead) skips
+ * this — `_resetRunToRest` discards the whole run anyway.
+ */
+export function captureExploreRoomForRest(game) {
+  saveExploreRoomState(
+    game.inventorySystem,
+    game.currentRoom,
+    game.items,
+    game.ingredients,
+    game.placedTraps,
+    game.currentRoom.enemies,
+    game.currentRoom.backgroundObjects,
+    game.captives
+  );
+  game.savedExploreEnemies = [...game.currentRoom.enemies];
+  game.savedExploreBackgroundObjects = [...game.backgroundObjects];
+  game.savedExploreCaptives = [...game.captives];
+}
+
 export function clearSavedExploreRoomState(inv) {
   inv.savedExploreRoom = null;
   inv.savedExploreItems = [];
