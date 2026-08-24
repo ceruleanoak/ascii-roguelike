@@ -30,6 +30,7 @@ export class DungeonBossSystem {
     this.breathApplied = false;    // Gold Breath one-shot guard
     this._paidOut = false;         // defeat payout one-shot
     this._finalPileOut = false;    // strike-the-pile beat spawned
+    this._elevationCooldown = 0;   // gilded-companion contribution cadence
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -96,10 +97,12 @@ export class DungeonBossSystem {
     maw.update(dt); // real seconds — sole-driver rule, see class comment
 
     this._consumeSignals(maw);
+    this._tickScaleClaiming();
     this._tickGoldBreath(maw);
     this._resolveInhale(maw, dt);
     this._tickRegisters(maw);
     this._tickBribe(maw);
+    this._tickCompanionElevation(maw, dt);
 
     if (maw.defeated && !this._paidOut) {
       this._defeat();
@@ -169,12 +172,37 @@ export class DungeonBossSystem {
     this.game.audioSystem?.playSFX?.('boss_breath');
   }
 
+  // Claim chipped scales by touch — greed collects. Runs every tick (not
+  // just during inhales): walk over a `$` and it mints +1 coin. Splices both
+  // the live list and the floor cache so a collected scale can't resurrect on
+  // re-entry, and sets consumed for any companion AI holding a reference.
+  _tickScaleClaiming() {
+    const game = this.game;
+    const player = game.player;
+    const floor = game.activeFloor;
+    if (!player || !floor) return;
+    const now = performance.now();
+    for (let i = game.items.length - 1; i >= 0; i--) {
+      const it = game.items[i];
+      if (!it?.mintCoin || !it.hutPlane || it.consumed) continue;
+      if (it.pickupReadyAt && now < it.pickupReadyAt) continue;
+      if (Math.hypot(player.position.x - it.position.x,
+                     player.position.y - it.position.y) > 18) continue;
+      it.consumed = true;
+      game.physicsSystem.removeEntity(it);
+      game.items.splice(i, 1);
+      const fi = floor.items.indexOf(it);
+      if (fi !== -1) floor.items.splice(fi, 1);
+      game.addIngredient(it.mintCoin);
+      game.audioSystem?.playSFX?.('coin_plink');
+    }
+  }
+
   // Inhale: pull the player, drag loose ground pickups toward the mouth.
   // Staged coins/bread caught by the sweep are devoured — loss only, never
   // armor-heal (ratified). The maw's OWN chipped scales re-absorb as armor.
   _resolveInhale(maw, dt) {
-    if (!maw.inhaleActive) return;
-    const game = this.game;
+    if (!maw.inhaleActive) return;    const game = this.game;
     const player = game.player;
     const mx = maw.mouthX();
     const my = maw.mouthY();
@@ -359,17 +387,59 @@ export class DungeonBossSystem {
                    atk.position.y - it.position.y) < GRID.CELL_SIZE * 1.5));
   }
 
+  // Gilded companions' combat elevation — the vault's reward made mechanical:
+  //   crow dive-pecks lock onto the true glint (a living Compass);
+  //   rats gnaw the tongue root through reel windows (bonus stagger damage).
+  // Direct, cadence-limited contributions rather than hacked Crow internals.
+  _tickCompanionElevation(maw, dt) {
+    this._elevationCooldown -= dt;
+    if (this._elevationCooldown > 0) return;
+    const game = this.game;
+    const gildedCrows = (game.companionCrows || []).filter(c => c.gilded);
+    const gildedRats = (game.tamedRats || []).filter(r => r.gilded && r.state !== 'permaFlee');
+    if (!gildedCrows.length && !gildedRats.length) return;
+
+    let acted = false;
+
+    for (const _crow of gildedCrows) {
+      if (maw.bossPhase === 2 && !maw.defeated) {
+        const g = maw.glintPx();
+        if (maw.takeDamage(1, { kind: 'melee', px: g.x, py: g.y })) {
+          game.combatSystem.createDamageNumber(1, g.x, g.y, '#ffd700');
+          acted = true;
+        }
+      }
+    }
+
+    for (const _rat of gildedRats) {
+      // Rats gnaw the tongue while it's live; during the choke they gnaw the
+      // hung-open lid seam. Either way: one damage beat per cadence.
+      const biting = !!maw.tongue || maw.chokeTimer > 0;
+      if (biting && maw.takeDamage(1, { kind: 'melee', px: maw.mouthX(), py: maw.mouthY() })) {
+        game.combatSystem.createDamageNumber(1, maw.mouthX(), maw.mouthY(), '#ffd700');
+        acted = true;
+      }
+    }
+
+    if (acted) {
+      game.audioSystem?.playSFX?.('crow_attack_1');
+      this._elevationCooldown = ELEVATION_CADENCE;
+    }
+  }
   // ── Defeat ────────────────────────────────────────────────────────────────
   _defeat() {
     const game = this.game;
+    const spec = this.spec;
+    const maw = this.hoardmaw;
     this._paidOut = true;
-    this.hoardmaw.markDefeated();
+    maw.markDefeated();
     game.hoardmawDefeatedThisRun = true;
     game.goldBreathCurseActive = false;
 
-    // Payout shower — acquisition, properly earned.
-    const spec = this.spec;
-    const maw = this.hoardmaw;
+    // The body collapses into the payout — acquisition, properly earned.
+    game.physicsSystem.removeEntity(maw);
+    this.hoardmaw = null;
+
     const floor = game.activeFloor;
     for (let i = 0; i < spec.payout.coinBurst; i++) {
       const angle = Math.random() * Math.PI * 2;
@@ -392,3 +462,4 @@ const SLAM_HIT_RADIUS = GRID.CELL_SIZE * 3.2;
 const INHALE_RANGE = GRID.CELL_SIZE * 7;
 const INHALE_PULL = 120;                    // px/s player pull
 const INHALE_DRAG = 90;                     // px/s ground-loot drag
+const ELEVATION_CADENCE = 2.2;              // seconds between gilded contributions

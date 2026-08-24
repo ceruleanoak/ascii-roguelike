@@ -290,6 +290,9 @@ export class DungeonSystem {
       game.companionSystem?.setPetsGilded?.(true);
     }
 
+    // Dungeon boss layer: spawn/resume the vault encounter.
+    game.dungeonBossSystem?.onFloorActivated?.(floor);
+
     game.renderer.backgroundDirty = true;
   }
 
@@ -420,6 +423,9 @@ export class DungeonSystem {
 
     // Pet companions: surface coordinates, surface maps, gilded cleared.
     game.companionSystem?.restorePetsFromFloor?.();
+
+    // Dungeon boss layer: tear down any live encounter (no payout on retreat).
+    game.dungeonBossSystem?.reset?.();
 
     // Clear hutPlane loot from active globals (preserved on floor objects above)
     game.ingredients = game.ingredients.filter(i => !i.hutPlane);
@@ -573,6 +579,9 @@ export class DungeonSystem {
       // Puzzle/gating logic (key vault lock, companion-gate visibility,
       // trap-room clear gate, companion-switch puzzle, compass beep).
       game.dungeonPuzzleSystem.update(floor, dt);
+
+      // Dungeon boss encounter (vault floor only; no-ops elsewhere).
+      game.dungeonBossSystem?.update?.(dt);
 
       // Update background objects
       for (const obj of floor.backgroundObjects) obj.update(dt);

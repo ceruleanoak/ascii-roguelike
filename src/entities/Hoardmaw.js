@@ -423,6 +423,7 @@ export class Hoardmaw extends Enemy {
       if (Math.hypot(g.x - px, g.y - py) > GRID.CELL_SIZE * 0.9) return false;
       this.hp = Math.max(0, this.hp - amount);
       this.invulnerabilityTimer = 0.15;
+      this.hasTakenDamage = true;
       if (this.hp <= 0) this.markDefeated();
       return true;
     }
@@ -432,6 +433,7 @@ export class Hoardmaw extends Enemy {
       if (this.chokeTimer <= 0) return false;
       this.hp = Math.max(0, this.hp - amount);
       this.invulnerabilityTimer = 0.15;
+      this.hasTakenDamage = true;
       if (this.hp <= 0) this.markDefeated();
       return true;
     }
