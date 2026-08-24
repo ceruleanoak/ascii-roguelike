@@ -461,10 +461,14 @@ programming terms.
 - **Not:** a suicide bomber triggered by proximity — the fuse is time-driven and readable.
 
 ### Thief
-- **Definition:** An urgency Mechanic: the Enemy steals the player's held weapon on contact,
-  flees, and despawns shortly after — taking the item with it unless killed first.
-- **In code:** `ThiefMechanic` gated by `data.thiefMechanic`.
-- **Not:** Looter (an Enemy that picks items up off the ground; it never takes from the player).
+- **Definition:** An urgency Mechanic: the Enemy steals from the player on contact and
+  permanently flips to cowardly flight the moment it succeeds (or is struck first) — coin
+  for Rat/Plague Rat; up to three ingredients (keeping one, scattering the rest) plus the
+  held weapon (knocked 3 cells away, pickup-cooldown gated) for Monkey.
+- **In code:** `ThiefMechanic` gated by `data.thiefMechanic`; `steals: 'satchel'` selects
+  the ingredient+weapon variant, unset defaults to coin.
+- **Not:** Looter (an Enemy that picks items up off the ground; it never takes from the
+  player). Not despawn-on-success — the thief flees and can recover, it doesn't vanish.
 
 ### Watcher
 - **Definition:** A Mechanic for a wide-vision alarm Enemy: on spotting the player it marks

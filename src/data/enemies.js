@@ -174,6 +174,42 @@ export const ENEMIES = {
     thiefMechanic: { enabled: true }
   },
 
+  '3': {
+    char: '3',
+    name: 'Monkey',
+    description: 'Empties your hands, then bolts.',
+    spellDescription: 'IT WILL RANSACK.',
+    mass: 0.6,
+    hp: 6,
+    speed: 100,
+    acceleration: 500,  // Agile — quick to close and quick to bolt
+    damage: 2,
+    attackRange: GRID.CELL_SIZE * 1.75,  // Same steal-contact range as Rat
+    aggroRange: GRID.CELL_SIZE * 9,
+    attackCooldown: 1.4,
+    attackWindup: 0.9,
+    attackType: 'melee',
+    decisionInterval: 0.3,
+    color: '#996633',
+    telegraph: { area: 'box', animation: 'clap', attackShape: 'v' },
+    recover: { variant: 'jumpBack' },
+    movementStyle: 'jumper',
+    movementConfig: {
+      jumpInterval: 0.7,
+      jumpSpeed: 150,
+      jumpDuration: 0.2,
+      zigzagStrength: 0.6
+    },
+    affinities: ['beast'],
+    tier: 'normal',
+    // Steals like Rat (see ThiefMechanic) but goes for the satchel instead
+    // of coin: whenever the player carries an ingredient or a weapon, its
+    // bite becomes a steal that ejects up to 3 ingredients (keeping 1) and
+    // knocks the held weapon away. Taking damage OR a successful grab
+    // permanently flips it to pure flight, same as Rat.
+    thiefMechanic: { enabled: true, steals: 'satchel' }
+  },
+
   '^': {
     char: '^',
     name: 'Bat',
@@ -2324,9 +2360,9 @@ export const ZONE_SPAWN_TABLES = {
   'green': {
     // Forest/verdant theme - NO fire/ice/lightning enemies
     0: ['r', 'o'],                                       // L1-2: Rats, Slimes (Boar too common at 1-in-3; first appears L3+)
-    3: ['r', 'o', '^', 'G', 'g', 'b', 'P'],           // L3-5: Add Bats, Goblins, Frogs, Boars, Plague Rats
-    6: ['o', '^', 'G', 'S', 'g', 'b', 'm', 'P'],      // L6-8: Add Skeletons, Mimics ('M' Giant Slime is now boss-only)
-    9: ['G', 'S', 'O', 'W', 'g', 'a', 'd', 'P'],     // L9-11: Add Ogres, Wizards, Shamans, Duelists
+    3: ['r', 'o', '^', 'G', 'g', 'b', 'P', '3'],      // L3-5: Add Bats, Goblins, Frogs, Boars, Plague Rats, Monkeys
+    6: ['o', '^', 'G', 'S', 'g', 'b', 'm', 'P', '3'], // L6-8: Add Skeletons, Mimics ('M' Giant Slime is now boss-only)
+    9: ['G', 'S', 'O', 'W', 'g', 'a', 'd', 'P', '3'], // L9-11: Add Ogres, Wizards, Shamans, Duelists
     12: ['S', 'O', 'G', 'W', 'K', 'T', 'L', 'a', 'd'] // L12+: Add Knights, Trolls, Looters, Shamans, Duelists
   },
 

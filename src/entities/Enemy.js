@@ -1806,7 +1806,8 @@ export class Enemy {
 
   // Steal attack (ThiefMechanic) — a zero-damage melee swing that lands like
   // any other hit (dodge/block/i-frames all resolve normally through
-  // takeDamage) but triggers a coin theft instead of a damage number. See
+  // takeDamage) but triggers a theft instead of a damage number — coin, or
+  // Monkey's satchel grab, per `data.thiefMechanic.steals`. See
   // ThiefMechanic.resolveTheft, called from CombatSystem once this attack
   // actually connects.
   createStealAttack() {

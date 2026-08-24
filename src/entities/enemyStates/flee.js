@@ -101,7 +101,7 @@ export default {
     // leaves it off on purpose — RipenMechanic already owns Bomb's own
     // proximity reaction, ahead of the spine, at `Enemy.js`'s
     // `tryDetonateTrigger` call). What "fighting back" means is per-enemy:
-    // Rat/Plague Rat (ThiefMechanic's coward flip) resolve `cornerTo`'s
+    // Rat/Plague Rat/Monkey (ThiefMechanic's coward flip) resolve `cornerTo`'s
     // default of `anticipate` through to `strike` — a bite, the same
     // fallback chain a normal un-flipped attack already uses when neither is
     // authored. Trap Goblin instead names `cornerTo: 'useTrap'` — its bite is

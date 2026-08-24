@@ -148,6 +148,15 @@ export class InventorySystem {
     return true;
   }
 
+  // Removes and returns one random ingredient's char from the pile, or null
+  // if empty. For callers (Monkey's satchel theft) that eject ingredients
+  // without knowing which char they'll get ahead of time.
+  removeRandomIngredient() {
+    if (this.ingredients.length === 0) return null;
+    const idx = Math.floor(Math.random() * this.ingredients.length);
+    return this.ingredients.splice(idx, 1)[0];
+  }
+
   // ─── Coin wallet ──────────────────────────────────────────────────────────
   addCoin(n = 1) { this.coinWallet += n; }
   removeCoin(n = 1) {
