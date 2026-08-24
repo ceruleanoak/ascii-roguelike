@@ -651,6 +651,23 @@ export class DungeonSystem {
     return game.dungeonPuzzleSystem.handleSpacePress();
   }
 
+  /**
+   * SHIFT inside the dungeon. Today that is exactly one thing: the Gold
+   * Breath curse's coin flip — with a slot armed, SHIFT tosses one coin from
+   * the wallet (the armed slot renders as a coin while cursed, so this is the
+   * same "SHIFT tosses the armed slot" grammar the game-wide Toss follows).
+   * Returns true only when a coin actually flew, letting the dispatcher fall
+   * through to the normal held-item drop otherwise. Runs before the held-item
+   * branch in main.js, so while cursed the armed coin wins over weapon-drop —
+   * disarm the slot (weapon number key) to drop items normally.
+   */
+  handleShiftPress() {
+    const { game } = this;
+    if (!game.player?.inDungeon || !game.activeFloor?.isVault) return false;
+    if ((game.player.selectedConsumableIndex ?? -1) < 0) return false;
+    return game.dungeonBossSystem?.dischargeCoin() ?? false;
+  }
+
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
   _nearCell(player, cellPixelX, cellPixelY) {

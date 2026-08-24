@@ -31,6 +31,7 @@ export class DungeonBossSystem {
     this._paidOut = false;         // defeat payout one-shot
     this._finalPileOut = false;    // strike-the-pile beat spawned
     this._elevationCooldown = 0;   // gilded-companion contribution cadence
+    this._coinFlights = [];        // cursed-slot discharges mid-arc
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -74,9 +75,13 @@ export class DungeonBossSystem {
       this.hoardmaw = null;
     }
     this.bribeMoundItems = [];
+    this._landCoinFlights();
     this.breathApplied = false;
     this._paidOut = false;
     this._finalPileOut = false;
+    // Fleeing the delve lifts the curse with everything else — without this
+    // the flag would stick and keep consumables suspended back on the surface.
+    this.game.goldBreathCurseActive = false;
   }
 
   // ── Per-tick ────────────────────────────────────────────────────────────────
@@ -100,6 +105,7 @@ export class DungeonBossSystem {
     this._tickScaleClaiming();
     this._tickGoldBreath(maw);
     this._resolveInhale(maw, dt);
+    this._tickCoinFlights(dt);
     this._tickRegisters(maw);
     this._tickBribe(maw);
     this._tickCompanionElevation(maw, dt);
@@ -164,12 +170,67 @@ export class DungeonBossSystem {
 
   // Gold Breath — one-shot curse application at phase-2 entry. The flag is
   // the contract quick-slot rendering and input handlers consume (coin-flip
-  // discharge); wiring those consumers is main.js-side and follows separately.
+  // discharge — see dischargeCoin and its fireSelected/handleShiftPress
+  // callers).
   _tickGoldBreath(maw) {
     if (this.breathApplied || maw.bossPhase !== 2) return;
     this.breathApplied = true;
     this.game.goldBreathCurseActive = true;
     this.game.audioSystem?.playSFX?.('boss_breath');
+  }
+
+  // Gold Breath discharge — the cursed slots' only verb. Spends one coin from
+  // the wallet and throws it as a physical `c` pickup along the player's
+  // facing: the staging gesture the whole vault loop feeds on (seam stagger,
+  // inhale bait, lunge decoys all read ground items). SPACE and SHIFT both
+  // route here while cursed — the remedies stay hoarded, the greed doesn't.
+  // Returns false (spending nothing) when the curse is off or the wallet is
+  // dry, so callers can let the press fall through.
+  dischargeCoin() {
+    const game = this.game;
+    if (!game.goldBreathCurseActive) return false;
+    if (!game.inventorySystem.removeCoin()) return false;
+    const player = game.player;
+    const f = player.facing;
+    const len = Math.hypot(f.x, f.y) || 1;
+    const item = Object.assign(new Item('c', player.position.x, player.position.y), {
+      hutPlane: true,
+      pickupReadyAt: performance.now() + 400,
+    });
+    game.activeFloor.items.push(item);
+    game.items.push(item);
+    game.physicsSystem.addEntity(item);
+    this._coinFlights.push({
+      item,
+      dirX: f.x / len,
+      dirY: f.y / len,
+      left: COIN_TOSS_DIST,
+    });
+    game.audioSystem?.playSFX?.('coin_plink');
+    return true;
+  }
+
+  // Linear toss arc — same read as the trap drop-throw's decel glide, kept
+  // local because the projectile is a wallet coin, not a held item the
+  // TrapSystem pipeline knows how to carry.
+  _tickCoinFlights(dt) {
+    for (let i = this._coinFlights.length - 1; i >= 0; i--) {
+      const fl = this._coinFlights[i];
+      const step = Math.min(COIN_TOSS_SPEED * dt, fl.left);
+      fl.item.position.x += fl.dirX * step;
+      fl.item.position.y += fl.dirY * step;
+      fl.left -= step;
+      if (fl.left <= 0) this._coinFlights.splice(i, 1);
+    }
+  }
+
+  /** Snap mid-arc coins to their resting spot (defeat/teardown). */
+  _landCoinFlights() {
+    for (const fl of this._coinFlights) {
+      fl.item.position.x += fl.dirX * fl.left;
+      fl.item.position.y += fl.dirY * fl.left;
+    }
+    this._coinFlights = [];
   }
 
   // Claim chipped scales by touch — greed collects. Runs every tick (not
@@ -437,6 +498,7 @@ export class DungeonBossSystem {
     game.goldBreathCurseActive = false;
 
     // The body collapses into the payout — acquisition, properly earned.
+    this._landCoinFlights();
     game.physicsSystem.removeEntity(maw);
     this.hoardmaw = null;
 
@@ -463,3 +525,5 @@ const INHALE_RANGE = GRID.CELL_SIZE * 7;
 const INHALE_PULL = 120;                    // px/s player pull
 const INHALE_DRAG = 90;                     // px/s ground-loot drag
 const ELEVATION_CADENCE = 2.2;              // seconds between gilded contributions
+const COIN_TOSS_DIST = GRID.CELL_SIZE * 2.5; // cursed-slot discharge arc length
+const COIN_TOSS_SPEED = COIN_TOSS_DIST / 0.25; // px/s — a brisk quarter-second flip
