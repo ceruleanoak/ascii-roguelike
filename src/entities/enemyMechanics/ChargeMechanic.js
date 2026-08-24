@@ -7,6 +7,8 @@
 // Goblin Chief bash also drives this state machine (tuned via data values),
 // so all reads/writes go through `enemy.data.chargeMechanic`.
 
+import { GRID } from '../../game/GameConfig.js';
+
 // Near-death threshold shared with Enemy.getNearDeathBlinkColor (≤30% HP) so
 // an enemy's blink and its behavioral desperation start on the same hit —
 // opt-in per enemy via `nearDeathCooldownMultiplier` on this mechanic's data.
@@ -26,6 +28,7 @@ export const ChargeMechanic = {
     enemy.chargeState = 'idle';
     enemy.chargeStunTimer = 0;
     enemy.chargeHasHit = false;
+    enemy.chargeLastDeflector = null;
   },
 
   update(enemy, ctx) {
@@ -86,6 +89,26 @@ export const ChargeMechanic = {
       }
     } else if (enemy.chargeState === 'charging') {
       enemy.chargeDurationTimer -= deltaTime;
+      // Reflector interaction (Tortoise): rolling through a BoulderSystem
+      // deflector triangle bends the charge off its elbow, same as a rolling
+      // boulder (BoulderSystem.js update(), the edge-triggered pattern this
+      // mirrors). chargeDir is a unit vector and deflectVelocity preserves
+      // input magnitude, so the result is already unit-length.
+      if (cfg.deflectable && enemy.game?.boulderSystem) {
+        const cx = enemy.position.x + (enemy.width ?? GRID.CELL_SIZE) / 2;
+        const cy = enemy.position.y + (enemy.height ?? GRID.CELL_SIZE) / 2;
+        const deflector = enemy.game.boulderSystem.findDeflectorAt(cx, cy);
+        if (deflector) {
+          if (enemy.chargeLastDeflector !== deflector) {
+            enemy.chargeLastDeflector = deflector;
+            const out = enemy.game.boulderSystem.deflectVelocity(
+              deflector.data.deflectorElbow, enemy.chargeDir.x, enemy.chargeDir.y);
+            if (out) enemy.chargeDir = { x: out.vx, y: out.vy };
+          }
+        } else {
+          enemy.chargeLastDeflector = null;
+        }
+      }
       enemy.targetVelocity.vx = enemy.chargeDir.x * cfg.chargeSpeed;
       enemy.targetVelocity.vy = enemy.chargeDir.y * cfg.chargeSpeed;
       if (enemy.state === 'windup' || enemy.state === 'attack') {

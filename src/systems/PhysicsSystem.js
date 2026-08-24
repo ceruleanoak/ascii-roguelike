@@ -773,6 +773,14 @@ export class PhysicsSystem {
     for (const obj of backgroundObjects) {
       if (obj.destroyed) continue;
 
+      // A deflectable charger (Tortoise) rolls through deflector triangles like
+      // a boulder rather than walling off on the solid half — ChargeMechanic's
+      // findDeflectorAt/deflectVelocity check is what redirects it. Boulders
+      // themselves never reach this collision pass at all (BoulderSystem moves
+      // them via their own tracked x/y), so this mirrors that exemption for the
+      // one other entity type that shares their deflector interaction.
+      if (obj.data?.boulderDeflector && this._isDeflectableCharge(entity)) continue;
+
       // Plane affinity gate — must be present on entity's plane to be collidable.
       if (!objectOnPlane(obj, entityPlane)) continue;
 
@@ -860,6 +868,13 @@ export class PhysicsSystem {
     }
 
     return collision;
+  }
+
+  // True while `entity` is a charging enemy whose chargeMechanic opts into
+  // deflector interaction (currently: Tortoise's shell-launch). Shared by
+  // both deflector collision skips above.
+  _isDeflectableCharge(entity) {
+    return entity.chargeState === 'charging' && entity.data?.chargeMechanic?.deflectable === true;
   }
 
   // Deflector collision box: the cell inset to DEFLECTOR_TRIANGLE_HITBOX_SCALE
@@ -1289,6 +1304,10 @@ export class PhysicsSystem {
       for (const obj of backgroundObjects) {
         if (obj.destroyed) continue;
         if (!obj.data) continue;
+
+        // See the matching skip in checkBackgroundObjectCollision — a
+        // deflectable charger passes through deflector triangles entirely.
+        if (obj.data.boulderDeflector && this._isDeflectableCharge(entity)) continue;
 
         // Plane affinity gate.
         if (!objectOnPlane(obj, entityPlane)) continue;

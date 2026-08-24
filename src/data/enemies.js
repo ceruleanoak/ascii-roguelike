@@ -1013,7 +1013,8 @@ export const ENEMIES = {
       chargeWindup: 0.35,        // Barely a beat — the coil inside the shell is the real tell
       cooldown: 5.0,
       wallStunDuration: 2.5,     // Tips out of the shell on impact — generous punish window, mirrors Rockwarden's
-      chargeRange: GRID.CELL_SIZE * 6
+      chargeRange: GRID.CELL_SIZE * 6,
+      deflectable: true          // Rolls off BoulderSystem's deflector triangles — the same fixtures the Ancient Shell boss uses
     },
     shellLaunch: {
       enabled: true,
