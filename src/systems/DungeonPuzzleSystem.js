@@ -350,9 +350,11 @@ export class DungeonPuzzleSystem {
     const { game } = this;
     const color = ITEMS[slot.requiredChar]?.color || '#ffcc00';
     slot.filled = true;
-    slot.obj.char = slot.requiredChar;
+    // The Slot has shown its wanted glyph all along, dimmed in SLOT_CHROME
+    // .PENDING (DungeonFloorGenerator._generatePyramid) — satisfying it is
+    // purely a repaint into the item's own color. The stone brackets around
+    // it don't change; they're masonry, not state.
     slot.obj.color = color;
-    slot.obj.animationChar = slot.requiredChar;
     slot.obj.animationColor = color;
 
     const cx = slot.obj.position.x + GRID.CELL_SIZE / 2;

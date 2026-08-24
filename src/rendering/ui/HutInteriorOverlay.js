@@ -9,6 +9,7 @@ import { drawWires } from '../effects/WireEffects.js';
 import { drawCoinArc } from '../effects/ArcTossEffects.js';
 import { drawStatusPips } from '../effects/StatusPipEffects.js';
 import { drawTamedRats } from './CompanionRenderers.js';
+import { SLOT_CHROME } from '../../data/slotChrome.js';
 
 /**
  * HutInteriorOverlay — picture-in-picture rendering for both Hut and Dungeon interiors.
@@ -344,10 +345,12 @@ export class HutInteriorOverlay {
     // ── 18. Green ranger indicator ─────────────────────────────────────────────
     this.renderController.greenRangerIndicator.render(game);
 
-    // ── 19b. Puzzle Room weapon pedestal — [x][x][x] slot chrome (same
+    // ── 19b. Puzzle Room weapon pedestal — [x][x][x] Slot chrome, the shared
+    // world-Slot vocabulary from slotChrome.js (same stone/pending pair the
+    // Pyramid's Legend of Three registers are built from). Uses the same
     // shared-divider bracket technique as CraftingStation.render(): three
     // slots at a 2-col pitch, each '[' + content + ']', touching brackets
-    // land on the same column so the later draw wins). Grayed decorative
+    // land on the same column so the later draw wins. Grayed decorative
     // ingredient glyphs fill the outer two slots; the center slot's content
     // is the real pickup-able weapon, rendered separately by the normal Item
     // loop above — not redrawn here. Drawn directly rather than as
@@ -363,12 +366,12 @@ export class HutInteriorOverlay {
       ctx.font = `${CS}px 'Unifont', monospace`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#554f3d';
+      ctx.fillStyle = SLOT_CHROME.STONE;
       for (const slotX of [leftX, centerX, rightX]) {
-        ctx.fillText('[', slotX * CS + CS / 2, cy);
-        ctx.fillText(']', (slotX + 2) * CS + CS / 2, cy);
+        ctx.fillText(SLOT_CHROME.BRACKET_LEFT, slotX * CS + CS / 2, cy);
+        ctx.fillText(SLOT_CHROME.BRACKET_RIGHT, (slotX + 2) * CS + CS / 2, cy);
       }
-      ctx.fillStyle = '#8a8470';
+      ctx.fillStyle = SLOT_CHROME.PENDING;
       ctx.fillText(leftChar, (leftX + 1) * CS + CS / 2, cy);
       ctx.fillText(rightChar, (rightX + 1) * CS + CS / 2, cy);
       ctx.restore();

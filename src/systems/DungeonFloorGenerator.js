@@ -10,6 +10,7 @@ import {
   STAIRS_COL, STAIRS_UP_ROW, NORTH_ROW, SPINE_ROW, WEST_COL, EAST_COL, EXIT_ROW,
 } from '../data/dungeonFloorTemplates.js';
 import { getLegendOfThree } from '../data/legendOfThree.js';
+import { SLOT_CHROME } from '../data/slotChrome.js';
 import { pickWeaponTutorial } from '../data/dungeon/weaponTutorials.js';
 import {
   pickRandomPuzzleTemplateName, applyPuzzleTemplateToCollisionMap, getPuzzleTemplateWaterCells,
@@ -307,6 +308,22 @@ export class DungeonFloorGenerator {
   // the descent that led there (see _generateBranch, _generatePyramid) —
   // "matching doors are always in the same room position" is the rule; the
   // universal north point is just its default.
+  /**
+   * One cell of a Slot's [glyph] frame. Color is painted explicitly (both
+   * `color` and `animationColor`) because none of '[', ']' or an item glyph is
+   * a registered BACKGROUND_OBJECT — they all land on BackgroundObject's
+   * generic fallback, which is inert and non-solid (exactly what masonry
+   * wants, and what the Pyramid's old '□' relied on) but carries a default
+   * gray that would otherwise show through.
+   */
+  _makeSlotCell(col, row, char, color) {
+    const obj = new BackgroundObject(char, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+    obj.color = color;
+    obj.animationColor = color;
+    obj.indestructible = true;
+    return obj;
+  }
+
   _makeStairsUp(locked, row = STAIRS_UP_ROW, col = STAIRS_COL) {
     const obj = new BackgroundObject('{', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
     paintStairsUpVisual(obj, locked);
@@ -529,7 +546,16 @@ export class DungeonFloorGenerator {
     });
     backgroundObjects.push(north.obj);
 
-    // Legend of Three slots — top (Justice), bottom-left (Truth), bottom-right (Help).
+    // Legend of Three Slots — top (Justice), bottom-left (Truth), bottom-right
+    // (Help). Each is built in the game's ubiquitous Slot shape: '[' + the
+    // wanted item's glyph + ']', in the same masonry the Puzzle Room's weapon
+    // pedestal uses (SLOT_CHROME). The glyph sits dimmed in PENDING until the
+    // offering lands, so each register states its own requirement without a
+    // word of instruction — DungeonPuzzleSystem._fillPyramidSlot repaints it
+    // in the item's own color on deposit.
+    //
+    // Columns are 4 apart around STAIRS_COL (12), so the three 3-cell frames
+    // (7-9, 11-13, 15-17) never touch.
     const legend = getLegendOfThree(zone);
     const slotDefs = [
       { key: 'justice', row: 8,  col: STAIRS_COL,      itemType: 'consumable' },
@@ -539,11 +565,14 @@ export class DungeonFloorGenerator {
     const pyramidSlots = {};
     for (const def of slotDefs) {
       const requiredChar = legend ? legend[def.key] : null;
-      const slotObj = new BackgroundObject('□', def.col * GRID.CELL_SIZE, def.row * GRID.CELL_SIZE);
-      slotObj.color = '#555555';
-      slotObj.animationColor = '#555555';
-      slotObj.indestructible = true;
-      backgroundObjects.push(slotObj);
+      // An unauthored zone's Pyramid still shows its three frames, just empty —
+      // dormant masonry rather than a missing edifice.
+      const slotObj = this._makeSlotCell(def.col, def.row, requiredChar ?? ' ', SLOT_CHROME.PENDING);
+      backgroundObjects.push(
+        this._makeSlotCell(def.col - 1, def.row, SLOT_CHROME.BRACKET_LEFT,  SLOT_CHROME.STONE),
+        slotObj,
+        this._makeSlotCell(def.col + 1, def.row, SLOT_CHROME.BRACKET_RIGHT, SLOT_CHROME.STONE),
+      );
       pyramidSlots[def.key] = {
         row: def.row, col: def.col, obj: slotObj,
         requiredChar, itemType: def.itemType, filled: !requiredChar,
