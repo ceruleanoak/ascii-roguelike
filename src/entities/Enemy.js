@@ -2316,6 +2316,10 @@ export class Enemy {
     return WindupTelegraphMechanic.getBowChargeRatio(this);
   }
 
+  getStolenItemIndicator() {
+    return ThiefMechanic.getCarriedItemIndicator(this);
+  }
+
   getMemoryIndicator() {
     if (this.aggroMemoryActive && this.state === 'chase' &&
         this.detectionIndicatorTimer <= 0) {

@@ -1552,15 +1552,7 @@ export class ExploreRenderer {
     }
 
     // Draw windup telegraph
-    const windupIndicator = enemy.getWindupIndicator();
-    if (windupIndicator) {
-      this.renderer.drawEntity(
-        enemy.position.x + GRID.CELL_SIZE / 2,
-        enemy.position.y + GRID.CELL_SIZE / 2 + windupIndicator.offsetY,
-        windupIndicator.char,
-        windupIndicator.color
-      );
-    }
+    this._drawHeadIndicator(enemy, enemy.getWindupIndicator());
 
     // Bow-draw charge bar: an equipped-bow enemy's windup mirrors the
     // player's own charge indicator (BowChargeIndicator), so the arrow's
@@ -1571,70 +1563,26 @@ export class ExploreRenderer {
     drawSniperIndicators(this.renderer, enemy);
 
     // Draw memory/vision lost indicator
-    const memoryIndicator = enemy.getMemoryIndicator();
-    if (memoryIndicator) {
-      this.renderer.drawEntity(
-        enemy.position.x + GRID.CELL_SIZE / 2,
-        enemy.position.y + GRID.CELL_SIZE / 2 + memoryIndicator.offsetY,
-        memoryIndicator.char,
-        memoryIndicator.color
-      );
-    }
+    this._drawHeadIndicator(enemy, enemy.getMemoryIndicator());
 
     // Draw detection/aggro indicator
-    const detectionIndicator = enemy.getDetectionIndicator();
-    if (detectionIndicator) {
-      this.renderer.drawEntity(
-        enemy.position.x + GRID.CELL_SIZE / 2,
-        enemy.position.y + GRID.CELL_SIZE / 2 + detectionIndicator.offsetY,
-        detectionIndicator.char,
-        detectionIndicator.color
-      );
-    }
+    this._drawHeadIndicator(enemy, enemy.getDetectionIndicator());
+
+    // Draw stolen-item indicator (satchel-thief Monkey: the ingredient it's
+    // carrying, in that ingredient's own char/color)
+    this._drawHeadIndicator(enemy, enemy.getStolenItemIndicator());
 
     // Draw trap-layer indicator (... while charging, yellow ! while fleeing)
-    const trapLayerIndicator = enemy.getTrapLayerIndicator();
-    if (trapLayerIndicator) {
-      this.renderer.drawEntity(
-        enemy.position.x + GRID.CELL_SIZE / 2,
-        enemy.position.y + GRID.CELL_SIZE / 2 + trapLayerIndicator.offsetY,
-        trapLayerIndicator.char,
-        trapLayerIndicator.color
-      );
-    }
+    this._drawHeadIndicator(enemy, enemy.getTrapLayerIndicator());
 
     // Draw sapping indicator (red * when latched to player; offset varies with bat count)
-    const sappingIndicator = enemy.getSappingIndicator();
-    if (sappingIndicator) {
-      this.renderer.drawEntity(
-        enemy.position.x + GRID.CELL_SIZE / 2 + (sappingIndicator.offsetX || 0),
-        enemy.position.y + GRID.CELL_SIZE / 2 + sappingIndicator.offsetY,
-        sappingIndicator.char,
-        sappingIndicator.color
-      );
-    }
+    this._drawHeadIndicator(enemy, enemy.getSappingIndicator());
 
     // Draw spawn indicator (purple + symbol during windup)
-    const spawnIndicator = enemy.getSpawnIndicator();
-    if (spawnIndicator) {
-      this.renderer.drawEntity(
-        enemy.position.x + GRID.CELL_SIZE / 2,
-        enemy.position.y + GRID.CELL_SIZE / 2 + spawnIndicator.offsetY,
-        spawnIndicator.char,
-        spawnIndicator.color
-      );
-    }
+    this._drawHeadIndicator(enemy, enemy.getSpawnIndicator());
 
     // Draw blind indicator (red X when blinded)
-    const blindIndicator = enemy.getBlindIndicator();
-    if (blindIndicator) {
-      this.renderer.drawEntity(
-        enemy.position.x + GRID.CELL_SIZE / 2,
-        enemy.position.y + GRID.CELL_SIZE / 2 + blindIndicator.offsetY,
-        blindIndicator.char,
-        blindIndicator.color
-      );
-    }
+    this._drawHeadIndicator(enemy, enemy.getBlindIndicator());
 
     // Dizzy orbital particles
     if (enemy.statusEffects.dizzy?.active && enemy.shouldRenderVisible()) {
@@ -1731,6 +1679,20 @@ export class ExploreRenderer {
     } finally {
       if (_enemyNeedsAlpha) _enemyCtx.restore();
     }
+  }
+
+  // Shared draw for the enemy head-indicator surface: every enemy.getXxxIndicator()
+  // getter (windup, memory, detection, stolen-item, trap-layer, sapping, spawn,
+  // blind, …) returns the same { char, color, offsetY, offsetX? } shape or null,
+  // so one draw call replaces what used to be a copy-pasted if-block per indicator.
+  _drawHeadIndicator(enemy, indicator) {
+    if (!indicator) return;
+    this.renderer.drawEntity(
+      enemy.position.x + GRID.CELL_SIZE / 2 + (indicator.offsetX || 0),
+      enemy.position.y + GRID.CELL_SIZE / 2 + indicator.offsetY,
+      indicator.char,
+      indicator.color
+    );
   }
 
   /**

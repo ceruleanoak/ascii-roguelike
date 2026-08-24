@@ -99,6 +99,21 @@ export class LootSystem {
 
   spawnLoot(enemy) {
     const game = this.game;
+
+    // Stolen goods (ThiefMechanic satchel variant — Monkey): whatever it's
+    // still carrying on death goes back to the player unconditionally, not
+    // gated by affinities/tier/luck like a natural drop below — killing the
+    // thief recovers exactly what it took, no roll involved. Empty/absent
+    // for every other enemy (coin-thieves drop the coin at steal time, not
+    // carry it) so this is a no-op for them.
+    if (enemy.stolenIngredients?.length) {
+      for (const char of enemy.stolenIngredients) {
+        const angle = Math.random() * Math.PI * 2;
+        this.spawnIngredientDrop(char, enemy.position.x, enemy.position.y, angle, enemy);
+      }
+      enemy.stolenIngredients = [];
+    }
+
     // Luck has two tiers: full-power while Lucky Coin (★) is equipped, half-power
     // permanently after the coin is vested in a well. The flags are independent
     // (vested coin frees the slot) but luckActive takes priority on the math.

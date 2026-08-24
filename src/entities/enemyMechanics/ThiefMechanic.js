@@ -14,7 +14,11 @@
 // `data.thiefMechanic.steals` selects what's on offer: default (unset) is
 // Rat's coin grab; `'satchel'` is Monkey's kit — up to three ingredients
 // ejected from the pile (one kept, the rest scatter to the ground) plus the
-// held weapon knocked away, both resolved in `_resolveSatchelTheft`.
+// held weapon knocked away, both resolved in `_resolveSatchelTheft`. The kept
+// ingredient rides along on `enemy.stolenIngredients` — rendered as a carried-
+// item tell (`getCarriedItemIndicator`) and returned to the world if the
+// player kills the thief before it escapes (`LootSystem.spawnLoot`); lost for
+// good only if the monkey survives.
 //
 // Cowardice's hunting behavior isn't permanent: a continuous run of lost
 // sight — not merely one successful lookback, the general coward's own
@@ -27,6 +31,7 @@
 // own comment.
 import { hasVision } from '../enemyVision.js';
 import { GRID } from '../../game/GameConfig.js';
+import { INGREDIENTS } from '../../data/items.js';
 
 export const ThiefMechanic = {
   isEnabled(enemy) {
@@ -37,6 +42,10 @@ export const ThiefMechanic = {
     enemy.thiefFlipped = false;
     enemy.thiefFlipPending = false;
     enemy.thiefRecoverTimer = 0;
+    // Satchel-thief only in practice (coin theft never pushes to this), but
+    // initialized for every thiefMechanic enemy so callers never have to
+    // guard against it being absent.
+    enemy.stolenIngredients = [];
   },
 
   // Taking damage always wins the priority cascade over a theft in progress —
@@ -214,23 +223,29 @@ export const ThiefMechanic = {
   },
 
   // Monkey's steal: ejects up to three ingredients from the pile — the
-  // monkey keeps the first (gone for good, same as Rat's coin grab) and
-  // scatters the rest to the ground for the player to reclaim — and, in the
-  // same beat, disarms the held weapon. The weapon lands 3 cells away in a
-  // random direction carrying the same pickup cooldown a voluntary weapon
-  // throw gets (TrapSystem._landThrownWeapon's 600ms) so the player can't
-  // instantly re-grab it out from under the monkey; placed directly rather
-  // than thrown, since this isn't the player's own attack arc.
+  // monkey keeps the first (carried on its person — see `stolenIngredients`
+  // above) and scatters the rest to the ground for the player to reclaim —
+  // and, in the same beat, disarms the held weapon. The weapon lands 3 cells
+  // away in a random direction carrying the same pickup cooldown a voluntary
+  // weapon throw gets (TrapSystem._landThrownWeapon's 600ms) so the player
+  // can't instantly re-grab it out from under the monkey; placed directly
+  // rather than thrown, since this isn't the player's own attack arc.
   _resolveSatchelTheft(attack, player, combatSystem) {
     const game = combatSystem.game;
     const inv = game.inventorySystem;
+    const thief = attack.owner;
 
     let ejected = 0;
     for (let i = 0; i < 3; i++) {
       const char = inv.removeRandomIngredient();
       if (!char) break;
       ejected++;
-      if (ejected === 1) continue; // kept by the monkey — not dropped
+      if (ejected === 1) {
+        // Kept, not dropped — rides along until the monkey dies (dropped
+        // back by LootSystem.spawnLoot) or gets away.
+        (thief.stolenIngredients ??= []).push(char);
+        continue;
+      }
       const angle = Math.random() * Math.PI * 2;
       game.lootSystem.spawnIngredientDrop(char, player.position.x, player.position.y, angle, null);
     }
@@ -255,5 +270,24 @@ export const ThiefMechanic = {
     }
 
     if ((ejected > 0 || weapon) && attack.owner) ThiefMechanic.onTheftSuccess(attack.owner);
+  },
+
+  // The carried-item tell above a satchel-thief's head: the exact ingredient
+  // it's holding, in that ingredient's own char/color — same "read what's
+  // above its head" convention as WindupTelegraphMechanic's equipped-weapon
+  // tell, so a played monkey visibly has something rather than the grab
+  // reading as a silent inventory decrement. Shows the most recently kept
+  // ingredient if a recovered-then-re-stole thief is carrying more than one.
+  // Coin-thieves (Rat/Plague Rat) never populate `stolenIngredients` — their
+  // grab drops the coin straight back to the ground rather than carrying it
+  // — so this stays null for them.
+  getCarriedItemIndicator(enemy) {
+    const char = enemy.stolenIngredients?.[enemy.stolenIngredients.length - 1];
+    if (!char) return null;
+    return {
+      char,
+      color: INGREDIENTS[char]?.color || '#ffffff',
+      offsetY: -GRID.CELL_SIZE
+    };
   }
 };
