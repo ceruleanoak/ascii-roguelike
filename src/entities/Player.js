@@ -511,7 +511,21 @@ export class Player {
   }
 
   applyStatusEffect(effect, duration = 3.0) {
-    if (!this.statusEffects[effect]) return;
+    // Loud on unsupported effects (bug #166): this map only holds goo/freeze/
+    // slimeBoost/dizzy — burn lives on applyBurn, poison on applyPoison, and
+    // slow has no player representation. A silent early-return here is how
+    // four shipped effects no-op'd invisibly; keep authoring mistakes loud.
+    if (!this.statusEffects[effect]) {
+      const warned = Player._unsupportedEffectWarned ?? (Player._unsupportedEffectWarned = new Set());
+      if (!warned.has(effect)) {
+        warned.add(effect);
+        console.error(
+          `[status-effects] Player has no '${effect}' slot — applyStatusEffect('${effect}') no-ops. ` +
+          `Route burn→applyBurn / poison→applyPoison; new effects need a slot here or a design call (known-bugs #166).`
+        );
+      }
+      return;
+    }
 
     // Check for immunity
     if (effect === 'goo' && this.slimeImmune) return;

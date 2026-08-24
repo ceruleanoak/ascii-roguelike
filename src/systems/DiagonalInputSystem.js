@@ -5,14 +5,13 @@ const KEY_TO_ARROWS = {
   c: ['Down', 'Right']
 };
 
+import { isInputCaptured } from '../game/inputCapture.js';
+
 export class DiagonalInputSystem {
   constructor(game) {
-    const suppressed = () =>
-      game.player?.polymorphed || game.cheatMenu?.isOpen || game.menuOpen || game.pauseSystem?.isPaused();
-
     window.addEventListener('keydown', (e) => {
       const key = e.key.toLowerCase();
-      if (suppressed() || !(key in KEY_TO_ARROWS)) return;
+      if (isInputCaptured(game) || !(key in KEY_TO_ARROWS)) return;
       KEY_TO_ARROWS[key].forEach(dir => game.arrowKeys['Arrow' + dir] = true);
       e.preventDefault();
     });
