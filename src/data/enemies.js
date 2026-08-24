@@ -978,7 +978,7 @@ export const ENEMIES = {
   't': {
     char: 't',
     name: 'Tortoise',
-    description: 'Hides as a rock until you get close. Retreats into its shell when struck. In lava, breathes fire.',
+    description: 'Hides as a rock until you get close. Strike the shell and it rolls out of it at you. In lava, breathes fire.',
     spellDescription: 'SHELL. FIRE. LAVA.',
     mass: 2.0,
     hp: 8,
@@ -1002,6 +1002,24 @@ export const ENEMIES = {
       burstDuration: 0.6
     },
     idleBehavior: 'stationary',
+    // Shell launch: being struck re-tucks the Tortoise (ShellFormMechanic),
+    // and after a short coiled pause it erupts into this rolling rush — the
+    // Ancient Turtle's ricochet-roll (zone boss, L10) in miniature, teaching
+    // the shell-comes-at-you lesson a full zone early.
+    chargeMechanic: {
+      enabled: true,
+      chargeSpeed: 165,          // Rolling rush — heavier line than Living Rock's snap
+      chargeDuration: 0.9,
+      chargeWindup: 0.35,        // Barely a beat — the coil inside the shell is the real tell
+      cooldown: 5.0,
+      wallStunDuration: 2.5,     // Tips out of the shell on impact — generous punish window, mirrors Rockwarden's
+      chargeRange: GRID.CELL_SIZE * 6
+    },
+    shellLaunch: {
+      enabled: true,
+      delay: 0.45,               // Coiled pause before it comes out of the shell
+      range: GRID.CELL_SIZE * 6
+    },
     elementalAffinity: {
       resistance: { 'physical': 0.4 },
       weakness: { 'freeze': 1.5, 'wet': 1.5 }

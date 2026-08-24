@@ -100,6 +100,9 @@ export const ChargeMechanic = {
       // idle — count down to next charge whenever a target is engaged
       const engaged = enemy.state !== 'idle' || enemy.aggroMemoryActive || enemy.enraged;
       if (engaged) enemy.chargeTimer -= deltaTime;
+      // A shelled enemy is already mid-response (ShellFormMechanic owns that
+      // window — for the Tortoise it ends in a shell launch). Starting an
+      // autonomous windup from inside the shell would fight it.
       if (enemy.chargeTimer <= 0
           && distance < cfg.chargeRange
           && enemy.target
@@ -107,6 +110,7 @@ export const ChargeMechanic = {
           && !enemy.isFrozen()
           && !enemy.isWet()
           && !enemy.isGooey()
+          && !enemy.inShellForm
           && onScreen
           && enemy.hasVision(enemy.position, enemy.target.position, effectiveVisionLength, { ignoreCone: true })) {
         enemy.chargeState = 'windup';
