@@ -49,7 +49,8 @@ export const ZONES = {
     rareSayings: [
       'SPEAK AND THE HUT WILL SIT.',
       'THE GREAT SLIME YIELDS TO A LONG BLADE.',
-      'THE MAGE FINDS HIS WAY THROUGH ASH.'
+      'THE MAGE FINDS HIS WAY THROUGH ASH.',
+      'THE HOARD YIELDS TO AN EMPTY HAND.'
     ],
     borderColor: '#00ff00',
     exitColor: ZONE_COLORS.green,
