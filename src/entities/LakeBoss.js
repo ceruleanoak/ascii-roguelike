@@ -26,9 +26,17 @@ const JUMP_HEIGHT_PX           = GRID.CELL_SIZE * 5;
 const STALK_SPEED              = 78;    // vs UNDERWATER_SPEED 55 — the hunt is faster
 const STALK_TIMEOUT            = 16.0;  // force a Breach even if the player is unreachable
 const BREACH_RANGE_SQ          = (GRID.CELL_SIZE * 1.2) ** 2;
-const BREACH_TELEGRAPH         = 2.4;   // the anticipation window, held under the ice
+// Exported: BossRenderer draws the telegraph over exactly this disc, for exactly
+// this long. The warning and the hit have to be the same shape or the player is
+// learning a lie.
+export const BREACH_TELEGRAPH  = 2.4;   // the anticipation window, held under the ice
 const SURFACED_WINDOW          = 8.0;   // fixed vulnerable window before submerging again
-const LEAD_RADIUS              = GRID.CELL_SIZE * 1.5;  // the sliver of open water a Breach opens
+// The eruption is the boss's whole bulk coming through the sheet, so it covers the
+// boss's own footprint (the composite is 5 cells wide, half-width 2.5) plus a cell
+// of margin. Everything inside is crushed and holed in the same instant — which is
+// what makes standing still lethal and gives the telegraph its whole purpose.
+export const BREACH_RADIUS     = GRID.CELL_SIZE * 3.5;
+const BREACH_DAMAGE            = 7;     // of the player's 10 max HP — two Breaches kill
 
 export class LakeBoss {
   constructor(x, y, waterTiles = []) {
@@ -135,6 +143,23 @@ export class LakeBoss {
 
   get vulnerable() { return this.invulnerabilityTimer <= 0; }
 
+  /**
+   * True while the boss is beneath the surface: there is no body above the water
+   * to see or to hit. Phase 1 submerges as 'underwater'; phase 2 spends nearly its
+   * whole cycle down there, stalking and then holding the Breach telegraph.
+   *
+   * Single predicate because "submerged" has to mean the same thing to three
+   * different consumers — the renderer (shadow, no body), the hitbox (nothing to
+   * connect with), and the i-frames set in _transitionTo. They drifted apart once
+   * already: phase 2's states were invulnerable but still drew a body and still
+   * ate projectiles.
+   */
+  isSubmerged() {
+    return this.state === 'underwater'
+        || this.state === 'stalking'
+        || this.state === 'breaching';
+  }
+
   takeDamage(amount) {
     // Any hit while surfaced starts (or resets) the slam countdown, giving the
     // player a damage window before the boss dives. Clear queued ice shots so
@@ -197,6 +222,14 @@ export class LakeBoss {
   isWet()                    { return false; }
   getHitbox() {
     const cs = GRID.CELL_SIZE;
+    // Submerged: untargetable. CombatSystem's projectile and melee tests are pure
+    // AABB overlap against this box with no vulnerability check of their own, so
+    // without this the boss would silently swallow arrows and swings while under
+    // the ice — the shot is spent, nothing registers. A degenerate box parked far
+    // off the board can never overlap anything real. (A zero-size box at the
+    // boss's own position is NOT enough: an attack straddling the point still
+    // satisfies both halves of the overlap test.)
+    if (this.isSubmerged()) return { x: -1e6, y: -1e6, width: 0, height: 0 };
     // Composite spans 5 chars wide (-2..+2 offX) × 3 chars tall (-2..0 offY)
     // anchored at bx = position.x + cs/2, by = position.y + cs/2 + jumpOffset
     return {
@@ -368,40 +401,80 @@ export class LakeBoss {
   // player authors the erosion pattern: hug the edge and the holes cluster there;
   // wander the middle and you strand yourself.
   _fireBreach() {
+    const cs = GRID.CELL_SIZE;
     const cx = this.position.x, cy = this.position.y;
 
-    // Jaw clamp on emergence — same shape as the phase-1 hammer, but this is the
-    // attack the player was given the telegraph to avoid.
+    // The crush. One hitbox covering the entire eruption, not the phase-1 jaw
+    // clamp: the boss is coming up through the floor the player is standing on,
+    // so the whole disc is lethal at once. Nothing about this is meant to be
+    // tanked — BREACH_TELEGRAPH exists so the player can be somewhere else.
     this.pendingBossAttacks.push({
-      position: {
-        x: cx - GRID.CELL_SIZE * 2.5,
-        y: cy - GRID.CELL_SIZE * 0.5,
-      },
+      position:    { x: cx - BREACH_RADIUS, y: cy - BREACH_RADIUS },
       velocity:    { vx: 0, vy: 0 },
-      damage:      5,
-      char:        ')',
+      damage:      BREACH_DAMAGE,
+      char:        ' ',          // the debris below is the visual; this box is the hit
       color:       '#4488aa',
       onHit:       null,
       reflectable: false,
       reflected:   false,
       owner:       this,
-      width:       GRID.CELL_SIZE * 5,
-      height:      GRID.CELL_SIZE * 1.5,
-      lifetime:    0.25,
+      width:       BREACH_RADIUS * 2,
+      height:      BREACH_RADIUS * 2,
+      lifetime:    0.3,
     });
 
-    // Signal BossSystem to open the Lead. Radius stays tight — the design is a
-    // sliver of water between the player and a vulnerable boss, not a moat.
-    this.pendingLead = { x: cx, y: cy, radius: LEAD_RADIUS };
+    // Shattered sheet flung outward. Zero damage — these are the destruction made
+    // visible, so the player can read how far the eruption reached and learn the
+    // radius by watching it rather than by being told. Two rings, staggered, so it
+    // erupts rather than pops.
+    const CHUNKS = ['*', '+', 'o', ':', '.'];  // printable ASCII per the encoding rule
+    for (let ring = 1; ring <= 2; ring++) {
+      const r   = BREACH_RADIUS * (ring === 1 ? 0.55 : 0.95);
+      const pts = ring === 1 ? 8 : 14;
+      for (let i = 0; i < pts; i++) {
+        const angle = (Math.PI * 2 / pts) * i + (ring - 1) * 0.22;
+        this.pendingBossAttacks.push({
+          position: {
+            x: cx + Math.cos(angle) * r - cs / 2,
+            y: cy + Math.sin(angle) * r - cs / 2,
+          },
+          velocity:    { vx: 0, vy: 0 },
+          damage:      0,
+          char:        CHUNKS[Math.floor(Math.random() * CHUNKS.length)],
+          color:       ring === 1 ? '#ffffff' : '#cceeff',
+          onHit:       null,
+          reflectable: false,
+          reflected:   false,
+          owner:       this,
+          width:       cs,
+          height:      cs,
+          lifetime:    0.35,
+          delay:       (ring - 1) * 0.08,
+        });
+      }
+    }
+
+    // Signal BossSystem to open the Lead across the same disc the crush covered,
+    // and to throw the ice shards. The hole is exactly as wide as the destruction
+    // the player just watched — the floor loss is legible, not bookkeeping.
+    this.pendingLead = { x: cx, y: cy, radius: BREACH_RADIUS };
   }
 
   // Fire 4 shots in a random order, staggered in time
   _fireIceStream() {
-    if (!this.target) return;
-    const base = Math.atan2(
-      this.target.position.y - this.position.y,
-      this.target.position.x - this.position.x
-    );
+    // Phase 1 aims the cone at the player. Phase 2 fires it wherever it likes:
+    // once the lake is a cage, the ice stream stops being the threat to read and
+    // becomes weather — hazard the player navigates around while solving the real
+    // problem, which is the Breach. Aimed shots on top of a tracked eruption would
+    // be two things to anticipate at once, and Anticipate only works when there is
+    // one thing worth watching.
+    if (this.phase !== 2 && !this.target) return;
+    const base = this.phase === 2
+      ? Math.random() * Math.PI * 2
+      : Math.atan2(
+          this.target.position.y - this.position.y,
+          this.target.position.x - this.position.x
+        );
 
     // Shuffle shot indices [0,1,2,3,4]
     const order = [0, 1, 2, 3, 4];
@@ -494,16 +567,21 @@ export class LakeBoss {
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
-  // Cooldown between ice bursts: 12s at full HP → 7s at 40% → 4s near death
+  // Cooldown between ice bursts: 12s at full HP → 7s at 40% → 4s near death.
+  // Phase 2 halves whatever that curve gives: the sheet is shrinking under the
+  // player, so the pressure to keep moving has to come with the shots landing
+  // twice as often rather than the boss simply hitting harder.
   _getAttackCooldown() {
     const hp_pct = this.hp / this.maxHp;
+    let cooldown;
     if (hp_pct >= 0.4) {
       const t = (hp_pct - 0.4) / 0.6;
-      return 7.0 + t * 5.0;
+      cooldown = 7.0 + t * 5.0;
     } else {
       const t = hp_pct / 0.4;
-      return 4.0 + t * 3.0;
+      cooldown = 4.0 + t * 3.0;
     }
+    return this.phase === 2 ? cooldown / 2 : cooldown;
   }
 
   _tickMouth(deltaTime) {
@@ -549,8 +627,12 @@ export class LakeBoss {
 
     // Phase 2's surfaced beat is timed rather than proximity-driven; set here so
     // the shared 'surfaced' branch above keeps its phase-1 meaning untouched.
+    // The opening delay is halved along with the cooldown — otherwise the boss
+    // would surface twice as often but still wait the phase-1 beat before its
+    // first shot, which reads as the stream getting *rarer*, not more frequent.
     if (state === 'surfaced' && this.phase === 2) {
       this.surfacedTimer = SURFACED_WINDOW;
+      this.attackTimer   = 0.75;
     }
   }
 

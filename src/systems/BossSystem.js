@@ -457,6 +457,7 @@ export class BossSystem {
    * supposed to be destroying.
    */
   _openLead(lead) {
+    let shattered = 0;
     for (const obj of this.game._activeBackgroundObjects()) {
       if (obj.destroyed || !obj.isWater || !obj.isWater()) continue;
       const cx = obj.position.x + GRID.CELL_SIZE / 2;
@@ -466,7 +467,51 @@ export class BossSystem {
       if (obj.getWaterState?.() === 'frozen') {
         obj.setWaterState('normal', 0);
         obj._playAnimation?.('shake');
+        shattered++;
       }
+    }
+    if (shattered) this._spawnBreachDebris(lead, shattered);
+  }
+
+  /**
+   * Ice thrown up by a Breach. The eruption removes a chunk of the only floor the
+   * player has left, and that has to land as violence rather than as tiles quietly
+   * changing colour — the depleting sheet is the fight's clock, so the player needs
+   * to feel each piece go.
+   *
+   * Scaled by how much sheet actually shattered, so a Breach into open water (a
+   * spot already holed) is visibly a lesser event than one that takes fresh ice.
+   */
+  _spawnBreachDebris(lead, shattered) {
+    const SHARDS = ['*', '+', '.', ':', 'o'];  // printable ASCII per the encoding rule
+    const count  = Math.min(46, 14 + shattered * 2);
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      // Bias outward from the centre so the spray traces the hole's real extent
+      const dist  = lead.radius * (0.2 + Math.random() * 0.8);
+      const speed = 55 + Math.random() * 95;
+      this.game.particles.push({
+        x: lead.x + Math.cos(angle) * dist,
+        y: lead.y + Math.sin(angle) * dist,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 40,   // upward bias: thrown, not pushed
+        life: 0.45 + Math.random() * 0.35,
+        maxLife: 0.8,
+        char: SHARDS[Math.floor(Math.random() * SHARDS.length)],
+        color: Math.random() < 0.5 ? '#ffffff' : '#cceeff',
+      });
+    }
+    // A slower column of spray straight up out of the hole, so the breach point
+    // itself stays readable after the outward shards have scattered.
+    for (let i = 0; i < 8; i++) {
+      this.game.particles.push({
+        x: lead.x + (Math.random() - 0.5) * GRID.CELL_SIZE * 2,
+        y: lead.y + (Math.random() - 0.5) * GRID.CELL_SIZE * 2,
+        vx: (Math.random() - 0.5) * 30,
+        vy: -110 - Math.random() * 60,
+        life: 0.7, maxLife: 0.7,
+        char: ':', color: '#aaddff',
+      });
     }
   }
 

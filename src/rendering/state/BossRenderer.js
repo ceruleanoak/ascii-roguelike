@@ -13,6 +13,7 @@ import { HEAD_FLASH_FREQ } from '../../entities/TurtleHead.js';
 import {
   GLINT_POSITIONS, GLINT_PULSE_PERIOD,
 } from '../../entities/Hoardmaw.js';
+import { BREACH_RADIUS, BREACH_TELEGRAPH } from '../../entities/LakeBoss.js';
 
 export class BossRenderer {
   constructor(renderer) {
@@ -232,8 +233,10 @@ export class BossRenderer {
     const cs   = GRID.CELL_SIZE;
     const ctx  = this.renderer.fgCtx;
 
-    // UNDERWATER: darken nearby water tiles; don't render body
-    if (boss.state === 'underwater') {
+    // SUBMERGED: darken nearby water tiles; don't render body. Covers phase 1's
+    // 'underwater' and phase 2's 'stalking'/'breaching' — the boss is under the
+    // sheet for nearly all of phase 2, and a shadow is the only thing to see.
+    if (boss.isSubmerged()) {
       const tx = boss.position.x, ty = boss.position.y;
       const R  = cs * 4;
       const RSq = R * R;
@@ -247,6 +250,13 @@ export class BossRenderer {
           ctx.fillRect(obj.position.x, obj.position.y, cs, cs);
       }
       ctx.restore();
+
+      // BREACHING: the anticipation window made visible. Cracks spread outward
+      // over the exact disc the eruption will crush, tightening as the timer runs
+      // out, so the player can see both where it lands and how long they have.
+      // Without this the telegraph is a pause with nothing to read, and the whole
+      // beat becomes the coin flip the rework exists to remove.
+      if (boss.state === 'breaching') this._drawBreachTelegraph(boss);
       return;  // no body rendered while submerged
     }
 
@@ -262,15 +272,30 @@ export class BossRenderer {
     const nearDeathColor = boss.getNearDeathBlinkColor();
     const hp_pct   = boss.hp / boss.maxHp;
     const BODY_CLR = nearDeathColor ?? flashColor ?? (hp_pct < 0.4 ? '#ff8888' : '#aaffff');
-    const EYE_CLR  = '#ffffff';
+    // Phase 2 turns the eyes red — the one part of the composite that says the
+    // thing hunting under the ice is not the same creature that was circling the
+    // lake. Everything else about phase 2 is arena-level; this is the boss itself.
+    const enraged  = boss.phase === 2;
+    const EYE_CLR  = nearDeathColor ?? flashColor ?? (enraged ? '#ff2200' : '#ffffff');
     const RIM_CLR  = nearDeathColor ?? flashColor ?? '#4488aa';
 
     const draw = (offX, offY, char, color) =>
       this.renderer.drawEntity(bx + offX * cs, by + offY * cs, char, color);
 
-    // Row -2: eyes
-    draw(-2, -2, '◉', EYE_CLR);  // ◉
-    draw(+2, -2, '◉', EYE_CLR);
+    // Row -2: eyes. In phase 2 they shake — a fast sub-cell jitter, sampled per
+    // eye from offset time seeds so the two never move in lockstep (synchronised
+    // jitter reads as the whole head sliding, not as eyes twitching).
+    if (enraged) {
+      const now   = performance.now() / 1000;
+      const SHAKE = cs * 0.18;
+      const jitter = seed =>
+        Math.sin(now * 47 + seed) * SHAKE + Math.sin(now * 31 + seed * 2.7) * SHAKE * 0.5;
+      this.renderer.drawEntity(bx - 2 * cs + jitter(0),   by - 2 * cs + jitter(1.9), '◉', EYE_CLR);
+      this.renderer.drawEntity(bx + 2 * cs + jitter(4.1), by - 2 * cs + jitter(6.3), '◉', EYE_CLR);
+    } else {
+      draw(-2, -2, '◉', EYE_CLR);  // ◉
+      draw(+2, -2, '◉', EYE_CLR);
+    }
 
     // Row -1: surface frill
     draw(-1, -1, '~', BODY_CLR);
@@ -300,6 +325,55 @@ export class BossRenderer {
       ctx.fillRect(barX, barY, BAR_W, BAR_H);
       ctx.fillStyle = '#aaffff';
       ctx.fillRect(barX, barY, BAR_W * (boss.hp / boss.maxHp), BAR_H);
+    }
+  }
+
+  /**
+   * The Breach telegraph: cracks radiating across the ice over the disc the
+   * eruption is about to crush.
+   *
+   * Reads two things at once. The ring of cracks marks the danger zone at its
+   * true BREACH_RADIUS, so the player learns the size by seeing it. The cracks
+   * then walk inward and speed up as the timer drains, so how much time is left
+   * is legible without a bar or a countdown — which the non-instructive UI rule
+   * would not allow anyway.
+   */
+  _drawBreachTelegraph(boss) {
+    const cs = GRID.CELL_SIZE;
+    const bx = boss.position.x + cs / 2;
+    const by = boss.position.y + cs / 2;
+
+    // 0 at the moment the telegraph starts → 1 at the instant of eruption
+    const t = 1 - Math.max(0, Math.min(1, boss.breachTimer / BREACH_TELEGRAPH));
+
+    // Cracks close in on the centre as the timer runs out. They never reach it —
+    // the ring stays wide enough to keep reading as "this whole disc", not "this
+    // point", because the whole disc is what hits.
+    const ringR = BREACH_RADIUS * (1 - t * 0.35);
+
+    // Spokes multiply as it tightens: 6 at first sight, 12 at the last moment.
+    const spokes = 6 + Math.round(t * 6);
+    const CRACK  = ['/', '|', '\\', '-'];
+
+    // Flicker rate ramps with t so the last half-second reads as urgent. Alpha is
+    // left alone — the retro quantizer rounds it to 10% steps, so brightness is
+    // carried by the colour swap instead.
+    const flickerHz = 4 + t * 10;
+    const on = Math.floor(performance.now() / 1000 * flickerHz) % 2 === 0;
+    const crackColor = on ? '#ffffff' : (t > 0.6 ? '#88ccff' : '#5588aa');
+
+    for (let i = 0; i < spokes; i++) {
+      const angle = (Math.PI * 2 / spokes) * i + t * 0.4;
+      // Two chars per spoke: one at the rim, one partway in, so the crack reads
+      // as a line spreading rather than a ring of dots.
+      for (const frac of [1.0, 0.62]) {
+        const r  = ringR * frac;
+        const cx = bx + Math.cos(angle) * r;
+        const cy = by + Math.sin(angle) * r;
+        // Pick the crack glyph whose orientation matches the spoke's direction
+        const oct = Math.round(angle / (Math.PI / 4)) % 4;
+        this.renderer.drawEntity(cx - cs / 2, cy - cs / 2, CRACK[oct], crackColor);
+      }
     }
   }
 

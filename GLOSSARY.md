@@ -548,23 +548,32 @@ programming terms.
   random surfacing — you cannot Anticipate a coin flip.
 - **In code:** `LakeBoss` state `'stalking'`, `_updateStalking()`. Moves at `STALK_SPEED`
   toward the player each frame; ends on proximity (`BREACH_RANGE_SQ`) or `STALK_TIMEOUT`.
+  Untargetable throughout, via `LakeBoss.isSubmerged()` — the one predicate the renderer (no
+  body, just a shadow), `getHitbox()` (nothing to connect with), and the i-frames all read, so
+  they cannot drift apart.
 - **Not:** an Enemy State. `LakeBoss` is a bespoke entity that does not run
   `EnemyStateMachine`, so `stalking` does not extend the closed State set below.
 
 ### Breach
-- **Definition:** The Frosted Maw crashing up through the ice at the player's feet. A held
-  telegraph precedes it — this is the anticipation window the zone's verb asks for.
+- **Definition:** The Frosted Maw crashing up through the ice at the player's feet — its whole
+  bulk erupting through the floor the player is standing on. Crushes everything within
+  `BREACH_RADIUS` (the boss's own half-width plus a cell) for heavy damage, throwing shattered
+  sheet outward. A held telegraph precedes it: this is the anticipation window the zone's verb
+  asks for, and the attack is meant to be avoided rather than absorbed.
 - **In code:** `LakeBoss` state `'breaching'`, `_updateBreaching()` / `_fireBreach()`.
-  `BREACH_TELEGRAPH` counts down, then a jaw-clamp attack fires and a Lead opens. Leaves the
+  `BREACH_TELEGRAPH` counts down while `BossRenderer._drawBreachTelegraph` spreads cracks over
+  the exact disc, then a `BREACH_DAMAGE` crush box covering the full disc fires alongside two
+  staggered rings of zero-damage debris, and a Lead opens across the same radius. Leaves the
   boss Surfaced, enraged, and vulnerable across the water it just opened.
 - **Not:** the phase-1 hammer slam, which lands where the boss surfaced rather than where the
-  player is standing.
+  player is standing, and which is a narrow jaw clamp rather than a disc.
 
 ### Lead
-- **Definition:** The sliver of open water a Breach punches in the frozen lake (the polar term
-  for a fissure in pack ice). Leads never close, so every Breach permanently removes floor —
-  the depleting sheet is phase 2's clock. Because a Breach lands on the player, the player
-  authors the erosion pattern.
+- **Definition:** The hole a Breach punches in the frozen lake (the polar term for a fissure in
+  pack ice). Opens across the full `BREACH_RADIUS`, so it is exactly as wide as the destruction
+  the player just watched. Leads never close, so every Breach permanently removes floor — the
+  depleting sheet is phase 2's clock. Because a Breach lands on the player, the player authors
+  the erosion pattern.
 - **In code:** `BackgroundObject.isLead`, set by `BossSystem._openLead()`. Permanence is
   enforced in `BackgroundObject.setWaterState`, which refuses `'frozen'` on a Lead — freezing
   has seven entry points, including the boss's own ice stream, and the guard has to sit at the
