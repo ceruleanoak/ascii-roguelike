@@ -35,7 +35,7 @@ const FAN_ARC          = Math.PI / 3;
 export const GLINT_POSITIONS = [
   { dx: -3.5, dy: 2 }, { dx: 0, dy: 3 }, { dx: 3.5, dy: 2 },
 ];
-const GLINT_PULSE_PERIOD = 1.2; // seconds per breath pulse (the rhythm to read)
+export const GLINT_PULSE_PERIOD = 1.2; // seconds per breath pulse (the rhythm to read)
 
 // Phase-3 bribe: three offers; each refused escalates the convulsion.
 const BRIBE_OFFER_COUNT  = 3;

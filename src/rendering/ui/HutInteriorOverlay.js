@@ -310,6 +310,12 @@ export class HutInteriorOverlay {
     // ── 16c. Sapping enemies on top of player (bats latched on player) ────────
     this.renderController.exploreRenderer.drawSappingEnemies(game, game.activeFloor.enemies);
 
+    // ── 16c-3. Dungeon boss composite (Hoardmaw) — interior coords, drawn in
+    // this translated pass; the surface boss-composite path skips interiors.
+    if (game.dungeonBossSystem?.hoardmaw) {
+      this.renderController.exploreRenderer.bossRenderer.renderBossComposite(game);
+    }
+
     // ── 16c2. Tomb Ghosts (DungeonGhostSystem) — bespoke, not part of
     //      game.activeFloor.enemies, so drawSappingEnemies above never sees
     //      them; drawn the same way MazeInteriorOverlay draws its own

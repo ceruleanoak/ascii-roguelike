@@ -10,6 +10,9 @@
 import { GRID } from '../../game/GameConfig.js';
 import { CHARGE_DURATION, ROLL_CHARS } from '../../entities/TurtleShell.js';
 import { HEAD_FLASH_FREQ } from '../../entities/TurtleHead.js';
+import {
+  GLINT_POSITIONS, GLINT_PULSE_PERIOD,
+} from '../../entities/Hoardmaw.js';
 
 export class BossRenderer {
   constructor(renderer) {
@@ -26,6 +29,9 @@ export class BossRenderer {
    */
   renderBossComposite(game) {
     const bs = game.bossSystem;
+    // Dungeon boss outranks the surface-boss gate — the vault is its own
+    // context and bossSystem is inactive there.
+    if (game.dungeonBossSystem?.hoardmaw) { this.renderHoardmawComposite(game); return; }
     if (!bs?.active) return;
     if (bs.lakeBoss)    { this.renderLakeBossComposite(game); return; }
     if (bs.turtleShell) { this.renderTurtleBossComposite(game); return; }
@@ -395,6 +401,126 @@ export class BossRenderer {
       ctx.arc(hx, hy - cs * 0.75, cs * 0.2, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
+    }
+  }
+
+  // ── Hoardmaw composite (green dungeon boss) ───────────────────────────────
+  // Interior coords — called under HutInteriorOverlay's translate (the vault
+  // is plane-1 content; the surface pass never sees this boss). Anatomy: lid
+  // bar, `$` scale field over bare hide, mouth interior during gape, ◉ glint,
+  // travelling tongue. Dormant it reads as an innocuous treasure pile — the
+  // ambush IS the reveal.
+
+  renderHoardmawComposite(game) {
+    const maw = game.dungeonBossSystem?.hoardmaw;
+    if (!maw || maw.defeated) return;
+    const cs = GRID.CELL_SIZE;
+    const rect = maw.bodyRect();
+
+    // Dormant prologue: plain pile of coins with a sealed lid line.
+    if (maw.dormant) {
+      for (let r = rect.rows - 2; r < rect.rows; r++) {
+        for (let c = 0; c < rect.cols; c++) {
+          this.renderer.drawEntity(rect.left + (c + 0.5) * cs, rect.top + (r + 0.5) * cs, '$', '#8a7a3a');
+        }
+      }
+      for (let c = 1; c < rect.cols - 1; c++) {
+        this.renderer.drawEntity(rect.left + (c + 0.5) * cs, rect.top + cs * 0.5, '=', '#6e5f2e');
+      }
+      return;
+    }
+
+    const gape = maw.attackState === 'inhale' || !!maw.tongue || maw.chokeTimer > 0;
+    const flash = maw.hitFlash && Math.floor(performance.now() / 1000 * 24) % 2 === 0;
+
+    // Body block: hide texture everywhere, then scales on top.
+    const hideColor = flash ? '#ffffff' : '#7a5c33';
+    for (let r = 1; r < rect.rows; r++) {
+      for (let c = 0; c < rect.cols; c++) {
+        this.renderer.drawEntity(rect.left + (c + 0.5) * cs, rect.top + (r + 0.5) * cs, '·', hideColor);
+      }
+    }
+    for (const key of maw.scales) {
+      const [r, c] = key.split(',').map(Number);
+      this.renderer.drawEntity(rect.left + (c + 0.5) * cs, rect.top + (r + 0.5) * cs, '$', '#ffd700');
+    }
+
+    // Lid row: '=' when sealed; opens (draws only at the edges) in gape so the
+    // dark mouth interior shows beneath.
+    for (let c = 0; c < rect.cols; c++) {
+      if (gape && c > 2 && c < rect.cols - 3) continue;
+      this.renderer.drawEntity(rect.left + (c + 0.5) * cs, rect.top + 0.5 * cs, '=', '#c9a227');
+    }
+
+    // Mouth interior during gape: dark maw cells along the bottom-center.
+    if (gape) {
+      const midL = Math.floor(rect.cols / 2) - 2;
+      for (let c = midL; c < midL + 5; c++) {
+        this.renderer.drawEntity(rect.left + (c + 0.5) * cs, rect.top + (rect.rows - 0.5) * cs, 'o', '#3d1500');
+      }
+    }
+
+    // Phase-2 glint ◉ — pulses with the maw's breath rhythm (the tell).
+    if (maw.bossPhase === 2 || maw.chokeTimer > 0) {
+      const g = maw.glintPx();
+      const pulse = 0.55 + 0.45 * Math.sin((maw.glintPulseTimer / GLINT_PULSE_PERIOD) * Math.PI * 2);
+      const glintAlpha = maw.chokeTimer > 0 ? 1 : pulse;
+      this.renderer.drawTextWithAlpha(g.x + cs / 2, g.y + cs / 2, '◉', '#ffe9a8', glintAlpha);
+      // Truth register: a carried Compass marks the true glint outright.
+      if (game.dungeonBossSystem?.compassTruthActive) {
+        this.renderer.drawEntity(g.x + cs / 2, g.y - cs * 0.9, '⌖', '#7fdfff');
+      }
+    }
+
+    // Tongue strip — head cell plus a short trailing tail toward the mouth.
+    if (maw.tongue) {
+      const t = maw.tongue;
+      this.renderer.drawEntity(t.position.x + cs / 2, t.position.y + cs / 2, '~', t.color);
+      for (let i = 1; i <= 3; i++) {
+        this.renderer.drawEntity(
+          t.position.x - t.dirX * i * cs * 0.5 + cs / 2,
+          t.position.y - t.dirY * i * cs * 0.5 + cs / 2,
+          '~', '#b8892f'
+        );
+      }
+    }
+
+    // Slam telegraph: expanding warning ring from the body edge (flanks safe).
+    if (maw.attackState === 'slamTele') {
+      const progress = Math.min(1, maw.attackTimer / 1.1);
+      const ctx = this.renderer.fgCtx;
+      ctx.save();
+      ctx.strokeStyle = `rgba(255, 80, 40, ${0.35 + 0.4 * progress})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(maw.mouthX(), maw.mouthY(), GRID.CELL_SIZE * (1.4 + 1.8 * progress), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Inhale suction: drifting motes between player and mouth read the pull.
+    if (maw.inhaleActive) {
+      const now = performance.now() / 120;
+      for (let i = 0; i < 6; i++) {
+        const t = ((now + i * 0.7) % 3) / 3; // 0..1 traveling toward mouth
+        const px = game.player?.position.x ?? maw.mouthX();
+        const py = game.player?.position.y ?? maw.mouthY();
+        const x = px + (maw.mouthX() - px) * t;
+        const y = py + (maw.mouthY() - py) * t;
+        this.renderer.drawEntity(x + cs / 2, y + cs / 2, '·', '#e0a83c');
+      }
+    }
+
+    // HP bar above the body (shown once damaged) — Turtle precedent.
+    if (maw.hasTakenDamage) {
+      const ctx = this.renderer.fgCtx;
+      const BAR_W = cs * 6, BAR_H = 4;
+      const barX = maw.position.x - BAR_W / 2;
+      const barY = rect.top - cs * 0.8;
+      ctx.fillStyle = '#333333';
+      ctx.fillRect(barX, barY, BAR_W, BAR_H);
+      ctx.fillStyle = maw.bossPhase >= 3 ? '#ffd700' : maw.bossPhase === 2 ? '#ffcc44' : '#22cc44';
+      ctx.fillRect(barX, barY, BAR_W * Math.max(0, maw.hp / maw.maxHp), BAR_H);
     }
   }
 }
