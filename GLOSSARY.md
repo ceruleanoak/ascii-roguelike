@@ -462,10 +462,12 @@ programming terms.
 
 ### Thief
 - **Definition:** An urgency Mechanic: the Enemy steals from the player on contact and
-  permanently flips to cowardly flight the moment it succeeds (or is struck first) — coin
-  for Rat/Plague Rat; up to three ingredients (keeping one — carried visibly and dropped back
-  if the thief is killed before it escapes — and scattering the rest) plus the held weapon
-  (knocked 3 cells away, pickup-cooldown gated) for Monkey.
+  permanently flips to cowardly flight the moment it succeeds (or is struck first). Rat/
+  Plague Rat take every coin on hand; Monkey ejects up to three ingredients (keeping one,
+  scattering the rest) plus knocks away the held weapon (3 cells, pickup-cooldown gated).
+  Either way, whatever the thief keeps is carried visibly — its glyph above the head plus
+  one white pip per item held — and dropped back if it's killed before it escapes; gone
+  for good only if it survives.
 - **In code:** `ThiefMechanic` gated by `data.thiefMechanic`; `steals: 'satchel'` selects
   the ingredient+weapon variant, unset defaults to coin.
 - **Not:** Looter (an Enemy that picks items up off the ground; it never takes from the

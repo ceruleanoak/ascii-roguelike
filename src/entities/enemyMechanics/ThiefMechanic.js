@@ -12,13 +12,15 @@
 // its own.
 //
 // `data.thiefMechanic.steals` selects what's on offer: default (unset) is
-// Rat's coin grab; `'satchel'` is Monkey's kit — up to three ingredients
-// ejected from the pile (one kept, the rest scatter to the ground) plus the
-// held weapon knocked away, both resolved in `_resolveSatchelTheft`. The kept
-// ingredient rides along on `enemy.stolenIngredients` — rendered as a carried-
-// item tell (`getCarriedItemIndicator`) and returned to the world if the
-// player kills the thief before it escapes (`LootSystem.spawnLoot`); lost for
-// good only if the monkey survives.
+// Rat's coin grab (every coin on hand); `'satchel'` is Monkey's kit — up to
+// three ingredients ejected from the pile (one kept, the rest scatter to the
+// ground) plus the held weapon knocked away, resolved in
+// `_resolveSatchelTheft`. Either way, what the thief actually keeps rides
+// along on `enemy.stolenIngredients` — rendered as a carried-item tell
+// (`getCarriedItemIndicator`, the latest item's own glyph/color) plus a white
+// count pip per entry (`StatusEffectVisuals.computePipRows`) — and returned
+// to the world if the player kills the thief before it escapes
+// (`LootSystem.spawnLoot`); lost for good only if the thief survives.
 //
 // Cowardice's hunting behavior isn't permanent: a continuous run of lost
 // sight — not merely one successful lookback, the general coward's own
@@ -42,9 +44,9 @@ export const ThiefMechanic = {
     enemy.thiefFlipped = false;
     enemy.thiefFlipPending = false;
     enemy.thiefRecoverTimer = 0;
-    // Satchel-thief only in practice (coin theft never pushes to this), but
-    // initialized for every thiefMechanic enemy so callers never have to
-    // guard against it being absent.
+    // Both coin theft and satchel theft push onto this — initialized for
+    // every thiefMechanic enemy so callers never have to guard against it
+    // being absent.
     enemy.stolenIngredients = [];
   },
 
@@ -213,13 +215,14 @@ export const ThiefMechanic = {
     if (stolen <= 0) return;
 
     game.inventorySystem.removeCoin(stolen);
-    for (let i = 0; i < stolen; i++) {
-      const angle = (i / stolen) * Math.PI * 2 + Math.random() * 0.4;
-      game.lootSystem.spawnIngredientDrop('c', player.position.x, player.position.y, angle, null);
-    }
+    // Carried, not dropped — same as the satchel variant below: rides along
+    // on stolenIngredients until the thief dies (LootSystem.spawnLoot drops
+    // every coin back) or gets away (gone for good).
+    const thief = attack.owner;
+    for (let i = 0; i < stolen; i++) (thief.stolenIngredients ??= []).push('c');
     combatSystem.createDamageNumber(`-${stolen}`, player.position.x, player.position.y, '#ffff00');
 
-    if (attack.owner) ThiefMechanic.onTheftSuccess(attack.owner);
+    if (thief) ThiefMechanic.onTheftSuccess(thief);
   },
 
   // Monkey's steal: ejects up to three ingredients from the pile — the
@@ -272,15 +275,14 @@ export const ThiefMechanic = {
     if ((ejected > 0 || weapon) && attack.owner) ThiefMechanic.onTheftSuccess(attack.owner);
   },
 
-  // The carried-item tell above a satchel-thief's head: the exact ingredient
-  // it's holding, in that ingredient's own char/color — same "read what's
-  // above its head" convention as WindupTelegraphMechanic's equipped-weapon
-  // tell, so a played monkey visibly has something rather than the grab
-  // reading as a silent inventory decrement. Shows the most recently kept
-  // ingredient if a recovered-then-re-stole thief is carrying more than one.
-  // Coin-thieves (Rat/Plague Rat) never populate `stolenIngredients` — their
-  // grab drops the coin straight back to the ground rather than carrying it
-  // — so this stays null for them.
+  // The carried-item tell above a thief's head: its most recently kept item,
+  // in that item's own char/color — same "read what's above its head"
+  // convention as WindupTelegraphMechanic's equipped-weapon tell, so a
+  // played thief visibly has something rather than the grab reading as a
+  // silent inventory decrement. Only ever shows the latest entry; the full
+  // haul's count is the separate white pip row stacked underneath
+  // (StatusEffectVisuals.computePipRows) — this glyph answers "what", the
+  // pips answer "how many".
   getCarriedItemIndicator(enemy) {
     const char = enemy.stolenIngredients?.[enemy.stolenIngredients.length - 1];
     if (!char) return null;

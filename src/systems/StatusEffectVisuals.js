@@ -102,6 +102,18 @@ export function computePipRows(enemy) {
     rows.push({ effect: 'burn', color: EFFECT_COLORS.burn, stacks: 1 });
   }
 
+  // Thief carry tell (ThiefMechanic — Rat/Plague Rat coin theft, Monkey
+  // satchel theft): one white pip per item currently carried. Not a status
+  // effect (no stacks/active/effectApplicationOrder entry of its own), so
+  // appended directly rather than routed through _activeOrderedEffects
+  // above — same append-after-the-map shape as the lava-burn row just
+  // above. White is otherwise unused across EFFECT_COLORS, keeping the
+  // stolen-goods row visually distinct from any real status effect it might
+  // stack alongside.
+  if (enemy.stolenIngredients?.length) {
+    rows.push({ effect: 'stolen', color: '#ffffff', stacks: enemy.stolenIngredients.length });
+  }
+
   return rows;
 }
 
