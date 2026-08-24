@@ -47,11 +47,12 @@ import {
  *                       were always visible in the open regardless of
  *                       companion status. Restored to match.
  *   index3 Pyramid   — Legend of Three, reached directly from Branch's East
- *                       descent once the switch puzzle is solved. Terminal
- *                       floor for this build (no floor 5/6 content yet —
- *                       see docs/adr/BACKLOG.md); solving it drops a reward
- *                       directly rather than unlocking a further descent,
- *                       so there is no stub floor to walk into.
+ *                       descent once the switch puzzle is solved. Its North
+ *                       descent (locked until the offering completes) leads
+ *                       to the Vault.
+ *   index4 Vault     — terminal arena beyond the Pyramid (dungeon boss
+ *                       layer; content owned by DungeonBossSystem — see
+ *                       _generateVault and claudedocs/dungeon-boss-green.md).
  *
  * Side rooms (Puzzle Room / Trap Room) are stored on game.dungeonFloors by
  * string key, not numeric index — InteriorManager.reset() clears them for
@@ -341,7 +342,7 @@ export class DungeonFloorGenerator {
     backgroundObjects.push(skull);
   }
 
-  // ── Numbered floors (0-3) ──────────────────────────────────────────────
+  // ── Numbered floors (0-4) ──────────────────────────────────────────────
 
   generateFloor(floorIndex, depth) {
     const zone = this.game.currentRoom?.zone || 'gray';
@@ -350,6 +351,7 @@ export class DungeonFloorGenerator {
       case 1: return this._generateCorridor(depth, zone);
       case 2: return this._generateBranch(depth, zone);
       case 3: return this._generatePyramid(depth, zone);
+      case 4: return this._generateVault(depth, zone);
       default: return null;
     }
   }
@@ -518,6 +520,15 @@ export class DungeonFloorGenerator {
     const stairsUpObj = this._makeStairsUp(false, SPINE_ROW, EAST_COL);
     backgroundObjects.push(stairsUpObj);
 
+    // North → the Vault (floor index 4), visible but locked until the
+    // Legend of Three offering completes (DungeonPuzzleSystem unlocks it in
+    // _checkPyramidComplete — same visible-but-locked contract as Branch's
+    // own East door). The dungeon boss layer's arena lives down there.
+    const north = this._makeDescent('north', NORTH_ROW, STAIRS_COL, {
+      active: true, locked: true, destination: { kind: 'numbered', floorIndex: 4 },
+    });
+    backgroundObjects.push(north.obj);
+
     // Legend of Three slots — top (Justice), bottom-left (Truth), bottom-right (Help).
     const legend = getLegendOfThree(zone);
     const slotDefs = [
@@ -549,13 +560,47 @@ export class DungeonFloorGenerator {
       exitRow: null, exitCol: null,
       stairsUpRow: SPINE_ROW, stairsUpCol: EAST_COL, stairsUpObj, stairsUpLocked: false,
       ascendTo: { kind: 'numbered', floorIndex: 2 },
-      descents: [], // terminal floor for this build — see file header
+      descents: [north], // the offering unlocks this descent into the Vault
       pyramidSlots,
       // Only zones with real legendOfThree.js content are solvable; unauthored
       // zones get a dormant/inert pyramid (same shape as puzzles.js's
       // DORMANT_PUZZLE) rather than an instantly-"solved" or crashing floor.
       legendAuthored: !!legend,
       puzzleSolved: false,
+    };
+  }
+
+  // Vault (floor index 4) — terminal arena beyond the Pyramid, reached via
+  // its North descent once the Legend of Three offering completes. The
+  // dungeon boss layer's home: content here is owned by DungeonBossSystem
+  // (per-zone spec), not by this generator — the floor itself is a bare
+  // authored chamber with zero ambient enemies, no decor/tombs/skull rolls
+  // (contrast every other numbered floor), because the boss encounter owns
+  // everything the player sees and fights. `isVault` is the marker the boss
+  // system and the gilded-companion trigger key off; `gildedTriggered`
+  // guards that trigger so re-activating a cached floor doesn't re-fire it.
+  _generateVault(depth, zone) {
+    const { cols, rows, collisionMap, backgroundObjects } = this._buildScaffold({ useTemplate: false });
+
+    // Entered via the Pyramid's North descent — up-stairs at the universal
+    // north point (the "matching doors are always in the same room
+    // position" rule's default).
+    const stairsUpObj = this._makeStairsUp(false);
+    backgroundObjects.push(stairsUpObj);
+
+    return {
+      type: 'DUNGEON_FLOOR',
+      roomKind: 'numbered',
+      floorIndex: 4,
+      isVault: true,
+      gridCols: cols, gridRows: rows, collisionMap, backgroundObjects, enemies: [],
+      items: [], ingredients: [], npcs: [], doors: [], tombGhosts: [],
+      viewport: this._makeViewport(cols, rows),
+      exitRow: null, exitCol: null,
+      stairsUpRow: STAIRS_UP_ROW, stairsUpCol: STAIRS_COL, stairsUpObj, stairsUpLocked: false,
+      ascendTo: { kind: 'numbered', floorIndex: 3 },
+      descents: [], // terminal — the delve ends here
+      gildedTriggered: false,
     };
   }
 

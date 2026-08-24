@@ -14,7 +14,8 @@ import { GooDragon, PHASE2_HP_THRESHOLD, PHASE3_HP_THRESHOLD } from '../entities
 import { GooHead } from '../entities/GooHead.js';
 import { GRID } from '../game/GameConfig.js';
 import { GooBlob } from '../entities/GooBlob.js';
-import { LakeBoss } from '../entities/LakeBoss.js';
+import { LakeBoss, LAKE_BOSS_PHASE2_HP_THRESHOLD } from '../entities/LakeBoss.js';
+import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { TurtleShell, TURTLE_MAX_HP, TURTLE_PHASE2_HP } from '../entities/TurtleShell.js';
 import { Enemy } from '../entities/Enemy.js';
 import { TurtleHead } from '../entities/TurtleHead.js';
@@ -225,9 +226,21 @@ export class BossSystem {
       this.game.combatSystem.cancelPendingAttacksFrom(boss);
     }
     this._drainPendingAttacks(boss);
+    this._checkLakePhaseTransition();
+
+    // On Breach: hole the sheet where the boss came up
+    if (boss.pendingLead) {
+      this._openLead(boss.pendingLead);
+      boss.pendingLead = null;
+    }
 
     // On slam impact: start expanding shockwave
     if (boss.pendingIceBreak && boss.slamPosition) {
+      // The armed Freeze-Over only commits if the player is standing on water.
+      // On land, the Hummock cage raised below would wall the player OUT of the
+      // arena in a room whose exits are locked — an unwinnable state. Declining
+      // leaves the boss armed, so the flip happens on a later slam instead.
+      const flip = boss.pendingFreezeOver && this._isPlayerOverWater();
       const ROOM_DIAG = Math.hypot(GRID.WIDTH, GRID.HEIGHT);
       this._iceShockwave = {
         x:         boss.slamPosition.x,
@@ -235,18 +248,30 @@ export class BossSystem {
         radius:    0,
         maxRadius: ROOM_DIAG,
         speed:     GRID.CELL_SIZE * 22,  // ~352 px/s — crosses room in ~1.4s
+        mode:      flip ? 'freeze' : 'thaw',
       };
-      boss.pendingIceBreak = false;
-      boss.slamPosition    = null;
+      boss.pendingIceBreak   = false;
+      boss.pendingFreezeOver = false;
+      boss.slamPosition      = null;
+      if (flip) {
+        this._raiseHummocks();
+        boss.transitionToPhase(2);
+      }
     }
 
-    // Expand shockwave, thawing frozen water and knocking back the player
+    // Expand shockwave, converting water tiles and knocking back the player.
+    // Direction depends on sw.mode: 'thaw' is the phase-1 ice hammer (undo the
+    // player's freezes); 'freeze' is the Freeze-Over running that same sweep
+    // backwards to flip the whole board to ice.
     if (this._iceShockwave) {
       const sw = this._iceShockwave;
+      const freezing = sw.mode === 'freeze';
       const prevRadius = sw.radius;
       sw.radius += sw.speed * deltaTime;
 
-      // Animate and thaw water tiles swept by the ring this frame
+      // Animate and convert water tiles swept by the ring this frame. The annulus
+      // test below touches each tile exactly once, so the _shockwaveTouched marker
+      // only guards against a tile being converted twice by overlapping sweeps.
       for (const obj of this.game._activeBackgroundObjects()) {
         if (obj.destroyed || !obj.isWater || !obj.isWater()) continue;
         const cx = obj.position.x + GRID.CELL_SIZE / 2;
@@ -255,10 +280,20 @@ export class BossSystem {
         if (dist <= prevRadius || dist > sw.radius) continue;
         // Shake every water tile the ring sweeps over
         obj._playAnimation?.('shake');
-        // Also thaw if frozen
-        if (!obj._shockwaveThawed && obj.getWaterState?.() === 'frozen') {
+        if (obj._shockwaveTouched) continue;
+        if (freezing) {
+          // Infinity, not a duration: BackgroundObject.update ticks waterStateTimer
+          // down and reverts to normal on expiry. The Freeze-Over must not expire —
+          // the sheet only ever opens where a Breach holes it.
+          // setWaterState itself refuses to refreeze a Lead, so the sweep needs
+          // no special case for holes the player has already earned.
+          if (obj.getWaterState?.() !== 'frozen') {
+            obj.setWaterState('frozen', Infinity);
+            obj._shockwaveTouched = true;
+          }
+        } else if (obj.getWaterState?.() === 'frozen') {
           obj.setWaterState('normal', 0);
-          obj._shockwaveThawed = true;
+          obj._shockwaveTouched = true;
           this.game.combatSystem.createDamageNumber('~', obj.position.x, obj.position.y, '#88ddff');
         }
       }
@@ -334,7 +369,125 @@ export class BossSystem {
     if (boss.hp <= 0) this._onLakeBossDefeated();
   }
 
+  /**
+   * Arm the Freeze-Over at the phase-2 HP threshold. Detection only — the flip
+   * itself rides the next slam, so the player's position decides when the board
+   * turns over. Mirrors _checkPhaseTransitions/_checkTurtlePhaseTransition.
+   */
+  _checkLakePhaseTransition() {
+    const boss = this.lakeBoss;
+    if (boss.phase !== 1 || boss.freezeOverArmed) return;
+    if (boss.hp <= LAKE_BOSS_PHASE2_HP_THRESHOLD) boss.freezeOverArmed = true;
+  }
+
+  /** True when the player is standing over a lake tile (frozen or not). */
+  _isPlayerOverWater() {
+    const player = this.game.player;
+    const pcx = player.position.x + GRID.CELL_SIZE / 2;
+    const pcy = player.position.y + GRID.CELL_SIZE / 2;
+    const half = GRID.CELL_SIZE / 2;
+    for (const obj of this.game._activeBackgroundObjects()) {
+      if (obj.destroyed || !obj.isWater || !obj.isWater()) continue;
+      if (Math.abs(obj.position.x + half - pcx) < GRID.CELL_SIZE &&
+          Math.abs(obj.position.y + half - pcy) < GRID.CELL_SIZE) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Raise the Hummock cage: a solid ring of piled ice on every land cell touching
+   * the lake. This is what makes the depleting floor a threat rather than an
+   * inconvenience — with the shore walled off, the frozen sheet is the only ground,
+   * and every Breach takes a piece of it away.
+   */
+  _raiseHummocks() {
+    const objects = this.game._activeBackgroundObjects();
+    const CS = GRID.CELL_SIZE;
+    const keyOf = obj => `${Math.round(obj.position.x / CS)},${Math.round(obj.position.y / CS)}`;
+
+    // Index occupancy by cell so we can walk the shoreline without rescanning the
+    // object list per candidate. `blockers` are cells that already stop the player.
+    const waterCells = new Set();
+    const occupants  = new Map();
+    const blockers   = new Set();
+    for (const obj of objects) {
+      if (obj.destroyed) continue;
+      const key = keyOf(obj);
+      occupants.set(key, obj);
+      if (obj.isWater && obj.isWater()) { waterCells.add(key); continue; }
+      if (obj.data?.solid) blockers.add(key);
+    }
+
+    const room = this.game.activeRoom ?? this.game.currentRoom;
+    const shore = new Set();
+    for (const key of waterCells) {
+      const [col, row] = key.split(',').map(Number);
+      for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const c = col + dc, r = row + dr;
+        if (c < 1 || r < 1 || c >= GRID.COLS - 1 || r >= GRID.ROWS - 1) continue;
+        const nKey = `${c},${r}`;
+        if (waterCells.has(nKey) || blockers.has(nKey)) continue;  // already blocks
+        if (room.collisionMap?.[r]?.[c]) continue;                 // already a wall
+        shore.add(nKey);
+      }
+    }
+
+    // The cage must be closed to mean anything. stampWaterBlobs scatters shoreline
+    // decoration (rocks, bushes) at exactly these cells, and a non-solid bush would
+    // be a hole the player could walk out through — so a decoration standing on a
+    // shore cell is replaced by the Hummock rather than skipped. Solid neighbours
+    // (rocks, walls) are left alone; they already do the job.
+    for (const key of shore) {
+      const standing = occupants.get(key);
+      if (standing) {
+        const at = objects.indexOf(standing);
+        if (at !== -1) objects.splice(at, 1);
+      }
+      const [col, row] = key.split(',').map(Number);
+      const hummock = new BackgroundObject('"', col * CS, row * CS);
+      hummock.isHummock = true;  // marks it for teardown when the boss dies
+      objects.push(hummock);
+    }
+  }
+
+  /**
+   * Open a Lead — a permanent hole in the frozen sheet where the boss breached.
+   * Marked `isLead` so nothing can close it again: the boss's own ice stream
+   * carries freezesWater, and without the mark it would repair the floor it is
+   * supposed to be destroying.
+   */
+  _openLead(lead) {
+    for (const obj of this.game._activeBackgroundObjects()) {
+      if (obj.destroyed || !obj.isWater || !obj.isWater()) continue;
+      const cx = obj.position.x + GRID.CELL_SIZE / 2;
+      const cy = obj.position.y + GRID.CELL_SIZE / 2;
+      if (Math.hypot(cx - lead.x, cy - lead.y) > lead.radius) continue;
+      obj.isLead = true;
+      if (obj.getWaterState?.() === 'frozen') {
+        obj.setWaterState('normal', 0);
+        obj._playAnimation?.('shake');
+      }
+    }
+  }
+
+  /**
+   * Tear down the arena mutations. Without this the Hummock cage outlives the
+   * fight and traps the player in a room whose exits just unlocked.
+   */
+  _clearLakeArena() {
+    const objects = this.game._activeBackgroundObjects();
+    for (let i = objects.length - 1; i >= 0; i--) {
+      const obj = objects[i];
+      if (obj.isHummock) { objects.splice(i, 1); continue; }
+      if (obj.isWater?.() && obj.getWaterState?.() === 'frozen') {
+        obj.setWaterState('normal', 0);
+      }
+      delete obj.isLead;
+    }
+  }
+
   _onLakeBossDefeated() {
+    this._clearLakeArena();
     this.game.zoneSystem.markBossDefeated(this.zone);
     const enemies = this.game._activeEnemies();
     for (let i = enemies.length - 1; i >= 0; i--)

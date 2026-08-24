@@ -727,6 +727,13 @@ export class BackgroundObject {
 
   setWaterState(state, duration) {
     if (!this.isWater()) return; // Only real water supports water states
+    // A Lead — the hole a Frosted Maw Breach punches in its frozen lake — never
+    // closes again; the depleting floor is the whole point of that phase. The
+    // guard lives here because freezing has seven entry points (boss ice stream,
+    // player freeze weapons, traps, WaterLavaHitMechanic, the Freeze-Over sweep),
+    // and the boss's own ice stream would otherwise repair the floor it is
+    // destroying. Thawing a Lead is always allowed.
+    if (this.isLead && state === 'frozen') return;
     this.waterState = state;
     this.waterStateTimer = duration;
     // conductivity handled by isConductive() checking waterState — no mutation needed

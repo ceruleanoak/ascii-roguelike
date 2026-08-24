@@ -529,6 +529,58 @@ programming terms.
   `isBossEntity` flag.
 - **Not:** just a difficult Enemy; a Boss is a gated milestone tied to zone depth.
 
+### Freeze-Over
+- **Definition:** The one-shot event that flips the cyan boss arena into its second phase. The
+  Frosted Maw runs its own ice-hammer thaw backwards, freezing every water tile on the lake
+  permanently and raising a closed ring of Hummocks around the shoreline. The player is left
+  standing on the sheet with no exit.
+- **In code:** armed at `LAKE_BOSS_PHASE2_HP_THRESHOLD` (40% HP) by
+  `BossSystem._checkLakePhaseTransition()`; carried as the payload of the next hammer slam
+  (`LakeBoss.pendingFreezeOver`). Fires the existing ice shockwave with `mode: 'freeze'`, then
+  `_raiseHummocks()` and `LakeBoss.transitionToPhase(2)`.
+- **Not:** an ordinary freeze status effect, and not reversible — the sheet never thaws on its
+  own. Declines to fire if the player is standing on land (that would cage them out of the
+  arena); the boss stays armed and tries again.
+
+### Stalk
+- **Definition:** The Frosted Maw's phase-2 pursuit. The boss tracks the player's live position
+  from beneath the frozen sheet, visible only as a shadow under the ice. Replaces phase 1's
+  random surfacing — you cannot Anticipate a coin flip.
+- **In code:** `LakeBoss` state `'stalking'`, `_updateStalking()`. Moves at `STALK_SPEED`
+  toward the player each frame; ends on proximity (`BREACH_RANGE_SQ`) or `STALK_TIMEOUT`.
+- **Not:** an Enemy State. `LakeBoss` is a bespoke entity that does not run
+  `EnemyStateMachine`, so `stalking` does not extend the closed State set below.
+
+### Breach
+- **Definition:** The Frosted Maw crashing up through the ice at the player's feet. A held
+  telegraph precedes it — this is the anticipation window the zone's verb asks for.
+- **In code:** `LakeBoss` state `'breaching'`, `_updateBreaching()` / `_fireBreach()`.
+  `BREACH_TELEGRAPH` counts down, then a jaw-clamp attack fires and a Lead opens. Leaves the
+  boss Surfaced, enraged, and vulnerable across the water it just opened.
+- **Not:** the phase-1 hammer slam, which lands where the boss surfaced rather than where the
+  player is standing.
+
+### Lead
+- **Definition:** The sliver of open water a Breach punches in the frozen lake (the polar term
+  for a fissure in pack ice). Leads never close, so every Breach permanently removes floor —
+  the depleting sheet is phase 2's clock. Because a Breach lands on the player, the player
+  authors the erosion pattern.
+- **In code:** `BackgroundObject.isLead`, set by `BossSystem._openLead()`. Permanence is
+  enforced in `BackgroundObject.setWaterState`, which refuses `'frozen'` on a Lead — freezing
+  has seven entry points, including the boss's own ice stream, and the guard has to sit at the
+  funnel or the boss repairs the floor it is destroying. Thawing a Lead is still allowed.
+- **Not:** a Pond or an Aquifer; a Lead is combat-time damage to a frozen surface, cleared with
+  the rest of the arena when the boss dies.
+
+### Hummock
+- **Definition:** A wall of piled broken ice (the polar term). Raised along the whole shoreline
+  by the Freeze-Over to cage the player on the lake for the rest of the fight.
+- **In code:** Background Object `'"'` in `BACKGROUND_OBJECTS`; solid and indestructible.
+  Placed by `BossSystem._raiseHummocks()`, which replaces any non-solid shoreline decoration
+  standing in the ring so the cage is closed, and torn down by `_clearLakeArena()` on defeat.
+- **Not:** a Ridge — that name belongs to `RidgeSystem.js`. Not permanent terrain either; a
+  Hummock exists only for the duration of the encounter.
+
 ### Status Effect
 - **Definition:** A temporary condition applied to a character (player or enemy) that modifies
   behavior, movement, or damage. Effects have a duration and wear off over time.
@@ -641,8 +693,8 @@ programming terms.
 ### Background Object
 - **Definition:** A non-entity environmental object that occupies a room tile, can be destroyed
   (by fire, water, impact), and may have interactive effects or drop items.
-- **In code:** class `BackgroundObject` in `src/entities/BackgroundObject.js`; data and
-  properties in `src/data/backgroundObjects.js`. Properties include flammability,
+- **In code:** class `BackgroundObject` in `src/entities/BackgroundObject.js`; the
+  `BACKGROUND_OBJECTS` catalogue in `src/game/GameConfig.js`. Properties include flammability,
   conductivity, interaction type, drop chance/table. Managed by collision and elemental
   systems (FireSystem, ElectricitySystem, WorldEffectsSystem).
 - **Not:** an Enemy or Ingredient. Objects are static/semi-static environmental features, not

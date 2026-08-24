@@ -378,6 +378,14 @@ export class DungeonPuzzleSystem {
     if (!allFilled) return;
 
     floor.puzzleSolved = true;
+    // The offering's real payoff: the Vault descent unlocks (the Artifact ⚜
+    // drops alongside it — the trophy the player carries out either way).
+    const onward = floor.descents.find(d => d.id === 'north');
+    if (onward) {
+      onward.locked = false;
+      paintDescentVisual(onward.obj, { active: onward.active, locked: false });
+      this._spawnUnlockEffect(onward.obj);
+    }
     const reward = Object.assign(
       new Ingredient('⚜', 12 * GRID.CELL_SIZE, 18 * GRID.CELL_SIZE),
       { hutPlane: true }

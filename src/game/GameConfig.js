@@ -290,6 +290,23 @@ export const BACKGROUND_OBJECTS = {
       default: { animation: 'ripple', message: null }
     }
   },
+  // Hummock — a wall of piled broken ice. Raised by the Frosted Maw's Freeze-Over
+  // to cage the lake, so the frozen sheet is the player's only ground. Solid and
+  // indestructible on purpose: the cage is the phase-2 threat, not an obstacle to
+  // clear. Spawned only by BossSystem._raiseHummocks and torn down on boss death;
+  // never placed by room generation, so it carries no objectWeights entry.
+  '"': {
+    name: 'Hummock',
+    color: '#cceeff',
+    solid: true,
+    indestructible: true,
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'water',
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
   '#': {
     name: 'Crate',
     color: '#aa8844',

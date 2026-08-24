@@ -2,7 +2,9 @@ import { GRID } from '../game/GameConfig.js';
 import { isImmuneToEffect, getElementalModifierFor } from './elementalAffinity.js';
 
 export const LAKE_BOSS_MAX_HP  = 80;
-const ENRAGED_THRESHOLD        = 32;     // 40% — used only for color change
+// 40% of max HP. Arms the Freeze-Over; the next slam carries it as its payload.
+// Also the enrage tint threshold BossRenderer reads as hp/maxHp < 0.4.
+export const LAKE_BOSS_PHASE2_HP_THRESHOLD = 32;
 const ICE_STREAM_SHOTS         = 5;
 const ICE_STREAM_SPEED         = 110;
 const CONE_SPREAD              = Math.PI / 5;   // ±36° total cone
@@ -15,6 +17,18 @@ const MOUTH_CYCLE              = 2.0;
 const JUMP_RISE_TIME           = 0.75;
 const JUMP_FALL_TIME           = 0.40;
 const JUMP_HEIGHT_PX           = GRID.CELL_SIZE * 5;
+
+// ── Phase 2 (post Freeze-Over) ──────────────────────────────────────────────
+// All Double-seconds, like every other timer here — the boss is stepped on the
+// enemy clock (deltaTime * PHYSICS.ENEMY_TIMER_RATE), so halve these to read
+// them as real seconds. Starting values, tuned by playtest (see bug #216: they
+// were authored against the corrected single-drive clock, not the old 3x one).
+const STALK_SPEED              = 78;    // vs UNDERWATER_SPEED 55 — the hunt is faster
+const STALK_TIMEOUT            = 16.0;  // force a Breach even if the player is unreachable
+const BREACH_RANGE_SQ          = (GRID.CELL_SIZE * 1.2) ** 2;
+const BREACH_TELEGRAPH         = 2.4;   // the anticipation window, held under the ice
+const SURFACED_WINDOW          = 8.0;   // fixed vulnerable window before submerging again
+const LEAD_RADIUS              = GRID.CELL_SIZE * 1.5;  // the sliver of open water a Breach opens
 
 export class LakeBoss {
   constructor(x, y, waterTiles = []) {
@@ -38,8 +52,20 @@ export class LakeBoss {
     this.hasTakenDamage = false;
     this.enteredSlamming = false; // one-shot slam-entry signal drained by BossSystem
 
-    // State machine: 'underwater' | 'surfaced' | 'slamming'
+    // State machine. Phase 1: 'underwater' | 'surfaced' | 'slamming'.
+    // Phase 2 replaces the phase-1 loop outright: 'stalking' | 'breaching' | 'surfaced'.
+    // This is the boss's own private machine — LakeBoss does not extend Enemy and is
+    // not on the Enemy State spine, so these ids do not extend that closed set.
     this.state = 'underwater';
+
+    // Phase 2 — the Freeze-Over rework. `phase` flips only via transitionToPhase(2).
+    this.phase           = 1;
+    this.freezeOverArmed = false;  // set by BossSystem at the HP threshold
+    this.stalkTimer      = 0;
+    this.breachTimer     = 0;
+    this.surfacedTimer   = 0;
+    this.pendingLead     = null;   // { x, y, radius } drained by BossSystem
+    this.pendingFreezeOver = false;// one-shot: the slam that flips the board
 
     // Underwater movement
     this.waterTiles       = waterTiles;
@@ -144,6 +170,8 @@ export class LakeBoss {
       case 'underwater': this._updateUnderwater(deltaTime); break;
       case 'surfaced':   this._updateSurfaced(deltaTime);   break;
       case 'slamming':   this._updateSlamming(deltaTime);   break;
+      case 'stalking':   this._updateStalking(deltaTime);   break;
+      case 'breaching':  this._updateBreaching(deltaTime);  break;
     }
 
     // Never let the physics system drift the boss off its water tiles
@@ -222,6 +250,22 @@ export class LakeBoss {
     this._tickMouth(deltaTime);
     if (!this.target) return;
 
+    // Phase 2 replaces the phase-1 loop outright: no proximity hammer, no passive
+    // slam. The surfaced window is a fixed, vulnerable beat that ends by sinking
+    // back under the sheet to Stalk again.
+    if (this.phase === 2) {
+      if (!this.shockwaveActive) {
+        this.attackTimer -= deltaTime;
+        if (this.attackTimer <= 0) {
+          this._fireIceStream();
+          this.attackTimer = this._getAttackCooldown();
+        }
+      }
+      this.surfacedTimer -= deltaTime;
+      if (this.surfacedTimer <= 0) this._transitionTo('stalking');
+      return;
+    }
+
     if (this.hammerCountdown === null) {
       // Passive safety: slam after 18s even if player never approaches
       this._passiveHammerTimer -= deltaTime;
@@ -281,7 +325,75 @@ export class LakeBoss {
     }
   }
 
+  // ── Phase 2 states ──────────────────────────────────────────────────────────
+
+  // Stalk: hunt the player's live position under the frozen sheet. This is the
+  // heart of the rework — phase 1 surfaced at a *random* tile, which cannot be
+  // anticipated. A tracked shadow can be, which is cyan's verb.
+  _updateStalking(deltaTime) {
+    if (!this.target) return;
+    this.stalkTimer += deltaTime;
+
+    const dx = this.target.position.x - this.position.x;
+    const dy = this.target.position.y - this.position.y;
+    const distSq = dx * dx + dy * dy;
+
+    // Close enough to strike, or the player has stayed unreachable too long
+    if (distSq <= BREACH_RANGE_SQ || this.stalkTimer >= STALK_TIMEOUT) {
+      this._transitionTo('breaching');
+      return;
+    }
+
+    const dist = Math.sqrt(distSq);
+    const s = STALK_SPEED * deltaTime / dist;
+    this.position.x += dx * s;
+    this.position.y += dy * s;
+  }
+
+  // Breach: the held telegraph. The boss stops dead beneath the player and waits.
+  // The delay is not mercy — it is the window the player has to slide clear of the
+  // spot they are standing on, made hard by the ice they are standing on.
+  _updateBreaching(deltaTime) {
+    this.breachTimer -= deltaTime;
+    if (this.breachTimer <= 0) {
+      this._fireBreach();
+      this._transitionTo('surfaced');
+    }
+  }
+
   // ── Attacks ─────────────────────────────────────────────────────────────────
+
+  // Crash up through the sheet. Opens a Lead — a permanent hole in the floor at
+  // the breach point. Because the Breach lands where the player was standing, the
+  // player authors the erosion pattern: hug the edge and the holes cluster there;
+  // wander the middle and you strand yourself.
+  _fireBreach() {
+    const cx = this.position.x, cy = this.position.y;
+
+    // Jaw clamp on emergence — same shape as the phase-1 hammer, but this is the
+    // attack the player was given the telegraph to avoid.
+    this.pendingBossAttacks.push({
+      position: {
+        x: cx - GRID.CELL_SIZE * 2.5,
+        y: cy - GRID.CELL_SIZE * 0.5,
+      },
+      velocity:    { vx: 0, vy: 0 },
+      damage:      5,
+      char:        ')',
+      color:       '#4488aa',
+      onHit:       null,
+      reflectable: false,
+      reflected:   false,
+      owner:       this,
+      width:       GRID.CELL_SIZE * 5,
+      height:      GRID.CELL_SIZE * 1.5,
+      lifetime:    0.25,
+    });
+
+    // Signal BossSystem to open the Lead. Radius stays tight — the design is a
+    // sliver of water between the player and a vulnerable boss, not a moat.
+    this.pendingLead = { x: cx, y: cy, radius: LEAD_RADIUS };
+  }
 
   // Fire 4 shots in a random order, staggered in time
   _fireIceStream() {
@@ -367,9 +479,17 @@ export class LakeBoss {
       }
     }
 
-    // Signal BossSystem to break ALL frozen water in the room
-    this.pendingIceBreak = true;
-    this.slamPosition    = { x: cx, y: cy };
+    // Signal BossSystem to sweep the room's water. Normally this THAWS everything
+    // the player has frozen. Once the Freeze-Over is armed the same sweep runs
+    // backwards and freezes the whole lake instead — the board flip.
+    //
+    // BossSystem has the final say on whether the flip commits: it declines if the
+    // player is standing on land, because the Hummock cage would then wall the
+    // player OUT of the arena. A declined flip is just an ordinary slam, and the
+    // boss stays armed for the next one.
+    this.pendingIceBreak   = true;
+    this.pendingFreezeOver = this.freezeOverArmed;
+    this.slamPosition      = { x: cx, y: cy };
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -417,7 +537,35 @@ export class LakeBoss {
       this.jumpTimer            = 0;
       this.jumpOffset           = 0;
       this.invulnerabilityTimer = 9999;  // airborne — untouchable
+    } else if (state === 'stalking') {
+      this.stalkTimer           = 0;
+      this.jumpOffset           = 0;
+      this.jumpPhase            = 'none';
+      this.invulnerabilityTimer = 9999;  // under the sheet — untouchable
+    } else if (state === 'breaching') {
+      this.breachTimer          = BREACH_TELEGRAPH;
+      this.invulnerabilityTimer = 9999;  // still under the sheet through the telegraph
     }
+
+    // Phase 2's surfaced beat is timed rather than proximity-driven; set here so
+    // the shared 'surfaced' branch above keeps its phase-1 meaning untouched.
+    if (state === 'surfaced' && this.phase === 2) {
+      this.surfacedTimer = SURFACED_WINDOW;
+    }
+  }
+
+  /**
+   * Flip to phase 2. Called by BossSystem once the armed slam has landed, which is
+   * also the moment the Freeze-Over sweep and the Hummock cage go out.
+   * Mirrors GooDragon/TurtleShell's transitionToPhase(n) contract, including the
+   * shared 0.6s post-transition invulnerability.
+   */
+  transitionToPhase(n) {
+    if (n !== 2 || this.phase === 2) return;
+    this.phase           = 2;
+    this.freezeOverArmed = false;
+    this._transitionTo('stalking');
+    this.invulnerabilityTimer = 0.6;
   }
 
   _clampToWater() {

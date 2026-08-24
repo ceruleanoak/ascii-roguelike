@@ -15,8 +15,8 @@ import { PUZZLE_ROOM_TEMPLATES } from '../data/dungeonPuzzleTemplates.js';
  *
  * Floor graph
  * ───────────
- * Floors are addressed either by numeric index (game.dungeonFloors[0..3],
- * the "spine" — Entrance → Corridor → Branch → Pyramid) or by string key
+ * Floors are addressed either by numeric index (game.dungeonFloors[0..4],
+ * the "spine" — Entrance → Corridor → Branch → Pyramid → Vault) or by string key
  * (game.dungeonFloors[templateName], a weighted-random Puzzle Room off
  * Corridor's North descent — the picked template's own name doubles as its
  * storage key, e.g. 'whip_trial'; see DungeonFloorGenerator._generateCorridor
@@ -35,11 +35,10 @@ import { PUZZLE_ROOM_TEMPLATES } from '../data/dungeonPuzzleTemplates.js';
  * special-casing floor-index arithmetic the way a strictly linear chain
  * would need.
  *
- * The Pyramid (floor index 3) is the terminal floor for this build — its
- * `descents` is empty by data, not by an explicit floor-count cap. There is
- * no MAX_FLOOR_INDEX constant: the chain ends wherever a floor's own
- * descents[] ends, so extending it later (a real Floor 5/6) is adding a
- * descent, not raising a ceiling.
+ * The Pyramid's offering unlocks the North descent into the Vault (floor
+ * index 4, the dungeon boss layer's terminal arena). There is still no
+ * MAX_FLOOR_INDEX constant: the chain ends wherever a floor's own
+ * descents[] ends.
  *
  * Floor data persists in game.dungeonFloors for the duration of the visit.
  * Cleared by InteriorManager.reset() (room change / REST / death).
@@ -283,6 +282,14 @@ export class DungeonSystem {
     // no heal on floor swap. CompanionSystem owns the roster logic.
     game.companionSystem?.snapPetsIntoFloor?.(floor);
 
+    // Vault arrival gilds the pets that survived the descent — the dungeon
+    // boss layer's Game Changer (claudedocs/dungeon-boss-green.md). The
+    // guard keeps a cached-floor re-activation from re-firing it.
+    if (floor.isVault && !floor.gildedTriggered) {
+      floor.gildedTriggered = true;
+      game.companionSystem?.setPetsGilded?.(true);
+    }
+
     game.renderer.backgroundDirty = true;
   }
 
@@ -500,7 +507,7 @@ export class DungeonSystem {
    */
   _debugEntryIdFor(destination) {
     if (destination.kind === 'numbered') {
-      return { 1: 'north', 2: 'west', 3: 'east' }[destination.floorIndex] ?? null;
+      return { 1: 'north', 2: 'west', 3: 'east', 4: 'north' }[destination.floorIndex] ?? null;
     }
     return 'north'; // every side room (Puzzle Room pool + Trap Room) is reached via a north descent
   }
