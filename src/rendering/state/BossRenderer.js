@@ -540,9 +540,12 @@ export class BossRenderer {
       const pulse = 0.55 + 0.45 * Math.sin((maw.glintPulseTimer / GLINT_PULSE_PERIOD) * Math.PI * 2);
       const glintAlpha = maw.chokeTimer > 0 ? 1 : pulse;
       this.renderer.drawTextWithAlpha(g.x + cs / 2, g.y + cs / 2, '◉', '#ffe9a8', glintAlpha);
-      // Truth register: a carried Compass marks the true glint outright.
+      // Truth register: a carried Compass pulses toward the true glint —
+      // same breath rhythm the glint itself reads, so the item literally
+      // keeps the maw's time for you.
       if (game.dungeonBossSystem?.compassTruthActive) {
-        this.renderer.drawEntity(g.x + cs / 2, g.y - cs * 0.9, '⌖', '#7fdfff');
+        const breath = 0.5 + 0.5 * Math.sin((maw.glintPulseTimer / GLINT_PULSE_PERIOD) * Math.PI * 2);
+        this.renderer.drawTextWithAlpha(g.x + cs / 2, g.y - cs * 0.9, '⌖', '#7fdfff', 0.45 + 0.55 * breath);
       }
     }
 
