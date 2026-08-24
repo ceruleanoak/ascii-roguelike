@@ -1140,6 +1140,7 @@ export const ENEMIES = {
     color: '#888866',
     knockbackMultiplier: 3.5,   // Very high knockback on hit
     isImpact: true,             // Heavy blow — bypasses staff block
+    recover: { variant: 'stationary' },   // Plants after a swing — a heavy tool-user doesn't backpedal like a skittish beast
     elementalAffinity: {
       resistance: { 'physical': 0.6, 'stun': 0.8 },
       weakness: { 'magic': 1.5 }
