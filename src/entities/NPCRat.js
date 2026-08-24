@@ -1,4 +1,5 @@
 import { GRID } from '../game/GameConfig.js';
+import { steerToward } from '../systems/npcSteering.js';
 
 /**
  * NPCRat — bread-tamed companion. Separate class from Enemy so it carries no
@@ -416,9 +417,11 @@ export class NPCRat {
       this.targetVelocity.vy = 0;
       return;
     }
-    this.targetVelocity.vx = (dx / d) * PERMA_FLEE_SPEED;
-    this.targetVelocity.vy = (dy / d) * PERMA_FLEE_SPEED;
-    this.velocity.vx = this.targetVelocity.vx;
-    this.velocity.vy = this.targetVelocity.vy;
+    // Shared steering replaces the bare straight-line steer: scenery on the
+    // exit run used to park the rat short of its target until the timeout
+    // (the invulnerable-strand half of bug #157).
+    steerToward(this.game, this, this.fleeTargetPos.x, this.fleeTargetPos.y, PERMA_FLEE_SPEED);
+    this.targetVelocity.vx = this.velocity.vx;
+    this.targetVelocity.vy = this.velocity.vy;
   }
 }

@@ -1,4 +1,5 @@
 import { GRID } from '../game/GameConfig.js';
+import { steerToward } from './npcSteering.js';
 import { ZONES } from '../data/zones.js';
 import { CampNPC, CAMP_NPC_STATE } from '../entities/CampNPC.js';
 
@@ -271,11 +272,14 @@ export class CampNPCSystem {
       npc.velocity.vy = 0;
       return;
     }
-    const len = Math.max(dist, 0.001);
-    npc.velocity.vx = (dx / len) * npc.speed;
-    npc.velocity.vy = (dy / len) * npc.speed;
-    npc.facing.x = Math.sign(dx) || npc.facing.x;
-    npc.facing.y = Math.sign(dy) || npc.facing.y;
+    // Shared steering (stuck detection + detour + BFS fallback): the switch-
+    // puzzle dispatch and interior flee paths cross real rooms with walls,
+    // and bare straight-line steering wedges against the first one (#208).
+    const result = steerToward(this.game, npc, target.x, target.y, npc.speed);
+    if (result?.heading) {
+      npc.facing.x = Math.sign(result.heading.x) || npc.facing.x;
+      npc.facing.y = Math.sign(result.heading.y) || npc.facing.y;
+    }
     // Position update delegated to PhysicsSystem.updateEntity()
   }
 

@@ -1,4 +1,5 @@
 import { GRID } from '../game/GameConfig.js';
+import { steerToward } from '../systems/npcSteering.js';
 import { NeutralCharacter } from './NeutralCharacter.js';
 
 /**
@@ -42,6 +43,9 @@ const HAPPY_CHAR = '\u263A'; // ☺
 const SAD_CHAR   = '\u2639'; // ☹
 
 const TETHER_RADIUS = GRID.CELL_SIZE * 3; // distance from campfire allowed in INTERESTED
+
+// Fixed flee speed (was inline in _updateFleeing).
+const CAMP_FLEE_SPEED = 140;
 
 export class CampNPC extends NeutralCharacter {
   constructor(x, y, campfirePos) {
@@ -226,29 +230,32 @@ export class CampNPC extends NeutralCharacter {
     if (this.weapon?.update) this.weapon.update(dt);
 
     if (this.state === CAMP_NPC_STATE.FLEEING) {
-      this._updateFleeing(dt);
+      this._updateFleeing(dt, game);
     }
   }
 
-  _updateFleeing(dt) {
+  _updateFleeing(dt, game) {
     if (!this.fleeTargetPosition || this.fleeReached) {
       this.velocity.vx = 0;
       this.velocity.vy = 0;
       return;
     }
-    const dx = this.fleeTargetPosition.x - this.position.x;
-    const dy = this.fleeTargetPosition.y - this.position.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const dist = Math.hypot(
+      this.fleeTargetPosition.x - this.position.x,
+      this.fleeTargetPosition.y - this.position.y
+    );
     if (dist < 5) {
       this.fleeReached = true;
       this.velocity.vx = 0;
       this.velocity.vy = 0;
       return;
     }
-    const speed = 140;
+    // Shared steering instead of bare straight-line velocity: a wall between
+    // here and the flee target used to wedge the NPC permanently (bug #208 —
+    // FLEEING early-returns in CampNPCSystem._updateNPC, so nothing ever
+    // re-routed it).
+    steerToward(game, this, this.fleeTargetPosition.x, this.fleeTargetPosition.y, CAMP_FLEE_SPEED);
     // Position update delegated to PhysicsSystem.updateEntity()
-    this.velocity.vx = (dx / dist) * speed;
-    this.velocity.vy = (dy / dist) * speed;
   }
 
   // ─── Render override (draw weapon char above head when armed) ───────────
