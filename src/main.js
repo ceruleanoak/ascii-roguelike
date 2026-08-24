@@ -3253,26 +3253,33 @@ class Game {
         // Handle spawn-on-death and parent spawner notification
         this.enemySpawnSystem.handleEnemyDeath(enemy);
 
-        // Death explosion (Magma Slug, Glacier Crab)
+        // Death explosion (Magma Slug, Fire Bat, Glacier Crab)
         if (enemy.data.deathExplosion?.enabled) {
           const de = enemy.data.deathExplosion;
-          const cx = enemy.position.x + GRID.CELL_SIZE / 2;
-          const cy = enemy.position.y + GRID.CELL_SIZE / 2;
-          const spread = (de.spreadAngle || 360) * Math.PI / 180;
-          const baseAngle = Math.random() * Math.PI * 2;
-          for (let p = 0; p < de.projectileCount; p++) {
-            const angle = baseAngle + (spread / de.projectileCount) * p;
-            this.combatSystem.createEnemyAttack({
-              type: 'enemy_projectile',
-              char: de.projectileType === 'fire' ? '·' : '*',
-              position: { x: cx, y: cy },
-              velocity: { vx: Math.cos(angle) * de.speed, vy: Math.sin(angle) * de.speed },
-              damage: de.damage,
-              color: de.projectileType === 'fire' ? '#ff6600' : '#88ccff',
-              onHit: de.projectileType === 'freeze' ? 'freeze' : undefined,
-              owner: enemy,
-              shooterPlane: enemy.plane ?? 0
-            });
+          // Wet/frozen fire enemies fizzle instead of detonating — same
+          // no-fuel rule as TrailMechanic's trail guard. Death shake, SFX and
+          // loot above are untouched; only the fire nova is suppressed.
+          // Freeze-type novas (Glacier Crab) are unaffected.
+          const novaFizzles = de.projectileType === 'fire' && (enemy.isWet() || enemy.isFrozen());
+          if (!novaFizzles) {
+            const cx = enemy.position.x + GRID.CELL_SIZE / 2;
+            const cy = enemy.position.y + GRID.CELL_SIZE / 2;
+            const spread = (de.spreadAngle || 360) * Math.PI / 180;
+            const baseAngle = Math.random() * Math.PI * 2;
+            for (let p = 0; p < de.projectileCount; p++) {
+              const angle = baseAngle + (spread / de.projectileCount) * p;
+              this.combatSystem.createEnemyAttack({
+                type: 'enemy_projectile',
+                char: de.projectileType === 'fire' ? '·' : '*',
+                position: { x: cx, y: cy },
+                velocity: { vx: Math.cos(angle) * de.speed, vy: Math.sin(angle) * de.speed },
+                damage: de.damage,
+                color: de.projectileType === 'fire' ? '#ff6600' : '#88ccff',
+                onHit: de.projectileType === 'freeze' ? 'freeze' : undefined,
+                owner: enemy,
+                shooterPlane: enemy.plane ?? 0
+              });
+            }
           }
         }
 

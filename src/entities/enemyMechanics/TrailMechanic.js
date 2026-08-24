@@ -15,6 +15,10 @@ export const TrailMechanic = {
   update(enemy, ctx) {
     const cfg = enemy.data.trailMechanic;
     if (!cfg?.enabled) return;
+    // Wet/frozen fire enemies drop no trail — the same no-fuel rule that
+    // aborts a charging Boar (ChargeMechanic: wet = no traction), applied to
+    // fire output. Freeze-type trails (Glacier Crab) are unaffected.
+    if (cfg.trailType === 'fire' && (enemy.isWet() || enemy.isFrozen())) return;
     const active = enemy.state === 'chase' || enemy.state === 'windup' || enemy.state === 'attack';
     if (!active) return;
     const { deltaTime, dotDamageEvents } = ctx;
