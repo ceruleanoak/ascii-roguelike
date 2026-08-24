@@ -6,7 +6,7 @@ import { COLORS, GRID } from '../game/GameConfig.js';
 export const MAGIC_SFX_NAMES = new Set([
   'Wizard', 'Shaman', 'Necromancer', 'Hex Witch', 'Alchemist',
   'Cryomancer', 'Storm Caller',
-  'Ember Sprite', 'Pyroclast', 'Fire Elemental',
+  'Fire Elemental',
   'Breeze Wisp', 'Ice Wraith', 'Frozen Construct', 'Steam Specter',
   'Spark', 'Voltaic Golem', 'Mirror Imp'
 ]);
@@ -183,7 +183,7 @@ export const ENEMIES = {
     hp: 6,
     speed: 100,
     acceleration: 500,  // Agile — quick to close and quick to bolt
-    damage: 2,
+    damage: 1,
     attackRange: GRID.CELL_SIZE * 1.75,  // Same steal-contact range as Rat
     aggroRange: GRID.CELL_SIZE * 9,
     attackCooldown: 1.4,
@@ -848,44 +848,10 @@ export const ENEMIES = {
   // ============================================================
 
   // --- Fire ---
-
-  'E': {
-    char: 'E',
-    name: 'Ember Sprite',
-    description: 'A small flame-spirit. Easy to miss, hard to ignore.',
-    spellDescription: 'SMALL FIRE. FAST.',
-    mass: 0.5,
-    hp: 3,
-    speed: 40,
-    damage: 2,
-    attackRange: GRID.CELL_SIZE * 2,  // 2 units (melee)
-    aggroRange: GRID.CELL_SIZE * 7,   // 7 units
-    attackCooldown: 3,
-    attackWindup: 1,
-    attackType: 'fire',
-    decisionInterval: 0.3,  // Fast reactions
-    color: '#ffaa44',
-    float: true,
-    lavaImmune: true,
-    movementStyle: 'keeper',
-    movementConfig: {
-      preferredRange: GRID.CELL_SIZE * 3,
-      rangeTolerance: GRID.CELL_SIZE * 1
-    },
-    deathExplosion: {
-      enabled: true,
-      projectileCount: 4,
-      projectileType: 'fire',
-      speed: 70,
-      damage: 1,
-      deathDelay: 0.8
-    },
-    elementalAffinity: {
-      weakness: { 'freeze': 2.0, 'wet': 1.8 }
-    },
-    affinities: ['fire'],
-    tier: 'weak'
-  },
+  // Retired from the roster (2026-08 roster revision): Ember Sprite 'E' and
+  // Pyroclast 'p' — both were stat-only variants of the keeper/kiter fire
+  // archetype with no mechanical idea of their own. Fire Elemental 'F' carries
+  // the keeper-fire slot alone now.
 
   'l': {
     char: 'l',
@@ -928,38 +894,6 @@ export const ENEMIES = {
     },
     elementalAffinity: {
       weakness: { 'freeze': 2.5, 'wet': 1.8 }
-    },
-    affinities: ['fire'],
-    tier: 'weak'
-  },
-
-  'p': {
-    char: 'p',
-    name: 'Pyroclast',
-    description: 'Lobs molten rocks in rapid bursts. Erupts after long silence.',
-    spellDescription: 'BURST ROCKS. KNOW THE RELOAD.',
-    mass: 0.8,
-    hp: 5,
-    speed: 32,
-    acceleration: 220,
-    damage: 2,
-    attackRange: GRID.CELL_SIZE * 6,
-    aggroRange: GRID.CELL_SIZE * 9,
-    attackCooldown: 4.5,   // Longer cycle: windup + burst + reload gap
-    attackWindup: 1.6,     // Extended telegraph for burst preparation
-    attackType: 'ranged',
-    projectileType: 'rock',
-    movementStyle: 'keeper',
-    movementConfig: {
-      preferredRange: GRID.CELL_SIZE * 5,
-      rangeTolerance: GRID.CELL_SIZE * 2
-    },
-    decisionInterval: 0.5,
-    color: '#cc6622',
-    // ⚠️ NEW MECHANIC (burstFireMechanic — fires 3 rocks with 0.25s delays):
-    // burstFireMechanic: { enabled: true, projectileCount: 3, projectileDelay: 0.25, reloadCooldown: 2.0 }
-    elementalAffinity: {
-      weakness: { 'freeze': 1.5, 'wet': 1.3 }
     },
     affinities: ['fire'],
     tier: 'weak'
@@ -1210,36 +1144,56 @@ export const ENEMIES = {
     tier: 'normal'
   },
 
+  // Zone-tagged 2026-08: moved out of ROOM-SPECIFIC — it spawns from Red's
+  // depth tables (L3-11) and is Red-roster content, not room furniture.
 
-  // --- Dragon ---
-
-  'D': {
-    char: 'D',
-    name: 'Dragon',
-    description: 'Ancient. Breathes fire from far away. It waited for you.',
-    spellDescription: 'IT HAS WAITED.',
-    hp: 20,
-    speed: 30,
-    damage: 5,
-    attackRange: GRID.CELL_SIZE * 7,  // 7 units (long range fire)
-    aggroRange: GRID.CELL_SIZE * 12,  // 12 units (boss awareness)
-    attackCooldown: 2.0,
-    attackWindup: 1.5,
-    windupMovement: 'stop',  // Holds still for the full fire breath — readable commitment
-    attackType: 'fire',
-    movementStyle: 'keeper',
+  '6': {
+    char: '6',
+    name: 'Bomb',
+    description: 'Flees at the sight of you, swelling fatter every time it slips away. Corner it enough times and it stops running.',
+    spellDescription: 'GROWS UNSEEN. EXPLODES CORNERED.',
+    mass: 0.7,
+    hp: 5,
+    speed: 58,             // faster than Magma Slug's kite (38), slower than Trap Goblin's flee (72) —
+                            // has to actually break sightlines to earn lookback growth
+    acceleration: 380,
+    attackType: 'none',    // no ordinary attack — detonation is entirely RipenMechanic-owned
+    attackRange: 0,
+    aggroRange: GRID.CELL_SIZE * 9,
     decisionInterval: 0.3,
-    color: '#ff0000',
+    color: '#dd3333',
     lavaImmune: true,
-    trailMechanic: {
-      enabled: true,
-      trailType: 'fire',
-      trailInterval: 0.4,
-      trailDuration: 3.5,
-      trailRadius: GRID.CELL_SIZE * 0.9
+    // No `approach`/`search` — both of Alert's transition doors fall through
+    // to `flee` (EnemyStateMachine's FALLBACK), same wildcard Trap Goblin
+    // uses. RipenMechanic retroactively declares both once growth maxes at
+    // 3 — the one-time archetype flip from prey to predator.
+    states: {
+      alert: {},
+      flee: { lookbackInterval: 1.6 },   // snappier than the 2.0 default so growth reads responsively
+      lookback: {},   // required — see EnemyStateMachine's FALLBACK comment on the flee/lookback asymmetry
+      withdraw: { duration: 0.6 }
     },
-    affinities: ['dragon', 'fire'],
-    tier: 'boss'
+    ripenMechanic: {
+      enabled: true,
+      growDuration: 3.0,        // double-seconds (1.5s real) — waggle+expand animation per attempt
+      waggleAngle: 15,          // degrees, spec-literal
+      waggleCycles: 3,
+      growthScales: [1.0, 1.2, 1.45, 1.75],   // render scale at growth level 0..3
+      blinkDelay: 2.0,          // double-seconds (1.0s real) — doubled from the spec-literal 1.0
+      detonateRange: GRID.CELL_SIZE * 1.25,
+      detonateDamage: 8,        // point-blank hit — bumped from the spec-literal 5 per playtest feedback ("should be... devastating")
+      shockwaveMaxRadius: GRID.CELL_SIZE * 5,   // was 3.5 — reads as a large blast, not a puff
+      shockwaveSpeed: 220,
+      shockwaveDamage: 6,       // falls off slightly vs. the point-blank hit
+      shockwaveKnockback: 320,
+      burnDuration: 3.0         // real seconds — ignites anything caught in the blast (matches Firecracker's burn duration)
+    },
+    idleBehavior: 'wander',
+    elementalAffinity: {
+      weakness: { 'freeze': 2.0 }
+    },
+    affinities: ['beast'],
+    tier: 'weak'
   },
 
 
@@ -2293,55 +2247,6 @@ export const ENEMIES = {
     },
     affinities: ['frost'],
     tier: 'boss'
-  },
-
-  '6': {
-    char: '6',
-    name: 'Bomb',
-    description: 'Flees at the sight of you, swelling fatter every time it slips away. Corner it enough times and it stops running.',
-    spellDescription: 'GROWS UNSEEN. EXPLODES CORNERED.',
-    mass: 0.7,
-    hp: 5,
-    speed: 58,             // faster than Magma Slug's kite (38), slower than Trap Goblin's flee (72) —
-                            // has to actually break sightlines to earn lookback growth
-    acceleration: 380,
-    attackType: 'none',    // no ordinary attack — detonation is entirely RipenMechanic-owned
-    attackRange: 0,
-    aggroRange: GRID.CELL_SIZE * 9,
-    decisionInterval: 0.3,
-    color: '#dd3333',
-    lavaImmune: true,
-    // No `approach`/`search` — both of Alert's transition doors fall through
-    // to `flee` (EnemyStateMachine's FALLBACK), same wildcard Trap Goblin
-    // uses. RipenMechanic retroactively declares both once growth maxes at
-    // 3 — the one-time archetype flip from prey to predator.
-    states: {
-      alert: {},
-      flee: { lookbackInterval: 1.6 },   // snappier than the 2.0 default so growth reads responsively
-      lookback: {},   // required — see EnemyStateMachine's FALLBACK comment on the flee/lookback asymmetry
-      withdraw: { duration: 0.6 }
-    },
-    ripenMechanic: {
-      enabled: true,
-      growDuration: 3.0,        // double-seconds (1.5s real) — waggle+expand animation per attempt
-      waggleAngle: 15,          // degrees, spec-literal
-      waggleCycles: 3,
-      growthScales: [1.0, 1.2, 1.45, 1.75],   // render scale at growth level 0..3
-      blinkDelay: 2.0,          // double-seconds (1.0s real) — doubled from the spec-literal 1.0
-      detonateRange: GRID.CELL_SIZE * 1.25,
-      detonateDamage: 8,        // point-blank hit — bumped from the spec-literal 5 per playtest feedback ("should be... devastating")
-      shockwaveMaxRadius: GRID.CELL_SIZE * 5,   // was 3.5 — reads as a large blast, not a puff
-      shockwaveSpeed: 220,
-      shockwaveDamage: 6,       // falls off slightly vs. the point-blank hit
-      shockwaveKnockback: 320,
-      burnDuration: 3.0         // real seconds — ignites anything caught in the blast (matches Firecracker's burn duration)
-    },
-    idleBehavior: 'wander',
-    elementalAffinity: {
-      weakness: { 'freeze': 2.0 }
-    },
-    affinities: ['beast'],
-    tier: 'weak'
   }
 };
 
@@ -2352,7 +2257,7 @@ export const SPAWN_TABLES = {
   5: ['o', '^', 'G', 'S', 'L'],                // Depth 5-7: Add looter
   8: ['G', 'S', 'O', 'W', 'F', 'N'],          // Depth 8-10: Add fire elemental, necromancer
   11: ['S', 'O', 'W', 'K', 'I', 'N', 'G'],    // Depth 11-14: Add ice golem, knight (K has item pickup)
-  15: ['O', 'W', 'K', 'T', 'D', 'F', 'I', 'N', 'G', 'L']  // Depth 15+: All enemies
+  15: ['O', 'W', 'K', 'T', 'F', 'I', 'N', 'G', 'L']  // Depth 15+: All enemies
 };
 
 // Zone-specific spawn tables (independent difficulty progression per zone)
@@ -2374,10 +2279,10 @@ export const ZONE_SPAWN_TABLES = {
 
   'red': {
     // Fire/scorched theme - NO green/ice enemies
-    0: ['E', 'l'],                                 // L1-2: Ember Sprites, Magma Slugs (intro trail mechanic)
-    3: ['E', 'f', 't', 'p', 'l', '6'],             // L3-5: Add Fire Bats, Tortoises, Pyroclasts, Magma Slugs, Bombs
-    6: ['f', '0', 'F', 't', 'k', 'p', 'l', '6'],  // L6-8: Add Living Rocks, Fire Elementals, Miners, Pyroclasts
-    9: ['f', '0', 'F', 'S', 't', 'k', 'l', '6'],  // L9-11: Add Skeletons (charred bones), Miners
+    0: ['l'],                                      // L1-2: Magma Slugs only (intro trail mechanic)
+    3: ['f', 't', 'l', '6'],                       // L3-5: Add Fire Bats, Tortoises, Bombs
+    6: ['f', '0', 'F', 't', 'k', 'l', '6'],        // L6-8: Add Living Rocks, Fire Elementals, Miners
+    9: ['f', '0', 'F', 'S', 't', 'k', 'l', '6'],   // L9-11: Add Skeletons (charred bones), Miners
     12: ['0', 'F', 'T', 'O', 't', 'k', 'R']        // L12+: Living Rocks, Trolls, Ogres, Miners, Rockwardens
   },
 

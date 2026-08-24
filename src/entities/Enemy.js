@@ -1669,7 +1669,7 @@ export class Enemy {
     }
   }
 
-  // ── New attack type: rock projectile (Pyroclast) ──────────────────────────
+  // ── Attack type: rock projectile (ranged mineral throwers) ────────────────
   createRockProjectile() {
     const aimPos = this.markedTargetPosition || this.target.position;
     const dx = aimPos.x - this.position.x;

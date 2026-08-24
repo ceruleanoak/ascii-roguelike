@@ -85,7 +85,7 @@ export class TransmutationSystem {
           outcome = `equivalent enemy (${randomEnemy})`;
         } else {
           // 20% - BOSS! (dangerous outcome)
-          const bossEnemies = ['D', 'W', 'G', 'S']; // Dragon, Wizard, Golem, etc.
+          const bossEnemies = ['W', 'G', 'S']; // Wizard, Golem, etc.
           const randomBoss = bossEnemies[Math.floor(Math.random() * bossEnemies.length)];
           const boss = new Enemy(randomBoss, pos.x, pos.y);
           polyEnemies.push(boss);
