@@ -26,6 +26,18 @@ export class BowChargeIndicator {
   }
 
   render(game) {
+    // Toss charge (armed consumable, hands free — TossSystem): same growing
+    // bar as the weapon-throw charge. One gesture, one read.
+    if (game.trapCharging?.source?.kind === 'consumable') {
+      const ratio = Math.min(game.trapCharging.timer / (game.trapCharging.maxTime || 0.7), 1.0);
+      const barHeight = GRID.CELL_SIZE;
+      const barX = game.player.position.x + GRID.CELL_SIZE * 1.5;
+      const barY = game.player.position.y;
+      const filledHeight = barHeight * ratio;
+      this.renderer.drawRect(barX, barY + (barHeight - filledHeight), 4, filledHeight, '#ffdd44', true);
+      return;
+    }
+
     if (!game.player || !game.player.heldItem) {
       return;
     }

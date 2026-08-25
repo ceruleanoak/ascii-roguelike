@@ -22,6 +22,7 @@ import { AudioSystem } from './systems/AudioSystem.js';
 import { FishingSystem } from './systems/FishingSystem.js';
 import { LootSystem } from './systems/LootSystem.js';
 import { TrapSystem } from './systems/TrapSystem.js';
+import { TossSystem } from './systems/TossSystem.js';
 import { WireSystem } from './systems/WireSystem.js';
 import { InteractionSystem } from './systems/InteractionSystem.js';
 import { CharacterSystem } from './systems/CharacterSystem.js';
@@ -166,6 +167,7 @@ class Game {
     new DIS(this);
     this.lootSystem = new LootSystem(this);
     this.trapSystem = new TrapSystem(this);
+    this.tossSystem = new TossSystem(this);
     this.wireSystem = new WireSystem(this);
     this.interactionSystem = new InteractionSystem(this);
     this.characterSystem = new CharacterSystem(this);
@@ -505,11 +507,15 @@ class Game {
           e.preventDefault();
           return;
         } else if (result && result.action === 'spawn_enemy') {
-          this.spawnCheatEnemy(result.enemy);
+          this.cheatMenu.spawnEnemyAtPlayer(result.enemy);
           e.preventDefault();
           return;
         } else if (result && result.action === 'spawn_object') {
-          this.spawnCheatObject(result.objChar);
+          const objects = this.cheatMenu.spawnObjectAtPlayer(result.objChar);
+          // Surface alias sync — game.backgroundObjects is a main.js-owned
+          // mirror of the surface list; systems may not write it themselves
+          // (layer guard, #107 divergent-copy class).
+          if (objects === this.currentRoom.backgroundObjects) this.backgroundObjects = objects;
           this.cheatMenu.toggle(); // Close so the player can reposition for the next placement
           e.preventDefault();
           return;
@@ -3327,7 +3333,9 @@ class Game {
         // player isn't tempted to dawdle for waste drops.
         if (this.player?.magicMeter?.active &&
             this.player.magicMeter.current < this.player.magicMeter.max) {
-          const manaDropChance = enemy.data?.isBoss ? 1.0 : 0.75;
+          // Instance flag first (roomFeatures boss spawns), shared data
+          // second (Centipede head's own data object) — #215.
+          const manaDropChance = (enemy.isBoss || enemy.data?.isBoss) ? 1.0 : 0.75;
           if (Math.random() < manaDropChance) {
             this.lootSystem.spawnIngredientDrop('𝑚', enemy.position.x, enemy.position.y, null, enemy);
           }
@@ -4059,6 +4067,11 @@ class Game {
         // SHIFT throws to drop — any held item leaves the slot and lands as a
         // pickup. Weapons may damage en route; traps do NOT arm (deploy is SPACE).
         this.trapSystem.startTrapCharge('drop');
+      } else if (this.tossSystem.startToss()) {
+        // SHIFT with a consumable armed (keys 4-8) and hands free — Toss:
+        // charge on hold, release flings the armed item as a ground pickup.
+        // Release needs no dispatch here — a toss charge is a 'drop'-mode
+        // trapCharging, so handleShiftRelease's existing drop-release fires it.
       }
     }
 
@@ -4145,52 +4158,6 @@ class Game {
     // Toggle vector visualization
     this.showVectors = !this.showVectors;
     console.log(`Vector visualization: ${this.showVectors ? 'ON' : 'OFF'}`);
-  }
-
-  // Debug: drop a background object (e.g. a deflector rock) at the player's
-  // cell. Runtime-spawned, so it isn't baked into collisionMap — fine for
-  // testing boulder routing, which reads game.backgroundObjects directly.
-  spawnCheatObject(objChar) {
-    if (!this.currentRoom) return;
-    const C = GRID.CELL_SIZE;
-    const col = Math.floor((this.player.position.x + C / 2) / C);
-    const row = Math.floor((this.player.position.y + C / 2) / C);
-    const objects = this._activeBackgroundObjects();
-    objects.push(new BackgroundObject(objChar, col * C, row * C));
-    if (objects === this.currentRoom.backgroundObjects) this.backgroundObjects = objects; // surface mirror
-    this.renderer.markBackgroundDirty();
-    console.log(`[CHEAT] Placed object '${objChar}' at cell ${col},${row}`);
-  }
-
-  spawnCheatEnemy(enemyData) {
-    const state = this.stateMachine.getCurrentState();
-    if (state !== GAME_STATES.EXPLORE) {
-      console.log('[CHEAT] ⚠ Enemy spawn only works in EXPLORE mode.');
-      return;
-    }
-    const { char, name } = enemyData;
-    const room = this.currentRoom;
-    const pos = this.findSpawnPosition(
-      this.player.position,
-      GRID.CELL_SIZE * 6,
-      room.collisionMap,
-      room.enemies
-    );
-    if (!pos) {
-      console.log(`[CHEAT] ⚠ No spawn position found for ${name}`);
-      return;
-    }
-    const enemy = new Enemy(char, pos.x, pos.y, this.getCurrentZoneDepth());
-    enemy.setCollisionMap(room.collisionMap);
-    enemy.setBackgroundObjects(room.backgroundObjects);
-    enemy.setSteamClouds(this.steamClouds);
-    enemy.setTarget(this.player);
-    enemy.setGame(this);
-    enemy.setRoom(room);
-    this.physicsSystem.addEntity(enemy);
-    room.enemies.push(enemy);
-    console.log(`[CHEAT] ✓ Spawned ${name} (${char})`);
-    this.renderer.markBackgroundDirty();
   }
 
   // Post-generation enemy wiring — part of the room-swap core below, also

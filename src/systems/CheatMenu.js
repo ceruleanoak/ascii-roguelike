@@ -1,10 +1,12 @@
 import { ITEMS, INGREDIENTS, ITEM_TYPES, WEAPON_TYPES } from '../data/items.js';
 import { Item } from '../entities/Item.js';
 import { ENEMIES, ZONE_SPAWN_TABLES } from '../data/enemies.js';
-import { GRID } from '../game/GameConfig.js';
+import { GRID, GAME_STATES } from '../game/GameConfig.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
 import { sessionDeaths } from './DeathLedgerSystem.js';
 import { PUZZLE_ROOM_TEMPLATES } from '../data/dungeonPuzzleTemplates.js';
+import { BackgroundObject } from '../entities/BackgroundObject.js';
+import { Enemy } from '../entities/Enemy.js';
 
 const GRID_COLS = 4;
 const TILE_COLS = 5;   // cell-widths per tile
@@ -498,6 +500,58 @@ export class CheatMenu {
     game.saveGameState();
     game.renderer.markBackgroundDirty();
     game.updateUI();
+  }
+
+  // Debug: drop a background object (e.g. a deflector rock) at the player's
+  // cell. Runtime-spawned, so it isn't baked into collisionMap — fine for
+  // testing boulder routing, which reads game.backgroundObjects directly.
+  // Returns the list the object joined so the caller (main.js, the field's
+  // owner) can maintain the game.backgroundObjects surface alias — the layer
+  // guard rightly forbids systems from touching that mirror themselves (#107:
+  // divergent private copies).
+  spawnObjectAtPlayer(objChar) {
+    const game = this.game;
+    if (!game.currentRoom) return null;
+    const C = GRID.CELL_SIZE;
+    const col = Math.floor((game.player.position.x + C / 2) / C);
+    const row = Math.floor((game.player.position.y + C / 2) / C);
+    const objects = game._activeBackgroundObjects();
+    objects.push(new BackgroundObject(objChar, col * C, row * C));
+    game.renderer.markBackgroundDirty();
+    console.log(`[CHEAT] Placed object '${objChar}' at cell ${col},${row}`);
+    return objects;
+  }
+
+  spawnEnemyAtPlayer(enemyData) {
+    const game = this.game;
+    const state = game.stateMachine.getCurrentState();
+    if (state !== GAME_STATES.EXPLORE) {
+      console.log('[CHEAT] ⚠ Enemy spawn only works in EXPLORE mode.');
+      return;
+    }
+    const { char, name } = enemyData;
+    const room = game.currentRoom;
+    const pos = game.findSpawnPosition(
+      game.player.position,
+      GRID.CELL_SIZE * 6,
+      room.collisionMap,
+      room.enemies
+    );
+    if (!pos) {
+      console.log(`[CHEAT] ⚠ No spawn position found for ${name}`);
+      return;
+    }
+    const enemy = new Enemy(char, pos.x, pos.y, game.getCurrentZoneDepth());
+    enemy.setCollisionMap(room.collisionMap);
+    enemy.setBackgroundObjects(room.backgroundObjects);
+    enemy.setSteamClouds(game.steamClouds);
+    enemy.setTarget(game.player);
+    enemy.setGame(game);
+    enemy.setRoom(room);
+    game.physicsSystem.addEntity(enemy);
+    room.enemies.push(enemy);
+    console.log(`[CHEAT] ✓ Spawned ${name} (${char})`);
+    game.renderer.markBackgroundDirty();
   }
 
   _activateItem(selected) {

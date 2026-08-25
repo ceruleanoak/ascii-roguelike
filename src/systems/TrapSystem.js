@@ -124,9 +124,13 @@ export class TrapSystem {
   //   mode === 'deploy' — SPACE on a trap; the trap arms where it lands.
   //   mode === 'drop'   — SHIFT on any item; lands on the ground as a pickup
   //                       (weapons may damage en route, traps do NOT arm).
-  startTrapCharge(mode = 'deploy') {
+  //   source (optional) — where the projectile comes from when it isn't the
+  //                       held item. Today: { kind: 'consumable', slotIndex }
+  //                       for the Toss (SHIFT with a consumable armed —
+  //                       TossSystem). Release routes on this descriptor.
+  startTrapCharge(mode = 'deploy', source = null) {
     const profile = getThrowProfile(this.game.player?.heldItem);
-    this.game.trapCharging = { timer: 0, maxDist: profile.maxDist, maxTime: MAX_CHARGE_TIME, mode };
+    this.game.trapCharging = { timer: 0, maxDist: profile.maxDist, maxTime: MAX_CHARGE_TIME, mode, source };
   }
 
   // Cancel charge without throwing (state change, death, etc.).
@@ -224,6 +228,16 @@ export class TrapSystem {
   releaseTrapThrow() {
     const game = this.game;
     if (!game.trapCharging) return;
+
+    // Toss release (source-descriptor branch of 'drop' — see TossSystem):
+    // the armed consumable leaves its slot and lands as a ground pickup.
+    // Checked before the held-item gate because a toss charge by definition
+    // has empty hands.
+    if (game.trapCharging.mode === 'drop' && game.trapCharging.source?.kind === 'consumable') {
+      this._releaseTossThrow(game.trapCharging);
+      return;
+    }
+
     const heldItem = game.player.heldItem;
     if (!heldItem) { game.trapCharging = null; return; }
 
@@ -320,6 +334,60 @@ export class TrapSystem {
     game.updateUI();
   }
 
+  // Toss release: take the armed consumable from its slot and throw it as a
+  // harmless projectile that lands as a ground pickup. Reuses the weapon-kind
+  // flight so walls, deflection and the landing path behave identically —
+  // _landThrownWeapon tags hutPlane, which is what makes staged goods persist
+  // across floor swaps within a delve (dungeon-boss-green.md SHIFT Toss).
+  _releaseTossThrow(charge) {
+    const game = this.game;
+    const player = game.player;
+    const pos = this.getTrapReticulePos();
+    game.trapCharging = null;
+    if (!pos) return;
+    const slotIndex = charge.source.slotIndex;
+    const tossed = player.equippedConsumables?.[slotIndex];
+    if (!tossed) return;
+
+    // Clear the slot in both views (mirrors _consumeOneShotSlot's dual write)
+    // and disarm the selection — the armed slot is empty now.
+    player.equippedConsumables[slotIndex] = null;
+    if (game.inventorySystem.equippedConsumables) {
+      game.inventorySystem.equippedConsumables[slotIndex] = null;
+    }
+    player.selectedConsumableIndex = -1;
+
+    const C = GRID.CELL_SIZE;
+    const px = player.position.x + C / 2;
+    const py = player.position.y + C / 2;
+    const dx = pos.x - px, dy = pos.y - py;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const v0 = Math.sqrt(2 * THROW_DECEL * dist);
+    const interior = isInteriorActive(game);
+    game.inFlightTraps.push({
+      kind: 'weapon',
+      x: px, y: py,
+      vx: (dx / dist) * v0,
+      vy: (dy / dist) * v0,
+      decel: THROW_DECEL,
+      targetX: pos.x, targetY: pos.y,
+      char: tossed.char,
+      color: tossed.color,
+      rotation: 0,
+      weaponItem: tossed,
+      harmless: true,   // remedies aren't weapons — fly through enemies, no hit checks
+      profile: getThrowProfile(null),
+      baseDamage: 0,
+      hitEnemies: new Set(),
+      plane: player.plane ?? 0,
+      inHut: player.inHut === true,
+      inDungeon: player.inDungeon === true,
+      inMaze: player.inMaze === true,
+      interior,
+    });
+    game.updateUI();
+  }
+
   // Move in-flight throwables. Traps arm on stop; weapons hit enemies mid-flight then land as pickups.
   updateInFlightTraps(deltaTime) {
     const game = this.game;
@@ -335,8 +403,10 @@ export class TrapSystem {
       // it hits. Deployed traps still sail over and arm at the target.
       const stopsAtWalls = t.kind === 'weapon' || t.kind === 'wire';
 
-      // Weapon mid-flight: enemy collision check against current position
-      if (t.kind === 'weapon' && speed > 0) {
+      // Weapon mid-flight: enemy collision check against current position.
+      // Harmless throws (Tossed consumables) skip it entirely — they sail
+      // through enemies and just land.
+      if (t.kind === 'weapon' && speed > 0 && !t.harmless) {
         this._checkThrownWeaponHit(t, speed);
         if (t.landed) {
           this._landThrownWeapon(t);

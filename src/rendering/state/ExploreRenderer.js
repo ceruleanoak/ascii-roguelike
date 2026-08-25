@@ -2451,7 +2451,13 @@ export class ExploreRenderer {
   // the preview always matches the actual throw exactly.
   drawThrowPreview(game) {
     if (!game.trapCharging) return;
-    const held = game.player?.heldItem;
+    // Toss charges preview the armed consumable; normal charges the held item.
+    const tossSlot = game.trapCharging.source?.kind === 'consumable'
+      ? game.trapCharging.source.slotIndex
+      : -1;
+    const held = tossSlot >= 0
+      ? game.player?.equippedConsumables?.[tossSlot]
+      : game.player?.heldItem;
     if (!held || held.data?.type === 'TRAP') return;
     const pos = game.trapSystem.getTrapReticulePos();
     if (!pos) return;
