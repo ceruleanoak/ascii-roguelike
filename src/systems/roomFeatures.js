@@ -1304,6 +1304,12 @@ export function spawnBossEncounter(gen, room, encounter) {
       }
 
       const enemy = new Enemy(spawn.char, x, y, gen.currentDepth);
+      // Boss/leader entities carry the boss flag on the INSTANCE (never the
+      // shared ENEMIES data — these chars also spawn as ordinary mobs):
+      // drives boss-tier drops (#215), guaranteed mana, and the near-death
+      // blink, matching the generic fallback Miniboss above. Followers stay
+      // regular mobs — a triple-drop skeleton ring would be absurd.
+      if (spawn.role === 'boss' || spawn.role === 'leader') enemy.isBoss = true;
       enemy.setCollisionMap(room.collisionMap);
       enemy.setBackgroundObjects(room.backgroundObjects);
 

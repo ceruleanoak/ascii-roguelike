@@ -129,7 +129,13 @@ export class LootSystem {
     const affinities = enemy.data.affinities || (enemy.data.dropTable ? [enemy.data.dropTable] : null);
     const tier = enemy.data.tier || enemy.data.rarityProfile;
     if (affinities && tier) {
-      const baseDropCount = enemy.data.isBoss ? 3 : null;
+      // Boss-tier drop count. The flag is read off the instance first, the
+      // shared data second: the generic fallback Miniboss and authored
+      // BOSS_ENCOUNTERS bosses carry `isBoss` on the entity (roomFeatures
+      // spawn paths), while the Centipede head ships its own data object
+      // with the flag set (#215 — every Miniboss now qualifies, not just
+      // the Centipede).
+      const baseDropCount = (enemy.isBoss || enemy.data?.isBoss) ? 3 : null;
       const generatedDrops = generateEnemyDrops(
         affinities,
         tier,
