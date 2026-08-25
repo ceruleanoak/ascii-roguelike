@@ -5,6 +5,7 @@ import { Enemy } from '../entities/Enemy.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { INGREDIENTS } from '../data/items.js';
 import { EEL } from '../data/enemies.js';
+import { cellularCaveGrid } from './roomFeatures.js';
 
 // Discovery pools — one Key Item per dive at a far dead-end; the rest rare Ingredients.
 const KEY_ITEMS = ['§', '⊙'];
@@ -90,7 +91,7 @@ export class AquiferSystem {
     // Organic cave via the shared cellular-automata helper; keep a 3x3 open
     // pocket around the dive point so the frog never lands walled in.
     const isPocket = (c, r) => Math.abs(c - entryCol) <= 1 && Math.abs(r - entryRow) <= 1;
-    const grid = this.game.roomGenerator._cellularCaveGrid(COLS, ROWS, isPocket, 0.46, 4);
+    const grid = cellularCaveGrid(COLS, ROWS, isPocket, 0.46, 4);
 
     // Flood-fill the open region reachable from the entry; wall off the rest so
     // no discovery is ever stranded in an isolated pocket.
