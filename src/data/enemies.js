@@ -115,7 +115,7 @@ export const ENEMIES = {
   'r': {
     char: 'r',
     name: 'Rat',
-    description: 'Aggressive, but surprisingly social.',
+    description: 'Bites on sight, but steals your coin if you\'re carrying any — succeed or get hurt, and it\'s gone for good.',
     spellDescription: 'IT WILL SERVE.',
     mass: 0.5,
     hp: 2,
@@ -367,7 +367,7 @@ export const ENEMIES = {
   'o': {
     char: 'o',
     name: 'Slime',
-    description: 'Leaves slime that slows and hinders.',
+    description: 'Leaves a slick trail that slows anything caught in it.',
     spellDescription: 'WEAK TO BLADES.',
     hp: 3,
     speed: 20,
@@ -480,7 +480,7 @@ export const ENEMIES = {
   'G': {
     char: 'G',
     name: 'Goblin',
-    description: 'Scavenges weapons before closing in. Steals stronger gear off the ground.',
+    description: 'Keeps its distance with a bow, but drops it fast for any better weapon it finds on the ground.',
     spellDescription: 'WANTS YOUR LOOT.',
     hp: 7,
     speed: 35,
@@ -574,7 +574,7 @@ export const ENEMIES = {
   'O': {
     char: 'O',
     name: 'Ogre',
-    description: 'A weapon-toting brute. Hits harder than it looks.',
+    description: 'A slow, heavy brute armed with whatever bludgeon it finds. Hits harder than it looks.',
     spellDescription: 'BIG. HITS HARD.',
     mass: 2,
     hp: 11,
@@ -637,7 +637,7 @@ export const ENEMIES = {
   'd': {
     char: 'd',
     name: 'Duelist',
-    description: 'Advances and retreats. Punishes reckless attacks.',
+    description: 'Keeps its distance until you swing recklessly, then parries the attack and counters.',
     spellDescription: 'WATCH THE FLASH.',
     hp: 7,
     speed: 44,
@@ -715,7 +715,7 @@ export const ENEMIES = {
   'K': {
     char: 'K',
     name: 'Knight',
-    description: 'Armed, armored, and trained to heal.',
+    description: 'Armored and disciplined — carries a potion for when the fight turns against it.',
     spellDescription: 'ARMORED. HAS AN ITEM.',
     mass: 1.5,
     hp: 13,
@@ -856,7 +856,7 @@ export const ENEMIES = {
   'l': {
     char: 'l',
     name: 'Magma Slug',
-    description: 'Orbits prey in tightening fire rings. Kill it fast, but not here.',
+    description: 'Circles you in tightening rings of fire, and bursts into flying embers when it dies — finish it from a step back.',
     spellDescription: 'STEP INSIDE THE RING.',
     mass: 1.5,
     hp: 5,
@@ -902,7 +902,7 @@ export const ENEMIES = {
   'F': {
     char: 'F',
     name: 'Fire Elemental',
-    description: 'Flame given purpose. Burns everything including you.',
+    description: 'Flame with a will of its own. Keeps its distance and hurls fire at everything in reach.',
     spellDescription: 'FLAME WITH INTENT.',
     hp: 9,
     speed: 35,
@@ -932,7 +932,7 @@ export const ENEMIES = {
   'f': {
     char: 'f',
     name: 'Fire Bat',
-    description: 'Wreathed in flame. Spits fire from range, leaves a trail overhead.',
+    description: 'Keeps its distance, spitting fire, and drags a burning trail across the ground as it flies.',
     spellDescription: 'SPITS FIRE. QUICK.',
     mass: 0.6,
     hp: 5,
@@ -978,7 +978,7 @@ export const ENEMIES = {
   't': {
     char: 't',
     name: 'Tortoise',
-    description: 'Hides as a rock until you get close. Strike the shell and it rolls out of it at you. In lava, breathes fire.',
+    description: 'Hides as a rock until you get close, then rolls its shell straight at you when struck. In lava, it breathes fire instead.',
     spellDescription: 'SHELL. FIRE. LAVA.',
     mass: 2.0,
     hp: 8,
@@ -1142,7 +1142,7 @@ export const ENEMIES = {
   'k': {
     char: 'k',
     name: 'Miner',
-    description: 'Heavy pickaxe blow. Sends you flying into hazards.',
+    description: 'Swings a heavy pickaxe that sends you flying — usually into a hazard.',
     spellDescription: 'HIGH KNOCKBACK HIT.',
     mass: 2.0,
     hp: 7,
@@ -1249,7 +1249,7 @@ export const ENEMIES = {
   'c': {
     char: 'c',
     name: 'Breeze Wisp',
-    description: 'Its touch pushes you, not wounds you. Groups chain-push.',
+    description: 'Its touch pushes, not wounds — in groups, they take turns knocking you between them.',
     spellDescription: 'PUSHES, NOT STABS.',
     mass: 0.3,
     hp: 3,
@@ -1310,7 +1310,7 @@ export const ENEMIES = {
   'I': {
     char: 'I',
     name: 'Ice Golem',
-    description: 'A walking frost construct. Resistant to most things.',
+    description: 'A walking frost construct, hard to stun or poison — but fire cuts straight through it.',
     spellDescription: 'COLD. RESISTANT.',
     mass: 3,
     hp: 13,
@@ -1336,7 +1336,7 @@ export const ENEMIES = {
   'U': {
     char: 'U',
     name: 'Frozen Construct',
-    description: 'An ice shell with purpose. Immune to cold and most tricks.',
+    description: 'An ice shell immune to poison and slow to stagger — shatters into shards when it finally breaks.',
     spellDescription: 'IMMUNE TO COLD.',
     mass: 2,
     hp: 9,
@@ -2068,7 +2068,7 @@ export const ENEMIES = {
   'S': {
     char: 'S',
     name: 'Skeleton',
-    description: 'Reassembled from old violence. It remembers.',
+    description: 'Bones raised from old violence, with nothing left in them for poison to take hold of.',
     spellDescription: 'WAS ALIVE ONCE.',
     hp: 6,
     speed: 35,
@@ -2197,7 +2197,7 @@ export const ENEMIES = {
   'Y': {
     char: 'Y',
     name: 'Barrow Tyrant',
-    description: 'An old king of the mound. Nothing staggers it.',
+    description: 'An old king of the mound — hurls bone from a distance, and nothing interrupts the throw.',
     spellDescription: 'IT DOES NOT FLINCH.',
     mass: 3.0,            // Barrow-heavy — shrugs off most knockback
     hp: 14,
@@ -2252,7 +2252,7 @@ export const ENEMIES = {
   '1': {
     char: '1',
     name: 'Sniper',
-    description: 'Watches from a distance. Vanishes when approached, fires an instant line shot after tracking you.',
+    description: 'Watches from a distance and vanishes if you approach. Once it locks on, the shot is instant.',
     spellDescription: 'FIRES FROM AFAR.',
     mass: 4.0,
     hp: 22,
