@@ -85,5 +85,58 @@ export class SpellSystem {
         return;
       }
     }
+
+    // Dynamic fallback: naming an entity describes it. Two forms —
+    //   LOOK<NAME>   the ritual form (fits names up to 5 letters; the 9-char
+    //                buffer cannot hold LOOK plus anything longer)
+    //   <NAME>       the bare word, matched against the whole buffer exactly,
+    //                so substrings and stray prefixes never half-fire
+    // Scans suffixes outward like static detection, so junk letters before
+    // LOOK don't block it; registered LOOK* words never reach this path (the
+    // loop above already returned on them).
+    const enemies = this.game._activeEnemies?.() ?? [];
+    if (!enemies.length) return;
+    for (let len = 5; len <= keyBuffer.length; len++) {
+      const word = keyBuffer.slice(keyBuffer.length - len).join('');
+      if (!word.startsWith('LOOK')) continue;
+      const text = this._describeEntity(enemies, word.slice(4));
+      if (text) {
+        this.game.spellResponse = { text, startTime: performance.now() };
+      }
+      // Whether it resolved or not, a LOOK phrase is answered here once —
+      // an unknown name is a wrong guess, not a prompt.
+      return;
+    }
+    const text = this._describeEntity(enemies, keyBuffer.join(''));
+    if (text) {
+      this.game.spellResponse = { text, startTime: performance.now() };
+    }
+  }
+
+  /**
+   * Resolve a typed name against the given enemies. Both call sites pass a
+   * whole fragment (the LOOK-form remainder, or the entire buffer for the
+   * bare-word form) and matching is whole-name equality after stripping
+   * non-alphanumerics — so substrings never half-fire ("OPERATE" is not RAT).
+   *
+   * The gate is literacy, not bookkeeping: nothing tracks what the player has
+   * "seen" — the word only resolves if an enemy whose name matches is actually
+   * in the room right now, and typing it at all requires knowing the name. The
+   * player's mental save file does the gating.
+   *
+   * @param {Array} enemies enemies on the player's active layer
+   * @param {string} name typed fragment to resolve
+   * @returns {string|null} description text, or null when nothing answers
+   */
+  _describeEntity(enemies, name) {
+    const wanted = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!wanted) return null;
+    for (const e of enemies) {
+      const ename = (e.data?.name ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (ename && ename === wanted) {
+        return e.data?.spellDescription || ename + '.';
+      }
+    }
+    return null;
   }
 }

@@ -377,4 +377,43 @@ export const SPELLS = {
       'NOTHING':    'IN DUE TIME...',
     },
   },
+
+  // ── The Three ────────────────────────────────────────────────────────────────
+  //
+  // The spell layer's second job: guide the player toward the 3 puzzle, and —
+  // inside the 3 room alone — hold a conversation instead of giving observations.
+  // These lines are the game's whole voice on the subject: terse, honest,
+  // sideways. Canon speaks nowhere else.
+  //
+  // Key forms are constrained by the 9-char keystroke buffer: each key below is
+  // either an exact fit for the phrase with spaces stripped, or the exact
+  // 9-char tail the buffer retains once its leading letters shift out:
+  //   WHERE ARE YOU   → ...AREYOU      WHAT IS ONE?    → WHATISONE (exact)
+  //   WHERE IS ONE?   → HEREISONE      WHAT IS TWO?    → WHATISTWO (exact)
+  //   WHERE IS TWO?   → HEREISTWO      WHAT IS THREE?  → ...TISTHREE
+  //   WHERE IS THREE? → ...REISTHREE   HOW TO ESCAPE   → ...ESCAPE
+  //
+  // The WHAT IS entries answer only inside the 3 room (room.isThreeRoom —
+  // stamped when the room is built); anywhere else they say nothing happened,
+  // matching the registry's existing '...NOTHING.' idiom.
+
+  'AREYOU': { response: 'NORTH.' },
+  'ESCAPE': { response: 'ONLY ONE WAY.' },
+
+  'HEREISONE':   { response: 'RED.' },
+  'HEREISTWO':   { response: 'CYAN.' },
+  'REISTHREE':   { response: 'YELLOW.' },
+
+  'WHATISONE': {
+    response: (game) =>
+      game.currentRoom?.isThreeRoom ? 'ONE IS KNOWN.' : '...NOTHING.',
+  },
+  'WHATISTWO': {
+    response: (game) =>
+      game.currentRoom?.isThreeRoom ? 'TWO IS FOUND.' : '...NOTHING.',
+  },
+  'TISTHREE': {
+    response: (game) =>
+      game.currentRoom?.isThreeRoom ? 'THREE IS TOLD.' : '...NOTHING.',
+  },
 };
