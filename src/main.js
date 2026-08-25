@@ -60,6 +60,7 @@ import { RunTimerSystem } from './systems/RunTimerSystem.js';
 import { PuzzleSystem } from './systems/PuzzleSystem.js';
 import { ChiBladeSystem } from './systems/ChiBladeSystem.js';
 import { SecretEventSystem } from './systems/SecretEventSystem.js';
+import { CompassSystem } from './systems/CompassSystem.js';
 import { LightningStrikeSystem } from './systems/LightningStrikeSystem.js';
 import { SandstormSystem } from './systems/SandstormSystem.js';
 import { GrayZoneSystem } from './systems/GrayZoneSystem.js';
@@ -153,6 +154,9 @@ class Game {
     this.exitSystem = new ExitSystem(this.zoneSystem, this);
     this.roomGenerator = new RoomGenerator(this.exitSystem, this.zoneSystem, this);
     this.secretEventSystem = new SecretEventSystem(this);
+    // Compass (⌖) Explore-mode behavior (secret-reveal beep + dungeon-finding
+    // arrow); dungeon behavior lives in DungeonPuzzleSystem instead.
+    this.compassSystem = new CompassSystem(this);
     this.neutralRoomSystem = new NeutralRoomSystem();
     this.errandSystem = new ErrandSystem();
     this.cheatMenu = new CheatMenu(this);
@@ -1975,6 +1979,12 @@ class Game {
         }
       }
 
+      // Compass (⌖) — mark this room's directional arrow; also consumes a
+      // pending guaranteed-D contract from a completed 3-exit streak. Runs
+      // after the blue-zone override above so its fixed tutorial exit can
+      // never get clobbered by a forced 'D' mutation.
+      this.compassSystem.onRoomEntered(this.currentRoom);
+
       // Activate boss system for zone boss rooms
       if (this.currentRoom.isZoneBossRoom) {
         this.bossSystem.activate(this.currentRoom, currentZone);
@@ -3454,6 +3464,7 @@ class Game {
     if ((inNorthExit || crossedNorthExit || isPressingIntoExitGap(this.player, this.keys, 'north')) && this.currentRoom.exits.north && (!this.currentRoom.exitsLocked || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0) {
       const exitObj = this.currentRoom.exits.north;
       this.zoneSystem.recordExit(exitObj);
+      this.compassSystem.onExitTaken('north');
       const letterPath = this.zoneSystem.pathHistory.map(exit => exit.letter).join('-');
 
       // Check for secret patterns
@@ -3530,6 +3541,7 @@ class Game {
         if ((inEastExit || crossedEastExit || isPressingIntoExitGap(this.player, this.keys, 'east')) && this.currentRoom.exits.east && (!this.currentRoom.exitsLocked || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0) {
           const exitObj = this.currentRoom.exits.east;
           this.zoneSystem.recordExit(exitObj);
+          this.compassSystem.onExitTaken('east');
           const letterPath = this.zoneSystem.pathHistory.map(exit => exit.letter).join('-');
 
           // Check for secret patterns
@@ -3578,6 +3590,7 @@ class Game {
           if ((inWestExit || crossedWestExit || isPressingIntoExitGap(this.player, this.keys, 'west')) && this.currentRoom.exits.west && (!this.currentRoom.exitsLocked || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0) {
             const exitObj = this.currentRoom.exits.west;
             this.zoneSystem.recordExit(exitObj);
+            this.compassSystem.onExitTaken('west');
             const letterPath = this.zoneSystem.pathHistory.map(exit => exit.letter).join('-');
 
             // Check for secret patterns

@@ -431,6 +431,8 @@ export class ExitSystem {
           // Apply secret events (key glitter, leshy chase, etc.)
           // Uses priority system - only 1 event per room
           game.secretEventSystem.applySecretEvents(room);
+          // Compass (⌖) — one-shot beep the instant a findable secret goes live
+          game.compassSystem?.onSecretRevealed(room);
 
           // E-room: spawn the errand traveler after enemies are cleared
           if (room.letterTemplate?.neutralAfterClear) {

@@ -25,6 +25,7 @@ import { NeutralRenderer } from './state/NeutralRenderer.js';
 import { DemoRenderer } from './state/DemoRenderer.js';
 import { HutInteriorOverlay } from './ui/HutInteriorOverlay.js';
 import { DialogueBox } from './ui/DialogueBox.js';
+import { CompassIndicator } from './ui/CompassIndicator.js';
 import { ErrandConfirmOverlay } from './ui/ErrandConfirmOverlay.js';
 import { MazeInteriorOverlay } from './ui/MazeInteriorOverlay.js';
 import { InteriorOverlay } from './ui/InteriorOverlay.js';
@@ -49,6 +50,9 @@ export class RenderController {
 
     // NPC speech panel — drawn last so it sits above interior overlays
     this.dialogueBox = new DialogueBox(renderer);
+
+    // Compass (⌖) bottom-right HUD dial — Explore-mode directional arrow
+    this.compassIndicator = new CompassIndicator(renderer);
 
     // Errand trade confirm popup — drawn alongside the speech panel
     this.errandConfirmOverlay = new ErrandConfirmOverlay(renderer);
@@ -109,6 +113,7 @@ export class RenderController {
 
   renderExploreState(game) {
     this.exploreRenderer.render(game);
+    this.compassIndicator.render(game);
     this.dialogueBox.render(game);
     this.errandConfirmOverlay.render(game);
   }

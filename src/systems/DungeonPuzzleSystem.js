@@ -43,16 +43,27 @@ export class DungeonPuzzleSystem {
     }
   }
 
-  // Compass (⌖) — dungeon-only "beeps when treasure is in the room" behavior.
-  // The full Explore-mode directional/room-letter mechanic is separate,
-  // out-of-scope work (see docs/adr/BACKLOG.md).
+  // Compass (⌖) — dungeon-only beep, narrowed (2026-08-25) to exactly the
+  // two dungeon secrets it's meant to flag: the skull key (wherever
+  // game.dungeonKeySkullFloor rolled it — Entrance or Corridor) and Branch's
+  // companion-switch puzzle. Generic floor loot (Pyramid slots, Puzzle Room
+  // triggers, plain chests) no longer beeps. The full Explore-mode mechanic
+  // (secret-reveal beep + directional arrow) lives in CompassSystem.js.
   updateCompassBeep(floor, dt) {
     const { game } = this;
     const holding = (game.player?.quickSlots || []).some(it => it?.char === '⌖');
     if (!holding) { this._compassBeepTimer = 0; return; }
 
-    const hasTreasure = (floor.items?.length > 0) || (floor.ingredients?.length > 0);
-    if (!hasTreasure) { this._compassBeepTimer = 0; return; }
+    // Skull key: pending only while unfound. hasKeyItem alone can't tell
+    // "not yet found" apart from "already spent" (both read false once the
+    // key is consumed), so dungeonKeyUsedThisRun disambiguates.
+    const skullPending = floor.floorIndex === game.dungeonKeySkullFloor
+      && !game.dungeonKeyUsedThisRun
+      && !game.inventorySystem?.hasKeyItem('⚿', game);
+    const branchPending = floor.roomKind === 'numbered' && floor.floorIndex === 2
+      && !floor.puzzleSolved;
+
+    if (!skullPending && !branchPending) { this._compassBeepTimer = 0; return; }
 
     this._compassBeepTimer += dt;
     if (this._compassBeepTimer >= SFX_BEEP_INTERVAL) {
