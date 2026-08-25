@@ -206,7 +206,7 @@ interior pathing/collision — hard prereqs for pet descent), #130/#131 layer-le
 all interior combat/effects through `_activeEnemies()` / `_activeBackgroundObjects()` from day
 one).
 
-## Glossary terms pending user authorship
+## Glossary terms
 
-**Dungeon Boss** · **Toss** · **Gold Breath** · **Gilded** · **Game Changer** (proposed; entries
-are the user's to write per CLAUDE.md).
+Authored 2026-08-24 (user-delegated): **Dungeon Boss** · **Toss** · **Gold Breath** ·
+**Gilded** · **Game Changer** — see `GLOSSARY.md`.

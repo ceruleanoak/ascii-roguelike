@@ -524,10 +524,14 @@ programming terms.
 ### Boss
 - **Definition:** An Enemy that appears at a zone-specific depth threshold and must be defeated
   to progress deeper. Bosses have enhanced drops (guaranteed Mana) and special behavior.
-- **In code:** `enemy.data.isBoss` flag; checked via `ZoneSystem.isBossReady(zone, depth)`;
-  room type `BOSS_ROOM` generated when conditions are met. Boss-spawned enemies carry
-  `isBossEntity` flag.
-- **Not:** just a difficult Enemy; a Boss is a gated milestone tied to zone depth.
+- **In code:** `isBoss` flag read off the instance first, shared data second
+  (`enemy.isBoss || enemy.data?.isBoss` — #215). Set on the instance by the roomFeatures boss
+  spawn paths; the Centipede head ships its own data object with the flag. Checked via
+  `ZoneSystem.isBossReady(zone, depth)`; room type `BOSS_ROOM` generated when conditions are
+  met. Boss-spawned enemies carry `isBossEntity` flag.
+- **Not:** just a difficult Enemy; a Boss is a gated milestone tied to zone depth. Not a
+  Dungeon Boss (interior encounter, own system) or a Miniboss (`BOSS_ENCOUNTERS` B-room
+  variant).
 
 ### Freeze-Over
 - **Definition:** The one-shot event that flips the cyan boss arena into its second phase. The
@@ -589,6 +593,67 @@ programming terms.
   standing in the ring so the cage is closed, and torn down by `_clearLakeArena()` on defeat.
 - **Not:** a Ridge — that name belongs to `RidgeSystem.js`. Not permanent terrain either; a
   Hummock exists only for the duration of the encounter.
+
+### Dungeon Boss
+- **Definition:** A Layer-2 boss encounter fought inside a Dungeon interior — the delve-capper,
+  not a depth-gated surface Boss. Every Dungeon Boss is a three-phase fight whose windows key
+  to its zone's Legend-of-Three triad, capped by a temptation finale won by refusing, carrying
+  one Game Changer. New zones author data + art, not new systems. The green Dungeon Boss is
+  the Hoardmaw.
+- **In code:** `DungeonBossSystem` (orchestrator; deliberately outside the floor's enemy tick
+  loop — sole driver on real seconds) + per-zone spec in `src/data/dungeonBosses/*.js`;
+  composite body entity + dedicated renderer section, like the zone bosses.
+- **Not:** a Boss (surface, `BossSystem`, depth-gated) or a Miniboss (`BOSS_ENCOUNTERS`
+  B-room encounter).
+
+### Toss
+- **Definition:** Throwing the armed consumable as a ground pickup: keys 4–8 arm a slot, SHIFT
+  press begins the throw charge, release flings the item. The staging gesture — pre-laying
+  coins beside a seam or bread along a lane before a fight. Tossed items persist on dungeon
+  floors while cached within a delve and wipe on delve reset (staging is per-delve effort; the
+  no-persistence law holds).
+- **In code:** `TossSystem.startToss()`; charge rides TrapSystem's drop-throw pipeline ('drop'
+  mode extended with a source descriptor naming the armed slot). Lands via the standard
+  pickup path with its cooldown. Weapon-held SHIFT behavior (drop) is unchanged — the Toss
+  exists only with hands free.
+- **Not:** the held-item SHIFT drop; a trap deploy (that's SPACE); the Gold Breath coin
+  discharge (which reuses the same gesture while cursed).
+
+### Gold Breath
+- **Definition:** The Hoardmaw's one-shot curse, exhaled at the Scaled→Glinting transition and
+  lasting until the kill. Every consumable quick slot renders `c` wired to the coin tally —
+  the slots become coins. SPACE and SHIFT each discharge one coin (throw arc, lands as a
+  pickup); consumable use is suspended — your remedies are hoarded too. Stated consequence,
+  deliberate.
+- **In code:** `game.goldBreathCurseActive` — the contract flag quick-slot rendering
+  (`MenuSystem`) and the input consumers (`ConsumableTriggerSystem.fireSelected`,
+  `DungeonSystem.handleShiftPress`) read; `DungeonBossSystem.dischargeCoin()` performs the
+  discharge. Cleared on defeat and on delve reset.
+- **Not:** a damage effect; it gilds nothing itself (companion Gilding triggers on vault
+  arrival — one theme, two faces of Greed).
+
+### Gilded
+- **Definition:** The HP-less companion state granted on vault arrival: damage intake is
+  skipped, death checks are bypassed, and the render turns gold-tinted. Lasts the rest of the
+  delve only and reverts on dungeon exit; the surface taming economy is untouched. In-fight,
+  gilded companions elevate: the crow dive-pecks the true glint, the rat gnaws the tongue
+  root. Solo arrival stays fully viable — a soft bonus, never a gate.
+- **In code:** `gilded` flag on companion entities, set at vault floor activation, reverted on
+  dungeon exit alongside the collision-map restore; contributions cadence-limited in
+  `DungeonBossSystem._tickCompanionElevation`. Pets descend mortal — Gilding is earned by
+  escorting them to the vault alive.
+- **Not:** player invincibility; a permanent state; a scope beyond dungeon floors (hut/maze
+  unchanged — the maze Ghost economy is deliberately pet-free).
+
+### Game Changer
+- **Definition:** The rule-bending state each Dungeon Boss earns: the delve itself pays for it,
+  reshaping the fight's contract. Green's is twofold — mortal→Gilded escorts, and the
+  slot-cursing Gold Breath. Yellow/red/cyan changers are Open (each zone authors its own).
+- **In code:** no shared field by design — each changer is its own mechanism under the
+  `DungeonBossSystem` template spine (ambush, registers, refusal finale, payout, companion
+  hooks).
+- **Not:** a power-up or a phase transition; it bends a rule of the run, it doesn't make the
+  numbers bigger.
 
 ### Status Effect
 - **Definition:** A temporary condition applied to a character (player or enemy) that modifies
