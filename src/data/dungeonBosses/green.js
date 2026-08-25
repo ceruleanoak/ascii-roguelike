@@ -36,10 +36,14 @@ export const GREEN_HOARDMAW_SPEC = {
   // WiseFellow rare saying unlocked on first win (zones.js rareSayings slot).
   victorySaying: 'THE HOARD YIELDS TO AN EMPTY HAND',
 
-  // Payout shower on defeat (boss-tier loot flags ride #215's fix).
+  // Payout shower on defeat: coin burst, a rarity-weighted gemstone roll, one
+  // tiered weapon from the generic pool (gear from the delvers it swallowed),
+  // and guaranteed mana (#215's boss-tier flag fix is what makes the Miniboss
+  // side of this contract hold; the maw's own shower is authored here).
   payout: {
     coinBurst: 14,
     gemChance: 0.6,
+    weaponAffinities: ['generic'],
     guaranteedMana: true,
   },
 };

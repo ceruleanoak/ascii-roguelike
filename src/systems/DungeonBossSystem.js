@@ -1,6 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { Hoardmaw, BRIBE_OFFER_WINDOW } from '../entities/Hoardmaw.js';
-import { Item } from '../entities/Item.js';
+import { Item, getRandomDrop, RARITY_PROFILES } from '../data/items.js';
 import { GREEN_HOARDMAW_SPEC } from '../data/dungeonBosses/green.js';
 
 // Spawn anchor: the maw fills the vault's north half — body center sits at
@@ -514,6 +514,21 @@ export class DungeonBossSystem {
       game.items.push(coin);
       game.physicsSystem.addEntity(coin);
     }
+
+    // Gems: rarity-weighted gemstone roll at boss weights — the hoard's
+    // jewel seam. Weapon: one tiered roll from the generic pool — gear from
+    // the delvers it swallowed over the years. Mana: guaranteed, per spec —
+    // the shower is authored, not rolled.
+    if (Math.random() < spec.payout.gemChance) {
+      const gem = getRandomDrop(['gemstone'], 'ingredients', RARITY_PROFILES.boss);
+      if (gem) game.lootSystem.spawnIngredientDrop(gem, maw.position.x, maw.position.y, null, maw);
+    }
+    const weaponChar = getRandomDrop(spec.payout.weaponAffinities, 'weapons', RARITY_PROFILES.boss);
+    if (weaponChar) game.lootSystem.spawnItemDrop(weaponChar, maw.position.x, maw.position.y, null, maw);
+    if (spec.payout.guaranteedMana) {
+      game.lootSystem.spawnIngredientDrop('𝑚', maw.position.x, maw.position.y, null, maw);
+    }
+
     game.inventorySystem.unlockConsumableSlot?.();
     game.audioSystem?.playSFX?.('boss_defeat');
   }
