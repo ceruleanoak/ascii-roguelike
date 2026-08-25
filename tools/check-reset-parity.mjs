@@ -388,6 +388,9 @@ async function main() {
     process.exit(1);
   }
   console.log('Reset parity ok.');
+  // Explicit exit: stubbed systems schedule real Node timers (audio stall
+  // watchdog etc.) that would otherwise hold the event loop open.
+  process.exit(0);
 }
 
 main().catch(err => { console.error(err); process.exit(1); });
