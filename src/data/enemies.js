@@ -86,12 +86,25 @@ export const RABBIT = {
 
 // Enemy definitions
 // Note: 1 unit = GRID.CELL_SIZE = 16 pixels
+//
+// trueName — the enemy's secret name, revealed by LOOK ENEMY and answered by
+// CALL/COMMAND <trueName> (CommandSystem permanently charms the speaker's
+// target; max three answer at once). Names speak to the enemy's nature in old
+// tongues (Latin or Germanic roots) and always begin with the enemy's char:
+// letter chars take a same-initial word; digit chars ('3','6','0','1') answer
+// to their number spoken in German — numbers are wild things, and their names
+// are the wild words for them. Symbol chars ('@','^') are named by nature
+// alone — no alphabet begins them. Boss-tier names are knowable but refuse
+// command. Names must stay typable on the 9-char keystroke buffer: A–Z only,
+// nine letters or fewer, unique across the registry (CALL resolves by exact
+// suffix match).
 export const ENEMIES = {
 
   // --- Training dummy (pacifist, indestructible; see Enemy.js pacifist branch) ---
   '@': {
     char: '@',
     name: 'Training Dummy',
+    trueName: 'SCUTUM',
     description: 'Doesn\'t hit back.',
     hp: 20,
     speed: 0,
@@ -117,6 +130,7 @@ export const ENEMIES = {
     name: 'Rat',
     description: 'Bites on sight, but steals your coin if you\'re carrying any — succeed or get hurt, and it\'s gone for good.',
     spellDescription: 'IT WILL SERVE.',
+    trueName: 'RATTUS',
     mass: 0.5,
     hp: 2,
     speed: 80,
@@ -152,6 +166,7 @@ export const ENEMIES = {
     name: 'Plague Rat',
     description: 'A rat whose bite festers.',
     spellDescription: 'IT WILL ROT.',
+    trueName: 'PESTIS',
     mass: 0.5,
     hp: 4,
     speed: 80,
@@ -179,6 +194,7 @@ export const ENEMIES = {
     name: 'Monkey',
     description: 'Empties your hands, then bolts.',
     spellDescription: 'IT WILL RANSACK.',
+    trueName: 'DREI',
     mass: 0.6,
     hp: 6,
     speed: 100,
@@ -215,6 +231,7 @@ export const ENEMIES = {
     name: 'Bat',
     description: 'Latches to flesh and drains steadily.',
     spellDescription: 'DRAINS. HANGS ON.',
+    trueName: 'BLODSUGA',
     mass: 0.4,
     hp: 2,
     speed: 70,
@@ -258,6 +275,7 @@ export const ENEMIES = {
     name: 'Frog',
     description: 'Zigzag jumper. Snaps its tongue when close.',
     spellDescription: 'WEAK TO SHOCK.',
+    trueName: 'GRODA',
     mass: 0.5,
     hp: 5,
     speed: 130,
@@ -299,6 +317,7 @@ export const ENEMIES = {
     name: 'Troll',
     description: 'Slow and steady. Each blow staggers. It does not tire.',
     spellDescription: 'TIRELESS AND SLOW.',
+    trueName: 'THRYMR',
     mass: 2.5,
     hp: 15,
     speed: 23,
@@ -322,6 +341,7 @@ export const ENEMIES = {
     name: 'Boar',
     description: 'Charges in a straight line. Stuns itself on walls.',
     spellDescription: 'CHARGES. STUNS ON WALL.',
+    trueName: 'BERSERK',
     mass: 1.5,
     hp: 5,
     speed: 45,
@@ -369,6 +389,7 @@ export const ENEMIES = {
     name: 'Slime',
     description: 'Leaves a slick trail that slows anything caught in it.',
     spellDescription: 'WEAK TO BLADES.',
+    trueName: 'OLJA',
     hp: 3,
     speed: 20,
     acceleration: 200,
@@ -399,6 +420,7 @@ export const ENEMIES = {
     name: 'Giant Slime',
     description: 'A bloated mother-slime. Splits when struck and reabsorbs its young.',
     spellDescription: 'SPLITS ON HIT — CHILDREN REFORM — SPEWS GOO.',
+    trueName: 'MUCILAGO',
     hp: 20,
     speed: 30,
     acceleration: 50,
@@ -482,6 +504,7 @@ export const ENEMIES = {
     name: 'Goblin',
     description: 'Keeps its distance with a bow, but drops it fast for any better weapon it finds on the ground.',
     spellDescription: 'WANTS YOUR LOOT.',
+    trueName: 'GRABEN',
     hp: 7,
     speed: 35,
     damage: 2,
@@ -534,6 +557,7 @@ export const ENEMIES = {
     name: 'Goblin Brute',
     description: 'A hulking goblin chief. Bashes with a stone hammer and calls his pack.',
     spellDescription: 'RALLIES. CHARGES. SMASHES.',
+    trueName: 'BOLVERK',
     mass: 2,
     hp: 22,
     speed: 22,                       // Slow — the "player is distant" trigger fires often
@@ -576,6 +600,7 @@ export const ENEMIES = {
     name: 'Ogre',
     description: 'A slow, heavy brute armed with whatever bludgeon it finds. Hits harder than it looks.',
     spellDescription: 'BIG. HITS HARD.',
+    trueName: 'ORCUS',
     mass: 2,
     hp: 11,
     speed: 25,
@@ -609,6 +634,7 @@ export const ENEMIES = {
     name: 'Looter',
     description: 'Takes what it finds. Fights with whatever that is.',
     spellDescription: 'LOOTS ON SIGHT.',
+    trueName: 'LATRO',
     hp: 6,
     speed: 50,
     damage: 2,
@@ -639,6 +665,7 @@ export const ENEMIES = {
     name: 'Duelist',
     description: 'Keeps its distance until you swing recklessly, then parries the attack and counters.',
     spellDescription: 'WATCH THE FLASH.',
+    trueName: 'DIMICATOR',
     hp: 7,
     speed: 44,
     acceleration: 360,
@@ -692,6 +719,7 @@ export const ENEMIES = {
     name: 'Wizard',
     description: 'Casts from a distance. Patient and very precise.',
     spellDescription: 'PRECISE FROM AFAR.',
+    trueName: 'WYRDA',
     hp: 8,
     speed: 30,
     damage: 3,
@@ -717,6 +745,7 @@ export const ENEMIES = {
     name: 'Knight',
     description: 'Armored and disciplined — carries a potion for when the fight turns against it.',
     spellDescription: 'ARMORED. HAS AN ITEM.',
+    trueName: 'KNECHT',
     mass: 1.5,
     hp: 13,
     speed: 33,
@@ -749,6 +778,7 @@ export const ENEMIES = {
     name: 'Shaman',
     description: 'Buffs nearby allies. It flees toward its kin, not away from you.',
     spellDescription: 'EMPOWERS ITS KIN.',
+    trueName: 'AUGUR',
     hp: 5,              // Glass cannon once isolated
     speed: 55,          // Fast enough to actually reach allies before you catch it
     acceleration: 400,  // Snappy — hard to corner
@@ -804,6 +834,7 @@ export const ENEMIES = {
     name: 'Mimic',
     description: 'Disguised as a floor item. Re-disguises between attacks.',
     spellDescription: 'WATCH FOR MOVEMENT.',
+    trueName: 'MIMUS',
     mass: 0.9,
     hp: 6,
     speed: 75,
@@ -858,6 +889,7 @@ export const ENEMIES = {
     name: 'Magma Slug',
     description: 'Circles you in tightening rings of fire, and bursts into flying embers when it dies — finish it from a step back.',
     spellDescription: 'STEP INSIDE THE RING.',
+    trueName: 'LIMAX',
     mass: 1.5,
     hp: 5,
     speed: 38,           // Up from 25 — needs lateral speed to maintain orbit arc
@@ -904,6 +936,7 @@ export const ENEMIES = {
     name: 'Fire Elemental',
     description: 'Flame with a will of its own. Keeps its distance and hurls fire at everything in reach.',
     spellDescription: 'FLAME WITH INTENT.',
+    trueName: 'FLAMMA',
     hp: 9,
     speed: 35,
     damage: 3,
@@ -934,6 +967,7 @@ export const ENEMIES = {
     name: 'Fire Bat',
     description: 'Keeps its distance, spitting fire, and drags a burning trail across the ground as it flies.',
     spellDescription: 'SPITS FIRE. QUICK.',
+    trueName: 'FURAX',
     mass: 0.6,
     hp: 5,
     speed: 55,
@@ -980,6 +1014,7 @@ export const ENEMIES = {
     name: 'Tortoise',
     description: 'Hides as a rock until you get close, then rolls its shell straight at you when struck. In lava, it breathes fire instead.',
     spellDescription: 'SHELL. FIRE. LAVA.',
+    trueName: 'TESTUDO',
     mass: 2.0,
     hp: 8,
     speed: 55,
@@ -1037,6 +1072,7 @@ export const ENEMIES = {
     name: 'Living Rock',
     description: 'Indistinguishable from scenery — until it moves. Charges like a boulder; stuns on walls.',
     spellDescription: 'STONE THAT MOVES.',
+    trueName: 'NULL',
     mass: 4.0,
     hp: 11,
     speed: 50,
@@ -1088,6 +1124,7 @@ export const ENEMIES = {
     name: 'Rockwarden',
     description: 'Sleeps as a boulder until you cross it. Charges like a landslide. On death, it erupts.',
     spellDescription: 'MAGIC SHATTERS IT.',
+    trueName: 'RISI',
     mass: 5.0,
     hp: 18,
     speed: 22,
@@ -1144,6 +1181,7 @@ export const ENEMIES = {
     name: 'Miner',
     description: 'Swings a heavy pickaxe that sends you flying — usually into a hazard.',
     spellDescription: 'HIGH KNOCKBACK HIT.',
+    trueName: 'KNACKEN',
     mass: 2.0,
     hp: 7,
     speed: 28,
@@ -1195,6 +1233,7 @@ export const ENEMIES = {
     name: 'Bomb',
     description: 'Flees at the sight of you, swelling fatter every time it slips away. Corner it enough times and it stops running.',
     spellDescription: 'GROWS UNSEEN. EXPLODES CORNERED.',
+    trueName: 'SECHS',
     mass: 0.7,
     hp: 5,
     speed: 58,             // faster than Magma Slug's kite (38), slower than Trap Goblin's flee (72) —
@@ -1251,6 +1290,7 @@ export const ENEMIES = {
     name: 'Breeze Wisp',
     description: 'Its touch pushes, not wounds — in groups, they take turns knocking you between them.',
     spellDescription: 'PUSHES, NOT STABS.',
+    trueName: 'CALIGO',
     mass: 0.3,
     hp: 3,
     speed: 55,           // Fast enough to orbit and reposition between pushes
@@ -1284,6 +1324,7 @@ export const ENEMIES = {
     name: 'Ice Wraith',
     description: 'A pale ghost of cold. Latches on and chills from within.',
     spellDescription: 'CLINGS AND CHILLS.',
+    trueName: 'XENOS',
     mass: 0.5,
     hp: 3,
     speed: 45,
@@ -1312,6 +1353,7 @@ export const ENEMIES = {
     name: 'Ice Golem',
     description: 'A walking frost construct, hard to stun or poison — but fire cuts straight through it.',
     spellDescription: 'COLD. RESISTANT.',
+    trueName: 'ISSKAPTR',
     mass: 3,
     hp: 13,
     speed: 20,
@@ -1338,6 +1380,7 @@ export const ENEMIES = {
     name: 'Frozen Construct',
     description: 'An ice shell immune to poison and slow to stagger — shatters into shards when it finally breaks.',
     spellDescription: 'IMMUNE TO COLD.',
+    trueName: 'UNDIQUE',
     mass: 2,
     hp: 9,
     speed: 22,
@@ -1381,6 +1424,7 @@ export const ENEMIES = {
     name: 'Glacier Crab',
     description: 'Lays ice as it moves. Charges across its own frozen ground. Shatters into shards on death.',
     spellDescription: 'ICE TRAIL. ICE SHARDS.',
+    trueName: 'UNCUS',
     mass: 2.0,
     hp: 8,
     speed: 28,            // Slow baseline — danger only when charging
@@ -1437,6 +1481,7 @@ export const ENEMIES = {
     name: 'Frost Wolf',
     description: 'A pack hunter. It waits for its mates before striking.',
     spellDescription: 'HUNTS WITH OTHERS.',
+    trueName: 'WULFGAR',
     hp: 4,
     speed: 60,
     damage: 2,
@@ -1465,6 +1510,7 @@ export const ENEMIES = {
     name: 'Yeti',
     description: 'Massive and relentless. Its fists freeze on contact.',
     spellDescription: 'FISTS THAT FREEZE.',
+    trueName: 'YMIR',
     mass: 2.5,
     hp: 13,
     speed: 18,
@@ -1510,6 +1556,7 @@ export const ENEMIES = {
     name: 'Cryomancer',
     description: 'A caster of ice. Summons wraiths while it still lives.',
     spellDescription: 'CASTS AND SUMMONS.',
+    trueName: 'CANDOR',
     hp: 8,
     speed: 28,
     damage: 3,
@@ -1558,6 +1605,7 @@ export const ENEMIES = {
     name: 'Steam Specter',
     description: 'Dives close to burst steam, then retreats through the cloud.',
     spellDescription: 'CLOUD LINGERS. DODGE OUT.',
+    trueName: 'XIPHIAS',
     mass: 0.4,
     hp: 5,
     speed: 45,
@@ -1600,6 +1648,7 @@ export const ENEMIES = {
     name: 'Siren',
     description: 'Its song pulls you toward the water. Reach it and it will tear you apart.',
     spellDescription: 'SONG PULLS YOU IN.',
+    trueName: 'VOCIS',
     mass: 0.5,
     hp: 5,
     speed: 0,
@@ -1646,6 +1695,7 @@ export const ENEMIES = {
     name: 'Spark',
     description: 'A jittering ball of lightning. Teleports in zigzags — hard to read.',
     spellDescription: 'PURE VOLTAGE.',
+    trueName: 'ELECTRON',
     mass: 0.5,
     hp: 3,
     speed: 90,            // High base — the jump speed feels electric
@@ -1687,6 +1737,7 @@ export const ENEMIES = {
     name: 'Voltaic Golem',
     description: 'Towers over everything. Discharges in all directions.',
     spellDescription: 'WIDE DISCHARGE.',
+    trueName: 'VASTATOR',
     mass: 2.5,
     hp: 12,
     speed: 20,
@@ -1727,6 +1778,7 @@ export const ENEMIES = {
     name: 'Mirror Imp',
     description: 'Shield down — it advances. Shield up — it retreats and reflects.',
     spellDescription: 'RUSH WHILE IT BACKS AWAY.',
+    trueName: 'IMAGO',
     mass: 0.7,
     hp: 6,
     speed: 42,
@@ -1766,6 +1818,7 @@ export const ENEMIES = {
     name: 'Storm Caller',
     description: 'Commands lightning from afar. Calls sparks to defend itself.',
     spellDescription: 'COMMANDS SPARKS.',
+    trueName: 'ZEUS',
     hp: 9,
     speed: 30,
     damage: 3,
@@ -1804,6 +1857,7 @@ export const ENEMIES = {
     name: 'Volt Spider',
     description: 'Hunts in packs. Its bite arcs between nearby targets.',
     spellDescription: 'BITE ARCS BETWEEN.',
+    trueName: 'JORMUN',
     hp: 5,
     speed: 48,
     damage: 2,
@@ -1832,6 +1886,7 @@ export const ENEMIES = {
     name: 'Thunder Hawk',
     description: 'A predator that dives like a bolt from above.',
     spellDescription: 'DIVES FROM ABOVE.',
+    trueName: 'HAVOC',
     hp: 6,
     speed: 50,
     damage: 2,
@@ -1875,6 +1930,7 @@ export const ENEMIES = {
     name: 'Trap Goblin',
     description: 'Runs at the sight of you. The floor behind it is the danger.',
     spellDescription: 'FLEES AND TRAPS.',
+    trueName: 'NIDHOGG',
     mass: 0.6,
     hp: 4,
     speed: 72,            // Fast enough to keep distance — has no attack of its own
@@ -1940,6 +1996,7 @@ export const ENEMIES = {
     name: 'Alchemist',
     description: 'Circles at range. The color it throws tells you what it\'s carrying.',
     spellDescription: 'KILL FOR THE POTION.',
+    trueName: 'QUINTA',
     hp: 6,
     speed: 38,
     acceleration: 260,
@@ -1988,6 +2045,7 @@ export const ENEMIES = {
     name: 'Hag',
     description: 'Circles at range. Her potion doesn\'t burn or freeze — it curses.',
     spellDescription: 'DON\'T LET THE CURSE LAND.',
+    trueName: 'QUELEN',
     hp: 6,
     speed: 38,
     acceleration: 260,
@@ -2027,6 +2085,7 @@ export const ENEMIES = {
     name: 'Hex Witch',
     description: 'Curses and retreats. She waits for confusion to do the work.',
     spellDescription: 'CHASE HER AFTER THE CURSE LANDS.',
+    trueName: 'HAEGTES',
     hp: 8,
     speed: 38,
     acceleration: 260,
@@ -2070,6 +2129,7 @@ export const ENEMIES = {
     name: 'Skeleton',
     description: 'Bones raised from old violence, with nothing left in them for poison to take hold of.',
     spellDescription: 'WAS ALIVE ONCE.',
+    trueName: 'SKELETOS',
     hp: 6,
     speed: 35,
     damage: 2,
@@ -2090,6 +2150,7 @@ export const ENEMIES = {
     name: 'Necromancer',
     description: 'Raises the dead. Kill it before its army grows.',
     spellDescription: 'KILLS YOUR KILLS.',
+    trueName: 'NEKYIA',
     hp: 9,
     speed: 25,
     damage: 2,
@@ -2121,6 +2182,7 @@ export const ENEMIES = {
     name: 'Risen',
     description: 'It falls, and then it gets back up.',
     spellDescription: 'KILL IT TWICE.',
+    trueName: 'ZOE',
     hp: 8,
     speed: 22,                         // Shambling — slow but it never stops coming
     damage: 3,
@@ -2150,6 +2212,7 @@ export const ENEMIES = {
     name: 'Mourner',
     description: 'Where it grieves, the mist closes in.',
     spellDescription: 'THE MIST FOLLOWS IT.',
+    trueName: 'ACHERON',
     hp: 7,
     speed: 30,
     damage: 2,
@@ -2172,6 +2235,7 @@ export const ENEMIES = {
     name: 'Gravejumper',
     description: 'It does not walk. It pounces from plot to plot.',
     spellDescription: 'NEVER A STRAIGHT LINE.',
+    trueName: 'JACTATOR',
     hp: 4,
     speed: 48,
     damage: 2,
@@ -2199,6 +2263,7 @@ export const ENEMIES = {
     name: 'Barrow Tyrant',
     description: 'An old king of the mound — hurls bone from a distance, and nothing interrupts the throw.',
     spellDescription: 'IT DOES NOT FLINCH.',
+    trueName: 'YNGVI',
     mass: 3.0,            // Barrow-heavy — shrugs off most knockback
     hp: 14,
     speed: 26,
@@ -2228,6 +2293,7 @@ export const ENEMIES = {
     name: 'Sea Snake',
     description: 'A water-dweller. Bites and retreats to the deep.',
     spellDescription: 'LOVES THE WATER.',
+    trueName: 'SERPENS',
     hp: 3,
     speed: 38,
     damage: 2,
@@ -2254,6 +2320,7 @@ export const ENEMIES = {
     name: 'Sniper',
     description: 'Watches from a distance and vanishes if you approach. Once it locks on, the shot is instant.',
     spellDescription: 'FIRES FROM AFAR.',
+    trueName: 'EINS',
     mass: 4.0,
     hp: 22,
     speed: 18,
@@ -2359,6 +2426,14 @@ export const ZONE_SPAWN_TABLES = {
 
 export function getEnemyData(char) {
   return ENEMIES[char] || null;
+}
+
+// True-name lookup for CALL/COMMAND (see CommandSystem). Exact match against
+// the registry's trueName field; returns the data block or null.
+export function findEnemyDataByTrueName(trueName) {
+  const wanted = (trueName || '').toUpperCase();
+  if (!wanted) return null;
+  return Object.values(ENEMIES).find(d => d.trueName === wanted) || null;
 }
 
 export function getSpawnTable(depth) {

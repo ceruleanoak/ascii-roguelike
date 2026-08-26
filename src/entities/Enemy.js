@@ -33,6 +33,7 @@ import { GameAnimalMechanic } from './enemyMechanics/GameAnimalMechanic.js';
 import { SniperMechanic } from './enemyMechanics/SniperMechanic.js';
 import { RipenMechanic } from './enemyMechanics/RipenMechanic.js';
 import { ThiefMechanic } from './enemyMechanics/ThiefMechanic.js';
+import { BreadSeekMechanic } from './enemyMechanics/BreadSeekMechanic.js';
 import { EnemyStateMachine, legacyStateFor } from './EnemyStateMachine.js';
 import { statesFor } from '../data/stateDefaults.js';
 import { computeBlinkColor, computePipRows } from '../systems/StatusEffectVisuals.js';
@@ -142,6 +143,11 @@ export class Enemy {
     this._frameUpdateResult = null;
     this.state = 'idle'; // idle, chase, windup, attack
     this.enraged = false; // Once attacked, always aggro'd
+    // Commanded via CALL/COMMAND true-name (CommandSystem): permanently
+    // charmed warband member. Gates the player out of its detection entirely
+    // (see update()'s effectiveDistance) and routes targeting through the
+    // shared charm machinery.
+    this.commanded = false;
 
     // Wandering behavior when idle
     this.wanderTimer = Math.random() * 3; // Random initial delay
@@ -569,28 +575,10 @@ export class Enemy {
     // Overrides default chase: pull the rat directly toward a dropped loaf.
     // Eating happens in main.js (proximity check + setTamed). Falls through
     // to default AI if the loaf was consumed or destroyed by something else.
-    // Sets velocity directly so physics moves the rat next frame, and resets
-    // state/attack timers so the post-update canAttack/createAttack in
-    // CombatSystem can't fire mid-seek (kept attacking the player otherwise).
-    if (this.seekingBread && this.breadTarget) {
-      const t = this.breadTarget;
-      if (t.consumed || t.destroyed) {
-        this.seekingBread = false;
-        this.breadTarget = null;
-      } else {
-        const dx = t.position.x - this.position.x;
-        const dy = t.position.y - this.position.y;
-        const d = Math.hypot(dx, dy) || 1;
-        const speed = this.speed;
-        this.targetVelocity.vx = (dx / d) * speed;
-        this.targetVelocity.vy = (dy / d) * speed;
-        this.velocity.vx = this.targetVelocity.vx;
-        this.velocity.vy = this.targetVelocity.vy;
-        this.state = 'chase';
-        this.windupTimer = 0;
-        if (this.attackTimer < 0.5) this.attackTimer = 0.5;
-        return { dotDamage: [] };
-      }
+    // Behavior lives in its Mechanic file; the velocity-write contract and
+    // the strike-cadence reset are documented there.
+    if (BreadSeekMechanic.update(this)) {
+      return { dotDamage: [] };
     }
 
     if (!this.target) {
@@ -703,7 +691,11 @@ export class Enemy {
     // If the player is on a different plane and this enemy isn't already in pursuit
     // (enraged or memory-active), treat the player as infinitely far away so that
     // no new aggro, memory marks, or movement toward the player can occur cross-plane.
-    const effectiveDistance = (inSamePlane(this, this.target) || this.enraged || this.aggroMemoryActive)
+    // Commanded units are unconditionally infinitely far from the player — that is
+    // what "removed from the aggro list" means mechanically (CommandSystem): no
+    // detection, windup, leap/charge-at-player, or memory mark can ever resolve.
+    const effectiveDistance = this.commanded ? Infinity
+      : (inSamePlane(this, this.target) || this.enraged || this.aggroMemoryActive)
       ? distance
       : Infinity;
     // Cyan well blessing shrinks the aggro radius (boss parts use Infinity aggro — unaffected)

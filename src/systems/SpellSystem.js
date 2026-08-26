@@ -133,7 +133,10 @@ export class SpellSystem {
     if (!wanted) return null;
     for (const e of enemies) {
       const ename = (e.data?.name ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-      if (ename && ename === wanted) {
+      // A true name names the beast too (LOOK ENEMY is where it is learned;
+      // speaking it back here keeps the two forms of address consistent).
+      const truename = (e.data?.trueName ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if ((ename && ename === wanted) || (truename && truename === wanted)) {
         return e.data?.spellDescription || ename + '.';
       }
     }

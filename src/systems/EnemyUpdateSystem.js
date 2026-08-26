@@ -58,16 +58,21 @@ export class EnemyUpdateSystem {
     // per-frame ticker (bug #92); interior floor enemies are driven by the
     // DungeonSystem/HutSystem interior loops instead.
     const enemies = game.currentRoom.enemies; // layer-guard-ok: surface ticker (#92)
+    // Commanded warband (CommandSystem) ticks through this same canonical loop
+    // so exactly one drive per frame holds for them too — they live outside
+    // room.enemies by design (aggro-list removal), so they ride along here.
+    const roster = game.commandedEnemies ?? [];
+    const tickedList = roster.length ? [...enemies, ...roster] : enemies;
     const player = game.player;
 
-    this._applySlimeContact(player, enemies);
+    this._applySlimeContact(player, tickedList);
     this._applySlimePuddleContact(player, enemies);
-    this._tickSlowTimers(deltaTime, enemies);
-    this._updatePackBehavior(enemies);
-    this._runEnemyLoop(deltaTime, player, enemies);
-    this._checkExitDespawn(enemies);
+    this._tickSlowTimers(deltaTime, tickedList);
+    this._updatePackBehavior(tickedList);
+    this._runEnemyLoop(deltaTime, player, tickedList);
+    this._checkExitDespawn(enemies);   // room-scoped: commanded units never despawn at exits
     game.enemySpawnSystem.flush();
-    this._handleEnemyItemPickup(enemies);
+    this._handleEnemyItemPickup(tickedList);
   }
 
   // Rooms lock their exits while any counted enemy remains (RoomGenerator/main.js),
@@ -134,10 +139,14 @@ export class EnemyUpdateSystem {
       // shouldn't slime anything it passes over.
       : enemies.filter(e => e.data?.affinities?.includes('goo') && !e.leapWindupActive && !e.leapAirborneActive);
     for (const slime of slimeEnemies) {
-      const pdx = player.position.x - slime.position.x;
-      const pdy = player.position.y - slime.position.y;
-      if (pdx * pdx + pdy * pdy < SLIME_COLLISION_SQ) {
-        player.applyStatusEffect('goo', 5.0);
+      // A commanded slime's goo is a weapon against the unsworn, not against
+      // its commander — skip the player branch for warband members.
+      if (!slime.commanded) {
+        const pdx = player.position.x - slime.position.x;
+        const pdy = player.position.y - slime.position.y;
+        if (pdx * pdx + pdy * pdy < SLIME_COLLISION_SQ) {
+          player.applyStatusEffect('goo', 5.0);
+        }
       }
       for (const other of enemies) {
         if (other === slime) continue;
@@ -265,6 +274,16 @@ export class EnemyUpdateSystem {
       const d = rDx * rDx + rDy * rDy;
       if (d < nearestDistSq) { nearestDistSq = d; nearestTarget = rat; }
     }
+    // Commanded warband members are legitimate hostile targets — the unsworn
+    // fight the sworn like they fight tamed companions.
+    for (const commanded of game.commandedEnemies ?? []) {
+      if (commanded === enemy || commanded.isDying) continue;
+      if ((commanded.plane ?? 0) !== (enemy.plane ?? 0)) continue;
+      const cDx = commanded.position.x - enemy.position.x;
+      const cDy = commanded.position.y - enemy.position.y;
+      const d = cDx * cDx + cDy * cDy;
+      if (d < nearestDistSq) { nearestDistSq = d; nearestTarget = commanded; }
+    }
     enemy.setTarget(nearestTarget);
   }
 
@@ -284,7 +303,7 @@ export class EnemyUpdateSystem {
       }
     }
 
-    if (enemy.chargeState === 'charging' && !enemy.chargeHasHit && inSamePlane(enemy, player)) {
+    if (enemy.chargeState === 'charging' && !enemy.chargeHasHit && !enemy.commanded && inSamePlane(enemy, player)) {
       const ex = enemy.position.x, ey = enemy.position.y;
       if (Math.abs(player.position.x - ex) < GRID.CELL_SIZE &&
           Math.abs(player.position.y - ey) < GRID.CELL_SIZE) {

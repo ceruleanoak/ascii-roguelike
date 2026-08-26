@@ -853,7 +853,9 @@ export class InventorySystem {
    * Update active consumable windups
    */
   updateConsumableWindups(deltaTime, player, currentRoom, combatSystem, steamClouds, particles) {
-    const enemies = game._activeEnemies();
+    // this.game — a bare `game` here (2026-08-24 layer-guard refactor) threw
+    // ReferenceError on every EXPLORE frame, halting the loop on room entry.
+    const enemies = this.game._activeEnemies();
 
     for (let i = this.consumableWindups.length - 1; i >= 0; i--) {
       const windup = this.consumableWindups[i];
