@@ -9,10 +9,12 @@ import { GameAnimalMechanic } from '../entities/enemyMechanics/GameAnimalMechani
 import { SniperMechanic } from '../entities/enemyMechanics/SniperMechanic.js';
 import { ThiefMechanic } from '../entities/enemyMechanics/ThiefMechanic.js';
 import { queueDamageNumber as queueDamageNumberImpl, ageDamageTextQueue, reportDamageResult as reportDamageResultImpl } from './DamageNumberQueue.js';
+import { applyTargetOverrides as applyTargetOverridesImpl } from './enemyTargeting.js';
 import { updateEnemyMeleeAttack, resolveEnemyAttack, attackHitsBox, retireAfterTest } from '../game/Telegraph.js';
 import { conductElectricity as conductElectricityImpl } from './ElectricConduction.js';
 import { checkProximity as checkProximityImpl, applyAOEStatus as applyAOEStatusImpl, createExplosion as createExplosionImpl } from './ExplosionEffects.js';
 import { acidFloodFillWater } from './AcidWaterSpread.js';
+import { affinityDamageMultiplier } from '../entities/PandoraBox.js';
 import { TongueAttackSystem } from './TongueAttackSystem.js';
 import { applyExtraOnHitEffects, applyOnHitStatusEffect } from './ExtraOnHitEffects.js';
 
@@ -55,47 +57,12 @@ export class CombatSystem {
   /**
    * Per-frame target overrides, applied by the canonical enemy tick BEFORE
    * enemy.update() (bug #92 — targeting must precede the single tick).
-   * Charm: fight the nearest other enemy. Noise-maker: keep the formal
-   * target on the player but pull aggro memory toward the noise source.
+   * Behavior lives in enemyTargeting.js (enemy-AI targeting, not combat
+   * resolution); this delegate keeps the three call sites unchanged.
    * Returns true when it set the target (caller skips its own selection).
    */
   applyTargetOverrides(enemy, enemies, player, noiseSource = null) {
-    if (enemy.isCharmed && enemy.isCharmed()) {
-      // Charmed: fight the nearest other enemy, charmed or not. Both charm
-      // sources (Garnet Staff AOE, Charm Lure trap) hit every enemy in a
-      // radius at once, so excluding charmed peers here meant a
-      // simultaneously-charmed cluster could never find each other as valid
-      // targets and all fell back to attacking the player instead of turning
-      // on one another (bug #202).
-      let nearestEnemy = null;
-      let nearestDist = Infinity;
-      for (const other of enemies) {
-        if (other === enemy) continue;
-        const dx = other.position.x - enemy.position.x;
-        const dy = other.position.y - enemy.position.y;
-        const d = Math.sqrt(dx * dx + dy * dy);
-        if (d < nearestDist) {
-          nearestDist = d;
-          nearestEnemy = other;
-        }
-      }
-      enemy.setTarget(nearestEnemy ?? player);
-      return true;
-    }
-    // Noise-maker redirect: pull enemy toward noise source instead of player
-    if (noiseSource) {
-      const dx = noiseSource.x - enemy.position.x;
-      const dy = noiseSource.y - enemy.position.y;
-      if (Math.sqrt(dx * dx + dy * dy) <= noiseSource.radius) {
-        enemy.lastKnownPosition = { x: noiseSource.x, y: noiseSource.y };
-        enemy.aggroMemoryActive = true;
-        enemy.memoryMoveDelayTimer = 0; // Investigate immediately
-        enemy.currentDirection = { x: 0, y: 0 }; // Force direction recalc toward noise
-        enemy.setTarget(player); // keep formal target as player, memory pulls to noise
-        return true;
-      }
-    }
-    return false;
+    return applyTargetOverridesImpl(enemy, enemies, player, noiseSource);
   }
 
   // Shared dodge/block/pierce/reflect damage-number reporting for enemy-initiated
@@ -621,6 +588,10 @@ export class CombatSystem {
           if (proj.electric) elementalMod *= enemy.getElementalModifier('shock');
           if (proj.isBlade) elementalMod *= enemy.getElementalModifier('blade');
           let adjustedDamage = Math.ceil(proj.damage * elementalMod * speedMultiplier);
+          // Pandora's Box affinity rock-paper-scissors modifier
+          if (proj.affinity && enemy.currentAffinity) {
+            adjustedDamage = Math.max(1, Math.ceil(adjustedDamage * affinityDamageMultiplier(proj.affinity, enemy.currentAffinity)));
+          }
           // Green Ranger flat modifier (not scaled by speed falloff); excludes boomerangs.
           if (proj.owner && proj.owner.characterType === 'green' && !proj.boomerang) {
             const enemyUndetected = enemy.detectionIndicatorTimer <= 0;

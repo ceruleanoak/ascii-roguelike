@@ -244,6 +244,17 @@ export const EXIT_LETTERS = {
     roomType: 'CAMP',
     weight: 0,
     spellDescription: 'THE GIFT OF THE DEEP.'
+  },
+
+  // Weight is zero — the only way to encounter a '3' exit is the gray-zone
+  // one-shot call (ExitSystem stamps it at depth 3, once per run). The entry
+  // exists so the renderer and LOOK NORTH recognize it when it appears;
+  // taking it routes to the Three Room, not any room type.
+  '3': {
+    name: 'Three',
+    roomType: null,
+    weight: 0,
+    spellDescription: 'THE SOURCE.'
   }
 };
 

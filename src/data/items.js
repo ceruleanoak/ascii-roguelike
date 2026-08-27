@@ -1108,6 +1108,21 @@ export const ITEMS = {
     knockback: 25,
     color: '#8b4513'
   },
+  '⚡': {
+    char: '⚡',
+    name: 'Storm Staff',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.GUN,
+    damage: 1,
+    cooldown: 0.35,              // 3× faster than Fester's Gun (0.35 vs 1.0 effective)
+    bulletChar: '↯',
+    bulletSpeed: 280,
+    bulletRange: 600,
+    accuracy: 0.92,
+    isConductiveStaff: true,     // Fires rapid magic bolts; passes through mana gems
+    maxUses: null,
+    color: '#ffcc00'
+  },
 
   // ── MELEE / bat — Tier 2 ──────────────────────────────────────────────────
   // Hold-to-windup slugger (BatSystem owns the lifecycle): while SPACE is held
@@ -2299,12 +2314,21 @@ export const ITEMS = {
   // Compass: equippable utility weapon, passive (no activation, no oneShot —
   // contrast Bread above). Legend of Three green-zone "Truth" item
   // (claudedocs/legend-of-three.md), pyramid slot in the Floor-4 dungeon
-  // puzzle. Scope note: this build implements only its dungeon behavior —
-  // DungeonPuzzleSystem polls for uncollected floor loot while equipped and
-  // beeps. The fuller Explore-mode mechanic the item's name implies
-  // (directional pointer toward room letters, "follow 3 times" for a
-  // guaranteed room-type choice) is explicitly out of scope here — see the
-  // docs/adr/BACKLOG.md row flagging it as a separate future system.
+  // puzzle. Two behavior surfaces, both built (2026-08-25):
+  // - Dungeon (DungeonPuzzleSystem.updateCompassBeep): beeps only for the
+  //   skull key (whichever floor game.dungeonKeySkullFloor rolled) and
+  //   Branch's companion-switch puzzle — not generic floor loot.
+  // - Explore (CompassSystem.js + CompassIndicator.js widget): one-shot
+  //   beep the moment a room's SecretEventSystem secret goes live
+  //   (key_glitter/leshy_chase/chi_grass — fires at room-clear, when
+  //   activeSecretEvent is actually set, not on entry; fairy_grass
+  //   excluded), plus a marked room exit shown via a persistent bottom-
+  //   right HUD dial (needle recomputed every frame from the live player-
+  //   to-target vector). 3 *consecutive* marked-exit follows (streak
+  //   resets on any deviation) force a guaranteed 'D' exit into the room
+  //   reached on the 3rd follow, via ExitSystem's mutateExitLetter.
+  // See docs/adr/BACKLOG.md row for the still-open architecture question
+  // (fork the effect vs. one effect, multiple contexts).
   '⌖': {
     char: '⌖',
     name: 'Compass',

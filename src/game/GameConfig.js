@@ -375,6 +375,21 @@ export const BACKGROUND_OBJECTS = {
       '/': { animation: 'ricochet', message: null, effect: 'reflectBullet' }
     }
   },
+  '◆': {
+    name: 'Mana Gem',
+    color: '#8844ff',
+    hp: null,
+    indestructible: true,
+    solid: false,
+    bulletInteraction: 'interact-preserve',
+    flammability: 'none',
+    conductivity: 'none',
+    manaGem: true,
+    manaGemColor: null,   // set at placement: 'red' | 'green' | 'blue' | 'yellow'
+    interactions: {
+      default: { animation: 'flash', message: null }
+    }
+  },
   'B': {
     name: 'Metal Box',
     color: '#999999',

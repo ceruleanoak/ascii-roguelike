@@ -16,10 +16,12 @@ import { GRID } from '../game/GameConfig.js';
 import { GooBlob } from '../entities/GooBlob.js';
 import { LakeBoss, LAKE_BOSS_PHASE2_HP_THRESHOLD } from '../entities/LakeBoss.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
+import { Item } from '../entities/Item.js';
 import { TurtleShell, TURTLE_MAX_HP, TURTLE_PHASE2_HP } from '../entities/TurtleShell.js';
 import { Enemy } from '../entities/Enemy.js';
 import { TurtleHead } from '../entities/TurtleHead.js';
 import { TurtleLeg } from '../entities/TurtleLeg.js';
+import { PandoraBox, PANDORA_PHASE2_HP } from '../entities/PandoraBox.js';
 
 
 
@@ -34,6 +36,7 @@ export class BossSystem {
     this.turtleShell    = null;   // TurtleShell (red zone)
     this.turtleHead     = null;   // TurtleHead (red zone)
     this.turtleLegs     = [];     // TurtleLeg[4] (red zone)
+    this.pandoraBox     = null;   // PandoraBox (yellow zone)
     this.zone      = null;   // which zone this boss represents
     this.bossPhase = 1;
     this.prevBossHp = Infinity;   // HP tracking for audio damage signal
@@ -101,6 +104,38 @@ export class BossSystem {
       return;
     }
 
+    // Yellow zone: spawn Pandora's Box
+    if (zone === 'yellow') {
+      const cx = GRID.WIDTH  / 2;
+      const cy = GRID.HEIGHT / 2;
+      this.pandoraBox = new PandoraBox(cx, cy);
+      this.pandoraBox.setCollisionMap(room.collisionMap);
+      this.pandoraBox.setBackgroundObjects(room.backgroundObjects);
+      this.pandoraBox.setTarget(this.game.player);
+      room.enemies.push(this.pandoraBox);
+      room.isBossRoom = true;
+
+      // Place 4 mana gems in a diamond around the boss center
+      const gemDistance = GRID.CELL_SIZE * 5;
+      const gemPositions = [
+        { x: cx, y: cy - gemDistance, color: 'red' },    // top
+        { x: cx + gemDistance, y: cy, color: 'green' },  // right
+        { x: cx, y: cy + gemDistance, color: 'blue' },   // bottom
+        { x: cx - gemDistance, y: cy, color: 'yellow' }  // left
+      ];
+      for (const gp of gemPositions) {
+        const gem = new BackgroundObject('◆', gp.x, gp.y, { manaGemColor: gp.color });
+        gem.manaGemColor = gp.color;
+        room.backgroundObjects.push(gem);
+      }
+
+      // Place Storm Staff near the boss (slightly offset from center)
+      const staffOffset = GRID.CELL_SIZE * 3;
+      room.items.push(new Item('⚡', cx + staffOffset, cy - staffOffset));
+
+      return;
+    }
+
     const cx = GRID.WIDTH  / 2;
     const cy = GRID.HEIGHT / 2;
 
@@ -133,6 +168,7 @@ export class BossSystem {
     this.turtleShell   = null;
     this.turtleHead    = null;
     this.turtleLegs    = [];
+    this.pandoraBox    = null;
     this.zone          = null;
     this.bossPhase = 1;
     this.prevBossHp = Infinity;
@@ -141,6 +177,7 @@ export class BossSystem {
   _getBossCurrentHp() {
     if (this.zone === 'red') return this.turtleShell?.hp ?? Infinity;
     if (this.zone === 'cyan') return this.lakeBoss?.hp ?? Infinity;
+    if (this.zone === 'yellow') return this.pandoraBox?.hp ?? Infinity;
     return this.dragon?.hp ?? Infinity;
   }
 
@@ -164,6 +201,15 @@ export class BossSystem {
       return;
     }
 
+    const pb = room.enemies.find(e => e instanceof PandoraBox && e.hp > 0) ?? null;
+    if (pb) {
+      this.pandoraBox = pb;
+      this.pandoraBox.setTarget(this.game.player);
+      this.zone   = 'yellow';
+      this.active = true;
+      return;
+    }
+
     this.dragon = room.enemies.find(e => e instanceof GooDragon && e.hp > 0) ?? null;
     this.heads  = room.enemies.filter(e => e instanceof GooHead && e.hp > 0);
     this.zone   = this.game.zoneSystem.currentZone;
@@ -176,6 +222,7 @@ export class BossSystem {
     if (!this.active) return;
     if (this.lakeBoss)    { this._updateLakeBoss(deltaTime); this._trackBossDamage(); return; }
     if (this.turtleShell) { this._updateRedBoss(deltaTime);  this._trackBossDamage(); return; }
+    if (this.pandoraBox)  { this._updateYellowBoss(deltaTime); this._trackBossDamage(); return; }
     if (!this.dragon) return;
 
     // Phase transitions
@@ -583,6 +630,18 @@ export class BossSystem {
         blob.hutPlane = !!this.game.activeFloor;
         this.game.gooBlobs.push(blob);
         while (this.game.gooBlobs.length > 20) this.game.gooBlobs.shift();
+      } else if (atk.type === 'lightning_strike') {
+        // Yellow boss: schedule a lightning strike via LightningStrikeSystem
+        if (this.game.lightningStrikeSystem) {
+          this.game.lightningStrikeSystem.scheduleStrike({
+            x: atk.position.x,
+            y: atk.position.y,
+            delay: 0.3,       // short warning for the chaotic yellow phase
+            damage: 4,
+            hitsPlayer: true,
+            source: 'boss'
+          });
+        }
       } else {
         // Regular projectile via CombatSystem
         this.game.combatSystem.createEnemyAttack({
@@ -888,6 +947,38 @@ export class BossSystem {
       if (bossSet.has(enemies[i])) enemies.splice(i, 1);
     }
     this.game.menuSystem.showPickupMessage('The Ancient Shell is defeated!', '#ff8800', 3.0);
+    this._grantBossReward();
+    this.deactivate();
+  }
+
+  // ── Yellow zone boss: Pandora's Box ──────────────────────────────────────
+
+  _updateYellowBoss(deltaTime) {
+    const box = this.pandoraBox;
+    if (!box) return;
+
+    // Phase transition
+    if (this.bossPhase === 1 && box.hp <= PANDORA_PHASE2_HP) {
+      this.bossPhase = 2;
+      box.transitionToPhase(2);
+    }
+
+    // Drain attacks queued by the box → CombatSystem
+    this._drainPendingAttacks(box);
+
+    // Check defeat
+    if (box.hp <= 0) {
+      this._onPandoraBoxDefeated();
+    }
+  }
+
+  _onPandoraBoxDefeated() {
+    this.game.zoneSystem.markBossDefeated(this.zone);
+    const enemies = this.game._activeEnemies();
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      if (enemies[i] === this.pandoraBox) enemies.splice(i, 1);
+    }
+    this.game.menuSystem.showPickupMessage('Pandora\'s Box is defeated!', '#ffcc00', 3.0);
     this._grantBossReward();
     this.deactivate();
   }

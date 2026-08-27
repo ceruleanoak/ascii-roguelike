@@ -45,6 +45,10 @@ export class BackgroundObject {
     // Rock poke drop ('/' interaction → zone mineral) is claimable once per rock.
     this.pokeMineralClaimed = false;
 
+    // Mana gem instance fields (set at placement for boss room gems)
+    this.manaGemColor = options.manaGemColor || this.data.manaGemColor || null;
+    this.pulseTimer = 0;
+
     this.animationTimer = 0;
     this.currentAnimation = null;
     this.animationOffset = { x: 0, y: 0 };
@@ -349,6 +353,11 @@ export class BackgroundObject {
       this.spawnImmunityTimer = Math.max(0, this.spawnImmunityTimer - deltaTime);
     }
 
+    // Mana gem pulse animation
+    if (this.data.manaGem) {
+      this.pulseTimer += deltaTime;
+    }
+
     // Update fire state
     if (this.onFire) {
       this.fireTimer += deltaTime;
@@ -580,6 +589,20 @@ export class BackgroundObject {
     if (this.puzzleSignal) {
       const result = this.takeDamage(1);
       return { bulletBehavior: 'block', effect: result.effect, shouldDestroyBullet: true, message: null, object: this };
+    }
+
+    // Mana gems: indestructible but projectiles pass through and gain affinity
+    if (this.data.manaGem) {
+      this._playAnimation('flash');
+      if (bullet.manaGemCooldownUntil && performance.now() < bullet.manaGemCooldownUntil) {
+        return { bulletBehavior: 'pass-through', effect: null, shouldDestroyBullet: false, message: null, object: this };
+      }
+      const gemColor = this.manaGemColor || this.data.manaGemColor;
+      if (gemColor) {
+        bullet.affinity = gemColor;
+        bullet.manaGemCooldownUntil = performance.now() + 3000;
+      }
+      return { bulletBehavior: 'pass-through', effect: null, shouldDestroyBullet: false, message: null, object: this };
     }
 
     // Pass-through and pass-through-slow always win, even for indestructible objects

@@ -42,10 +42,12 @@ import { CameraZoomSystem } from './systems/CameraZoomSystem.js';
 import { RoundCombatSystem } from './systems/RoundCombatSystem.js';
 import { AquiferSystem } from './systems/AquiferSystem.js';
 import { SinkholeSystem } from './systems/SinkholeSystem.js';
+import { ThreeRoomSystem } from './systems/ThreeRoomSystem.js';
 import { BossSystem } from './systems/BossSystem.js';
 import { BoulderSystem } from './systems/BoulderSystem.js';
 import { CentipedeSystem } from './systems/CentipedeSystem.js';
 import { SpellSystem } from './systems/SpellSystem.js';
+import { WishSystem } from './systems/WishSystem.js';
 import { RidgeSystem } from './systems/RidgeSystem.js';
 import { PolymorphSystem } from './systems/PolymorphSystem.js';
 import { TransmutationSystem } from './systems/TransmutationSystem.js';
@@ -75,6 +77,7 @@ import { WeaponsMasterSystem } from './systems/WeaponsMasterSystem.js';
 import { ShopSystem } from './systems/ShopSystem.js';
 import { PearlSystem } from './systems/PearlSystem.js';
 import { CompanionSystem } from './systems/CompanionSystem.js';
+import { CommandSystem } from './systems/CommandSystem.js';
 import { WorldEffectsSystem } from './systems/WorldEffectsSystem.js';
 import { EnemyUpdateSystem } from './systems/EnemyUpdateSystem.js';
 import { PauseSystem } from './systems/PauseSystem.js';
@@ -197,10 +200,12 @@ class Game {
     this.roundCombatSystem = new RoundCombatSystem(this); // Quagmire wave combat
     this.aquiferSystem = new AquiferSystem(this);         // frog-only plane-1 Aquifer (Quagmire dive)
     this.sinkholeSystem = new SinkholeSystem(this);       // concealed G-room shortcut → yellow-zone U room
+    this.threeRoomSystem = new ThreeRoomSystem();          // the source room: N×3 + gray '3' discoveries, Death behind its door
     this.bossSystem = new BossSystem(this);
     this.boulderSystem = new BoulderSystem(this);
     this.centipedeSystem = new CentipedeSystem(this);
     this.spellSystem = new SpellSystem(this);
+    this.wishSystem = new WishSystem();
     this.ridgeSystem = new RidgeSystem(this);
     this.polymorphSystem = new PolymorphSystem();
     this.transmutationSystem = new TransmutationSystem(this);
@@ -226,6 +231,7 @@ class Game {
     this.consumableTriggerSystem = new ConsumableTriggerSystem(this);
     this.campNPCSystem = new CampNPCSystem(this);
     this.companionSystem = new CompanionSystem(this);
+    this.commandSystem = new CommandSystem(this);
     this.worldEffectsSystem = new WorldEffectsSystem(this);
     this.enemyUpdateSystem = new EnemyUpdateSystem(this);
     this.dialogueSystem = new DialogueSystem(this);
@@ -916,8 +922,11 @@ class Game {
     this.preBossGateActive = false;
     this.preMinibossGateActive = false;
     this.knownSpells?.clear?.();
+    this.commandSystem.clearRunState();
     this.blueZoneRoom = 0;
     this.runTimerSystem.clear(); // No run in progress on TITLE — next REST entry starts a fresh timer
+    this.threeRoomSystem.hardReset();       // streak + Death state die with the run
+    this.grayThreeExitShown = false;        // the gray '3' call can happen again next run
 
     // Transient feedback dies with the session (bug #198; harness-enforced).
     this.menuSystem.clearPickupFeedback();
@@ -1180,6 +1189,10 @@ class Game {
 
   enterRestState() {
     // Note: exitPathHistory persists for future secret pattern tracking
+
+    // Coming home breaks any N×3 insistence — the streak is about walking
+    // away from the world's exits, not resting between attempts.
+    this.threeRoomSystem.breakStreak();
 
     // First REST of a run starts the run timer; later returns from EXPLORE leave it running
     this.runTimerSystem.beginIfIdle();
@@ -2144,6 +2157,10 @@ class Game {
     // Update neutral room system script
     this.neutralRoomSystem.update(deltaTime, this.currentRoom, this.player);
 
+    // Three Room runtime — Death homing once its door is open (no-ops
+    // everywhere else via the room's isThreeRoom flag).
+    this.threeRoomSystem.update(deltaTime, this);
+
     // Wind (e.g. Oasis, flagged room.windThemed) — no-ops for rooms that
     // aren't yellow/wind-themed, same guard as the EXPLORE loop.
     this.sandstormSystem.bindToRoom(this.currentRoom);
@@ -2906,6 +2923,12 @@ class Game {
 
     // Slime contact, puddle contact, slow timers, trails — delegated to systems
     this.enemyUpdateSystem.update(deltaTime);
+    // Commanded warband follow/prune pass — runs AFTER the canonical enemy
+    // tick so its steering writes are what physics integrates this frame.
+    // rest-parity: absent from updateRestState because the roster parks in
+    // non-EXPLORE states by design (CommandSystem.update early-outs on an
+    // empty roster; there is no degraded-in-hub behavior to guard).
+    this.commandSystem.update();
     this.worldEffectsSystem.updateEntityTrails(deltaTime);
 
     // Held-item ticking + windup completion live in updatePlayerMechanics
@@ -3463,6 +3486,13 @@ class Game {
     const crossedNorthExit = prevPx.y >= northThreshold && playerPx.y < northThreshold && gridPos.x === centerX;
     if ((inNorthExit || crossedNorthExit || isPressingIntoExitGap(this.player, this.keys, 'north')) && this.currentRoom.exits.north && (!this.currentRoom.exitsLocked || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0) {
       const exitObj = this.currentRoom.exits.north;
+
+      // The Three takes this exit whole — no path history, no generation.
+      if (exitObj?.threeRoom) {
+        this.animateExitWarp('north', () => this.transitionToNeutralRoom('threeRoom', 'north'));
+        return;
+      }
+
       this.zoneSystem.recordExit(exitObj);
       this.compassSystem.onExitTaken('north');
       const letterPath = this.zoneSystem.pathHistory.map(exit => exit.letter).join('-');
@@ -3491,6 +3521,14 @@ class Game {
       // Secret pattern may route to a neutral room (e.g. D-R-A-W → drawRoom)
       if (secret?.neutralScript) {
         this.animateExitWarp('north', () => this.transitionToNeutralRoom(secret.neutralScript, 'north'));
+        return;
+      }
+
+      // Third consecutive north: the world runs out and the source answers
+      // instead. Existing secrets keep precedence; the streak records after
+      // them but before generic deeper generation.
+      if (this.threeRoomSystem.recordNorthTraversal()) {
+        this.animateExitWarp('north', () => this.transitionToNeutralRoom('threeRoom', 'north'));
         return;
       }
 
@@ -3540,6 +3578,7 @@ class Game {
         const crossedEastExit = prevPx.x < eastThreshold && playerPx.x >= eastThreshold && gridPos.y === centerY;
         if ((inEastExit || crossedEastExit || isPressingIntoExitGap(this.player, this.keys, 'east')) && this.currentRoom.exits.east && (!this.currentRoom.exitsLocked || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0) {
           const exitObj = this.currentRoom.exits.east;
+          this.threeRoomSystem.breakStreak(); // only consecutive norths count
           this.zoneSystem.recordExit(exitObj);
           this.compassSystem.onExitTaken('east');
           const letterPath = this.zoneSystem.pathHistory.map(exit => exit.letter).join('-');
@@ -3589,6 +3628,7 @@ class Game {
           const crossedWestExit = prevPx.x >= westThreshold && playerPx.x < westThreshold && gridPos.y === centerY;
           if ((inWestExit || crossedWestExit || isPressingIntoExitGap(this.player, this.keys, 'west')) && this.currentRoom.exits.west && (!this.currentRoom.exitsLocked || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0) {
             const exitObj = this.currentRoom.exits.west;
+            this.threeRoomSystem.breakStreak(); // only consecutive norths count
             this.zoneSystem.recordExit(exitObj);
             this.compassSystem.onExitTaken('west');
             const letterPath = this.zoneSystem.pathHistory.map(exit => exit.letter).join('-');
@@ -3937,6 +3977,12 @@ class Game {
           this.renderer.markBackgroundDirty();
         }
       }
+      else if (nearbyObject?.threeDoor) {
+        // The shut way north — ThreeRoomSystem owns the opening and what it
+        // releases; a second press on an already-open door falls through here
+        // and is refused inside the system.
+        this.threeRoomSystem.handleDoorPress(this);
+      }
     }
   }
 
@@ -3989,6 +4035,11 @@ class Game {
     // Reset Spectacles key-item run-flag (Maze clear-without-a-ghost reward)
     this.spectaclesObtainedThisRun = false;
 
+    // Three Room run-state: the gray '3' call can happen again next run, and
+    // the N×3 streak starts clean.
+    this.grayThreeExitShown = false;
+    this.threeRoomSystem.hardReset();
+
     // Reset fairy run-flag for new run
     this.fairiesAngered = false;
     this.chiBladeFound = false;
@@ -3996,6 +4047,8 @@ class Game {
     this.companionCrows = [];
     this.followerCrows = [];
     this.tamedRats = [];
+    // Commanded warband dies with the run like every companion roster
+    this.commandSystem.clearRunState();
     this.ridgeBridgeBuilt = false;
 
     // Same transient-feedback clears as TITLE (bug #198 family).
@@ -4307,6 +4360,9 @@ class Game {
     }
     this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
     this.companionSystem.registerTamedRatsWithPhysics();
+    // Commanded warband surfaces into the new room beside the player (parks
+    // itself when an interior owns the floor).
+    this.commandSystem.onRoomSwap(room);
 
     // Reset combat
     this.combatSystem.clear();
@@ -4625,142 +4681,6 @@ class Game {
 
   findSpawnPosition(center, range, collisionMap, enemies) {
     return this.roomGenerator.findSpawnPosition(center, range, collisionMap, enemies);
-  }
-
-  /**
-   * Execute a CLEANSE wish — destroys all non-player, non-background entities,
-   * consumes one wish, and permanently destroys the highest available quick slot.
-   */
-  executeCleanse() {
-    if (this.wishesUsed >= 3) return;
-
-    // Consume one wish and destroy the corresponding quick slot (0→1→2 as wishes used)
-    const slotIdx = this.wishesUsed; // wish 1 → slot 0, wish 2 → slot 1, wish 3 → slot 2
-    this.wishesUsed++;
-
-    this._savedDestroyedSlots[slotIdx] = true;
-    if (this.player) {
-      // Move item to an empty slot before destroying this one
-      const item = this.player.quickSlots[slotIdx];
-      if (item) {
-        const emptySlot = this.player.quickSlots.findIndex(
-          (s, i) => i !== slotIdx && s === null && !this.player.destroyedSlots[i]
-        );
-        if (emptySlot !== -1) this.player.quickSlots[emptySlot] = item;
-      }
-      this.player.quickSlots[slotIdx] = null;
-      this.player.destroyedSlots[slotIdx] = true;
-      // Shift active slot away from any destroyed slot
-      if (this.player.destroyedSlots[this.player.activeSlotIndex]) {
-        const next = this.player.quickSlots.findIndex((_, i) => !this.player.destroyedSlots[i]);
-        if (next !== -1) this.player.activeSlotIndex = next;
-      }
-    }
-
-    // Clear all non-player, non-background entities
-    if (this.currentRoom) {
-      this.currentRoom.enemies = [];
-    }
-    this.combatSystem.clear();
-    this._resetEnvironmentalEffects();
-    this.items = [];
-    this.ingredients = [];
-
-    // Play wave animation
-    this.cleanseWave = { startTime: performance.now(), duration: 1400 };
-
-    this.renderController.screenShake.trigger();
-    this.updateUI();
-  }
-
-  /**
-   * Execute a REVIVE wish — consumes a wish and continues the current fight
-   * in place without resetting the room. Zone depths, run state, and all
-   * living enemies are preserved.
-   */
-  executeRevive() {
-    if (this.wishesUsed >= 3) return;
-    if (this.stateMachine.getCurrentState() !== GAME_STATES.GAME_OVER) return;
-
-    // Ledger: the preceding 'death' record shares this runId — a 'revive'
-    // record marks that death as undone, so analysis can tell wish-revived
-    // deaths from run-ending ones. Snapshot before slots are destroyed.
-    captureDeath(this, { event: 'revive', revivedBy: 'wish' });
-
-    // Consume a wish and destroy a slot (same order as CLEANSE: 0→1→2)
-    const slotIdx = this.wishesUsed;
-    this.wishesUsed++;
-
-    this._savedDestroyedSlots[slotIdx] = true;
-    if (this.player) {
-      // Move item to an empty slot before destroying this one
-      const item = this.player.quickSlots[slotIdx];
-      if (item) {
-        const emptySlot = this.player.quickSlots.findIndex(
-          (s, i) => i !== slotIdx && s === null && !this.player.destroyedSlots[i]
-        );
-        if (emptySlot !== -1) this.player.quickSlots[emptySlot] = item;
-      }
-      this.player.quickSlots[slotIdx] = null;
-      this.player.destroyedSlots[slotIdx] = true;
-      // Shift active slot away from any destroyed slot
-      if (this.player.destroyedSlots[this.player.activeSlotIndex]) {
-        const next = this.player.quickSlots.findIndex((_, i) => !this.player.destroyedSlots[i]);
-        if (next !== -1) this.player.activeSlotIndex = next;
-      }
-    }
-    // Clear the REST-saved slot so enterRestState() won't restore an item into it
-    if (this.inventorySystem.restQuickSlots) {
-      this.inventorySystem.restQuickSlots[slotIdx] = null;
-    }
-    // Sanitize restActiveSlotIndex so enterRestState() doesn't restore a destroyed slot as active
-    if (this._savedDestroyedSlots[this.inventorySystem.restActiveSlotIndex ?? 0]) {
-      const next = this._savedDestroyedSlots.findIndex(d => !d);
-      this.inventorySystem.restActiveSlotIndex = next !== -1 ? next : 0;
-    }
-
-    // If a character-death swap was pending, undo it — the revived run continues with this character
-    if (this.characterDeathPending) {
-      const deadIdx = this.deadCharacters.indexOf(this.activeCharacterType);
-      if (deadIdx !== -1) this.deadCharacters.splice(deadIdx, 1);
-      this.characterDeathPending = false;
-      this.characterDeathTimer = 0;
-      this.pendingNextCharacter = null;
-      this.characterDeathName = '';
-    }
-
-    // Restore player at half HP with a brief invulnerability window
-    if (this.player) {
-      this.player.hp = Math.ceil(this.player.maxHp * 0.5);
-      this.player.invulnerabilityTimer = 5.0;
-      this.player.velocity.vx = 0;
-      this.player.velocity.vy = 0;
-      this.player._killedByGhost = false;
-    }
-
-    // Clear death screen state
-    this.gameOverWaitingForSpace = false;
-    this.gameOverDeathTimer = 0;
-
-    // Clear death explosion particles (leave environmental debris)
-    this.particles = [];
-
-    // Reactivate boss AI if the player died in a boss room
-    if (this.currentRoom?.isBossRoom) {
-      this.bossSystem.reactivate(this.currentRoom);
-    }
-
-    // Resume music
-    this.audioSystem.play();
-
-    // Force background redraw
-    this.renderer.markBackgroundDirty();
-
-    // Return to EXPLORE without regenerating the room (bypass the state handler)
-    this.stateMachine.currentState = GAME_STATES.EXPLORE;
-
-    this.renderController.screenShake.trigger();
-    this.updateUI();
   }
 
   bankLoot() {

@@ -217,6 +217,15 @@ export class ExitSystem {
       south: !ZONES[zoneType]?.noRest  // South is boolean (return to REST); noRest zones have no way back
     };
 
+    // The inevitable call — once per run, at gray depth 3, the north exit's
+    // own signage turns into '3'. Taking it routes to the Three Room (the
+    // north-exit block in main.js intercepts exit.threeRoom); LOOK NORTH here
+    // answers through EXIT_LETTERS['3'].
+    if (zoneType === 'gray' && currentDepth === 3 && !this.game?.grayThreeExitShown) {
+      this.game.grayThreeExitShown = true;
+      exits.north = { letter: '3', color: '#999999', threeRoom: true };
+    }
+
     return exits;
   }
 

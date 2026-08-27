@@ -36,6 +36,7 @@ import { BossRenderer } from './BossRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
 import { isInteriorActive } from '../../systems/PlaneSystem.js';
 import { drawUndergroundFogOverlay } from '../ui/torchLight.js';
+import { drawManaGems } from '../effects/ManaGemRenderer.js';
 import { stepConcealmentAlpha } from '../../systems/WorldEffectsSystem.js';
 import { ConsumableTriggerSystem } from '../../systems/ConsumableTriggerSystem.js';
 import { drawFracturedRock } from '../sprites/fracturedRockSprite.js';
@@ -459,6 +460,9 @@ export class ExploreRenderer {
       );
     }
 
+    // Draw mana gems on foreground with pulsing glow (boss room)
+    drawManaGems(this.renderer, game);
+
     // Draw revealed Sinkholes on foreground each frame so the in-range
     // highlight (SPACE would trigger a dive) tracks player movement live.
     drawSinkholes(this.renderer, game);
@@ -739,7 +743,12 @@ export class ExploreRenderer {
     // Draw non-sapping enemies first (so they render behind player)
     // Skip when interior (overlay calls drawNonSappingEnemies after translate with activeFloor enemies)
     if (!playerInInterior) {
-      this.drawNonSappingEnemies(game, game.activeRoom.enemies);
+      // Commanded warband renders through the same Enemy pass — full Enemy
+      // instances, and the charm slot lights the shared magenta tint.
+      const commanded = game.commandedEnemies ?? [];
+      this.drawNonSappingEnemies(game, commanded.length
+        ? [...game.activeRoom.enemies, ...commanded]
+        : game.activeRoom.enemies);
       drawOffscreenEnemyIndicators(this.renderer, game, game.activeRoom.enemies);
       // Tamed rats render through a dedicated minimal path — NPCRat doesn't
       // implement the full Enemy indicator surface (windup/memory/detection
@@ -993,7 +1002,12 @@ export class ExploreRenderer {
     if (!playerInInterior) this.drawInFlightTraps(game, false);
 
     // Draw sapping enemies on top of player — skip when interior (overlay handles via its own drawSappingEnemies call)
-    if (!playerInInterior) this.drawSappingEnemies(game, game.activeRoom.enemies);
+    if (!playerInInterior) {
+      const commandedForSap = game.commandedEnemies ?? [];
+      this.drawSappingEnemies(game, commandedForSap.length
+        ? [...game.activeRoom.enemies, ...commandedForSap]
+        : game.activeRoom.enemies);
+    }
 
     // Sniper reticule on top of player (see SniperEffects.js — was previously
     // drawn in the enemy pass, before the player, so it rendered behind them).

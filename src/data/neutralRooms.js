@@ -415,18 +415,80 @@ export const NEUTRAL_ROOMS = {
   },
 
   /**
-   * Three Room — the view from the ridge. Stub placeholder.
-   * A centered '3' marker hints at the three zones ahead.
+   * Three Room — the source. An emptied room, mist cleared, holding the three
+   * slots in a pyramid and one shut way north. Typing here holds a
+   * conversation instead of an observation (spells.js "The Three"). SPACE
+   * near the door opens it; ThreeRoomSystem owns everything that happens
+   * after that.
    */
   threeRoom: {
     onGenerate(room, state) {
-      const cx = Math.floor(GRID.COLS / 2) * GRID.CELL_SIZE;
-      const cy = Math.floor(GRID.ROWS / 2) * GRID.CELL_SIZE;
-      const marker = new BackgroundObject('3', cx, cy);
-      marker.indestructible = true;
-      marker.color = '#888888';
-      marker.animationColor = '#888888';
-      room.backgroundObjects.push(marker);
+      room.isThreeRoom = true;
+      room.borderColor = '#666666';
+
+      const cx = Math.floor(GRID.COLS / 2);
+      const cy = Math.floor(GRID.ROWS / 2);
+
+      // The slots — pyramid arrangement: apex above, two at the base. Inert
+      // until the pattern is authored; wrong offerings are refused silently,
+      // like every other non-instructive gate in the game.
+      //
+      // DESIGN INTENT — recorded here for the build that lands, not built yet:
+      //
+      // Each slot accepts one of two truths, and the choice is the ending.
+      //
+      //   The Voice desires the player's three powers placed in it: the
+      //   Weapon of Instinct, the Armor of Experience, the Consumable of
+      //   Convention (form-to-slot: weapon/armor/consumable; which physical
+      //   slot takes which power is still undecided — apex/base-left/base-
+      //   right). What feeding the Voice YIELDS is also still the author's
+      //   call — center-mark completion, corruption, something else; the
+      //   cosmology doc's "Know it" ending is one candidate, not a given.
+      //
+      //   The alternative is the true 3: Justice in the weapon slot, Truth
+      //   in the armor, Help in the consumable. The Voice is wary of exactly
+      //   this. Fixing the pattern with the true 3 does two things, and the
+      //   sequencing between them is deliberately unresolved:
+      //     - it opens the way north FOR REAL — behind the door stands the
+      //       final game boss: Death, inevitable, unrelenting, impossible
+      //       to defeat (the door itself is already live; ThreeRoomSystem);
+      //     - it liberates the path SOUTH OF REST — an escape that ends the
+      //       game by PERMISSION. The teaching is the point: the player was
+      //       always waiting for the game's permission to be done, something
+      //       most players never recognized was the agreement to begin with.
+      //       This is the fourth path. HOW TO ESCAPE answers ONLY ONE WAY;
+      //       whether that one way is leaving or walking north is the final
+      //       reading of the whole game and is NOT yet decided.
+      //
+      //   Item identities TBD — draw against claudedocs/legend-of-three.md
+      //   and docs/adr/BACKLOG.md's P1 row before authoring anything.
+      const slotCells = [
+        { col: cx,     row: cy - 3 }, // apex
+        { col: cx - 4, row: cy + 3 }, // base left
+        { col: cx + 4, row: cy + 3 }  // base right
+      ];
+      slotCells.forEach((cell, idx) => {
+        const slot = new BackgroundObject('_', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
+        slot.indestructible = true;
+        slot.color = '#887755';
+        slot.animationColor = '#887755';
+        slot.threeSlot = idx; // 0 = apex, 1 = base-left, 2 = base-right
+        room.backgroundObjects.push(slot);
+      });
+
+      // The shut way north. It opens; nothing good is behind it.
+      const doorCol = cx;
+      const doorRow = 2;
+      const door = new BackgroundObject('∩', doorCol * GRID.CELL_SIZE, doorRow * GRID.CELL_SIZE);
+      door.indestructible = true;
+      door.structural = true;
+      door.hasCollision = true;
+      door.color = '#cccccc';
+      door.animationColor = '#cccccc';
+      door.threeDoor = true;
+      door.threeDoorCell = { col: doorCol, row: doorRow };
+      room.backgroundObjects.push(door);
+      room.collisionMap[doorRow][doorCol] = true;
     },
 
     onInteract(target, player, room, state) { return null; },

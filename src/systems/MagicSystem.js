@@ -141,6 +141,47 @@ export class MagicSystem {
     return granted;
   }
 
+  // Boss-specific mana slot: temporarily grants a slot from a mana gem hit.
+  // Reverts after 3s or when depleted, re-equipping the last consumable.
+  grantBossManaSlot(player) {
+    if (!player?.magicMeter) return false;
+    if (player.magicMeter.bossSlotActive) return false;
+    // Find a free consumable slot to convert
+    const inv = player.inventory || [];
+    let targetIdx = -1;
+    for (let i = 0; i < inv.length; i++) {
+      if (inv[i] && inv[i].type === 'CONSUMABLE' && !player.magicMeter.slots.includes(i)) {
+        targetIdx = i;
+        break;
+      }
+    }
+    if (targetIdx < 0) return false;
+    player.magicMeter.bossSlotActive = true;
+    player.magicMeter.bossSlotIndex = targetIdx;
+    player.magicMeter.bossSlotOriginal = inv[targetIdx];
+    player.magicMeter.bossSlotTimer = 3.0;
+    this.activateMagicMeter(player);
+    return true;
+  }
+
+  revertBossManaSlot(player) {
+    if (!player?.magicMeter?.bossSlotActive) return;
+    const meter = player.magicMeter;
+    const idx = meter.bossSlotIndex;
+    // Remove the slot from meter
+    const slotPos = meter.slots.indexOf(idx);
+    if (slotPos >= 0) meter.slots.splice(slotPos, 1);
+    // Restore original consumable
+    if (meter.bossSlotOriginal && player.inventory) {
+      player.inventory[idx] = meter.bossSlotOriginal;
+    }
+    meter.bossSlotActive = false;
+    meter.bossSlotIndex = -1;
+    meter.bossSlotOriginal = null;
+    meter.bossSlotTimer = 0;
+    this.recalcMax(meter);
+  }
+
   // Character-specific modifier applied on top of earned mana-slot conversions.
   // Yellow's +1 is granted directly as a real converted slot (see
   // grantYellowFreeManaSlot) so it isn't double-counted here — only Red
@@ -251,7 +292,17 @@ export class MagicSystem {
     this._updateGemWandAutoCast();
     this._updateChargeHammer();
     this._updateTempManaSlot(dt);
+    this._updateBossManaSlot(dt);
     this._updateStaffGrassEffects(dt);
+  }
+
+  _updateBossManaSlot(dt) {
+    const meter = this.game.player?.magicMeter;
+    if (!meter?.bossSlotActive) return;
+    meter.bossSlotTimer -= dt;
+    if (meter.bossSlotTimer <= 0) {
+      this.revertBossManaSlot(this.game.player);
+    }
   }
 
   // Emerald Staff grass: standing inside a patch the player grew slowly heals

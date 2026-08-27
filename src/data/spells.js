@@ -1,5 +1,6 @@
 import { EXIT_LETTERS } from './exitLetters.js';
 import { ZONES } from './zones.js';
+import { ENEMIES } from './enemies.js';
 import { GAME_STATES, ROOM_TYPES } from '../game/GameConfig.js';
 
 
@@ -95,7 +96,10 @@ function _lookArmor(game) {
 function _lookEnemy(game) {
   const e = _closestEnemy(game);
   if (!e) return 'NO ENEMIES NEAR.';
-  return e.data?.spellDescription || e.data?.name?.toUpperCase() || 'SOMETHING HOSTILE.';
+  // LOOK ENEMY betrays the true name — the word CALL/COMMAND answers to
+  // (CommandSystem). The epitaph stays one tier deeper: naming the beast by
+  // its common name still describes it; LOOK ENEMY names what it IS.
+  return e.data?.trueName || e.data?.spellDescription || e.data?.name?.toUpperCase() || 'SOMETHING HOSTILE.';
 }
 
 /** Returns ordinal string for the nth wish (1-indexed). */
@@ -111,7 +115,7 @@ function _cleanseResponse(game) {
 
 /** Action fired when player confirms a CLEANSE wish. */
 function _grantWish(game) {
-  if (game.wishesUsed < 3) game.executeCleanse();
+  if (game.wishesUsed < 3) game.wishSystem?.executeCleanse(game);
 }
 
 /** Response for REVIVE — fires immediately without confirmation. */
@@ -122,7 +126,7 @@ function _reviveResponse(game) {
 
 /** Action fired immediately on REVIVE. */
 function _grantRevive(game) {
-  if (game.wishesUsed < 3) game.executeRevive();
+  if (game.wishesUsed < 3) game.wishSystem?.executeRevive(game);
 }
 
 /** SIT/SITDOWN — lowers a raised witch hut so the player can enter. */
@@ -155,6 +159,20 @@ function _buildBridgeAction(game) {
     game.ridgeSystem.buildBridgeViaSpell();
   }
 }
+
+// ── True-name command (CALL / COMMAND) ──────────────────────────────────────
+//
+// Every registry enemy bears a trueName (enemies.js). Speaking CALL or
+// COMMAND enters the awaiting state; the next submitted word is checked
+// against this map — a true name permanently charms the nearest bearer via
+// CommandSystem, whose return line IS the response (house pattern: HEX's
+// response applies its own effect). Unknown words fall through to '...
+// NOTHING.'; the awaiting state also resets on any room/state transition.
+const COMMAND_FOLLOWUPS = Object.fromEntries(
+  Object.values(ENEMIES)
+    .filter(d => d.trueName)
+    .map(d => [d.trueName, (game) => game.commandSystem?.commandNearest(d.trueName) ?? '...NOTHING.'])
+);
 
 export const SPELLS = {
   'HEX': {
@@ -292,6 +310,18 @@ export const SPELLS = {
       'TWO':   'MORE THAN TWO.',
       'FOUR':  'LESS THAN FOUR.',
     },
+  },
+
+  // Command by true name — both words share one grammar and one warband
+  // (CommandSystem: permanent charm, max three, boss-tier refuses).
+  'CALL': {
+    response: 'CALL WHOM?',
+    followUps: COMMAND_FOLLOWUPS,
+  },
+
+  'COMMAND': {
+    response: 'COMMAND WHOM?',
+    followUps: COMMAND_FOLLOWUPS,
   },
 
   'LOOKENEMY': { response: (game) => _lookEnemy(game) },

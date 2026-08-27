@@ -36,6 +36,7 @@ export class BossRenderer {
     if (!bs?.active) return;
     if (bs.lakeBoss)    { this.renderLakeBossComposite(game); return; }
     if (bs.turtleShell) { this.renderTurtleBossComposite(game); return; }
+    if (bs.pandoraBox)  { this.renderPandoraBoxComposite(game); return; }
     if (!bs.dragon) return;
 
     const dragon = bs.dragon;
@@ -599,5 +600,114 @@ export class BossRenderer {
       ctx.fillStyle = maw.bossPhase >= 3 ? '#ffd700' : maw.bossPhase === 2 ? '#ffcc44' : '#22cc44';
       ctx.fillRect(barX, barY, BAR_W * Math.max(0, maw.hp / maw.maxHp), BAR_H);
     }
+  }
+
+  // ── Pandora's Box (Yellow Zone Boss) ──────────────────────────────────────
+
+  renderPandoraBoxComposite(game) {
+    const box = game.bossSystem?.pandoraBox;
+    if (!box || box.hp <= 0) return;
+
+    const cs  = GRID.CELL_SIZE;
+    const ctx = this.renderer.fgCtx;
+    const cx  = box.position.x;
+    const cy  = box.position.y + box.bounceOffset;
+
+    // Affinity face characters (2-face view: left face + right face)
+    const FACE_CHARS = {
+      red:    { left: '|', right: '/' },
+      green:  { left: 'o', right: 'O' },
+      blue:   { left: '*', right: '+' },
+      yellow: { left: '~', right: '⚡' }
+    };
+
+    const AFFINITY_COLORS = {
+      red:    '#ff3333',
+      green:  '#33cc33',
+      blue:   '#3388ff',
+      yellow: '#ffcc00'
+    };
+
+    const face = FACE_CHARS[box.currentAffinity];
+    const faceColor = AFFINITY_COLORS[box.currentAffinity];
+
+    // I-frame flash
+    const isFlashing = box.hitFlash && box.invulnerabilityTimer > 0
+      && Math.floor(performance.now() / 1000 * 24) % 2 === 0;
+
+    // Near-death blink
+    const nearDeathColor = box.getNearDeathBlinkColor?.() ?? null;
+    const drawColor = nearDeathColor ?? (isFlashing ? '#ffffff' : faceColor);
+
+    // Gray top row
+    const topY = cy - cs * 1.5;
+    const GRAY = '#666666';
+    const grayColor = isFlashing ? '#ffffff' : GRAY;
+
+    // ── Gray top row (4 cells) ─────────────────────────────────────────────
+    for (let col = -2; col <= 1; col++) {
+      this.renderer.drawEntity(cx + col * cs, topY, '░', grayColor);
+    }
+
+    // ── Spinning body (4×3 cells: 4 columns, 3 rows showing 2 faces) ──────
+    // The spin is animated by shifting which columns show which face.
+    // During spin phase, columns shift left over time.
+    const spinProgress = box.cyclePhase === 'spin' ? box.spinProgress : 0;
+    const bodyTopY = cy - cs * 0.5;
+
+    for (let row = 0; row < 3; row++) {
+      for (let col = -2; col <= 1; col++) {
+        // Determine which face this column shows based on spin state
+        let showLeftFace;
+        if (box.cyclePhase === 'spin') {
+          // During spin: columns shift left, wrapping
+          const shifted = col + Math.floor(spinProgress * 4);
+          showLeftFace = shifted < 0;
+        } else {
+          // After spin: left 2 cols = current face, right 2 cols = next face preview
+          showLeftFace = col < 0;
+        }
+
+        const char = showLeftFace ? face.left : face.right;
+        const color = drawColor;
+
+        // Lull dimming
+        const lullDim = box.isLull ? 0.6 : 1.0;
+        const finalColor = this._dimColor(color, lullDim);
+
+        this.renderer.drawEntity(cx + col * cs, bodyTopY + row * cs, char, finalColor);
+      }
+    }
+
+    // ── Phase 2 indicator: rapid color pulse on all faces ──────────────────
+    if (box.bossPhase === 2) {
+      const pulse = Math.sin(performance.now() / 1000 * 12) * 0.3 + 0.7;
+      const pulseColor = this._dimColor(drawColor, pulse);
+      // Draw a border char around the box
+      for (let col = -2; col <= 1; col++) {
+        this.renderer.drawEntity(cx + col * cs, bodyTopY - cs * 0.5, '·', pulseColor);
+        this.renderer.drawEntity(cx + col * cs, bodyTopY + cs * 2.5, '·', pulseColor);
+      }
+    }
+
+    // ── HP bar ─────────────────────────────────────────────────────────────
+    if (box.hasTakenDamage) {
+      const BAR_W = cs * 4;
+      const BAR_H = 4;
+      const barX = cx - BAR_W / 2;
+      const barY = topY - cs * 1.0;
+      ctx.fillStyle = '#333333';
+      ctx.fillRect(barX, barY, BAR_W, BAR_H);
+      ctx.fillStyle = box.bossPhase === 2 ? '#ffcc00' : '#8844ff';
+      ctx.fillRect(barX, barY, BAR_W * Math.max(0, box.hp / box.maxHp), BAR_H);
+    }
+  }
+
+  _dimColor(hexColor, factor) {
+    // Simple brightness multiplier on a hex color
+    const r = parseInt(hexColor.slice(1, 3), 16);
+    const g = parseInt(hexColor.slice(3, 5), 16);
+    const b = parseInt(hexColor.slice(5, 7), 16);
+    return `rgb(${Math.round(r * factor)},${Math.round(g * factor)},${Math.round(b * factor)})`;
   }
 }
