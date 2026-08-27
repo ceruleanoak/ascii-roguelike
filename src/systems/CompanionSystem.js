@@ -545,7 +545,7 @@ export class CompanionSystem {
       });
     };
 
-    for (const crow of crows) {
+    for (const crow of [...crows]) {
       crow.update(deltaTime, bgObjects, crows, breadItems, onAteBread, lootItems, onGrabLoot);
 
       // Tagged threats: weapon contact counts as an attack and shakes
