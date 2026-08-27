@@ -560,6 +560,13 @@ export class PhysicsSystem {
       this.enforceGridBounds(entity);
     }
 
+    // Items and ingredients must not enter exit zones — the exit warp
+    // animation and pickup-timing window make them unreachable there.
+    // Bounce them back so loot stays retrievable.
+    if (!isProjectile && entity.pickupCooldown !== undefined) {
+      this.resolveExitZoneCollision(entity, room);
+    }
+
     // Eject entity from any wall cells it currently overlaps (knockback / spawn-inside fix).
     // Keyed off collisionMap presence rather than hasCollision so entities that
     // don't block movement/others (e.g. Debris) still get pushed out of walls
@@ -980,6 +987,43 @@ export class PhysicsSystem {
     }
     if (entity.position.y + hitbox.height > GRID.HEIGHT) {
       entity.position.y = GRID.HEIGHT - hitbox.height;
+    }
+  }
+
+  /**
+   * Bounce items and ingredients out of exit zones. Exit warp animations
+   * and the post-animation pickup window make loot in exit lanes unreachable;
+   * this keeps drops inside the playable area where the player can grab them.
+   */
+  resolveExitZoneCollision(entity, room = null) {
+    const CS = GRID.CELL_SIZE;
+    const centerX = Math.floor(GRID.COLS / 2);
+    const centerY = Math.floor(GRID.ROWS / 2);
+    const w = entity.width || CS;
+    const h = entity.height || CS;
+    const cx = entity.position.x + w / 2;
+    const cy = entity.position.y + h / 2;
+
+    // Exit zone: a 1-cell-wide lane centred on the room edge.
+    // North — row 2, column centerX
+    if (room?.exits?.north && cx > centerX * CS && cx < (centerX + 1) * CS && cy < 3 * CS) {
+      entity.velocity.vy = Math.abs(entity.velocity.vy) || 60;
+      entity.position.y = 3 * CS;
+    }
+    // South — row ROWS-3, column centerX
+    else if (room?.exits?.south && cx > centerX * CS && cx < (centerX + 1) * CS && cy > (GRID.ROWS - 3) * CS) {
+      entity.velocity.vy = -Math.abs(entity.velocity.vy) || -60;
+      entity.position.y = (GRID.ROWS - 3) * CS - h;
+    }
+    // East — column COLS-3, row centerY
+    else if (room?.exits?.east && cy > centerY * CS && cy < (centerY + 1) * CS && cx > (GRID.COLS - 3) * CS) {
+      entity.velocity.vx = -Math.abs(entity.velocity.vx) || -60;
+      entity.position.x = (GRID.COLS - 3) * CS - w;
+    }
+    // West — column 2, row centerY
+    else if (room?.exits?.west && cy > centerY * CS && cy < (centerY + 1) * CS && cx < 3 * CS) {
+      entity.velocity.vx = Math.abs(entity.velocity.vx) || 60;
+      entity.position.x = 3 * CS;
     }
   }
 
