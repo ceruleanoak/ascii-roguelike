@@ -3125,6 +3125,10 @@ class Game {
         const bottle = this.player.equippedConsumables[bottleIdx];
         this.player.hp = this.player.maxHp;
         this.player.invulnerabilityTimer = 2.0;
+        // Clear movement-locking state so the player isn't frozen post-revive
+        // (e.g. died mid-dodge-roll — dodgeRoll.active must be false or
+        // updatePlayerMechanics zeroes input every frame; bug #1865).
+        this._clearReviveMovementLocks();
         this.combatSystem.createDamageNumber(
           bottle.char,
           this.player.position.x,
@@ -3149,6 +3153,8 @@ class Game {
         const feather = this.player.equippedConsumables[reviveIdx];
         this.player.hp = Math.floor(this.player.maxHp * 0.5);
         this.player.invulnerabilityTimer = 2.0;
+        // Clear movement-locking state so the player isn't frozen post-revive
+        this._clearReviveMovementLocks();
         this.combatSystem.createDamageNumber(
           feather.char,
           this.player.position.x,
@@ -3986,6 +3992,24 @@ class Game {
     }
   }
 
+
+  // Clear movement-locking state that would freeze the player after any revive
+  // path (wish spell, Fairy in a Bottle, Phoenix Feather). Called from the
+  // three revive sites to avoid duplicating the cleanup. Bug #1865.
+  _clearReviveMovementLocks() {
+    const p = this.player;
+    if (!p) return;
+    const dr = p.dodgeRoll;
+    dr.active = false;
+    dr.timer = 0;
+    dr.justEnded = false;
+    dr.hidden = false;
+    dr.hideTimer = 0;
+    p.grabbed = false;
+    p.hookedByWhip = false;
+    p.activeSappingBats = [];
+    p.fishingLocked = false;
+  }
 
   // True game over: full run reset (zones, inventories, spells, magic meter,
   // companions, characters, boss/audio state) and back to REST.

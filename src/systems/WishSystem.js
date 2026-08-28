@@ -126,6 +126,12 @@ export class WishSystem {
       game.player.velocity.vx = 0;
       game.player.velocity.vy = 0;
       game.player._killedByGhost = false;
+
+      // Clear any movement-locking state the player died in — dodge roll,
+      // grab, whip hook, sapping bats, fishing. Without this, a mid-roll
+      // death leaves dodgeRoll.active=true and the player frozen on revive
+      // because updatePlayerMechanics zeroes input while rolling (bug #1865).
+      game._clearReviveMovementLocks();
     }
 
     // Clear death screen state
