@@ -988,6 +988,36 @@ export const BACKGROUND_OBJECTS = {
       default: { animation: 'none', message: null }
     }
   },
+  // Sealed Vault Door — the two leaves of one door set into the Vault's south
+  // wall, behind the hoard. It never opens and has no interaction: it exists
+  // to be seen, tried, and refused. The suspicion-of-further-south rule made
+  // physical (claudedocs/dungeon-boss-green.md, "sealed inner-vault door").
+  // Two entries because a single cell cannot show a seam, and the seam is the
+  // whole read — `[]` is a shut double door, `[` alone is a bracket.
+  '[': {
+    name: 'Sealed Vault Door',
+    color: '#7a5c33',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    solid: true,
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
+  ']': {
+    name: 'Sealed Vault Door',
+    color: '#7a5c33',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    solid: true,
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
   // Small door — a few-pixel-tall gap at the bottom of a wall. Only entities
   // with isSmall (frog form, tamed rat) can pass through. Also blocks crow
   // flight via the blocksCrows flag (crows normally skip all collision).

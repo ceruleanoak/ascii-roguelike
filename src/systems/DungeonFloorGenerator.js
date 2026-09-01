@@ -617,6 +617,18 @@ export class DungeonFloorGenerator {
     const stairsUpObj = this._makeStairsUp(false);
     backgroundObjects.push(stairsUpObj);
 
+    // The sealed inner-vault door, set into the south wall behind the hoard.
+    // It never opens, has no key, and is wired to nothing — a dead end by
+    // design. South is the freedom axis, so the deepest room in the delve
+    // ends on the suspicion that it is not actually the deepest room. Two
+    // leaves so the seam shows; the seam is what makes it read as shut.
+    const doorRow = rows - 1;
+    const doorCol = Math.floor(cols / 2) - 1;
+    backgroundObjects.push(
+      new BackgroundObject('[', doorCol * GRID.CELL_SIZE, doorRow * GRID.CELL_SIZE),
+      new BackgroundObject(']', (doorCol + 1) * GRID.CELL_SIZE, doorRow * GRID.CELL_SIZE),
+    );
+
     return {
       type: 'DUNGEON_FLOOR',
       roomKind: 'numbered',
