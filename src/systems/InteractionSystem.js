@@ -162,7 +162,7 @@ export class InteractionSystem {
       );
       if (dist > GRID.CELL_SIZE * 2) continue;
       if (!game.removeIngredient('⚜')) continue;
-      npc.unlockRareHint(game.currentRoom?.zone || 'green');
+      npc.unlockRareHint(game.currentRoom?.zone || 'green', game.unlockedRareSayings);
       return true;
     }
     return false;

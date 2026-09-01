@@ -28,11 +28,17 @@ export class WiseFellow extends NeutralCharacter {
    * Swap to a rare-tier hint (gated by Artifact ⚜ payment in main.js SPACE handler).
    * Re-callable — each Artifact buys a fresh rare hint roll. The next SPACE
    * opens the dialogue box with the new line.
+   *
+   * `earned` carries lines this run unlocked by doing something rather than
+   * paying for something (currently: dungeon-boss victory sayings). They join
+   * the roll instead of replacing it, so the reward is a chance at knowledge
+   * the wallet cannot reach — not a guaranteed line that pre-empts the pool.
    */
-  unlockRareHint(zoneName) {
-    const rare = ZONES[zoneName]?.rareSayings;
-    if (Array.isArray(rare) && rare.length > 0) {
-      this.hintText = rare[Math.floor(Math.random() * rare.length)];
+  unlockRareHint(zoneName, earned = []) {
+    const rare = ZONES[zoneName]?.rareSayings ?? [];
+    const pool = Array.isArray(earned) && earned.length ? [...rare, ...earned] : rare;
+    if (pool.length > 0) {
+      this.hintText = pool[Math.floor(Math.random() * pool.length)];
     } else {
       this.hintText = 'WE WILL SPEAK IN ANOTHER PLACE.';
     }
