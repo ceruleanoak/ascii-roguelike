@@ -1207,6 +1207,15 @@ export class AudioSystem {
     this.loadSFX('puzzle_solve', null);  // puzzle solved, spirit rises
     this.loadSFX('plank_place', null);   // Platform plank laid over deep water
     this.loadSFX('sword_draw', null);    // § drawn from the islet stone
+    // Hoardmaw (green dungeon boss) — placeholder names, no assets yet. Every
+    // beat of the encounter is already wired to these, so authoring the audio
+    // later is a drop-in with no code change: grep loadSFX(.*null.
+    this.loadSFX('boss_roar', null);       // ambush wake / phase-3 pile heaved back out
+    this.loadSFX('boss_slam', null);       // lid slam impact, ambush snap, swallow spit
+    this.loadSFX('boss_breath', null);     // Gold Breath curse lands (phase-2 entry)
+    this.loadSFX('boss_hit', null);        // bribe refused / pile struck home
+    this.loadSFX('armor_break', null);     // coin scale chipped loose, or re-absorbed
+    this.loadSFX('scale_ricochet', null);  // a hit the armor turned away; grab broken
     // Dungeon 6-floor rework — placeholder names, no assets yet.
     this.loadSFX('dungeon_key_pickup', null); // Skull destroyed, key obtained
     this.loadSFX('dungeon_key_use', null);    // Key consumed at the Vault door
