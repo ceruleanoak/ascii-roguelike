@@ -82,6 +82,7 @@ export class NPCRat {
     // Physics flags so PhysicsSystem treats us like a normal collide-able mover.
     this.hasCollision = true;
     this.boundToGrid = true;
+    this.isSmall = true; // small enough to pass through small doors (▄)
     this.collisionMap = null;
     this.backgroundObjects = null; // layer-guard-ok: router-injected
 

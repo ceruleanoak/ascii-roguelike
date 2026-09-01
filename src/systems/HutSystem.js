@@ -55,8 +55,8 @@ export class HutSystem {
   // ─── Interior Generation ─────────────────────────────────────────────────
 
   generateHutInterior(hutKind, depth, sizeOverride = null) {
-    const cols = sizeOverride?.cols ?? INTERIOR_COLS;
-    const rows = sizeOverride?.rows ?? INTERIOR_ROWS;
+    const cols = sizeOverride?.cols ?? (hutKind === 'frog_hut' ? 6 : INTERIOR_COLS);
+    const rows = sizeOverride?.rows ?? (hutKind === 'frog_hut' ? 6 : INTERIOR_ROWS);
 
     // Build collision map: border solid, interior open
     const collisionMap = [];
@@ -73,12 +73,18 @@ export class HutSystem {
     // Spawn-occupancy helper: rejects walls AND cells already holding a
     // background object or item. Prevents items/decor from rendering on top
     // of fixed objects like the oil press.
+    const NPC_EXCL_RADIUS = GRID.CELL_SIZE * 2;
     const cellOccupied = (col, row, items = []) => {
       if (collisionMap[row]?.[col]) return true;
       const x = col * GRID.CELL_SIZE;
       const y = row * GRID.CELL_SIZE;
       if (backgroundObjects.some(o => o.position.x === x && o.position.y === y)) return true;
       if (items.some(it => it.position.x === x && it.position.y === y)) return true;
+      for (const npc of npcs) {
+        const dx = x - npc.position.x;
+        const dy = y - npc.position.y;
+        if (dx * dx + dy * dy < NPC_EXCL_RADIUS * NPC_EXCL_RADIUS) return true;
+      }
       return false;
     };
 
@@ -247,6 +253,11 @@ export class HutSystem {
           ));
         }
       }
+    } else if (hutKind === 'frog_hut') {
+      // Frog Coin at center — only reachable by frog/rat
+      const centerCol = Math.floor(cols / 2);
+      const centerRow = Math.floor(rows / 2);
+      breadItems.push(new Item('⊚', centerCol * GRID.CELL_SIZE, centerRow * GRID.CELL_SIZE));
     }
 
     // Bread loaves: occasional in huts (40% chance to spawn, 1–2 loaves) —
@@ -344,6 +355,8 @@ export class HutSystem {
       if (!hut?.doorPosition) continue;
       // Witch huts on chicken legs are inaccessible until SIT/SITDOWN lowers them.
       if (hut.raised) continue;
+      // Frog hut: only isSmall entities (frog form, tamed rat) can enter
+      if (hut.hutKind === 'frog_hut' && !game.player.isSmall) continue;
       const { col, row } = hut.doorPosition;
       if (this._nearCell(game.player, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE)) return hut;
     }

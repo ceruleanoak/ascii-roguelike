@@ -21,6 +21,9 @@ export class Ingredient {
     this.boundToGrid = true;
     this.friction = true;
 
+    // Flags
+    this.noGravitate = false; // when true, attraction system ignores this ingredient
+
     // State
     this.pickedUp = false;
     this.pickupCooldown = 0;  // seconds before magnetization kicks in

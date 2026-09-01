@@ -11,7 +11,7 @@ import { getDungeonDesign } from '../data/dungeonDesigns.js';
 import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
-import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, applyKeyDropLogic, ensureKeyDroppers, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, deriveRiverFlowDirection, buildForcedRiverParams, carveForcedRiver, cellularCaveGrid, generateCalderaRoom, seedMoltenAscentCycle, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths } from './roomFeatures.js';
+import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, stampSmallDoorInVault, getIslandPosition, applyKeyDropLogic, ensureKeyDroppers, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, deriveRiverFlowDirection, buildForcedRiverParams, carveForcedRiver, cellularCaveGrid, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields } from './roomFeatures.js';
 
 // Zone-boss arena → letter template key. Boss rooms are entered without a
 // letter (cheat warp) or with an arbitrary one (normal progression), so we
@@ -238,6 +238,15 @@ export class RoomGenerator {
     if (this.pendingVaultLoot?.length) {
       room.backgroundObjects.push(...this.pendingVaultLoot);
       this.pendingVaultLoot = [];
+    }
+
+    // Flush vault coins (non-gravitating ingredients) into game
+    if (this.pendingVaultCoins?.length) {
+      for (const coin of this.pendingVaultCoins) {
+        this.game?.ingredients?.push(coin);
+        this.game?.physicsSystem?.addEntity(coin);
+      }
+      this.pendingVaultCoins = [];
     }
 
     // First-room flourish: a single idle crow in the very first green-zone
@@ -619,7 +628,7 @@ export class RoomGenerator {
       }
       if (!pos) {
         pos = islandConfig
-          ? this.getIslandPosition(islandConfig, room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects)
+          ? getIslandPosition(islandConfig, room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects)
           : this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, allowLiquid);
       }
       if (!pos) continue;
@@ -636,7 +645,7 @@ export class RoomGenerator {
       for (let i = 0; i < injCount; i++) {
         const allowLiquid = inj.preferLiquid === true;
         const pos = islandConfig
-          ? this.getIslandPosition(islandConfig, room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects)
+          ? getIslandPosition(islandConfig, room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects)
           : this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, allowLiquid);
         if (!pos) continue;
         const enemy = new Enemy(inj.char, pos.x, pos.y, this.currentDepth);
@@ -1032,17 +1041,10 @@ export class RoomGenerator {
       }
     }
 
-    // Red zone only: the floor outside the plateau starts as mud and floods
-    // to lava over time (LavaAscentSystem drives the cycle each frame). The
-    // mud/lava cycle already covers nearly the whole grid, so the usual
-    // scattered grass/trees/rocks pass is skipped — they'd read as clutter
-    // sitting on top of (or swallowed by) the flood.
-    if (room.zone === 'red') {
-      seedMoltenAscentCycle(this, room, CENTER_COL, CENTER_ROW, INNER_RADIUS, OUTER_RADIUS);
-    } else {
-      // Standard background objects (grass, trees, rocks) — clearing zone keeps plateau tidy
-      this.generateBackgroundObjects(room);
-    }
+    // Zone-specific Ascent variations: each zone's hazard seeds its own
+    // floor tiles and captures slope metadata for the per-zone system.
+    const handledBg = seedAscentZone(this, room, CENTER_COL, CENTER_ROW, INNER_RADIUS, OUTER_RADIUS);
+    if (!handledBg) this.generateBackgroundObjects(room);
 
     // Spawn enemies, clustered around 3 anchor points so dense rooms feel like
     // pockets to clear rather than wall-to-wall chaos.
@@ -1231,6 +1233,32 @@ export class RoomGenerator {
       const obj = new BackgroundObject('5', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
       room.backgroundObjects.push(obj);
       rocksPlaced++;
+    }
+
+    // ── Wet mud patches in cave passages (red zone only) ─────────────────────
+    if (room.zone === 'red') {
+      const mudPatchCount = this.randInt(3, 5);
+      const mudCells = passageCells.slice(rocksPlaced);
+      this._shuffleArray(mudCells);
+      let mudPatchesPlaced = 0;
+      let mudCellIdx = 0;
+      for (let p = 0; p < mudPatchCount && mudCellIdx < mudCells.length; p++) {
+        const patchSize = this.randInt(3, 5);
+        const center = mudCells[mudCellIdx++];
+        for (let t = 0; t < patchSize && mudCellIdx < mudCells.length; t++) {
+          const cell = mudCells[mudCellIdx++];
+          const mud = new BackgroundObject('~', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
+          mud.data = { ...mud.data, renderOnlyOnPlane: 1 };
+          mud.typeId = 'mud_wet';
+          mud.color = '#664422';
+          mud.animationColor = '#664422';
+          mud.name = 'Wet Mud';
+          mud.slowing = true;
+          mud.environmental = true;
+          room.backgroundObjects.push(mud);
+          mudPatchesPlaced++;
+        }
+      }
     }
 
     // ── Spawn 3-6 enemies in cave with plane 1 + rest state ──────────────────
@@ -1797,56 +1825,6 @@ export class RoomGenerator {
     );
   }
 
-  getIslandPosition(islandConfig, collisionMap, existingEnemies = [], playerStartPos = null, backgroundObjects = []) {
-    const { islandCenterCol, islandCenterRow, islandRadius, edgeNoise } = islandConfig;
-    const islandInner = islandRadius - edgeNoise;
-    const spawnRadius = Math.max(islandInner - 1, 1);
-    const MIN_SPACING = GRID.CELL_SIZE * 2;
-    const PLAYER_BUFFER = GRID.CELL_SIZE * 3;
-
-    for (let attempts = 0; attempts < 200; attempts++) {
-      const angle = Math.random() * Math.PI * 2;
-      const r = Math.random() * spawnRadius;
-      const col = Math.round(islandCenterCol + Math.cos(angle) * r);
-      const row = Math.round(islandCenterRow + Math.sin(angle) * r);
-
-      if (col < 1 || col >= GRID.COLS - 1 || row < 1 || row >= GRID.ROWS - 1) continue;
-      if (collisionMap[row]?.[col]) continue;
-
-      const pixelX = col * GRID.CELL_SIZE;
-      const pixelY = row * GRID.CELL_SIZE;
-
-      if (playerStartPos) {
-        const dx = pixelX - playerStartPos.x;
-        const dy = pixelY - playerStartPos.y;
-        if (Math.sqrt(dx * dx + dy * dy) < PLAYER_BUFFER) continue;
-      }
-
-      let tooClose = false;
-      for (const e of existingEnemies) {
-        const dx = pixelX - e.position.x;
-        const dy = pixelY - e.position.y;
-        if (Math.sqrt(dx * dx + dy * dy) < MIN_SPACING) { tooClose = true; break; }
-      }
-      if (tooClose) continue;
-
-      let blocked = false;
-      for (const obj of backgroundObjects) {
-        if (obj.solid) {
-          const dx = pixelX - obj.position.x;
-          const dy = pixelY - obj.position.y;
-          if (Math.abs(dx) < GRID.CELL_SIZE && Math.abs(dy) < GRID.CELL_SIZE) { blocked = true; break; }
-        }
-      }
-      if (blocked) continue;
-
-      return { x: pixelX, y: pixelY };
-    }
-
-    // Fallback to any position on the island center
-    return { x: islandCenterCol * GRID.CELL_SIZE, y: islandCenterRow * GRID.CELL_SIZE };
-  }
-
   getRandomPosition(collisionMap, existingEnemies = [], playerStartPos = null, backgroundObjects = [], allowLiquid = false) {
     let x, y;
     let attempts = 0;
@@ -2000,7 +1978,7 @@ export class RoomGenerator {
     const MIN_ANCHOR_SPACING = GRID.CELL_SIZE * 6;
     const anchors = [];
     const pickOne = () => islandConfig
-      ? this.getIslandPosition(islandConfig, room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects)
+      ? getIslandPosition(islandConfig, room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects)
       : this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, false);
 
     for (let i = 0; i < count; i++) {
@@ -2191,6 +2169,11 @@ export class RoomGenerator {
     // becomes part of normal combat, not just the puzzle.
     if (effectiveZone === 'red') {
       this.generateRedZoneDeflectors(room);
+    }
+
+    // CYAN zone: deep snow fields — large swaths of full-block white terrain
+    if (effectiveZone === 'cyan') {
+      generateSnowFields(this, room);
     }
 
     // Letter template: Generate corner clusters if specified
@@ -3280,6 +3263,7 @@ export class RoomGenerator {
     const centerRow = vault.centerRow;
     const size = vault.size;
     this.pendingVaultLoot = [];
+    this.pendingVaultCoins = [];
 
     // Create hollow square (only walls on perimeter)
     const halfSize = Math.floor(size / 2);
@@ -3298,11 +3282,8 @@ export class RoomGenerator {
       minRow,
       maxRow,
       bottomWallRow: maxRow, // Bottom wall is at maxRow
-      unlocked: false
-      // Key possession is NOT tracked here — canUnlockVault/unlockVault
-      // (InteractionSystem.js) read/spend it via InventorySystem's
-      // keyItemInventory (hasKeyItem/consumeKeyItem), the same real-Item
-      // pickup as the K-room key-dropping object grants.
+      unlocked: false,
+      smallDoorInBottomWall: !!vault.smallDoorInBottomWall
     };
 
     for (let row = minRow; row <= maxRow; row++) {
@@ -3317,11 +3298,29 @@ export class RoomGenerator {
       }
     }
 
+    // Small door in bottom wall: replace center-bottom solid cell with ▄ gap
+    if (vault.smallDoorInBottomWall) {
+      this.pendingVaultLoot = this.pendingVaultLoot || [];
+      this.pendingWallCells = stampSmallDoorInVault(
+        collisionMap, this.pendingWallCells, this.pendingVaultLoot, centerCol, maxRow
+      );
+    }
+
     // Vault interior abundance — flushed into room.backgroundObjects later
     this.pendingVaultLoot = buildVaultInteriorLoot(
       { minCol, maxCol, minRow, maxRow, centerCol, centerRow },
       (arr) => this._shuffleArray(arr)
     );
+
+    // Coin abundance inside vault (non-gravitating ingredients)
+    if (this.currentLetterTemplate?.coinAbundance?.enabled) {
+      const cfg = this.currentLetterTemplate.coinAbundance;
+      this.pendingVaultCoins = buildVaultCoinAbundance(
+        { minCol, maxCol, minRow, maxRow, centerCol, centerRow },
+        (arr) => this._shuffleArray(arr),
+        cfg.count
+      );
+    }
   }
 
   getStructuresForRoom(roomType) {

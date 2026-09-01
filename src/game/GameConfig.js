@@ -987,6 +987,24 @@ export const BACKGROUND_OBJECTS = {
     interactions: {
       default: { animation: 'none', message: null }
     }
+  },
+  // Small door — a few-pixel-tall gap at the bottom of a wall. Only entities
+  // with isSmall (frog form, tamed rat) can pass through. Also blocks crow
+  // flight via the blocksCrows flag (crows normally skip all collision).
+  '▄': {
+    name: 'Small Door',
+    color: '#5c4a2a',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    solid: true,
+    smallDoor: true,
+    blocksCrows: true,
+    hitbox: { w: 1.0, h: 0.3 },
+    interactions: {
+      default: { animation: 'none', message: null }
+    }
   }
 };
 
@@ -1053,6 +1071,19 @@ export const BACKGROUND_OBJECT_VARIANTS = {
     healing:     true,
     healAmount:  1,
     healInterval: 3.0,
+    environmental: true,
+  },
+  'snow_deep': {
+    char: '█',
+    name: 'Deep Snow',
+    color: '#ffffff',
+    compactColor: '#ccffff',  // light cyan when compacted
+    makesWet:    false,
+    steamOnFire: false,
+    conductivity: 'none',
+    damaging:    false,
+    damage:      0,
+    slowing:     false,
     environmental: true,
   },
 };

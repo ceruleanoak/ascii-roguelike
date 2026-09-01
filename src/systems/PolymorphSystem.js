@@ -49,6 +49,7 @@ export class PolymorphSystem {
     player._polymorphAccelOverride = FROG_ACCEL;
     player.polymorphed    = true;
     player.polymorphCursed = cursed;
+    player.isSmall        = true;
 
     // Initialize frog jump state — fire first jump immediately
     player._frogJumpTimer    = 0;
@@ -87,6 +88,7 @@ export class PolymorphSystem {
     delete player._polymorphAccelOverride;
     player.polymorphed     = false;
     player.polymorphCursed = false;
+    player.isSmall         = false;
     player.polymorphSavedState = null;
 
     // Clear frog jump state

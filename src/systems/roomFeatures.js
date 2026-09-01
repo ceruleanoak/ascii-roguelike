@@ -3,6 +3,7 @@ import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Fisherman } from '../entities/Fisherman.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
+import { Ingredient } from '../entities/Ingredient.js';
 import { ENEMIES, getZoneRandomEnemy, createBossEnemy, BOSS_ENCOUNTERS } from '../data/enemies.js';
 import { ZONES } from '../data/zones.js';
 import { WeaponsMaster } from '../entities/WeaponsMaster.js';
@@ -373,6 +374,167 @@ export function seedMoltenAscentCycle(gen, room, centerCol, centerRow, innerRadi
     floorFillOrder,
     slopeFillGroups,
     plateau: { centerCol, centerRow, radius: innerRadius }
+  };
+}
+
+// ── Zone-specific Ascent seeding (unified dispatcher) ──────────────────────
+// Called from RoomGenerator.generateAscentRoom() to seed zone-specific tiles
+// and capture slope metadata. Returns true if the zone handled its own bg
+// objects (caller should skip generateBackgroundObjects).
+export function seedAscentZone(gen, room, centerCol, centerRow, innerRadius, outerRadius) {
+  switch (room.zone) {
+    case 'red':
+      seedMoltenAscentCycle(gen, room, centerCol, centerRow, innerRadius, outerRadius);
+      return true; // mud/lava cycle covers the whole grid
+    case 'cyan':
+      seedFrozenAscentCycle(gen, room, centerCol, centerRow, innerRadius, outerRadius);
+      return true; // ice covers the floor ring
+    case 'yellow':
+      seedStormAscent(gen, room, centerCol, centerRow, innerRadius, outerRadius);
+      return false; // still needs standard bg objects around the spire
+    case 'gray':
+      seedMistAscent(gen, room, centerCol, centerRow, innerRadius, outerRadius);
+      return false; // standard bg objects on the plateau
+    default:
+      return false; // green: standard bg objects
+  }
+}
+
+// ── Cyan Zone Ascent: frozen floor ring + momentum slopes + Maw shadow ──────
+// Seeds the floor ring outside the plateau with frozen water tiles and captures
+// the slope belt's original glyph/direction. IceAscentSystem drives the
+// cracking/breaking/refreezing cycle each frame.
+export function seedFrozenAscentCycle(gen, room, centerCol, centerRow, innerRadius, outerRadius) {
+  const C = GRID.CELL_SIZE;
+  const floorIceTiles = [];
+
+  for (let col = 1; col < GRID.COLS - 1; col++) {
+    for (let row = 1; row < GRID.ROWS - 1; row++) {
+      const dx = col - centerCol;
+      const dy = row - centerRow;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist <= outerRadius) continue;
+      if (!gen.isValidPosition(col, row, room)) continue;
+      const iceTile = BackgroundObject.createVariant('water', col * C, row * C);
+      iceTile.setWaterState('frozen', 0);
+      iceTile._ascentCol = col;
+      iceTile._ascentRow = row;
+      iceTile._weight = 0;
+      iceTile._cracked = false;
+      room.backgroundObjects.push(iceTile);
+      floorIceTiles.push(iceTile);
+    }
+  }
+
+  // Slope tiles get original char/direction saved for restore on refreeze
+  const ringGroups = new Map();
+  for (const obj of room.backgroundObjects) {
+    if (!obj.slope) continue;
+    obj.originalSlopeChar = obj.char;
+    obj.originalSlopeDirection = obj.slopeDirection;
+    obj.onIce = true; // momentum-based push
+  }
+
+  // Frozen Maw shadow — large glyph under the ice, drifts down and fades
+  const mawShadow = {
+    x: centerCol * C,
+    y: centerRow * C,
+    glyph: 'M',
+    alpha: 0.3,
+    yOffset: 0,
+    timer: 0
+  };
+
+  room.ascentIce = {
+    phase: 'stable',
+    timer: 0,
+    floorTiles: floorIceTiles,
+    plateau: { centerCol, centerRow, radius: innerRadius },
+    mawShadow
+  };
+}
+
+// ── Yellow Zone Ascent: storm spire + charged metal ────────────────────────
+// Seeds a central conductive spire on the plateau and electrified puddle patches
+// on the floor ring. StormAscentSystem drives the lightning-attraction and
+// charged-metal cycle.
+export function seedStormAscent(gen, room, centerCol, centerRow, innerRadius, outerRadius) {
+  const C = GRID.CELL_SIZE;
+
+  // Central spire — conductive, attracts all lightning
+  const spireTile = new BackgroundObject('\u2B22', centerCol * C, centerRow * C); // ⬢ hexagon
+  spireTile.data = {
+    name: 'Lightning Spire',
+    color: '#ccccaa',
+    solid: false,
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'high',
+    indestructible: true,
+    environmental: true,
+    interactions: { default: { animation: 'none', message: null } }
+  };
+  spireTile.conductive = true;
+  spireTile.isSpire = true;
+  spireTile.charged = false;
+  spireTile.chargeTimer = 0;
+  room.backgroundObjects.push(spireTile);
+
+  // Slope tiles: mark as conductive (metal grating)
+  for (const obj of room.backgroundObjects) {
+    if (!obj.slope) continue;
+    obj.conductive = true;
+    obj.originalSlopeChar = obj.char;
+    obj.originalSlopeDirection = obj.slopeDirection;
+  }
+
+  // Floor ring: sporadic electrified puddles
+  const floorTiles = [];
+  for (let col = 1; col < GRID.COLS - 1; col++) {
+    for (let row = 1; row < GRID.ROWS - 1; row++) {
+      const dx = col - centerCol;
+      const dy = row - centerRow;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist <= outerRadius) continue;
+      if (!gen.isValidPosition(col, row, room)) continue;
+      if (Math.random() > 0.3) continue; // 30% puddle coverage
+      const puddle = BackgroundObject.createVariant('water', col * C, row * C);
+      puddle.conductive = true;
+      room.backgroundObjects.push(puddle);
+      floorTiles.push(puddle);
+    }
+  }
+
+  // Track charged metal objects in the room (weapons on ground, etc.)
+  room.ascentStorm = {
+    phase: 'idle',
+    timer: 0,
+    spire: spireTile,
+    floorTiles,
+    chargedObjects: [], // items on ground that got charged
+    strikeFlash: 0     // visual flash timer after lightning hits spire
+  };
+}
+
+// ── Gray Zone Ascent: bone slopes + mist exemption + plateau shrink ────────
+// Marks the plateau as mist-exempt and sets up the bone slope push mechanic.
+// MistAscentSystem shrinks the plateau radius on room clear.
+export function seedMistAscent(gen, room, centerCol, centerRow, innerRadius, outerRadius) {
+  const C = GRID.CELL_SIZE;
+
+  // Slope tiles: bone glyphs with grab-on-push
+  for (const obj of room.backgroundObjects) {
+    if (!obj.slope) continue;
+    obj.originalSlopeChar = obj.char;
+    obj.originalSlopeDirection = obj.slopeDirection;
+    obj.boneSlope = true; // brief grab on push
+  }
+
+  room.ascentMist = {
+    plateauCenterCol: centerCol,
+    plateauCenterRow: centerRow,
+    plateauRadius: innerRadius,
+    mistExempt: true // GrayZoneSystem reads this to skip fog over plateau
   };
 }
 
@@ -830,6 +992,102 @@ export function buildVaultInteriorLoot(bounds, shuffleFn) {
 }
 
 /**
+ * Stamp a ▄ small door into a vault's bottom wall. Clears the collisionMap
+ * cell, removes it from pendingWallCells, and stages the door BackgroundObject.
+ * Returns the filtered pendingWallCells array.
+ */
+export function stampSmallDoorInVault(collisionMap, pendingWallCells, pendingLoot, centerCol, maxRow) {
+  const doorCol = centerCol;
+  const doorRow = maxRow;
+  collisionMap[doorRow][doorCol] = false;
+  const filtered = pendingWallCells.filter(c => !(c.col === doorCol && c.row === doorRow));
+  const doorObj = new BackgroundObject('▄', doorCol * GRID.CELL_SIZE, doorRow * GRID.CELL_SIZE);
+  doorObj.structural = true;
+  pendingLoot.push(doorObj);
+  return filtered;
+}
+
+/**
+ * Spawn non-gravitating coin ingredients inside a vault. Returns an array
+ * of Ingredient entities ready to be flushed into game.ingredients.
+ */
+export function buildVaultCoinAbundance(bounds, shuffleFn, count) {
+  const { minCol, maxCol, minRow, maxRow, centerCol, centerRow } = bounds;
+  const interiorCells = [];
+  for (let row = minRow + 1; row <= maxRow - 1; row++) {
+    for (let col = minCol + 1; col <= maxCol - 1; col++) {
+      if (row === centerRow && col === centerCol) continue;
+      interiorCells.push({ col, row });
+    }
+  }
+  shuffleFn(interiorCells);
+  const coins = [];
+  const coinCount = Math.min(count, interiorCells.length);
+  for (let i = 0; i < coinCount; i++) {
+    const { col, row } = interiorCells[i];
+    const coin = new Ingredient('c', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+    coin.noGravitate = true;
+    coin.pickupCooldown = 0;
+    coins.push(coin);
+  }
+  return coins;
+}
+
+/**
+ * Find a valid spawn position on a circular island. Returns {x, y} pixel
+ * coordinates, or the island center as fallback.
+ */
+export function getIslandPosition(islandConfig, collisionMap, existingEnemies = [], playerStartPos = null, backgroundObjects = []) {
+  const { islandCenterCol, islandCenterRow, islandRadius, edgeNoise } = islandConfig;
+  const islandInner = islandRadius - edgeNoise;
+  const spawnRadius = Math.max(islandInner - 1, 1);
+  const MIN_SPACING = GRID.CELL_SIZE * 2;
+  const PLAYER_BUFFER = GRID.CELL_SIZE * 3;
+
+  for (let attempts = 0; attempts < 200; attempts++) {
+    const angle = Math.random() * Math.PI * 2;
+    const r = Math.random() * spawnRadius;
+    const col = Math.round(islandCenterCol + Math.cos(angle) * r);
+    const row = Math.round(islandCenterRow + Math.sin(angle) * r);
+
+    if (col < 1 || col >= GRID.COLS - 1 || row < 1 || row >= GRID.ROWS - 1) continue;
+    if (collisionMap[row]?.[col]) continue;
+
+    const pixelX = col * GRID.CELL_SIZE;
+    const pixelY = row * GRID.CELL_SIZE;
+
+    if (playerStartPos) {
+      const dx = pixelX - playerStartPos.x;
+      const dy = pixelY - playerStartPos.y;
+      if (Math.sqrt(dx * dx + dy * dy) < PLAYER_BUFFER) continue;
+    }
+
+    let tooClose = false;
+    for (const e of existingEnemies) {
+      const dx = pixelX - e.position.x;
+      const dy = pixelY - e.position.y;
+      if (Math.sqrt(dx * dx + dy * dy) < MIN_SPACING) { tooClose = true; break; }
+    }
+    if (tooClose) continue;
+
+    let blocked = false;
+    for (const obj of backgroundObjects) {
+      if (obj.solid) {
+        const dx = pixelX - obj.position.x;
+        const dy = pixelY - obj.position.y;
+        if (Math.abs(dx) < GRID.CELL_SIZE && Math.abs(dy) < GRID.CELL_SIZE) { blocked = true; break; }
+      }
+    }
+    if (blocked) continue;
+
+    return { x: pixelX, y: pixelY };
+  }
+
+  // Fallback to any position on the island center
+  return { x: islandCenterCol * GRID.CELL_SIZE, y: islandCenterRow * GRID.CELL_SIZE };
+}
+
+/**
  * Can this object carry a vault key? The key only reaches the player when the
  * object is destroyed, so the letter template's eligible-char list is necessary
  * but not sufficient — an eligible char can still be an unbreakable *instance*,
@@ -909,7 +1167,7 @@ export function spawnBatFlock(gen, room, clusterAnchors, islandConfig) {
       : null;
     if (!pos) {
       pos = islandConfig
-        ? gen.getIslandPosition(islandConfig, room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects)
+        ? getIslandPosition(islandConfig, room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects)
         : gen.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, false);
     }
     if (!pos) continue;
@@ -1044,6 +1302,62 @@ const SETTLEMENT_CENTER_SPAN = 22; // centers land in [4, 25]
 const SETTLEMENT_HUT_BUFFER = 1; // min empty-cell gap between hut footprints
 
 /**
+ * Stamp a tiny 3×3 hut with a ▄ small-door entrance (only isSmall entities
+ * can enter). Used for the unnamed frog-hut in Settlement rooms. Returns a
+ * hut record compatible with HutSystem._findNearbyHut.
+ */
+export function stampSmallHutFootprint(room, { centerCol, centerRow, hutKind = 'frog_hut' }) {
+  const halfW = 1;
+  const halfH = 1;
+  const minCol = centerCol - halfW;
+  const maxCol = centerCol + halfW;
+  const minRow = centerRow - halfH;
+  const maxRow = centerRow + halfH;
+
+  const wallObjects = [];
+  const interiorObjects = [];
+  for (let row = minRow; row <= maxRow; row++) {
+    for (let col = minCol; col <= maxCol; col++) {
+      room.collisionMap[row][col] = true;
+      const isWall = row === minRow || row === maxRow || col === minCol || col === maxCol;
+      if (!isWall) {
+        const fill = new BackgroundObject('█', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+        fill.structural = true;
+        room.backgroundObjects.push(fill);
+        interiorObjects.push(fill);
+        continue;
+      }
+      // Skip the south-center cell — that's the small door
+      if (row === maxRow && col === centerCol) continue;
+      const wallObj = new BackgroundObject('≡', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+      wallObj.structural = true;
+      room.backgroundObjects.push(wallObj);
+      wallObjects.push(wallObj);
+    }
+  }
+
+  // Small door (▄) at south-center — only isSmall entities can pass
+  const doorCol = centerCol;
+  const doorRow = maxRow;
+  const doorObj = new BackgroundObject('▄', doorCol * GRID.CELL_SIZE, doorRow * GRID.CELL_SIZE);
+  doorObj.structural = true;
+  room.backgroundObjects.push(doorObj);
+
+  return {
+    exteriorBounds: { minCol, maxCol, minRow, maxRow },
+    doorPosition: { col: doorCol, row: doorRow },
+    hutKind,
+    interiorGenerated: false,
+    raised: false,
+    verticalShift: 0,
+    wallObjects,
+    doorObject: doorObj,
+    interiorObjects,
+    legObjects: []
+  };
+}
+
+/**
  * Settlement room ('S') — 2-3 neutral huts drawn at random from
  * `template.settlementHutPool`, placed at random non-overlapping positions
  * (never enemy_encounter or witch). Builds `room.huts[]` (plural — see
@@ -1074,6 +1388,22 @@ export function generateSettlementRoom(gen, room) {
     placedBounds.push({ minCol, maxCol, minRow, maxRow });
     protectRegion(room, { kind: 'rect', minCol, maxCol, minRow, maxRow });
     room.huts.push(hut);
+  }
+
+  // 50% chance: unnamed frog hut (tiny 3×3, ▄ entrance, Frog Coin inside)
+  if (Math.random() < 0.5) {
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const centerCol = SETTLEMENT_CENTER_MIN + Math.floor(Math.random() * SETTLEMENT_CENTER_SPAN);
+      const centerRow = SETTLEMENT_CENTER_MIN + Math.floor(Math.random() * SETTLEMENT_CENTER_SPAN);
+      const candidate = { minCol: centerCol - 1, maxCol: centerCol + 1, minRow: centerRow - 1, maxRow: centerRow + 1 };
+      if (placedBounds.some(b => footprintsTooClose(candidate, b, SETTLEMENT_HUT_BUFFER))) continue;
+      const smallHut = stampSmallHutFootprint(room, { centerCol, centerRow });
+      const { minCol, maxCol, minRow, maxRow } = smallHut.exteriorBounds;
+      placedBounds.push({ minCol, maxCol, minRow, maxRow });
+      protectRegion(room, { kind: 'rect', minCol, maxCol, minRow, maxRow });
+      room.huts.push(smallHut);
+      break;
+    }
   }
 
   gen.generateBackgroundObjects(room);
@@ -1354,4 +1684,33 @@ export function spawnBossEncounter(gen, room, encounter) {
     e.formationSlot = idx;
     e.formationCount = meleeFollowers.length;
   });
+}
+
+// Cyan zone: deep snow fields — large swaths of full-block white terrain.
+// Called from RoomGenerator.generateBackgroundObjects for cyan rooms.
+export function generateSnowFields(gen, room) {
+  const clusterCount = gen.randInt(3, 6);
+
+  for (let i = 0; i < clusterCount; i++) {
+    const size = gen.randInt(5, 10);
+    const startX = gen.randInt(4, GRID.COLS - 4);
+    const startY = gen.randInt(4, GRID.ROWS - 4);
+
+    for (let j = 0; j < size; j++) {
+      const x = startX + gen.randInt(-2, 2);
+      const y = startY + gen.randInt(-2, 2);
+
+      if (gen.isValidPosition(x, y, room)) {
+        const snow = new BackgroundObject(
+          '█',
+          x * GRID.CELL_SIZE,
+          y * GRID.CELL_SIZE
+        );
+        snow.color = '#ffffff';
+        snow.compacted = false;
+        snow.name = 'Deep Snow';
+        room.backgroundObjects.push(snow);
+      }
+    }
+  }
 }

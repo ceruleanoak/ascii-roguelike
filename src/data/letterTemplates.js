@@ -83,7 +83,7 @@ export const LETTER_TEMPLATES = {
 
   V: {
     name: 'Vault',
-    description: 'Locked cage with rare treasure - no clear way inside',
+    description: 'Sealed cage with coins — only a tiny gap lets small creatures in',
 
     // Wall structure rules
     wallStructures: {
@@ -97,7 +97,8 @@ export const LETTER_TEMPLATES = {
       centerRow: 15,
       size: 7,        // 7x7 hollow square
       hollow: true,   // Hollow interior (1-cell thick walls)
-      wallChar: '#'   // Visual indicator (uses crate/wall char)
+      wallChar: '#',  // Visual indicator (uses crate/wall char)
+      smallDoorInBottomWall: true // Replace bottom-center wall cell with ▄ gap
     },
 
     // Background object generation rules
@@ -116,11 +117,11 @@ export const LETTER_TEMPLATES = {
       grassDensity: 0.5 // 50% normal (sparse but visible)
     },
 
-    // Guaranteed loot spawn
-    guaranteedItems: {
+    // Coin abundance inside vault (replaces guaranteed rare item)
+    coinAbundance: {
       enabled: true,
-      position: 'vault_center', // Spawn in exact center of vault
-      itemPool: 'rare_epic'     // Rare/epic weapons and armor only
+      count: 8,            // 8 coins scattered inside
+      noGravitate: true    // coins don't attract to player
     },
 
     // Enemy spawn rules

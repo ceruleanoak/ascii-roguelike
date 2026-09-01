@@ -208,6 +208,22 @@ export class CompanionSystem {
                                                victim.position.x, victim.position.y,
                                                victim.color || '#ffffff');
       }
+
+      // Tamed rats collect non-gravitating ingredients they overlap (e.g. vault coins)
+      if (rat.state !== 'permaFlee' && game.lootSystem) {
+        const rw = rat.width || GRID.CELL_SIZE;
+        const rh = rat.height || GRID.CELL_SIZE;
+        for (let j = game.ingredients.length - 1; j >= 0; j--) {
+          const ing = game.ingredients[j];
+          if (!ing.noGravitate) continue;
+          if (ing.pickedUp) continue;
+          const dx = rat.position.x - ing.position.x;
+          const dy = rat.position.y - ing.position.y;
+          if (Math.abs(dx) < rw && Math.abs(dy) < rh) {
+            game.lootSystem.collectIngredient(ing);
+          }
+        }
+      }
     }
   }
 

@@ -77,6 +77,9 @@ export class InteractionSystem {
 
     const vault = game.currentRoom.vaultInfo;
 
+    // Vaults with a small door (▄) use the gap, not a key
+    if (vault.smallDoorInBottomWall) return false;
+
     // Check if vault is already unlocked
     if (vault.unlocked) {
       return false;

@@ -244,6 +244,12 @@ export class PhysicsSystem {
   }
 
   update(deltaTime, backgroundObjects = [], room = null, combatSystem = null) {
+    // Reset dry mud activation timers — only tiles overlapped this frame accumulate
+    if (backgroundObjects) {
+      for (const obj of backgroundObjects) {
+        if (obj._mudActTimer) obj._mudActTimer = 0;
+      }
+    }
     const waterResults = [];
     for (const entity of this.entities) {
       const result = this.updateEntity(entity, deltaTime, backgroundObjects, room, combatSystem);
@@ -334,11 +340,14 @@ export class PhysicsSystem {
     let inLiquid = false;
     let liquidState = 'normal';
     let inGrass = false;
+    let inMud = false; // Wet mud — heavier than water, dodge roll bypasses
     let slowingMultiplier = 1.0; // For numeric slowing values (trees, stumps)
     let damagingLiquid = null; // Track lava damage
     let healingLiquid = null; // Track hot spring heal
     let onSlopeDirection = null; // Ascent room slope push direction
     let onCurrentDirection = null; // Yellow zone river current push direction
+    let inDeepSnow = false;
+    let inCompactedSnow = false;
     const isProjectile = entity.type === 'bullet' || entity.type === 'arrow';
 
     // Reset per-frame terrain flags (read by Player.updateDodgeRoll with 1-frame lag)
@@ -379,18 +388,29 @@ export class PhysicsSystem {
                                          : (obj.isDryMud || obj.slowing === true);
             const isHotWaterObj = obj.typeId === 'hot_water';
 
-            // Mud activation: dry → wet on first step
-            if (obj.typeId === 'mud_dry') {
-              obj.typeId = 'mud_wet';
-              obj._variantData = BACKGROUND_OBJECT_VARIANTS['mud_wet'];
-              obj.color = obj._variantData.color;
-              obj.animationColor = obj._variantData.color;
-            } else if (obj.isDryMud && !obj.slowing) {
-              // Legacy path
-              obj.isDryMud = false;
-              obj.color = '#664422';
-              obj.slowing = true;
-              obj.name = 'Wet Mud';
+            // Mud activation: dry → wet after 15 frames (~0.25s) of overlap
+            // so the player sees the color shift before the slowdown kicks in.
+            // Any entity (player or enemy) can trigger activation.
+            {
+              const isDryMudTile = (obj.typeId === 'mud_dry') ||
+                                   (obj.isDryMud && obj.slowing !== true);
+              if (isMudObj && isDryMudTile) {
+                obj._mudActTimer = (obj._mudActTimer || 0) + 1;
+                if (obj._mudActTimer >= 15) {
+                  if (obj.typeId === 'mud_dry') {
+                    obj.typeId = 'mud_wet';
+                    obj._variantData = BACKGROUND_OBJECT_VARIANTS['mud_wet'];
+                    obj.color = obj._variantData.color;
+                    obj.animationColor = obj._variantData.color;
+                  } else {
+                    obj.isDryMud = false;
+                    obj.color = '#664422';
+                    obj.slowing = true;
+                    obj.name = 'Wet Mud';
+                  }
+                  obj._mudActTimer = 0;
+                }
+              }
             }
 
             if (isLavaObj) {
@@ -404,7 +424,14 @@ export class PhysicsSystem {
               };
               // Hot water does NOT set inLiquid — no wet status (makesWet: false)
             } else if (isMudObj) {
-              inGrass = true; // 75% speed, same path as grass — but NOT inLiquid
+              // Determine wetness from CURRENT state (after any conversion above)
+              const isNowWet = (obj.typeId === 'mud_wet') ||
+                               (obj.slowing === true && !obj.isDryMud);
+              if (isNowWet) {
+                inMud = true;
+              } else {
+                inGrass = true; // 75% — dry mud still activating
+              }
               // Mud does NOT set inLiquid — no wet status, no water state transitions
             } else {
               // Real water
@@ -418,6 +445,10 @@ export class PhysicsSystem {
               } else {
                 inLiquid = true;
                 liquidState = wState;
+                // Glacier Crab freezes water on contact
+                if (!isProjectile && entity.data?.char === 'u' && entity.isEnemy && obj.setWaterState) {
+                  obj.setWaterState('frozen');
+                }
                 // River-current push: the whole channel is a conveyor — center
                 // tiles show the arrow, bank tiles inherit the parent center's
                 // direction so drift never stalls mid-river.
@@ -425,6 +456,20 @@ export class PhysicsSystem {
               }
             }
             break;
+          }
+          // Check for deep snow (full-block terrain — player slowed, compacts on contact)
+          if (obj.char === '█' && obj._variantData?.environmental && obj._variantData?.compactColor) {
+            if (obj.compacted) {
+              inCompactedSnow = true;
+            } else {
+              inDeepSnow = true;
+              // Compaction: player or large enemies (mass > 1) compact snow on contact
+              const entityMass = entity.mass ?? 1;
+              if (entityMass > 1 || entity.isPlayer) {
+                obj.compacted = true;
+                obj.color = obj._variantData.compactColor;
+              }
+            }
           }
           // Check for objects with numeric slowing first (trees, stumps)
           if (obj.data && typeof obj.data.slowing === 'number') {
@@ -437,7 +482,7 @@ export class PhysicsSystem {
           }
           // Check for wet mud (instance property, boolean slowing)
           else if (obj.slowing === true && !obj.isDryMud) {
-            inGrass = true;  // 75% speed for mud
+            inMud = true;  // Heavy slowdown for wet mud
           }
         }
       }
@@ -445,7 +490,9 @@ export class PhysicsSystem {
 
     // Apply friction (ice = less friction = more sliding)
     if (entity.friction !== false) {
-      const friction = onIce ? PHYSICS.FRICTION * 1.03 : PHYSICS.FRICTION;
+      // Cyan-zone Ascent ice: momentum-based slide (much lower friction)
+      const cyanAscentIce = onIce && room?.zone === 'cyan' && room?.ascentIce;
+      const friction = cyanAscentIce ? 0.15 : (onIce ? PHYSICS.FRICTION * 1.03 : PHYSICS.FRICTION);
       entity.velocity.vx *= friction;
       entity.velocity.vy *= friction;
     }
@@ -494,10 +541,11 @@ export class PhysicsSystem {
       inLiquid = false;
       damagingLiquid = null;
       inGrass = false;
+      inMud = false;
       slowingMultiplier = 1.0; // airborne — bushes/trees/stumps pass underneath
     }
 
-    // Apply velocity multiplier for liquid water, grass, and slowing objects
+    // Apply velocity multiplier for liquid water, grass, mud, and slowing objects
     // Dodge roll ignores grass/terrain slowdown
     const isDodgeRolling = entity.dodgeRoll && entity.dodgeRoll.active;
     let velocityMultiplier = 1.0;
@@ -506,6 +554,12 @@ export class PhysicsSystem {
       // they compensate via higher jump velocity in water. Shark Mask divers
       // are treated the same way while their dive is active.
       velocityMultiplier = (entity.data?.swimAffinity || entity.diving) ? 1.0 : 0.5;
+    } else if (inDeepSnow && !isDodgeRolling) {
+      velocityMultiplier = 0.35; // Deep snow: heavy slow (same as wet mud)
+    } else if (inCompactedSnow && !isDodgeRolling) {
+      velocityMultiplier = 0.8;  // Compacted snow: light slow
+    } else if (inMud && !isDodgeRolling) {
+      velocityMultiplier = 0.35; // Wet mud: heavier than water, dodge roll bypasses
     } else if (inGrass && !isDodgeRolling) {
       velocityMultiplier = 0.75; // Grass slows to 75% (dodge roll ignores)
     } else if (slowingMultiplier < 1.0 && !isDodgeRolling) {
@@ -514,6 +568,19 @@ export class PhysicsSystem {
 
     if (entity.isStaffBlocking && !isDodgeRolling) {
       velocityMultiplier *= 0.5; // Staff block: half-speed while bracing
+    }
+
+    // Store snow state on entity for trail/speed/visibility logic
+    if (!isProjectile) {
+      entity.isInDeepSnow = inDeepSnow;
+      entity.isInCompactedSnow = inCompactedSnow;
+    }
+
+    // Glacier Crab-specific: 2x speed in deep snow, freeze water on contact
+    if (!isProjectile && entity.data?.char === 'u' && entity.isEnemy) {
+      if (inDeepSnow && !isDodgeRolling) {
+        velocityMultiplier *= 2.0;
+      }
     }
 
     // Update position with velocity multiplier
@@ -551,8 +618,30 @@ export class PhysicsSystem {
       }
 
     } else {
-      entity.position.x = newX;
-      entity.position.y = newY;
+      // Non-colliding entities (crows) are still blocked by blocksCrows objects
+      if (!isProjectile && backgroundObjects) {
+        const bw = entity.width || GRID.CELL_SIZE;
+        const bh = entity.height || GRID.CELL_SIZE;
+        const ePlane = planeOf(entity);
+        let blocked = false;
+        for (const obj of backgroundObjects) {
+          if (obj.destroyed || !obj.data?.blocksCrows) continue;
+          if (!objectOnPlane(obj, ePlane)) continue;
+          const ob = obj.getHitbox();
+          if (newX < ob.x + ob.width && newX + bw > ob.x &&
+              newY < ob.y + ob.height && newY + bh > ob.y) {
+            blocked = true;
+            break;
+          }
+        }
+        if (!blocked) {
+          entity.position.x = newX;
+          entity.position.y = newY;
+        }
+      } else {
+        entity.position.x = newX;
+        entity.position.y = newY;
+      }
     }
 
     // Bounds checking
@@ -798,6 +887,9 @@ export class PhysicsSystem {
         const isSolid = obj.data.solid || obj.data.bulletInteraction === 'block' || obj.data.bulletInteraction === 'interact-preserve';
         if (!isSolid) continue;
       }
+
+      // Small door: passable by small entities (frog form, tamed rat)
+      if (obj.data.smallDoor && entity.isSmall) continue;
 
       const objBox = obj.getHitbox();
 
@@ -1247,6 +1339,12 @@ export class PhysicsSystem {
       return false;
     }
 
+    // Non-gravitating ingredients (e.g. vault coins) stay put
+    if (ingredient.noGravitate) {
+      ingredient.acceleration = { ax: 0, ay: 0 };
+      return false;
+    }
+
     // Cross-plane ingredients are unreachable — no attraction, no pickup.
     if (!inSamePlane(ingredient, target)) {
       ingredient.acceleration = { ax: 0, ay: 0 };
@@ -1364,6 +1462,9 @@ export class PhysicsSystem {
             obj.data.bulletInteraction === 'interact-preserve';
           if (!isSolid) continue;
         }
+
+        // Small door: passable by small entities (frog form, tamed rat)
+        if (obj.data.smallDoor && entity.isSmall) continue;
 
         const ex = entity.position.x;
         const ey = entity.position.y;

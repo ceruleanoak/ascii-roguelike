@@ -1894,6 +1894,14 @@ export const ITEMS = {
     effect: 'wellOffering',  // Consumed by WellSystem when tossed into a W-room well
     color: '#ffcc66'
   },
+  '⊚': {
+    char: '⊚',
+    name: 'Frog Coin',
+    type: ITEM_TYPES.CONSUMABLE,
+    passive: true,
+    damageBonus: 1,           // +1 damage to all attacks while equipped
+    color: '#44bb44'
+  },
   '🜛': {
     char: '🜛',
     name: 'Mana Potion',
