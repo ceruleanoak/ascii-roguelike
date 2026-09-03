@@ -70,6 +70,15 @@ export class HutSystem {
     // Background objects: simple border wall visuals + sparse decor
     const backgroundObjects = [];
 
+    // Enemies and NPCs — filled in by the hutKind branches further down, but
+    // declared up here because `cellOccupied` below closes over `npcs` and the
+    // decor loop calls it before those branches run. Declaring them at the
+    // point of use put `npcs` in the temporal dead zone for that call, so
+    // generateHutInterior threw ReferenceError on EVERY hut and no hut could
+    // be entered at all.
+    const enemies = [];
+    const npcs = [];
+
     // Spawn-occupancy helper: rejects walls AND cells already holding a
     // background object or item. Prevents items/decor from rendering on top
     // of fixed objects like the oil press.
@@ -158,10 +167,8 @@ export class HutSystem {
       }
     }
 
-    // Enemies and NPCs — populated based on hutKind
-    const enemies = [];
-    const npcs = [];
-
+    // Enemies and NPCs — populated based on hutKind (declared above the
+    // cellOccupied helper, which reads `npcs`).
     if (hutKind === 'enemy_encounter') {
       // 1–2 zone-appropriate enemies
       const spawnCount = 1 + Math.floor(Math.random() * 2);
