@@ -825,6 +825,69 @@ programming terms.
   or NPC interactions. Updates player position and triggers room entry logic.
 - **Not:** normal movement or pathfinding. Warp is instantaneous spatial displacement.
 
+### Three Room
+- **Definition:** The source-head of the game — a Neutral Room holding one carved object with
+  three slots in it and a shut door to the north. Found only by travelling north three times
+  in a row, or through a Gray zone `'3'` room. What is placed in the slots decides how the run
+  can end.
+- **In code:** `threeRoom` script in `src/data/neutralRooms.js`; `room.isThreeRoom`;
+  `ThreeRoomSystem` owns the offerings, the music and the door; `ThreeRoomRenderer` draws the
+  frames and the Death cinematic.
+- **Not:** "Triangle Room" (the superseded cosmology name), "puzzle room" (reserved — that is
+  the dungeon side-room authoring pathway), "altar", "shrine".
+
+### Offering
+- **Definition:** A symbol placed into one of the Three Room's three slots. Placement is
+  one-shot: an offering can never be changed once made.
+- **In code:** `ThreeRoomSystem.placeOffering()`; stored on the slot Background Object.
+- **Not:** "sacrifice", "sacrifice item", "insert", "deposit".
+
+### Globe of Offerings
+- **Definition:** The menu the Three Room's slots are fed from — a slowly turning sphere with
+  the run's symbols on its surface, back face never drawn. It offers back only glyphs the run
+  actually touched, so the puzzle is unsolvable on some runs by design.
+- **In code:** `ThreeSlotGlobeSystem` (state, input, selection) + `ThreeSlotGlobeOverlay`
+  (render only); opened through the PauseSystem modal hook.
+- **Not:** "symbol menu", "item wheel", "carousel", "picker".
+
+### Power Trio
+- **Definition:** The set that satisfies the Three Room by **form** — a weapon in the apex
+  slot (Instinct), armor in the left (Experience), a consumable in the right (Convention).
+  It opens the north door, and behind the north door is Death.
+- **In code:** `SLOT_FORMS` in `ThreeRoomSystem`.
+- **Not:** "the three powers", "correct set", "win condition".
+
+### True 3
+- **Definition:** The one exact set of offerings the room is looking for — `⊥` Hammer,
+  `⊙` Spectacles, `🜛` Mana Potion, in the Instinct / Experience / Convention slots. It is
+  spared the north door and instead liberates South of Rest: an ending by permission.
+- **In code:** `TRUE_THREE` in `ThreeRoomSystem`. Because those three items are themselves a
+  weapon, an armor and a consumable, the True 3 also satisfies the Power Trio's form rule —
+  identity is therefore tested first and form is the fallback.
+- **Not:** "the right answer", "solution", "correct combination".
+
+### Cracked Slot
+- **Definition:** A Three Room slot whose offering was the wrong form for it. The slot goes
+  gray and cracked and keeps the wrong glyph — the mistake stays visible. Cracking is what
+  curses the run, and a cracked slot still counts as filled for opening the north door.
+- **In code:** `cracked` flag on the slot Background Object; `SLOT_CRACKED_COLOR` and
+  `_drawCracks` in `ThreeRoomRenderer`.
+- **Not:** "broken slot", "failed slot", "invalid placement".
+
+### Cursed Run
+- **Definition:** The state a run enters the moment a slot cracks. The Three Room can no
+  longer be found for the rest of the run, the Graveyard fills as rooms are explored, and REST
+  eventually turns gray, stops healing, and starts admitting undead from the south.
+- **In code:** planned `game.cursedRun` (not yet built).
+- **Not:** "cursed mode", "bad ending", "hard mode".
+
+### Graveyard
+- **Definition:** The room south of REST, opened by a Cursed Run — undead milling below a hard
+  divider between its top third and its lower two thirds. It fills further with every newly
+  explored room.
+- **In code:** planned Neutral Room script (not yet built).
+- **Not:** "cemetery", "boneyard", "crypt".
+
 ## Conventions
 
 - **Casing:** types/classes PascalCase; functions/variables camelCase; constants

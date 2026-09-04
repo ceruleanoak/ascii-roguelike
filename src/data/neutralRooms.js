@@ -437,18 +437,22 @@ export const NEUTRAL_ROOMS = {
       // up to reads as a single carved thing with three holes in it rather
       // than as three pieces of scattered furniture.
       //
-      //   col:  12 13 14 15 16 17
-      //   row-1        [     ]        ← apex, over the seam
-      //   row    [     ][     ]       ← base pair, touching
+      //   col:     12 13 14 15 16 17
+      //   row 14           [     ]       ← apex, over the seam
+      //   row 15     [     ][     ]      ← base pair, touching
       //
       // A 3-cell frame has no cell-aligned center, so the base pair's center
       // falls half a cell left of the apex's. That half-cell is the price of
       // the frames touching, and touching is the requirement.
       //
-      // The cluster sits above the room's center rather than around it: the
-      // player arrives at the center, so straddling that cell would drop a
-      // frame on top of them. Placed here they walk up to it, with the shut
-      // door still further north beyond it.
+      // The object is centered on the room. Its base pair spans cols 12-17
+      // and its two rows are 14-15, so both of its midlines fall on the
+      // room's own — the 30x30 field's true center is the boundary between
+      // 14 and 15, not a cell. Nothing is spawned on top of the player by
+      // doing this: entry to the Three Room always runs through
+      // animateExitWarp('north', ...), which re-anchors the player on the
+      // SOUTH edge and walks them inward to about row 25. They come up the
+      // room at the object, with the shut door beyond it to the north.
       //
       // Only the CONTENT cell is a real BackgroundObject — it carries
       // `threeSlot` and is what SPACE finds. ThreeRoomRenderer draws the
@@ -462,9 +466,9 @@ export const NEUTRAL_ROOMS = {
       //   1 left  — Experience — takes armor
       //   2 right — Convention — takes a consumable
       const slotCells = [
-        { col: cx,     row: cy - 3 }, // apex  — Instinct
-        { col: cx - 2, row: cy - 2 }, // left  — Experience
-        { col: cx + 1, row: cy - 2 }  // right — Convention
+        { col: cx,     row: cy - 1 }, // apex  — Instinct
+        { col: cx - 2, row: cy     }, // left  — Experience
+        { col: cx + 1, row: cy     }  // right — Convention
       ];
       slotCells.forEach((cell, idx) => {
         const slot = new BackgroundObject(' ', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
