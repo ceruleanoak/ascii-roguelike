@@ -344,7 +344,7 @@ export class ConsumableTriggerSystem {
   // Applies a self/AoE-around-player consumable's effect once its throw
   // animation lands. The eight offensive items with their own fixed AoE
   // landing spot (explode, curse, slow, poison, venomcloud, jolt,
-  // throwSteam, firecracker) stay in InventorySystem._executeWindupEffect —
+  // throwSteam, firecracker) resolve in ConsumableWindupEffects.execute —
   // this covers everything else, resolved against the player's CURRENT
   // position/state at landing time rather than at throw time.
   applyEffect(windup, player, enemies, steamClouds) {

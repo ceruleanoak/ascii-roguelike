@@ -28,9 +28,11 @@ import { computePawnSellValue } from '../data/shopPricing.js';
  *              Confirm toggles the highlighted lane — unless the row's cost
  *              is already met, in which case Confirm completes the purchase.
  *              Shift returns to 'list' and clears every toggle on that row.
- *   'pawn'   — Up/Down (W/S) moves pawnIndex across the player's own sellable
- *              items (itemChest weapons + banked armor/consumables — never
- *              ingredients, equipped gear, or key items). Confirm sells the
+ *   'pawn'   — Up/Down (W/S) moves pawnIndex across everything the player is
+ *              carrying: the weapon quick slots, worn armor and equipped
+ *              consumables, plus the banked itemChest and armor/consumable
+ *              spares. Never ingredients (their own economy) or key items
+ *              (narrative keys are not for sale). Confirm sells the
  *              highlighted item outright for its shown coin value. Shift
  *              returns to 'menu'. An empty list shows EMPTY and auto-returns
  *              to 'menu' after 2s if Shift isn't pressed first.
@@ -351,14 +353,19 @@ export class ShopSystem {
 
   // ── Pawn mode ────────────────────────────────────────────────────────────
   //
-  // Sells FROM the player's own banked storage — itemChest (weapons),
-  // armorInventory, consumableInventory. Deliberately excludes the
-  // ingredient pile (a separate, much larger economy already spent at the
-  // press/cauldron), equipped gear (selling what's actively worn/wielded is
-  // a foot-gun with no upside), and keyItemInventory (narrative keys are
-  // never for sale). A unique, much simpler scrollable list than the REST
-  // crafting screen — one flat row per owned Item instance, no ingredient
-  // pairing or recipe lookups involved.
+  // Sells everything the player is carrying — the weapon quick slots, worn
+  // armor and equipped consumables — plus their banked storage (itemChest,
+  // armorInventory, consumableInventory). Carried gear is in the list on
+  // purpose: mid-run the banked piles are usually empty (a picked-up weapon
+  // goes straight to a quick slot, and equipping armor splices it OUT of
+  // armorInventory), so a banked-only list showed the player nothing they
+  // owned. Selling your last weapon is allowed and is the player's call.
+  //
+  // Still excluded: the ingredient pile (a separate, much larger economy
+  // already spent at the press/cauldron) and keyItemInventory (narrative
+  // keys are never for sale). A unique, much simpler scrollable list than
+  // the REST crafting screen — one flat row per owned Item instance, no
+  // ingredient pairing or recipe lookups involved.
 
   _enterPawn() {
     this.mode = 'pawn';
@@ -367,12 +374,32 @@ export class ShopSystem {
     this.pawnEmptyAt = this.pawnEntries.length === 0 ? performance.now() : null;
   }
 
+  // Carried first, banked after — the loadout is what the player is thinking
+  // about when they walk up to the counter. `slot` is only meaningful for the
+  // indexed sources ('quick', 'equippedConsumable'); _sellPawnEntry reads it
+  // back to know which slot to empty.
   _buildPawnEntries() {
     const inv = this.game.inventorySystem;
+    const player = this.game.player;
     const entries = [];
+
+    (player?.quickSlots || []).forEach((item, slot) => {
+      if (item) entries.push({ item, source: 'quick', slot });
+    });
+    const worn = inv.getEquippedArmor();
+    if (worn) entries.push({ item: worn, source: 'equippedArmor', slot: -1 });
+    (inv.getEquippedConsumables() || []).forEach((item, slot) => {
+      // A spent one-shot slot still holds its Item for the HUD to grey out —
+      // it's already used up, so there's nothing left to sell.
+      if (item && !inv.getSpentConsumableSlots()?.[slot]) {
+        entries.push({ item, source: 'equippedConsumable', slot });
+      }
+    });
+
     for (const item of inv.getItemChest()) entries.push({ item, source: 'chest' });
     for (const item of inv.getArmorInventory()) entries.push({ item, source: 'armor' });
     for (const item of inv.getConsumableInventory()) entries.push({ item, source: 'consumable' });
+
     for (const entry of entries) entry.value = computePawnSellValue(entry.item.data);
     return entries;
   }
@@ -397,27 +424,33 @@ export class ShopSystem {
   }
 
   /**
-   * Sells one entry outright: removes it from whichever source array it came
-   * from, credits its coin value, then drops the row from the list. A row is
-   * one full sale, never a partial stack peel — itemChest can hold a stacked
-   * trap (item.count > 1) behind a single entry, so a chest row loops
-   * retrieveFromChest (the same one-unit-at-a-time helper the chest's own
-   * retrieve UI uses) enough times to clear the whole stack, paying out per
-   * unit sold.
+   * Sells one entry outright: removes it from whichever source it came from,
+   * credits its coin value, then drops the row from the list. A row is one
+   * full sale, never a partial stack peel — a stacked trap (item.count > 1)
+   * sits behind a single entry whether it's in the chest or a quick slot, so
+   * both pay out per unit and clear the whole stack.
+   *
+   * Carried sources route through InventorySystem.removeCarriedItem, which
+   * empties the slot and re-projects equipment onto the player (selling worn
+   * armor has to give its defense back); banked sources use the plain
+   * array-removal helpers, which have no player-facing stat to undo.
    */
   _sellPawnEntry(idx) {
     const entry = this.pawnEntries[idx];
     if (!entry) return;
     const inv = this.game.inventorySystem;
+    const units = entry.item.count || 1;
 
     if (entry.source === 'chest') {
-      const units = entry.item.count || 1;
       for (let i = 0; i < units; i++) inv.retrieveFromChest(entry.item);
       inv.addCoin(entry.value * units);
-    } else {
+    } else if (entry.source === 'armor' || entry.source === 'consumable') {
       if (entry.source === 'armor') inv.removeFromArmorInventory(entry.item);
       else inv.removeFromConsumableInventory(entry.item);
       inv.addCoin(entry.value);
+    } else {
+      inv.removeCarriedItem(entry.source, entry.slot, this.game.player);
+      inv.addCoin(entry.value * units);
     }
 
     this.pawnEntries.splice(idx, 1);

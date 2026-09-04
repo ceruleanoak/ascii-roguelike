@@ -16,8 +16,9 @@ import { Item } from '../entities/Item.js';
 import { GRID } from '../game/GameConfig.js';
 import { addItemToChestArray, removeItemFromChestArray, chestEntryLabel, trapAlreadyEquipped } from './TrapSystem.js';
 import { saveExploreRoomState, getSavedExploreRoomState, clearSavedExploreRoomState, saveRestIngredientsState, getSavedRestIngredientsState, clearSavedRestIngredientsState } from './RoomStatePersistence.js';
-import { createBurstParticles, createSparkBurst } from './WorldEffectsSystem.js';
+import { createBurstParticles } from './WorldEffectsSystem.js';
 import { EquipmentEffectsSystem } from './EquipmentEffectsSystem.js';
+import { ConsumableWindupEffects } from './ConsumableWindupEffects.js';
 
 export class InventorySystem {
   constructor() {
@@ -66,6 +67,7 @@ export class InventorySystem {
     // Recomputes player stat fields from equipped armor/consumables — see
     // applyEquipmentEffectsToPlayer, the sanctioned call point.
     this.equipmentEffectsSystem = new EquipmentEffectsSystem();
+    this.consumableWindupEffects = new ConsumableWindupEffects();
 
     // Weapons displaced during EXPLORE pickup buffer here, not in itemChest.
     // Flushed to itemChest by bankLoot() on safe REST return. Discarded on
@@ -587,6 +589,43 @@ export class InventorySystem {
     return true;
   }
 
+  // Strips an item the player is actively CARRYING rather than one sitting in
+  // a banked pile — the Shopkeeper's Pawn list sells the whole loadout, not
+  // just spares (see ShopSystem's pawn-mode header). `source` names which
+  // carried store the item came out of, matching the pawn entry's own field:
+  //
+  //   'equippedArmor'      — the single worn armor slot
+  //   'equippedConsumable' — equippedConsumables[slotIndex]; the slot goes
+  //                          empty rather than spent, so it can be refilled
+  //   'quick'              — player.quickSlots[slotIndex], the weapon loadout
+  //
+  // Always re-projects equipment onto the player afterwards: selling worn
+  // armor or an equipped consumable changes defense/resists/procs, and
+  // applyEquipmentEffectsToPlayer is the one sanctioned way to recompute them.
+  removeCarriedItem(source, slotIndex, player) {
+    if (source === 'equippedArmor') {
+      this.equippedArmor = null;
+    } else if (source === 'equippedConsumable') {
+      this.equippedConsumables[slotIndex] = null;
+      this.spentConsumableSlots[slotIndex] = false;
+      this.consumableCooldowns[slotIndex] = 0;
+      // Selling the armed slot disarms it — SPACE must not fire what's gone.
+      if (player.selectedConsumableIndex === slotIndex) player.selectedConsumableIndex = -1;
+    } else if (source === 'quick') {
+      player.quickSlots[slotIndex] = null;
+      // Selling the weapon in hand: fall back to whatever slot still holds
+      // one, mirroring Player.dropItem's own auto-switch.
+      if (player.activeSlotIndex === slotIndex) {
+        const nextFilled = player.quickSlots.findIndex(slot => slot !== null);
+        if (nextFilled !== -1) player.activeSlotIndex = nextFilled;
+      }
+    } else {
+      return false;
+    }
+    this.applyEquipmentEffectsToPlayer(player);
+    return true;
+  }
+
   // ========== ARMOR EFFECTS APPLICATION ==========
 
   /**
@@ -871,183 +910,9 @@ export class InventorySystem {
 
       // Windup complete — trigger effect
       if (windup.timer <= 0) {
-        this._executeWindupEffect(windup, player, enemies, combatSystem, steamClouds, particles);
+        this.consumableWindupEffects.execute(this, windup, player, enemies, combatSystem, steamClouds, particles);
         this.consumableWindups.splice(i, 1);
       }
-    }
-  }
-
-  /**
-   * Execute windup effect when timer completes
-   * @private
-   */
-  _executeWindupEffect(windup, player, enemies, combatSystem, steamClouds, particles) {
-    const cd = windup.consumable.data;
-    const px = windup.x;
-    const py = windup.y;
-
-    // Execute effect based on type
-    switch (windup.effectType) {
-      case 'explode': {
-        // Bomb explosion
-        const aoeRadius = cd.radius * 2;
-        for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px;
-          const dy = (enemy.position.y + 20) - py;
-          if (Math.sqrt(dx * dx + dy * dy) <= aoeRadius) {
-            enemy.takeDamage(cd.damage);
-          }
-        }
-        // Explosion particles
-        createBurstParticles(this.game, particles, px, py, 20, windup.consumable.color || '#ff4400');
-        break;
-      }
-      case 'curse': {
-        // Cursed Skull damage
-        for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px;
-          const dy = (enemy.position.y + 20) - py;
-          if (Math.sqrt(dx * dx + dy * dy) <= cd.radius) {
-            enemy.takeDamage(cd.damage);
-            combatSystem.createDamageNumber(cd.damage, enemy.position.x, enemy.position.y, '#ffffff');
-          }
-        }
-        createBurstParticles(this.game, particles, px, py, 25, '#9900ff');
-        break;
-      }
-      case 'slow': {
-        // Slime Ball - apply freeze effect
-        for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px;
-          const dy = (enemy.position.y + 20) - py;
-          if (Math.sqrt(dx * dx + dy * dy) <= 50) {
-            enemy.applyStatusEffect('freeze', cd.duration || 10);
-            combatSystem.createDamageNumber('~', enemy.position.x, enemy.position.y, '#00ff00');
-          }
-        }
-        createBurstParticles(this.game, particles, px, py, 15, '#00ff00');
-        break;
-      }
-      case 'poison': {
-        // Poison Flask - apply poison
-        for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px;
-          const dy = (enemy.position.y + 20) - py;
-          if (Math.sqrt(dx * dx + dy * dy) <= 55) {
-            enemy.applyStatusEffect('poison', 8);
-            combatSystem.createDamageNumber('☠', enemy.position.x, enemy.position.y, '#44ff44');
-          }
-        }
-        createBurstParticles(this.game, particles, px, py, 18, '#44ff44');
-        break;
-      }
-      case 'venomcloud': {
-        // Venom Vial - damage + poison + slow
-        for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px;
-          const dy = (enemy.position.y + 20) - py;
-          if (Math.sqrt(dx * dx + dy * dy) <= 60) {
-            enemy.takeDamage(3);
-            enemy.applyStatusEffect('poison', 8);
-            enemy.applyStatusEffect('freeze', 5);
-            combatSystem.createDamageNumber(3, enemy.position.x, enemy.position.y, '#00ff44');
-          }
-        }
-        createBurstParticles(this.game, particles, px, py, 22, '#00ff44');
-        break;
-      }
-      case 'jolt': {
-        // Jolt Jar — impact AoE at the throw target (set when the jar was thrown)
-        const ix = windup.targetX != null ? windup.targetX : px;
-        const iy = windup.targetY != null ? windup.targetY : py;
-        const radius = cd.radius || 80;
-        const damage = cd.damage || 4;
-        for (const enemy of enemies) {
-          const ex = enemy.position.x + 20;
-          const ey = enemy.position.y + 20;
-          const dx = ex - ix;
-          const dy = ey - iy;
-          if (Math.sqrt(dx * dx + dy * dy) <= radius) {
-            enemy.takeDamage(damage);
-            combatSystem.createDamageNumber(damage, enemy.position.x, enemy.position.y, '#ffff00');
-          }
-        }
-        // Spark burst at impact + four ring offsets so the AoE reads "large"
-        createSparkBurst(this.game, particles, ix, iy);
-        const ring = radius * 0.55;
-        createSparkBurst(this.game, particles, ix + ring, iy);
-        createSparkBurst(this.game, particles, ix - ring, iy);
-        createSparkBurst(this.game, particles, ix, iy + ring);
-        createSparkBurst(this.game, particles, ix, iy - ring);
-        break;
-      }
-      case 'firecracker': {
-        const burnRadius = windup.consumable?.data?.radius || 64;
-        for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px, dy = (enemy.position.y + 20) - py;
-          if (Math.sqrt(dx * dx + dy * dy) <= burnRadius) {
-            // Two stacks so the blast reads as a real hit, not a graze —
-            // applyStatusEffect increments enemy.statusEffects.burn.stacks
-            // by 1 per call (capped at MAX_STACKUP=3 in EnemyStatusEffects.js).
-            enemy.applyStatusEffect('burn', 3.0);
-            enemy.applyStatusEffect('burn', 3.0);
-          }
-        }
-        createSparkBurst(this.game, particles, px, py);
-        break;
-      }
-      case 'throwSteam': {
-        // Steam Vial — only push when the caller provided a valid array.
-        // Rebinding the local parameter has no effect on the caller's reference.
-        if (steamClouds) {
-          steamClouds.push({
-            x: px,
-            y: py,
-            radius: cd.radius || 20 * 4, // GRID.CELL_SIZE * 4
-            timer: cd.duration || 8.0
-          });
-        }
-        createBurstParticles(this.game, particles, px, py, 25, '#aaaaaa');
-        break;
-      }
-      default: {
-        // Self/AoE-around-player consumables (heal, buffs, shields, etc) —
-        // ConsumableTriggerSystem owns the per-effect mutation.
-        this.game.consumableTriggerSystem.applyEffect(windup, player, enemies, steamClouds);
-
-        // Landing burst — same feedback the old instant-trigger path showed.
-        const burstChars = ['+', '*', 'o', '.'];
-        for (let i = 0; i < 10; i++) {
-          particles.push({
-            x: px + Math.random() * 40 - 20,
-            y: py + Math.random() * 40 - 20,
-            vx: Math.random() * 60 - 30,
-            vy: Math.random() * 60 - 30,
-            life: 0.5,
-            maxLife: 0.5,
-            char: burstChars[Math.floor(Math.random() * burstChars.length)],
-            color: windup.consumable.color || '#ffaa00',
-            hutPlane: !!this.game.activeFloor
-          });
-        }
-
-        // Mark effect as active for the full duration (drives slow bar blink)
-        if (cd.duration > 0) {
-          this.activeEffectTimers[windup.slotIndex] = cd.duration;
-        }
-        break;
-      }
-    }
-
-    // Blink HUD slot
-    this.consumableBlinkSlot = windup.slotIndex;
-    this.consumableBlinkTimer = 0.4;
-    this.consumableBlinkPhase = 0.1;
-    this.consumableBlinkShowBlock = true;
-
-    // Handle consumption based on one-shot vs reusable
-    if (!windup.isOneShot) {
-      this.consumableCooldowns[windup.slotIndex] = cd.cooldown || 10;
     }
   }
 
