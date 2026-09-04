@@ -326,7 +326,7 @@ export class MazeSystem {
 
     // Maze music override: the mono maze track fills both dual-layer slots
     // with the bassline layer muted, mirroring the cyan/green zone pattern.
-    if (game.audioSystem.mode === 'dual' || game.audioSystem.mode === 'red') {
+    if (game.audioSystem.isZoneMusicActive()) {
       const base = import.meta.env.BASE_URL;
       const mazeTrack = `${base}assets/audio/maze.mp3`;
       game.audioSystem.switchMusic(mazeTrack, mazeTrack)

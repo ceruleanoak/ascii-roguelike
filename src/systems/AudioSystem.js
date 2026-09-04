@@ -20,6 +20,28 @@ const REST_MUSIC_PATHS = {
   cyan: 'assets/audio/rest-cyan.mp3'
 };
 
+// Zones whose EXPLORE music is a sequence of whole tracks rather than a
+// dual-layer stem pair. Sequential music never cuts mid-track: the combat
+// flag only decides which track plays *next*, at the current one's end.
+//
+//   calmNext[i]   — track to play after track i while no enemies are engaged
+//   combatNext[i] — track to play after track i while combat is active
+//
+// Red is a three-part set (A/B out of combat, B/C in combat); yellow is the
+// two-part form (A alone out of combat, B alone in combat).
+const SEQUENCE_MUSIC = {
+  red: {
+    tracks: ['assets/audio/red-a.mp3', 'assets/audio/red-b.mp3', 'assets/audio/red-c.mp3'],
+    calmNext:   [1, 0, 0], // A→B, B→A, C→A
+    combatNext: [1, 2, 1]  // A→B, B→C, C→B
+  },
+  yellow: {
+    tracks: ['assets/audio/yellow-a.mp3', 'assets/audio/yellow-b.mp3'],
+    calmNext:   [0, 0], // A→A, B→A
+    combatNext: [1, 1]  // A→B, B→B
+  }
+};
+
 export class AudioSystem {
   constructor() {
     // Mode: 'single' (title screen) or 'dual' (gameplay)
@@ -69,14 +91,13 @@ export class AudioSystem {
     this.bossAnticipationActive = false; // true = mini-loop mode (tracks 0–1 only)
     this.bossSequencePending = false; // true = switch to full 5-track at next boundary
 
-    // Red zone music (sequential 3-part: A/B out of combat, B/C in combat)
-    // Out of combat: A → B → A → B …
-    // In combat:    B → C → B → C …
-    // Transitions happen at the end of the currently playing track.
-    this.redBuffers = [];             // AudioBuffer[3] — A=0, B=1, C=2
-    this.redSequenceSource = null;    // current AudioBufferSourceNode
-    this.redCurrentIndex = 0;         // 0=A, 1=B, 2=C
-    this.redCombatActive = false;     // updated by setLayer2Enabled while in red mode
+    // Sequential zone music (see SEQUENCE_MUSIC) — whole tracks chained at
+    // their own boundaries instead of dual-layer stems mixed live.
+    this.zoneSequenceBuffers = {};    // zone → AudioBuffer[], one per track
+    this.zoneSequenceSource = null;   // current AudioBufferSourceNode
+    this.zoneSequenceIndex = 0;       // index into the active zone's tracks
+    this.sequenceZone = null;         // zone whose sequence is playing
+    this.zoneCombatActive = false;    // updated by setLayer2Enabled while sequential
 
     // Shared state
     this.isPlaying = false;
@@ -767,13 +788,15 @@ export class AudioSystem {
         this.bossSequenceSource.disconnect();
         this.bossSequenceSource = null;
       }
-    } else if (this.mode === 'red') {
-      if (this.redSequenceSource) {
-        this.redSequenceSource.onended = null;
-        try { this.redSequenceSource.stop(); } catch (_) {}
-        this.redSequenceSource.disconnect();
-        this.redSequenceSource = null;
-      }
+    } else if (this.mode === 'zoneSequence') {
+      // The sequence's zone and combat flag die with its source, so a later
+      // switchMusic() back to dual-layer can't leave them pointing at a
+      // sequence that is no longer playing. Nothing resumes a sequence from
+      // stop() — play() only restores 'single'/'dual' — so there is no state
+      // here worth preserving.
+      this._stopZoneSequenceSource();
+      this.sequenceZone = null;
+      this.zoneCombatActive = false;
     }
     this.isPlaying = false;
     this.removeAutoplayUnblock();
@@ -786,8 +809,8 @@ export class AudioSystem {
    * @param {boolean} enabled - True to unmute layer 2, false to mute
    */
   setLayer2Enabled(enabled) {
-    if (this.mode === 'red') {
-      this.setRedCombatActive(enabled);
+    if (this.mode === 'zoneSequence') {
+      this.setZoneCombatActive(enabled);
       return;
     }
     if (this.mode !== 'dual' || !this.layer2Gain) return;
@@ -827,8 +850,8 @@ export class AudioSystem {
    * for the loop end would feel wrong. Does not affect the enable path.
    */
   muteLayer2Immediately() {
-    if (this.mode === 'red') {
-      this.setRedCombatActive(false);
+    if (this.mode === 'zoneSequence') {
+      this.setZoneCombatActive(false);
       return;
     }
     if (this.mode !== 'dual' || !this.layer2Gain || this.layer2Muted) return;
@@ -857,11 +880,11 @@ export class AudioSystem {
    * @param {string} layer2Path - Path to new layer 2
    */
   async switchMusic(layer1Path, layer2Path) {
-    if (this.mode !== 'dual' && this.mode !== 'red') return false;
+    if (!this.isZoneMusicActive()) return false;
 
-    // Coming from red mode there is no meaningful layer2 state to preserve —
-    // the caller (usually setLayer2Enabled on the next room enter) will set
-    // combat layering correctly for the destination zone.
+    // Coming from a sequential zone there is no meaningful layer2 state to
+    // preserve — the caller (usually setLayer2Enabled on the next room enter)
+    // will set combat layering correctly for the destination zone.
     const wasLayer2Enabled = this.mode === 'dual' && !this.layer2Muted;
 
     this.stop();
@@ -908,8 +931,8 @@ export class AudioSystem {
     if (this.mode === 'sequence') {
       this.stopBossMusic();
     }
-    if (this.mode === 'red') {
-      this.stopRedSequence();
+    if (this.mode === 'zoneSequence') {
+      this.stopZoneSequence();
     }
     this.layer2Muted = true;
     if (this.layer2Gain && this.audioContext) {
@@ -921,18 +944,19 @@ export class AudioSystem {
   }
 
   /**
-   * Switch music to match a zone (green/cyan/red), skipping the swap when
-   * already on that zone's track. Skipped entirely while boss sequence mode
-   * is active (anticipation or full fight).
+   * Switch music to match a zone, skipping the swap when already on that
+   * zone's track. Skipped entirely while boss sequence mode is active
+   * (anticipation or full fight).
    * `force` bypasses the currentMusicZone equality checks — used by interior
    * exits (e.g. the maze) to restore zone music after a non-zone override,
    * since currentMusicZone is never touched while inside the interior.
-   * @param {string} zone - 'green' | 'cyan' | 'red' (any other value maps to green)
+   * @param {string} zone - a SEQUENCE_MUSIC zone, 'cyan', or anything else
+   *                        (which maps to the green dual-layer track)
    * @param {string} base - BASE_URL prefix
    * @param {boolean} force - bypass the already-on-this-zone check
    */
   switchZoneMusic(zone, base, force = false) {
-    if (this.mode !== 'dual' && this.mode !== 'red') return;
+    if (!this.isZoneMusicActive()) return;
     // Leaving a dedicated REST track always requires a reload, even when the
     // zone itself didn't change (green REST → green EXPLORE both report
     // currentMusicZone === 'green', so the equality checks below would
@@ -945,15 +969,16 @@ export class AudioSystem {
       force = true;
     }
     const swap = (l1, l2) => cameFromRest ? this.switchMusicAtLoopEnd(l1, l2) : this.switchMusic(l1, l2);
-    if (zone === 'red' && (force || this.currentMusicZone !== 'red')) {
-      if (this.switchToRedSequence()) {
-        this.currentMusicZone = 'red';
+    if (SEQUENCE_MUSIC[zone] && (force || this.currentMusicZone !== zone)) {
+      if (this.switchToZoneSequence(zone)) {
+        this.currentMusicZone = zone;
       }
     } else if (zone === 'cyan' && (force || this.currentMusicZone !== 'cyan')) {
       this.currentMusicZone = 'cyan';
       swap(`${base}assets/audio/cyan-layer1.mp3`, `${base}assets/audio/cyan-layer2.mp3`);
-    } else if (zone !== 'cyan' && zone !== 'red'
-               && (force || this.currentMusicZone === 'cyan' || this.currentMusicZone === 'red')) {
+    } else if (zone !== 'cyan' && !SEQUENCE_MUSIC[zone]
+               && (force || this.currentMusicZone === 'cyan'
+                   || SEQUENCE_MUSIC[this.currentMusicZone])) {
       this.currentMusicZone = 'green';
       swap(`${base}assets/audio/layer1.mp3`, `${base}assets/audio/layer2.mp3`);
     }
@@ -1416,31 +1441,39 @@ export class AudioSystem {
   }
 
   /**
-   * Load the 3 red-zone tracks (A/B/C) for sequential playback.
-   * Fire-and-forget — resolves silently if files are missing.
+   * Load every sequential zone's tracks (see SEQUENCE_MUSIC) for playback.
+   * Fire-and-forget — a zone whose files are missing is simply left unloaded
+   * and falls back to the green dual-layer track via switchToZoneSequence.
    * @param {string} base - BASE_URL prefix
    */
-  async loadRedTracks(base) {
+  async loadZoneTracks(base) {
     if (!this.audioContext) return;
-    try {
-      const paths = ['a', 'b', 'c'].map(l => `${base}assets/audio/red-${l}.mp3`);
-      const datas = await Promise.all(paths.map(p => this.fetchAudioBuffer(p)));
-      this.redBuffers = await Promise.all(
-        datas.map(d => this.audioContext.decodeAudioData(d))
-      );
-    } catch (e) {
-      console.error('[Audio] Failed to load red tracks:', e);
-    }
+    await Promise.all(Object.entries(SEQUENCE_MUSIC).map(async ([zone, spec]) => {
+      try {
+        const datas = await Promise.all(
+          spec.tracks.map(path => this.fetchAudioBuffer(`${base}${path}`))
+        );
+        this.zoneSequenceBuffers[zone] = await Promise.all(
+          datas.map(d => this.audioContext.decodeAudioData(d))
+        );
+      } catch (e) {
+        console.error(`[Audio] Failed to load ${zone} tracks:`, e);
+      }
+    }));
   }
 
   /**
-   * Switch from dual-layer mode to the red zone sequential mode.
-   * Stops current dual sources, enters mode='red', starts playback at track A.
-   * Requires loadRedTracks() to have completed and a layer1Gain to exist.
+   * Switch to a zone's sequential music, starting at its first track (A).
+   * Stops whatever is currently playing — dual-layer sources or another
+   * zone's sequence — and enters mode='zoneSequence'.
+   * Requires loadZoneTracks() to have completed and a layer1Gain to exist.
+   * @param {string} zone - a key of SEQUENCE_MUSIC
+   * @returns {boolean} True if the sequence started
    */
-  switchToRedSequence() {
-    if (!this.redBuffers.length) {
-      console.warn('[Audio] Red tracks not loaded yet');
+  switchToZoneSequence(zone) {
+    const buffers = this.zoneSequenceBuffers[zone];
+    if (!buffers?.length) {
+      console.warn(`[Audio] ${zone} tracks not loaded yet`);
       return false;
     }
     if (!this.layer1Gain) return false;
@@ -1453,75 +1486,85 @@ export class AudioSystem {
         this[prop] = null;
       }
     }
-    this.mode = 'red';
-    this.redCombatActive = false;
-    this._startRedTrack(0);
+    // …and any sequence already running, when crossing between two
+    // sequential zones (red ↔ yellow) without passing through dual mode.
+    this._stopZoneSequenceSource();
+
+    this.mode = 'zoneSequence';
+    this.sequenceZone = zone;
+    this.zoneCombatActive = false;
+    this._startZoneTrack(0);
     return true;
   }
 
   /**
-   * Stop red sequence playback and revert mode to 'dual' so dual-layer
+   * Stop sequential playback and revert mode to 'dual' so dual-layer
    * APIs (switchMusic, setLayer2Enabled) can take over again.
    */
-  stopRedSequence() {
-    if (this.redSequenceSource) {
-      this.redSequenceSource.onended = null;
-      try { this.redSequenceSource.stop(); } catch (_) {}
-      this.redSequenceSource.disconnect();
-      this.redSequenceSource = null;
-    }
-    this.redCombatActive = false;
-    if (this.mode === 'red') this.mode = 'dual';
-    this.isPlaying = false;
+  stopZoneSequence() {
+    this.stop();
+    if (this.mode === 'zoneSequence') this.mode = 'dual';
   }
 
   /**
-   * Update the combat-active flag for red sequence routing.
+   * True while zone music owns playback — dual-layer or sequential, as
+   * opposed to the title screen ('single') or a boss fight ('sequence').
+   * Callers that swap zone music must check this first.
+   */
+  isZoneMusicActive() {
+    return this.mode === 'dual' || this.mode === 'zoneSequence';
+  }
+
+  /**
+   * Update the combat-active flag for sequential routing.
    * Takes effect at the end of the currently playing track (sequential music
-   * never cuts mid-track). Out-of-combat oscillates A↔B; in-combat oscillates
-   * B↔C; combat-end always queues A next.
+   * never cuts mid-track); the per-zone calmNext/combatNext tables in
+   * SEQUENCE_MUSIC decide where each boundary leads.
    */
-  setRedCombatActive(active) {
-    if (this.mode !== 'red') return;
-    this.redCombatActive = !!active;
+  setZoneCombatActive(active) {
+    if (this.mode !== 'zoneSequence') return;
+    this.zoneCombatActive = !!active;
   }
 
   /**
-   * Start playing red track at the given index (0=A, 1=B, 2=C).
-   * Sets up onended to advance via _onRedTrackEnded().
+   * Tear down the current sequence source without touching mode or flags.
+   * Clearing onended first keeps the teardown from advancing the sequence.
    */
-  _startRedTrack(index) {
-    if (this.redSequenceSource) {
-      this.redSequenceSource.onended = null;
-      try { this.redSequenceSource.stop(); } catch (_) {}
-      this.redSequenceSource.disconnect();
-    }
-    this.redCurrentIndex = index;
+  _stopZoneSequenceSource() {
+    if (!this.zoneSequenceSource) return;
+    this.zoneSequenceSource.onended = null;
+    try { this.zoneSequenceSource.stop(); } catch (_) {}
+    this.zoneSequenceSource.disconnect();
+    this.zoneSequenceSource = null;
+  }
+
+  /**
+   * Start playing the active zone's track at the given index.
+   * Sets up onended to advance via _onZoneTrackEnded().
+   */
+  _startZoneTrack(index) {
+    this._stopZoneSequenceSource();
+    this.zoneSequenceIndex = index;
     const source = this.audioContext.createBufferSource();
-    source.buffer = this.redBuffers[index];
+    source.buffer = this.zoneSequenceBuffers[this.sequenceZone][index];
     source.loop = false;
     source.connect(this.layer1Gain);
-    source.onended = () => this._onRedTrackEnded();
+    source.onended = () => this._onZoneTrackEnded();
     source.start(0);
-    this.redSequenceSource = source;
+    this.zoneSequenceSource = source;
     this.isPlaying = true;
   }
 
   /**
-   * Decide and play the next red track at the boundary.
-   *   combatActive:  A→B, B→C, C→B
-   *   !combatActive: A→B, B→A, C→A
+   * Decide and play the next track at the boundary, per the active zone's
+   * calmNext/combatNext table.
    */
-  _onRedTrackEnded() {
-    if (this.mode !== 'red') return;
-    const curr = this.redCurrentIndex;
-    let next;
-    if (this.redCombatActive) {
-      next = (curr === 0) ? 1 : (curr === 1) ? 2 : 1;
-    } else {
-      next = (curr === 0) ? 1 : 0;
-    }
-    this._startRedTrack(next);
+  _onZoneTrackEnded() {
+    if (this.mode !== 'zoneSequence') return;
+    const spec = SEQUENCE_MUSIC[this.sequenceZone];
+    if (!spec) return;
+    const table = this.zoneCombatActive ? spec.combatNext : spec.calmNext;
+    this._startZoneTrack(table[this.zoneSequenceIndex]);
   }
 
   /**
@@ -1560,8 +1603,9 @@ export class AudioSystem {
     this.gameplaySFXLoaded = false;
     this.bossBuffers = [];
     this.bossLoopBuffer = null;
-    this.redBuffers = [];
-    this.redSequenceSource = null;
+    this.zoneSequenceBuffers = {};
+    this.zoneSequenceSource = null;
+    this.sequenceZone = null;
     this.mode = null;
   }
 }

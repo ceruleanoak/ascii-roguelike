@@ -1240,8 +1240,9 @@ class Game {
         this.audioSystem.loadGameplaySFX(base);
         // Load boss tracks in background (ready before player reaches depth 14)
         this.audioSystem.loadBossTracks(base);
-        // Load red zone tracks in background (ready before player enters red zone)
-        this.audioSystem.loadRedTracks(base);
+        // Load the sequential zones' tracks in background (ready before the
+        // player reaches red or yellow)
+        this.audioSystem.loadZoneTracks(base);
       });
     } else if (this.audioSystem.mode === 'sequence') {
       // Returned to REST either by retreating from the pre-boss room without
