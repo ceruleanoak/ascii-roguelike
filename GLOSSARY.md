@@ -600,9 +600,13 @@ programming terms.
   to its zone's Legend-of-Three triad, capped by a temptation finale won by refusing, carrying
   one Game Changer. New zones author data + art, not new systems. The green Dungeon Boss is
   the Hoardmaw.
-- **In code:** `DungeonBossSystem` (orchestrator; deliberately outside the floor's enemy tick
-  loop — sole driver on real seconds) + per-zone spec in `src/data/dungeonBosses/*.js`;
-  composite body entity + dedicated renderer section, like the zone bosses.
+- **In code:** `DungeonBossSystem` (orchestrator) + per-zone spec in
+  `src/data/dungeonBosses/*.js`; composite body entity + dedicated renderer, like the zone
+  bosses. The body rides `floor.enemies`, so the Dungeon interior loop is its sole driver and
+  CombatSystem hit-tests it like any other enemy; the orchestrator is a pure consumer and
+  never ticks the body itself (bug #216). That loop runs on double-seconds, so the entity
+  converts once at its own `update()` boundary and its constants stay authored in real
+  seconds.
 - **Not:** a Boss (surface, `BossSystem`, depth-gated) or a Miniboss (`BOSS_ENCOUNTERS`
   B-room encounter).
 

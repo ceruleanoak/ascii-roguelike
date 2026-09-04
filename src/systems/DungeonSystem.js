@@ -560,6 +560,12 @@ export class DungeonSystem {
         }
       }
 
+      // Dungeon boss encounter (vault floor only; no-ops elsewhere). Runs
+      // BEFORE the death sweep on purpose: the boss owns its own death beat
+      // (authored payout, no generic destroy thud or gray debris), and it
+      // removes itself from the roster once paid out.
+      game.dungeonBossSystem?.update?.(dt);
+
       // Process interior enemy deaths
       for (let i = floor.enemies.length - 1; i >= 0; i--) {
         const enemy = floor.enemies[i];
@@ -579,9 +585,6 @@ export class DungeonSystem {
       // Puzzle/gating logic (key vault lock, companion-gate visibility,
       // trap-room clear gate, companion-switch puzzle, compass beep).
       game.dungeonPuzzleSystem.update(floor, dt);
-
-      // Dungeon boss encounter (vault floor only; no-ops elsewhere).
-      game.dungeonBossSystem?.update?.(dt);
 
       // Update background objects
       for (const obj of floor.backgroundObjects) obj.update(dt);

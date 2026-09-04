@@ -207,6 +207,17 @@ export class SandstormSystem {
     const lss = this.game.lightningStrikeSystem;
     if (!lss) return;
     let x, y;
+
+    // Yellow Ascent: redirect lightning to the storm spire
+    const storm = this.game.currentRoom?.ascentStorm;
+    if (storm?.spire && !storm.spire.destroyed) {
+      x = storm.spire.position.x + GRID.CELL_SIZE / 2;
+      y = storm.spire.position.y + GRID.CELL_SIZE / 2;
+      const strike = lss.scheduleStrike({ x, y, delay: 0.7, hitsPlayer: true, plane: 0 });
+      this.game.stormAscentSystem?.redirectStrike(strike);
+      return;
+    }
+
     // Half the storm strikes aim at water when the room has any — rivers are
     // the show: a strike on the channel sends a visible electric cascade
     // downstream (ElectricitySystem). The rest stay fully random.

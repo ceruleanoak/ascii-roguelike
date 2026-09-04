@@ -1303,6 +1303,7 @@ export const ENEMIES = {
     attackType: 'melee',
     decisionInterval: 0.35,
     color: '#aaeeff',
+    small: true,           // Hides under deep snow — visible as cyan bump
     movementStyle: 'kiter',
     movementConfig: {
       kiteDistance: GRID.CELL_SIZE * 3.5,    // Orbiting radius — just outside melee
@@ -1339,6 +1340,7 @@ export const ENEMIES = {
     sapDamageInterval: 1.2,  // Slower than bat
     decisionInterval: 0.4,
     color: '#88ddff',
+    small: true,           // Hides under deep snow — visible as cyan bump
     float: true,  // Ghostly — drifts over ground hazards
     packCoordination: true,  // Multiple wraiths coordinate latching to exhaust the player
     elementalAffinity: {
@@ -1351,22 +1353,41 @@ export const ENEMIES = {
   'I': {
     char: 'I',
     name: 'Ice Golem',
-    description: 'A walking frost construct, hard to stun or poison — but fire cuts straight through it.',
-    spellDescription: 'COLD. RESISTANT.',
+    description: 'A walking glacier. Its frozen shell reflects projectiles — but drops the shield to strike.',
+    spellDescription: 'REFLECTS. THEN STRIKES.',
     trueName: 'ISSKAPTR',
-    mass: 3,
-    hp: 13,
-    speed: 20,
-    acceleration: 60,   // Glacial inertia — an ice golem moving is hard to stop
-    damage: 3,
-    attackRange: GRID.CELL_SIZE * 2,  // 2 units (melee)
+    mass: 5,
+    hp: 20,
+    speed: 14,
+    acceleration: 40,   // Glacial inertia — barely moves, hard to stop
+    damage: 4,
+    attackRange: GRID.CELL_SIZE * 2.5,  // 2.5 units (heavy reach)
     aggroRange: GRID.CELL_SIZE * 8,   // 8 units
-    attackCooldown: 1.8,
-    attackWindup: 1.0,  // Minimum 1 second telegraph
+    attackCooldown: 2.5,
+    attackWindup: 1.2,  // Long telegraph — read the windup
     windupMovement: 'advance',  // Heavy golem keeps closing during windup
     attackType: 'melee',
-    decisionInterval: 0.6,
+    decisionInterval: 0.8,
     color: '#aaddff',
+    reflectShield: {
+      enabled: true,
+      arcDegrees: 360,
+      shieldDuration: 999,         // Effectively permanent — drops only during attack windup
+      dropsDuringWindup: true,     // The punish window: shield is down for the whole telegraph
+      shieldCooldown: 2.5,         // Drops for 2.5s during attack
+      reflectDamageBonus: 1.5,     // Ice shards hurt
+      shieldPhaseMovement: false,  // Doesn't retreat — it's a walking glacier
+      shieldColor: '#aaeeff'
+    },
+    deathExplosion: {
+      enabled: true,
+      projectileCount: 8,
+      projectileType: 'freeze',
+      speed: 80,
+      damage: 2,
+      spreadAngle: 360,
+      deathDelay: 1.0
+    },
     elementalAffinity: {
       resistance: { 'stun': 0.6, 'poison': 0.8 },
       weakness: { 'burn': 2.0 }
@@ -1453,6 +1474,7 @@ export const ENEMIES = {
     trailMechanic: {
       enabled: true,
       trailType: 'ice',
+      suppressInDeepSnow: true, // Glides over deep snow; scores only bare ground
       trailInterval: 0.4,
       trailDuration: 7.0,       // Long-lived — accumulates as fight drags on
       trailRadius: GRID.CELL_SIZE * 1.1
@@ -1508,14 +1530,14 @@ export const ENEMIES = {
   'y': {
     char: 'y',
     name: 'Yeti',
-    description: 'Massive and relentless. Its fists freeze on contact.',
-    spellDescription: 'FISTS THAT FREEZE.',
+    description: 'Massive and relentless. It falls twice before staying down — each rise brings a frenzy.',
+    spellDescription: 'FALLS TWICE. RAGES.',
     trueName: 'YMIR',
     mass: 2.5,
-    hp: 13,
+    hp: 10,
     speed: 18,
     acceleration: 65,   // Massive inertia — slow to start, hard to stop
-    damage: 4,
+    damage: 3,
     attackRange: GRID.CELL_SIZE * 2.5,  // 2.5 units (heavy reach)
     aggroRange: GRID.CELL_SIZE * 7,     // 7 units
     attackCooldown: 2.2,
@@ -1539,6 +1561,16 @@ export const ENEMIES = {
       trailInterval: 0.6,
       trailDuration: 5.0,
       trailRadius: GRID.CELL_SIZE * 1.0
+    },
+    riseAgain: {
+      riseDelay: 3.0,
+      riseHpFraction: 0.4,
+      pileChar: '8',
+      maxRises: 2,
+      frenzyOnRise: true,
+      frenzyDuration: 3.0,
+      frenzyDamageMultiplier: 2.0,
+      frenzySpeedMultiplier: 1.5
     },
     elementalAffinity: {
       resistance: { 'physical': 0.6, 'stun': 0.7 },
@@ -1597,6 +1629,49 @@ export const ENEMIES = {
     tier: 'elite'
   },
 
+  'D': {
+    char: 'D',
+    name: 'Frozen Duelist',
+    description: 'An ice-wreathed fencer. Its parry is always raised — only the attack windup creates an opening.',
+    spellDescription: 'WATCH THE FLASH.',
+    trueName: 'DUXGLACIE',
+    mass: 0.9,
+    hp: 10,
+    speed: 38,
+    acceleration: 300,
+    damage: 3,
+    attackRange: GRID.CELL_SIZE * 2,
+    aggroRange: GRID.CELL_SIZE * 9,
+    attackCooldown: 2.0,
+    attackWindup: 1.0,
+    windupMovement: 'advance',
+    attackType: 'melee',
+    decisionInterval: 0.35,
+    color: '#88ccee',
+    movementStyle: 'keeper',
+    movementConfig: {
+      preferredRange: GRID.CELL_SIZE * 4,
+      rangeTolerance: GRID.CELL_SIZE * 1.0
+    },
+    parryMechanic: {
+      enabled: true,
+      parryArcDegrees: 360,       // Always raised — full coverage
+      parryDuration: 1.5,         // Long active window
+      parryCooldown: 3.0,         // Long cooldown = big punish window
+      parryWindup: 0.8,           // Telegraph before parry activates
+      reflectDamage: false,       // Doesn't reflect melee — just blocks
+      counterAttack: true,        // Counters on successful parry
+      chargeOnParry: false,
+      parryColor: '#aaeeff'
+    },
+    elementalAffinity: {
+      resistance: { 'stun': 0.5 },
+      weakness: { 'burn': 1.8 }
+    },
+    affinities: ['ice', 'humanoid'],
+    tier: 'elite'
+  },
+
 
   // --- Fire ---
 
@@ -1619,6 +1694,7 @@ export const ENEMIES = {
     attackType: 'magic',
     decisionInterval: 0.4,
     color: '#dddddd',
+    small: true,           // Hides under deep snow — visible as cyan bump
     float: true,
     movementStyle: 'kiter',
     movementConfig: {
@@ -1662,6 +1738,7 @@ export const ENEMIES = {
     attackType: 'melee',
     decisionInterval: 0.5,
     color: '#66ccdd',
+    small: true,           // Hides under deep snow — visible as cyan bump
     movementStyle: 'keeper',
     movementConfig: {
       preferredRange: GRID.CELL_SIZE * 999,
@@ -2401,8 +2478,8 @@ export const ZONE_SPAWN_TABLES = {
     0: ['w', 'c'],                          // L1-2: Frost Wolves, Breeze Wisps (intro push)
     3: ['w', 'X', 'c', 'v'],               // L3-5: Add Ice Wraiths, Sirens
     6: ['X', 'w', 'U', 'u', 'v'],          // L6-8: Add Frozen Constructs, Glacier Crabs, Sirens
-    9: ['w', 'U', 'C', 'I', 'u', 'x'],     // L9-11: Add Cryomancers, Ice Golems, Steam Specters
-    12: ['U', 'C', 'I', 'y', 'u', 'x']     // L12+: Add Yetis, Glacier Crabs, Steam Specters
+    9: ['w', 'U', 'C', 'I', 'u', 'x', 'D'], // L9-11: Add Cryomancers, Ice Golems, Steam Specters, Frozen Duelists
+    12: ['U', 'C', 'I', 'y', 'u', 'x', 'D'] // L12+: Add Yetis, Glacier Crabs, Steam Specters, Frozen Duelists
   },
 
   'yellow': {

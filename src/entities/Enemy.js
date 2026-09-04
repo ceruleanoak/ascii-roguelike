@@ -135,6 +135,10 @@ export class Enemy {
     this.backgroundObjects = null; // layer-guard-ok: router-injected list
     this.plane = 0; // 0=normal plane, 1=tunnel plane
 
+    // Snow terrain state (set by PhysicsSystem each frame)
+    this.isInDeepSnow = false;
+    this.isInCompactedSnow = false;
+
     // AI state
     this.target = null;
     // Cached return value of this frame's update(), written by the canonical
@@ -2134,10 +2138,10 @@ export class Enemy {
     // in the constructor and PhysicsSystem.resolveSpeedCollisions.
     this.speedCollisionGraceFrames = 2;
 
-    // Risen: first lethal hit collapses into a bone pile (no iframes — smashable); collapsed dies for real
-    if (this.hp <= 0 && this.data.riseAgain && !this.riseUsed && !this.collapsed) {
-      RiseAgainMechanic.collapse(this);
-      return { damaged: true };
+    // Risen: lethal hit collapses into a bone pile (no iframes — smashable); collapses until maxRises reached
+    if (this.hp <= 0 && this.data.riseAgain && !this.collapsed) {
+      const collapsed = RiseAgainMechanic.collapse(this);
+      if (collapsed) return { damaged: true };
     }
 
     // Per-enemy hit SFX. Death SFX is handled by the enemy-removal loop in

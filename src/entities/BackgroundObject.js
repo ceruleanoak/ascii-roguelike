@@ -14,21 +14,35 @@ function _lerpHex(a, b, t) {
 export class BackgroundObject {
   constructor(char, x, y, options = {}) {
     this.char = char;
-    // Handle unknown characters (e.g., item chars in recipe signs)
-    // Fallback chain: BACKGROUND_OBJECTS → ITEMS → INGREDIENTS → default
-    if (BACKGROUND_OBJECTS[char]) {
-      this.data = BACKGROUND_OBJECTS[char];
+
+    // Variant identity — decouples behavior from render char
+    // If typeId is provided, use variant data as primary data source
+    this.typeId = options.typeId || null;
+    this._variantData = null;
+    if (this.typeId) {
+      const base = BACKGROUND_OBJECT_VARIANTS[this.typeId];
+      this._variantData = options.variantOverrides
+        ? { ...base, ...options.variantOverrides }
+        : base || null;
+      // Use variant data as primary data, falling back to BACKGROUND_OBJECTS for missing keys
+      this.data = this._variantData;
     } else {
-      // For recipe signs: use item/ingredient colors if available
-      const itemData = ITEMS[char] || INGREDIENTS[char];
-      this.data = {
-        name: itemData ? itemData.name : 'Unknown',
-        color: itemData ? itemData.color : '#888888',
-        solid: false,
-        hp: null,
-        bulletInteraction: 'pass-through',
-        indestructible: true
-      };
+      // Handle unknown characters (e.g., item chars in recipe signs)
+      // Fallback chain: BACKGROUND_OBJECTS → ITEMS → INGREDIENTS → default
+      if (BACKGROUND_OBJECTS[char]) {
+        this.data = BACKGROUND_OBJECTS[char];
+      } else {
+        // For recipe signs: use item/ingredient colors if available
+        const itemData = ITEMS[char] || INGREDIENTS[char];
+        this.data = {
+          name: itemData ? itemData.name : 'Unknown',
+          color: itemData ? itemData.color : '#888888',
+          solid: false,
+          hp: null,
+          bulletInteraction: 'pass-through',
+          indestructible: true
+        };
+      }
     }
     this.position = { x, y };
     this.originalChar = char;
@@ -120,15 +134,6 @@ export class BackgroundObject {
     // containers opt in to direct player opening.
     this.acceptsInteractions = this.data.acceptsInteractions || ['blade', 'bullet', 'blunt'];
 
-    // Variant identity — decouples behavior from render char
-    this.typeId = options.typeId || null;
-    this._variantData = null;
-    if (this.typeId) {
-      const base = BACKGROUND_OBJECT_VARIANTS[this.typeId];
-      this._variantData = options.variantOverrides
-        ? { ...base, ...options.variantOverrides }
-        : base || null;
-    }
     this.collisionShape = this.data.collisionShape || 'rectangle'; // 'rectangle' or 'ellipse'
 
     // HP system

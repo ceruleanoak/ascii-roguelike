@@ -19,6 +19,10 @@ export const TrailMechanic = {
     // aborts a charging Boar (ChargeMechanic: wet = no traction), applied to
     // fire output. Freeze-type trails (Glacier Crab) are unaffected.
     if (cfg.trailType === 'fire' && (enemy.isWet() || enemy.isFrozen())) return;
+    // Deep snow swallows the trail — the Glacier Crab glides over it instead of
+    // scoring it. Declared per-enemy in the trail config rather than tested
+    // against a glyph so the next 'u' doesn't silently inherit the exemption.
+    if (cfg.suppressInDeepSnow && enemy.isInDeepSnow) return;
     const active = enemy.state === 'chase' || enemy.state === 'windup' || enemy.state === 'attack';
     if (!active) return;
     const { deltaTime, dotDamageEvents } = ctx;

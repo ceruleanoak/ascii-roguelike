@@ -49,8 +49,10 @@ export const ZONES = {
     rareSayings: [
       'SPEAK AND THE HUT WILL SIT.',
       'THE GREAT SLIME YIELDS TO A LONG BLADE.',
-      'THE MAGE FINDS HIS WAY THROUGH ASH.',
-      'THE HOARD YIELDS TO AN EMPTY HAND.'
+      'THE MAGE FINDS HIS WAY THROUGH ASH.'
+      // The Hoardmaw's line is NOT listed here — it is earned by killing it
+      // (GREEN_HOARDMAW_SPEC.victorySaying → game.unlockedRareSayings), so an
+      // Artifact alone can never buy it. See dungeonBosses/green.js.
     ],
     borderColor: '#00ff00',
     exitColor: ZONE_COLORS.green,

@@ -134,6 +134,10 @@ export class RoomGenerator {
       items: [],
       crows: [], // Idle non-combat birds — depth-1 intro room + X (Crossroads) rooms
       backgroundObjects: [],
+      // Repaint request from systems that mutate a background-baked tile but hold
+      // no renderer reference (PhysicsSystem's snow compaction). ExploreRenderer
+      // consumes and clears it at the top of renderBackground.
+      backgroundRepaint: false,
       recipeSign: null, // Visual-only recipe hint (not a BackgroundObject)
       exits: this.exitSystem ? this.exitSystem.generateExits(this.currentDepth, type, zoneType, progressionColor, exitLetter) : { north: false, east: false, west: false, south: true },
       playerStartPos: playerStartPos,  // Store for enemy generation

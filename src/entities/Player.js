@@ -121,6 +121,9 @@ export class Player {
     this.grabbed   = false; // true while a GooHead has the player in its grip
     this.grabbedBy = null;  // reference to the GooHead holding the player
 
+    // Gray-zone bone slope lock (brief movement lock from bone slope push)
+    this.boneSlopeLock = 0;
+
     // Interior state (inDungeon derived from _activeInteriorKind; see ADR-0001)
     this.dungeonExitPosition = null; // saved exterior position when entering a dungeon
 
@@ -404,6 +407,14 @@ export class Player {
       this.velocity.vy *= 0.75;
       if (Math.abs(this.velocity.vx) < 4) this.velocity.vx = 0;
       if (Math.abs(this.velocity.vy) < 4) this.velocity.vy = 0;
+    // Gray-zone bone slope: brief movement lock after push
+    } else if (this.boneSlopeLock > 0) {
+      this.acceleration.ax = 0;
+      this.acceleration.ay = 0;
+      this.velocity.vx *= 0.6;
+      this.velocity.vy *= 0.6;
+      if (Math.abs(this.velocity.vx) < 3) this.velocity.vx = 0;
+      if (Math.abs(this.velocity.vy) < 3) this.velocity.vy = 0;
     // While charging bow: zero acceleration (movement slows to stop) but allow aiming
     } else if (isChargingBow) {
       this.acceleration.ax = 0;
@@ -1135,6 +1146,9 @@ export class Player {
     // Reset boss grab state
     this.grabbed = false;
     this.grabbedBy = null;
+
+    // Reset bone slope lock (gray-zone Ascent)
+    this.boneSlopeLock = 0;
 
     // Reset sapping bats
     this.activeSappingBats = [];

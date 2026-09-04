@@ -337,6 +337,12 @@ export class GrayZoneSystem {
     const t = this.mistTime;
     const background = ZONES.gray.environmentColors.background || '#050505';
 
+    // Gray Ascent mist exemption: plateau area is fog-free
+    const ascentMist = game.currentRoom?.ascentMist;
+    const plateauR = ascentMist?.mistExempt ? ascentMist.plateauRadius * GRID.CELL_SIZE : 0;
+    const plateauCx = ascentMist?.mistExempt ? ascentMist.plateauCenterCol * GRID.CELL_SIZE + GRID.CELL_SIZE / 2 : 0;
+    const plateauCy = ascentMist?.mistExempt ? ascentMist.plateauCenterRow * GRID.CELL_SIZE + GRID.CELL_SIZE / 2 : 0;
+
     ctx.save();
 
     // World-dimming veil (inverse of the glyph thinning), cell-quantized:
@@ -345,11 +351,18 @@ export class GrayZoneSystem {
     // block at the vision edge is uniformly half-faded rather than sliced by
     // a per-pixel circle. No rendered radius, no light — just blocky falloff.
     // Cells are bucketed by alpha so each step is one batched fill.
+    // Gray Ascent: skip veil over plateau area (fog-free zone).
     if (radius > 0) {
       const CS = GRID.CELL_SIZE;
       const buckets = new Map(); // quantized alpha → flat [col,row,...] list
       for (let row = 0; row < GRID.ROWS; row++) {
         for (let col = 0; col < GRID.COLS; col++) {
+          // Skip veil over Ascent plateau
+          if (plateauR > 0) {
+            const cellCx = col * CS + CS / 2;
+            const cellCy = row * CS + CS / 2;
+            if (Math.hypot(cellCx - plateauCx, cellCy - plateauCy) < plateauR) continue;
+          }
           const dist = Math.hypot(col * CS + CS / 2 - px, row * CS + CS / 2 - py);
           const tt = Math.min(1, dist / radius);
           const a = Math.round(VEIL_MAX * tt * tt * 10) / 10;
@@ -385,6 +398,12 @@ export class GrayZoneSystem {
     for (const m of this.mistField) {
       const mx = m.x + Math.sin(t * m.speedX + m.phase) * m.ampX;
       const my = m.y + Math.cos(t * m.speedY + m.phase * 1.7) * m.ampY;
+
+      // Skip mist motes that are within the Ascent plateau radius
+      if (plateauR > 0) {
+        const pDist = Math.hypot(mx - plateauCx, my - plateauCy);
+        if (pDist < plateauR) continue;
+      }
 
       // Proximity thinning: 0 at the player, 1 at/beyond the vision radius.
       const dist = Math.hypot(mx - px, my - py);

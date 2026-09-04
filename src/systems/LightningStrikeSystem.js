@@ -12,7 +12,8 @@
  *                 they live on after the strike record is removed.
  *
  * Callers:
- *   scheduleStrike({ x, y, radius, delay, damage, hitsPlayer, hutPlane, source })
+ *   scheduleStrike({ x, y, radius, delay, damage, hitsPlayer, hutPlane, source,
+ *                    onResolve })
  *
  * Used by: Lightning Sword (weapon-driven test driver). Designed for reuse by
  * future yellow-zone storm hazards and enemy attacks — same pipeline, same
@@ -41,10 +42,14 @@ export class LightningStrikeSystem {
     hitsPlayer = true,
     plane = 0,
     hutPlane = !!this.game?.activeFloor,
-    source = null
+    source = null,
+    // Fired once, at impact — never at schedule time. Hazards that go live
+    // with the bolt (the yellow Ascent spire charging its metal) hang here so
+    // the telegraph window stays a real dodge window.
+    onResolve = null
   }) {
     const strike = {
-      x, y, radius, damage, hitsPlayer, plane, hutPlane, source,
+      x, y, radius, damage, hitsPlayer, plane, hutPlane, source, onResolve,
       warningTimer: delay,
       warningDuration: delay,
       flashTimer: 0,
@@ -125,6 +130,8 @@ export class LightningStrikeSystem {
 
     // Audio — silently no-ops until a 'thunder' buffer is loaded
     game.audioSystem?.playSFX?.('thunder');
+
+    s.onResolve?.(s);
   }
 
   createChainLightning(source, hitEnemy, enemies) {

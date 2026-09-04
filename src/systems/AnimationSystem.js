@@ -181,7 +181,14 @@ function writeY(t, y) { if (t.position) t.position.y = y; else t.y = y; }
 
 function lerp(a, b, t) { return a + (b - a) * t; }
 
-function applyEasing(t, kind) {
+/**
+ * Shared easing curves. Exported because deform animation that must NOT go
+ * through AnimationSystem.play() still wants the same feel: play() locks its
+ * target and writes `position` directly, which would fight PhysicsSystem on a
+ * live entity. Bodies that deform around a fixed position (Hoardmaw) drive
+ * their own offsets procedurally and borrow only the curves.
+ */
+export function applyEasing(t, kind) {
   switch (kind) {
     case 'easeIn':      return t * t * t;
     case 'easeInQuad':  return t * t;

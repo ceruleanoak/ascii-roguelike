@@ -348,6 +348,7 @@ export class PhysicsSystem {
     let onCurrentDirection = null; // Yellow zone river current push direction
     let inDeepSnow = false;
     let inCompactedSnow = false;
+    let onIcySlope = false; // Cyan ascent: slope tiles with onIce=true
     const isProjectile = entity.type === 'bullet' || entity.type === 'arrow';
 
     // Reset per-frame terrain flags (read by Player.updateDodgeRoll with 1-frame lag)
@@ -378,6 +379,8 @@ export class PhysicsSystem {
           if (obj.slope) {
             onSlopeDirection = obj.slopeDirection;
             entity.isOnSlope = true; // For dodge roll slope-lock mechanic
+            // Cyan ascent: slope tiles marked with onIce=true use momentum-based physics
+            if (obj.onIce) onIcySlope = true;
           }
 
           // Check for water/lava/mud (~)
@@ -468,6 +471,12 @@ export class PhysicsSystem {
               if (entityMass > 1 || entity.isPlayer) {
                 obj.compacted = true;
                 obj.color = obj._variantData.compactColor;
+                // The snow tile is baked into the cached background layer, which
+                // only repaints when dirty — without this the compacted trail
+                // stays invisible until some unrelated event forces a repaint.
+                // PhysicsSystem holds no renderer reference, so the request rides
+                // the room and ExploreRenderer consumes it.
+                if (room) room.backgroundRepaint = true;
               }
             }
           }
@@ -491,7 +500,8 @@ export class PhysicsSystem {
     // Apply friction (ice = less friction = more sliding)
     if (entity.friction !== false) {
       // Cyan-zone Ascent ice: momentum-based slide (much lower friction)
-      const cyanAscentIce = onIce && room?.zone === 'cyan' && room?.ascentIce;
+      // Applies to both frozen water tiles (onIce) and icy slope tiles (onIcySlope)
+      const cyanAscentIce = (onIce || onIcySlope) && room?.zone === 'cyan' && room?.ascentIce;
       const friction = cyanAscentIce ? 0.15 : (onIce ? PHYSICS.FRICTION * 1.03 : PHYSICS.FRICTION);
       entity.velocity.vx *= friction;
       entity.velocity.vy *= friction;
@@ -555,9 +565,18 @@ export class PhysicsSystem {
       // are treated the same way while their dive is active.
       velocityMultiplier = (entity.data?.swimAffinity || entity.diving) ? 1.0 : 0.5;
     } else if (inDeepSnow && !isDodgeRolling) {
-      velocityMultiplier = 0.35; // Deep snow: heavy slow (same as wet mud)
+      // Ice-affinity enemies and small enemies travel under deep snow uninhibited
+      const hasIceAffinity = entity.data?.affinities?.includes('ice');
+      const isSmallEnemy = entity.data?.small === true || entity.isSmall;
+      if (hasIceAffinity || isSmallEnemy) {
+        velocityMultiplier = 1.0;
+      } else {
+        velocityMultiplier = 0.35; // Deep snow: heavy slow (same as wet mud)
+      }
     } else if (inCompactedSnow && !isDodgeRolling) {
-      velocityMultiplier = 0.8;  // Compacted snow: light slow
+      // Small enemies travel under compacted snow uninhibited
+      const isSmallEnemy = entity.data?.small === true || entity.isSmall;
+      velocityMultiplier = isSmallEnemy ? 1.0 : 0.8;  // Compacted snow: light slow
     } else if (inMud && !isDodgeRolling) {
       velocityMultiplier = 0.35; // Wet mud: heavier than water, dodge roll bypasses
     } else if (inGrass && !isDodgeRolling) {
@@ -884,6 +903,8 @@ export class PhysicsSystem {
       // Other objects (including surfaceOnly) follow normal solidity rules.
       if (!obj.data.tunnelWall) {
         if (obj.data && typeof obj.data.slowing === 'number') continue;
+        // Deep snow (snow_deep variant) is environmental terrain that slows but does not block.
+        if (obj._variantData?.environmental && obj._variantData?.compactColor) continue;
         const isSolid = obj.data.solid || obj.data.bulletInteraction === 'block' || obj.data.bulletInteraction === 'interact-preserve';
         if (!isSolid) continue;
       }

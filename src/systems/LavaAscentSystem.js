@@ -20,6 +20,7 @@
  * early.
  */
 
+import { PhasedHazardSystem } from './PhasedHazardSystem.js';
 import { BACKGROUND_OBJECT_VARIANTS } from '../game/GameConfig.js';
 
 const PHASE_DURATIONS = {
@@ -30,48 +31,42 @@ const PHASE_DURATIONS = {
 };
 
 const PHASE_ORDER = ['fillingFloor', 'fillingSlopes', 'drainingSlopes', 'drainingFloor', 'complete'];
+const FILL_PHASES = ['fillingFloor', 'fillingSlopes'];
 
-export class LavaAscentSystem {
-  constructor(game) {
-    this.game = game;
+export class LavaAscentSystem extends PhasedHazardSystem {
+  _getData(room) { return room?.ascentLava; }
+  isActive(room) { return !!room?.ascentLava; }
+  _getPhaseOrder() { return PHASE_ORDER; }
+  _getDuration(phase) { return PHASE_DURATIONS[phase] ?? 1; }
+  _getFillPhases() { return FILL_PHASES; }
+
+  onPhaseStart(phase, room) {
+    const lava = room.ascentLava;
+    if (!lava) return;
+
+    if (phase === 'fillingSlopes') lava._slopeConverted = 0;
+    if (phase === 'drainingSlopes') {
+      lava._slopeConverted = 0;
+      // The flood is the hazard, not the residual puddle — let the player
+      // out as soon as recession starts rather than waiting for full drain.
+      room.exitsLocked = false;
+      this.game.updateExitCollisions?.();
+    }
+    if (phase === 'drainingFloor') lava._floorConverted = 0;
   }
 
-  update(dt) {
-    const room = this.game.currentRoom;
-    const lava = room?.ascentLava;
-    if (!lava || lava.phase === 'complete') return;
+  onTick(phase, eased, dt, room) {
+    const lava = room.ascentLava;
+    if (!lava) return;
 
-    lava.timer += dt;
-    const duration = PHASE_DURATIONS[lava.phase];
-
-    // Accelerating (ease-in) schedule: conversions start slow and speed up.
-    const fraction = Math.min(1, lava.timer / duration);
-    const eased = fraction * fraction;
-
-    if (lava.phase === 'fillingFloor') {
+    if (phase === 'fillingFloor') {
       this._advanceFloor(lava, eased, true);
-    } else if (lava.phase === 'fillingSlopes') {
+    } else if (phase === 'fillingSlopes') {
       this._advanceSlopeRings(lava, eased, true);
-    } else if (lava.phase === 'drainingSlopes') {
+    } else if (phase === 'drainingSlopes') {
       this._advanceSlopeRings(lava, eased, false);
-    } else if (lava.phase === 'drainingFloor') {
+    } else if (phase === 'drainingFloor') {
       this._advanceFloor(lava, eased, false);
-    }
-
-    if (fraction >= 1) {
-      lava.timer = 0;
-      const nextPhase = PHASE_ORDER[PHASE_ORDER.indexOf(lava.phase) + 1];
-      lava.phase = nextPhase;
-
-      if (nextPhase === 'fillingSlopes') lava._slopeConverted = 0;
-      if (nextPhase === 'drainingSlopes') {
-        lava._slopeConverted = 0;
-        // The flood is the hazard, not the residual puddle — let the player
-        // out as soon as recession starts rather than waiting for full drain.
-        room.exitsLocked = false;
-        this.game.updateExitCollisions?.();
-      }
-      if (nextPhase === 'drainingFloor') lava._floorConverted = 0;
     }
   }
 

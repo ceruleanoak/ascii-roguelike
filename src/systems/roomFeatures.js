@@ -416,7 +416,12 @@ export function seedFrozenAscentCycle(gen, room, centerCol, centerRow, innerRadi
       if (dist <= outerRadius) continue;
       if (!gen.isValidPosition(col, row, room)) continue;
       const iceTile = BackgroundObject.createVariant('water', col * C, row * C);
-      iceTile.setWaterState('frozen', 0);
+      // Infinity, not 0: BackgroundObject.update ticks waterStateTimer down and
+      // thaws back to 'normal' the moment it hits zero, so a 0-second freeze is
+      // gone on the first frame — the ring would be open water before the player
+      // ever sees ice. Every other permanent freeze in the codebase (Freeze-Over
+      // sweep, ice stream, frost traps) passes Infinity for the same reason.
+      iceTile.setWaterState('frozen', Infinity);
       iceTile._ascentCol = col;
       iceTile._ascentRow = row;
       iceTile._weight = 0;
@@ -1701,14 +1706,12 @@ export function generateSnowFields(gen, room) {
       const y = startY + gen.randInt(-2, 2);
 
       if (gen.isValidPosition(x, y, room)) {
-        const snow = new BackgroundObject(
-          '█',
+        const snow = BackgroundObject.createVariant(
+          'snow_deep',
           x * GRID.CELL_SIZE,
           y * GRID.CELL_SIZE
         );
-        snow.color = '#ffffff';
         snow.compacted = false;
-        snow.name = 'Deep Snow';
         room.backgroundObjects.push(snow);
       }
     }

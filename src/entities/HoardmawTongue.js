@@ -15,7 +15,11 @@ export class HoardmawTongue {
     this.color = '#e0a83c';
     this.width = GRID.CELL_SIZE;
     this.height = GRID.CELL_SIZE;
-    this.plane = 1; // interior layer — the vault is plane-1 content
+    // Interior membership, not PlaneSystem's plane 1 — that constant is
+    // PLANE_TUNNEL (underground passages), and claiming it here would have
+    // made the tongue collide and render against tunnel walls. Every other
+    // thing DungeonBossSystem spawns into the vault is tagged this way.
+    this.hutPlane = true;
 
     // Motion: fixed-length extension toward the aim point, then retract.
     const dx = targetX - originX;

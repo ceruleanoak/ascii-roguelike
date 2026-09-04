@@ -8,6 +8,7 @@ import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { GameAnimalMechanic } from '../entities/enemyMechanics/GameAnimalMechanic.js';
 import { SniperMechanic } from '../entities/enemyMechanics/SniperMechanic.js';
 import { ThiefMechanic } from '../entities/enemyMechanics/ThiefMechanic.js';
+import { ReflectShieldMechanic } from '../entities/enemyMechanics/ReflectShieldMechanic.js';
 import { queueDamageNumber as queueDamageNumberImpl, ageDamageTextQueue, reportDamageResult as reportDamageResultImpl } from './DamageNumberQueue.js';
 import { applyTargetOverrides as applyTargetOverridesImpl } from './enemyTargeting.js';
 import { updateEnemyMeleeAttack, resolveEnemyAttack, attackHitsBox, retireAfterTest } from '../game/Telegraph.js';
@@ -530,22 +531,8 @@ export class CombatSystem {
             }
             continue;
           }
-          // Reflect shield (Mirror Imp): bounce projectile back at player if shield active
-          if (enemy.shieldActive && enemy.data.reflectShield?.enabled) {
-            const reflectedDmg = Math.ceil(proj.damage * (enemy.data.reflectShield.reflectDamageBonus ?? 0.5));
-            const spd = Math.sqrt(proj.velocity.vx ** 2 + proj.velocity.vy ** 2) || 150;
-            // Direction: from enemy toward original shooter (reversal)
-            const rdx = -proj.velocity.vx;
-            const rdy = -proj.velocity.vy;
-            const rdist = Math.sqrt(rdx * rdx + rdy * rdy) || 1;
-            this.enemyProjectiles.push({
-              ...proj,
-              velocity: { vx: (rdx / rdist) * spd, vy: (rdy / rdist) * spd },
-              damage: reflectedDmg,
-              reflected: true,
-              owner: enemy
-            });
-            this.createDamageNumber('REFLECT', enemy.position.x, enemy.position.y, '#ccddff');
+          // Reflect shield (Mirror Imp, Ice Golem): bounce the shot back at the shooter
+          if (ReflectShieldMechanic.tryReflect(enemy, proj, this)) {
             hit = true;   // Remove from player projectiles
             break;
           }
@@ -617,7 +604,19 @@ export class CombatSystem {
           // Told to takeDamage so its sleep-wake-on-damage rule doesn't clear
           // stacks this same hit is about to (re)apply — see Enemy.js.
           const reapplyingSleep = proj.onHit === 'sleep' || !!(proj.extraOnHit && proj.extraOnHit.includes('sleep'));
-          const damaged = enemy.takeDamage(finalDamage, proj.attackId, { reapplyingSleep });
+          // Damage-source identity: where the hit landed and what threw it.
+          // Ordinary enemies ignore these keys; hit-location bosses (the
+          // Hoardmaw's scale field and glint) are unhittable without them.
+          // position is the hit box's TOP-LEFT (see checkProjectileCollision),
+          // so the strike point is its center — passing the corner biases every
+          // location lookup up-left by half a box.
+          const damaged = enemy.takeDamage(finalDamage, proj.attackId, {
+            reapplyingSleep,
+            px: proj.position.x + (proj.width || GRID.CELL_SIZE) / 2,
+            py: proj.position.y + (proj.height || GRID.CELL_SIZE) / 2,
+            kind: 'projectile',
+            weaponSubtype: proj.weaponSubtype,
+          });
           if (damaged !== false) {
             // Show damage number with color based on affinity (crit overrides color + scale)
             const damageColor = critRoll.isCrit ? '#ffff66' :
@@ -1038,7 +1037,14 @@ export class CombatSystem {
             // reapplyingSleep tells takeDamage its sleep-wake-on-damage rule
             // shouldn't clear stacks this same hit is about to (re)apply.
             const reapplyingSleep = attack.onHit === 'sleep' || !!(attack.extraOnHit && attack.extraOnHit.includes('sleep'));
-            const damaged = enemy.takeDamage(finalDamage, attack.attackId, { reapplyingSleep });
+            // Damage-source identity — see the projectile call site above.
+            const damaged = enemy.takeDamage(finalDamage, attack.attackId, {
+              reapplyingSleep,
+              px: attack.position.x + (attack.width || 0) / 2,
+              py: attack.position.y + (attack.height || 0) / 2,
+              kind: 'melee',
+              weaponSubtype: attack.weaponSubtype,
+            });
             if (damaged === true && attack.isBlade) enemy.killedByBlade = true;
             if (damaged !== false) {
               // Generic hit-landed signal — FlailSystem resets its spin ramp on this.
@@ -1236,10 +1242,30 @@ export class CombatSystem {
         continue;
       }
 
-      // Deflector triangles also bend enemy projectiles. Reflected enemy
-      // projectiles skip player collision (existing convention), so a deflected
-      // shot can no longer hurt the player.
-      this._tryDeflectorRedirect(proj);
+      // Deflector triangles also bend enemy projectiles, and the bend has to be
+      // tested BEFORE the background-object loop below — exactly as the player
+      // path does it. A deflector is a background object whose bulletInteraction
+      // is 'block', so letting the loop run first destroys the shot on the
+      // triangle instead of turning it. Reflected enemy projectiles skip player
+      // collision (existing convention), so a deflected shot can no longer hurt
+      // the player.
+      if (this._tryDeflectorRedirect(proj)) continue;
+
+      // Check collision with background objects (cave walls, etc.)
+      for (const obj of backgroundObjects) {
+        if (obj.destroyed || obj.isRecipeSign) continue; // Skip destroyed and recipe signs
+        if (!objectOnPlane(obj, planeOf(proj))) continue;
+        if (this.checkProjectileCollisionWithObject(proj, obj)) {
+          // Deflectors are routed above; skip the generic bullet-interaction path.
+          if (obj.data?.boulderDeflector) continue;
+          const result = obj.handleBulletCollision(proj);
+          if (result.shouldDestroyBullet) {
+            this.enemyProjectiles.splice(i, 1);
+            break;
+          }
+        }
+      }
+      if (!this.enemyProjectiles[i] || this.enemyProjectiles[i] !== proj) continue;
 
       if (!inSamePlane(proj, player)) continue;
 
