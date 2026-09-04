@@ -45,6 +45,7 @@ import { RoundCombatSystem } from './systems/RoundCombatSystem.js';
 import { AquiferSystem } from './systems/AquiferSystem.js';
 import { SinkholeSystem } from './systems/SinkholeSystem.js';
 import { ThreeRoomSystem } from './systems/ThreeRoomSystem.js';
+import { ThreeSlotGlobeSystem } from './systems/ThreeSlotGlobeSystem.js';
 import { BossSystem } from './systems/BossSystem.js';
 import { BoulderSystem } from './systems/BoulderSystem.js';
 import { CentipedeSystem } from './systems/CentipedeSystem.js';
@@ -208,6 +209,7 @@ class Game {
     this.aquiferSystem = new AquiferSystem(this);         // frog-only plane-1 Aquifer (Quagmire dive)
     this.sinkholeSystem = new SinkholeSystem(this);       // concealed G-room shortcut → yellow-zone U room
     this.threeRoomSystem = new ThreeRoomSystem();          // the source room: N×3 + gray '3' discoveries, Death behind its door
+    this.threeSlotGlobeSystem = new ThreeSlotGlobeSystem(this); // the turning globe of offerings its slots are fed from
     this.cheatWarpSystem = new CheatWarpSystem();          // cheat-menu warp destinations (zone/depth/boss/room/maze)
     this.bossSystem = new BossSystem(this);
     this.boulderSystem = new BoulderSystem(this);
@@ -938,6 +940,7 @@ class Game {
     this.blueZoneRoom = 0;
     this.runTimerSystem.clear(); // No run in progress on TITLE — next REST entry starts a fresh timer
     this.threeRoomSystem.hardReset();       // streak + Death state die with the run
+    this.threeSlotGlobeSystem.hardReset();  // the run's touched glyphs die with it too
     this.grayThreeExitShown = false;        // the gray '3' call can happen again next run
 
     // Transient feedback dies with the session (bug #198; harness-enforced).
@@ -2157,6 +2160,9 @@ class Game {
 
     // Mute layer 2 (bassline) in NEUTRAL state (peaceful encounters)
     this.audioSystem.setLayer2Enabled(false);
+
+    // The Three Room takes the music over; no-ops in every other neutral room.
+    this.threeRoomSystem.onRoomEnter(this);
   }
 
   updateNeutralState(deltaTime) {
@@ -2259,6 +2265,7 @@ class Game {
         (inReturnExit || crossedReturnExit) && this.currentRoom.exits[returnExit]) {
 
       // Call neutral room exit hook
+      const leavingNeutralRoom = this.currentRoom;
       this.neutralRoomSystem.onExit(this.currentRoom, this.player);
 
       // Restore saved explore state (room contents only — the ingredient pile
@@ -2288,6 +2295,11 @@ class Game {
       // arrival from REST and regenerate/restore over the room we just
       // reinstated above, stranding the player in an unrelated room).
       this.stateMachine.currentState = GAME_STATES.EXPLORE;
+
+      // Hand the zone its music back after the Three Room's mono-track
+      // override. Runs after the restore above so the zone read is the room
+      // being returned to; no-op for every other neutral room.
+      this.threeRoomSystem.onRoomExit(this, leavingNeutralRoom);
     }
 
     // Store previous position for next frame
@@ -4018,8 +4030,14 @@ class Game {
       else if (nearbyObject?.threeDoor) {
         // The shut way north — ThreeRoomSystem owns the opening and what it
         // releases; a second press on an already-open door falls through here
-        // and is refused inside the system.
+        // and is refused inside the system. Refused too while any slot is
+        // still empty.
         this.threeRoomSystem.handleDoorPress(this);
+      }
+      else if (typeof nearbyObject?.threeSlot === 'number') {
+        // An empty slot opens the globe of offerings; a filled one is refused
+        // inside the system, since placement is one-shot.
+        this.threeRoomSystem.handleSlotPress(this, nearbyObject);
       }
     }
   }
@@ -4096,6 +4114,7 @@ class Game {
     // the N×3 streak starts clean.
     this.grayThreeExitShown = false;
     this.threeRoomSystem.hardReset();
+    this.threeSlotGlobeSystem.hardReset();  // the run's touched glyphs die with it too
 
     // Reset fairy run-flag for new run
     this.fairiesAngered = false;
@@ -4457,6 +4476,9 @@ class Game {
       if (result.pickedUpType === 'WEAPON' && this.stateMachine.currentState === GAME_STATES.EXPLORE) {
         this.audioSystem.playSFX('weapon_pickup');
       }
+
+      // The Three Room's globe only offers back what this run actually held.
+      this.threeSlotGlobeSystem.recordTouched(result.pickedUpChar);
 
       // Key items (Vault Key / Skull Key) — held-confirmation sfx fires here,
       // at the moment it's actually picked up, not when the carrying object

@@ -429,50 +429,51 @@ export const NEUTRAL_ROOMS = {
       const cx = Math.floor(GRID.COLS / 2);
       const cy = Math.floor(GRID.ROWS / 2);
 
-      // The slots — pyramid arrangement: apex above, two at the base. Inert
-      // until the pattern is authored; wrong offerings are refused silently,
-      // like every other non-instructive gate in the game.
+      // The slots — one object, not three. Each slot is a `[ ]` frame three
+      // cells wide, and the frames are packed until they touch: the two base
+      // frames sit shoulder to shoulder on one row, and the apex sits on the
+      // row directly above, straddling their seam. Every cell of the apex
+      // frame has a base-frame cell underneath it, so what the player walks
+      // up to reads as a single carved thing with three holes in it rather
+      // than as three pieces of scattered furniture.
       //
-      // DESIGN INTENT — recorded here for the build that lands, not built yet:
+      //   col:  12 13 14 15 16 17
+      //   row-1        [     ]        ← apex, over the seam
+      //   row    [     ][     ]       ← base pair, touching
       //
-      // Each slot accepts one of two truths, and the choice is the ending.
+      // A 3-cell frame has no cell-aligned center, so the base pair's center
+      // falls half a cell left of the apex's. That half-cell is the price of
+      // the frames touching, and touching is the requirement.
       //
-      //   The Voice desires the player's three powers placed in it: the
-      //   Weapon of Instinct, the Armor of Experience, the Consumable of
-      //   Convention (form-to-slot: weapon/armor/consumable; which physical
-      //   slot takes which power is still undecided — apex/base-left/base-
-      //   right). What feeding the Voice YIELDS is also still the author's
-      //   call — center-mark completion, corruption, something else; the
-      //   cosmology doc's "Know it" ending is one candidate, not a given.
+      // The cluster sits above the room's center rather than around it: the
+      // player arrives at the center, so straddling that cell would drop a
+      // frame on top of them. Placed here they walk up to it, with the shut
+      // door still further north beyond it.
       //
-      //   The alternative is the true 3: Justice in the weapon slot, Truth
-      //   in the armor, Help in the consumable. The Voice is wary of exactly
-      //   this. Fixing the pattern with the true 3 does two things, and the
-      //   sequencing between them is deliberately unresolved:
-      //     - it opens the way north FOR REAL — behind the door stands the
-      //       final game boss: Death, inevitable, unrelenting, impossible
-      //       to defeat (the door itself is already live; ThreeRoomSystem);
-      //     - it liberates the path SOUTH OF REST — an escape that ends the
-      //       game by PERMISSION. The teaching is the point: the player was
-      //       always waiting for the game's permission to be done, something
-      //       most players never recognized was the agreement to begin with.
-      //       This is the fourth path. HOW TO ESCAPE answers ONLY ONE WAY;
-      //       whether that one way is leaving or walking north is the final
-      //       reading of the whole game and is NOT yet decided.
+      // Only the CONTENT cell is a real BackgroundObject — it carries
+      // `threeSlot` and is what SPACE finds. ThreeRoomRenderer draws the
+      // brackets around it, which keeps proximity detection trivial and
+      // leaves the frame free to change (cracked, gray) without touching
+      // collision or interaction.
       //
-      //   Item identities TBD — draw against claudedocs/legend-of-three.md
-      //   and docs/adr/BACKLOG.md's P1 row before authoring anything.
+      // Slot order is the Power of 3's registers, and ThreeRoomSystem's
+      // SLOT_FORMS/TRUE_THREE tables are indexed by it:
+      //   0 apex  — Instinct   — takes a weapon
+      //   1 left  — Experience — takes armor
+      //   2 right — Convention — takes a consumable
       const slotCells = [
-        { col: cx,     row: cy - 3 }, // apex
-        { col: cx - 4, row: cy + 3 }, // base left
-        { col: cx + 4, row: cy + 3 }  // base right
+        { col: cx,     row: cy - 3 }, // apex  — Instinct
+        { col: cx - 2, row: cy - 2 }, // left  — Experience
+        { col: cx + 1, row: cy - 2 }  // right — Convention
       ];
       slotCells.forEach((cell, idx) => {
-        const slot = new BackgroundObject('_', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
+        const slot = new BackgroundObject(' ', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
         slot.indestructible = true;
+        slot.hasCollision = false;
         slot.color = '#887755';
         slot.animationColor = '#887755';
-        slot.threeSlot = idx; // 0 = apex, 1 = base-left, 2 = base-right
+        slot.threeSlot = idx;
+        slot.threeSlotCell = { col: cell.col, row: cell.row };
         room.backgroundObjects.push(slot);
       });
 

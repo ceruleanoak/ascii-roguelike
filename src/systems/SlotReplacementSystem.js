@@ -185,6 +185,11 @@ export class SlotReplacementSystem {
     const idx = game.items.indexOf(item);
     if (idx > -1) game.items.splice(idx, 1);
     game.physicsSystem.removeEntity(item);
+    // Every confirm path funnels through here, so this is the one place that
+    // sees an item the player actually took via this prompt — the main.js
+    // tryPickupItem wrapper never fires for these (the pickup returned
+    // needsSlotChoice instead of success).
+    game.threeSlotGlobeSystem.recordTouched(item.char);
     return item;
   }
 

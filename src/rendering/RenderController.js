@@ -29,6 +29,7 @@ import { CompassIndicator } from './ui/CompassIndicator.js';
 import { ErrandConfirmOverlay } from './ui/ErrandConfirmOverlay.js';
 import { MazeInteriorOverlay } from './ui/MazeInteriorOverlay.js';
 import { InteriorOverlay } from './ui/InteriorOverlay.js';
+import { ThreeRoomRenderer } from './ui/ThreeRoomRenderer.js';
 import { PixelatedDissolve, ScreenShake } from './effects/TextEffects.js';
 import { GRID } from '../game/GameConfig.js';
 
@@ -70,6 +71,7 @@ export class RenderController {
     this.restRenderer = new RestRenderer(renderer, this);
     this.exploreRenderer = new ExploreRenderer(renderer, this);
     this.neutralRenderer = new NeutralRenderer(renderer, this);
+    this.threeRoomRenderer = new ThreeRoomRenderer();
     this.demoRenderer = new DemoRenderer(renderer, this);
 
     // Spell response overlay state
@@ -120,6 +122,11 @@ export class RenderController {
 
   renderNeutralState(game) {
     this.neutralRenderer.render(game);
+    // The Three Room's slot frames and Death's arrival — no-ops in every
+    // other neutral room. Drawn after the room so the staged darkness lands
+    // above it, and before the screen fade so a real state transition still
+    // wins over the cinematic.
+    this.threeRoomRenderer.render(game);
     this.dialogueBox.render(game);
   }
 

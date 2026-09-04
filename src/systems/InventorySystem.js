@@ -387,7 +387,7 @@ export class InventorySystem {
             item.consumed = true;
             physicsSystem.removeEntity(item);
             items.splice(i, 1);
-            return { success: true, droppedItem: item, message: item.data.name, removedTrap: false, pickedUpType: item.data.type };
+            return { success: true, droppedItem: item, message: item.data.name, removedTrap: false, pickedUpType: item.data.type, pickedUpChar: item.char };
           }
           // Full quick slots: don't silently displace the loadout — signal the
           // caller to open the paused slot-choice prompt (SlotReplacementSystem).
@@ -430,6 +430,7 @@ export class InventorySystem {
             droppedItem: null,
             message: null,
             removedTrap: false,
+            pickedUpChar: item.char,
             blessing: item // Return blessing item for caller to apply
           };
         } else if (item.data.type === 'NEUTRAL') {

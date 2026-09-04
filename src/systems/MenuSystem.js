@@ -997,6 +997,9 @@ export class MenuSystem {
           game.player.position.y
         );
         if (item) {
+          // Crafted output counts as touched for the Three Room's globe — the
+          // run put it in the player's hands just as surely as a floor pickup.
+          game.threeSlotGlobeSystem.recordTouched(item.char);
           if (item.data.type === 'ARMOR') {
             // Mirror world-pickup behavior: auto-equip, or prompt when occupied
             if (game.inventorySystem.equippedArmor !== null) {
