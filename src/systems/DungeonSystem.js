@@ -293,7 +293,31 @@ export class DungeonSystem {
     // Dungeon boss layer: spawn/resume the vault encounter.
     game.dungeonBossSystem?.onFloorActivated?.(floor);
 
+    // …then let the music follow whatever that produced — ambient on an
+    // ordinary floor, the boss track once the Vault encounter is live.
+    this.syncDungeonMusic();
+
     game.renderer.backgroundDirty = true;
+  }
+
+  /**
+   * Point the music at the track this Dungeon should be playing right now:
+   * its Zone's ambient track, or the Dungeon Boss track once the Vault
+   * encounter is live and that Dungeon declares one.
+   *
+   * Safe to call on any state change — AudioSystem no-ops when the chosen
+   * track is already playing, so floor swaps don't restart the music. This is
+   * the only place the choice is made; DungeonBossSystem re-runs it at the
+   * encounter's edges rather than reaching for tracks itself.
+   */
+  syncDungeonMusic() {
+    const { game } = this;
+    if (!game.player?.inDungeon) return;
+    const music = game.audioSystem.getDungeonMusic(game.currentRoom?.zone || 'green');
+    const track = (music.boss && game.dungeonBossSystem?.isEncounterLive())
+      ? music.boss
+      : music.ambient;
+    game.audioSystem.switchToDungeonTrack(track, import.meta.env.BASE_URL);
   }
 
   _descend(descent) {
@@ -436,6 +460,11 @@ export class DungeonSystem {
     // is detached so exterior physics paths don't see stale interior state.
     game.dungeonCurrentFloor = -1;
     game.activeFloor = null;
+
+    // Surface music resumes. Forced because currentMusicZone was never touched
+    // while the Dungeon override held the output (same contract as the maze).
+    game.audioSystem.switchZoneMusic(
+      game.currentRoom?.zone || 'green', import.meta.env.BASE_URL, true);
 
     game.renderer.backgroundDirty = true;
   }

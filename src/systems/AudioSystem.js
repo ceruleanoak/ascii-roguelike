@@ -29,6 +29,18 @@ const REST_MUSIC_PATHS = {
 //
 // Red is a three-part set (A/B out of combat, B/C in combat); yellow is the
 // two-part form (A alone out of combat, B alone in combat).
+// Per-Dungeon music, keyed by the Zone whose D room the Dungeon sits in.
+//   ambient — plays across the whole interior, every Floor
+//   boss    — swaps in while the Vault encounter is live; null keeps ambient
+//             playing through the fight (no dedicated bounce authored yet)
+// Every Dungeon has music from day one: a zone with no entry here borrows
+// DUNGEON_MUSIC_FALLBACK. Giving a Dungeon (or its Dungeon Boss) its own
+// track is a file in public/assets/audio/ plus one entry here — no code.
+const DUNGEON_MUSIC = {
+  green: { ambient: 'assets/audio/dungeon-green.mp3', boss: null }
+};
+const DUNGEON_MUSIC_FALLBACK = DUNGEON_MUSIC.green;
+
 const SEQUENCE_MUSIC = {
   red: {
     tracks: ['assets/audio/red-a.mp3', 'assets/audio/red-b.mp3', 'assets/audio/red-c.mp3'],
@@ -98,6 +110,11 @@ export class AudioSystem {
     this.zoneSequenceIndex = 0;       // index into the active zone's tracks
     this.sequenceZone = null;         // zone whose sequence is playing
     this.zoneCombatActive = false;    // updated by setLayer2Enabled while sequential
+
+    // Dungeon interior override — path of the mono track currently standing in
+    // for zone music, so repeated floor swaps can re-assert it without
+    // restarting playback. Null whenever zone music owns the output.
+    this.dungeonTrack = null;
 
     // Shared state
     this.isPlaying = false;
@@ -934,6 +951,7 @@ export class AudioSystem {
     if (this.mode === 'zoneSequence') {
       this.stopZoneSequence();
     }
+    this.dungeonTrack = null; // dying in a Dungeon skips the normal exit path
     this.layer2Muted = true;
     if (this.layer2Gain && this.audioContext) {
       const t = this.audioContext.currentTime;
@@ -957,6 +975,8 @@ export class AudioSystem {
    */
   switchZoneMusic(zone, base, force = false) {
     if (!this.isZoneMusicActive()) return;
+    // Zone music is taking the output back — any Dungeon override is over.
+    this.dungeonTrack = null;
     // Leaving a dedicated REST track always requires a reload, even when the
     // zone itself didn't change (green REST → green EXPLORE both report
     // currentMusicZone === 'green', so the equality checks below would
@@ -1075,6 +1095,41 @@ export class AudioSystem {
       ? [`${base}${restPath}`, `${base}${restPath}`]
       : [`${base}assets/audio/layer1.mp3`, `${base}assets/audio/layer2.mp3`];
     return this.switchMusic(l1, l2);
+  }
+
+  /**
+   * The Dungeon music entry for a zone — its own if it has one, otherwise the
+   * shared fallback. Always returns a spec, so callers never branch on
+   * "does this dungeon have music".
+   * @param {string} zone - zone the Dungeon's D room sits in
+   * @returns {{ambient: string, boss: ?string}}
+   */
+  getDungeonMusic(zone) {
+    return DUNGEON_MUSIC[zone] || DUNGEON_MUSIC_FALLBACK;
+  }
+
+  /**
+   * Override zone music with a Dungeon interior track. The track is mono, so
+   * it fills both dual-layer slots with layer 2 muted (the maze/REST pattern)
+   * — interior combat doesn't drive layering the way surface rooms do.
+   *
+   * Idempotent by design: re-asserting the track already playing is a no-op,
+   * so DungeonSystem can call this on every Floor activation without the
+   * music restarting each time the player takes a staircase.
+   * The override is released by switchZoneMusic — zone music reclaiming the
+   * output IS the end of the override — so Dungeon exit only has to restore
+   * zone music, with force=true since currentMusicZone was never touched
+   * while the override was up (the same contract the maze follows).
+   * @param {string} path - DUNGEON_MUSIC path (no BASE_URL prefix)
+   * @param {string} base - BASE_URL prefix
+   * @returns {boolean} True if a swap was started
+   */
+  switchToDungeonTrack(path, base) {
+    if (!this.isZoneMusicActive() || this.dungeonTrack === path) return false;
+    this.dungeonTrack = path;
+    const url = `${base}${path}`;
+    this.switchMusic(url, url).then(() => this.setLayer2Enabled(false));
+    return true;
   }
 
   /**
@@ -1606,6 +1661,7 @@ export class AudioSystem {
     this.zoneSequenceBuffers = {};
     this.zoneSequenceSource = null;
     this.sequenceZone = null;
+    this.dungeonTrack = null;
     this.mode = null;
   }
 }

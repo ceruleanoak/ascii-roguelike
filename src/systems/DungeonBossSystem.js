@@ -67,6 +67,16 @@ export class DungeonBossSystem {
     game.unlockedRareSayings = [];        // WiseFellow lines earned by winning, not buying
   }
 
+  /**
+   * True while the Vault encounter is awake and unresolved — the window a
+   * Dungeon Boss track belongs to. Dormant does NOT count: the prologue is
+   * meant to read as an innocuous centerpiece, and swapping the music before
+   * the snap would give the ambush away.
+   */
+  isEncounterLive() {
+    return !!this.hoardmaw && !this.hoardmaw.dormant && !this.hoardmaw.defeated;
+  }
+
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   /** Called by DungeonSystem._activateFloor for every floor swap. */
@@ -114,6 +124,8 @@ export class DungeonBossSystem {
     maw.dormant = false;
     const game = this.game;
     game.audioSystem?.playSFX?.('boss_roar');
+    // Encounter is live — DungeonSystem owns which track that means.
+    game.dungeonSystem?.syncDungeonMusic?.();
 
     const speed = Math.hypot(player.velocity?.vx ?? 0, player.velocity?.vy ?? 0);
     if (speed <= AMBUSH_CREEP_SPEED) return;   // crept in — it wakes, it does not bite
@@ -148,6 +160,8 @@ export class DungeonBossSystem {
     this.game.physicsSystem?.removeEntity?.(maw);
     this._leaveFloorRoster(maw);
     this.hoardmaw = null;
+    // Encounter resolved — the Dungeon's ambient track carries the payout.
+    game.dungeonSystem?.syncDungeonMusic?.();
   }
 
   /** Splice the maw out of the floor roster it joined at spawn. */
