@@ -2,6 +2,7 @@ import { GRID, ROOM_TYPES, INTERACTION_RANGE } from '../game/GameConfig.js';
 import { ZONES } from '../data/zones.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { cellularCaveGrid, bfsFarthestOpenPath } from './roomFeatures.js';
+import { PLANE_SURFACE, PLANE_TUNNEL } from './PlaneSystem.js';
 
 const CS = GRID.CELL_SIZE;
 const EXIT_RADIUS = CS * 1.5;
@@ -23,7 +24,11 @@ const REVEAL_COOLDOWN_MS = 1000;
  *    with a guaranteed lake + river trail and swapped in via the mandatory
  *    `Game.applyRoomSwap` path (bug #93 warp-divergence precedent).
  *
- * One-way only: no return trigger anywhere in this system.
+ * The Cross is one-way — nothing in this system leads back out of the yellow
+ * room it lands in. The Dive is not: SPACE on the hole from inside the cave
+ * climbs back out to the same G room's surface (see surface()). Plane 1 has no
+ * room exits of its own, so without that climb any cave the player can't cross
+ * is a dead end they can never leave.
  */
 export class SinkholeSystem {
   constructor(game) {
@@ -50,11 +55,12 @@ export class SinkholeSystem {
     this.game.renderer.markBackgroundDirty();
   }
 
-  // Scans this room's Sinkholes directly for a revealed, not-yet-dived one
-  // in range — independent of InteractionSystem's generic single-object
-  // scan, so no unrelated background object (rocks, containers, signs) can
-  // accidentally block it. Only uncut grass is meant to hide it, and that's
-  // enforced by the caller (main.js), not here.
+  // Scans this room's Sinkholes directly for a revealed one in range that
+  // SPACE would still act on (see isInteractable) — independent of
+  // InteractionSystem's generic single-object scan, so no unrelated
+  // background object (rocks, containers, signs) can accidentally block it.
+  // Only uncut grass is meant to hide it, and that's enforced by the caller
+  // (main.js), not here.
   findNearby() {
     const { game } = this;
     const sinkholes = game.currentRoom?.sinkholes;
@@ -68,20 +74,30 @@ export class SinkholeSystem {
   }
 
   // True once a Sinkhole has surfaced, cleared its post-reveal grace period,
-  // and hasn't been dived yet. Shared by findNearby() (SPACE dispatch) and
-  // ExploreRenderer (the in-range highlight) so both agree on when SPACE
-  // would actually trigger a dive.
+  // and SPACE would still take the player somewhere. Which way depends on
+  // where they are: from the surface only an un-dived hole leads anywhere
+  // (down), while from inside the cave the hole is always the way back up.
+  // Shared by findNearby() (SPACE dispatch) and ExploreRenderer (the in-range
+  // highlight) so both agree on when SPACE would actually do something.
   isInteractable(sink) {
-    if (!sink?.revealed || sink.dived || !sink.glyphObj) return false;
-    return performance.now() - sink.revealedAt >= REVEAL_COOLDOWN_MS;
+    if (!sink?.revealed || !sink.glyphObj) return false;
+    if (performance.now() - sink.revealedAt < REVEAL_COOLDOWN_MS) return false;
+    return this.game.player?.plane === PLANE_TUNNEL ? !!sink.cave : !sink.dived;
   }
 
   // EXPLORE SPACE dispatch: revealed Sinkholes supersede attacking, same as
-  // spacebar-openable containers. Routes into the generic interact/effect
-  // pipeline, which calls dive() below via the 'sinkholeDive' effect.
+  // spacebar-openable containers. From the surface this routes into the
+  // generic interact/effect pipeline, which calls dive() below via the
+  // 'sinkholeDive' effect. From inside the cave it climbs back out instead —
+  // a bare plane flip with no animation or drop table, so there is nothing
+  // for the interaction pipeline to carry and it calls surface() directly.
   handleSpacePress() {
     const glyph = this.findNearby();
     if (!glyph) return false;
+    if (this.game.player.plane === PLANE_TUNNEL) {
+      this.surface(glyph.sinkholeRef);
+      return true;
+    }
     this.game.interactWithObject(glyph);
     return true;
   }
@@ -105,9 +121,28 @@ export class SinkholeSystem {
 
     if (!sink.cave) sink.cave = this._generateSinkholeCave(room, sink);
 
-    game.player.plane = 1;
+    game.player.plane = PLANE_TUNNEL;
     game.player.position.x = sink.cave.spawn.x;
     game.player.position.y = sink.cave.spawn.y;
+    game.renderer.markBackgroundDirty();
+  }
+
+  // SPACE on the hole while standing in its cave: climb back out onto the same
+  // G room's surface, at the hole itself. The mirror of dive(), minus the parts
+  // that only make sense going down — the cave is already carved and cached on
+  // sink.cave, and nothing is reset on the way up.
+  //
+  // sink.dived deliberately stays true, so this is a way back rather than a
+  // ladder: the descent keeps its one-shot plane-0 enemy wipe, which hopping in
+  // and out would otherwise let the player farm on every room's worth of
+  // enemies. Once out, the hole is spent and reads as ordinary scenery.
+  surface(sink) {
+    if (!sink?.cave || !sink.glyphObj) return;
+
+    const { game } = this;
+    game.player.plane = PLANE_SURFACE;
+    game.player.position.x = sink.glyphObj.position.x;
+    game.player.position.y = sink.glyphObj.position.y;
     game.renderer.markBackgroundDirty();
   }
 
@@ -153,7 +188,7 @@ export class SinkholeSystem {
   update(dt) {
     const { game } = this;
     const p = game.player;
-    if (!p || p.plane !== 1) return;
+    if (!p || p.plane !== PLANE_TUNNEL) return;
 
     const room = game.currentRoom;
     const sink = room?.sinkholes?.find(s => s.cave && !s.cave._consumed);
@@ -209,7 +244,7 @@ export class SinkholeSystem {
     game.currentRoom = newRoom;
     game.player.position.x = spawn.x;
     game.player.position.y = spawn.y;
-    game.player.plane = 1;
+    game.player.plane = PLANE_TUNNEL;
     game.player.setCollisionMap(newRoom.collisionMap);
 
     // Canonical, mandatory room-swap path (bug #93 warp-divergence

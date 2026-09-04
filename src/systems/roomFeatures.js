@@ -668,7 +668,14 @@ export function generateGrassSwaths(gen, room) {
   return clusters; // Return cluster positions for recipe sign placement
 }
 
-// Seeds 0-2 concealed Sinkholes into a G room's already-placed grass swaths.
+// Seeds at most ONE concealed Sinkhole into a G room's already-placed grass
+// swaths. One is a hard structural ceiling, not a balance dial: diving a
+// Sinkhole carves its cave directly into this room's own backgroundObjects and
+// overwrites room.underground (see SinkholeSystem._generateSinkholeCave), so a
+// second hole in the same room lays a second cave over the first — two sets of
+// walls in one grid, with each cave's river exit fenced off by the other's
+// walls. That is a softlock, since plane 1 has no room exits of its own.
+//
 // Grass is scattered as continuous pixel positions in circular clusters (not
 // grid cells), so adjacency is measured by pixel radius around a randomly
 // chosen anchor grass tile rather than an 8-neighborhood grid check. The
@@ -681,38 +688,35 @@ export function seedSinkholes(gen, room) {
   const grassObjects = room.backgroundObjects.filter(obj => obj.char === '|');
   if (grassObjects.length < 3) return;
 
-  const siteCount = Math.floor(Math.random() * 3); // 0-2
+  // Two thirds of G rooms get a site. That is exactly the "at least one"
+  // rate the old uniform 0-2 roll produced, so capping the count changes how
+  // many holes a room can hold without changing how often one is there.
+  if (Math.random() < 1 / 3) return;
+
+  const anchor = grassObjects[Math.floor(Math.random() * grassObjects.length)];
   const adjacencyRadius = GRID.CELL_SIZE * 1.5;
-  const usedAnchors = new Set();
 
-  for (let i = 0; i < siteCount; i++) {
-    const candidates = grassObjects.filter(g => !usedAnchors.has(g));
-    if (!candidates.length) break;
-    const anchor = candidates[Math.floor(Math.random() * candidates.length)];
-    usedAnchors.add(anchor);
+  const adjacentGrass = grassObjects.filter(g => {
+    if (g === anchor) return false;
+    const dx = g.position.x - anchor.position.x;
+    const dy = g.position.y - anchor.position.y;
+    return Math.sqrt(dx * dx + dy * dy) <= adjacencyRadius;
+  });
 
-    const adjacentGrass = grassObjects.filter(g => {
-      if (g === anchor) return false;
-      const dx = g.position.x - anchor.position.x;
-      const dy = g.position.y - anchor.position.y;
-      return Math.sqrt(dx * dx + dy * dy) <= adjacencyRadius;
-    });
+  // Too few neighbors to ever reach majority-cut — skip so every seeded
+  // Sinkhole is guaranteed revealable.
+  if (adjacentGrass.length < 3) return;
 
-    // Too few neighbors to ever reach majority-cut — skip so every seeded
-    // Sinkhole is guaranteed revealable.
-    if (adjacentGrass.length < 3) continue;
-
-    room.sinkholes.push({
-      col: anchor.position.x,
-      row: anchor.position.y,
-      anchor,
-      revealed: false,
-      adjacentGrass,
-      cutSet: new Set(),
-      glyphObj: null,
-      cave: null
-    });
-  }
+  room.sinkholes.push({
+    col: anchor.position.x,
+    row: anchor.position.y,
+    anchor,
+    revealed: false,
+    adjacentGrass,
+    cutSet: new Set(),
+    glyphObj: null,
+    cave: null
+  });
 }
 
 // BFS over a cave grid's open cells (0 = passage, 1 = wall) from a start

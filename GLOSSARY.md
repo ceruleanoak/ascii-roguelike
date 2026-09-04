@@ -106,7 +106,10 @@ programming terms.
   until a majority of the grass tiles touching it have been cut. Once revealed, SPACE dives
   the player to that Room's own plane-1 cave — a guaranteed river leads to a one-way shortcut
   into a freshly generated Room in another Zone, arriving already on plane 1 inside the river's
-  trail.
+  trail. SPACE on the hole from inside the cave climbs back out to the same Room's surface;
+  the descent is spent once taken, so the hole is then ordinary scenery. At most one Sinkhole
+  exists per Room — its cave is carved into that Room's own grid, so a second would overlay
+  the first.
 - **In code:** `SinkholeSystem`; `room.sinkholes[]` (site + adjacency-cut tracking); reveal
   glyph `⬤`, plane-1 water glyph `≈`.
 - **Not:** the Pond (a fixed, always-visible Quagmire entrance reached by a Frog only) or the
