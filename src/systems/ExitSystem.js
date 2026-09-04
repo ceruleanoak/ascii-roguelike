@@ -250,7 +250,10 @@ export class ExitSystem {
     // own signage turns into '3'. Taking it routes to the Three Room (the
     // north-exit block in main.js intercepts exit.threeRoom); LOOK NORTH here
     // answers through EXIT_LETTERS['3'].
-    if (zoneType === 'gray' && currentDepth === 3 && !this.game?.grayThreeExitShown) {
+    // A Cursed run is never offered it again — the room withdraws once a slot
+    // has cracked, which is what makes the mistake permanent rather than
+    // something the player can walk back and correct.
+    if (zoneType === 'gray' && currentDepth === 3 && !this.game?.grayThreeExitShown && !this.game?.cursedRun) {
       this.game.grayThreeExitShown = true;
       exits.north = { letter: '3', color: '#999999', threeRoom: true };
     }

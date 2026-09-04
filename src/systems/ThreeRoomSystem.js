@@ -75,6 +75,11 @@ const SLOT_COUNT = 3;
 // replaced by a generic crack mark. The frame is drawn by ThreeRoomRenderer.
 const SLOT_CRACKED_COLOR = '#5a5a5a';
 
+// What comes up when a slot cracks. Far enough out to ring the whole cluster
+// rather than crowd it, and few enough that a second crack visibly doubles it.
+const CURSE_RISE_COUNT = 5;
+const CURSE_RISE_RADIUS = GRID.CELL_SIZE * 4.5;
+
 // The room's three loops. The music thickens as offerings land — one track
 // per stage, swapped at the loop boundary so the change lands on the beat.
 const MUSIC_TRACKS = ['three-1.mp3', 'three-2.mp3', 'three-3.mp3'];
@@ -103,9 +108,14 @@ export class ThreeRoomSystem {
    * Record a north traversal. Returns true on the traversal that summons the
    * source room (the caller warps there instead of generating deeper); the
    * streak consumes itself so wandering back and insisting again can re-find it.
+   *
+   * A Cursed run is never answered. The streak still counts — insisting north
+   * is not what the curse takes away — but the world has stopped replying, so
+   * the third north is just another room.
    */
-  recordNorthTraversal() {
+  recordNorthTraversal(game) {
     this._northStreak += 1;
+    if (game?.cursedRun) return false;
     if (this._northStreak >= NORTH_STREAK_TRIGGER) {
       this._northStreak = 0;
       return true;
@@ -171,17 +181,54 @@ export class ThreeRoomSystem {
       slot.animationColor = slot.color;
     } else {
       // Refused. The offering stays where it was put, drained of its color
-      // inside a cracked frame — the run has to keep looking at it. The
-      // undead that rise around it, and the Cursed run they begin, are Phase 2.
+      // inside a cracked frame — the run has to keep looking at it.
       slot.threeCracked = true;
       slot.char = char;
       slot.animationChar = char;
       slot.color = SLOT_CRACKED_COLOR;
       slot.animationColor = SLOT_CRACKED_COLOR;
+
+      // The crack is the curse. It lands on the wrong placement, not on the
+      // finished set — the remaining two slots can still be filled and the
+      // door still opens, but the run is already owed.
+      this._beginCurse(game, room);
     }
 
     this._advanceMusic(game, room);
     game.renderer.markBackgroundDirty();
+  }
+
+  /**
+   * A slot cracked, so the run is Cursed from here on.
+   *
+   * Two things happen and they are separate on purpose. The flag is the one
+   * the rest of the game reads — the world stops offering this room, REST
+   * starts decaying, EXPLORE starts going gray — and it is set exactly once,
+   * because a second wrong offering does not curse an already-cursed run any
+   * harder. The Undead are the visible half, and they DO come up again with
+   * every crack: three refused slots means three rings of them, so the room
+   * shows how much was gotten wrong without anyone being told.
+   *
+   * They rise around the cluster rather than around the one bad slot. What was
+   * refused is the offering, but what is answering is the object.
+   */
+  _beginCurse(game, room) {
+    if (!game.cursedRun) {
+      game.cursedRun = true;
+      console.log('☠️ The run is Cursed.');
+    }
+
+    const { x, y } = this._clusterCenter(room);
+    game.undeadSystem.rise(game, x, y, CURSE_RISE_COUNT, { radius: CURSE_RISE_RADIUS });
+  }
+
+  /** Middle of the slot cluster, read off the slots so it follows the layout. */
+  _clusterCenter(room) {
+    const slots = this._slots(room).filter(Boolean);
+    if (!slots.length) return { x: GRID.WIDTH / 2, y: GRID.HEIGHT / 2 };
+    let sx = 0, sy = 0;
+    for (const s of slots) { sx += s.position.x; sy += s.position.y; }
+    return { x: sx / slots.length, y: sy / slots.length };
   }
 
   /**
@@ -252,6 +299,11 @@ export class ThreeRoomSystem {
     // Three Room this run finds (N×3 can summon it again) before its door was
     // ever touched.
     this.cinematic = null;
+
+    // The Undead risen around a cracked slot belong to this room. The curse
+    // they announce does not go with them — game.cursedRun outlives the room,
+    // and later phases raise their own in the graveyard and in REST.
+    game.undeadSystem.clear();
 
     if (!game.audioSystem.isZoneMusicActive()) return;
     game.audioSystem.switchZoneMusic(game.currentRoom?.zone || 'green', import.meta.env.BASE_URL, true);

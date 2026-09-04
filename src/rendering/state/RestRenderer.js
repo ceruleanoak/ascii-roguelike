@@ -17,6 +17,7 @@
 import { GRID, COLORS, EQUIPMENT, CRAFTING } from '../../game/GameConfig.js';
 import { getItemData } from '../../data/items.js';
 import { PixelatedDissolve, TextSwapDissolve } from '../effects/TextEffects.js';
+import { drawUndead } from '../ui/UndeadRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
 
 const IDLE_ECHO_DURATION = 0.5;          // seconds — must match WorldEffectsSystem's IDLE_ECHO_DURATION
@@ -65,6 +66,10 @@ export class RestRenderer {
 
     // Render foreground
     this.renderer.clearForeground();
+
+    // The Undead, same shared pass as NEUTRAL — REST is where the curse puts
+    // them last, streaming in from the south once it has run far enough.
+    drawUndead(this.renderer, game);
 
     // Vacuum particles — pixel-sized motes slowly drawn toward the north exit
     const _vpNow = performance.now();

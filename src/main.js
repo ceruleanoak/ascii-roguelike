@@ -45,6 +45,7 @@ import { RoundCombatSystem } from './systems/RoundCombatSystem.js';
 import { AquiferSystem } from './systems/AquiferSystem.js';
 import { SinkholeSystem } from './systems/SinkholeSystem.js';
 import { ThreeRoomSystem } from './systems/ThreeRoomSystem.js';
+import { UndeadSystem } from './systems/UndeadSystem.js';
 import { ThreeSlotGlobeSystem } from './systems/ThreeSlotGlobeSystem.js';
 import { BossSystem } from './systems/BossSystem.js';
 import { BoulderSystem } from './systems/BoulderSystem.js';
@@ -210,6 +211,7 @@ class Game {
     this.sinkholeSystem = new SinkholeSystem(this);       // concealed G-room shortcut → yellow-zone U room
     this.threeRoomSystem = new ThreeRoomSystem();          // the source room: N×3 + gray '3' discoveries, Death behind its door
     this.threeSlotGlobeSystem = new ThreeSlotGlobeSystem(this); // the turning globe of offerings its slots are fed from
+    this.undeadSystem = new UndeadSystem();                // the Undead a Cursed run fills the world with
     this.cheatWarpSystem = new CheatWarpSystem();          // cheat-menu warp destinations (zone/depth/boss/room/maze)
     this.bossSystem = new BossSystem(this);
     this.boulderSystem = new BoulderSystem(this);
@@ -323,6 +325,11 @@ class Game {
     this.dungeonRareItemObtainedThisRun = false;
     this.spectaclesObtainedThisRun = false; // Maze clear reward flag — declared here, not lazily at first set
     this.dungeonTemplatesUsedThisRun = new Set(); // no floor-layout repeats within one dungeon visit
+
+    // The Cursed run — set the moment a Three Room slot cracks, and true for
+    // the rest of the run. Survives REST on purpose: the curse is a thing REST
+    // itself decays under, so enterRestState is deliberately NOT a reset home.
+    this.cursedRun = false;
     this.companion = null;         // Active camp NPC companion (promoted from room.campNPC)
 
     // Pre-boss gate: set at depth 14 room clear, cleared on room transition
@@ -942,6 +949,8 @@ class Game {
     this.threeRoomSystem.hardReset();       // streak + Death state die with the run
     this.threeSlotGlobeSystem.hardReset();  // the run's touched glyphs die with it too
     this.grayThreeExitShown = false;        // the gray '3' call can happen again next run
+    this.cursedRun = false;                 // a new run is not yet owed anything
+    this.undeadSystem.clear();              // and nothing is standing in it
 
     // Transient feedback dies with the session (bug #198; harness-enforced).
     this.menuSystem.clearPickupFeedback();
@@ -2181,6 +2190,10 @@ class Game {
     // everywhere else via the room's isThreeRoom flag).
     this.threeRoomSystem.update(deltaTime, this);
 
+    // The Undead shamble in both non-combat states; nothing is risen on an
+    // uncursed run, so this is inert until a slot cracks.
+    this.undeadSystem.update(deltaTime, this);
+
     // Wind (e.g. Oasis, flagged room.windThemed) — no-ops for rooms that
     // aren't yellow/wind-themed, same guard as the EXPLORE loop.
     this.sandstormSystem.bindToRoom(this.currentRoom);
@@ -2700,6 +2713,10 @@ class Game {
 
     // Update all shared player mechanics
     this.updatePlayerMechanics(deltaTime);
+
+    // Same Undead tick as NEUTRAL — REST is the second place the curse puts
+    // them, once it has run far enough.
+    this.undeadSystem.update(deltaTime, this);
 
     // Drive gem-wand auto-cast + Crystal Maul charge-hammer lifecycles — same
     // as EXPLORE, so charged weapons fire in the hub instead of hanging at
@@ -3573,7 +3590,7 @@ class Game {
       // Third consecutive north: the world runs out and the source answers
       // instead. Existing secrets keep precedence; the streak records after
       // them but before generic deeper generation.
-      if (this.threeRoomSystem.recordNorthTraversal()) {
+      if (this.threeRoomSystem.recordNorthTraversal(this)) {
         this.animateExitWarp('north', () => this.transitionToNeutralRoom('threeRoom', 'north'));
         return;
       }
@@ -4113,6 +4130,8 @@ class Game {
     // Three Room run-state: the gray '3' call can happen again next run, and
     // the N×3 streak starts clean.
     this.grayThreeExitShown = false;
+    this.cursedRun = false;
+    this.undeadSystem.clear();
     this.threeRoomSystem.hardReset();
     this.threeSlotGlobeSystem.hardReset();  // the run's touched glyphs die with it too
 

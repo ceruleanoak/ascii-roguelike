@@ -1,5 +1,6 @@
 import { GRID, COLORS } from '../../game/GameConfig.js';
 import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher.js';
+import { drawUndead } from '../ui/UndeadRenderer.js';
 
 /**
  * NeutralRenderer - Renders NEUTRAL state (Leshy Grove, future shops/puzzles)
@@ -107,6 +108,10 @@ export class NeutralRenderer {
       const y = ingredient.position.y + GRID.CELL_SIZE / 2;
       this.renderer.drawEntity(x, y, ingredient.char, ingredient.color);
     }
+
+    // The Undead — drawn with the other living figures and under the player,
+    // so a crowd never hides the one thing the player is steering.
+    drawUndead(this.renderer, game);
 
     // Draw neutral characters (Leshy, Fairy, etc.)
     for (const neutralChar of game.neutralCharacters) {

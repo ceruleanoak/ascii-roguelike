@@ -878,8 +878,17 @@ programming terms.
 - **Definition:** The state a run enters the moment a slot cracks. The Three Room can no
   longer be found for the rest of the run, the Graveyard fills as rooms are explored, and REST
   eventually turns gray, stops healing, and starts admitting undead from the south.
-- **In code:** planned `game.cursedRun` (not yet built).
+- **In code:** `game.cursedRun`, set in `ThreeRoomSystem._beginCurse`.
 - **Not:** "cursed mode", "bad ending", "hard mode".
+
+### Undead
+- **Definition:** The risen figures a Cursed Run fills the world with — around a cracked slot,
+  through the Graveyard, and finally inside REST. They shamble and crowd; they do not attack,
+  take damage, or drop anything. They borrow the gray zone's letters (`S` Skeleton, `Z` Risen
+  and up) because the curse is bending the world toward gray.
+- **In code:** `UndeadSystem` (`src/systems/UndeadSystem.js`), drawn by `drawUndead`
+  (`src/rendering/ui/UndeadRenderer.js`). Not `Enemy` instances — see the system's header.
+- **Not:** "ghosts", "spirits", "mobs", "wanderers".
 
 ### Graveyard
 - **Definition:** The room south of REST, opened by a Cursed Run — undead milling below a hard
