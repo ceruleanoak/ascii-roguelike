@@ -13,13 +13,15 @@
 //     while homing straight at the player at a fixed speed, ignoring walls
 //     and every other obstacle unconditionally. No pathfinding, unlike
 //     MazeGhost's BFS cell-stepping through the maze's collision grid.
-//   - Sap: contact sets player.tombSapped, deliberately never registered
-//     into player.activeSappingBats — the bat sap mechanic's own array,
-//     which both takeDamage() and the dodge roll walk to call
-//     breakSapping() on every entry. Tomb Ghost sap is immune to both
-//     interrupts for free, simply by living outside that array. It also has
-//     no duration; only leaving the room (DungeonSystem._activateFloor) or
-//     the dungeon (_exitDungeon) clears it — see those two hook sites plus
+//   - Sap: player.tombSapped tracks live contact — it is set while a ghost
+//     is actually touching the player and cleared the frame contact breaks,
+//     so walking out of the ghost's reach stops the damage. It's
+//     deliberately never registered into player.activeSappingBats — the bat
+//     sap mechanic's own array, which both takeDamage() and the dodge roll
+//     walk to call breakSapping() on every entry. Tomb Ghost sap is immune
+//     to both interrupts for free, simply by living outside that array.
+//     Leaving the room (DungeonSystem._activateFloor) or the dungeon
+//     (_exitDungeon) also clears it — see those two hook sites plus
 //     InteriorManager.reset()'s defensive third clear-point.
 
 const GHOST_CHAR          = '⚉';  // Same glyph as MazeSystem's MazeGhost — signals the shared family
@@ -47,7 +49,7 @@ class TombGhost {
     this.position = { x, y };
     this.wobbleTimer = Math.random() * Math.PI * 2; // Phase-desync if multiple ghosts ever coexist
     // Immune — mirrors MazeGhost exactly. Cannot be damaged, destroyed, or
-    // rolled away; only escape from its sap is leaving the room/dungeon.
+    // rolled away; the only counter is staying out of its reach.
     this.hp = Infinity;
     this.takeDamage = () => 0;
   }
@@ -67,6 +69,7 @@ export class DungeonGhostSystem {
   /** Per-tick ghost movement + contact-sap. Called from DungeonSystem.update(). */
   update(floor, dt) {
     const player = this.game.player;
+    let touching = null;
     for (const ghost of floor.tombGhosts) {
       // Homing: straight line to the player at a fixed speed, unconditionally
       // ignoring floor.collisionMap and every other obstacle — the one
@@ -89,21 +92,31 @@ export class DungeonGhostSystem {
       ghost.position.x = ghost.basePosition.x + (WOBBLE_RADIUS * Math.cos(t)) / denom;
       ghost.position.y = ghost.basePosition.y + (WOBBLE_RADIUS * Math.sin(t) * Math.cos(t)) / denom;
 
-      // Contact sap. Persists once set — see file header — so this only ever
-      // needs to turn the flag on, never off.
+      // Contact sap — resolved fresh every frame from the ghost's CURRENT
+      // distance, so the sap only lasts as long as the touch does.
       const cdx = player.position.x - ghost.position.x;
       const cdy = player.position.y - ghost.position.y;
-      if (Math.hypot(cdx, cdy) < CONTACT_RADIUS) {
-        player.tombSapped = true;
-        player._tombSappingGhost = ghost;
-      }
+      if (Math.hypot(cdx, cdy) < CONTACT_RADIUS) touching = ghost;
+    }
+
+    if (touching) {
+      // Priming the timer at a full interval makes the first sap land on the
+      // frame contact begins rather than a second later — the hit has to read
+      // as the collision that caused it.
+      if (!player.tombSapped) player._tombSapTimer = SAP_DAMAGE_INTERVAL;
+      player.tombSapped = true;
+      player._tombSappingGhost = touching;
+    } else {
+      player.tombSapped = false;
+      player._tombSapTimer = 0;
+      player._tombSappingGhost = null;
     }
   }
 
-  /** Periodic sap damage while player.tombSapped is set. Called from
-   *  DungeonSystem.update(), independent of the ghost's current distance —
-   *  the sap persists past contact per the design (escape is leaving the
-   *  room/dungeon, not outrunning the ghost). */
+  /** Periodic sap damage for as long as a ghost is in contact. tombSapped is
+   *  recomputed from live distance in update() above, so stepping out of the
+   *  ghost's reach ends the damage on the next frame. Called from
+   *  DungeonSystem.update(), immediately after update(). */
   tickSap(player, dt) {
     if (!player.tombSapped) return;
 
