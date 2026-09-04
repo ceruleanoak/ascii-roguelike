@@ -929,6 +929,10 @@ export const BACKGROUND_OBJECTS = {
     conductivity: 'none',
     indestructible: false,
     glitteringRock: true,
+    // Draws the twinkle (ExploreRenderer's per-frame glitter pass). The Secret
+    // Vein Rock below shares glitteringRock but deliberately omits this — it
+    // is disguised as ordinary stone, and a glint would give the secret away.
+    showsGlitter: true,
     solid: true,
     tunnelWall: false,
     renderOnlyOnPlane: 1,

@@ -27,6 +27,8 @@ import { drawSinkholes } from '../effects/SinkholeEffects.js';
 import { drawWires } from '../effects/WireEffects.js';
 import { drawDonationArc, drawCoinArc, drawWellRitual } from '../effects/ArcTossEffects.js';
 import { renderBombEnemy } from '../effects/BombEffects.js';
+import { renderIceGolem, renderSmallEnemyUnderSnow, renderYetiFrenzyPip } from '../effects/CyanEnemyEffects.js';
+import { renderFishingPasses } from '../effects/FishingRenderEffects.js';
 import { drawStatusPips } from '../effects/StatusPipEffects.js';
 import { drawTamedRats } from '../ui/CompanionRenderers.js';
 import { BRIDGE_MATERIALS } from '../../systems/RidgeSystem.js';
@@ -36,10 +38,14 @@ import { BossRenderer } from './BossRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
 import { isInteriorActive } from '../../systems/PlaneSystem.js';
 import { drawUndergroundFogOverlay } from '../ui/torchLight.js';
+import { drawKnownSpellHints, drawWellCoinHint, drawDoorPrompts } from '../ui/ContextHints.js';
 import { drawManaGems } from '../effects/ManaGemRenderer.js';
+import { drawSparkle, GRASS_SPARKLE_SPEED, GLITTER_SPARKLE_SPEED } from '../effects/SparkleEffects.js';
 import { stepConcealmentAlpha } from '../../systems/WorldEffectsSystem.js';
 import { ConsumableTriggerSystem } from '../../systems/ConsumableTriggerSystem.js';
 import { drawFracturedRock } from '../sprites/fracturedRockSprite.js';
+import { renderMawShadow, chargedColor, renderChargedObjects } from '../AscentRenderHelpers.js';
+import { ReflectShieldMechanic } from '../../entities/enemyMechanics/ReflectShieldMechanic.js';
 
 // Peak height (px) of a thrown consumable's toss arc, and how many full
 // spins it completes over the flight — shared by every consumable windup so
@@ -90,6 +96,9 @@ export class ExploreRenderer {
       west:  new SplitReveal({ speed: 3.5, axis: 'vertical' }),
     };
     this._lastRoom = null;
+    // Tracks the underground blackout so a plane change can force a background
+    // repaint (the blackout is baked into the cached layer — see renderBackground).
+    this._lastUndergroundDark = false;
 
     // Vacuum particle state — pixel motes cycling downward into the south exit
     this._southVacuumParticles = [];
@@ -129,12 +138,32 @@ export class ExploreRenderer {
       this.renderer.backgroundDirty = true;
     }
 
+    // Systems without a renderer reference (PhysicsSystem's snow compaction)
+    // request a repaint by flagging the room; consume it here.
+    if (game.currentRoom.backgroundRepaint) {
+      game.currentRoom.backgroundRepaint = false;
+      this.renderer.backgroundDirty = true;
+    }
+
+    // The underground blackout below is baked into the cached background, so a
+    // plane change has to force a repaint the same way a locked exit does.
+    const undergroundDark = !!(game.currentRoom.underground && game.player?.plane === 1);
+    if (this._lastUndergroundDark !== undergroundDark) {
+      this._lastUndergroundDark = undergroundDark;
+      this.renderer.backgroundDirty = true;
+    }
+
     // Render background (only if dirty)
     if (!this.renderer.backgroundDirty) return;
 
-    // Get zone background color (with progression blending)
+    // Get zone background color (with progression blending). Underground on
+    // plane 1 the surface palette is never seen at all: the ground clears to
+    // black so the only thing that reads is whatever the fog radius leaves
+    // unwashed (drawUndergroundFogOverlay). Clearing to the zone's daylight
+    // ground and darkening it afterwards left the surface colour glowing
+    // through the cave.
     const environmentColors = game.zoneSystem.getBlendedEnvironmentColors(game.currentRoom.zone);
-    this.renderer.clearBackground(environmentColors.background);
+    this.renderer.clearBackground(undergroundDark ? '#000000' : environmentColors.background);
 
     // Always draw visual gaps for every exit that exists on this room.
     // The split panels on the foreground act as doors — they cover each gap
@@ -202,20 +231,30 @@ export class ExploreRenderer {
       if (obj.isCampfire) continue;
       if (obj.onFire) continue; // burning objects flicker on the foreground (drawBurningObjects)
       if (obj.char === '⬤') continue; // Sinkhole: foreground draw, see drawSinkholes
+      if (obj.charged) continue; // Yellow Ascent: charged metal blinks on the foreground
       if (!obj.currentAnimation && obj.char !== '~' && !isGrass && !isTunnelWall) {
         // Check plane-aware rendering (tunnel entrances, etc.)
         if (!this.shouldRenderBackgroundObject(obj, game.player)) continue;
 
         const x = obj.position.x + GRID.CELL_SIZE / 2;
         const y = obj.position.y + GRID.CELL_SIZE / 2;
-        this.renderer.bgCtx.fillStyle = obj.color;
+
+        // Deep snow: render as a filled white (or compacted cyan) tile covering the full cell
+        if (obj.char === '█' && obj._variantData?.compactColor) {
+          this.renderer.bgCtx.fillStyle = obj.compacted ? obj._variantData.compactColor : '#ffffff';
+          this.renderer.bgCtx.fillRect(obj.position.x, obj.position.y, GRID.CELL_SIZE, GRID.CELL_SIZE);
+          continue;
+        }
+
+        const objColor = obj.color;
+        this.renderer.bgCtx.fillStyle = objColor;
         // Deflectors render as Path2D filled triangles at 1.5× cell size so
         // every collision system (bullets, boulders, player) lines up exactly
         // with the visible hypotenuse and legs.
         if (obj.data?.boulderDeflector) {
-          this._drawDeflectorTriangle(this.renderer.bgCtx, x, y, obj.data.deflectorElbow, obj.color);
+          this._drawDeflectorTriangle(this.renderer.bgCtx, x, y, obj.data.deflectorElbow, objColor);
         } else if (obj.data?.customSprite === 'fracturedRock') {
-          drawFracturedRock(this.renderer.bgCtx, x, y, obj.damageStage, obj.color);
+          drawFracturedRock(this.renderer.bgCtx, x, y, obj.damageStage, objColor);
         } else {
           this.renderer.bgCtx.fillText(obj.char, x, y);
         }
@@ -460,6 +499,33 @@ export class ExploreRenderer {
       );
     }
 
+    // Yellow Ascent: charged metal blinks each frame (skipped by the bg loop)
+    renderChargedObjects(this.renderer, game, (obj) => this.shouldRenderBackgroundObject(obj, game.player));
+
+    // Glittering Rocks twinkle each frame. The rock glyph itself is baked into
+    // the cached background layer, so the glint has to ride the foreground
+    // pass — same reason campfires and charged metal are drawn up here. It
+    // sits up-right of the glyph's center, reading as light caught on a facet
+    // rather than as something sitting on top of the rock.
+    //
+    // Surface pass only, deliberately: '5' rocks are generated into the
+    // underground layer of an EXPLORE room (RoomGenerator's two cave passes)
+    // and never onto a hut, dungeon or maze floor, so there is no interior PiP
+    // pass to ship alongside this one.
+    for (const obj of game.backgroundObjects) {
+      if (!obj.data?.showsGlitter || obj.destroyed) continue;
+      if (!this.shouldRenderBackgroundObject(obj, game.player)) continue;
+      drawSparkle(
+        this.renderer,
+        obj.position.x + GRID.CELL_SIZE * 0.75,
+        obj.position.y + GRID.CELL_SIZE * 0.25,
+        GLITTER_SPARKLE_SPEED
+      );
+    }
+
+    // Cyan Ascent: Frozen Maw shadow under the ice (visual only, fades downward)
+    renderMawShadow(this.renderer.ctx, game);
+
     // Draw mana gems on foreground with pulsing glow (boss room)
     drawManaGems(this.renderer, game);
 
@@ -573,113 +639,7 @@ export class ExploreRenderer {
     if (donAnim) drawDonationArc(this.renderer, donAnim);
 
     // ── Fishing system render passes ──────────────────────────────────────────
-    const fishingSystem = game.fishingSystem;
-    if (fishingSystem) {
-      // Ambient fish (jump arcs from water)
-      for (const fish of fishingSystem.fishEntities) {
-        this.renderer.drawEntity(
-          fish.getRenderX(),
-          fish.getRenderY(),
-          fish.char,
-          fish.color
-        );
-      }
-
-      // Bobber (visible while BOBBING state)
-      if (fishingSystem.bobber?.visible) {
-        const bobber = fishingSystem.bobber;
-        this.renderer.drawEntity(
-          bobber.getRenderX(),
-          bobber.getRenderY(),
-          bobber.char,
-          bobber.color
-        );
-      }
-
-      // Fishing charge bar: shown while holding space to cast (like bow charge)
-      if (fishingSystem.state === fishingSystem.STATES.CHARGING && game.player) {
-        const chargeRatio = Math.min(fishingSystem.chargeTime / 1.5, 1.0);
-        const barHeight = GRID.CELL_SIZE;
-        const barX = game.player.position.x + GRID.CELL_SIZE * 1.5;
-        const barY = game.player.position.y;
-        const filledHeight = barHeight * chargeRatio;
-        this.renderer.drawRect(
-          barX,
-          barY + (barHeight - filledHeight),
-          4,
-          filledHeight,
-          '#8b4513',
-          true
-        );
-      }
-
-      // Bite window indicator: flash '!' when bobber bites
-      if (fishingSystem.state === fishingSystem.STATES.BITE_WINDOW) {
-        const ctx = this.renderer.fgCtx;
-        const pulse = Math.sin(Date.now() / 80) > 0;
-        if (pulse && game.player) {
-          ctx.save();
-          ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillStyle = '#ffff00';
-          ctx.globalAlpha = 0.9;
-          ctx.fillText(
-            '!',
-            game.player.position.x + GRID.CELL_SIZE / 2,
-            game.player.position.y - GRID.CELL_SIZE
-          );
-          ctx.restore();
-        }
-      }
-
-      // Rusalka (rendered separately from neutralCharacters to avoid double-update)
-      if (fishingSystem.rusalka?.alive) {
-        const rusalka = fishingSystem.rusalka;
-        const ctx = this.renderer.fgCtx;
-        ctx.save();
-        ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.globalAlpha = rusalka.getPulseAlpha();
-        ctx.fillStyle = rusalka.color;
-        ctx.fillText(
-          rusalka.char,
-          rusalka.position.x + GRID.CELL_SIZE / 2,
-          rusalka.position.y + GRID.CELL_SIZE / 2
-        );
-        ctx.restore();
-      }
-
-      // Reward objects: draw char + "CAUGHT: NAME" label
-      for (const reward of fishingSystem.rewardObjects) {
-        if (!reward.alive) continue;
-
-        this.renderer.drawEntity(
-          reward.getRenderX(),
-          reward.getRenderY(),
-          reward.char,
-          reward.color
-        );
-
-        // "CAUGHT: NAME" text above the char (fades out after 2s)
-        if (reward.messageTimer > 0) {
-          const ctx = this.renderer.fgCtx;
-          ctx.save();
-          ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'bottom';
-          ctx.fillStyle = reward.color;
-          ctx.globalAlpha = Math.min(0.9, reward.messageTimer); // fade in last second
-          ctx.fillText(
-            `CAUGHT: ${reward.name}`,
-            reward.getRenderX(),
-            reward.getRenderY() - GRID.CELL_SIZE / 2 - 2
-          );
-          ctx.restore();
-        }
-      }
-    }
+    renderFishingPasses(this.renderer, game);
     // ── End fishing render passes ─────────────────────────────────────────────
 
     // When player is inside a hut, all interior-coord entities (player, combat,
@@ -936,18 +896,18 @@ export class ExploreRenderer {
 
     // Draw known-spell indicators above player
     if (!playerInInterior && game.knownSpells?.size > 0) {
-      this._renderKnownSpellHints(game);
+      drawKnownSpellHints(this.renderer, game);
     }
 
     // Coin-in-pocket hint when standing in a usable W room. Tells the player
     // they have something coin-shaped without explaining what it's for.
     if (!playerInInterior) {
-      this._renderWellCoinHint(game);
+      drawWellCoinHint(this.renderer, game);
     }
 
     // Draw "SPACE ENTER" prompt near exterior hut/dungeon/maze doors
     if (!playerInInterior) {
-      this._renderDoorPrompts(game);
+      drawDoorPrompts(this.renderer, game);
     }
 
     // Draw gem wand held aloft (with shake) while charging
@@ -1244,25 +1204,6 @@ export class ExploreRenderer {
     return onCell > 0 && nearby >= 6;
   }
 
-  // Draw a single intermittent sparkle at the center of a tile.
-  // Sequence: dot → slowly spinning asterisk → dot, then a quiet tail.
-  // Period ~1.8s with a 0.6s active window. Per-position phase offset so
-  // adjacent sparkles don't sync.
-  _drawGrassSparkle(cx, cy) {
-    const phase = (((cx * 73856093) ^ (cy * 19349663)) >>> 0) % 1800 / 1000;
-    const t = (performance.now() / 1000 + phase) % 1.8;
-    if (t > 0.6) return;
-    const color = '#ffffcc';
-    if (t < 0.15 || t >= 0.45) {
-      // Pixel-sized dot — head and tail of the sparkle.
-      this.renderer.drawEntity(cx, cy, '·', color);
-    } else {
-      // Spinning asterisk — gentle ~1/6 rotation across the 0.3s mid window.
-      const angle = ((t - 0.15) / 0.3) * (Math.PI * 2 / 3);
-      this.renderer.drawEntityRotated(cx, cy, '*', color, angle);
-    }
-  }
-
   // Draws a deflector as a filled right triangle centered at (cx, cy). The
   // triangle fills the cell exactly so it lines up with the collision shape
   // used by PhysicsSystem / BoulderSystem / CombatSystem.
@@ -1383,6 +1324,12 @@ export class ExploreRenderer {
       return; // Skip normal enemy indicators while collapsed
     }
 
+    // Small enemies under deep snow: render as subtle pulsing cyan bump
+    if (enemy.data?.small && enemy.isInDeepSnow) {
+      renderSmallEnemyUnderSnow(this.renderer, enemy);
+      return; // Skip normal enemy rendering while hidden under snow
+    }
+
     if (enemy.shouldRenderVisible()) {
       // iframe flash (white) takes priority, then windup (also white, but
       // solid rather than blinking), then DOT blink, then base color
@@ -1401,6 +1348,18 @@ export class ExploreRenderer {
       // Boss/miniboss near-death warning: blink dark red — highest-priority signal (mirrors the player)
       const nearDeathColor = enemy.getNearDeathBlinkColor();
       if (nearDeathColor !== null) displayColor = nearDeathColor;
+
+      // Yeti frenzy: rapid red flicker while frenzy timer active. The off-phase
+      // falls back to `displayColor`, not `enemy.color` — every higher-priority
+      // signal resolved above (iframe flash, windup white, DOT blink, and the
+      // near-death warning that the comment above calls highest-priority) lives
+      // in that variable, and dropping to the base color erases it outright on
+      // half the frames.
+      if (enemy.frenzyActive) {
+        const t = Date.now() / 1000;
+        const flicker = Math.sin(t * 30) * 0.5 + 0.5;
+        displayColor = flicker > 0.5 ? '#ff3333' : displayColor;
+      }
 
       // Use dithered rendering for tunnel plane entities (plane 1)
       const useDithering = enemy.plane === 1 && game.player.plane === 1;
@@ -1483,6 +1442,9 @@ export class ExploreRenderer {
           displayColor
         );
         this.renderer.fgCtx.restore();
+      } else if (enemy.char === 'I' && enemy.data?.affinities?.includes('ice')) {
+        // Ice Golem — massive walking glacier, rendered at 2.5× cell size.
+        renderIceGolem(this.renderer, enemy, displayColor, shakeX, shakeY, drawMethod);
       } else if (enemy.char === '6' && enemy.data?.ripenMechanic?.enabled) {
         renderBombEnemy(this.renderer, enemy, displayColor, shakeX, shakeY);
       } else {
@@ -1498,6 +1460,11 @@ export class ExploreRenderer {
       // Stack-count pips for active stackable status effects (burn, poison,
       // drowse tiers, etc.) — rows stacked upward in application order.
       drawStatusPips(this.renderer, enemy);
+
+      // Yeti frenzy: red pip above head while frenzy active
+      if (enemy.frenzyActive) {
+        renderYetiFrenzyPip(this.renderer, enemy);
+      }
     }
 
     // Parry indicator (Duelist): show ']' above enemy when parry is active
@@ -1511,8 +1478,10 @@ export class ExploreRenderer {
       );
     }
 
-    // Reflect shield indicator (Mirror Imp): show '|' above when shield is active
-    if (enemy.shieldActive) {
+    // Reflect shield indicator (Mirror Imp, Ice Golem): show '|' above when shield is active.
+    // Asks the mechanic the same question the projectile check asks — the
+    // indicator must never claim cover that reflection isn't honouring.
+    if (enemy.shieldActive && !ReflectShieldMechanic.isShieldDown(enemy)) {
       const shieldColor = enemy.data?.reflectShield?.shieldColor || '#ffffff';
       const shieldFlash = Math.floor(Date.now() / 100) % 2 === 0 ? shieldColor : '#8888ff';
       this.renderer.drawEntity(
@@ -1930,112 +1899,6 @@ export class ExploreRenderer {
    * Letters matching the current typed buffer prefix light up; the rest stay dim.
    * First-learned spell sits closest to the player; newer ones stack upward.
    */
-  _renderKnownSpellHints(game) {
-    const knownSpells = game.knownSpells;
-    if (!knownSpells?.size) return;
-
-    const C = GRID.CELL_SIZE;
-    const keyBuffer = game.keyBuffer ?? [];
-    const ctx = this.renderer.fgCtx;
-
-    ctx.save();
-    ctx.font = `${Math.round(C * 0.65)}px 'Unifont', monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    const charW = ctx.measureText('M').width;
-    const spacing = charW * 1.35;
-    const ROW_H = C * 0.82;
-    const cx = game.player.position.x + C / 2;
-    const baseY = game.player.position.y - C * 0.9;
-
-    let row = 0;
-    for (const word of knownSpells) {
-      const totalW = spacing * (word.length - 1);
-      const startX = cx - totalW / 2;
-      const cy = baseY - row * ROW_H;
-
-      // Count how many leading letters of this word are in the buffer tail
-      let progress = 0;
-      for (let len = Math.min(keyBuffer.length, word.length); len >= 1; len--) {
-        const suffix = keyBuffer.slice(keyBuffer.length - len).join('');
-        if (word.startsWith(suffix)) { progress = len; break; }
-      }
-
-      const specOn = isSpectaclesActive(game);
-      for (let i = 0; i < word.length; i++) {
-        ctx.fillStyle = i < progress ? '#88ff88' : '#333333';
-        ctx.fillText(spectaclesTransform(word[i], specOn), startX + i * spacing, cy);
-      }
-
-      row++;
-    }
-
-    ctx.restore();
-  }
-
-  /**
-   * Renders a small dim 'c' above the player when they're in a W (well) room
-   * holding at least one Coin ingredient. Only shown while the well is still
-   * usable. Mirrors the spell-hint style so the player reads it as "you have
-   * something" without explanation.
-   */
-  _renderWellCoinHint(game) {
-    const room = game.currentRoom;
-    if (!room || room.type !== ROOM_TYPES.WELL) return;
-    if (!room.well || room.well.consumed) return;
-    if (!game.inventorySystem?.hasCoin()) return;
-
-    const C = GRID.CELL_SIZE;
-    const ctx = this.renderer.fgCtx;
-    const cx = game.player.position.x + C / 2;
-    // Sit above any existing spell hints by a row.
-    const knownCount = game.knownSpells?.size || 0;
-    const cy = game.player.position.y - C * 0.9 - knownCount * (C * 0.82);
-
-    ctx.save();
-    ctx.font = `${Math.round(C * 0.65)}px 'Unifont', monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ffff66';
-    ctx.globalAlpha = 0.55;
-    ctx.fillText(spectaclesTransform('c', isSpectaclesActive(game)), cx, cy);
-    ctx.restore();
-  }
-
-  /**
-   * Renders a "SPACE  ENTER" prompt above the door glyph when the player
-   * is within interaction range of an exterior hut, dungeon, or maze door.
-   */
-  _renderDoorPrompts(game) {
-    if (!game.player) return;
-
-    let doorPosition = null;
-    if (game.hutSystem?.nearExteriorDoor()) {
-      doorPosition = game.currentRoom?.hut?.doorPosition;
-    } else if (game.dungeonSystem?.nearExteriorDoor()) {
-      doorPosition = game.currentRoom?.dungeon?.doorPosition;
-    } else if (game.mazeSystem?.nearExteriorDoor()) {
-      doorPosition = game.currentRoom?.maze?.doorPosition;
-    }
-
-    if (!doorPosition) return;
-
-    const C = GRID.CELL_SIZE;
-    const ctx = this.renderer.fgCtx;
-    ctx.save();
-    ctx.font = `10px 'Unifont', monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ccccaa';
-    ctx.fillText(
-      spectaclesTransformString('SPACE  ENTER', isSpectaclesActive(game)),
-      doorPosition.col * C + C / 2,
-      doorPosition.row * C - C * 0.75
-    );
-    ctx.restore();
-  }
-
   /** Creates a single south vacuum particle with a random initial cycle phase. */
   _makeSouthVacuumParticle() {
     const colors = ['#cc9a3c', '#d4a84a', '#dbb85a', '#c8943a'];
@@ -2566,7 +2429,7 @@ export class ExploreRenderer {
       if (this._isOnTallGrass(game, ingredient.position.x, ingredient.position.y)) {
         const now = performance.now() / 1000;
         if (ingredient._concealedSince === undefined) ingredient._concealedSince = now;
-        if (now - ingredient._concealedSince >= 3) this._drawGrassSparkle(cx, cy);
+        if (now - ingredient._concealedSince >= 3) drawSparkle(this.renderer, cx, cy, GRASS_SPARKLE_SPEED);
         continue;
       }
       ingredient._concealedSince = undefined;
@@ -2585,13 +2448,15 @@ export class ExploreRenderer {
       if (this._isOnTallGrass(game, item.position.x, item.position.y)) {
         const now = performance.now() / 1000;
         if (item._concealedSince === undefined) item._concealedSince = now;
-        if (now - item._concealedSince >= 3) this._drawGrassSparkle(cx, cy);
+        if (now - item._concealedSince >= 3) drawSparkle(this.renderer, cx, cy, GRASS_SPARKLE_SPEED);
         continue;
       }
       item._concealedSince = undefined;
       const useDithering = itemPlane === 1 && game.player.plane === 1;
-      const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity'; // bob = SPACE-pickup float cue (satchel/crows), position-phased to avoid lockstep
-      this.renderer[drawMethod](cx, cy + Math.sin(performance.now() / 400 + (item.position.x + item.position.y) * 0.01) * 3, item.char, item.color);
+      const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
+      // Yellow Ascent: charged items blink yellow
+      const itemColor = chargedColor(item, item.color);
+      this.renderer[drawMethod](cx, cy + Math.sin(performance.now() / 400 + (item.position.x + item.position.y) * 0.01) * 3, item.char, itemColor);
     }
   }
 
@@ -2676,4 +2541,5 @@ export class ExploreRenderer {
       tctx.restore();
     }
   }
+
 }
