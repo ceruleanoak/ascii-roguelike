@@ -687,8 +687,11 @@ export class InteractionSystem {
         } else if (roll < 0.0013) {
           // Very rare: coin
           game.lootSystem.spawnIngredientDrop('c', obj.position.x, obj.position.y, null, obj);
-        } else if (roll < 0.00739) {
-          // Uncommon: beast lurking in the grass (spawn chance reduced 30% from baseline).
+        } else if (roll < 0.004345) {
+          // Uncommon: beast lurking in the grass. The band is 0.003045 wide —
+          // baseline, cut 30%, then halved again — and every threshold below it
+          // is shifted down by that same halving, so only the beast rate moved
+          // and the stick/rock/pollen/axe-head/arrowhead bands keep their width.
           // Fully respects the zone's normal depth-gated spawn table — no
           // separate/guaranteed roll. If the roll happens to land on Goblin,
           // it carries a Scythe (the item's sole source, since Goblin no
@@ -707,19 +710,19 @@ export class InteractionSystem {
             });
             game._activeEnemies().push(...spawned);
           }
-        } else if (roll < 0.01179) {
+        } else if (roll < 0.008745) {
           // Uncommon: stick
           game.lootSystem.spawnIngredientDrop('|', obj.position.x, obj.position.y, null, obj);
-        } else if (roll < 0.01619) {
+        } else if (roll < 0.013145) {
           // Uncommon: rock
           game.lootSystem.spawnIngredientDrop('0', obj.position.x, obj.position.y, null, obj);
-        } else if (roll < 0.01929) {
+        } else if (roll < 0.016245) {
           // Uncommon: pollen (raw oil)
           game.lootSystem.spawnIngredientDrop('ł', obj.position.x, obj.position.y, null, obj);
-        } else if (roll < 0.01979) {
+        } else if (roll < 0.016745) {
           // Rare: axe head
           game.lootSystem.spawnIngredientDrop('⊿', obj.position.x, obj.position.y, null, obj);
-        } else if (roll < 0.02029) {
+        } else if (roll < 0.017245) {
           // Rare: arrowhead
           game.lootSystem.spawnIngredientDrop('△', obj.position.x, obj.position.y, null, obj);
         }
