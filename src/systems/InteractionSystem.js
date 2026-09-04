@@ -12,6 +12,11 @@ import { INTERACTION_RANGE, OBJECT_ANIMATIONS, GRID, GAME_STATES } from '../game
 import { inSamePlane, planeOf, objectOnPlane } from './PlaneSystem.js';
 import { WiseFellow } from '../entities/WiseFellow.js';
 
+// Reach for the armed-Bottle fairy catch (InteractionSystem.tryBottleFairy).
+// Wider than AlchemySystem's one-cell liquid radius: a liquid tile sits still
+// and a fluttering fairy does not, so the catch gets a cell and a half.
+const FAIRY_CATCH_RADIUS = GRID.CELL_SIZE * 1.5;
+
 export class InteractionSystem {
   constructor(game) {
     this.game = game;
@@ -273,13 +278,14 @@ export class InteractionSystem {
   }
 
   // Fairy touch resolution. Called per-frame from main.js for each Fairy in
-  // neutralCharacters. Returns true if the fairy was consumed by the touch
-  // (heal or bottle conversion), so the caller can despawn it.
+  // neutralCharacters. Returns true if the fairy was consumed by the touch,
+  // so the caller can despawn it.
   //
-  // Outcomes (priority order):
-  //   1. Player has an Empty Bottle ('B') equipped + is at full HP →
-  //      convert the bottle slot to 'fairy_in_a_bottle' (⚱). One-shot revive.
-  //   2. Otherwise → heal to full.
+  // Touch is now the heal outcome only — catching a fairy in an Empty Bottle
+  // is the armed-slot SPACE action instead (tryBottleFairy below). While a
+  // Bottle is armed, touch resolution stands down entirely: a player closing
+  // in on a fairy with the bottle out is hunting it, and letting the walk-up
+  // spend the fairy on a heal made the catch unwinnable.
   //
   // Only fires while the fairy is in 'flutter' state. Fleeing/dusting/
   // delivering fairies don't react to touch.
@@ -340,37 +346,82 @@ export class InteractionSystem {
     if (px + pw < fh.x || px > fh.x + fh.width)  return false;
     if (py + ph < fh.y || py > fh.y + fh.height) return false;
 
-    // Bottle conversion path: empty bottle ('B') equipped + at full HP
-    const consumables = player.equippedConsumables;
-    const fullHP = player.hp >= player.maxHp;
-    if (fullHP && Array.isArray(consumables)) {
-      for (let i = 0; i < consumables.length; i++) {
-        const slot = consumables[i];
-        if (slot?.data?.char === 'B') {
-          // Replace the empty bottle with a fairy_in_a_bottle (⚱)
-          const inv = game.inventorySystem;
-          if (inv) {
-            inv.replaceConsumableSlot?.(i, '⚱')
-              || this._fallbackReplaceConsumableSlot(i, '⚱');
-          } else {
-            this._fallbackReplaceConsumableSlot(i, '⚱');
-          }
-          game.menuSystem?.showPickupMessage?.('CAUGHT A FAIRY!');
-          game.audioSystem?.playSFX?.('fairy_pickup');
-          game.menuSystem?.updateUI?.();
-          fairy.consume();
-          return true;
-        }
-      }
-    }
+    // An armed Empty Bottle claims the fairy for tryBottleFairy — see header.
+    if (this._armedBottleIndex() >= 0) return false;
 
-    // Default: full heal. No text — the HP readout blinks instead.
+    // Full heal. No text — the HP readout blinks instead.
     player.hp = player.maxHp;
     game.audioSystem?.playSFX?.('fairy_pickup');
     game.menuSystem?.updateUI?.();
     this._blinkHPDisplay();
     fairy.consume();
     return true;
+  }
+
+  /** Index of the armed (number-key selected) Empty Bottle slot, or -1. */
+  _armedBottleIndex() {
+    const idx = this.game.player?.selectedConsumableIndex ?? -1;
+    if (idx < 0) return -1;
+    return this.game.player.equippedConsumables?.[idx]?.char === 'B' ? idx : -1;
+  }
+
+  /**
+   * SPACE with the Bottle slot armed and a catchable fairy within reach →
+   * the slot becomes a Fairy in a Bottle (⚱). Deliberately the same gesture
+   * as filling a bottle from mud/lava/water (AlchemySystem.tryFillArmedBottle):
+   * arm the bottle, stand next to the thing you want in it, press SPACE. Like
+   * that path it must be checked ahead of ConsumableTriggerSystem.fireSelected(),
+   * which would otherwise swallow the press on an Empty Bottle's absent effect.
+   *
+   * No HP condition — the catch is a deliberate act, so a wounded player is
+   * free to bank the fairy instead of spending it on a heal.
+   */
+  tryBottleFairy() {
+    const game = this.game;
+    const slotIndex = this._armedBottleIndex();
+    if (slotIndex < 0) return false;
+
+    const fairy = this._nearestCatchableFairy();
+    if (!fairy) return false;
+
+    const inv = game.inventorySystem;
+    if (!inv?.replaceConsumableSlot?.(slotIndex, '⚱')) {
+      this._fallbackReplaceConsumableSlot(slotIndex, '⚱');
+    }
+    game.player.selectedConsumableIndex = -1;
+    game.menuSystem?.showPickupMessage?.('CAUGHT A FAIRY!');
+    game.audioSystem?.playSFX?.('fairy_pickup');
+    game.menuSystem?.updateUI?.();
+    fairy.consume();
+    return true;
+  }
+
+  /**
+   * Nearest fairy within FAIRY_CATCH_RADIUS that is willing to be caught.
+   * 'flutter' and 'ambient' both qualify — a fountain room's ambient fairies
+   * are as real as a fairy-grass one, and the old touch path could never
+   * reach them. A fairy already fleeing, dusting, delivering or carrying is
+   * mid-errand and stays out of reach.
+   */
+  _nearestCatchableFairy() {
+    const CATCHABLE = new Set(['flutter', 'ambient']);
+    const player = this.game.player;
+    if (!player) return null;
+    const px = player.position.x + (player.width ?? GRID.CELL_SIZE) / 2;
+    const py = player.position.y + (player.height ?? GRID.CELL_SIZE) / 2;
+
+    let best = null;
+    let bestDist = FAIRY_CATCH_RADIUS;
+    for (const char of this.game.neutralCharacters || []) {
+      if (!(char instanceof Fairy) || char.consumed) continue;
+      if (!CATCHABLE.has(char.state)) continue;
+      const dist = Math.hypot(px - char.position.x, py - char.position.y);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = char;
+      }
+    }
+    return best;
   }
 
   // Retrigger the HP heal-blink CSS animation by toggling the class off/on.
@@ -719,17 +770,25 @@ export class InteractionSystem {
         const angle = (i / stoneCount) * Math.PI * 2 + Math.random() * 0.5;
         game.lootSystem.spawnIngredientDrop('0', obj.position.x, obj.position.y, angle, obj);
       }
-      // Gem drop: 25% chance per rock; guaranteed on the last rock if none found yet.
+      // Gem drop: 75% chance per rock until the room's minimum is met, and the
+      // remaining rocks force the rest if the rolls come up short — an
+      // Underground visit is the mining trip, so it pays out at least
+      // MIN_GEMS_PER_ROOM even on a cold streak. Past the minimum the rolls
+      // keep going, so a rich seam can hand back more than two.
       const GEM_CHARS = ['◇', '⬥', '⬦', '⧫', '⬧', '◈', '⬨'];
-      if (!game.currentRoom.miningGemDropped) {
-        const rocksRemaining = game._activeBackgroundObjects().filter(
-          o => !o.destroyed && o.data?.glitteringRock && o !== obj
-        ).length;
-        if (rocksRemaining === 0 || Math.random() < 0.25) {
-          game.currentRoom.miningGemDropped = true;
-          const gemChar = GEM_CHARS[Math.floor(Math.random() * GEM_CHARS.length)];
-          game.lootSystem.spawnIngredientDrop(gemChar, obj.position.x, obj.position.y, null, obj);
-        }
+      const GEM_CHANCE = 0.75;
+      const MIN_GEMS_PER_ROOM = 2;
+      const gemsSoFar = game.currentRoom.miningGemsDropped || 0;
+      const rocksRemaining = game._activeBackgroundObjects().filter(
+        o => !o.destroyed && o.data?.glitteringRock && o !== obj
+      ).length;
+      // Rocks left after this one have to cover whatever the minimum still
+      // needs; when they can't, this rock is one of the guaranteed drops.
+      const shortfall = MIN_GEMS_PER_ROOM - gemsSoFar;
+      if (shortfall > rocksRemaining || Math.random() < GEM_CHANCE) {
+        game.currentRoom.miningGemsDropped = gemsSoFar + 1;
+        const gemChar = GEM_CHARS[Math.floor(Math.random() * GEM_CHARS.length)];
+        game.lootSystem.spawnIngredientDrop(gemChar, obj.position.x, obj.position.y, null, obj);
       }
     } else if (effect.startsWith('destroyObject:spawnWeapon:')) {
       const weaponChar = effect.split(':')[2];

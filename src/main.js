@@ -36,6 +36,7 @@ import { DungeonSystem } from './systems/DungeonSystem.js';
 import { DungeonFloorGenerator } from './systems/DungeonFloorGenerator.js';
 import { DungeonPuzzleSystem } from './systems/DungeonPuzzleSystem.js';
 import { DungeonGhostSystem } from './systems/DungeonGhostSystem.js';
+import { DungeonBossSystem } from './systems/DungeonBossSystem.js';
 import { MazeSystem } from './systems/MazeSystem.js';
 import { InteriorManager } from './systems/InteriorManager.js';
 import { CameraZoomSystem } from './systems/CameraZoomSystem.js';
@@ -56,6 +57,9 @@ import { BatSystem } from './systems/BatSystem.js';
 import { FlailSystem } from './systems/FlailSystem.js';
 import { WellSystem } from './systems/WellSystem.js';
 import { LavaAscentSystem } from './systems/LavaAscentSystem.js';
+import { IceAscentSystem } from './systems/IceAscentSystem.js';
+import { StormAscentSystem } from './systems/StormAscentSystem.js';
+import { MistAscentSystem } from './systems/MistAscentSystem.js';
 import { HuntingSystem } from './systems/HuntingSystem.js';
 import { WarpSystem } from './systems/WarpSystem.js';
 import { RunTimerSystem } from './systems/RunTimerSystem.js';
@@ -192,6 +196,8 @@ class Game {
     this.dungeonFloorGenerator = new DungeonFloorGenerator(this);
     this.dungeonPuzzleSystem = new DungeonPuzzleSystem(this);
     this.dungeonGhostSystem = new DungeonGhostSystem(this);
+    this.dungeonBossSystem = new DungeonBossSystem(this);
+    this.dungeonBossSystem.resetRunState(); // declares its own run-scoped game.* fields
     this.mazeSystem = new MazeSystem(this);
     // Interior lifecycle host (ADR-0001). Created after its controllers so it can
     // register them; also defines the Player interior-membership accessors.
@@ -214,6 +220,9 @@ class Game {
     this.flailSystem = new FlailSystem(this);
     this.wellSystem = new WellSystem(this);
     this.lavaAscentSystem = new LavaAscentSystem(this);
+    this.iceAscentSystem = new IceAscentSystem(this);
+    this.stormAscentSystem = new StormAscentSystem(this);
+    this.mistAscentSystem = new MistAscentSystem(this);
     this.huntingSystem = new HuntingSystem(this);
     this.warpSystem = new WarpSystem(this);
     this.runTimerSystem = new RunTimerSystem();
@@ -908,6 +917,7 @@ class Game {
     this.zoneDepths = freshZoneDepths();
     this.zoneSystem.resetOnDeath(this);
     this.roomGenerator.setDepth(0);
+    this.dungeonBossSystem.resetRunState();
     this.bossSystem.deactivate();
     this.physicsSystem.clear();
     this.huntingSystem.reset();
@@ -2522,6 +2532,14 @@ class Game {
   updatePlayerMechanics(deltaTime) {
     if (!this.player) return null;
 
+    // Gray-zone Ascent bone slope lock + plateau shrink. Dispatched from the
+    // state-shared path rather than EXPLORE's list because the lock it ticks is
+    // a Player field, and the slope belt's outward push can shove a locked
+    // player straight through an exit — including the south one into REST.
+    // EXPLORE-only dispatch would have stranded the timer above zero there,
+    // holding the movement clamp for the rest of the run ([rest-parity]).
+    this.mistAscentSystem.update(deltaTime);
+
     // Dodge dispatch (shark dive / green continuous roll / standard roll)
     // lives in CharacterSystem. skipFrame = shark dive drove the player
     // directly; skip movement dispatch, player.update, and held-item tick
@@ -2848,6 +2866,12 @@ class Game {
 
     // Drive the red-zone Ascent mud→lava flood/recede cycle
     this.lavaAscentSystem.update(deltaTime);
+
+    // Drive the cyan-zone Ascent ice crack/break/refreeze cycle
+    this.iceAscentSystem.update(deltaTime);
+
+    // Drive the yellow-zone Ascent storm spire + charged metal cycle
+    this.stormAscentSystem.update(deltaTime);
 
     // Drive room-stillness timer + huntable game (moose/rabbit) lifecycle
     this.huntingSystem.update(deltaTime);
@@ -3705,6 +3729,10 @@ class Game {
     // Armed Bottle near trough/spring — precedes fireSelected() (AlchemySystem.tryFillArmedBottle).
     if (this.alchemySystem?.tryFillArmedBottle()) return;
 
+    // Armed Bottle next to a fairy — same gesture, caught by the fairy's own
+    // owner (InteractionSystem.tryBottleFairy), same reason it precedes fireSelected().
+    if (this.interactionSystem?.tryBottleFairy()) return;
+
     // Consumable slot armed (keys 4-8) — SPACE fires it, priority over pickup/attack.
     if (this.consumableTriggerSystem.fireSelected(state)) return;
 
@@ -4026,6 +4054,7 @@ class Game {
     // Reset all zone depths on death
     this.zoneDepths = freshZoneDepths();
     this.audioSystem.currentMusicZone = 'green';
+    this.dungeonBossSystem.resetRunState();
 
     // Clear held items on death (but keep crafting slots)
     this.inventorySystem.restQuickSlots = [null, null, null];

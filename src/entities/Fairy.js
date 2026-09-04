@@ -7,6 +7,7 @@ import { getExitSlotPosition, mutateExitLetter } from '../systems/ExitSystem.js'
 // State machine:
 //   flutter    → oscillates around spawn point. Player touch → 'heal' outcome
 //                (handled externally by InteractionSystem). Timeout → fleeing.
+//                Catchable by an armed Empty Bottle, as is 'ambient'.
 //   fleeing    → flies toward nearest N/E/W exit (mirrors Leshy targeting).
 //   dusting    → at the exit slot, pauses, mutates the letter to 'F', then exits.
 //   exited     → flies offscreen and self-marks consumed.
@@ -16,10 +17,11 @@ import { getExitSlotPosition, mutateExitLetter } from '../systems/ExitSystem.js'
 //                (opposite the assigned exit) and applies a continuous impulse
 //                that herds the player out. Each fairy acts independently.
 //
-// Touch outcomes (decided by the caller, not the entity):
-//   - empty bottle equipped at full HP → convert slot to fairy_in_a_bottle
-//   - otherwise → heal player to full
-// Either way, the caller calls consume() to despawn the fairy.
+// Touch outcome (decided by the caller, not the entity): heal the player to
+// full, then consume() to despawn. Catching a fairy in an Empty Bottle is a
+// separate, deliberate act — arm the bottle and press SPACE in range
+// (InteractionSystem.tryBottleFairy) — and it suppresses the touch heal while
+// the bottle is armed so the walk-up can't spend the fairy first.
 export class Fairy extends NeutralCharacter {
   constructor(x, y, exits, opts = {}) {
     super('*', '#ffaaff', x, y);
