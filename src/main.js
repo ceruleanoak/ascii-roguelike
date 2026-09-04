@@ -8,6 +8,7 @@ import { CraftingSystem } from './systems/CraftingSystem.js';
 import { CombatSystem } from './systems/CombatSystem.js';
 import { RoomGenerator } from './systems/RoomGenerator.js';
 import { ZoneSystem } from './systems/ZoneSystem.js';
+import { CheatWarpSystem } from './systems/CheatWarpSystem.js';
 import { ExitSystem, isPressingIntoExitGap } from './systems/ExitSystem.js';
 import { PersistenceSystem } from './systems/PersistenceSystem.js';
 import { InventorySystem } from './systems/InventorySystem.js';
@@ -207,6 +208,7 @@ class Game {
     this.aquiferSystem = new AquiferSystem(this);         // frog-only plane-1 Aquifer (Quagmire dive)
     this.sinkholeSystem = new SinkholeSystem(this);       // concealed G-room shortcut → yellow-zone U room
     this.threeRoomSystem = new ThreeRoomSystem();          // the source room: N×3 + gray '3' discoveries, Death behind its door
+    this.cheatWarpSystem = new CheatWarpSystem();          // cheat-menu warp destinations (zone/depth/boss/room/maze)
     this.bossSystem = new BossSystem(this);
     this.boulderSystem = new BoulderSystem(this);
     this.centipedeSystem = new CentipedeSystem(this);
@@ -549,12 +551,12 @@ class Game {
           e.preventDefault();
           return;
         } else if (result && result.action === 'teleport_zone') {
-          this.handleZoneTeleport(result.zone);
+          this.cheatWarpSystem.handleZoneTeleport(this, result.zone);
           this.cheatMenu.toggle(); // Close menu after teleport
           e.preventDefault();
           return;
         } else if (result && result.action === 'warp') {
-          this.handleRoomWarp(result.roomLetter);
+          this.cheatWarpSystem.handleRoomWarp(this, result.roomLetter);
           this.cheatMenu.toggle(); // Close menu after warp
           e.preventDefault();
           return;
@@ -564,12 +566,12 @@ class Game {
           e.preventDefault();
           return;
         } else if (result && result.action === 'boss_test') {
-          this.handleBossTest(result.zone);
+          this.cheatWarpSystem.handleBossTest(this, result.zone);
           this.cheatMenu.toggle();
           e.preventDefault();
           return;
         } else if (result && result.action === 'set_depth') {
-          this.handleDepthJump(result.depth);
+          this.cheatWarpSystem.handleDepthJump(this, result.depth);
           this.cheatMenu.toggle();
           e.preventDefault();
           return;
@@ -1076,7 +1078,8 @@ class Game {
 
   /**
    * Generate the demo's room under whatever RNG is currently installed.
-   * Mirrors the cheat-menu warp paths (handleZoneTeleport / handleBossTest)
+   * Mirrors the cheat-menu warp paths (CheatWarpSystem.handleZoneTeleport /
+   * handleBossTest)
    * but skipped of side effects we don't need for a demo (music switches,
    * grace timers tied to player progress).
    */
@@ -4271,7 +4274,7 @@ class Game {
     const state = this.stateMachine.getCurrentState();
     if (state !== GAME_STATES.REST) return;
 
-    this.enterMazeTestRoom();
+    this.cheatWarpSystem.enterMazeTestRoom(this);
   }
 
   handleVPress() {
@@ -4423,222 +4426,6 @@ class Game {
 
     // Mark background dirty
     this.renderer.markBackgroundDirty();
-  }
-
-  handleZoneTeleport(targetZone) {
-    console.log(`[CHEAT] Teleporting to ${targetZone} zone`);
-
-    // Only allow teleporting during EXPLORE state
-    const state = this.stateMachine.getCurrentState();
-    if (state !== GAME_STATES.EXPLORE) {
-      console.log('[CHEAT] ⚠ Zone teleport only works during EXPLORE mode. Exit REST first (press E on south exit).');
-      return;
-    }
-
-    // Force zone transition by populating path history with 3 consecutive exits of target zone color
-    // This ensures checkZoneTransition() will return the correct zone
-    const targetZoneColor = ZONES[targetZone].exitColor;
-    this.zoneSystem.pathHistory = [
-      { letter: 'X', color: targetZoneColor },
-      { letter: 'X', color: targetZoneColor },
-      { letter: 'X', color: targetZoneColor }
-    ];
-    this.zoneSystem.currentZone = targetZone;
-
-    // Set zone depth: if first time in zone, start at 1; otherwise use current depth
-    if (this.zoneDepths[targetZone] === 0) {
-      this.zoneDepths[targetZone] = 1;
-      console.log(`[CHEAT] First time in ${targetZone} zone - starting at Level 1`);
-    }
-
-    // Regenerate room with target zone's depth
-    this.roomGenerator.setDepth(this.zoneDepths[targetZone]);
-    const playerPos = { x: this.player.position.x, y: this.player.position.y };
-    const newRoom = this.roomGenerator.generateRoom(
-      null,
-      playerPos,
-      targetZone,
-      null
-    );
-
-    // Replace current room — applyRoomSwap covers entity arrays, enemy
-    // wiring, entry grace, and physics/combat reset (shared with natural entry)
-    this.currentRoom = newRoom;
-    this.player.setCollisionMap(newRoom.collisionMap);
-    this.applyRoomSwap(newRoom);
-
-    // Switch music if entering/leaving a zone with custom music
-    this.audioSystem.switchZoneMusic(targetZone, import.meta.env.BASE_URL);
-
-    // Update UI
-    this.updateUI();
-
-    console.log(`[CHEAT] ✓ Teleported to ${targetZone} zone at depth ${this.getCurrentZoneDepth()}`);
-  }
-
-  handleDepthJump(depth) {
-    const state = this.stateMachine.getCurrentState();
-    if (state !== GAME_STATES.EXPLORE) {
-      console.log('[CHEAT] ⚠ Depth jump only works during EXPLORE mode. Exit REST first.');
-      return;
-    }
-
-    const currentZone = this.zoneSystem.currentZone;
-    this.zoneDepths[currentZone] = depth;
-    this.roomGenerator.setDepth(depth);
-    this.preBossGateActive = false;
-    this.preMinibossGateActive = false;
-    this.bossSystem.deactivate();
-
-    // Generate a fresh room at the target depth (same zone, no forced room type)
-    const playerPos = { x: this.player.position.x, y: this.player.position.y };
-    const newRoom = this.roomGenerator.generateRoom(null, playerPos, currentZone, null);
-
-    // Replace current room — applyRoomSwap covers entity arrays, enemy
-    // wiring, entry grace, and physics/combat reset (shared with natural entry)
-    this.currentRoom = newRoom;
-    this.player.setCollisionMap(newRoom.collisionMap);
-
-    // Reset interior state
-    this.interiorManager.reset();
-
-    this.applyRoomSwap(newRoom);
-    this.updateUI();
-
-    console.log(`[CHEAT] ✓ Depth jump → L${depth} in ${currentZone} zone`);
-  }
-
-  handleBossTest(targetZone) {
-    const state = this.stateMachine.getCurrentState();
-    if (state !== GAME_STATES.EXPLORE) {
-      console.log('[CHEAT] ⚠ Boss test only works during EXPLORE mode. Exit REST first.');
-      return;
-    }
-
-    // Deactivate any existing boss fight
-    this.bossSystem.deactivate();
-
-    // Set zone + depth so isBossReady() returns true
-    this.zoneSystem.currentZone = targetZone;
-    const bossDepth = ZONES[targetZone]?.bossDepth ?? 15;
-    this.zoneDepths[targetZone] = bossDepth;
-    this.roomGenerator.setDepth(bossDepth);
-
-    // Generate boss room directly
-    this.roomGenerator.isZoneBossRoom = true;
-    const playerPos = { x: this.player.position.x, y: this.player.position.y };
-    const newRoom = this.roomGenerator.generateRoom(ROOM_TYPES.BOSS, playerPos, targetZone, null);
-    this.roomGenerator.isZoneBossRoom = false;
-
-    // Replace current room — applyRoomSwap covers entity arrays, enemy
-    // wiring, entry grace, and physics/combat reset (shared with natural entry)
-    this.currentRoom = newRoom;
-    this.player.setCollisionMap(newRoom.collisionMap);
-
-    // Activate boss BEFORE the swap so any boss entities it adds to
-    // newRoom.enemies get wired and physics-registered too
-    this.bossSystem.activate(newRoom, targetZone);
-
-    this.applyRoomSwap(newRoom);
-    this.updateUI();
-
-    console.log(`[CHEAT] ✓ Boss test: ${targetZone} zone boss spawned`);
-  }
-
-  handleRoomWarp(roomLetter) {
-    console.log(`[CHEAT] Warping to room type: ${roomLetter}`);
-
-    // Only allow warping during EXPLORE state
-    const state = this.stateMachine.getCurrentState();
-    if (state !== GAME_STATES.EXPLORE) {
-      console.log('[CHEAT] ⚠ Room warp only works during EXPLORE mode. Exit REST first.');
-      return;
-    }
-
-    // Check if room letter is valid
-    const letterData = EXIT_LETTERS[roomLetter];
-    if (!letterData) {
-      console.log(`[CHEAT] ⚠ Invalid room letter: ${roomLetter}`);
-      return;
-    }
-
-    // Get current zone and depth
-    const currentZone = this.zoneSystem.currentZone;
-    const currentDepth = this.getCurrentZoneDepth();
-    const progressionColor = this.zoneSystem.getProgressionColor();
-
-    // Get room type from letter
-    const roomType = ROOM_TYPES[letterData.roomType] || ROOM_TYPES.COMBAT;
-
-    // Generate new room
-    this.roomGenerator.setDepth(currentDepth);
-    const playerPos = { x: this.player.position.x, y: this.player.position.y };
-    const newRoom = this.roomGenerator.generateRoom(
-      roomType,
-      playerPos,
-      currentZone,
-      progressionColor,
-      roomLetter
-    );
-
-    // Replace current room — applyRoomSwap covers entity arrays + room
-    // attachments, enemy wiring, entry grace, and physics/combat reset
-    // (shared with natural entry)
-    this.currentRoom = newRoom;
-    // Natural entry records the exit letter for letter-gated behaviors
-    // (e.g. errand rooms check exitLetter === 'E')
-    newRoom.exitLetter = roomLetter;
-
-    // Apply room-declared spawn zone if present (e.g. underground clearings)
-    if (newRoom.spawnZones) {
-      const zone = newRoom.spawnZones.default;
-      if (zone) {
-        this.player.position.x = zone.x;
-        this.player.position.y = zone.y;
-      }
-    }
-
-    this.player.setCollisionMap(newRoom.collisionMap);
-    this.applyRoomSwap(newRoom);
-
-    // Preload room previews for exits
-    this.preloadRoomPreviews();
-
-    // Update UI
-    this.updateUI();
-
-    console.log(`[CHEAT] ✓ Warped to ${letterData.name} (${roomLetter}) - ${letterData.roomType}`);
-  }
-
-  enterMazeTestRoom() {
-    // Save player state (quick slots, HP)
-    const savedQuickSlots = this.player ? [...this.player.quickSlots] : [null, null, null];
-    const savedActiveSlotIndex = this.player ? this.player.activeSlotIndex : 0;
-    const savedHp = this.player ? this.player.hp : null;
-    const savedDestroyedSlots = this.player ? [...this.player.destroyedSlots] : [...this._savedDestroyedSlots];
-
-    // Generate maze room first
-    const centerX = GRID.WIDTH / 2;
-    const startY = (GRID.ROWS - 3) * GRID.CELL_SIZE;
-    this.currentRoom = this.roomGenerator.generateRoom(ROOM_TYPES.MAZE, { x: centerX, y: startY });
-
-    // Create player at south entrance
-    this.player = new Player(centerX, startY);
-    this.player.godMode = this.cheatMenu.godMode;
-    this.player.setCollisionMap(this.currentRoom.collisionMap);
-
-    // Restore state
-    this.player.quickSlots = savedQuickSlots;
-    this.player.activeSlotIndex = savedActiveSlotIndex;
-    this.player.destroyedSlots = savedDestroyedSlots;
-    if (savedHp !== null) this.player.hp = savedHp;
-
-    // Room-swap core: entity arrays, enemy wiring, entry grace, physics/combat
-    // reset (shared with natural entry and all warp paths)
-    this.applyRoomSwap(this.currentRoom);
-
-    // Set state directly (don't call transition - that would trigger enterExploreState and overwrite our maze!)
-    this.stateMachine.currentState = GAME_STATES.EXPLORE;
   }
 
   tryPickupItem() {
