@@ -1,4 +1,4 @@
-import { GRID } from '../game/GameConfig.js';
+import { GRID, ROOM_TYPES } from '../game/GameConfig.js';
 
 const BOULDER_SPEED      = 60;   // px/s
 const BOULDER_SPEED_LAVA = 40;   // px/s on lava
@@ -57,7 +57,11 @@ export class BoulderSystem {
 
   update(deltaTime) {
     const game = this.game;
-    if (!game.currentRoom || game.currentRoom.zone !== 'red') {
+    // Settlement ('S') is excluded: the red zone's town is a safe-feeling hub
+    // of neutral huts and NPCs, and a rockfall sweeping through it reads as
+    // the room betraying its own premise.
+    if (!game.currentRoom || game.currentRoom.zone !== 'red' ||
+        game.currentRoom.type === ROOM_TYPES.SETTLEMENT) {
       this._reset();
       return;
     }
