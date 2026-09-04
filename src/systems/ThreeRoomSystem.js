@@ -38,8 +38,9 @@ const NORTH_STREAK_TRIGGER = 3;
 const DEATH_CHAR = '¥';
 const DEATH_COLOR = '#dddddd';
 
-// Slower than the player's walk on purpose: opening the door is survivable,
-// outrunning it south is the only answer, and it never stops following.
+// Slower than the player's walk on purpose — but the room is sealed the
+// moment the door opens, so the pace only decides how long the player has to
+// watch it come, not whether they get away. It never stops following.
 const DEATH_SPEED = 62;
 // Contact distance for the kill — inside a cell's shadow.
 const DEATH_KILL_RADIUS = GRID.CELL_SIZE * 0.55;
@@ -245,10 +246,11 @@ export class ThreeRoomSystem {
   onRoomExit(game, room) {
     if (!room?.isThreeRoom) return;
 
-    // Outrunning Death south ends the scene: the room it was staged in is
-    // behind the player now. Left set, a stale cinematic would black out the
-    // next Three Room this run finds (N×3 can summon it again) before its
-    // door was ever touched.
+    // The cinematic seals this room, so leaving mid-scene is not reachable
+    // from inside it — but a wish-revive lands the player back in NEUTRAL and
+    // can walk them out. Left set, a stale cinematic would black out the next
+    // Three Room this run finds (N×3 can summon it again) before its door was
+    // ever touched.
     this.cinematic = null;
 
     if (!game.audioSystem.isZoneMusicActive()) return;
@@ -294,9 +296,35 @@ export class ThreeRoomSystem {
   /**
    * The room goes out in steps, leaving the player lit and alone; Death then
    * stands up out of the dark at the far end and starts walking.
+   *
+   * The way back is shut first. Opening the door is a decision, not a look —
+   * once it is made the room stops being somewhere the player can leave.
    */
   _beginCinematic(game) {
+    this._sealReturn(game.currentRoom);
     this.cinematic = { phase: 'darkening', elapsed: 0, opacity: 0 };
+  }
+
+  /**
+   * Close the entry edge behind the player. Clearing the exit flag is what
+   * does the work in three places at once — the border draws solid over the
+   * gap, the return warp zone stops being painted, and updateNeutralState's
+   * return branch reads the same flag and refuses to fire. The collision cell
+   * is set by hand because ExitSystem.updateExitCollisions only writes cells
+   * for exits that still exist, so a cleared flag would otherwise leave the
+   * gap walkable under a wall that looks closed.
+   */
+  _sealReturn(room) {
+    if (!room?.exits) return;
+    const edge = room.returnExit || 'south';
+    if (!room.exits[edge]) return;
+
+    room.exits[edge] = false;
+    const cx = Math.floor(GRID.COLS / 2);
+    const cy = Math.floor(GRID.ROWS / 2);
+    const cell = { north: [0, cx], south: [GRID.ROWS - 1, cx],
+                   west: [cy, 0], east: [cy, GRID.COLS - 1] }[edge];
+    if (cell && room.collisionMap?.[cell[0]]) room.collisionMap[cell[0]][cell[1]] = true;
   }
 
   /**
