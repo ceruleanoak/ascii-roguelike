@@ -2250,36 +2250,23 @@ class Game {
     this.companionSystem.updateCompanionCrow(deltaTime);
     this.companionSystem.updateFollowerCrows(deltaTime);
 
-    // Check for the return exit (back to EXPLORE) — sits on the edge the
-    // player entered through (south / west / east, see NeutralRoomSystem)
-    const gridPos = this.player.getGridPosition();
-    const prevGridPos = {
-      x: Math.floor(this.previousPlayerPosition.x / GRID.CELL_SIZE),
-      y: Math.floor(this.previousPlayerPosition.y / GRID.CELL_SIZE)
-    };
-    const centerX = Math.floor(GRID.COLS / 2);
-    const centerY = Math.floor(GRID.ROWS / 2);
-    const returnExit = this.currentRoom.returnExit || 'south';
-
-    let inReturnExit = false;
-    let crossedReturnExit = false;
-    if (returnExit === 'south') {
-      inReturnExit = gridPos.y >= GRID.ROWS - 2 && Math.abs(gridPos.x - centerX) <= 1;
-      crossedReturnExit = prevGridPos.y < GRID.ROWS - 2 && gridPos.y >= GRID.ROWS - 2 && Math.abs(gridPos.x - centerX) <= 1;
-    } else if (returnExit === 'west') {
-      inReturnExit = gridPos.x <= 1 && Math.abs(gridPos.y - centerY) <= 1;
-      crossedReturnExit = prevGridPos.x > 1 && gridPos.x <= 1 && Math.abs(gridPos.y - centerY) <= 1;
-    } else if (returnExit === 'east') {
-      inReturnExit = gridPos.x >= GRID.COLS - 2 && Math.abs(gridPos.y - centerY) <= 1;
-      crossedReturnExit = prevGridPos.x < GRID.COLS - 2 && gridPos.x >= GRID.COLS - 2 && Math.abs(gridPos.y - centerY) <= 1;
-    }
-
+    // Standing in — or having just stepped into — the return exit's warp band.
     if (!this.animationSystem.isAnimating(this.player) &&
-        (inReturnExit || crossedReturnExit) && this.currentRoom.exits[returnExit]) {
+        this.neutralRoomSystem.isInReturnExit(this.currentRoom, this.player)) {
 
       // Call neutral room exit hook
       const leavingNeutralRoom = this.currentRoom;
       this.neutralRoomSystem.onExit(this.currentRoom, this.player);
+
+      // A Cursed run is not given its room back — ThreeRoomSystem decides,
+      // this only dispatches. The saved EXPLORE state is dropped on purpose:
+      // the retreat is a retreat, and it costs the depth it was bought at.
+      if (this.threeRoomSystem.retreatsToRest(this, leavingNeutralRoom)) {
+        this.savedExploreState = null;
+        this.threeRoomSystem.onRoomExit(this, leavingNeutralRoom);
+        this.stateMachine.transition(GAME_STATES.REST);
+        return;
+      }
 
       // Restore saved explore state (room contents only — the ingredient pile
       // is untouched by room transitions)

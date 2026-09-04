@@ -1,6 +1,16 @@
 import { GRID, ROOM_TYPES } from '../game/GameConfig.js';
 import { NEUTRAL_ROOMS } from '../data/neutralRooms.js';
 
+// The edge a neutral room is left through, given the exit taken to reach it.
+// 'south' entry (REST → the Graveyard) is the only one that puts the door home
+// on the north wall; every other neutral room is entered walking away from REST.
+const RETURN_EDGE = { north: 'south', south: 'north', east: 'west', west: 'east' };
+
+// Half-width of the warp band, in cells either side of the edge's midpoint.
+const RETURN_BAND_HALF = 1;
+// How deep into the room the band reaches from its edge, in cells.
+const RETURN_BAND_DEPTH = 2;
+
 /**
  * NeutralRoomSystem - Script executor for NEUTRAL state rooms
  * Handles lifecycle management for neutral room scripts (Leshy Grove, future shops/puzzles)
@@ -34,7 +44,7 @@ export class NeutralRoomSystem {
     this.state = {}; // Reset state for new room
 
     // Return exit mirrors the entry: the door home is the edge you walked in from.
-    const returnExit = { north: 'south', east: 'west', west: 'east' }[entryDirection] || 'south';
+    const returnExit = RETURN_EDGE[entryDirection] || 'south';
 
     const room = {
       type: ROOM_TYPES.DISCOVERY, // Neutral rooms use discovery room type
@@ -57,6 +67,46 @@ export class NeutralRoomSystem {
     }
 
     return room;
+  }
+
+  /**
+   * Is the player inside the return exit's warp band — the strip of floor
+   * against whichever edge they entered through?
+   *
+   * The band is 3 cells wide, centered on the edge's midpoint, and reaches
+   * RETURN_BAND_DEPTH cells in from the wall.
+   *
+   * Extracted from updateNeutralState, where it also carried a separate
+   * "crossed the boundary this frame" test. That test was redundant — having
+   * crossed inward strictly implies being inside — so only the containment
+   * check survives the move. The geometry is the neutral room's, not the
+   * orchestrator's, and it grew a fourth edge when the Graveyard became
+   * reachable by walking south out of REST.
+   */
+  isInReturnExit(room, player) {
+    const edge = room?.returnExit || 'south';
+    if (!room?.exits?.[edge]) return false;
+
+    const grid = player.getGridPosition();
+    const near = RETURN_BAND_DEPTH - 1;      // last cell of a band on a low edge
+    const farSide = RETURN_BAND_DEPTH;       // first cell of a band on a high edge
+
+    switch (edge) {
+      case 'south':
+        return Math.abs(grid.x - Math.floor(GRID.COLS / 2)) <= RETURN_BAND_HALF
+          && grid.y >= GRID.ROWS - farSide;
+      case 'north':
+        return Math.abs(grid.x - Math.floor(GRID.COLS / 2)) <= RETURN_BAND_HALF
+          && grid.y <= near;
+      case 'west':
+        return Math.abs(grid.y - Math.floor(GRID.ROWS / 2)) <= RETURN_BAND_HALF
+          && grid.x <= near;
+      case 'east':
+        return Math.abs(grid.y - Math.floor(GRID.ROWS / 2)) <= RETURN_BAND_HALF
+          && grid.x >= GRID.COLS - farSide;
+      default:
+        return false;
+    }
   }
 
   /**

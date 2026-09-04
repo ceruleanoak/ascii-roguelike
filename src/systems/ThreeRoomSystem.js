@@ -309,6 +309,18 @@ export class ThreeRoomSystem {
     game.audioSystem.switchZoneMusic(game.currentRoom?.zone || 'green', import.meta.env.BASE_URL, true);
   }
 
+  /**
+   * Where retreating south out of the Three Room lands.
+   *
+   * Normally back into the EXPLORE room the player left, which is what the
+   * saved state is for. On a Cursed run the world does not give that back —
+   * the retreat walks all the way home, and the run's depth goes with it.
+   * REST is where the curse shows itself next, so that is where it puts you.
+   */
+  retreatsToRest(game, room) {
+    return !!room?.isThreeRoom && !!game.cursedRun;
+  }
+
   // ── The door ────────────────────────────────────────────────────────────────
 
   /**
