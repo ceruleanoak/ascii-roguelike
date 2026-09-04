@@ -1,4 +1,5 @@
 import { EXIT_LETTERS, SECRET_PATTERNS } from '../data/exitLetters.js';
+import { LETTER_TEMPLATES } from '../data/letterTemplates.js';
 import { ZONES, ZONE_COLORS } from '../data/zones.js';
 import { GRID } from '../game/GameConfig.js';
 
@@ -13,6 +14,32 @@ const LUCKY_BOOST = { 'V': 2.5, 'K': 2.0, '?': 2.0, 'C': 1.5 };
 // rarely: only SOMETIMES does an un-progressed room offer a way out of the
 // current color, so staying put feels like the default rather than a refusal.
 const ALT_EXIT_CHANCE_NON_GREEN = 0.5;
+
+// Exit slots are ordered [north, east, west] everywhere in this file. Some
+// letter templates close one of those slots during room generation (Ocean's
+// wall of water eats the east exit — RoomGenerator.generateOceanTerrain reads
+// the same exitRules and overwrites room.exits.east with false), which happens
+// AFTER this file has already handed out letters and colors. Anything picked
+// at random here has to skip those slots, or it lands on an exit the player
+// will never be able to walk through.
+const EXIT_RULE_SLOT = { disableNorth: 0, disableEast: 1, disableWest: 2 };
+
+function closedSlotsForLetter(currentLetter) {
+  const rules = currentLetter ? LETTER_TEMPLATES[currentLetter]?.exitRules : null;
+  if (!rules) return new Set();
+  return new Set(
+    Object.entries(EXIT_RULE_SLOT).filter(([rule]) => rules[rule]).map(([, slot]) => slot)
+  );
+}
+
+// Random slot index that isn't going to be closed by the room's own template.
+// Falls back to a plain random pick if every slot is closed (no template does
+// that today, and a room with no exits at all has bigger problems).
+function randomOpenSlot(closedSlots) {
+  const open = [0, 1, 2].filter(i => !closedSlots.has(i));
+  if (open.length === 0) return Math.floor(Math.random() * 3);
+  return open[Math.floor(Math.random() * open.length)];
+}
 
 // Walks the alphabet forward from `currentLetter`, returning the first letter
 // that is a defined entry in EXIT_LETTERS. Wraps A→...→Z→A. Non-alphabet
@@ -190,15 +217,17 @@ export class ExitSystem {
     // Guarantee the miniboss ('B') exit is always on offer from L5 onward
     // until this zone's miniboss has been cleared this run (gray excluded,
     // same as the miniboss gating elsewhere).
+    const closedSlots = closedSlotsForLetter(currentLetter);
+
     let forcedBossIndex = -1;
     if (currentDepth >= 5 && zoneType !== 'gray' && currentLetter !== 'B' &&
         !letters.includes('B') && !this.zoneSystem?.clearedZones?.has(zoneType)) {
-      forcedBossIndex = Math.floor(Math.random() * letters.length);
+      forcedBossIndex = randomOpenSlot(closedSlots);
       letters[forcedBossIndex] = 'B';
     }
 
     // Assign colors based on zone and progression state
-    const colors = this.assignExitColors(letters, zoneType, progressionColor);
+    const colors = this.assignExitColors(letters, zoneType, progressionColor, closedSlots);
 
     // The guarantee is "this zone's miniboss is reachable" — room.zone (and
     // therefore which zone's miniboss pool spawns) follows the exit's COLOR,
@@ -234,7 +263,7 @@ export class ExitSystem {
     return this.weightedRandomChoice(weights);
   }
 
-  assignExitColors(letters, zoneType, progressionColor = null) {
+  assignExitColors(letters, zoneType, progressionColor = null, closedSlots = new Set()) {
     const zone = ZONES[zoneType];
     const colors = [zone.exitColor, zone.exitColor, zone.exitColor];
 
@@ -243,8 +272,11 @@ export class ExitSystem {
       return colors;
     }
 
-    // Pick 1 random exit for alternative color
-    const altIndex = Math.floor(Math.random() * 3);
+    // Pick 1 random OPEN exit for the alternative color. A player following a
+    // color trail reads "one exit of my color is always on offer" as the rule;
+    // putting that single alt color on the exit an Ocean room is about to wall
+    // off silently breaks the trail with no way to tell it happened.
+    const altIndex = randomOpenSlot(closedSlots);
 
     if (progressionColor && progressionColor !== zone.exitColor) {
       // Mid-progression: use progression color
@@ -411,9 +443,14 @@ export class ExitSystem {
   updateRoomClearState() {
     const game = this.game;
     const room = game.currentRoom;
-    const ascentLavaPhase = room.ascentLava?.phase;
-    const ascentLavaActive = ascentLavaPhase === 'fillingFloor' || ascentLavaPhase === 'fillingSlopes';
-    if (game.player.inAquifer || ascentLavaActive) return;
+    // Ask each Ascent hazard whether it is mid-flood rather than re-listing its
+    // phase names here — `PhasedHazardSystem.isHazardActive()` reads the same
+    // FILL_PHASES the system itself schedules against, so renaming or adding a
+    // fill phase can't leave this gate silently out of date (#142 drift shape).
+    const ascentHazardActive =
+      !!game.lavaAscentSystem?.isHazardActive(room) ||
+      !!game.iceAscentSystem?.isHazardActive(room);
+    if (game.player.inAquifer || ascentHazardActive) return;
 
     if (game._countedEnemies(room.enemies).length === 0) {
       // Quagmire: spawn the next wave instead of clearing while rounds remain.
@@ -442,6 +479,9 @@ export class ExitSystem {
           game.secretEventSystem.applySecretEvents(room);
           // Compass (⌖) — one-shot beep the instant a findable secret goes live
           game.compassSystem?.onSecretRevealed(room);
+
+          // Gray Ascent: shrink plateau on room clear
+          game.mistAscentSystem?.onRoomClear(room);
 
           // E-room: spawn the errand traveler after enemies are cleared
           if (room.letterTemplate?.neutralAfterClear) {
