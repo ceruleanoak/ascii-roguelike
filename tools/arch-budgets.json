@@ -2,7 +2,7 @@
   "src/main.js": 205694,
   "src/systems/RoomGenerator.js": 165593,
   "src/entities/Enemy.js": 109220,
-  "src/rendering/state/ExploreRenderer.js": 111058,
+  "src/rendering/state/ExploreRenderer.js": 109675,
   "src/systems/CombatSystem.js": 101241,
   "src/systems/InventorySystem.js": 41873,
   "src/entities/Player.js": 47726
