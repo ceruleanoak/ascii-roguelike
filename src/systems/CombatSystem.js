@@ -777,38 +777,15 @@ export class CombatSystem {
               continue;
             }
 
-            // Obsidian rocks are unbreakable
-            if (obj.obsidian) {
-              this.createDamageNumber('!', obj.position.x, obj.position.y, '#aaaaaa');
-              continue;
-            }
-
-            // Regular rocks (0) only yield to pickaxe or hammer — everything else clinks off.
-            // allWeaponsDamage is a per-instance escape hatch (e.g. the Centipede arena's
-            // obstacle rocks) that ignores this gate so no weapon loadout can strand the player.
-            if (obj.char === '0' && !attack.isPickaxe && !attack.canSmash && !obj.allWeaponsDamage) {
-              this.createDamageNumber('!', obj.position.x, obj.position.y, '#aaaaaa');
-              continue;
-            }
-
-            // Boulders (Q) require level 2+ hammer or pickaxe
-            if (obj.char === 'Q') {
-              const hasPickaxe = attack.isPickaxe;
-              const hasHighLevelHammer = attack.canSmash && attack.weaponLevel >= 2;
-              if (!hasPickaxe && !hasHighLevelHammer) {
-                this.createDamageNumber('!', obj.position.x, obj.position.y, '#aaaaaa');
-                continue;
-              }
-            }
-
             // Whip strikes on a Stump or Tree grab hold and reel the player in
             // — the Whip Trial's hook-post pull, generalized to ordinary
             // terrain once the player has learned the trick. Checked before
-            // the axe-only Tree gate and the general damage section below so
-            // a whip swing grabs on instead of thunking off (Tree) or
-            // chopping/harvesting (Stump); PhysicsSystem.updateEntity's
-            // hookedByWhip handling owns the actual traversal + i-frames,
-            // this only sets the target.
+            // the material gates below so a whip swing grabs on instead of
+            // thunking off (Tree) or chopping/harvesting (Stump);
+            // PhysicsSystem.updateEntity's hookedByWhip handling owns the
+            // actual traversal + i-frames, this only sets the target. Safe
+            // above the gates because it only ever fires on 'Y'/'ŋ', and no
+            // object with either char is obsidian, a rock, or a boulder.
             if (attack.weaponSubtype === 'whip' && (obj.char === 'Y' || obj.char === 'ŋ') && attack.owner) {
               attack.owner.hookedByWhip = { targetX: obj.position.x, targetY: obj.position.y };
               // Flash the grabbed object in the whip's own color — the
@@ -819,11 +796,15 @@ export class CombatSystem {
               continue;
             }
 
-            // Trees only fall to axes — blades, hammers, and the pickaxe (rocks
-            // are its specialty) thunk off. Fire weapons still ignite them
-            // (burning ≠ chopping).
-            if (obj.char === 'Y' && attack.weaponSubtype !== 'axe') {
-              if (attack.onHit === 'burn' && obj.isFlammable() && this._ignite(obj)) {
+            // Which weapons may damage this material at all — obsidian, rock,
+            // boulder, tree. InteractionSystem owns the answer, next door to
+            // resolveSmashDamage's "how much"; what is left here is the
+            // feedback, because the damage number belongs to combat.
+            const refusal = this.game.interactionSystem.resolveSmashRefusal(attack, obj);
+            if (refusal) {
+              // Fire talks its way past exactly one refusal: a Tree burns even
+              // though it will not chop.
+              if (refusal.fireBypass && attack.onHit === 'burn' && obj.isFlammable() && this._ignite(obj)) {
                 this.createDamageNumber('!', obj.position.x, obj.position.y, '#ff4400');
               } else {
                 this.createDamageNumber('!', obj.position.x, obj.position.y, '#aaaaaa');
@@ -833,7 +814,10 @@ export class CombatSystem {
 
             // Blunt weapons can't damage objects, but still rustle grass; bushes yield to
             // anything, and allWeaponsDamage-flagged instances yield to anything too.
-            if (!attack.isBlunt || obj.char === '%' || obj.allWeaponsDamage) {
+            // Rocks (0) are the standing exception (bug #10): smashing stone is
+            // what a blunt weapon is for, and resolveSmashRefusal already let
+            // the swing through — without this the payload below would eat it.
+            if (!attack.isBlunt || obj.char === '%' || obj.char === '0' || obj.allWeaponsDamage) {
               const smashDamage = this.game.interactionSystem.resolveSmashDamage(attack, obj);
               const result = obj.takeDamage(smashDamage, attack.isBlade);
 

@@ -12,6 +12,11 @@ import { INTERACTION_RANGE, OBJECT_ANIMATIONS, GRID, GAME_STATES } from '../game
 import { inSamePlane, planeOf, objectOnPlane } from './PlaneSystem.js';
 import { WiseFellow } from '../entities/WiseFellow.js';
 
+// Refusal singletons for resolveSmashRefusal — the melee loop tests every
+// object a swing overlaps, so a refusal is not worth an allocation.
+const SMASH_REFUSED = Object.freeze({ fireBypass: false });
+const SMASH_REFUSED_UNLESS_BURNED = Object.freeze({ fireBypass: true });
+
 // Reach for the armed-Bottle fairy catch (InteractionSystem.tryBottleFairy).
 // Wider than AlchemySystem's one-cell liquid radius: a liquid tile sits still
 // and a fluttering fairy does not, so the catch gets a cell and a half.
@@ -68,6 +73,48 @@ export class InteractionSystem {
       if (attack.weaponSubtype === 'axe') return Math.max(1, Math.floor(attack.damage * 0.5));
     }
     return attack.canSmash ? attack.damage * 2 : attack.damage;
+  }
+
+  // Whether a melee swing may damage this background object at all — the
+  // companion question to resolveSmashDamage's "how much", and the reason both
+  // live here rather than inline in CombatSystem's melee loop. These are the
+  // materials that answer to a specific tool: obsidian, rock, boulder, tree.
+  //
+  // Returns null when the swing lands. Otherwise a refusal, which the caller
+  // turns into feedback — `fireBypass` marks the single refusal fire can talk
+  // its way past, since a Tree burns even though it will not chop.
+  //
+  // Order matters and mirrors what shipped: obsidian is checked before
+  // allWeaponsDamage because an unbreakable rock stays unbreakable, and
+  // allWeaponsDamage exempts the rock gate ONLY — the Centipede arena flags its
+  // obstacle rocks so no loadout can strand the player, and that escape hatch
+  // was never extended to boulders or trees.
+  resolveSmashRefusal(attack, obj) {
+    if (obj.obsidian) return SMASH_REFUSED;
+
+    // Rock yields to anything that hits rather than cuts: the pickaxe, a hammer
+    // (canSmash), or any blunt weapon — flail, staff, bat, baton. Blades and
+    // axes clink off. Hammers carry canSmash but not isBlunt, so both flags are
+    // load-bearing here.
+    if (obj.char === '0') {
+      const strikes = attack.isPickaxe || attack.canSmash || attack.isBlunt || obj.allWeaponsDamage;
+      return strikes ? null : SMASH_REFUSED;
+    }
+
+    // A boulder wants the pickaxe or a level 2+ hammer; a level 1 hammer is not
+    // enough mass.
+    if (obj.char === 'Q') {
+      const strikes = attack.isPickaxe || (attack.canSmash && attack.weaponLevel >= 2);
+      return strikes ? null : SMASH_REFUSED;
+    }
+
+    // Trees only fall to axes — blades, hammers, and the pickaxe (rock is its
+    // specialty) thunk off. Petrified Trees share the 'Y' char precisely so
+    // they inherit this gate; they simply refuse the fire bypass by declaring
+    // `flammability: 'none'`.
+    if (obj.char === 'Y' && attack.weaponSubtype !== 'axe') return SMASH_REFUSED_UNLESS_BURNED;
+
+    return null;
   }
 
   // Vault (V room): true when the player stands south of the vault's bottom
