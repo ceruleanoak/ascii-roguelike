@@ -1,5 +1,5 @@
 import { PHYSICS, GRID, COLORS, PLAYER_STATS } from '../game/GameConfig.js';
-import { StatusEffectSystem } from '../systems/StatusEffectSystem.js';
+import { StatusEffectSystem, createPlayerStatusSlots } from '../systems/StatusEffectSystem.js';
 import { computePlayerPipRows, computePlayerDisplayColor } from '../systems/StatusEffectVisuals.js';
 import { PlayerDamageSystem } from '../systems/PlayerDamageSystem.js';
 
@@ -285,13 +285,9 @@ export class Player {
     this.isOnSlope = false;
     this.isOnIce   = false;
 
-    // Status effects
-    this.statusEffects = {
-      goo: { active: false, duration: 0, slowAmount: 0.8 }, // Heavy slow + prevents dodge roll
-      freeze: { active: false, duration: 0, slowAmount: 0.5 },
-      slimeBoost: { active: false, duration: 0, speedMult: 2.0 }, // Speed boost from slime puddle (slime suit) — matches slime enemy 2x
-      dizzy: { active: false, duration: 0 }
-    };
+    // Timed status slots. Declared once, in StatusEffectSystem — reset() builds
+    // them from the same factory, which is what keeps the two from drifting.
+    this.statusEffects = createPlayerStatusSlots();
 
     // Status visual feedback
     this.statusBlinkTimer = 0;
@@ -522,66 +518,11 @@ export class Player {
   }
 
   applyStatusEffect(effect, duration = 3.0) {
-    // Loud on unsupported effects (bug #166): this map only holds goo/freeze/
-    // slimeBoost/dizzy — burn lives on applyBurn, poison on applyPoison, and
-    // slow has no player representation. A silent early-return here is how
-    // four shipped effects no-op'd invisibly; keep authoring mistakes loud.
-    if (!this.statusEffects[effect]) {
-      const warned = Player._unsupportedEffectWarned ?? (Player._unsupportedEffectWarned = new Set());
-      if (!warned.has(effect)) {
-        warned.add(effect);
-        console.error(
-          `[status-effects] Player has no '${effect}' slot — applyStatusEffect('${effect}') no-ops. ` +
-          `Route burn→applyBurn / poison→applyPoison; new effects need a slot here or a design call (known-bugs #166).`
-        );
-      }
-      return;
-    }
-
-    // Check for immunity
-    if (effect === 'goo' && this.slimeImmune) return;
-    if (effect === 'freeze' && this.freezeImmune) return;
-
-    this.statusEffects[effect].active = true;
-    this.statusEffects[effect].duration = Math.max(this.statusEffects[effect].duration, duration);
+    StatusEffectSystem.applyPlayerStatusEffect(this, effect, duration);
   }
 
   updateStatusEffects(deltaTime) {
-    // Goo effect (heavy slow + prevents dodge roll)
-    const goo = this.statusEffects.goo;
-    if (goo.active) {
-      goo.duration -= deltaTime;
-      if (goo.duration <= 0) {
-        goo.active = false;
-        goo.duration = 0;
-      }
-    }
-
-    // Freeze effect (slow movement)
-    const freeze = this.statusEffects.freeze;
-    if (freeze.active) {
-      freeze.duration -= deltaTime;
-      if (freeze.duration <= 0) {
-        freeze.active = false;
-        freeze.duration = 0;
-      }
-    }
-
-    // Slime boost (speed increase from slime puddle while wearing slime suit)
-    const slimeBoost = this.statusEffects.slimeBoost;
-    if (slimeBoost.active) {
-      slimeBoost.duration -= deltaTime;
-      if (slimeBoost.duration <= 0) {
-        slimeBoost.active = false;
-        slimeBoost.duration = 0;
-      }
-    }
-
-    const dizzy = this.statusEffects.dizzy;
-    if (dizzy.active) {
-      dizzy.duration -= deltaTime;
-      if (dizzy.duration <= 0) { dizzy.active = false; dizzy.duration = 0; }
-    }
+    StatusEffectSystem.tickPlayerStatusSlots(this, deltaTime);
   }
 
   isGooey() {
@@ -1093,12 +1034,10 @@ export class Player {
     this.fishingLocked = false;
     this.rusalkaInputScale = 1.0;
 
-    // Reset status effects
-    this.statusEffects = {
-      goo: { active: false, duration: 0, slowAmount: 0.8 },
-      freeze: { active: false, duration: 0, slowAmount: 0.5 },
-      slimeBoost: { active: false, duration: 0, speedMult: 2.0 }
-    };
+    // Reset status effects — the same factory the constructor uses, so a slot
+    // can never go missing from one and not the other (#256: this rebuild had
+    // no `dizzy`, and isDizzy() reads `.dizzy.active` unguarded).
+    this.statusEffects = createPlayerStatusSlots();
 
     // Reset burn state
     this.burnDuration = 0;
