@@ -1285,6 +1285,7 @@ export class AudioSystem {
     this.loadSFX('puzzle_pulse', null);  // correct listening-stone strike
     this.loadSFX('puzzle_fizzle', null); // wrong stone — sequence reset
     this.loadSFX('puzzle_solve', null);  // puzzle solved, spirit rises
+    this.loadSFX('barricade_lift', null); // a trigger Barricade's plug gives way
     this.loadSFX('plank_place', null);   // Platform plank laid over deep water
     this.loadSFX('sword_draw', null);    // § drawn from the islet stone
     // Hoardmaw (green dungeon boss) — placeholder names, no assets yet. Every

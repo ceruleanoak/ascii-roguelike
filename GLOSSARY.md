@@ -910,19 +910,36 @@ programming terms.
 - **Not:** "fence", "barrier", "gate", "partition".
 
 ### Barricade
-- **Definition:** A breakable plug of Background Objects stamped across an exit lane, raised to
-  make a way through cost a specific tool. Unlike the Graveyard Divider it is meant to be
-  cleared — a Barricade asks what the run is carrying, and answers by opening or not.
-  The approach to the Three Room raises one on the second north (rocks) and another on the
-  third (Petrified Trees); the shape is general and not specific to that approach.
-- **In code:** `ThreeRoomSystem.barricadeNorthExit()`, with `BARRICADE_MATERIALS` naming the
-  material per north streak and `BARRICADE_ROWS`/`BARRICADE_COL_OFFSETS` its footprint. Its
-  objects are flagged `structural` so roomFeatures' stray-object sweep leaves them alone. Lives
-  in `ThreeRoomSystem` until a second caller earns it a system of its own.
-- **Not:** "gate", "blocker", "wall", "plug", "obstacle".
+- **Definition:** Something stamped across an exit lane that asks what the run is carrying and
+  answers by opening or not. Unlike the Graveyard Divider it is meant to be cleared — by force,
+  by tool, by sacrifice, or by neutralizing what it is made of. A room raises at most one, never
+  across its south exit, and never before the third room of a zone unless the Three Room approach
+  is what raised it.
+- **In code:** `BarricadeSystem`, with the `barricades` catalogue holding every one that exists
+  and `laneCell`/`laneCells` giving a layout an exit's own frame of reference so it can be
+  authored once and raised any direction. Live state is `room.barricade` and never `game.*` — it
+  dies with the room. Its objects are flagged `structural` so roomFeatures' stray-object sweep
+  leaves them alone.
+- **Not:** "gate", "blocker", "wall", "plug", "obstacle". ("Gate" survives only inside the
+  authored family names below — a Barricade is never *a* gate on its own. "Plug" stays a
+  descriptive word for the part that fills the lane, as in the definition above; it is never a
+  name for the Barricade itself.)
+
+### Barricade Family
+- **Definition:** The set of Barricades one exit-letter colour can raise, and the kind of question
+  they all ask. The colour a player already reads for "where does this go" doubles as "what will
+  this ask me for": **craft gates** (green) want a tool used a particular way; **mastery gates**
+  (red) want a weapon class carried far enough; **sacrifice gates** (cyan) want meaningful progress
+  given away; **mage gates** (yellow) want the run's relationship to affinities and the elements.
+  Gray and blue have no family and raise nothing — gray is the Three Room's own signage, blue is
+  Tidefall's fixed tutorial chain.
+- **In code:** `BARRICADE_FAMILIES` keyed by family name, `FAMILY_BY_COLOR` mapping a `ZONE_COLORS`
+  value onto one. An empty family (red, for now) raises nothing rather than borrowing another
+  family's question.
+- **Not:** "barricade type", "gate category", "tier", "colour group".
 
 ### Petrified Tree
-- **Definition:** Wood already turned to stone — the Barricade material on the third north.
+- **Definition:** Wood already turned to stone — the Barricade plug on the third north.
   Gray, impassable, and openable only by an axe over several swings. It does not burn, so fire
   is not a way around the axe.
 - **In code:** the `petrified_tree` Background Object variant (`GameConfig.js`). Shares the

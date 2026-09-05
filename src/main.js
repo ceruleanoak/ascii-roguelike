@@ -2878,6 +2878,9 @@ class Game {
     // Drive P-room puzzle demos/solve detection
     this.puzzleSystem.update(deltaTime);
 
+    // Drive trigger-shaped Barricades toward the moment their plug lifts
+    this.barricadeSystem.update(deltaTime);
+
     // Drive X-room χ proximity buzz + strike resolution
     this.chiBladeSystem.update(deltaTime);
 

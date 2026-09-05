@@ -36,9 +36,14 @@ const NORTH_STREAK_TRIGGER = 3;
 // Keyed to the streak the run is already holding — one Barricade per room
 // standing between the first north and the last.
 //
-// Nothing here is generous, and that is deliberate: a run that never found an
-// axe cannot clear the third Barricade, the same way the Globe of Offerings can
-// only hand back glyphs the run actually touched.
+// Nothing here is generous, and that is deliberate: the approach can ask for a
+// tool the run never found, the same way the Globe of Offerings can only hand
+// back glyphs the run actually touched. What it asks for is no longer fixed,
+// though — the exit letter's colour picks the family, so a green north asks for
+// a craft gate's answer instead of an axe, and only a colour with no family of
+// its own (gray, and red until its gates are authored) still falls back to the
+// rocks and Petrified Trees this streak was built around. The gray '3' exit is
+// the one that matters for the inevitable path, and gray always falls back.
 //
 // The materials and the stamp itself live in BarricadeSystem and the barricades
 // catalogue now — a Barricade is a general shape, and this streak is only one

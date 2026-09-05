@@ -408,6 +408,7 @@ export class TrapSystem {
       // through enemies and just land.
       if (t.kind === 'weapon' && speed > 0 && !t.harmless) {
         this._checkThrownWeaponHit(t, speed);
+        this._checkThrownWeaponSignalHit(t);
         if (t.landed) {
           this._landThrownWeapon(t);
           game.inFlightTraps.splice(i, 1);
@@ -552,6 +553,34 @@ export class TrapSystem {
     const range = Math.max(1, profile.maxDamageVel - profile.minVelForDamage);
     const t01 = Math.min(1, (speed - profile.minVelForDamage) / range);
     return Math.max(1, Math.round(baseDamage * profile.damageMult * t01));
+  }
+
+  /**
+   * Strike any puzzleSignal fixture the flying weapon passes over. Enemies are
+   * the only thing _checkThrownWeaponHit looks at, so without this a thrown
+   * weapon sails straight through a switch — which is precisely the Barricade
+   * that asks for a spear (the switch sits past every melee weapon's reach).
+   *
+   * Routed through takeDamage rather than by setting glitterHit directly: the
+   * puzzleSignal short-circuit in there is the sanctioned contract, and it
+   * keeps the fixture's HP and animation behaving the same for a thrown weapon
+   * as for a swung one. The weapon keeps flying — a switch is a fixture the
+   * throw clips, not a wall it stops against.
+   */
+  _checkThrownWeaponSignalHit(t) {
+    const game = this.game;
+    const source = (t.interior === true && game.activeFloor) ? game.activeFloor : game.currentRoom;
+    const objs = source?.backgroundObjects;
+    if (!objs) return;
+    const hitR = GRID.CELL_SIZE * 0.75;
+    for (const obj of objs) {
+      if (obj.destroyed || !obj.puzzleSignal) continue;
+      const cx = obj.position.x + GRID.CELL_SIZE / 2;
+      const cy = obj.position.y + GRID.CELL_SIZE / 2;
+      const dx = cx - t.x, dy = cy - t.y;
+      if (dx * dx + dy * dy > hitR * hitR) continue;
+      obj.takeDamage(t.baseDamage || 1);
+    }
   }
 
   // Detect enemy collision for a flying weapon. Marks t.landed on hit.

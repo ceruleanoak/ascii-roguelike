@@ -786,6 +786,11 @@ export class InteractionSystem {
         game._activeBackgroundObjects().push(chi);
         game.renderer.markBackgroundDirty();
       }
+      // Barricade grass: a trigger fixture concealed under this tile. The cut
+      // is the whole reveal — same shape as the χ grass above, asked as a gate.
+      if (obj.barricadeTrigger) {
+        game.barricadeSystem.revealTrigger(obj);
+      }
       // Fairy grass: blade-cut releases the fairy. Multiple grass tiles in the
       // room are marked; the first one cut spawns the fairy, the rest are inert.
       if (obj.fairyGrass && !game.currentRoom?.fairySpawned && !game.fairiesAngered) {
