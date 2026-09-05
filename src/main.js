@@ -2731,7 +2731,8 @@ class Game {
     this.trapSystem.update(deltaTime);
 
     // Leaving REST: north is always open, south only on a Cursed run and it
-    // leads to the Graveyard rather than deeper. Player owns the geometry.
+    // leads to the Graveyard rather than deeper. ExitSystem owns the geometry —
+    // both edges share one predicate so they cannot drift apart.
     const restExit = this.animationSystem.isAnimating(this.player) ? null
       : this.exitSystem.restExitCrossing(this.currentRoom, this.player, this.previousPlayerPosition.y);
     if (restExit) {
