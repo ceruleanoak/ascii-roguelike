@@ -1065,6 +1065,38 @@ export const BACKGROUND_OBJECT_VARIANTS = {
       default: { animation: 'none', message: null }
     }
   },
+  // The gray trees standing in the way of the third north. Bark the color the
+  // world is bending toward, and nothing but an axe gets through them — the
+  // Three Room is not owed to a run that arrived without one.
+  //
+  // The 'Y' render char is shared with the ordinary Tree on purpose:
+  // CombatSystem gates the axe requirement on the char, so the gate arrives
+  // with the glyph. A typeId replaces that char's data outright, which is what
+  // lets this entry keep the gate while dropping the Tree's flammability —
+  // burning is not allowed to be a way around an axe.
+  //
+  // `slowing` is deliberately absent rather than false or 0, the same trap the
+  // divider above documents: the Tree's own 0.8 would make these walk-through
+  // while still looking solid.
+  //
+  // No `allWeaponsDamage` either. That is the Centipede arena's escape hatch so
+  // no loadout can strand the player; here being stranded is the feature.
+  'gray_tree': {
+    char: 'Y',
+    name: 'Gray Tree',
+    color: '#888888',
+    hp: 3,
+    // Same guaranteed Stick as a living Tree — what is refused here is passage,
+    // not the wood.
+    dropEffect: 'destroyObject:spawnIngredient:|',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    solid: true,
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
   'water': {
     char: '~',
     name: 'Puddle',

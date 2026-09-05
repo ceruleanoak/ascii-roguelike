@@ -2016,6 +2016,12 @@ class Game {
       // never get clobbered by a forced 'D' mutation.
       this.compassSystem.onRoomEntered(this.currentRoom);
 
+      // The way north is not free while a north streak is running: the second
+      // north is walled off with rocks, the third with gray trees. Placed after
+      // the exit overrides above so the gate reads the exit the room actually
+      // ended up with.
+      this.threeRoomSystem.gateNorthExit(this, this.currentRoom);
+
       // Activate boss system for zone boss rooms
       if (this.currentRoom.isZoneBossRoom) {
         this.bossSystem.activate(this.currentRoom, currentZone);
