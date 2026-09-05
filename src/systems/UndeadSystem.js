@@ -47,6 +47,10 @@ const PAUSE_MAX = 2.4;
 // Coming up out of the ground: held in place, fading in, for this long.
 const RISE_DURATION = 1.1;
 
+// Walking in through a door instead. Shorter, because nothing is clawing its
+// way up — and short enough that the doorway is clear before the next arrival.
+const DOOR_FADE = 0.35;
+
 // The bands the gray zone raises, reused so the curse speaks in gray's letters.
 const EARLY_UNDEAD = ['S', 'Z'];
 
@@ -119,6 +123,35 @@ export class UndeadSystem {
     if (!opts.silent) game?.audioSystem?.playSFX('bone_rise');
   }
 
+  /**
+   * One figure walking in through a doorway rather than clawing up out of the
+   * ground. It appears in the gap and takes its roaming home from further
+   * inside the room, so its first drift carries it in instead of leaving it
+   * loitering in the door for the next arrival to walk into.
+   *
+   * @param {object} game
+   * @param {number} x world px of the gap
+   * @param {number} y world px of the gap
+   * @param {number} homeX where inside the room it should settle and drift around
+   * @param {number} homeY
+   * @param {object} [opts] `chars` to override the band
+   */
+  enter(game, x, y, homeX, homeY, opts = {}) {
+    const chars = opts.chars ?? EARLY_UNDEAD;
+    const map = game?.currentRoom?.collisionMap || null;
+    const u = this._make(chars[Math.floor(Math.random() * chars.length)], x, y, map);
+
+    u.homeX = this._clamp(homeX, GRID.WIDTH);
+    u.homeY = this._clamp(homeY, GRID.HEIGHT);
+    u.riseTimer = DOOR_FADE;
+    u.riseFrom = DOOR_FADE;
+    u.pauseTimer = 0;   // steps off the moment it is solid
+
+    this.undead.push(u);
+    game?.audioSystem?.playSFX('bone_rise');
+    return u;
+  }
+
   /** One figure, standing where it came up. */
   _make(char, x, y, collisionMap) {
     const data = getEnemyData(char);
@@ -133,6 +166,7 @@ export class UndeadSystem {
       target: null,
       pauseTimer: Math.random() * PAUSE_MAX,
       riseTimer: RISE_DURATION,
+      riseFrom: RISE_DURATION,   // denominator for the fade; a door arrival shortens both
       alpha: 0
     };
   }
@@ -156,7 +190,7 @@ export class UndeadSystem {
       if (u.riseTimer > 0) {
         // Still coming up — held in place while it fades in.
         u.riseTimer -= dt;
-        u.alpha = 1 - Math.max(u.riseTimer, 0) / RISE_DURATION;
+        u.alpha = 1 - Math.max(u.riseTimer, 0) / u.riseFrom;
         continue;
       }
       u.alpha = 1;

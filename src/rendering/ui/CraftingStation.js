@@ -17,18 +17,21 @@ export class CraftingStation {
 
   /** Called on background pass — draws brackets and static slot contents. */
   render(game) {
+    // REST's chrome goes gray once a Cursed run has run far enough.
+    const chrome = game.cursedRunSystem.restChromeColor(game);
+
     // Draw crafting slot brackets
-    this.renderer.drawCell(CRAFTING.LEFT_SLOT_X,     CRAFTING.STATION_Y, '[', COLORS.BORDER);
-    this.renderer.drawCell(CRAFTING.LEFT_SLOT_X + 1, CRAFTING.STATION_Y, ' ', COLORS.BORDER);
-    this.renderer.drawCell(CRAFTING.LEFT_SLOT_X + 2, CRAFTING.STATION_Y, ']', COLORS.BORDER);
+    this.renderer.drawCell(CRAFTING.LEFT_SLOT_X,     CRAFTING.STATION_Y, '[', chrome);
+    this.renderer.drawCell(CRAFTING.LEFT_SLOT_X + 1, CRAFTING.STATION_Y, ' ', chrome);
+    this.renderer.drawCell(CRAFTING.LEFT_SLOT_X + 2, CRAFTING.STATION_Y, ']', chrome);
 
-    this.renderer.drawCell(CRAFTING.CENTER_SLOT_X,     CRAFTING.STATION_Y, '[', COLORS.BORDER);
-    this.renderer.drawCell(CRAFTING.CENTER_SLOT_X + 1, CRAFTING.STATION_Y, ' ', COLORS.BORDER);
-    this.renderer.drawCell(CRAFTING.CENTER_SLOT_X + 2, CRAFTING.STATION_Y, ']', COLORS.BORDER);
+    this.renderer.drawCell(CRAFTING.CENTER_SLOT_X,     CRAFTING.STATION_Y, '[', chrome);
+    this.renderer.drawCell(CRAFTING.CENTER_SLOT_X + 1, CRAFTING.STATION_Y, ' ', chrome);
+    this.renderer.drawCell(CRAFTING.CENTER_SLOT_X + 2, CRAFTING.STATION_Y, ']', chrome);
 
-    this.renderer.drawCell(CRAFTING.RIGHT_SLOT_X,     CRAFTING.STATION_Y, '[', COLORS.BORDER);
-    this.renderer.drawCell(CRAFTING.RIGHT_SLOT_X + 1, CRAFTING.STATION_Y, ' ', COLORS.BORDER);
-    this.renderer.drawCell(CRAFTING.RIGHT_SLOT_X + 2, CRAFTING.STATION_Y, ']', COLORS.BORDER);
+    this.renderer.drawCell(CRAFTING.RIGHT_SLOT_X,     CRAFTING.STATION_Y, '[', chrome);
+    this.renderer.drawCell(CRAFTING.RIGHT_SLOT_X + 1, CRAFTING.STATION_Y, ' ', chrome);
+    this.renderer.drawCell(CRAFTING.RIGHT_SLOT_X + 2, CRAFTING.STATION_Y, ']', chrome);
 
     // Draw slot contents
     const state = game.craftingSystem.getState();

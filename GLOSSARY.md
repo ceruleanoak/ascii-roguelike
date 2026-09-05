@@ -878,7 +878,9 @@ programming terms.
 - **Definition:** The state a run enters the moment a slot cracks. The Three Room can no
   longer be found for the rest of the run, the Graveyard fills as rooms are explored, and REST
   eventually turns gray, stops healing, and starts admitting undead from the south.
-- **In code:** `game.cursedRun`, set in `ThreeRoomSystem._beginCurse`.
+- **In code:** `game.cursedRun`, set in `ThreeRoomSystem._beginCurse`. Everything the flag
+  changes outside the Three Room is owned by `CursedRunSystem`, including when REST itself
+  gives way (`isRestDecayed`).
 - **Not:** "cursed mode", "bad ending", "hard mode".
 
 ### Undead

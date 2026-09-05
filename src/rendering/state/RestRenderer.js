@@ -48,12 +48,16 @@ export class RestRenderer {
     // Spectacles state — used at multiple keystroke-label sites below.
     const spectaclesOn = isSpectaclesActive(game);
 
+    // REST's chrome — green normally, the gray zone's color once a Cursed run
+    // has run far enough that the hub itself gives way.
+    const chrome = game.cursedRunSystem.restChromeColor(game);
+
     // Render background (only if dirty)
     if (this.renderer.backgroundDirty) {
       this.renderer.clearBackground();
       // North is always open; south opens onto the Graveyard on a Cursed run,
       // so the border reads the room instead of asserting the shape itself.
-      this.renderer.drawBorder(game.currentRoom.exits);
+      this.renderer.drawBorder(game.currentRoom.exits, chrome);
 
       // Draw crafting station
       this.renderController.craftingStation.render(game);
@@ -491,7 +495,7 @@ export class RestRenderer {
     // Determine colors and sizes based on key state (highlight when pressed) and inactivity blinking
     const isInactive = game.inactivityTimer >= game.INACTIVITY_THRESHOLD;
     const blinkWhite = isInactive && game.wasdBlinkState;
-    const inactiveColor = blinkWhite ? '#FFFFFF' : COLORS.TEXT;
+    const inactiveColor = blinkWhite ? '#FFFFFF' : chrome;
 
     const getWasdStyle = (isPressed, slotAvailable = false) => {
       if (isPressed) {
@@ -501,7 +505,7 @@ export class RestRenderer {
       } else if (isInactive) {
         return { fontSize: GRID.CELL_SIZE, color: inactiveColor };
       } else {
-        return { fontSize: GRID.CELL_SIZE, color: COLORS.TEXT };
+        return { fontSize: GRID.CELL_SIZE, color: chrome };
       }
     };
 
@@ -556,7 +560,7 @@ export class RestRenderer {
     // slot action itself is available, to draw attention regardless of how
     // recently the player moved.
     const slotBlinkOn = (performance.now() % 1000) < 500;
-    const slotBlinkColor = slotBlinkOn ? '#FFFFFF' : COLORS.TEXT;
+    const slotBlinkColor = slotBlinkOn ? '#FFFFFF' : chrome;
 
     const wStyle = getWasdStyle(game.keys.w);
     const aStyle = getWasdStyle(game.keys.a);
@@ -577,7 +581,7 @@ export class RestRenderer {
 
     // Brackets (static size)
     wasdCtx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
-    wasdCtx.fillStyle = COLORS.BORDER;
+    wasdCtx.fillStyle = chrome;
     wasdCtx.fillText('[', (wasdCenterCol - 1) * GRID.CELL_SIZE + half, wasdTopRow * GRID.CELL_SIZE + half);
     wasdCtx.fillText(']', (wasdCenterCol + 1) * GRID.CELL_SIZE + half, wasdTopRow * GRID.CELL_SIZE + half);
 
@@ -622,7 +626,7 @@ export class RestRenderer {
     const spaceY = moveY + GRID.CELL_SIZE * 1.5;
     const spaceRow = Math.floor(spaceY / GRID.CELL_SIZE);
     wasdCtx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
-    wasdCtx.fillStyle = COLORS.BORDER;
+    wasdCtx.fillStyle = chrome;
     wasdCtx.fillText('[', (wasdCenterCol - 6) * GRID.CELL_SIZE + half, spaceY);
     wasdCtx.fillText(']', (wasdCenterCol + 6) * GRID.CELL_SIZE + half, spaceY);
     wasdCtx.font = `${spaceStyle.fontSize}px 'Unifont', monospace`;

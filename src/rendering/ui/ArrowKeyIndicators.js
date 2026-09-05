@@ -27,10 +27,13 @@ export class ArrowKeyIndicators {
 
     const spectaclesOn = isSpectaclesActive(game);
 
+    // REST's chrome goes gray once a Cursed run has run far enough.
+    const chrome = game.cursedRunSystem.restChromeColor(game);
+
     // Determine inactivity blinking state
     const isInactive = game.inactivityTimer >= game.INACTIVITY_THRESHOLD;
     const blinkWhite = isInactive && game.wasdBlinkState;
-    const inactiveColor = blinkWhite ? '#FFFFFF' : COLORS.TEXT;
+    const inactiveColor = blinkWhite ? '#FFFFFF' : chrome;
 
     // Check if on cooldown for color theming
     const onCooldown = game.player && game.player.dodgeRoll.cooldownTimer > 0;
@@ -70,7 +73,7 @@ export class ArrowKeyIndicators {
     // slot action itself is available, to draw attention regardless of how
     // recently the player moved.
     const slotBlinkOn = (performance.now() % 1000) < 500;
-    const slotBlinkColor = slotBlinkOn ? '#FFFFFF' : COLORS.TEXT;
+    const slotBlinkColor = slotBlinkOn ? '#FFFFFF' : chrome;
 
     // Determine font sizes: pressed keys get larger font
     const getArrowStyle = (isPressed, isShift = false) => {
@@ -88,7 +91,7 @@ export class ArrowKeyIndicators {
       } else if (isInactive) {
         return { fontSize: GRID.CELL_SIZE, color: inactiveColor };
       } else {
-        return { fontSize: GRID.CELL_SIZE, color: COLORS.TEXT };
+        return { fontSize: GRID.CELL_SIZE, color: chrome };
       }
     };
 
@@ -111,7 +114,7 @@ export class ArrowKeyIndicators {
 
     // Brackets (static size)
     ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
-    ctx.fillStyle = COLORS.BORDER;
+    ctx.fillStyle = chrome;
     ctx.fillText('[', (centerCol - 1) * GRID.CELL_SIZE + half, topRow * GRID.CELL_SIZE + half);
     ctx.fillText(']', (centerCol + 1) * GRID.CELL_SIZE + half, topRow * GRID.CELL_SIZE + half);
 
@@ -155,7 +158,7 @@ export class ArrowKeyIndicators {
     // SHIFT key with THROW label (grouped together)
     const shiftY = dodgeY + GRID.CELL_SIZE * 1.5;
     ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
-    ctx.fillStyle = COLORS.BORDER;
+    ctx.fillStyle = chrome;
     ctx.fillText('[', (centerCol - 6) * GRID.CELL_SIZE + half, shiftY);
     ctx.fillText(']', (centerCol + 6) * GRID.CELL_SIZE + half, shiftY);
     ctx.font = `${shiftStyle.fontSize}px 'Unifont', monospace`;

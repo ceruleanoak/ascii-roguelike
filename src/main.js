@@ -1298,12 +1298,17 @@ class Game {
       ? { ...this.player.magicMeter }
       : this._savedMagicMeter ?? null;
 
+    // A decayed REST no longer heals. Read off the outgoing Player, same as the
+    // magic meter above, because the rebuild below is what does the healing.
+    const carriedHp = this.cursedRunSystem.carryRestHp(this, this.player);
+
     // Create player just below the "E X P L O R E" label (text centre = 4.5 * CELL_SIZE),
     // offset 2 tiles lower than the label-relative spawn point
     const centerX = GRID.WIDTH / 2;
     const spawnY = GRID.CELL_SIZE * 5.5 + GRID.CELL_SIZE * 2;
     this.player = new Player(centerX, spawnY);
     this.player.godMode = this.cheatMenu.godMode;
+    if (carriedHp !== null) this.player.hp = carriedHp;
     if (savedMagicMeter) {
       this.player.magicMeter = savedMagicMeter;
       this._savedMagicMeter = savedMagicMeter;
@@ -2693,8 +2698,10 @@ class Game {
     this.updatePlayerMechanics(deltaTime);
 
     // Same Undead tick as NEUTRAL — REST is the second place the curse puts
-    // them, once it has run far enough.
+    // them, once it has run far enough. The system above walks them; the one
+    // below is what keeps letting more of them in through the south door.
     this.undeadSystem.update(deltaTime, this);
+    this.cursedRunSystem.updateRest(deltaTime, this);
 
     // Drive gem-wand auto-cast + Crystal Maul charge-hammer lifecycles — same
     // as EXPLORE, so charged weapons fire in the hub instead of hanging at
