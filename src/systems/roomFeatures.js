@@ -1721,3 +1721,66 @@ export function generateSnowFields(gen, room) {
     }
   }
 }
+
+/**
+ * Letter-template guaranteed item drop — the one item a template promises will
+ * be in the room, placed at whatever anchor the template names (vault centre,
+ * clearing centre) or dropped anywhere walkable if it names none.
+ */
+export function spawnGuaranteedItems(gen, room) {
+  const itemConfig = gen.currentLetterTemplate.guaranteedItems;
+
+  // Determine item pool based on config
+  let itemPool = [];
+  if (Array.isArray(itemConfig.itemPool)) {
+    itemPool = itemConfig.itemPool;
+  } else if (itemConfig.itemPool === 'rare_epic') {
+    // High-tier weapons, armor, and consumables
+    itemPool = [
+      'ᛖ', // Dragon Blade (damage 5)
+      'ᚲ', // Dragon Shotgun
+      '⚔', // Legendary Flame Sword (damage 6)
+      '♦', // Dragon Heart (max HP consumable)
+      '𐤓', // Dragon Scale Armor (defense 5)
+      '^', // Hammer (damage 7)
+      'ᛜ', // Ice Hammer (damage 6)
+    ];
+  }
+
+  if (itemPool.length === 0) {
+    console.warn(`[Guaranteed Items] Unknown item pool: ${itemConfig.itemPool}`);
+    return;
+  }
+
+  // Select random item from pool
+  const itemChar = itemPool[Math.floor(Math.random() * itemPool.length)];
+
+  // Determine spawn position
+  let spawnPos;
+  if (itemConfig.position === 'vault_center') {
+    // Spawn in exact center of vault
+    const vault = gen.currentLetterTemplate.vaultStructure;
+    const centerX = vault.centerCol * GRID.CELL_SIZE + (GRID.CELL_SIZE / 2);
+    const centerY = vault.centerRow * GRID.CELL_SIZE + (GRID.CELL_SIZE / 2);
+    spawnPos = { x: centerX, y: centerY };
+  } else if (itemConfig.position === 'clearing_center') {
+    // Spawn at the center of the template's clearingZone
+    const clearing = gen.currentLetterTemplate.bgObjectRules?.clearingZone;
+    if (clearing) {
+      const centerX = clearing.centerCol * GRID.CELL_SIZE + (GRID.CELL_SIZE / 2);
+      const centerY = clearing.centerRow * GRID.CELL_SIZE + (GRID.CELL_SIZE / 2);
+      spawnPos = { x: centerX, y: centerY };
+    } else {
+      spawnPos = gen.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
+    }
+  } else {
+    // Fallback to random position
+    spawnPos = gen.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
+  }
+
+  if (!spawnPos) return;
+
+  // Create and add item to room
+  const item = new Item(itemChar, spawnPos.x, spawnPos.y);
+  room.items.push(item);
+}

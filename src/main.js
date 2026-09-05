@@ -45,6 +45,7 @@ import { RoundCombatSystem } from './systems/RoundCombatSystem.js';
 import { AquiferSystem } from './systems/AquiferSystem.js';
 import { SinkholeSystem } from './systems/SinkholeSystem.js';
 import { ThreeRoomSystem } from './systems/ThreeRoomSystem.js';
+import { BarricadeSystem } from './systems/BarricadeSystem.js';
 import { UndeadSystem } from './systems/UndeadSystem.js';
 import { CursedRunSystem } from './systems/CursedRunSystem.js';
 import { ThreeSlotGlobeSystem } from './systems/ThreeSlotGlobeSystem.js';
@@ -236,6 +237,7 @@ class Game {
     this.runTimerSystem = new RunTimerSystem();
     this.fountainSystem = new FountainSystem(this);
     this.puzzleSystem = new PuzzleSystem(this);
+    this.barricadeSystem = new BarricadeSystem(this);  // exit-lane Barricades: the streak's rocks/trees, and what else asks a room a question
     this.chiBladeSystem = new ChiBladeSystem(this);
     this.lightningStrikeSystem = new LightningStrikeSystem(this);
     this.sandstormSystem = new SandstormSystem(this);
@@ -2016,11 +2018,10 @@ class Game {
       // never get clobbered by a forced 'D' mutation.
       this.compassSystem.onRoomEntered(this.currentRoom);
 
-      // The way north is not free while a north streak is running: the second
-      // north is barricaded with rocks, the third with Petrified Trees. Placed
-      // after the exit overrides above so the Barricade reads the exit the room
-      // actually ended up with.
-      this.threeRoomSystem.barricadeNorthExit(this, this.currentRoom);
+      // Barricades — whatever this room's exits are worth blocking. Placed
+      // after the exit overrides above so the Barricade reads the exits the
+      // room actually ended up with.
+      this.barricadeSystem.raiseForRoom(this.currentRoom);
 
       // Activate boss system for zone boss rooms
       if (this.currentRoom.isZoneBossRoom) {

@@ -11,7 +11,7 @@ import { getDungeonDesign } from '../data/dungeonDesigns.js';
 import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
-import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, stampSmallDoorInVault, getIslandPosition, applyKeyDropLogic, ensureKeyDroppers, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, deriveRiverFlowDirection, buildForcedRiverParams, carveForcedRiver, cellularCaveGrid, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields } from './roomFeatures.js';
+import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, stampSmallDoorInVault, getIslandPosition, applyKeyDropLogic, ensureKeyDroppers, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, deriveRiverFlowDirection, buildForcedRiverParams, carveForcedRiver, cellularCaveGrid, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, spawnGuaranteedItems } from './roomFeatures.js';
 
 // Zone-boss arena → letter template key. Boss rooms are entered without a
 // letter (cheat warp) or with an arbitrary one (normal progression), so we
@@ -139,6 +139,7 @@ export class RoomGenerator {
       // consumes and clears it at the top of renderBackground.
       backgroundRepaint: false,
       recipeSign: null, // Visual-only recipe hint (not a BackgroundObject)
+      barricade: null, // Set by BarricadeSystem.raiseForRoom once the exits are final
       exits: this.exitSystem ? this.exitSystem.generateExits(this.currentDepth, type, zoneType, progressionColor, exitLetter) : { north: false, east: false, west: false, south: true },
       playerStartPos: playerStartPos,  // Store for enemy generation
       letterTemplate: this.currentLetterTemplate, // Store template for later event checks
@@ -224,7 +225,7 @@ export class RoomGenerator {
 
     // Spawn guaranteed items if template defines them (e.g., vault treasure)
     if (this.currentLetterTemplate?.guaranteedItems?.enabled) {
-      this.spawnGuaranteedItems(room);
+      spawnGuaranteedItems(this, room);
     }
 
     // Blue-zone room post-processing — armor pickup + pedestal + linear exits
@@ -3554,64 +3555,6 @@ export class RoomGenerator {
    * Spawn guaranteed items for special room templates (e.g., vault treasure)
    * Places items at specific positions defined by the template
    */
-  spawnGuaranteedItems(room) {
-    const itemConfig = this.currentLetterTemplate.guaranteedItems;
-
-    // Determine item pool based on config
-    let itemPool = [];
-    if (Array.isArray(itemConfig.itemPool)) {
-      itemPool = itemConfig.itemPool;
-    } else if (itemConfig.itemPool === 'rare_epic') {
-      // High-tier weapons, armor, and consumables
-      itemPool = [
-        'ᛖ', // Dragon Blade (damage 5)
-        'ᚲ', // Dragon Shotgun
-        '⚔', // Legendary Flame Sword (damage 6)
-        '♦', // Dragon Heart (max HP consumable)
-        '𐤓', // Dragon Scale Armor (defense 5)
-        '^', // Hammer (damage 7)
-        'ᛜ', // Ice Hammer (damage 6)
-      ];
-    }
-
-    if (itemPool.length === 0) {
-      console.warn(`[Guaranteed Items] Unknown item pool: ${itemConfig.itemPool}`);
-      return;
-    }
-
-    // Select random item from pool
-    const itemChar = itemPool[Math.floor(Math.random() * itemPool.length)];
-
-    // Determine spawn position
-    let spawnPos;
-    if (itemConfig.position === 'vault_center') {
-      // Spawn in exact center of vault
-      const vault = this.currentLetterTemplate.vaultStructure;
-      const centerX = vault.centerCol * GRID.CELL_SIZE + (GRID.CELL_SIZE / 2);
-      const centerY = vault.centerRow * GRID.CELL_SIZE + (GRID.CELL_SIZE / 2);
-      spawnPos = { x: centerX, y: centerY };
-    } else if (itemConfig.position === 'clearing_center') {
-      // Spawn at the center of the template's clearingZone
-      const clearing = this.currentLetterTemplate.bgObjectRules?.clearingZone;
-      if (clearing) {
-        const centerX = clearing.centerCol * GRID.CELL_SIZE + (GRID.CELL_SIZE / 2);
-        const centerY = clearing.centerRow * GRID.CELL_SIZE + (GRID.CELL_SIZE / 2);
-        spawnPos = { x: centerX, y: centerY };
-      } else {
-        spawnPos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
-      }
-    } else {
-      // Fallback to random position
-      spawnPos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
-    }
-
-    if (!spawnPos) return;
-
-    // Create and add item to room
-    const item = new Item(itemChar, spawnPos.x, spawnPos.y);
-    room.items.push(item);
-  }
-
   // Blue-zone tutorial rooms: drop the armor pickup (Shallows/Reef/Wake) or the
   // pearl-cache pedestal (Pearl Cache), and clamp exits to a linear N/S spine
   // so the player can only advance forward or retreat. The actual N exit-letter

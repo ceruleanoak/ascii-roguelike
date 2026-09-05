@@ -2,6 +2,7 @@ import { GRID, GAME_STATES } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { captureDeath } from './DeathLedgerSystem.js';
 import { ITEM_TYPES } from '../data/items.js';
+import { STREAK_BARRICADES } from '../data/barricades.js';
 
 /**
  * ThreeRoomSystem — the source room, its offerings, and what the door lets out.
@@ -39,22 +40,10 @@ const NORTH_STREAK_TRIGGER = 3;
 // axe cannot clear the third Barricade, the same way the Globe of Offerings can
 // only hand back glyphs the run actually touched.
 //
-// A Barricade is a general shape, not a Three Room fixture: a material and a
-// footprint stamped across an exit lane. It lives here because the approach
-// gating is the only thing that raises one today; a second caller is the
-// trigger to lift it into its own system, not a reason to build one now.
-const BARRICADE_MATERIALS = {
-  1: { char: '0' },                 // rocks — a hammer, a blunt weapon, or the pickaxe
-  2: { typeId: 'petrified_tree' }   // Petrified Trees — an axe, three swings each
-};
-
-// The footprint: two rows deep, three columns wide, centred on the exit lane.
-// Rocks and trees both carry narrow hitboxes (a round rock; a tree's trunk), so
-// a single cell would leave room to slide past it and still read as standing in
-// the gap — see ExitSystem.isPressingIntoExitGap, which only asks that the
-// player's box overlap the lane at all.
-const BARRICADE_ROWS = [1, 2];
-const BARRICADE_COL_OFFSETS = [-1, 0, 1];
+// The materials and the stamp itself live in BarricadeSystem and the barricades
+// catalogue now — a Barricade is a general shape, and this streak is only one
+// of the things that raises one. What stays here is the streak, because the
+// streak is what this system knows.
 
 // Death — behind the shut door, beyond naming. Printable ASCII per the
 // encoding rule; the room around it does the implying.
@@ -158,58 +147,13 @@ export class ThreeRoomSystem {
   }
 
   /**
-   * Raise a Barricade across a freshly generated room's north exit when the run
-   * is mid-streak. Called from enterExploreState for every room the world
-   * builds; the streak decides whether anything is placed and out of what.
-   * Inert otherwise, so the call site stays unconditional.
-   *
-   * A Cursed run is never barricaded. The streak still counts there, but the
-   * world has stopped answering the third north — asking for an axe to open a
-   * door that is no longer behind it would be a cruelty with nothing on the far
-   * side.
+   * The Barricade this run's north streak asks for, or null if it asks for
+   * none. BarricadeSystem calls this for every room the world builds and
+   * decides what to do with the answer; the streak count is this system's to
+   * know, and the stamping is not.
    */
-  barricadeNorthExit(game, room) {
-    if (!room || game?.cursedRun) return;
-
-    const material = BARRICADE_MATERIALS[this._northStreak];
-    if (!material) return;
-
-    // Nothing to barricade without a way north. Never the gray zone's own '3'
-    // exit either: that is the inevitable path, and it stays inevitable.
-    const north = room.exits?.north;
-    if (!north || north.threeRoom) return;
-
-    const cs = GRID.CELL_SIZE;
-    const centerX = Math.floor(GRID.COLS / 2);
-    for (const row of BARRICADE_ROWS) {
-      for (const dx of BARRICADE_COL_OFFSETS) {
-        const col = centerX + dx;
-        this._clearCell(room, col, row);
-        const obj = material.typeId
-          ? BackgroundObject.createVariant(material.typeId, col * cs, row * cs)
-          : new BackgroundObject(material.char, col * cs, row * cs);
-        // Part of a placed structure, not scatter — the same exemption the
-        // hut walls and the Graveyard Divider carry.
-        obj.structural = true;
-        room.backgroundObjects.push(obj);
-      }
-    }
-  }
-
-  /**
-   * Whatever generation already left in a Barricade cell gives way to it.
-   * Spliced in place rather than filtered into a new array, because the room's
-   * list is aliased onto the surface mirror once the swap lands.
-   */
-  _clearCell(room, col, row) {
-    const cs = GRID.CELL_SIZE;
-    const objs = room.backgroundObjects || [];
-    for (let i = objs.length - 1; i >= 0; i--) {
-      const o = objs[i];
-      if (Math.floor(o.position.x / cs) === col && Math.floor(o.position.y / cs) === row) {
-        objs.splice(i, 1);
-      }
-    }
+  streakBarricade() {
+    return STREAK_BARRICADES[this._northStreak] || null;
   }
 
   /** Full run-scoped reset — death/title. */
