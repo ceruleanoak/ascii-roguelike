@@ -27,29 +27,34 @@ import { ITEM_TYPES } from '../data/items.js';
 // North traversals in a row before the world runs out.
 const NORTH_STREAK_TRIGGER = 3;
 
-// ── The way north ───────────────────────────────────────────────────────────
+// ── The Barricade ───────────────────────────────────────────────────────────
 //
 // Insisting north three times is the ask; insisting is not enough. The second
-// north is walled off with rocks and the third with gray trees, so the source
-// is reached carrying a hammer and an axe or it is not reached at all. Keyed to
-// the streak the run is already holding — one gate per room standing between
-// the first north and the last.
+// north is barricaded with rocks and the third with Petrified Trees, so the
+// source is reached carrying a hammer and an axe or it is not reached at all.
+// Keyed to the streak the run is already holding — one Barricade per room
+// standing between the first north and the last.
 //
 // Nothing here is generous, and that is deliberate: a run that never found an
-// axe cannot open the third gate, the same way the Globe of Offerings can only
-// hand back glyphs the run actually touched.
-const NORTH_GATES = {
-  1: { char: '0' },             // rocks — any hammer, or the pickaxe
-  2: { typeId: 'gray_tree' }    // gray trees — an axe, three swings each
+// axe cannot clear the third Barricade, the same way the Globe of Offerings can
+// only hand back glyphs the run actually touched.
+//
+// A Barricade is a general shape, not a Three Room fixture: a material and a
+// footprint stamped across an exit lane. It lives here because the approach
+// gating is the only thing that raises one today; a second caller is the
+// trigger to lift it into its own system, not a reason to build one now.
+const BARRICADE_MATERIALS = {
+  1: { char: '0' },                 // rocks — a hammer, a blunt weapon, or the pickaxe
+  2: { typeId: 'petrified_tree' }   // Petrified Trees — an axe, three swings each
 };
 
-// The plug: two rows deep, three columns wide, centred on the exit lane. Rocks
-// and trees both carry narrow hitboxes (a round rock; a tree's trunk), so a
-// single cell would leave room to slide past it and still read as standing in
+// The footprint: two rows deep, three columns wide, centred on the exit lane.
+// Rocks and trees both carry narrow hitboxes (a round rock; a tree's trunk), so
+// a single cell would leave room to slide past it and still read as standing in
 // the gap — see ExitSystem.isPressingIntoExitGap, which only asks that the
 // player's box overlap the lane at all.
-const NORTH_GATE_ROWS = [1, 2];
-const NORTH_GATE_COL_OFFSETS = [-1, 0, 1];
+const BARRICADE_ROWS = [1, 2];
+const BARRICADE_COL_OFFSETS = [-1, 0, 1];
 
 // Death — behind the shut door, beyond naming. Printable ASCII per the
 // encoding rule; the room around it does the implying.
@@ -153,35 +158,36 @@ export class ThreeRoomSystem {
   }
 
   /**
-   * Wall off a freshly generated room's north exit when the run is mid-streak.
-   * Called from enterExploreState for every room the world builds; the streak
-   * decides whether anything is placed and what out of. Inert otherwise, so the
-   * call site stays unconditional.
+   * Raise a Barricade across a freshly generated room's north exit when the run
+   * is mid-streak. Called from enterExploreState for every room the world
+   * builds; the streak decides whether anything is placed and out of what.
+   * Inert otherwise, so the call site stays unconditional.
    *
-   * A Cursed run is never gated. The streak still counts there, but the world
-   * has stopped answering the third north — asking for an axe to open a door
-   * that is no longer behind it would be a cruelty with nothing on the far side.
+   * A Cursed run is never barricaded. The streak still counts there, but the
+   * world has stopped answering the third north — asking for an axe to open a
+   * door that is no longer behind it would be a cruelty with nothing on the far
+   * side.
    */
-  gateNorthExit(game, room) {
+  barricadeNorthExit(game, room) {
     if (!room || game?.cursedRun) return;
 
-    const gate = NORTH_GATES[this._northStreak];
-    if (!gate) return;
+    const material = BARRICADE_MATERIALS[this._northStreak];
+    if (!material) return;
 
-    // Nothing to gate without a way north. Never the gray zone's own '3' exit
-    // either: that is the inevitable path, and it is meant to stay inevitable.
+    // Nothing to barricade without a way north. Never the gray zone's own '3'
+    // exit either: that is the inevitable path, and it stays inevitable.
     const north = room.exits?.north;
     if (!north || north.threeRoom) return;
 
     const cs = GRID.CELL_SIZE;
     const centerX = Math.floor(GRID.COLS / 2);
-    for (const row of NORTH_GATE_ROWS) {
-      for (const dx of NORTH_GATE_COL_OFFSETS) {
+    for (const row of BARRICADE_ROWS) {
+      for (const dx of BARRICADE_COL_OFFSETS) {
         const col = centerX + dx;
         this._clearCell(room, col, row);
-        const obj = gate.typeId
-          ? BackgroundObject.createVariant(gate.typeId, col * cs, row * cs)
-          : new BackgroundObject(gate.char, col * cs, row * cs);
+        const obj = material.typeId
+          ? BackgroundObject.createVariant(material.typeId, col * cs, row * cs)
+          : new BackgroundObject(material.char, col * cs, row * cs);
         // Part of a placed structure, not scatter — the same exemption the
         // hut walls and the Graveyard Divider carry.
         obj.structural = true;
@@ -191,7 +197,7 @@ export class ThreeRoomSystem {
   }
 
   /**
-   * Whatever generation already left in a barricade cell gives way to it.
+   * Whatever generation already left in a Barricade cell gives way to it.
    * Spliced in place rather than filtered into a new array, because the room's
    * list is aliased onto the surface mirror once the swap lands.
    */

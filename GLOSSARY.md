@@ -909,6 +909,27 @@ programming terms.
   cell at a time across `room.graveyardDividerRow` by the `graveyard` script.
 - **Not:** "fence", "barrier", "gate", "partition".
 
+### Barricade
+- **Definition:** A breakable plug of Background Objects stamped across an exit lane, raised to
+  make a way through cost a specific tool. Unlike the Graveyard Divider it is meant to be
+  cleared — a Barricade asks what the run is carrying, and answers by opening or not.
+  The approach to the Three Room raises one on the second north (rocks) and another on the
+  third (Petrified Trees); the shape is general and not specific to that approach.
+- **In code:** `ThreeRoomSystem.barricadeNorthExit()`, with `BARRICADE_MATERIALS` naming the
+  material per north streak and `BARRICADE_ROWS`/`BARRICADE_COL_OFFSETS` its footprint. Its
+  objects are flagged `structural` so roomFeatures' stray-object sweep leaves them alone. Lives
+  in `ThreeRoomSystem` until a second caller earns it a system of its own.
+- **Not:** "gate", "blocker", "wall", "plug", "obstacle".
+
+### Petrified Tree
+- **Definition:** Wood already turned to stone — the Barricade material on the third north.
+  Gray, impassable, and openable only by an axe over several swings. It does not burn, so fire
+  is not a way around the axe.
+- **In code:** the `petrified_tree` Background Object variant (`GameConfig.js`). Shares the
+  ordinary Tree's `'Y'` char deliberately, because CombatSystem keys the axe requirement on the
+  char; the variant keeps that gate while dropping the Tree's flammability and `slowing`.
+- **Not:** "gray tree", "stone tree", "dead tree", "fossil tree".
+
 ## Conventions
 
 - **Casing:** types/classes PascalCase; functions/variables camelCase; constants
