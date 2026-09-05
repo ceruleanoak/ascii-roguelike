@@ -1,4 +1,4 @@
-import { GRID, ROOM_TYPES } from '../game/GameConfig.js';
+import { GRID, ROOM_TYPES, GAME_STATES } from '../game/GameConfig.js';
 import { NEUTRAL_ROOMS } from '../data/neutralRooms.js';
 
 // The edge a neutral room is left through, given the exit taken to reach it.
@@ -116,6 +116,55 @@ export class NeutralRoomSystem {
    * @param {object} room - Current room
    * @returns {object|null} - Interaction result (e.g., spawnedItems)
    */
+  /**
+   * Walk back out of a neutral room into the room that was saved on the way in.
+   *
+   * Room CONTENTS only — the ingredient pile survives room transitions on its
+   * own. The saved state also carries where the return leads: almost always
+   * EXPLORE, but the Graveyard is the one neutral room entered by walking out
+   * of REST, and it goes back to REST.
+   *
+   * The state machine is set directly rather than transitioned, because the
+   * registered handler for either target rebuilds its room from scratch.
+   * enterExploreState would read this as a fresh arrival from REST and
+   * generate over the room just reinstated, stranding the player somewhere
+   * unrelated; enterRestState would rebuild the hub and hand out a free heal
+   * for the round trip.
+   *
+   * Bypassing them is also why the background is invalidated by hand here:
+   * those handlers are the only places that do it, and the background layer is
+   * cached, so the room being left would otherwise keep painting underneath
+   * the room being restored.
+   */
+  returnToSavedRoom(game) {
+    const saved = game.savedExploreState;
+
+    if (saved) {
+      game.currentRoom = saved.room;
+      game.items = [...saved.items];
+      game.ingredients = [...saved.ingredients];   // floor entities, not the pile
+      game.placedTraps = [...saved.placedTraps];
+      // The surface mirror main.js keeps beside currentRoom. Marked
+      // layer-guard-ok because this is a room-swap restore, not a combat
+      // spawn: no interior is ever live on this path, since a neutral room
+      // has no hut, dungeon or maze to have been standing inside of.
+      game.backgroundObjects = [...saved.backgroundObjects];   // layer-guard-ok
+      game.captives = [...saved.captives];
+      game.neutralCharacters = [...saved.neutralCharacters];
+
+      // The center of the restored room, not the saved edge-of-room position,
+      // which sits in the warp band that was just walked out of.
+      game.player.position.x = Math.floor(GRID.COLS / 2) * GRID.CELL_SIZE;
+      game.player.position.y = Math.floor(GRID.ROWS / 2) * GRID.CELL_SIZE;
+
+      game.savedExploreState = null;
+    }
+
+    game.updateExitCollisions();
+    game.renderer.markBackgroundDirty();
+    game.stateMachine.currentState = saved?.returnState || GAME_STATES.EXPLORE;
+  }
+
   handleInteraction(target, player, room) {
     if (!this.currentScript || !this.currentScript.onInteract) {
       return null;

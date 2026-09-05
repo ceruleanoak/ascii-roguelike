@@ -2260,36 +2260,9 @@ class Game {
         return;
       }
 
-      const returnState = this.savedExploreState?.returnState || GAME_STATES.EXPLORE;
-
-      // Restore saved explore state (room contents only — the ingredient pile
-      // is untouched by room transitions)
-      if (this.savedExploreState) {
-        this.currentRoom = this.savedExploreState.room;
-        this.items = [...this.savedExploreState.items];
-        this.ingredients = [...this.savedExploreState.ingredients]; // floor entities, not the pile
-        this.placedTraps = [...this.savedExploreState.placedTraps];
-        this.backgroundObjects = [...this.savedExploreState.backgroundObjects];
-        this.captives = [...this.savedExploreState.captives];
-        this.neutralCharacters = [...this.savedExploreState.neutralCharacters];
-        // Spawn at the center of the explore room rather than the saved
-        // edge-of-room position (which would re-trigger the south transition).
-        this.player.position.x = Math.floor(GRID.COLS / 2) * GRID.CELL_SIZE;
-        this.player.position.y = Math.floor(GRID.ROWS / 2) * GRID.CELL_SIZE;
-
-        // Clear saved state
-        this.savedExploreState = null;
-      }
-
-      // Update collision map
-      this.updateExitCollisions();
-
-      // Set state directly (don't call transition - the registered EXPLORE
-      // handler is enterExploreState(), which would treat this as a fresh
-      // arrival from REST and regenerate/restore over the room we just
-      // reinstated above, stranding the player in an unrelated room). The same
-      // reasoning holds for the Graveyard's return into REST.
-      this.stateMachine.currentState = returnState;
+      // Back out into the room saved on the way in — its contents, its
+      // collision, and which state that room belongs to.
+      this.neutralRoomSystem.returnToSavedRoom(this);
 
       // Hand the zone its music back after the Three Room's mono-track
       // override. Runs after the restore above so the zone read is the room
