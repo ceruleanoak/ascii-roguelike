@@ -4,6 +4,7 @@ import { Ingredient } from '../entities/Ingredient.js';
 import { ITEMS } from '../data/items.js';
 import { paintDescentVisual, paintStairsUpVisual } from '../data/dungeonFloorTemplates.js';
 import { TORCH_INTERACT_RADIUS } from './MazeSystem.js';
+import { tickTriggers, within, overlapsCell } from './triggerMachine.js';
 
 // Proximity radius for door/switch/slot interaction (px from cell center) —
 // mirrors DungeonSystem's DOOR_INTERACT_RADIUS.
@@ -102,10 +103,10 @@ export class DungeonPuzzleSystem {
     const aPx = a.position.x, aPy = a.position.y;
     const bPx = b.position.x, bPy = b.position.y;
 
-    const playerOnA = this._overlapsCell(player, aPx, aPy);
-    const playerOnB = this._overlapsCell(player, bPx, bPy);
-    const compOnA = companion ? this._overlapsCell(companion, aPx, aPy) : false;
-    const compOnB = companion ? this._overlapsCell(companion, bPx, bPy) : false;
+    const playerOnA = overlapsCell(player, aPx, aPy);
+    const playerOnB = overlapsCell(player, bPx, bPy);
+    const compOnA = companion ? overlapsCell(companion, aPx, aPy) : false;
+    const compOnB = companion ? overlapsCell(companion, bPx, bPy) : false;
 
     const aPressed = playerOnA || compOnA;
     const bPressed = playerOnB || compOnB;
@@ -161,7 +162,7 @@ export class DungeonPuzzleSystem {
   // (a 'switch', strike-triggered via the puzzleSignal/glitterHit contract;
   // a 'panel', occupancy-triggered like Branch's own switches; or a 'torch',
   // ignited by the same proximity + held-Torch-item contract as a decorative
-  // PuzzleTorch below) runs through the shared _advanceTrigger state
+  // PuzzleTorch below) runs through the shared triggerMachine state
   // machine; the exit unlocks once every trigger is active at once — the
   // generalized form of both Branch's own "all at once" solve rule and the
   // original Whip Trial's "both switches struck together" rule (now itself
@@ -200,83 +201,19 @@ export class DungeonPuzzleSystem {
       torch.pulseTimer += dt;
       if (torch.lit) continue;
       if (player.heldItem?.data?.name !== 'Torch') continue;
-      if (this._within(player.position, torch.position, TORCH_INTERACT_RADIUS)) {
+      if (within(player.position, torch.position, TORCH_INTERACT_RADIUS)) {
         torch.lit = true;
       }
     }
 
     if (room.puzzleSolved) return;
 
-    for (const trigger of room.triggers) {
-      let isTriggeredNow;
-      if (trigger.kind === 'switch') {
-        isTriggeredNow = !!trigger.glitterHit;
-        trigger.glitterHit = false;
-      } else if (trigger.kind === 'panel') { // occupancy, same contract as Branch's own switches
-        const px = trigger.position.x, py = trigger.position.y;
-        isTriggeredNow = this._overlapsCell(player, px, py)
-          || (companion ? this._overlapsCell(companion, px, py) : false);
-      } else { // 'torch' — ignite via proximity + held Torch item, same contract
-               // as a decorative PuzzleTorch; authored activation is always
-               // 'permanent' (validated at save time) since a lit torch never
-               // reverts, so once true this stays true regardless of dt below.
-        trigger.pulseTimer += dt;
-        isTriggeredNow = !trigger.active
-          && player.heldItem?.data?.name === 'Torch'
-          && this._within(player.position, trigger.position, TORCH_INTERACT_RADIUS);
-      }
-      const wasActive = trigger.active;
-      this._advanceTrigger(trigger, dt, isTriggeredNow);
-      // Torch-kind triggers render themselves every frame from `.active`
-      // directly (HutInteriorOverlay's shared torch-fixture draw, same as a
-      // decorative torch) rather than mutating char/color fields on a
-      // BackgroundObject, so _setTriggerVisual — which only knows the
-      // switch ○/● and panel ▭/▬ glyph pairs — doesn't apply here.
-      if (trigger.active !== wasActive && trigger.kind !== 'torch') {
-        this._setTriggerVisual(trigger, trigger.active);
-      }
-    }
-
-    if (room.triggers.length && room.triggers.every(t => t.active)) {
+    if (tickTriggers(room.triggers, dt, player, companion)) {
       room.puzzleSolved = true;
       room.stairsUpLocked = false;
       paintStairsUpVisual(room.stairsUpObj, false);
       this._spawnUnlockEffect(room.stairsUpObj);
     }
-  }
-
-  // Generic per-trigger activation state machine — shared by every dungeon
-  // puzzle room's switches/panels (Whip Trial's two switches, and any
-  // editor-authored Puzzle Room trigger). `trigger` carries `activation`
-  // ('permanent' | 'timed'), `neutralizeSeconds` (timed only), and mutable
-  // `active`/`_timer` fields. `isTriggeredNow` is the caller's per-kind read
-  // of "is this trigger being hit/occupied THIS tick" — a one-tick pulse for
-  // a struck switch, a sustained level for an occupied floor panel.
-  _advanceTrigger(trigger, dt, isTriggeredNow) {
-    if (isTriggeredNow) {
-      trigger.active = true;
-      trigger._timer = 0;
-    } else if (trigger.active && trigger.activation === 'timed') {
-      trigger._timer += dt;
-      if (trigger._timer >= trigger.neutralizeSeconds) {
-        trigger.active = false;
-      }
-    }
-    // activation === 'permanent': once active, never reverts.
-  }
-
-  // Visual for a generic trigger — switches reuse Branch/Whip
-  // Trial's ○/● pair (one consistent "this is a switch" glyph language
-  // across every dungeon puzzle room); panels use their own ▭/▬ pair so the
-  // two trigger kinds always read as visually distinct fixtures.
-  _setTriggerVisual(trigger, active) {
-    const isSwitch = trigger.kind === 'switch';
-    const char = isSwitch ? (active ? '●' : '○') : (active ? '▬' : '▭');
-    const color = active ? '#ffcc44' : '#888888';
-    trigger.char = char;
-    trigger.color = color;
-    trigger.animationChar = char;
-    trigger.animationColor = color;
   }
 
   _setSwitchVisual(sw, pressed) {
@@ -316,7 +253,7 @@ export class DungeonPuzzleSystem {
     const west = floor.descents.find(d => d.id === 'west');
     if (!west || !west.locked) return false;
     if (!game.inventorySystem.hasKeyItem('⚿', game)) return false;
-    if (!this._overlapsCell(game.player, west.obj.position.x, west.obj.position.y)) return false;
+    if (!overlapsCell(game.player, west.obj.position.x, west.obj.position.y)) return false;
 
     game.inventorySystem.consumeKeyItem('⚿');
     game.dungeonKeyUsedThisRun = true;
@@ -439,27 +376,5 @@ export class DungeonPuzzleSystem {
     const cy = cellPixelY + C / 2;
     const dx = px - cx, dy = py - cy;
     return Math.sqrt(dx * dx + dy * dy) < radius;
-  }
-
-  // Straight-line proximity between two {x,y} positions — used by the torch
-  // ignite check (mirrors MazeSystem's own private _within helper; distance
-  // here is between two positions directly, not entity-vs-cell like
-  // _nearCell above).
-  _within(a, b, radius) {
-    const dx = a.x - b.x, dy = a.y - b.y;
-    return dx * dx + dy * dy <= radius * radius;
-  }
-
-  _overlapsCell(entity, cellPixelX, cellPixelY) {
-    const px = entity.position.x;
-    const py = entity.position.y;
-    const pw = GRID.CELL_SIZE;
-    const ph = GRID.CELL_SIZE;
-    return (
-      px < cellPixelX + pw &&
-      px + pw > cellPixelX &&
-      py < cellPixelY + ph &&
-      py + ph > cellPixelY
-    );
   }
 }
