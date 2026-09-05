@@ -427,57 +427,58 @@ export const NEUTRAL_ROOMS = {
       room.borderColor = '#666666';
 
       const cx = Math.floor(GRID.COLS / 2);
-      const cy = Math.floor(GRID.ROWS / 2);
 
       // The slots — one object, not three. Each slot is a `[ ]` frame three
-      // cells wide, and the frames are packed until they touch: the two base
-      // frames sit shoulder to shoulder on one row, and the apex sits on the
-      // row directly above, straddling their seam. Every cell of the apex
-      // frame has a base-frame cell underneath it, so what the player walks
-      // up to reads as a single carved thing with three holes in it rather
-      // than as three pieces of scattered furniture.
+      // glyphs wide, and the frames are packed until they touch: the two base
+      // frames sit shoulder to shoulder on one row, the apex straddles their
+      // seam on the row above. What the player walks up to reads as a single
+      // carved thing with three holes in it, not three pieces of furniture.
       //
-      //   col:     12 13 14 15 16 17
-      //   row 14           [     ]       ← apex, over the seam
-      //   row 15     [     ][     ]      ← base pair, touching
+      //        [ ]          ← apex, over the seam
+      //     [ ][ ]          ← base pair, touching
       //
-      // A 3-cell frame has no cell-aligned center, so the base pair's center
-      // falls half a cell left of the apex's. That half-cell is the price of
-      // the frames touching, and touching is the requirement.
+      // Laid out in PIXELS about the room's center, deliberately NOT on the
+      // cell grid. Two touching 3-glyph frames are six glyphs wide, so the
+      // object's midline falls on a cell BOUNDARY while the apex's falls on a
+      // cell CENTER — a cell-aligned layout is therefore off by half a cell on
+      // one row or the other no matter which row is anchored, and that
+      // half-cell is exactly the lopsided triangle this replaces. Half-cells
+      // cost nothing here: background objects render at their pixel position
+      // (NeutralRenderer) and the slots carry no collision.
       //
-      // The object is centered on the room. Its base pair spans cols 12-17
-      // and its two rows are 14-15, so both of its midlines fall on the
-      // room's own — the 30x30 field's true center is the boundary between
-      // 14 and 15, not a cell. Nothing is spawned on top of the player by
-      // doing this: entry to the Three Room always runs through
-      // animateExitWarp('north', ...), which re-anchors the player on the
-      // SOUTH edge and walks them inward to about row 25. They come up the
-      // room at the object, with the shut door beyond it to the north.
+      // Centering it spawns nothing on top of the player: entry to the Three
+      // Room always runs through animateExitWarp('north', ...), which
+      // re-anchors the player on the SOUTH edge and walks them inward to about
+      // row 25. They come up the room at the object, with the door beyond it.
       //
       // Only the CONTENT cell is a real BackgroundObject — it carries
       // `threeSlot` and is what SPACE finds. ThreeRoomRenderer draws the
-      // brackets around it, which keeps proximity detection trivial and
-      // leaves the frame free to change (cracked, gray) without touching
-      // collision or interaction.
+      // brackets around it off the same pixel position, which keeps proximity
+      // detection trivial and leaves the frame free to change (highlighted,
+      // shaking, cracked) without touching collision or interaction.
       //
       // Slot order is the Power of 3's registers, and ThreeRoomSystem's
       // SLOT_FORMS/TRUE_THREE tables are indexed by it:
       //   0 apex  — Instinct   — takes a weapon
       //   1 left  — Experience — takes armor
       //   2 right — Convention — takes a consumable
-      const slotCells = [
-        { col: cx,     row: cy - 1 }, // apex  — Instinct
-        { col: cx - 2, row: cy     }, // left  — Experience
-        { col: cx + 1, row: cy     }  // right — Convention
+      const cs = GRID.CELL_SIZE;
+      const midX = GRID.WIDTH / 2;
+      const midY = GRID.HEIGHT / 2;
+      const slotCenters = [
+        { x: midX,            y: midY - cs / 2 }, // apex  — Instinct
+        { x: midX - cs * 1.5, y: midY + cs / 2 }, // left  — Experience
+        { x: midX + cs * 1.5, y: midY + cs / 2 }  // right — Convention
       ];
-      slotCells.forEach((cell, idx) => {
-        const slot = new BackgroundObject(' ', cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE);
+      slotCenters.forEach((center, idx) => {
+        // BackgroundObject positions are the top-left of a glyph cell, so the
+        // center goes back half a cell in each axis to get there.
+        const slot = new BackgroundObject(' ', center.x - cs / 2, center.y - cs / 2);
         slot.indestructible = true;
         slot.hasCollision = false;
         slot.color = '#887755';
         slot.animationColor = '#887755';
         slot.threeSlot = idx;
-        slot.threeSlotCell = { col: cell.col, row: cell.row };
         room.backgroundObjects.push(slot);
       });
 
