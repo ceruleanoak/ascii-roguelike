@@ -870,8 +870,8 @@ programming terms.
 - **Definition:** A Three Room slot whose offering was the wrong form for it. The slot goes
   gray and cracked and keeps the wrong glyph — the mistake stays visible. Cracking is what
   curses the run, and a cracked slot still counts as filled for opening the north door.
-- **In code:** `cracked` flag on the slot Background Object; `SLOT_CRACKED_COLOR` and
-  `_drawCracks` in `ThreeRoomRenderer`.
+- **In code:** `threeCracked` flag on the slot Background Object; `FRAME_CRACKED_COLOR`,
+  `CRACK_COLOR` and `_drawCracks` in `ThreeRoomRenderer`.
 - **Not:** "broken slot", "failed slot", "invalid placement".
 
 ### Cursed Run
