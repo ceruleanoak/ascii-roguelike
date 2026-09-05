@@ -46,6 +46,7 @@ import { AquiferSystem } from './systems/AquiferSystem.js';
 import { SinkholeSystem } from './systems/SinkholeSystem.js';
 import { ThreeRoomSystem } from './systems/ThreeRoomSystem.js';
 import { UndeadSystem } from './systems/UndeadSystem.js';
+import { CursedRunSystem } from './systems/CursedRunSystem.js';
 import { ThreeSlotGlobeSystem } from './systems/ThreeSlotGlobeSystem.js';
 import { BossSystem } from './systems/BossSystem.js';
 import { BoulderSystem } from './systems/BoulderSystem.js';
@@ -212,6 +213,7 @@ class Game {
     this.threeRoomSystem = new ThreeRoomSystem();          // the source room: N×3 + gray '3' discoveries, Death behind its door
     this.threeSlotGlobeSystem = new ThreeSlotGlobeSystem(this); // the turning globe of offerings its slots are fed from
     this.undeadSystem = new UndeadSystem();                // the Undead a Cursed run fills the world with
+    this.cursedRunSystem = new CursedRunSystem();          // and what that curse does to REST and beyond
     this.cheatWarpSystem = new CheatWarpSystem();          // cheat-menu warp destinations (zone/depth/boss/room/maze)
     this.bossSystem = new BossSystem(this);
     this.boulderSystem = new BoulderSystem(this);
@@ -947,6 +949,7 @@ class Game {
     this.blueZoneRoom = 0;
     this.runTimerSystem.clear(); // No run in progress on TITLE — next REST entry starts a fresh timer
     this.threeRoomSystem.hardReset();       // streak + Death state die with the run
+    this.cursedRunSystem.hardReset();       // and the Graveyard's headcount with it
     this.threeSlotGlobeSystem.hardReset();  // the run's touched glyphs die with it too
     this.grayThreeExitShown = false;        // the gray '3' call can happen again next run
     this.cursedRun = false;                 // a new run is not yet owed anything
@@ -1323,36 +1326,13 @@ class Game {
     this.player.activeSlotIndex = this.inventorySystem.restActiveSlotIndex;
     this.player.destroyedSlots = [...(this._savedDestroyedSlots ?? [false, false, false])];
 
-    // Create basic REST room with collision map (walls on all borders except north exit)
-    const collisionMap = [];
-    for (let y = 0; y < GRID.ROWS; y++) {
-      collisionMap[y] = [];
-      for (let x = 0; x < GRID.COLS; x++) {
-        collisionMap[y][x] = false;
-      }
-    }
+    // The hub room itself: bare walls with the north exit cut into them.
+    this.currentRoom = this.roomGenerator.createRestRoom();
+    const collisionMap = this.currentRoom.collisionMap;
 
-    // Add border walls
-    for (let x = 0; x < GRID.COLS; x++) {
-      collisionMap[0][x] = true; // Top wall
-      collisionMap[GRID.ROWS - 1][x] = true; // Bottom wall
-    }
-    for (let y = 0; y < GRID.ROWS; y++) {
-      collisionMap[y][0] = true; // Left wall
-      collisionMap[y][GRID.COLS - 1] = true; // Right wall
-    }
-
-    // Open north exit (center of top wall)
-    const centerGridX = Math.floor(GRID.COLS / 2);
-    collisionMap[0][centerGridX] = false;
-
-    // Create minimal REST room object
-    this.currentRoom = {
-      collisionMap: collisionMap,
-      exits: { north: true, south: false, east: false, west: false },
-      enemies: [],
-      backgroundObjects: []
-    };
+    // A Cursed run opens REST's south wall onto the Graveyard. Runs before the
+    // collision map is handed to the player so the gap is already cut.
+    this.cursedRunSystem.applyToRest(this, this.currentRoom);
 
     // Set player collision map
     this.player.setCollisionMap(collisionMap);
@@ -1363,6 +1343,7 @@ class Game {
     this.items = [];
     this.placedTraps = [];
     this.activeNoiseSource = null;
+    this.undeadSystem.clear();   // room-scoped; a cursed REST raises its own later
 
     // Restore REST ingredients from saved state (persists between REST visits)
     const savedRestIngredients = this.inventorySystem.getSavedRestIngredients();
@@ -1628,7 +1609,12 @@ class Game {
       enemies: [...this.currentRoom.enemies],
       captives: [...this.captives],
       neutralCharacters: [...this.neutralCharacters],
-      playerPosition: { x: this.player.position.x, y: this.player.position.y }
+      playerPosition: { x: this.player.position.x, y: this.player.position.y },
+      // Where the return exit leads back to. Almost always EXPLORE; the
+      // Graveyard is the one neutral room reached by walking out of REST, and
+      // going back in through enterRestState would rebuild the hub and hand
+      // the player a free heal for the round trip.
+      returnState: this.stateMachine.getCurrentState()
     };
 
     // Generate neutral room via script system
@@ -1922,6 +1908,7 @@ class Game {
       // Check zone transition FIRST (before updating depth)
       if (roomTransition) {
         this.zoneSystem.incrementRoomCount();
+        this.cursedRunSystem.recordRoomExplored(this);  // the Graveyard counts what the curse has cost
         // Deactivate any active boss fight when leaving a room
         this.bossSystem.deactivate();
       }
@@ -2268,6 +2255,8 @@ class Game {
         return;
       }
 
+      const returnState = this.savedExploreState?.returnState || GAME_STATES.EXPLORE;
+
       // Restore saved explore state (room contents only — the ingredient pile
       // is untouched by room transitions)
       if (this.savedExploreState) {
@@ -2293,13 +2282,15 @@ class Game {
       // Set state directly (don't call transition - the registered EXPLORE
       // handler is enterExploreState(), which would treat this as a fresh
       // arrival from REST and regenerate/restore over the room we just
-      // reinstated above, stranding the player in an unrelated room).
-      this.stateMachine.currentState = GAME_STATES.EXPLORE;
+      // reinstated above, stranding the player in an unrelated room). The same
+      // reasoning holds for the Graveyard's return into REST.
+      this.stateMachine.currentState = returnState;
 
       // Hand the zone its music back after the Three Room's mono-track
       // override. Runs after the restore above so the zone read is the room
       // being returned to; no-op for every other neutral room.
       this.threeRoomSystem.onRoomExit(this, leavingNeutralRoom);
+      this.cursedRunSystem.onRoomExit(this, leavingNeutralRoom);
     }
 
     // Store previous position for next frame
@@ -2732,22 +2723,19 @@ class Game {
     this.combatSystem.update(deltaTime, this.player, [], []);
     this.trapSystem.update(deltaTime);
 
-    // Check for North exit — gated to the center warp arrows (3-cell-wide column)
-    // so other interactives near the top edge (e.g. the gravestone) don't
-    // accidentally cross the y-threshold and trigger an exit.
-    const exitThreshold = GRID.CELL_SIZE * 2 - 10;
-    const centerX = Math.floor(GRID.COLS / 2);
-    const gridX = Math.floor(this.player.position.x / GRID.CELL_SIZE);
-    const inWarpColumn = gridX >= centerX - 1 && gridX <= centerX + 1;
-    const crossedNorthExit = this.previousPlayerPosition.y >= exitThreshold && this.player.position.y < exitThreshold;
-    if (!this.animationSystem.isAnimating(this.player) &&
-        inWarpColumn &&
-        (this.player.position.y < exitThreshold || crossedNorthExit)) {
-      // Save REST ingredients before leaving for EXPLORE
+    // Leaving REST: north is always open, south only on a Cursed run and it
+    // leads to the Graveyard rather than deeper. Player owns the geometry.
+    const restExit = this.animationSystem.isAnimating(this.player) ? null
+      : this.exitSystem.restExitCrossing(this.currentRoom, this.player, this.previousPlayerPosition.y);
+    if (restExit) {
       this.inventorySystem.saveRestIngredients(this.ingredients);
-
-      this.animateExitWarp('north', () => {
-        this.stateMachine.transition(GAME_STATES.EXPLORE);
+      this.animateExitWarp(restExit, () => {
+        if (restExit === 'north') {
+          this.stateMachine.transition(GAME_STATES.EXPLORE);
+        } else {
+          this.transitionToNeutralRoom('graveyard', 'south');
+          this.cursedRunSystem.populateGraveyard(this);
+        }
       });
     }
 
@@ -4119,6 +4107,7 @@ class Game {
     this.grayThreeExitShown = false;
     this.cursedRun = false;
     this.undeadSystem.clear();
+    this.cursedRunSystem.hardReset();
     this.threeRoomSystem.hardReset();
     this.threeSlotGlobeSystem.hardReset();  // the run's touched glyphs die with it too
 

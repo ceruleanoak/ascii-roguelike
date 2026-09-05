@@ -894,8 +894,18 @@ programming terms.
 - **Definition:** The room south of REST, opened by a Cursed Run — undead milling below a hard
   divider between its top third and its lower two thirds. It fills further with every newly
   explored room.
-- **In code:** planned Neutral Room script (not yet built).
+- **In code:** the `graveyard` Neutral Room script (`src/data/neutralRooms.js`); population and
+  growth in `CursedRunSystem`. Reached by REST's south exit, and its return exit goes back to
+  REST rather than EXPLORE.
 - **Not:** "cemetery", "boneyard", "crypt".
+
+### Graveyard Divider
+- **Definition:** The unbroken wall across the Graveyard separating the top third the player
+  stands in from the lower two thirds the undead mill in. It has no gap — the point is that the
+  crowd can be seen and not reached.
+- **In code:** the `graveyard_divider` Background Object variant (`GameConfig.js`), stamped a
+  cell at a time across `room.graveyardDividerRow` by the `graveyard` script.
+- **Not:** "fence", "barrier", "gate", "partition".
 
 ## Conventions
 

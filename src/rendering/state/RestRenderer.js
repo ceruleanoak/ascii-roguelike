@@ -51,8 +51,9 @@ export class RestRenderer {
     // Render background (only if dirty)
     if (this.renderer.backgroundDirty) {
       this.renderer.clearBackground();
-      // REST always has north exit open
-      this.renderer.drawBorder({ north: true, south: false, east: false, west: false });
+      // North is always open; south opens onto the Graveyard on a Cursed run,
+      // so the border reads the room instead of asserting the shape itself.
+      this.renderer.drawBorder(game.currentRoom.exits);
 
       // Draw crafting station
       this.renderController.craftingStation.render(game);

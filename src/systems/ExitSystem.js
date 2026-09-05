@@ -386,6 +386,36 @@ export class ExitSystem {
     return null;
   }
 
+  /**
+   * Which REST exit the player is crossing this frame, or null.
+   *
+   * REST's exits are gated to the 3-cell warp column under the arrows, so other
+   * interactives near an edge (the gravestone sits by the north wall) can't
+   * drift across the threshold and trigger a transition. North also accepts a
+   * one-frame crossing of the threshold, because a fast enough approach can
+   * step clean over the band between two updates; south is only reachable at
+   * walking pace off a Cursed run's opened wall and needs no such catch.
+   *
+   * @param {object} room - the REST room, read for its open edges
+   * @param {Player} player
+   * @param {number} previousY - the player's y at the end of the last frame
+   * @returns {'north'|'south'|null}
+   */
+  restExitCrossing(room, player, previousY) {
+    const centerX = Math.floor(GRID.COLS / 2);
+    const gridX = Math.floor(player.position.x / GRID.CELL_SIZE);
+    if (gridX < centerX - 1 || gridX > centerX + 1) return null;
+
+    const northThreshold = GRID.CELL_SIZE * 2 - 10;
+    const crossedNorth = previousY >= northThreshold && player.position.y < northThreshold;
+    if (room?.exits?.north && (player.position.y < northThreshold || crossedNorth)) return 'north';
+
+    const southThreshold = (GRID.ROWS - 2) * GRID.CELL_SIZE + 10;
+    if (room?.exits?.south && player.position.y > southThreshold) return 'south';
+
+    return null;
+  }
+
   updateExitCollisions(room, player) {
     if (!room || !room.collisionMap) return;
 

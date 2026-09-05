@@ -504,6 +504,46 @@ export const NEUTRAL_ROOMS = {
   },
 
   /**
+   * Graveyard — south of REST, opened only by a Cursed Run.
+   *
+   * A divider runs unbroken across the room at the one-third line. The player
+   * comes in through the north wall and stays in the top third; the Undead are
+   * in the lower two, and there is no way down to them. The room is a window,
+   * not a place to go — the only thing to do here is see how much of it is
+   * filling up, which is the whole point of a curse you cannot walk back.
+   *
+   * Population is CursedRunSystem's, not the script's: it grows with the run
+   * rather than with the room, so it has to outlive any single visit.
+   */
+  graveyard: {
+    onGenerate(room, state) {
+      room.isGraveyard = true;
+      room.borderColor = '#4a4a4a';
+
+      // One third down, so the top third is the player's and the lower two
+      // thirds are theirs. The divider row itself belongs to neither.
+      const dividerRow = Math.floor(GRID.ROWS / 3);
+      room.graveyardDividerRow = dividerRow;
+
+      for (let col = 1; col < GRID.COLS - 1; col++) {
+        const wall = new BackgroundObject('█', col * GRID.CELL_SIZE, dividerRow * GRID.CELL_SIZE,
+          { typeId: 'graveyard_divider' });
+        wall.indestructible = true;
+        wall.structural = true;
+        wall.hasCollision = true;
+        room.backgroundObjects.push(wall);
+        room.collisionMap[dividerRow][col] = true;
+      }
+    },
+
+    onInteract(target, player, room, state) { return null; },
+
+    onUpdate(dt, room, player, state) {},
+
+    onExit(room, player, state) {}
+  },
+
+  /**
    * Draw Room — secret gallery accessible via D-R-A-W exit sequence.
    * Dodge-rolling permanently marks grid cells as ASCII brush strokes.
    * Canvas is a pixel-resolution Map (key: "px,py") — one char per unique

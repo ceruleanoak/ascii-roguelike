@@ -486,6 +486,38 @@ export class RoomGenerator {
     return effectiveZone;
   }
 
+  /**
+   * The REST hub room: four bare walls with a single gap cut into the north
+   * one. REST has no procedural content of its own, so this is deliberately
+   * not routed through createCollisionMap — no wall blocks, no vault, no
+   * template. A Cursed run cuts the south gap afterwards (CursedRunSystem).
+   */
+  createRestRoom() {
+    const collisionMap = [];
+    for (let y = 0; y < GRID.ROWS; y++) {
+      collisionMap[y] = [];
+      for (let x = 0; x < GRID.COLS; x++) {
+        collisionMap[y][x] = false;
+      }
+    }
+    for (let x = 0; x < GRID.COLS; x++) {
+      collisionMap[0][x] = true;              // Top wall
+      collisionMap[GRID.ROWS - 1][x] = true;  // Bottom wall
+    }
+    for (let y = 0; y < GRID.ROWS; y++) {
+      collisionMap[y][0] = true;              // Left wall
+      collisionMap[y][GRID.COLS - 1] = true;  // Right wall
+    }
+    collisionMap[0][Math.floor(GRID.COLS / 2)] = false;  // North exit gap
+
+    return {
+      collisionMap,
+      exits: { north: true, south: false, east: false, west: false },
+      enemies: [],
+      backgroundObjects: []
+    };
+  }
+
   createCollisionMap(roomType = ROOM_TYPES.COMBAT) {
     // Cells stamped by wall-block / vault patterns — generateRoom registers
     // them as a protected region for the stray-object cleanup pass.

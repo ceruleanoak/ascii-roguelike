@@ -95,6 +95,30 @@ export class UndeadSystem {
     game?.audioSystem?.playSFX('bone_rise');
   }
 
+  /**
+   * Scatter `count` undead across a rectangle of the room — the Graveyard's
+   * shape rather than the cracked slot's. Each keeps where it came up as the
+   * center of its own drift, so a filled graveyard stays evenly filled instead
+   * of drifting into one corner.
+   *
+   * @param {object} game
+   * @param {{x: number, y: number, w: number, h: number}} bounds world px
+   * @param {number} count how many to raise
+   * @param {object} [opts] `chars` to override the band, `silent` to skip the SFX
+   */
+  fill(game, bounds, count, opts = {}) {
+    const chars = opts.chars ?? EARLY_UNDEAD;
+    const map = game?.currentRoom?.collisionMap || null;
+
+    for (let i = 0; i < count; i++) {
+      const x = this._clamp(bounds.x + Math.random() * bounds.w, GRID.WIDTH);
+      const y = this._clamp(bounds.y + Math.random() * bounds.h, GRID.HEIGHT);
+      this.undead.push(this._make(chars[Math.floor(Math.random() * chars.length)], x, y, map));
+    }
+
+    if (!opts.silent) game?.audioSystem?.playSFX('bone_rise');
+  }
+
   /** One figure, standing where it came up. */
   _make(char, x, y, collisionMap) {
     const data = getEnemyData(char);

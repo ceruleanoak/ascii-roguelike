@@ -1043,6 +1043,28 @@ export const BACKGROUND_OBJECTS = {
 };
 
 export const BACKGROUND_OBJECT_VARIANTS = {
+  // The Graveyard's divider: the unbroken wall that keeps the player in the
+  // top third of the room and the Undead in the lower two. It borrows the full
+  // block from Hut Interior for its render char only — a typeId replaces the
+  // char's data outright, so none of that entry's hut semantics come with it.
+  //
+  // `slowing` is deliberately absent rather than false or 0: PhysicsSystem's
+  // two movement paths both skip the solidity check for anything whose
+  // data.slowing is a number, so a numeric value here would make the wall
+  // walk-through while still looking solid.
+  'graveyard_divider': {
+    char: '█',
+    name: 'Graveyard Divider',
+    color: '#4a4a4a',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    solid: true,
+    interactions: {
+      default: { animation: 'none', message: null }
+    }
+  },
   'water': {
     char: '~',
     name: 'Puddle',
