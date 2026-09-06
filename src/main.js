@@ -1220,10 +1220,6 @@ class Game {
   enterRestState() {
     // Note: exitPathHistory persists for future secret pattern tracking
 
-    // Coming home breaks any N×3 insistence — the streak is about walking
-    // away from the world's exits, not resting between attempts.
-    this.threeRoomSystem.breakStreak();
-
     // First REST of a run starts the run timer; later returns from EXPLORE leave it running
     this.runTimerSystem.beginIfIdle();
 

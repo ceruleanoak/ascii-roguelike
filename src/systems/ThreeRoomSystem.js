@@ -9,7 +9,10 @@ import { STREAK_BARRICADES } from '../data/barricades.js';
  *
  * Discovery paths (both route into the neutral `threeRoom` script):
  *   Accidental — three consecutive north traversals. The streak counts real
- *                exits taken; any east/west/south move or REST entry breaks it.
+ *                exits taken; turning east or west is what breaks it. Going
+ *                home does not: REST is where a run stocks up, and every other
+ *                thing the player is building toward survives the trip, so an
+ *                insistence on north has no business being the exception.
  *   Inevitable — once per run, gray depth 3 replaces the north exit's letter
  *                with '3' (stamped by ExitSystem.generateExits; the exit
  *                object carries `threeRoom: true`, which the north-exit block
@@ -146,7 +149,11 @@ export class ThreeRoomSystem {
     return false;
   }
 
-  /** Any non-north step forgets the insistence. */
+  /**
+   * Turning aside forgets the insistence — east or west, the two ways out that
+   * are not north. A trip through REST is not turning aside and does not reach
+   * here; the streak dies with the run instead, in hardReset().
+   */
   breakStreak() {
     this._northStreak = 0;
   }
