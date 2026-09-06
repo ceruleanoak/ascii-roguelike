@@ -38,7 +38,7 @@ export class InventorySystem {
 
     // Coins are passive: they never enter the ingredient pile. Picked up
     // directly into this wallet, spendable from anywhere (well, NPC, crafting).
-    // Persists through banking and death; cleared only on full game over.
+    // Survives the walk home and character death; cleared only on full game over.
     this.coinWallet = 0;
 
     // PER-CHARACTER REST loadout (quick slots + active slot + mana state).
@@ -58,8 +58,8 @@ export class InventorySystem {
     this.restQuickSlots = this.characterInventories['default'].quickSlots;
     this.restActiveSlotIndex = this.characterInventories['default'].activeSlotIndex;
 
-    // Track which character is currently active so bankLoot() can write the
-    // activeSlotIndex back to the correct characterInventories entry.
+    // Track which character is currently active so saveRestLoadout() can write
+    // the activeSlotIndex back to the correct characterInventories entry.
     this._activeCharacterType = 'default';
 
     this.itemChest = []; // Storage for weapons (shared across all characters)
@@ -68,11 +68,6 @@ export class InventorySystem {
     // applyEquipmentEffectsToPlayer, the sanctioned call point.
     this.equipmentEffectsSystem = new EquipmentEffectsSystem();
     this.consumableWindupEffects = new ConsumableWindupEffects();
-
-    // Weapons displaced during EXPLORE pickup buffer here, not in itemChest.
-    // Flushed to itemChest by bankLoot() on safe REST return. Discarded on
-    // character/run death so EXPLORE-picked-up weapons don't survive a wipe.
-    this.pendingChestDeposits = [];
 
     // EXPLORE inventory (lost on death)
     this.armorInventory = []; // All collected armor
@@ -591,7 +586,7 @@ export class InventorySystem {
   }
 
   // Strips an item the player is actively CARRYING rather than one sitting in
-  // a banked pile — the Shopkeeper's Pawn list sells the whole loadout, not
+  // a storage pile — the Shopkeeper's Pawn list sells the whole loadout, not
   // just spares (see ShopSystem's pawn-mode header). `source` names which
   // carried store the item came out of, matching the pawn entry's own field:
   //
@@ -918,19 +913,22 @@ export class InventorySystem {
   }
 
 
-  // ========== DEATH & BANKING MECHANICS ==========
+  // ========== DEATH & LOADOUT MECHANICS ==========
 
   /**
    * Save the loadout when returning from EXPLORE to REST.
    *
-   * Ingredients no longer move here: there is one pile and the player has been
-   * adding to it all along, so arriving in REST transfers nothing. Only the
-   * quick slots need copying, because those are per-character.
+   * Nothing is transferred here, only recorded. Ingredients sit in the one pile
+   * the player has been adding to all along, and a displaced weapon goes into
+   * the chest at the moment it is displaced — there is no second, safer copy of
+   * anything waiting on a successful return. What is left is the quick-slot
+   * loadout, copied because it is per-character, not because coming home is
+   * what makes it real.
    *
    * @param {Array} playerQuickSlots - Player's quick slots (weapons)
    * @param {number} playerActiveSlotIndex - Active slot index
    */
-  bankLoot(playerQuickSlots, playerActiveSlotIndex) {
+  saveRestLoadout(playerQuickSlots, playerActiveSlotIndex) {
     // Save quick slots and active index to active character.
     // restQuickSlots is a live reference to the character's array, so length/push
     // writes through correctly. restActiveSlotIndex is a scalar copy, so we must
@@ -940,12 +938,6 @@ export class InventorySystem {
     this.restActiveSlotIndex = playerActiveSlotIndex;
     if (this._activeCharacterType && this.characterInventories[this._activeCharacterType]) {
       this.characterInventories[this._activeCharacterType].activeSlotIndex = playerActiveSlotIndex;
-    }
-
-    // Flush deferred EXPLORE chest deposits — survived the run, now banked.
-    if (this.pendingChestDeposits.length > 0) {
-      this.pendingChestDeposits.forEach((item) => this.addToChest(item));
-      this.pendingChestDeposits.length = 0;
     }
   }
 
@@ -960,7 +952,6 @@ export class InventorySystem {
 
     // Clear shared inventories and equipment
     this.itemChest = [];
-    this.pendingChestDeposits = [];
     this.armorInventory = [];
     this.consumableInventory = [];
     this.keyItemInventory = [];
@@ -1019,15 +1010,18 @@ export class InventorySystem {
   }
 
   // ========== CHEST SYSTEM ==========
+  //
+  // One chest, written the moment an item is displaced, in every game state.
+  // EXPLORE deposits used to buffer in a `pendingChestDeposits` array and flush
+  // on a safe return to REST, which bought the player nothing — full game over
+  // wipes the chest too, so the deferred copy was never the safer one — while
+  // hiding a weapon they were already carrying from the retrieve menu, the Pawn
+  // list and the trap counts until they walked home. Same removal the ingredient
+  // pile got, for the same reason. Do not reintroduce a second pool.
 
   // Traps merge into an existing same-char stack instead of a new chest slot.
   addToChest(item) {
     addItemToChestArray(this.itemChest, item);
-  }
-
-  // EXPLORE-time deferred deposit; flushed to itemChest by bankLoot().
-  deferToChest(item) {
-    addItemToChestArray(this.pendingChestDeposits, item);
   }
 
   // Removes one unit of `item`; returns the instance to use, or null if absent.

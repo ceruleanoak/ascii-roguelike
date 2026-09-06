@@ -3584,7 +3584,7 @@ class Game {
         // South exit is always boolean (returns to REST), not a letter
         const escapeRoute = this.currentRoom.exitsLocked && this.playerHasNoItems();
 
-        this.bankLoot();
+        this.saveRestLoadout();
 
         // Save EXPLORE room state before returning to REST (prevents room cycling cheat)
         captureExploreRoomForRest(this);
@@ -4469,15 +4469,11 @@ class Game {
         this.audioSystem.playSFX(result.pickedUpChar === '⚿' ? 'dungeon_key_pickup' : 'vault_key_pickup');
       }
 
-      // Displaced item routes to REST chest instead of being dropped on the ground.
-      // In EXPLORE, deposit is deferred — only banked on safe REST return,
-      // discarded on death so displaced weapons don't survive a wipe.
+      // Displaced item routes to the chest instead of being dropped on the
+      // ground — the same chest in every state, written now rather than held
+      // against a safe return (see InventorySystem's chest-system note).
       if (result.droppedItem) {
-        if (this.stateMachine.currentState === GAME_STATES.EXPLORE) {
-          this.inventorySystem.deferToChest(result.droppedItem);
-        } else {
-          this.inventorySystem.addToChest(result.droppedItem);
-        }
+        this.inventorySystem.addToChest(result.droppedItem);
       }
 
       this.updateUI();
@@ -4528,15 +4524,16 @@ class Game {
     return this.roomGenerator.findSpawnPosition(center, range, collisionMap, enemies);
   }
 
-  bankLoot() {
+  saveRestLoadout() {
     // Player successfully returned to REST. Ingredients are already in the one
-    // pile, so only the quick-slot loadout is saved.
+    // pile and displaced weapons are already in the chest, so only the
+    // quick-slot loadout is saved.
     if (this.player) {
-      this.inventorySystem.bankLoot(this.player.quickSlots, this.player.activeSlotIndex);
+      this.inventorySystem.saveRestLoadout(this.player.quickSlots, this.player.activeSlotIndex);
     }
   }
 
-  // The ingredient pile — one array, every game state, no banked/carried split.
+  // The ingredient pile — one array, every game state, no stored/carried split.
   // Everything that reads, counts or spends an ingredient goes through these
   // five; InventorySystem owns the storage. Not to be confused with
   // `this.ingredients`, which is the loose ingredients on the room floor.

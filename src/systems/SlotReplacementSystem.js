@@ -193,15 +193,6 @@ export class SlotReplacementSystem {
     return item;
   }
 
-  _routeToChest(item) {
-    const game = this.game;
-    if (game.stateMachine.getCurrentState() === GAME_STATES.EXPLORE) {
-      game.inventorySystem.deferToChest(item);
-    } else {
-      game.inventorySystem.addToChest(item);
-    }
-  }
-
   _confirmSlot(slotIdx) {
     const game = this.game;
     const item = this._takeFromWorld();
@@ -239,7 +230,7 @@ export class SlotReplacementSystem {
       game.player.activeSlotIndex = slotIdx;
       const displaced = game.player.pickupItem(item);
       if (displaced) {
-        this._routeToChest(displaced);
+        game.inventorySystem.addToChest(displaced);
         game.audioSystem.playSFX('slot_swap');
       }
       if (item.data.type === 'WEAPON' && game.stateMachine.getCurrentState() === GAME_STATES.EXPLORE) {
@@ -268,7 +259,7 @@ export class SlotReplacementSystem {
     } else if (this.slotType === 'consumable') {
       inv.consumableInventory.push(item);
     } else {
-      this._routeToChest(item);
+      inv.addToChest(item);
     }
     this.game.updateUI();
     this.game.pauseSystem.closeModal();

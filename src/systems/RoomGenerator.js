@@ -1335,11 +1335,11 @@ export class RoomGenerator {
     }
 
     // ── Spawn one pickaxe in a clearing so the player can find it ─────────────
-    // Pickaxe is unique: skip while one is owned (slots/chest/pending deposits).
+    // Pickaxe is unique: skip while one is owned (quick slots or chest).
     const inv = this.game?.inventorySystem;
     const ownsPickaxe = (list) => list?.some(s => s?.char === '⛏');
     const hasPickaxe = ownsPickaxe(this.game?.player?.quickSlots) ||
-      ownsPickaxe(inv?.itemChest) || ownsPickaxe(inv?.pendingChestDeposits);
+      ownsPickaxe(inv?.itemChest);
     if (!hasPickaxe) {
       const pickaxeClearing = clearings[Math.floor(Math.random() * clearings.length)];
       const pickCol = this.randInt(pickaxeClearing.minCol + 1, pickaxeClearing.maxCol - 1);
