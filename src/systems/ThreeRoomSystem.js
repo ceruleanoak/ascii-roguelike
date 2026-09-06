@@ -152,6 +152,20 @@ export class ThreeRoomSystem {
   }
 
   /**
+   * Would a room reached by going north from here have its OWN north answered
+   * by the source room instead of by the world? True at exactly one point in a
+   * streak — this room stands on the first north, so the next one stands on the
+   * second and the north after that is the third.
+   *
+   * ExitSystem asks before offering a north letter whose room makes a promise
+   * about where its north goes; a Ridge, which always climbs into the gray
+   * zone, cannot keep that promise from the second north.
+   */
+  nextRoomsNorthReachesTheThree() {
+    return this._northStreak === NORTH_STREAK_TRIGGER - 2;
+  }
+
+  /**
    * The Barricade this run's north streak asks for, or null if it asks for
    * none. BarricadeSystem calls this for every room the world builds and
    * decides what to do with the answer; the streak count is this system's to

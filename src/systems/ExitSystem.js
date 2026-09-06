@@ -72,6 +72,23 @@ export function getExitSlotPosition(direction) {
   return EXIT_SLOT_POSITIONS[direction] || null;
 }
 
+/**
+ * Is this cell an exit letter's own tile? The letter is the only thing the room
+ * says about where that way out leads, so the tile is restricted: nothing the
+ * world stamps by grid coordinate may land on it and cover the signage up. A
+ * layout that wants the lane works around the tile rather than over it (see
+ * BarricadeSystem.laneCells, which notches its footprint here).
+ *
+ * All four slots are tested rather than the one a caller has in hand — the rule
+ * belongs to the tile, not to whichever lane happens to be reaching for it.
+ */
+export function isExitLetterTile(col, row) {
+  for (const slot of Object.values(EXIT_SLOT_POSITIONS)) {
+    if (slot.col === col && slot.row === row) return true;
+  }
+  return false;
+}
+
 // How close (pixels, center-to-center) an entity must get to an open exit's
 // doorway before it counts as "at the exit" for despawn purposes — same
 // tolerance as the player's own lenient exit-crossing checks.
@@ -187,6 +204,29 @@ export class ExitSystem {
     this.game = game;
   }
 
+  /**
+   * Letters one slot will not take, checked on every reroll. Slots are ordered
+   * [north, east, west] here as everywhere else in this file.
+   */
+  _slotRefuses(slot, letter) {
+    // 'O' (Ocean) cannot be a west exit — entering from the west would put the
+    // player in the ocean.
+    if (slot === 2 && letter === 'O') return true;
+
+    // 'R' (Ridge) cannot be the north exit when the room behind it would stand
+    // on the run's second consecutive north. Crossing a Ridge is a promise:
+    // its north always climbs into the gray zone (generateRidgeRoomImpl forces
+    // it). A Ridge reached on the second north has its own north answered by
+    // the Three Room instead, so the bridge the player paid an errand for would
+    // deliver them somewhere the room said it never went. Offering it on the
+    // third north is harmless — that traversal is intercepted before any room
+    // is built, so the Ridge is never stood in.
+    if (slot === 0 && letter === 'R' &&
+        this.game?.threeRoomSystem?.nextRoomsNorthReachesTheThree()) return true;
+
+    return false;
+  }
+
   generateExits(currentDepth, roomType, zoneType, progressionColor = null, currentLetter = null) {
     // Generate 3 UNIQUE letters (no duplicates, never the same letter as the room we're in)
     const letters = [];
@@ -199,16 +239,9 @@ export class ExitSystem {
       do {
         letter = this.selectExitLetter(currentDepth, zoneType);
         attempts++;
-
-        // Special rule: 'O' (Ocean) cannot be a west exit
-        // (entering from west would place player in the ocean)
-        if (i === 2 && letter === 'O') {
-          continue; // Reroll if Ocean selected for west exit
-        }
-
       } while (
         attempts < maxAttempts &&
-        (letters.includes(letter) || letter === currentLetter || (i === 2 && letter === 'O'))
+        (letters.includes(letter) || letter === currentLetter || this._slotRefuses(i, letter))
       );
 
       letters.push(letter);
