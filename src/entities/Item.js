@@ -24,6 +24,10 @@ import { ITEMS, WEAPON_TYPES, TRAINING_TECHNIQUES, resolveWeaponDefaults } from 
 
 let _nextAttackId = 0;
 
+// Forward impulse (px/s) a hammer strike adds to its carrier. Damped by
+// PHYSICS.FRICTION, this carries roughly one cell before it dies out.
+const HAMMER_LUNGE_SPEED = 90;
+
 // Aggregate oilEffect from any equipped consumables. Returns
 // { onHits: string[], arrowSpeedMult: number }. onHits collects every
 // equipped oil's onHit in slot order (no dedup — a weapon's own effect and
@@ -990,15 +994,26 @@ export class Item {
   }
 
   createMeleeHammerRing(player) {
-    // Single weapon-glyph flash at the strike point (facing × range).
+    // The hitbox is a single flash at the strike point (facing × range); the
+    // visual is the weapon's own glyph held over the carrier's head, drawn from
+    // the owner's root every frame (drawAboveOwner) so it rides the strike hop
+    // instead of hanging in the air where the swing started.
     // Movement is locked by locksMovement + attackLockTimer for the flash duration.
     const facingAngle = Math.atan2(player.facing.y, player.facing.x);
     const range = this.data.range || GRID.CELL_SIZE * 1.25;
+    // Mild forward hop at the moment of the strike — the carrier commits weight
+    // into the blow. Friction eats it inside the flash (~1 cell of travel at the
+    // default), so it reads as a lunge, not a dash.
+    const lungeSpeed = this.data.lungeSpeed ?? HAMMER_LUNGE_SPEED;
 
     return {
       type: 'melee',
       char: this.data.char,
-      drawAngle: this.getMeleeDrawAngle(this.data.char, facingAngle),
+      drawAboveOwner: true,
+      lunge: {
+        vx: Math.cos(facingAngle) * lungeSpeed,
+        vy: Math.sin(facingAngle) * lungeSpeed,
+      },
       position: {
         x: player.position.x + Math.cos(facingAngle) * range,
         y: player.position.y + Math.sin(facingAngle) * range,

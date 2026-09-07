@@ -2001,8 +2001,14 @@ export class ExploreRenderer {
     for (const attack of game.combatSystem.getMeleeAttacks()) {
       if (!!attack.hutPlane !== hutPlane) continue;
       const useDithering = attack.shooterPlane === 1 && game.player.plane === 1;
-      const cx = attack.position.x + GRID.CELL_SIZE / 2;
-      const cy = attack.position.y + GRID.CELL_SIZE / 2;
+      // drawAboveOwner (hammers): the glyph is held over the carrier's head and
+      // read off the owner's root every frame, so it tracks the strike hop
+      // rather than sitting at the hitbox where the swing began.
+      const anchor = (attack.drawAboveOwner && attack.owner)
+        ? { x: attack.owner.position.x, y: attack.owner.position.y - GRID.CELL_SIZE }
+        : attack.position;
+      const cx = anchor.x + GRID.CELL_SIZE / 2;
+      const cy = anchor.y + GRID.CELL_SIZE / 2;
       const scale = attack.drawScale || 1.0;
       if (attack.drawAngle != null) {
         if (useDithering) {

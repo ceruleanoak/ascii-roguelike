@@ -1672,6 +1672,14 @@ export class CombatSystem {
           ...attackData
         });
       } else {
+        // Strike lunge: a weapon that commits the carrier's weight forward (the
+        // hammer's hop) hands the impulse over on the attack itself. Applied once,
+        // as the hitbox lands; friction and the carrier's own speed cap take it
+        // from there.
+        if (attackData.lunge && attackData.owner?.velocity) {
+          attackData.owner.velocity.vx += attackData.lunge.vx;
+          attackData.owner.velocity.vy += attackData.lunge.vy;
+        }
         this.meleeAttacks.push({
           ...attackData,
           hasHit: false
