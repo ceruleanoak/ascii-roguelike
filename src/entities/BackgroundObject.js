@@ -329,6 +329,7 @@ export class BackgroundObject {
   }
 
   _playAnimation(type) {
+    if (this.isNonInteractive()) return; // see isNonInteractive()
     const animData = OBJECT_ANIMATIONS[type];
     if (animData) {
       this.currentAnimation = {
@@ -346,6 +347,7 @@ export class BackgroundObject {
   // for the full duration; the currentAnimation machinery above already
   // restores this.color on expiry, same as any other animation ending.
   flashColor(color, duration = 0.25) {
+    if (this.isNonInteractive()) return; // see isNonInteractive()
     this.currentAnimation = {
       type: 'flashColor',
       data: { duration, colorFrames: [color, color, color] },
@@ -744,6 +746,21 @@ export class BackgroundObject {
   isEnvironmental() {
     if (this._variantData) return !!this._variantData.environmental;
     return !!this.data?.environmental;
+  }
+
+  // Non-interactive class — an object that can be neither changed nor
+  // destroyed: indestructible, and declaring `animation: 'none'` as its
+  // default interaction, which is how the catalogue says "nothing happens
+  // here". Walls, doors, tunnel mouths, chasms, sand, the Barricade plug.
+  //
+  // Such an object never animates, from any source: not a SPACE interact, not
+  // a weapon strike, not a shockwave sweeping past. A reaction is a promise
+  // that something can be acted on, and these can't be — a Barricade plug that
+  // shakes when hit reads as a wall a big enough hammer would open, which is
+  // the one thing it isn't. Enforced in _playAnimation() rather than at each
+  // call site so a new animation source can't reopen the hole.
+  isNonInteractive() {
+    return this.indestructible && this.data?.interactions?.default?.animation === 'none';
   }
 
   // Used by CombatSystem to decide whether fire should suppress impact effects
