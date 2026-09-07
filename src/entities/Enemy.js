@@ -856,6 +856,11 @@ export class Enemy {
       // never once be facing it at the moment it is finally in range. Both
       // checks are carried because both are asked.
       canStrike: this.hasVision(this.position, this.target.position, effectiveVisionLength, { ignoreCone: true }),
+      // True on exactly one frame per `decisionInterval` (decremented above,
+      // reset at the end of this update). States gate their *perception*
+      // transitions on it so noticing, losing and re-acquiring a target all
+      // run at the Enemy's thinking cadence instead of instantly.
+      decisionFrame: this.decisionTimer <= 0,
       samePlane: inSamePlane(this, this.target),
       speedMultiplier,
       deltaTime,

@@ -57,7 +57,12 @@ export default {
     // Losing sight is the only other thing that ends an approach besides
     // arriving. In the legacy ladder this is three different branches that
     // disagree about whether to go idle, halt, or keep the mark.
-    if (!ctx.canSee) {
+    // Realising the target is gone is perception, so it takes a beat — the
+    // Enemy keeps closing on the spot it last saw them until its next decision
+    // frame. `update()` above stops refreshing the mark the moment sight
+    // breaks, so that beat is exactly what makes the mark stale: a slow Enemy
+    // commits to a staler one than a sharp Enemy does.
+    if (ctx.decisionFrame && !ctx.canSee) {
       return enemy.lastKnownPosition
         ? { id: 'search', cause: 'lost sight, have a mark' }
         : { id: 'withdraw', cause: 'lost sight, no mark' };

@@ -26,10 +26,25 @@ export default {
     // Arm `requirePursuit` below — see enemyPursuit.js for why this is
     // anchored to the enemy's own position rather than a raw distance.
     armPursuitGate(enemy, '_alertPursuitGate');
+    machine.sighting = null;
+  },
+
+  exit(enemy, ctx, machine) {
+    machine.sighting = null;
   },
 
   update(enemy, ctx, machine) {
     const cfg = machine.configFor('alert') ?? {};
+
+    // Where the target was the moment it was seen. Perception resolves on
+    // decision frames (next(), below), so between one and the next there is a
+    // window in which the Enemy has seen something but has not yet decided
+    // what to do about it. Without this stamp that window would *discard* the
+    // sighting — a target that crosses the vision cone and is gone again
+    // before the next decision frame would leave no trace at all, and a slow
+    // Enemy would be blind rather than slow. Refreshed every frame of contact,
+    // so it always holds the last place the target was actually seen.
+    if (ctx.canSee) machine.sighting = { x: ctx.targetPos.x, y: ctx.targetPos.y };
     // The two halves of legacy `'idle'`, finally distinguishable. An enemy with
     // the target inside its aggro range but no way to act on it is not idling —
     // it is listening, and it holds. Wandering is what the *other* half does,
@@ -57,6 +72,16 @@ export default {
     // a moment, then commits. Without one it commits as soon as it can see, which
     // is today's behavior.
     if (cfg.duration && machine.timer < cfg.duration) return null;
+
+    // Everything below is perception — noticing, sensing, deciding to commit —
+    // so all of it runs at this Enemy's thinking cadence rather than the frame
+    // rate. `decisionInterval` was already the roster's intelligence stat, but
+    // until now it only re-planned pathfinding: a 0.8 "dumb brute" reacted to
+    // being seen on precisely the same frame as a 0.25 assassin, and read as
+    // dim only while walking around a wall. This is what makes it legible as
+    // thinking — the beat between the target appearing and the Enemy doing
+    // something about it, which is also the beat a player can move inside.
+    if (!ctx.decisionFrame) return null;
 
     // Nothing commits across planes unless it is already engaged. This is the
     // legacy `canChase` guard, which is what makes an enemy on the surface
@@ -103,6 +128,21 @@ export default {
     // mean an enemy that has met you once can never notice you at range again.
     if (pursuing && ctx.canSee && ctx.samePlane && !inRange) {
       return { id: 'search', cause: 'noticed at vision range' };
+    }
+
+    // Door two-and-a-half: it was there a moment ago. The Enemy saw something
+    // during this thinking beat and, by the time it came to decide, the target
+    // is out of sight — so it goes to look where it saw it, not where the
+    // target actually is now. This is the whole payoff of a slow decision
+    // interval: cross a dull brute's cone and break line of sight before its
+    // next decision frame and it commits to the wrong place, while a sharp
+    // Enemy resolves the sighting before you can clear it.
+    if (pursuing && ctx.samePlane && machine.sighting) {
+      // Handing Search the stamp rather than letting it build its own mark
+      // from the target's live position — which is exactly the difference
+      // between an Enemy that investigates and one that always knows.
+      enemy.lastKnownPosition = { x: machine.sighting.x, y: machine.sighting.y };
+      return { id: 'search', cause: 'lost sight while deciding' };
     }
 
     // Door three: proximity. An enemy that has never laid eyes on the target —

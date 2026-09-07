@@ -39,15 +39,26 @@ export default {
     // player does not fling it across the room. The searcher goes to where you
     // were *going*, not the pixel you vanished on — which is the difference
     // between being hunted and being followed.
-    if (enemy.target) {
+    //
+    // Built from what the Enemy *knows* — the mark the losing State left
+    // behind — rather than from the target's live position. The two are the
+    // same thing when sight breaks and Search begins on the same frame, which
+    // is why reading the live position was harmless until perception started
+    // resolving on decision frames. Across a thinking beat they are not: Alert
+    // hands down where it saw the target, and rebuilding from the live
+    // position would throw that away and send the Enemy straight to wherever
+    // the target actually is, which is precisely the evade being defended
+    // against.
+    const base = enemy.lastKnownPosition ?? enemy.target?.position;
+    if (base) {
       const lookahead = 0.35;
       const maxLead = GRID.CELL_SIZE * 4;
-      const tv = enemy.target.velocity ?? { vx: 0, vy: 0 };
+      const tv = enemy.target?.velocity ?? { vx: 0, vy: 0 };
       let leadX = tv.vx * lookahead;
       let leadY = tv.vy * lookahead;
       const mag = Math.sqrt(leadX * leadX + leadY * leadY);
       if (mag > maxLead) { leadX = (leadX / mag) * maxLead; leadY = (leadY / mag) * maxLead; }
-      enemy.lastKnownPosition = { x: enemy.target.position.x + leadX, y: enemy.target.position.y + leadY };
+      enemy.lastKnownPosition = { x: base.x + leadX, y: base.y + leadY };
     }
 
     enemy.memoryMoveDelayTimer = cfg.moveDelay ?? enemy.memoryMoveDelay ?? 0;
@@ -99,7 +110,12 @@ export default {
       return { id: 'anticipate', cause: 'searcher walked into attack range' };
     }
 
-    if (ctx.canSee && ctx.effectiveDistance <= ctx.effectiveAggroRange) {
+    // Re-acquiring is perception, so it waits for a decision frame like every
+    // other sighting. Arriving at the mark and giving up (below) are not — one
+    // is geometry and the other a timer, and making the Enemy think about
+    // whether it has arrived somewhere would only add lag to a decision it has
+    // already made.
+    if (ctx.decisionFrame && ctx.canSee && ctx.effectiveDistance <= ctx.effectiveAggroRange) {
       machine.marksInvestigated = 0;
       return { id: 'approach', cause: 'reacquired target' };
     }

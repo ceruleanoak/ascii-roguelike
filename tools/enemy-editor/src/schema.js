@@ -215,7 +215,8 @@ export const SECTIONS = [
     id: 'behavior',
     title: 'Behavior & decision',
     fields: [
-      { key: 'decisionInterval', label: 'Decision interval (dbl-sec)', type: 'number', min: 0.05, step: 0.05, default: 0.5 },
+      { key: 'decisionInterval', label: 'Decision interval (dbl-sec)', type: 'number', min: 0.05, step: 0.05, default: 0.5,
+        help: 'The intelligence stat. Perception resolves on this beat — noticing, losing sight, re-acquiring — as well as re-planning a path. A slow Enemy that sees you and then loses you mid-beat searches where it saw you, so the gap is room a player can move inside.' },
       { key: 'idleBehavior', label: 'Idle behavior', type: 'select', options: IDLE_BEHAVIORS, default: 'wander' },
       { key: 'windupMovement', label: 'Windup movement', type: 'select', options: WINDUP_MOVEMENTS, default: 'stop' },
       { key: 'windupImmune', label: 'Windup immune (uninterruptible)', type: 'bool', default: false },

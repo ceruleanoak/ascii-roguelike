@@ -35,9 +35,11 @@ export default {
     // commitment, and an enemy that ignored the player reappearing in front of
     // it would read as broken. `requirePursuit` narrows "reappeared" to mean
     // "is actually closing the distance" rather than merely visible — see
-    // alert.js's own copy of this gate for the full reasoning.
+    // alert.js's own copy of this gate for the full reasoning. Noticing the
+    // reappearance is perception, so it waits for a decision frame; the
+    // withdrawal timing out below does not.
     const pursuing = isPursuing(enemy, '_withdrawPursuitGate', cfg);
-    if (pursuing && ctx.canSee && ctx.effectiveDistance <= ctx.effectiveAggroRange && enemy.target) {
+    if (pursuing && ctx.decisionFrame && ctx.canSee && ctx.effectiveDistance <= ctx.effectiveAggroRange && enemy.target) {
       return { id: 'approach', cause: 'target reappeared during withdrawal' };
     }
     if (machine.timer >= (cfg.duration ?? 0)) {
