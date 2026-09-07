@@ -636,7 +636,7 @@ export class CharacterSystem {
       }
     }
 
-    // Switch inventory system to this character's banked inventory
+    // Switch inventory system to this character's stored inventory
     inv.setActiveCharacter(type);
 
     // Restore (or initialize) this character's saved magic-meter state.

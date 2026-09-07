@@ -30,7 +30,7 @@ import { computePawnSellValue } from '../data/shopPricing.js';
  *              Shift returns to 'list' and clears every toggle on that row.
  *   'pawn'   — Up/Down (W/S) moves pawnIndex across everything the player is
  *              carrying: the weapon quick slots, worn armor and equipped
- *              consumables, plus the banked itemChest and armor/consumable
+ *              consumables, plus the stored itemChest and armor/consumable
  *              spares. Never ingredients (their own economy) or key items
  *              (narrative keys are not for sale). Confirm sells the
  *              highlighted item outright for its shown coin value. Shift
@@ -354,11 +354,11 @@ export class ShopSystem {
   // ── Pawn mode ────────────────────────────────────────────────────────────
   //
   // Sells everything the player is carrying — the weapon quick slots, worn
-  // armor and equipped consumables — plus their banked storage (itemChest,
+  // armor and equipped consumables — plus their backing storage (itemChest,
   // armorInventory, consumableInventory). Carried gear is in the list on
-  // purpose: mid-run the banked piles are usually empty (a picked-up weapon
+  // purpose: mid-run the storage piles are usually empty (a picked-up weapon
   // goes straight to a quick slot, and equipping armor splices it OUT of
-  // armorInventory), so a banked-only list showed the player nothing they
+  // armorInventory), so a storage-only list showed the player nothing they
   // owned. Selling your last weapon is allowed and is the player's call.
   //
   // Still excluded: the ingredient pile (a separate, much larger economy
@@ -374,7 +374,7 @@ export class ShopSystem {
     this.pawnEmptyAt = this.pawnEntries.length === 0 ? performance.now() : null;
   }
 
-  // Carried first, banked after — the loadout is what the player is thinking
+  // Carried first, stored after — the loadout is what the player is thinking
   // about when they walk up to the counter. `slot` is only meaningful for the
   // indexed sources ('quick', 'equippedConsumable'); _sellPawnEntry reads it
   // back to know which slot to empty.
@@ -432,7 +432,7 @@ export class ShopSystem {
    *
    * Carried sources route through InventorySystem.removeCarriedItem, which
    * empties the slot and re-projects equipment onto the player (selling worn
-   * armor has to give its defense back); banked sources use the plain
+   * armor has to give its defense back); stored sources use the plain
    * array-removal helpers, which have no player-facing stat to undo.
    */
   _sellPawnEntry(idx) {

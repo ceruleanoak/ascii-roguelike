@@ -123,7 +123,7 @@ export class CraftingSystem {
 
   /**
    * Claim a center-slot result that is itself a raw ingredient (e.g. Mana) —
-   * these bank straight into inventory rather than becoming an equippable
+   * these land straight in the ingredient pile rather than becoming an equippable
    * Item, since ingredients have no equipment slot to occupy. Returns the
    * ingredient char, or null if the center slot holds a real crafted item.
    */

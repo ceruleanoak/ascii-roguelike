@@ -26,10 +26,11 @@ export class InventorySystem {
     // array, in every game state. One pile for all characters (ingredients have
     // no character affinity) and one pile across REST and EXPLORE.
     //
-    // This used to be two arrays — a banked `restInventory` here and a carried
-    // `player.inventory` on the entity — with a state switch picking which one
-    // a given feature could see. That split had no mechanical stake behind it
-    // (game over wipes both, so "banked" was never safer than "carried") and it
+    // This used to be two arrays — a REST-side `restInventory` here and a
+    // carried `player.inventory` on the entity — with a state switch picking
+    // which one a given feature could see. That split had no mechanical stake
+    // behind it (game over wipes both, so the stored half was never the safer
+    // half) and it
     // silently halved the player's inventory for anything that read the wrong
     // one: the cauldron, the press, and the fairy fountain's treasure offering
     // all did. Everything reads this array now, and nothing else stores
@@ -38,7 +39,7 @@ export class InventorySystem {
 
     // Coins are passive: they never enter the ingredient pile. Picked up
     // directly into this wallet, spendable from anywhere (well, NPC, crafting).
-    // Persists through banking and death; cleared only on full game over.
+    // Survives the walk home and character death; cleared only on full game over.
     this.coinWallet = 0;
 
     // PER-CHARACTER REST loadout (quick slots + active slot + mana state).
@@ -58,8 +59,8 @@ export class InventorySystem {
     this.restQuickSlots = this.characterInventories['default'].quickSlots;
     this.restActiveSlotIndex = this.characterInventories['default'].activeSlotIndex;
 
-    // Track which character is currently active so bankLoot() can write the
-    // activeSlotIndex back to the correct characterInventories entry.
+    // Track which character is currently active so saveRestLoadout() can write
+    // the activeSlotIndex back to the correct characterInventories entry.
     this._activeCharacterType = 'default';
 
     this.itemChest = []; // Storage for weapons (shared across all characters)
@@ -70,7 +71,7 @@ export class InventorySystem {
     this.consumableWindupEffects = new ConsumableWindupEffects();
 
     // Weapons displaced during EXPLORE pickup buffer here, not in itemChest.
-    // Flushed to itemChest by bankLoot() on safe REST return. Discarded on
+    // Flushed to itemChest by saveRestLoadout() on safe REST return. Discarded on
     // character/run death so EXPLORE-picked-up weapons don't survive a wipe.
     this.pendingChestDeposits = [];
 
@@ -591,7 +592,7 @@ export class InventorySystem {
   }
 
   // Strips an item the player is actively CARRYING rather than one sitting in
-  // a banked pile — the Shopkeeper's Pawn list sells the whole loadout, not
+  // a storage pile — the Shopkeeper's Pawn list sells the whole loadout, not
   // just spares (see ShopSystem's pawn-mode header). `source` names which
   // carried store the item came out of, matching the pawn entry's own field:
   //
@@ -918,19 +919,26 @@ export class InventorySystem {
   }
 
 
-  // ========== DEATH & BANKING MECHANICS ==========
+  // ========== DEATH & LOADOUT MECHANICS ==========
 
   /**
-   * Save the loadout when returning from EXPLORE to REST.
+   * Commit the surviving loadout to the active character's record, on the walk
+   * home from EXPLORE to REST.
    *
-   * Ingredients no longer move here: there is one pile and the player has been
-   * adding to it all along, so arriving in REST transfers nothing. Only the
-   * quick slots need copying, because those are per-character.
+   * This is the write half of a round trip. enterRestState discards the Player
+   * entity and builds a new one, then refills its quick slots from
+   * restQuickSlots — so whatever is not written here is not what the player
+   * walks back into REST holding. Death is the case that never reaches this
+   * call and has the record cleared out from under it instead, which is how
+   * one restore line gives both outcomes.
+   *
+   * Ingredients do not pass through: there is one pile and the player has been
+   * adding to it all along, so arriving in REST transfers nothing.
    *
    * @param {Array} playerQuickSlots - Player's quick slots (weapons)
    * @param {number} playerActiveSlotIndex - Active slot index
    */
-  bankLoot(playerQuickSlots, playerActiveSlotIndex) {
+  saveRestLoadout(playerQuickSlots, playerActiveSlotIndex) {
     // Save quick slots and active index to active character.
     // restQuickSlots is a live reference to the character's array, so length/push
     // writes through correctly. restActiveSlotIndex is a scalar copy, so we must
@@ -942,7 +950,8 @@ export class InventorySystem {
       this.characterInventories[this._activeCharacterType].activeSlotIndex = playerActiveSlotIndex;
     }
 
-    // Flush deferred EXPLORE chest deposits — survived the run, now banked.
+    // Flush deferred EXPLORE chest deposits — they survived the run, so they
+    // land in the chest now.
     if (this.pendingChestDeposits.length > 0) {
       this.pendingChestDeposits.forEach((item) => this.addToChest(item));
       this.pendingChestDeposits.length = 0;
@@ -1025,7 +1034,7 @@ export class InventorySystem {
     addItemToChestArray(this.itemChest, item);
   }
 
-  // EXPLORE-time deferred deposit; flushed to itemChest by bankLoot().
+  // EXPLORE-time deferred deposit; flushed to itemChest by saveRestLoadout().
   deferToChest(item) {
     addItemToChestArray(this.pendingChestDeposits, item);
   }

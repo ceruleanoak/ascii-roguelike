@@ -974,7 +974,7 @@ export class MenuSystem {
       if (game.craftingSystem.hasCenterContent()) {
         game.audioSystem.stopSFXByName('craft_cycle');
 
-        // Ingredient-result recipes (e.g. Mana) bank straight into inventory —
+        // Ingredient-result recipes (e.g. Mana) land straight in the pile —
         // they're raw ingredients, not equippable items, and must never
         // occupy a weapon/consumable slot.
         const ingredientChar = game.craftingSystem.claimCraftedIngredient();
