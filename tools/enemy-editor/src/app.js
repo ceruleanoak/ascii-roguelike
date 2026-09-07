@@ -4,6 +4,7 @@ import { EnemyForm } from './form.js';
 import { Sandbox } from './sandbox.js';
 import { toEntryLiteral, toDraftJSON, fromDraftJSON } from './codegen.js';
 import { buildDefaultDef, deepClone } from './util.js';
+import { DevConsole } from './devconsole.js';
 
 const DRAFT_API = '/api/enemy-drafts';
 
@@ -14,11 +15,13 @@ let refreshTimer = null;
 function el(id) { return document.getElementById(id); }
 
 function init() {
+  // First, so its console tap is in place before anything else can log or throw.
+  new DevConsole(el('console'));
   sandbox = new Sandbox(el('arena'), (msg) => {
     el('error').textContent = msg || '';
     el('error').style.display = msg ? 'block' : 'none';
   });
-  sandbox.onNotice = (msg) => flash(el('telegraph'), msg);
+  sandbox.onNotice = (msg) => { flash(el('telegraph'), msg); console.info(msg); };
   sandbox.onStateChange = renderStateReadout;
   form = new EnemyForm(el('form'), def, onDefChange);
   sandbox.loadDef(def);
