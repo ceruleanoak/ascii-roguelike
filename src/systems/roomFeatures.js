@@ -876,6 +876,18 @@ export function isCellProtected(room, col, row) {
   return (room.protectedRegions || []).some(region => cellInRegion(col, row, region));
 }
 
+// Sealed regions are the footprints of structures the player has no walkable
+// route into — the Maze shell being the first: its perimeter is solid and the
+// only way in is the door, which teleports the player to the separate interior.
+// Ordinary movement can never breach one, but a teleport (the Yellow Mage's
+// blink) crosses the wall and strands the player inside with no way out. Any
+// code that places the player at a position they did not walk to must refuse a
+// sealed cell.
+/** True when the cell falls inside any of the room's sealed structure regions. */
+export function isCellSealed(room, col, row) {
+  return (room?.sealedRegions || []).some(region => cellInRegion(col, row, region));
+}
+
 // Grass bends up to ±¼ cell at runtime (main.js grass bending), so its
 // footprint gets horizontal slop beyond the glyph box.
 const GRASS_CHARS = new Set(['|', '\\', '/', ',']);

@@ -1,4 +1,5 @@
 import { GRID } from '../game/GameConfig.js';
+import { isCellSealed } from './roomFeatures.js';
 
 export class WarpSystem {
   constructor(game) {
@@ -18,7 +19,28 @@ export class WarpSystem {
     if (x < margin || x + w > GRID.WIDTH - margin) return false;
     if (y < margin || y + h > GRID.HEIGHT - margin) return false;
 
+    // Blinking through a wall is the point of the ability; blinking *into* a
+    // sealed structure (the Maze shell) is a trap — its perimeter is solid and
+    // its interior has no exit, so the player would be stuck there for the run.
+    if (this._overlapsSealedRegion(x, y, w, h)) return false;
+
     return true;
+  }
+
+  // True when any cell the player would occupy at (x, y) is inside one of the
+  // active room's sealed structure regions.
+  _overlapsSealedRegion(x, y, w, h) {
+    const room = this.game.currentRoom;
+    if (!room?.sealedRegions?.length) return false;
+    const C = GRID.CELL_SIZE;
+    const col0 = Math.floor(x / C), col1 = Math.floor((x + w - 1) / C);
+    const row0 = Math.floor(y / C), row1 = Math.floor((y + h - 1) / C);
+    for (let row = row0; row <= row1; row++) {
+      for (let col = col0; col <= col1; col++) {
+        if (isCellSealed(room, col, row)) return true;
+      }
+    }
+    return false;
   }
 
   // Yellow mage blink: find the furthest valid position along the blink direction, emit trail particles, then move

@@ -4009,6 +4009,12 @@ export class RoomGenerator {
     // would otherwise stamp objects across it.
     protectRegion(room, { kind: 'rect', minCol, maxCol, minRow, maxRow });
 
+    // Seal the same footprint against teleports. The shell's perimeter is solid
+    // and the door hands off to the separate 19x19 interior, so nothing that
+    // walks can get inside — but a blink crosses the wall and lands in the
+    // non-solid decorative interior, stranding the player (see isCellSealed).
+    room.sealedRegions = [{ kind: 'rect', minCol, maxCol, minRow, maxRow }];
+
     // ── Sparse exterior bg objects (no room inside the large shell) ─────────
     const prev = this.currentLetterTemplate?.bgObjectRules?.clearingZone;
     if (this.currentLetterTemplate?.bgObjectRules) {
