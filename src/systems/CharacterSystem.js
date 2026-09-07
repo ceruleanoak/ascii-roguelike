@@ -38,9 +38,8 @@ export class CharacterSystem {
     game.inventorySystem.restActiveSlotIndex = 0;
     game.inventorySystem.equippedArmor = null;
     game.inventorySystem.equippedConsumables = Array(game.inventorySystem.maxConsumableSlots).fill(null);
-    // The chest is not touched: it is shared across characters by design, and a
-    // weapon displaced during EXPLORE is in it already, the same as one stored
-    // by hand in REST.
+    // Discard EXPLORE-deferred chest deposits — displaced weapons go with the character
+    game.inventorySystem.pendingChestDeposits = [];
 
     game.activeCharacterType = nextType;
     console.log(`🔄 Continuing as ${CHARACTER_TYPES[game.activeCharacterType].name}`);
@@ -637,7 +636,7 @@ export class CharacterSystem {
       }
     }
 
-    // Switch inventory system to this character's stored inventory
+    // Switch inventory system to this character's banked inventory
     inv.setActiveCharacter(type);
 
     // Restore (or initialize) this character's saved magic-meter state.

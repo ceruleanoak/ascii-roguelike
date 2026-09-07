@@ -177,7 +177,8 @@ export class TrapSystem {
     }
   }
 
-  // Total copies of a trap the player owns: quick slots plus chest storage.
+  // Total copies of a trap the player owns: quick slots plus chest storage
+  // (including deposits still pending at the end of the room).
   countHeldTraps(char) {
     const player = this.game.player;
     const inventorySystem = this.game.inventorySystem;
@@ -185,6 +186,7 @@ export class TrapSystem {
     if (inventorySystem) {
       const sumStacked = (arr) => arr.reduce((sum, i) => (i.char === char ? sum + (i.count || 1) : sum), 0);
       count += sumStacked(inventorySystem.itemChest);
+      count += sumStacked(inventorySystem.pendingChestDeposits);
     }
     return count;
   }
