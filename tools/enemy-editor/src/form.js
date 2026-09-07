@@ -334,27 +334,39 @@ export class EnemyForm {
       case 'px': {
         const grp = document.createElement('div');
         grp.className = 'px-grp';
-        input = document.createElement('input');
-        input.type = 'number';
+        // Held in its own const rather than in `input`, which is reassigned to
+        // the wrapper below before any of these closures ever run: reading
+        // `input.value` off a <div> yields undefined, so the hint printed
+        // "NaN cells" and — worse — the edit handler wrote NaN into the def,
+        // discarding every value typed into any px field. The runtime's `||`
+        // fallbacks then hid it by silently substituting the default.
+        const box = document.createElement('input');
+        box.type = 'number';
         // An unset key is not a zero — the game falls back to a real number, so
         // the box stays empty and shows that number as its placeholder rather
         // than reading "0 px" for a keeper that actually holds at 1.5 cells.
         const fallback = defaultFor(field, this.def);
-        input.value = value ?? '';
-        input.placeholder = String(fallback);
-        if (field.step) input.step = field.step;
+        box.value = value ?? '';
+        box.placeholder = String(fallback);
+        if (field.step) box.step = field.step;
         const hint = document.createElement('span');
         hint.className = 'px-hint';
         const setHint = () => {
-          const px = input.value === '' ? fallback : Number(input.value);
-          hint.textContent = `${(px / GRID_CELL).toFixed(2)} cells${input.value === '' ? ' (default)' : ''}`;
+          const px = box.value === '' ? fallback : Number(box.value);
+          hint.textContent = `${(px / GRID_CELL).toFixed(2)} cells${box.value === '' ? ' (default)' : ''}`;
         };
         setHint();
-        input.addEventListener('input', () => {
-          setPath(this.def, field.key, Number(input.value)); setHint(); this.afterEditLight(field);
+        box.addEventListener('input', () => {
+          // Clearing the box unsets the key rather than writing a zero the
+          // codegen would emit as a deliberate value — the same contract the
+          // plain number case below keeps, which this case had never matched.
+          const raw = box.value;
+          setPath(this.def, field.key, raw === '' ? null : Number(raw));
+          setHint();
+          this.afterEditLight(field);
         });
-        input.addEventListener('change', () => this.afterEdit(field));
-        grp.appendChild(input); grp.appendChild(hint);
+        box.addEventListener('change', () => this.afterEdit(field));
+        grp.appendChild(box); grp.appendChild(hint);
         input = grp;
         break;
       }
