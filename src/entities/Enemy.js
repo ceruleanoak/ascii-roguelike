@@ -4,7 +4,7 @@ import { isImmuneToEffect, getElementalModifierFor } from './elementalAffinity.j
 import { Item } from './Item.js';
 import { attachTelegraph, meleeAimOffset } from '../game/Telegraph.js';
 import { inSamePlane, planeOf, objectOnPlane } from '../systems/PlaneSystem.js';
-import { hasLineOfSight, getVisionObstructionPoint, hasVision, spineCanSee } from './enemyVision.js';
+import { hasLineOfSight, getVisionObstructionPoint, hasVision, spineCanSee, initSenses } from './enemyVision.js';
 import { EXIT_SLOT_POSITIONS } from '../systems/ExitSystem.js';
 import { LureMechanic } from './enemyMechanics/LureMechanic.js';
 import { ParryMechanic } from './enemyMechanics/ParryMechanic.js';
@@ -102,7 +102,6 @@ export class Enemy {
     this.accelRate = this.data.acceleration || PHYSICS.ENEMY_ACCELERATION;
     this.damage = Math.ceil(this.data.damage * depthMultiplier);
     this.attackRange = this.data.attackRange;
-    this.aggroRange = this.data.aggroRange || GRID.CELL_SIZE * 8;
     this.attackCooldown = this.data.attackCooldown;
     this.attackWindup = this.data.attackWindup || 0.3;
     this.windupImmune = this.data.windupImmune || false;  // Cannot be interrupted during windup
@@ -158,9 +157,13 @@ export class Enemy {
     this.wanderDirection = { x: 0, y: 0 };
     this.wanderSpeed = this.speed * 0.3; // 30% of normal speed
 
+    // Senses: how far this Enemy sees, how wide its cone is, where it commits,
+    // and what it remembers having seen. All of it lives in enemyVision.js,
+    // which owns every question an Enemy asks about what it can see — including
+    // the aggro <= vision invariant they have to satisfy together.
+    initSenses(this);
+
     // Vector-based navigation
-    this.navigationLength = GRID.CELL_SIZE * 6; // Vector length for pathfinding around walls
-    this.visionLength = GRID.CELL_SIZE * 8; // Longer vector for vision checks (can see further)
     this.rotationIncrement = 1; // Degrees to rotate when checking for clear path
     this.currentDirection = { x: 0, y: 0 }; // Cached movement direction
     this.facingAngle = Math.random() * Math.PI * 2; // Facing direction (radians), updated from velocity
@@ -173,19 +176,6 @@ export class Enemy {
     // Node-based pathfinding
     this.pathNodes = []; // Computed waypoints around obstacles
     this.currentNodeIndex = 0;
-
-    // Memory-based aggro
-    this.lastKnownPosition = null; // Last known player position
-    this.aggroMemoryActive = false; // Whether pursuing a memory mark
-    this.memoryMarkSuspected = false; // true = heard/felt (investigating); false = confirmed sighting
-    this.memoryMoveDelayTimer = 0; // Delay before moving to memory mark after losing sight
-    this.memoryMoveDelay = 1.0; // 1 second delay before chasing memory
-    this.memoryChaseTimer = 0; // Countdown while actively chasing memory mark; gives up at 0
-    this.detectionIndicatorTimer = 0; // Show yellow ! when detecting/reacquiring player
-    this.detectionIndicatorDuration = 1.0; // Show detection indicator for 1 second
-    this.hadVisualContact = false; // Set true on first real sighting; gates proximity-only re-aggro
-    this.memoryMarkPlane = 0;  // Plane player was on when memory mark was created
-    this.memoryStaleTimer = 2.0; // Countdown (sec) before a cross-plane-stale mark expires
 
     // Flee state — running from a memory mark rather than pursuing one.
     this.fleeing = false; // Whether Flee has armed its mark (mirrors aggroMemoryActive's role for Search)

@@ -107,6 +107,12 @@ export default {
   },
 
   thresholds(enemy) {
-    return [{ label: 'aggro', px: enemy.aggroRange, color: '#5ec46a' }];
+    // Both senses, because Alert is the State where the difference between them
+    // is the whole behavior: the band between aggro and vision is ground the
+    // Enemy can see a target standing in without committing to it.
+    return [
+      { label: 'aggro', px: enemy.aggroRange, color: '#5ec46a' },
+      { label: 'vision', px: enemy.visionLength, color: '#8089a0' },
+    ];
   },
 };

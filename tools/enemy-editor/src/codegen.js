@@ -28,6 +28,7 @@ const REQUIRED = new Set(['char', 'name', 'hp', 'speed', 'damage', 'attackType',
 // Top-level emit order; unknown keys appended after in insertion order.
 const ORDER = ['char', 'name', 'description', 'spellDescription', 'tier', 'affinities',
   'hp', 'speed', 'damage', 'color', 'attackType', 'attackRange', 'aggroRange',
+  'visionLength', 'visionHalfAngle',
   'attackCooldown', 'attackWindup', 'projectileType', 'isImpact', 'telegraph',
   'mass', 'acceleration', 'knockbackMultiplier', 'knockbackResistance',
   'decisionInterval', 'idleBehavior', 'windupMovement', 'windupImmune',

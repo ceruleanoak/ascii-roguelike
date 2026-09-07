@@ -14,6 +14,54 @@ import { inSamePlane, planeOf, objectOnPlane } from '../systems/PlaneSystem.js';
 // made the entity the place everything adjacent to it accumulated. Enemy keeps
 // three one-line methods so the ~30 `this.hasVision(...)` call sites are
 // untouched.
+// Establishes an Enemy's sense thresholds from its data block, at construction.
+//
+// Vision length and cone width were hardcoded for every Enemy in the game until
+// 2026-09-06 — one number nobody could author, which meant a slow brute and a
+// hawk saw exactly the same distance. Aggro range came with it because the two
+// are one decision: vision is the outer sense, aggro the commitment threshold
+// inside it, and they have an invariant to keep between them.
+export function initSenses(enemy) {
+  const data = enemy.data;
+  enemy.aggroRange = data.aggroRange || GRID.CELL_SIZE * 8;
+
+  // The default is `max(8 cells, aggroRange)` rather than a flat 8 so that
+  // vision is never shorter than aggro. 35 of the shipped 57 Enemies carry an
+  // aggroRange past 8 cells, so a flat default would have quietly cut their
+  // reach the moment the invariant below landed.
+  enemy.visionLength = data.visionLength ?? Math.max(GRID.CELL_SIZE * 8, enemy.aggroRange);
+  // Half-angle of the facing cone, in degrees — 65 is what every Enemy used
+  // before this was authorable. 180 is a full sphere of awareness.
+  enemy.visionHalfAngle = data.visionHalfAngle ?? 65;
+  // Cached because `hasVision` compares against it per ray-cast, per frame.
+  enemy.visionHalfAngleCos = Math.cos(enemy.visionHalfAngle * Math.PI / 180);
+
+  // Invariant: an Enemy can never aggro onto something it cannot see that far.
+  // An aggroRange past visionLength describes a band the Enemy reacts in but is
+  // blind in, which is not a behavior anything should author by accident.
+  // Authored vision wins; the aggro range yields.
+  if (enemy.aggroRange > enemy.visionLength) enemy.aggroRange = enemy.visionLength;
+
+  // Vector length for pathfinding probes around walls.
+  enemy.navigationLength = GRID.CELL_SIZE * 6;
+
+  // What it remembers seeing. A memory mark is the position sight last put the
+  // target at, so it belongs with the sense that wrote it: every field here is
+  // read back by the Search/Flee states as a stand-in for vision it no longer
+  // has.
+  enemy.lastKnownPosition = null; // Last known player position
+  enemy.aggroMemoryActive = false; // Whether pursuing a memory mark
+  enemy.memoryMarkSuspected = false; // true = heard/felt (investigating); false = confirmed sighting
+  enemy.memoryMoveDelayTimer = 0; // Delay before moving to memory mark after losing sight
+  enemy.memoryMoveDelay = 1.0; // 1 second delay before chasing memory
+  enemy.memoryChaseTimer = 0; // Countdown while actively chasing memory mark; gives up at 0
+  enemy.detectionIndicatorTimer = 0; // Show yellow ! when detecting/reacquiring player
+  enemy.detectionIndicatorDuration = 1.0; // Show detection indicator for 1 second
+  enemy.hadVisualContact = false; // Set true on first real sighting; gates proximity-only re-aggro
+  enemy.memoryMarkPlane = 0;  // Plane player was on when memory mark was created
+  enemy.memoryStaleTimer = 2.0; // Countdown (sec) before a cross-plane-stale mark expires
+}
+
 /**
  * Check if there's a clear line of sight along a vector
  * Uses ray casting to detect collisions
@@ -259,12 +307,17 @@ export function hasVision(enemy, start, end, maxLength, { ignoreCone = false } =
   }
 
   // ── Vision cone gate ────────────────────────────────────────────────────
-  // Non-alerted enemies can only see within ±65° of their facing direction.
+  // Non-alerted enemies can only see within ±`visionHalfAngle`° of their facing
+  // direction (65° unless the Enemy authors otherwise).
   // Alerted enemies (enraged or memory-chasing) have already turned toward the
   // player via velocity, so their cone naturally tracks. ignoreCone bypasses
   // this for sound-based detection (omnidirectional hearing).
   if (!enemy.enraged && !enemy.aggroMemoryActive && !ignoreCone) {
-    const HALF_CONE_COS = Math.cos(65 * Math.PI / 180); // ~0.423
+    // Per-Enemy since 2026-09-06 (`data.visionHalfAngle`, cached as a cosine on
+    // the Enemy). The `??` fallback covers callers that are not Enemies — the
+    // boss part entities (TurtleHead, GooHead, Hoardmaw) build their own stat
+    // blocks and never run Enemy's constructor.
+    const HALF_CONE_COS = enemy.visionHalfAngleCos ?? Math.cos(65 * Math.PI / 180); // ~0.423 at 65°
     const PROXIMITY_OVERRIDE = GRID.CELL_SIZE * 1.5;    // Knife-edge: bypass cone
     if (distance > PROXIMITY_OVERRIDE) {
       const dot = (dx / distance) * Math.cos(enemy.facingAngle)

@@ -134,6 +134,40 @@ const isKeeperKiter = (d) => d.movementStyle === 'keeper' || d.movementStyle ===
 //      strike (distance bands) + recover (the post-strike window) + search
 //      (last-known-position pursuit) + withdraw (disengaging on purpose).
 //   3. Everything else — attributes that aren't tied to a specific State.
+// Vision defaults to `max(8 cells, aggroRange)` — the runtime's own fallback
+// (Enemy.js). A flat 8 would read as a cut to the 35 shipped Enemies that aggro
+// further than that, so the default tracks aggro upward instead.
+function visionLengthDefault(def) {
+  return Math.max(GRID_CELL * 8, def.aggroRange ?? GRID_CELL * 8);
+}
+
+// The aggro <= vision invariant, enforced where the numbers are authored rather
+// than only where they are consumed, so the form can never emit a def the
+// runtime would silently clamp on load.
+//
+// Which side yields depends on which side was just edited, because the two
+// edits mean opposite things. Dragging aggro past vision reads as "react from
+// further away" — almost never as a request for a band the Enemy reacts in but
+// is blind in — so vision follows it up. Dragging vision below aggro is a
+// deliberate statement about how far this Enemy can see, so aggro comes down to
+// meet it. The runtime resolves the same pair one way only (authored vision
+// wins, per Enemy.js) — it has no edit to read the intent from.
+function raiseVisionToAggro(def) {
+  if (def.aggroRange == null) return false;
+  const vision = def.visionLength ?? visionLengthDefault(def);
+  if (def.aggroRange <= vision) return false;
+  def.visionLength = def.aggroRange;
+  return true;
+}
+
+function lowerAggroToVision(def) {
+  if (def.visionLength == null) return false;
+  const aggro = def.aggroRange ?? GRID_CELL * 8;
+  if (aggro <= def.visionLength) return false;
+  def.aggroRange = def.visionLength;
+  return true;
+}
+
 export const SECTIONS = [
   {
     id: 'identity',
@@ -160,7 +194,14 @@ export const SECTIONS = [
       { key: 'attackType', label: 'Attack type', type: 'select', options: ATTACK_TYPES, default: 'melee',
         help: "'custom' hands the whole strike to a mechanic — the standard windup/attack pipeline no-ops." },
       { key: 'attackRange', label: 'Attack range', type: 'px', default: GRID_CELL * 2 },
-      { key: 'aggroRange', label: 'Aggro range', type: 'px', default: GRID_CELL * 8 },
+      { key: 'aggroRange', label: 'Aggro range', type: 'px', default: GRID_CELL * 8,
+        help: 'Where it commits — Alert hands off to Approach here. Can never exceed vision length.',
+        reconcile: raiseVisionToAggro },
+      { key: 'visionLength', label: 'Vision length', type: 'px', default: visionLengthDefault,
+        help: 'How far it can see at all. The outer sense: aggro range is clamped to it.',
+        reconcile: lowerAggroToVision },
+      { key: 'visionHalfAngle', label: 'Vision cone (± deg)', type: 'number', min: 1, max: 180, step: 5, default: 65,
+        help: 'Half-angle from facing. 180 = omnidirectional. Bypassed within 1.5 cells, and while enraged or working a mark.' },
       { key: 'attackCooldown', label: 'Attack cooldown (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 1.5,
         help: 'Double-seconds (÷2 for real seconds). See ENEMY_TIMER_RATE.' },
       { key: 'attackWindup', label: 'Attack windup (dbl-sec)', type: 'number', min: 0, step: 0.1, default: 0.3 },
