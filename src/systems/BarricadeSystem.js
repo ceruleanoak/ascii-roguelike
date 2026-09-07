@@ -18,23 +18,67 @@ const ORGANIC_CHANCE = 0.25;
 // and is never gated; a run always keeps its retreat.
 const BARRICADEABLE = ['north', 'east', 'west'];
 
+// Insisting on one direction is what the world answers. The first traversal is
+// a choice and stays unanswered; the second is insistence, and the room it
+// lands in raises a Barricade across that same way out. Turning aside starts
+// the count over — the streak is about one direction, not about depth.
+const INSISTENCE_TO_BARRICADE = 2;
+
 /**
  * BarricadeSystem — raises and owns Barricades: the things stamped across an
  * exit lane that ask what the run is carrying and answer by opening or not.
  *
- * Lifted out of ThreeRoomSystem, which raised the only two that existed (rocks
- * on the second north of a streak, Petrified Trees on the third) and said in
- * its own comment that a second caller was the trigger to give the shape a
- * system. ThreeRoomSystem still owns the streak — it is the only thing that
- * knows how many norths in a row the run has taken — and now answers with a
- * descriptor rather than stamping objects itself.
+ * Lifted out of ThreeRoomSystem, which raised the only two that existed and
+ * said in its own comment that a second caller was the trigger to give the
+ * shape a system. It named specific materials for specific norths; that
+ * hardcoding is gone. What raises a Barricade now is insistence in any
+ * direction, and what it raises is whatever the exit's colour asks for.
  *
- * All Barricade state lives on `room.barricade`, never on `game`: it dies with
- * the room, so there is no run-scoped field for a reset path to forget.
+ * ThreeRoomSystem still owns the north streak, because the source room is its
+ * business; the insistence counted here is a separate, general thing and knows
+ * nothing about the Three.
+ *
+ * Barricade state lives on `room.barricade`, never on `game`: it dies with the
+ * room, so there is no run-scoped field for a reset path to forget. The one
+ * exception is the insistence count below, which is about the run rather than
+ * any room — it is cleared by hardReset() on death and title.
  */
 export class BarricadeSystem {
   constructor(game) {
     this.game = game;
+    // How many times in a row the run has left by the same way out. Run-scoped;
+    // see hardReset().
+    this._insisted = { direction: null, count: 0 };
+  }
+
+  /**
+   * Record an Explore traversal. Called from main.js for every north, east and
+   * west exit taken — dispatch only; what the count means is this system's.
+   *
+   * South is deliberately not recorded and does not break the count: it is the
+   * trip home to REST, not a turn aside, and a run that restocks and comes back
+   * has not stopped insisting (same reading as the north streak's).
+   */
+  recordTraversal(direction) {
+    if (!BARRICADEABLE.includes(direction)) return;
+    this._insisted.count = (direction === this._insisted.direction)
+      ? this._insisted.count + 1
+      : 1;
+    this._insisted.direction = direction;
+  }
+
+  /** Full run-scoped reset — death/title. Insistence dies with the run. */
+  hardReset() {
+    this._insisted = { direction: null, count: 0 };
+  }
+
+  /**
+   * The direction the run has insisted on hard enough to be answered, or null.
+   * True from the second traversal onward: once a way out has earned a
+   * Barricade, every further room reached that same way raises one too.
+   */
+  _insistedDirection() {
+    return this._insisted.count >= INSISTENCE_TO_BARRICADE ? this._insisted.direction : null;
   }
 
   /**
@@ -43,10 +87,9 @@ export class BarricadeSystem {
    * builds, so the call site stays free of the conditions; everything that
    * decides whether to place anything is here.
    *
-   * A Cursed run is never barricaded. The streak still counts there, but the
-   * world has stopped answering the third north — asking for an axe to open a
-   * door that is no longer behind it would be a cruelty with nothing on the far
-   * side.
+   * A Cursed run is never barricaded. Insistence still counts there, but the
+   * world has stopped answering it — asking for a tool to open a door that no
+   * longer leads anywhere would be a cruelty with nothing on the far side.
    */
   raiseForRoom(room) {
     const { game } = this;
@@ -61,10 +104,13 @@ export class BarricadeSystem {
     // the whole ask. Whatever the run is carrying, the bridge is the answer.
     if (room.type === ROOM_TYPES.RIDGE) return;
 
-    // The streak's own Barricade takes the north exit and outranks any roll:
-    // the approach to the source is gated whether or not the room felt like it.
-    const forced = game?.threeRoomSystem?.streakBarricade();
-    const direction = forced ? 'north' : this._rollDirection(room);
+    // An insisted direction takes that exit and outranks any roll: a way out
+    // the run keeps choosing is answered whether or not the room felt like it.
+    // It outranks ORGANIC_MIN_DEPTH too — that floor exists so an unearned
+    // Barricade never lands on a run still finding its first weapon, and a
+    // Barricade the player walked into twice on purpose is not unearned.
+    const insisted = this._insistedDirection();
+    const direction = insisted || this._rollDirection(room);
     if (!direction) return;
 
     const exit = room.exits?.[direction];
@@ -72,10 +118,10 @@ export class BarricadeSystem {
 
     // The exit letter's colour picks the family; the family picks the
     // Barricade. A colour with no family (gray, blue) or an empty one (red)
-    // falls back to the streak's material when the streak is what asked for
-    // this Barricade, and otherwise raises nothing — so the Three Room
-    // approach is gated identically no matter what colour its north came up.
-    const descriptor = this._pickFromFamily(exit.color) || forced;
+    // raises nothing at all — insistence included. What the world asks for is
+    // the colour's question, and a colour with no question stays silent rather
+    // than borrowing another one's.
+    const descriptor = this._pickFromFamily(exit.color);
     if (!descriptor) return;
 
     this._raise(room, direction, descriptor);
@@ -89,9 +135,9 @@ export class BarricadeSystem {
     return !!exit?.letter && !exit.threeRoom && !exit.secretBlueZone;
   }
 
-  // One roll for the room, then one of its eligible exits at random — so a room
-  // never raises two, and which way is blocked is not something the player can
-  // predict from the letter alone.
+  // The unearned Barricade: one roll for the room, then one of its eligible
+  // exits at random — so a room never raises two, and which way is blocked is
+  // not something the player can predict from the letter alone.
   _rollDirection(room) {
     const { game } = this;
     if ((game?.getCurrentZoneDepth?.() ?? 0) < ORGANIC_MIN_DEPTH) return null;
@@ -173,19 +219,35 @@ export class BarricadeSystem {
   // A concealed fixture is not built yet — only its cover is, carrying the flag
   // that routes the uncovering back here (see revealTrigger).
   _placeTriggers(room, direction, descriptor) {
-    const cs = GRID.CELL_SIZE;
     for (const spec of descriptor.triggers) {
       const { col, row } = laneCell(direction, spec.depth, spec.across);
       this._clearCell(room, col, row);
       if (spec.conceal === 'grass') {
-        const cover = new BackgroundObject('|', col * cs, row * cs);
-        cover.structural = true;
-        cover.barricadeTrigger = spec;
-        room.backgroundObjects.push(cover);
+        this._buildCover(room, spec, col, row);
         continue;
       }
       this._buildTrigger(room, spec, col, row);
     }
+    // The decoys go down last and are the same object minus the fixture, so a
+    // concealed layout reads as a stand of grass rather than as one tile with
+    // something obviously under it.
+    for (const spec of descriptor.decoys || []) {
+      const { col, row } = laneCell(direction, spec.depth, spec.across);
+      this._clearCell(room, col, row);
+      this._buildCover(room, null, col, row);
+    }
+  }
+
+  // A concealing cover: the tile a fixture hides under, and — with `spec` null —
+  // the identical tile hiding nothing. Only `barricadeTrigger` tells them apart,
+  // and only InteractionSystem's cut ever asks.
+  _buildCover(room, spec, col, row) {
+    const cs = GRID.CELL_SIZE;
+    const cover = new BackgroundObject('|', col * cs, row * cs);
+    cover.structural = true;
+    if (spec) cover.barricadeTrigger = spec;
+    room.backgroundObjects.push(cover);
+    return cover;
   }
 
   // A trigger fixture, built to the same contract as a dungeon Puzzle Room's:

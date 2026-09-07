@@ -2,7 +2,6 @@ import { GRID, GAME_STATES } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { captureDeath } from './DeathLedgerSystem.js';
 import { ITEM_TYPES } from '../data/items.js';
-import { STREAK_BARRICADES } from '../data/barricades.js';
 
 /**
  * ThreeRoomSystem — the source room, its offerings, and what the door lets out.
@@ -33,25 +32,18 @@ const NORTH_STREAK_TRIGGER = 3;
 
 // ── The Barricade ───────────────────────────────────────────────────────────
 //
-// Insisting north three times is the ask; insisting is not enough. The second
-// north is barricaded with rocks and the third with Petrified Trees, so the
-// source is reached carrying a hammer and an axe or it is not reached at all.
-// Keyed to the streak the run is already holding — one Barricade per room
-// standing between the first north and the last.
+// Insisting north three times is the ask; insisting is not enough. The approach
+// is barricaded, but not by anything this system names: a run that has gone
+// north twice in a row has insisted, and BarricadeSystem answers insistence in
+// any direction with whatever the exit letter's colour asks for. The Three
+// Room's approach is gated because it is a streak, not because it is north.
 //
-// Nothing here is generous, and that is deliberate: the approach can ask for a
-// tool the run never found, the same way the Globe of Offerings can only hand
-// back glyphs the run actually touched. What it asks for is no longer fixed,
-// though — the exit letter's colour picks the family, so a green north asks for
-// a craft gate's answer instead of an axe, and only a colour with no family of
-// its own (gray, and red until its gates are authored) still falls back to the
-// rocks and Petrified Trees this streak was built around. The gray '3' exit is
-// the one that matters for the inevitable path, and gray always falls back.
+// Nothing about that is generous, and that is deliberate: the approach can ask
+// for a tool the run never found, the same way the Globe of Offerings can only
+// hand back glyphs the run actually touched.
 //
-// The materials and the stamp itself live in BarricadeSystem and the barricades
-// catalogue now — a Barricade is a general shape, and this streak is only one
-// of the things that raises one. What stays here is the streak, because the
-// streak is what this system knows.
+// What stays here is the streak count, because the third north is what summons
+// the source and that is this system's business alone.
 
 // Death — behind the shut door, beyond naming. Printable ASCII per the
 // encoding rule; the room around it does the implying.
@@ -170,16 +162,6 @@ export class ThreeRoomSystem {
    */
   nextRoomsNorthReachesTheThree() {
     return this._northStreak === NORTH_STREAK_TRIGGER - 2;
-  }
-
-  /**
-   * The Barricade this run's north streak asks for, or null if it asks for
-   * none. BarricadeSystem calls this for every room the world builds and
-   * decides what to do with the answer; the streak count is this system's to
-   * know, and the stamping is not.
-   */
-  streakBarricade() {
-    return STREAK_BARRICADES[this._northStreak] || null;
   }
 
   /** Full run-scoped reset — death/title. */

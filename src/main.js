@@ -951,6 +951,7 @@ class Game {
     this.blueZoneRoom = 0;
     this.runTimerSystem.clear(); // No run in progress on TITLE — next REST entry starts a fresh timer
     this.threeRoomSystem.hardReset();       // streak + Death state die with the run
+    this.barricadeSystem.hardReset();       // and the direction the run was insisting on
     this.cursedRunSystem.hardReset();       // and the Graveyard's headcount with it
     this.threeSlotGlobeSystem.hardReset();  // the run's touched glyphs die with it too
     this.grayThreeExitShown = false;        // the gray '3' call can happen again next run
@@ -3520,6 +3521,7 @@ class Game {
 
       this.zoneSystem.recordExit(exitObj);
       this.compassSystem.onExitTaken('north');
+      this.barricadeSystem.recordTraversal('north');
       const letterPath = this.zoneSystem.pathHistory.map(exit => exit.letter).join('-');
 
       // Check for secret patterns
@@ -3606,6 +3608,7 @@ class Game {
           this.threeRoomSystem.breakStreak(); // only consecutive norths count
           this.zoneSystem.recordExit(exitObj);
           this.compassSystem.onExitTaken('east');
+          this.barricadeSystem.recordTraversal('east');
           const letterPath = this.zoneSystem.pathHistory.map(exit => exit.letter).join('-');
 
           // Check for secret patterns
@@ -3656,6 +3659,7 @@ class Game {
             this.threeRoomSystem.breakStreak(); // only consecutive norths count
             this.zoneSystem.recordExit(exitObj);
             this.compassSystem.onExitTaken('west');
+            this.barricadeSystem.recordTraversal('west');
             const letterPath = this.zoneSystem.pathHistory.map(exit => exit.letter).join('-');
 
             // Check for secret patterns
@@ -4096,6 +4100,7 @@ class Game {
     this.undeadSystem.clear();
     this.cursedRunSystem.hardReset();
     this.threeRoomSystem.hardReset();
+    this.barricadeSystem.hardReset();       // insistence starts over with the run
     this.threeSlotGlobeSystem.hardReset();  // the run's touched glyphs die with it too
 
     // Reset fairy run-flag for new run

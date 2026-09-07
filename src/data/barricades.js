@@ -29,6 +29,10 @@ import { ZONE_COLORS } from './zones.js';
  *              column/row. Plus the triggerMachine fields — `kind`,
  *              `activation`, `neutralizeSeconds` — and optionally `conceal`,
  *              naming what the fixture hides under until it is uncovered.
+ *   decoys     optional placements, same lane coordinates, that get a concealing
+ *              cover and nothing under it. A layout whose only cover IS the
+ *              answer gives itself away; decoys make the cover ordinary again,
+ *              so uncovering is a search rather than a single obvious tile.
  *
  * shape 'hazard' — terrain laid across the lane rather than a wall built in it.
  * The way through is open the whole time; what it costs is HP, and the answer
@@ -59,15 +63,6 @@ import { ZONE_COLORS } from './zones.js';
  * checks every family for it).
  */
 
-// The Three Room approach. Insisting north three times is the ask; insisting is
-// not enough. Keyed to the north streak the run is already holding — one
-// Barricade per room standing between the first north and the last, so the
-// source is reached carrying a hammer and an axe or it is not reached at all.
-export const STREAK_BARRICADES = {
-  1: { id: 'rocks',           shape: 'material', char: '0' },              // a hammer, a blunt weapon, or the pickaxe
-  2: { id: 'petrified_trees', shape: 'material', typeId: 'petrified_tree' } // an axe, three swings each
-};
-
 // ── The families ────────────────────────────────────────────────────────────
 //
 // Which Barricade a room can raise follows the exit letter's colour, so the
@@ -75,10 +70,31 @@ export const STREAK_BARRICADES = {
 // "what will it ask me for". One family per colour, and a colour with no
 // family raises nothing.
 
-// Green — craft gates. Every one is a trigger layout over an unbreakable plug,
-// and every layout is a shape only one tool can satisfy: the tool is implied by
-// the geometry and never named. Reachable from the green dungeon puzzle rooms'
-// own vocabulary, which is where a player learns to read these.
+// Green — craft gates. Most are a trigger layout over an unbreakable plug, and
+// every layout is a shape only one tool can satisfy: the tool is implied by the
+// geometry and never named. Reachable from the green dungeon puzzle rooms' own
+// vocabulary, which is where a player learns to read these.
+//
+// Two of them are plainer than that. Rocks and Petrified Trees are material
+// plugs — swing the right thing at them and they are gone — and they were the
+// first two Barricades the game had, back when the north streak named them
+// itself. They stay in green because green is where the hammer and the axe are
+// found, and because a family whose every member is a puzzle would teach that a
+// plug is always a puzzle.
+
+// A plug of rocks. A hammer, a blunt weapon, or the pickaxe.
+const ROCKS = {
+  id: 'rocks',
+  shape: 'material',
+  char: '0'
+};
+
+// A stand of Petrified Trees. An axe, three swings each.
+const PETRIFIED_TREES = {
+  id: 'petrified_trees',
+  shape: 'material',
+  typeId: 'petrified_tree'
+};
 
 // Two switches, two cells apart, both timed so tightly that no walk between
 // them is fast enough — the whip's crack covers five collinear cells in one
@@ -141,12 +157,27 @@ const SPEAR_LOCK = {
 // One switch, and no sign that there is one — it sits under a tall grass tile
 // and only a blade cut uncovers it. The same reveal the χ grass uses, asked as
 // a gate instead of a secret.
+//
+// The stand it hides in is the whole point. A single tuft of grass planted in
+// front of a plug is not concealment, it is a label; the decoys around it are
+// what make the tile ordinary, so the answer is to cut the patch rather than to
+// notice the odd one. They are scattered off the lane's centre line and out to
+// either side of the switch, so no side of the stand can be skipped.
 const GRASS_LOCK = {
   id: 'grass_lock',
   shape: 'trigger',
   plugColor: ZONE_COLORS.green,
   triggers: [
     { depth: 4, across: 0, kind: 'switch', activation: 'permanent', conceal: 'grass' }
+  ],
+  decoys: [
+    { depth: 3, across: -2 },
+    { depth: 3, across:  1 },
+    { depth: 4, across: -1 },
+    { depth: 4, across:  2 },
+    { depth: 5, across: -2 },
+    { depth: 5, across:  0 },
+    { depth: 6, across:  1 }
   ]
 };
 
@@ -193,7 +224,7 @@ const ELECTRIC_POLES = {
 };
 
 export const BARRICADE_FAMILIES = {
-  green: [WHIP_LOCK, BOOMERANG_LOCK, SPEAR_LOCK, GRASS_LOCK],
+  green: [ROCKS, PETRIFIED_TREES, WHIP_LOCK, BOOMERANG_LOCK, SPEAR_LOCK, GRASS_LOCK],
   yellow: [LAVA_MOAT, ICE_BLOCKS, ELECTRIC_POLES],
   // Red — mastery gates, keyed to weapon-class upgrades. Deliberately empty:
   // a red exit raises nothing until they are authored, rather than borrowing
