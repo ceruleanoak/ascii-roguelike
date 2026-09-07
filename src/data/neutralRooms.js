@@ -431,10 +431,13 @@ export const NEUTRAL_ROOMS = {
       // The slots — one object, not three. Each slot is a `[ ]` frame three
       // glyphs wide, and the frames are packed until they touch: the two base
       // frames sit shoulder to shoulder on one row, the apex straddles their
-      // seam on the row above. What the player walks up to reads as a single
-      // carved thing with three holes in it, not three pieces of furniture.
+      // seam two rows above — packed side to side, but with a clear row under
+      // the apex so the top of the triangle doesn't crowd the base pair. What
+      // the player walks up to reads as a single carved thing with three holes
+      // in it, not three pieces of furniture.
       //
       //        [ ]          ← apex, over the seam
+      //                     ← one clear row, so the apex reads as its own
       //     [ ][ ]          ← base pair, touching
       //
       // Laid out in PIXELS about the room's center, deliberately NOT on the
@@ -466,7 +469,7 @@ export const NEUTRAL_ROOMS = {
       const midX = GRID.WIDTH / 2;
       const midY = GRID.HEIGHT / 2;
       const slotCenters = [
-        { x: midX,            y: midY - cs / 2 }, // apex  — Instinct
+        { x: midX,            y: midY - cs * 1.5 }, // apex  — Instinct
         { x: midX - cs * 1.5, y: midY + cs / 2 }, // left  — Experience
         { x: midX + cs * 1.5, y: midY + cs / 2 }  // right — Convention
       ];
