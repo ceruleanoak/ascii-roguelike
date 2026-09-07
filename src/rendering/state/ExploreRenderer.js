@@ -33,7 +33,7 @@ import { drawStatusPips } from '../effects/StatusPipEffects.js';
 import { drawTamedRats } from '../ui/CompanionRenderers.js';
 import { BRIDGE_MATERIALS } from '../../systems/RidgeSystem.js';
 import { PixelatedDissolve, SplitReveal } from '../effects/TextEffects.js';
-import { drawTelegraph } from '../../game/Telegraph.js';
+import { drawPlayerMeleeAttacks, drawEnemyMelee } from '../effects/MeleeAttackDraw.js';
 import { BossRenderer } from './BossRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
 import { isInteriorActive } from '../../systems/PlaneSystem.js';
@@ -1997,63 +1997,16 @@ export class ExploreRenderer {
     }
   }
 
+  // Both melee-attack passes live in MeleeAttackDraw and are delegated to from
+  // here, because the interior PiP overlays call these same two methods with
+  // hutPlane true (the render-helper pattern) and neither pass needs anything
+  // off this renderer but the ASCIIRenderer itself.
   drawMeleeAttacks(game, hutPlane = false) {
-    for (const attack of game.combatSystem.getMeleeAttacks()) {
-      if (!!attack.hutPlane !== hutPlane) continue;
-      const useDithering = attack.shooterPlane === 1 && game.player.plane === 1;
-      // drawAboveOwner (hammers): the glyph is held over the carrier's head and
-      // read off the owner's root every frame, so it tracks the strike hop
-      // rather than sitting at the hitbox where the swing began.
-      const anchor = (attack.drawAboveOwner && attack.owner)
-        ? { x: attack.owner.position.x, y: attack.owner.position.y - GRID.CELL_SIZE }
-        : attack.position;
-      const cx = anchor.x + GRID.CELL_SIZE / 2;
-      const cy = anchor.y + GRID.CELL_SIZE / 2;
-      const scale = attack.drawScale || 1.0;
-      if (attack.drawAngle != null) {
-        if (useDithering) {
-          this.renderer.drawEntityRotatedDithered(cx, cy, attack.char, attack.color, attack.drawAngle, scale);
-        } else {
-          this.renderer.drawEntityRotated(cx, cy, attack.char, attack.color, attack.drawAngle, scale);
-        }
-      } else if (scale !== 1.0) {
-        this.renderer.drawEntityScaled(cx, cy, attack.char, attack.color, scale);
-      } else {
-        const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
-        this.renderer[drawMethod](cx, cy, attack.char, attack.color);
-      }
-    }
+    drawPlayerMeleeAttacks(this.renderer, game, hutPlane);
   }
 
   drawEnemyMeleeAttacks(game, hutPlane = false) {
-    for (const attack of game.combatSystem.getEnemyMeleeAttacks()) {
-      if (!!attack.hutPlane !== hutPlane) continue;
-
-      // Telegraph-shaped attacks draw themselves in pixel space, off the shared
-      // module, so the editor sandbox shows the identical thing.
-      if (drawTelegraph(this.renderer.fgCtx, attack)) continue;
-
-      const displayColor = attack.flashWhite ? '#ffffff' : attack.color;
-      const alpha = attack.alpha !== undefined ? attack.alpha : 1.0;
-      const cx = attack.position.x + GRID.CELL_SIZE / 2;
-      const cy = attack.position.y + GRID.CELL_SIZE / 2;
-      const scale = attack.drawScale || 1.0;
-      if (attack.drawAngle != null) {
-        const ctx = this.renderer.fgCtx;
-        const prevAlpha = ctx.globalAlpha;
-        ctx.globalAlpha = alpha;
-        this.renderer.drawEntityRotated(cx, cy, attack.char, displayColor, attack.drawAngle, scale);
-        ctx.globalAlpha = prevAlpha;
-      } else if (scale !== 1.0) {
-        const ctx = this.renderer.fgCtx;
-        const prevAlpha = ctx.globalAlpha;
-        ctx.globalAlpha = alpha;
-        this.renderer.drawEntityScaled(cx, cy, attack.char, displayColor, scale);
-        ctx.globalAlpha = prevAlpha;
-      } else {
-        this.renderer.drawTextWithAlpha(cx, cy, attack.char, displayColor, alpha);
-      }
-    }
+    drawEnemyMelee(this.renderer, game, hutPlane);
   }
 
   drawStuckArrows(game, hutPlane = false) {

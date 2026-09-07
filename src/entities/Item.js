@@ -28,6 +28,10 @@ let _nextAttackId = 0;
 // PHYSICS.FRICTION, this carries roughly one cell before it dies out.
 const HAMMER_LUNGE_SPEED = 90;
 
+// The mark left on the cell a hammer strikes — the blow's own footprint, drawn
+// where the damage lands rather than where the weapon is being held.
+const HAMMER_STRIKE_CHAR = '*';
+
 // Aggregate oilEffect from any equipped consumables. Returns
 // { onHits: string[], arrowSpeedMult: number }. onHits collects every
 // equipped oil's onHit in slot order (no dedup — a weapon's own effect and
@@ -994,13 +998,17 @@ export class Item {
   }
 
   createMeleeHammerRing(player) {
-    // The hitbox is a single flash at the strike point (facing × range); the
-    // visual is the weapon's own glyph held over the carrier's head, drawn from
-    // the owner's root every frame (drawAboveOwner) so it rides the strike hop
-    // instead of hanging in the air where the swing started.
+    // Two things are drawn, and they are not in the same place. The weapon's own
+    // glyph is held over the carrier's head, read off the owner's root every
+    // frame (drawAboveOwner) so it rides the strike hop; the struck cell draws
+    // its own mark (strikeChar), because a blow whose glyph has left the hitbox
+    // would otherwise land somewhere the player was never shown.
     // Movement is locked by locksMovement + attackLockTimer for the flash duration.
     const facingAngle = Math.atan2(player.facing.y, player.facing.x);
-    const range = this.data.range || GRID.CELL_SIZE * 1.25;
+    // The strike lands on the cell the carrier is facing — directly in front,
+    // never a step beyond it. The weapon's data `range` says what it can be
+    // swung at, not where this blow falls, so the hammer's reach is one cell flat.
+    const range = GRID.CELL_SIZE;
     // Mild forward hop at the moment of the strike — the carrier commits weight
     // into the blow. Friction eats it inside the flash (~1 cell of travel at the
     // default), so it reads as a lunge, not a dash.
@@ -1010,6 +1018,7 @@ export class Item {
       type: 'melee',
       char: this.data.char,
       drawAboveOwner: true,
+      strikeChar: HAMMER_STRIKE_CHAR,
       lunge: {
         vx: Math.cos(facingAngle) * lungeSpeed,
         vy: Math.sin(facingAngle) * lungeSpeed,
