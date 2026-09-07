@@ -1175,6 +1175,86 @@ export const BACKGROUND_OBJECT_VARIANTS = {
     slowing:     false,
     environmental: true,
   },
+  // Barricade ice — the mage gate that answers to heat and to nothing else.
+  //
+  // The 'i' render char belongs to a base Ice entry that nothing in the game
+  // ever constructs; a typeId replaces that char's data outright, so this keeps
+  // the glyph and the cold colour while dropping the base entry's `slide`
+  // interaction (a Barricade is stood in front of, not skated over) and its
+  // `indestructible: false` default silence about what may break it.
+  //
+  // One HP per block, and resolveSmashRefusal turns every non-burning swing
+  // away: a block is one lick of flame, six blocks are the wall. `flammability`
+  // stays 'none' on purpose — ice does not catch, it melts, and the fire bypass
+  // that ignites a Tree would set this alight instead of thawing it.
+  'barricade_ice': {
+    char: 'i',
+    name: 'Barricade Ice',
+    color: '#aaffff',
+    hp: 1,
+    // Melting leaves the water behind, which is the same answer the lava moat
+    // in this family wants — the two yellow gates teach each other.
+    dropEffect: 'destroyObject:spawnIngredient:w',
+    dropChance: 1.0,
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    solid: true,
+    interactions: {
+      default: { animation: 'melt', message: null }
+    }
+  },
+  // Barricade Wall — the unbreakable plug a 'trigger' or 'circuit' Barricade
+  // stands in the exit gap. Solid block, because that is what the room's own
+  // perimeter is: ASCIIRenderer.drawBorder paints the border as filled cells,
+  // so a plug drawn as a full block reads as the wall having closed over the
+  // gap rather than as something dropped in front of it.
+  //
+  // It used to be the rock glyph '0', which was a lie the player could act on —
+  // rocks are what a hammer opens, and this one answers to nothing but its own
+  // fixtures. The tint is the exit letter's colour, applied per instance by
+  // BarricadeSystem._buildPlug, so the wall says which family is asking.
+  'barricade_wall': {
+    char: '█',
+    name: 'Barricade Wall',
+    color: '#666666',
+    // Painted as a filled cell rather than as its glyph. Unifont's block is a
+    // half-width 8x16 sprite in a 16px cell, so drawn as text it leaves a seam
+    // down every column and cannot meet the border — which is a fillRect (see
+    // ASCIIRenderer.drawFilledCell). The plug has to read as the wall having
+    // closed over the gap, so it is drawn the way the wall is. Deep snow solves
+    // the same problem with its own branch in ExploreRenderer.
+    fillCell: true,
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    solid: true,
+    interactions: {
+      default: { animation: 'none', message: null }
+    }
+  },
+  // Electric Pole — an anchor, not an obstacle. Two flank a circuit Barricade's
+  // plug, one of them already live; a tripline strung between them carries the
+  // current across and the plug gives way.
+  //
+  // Indestructible because the answer is the wire, not the hammer, and solid so
+  // it reads as a thing standing in the room rather than scenery painted on the
+  // floor. Its name is what WireSystem's ELIGIBLE_ANCHOR_NAMES matches on, so
+  // renaming it silently breaks every circuit gate.
+  'electric_pole': {
+    char: 'A',
+    name: 'Electric Pole',
+    color: '#666666',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'metal',
+    indestructible: true,
+    solid: true,
+    interactions: {
+      default: { animation: 'clang', message: null }
+    }
+  },
 };
 
 export const WATER_COLORS = {

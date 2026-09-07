@@ -239,6 +239,16 @@ export class ExploreRenderer {
         const x = obj.position.x + GRID.CELL_SIZE / 2;
         const y = obj.position.y + GRID.CELL_SIZE / 2;
 
+        // A variant that asks to be painted as a filled cell gets one, in its
+        // own colour: the glyph is a half-width block in a full-width cell, so
+        // anything that has to meet the border (a Barricade plug) must be drawn
+        // the way the border is.
+        if (obj._variantData?.fillCell) {
+          this.renderer.bgCtx.fillStyle = obj.color;
+          this.renderer.bgCtx.fillRect(obj.position.x, obj.position.y, GRID.CELL_SIZE, GRID.CELL_SIZE);
+          continue;
+        }
+
         // Deep snow: render as a filled white (or compacted cyan) tile covering the full cell
         if (obj.char === '█' && obj._variantData?.compactColor) {
           this.renderer.bgCtx.fillStyle = obj.compacted ? obj._variantData.compactColor : '#ffffff';

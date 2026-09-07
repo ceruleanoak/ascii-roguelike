@@ -114,6 +114,16 @@ export class InteractionSystem {
     // `flammability: 'none'`.
     if (obj.char === 'Y' && attack.weaponSubtype !== 'axe') return SMASH_REFUSED_UNLESS_BURNED;
 
+    // Barricade ice answers to heat and nothing else — a Torch, a flame or lava
+    // sword, the Ruby Whip, or any blade an Oil augment is burning on. Note
+    // this is not the fire *bypass* the Tree above uses: that route ignites a
+    // refusal, and ice does not catch fire. A burning swing is simply not
+    // refused here, so the ordinary damage path melts a block the way any
+    // weapon breaks any other material.
+    if (obj.typeId === 'barricade_ice') {
+      return attack.onHit === 'burn' ? null : SMASH_REFUSED;
+    }
+
     return null;
   }
 

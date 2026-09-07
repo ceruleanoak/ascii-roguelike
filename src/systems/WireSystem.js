@@ -22,6 +22,9 @@ const ELIGIBLE_ANCHOR_NAMES = new Set([
   'Tree', 'Stump', 'Crystal', 'Boulder', 'Mushroom',
   'Pillar Cluster', 'Shrine', 'Barrel', 'Crate', 'Metal Box',
   'Rock', 'Glittering Rock', 'Secret Vein Rock',
+  // A circuit Barricade's poles are anchors on purpose — biting onto both is
+  // the whole answer to that gate (see BarricadeSystem's 'circuit' shape).
+  'Electric Pole',
   // Walls also accept anchors — wire can string between any solid wall.
   'Cave Wall', 'Hut Wall', 'Water Wall',
   'Tunnel Wall (Horizontal)', 'Tunnel Wall (Vertical)'

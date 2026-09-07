@@ -1,7 +1,8 @@
-import { GRID } from '../game/GameConfig.js';
+import { GRID, ROOM_TYPES } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { BARRICADE_FAMILIES, FAMILY_BY_COLOR } from '../data/barricades.js';
 import { tickTriggers } from './triggerMachine.js';
+import { isExitLetterTile } from './ExitSystem.js';
 import { createBurstParticles } from './WorldEffectsSystem.js';
 
 // Barricades stay out of the first two depths of a zone: the shape has to be
@@ -53,6 +54,13 @@ export class BarricadeSystem {
     room.barricade = null;
     if (game?.cursedRun) return;
 
+    // A Ridge is already a gate, and it is the only one this room is making.
+    // Its north lane is the far lip of the ravine — a plug raised there would
+    // stand out over the painted drop with nothing to stand on, and the room
+    // has stripped its own combat out (noCombat) precisely because crossing is
+    // the whole ask. Whatever the run is carrying, the bridge is the answer.
+    if (room.type === ROOM_TYPES.RIDGE) return;
+
     // The streak's own Barricade takes the north exit and outranks any roll:
     // the approach to the source is gated whether or not the room felt like it.
     const forced = game?.threeRoomSystem?.streakBarricade();
@@ -99,11 +107,15 @@ export class BarricadeSystem {
     return family[Math.floor(Math.random() * family.length)];
   }
 
-  // Stamp a descriptor across one exit lane and record it on the room.
+  // Stamp a descriptor across one exit lane and record it on the room. The whole
+  // footprint is cleared, the notch included: the plug does not stand on the
+  // letter's tile, but nothing generation scattered there gets to stand on it
+  // either, so a barricaded lane always reads its letter.
   _raise(room, direction, descriptor) {
     const objects = [];
-    for (const { col, row } of laneCells(direction)) {
+    for (const { col, row } of laneFootprint(direction, descriptor.deep, descriptor.spread)) {
       this._clearCell(room, col, row);
+      if (isExitLetterTile(col, row)) continue;
       const obj = this._buildPlug(descriptor, col, row);
       room.backgroundObjects.push(obj);
       objects.push(obj);
@@ -114,23 +126,36 @@ export class BarricadeSystem {
       direction,
       objects,
       triggers: [],
+      poles: [],
+      // Only a 'circuit' Barricade uses this; declared here so every Barricade
+      // record has the same shape whatever raised it.
+      liveColor: descriptor.liveColor || null,
       cleared: false
     };
     if (descriptor.shape === 'trigger') this._placeTriggers(room, direction, descriptor);
+    if (descriptor.shape === 'circuit') this._placePoles(room, direction, descriptor);
   }
 
   // The plug itself. A 'material' plug is ordinary breakable Background
   // Objects, so the tool that opens it is whatever InteractionSystem's smash
   // rules already say breaks that material, and breaking them IS the clearing.
-  // A 'trigger' plug is unbreakable rock tinted its family's colour — no tool
-  // touches it, and the room in front of it is where the answer is.
+  // A 'trigger' plug is a Barricade Wall tinted its family's colour — a solid
+  // block, the same thing the room's perimeter is drawn as, because no tool
+  // touches it and the room in front of it is where the answer is.
   _buildPlug(descriptor, col, row) {
     const cs = GRID.CELL_SIZE;
-    if (descriptor.shape === 'trigger') {
-      const obj = new BackgroundObject('0', col * cs, row * cs);
+    // A 'hazard' plug does not block the lane at all — it is terrain laid
+    // across it, and the cost of crossing is the damage. Nothing lifts it; the
+    // answer is a state the player arrives already carrying.
+    if (descriptor.shape === 'hazard') {
+      const obj = BackgroundObject.createVariant(descriptor.typeId, col * cs, row * cs);
+      obj.structural = true;
+      return obj;
+    }
+    if (descriptor.shape === 'trigger' || descriptor.shape === 'circuit') {
+      const obj = BackgroundObject.createVariant('barricade_wall', col * cs, row * cs);
       obj.color = descriptor.plugColor;
       obj.animationColor = descriptor.plugColor;
-      obj.indestructible = true;
       obj.structural = true;
       return obj;
     }
@@ -195,6 +220,55 @@ export class BarricadeSystem {
   }
 
   /**
+   * Stand a circuit Barricade's two poles out past either edge of its plug, one
+   * of them already live. Which one is live is recorded on the Barricade rather
+   * than flagged on the object: the pole is ordinary scenery that a wire may
+   * bite, and the circuit is the Barricade's business, not the pole's.
+   */
+  _placePoles(room, direction, descriptor) {
+    const cs = GRID.CELL_SIZE;
+    const barricade = room.barricade;
+    for (let i = 0; i < descriptor.poles.length; i++) {
+      const spec = descriptor.poles[i];
+      const { col, row } = laneCell(direction, spec.depth, spec.across);
+      this._clearCell(room, col, row);
+      const pole = BackgroundObject.createVariant('electric_pole', col * cs, row * cs);
+      pole.structural = true;
+      if (i === 0) {
+        pole.color = descriptor.liveColor;
+        pole.animationColor = descriptor.liveColor;
+      }
+      room.backgroundObjects.push(pole);
+      barricade.poles.push(pole);
+    }
+  }
+
+  /**
+   * Has a tripline been strung between this Barricade's two poles? Measured
+   * geometrically rather than by asking the wire what it bit: an end anchored
+   * onto a pole records that pole's exact centre, and an end thrown against one
+   * comes to rest beside it, so one cell of tolerance accepts both ways of
+   * placing a wire and the gate does not care which the player used.
+   *
+   * The wire's own type is deliberately not checked — any tripline conducts
+   * here. What the gate asks for is a line between the two, not a current.
+   */
+  _circuitClosed(room, barricade) {
+    const [a, b] = barricade.poles || [];
+    if (!a || !b) return false;
+    const reach = GRID.CELL_SIZE;
+    const at = (x, y, pole) =>
+      Math.hypot(x - (pole.position.x + GRID.CELL_SIZE / 2),
+                 y - (pole.position.y + GRID.CELL_SIZE / 2)) <= reach;
+    for (const seg of room.triplines || []) {
+      const oneWay = at(seg.x1, seg.y1, a) && at(seg.x2, seg.y2, b);
+      const other  = at(seg.x1, seg.y1, b) && at(seg.x2, seg.y2, a);
+      if (oneWay || other) return true;
+    }
+    return false;
+  }
+
+  /**
    * A concealed fixture's cover has been removed — build the fixture in its
    * place. Called from InteractionSystem's grass-cut resolution, the same route
    * the χ grass reveal takes.
@@ -220,8 +294,20 @@ export class BarricadeSystem {
   update(deltaTime) {
     const room = this.game?.currentRoom;
     const barricade = room?.barricade;
-    if (!barricade || barricade.shape !== 'trigger' || barricade.cleared) return;
-    if (tickTriggers(barricade.triggers, deltaTime, this.game.player, this.game.companion)) {
+    if (!barricade || barricade.cleared) return;
+    if (barricade.shape === 'trigger') {
+      if (tickTriggers(barricade.triggers, deltaTime, this.game.player, this.game.companion)) {
+        this._lift(room, barricade);
+      }
+      return;
+    }
+    if (barricade.shape === 'circuit' && this._circuitClosed(room, barricade)) {
+      // The dead pole comes up live as the current reaches it — the one beat of
+      // feedback that says the wire, not the wall, was the thing that mattered.
+      for (const pole of barricade.poles) {
+        pole.color = barricade.liveColor;
+        pole.animationColor = barricade.liveColor;
+      }
       this._lift(room, barricade);
     }
   }
@@ -263,16 +349,42 @@ export class BarricadeSystem {
   }
 }
 
-// The footprint: two cells deep into the room, three cells wide across the
-// lane, centred on the exit gap (the same cell EXIT_SLOT_POSITIONS puts the
-// letter on). Plug materials tend to carry narrow hitboxes (a round rock; a
-// tree's trunk), so a single cell would leave room to slide past one and still
-// read as standing in the gap — see ExitSystem.isPressingIntoExitGap, which
-// only asks that the player's box overlap the lane at all.
-export function laneCells(direction) {
+/**
+ * The footprint: two cells deep into the room, three cells wide across the
+ * lane, centred on the exit gap — minus the exit letter's own tile, which is
+ * restricted and belongs to the letter (ExitSystem.isExitLetterTile). The
+ * letter is the only thing the room says about where that way out leads, and a
+ * Barricade that covered it would be refusing to answer a question it had also
+ * hidden.
+ *
+ * Notching that one cell costs nothing, because the lane is sealed in front of
+ * it and beside it: the depth-2 row closes the way in, and the depth-1
+ * shoulders close the way around. What is left on the letter tile is a pocket
+ * with no approach, so the letter stays readable and the exit stays shut.
+ *
+ * That argument only holds for a plug at least 2 deep — a 1-deep plug notched
+ * this way is a doorway — so `deep` is floored at 2 rather than trusted. The
+ * width matters for the same reason the depth does: plug materials tend to
+ * carry narrow hitboxes (a round rock; a tree's trunk), so a lone cell would
+ * leave room to slide past one and still read as standing in the gap (see
+ * ExitSystem.isPressingIntoExitGap, which only asks that the player's box
+ * overlap the lane at all).
+ */
+export function laneCells(direction, deep = 2, spread = 1) {
+  return laneFootprint(direction, deep, spread)
+    .filter(({ col, row }) => !isExitLetterTile(col, row));
+}
+
+/**
+ * The same block before the notch is cut — every cell the Barricade claims,
+ * whether or not it builds there. What the plug fills and what the plug clears
+ * are different sets by exactly one tile, and _raise needs both.
+ */
+export function laneFootprint(direction, deep = 2, spread = 1) {
   const cells = [];
-  for (let depth = 1; depth <= 2; depth++) {
-    for (let across = -1; across <= 1; across++) {
+  const reach = Math.max(2, deep);
+  for (let depth = 1; depth <= reach; depth++) {
+    for (let across = -spread; across <= spread; across++) {
       cells.push(laneCell(direction, depth, across));
     }
   }

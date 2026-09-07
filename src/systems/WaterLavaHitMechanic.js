@@ -40,6 +40,15 @@ export const WaterLavaHitMechanic = {
       }
     }
 
+    // Fire projectile hits Barricade ice → melt it, the same one-hit thaw a
+    // burning melee swing gets past resolveSmashRefusal. Handled here rather
+    // than in the collision handler's damage path because a projectile never
+    // consults the smash rules at all: this module is where a projectile's
+    // elemental reactions to terrain already live.
+    if (obj.typeId === 'barricade_ice' && proj.onHit === 'burn') {
+      obj.takeDamage(Math.max(1, proj.damage || 1));
+    }
+
     // Water attack hits lava → solidify to rock
     if (obj.isLava && obj.isLava() && proj.onHit === 'freeze') {
       obj.solidifyToRock();

@@ -1596,6 +1596,18 @@ export class PhysicsSystem {
           entity.inDamagingLiquid = false; // immune — not actually taking damage, no burn pip
           continue;
         }
+        // Wet skin survives lava. Water is scarce wherever lava is — the red
+        // zone's own liquidType replaces water with lava outright — so this is
+        // a crossing bought somewhere else and carried in, not a standing
+        // immunity, and it lasts exactly as long as the 6s wet status does.
+        // The yellow lava-moat Barricade is the gate written against it.
+        // Player and Enemy both answer isWet(); a companion that answers
+        // nothing simply keeps burning.
+        if (entity.isWet?.()) {
+          entity.inLava = true;
+          entity.inDamagingLiquid = false;
+          continue;
+        }
         // Lava contact reads as "burning" for the status pip (StatusEffectVisuals.js)
         // even though the damage below is lava's own tick, not the burn DOT.
         entity.inDamagingLiquid = true;
