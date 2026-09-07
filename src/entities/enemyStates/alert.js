@@ -83,9 +83,31 @@ export default {
       return { id: 'approach', cause: 'target sighted' };
     }
 
-    // Door two: proximity. An enemy that has never laid eyes on the target — the
-    // one that spawned facing a wall — still notices something walk past it, and
-    // investigates where it sensed it rather than chasing what it cannot see.
+    // Door two: sight at a distance. Being seen from outside aggro range does
+    // not commit the enemy to you, it *draws* it — the band between aggro and
+    // vision is ground where you are noticed rather than engaged, and the
+    // enemy comes to look. Closing the rest of the way is Search's job, and
+    // Search hands off to Approach at aggro range (search.js), so aggro keeps
+    // exactly one meaning: this is where I commit.
+    //
+    // `ctx.canSee` is cone-gated in Alert (spineCanSee only ignores the cone
+    // once a State from Approach onward is running), which is the whole
+    // character of this door: standing in the band is a *chance* of being
+    // noticed, decided by which way the enemy happens to be turned. Distance
+    // needs no test of its own — canSee is cast against visionLength, so a
+    // steam cloud shrinking that reach closes this door with it.
+    //
+    // Deliberately not gated on `hadVisualContact`, unlike door three: that
+    // flag exists to stop a blind sensor re-sensing its own stale mark, and
+    // this door is the sighted one. Slamming it after the first chase would
+    // mean an enemy that has met you once can never notice you at range again.
+    if (pursuing && ctx.canSee && ctx.samePlane && !inRange) {
+      return { id: 'search', cause: 'noticed at vision range' };
+    }
+
+    // Door three: proximity. An enemy that has never laid eyes on the target —
+    // the one that spawned facing a wall — still notices something walk past it,
+    // and investigates where it sensed it rather than chasing what it cannot see.
     //
     // `hadVisualContact` slams this door permanently once the enemy has seen the
     // target even once, and that guard is load-bearing: without it an enemy that
@@ -108,8 +130,8 @@ export default {
 
   thresholds(enemy) {
     // Both senses, because Alert is the State where the difference between them
-    // is the whole behavior: the band between aggro and vision is ground the
-    // Enemy can see a target standing in without committing to it.
+    // is the whole behavior: inside the aggro ring the Enemy commits, and in the
+    // band out to the vision ring it is drawn to look without committing.
     return [
       { label: 'aggro', px: enemy.aggroRange, color: '#5ec46a' },
       { label: 'vision', px: enemy.visionLength, color: '#8089a0' },

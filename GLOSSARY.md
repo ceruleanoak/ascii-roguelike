@@ -174,7 +174,9 @@ programming terms.
 - **Definition:** Aware the target may be nearby but not committed to engaging it — the
   "listening" half of what the legacy `'idle'` state id conflated with "wandering." Holds
   position if the target is within aggro range but undetected; wanders otherwise. Exits toward
-  Approach on sight, or toward Search on proximity-only detection.
+  Approach on sight inside aggro range, or toward Search two ways: on sight from the band
+  between aggro range and vision length (noticed, not engaged), and on proximity-only detection
+  by an Enemy that has never seen the target.
 - **In code:** `src/entities/enemyStates/alert.js`; must be declared by every Enemy — it is the
   only State Approach can hand back to when the target leaves aggro range.
 - **Not:** the legacy `'idle'` state id, which this and Approach's holding behavior jointly
