@@ -3096,6 +3096,7 @@ class Game {
     this.aquiferSystem.update(deltaTime); // Quagmire dive: entry cooldown + plane-1 pickup
     this.sinkholeSystem.update(deltaTime); // Sinkhole cave: river-exit → cross-zone transition
     this.alchemySystem.update(deltaTime);
+    this.fireplaceSystem.update(); // Torch in a quick slot auto-lights an unlit fireplace on approach
 
     // Update polymorph system (tongue attacks, cure Rusalka contact, Lake room spawn)
     this.polymorphSystem.update(deltaTime, this);

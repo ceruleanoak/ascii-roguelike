@@ -15,6 +15,9 @@ import { Item } from '../entities/Item.js';
  * than landing straight in inventory, same as any other world pickup.
  * `burning` lives on the BackgroundObject instance, so it resets for free
  * every time HutSystem regenerates the hut.
+ *
+ * A Torch in any quick slot lights an unlit fireplace on approach, no
+ * SPACE/stick needed — checked passively every frame via update().
  */
 
 const UNLIT_COLOR = '#886655';
@@ -26,6 +29,7 @@ const STOKE_ASH_CHANCE = 0.60;
 const STOKE_ESSENCE_CHANCE = 0.10;
 
 const INTERACT_RADIUS = GRID.CELL_SIZE * 1.2;
+const TORCH_CHAR = '♨';
 
 export class FireplaceSystem {
   constructor(game) {
@@ -47,6 +51,26 @@ export class FireplaceSystem {
       if (Math.sqrt(dx * dx + dy * dy) < INTERACT_RADIUS) return obj;
     }
     return null;
+  }
+
+  /**
+   * Passive tick: a Torch parked in any quick slot (not necessarily the
+   * held/active one — "equipped" mirrors TrapSystem's slot-presence check)
+   * ignites an unlit fireplace the moment the player is in range, mirroring
+   * how a real torch would light one without any menu interaction.
+   */
+  update() {
+    const fireplace = this._findFireplace();
+    if (!fireplace || fireplace.burning) return;
+    const game = this.game;
+    const hasTorch = game.player.quickSlots.some(slot => slot?.char === TORCH_CHAR);
+    if (!hasTorch) return;
+
+    fireplace.burning = true;
+    fireplace.color = LIT_COLOR;
+    fireplace.animationColor = LIT_COLOR;
+    game.menuSystem.showPickupMessage('FIREPLACE LIT');
+    game.audioSystem?.playSFX?.('craft');
   }
 
   /** SPACE near a fireplace → open its menu. */
