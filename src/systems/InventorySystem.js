@@ -19,6 +19,7 @@ import { saveExploreRoomState, getSavedExploreRoomState, clearSavedExploreRoomSt
 import { createBurstParticles } from './WorldEffectsSystem.js';
 import { EquipmentEffectsSystem } from './EquipmentEffectsSystem.js';
 import { ConsumableWindupEffects } from './ConsumableWindupEffects.js';
+import { countItemChar, removeItemChar } from './itemCostDispatch.js';
 
 export class InventorySystem {
   constructor() {
@@ -158,6 +159,17 @@ export class InventorySystem {
     if (this.ingredients.length === 0) return null;
     const idx = Math.floor(Math.random() * this.ingredients.length);
     return this.ingredients.splice(idx, 1)[0];
+  }
+
+  // Generic char-based cost dispatch (raw ingredient vs crafted item) — full
+  // logic lives in itemCostDispatch.js (free functions taking `this`), same
+  // pattern as the TrapSystem chest-array helpers below. See that file's
+  // header for why a recipe/shop-listing char can name either tier.
+  countItemChar(char, player) {
+    return countItemChar(this, char, player);
+  }
+  removeItemChar(char, player) {
+    return removeItemChar(this, char, player);
   }
 
   // ─── Coin wallet ──────────────────────────────────────────────────────────

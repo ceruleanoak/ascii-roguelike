@@ -220,10 +220,17 @@ export class ShopSystem {
       // Duplicate-char guard: a few real recipes self-pair (e.g. 'b'+'b' Bone
       // Armor). Count how many OTHER already-toggled lanes share this char —
       // toggling on requires strictly more copies held than that.
+      //
+      // A recipe's left/right char isn't always a raw ingredient — plenty of
+      // recipes chain a previous crafted result as an input (Base Potion +
+      // Meat = Health Potion, Hammer + Hammer = Maul, Staff + gemstone =
+      // Wand, ...). countItemChar dispatches to the right source either way
+      // (ingredient pile, or wherever the player's carrying/storing the
+      // crafted item) so every such listing is actually purchasable.
       const alreadyToggledSameChar = this.lanes.filter(
         (l, i) => l.type === 'ingredient' && l.char === lane.char && this.toggled[i]
       ).length;
-      if (inv.countIngredient(lane.char) <= alreadyToggledSameChar) {
+      if (inv.countItemChar(lane.char, this.game.player) <= alreadyToggledSameChar) {
         this._playError();
         return;
       }
@@ -299,7 +306,7 @@ export class ShopSystem {
     } else {
       for (let i = 0; i < this.lanes.length; i++) {
         if (this.lanes[i].type === 'ingredient' && this.toggled[i]) {
-          inv.removeIngredient(this.lanes[i].char);
+          inv.removeItemChar(this.lanes[i].char, game.player);
         }
       }
       inv.removeCoin(this.getRemainingCoinPrice());
