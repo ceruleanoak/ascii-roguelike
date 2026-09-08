@@ -1378,6 +1378,12 @@ export function stampSmallHutFootprint(room, { centerCol, centerRow, hutKind = '
   };
 }
 
+// Odds a Settlement includes the Shopkeeper's hut. Applied before the other
+// kinds are drawn, so it is the real appearance rate rather than a weight
+// competing with the rest of settlementHutPool.
+const SETTLEMENT_SHOP_CHANCE = 0.75;
+const SETTLEMENT_SHOP_KIND = 'shopkeeper';
+
 /**
  * Settlement room ('S') — 2-3 neutral huts drawn at random from
  * `template.settlementHutPool`, placed at random non-overlapping positions
@@ -1388,7 +1394,18 @@ export function stampSmallHutFootprint(room, { centerCol, centerRow, hutKind = '
 export function generateSettlementRoom(gen, room) {
   const pool = gen.currentLetterTemplate?.settlementHutPool ?? [];
   const hutCount = Math.min(pool.length, 2 + Math.floor(Math.random() * 2)); // 2-3
-  const chosenKinds = shuffled(pool).slice(0, hutCount);
+
+  // The Shopkeeper is drawn first, at its own rate, before the rest of the
+  // slots are filled at random. A flat shuffle over a 7-kind pool put the shop
+  // in only ~36% of Settlements, which is too rare for a counter whose stock
+  // is meant to track the run's progress — the player has to be able to find
+  // it again after pushing deeper (see Shopkeeper.refreshStock).
+  const wantsShop = pool.includes(SETTLEMENT_SHOP_KIND)
+    && Math.random() < SETTLEMENT_SHOP_CHANCE;
+  const rest = shuffled(pool.filter(k => k !== SETTLEMENT_SHOP_KIND));
+  const chosenKinds = wantsShop
+    ? shuffled([SETTLEMENT_SHOP_KIND, ...rest.slice(0, hutCount - 1)])
+    : rest.slice(0, hutCount);
 
   const placedBounds = [];
   room.huts = [];
