@@ -737,6 +737,12 @@ export class MenuSystem {
       return;
     }
 
+    // Fireplace stoke-quantity submenu (how many sticks to feed at once)
+    if (game.currentMenuSlot === 'fireplace-stoke-qty') {
+      game.fireplaceSystem?.commitStickQuantity(selectedItem.value);
+      return;
+    }
+
     // Handle alchemy cauldron operations (water → starter potion → true potion)
     if (game.currentMenuSlot === 'alchemy') {
       game.alchemySystem?.commitSelection(selectedItem);

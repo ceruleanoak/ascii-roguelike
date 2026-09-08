@@ -8,9 +8,13 @@ import { Item } from '../entities/Item.js';
  * accepts a Stick, which ignites it (recolors the instance, no state machine
  * beyond the one `burning` flag). Once burning, the menu opens up to Meat
  * (100% → Meat Jerky), Ore (100% → Metal), a held Fire Berry (100% → Mana),
- * and further Sticks (a chance of Ash, common, or Fire Essence, rare — just
- * feeds the fire on a whiff). `burning` lives on the BackgroundObject
- * instance, so it resets for free every time HutSystem regenerates the hut.
+ * and further Sticks — picking Stick opens a quantity submenu asking how
+ * many to contribute at once, then rolls each stick independently for a
+ * byproduct (Ash, common; Fire Essence, rare — a whiff just feeds the fire).
+ * Byproducts pop out of the fireplace as physical drops (LootSystem) rather
+ * than landing straight in inventory, same as any other world pickup.
+ * `burning` lives on the BackgroundObject instance, so it resets for free
+ * every time HutSystem regenerates the hut.
  */
 
 const UNLIT_COLOR = '#886655';
@@ -18,8 +22,8 @@ const LIT_COLOR = '#ff6622';
 
 // Sticks fed to an already-burning fireplace: roll for a byproduct, in order.
 // Neither hits → the stick just feeds the fire, no output.
-const STOKE_ASH_CHANCE = 0.55;
-const STOKE_ESSENCE_CHANCE = 0.15;
+const STOKE_ASH_CHANCE = 0.60;
+const STOKE_ESSENCE_CHANCE = 0.10;
 
 const INTERACT_RADIUS = GRID.CELL_SIZE * 1.2;
 
@@ -104,21 +108,17 @@ export class FireplaceSystem {
     if (!fireplace) return;
 
     if (rawChar === '|') {
-      if (!game.removeIngredient('|')) return;
       if (!fireplace.burning) {
+        if (!game.removeIngredient('|')) return;
         fireplace.burning = true;
         fireplace.color = LIT_COLOR;
         fireplace.animationColor = LIT_COLOR;
         game.menuSystem.showPickupMessage('FIREPLACE LIT');
       } else {
-        const roll = Math.random();
-        if (roll < STOKE_ASH_CHANCE) {
-          game.addIngredient('a');
-          game.menuSystem.showPickupMessage('Ash');
-        } else if (roll < STOKE_ASH_CHANCE + STOKE_ESSENCE_CHANCE) {
-          game.addIngredient('F');
-          game.menuSystem.showPickupMessage('Fire Essence');
-        }
+        // Already burning — how many sticks to feed it is a separate
+        // quantity submenu rather than a single implicit stick.
+        this.openStickQuantityMenu(fireplace);
+        return;
       }
     } else if (rawChar === 'm') {
       if (!fireplace.burning || !game.removeIngredient('m')) return;
@@ -138,6 +138,55 @@ export class FireplaceSystem {
       game.menuSystem.showPickupMessage('Mana');
     } else {
       return;
+    }
+
+    game.audioSystem?.playSFX?.('craft');
+    game.closeMenu();
+    game.updateUI();
+  }
+
+  /** How many sticks to feed the already-burning fireplace, 1..stickCount. */
+  openStickQuantityMenu(fireplace) {
+    const game = this.game;
+    const stickCount = game.inventorySystem.countIngredient('|');
+    if (stickCount === 0) return;
+
+    const items = [];
+    for (let n = 1; n <= stickCount; n++) {
+      items.push({ action: 'qty', label: `|×${n}`, value: n });
+    }
+
+    game.menuOpen = true;
+    game.currentMenuSlot = 'fireplace-stoke-qty';
+    game.selectedMenuIndex = 0;
+    game.menuItems = items;
+    this.activeFireplace = fireplace;
+    game.renderController.menuOverlay.render(game);
+    game.menuSystem.closeOnMovement = true;
+  }
+
+  /**
+   * Commit a stick-quantity submenu pick: consume that many sticks, roll
+   * each independently for Ash/Fire Essence, and pop any hits out of the
+   * fireplace as physical drops (LootSystem) instead of straight-to-inventory.
+   */
+  commitStickQuantity(count) {
+    const game = this.game;
+    const fireplace = this.activeFireplace;
+    if (!fireplace || !fireplace.burning) return;
+
+    const C = GRID.CELL_SIZE;
+    const dropX = fireplace.position.x + C / 2;
+    const dropY = fireplace.position.y + C / 2;
+
+    for (let i = 0; i < count; i++) {
+      if (!game.removeIngredient('|')) break;
+      const roll = Math.random();
+      if (roll < STOKE_ASH_CHANCE) {
+        game.lootSystem.spawnIngredientDrop('a', dropX, dropY);
+      } else if (roll < STOKE_ASH_CHANCE + STOKE_ESSENCE_CHANCE) {
+        game.lootSystem.spawnIngredientDrop('F', dropX, dropY);
+      }
     }
 
     game.audioSystem?.playSFX?.('craft');
