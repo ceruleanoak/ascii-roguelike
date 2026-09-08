@@ -289,16 +289,6 @@ class Game {
     this.tamedRats = [];            // Run-scoped: rats that ate bread; companion mode driven by Enemy.tamed
     this.ridgeBridgeBuilt = false;  // Run-scoped: set once any Ridge bridge is built; future Ridge rooms skip the BridgeWorker errand entirely
 
-    // Selectors that return arrays of entities eligible to eat a dropped loaf.
-    // SPACE with bread equipped is a no-op unless at least one selector returns
-    // a non-empty list. Append more selectors as new feed-able creatures land.
-    this.breadTargetSelectors = [
-      (game) => game.currentRoom?.crows || [],
-      (game) => game.followerCrows || [],
-      // Wild rats in the current room are eligible: SPACE drops a loaf and the
-      // nearest wild rat paths to it via updateBreadSeekingRats.
-      (game) => (game.currentRoom?.enemies || []).filter(e => e.char === 'r' && !e.tamed && e.hp > 0)
-    ];
     this.activeNoiseSource = null; // Set each frame by updatePlacedTraps if noise-maker is active
     this.backgroundObjects = [];
     this.steamClouds = []; // Steam clouds from fire+water and Steam Vial

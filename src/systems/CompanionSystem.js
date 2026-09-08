@@ -1,5 +1,4 @@
 import { GRID } from '../game/GameConfig.js';
-import { Item } from '../entities/Item.js';
 import { NPCRat } from '../entities/NPCRat.js';
 import { Ingredient } from '../entities/Ingredient.js';
 import { planeOf, PLANE_SURFACE } from './PlaneSystem.js';
@@ -14,41 +13,20 @@ const LOOT_SEEK_DELAY_MS = 2000;
 // Companion behavior: the bread-feed pipeline and per-frame drivers for every
 // befriendable creature — wild rat → NPCRat companion, wild crow → follower
 // flock → shoulder companion. Companion rosters (game.tamedRats,
-// game.companionCrows, game.followerCrows, game.fedCrowCount) and the
-// breadTargetSelectors list stay on game: renderers read them directly, the
-// same documented compromise as trap state (system owns logic, game holds data).
+// game.companionCrows, game.followerCrows, game.fedCrowCount) stay on game:
+// renderers read them directly, the same documented compromise as trap state
+// (system owns logic, game holds data). Bread is a consumable now (items.js)
+// — SHIFT (TossSystem) throws it to the ground as a pickup, which is the
+// whole feed trigger; this file only drives what happens once a loaf lands.
 export class CompanionSystem {
   constructor(game) {
     this.game = game;
   }
 
-  // True iff any entity in the current room would eat a dropped loaf.
-  // Iterates game.breadTargetSelectors so new bread-eaters drop in by appending.
-  hasBreadEligibleTarget() {
-    for (const sel of this.game.breadTargetSelectors) {
-      const list = sel(this.game);
-      if (list && list.length > 0) return true;
-    }
-    return false;
-  }
-
-  // Spawn a Bread Item entity at the player's feet — SPACE path. Wild rats
-  // are steered toward it by updateBreadSeekingRats (which scans every frame
-  // so SHIFT-thrown loaves are handled the same way without a parallel hook).
-  dropBreadAtPlayer() {
-    const game = this.game;
-    if (!game.player) return;
-    const loaf = new Item('⌬', game.player.position.x, game.player.position.y);
-    loaf.pickupReadyAt = performance.now() + 1500;
-    game.items.push(loaf);
-    game.physicsSystem.addEntity(loaf);
-  }
-
   // Wild rats seeking bread: assign unowned loaves → nearest wild rat each
-  // frame (so both SPACE-drop and SHIFT-throw work without a separate hook),
-  // then check proximity, consume the loaf, remove the wild Enemy, and spawn
-  // a fresh NPCRat in its place. Replacing rather than re-skinning keeps the
-  // hostile Enemy AI cleanly out of the companion's behavior tree.
+  // frame, then check proximity, consume the loaf, remove the wild Enemy,
+  // and spawn a fresh NPCRat in its place. Replacing rather than re-skinning
+  // keeps the hostile Enemy AI cleanly out of the companion's behavior tree.
   updateBreadSeekingRats() {
     const game = this.game;
     // Dungeons have no wild rats to tame, and dungeon loaves are the
@@ -468,9 +446,9 @@ export class CompanionSystem {
     // Player-as-threat: scares unfed crows on proximity. Fed crows (already
     // tame) skip this — they only flee actual weapon contact.
     // While bread is on the ground, the player is offering food, not
-    // threatening — otherwise SPACE-dropped bread at the player's feet
-    // creates a scare loop: crow seeks → enters scare radius → flees →
-    // returns → seeks → forever. Weapon attacks below still scare.
+    // threatening — otherwise a nearby dropped loaf creates a scare loop:
+    // crow seeks → enters scare radius → flees → returns → seeks → forever.
+    // Weapon attacks below still scare.
     const playerThreat = (game.player && game.player.plane === 0 && breadItems.length === 0)
       ? { x: game.player.position.x, y: game.player.position.y }
       : null;

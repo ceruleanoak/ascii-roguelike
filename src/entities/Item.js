@@ -252,13 +252,8 @@ export class Item {
   use(player) {
     if (!this.canUse()) return null;
 
-    // Utility items (like vault key) have no attack behavior
+    // Utility items (like vault key, compass) have no attack behavior
     if (this.data.weaponType === 'UTILITY') {
-      // Bread: signal main.js to drop a loaf at the player's feet and consume
-      // the slot. No attack, no cooldown — the drop IS the use.
-      if (this.data.effect === 'dropBread') {
-        return { consumed: true, dropBread: true };
-      }
       return null;
     }
 

@@ -1591,10 +1591,10 @@ export class CombatSystem {
     return { playerDead: false, objectEffects, impactEffects, newSteamClouds, polymorphEvents };
   }
 
-  // SPACE attack flow (EXPLORE): gem-wand mana gate, bread feed gate, charge
-  // SFX on first press, then route the attack (or bread drop). Caller has
-  // already verified player.heldItem && player.canAttack() and that no
-  // higher-priority interaction (pickup, captive, container) claimed the press.
+  // SPACE attack flow (EXPLORE): gem-wand mana gate, charge SFX on first
+  // press, then route the attack. Caller has already verified
+  // player.heldItem && player.canAttack() and that no higher-priority
+  // interaction (pickup, captive, container) claimed the press.
   tryUseHeldWeapon() {
     const game = this.game;
     const player = game.player;
@@ -1617,20 +1617,8 @@ export class CombatSystem {
       game.audioSystem.playStoppableSFXStretched('wand_charge', player.heldItem.data.chargeTime);
     }
     if (attack) {
-      // Bread "use" skips the attack pipeline entirely: feed a nearby
-      // crow/rat if one is eligible (dropBreadAtPlayer), otherwise eat it
-      // directly for 2 HP. The slot was already cleared inside
-      // Player.useHeldItem because the result was { consumed: true }.
-      if (attack.dropBread) {
-        if (game.companionSystem.hasBreadEligibleTarget()) {
-          game.companionSystem.dropBreadAtPlayer();
-        } else {
-          player.hp = Math.min(player.hp + 2, player.maxHp);
-        }
-      } else {
-        this.createAttack(game.applyGreenDamageModifier(attack), game._activeEnemies());
-        game.triggerGreenActionCooldown();
-      }
+      this.createAttack(game.applyGreenDamageModifier(attack), game._activeEnemies());
+      game.triggerGreenActionCooldown();
     }
   }
 
