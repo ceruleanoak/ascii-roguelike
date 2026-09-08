@@ -35,15 +35,29 @@ export function drawPlayerMeleeAttacks(renderer, game, hutPlane = false) {
     const scale = attack.drawScale || 1.0;
     // The hitbox's own mark. An attack whose glyph rides its carrier leaves the
     // struck cell unmarked otherwise, and a blow has to show where it lands,
-    // not only who is throwing it.
-    if (attack.strikeChar) {
-      const strikeMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
-      renderer[strikeMethod](
-        attack.position.x + GRID.CELL_SIZE / 2,
-        attack.position.y + GRID.CELL_SIZE / 2,
-        attack.strikeChar,
-        attack.color
-      );
+    // not only who is throwing it. `strikeFlashTimer`/`strikeFlashDuration`
+    // (hammerRing) fade this out on its own short clock — independent of
+    // attack.duration, which keeps the weapon glyph up for the whole flash —
+    // so the mark reads as a burst at the instant of impact, not a sustained
+    // decal; a strikeChar with no flash timer just draws at full opacity.
+    if (attack.strikeChar && (attack.strikeFlashTimer === undefined || attack.strikeFlashTimer > 0)) {
+      const flashAlpha = attack.strikeFlashDuration
+        ? attack.strikeFlashTimer / attack.strikeFlashDuration
+        : 1;
+      const strikeScale = attack.strikeScale || 1.0;
+      const scx = attack.position.x + GRID.CELL_SIZE / 2;
+      const scy = attack.position.y + GRID.CELL_SIZE / 2;
+      if (strikeScale !== 1.0) {
+        const ctx = renderer.fgCtx;
+        const prevAlpha = ctx.globalAlpha;
+        ctx.globalAlpha = flashAlpha;
+        renderer.drawEntityScaled(scx, scy, attack.strikeChar, attack.color, strikeScale);
+        ctx.globalAlpha = prevAlpha;
+      } else if (useDithering) {
+        renderer.drawTextWithAlphaDithered(scx, scy, attack.strikeChar, attack.color, flashAlpha);
+      } else {
+        renderer.drawTextWithAlpha(scx, scy, attack.strikeChar, attack.color, flashAlpha);
+      }
     }
     if (attack.drawAngle != null) {
       if (useDithering) {

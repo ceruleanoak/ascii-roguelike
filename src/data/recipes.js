@@ -43,11 +43,15 @@ export const RECIPES = [
   { left: '/', right: '⬥', result: '⚭', name: 'Garnet Staff' },   // Staff + Garnet
   { left: '/', right: '⧫', result: '⚳', name: 'Force Wand' },    // Staff + Diamond
 
-  // === GEM WHIPS (Whip + gemstone) — magic-infused whipcrack ===
-  { left: '≋', right: '◈', result: '∿', name: 'Ruby Whip' },      // Whip + Ruby     = burn lash
-  { left: '≋', right: '⬨', result: '≀', name: 'Sapphire Whip' },  // Whip + Sapphire = freeze lash
-  { left: '≋', right: '◇', result: '⤳', name: 'Topaz Whip' },     // Whip + Topaz    = electric stun lash
-  { left: '≋', right: '⬦', result: '∽', name: 'Emerald Whip' },   // Whip + Emerald  = poison lash
+  // === MANA WHIP (Whip + Mana Potion) — confusion lash, and the required base
+  // for the gem whips below (was plain Whip) ===
+  { left: '≋', right: '𝑚', result: '∾', name: 'Infused Whip' },  // Whip + Mana = Infused Whip
+
+  // === GEM WHIPS (Infused Whip + gemstone) — magic-infused whipcrack ===
+  { left: '∾', right: '◈', result: '∿', name: 'Ruby Whip' },      // Infused Whip + Ruby     = burn lash
+  { left: '∾', right: '⬨', result: '≀', name: 'Sapphire Whip' },  // Infused Whip + Sapphire = freeze lash
+  { left: '∾', right: '◇', result: '⤳', name: 'Topaz Whip' },     // Infused Whip + Topaz    = electric stun lash
+  { left: '∾', right: '⬦', result: '∽', name: 'Emerald Whip' },   // Infused Whip + Emerald  = poison lash
 
 
   // Dual wielding

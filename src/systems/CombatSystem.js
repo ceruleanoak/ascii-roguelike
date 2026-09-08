@@ -740,6 +740,13 @@ export class CombatSystem {
 
       attack.duration -= deltaTime;
 
+      // Impact-burst fade: a separate, shorter countdown from strikeChar's own
+      // flash duration (hammerRing's ✷) so it fades at the instant of impact
+      // rather than lingering for the whole attack.duration flash.
+      if (attack.strikeFlashTimer > 0) {
+        attack.strikeFlashTimer = Math.max(0, attack.strikeFlashTimer - deltaTime);
+      }
+
       if (attack.duration <= 0) {
         this.meleeAttacks.splice(i, 1);
         continue;

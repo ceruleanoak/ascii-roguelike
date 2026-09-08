@@ -945,6 +945,25 @@ export class ExploreRenderer {
       }
     }
 
+    // Draw hammer held raised overhead during its windup — the same anchor
+    // MeleeAttackDraw uses for drawAboveOwner, so the glyph doesn't jump when
+    // the windup completes and createMeleeHammerRing's attack object takes
+    // over drawing it for the strike itself. Static (no shake): the raised
+    // pose alone reads as "about to swing" without competing with the
+    // impact-frame burst at the strike.
+    if (!playerInInterior) {
+      const held = game.player.heldItem;
+      if (held?.data?.attackPattern === 'hammerRing' && held.windupActive) {
+        const C = GRID.CELL_SIZE;
+        this.renderer.drawEntity(
+          game.player.position.x + C / 2,
+          game.player.position.y - C / 2,
+          held.char,
+          held.color || COLORS.ITEM
+        );
+      }
+    }
+
     // Draw blinking trap charge count above player (hidden during charge-up)
     if (!playerInInterior && !game.trapCharging) {
       const held = game.player.heldItem;
@@ -2290,27 +2309,20 @@ export class ExploreRenderer {
     ctx.restore();
   }
 
-  // Ghost of the held weapon at its current estimated landing spot while charging
-  // a throw (non-trap items only — traps show the 'x' reticule instead). Reuses
-  // TrapSystem's cheap trig landing calc (no wall raycast) and the same
-  // facing-based rotation formula TrapSystem.releaseTrapThrow uses for spears, so
-  // the preview always matches the actual throw exactly.
+  // Ghost of the armed consumable at its current estimated landing spot while
+  // charging a Toss (non-trap items only — traps show the 'x' reticule
+  // instead, and a held weapon throw (spear) shows no ghost). Reuses
+  // TrapSystem's cheap trig landing calc (no wall raycast) so the preview
+  // always matches the actual throw exactly.
   drawThrowPreview(game) {
     if (!game.trapCharging) return;
-    // Toss charges preview the armed consumable; normal charges the held item.
-    const tossSlot = game.trapCharging.source?.kind === 'consumable'
-      ? game.trapCharging.source.slotIndex
-      : -1;
-    const held = tossSlot >= 0
-      ? game.player?.equippedConsumables?.[tossSlot]
-      : game.player?.heldItem;
+    // Only Toss charges (armed consumable) preview a ghost; held-weapon
+    // throws (spear) render no charged-distance preview.
+    if (game.trapCharging.source?.kind !== 'consumable') return;
+    const held = game.player?.equippedConsumables?.[game.trapCharging.source.slotIndex];
     if (!held || held.data?.type === 'TRAP') return;
     const pos = game.trapSystem.getTrapReticulePos();
     if (!pos) return;
-    const f = game.player.facing;
-    const rotation = held.data?.weaponSubtype === 'spear'
-      ? Math.atan2(f.y, f.x) + Math.PI / 2
-      : 0;
     const ctx = this.renderer.fgCtx;
     ctx.save();
     ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
@@ -2318,13 +2330,7 @@ export class ExploreRenderer {
     ctx.textBaseline = 'middle';
     ctx.globalAlpha = 0.5;
     ctx.fillStyle = held.color || '#ffffff';
-    if (rotation) {
-      ctx.translate(pos.x, pos.y);
-      ctx.rotate(rotation);
-      ctx.fillText(held.char, 0, 0);
-    } else {
-      ctx.fillText(held.char, pos.x, pos.y);
-    }
+    ctx.fillText(held.char, pos.x, pos.y);
     ctx.restore();
   }
 

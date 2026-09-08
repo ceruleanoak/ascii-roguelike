@@ -29,6 +29,14 @@ export const WEAPON_TYPES = {
 // the items themselves keeps the fountain upgrade and duplicate-upgrade
 // crafting in sync automatically — a new weapon participates the moment it
 // declares a `tier`, with no separate table to keep current.
+//
+// Naming rule: any weapon named "Dragon ___" is top tier for its weapon
+// family (the family's highest populated `tier` rung), regardless of what
+// its recipe chain implies. Dragon Shotgun already lands there (gun family
+// tops out at 3); Dragon Blade was bumped from 2 to 3 to match the sword
+// family's top rung even though it still feeds the Venom/Chaos Blade
+// recipes as a mid-chain ingredient — the naming rule wins over recipe-tree
+// placement. Apply this to future "Dragon ___" weapons on sight.
 
 // Item definitions
 // Item definitions are organized by class → type → tier:
@@ -643,7 +651,7 @@ export const ITEMS = {
   },
   'ᛖ': {
     char: 'ᛖ',
-    tier: 2,
+    tier: 3, // top of the sword family — see the "Dragon ___" naming rule above
     name: 'Dragon Blade',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -1325,7 +1333,30 @@ export const ITEMS = {
     color: '#8b4513'
   },
 
-  // ── MELEE / whip — gem-infused (Whip + gemstone) ──────────────────────────
+  // ── MELEE / whip — mana-infused (Whip + Mana Potion) ──────────────────────
+  // Sidegrade of the base Whip, not an elemental upgrade — the lash carries
+  // no damage bonus, only the confusion (dizzy) effect from the mana soaked
+  // into the leather. Now the required base ingredient for the gem-infused
+  // whips below (was plain Whip) — infusing with mana first, then a gemstone,
+  // is the intended crafting path to an elemental lash.
+  '∾': {
+    char: '∾',
+    tier: 1,
+    name: 'Infused Whip',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'whip',
+    damage: 1,
+    windup: 0.5,
+    recovery: 1.45,
+    patternSpeed: 0.02,
+    range: 40,
+    meleeChar: '~',
+    onHit: 'dizzy', // confusion
+    color: '#aa66ff'
+  },
+
+  // ── MELEE / whip — gem-infused (Infused Whip + gemstone) ──────────────────
   // Elemental whipcracks: long-range lash inherits the gem's status effect.
   '∿': {
     char: '∿',
@@ -1796,6 +1827,7 @@ export const ITEMS = {
     effect: 'heal',
     amount: 2,
     oneShot: true,
+    stackable: true, // shares one quick slot by count — see InventorySystem.mergeStackableConsumable
     autoTriggerHP: 0.18,
     color: '#aa4422'
   },
@@ -2005,7 +2037,7 @@ export const ITEMS = {
   // ── Throwables ────────────────────────────────────────────────────────────
   'y': {
     char: 'y', name: 'Firecracker', type: ITEM_TYPES.CONSUMABLE,
-    effect: 'firecracker', radius: 64, oneShot: true, manualOnly: true, color: '#ff8800'
+    effect: 'firecracker', radius: 64, oneShot: true, manualOnly: true, stackable: true, color: '#ff8800'
   },
   '@': {
     char: '@',
@@ -2304,18 +2336,18 @@ export const ITEMS = {
     potionModifier: 'primal'
   },
 
-  // Bread: equippable utility consumable. Use action drops the loaf on the
-  // ground (handled in Item.use via effect: 'dropBread'). Idle crows in the
-  // room — fed or not — seek the nearest dropped bread; eating it flips them
-  // to 'fed' (won't flee player proximity) or, if already fed, to 'companion'.
-  // Found commonly in huts and occasionally in chests (see HutSystem, AFFINITY_POOLS).
+  // Bread: consumable slot item, no SPACE effect — SHIFT (TossSystem) throws
+  // it to the ground like any other armed consumable, which is the entire
+  // feeding mechanic. Idle crows in the room — fed or not — seek the nearest
+  // dropped bread; eating it flips them to 'fed' (won't flee player proximity)
+  // or, if already fed, to 'companion'. Found commonly in huts and
+  // occasionally in chests (see HutSystem, AFFINITY_POOLS).
   '⌬': {
     char: '⌬',
     name: 'Bread',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: 'UTILITY',
-    effect: 'dropBread',
+    type: ITEM_TYPES.CONSUMABLE,
     oneShot: true,
+    stackable: true, // shares one quick slot by count — see InventorySystem.mergeStackableConsumable
     color: '#daa520'
   },
 
@@ -2582,6 +2614,10 @@ export const INGREDIENTS = {
   's': { char: 's', name: 'Scale', color: '#ff00ff' },
   'F': { char: 'F', name: 'Fire Essence', color: '#ff4400' },
   'M': { char: 'M', name: 'Metal', color: '#aaaaaa' },
+  // Unrefined ore: a rock-harvest roll alongside Rock (never a red-zone-only
+  // pull like Metal itself), smelted into Metal 100% of the time in a hut
+  // fireplace. See FireplaceSystem.
+  '2': { char: '2', name: 'Ore', color: '#8899aa' },
   '~': { char: '~', name: 'String', color: '#cccccc' },
   '|': { char: '|', name: 'Stick', color: '#8b4513' },
   'a': { char: 'a', name: 'Ash', color: '#888888' },
@@ -2970,8 +3006,7 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     ['M']               // Metal
     },
     weapons: {
-      [RARITY.UNCOMMON]: ['ᛖ'],              // Dragon Blade
-      [RARITY.RARE]:     ['ᚲ', 'ᛠ']        // Dragon Shotgun, Chaos Blade
+      [RARITY.RARE]:     ['ᚲ', 'ᛠ', 'ᛖ']   // Dragon Shotgun, Chaos Blade, Dragon Blade (now tier 3)
     },
     traps: {},
     armor: {

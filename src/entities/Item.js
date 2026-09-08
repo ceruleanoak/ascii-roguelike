@@ -28,9 +28,14 @@ let _nextAttackId = 0;
 // PHYSICS.FRICTION, this carries roughly one cell before it dies out.
 const HAMMER_LUNGE_SPEED = 90;
 
-// The mark left on the cell a hammer strikes — the blow's own footprint, drawn
-// where the damage lands rather than where the weapon is being held.
-const HAMMER_STRIKE_CHAR = '*';
+// The impact burst left on the cell a hammer strikes — the blow's own
+// footprint, drawn where the damage lands rather than where the weapon is
+// held. Scaled up and faded independently of the strike's full flash
+// duration (see strikeFlashDuration below) so it reads as a quick impact
+// crack at the instant of the hit, not a glyph that lingers with the swing.
+const HAMMER_STRIKE_CHAR = '✷';
+const HAMMER_STRIKE_SCALE = 1.6;
+const HAMMER_STRIKE_FLASH_DURATION = 0.08;
 
 // Aggregate oilEffect from any equipped consumables. Returns
 // { onHits: string[], arrowSpeedMult: number }. onHits collects every
@@ -997,7 +1002,11 @@ export class Item {
     // glyph is held over the carrier's head, read off the owner's root every
     // frame (drawAboveOwner) so it rides the strike hop; the struck cell draws
     // its own mark (strikeChar), because a blow whose glyph has left the hitbox
-    // would otherwise land somewhere the player was never shown.
+    // would otherwise land somewhere the player was never shown. The same
+    // above-head glyph is also what ExploreRenderer shows during the windup
+    // that precedes this attack (gated on windupActive + attackPattern
+    // 'hammerRing'), so the hammer is already raised by the time this object
+    // exists — this only adds the impact-frame burst at the struck cell.
     // Movement is locked by locksMovement + attackLockTimer for the flash duration.
     const facingAngle = Math.atan2(player.facing.y, player.facing.x);
     // The strike lands on the cell the carrier is facing — directly in front,
@@ -1032,6 +1041,9 @@ export class Item {
       knockback: this.data.knockback || 300,
       owner: player,
       shooterPlane: player.plane,
+      strikeScale: HAMMER_STRIKE_SCALE,
+      strikeFlashDuration: HAMMER_STRIKE_FLASH_DURATION,
+      strikeFlashTimer: HAMMER_STRIKE_FLASH_DURATION,
     };
   }
 
