@@ -109,9 +109,11 @@ export class Enemy {
     this.attackTimer = 0;
     this.windupTimer = 0;
 
-    // Invulnerability frames
+    // Invulnerability frames — data.invulnerabilityDuration overrides the
+    // default for enemies that need a longer reposition window (e.g. Giant
+    // Slime's forced post-hit leap, below).
     this.invulnerabilityTimer = 0;
-    this.invulnerabilityDuration = ENEMY_INVULNERABILITY_DURATION;
+    this.invulnerabilityDuration = this.data.invulnerabilityDuration ?? ENEMY_INVULNERABILITY_DURATION;
     this.lastHitAttackId = null; // tracks the burst attackId that triggered the current iframe
 
     // Speed-collision grace: frames (not seconds) to skip enemy-on-enemy speed
@@ -2224,6 +2226,12 @@ export class Enemy {
     if (this.hp > 0) {
       this.invulnerabilityTimer = this.invulnerabilityDuration;
       this.lastHitAttackId = attackId;
+      // Giant Slime boss: every landed hit arms a forced leap that fires the
+      // instant iframes expire (LeapAttackMechanic.tryTrigger), so a hit is
+      // always answered with a mandatory reposition rather than a free follow-up.
+      if (this.data?.leapAttack?.enabled) {
+        this.forcedLeapPending = true;
+      }
     }
 
     // Retreat into shell after taking damage (shell-armored enemies)

@@ -421,6 +421,10 @@ export const ENEMIES = {
     description: 'A bloated mother-slime. Splits when struck and reabsorbs its young.',
     spellDescription: 'SPLITS ON HIT — CHILDREN REFORM — SPEWS GOO.',
     trueName: 'MUCILAGO',
+    // Standardized to a full second (default is 0.3s) — pairs with the forced
+    // leap in Enemy.takeDamage/LeapAttackMechanic.tryTrigger: every landed hit
+    // buys the player exactly this long before the boss leaps at them.
+    invulnerabilityDuration: 1.0,
     hp: 20,
     speed: 30,
     acceleration: 50,

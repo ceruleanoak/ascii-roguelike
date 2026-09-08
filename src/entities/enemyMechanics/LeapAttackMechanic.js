@@ -19,6 +19,7 @@ export const LeapAttackMechanic = {
 
   init(enemy) {
     enemy.leapCooldown = 2.0; // brief grace at spawn
+    enemy.forcedLeapPending = false; // armed by Enemy.takeDamage, consumed in tryTrigger
     enemy.leapWindupActive = false;
     enemy.leapWindupTimer = 0;
     enemy.leapAirborneActive = false;
@@ -105,24 +106,31 @@ export const LeapAttackMechanic = {
     const cfg = enemy.data.leapAttack;
     if (!cfg?.enabled) return;
     if (enemy.spewWindupActive) return;
-    if (enemy.leapCooldown > 0) return;
     if (!inSamePlane(enemy, enemy.target)) return;
     if (!ctx.onScreen) return; // no ambushing from outside the zoomed frame
 
     const { effectiveDistance, dotDamageEvents } = ctx;
-    if (effectiveDistance >= cfg.triggerRangeMin && effectiveDistance <= cfg.triggerRangeMax) {
-      // Windup scales down with lost HP — full HP leaps at cfg.windupTime,
-      // 0 HP leaps at half that, linear in between. Makes the boss leap
-      // noticeably more often as it's worn down instead of at a flat cadence.
-      const hpFraction = enemy.maxHp > 0 ? Math.max(0, Math.min(1, enemy.hp / enemy.maxHp)) : 1;
-      enemy.leapWindupActive = true;
-      enemy.leapWindupTimer = cfg.windupTime * (0.5 + 0.5 * hpFraction);
-      enemy.leapTargetX = enemy.target.position.x;
-      enemy.leapTargetY = enemy.target.position.y;
-      enemy.velocity.vx = 0;
-      enemy.velocity.vy = 0;
-      if (enemy.targetVelocity) { enemy.targetVelocity.vx = 0; enemy.targetVelocity.vy = 0; }
-      return { suspend: true, result: { dotDamage: dotDamageEvents } };
-    }
+
+    // Forced leap: a landed hit arms this in Enemy.takeDamage; the instant the
+    // (now-standardized 1s) iframe window expires, the leap fires regardless
+    // of cooldown or trigger range — every hit is answered with a mandatory
+    // reposition, not a free follow-up swing.
+    const forced = enemy.forcedLeapPending && enemy.invulnerabilityTimer <= 0;
+    const inRange = effectiveDistance >= cfg.triggerRangeMin && effectiveDistance <= cfg.triggerRangeMax;
+    if (!forced && (enemy.leapCooldown > 0 || !inRange)) return;
+
+    // Windup scales down with lost HP — full HP leaps at cfg.windupTime,
+    // 0 HP leaps at half that, linear in between. Makes the boss leap
+    // noticeably more often as it's worn down instead of at a flat cadence.
+    const hpFraction = enemy.maxHp > 0 ? Math.max(0, Math.min(1, enemy.hp / enemy.maxHp)) : 1;
+    enemy.leapWindupActive = true;
+    enemy.leapWindupTimer = cfg.windupTime * (0.5 + 0.5 * hpFraction);
+    enemy.leapTargetX = enemy.target.position.x;
+    enemy.leapTargetY = enemy.target.position.y;
+    enemy.velocity.vx = 0;
+    enemy.velocity.vy = 0;
+    if (enemy.targetVelocity) { enemy.targetVelocity.vx = 0; enemy.targetVelocity.vy = 0; }
+    enemy.forcedLeapPending = false;
+    return { suspend: true, result: { dotDamage: dotDamageEvents } };
   }
 };
