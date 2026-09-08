@@ -79,6 +79,9 @@ export class ShopSystem {
 
   open(shopkeeper) {
     if (!this.game.pauseSystem.openModal(this)) return;
+    // Unsold rows catch up to whatever the run has reached since the last
+    // look; sold rows stay sold. No-ops when progress hasn't moved.
+    shopkeeper.refreshStock(this.game.zoneDepths);
     this.shopkeeper = shopkeeper;
     this.mode = 'menu';
     this.menuIndex = 0;

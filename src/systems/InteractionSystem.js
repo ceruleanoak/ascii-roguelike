@@ -5,6 +5,7 @@ import { Fairy } from '../entities/Fairy.js';
 import { isIngredient, isItem, generateEnemyDrops } from '../data/items.js';
 import { pickQuagmireIngredient } from '../data/alchemy.js';
 import { getZoneRandomEnemy, ENEMIES } from '../data/enemies.js';
+import { ZONE_MINERALS } from '../data/zones.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
 import { createDebris } from '../entities/Debris.js';
 import { createIceBurst, Particle } from '../entities/Particle.js';
@@ -40,16 +41,10 @@ export class InteractionSystem {
   // once-per-rock poke drop). Red owns Metal; yellow is the gem/magic zone;
   // cyan feeds the bow path. Unlisted zones (gray, blue) hide nothing extra.
   getZoneMineral(zone) {
-    switch (zone) {
-      case 'green':  return '❦';                       // Moss
-      case 'red':    return 'M';                       // Metal
-      case 'yellow': {                                 // Gemstone
-        const gems = ['1', '9', '`', '?', '('];
-        return gems[Math.floor(Math.random() * gems.length)];
-      }
-      case 'cyan':   return '△';                       // Arrowhead
-      default:       return null;
-    }
+    const minerals = ZONE_MINERALS[zone];
+    if (!minerals?.length) return null;
+    // Single-mineral zones return their one entry; yellow rolls among its gems.
+    return minerals[Math.floor(Math.random() * minerals.length)];
   }
 
   // Melee-vs-background-object damage for CombatSystem's generic object-smash

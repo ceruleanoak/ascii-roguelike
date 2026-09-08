@@ -8,6 +8,22 @@ export const ZONE_COLORS = {
   blue: '#66aaff'
 };
 
+// Rare mineral each zone's rocks hide — knowledge of WHERE to smash rocks is
+// the gate (see InteractionSystem's rockHarvest / rock-poke paths, which roll
+// one of these). Yellow owns the gemstones, so its entry is a list to pick
+// from; the others own exactly one mineral. Zones absent from this table
+// (gray, blue) have no mineral of their own.
+//
+// Lives here rather than inside InteractionSystem because it is zone identity
+// data, and the Home Zone derivation reads it too (see data/homeZone.js) —
+// two readers, one table.
+export const ZONE_MINERALS = {
+  green:  ['❦'],                       // Moss
+  red:    ['M'],                       // Metal
+  yellow: ['1', '9', '`', '?', '('],   // Gemstone
+  cyan:   ['△']                        // Arrowhead
+};
+
 // Fresh per-zone depth tracker, derived from the zone list itself so a new
 // zone can never be missed at a reset site again (resolved bug #100: three
 // hand-written literals dropped the `blue` key).

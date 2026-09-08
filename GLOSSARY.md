@@ -26,6 +26,18 @@ programming terms.
 - **In code:** `ZoneSystem` depth tracking; `bossDepth` is the per-Zone boss threshold.
 - **Not:** "floor" (reserved — see Floor), "level", "stage".
 
+### Home Zone
+- **Definition:** The (Zone, Depth) at which an item first becomes obtainable — the zone whose
+  world first supplies that item's entire recipe chain, at the deeper of the supplying spawn
+  band and the item's value tier floor. It is what "the player has progressed far enough to be
+  offered this" means, and the Settlement Shop's stock gate is its first consumer.
+- **In code:** `src/data/homeZone.js` — `getHomeZone(char)` returns `{ zone, depth }` or `null`.
+  Wholly **derived** from existing data (spawn tables, affinities, rarity profiles, terrain drop
+  effects, recipes), never an authored per-item field, so it can't go stale as content is added.
+  An item with no Home Zone is one the world cannot produce.
+- **Not:** "unlock level", "item tier" (see value tier — one of Home Zone's two inputs),
+  "native zone", "origin".
+
 ### Game State
 - **Definition:** The top-level mode the game is in. The three play modes are **REST** (safe
   hub: crafting, prep, no enemies), **EXPLORE** (procedural combat rooms), and **NEUTRAL**

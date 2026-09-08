@@ -11,12 +11,17 @@
 // (recipe pairs, AFFINITY_POOLS rarity, weapon .tier) rather than a new
 // manually-authored field on 25+ items — see CLAUDE.md's "Architectural
 // Maturity" guidance against >10-item manual edits.
+//
+// WHAT the shop may stock is gated the same way: every listing's Home Zone
+// (data/homeZone.js) is derived from where in the world its recipe chain
+// first becomes obtainable, and rollShopStock only draws from listings the
+// run has actually reached. Nothing to author per item, so the gate can't go
+// stale as items are added.
 
 import {
   ITEMS,
   ITEM_TYPES,
   AFFINITY_POOLS,
-  RARITY,
   RARITY_PROFILES,
   getRandomDrop,
   TREASURE_CHARS,
@@ -24,72 +29,15 @@ import {
   weaponElement,
 } from './items.js';
 import { findRecipeByResult } from './recipes.js';
+import {
+  deriveValueTier,
+  getHomeZone,
+  getAdvancement,
+  isUnlocked,
+} from './homeZone.js';
 
 function clamp(n, min, max) {
   return Math.min(max, Math.max(min, n));
-}
-
-// ============================================================================
-// VALUE TIER (0-3)
-// ============================================================================
-
-const RARITY_ORDER = [RARITY.COMMON, RARITY.UNCOMMON, RARITY.RARE, RARITY.EPIC];
-const RARITY_TO_TIER = {
-  [RARITY.COMMON]: 0,
-  [RARITY.UNCOMMON]: 1,
-  [RARITY.RARE]: 2,
-  [RARITY.EPIC]: 3,
-};
-
-/**
- * Reverse-lookup an ingredient char's rarity against AFFINITY_POOLS (scanning
- * all 5 sub-categories per affinity, not just `ingredients` — a char like a
- * gemstone can be the "weapons" or "armor" pool's rare drop for one affinity
- * while being common elsewhere isn't a concern here; the first match wins).
- *
- * Falls back to recursing through the char's own recipe for crafted
- * intermediates (e.g. '⊿' Axe head) that aren't placed in any pool directly —
- * such a char's rarity is the higher of its two components' rarities.
- * Depth-capped so a malformed/cyclical recipe chain can't recurse forever;
- * an unresolvable char reads as common rather than throwing.
- */
-export function getIngredientRarity(char, _depth = 0) {
-  for (const pool of Object.values(AFFINITY_POOLS)) {
-    for (const category of Object.values(pool)) {
-      for (const rarity of RARITY_ORDER) {
-        if (category[rarity]?.includes(char)) return rarity;
-      }
-    }
-  }
-
-  if (_depth < 6) {
-    const recipe = findRecipeByResult(char);
-    if (recipe) {
-      const leftIdx = RARITY_ORDER.indexOf(getIngredientRarity(recipe.left, _depth + 1));
-      const rightIdx = RARITY_ORDER.indexOf(getIngredientRarity(recipe.right, _depth + 1));
-      return RARITY_ORDER[Math.max(leftIdx, rightIdx)];
-    }
-  }
-
-  return RARITY.COMMON;
-}
-
-/**
- * Value tier 0-3 for a shop listing. Weapons use their existing `tier` field
- * (1-4 in the data → 0-3 here). Armor and consumables have no tier field —
- * adding one by hand to every item is exactly the manual-edit trap
- * CLAUDE.md's "Architectural Maturity" section warns about — so their tier is
- * the higher of their own real recipe's two ingredient rarities.
- */
-function deriveValueTier(itemData, role) {
-  if (role === 'WEAPON' && typeof itemData.tier === 'number') {
-    return clamp(itemData.tier - 1, 0, 3);
-  }
-  const recipe = findRecipeByResult(itemData.char);
-  if (!recipe) return 0;
-  const leftTier = RARITY_TO_TIER[getIngredientRarity(recipe.left)] ?? 0;
-  const rightTier = RARITY_TO_TIER[getIngredientRarity(recipe.right)] ?? 0;
-  return Math.max(leftTier, rightTier);
 }
 
 // ============================================================================
@@ -241,6 +189,7 @@ function buildListing(itemData, role) {
     name: itemData.name,
     color: itemData.color,
     tier,
+    home: getHomeZone(itemData.char),  // {zone, depth} — why this row is stockable
     ingredientCost: [recipe.left, recipe.right, ...padding], // 3-5 chars
     baseCoins,
     coinFloor,
@@ -250,33 +199,68 @@ function buildListing(itemData, role) {
   };
 }
 
-function pickN(pool, n) {
+/**
+ * The craftable catalogue for one role: items with a real, discoverable
+ * 2-ingredient recipe (no hand-curated list to maintain) that also have a
+ * derivable Home Zone. Items with no Home Zone — alchemy-only fills, puzzle
+ * rewards, anything the world can't supply through drops and recipes — are
+ * never shop stock.
+ */
+function craftablePool(type) {
+  return Object.values(ITEMS).filter(
+    d => d.type === type && findRecipeByResult(d.char) && getHomeZone(d.char)
+  );
+}
+
+/**
+ * The slice of a role's catalogue this run has unlocked. Falls back to the
+ * shallowest-Home-Depth items when nothing qualifies (a shop reached before
+ * any Depth was banked) so the counter is never bare — an empty shop reads as
+ * a bug to the player, not as a gate.
+ */
+function unlockedPool(type, zoneDepths) {
+  const pool = craftablePool(type);
+  const unlocked = pool.filter(d => isUnlocked(d.char, zoneDepths));
+  if (unlocked.length > 0) return unlocked;
+
+  const shallowest = Math.min(...pool.map(d => getAdvancement(d.char)));
+  return pool.filter(d => getAdvancement(d.char) === shallowest);
+}
+
+/**
+ * Weighted pick favouring the player's frontier: an item's weight is its Home
+ * Depth, so the deepest wares a run has earned are the likeliest to appear
+ * while shallow staples stay possible. Early on every candidate is Home
+ * Depth 1 and this degrades to the uniform pick it replaced.
+ */
+function pickAdvanced(pool, n) {
   const copy = [...pool];
   const picks = [];
   while (picks.length < n && copy.length > 0) {
-    const idx = Math.floor(Math.random() * copy.length);
+    const weights = copy.map(d => Math.max(1, getAdvancement(d.char)));
+    const total = weights.reduce((sum, w) => sum + w, 0);
+    let roll = Math.random() * total;
+    let idx = weights.findIndex(w => (roll -= w) < 0);
+    if (idx === -1) idx = copy.length - 1;
     picks.push(copy.splice(idx, 1)[0]);
   }
   return picks;
 }
 
 /**
- * Rolls one shop's stock: 1 armor / 2 weapons / 3 consumables, drawn only
- * from items with a real, discoverable 2-ingredient recipe (no hand-curated
- * catalog to maintain). Fixed return order (armor, weapon, weapon,
- * consumable×3) is the shop row order ShopSystem/ShopOverlay index into.
+ * Rolls one shop's stock: 1 armor / 2 weapons / 3 consumables, drawn from
+ * whatever this run has unlocked and biased toward its frontier. Fixed return
+ * order (armor, weapon, weapon, consumable×3) is the shop row order
+ * ShopSystem/ShopOverlay index into.
+ *
+ * @param {Object} zoneDepths - game.zoneDepths: deepest Depth reached per Zone
+ *   this run. Resets on death with the rest of the run, so a fresh run walks
+ *   up to a beginner's counter again.
  */
-export function rollShopStock() {
-  const craftablePool = (type) =>
-    Object.values(ITEMS).filter(d => d.type === type && findRecipeByResult(d.char));
-
-  const armorPool = craftablePool(ITEM_TYPES.ARMOR);
-  const weaponPool = craftablePool(ITEM_TYPES.WEAPON);
-  const consumablePool = craftablePool(ITEM_TYPES.CONSUMABLE);
-
+export function rollShopStock(zoneDepths = {}) {
   return [
-    ...pickN(armorPool, 1).map(d => buildListing(d, 'ARMOR')),
-    ...pickN(weaponPool, 2).map(d => buildListing(d, 'WEAPON')),
-    ...pickN(consumablePool, 3).map(d => buildListing(d, 'CONSUMABLE')),
+    ...pickAdvanced(unlockedPool(ITEM_TYPES.ARMOR, zoneDepths), 1).map(d => buildListing(d, 'ARMOR')),
+    ...pickAdvanced(unlockedPool(ITEM_TYPES.WEAPON, zoneDepths), 2).map(d => buildListing(d, 'WEAPON')),
+    ...pickAdvanced(unlockedPool(ITEM_TYPES.CONSUMABLE, zoneDepths), 3).map(d => buildListing(d, 'CONSUMABLE')),
   ];
 }

@@ -240,7 +240,13 @@ export class HutSystem {
       // constructor. Never directly reachable; the player interacts across
       // the counter from row 3+ via SHOP_INTERACTION_RANGE.
       const centerCol = Math.floor(cols / 2);
-      npcs.push(new Shopkeeper(centerCol * GRID.CELL_SIZE, SHOPKEEPER_ALCOVE_ROW * GRID.CELL_SIZE));
+      // zoneDepths seeds the first stock roll — the Shopkeeper only ever
+      // offers wares whose Home Zone this run has reached (data/homeZone.js).
+      npcs.push(new Shopkeeper(
+        centerCol * GRID.CELL_SIZE,
+        SHOPKEEPER_ALCOVE_ROW * GRID.CELL_SIZE,
+        this.game.zoneDepths
+      ));
 
     } else if (hutKind === 'neutral_npc') {
       // Placeholder NPC: spawn the errand traveler. Seeds an errand if none active
