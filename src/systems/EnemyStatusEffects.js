@@ -60,6 +60,60 @@ export function applyStatusEffect(enemy, effect, duration = 3.0) {
   }
 }
 
+// Ensnare: any boss-tier enemy that takes a landed hit gets permanently
+// entangled for the rest of the fight — half speed (Enemy.getSpeedMultiplier),
+// a continuous blink (Enemy.getIframeFlashColor), and a doubled decision
+// interval — instead of the plain iframe flash every other enemy gets.
+// Applied once via the generic named-effect system above; re-hitting an
+// already-ensnared boss doesn't double the interval again. 'boss' is the one
+// tier value used for both zone bosses and minibosses in this data set (see
+// Enemy.getNearDeathBlinkColor's identical check).
+//
+// For Giant Slime (or any future leap-capable boss), the ensnared, now-
+// doubled decision interval also gates its leap: every landed hit re-arms a
+// countdown of exactly one doubled decision cycle (LeapAttackMechanic ticks
+// it and fires the leap at zero), regardless of the leap's normal cooldown/
+// range — the "standard jump state change" the decision timer now drives, in
+// place of a hardcoded delay.
+export function applyEnsnareOnHit(enemy) {
+  if (enemy.data?.tier !== 'boss') return;
+
+  if (!enemy.isEnsnared()) {
+    enemy.applyStatusEffect('ensnare', Infinity);
+    enemy.decisionInterval = enemy.baseDecisionInterval * 2;
+  }
+  if (enemy.data?.leapAttack?.enabled) {
+    enemy.ensnareLeapArmed = true;
+    enemy.ensnareLeapTimer = enemy.decisionInterval;
+  }
+}
+
+// Combined movement-speed multiplier from every slowing/halting effect
+// currently on the enemy — freeze/gooey/dizzy/sleep tiers, rally-boost
+// speedup, gas-attack slow stacks, and Ensnare's permanent half-speed on top
+// of whatever else applies. Split out of Enemy.js (getSpeedMultiplier) to
+// keep that file under its architecture budget; stun/zap/knockback/frozen's
+// hard-zero cases stay in Enemy.js since they're plain early-return guards
+// on the caller's own state, not part of this stacking multiplier.
+export function computeSpeedMultiplier(enemy) {
+  let m = 1;
+  if (enemy.statusEffects.freeze.active) m = 1 - enemy.statusEffects.freeze.slowAmount;
+  else if (enemy.isGooey()) m = 1 - enemy.statusEffects.goo.slowAmount;
+  else if (enemy.isDizzy()) m = 0.35;
+  // Drowse tiers 1-2 slow instead of halting (tier 3 already returns 0 via
+  // isFullyAsleep() short-circuiting the AI before this is even called).
+  else if (enemy.isSleeping()) m = enemy.statusEffects.sleep.stacks >= 2 ? 0.25 : 0.6;
+  // Rally boost: scale chase target velocity so _blendVelocity converges cleanly.
+  // (Earlier impl multiplied raw velocity post-blend, which compounded each frame
+  // against any large velocity impulse — e.g. the melee leap — into a runaway.)
+  if (enemy.rallyBoostTimer > 0) m *= (enemy._rallyBoostMultiplier ?? 1.3);
+  if (enemy.gaSlowStacks) m *= Math.max(0.25, 1 - enemy.gaSlowStacks * 0.1);
+  // Ensnare (boss/miniboss, permanent once a hit lands): half speed for the
+  // rest of the fight, on top of whatever else is already slowing it.
+  if (enemy.isEnsnared()) m *= 0.5;
+  return m;
+}
+
 // Removes an effect from the round-robin blink/pip order. Called on every
 // expiry path below; StatusEffectVisuals also live-filters by `.active` as
 // a defensive backstop against any bypass that flips `.active` directly

@@ -36,9 +36,11 @@ import { ThiefMechanic } from './enemyMechanics/ThiefMechanic.js';
 import { BreadSeekMechanic } from './enemyMechanics/BreadSeekMechanic.js';
 import { EnemyStateMachine, legacyStateFor } from './EnemyStateMachine.js';
 import { statesFor } from '../data/stateDefaults.js';
-import { computeBlinkColor, computePipRows } from '../systems/StatusEffectVisuals.js';
+import { computeBlinkColor, computePipRows, computeIframeFlashColor } from '../systems/StatusEffectVisuals.js';
 import {
   applyStatusEffect as applyStatusEffectImpl,
+  applyEnsnareOnHit as applyEnsnareOnHitImpl,
+  computeSpeedMultiplier as computeSpeedMultiplierImpl,
   clearEffectOrder as clearEffectOrderImpl,
   updateStatusEffects as updateStatusEffectsImpl
 } from '../systems/EnemyStatusEffects.js';
@@ -64,7 +66,6 @@ const EnemyDebug = {
 // ──────────────────────────────────────────────────────────────────────────
 
 const ENEMY_INVULNERABILITY_DURATION = 0.3; // seconds
-const ENEMY_BLINK_FREQUENCY = 0.05; // blink every 0.05 seconds
 
 export class Enemy {
   constructor(char, x, y, depth = 0, dataOverride = null) {
@@ -189,7 +190,11 @@ export class Enemy {
     this.fleeHeadingAngle = null; // Locked heading (radians), held stable between decisions
 
     // Unified AI decision-making (intelligence system)
-    this.decisionInterval = this.data.decisionInterval || 0.5; // How often to reassess (smarter = lower)
+    // baseDecisionInterval is the un-ensnared value — ensnare (below) permanently
+    // doubles decisionInterval itself, so this is what it doubles *from* and what
+    // nothing else ever needs to touch.
+    this.baseDecisionInterval = this.data.decisionInterval || 0.5; // How often to reassess (smarter = lower)
+    this.decisionInterval = this.baseDecisionInterval;
     this.decisionTimer = Math.random() * this.decisionInterval; // Time until next decision (randomized start)
     this.bruteForceTimer = 0; // Cooldown after applying 45° brute force (prevents immediate recalc)
     this.lastBruteForceAngle = null; // Track last forced angle to avoid repeating
@@ -220,7 +225,13 @@ export class Enemy {
       knockback: { active: false, duration: 0 },
       blind: { active: false, duration: 0 }, // Attacks miss (0 damage)
       dizzy: { active: false, duration: 0, stacks: 0 },
-      goo: { active: false, duration: 0, slowAmount: 0.8, stacks: 0 }
+      goo: { active: false, duration: 0, slowAmount: 0.8, stacks: 0 },
+      // Boss/miniboss-only, applied via applyStatusEffect('ensnare', Infinity)
+      // from takeDamage. Deliberately never ticked in EnemyStatusEffects'
+      // updateStatusEffects — once triggered it lasts the rest of the fight,
+      // not a timed slot like everything else in this table (see isEnsnared/
+      // getSpeedMultiplier/getIframeFlashColor).
+      ensnare: { active: false, duration: 0 }
     };
 
     // Ordered list of currently-active blink-capable effect names, in the
@@ -530,28 +541,15 @@ export class Enemy {
 
   isGooey() { return this.statusEffects.goo.active; }
 
+  isEnsnared() { return this.statusEffects.ensnare.active; }
+
   // Get effective damage (0 if blind, normal damage otherwise)
   getEffectiveDamage() {
     return this.isBlind() ? 0 : this.damage;
   }
 
   getSpeedMultiplier() {
-    if (this.isStunned() || this.isZapped()) return 0;
-    if (this.isKnockedBack()) return 0;
-    if (this.isFrozen()) return 0;
-    let m = 1;
-    if (this.statusEffects.freeze.active) m = 1 - this.statusEffects.freeze.slowAmount;
-    else if (this.isGooey()) m = 1 - this.statusEffects.goo.slowAmount;
-    else if (this.isDizzy()) m = 0.35;
-    // Drowse tiers 1-2 slow instead of halting (tier 3 already returns 0 via
-    // isFullyAsleep() short-circuiting the AI before this is even called).
-    else if (this.isSleeping()) m = this.statusEffects.sleep.stacks >= 2 ? 0.25 : 0.6;
-    // Rally boost: scale chase target velocity so _blendVelocity converges cleanly.
-    // (Earlier impl multiplied raw velocity post-blend, which compounded each frame
-    // against any large velocity impulse — e.g. the melee leap — into a runaway.)
-    if (this.rallyBoostTimer > 0) m *= (this._rallyBoostMultiplier ?? 1.3);
-    if (this.gaSlowStacks) m *= Math.max(0.25, 1 - this.gaSlowStacks * 0.1);
-    return m;
+    return computeSpeedMultiplierImpl(this);
   }
 
   getActiveStatusEffects() {
@@ -2226,12 +2224,7 @@ export class Enemy {
     if (this.hp > 0) {
       this.invulnerabilityTimer = this.invulnerabilityDuration;
       this.lastHitAttackId = attackId;
-      // Giant Slime boss: every landed hit arms a forced leap that fires the
-      // instant iframes expire (LeapAttackMechanic.tryTrigger), so a hit is
-      // always answered with a mandatory reposition rather than a free follow-up.
-      if (this.data?.leapAttack?.enabled) {
-        this.forcedLeapPending = true;
-      }
+      applyEnsnareOnHitImpl(this); // boss-tier ensnare debuff — see EnemyStatusEffects.js
     }
 
     // Retreat into shell after taking damage (shell-armored enemies)
@@ -2256,9 +2249,7 @@ export class Enemy {
   }
 
   getIframeFlashColor() {
-    if (this.invulnerabilityTimer <= 0) return null;
-    const blinkCycle = Math.floor(this.invulnerabilityTimer / ENEMY_BLINK_FREQUENCY);
-    return blinkCycle % 2 === 0 ? '#ffffff' : null;
+    return computeIframeFlashColor(this);
   }
 
   // Boss/miniboss low-HP warning: blink dark red at ≤30% HP — same near-death

@@ -7,6 +7,7 @@
 
 const DOT_BLINK_FREQUENCY = 0.2; // baseline blink period at 1 stack
 const SLICE_DURATION = 0.6; // seconds each active effect gets the blink "turn"
+const IFRAME_BLINK_FREQUENCY = 0.05; // blink every 0.05 seconds
 
 // Representative "on" color per blink-capable effect — used both for the
 // round-robin blink target and the stack-pip dots. Sleep's color depends on
@@ -78,6 +79,23 @@ export function computeBlinkColor(enemy) {
   const period = DOT_BLINK_FREQUENCY / stacks;
   const blinkCycle = Math.floor(enemy.dotBlinkTimer / period);
   return blinkCycle % 2 === 0 ? EFFECT_COLORS[effect] : enemy.baseColor;
+}
+
+// White iframe flash while actually invulnerable, falling back to Ensnare's
+// own permanent blink once the (brief, per-hit) invulnerability window ends.
+// Ensnare has no countdown to phase against — it's applied once and never
+// expires (see Enemy.isEnsnared/EnemyStatusEffects.applyEnsnareOnHit) — so it
+// blinks off Date.now() instead, same idiom as computePlayerDisplayColor's
+// low-HP blink and Enemy.getNearDeathBlinkColor.
+export function computeIframeFlashColor(enemy) {
+  if (enemy.invulnerabilityTimer > 0) {
+    const blinkCycle = Math.floor(enemy.invulnerabilityTimer / IFRAME_BLINK_FREQUENCY);
+    return blinkCycle % 2 === 0 ? '#ffffff' : null;
+  }
+  if (enemy.isEnsnared()) {
+    return Math.floor(Date.now() / (IFRAME_BLINK_FREQUENCY * 1000)) % 2 === 0 ? '#ffffff' : null;
+  }
+  return null;
 }
 
 // Returns [{effect, color, stacks}, ...] for every active blink-capable

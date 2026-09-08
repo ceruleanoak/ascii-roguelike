@@ -19,7 +19,8 @@ export const LeapAttackMechanic = {
 
   init(enemy) {
     enemy.leapCooldown = 2.0; // brief grace at spawn
-    enemy.forcedLeapPending = false; // armed by Enemy.takeDamage, consumed in tryTrigger
+    enemy.ensnareLeapArmed = false; // armed by Enemy.takeDamage's ensnare block, consumed in tryTrigger
+    enemy.ensnareLeapTimer = 0;     // counts down one doubled decision interval once armed
     enemy.leapWindupActive = false;
     enemy.leapWindupTimer = 0;
     enemy.leapAirborneActive = false;
@@ -40,6 +41,13 @@ export const LeapAttackMechanic = {
 
     if (enemy.leapCooldown > 0) {
       enemy.leapCooldown = Math.max(0, enemy.leapCooldown - deltaTime);
+    }
+
+    // Ensnare's forced-leap countdown ticks regardless of windup/airborne/
+    // onscreen state below — it only fires once tryTrigger sees it at 0 AND
+    // the normal onScreen/plane gates there pass.
+    if (enemy.ensnareLeapArmed && enemy.ensnareLeapTimer > 0) {
+      enemy.ensnareLeapTimer = Math.max(0, enemy.ensnareLeapTimer - deltaTime);
     }
 
     if (enemy.leapAirborneActive) {
@@ -111,11 +119,13 @@ export const LeapAttackMechanic = {
 
     const { effectiveDistance, dotDamageEvents } = ctx;
 
-    // Forced leap: a landed hit arms this in Enemy.takeDamage; the instant the
-    // (now-standardized 1s) iframe window expires, the leap fires regardless
-    // of cooldown or trigger range — every hit is answered with a mandatory
-    // reposition, not a free follow-up swing.
-    const forced = enemy.forcedLeapPending && enemy.invulnerabilityTimer <= 0;
+    // Forced leap: a landed hit ensnares the boss and arms this (Enemy.
+    // takeDamage) with a countdown of one doubled decision interval. The
+    // instant that elapses, the leap fires regardless of cooldown or trigger
+    // range — ensnare's decision timer, not a flat delay, drives this "jump"
+    // state change, so every landed hit is answered with a mandatory
+    // reposition rather than a free follow-up swing.
+    const forced = enemy.ensnareLeapArmed && enemy.ensnareLeapTimer <= 0;
     const inRange = effectiveDistance >= cfg.triggerRangeMin && effectiveDistance <= cfg.triggerRangeMax;
     if (!forced && (enemy.leapCooldown > 0 || !inRange)) return;
 
@@ -130,7 +140,7 @@ export const LeapAttackMechanic = {
     enemy.velocity.vx = 0;
     enemy.velocity.vy = 0;
     if (enemy.targetVelocity) { enemy.targetVelocity.vx = 0; enemy.targetVelocity.vy = 0; }
-    enemy.forcedLeapPending = false;
+    enemy.ensnareLeapArmed = false;
     return { suspend: true, result: { dotDamage: dotDamageEvents } };
   }
 };
