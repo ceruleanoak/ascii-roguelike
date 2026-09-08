@@ -730,6 +730,13 @@ export class MenuSystem {
       return;
     }
 
+    // Handle fireplace operations (fireplace inside huts)
+    if (game.currentMenuSlot === 'fireplace') {
+      const rawChar = typeof selectedItem === 'string' ? selectedItem : selectedItem.char;
+      game.fireplaceSystem?.commitSelection(rawChar);
+      return;
+    }
+
     // Handle alchemy cauldron operations (water → starter potion → true potion)
     if (game.currentMenuSlot === 'alchemy') {
       game.alchemySystem?.commitSelection(selectedItem);

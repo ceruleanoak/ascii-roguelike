@@ -115,6 +115,25 @@ export function chestEntryLabel(item) {
   return `${item.char} - ${item.data.name}${suffix}`;
 }
 
+// Consumables flagged `data.stackable` (Meat Jerky, Bread, Firecracker, ...)
+// merge into an existing same-char stack — carried in a quick slot or sitting
+// loose in the pile — instead of taking a new slot of their own. A 2 HP Meat
+// Jerky heal shouldn't cost a whole consumable slot any more than a single
+// arrow should. Mirrors the TRAP chest-stacking helpers above (`item.count`);
+// InventorySystem._consumeOneShotSlot is the matching unwind, decrementing
+// count instead of clearing the slot. Returns the stack (with its updated
+// count) on merge, or null if `item` isn't stackable or no existing stack was
+// found — caller falls back to normal slot-claiming pickup in that case.
+export function mergeStackableConsumable(equippedSlots, loosePile, item) {
+  if (!item?.data?.stackable) return null;
+  const existing =
+    equippedSlots.find(s => s && s !== item && s.char === item.char) ||
+    loosePile.find(i => i !== item && i.char === item.char);
+  if (!existing) return null;
+  existing.count = (existing.count || 1) + (item.count || 1);
+  return existing;
+}
+
 export class TrapSystem {
   constructor(game) {
     this.game = game;
@@ -349,13 +368,23 @@ export class TrapSystem {
     const tossed = player.equippedConsumables?.[slotIndex];
     if (!tossed) return;
 
-    // Clear the slot in both views (mirrors _consumeOneShotSlot's dual write)
-    // and disarm the selection — the armed slot is empty now.
-    player.equippedConsumables[slotIndex] = null;
-    if (game.inventorySystem.equippedConsumables) {
-      game.inventorySystem.equippedConsumables[slotIndex] = null;
+    // Stacked consumable (Bread, e.g.): tossing one loaf peels a single unit
+    // off the stack — decrement in place and throw a fresh single-unit Item,
+    // leaving the rest equipped. Mirrors InventorySystem._consumeOneShotSlot's
+    // decrement for the heal path.
+    let thrown = tossed;
+    if (tossed.data?.stackable && (tossed.count || 1) > 1) {
+      tossed.count -= 1;
+      thrown = new Item(tossed.char, 0, 0);
+    } else {
+      // Clear the slot in both views (mirrors _consumeOneShotSlot's dual write)
+      // and disarm the selection — the armed slot is empty now.
+      player.equippedConsumables[slotIndex] = null;
+      if (game.inventorySystem.equippedConsumables) {
+        game.inventorySystem.equippedConsumables[slotIndex] = null;
+      }
+      player.selectedConsumableIndex = -1;
     }
-    player.selectedConsumableIndex = -1;
 
     const C = GRID.CELL_SIZE;
     const px = player.position.x + C / 2;
@@ -371,10 +400,10 @@ export class TrapSystem {
       vy: (dy / dist) * v0,
       decel: THROW_DECEL,
       targetX: pos.x, targetY: pos.y,
-      char: tossed.char,
-      color: tossed.color,
+      char: thrown.char,
+      color: thrown.color,
       rotation: 0,
-      weaponItem: tossed,
+      weaponItem: thrown,
       harmless: true,   // remedies aren't weapons — fly through enemies, no hit checks
       profile: getThrowProfile(null),
       baseDamage: 0,

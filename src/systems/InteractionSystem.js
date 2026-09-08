@@ -578,14 +578,23 @@ export class InteractionSystem {
     if (effect === 'destroyObject:rockHarvest') {
       obj.destroyAfterAnimation = true;
       game.renderer.markBackgroundDirty();
-      // Guaranteed Rock + a ~7% zone mineral (each zone's rocks hide a different
-      // rare: knowledge of WHERE to smash rocks is the gate) + 3% Artifact.
+      // Guaranteed Rock + a ~15% Ore + a ~7% zone mineral (each zone's rocks
+      // hide a different rare: knowledge of WHERE to smash rocks is the gate)
+      // + 3% Artifact. Red zone runs the richer vein everywhere (it owns
+      // Metal, Ore's whole reason to exist), and any Underground room
+      // compounds that further — red Underground doubly so, every other
+      // zone's Underground gets a smaller version of the same bump so a U
+      // room is always worth a detour, not just red's.
+      const zone = game.currentRoom?.zone;
+      const isUnderground = !!game.currentRoom?.underground;
+      const mineralMult = (zone === 'red' ? 2 : 1) * (isUnderground ? (zone === 'red' ? 1.5 : 1.25) : 1);
       const rolls = [
         { char: '0', chance: 0.50 },
+        { char: '2', chance: 0.15 * mineralMult }, // Ore
         { char: '⚜', chance: 0.03 }
       ];
-      const zoneMineral = this.getZoneMineral(game.currentRoom?.zone);
-      if (zoneMineral) rolls.splice(1, 0, { char: zoneMineral, chance: 0.07 });
+      const zoneMineral = this.getZoneMineral(zone);
+      if (zoneMineral) rolls.splice(1, 0, { char: zoneMineral, chance: 0.07 * mineralMult });
       let i = 0;
       for (const r of rolls) {
         if (Math.random() < r.chance) {
@@ -835,8 +844,14 @@ export class InteractionSystem {
       // Underground visit is the mining trip, so it pays out at least
       // MIN_GEMS_PER_ROOM even on a cold streak. Past the minimum the rolls
       // keep going, so a rich seam can hand back more than two.
+      // Ore and Metal ride in the same vein pool as the gems — every zone's
+      // Underground room can turn one up, but red (Metal's home zone) gets
+      // them at double weight so its veins read richer, same as the rockHarvest bump above.
       const GEM_CHARS = ['◇', '⬥', '⬦', '⧫', '⬧', '◈', '⬨'];
-      const GEM_CHANCE = 0.75;
+      const veinChars = game.currentRoom?.zone === 'red'
+        ? [...GEM_CHARS, '2', '2', 'M', 'M']
+        : [...GEM_CHARS, '2', 'M'];
+      const GEM_CHANCE = 0.45;
       const MIN_GEMS_PER_ROOM = 2;
       const gemsSoFar = game.currentRoom.miningGemsDropped || 0;
       const rocksRemaining = game._activeBackgroundObjects().filter(
@@ -847,7 +862,7 @@ export class InteractionSystem {
       const shortfall = MIN_GEMS_PER_ROOM - gemsSoFar;
       if (shortfall > rocksRemaining || Math.random() < GEM_CHANCE) {
         game.currentRoom.miningGemsDropped = gemsSoFar + 1;
-        const gemChar = GEM_CHARS[Math.floor(Math.random() * GEM_CHARS.length)];
+        const gemChar = veinChars[Math.floor(Math.random() * veinChars.length)];
         game.lootSystem.spawnIngredientDrop(gemChar, obj.position.x, obj.position.y, null, obj);
       }
     } else if (effect.startsWith('destroyObject:spawnWeapon:')) {

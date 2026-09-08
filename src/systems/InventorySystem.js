@@ -14,7 +14,7 @@
 import { inSamePlane } from './PlaneSystem.js';
 import { Item } from '../entities/Item.js';
 import { GRID } from '../game/GameConfig.js';
-import { addItemToChestArray, removeItemFromChestArray, chestEntryLabel, trapAlreadyEquipped } from './TrapSystem.js';
+import { addItemToChestArray, removeItemFromChestArray, chestEntryLabel, trapAlreadyEquipped, mergeStackableConsumable as mergeStackableConsumableStack } from './TrapSystem.js';
 import { saveExploreRoomState, getSavedExploreRoomState, clearSavedExploreRoomState, saveRestIngredientsState, getSavedRestIngredientsState, clearSavedRestIngredientsState } from './RoomStatePersistence.js';
 import { createBurstParticles } from './WorldEffectsSystem.js';
 import { EquipmentEffectsSystem } from './EquipmentEffectsSystem.js';
@@ -373,7 +373,13 @@ export class InventorySystem {
           physicsSystem.removeEntity(item);
           items.splice(i, 1);
         } else if (item.data.type === 'CONSUMABLE') {
-          if (allowSlotChoice) {
+          // Stackable consumables (Meat Jerky, Bread, Firecracker, ...) merge
+          // into an existing same-char stack instead of contesting a slot —
+          // see mergeStackableConsumable.
+          const stacked = this.mergeStackableConsumable(item);
+          if (stacked) {
+            customMessage = `${item.data.name} x${stacked.count}`;
+          } else if (allowSlotChoice) {
             const emptySlot = this.firstFreeConsumableSlot(player);
             if (emptySlot === -1) return { success: false, needsSlotChoice: true, slotType: 'consumable', pendingItem: item, droppedItem: null, message: null, removedTrap: false };
             this.consumableInventory.push(item);
@@ -591,6 +597,12 @@ export class InventorySystem {
     return true;
   }
 
+  // Stackable-consumable merge: see mergeStackableConsumable in TrapSystem.js
+  // (shares the TRAP chest-stacking helpers there) for the actual logic.
+  mergeStackableConsumable(item) {
+    return mergeStackableConsumableStack(this.equippedConsumables, this.consumableInventory, item);
+  }
+
   // Strips an item the player is actively CARRYING rather than one sitting in
   // a storage pile — the Shopkeeper's Pawn list sells the whole loadout, not
   // just spares (see ShopSystem's pawn-mode header). `source` names which
@@ -645,39 +657,6 @@ export class InventorySystem {
   }
 
   // ========== CONSUMABLE AUTO-TRIGGER SYSTEM ==========
-
-  /**
-   * Apply a permanent blessing buff (Leshy Grove) to the player, track it in
-   * the caller's blessingsCollected array, and return the pickup message.
-   *
-   * @param {Player} player - Player entity to buff
-   * @param {Item} blessingItem - Blessing item picked up
-   * @param {Array} blessingsCollected - Caller's collected-blessing tracker
-   * @returns {string|null} Pickup message, or null for an unknown effect type
-   */
-  applyBlessing(player, blessingItem, blessingsCollected) {
-    const blessing = blessingItem.data;
-    blessingsCollected.push(blessing.char);
-
-    switch (blessing.effect.type) {
-      case 'damageBuff':
-        player.damageBuff = (player.damageBuff || 0) + blessing.effect.value;
-        return `${blessing.name} (+${blessing.effect.value} damage)`;
-
-      case 'hpBuff':
-        player.maxHp += blessing.effect.value;
-        player.hp = Math.min(player.hp + blessing.effect.value, player.maxHp); // Heal to new max
-        return `${blessing.name} (+${blessing.effect.value} HP)`;
-
-      case 'speedBuff':
-        player.speed += blessing.effect.value;
-        return `${blessing.name} (+${blessing.effect.value} speed)`;
-
-      default:
-        console.warn(`[Blessing] Unknown effect type: ${blessing.effect.type}`);
-        return null;
-    }
-  }
 
   /**
    * Main update loop for consumable system
@@ -842,6 +821,13 @@ export class InventorySystem {
   // Empty Bottle ('B') instead of clearing to null. Sources: magic-potion
   // residue (per design: any "potion such as haste draught").
   _consumeOneShotSlot(slotIndex, consumable, player) {
+    // Stacked consumable (data.stackable, count > 1): using one unit
+    // decrements the stack instead of clearing the slot — the item stays
+    // equipped until the last unit is spent. See mergeStackableConsumable.
+    if (consumable?.data?.stackable && (consumable.count || 1) > 1) {
+      consumable.count -= 1;
+      return;
+    }
     const leavesBottle = consumable?.data?.leavesBottle === true;
     if (leavesBottle) {
       const bottle = new Item('B', 0, 0);

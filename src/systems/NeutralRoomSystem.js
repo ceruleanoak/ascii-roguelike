@@ -12,6 +12,41 @@ const RETURN_BAND_HALF = 1;
 const RETURN_BAND_DEPTH = 2;
 
 /**
+ * Apply a permanent blessing buff (Leshy Grove) to the player, track it in
+ * the caller's blessingsCollected array, and return the pickup message.
+ * Lives here rather than InventorySystem because the blessing item itself
+ * is Leshy Grove content — this system already owns that script's lifecycle.
+ *
+ * @param {Player} player - Player entity to buff
+ * @param {Item} blessingItem - Blessing item picked up
+ * @param {Array} blessingsCollected - Caller's collected-blessing tracker
+ * @returns {string|null} Pickup message, or null for an unknown effect type
+ */
+export function applyBlessing(player, blessingItem, blessingsCollected) {
+  const blessing = blessingItem.data;
+  blessingsCollected.push(blessing.char);
+
+  switch (blessing.effect.type) {
+    case 'damageBuff':
+      player.damageBuff = (player.damageBuff || 0) + blessing.effect.value;
+      return `${blessing.name} (+${blessing.effect.value} damage)`;
+
+    case 'hpBuff':
+      player.maxHp += blessing.effect.value;
+      player.hp = Math.min(player.hp + blessing.effect.value, player.maxHp); // Heal to new max
+      return `${blessing.name} (+${blessing.effect.value} HP)`;
+
+    case 'speedBuff':
+      player.speed += blessing.effect.value;
+      return `${blessing.name} (+${blessing.effect.value} speed)`;
+
+    default:
+      console.warn(`[Blessing] Unknown effect type: ${blessing.effect.type}`);
+      return null;
+  }
+}
+
+/**
  * NeutralRoomSystem - Script executor for NEUTRAL state rooms
  * Handles lifecycle management for neutral room scripts (Leshy Grove, future shops/puzzles)
  */

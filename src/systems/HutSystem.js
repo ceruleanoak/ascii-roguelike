@@ -103,13 +103,28 @@ export class HutSystem {
     // 'press' hut guarantees one instead (see branch below) and skips the
     // random roll so it never gets a second; the Alchemy Hut never rolls one.
     // Placed BEFORE decor/bread so those spawn loops can reject the press cell.
-    const hasPress = hutKind !== 'press' && hutKind !== 'alchemy' && Math.random() < 0.12;
+    const hasPress = hutKind !== 'press' && hutKind !== 'alchemy' && hutKind !== 'fireplace' && Math.random() < 0.12;
     if (hasPress || hutKind === 'press') {
       backgroundObjects.push(new BackgroundObject(
         '⊓',
         2 * GRID.CELL_SIZE,
         2 * GRID.CELL_SIZE
       ));
+    }
+
+    // Fireplace: same roll shape as the press, placed at the opposite corner
+    // so the two can coexist. Starts unlit (`burning: false`) — FireplaceSystem
+    // flips it on the first Stick and the flag resets for free next visit
+    // since generateHutInterior rebuilds this object from scratch.
+    const hasFireplace = hutKind !== 'press' && hutKind !== 'alchemy' && hutKind !== 'fireplace' && Math.random() < 0.12;
+    if (hasFireplace || hutKind === 'fireplace') {
+      const fireplace = new BackgroundObject(
+        '⌂',
+        (cols - 3) * GRID.CELL_SIZE,
+        2 * GRID.CELL_SIZE
+      );
+      fireplace.burning = false;
+      backgroundObjects.push(fireplace);
     }
 
     // Alchemy Hut: Water Trough (2x2, top-left), Cauldron (center, white),

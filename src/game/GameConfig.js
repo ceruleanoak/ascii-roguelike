@@ -205,6 +205,22 @@ export const BACKGROUND_OBJECTS = {
       default: { animation: 'shake', message: null }
     }
   },
+  // Fireplace: unlit until a Stick is fed to it (FireplaceSystem toggles
+  // `obj.burning` + recolors the instance to the lit palette rather than
+  // swapping char/config — same instance-flag approach as the puzzle-signal
+  // glitter objects). Never itself flammable/conductive; it's the fire source.
+  '⌂': {
+    name: 'Fireplace',
+    color: '#886655',
+    solid: true,
+    indestructible: true,
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
   'Π': {
     name: 'Counter',
     color: '#aa8855',

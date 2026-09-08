@@ -15,7 +15,7 @@ import { InventorySystem } from './systems/InventorySystem.js';
 import { captureExploreRoomForRest } from './systems/RoomStatePersistence.js';
 import { ArmorEffectsSystem } from './systems/ArmorEffectsSystem.js';
 import { ConsumableTriggerSystem } from './systems/ConsumableTriggerSystem.js';
-import { NeutralRoomSystem } from './systems/NeutralRoomSystem.js';
+import { NeutralRoomSystem, applyBlessing as applyBlessingBuff } from './systems/NeutralRoomSystem.js';
 import { ErrandSystem } from './systems/ErrandSystem.js';
 import { CheatMenu } from './systems/CheatMenu.js';
 import { DemoSystem } from './systems/DemoSystem.js';
@@ -32,6 +32,7 @@ import { AnimationSystem } from './systems/AnimationSystem.js';
 import { EnemySpawnSystem } from './systems/EnemySpawnSystem.js';
 import { HutSystem } from './systems/HutSystem.js';
 import { PressSystem } from './systems/PressSystem.js';
+import { FireplaceSystem } from './systems/FireplaceSystem.js';
 import { AlchemySystem } from './systems/AlchemySystem.js';
 import { DungeonSystem } from './systems/DungeonSystem.js';
 import { DungeonFloorGenerator } from './systems/DungeonFloorGenerator.js';
@@ -192,6 +193,7 @@ class Game {
     this.enemySpawnSystem = new EnemySpawnSystem(this);
     this.hutSystem = new HutSystem(this);
     this.pressSystem = new PressSystem(this);
+    this.fireplaceSystem = new FireplaceSystem(this);
     this.alchemySystem = new AlchemySystem(this);
     this.dungeonSystem = new DungeonSystem(this);
     // Internal collaborators DungeonSystem calls directly — not registered with
@@ -3760,6 +3762,7 @@ class Game {
       // maze-object hit) via the InteriorManager registry (ADR-0001).
       if (this.interiorManager.handleSpacePress()) return;
       if (this.pressSystem?.handleSpacePress()) return;
+      if (this.fireplaceSystem?.handleSpacePress()) return;
       if (this.alchemySystem?.handleSpacePress()) return;
       if (this.wellSystem?.handleSpacePress()) return;
       if (this.campNPCSystem?.handleSpacePress()) return;
@@ -4482,7 +4485,7 @@ class Game {
 
   // Apply blessing (permanent buff from Leshy Grove)
   applyBlessing(blessingItem) {
-    const message = this.inventorySystem.applyBlessing(this.player, blessingItem, this.blessingsCollected);
+    const message = applyBlessingBuff(this.player, blessingItem, this.blessingsCollected);
     if (message) this.showPickupMessage(message);
   }
 
