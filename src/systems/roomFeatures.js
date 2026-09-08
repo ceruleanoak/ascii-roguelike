@@ -1550,12 +1550,20 @@ export function stampCentipedeArena(room) {
 // l1WeaponPool of their own (gray, blue) — the baseline tier-1 spread.
 const BASELINE_T1_WEAPONS = ['†', '/', '↾', ')', '⊥']; // sword, staff, dagger, bow, hammer
 
-// True while the player's quick slots hold no weapon. Traps also live in the
-// quick slots, so an armful of them still counts as unarmed.
+// True while the player holds no weapon anywhere they could swing it from —
+// the quick slots plus the equipped armor/consumable slots, since a weapon
+// parked in an equipped slot is still a weapon in hand for this check. Traps
+// also live in the quick slots, so an armful of them still counts as unarmed.
 function playerIsUnarmed(gen) {
-  const quickSlots = gen.game?.player?.quickSlots;
-  if (!quickSlots) return false;
-  return !quickSlots.some(slot => slot?.data?.type === ITEM_TYPES.WEAPON);
+  const player = gen.game?.player;
+  if (!player?.quickSlots) return false;
+  const inventory = gen.game?.inventorySystem;
+  const held = [
+    ...player.quickSlots,
+    inventory?.equippedArmor,
+    ...(inventory?.equippedConsumables || [])
+  ];
+  return !held.some(slot => slot?.data?.type === ITEM_TYPES.WEAPON);
 }
 
 // Depth-1 weapon offering: place a single floating pickup drawn from the zone's
