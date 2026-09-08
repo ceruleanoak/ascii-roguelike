@@ -1284,10 +1284,16 @@ export class RoomGenerator {
       }
     }
 
-    // ── Spawn 3-6 enemies in cave with plane 1 + rest state ──────────────────
+    // ── Spawn enemies in cave with plane 1 + rest state ───────────────────────
     // Centralize spawns near the cave center (15, 15) so enemies cluster in the
     // middle rather than ambushing the player at the corridor mouths.
-    const enemyCount = this.randInt(3, 6);
+    // Count scales with depth (same shape as generateCombatRoom's depth scaling)
+    // rather than a flat 3-6: the cave's vision impairment already makes early
+    // Underground visits hard, so a low-depth U room shouldn't also throw a
+    // max-density enemy count at the player.
+    const minEnemies = Math.min(2 + Math.floor(this.currentDepth / 4), 3);
+    const maxEnemies = Math.min(3 + Math.floor(this.currentDepth / 3), 6);
+    const enemyCount = this.randInt(minEnemies, maxEnemies);
     const usedCells = new Set();
     let spawned = 0;
     const CENTER_RADIUS = 5;
