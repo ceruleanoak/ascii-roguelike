@@ -6,6 +6,7 @@ import { Item } from '../entities/Item.js';
 import { Ingredient } from '../entities/Ingredient.js';
 import { ENEMIES, getZoneRandomEnemy, createBossEnemy, BOSS_ENCOUNTERS } from '../data/enemies.js';
 import { ZONES } from '../data/zones.js';
+import { ITEM_TYPES } from '../data/items.js';
 import { WeaponsMaster } from '../entities/WeaponsMaster.js';
 import { HOT_WATER_CHAR } from '../data/alchemy.js';
 
@@ -1545,9 +1546,42 @@ export function stampCentipedeArena(room) {
   return { spawnCell: { x: CENTIPEDE_SPAWN_CELL.col, y: CENTIPEDE_SPAWN_CELL.row }, facing: { ...CENTIPEDE_SPAWN_FACING } };
 }
 
+// Fallback arms for the unarmed safety net in zones that author no
+// l1WeaponPool of their own (gray, blue) — the baseline tier-1 spread.
+const BASELINE_T1_WEAPONS = ['†', '/', '↾', ')', '⊥']; // sword, staff, dagger, bow, hammer
+
+// True while the player's quick slots hold no weapon. Traps also live in the
+// quick slots, so an armful of them still counts as unarmed.
+function playerIsUnarmed(gen) {
+  const quickSlots = gen.game?.player?.quickSlots;
+  if (!quickSlots) return false;
+  return !quickSlots.some(slot => slot?.data?.type === ITEM_TYPES.WEAPON);
+}
+
+// Depth-1 weapon offering: place a single floating pickup drawn from the zone's
+// l1WeaponPool (zones.js). One item per L1 room — the player's first choice of arm.
+//
+// The same offering doubles as the unarmed safety net: a player carrying no
+// weapon at all (walked past the L1 offering, or lost every weapon slot) gets
+// one at any depth and in any zone, so a run can never stall for want of
+// something to swing. Zones with no l1WeaponPool of their own (gray, blue)
+// fall back to the baseline tier-1 arms.
+export function offerL1Weapon(gen, room) {
+  const unarmed = playerIsUnarmed(gen);
+  if (gen.currentDepth !== 1 && !unarmed) return;
+  const pool = ZONES[room.zone]?.l1WeaponPool || (unarmed ? BASELINE_T1_WEAPONS : null);
+  if (!pool || pool.length === 0) return;
+  const itemChar = pool[Math.floor(Math.random() * pool.length)];
+  const pos = gen.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
+  if (pos) {
+    room.items.push(new Item(itemChar, pos.x, pos.y));
+  }
+}
+
 // Centipede arena is a long horizontal gauntlet that rewards a ranged option —
 // guarantee a Gun pickup ('¬') regardless of depth, independent of the
-// depth-1-only offerL1Weapon roll in generateBossRoom.
+// offerL1Weapon roll in generateBossRoom (which only fires at depth 1, or at
+// any depth for an unarmed player).
 export function spawnCentipedeGunDrop(gen, room) {
   const pos = gen.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects);
   if (pos) {

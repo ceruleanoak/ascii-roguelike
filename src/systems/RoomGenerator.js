@@ -11,7 +11,7 @@ import { getDungeonDesign } from '../data/dungeonDesigns.js';
 import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
-import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, stampSmallDoorInVault, getIslandPosition, applyKeyDropLogic, ensureKeyDroppers, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, deriveRiverFlowDirection, buildForcedRiverParams, carveForcedRiver, cellularCaveGrid, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, spawnGuaranteedItems } from './roomFeatures.js';
+import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, stampSmallDoorInVault, getIslandPosition, applyKeyDropLogic, ensureKeyDroppers, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, deriveRiverFlowDirection, buildForcedRiverParams, carveForcedRiver, cellularCaveGrid, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, spawnGuaranteedItems, offerL1Weapon } from './roomFeatures.js';
 
 // Zone-boss arena → letter template key. Boss rooms are entered without a
 // letter (cheat warp) or with an arbitrary one (normal progression), so we
@@ -692,10 +692,9 @@ export class RoomGenerator {
       }
     }
 
-    // Depth-1 rooms offer a single floating weapon from the zone's L1 pool.
-    if (this.currentDepth === 1) {
-      this.offerL1Weapon(room);
-    }
+    // Depth-1 rooms offer a single floating weapon from the zone's L1 pool;
+    // an unarmed player is offered one at any depth (see offerL1Weapon).
+    offerL1Weapon(this, room);
 
     // Ensure K rooms have at least one guaranteed key dropper
     ensureKeyDroppers(this, room);
@@ -717,18 +716,6 @@ export class RoomGenerator {
 
     // Exits are locked until all enemies defeated
     room.exitsLocked = true;
-  }
-
-  // Depth-1 weapon offering: place a single floating pickup drawn from the zone's
-  // l1WeaponPool (zones.js). One item per L1 room — the player's first choice of arm.
-  offerL1Weapon(room) {
-    const pool = ZONES[room.zone]?.l1WeaponPool;
-    if (!pool || pool.length === 0) return;
-    const itemChar = pool[Math.floor(Math.random() * pool.length)];
-    const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
-    if (pos) {
-      room.items.push(new Item(itemChar, pos.x, pos.y));
-    }
   }
 
   generateBossRoom(room) {
@@ -766,10 +753,9 @@ export class RoomGenerator {
       spawnMinibossOrFallback(this, room);
     }
 
-    // Depth-1 rooms offer a single floating weapon from the zone's L1 pool.
-    if (this.currentDepth === 1) {
-      this.offerL1Weapon(room);
-    }
+    // Depth-1 rooms offer a single floating weapon from the zone's L1 pool;
+    // an unarmed player is offered one at any depth (see offerL1Weapon).
+    offerL1Weapon(this, room);
 
     // Ensure K rooms have at least one guaranteed key dropper
     ensureKeyDroppers(this, room);
