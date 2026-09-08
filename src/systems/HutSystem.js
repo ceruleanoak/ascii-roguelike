@@ -54,7 +54,7 @@ export class HutSystem {
 
   // ─── Interior Generation ─────────────────────────────────────────────────
 
-  generateHutInterior(hutKind, depth, sizeOverride = null) {
+  generateHutInterior(hutKind, depth, sizeOverride = null, zone = null) {
     const cols = sizeOverride?.cols ?? (hutKind === 'frog_hut' ? 6 : INTERIOR_COLS);
     const rows = sizeOverride?.rows ?? (hutKind === 'frog_hut' ? 6 : INTERIOR_ROWS);
 
@@ -255,12 +255,16 @@ export class HutSystem {
       // constructor. Never directly reachable; the player interacts across
       // the counter from row 3+ via SHOP_INTERACTION_RANGE.
       const centerCol = Math.floor(cols / 2);
-      // zoneDepths seeds the first stock roll — the Shopkeeper only ever
-      // offers wares whose Home Zone this run has reached (data/homeZone.js).
+      // zoneDepths seeds the first stock roll (only wares whose Home Zone
+      // this run has reached, data/homeZone.js); zone is the physical Zone
+      // this Settlement sits in and narrows the roll to that Zone's own
+      // wares first (shopPricing.js's zoneCraftablePool) — a Green
+      // Settlement and a Red Settlement stock different counters.
       npcs.push(new Shopkeeper(
         centerCol * GRID.CELL_SIZE,
         SHOPKEEPER_ALCOVE_ROW * GRID.CELL_SIZE,
-        this.game.zoneDepths
+        this.game.zoneDepths,
+        zone
       ));
 
     } else if (hutKind === 'neutral_npc') {
@@ -581,7 +585,7 @@ export class HutSystem {
     } else {
       const depth = game.getCurrentZoneDepth ? game.getCurrentZoneDepth() : 1;
       const sizeOverride = hut.hutKind === 'alchemy' ? { cols: 12, rows: 12 } : null;
-      game.activeFloor = this.generateHutInterior(hut.hutKind, depth, sizeOverride);
+      game.activeFloor = this.generateHutInterior(hut.hutKind, depth, sizeOverride, game.currentRoom?.zone);
       hut.interiorState = game.activeFloor;
       hut.interiorGenerated = true;
     }

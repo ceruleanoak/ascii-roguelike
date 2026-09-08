@@ -196,6 +196,11 @@ function buildListing(itemData, role) {
     treasureChar,
     treasureCount,
     sold: false,
+    // How many times this exact row has been offered (shop opened) without a
+    // purchase — Shopkeeper.refreshStock force-rerolls a stale unsold row
+    // once this crosses STOCK_STALE_VISIT_LIMIT, so standing pat never dead-
+    // ends the counter on wares the player has already passed on twice.
+    staleVisits: 0,
   };
 }
 
@@ -213,13 +218,29 @@ function craftablePool(type) {
 }
 
 /**
- * The slice of a role's catalogue this run has unlocked. Falls back to the
+ * craftablePool narrowed to one physical Zone's own wares (Home Zone match) —
+ * a Settlement's counter should read as local to where it's standing, not a
+ * single catalogue shared identically by every Settlement in the game. Falls
+ * back to the full unzoned catalogue when the zone has nothing of this role
+ * (e.g. Blue/Gray, which are light on lootable gear by design) so the shop
+ * never goes bare over a zone-purity rule.
+ */
+function zoneCraftablePool(type, zone) {
+  const pool = craftablePool(type);
+  if (!zone) return pool;
+  const zoned = pool.filter(d => getHomeZone(d.char)?.zone === zone);
+  return zoned.length > 0 ? zoned : pool;
+}
+
+/**
+ * The slice of a role's catalogue this run has unlocked, restricted to the
+ * shop's own zone first (see zoneCraftablePool). Falls back to the
  * shallowest-Home-Depth items when nothing qualifies (a shop reached before
  * any Depth was banked) so the counter is never bare — an empty shop reads as
  * a bug to the player, not as a gate.
  */
-function unlockedPool(type, zoneDepths) {
-  const pool = craftablePool(type);
+function unlockedPool(type, zoneDepths, zone) {
+  const pool = zoneCraftablePool(type, zone);
   const unlocked = pool.filter(d => isUnlocked(d.char, zoneDepths));
   if (unlocked.length > 0) return unlocked;
 
@@ -256,11 +277,15 @@ function pickAdvanced(pool, n) {
  * @param {Object} zoneDepths - game.zoneDepths: deepest Depth reached per Zone
  *   this run. Resets on death with the rest of the run, so a fresh run walks
  *   up to a beginner's counter again.
+ * @param {string|null} zone - the Zone this Settlement physically sits in
+ *   (room.zone). Narrows each role's pool to that zone's own wares first (see
+ *   zoneCraftablePool) — a Green Settlement and a Red Settlement stock
+ *   different counters instead of drawing from one shared catalogue.
  */
-export function rollShopStock(zoneDepths = {}) {
+export function rollShopStock(zoneDepths = {}, zone = null) {
   return [
-    ...pickAdvanced(unlockedPool(ITEM_TYPES.ARMOR, zoneDepths), 1).map(d => buildListing(d, 'ARMOR')),
-    ...pickAdvanced(unlockedPool(ITEM_TYPES.WEAPON, zoneDepths), 2).map(d => buildListing(d, 'WEAPON')),
-    ...pickAdvanced(unlockedPool(ITEM_TYPES.CONSUMABLE, zoneDepths), 3).map(d => buildListing(d, 'CONSUMABLE')),
+    ...pickAdvanced(unlockedPool(ITEM_TYPES.ARMOR, zoneDepths, zone), 1).map(d => buildListing(d, 'ARMOR')),
+    ...pickAdvanced(unlockedPool(ITEM_TYPES.WEAPON, zoneDepths, zone), 2).map(d => buildListing(d, 'WEAPON')),
+    ...pickAdvanced(unlockedPool(ITEM_TYPES.CONSUMABLE, zoneDepths, zone), 3).map(d => buildListing(d, 'CONSUMABLE')),
   ];
 }
