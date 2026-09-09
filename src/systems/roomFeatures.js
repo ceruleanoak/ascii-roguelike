@@ -208,6 +208,61 @@ export function maybeSpawnRoamingAlchemist(gen, room) {
   return true;
 }
 
+// ── Zone-specific Tunnel seeding (unified dispatcher) ───────────────────────
+// Called from RoomGenerator.generateTunnelRoom() to seed zone-specific payoff
+// for walking the tunnel, after the corridor/rocks/entrances and the generic
+// background-object pass are already in place. Mirrors seedAscentZone's
+// per-zone dispatch shape; yellow/red/cyan are future phases (each teaches
+// the same "rocks flank a hidden tunnel" idea differently but need their own
+// design pass) and fall through to the existing generic Tunnel content.
+export function seedTunnelZone(gen, room) {
+  switch (room.zone) {
+    case 'green':
+      return seedGreenTunnelChest(gen, room);
+    default:
+      return false;
+  }
+}
+
+// ── Green Zone Tunnel: chest reward at the tunnel's far end ────────────────
+// Green's Tunnel room is the teaching room: the rock-flanked entrances are
+// the whole lesson, so the payoff for walking the corridor (rather than
+// fighting through the room) is a Chest planted near whichever entrance is
+// farther from the player's start — reaching it rewards noticing the
+// entrance rocks and taking the corridor rather than skipping it.
+export function seedGreenTunnelChest(gen, room) {
+  const { bounds, entrances, entranceAxis } = room.tunnel || {};
+  if (!bounds || !entrances?.length) return false;
+
+  const start = room.playerStartPos;
+  const distSq = (col, row) => {
+    const dx = col * GRID.CELL_SIZE - start.x;
+    const dy = row * GRID.CELL_SIZE - start.y;
+    return dx * dx + dy * dy;
+  };
+
+  // Pick the farther end of the corridor (left/right or top/bottom), then
+  // the interior cell just inside that end, centered across the tunnel's
+  // width so the chest sits in the open corridor floor, not against a wall.
+  let col, row;
+  if (entranceAxis === 'horizontal') {
+    const midRow = Math.round((bounds.minRow + bounds.maxRow) / 2);
+    const leftCol = bounds.minCol, rightCol = bounds.maxCol;
+    col = distSq(leftCol, midRow) > distSq(rightCol, midRow) ? leftCol : rightCol;
+    row = midRow;
+  } else {
+    const midCol = Math.round((bounds.minCol + bounds.maxCol) / 2);
+    const topRow = bounds.minRow, bottomRow = bounds.maxRow;
+    row = distSq(midCol, topRow) > distSq(midCol, bottomRow) ? topRow : bottomRow;
+    col = midCol;
+  }
+
+  const chest = new BackgroundObject('⊞', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+  chest.spawnImmunityTimer = 1.0;
+  room.backgroundObjects.push(chest);
+  return true;
+}
+
 // ── Post-generation background-object cleanup ───────────────────────────────
 // Structure generators register protected regions on the room and mark the
 // objects that make up the structure itself with `obj.structural = true`.
