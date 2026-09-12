@@ -34,14 +34,14 @@ export const RECIPES = [
   { left: '¡', right: 'M', result: '⸘', name: 'Metal Bat' },     // Bat + Metal = Metal Bat (double damage)
   { left: 'M', right: '|', result: '↾', name: 'Dagger' },      // Metal + Stick = Dagger
 
-  // === GEM WANDS (Staff + gemstone) ===
-  { left: '/', right: '◈', result: '⚝', name: 'Ruby Staff' },     // Staff + Ruby
-  { left: '/', right: '⬨', result: '⚹', name: 'Sapphire Staff' }, // Staff + Sapphire
-  { left: '/', right: '◇', result: '⚶', name: 'Topaz Staff' },    // Staff + Topaz
-  { left: '/', right: '⬧', result: '⚸', name: 'Onyx Staff' },     // Staff + Onyx
-  { left: '/', right: '⬦', result: '⚘', name: 'Emerald Staff' },  // Staff + Emerald
-  { left: '/', right: '⬥', result: '⚭', name: 'Garnet Staff' },   // Staff + Garnet
-  { left: '/', right: '⧫', result: '⚳', name: 'Force Wand' },    // Staff + Diamond
+  // === GEM WANDS (Thick Staff + gemstone) ===
+  { left: 'Ⲯ', right: '◈', result: '⚝', name: 'Ruby Staff' },     // Thick Staff + Ruby
+  { left: 'Ⲯ', right: '⬨', result: '⚹', name: 'Sapphire Staff' }, // Thick Staff + Sapphire
+  { left: 'Ⲯ', right: '◇', result: '⚶', name: 'Topaz Staff' },    // Thick Staff + Topaz
+  { left: 'Ⲯ', right: '⬧', result: '⚸', name: 'Onyx Staff' },     // Thick Staff + Onyx
+  { left: 'Ⲯ', right: '⬦', result: '⚘', name: 'Emerald Staff' },  // Thick Staff + Emerald
+  { left: 'Ⲯ', right: '⬥', result: '⚭', name: 'Garnet Staff' },   // Thick Staff + Garnet
+  { left: 'Ⲯ', right: '⧫', result: '⚳', name: 'Force Wand' },    // Thick Staff + Diamond
 
   // === MANA WHIP (Whip + Mana Potion) — confusion lash, and the required base
   // for the gem whips below (was plain Whip) ===
