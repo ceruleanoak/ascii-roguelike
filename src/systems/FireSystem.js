@@ -109,6 +109,17 @@ export class FireSystem {
     let dirty = false;
     for (const obj of this._burning) {
       if (!obj.onFire || obj.destroyed) {
+        // A Tree that burned all the way down (as opposed to being chopped,
+        // which already drops via destroyObject:spawnIngredient: in
+        // InteractionSystem) bypasses the dropEffect loot pipeline entirely —
+        // BackgroundObject.update() sets `destroyed = true` directly on
+        // burnout. This is the one place that transition is observable, so
+        // it's the drop hook: same Ash ingredient the Fireplace already
+        // stokes with, at a modest rate since burning down a tree costs
+        // nothing to attempt.
+        if (obj.destroyed && obj.originalChar === 'Y' && Math.random() < 0.35) {
+          this.game.lootSystem?.spawnIngredientDrop('a', obj.position.x, obj.position.y, null, obj);
+        }
         this._burning.delete(obj);
         dirty = true;
       }
