@@ -65,15 +65,25 @@ export class FireSystem {
   // ── Ignition (single entry point) ────────────────────────────────────────
 
   /**
-   * Ignite a background object. Returns true if the object is burning after
-   * the call (matches BackgroundObject.ignite semantics: false only for
-   * non-flammables). Marks the background dirty on a fresh ignition so the
-   * cached canvas drops the object (it moves to the foreground flicker pass).
+   * Ignite a background object from an AMBIENT source — adjacency spread
+   * (`_advanceFront`) or a burning entity's contact scan
+   * (`_scanBurningEntities`). Routes through `registerSpark()` rather than
+   * `ignite()` directly so an object with `sparkThreshold` (Tree) needs that
+   * many roughly-concurrent ambient sparks before it actually catches;
+   * objects with no threshold ignite immediately, unchanged. Direct
+   * fire-weapon damage bypasses this entirely — CombatSystem._ignite() calls
+   * `obj.ignite()` itself, never this method.
+   *
+   * Returns true if the object is burning after the call (false while still
+   * accumulating sparks, or for non-flammables — matches the prior
+   * `ignite()`-only contract). Marks the background dirty on a fresh
+   * ignition so the cached canvas drops the object (it moves to the
+   * foreground flicker pass).
    */
   igniteObject(obj, duration = 5.0) {
     if (!obj || obj.destroyed) return false;
     const wasBurning = obj.onFire;
-    const ignited = obj.ignite(duration);
+    const ignited = obj.registerSpark(duration);
     if (ignited && !wasBurning) {
       this._burning.add(obj);
       this.game.renderer?.markBackgroundDirty?.();

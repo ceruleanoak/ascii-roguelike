@@ -1,6 +1,11 @@
 import { GRID, BACKGROUND_OBJECTS, BACKGROUND_OBJECT_VARIANTS, OBJECT_ANIMATIONS, WATER_COLORS } from '../game/GameConfig.js';
 import { ITEMS, INGREDIENTS } from '../data/items.js';
 
+// Concurrency window for `registerSpark()` — mirrors FireSystem's
+// EMBER_STACK_WINDOW (the same "close together counts, spread out doesn't"
+// shape used for the player's own ember-contact burn threshold).
+const SPARK_WINDOW = 2.0;
+
 // Linear-interpolate between two #rrggbb colors. t in [0, 1].
 function _lerpHex(a, b, t) {
   const ar = parseInt(a.slice(1, 3), 16), ag = parseInt(a.slice(3, 5), 16), ab = parseInt(a.slice(5, 7), 16);
@@ -148,6 +153,19 @@ export class BackgroundObject {
     this.onFire = false;
     this.fireDuration = 0;
     this.fireTimer = 0;
+
+    // Spark accumulation gate (optional, data-declared — see `sparkThreshold`
+    // on Tree in GameConfig.js). Ambient ignition sources (FireSystem's
+    // adjacency spread, burning-entity contact) go through `registerSpark()`
+    // instead of `ignite()` directly for any object that declares a
+    // threshold, requiring that many roughly-concurrent sparks before it
+    // actually catches — a single ember or one passing burning rat shouldn't
+    // torch a tree the way it does a blade of grass. Direct fire-weapon
+    // damage (CombatSystem._ignite) always calls `ignite()` itself and is
+    // untouched by this gate.
+    this.sparkThreshold = this.data.sparkThreshold || null;
+    this.sparkStacks = 0;
+    this.sparkTimer = 0;
 
     // Water state (only meaningful when this.char === '~')
     this.waterState = 'normal'; // 'normal' | 'frozen' | 'poisoned' | 'electrified' | 'crystallized'
@@ -378,6 +396,17 @@ export class BackgroundObject {
         } else {
           this.destroyed = true;
         }
+      }
+    }
+
+    // Spark accumulation decays if not reinforced within the window — sparks
+    // have to land close together to count as "a few concurrent sparks",
+    // not slowly add up over an entire fight.
+    if (this.sparkStacks > 0) {
+      this.sparkTimer -= deltaTime;
+      if (this.sparkTimer <= 0) {
+        this.sparkStacks = 0;
+        this.sparkTimer = 0;
       }
     }
 
@@ -689,6 +718,25 @@ export class BackgroundObject {
     this.fireDuration = this.data.burnDuration || duration;
     this.fireTimer = 0;
     return true;
+  }
+
+  // Ambient ignition entry point (FireSystem's adjacency spread and
+  // burning-entity contact scan) for an object that declares `sparkThreshold`.
+  // Accumulates one spark, resetting the concurrency window each time, and
+  // only actually ignites once the threshold is reached within it — see the
+  // `sparkStacks` field comment. Objects with no threshold ignite immediately
+  // (same as calling `ignite()` directly), which is the unchanged behavior
+  // for grass and everything else that never opted in. Returns true only on
+  // the call that actually ignites, matching `ignite()`'s return contract.
+  registerSpark(duration = 5.0) {
+    if (!this.sparkThreshold) return this.ignite(duration);
+    if (this.flammability === 'none' || this.onFire) return this.onFire;
+    this.sparkStacks++;
+    this.sparkTimer = SPARK_WINDOW;
+    if (this.sparkStacks < this.sparkThreshold) return false;
+    this.sparkStacks = 0;
+    this.sparkTimer = 0;
+    return this.ignite(duration);
   }
 
   isWater() {

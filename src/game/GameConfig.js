@@ -256,6 +256,12 @@ export const BACKGROUND_OBJECTS = {
     dropEffect: 'destroyObject:spawnIngredient:|',
     bulletInteraction: 'block',
     flammability: 'high',
+    // A tree catching like a blade of grass off one adjacent ember or a
+    // passing burning rat read as too eager — direct fire-weapon damage
+    // still ignites it instantly (CombatSystem bypasses the spark gate
+    // entirely), but ambient sources (FireSystem.igniteObject) need this
+    // many roughly-concurrent sparks first. See BackgroundObject.registerSpark.
+    sparkThreshold: 3,
     conductivity: 'none',
     slowing: 0.8,
     interactions: {
