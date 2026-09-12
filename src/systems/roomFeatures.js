@@ -9,6 +9,7 @@ import { ZONES } from '../data/zones.js';
 import { ITEM_TYPES } from '../data/items.js';
 import { WeaponsMaster } from '../entities/WeaponsMaster.js';
 import { HOT_WATER_CHAR } from '../data/alchemy.js';
+import { PLANE_TUNNEL } from './PlaneSystem.js';
 
 // Room-generation feature helpers extracted from RoomGenerator (arch budget).
 // Each takes the generator instance (`gen`) for its placement utilities.
@@ -259,6 +260,11 @@ export function seedGreenTunnelChest(gen, room) {
 
   const chest = new BackgroundObject('⊞', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
   chest.spawnImmunityTimer = 1.0;
+  // Sits inside the tunnel corridor, where the player is on PLANE_TUNNEL (see
+  // PhysicsSystem.updatePlane) — without this flag it defaults to plane 0
+  // (PlaneSystem.objectOnPlane) and is invisible/unreachable from inside the
+  // tunnel, same as the mud patches in generateTunnelRoom().
+  chest.data = { ...chest.data, renderOnlyOnPlane: PLANE_TUNNEL };
   room.backgroundObjects.push(chest);
   return true;
 }
