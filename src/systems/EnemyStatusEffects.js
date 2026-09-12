@@ -70,11 +70,17 @@ export function applyStatusEffect(enemy, effect, duration = 3.0) {
 // Enemy.getNearDeathBlinkColor's identical check).
 //
 // For Giant Slime (or any future leap-capable boss), the ensnared, now-
-// doubled decision interval also gates its leap: every landed hit re-arms a
+// doubled decision interval also gates its leap: the first landed hit arms a
 // countdown of exactly one doubled decision cycle (LeapAttackMechanic ticks
 // it and fires the leap at zero), regardless of the leap's normal cooldown/
 // range — the "standard jump state change" the decision timer now drives, in
-// place of a hardcoded delay.
+// place of a hardcoded delay. Only arms when not already counting down —
+// a hit landing mid-countdown must NOT push the countdown back out, or a
+// player attacking faster than one doubled decision cycle (the common case,
+// since the countdown outlasts invulnerabilityDuration) can keep it pinned
+// at "armed but never firing" forever (bug #266). tryTrigger clears
+// ensnareLeapArmed once the leap actually fires, so the next landed hit
+// re-arms a fresh cycle as intended.
 export function applyEnsnareOnHit(enemy) {
   if (enemy.data?.tier !== 'boss') return;
 
@@ -82,7 +88,7 @@ export function applyEnsnareOnHit(enemy) {
     enemy.applyStatusEffect('ensnare', Infinity);
     enemy.decisionInterval = enemy.baseDecisionInterval * 2;
   }
-  if (enemy.data?.leapAttack?.enabled) {
+  if (enemy.data?.leapAttack?.enabled && !enemy.ensnareLeapArmed) {
     enemy.ensnareLeapArmed = true;
     enemy.ensnareLeapTimer = enemy.decisionInterval;
   }
