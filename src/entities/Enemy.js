@@ -571,7 +571,7 @@ export class Enemy {
     // to default AI if the loaf was consumed or destroyed by something else.
     // Behavior lives in its Mechanic file; the velocity-write contract and
     // the strike-cadence reset are documented there.
-    if (BreadSeekMechanic.update(this)) {
+    if (BreadSeekMechanic.update(this, deltaTime)) {
       return { dotDamage: [] };
     }
 
