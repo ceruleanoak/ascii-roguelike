@@ -1861,9 +1861,17 @@ export class Enemy {
       duration: windup + (band?.duration ?? 0.30),
       color: this.color,
       knockback: band?.knockback ?? 300,
+      isImpact: this.data.isImpact === true,
       owner: this,
       isCharmedAttack: this.isCharmed(),
       charmedTarget: this.isCharmed() ? this.target : null,
+      // A windup visual IS the eventual live attack (Telegraph.activateWindupVisual
+      // mutates this same object in place; createMeleeAttack is never called again
+      // for it — see resolveEnemyAttack). Without these, any onHit-bearing enemy
+      // (e.g. Plague Rat's poison) telegraphs a swing whose landed hit silently
+      // carries no elemental follow-through (bug #263).
+      onHit: this.data.onHit,
+      poisonDuration: this.data.poisonDuration,
       windupPhase: true, // Mark as windup - cannot deal damage yet
       hasHit: true, // Prevent damage during windup
       windupDuration: windup, // Store total windup time
