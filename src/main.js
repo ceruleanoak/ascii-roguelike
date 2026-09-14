@@ -4030,8 +4030,8 @@ class Game {
     dr.active = false;
     dr.timer = 0;
     dr.justEnded = false;
-    dr.hidden = false;
     dr.hideTimer = 0;
+    p.hidden = false;
     p.grabbed = false;
     p.hookedByWhip = false;
     p.activeSappingBats = [];
