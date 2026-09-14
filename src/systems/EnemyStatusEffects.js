@@ -60,44 +60,9 @@ export function applyStatusEffect(enemy, effect, duration = 3.0) {
   }
 }
 
-// Ensnare: any boss-tier enemy that takes a landed hit gets permanently
-// entangled for the rest of the fight — half speed (Enemy.getSpeedMultiplier),
-// a continuous blink (Enemy.getIframeFlashColor), and a doubled decision
-// interval — instead of the plain iframe flash every other enemy gets.
-// Applied once via the generic named-effect system above; re-hitting an
-// already-ensnared boss doesn't double the interval again. 'boss' is the one
-// tier value used for both zone bosses and minibosses in this data set (see
-// Enemy.getNearDeathBlinkColor's identical check).
-//
-// For Giant Slime (or any future leap-capable boss), the ensnared, now-
-// doubled decision interval also gates its leap: the first landed hit arms a
-// countdown of exactly one doubled decision cycle (LeapAttackMechanic ticks
-// it and fires the leap at zero), regardless of the leap's normal cooldown/
-// range — the "standard jump state change" the decision timer now drives, in
-// place of a hardcoded delay. Only arms when not already counting down —
-// a hit landing mid-countdown must NOT push the countdown back out, or a
-// player attacking faster than one doubled decision cycle (the common case,
-// since the countdown outlasts invulnerabilityDuration) can keep it pinned
-// at "armed but never firing" forever (bug #266). tryTrigger clears
-// ensnareLeapArmed once the leap actually fires, so the next landed hit
-// re-arms a fresh cycle as intended.
-export function applyEnsnareOnHit(enemy) {
-  if (enemy.data?.tier !== 'boss') return;
-
-  if (!enemy.isEnsnared()) {
-    enemy.applyStatusEffect('ensnare', Infinity);
-    enemy.decisionInterval = enemy.baseDecisionInterval * 2;
-  }
-  if (enemy.data?.leapAttack?.enabled && !enemy.ensnareLeapArmed) {
-    enemy.ensnareLeapArmed = true;
-    enemy.ensnareLeapTimer = enemy.decisionInterval;
-  }
-}
-
 // Combined movement-speed multiplier from every slowing/halting effect
 // currently on the enemy — freeze/gooey/dizzy/sleep tiers, rally-boost
-// speedup, gas-attack slow stacks, and Ensnare's permanent half-speed on top
-// of whatever else applies. Split out of Enemy.js (getSpeedMultiplier) to
+// speedup, and gas-attack slow stacks. Split out of Enemy.js (getSpeedMultiplier) to
 // keep that file under its architecture budget; stun/zap/knockback/frozen's
 // hard-zero cases stay in Enemy.js since they're plain early-return guards
 // on the caller's own state, not part of this stacking multiplier.
@@ -114,9 +79,6 @@ export function computeSpeedMultiplier(enemy) {
   // against any large velocity impulse — e.g. the melee leap — into a runaway.)
   if (enemy.rallyBoostTimer > 0) m *= (enemy._rallyBoostMultiplier ?? 1.3);
   if (enemy.gaSlowStacks) m *= Math.max(0.25, 1 - enemy.gaSlowStacks * 0.1);
-  // Ensnare (boss/miniboss, permanent once a hit lands): half speed for the
-  // rest of the fight, on top of whatever else is already slowing it.
-  if (enemy.isEnsnared()) m *= 0.5;
   return m;
 }
 

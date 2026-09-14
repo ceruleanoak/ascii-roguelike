@@ -39,7 +39,6 @@ import { statesFor } from '../data/stateDefaults.js';
 import { computeBlinkColor, computePipRows, computeIframeFlashColor } from '../systems/StatusEffectVisuals.js';
 import {
   applyStatusEffect as applyStatusEffectImpl,
-  applyEnsnareOnHit as applyEnsnareOnHitImpl,
   computeSpeedMultiplier as computeSpeedMultiplierImpl,
   clearEffectOrder as clearEffectOrderImpl,
   updateStatusEffects as updateStatusEffectsImpl
@@ -190,9 +189,6 @@ export class Enemy {
     this.fleeHeadingAngle = null; // Locked heading (radians), held stable between decisions
 
     // Unified AI decision-making (intelligence system)
-    // baseDecisionInterval is the un-ensnared value — ensnare (below) permanently
-    // doubles decisionInterval itself, so this is what it doubles *from* and what
-    // nothing else ever needs to touch.
     this.baseDecisionInterval = this.data.decisionInterval || 0.5; // How often to reassess (smarter = lower)
     this.decisionInterval = this.baseDecisionInterval;
     this.decisionTimer = Math.random() * this.decisionInterval; // Time until next decision (randomized start)
@@ -225,13 +221,7 @@ export class Enemy {
       knockback: { active: false, duration: 0 },
       blind: { active: false, duration: 0 }, // Attacks miss (0 damage)
       dizzy: { active: false, duration: 0, stacks: 0 },
-      goo: { active: false, duration: 0, slowAmount: 0.8, stacks: 0 },
-      // Boss/miniboss-only, applied via applyStatusEffect('ensnare', Infinity)
-      // from takeDamage. Deliberately never ticked in EnemyStatusEffects'
-      // updateStatusEffects — once triggered it lasts the rest of the fight,
-      // not a timed slot like everything else in this table (see isEnsnared/
-      // getSpeedMultiplier/getIframeFlashColor).
-      ensnare: { active: false, duration: 0 }
+      goo: { active: false, duration: 0, slowAmount: 0.8, stacks: 0 }
     };
 
     // Ordered list of currently-active blink-capable effect names, in the
@@ -540,8 +530,6 @@ export class Enemy {
   isDizzy() { return this.statusEffects.dizzy.active; }
 
   isGooey() { return this.statusEffects.goo.active; }
-
-  isEnsnared() { return this.statusEffects.ensnare.active; }
 
   // Get effective damage (0 if blind, normal damage otherwise)
   getEffectiveDamage() {
@@ -2232,7 +2220,6 @@ export class Enemy {
     if (this.hp > 0) {
       this.invulnerabilityTimer = this.invulnerabilityDuration;
       this.lastHitAttackId = attackId;
-      applyEnsnareOnHitImpl(this); // boss-tier ensnare debuff — see EnemyStatusEffects.js
     }
 
     // Retreat into shell after taking damage (shell-armored enemies)

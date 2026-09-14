@@ -81,19 +81,11 @@ export function computeBlinkColor(enemy) {
   return blinkCycle % 2 === 0 ? EFFECT_COLORS[effect] : enemy.baseColor;
 }
 
-// White iframe flash while actually invulnerable, falling back to Ensnare's
-// own permanent blink once the (brief, per-hit) invulnerability window ends.
-// Ensnare has no countdown to phase against — it's applied once and never
-// expires (see Enemy.isEnsnared/EnemyStatusEffects.applyEnsnareOnHit) — so it
-// blinks off Date.now() instead, same idiom as computePlayerDisplayColor's
-// low-HP blink and Enemy.getNearDeathBlinkColor.
+// White iframe flash for the brief, per-hit invulnerability window only.
 export function computeIframeFlashColor(enemy) {
   if (enemy.invulnerabilityTimer > 0) {
     const blinkCycle = Math.floor(enemy.invulnerabilityTimer / IFRAME_BLINK_FREQUENCY);
     return blinkCycle % 2 === 0 ? '#ffffff' : null;
-  }
-  if (enemy.isEnsnared()) {
-    return Math.floor(Date.now() / (IFRAME_BLINK_FREQUENCY * 1000)) % 2 === 0 ? '#ffffff' : null;
   }
   return null;
 }
