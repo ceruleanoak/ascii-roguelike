@@ -19,6 +19,7 @@ export const LeapAttackMechanic = {
 
   init(enemy) {
     enemy.leapCooldown = 2.0; // brief grace at spawn
+    enemy.forcedLeapPending = false; // armed by Enemy.takeDamage; consumed the frame iframes expire
     enemy.leapWindupActive = false;
     enemy.leapWindupTimer = 0;
     enemy.leapAirborneActive = false;
@@ -110,8 +111,16 @@ export const LeapAttackMechanic = {
 
     const { effectiveDistance, dotDamageEvents } = ctx;
 
+    // Counterattack: a landed hit arms forcedLeapPending (Enemy.takeDamage).
+    // The instant this boss's own post-hit iframes expire, the leap fires
+    // immediately — regardless of the normal cooldown/trigger-range gate —
+    // so every hit that lands is answered with a forced reposition instead
+    // of leaving the boss standing still to be melee-spammed. onScreen/plane/
+    // spewWindupActive above still gate it; only cooldown and range are
+    // bypassed.
+    const forced = enemy.forcedLeapPending && enemy.invulnerabilityTimer <= 0;
     const inRange = effectiveDistance >= cfg.triggerRangeMin && effectiveDistance <= cfg.triggerRangeMax;
-    if (enemy.leapCooldown > 0 || !inRange) return;
+    if (!forced && (enemy.leapCooldown > 0 || !inRange)) return;
 
     // Windup scales down with lost HP — full HP leaps at cfg.windupTime,
     // 0 HP leaps at half that, linear in between. Makes the boss leap
@@ -124,6 +133,7 @@ export const LeapAttackMechanic = {
     enemy.velocity.vx = 0;
     enemy.velocity.vy = 0;
     if (enemy.targetVelocity) { enemy.targetVelocity.vx = 0; enemy.targetVelocity.vy = 0; }
+    enemy.forcedLeapPending = false;
     return { suspend: true, result: { dotDamage: dotDamageEvents } };
   }
 };

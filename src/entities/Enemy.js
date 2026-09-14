@@ -2220,6 +2220,9 @@ export class Enemy {
     if (this.hp > 0) {
       this.invulnerabilityTimer = this.invulnerabilityDuration;
       this.lastHitAttackId = attackId;
+      // Arm a forced leap for the instant these iframes expire — see
+      // LeapAttackMechanic.tryTrigger. No-op for enemies without leapAttack.
+      if (this.data?.leapAttack?.enabled) this.forcedLeapPending = true;
     }
 
     // Retreat into shell after taking damage (shell-armored enemies)
