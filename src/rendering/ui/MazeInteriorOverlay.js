@@ -184,6 +184,7 @@ export class MazeInteriorOverlay {
 
     this.renderController.bowChargeIndicator.render(game);
     this.renderController.greenRangerIndicator.render(game);
+    this.renderController.cyanRogueIndicator.render(game);
 
     // ── Restore interior translate ────────────────────────────────────────
     ctx.restore();

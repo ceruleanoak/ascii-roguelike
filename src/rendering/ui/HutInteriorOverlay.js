@@ -344,6 +344,7 @@ export class HutInteriorOverlay {
 
     // ── 18. Green ranger indicator ─────────────────────────────────────────────
     this.renderController.greenRangerIndicator.render(game);
+    this.renderController.cyanRogueIndicator.render(game);
 
     // ── 19b. Puzzle Room weapon pedestal — [x][x][x] Slot chrome, the shared
     // world-Slot vocabulary from slotChrome.js (same stone/pending pair the

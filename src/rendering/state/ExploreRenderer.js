@@ -1066,7 +1066,10 @@ export class ExploreRenderer {
     if (!playerInInterior) this.renderController.bowChargeIndicator.render(game);
 
     // Draw green ranger action cooldown indicator — skip when inHut
-    if (!playerInInterior) this.renderController.greenRangerIndicator.render(game);
+    if (!playerInInterior) {
+      this.renderController.greenRangerIndicator.render(game);
+      this.renderController.cyanRogueIndicator.render(game);
+    }
 
     // Sandstorm sand motes — yellow zone wind. Drawn over entities so motes
     // pass in front, under interior overlays so they don't bleed into the PiP.

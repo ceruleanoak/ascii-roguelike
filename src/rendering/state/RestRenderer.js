@@ -365,6 +365,7 @@ export class RestRenderer {
 
     // Draw green ranger action cooldown indicator
     this.renderController.greenRangerIndicator.render(game);
+    this.renderController.cyanRogueIndicator.render(game);
 
     // Draw contextual floating text above player when near a slot
     if (nearestSlot && activeHint === 'slot') {

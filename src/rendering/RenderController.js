@@ -12,6 +12,7 @@
 
 import { BowChargeIndicator } from './ui/BowChargeIndicator.js';
 import { GreenRangerIndicator } from './ui/GreenRangerIndicator.js';
+import { CyanRogueIndicator } from './ui/CyanRogueIndicator.js';
 import { ArrowKeyIndicators } from './ui/ArrowKeyIndicators.js';
 import { CraftingStation } from './ui/CraftingStation.js';
 import { MenuOverlay } from './ui/MenuOverlay.js';
@@ -40,6 +41,7 @@ export class RenderController {
     // UI components (must be initialized before state renderers that use them)
     this.bowChargeIndicator = new BowChargeIndicator(renderer);
     this.greenRangerIndicator = new GreenRangerIndicator(renderer);
+    this.cyanRogueIndicator = new CyanRogueIndicator(renderer);
     this.arrowKeyIndicators = new ArrowKeyIndicators(renderer);
     this.craftingStation = new CraftingStation(renderer);
     this.menuOverlay = new MenuOverlay(renderer);
