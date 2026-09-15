@@ -224,6 +224,12 @@ export class DungeonSystem {
     // Wipe combat state on every floor activation (initial entry + inter-floor).
     // In-flight projectiles/arrows shouldn't carry across context boundaries.
     game.combatSystem.clear();
+    // Transient world effects (particles, puddles/slime trails, goo blobs,
+    // debris, steam clouds) carry no floor/room identity to filter by, so a
+    // full clear mirrors the surface's own applyRoomSwap() contract — without
+    // this, a puddle dropped on one floor kept rendering and applying contact
+    // on every floor descended/ascended to afterward.
+    game._resetEnvironmentalEffects();
 
     // Swap physics entities — enemies
     if (game.activeFloor?.enemies) {
@@ -392,6 +398,9 @@ export class DungeonSystem {
     // Wipe interior combat state on exit so dungeon projectiles/arrows don't
     // leak into surface coords on the return canvas.
     game.combatSystem.clear();
+    // Same effect-array clear as _activateFloor — leftover interior puddles/
+    // goo/debris must not persist into the surface pass on exit.
+    game._resetEnvironmentalEffects();
 
     // Snapshot the current floor's loot before clearing globals, so that
     // re-entering the same D room restores picked-up state correctly.

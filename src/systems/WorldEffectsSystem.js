@@ -2,7 +2,7 @@ import { GRID } from '../game/GameConfig.js';
 import { GooBlob } from '../entities/GooBlob.js';
 import { createDebris } from '../entities/Debris.js';
 import { createFootstep, createWetDrop, createSteamPuff, createChaff } from '../entities/Particle.js';
-import { inSamePlane } from './PlaneSystem.js';
+import { inSamePlane, tagInteriorPlane } from './PlaneSystem.js';
 
 const MAX_GOO_BLOBS = 20;
 const IDLE_ECHO_DURATION = 0.5; // seconds — must match the radius/alpha envelope in RestRenderer
@@ -143,29 +143,26 @@ export function makeAuraParticle(cx, cy, type) {
 // class instances and doesn't tag hutPlane — not a drop-in replacement here.
 export function createBurstParticles(game, particles, x, y, count, color) {
   const chars = ['*', '+', 'x', '.', 'o'];
-  const hutPlane = !!game.activeFloor;
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
     const speed = 50 + Math.random() * 50;
-    particles.push({
+    particles.push(tagInteriorPlane(game, {
       x, y,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
       life: 0.5 + Math.random() * 0.5,
       maxLife: 1.0,
       char: chars[Math.floor(Math.random() * chars.length)],
-      color,
-      hutPlane
-    });
+      color
+    }));
   }
 }
 
 export function createSparkBurst(game, particles, x, y) {
-  const hutPlane = !!game.activeFloor;
   for (let i = 0; i < 12; i++) {
     const angle = Math.random() * Math.PI * 2;
     const speed = 80 + Math.random() * 120;
-    particles.push({
+    particles.push(tagInteriorPlane(game, {
       x: x + (Math.random() - 0.5) * 8,
       y: y + (Math.random() - 0.5) * 8,
       vx: Math.cos(angle) * speed,
@@ -173,9 +170,8 @@ export function createSparkBurst(game, particles, x, y) {
       life: 0.2 + Math.random() * 0.2,
       maxLife: 0.4,
       char: Math.random() < 0.5 ? '*' : '.',
-      color: Math.random() < 0.6 ? '#ff8800' : '#ffff00',
-      hutPlane
-    });
+      color: Math.random() < 0.6 ? '#ff8800' : '#ffff00'
+    }));
   }
 }
 
@@ -199,14 +195,13 @@ export class WorldEffectsSystem {
     // yellow for pollen. Flag is set in Player.takeDamage and consumed here.
     if (game.player?.smokeBurstPending) {
       game.player.smokeBurstPending = false;
-      game.steamClouds.push({
+      game.steamClouds.push(tagInteriorPlane(game, {
         x: game.player.position.x + GRID.CELL_SIZE / 2,
         y: game.player.position.y + GRID.CELL_SIZE / 2,
         radius: GRID.CELL_SIZE * 3,
         timer: 4.0,
-        color: '#ffe566',
-        hutPlane: !!game.activeFloor
-      });
+        color: '#ffe566'
+      }));
     }
 
     // Caldera hot spring: occasional ambient steam puff off a random pool tile.

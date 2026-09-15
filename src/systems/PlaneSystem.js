@@ -116,7 +116,7 @@ export function isInteriorActive(game) {
  * (bug #107).
  */
 export function tagInteriorPlane(game, entity) {
-  entity.hutPlane = !!game.activeFloor;
+  entity.hutPlane = isInteriorActive(game);
   return entity;
 }
 

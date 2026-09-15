@@ -18,10 +18,12 @@ import { drawStatusPips } from '../effects/StatusPipEffects.js';
  *   1. Dim exterior + floor panel
  *   2. Wall cells
  *   2b. Maze torches (fixture glyph + pulsing light when lit)
+ *   2c. Interior puddles / goo blobs / steam clouds (slime trails, etc.)
  *   3. Exit indicator
  *   4. Maze objects (3-hit breakables, hit flash, blink warning)
  *   5. Dropped ingredients / items (mazePlane)
  *   6. Ghosts
+ *   6b. Interior debris
  *   7. Player attacks (projectiles, melee, arrows, damage numbers)
  *   8. Particles
  *   9. Player
@@ -83,6 +85,13 @@ export class MazeInteriorOverlay {
       ctx.fillText(torch.char, cx, cy);
     }
 
+    // ── 2c. Interior puddles + goo blobs + steam clouds (slime trails, etc.) ──
+    // Same shared-helper convention as HutInteriorOverlay; hutPlane=true selects
+    // entries tagged on spawn via tagInteriorPlane (PlaneSystem.js).
+    this.renderController.exploreRenderer.drawPuddles(game, true);
+    this.renderController.exploreRenderer.drawGooBlobs(game, true);
+    this.renderController.exploreRenderer.drawSteamClouds(game, true);
+
     // ── 3. Exit indicator ──────────────────────────────────────────────────
     {
       const ex = mi.exitCol * CS + CS / 2;
@@ -137,6 +146,9 @@ export class MazeInteriorOverlay {
       ctx.fillText(ghost.char, ghost.position.x + CS / 2, ghost.position.y + CS / 2);
     }
 
+    // ── 6b. Interior debris ─────────────────────────────────────────────────
+    this.renderController.exploreRenderer.drawDebris(game, true);
+
     // ── 7. Player attacks (shared with surface/hut via hutPlane=true filter;
     //      see render_helper_pattern — keeps maze combat draw in sync with
     //      the surface pass instead of reimplementing an unfiltered copy) ──
@@ -151,13 +163,7 @@ export class MazeInteriorOverlay {
     this.renderController.exploreRenderer.drawDamageNumbers(game, true);
 
     // ── 8. Particles ───────────────────────────────────────────────────────
-    for (const p of game.particles) {
-      if (p.getAlpha) {
-        this.renderer.drawTextWithAlpha(p.position.x + CS / 2, p.position.y + CS / 2, p.char, p.color, p.getAlpha());
-      } else {
-        this.renderer.drawTextWithAlpha(p.x, p.y, p.char, p.color, Math.max(0, p.life / p.maxLife));
-      }
-    }
+    this.renderController.exploreRenderer.drawParticles(game, true);
 
     // ── 8b. Torch light (cosmetic glow when Torch equipped) ────────────────
     if (hasTorchLight(game)) {
