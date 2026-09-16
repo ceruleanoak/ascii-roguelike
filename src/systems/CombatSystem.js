@@ -1095,6 +1095,7 @@ export class CombatSystem {
               // EnemyUpdateSystem polls it and scatters the inventory.
               if (attack.disarm && enemy.itemUsage && enemy.inventory?.length) {
                 enemy.shouldDropItems = true;
+                enemy._disarmed = true;
                 this.createDamageNumber('DISARM', enemy.position.x, enemy.position.y - 14, '#ffcc66');
               }
 

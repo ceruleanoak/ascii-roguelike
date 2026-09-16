@@ -533,6 +533,14 @@ export class EnemyUpdateSystem {
     const game = this.game;
     for (const enemy of enemies) {
       if (!enemy.itemUsage?.canPickup) continue;
+      // Weapon pickup rides the enemy's own thinking cadence (decisionFrame,
+      // set once per decisionInterval by Enemy.update()) rather than
+      // re-evaluating every physics frame — and a fresh disarm additionally
+      // locks pickup out via itemPickupCooldown (see getStunDroppedItems).
+      // Without this an adjacent enemy re-grabbed a just-dropped weapon the
+      // instant it landed, since nothing paced the retry.
+      if (!enemy._decisionFrame) continue;
+      if (enemy.itemPickupCooldown > 0) continue;
       const targetItem = enemy.evaluateItemPickup(game.items);
       if (!targetItem) continue;
       enemy.targetItem = targetItem;

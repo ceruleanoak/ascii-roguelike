@@ -41,7 +41,8 @@ import {
   applyStatusEffect as applyStatusEffectImpl,
   computeSpeedMultiplier as computeSpeedMultiplierImpl,
   clearEffectOrder as clearEffectOrderImpl,
-  updateStatusEffects as updateStatusEffectsImpl
+  updateStatusEffects as updateStatusEffectsImpl,
+  getStunDroppedItems
 } from '../systems/EnemyStatusEffects.js';
 
 // ─── Enemy AI Debug Logger ─────────────────────────────────────────────────
@@ -288,6 +289,14 @@ export class Enemy {
       this.itemUseCooldown = 0;
       this.targetItem = null;
       this.shouldDropItems = false;
+      // Set alongside shouldDropItems specifically by whip disarm (never by
+      // the zap/stun jolt) — getStunDroppedItems() reads it to scatter the
+      // weapon harder and lock out retrieval for a beat.
+      this._disarmed = false;
+      // Retrieval lockout after a weapon is knocked from the enemy's hands
+      // (disarm/zap) — see getStunDroppedItems(). Keeps the enemy from
+      // re-grabbing its own weapon the instant it lands beside them.
+      this.itemPickupCooldown = 0;
     }
 
     // Sapping system (for bat enemy)
@@ -879,7 +888,12 @@ export class Enemy {
       }
     }
 
-    // Reset decision timer if expired
+    // Reset decision timer if expired. Cached before the reset so systems
+    // driven after this tick (e.g. EnemyUpdateSystem's item-pickup pass) can
+    // still tell whether this was the enemy's once-per-interval thinking
+    // frame — item pickup/chase runs on this same cadence rather than
+    // re-evaluating every physics frame.
+    this._decisionFrame = this.decisionTimer <= 0;
     if (this.decisionTimer <= 0) {
       this.decisionTimer = this.decisionInterval;
     }
@@ -888,6 +902,9 @@ export class Enemy {
     if (this.itemUsage && this.itemUsage.enabled) {
       if (this.itemUseCooldown > 0) {
         this.itemUseCooldown -= deltaTime;
+      }
+      if (this.itemPickupCooldown > 0) {
+        this.itemPickupCooldown -= deltaTime;
       }
 
       if (this.equippedWeapon && this.equippedWeapon.update) {
@@ -2615,33 +2632,7 @@ export class Enemy {
   }
 
   getStunDroppedItems() {
-    if (!this.shouldDropItems) return [];
-    this.shouldDropItems = false;
-
-    const drops = [];
-    for (const item of this.inventory) {
-      item.position.x = this.position.x;
-      item.position.y = this.position.y;
-      // Add some velocity to scatter items
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 50 + Math.random() * 50;
-      item.velocity = {
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed
-      };
-      drops.push(item);
-    }
-
-    this.inventory = [];
-    this.equippedWeapon = null;
-    this.attackType = this.data.attackType || 'melee'; // Revert to original attack type
-    // Restore original movement archetype (we may have swapped to chaser when
-    // equipping a melee weapon).
-    if (this.data.movementStyle) this.movementStyle = this.data.movementStyle;
-    // Restore native speed (melee equip applied a +30% boost).
-    if (this._baseSpeed !== undefined) this.speed = this._baseSpeed;
-
-    return drops;
+    return getStunDroppedItems(this);
   }
 
   breakSapping(knockbackForce = 200) {

@@ -60,6 +60,50 @@ export function applyStatusEffect(enemy, effect, duration = 3.0) {
   }
 }
 
+// Scatters an enemy's carried inventory after a stun/zap jolt or a whip
+// disarm knocks it loose (both set enemy.shouldDropItems — see
+// applyStatusEffect above and CombatSystem's disarm branch). Whip disarm
+// additionally flags enemy._disarmed, which this reads to scatter much
+// harder and lock out retrieval for a beat: without that distinction the
+// enemy stands exactly where the weapon lands and the plain jolt's gentle
+// scatter (speed 50-100) barely clears melee range, so it was re-equipping
+// almost the instant the weapon hit the ground.
+export function getStunDroppedItems(enemy) {
+  if (!enemy.shouldDropItems) return [];
+  enemy.shouldDropItems = false;
+
+  const disarmed = enemy._disarmed;
+  enemy._disarmed = false;
+  const minSpeed = disarmed ? 140 : 50;
+  const speedRange = disarmed ? 110 : 50;
+
+  const drops = [];
+  for (const item of enemy.inventory) {
+    item.position.x = enemy.position.x;
+    item.position.y = enemy.position.y;
+    // Add some velocity to scatter items
+    const angle = Math.random() * Math.PI * 2;
+    const speed = minSpeed + Math.random() * speedRange;
+    item.velocity = {
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed
+    };
+    drops.push(item);
+  }
+
+  enemy.inventory = [];
+  enemy.equippedWeapon = null;
+  if (disarmed) enemy.itemPickupCooldown = Math.max(enemy.itemPickupCooldown, 1.5);
+  enemy.attackType = enemy.data.attackType || 'melee'; // Revert to original attack type
+  // Restore original movement archetype (we may have swapped to chaser when
+  // equipping a melee weapon).
+  if (enemy.data.movementStyle) enemy.movementStyle = enemy.data.movementStyle;
+  // Restore native speed (melee equip applied a +30% boost).
+  if (enemy._baseSpeed !== undefined) enemy.speed = enemy._baseSpeed;
+
+  return drops;
+}
+
 // Combined movement-speed multiplier from every slowing/halting effect
 // currently on the enemy — freeze/gooey/dizzy/sleep tiers, rally-boost
 // speedup, and gas-attack slow stacks. Split out of Enemy.js (getSpeedMultiplier) to
