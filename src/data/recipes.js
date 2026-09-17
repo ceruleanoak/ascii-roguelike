@@ -78,6 +78,10 @@ export const RECIPES = [
   // path to the Caldera hot-spring fill (AlchemySystem.fillHotWaterBottle);
   // zero shared code, both coexist by construction.
   { left: 'F', right: '🜉', result: '🜊', name: 'Bottle of Hot Water' },
+  // Fire Berry + Bottle of Water = Bottle of Hot Water — same result, a
+  // third parallel path (alongside the Caldera fill and the fireplace stoke
+  // in FireplaceSystem) reusing the held berry itself, not the fireplace.
+  { left: '❋', right: '🜉', result: '🜊', name: 'Bottle of Hot Water' },
 
   // Purified Potion true-potion recipes — same results as Base Potion;
   // AlchemySystem stamps the buffed potionModifier onto the result instance.

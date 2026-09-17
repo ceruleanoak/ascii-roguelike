@@ -12,17 +12,26 @@ import {
  * AlchemySystem — operates the Water Trough, Cauldron, and Condenser inside
  * the Alchemy Hut. Modeled on PressSystem's proximity → menu → commit shape.
  *
- * Cauldron supports two paths:
+ * SPACE at the cauldron opens a top-level BREW / INFUSE choice first (mirrors
+ * ShopSystem's WARES/PAWN front menu) — the old single merged bottle-or-
+ * starter list conflated two different questions the player is asking
+ * ("start a new potion" vs. "finish one I already started") behind one
+ * ambiguous list, and gave no feedback about which ingredients a given
+ * choice would need until after committing. Picking a mode up front filters
+ * the very next menu down to only the equipped items that mode can use, and
+ * a mode with nothing valid says so immediately instead of silently.
  *
- *   PATH 1: Bottle of Water (3 stages)
- *   'water'   — select an equipped Bottle of Water to place in the cauldron
+ *   BREW   (liquid path, 3 stages total)
+ *   'mode'    — top choice: BREW
+ *   'input'   — select an equipped liquid bottle (Water/Electrified/Magma/Mud)
  *   'starter' — select a held ingredient to brew a starter potion (Base /
  *               Purified / Unstable), which stays in the cauldron
  *   'true'    — select a held ingredient matching the starter's existing
  *               true-potion recipes; result is handed to the player
  *
- *   PATH 2: Starter Potion (2 stages, skips starter creation)
- *   'input'   — select an equipped Bottle of Water or Starter Potion
+ *   INFUSE (starter-potion path, 2 stages total, skips starter creation)
+ *   'mode'    — top choice: INFUSE
+ *   'input'   — select an equipped Starter Potion
  *   'true'    — select a held ingredient matching the starter's existing
  *               true-potion recipes; result is handed to the player
  *
@@ -66,7 +75,7 @@ const LIQUID_BOTTLE_NAMES = {
 export class AlchemySystem {
   constructor(game) {
     this.game = game;
-    this.cauldronStage = 'input';
+    this.cauldronStage = 'mode';
     this.cauldronInputType = null; // 'liquid' or 'starter'
     this.cauldronLiquidType = null; // '🜉', 'ε', '◆', or '◐' (only when inputType is 'liquid')
     this.cauldronStarterChar = null;
@@ -243,32 +252,49 @@ export class AlchemySystem {
   // ─── Cauldron ────────────────────────────────────────────────────────────
 
   openCauldronMenu() {
-    const game = this.game;
-    this.cauldronStage = 'input';
+    this.cauldronStage = 'mode';
     this.cauldronInputType = null;
     this.cauldronStarterChar = null;
     this.cauldronSlotIndex = -1;
-    this._openInputMenu();
+    this._openModeMenu();
   }
 
-  _openInputMenu() {
+  /** Top-level BREW / INFUSE choice — see class doc. Both options always show,
+   * same as Shopkeeper's WARES/PAWN; a mode with nothing to work with says so
+   * only once the player actually picks it, not before. */
+  _openModeMenu() {
+    const game = this.game;
+    game.menuOpen = true;
+    game.currentMenuSlot = 'alchemy';
+    game.alchemyMenuTitle = 'CAULDRON';
+    game.selectedMenuIndex = 0;
+    game.menuItems = [
+      { action: 'brew', label: 'BREW' },
+      { action: 'infuse', label: 'INFUSE' },
+    ];
+    game.renderController.menuOverlay.render(game);
+    game.menuSystem.closeOnMovement = true;
+  }
+
+  _openInputMenu(validCharSet, title) {
     const game = this.game;
     const slots = game.player.equippedConsumables;
     const validIndices = [];
     (slots ?? []).forEach((s, i) => {
-      if (LIQUID_BOTTLE_CHARS.has(s?.char) || STARTER_POTION_CHARS.has(s?.char)) {
-        validIndices.push(i);
-      }
+      if (validCharSet.has(s?.char)) validIndices.push(i);
     });
 
     if (validIndices.length === 0) {
-      game.menuSystem.showPickupMessage('NO BOTTLE OR STARTER POTION');
+      game.menuSystem.showPickupMessage(
+        validCharSet === LIQUID_BOTTLE_CHARS ? 'NO BOTTLE EQUIPPED' : 'NO STARTER POTION EQUIPPED'
+      );
+      game.closeMenu();
       return;
     }
 
     game.menuOpen = true;
     game.currentMenuSlot = 'alchemy';
-    game.alchemyMenuTitle = 'CAULDRON';
+    game.alchemyMenuTitle = title;
     game.selectedMenuIndex = 0;
     game.menuItems = validIndices.map(i => slots[i]);
     game.renderController.menuOverlay.render(game);
@@ -303,9 +329,19 @@ export class AlchemySystem {
 
   /** Dispatches a cauldron selection based on the current stage. */
   commitSelection(selectedItem) {
-    if (this.cauldronStage === 'input') this._commitInput(selectedItem);
+    if (this.cauldronStage === 'mode') this._commitMode(selectedItem);
+    else if (this.cauldronStage === 'input') this._commitInput(selectedItem);
     else if (this.cauldronStage === 'starter') this._commitStarter(selectedItem);
     else if (this.cauldronStage === 'true') this._commitTrue(selectedItem);
+  }
+
+  _commitMode(modeItem) {
+    this.cauldronStage = 'input';
+    if (modeItem.action === 'brew') {
+      this._openInputMenu(LIQUID_BOTTLE_CHARS, 'BREW');
+    } else if (modeItem.action === 'infuse') {
+      this._openInputMenu(STARTER_POTION_CHARS, 'INFUSE');
+    }
   }
 
   _commitInput(inputItem) {
@@ -338,7 +374,7 @@ export class AlchemySystem {
       this.cauldronInputType = 'liquid';
       this.cauldronLiquidType = inputChar; // Store the liquid type for starter creation
       this.cauldronStage = 'starter';
-      this._openIngredientMenu(ALL_STARTER_INGREDIENTS, 'CAULDRON');
+      this._openIngredientMenu(ALL_STARTER_INGREDIENTS, 'BREW');
       game.updateUI();
     } else if (STARTER_POTION_CHARS.has(inputChar)) {
       // Starter potion path: 2-stage (starter potion → select ingredient → final potion)
@@ -421,7 +457,7 @@ export class AlchemySystem {
     game.menuSystem.showPickupMessage(result.data.name);
     game.audioSystem?.playSFX?.('craft');
 
-    this.cauldronStage = 'input';
+    this.cauldronStage = 'mode';
     this.cauldronInputType = null;
     this.cauldronLiquidType = null;
     this.cauldronStarterChar = null;
@@ -515,7 +551,7 @@ export class AlchemySystem {
     // If in input selection stage, nothing was consumed yet (correct behavior)
 
     // Reset cauldron state
-    this.cauldronStage = 'input';
+    this.cauldronStage = 'mode';
     this.cauldronInputType = null;
     this.cauldronLiquidType = null;
     this.cauldronStarterChar = null;

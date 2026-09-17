@@ -8,9 +8,12 @@ import { Item } from '../entities/Item.js';
  * accepts a Stick, which ignites it (recolors the instance, no state machine
  * beyond the one `burning` flag). Once burning, the menu opens up to Meat
  * (100% → Meat Jerky), Ore (100% → Metal), a held Fire Berry (100% → Mana),
- * and further Sticks — picking Stick opens a quantity submenu asking how
- * many to contribute at once, then rolls each stick independently for a
- * byproduct (Ash, common; Fire Essence, rare — a whiff just feeds the fire).
+ * an equipped Bottle of Water (100% → Bottle of Hot Water — a fourth parallel
+ * path to hot water alongside the Caldera fill, the Fire Essence recipe, and
+ * the Fire Berry recipe in recipes.js), and further Sticks — picking Stick
+ * opens a quantity submenu asking how many to contribute at once, then rolls
+ * each stick independently for a byproduct (Ash, common; Fire Essence, rare
+ * — a whiff just feeds the fire).
  * Byproducts pop out of the fireplace as physical drops (LootSystem) rather
  * than landing straight in inventory, same as any other world pickup.
  * `burning` lives on the BackgroundObject instance, so it resets for free
@@ -108,6 +111,11 @@ export class FireplaceSystem {
         counts.set('❋', berryCount);
         items.push('❋');
       }
+      const hasWaterBottle = game.player.equippedConsumables.some(s => s?.char === '🜉');
+      if (hasWaterBottle) {
+        counts.set('🜉', 1);
+        items.push('🜉');
+      }
     }
 
     if (items.length === 0) {
@@ -160,6 +168,15 @@ export class FireplaceSystem {
       if (!berry || !game.inventorySystem.removeFromConsumableInventory(berry)) return;
       game.addIngredient('𝑚');
       game.menuSystem.showPickupMessage('Mana');
+    } else if (rawChar === '🜉') {
+      if (!fireplace.burning) return;
+      const idx = game.player.equippedConsumables.findIndex(s => s?.char === '🜉');
+      if (idx === -1) return;
+      game.inventorySystem.replaceConsumableSlot(idx, '🜊');
+      // Reverts after 3 room exits, same decay as the Caldera fill — see
+      // main.js's room-transition reset block.
+      game.player.equippedConsumables[idx].hotWaterRoomsLeft = 3;
+      game.menuSystem.showPickupMessage('BOTTLE OF HOT WATER');
     } else {
       return;
     }
