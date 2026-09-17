@@ -245,6 +245,22 @@ export const BACKGROUND_OBJECTS = {
       default: { animation: 'shake', message: null }
     }
   },
+
+  // ── Tea Party clutter ────────────────────────────────────────────────────
+  // Purely decorative, non-solid (pass-through) — the chaotic scatter of odd
+  // objects filling the outer ring of the Tea Party room (see
+  // NEUTRAL_ROOMS.teaParty). Color is rolled per-instance from a wild
+  // palette rather than fixed here, so the base `color` below is only ever
+  // the fallback if an instance somehow skips the override.
+  '♤': { name: 'Stray Card', color: '#ffffff', indestructible: true, bulletInteraction: 'pass-through', flammability: 'none', conductivity: 'none' },
+  '♧': { name: 'Stray Card', color: '#ffffff', indestructible: true, bulletInteraction: 'pass-through', flammability: 'none', conductivity: 'none' },
+  '♛': { name: 'Toppled Queen', color: '#ffffff', indestructible: true, bulletInteraction: 'pass-through', flammability: 'none', conductivity: 'none' },
+  '◑': { name: 'Stopped Clock', color: '#ffffff', indestructible: true, bulletInteraction: 'pass-through', flammability: 'none', conductivity: 'none' },
+  '✿': { name: 'Wild Flower', color: '#ffffff', indestructible: true, bulletInteraction: 'pass-through', flammability: 'none', conductivity: 'none' },
+  '◎': { name: 'Looking Glass', color: '#ffffff', indestructible: true, bulletInteraction: 'pass-through', flammability: 'none', conductivity: 'none' },
+  '✧': { name: 'Loose Sparkle', color: '#ffffff', indestructible: true, bulletInteraction: 'pass-through', flammability: 'none', conductivity: 'none' },
+  '⊔': { name: 'Spare Teacup', color: '#ffffff', indestructible: true, bulletInteraction: 'pass-through', flammability: 'none', conductivity: 'none' },
+
   '&': {
     name: 'Bush',
     color: '#336633',

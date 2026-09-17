@@ -632,6 +632,44 @@ export const NEUTRAL_ROOMS = {
       // Scripts with no `game` ref here stash characters via
       // pendingNeutralCharacters (see NeutralRoomSystem.generateNeutralRoom).
       room.pendingNeutralCharacters = [new Hatter((centerX + 2) * GRID.CELL_SIZE, centerY * GRID.CELL_SIZE)];
+
+      // ── Chaotic clutter ──────────────────────────────────────────────────
+      // Wonderland odds and ends scattered through the outer half of the
+      // room, well clear of the table/Hatter. Angle+radius placement (not a
+      // grid) for genuine scatter; glyph and color are each rolled
+      // independently per piece so no two clumps read the same way.
+      const CLUTTER_CHARS = ['♤', '♧', '♛', '◑', '✿', '◎', '✧', '⊔'];
+      const CLUTTER_COLORS = [
+        '#ff33aa', '#33ffcc', '#ff3355', '#ffcc33', '#cc66ff',
+        '#33ccff', '#ffff66', '#66ccff', '#ff6600', '#00ff99'
+      ];
+      const CLUTTER_COUNT = 26;
+      const INNER_CLEAR_RADIUS = 7; // cells — keeps the table/Hatter's footing clear
+      const WALL_MARGIN = 2;        // stay this far off the walls
+      const maxRadius = Math.min(centerX, centerY) - WALL_MARGIN;
+
+      const occupied = new Set([`${centerX},${centerY}`, `${centerX + 2},${centerY}`]);
+      let placed = 0, attempts = 0;
+      while (placed < CLUTTER_COUNT && attempts < CLUTTER_COUNT * 20) {
+        attempts++;
+        const angle = Math.random() * Math.PI * 2;
+        const radius = INNER_CLEAR_RADIUS + Math.random() * (maxRadius - INNER_CLEAR_RADIUS);
+        const col = Math.round(centerX + Math.cos(angle) * radius);
+        const row = Math.round(centerY + Math.sin(angle) * radius);
+        if (col <= WALL_MARGIN || col >= GRID.COLS - 1 - WALL_MARGIN) continue;
+        if (row <= WALL_MARGIN || row >= GRID.ROWS - 1 - WALL_MARGIN) continue;
+        const key = `${col},${row}`;
+        if (occupied.has(key)) continue;
+        occupied.add(key);
+
+        const clutter = new BackgroundObject(
+          CLUTTER_CHARS[Math.floor(Math.random() * CLUTTER_CHARS.length)],
+          col * GRID.CELL_SIZE, row * GRID.CELL_SIZE
+        );
+        clutter.color = CLUTTER_COLORS[Math.floor(Math.random() * CLUTTER_COLORS.length)];
+        room.backgroundObjects.push(clutter);
+        placed++;
+      }
     },
 
     onInteract(target, player, room, state) { return null; },
