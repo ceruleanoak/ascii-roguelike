@@ -1,6 +1,6 @@
 import { GRID, PHYSICS, COLORS } from '../game/GameConfig.js';
 import { planeOf, inSamePlane, objectOnPlane } from './PlaneSystem.js';
-import { cycleExitLetter, findExitAtPoint, mutateExitLetter } from './ExitSystem.js';
+import { applyExitMutatingSwordHit } from './ExitSystem.js';
 import { BoomerangMechanic } from './BoomerangMechanic.js';
 import { WallRicochetMechanic } from './WallRicochetMechanic.js';
 import { WaterLavaHitMechanic } from './WaterLavaHitMechanic.js';
@@ -752,16 +752,9 @@ export class CombatSystem {
         continue;
       }
 
-      // Sword of the Letter: striking an exit letter cycles it forward
-      if (attack.cyclesExitLetter && !attack.hasCycledLetter && room && room.exits) {
-        const hit = findExitAtPoint(room, attack.position.x, attack.position.y, attack.width, attack.height);
-        if (hit) {
-          const next = cycleExitLetter(hit.exit.letter);
-          if (mutateExitLetter(hit.exit, next, { source: 'sword' })) {
-            attack.hasCycledLetter = true;
-          }
-        }
-      }
+      // Sword of the Letter / Chromablade: striking an exit tile cycles its
+      // letter or color forward. See ExitSystem.applyExitMutatingSwordHit.
+      applyExitMutatingSwordHit(attack, room);
 
       // Check collision with background objects (only on first frame)
       if (!attack.hasHitObject) {

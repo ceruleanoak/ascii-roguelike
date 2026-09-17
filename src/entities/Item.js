@@ -442,7 +442,8 @@ export class Item {
     if (!player) return null;
     // Call the shockwave creator directly — avoids mutating the shared data object.
     // Inject the same subtype props that injectSubtype() would apply in createMeleeAttack,
-    // so canSmash, electric, isBlade, isBlunt, isPickaxe, weaponLevel, cyclesExitLetter are preserved.
+    // so canSmash, electric, isBlade, isBlunt, isPickaxe, weaponLevel, cyclesExitLetter,
+    // cyclesExitColor are preserved.
     const attacks = this.createMeleeShockwave(player);
     const props = {};
     if (this.data.weaponSubtype) props.weaponSubtype = this.data.weaponSubtype;
@@ -453,10 +454,11 @@ export class Item {
     if (this.data.isPickaxe) props.isPickaxe = this.data.isPickaxe;
     if (this.data.weaponLevel) props.weaponLevel = this.data.weaponLevel;
     if (this.data.cyclesExitLetter) props.cyclesExitLetter = this.data.cyclesExitLetter;
+    if (this.data.cyclesExitColor) props.cyclesExitColor = this.data.cyclesExitColor;
     const result = Array.isArray(attacks)
       ? attacks.map((a, idx) => {
           const merged = { ...a, ...props };
-          if (idx > 0) delete merged.cyclesExitLetter;
+          if (idx > 0) { delete merged.cyclesExitLetter; delete merged.cyclesExitColor; }
           return merged;
         })
       : { ...attacks, ...props };
@@ -837,6 +839,7 @@ export class Item {
       if (this.data.isPickaxe) props.isPickaxe = this.data.isPickaxe;
       if (this.data.weaponLevel) props.weaponLevel = this.data.weaponLevel;
       if (this.data.cyclesExitLetter) props.cyclesExitLetter = this.data.cyclesExitLetter;
+      if (this.data.cyclesExitColor) props.cyclesExitColor = this.data.cyclesExitColor;
       if (this.data.poisonStacks) props.poisonStacks = true;
       if (this.data.acidBlade) props.acidBlade = true;
       if (this.data.randomOnHit) props.randomOnHit = this.data.randomOnHit;
@@ -845,7 +848,7 @@ export class Item {
       if (Array.isArray(result)) {
         return result.map((a, idx) => {
           const merged = { ...a, ...props };
-          if (idx > 0) delete merged.cyclesExitLetter;
+          if (idx > 0) { delete merged.cyclesExitLetter; delete merged.cyclesExitColor; }
           return merged;
         });
       }

@@ -595,6 +595,29 @@ export const ITEMS = {
   },
 
   // ── MELEE / sword — Legendary (uncraftable) ──────────────────────────────
+  // Sword of the Letter's companion weapon. Same stats, same one-hit-per-swing
+  // exit-tile gate — but strikes retarget an exit's COLOR (cycleExitColor,
+  // green→yellow→red→cyan→green) instead of its letter. Because
+  // ZoneSystem.recordExit reads exit.color, cycling it is what actually
+  // steers which zone a path of consecutive same-color exits resolves to —
+  // see ExitSystem.mutateExitColor.
+  '◓': {
+    char: '◓',
+    tier: 1,
+    name: 'Chromablade',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'sword',
+    damage: 2,
+    windup: 0.3,
+    recovery: 0.5,
+    patternSpeed: 0.05,
+    range: 20,
+    cyclesExitColor: true,
+    color: '#ffffff'
+  },
+
+  // ── MELEE / sword — Legendary (uncraftable) ──────────────────────────────
   // Stats mirror Tier 1 Sword, same as '§'. Sole source: ChiBladeSystem's
   // χ-room secret (X/Crossroads room) — strike the revealed χ while 3
   // equipped items have 'x'/'X' in their char or name. opensAnyLock is read

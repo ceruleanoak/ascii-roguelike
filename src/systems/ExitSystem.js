@@ -54,6 +54,25 @@ export function cycleExitLetter(currentLetter) {
   return currentLetter;
 }
 
+// Fixed progression order for the Chromablade's color cycle — the same
+// green/yellow/red/cyan reading order as the zone danger ramp. Gray and blue
+// are deliberately excluded: they're reached by dedicated mechanics (mist,
+// the pearl offering), not by walking a color trail, so the blade only ever
+// cycles among the four colors a path of consecutive same-color exits can
+// actually resolve to (see ZoneSystem.peekZoneTransition).
+const CHROMA_CYCLE = [ZONE_COLORS.green, ZONE_COLORS.yellow, ZONE_COLORS.red, ZONE_COLORS.cyan];
+
+// Walks CHROMA_CYCLE forward from `currentColor`, wrapping around. An
+// unrecognized input (gray, blue, a fairy-dusted pink) starts the cycle over
+// at green rather than erroring. Used by the Chromablade — the Sword of the
+// Letter's companion weapon — to cycle an exit's COLOR instead of its letter,
+// which retargets the zone that exit's color-matching streak will resolve to
+// (ZoneSystem.recordExit reads exit.color, not exit.letter).
+export function cycleExitColor(currentColor) {
+  const idx = CHROMA_CYCLE.indexOf(currentColor);
+  return CHROMA_CYCLE[(idx + 1) % CHROMA_CYCLE.length];
+}
+
 // ── Exit-letter mutation surface ──────────────────────────────────────────────
 // Single source of truth for exit letter slot positions and mutations. Used by
 // the Sword of the Letter (cycles letters on hit) and the Fairy fountain
@@ -196,6 +215,57 @@ export function mutateExitLetter(exit, newLetter, { source = null } = {}) {
   exit.mutated = true;
   exit.mutationSource = source;
   return true;
+}
+
+// Mutates an exit's COLOR in place, tagged the same way as mutateExitLetter
+// (shared exit.mutated/exit.mutationSource fields — the renderer's fairyDust
+// tint check is the only current reader and only fires on that one source
+// string, so a 'chromablade' source is inert to it). Source: 'chromablade'.
+// Returns true if the color actually changed. Mutating exit.color here is
+// what makes the change stick for zone-transition purposes: ZoneSystem
+// .recordExit() reads exit.color at the moment the player actually leaves
+// through the exit, so a Chromablade hit that lands before that crossing
+// changes which color streak (and therefore which zone) the exit counts
+// toward — same "signage IS the destination" contract the letter sword uses.
+export function mutateExitColor(exit, newColor, { source = null } = {}) {
+  if (!exit || !newColor) return false;
+  if (exit.color === newColor) return false;
+  exit.color = newColor;
+  exit.mutated = true;
+  exit.mutationSource = source;
+  return true;
+}
+
+// Single call site for the two exit-mutating swords — Sword of the Letter
+// (cycles exit.letter) and Chromablade (cycles exit.color). Called once per
+// frame per melee attack from CombatSystem's attack-update loop; each flag is
+// independently gated by its own attack.hasCycledXxx one-shot so an attack
+// carrying both flags (it never does today, but nothing stops a future
+// weapon) would resolve both. Lives here rather than inline in CombatSystem
+// so the two weapons' resolution logic sits next to the mutation primitives
+// (mutateExitLetter/mutateExitColor) it calls.
+export function applyExitMutatingSwordHit(attack, room) {
+  if (!room || !room.exits) return;
+
+  if (attack.cyclesExitLetter && !attack.hasCycledLetter) {
+    const hit = findExitAtPoint(room, attack.position.x, attack.position.y, attack.width, attack.height);
+    if (hit) {
+      const next = cycleExitLetter(hit.exit.letter);
+      if (mutateExitLetter(hit.exit, next, { source: 'sword' })) {
+        attack.hasCycledLetter = true;
+      }
+    }
+  }
+
+  if (attack.cyclesExitColor && !attack.hasCycledColor) {
+    const hit = findExitAtPoint(room, attack.position.x, attack.position.y, attack.width, attack.height);
+    if (hit) {
+      const next = cycleExitColor(hit.exit.color);
+      if (mutateExitColor(hit.exit, next, { source: 'chromablade' })) {
+        attack.hasCycledColor = true;
+      }
+    }
+  }
 }
 
 export class ExitSystem {
