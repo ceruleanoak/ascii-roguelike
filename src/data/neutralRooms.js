@@ -3,6 +3,7 @@ import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Item } from '../entities/Item.js';
 import { Ingredient } from '../entities/Ingredient.js';
 import { Fairy } from '../entities/Fairy.js';
+import { Hatter } from '../entities/Hatter.js';
 import { ITEMS, ITEM_TYPES, INGREDIENTS, getItemData, isIngredient } from './items.js';
 import { ZONES } from './zones.js';
 
@@ -598,6 +599,44 @@ export const NEUTRAL_ROOMS = {
     onRender(renderer, room, player, state) {},
 
     onInteract(target, player, room, state) { return null; },
+
+    onExit(room, player, state) {}
+  },
+
+  /**
+   * Tea Party — secret room reached via the T-E-A / E-A-T / A-T-E / H-A-T
+   * exit sequences (data/exitLetters.js SECRET_PATTERNS). The Hatter sits at
+   * the table; the table always holds one potion, picked uniformly from
+   * every CONSUMABLE named "...Potion" (same uncurated-roll shape as
+   * Oasis's tier-3 weapon pick, above).
+   */
+  teaParty: {
+    onGenerate(room, state) {
+      room.borderColor = '#cc88ff';
+
+      const centerX = Math.floor(GRID.COLS / 2);
+      const centerY = Math.floor(GRID.ROWS / 2);
+
+      const table = new BackgroundObject('⊡', centerX * GRID.CELL_SIZE, centerY * GRID.CELL_SIZE);
+      room.backgroundObjects.push(table);
+
+      const potions = Object.values(ITEMS).filter(
+        item => item.type === ITEM_TYPES.CONSUMABLE && item.name.includes('Potion')
+      );
+      if (potions.length > 0) {
+        const chosen = potions[Math.floor(Math.random() * potions.length)];
+        const potion = new Item(chosen.char, centerX * GRID.CELL_SIZE, (centerY - 1) * GRID.CELL_SIZE);
+        room.items.push(potion);
+      }
+
+      // Scripts with no `game` ref here stash characters via
+      // pendingNeutralCharacters (see NeutralRoomSystem.generateNeutralRoom).
+      room.pendingNeutralCharacters = [new Hatter((centerX + 2) * GRID.CELL_SIZE, centerY * GRID.CELL_SIZE)];
+    },
+
+    onInteract(target, player, room, state) { return null; },
+
+    onUpdate(dt, room, player, state) {},
 
     onExit(room, player, state) {}
   }

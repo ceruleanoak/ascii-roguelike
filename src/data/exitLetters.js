@@ -289,5 +289,30 @@ export const SECRET_PATTERNS = {
     name: 'Gallery',
     neutralScript: 'drawRoom',
     message: 'A blank canvas awaits.'
+  },
+
+  // Four separate 3-letter paths land on the same door — T/E/A are all
+  // mid-to-high weight letters (see exit-letter weights in ExitSystem), so
+  // this one is meant to be found by accident, unlike the rarer/gated
+  // patterns above.
+  'T-E-A': {
+    name: 'Tea Party',
+    neutralScript: 'teaParty',
+    message: 'A table is set for no one in particular.'
+  },
+  'E-A-T': {
+    name: 'Tea Party',
+    neutralScript: 'teaParty',
+    message: 'A table is set for no one in particular.'
+  },
+  'A-T-E': {
+    name: 'Tea Party',
+    neutralScript: 'teaParty',
+    message: 'A table is set for no one in particular.'
+  },
+  'H-A-T': {
+    name: 'Tea Party',
+    neutralScript: 'teaParty',
+    message: 'A table is set for no one in particular.'
   }
 };

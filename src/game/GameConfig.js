@@ -233,6 +233,18 @@ export const BACKGROUND_OBJECTS = {
       default: { animation: 'shake', message: null }
     }
   },
+  '⊡': {
+    name: 'Table',
+    color: '#aa8855',
+    solid: true,
+    indestructible: true,
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
   '&': {
     name: 'Bush',
     color: '#336633',
