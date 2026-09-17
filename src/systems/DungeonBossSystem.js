@@ -1,9 +1,11 @@
 import { GRID } from '../game/GameConfig.js';
-import { Hoardmaw, BRIBE_OFFER_WINDOW, SLAM_RADIUS } from '../entities/Hoardmaw.js';
+import { Hoardmaw, SLAM_RADIUS, TEMPTATION_HP_THRESHOLD, TEMPTATION_PILE_SELF_DAMAGE } from '../entities/Hoardmaw.js';
 import { Item } from '../entities/Item.js';
 import { getRandomDrop, RARITY_PROFILES } from '../data/items.js';
 import { GREEN_HOARDMAW_SPEC } from '../data/dungeonBosses/green.js';
 import { createSparkBurst } from './WorldEffectsSystem.js';
+import { createDebris } from '../entities/Debris.js';
+import { paintStairsUpVisual } from '../data/dungeonFloorTemplates.js';
 
 // Spawn anchor: the maw fills the vault's north half — body center sits at
 // (12, 6) in floor cells, player fights in rows 10+.
@@ -33,13 +35,13 @@ export class DungeonBossSystem {
     this.hoardmaw = null;          // live encounter entity (or null)
     this.vaultFloor = null;        // the floor whose enemy roster holds it
     this.spec = GREEN_HOARDMAW_SPEC;
-    this.bribeMoundItems = [];     // the temptation pile (Item refs)
+    this.temptationPileItems = []; // the phase-3 corner coin pile (Item refs)
+    this._temptationPileSpawned = false; // one-time spawn guard (no respawn loop)
     this.breathApplied = false;    // Gold Breath one-shot guard
     this._paidOut = false;         // defeat payout one-shot
-    this._finalPileOut = false;    // strike-the-pile beat spawned
-    this._chokeRunning = false;    // a choke window is open (re-offer on expiry)
     this._elevationCooldown = 0;   // gilded-companion contribution cadence
     this._coinFlights = [];        // cursed-slot discharges mid-arc
+    this.compassTruthActive = false; // Truth-register read: Vulnerable Window live
   }
 
   /**
@@ -156,8 +158,9 @@ export class DungeonBossSystem {
    */
   _teardownEncounter() {
     const maw = this.hoardmaw;
+    const game = this.game;
     if (!maw) { this.vaultFloor = null; return; }
-    this.game.physicsSystem?.removeEntity?.(maw);
+    game.physicsSystem?.removeEntity?.(maw);
     this._leaveFloorRoster(maw);
     this.hoardmaw = null;
     // Encounter resolved — the Dungeon's ambient track carries the payout.
@@ -175,12 +178,11 @@ export class DungeonBossSystem {
   /** Called on dungeon exit / interior reset — tear down without payout. */
   reset() {
     this._teardownEncounter();
-    this.bribeMoundItems = [];
+    this._clearTemptationPile();
+    this._temptationPileSpawned = false;
     this._landCoinFlights();
     this.breathApplied = false;
     this._paidOut = false;
-    this._finalPileOut = false;
-    this._chokeRunning = false;
     // Fleeing the delve lifts the curse with everything else — without this
     // the flag would stick and keep consumables suspended back on the surface.
     this.game.goldBreathCurseActive = false;
@@ -205,13 +207,12 @@ export class DungeonBossSystem {
     maw.target = player;
 
     this._consumeSignals(maw);
-    this._checkGrabEscape(maw);
     this._tickScaleClaiming();
     this._tickGoldBreath(maw);
-    this._resolveInhale(maw, dt);
     this._tickCoinFlights(dt);
     this._tickRegisters(maw);
-    this._tickBribe(maw);
+    this._tickEnduranceCoins(maw);
+    this._tickTemptation(maw);
     this._tickCompanionElevation(maw, dt);
 
     if (maw.defeated && !this._paidOut) {
@@ -264,13 +265,19 @@ export class DungeonBossSystem {
     }
 
     // A hit the armor turned away. Silence would read as a broken hitbox, so
-    // the refusal gets its own spark: the player is being told WHERE they hit
-    // and that it did nothing, which is the phase-1 and phase-2 lesson both.
+    // the refusal gets its own spark AND a floating "BLOCKED" label — the
+    // player is being told WHERE they hit and that it did nothing, which is
+    // the phase-1 and endurance-phase lesson both.
     if (maw.ricochetAt) {
       const { px, py } = maw.ricochetAt;
       maw.ricochetAt = null;
       createSparkBurst(game, game.particles, px, py);
       game.audioSystem?.playSFX?.('scale_ricochet');
+    }
+    if (maw.blockedAt) {
+      const { px, py } = maw.blockedAt;
+      maw.blockedAt = null;
+      game.combatSystem.createDamageNumber('BLOCKED', px, py - GRID.CELL_SIZE * 0.5, '#eeeeee');
     }
 
     // Swallowed whole: it takes its bite and throws the player back out of
@@ -290,47 +297,31 @@ export class DungeonBossSystem {
       game.audioSystem?.playSFX?.('boss_slam');
     }
 
-    // Phase gate: scales gone → Glinting.
+    // Vulnerable Window ran out: the shield reforms, and it shoves the player
+    // clear FIRST — hesitation is punished twice, the shove buying the armor
+    // room to close before the endurance gauntlet itself starts. Knockback
+    // only, no damage: this is a warning shot, not a hit.
+    if (maw.enduranceKnockbackAt) {
+      const { x, y } = maw.enduranceKnockbackAt;
+      maw.enduranceKnockbackAt = null;
+      if (!player.dodgeRoll?.active) {
+        game.physicsSystem.applyDamageKnockback(player, {}, x, y, 320);
+      }
+      createSparkBurst(game, game.particles, x, y);
+      game.audioSystem?.playSFX?.('boss_slam');
+    }
+
+    // Phase gate: scales gone → Vulnerable/Endurance cycle.
     if (maw.pendingPhaseTransition === 2) {
       maw.pendingPhaseTransition = null;
       maw.transitionToPhase(2);
     }
 
-    // Phase gate: glint-phase HP low enough → the Bribe.
-    if (maw.bossPhase === 2 && maw.hp <= BRIBE_HP_THRESHOLD) {
+    // Phase gate: HP low enough → Temptation (final passive substate).
+    if (maw.bossPhase === 2 && maw.hp <= TEMPTATION_HP_THRESHOLD) {
       maw.transitionToPhase(3);
-      this.bribeMoundItems = [];
-    }
-  }
-
-  /**
-   * Face-melee grab escape. BossSystem has its own version, but it gates on
-   * `bossSystem.active` — false in the vault — so Layer 2 owns this one.
-   *
-   * Same grammar the Goo Dragon taught, which is the point: swing at the thing
-   * holding you and it lets go. The tongue rides the player while reeling, so
-   * any melee that reaches it counts. The skill being tested is reacting
-   * before you arrive at the mouth, not aiming at a strip you are pinned to.
-   */
-  _checkGrabEscape(maw) {
-    const game = this.game;
-    const player = game.player;
-    if (!player?.grabbed || player.grabbedBy !== maw) return;
-
-    // Latched with no tongue left alive: nothing can break the grip, so drop
-    // it rather than lock the player out of their own controls.
-    const tongue = maw.tongue;
-    if (!tongue) { maw.releaseGrab(); return; }
-
-    for (const atk of game.combatSystem.getMeleeAttacks()) {
-      const d = Math.hypot(atk.position.x - tongue.position.x,
-                           atk.position.y - tongue.position.y);
-      if (d > GRID.CELL_SIZE * 1.6) continue;
-      if (!tongue.takeDamage()) continue;
-      maw.releaseGrab();
-      createSparkBurst(game, game.particles, tongue.position.x, tongue.position.y);
-      game.audioSystem?.playSFX?.('scale_ricochet');
-      break;
+      this._clearTemptationPile();
+      this._temptationPileSpawned = false;
     }
   }
 
@@ -425,105 +416,33 @@ export class DungeonBossSystem {
     }
   }
 
-  // Inhale: pull the player, drag loose ground pickups toward the mouth.
-  // Staged coins/bread caught by the sweep are devoured outright. The maw's
-  // OWN chipped scales are the exception — they re-absorb and re-armor it.
-  _resolveInhale(maw, dt) {
-    if (!maw.inhaleActive) return;
-    const game = this.game;
-    const player = game.player;
-    const mx = maw.mouthX();
-    const my = maw.mouthY();
-
-    // Pull the player.
-    if (player.invulnerabilityTimer <= 0 && !player.dodgeRoll?.active) {
-      const dx = mx - player.position.x;
-      const dy = my - player.position.y;
-      const d = Math.hypot(dx, dy);
-      if (d < INHALE_RANGE && d > 1) {
-        player.position.x += (dx / d) * INHALE_PULL * dt;
-        player.position.y += (dy / d) * INHALE_PULL * dt;
-      }
-    }
-
-    // Drag ground loot (floor-tagged only — layer discipline).
-    const floor = game.activeFloor;
-    for (const list of [game.items, game.ingredients]) {
-      for (let i = list.length - 1; i >= 0; i--) {
-        const ent = list[i];
-        if (!ent || !ent.hutPlane) continue;
-
-        const dx = mx - ent.position.x;
-        const dy = my - ent.position.y;
-        const d = Math.hypot(dx, dy);
-        if (d > INHALE_RANGE) continue;
-        // No lower cutoff before the devour test: the drag moves an item most
-        // of a cell per frame, so a near-mouth skip band leaves anything that
-        // overshoots it sitting inside the maw forever, never swallowed and
-        // never re-armoring. Devour is the only thing that happens this close.
-        if (d < GRID.CELL_SIZE * 1.2) {
-          // Devoured. Staged coins and bread are simply lost — no refund, no
-          // heal. But its OWN chipped scale swept back in RE-ARMORS the cell
-          // it fell from: damage you did not walk over and claim is damage you
-          // did not do. That is phase 1's entire tension, and the zone's verb
-          // (Acquire) enforced mechanically rather than narrated.
-          if (ent.mintCoin && ent.scaleKey && maw.restoreScale(ent.scaleKey)) {
-            game.audioSystem?.playSFX?.('armor_break');
-          }
-          game.physicsSystem.removeEntity(ent);
-          list.splice(i, 1);
-          const fi = floor?.items?.indexOf(ent) ?? -1;
-          if (fi !== -1) floor.items.splice(fi, 1);
-          continue;
-        }
-        ent.position.x += (dx / d) * INHALE_DRAG * dt;
-        ent.position.y += (dy / d) * INHALE_DRAG * dt;
-      }
-    }
-  }
-
-  // Register windows (soft gates): Justice coin-in-seam, Truth compass pulse,
-  // Help bread decoy. All behavioral reads — nothing instructs.
+  // Register windows (soft gates): Truth compass pulse, Help bread decoy.
+  // Justice's "feed a coin through the seam" mechanic is retired (scrapped:
+  // confusing in a destructive conflict) — no replacement. All behavioral
+  // reads — nothing instructs.
   _tickRegisters(maw) {
     const game = this.game;
     const spec = this.spec;
 
-    // Justice ★ — a tossed coin resting inside the seam cell during gape
-    // (any attack windup or tongue extension counts as "mouth busy") staggers.
-    // "Mouth busy" is the real gate: any attack windup or live tongue means
-    // the seam is exposed. `bossPhase >= 1` used to sit here and was always
-    // true — it read like a phase gate while gating nothing.
-    if (maw.attackState !== 'idle') {
-      const seamX = maw.mouthX();
-      const seamY = maw.mouthY() - GRID.CELL_SIZE * 0.5;
-      const coins = game.items.filter(it => it?.char === spec.justiceCurrency && it.hutPlane);
-      for (const coin of coins) {
-        if (Math.hypot(coin.position.x - seamX, coin.position.y - seamY) < GRID.CELL_SIZE * 0.9) {
-          // Stagger: interrupt current attack, brief vulnerability to glint hits.
-          maw.attackState = 'idle';
-          maw.inhaleActive = false;
-          maw.invulnerabilityTimer = 0;
-          this._despawnFloorItem(coin);
-          game.audioSystem?.playSFX?.('pyramid_fill');
-          break;
-        }
-      }
-    }
-
-    // Truth ⌖ — carried Compass brightens toward the true glint during
-    // phase 2. Rendered by the composite renderer reading this flag.
-    this.compassTruthActive = maw.bossPhase === 2
+    // Truth ⌖ — carried Compass brightens while the Vulnerable Window is
+    // open. Glint hunting is gone, but the feature it taught (a carried item
+    // reveals hidden timing) survives, now pointed at the mouth rather than a
+    // migrating cell. Rendered by the composite renderer reading this flag.
+    this.compassTruthActive = maw.bossPhase === 2 && maw.enduranceState === 'vulnerable'
       && (game.player?.quickSlots || []).some(it => it?.char === spec.truthItemChar);
 
-    // Help ⌬ — ground bread within lunge reach redirects a live tongue.
-    if (maw.tongue && !maw.tongue.retracting) {
+    // Help ⌬ — ground bread within lunge reach redirects a live tongue while
+    // it is still sweeping toward the player (not once it has already
+    // latched and is reeling — the redirect is a save, not an escape hatch
+    // for a caught player).
+    if (maw.tongue && maw.tongue.state === 'sweep') {
       const bread = game.items.find(it => it?.char === spec.helpDecoyChar && it.hutPlane);
       if (bread) {
         const bx = bread.position.x, by = bread.position.y;
         const tx = maw.tongue.position.x, ty = maw.tongue.position.y;
         if (Math.hypot(bx - tx, by - ty) < GRID.CELL_SIZE * 4) {
           // The lunge breaks off to devour the loaf instead.
-          maw.tongue.broken = true;
+          maw.tongue.done = true;
           game.physicsSystem.removeEntity(bread);
           game.items.splice(game.items.indexOf(bread), 1);
           game.audioSystem?.playSFX?.('crow_drop');
@@ -532,80 +451,43 @@ export class DungeonBossSystem {
     }
   }
 
-  // Bribe finale: mound out → grab punishes, refusal escalates ×3 → strike
-  // the pile home → choke kill window.
-  _tickBribe(maw) {
+  /**
+   * Endurance coin-redirect: melee-striking a bouncing coin sends it back
+   * into the boss, ending Endurance and reopening a fresh Vulnerable Window.
+   * Reuses `CombatSystem.reflectBullet`'s contact-reflection math for the
+   * bounce itself (also gets its ricochet SFX for free), then overrides the
+   * resulting vector to aim precisely at the mouth — the fixed-vector "sent
+   * it home" read the design calls for, rather than a random deflection.
+   */
+  _tickEnduranceCoins(maw) {
+    if (maw.bossPhase !== 2 || maw.enduranceState !== 'endurance') return;
     const game = this.game;
-    const player = game.player;
+    if (!maw.enduranceCoins.length) return;
+    const melee = game.combatSystem.getMeleeAttacks();
+    if (!melee.length) return;
 
-    if (maw.chokeTimer > 0) {
-      // Kill window: melee strikes anywhere on the body land via takeDamage's
-      // phase-3 branch. Nothing else to resolve here.
-      this._chokeRunning = true;
-      return;
-    }
-    if (maw.bossPhase !== 3) return;
+    for (const coin of maw.enduranceCoins) {
+      if (coin.redirected) continue;
+      const hit = melee.some(atk =>
+        Math.hypot(atk.position.x - coin.x, atk.position.y - coin.y) < GRID.CELL_SIZE * 1.4);
+      if (!hit) continue;
 
-    // The choke ran out and it is still alive: it heaves the pile back up and
-    // the offer stands again. The banked refusals are NOT spent — they were
-    // earned by resisting three times and the player does not have to earn
-    // them twice. Only the strike window repeats. Without this the fight
-    // deadlocks: pile gone, nothing to strike, no attacks, no way to lose.
-    if (this._chokeRunning) {
-      this._chokeRunning = false;
-      this._finalPileOut = false;
-      game.audioSystem?.playSFX?.('boss_roar');
-    }
-
-    // Mound resolution while an offer is live.
-    if (this.bribeMoundItems.length) {
-      if (this._playerTouchingMound(player)) {
-        // Greed punished — lid slam, heavy hit, mound reclaimed. The window
-        // resets and the refusal count does not advance.
-        maw.bribesAccepted = true;
-        if (player.invulnerabilityTimer <= 0 && !player.dodgeRoll?.active) {
-          player.takeDamage(4);
-          game.physicsSystem.applyDamageKnockback(player, {}, maw.mouthX(), maw.mouthY(), 300);
-        }
-        this._clearMound();
-        maw.bribeOfferTimer = 0;
-        // If greed just took the FINAL pile, the strike target is gone and
-        // there is nothing left to hit — same deadlock the choke-expiry
-        // re-offer exists to prevent. Clear the flag so the next tick heaves
-        // it back up. No-op for the ordinary offers, where it is already false.
-        this._finalPileOut = false;
-        game.audioSystem?.playSFX?.('boss_slam');
-        return;
-      }
-      // The final pile never times out: it is not an offer, it is the target.
-      // Expiry here would clear it one frame after it spawned (bribeOfferTimer
-      // is 0 by then) and bank a refusal the player never actually made.
-      if (maw.bribeOfferTimer <= 0 && !this._finalPileOut) {
-        // Untouched until expiry — a real refusal.
-        this._clearMound();
-        maw.recordBribeRefusal();
-        game.audioSystem?.playSFX?.('boss_hit');
-      }
-      return;
-    }
-
-    // Three refusals banked: the final pile sits out; striking it home chokes.
-    if (maw.bribeRefusals >= 3) {
-      if (!this._finalPileOut) {
-        this._spawnMound(maw);
-        this._finalPileOut = true;
-      } else if (this._meleeStrikingMound()) {
-        this._clearMound();
-        maw.beginChoke();
-        game.audioSystem?.playSFX?.('boss_hit');
-      }
-      return;
-    }
-
-    // Next offer once the previous one fully resolved.
-    if (maw.bribeOfferTimer <= 0) {
-      maw.bribeOfferTimer = BRIBE_OFFER_WINDOW;
-      this._spawnMound(maw);
+      // reflectBullet expects a `.velocity = {vx, vy}` shape — coin flight
+      // state is authored as loose vx/vy, so bridge it for the one call.
+      const bridge = { velocity: { vx: coin.vx, vy: coin.vy } };
+      game.combatSystem.reflectBullet(bridge, {});
+      const mx = maw.mouthX(), my = maw.mouthY();
+      const d = Math.hypot(mx - coin.x, my - coin.y) || 1;
+      coin.vx = (mx - coin.x) / d;
+      coin.vy = (my - coin.y) / d;
+      coin.redirected = true;
+      // Ends Endurance the instant contact is made — the coin still visibly
+      // flies home afterward (ticked in Hoardmaw._tickEndurance), but the
+      // window reopens immediately rather than waiting on arrival.
+      maw.breakEndurance();
+      createSparkBurst(game, game.particles, coin.x, coin.y);
+      game.audioSystem?.playSFX?.('scale_ricochet');
+      break; // one redirect per tick is plenty — the window just reopened
     }
   }
 
@@ -625,44 +507,71 @@ export class DungeonBossSystem {
     if (fi !== -1) floorItems.splice(fi, 1);
   }
 
-  _spawnMound(maw) {
+  /**
+   * Phase 3 (Temptation): a one-time corner coin pile — the "bad choice"
+   * left sitting in plain view while the boss stands fully passive. No
+   * refusal counting, no choke window, no respawn loop: touch it once and
+   * it punishes; ignore it and finish the boss for the clean win.
+   */
+  _tickTemptation(maw) {
+    if (maw.bossPhase !== 3) return;
     const game = this.game;
-    const { char, count } = this.spec.bribeLoot;
-    const baseX = maw.mouthX() - ((count - 1) * GRID.CELL_SIZE) / 2;
-    const y = maw.mouthY() + GRID.CELL_SIZE * 1.5;
+    const player = game.player;
+
+    if (!this._temptationPileSpawned) {
+      this._spawnTemptationPile(maw);
+      this._temptationPileSpawned = true;
+      return;
+    }
+    if (!this.temptationPileItems.length) return;
+
+    const touching = this.temptationPileItems.some(it =>
+      Math.hypot(player.position.x - it.position.x,
+                 player.position.y - it.position.y) < GRID.CELL_SIZE * 1.1);
+    if (!touching) return;
+
+    // Greed punished: themed callback to the eventual death explosion, sized
+    // down — self-damage only, the boss is untouched and stays killable.
+    if (player.invulnerabilityTimer <= 0 && !player.dodgeRoll?.active) {
+      player.takeDamage(TEMPTATION_PILE_SELF_DAMAGE);
+      game.physicsSystem.applyDamageKnockback(player, {},
+        player.position.x, player.position.y, 220);
+    }
+    createDebris(player.position.x, player.position.y, 10, '#8a6a2e');
+    createSparkBurst(game, game.particles, player.position.x, player.position.y);
+    game.audioSystem?.playSFX?.('boss_hit');
+    this._clearTemptationPile();
+  }
+
+  _spawnTemptationPile(maw) {
+    const game = this.game;
+    const { char, count } = this.spec.temptationPile;
+    // A room corner, away from the boss body — the "right choice" is to
+    // simply not walk over there.
+    const baseX = maw.mouthX() - GRID.CELL_SIZE * 7;
+    const baseY = maw.mouthY() + GRID.CELL_SIZE * 6;
     for (let i = 0; i < count; i++) {
-      const item = Object.assign(new Item(char, baseX + i * GRID.CELL_SIZE, y), {
-        hutPlane: true,
-        bribePile: true,
-        pickupReadyAt: performance.now() + 250,
-      });
-      this.bribeMoundItems.push(item);
+      const item = Object.assign(
+        new Item(char, baseX + (i % 3) * GRID.CELL_SIZE, baseY + Math.floor(i / 3) * GRID.CELL_SIZE),
+        { hutPlane: true, temptationPile: true, pickupReadyAt: performance.now() + 250 });
+      this.temptationPileItems.push(item);
       game.items.push(item);
+      const floorItems = game.activeFloor?.items;
+      if (floorItems) floorItems.push(item);
       game.physicsSystem.addEntity(item);
     }
   }
 
-  _clearMound() {
-    for (const item of this.bribeMoundItems) this._despawnFloorItem(item);
-    this.bribeMoundItems = [];
-  }
-
-  _playerTouchingMound(player) {
-    return this.bribeMoundItems.some(it =>
-      Math.hypot(player.position.x - it.position.x,
-                 player.position.y - it.position.y) < GRID.CELL_SIZE * 1.1);
-  }
-
-  _meleeStrikingMound() {
-    return this.game.combatSystem.getMeleeAttacks().some(atk =>
-      this.bribeMoundItems.some(it =>
-        Math.hypot(atk.position.x - it.position.x,
-                   atk.position.y - it.position.y) < GRID.CELL_SIZE * 1.5));
+  _clearTemptationPile() {
+    for (const item of this.temptationPileItems) this._despawnFloorItem(item);
+    this.temptationPileItems = [];
   }
 
   // Gilded companions' combat elevation — the vault's reward made mechanical:
-  //   crow dive-pecks lock onto the true glint (a living Compass);
-  //   rats gnaw the tongue root through reel windows (bonus stagger damage).
+  //   crows dive-peck damage home during the Vulnerable Window (a living
+  //   contribution to the punish, now that there is no glint cell to aim at);
+  //   rats gnaw the tongue root through reel windows, or the seam during the
+  //   Vulnerable Window (bonus stagger damage).
   // Direct, cadence-limited contributions rather than hacked Crow internals.
   _tickCompanionElevation(maw, dt) {
     this._elevationCooldown -= dt;
@@ -672,22 +581,23 @@ export class DungeonBossSystem {
     const gildedRats = (game.tamedRats || []).filter(r => r.gilded && r.state !== 'permaFlee');
     if (!gildedCrows.length && !gildedRats.length) return;
 
+    const vulnerable = maw.bossPhase === 2 && maw.enduranceState === 'vulnerable';
     let acted = false;
 
     for (const _crow of gildedCrows) {
-      if (maw.bossPhase === 2 && !maw.defeated) {
-        const g = maw.glintPx();
-        if (maw.takeDamage(1, null, { kind: 'melee', px: g.x, py: g.y })) {
-          game.combatSystem.createDamageNumber(1, g.x, g.y, '#ffd700');
+      if (vulnerable && !maw.defeated) {
+        const mx = maw.mouthX(), my = maw.mouthY();
+        if (maw.takeDamage(1, null, { kind: 'melee', px: mx, py: my })) {
+          game.combatSystem.createDamageNumber(1, mx, my, '#ffd700');
           acted = true;
         }
       }
     }
 
     for (const _rat of gildedRats) {
-      // Rats gnaw the tongue while it's live; during the choke they gnaw the
-      // hung-open lid seam. Either way: one damage beat per cadence.
-      const biting = !!maw.tongue || maw.chokeTimer > 0;
+      // Rats gnaw the tongue while it's live, or the exposed seam during the
+      // Vulnerable Window. Either way: one damage beat per cadence.
+      const biting = !!maw.tongue || vulnerable;
       if (biting && maw.takeDamage(1, null, { kind: 'melee', px: maw.mouthX(), py: maw.mouthY() })) {
         game.combatSystem.createDamageNumber(1, maw.mouthX(), maw.mouthY(), '#ffd700');
         acted = true;
@@ -699,6 +609,7 @@ export class DungeonBossSystem {
       this._elevationCooldown = ELEVATION_CADENCE;
     }
   }
+
   // ── Defeat ────────────────────────────────────────────────────────────────
   _defeat() {
     const game = this.game;
@@ -709,26 +620,43 @@ export class DungeonBossSystem {
     game.hoardmawDefeatedThisRun = true;
     game.goldBreathCurseActive = false;
 
+    // Unlock the ascend — the bug-fix half of item 0. Mirrors the Trap Room's
+    // "all cleared" unlock; the Vault's up-stairs sit right where the boss
+    // body lives, so they must stay locked for the whole encounter or a pull/
+    // knockback can throw the player into an unintended floor transition.
+    const floor = game.activeFloor;
+    if (floor?.stairsUpObj) {
+      floor.stairsUpLocked = false;
+      paintStairsUpVisual(floor.stairsUpObj, false);
+    }
+
     // The body collapses into the payout — acquisition, properly earned.
     this._landCoinFlights();
+    this._clearTemptationPile();
     game.physicsSystem.removeEntity(maw);
-    const floor = game.activeFloor;
     // Leave the roster here rather than letting the interior death sweep do
     // it: that path plays a generic destroy thud and scatters gray debris,
     // which is not this boss's death. DungeonSystem runs us before the sweep
     // precisely so the authored beat wins.
     this._leaveFloorRoster(maw);
     this.hoardmaw = null;
-    for (let i = 0; i < spec.payout.coinBurst; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const dist = GRID.CELL_SIZE * (2 + Math.random() * 5);
-      const coin = Object.assign(
-        new Item(spec.bribeLoot.char, maw.position.x + Math.cos(angle) * dist,
-                 maw.position.y + Math.sin(angle) * dist),
-        { hutPlane: true, pickupReadyAt: performance.now() + 900 });
-      floor.items.push(coin);
-      game.items.push(coin);
-      game.physicsSystem.addEntity(coin);
+
+    // A large, room-filling burst of wood-glyph debris — the chest is wood,
+    // not the generic gray detritus every other enemy uses. Multiple origin
+    // points across the body read as the whole carcass coming apart, not one
+    // point exploding.
+    const woodColor = '#8a6a2e';
+    const originCount = 5;
+    for (let i = 0; i < originCount; i++) {
+      const ox = maw.rootX() + (Math.random() - 0.5) * GRID.CELL_SIZE * BODY_SPAN_COLS;
+      const oy = maw.rootY() + (Math.random() - 0.5) * GRID.CELL_SIZE * BODY_SPAN_ROWS;
+      const pieces = createDebris(ox, oy, 9, woodColor);
+      for (const piece of pieces) {
+        piece.hutPlane = true;
+        piece.setCollisionMap(maw.collisionMap);
+        game.debris.push(piece);
+        game.physicsSystem.addEntity(piece);
+      }
     }
 
     // Gems: rarity-weighted gemstone roll at boss weights — the hoard's
@@ -758,14 +686,15 @@ export class DungeonBossSystem {
   }
 }
 
-const BRIBE_HP_THRESHOLD = 32;              // of 80 — glinting ends early-ish
+// Roughly the body's footprint, in cells — used only to spread the victory
+// debris origins across the carcass rather than pin them all to one point.
+const BODY_SPAN_COLS = 6;
+const BODY_SPAN_ROWS = 4;
+
 // Walk in under this and the prologue ambush wakes without biting. Roughly a
 // third of PLAYER_SPEED — reachable only by deliberately easing in, never by
 // accident while running the room.
 const AMBUSH_CREEP_SPEED = 70;
-const INHALE_RANGE = GRID.CELL_SIZE * 7;
-const INHALE_PULL = 120;                    // px/s player pull
-const INHALE_DRAG = 90;                     // px/s ground-loot drag
 const ELEVATION_CADENCE = 2.2;              // seconds between gilded contributions
 const COIN_TOSS_DIST = GRID.CELL_SIZE * 2.5; // cursed-slot discharge arc length
 const COIN_TOSS_SPEED = COIN_TOSS_DIST / 0.25; // px/s — a brisk quarter-second flip

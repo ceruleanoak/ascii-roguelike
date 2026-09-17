@@ -1,0 +1,42 @@
+{
+  "char": "T",
+  "name": "Troll",
+  "description": "Slow and steady. Each blow staggers. It does not tire.",
+  "spellDescription": "TIRELESS AND SLOW.",
+  "trueName": "THRYMR",
+  "mass": 2.5,
+  "hp": 15,
+  "speed": 23,
+  "acceleration": 70,
+  "damage": 4,
+  "attackRange": 40,
+  "aggroRange": 112,
+  "attackCooldown": 2.2,
+  "attackWindup": 1.8,
+  "windupMovement": "advance",
+  "attackType": "melee",
+  "decisionInterval": 1.5,
+  "color": "#00aa00",
+  "recover": {
+    "variant": "knockback",
+    "duration": 0.6
+  },
+  "affinities": [
+    "humanoid"
+  ],
+  "tier": "elite",
+  "telegraph": {
+    "area": "trapezoid",
+    "size": "big",
+    "animation": "blink",
+    "attackShape": "T",
+    "attackShapeTurn": 90,
+    "attackShapeCount": null,
+    "beatDamage": null,
+    "warnShape": null,
+    "hitShape": null,
+    "pulses": null
+  },
+  "windupImmune": true,
+  "isImpact": true
+}

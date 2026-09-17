@@ -56,39 +56,46 @@ dedicated draw section on fgCtx with HP bar above the body (precedents: `GooDrag
 |------|----------|
 | **Lid** | Animated plank row: sealed vs gape states exposing dark mouth-interior cells; slams close over the ring telegraph |
 | **Scale field** | Rows of `$` chips over bare hide; each chip an `ArmorMechanic` chunk keyed by offset (not ~60 entities); chipped cells expose hide until re-armored |
-| **Mouth interior** | Visible only in gape; hosts the coin-slot seam cell; originates the inhale |
-| **Keyhole `◉`** | One cell within the body block — the phase-2 weak point, migrating on a fixed cycle |
-| **Tongue** | Travelling grab strip (`HoardmawTongue`, `GooHead` grab precedent); face-melee breaks the grip |
+| **Mouth interior** | Visible only in gape; hosts the Hoard Reveal's spilled/retrieved treasure |
+| **Tongue** | Telegraph (fixed filled/blinking lane) → thick sweep (timed dodge-roll escape) → reel-in → rectangle bite at the mouth (a second, later timed dodge-roll escape) |
 
 ## The three phases — Ratified
 
 | Phase | Name | State | The lock |
 |-------|------|-------|----------|
-| 1 | **Scaled** | Full coin-scale armor | Hits chip `$` pickups loose. Collecting a scale **mints +1 coin**. Left on the floor, swept scales are re-absorbed and **re-armor** the maw — claim your damage. *Acquire*, enforced mechanically. |
-| 2 | **Glinting** | Bare hide; true glint among fakes | Fakes sparkle arrhythmically; the true `◉` pulses **in rhythm with the maw's breathing** and brightens two pulses when it reaches to grab. Wrong spot = `ting` ricochet. Reading the rhythm is the skill. Roams a fixed 3-position cycle (third-visit mastery: pre-positioning ends the phase in seconds). |
-| 3 | **The Bribe** | It goes still and pushes out a mound of real coins/ingredients | Grabbing = lid slam (massive hit). **Refuse three times**, then strike the offered pile into its own mouth: choke, lid hangs open, `◉` exposed for the kill window. |
+| 1 | **Scaled** | Full coin-scale armor | Hits chip `$` pickups loose. Collecting a scale **mints +1 coin**. Left on the floor, swept scales are re-absorbed and **re-armor** the maw — claim your damage. Hoard Reveal (lean-forward pose, spillable/destructible treasure) and the scale-fan shrapnel attack both belong to this phase only. *Acquire*, enforced mechanically. |
+| 2 | **Vulnerable / Endurance** | Bare hide, cycling between a killable window and a reformed shield | A fixed-duration **Vulnerable Window** opens (hits land freely; the carried Compass brightens at the mouth for its duration — Truth register). Left unbroken, it expires: the scale shield reforms as **Endurance**, and the maw emits fixed-velocity bouncing coin projectiles. A melee strike that redirects one of those coins back into the mouth **breaks Endurance** immediately and reopens a fresh Vulnerable Window. Reading the cycle — punish the window, redirect during Endurance — is the skill. |
+| 3 | **Temptation** | At ≤10% HP, the maw goes fully passive (no attacks, no shield) and a coin pile spawns once in a room corner | Touching the pile costs the player a 10HP self-damage explosion; the boss stays passive and killable throughout. Ignoring the pile and landing the finishing blow is the win — no refusal count, no choke window. |
 
 ## Attack set (all close-range, all readable) — Ratified
 
 - **Lid slam** — telegraphed ring Area; safe cells hug its sides.
-- **Inhale** — vacuum pull toward the mouth (`LureMechanic` pull math); swallow costs big + wall
-  spit. Counterplay: anchored dodge-roll or bracing against debris. Drags **all** loose pickups —
-  chipped scales *and* the player's pre-staged goods.
-- **Scale fan** — chipped scales flung as shrapnel cones when it lurches; lost wealth defends itself.
-- **Tongue reel** — mid-range grab-and-pull (`MimicMechanic` tongue reuse); same escape grammar as
-  Goo Dragon head grabs (learned behavior transfers).
+- **Hoard Reveal** (phase 1 only) — the maw leans forward and spills a run of treasure into the open
+  mouth interior; the pile is destructible/spillable and scatters on a decaying-velocity physics tick
+  when struck. Left alone, the maw retrieves it back (`LureMechanic`-style pull math, retargeted from
+  the old player-pull to treasure-retrieval only). A tongue pre-sweep telegraph during the lean can be
+  interrupted by a brave melee strike at the mouth.
+- **Scale fan** (phase 1 only) — chipped scales flung as shrapnel cones when it lurches; lost wealth
+  defends itself.
+- **Tongue** — fixed filled/blinking telegraph lane, then a thick sweep (timed dodge-roll escape),
+  then reel-in and a rectangle bite held at the mouth (a second, later timed dodge-roll escape). No
+  mid-travel melee-break escape — the escape grammar is entirely dodge-roll timing now, not a face
+  melee.
+- **Endurance coins** (phase 2 only) — fixed-velocity bouncing coin projectiles while the shield is
+  reformed; a melee strike that redirects one back into the mouth ends Endurance early.
 - Ranged deflection until stripped (`ReflectShieldMechanic` bounce logic).
 
 ## Coin economy — Ratified
 
-The fight is a closed greed loop: chip armor → collect minted scales → coins fill the cursed
-slots → feed them back through the seam → more windows → more chips.
+The fight is a closed greed loop: chip armor → collect minted scales → the maw retrieves unclaimed
+Hoard Reveal treasure back into itself → more chips.
 
 - Raw coin `c` only (Infused Coin `¤` stays a crafting component).
-- Scales swept back by the inhale re-absorb as armor (its own wealth returns to it).
-- **Player-staged coins caught by the inhale are devoured and gone** — visible gulp, no heal, no
-  mechanical punishment beyond loss (Ratified). Careless staging is wasted greed; lane-aware
-  staging is repeat-visit mastery.
+- Scales swept back and Hoard Reveal treasure left unclaimed both re-absorb into the maw (its own
+  wealth returns to it).
+- The retired Justice register (tossing coin into a seam cell for an instant stagger) is gone —
+  there is no seam cell in this design. Truth (Vulnerable Window) and Help (bread redirect) are the
+  fight's only register windows now.
 
 ## Gold Breath curse — Ratified
 
@@ -126,9 +133,8 @@ knowledgeless run and violate the arcade-purity guardrail. Each triad item opens
 
 | Register | Act | Effect |
 |----------|-----|--------|
-| **Justice ★** | Toss `c` landing in the seam cell during gape | Instant stagger — currency judged |
-| **Truth ⌖** | Carried Compass pulses toward the true glint | Cuts the phase-2 search cost (extends the Compass's existing dungeon-beep scope; see ADR-backlog 2026-08-13 Compass row) |
-| **Help ⌬** | Ground bread within lunge reach during a lunge beat | Redirects the lunge — decoy save, drags the true glint into reach |
+| **Truth ⌖** | Carried Compass brightens at the mouth | Indicates the phase-2 Vulnerable Window is open (extends the Compass's existing dungeon-beep scope; see ADR-backlog 2026-08-13 Compass row) |
+| **Help ⌬** | Ground bread within lunge reach during a lunge beat | Redirects the lunge — decoy save |
 
 Nothing on screen names the registers. The acts are the statement.
 
@@ -141,9 +147,9 @@ Pets enter dungeons game-wide (new capability; ADR-backlog row filed):
 - **Vault arrival:** every living pet flips **gilded** — HP-less (damage intake skipped, death
   checks bypassed), gold-tinted render, reverting on dungeon exit alongside the collision-map
   restore path. Duration: rest of the delve only; surface taming economy untouched.
-- **In-fight elevation:** crow dive-pecks auto-target the true glint (a living Compass — green's
-  mascot teaching the lock); rat gnaws the tongue root through stagger/reel windows; crow ferries
-  chipped scales back before re-absorption sweeps reclaim them.
+- **In-fight elevation:** crow dive-pecks land damage during the Vulnerable Window (a living
+  Compass — green's mascot teaching the lock); rat gnaws the tongue during its grab or the
+  Vulnerable Window; crow ferries chipped scales back before re-absorption sweeps reclaim them.
 - Solo arrival stays fully viable — soft bonus, never a gate.
 - Scope: dungeon floors only; hut/maze unchanged (maze Ghost economy deliberately pet-free).
 
@@ -154,7 +160,8 @@ Pets enter dungeons game-wide (new capability; ADR-backlog row filed):
 ## Earned win — Ratified
 
 Phase 3 *is* the earned win: the boss's last weapon is the player's greed, and the winning move is
-refusal — three refusals, then turning its own bribe into its grave.
+refusal — the maw stands fully passive at the door of death, and the win is landing the finishing
+blow instead of reaching for the coin pile it leaves sitting out.
 
 - WiseFellow rare saying (existing pattern): **"THE HOARD YIELDS TO AN EMPTY HAND."**
 - Death: the hoard collapses into a genuine payout shower — coins, gems, tiered weapon roll,
@@ -169,10 +176,12 @@ refusal — three refusals, then turning its own bribe into its grave.
 
 Death resets everything; repeats happen across runs and knowledge is the progression:
 
-1. Visit 1: survive the ambush, learn chip-and-claim, glimpse the glint rhythm.
-2. Visit 2+: slow-approach skips the ambush; route straight chip → glint → refuse.
-3. Mastery: the glint's fixed 3-position cycle allows pre-positioning; inhale-lane knowledge makes
-   staging safe; faster kills, cleaner payouts.
+1. Visit 1: survive the ambush, learn chip-and-claim, learn to read the Vulnerable/Endurance cycle.
+2. Visit 2+: slow-approach skips the ambush; route straight chip → punish the Vulnerable Window →
+   redirect Endurance coins to reopen it.
+3. Mastery: reading the tongue's telegraph-to-sweep-to-bite timing tightens dodge-roll escapes;
+   knowing Temptation is a no-refusal-count freebie (just don't touch the pile) makes the close
+   trivial; faster kills, cleaner payouts.
 
 ## Template (how this generalizes) — spine Ratified, per-zone content Open
 
@@ -192,8 +201,8 @@ New `src/systems/DungeonBossSystem.js` + per-zone spec (`src/data/dungeonBosses/
 | Need | Seam |
 |------|------|
 | Armor chip | `ArmorMechanic` (dormant plumbing; whip-immunity contract per ADR-backlog 2026-07-22) |
-| Ambush reveal / tongue reel | `MimicMechanic` |
-| Inhale pull | `LureMechanic` math |
+| Ambush reveal | `MimicMechanic` |
+| Hoard Reveal treasure retrieval | `LureMechanic`-style pull math (inline, retargeted to treasure not the player) |
 | Slam/ring telegraphs | Telegraph Areas + Beat system (`ring`/`circle`) |
 | Projectile deflection | `ReflectShieldMechanic` logic |
 | Composite rendering | `BossRenderer.renderBossComposite` pattern |

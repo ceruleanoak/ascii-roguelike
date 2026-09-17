@@ -36,40 +36,49 @@ const SLAM_TELEGRAPH   = 1.1;   // ring telegraph before the lid comes down
 // hit — the reach is the attack's property, so it is authored once here rather
 // than in the system that happens to test it.
 export const SLAM_RADIUS = GRID.CELL_SIZE * 3.2;
-const INHALE_COOLDOWN  = 7.0;
-const INHALE_DURATION  = 1.6;   // vacuum pull window
-const INHALE_RANGE     = GRID.CELL_SIZE * 7;
-const INHALE_PULL      = 120;   // px/s toward the mouth
-const TONGUE_COOLDOWN  = 6.0;
-const FAN_COOLDOWN     = 5.0;
+const FAN_COOLDOWN     = 5.0;   // phase-1 only — "victory lap" once the armor's gone
 const FAN_COUNT        = 7;
 const FAN_SPEED        = 150;
 const FAN_ARC          = Math.PI / 3;
 const FAN_WINDUP       = 0.55;  // lid cracks and gathers before the spray
 const HIT_FLASH_TIME   = 0.12;  // white-out on a landed hit
 
-// Phase-2 glint: the true weak point migrates over three fixed body
-// positions (left cheek / keyhole center / right cheek). Fixed cycle, not a
-// roll — repeat visits learn it and pre-position (repeat-visit mastery).
-// Offsets are from the body CENTER in pitch units, and all three sit on the
-// carcass face below the mouth — the "bare hide" the stripped armor exposes.
-// Keeping them off the lid means the weak point never rides the animation.
-export const GLINT_POSITIONS = [
-  { dx: -3, dy: 1 }, { dx: 0, dy: 2 }, { dx: 3, dy: 1 },
-];
-export const GLINT_PULSE_PERIOD = 1.2; // seconds per breath pulse (the rhythm to read)
-// Breaths the glint holds one position before moving on. Every-pulse migration
-// would be unreadable and unhittable; three gives a real strike window while
-// still keeping the eye moving.
-const GLINT_MIGRATE_PULSES = 3;
-// Breaths the true glint stays brightened before a grab — the pre-grab tell.
-const GLINT_TELL_PULSES = 2;
+// ── Hoard Reveal ────────────────────────────────────────────────────────────
+// Replaces both the interior's static dressing and the scrapped "feed coins
+// through the seam" Justice mechanic. Own cooldown, phase-1 rotation only.
+const HOARD_REVEAL_COOLDOWN  = 8.0;
+const HOARD_LEAN_TIME        = 0.9;   // lean-forward tell before the spill
+export const HOARD_TREASURE_COUNT = 6;
+const HOARD_SPILL_WINDOW     = 2.4;   // spilled treasure is hittable this long
+const HOARD_RETRIEVE_TIME    = 1.6;   // retrieval pull duration (Inhale's job now)
+const HOARD_RETRIEVE_PULL    = 140;   // px/s treasure is pulled back at
+const HOARD_SCATTER_SPEED    = 210;   // px/s a piece spills out at
+const HOARD_DECAY_RATE       = 0.88;  // per-tick-at-60fps velocity decay (WorldEffectsSystem shape)
+const HOARD_TREASURE_HP      = 2;     // hits to destroy one spilled piece
+// Exposed and waiting: the spill is a response to being struck, not a timer
+// firing on its own — "hitting the hoard" is what spills it. The timeout is
+// a fallback only, so a player who disengages doesn't stall the boss forever.
+const HOARD_WAIT_TIMEOUT     = 3.0;
+const HOARD_MAX_CYCLES       = 2;     // spill→retrieve repetitions per reveal
+// How close a strike on the open mouth must land, during the tongue's
+// pre-sweep telegraph, to count as the brave-attack interrupt.
+const MOUTH_STRIKE_REACH     = GRID.CELL_SIZE * 1.6;
 
-// Phase-3 bribe: three offers; each refused escalates the convulsion.
-const BRIBE_OFFER_COUNT  = 3;
-export const BRIBE_OFFER_WINDOW = 2.8;  // seconds the mound sits there, tempting
-// Choke kill window once the pile is fed back into its own mouth.
-const CHOKE_WINDOW       = 4.5;
+// ── Tongue ───────────────────────────────────────────────────────────────
+const TONGUE_COOLDOWN       = 6.0;
+const TONGUE_TELEGRAPH_TIME = 0.85;  // fixed-area filled/blinking lane tell
+
+// ── Vulnerable / Endurance cycle (phase 2) ──────────────────────────────────
+// Fixed, non-hit-reset punish window: "inevitable — it's a matter of how many
+// times the player lets the punish run," not a race against a re-armed timer.
+export const VULNERABLE_WINDOW_DURATION = 5.0;
+const ENDURANCE_COIN_INTERVAL = 0.9;   // seconds between bounced coins
+const ENDURANCE_COIN_SPEED    = 190;   // px/s, fixed — not the old randomized fan spread
+const ENDURANCE_COIN_LIFETIME = 8.0;   // safety despawn if never touched
+
+// ── Temptation (phase 3, ≤10% HP) ───────────────────────────────────────────
+export const TEMPTATION_HP_THRESHOLD = HOARDMAW_MAX_HP * 0.10;
+export const TEMPTATION_PILE_SELF_DAMAGE = 10;
 
 // ─── Deform tuning ──────────────────────────────────────────────────────────
 // It is a chest. Everything here is deliberately restrained: a chest that
@@ -78,21 +87,22 @@ const CHOKE_WINDOW       = 4.5;
 // could have opened yourself. Total body travel stays close to one cell; all
 // the character lives in the lid.
 
-export const LID_REST  = 0.12;  // never fully shut — the sliver of dark IS the menace
-export const LID_REAR  = 0.30;  // drawn back before a slam, gathering
-export const LID_GAPE  = 0.70;  // inhale / tongue / fan: open and working
-export const LID_CHOKE = 0.90;  // jammed open around its own hoard — the kill window
+export const LID_REST   = 0.12;  // never fully shut — the sliver of dark IS the menace
+export const LID_REAR   = 0.30;  // drawn back before a slam, gathering
+export const LID_GAPE   = 0.70;  // inhale / tongue / fan: open and working
+export const LID_REVEAL = 0.97;  // Hoard Reveal's lean — the mouth dominates the frame
+export const LID_EXHAUSTED = 0.55; // Temptation's resting sag — hanging open, not working
 
 const LID_OPEN_RATE = 1 / 0.30; // units/sec opening — unhurried, readable
 const LID_SLAM_RATE = 1 / 0.12; // units/sec shutting — accelerating, heavy
+const EXHAUST_SAG   = 0.22;     // cells the body settles down onto in Temptation
 
-const BREATH_PERIOD  = GLINT_PULSE_PERIOD; // the bob and the glint share one clock
+const BREATH_PERIOD  = 1.2;   // seconds per breath — the body's idle rhythm
 const BREATH_BOB     = 0.15;  // cells — barely there, but the eye reads "alive"
-const REAR_LIFT      = 1.10;  // cells it hauls itself up before a slam
-const SLAM_DROP      = 0.35;  // cells it drives down through the floor on impact
-const SLAM_RECOIL    = 0.28;  // seconds the impact frame decays over
-const RECOIL_LIFT    = 0.25;  // cells it flinches back on taking a hit
-const CONVULSE_BASE  = 0.06;  // cells of phase-3 tremor per banked refusal
+const REAR_LIFT       = 1.10;  // cells it hauls itself up before a slam
+const SLAM_DROP       = 0.35;  // cells it drives down through the floor on impact
+const SLAM_RECOIL     = 0.28;  // seconds the impact frame decays over
+const RECOIL_LIFT     = 0.25;  // cells it flinches back on taking a hit
 export const DENT_TIME  = 0.20;  // seconds a chipped cell shows its dent
 export const DENT_DEPTH = 0.45;  // fraction of a pitch the dented glyph sinks inward
 
@@ -123,17 +133,24 @@ const MAW_DATA = {
  * DungeonBossSystem consumes them).
  *
  * Damage model:
- *   Phase 1 SCALED   — every intact scale absorbs one melee hit and flies off
- *                      as a `$` pickup (mint +1 coin when collected); ranged
- *                      attacks ricochet for nothing. No HP loss while any
- *                      scale remains. This is ArmorMechanic's contract made
- *                      positional — implemented natively because the chunk
- *                      model can't express a hit-location grid (whip-immunity
- *                      rule carries over: whips never chip).
- *   Phase 2 GLINTING — bare hide; only the pulsing ◉ glint takes damage,
- *                      everything else tings off.
- *   Phase 3 BRIBE    — invulnerable except the choke window after the player
- *                      refuses all three offers and strikes the pile home.
+ *   Phase 1 SCALED       — every intact scale absorbs one melee hit and flies
+ *                          off as a `$` pickup (mint +1 coin when collected);
+ *                          ranged attacks ricochet for nothing. No HP loss
+ *                          while any scale remains. This is ArmorMechanic's
+ *                          contract made positional — implemented natively
+ *                          because the chunk model can't express a hit-
+ *                          location grid (whip-immunity rule carries over).
+ *   Phase 2 VULNERABLE/  — the whole body is damageable during a fixed-
+ *          ENDURANCE       duration Vulnerable Window (not reset by landed
+ *                          hits). On expiry the shield reforms (Endurance):
+ *                          impervious again, emitting bouncing coins the
+ *                          player must melee-redirect back into the boss to
+ *                          reopen a fresh Vulnerable Window. Repeats until HP
+ *                          crosses the Temptation threshold.
+ *   Phase 3 TEMPTATION   — fully passive: no attacks, no shield, damageable
+ *                          everywhere. A coin pile in a room corner punishes
+ *                          greed (self-damage explosion); ignoring it and
+ *                          finishing the boss is the win.
  */
 export class Hoardmaw extends Enemy {
   constructor(x, y) {
@@ -178,37 +195,46 @@ export class Hoardmaw extends Enemy {
     this.initialScaleCount = this.scales.size;
 
     // ── Phase state ─────────────────────────────────────────────────────────
-    this.bossPhase = 1;            // 1 scaled · 2 glinting · 3 bribe
-    this.goldBreathFired = false;  // one-shot curse trigger signal (phase 2)
-    // Fixed cycle, deterministic start: repeat visits are supposed to be able
-    // to learn the order and pre-position (doc: repeat-visit mastery). A random
-    // start would make the first position unlearnable.
-    this.glintIndex = 0;
-    this.glintPulseTimer = 0;      // breath rhythm the player reads
-    this.glintPulseCount = 0;      // whole pulses elapsed — drives the migration
-    this.glintTellTimer = 0;       // >0 while the glint brightens pre-grab
+    this.bossPhase = 1;            // 1 scaled · 2 vulnerable/endurance · 3 temptation
+    this.goldBreathFired = false;  // one-shot curse trigger signal (phase 2 entry)
+    // Phase-2 substate: 'vulnerable' (full body hittable, fixed countdown) or
+    // 'endurance' (shield reformed, bouncing coins, impervious except redirect).
+    this.enduranceState = null;
+    this.vulnerableTimer = 0;
+    this.enduranceCoinTimer = 0;
+    this.enduranceCoins = [];      // self-managed { x, y, vx, vy, redirected, life }
 
     // ── Attack state machine ────────────────────────────────────────────────
     // One attack at a time; idle otherwise. All timings real seconds.
-    this.attackState = 'idle';     // idle|slamTele|inhale|fanWindup|tongueLive
+    // idle | slamTele | tongueTelegraph | tongueLive | fanWindup |
+    // hoardLean | hoardWait | hoardSpill | hoardRetrieve
+    this.attackState = 'idle';
     this.attackTimer = 0;
+    this.hoardCycle = 0;           // spill/retrieve repetitions this reveal
     this.slamCooldown = SLAM_COOLDOWN;
-    this.inhaleCooldown = INHALE_COOLDOWN * 0.5; // first inhale comes early
     this.tongueCooldown = TONGUE_COOLDOWN * 0.5;
     this.fanCooldown = FAN_COOLDOWN;
+    this.hoardRevealCooldown = HOARD_REVEAL_COOLDOWN * 0.4; // an early first reveal
     this.tongue = null;            // live HoardmawTongue child
+
+    // ── Hoard Reveal state ───────────────────────────────────────────────────
+    // Self-managed spilled treasure — plain objects, not world Items: this is
+    // boss-body-local content, drawn only by HoardmawRenderer (already gated
+    // on isVault), same precedent as the tongue child.
+    this.spilledTreasure = [];     // { x, y, vx, vy, hp, alive, char, color }
 
     // ── Signals polled by DungeonBossSystem ─────────────────────────────────
     this.pendingBossAttacks = [];  // projectiles (scale fan) for CombatSystem
     this.slamLandedAt = null;      // { x, y } — shockwave resolution site
-    this.inhaleActive = false;     // system drags ground pickups while true
     this.onSwallowCount = 0;       // player swallowed beats (tongue reached home)
     // Declared here rather than sprung into existence mid-hit: lazy property
     // init on a live entity is a listed anti-pattern (CLAUDE.md).
     this.pendingPhaseTransition = null; // 2 once the last scale falls
     this.scaleChippedAt = null;    // { key, px, py } — system spawns the `$`
     this.ricochetAt = null;        // { px, py } — a hit the armor turned away
+    this.blockedAt = null;         // { px, py } — same beat, floating "BLOCKED" text
     this.swallowedAt = null;       // { px, py } — spit-out site after a swallow
+    this.enduranceKnockbackAt = null; // { x, y } — shove as the shield reforms
     this.hitFlash = 0;             // seconds of white-out remaining
     this.ambushSnapPending = false; // prologue lid-snap awaiting resolution
     this.hasTakenDamage = false;   // gates the HP bar — Turtle precedent
@@ -222,22 +248,16 @@ export class Hoardmaw extends Enemy {
     this.slamRecoil = 0;           // seconds left in the impact frame
     this.dents = [];               // { row, col, t } — freshly chipped cells
 
-    // ── Phase-3 bribe state ─────────────────────────────────────────────────
-    this.bribeOffersMade = 0;
-    this.bribeRefusals = 0;        // incremented by the system per expired offer
-    this.bribeOfferTimer = 0;
-    this.bribesAccepted = false;   // grabbing the mound = punishment beat
-    this.chokeTimer = 0;           // >0 during the choke kill window
     this.defeated = false;
   }
 
   // ── Geometry: one transform, every consumer ───────────────────────────────
   //
   // The body is drawn and struck on the maw's OWN glyph pitch, anchored to a
-  // root that moves (breath, rear-up, slam, convulsion). Hit math, the glint,
-  // the mouth and the renderer all resolve through offsetPx()/glyphAt(), so
-  // the picture and the hitboxes cannot drift apart. Anything that needs a
-  // point on this body asks here — never recomputes from position + CELL_SIZE.
+  // root that moves (breath, rear-up, slam). Hit math, the mouth and the
+  // renderer all resolve through offsetPx()/glyphAt(), so the picture and the
+  // hitboxes cannot drift apart. Anything that needs a point on this body
+  // asks here — never recomputes from position + CELL_SIZE.
 
   /** Body root in world px: the block center, plus the live anchor offset. */
   rootX() { return this.position.x + this.anchorX; }
@@ -271,9 +291,9 @@ export class Hoardmaw extends Enemy {
    * Enemy.getHitbox() treats position as a top-left corner and returns one
    * cell — but this boss's position is the body-block CENTER, so the inherited
    * box lands a single cell down-right of center and every hit test runs
-   * against ~4% of the visible mass. Most of the scale field and two of the
-   * three glints sit outside it, i.e. unhittable. LakeBoss overrides the same
-   * way for the same reason: composite bodies must publish their real extent.
+   * against ~4% of the visible mass. Most of the scale field sits outside it,
+   * i.e. unhittable. LakeBoss overrides the same way for the same reason:
+   * composite bodies must publish their real extent.
    */
   getHitbox() {
     const r = this.bodyRect();
@@ -289,12 +309,6 @@ export class Hoardmaw extends Enemy {
   mouthY() {
     // Mouth sits at the bottom edge of the body block (facing the player).
     return this.rootY() + (this.bodyRows * GLYPH_PITCH()) / 2;
-  }
-
-  /** World-space px of the current true glint (phase 2 weak point). */
-  glintPx() {
-    const pos = GLINT_POSITIONS[this.glintIndex % GLINT_POSITIONS.length];
-    return this.offsetPx(pos.dx, pos.dy);
   }
 
   /**
@@ -337,21 +351,13 @@ export class Hoardmaw extends Enemy {
     this.velocity.vy = 0;
 
     this.hitFlash = Math.max(0, this.hitFlash - dt);
-
-    // Breath rhythm runs in every phase — it IS the glint tell (phase 2), and
-    // the body has to visibly move on it or the tell cannot be read at all.
-    this.glintPulseTimer += dt;
-    while (this.glintPulseTimer >= GLINT_PULSE_PERIOD) {
-      this.glintPulseTimer -= GLINT_PULSE_PERIOD;
-      this.glintPulseCount++;
-      this._onBreathPulse();
-    }
+    this.breathPhase = (this.breathPhase + dt / BREATH_PERIOD) % 1;
 
     this._tickDeform(dt);
 
     // Dormant prologue: scenery until the player crosses the wake line. The
-    // bookkeeping above still runs so nothing stalls, but no AI and no breath
-    // migration — it is pretending to be furniture.
+    // bookkeeping above still runs so nothing stalls, but no AI at all — it
+    // is pretending to be furniture.
     if (this.dormant) return { dotDamage: dotDamageEvents };
 
     // Live child tongue ticks with us (real seconds — its own constants are).
@@ -360,17 +366,19 @@ export class Hoardmaw extends Enemy {
       if (this.tongue.done) this.tongue = null;
     }
 
-    // Cooldowns tick always.
+    this._tickSpilledTreasure(dt);
+    if (this.bossPhase === 2) this._tickEndurance(dt);
+
+    // Cooldowns tick always (phase 1 only meaningfully gates on them).
     this.slamCooldown = Math.max(0, this.slamCooldown - dt);
-    this.inhaleCooldown = Math.max(0, this.inhaleCooldown - dt);
     this.tongueCooldown = Math.max(0, this.tongueCooldown - dt);
     this.fanCooldown = Math.max(0, this.fanCooldown - dt);
-    this.glintTellTimer = Math.max(0, this.glintTellTimer - dt);
+    this.hoardRevealCooldown = Math.max(0, this.hoardRevealCooldown - dt);
 
     switch (this.bossPhase) {
       case 1: this._updateScaled(dt); break;
-      case 2: this._updateGlinting(dt); break;
-      case 3: this._updateBribe(dt); break;
+      case 2: this._updateVulnerableEndurance(dt); break;
+      case 3: this._updateTemptation(dt); break;
     }
 
     return { dotDamage: dotDamageEvents };
@@ -378,15 +386,14 @@ export class Hoardmaw extends Enemy {
 
   /**
    * Body deform: the root's vertical offset and the lid angle, one pose at a
-   * time. Poses are exclusive and ordered by urgency — a choking maw is not
-   * also flinching — so the body never reads as two things at once.
+   * time. Poses are exclusive and ordered by urgency, so the body never reads
+   * as two things at once.
    *
    * Nothing here moves the maw horizontally. A chest that slides is a chest
    * on wheels; the whole threat is that it does not have to come to you.
    */
   _tickDeform(dt) {
     const cell = GRID.CELL_SIZE;
-    this.breathPhase = (this.breathPhase + dt / BREATH_PERIOD) % 1;
     this.slamRecoil = Math.max(0, this.slamRecoil - dt);
 
     for (let i = this.dents.length - 1; i >= 0; i--) {
@@ -408,11 +415,7 @@ export class Hoardmaw extends Enemy {
     let lidRate = LID_OPEN_RATE;
     let lidEase = 'easeOut';
 
-    if (this.chokeTimer > 0) {
-      // Jammed open around its own hoard, hauled upright and stuck there.
-      poseY = -REAR_LIFT * 0.5 * cell;
-      lidTarget = LID_CHOKE;
-    } else if (this.slamRecoil > 0) {
+    if (this.slamRecoil > 0) {
       // Impact frame: driven down, lid shut hard, bouncing back out of it.
       const t = this.slamRecoil / SLAM_RECOIL;
       poseY = SLAM_DROP * cell * applyEasing(t, 'easeOut');
@@ -424,22 +427,28 @@ export class Hoardmaw extends Enemy {
       const t = Math.min(1, this.attackTimer / SLAM_TELEGRAPH);
       poseY = -REAR_LIFT * cell * applyEasing(t, 'easeOut');
       lidTarget = LID_REAR;
-    } else if (this.attackState === 'inhale' || this.attackState === 'fanWindup'
+    } else if (this.attackState === 'hoardLean' || this.attackState === 'hoardWait'
+               || this.attackState === 'hoardSpill' || this.attackState === 'hoardRetrieve') {
+      // Lean forward: the mouth dominates the frame. No horizontal travel —
+      // the "lean" reads entirely through the fully-driven-open lid.
+      lidTarget = LID_REVEAL;
+    } else if (this.attackState === 'fanWindup' || this.attackState === 'tongueTelegraph'
                || this.attackState === 'tongueLive') {
       lidTarget = LID_GAPE;
     } else if (this.hitFlash > 0) {
       poseY = -RECOIL_LIFT * cell * (this.hitFlash / HIT_FLASH_TIME);
-    }
-
-    // Phase 3 shakes underneath whatever pose is running, harder with every
-    // refusal banked — the convulsion escalates because the player made it.
-    if (this.bossPhase === 3 && this.chokeTimer <= 0) {
-      const amp = CONVULSE_BASE * cell * (1 + this.bribeRefusals);
-      poseY += Math.sin(this.breathPhase * Math.PI * 2 * 9) * amp;
+    } else if (this.bossPhase === 3) {
+      // Temptation: spent. The mouth hangs open loosely rather than working —
+      // no attack left in it, no reason to hold the jaw at a working angle.
+      lidTarget = LID_EXHAUSTED;
+      lidRate = LID_OPEN_RATE * 0.35;
+      poseY = EXHAUST_SAG * cell;
     }
 
     // Breath rides on top of everything: the body is never entirely still.
-    poseY += Math.sin(this.breathPhase * Math.PI * 2) * BREATH_BOB * cell;
+    // Exhausted breathing is shallower than the idle rhythm.
+    const breathAmp = this.bossPhase === 3 ? BREATH_BOB * 0.4 : BREATH_BOB;
+    poseY += Math.sin(this.breathPhase * Math.PI * 2) * breathAmp * cell;
 
     this.anchorY = poseY;
 
@@ -456,24 +465,13 @@ export class Hoardmaw extends Enemy {
     }
   }
 
-  /**
-   * One breath. Phase 2 walks the glint cycle on it — the rhythm IS the tell.
-   * The order is fixed and the start deterministic, so a returning player can
-   * pre-position and end the phase in seconds (doc: repeat-visit mastery).
-   */
-  _onBreathPulse() {
-    if (this.bossPhase !== 2) return;
-    if (this.glintPulseCount % GLINT_MIGRATE_PULSES !== 0) return;
-    this.glintIndex = (this.glintIndex + 1) % GLINT_POSITIONS.length;
-  }
-
   _pickAttack() {
-    // Rotation preference: slam → tongue → inhale → fan. Whatever is off
-    // cooldown first fires; all close-range by design (no kiting exists).
+    // Rotation preference: slam → tongue → hoard reveal → fan. Whatever is
+    // off cooldown first fires; all close-range by design (no kiting exists).
     if (this.slamCooldown <= 0) return 'slam';
     if (this.tongueCooldown <= 0 && this.target
         && this._distToTarget() < TONGUE_REACH()) return 'tongue';
-    if (this.inhaleCooldown <= 0) return 'inhale';
+    if (this.hoardRevealCooldown <= 0) return 'hoardReveal';
     if (this.fanCooldown <= 0) return 'fan';
     return null;
   }
@@ -493,39 +491,31 @@ export class Hoardmaw extends Enemy {
     }
   }
 
-  _updateGlinting(deltaTime) {
+  /**
+   * Phase 2: alternates a fixed-duration Vulnerable Window (full body
+   * damageable, countdown never reset by landed hits) with an Endurance
+   * phase (shield reformed, bouncing coins — see _tickEndurance). No other
+   * attack continues into this phase: it is a focused two-state loop.
+   */
+  _updateVulnerableEndurance(deltaTime) {
     // Gold Breath fires exactly once at phase entry (signal → system applies
     // the coin-slot curse). Kept as a poll flag so the entity stays decoupled.
     if (!this.goldBreathFired) this.goldBreathFired = true;
 
-    if (this.attackState === 'idle') {
-      const pick = this._pickAttack();
-      if (pick) this._beginAttack(pick);
-    } else {
-      this._tickAttack(deltaTime);
+    if (this.enduranceState === 'vulnerable') {
+      // Fixed countdown — NOT reset by landed hits. Punish is inevitable; the
+      // only variable is how many hits the player lands before it runs out.
+      this.vulnerableTimer = Math.max(0, this.vulnerableTimer - deltaTime);
+      if (this.vulnerableTimer <= 0) this._enterEndurance();
     }
+    // Endurance itself is ticked in update() via _tickEndurance every frame
+    // regardless of bossPhase dispatch ordering, so nothing else runs here.
   }
 
-  _updateBribe(deltaTime) {
-    // Choke window: the earned kill window. The body hangs open and does
-    // nothing else — that stillness is what makes the window feel earned.
-    if (this.chokeTimer > 0) {
-      this.chokeTimer -= deltaTime;
-      this.attackState = 'idle';
-      return;
-    }
-    // Offer loop: mound goes out, timer runs; refusals counted by the system
-    // (which watches the player's actual behavior — grab vs. stand off).
-    this.bribeOfferTimer -= deltaTime;
-
-    // It is still a boss between offers. Without this the "escalating
-    // convulsion" is a still image and phase 3 is a waiting room.
-    if (this.attackState === 'idle') {
-      const pick = this._pickAttack();
-      if (pick) this._beginAttack(pick);
-    } else {
-      this._tickAttack(deltaTime);
-    }
+  _updateTemptation() {
+    // Fully passive: no attacks, no shield. Stillness is the "right choice"
+    // being visibly available at every moment.
+    this.attackState = 'idle';
   }
 
   // ── Attack implementations ─────────────────────────────────────────────────
@@ -538,21 +528,17 @@ export class Hoardmaw extends Enemy {
         this.attackState = 'slamTele';
         this.slamCooldown = SLAM_COOLDOWN;
         break;
-      case 'tongue': {
-        this.attackState = 'tongueLive';
+      case 'tongue':
+        // Telegraph first: a fixed-area, filled, blinking lane across the
+        // room (house Telegraph rule — no growth, no outline). The live
+        // tongue only spawns once the telegraph resolves (_tickAttack).
+        this.attackState = 'tongueTelegraph';
         this.tongueCooldown = TONGUE_COOLDOWN;
-        // "Brightens two pulses when it reaches to grab" — the reach is the
-        // one moment the weak point announces itself.
-        this.glintTellTimer = GLINT_PULSE_PERIOD * GLINT_TELL_PULSES;
-        const tx = this.target?.position.x ?? this.mouthX();
-        const ty = this.target?.position.y ?? this.mouthY();
-        this.tongue = new HoardmawTongue(this, this.mouthX(), this.mouthY(), tx, ty);
         break;
-      }
-      case 'inhale':
-        this.attackState = 'inhale';
-        this.inhaleCooldown = INHALE_COOLDOWN;
-        this.inhaleActive = true;
+      case 'hoardReveal':
+        this.attackState = 'hoardLean';
+        this.hoardRevealCooldown = HOARD_REVEAL_COOLDOWN;
+        this.hoardCycle = 0;
         break;
       case 'fan':
         this.attackState = 'fanWindup';
@@ -575,11 +561,12 @@ export class Hoardmaw extends Enemy {
           this.attackState = 'idle';
         }
         break;
-      case 'inhale':
-        // Pull strength read by DungeonBossSystem each frame while active.
-        if (this.attackTimer >= INHALE_DURATION) {
-          this.inhaleActive = false;
-          this.attackState = 'idle';
+      case 'tongueTelegraph':
+        if (this.attackTimer >= TONGUE_TELEGRAPH_TIME) {
+          const tx = this.target?.position.x ?? this.mouthX();
+          const ty = this.target?.position.y ?? this.mouthY();
+          this.tongue = new HoardmawTongue(this, this.mouthX(), this.mouthY(), tx, ty);
+          this.attackState = 'tongueLive';
         }
         break;
       case 'fanWindup':
@@ -596,6 +583,48 @@ export class Hoardmaw extends Enemy {
         // Driven by the child entity; ends when it reports done above.
         if (!this.tongue) this.attackState = 'idle';
         break;
+      case 'hoardLean':
+        // Lean finishes into an exposed wait, NOT an automatic spill — the
+        // spill is a response to being struck (takeDamage's hoardWait
+        // branch). The timeout below is only a fallback for a player who
+        // disengages entirely.
+        if (this.attackTimer >= HOARD_LEAN_TIME) {
+          this.attackState = 'hoardWait';
+          this.attackTimer = 0;
+        }
+        break;
+      case 'hoardWait':
+        if (this.attackTimer >= HOARD_WAIT_TIMEOUT) {
+          this._spillTreasure();
+          this.attackState = 'hoardSpill';
+          this.attackTimer = 0;
+        }
+        break;
+      case 'hoardSpill':
+        // Ends early once every spilled piece is destroyed, or on the window
+        // timing out — whichever comes first.
+        if (this.spilledTreasure.length === 0 || this.attackTimer >= HOARD_SPILL_WINDOW) {
+          this.attackState = 'hoardRetrieve';
+          this.attackTimer = 0;
+        }
+        break;
+      case 'hoardRetrieve':
+        // Ends early once everything is gone (destroyed or retrieved), or on
+        // the timeout — whichever comes first. What's left alive gets pulled
+        // back in; then, if the reveal hasn't run its full cycle count yet,
+        // the mouth stays open for another wait→spill→retrieve pass instead
+        // of snapping shut — the breathing loop the fight was missing.
+        if (this.spilledTreasure.length === 0 || this.attackTimer >= HOARD_RETRIEVE_TIME) {
+          this.spilledTreasure.length = 0;
+          this.hoardCycle++;
+          if (this.hoardCycle < HOARD_MAX_CYCLES) {
+            this.attackState = 'hoardWait';
+          } else {
+            this.attackState = 'idle';
+          }
+          this.attackTimer = 0;
+        }
+        break;
       default:
         // Unknown state — retire rather than strand. A frozen boss is a worse
         // failure than a skipped attack.
@@ -603,7 +632,7 @@ export class Hoardmaw extends Enemy {
     }
   }
 
-  /** Fan of chipped scales — its lost wealth turned weapon. */
+  /** Fan of chipped scales — its lost wealth turned weapon. Phase 1 only. */
   fireScaleFan() {
     if (!this.target) return;
     const base = Math.atan2(this.target.position.y - this.mouthY(),
@@ -628,6 +657,73 @@ export class Hoardmaw extends Enemy {
     this.attackState = 'idle';
   }
 
+  /** Spill treasure outward from the mouth with decaying velocity (Hoard Reveal). */
+  _spillTreasure() {
+    this.spilledTreasure = [];
+    for (let i = 0; i < HOARD_TREASURE_COUNT; i++) {
+      const angle = (-Math.PI / 2) + (Math.random() - 0.5) * Math.PI * 0.8;
+      const speed = HOARD_SCATTER_SPEED * (0.6 + Math.random() * 0.6);
+      this.spilledTreasure.push({
+        x: this.mouthX(), y: this.mouthY(),
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 40,
+        hp: HOARD_TREASURE_HP,
+        alive: true,
+        char: Math.random() < 0.5 ? '$' : 'o',
+        color: '#ffd700',
+      });
+    }
+  }
+
+  /**
+   * Decaying-velocity scatter, then a pull-back retrieval — the same shape
+   * WorldEffectsSystem's particle families author (decayRate constants),
+   * reused here rather than inventing new physics.
+   */
+  _tickSpilledTreasure(dt) {
+    if (!this.spilledTreasure.length) return;
+    const decay = Math.pow(HOARD_DECAY_RATE, dt * 60);
+    const retrieving = this.attackState === 'hoardRetrieve';
+    const mx = this.mouthX();
+    const my = this.mouthY();
+
+    for (let i = this.spilledTreasure.length - 1; i >= 0; i--) {
+      const t = this.spilledTreasure[i];
+      if (!t.alive) { this.spilledTreasure.splice(i, 1); continue; }
+
+      if (retrieving) {
+        // Retrieval: pulled back in — Inhale's sole remaining job, same pull
+        // math LureMechanic uses, retargeted from the player to treasure.
+        const dx = mx - t.x, dy = my - t.y;
+        const d = Math.hypot(dx, dy) || 1;
+        if (d < GRID.CELL_SIZE * 0.6) { this.spilledTreasure.splice(i, 1); continue; }
+        t.x += (dx / d) * HOARD_RETRIEVE_PULL * dt;
+        t.y += (dy / d) * HOARD_RETRIEVE_PULL * dt;
+      } else {
+        t.vx *= decay;
+        t.vy *= decay;
+        t.x += t.vx * dt;
+        t.y += t.vy * dt;
+      }
+    }
+  }
+
+  /**
+   * A spilled piece was struck. Un-spilled (interior dressing) treasure is
+   * never a target — this is only ever called against `spilledTreasure`
+   * entries, which is the whole point: only spilled treasure is vulnerable.
+   */
+  strikeTreasure(px, py) {
+    if (this.attackState !== 'hoardSpill') return false;
+    for (const t of this.spilledTreasure) {
+      if (!t.alive) continue;
+      if (Math.hypot(t.x - px, t.y - py) > GRID.CELL_SIZE * 1.2) continue;
+      t.hp--;
+      if (t.hp <= 0) t.alive = false;
+      return true;
+    }
+    return false;
+  }
+
   /**
    * The tongue reeled the player all the way home. Raises the spit signal —
    * the system owns the damage and the wall throw, because only it knows the
@@ -639,16 +735,106 @@ export class Hoardmaw extends Enemy {
     this.swallowedAt = { px: this.mouthX(), py: this.mouthY() };
   }
 
+  // ── Vulnerable / Endurance cycle ────────────────────────────────────────────
+
+  /**
+   * Shield reforms: impervious again, and coins start bouncing off the mouth.
+   * Hesitation is punished twice over — first the shove that buys the armor
+   * room to close, then the endurance gauntlet itself.
+   */
+  _enterEndurance() {
+    this.enduranceState = 'endurance';
+    this.enduranceCoinTimer = 0.3; // a quick first coin
+    this.enduranceKnockbackAt = { x: this.mouthX(), y: this.mouthY() };
+  }
+
+  /** A coin was redirected home, or the window is opened fresh (phase entry). */
+  _enterVulnerable() {
+    this.enduranceState = 'vulnerable';
+    this.vulnerableTimer = VULNERABLE_WINDOW_DURATION;
+    this.enduranceCoins.length = 0;
+  }
+
+  /** Melee-redirected a coin all the way into the boss — ends Endurance. */
+  breakEndurance() {
+    if (this.enduranceState !== 'endurance') return;
+    this._enterVulnerable();
+  }
+
+  /**
+   * Bouncing coin projectiles, fixed velocity + specific vector (toward the
+   * target at spawn, not a randomized spread). Bounces off a fixed arena
+   * rectangle around the body — the vault's north half. DungeonBossSystem
+   * checks these against live melee attacks each tick to detect the
+   * redirect; this entity owns only their flight physics.
+   */
+  _tickEndurance(dt) {
+    if (this.enduranceState !== 'endurance') return;
+
+    this.enduranceCoinTimer -= dt;
+    if (this.enduranceCoinTimer <= 0 && this.target) {
+      this.enduranceCoinTimer = ENDURANCE_COIN_INTERVAL;
+      const angle = Math.atan2(this.target.position.y - this.mouthY(),
+                               this.target.position.x - this.mouthX());
+      this.enduranceCoins.push({
+        x: this.mouthX(), y: this.mouthY(),
+        vx: Math.cos(angle) * ENDURANCE_COIN_SPEED,
+        vy: Math.sin(angle) * ENDURANCE_COIN_SPEED,
+        redirected: false,
+        life: ENDURANCE_COIN_LIFETIME,
+      });
+    }
+
+    const bounds = this._enduranceBounds();
+    for (let i = this.enduranceCoins.length - 1; i >= 0; i--) {
+      const c = this.enduranceCoins[i];
+      c.life -= dt;
+      if (c.life <= 0) { this.enduranceCoins.splice(i, 1); continue; }
+
+      if (c.redirected) {
+        // Homing back into the boss — arrival is resolved by the system
+        // (which already ended Endurance the instant it redirected the hit).
+        const dx = this.mouthX() - c.x, dy = this.mouthY() - c.y;
+        const d = Math.hypot(dx, dy) || 1;
+        c.x += (dx / d) * ENDURANCE_COIN_SPEED * dt;
+        c.y += (dy / d) * ENDURANCE_COIN_SPEED * dt;
+        if (d < GRID.CELL_SIZE * 0.6) this.enduranceCoins.splice(i, 1);
+        continue;
+      }
+
+      c.x += c.vx * dt;
+      c.y += c.vy * dt;
+      if (c.x < bounds.left || c.x > bounds.right) c.vx = -c.vx;
+      if (c.y < bounds.top || c.y > bounds.bottom) c.vy = -c.vy;
+      c.x = Math.min(bounds.right, Math.max(bounds.left, c.x));
+      c.y = Math.min(bounds.bottom, Math.max(bounds.top, c.y));
+    }
+  }
+
+  /** Fixed bounce rectangle around the body — the vault's north-half arena. */
+  _enduranceBounds() {
+    const cell = GRID.CELL_SIZE;
+    return {
+      left: this.mouthX() - cell * 6.5,
+      right: this.mouthX() + cell * 6.5,
+      top: this.rootY() - cell * 5,
+      bottom: this.mouthY() + cell * 7,
+    };
+  }
+
   // ── Phase transitions (driven by DungeonBossSystem) ────────────────────────
 
-  /** All scales stripped — bare hide, the glint cycle begins. */
+  /** All scales stripped → Vulnerable/Endurance. Low HP → Temptation. */
   transitionToPhase(phase) {
     this.bossPhase = phase;
     this.attackState = 'idle';
     this.tongue = null;
-    if (phase === 3) {
-      this.bribeOfferTimer = BRIBE_OFFER_WINDOW;
-      this.chokeTimer = 0;
+    this.spilledTreasure.length = 0;
+    if (phase === 2) {
+      this._enterVulnerable();
+    } else if (phase === 3) {
+      this.enduranceState = null;
+      this.enduranceCoins.length = 0;
     }
   }
 
@@ -664,24 +850,6 @@ export class Hoardmaw extends Enemy {
     if (this.scales.has(key)) return false;
     this.scales.add(key);
     return true;
-  }
-
-  /** Refusal recorded; three unlocks the strike-the-pile opportunity. */
-  recordBribeRefusal() {
-    this.bribeRefusals++;
-    this.bribesAccepted = false;
-    if (this.bribeRefusals >= BRIBE_OFFER_COUNT) {
-      // Next player action: strike the offered pile into the mouth → choke.
-      this.bribeOfferTimer = 0;
-      return true;
-    }
-    this.bribeOfferTimer = BRIBE_OFFER_WINDOW;
-    return false;
-  }
-
-  /** Player struck the pile home — choke opens the kill window. */
-  beginChoke() {
-    this.chokeTimer = CHOKE_WINDOW;
   }
 
   markDefeated() {
@@ -701,21 +869,52 @@ export class Hoardmaw extends Enemy {
     if (this.defeated) return false;
     if (this.invulnerabilityTimer > 0) return false;
 
-    // An unlocated hit would collapse onto the body center and make both the
-    // scale field and the glint decorative. Refuse it rather than grant a
-    // free chip anywhere — the whole encounter is positional.
+    // An unlocated hit would collapse onto the body center and make the
+    // scale field decorative. Refuse it rather than grant a free chip
+    // anywhere — the whole encounter is positional.
     const px = opts.px;
     const py = opts.py;
     if (!Number.isFinite(px) || !Number.isFinite(py)) return false;
 
+    // Brave-attack interrupt: a hit on the open mouth during the tongue's
+    // pre-sweep telegraph triggers Hoard Reveal early — a deliberate
+    // risk/reward tie between the two attacks. Checked ahead of the phase
+    // branches below since it can fire in phase 1 regardless of scale state.
+    if (this.attackState === 'tongueTelegraph'
+        && Math.hypot(this.mouthX() - px, this.mouthY() - py) < MOUTH_STRIKE_REACH) {
+      this.attackState = 'hoardLean';
+      this.attackTimer = 0;
+      this.tongue = null;
+      return true;
+    }
+
+    // The hoard's own wait beat: exposed and sitting open, it spills in
+    // response to being struck rather than on a timer — "hitting the hoard"
+    // is what spills it (the fallback timeout in _tickAttack only covers a
+    // player who has disengaged entirely).
+    if (this.attackState === 'hoardWait'
+        && Math.hypot(this.mouthX() - px, this.mouthY() - py) < MOUTH_STRIKE_REACH) {
+      this._spillTreasure();
+      this.attackState = 'hoardSpill';
+      this.attackTimer = 0;
+      return true;
+    }
+
     // Phase 1: scales eat everything. Ranged ricochets outright; whips never
     // chip (ArmorMechanic's hard-counter contract carried over). Both raise a
-    // ricochet so the player is told WHY nothing happened — a silent no-op
-    // reads as a broken hitbox.
+    // ricochet (+ a floating "BLOCKED" text) so the player is told WHY
+    // nothing happened — a silent no-op reads as a broken hitbox.
     if (this.bossPhase === 1) {
       if (opts.kind === 'projectile' || opts.weaponSubtype === 'whip') {
         this.ricochetAt = { px, py };
+        this.blockedAt = { px, py };
         return false;
+      }
+      // Hoard Reveal's spilled treasure takes priority over the scale field
+      // while it's out — the whole point of the state is that IT is what's
+      // hittable, not the armor underneath it.
+      if (this.attackState === 'hoardSpill' && this.strikeTreasure(px, py)) {
+        return true;
       }
       const hit = this.nearestScale(px, py);
       if (!hit) return false;
@@ -729,22 +928,20 @@ export class Hoardmaw extends Enemy {
       return true;
     }
 
-    // Phase 2: bare hide — only the glint bleeds.
+    // Phase 2: Vulnerable Window = whole body damageable. Endurance = shield
+    // reformed, impervious to direct damage (the coin redirect is the only
+    // way through, handled by DungeonBossSystem via breakEndurance()).
     if (this.bossPhase === 2) {
-      const g = this.glintPx();
-      if (Math.hypot(g.x - px, g.y - py) > GLINT_REACH()) {
-        this.ricochetAt = { px, py };
-        return false;
+      if (this.enduranceState === 'vulnerable') {
+        return this._wound(amount);
       }
-      return this._wound(amount);
+      this.ricochetAt = { px, py };
+      this.blockedAt = { px, py };
+      return false;
     }
 
-    // Phase 3: invulnerable except the choke window (glint exposed, lid hung).
+    // Phase 3: fully passive and damageable everywhere.
     if (this.bossPhase === 3) {
-      if (this.chokeTimer <= 0) {
-        this.ricochetAt = { px, py };
-        return false;
-      }
       return this._wound(amount);
     }
 
@@ -791,10 +988,6 @@ function GLYPH_PITCH() { return GRID.CELL_SIZE * GLYPH_PITCH_SCALE; }
 
 // How near a scale's center a strike must land to chip it.
 function SCALE_REACH() { return GLYPH_PITCH() * 1.6; }
-
-// Strike tolerance on the phase-2 glint. Generous enough to be a skill check
-// rather than a pixel hunt — the read is the timing, not the aim.
-function GLINT_REACH() { return GRID.CELL_SIZE * 1.2; }
 
 // Tongue reach helper kept outside the class so the constant table stays at top.
 function TONGUE_REACH() { return GRID.CELL_SIZE * 5.5; }

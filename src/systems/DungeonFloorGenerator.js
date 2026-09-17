@@ -613,8 +613,13 @@ export class DungeonFloorGenerator {
 
     // Entered via the Pyramid's North descent — up-stairs at the universal
     // north point (the "matching doors are always in the same room
-    // position" rule's default).
-    const stairsUpObj = this._makeStairsUp(false);
+    // position" rule's default). Locked for the whole encounter (mirrors the
+    // Trap Room's "all cleared" gate): the boss body sits right on top of
+    // this point, and an unlocked ascend trigger here fired an unintended
+    // mid-fight floor transition whenever a pull/knockback landed the player
+    // on it (bug: player/boss ending up back in the Pyramid room). Unlocked
+    // in DungeonBossSystem._defeat().
+    const stairsUpObj = this._makeStairsUp(true);
     backgroundObjects.push(stairsUpObj);
 
     // The sealed inner-vault door, set into the south wall behind the hoard.
@@ -638,7 +643,7 @@ export class DungeonFloorGenerator {
       items: [], ingredients: [], npcs: [], doors: [], tombGhosts: [],
       viewport: this._makeViewport(cols, rows),
       exitRow: null, exitCol: null,
-      stairsUpRow: STAIRS_UP_ROW, stairsUpCol: STAIRS_COL, stairsUpObj, stairsUpLocked: false,
+      stairsUpRow: STAIRS_UP_ROW, stairsUpCol: STAIRS_COL, stairsUpObj, stairsUpLocked: true,
       ascendTo: { kind: 'numbered', floorIndex: 3 },
       descents: [], // terminal — the delve ends here
       gildedTriggered: false,

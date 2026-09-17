@@ -1,7 +1,6 @@
 import { GRID } from '../../game/GameConfig.js';
 import {
   BODY_COLS, BODY_ROWS, LID_ROWS,
-  GLINT_POSITIONS, GLINT_PULSE_PERIOD,
   DENT_TIME, DENT_DEPTH,
 } from '../../entities/Hoardmaw.js';
 
@@ -24,10 +23,10 @@ import {
  *     merely uncovered — the mouth, which is the whole identity of the boss.
  *
  * This file is a PURE READER. Every pose, angle and timer it draws was
- * decided by Hoardmaw._tickDeform; nothing here advances state. It also asks
- * the entity for every position through glyphAt()/offsetPx() rather than
- * recomputing from position + CELL_SIZE, so the picture and the hitboxes
- * cannot drift apart.
+ * decided by Hoardmaw._tickDeform/_tickAttack; nothing here advances state.
+ * It also asks the entity for every position through glyphAt()/offsetPx()
+ * rather than recomputing from position + CELL_SIZE, so the picture and the
+ * hitboxes cannot drift apart.
  *
  * Called under the interior overlay's translate (the vault is plane-1 content;
  * the surface pass never sees this boss) — see BossRenderer.renderBossComposite.
@@ -39,10 +38,17 @@ const C_LID_RIM    = '#ffd76a'; // THE line — brightest thing on the body
 const C_BODY_HIDE  = '#5c4527';
 const C_BODY_RIM   = '#8a6a2e'; // deliberately duller than the lid rim
 const C_TOOTH      = '#e8d49a';
-const C_SCALE      = '#ffd700';
+// Steel-silver, deliberately NOT gold: the armor has to read as "impervious
+// plating" at a glance, distinct from the loose gold treasure it's guarding
+// (C_HOARD_MOTE / C_SPILL below) — the old gold-on-gold scale color let the
+// two blur together.
+const C_SCALE      = '#c7d0d6';
 const C_DENT       = '#6b512c';
 const C_FLASH      = '#ffffff';
 const C_TONGUE     = '#e0a83c';
+const C_TELEGRAPH  = '#ff5028';
+const C_SPILL      = '#ffd700';
+const C_COIN_PROJ  = '#ffe066';
 
 // Interior darkness, drawn as three flat bands rather than a gradient: canvas
 // alpha here hard-rounds to 10% steps and gradients bypass the quantization
@@ -53,7 +59,7 @@ const C_SPECK       = '#b8a67e';
 
 // ─── Geometry ───────────────────────────────────────────────────────────────
 const LID_MAX_LIFT  = 2.6;
-const LID_REST_AJAR = 0.55; // pitch units the lip stays off the rim when "shut"   // pitch units the front lip rises at full gape
+const LID_REST_AJAR = 0.55; // pitch units the lip stays off the rim when "shut"
 const LID_MAX_ANGLE = 0.42;  // radians each lid glyph tilts at full gape
 const GLYPH_SCALE   = 0.62;  // glyphs drawn smaller to match the tighter pitch
 const TOOTH_COUNT   = 7;     // teeth per rim — odd, so one sits dead center
@@ -65,6 +71,10 @@ export class HoardmawRenderer {
   }
 
   render(game) {
+    // Bug fix (plan item 0): without this guard the boss kept drawing on top
+    // of whatever room the player warped into if a pull/knockback ever fired
+    // the (now-locked) ascend trigger mid-fight.
+    if (!game.activeFloor?.isVault) return;
     const maw = game.dungeonBossSystem?.hoardmaw;
     if (!maw || maw.defeated) return;
 
@@ -81,10 +91,13 @@ export class HoardmawRenderer {
     this._drawCarcass(maw, pitch, flash);
     this._drawBodyRim(maw, pitch);
     this._drawLid(maw, pitch, flash);
-    this._drawGlint(game, maw, pitch);
+    this._drawSpilledTreasure(maw);
+    this._drawEnduranceCoins(maw);
     this._drawTongue(maw, pitch);
+    this._drawTongueTelegraph(maw);
     this._drawSlamTelegraph(maw);
-    this._drawInhaleMotes(game, maw);
+    this._drawRetrievalMotes(game, maw);
+    this._drawTruthCompass(game, maw, pitch);
     this._drawHealthBar(maw, pitch);
   }
 
@@ -215,19 +228,32 @@ export class HoardmawRenderer {
       }
     }
 
-    for (const key of maw.scales) {
-      const [row, col] = key.split(',').map(Number);
-      const { x, y } = maw.glyphAt(row, col);
-      this.renderer.drawEntityScaled(x, y, '$', flash ? C_FLASH : C_SCALE, GLYPH_SCALE);
-    }
-
-    // A chipped cell sinks inward and shrinks before settling as bare hide.
-    // Armor that simply stops being drawn does not read as armor coming off.
-    for (const dent of maw.dents) {
-      const k = dent.t / DENT_TIME;
-      const { x, y } = maw.glyphAt(dent.row, dent.col);
-      this.renderer.drawEntityScaled(
-        x, y + (1 - k) * DENT_DEPTH * pitch, 'o', C_DENT, GLYPH_SCALE * (0.3 + 0.5 * k));
+    // Endurance re-forms the same impervious plating, visually — the shield
+    // reads identically whether it's phase 1's original scales or phase 2's
+    // reformed shell.
+    const scaleColor = flash ? C_FLASH : C_SCALE;
+    if (maw.bossPhase === 1) {
+      for (const key of maw.scales) {
+        const [row, col] = key.split(',').map(Number);
+        const { x, y } = maw.glyphAt(row, col);
+        this.renderer.drawEntityScaled(x, y, '$', scaleColor, GLYPH_SCALE);
+      }
+      // A chipped cell sinks inward and shrinks before settling as bare hide.
+      // Armor that simply stops being drawn does not read as armor coming off.
+      for (const dent of maw.dents) {
+        const k = dent.t / DENT_TIME;
+        const { x, y } = maw.glyphAt(dent.row, dent.col);
+        this.renderer.drawEntityScaled(
+          x, y + (1 - k) * DENT_DEPTH * pitch, 'o', C_DENT, GLYPH_SCALE * (0.3 + 0.5 * k));
+      }
+    } else if (maw.bossPhase === 2 && maw.enduranceState === 'endurance') {
+      // Full reformed field — same anchor the original scale set used.
+      for (let row = LID_ROWS; row < BODY_ROWS; row++) {
+        for (let col = 0; col < BODY_COLS; col++) {
+          this.renderer.drawEntityScaled(
+            maw.glyphAt(row, col).x, maw.glyphAt(row, col).y, '$', scaleColor, GLYPH_SCALE * 0.7);
+        }
+      }
     }
   }
 
@@ -291,43 +317,28 @@ export class HoardmawRenderer {
     }
   }
 
-  // ── Signals the player reads ──────────────────────────────────────────────
+  // ── Hoard Reveal ─────────────────────────────────────────────────────────
 
-  /**
-   * Phase-2 weak point. The true glint pulses on the maw's breath; decoys
-   * sparkle off that rhythm. Both are drawn — the phase is unreadable without
-   * the fakes, because "find the one keeping time" needs something to not be
-   * keeping time. Only the true one has a hitbox.
-   */
-  _drawGlint(game, maw, pitch) {
-    if (maw.bossPhase !== 2 && maw.chokeTimer <= 0) return;
-
-    const breath = 0.5 + 0.5 * Math.sin((maw.glintPulseTimer / GLINT_PULSE_PERIOD) * Math.PI * 2);
-    const t = performance.now() / 1000;
-
-    // Decoys: every position that is not the live one, sparkling on its own
-    // irrational period so it can never accidentally match the breath.
-    for (let i = 0; i < GLINT_POSITIONS.length; i++) {
-      if (i === maw.glintIndex % GLINT_POSITIONS.length) continue;
-      const p = GLINT_POSITIONS[i];
-      const { x, y } = maw.offsetPx(p.dx, p.dy);
-      const fake = 0.5 + 0.5 * Math.sin(t * (2.7 + i * 1.31) + i * 1.9);
-      this.renderer.drawTextWithAlpha(x, y, '◉', '#c9b070', 0.15 + 0.35 * fake);
-    }
-
-    const g = maw.glintPx();
-    // Reaching to grab brightens it for two breaths — the one moment the weak
-    // point tells you where it is, paid for by being grabbed.
-    const telling = maw.glintTellTimer > 0;
-    const alpha = maw.chokeTimer > 0 ? 1 : (telling ? 1 : 0.45 + 0.55 * breath);
-    this.renderer.drawTextWithAlpha(g.x, g.y, '◉', '#ffe9a8', alpha);
-
-    // Truth register: a carried Compass keeps the maw's own time for you.
-    if (game.dungeonBossSystem?.compassTruthActive) {
-      this.renderer.drawTextWithAlpha(
-        g.x, g.y - pitch * 1.6, '⌖', '#7fdfff', 0.45 + 0.55 * breath);
+  /** Spilled treasure — real, hittable, drawn wherever its decay physics put it. */
+  _drawSpilledTreasure(maw) {
+    if (!maw.spilledTreasure.length) return;
+    for (const t of maw.spilledTreasure) {
+      if (!t.alive) continue;
+      this.renderer.drawEntity(t.x, t.y, t.char, C_SPILL);
     }
   }
+
+  // ── Vulnerable / Endurance ───────────────────────────────────────────────
+
+  /** Bouncing coin projectiles — fixed vector, not the retired fan's spread. */
+  _drawEnduranceCoins(maw) {
+    if (!maw.enduranceCoins.length) return;
+    for (const c of maw.enduranceCoins) {
+      this.renderer.drawEntity(c.x, c.y, c.redirected ? '*' : 'o', C_COIN_PROJ);
+    }
+  }
+
+  // ── Tongue ───────────────────────────────────────────────────────────────
 
   _drawTongue(maw, pitch) {
     const t = maw.tongue;
@@ -340,6 +351,45 @@ export class HoardmawRenderer {
         t.position.y - t.dirY * i * cs * 0.5 + cs / 2,
         '~', '#b8892f');
     }
+    // Bite: fixed rectangle telegraph at the mouth, filled and blinking —
+    // house Telegraph rule (no growth, no outline).
+    if (t.state === 'biting') {
+      const r = t.biteRect();
+      const on = Math.floor(performance.now() / 100) % 2 === 0;
+      if (on) {
+        const ctx = this.renderer.fgCtx;
+        ctx.save();
+        ctx.fillStyle = 'rgba(255, 80, 40, 0.4)';
+        ctx.fillRect(r.x, r.y, r.width, r.height);
+        ctx.restore();
+      }
+    }
+  }
+
+  /**
+   * Fixed-area, filled, blinking lane across the aim path — the house
+   * Telegraph rule (no growth, no outline). Shown for the tell BEFORE the
+   * live tongue spawns, so the sweep's whole path is known ahead of time.
+   */
+  _drawTongueTelegraph(maw) {
+    if (maw.attackState !== 'tongueTelegraph' || !maw.target) return;
+    const on = Math.floor(performance.now() / 120) % 2 === 0;
+    if (!on) return;
+    const ox = maw.mouthX(), oy = maw.mouthY();
+    const dx = maw.target.position.x - ox, dy = maw.target.position.y - oy;
+    const dist = Math.hypot(dx, dy) || 1;
+    const dirX = dx / dist, dirY = dy / dist;
+    const len = Math.min(dist, GRID.CELL_SIZE * 5.5);
+    const cs = GRID.CELL_SIZE;
+    const ctx = this.renderer.fgCtx;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 80, 40, 0.55)';
+    ctx.lineWidth = cs * 1.6;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy);
+    ctx.lineTo(ox + dirX * len, oy + dirY * len);
+    ctx.stroke();
+    ctx.restore();
   }
 
   /** Expanding warning ring from the body edge — the flanks stay safe. */
@@ -356,20 +406,38 @@ export class HoardmawRenderer {
     ctx.restore();
   }
 
-  /** Motes streaming off the player toward the mouth make the pull legible. */
-  _drawInhaleMotes(game, maw) {
-    if (!maw.inhaleActive) return;
+  /**
+   * Motes streaming from spilled treasure toward the mouth — Inhale's sole
+   * remaining job is retrieval, not pulling the player, so the motes now
+   * originate at the treasure being reclaimed rather than at the player.
+   */
+  _drawRetrievalMotes(game, maw) {
+    if (maw.attackState !== 'hoardRetrieve' || !maw.spilledTreasure.length) return;
     const cs = GRID.CELL_SIZE;
     const now = performance.now() / 120;
-    for (let i = 0; i < 6; i++) {
-      const t = ((now + i * 0.7) % 3) / 3;
-      const px = game.player?.position.x ?? maw.mouthX();
-      const py = game.player?.position.y ?? maw.mouthY();
-      this.renderer.drawEntity(
-        px + (maw.mouthX() - px) * t + cs / 2,
-        py + (maw.mouthY() - py) * t + cs / 2,
-        '·', C_TONGUE);
+    for (const t of maw.spilledTreasure) {
+      if (!t.alive) continue;
+      for (let i = 0; i < 2; i++) {
+        const p = ((now + i * 0.7) % 3) / 3;
+        this.renderer.drawEntity(
+          t.x + (maw.mouthX() - t.x) * p + cs / 2,
+          t.y + (maw.mouthY() - t.y) * p + cs / 2,
+          '·', C_TONGUE);
+      }
     }
+  }
+
+  /**
+   * Truth register: a carried Compass brightens near the mouth while the
+   * Vulnerable Window is open. Preserves the feature glint hunting taught (a
+   * carried item reveals hidden timing) without depending on the removed
+   * migrating weak-point cell.
+   */
+  _drawTruthCompass(game, maw, pitch) {
+    if (!game.dungeonBossSystem?.compassTruthActive) return;
+    const breath = 0.5 + 0.5 * Math.sin((maw.vulnerableTimer) * Math.PI);
+    this.renderer.drawTextWithAlpha(
+      maw.mouthX(), maw.mouthY() - pitch * 1.6, '⌖', '#7fdfff', 0.45 + 0.55 * breath);
   }
 
   /** HP bar above the body, shown once damaged (Turtle precedent). */
