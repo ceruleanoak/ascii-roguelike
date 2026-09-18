@@ -1,4 +1,4 @@
-import { GAME_STATES } from '../game/GameConfig.js';
+import { GAME_STATES, ROOM_TYPES } from '../game/GameConfig.js';
 import { menuIntent } from './MenuInput.js';
 import { SlotReplacementOverlay } from '../rendering/ui/SlotReplacementOverlay.js';
 import { findRecipeByResult } from '../data/recipes.js';
@@ -42,13 +42,34 @@ export class SlotReplacementSystem {
   }
 
   /**
-   * DISMANTLE option index — only present when the pending item has a known
-   * recipe AND no enemies are active in the current room/floor. Dismantling
-   * mid-fight would let the player stall combat risk-free inside the paused
-   * modal, so the option simply doesn't appear while enemies are around.
+   * Whether STORE IN CHEST (and by extension DISMANTLE) may be offered at all.
+   * Puzzle rooms (ROOM_TYPES.PUZZLE) hide both — a picked-up item there must be
+   * slotted, not stashed or broken down, so the player can't dodge the puzzle
+   * by discarding what they just found. The one exception is the consumable
+   * mana-slot edge case: if every real consumable slot is claimed by the magic
+   * meter, there is no slot destination at all, and STORE has to stay the only
+   * way to resolve the prompt.
+   */
+  get storeAvailable() {
+    if (this.game.currentRoom?.type !== ROOM_TYPES.PUZZLE) return true;
+    if (this.slotType === 'consumable') {
+      const reserved = this._reservedManaSlots();
+      const equipped = this.game.inventorySystem.equippedConsumables;
+      const hasRealSlot = equipped.some((_, i) => !reserved.includes(i));
+      if (!hasRealSlot) return true;
+    }
+    return false;
+  }
+
+  /**
+   * DISMANTLE option index — only present when STORE is available, the pending
+   * item has a known recipe, AND no enemies are active in the current room/floor.
+   * Dismantling mid-fight would let the player stall combat risk-free inside the
+   * paused modal, so the option simply doesn't appear while enemies are around.
    */
   get dismantleIndex() {
     if (!this.pendingItem) return -1;
+    if (!this.storeAvailable) return -1;
     if (!findRecipeByResult(this.pendingItem.char)) return -1;
     if (this.game._countedEnemies(this.game._activeEnemies()).length > 0) return -1;
     return this.storeIndex + 1;
@@ -83,7 +104,8 @@ export class SlotReplacementSystem {
       const equipped = this.game.inventorySystem.equippedConsumables;
       start = equipped.findIndex((_, i) => !reserved.includes(i));
       // Every real slot is a mana slot (e.g. Yellow Mage's single starting
-      // slot) — land on STORE IN CHEST, the only real destination.
+      // slot) — land on STORE IN CHEST, the only real destination. (storeAvailable
+      // stays true for this exact case even in a puzzle room — see its getter.)
       if (start === -1) start = this.storeIndex;
     }
     if (!this.game.pauseSystem.openModal(this)) return;
@@ -108,7 +130,8 @@ export class SlotReplacementSystem {
     // Number key shortcuts: slots, then STORE IN CHEST, then DISMANTLE (if available)
     if (key >= '1' && key <= '5') {
       const optionIdx = parseInt(key) - 1;
-      const maxIdx = this.dismantleIndex !== -1 ? this.dismantleIndex : this.storeIndex;
+      const maxIdx = this.dismantleIndex !== -1 ? this.dismantleIndex
+        : this.storeAvailable ? this.storeIndex : this.storeIndex - 1;
       if (optionIdx > maxIdx) return;
       const reserved = this.slotType === 'consumable' ? this._reservedManaSlots() : [];
       if (optionIdx < this.storeIndex && reserved.includes(optionIdx)) return;
@@ -124,7 +147,7 @@ export class SlotReplacementSystem {
     }
 
     if (intent === 'shift') {
-      this._confirmStore(); // fast path: straight to chest, no navigation
+      if (this.storeAvailable) this._confirmStore(); // fast path: straight to chest, no navigation
     } else if (intent === 'left') {
       this._moveSlot(-1);
     } else if (intent === 'right') {
@@ -132,7 +155,7 @@ export class SlotReplacementSystem {
     } else if (intent === 'down') {
       if (this.selection === this.storeIndex && this.dismantleIndex !== -1) {
         this.selection = this.dismantleIndex;
-      } else if (this.selection !== this.storeIndex && this.selection !== this.dismantleIndex) {
+      } else if (this.storeAvailable && this.selection !== this.storeIndex && this.selection !== this.dismantleIndex) {
         this.lastSlotSelection = this.selection;
         this.selection = this.storeIndex;
       }

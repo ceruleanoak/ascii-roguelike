@@ -26,9 +26,10 @@ export class SlotReplacementOverlay {
     const ctx = renderer.uiCtx;
     const cs = GRID.CELL_SIZE;
 
+    const hasStore = state.storeAvailable;
     const hasDismantle = state.dismantleIndex !== -1;
     const boxW = cs * 12;
-    const boxH = cs * (hasDismantle ? 9 : 7.5);
+    const boxH = cs * (!hasStore ? 6 : hasDismantle ? 9 : 7.5);
     const boxX = Math.floor((GRID.WIDTH - boxW) / 2);
     const boxY = Math.floor((GRID.HEIGHT - boxH) / 2);
 
@@ -113,22 +114,24 @@ export class SlotReplacementOverlay {
       ctx.fillText((i + 1).toString(), x + cellSize / 2, rowY + cellSize + cs * 0.3);
     }
 
-    // STORE IN CHEST option
+    // STORE IN CHEST option — hidden in puzzle rooms (see storeAvailable)
     const storeIndex = state.slotType === 'armor' ? 1 : state.slotType === 'consumable' ? slots.length : 3;
-    const storeSelected = state.selection === storeIndex;
     const storeY = rowY + cellSize + cs * 1.4;
-    ctx.font = `${cs}px 'Unifont', monospace`;
-    if (storeSelected) {
-      ctx.fillStyle = '#ffff00';
-      ctx.fillText('▼', boxX + boxW / 2, storeY - cs);
-    }
-    ctx.fillStyle = storeSelected ? '#ffff00' : '#999999';
-    ctx.fillText(spectaclesTransformString('STORE IN CHEST', isSpectaclesActive(game)), boxX + boxW / 2, storeY);
+    if (hasStore) {
+      const storeSelected = state.selection === storeIndex;
+      ctx.font = `${cs}px 'Unifont', monospace`;
+      if (storeSelected) {
+        ctx.fillStyle = '#ffff00';
+        ctx.fillText('▼', boxX + boxW / 2, storeY - cs);
+      }
+      ctx.fillStyle = storeSelected ? '#ffff00' : '#999999';
+      ctx.fillText(spectaclesTransformString('STORE IN CHEST', isSpectaclesActive(game)), boxX + boxW / 2, storeY);
 
-    // Small number indicator for STORE option
-    ctx.font = `${cs * 0.5}px 'Unifont', monospace`;
-    ctx.fillStyle = '#888888';
-    ctx.fillText((storeIndex + 1).toString(), boxX + boxW / 2, storeY + cs * 0.6);
+      // Small number indicator for STORE option
+      ctx.font = `${cs * 0.5}px 'Unifont', monospace`;
+      ctx.fillStyle = '#888888';
+      ctx.fillText((storeIndex + 1).toString(), boxX + boxW / 2, storeY + cs * 0.6);
+    }
 
     // DISMANTLE option — only offered when the pending item has a known recipe
     if (hasDismantle) {
