@@ -250,7 +250,13 @@ export const ThiefMechanic = {
         continue;
       }
       const angle = Math.random() * Math.PI * 2;
-      game.lootSystem.spawnIngredientDrop(char, player.position.x, player.position.y, angle, null);
+      // Source is the player, not the thief — theft can be resolved while the
+      // player stands on the underground plane (e.g. the Aquifer tunnel), and
+      // the ejected ingredients must land on that same plane to be reachable.
+      // Passing null here was the bug: spawnIngredientDrop only sets
+      // ingredient.plane when a source is given, so drops silently defaulted
+      // to plane 0 regardless of where the theft actually happened.
+      game.lootSystem.spawnIngredientDrop(char, player.position.x, player.position.y, angle, player);
     }
     if (ejected > 0) {
       combatSystem.createDamageNumber(`-${ejected}`, player.position.x, player.position.y, '#88ff44');
