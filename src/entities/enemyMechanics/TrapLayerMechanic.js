@@ -16,6 +16,9 @@ export const TrapLayerMechanic = {
 
   init(enemy) {
     enemy.fleeTrapPlaced = false; // One trap per `useTrap` visit
+    enemy.trapWindupActive = false; // Drives the '...' head indicator and,
+    // via useTrap.js's moveStill, the visible run-to-stop while charging.
+    enemy.trapWindupTimer = 0;
     enemy.ownTrapPositions = []; // This enemy's own traps — {x, y, radius} — so
     // moveFlee can steer around them and useTrap.js can distance-gate its
     // post-placement retreat against the real blast radius.
@@ -29,11 +32,25 @@ export const TrapLayerMechanic = {
     // nothing.
     if (enemy.stateMachine.current !== 'useTrap') {
       enemy.fleeTrapPlaced = false;
+      enemy.trapWindupActive = false;
+      enemy.trapWindupTimer = 0;
       return null;
     }
 
     if (enemy.fleeTrapPlaced) return null;
 
+    // Charge for `windup` (double-seconds, same convention as State timers)
+    // before the trap actually drops. useTrap.js already targets zero
+    // velocity here (`moveStill`) the instant this State is entered — without
+    // a real windup to hold that target, the mechanic used to fire on the
+    // very same frame, so the enemy's own accelRate never got more than one
+    // frame to bleed off its flee speed and the drop read as instantaneous
+    // rather than a goblin skidding to a stop to plant something.
+    enemy.trapWindupActive = true;
+    enemy.trapWindupTimer += ctx.deltaTime;
+    if (enemy.trapWindupTimer < (cfg.windup ?? 0)) return null;
+
+    enemy.trapWindupActive = false;
     enemy.fleeTrapPlaced = true;
     const x = enemy.position.x + enemy.width / 2;
     const y = enemy.position.y + enemy.height / 2;

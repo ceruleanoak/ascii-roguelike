@@ -2019,7 +2019,7 @@ export const ENEMIES = {
     attackType: 'none',   // No direct attack — traps are the entire threat
     attackRange: 0,
     aggroRange: GRID.CELL_SIZE * 12,
-    decisionInterval: 0.25,
+    decisionInterval: 0.55,
     color: '#ccaa00',
     // No `approach`/`search` — both of Alert's transition doors fall through
     // to `flee` instead (EnemyStateMachine's FALLBACK), the wildcard-state
@@ -2061,6 +2061,9 @@ export const ENEMIES = {
     },
     trapLayerMechanic: {
       enabled: true,
+      windup: 0.7,          // 0.35 real seconds — lets moveStill's decelerate-to-zero
+                             // (accelRate 420) actually play out as a visible skid
+                             // instead of firing same-frame as a teleport-stop
       trapTypes: ['slow', 'slow', 'fire', 'freeze', 'stun']  // slow sets up; fire/freeze/stun punish stopping
     },
     idleBehavior: 'wander',
