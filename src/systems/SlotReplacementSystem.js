@@ -1,4 +1,4 @@
-import { GAME_STATES, ROOM_TYPES } from '../game/GameConfig.js';
+import { GAME_STATES } from '../game/GameConfig.js';
 import { menuIntent } from './MenuInput.js';
 import { SlotReplacementOverlay } from '../rendering/ui/SlotReplacementOverlay.js';
 import { findRecipeByResult } from '../data/recipes.js';
@@ -43,15 +43,16 @@ export class SlotReplacementSystem {
 
   /**
    * Whether STORE IN CHEST (and by extension DISMANTLE) may be offered at all.
-   * Puzzle rooms (ROOM_TYPES.PUZZLE) hide both — a picked-up item there must be
-   * slotted, not stashed or broken down, so the player can't dodge the puzzle
-   * by discarding what they just found. The one exception is the consumable
-   * mana-slot edge case: if every real consumable slot is claimed by the magic
-   * meter, there is no slot destination at all, and STORE has to stay the only
-   * way to resolve the prompt.
+   * The dungeon's Puzzle Room (floor.roomKind === 'puzzleRoom' — see
+   * DungeonPuzzleSystem._updatePuzzleRoom) hides both: a picked-up item there
+   * (e.g. the Torch a torch trigger needs) must be slotted, not stashed or
+   * broken down, so the player can't dodge the puzzle by discarding what they
+   * just found. The one exception is the consumable mana-slot edge case: if
+   * every real consumable slot is claimed by the magic meter, there is no slot
+   * destination at all, and STORE has to stay the only way to resolve the prompt.
    */
   get storeAvailable() {
-    if (this.game.currentRoom?.type !== ROOM_TYPES.PUZZLE) return true;
+    if (this.game.activeFloor?.roomKind !== 'puzzleRoom') return true;
     if (this.slotType === 'consumable') {
       const reserved = this._reservedManaSlots();
       const equipped = this.game.inventorySystem.equippedConsumables;
