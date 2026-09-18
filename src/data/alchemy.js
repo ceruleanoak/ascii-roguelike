@@ -61,7 +61,7 @@ export function ingredientToGreek(char) {
  * The Alchemist's Path — a potion's color/purity is fixed at the starter
  * tier and must persist through to the true potion it becomes, rather than
  * resetting to a fixed per-recipe color. Maps every starter char (water-path
- * 🜄/🜅/🜆 plus the liquid-path charge/burn/primal starters !/«/∿) to the
+ * 🜄/🜅/🜆 plus the liquid-path charge/burn/primal starters !/«/¿) to the
  * `potionModifier` it stamps, and each modifier to its canonical color.
  */
 export const POTION_STARTER_MODIFIERS = {
@@ -70,7 +70,7 @@ export const POTION_STARTER_MODIFIERS = {
   '🜆': 'unstable',    // Unstable
   '!': 'charge',       // Charged (Electrified Water path)
   '«': 'burn',         // Burning (Magma path)
-  '∿': 'primal'        // Primal (Mud path)
+  '¿': 'primal'        // Primal (Mud path)
 };
 
 export const POTION_MODIFIER_COLORS = {

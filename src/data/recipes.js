@@ -250,13 +250,13 @@ export const RECIPES = [
   { left: '«', right: 't', result: 'u', name: 'Battle Elixir' },
   { left: '«', right: 'h', result: 'z', name: 'Mending Brew' },
 
-  // Primal Potion true-potion recipes (from Primal Starter '∿');
+  // Primal Potion true-potion recipes (from Primal Starter '¿');
   // AlchemySystem stamps the primal potionModifier onto the result instance.
-  { left: '∿', right: 'm', result: 'H', name: 'Health Potion' },
-  { left: '∿', right: 'w', result: 'q', name: 'Haste Draught' },
-  { left: '∿', right: 'b', result: 'x', name: 'Stone Skin' },
-  { left: '∿', right: 't', result: 'u', name: 'Battle Elixir' },
-  { left: '∿', right: 'h', result: 'z', name: 'Mending Brew' },
+  { left: '¿', right: 'm', result: 'H', name: 'Health Potion' },
+  { left: '¿', right: 'w', result: 'q', name: 'Haste Draught' },
+  { left: '¿', right: 'b', result: 'x', name: 'Stone Skin' },
+  { left: '¿', right: 't', result: 'u', name: 'Battle Elixir' },
+  { left: '¿', right: 'h', result: 'z', name: 'Mending Brew' },
 
   // Jolt Jar: charged potion + coin
   { left: '!', right: 'c', result: 'J', name: 'Jolt Jar' },          // Charged Potion + Coin

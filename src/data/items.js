@@ -2349,8 +2349,8 @@ export const ITEMS = {
     potionModifier: 'burn'
   },
   // Primal Potion: half damage repeat attack 0.5s later
-  '∿': {
-    char: '∿',
+  '¿': {
+    char: '¿',
     name: 'Primal Potion',
     type: ITEM_TYPES.CONSUMABLE,
     effect: 'heal', amount: 1, oneShot: true,

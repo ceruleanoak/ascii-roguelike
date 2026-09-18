@@ -398,7 +398,7 @@ export class AlchemySystem {
         starterChar = starterPotionForIngredient(ingredientChar);
       } else {
         // Electrified/Magma/Mud: still liquid-determined, ingredient-agnostic
-        const liquidToStarter = { 'ε': '!', '◆': '«', '◐': '∿' };
+        const liquidToStarter = { 'ε': '!', '◆': '«', '◐': '¿' };
         starterChar = liquidToStarter[this.cauldronLiquidType];
       }
     } else {
