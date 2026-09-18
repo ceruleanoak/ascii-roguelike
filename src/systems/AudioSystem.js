@@ -41,6 +41,14 @@ const DUNGEON_MUSIC = {
 };
 const DUNGEON_MUSIC_FALLBACK = DUNGEON_MUSIC.green;
 
+// Every music track in the game (dual-layer stems and sequence tracks alike)
+// is authored at this same tempo, 4/4. muteLayer2Immediately() uses it to
+// quantize the combat→calm cutoff to a bar boundary instead of chopping the
+// bassline off at an arbitrary instant.
+const MUSIC_BPM = 94;
+const BEATS_PER_BAR = 4;
+const BAR_DURATION = (60 / MUSIC_BPM) * BEATS_PER_BAR;
+
 const SEQUENCE_MUSIC = {
   red: {
     tracks: ['assets/audio/red-a.mp3', 'assets/audio/red-b.mp3', 'assets/audio/red-c.mp3'],
@@ -862,9 +870,13 @@ export class AudioSystem {
   }
 
   /**
-   * Mute layer 2 immediately with a short fade, bypassing loop-end scheduling.
-   * Use this for sudden state changes (e.g., last enemy killed) where waiting
-   * for the loop end would feel wrong. Does not affect the enable path.
+   * Mute layer 2 for a sudden state change (e.g., last enemy killed), bypassing
+   * the full loop-end wait of setLayer2Enabled(false). A truly instant cutoff
+   * still chops the bassline off mid-phrase and throws off the beat, so this
+   * quantizes to the next bar boundary instead — every track shares the same
+   * 94 BPM 4/4 tempo (see BAR_DURATION), so a bar is at most ~2.5s away, far
+   * quicker than waiting for the whole loop while still landing on a gap.
+   * Does not affect the enable path.
    */
   muteLayer2Immediately() {
     if (this.mode === 'zoneSequence') {
@@ -875,11 +887,17 @@ export class AudioSystem {
 
     this.layer2Muted = true;
     const currentTime = this.audioContext.currentTime;
-    const fadeTime = 0.15;
+    const fadeTime = 0.05;
+
+    const elapsedTime = currentTime - this.playbackStartTime;
+    const positionInBar = elapsedTime % BAR_DURATION;
+    const timeUntilBarEnd = (BAR_DURATION - positionInBar) % BAR_DURATION;
+    const cutoffTime = currentTime + timeUntilBarEnd;
 
     this.layer2Gain.gain.cancelScheduledValues(currentTime);
     this.layer2Gain.gain.setValueAtTime(this.layer2Gain.gain.value, currentTime);
-    this.layer2Gain.gain.linearRampToValueAtTime(0, currentTime + fadeTime);
+    this.layer2Gain.gain.setValueAtTime(this.layer2Gain.gain.value, Math.max(currentTime, cutoffTime - fadeTime));
+    this.layer2Gain.gain.linearRampToValueAtTime(0, cutoffTime);
   }
 
   /**
