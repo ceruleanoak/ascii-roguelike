@@ -9,7 +9,7 @@
  */
 
 import { GRID, COLORS } from '../../game/GameConfig.js';
-import { objectOnPlane, planeOf } from '../../systems/PlaneSystem.js';
+import { objectOnPlane, PLANE_SURFACE } from '../../systems/PlaneSystem.js';
 
 export class GameOverRenderer {
   constructor(renderer, renderController) {
@@ -41,11 +41,14 @@ export class GameOverRenderer {
       }
 
       // Draw static background objects (water and grass render on foreground).
-      // Use the player's plane at death so plane-1-only objects (glittering rocks,
-      // red vein markers, tunnel walls) don't bleed onto the game over screen.
-      const deathPlane = planeOf(game.player);
+      // Always render plane 0 (surface) here, regardless of which plane the
+      // player died on: the game-over screen is the top-layer view, and
+      // plane-1-only objects (glittering rocks, red vein markers, tunnel
+      // walls) must not bleed onto it just because death happened underground
+      // (bug #274 — dying on the tunnel/Aquifer plane showed those instead of
+      // the surface room).
       for (const obj of game.backgroundObjects) {
-        if (!objectOnPlane(obj, deathPlane)) continue;
+        if (!objectOnPlane(obj, PLANE_SURFACE)) continue;
         const isGrass = obj.char === '|' || obj.char === '\\' || obj.char === '/' || obj.char === ',';
         if (!obj.currentAnimation && obj.char !== '~' && !isGrass) {
           const x = obj.position.x + GRID.CELL_SIZE / 2;
