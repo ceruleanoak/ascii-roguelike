@@ -19,6 +19,7 @@ import { getItemData } from '../../data/items.js';
 import { PixelatedDissolve, TextSwapDissolve } from '../effects/TextEffects.js';
 import { drawUndead } from '../ui/UndeadRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
+import { whirlwindSpinAngle } from '../effects/WeaponPreviewDraw.js';
 
 const IDLE_ECHO_DURATION = 0.5;          // seconds — must match WorldEffectsSystem's IDLE_ECHO_DURATION
 const IDLE_ECHO_MAX_RADIUS = GRID.CELL_SIZE * 1.5;
@@ -185,30 +186,31 @@ export class RestRenderer {
       );
     }
 
-    // Draw projectiles (for weapon preview)
-    for (const proj of game.combatSystem.getProjectiles()) {
-      const cx = proj.position.x + GRID.CELL_SIZE / 2;
-      const cy = proj.position.y + GRID.CELL_SIZE / 2;
-      if (proj.drawAngle != null) {
-        this.renderer.drawEntityRotated(cx, cy, proj.char, proj.color, proj.drawAngle);
-      } else {
-        this.renderer.drawEntity(cx, cy, proj.char, proj.color);
-      }
-    }
+    // Draw projectiles and melee attacks (weapon preview) — shared with
+    // EXPLORE's surface pass via ExploreRenderer.drawProjectiles/
+    // drawMeleeAttacks (render-helper pattern), so a swing or arrow reads
+    // identically in REST (strike-flash overlay, drawAboveOwner anchor,
+    // dithering included) instead of a second hand-maintained copy.
+    this.renderController.exploreRenderer.drawProjectiles(game, false);
+    this.renderController.exploreRenderer.drawMeleeAttacks(game, false);
 
-    // Draw melee attacks (for weapon preview)
-    for (const attack of game.combatSystem.getMeleeAttacks()) {
-      const cx = attack.position.x + GRID.CELL_SIZE / 2;
-      const cy = attack.position.y + GRID.CELL_SIZE / 2;
-      const scale = attack.drawScale || 1.0;
-      if (attack.drawAngle != null) {
-        this.renderer.drawEntityRotated(cx, cy, attack.char, attack.color, attack.drawAngle, scale);
-      } else if (scale !== 1.0) {
-        this.renderer.drawEntityScaled(cx, cy, attack.char, attack.color, scale);
-      } else {
-        this.renderer.drawEntity(cx, cy, attack.char, attack.color);
-      }
-    }
+    // Arrows that missed and stuck in the ground — same shared pass as EXPLORE.
+    this.renderController.exploreRenderer.drawStuckArrows(game, false);
+
+    // Thrown consumables (arc + spin + AoE ring telegraph) — weapon preview.
+    this.renderController.exploreRenderer.drawConsumableWindups(game);
+
+    // Held-weapon poses that don't depend on an enemy being present: gem wand
+    // charge shake, hammer overhead windup, staff-block stance.
+    this.renderController.exploreRenderer.drawGemWandCharge(game);
+    this.renderController.exploreRenderer.drawHammerWindupPose(game);
+    this.renderController.exploreRenderer.drawStaffBlockStance(game);
+
+    // Trap/thrown-weapon charge preview: reticule + ghost while charging, and
+    // the blinking charge count once charged (SHIFT throw from REST mode).
+    this.renderController.exploreRenderer.drawTrapReticule(game);
+    this.renderController.exploreRenderer.drawThrowPreview(game);
+    this.renderController.exploreRenderer.drawTrapChargeCount(game);
 
     // Draw particles (dodge trails, explosions, etc.)
     for (const particle of game.particles) {
@@ -323,16 +325,30 @@ export class RestRenderer {
       }));
     }
 
-    // Draw player (with i-frame alpha fade and status color)
+    // Draw player (with i-frame alpha fade and status color). Whirlwind Cape's
+    // dodge roll spins the glyph instead — shared with ExploreRenderer via
+    // whirlwindSpinAngle() (render-helper pattern) so the cape reads the same
+    // whether it's dodged in EXPLORE or previewed in REST.
     const playerAlpha = game.player.getVisibilityAlpha();
     const playerColor = game.player.getDisplayColor();
-    this.renderer.drawTextWithAlpha(
-      game.player.position.x + GRID.CELL_SIZE / 2,
-      game.player.position.y + GRID.CELL_SIZE / 2,
-      game.player.char,
-      playerColor,
-      playerAlpha
-    );
+    const spinAngle = whirlwindSpinAngle(game.player);
+    if (spinAngle !== null) {
+      this.renderer.drawEntityRotated(
+        game.player.position.x + GRID.CELL_SIZE / 2,
+        game.player.position.y + GRID.CELL_SIZE / 2,
+        game.player.char,
+        playerColor,
+        spinAngle
+      );
+    } else {
+      this.renderer.drawTextWithAlpha(
+        game.player.position.x + GRID.CELL_SIZE / 2,
+        game.player.position.y + GRID.CELL_SIZE / 2,
+        game.player.char,
+        playerColor,
+        playerAlpha
+      );
+    }
 
     // Follower flock (persists across rooms after feeding events).
     if (game.followerCrows && game.followerCrows.length > 0) {

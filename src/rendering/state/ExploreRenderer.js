@@ -34,6 +34,10 @@ import { drawTamedRats } from '../ui/CompanionRenderers.js';
 import { BRIDGE_MATERIALS } from '../../systems/RidgeSystem.js';
 import { PixelatedDissolve, SplitReveal } from '../effects/TextEffects.js';
 import { drawPlayerMeleeAttacks, drawEnemyMelee } from '../effects/MeleeAttackDraw.js';
+import {
+  drawConsumableWindups, drawGemWandCharge, drawHammerWindupPose,
+  drawTrapChargeCount, drawStaffBlockStance, whirlwindSpinAngle
+} from '../effects/WeaponPreviewDraw.js';
 import { BossRenderer } from './BossRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
 import { isInteriorActive } from '../../systems/PlaneSystem.js';
@@ -42,16 +46,9 @@ import { drawKnownSpellHints, drawWellCoinHint, drawDoorPrompts } from '../ui/Co
 import { drawManaGems } from '../effects/ManaGemRenderer.js';
 import { drawSparkle, GRASS_SPARKLE_SPEED, GLITTER_SPARKLE_SPEED } from '../effects/SparkleEffects.js';
 import { stepConcealmentAlpha } from '../../systems/WorldEffectsSystem.js';
-import { ConsumableTriggerSystem } from '../../systems/ConsumableTriggerSystem.js';
 import { drawFracturedRock } from '../sprites/fracturedRockSprite.js';
 import { renderMawShadow, chargedColor, renderChargedObjects } from '../AscentRenderHelpers.js';
 import { ReflectShieldMechanic } from '../../entities/enemyMechanics/ReflectShieldMechanic.js';
-
-// Peak height (px) of a thrown consumable's toss arc, and how many full
-// spins it completes over the flight — shared by every consumable windup so
-// heal potions and bombs read as the same "thrown object" motion.
-const THROW_ARC_HEIGHT = 46;
-const THROW_SPINS = 2;
 
 function drawDizzyOrbitals(ctx, cx, cy, timer) {
   const r = 6;
@@ -659,56 +656,9 @@ export class ExploreRenderer {
 
     // Draw consumable windups — every consumable throw arcs up and spins
     // before landing, where its effect resolves (ConsumableTriggerSystem).
-    for (const windup of !playerInInterior ? game.inventorySystem.consumableWindups : []) {
-      const progress = 1 - (windup.timer / windup.maxTimer);
-
-      // Jolt Jar bakes its own arc lift into windup.y (see InventorySystem
-      // updateConsumableWindups) since it's also interpolating toward a
-      // fixed target — don't double-apply the lift for it.
-      const arcLift = windup.effectType === 'jolt'
-        ? 0
-        : Math.sin(Math.min(1, Math.max(0, progress)) * Math.PI) * THROW_ARC_HEIGHT;
-      const spinAngle = progress * Math.PI * 2 * THROW_SPINS;
-
-      this.renderer.drawEntityRotated(
-        windup.x,
-        windup.y - arcLift,
-        windup.consumable.char,
-        windup.consumable.color,
-        spinAngle
-      );
-
-      // Self-targeted potions (heal, buffs, shields, ...) have no AoE landing
-      // zone to telegraph — skip the ring entirely for those.
-      if (ConsumableTriggerSystem.isSelfOnlyEffect(windup.effectType)) continue;
-
-      const aoeRadius = game.consumableTriggerSystem.getWindupAoeRadius(windup);
-
-      // Draw pulsing ring to show AoE damage radius.
-      // Jolt Jar is a thrown projectile — show the ring at the locked impact
-      // target, not around the moving jar.
-      const pulse = Math.sin(progress * Math.PI * 6) * 0.15; // Subtle pulse
-      const displayRadius = aoeRadius * (1 + pulse);
-      const ringX = (windup.effectType === 'jolt' && windup.targetX != null) ? windup.targetX : windup.x;
-      const ringY = (windup.effectType === 'jolt' && windup.targetY != null) ? windup.targetY : windup.y;
-
-      this.renderer.fgCtx.save();
-      this.renderer.fgCtx.strokeStyle = windup.consumable.color;
-      this.renderer.fgCtx.globalAlpha = 0.4 + Math.sin(progress * Math.PI * 8) * 0.2;
-      this.renderer.fgCtx.lineWidth = 2;
-      this.renderer.fgCtx.beginPath();
-      this.renderer.fgCtx.arc(ringX, ringY, displayRadius, 0, Math.PI * 2);
-      this.renderer.fgCtx.stroke();
-
-      // Draw inner ring at 50% radius for better depth perception
-      this.renderer.fgCtx.globalAlpha = 0.2;
-      this.renderer.fgCtx.lineWidth = 1;
-      this.renderer.fgCtx.beginPath();
-      this.renderer.fgCtx.arc(ringX, ringY, displayRadius * 0.5, 0, Math.PI * 2);
-      this.renderer.fgCtx.stroke();
-
-      this.renderer.fgCtx.restore();
-    }
+    // Shared with RestRenderer via drawConsumableWindups(game) (render-helper
+    // pattern) so a thrown potion previews identically in both states.
+    if (!playerInInterior) this.drawConsumableWindups(game);
 
     // Draw non-sapping enemies first (so they render behind player)
     // Skip when interior (overlay calls drawNonSappingEnemies after translate with activeFloor enemies)
@@ -850,15 +800,15 @@ export class ExploreRenderer {
         playerColor,
         playerAlpha
       );
-    } else if (game.player.dodgeRoll?.type === 'whirlwind' && game.player.dodgeRoll.active) {
-      // Whirlwind Cape: render player spinning rapidly (no alpha — iframes are short)
-      const spinAngle = game.player.statusBlinkTimer * Math.PI * 20; // ~10 rotations/sec
+    } else if (whirlwindSpinAngle(game.player) !== null) {
+      // Whirlwind Cape: render player spinning rapidly (no alpha — iframes are short).
+      // Shared with RestRenderer via whirlwindSpinAngle() (render-helper pattern).
       this.renderer.drawEntityRotated(
         game.player.position.x + GRID.CELL_SIZE / 2,
         game.player.position.y + GRID.CELL_SIZE / 2,
         playerChar,
         playerColor,
-        spinAngle
+        whirlwindSpinAngle(game.player)
       );
     } else {
       this.renderer.drawTextWithAlpha(
@@ -892,17 +842,9 @@ export class ExploreRenderer {
     if (!playerInInterior) drawPlayerFacingIndicator(this.renderer, game);
 
     // Draw staff-block stance: staff held perpendicular to facing direction,
-    // ~1 cell forward from player center.
-    if (!playerInInterior && game.player.isStaffBlocking && game.player.heldItem) {
-      const facingAngle = Math.atan2(game.player.facing.y, game.player.facing.x);
-      const offset = GRID.CELL_SIZE * 0.9;
-      const cx = game.player.position.x + GRID.CELL_SIZE / 2 + Math.cos(facingAngle) * offset;
-      const cy = game.player.position.y + GRID.CELL_SIZE / 2 + Math.sin(facingAngle) * offset;
-      const staffChar = game.player.heldItem.data?.meleeChar || game.player.heldItem.char || '|';
-      const staffColor = game.player.heldItem.color || '#ffffff';
-      // Rotate the (vertical-glyph) staff so it lies perpendicular to facing.
-      this.renderer.drawEntityRotated(cx, cy, staffChar, staffColor, facingAngle);
-    }
+    // ~1 cell forward from player center. Shared with RestRenderer via
+    // drawStaffBlockStance(game) (render-helper pattern).
+    if (!playerInInterior) this.drawStaffBlockStance(game);
 
     // Draw known-spell indicators above player
     if (!playerInInterior && game.knownSpells?.size > 0) {
@@ -920,65 +862,22 @@ export class ExploreRenderer {
       drawDoorPrompts(this.renderer, game);
     }
 
-    // Draw gem wand held aloft (with shake) while charging
-    if (!playerInInterior) {
-      const held = game.player.heldItem;
-      if (held?.data?.gemWand && held.isCharging) {
-        const C = GRID.CELL_SIZE;
-        const ctx = this.renderer.fgCtx;
-        // Charge progress 0..1 — shake intensifies as the spell nears completion
-        const t = Math.min(1, held.chargeTime / (held.data.chargeTime || 1));
-        const shakeAmp = 0.5 + 2.5 * t;
-        const jitterX = (Math.random() - 0.5) * shakeAmp;
-        const jitterY = (Math.random() - 0.5) * shakeAmp;
-        ctx.save();
-        ctx.font = `${C}px 'Unifont', monospace`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = held.color || '#ffffff';
-        ctx.fillText(
-          held.char,
-          game.player.position.x + C / 2 + jitterX,
-          game.player.position.y - C * 0.6 + jitterY
-        );
-        ctx.restore();
-      }
-    }
+    // Draw gem wand held aloft (with shake) while charging. Shared with
+    // RestRenderer via drawGemWandCharge(game) (render-helper pattern).
+    if (!playerInInterior) this.drawGemWandCharge(game);
 
     // Draw hammer held raised overhead during its windup — the same anchor
     // MeleeAttackDraw uses for drawAboveOwner, so the glyph doesn't jump when
     // the windup completes and createMeleeHammerRing's attack object takes
     // over drawing it for the strike itself. Static (no shake): the raised
     // pose alone reads as "about to swing" without competing with the
-    // impact-frame burst at the strike.
-    if (!playerInInterior) {
-      const held = game.player.heldItem;
-      if (held?.data?.attackPattern === 'hammerRing' && held.windupActive) {
-        const C = GRID.CELL_SIZE;
-        this.renderer.drawEntity(
-          game.player.position.x + C / 2,
-          game.player.position.y - C / 2,
-          held.char,
-          held.color || COLORS.ITEM
-        );
-      }
-    }
+    // impact-frame burst at the strike. Shared with RestRenderer via
+    // drawHammerWindupPose(game) (render-helper pattern).
+    if (!playerInInterior) this.drawHammerWindupPose(game);
 
-    // Draw blinking trap charge count above player (hidden during charge-up)
-    if (!playerInInterior && !game.trapCharging) {
-      const held = game.player.heldItem;
-      if (held?.charges != null && held.charges > 0 && Math.floor(performance.now() / 200) % 2 === 0) {
-        const C = GRID.CELL_SIZE;
-        const ctx = this.renderer.fgCtx;
-        ctx.save();
-        ctx.font = `${C * 0.7}px 'Unifont', monospace`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = held.color || '#ffffff';
-        ctx.fillText(held.charges.toString(), game.player.position.x + C / 2, game.player.position.y - C * 0.4);
-        ctx.restore();
-      }
-    }
+    // Draw blinking trap charge count above player (hidden during charge-up).
+    // Shared with RestRenderer via drawTrapChargeCount(game) (render-helper pattern).
+    if (!playerInInterior) this.drawTrapChargeCount(game);
 
     // Draw trap throw reticule while charging (traps only) or a translucent weapon
     // ghost at the estimated landing spot (thrown weapons only).
@@ -2292,6 +2191,17 @@ export class ExploreRenderer {
       }
     }
   }
+
+  // Held-weapon and thrown-consumable preview passes — bodies live in
+  // WeaponPreviewDraw.js; declared as methods here (matching drawMeleeAttacks/
+  // drawChainArcs above) so RestRenderer can call them by name off
+  // renderController.exploreRenderer, the same render-helper pattern used
+  // for the interior PiP overlays.
+  drawConsumableWindups(game) { drawConsumableWindups(this.renderer, game); }
+  drawGemWandCharge(game) { drawGemWandCharge(this.renderer, game); }
+  drawHammerWindupPose(game) { drawHammerWindupPose(this.renderer, game); }
+  drawTrapChargeCount(game) { drawTrapChargeCount(this.renderer, game); }
+  drawStaffBlockStance(game) { drawStaffBlockStance(this.renderer, game); }
 
   // Reticule + in-flight + placed traps share a single render path so the
   // surface canvas and the interior overlay (HutInteriorOverlay) can both
