@@ -20,6 +20,7 @@ import { createBurstParticles } from './WorldEffectsSystem.js';
 import { EquipmentEffectsSystem } from './EquipmentEffectsSystem.js';
 import { ConsumableWindupEffects } from './ConsumableWindupEffects.js';
 import { countItemChar, removeItemChar } from './itemCostDispatch.js';
+import * as ingredientPile from './IngredientPile.js';
 
 export class InventorySystem {
   constructor() {
@@ -125,40 +126,30 @@ export class InventorySystem {
   // ─── Ingredient pile ──────────────────────────────────────────────────────
   // The whole pile, live. Callers may read and iterate it; mutate through the
   // methods below so there is one place to look when a count goes wrong.
+  // Logic lives in IngredientPile.js (free functions taking `this`), same
+  // pattern as itemCostDispatch.js below.
   getIngredients() {
-    return this.ingredients;
+    return ingredientPile.getIngredients(this);
   }
 
   hasIngredient(char) {
-    return this.ingredients.includes(char);
+    return ingredientPile.hasIngredient(this, char);
   }
 
   countIngredient(char) {
-    let n = 0;
-    for (const c of this.ingredients) if (c === char) n++;
-    return n;
+    return ingredientPile.countIngredient(this, char);
   }
 
   addIngredient(char) {
-    this.ingredients.push(char);
+    return ingredientPile.addIngredient(this, char);
   }
 
-  // Spends one. Returns whether there was one to spend, so callers that pay a
-  // cost can bail instead of handing out the reward for free.
   removeIngredient(char) {
-    const idx = this.ingredients.indexOf(char);
-    if (idx === -1) return false;
-    this.ingredients.splice(idx, 1);
-    return true;
+    return ingredientPile.removeIngredient(this, char);
   }
 
-  // Removes and returns one random ingredient's char from the pile, or null
-  // if empty. For callers (Monkey's satchel theft) that eject ingredients
-  // without knowing which char they'll get ahead of time.
   removeRandomIngredient() {
-    if (this.ingredients.length === 0) return null;
-    const idx = Math.floor(Math.random() * this.ingredients.length);
-    return this.ingredients.splice(idx, 1)[0];
+    return ingredientPile.removeRandomIngredient(this);
   }
 
   // Generic char-based cost dispatch (raw ingredient vs crafted item) — full

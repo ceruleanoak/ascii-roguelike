@@ -118,6 +118,7 @@ import { GAME_STATES, GRID, CRAFTING, INTERACTION_RANGE, ROOM_TYPES, PHYSICS } f
 import { captureDeath, downloadSessionLedger, newRunId } from './systems/DeathLedgerSystem.js';
 import{DiagonalInputSystem as DIS}from'./systems/DiagonalInputSystem.js';
 import { MAGIC_SFX_NAMES } from './data/enemies.js';
+import * as ingredientPile from './systems/IngredientPile.js';
 
 // Particle Fireworks (debug toggle): each entry produces one effect at (x, y),
 // cycled in order. Mix of bursts (return arrays) and single emitters.
@@ -4547,30 +4548,11 @@ class Game {
     return this.inventorySystem.getIngredients();
   }
 
-  hasIngredient(char) {
-    if (char === 'c') return this.inventorySystem.getCoinCount() > 0;
-    return this.inventorySystem.hasIngredient(char);
-  }
-
-  countIngredient(char) {
-    if (char === 'c') return this.inventorySystem.getCoinCount();
-    return this.inventorySystem.countIngredient(char);
-  }
-
-  addIngredient(char) {
-    // Coins live in a passive wallet rather than the pile, so they remain
-    // spendable at wells / NPCs / crafting.
-    if (char === 'c') {
-      this.inventorySystem.addCoin();
-      return;
-    }
-    this.inventorySystem.addIngredient(char);
-  }
-
-  removeIngredient(char) {
-    if (char === 'c') return this.inventorySystem.removeCoin();
-    return this.inventorySystem.removeIngredient(char);
-  }
+  // Coin/pile dispatch lives in IngredientPile.js.
+  hasIngredient(char) { return ingredientPile.hasIngredientOrCoin(this.inventorySystem, char); }
+  countIngredient(char) { return ingredientPile.countIngredientOrCoin(this.inventorySystem, char); }
+  addIngredient(char) { return ingredientPile.addIngredientOrCoin(this.inventorySystem, char); }
+  removeIngredient(char) { return ingredientPile.removeIngredientOrCoin(this.inventorySystem, char); }
 
   render(alpha) {
     this.renderController.applyCameraEffects(this);

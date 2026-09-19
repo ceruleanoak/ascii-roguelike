@@ -48,6 +48,9 @@ export class LootSystem {
     }
   }
 
+  // Returns false (and leaves the ingredient in the world) when the pile is
+  // capped for that char — the special-cased goo/mana drains bypass the pile
+  // entirely so they're never capped.
   collectIngredient(ingredient) {
     const game = this.game;
     const player = game.player;
@@ -58,13 +61,14 @@ export class LootSystem {
       // Mana drop auto-refills the meter once the well/cauldron has
       // activated it; bypass inventory entirely.
       game.magicSystem.addMana(player, 2);
-    } else {
-      game.addIngredient(ingredient.char);
+    } else if (!game.addIngredient(ingredient.char)) {
+      return false;
     }
     game.audioSystem?.playSFX(resolvePickupSfx(ingredient.char));
     game.physicsSystem.removeEntity(ingredient);
     const idx = game.ingredients.indexOf(ingredient);
     if (idx !== -1) game.ingredients.splice(idx, 1);
+    return true;
   }
 
   // REST starter bundle: SPACE near the bundle destroys it and scatters its
