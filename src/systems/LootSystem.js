@@ -171,6 +171,15 @@ export class LootSystem {
       }
     }
 
+    // Universal coin chance (bug-inbox 2026-09-18): every enemy has an
+    // independent 10% chance to drop 1 Coin, on top of whatever the
+    // affinity/tier or legacy `drops` tooling above already rolled — not
+    // scaled by luckMult/bonusChance, since it's deliberately separate from
+    // those systems rather than folded into them.
+    if (Math.random() < 0.10) {
+      drops.push('c');
+    }
+
     for (let i = 0; i < drops.length; i++) {
       const drop = drops[i];
       const angle = (i / Math.max(drops.length, 1)) * Math.PI * 2 + Math.random() * 0.8;
