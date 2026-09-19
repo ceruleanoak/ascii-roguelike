@@ -401,6 +401,11 @@ export class InteractionSystem {
     // An armed Empty Bottle claims the fairy for tryBottleFairy — see header.
     if (this._armedBottleIndex() >= 0) return false;
 
+    // At full health, touch does nothing — the fairy is worth more than a
+    // no-op heal. tryFairyBlessing (SPACE, below) is the deliberate gesture
+    // for a full-health player instead.
+    if (player.hp >= player.maxHp) return false;
+
     // Full heal. No text — the HP readout blinks instead.
     player.hp = player.maxHp;
     game.audioSystem?.playSFX?.('fairy_pickup');
@@ -444,6 +449,32 @@ export class InteractionSystem {
     game.menuSystem?.showPickupMessage?.('CAUGHT A FAIRY!');
     game.audioSystem?.playSFX?.('fairy_pickup');
     game.menuSystem?.updateUI?.();
+    fairy.consume();
+    return true;
+  }
+
+  /**
+   * SPACE with no Bottle armed, next to a fairy, at full health — permanent
+   * +1 max HP. Counterpart to checkFairyTouch's walk-up heal: touch stands
+   * down once the player is topped off (see the gate there), so this is the
+   * deliberate gesture that makes a full-health encounter worth something
+   * instead of the fairy just going to waste.
+   */
+  tryFairyBlessing() {
+    const game = this.game;
+    const player = game.player;
+    if (!player || player.hp < player.maxHp) return false;
+    if (this._armedBottleIndex() >= 0) return false;
+
+    const fairy = this._nearestCatchableFairy();
+    if (!fairy) return false;
+
+    player.maxHp += 1;
+    player.hp = player.maxHp;
+    game.audioSystem?.playSFX?.('fairy_pickup');
+    game.menuSystem?.showPickupMessage?.('+1 MAX HP');
+    game.menuSystem?.updateUI?.();
+    this._blinkHPDisplay();
     fairy.consume();
     return true;
   }

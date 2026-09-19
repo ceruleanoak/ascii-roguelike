@@ -3731,9 +3731,8 @@ class Game {
     // Armed Bottle near trough/spring — precedes fireSelected() (AlchemySystem.tryFillArmedBottle).
     if (this.alchemySystem?.tryFillArmedBottle()) return;
 
-    // Armed Bottle next to a fairy — same gesture, caught by the fairy's own
-    // owner (InteractionSystem.tryBottleFairy), same reason it precedes fireSelected().
-    if (this.interactionSystem?.tryBottleFairy()) return;
+    // Fairy gesture: armed Bottle catches it, else full-health blessing (+1 max HP).
+    if (this.interactionSystem?.tryBottleFairy() || this.interactionSystem?.tryFairyBlessing()) return;
 
     // Consumable slot armed (keys 4-8) — SPACE fires it, priority over pickup/attack.
     if (this.consumableTriggerSystem.fireSelected(state)) return;
@@ -3756,9 +3755,7 @@ class Game {
       // Items can land on top of pressable/spacebar objects (press, well,
       // pedestals) and the player almost always wants to grab the item first.
       // Mirrors the lower-block pickup check at the captive/attack tier.
-      const hasNearbyItemTop = this.items.some(
-        item => this.physicsSystem.getDistance(this.player, item) < 20
-      );
+      const hasNearbyItemTop = this.inventorySystem.hasNearbyGroundItem(this.items, this.player, this.physicsSystem);
       if (hasNearbyItemTop) {
         this.tryPickupItem();
         return;
@@ -3864,9 +3861,7 @@ class Game {
       // SPACE release fires it (trap arms where it lands). Wires were handled
       // earlier via wireSystem.handleSpacePress. Skip if a ground item is nearby
       // so pickup wins.
-      const hasNearbyPickup = this.items.some(
-        item => this.physicsSystem.getDistance(this.player, item) < 20
-      );
+      const hasNearbyPickup = this.inventorySystem.hasNearbyGroundItem(this.items, this.player, this.physicsSystem);
       if (this.trapSystem.canUseTrap() && !hasNearbyPickup) {
         this.trapSystem.startTrapCharge('deploy');
         return;
@@ -3901,9 +3896,7 @@ class Game {
 
       // Item pickup: crafted items (and any other items) land on ground in REST —
       // pick them up before other REST interactions, same as EXPLORE mode.
-      const hasNearbyRestItem = this.items.some(
-        item => this.physicsSystem.getDistance(this.player, item) < 20
-      );
+      const hasNearbyRestItem = this.inventorySystem.hasNearbyGroundItem(this.items, this.player, this.physicsSystem);
       if (hasNearbyRestItem) { this.tryPickupItem(); return; }
 
       const nearestSlot = this.getNearestInteractiveSlot();
@@ -3945,9 +3938,7 @@ class Game {
       }
 
       // Item pickup takes priority over attacking (armor, consumables, weapons, placed traps)
-      const hasNearbyItem = this.items.some(
-        item => this.physicsSystem.getDistance(this.player, item) < 20
-      );
+      const hasNearbyItem = this.inventorySystem.hasNearbyGroundItem(this.items, this.player, this.physicsSystem);
 
       if (hasNearbyItem) {
         // Pick up nearby item (overrides attacking)
@@ -3983,9 +3974,7 @@ class Game {
       }
     } else if (state === GAME_STATES.NEUTRAL) {
       // Item pickup has priority over grass interaction (same as EXPLORE)
-      const hasNearbyItem = this.items.some(
-        item => this.physicsSystem.getDistance(this.player, item) < 20
-      );
+      const hasNearbyItem = this.inventorySystem.hasNearbyGroundItem(this.items, this.player, this.physicsSystem);
       if (hasNearbyItem) {
         this.tryPickupItem();
         return;

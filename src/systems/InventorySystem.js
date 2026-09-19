@@ -350,6 +350,11 @@ export class InventorySystem {
    * @param {number} selectedWeaponSlotIdx - Currently selected weapon slot (0-2)
    * @returns {Object} - { success: boolean, droppedItem: Item|null, message: string|null, removedTrap: boolean }
    */
+  // Ground-item proximity check — dedup of 5 identical inline checks in main.js.
+  hasNearbyGroundItem(items, player, physicsSystem, radius = 20) {
+    return items.some(item => physicsSystem.getDistance(player, item) < radius);
+  }
+
   tryPickupItem(items, placedTraps, player, physicsSystem, allowSlotChoice = false, _unused = 0, selectedWeaponSlotIdx = 0, renderer = null) {
     // NOTE: Placed traps (activated with SPACE) are NOT pickable - they're active traps
     // Only dropped traps (swapped from quick slots) in the items array can be picked up
