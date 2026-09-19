@@ -1,4 +1,4 @@
-import { GRID } from '../game/GameConfig.js';
+import { GRID, BACKGROUND_OBJECT_VARIANTS } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 
 // Water/lava elemental reactions to a projectile hit — split out of
@@ -47,6 +47,22 @@ export const WaterLavaHitMechanic = {
     // elemental reactions to terrain already live.
     if (obj.typeId === 'barricade_ice' && proj.onHit === 'burn') {
       obj.takeDamage(Math.max(1, proj.damage || 1));
+    }
+
+    // Fire projectile hits deep snow → melt it into a water tile, the same
+    // permanent terrain conversion LavaAscentSystem's _convertTile uses for
+    // its own flood cycle (typeId + _variantData swap). PhysicsSystem's deep-
+    // snow detection keys off `char === '█'` (right next to its `char === '~'`
+    // water/lava/mud branch), so flipping char to '~' is what actually moves
+    // the tile out of "snow" and into "water" at the physics layer, not just
+    // visually.
+    if (obj.typeId === 'snow_deep' && proj.onHit === 'burn') {
+      const variant = BACKGROUND_OBJECT_VARIANTS.water;
+      obj.typeId = 'water';
+      obj._variantData = { ...variant };
+      obj.char = variant.char;
+      obj.color = variant.color;
+      obj.animationColor = variant.color;
     }
 
     // Water attack hits lava → solidify to rock
