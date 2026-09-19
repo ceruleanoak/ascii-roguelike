@@ -2138,9 +2138,12 @@ class Game {
     // Switch music based on zone (covers all entry paths: new room, restore, and leavingRest)
     this.audioSystem.switchZoneMusic(this.currentRoom?.zone || 'green', import.meta.env.BASE_URL);
 
-    // Set layer 2 (bassline) based on enemy presence
-    // Always check for enemies, regardless of how we entered EXPLORE
-    const hasEnemies = this.currentRoom && this.currentRoom.enemies && this.currentRoom.enemies.length > 0;
+    // Set layer 2 (bassline) based on enemy presence. Uses _countedEnemies
+    // (not raw .length) so a room whose only occupants are non-hostile —
+    // an unrevealed mimic, a fled/uncounted thief, a pacifist animal —
+    // doesn't start combat music on entry (bug #279).
+    const hasEnemies = this.currentRoom && this.currentRoom.enemies &&
+      this._countedEnemies(this.currentRoom.enemies).length > 0;
     this.audioSystem.setLayer2Enabled(hasEnemies);
 
     // Open physical wall gaps for all exits so escape-route south exit (no weapons)
