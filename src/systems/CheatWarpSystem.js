@@ -117,15 +117,26 @@ export class CheatWarpSystem {
     game.zoneDepths[targetZone] = bossDepth;
     game.roomGenerator.setDepth(bossDepth);
 
-    // Generate boss room directly
+    // Generate boss room directly. Unlike the other warps here, the player is
+    // also repositioned below (not just handed the stale room) — createCollisionMap
+    // only guarantees clear cells near the four canonical exit spawn points, not
+    // wherever the player happens to be standing, and only cyan's boss arena has
+    // a dedicated template (ZONE_BOSS_TEMPLATES) forcing a clear center. A red/
+    // yellow/green boss test could otherwise drop the player into freshly
+    // stamped wall/rock/lava geometry right where BossSystem.activate() also
+    // hard-spawns the boss (#285, [warp-divergence]).
     game.roomGenerator.isZoneBossRoom = true;
-    const playerPos = { x: game.player.position.x, y: game.player.position.y };
-    const newRoom = game.roomGenerator.generateRoom(ROOM_TYPES.BOSS, playerPos, targetZone, null);
+    const centerX = Math.floor(GRID.COLS / 2) * GRID.CELL_SIZE;
+    const southSpawnY = (GRID.ROWS - 3) * GRID.CELL_SIZE;
+    const spawnPos = { x: centerX, y: southSpawnY };
+    const newRoom = game.roomGenerator.generateRoom(ROOM_TYPES.BOSS, spawnPos, targetZone, null);
     game.roomGenerator.isZoneBossRoom = false;
 
     // Replace current room — applyRoomSwap covers entity arrays, enemy
     // wiring, entry grace, and physics/combat reset (shared with natural entry)
     game.currentRoom = newRoom;
+    game.player.position.x = spawnPos.x;
+    game.player.position.y = spawnPos.y;
     game.player.setCollisionMap(newRoom.collisionMap);
 
     // Activate boss BEFORE the swap so any boss entities it adds to
