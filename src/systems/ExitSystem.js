@@ -278,7 +278,7 @@ export class ExitSystem {
    * Letters one slot will not take, checked on every reroll. Slots are ordered
    * [north, east, west] here as everywhere else in this file.
    */
-  _slotRefuses(slot, letter) {
+  _slotRefuses(slot, letter, currentDepth, zoneType) {
     // 'O' (Ocean) cannot be a west exit — entering from the west would put the
     // player in the ocean.
     if (slot === 2 && letter === 'O') return true;
@@ -293,6 +293,19 @@ export class ExitSystem {
     // is built, so the Ridge is never stood in.
     if (slot === 0 && letter === 'R' &&
         this.game?.threeRoomSystem?.nextRoomsNorthReachesTheThree()) return true;
+
+    // 'R' (Ridge) also cannot land at the depth the pre-boss or pre-miniboss
+    // gate hijacks: both gates overwrite the CLEARED room's own north exit
+    // with a forced 'B' door (ExitSystem's pre-boss gate at bossDepth - 1,
+    // ZoneSystem.applyPreMinibossGate at depth 8), clobbering Ridge's own
+    // designed north exit (which must always force a transition to gray) —
+    // reads as "unable to cross ridge" with no other way forward (#284).
+    if (letter === 'R' && currentDepth != null) {
+      const nextDepth = currentDepth + 1;
+      const bossDepth = ZONES[zoneType]?.bossDepth;
+      if (bossDepth != null && nextDepth === bossDepth - 1) return true;
+      if (zoneType !== 'gray' && nextDepth === 8) return true;
+    }
 
     return false;
   }
@@ -311,7 +324,7 @@ export class ExitSystem {
         attempts++;
       } while (
         attempts < maxAttempts &&
-        (letters.includes(letter) || letter === currentLetter || this._slotRefuses(i, letter))
+        (letters.includes(letter) || letter === currentLetter || this._slotRefuses(i, letter, currentDepth, zoneType))
       );
 
       letters.push(letter);
