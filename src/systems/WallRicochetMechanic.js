@@ -1,11 +1,10 @@
 import { GRID } from '../game/GameConfig.js';
 
 // Fallback tangential nudge distance for projectiles whose item data doesn't
-// define its own `wallNudgeDistance` — see tryTangentialNudge below. Half a
-// cell is enough to clear a projectile fully off a wall column/row it's
-// merely flush against without the nudge itself overshooting into a wall on
-// the far side of a one-cell-wide gap.
-const DEFAULT_WALL_NUDGE_DISTANCE = GRID.CELL_SIZE * 0.5;
+// define its own `wallNudgeDistance` — see tryTangentialNudge below. A few
+// pixels is enough to clear a projectile off a wall column/row it's merely
+// flush against; anything larger visibly teleports the projectile sideways.
+const DEFAULT_WALL_NUDGE_DISTANCE = 3;
 
 // Projectile-vs-wall collision: hit detection against room.collisionMap, the
 // interior-structure-wall ricochet regular bullets get, and the border-wall

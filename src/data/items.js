@@ -511,7 +511,7 @@ export const ITEMS = {
     boomerangMaxRicochets: 3,     // enemy-to-enemy bounces at full charge (0 at no charge)
     chainRadius: 32,              // ~1 cell — chain damage radius around first hit
     knockback: 150,               // ricochet-only bonk (see BoomerangMechanic.onRicochetHit) — first hit and chain splash never knock back
-    wallNudgeDistance: 14,        // tangential wall-nudge distance (px) — see WallRicochetMechanic.tryTangentialNudge; smaller than the default half-cell since the boomerang's own bounce-off-walls behavior is a benign fallback, not a destroy
+    wallNudgeDistance: 3,         // tangential wall-nudge distance (px) — see WallRicochetMechanic.tryTangentialNudge
     color: '#ffaa44'
   },
   // Slingshot: the Sling strung onto a proper Y-frame. Still a bow-slot weapon
