@@ -16,6 +16,7 @@ import { captureExploreRoomForRest } from './systems/RoomStatePersistence.js';
 import { ArmorEffectsSystem } from './systems/ArmorEffectsSystem.js';
 import { ConsumableTriggerSystem } from './systems/ConsumableTriggerSystem.js';
 import { NeutralRoomSystem, applyBlessing as applyBlessingBuff } from './systems/NeutralRoomSystem.js';
+import { spawnRoomNeutralCharacters } from './systems/roomFeatures.js';
 import { ErrandSystem } from './systems/ErrandSystem.js';
 import { CheatMenu } from './systems/CheatMenu.js';
 import { DemoSystem } from './systems/DemoSystem.js';
@@ -4334,39 +4335,10 @@ class Game {
         this.ridgeSystem.attachToRoom(room);
       }
 
-      // Pearl-guide fairy (O room + pearl in inventory): pre-spawned at room
-      // generation; lives in neutralCharacters alongside the fight. Suppressed
-      // once the fountain has been corrupted.
-      if (room.pearlFairy && !room.pearlFairy.consumed && !this.fairiesAngered) {
-        this.neutralCharacters.push(room.pearlFairy);
-      }
-
-      // Peaceful fishing room (low-depth L/O roll): the shore Fisherman joins
-      if (room.lakeFisherman) {
-        this.neutralCharacters.push(room.lakeFisherman);
-      }
-
-      // Rare Red Zone caldera Weapons Master
-      if (room.calderaWeaponsMaster) {
-        this.neutralCharacters.push(room.calderaWeaponsMaster);
-      }
-
-      // Roaming Alchemist (Red-L / Yellow-O / Cyan-T, post-lesson) — see
-      // roomFeatures.maybeSpawnRoamingAlchemist.
-      if (room.alchemistNPC) {
-        this.neutralCharacters.push(room.alchemistNPC);
-      }
-
-      // Errand room: active errand + E room clears enemies and spawns the
-      // traveler immediately (they remember what they wanted last time)
-      if (this.errandSystem.activeErrand && room.exitLetter === 'E') {
-        room.enemies = [];
-        room.enemiesPlane0 = [];
-        room.enemiesPlane1 = [];
-        room.exitsLocked = false;
-        const errandChar = this.errandSystem.spawnErrandCharacter(room);
-        if (errandChar) this.neutralCharacters.push(errandChar);
-      }
+      // Pearl-guide fairy, shore Fisherman, Settlement errand traveler,
+      // caldera Weapons Master, roaming Alchemist, and the Errand room's
+      // fresh spawn — see spawnRoomNeutralCharacters (arch budget extraction).
+      spawnRoomNeutralCharacters(this, room);
 
       // Unlock exits immediately if room has no enemies (CAMP, DISCOVERY, etc.)
       // Hidden mimics don't count — exits stay open until they reveal.

@@ -517,7 +517,10 @@ export const LETTER_TEMPLATES = {
     // positions, unlike hutStructure's single fixed footprint above. 'press'
     // guarantees both the oil press AND the fireplace (see HutSystem.js) —
     // no separate 'fireplace' slot, the two appliances share one building.
-    settlementHutPool: ['press', 'wise_man', 'alchemy', 'neutral_npc', 'fisherman', 'weapons_master', 'shopkeeper']
+    // No 'neutral_npc' (errand traveler) entry — that NPC now roams the open
+    // Settlement ground directly instead of requiring a dedicated building
+    // (see generateSettlementRoom's own roll for it in roomFeatures.js).
+    settlementHutPool: ['press', 'wise_man', 'alchemy', 'fisherman', 'weapons_master', 'shopkeeper']
   },
 
   M: {

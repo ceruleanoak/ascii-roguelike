@@ -8,6 +8,7 @@ import { ENEMIES, getZoneRandomEnemy, createBossEnemy, BOSS_ENCOUNTERS } from '.
 import { ZONES } from '../data/zones.js';
 import { ITEM_TYPES } from '../data/items.js';
 import { WeaponsMaster } from '../entities/WeaponsMaster.js';
+import { ErrandCharacter } from '../entities/ErrandCharacter.js';
 import { HOT_WATER_CHAR } from '../data/alchemy.js';
 import { PLANE_TUNNEL } from './PlaneSystem.js';
 
@@ -1506,8 +1507,88 @@ export function generateSettlementRoom(gen, room) {
     }
   }
 
+  // Errand NPC: used to require entering a dedicated 'neutral_npc' Settlement
+  // hut; now roams the open Settlement ground directly instead, at a roll
+  // approximating that hut kind's old odds of landing one of the pool's 2-3
+  // slots. Mirrors the lakeFisherman pattern — stored on room.settlementErrand,
+  // pushed into game.neutralCharacters at room entry (main.js).
+  if (Math.random() < 0.40) {
+    const errandSystem = gen.game?.errandSystem;
+    if (errandSystem) {
+      if (!errandSystem.activeErrand) errandSystem._pickRequest(gen.game.player);
+      const errand = errandSystem.activeErrand;
+      if (errand) {
+        for (let attempt = 0; attempt < 40; attempt++) {
+          const centerCol = SETTLEMENT_CENTER_MIN + Math.floor(Math.random() * SETTLEMENT_CENTER_SPAN);
+          const centerRow = SETTLEMENT_CENTER_MIN + Math.floor(Math.random() * SETTLEMENT_CENTER_SPAN);
+          const candidate = { minCol: centerCol - 1, maxCol: centerCol + 1, minRow: centerRow - 1, maxRow: centerRow + 1 };
+          if (placedBounds.some(b => footprintsTooClose(candidate, b, SETTLEMENT_HUT_BUFFER))) continue;
+          room.settlementErrand = new ErrandCharacter(
+            centerCol * GRID.CELL_SIZE,
+            centerRow * GRID.CELL_SIZE,
+            errand.requestedItem,
+            errand.stage
+          );
+          placedBounds.push(candidate);
+          break;
+        }
+      }
+    }
+  }
+
   gen.generateBackgroundObjects(room);
   room.exitsLocked = false;
+}
+
+/**
+ * Pushes every pre-generated / persistent neutral NPC attached to `room`
+ * into `game.neutralCharacters` on room entry (Pearl-guide fairy, shore
+ * Fisherman, Settlement errand traveler, caldera Weapons Master, roaming
+ * Alchemist), and spawns the Errand room's traveler fresh when applicable.
+ * Extracted out of main.js's room-entry path (arch budget) — a growing list
+ * of "spawns from room generation, joins the fight" NPCs doesn't belong
+ * accreting inline in the orchestrator.
+ */
+export function spawnRoomNeutralCharacters(game, room) {
+  // Pearl-guide fairy (O room + pearl in inventory): pre-spawned at room
+  // generation; lives in neutralCharacters alongside the fight. Suppressed
+  // once the fountain has been corrupted.
+  if (room.pearlFairy && !room.pearlFairy.consumed && !game.fairiesAngered) {
+    game.neutralCharacters.push(room.pearlFairy);
+  }
+
+  // Peaceful fishing room (low-depth L/O roll): the shore Fisherman joins
+  if (room.lakeFisherman) {
+    game.neutralCharacters.push(room.lakeFisherman);
+  }
+
+  // Settlement errand traveler: roams the open ground rather than
+  // requiring a dedicated hut (see generateSettlementRoom).
+  if (room.settlementErrand) {
+    game.neutralCharacters.push(room.settlementErrand);
+  }
+
+  // Rare Red Zone caldera Weapons Master
+  if (room.calderaWeaponsMaster) {
+    game.neutralCharacters.push(room.calderaWeaponsMaster);
+  }
+
+  // Roaming Alchemist (Red-L / Yellow-O / Cyan-T, post-lesson) — see
+  // maybeSpawnRoamingAlchemist below.
+  if (room.alchemistNPC) {
+    game.neutralCharacters.push(room.alchemistNPC);
+  }
+
+  // Errand room: active errand + E room clears enemies and spawns the
+  // traveler immediately (they remember what they wanted last time)
+  if (game.errandSystem.activeErrand && room.exitLetter === 'E') {
+    room.enemies = [];
+    room.enemiesPlane0 = [];
+    room.enemiesPlane1 = [];
+    room.exitsLocked = false;
+    const errandChar = game.errandSystem.spawnErrandCharacter(room);
+    if (errandChar) game.neutralCharacters.push(errandChar);
+  }
 }
 
 // ── Centipede miniboss arena (red zone) ─────────────────────────────────────
