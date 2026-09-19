@@ -2251,6 +2251,10 @@ class Game {
       // this only dispatches. The saved EXPLORE state is dropped on purpose:
       // the retreat is a retreat, and it costs the depth it was bought at.
       if (this.threeRoomSystem.retreatsToRest(this, leavingNeutralRoom)) {
+        // Only the depth progress (savedExploreState) is forfeited by the
+        // retreat — the run's current quick-slot loadout is not part of that
+        // cost and must be saved same as any other REST entry (bug #276).
+        this.saveRestLoadout();
         this.savedExploreState = null;
         this.threeRoomSystem.onRoomExit(this, leavingNeutralRoom);
         this.stateMachine.transition(GAME_STATES.REST);
