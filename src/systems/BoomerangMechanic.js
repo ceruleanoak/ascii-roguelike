@@ -14,6 +14,14 @@ import { inSamePlane } from './PlaneSystem.js';
 // rather than the struck switch's, so a flat 120 leaves too thin a margin.
 const SWITCH_BOUNCE_RADIUS = 80;
 
+// Safety-net lifetime cap (seconds): a normal throw/return round-trip is well
+// under this, but an owner who becomes unreachable mid-flight (blocked path,
+// stuck behind geometry, teleported away) would otherwise leave the
+// boomerang homing forever and its ammo permanently unrefunded (maxUses: 1
+// means there's no second one to fall back on). Past this, force the same
+// catch/refund path a normal pickup takes and despawn.
+const BOOMERANG_MAX_LIFETIME = 5.0;
+
 // Boomerang projectile behavior (Zelda-style: flies out, stuns and damages the
 // first enemy it hits, then ricochets between enemies on a charge-scaled
 // budget — each ricocheted enemy only takes knockback, not damage or stun —
@@ -56,6 +64,23 @@ export const BoomerangMechanic = {
     }
   },
 
+  // Refund one charge to the matching bow slot on catch (or on the
+  // safety-net timeout below) — matches the arrow-pickup pattern, minus the
+  // '+1' popup (maxUses is 1, so there's never more than one to count).
+  _refundAmmo(proj) {
+    const bow = (proj.owner?.quickSlots || []).find(slot =>
+      slot &&
+      slot.data?.weaponType === 'BOW' &&
+      slot.char === proj.weaponChar &&
+      slot.maxUses !== null &&
+      slot.usesRemaining < slot.maxUses
+    );
+    if (bow) {
+      bow.usesRemaining++;
+      if (bow.cooldownTimer > 1000) bow.cooldownTimer = 0; // Clear depletion lock
+    }
+  },
+
   // Per-frame flight control. Outbound: home onto a locked bounce target (re-aimed
   // at the enemy's current hitbox center every frame so a committed bounce always
   // connects; the return-mode flip is suspended while locked) and count down the
@@ -63,6 +88,11 @@ export const BoomerangMechanic = {
   // straight line directly toward the owner each frame (no curve interp); no
   // retrieval — despawns on catch or owner death. Returns true to despawn.
   updateFlight(proj, deltaTime, combat) {
+    proj.boomerangLifetime = (proj.boomerangLifetime || 0) + deltaTime;
+    if (proj.boomerangLifetime > BOOMERANG_MAX_LIFETIME) {
+      this._refundAmmo(proj);
+      return true;
+    }
     this._collectIngredients(proj, combat);
     const bSpeed = Math.hypot(proj.velocity.vx, proj.velocity.vy) || 250;
     if (!proj.boomerangReturning && proj.boomerangBounceTarget) {
@@ -92,21 +122,8 @@ export const BoomerangMechanic = {
       const dy = ty - proj.position.y;
       const dist = Math.hypot(dx, dy);
       if (dist < GRID.CELL_SIZE * 0.6) {
-        // Caught — refund one charge to the matching bow slot (matches arrow-pickup pattern).
-        const bow = (proj.owner.quickSlots || []).find(slot =>
-          slot &&
-          slot.data?.weaponType === 'BOW' &&
-          slot.char === proj.weaponChar &&
-          slot.maxUses !== null &&
-          slot.usesRemaining < slot.maxUses
-        );
-        if (bow) {
-          bow.usesRemaining++;
-          if (bow.cooldownTimer > 1000) bow.cooldownTimer = 0; // Clear depletion lock
-          // No '+1' popup here (unlike the arrow-pickup pattern this refund
-          // mirrors) — maxUses is 1, so there's never more than a single
-          // boomerang to count; the number would just be noise.
-        }
+        // Caught.
+        this._refundAmmo(proj);
         return true;
       }
       // Straight-line aim: snap velocity to current player direction at constant speed.
