@@ -229,8 +229,10 @@ export class CharacterSystem {
     const reach = (weaponData.range || 20) + C;
     const px = player.position.x + C / 2;
     const py = player.position.y + C / 2;
-    const fx = player.facing?.x || 0;
-    const fy = player.facing?.y || -1;
+    // ?? (not ||) — facing.y is legitimately 0 when facing purely left/right;
+    // the -1 default should only apply when facing itself is missing (#280).
+    const fx = player.facing?.x ?? 0;
+    const fy = player.facing?.y ?? -1;
     const flen = Math.sqrt(fx * fx + fy * fy) || 1;
     const x = px + (fx / flen) * reach;
     const y = py + (fy / flen) * reach;
