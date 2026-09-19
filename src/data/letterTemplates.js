@@ -514,8 +514,10 @@ export const LETTER_TEMPLATES = {
 
     // Pool of available hut kinds — generateSettlementRoom (roomFeatures.js)
     // picks 2-3 of these at random and places them at random non-overlapping
-    // positions, unlike hutStructure's single fixed footprint above.
-    settlementHutPool: ['press', 'fireplace', 'wise_man', 'alchemy', 'neutral_npc', 'fisherman', 'weapons_master', 'shopkeeper']
+    // positions, unlike hutStructure's single fixed footprint above. 'press'
+    // guarantees both the oil press AND the fireplace (see HutSystem.js) —
+    // no separate 'fireplace' slot, the two appliances share one building.
+    settlementHutPool: ['press', 'wise_man', 'alchemy', 'neutral_npc', 'fisherman', 'weapons_master', 'shopkeeper']
   },
 
   M: {

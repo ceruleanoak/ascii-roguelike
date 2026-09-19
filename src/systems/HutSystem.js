@@ -103,7 +103,7 @@ export class HutSystem {
     // 'press' hut guarantees one instead (see branch below) and skips the
     // random roll so it never gets a second; the Alchemy Hut never rolls one.
     // Placed BEFORE decor/bread so those spawn loops can reject the press cell.
-    const hasPress = hutKind !== 'press' && hutKind !== 'alchemy' && hutKind !== 'fireplace' && Math.random() < 0.12;
+    const hasPress = hutKind !== 'press' && hutKind !== 'alchemy' && Math.random() < 0.12;
     if (hasPress || hutKind === 'press') {
       backgroundObjects.push(new BackgroundObject(
         '⊓',
@@ -112,14 +112,18 @@ export class HutSystem {
       ));
     }
 
-    // Fireplace: same roll shape as the press but at double the rate — the
-    // player wasn't running into it often enough given its value. Placed at
-    // the opposite corner so the two can coexist. Starts unlit
+    // Fireplace: same independent roll shape as the press (double its rate —
+    // the player wasn't running into it often enough given its value), placed
+    // at the opposite corner so the two can coexist in a randomly-rolled hut.
+    // The Settlement's dedicated 'press' hut now guarantees BOTH appliances
+    // in the same building (merged from a separate dedicated 'fireplace' hut
+    // — two Settlement slots for two appliances that belong together) so it
+    // skips the random roll same as the press does above. Starts unlit
     // (`burning: false`) — FireplaceSystem flips it on the first Stick and
     // the flag resets for free next visit since generateHutInterior rebuilds
     // this object from scratch.
-    const hasFireplace = hutKind !== 'press' && hutKind !== 'alchemy' && hutKind !== 'fireplace' && Math.random() < 0.24;
-    if (hasFireplace || hutKind === 'fireplace') {
+    const hasFireplace = hutKind !== 'press' && hutKind !== 'alchemy' && Math.random() < 0.24;
+    if (hasFireplace || hutKind === 'press') {
       const fireplace = new BackgroundObject(
         '⌂',
         (cols - 3) * GRID.CELL_SIZE,
