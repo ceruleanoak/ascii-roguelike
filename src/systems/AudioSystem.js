@@ -1362,6 +1362,9 @@ export class AudioSystem {
       console.warn('[Audio] Boss tracks not loaded yet');
       return;
     }
+    // Stop any red/yellow zoneSequence source — otherwise it keeps playing
+    // underneath the boss track since it isn't one of layer1Source/layer2Source (#283).
+    this._stopZoneSequenceSource();
     // Stop current dual-layer sources
     for (const prop of ['layer1Source', 'layer2Source']) {
       if (this[prop]) {
@@ -1400,6 +1403,9 @@ export class AudioSystem {
     if (this.mode === 'sequence') {
       this._beginFullBossSequence();
     } else {
+      // Stop any red/yellow zoneSequence source — same reasoning as
+      // startBossAnticipation() above (#283).
+      this._stopZoneSequenceSource();
       // Stop dual-layer playback and enter sequence mode
       for (const prop of ['layer1Source', 'layer2Source']) {
         if (this[prop]) {
