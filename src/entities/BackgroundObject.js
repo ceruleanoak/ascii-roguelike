@@ -54,6 +54,12 @@ export class BackgroundObject {
     this.color = this.data.color;
     this.destroyed = false;
 
+    // Deep water — a darker-tinted '~' tile (see WATER_COLORS.deep) that drowns
+    // non-immune entities and blocks dodge-roll activation; set by RoomGenerator
+    // on Lake-center and off-coast Ocean cells. Read by PhysicsSystem, never by
+    // this class beyond the render-color override in update()/getRenderPosition().
+    this.deepWater = options.deepWater || false;
+
     // Obsidian flag — unbreakable rock (darker gray rendering)
     this.obsidian = options.obsidian || false;
     if (this.obsidian && char === '0') {
@@ -453,7 +459,7 @@ export class BackgroundObject {
         this.animationChar = '~';
         this.electricBlinkTimer = 0;
         this.electricBlinkOn = false;
-        this.animationColor = WATER_COLORS[this.waterState] || WATER_COLORS.normal;
+        this.animationColor = this.deepWater ? WATER_COLORS.deep : (WATER_COLORS[this.waterState] || WATER_COLORS.normal);
       }
     }
 
@@ -554,7 +560,7 @@ export class BackgroundObject {
     // Electrified is excluded: its per-frame blink value lives in animationColor and must not be replaced
     // Damaging liquids (lava) and mud beds excluded: they use their custom colors, not water colors
     if (!this.onFire && this.isWater() && this.waterState !== 'electrified' && !this.riverFlow) {
-      color = WATER_COLORS[this.waterState] || WATER_COLORS.normal;
+      color = (this.deepWater && this.waterState === 'normal') ? WATER_COLORS.deep : (WATER_COLORS[this.waterState] || WATER_COLORS.normal);
       // Frozen water also overrides the char for the static (non-animating) path
       if (this.waterState === 'frozen' && this.animationChar === this.originalChar) {
         return { x: this.position.x, y: this.position.y, char: '=', color };

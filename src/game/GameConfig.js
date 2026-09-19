@@ -1312,7 +1312,8 @@ export const WATER_COLORS = {
   frozen:      '#ffffff',
   poisoned:    '#44bb44',
   electrified: '#cccc00',
-  crystallized: '#bbeeff' // Coral Crown — walkable platform, blocks bullets, 6s decay
+  crystallized: '#bbeeff', // Coral Crown — walkable platform, blocks bullets, 6s decay
+  deep:        '#0a1a55'  // Deep water (BackgroundObject.deepWater) — darker tint, drowning hazard
 };
 
 export const WATER_STRUCTURES = {

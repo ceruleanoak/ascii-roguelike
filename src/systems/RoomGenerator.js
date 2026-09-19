@@ -11,7 +11,7 @@ import { getDungeonDesign } from '../data/dungeonDesigns.js';
 import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
-import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, stampSmallDoorInVault, getIslandPosition, applyKeyDropLogic, ensureKeyDroppers, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, deriveRiverFlowDirection, buildForcedRiverParams, carveForcedRiver, cellularCaveGrid, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, spawnGuaranteedItems, offerL1Weapon, seedTunnelZone } from './roomFeatures.js';
+import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, stampSmallDoorInVault, getIslandPosition, applyKeyDropLogic, ensureKeyDroppers, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, deriveRiverFlowDirection, buildForcedRiverParams, carveForcedRiver, cellularCaveGrid, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, spawnGuaranteedItems, offerL1Weapon, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl } from './roomFeatures.js';
 
 // Zone-boss arena → letter template key. Boss rooms are entered without a
 // letter (cheat warp) or with an arbitrary one (normal progression), so we
@@ -1671,46 +1671,7 @@ export class RoomGenerator {
   }
 
   generateOceanTerrain(room) {
-    const oceanConfig = this.currentLetterTemplate.oceanZone;
-
-    // Generate sand in transition zone (columns 18-21)
-    for (let col = oceanConfig.sandStartCol; col <= oceanConfig.sandEndCol; col++) {
-      for (let row = 1; row < GRID.ROWS - 1; row++) {
-        // Random placement based on sand density
-        if (Math.random() < oceanConfig.sandDensity) {
-          const x = col * GRID.CELL_SIZE;
-          const y = row * GRID.CELL_SIZE;
-
-          // Check if position is clear (no walls, no existing objects)
-          if (!room.collisionMap[row][col] && !this.hasObjectAt(room, x, y)) {
-            const sand = new BackgroundObject('.', x, y);
-            room.backgroundObjects.push(sand);
-          }
-        }
-      }
-    }
-
-    // Generate water in ocean zone (columns 20-29)
-    for (let col = oceanConfig.waterStartCol; col <= oceanConfig.waterEndCol; col++) {
-      for (let row = 1; row < GRID.ROWS - 1; row++) {
-        // Random placement based on water density
-        if (Math.random() < oceanConfig.waterDensity) {
-          const x = col * GRID.CELL_SIZE;
-          const y = row * GRID.CELL_SIZE;
-
-          // Check if position is clear (no walls, no existing objects)
-          if (!room.collisionMap[row][col] && !this.hasObjectAt(room, x, y)) {
-            const water = new BackgroundObject('~', x, y);
-            room.backgroundObjects.push(water);
-          }
-        }
-      }
-    }
-
-    // Disable east exit if configured
-    if (this.currentLetterTemplate.exitRules?.disableEast) {
-      room.exits.east = false;
-    }
+    generateOceanTerrainImpl(this, room);
   }
 
   generateLakeTerrain(room) {
@@ -1720,61 +1681,7 @@ export class RoomGenerator {
 
   // Blob-fill + shoreline decoration; shared by generateLakeTerrain and Oasis.
   stampWaterBlobs(room, nodes, edgeNoise, waterDensity) {
-    // For each grid cell, check if it falls inside any blob node
-    for (let col = 1; col < GRID.COLS - 1; col++) {
-      for (let row = 1; row < GRID.ROWS - 1; row++) {
-        if (room.collisionMap[row][col]) continue;
-
-        // Check if cell is inside any blob (with noise)
-        let inAnyBlob = false;
-        for (const node of nodes) {
-          const dx = col - node.col;
-          const dy = row - node.row;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          // Perlin-like edge noise: add random offset to threshold per cell
-          const noiseOffset = (Math.random() - 0.5) * edgeNoise;
-          if (dist < node.radius + noiseOffset) {
-            inAnyBlob = true;
-            break;
-          }
-        }
-
-        if (inAnyBlob && Math.random() < waterDensity) {
-          // Remove any existing background object at this cell
-          const cellX = col * GRID.CELL_SIZE;
-          const cellY = row * GRID.CELL_SIZE;
-          const halfCell = GRID.CELL_SIZE / 2;
-
-          room.backgroundObjects = room.backgroundObjects.filter(obj =>
-            !(Math.abs(obj.position.x - cellX) < halfCell &&
-              Math.abs(obj.position.y - cellY) < halfCell)
-          );
-
-          // Place water tile
-          const water = new BackgroundObject('~', cellX, cellY);
-          room.backgroundObjects.push(water);
-        }
-      }
-    }
-
-    // Scatter shoreline decoration (rocks, bushes) at blob edges
-    for (const node of nodes) {
-      const decCount = Math.floor(node.radius * 1.5);
-      for (let i = 0; i < decCount; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const edgeDist = node.radius + 0.5 + Math.random() * 1.5;
-        const col = Math.round(node.col + Math.cos(angle) * edgeDist);
-        const row = Math.round(node.row + Math.sin(angle) * edgeDist);
-
-        if (this.isValidPosition(col, row, room) &&
-            !this.hasObjectAt(room, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE)) {
-          const decChar = Math.random() < 0.6 ? '%' : '0';
-          const decObj = new BackgroundObject(decChar, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
-          this.applyZoneProperties(decObj, room.zone);
-          room.backgroundObjects.push(decObj);
-        }
-      }
-    }
+    stampWaterBlobsImpl(this, room, nodes, edgeNoise, waterDensity);
   }
 
   preloadRoomPreviews() {

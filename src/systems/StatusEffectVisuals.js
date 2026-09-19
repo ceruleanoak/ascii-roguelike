@@ -5,6 +5,8 @@
 // stack-driven blink speed) one home instead of a hand-duplicated fixed
 // priority chain.
 
+import { WATER_COLORS } from '../game/GameConfig.js';
+
 const DOT_BLINK_FREQUENCY = 0.2; // baseline blink period at 1 stack
 const SLICE_DURATION = 0.6; // seconds each active effect gets the blink "turn"
 const IFRAME_BLINK_FREQUENCY = 0.05; // blink every 0.05 seconds
@@ -167,9 +169,20 @@ function _isPlayerEffectActive(player, effect) {
 }
 
 export function computePlayerPipRows(player) {
-  return PLAYER_PIP_ORDER
+  const rows = PLAYER_PIP_ORDER
     .filter(effect => _isPlayerEffectActive(player, effect))
     .map(effect => ({ effect, color: PLAYER_EFFECT_COLORS[effect], stacks: 1 }));
+
+  // Drowning meter — deep water (PhysicsSystem.applyLiquidResults) fills
+  // player.drownPips 0→3 over 6s of non-immune deep-water contact. Unlike
+  // the fixed 1-dot rows above, this is a progress meter: stacks tracks
+  // whole pips filled so far, so the row visibly grows dot-by-dot instead
+  // of appearing/disappearing as a single unit.
+  const drownStacks = Math.floor(player.drownPips || 0);
+  if (drownStacks > 0) {
+    rows.push({ effect: 'drown', color: WATER_COLORS.deep, stacks: drownStacks });
+  }
+  return rows;
 }
 
 const STONE_SKIN_COLOR = '#8c7853'; // gray/bronze — must match the stoneskin pip color above

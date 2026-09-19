@@ -1,4 +1,4 @@
-import { PHYSICS, GRID, BACKGROUND_OBJECT_VARIANTS } from '../game/GameConfig.js';
+import { PHYSICS, GRID, BACKGROUND_OBJECT_VARIANTS, WATER_COLORS } from '../game/GameConfig.js';
 import {
   PLANE_TUNNEL,
   planeOf,
@@ -339,6 +339,7 @@ export class PhysicsSystem {
     let onIce = false;
     let inLiquid = false;
     let liquidState = 'normal';
+    let inDeepWaterTile = false; // Deep water (BackgroundObject.deepWater) — see velocityMultiplier below
     let inGrass = false;
     let inMud = false; // Wet mud — heavier than water, dodge roll bypasses
     let slowingMultiplier = 1.0; // For numeric slowing values (trees, stumps)
@@ -448,6 +449,7 @@ export class PhysicsSystem {
               } else {
                 inLiquid = true;
                 liquidState = wState;
+                if (obj.deepWater) inDeepWaterTile = true;
                 // Glacier Crab freezes water on contact
                 if (!isProjectile && entity.data?.char === 'u' && entity.isEnemy && obj.setWaterState) {
                   obj.setWaterState('frozen');
@@ -549,6 +551,7 @@ export class PhysicsSystem {
     const hasFloat = (entity.floatTimer > 0) || (entity.data?.float);
     if (hasFloat) {
       inLiquid = false;
+      inDeepWaterTile = false;
       damagingLiquid = null;
       inGrass = false;
       inMud = false;
@@ -563,7 +566,18 @@ export class PhysicsSystem {
       // swimAffinity entities (e.g. frog) glide through water at full speed —
       // they compensate via higher jump velocity in water. Shark Mask divers
       // are treated the same way while their dive is active.
-      velocityMultiplier = (entity.data?.swimAffinity || entity.diving) ? 1.0 : 0.5;
+      const swimsFast = entity.data?.swimAffinity || entity.diving;
+      // Deep water: an extra slow beyond the standard 0.5x, unless the entity
+      // already swims fast, or is a frog (polymorphed) or wearing Flippers
+      // (deepWaterImmune) — the two deep-water-specific immunities.
+      const deepWaterImmune = swimsFast || entity.polymorphed || entity.deepWaterImmune;
+      if (swimsFast) {
+        velocityMultiplier = 1.0;
+      } else if (inDeepWaterTile && !deepWaterImmune) {
+        velocityMultiplier = 0.3;
+      } else {
+        velocityMultiplier = 0.5;
+      }
     } else if (inDeepSnow && !isDodgeRolling) {
       // Ice-affinity enemies and small enemies travel under deep snow uninhibited
       const hasIceAffinity = entity.data?.affinities?.includes('ice');
@@ -593,6 +607,9 @@ export class PhysicsSystem {
     if (!isProjectile) {
       entity.isInDeepSnow = inDeepSnow;
       entity.isInCompactedSnow = inCompactedSnow;
+      // Read by Player.startDodgeRoll (blocks activation) and applyLiquidResults
+      // (drowning-pip fill) below.
+      entity.inDeepWater = inDeepWaterTile;
     }
 
     // Glacier Crab-specific: 2x speed in deep snow, freeze water on contact
@@ -720,7 +737,7 @@ export class PhysicsSystem {
       this.resolveTunnelWallOverlap(entity, room.tunnel, backgroundObjects, deltaTime);
     }
 
-    return { inLiquid, liquidState, damagingLiquid, healingLiquid };
+    return { inLiquid, liquidState, damagingLiquid, healingLiquid, inDeepWater: inDeepWaterTile };
   }
 
   checkCollision(entity, newX, newY, backgroundObjects = [], room = null) {
@@ -1566,7 +1583,37 @@ export class PhysicsSystem {
       ingredient.inWater = false;
     }
 
-    for (const { entity, inLiquid, liquidState, damagingLiquid, healingLiquid } of waterResults) {
+    for (const { entity, inLiquid, liquidState, damagingLiquid, healingLiquid, inDeepWater } of waterResults) {
+      // Deep-water drowning — independent of (runs before) the lava/heal/wet
+      // branches below, so pips drain even on a frame the entity has left the
+      // water for dry ground. Immune: aquatic enemies (data.waterAffinity or
+      // swimAffinity), frog form (polymorphed), and Flippers (deepWaterImmune).
+      if (entity.drownPips !== undefined) {
+        const drownImmune = entity.data?.waterAffinity || entity.data?.swimAffinity
+          || entity.polymorphed || entity.deepWaterImmune;
+        if (inDeepWater && !drownImmune) {
+          entity.drownPips = Math.min(3, entity.drownPips + deltaTime * 0.5); // fills over 6s
+          if (entity.drownPips >= 3) {
+            entity.drownDamageTimer -= deltaTime;
+            if (entity.drownDamageTimer <= 0) {
+              entity.drownDamageTimer = 1.0;
+              if (entity.takeDamage) {
+                const damageResult = entity.takeDamage(1);
+                if (damageResult === true || (damageResult && damageResult.damaged)) {
+                  game.combatSystem.createDamageNumber(1, entity.position.x, entity.position.y, WATER_COLORS.deep);
+                  entity.hitFlashTimer = 0.15;
+                }
+              }
+            }
+          } else {
+            entity.drownDamageTimer = 0;
+          }
+        } else {
+          entity.drownPips = Math.max(0, entity.drownPips - deltaTime); // drains over 3s
+          entity.drownDamageTimer = 0;
+        }
+      }
+
       // Ingredients: lava destroys them, water makes them bob
       if (entity.pickupCooldown !== undefined) {
         if (damagingLiquid) {

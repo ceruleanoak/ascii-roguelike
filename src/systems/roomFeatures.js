@@ -1916,3 +1916,128 @@ export function spawnGuaranteedItems(gen, room) {
   const item = new Item(itemChar, spawnPos.x, spawnPos.y);
   room.items.push(item);
 }
+
+// Deep-water depth check shared by RoomGenerator.stampWaterBlobs (lake/oasis
+// blobs) and generateOceanTerrain (ocean band). A cell reads as deep when
+// it's within the inner half of a blob node's radius (near the node center,
+// away from the noisy shoreline) — see deep-water feature-inbox spec:
+// darker-tinted '~' tiles that drown non-immune entities.
+export function isDeepWaterCell(col, row, nodes) {
+  for (const node of nodes) {
+    const dx = col - node.col;
+    const dy = row - node.row;
+    if (Math.sqrt(dx * dx + dy * dy) < node.radius * 0.5) return true;
+  }
+  return false;
+}
+
+// Moved out of RoomGenerator.js to stay within its architecture budget (see
+// CLAUDE.md Code Placement Procedure). `gen` is the RoomGenerator instance —
+// still needs its helper methods (hasObjectAt, isValidPosition, etc.).
+export function generateOceanTerrain(gen, room) {
+  const oceanConfig = gen.currentLetterTemplate.oceanZone;
+
+  // Generate sand in transition zone (columns 18-21)
+  for (let col = oceanConfig.sandStartCol; col <= oceanConfig.sandEndCol; col++) {
+    for (let row = 1; row < GRID.ROWS - 1; row++) {
+      // Random placement based on sand density
+      if (Math.random() < oceanConfig.sandDensity) {
+        const x = col * GRID.CELL_SIZE;
+        const y = row * GRID.CELL_SIZE;
+
+        // Check if position is clear (no walls, no existing objects)
+        if (!room.collisionMap[row][col] && !gen.hasObjectAt(room, x, y)) {
+          const sand = new BackgroundObject('.', x, y);
+          room.backgroundObjects.push(sand);
+        }
+      }
+    }
+  }
+
+  // Generate water in ocean zone (columns 20-29). Deep water covers most of
+  // the band — only a shallow strip nearest the sand stays normal depth.
+  const oceanWaterSpan = oceanConfig.waterEndCol - oceanConfig.waterStartCol;
+  const oceanShallowCols = Math.max(1, Math.round(oceanWaterSpan * 0.2));
+  for (let col = oceanConfig.waterStartCol; col <= oceanConfig.waterEndCol; col++) {
+    const isDeep = col > oceanConfig.waterStartCol + oceanShallowCols;
+    for (let row = 1; row < GRID.ROWS - 1; row++) {
+      // Random placement based on water density
+      if (Math.random() < oceanConfig.waterDensity) {
+        const x = col * GRID.CELL_SIZE;
+        const y = row * GRID.CELL_SIZE;
+
+        // Check if position is clear (no walls, no existing objects)
+        if (!room.collisionMap[row][col] && !gen.hasObjectAt(room, x, y)) {
+          const water = new BackgroundObject('~', x, y, { deepWater: isDeep });
+          room.backgroundObjects.push(water);
+        }
+      }
+    }
+  }
+
+  // Disable east exit if configured
+  if (gen.currentLetterTemplate.exitRules?.disableEast) {
+    room.exits.east = false;
+  }
+}
+
+// Moved out of RoomGenerator.js to stay within its architecture budget.
+// Blob-fill + shoreline decoration; shared by generateLakeTerrain and Oasis.
+export function stampWaterBlobs(gen, room, nodes, edgeNoise, waterDensity) {
+  // For each grid cell, check if it falls inside any blob node
+  for (let col = 1; col < GRID.COLS - 1; col++) {
+    for (let row = 1; row < GRID.ROWS - 1; row++) {
+      if (room.collisionMap[row][col]) continue;
+
+      // Check if cell is inside any blob (with noise)
+      let inAnyBlob = false;
+      for (const node of nodes) {
+        const dx = col - node.col;
+        const dy = row - node.row;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        // Perlin-like edge noise: add random offset to threshold per cell
+        const noiseOffset = (Math.random() - 0.5) * edgeNoise;
+        if (dist < node.radius + noiseOffset) {
+          inAnyBlob = true;
+          break;
+        }
+      }
+
+      if (inAnyBlob && Math.random() < waterDensity) {
+        // Remove any existing background object at this cell
+        const cellX = col * GRID.CELL_SIZE;
+        const cellY = row * GRID.CELL_SIZE;
+        const halfCell = GRID.CELL_SIZE / 2;
+
+        room.backgroundObjects = room.backgroundObjects.filter(obj =>
+          !(Math.abs(obj.position.x - cellX) < halfCell &&
+            Math.abs(obj.position.y - cellY) < halfCell)
+        );
+
+        // Deep water fills each blob's inner half (near its node center);
+        // the outer half (near the noisy shoreline) stays normal depth.
+        const water = new BackgroundObject('~', cellX, cellY, { deepWater: isDeepWaterCell(col, row, nodes) });
+        room.backgroundObjects.push(water);
+      }
+    }
+  }
+
+  // Scatter shoreline decoration (rocks, bushes) at blob edges
+  for (const node of nodes) {
+    const decCount = Math.floor(node.radius * 1.5);
+    for (let i = 0; i < decCount; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const edgeDist = node.radius + 0.5 + Math.random() * 1.5;
+      const col = Math.round(node.col + Math.cos(angle) * edgeDist);
+      const row = Math.round(node.row + Math.sin(angle) * edgeDist);
+
+      if (gen.isValidPosition(col, row, room) &&
+          !gen.hasObjectAt(room, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE)) {
+        const decChar = Math.random() < 0.6 ? '%' : '0';
+        const decObj = new BackgroundObject(decChar, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+        gen.applyZoneProperties(decObj, room.zone);
+        room.backgroundObjects.push(decObj);
+      }
+    }
+  }
+}

@@ -1796,6 +1796,13 @@ export const ITEMS = {
     spellDescription: 'LEAVE A LIVE WAKE.',
     color: '#ccddee'
   },
+  '⚷': {
+    char: '⚷', name: 'Flippers', type: ITEM_TYPES.ARMOR,
+    defense: 1,
+    deepWaterImmune: true, // full deep-water immunity: no extra slow, no drowning pips, dodge roll works normally (matches frog form)
+    spellDescription: 'THE DEEP HOLDS NO CLAIM.',
+    color: '#3399cc'
+  },
 
   // ── Moss Cloak: stealth bush transform ────────────────────────────────────
   // After a dodge roll ends, the player becomes "armed". Staying still (no WASD)
@@ -2681,11 +2688,13 @@ export const INGREDIENTS = {
 
   // Blue-zone ingredients — shared Pearl Shard base + one rare per armor recipe.
   // Drop sources: 'p' from Ocean fishing (rare), 'n' from Sea Snake (rare),
-  // 'C' from Coral Cluster bg objects in Lake rooms, 'Y' from Ocean fishing (rare).
+  // 'C' from Coral Cluster bg objects in Lake rooms, 'Y' from Ocean fishing (rare),
+  // 'V' from Lake/Ocean fishing (rare).
   'p': { char: 'p', name: 'Pearl Shard',    color: '#ddeeff' },
   'n': { char: 'n', name: 'Sharkbone',      color: '#ccd8e8' },
   'C': { char: 'C', name: 'Coral Cluster',  color: '#ff88aa' },
   'Y': { char: 'Y', name: 'Stingray Barb',  color: '#aabbcc' },
+  'V': { char: 'V', name: 'Webbed Foot',    color: '#77cc99' },
 
   // Huntable game (HuntingSystem) — rare Moose drop.
   'K': { char: 'K', name: 'Thick Fur', color: '#c9a876' },

@@ -46,6 +46,7 @@ export class EquipmentEffectsSystem {
     player.sharkMask = false;
     player.coralCrown = false;
     player.stingrayMantle = false;
+    player.deepWaterImmune = false;
 
     // Apply equipped armor properties
     if (inventorySystem.equippedArmor) {
@@ -74,6 +75,7 @@ export class EquipmentEffectsSystem {
       player.sharkMask = a.sharkMask || false;
       player.coralCrown = a.coralCrown || false;
       player.stingrayMantle = a.stingrayMantle || false;
+      player.deepWaterImmune = a.deepWaterImmune || false;
     }
 
     player.mass = 1 + player.massBonus; // base mass + massBonus, read by PhysicsSystem

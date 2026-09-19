@@ -26,7 +26,8 @@ export const FISHING_TABLES = {
       // bootstrap source.
       { name: 'Oyster Husk', char: 'ծ', color: '#ddeeff', drops: ['p'],             weight: 3 },
       { name: 'Sharkbone',   char: 'ծ', color: '#ccd8e8', drops: ['n'],             weight: 1 },
-      { name: 'Ray Tail',    char: 'ծ', color: '#aabbcc', drops: ['Y'],             weight: 1 }
+      { name: 'Ray Tail',    char: 'ծ', color: '#aabbcc', drops: ['Y'],             weight: 1 },
+      { name: 'Webbed Foot', char: 'ծ', color: '#77cc99', drops: ['V'],             weight: 1 }
     ]
   },
 
@@ -42,6 +43,7 @@ export const FISHING_TABLES = {
       { name: 'Oyster',       char: 'ծ', color: '#ddeeff', drops: ['p'],            weight: 12 },
       { name: 'Sharkbone',    char: 'ծ', color: '#ccd8e8', drops: ['n'],            weight: 5 },
       { name: 'Ray Tail',     char: 'ծ', color: '#aabbcc', drops: ['Y'],            weight: 5 },
+      { name: 'Webbed Foot',  char: 'ծ', color: '#77cc99', drops: ['V'],            weight: 5 },
       { name: 'Fish',         char: 'ծ', color: '#7ec8e3', drops: [], directPickupItem: '♓', weight: 20 },
       { name: 'Empty Bottle', char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 }
     ]

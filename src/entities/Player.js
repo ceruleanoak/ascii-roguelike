@@ -146,6 +146,16 @@ export class Player {
     // reads as "burning" for the status pip — see StatusEffectVisuals.js.
     this.inDamagingLiquid = false;
 
+    // Deep water (PhysicsSystem sets inDeepWater every frame; applyLiquidResults
+    // fills/drains drownPips and ticks drownDamageTimer once maxed at 3).
+    // deepWaterImmune is armor-derived (Flippers), projected by
+    // EquipmentEffectsSystem same as sharkMask/coralCrown/stingrayMantle;
+    // frog form's existing `polymorphed` flag grants the same immunity.
+    this.inDeepWater = false;
+    this.drownPips = 0;
+    this.drownDamageTimer = 0;
+    this.deepWaterImmune = false;
+
     // Poison status (Plague Rat bite) — mirrors burn's shape exactly
     this.poisonDuration = 0;
     this.poisonTickTimer = 0;
@@ -650,6 +660,12 @@ export class Player {
       return false;
     }
 
+    // Deep water blocks roll activation outright — frog form and Flippers
+    // (deepWaterImmune) are exempt, matching their full deep-water immunity.
+    if (this.inDeepWater && !this.polymorphed && !this.deepWaterImmune) {
+      return false;
+    }
+
     // Cancel attack windup for melee weapons
     if (this.heldItem && this.heldItem.windupActive) {
       this.heldItem.windupActive = false;
@@ -1119,6 +1135,12 @@ export class Player {
 
     // Reset inLiquid (set per-frame by main.js)
     this.inLiquid = false;
+
+    // Reset deep-water drowning state
+    this.inDeepWater = false;
+    this.drownPips = 0;
+    this.drownDamageTimer = 0;
+    this.deepWaterImmune = false;
 
     // Reset plane and interior state
     this.plane = 0;
