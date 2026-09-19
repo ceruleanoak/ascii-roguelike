@@ -628,8 +628,16 @@ export class PhysicsSystem {
         entity.velocity.vy = 0;
       }
       if (highSpeed && (collision.x || collision.y)) {
-        entity.takeDamage(1);
-        combatSystem?.createDamageNumber(1, entity.position.x, entity.position.y, '#ff4444');
+        // takeDamage returns false when the hit is blocked (e.g. still inside
+        // the iframes from the melee hit that launched this enemy — a Bat/
+        // Rubber Bat swing sets invulnerabilityTimer before the knockback
+        // carries the enemy into a wall this same frame or shortly after).
+        // Only show the number when the damage actually landed, matching the
+        // dodge-roll wall-slam's own guard at CombatSystem.js's `if (result)`.
+        const damaged = entity.takeDamage(1);
+        if (damaged !== false) {
+          combatSystem?.createDamageNumber(1, entity.position.x, entity.position.y, '#ff4444');
+        }
       }
       if (entity.pinOnWallContact && (collision.x || collision.y)) {
         entity.pinnedDuration = 2.0;
