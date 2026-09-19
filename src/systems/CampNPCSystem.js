@@ -170,15 +170,14 @@ export class CampNPCSystem {
     npc.clearIndicator();
 
     if (distToPlayer > COMPANION_FOLLOW_DISTANCE) {
-      const len = Math.max(distToPlayer, 0.001);
-      const dirX = dx / len;
-      const dirY = dy / len;
+      // Shared steering (stuck detection + detour + BFS fallback) — bare
+      // straight-line follow catches on corners in the dungeon (#208 family).
       const followSpeed = npc.speed * COMPANION_FOLLOW_SPEED_MULT;
-      npc.velocity.vx = dirX * followSpeed;
-      npc.velocity.vy = dirY * followSpeed;
-      // Update facing (toward player)
-      npc.facing.x = Math.sign(dirX) || npc.facing.x;
-      npc.facing.y = Math.sign(dirY) || npc.facing.y;
+      const result = steerToward(this.game, npc, player.position.x, player.position.y, followSpeed);
+      if (result?.heading) {
+        npc.facing.x = Math.sign(result.heading.x) || npc.facing.x;
+        npc.facing.y = Math.sign(result.heading.y) || npc.facing.y;
+      }
       // Position update delegated to PhysicsSystem.updateEntity()
     } else {
       npc.velocity.vx = 0;
@@ -289,10 +288,14 @@ export class CampNPCSystem {
     const dist = Math.sqrt(dx * dx + dy * dy);
 
     if (dist > COMPANION_FOLLOW_DISTANCE) {
-      const len = Math.max(dist, 0.001);
+      // Shared steering (stuck detection + detour + BFS fallback) — bare
+      // straight-line follow catches on corners in the dungeon (#208 family).
       const followSpeed = npc.speed * COMPANION_FOLLOW_SPEED_MULT;
-      npc.velocity.vx = (dx / len) * followSpeed;
-      npc.velocity.vy = (dy / len) * followSpeed;
+      const result = steerToward(this.game, npc, player.position.x, player.position.y, followSpeed);
+      if (result?.heading) {
+        npc.facing.x = Math.sign(result.heading.x) || npc.facing.x;
+        npc.facing.y = Math.sign(result.heading.y) || npc.facing.y;
+      }
       // Position update delegated to PhysicsSystem.updateEntity()
     } else {
       npc.velocity.vx = 0;
