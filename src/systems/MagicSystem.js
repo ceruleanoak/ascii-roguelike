@@ -451,6 +451,48 @@ export class MagicSystem {
     }
   }
 
+  // ─── Bare-staff missile ─────────────────────────────────────────────────
+
+  // Plain Staff / Thick Staff (weaponSubtype 'staff', MELEE, not a gem wand,
+  // not the Fishing Pole which shares the subtype). Excludes gem staffs
+  // (WAND) — those already spend mana on their own charge/cast.
+  isBareStaff(weapon) {
+    return !!weapon
+      && weapon.data?.weaponType === 'MELEE'
+      && weapon.data?.weaponSubtype === 'staff'
+      && !weapon.data?.isFishingRod;
+  }
+
+  // Called every time a bare staff's swing completes. When the mana meter is
+  // active and holds ≥1 point, spends 1 and fires a 1-damage bolt along the
+  // player's facing — the un-gemmed staff's only taste of magic. No-ops (and
+  // spends nothing) for every other weapon or an empty/inactive meter.
+  fireStaffMissile(player) {
+    const weapon = player?.heldItem;
+    if (!this.isBareStaff(weapon)) return false;
+    if (!this.spendMana(player, 1)) return false;
+
+    const angle = Math.atan2(player.facing.y, player.facing.x);
+    const spawnOffset = 6;
+    this.game.combatSystem.createAttack({
+      type: 'bullet',
+      char: '∘',
+      drawAngle: angle,
+      weaponChar: weapon.char,
+      position: {
+        x: player.position.x + player.width / 2 + Math.cos(angle) * spawnOffset,
+        y: player.position.y + player.height / 2 + Math.sin(angle) * spawnOffset
+      },
+      velocity: { vx: Math.cos(angle) * 260, vy: Math.sin(angle) * 260 },
+      damage: 1,
+      color: '#cc66ff',
+      bulletRange: 240,
+      owner: player,
+      shooterPlane: player.plane
+    }, this._activeEnemies());
+    return true;
+  }
+
   // ─── Spell effects ──────────────────────────────────────────────────────
 
   // Layer routing delegates to the canonical game accessors (single source of truth).

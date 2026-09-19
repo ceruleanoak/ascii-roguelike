@@ -2647,6 +2647,7 @@ class Game {
         if (this.characterSystem.isBlockingStaff(this.player.heldItem)) {
           this.player.staffSwingHasFired = true;
         }
+        this.magicSystem.fireStaffMissile(this.player); // no-op off-staff
         this._emitSoundEvent();
       }
       this._updateReloadAudio(this.player.heldItem);
