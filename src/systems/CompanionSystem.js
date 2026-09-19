@@ -1,7 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { NPCRat } from '../entities/NPCRat.js';
 import { Ingredient } from '../entities/Ingredient.js';
-import { planeOf, PLANE_SURFACE } from './PlaneSystem.js';
+import { planeOf, PLANE_SURFACE, tagInteriorPlane } from './PlaneSystem.js';
 
 // Grace period before a wild crow may loot-seek a piece of ground loot,
 // timed from the first frame it's observed as a valid target (effectively
@@ -146,18 +146,18 @@ export class CompanionSystem {
       for (let k = 0; k < 10; k++) {
         const angle = (k / 10) * Math.PI * 2 + Math.random() * 0.3;
         const speed = 30 + Math.random() * 30;
-        game.particles.push({
+        game.particles.push(tagInteriorPlane(game, {
           x: ex, y: ey,
           vx: Math.cos(angle) * speed,
           vy: Math.sin(angle) * speed - 15,
           life: 0.5, maxLife: 0.5,
           char: '·', color: '#ffffff'
-        });
+        }));
       }
-      game.particles.push({
+      game.particles.push(tagInteriorPlane(game, {
         x: ex, y: ey - 4, vx: 0, vy: -22,
         life: 0.9, maxLife: 0.9, char: '♥', color: '#ff5577'
-      });
+      }));
     }
   }
 
@@ -524,19 +524,19 @@ export class CompanionSystem {
       for (let i = 0; i < 14; i++) {
         const angle = (i / 14) * Math.PI * 2 + Math.random() * 0.3;
         const speed = 35 + Math.random() * 35;
-        game.particles.push({
+        game.particles.push(tagInteriorPlane(game, {
           x: ex, y: ey,
           vx: Math.cos(angle) * speed,
           vy: Math.sin(angle) * speed - 20,
           life: 0.55, maxLife: 0.55,
           char: i % 2 === 0 ? '*' : '·',
           color: i % 2 === 0 ? '#ffffff' : '#daa520'
-        });
+        }));
       }
-      game.particles.push({
+      game.particles.push(tagInteriorPlane(game, {
         x: ex, y: ey - 4, vx: 0, vy: -22,
         life: 0.9, maxLife: 0.9, char: '♥', color: '#ff5577'
-      });
+      }));
     };
 
     for (const crow of [...crows]) {
@@ -626,12 +626,12 @@ export class CompanionSystem {
           const cy = crow.position.y + GRID.CELL_SIZE / 2;
           for (let i = 0; i < 5; i++) {
             const a = (i / 5) * Math.PI * 2;
-            game.particles.push({
+            game.particles.push(tagInteriorPlane(game, {
               x: cx, y: cy,
               vx: Math.cos(a) * 25, vy: Math.sin(a) * 25 - 10,
               life: 0.35, maxLife: 0.35,
               char: '·', color: '#ffffff'
-            });
+            }));
           }
         }
       },
@@ -683,12 +683,12 @@ export class CompanionSystem {
         const iy = hitEnemy.position.y + GRID.CELL_SIZE / 2;
         for (let i = 0; i < 6; i++) {
           const a = (i / 6) * Math.PI * 2;
-          game.particles.push({
+          game.particles.push(tagInteriorPlane(game, {
             x: ix, y: iy,
             vx: Math.cos(a) * 50, vy: Math.sin(a) * 50,
             life: 0.35, maxLife: 0.35,
             char: '·', color: '#ffffff'
-          });
+          }));
         }
       }
     }

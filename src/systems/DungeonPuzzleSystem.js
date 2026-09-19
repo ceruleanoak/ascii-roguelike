@@ -5,6 +5,7 @@ import { ITEMS } from '../data/items.js';
 import { paintDescentVisual, paintStairsUpVisual } from '../data/dungeonFloorTemplates.js';
 import { TORCH_INTERACT_RADIUS } from './MazeSystem.js';
 import { tickTriggers, within, overlapsCell } from './triggerMachine.js';
+import { tagInteriorPlane } from './PlaneSystem.js';
 
 // Proximity radius for door/switch/slot interaction (px from cell center) —
 // mirrors DungeonSystem's DOOR_INTERACT_RADIUS.
@@ -309,11 +310,11 @@ export class DungeonPuzzleSystem {
     const cy = slot.obj.position.y + GRID.CELL_SIZE / 2;
     for (let i = 0; i < 4; i++) {
       const angle = (i / 4) * Math.PI * 2;
-      game.particles.push(new Particle(
+      game.particles.push(tagInteriorPlane(game, new Particle(
         cx, cy, '*', color,
         { vx: Math.cos(angle) * 25, vy: Math.sin(angle) * 25 - 15 },
         0.8
-      ));
+      )));
     }
     game.audioSystem?.playSFX?.('pyramid_fill');
     this._checkPyramidComplete(floor);
@@ -358,13 +359,13 @@ export class DungeonPuzzleSystem {
     for (let i = 0; i < chars.length; i++) {
       const angle = (i / chars.length) * Math.PI * 2;
       const speed = 30 + Math.random() * 30;
-      game.particles.push(new Particle(
+      game.particles.push(tagInteriorPlane(game, new Particle(
         sx + (Math.random() - 0.5) * 6,
         sy + (Math.random() - 0.5) * 6,
         chars[i], colors[i],
         { vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 20 },
         1.0 + Math.random() * 0.5
-      ));
+      )));
     }
   }
 

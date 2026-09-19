@@ -3,7 +3,7 @@ import { Puddle } from '../entities/Puddle.js';
 import { createActivationBurst, createEmberBurst, createIceBurst } from '../entities/Particle.js';
 import { GRID } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
-import { isInteriorActive } from './PlaneSystem.js';
+import { isInteriorActive, tagInteriorPlane } from './PlaneSystem.js';
 
 const MAX_CHARGE_TIME = 0.7; // seconds to reach max throw distance
 const MIN_DIST = GRID.CELL_SIZE;       // 16px — tap distance
@@ -703,7 +703,7 @@ export class TrapSystem {
       entry.blinkVisible = true;
     }
     game.placedTraps.push(entry);
-    game.particles.push(...createActivationBurst(t.x, t.y, t.trapData.color || '#ffffff'));
+    for (const p of createActivationBurst(t.x, t.y, t.trapData.color || '#ffffff')) game.particles.push(tagInteriorPlane(game, p));
   }
 
   // Place a trap at an arbitrary world position (used by Trap Goblin enemy).
@@ -881,7 +881,7 @@ export class TrapSystem {
               if (!this._applyTrapHit(enemy, trapData, zapDmg, '#00ffff')) continue;
               enemy.applyStatusEffect('zap', trapData.stunDuration || 0.8);
               // Lightning particle
-              game.particles.push({
+              game.particles.push(tagInteriorPlane(game, {
                 x: tx,
                 y: ty,
                 vx: (Math.random() - 0.5) * 60,
@@ -891,7 +891,7 @@ export class TrapSystem {
                 char: '!',
                 color: '#00ffff',
                 isImpact: true
-              });
+              }));
             }
           }
 
@@ -951,7 +951,7 @@ export class TrapSystem {
       // enemies (freeze >1.0) also get Infinity. Everyone else uses effectDuration. `frozen=true`
       // unconditionally so the freeze is full immobilization, not just slow. Freeze-immune enemies
       // are filtered by _applyTrapHit via trapData.affinity='freeze'.
-      game.particles.push(...createIceBurst(cx, cy));
+      for (const p of createIceBurst(cx, cy)) game.particles.push(tagInteriorPlane(game, p));
       const freezeDmg = trapData.damage || 1;
       for (const enemy of targets) {
         const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - cx;
@@ -1032,7 +1032,7 @@ export class TrapSystem {
       for (let i = 0; i < 18; i++) {
         const angle = (Math.PI * 2 * i) / 18 + (Math.random() - 0.5) * 0.3;
         const speed = 70 + Math.random() * 80;
-        game.particles.push({
+        game.particles.push(tagInteriorPlane(game, {
           x: cx, y: cy,
           vx: Math.cos(angle) * speed,
           vy: Math.sin(angle) * speed,
@@ -1041,7 +1041,7 @@ export class TrapSystem {
           char: iceChars[Math.floor(Math.random() * iceChars.length)],
           color: iceColors[Math.floor(Math.random() * iceColors.length)],
           isImpact: true
-        });
+        }));
       }
     } else if (trapData.effect === 'remote') {
       // Remote Bomb: radial explosion damage + fire particles (friendly fire). Pure
@@ -1072,7 +1072,7 @@ export class TrapSystem {
       for (let i = 0; i < 24; i++) {
         const angle = (Math.PI * 2 * i) / 24 + (Math.random() - 0.5) * 0.4;
         const speed = 80 + Math.random() * 120;
-        game.particles.push({
+        game.particles.push(tagInteriorPlane(game, {
           x: cx, y: cy,
           vx: Math.cos(angle) * speed,
           vy: Math.sin(angle) * speed,
@@ -1081,7 +1081,7 @@ export class TrapSystem {
           char: ['*', '!', '+', '.'][Math.floor(Math.random() * 4)],
           color: fireColors[Math.floor(Math.random() * fireColors.length)],
           isImpact: true
-        });
+        }));
       }
     } else if (trapData.effect === 'snare') {
       // Snare Trap: a beast-affinity enemy caught in the radius is rooted in place
@@ -1150,9 +1150,9 @@ export class TrapSystem {
 
     // Burst particle effect at trap location
     if (trapData.effect === 'burn') {
-      game.particles.push(...createEmberBurst(cx, cy));
+      for (const p of createEmberBurst(cx, cy)) game.particles.push(tagInteriorPlane(game, p));
     } else {
-      game.particles.push(...createActivationBurst(cx, cy, trapData.color || '#ffffff'));
+      for (const p of createActivationBurst(cx, cy, trapData.color || '#ffffff')) game.particles.push(tagInteriorPlane(game, p));
     }
     game.placedTraps.splice(index, 1);
   }

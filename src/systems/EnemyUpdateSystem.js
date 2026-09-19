@@ -523,8 +523,8 @@ export class EnemyUpdateSystem {
     // wide radial scatter) plus a screen shake — the shockwave ring itself is
     // invisible by design (WorldEffectsSystem), so the detonation needs its
     // own visual payoff to read as "large and devastating."
-    game.particles.push(...createEmberBurst(ed.x, ed.y));
-    game.particles.push(...createExplosion(ed.x, ed.y, 24, '#ff6600'));
+    for (const p of createEmberBurst(ed.x, ed.y)) game.particles.push(tagInteriorPlane(game, p));
+    for (const p of createExplosion(ed.x, ed.y, 24, '#ff6600')) game.particles.push(tagInteriorPlane(game, p));
     game.renderController?.screenShake.trigger(10, 0.5);
     game.audioSystem?.playSFX('destroy');
   }

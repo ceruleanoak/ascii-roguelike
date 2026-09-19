@@ -17,6 +17,7 @@
 
 import { GRID } from '../game/GameConfig.js';
 import { makeAuraParticle } from './WorldEffectsSystem.js';
+import { tagInteriorPlane } from './PlaneSystem.js';
 
 export class ArmorEffectsSystem {
   constructor(game) {
@@ -41,7 +42,7 @@ export class ArmorEffectsSystem {
       if (player._auraParticleTimer >= emitInterval) {
         player._auraParticleTimer = 0;
         const p = makeAuraParticle(cx, cy, auraType);
-        if (p) particles.push(p);
+        if (p) particles.push(tagInteriorPlane(this.game, p));
       }
     }
 
@@ -75,7 +76,7 @@ export class ArmorEffectsSystem {
           p.vy = Math.sin(angle) * speed;
           p.life = 0.4 + Math.random() * 0.3;
           p.maxLife = p.life;
-          particles.push(p);
+          particles.push(tagInteriorPlane(this.game, p));
         }
       }
     }

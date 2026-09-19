@@ -5,6 +5,7 @@ import { GRID, NPC_INTERACTION_RANGE, GAME_STATES } from '../game/GameConfig.js'
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Captive } from '../entities/Captive.js';
 import { isCellProtected } from './roomFeatures.js';
+import { tagInteriorPlane } from './PlaneSystem.js';
 
 export class CharacterSystem {
   constructor(game) {
@@ -458,7 +459,7 @@ export class CharacterSystem {
 
           // Show red X if dodge roll blocked by goo (with cooldown to prevent spam)
           if (!rollStarted && player.isGooey() && game.dodgeBlockedFeedbackTimer <= 0) {
-            game.particles.push({
+            game.particles.push(tagInteriorPlane(game, {
               x: player.position.x + GRID.CELL_SIZE / 2,
               y: player.position.y - 10,
               vx: 0,
@@ -468,7 +469,7 @@ export class CharacterSystem {
               char: 'X',
               color: '#ff0000',
               isImpact: true
-            });
+            }));
             game.dodgeBlockedFeedbackTimer = 0.5;
           }
         } else if (player.dodgeRoll.active) {
@@ -554,14 +555,14 @@ export class CharacterSystem {
     for (let i = 0; i < 14; i++) {
       const ang = Math.random() * Math.PI * 2;
       const speed = 60 + Math.random() * 90;
-      game.particles.push({
+      game.particles.push(tagInteriorPlane(game, {
         x: cx, y: cy,
         vx: Math.cos(ang) * speed,
         vy: Math.sin(ang) * speed,
         life: 0.7, maxLife: 0.7,
         char: Math.random() < 0.5 ? '·' : '▪',
         color: '#88ccff'
-      });
+      }));
     }
     game.audioSystem?.playSFX?.('roll');
     this.endSharkDive(game.player);

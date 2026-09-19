@@ -1,5 +1,5 @@
 import { GRID, PHYSICS, COLORS } from '../game/GameConfig.js';
-import { planeOf, inSamePlane, objectOnPlane } from './PlaneSystem.js';
+import { planeOf, inSamePlane, objectOnPlane, tagInteriorPlane } from './PlaneSystem.js';
 import { applyExitMutatingSwordHit } from './ExitSystem.js';
 import { BoomerangMechanic } from './BoomerangMechanic.js';
 import { WallRicochetMechanic } from './WallRicochetMechanic.js';
@@ -2070,7 +2070,7 @@ export class CombatSystem {
   }
 
   createDamageNumber(damage, x, y, color, scale = 1, duration = 1.0) {
-    this.damageNumbers.push({
+    this.damageNumbers.push(tagInteriorPlane(this.game, {
       value: damage,
       x: x + GRID.CELL_SIZE / 2,
       y: y,
@@ -2080,7 +2080,7 @@ export class CombatSystem {
       riseSpeed: 30,  // pixels per second
       color: color,
       scale: scale
-    });
+    }));
   }
 
   // Staggered player combat text — see DamageNumberQueue.js.

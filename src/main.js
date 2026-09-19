@@ -1448,6 +1448,7 @@ class Game {
             0.8 + Math.random() * 0.4   // lifetime
           );
 
+          tagInteriorPlane(this, glitter);
           this.particles.push(glitter);
         }
       }
@@ -3149,6 +3150,7 @@ class Game {
           bottle.color
         );
         const burst = createActivationBurst(this.player.position.x, this.player.position.y, bottle.color);
+        for (const p of burst) tagInteriorPlane(this, p);
         this.particles.push(...burst);
         this.inventorySystem.equippedConsumables[bottleIdx] = null;
         this.player.equippedConsumables[bottleIdx] = null;
@@ -3175,6 +3177,7 @@ class Game {
           feather.color
         );
         const burst = createActivationBurst(this.player.position.x, this.player.position.y, feather.color);
+        for (const p of burst) tagInteriorPlane(this, p);
         this.particles.push(...burst);
         this.inventorySystem.equippedConsumables[reviveIdx] = null;
         this.player.equippedConsumables[reviveIdx] = null;

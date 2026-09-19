@@ -1,5 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { isCellSealed } from './roomFeatures.js';
+import { tagInteriorPlane } from './PlaneSystem.js';
 
 export class WarpSystem {
   constructor(game) {
@@ -94,8 +95,8 @@ export class WarpSystem {
     for (let i = 0; i < 6; i++) {
       const angle = (i / 6) * Math.PI * 2;
       const speed = 30 + Math.random() * 25;
-      this.game.particles.push({ x: ox, y: oy, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-        life: 0.35, maxLife: 0.35, char: '*', color: player.color });
+      this.game.particles.push(tagInteriorPlane(this.game, { x: ox, y: oy, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        life: 0.35, maxLife: 0.35, char: '*', color: player.color }));
     }
 
     // Path trail (static dots that fade out)
@@ -103,8 +104,8 @@ export class WarpSystem {
       const steps = Math.max(2, Math.floor(trailDist / (C / 2)));
       for (let i = 1; i < steps; i++) {
         const t = i / steps;
-        this.game.particles.push({ x: ox + dx * t, y: oy + dy * t, vx: 0, vy: 0,
-          life: 0.25, maxLife: 0.25, char: '.', color: player.color });
+        this.game.particles.push(tagInteriorPlane(this.game, { x: ox + dx * t, y: oy + dy * t, vx: 0, vy: 0,
+          life: 0.25, maxLife: 0.25, char: '.', color: player.color }));
       }
     }
 
@@ -112,8 +113,8 @@ export class WarpSystem {
     for (let i = 0; i < 6; i++) {
       const angle = (i / 6) * Math.PI * 2;
       const speed = 25 + Math.random() * 30;
-      this.game.particles.push({ x: ox + dx, y: oy + dy, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-        life: 0.4, maxLife: 0.4, char: '*', color: player.color });
+      this.game.particles.push(tagInteriorPlane(this.game, { x: ox + dx, y: oy + dy, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        life: 0.4, maxLife: 0.4, char: '*', color: player.color }));
     }
 
     // Apply teleport

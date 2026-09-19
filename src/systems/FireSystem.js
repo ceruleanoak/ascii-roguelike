@@ -33,6 +33,7 @@
  */
 
 import { GRID } from '../game/GameConfig.js';
+import { tagInteriorPlane } from './PlaneSystem.js';
 
 const IGNITE_INTERVAL = 0.4;  // seconds per spread step
 const SPREAD_CHANCE = 0.5;    // per-neighbor ignition chance each spread step
@@ -179,21 +180,21 @@ export class FireSystem {
       const emberCount = obj.flammability === 'high' ? 3 : 1;
       if (Math.random() < emberCount * deltaTime && particles.length < PARTICLE_BUDGET) {
         const travelDist = obj.flammability === 'high' ? 48 : 32;
-        particles.push(this._makeEmber(
+        particles.push(tagInteriorPlane(this.game, this._makeEmber(
           obj.position.x + GRID.CELL_SIZE / 2,
           obj.position.y + GRID.CELL_SIZE / 2,
           travelDist
-        ));
+        )));
       }
     }
 
     for (const arrow of this.game.combatSystem?.getStuckArrows() ?? []) {
       if (arrow.isBurning && particles.length < PARTICLE_BUDGET && Math.random() < deltaTime) {
-        particles.push(this._makeEmber(
+        particles.push(tagInteriorPlane(this.game, this._makeEmber(
           arrow.position.x + GRID.CELL_SIZE / 2,
           arrow.position.y + GRID.CELL_SIZE / 2,
           32
-        ));
+        )));
       }
     }
   }

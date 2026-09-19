@@ -3,6 +3,7 @@ import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { ITEM_TYPES, ITEMS } from '../data/items.js';
+import { tagInteriorPlane } from './PlaneSystem.js';
 
 // Transmutation Wand resolution. CombatSystem queues a polymorphEvent whenever
 // a transmutation_bolt projectile hits an enemy (CombatSystem.polymorphEvents,
@@ -36,7 +37,7 @@ export class TransmutationSystem {
         for (let i = 0; i < 20; i++) {
           const angle = Math.random() * Math.PI * 2;
           const speed = 50 + Math.random() * 100;
-          game.particles.push({
+          game.particles.push(tagInteriorPlane(game, {
             x: pos.x + GRID.CELL_SIZE / 2,
             y: pos.y + GRID.CELL_SIZE / 2,
             vx: Math.cos(angle) * speed,
@@ -46,7 +47,7 @@ export class TransmutationSystem {
             char: '*',
             color: '#ff00ff',
             isImpact: true
-          });
+          }));
         }
 
         // Polymorph transformation - weighted random outcome

@@ -1,5 +1,6 @@
 import { GRID } from '../../game/GameConfig.js';
 import { createActivationBurst } from '../Particle.js';
+import { tagInteriorPlane } from '../../systems/PlaneSystem.js';
 
 // Sniper: a stationary ranged attacker, aware of the player's position
 // regardless of vision, with a vanish-and-reposition evasion response and a
@@ -58,7 +59,9 @@ export const SniperMechanic = {
       if (!combatSystem.game.sniperBeams) combatSystem.game.sniperBeams = [];
       combatSystem.game.sniperBeams.push({ from, to, createdAt: Date.now(), life: (cfg?.beamFadeTime ?? 0.6) * 1000 });
       // Small muzzle-flash burst at the Sniper's position on fire.
-      combatSystem.game.particles.push(...createActivationBurst(from.x, from.y, '#ff5555'));
+      for (const p of createActivationBurst(from.x, from.y, '#ff5555')) {
+        combatSystem.game.particles.push(tagInteriorPlane(combatSystem.game, p));
+      }
     }
     if (updateResult.sniperBeamHit) {
       // Armor-piercing: isImpact bypasses staff block (Miner precedent). Capture

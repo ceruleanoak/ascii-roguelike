@@ -13,6 +13,7 @@
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Particle } from '../entities/Particle.js';
 import { GRID } from '../game/GameConfig.js';
+import { tagInteriorPlane } from './PlaneSystem.js';
 
 // Mana yield per ingredient char. Phase 1 only Goo is exposed in the UI;
 // remaining entries are reserved for the Phase 2 conversion menu expansion.
@@ -425,7 +426,7 @@ export class MagicSystem {
       );
       p.boundToGrid = false;
       p.decelerationRate = 0.94;
-      particles.push(p);
+      particles.push(tagInteriorPlane(this.game, p));
     }
   }
 
@@ -446,7 +447,7 @@ export class MagicSystem {
       );
       p.boundToGrid = false;
       p.decelerationRate = 0.92;
-      particles.push(p);
+      particles.push(tagInteriorPlane(this.game, p));
     }
   }
 

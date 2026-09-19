@@ -10,7 +10,7 @@ import { CHARACTER_TYPES } from '../data/characters.js';
 import { createDebris } from '../entities/Debris.js';
 import { createIceBurst, Particle } from '../entities/Particle.js';
 import { INTERACTION_RANGE, OBJECT_ANIMATIONS, GRID, GAME_STATES } from '../game/GameConfig.js';
-import { inSamePlane, planeOf, objectOnPlane } from './PlaneSystem.js';
+import { inSamePlane, planeOf, objectOnPlane, tagInteriorPlane } from './PlaneSystem.js';
 import { WiseFellow } from '../entities/WiseFellow.js';
 
 // Refusal singletons for resolveSmashRefusal — the melee loop tests every
@@ -202,7 +202,7 @@ export class InteractionSystem {
         },
         0.8                     // lifetime
       );
-      game.particles.push(particle);
+      game.particles.push(tagInteriorPlane(game, particle));
     }
   }
 
@@ -729,10 +729,10 @@ export class InteractionSystem {
     } else if (effect === 'cutGrass') {
       // Frozen grass (tinted by a Freeze Trap) emits an ice burst when sliced.
       if (obj.frozen) {
-        game.particles.push(...createIceBurst(
+        for (const p of createIceBurst(
           obj.position.x + GRID.CELL_SIZE / 2,
           obj.position.y + GRID.CELL_SIZE / 2
-        ));
+        )) game.particles.push(tagInteriorPlane(game, p));
       }
       // Grass drop table — rolled independently per grass object cut.
       // Thresholds are 1/8 of the per-swing values so that ~8 blades per swing
@@ -946,7 +946,7 @@ export class InteractionSystem {
           color: cloudColor,
           size: 4
         };
-        game.particles.push(particle);
+        game.particles.push(tagInteriorPlane(game, particle));
       }
     }
   }
@@ -974,7 +974,7 @@ export class InteractionSystem {
             12,
             '#ffaa00'
           );
-          game.debris.push(...cageDebris);
+          for (const piece of cageDebris) game.debris.push(tagInteriorPlane(game, piece));
 
           game.captiveInteractionThisFrame = true;
           return true;

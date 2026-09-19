@@ -22,6 +22,7 @@ import { Enemy } from '../entities/Enemy.js';
 import { TurtleHead } from '../entities/TurtleHead.js';
 import { TurtleLeg } from '../entities/TurtleLeg.js';
 import { PandoraBox, PANDORA_PHASE2_HP } from '../entities/PandoraBox.js';
+import { tagInteriorPlane } from './PlaneSystem.js';
 
 
 
@@ -537,7 +538,7 @@ export class BossSystem {
       // Bias outward from the centre so the spray traces the hole's real extent
       const dist  = lead.radius * (0.2 + Math.random() * 0.8);
       const speed = 55 + Math.random() * 95;
-      this.game.particles.push({
+      this.game.particles.push(tagInteriorPlane(this.game, {
         x: lead.x + Math.cos(angle) * dist,
         y: lead.y + Math.sin(angle) * dist,
         vx: Math.cos(angle) * speed,
@@ -546,19 +547,19 @@ export class BossSystem {
         maxLife: 0.8,
         char: SHARDS[Math.floor(Math.random() * SHARDS.length)],
         color: Math.random() < 0.5 ? '#ffffff' : '#cceeff',
-      });
+      }));
     }
     // A slower column of spray straight up out of the hole, so the breach point
     // itself stays readable after the outward shards have scattered.
     for (let i = 0; i < 8; i++) {
-      this.game.particles.push({
+      this.game.particles.push(tagInteriorPlane(this.game, {
         x: lead.x + (Math.random() - 0.5) * GRID.CELL_SIZE * 2,
         y: lead.y + (Math.random() - 0.5) * GRID.CELL_SIZE * 2,
         vx: (Math.random() - 0.5) * 30,
         vy: -110 - Math.random() * 60,
         life: 0.7, maxLife: 0.7,
         char: ':', color: '#aaddff',
-      });
+      }));
     }
   }
 
@@ -627,8 +628,7 @@ export class BossSystem {
           atk.velocity.vx, atk.velocity.vy,
           atk.decel ?? 2.2
         );
-        blob.hutPlane = !!this.game.activeFloor;
-        this.game.gooBlobs.push(blob);
+        this.game.gooBlobs.push(tagInteriorPlane(this.game, blob));
         while (this.game.gooBlobs.length > 20) this.game.gooBlobs.shift();
       } else if (atk.type === 'lightning_strike') {
         // Yellow boss: schedule a lightning strike via LightningStrikeSystem

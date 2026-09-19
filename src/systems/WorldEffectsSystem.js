@@ -212,10 +212,10 @@ export class WorldEffectsSystem {
       const hotWaterTiles = game._activeBackgroundObjects().filter(o => o.typeId === 'hot_water');
       if (hotWaterTiles.length > 0) {
         const tile = hotWaterTiles[Math.floor(Math.random() * hotWaterTiles.length)];
-        game.particles.push(createSteamPuff(
+        game.particles.push(tagInteriorPlane(game, createSteamPuff(
           tile.position.x + GRID.CELL_SIZE / 2,
           tile.position.y + GRID.CELL_SIZE / 2
-        ));
+        )));
       }
     }
 
@@ -610,7 +610,7 @@ export class WorldEffectsSystem {
           const side = player.footstepSide === 0 ? 0.5 : -0.5;
           const ox = -f.y * GRID.CELL_SIZE * 0.3 * side;
           const oy =  f.x * GRID.CELL_SIZE * 0.3 * side;
-          particles.push(createFootstep(cx + ox, cy + oy));
+          particles.push(tagInteriorPlane(game, createFootstep(cx + ox, cy + oy)));
           player.footstepSide = 1 - player.footstepSide;
           player.footstepTimer = 0.10;
         }
@@ -625,7 +625,7 @@ export class WorldEffectsSystem {
       if (player.wetDropTimer <= 0) {
         const dropCount = Math.random() < 0.4 ? 2 : 1;
         for (let d = 0; d < dropCount; d++) {
-          particles.push(createWetDrop(player.position.x, player.position.y));
+          particles.push(tagInteriorPlane(game, createWetDrop(player.position.x, player.position.y)));
         }
         const wet = player.wetDuration;
         player.wetDropTimer = wet > 4 ? 0.10 : wet > 2 ? 0.14 : 0.20;
@@ -641,7 +641,7 @@ export class WorldEffectsSystem {
         if (enemy.wetDropTimer <= 0) {
           const dropCount = Math.random() < 0.4 ? 2 : 1;
           for (let d = 0; d < dropCount; d++) {
-            particles.push(createWetDrop(enemy.position.x, enemy.position.y));
+            particles.push(tagInteriorPlane(game, createWetDrop(enemy.position.x, enemy.position.y)));
           }
           const wet = enemy.statusEffects.wet.duration;
           enemy.wetDropTimer = wet > 4 ? 0.10 : wet > 2 ? 0.14 : 0.20;
@@ -663,7 +663,7 @@ export class WorldEffectsSystem {
       if (playerInSteam) {
         player.steamTrailTimer -= deltaTime;
         if (player.steamTrailTimer <= 0) {
-          particles.push(createSteamPuff(player.position.x, player.position.y));
+          particles.push(tagInteriorPlane(game, createSteamPuff(player.position.x, player.position.y)));
           player.steamTrailTimer = 0.12 + Math.random() * 0.06;
         }
       } else {
@@ -683,7 +683,7 @@ export class WorldEffectsSystem {
       if (enemyInSteam) {
         enemy.steamTrailTimer = (enemy.steamTrailTimer || 0) - deltaTime;
         if (enemy.steamTrailTimer <= 0) {
-          particles.push(createSteamPuff(enemy.position.x, enemy.position.y));
+          particles.push(tagInteriorPlane(game, createSteamPuff(enemy.position.x, enemy.position.y)));
           enemy.steamTrailTimer = 0.15 + Math.random() * 0.07;
         }
       } else {
@@ -694,7 +694,8 @@ export class WorldEffectsSystem {
 
   spawnImpactEffects(impactEffects) {
     if (!impactEffects || !impactEffects.length) return;
-    const particles = this.game.particles;
+    const game = this.game;
+    const particles = game.particles;
     const IMPACT_CHARS = {
       burn:   ['!', '+', '.'],
       stun:   ['+', '*', '.'],
@@ -705,7 +706,7 @@ export class WorldEffectsSystem {
       if (fx.effect === 'chaff') {
         const chaffParticles = createChaff(fx.x + GRID.CELL_SIZE / 2, fx.y + GRID.CELL_SIZE / 2);
         for (const particle of chaffParticles) {
-          particles.push({
+          particles.push(tagInteriorPlane(game, {
             x: particle.position.x,
             y: particle.position.y,
             vx: particle.velocity.vx,
@@ -715,7 +716,7 @@ export class WorldEffectsSystem {
             char: particle.char,
             color: particle.color,
             isImpact: true
-          });
+          }));
         }
       } else {
         const chars = IMPACT_CHARS[fx.onHit] || ['+', '.'];
@@ -723,7 +724,7 @@ export class WorldEffectsSystem {
           const angle = Math.random() * Math.PI * 2;
           const speed = 40 + Math.random() * 60;
           const life = 0.2 + Math.random() * 0.3;
-          particles.push({
+          particles.push(tagInteriorPlane(game, {
             x: fx.x + GRID.CELL_SIZE / 2,
             y: fx.y + GRID.CELL_SIZE / 2,
             vx: Math.cos(angle) * speed,
@@ -733,7 +734,7 @@ export class WorldEffectsSystem {
             char: chars[Math.floor(Math.random() * chars.length)],
             color: fx.color || '#ffffff',
             isImpact: true
-          });
+          }));
         }
       }
     }
