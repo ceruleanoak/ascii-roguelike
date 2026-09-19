@@ -16,14 +16,19 @@ export const PLAYER_TORCH_ALPHA_LOW    = 0.15;
 export const PLAYER_TORCH_PULSE_SPEED  = 2.2;
 export const PLAYER_TORCH_COLOR        = '#ffaa33';
 
+// Any quick slot carrying a Torch counts as "equipped" for the passive glow —
+// mirrors the Fire Berry's equipped-regardless-of-active-slot semantics
+// (InventorySystem.applyEquipmentEffectsToPlayer) rather than requiring the
+// Torch to be the one currently held in hand (bug: torch should emit light
+// if equipped regardless of whether its slot is active).
 export function isWieldingTorch(game) {
-  return game.player?.heldItem?.data?.name === 'Torch';
+  return !!game.player?.quickSlots?.some(slot => slot?.data?.name === 'Torch');
 }
 
-// True while wielding a Torch OR while an equipped, unspent Fire Berry is
-// providing its passive glow (player.fireBerryLit, set in
-// InventorySystem.applyEquipmentEffectsToPlayer). Single source of truth for
-// the 3 render call sites that gate torch-light on wielding alone.
+// True while a Torch is equipped in any quick slot OR while an equipped,
+// unspent Fire Berry is providing its passive glow (player.fireBerryLit, set
+// in InventorySystem.applyEquipmentEffectsToPlayer). Single source of truth
+// for the 3 render call sites that gate torch-light on carrying one.
 export function hasTorchLight(game) {
   return isWieldingTorch(game) || !!game.player?.fireBerryLit;
 }
