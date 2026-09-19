@@ -48,6 +48,12 @@ export class LightningStrikeSystem {
     // the telegraph window stays a real dodge window.
     onResolve = null
   }) {
+    // Lightning is deliberately inert underground (#281) — gate at schedule
+    // time so neither the gameplay effect nor its warning/flash/spark visuals
+    // ever fire, rather than letting the visual render a strike that (after
+    // the active-layer fix above) would otherwise now land in a dungeon.
+    if (this.game?.player?.inDungeon) return null;
+
     const strike = {
       x, y, radius, damage, hitsPlayer, plane, hutPlane, source, onResolve,
       warningTimer: delay,
@@ -89,8 +95,10 @@ export class LightningStrikeSystem {
     const game = this.game;
     if (!game) return;
 
-    const room = game.currentRoom;
-    const enemies = (room && room.enemies) || [];
+    // Active-layer accessor, not currentRoom directly — freezeSurfaceRoom()
+    // empties currentRoom.enemies while a hut/dungeon/maze interior is
+    // active, which silently no-op'd this whole method in any interior (#281).
+    const enemies = game._activeEnemies?.() || [];
 
     // Enemy damage — plane-gated, circle test on enemy center
     for (const enemy of enemies) {

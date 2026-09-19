@@ -128,7 +128,9 @@ export class ElectricitySystem {
 
   /** Seed the nearest surface water tile within `radius` px (lightning impacts). */
   seedNear(x, y, radius, opts = {}) {
-    const bg = this.game.currentRoom?.backgroundObjects;
+    // Active-layer accessor — currentRoom.backgroundObjects is frozen/empty
+    // while a hut/dungeon/maze interior is active (#281, [layer-leak]).
+    const bg = this.game._activeBackgroundObjects?.();
     if (!bg) return false;
     let best = null;
     let bestD = radius * radius;
