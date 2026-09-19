@@ -334,7 +334,17 @@ export class HutInteriorOverlay {
       }
     }
 
-    // ── 16d. Trap throw reticule + in-flight throwables (interior plane) ──────
+    // ── 16d. Player weapon charge-up/windup poses (render-helper pattern) ─────
+    // ExploreRenderer's surface pass suppresses these while playerInInterior
+    // is true; this overlay is the interior half of the same shared helper
+    // (bug #277 — was missing entirely, so gem wand/staff/hammer charge-ups
+    // never drew inside any hut/dungeon/maze).
+    this.renderController.exploreRenderer.drawStaffBlockStance(game);
+    this.renderController.exploreRenderer.drawGemWandCharge(game);
+    this.renderController.exploreRenderer.drawHammerWindupPose(game);
+    this.renderController.exploreRenderer.drawTrapChargeCount(game);
+
+    // ── 16e. Trap throw reticule + in-flight throwables (interior plane) ──────
     this.renderController.exploreRenderer.drawTrapReticule(game);
     this.renderController.exploreRenderer.drawThrowPreview(game);
     this.renderController.exploreRenderer.drawInFlightTraps(game, true);
