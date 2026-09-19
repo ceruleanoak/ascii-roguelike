@@ -103,7 +103,9 @@ export const BoomerangMechanic = {
         if (bow) {
           bow.usesRemaining++;
           if (bow.cooldownTimer > 1000) bow.cooldownTimer = 0; // Clear depletion lock
-          combat.createDamageNumber('+1', proj.position.x, proj.position.y, proj.color || '#ffffff');
+          // No '+1' popup here (unlike the arrow-pickup pattern this refund
+          // mirrors) — maxUses is 1, so there's never more than a single
+          // boomerang to count; the number would just be noise.
         }
         return true;
       }
