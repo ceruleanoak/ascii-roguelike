@@ -10,6 +10,11 @@ import { planeOf, PLANE_SURFACE, tagInteriorPlane } from './PlaneSystem.js';
 // starting gear — instead of a crow instantly swooping on it.
 const LOOT_SEEK_DELAY_MS = 2000;
 
+// Contact damage from an enraged wild crow's dive-bomb (see snareCrow /
+// updateCrows) — a peck-strength hit, not a real threat on its own, but it
+// stacks with however many other room crows got enraged by the same catch.
+const CROW_ENRAGE_DAMAGE = 1;
+
 // Companion behavior: the bread-feed pipeline and per-frame drivers for every
 // befriendable creature — wild rat → NPCRat companion, wild crow → follower
 // flock → shoulder companion. Companion rosters (game.tamedRats,
@@ -352,6 +357,23 @@ export class CompanionSystem {
   }
 
   // Wild + follower crow driver: bread seeking, scare reactions, promotion.
+  // Snare Trap catches a wild room crow (see TrapSystem's 'snare' effect):
+  // roots the caught crow in place permanently and enrages every OTHER wild
+  // crow in the room into dive-bombing the player — mirrors Enemy's "once
+  // attacked, always aggro'd" permanence (Enemy.js `enraged`), just triggered
+  // by a caught flockmate instead of a direct hit on the crow itself.
+  snareCrow(crow) {
+    if (!crow || crow.snared) return;
+    crow.snared = true;
+    crow.velocity.vx = 0;
+    crow.velocity.vy = 0;
+    const roomCrows = this.game.currentRoom?.crows || [];
+    for (const other of roomCrows) {
+      if (other === crow) continue;
+      other.enraged = true;
+    }
+  }
+
   updateCrows(deltaTime) {
     const game = this.game;
     const crows = game.currentRoom?.crows || [];
@@ -540,6 +562,26 @@ export class CompanionSystem {
     };
 
     for (const crow of [...crows]) {
+      // Enraged (see snareCrow): dive-bombs the player instead of running the
+      // wild idle/bread/loot/flee FSM. Reuses the companion dive machinery
+      // (beginDive/updateDive) already on Crow — an enraged wild crow's
+      // attack is mechanically identical to a companion's dive, just aimed
+      // at the player instead of an enemy. Hits deal contact damage through
+      // the same off-pipeline helper other enemy-initiated hits use (staff
+      // block respected, dodge/immune reported).
+      if (crow.enraged && !crow.snared) {
+        if (crow.diveState === 'idle') {
+          if (crow.diveCooldownTimer > 0) crow.diveCooldownTimer -= deltaTime;
+          else if (game.player) crow.beginDive(game.player, { miss: Math.random() < 0.3 });
+        } else {
+          const hit = crow.updateDive(deltaTime);
+          if (hit && game.player) {
+            game.combatSystem._applyBlockableEnemyDamage(game.player, crow, CROW_ENRAGE_DAMAGE, 'crow-enraged');
+          }
+        }
+        continue;
+      }
+
       crow.update(deltaTime, bgObjects, crows, breadItems, onAteBread, lootItems, onGrabLoot);
 
       // Tagged threats: weapon contact counts as an attack and shakes

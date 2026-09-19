@@ -84,6 +84,18 @@ export class Crow {
     // never lazy-assigned.
     this.gilded = false;
 
+    // Snared: caught by a Snare Trap, rooted in place permanently (mirrors
+    // Enemy.isSnared's pinnedDuration===Infinity semantics — no un-snare path,
+    // the room reset is the only way out). A snared crow ignores bread/loot/
+    // flee entirely; see the early-out at the top of update().
+    this.snared = false;
+    // Enraged: flipped on every OTHER room crow the instant one of them gets
+    // snared (see CompanionSystem.snareCrow). Once set, never clears for the
+    // room — same "once provoked, always aggro'd" convention as Enemy.enraged.
+    // Driven by CompanionSystem.updateCrows via the companion dive machinery
+    // below (beginDive/updateDive), aimed at the player instead of an enemy.
+    this.enraged = false;
+
     // State machine:
     //   'idle' → 'fleeing' (scared by weapon/player) → 'returning' → 'idle'
     //   'idle'/'returning'/'fleeing' → 'seekingBread' on bread sighted → eats → promoted to companion.
@@ -260,6 +272,15 @@ export class Crow {
   }
 
   update(deltaTime, backgroundObjects = [], otherCrows = [], breadItems = [], onAteBread = null, lootItems = [], onGrabLoot = null) {
+    // Snared crows are rooted — no bread/loot/flee, just a stuck idle bob.
+    // Enraged crows are driven separately by CompanionSystem (dive machinery),
+    // which skips this method entirely for them.
+    if (this.snared) {
+      this.wingPhase += deltaTime * 10;
+      this.bobPhase += deltaTime * IDLE_BOB_FREQ;
+      return;
+    }
+
     this.wingPhase += deltaTime * 10;
 
     // Bread sighting overrides idle/returning. Fleeing crows still finish

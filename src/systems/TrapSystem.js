@@ -1099,6 +1099,21 @@ export class TrapSystem {
         caught = true;
         game.combatSystem.createDamageNumber('SNARED', enemy.position.x, enemy.position.y, '#8b6914');
       }
+      // Wild crows are beast-adjacent fauna but never routed through `targets`
+      // (they're not Enemy instances — see game.currentRoom.crows) — catch
+      // them here instead. CompanionSystem.snareCrow roots the caught crow
+      // and enrages the rest of the room's flock into dive-bombing the player.
+      const roomCrows = game.currentRoom?.crows || [];
+      for (const crow of roomCrows) {
+        if (crow.snared) continue;
+        const dx = (crow.position.x + GRID.CELL_SIZE / 2) - cx;
+        const dy = (crow.position.y + GRID.CELL_SIZE / 2) - cy;
+        if (Math.sqrt(dx * dx + dy * dy) > r) continue;
+        game.companionSystem?.snareCrow(crow);
+        caught = true;
+        game.combatSystem.createDamageNumber('SNARED', crow.position.x, crow.position.y, '#8b6914');
+        break; // one crow per trap trigger
+      }
       if (!caught) {
         // Snapped shut on nothing it could hold — still consume the charge.
       }
