@@ -1,5 +1,12 @@
 import { GRID } from '../game/GameConfig.js';
 
+// Fallback tangential nudge distance for projectiles whose item data doesn't
+// define its own `wallNudgeDistance` — see tryTangentialNudge below. Half a
+// cell is enough to clear a projectile fully off a wall column/row it's
+// merely flush against without the nudge itself overshooting into a wall on
+// the far side of a one-cell-wide gap.
+const DEFAULT_WALL_NUDGE_DISTANCE = GRID.CELL_SIZE * 0.5;
+
 // Projectile-vs-wall collision: hit detection against room.collisionMap, the
 // interior-structure-wall ricochet regular bullets get, and the border-wall
 // bounce used by ricochet-flagged weapons (e.g. Ricochet Rifle). Composition
@@ -30,6 +37,49 @@ export const WallRicochetMechanic = {
     // overhead for a thrown boomerang instead of bouncing it back early.
     if (proj.boomerang && room.gapCells?.has(`${row},${col}`)) return false;
     return true;
+  },
+
+  // A projectile should never register a wall collision purely because it's
+  // flush against a wall running parallel to its flight path — e.g. a
+  // boomerang thrown straight up while the player who threw it is pinned
+  // against a wall to their side. `hitsWall` checks a single point (the
+  // projectile's post-move cell), so it can't tell "genuinely flew into a
+  // wall" apart from "grazing a wall that isn't actually in the way of this
+  // frame's travel." Before the caller treats a `hitsWall` true as a real
+  // block, this tries nudging the projectile along the tangential axis
+  // (perpendicular to its velocity) in both directions; if either nudge
+  // clears the overlap, it's kept — position updates, velocity is left
+  // completely untouched (no speed/direction degradation) — and the caller
+  // should treat this frame as a non-collision. Only when neither tangential
+  // nudge clears it does this return false, meaning the collision is genuine
+  // and the caller's normal wall-hit handling (bounce/ricochet/stick/destroy)
+  // should run. Nudge magnitude is per-projectile via
+  // `proj.wallNudgeDistance` (set from the weapon's item data), falling back
+  // to DEFAULT_WALL_NUDGE_DISTANCE, so it can be tuned per projectile type
+  // rather than one constant for every projectile.
+  tryTangentialNudge(proj, room) {
+    const speed = Math.hypot(proj.velocity.vx, proj.velocity.vy);
+    if (speed === 0) return false;
+    // Unit tangent: velocity direction rotated 90°.
+    const tx = -proj.velocity.vy / speed;
+    const ty = proj.velocity.vx / speed;
+    const nudge = proj.wallNudgeDistance || DEFAULT_WALL_NUDGE_DISTANCE;
+
+    const origX = proj.position.x;
+    const origY = proj.position.y;
+
+    for (const dir of [1, -1]) {
+      proj.position.x = origX + tx * nudge * dir;
+      proj.position.y = origY + ty * nudge * dir;
+      if (!this.hitsWall(proj, room)) return true;
+    }
+
+    // Neither direction clears it — this is a genuine collision. Restore the
+    // (still-blocked) position so the caller's wall-hit handling sees the
+    // same state hitsWall was originally checked against.
+    proj.position.x = origX;
+    proj.position.y = origY;
+    return false;
   },
 
   isOutOfBounds(proj) {

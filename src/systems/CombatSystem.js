@@ -293,7 +293,13 @@ export class CombatSystem {
       // Check collision with room walls via collisionMap.
       // Ricochet projectiles skip this — they use checkRicochet() to bounce off
       // the room's border wall instead.
-      if (!proj.ricochet && WallRicochetMechanic.hitsWall(proj, room)) {
+      // A raw hitsWall hit is tried against a tangential nudge first (see
+      // WallRicochetMechanic.tryTangentialNudge) so a projectile merely flush
+      // against a wall parallel to its flight path slides past instead of
+      // registering a false collision; only a nudge-proof hit falls through
+      // to the real wall-hit handling below.
+      if (!proj.ricochet && WallRicochetMechanic.hitsWall(proj, room) &&
+          !WallRicochetMechanic.tryTangentialNudge(proj, room)) {
         // Boomerangs bounce off walls into return mode instead of dying.
         if (proj.boomerang) {
           BoomerangMechanic.onWallHit(proj, deltaTime);

@@ -565,6 +565,7 @@ export class Item {
         homing: this.data.homing,
         ricochet: this.data.ricochet,
         maxRicochets: this.data.maxRicochets || 3,
+        wallNudgeDistance: this.data.wallNudgeDistance,  // per-weapon tangential wall-nudge override — see WallRicochetMechanic.tryTangentialNudge
         pierce: this.data.pierce,
         split: this.data.split,
         splitCount: this.data.splitCount || 3,
@@ -641,6 +642,7 @@ export class Item {
         homing: this.data.homing,
         ricochet: this.data.ricochet,
         maxRicochets: this.data.maxRicochets || 3,
+        wallNudgeDistance: this.data.wallNudgeDistance,  // per-weapon tangential wall-nudge override — see WallRicochetMechanic.tryTangentialNudge
         pierce: this.data.pierce,
         split: this.data.split,
         splitCount: this.data.splitCount || 3,
@@ -695,6 +697,7 @@ export class Item {
         homing: this.data.homing,
         ricochet: this.data.ricochet,
         maxRicochets: this.data.maxRicochets || 3,
+        wallNudgeDistance: this.data.wallNudgeDistance,  // per-weapon tangential wall-nudge override — see WallRicochetMechanic.tryTangentialNudge
         pierce: this.data.pierce,
         split: this.data.split,
         splitCount: this.data.splitCount || 3,
@@ -750,6 +753,7 @@ export class Item {
         homing: this.data.homing,
         ricochet: this.data.ricochet,
         maxRicochets: this.data.maxRicochets || 3,
+        wallNudgeDistance: this.data.wallNudgeDistance,  // per-weapon tangential wall-nudge override — see WallRicochetMechanic.tryTangentialNudge
         pierce: this.data.pierce,
         split: this.data.split,
         splitCount: this.data.splitCount || 3,
@@ -805,6 +809,7 @@ export class Item {
         homing: this.data.homing,
         ricochet: this.data.ricochet,
         maxRicochets: this.data.maxRicochets || 3,
+        wallNudgeDistance: this.data.wallNudgeDistance,  // per-weapon tangential wall-nudge override — see WallRicochetMechanic.tryTangentialNudge
         pierce: this.data.pierce,
         split: this.data.split,
         splitCount: this.data.splitCount || 3,
@@ -1380,6 +1385,7 @@ export class Item {
       homing: this.data.homing,
       knockback: this.data.knockback,
       pierce: this.data.pierce || isBoomerang,  // Boomerang: pierce so wall/single-hit doesn't despawn it
+      wallNudgeDistance: this.data.wallNudgeDistance,  // per-weapon tangential wall-nudge override — see WallRicochetMechanic.tryTangentialNudge
       split: this.data.split,
       splitCount: this.data.splitCount || 3,
       explode: this.data.explode,
