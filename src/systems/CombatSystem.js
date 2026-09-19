@@ -18,6 +18,7 @@ import { acidFloodFillWater } from './AcidWaterSpread.js';
 import { affinityDamageMultiplier } from '../entities/PandoraBox.js';
 import { TongueAttackSystem } from './TongueAttackSystem.js';
 import { applyExtraOnHitEffects, applyOnHitStatusEffect } from './ExtraOnHitEffects.js';
+import { applyMeleeStatusDamageBonus, getMeleeStatusBonusIndicator } from './MeleeStatusBonuses.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
 // room — keeps cross-room sniping in check while still feeling powerful.
@@ -960,6 +961,7 @@ export class CombatSystem {
             // Melee still bypasses shield
 
             const isWet = enemy.isWet && enemy.isWet();
+            const isSnared = enemy.isSnared && enemy.isSnared();
 
             // Chaos Blade: resolve random onHit per arc hit before any elemental logic
             if (attack.randomOnHit) {
@@ -1005,10 +1007,8 @@ export class CombatSystem {
               statusDuration = 5.0;  // Extended freeze
             }
 
-            // Blunt weapons deal 2.5x damage to frozen enemies
-            if (isFrozen && attack.weaponSubtype === 'hammer') {
-              totalDamage = Math.ceil(totalDamage * 2.5);
-            }
+            // Blunt-vs-frozen and blade-vs-snared damage bonuses (MeleeStatusBonuses.js)
+            totalDamage = applyMeleeStatusDamageBonus(totalDamage, attack, { isFrozen, isSnared });
 
             // Apply elemental modifier to final damage
             totalDamage = Math.ceil(totalDamage * elementalMod);
@@ -1103,9 +1103,10 @@ export class CombatSystem {
                 this.createDamageNumber('⚡', enemy.position.x, enemy.position.y - 12, '#ffff00');
               }
 
-              // Show blunt-on-frozen bonus indicator
-              if (isFrozen && attack.weaponSubtype === 'hammer') {
-                this.createDamageNumber('*', enemy.position.x, enemy.position.y - 12, '#00ddff');
+              // Show blunt-on-frozen / blade-on-snared bonus indicator
+              const statusBonusIndicator = getMeleeStatusBonusIndicator(attack, { isFrozen, isSnared });
+              if (statusBonusIndicator) {
+                this.createDamageNumber(statusBonusIndicator.char, enemy.position.x, enemy.position.y - 12, statusBonusIndicator.color);
               }
 
               // Show distance crit indicator (spear full-extension bonus)

@@ -49,8 +49,13 @@ export const ChargeMechanic = {
     // close the last stretch to the player between one off-screen frame and
     // the next — the windup was the player's only chance to see it coming,
     // so losing the frame mid-charge is just as unfair as losing it mid-windup.
+    // Pinned (Trident/Snare) joins the same abort — critically, this must run
+    // BEFORE the 'charging' branch below sets velocity directly to chargeSpeed;
+    // PhysicsSystem's pin-break check (spd > 80) can't tell that speed apart
+    // from a real incoming knockback, so a mid-charge boar was snapping its own
+    // snare/pin every tick (bug: "boar breaks out of snare"). Abort first.
     // Abort an in-progress windup/charge and pay the full cooldown.
-    if ((enemy.isWet() || enemy.isGooey() || !onScreen)
+    if ((enemy.isWet() || enemy.isGooey() || enemy.isPinned() || !onScreen)
         && (enemy.chargeState === 'windup' || enemy.chargeState === 'charging')) {
       enemy.chargeState = 'idle';
       enemy.chargeTimer = cfg.cooldown * cooldownMult;
@@ -133,6 +138,7 @@ export const ChargeMechanic = {
           && !enemy.isFrozen()
           && !enemy.isWet()
           && !enemy.isGooey()
+          && !enemy.isPinned()
           && !enemy.inShellForm
           && onScreen
           && enemy.hasVision(enemy.position, enemy.target.position, effectiveVisionLength, { ignoreCone: true })) {

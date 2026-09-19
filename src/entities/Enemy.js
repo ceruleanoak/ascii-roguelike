@@ -540,6 +540,15 @@ export class Enemy {
 
   isGooey() { return this.statusEffects.goo.active; }
 
+  // Pinned: rooted in place by the Trident throw (finite pinnedDuration) or the
+  // Snare Trap (pinnedDuration === Infinity — see TrapSystem's 'snare' effect).
+  // Gates any mechanic that would otherwise override velocity/position while pinned.
+  isPinned() { return this.pinnedDuration > 0; }
+
+  // Snared specifically (Infinity duration) vs. a temporary Trident pin — the
+  // distinction that gates the blade double-damage bonus below.
+  isSnared() { return this.pinnedDuration === Infinity; }
+
   // Get effective damage (0 if blind, normal damage otherwise)
   getEffectiveDamage() {
     return this.isBlind() ? 0 : this.damage;
