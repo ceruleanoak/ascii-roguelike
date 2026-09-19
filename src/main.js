@@ -3822,15 +3822,18 @@ class Game {
       // both flows exist within the same hut.
       if (this.interactionSystem.tryGiveArtifactToWiseFellow(npcArray)) return;
 
-      // Artifact → errand traveler: consume ⚜, spawn 2 coin ingredients at NPC.
-      // Side trade — does not advance or alter the active stage errand.
-      if (this.errandSystem.handleArtifactGiveSpacePress(this, npcArray)) return;
-
       // Errand traveler interaction: SPACE opens a confirm popup (instead of
       // trading immediately) when the player holds/carries the requested item.
+      // Checked before the Artifact side trade below (bug #282) — a player
+      // carrying both the requested item AND an Artifact should get the real
+      // quest trade, not have it silently preempted by the coin side trade.
       // Falls through to dialogueSystem.tryOpenNearby() below when not eligible
       // — the traveler just states what they're after.
       if (this.errandSystem.tryOpenMenu(this.player, npcArray, this.inventorySystem)) return;
+
+      // Artifact → errand traveler: consume ⚜, spawn 2 coin ingredients at NPC.
+      // Side trade — does not advance or alter the active stage errand.
+      if (this.errandSystem.handleArtifactGiveSpacePress(this, npcArray)) return;
 
       // Hut fisherman coin trade (gated on tips heard — see FishermanDemoSystem)
       if (this.fishermanDemoSystem.trySpacePress()) return;
