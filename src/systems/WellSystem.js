@@ -124,6 +124,13 @@ export class WellSystem {
       return true;
     }
 
+    // Empty-handed SPACE: the well answers with a plain line. Not an NPC, so
+    // this bypasses dialogueSystem.tryOpenNearby()'s npc-list scan and opens
+    // directly against a position-only speaker stub.
+    if (game.dialogueSystem?.open({ position: { x: wellCx, y: wellCy } }, ['Your voice echoes back.'])) {
+      return true;
+    }
+
     return false;
   }
 
