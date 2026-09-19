@@ -112,11 +112,13 @@ export class HutSystem {
       ));
     }
 
-    // Fireplace: same roll shape as the press, placed at the opposite corner
-    // so the two can coexist. Starts unlit (`burning: false`) — FireplaceSystem
-    // flips it on the first Stick and the flag resets for free next visit
-    // since generateHutInterior rebuilds this object from scratch.
-    const hasFireplace = hutKind !== 'press' && hutKind !== 'alchemy' && hutKind !== 'fireplace' && Math.random() < 0.12;
+    // Fireplace: same roll shape as the press but at double the rate — the
+    // player wasn't running into it often enough given its value. Placed at
+    // the opposite corner so the two can coexist. Starts unlit
+    // (`burning: false`) — FireplaceSystem flips it on the first Stick and
+    // the flag resets for free next visit since generateHutInterior rebuilds
+    // this object from scratch.
+    const hasFireplace = hutKind !== 'press' && hutKind !== 'alchemy' && hutKind !== 'fireplace' && Math.random() < 0.24;
     if (hasFireplace || hutKind === 'fireplace') {
       const fireplace = new BackgroundObject(
         '⌂',
