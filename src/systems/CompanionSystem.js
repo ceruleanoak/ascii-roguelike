@@ -2,6 +2,8 @@ import { GRID } from '../game/GameConfig.js';
 import { NPCRat } from '../entities/NPCRat.js';
 import { Ingredient } from '../entities/Ingredient.js';
 import { planeOf, PLANE_SURFACE, tagInteriorPlane } from './PlaneSystem.js';
+import { GolemCompanion } from '../entities/GolemCompanion.js';
+import { GOLEM_TYPES, GOLEM_CAP } from '../data/golems.js';
 
 // Grace period before a wild crow may loot-seek a piece of ground loot,
 // timed from the first frame it's observed as a valid target (effectively
@@ -283,6 +285,10 @@ export class CompanionSystem {
     for (let i = 0; i < ratCount; i++) {
       game.tamedRats[i].onRoomEnter?.(game.player, game, i, ratCount);
     }
+    const golemCount = game.golems?.length || 0;
+    for (let i = 0; i < golemCount; i++) {
+      game.golems[i].onRoomEnter?.(game.player, game, i, golemCount);
+    }
     game.companion?.onRoomEnter?.(game.player, game);
   }
 
@@ -291,6 +297,135 @@ export class CompanionSystem {
     if (!game.tamedRats || game.tamedRats.length === 0) return;
     for (const rat of game.tamedRats) {
       game.physicsSystem.addEntity(rat);
+    }
+  }
+
+  registerGolemsWithPhysics() {
+    const game = this.game;
+    if (!game.golems || game.golems.length === 0) return;
+    for (const golem of game.golems) {
+      game.physicsSystem.addEntity(golem);
+    }
+  }
+
+  // Combined call for the 3 main.js physics-registration sites (room entry,
+  // dungeon floor swaps, etc.) — keeps each site to one line as the companion
+  // roster count grows.
+  registerCompanionsWithPhysics() {
+    this.registerTamedRatsWithPhysics();
+    this.registerGolemsWithPhysics();
+  }
+
+  // Summon a golem companion at the player's position — the "recipe → summon
+  // on craft" design (feature-inbox #9): combining an ingredient with Mana at
+  // the Combine Station spawns the companion immediately rather than yielding
+  // an inventory item. Defensive GOLEM_CAP re-check: MenuSystem's caller
+  // already gates on the cap via CraftingSystem.claimCraftedGolem, but this
+  // stays safe to call from anywhere. Returns the new GolemCompanion, or null
+  // if the cap is full or the type is unknown.
+  spawnGolem(type) {
+    const game = this.game;
+    if (!GOLEM_TYPES[type]) return null;
+    if (!game.golems) game.golems = [];
+    if (game.golems.length >= GOLEM_CAP) return null;
+    const golem = new GolemCompanion(type, game.player.position.x, game.player.position.y);
+    golem.setGame(game);
+    golem.setRoom(game.currentRoom);
+    golem.setCollisionMap(game.currentRoom?.collisionMap || null);
+    golem.setBackgroundObjects(game._activeBackgroundObjects() || null); // layer-guard-ok: routed read
+    game.golems.push(golem);
+    game.physicsSystem.addEntity(golem);
+    return golem;
+  }
+
+  // Per-frame driver for the golem roster — same shape as updateTamedRats,
+  // minus the ingredient-collection side effect (golems don't scavenge loot)
+  // and minus permaFlee handling (golems never flee). Handles both combat
+  // ('chase'/'idle') and Mud Golem's 'dead'→resurrect countdown.
+  updateGolems(deltaTime) {
+    const game = this.game;
+    if (!game.golems || game.golems.length === 0) return;
+    const enemies = game._activeEnemies?.() || [];
+    const siblings = game.golems;
+    for (let i = game.golems.length - 1; i >= 0; i--) {
+      const golem = game.golems[i];
+      const result = golem.update(deltaTime, enemies, game.player, siblings);
+      if (result?.attacked) {
+        const victim = result.attacked;
+        game.combatSystem.createDamageNumber?.(result.damage ?? 1,
+                                               victim.position.x, victim.position.y,
+                                               victim.color || '#ffffff');
+      }
+      if (result?.died && !result.resurrecting) {
+        game.physicsSystem.removeEntity(golem);
+        game.golems.splice(i, 1);
+      }
+    }
+  }
+
+  // Combined call for the main.js update loop — keeps that call site to one
+  // line, mirroring registerCompanionsWithPhysics.
+  updateGolemsAndDamage(deltaTime) {
+    this.updateGolems(deltaTime);
+    this.applyEnemyDamageToGolems();
+  }
+
+  // Apply enemy melee + projectile hits to golems. Mirrors
+  // applyEnemyDamageToTamedRats over the golem roster.
+  applyEnemyDamageToGolems() {
+    const game = this.game;
+    if (!game.golems || game.golems.length === 0) return;
+    const cs = game.combatSystem;
+    if (!cs) return;
+
+    const projs = cs.enemyProjectiles || [];
+    for (let gi = game.golems.length - 1; gi >= 0; gi--) {
+      const golem = game.golems[gi];
+      if (golem.state === 'dead') continue;
+      if (golem.invulnerabilityTimer > 0) continue;
+      let result = null;
+      // Projectiles
+      for (let i = projs.length - 1; i >= 0; i--) {
+        const p = projs[i];
+        if ((p.plane ?? 0) !== golem.plane) continue;
+        const cx = golem.position.x + golem.width / 2;
+        const cy = golem.position.y + golem.height / 2;
+        const dx = p.position.x - cx;
+        const dy = p.position.y - cy;
+        const r = GRID.CELL_SIZE * 0.6 + Math.min(golem.width, golem.height) / 2;
+        if (dx * dx + dy * dy < r * r) {
+          result = golem.takeDamage(p.damage || 1, p.owner);
+          projs.splice(i, 1);
+          cs.createDamageNumber?.(p.damage || 1, golem.position.x, golem.position.y, golem.color);
+          break;
+        }
+      }
+      if (!result && golem.invulnerabilityTimer <= 0) {
+        // Melee attack hitboxes
+        const melee = cs.enemyMeleeAttacks || [];
+        for (const m of melee) {
+          if (m.windupPhase) continue;
+          if (m.hasHit) continue;
+          if ((m.plane ?? 0) !== golem.plane) continue;
+          const ax = m.position.x;
+          const ay = m.position.y;
+          const aw = m.width || GRID.CELL_SIZE;
+          const ah = m.height || GRID.CELL_SIZE;
+          if (
+            ax < golem.position.x + golem.width && ax + aw > golem.position.x &&
+            ay < golem.position.y + golem.height && ay + ah > golem.position.y
+          ) {
+            m.hasHit = true;
+            result = golem.takeDamage(m.damage || 1, m.owner);
+            cs.createDamageNumber?.(m.damage || 1, golem.position.x, golem.position.y, golem.color);
+            break;
+          }
+        }
+      }
+      if (result?.died && !result.resurrecting) {
+        game.physicsSystem.removeEntity(golem);
+        game.golems.splice(gi, 1);
+      }
     }
   }
 
@@ -306,7 +441,7 @@ export class CompanionSystem {
   snapPetsIntoFloor(floor) {
     const game = this.game;
     if (!game.player) return;
-    const total = (game.companionCrows?.length || 0) + (game.tamedRats?.length || 0);
+    const total = (game.companionCrows?.length || 0) + (game.tamedRats?.length || 0) + (game.golems?.length || 0);
     let slot = 0;
     for (const crow of game.companionCrows || []) {
       this._placePetAtPlayerSlot(crow, game.player, slot++, total);
@@ -316,6 +451,11 @@ export class CompanionSystem {
       rat.setCollisionMap(floor.collisionMap);
       rat.setBackgroundObjects(floor.backgroundObjects); // layer-guard-ok: router-injected
     }
+    for (const golem of game.golems || []) {
+      this._placePetAtPlayerSlot(golem, game.player, slot++, total);
+      golem.setCollisionMap(floor.collisionMap);
+      golem.setBackgroundObjects(floor.backgroundObjects); // layer-guard-ok: router-injected
+    }
   }
 
   // Dungeon exit: bring pets back to surface coordinates beside the player,
@@ -324,7 +464,7 @@ export class CompanionSystem {
   restorePetsFromFloor() {
     const game = this.game;
     if (!game.player) return;
-    const total = (game.companionCrows?.length || 0) + (game.tamedRats?.length || 0);
+    const total = (game.companionCrows?.length || 0) + (game.tamedRats?.length || 0) + (game.golems?.length || 0);
     let slot = 0;
     for (const crow of game.companionCrows || []) {
       this._placePetAtPlayerSlot(crow, game.player, slot++, total);
@@ -334,11 +474,18 @@ export class CompanionSystem {
       rat.setCollisionMap(game.currentRoom?.collisionMap || null);
       rat.setBackgroundObjects(game.currentRoom?.backgroundObjects || null); // layer-guard-ok
     }
+    for (const golem of game.golems || []) {
+      this._placePetAtPlayerSlot(golem, game.player, slot++, total);
+      golem.setCollisionMap(game.currentRoom?.collisionMap || null);
+      golem.setBackgroundObjects(game.currentRoom?.backgroundObjects || null); // layer-guard-ok
+    }
     this.setPetsGilded(false);
   }
 
   // Gilded flip for both pet rosters. Called by the dungeon boss system on
   // vault-floor arrival; cleared on dungeon exit via restorePetsFromFloor.
+  // Golems don't participate — gilding is the vault's reward for the
+  // bread-tamed pet rosters specifically, not every companion type.
   setPetsGilded(gilded) {
     const game = this.game;
     for (const crow of game.companionCrows || []) crow.gilded = gilded;

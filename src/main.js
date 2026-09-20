@@ -291,6 +291,7 @@ class Game {
     this.companionCrows = [];       // Run-scoped: crows that ate bread; act as combat companions across rooms
     this.followerCrows = [];        // Room-scoped: bystander crows that joined a feed event in the current room
     this.tamedRats = [];            // Run-scoped: rats that ate bread; companion mode driven by Enemy.tamed
+    this.golems = [];               // Run-scoped: summoned at the Combine Station (ingredient + Mana); see CompanionSystem.spawnGolem
     this.ridgeBridgeBuilt = false;  // Run-scoped: set once any Ridge bridge is built; future Ridge rooms skip the BridgeWorker errand entirely
 
     this.activeNoiseSource = null; // Set each frame by updatePlacedTraps if noise-maker is active
@@ -1390,7 +1391,7 @@ class Game {
     }
 
     this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
-    this.companionSystem.registerTamedRatsWithPhysics();
+    this.companionSystem.registerCompanionsWithPhysics();
 
     // Mark background dirty
     this.renderer.markBackgroundDirty();
@@ -1663,7 +1664,7 @@ class Game {
     }
 
     this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
-    this.companionSystem.registerTamedRatsWithPhysics();
+    this.companionSystem.registerCompanionsWithPhysics();
 
     // Update collision map
     this.updateExitCollisions();
@@ -3464,6 +3465,7 @@ class Game {
     this.companionSystem.updateBreadSeekingRats();
     this.companionSystem.updateTamedRats(deltaTime);
     this.companionSystem.applyEnemyDamageToTamedRats();
+    this.companionSystem.updateGolemsAndDamage(deltaTime);
 
     // Age and prune sound events (used for global enemy sound detection)
     for (let i = this.soundEvents.length - 1; i >= 0; i--) {
@@ -4120,6 +4122,7 @@ class Game {
     this.companionCrows = [];
     this.followerCrows = [];
     this.tamedRats = [];
+    this.golems = [];
     // Commanded warband dies with the run like every companion roster
     this.commandSystem.clearRunState();
     this.ridgeBridgeBuilt = false;
@@ -4403,7 +4406,7 @@ class Game {
       this.physicsSystem.addEntity(item);
     }
     this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
-    this.companionSystem.registerTamedRatsWithPhysics();
+    this.companionSystem.registerCompanionsWithPhysics();
     // Commanded warband surfaces into the new room beside the player (parks
     // itself when an interior owns the floor).
     this.commandSystem.onRoomSwap(room);

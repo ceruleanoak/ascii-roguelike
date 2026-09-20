@@ -274,6 +274,17 @@ export class EnemyUpdateSystem {
       const d = rDx * rDx + rDy * rDy;
       if (d < nearestDistSq) { nearestDistSq = d; nearestTarget = rat; }
     }
+    // Golems are legitimate melee targets too — "basic melee attacks" cuts
+    // both ways. A dead Mud Golem mid-resurrect-cooldown is not present in
+    // the fight, so it's excluded like a permaFlee rat.
+    for (const golem of game.golems ?? []) {
+      if (golem.state === 'dead') continue;
+      if ((golem.plane ?? 0) !== (enemy.plane ?? 0)) continue;
+      const gDx = golem.position.x - enemy.position.x;
+      const gDy = golem.position.y - enemy.position.y;
+      const d = gDx * gDx + gDy * gDy;
+      if (d < nearestDistSq) { nearestDistSq = d; nearestTarget = golem; }
+    }
     // Commanded warband members are legitimate hostile targets — the unsworn
     // fight the sworn like they fight tamed companions.
     for (const commanded of game.commandedEnemies ?? []) {

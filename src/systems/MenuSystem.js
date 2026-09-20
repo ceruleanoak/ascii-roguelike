@@ -3,6 +3,7 @@ import { CRAFTING, EQUIPMENT, COLORS, GRID } from '../game/GameConfig.js';
 import { Item } from '../entities/Item.js';
 import { isIngredient, isItem, getItemData } from '../data/items.js';
 import { ZONES } from '../data/zones.js';
+import { GOLEM_TYPES } from '../data/golems.js';
 import { trapAlreadyEquipped } from './TrapSystem.js';
 
 export class MenuSystem {
@@ -992,6 +993,19 @@ export class MenuSystem {
     if (slotType === 'crafting-center') {
       if (game.craftingSystem.hasCenterContent()) {
         game.audioSystem.stopSFXByName('craft_cycle');
+
+        // Golem-result recipes (e.g. Slag + Mana) summon a companion
+        // immediately rather than yielding an inventory item — at the
+        // combined GOLEM_CAP the claim is refused and the slots stay full
+        // (see CraftingSystem.claimCraftedGolem).
+        const golemType = game.craftingSystem.claimCraftedGolem(game.golems.length);
+        if (golemType) {
+          game.companionSystem.spawnGolem(golemType);
+          game.showPickupMessage(GOLEM_TYPES[golemType].name);
+          game.renderer.markBackgroundDirty();
+          game.updateUI();
+          return;
+        }
 
         // Ingredient-result recipes (e.g. Mana) land straight in the pile —
         // they're raw ingredients, not equippable items, and must never

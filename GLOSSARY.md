@@ -688,8 +688,9 @@ programming terms.
 - **Definition:** A persistent non-player character that follows the player across rooms and
   states. Companions offer passive support and interact with the environment.
 - **In code:** managed by `CompanionSystem`; currently crows (`companionCrows`, `followerCrows`);
-  also tamed rats (`tamedRats`, fed via bread consumable). State lives on `game`; logic in
-  `src/systems/CompanionSystem.js`.
+  also tamed rats (`tamedRats`, fed via bread consumable); also golems (`golems`, summoned by
+  combining an ingredient with Mana at the REST Combine Station — see `src/data/golems.js`).
+  State lives on `game`; logic in `src/systems/CompanionSystem.js`.
 - **Not:** an Enemy; not an NPC (Companions don't initiate dialogue).
 
 ### Spell

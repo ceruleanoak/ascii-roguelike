@@ -8,7 +8,7 @@ import {
 import { drawWires } from '../effects/WireEffects.js';
 import { drawCoinArc } from '../effects/ArcTossEffects.js';
 import { drawStatusPips } from '../effects/StatusPipEffects.js';
-import { drawTamedRats } from './CompanionRenderers.js';
+import { drawTamedRats, drawGolems } from './CompanionRenderers.js';
 import { SLOT_CHROME } from '../../data/slotChrome.js';
 
 /**
@@ -300,6 +300,9 @@ export class HutInteriorOverlay {
     if (game.player?.inDungeon) {
       if (game.tamedRats?.length) {
         drawTamedRats(this.renderer, game, () => true);
+      }
+      if (game.golems?.length) {
+        drawGolems(this.renderer, game, () => true);
       }
       if (game.companionCrows?.length) {
         for (const crow of game.companionCrows) {

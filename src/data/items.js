@@ -12,7 +12,13 @@ export const ITEM_TYPES = {
   // picked up exactly like a weapon/armor drop, but routed by
   // InventorySystem.tryPickupItem into keyItemInventory instead of a
   // quick/equip slot — held, never equipped. See hasKeyItem/consumeKeyItem.
-  KEY: 'KEY'
+  KEY: 'KEY',
+  // Golem-summon sentinel: a recipe "result" that CraftingSystem.
+  // claimCraftedGolem() intercepts before any Item is ever constructed — see
+  // src/data/golems.js. Never spawned into the world, never picked up; exists
+  // only so tools/check-data.js's recipe-resolves-to-something gate has a
+  // registry entry to find.
+  GOLEM: 'GOLEM'
 };
 
 // Weapon behaviors
@@ -2603,7 +2609,18 @@ export const ITEMS = {
     name: 'Arrowhead',
     type: ITEM_TYPES.INGREDIENT,
     color: '#aaaaaa'
-  }
+  },
+
+  // ── Golem-summon sentinels (src/data/golems.js) ─────────────────────────
+  // Never constructed as a real Item — CraftingSystem.claimCraftedGolem()
+  // claims these out of the crafting-center slot before claimCraftedItem()
+  // would otherwise build one. Registered here only so the crafting-station
+  // preview render (a bare glyph draw, no lookup) and tools/check-data.js's
+  // recipe-resolves-to-something gate have somewhere to resolve the char.
+  '♟': { char: '♟', name: 'Slag Golem', type: ITEM_TYPES.GOLEM, color: '#5a4a42' },
+  '♞': { char: '♞', name: 'Mud Golem', type: ITEM_TYPES.GOLEM, color: '#664422' },
+  '♜': { char: '♜', name: 'Rock Golem', type: ITEM_TYPES.GOLEM, color: '#888888' },
+  '♚': { char: '♚', name: 'Metal Golem', type: ITEM_TYPES.GOLEM, color: '#aaaaaa' }
 };
 
 // Tier pools for the fountain upgrade and duplicate-upgrade crafting, derived

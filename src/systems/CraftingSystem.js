@@ -2,6 +2,7 @@ import { findRecipe } from '../data/recipes.js';
 import { Item } from '../entities/Item.js';
 import { WEAPON_TIERS, ITEMS, isIngredient } from '../data/items.js';
 import { POTION_STARTER_MODIFIERS, applyPotionModifierColor } from '../data/alchemy.js';
+import { getGolemTypeForResult, GOLEM_CAP } from '../data/golems.js';
 
 /**
  * Returns the next-tier pool for a given weapon char, or null if none exists.
@@ -134,6 +135,27 @@ export class CraftingSystem {
     this.rightSlot = null;
     this.centerSlot = null;
     return char;
+  }
+
+  /**
+   * Claim a center-slot result that summons a golem companion (e.g. Slag +
+   * Mana) rather than yielding an inventory item — same shape as
+   * claimCraftedIngredient, just against the golem sentinel table instead of
+   * the ingredient registry. `currentGolemCount` is the live roster size
+   * (GOLEM_CAP is a combined cap across all golem types); at cap the craft
+   * is a no-op and the ingredient/mana pairing is left in the slots
+   * unconsumed. Returns the golem type key ('slag', 'mud', …), or null if
+   * the center slot holds a real crafted item/ingredient, or the cap is full.
+   */
+  claimCraftedGolem(currentGolemCount) {
+    if (this.cycleState || !this.centerSlot) return null;
+    const golemType = getGolemTypeForResult(this.centerSlot);
+    if (!golemType) return null;
+    if (currentGolemCount >= GOLEM_CAP) return null;
+    this.leftSlot = null;
+    this.rightSlot = null;
+    this.centerSlot = null;
+    return golemType;
   }
 
   claimCraftedItem(x, y) {

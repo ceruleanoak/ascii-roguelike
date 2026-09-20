@@ -8,6 +8,18 @@ export const RECIPES = [
   { left: 'l', right: 'r', result: '𝑚', name: 'Mana' },  // Leaf + Root  (nature essence)
   { left: 'd', right: 'b', result: '𝑚', name: 'Mana' },  // Dust + Bone  (remains)
 
+  // === GOLEM SUMMONS (ingredient + Mana → companion, not an item) ===
+  // The "result" chars below are sentinels (src/data/golems.js /
+  // ITEMS['♟'] etc.) — CraftingSystem.claimCraftedGolem() intercepts them
+  // and hands off to CompanionSystem.spawnGolem() instead of ever building
+  // an Item. Mud Golem uses Bottle of Mud rather than a raw Mud ingredient —
+  // there isn't one (mud only exists as an environmental tile / cauldron
+  // input).
+  { left: '4', right: '𝑚', result: '♟', name: 'Slag Golem' },   // Slag + Mana
+  { left: '◐', right: '𝑚', result: '♞', name: 'Mud Golem' },    // Bottle of Mud + Mana
+  { left: '0', right: '𝑚', result: '♜', name: 'Rock Golem' },   // Rock + Mana
+  { left: 'M', right: '𝑚', result: '♚', name: 'Metal Golem' },  // Metal + Mana
+
   // === ROCK RECIPES ===
   { left: '0', right: '0', result: '⊿', name: 'Axe head' },       // Rock + Rock = Axe head
   { left: '⊿', right: '0', result: '△', name: 'Arrowhead' },      // Axe head + Rock = Arrowhead

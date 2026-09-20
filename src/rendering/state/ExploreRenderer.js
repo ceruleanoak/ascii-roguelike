@@ -30,7 +30,7 @@ import { renderBombEnemy } from '../effects/BombEffects.js';
 import { renderIceGolem, renderSmallEnemyUnderSnow, renderYetiFrenzyPip } from '../effects/CyanEnemyEffects.js';
 import { renderFishingPasses } from '../effects/FishingRenderEffects.js';
 import { drawStatusPips } from '../effects/StatusPipEffects.js';
-import { drawTamedRats } from '../ui/CompanionRenderers.js';
+import { drawTamedRats, drawGolems } from '../ui/CompanionRenderers.js';
 import { BRIDGE_MATERIALS } from '../../systems/RidgeSystem.js';
 import { PixelatedDissolve, SplitReveal } from '../effects/TextEffects.js';
 import { drawPlayerMeleeAttacks, drawEnemyMelee } from '../effects/MeleeAttackDraw.js';
@@ -675,6 +675,8 @@ export class ExploreRenderer {
       // /hover/sapping/spawn/blind indicators) so reusing the Enemy renderer
       // would crash. See CompanionRenderers.drawTamedRats.
       if (game.tamedRats?.length) drawTamedRats(this.renderer, game, this.shouldRenderEntity);
+      // Golems share the same minimal render path as tamed rats.
+      if (game.golems?.length) drawGolems(this.renderer, game, this.shouldRenderEntity);
     }
 
     // Detection system overlay (toggle with 'v' key)

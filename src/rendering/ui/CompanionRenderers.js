@@ -26,3 +26,21 @@ export function drawTamedRats(renderer, game, shouldRenderEntity) {
     );
   }
 }
+
+// Minimal GolemCompanion render: char + type color + iframe white-flash.
+// A resurrecting Mud Golem is body-destroyed (shouldRenderVisible() false)
+// so it draws nothing until it comes back.
+export function drawGolems(renderer, game, shouldRenderEntity) {
+  for (const golem of game.golems) {
+    if (!shouldRenderEntity(golem, game.player, game.currentRoom)) continue;
+    if (!golem.shouldRenderVisible()) continue;
+    const flash = golem.getIframeFlashColor?.();
+    const color = flash !== null && flash !== undefined ? flash : golem.color;
+    renderer.drawEntity(
+      golem.position.x + GRID.CELL_SIZE / 2,
+      golem.position.y + GRID.CELL_SIZE / 2,
+      golem.char,
+      color
+    );
+  }
+}
