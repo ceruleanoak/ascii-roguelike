@@ -899,15 +899,13 @@ export class CombatSystem {
               }
 
               // Water attack hits lava → solidify to rock
-              if (obj.isLava && obj.isLava() && attack.onHit === 'freeze') {
-                obj.solidifyToRock();
-                this.newSteamClouds.push({
-                  x: obj.position.x + GRID.CELL_SIZE / 2,
-                  y: obj.position.y + GRID.CELL_SIZE / 2,
-                  radius: GRID.CELL_SIZE * 2,
-                  timer: 3.0
-                });
-                  }
+              WaterLavaHitMechanic.freezeLava(obj, attack.onHit, this);
+
+              // Fire melee hits deep snow → melt it (bug #302: only the fire
+              // projectile path called into WaterLavaHitMechanic before this;
+              // a fire-sword swing never did). See meltSnow for the shared
+              // conversion logic.
+              WaterLavaHitMechanic.meltSnow(obj, attack.onHit);
             }
 
             // Chaff VFX when melee hits grass (all weapons including blunt) — 5% chance

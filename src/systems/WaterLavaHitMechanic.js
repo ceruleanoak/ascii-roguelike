@@ -49,31 +49,46 @@ export const WaterLavaHitMechanic = {
       obj.takeDamage(Math.max(1, proj.damage || 1));
     }
 
-    // Fire projectile hits deep snow → melt it into a water tile, the same
-    // permanent terrain conversion LavaAscentSystem's _convertTile uses for
-    // its own flood cycle (typeId + _variantData swap). PhysicsSystem's deep-
-    // snow detection keys off `char === '█'` (right next to its `char === '~'`
-    // water/lava/mud branch), so flipping char to '~' is what actually moves
-    // the tile out of "snow" and into "water" at the physics layer, not just
-    // visually.
-    if (obj.typeId === 'snow_deep' && proj.onHit === 'burn') {
-      const variant = BACKGROUND_OBJECT_VARIANTS.water;
-      obj.typeId = 'water';
-      obj._variantData = { ...variant };
-      obj.char = variant.char;
-      obj.color = variant.color;
-      obj.animationColor = variant.color;
-    }
+    // Fire projectile hits deep snow → melt it (shared with the melee path,
+    // see meltSnow below).
+    this.meltSnow(obj, proj.onHit);
 
-    // Water attack hits lava → solidify to rock
-    if (obj.isLava && obj.isLava() && proj.onHit === 'freeze') {
-      obj.solidifyToRock();
-      combat.newSteamClouds.push({
-        x: obj.position.x + GRID.CELL_SIZE / 2,
-        y: obj.position.y + GRID.CELL_SIZE / 2,
-        radius: GRID.CELL_SIZE * 2,
-        timer: 3.0
-      });
-    }
+    // Water attack hits lava → solidify to rock (shared with the melee path,
+    // see freezeLava below).
+    this.freezeLava(obj, proj.onHit, combat);
+  },
+
+  // Fire hits deep snow → melt it into a water tile, the same permanent
+  // terrain conversion LavaAscentSystem's _convertTile uses for its own
+  // flood cycle (typeId + _variantData swap). PhysicsSystem's deep-snow
+  // detection keys off `char === '█'` (right next to its `char === '~'`
+  // water/lava/mud branch), so flipping char to '~' is what actually moves
+  // the tile out of "snow" and into "water" at the physics layer, not just
+  // visually. Shared by both a fire projectile's hit (applyHit above) and a
+  // melee fire-sword swing (CombatSystem's melee background-object loop) —
+  // bug #302 was a fire sword never melting snow because only the projectile
+  // path called into this module at all.
+  meltSnow(obj, onHit) {
+    if (obj.typeId !== 'snow_deep' || onHit !== 'burn') return;
+    const variant = BACKGROUND_OBJECT_VARIANTS.water;
+    obj.typeId = 'water';
+    obj._variantData = { ...variant };
+    obj.char = variant.char;
+    obj.color = variant.color;
+    obj.animationColor = variant.color;
+  },
+
+  // Freeze attack hits lava → solidify to rock, with a cooling steam puff.
+  // Shared by both a projectile's hit (applyHit above) and a melee freeze
+  // weapon's swing (CombatSystem's melee background-object loop).
+  freezeLava(obj, onHit, combat) {
+    if (!(obj.isLava && obj.isLava()) || onHit !== 'freeze') return;
+    obj.solidifyToRock();
+    combat.newSteamClouds.push({
+      x: obj.position.x + GRID.CELL_SIZE / 2,
+      y: obj.position.y + GRID.CELL_SIZE / 2,
+      radius: GRID.CELL_SIZE * 2,
+      timer: 3.0
+    });
   }
 };

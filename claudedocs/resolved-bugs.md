@@ -4,6 +4,8 @@ Archive of fixed bugs from `known-bugs.md`. Migrated here on resolution so the a
 
 ---
 
+| 302 | **Fire sword doesn't melt snow** — `WaterLavaHitMechanic.applyHit`'s `snow_deep`→water melt branch was only invoked from CombatSystem's projectile-collision path, never from the melee background-object loop; a fire projectile melted deep snow, but a melee fire sword swing did not, because melee never called into that module for elemental terrain reactions at all. | user-reported 2026-09-19 | ✅ fixed — 2026-09-19 — extracted the snow-melt (and the analogous lava-freeze) reaction into shared `WaterLavaHitMechanic.meltSnow`/`freezeLava` helpers and call them from both the projectile and melee hit paths. |
+
 ## P1 — Confirmed Broken (Resolved)
 
 | # | Bug | Source | Resolution |
