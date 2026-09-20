@@ -166,6 +166,19 @@ export class ZoneSystem {
         break;
       }
 
+      // Blue (Tidefall) is a forced-entry linear tutorial excursion, never an
+      // organic 3-consecutive-color drift target (mirrors peekZoneTransition's
+      // "3 consecutive same color" zone-switch check above, which only tests
+      // red/cyan/yellow — blue is deliberately excluded there too). Without
+      // this, the blue-colored exits recorded while walking the Shallows →
+      // Reef Walk → Wake Drift → Pearl Cache chain — and the Pearl Cache
+      // return exit itself — read as a real drift once the player is back in
+      // their origin zone, painting a full blue tint over EXPLORE that only
+      // fades once 3 more non-blue exits are taken (bug #297).
+      if (exitColor === ZONE_COLORS.blue) {
+        break;
+      }
+
       // First colored exit or matching previous
       if (targetColor === null) {
         targetColor = exitColor;
