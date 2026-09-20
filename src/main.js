@@ -307,6 +307,7 @@ class Game {
     this.wishesUsed = 0; // CLEANSE spell wishes used this run (max 3)
     this.cleanseWave = null; // Active wave animation { startTime, duration }
     this.bossDefeatFlash = null; // White screen flash on boss defeat { startTime, duration }
+    this.pendingZoneMusicResume = null; // Delayed zone-music resume after boss defeat { readyAt, zone }
     this._savedDestroyedSlots = [false, false, false]; // Persists across player recreations
     this.neutralCharacters = []; // Neutral entities (Leshy, NPCs, etc.)
     this.cureRusalka = null;      // Stationary cure Rusalka for polymorph reversal (Lake rooms)
@@ -2290,6 +2291,7 @@ class Game {
   enterGameOverState() {
     this.cleanseWave = null;
     this.bossDefeatFlash = null;
+    this.pendingZoneMusicResume = null;
 
     // Reset spell follow-up state
     this.spellSystem.resetAwaiting();
@@ -2432,6 +2434,10 @@ class Game {
     this.screenFadeSystem.update(deltaTime);
 
     if (this.pauseSystem.isPaused()) return; // modal pause — world frozen, render continues
+
+    // Runs unconditionally (like cameraZoomSystem above) since BossSystem
+    // itself deactivates right after queuing this — see BossSystem docstring.
+    this.bossSystem.updatePendingMusicResume();
 
     // Particle Fireworks (debug): cycle through every effect at ~2.5 bursts/sec
     // at random screen positions. Skips TITLE (no canvas particle pipe there).

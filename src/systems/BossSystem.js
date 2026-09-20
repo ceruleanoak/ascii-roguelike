@@ -587,6 +587,7 @@ export class BossSystem {
       if (enemies[i] === this.lakeBoss) enemies.splice(i, 1);
     this.game.menuSystem.showPickupMessage('The Frosted Maw is defeated!', '#aaffff', 3.0);
     this._grantBossReward();
+    this._scheduleZoneMusicResume();
     this.lakeBoss = null;
     this.deactivate();
   }
@@ -948,6 +949,7 @@ export class BossSystem {
     }
     this.game.menuSystem.showPickupMessage('The Ancient Shell is defeated!', '#ff8800', 3.0);
     this._grantBossReward();
+    this._scheduleZoneMusicResume();
     this.deactivate();
   }
 
@@ -980,6 +982,7 @@ export class BossSystem {
     }
     this.game.menuSystem.showPickupMessage('Pandora\'s Box is defeated!', '#ffcc00', 3.0);
     this._grantBossReward();
+    this._scheduleZoneMusicResume();
     this.deactivate();
   }
 
@@ -1006,6 +1009,7 @@ export class BossSystem {
     // Announce
     this.game.menuSystem.showPickupMessage('The Goo Dragon is defeated!', '#22ff66', 3.0);
     this._grantBossReward();
+    this._scheduleZoneMusicResume();
 
     this.deactivate();
   }
@@ -1018,6 +1022,38 @@ export class BossSystem {
     this.game.bossDefeatFlash = { startTime: performance.now(), duration: 600 };
     this.game.menuSystem.showPickupMessage('Your power has grown');
     this.game.audioSystem.playSFX('boss_defeat');
+  }
+
+  /**
+   * Stop the boss music sequence immediately and schedule the zone's normal
+   * EXPLORE track to resume after a brief silence, rather than leaving the
+   * boss sequence looping forever over an empty room. Mirrors the frame-
+   * driven timer pattern used by `bossDefeatFlash` (checked via elapsed
+   * `performance.now()`, not setTimeout) — ticked in `Game.update()` since
+   * this BossSystem instance deactivates (and stops updating) immediately
+   * after the defeat handler that calls this returns.
+   */
+  _scheduleZoneMusicResume() {
+    this.game.audioSystem.stopBossMusic();
+    this.game.pendingZoneMusicResume = {
+      readyAt: performance.now() + 1500, // first-pass value, needs playtest tuning
+      zone: this.zone
+    };
+  }
+
+  /**
+   * Poll the timer queued by `_scheduleZoneMusicResume()` and resume the
+   * zone's normal EXPLORE track once it elapses. Called unconditionally
+   * from `Game.update()` every frame (not gated on `this.active`) because
+   * `deactivate()` runs immediately after the defeat handler that queues
+   * this, so BossSystem's own `update()` (which early-returns when
+   * inactive) never sees the pending timer.
+   */
+  updatePendingMusicResume() {
+    const pending = this.game.pendingZoneMusicResume;
+    if (!pending || performance.now() < pending.readyAt) return;
+    this.game.pendingZoneMusicResume = null;
+    this.game.audioSystem.switchZoneMusic(pending.zone, import.meta.env.BASE_URL, true);
   }
 
 }
