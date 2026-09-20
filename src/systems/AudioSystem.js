@@ -1318,10 +1318,14 @@ export class AudioSystem {
     // Dungeon 6-floor rework — placeholder names, no assets yet.
     this.loadSFX('dungeon_key_pickup', null); // Skull destroyed, key obtained
     this.loadSFX('dungeon_key_use', null);    // Key consumed at the Vault door
-    // K room Vault Key — held, not equipped (same "held, not equipped"
+    // Vault Key (green zone) — held, not equipped (same "held, not equipped"
     // pattern as the dungeon key above; see InteractionSystem.canUnlockVault).
     this.loadSFX('vault_key_pickup', null);   // Key-dropping object destroyed
     this.loadSFX('vault_key_use', null);      // Key consumed unlocking the vault door
+    // Per-zone Vault unlock, non-key methods (K room retired 2026-09-20 —
+    // see RoomGenerator's VAULT_UNLOCK_BY_ZONE).
+    this.loadSFX('vault_wall_break', null);   // Red zone: boulder/bomb/roll breaks the wall
+    this.loadSFX('vault_switch', null);       // Cyan zone: buried switch activated
     this.loadSFX('compass_beep', null);       // Compass ping (item present on floor)
     this.loadSFX('pyramid_fill', null);       // Legend of Three slot filled
     this.loadSFX('pyramid_solve', null);      // All 3 slots filled

@@ -4,10 +4,9 @@ import { ZONES, ZONE_COLORS } from '../data/zones.js';
 import { GRID } from '../game/GameConfig.js';
 
 // Letters whose weights get boosted when the player has the well-vested luck
-// blessing. V (Vault), K (Key Room), ? (Mystery), C (Camp) — all desirable
-// stops that make luck feel like it's reshaping the run, not just fattening
-// the loot table.
-const LUCKY_BOOST = { 'V': 2.5, 'K': 2.0, '?': 2.0, 'C': 1.5 };
+// blessing. V (Vault), ? (Mystery), C (Camp) — all desirable stops that make
+// luck feel like it's reshaping the run, not just fattening the loot table.
+const LUCKY_BOOST = { 'V': 2.5, '?': 2.0, 'C': 1.5 };
 
 // Green is the starting zone — it always dangles an alternative-color exit to
 // teach the player that color = destination. Every other zone tempts more

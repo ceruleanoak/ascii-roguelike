@@ -122,66 +122,37 @@ export class InteractionSystem {
     return null;
   }
 
-  // Vault (V room): true when the player stands south of the vault's bottom
-  // wall, roughly centered, with the vault key ߃ held.
-  canUnlockVault() {
+  // Vault (V room), shared plumbing — K room retired 2026-09-20, each zone
+  // now guards its Vault a different way (RoomGenerator's
+  // VAULT_UNLOCK_BY_ZONE): green/gray use a held key (this file's
+  // canUnlockVault/unlockVault), red breaks the wall on contact
+  // (tryBreakVaultWall, called from BoulderSystem/ExplosionEffects/
+  // CombatSystem's roll-damage), cyan uses a buried switch
+  // (canActivateVaultSwitch/activateVaultSwitch), yellow has no unlock path
+  // at all (only Yellow Mage's blink, which ignores collisionMap, gets in).
+
+  // True when the player stands south of the vault's bottom wall, roughly
+  // centered — the shared proximity check for the key and switch paths.
+  _isPlayerSouthCentered(vault) {
     const game = this.game;
-    // Only check in EXPLORE mode with a current room and vault
-    const state = game.stateMachine.getCurrentState();
-    if (state !== GAME_STATES.EXPLORE || !game.currentRoom || !game.currentRoom.vaultInfo) {
-      return false;
-    }
-
-    const vault = game.currentRoom.vaultInfo;
-
-    // Vaults with a small door (▄) use the gap, not a key
-    if (vault.smallDoorInBottomWall) return false;
-
-    // Check if vault is already unlocked
-    if (vault.unlocked) {
-      return false;
-    }
-
-    // Held, not equipped — the vault key is a real Item in
-    // InventorySystem.keyItemInventory, granted when the key-dropping
-    // object is destroyed and picked up (handleObjectEffect's dropsKey
-    // branch), spent by unlockVault() below.
-    if (!game.inventorySystem.hasKeyItem('߃', game)) {
-      return false;
-    }
-
-    // Player must be SOUTH (outside) of the bottom wall and horizontally centered
     const playerGridX = Math.floor(game.player.position.x / GRID.CELL_SIZE);
     const playerGridY = Math.floor(game.player.position.y / GRID.CELL_SIZE);
 
-    const isSouthOfVault = playerGridY > vault.bottomWallRow; // Player is below/south of the wall
+    const isSouthOfVault = playerGridY > vault.bottomWallRow;
     const distanceToCenter = Math.abs(playerGridX - vault.centerCol);
     const maxCenterDist = vault.size / 2 + 2; // Lenient horizontal range
-    const isNearCenter = distanceToCenter <= maxCenterDist;
-
-    return isSouthOfVault && isNearCenter;
+    return isSouthOfVault && distanceToCenter <= maxCenterDist;
   }
 
-  // Open the vault: clear the bottom wall, consume the key, debris burst.
-  unlockVault() {
+  // Clear the bottom wall, mark the vault unlocked, debris burst. Shared by
+  // every unlock method — key, break, and switch all end here.
+  _openVaultWall(vault) {
     const game = this.game;
-    const vault = game.currentRoom.vaultInfo;
-    if (!vault || vault.unlocked) return;
-
-    // Remove bottom wall from collision map
     const bottomRow = vault.bottomWallRow;
     for (let col = vault.minCol; col <= vault.maxCol; col++) {
       game.currentRoom.collisionMap[bottomRow][col] = false;
     }
-
-    // Mark vault as unlocked
     vault.unlocked = true;
-
-    // Spend the held key item (held, not equipped — no quick slot involved)
-    game.inventorySystem.consumeKeyItem('߃');
-    game.audioSystem?.playSFX?.('vault_key_use');
-
-    // Mark background dirty to show wall removal
     game.renderer.markBackgroundDirty();
 
     // Visual feedback - create some debris particles
@@ -204,6 +175,94 @@ export class InteractionSystem {
       );
       game.particles.push(tagInteriorPlane(game, particle));
     }
+  }
+
+  // Green/gray: true when the player stands south of the vault's bottom
+  // wall, roughly centered, with the zone's key held.
+  canUnlockVault() {
+    const game = this.game;
+    // Only check in EXPLORE mode with a current room and vault
+    const state = game.stateMachine.getCurrentState();
+    if (state !== GAME_STATES.EXPLORE || !game.currentRoom || !game.currentRoom.vaultInfo) {
+      return false;
+    }
+
+    const vault = game.currentRoom.vaultInfo;
+
+    if (vault.unlockMethod !== 'key') return false;
+    if (vault.unlocked) return false;
+
+    // Held, not equipped — the vault key is a real Item in
+    // InventorySystem.keyItemInventory, granted when the key-dropping
+    // object is destroyed and picked up (handleObjectEffect's dropsKey
+    // branch), spent by unlockVault() below.
+    if (!game.inventorySystem.hasKeyItem(vault.keyChar, game)) {
+      return false;
+    }
+
+    return this._isPlayerSouthCentered(vault);
+  }
+
+  // Open the vault: clear the bottom wall, consume the key, debris burst.
+  unlockVault() {
+    const game = this.game;
+    const vault = game.currentRoom.vaultInfo;
+    if (!vault || vault.unlockMethod !== 'key' || vault.unlocked) return;
+
+    this._openVaultWall(vault);
+
+    // Spend the held key item (held, not equipped — no quick slot involved)
+    game.inventorySystem.consumeKeyItem(vault.keyChar);
+    game.audioSystem?.playSFX?.('vault_key_use');
+  }
+
+  // Red zone: a boulder, bomb, or the Red Warrior's damage roll breaks the
+  // wall on contact instead of a key. `x`/`y`/`radius` are pixel-space —
+  // callers pass whatever impact/hitbox/explosion footprint they already
+  // have. Returns true if this call actually broke the wall.
+  tryBreakVaultWall(x, y, radius = GRID.CELL_SIZE / 2) {
+    const game = this.game;
+    const vault = game.currentRoom?.vaultInfo;
+    if (!vault || vault.unlockMethod !== 'break' || vault.unlocked) return false;
+
+    const bottomWallY = vault.bottomWallRow * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+    const minX = vault.minCol * GRID.CELL_SIZE;
+    const maxX = (vault.maxCol + 1) * GRID.CELL_SIZE;
+    const halfCell = GRID.CELL_SIZE / 2;
+
+    if (Math.abs(y - bottomWallY) > halfCell + radius) return false;
+    if (x + radius < minX || x - radius > maxX) return false;
+
+    this._openVaultWall(vault);
+    game.audioSystem?.playSFX?.('vault_wall_break');
+    return true;
+  }
+
+  // Cyan zone: true when the buried switch has been uncovered (walked onto
+  // — PhysicsSystem's deep-snow compaction, same mechanic as any other snow
+  // field) and the player is back at the vault to throw it.
+  canActivateVaultSwitch() {
+    const game = this.game;
+    const state = game.stateMachine.getCurrentState();
+    if (state !== GAME_STATES.EXPLORE || !game.currentRoom || !game.currentRoom.vaultInfo) {
+      return false;
+    }
+
+    const vault = game.currentRoom.vaultInfo;
+    if (vault.unlockMethod !== 'switch') return false;
+    if (vault.unlocked) return false;
+    if (!vault.switchObject?.compacted) return false;
+
+    return this._isPlayerSouthCentered(vault);
+  }
+
+  activateVaultSwitch() {
+    const game = this.game;
+    const vault = game.currentRoom.vaultInfo;
+    if (!vault || vault.unlockMethod !== 'switch' || vault.unlocked) return;
+
+    this._openVaultWall(vault);
+    game.audioSystem?.playSFX?.('vault_switch');
   }
 
   // Artifact ⚜ → wise fellow: consume the artifact, unlock the rare-tier hint
@@ -588,7 +647,7 @@ export class InteractionSystem {
     const game = this.game;
     if (!effect) return;
 
-    // Key items (K room Vault Key, dungeon Skull Key): destroying the
+    // Key items (green Vault's Vault Key, dungeon Skull Key): destroying the
     // carrying object spawns a real, pickup-able Item — held like any
     // weapon/armor drop, just routed by InventorySystem.tryPickupItem's KEY
     // branch into keyItemInventory instead of a quick/equip slot, so it

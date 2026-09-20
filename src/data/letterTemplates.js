@@ -83,22 +83,23 @@ export const LETTER_TEMPLATES = {
 
   V: {
     name: 'Vault',
-    description: 'Sealed cage with coins — only a tiny gap lets small creatures in',
+    description: 'Sealed cage with rare treasure — each zone guards it differently',
 
     // Wall structure rules
     wallStructures: {
       allow: true // Allow structures outside vault
     },
 
-    // Custom collision pattern (hollow square cage)
+    // Custom collision pattern (hollow square cage). How the cage actually
+    // opens is zone-dependent — see RoomGenerator.placeVaultStructure's
+    // VAULT_UNLOCK_BY_ZONE table (key/break/switch/none), not this template.
     vaultStructure: {
       enabled: true,
       centerCol: 15,  // Center of 30x30 grid
       centerRow: 15,
       size: 7,        // 7x7 hollow square
       hollow: true,   // Hollow interior (1-cell thick walls)
-      wallChar: '#',  // Visual indicator (uses crate/wall char)
-      smallDoorInBottomWall: true // Replace bottom-center wall cell with ▄ gap
+      wallChar: '#'   // Visual indicator (uses crate/wall char)
     },
 
     // Background object generation rules
@@ -128,45 +129,6 @@ export const LETTER_TEMPLATES = {
     enemySpawnRule: {
       spawnZone: 'perimeter',  // Enemies spawn outside vault
       preventVaultSpawn: true  // Never spawn inside vault
-    },
-
-    // Eligible for HuntingSystem's stillness-triggered moose/rabbit encounter.
-    huntableGame: true
-  },
-
-  K: {
-    name: 'Key Room',
-    description: 'Destructible objects contain vault keys',
-
-    // Wall structure rules
-    wallStructures: {
-      allow: true // Normal structures
-    },
-
-    // Background object generation rules
-    bgObjectRules: {
-      // Favor destructible non-organic objects (barrels, crates, rocks)
-      objectBias: {
-        'p': 3.0,  // 3x barrels
-        '#': 3.0,  // 3x crates
-        '0': 2.0,  // 2x rocks
-        'B': 2.0,  // 2x metal boxes
-        '%': 0.3,  // Fewer shrubs
-        'Y': 0.3   // Fewer trees
-      },
-
-      // Overall density boost
-      densityMultiplier: 1.5, // 50% more objects than normal
-
-      grassDensity: 0.4 // 40% normal grass (less organic)
-    },
-
-    // Special drop behavior
-    keyDrops: {
-      enabled: true,
-      dropChance: 0.4,  // 40% chance per destructible
-      keyChar: '߃',     // Key item character (Unicode U+07C3)
-      eligibleObjects: ['p', '#', '0', 'B', '8'] // Barrels, crates, rocks, metal boxes, bones
     },
 
     // Eligible for HuntingSystem's stillness-triggered moose/rabbit encounter.

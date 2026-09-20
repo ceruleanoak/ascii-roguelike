@@ -111,4 +111,7 @@ export function createExplosion(combatSystem, x, y, radius, damage, enemies, bac
 
   // Create visual effect (you can enhance this later)
   combatSystem.createDamageNumber('BOOM!', x, y, '#ff4400');
+
+  // Red zone Vault: a bomb in range of the wall breaks it, same as a boulder.
+  combatSystem.game?.interactionSystem?.tryBreakVaultWall(x, y, radius);
 }

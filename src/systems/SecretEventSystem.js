@@ -32,8 +32,11 @@ export class SecretEventSystem {
         name: 'key_glitter',
         priority: 10,
         condition: (room) => {
-          // Must be K room with key-dropping objects
-          return room.letterTemplate?.keyDrops?.enabled === true;
+          // Any room with an actual key-dropping object (Key Room letter
+          // retired 2026-09-20 — the green Vault's key rock is the only
+          // survivor of this mechanic; check the marker directly instead of
+          // a letter-template flag so it isn't tied to one room type).
+          return room.backgroundObjects.some(obj => obj.dropsKey === true);
         },
         eligibleObjects: (room) => {
           // Objects that actually drop keys

@@ -240,6 +240,12 @@ export class BoulderSystem {
                        cellRow === 0 || cellRow === GRID.ROWS - 1;
       const intoWall = !onBorder && !!game.currentRoom?.collisionMap?.[cellRow]?.[cellCol];
       if (intoWall) {
+        // Red zone Vault: a boulder into the wall breaks it instead of
+        // deflecting — the boulder is spent on the break.
+        if (game.interactionSystem?.tryBreakVaultWall(r.x, r.y, GRID.CELL_SIZE / 2)) {
+          this.rocks.splice(i, 1);
+          continue;
+        }
         r.x = prevX;
         r.y = prevY;
         r.vx *= -1;

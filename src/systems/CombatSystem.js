@@ -14,6 +14,7 @@ import { applyTargetOverrides as applyTargetOverridesImpl } from './enemyTargeti
 import { updateEnemyMeleeAttack, resolveEnemyAttack, attackHitsBox, retireAfterTest } from '../game/Telegraph.js';
 import { conductElectricity as conductElectricityImpl } from './ElectricConduction.js';
 import { checkProximity as checkProximityImpl, applyAOEStatus as applyAOEStatusImpl, createExplosion as createExplosionImpl } from './ExplosionEffects.js';
+import { updateRollDamage as updateRollDamageImpl } from './RollDamageMechanic.js';
 import { acidFloodFillWater } from './AcidWaterSpread.js';
 import { affinityDamageMultiplier } from '../entities/PandoraBox.js';
 import { TongueAttackSystem } from './TongueAttackSystem.js';
@@ -1875,57 +1876,12 @@ export class CombatSystem {
            attackBox.y + attackBox.height > playerBox.y;
   }
 
+  // Red Warrior's damage dodge-roll — see RollDamageMechanic.js. Extracted
+  // to its own file (not a shared mechanic, just an architecture-budget
+  // split); state (_rollHitEnemies/_rollHitObjects/_rollWasActive) stays on
+  // this instance.
   updateRollDamage(player, enemies, backgroundObjects) {
-    if (!player || player.dodgeRoll.type !== 'damage') return;
-
-    const rolling = player.dodgeRoll.active;
-
-    // Reset hit-tracking sets at the start of each new roll
-    if (rolling && !this._rollWasActive) {
-      this._rollHitEnemies = new Set();
-      this._rollHitObjects = new Set();
-    }
-    this._rollWasActive = rolling;
-
-    if (!rolling) return;
-
-    const hitbox = player.getHitbox();
-    const dir = player.dodgeRoll.direction;
-
-    // Damage enemies on contact (once per enemy per roll)
-    for (const enemy of enemies) {
-      if (this._rollHitEnemies.has(enemy) || enemy.hp <= 0) continue;
-      if (!inSamePlane(player, enemy)) continue;
-      const eb = enemy.getHitbox();
-      if (hitbox.x < eb.x + eb.width && hitbox.x + hitbox.width > eb.x &&
-          hitbox.y < eb.y + eb.height && hitbox.y + hitbox.height > eb.y) {
-        this._rollHitEnemies.add(enemy);
-        const result = enemy.takeDamage(1);
-        if (result) {
-          this.createDamageNumber(1, enemy.position.x, enemy.position.y, '#ff4444');
-          // Knockback in the roll direction
-          enemy.velocity.vx = dir.x * 300;
-          enemy.velocity.vy = dir.y * 300;
-          if (enemy.applyStatusEffect) enemy.applyStatusEffect('knockback', 0.25);
-        }
-      }
-    }
-
-    // Smash background objects on contact (once per object per roll)
-    for (const obj of backgroundObjects) {
-      if (obj.destroyed || obj.isRecipeSign || obj.indestructible || obj.hp === null) continue;
-      if (!objectOnPlane(obj, planeOf(player))) continue;
-      if (this._rollHitObjects.has(obj)) continue;
-      const ob = obj.getHitbox();
-      if (hitbox.x < ob.x + ob.width && hitbox.x + hitbox.width > ob.x &&
-          hitbox.y < ob.y + ob.height && hitbox.y + hitbox.height > ob.y) {
-        this._rollHitObjects.add(obj);
-        const result = obj.takeDamage(1, false);
-        if (result.effect) {
-          this.objectDestroyEvents.push({ obj, effect: result.effect });
-        }
-      }
-    }
+    updateRollDamageImpl(this, player, enemies, backgroundObjects);
   }
 
   applyKnockback(enemy, attack) {

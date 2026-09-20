@@ -83,11 +83,14 @@ Each event in `getSecretEventTypes()` has:
 **Purpose:** Show player which destructible contains vault key
 
 **Condition:**
-- Must be K room (`keyDrops.enabled === true`)
+- Any room with an object marked `dropsKey === true` (K room retired
+  2026-09-20 — the green Vault's key rock is the only survivor of this
+  mechanic; the condition checks the marker directly rather than a
+  letter-template flag)
 
 **Eligible Objects:**
 - Background objects with `dropsKey === true`
-- (Barrels, crates, rocks, metal boxes, bones in K rooms)
+- (The green Vault's key rock, placed by `buildVaultUnlockExtras`)
 
 **Marking:**
 ```javascript

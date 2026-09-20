@@ -657,7 +657,7 @@ export const ITEMS = {
     weaponSubtype: 'sword',
     damage: 2,
     windup: 0.5,
-    recovery: 1.65,
+    recovery: 1.25,
     patternSpeed: 0.07,
     range: 30,         // 1.5× base sword reach
     drawScale: 1.3,    // strike rendered larger to telegraph the longer reach
@@ -2974,8 +2974,9 @@ export const AFFINITY_POOLS = {
     weapons: {
       [RARITY.COMMON]:   ['†', ')', '↑', '≋', '○', '⊥', '⊸'],         // Sword, Bow, Spear, Whip, Flail, Hammer, Sling
       [RARITY.UNCOMMON]: ['¬', '⋙', '⫯', '↟', 'Ⲯ', 'ߒ'],              // Gun, Multi-Shot Bow, Longsword, Venom Lance, Thick Staff, Fishing Pole
-      // Vault Key ('߃') intentionally excluded — it's a K-room-only "held,
-      // not equipped" pickup (InteractionSystem.dropsKey), never a generic
+      // Vault Key ('߃') intentionally excluded — it's a green-zone-only
+      // "held, not equipped" pickup (InteractionSystem.dropsKey, from the
+      // key rock RoomGenerator places by the green Vault), never a generic
       // enemy weapon drop.
       [RARITY.RARE]:     ['⇑', '✺', 'ᛟ', 'ᛏ', 'ᛉ', '⌐']              // War Spear, Exploding Mace, Homing Bow, Piercing Bow, Shotgun, Machine Gun
     },

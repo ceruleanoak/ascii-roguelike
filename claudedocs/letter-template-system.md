@@ -178,38 +178,16 @@ generateRoom(letter) {
 - Item pool: `['⌘', '☼', '⚔', '♦', 'K', '^', '℧']` (high-tier weapons/armor)
 - Spawn weight: 0.05 (5% chance, rare)
 - Zone boosts: gray (3x), red (2x)
-- **Vault unlocking:** Requires vault key from K rooms - see below
-
-### ✅ **K - Key Room** (Complete)
-
-**Terrain Identity:**
-- Heavy destructible objects (barrels, crates, rocks, metal boxes, bones)
-- 50% more objects than normal rooms
-- Reduced organic objects (fewer bushes/trees)
-- Less grass (40% normal)
-
-**Gameplay Impact:**
-- Destructible objects have 40% chance to drop vault key ('k')
-- Key spawns from non-organic objects only
-- Keys are required to unlock V (Vault) rooms
-- Fairly common spawn rate to support vault progression
-
-**Implementation notes:**
-- `objectBias` → 3x barrels/crates, 2x rocks/metal boxes, 0.3x organic
-- `keyDrops` → 40% drop chance from eligible objects (p, #, 0, B, 8)
-- Objects marked with `dropsKey: true` flag on creation
-- Key spawned as Item on object destruction via `handleObjectEffect()`
-- Spawn weight: 0.08 (8% chance, fairly common)
-- Zone boosts: green (2x), cyan (1.5x) - more common early game
-
-**Vault Key System:**
-- Key item: '߃' (Unicode U+07C3 - NKo letter, gold color #ffaa00)
-- Unlocks vault by removing bottom wall when player approaches with key
-- Auto-detection: Player within 2 cells of vault bottom wall triggers unlock
-- Key consumed on use (one-time unlock per key)
-- Visual feedback: Wall debris particles on unlock
-- `checkVaultKeyInteraction()` runs every frame in EXPLORE state
-- `unlockVault()` removes collision map cells and marks vault as unlocked
+- **Vault unlocking (K room retired 2026-09-20):** per-zone method, resolved by
+  `RoomGenerator.buildVaultUnlockExtras`/`VAULT_UNLOCK_BY_ZONE`
+  (`src/systems/roomFeatures.js`) — green: a key rock stands just south of
+  the cage (Vault Key '߃'); gray: Skull Key '⚿' (shared with the dungeon
+  gate, placeholder — no drop source authored yet); red: Red Warrior's
+  damage roll, a boulder, or a bomb breaks the wall
+  (`InteractionSystem.tryBreakVaultWall`); cyan: a switch buried under deep
+  snow just south of the cage (`canActivateVaultSwitch`/`activateVaultSwitch`);
+  yellow: no unlock at all — only Yellow Mage's blink gets past it. See
+  `InteractionSystem.js`'s vault section for the full mechanism.
 
 ---
 

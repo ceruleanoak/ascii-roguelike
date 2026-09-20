@@ -86,16 +86,6 @@ export const EXIT_LETTERS = {
     vowel: true,
     spellDescription: 'THE HOARDER PATH.'
   },
-  'K': {
-    name: 'Key Room',
-    roomType: 'COMBAT',
-    weight: 0.08,
-    zoneBoosts: {
-      green: 2,
-      cyan: 1.5
-    },
-    spellDescription: 'A GLIMMERING KEY.'
-  },
   'L': {
     name: 'Lake',
     roomType: 'COMBAT',

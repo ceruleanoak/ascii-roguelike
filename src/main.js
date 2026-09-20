@@ -3756,6 +3756,12 @@ class Game {
         return;
       }
 
+      // Cyan zone: throw the buried vault switch once it's been uncovered
+      if (this.interactionSystem.canActivateVaultSwitch()) {
+        this.interactionSystem.activateVaultSwitch();
+        return;
+      }
+
       // Detonate any placed remote bombs (takes priority over new throw)
       const hasRemoteBombs = this.placedTraps.some(e => e.item.data.remoteTrigger);
       if (hasRemoteBombs) {

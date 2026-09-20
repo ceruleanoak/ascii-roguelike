@@ -1076,22 +1076,6 @@ export function buildVaultInteriorLoot(bounds, shuffleFn) {
 }
 
 /**
- * Stamp a ▄ small door into a vault's bottom wall. Clears the collisionMap
- * cell, removes it from pendingWallCells, and stages the door BackgroundObject.
- * Returns the filtered pendingWallCells array.
- */
-export function stampSmallDoorInVault(collisionMap, pendingWallCells, pendingLoot, centerCol, maxRow) {
-  const doorCol = centerCol;
-  const doorRow = maxRow;
-  collisionMap[doorRow][doorCol] = false;
-  const filtered = pendingWallCells.filter(c => !(c.col === doorCol && c.row === doorRow));
-  const doorObj = new BackgroundObject('▄', doorCol * GRID.CELL_SIZE, doorRow * GRID.CELL_SIZE);
-  doorObj.structural = true;
-  pendingLoot.push(doorObj);
-  return filtered;
-}
-
-/**
  * Spawn non-gravitating coin ingredients inside a vault. Returns an array
  * of Ingredient entities ready to be flushed into game.ingredients.
  */
@@ -1115,6 +1099,75 @@ export function buildVaultCoinAbundance(bounds, shuffleFn, count) {
     coins.push(coin);
   }
   return coins;
+}
+
+// Per-zone Vault (V room) unlock method (K room retired 2026-09-20 — see
+// bug-inbox and resolved-bugs.md; each zone now guards its Vault a
+// different way, matching the zone's own verb rather than one shared key):
+//   green  — a key rock stands just south of the cage; break it for the Vault Key
+//   gray   — Skull Key ('⚿', shared with the dungeon's own gate) — no drop
+//            source exists yet, placeholder until a quest is authored
+//   red    — Red Warrior's damage roll, a boulder, or a bomb breaks the wall
+//   yellow — no unlock at all; only Yellow Mage's blink (which already
+//            ignores collisionMap, see WarpSystem) gets past it
+//   cyan   — a switch buried in deep snow just outside the cage
+// Missing zones (blue, and any future zone) fall back to 'none' — same as
+// yellow, sealed except by blink. InteractionSystem's canUnlockVault/
+// unlockVault, tryBreakVaultWall, and canActivateVaultSwitch/
+// activateVaultSwitch all read the resulting unlockMethod off vaultInfo.
+export const VAULT_UNLOCK_BY_ZONE = {
+  green: { method: 'key', keyChar: '߃', dropsKeyRock: true },
+  gray: { method: 'key', keyChar: '⚿' },
+  red: { method: 'break' },
+  cyan: { method: 'switch' },
+  yellow: { method: 'none' },
+};
+
+/**
+ * Resolve a Vault's per-zone unlock method and build whatever extra
+ * BackgroundObject it needs (green's key rock, cyan's buried switch).
+ * `applyZoneProperties(obj, zone)` is passed in rather than imported, since
+ * it's a RoomGenerator instance method. Returns
+ * { unlockConfig, extraLoot, switchObject } — extraLoot is pushed onto the
+ * vault's pending loot by the caller, switchObject is stored on vaultInfo
+ * so InteractionSystem can check `.compacted`.
+ */
+export function buildVaultUnlockExtras(zoneType, { centerCol, maxRow }, applyZoneProperties) {
+  const unlockConfig = VAULT_UNLOCK_BY_ZONE[zoneType] || { method: 'none' };
+  const extraLoot = [];
+  let switchObject = null;
+
+  // Green zone: the key rock stands just south of the cage (K room retired
+  // — this replaces the separate Key Room letter with a rock right at the
+  // Vault door). Same 'dropsKey'/'keyChar' contract as the dungeon's Skull
+  // Key bone pile (DungeonFloorGenerator._placeSkullIfDue).
+  if (unlockConfig.method === 'key' && unlockConfig.dropsKeyRock) {
+    const rockCol = centerCol;
+    const rockRow = Math.min(maxRow + 2, GRID.ROWS - 2);
+    const keyRock = new BackgroundObject('0', rockCol * GRID.CELL_SIZE, rockRow * GRID.CELL_SIZE);
+    applyZoneProperties(keyRock, zoneType);
+    keyRock.dropsKey = true;
+    keyRock.keyChar = unlockConfig.keyChar;
+    extraLoot.push(keyRock);
+  }
+
+  // Cyan zone: a switch buried under deep snow just south of the cage.
+  // Reuses the existing snow-compaction mechanic (PhysicsSystem — any
+  // mass-bearing entity walking over deep snow compacts it) rather than a
+  // bespoke digging system; vaultSwitch flags this particular tile for
+  // InteractionSystem's canActivateVaultSwitch/activateVaultSwitch.
+  if (unlockConfig.method === 'switch') {
+    const switchCol = centerCol;
+    const switchRow = Math.min(maxRow + 1, GRID.ROWS - 2);
+    switchObject = BackgroundObject.createVariant(
+      'snow_deep', switchCol * GRID.CELL_SIZE, switchRow * GRID.CELL_SIZE
+    );
+    switchObject.compacted = false;
+    switchObject.vaultSwitch = true;
+    extraLoot.push(switchObject);
+  }
+
+  return { unlockConfig, extraLoot, switchObject };
 }
 
 /**
@@ -1169,66 +1222,6 @@ export function getIslandPosition(islandConfig, collisionMap, existingEnemies = 
 
   // Fallback to any position on the island center
   return { x: islandCenterCol * GRID.CELL_SIZE, y: islandCenterRow * GRID.CELL_SIZE };
-}
-
-/**
- * Can this object carry a vault key? The key only reaches the player when the
- * object is destroyed, so the letter template's eligible-char list is necessary
- * but not sufficient — an eligible char can still be an unbreakable *instance*,
- * which would strand the key inside a rock nothing can break:
- *   - obsidian rock variants ('0' with obsidian: true — 30% of formation rocks)
- *   - tunnel entrance cap rocks (indestructible '0' structure)
- * Obsidian is checked on its own because CombatSystem's melee path gates on
- * obj.obsidian, not on the indestructible flag.
- */
-export function isKeyDropEligible(obj, keyDropConfig) {
-  if (!keyDropConfig.eligibleObjects.includes(obj.char)) return false;
-  if (obj.indestructible || obj.obsidian || obj.hp === null || obj.destroyed) return false;
-  return true;
-}
-
-/**
- * Roll a single freshly generated object for vault-key duty in K rooms.
- */
-export function applyKeyDropLogic(gen, obj) {
-  const keyDropConfig = gen.currentLetterTemplate?.keyDrops;
-  if (!keyDropConfig?.enabled) return; // Not a K room
-
-  if (isKeyDropEligible(obj, keyDropConfig) && Math.random() < keyDropConfig.dropChance) {
-    // Mark this object as a key dropper
-    obj.dropsKey = true;
-    obj.keyChar = keyDropConfig.keyChar;
-  }
-}
-
-/**
- * Ensure K rooms always have at least one key dropper (post-generation
- * guarantee). Only objects that went through generation paths calling
- * applyKeyDropLogic can already be marked, so this sweeps the whole room.
- */
-export function ensureKeyDroppers(gen, room) {
-  const keyDropConfig = gen.currentLetterTemplate?.keyDrops;
-  if (!keyDropConfig?.enabled) return; // Not a K room
-
-  // Already have at least one key dropper — nothing to guarantee
-  if (room.backgroundObjects.some(obj => obj.dropsKey === true)) return;
-
-  // No key droppers yet — find all eligible objects. Char match alone is not
-  // enough: mineral formations mix unbreakable obsidian rocks in with normal
-  // ones under the same '0' char, and picking one here hides the key forever.
-  const eligibleObjects = room.backgroundObjects.filter(obj =>
-    isKeyDropEligible(obj, keyDropConfig)
-  );
-
-  if (eligibleObjects.length === 0) {
-    console.warn(`[Key Room] No breakable objects found for key drops! Room may be un-completable.`);
-    return;
-  }
-
-  // Mark 1 random eligible object as guaranteed key dropper
-  const obj = eligibleObjects[Math.floor(Math.random() * eligibleObjects.length)];
-  obj.dropsKey = true;
-  obj.keyChar = keyDropConfig.keyChar;
 }
 
 /**
