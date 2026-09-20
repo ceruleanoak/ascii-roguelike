@@ -4124,21 +4124,27 @@ class Game {
   //   grace:         false → demo attract mode; enemies act immediately.
   applyRoomSwap(room, { resetEntities = true, grace = true } = {}) {
     if (resetEntities) {
-      this.ingredients = [];
+      // Room-scoped registry entries first (resetRegistry.js §D / plan §7
+      // Step 6): clears backgroundObjects/items/ingredients/placedTraps/
+      // physicsSystem/combatSystem/huntingSystem/cureRusalka/
+      // playerTongueAttacks/followerCrows/soundEvents/activeNoiseSource/
+      // bridgeMenuOpen, and runs interiorManager.reset(). (currentRoom is
+      // deliberately NOT in this scope — see its registry entry's `why` —
+      // both callers of applyRoomSwap already assigned `this.currentRoom`
+      // to the incoming room before this method runs.) The room-derived
+      // reassignments below (items/backgroundObjects) intentionally run
+      // AFTER this call and overwrite its clears — that's the room swap,
+      // not a race.
+      applyReset(this, 'room');
       this.items = room.items || [];
-      this.placedTraps = [];
-      this.activeNoiseSource = null;
+      this.backgroundObjects = room.backgroundObjects || [];
+
       this._resetEnvironmentalEffects();
       this.captives = [];
       this.neutralCharacters = [];
       // Roaming Alchemist: release placement on room exit (AlchemistNPC.releaseIfLeftRoom).
       this.alchemistNPC?.releaseIfLeftRoom(room);
-      this.bridgeMenuOpen = false;
       this.errandSystem.closeMenu();
-      this.backgroundObjects = room.backgroundObjects || [];
-
-      // Clear sound events from any previous room
-      this.soundEvents = [];
 
       // Ridge room: attach ridge system (registers the bridge worker too).
       if (room.type === ROOM_TYPES.RIDGE) {
@@ -4160,9 +4166,9 @@ class Game {
         room.exitsLocked = false;
       }
 
-      // Follower flock is room-scoped: bystander crows don't trail the player
-      // across rooms (companions still do). Auto-join reapplies per-room.
-      this.followerCrows = [];
+      // Follower flock is room-scoped (cleared above via applyReset('room')):
+      // bystander crows don't trail the player across rooms (companions
+      // still do). Auto-join reapplies per-room.
       if (this.player) this.companionSystem.autoJoinWildCrows();
     } else {
       // Restore path: still clear transient effects

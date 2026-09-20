@@ -286,21 +286,13 @@ const UNREGISTERED_ALLOWLIST = [
   /^player$/,
   /^player\..+$/,
 
-  // InteriorManager-owned fields — Non-Goals: "InteriorManager.reset()...
-  // only call sites move [into the registry], bodies untouched." Per plan
-  // §5.E / §7 Step 6, InteriorManager.reset() is NOT YET wired into either
-  // full-reset path (it's called from enterRestState/transitionToNeutralRoom/
-  // room transitions instead) — registering its `covers` is explicitly
-  // deferred to the optional room-tier step, not a Step 4 gap. Re-triage
-  // this entry if Step 6 lands and these still aren't covered.
-  /^activeFloor$/,
-  /^mazeInterior$/,
-  /^dungeonFloors$/,
-  /^dungeonCurrentFloor$/,
-  /^dungeonKeySkullFloor$/,
-  /^dungeonKeyUsedThisRun$/,
-  /^dungeonRareItemObtainedThisRun$/,
-  /^dungeonTemplatesUsedThisRun$/,
+  // InteriorManager-owned fields were allowlisted here pending plan Step 6.
+  // Step 6 landed: resetRegistry.js now has a room-scoped `interiorManager.reset`
+  // entry whose `covers` array lists activeFloor/mazeInterior/dungeonFloors/
+  // dungeonCurrentFloor/dungeonKeySkullFloor/dungeonKeyUsedThisRun/
+  // dungeonRareItemObtainedThisRun/dungeonTemplatesUsedThisRun (plus the
+  // player.* interior fields) — registeredPaths() now exempts them via that
+  // `covers` list, so these regexes are redundant and removed.
 
   // Explicitly documented intentional persistence — main.js:1187: "Note:
   // exitPathHistory persists for future secret pattern tracking." This is
@@ -318,17 +310,20 @@ const UNREGISTERED_ALLOWLIST = [
   /^bossDefeatFlash$/,
   /^pendingZoneMusicResume$/,
 
-  // Per-frame scratch, recomputed every tick from live world state —
-  // `activeNoiseSource`'s own inline comment: "Set each frame by
-  // updatePlacedTraps if noise-maker is active."
-  /^activeNoiseSource$/,
+  // Per-frame scratch, recomputed every tick from live world state.
+  // `activeNoiseSource` is now registered directly at `room` scope in
+  // resetRegistry.js (Step 6), so its allowlist entry is removed — kept here
+  // only as a note that it's still per-frame-recomputed in practice, and the
+  // registry entry is a defensive room-transition clear on top of that.
 
   // Menu-state compromise cluster — CLAUDE.md "Architectural Compromises"
   // names this explicitly: menu state lives on `game` and every renderer
   // reads it directly; it is UI-selection scratch re-derived by MenuSystem
   // on the next open, not run-scoped data that needs a clear-on-reset entry.
   // `bridgeMenuOpen` (RidgeSystem's own open/close flag, auto-closed on
-  // distance/interaction, main.js:2973/4215) is the same shape.
+  // distance/interaction, main.js:2973/4215) is the same shape but is now
+  // registered directly at `room` scope in resetRegistry.js (Step 6), so its
+  // allowlist entry is removed.
   /^menuOpen$/,
   /^menuItems$/,
   /^selectedMenuIndex$/,
@@ -337,7 +332,6 @@ const UNREGISTERED_ALLOWLIST = [
   /^currentMenuSlot$/,
   /^selectedWeaponSlotIndex$/,
   /^selectedColumn$/,
-  /^bridgeMenuOpen$/,
 
   // attackSequenceActive is cleared synchronously within the same
   // input-handler pass that sets it true (handleSpaceRelease zeroes it

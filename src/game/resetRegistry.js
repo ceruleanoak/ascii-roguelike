@@ -22,13 +22,22 @@
 // GameStateMachine.js, its src/game/ siblings) that every system can be
 // reset by, without the registry ever depending on a system's module.
 //
-// STATUS: Steps 1-3 done. RESET_REGISTRY holds the full run-scoped
-// inventory (§5.A/§5.B) plus the title-only inventory (§5.C) and the
-// tombstone addendum (§5.-1). `_resetRunToRest()` and `enterTitleState()`
-// in src/main.js both consume this table via applyReset(). Remaining work
-// (plan §7): Step 4 (harness registry-coverage check), Step 5 (constructor
-// consumes the registry via initRegisteredState), Step 6 (optional `room`
-// tier).
+// STATUS: Steps 1-6 done. RESET_REGISTRY holds the full run-scoped
+// inventory (§5.A/§5.B), the title-only inventory (§5.C), the tombstone
+// addendum (§5.-1), and — as of Step 6 — the `room` tier (§7 Step 6): most of
+// the original §5.C world-teardown set re-labeled down from `title` to
+// `room` (it was always correct at the narrower tier; the cascade still
+// gives title/run the same reach), plus the interior/polymorph/noise/menu
+// backstop entries. One exception: `currentRoom` stayed at `run` scope (see
+// its entry in Section B) rather than moving to `room`, because
+// applyRoomSwap's own callers assign `this.currentRoom` to the incoming room
+// before calling it — a `room`-scope null-out there would clobber that
+// assignment with nothing to restore it. Step 4's bug #305 triage also
+// landed (the "Bug #305 triage" section below). `_resetRunToRest()` and
+// `enterTitleState()` in src/main.js both consume this table via
+// applyReset(); `applyRoomSwap()`'s `resetEntities` block now also calls
+// applyReset(this, 'room'). Remaining work (plan §7): Step 7 (docs/glossary/
+// ADR-backlog cleanup) only.
 
 // ---------------------------------------------------------------------------
 // Scope cascade
@@ -38,9 +47,9 @@
 // narrower ones: a room transition clears the least; returning to TITLE
 // clears everything a room transition and a run-death both clear, plus more.
 //
-//   room  — narrowest. Per-room-transition state (population deferred to
-//           plan Step 6 — see plan §3; the tier exists in the enum now so
-//           the type is stable, but no entries are scoped to it yet).
+//   room  — narrowest. Per-room-transition state (populated by plan Step 6
+//           — see plan §3/§7 Step 6: the `applyRoomSwap()` world-teardown
+//           set plus interior/polymorph/noise/menu backstop entries).
 //   run   — dies on death / game-over (today's _resetRunToRest() surface).
 //   title — dies returning to TITLE (today's enterTitleState() surface).
 //
@@ -299,6 +308,12 @@ export const RESET_REGISTRY = [
   // this step's concern — this step only needs run-scope behavior to stay
   // exactly as it is today. ─────────────────────────────────────────────
   {
+    path: 'currentRoom',
+    scope: 'run',
+    value: null,
+    why: "No room exists between runs (also true of the title screen, which inherits this via the cascade). Deliberately NOT `room` scope despite being part of the §5.C world-teardown set conceptually: both real applyRoomSwap call sites (main.js ~1019/~1036 and ~1885/~2033) assign `this.currentRoom = newRoom` BEFORE calling applyRoomSwap, and nothing re-assigns it afterward inside or after that call — if this entry were scope 'room', applyRoomSwap's own applyReset('room') call (Step 6) would null out the room the caller just set, and callers immediately downstream (e.g. enterExploreState reading `this.currentRoom?.zone` right after the applyRoomSwap call) would see null instead of the new room. Scoping it 'run' instead keeps the intended behavior (nulled on death before REST reassigns it, and on title-return) while never firing from applyRoomSwap's narrower 'room' scope.",
+  },
+  {
     path: 'gameOverWaitingForSpace',
     scope: 'run',
     value: false,
@@ -404,12 +419,6 @@ export const RESET_REGISTRY = [
   },
   {
     path: 'companionCrows',
-    scope: 'run',
-    fresh: () => [],
-    why: 'Reset fairy run-flag for new run.',
-  },
-  {
-    path: 'followerCrows',
     scope: 'run',
     fresh: () => [],
     why: 'Reset fairy run-flag for new run.',
@@ -553,12 +562,6 @@ export const RESET_REGISTRY = [
     why: 'Genuine pre-existing bug (bug #305): a pure accumulator (NeutralRoomSystem.applyBlessing pushes into it) with no reset call anywhere — blessings collected in one run persisted into the next. Registering this closes the bug, not just a housekeeping gap.',
   },
   {
-    path: 'cureRusalka',
-    scope: 'run',
-    value: null,
-    why: "Backstop clear for the polymorph-cure flag (PolymorphSystem). Room-transition sites (enterRestState, the neutral-room-transition path, and a third room-transition function) already null this inline on every room change — that is a different mechanism (per-room, not per-run) and is kept as-is; this entry is the death/title-return safety net those sites don't cover.",
-  },
-  {
     path: 'neutralCharacters',
     scope: 'run',
     fresh: () => [],
@@ -569,12 +572,6 @@ export const RESET_REGISTRY = [
     scope: 'run',
     fresh: () => [],
     why: "Genuine pre-existing bug (bug #305): unlike sibling `placedTraps` (already registered at title scope), inFlightTraps was cleared at NO site anywhere in the codebase — an in-flight thrown trap/wire could carry across a death or title return. Registering this closes the bug. Shape: [{ x, y, vx, vy, decel, targetX, targetY, char, color, trapData, plane }].",
-  },
-  {
-    path: 'playerTongueAttacks',
-    scope: 'run',
-    fresh: () => [],
-    why: 'Backstop clear for in-flight rusalka tongue-attack projectiles (PolymorphSystem). Room-transition inline clears (same three sites as cureRusalka) stay in place as the per-room mechanism; this is the run/title-reset backstop.',
   },
   {
     path: 'gameOverDeathTimer',
@@ -613,12 +610,6 @@ export const RESET_REGISTRY = [
     why: 'Self-clearing ritual/spell-feedback text with a start-time-based auto-expiry (RenderController), same shape as the already-registered wellCoinAnim/wellFlashTimer/wellFlashDuration. Registered anyway as a backstop against a stale message surviving into the next run\'s first frame.',
   },
   {
-    path: 'soundEvents',
-    scope: 'run',
-    fresh: () => [],
-    why: 'Backstop clear for the per-frame noise-detection queue (read by ExploreRenderer/enemy hearing). Already cleared inline in applyRoomSwap()\'s resetEntities block (a room-transition mechanism, kept as-is); this is the run/title-reset backstop.',
-  },
-  {
     path: 'idleEchoes',
     scope: 'run',
     fresh: () => [],
@@ -649,11 +640,142 @@ export const RESET_REGISTRY = [
     why: 'Whole-entity reset; must run after every other player.* reset entry.',
   },
 
+  // ── D. Room-scoped (plan §7 Step 6) — narrowest tier. These entries fire
+  // on every room transition via `applyReset(this, 'room')` at the top of
+  // applyRoomSwap()'s resetEntities block, AND — via the cascade — on every
+  // run-death and title-return reset too, since room ⊂ run ⊂ title. Two
+  // families:
+  //   (1) the original §5.C "world-teardown set" (minus `currentRoom` — see
+  //       below), re-labeled down from `title` to `room` — it was always
+  //       room-transition behavior (`applyRoomSwap` already cleared these on
+  //       every warp; the title registration in Step 3 was the correct
+  //       EFFECT but the wrong DECLARED HOME). Re-labeling doesn't remove
+  //       them from title's reach — title still gets them via
+  //       scopeIncludes('title') including 'room' — it just corrects which
+  //       tier owns the declaration. `currentRoom` itself stayed at `run`
+  //       scope (declared in Section B) rather than moving to `room`: both
+  //       real applyRoomSwap call sites assign `this.currentRoom = newRoom`
+  //       BEFORE calling applyRoomSwap, so a `room`-scope null-out would
+  //       clobber the room the caller just set, with nothing downstream to
+  //       re-assign it. `run`/`title` still null it exactly as before.
+  //   (2) fields that were registered at `run` scope as death/title-return
+  //       BACKSTOPS in Step 4 (bug #305 triage) for state whose PRIMARY
+  //       clear mechanism is inline per-room-transition code (enterRestState/
+  //       transitionToNeutralRoom/enterExploreState for cureRusalka and
+  //       playerTongueAttacks; applyRoomSwap itself for followerCrows and
+  //       soundEvents). Re-scoping these down to `room` makes the registry
+  //       entry ALSO be that room-transition mechanism for the one call site
+  //       (applyRoomSwap) that didn't already inline-clear them, while the
+  //       existing inline clears at the other sites stay exactly as they are
+  //       (redundant with this entry there, which is harmless and unchanged
+  //       from the pattern Step 4 already established). ────────────────────
+  {
+    path: 'backgroundObjects',
+    scope: 'room',
+    fresh: () => [],
+    why: 'No room exists between room transitions. The next applyRoomSwap immediately repopulates this with the incoming room\'s own array right after this clear runs — see applyRoomSwap\'s resetEntities block.',
+  },
+  {
+    path: 'items',
+    scope: 'room',
+    fresh: () => [],
+    why: 'No room exists between room transitions. The next applyRoomSwap immediately repopulates this with the incoming room\'s own array right after this clear runs — see applyRoomSwap\'s resetEntities block.',
+  },
+  {
+    path: 'ingredients',
+    scope: 'room',
+    fresh: () => [],
+    why: 'No room exists between room transitions. Ingredient entities lying on the floor of the current room — NOT the player\'s pile; picking one up moves its glyph into the pile via addIngredient(), and the two never hold the same thing.',
+  },
+  {
+    path: 'placedTraps',
+    scope: 'room',
+    fresh: () => [],
+    why: 'No room exists between room transitions. Shape: { item, tickTimer, activeDuration, affectedEnemies }.',
+  },
+  {
+    path: 'physicsSystem.clear',
+    scope: 'room',
+    call: (game) => game.physicsSystem.clear(),
+    why: 'No room exists between room transitions. applyRoomSwap re-registers the player/enemies/items with physics immediately after this clear runs.',
+  },
+  {
+    path: 'combatSystem.clear',
+    scope: 'room',
+    call: (game) => game.combatSystem.clear(),
+    why: 'No room exists between room transitions.',
+  },
+  {
+    path: 'huntingSystem.reset',
+    scope: 'room',
+    call: (game) => game.huntingSystem.reset(),
+    why: 'No room exists between room transitions.',
+  },
+  {
+    path: 'cureRusalka',
+    scope: 'room',
+    value: null,
+    why: "Polymorph-cure flag (PolymorphSystem) is genuinely per-room, not per-run — re-scoped down from 'run' in Step 6 (was a death/title-return backstop for the mechanism, now the mechanism itself covers all three call sites that clear it: this registry entry via applyRoomSwap's applyReset('room'), plus the pre-existing inline nulls at enterRestState/transitionToNeutralRoom/enterExploreState, which stay in place unchanged).",
+  },
+  {
+    path: 'playerTongueAttacks',
+    scope: 'room',
+    fresh: () => [],
+    why: "In-flight rusalka tongue-attack projectiles (PolymorphSystem) — same shape and same Step 6 re-scope as cureRusalka above: genuinely per-room, this entry now covers applyRoomSwap directly while the existing inline clears at the other three room-transition sites stay in place unchanged.",
+  },
+  {
+    path: 'followerCrows',
+    scope: 'room',
+    fresh: () => [],
+    why: "Follower flock is room-scoped by design: bystander crows don't trail the player across rooms (companions still do — see companionCrows, which stays run-scoped). Re-scoped down from 'run' in Step 6 to match applyRoomSwap's actual per-room clear; auto-join reapplies per-room via companionSystem.autoJoinWildCrows().",
+  },
+  {
+    path: 'soundEvents',
+    scope: 'room',
+    fresh: () => [],
+    why: "Per-frame noise-detection queue (read by ExploreRenderer/enemy hearing) — re-scoped down from 'run' in Step 6 to match its actual clear site: applyRoomSwap's resetEntities block, on every room transition, not only on death/title-return.",
+  },
+  {
+    path: 'activeNoiseSource',
+    scope: 'room',
+    value: null,
+    why: "Backstop for the per-frame noise-maker reference (set each frame by updatePlacedTraps when a noise-maker is active — see the constructor default's own comment). Recomputed every tick regardless, but applyRoomSwap explicitly nulls it on every room transition too, to guarantee a stale reference from the departed room can never be read as 'active' during the single frame before the trap system recomputes it in the new room.",
+  },
+  {
+    path: 'bridgeMenuOpen',
+    scope: 'room',
+    value: false,
+    why: "RidgeSystem's bridge-worker menu open/close flag. Auto-closes on distance/interaction during normal play, but applyRoomSwap explicitly closes it on every room transition as a backstop against carrying a stale 'open' state (and its input-capture gate) into a room with no bridge worker at all.",
+  },
+  {
+    path: 'interiorManager.reset',
+    scope: 'room',
+    call: (game) => game.interiorManager.reset(),
+    covers: [
+      'activeFloor', 'mazeInterior', 'dungeonFloors', 'dungeonCurrentFloor',
+      'dungeonKeySkullFloor', 'dungeonKeyUsedThisRun',
+      'dungeonRareItemObtainedThisRun', 'dungeonTemplatesUsedThisRun',
+      'player._activeInteriorKind', 'player.hutExitPosition',
+      'player.mazeExitPosition', 'player.dungeonExitPosition',
+      'player.inAquifer', 'player.aquiferExitPosition', 'player.plane',
+      'player.tombSapped', 'player._tombSapTimer', 'player._tombSappingGhost',
+    ],
+    why: "InteriorManager.reset() is Non-Goals-exempt (PRD: system-owned reset methods keep their internal logic; the registry only guarantees the CALL happens at the right scope). InteriorManager.reset() already runs from its own three direct call sites (enterRestState, transitionToNeutralRoom, enterExploreState) — those are unchanged by this entry. Registering it here at 'room' scope means it ALSO now fires a 4th time via applyRoomSwap's applyReset('room') call (Step 6) — every existing call site to those three functions already runs applyRoomSwap downstream, so this is a same-tick duplicate call, not a new independent trigger. Verified idempotent: every field it writes is a plain null/-1/[]/new-Set() assignment, and its one side-effecting call (inventorySystem.consumeKeyItem('⚿')) is a no-op splice-miss when nothing is held (InventorySystem.js:321-326) — so the duplicate call is inert, not merely 'probably harmless'. Registering it was primarily for FR5 traceability (plan §5.E) so the harness's registry-coverage check accounts for the game.*/player.* fields it reaches via `covers`, without duplicating InteriorManager's own internal reset logic as table entries — the extra call is an accepted side effect of that, not the goal.",
+  },
+
   // ── C. Title-only today (plan §5.C) — STEP 3. These fields/calls, plus
   // everything above (inherited via scopeIncludes('title') === ['room','run',
   // 'title']), are what enterTitleState() now applies via
-  // applyReset(game, 'title'). Do not duplicate anything from sections A/B
-  // here — TITLE gets it for free through the cascade. ───────────────────
+  // applyReset(game, 'title'). Do not duplicate anything from sections A/B/D
+  // here — TITLE gets it for free through the cascade. The original §5.C
+  // world-teardown set (backgroundObjects/items/ingredients/placedTraps/
+  // physicsSystem.clear/combatSystem.clear/huntingSystem.reset) moved to
+  // Section D below in Step 6 — it was always room-scoped behavior, not
+  // title-only; TITLE still gets it via the cascade unchanged. `currentRoom`
+  // moved to Section B (`run` scope, not `room`) instead — see that entry's
+  // `why` for the reason applyRoomSwap's own call sites rule out `room`
+  // scope for this one field. TITLE still gets it via the cascade either
+  // way. ─────────────────────────────────────────────────────────────────
   {
     path: 'blueZoneRoom',
     scope: 'title',
@@ -670,54 +792,6 @@ export const RESET_REGISTRY = [
     call: (game) => game.roomGenerator.setDepth(0),
     // Same latent-death-path-gap note as blueZoneRoom above.
     why: "Room generator depth mirrors zoneDepths' reset for the title screen; enterExploreState re-sets it per room anyway.",
-  },
-  {
-    path: 'currentRoom',
-    scope: 'title',
-    value: null,
-    why: 'No room exists on the title screen.',
-  },
-  {
-    path: 'backgroundObjects',
-    scope: 'title',
-    fresh: () => [],
-    why: 'No room exists on the title screen.',
-  },
-  {
-    path: 'items',
-    scope: 'title',
-    fresh: () => [],
-    why: 'No room exists on the title screen.',
-  },
-  {
-    path: 'ingredients',
-    scope: 'title',
-    fresh: () => [],
-    why: 'No room exists on the title screen. Ingredient entities lying on the floor of the current room — NOT the player\'s pile; picking one up moves its glyph into the pile via addIngredient(), and the two never hold the same thing.',
-  },
-  {
-    path: 'placedTraps',
-    scope: 'title',
-    fresh: () => [],
-    why: 'No room exists on the title screen. Shape: { item, tickTimer, activeDuration, affectedEnemies }.',
-  },
-  {
-    path: 'physicsSystem.clear',
-    scope: 'title',
-    call: (game) => game.physicsSystem.clear(),
-    why: 'No room exists on the title screen.',
-  },
-  {
-    path: 'combatSystem.clear',
-    scope: 'title',
-    call: (game) => game.combatSystem.clear(),
-    why: 'No room exists on the title screen.',
-  },
-  {
-    path: 'huntingSystem.reset',
-    scope: 'title',
-    call: (game) => game.huntingSystem.reset(),
-    why: 'No room exists on the title screen.',
   },
   {
     path: 'titleAnimationTime',
