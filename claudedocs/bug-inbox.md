@@ -7,7 +7,6 @@ Quick-capture list for bugs noticed during play/dev, before they've been triaged
 Just one bug per line below, plain text.
 entering the ocean (blue) zone permanently affects explore (blue tint), and the 3 north path needs to be altered because it triggers 3 room. So the path should be east, north, west, then west again to exit
 if an exit transforms into a "B" (L14/L9) exit, destroy any barrier in its way
-K enemy (in green zone) weapon not rendering; fisherman blade cut (/ char, same as sword attack), not successfully rendering in hut.
 troll's new, larger hitbox not showing, if successfully implemented from prior commit
 wet enemies should zero out all burning pips, currently bugged, shows a ton of red pips for one frame
 snow is not melting when hit with fire sword
