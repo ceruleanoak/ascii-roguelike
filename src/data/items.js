@@ -1521,6 +1521,8 @@ export const ITEMS = {
   //   meleeResist    0–1  fraction of melee damage absorbed before defense
   //   bulletResist   0–1  chance to completely block a projectile
   //   dodgeChance    0–1  chance to fully evade any hit
+  //   blockChance    0–1  chance to fully block a bullet (and melee too, if blockMelee)
+  //   blockMelee     bool blockChance also rolls against melee hits, not just bullets
   //   burnResist     0–1  fraction of burn DoT absorbed (stacks with fireImmune)
   //   reflectDamage  0–1  fraction of taken damage reflected to attacker
   //   massBonus      +N   added to base mass=1; higher = less knockback received
@@ -1610,6 +1612,21 @@ export const ITEMS = {
     rollCooldownMult: 1.65,  // rolling in chain mail is a commitment
     spellDescription: 'ARROW PROTECTION.',
     color: '#aaaaaa'
+  },
+  'S': {
+    char: 'S', name: 'Shield', type: ITEM_TYPES.ARMOR,
+    defense: 1,
+    blockChance: 0.4,       // chance to fully negate a bullet — bullets only
+    spellDescription: 'CATCHES ARROWS.',
+    color: '#aaddff'
+  },
+  'U': {
+    char: 'U', name: 'Tower Shield', type: ITEM_TYPES.ARMOR,
+    defense: 2,
+    blockChance: 0.3,       // lower per-hit chance, but covers melee too
+    blockMelee: true,
+    spellDescription: 'NOTHING GETS THROUGH.',
+    color: '#8888ff'
   },
   '𐤄': {
     char: '𐤄', name: 'Robe', type: ITEM_TYPES.ARMOR,
@@ -2023,24 +2040,6 @@ export const ITEMS = {
   },
 
   // ── Defensive ─────────────────────────────────────────────────────────────
-  'S': {
-    char: 'S',
-    name: 'Shield',
-    type: ITEM_TYPES.CONSUMABLE,
-    effect: 'shield',
-    charges: 3,
-    rechargeCooldown: 5, // Shields recharge, not consumed
-    color: '#aaddff'
-  },
-  'U': {
-    char: 'U',
-    name: 'Tower Shield',
-    type: ITEM_TYPES.CONSUMABLE,
-    effect: 'bulwark',
-    charges: 2,
-    rechargeCooldown: 8, // Shields recharge, not consumed
-    color: '#8888ff'
-  },
   '■': {
     char: '■',
     name: 'Metal Block',

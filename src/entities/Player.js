@@ -223,13 +223,6 @@ export class Player {
     this.regenInterval = 1.0;
     this.regenTickTimer = 0;
 
-    // Shield charges (from Shield / Tower Shield consumables)
-    this.shieldCharges = 0;
-    this.shieldMaxCharges = 0;
-    this.shieldCooldown = 0;
-    this.shieldCooldownMax = 5;
-    this.shieldBlocksAll = false; // true = blocks melee too, false = bullets only
-
     // Staff blocking (basic staves: '/' Staff and 'ߒ' Fishing Pole)
     // Triggered when space remains held past the staff swing cooldown.
     this.isStaffBlocking = false;
@@ -515,18 +508,6 @@ export class Player {
     this.blockBoostAmount = Math.max(this.blockBoostAmount, amount);
   }
 
-  // Returns true if a shield charge absorbed this hit (bullet always checked;
-  // melee only absorbed if shieldBlocksAll is true)
-  tryShieldBlock(isBullet = true) {
-    if (this.shieldCharges <= 0) return false;
-    if (!isBullet && !this.shieldBlocksAll) return false;
-    this.shieldCharges--;
-    if (this.shieldCharges < this.shieldMaxCharges) {
-      this.shieldCooldown = this.shieldCooldownMax;
-    }
-    return true;
-  }
-
   applyStatusEffect(effect, duration = 3.0) {
     StatusEffectSystem.applyPlayerStatusEffect(this, effect, duration);
   }
@@ -631,17 +612,6 @@ export class Player {
     if (this.actionCooldown > 0) {
       this.actionCooldown -= deltaTime;
       if (this.actionCooldown < 0) this.actionCooldown = 0;
-    }
-
-    // Recharge shield charges on cooldown
-    if (this.shieldCooldown > 0) {
-      this.shieldCooldown -= deltaTime;
-      if (this.shieldCooldown <= 0 && this.shieldCharges < this.shieldMaxCharges) {
-        this.shieldCharges++;
-        if (this.shieldCharges < this.shieldMaxCharges) {
-          this.shieldCooldown = this.shieldCooldownMax;
-        }
-      }
     }
 
     // Burn/poison DoT ticking — StatusEffectSystem.js (damage applied back
@@ -1087,12 +1057,6 @@ export class Player {
     // Reset invulnerability/attack block timers
     this.invulnerabilityTimer = 0;
     this.attackBlockTimer = 0;
-
-    // Reset shield charges
-    this.shieldCharges = 0;
-    this.shieldMaxCharges = 0;
-    this.shieldCooldown = 0;
-    this.shieldBlocksAll = false;
 
     // Reset staff blocking state
     this.isStaffBlocking = false;

@@ -35,6 +35,14 @@ export const PlayerDamageSystem = {
       return { dodged: true, lucky: false };
     }
 
+    // Shield block: fully negates bullets (all shields), and melee too for
+    // shields with blockMelee (Tower Shield-style armor).
+    if (player.blockChance > 0 && (damageSource.isBullet || (damageSource.isMelee && player.blockMelee))) {
+      if (Math.random() < player.blockChance) {
+        return { blocked: true };
+      }
+    }
+
     // Bullet resistance check (probabilistic block)
     if (damageSource.isBullet && player.bulletResist > 0) {
       if (Math.random() < player.bulletResist) {

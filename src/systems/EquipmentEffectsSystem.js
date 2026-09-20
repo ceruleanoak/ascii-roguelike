@@ -26,6 +26,8 @@ export class EquipmentEffectsSystem {
     player.bulletResist = 0;
     player.meleeResist = 0;
     player.dodgeChance = 0;
+    player.blockChance = 0;
+    player.blockMelee = false;
     player.fireImmune = false;
     player.freezeImmune = false;
     player.poisonImmune = false;
@@ -55,6 +57,8 @@ export class EquipmentEffectsSystem {
       player.bulletResist = a.bulletResist || 0;
       player.meleeResist = a.meleeResist || 0;
       player.dodgeChance = a.dodgeChance || 0;
+      player.blockChance = a.blockChance || 0;
+      player.blockMelee = a.blockMelee || false;
       player.fireImmune = a.fireImmune || false;
       player.freezeImmune = a.freezeImmune || false;
       player.poisonImmune = a.poisonImmune || false;

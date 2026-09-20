@@ -13,7 +13,7 @@ const THROW_DURATION = 0.45;
 // pulsing radius ring for these (they always resolve on the player).
 const SELF_ONLY_EFFECTS = new Set([
   'heal', 'manaSlot', 'maxhp', 'speed', 'block', 'cleanse', 'invuln',
-  'shield', 'bulwark', 'waterImmunity', 'float', 'stoneskin', 'regen',
+  'waterImmunity', 'float', 'stoneskin', 'regen',
   'damageBuff', 'auto_dodge', 'arrowRefill',
 ]);
 
@@ -236,20 +236,6 @@ export class ConsumableTriggerSystem {
           targetY: nearest.position.y + 20,
         };
       }
-      case 'shield': {
-        // Grants bullet-blocking charges once the throw lands
-        if (player.shieldMaxCharges === 0) {
-          return { windup: THROW_DURATION, effectType: 'shield' };
-        }
-        return false;
-      }
-      case 'bulwark': {
-        // Grants all-hit-blocking charges once the throw lands
-        if (player.shieldMaxCharges === 0) {
-          return { windup: THROW_DURATION, effectType: 'bulwark' };
-        }
-        return false;
-      }
       case 'waterImmunity': {
         // Rubber Boots: only makes sense in liquid — a physical precondition,
         // not an emergency gate, so this stays absolute even under manual.
@@ -392,20 +378,6 @@ export class ConsumableTriggerSystem {
         }
         break;
       }
-      case 'shield':
-        player.shieldCharges = cd.charges || 3;
-        player.shieldMaxCharges = cd.charges || 3;
-        player.shieldCooldownMax = cd.rechargeCooldown || 5;
-        player.shieldCooldown = 0;
-        player.shieldBlocksAll = false;
-        break;
-      case 'bulwark':
-        player.shieldCharges = cd.charges || 2;
-        player.shieldMaxCharges = cd.charges || 2;
-        player.shieldCooldownMax = cd.rechargeCooldown || 8;
-        player.shieldCooldown = 0;
-        player.shieldBlocksAll = true;
-        break;
       case 'waterImmunity':
         player.waterImmunityTimer = cd.duration;
         break;

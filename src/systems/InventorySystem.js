@@ -854,8 +854,7 @@ export class InventorySystem {
     const cd = consumable.data;
 
     // Check if this is a one-shot or reusable consumable
-    const isShield = cd.effect === 'shield' || cd.effect === 'bulwark';
-    const isOneShot = cd.oneShot === true && !isShield;
+    const isOneShot = cd.oneShot === true;
 
     // Every consumable use is a throw — arc up and land before the effect
     // resolves. `triggerData.windup` is always set by checkTriggerCondition

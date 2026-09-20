@@ -1271,84 +1271,79 @@ export class CombatSystem {
           this.enemyProjectiles.splice(i, 1);
           continue;
         }
-        if (player.tryShieldBlock && player.tryShieldBlock(true)) {
-          // Shield absorbed the bullet
-          this.createDamageNumber('*', player.position.x, player.position.y, '#aaddff');
+        // Build damage source object
+        const damageSource = {
+          isBullet: true,
+          element: proj.onHit,
+          attacker: proj.owner
+        };
+        const result = player.takeDamage(proj.damage, damageSource);
+
+        if (result === false) {
+          // Player is invulnerable (dodge roll, i-frames, god mode) — let projectile pass through
+          consumed = false;
         } else {
-          // Build damage source object
-          const damageSource = {
-            isBullet: true,
-            element: proj.onHit,
-            attacker: proj.owner
-          };
-          const result = player.takeDamage(proj.damage, damageSource);
-
-          if (result === false) {
-            // Player is invulnerable (dodge roll, i-frames, god mode) — let projectile pass through
-            consumed = false;
+          // Handle special results
+          if (result.dodged) {
+            this.createDamageNumber(result.lucky ? 'LUCKY DODGE' : 'DODGE',
+                                    player.position.x, player.position.y,
+                                    result.lucky ? '#ffff66' : '#ffff00');
+          } else if (result.blocked) {
+            this.createDamageNumber('BLOCK', player.position.x, player.position.y, '#aaaaaa');
+          } else if (result.immune) {
+            this.createDamageNumber('IMMUNE', player.position.x, player.position.y, '#00ffff');
           } else {
-            // Handle special results
-            if (result.dodged) {
-              this.createDamageNumber(result.lucky ? 'LUCKY DODGE' : 'DODGE',
-                                      player.position.x, player.position.y,
-                                      result.lucky ? '#ffff66' : '#ffff00');
-            } else if (result.blocked) {
-              this.createDamageNumber('BLOCK', player.position.x, player.position.y, '#aaaaaa');
-            } else if (result.immune) {
-              this.createDamageNumber('IMMUNE', player.position.x, player.position.y, '#00ffff');
-            } else {
-              this.createDamageNumber(result.actualDamage ?? proj.damage, player.position.x, player.position.y, player.color);
+            this.createDamageNumber(result.actualDamage ?? proj.damage, player.position.x, player.position.y, player.color);
 
-              // Rock projectiles tune their own force; everything else gets the default
-              this.physicsSystem.applyKnockback(player, proj.position.x, proj.position.y, proj.knockbackForce || PHYSICS.DEFAULT_DAMAGE_KNOCKBACK);
+            // Rock projectiles tune their own force; everything else gets the default
+            this.physicsSystem.applyKnockback(player, proj.position.x, proj.position.y, proj.knockbackForce || PHYSICS.DEFAULT_DAMAGE_KNOCKBACK);
 
-              // Potion projectile: apply elemental status effect
-              if (proj.type === 'potion_projectile' && proj.potionEffect) {
-                if (proj.potionEffect === 'confusion') {
-                  player.confusionTimer = (player.confusionTimer || 0) + 3.0;
-                } else if (proj.potionEffect === 'polymorph') {
-                  // Hag's curse — same generic entry point the stationary hut
-                  // Witch uses, cursed=true (deliberate hit, not accidental).
-                  this.game.polymorphSystem?.activatePolymorph(this.game, true);
-                } else {
-                  player.applyStatusEffect?.(proj.potionEffect, 3.0);
-                }
-              }
-
-              // Steam cloud: apply scald (burn+slow) in AOE
-              if (proj.type === 'steam_cloud') {
-                player.applyStatusEffect?.('burn', proj.scaldDuration || 2.5);
-                player.applyStatusEffect?.('slow', proj.slowDuration || 3.0);
-              }
-
-              // Handle reflection
-              if (result.reflect && result.attacker) {
-                result.attacker.takeDamage(result.reflect);
-                this.createDamageNumber(result.reflect, result.attacker.position.x, result.attacker.position.y, '#ff8800');
+            // Potion projectile: apply elemental status effect
+            if (proj.type === 'potion_projectile' && proj.potionEffect) {
+              if (proj.potionEffect === 'confusion') {
+                player.confusionTimer = (player.confusionTimer || 0) + 3.0;
+              } else if (proj.potionEffect === 'polymorph') {
+                // Hag's curse — same generic entry point the stationary hut
+                // Witch uses, cursed=true (deliberate hit, not accidental).
+                this.game.polymorphSystem?.activatePolymorph(this.game, true);
+              } else {
+                player.applyStatusEffect?.(proj.potionEffect, 3.0);
               }
             }
 
-            if (result === true) {
-              this.enemyProjectiles.splice(i, 1);
-              return { playerDead: true };
+            // Steam cloud: apply scald (burn+slow) in AOE
+            if (proj.type === 'steam_cloud') {
+              player.applyStatusEffect?.('burn', proj.scaldDuration || 2.5);
+              player.applyStatusEffect?.('slow', proj.slowDuration || 3.0);
             }
 
-            // Create stuck arrow if this is an arrow (not a bullet/magic)
-            if (proj.type === 'arrow') {
-              this.stuckArrows.push({
-                char: proj.char,
-                stuckType: 'player',
-                position: { x: proj.position.x, y: proj.position.y },
-                stuckTo: player,
-                offset: {
-                  x: proj.position.x - player.position.x,
-                  y: proj.position.y - player.position.y
-                },
-                color: proj.color,
-                isBurning: proj.onHit === 'burn',
-                fireGenTimer: 0
-              });
+            // Handle reflection
+            if (result.reflect && result.attacker) {
+              result.attacker.takeDamage(result.reflect);
+              this.createDamageNumber(result.reflect, result.attacker.position.x, result.attacker.position.y, '#ff8800');
             }
+          }
+
+          if (result === true) {
+            this.enemyProjectiles.splice(i, 1);
+            return { playerDead: true };
+          }
+
+          // Create stuck arrow if this is an arrow (not a bullet/magic)
+          if (proj.type === 'arrow') {
+            this.stuckArrows.push({
+              char: proj.char,
+              stuckType: 'player',
+              position: { x: proj.position.x, y: proj.position.y },
+              stuckTo: player,
+              offset: {
+                x: proj.position.x - player.position.x,
+                y: proj.position.y - player.position.y
+              },
+              color: proj.color,
+              isBurning: proj.onHit === 'burn',
+              fireGenTimer: 0
+            });
           }
         }
         if (consumed) this.enemyProjectiles.splice(i, 1);
@@ -1396,9 +1391,6 @@ export class CombatSystem {
           if (connected) {
             if (player.isStaffBlocking && !attack.isImpact) {
               this.createDamageNumber('BLOCK', player.position.x, player.position.y, '#aaaaaa');
-            } else if (player.tryShieldBlock && player.tryShieldBlock(false)) {
-              // Tower Shield absorbed the melee hit
-              this.createDamageNumber('*', player.position.x, player.position.y, '#8888ff');
             } else {
               // Build damage source object
               const damageSource = {
