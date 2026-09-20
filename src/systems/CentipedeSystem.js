@@ -57,10 +57,18 @@ export class CentipedeSystem {
   }
 
   // ── Spawn ──────────────────────────────────────────────────────────────
+  // Appends a new, independent centipede chain rather than replacing
+  // whatever's already in room.centipedeChains — callable more than once per
+  // room (item #8: red B room hosts 2 centipedes) so each gets its own
+  // spawn cell/facing and splits/dies independently of the other. The room
+  // clears only once room.centipedeChains is empty (_onCentipedeDefeated),
+  // so both centipedes — and every chain either has split into — must be
+  // downed.
   spawn(room, spawnCell, facing = { dx: 1, dy: 0 }) {
     const cell = GRID.CELL_SIZE;
     const depth = this.game.getCurrentZoneDepth();
     const units = [];
+    const chainId = this._nextChainId++;
 
     for (let i = 0; i <= CENTIPEDE_BODY_COUNT; i++) {
       const isHead = i === 0;
@@ -68,7 +76,7 @@ export class CentipedeSystem {
       const cy = (spawnCell.y - facing.dy * i) * cell;
       const unit = new CentipedeUnit(cx, cy, depth, {
         isHead,
-        chainId: 0,
+        chainId,
         contactDamage: CENTIPEDE_CONTACT_DAMAGE,
         game: this.game,
       });
@@ -80,7 +88,7 @@ export class CentipedeSystem {
 
     const trail = units.slice(1).map(u => ({ x: u.position.x, y: u.position.y }));
     const chain = {
-      id: 0,
+      id: chainId,
       units,
       trail,
       facing: { ...facing },
@@ -94,8 +102,7 @@ export class CentipedeSystem {
     // Set before resolving direction so the cross-chain occupancy check in
     // _resolveNextDirection (which reads room.centipedeChains) has something
     // to read even on the very first call.
-    room.centipedeChains = [chain];
-    this._nextChainId = 1;
+    room.centipedeChains = (room.centipedeChains || []).concat(chain);
     this._resolveNextDirection(chain, spawnCell, room);
   }
 

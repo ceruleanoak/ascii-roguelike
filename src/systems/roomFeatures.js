@@ -1607,8 +1607,14 @@ export function spawnRoomNeutralCharacters(game, room) {
 // for one shared number; only used here to size the spawn-row reservation.
 const CENTIPEDE_BODY_COUNT = 14;
 const CENTIPEDE_ARENA_BOUNDS = { minCol: 2, maxCol: 27, minRow: 2, maxRow: 27 };
-const CENTIPEDE_SPAWN_CELL = { col: 15, row: 15 };
-const CENTIPEDE_SPAWN_FACING = { dx: 1, dy: 0 };
+// Two independent centipedes (item #8) — separate rows, facing away from
+// each other so their initial body spans never overlap, wide enough apart
+// (10 rows) that neither chain's early wandering immediately runs into the
+// other's spawn line.
+const CENTIPEDE_SPAWN_POINTS = [
+  { cell: { col: 15, row: 10 }, facing: { dx: 1, dy: 0 } },
+  { cell: { col: 15, row: 20 }, facing: { dx: -1, dy: 0 } },
+];
 const CENTIPEDE_DEFLECTOR_CYCLE = ['◣', '◢', '◥', '◤'];
 // Playtest feedback: the original layout stamped deflectors/fillers on two
 // perfectly regular 4-cell lattices, which (a) reads as visibly uniform and
@@ -1632,12 +1638,14 @@ function buildCentipedeArenaLayout() {
   const { minCol, maxCol, minRow, maxRow } = CENTIPEDE_ARENA_BOUNDS;
   const placements = [];
 
-  // Reserve the spawn cell and the full initial body span (spawn facing is
-  // horizontal, body trails leftward from the head) so the centipede never
-  // spawns embedded in an obstacle on its first frame.
+  // Reserve each centipede's spawn cell and full initial body span (body
+  // trails opposite its facing) so neither centipede spawns embedded in an
+  // obstacle on its first frame.
   const reserved = new Set();
-  for (let i = 0; i <= CENTIPEDE_BODY_COUNT; i++) {
-    reserved.add(`${CENTIPEDE_SPAWN_CELL.col - i},${CENTIPEDE_SPAWN_CELL.row}`);
+  for (const { cell, facing } of CENTIPEDE_SPAWN_POINTS) {
+    for (let i = 0; i <= CENTIPEDE_BODY_COUNT; i++) {
+      reserved.add(`${cell.col - facing.dx * i},${cell.row - facing.dy * i}`);
+    }
   }
 
   for (let row = minRow; row <= maxRow; row++) {
@@ -1656,11 +1664,12 @@ function buildCentipedeArenaLayout() {
 }
 
 // Clears whatever generateBackgroundObjects() already placed inside the arena
-// footprint, stamps the fixed Centipede layout on top, and returns the head's
-// spawn cell + facing for CentipedeSystem.spawn(). Mirrors PuzzleSystem's
-// _clearArena (filter-by-rounded-cell, preserve structural) for the clear
-// step, and stampHutFootprint's "structural = true" convention so the stamped
-// objects survive the later cleanupStrayBackgroundObjects generation pass.
+// footprint, stamps the fixed Centipede layout on top, and returns each
+// centipede's spawn cell + facing for CentipedeSystem.spawn() (one call per
+// entry — item #8's 2-centipede room). Mirrors PuzzleSystem's _clearArena
+// (filter-by-rounded-cell, preserve structural) for the clear step, and
+// stampHutFootprint's "structural = true" convention so the stamped objects
+// survive the later cleanupStrayBackgroundObjects generation pass.
 export function stampCentipedeArena(room) {
   const CS = GRID.CELL_SIZE;
   const { minCol, maxCol, minRow, maxRow } = CENTIPEDE_ARENA_BOUNDS;
@@ -1685,7 +1694,10 @@ export function stampCentipedeArena(room) {
     room.backgroundObjects.push(obj);
   }
 
-  return { spawnCell: { x: CENTIPEDE_SPAWN_CELL.col, y: CENTIPEDE_SPAWN_CELL.row }, facing: { ...CENTIPEDE_SPAWN_FACING } };
+  return CENTIPEDE_SPAWN_POINTS.map(({ cell, facing }) => ({
+    spawnCell: { x: cell.col, y: cell.row },
+    facing: { ...facing },
+  }));
 }
 
 // Fallback arms for the unarmed safety net in zones that author no
@@ -1771,8 +1783,10 @@ export function spawnMinibossOrFallback(gen, room) {
       // Bespoke multi-instance encounter — outside the single/formation
       // BOSS_ENCOUNTERS data model, so it gets its own arena stamp + system
       // spawn rather than a BOSS_ENCOUNTERS entry.
-      const { spawnCell, facing } = stampCentipedeArena(room);
-      gen.game.centipedeSystem.spawn(room, spawnCell, facing);
+      const spawnPoints = stampCentipedeArena(room);
+      for (const { spawnCell, facing } of spawnPoints) {
+        gen.game.centipedeSystem.spawn(room, spawnCell, facing);
+      }
       spawnCentipedeGunDrop(gen, room);
     } else {
       const encounter = BOSS_ENCOUNTERS[encounterId];
