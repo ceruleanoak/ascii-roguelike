@@ -737,6 +737,32 @@ programming terms.
 - **Not:** soft-lock or save-scumming. Death is final and intentional; mental progression is
   the reward, not inventory accumulation.
 
+### Reset Registry
+- **Definition:** The declare-once table of every run/title/room-scoped `game.*`/`player.*` field
+  and how it's cleared. Replaces scattered ad hoc clears duplicated across separate reset
+  functions — a field's reset behavior is declared exactly once, at its narrowest correct Reset
+  Scope, and every reset path gets it for free through the scope cascade.
+- **In code:** `RESET_REGISTRY` in `src/game/resetRegistry.js` — an array of `{path, scope,
+  value|fresh|call, covers?, why}` entries. `applyReset(game, scope)` applies every entry at or
+  below a scope; `initRegisteredState(game)` seeds the `Game` constructor from it once.
+  `enterTitleState()`, `_resetRunToRest()`, and `applyRoomSwap()`'s `resetEntities` block all
+  consume it. `tools/check-reset-parity.mjs` hard-fails on any entry whose path doesn't resolve
+  (`checkRegistryPathsResolve`) or any live field missing from the registry/allowlist
+  (`checkRegistryCoverage`).
+- **Not:** the pre-registry shape — clearing a field by hand in up to four separate functions,
+  one of which could be missed. That drift is how bug family #198/#196/#100/#86/#13/#307 happened.
+
+### Reset Scope
+- **Definition:** How narrow or wide a Reset Registry entry's lifetime is, as one of three tiers
+  that cascade narrowest-to-widest: **room** (dies on every room transition), **run** (also dies
+  on death/game over — includes everything room clears), **title** (also dies returning to the
+  title screen — includes everything run clears). A field declares its narrowest correct scope
+  once; wider resets get it automatically through the cascade, never by duplicating the entry.
+- **In code:** `RESET_SCOPES` and `scopeIncludes(scope)` in `src/game/resetRegistry.js`; the
+  `scope` field on each `RESET_REGISTRY` entry.
+- **Not:** Game State (REST/EXPLORE/NEUTRAL/TITLE) — an unrelated top-level-mode concept that
+  happens to share the word "state" informally; a Reset Scope is a lifetime tier, not a mode.
+
 ### Quagmire
 - **Definition:** A rare green-zone Room (exit letter Q): a water-dispersed arena. Mostly not
   generic combat; when combat occurs it runs in escalating rounds, and a Rusalka may appear
