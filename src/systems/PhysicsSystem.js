@@ -5,6 +5,7 @@ import {
   inSamePlane,
   objectOnPlane,
 } from './PlaneSystem.js';
+import { clearEffectOrder } from './EnemyStatusEffects.js';
 
 // Re-exported so existing imports (e.g. Enemy.js) keep working.
 // New code should import directly from PlaneSystem.
@@ -1761,7 +1762,18 @@ export class PhysicsSystem {
           entity.burnDuration = 0;  // Water extinguishes burn
         } else if (entity.applyStatusEffect) {
           entity.applyStatusEffect('wet', 6.0); // Enemies
-          if (entity.statusEffects?.burn) entity.statusEffects.burn.active = false; // Water extinguishes burn
+          if (entity.statusEffects?.burn?.active) {
+            // Water extinguishes burn. Zero stacks (not just active) and
+            // remove the stale entry from effectApplicationOrder — leaving
+            // either behind survives to the next ignite, since
+            // applyStatusEffect only re-pushes onto effectApplicationOrder
+            // on an inactive→active transition (bug #301: a burn/wet/burn
+            // cycle left duplicate 'burn' entries, each contributing its own
+            // full pip row once burn reactivated).
+            entity.statusEffects.burn.active = false;
+            entity.statusEffects.burn.stacks = 0;
+            clearEffectOrder(entity, 'burn');
+          }
         }
       }
 
