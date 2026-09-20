@@ -695,6 +695,7 @@ export class CompanionSystem {
         materializeDrop(carried, crow);
       }
 
+      crow.setGame(game);
       crow.companionShoulderIndex = game.companionCrows.length;
       game.companionCrows.push(crow);
       game.fedCrowCount = Math.min(3, (game.fedCrowCount || 0) + 1);
@@ -836,10 +837,72 @@ export class CompanionSystem {
       },
       companionCount: game.companionCrows.length
     };
-    for (const c of game.companionCrows) {
+    for (let i = game.companionCrows.length - 1; i >= 0; i--) {
+      const c = game.companionCrows[i];
       c.updateAsCompanion(deltaTime, ctx);
+      // Abandon flight finished — drop it from the roster for good. Mirrors
+      // updateTamedRats' permaFlee prune.
+      if (c.abandoning && c.abandonReached) {
+        game.companionCrows.splice(i, 1);
+      }
     }
     this._processCompanionDiveAttacks(deltaTime);
+  }
+
+  // Apply enemy melee + projectile hits to companion crows. Mirrors
+  // applyEnemyDamageToTamedRats/applyEnemyDamageToGolems over the crow
+  // roster. Wild/follower crows are never targeted — only bonded companions
+  // ride close enough to combat to eat hits.
+  applyEnemyDamageToCompanionCrows() {
+    const game = this.game;
+    if (!game.companionCrows || game.companionCrows.length === 0) return;
+    const cs = game.combatSystem;
+    if (!cs) return;
+
+    const projs = cs.enemyProjectiles || [];
+    for (const crow of game.companionCrows) {
+      if (crow.abandoning) continue;
+      // Gilded crows are the vault's reward — nothing can hurt them.
+      if (crow.gilded) continue;
+      if (crow.invulnerabilityTimer > 0) continue;
+      // Projectiles
+      for (let i = projs.length - 1; i >= 0; i--) {
+        const p = projs[i];
+        if ((p.plane ?? 0) !== crow.plane) continue;
+        const cx = crow.position.x + crow.width / 2;
+        const cy = crow.position.y + crow.height / 2;
+        const dx = p.position.x - cx;
+        const dy = p.position.y - cy;
+        const r = GRID.CELL_SIZE * 0.6 + Math.min(crow.width, crow.height) / 2;
+        if (dx * dx + dy * dy < r * r) {
+          crow.takeDamage(p.damage || 1, p.owner);
+          projs.splice(i, 1);
+          cs.createDamageNumber?.(p.damage || 1, crow.position.x, crow.position.y, crow.color);
+          break;
+        }
+      }
+      if (crow.invulnerabilityTimer > 0) continue;
+      // Melee attack hitboxes
+      const melee = cs.enemyMeleeAttacks || [];
+      for (const m of melee) {
+        if (m.windupPhase) continue;
+        if (m.hasHit) continue;
+        if ((m.plane ?? 0) !== crow.plane) continue;
+        const ax = m.position.x;
+        const ay = m.position.y;
+        const aw = m.width || GRID.CELL_SIZE;
+        const ah = m.height || GRID.CELL_SIZE;
+        if (
+          ax < crow.position.x + crow.width && ax + aw > crow.position.x &&
+          ay < crow.position.y + crow.height && ay + ah > crow.position.y
+        ) {
+          m.hasHit = true;
+          crow.takeDamage(m.damage || 1, m.owner);
+          cs.createDamageNumber?.(m.damage || 1, crow.position.x, crow.position.y, crow.color);
+          break;
+        }
+      }
+    }
   }
 
   // Dive-attack coordination: at most ONE companion is in flight at a time.

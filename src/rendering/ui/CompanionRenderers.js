@@ -6,8 +6,9 @@
 
 import { GRID } from '../../game/GameConfig.js';
 
-// Minimal NPCRat render: char + color + iframe white-flash. Gilded rats
-// (dungeon-vault reward) render gold instead of white.
+// Minimal NPCRat render: char + color + iframe white-flash, falling back to
+// a red pulse under 25% hp (getLowHealthBlinkColor). Gilded rats (dungeon-
+// vault reward) render gold instead and skip both blinks — they're immune.
 export function drawTamedRats(renderer, game, shouldRenderEntity) {
   for (const rat of game.tamedRats) {
     if (!shouldRenderEntity(rat, game.player, game.currentRoom)) continue;
@@ -16,7 +17,8 @@ export function drawTamedRats(renderer, game, shouldRenderEntity) {
       color = '#ffd700';
     } else {
       const flash = rat.getIframeFlashColor?.();
-      color = flash !== null && flash !== undefined ? flash : rat.color;
+      const lowHp = rat.getLowHealthBlinkColor?.();
+      color = flash ?? lowHp ?? rat.color;
     }
     renderer.drawEntity(
       rat.position.x + GRID.CELL_SIZE / 2,

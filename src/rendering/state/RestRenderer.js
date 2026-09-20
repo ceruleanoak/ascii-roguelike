@@ -368,11 +368,19 @@ export class RestRenderer {
     if (game.companionCrows && game.companionCrows.length > 0) {
       for (const c of game.companionCrows) {
         const offY = c.getRenderOffsetY();
+        let color = c.color;
+        if (c.gilded) {
+          color = '#ffd700';
+        } else {
+          const flash = c.getIframeFlashColor?.();
+          const lowHp = c.getLowHealthBlinkColor?.();
+          color = flash ?? lowHp ?? c.color;
+        }
         this.renderer.drawEntity(
           c.position.x + GRID.CELL_SIZE / 2,
           c.position.y + GRID.CELL_SIZE / 2 + offY,
           c.char,
-          c.color
+          color
         );
       }
     }

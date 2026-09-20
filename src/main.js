@@ -3350,6 +3350,7 @@ class Game {
 
     // Companion crow: persistent across rooms, runs its own priority FSM.
     this.companionSystem.updateCompanionCrow(deltaTime);
+    this.companionSystem.applyEnemyDamageToCompanionCrows();
     this.companionSystem.updateFollowerCrows(deltaTime);
 
     // Tamed rats: wild → bread-seek, then tamed companion movement + flee FSM,

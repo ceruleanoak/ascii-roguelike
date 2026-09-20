@@ -66,6 +66,22 @@ const PERCH_CHANCE = 0.45;                          // per check, when player is
 const PERCH_LEAVE_DIST = GRID.CELL_SIZE * 10;       // if player gets this far, take off
 const PLAYER_SLOW_THRESHOLD = 40;                   // px/sec — under this, perches allowed
 
+// Companion HP: only bonded companion crows (game.companionCrows) are ever
+// hit — wild/follower crows aren't enemy targets. Mirrors NPCRat's MAX_HP=5.
+const MAX_HP = 5;
+const INVULNERABILITY_DURATION = 0.5;
+// Shared low-hp blink tuning — see getLowHealthBlinkColor. Same values as
+// NPCRat's (non-golem companions share the convention).
+const LOW_HP_BLINK_THRESHOLD = 0.25;
+const LOW_HP_BLINK_PERIOD_MS = 200;
+// Abandon: hp hits 0 → the crow permanently leaves the flock, flying to the
+// nearest room edge before CompanionSystem drops it from game.companionCrows.
+// Mirrors NPCRat's permaFlee, but crows have no collision/pathfinding so this
+// is a straight-line steer — time-boxed the same way so a stalled run still ends.
+const ABANDON_SPEED = 140;
+const ABANDON_ARRIVE_DIST = 8;
+const ABANDON_TIMEOUT = 4.0;
+
 export class Crow {
   constructor(x, y, { hoardItem = null } = {}) {
     this.position = { x, y };
@@ -170,7 +186,21 @@ export class Crow {
     this.hasCollision = false;
     this.boundToGrid = false;
     this.friction = false;
+
+    // Wired by CompanionSystem on promotion (setGame) — only companions ever
+    // need it, for the takeDamage hit-sfx.
+    this.game = null;
+    this.maxHp = MAX_HP;
+    this.hp = MAX_HP;
+    this.invulnerabilityTimer = 0;
+    // Abandon: see takeDamage / _startAbandon.
+    this.abandoning = false;
+    this.abandonTargetPos = null;
+    this.abandonReached = false;
+    this.abandonTimer = 0;
   }
+
+  setGame(game) { this.game = game; }
 
   // One-way promotion: wild crow → companion. Caller is responsible for
   // pulling this crow out of room.crows and parking it on game.companionCrows.
@@ -188,6 +218,12 @@ export class Crow {
   // dispatch all companions through one unified call site.
   onRoomEnter(player) {
     if (!player) return;
+    // Mid-abandon-flight — let it finish leaving instead of snapping back to
+    // the shoulder. CompanionSystem prunes it once abandonReached flips.
+    if (this.abandoning) return;
+    // Heal on room transition, same convention as NPCRat/GolemCompanion.
+    this.hp = this.maxHp;
+    this.invulnerabilityTimer = 0;
     const offset = this._shoulderOffset();
     this.position.x = player.position.x + offset.x;
     this.position.y = player.position.y + offset.y;
@@ -212,6 +248,75 @@ export class Crow {
     this.breadTarget = null;
     this.velocity.vx = 0;
     this.velocity.vy = 0;
+  }
+
+  // Damage handler for bonded companion crows — CompanionSystem's
+  // applyEnemyDamageToCompanionCrows is the only caller. Mirrors NPCRat/
+  // GolemCompanion.takeDamage: i-frames, gilded immunity, and a one-way
+  // "abandon" transition at 0 hp instead of dying outright — a crow flies off
+  // rather than perma-fleeing on foot.
+  takeDamage(amount, attacker = null) {
+    if (this.invulnerabilityTimer > 0) return false;
+    if (this.gilded) return false;
+    if (this.abandoning) return false;
+    this.hp = Math.max(0, this.hp - amount);
+    this.invulnerabilityTimer = INVULNERABILITY_DURATION;
+    this.game?.audioSystem?.playSFX?.('enemy_hit');
+    if (this.hp <= 0) this._startAbandon();
+    return { damaged: true };
+  }
+
+  // Fly to the nearest room edge and leave the flock. CompanionSystem prunes
+  // this crow from game.companionCrows once abandonReached flips true.
+  _startAbandon() {
+    this.abandoning = true;
+    this.abandonReached = false;
+    this.abandonTimer = 0;
+    this.diveState = 'idle';
+    this.diveTarget = null;
+    const minX = GRID.CELL_SIZE * 2;
+    const minY = GRID.CELL_SIZE * 2;
+    const maxX = GRID.WIDTH - GRID.CELL_SIZE * 2;
+    const maxY = GRID.HEIGHT - GRID.CELL_SIZE * 2;
+    const { x, y } = this.position;
+    const candidates = [
+      { d: x - minX, p: { x: minX, y } },
+      { d: maxX - x, p: { x: maxX, y } },
+      { d: y - minY, p: { x, y: minY } },
+      { d: maxY - y, p: { x, y: maxY } }
+    ];
+    this.abandonTargetPos = candidates.reduce((a, b) => (b.d < a.d ? b : a)).p;
+  }
+
+  // Per-frame abandon-flight driver, called from updateAsCompanion in place
+  // of the normal companion FSM once abandoning is set.
+  _updateAbandon(deltaTime) {
+    this.wingPhase += deltaTime * 10;
+    this.abandonTimer += deltaTime;
+    if (this.abandonTimer >= ABANDON_TIMEOUT) { this.abandonReached = true; return; }
+    const target = this.abandonTargetPos;
+    if (!target) { this.abandonReached = true; return; }
+    const dx = target.x - this.position.x;
+    const dy = target.y - this.position.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < ABANDON_ARRIVE_DIST) { this.abandonReached = true; return; }
+    this.position.x += (dx / dist) * ABANDON_SPEED * deltaTime;
+    this.position.y += (dy / dist) * ABANDON_SPEED * deltaTime;
+  }
+
+  // White blink during iframes — same cadence Enemy/NPCRat/GolemCompanion use.
+  getIframeFlashColor() {
+    if (this.invulnerabilityTimer <= 0) return null;
+    const blinkCycle = Math.floor(this.invulnerabilityTimer / 0.08);
+    return blinkCycle % 2 === 0 ? '#ffffff' : null;
+  }
+
+  // Red pulse once hp drops to/under 25% of max (0 hp, mid-abandon-flight,
+  // included) — shared convention for every non-golem companion.
+  getLowHealthBlinkColor() {
+    if (this.hp > this.maxHp * LOW_HP_BLINK_THRESHOLD) return null;
+    const cycle = Math.floor(performance.now() / LOW_HP_BLINK_PERIOD_MS);
+    return cycle % 2 === 0 ? '#ff0000' : null;
   }
 
   // isAttack: true for weapon contact (melee/projectile), false for passive
@@ -489,6 +594,15 @@ export class Crow {
   //
   // ctx: { player, ingredients, enemies, items, addIngredient, room }
   updateAsCompanion(deltaTime, ctx) {
+    if (this.invulnerabilityTimer > 0) {
+      this.invulnerabilityTimer -= deltaTime;
+      if (this.invulnerabilityTimer < 0) this.invulnerabilityTimer = 0;
+    }
+    // Abandon fully overrides the FSM — a crow at 0 hp is done taking orders.
+    if (this.abandoning) {
+      this._updateAbandon(deltaTime);
+      return;
+    }
     this.wingPhase += deltaTime * 7;
     if (!ctx || !ctx.player) return;
 

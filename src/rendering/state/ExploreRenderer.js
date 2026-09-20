@@ -1163,12 +1163,20 @@ export class ExploreRenderer {
 
   _drawCrow(crow) {
     const offsetY = crow.getRenderOffsetY();
+    let color = crow.color;
+    if (crow.gilded) {
+      // Gilded crows (dungeon-vault reward) read as gold at a glance.
+      color = '#ffd700';
+    } else {
+      const flash = crow.getIframeFlashColor?.();
+      const lowHp = crow.getLowHealthBlinkColor?.();
+      color = flash ?? lowHp ?? crow.color;
+    }
     this.renderer.drawEntity(
       crow.position.x + GRID.CELL_SIZE / 2,
       crow.position.y + GRID.CELL_SIZE / 2 + offsetY,
       crow.char,
-      // Gilded crows (dungeon-vault reward) read as gold at a glance.
-      crow.gilded ? '#ffd700' : crow.color
+      color
     );
     // Beak pixel: shown for whatever the crow is currently carrying (spawn
     // hoard, ferried/stolen ingredient, or a stolen ground Item) — a single

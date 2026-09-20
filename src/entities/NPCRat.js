@@ -25,6 +25,9 @@ const MAX_HP = 5;                          // 3 hits to flee + 2 hp buffer
 const HIT_FLEE_DURATION = 1.5;             // short retreat after each hit
 const PERMA_FLEE_HIT_THRESHOLD = 3;
 const INVULNERABILITY_DURATION = 0.5;
+// Shared low-hp blink tuning — see getLowHealthBlinkColor.
+const LOW_HP_BLINK_THRESHOLD = 0.25;
+const LOW_HP_BLINK_PERIOD_MS = 200;
 // Hard cap on the perma-flee run. permaFlee gates both takeDamage and enemy
 // targeting, so a rat that never arrives is a permanently invulnerable prop
 // standing in the room — this guarantees the despawn regardless of arrival.
@@ -223,6 +226,7 @@ export class NPCRat {
     if (this.state === 'permaFlee') return false;
     // Gilded rats are the vault's reward — nothing can hurt them.
     if (this.gilded) return false;
+    this.hp = Math.max(0, this.hp - amount);
     this.hitsThisRoom++;
     this.invulnerabilityTimer = INVULNERABILITY_DURATION;
     const from = attacker?.position || this.target?.position || null;
@@ -249,6 +253,16 @@ export class NPCRat {
 
   getDOTBlinkColor() { return null; }
   getStatusPipRows() { return []; }
+
+  // Red pulse once hp drops to/under 25% of max (0 hp included) — shared
+  // convention for every non-golem companion; see Crow.getLowHealthBlinkColor.
+  // Takes priority under the iframe white-flash in the renderer's color pick,
+  // not here — this only reports whether the condition holds this frame.
+  getLowHealthBlinkColor() {
+    if (this.hp > this.maxHp * LOW_HP_BLINK_THRESHOLD) return null;
+    const cycle = Math.floor(performance.now() / LOW_HP_BLINK_PERIOD_MS);
+    return cycle % 2 === 0 ? '#ff0000' : null;
+  }
 
   // ─── Internals ──────────────────────────────────────────────────────────
 
