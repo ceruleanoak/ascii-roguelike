@@ -34,17 +34,49 @@ export class TongueAttackSystem {
           tongue.phase = 'hold';
           tongue.timer = 0;
 
-          // Collision check at full extension — damage player if tongue tip reaches them
+          // Collision check at full extension — damage whatever the frog is
+          // actually snapping at. EnemyUpdateSystem._selectTarget can aim a
+          // frog at a golem or tamed rat, not only the player (bug: frogs
+          // couldn't hit golems because this check was hardcoded to
+          // player.getHitbox()). Player keeps its full resolution (block/
+          // miss-chance/dodge/knockback/freeze); a golem or rat target gets
+          // the same plain takeDamage() path applyEnemyDamageToGolems/
+          // applyEnemyDamageToTamedRats use for melee/projectile hits —
+          // anything else (game.companion, a dead/out-of-range target) falls
+          // back to the player check, unchanged from before this fix.
           if (!tongue.hasHit) {
             const owner = tongue.owner;
+            const game = cs.game;
+            const ownerTarget = owner.target;
+            const isGolemTarget = ownerTarget && ownerTarget !== player && game?.golems?.includes(ownerTarget);
+            const isRatTarget = ownerTarget && ownerTarget !== player && game?.tamedRats?.includes(ownerTarget);
+            const target = (isGolemTarget || isRatTarget) ? ownerTarget : player;
+
             const sx = owner.position.x + GRID.CELL_SIZE / 2;
             const sy = owner.position.y + GRID.CELL_SIZE / 2;
             const tipX = sx + tongue.direction.x * tongue.maxLength;
             const tipY = sy + tongue.direction.y * tongue.maxLength;
-            const playerBox = player.getHitbox();
+            const targetBox = target === player ? target.getHitbox() : {
+              x: target.position.x, y: target.position.y,
+              width: target.width || GRID.CELL_SIZE, height: target.height || GRID.CELL_SIZE
+            };
             const half = GRID.CELL_SIZE * 0.5;
-            if (tipX + half > playerBox.x && tipX - half < playerBox.x + playerBox.width &&
-                tipY + half > playerBox.y && tipY - half < playerBox.y + playerBox.height) {
+            if (tipX + half > targetBox.x && tipX - half < targetBox.x + targetBox.width &&
+                tipY + half > targetBox.y && tipY - half < targetBox.y + targetBox.height) {
+              if (target !== player) {
+                if (target.invulnerabilityTimer > 0) { tongue.hasHit = true; continue; }
+                const result = target.takeDamage(tongue.damage, owner);
+                if (result) {
+                  cs.createDamageNumber?.(tongue.damage, target.position.x, target.position.y, target.color);
+                  if (isGolemTarget && result.died && !result.resurrecting) {
+                    game.physicsSystem.removeEntity(target);
+                    const idx = game.golems.indexOf(target);
+                    if (idx >= 0) game.golems.splice(idx, 1);
+                  }
+                }
+                tongue.hasHit = true;
+                continue;
+              }
               if (player.isStaffBlocking) {
                 cs.createDamageNumber('BLOCK', player.position.x, player.position.y, '#aaaaaa');
                 tongue.hasHit = true;
