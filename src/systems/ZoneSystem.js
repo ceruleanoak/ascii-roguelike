@@ -107,6 +107,24 @@ export class ZoneSystem {
       return 'gray';
     }
 
+    // Completed zone (this zone's own boss already defeated, e.g. the Goo
+    // Dragon at green L15): a single exit whose color points at another zone
+    // transitions there immediately, skipping the usual 3-consecutive streak.
+    // A completed zone's own rooms only ever offer 1 own-color exit anyway
+    // (ExitSystem.assignExitColors), so the other 2 are always meant as an
+    // immediate way out, not the start of a streak. Universal — applies to
+    // whichever zone's defeatedBosses entry this is, not just green.
+    if (this.defeatedBosses.has(this.currentZone) && this.pathHistory.length > 0) {
+      const zone = ZONES[this.currentZone];
+      const lastColor = this.pathHistory[this.pathHistory.length - 1].color;
+      if (lastColor !== zone.exitColor) {
+        const targetZone = Object.keys(ZONE_COLORS).find(c => ZONE_COLORS[c] === lastColor);
+        if (targetZone && zone.alternativeZones.includes(targetZone)) {
+          return targetZone;
+        }
+      }
+    }
+
     // Color matching: 3 consecutive same color
     if (this.pathHistory.length >= 3) {
       const last3Colors = this.pathHistory.slice(-3).map(exit => exit.color);

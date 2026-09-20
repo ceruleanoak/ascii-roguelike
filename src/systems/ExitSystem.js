@@ -397,6 +397,17 @@ export class ExitSystem {
       return colors;
     }
 
+    // Completed zone (its own boss already defeated): flip the usual ratio.
+    // Only 1 exit keeps this zone's own color; the other 2 take alt-zone
+    // colors, actively pushing the player to leave a zone with nothing left
+    // to do. Paired with ZoneSystem.peekZoneTransition's instant-transition
+    // check, each of those 2 alt exits leaves on a single step rather than
+    // needing a 3-color streak. Universal rule for any completed zone, not
+    // just green (post-L15 Goo Dragon).
+    if (this.zoneSystem?.isZoneDefeated(zoneType)) {
+      return this.assignCompletedZoneColors(letters, zone, closedSlots);
+    }
+
     // Pick 1 random OPEN exit for the alternative color. A player following a
     // color trail reads "one exit of my color is always on offer" as the rule;
     // putting that single alt color on the exit an Ocean room is about to wall
@@ -430,6 +441,35 @@ export class ExitSystem {
         colors[altIndex] = ZONE_COLORS[altZone];
       }
       // If all alternativeZones are defeated (or gated out for this letter), all exits show the current zone color (no alt)
+    }
+
+    return colors;
+  }
+
+  /**
+   * Completed-zone exit coloring: 2 of the 3 slots take an alt-zone color
+   * instead of the usual 1, leaving exactly 1 exit still colored for this
+   * zone. Each alt slot independently picks from the zones this zone can
+   * lead to, same eligibility filters as the normal single-alt path (not
+   * already defeated, not hard-gated for that slot's letter) — the two picks
+   * can land on the same alt zone, which is fine, same as 2 same-color exits
+   * being ordinary in the non-completed case.
+   */
+  assignCompletedZoneColors(letters, zone, closedSlots) {
+    const colors = [zone.exitColor, zone.exitColor, zone.exitColor];
+    const open = [0, 1, 2].filter(i => !closedSlots.has(i));
+    const altSlots = [...open].sort(() => Math.random() - 0.5).slice(0, Math.min(2, open.length));
+
+    for (const slot of altSlots) {
+      const altLetterBoosts = EXIT_LETTERS[letters[slot]]?.zoneBoosts;
+      const altZoneGated = z => altLetterBoosts?.[z] === 0;
+      const available = zone.alternativeZones.filter(
+        z => !this.zoneSystem.isZoneDefeated(z) && !altZoneGated(z)
+      );
+      if (available.length > 0) {
+        colors[slot] = ZONE_COLORS[available[Math.floor(Math.random() * available.length)]];
+      }
+      // If none available for this slot, it stays the zone's own color.
     }
 
     return colors;
