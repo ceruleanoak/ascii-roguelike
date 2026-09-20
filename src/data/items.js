@@ -2649,9 +2649,13 @@ export const INGREDIENTS = {
   'F': { char: 'F', name: 'Fire Essence', color: '#ff4400' },
   'M': { char: 'M', name: 'Metal', color: '#aaaaaa' },
   // Unrefined ore: a rock-harvest roll alongside Rock (never a red-zone-only
-  // pull like Metal itself), smelted into Metal 100% of the time in a hut
-  // fireplace. See FireplaceSystem.
+  // pull like Metal itself), fed to a hut fireplace to smelt — 30% Metal,
+  // rest Slag (a whiff, not a byproduct worth using). See FireplaceSystem.
   '2': { char: '2', name: 'Ore', color: '#8899aa' },
+  // Fireplace-smelting miss byproduct — see Ore above. Not itself craftable
+  // into anything yet; exists so a bad smelting roll leaves something in
+  // hand rather than nothing.
+  '4': { char: '4', name: 'Slag', color: '#5a4a42' },
   '~': { char: '~', name: 'String', color: '#cccccc' },
   '|': { char: '|', name: 'Stick', color: '#8b4513' },
   'a': { char: 'a', name: 'Ash', color: '#888888' },

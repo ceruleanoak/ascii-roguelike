@@ -12,5 +12,4 @@ rework shields into a new armor item, not consumables, preventing stacking. Poss
 crow in L1 room always holds pearl. Change it to hold either pearl or onyx
 gray out "brew" option in alchemist lab with no bottles of water equipped. Gray out "infuse" with no start potions equipped
 increase # of centipedes in red B room to 2
-Use same fireplace menu for ore as with sticks, instead of straight to inventory similar experience where 30% chance of metal, rest chance of "slag" (new ingredient)
 Slag golem, new NPC, have 2 hp, combine slag with mana. Can have up to 5 golems at once. They do basic melee attacks. Mud golems have 1 hp with resurrect. Rock golems have 1 hp. Metal golems have 5 hp. To make a golem combine the related ingredient with mana.

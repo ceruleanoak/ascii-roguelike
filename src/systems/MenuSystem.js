@@ -743,6 +743,12 @@ export class MenuSystem {
       return;
     }
 
+    // Fireplace ore-quantity submenu (how many ore to smelt at once)
+    if (game.currentMenuSlot === 'fireplace-ore-qty') {
+      game.fireplaceSystem?.commitOreQuantity(selectedItem.value);
+      return;
+    }
+
     // Handle alchemy cauldron operations (water → starter potion → true potion)
     if (game.currentMenuSlot === 'alchemy') {
       game.alchemySystem?.commitSelection(selectedItem);

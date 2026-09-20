@@ -7,13 +7,13 @@ import { Item } from '../entities/Item.js';
  * Players walk up to a `⌂` fireplace and hit SPACE. An unlit fireplace only
  * accepts a Stick, which ignites it (recolors the instance, no state machine
  * beyond the one `burning` flag). Once burning, the menu opens up to Meat
- * (100% → Meat Jerky), Ore (100% → Metal), a held Fire Berry (100% → Mana),
- * an equipped Bottle of Water (100% → Bottle of Hot Water — a fourth parallel
- * path to hot water alongside the Caldera fill, the Fire Essence recipe, and
- * the Fire Berry recipe in recipes.js), and further Sticks — picking Stick
- * opens a quantity submenu asking how many to contribute at once, then rolls
- * each stick independently for a byproduct (Ash, common; Fire Essence, rare
- * — a whiff just feeds the fire).
+ * (100% → Meat Jerky), a held Fire Berry (100% → Mana), an equipped Bottle of
+ * Water (100% → Bottle of Hot Water — a fourth parallel path to hot water
+ * alongside the Caldera fill, the Fire Essence recipe, and the Fire Berry
+ * recipe in recipes.js), and Ore and Sticks, both of which open a quantity
+ * submenu asking how many to feed at once, then roll each independently for
+ * a byproduct: Ore rolls Metal (30%) / Slag (rest, a whiff); Sticks roll Ash
+ * (common) / Fire Essence (rare) — a whiff there just feeds the fire.
  * Byproducts pop out of the fireplace as physical drops (LootSystem) rather
  * than landing straight in inventory, same as any other world pickup.
  * `burning` lives on the BackgroundObject instance, so it resets for free
@@ -30,6 +30,9 @@ const LIT_COLOR = '#ff6622';
 // Neither hits → the stick just feeds the fire, no output.
 const STOKE_ASH_CHANCE = 0.60;
 const STOKE_ESSENCE_CHANCE = 0.10;
+
+// Ore fed to an already-burning fireplace: smelting roll, Metal or a Slag whiff.
+const ORE_METAL_CHANCE = 0.30;
 
 const INTERACT_RADIUS = GRID.CELL_SIZE * 1.2;
 const TORCH_CHAR = '♨';
@@ -159,9 +162,11 @@ export class FireplaceSystem {
       if (!stacked) game.inventorySystem.consumableInventory.push(jerky);
       game.menuSystem.showPickupMessage(jerky.data.name);
     } else if (rawChar === '2') {
-      if (!fireplace.burning || !game.removeIngredient('2')) return;
-      game.addIngredient('M');
-      game.menuSystem.showPickupMessage('Metal');
+      // Ore, like Sticks, opens a quantity submenu rather than smelting one
+      // implicit unit — see openOreQuantityMenu.
+      if (!fireplace.burning) return;
+      this.openOreQuantityMenu(fireplace);
+      return;
     } else if (rawChar === '❋') {
       if (!fireplace.burning) return;
       const berry = game.inventorySystem.consumableInventory.find(it => it.char === '❋');
@@ -228,6 +233,52 @@ export class FireplaceSystem {
       } else if (roll < STOKE_ASH_CHANCE + STOKE_ESSENCE_CHANCE) {
         game.lootSystem.spawnIngredientDrop('F', dropX, dropY);
       }
+    }
+
+    game.audioSystem?.playSFX?.('craft');
+    game.closeMenu();
+    game.updateUI();
+  }
+
+  /** How many ore to smelt at once, 1..oreCount. Mirrors openStickQuantityMenu. */
+  openOreQuantityMenu(fireplace) {
+    const game = this.game;
+    const oreCount = game.inventorySystem.countIngredient('2');
+    if (oreCount === 0) return;
+
+    const items = [];
+    for (let n = 1; n <= oreCount; n++) {
+      items.push({ action: 'qty', label: `2×${n}`, value: n });
+    }
+
+    game.menuOpen = true;
+    game.currentMenuSlot = 'fireplace-ore-qty';
+    game.selectedMenuIndex = 0;
+    game.menuItems = items;
+    this.activeFireplace = fireplace;
+    game.renderController.menuOverlay.render(game);
+    game.menuSystem.closeOnMovement = true;
+  }
+
+  /**
+   * Commit an ore-quantity submenu pick: smelt that many ore, rolling each
+   * independently for Metal (ORE_METAL_CHANCE) or a Slag whiff, and pop the
+   * result out of the fireplace as a physical drop (LootSystem) instead of
+   * straight-to-inventory — same shape as commitStickQuantity.
+   */
+  commitOreQuantity(count) {
+    const game = this.game;
+    const fireplace = this.activeFireplace;
+    if (!fireplace || !fireplace.burning) return;
+
+    const C = GRID.CELL_SIZE;
+    const dropX = fireplace.position.x + C / 2;
+    const dropY = fireplace.position.y + C / 2;
+
+    for (let i = 0; i < count; i++) {
+      if (!game.removeIngredient('2')) break;
+      const char = Math.random() < ORE_METAL_CHANCE ? 'M' : '4';
+      game.lootSystem.spawnIngredientDrop(char, dropX, dropY);
     }
 
     game.audioSystem?.playSFX?.('craft');
