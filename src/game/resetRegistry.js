@@ -22,12 +22,13 @@
 // GameStateMachine.js, its src/game/ siblings) that every system can be
 // reset by, without the registry ever depending on a system's module.
 //
-// STATUS: Step 1 only. RESET_REGISTRY is intentionally EMPTY — no field rows
-// have been migrated yet (that is Steps 2/3 of the plan). This file is not
-// imported anywhere yet either. What must already be correct: the scope
-// cascade, the consumer (applyReset), the load-time shape assertions, and
-// the path-resolution rules, because Steps 2/3 populate the table against
-// this exact contract without revisiting it.
+// STATUS: Steps 1-3 done. RESET_REGISTRY holds the full run-scoped
+// inventory (§5.A/§5.B) plus the title-only inventory (§5.C) and the
+// tombstone addendum (§5.-1). `_resetRunToRest()` and `enterTitleState()`
+// in src/main.js both consume this table via applyReset(). Remaining work
+// (plan §7): Step 4 (harness registry-coverage check), Step 5 (constructor
+// consumes the registry via initRegisteredState), Step 6 (optional `room`
+// tier).
 
 // ---------------------------------------------------------------------------
 // Scope cascade
@@ -553,6 +554,136 @@ export const RESET_REGISTRY = [
     call: (game) => game.player?.reset(),
     covers: ['player.destroyedSlots', 'player.magicMeter'],
     why: 'Whole-entity reset; must run after every other player.* reset entry.',
+  },
+
+  // ── C. Title-only today (plan §5.C) — STEP 3. These fields/calls, plus
+  // everything above (inherited via scopeIncludes('title') === ['room','run',
+  // 'title']), are what enterTitleState() now applies via
+  // applyReset(game, 'title'). Do not duplicate anything from sections A/B
+  // here — TITLE gets it for free through the cascade. ───────────────────
+  {
+    path: 'blueZoneRoom',
+    scope: 'title',
+    value: 0,
+    // Plan §5.C notes this also looks like a latent death-path gap (not
+    // cleared by _resetRunToRest today), but Step 3's brief is title-only —
+    // adding it at run scope too is a separate call, flagged in the Step 3
+    // report rather than made unilaterally here.
+    why: 'Blue Zone secret-room counter starts over for a fresh title session.',
+  },
+  {
+    path: 'roomGenerator.setDepth',
+    scope: 'title',
+    call: (game) => game.roomGenerator.setDepth(0),
+    // Same latent-death-path-gap note as blueZoneRoom above.
+    why: "Room generator depth mirrors zoneDepths' reset for the title screen; enterExploreState re-sets it per room anyway.",
+  },
+  {
+    path: 'currentRoom',
+    scope: 'title',
+    value: null,
+    why: 'No room exists on the title screen.',
+  },
+  {
+    path: 'backgroundObjects',
+    scope: 'title',
+    fresh: () => [],
+    why: 'No room exists on the title screen.',
+  },
+  {
+    path: 'items',
+    scope: 'title',
+    fresh: () => [],
+    why: 'No room exists on the title screen.',
+  },
+  {
+    path: 'ingredients',
+    scope: 'title',
+    fresh: () => [],
+    why: 'No room exists on the title screen.',
+  },
+  {
+    path: 'placedTraps',
+    scope: 'title',
+    fresh: () => [],
+    why: 'No room exists on the title screen.',
+  },
+  {
+    path: 'physicsSystem.clear',
+    scope: 'title',
+    call: (game) => game.physicsSystem.clear(),
+    why: 'No room exists on the title screen.',
+  },
+  {
+    path: 'combatSystem.clear',
+    scope: 'title',
+    call: (game) => game.combatSystem.clear(),
+    why: 'No room exists on the title screen.',
+  },
+  {
+    path: 'huntingSystem.reset',
+    scope: 'title',
+    call: (game) => game.huntingSystem.reset(),
+    why: 'No room exists on the title screen.',
+  },
+  {
+    path: 'titleAnimationTime',
+    scope: 'title',
+    value: 0,
+    why: 'Title screen intro animation starts over each time TITLE is entered.',
+  },
+  {
+    path: 'introAnimationStarted',
+    scope: 'title',
+    value: false,
+    why: 'Start with the pre-intro screen each time TITLE is entered.',
+  },
+  {
+    path: 'launchButtonBounds',
+    scope: 'title',
+    value: null,
+    why: 'Re-set by TitleRenderer on the next render; stale bounds from a prior TITLE visit must not linger.',
+  },
+  {
+    path: 'titleIdleTimer',
+    scope: 'title',
+    value: 0,
+    why: 'Idle timer (drives the arcade-demo trigger) restarts fresh on each TITLE entry.',
+  },
+
+  // ── Addendum: death-output fields, title-only (plan §5.-1) ────────────
+  // lastDeathCause / tombstoneActive / tombstonePopup are death-path OUTPUT
+  // consumed by REST, not run-scoped input to clear on a run reset —
+  // _resetRunToRest runs at the exact moment these are freshly populated by
+  // the death event (main.js ~3218-3230), immediately before the REST
+  // transition that needs to render the tombstone from them. Registering
+  // them at scope: 'run' would erase the tombstone before REST ever shows
+  // it. They are intentionally ABSENT from section A/B above — do not
+  // "fix" that asymmetry by adding them there. Their normal dismissal
+  // already has an owner (the bespoke inline check in enterExploreState()
+  // when leaving REST for EXPLORE, main.js ~1816-1818) and stays exactly
+  // where it is. This title-only entry exists only to close the gap where
+  // a title return happens WITHOUT that dismissal ever running (e.g. after
+  // a death where the player never re-entered EXPLORE) — verified against
+  // every transition(GAME_STATES.TITLE) call site: none of them touch
+  // these three fields today.
+  {
+    path: 'lastDeathCause',
+    scope: 'title',
+    value: null,
+    why: 'Death-output field (plan §5.-1 addendum), deliberately absent from run scope — see the section comment above.',
+  },
+  {
+    path: 'tombstoneActive',
+    scope: 'title',
+    value: false,
+    why: 'Death-output field (plan §5.-1 addendum), deliberately absent from run scope — see the section comment above.',
+  },
+  {
+    path: 'tombstonePopup',
+    scope: 'title',
+    value: null,
+    why: 'Death-output field (plan §5.-1 addendum), deliberately absent from run scope — see the section comment above.',
   },
 ];
 

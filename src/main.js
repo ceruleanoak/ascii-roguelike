@@ -921,54 +921,22 @@ class Game {
     this.ui.overlay.classList.remove('slide-up');
     this.ui.overlay.classList.add('hidden');
 
-    // TITLE is always a "no run in progress" state. Reset every gameplay
-    // variable the arcade demo (or anything else) may have touched so the
-    // next real run from this title screen starts at L1 in a fresh world.
-    // Idempotent on first boot — these fields are already in their initial
-    // form set by the constructor.
-    this.zoneDepths = freshZoneDepths();
-    this.zoneSystem.resetOnDeath(this);
-    this.roomGenerator.setDepth(0);
-    this.dungeonBossSystem.resetRunState();
-    this.bossSystem.deactivate();
-    this.physicsSystem.clear();
-    this.huntingSystem.reset();
-    this.combatSystem.clear();
-    this.inventorySystem.clearAllCharacterInventories();
-    this.currentRoom = null;
-    this.backgroundObjects = [];
-    this.items = [];
-    this.ingredients = [];
-    this.placedTraps = [];
-    this.audioSystem.currentMusicZone = 'green';
-    this.preBossGateActive = false;
-    this.preMinibossGateActive = false;
-    this.knownSpells?.clear?.();
-    this.commandSystem.clearRunState();
-    this.blueZoneRoom = 0;
-    this.runTimerSystem.clear(); // No run in progress on TITLE — next REST entry starts a fresh timer
-    this.threeRoomSystem.hardReset();       // streak + Death state die with the run
-    this.barricadeSystem.hardReset();       // and the direction the run was insisting on
-    this.cursedRunSystem.hardReset();       // and the Graveyard's headcount with it
-    this.threeSlotGlobeSystem.hardReset();  // the run's touched glyphs die with it too
-    this.grayThreeExitShown = false;        // the gray '3' call can happen again next run
-    this.cursedRun = false;                 // a new run is not yet owed anything
-    this.undeadSystem.clear();              // and nothing is standing in it
-
-    // Transient feedback dies with the session (bug #198; harness-enforced).
-    this.menuSystem.clearPickupFeedback();
-    this.restBundle = null;
-    this.hasLeftRestOnce = false;
+    // Declarative title-scope reset (src/game/resetRegistry.js) — see that
+    // file for the full field-by-field inventory and rationale
+    // (claudedocs/reset-registry-plan.md §5.C, §5.-1). scopeIncludes('title')
+    // pulls in every run-scoped entry too (§5.A/§5.B), so TITLE now performs
+    // the same full run wipe death does, plus the title-only extras —
+    // a deliberate widening ratified in the plan (§7 risk #1): TITLE is
+    // always a "no run in progress" state, so idempotent on first boot.
+    // Only genuinely bespoke, non-table logic stays inline below (plan
+    // §5.D): the UI-overlay toggles above, `this.player = null` (must run
+    // AFTER applyReset — every player.* entry no-ops once player is null),
+    // markBackgroundDirty(), and the title-music load guard.
+    applyReset(this, 'title');
 
     // No player needed for title screen
     this.player = null;
     this.renderer.markBackgroundDirty();
-
-    // Initialize title animation timer and button bounds
-    this.titleAnimationTime = 0;
-    this.introAnimationStarted = false; // Start with pre-intro screen
-    this.launchButtonBounds = null; // Will be set by TitleRenderer
-    this.titleIdleTimer = 0;
 
     // Load title screen music (single track with custom loop point).
     // Skip the reload if it's already loaded — re-entering TITLE from the
