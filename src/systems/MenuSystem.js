@@ -756,6 +756,12 @@ export class MenuSystem {
       return;
     }
 
+    // Handle Wizard Hut operations (Gather Materials / Summon Golem)
+    if (game.currentMenuSlot === 'wizard') {
+      game.wizardSystem?.commitSelection(selectedItem);
+      return;
+    }
+
     // Handle condenser potion selection menu (when multiple potions equipped)
     if (game.currentMenuSlot === 'condenser') {
       game.alchemySystem?.commitCondenserSelection(selectedItem);

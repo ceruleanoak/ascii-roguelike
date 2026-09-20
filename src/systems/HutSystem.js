@@ -10,6 +10,7 @@ import { Witch } from '../entities/Witch.js';
 import { ErrandCharacter } from '../entities/ErrandCharacter.js';
 import { WeaponsMaster } from '../entities/WeaponsMaster.js';
 import { Shopkeeper } from '../entities/Shopkeeper.js';
+import { WizardNPC } from '../entities/WizardNPC.js';
 import { freezeSurfaceRoom, thawSurfaceRoom } from './PlaneSystem.js';
 import { HOT_WATER_CHAR } from '../data/alchemy.js';
 
@@ -188,6 +189,10 @@ export class HutSystem {
       }
     }
 
+    // Wizard Hut's summoning-circle ground point — set inside the 'wizard'
+    // branch below, read by WizardSystem off the returned floor object.
+    let wizardCirclePosition = null;
+
     // Enemies and NPCs — populated based on hutKind (declared above the
     // cellOccupied helper, which reads `npcs`).
     if (hutKind === 'enemy_encounter') {
@@ -291,6 +296,25 @@ export class HutSystem {
           ));
         }
       }
+    } else if (hutKind === 'wizard') {
+      // Wizard at interior center; summoning circle 2 cells south of them —
+      // the ground point WizardSystem's lightning strike lands on and the
+      // golem appears at. Position cached on the returned floor object
+      // (below) so WizardSystem doesn't have to re-derive it.
+      const centerCol = Math.floor(cols / 2);
+      const centerRow = Math.floor(rows / 2) - 1;
+      npcs.push(new WizardNPC(centerCol * GRID.CELL_SIZE, centerRow * GRID.CELL_SIZE));
+
+      const circleCol = centerCol;
+      const circleRow = centerRow + 2;
+      const circle = new BackgroundObject('◎', circleCol * GRID.CELL_SIZE, circleRow * GRID.CELL_SIZE);
+      circle.color = '#aa66ff';
+      backgroundObjects.push(circle);
+      wizardCirclePosition = {
+        x: circleCol * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
+        y: circleRow * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
+      };
+
     } else if (hutKind === 'frog_hut') {
       // Frog Coin at center — only reachable by frog/rat
       const centerCol = Math.floor(cols / 2);
@@ -373,6 +397,7 @@ export class HutSystem {
       exitCol,
       exitRow,
       viewport,
+      wizardCirclePosition,
     };
   }
 
@@ -717,6 +742,19 @@ export class HutSystem {
     game.campNPCSystem?.snapCompanionToPlayer?.();
     if (game.companion && game.currentRoom?.collisionMap) {
       game.companion.collisionMap = game.currentRoom.collisionMap;
+    }
+
+    // Golems summoned inside a hut (Wizard Hut — see WizardSystem) get
+    // switched onto the interior's collision map/background objects while
+    // they're in there; resync every golem back to the exterior room here,
+    // same as the companion swap above, so one summoned mid-visit doesn't
+    // keep walking against the tiny interior grid once outside.
+    if (game.golems?.length && game.currentRoom?.collisionMap) {
+      const bgObjects = game._activeBackgroundObjects() || null;
+      for (const golem of game.golems) {
+        golem.collisionMap = game.currentRoom.collisionMap;
+        golem.backgroundObjects = bgObjects;
+      }
     }
 
     // Clear hutPlane loot (ingredients/items spawned inside are abandoned on exit)

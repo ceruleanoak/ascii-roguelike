@@ -3530,10 +3530,19 @@ export class RoomGenerator {
     //   game.cheat_forceHutKind = 'witch' | 'enemy_encounter' | 'neutral_npc'
     // forces every subsequent hut roll to that kind.
     const cheatKind = this.game?.cheat_forceHutKind;
-    const validKinds = new Set(['enemy_encounter', 'neutral_npc', 'wise_man', 'fisherman', 'witch']);
+    const isRedZone = room.zone === 'red';
+    const validKinds = new Set([
+      'enemy_encounter', 'neutral_npc', 'wise_man', 'fisherman', 'witch',
+      ...(isRedZone ? ['wizard'] : [])
+    ]);
     let hutKind;
     if (cheatKind && validKinds.has(cheatKind)) {
       hutKind = cheatKind;
+    } else if (isRedZone && Math.random() < 0.12) {
+      // Wizard Hut — red zone only, golem summoning. Drawn separately from
+      // the shared pool below (rather than folded into its thresholds) so
+      // every other zone's odds stay untouched.
+      hutKind = 'wizard';
     } else {
       const r = Math.random();
       hutKind =

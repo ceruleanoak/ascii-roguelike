@@ -39,6 +39,7 @@ export class MenuOverlay {
     else if (game.currentMenuSlot === 'fireplace-stoke-qty') title = 'STOKE';
     else if (game.currentMenuSlot === 'fireplace-ore-qty') title = 'SMELT';
     else if (game.currentMenuSlot === 'alchemy') title = game.alchemyMenuTitle ?? 'CAULDRON';
+    else if (game.currentMenuSlot === 'wizard') title = 'WIZARD';
 
     let html = `<h3 style="text-align: center;">${title}</h3>`;
     html += '<div style="max-height: 300px; overflow-y: auto; overflow-x: hidden;">';

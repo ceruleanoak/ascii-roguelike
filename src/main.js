@@ -87,6 +87,7 @@ import { DialogueSystem } from './systems/DialogueSystem.js';
 import { FishermanDemoSystem } from './systems/FishermanDemoSystem.js';
 import { WeaponsMasterSystem } from './systems/WeaponsMasterSystem.js';
 import { ShopSystem } from './systems/ShopSystem.js';
+import { WizardSystem } from './systems/WizardSystem.js';
 import { PearlSystem } from './systems/PearlSystem.js';
 import { CompanionSystem } from './systems/CompanionSystem.js';
 import { CommandSystem } from './systems/CommandSystem.js';
@@ -261,6 +262,7 @@ class Game {
     this.fishermanDemoSystem = new FishermanDemoSystem(this);
     this.weaponsMasterSystem = new WeaponsMasterSystem(this);
     this.shopSystem = new ShopSystem(this);
+    this.wizardSystem = new WizardSystem(this);
     this.pearlSystem = new PearlSystem(this);
     this.pauseSystem = new PauseSystem(this);
     this.slotReplacementSystem = new SlotReplacementSystem(this);
@@ -3746,6 +3748,9 @@ class Game {
 
       // Hut Shopkeeper barter (no dialogue box — see Shopkeeper.getDialogueLines)
       if (this.shopSystem.trySpacePress()) return;
+
+      // Red-zone Wizard Hut: gather-materials hint / golem summoning
+      if (this.wizardSystem.handleSpacePress()) return;
 
       // Speaking NPCs open the dialogue box (after trade flows, which keep priority)
       if (this.dialogueSystem.tryOpenNearby()) return;
