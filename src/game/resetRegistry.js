@@ -266,7 +266,7 @@ export const RESET_REGISTRY = [
     path: 'cursedRun',
     scope: 'run',
     value: false,
-    why: 'A new run is not yet owed anything.',
+    why: 'A new run is not yet owed anything. Set the moment a Three Room slot cracks, and true for the rest of the run; survives REST on purpose — the curse is a thing REST itself decays under, so enterRestState is deliberately not a reset home for it.',
   },
   {
     path: 'undeadSystem.clear',
@@ -285,7 +285,7 @@ export const RESET_REGISTRY = [
     path: 'restBundle',
     scope: 'run',
     value: null,
-    why: 'Reset starter bundle so a fresh one spawns on new run.',
+    why: 'Reset starter bundle so a fresh one spawns on new run. One-time starter bundle object, destroyed on SPACE to drop its ingredients.',
   },
   {
     path: 'hasLeftRestOnce',
@@ -502,7 +502,7 @@ export const RESET_REGISTRY = [
     path: 'companion',
     scope: 'run',
     value: null,
-    why: "Clear companion so a stale hired NPC doesn't carry over to the next run.",
+    why: "Clear companion so a stale hired NPC doesn't carry over to the next run. Active camp NPC companion, promoted from room.campNPC.",
   },
 
   // ── New: previously-uncleared gap (plan §0.3/§5.B) ────────────────────
@@ -544,7 +544,7 @@ export const RESET_REGISTRY = [
     path: 'trapCharging',
     scope: 'run',
     value: null,
-    why: 'Unlike attackSequenceActive (already allowlisted — cleared synchronously within the same input-handler pass), trapCharging has no such guarantee: a death interrupting a mid-charge throw leaves it non-null with a stale timer, which BowChargeIndicator and WeaponPreviewDraw read directly and would render into the next run\'s first frame. Registering closes that staleness gap.',
+    why: 'Unlike attackSequenceActive (already allowlisted — cleared synchronously within the same input-handler pass), trapCharging has no such guarantee: a death interrupting a mid-charge throw leaves it non-null with a stale timer, which BowChargeIndicator and WeaponPreviewDraw read directly and would render into the next run\'s first frame. Registering closes that staleness gap. Shape: { timer: float } while charging a throw, null otherwise.',
   },
   {
     path: 'blessingsCollected',
@@ -568,7 +568,7 @@ export const RESET_REGISTRY = [
     path: 'inFlightTraps',
     scope: 'run',
     fresh: () => [],
-    why: "Genuine pre-existing bug (bug #305): unlike sibling `placedTraps` (already registered at title scope), inFlightTraps was cleared at NO site anywhere in the codebase — an in-flight thrown trap/wire could carry across a death or title return. Registering this closes the bug.",
+    why: "Genuine pre-existing bug (bug #305): unlike sibling `placedTraps` (already registered at title scope), inFlightTraps was cleared at NO site anywhere in the codebase — an in-flight thrown trap/wire could carry across a death or title return. Registering this closes the bug. Shape: [{ x, y, vx, vy, decel, targetX, targetY, char, color, trapData, plane }].",
   },
   {
     path: 'playerTongueAttacks',
@@ -628,7 +628,7 @@ export const RESET_REGISTRY = [
     path: 'slotPopup',
     scope: 'run',
     value: null,
-    why: 'REST quick-slot interaction popup (MenuSystem). Self-closes within ~0.25s via its own phase timer, and is explicitly dismissed on SPACE in REST — but nothing previously cleared it on a run/title reset reached some other way; registered as a backstop.',
+    why: 'REST quick-slot interaction popup (MenuSystem). Self-closes within ~0.25s via its own phase timer, and is explicitly dismissed on SPACE in REST — but nothing previously cleared it on a run/title reset reached some other way; registered as a backstop. Shape: { phase, timer, pixelX, pixelY, open: fn } or null.',
   },
 
   // ── late: whole-entity resets (plan §4, ordering dependency #1) ───────
@@ -693,13 +693,13 @@ export const RESET_REGISTRY = [
     path: 'ingredients',
     scope: 'title',
     fresh: () => [],
-    why: 'No room exists on the title screen.',
+    why: 'No room exists on the title screen. Ingredient entities lying on the floor of the current room — NOT the player\'s pile; picking one up moves its glyph into the pile via addIngredient(), and the two never hold the same thing.',
   },
   {
     path: 'placedTraps',
     scope: 'title',
     fresh: () => [],
-    why: 'No room exists on the title screen.',
+    why: 'No room exists on the title screen. Shape: { item, tickTimer, activeDuration, affectedEnemies }.',
   },
   {
     path: 'physicsSystem.clear',
@@ -764,7 +764,7 @@ export const RESET_REGISTRY = [
     path: 'lastDeathCause',
     scope: 'title',
     value: null,
-    why: 'Death-output field (plan §5.-1 addendum), deliberately absent from run scope — see the section comment above.',
+    why: 'Death-output field (plan §5.-1 addendum), deliberately absent from run scope — see the section comment above. Shape: { name, char, color, description } of the killing enemy.',
   },
   {
     path: 'tombstoneActive',
@@ -776,7 +776,7 @@ export const RESET_REGISTRY = [
     path: 'tombstonePopup',
     scope: 'title',
     value: null,
-    why: 'Death-output field (plan §5.-1 addendum), deliberately absent from run scope — see the section comment above.',
+    why: 'Death-output field (plan §5.-1 addendum), deliberately absent from run scope — see the section comment above. Shape: { phase: 0|1|2, timer: float } or null.',
   },
 ];
 

@@ -1,6 +1,6 @@
 import { GameLoop } from './game/GameLoop.js';
 import { GameStateMachine } from './game/GameStateMachine.js';
-import { applyReset } from './game/resetRegistry.js';
+import { applyReset, initRegisteredState } from './game/resetRegistry.js';
 import { ASCIIRenderer } from './rendering/ASCIIRenderer.js';
 import { RenderController } from './rendering/RenderController.js';
 import { PhysicsSystem } from './systems/PhysicsSystem.js';
@@ -207,7 +207,6 @@ class Game {
     this.dungeonPuzzleSystem = new DungeonPuzzleSystem(this);
     this.dungeonGhostSystem = new DungeonGhostSystem(this);
     this.dungeonBossSystem = new DungeonBossSystem(this);
-    this.dungeonBossSystem.resetRunState(); // declares its own run-scoped game.* fields
     this.mazeSystem = new MazeSystem(this);
     // Interior lifecycle host (ADR-0001). Created after its controllers so it can
     // register them; also defines the Player interior-membership accessors.
@@ -269,51 +268,24 @@ class Game {
     this.screenFadeSystem = new ScreenFadeSystem(this);
     this.bridgeMenuOpen = false;
 
+    // All systems above are now constructed. Establish every registry-declared
+    // field's title-scope (widest) initial value in one pass — see
+    // src/game/resetRegistry.js. Must run after system construction (several
+    // entries are `call`-backed methods on systems just built above) and before
+    // any of this constructor's own remaining literal field initializations
+    // below, several of which are genuinely not registry-covered (DOM/input
+    // plumbing, debug toggles, persistent/session state — see each field's own
+    // comment) and stay here.
+    initRegisteredState(this);
+
     // Game state
-    this.player = null;
+    this.player = null; // No `player` registry entry exists (only `player.*` sub-fields, which resolveEntryOwner skips while game.player is null) — this is the field's only creation site.
     this.previousPlayerPosition = { x: 0, y: 0 }; // Track previous position for exit zone crossing detection
-    this.currentRoom = null;
-    // Ingredient entities lying on the floor of the current room — NOT the
-    // player's pile. Picking one up moves its glyph into the pile via
-    // addIngredient() below; the two never hold the same thing.
-    this.ingredients = [];
-    this.items = [];
-    this.placedTraps = []; // Placed trap items { item, tickTimer, activeDuration, affectedEnemies }
-    this.wellCoinAnim = null;       // WellSystem in-flight coin animation state
-    this.wellFlashTimer = 0;        // Post-ritual screen flash decay
-    this.wellFlashDuration = 0;     // Initial flash duration (used for normalized alpha)
-    this.fairiesAngered = false;    // Run-scoped: set when fountain is corrupted; suppresses all fairy spawns
-    this.chiBladeFound = false;     // Run-scoped: set once the X-room χ-blade secret resolves; gates chi_grass re-rolling
-    this.graySnapshots = [];        // Run-scoped: loadouts of characters the mist took at gray L10 (future 5-character ending hook)
-    this.lostCharacters = [];       // Run-scoped: characters lost in the mist — distinct from deadCharacters
-    this.cheatUsed = false;         // Run-scoped: set when any gameplay-affecting cheat-menu action fires; reported in the death ledger
-    this.runId = newRunId();        // Run-scoped: links all death-ledger records (deaths + revives) from this run
-    this.fedCrowCount = 0;          // Run-scoped: bread-fed crows so far (caps at 3); boosts crow spawn odds in new rooms
-    this.companionCrows = [];       // Run-scoped: crows that ate bread; act as combat companions across rooms
-    this.followerCrows = [];        // Room-scoped: bystander crows that joined a feed event in the current room
-    this.tamedRats = [];            // Run-scoped: rats that ate bread; companion mode driven by Enemy.tamed
-    this.golems = [];               // Run-scoped: summoned at the Combine Station (ingredient + Mana); see CompanionSystem.spawnGolem
-    this.ridgeBridgeBuilt = false;  // Run-scoped: set once any Ridge bridge is built; future Ridge rooms skip the BridgeWorker errand entirely
 
     this.activeNoiseSource = null; // Set each frame by updatePlacedTraps if noise-maker is active
-    this.backgroundObjects = [];
-    this.steamClouds = []; // Steam clouds from fire+water and Steam Vial
-    this.soundEvents = []; // Sound pulses emitted by player attacks/interactions; used for enemy detection
-    this.particles = []; // Explosion particles
-    this.debris = []; // Enemy debris
-    this.gooBlobs = []; // Goo blobs from Goo Dispenser
-    this.puddles = []; // Persistent slime puddles from Slime Bomb
-    this.enemyShockwaves = []; // Invisible expanding rings from enemy attacks (e.g., Giant Slime leap landing)
-    this.sniperBeams = []; // Fading red line renders from the Sniper's fired shot
-    this.idleEchoes = []; // REST: SPACE-with-nothing-to-do feedback rings
-    this.wishesUsed = 0; // CLEANSE spell wishes used this run (max 3)
     this.cleanseWave = null; // Active wave animation { startTime, duration }
     this.bossDefeatFlash = null; // White screen flash on boss defeat { startTime, duration }
     this.pendingZoneMusicResume = null; // Delayed zone-music resume after boss defeat { readyAt, zone }
-    this._savedDestroyedSlots = [false, false, false]; // Persists across player recreations
-    this.neutralCharacters = []; // Neutral entities (Leshy, NPCs, etc.)
-    this.cureRusalka = null;      // Stationary cure Rusalka for polymorph reversal (Lake rooms)
-    this.playerTongueAttacks = []; // Player frog-tongue attacks when polymorphed
     this.activeFloor = null;       // Active interior floor (hut or dungeon floor). Null on surface.
     this.mazeInterior = null;   // Active maze interior (MazeSystem)
     this.dungeonFloors = [];       // Persistent dungeon floor states for current visit
@@ -324,55 +296,16 @@ class Game {
     this.dungeonKeySkullFloor = -1;
     this.dungeonKeyUsedThisRun = false;
     this.dungeonRareItemObtainedThisRun = false;
-    this.spectaclesObtainedThisRun = false; // Maze clear reward flag — declared here, not lazily at first set
     this.dungeonTemplatesUsedThisRun = new Set(); // no floor-layout repeats within one dungeon visit
 
-    // The Cursed run — set the moment a Three Room slot cracks, and true for
-    // the rest of the run. Survives REST on purpose: the curse is a thing REST
-    // itself decays under, so enterRestState is deliberately NOT a reset home.
-    this.cursedRun = false;
-    this.companion = null;         // Active camp NPC companion (promoted from room.campNPC)
-
-    // Pre-boss gate: set at depth 14 room clear, cleared on room transition
-    this.preBossGateActive = false;
-    this.preMinibossGateActive = false;
-
-    // Per-zone depth tracking (independent progression)
-    this.zoneDepths = freshZoneDepths();
-
-    this.knownSpells = new Set(); // Spells the player has learned this run (resets on death)
-
-    this.gameOverWaitingForSpace = false;
-    this.gameOverDeathTimer = 0; // Timer for 2-second delay before showing "Press SPACE"
-    this.characterDeathPending = false; // True when a character died but others remain
-    this.characterDeathTimer = 0; // Like gameOverDeathTimer but for character-death path
-    this.pendingNextCharacter = null; // Character type to swap to after space press
-    this.characterDeathName = ''; // Name of the character who just died
-
-    // Tombstone: appears in REST after death, tracks what killed the player
-    this.lastDeathCause = null; // { name, char, color, description } of the killing enemy
-    this.tombstoneActive = false; // Show tombstone in REST mode
-    this.tombstonePopup = null; // { phase: 0|1|2, timer: float } or null
-
-    // Slot popup: animated expand box before equipment/chest menus open
-    this.slotPopup = null; // { phase, timer, pixelX, pixelY, open: fn } or null
-
-    // Trap throw charge state
-    this.trapCharging = null; // { timer: float } while player is charging a throw, null otherwise
-    this.inFlightTraps = [];  // [{ x, y, vx, vy, decel, targetX, targetY, char, color, trapData, plane }]
-    this.restBundle = null; // One-time starter bundle object (destroyed on SPACE to drop ingredients)
     this.particleFireworks = false; // Debug toggle: cycles every particle factory at random screen positions
     this._fwTimer = 0;
     this._fwIndex = -1;
-    this.hasLeftRestOnce = false; // Becomes true on first EXPLORE entry; gates the rest-bundle pickup hint arrow
     this.dodgeBlockedFeedbackTimer = 0; // Cooldown for red X feedback
     this.showVectors = false; // Debug: Toggle with 'v' key
 
     // ALL INVENTORY STATE NOW IN InventorySystem
     // Access via: this.inventorySystem.property
-
-    // Blessings (permanent buffs)
-    this.blessingsCollected = [];
 
     // Room preview state
     this.roomPreviews = {
@@ -402,9 +335,6 @@ class Game {
     this.WASD_BLINK_INTERVAL = 0.5; // seconds per blink cycle
 
     // Item pickup notification with queue system
-    this.pickupMessage = null;
-    this.pickupMessageTimer = 0;
-    this.pickupMessageQueue = []; // Queue for multiple pickups
     this.PICKUP_MESSAGE_DURATION = 2.0; // seconds
 
     // Path announcement system (for Path Amulet)
@@ -414,11 +344,6 @@ class Game {
 
     // Character system (captives and character types)
     this.exitPathHistory = []; // Track exit letters chosen (future: for Week 4 secret patterns)
-    this.unlockedCharacters = ['default']; // All unlocked character types
-    this.activeCharacterType = 'default'; // Currently playing as this character
-    this.deadCharacters = []; // Characters that have died (can't be used again this run)
-    this.captives = []; // Active captives in current room
-    this.characterNPCs = []; // Character NPCs in REST mode
 
     // Input state
     this.keys = {
@@ -483,13 +408,9 @@ class Game {
     this.disabledColumns = []; // Which columns are disabled
 
     // Title screen state
-    this.titleAnimationTime = 0;
-    this.introAnimationStarted = false; // Tracks if user has started the intro
-    this.launchButtonBounds = null; // Set by TitleRenderer for click detection
     this.screenFade = null; // { direction: 'out'|'in', elapsed, opacity, pendingState }
     // Arcade attract-mode: after this many seconds of idle on the pre-intro
     // title screen, the demo begins playing behind the launch button.
-    this.titleIdleTimer = 0;
     this.TITLE_IDLE_THRESHOLD = 5.0;
 
     // Setup
