@@ -255,7 +255,7 @@ export class RoomGenerator {
     }
 
     // First-room flourish: a single idle crow in the very first green-zone
-    // explore room, carrying a pearl it drops the first time it's scared.
+    // explore room, carrying a shiny it drops the first time it's scared.
     // Teaches the player that not all motion is hostile. Solo (not a flock):
     // extra wild crows this early have nothing to hoard and were free to
     // loot-seek the player's own dropped starting gear before they could
@@ -265,9 +265,13 @@ export class RoomGenerator {
       || type === ROOM_TYPES.DISCOVERY
       || type === ROOM_TYPES.CAMP;
     if (this.currentDepth === 1 && zoneType === 'green' && introRoomEligible) {
-      // Guaranteed to carry the pearl — that drop gates the blue-zone Ocean
-      // exit, so the chance must be 100%.
-      this.spawnCrows(room, { guaranteedItem: '●', count: 1 });
+      // 50/50 Pearl or Onyx. Pearl gates the blue-zone Ocean exit (PearlSystem
+      // requires it to spawn the guide fairy) — this was a guaranteed 100%
+      // Pearl drop until deliberately made a coin flip, so blue-zone access is
+      // no longer promised every run. Pearl is still reachable the rest of a
+      // no-Pearl run via the X-room crow hoard (CROW_HOARD_POOL), just at much
+      // lower odds.
+      this.spawnCrows(room, { hoardPool: ['●', '⬧'], count: 1 });
       console.log(`[Crows] spawned ${room.crows.length} in depth-1 ${type} room`);
     }
 
