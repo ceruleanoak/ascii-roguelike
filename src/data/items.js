@@ -1971,6 +1971,9 @@ export const ITEMS = {
     type: ITEM_TYPES.CONSUMABLE,
     effect: 'manaSlot',   // Grants a temporary mana slot (no true slot required)
     oneShot: true,
+    manualOnly: true,     // checkTriggerCondition's manaSlot case has no HP/proximity
+                           // gate, so without this it auto-fires the frame after
+                           // equip instead of waiting for select+SPACE (bug-inbox)
     duration: 30,
     color: '#8866ff'
   },
