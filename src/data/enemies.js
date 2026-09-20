@@ -325,15 +325,26 @@ export const ENEMIES = {
     damage: 4,
     attackRange: GRID.CELL_SIZE * 2.5,  // 2.5 units (heavy reach)
     aggroRange: GRID.CELL_SIZE * 7,     // 7 units (slow to notice)
-    attackCooldown: 1.8,
-    attackWindup: 1.2,  // Heavy swing - longer telegraph
+    attackCooldown: 2.2,
+    attackWindup: 1.8,  // Heavy swing - longer telegraph
     windupMovement: 'advance',  // Shambles forward during the long telegraph
     attackType: 'melee',
-    decisionInterval: 0.75,  // Dumb brute (very slow reactions)
+    decisionInterval: 1.5,  // Dumb brute (very slow reactions)
     color: '#00aa00',
     recover: { variant: 'knockback', duration: 0.6 },  // Staggers off its own heavy swing
-    affinities: ['beast'],
-    tier: 'normal'
+    // Larger trapezoid hitbox — drafted in tools/enemy-editor, never synced
+    // into production until now (resolved bug #300).
+    telegraph: {
+      area: 'trapezoid',
+      size: 'big',
+      animation: 'blink',
+      attackShape: 'T',
+      attackShapeTurn: 90
+    },
+    windupImmune: true,
+    isImpact: true,
+    affinities: ['humanoid'],
+    tier: 'elite'
   },
 
   'b': {
