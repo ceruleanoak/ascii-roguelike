@@ -16,7 +16,7 @@ export const GOLEM_TYPES = {
     name: 'Slag Golem',
     resultChar: '♟',
     ingredientChar: '4',   // Slag
-    maxHp: 2,
+    maxHp: 15,
     color: '#5a4a42',      // matches Slag's own item color
     resurrect: false,
   },
@@ -40,7 +40,7 @@ export const GOLEM_TYPES = {
     name: 'Rock Golem',
     resultChar: '♜',
     ingredientChar: '0',   // Rock
-    maxHp: 1,
+    maxHp: 10,
     color: '#888888',      // matches Rock's own item color
     resurrect: false,
   },
@@ -48,7 +48,7 @@ export const GOLEM_TYPES = {
     name: 'Metal Golem',
     resultChar: '♚',
     ingredientChar: 'M',   // Metal
-    maxHp: 5,
+    maxHp: 20,
     color: '#aaaaaa',      // matches Metal's own item color
     resurrect: false,
   },
