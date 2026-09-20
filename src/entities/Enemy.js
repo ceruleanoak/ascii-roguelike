@@ -2030,6 +2030,15 @@ export class Enemy {
       if (!sameBurst) return false;
     }
 
+    // Dodge roll (data-driven, 0-1 chance to fully evade any hit). Mirrors
+    // the player's dodgeChance armor stat — introduced for the hostile
+    // Errand enemy's "almost always avoids attacks" (feature-inbox), but
+    // any enemy can carry this field. Distinct sentinel from `false` so
+    // CombatSystem can show DODGE text instead of silently no-opping.
+    if (this.data?.dodgeChance > 0 && Math.random() < this.data.dodgeChance) {
+      return { dodged: true };
+    }
+
     this.hp -= amount;
     if (this.hp < 0) this.hp = 0;
 

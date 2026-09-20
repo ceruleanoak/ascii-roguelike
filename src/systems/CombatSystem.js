@@ -624,7 +624,9 @@ export class CombatSystem {
             kind: 'projectile',
             weaponSubtype: proj.weaponSubtype,
           });
-          if (damaged !== false) {
+          if (damaged && damaged.dodged) {
+            this.createDamageNumber('DODGE', enemy.position.x, enemy.position.y, '#ffffff');
+          } else if (damaged !== false) {
             // Show damage number with color based on affinity (crit overrides color + scale)
             const damageColor = critRoll.isCrit ? '#ffff66' :
                                elementalMod < 1.0 ? '#888888' :   // Resisted
@@ -1034,7 +1036,9 @@ export class CombatSystem {
               weaponSubtype: attack.weaponSubtype,
             });
             if (damaged === true && attack.isBlade) enemy.killedByBlade = true;
-            if (damaged !== false) {
+            if (damaged && damaged.dodged) {
+              this.createDamageNumber('DODGE', enemy.position.x, enemy.position.y, '#ffffff');
+            } else if (damaged !== false) {
               // Generic hit-landed signal — FlailSystem resets its spin ramp on this.
               attack.hitConnected = true;
               // Show damage number with color based on affinity (crit overrides color + scale)
@@ -1175,6 +1179,12 @@ export class CombatSystem {
             }
           }
         }
+
+        // Errand NPC (feature-inbox): the one NeutralCharacter special-cased
+        // as attackable. ErrandSystem owns the hit-check + conversion logic —
+        // this is just the wiring hook, matching the enemy loop right above.
+        this.game?.errandSystem?.checkAttackHit(attack, this, this.game, room);
+
         attack.hasHit = true;
       }
     }

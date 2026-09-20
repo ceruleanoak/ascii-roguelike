@@ -567,6 +567,40 @@ export const ENEMIES = {
     tier: 'normal'
   },
 
+  // Betrayed Errand traveler (feature-inbox): not spawned by normal room
+  // generation — ErrandSystem._becomeHostile() spawns this the moment the
+  // player lands a hit on the ErrandCharacter NPC (Errand-only attackability
+  // special case), and again on any later re-entry into an E room for the
+  // rest of the run (see roomFeatures.spawnRoomNeutralCharacters). Fast and
+  // near-unhittable rather than dangerous per hit — the punishment for
+  // attacking a trade partner is losing the trade, not a tough fight.
+  'E': {
+    char: 'E',
+    name: 'Betrayed Traveler',
+    description: 'Once a trade partner — now it only wants blood, and it is very hard to land a hit on.',
+    spellDescription: 'THE DEAL IS OFF.',
+    trueName: 'PRODITOR',
+    mass: 0.5,
+    hp: 4,
+    speed: 130,          // Fastest in the roster — "moves very quickly"
+    acceleration: 700,
+    damage: 4,
+    attackRange: GRID.CELL_SIZE * 1.5,
+    aggroRange: GRID.CELL_SIZE * 10,
+    attackCooldown: 0.6,
+    attackWindup: 0.3,
+    attackType: 'melee',
+    decisionInterval: 0.25,
+    color: '#ff4444',
+    telegraph: { area: 'box', animation: 'clap', attackShape: 'v' },
+    recover: { variant: 'jumpBack' },
+    affinities: ['humanoid'],
+    tier: 'normal',
+    // "Almost always successfully avoid player attacks" — see the dodgeChance
+    // check in Enemy.takeDamage().
+    dodgeChance: 0.9
+  },
+
   'B': {
     char: 'B',
     name: 'Goblin Brute',

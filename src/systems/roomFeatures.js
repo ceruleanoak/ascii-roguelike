@@ -1581,13 +1581,18 @@ export function spawnRoomNeutralCharacters(game, room) {
 
   // Errand room: active errand + E room clears enemies and spawns the
   // traveler immediately (they remember what they wanted last time)
-  if (game.errandSystem.activeErrand && room.exitLetter === 'E') {
+  if (game.errandSystem.activeErrand && room.exitLetter === 'E' && !game.errandSystem.hostile) {
     room.enemies = [];
     room.enemiesPlane0 = [];
     room.enemiesPlane1 = [];
     room.exitsLocked = false;
     const errandChar = game.errandSystem.spawnErrandCharacter(room);
     if (errandChar) game.neutralCharacters.push(errandChar);
+  } else if (game.errandSystem.hostile && room.exitLetter === 'E') {
+    // Traveler is gone for good (feature-inbox) — re-entering an E room
+    // for the rest of the run spawns the hostile enemy it turned into
+    // instead of the peaceful trader.
+    game.errandSystem.spawnHostileEnemy(room, game);
   }
 }
 

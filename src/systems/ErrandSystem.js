@@ -1,6 +1,8 @@
 import { GRID } from '../game/GameConfig.js';
 import { ErrandCharacter } from '../entities/ErrandCharacter.js';
 import { Item } from '../entities/Item.js';
+import { Enemy } from '../entities/Enemy.js';
+import { applyZoneCombatModifiers } from '../data/zones.js';
 
 /**
  * Three-stage trade progression.
@@ -49,6 +51,9 @@ const STAGE_CONFIG = [
  *      SHIFT, or walking out of range, → closeMenu(): cancels, no trade.
  *   6. Stage advances (capped at 2); ErrandCharacter requests the next item.
  *   7. Death → resetOnDeath(): wipes state for a clean new run.
+ *   8. Attacking the traveler (feature-inbox, Errand-only special case — not
+ *      general NeutralCharacter attackability) permanently flips it hostile
+ *      for the rest of the run: see checkAttackHit()/_becomeHostile().
  */
 export class ErrandSystem {
   constructor() {
@@ -57,6 +62,7 @@ export class ErrandSystem {
     this.menuOpen = false;    // Confirm popup gate — mirrors game.bridgeMenuOpen,
                                // but kept internal since ErrandSystem already
                                // owns activeErrand/stage itself rather than on `game`.
+    this.hostile = false;     // Attacked the traveler — permanent for the run (resetOnDeath wipes it)
   }
 
   // ── Hooks called by main.js ─────────────────────────────────────────────────
@@ -86,7 +92,7 @@ export class ErrandSystem {
    * @returns {ErrandCharacter|null}
    */
   spawnErrandCharacter(room) {
-    if (!this.activeErrand) return null;
+    if (!this.activeErrand || this.hostile) return null;
 
     const { x, y } = this._findSafeSpawnPosition(room);
     return new ErrandCharacter(x, y, this.activeErrand.requestedItem, this.activeErrand.stage);
@@ -360,6 +366,66 @@ export class ErrandSystem {
     this.activeErrand = null;
     this.stage = 0;
     this.menuOpen = false;
+    this.hostile = false;
+  }
+
+  // ── Hostility (feature-inbox) ───────────────────────────────────────────────
+  // Attacking the traveler is an Errand-only special case (not general
+  // NeutralCharacter attackability — a ratified design call, see
+  // AskUserQuestion history). A landed hit converts it into a hostile 'E'
+  // enemy, permanently for the rest of the run (resetOnDeath wipes it).
+
+  /**
+   * Called once per player melee swing from CombatSystem, right alongside
+   * its own enemy-hit loop. No-ops once already hostile (nothing left to
+   * hit) or when there's no live traveler in range.
+   * @param {Object} attack - the player's active melee attack hitbox
+   * @param {CombatSystem} combatSystem - for checkMeleeCollision/createDamageNumber
+   * @param {Game} game
+   * @param {Object} room - current room, passed through from CombatSystem.update
+   */
+  checkAttackHit(attack, combatSystem, game, room) {
+    if (this.hostile || attack.hasHit) return;
+    const errandChar = game.neutralCharacters?.find(nc => nc instanceof ErrandCharacter);
+    if (!errandChar) return;
+    if (!combatSystem.checkMeleeCollision(attack, errandChar)) return;
+    this._becomeHostile(errandChar, combatSystem, game, room);
+  }
+
+  /** Removes the traveler and spawns the hostile enemy in its place. */
+  _becomeHostile(errandChar, combatSystem, game, room) {
+    this.hostile = true;
+    const idx = game.neutralCharacters.indexOf(errandChar);
+    if (idx !== -1) game.neutralCharacters.splice(idx, 1);
+    combatSystem.createDamageNumber('BETRAYED', errandChar.position.x, errandChar.position.y, '#ff4444');
+    if (room) this.spawnHostileEnemy(room, game, errandChar.position);
+  }
+
+  /**
+   * Spawns the hostile 'E' enemy, fully wired for live play — mirrors
+   * RoundCombatSystem._spawnHag's runtime registration (physics, target,
+   * room). `uncounted` keeps it out of the room's clear-gate, same as Hag:
+   * a permanent hazard shouldn't lock exits behind killing it.
+   * Reused both by the live conversion above and by spawnRoomNeutralCharacters
+   * on any later re-entry into an E room, once `hostile` is set.
+   */
+  spawnHostileEnemy(room, game, pos = null) {
+    const depth = game?.getCurrentZoneDepth?.() ?? 1;
+    const spawnPos = pos || this._findSafeSpawnPosition(room);
+    const enemy = new Enemy('E', spawnPos.x, spawnPos.y, depth);
+    enemy.setCollisionMap(room.collisionMap);
+    enemy.setBackgroundObjects(room.backgroundObjects);
+    enemy.setSteamClouds?.(game.steamClouds);
+    enemy.setTarget?.(game.player);
+    enemy.setGame?.(game);
+    enemy.setRoom?.(room);
+    applyZoneCombatModifiers(enemy, room.zone);
+    enemy.uncounted = true;
+    if (enemy.plane === 1) room.enemiesPlane1.push(enemy);
+    else room.enemiesPlane0.push(enemy);
+    room.enemies.push(enemy);
+    game.physicsSystem.addEntity(enemy);
+    return enemy;
   }
 
   // ── Internal ────────────────────────────────────────────────────────────────
