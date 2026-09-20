@@ -689,6 +689,10 @@ export class ExitSystem {
             // the streak intact in checkZoneTransition. ExploreRenderer paints
             // the pulse from preBossGateActive, not from this stored color.
             room.exits.north = { letter: 'B', color: ZONES[preBossZone].exitColor };
+            // The room already generated (and may have raised a Barricade
+            // across this same lane) before this retrofit existed to consult
+            // it — clear any plug now blocking the forced gate (bug #298).
+            game.barricadeSystem.liftForGate(room);
             game.audioSystem.startBossAnticipation();
           }
 

@@ -374,6 +374,22 @@ export class BarricadeSystem {
     }
   }
 
+  /**
+   * A room's north exit can be retrofitted into a forced boss/miniboss 'B'
+   * gate (ExitSystem's pre-boss gate, ZoneSystem's pre-miniboss gate) well
+   * after the room was generated — and raiseForRoom runs at generation time,
+   * before either gate exists to consult, so a Barricade can already be
+   * standing across that same lane when the retrofit lands (bug #298). The
+   * letter change already told the player this direction is now the only one
+   * and always was going to be; a plug the run has no more chances to answer
+   * would make that a lie. Call this right after the exit mutation.
+   */
+  liftForGate(room) {
+    const barricade = room?.barricade;
+    if (!barricade || barricade.cleared || barricade.direction !== 'north') return;
+    this._lift(room, barricade);
+  }
+
   // The plug gives way. Objects are spliced out in place rather than filtered
   // into a new array, for the same aliasing reason _clearCell is.
   _lift(room, barricade) {

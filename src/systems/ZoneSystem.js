@@ -378,6 +378,9 @@ export class ZoneSystem {
     game.currentRoom.exits.east = null;
     game.currentRoom.exits.west = null;
     game.currentRoom.exits.north = { letter: 'B', color: ZONES[zone].exitColor };
+    // Same retrofit-after-generation gap as the pre-boss gate: clear any
+    // Barricade already standing across the forced lane (bug #298).
+    game.barricadeSystem.liftForGate(game.currentRoom);
   }
 
   /** Clears both zone-boss and miniboss exit-forcing flags on room transition. */
