@@ -228,6 +228,285 @@ const IGNORE = [
   /^x\.inventorySystem\.activeEffectTimers\.\d+$/, // array-length churn beyond equipped slots
 ];
 
+// ── Registry coverage — Step 4 (plan §6 edit 2) ─────────────────────────────
+// UNREGISTERED_ALLOWLIST: sibling to IGNORE, same "each entry needs a reason"
+// discipline. This is the FR5 escape hatch for game.*/player.* own-properties
+// that are legitimately out of scope for resetRegistry.js (PRD Non-Goals:
+// fields already encapsulated behind a system's own reset method, or
+// intentionally-persistent state like cheat/debug flags) rather than a real
+// registration gap. Populated by actually running checkRegistryCoverage()
+// and triaging what it flagged (plan §7 Step 4) — every entry below was
+// looked at, not blanket-added.
+//
+// Class instances whose constructor name ends in System/Manager/Menu/
+// Renderer/Machine/Loop/Controller, and UPPER_SNAKE_CASE constant names, are
+// matched structurally in checkRegistryCoverage() itself (plan §6 edit 3) —
+// they do NOT need an entry here.
+const UNREGISTERED_ALLOWLIST = [
+  // DOM / live-input handles — not reset state, they're I/O plumbing that
+  // outlives any run/title/room boundary by definition.
+  /^ui$/,
+  /^keys$/,
+  /^arrowKeys$/,
+  /^keyBuffer$/,
+  /^keyFlashMap$/,
+  // Raw per-frame input-down booleans — same category as `keys`/`arrowKeys`
+  // above (SPACE/SHIFT/V key-down state), not run-scoped data.
+  /^spacePressed$/,
+  /^shiftPressed$/,
+  /^vPressed$/,
+
+  // Generator instances — same Non-Goals category as System/Manager
+  // instances (their INTERNAL state is out of scope; only the game.*
+  // fields a call reaches via `covers` are in scope). RoomGenerator and
+  // DungeonFloorGenerator don't match the System$/Manager$/etc. structural
+  // exemption's naming convention, so they need an explicit entry here
+  // rather than broadening that regex for two known instances.
+  /^roomGenerator$/,
+  /^dungeonFloorGenerator$/,
+
+  // Whole-entity Player fields. `player` itself is deliberately NOT registry
+  // material (plan §4 ordering-dependency #2: `this.player = null` stays
+  // inline in enterTitleState, after applyReset runs, so every player.*
+  // entry sees a live owner). Every `player.*` sub-path is likewise out of
+  // scope for TWO independent reasons, either of which is sufficient: (1)
+  // `player.reset()` is itself a Non-Goals-exempt method-backed reset
+  // (PRD Non-Goals explicitly names it alongside zoneSystem.resetOnDeath/
+  // InteriorManager.reset/every *.hardReset() — "these keep their existing
+  // internal logic and ownership... not to inline their internals as table
+  // entries") and verifiably does clear the large majority of Player's own
+  // fields (read in full at src/entities/Player.js:965-1130); and (2), more
+  // fundamentally, `enterRestState()` UNCONDITIONALLY reconstructs
+  // `this.player = new Player(...)` on every entry to REST (main.js:1278) —
+  // which every path back to REST (title, death, character swap) passes
+  // through — so the OLD Player object (and every field on it) is discarded
+  // wholesale regardless of what resetRegistry.js does or doesn't clear on
+  // it. Registering the ~140 individual player.* fields would duplicate
+  // Player's own constructor/reset() literals for no enforcement benefit.
+  /^player$/,
+  /^player\..+$/,
+
+  // InteriorManager-owned fields — Non-Goals: "InteriorManager.reset()...
+  // only call sites move [into the registry], bodies untouched." Per plan
+  // §5.E / §7 Step 6, InteriorManager.reset() is NOT YET wired into either
+  // full-reset path (it's called from enterRestState/transitionToNeutralRoom/
+  // room transitions instead) — registering its `covers` is explicitly
+  // deferred to the optional room-tier step, not a Step 4 gap. Re-triage
+  // this entry if Step 6 lands and these still aren't covered.
+  /^activeFloor$/,
+  /^mazeInterior$/,
+  /^dungeonFloors$/,
+  /^dungeonCurrentFloor$/,
+  /^dungeonKeySkullFloor$/,
+  /^dungeonKeyUsedThisRun$/,
+  /^dungeonRareItemObtainedThisRun$/,
+  /^dungeonTemplatesUsedThisRun$/,
+
+  // Explicitly documented intentional persistence — main.js:1187: "Note:
+  // exitPathHistory persists for future secret pattern tracking." This is
+  // the PRD Non-Goals "intentionally-persistent" carve-out in its own words,
+  // already written into the code before this harness change existed.
+  /^exitPathHistory$/,
+
+  // Death-event output, already nulled by enterGameOverState() (main.js
+  // ~2261-2264) at the moment of death — BEFORE _resetRunToRest ever runs.
+  // Not reachable-dirty from TITLE either, since TITLE is only reached from
+  // boot or the arcade demo (neither sets these) — same "invisible in
+  // practice" fact the plan's §0.1 audit already relied on for a different
+  // field set.
+  /^cleanseWave$/,
+  /^bossDefeatFlash$/,
+  /^pendingZoneMusicResume$/,
+
+  // Per-frame scratch, recomputed every tick from live world state —
+  // `activeNoiseSource`'s own inline comment: "Set each frame by
+  // updatePlacedTraps if noise-maker is active."
+  /^activeNoiseSource$/,
+
+  // Menu-state compromise cluster — CLAUDE.md "Architectural Compromises"
+  // names this explicitly: menu state lives on `game` and every renderer
+  // reads it directly; it is UI-selection scratch re-derived by MenuSystem
+  // on the next open, not run-scoped data that needs a clear-on-reset entry.
+  // `bridgeMenuOpen` (RidgeSystem's own open/close flag, auto-closed on
+  // distance/interaction, main.js:2973/4215) is the same shape.
+  /^menuOpen$/,
+  /^menuItems$/,
+  /^selectedMenuIndex$/,
+  /^menuColumns$/,
+  /^disabledColumns$/,
+  /^currentMenuSlot$/,
+  /^selectedWeaponSlotIndex$/,
+  /^selectedColumn$/,
+  /^bridgeMenuOpen$/,
+
+  // attackSequenceActive is cleared synchronously within the same
+  // input-handler pass that sets it true (handleSpaceRelease zeroes it
+  // unconditionally, main.js:4102) — never a multi-frame, let alone
+  // multi-run, carry.
+  /^attackSequenceActive$/,
+
+  // screenFade — in-flight screen-transition scratch owned/driven by
+  // ScreenFadeSystem; self-clearing when the fade completes, not gameplay
+  // state that survives across a reset boundary in any meaningful sense.
+  /^screenFade$/,
+
+  // roomPreviews — rebuilt wholesale (`this.roomPreviews =
+  // this.roomGenerator.preloadRoomPreviews()`, main.js:2291) on demand, the
+  // same "regenerable root" shape as currentRoom/items/ingredients (which
+  // ARE registered) — but roomPreviews is keyed by exit direction, not a
+  // per-room entity list, and every reader already guards with `|| {}`-style
+  // fallbacks for the pre-populated state.
+  /^roomPreviews$/,
+
+  // Cosmetic/feedback animation timers — every one of these is a
+  // self-healing accumulator that free-runs every frame regardless of reset
+  // (same category as `titleIdleTimer`, IGNOREd above, and
+  // `_hotSpringSteamTimer`/`_sharkLastDodgeInput` below): a stale leftover
+  // value only ever shifts *when* the next blink/pulse/hint animation fires,
+  // never *whether* gameplay state is correct.
+  /^previewBlinkTimer$/,
+  /^previewBlinkState$/,
+  /^waveSfxTimer$/,
+  /^glitterTimer$/,
+  /^inactivityTimer$/,
+  /^wasdBlinkTimer$/,
+  /^wasdBlinkState$/,
+  // pathAnnouncement/pathAnnouncementTimer are a paired display-text +
+  // countdown: every read site (RestRenderer.js:687) gates on
+  // `pathAnnouncementTimer > 0` before ever looking at the text, so a stale
+  // `pathAnnouncement` string with an expired timer is unobservable — same
+  // self-healing shape as the other timer-paired fields above.
+  /^pathAnnouncement$/,
+  /^pathAnnouncementTimer$/,
+  /^dodgeBlockedFeedbackTimer$/,
+
+  // Debug/cheat toggles — intentionally persistent across resets (the same
+  // reason cheatMenu.godMode survives a run reset per resetRegistry.js's
+  // `cheatUsed` entry comment); these are player-facing dev conveniences,
+  // not gameplay state.
+  /^showVectors$/,
+  /^particleFireworks$/,
+  /^_fwTimer$/,
+  /^_fwIndex$/,
+
+  // Per-frame scratch — recomputed every tick from live world state, never
+  // read before being written that same frame; nothing "resets" a value
+  // that has no meaning between frames.
+  /^previousPlayerPosition$/,
+  /^_enemyTickFrame$/,
+  /^_hotSpringSteamTimer$/,
+  /^_sharkLastDodgeInput$/,
+  /^captiveInteractionThisFrame$/,
+];
+
+/**
+ * checkRegistryPathsResolve(game, RESET_REGISTRY) — plan §6 edit 4. For every
+ * registry entry, verifies `entry.path` resolves to a real, existing
+ * property somewhere on the live Game/Player object graph — catches a typo'd
+ * or stale path (a rename that didn't update the table, a field that died
+ * with a refactor) that would otherwise silently no-op forever inside
+ * applyReset()'s skip-on-missing-owner behavior.
+ *
+ * Mirrors resetRegistry.js's own resolveEntryOwner() path-walking rules (a
+ * leading 'player' segment resolves through game.player) but checks
+ * PROPERTY EXISTENCE via the `in` operator rather than "is the current value
+ * non-null" — a registered path pointing at a currently-null/false/0 field
+ * must not be reported as broken, and `in` also finds prototype methods
+ * (e.g. 'zoneSystem.resetOnDeath') that a plain value-walk would miss.
+ *
+ * Returns an array of { path, reason } for every entry that failed to
+ * resolve. An empty array is the only passing result — this check is a HARD
+ * FAILURE from day one per the task brief: it can only ever fire on a
+ * registry bug (typo, stale rename), never on legitimately-persistent state,
+ * so there is no rollout-warning tier for it the way there is for coverage.
+ */
+function checkRegistryPathsResolve(game, RESET_REGISTRY) {
+  const failures = [];
+  for (const entry of RESET_REGISTRY) {
+    const segments = entry.path.split('.');
+    let owner;
+    let ownerSegments;
+    if (segments[0] === 'player') {
+      if (game.player == null) continue; // same skip rule as applyReset itself
+      owner = game.player;
+      ownerSegments = segments.slice(1);
+    } else {
+      owner = game;
+      ownerSegments = segments;
+    }
+    if (ownerSegments.length === 0) {
+      failures.push({ path: entry.path, reason: 'malformed path: nothing after "player."' });
+      continue;
+    }
+    let broke = false;
+    for (let i = 0; i < ownerSegments.length - 1; i++) {
+      if (owner == null || !(ownerSegments[i] in owner)) {
+        failures.push({
+          path: entry.path,
+          reason: `missing intermediate owner "${ownerSegments.slice(0, i + 1).join('.')}"`,
+        });
+        broke = true;
+        break;
+      }
+      owner = owner[ownerSegments[i]];
+    }
+    if (broke) continue;
+    const last = ownerSegments[ownerSegments.length - 1];
+    if (owner == null || !(last in owner)) {
+      failures.push({ path: entry.path, reason: `property "${last}" does not exist on its owner` });
+    }
+  }
+  return failures;
+}
+
+/**
+ * checkRegistryCoverage(game, registered) — plan §6 edit 3. Runs once
+ * against a REST-baseline fresh instance (so `player` exists and every
+ * player.* candidate path is reachable). Enumerates every own-property on
+ * `game` plus every own-property on `game.player` (mapped to `player.*`),
+ * and reports anything that is neither:
+ *   (a) a registered path (registeredPaths() — an entry's own `path`, or a
+ *       path listed in some entry's `covers`),
+ *   (b) an IGNORE hit (the harness's existing deep-diff ignore list), nor
+ *   (c) an UNREGISTERED_ALLOWLIST hit, nor
+ *   (d) structurally exempt: a class instance whose constructor name ends in
+ *       System/Manager/Menu/Renderer/Machine/Loop/Controller (system/
+ *       orchestrator objects — reset behavior for their INTERNALS is out of
+ *       scope per the PRD's Non-Goals; only the game.* / player.* fields a
+ *       system's call clears via `covers` are in scope), or an
+ *       UPPER_SNAKE_CASE constant name (module-level constants, not state).
+ *
+ * Returns the remainder as unregistered[] — every candidate that isn't one
+ * of the above and therefore needs either a new registry row or a reasoned
+ * UNREGISTERED_ALLOWLIST entry.
+ */
+function checkRegistryCoverage(game, registered) {
+  const SYSTEM_LIKE = /(System|Manager|Menu|Renderer|Machine|Loop|Controller)$/;
+  const UPPER_SNAKE = /^[A-Z][A-Z0-9_]*$/;
+
+  function isExempt(path, value) {
+    if (registered.has(path)) return true;
+    if (IGNORE.some((re) => re.test(path))) return true;
+    if (UNREGISTERED_ALLOWLIST.some((re) => re.test(path))) return true;
+    const lastSegment = path.split('.').pop();
+    if (UPPER_SNAKE.test(lastSegment)) return true;
+    if (value != null && typeof value === 'object' && SYSTEM_LIKE.test(value.constructor?.name ?? '')) return true;
+    return false;
+  }
+
+  const unregistered = [];
+  for (const key of Object.keys(game)) {
+    if (!isExempt(key, game[key])) unregistered.push(key);
+  }
+  if (game.player) {
+    for (const key of Object.keys(game.player)) {
+      const path = `player.${key}`;
+      if (!isExempt(path, game.player[key])) unregistered.push(path);
+    }
+  }
+  return unregistered;
+}
+
 // null and undefined both mean "unset" for contract purposes — an explicit
 // null write during a consumed transition is not drift.
 function sameUnset(a, b) {
@@ -247,7 +526,14 @@ function diffSnapshots(a, b, limit = 120) {
 }
 
 // ── Instance construction + driving ────────────────────────────────────────
-async function loadGameClass() {
+// loadGameAndRegistry() — Step 4 (plan §6 edit 1): the harness now also needs
+// the registry module (registeredPaths/RESET_REGISTRY) to cross-check against
+// live Game/Player state. It is SSR-loaded through the SAME Vite dev server
+// as Game, before the server closes — required, not optional, because
+// resetRegistry.js is ESM that may transitively touch import.meta.env
+// (via src/data/zones.js et al.), which only resolves correctly inside Vite's
+// module graph, not via a plain Node import.
+async function loadGameAndRegistry() {
   const exposeGame = {
     name: 'expose-game-for-parity',
     enforce: 'post',
@@ -263,8 +549,9 @@ async function loadGameClass() {
     plugins: [exposeGame],
   });
   const mod = await server.ssrLoadModule('/src/main.js');
+  const registryMod = await server.ssrLoadModule('/src/game/resetRegistry.js');
   await server.close();
-  return mod.Game;
+  return { Game: mod.Game, registryMod };
 }
 
 function construct(Game, seed) {
@@ -334,6 +621,15 @@ function contractSurface(path) {
 
 const LIMIT = 120;
 const VERBOSE = process.argv.includes('--verbose');
+// --warn-registry: downgrade checkRegistryCoverage() from hard-fail to a
+// printed-but-non-fatal warning. Plan §6 edit 5 / §7 Step 4: this exists for
+// the triage pass itself (Step 4) so the list can be inspected without the
+// harness refusing to finish; once the coverage list is fully triaged (every
+// live field either registered or in UNREGISTERED_ALLOWLIST), the default
+// (no flag) hard-fails, matching checkRegistryPathsResolve's day-one hard
+// failure and the repo's check:data convention ("pre-existing debt is
+// allowlisted warns; NEW violations fail").
+const WARN_REGISTRY = process.argv.includes('--warn-registry');
 
 // Terminal-state baselines: each reset path lands the game somewhere specific,
 // so the reference instance is driven to THAT state on a virgin run — otherwise
@@ -345,7 +641,8 @@ const BASELINES = {
 
 async function main() {
   console.log('Bootstrapping Game via Vite SSR...');
-  const Game = await loadGameClass();
+  const { Game, registryMod } = await loadGameAndRegistry();
+  const { RESET_REGISTRY, registeredPaths } = registryMod;
 
   const results = [];
   for (const [resetName, baselineDrive] of Object.entries(BASELINES)) {
@@ -382,9 +679,54 @@ async function main() {
   }
 
   const failing = results.filter(r => r.count > 0);
-  console.log('\nSummary:', results.map(r => `${r.resetName}: ${r.count}`).join(' | '));
-  if (failing.length) {
-    console.error('\nReset drift found. Fix the missed clears (or justify an IGNORE entry in tools/check-reset-parity.mjs).');
+
+  // ── Registry cross-checks — Step 4 (plan §6) ──────────────────────────────
+  // Run once against a fresh instance driven to the same REST baseline used
+  // above for _resetRunToRest, so `game.player` exists and every `player.*`
+  // registry path / candidate is reachable.
+  seedAll(1337); unseed();
+  const regInstance = construct(Game, 20260824);
+  regInstance.enterRestState();
+  tick(regInstance, 20);
+
+  const pathFailures = checkRegistryPathsResolve(regInstance, RESET_REGISTRY);
+  console.log(`\n=== registry paths resolve — ${pathFailures.length} broken entr${pathFailures.length === 1 ? 'y' : 'ies'} ===`);
+  for (const { path, reason } of pathFailures) {
+    console.log(`  ${path}\n      ${reason}`);
+  }
+  const pathsOk = pathFailures.length === 0;
+
+  const registered = registeredPaths();
+  const unregistered = checkRegistryCoverage(regInstance, registered);
+  console.log(`\n=== registry coverage — ${unregistered.length} unregistered live field(s), ${UNREGISTERED_ALLOWLIST.length} allowlisted ===`);
+  for (const path of unregistered.slice(0, LIMIT)) console.log(`  · ${path}`);
+  if (unregistered.length > LIMIT) console.log(`  ...and ${unregistered.length - LIMIT} more`);
+  const coverageOk = unregistered.length === 0;
+
+  console.log(
+    '\nSummary:',
+    results.map(r => `${r.resetName}: ${r.count}`).join(' | '),
+    `| registryPathsResolve: ${pathsOk ? 'ok' : `${pathFailures.length} broken`}`,
+    `| registryCoverage: ${coverageOk ? 'ok' : `${unregistered.length} unregistered${WARN_REGISTRY ? ' (warn)' : ''}`}`
+  );
+
+  // checkRegistryPathsResolve is a hard failure unconditionally (task brief:
+  // "not a soft warning" — it can only fire on an actual registry bug).
+  if (!pathsOk) {
+    console.error('\nRegistry path(s) do not resolve against a live Game/Player instance. Fix the stale/typo\'d path(s) in src/game/resetRegistry.js.');
+  }
+  // checkRegistryCoverage hard-fails by default (plan §6 edit 5); --warn-registry
+  // downgrades it to informational for the Step 4 triage pass only.
+  if (!coverageOk && !WARN_REGISTRY) {
+    console.error('\nUnregistered live field(s) found. Add a resetRegistry.js entry, or a reasoned UNREGISTERED_ALLOWLIST entry in tools/check-reset-parity.mjs (or pass --warn-registry to triage without failing).');
+  } else if (!coverageOk && WARN_REGISTRY) {
+    console.warn('\n[--warn-registry] Unregistered live field(s) found (see above) — not failing the build while this flag is set.');
+  }
+
+  if (failing.length || !pathsOk || (!coverageOk && !WARN_REGISTRY)) {
+    if (failing.length) {
+      console.error('\nReset drift found. Fix the missed clears (or justify an IGNORE entry in tools/check-reset-parity.mjs).');
+    }
     process.exit(1);
   }
   console.log('Reset parity ok.');
