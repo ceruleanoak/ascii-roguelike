@@ -9,4 +9,3 @@ if an exit transforms into a "B" (L14/L9) exit, destroy any barrier in its way
 K enemy (in green zone) weapon not rendering; fisherman blade cut (/ char, same as sword attack), not successfully rendering in hut.
 wet enemies should zero out all burning pips, currently bugged, shows a ton of red pips for one frame
 snow is not melting when hit with fire sword
-coral crown now working for water and deep water tiles outside of blue zone
