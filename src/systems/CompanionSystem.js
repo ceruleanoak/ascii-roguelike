@@ -339,9 +339,10 @@ export class CompanionSystem {
   }
 
   // Per-frame driver for the golem roster — same shape as updateTamedRats,
-  // minus the ingredient-collection side effect (golems don't scavenge loot)
-  // and minus permaFlee handling (golems never flee). Handles both combat
-  // ('chase'/'idle') and Mud Golem's 'dead'→resurrect countdown.
+  // minus permaFlee handling (golems never flee). Handles both combat
+  // ('chase'/'idle') and Mud Golem's 'dead'→resurrect countdown, plus
+  // feature-inbox's ground-weapon pickup (golems don't scavenge ingredients,
+  // only melee weapons — see GolemCompanion.findBetterGroundWeapon).
   updateGolems(deltaTime) {
     const game = this.game;
     if (!game.golems || game.golems.length === 0) return;
@@ -349,6 +350,15 @@ export class CompanionSystem {
     const siblings = game.golems;
     for (let i = game.golems.length - 1; i >= 0; i--) {
       const golem = game.golems[i];
+      if (golem.state !== 'dead' && game.items?.length) {
+        const weapon = golem.findBetterGroundWeapon(game.items);
+        if (weapon) {
+          golem.equipWeapon(weapon);
+          const idx = game.items.indexOf(weapon);
+          if (idx !== -1) game.items.splice(idx, 1);
+          game.physicsSystem.removeEntity(weapon);
+        }
+      }
       const result = golem.update(deltaTime, enemies, game.player, siblings);
       if (result?.attacked) {
         const victim = result.attacked;

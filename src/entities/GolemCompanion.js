@@ -1,6 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { GOLEM_TYPES } from '../data/golems.js';
 import { getElementalModifierFor } from './elementalAffinity.js';
+import { WEAPON_TYPES } from '../data/items.js';
 
 /**
  * GolemCompanion — summoned at the REST Combine Station (ingredient + Mana,
@@ -27,6 +28,8 @@ import { getElementalModifierFor } from './elementalAffinity.js';
  * (per CLAUDE.md's "printable ASCII for enemies/background objects"
  * convention — distinct from the Unicode-symbol rule that governs the
  * recipe-result sentinel chars in items.js); types are told apart by color.
+ * equipWeapon() (feature-inbox: ground-weapon pickup) overrides the char to
+ * the equipped weapon's glyph once armed — color still carries golem type.
  */
 
 const RENDER_CHAR = 'g';
@@ -42,6 +45,13 @@ const ATTACK_COOLDOWN = 1.4;
 const ATTACK_WINDUP = 0.35;
 const ATTACK_DAMAGE = 1;
 const AGGRO_RANGE = GRID.CELL_SIZE * 9;
+
+// feature-inbox: "golems should equip weapons found on the ground" —
+// simplified subset (no inventory, no preferred-item list, no use-cooldown;
+// see Enemy.js's itemUsage/evaluateItemPickup for the fuller system this
+// deliberately does not port). A golem only benefits from MELEE weapons
+// since its attack is a fixed-range windup/strike with no ranged branch.
+const WEAPON_PICKUP_RANGE = GRID.CELL_SIZE * 3;
 
 const FOLLOW_RADIUS = GRID.CELL_SIZE * 3;
 const FOLLOW_SPEED_MULT = 0.75;
@@ -67,6 +77,14 @@ export class GolemCompanion {
     this.hp = def.maxHp;
     this.invulnerabilityTimer = 0;
     this.attackTimer = 0;
+
+    // Instance-level combat stats, defaulted from the flat golem baseline —
+    // overwritten by equipWeapon() when a better ground weapon is found.
+    // Every golem type starts identical here; GOLEM_TYPES carries no
+    // per-type damage/range (see class comment).
+    this.attackDamage = ATTACK_DAMAGE;
+    this.attackRange = ATTACK_RANGE;
+    this.equippedWeaponChar = null;
 
     this.state = 'idle';
     this.target = null;
@@ -310,7 +328,7 @@ export class GolemCompanion {
     const dirX = dx / dist;
     const dirY = dy / dist;
 
-    if (dist > ATTACK_RANGE) {
+    if (dist > this.attackRange) {
       this.targetVelocity.vx = dirX * SPEED;
       this.targetVelocity.vy = dirY * SPEED;
     } else {
@@ -345,13 +363,59 @@ export class GolemCompanion {
     this.attackTimer = ATTACK_COOLDOWN;
     const t = this.target;
     const dist = Math.hypot(t.position.x - this.position.x, t.position.y - this.position.y);
-    if (dist <= ATTACK_RANGE && typeof t.takeDamage === 'function') {
-      t.takeDamage(ATTACK_DAMAGE);
+    if (dist <= this.attackRange && typeof t.takeDamage === 'function') {
+      t.takeDamage(this.attackDamage);
       // Magma Golem: "can burn enemies" (bug-inbox #10, user-specified design).
       if (this.def.burnOnHit) t.applyStatusEffect?.('burn', this.def.burnOnHit);
-      return { attacked: t, damage: ATTACK_DAMAGE };
+      return { attacked: t, damage: this.attackDamage };
     }
     return null;
+  }
+
+  // ─── Weapon pickup (feature-inbox, simplified subset) ──────────────────
+
+  // Same one-line comparator as Enemy._weaponPower — melee-only here since
+  // the golem has no ranged attack branch to hand a gun/bow/wand to.
+  _weaponPower(item) {
+    if (!item || item.data?.type !== 'WEAPON' || item.data.weaponType !== WEAPON_TYPES.MELEE) return -1;
+    return item.data.damage ?? 0;
+  }
+
+  // Scans a ground-item array (game.items) for the strongest melee weapon
+  // within WEAPON_PICKUP_RANGE that beats this golem's current damage.
+  // Read-only — caller (CompanionSystem.updateGolems) owns removing the
+  // winning item from game.items/physicsSystem, mirroring how Enemy.js
+  // leaves that removal to its own call site.
+  findBetterGroundWeapon(items) {
+    if (!items || items.length === 0) return null;
+    const currentPower = this.attackDamage;
+    let best = null;
+    let bestPower = currentPower;
+    for (const item of items) {
+      if (!item || item.consumed) continue;
+      if ((item.plane ?? 0) !== this.plane) continue;
+      const power = this._weaponPower(item);
+      if (power <= bestPower) continue;
+      const dx = item.position.x - this.position.x;
+      const dy = item.position.y - this.position.y;
+      if (dx * dx + dy * dy > WEAPON_PICKUP_RANGE * WEAPON_PICKUP_RANGE) continue;
+      best = item;
+      bestPower = power;
+    }
+    return best;
+  }
+
+  // Simplified "equip": bump damage/range to the weapon's stats and swap
+  // the render char to it, so a weapon-carrying golem reads differently at
+  // a glance — no inventory slot, no use-cooldown, no unequip.
+  equipWeapon(item) {
+    this.attackDamage = item.data.damage ?? this.attackDamage;
+    // Not every melee entry carries `range` (resolveWeaponDefaults only
+    // fills it via SUBTYPE_DEFAULTS for some subtypes) — keep the current
+    // reach rather than collapsing it to 0 when the field is absent.
+    this.attackRange = item.data.range ?? this.attackRange;
+    this.equippedWeaponChar = item.char;
+    this.char = item.char;
   }
 
   // bug-inbox #10: "Mud golems should be destroyed by water and lava. Magma
