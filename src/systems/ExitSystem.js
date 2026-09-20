@@ -24,6 +24,12 @@ const ALT_EXIT_CHANCE_NON_GREEN = 0.5;
 // will never be able to walk through.
 const EXIT_RULE_SLOT = { disableNorth: 0, disableEast: 1, disableWest: 2 };
 
+// Reverse lookup: which zone does an exit color represent? Colors are unique
+// per zone in ZONE_COLORS, so this is safe both ways.
+function zoneForColor(color) {
+  return Object.keys(ZONE_COLORS).find(z => ZONE_COLORS[z] === color) ?? null;
+}
+
 function closedSlotsForLetter(currentLetter) {
   const rules = currentLetter ? LETTER_TEMPLATES[currentLetter]?.exitRules : null;
   if (!rules) return new Set();
@@ -397,20 +403,33 @@ export class ExitSystem {
     // off silently breaks the trail with no way to tell it happened.
     const altIndex = randomOpenSlot(closedSlots);
 
-    if (progressionColor && progressionColor !== zone.exitColor) {
+    // A letter's zoneBoosts of 0 is a hard gate against that DESTINATION zone
+    // (same rule getLetterWeightsForZone enforces at selection time — resolved
+    // bug #103), but the letter for this slot was picked against the CURRENT
+    // zone's weights, before any of this alt-color logic ever runs. Left
+    // unchecked here, a letter hard-gated against e.g. cyan could still get
+    // dressed in cyan's color whenever the current zone's alt-zone pool offers
+    // it (green always includes cyan) — reaching the exact destination its own
+    // gate says it never should. Filter the alt-zone candidate by the slot's
+    // letter before using it.
+    const altLetterBoosts = EXIT_LETTERS[letters[altIndex]]?.zoneBoosts;
+    const altZoneGated = z => altLetterBoosts?.[z] === 0;
+
+    if (progressionColor && progressionColor !== zone.exitColor &&
+        !altZoneGated(zoneForColor(progressionColor))) {
       // Mid-progression: use progression color
       colors[altIndex] = progressionColor;
     } else if (zoneType === 'green' || Math.random() < ALT_EXIT_CHANCE_NON_GREEN) {
       // No progression: use random alternative, excluding zones whose boss is defeated.
       // Green always offers one; other zones only sometimes (gate above).
       const available = zone.alternativeZones.filter(
-        z => !this.zoneSystem.isZoneDefeated(z)
+        z => !this.zoneSystem.isZoneDefeated(z) && !altZoneGated(z)
       );
       if (available.length > 0) {
         const altZone = available[Math.floor(Math.random() * available.length)];
         colors[altIndex] = ZONE_COLORS[altZone];
       }
-      // If all alternativeZones are defeated, all exits show the current zone color (no alt)
+      // If all alternativeZones are defeated (or gated out for this letter), all exits show the current zone color (no alt)
     }
 
     return colors;

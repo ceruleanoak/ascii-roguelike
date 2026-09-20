@@ -531,7 +531,7 @@ export class ExploreRenderer {
     }
 
     // Cyan Ascent: Frozen Maw shadow under the ice (visual only, fades downward)
-    renderMawShadow(this.renderer.ctx, game);
+    renderMawShadow(this.renderer.fgCtx, game);
 
     // Draw mana gems on foreground with pulsing glow (boss room)
     drawManaGems(this.renderer, game);
