@@ -4,6 +4,7 @@ import { isIngredient, isItem, generateEnemyDrops, resolvePickupSfx } from '../d
 import { planeOf } from './PlaneSystem.js';
 import { GRID } from '../game/GameConfig.js';
 import { STARTER_POTION_CHARS, starterPotionIngredientsFor } from '../data/alchemy.js';
+import { INGREDIENT_STACK_CAP } from './ingredientPile.js';
 
 export class LootSystem {
   constructor(game) {
@@ -42,7 +43,14 @@ export class LootSystem {
           other.velocity.vy -= ny * force * deltaTime;
         }
       }
-      if (game.physicsSystem.applyAttraction(ingredient, player)) {
+      // Pile-capped for this char (coins never cap — they live in the
+      // wallet, not the pile): stop pulling it toward the player instead of
+      // dragging it in only to have collectIngredient bounce it right back.
+      const capped = ingredient.char !== 'c'
+        && game.countIngredient(ingredient.char) >= INGREDIENT_STACK_CAP;
+      if (capped) {
+        ingredient.acceleration = { ax: 0, ay: 0 };
+      } else if (game.physicsSystem.applyAttraction(ingredient, player)) {
         this.collectIngredient(ingredient);
       }
     }

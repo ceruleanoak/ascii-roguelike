@@ -6,3 +6,11 @@ Quick-capture list for feature/content ideas noticed during play/dev, before the
 
 Just one idea per line below, plain text.
 If you attack the Errand NPC, he becomes a permanent enemies, attacks with a dagger, inflicts 4 damage, moves very quickly, has a dodge roll and will almost always successfully avoid player attacks.
+after defeating goo dragon (L15), exit letters now immediately take you to the related zone color and only one green exit is offered when in green zone (universal rule for completed zones). This will trigger new "completed" music for the completed green zone, not ready yet, so use existing song.
+halve time for cyan zone hunt to start
+rework shields into a new armor item, not consumables, preventing stacking. Possibly changing the # of charges into a % likelihood to block. 
+crow in L1 room always holds pearl. Change it to hold either pearl or onyx
+gray out "brew" option in alchemist lab with no bottles of water equipped. Gray out "infuse" with no start potions equipped
+increase # of centipedes in red B room to 2
+Use same fireplace menu for ore as with sticks, instead of straight to inventory similar experience where 30% chance of metal, rest chance of "slag" (new ingredient)
+Slag golem, new NPC, have 2 hp, combine slag with mana. Can have up to 5 golems at once. They do basic melee attacks. Mud golems have 1 hp with resurrect. Rock golems have 1 hp. Metal golems have 5 hp. To make a golem combine the related ingredient with mana.
