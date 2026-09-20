@@ -31,6 +31,10 @@ export const GOLEM_TYPES = {
     // Golem dying mid-fight is a real (if temporary) loss of the body, not a
     // free unkillable meat shield.
     resurrectCooldown: 10,
+    // bug-inbox: "Mud golems should be destroyed by water and lava." A body
+    // made of mud dissolves/bakes on contact — this bypasses the normal
+    // resurrect path entirely (see GolemCompanion._checkEnvironmentalReaction).
+    destroyedByWaterAndLava: true,
   },
   rock: {
     name: 'Rock Golem',
@@ -47,6 +51,28 @@ export const GOLEM_TYPES = {
     maxHp: 5,
     color: '#aaaaaa',      // matches Metal's own item color
     resurrect: false,
+  },
+  magma: {
+    name: 'Magma Golem',
+    resultChar: '♗',
+    ingredientChar: '◆',   // Bottle of Magma
+    maxHp: 3,
+    color: '#ff5522',
+    resurrect: false,
+    // A molten body slowly re-melts damage shut.
+    regen: 0.5, // hp/sec
+    // Elemental affinity (bug-inbox "targeted subset": reuse
+    // elementalAffinity.js as-is rather than porting full status-effect
+    // parity). Fire-affine — immune to burn, takes bonus from freeze.
+    affinities: ['fire'],
+    elementalAffinity: {
+      weakness: { freeze: 1.5 },
+    },
+    // Ignites whatever it lands a hit on.
+    burnOnHit: 2.0, // seconds of burn
+    // bug-inbox: "should turn into rock golems when touching water" — the
+    // molten body quenches and cools solid instead of dying outright.
+    convertsToRockInWater: true,
   },
 };
 

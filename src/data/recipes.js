@@ -19,6 +19,7 @@ export const RECIPES = [
   { left: '◐', right: '𝑚', result: '♞', name: 'Mud Golem' },    // Bottle of Mud + Mana
   { left: '0', right: '𝑚', result: '♜', name: 'Rock Golem' },   // Rock + Mana
   { left: 'M', right: '𝑚', result: '♚', name: 'Metal Golem' },  // Metal + Mana
+  { left: '◆', right: '𝑚', result: '♗', name: 'Magma Golem' }, // Bottle of Magma + Mana
 
   // === ROCK RECIPES ===
   { left: '0', right: '0', result: '⊿', name: 'Axe head' },       // Rock + Rock = Axe head

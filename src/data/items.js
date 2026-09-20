@@ -2619,7 +2619,8 @@ export const ITEMS = {
   '♟': { char: '♟', name: 'Slag Golem', type: ITEM_TYPES.GOLEM, color: '#5a4a42' },
   '♞': { char: '♞', name: 'Mud Golem', type: ITEM_TYPES.GOLEM, color: '#664422' },
   '♜': { char: '♜', name: 'Rock Golem', type: ITEM_TYPES.GOLEM, color: '#888888' },
-  '♚': { char: '♚', name: 'Metal Golem', type: ITEM_TYPES.GOLEM, color: '#aaaaaa' }
+  '♚': { char: '♚', name: 'Metal Golem', type: ITEM_TYPES.GOLEM, color: '#aaaaaa' },
+  '♗': { char: '♗', name: 'Magma Golem', type: ITEM_TYPES.GOLEM, color: '#ff5522' }
 };
 
 // Tier pools for the fountain upgrade and duplicate-upgrade crafting, derived

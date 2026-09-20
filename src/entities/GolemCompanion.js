@@ -1,5 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { GOLEM_TYPES } from '../data/golems.js';
+import { getElementalModifierFor } from './elementalAffinity.js';
 
 /**
  * GolemCompanion — summoned at the REST Combine Station (ingredient + Mana,
@@ -10,12 +11,17 @@ import { GOLEM_TYPES } from '../data/golems.js';
  *
  * State machine (deliberately simpler than NPCRat — no flee/permaFlee; the
  * inbox description is "basic melee attacks" with no retreat behavior):
- *   'idle'  — no target; drifts toward player to stay close
- *   'chase' — pursuing a hostile enemy, attacks in range
- *   'dead'  — Mud Golem only: body destroyed, resurrectTimer counting down
- *             to an indefinite revive (see GOLEM_TYPES.mud.resurrectCooldown).
- *             Every other type is simply removed from game.golems on death —
- *             see CompanionSystem.updateGolems.
+ *   'idle'   — no target; drifts toward player to stay close
+ *   'chase'  — pursuing a hostile enemy, closes to attack range
+ *   'windup' — in range, telegraphing a strike (bug-inbox: golems attacked
+ *              instantly with no tell); holds position, target frozen, damage
+ *              lands when windupTimer expires — same shape as Enemy's own
+ *              windup/attack split (WindupTelegraphMechanic), scaled down to
+ *              one flat duration since golems don't carry per-weapon timing.
+ *   'dead'   — Mud Golem only: body destroyed, resurrectTimer counting down
+ *              to an indefinite revive (see GOLEM_TYPES.mud.resurrectCooldown).
+ *              Every other type is simply removed from game.golems on death —
+ *              see CompanionSystem.updateGolems.
  *
  * Render char is a single printable-ASCII glyph shared by all golem types
  * (per CLAUDE.md's "printable ASCII for enemies/background objects"
@@ -27,14 +33,18 @@ const RENDER_CHAR = 'g';
 
 const INVULNERABILITY_DURATION = 0.5;
 
-const SPEED = 90;
+// bug-inbox: golems were "much too fast, should not move much faster when
+// aggro" — chase speed dropped 90 → 70 and the idle→chase ratio narrowed
+// (0.6x → 0.75x) so aggro reads as a lean into the chase, not a burst.
+const SPEED = 70;
 const ATTACK_RANGE = GRID.CELL_SIZE * 1.75;
 const ATTACK_COOLDOWN = 1.4;
+const ATTACK_WINDUP = 0.35;
 const ATTACK_DAMAGE = 1;
 const AGGRO_RANGE = GRID.CELL_SIZE * 9;
 
 const FOLLOW_RADIUS = GRID.CELL_SIZE * 3;
-const FOLLOW_SPEED_MULT = 0.6;
+const FOLLOW_SPEED_MULT = 0.75;
 
 export class GolemCompanion {
   constructor(type, x, y) {
@@ -60,6 +70,8 @@ export class GolemCompanion {
 
     this.state = 'idle';
     this.target = null;
+    this.windupTimer = 0;
+    this.windupDuration = ATTACK_WINDUP;
 
     // Mud Golem only — see class comment.
     this.resurrectTimer = 0;
@@ -105,6 +117,7 @@ export class GolemCompanion {
     this.targetVelocity.vy = 0;
     this.invulnerabilityTimer = 0;
     this.attackTimer = 0;
+    this.windupTimer = 0;
     if (this.state !== 'dead') {
       this.hp = this.maxHp;
       this.state = 'idle';
@@ -144,18 +157,55 @@ export class GolemCompanion {
     }
     if (this.attackTimer > 0) this.attackTimer -= deltaTime;
 
-    this.target = this._findNearestEnemy(enemies);
+    // Environmental reactions (bug-inbox #10, "targeted subset now" scope) —
+    // checked every non-dead frame regardless of combat state, since a golem
+    // can wander into water/lava with no target at all.
+    const envResult = this._checkEnvironmentalReaction();
+    if (envResult) return envResult;
+
+    if (this.def.regen && this.hp < this.maxHp) {
+      this.hp = Math.min(this.maxHp, this.hp + this.def.regen * deltaTime);
+    }
+
+    // Target is frozen through a windup — re-picking mid-swing would let the
+    // golem retarget onto something closer without ever finishing the tell.
+    if (this.state !== 'windup') {
+      this.target = this._findNearestEnemy(enemies);
+    } else if (!this.target || this.target.hp <= 0 || this.target.isDying) {
+      this.windupTimer = 0;
+      this.target = null;
+    }
 
     let result = null;
     if (this.target) {
-      this.state = 'chase';
-      result = this._chaseAndAttack(deltaTime);
+      if (this.state === 'windup') {
+        result = this._continueWindup(deltaTime);
+      } else {
+        this.state = 'chase';
+        result = this._chaseAndAttack(deltaTime);
+      }
     } else {
       this.state = 'idle';
       this._driftTowardPlayer(deltaTime, player);
     }
     this._applySeparation(siblings);
     return result;
+  }
+
+  // Render-path compatibility shim, mirrors Enemy's WindupTelegraphMechanic
+  // surface so ExploreRenderer-style consumers can read a golem's windup the
+  // same way they read an enemy's: guaranteed-white in the back half, plain
+  // red '!' the rest of the way (golems carry no equipped weapon to show).
+  isWindingUp() { return this.state === 'windup' && this.windupTimer > 0; }
+
+  getWindupFlashColor() {
+    if (!this.isWindingUp()) return null;
+    return this.windupTimer <= this.windupDuration / 2 ? '#ffffff' : null;
+  }
+
+  getWindupIndicator() {
+    if (!this.isWindingUp()) return null;
+    return { char: '!', color: '#ff0000', offsetY: -GRID.CELL_SIZE };
   }
 
   // Boids-style separation — same shape as NPCRat._applySeparation.
@@ -192,9 +242,19 @@ export class GolemCompanion {
   // out. On death: Mud Golem drops into 'dead' (resurrect countdown starts);
   // every other type signals { died: true } so CompanionSystem removes it
   // from game.golems.
-  takeDamage(amount, attacker = null) {
+  //
+  // `onHit` (bug-inbox #10, "targeted subset now" scope) is the same effect
+  // key Enemy attacks already carry (e.g. 'burn') — reuses
+  // elementalAffinity.js as-is rather than porting full status-effect
+  // parity. A type with no affinities/elementalAffinity entry is unaffected
+  // (getElementalModifierFor returns 1.0).
+  takeDamage(amount, attacker = null, onHit = null) {
     if (this.invulnerabilityTimer > 0) return false;
     if (this.state === 'dead') return false;
+    if (onHit) {
+      const modifier = getElementalModifierFor(this.def.elementalAffinity, this.def.affinities, onHit);
+      amount = Math.max(0, Math.round(amount * modifier));
+    }
     this.hp -= amount;
     this.invulnerabilityTimer = INVULNERABILITY_DURATION;
     this.game?.audioSystem?.playSFX?.('enemy_hit');
@@ -257,14 +317,107 @@ export class GolemCompanion {
       this.targetVelocity.vx = 0;
       this.targetVelocity.vy = 0;
       if (this.attackTimer <= 0 && typeof t.takeDamage === 'function') {
-        t.takeDamage(ATTACK_DAMAGE);
-        this.attackTimer = ATTACK_COOLDOWN;
-        return { attacked: t, damage: ATTACK_DAMAGE };
+        this.state = 'windup';
+        this.windupTimer = ATTACK_WINDUP;
+        this.windupDuration = ATTACK_WINDUP;
       }
     }
     this.velocity.vx = this.targetVelocity.vx;
     this.velocity.vy = this.targetVelocity.vy;
     return null;
+  }
+
+  // Holds position while the windup telegraph counts down, then lands the
+  // hit — mirrors createAttack()/resolveEnemyAttack's windup→strike split on
+  // Enemy, collapsed to one step since the golem swing has no travelling
+  // hitbox of its own. A target that steps back out of range during the
+  // windup simply avoids the swing (no damage), same as dodging any other
+  // telegraphed attack; the cooldown still starts so the golem can't retry instantly.
+  _continueWindup(deltaTime) {
+    this.velocity.vx = 0;
+    this.velocity.vy = 0;
+    this.targetVelocity.vx = 0;
+    this.targetVelocity.vy = 0;
+    this.windupTimer -= deltaTime;
+    if (this.windupTimer > 0) return null;
+    this.windupTimer = 0;
+    this.state = 'chase';
+    this.attackTimer = ATTACK_COOLDOWN;
+    const t = this.target;
+    const dist = Math.hypot(t.position.x - this.position.x, t.position.y - this.position.y);
+    if (dist <= ATTACK_RANGE && typeof t.takeDamage === 'function') {
+      t.takeDamage(ATTACK_DAMAGE);
+      // Magma Golem: "can burn enemies" (bug-inbox #10, user-specified design).
+      if (this.def.burnOnHit) t.applyStatusEffect?.('burn', this.def.burnOnHit);
+      return { attacked: t, damage: ATTACK_DAMAGE };
+    }
+    return null;
+  }
+
+  // bug-inbox #10: "Mud golems should be destroyed by water and lava. Magma
+  // golems ... should turn into rock golems when touching water." Checked
+  // every frame the golem is alive. Mirrors Enemy._isOnWater()'s
+  // backgroundObjects/grid-cell check, extended with an isLava() variant.
+  // Returns a death-shaped result (same as takeDamage's die branch) when the
+  // reaction kills the golem this frame, else null.
+  _checkEnvironmentalReaction() {
+    if (this.def.destroyedByWaterAndLava && (this._isOnWater() || this._isOnLava())) {
+      this.hp = 0;
+      this.invulnerabilityTimer = 0;
+      if (this.def.resurrect) {
+        this.state = 'dead';
+        this.resurrectTimer = this.def.resurrectCooldown;
+        this.target = null;
+        return { damaged: true, died: true, resurrecting: true };
+      }
+      return { damaged: true, died: true };
+    }
+    if (this.def.convertsToRockInWater && this._isOnWater()) {
+      this._convertToRockGolem();
+    }
+    return null;
+  }
+
+  _isOnWater() {
+    if (!this.backgroundObjects) return false; // layer-guard-ok
+    const ex = Math.floor(this.position.x / GRID.CELL_SIZE);
+    const ey = Math.floor(this.position.y / GRID.CELL_SIZE);
+    for (const obj of this.backgroundObjects) { // layer-guard-ok
+      if (!obj.isWater || !obj.isWater()) continue;
+      if (Math.floor(obj.position.x / GRID.CELL_SIZE) === ex &&
+          Math.floor(obj.position.y / GRID.CELL_SIZE) === ey) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  _isOnLava() {
+    if (!this.backgroundObjects) return false; // layer-guard-ok
+    const ex = Math.floor(this.position.x / GRID.CELL_SIZE);
+    const ey = Math.floor(this.position.y / GRID.CELL_SIZE);
+    for (const obj of this.backgroundObjects) { // layer-guard-ok
+      if (!obj.isLava || !obj.isLava()) continue;
+      if (Math.floor(obj.position.x / GRID.CELL_SIZE) === ex &&
+          Math.floor(obj.position.y / GRID.CELL_SIZE) === ey) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Magma Golem quenching to Rock Golem — mutates type/def/hp in place
+  // (never removed from game.golems, unlike a death) since this is a
+  // transformation, not a kill.
+  _convertToRockGolem() {
+    const rockDef = GOLEM_TYPES.rock;
+    this.golemType = 'rock';
+    this.def = rockDef;
+    this.color = rockDef.color;
+    this.baseColor = rockDef.color;
+    this.maxHp = rockDef.maxHp;
+    this.hp = Math.min(this.hp, rockDef.maxHp) || rockDef.maxHp;
+    this.game?.audioSystem?.playSFX?.('enemy_hit');
   }
 
   _driftTowardPlayer(deltaTime, player) {

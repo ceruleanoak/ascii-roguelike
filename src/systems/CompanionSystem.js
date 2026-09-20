@@ -394,7 +394,7 @@ export class CompanionSystem {
         const dy = p.position.y - cy;
         const r = GRID.CELL_SIZE * 0.6 + Math.min(golem.width, golem.height) / 2;
         if (dx * dx + dy * dy < r * r) {
-          result = golem.takeDamage(p.damage || 1, p.owner);
+          result = golem.takeDamage(p.damage || 1, p.owner, p.onHit);
           projs.splice(i, 1);
           cs.createDamageNumber?.(p.damage || 1, golem.position.x, golem.position.y, golem.color);
           break;
@@ -416,7 +416,7 @@ export class CompanionSystem {
             ay < golem.position.y + golem.height && ay + ah > golem.position.y
           ) {
             m.hasHit = true;
-            result = golem.takeDamage(m.damage || 1, m.owner);
+            result = golem.takeDamage(m.damage || 1, m.owner, m.onHit);
             cs.createDamageNumber?.(m.damage || 1, golem.position.x, golem.position.y, golem.color);
             break;
           }

@@ -34,7 +34,7 @@ export function drawGolems(renderer, game, shouldRenderEntity) {
   for (const golem of game.golems) {
     if (!shouldRenderEntity(golem, game.player, game.currentRoom)) continue;
     if (!golem.shouldRenderVisible()) continue;
-    const flash = golem.getIframeFlashColor?.();
+    const flash = golem.getIframeFlashColor?.() ?? golem.getWindupFlashColor?.();
     const color = flash !== null && flash !== undefined ? flash : golem.color;
     renderer.drawEntity(
       golem.position.x + GRID.CELL_SIZE / 2,
@@ -42,5 +42,16 @@ export function drawGolems(renderer, game, shouldRenderEntity) {
       golem.char,
       color
     );
+    // Windup telegraph ('!' above the head) — bug-inbox: golems attacked
+    // with no tell. Mirrors ExploreRenderer._drawHeadIndicator for enemies.
+    const indicator = golem.getWindupIndicator?.();
+    if (indicator) {
+      renderer.drawEntity(
+        golem.position.x + GRID.CELL_SIZE / 2 + (indicator.offsetX || 0),
+        golem.position.y + GRID.CELL_SIZE / 2 + indicator.offsetY,
+        indicator.char,
+        indicator.color
+      );
+    }
   }
 }
