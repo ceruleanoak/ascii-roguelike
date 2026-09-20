@@ -11,17 +11,18 @@ const CENTIPEDE_MIN_SPEED = 80;          // px/s floor at 14 segments (doubled i
 const CENTIPEDE_CONTACT_DAMAGE = 3;
 const CENTIPEDE_CONTACT_COOLDOWN = 0.5; // seconds between contact-damage ticks
 const CENTIPEDE_CONTACT_HITBOX_RATIO = 0.625; // fraction of full footprint (0.5 base, +25% per playtest feedback)
-// Post-split "white" state: the struck centipede's own surviving segments
-// (i.e. the two halves the hit splits it into — never the segments of any
-// other chain in the arena) blink white and are immune to contact with the
-// player for this long. Also blocks further takeDamage() hits outright
-// (see CentipedeUnit.takeDamage) —
-// bullets are the one exception, since that block lives in takeDamage(), not
-// here, and this system never touches it. 2 real seconds. Enemy.update() (and
-// thus CentipedeUnit's invulnerabilityTimer decrement) runs on a deltaTime
-// already scaled by PHYSICS.ENEMY_TIMER_RATE (bug #92's canonical single-tick
-// fix), so the stored timer must be pre-scaled by the same factor to actually
-// cover 2 real seconds' worth of decrement.
+// Post-split "white" state: just the two units adjacent to a fresh split
+// point (the new tail of the surviving front half, the new head of the
+// promoted back half — see _grantSplitInvulnerability, bug #305) blink white
+// and are immune to contact with the player for this long. Also blocks
+// further takeDamage() hits outright on those two units (see
+// CentipedeUnit.takeDamage) — bullets are the one exception, since that
+// block lives in takeDamage(), not here, and this system never touches it.
+// 2 real seconds. Enemy.update() (and thus CentipedeUnit's
+// invulnerabilityTimer decrement) runs on a deltaTime already scaled by
+// PHYSICS.ENEMY_TIMER_RATE (bug #92's canonical single-tick fix), so the
+// stored timer must be pre-scaled by the same factor to actually cover 2
+// real seconds' worth of decrement.
 const CENTIPEDE_WHITE_STATE_DURATION = 2 * PHYSICS.ENEMY_TIMER_RATE;
 // A narrow channel between two parallel walls can trap a chain in an
 // infinite reversal loop: reversing flips both facing and turnBias, and
@@ -320,14 +321,18 @@ export class CentipedeSystem {
 
   // ── Hit / split ────────────────────────────────────────────────────────
   // Called from CentipedeUnit.takeDamage(). The struck unit converts to a
-  // Fractured Rock and the rest of ITS OWN chain — the two halves about to
-  // split off it — gets a brief invulnerability window. Chains the player
-  // didn't hit are untouched: each centipede is damaged independently, so a
-  // hit on one must never shield the others. The hit chain splits
-  // in two around the struck unit: the surviving front half keeps its head
-  // and facing untouched, while the back half's first unit promotes to a new
-  // head and reverses direction — including the bare-head terminal case,
-  // which simply yields no new chain and can end the fight.
+  // Fractured Rock, and only the two units immediately adjacent to the split
+  // point — the new tail of the surviving front half and the new head of the
+  // promoted back half — get a brief invulnerability window (bug #305: the
+  // old behavior granted it to the ENTIRE remaining chain, which made body
+  // segments near-permanently immune to contact damage since they're struck
+  // far more often than the head). Chains the player didn't hit are
+  // untouched: each centipede is damaged independently, so a hit on one must
+  // never shield the others. The hit chain splits in two around the struck
+  // unit: the surviving front half keeps its head and facing untouched,
+  // while the back half's first unit promotes to a new head and reverses
+  // direction — including the bare-head terminal case, which simply yields
+  // no new chain and can end the fight.
   handleUnitHit(unit, attackId) {
     const room = this.game.activeRoom;
     if (!room?.centipedeChains) return false;
@@ -336,7 +341,7 @@ export class CentipedeSystem {
     const chain = room.centipedeChains[chainIndex];
     const index = chain.units.indexOf(unit);
 
-    this._grantSplitInvulnerability(chain, unit);
+    this._grantSplitInvulnerability(chain, index);
     this._convertToRock(unit, room);
     this._removeUnitFromRoom(room, unit);
 
@@ -385,10 +390,21 @@ export class CentipedeSystem {
   // the front half, the struck unit, and the back half. Everything except the
   // struck unit goes white — which after the split is precisely the two
   // chains that came off it.
-  _grantSplitInvulnerability(chain, hitUnit) {
-    for (const u of chain.units) {
-      if (u !== hitUnit) u.invulnerabilityTimer = CENTIPEDE_WHITE_STATE_DURATION;
-    }
+  // Bug #305: this used to grant invulnerability to every surviving unit in
+  // the chain (head included), so a body segment struck mid-fight spent most
+  // of its life re-flagged white and unable to deal contact damage — reading
+  // as "body segments barely damage the player" even though the head (struck
+  // far less often, since players target the body to split it) mostly
+  // didn't carry the flag. Scoped down to just the two units adjacent to the
+  // split point — the new tail end of the surviving front half and the new
+  // head of the promoted back half — which is where a fresh break plausibly
+  // stuns a segment; the rest of both chains keep dealing contact damage
+  // uninterrupted.
+  _grantSplitInvulnerability(chain, hitIndex) {
+    const before = chain.units[hitIndex - 1];
+    const after = chain.units[hitIndex + 1];
+    if (before) before.invulnerabilityTimer = CENTIPEDE_WHITE_STATE_DURATION;
+    if (after) after.invulnerabilityTimer = CENTIPEDE_WHITE_STATE_DURATION;
   }
 
   _convertToRock(unit, room) {
