@@ -26,8 +26,8 @@ import { MOOSE, RABBIT } from '../data/enemies.js';
 import { Enemy } from '../entities/Enemy.js';
 import { LETTER_TEMPLATES } from '../data/letterTemplates.js';
 
-const STILLNESS_MIN = 10;
-const STILLNESS_MAX = 20;
+const STILLNESS_MIN = 5;
+const STILLNESS_MAX = 10;
 
 export class HuntingSystem {
   constructor(game) {

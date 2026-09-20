@@ -6,7 +6,6 @@ Quick-capture list for feature/content ideas noticed during play/dev, before the
 
 Just one idea per line below, plain text.
 If you attack the Errand NPC, he becomes a permanent enemies, attacks with a dagger, inflicts 4 damage, moves very quickly, has a dodge roll and will almost always successfully avoid player attacks.
-halve time for cyan zone hunt to start
 rework shields into a new armor item, not consumables, preventing stacking. Possibly changing the # of charges into a % likelihood to block. 
 crow in L1 room always holds pearl. Change it to hold either pearl or onyx
 gray out "brew" option in alchemist lab with no bottles of water equipped. Gray out "infuse" with no start potions equipped
