@@ -1263,9 +1263,14 @@ class Game {
       this.audioSystem.stopBossMusic(); // mode → 'dual', isPlaying = false
       this.preBossGateActive = false;
       this.preMinibossGateActive = false;
-      this.audioSystem.currentMusicZone = 'green';
+      // currentMusicZone already holds whatever zone was playing before the
+      // boss anticipation/sequence took over the output (startBossAnticipation
+      // never touches it) — use it rather than hardcoding 'green', since the
+      // pre-boss gate (ExitSystem.js) fires for red/cyan/yellow too, not just
+      // green. loadRestBuffers falls back to the plain EXPLORE track for a
+      // zone with no dedicated REST track, so this is safe for every zone.
       const base = import.meta.env.BASE_URL;
-      this.audioSystem.loadRestBuffers('green', base)
+      this.audioSystem.loadRestBuffers(this.audioSystem.currentMusicZone, base)
         .then(() => this.audioSystem.setLayer2Enabled(false));
     } else if (this.audioSystem.mode === 'dual') {
       // Common case: retreating south from EXPLORE straight into REST.
