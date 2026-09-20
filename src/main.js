@@ -1,5 +1,6 @@
 import { GameLoop } from './game/GameLoop.js';
 import { GameStateMachine } from './game/GameStateMachine.js';
+import { applyReset } from './game/resetRegistry.js';
 import { ASCIIRenderer } from './rendering/ASCIIRenderer.js';
 import { RenderController } from './rendering/RenderController.js';
 import { PhysicsSystem } from './systems/PhysicsSystem.js';
@@ -4059,111 +4060,17 @@ class Game {
   // True game over: full run reset (zones, inventories, spells, magic meter,
   // companions, characters, boss/audio state) and back to REST.
   _resetRunToRest() {
-    // True game over — full reset
-    this.gameOverWaitingForSpace = false;
+    // Declarative run-scope reset (src/game/resetRegistry.js) — see that
+    // file for the full field-by-field inventory and rationale
+    // (claudedocs/reset-registry-plan.md §5.A/§5.B). Only genuinely bespoke,
+    // non-table logic stays inline below (plan §5.D): the boss-music
+    // conditional (order-sensitive within itself, and it reads
+    // import.meta.env.BASE_URL, which shouldn't leak into the registry
+    // module) and the final REST transition.
+    applyReset(this, 'run');
 
-    // Reset wish/slot state for fresh run
-    this.wishesUsed = 0;
-    this._savedDestroyedSlots = [false, false, false];
-    if (this.player) this.player.destroyedSlots = [false, false, false];
-    this._resetEnvironmentalEffects();
-
-    // Reset all zone depths on death
-    this.zoneDepths = freshZoneDepths();
-    this.audioSystem.currentMusicZone = 'green';
-    this.dungeonBossSystem.resetRunState();
-
-    // Clear held items on death (but keep crafting slots)
-    this.inventorySystem.restQuickSlots = [null, null, null];
-    this.inventorySystem.restActiveSlotIndex = 0;
-
-    // Clear all inventories and equipment on death (true roguelike)
-    this.inventorySystem.handleGameOver();
-
-    // Reset learned spells for new run
-    this.knownSpells = new Set();
-
-    // Reset magic meter — must be re-activated via well or cauldron each run
-    if (this.player?.magicMeter) {
-      this.player.magicMeter = { active: false, slots: [], current: 0, max: 10 };
-    }
-    this._savedMagicMeter = null;
-
-    // Reset well ritual state (any in-flight coin or lingering flash)
-    this.wellCoinAnim = null;
-    this.wellFlashTimer = 0;
-    this.wellFlashDuration = 0;
-
-    // New run → new ledger run id; cheat flag stays set if god mode is still
-    // on, since cheatMenu.godMode persists and is reapplied to the new Player.
-    this.runId = newRunId();
-    this.cheatUsed = !!this.cheatMenu.godMode;
-
-    // New run → clock back to zero; the REST transition at the end restarts it
-    this.runTimerSystem.clear();
-
-    // Reset Spectacles key-item run-flag (Maze clear-without-a-ghost reward)
-    this.spectaclesObtainedThisRun = false;
-
-    // Three Room run-state: the gray '3' call can happen again next run, and
-    // the N×3 streak starts clean.
-    this.grayThreeExitShown = false;
-    this.cursedRun = false;
-    this.undeadSystem.clear();
-    this.cursedRunSystem.hardReset();
-    this.threeRoomSystem.hardReset();
-    this.barricadeSystem.hardReset();       // insistence starts over with the run
-    this.threeSlotGlobeSystem.hardReset();  // the run's touched glyphs die with it too
-
-    // Reset fairy run-flag for new run
-    this.fairiesAngered = false;
-    this.chiBladeFound = false;
-    this.fedCrowCount = 0;
-    this.companionCrows = [];
-    this.followerCrows = [];
-    this.tamedRats = [];
-    this.golems = [];
-    // Commanded warband dies with the run like every companion roster
-    this.commandSystem.clearRunState();
-    this.ridgeBridgeBuilt = false;
-
-    // Same transient-feedback clears as TITLE (bug #198 family).
-    this.menuSystem.clearPickupFeedback();
-    this.restBundle = null;
-    this.hasLeftRestOnce = false;
-
-    // Reset character system for new run
-    this.deadCharacters = [];
-    this.lostCharacters = [];
-    this.graySnapshots = [];  // Mist snapshots only count within a single run
-    this.activeCharacterType = 'default';
-    this.unlockedCharacters = ['default']; // Reset to only default character
-    this.captives = []; // Clear active captives
-    this.characterNPCs = []; // Clear character NPCs in REST
-    this.errandSystem.resetOnDeath();
-    this.zoneSystem.resetOnDeath(this); // Reset zone system and captive tracking (incl. rescued-Alchemist singleton, bug #196)
-    this.bossSystem.deactivate();   // Clean up any active boss fight
-    // Reset boss music and pre-boss gate state for new run
-    this.preBossGateActive = false;
-    this.preMinibossGateActive = false;
     if (this.audioSystem.mode === 'sequence' || this.audioSystem.bossAnticipationActive) {
       this.audioSystem.stopBossMusic();
-    }
-
-    // Clear crafting slots and wipe localStorage save
-    this.craftingSystem.setState({ leftSlot: null, rightSlot: null, centerSlot: null });
-    this.craftingSystem.resetDiscoveries();
-    this.persistenceSystem.clearSave();
-
-    // Reset starter bundle so a fresh one spawns on new run
-    this.restBundle = null;
-    this.hasLeftRestOnce = false;
-
-    // Clear companion so a stale hired NPC doesn't carry over to the next run
-    this.companion = null;
-
-    if (this.player) {
-      this.player.reset();
     }
     const audioBase = import.meta.env.BASE_URL;
     this.audioSystem.hardResetDualLayers(
