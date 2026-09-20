@@ -20,6 +20,7 @@ import { PixelatedDissolve, TextSwapDissolve } from '../effects/TextEffects.js';
 import { drawUndead } from '../ui/UndeadRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
 import { whirlwindSpinAngle } from '../effects/WeaponPreviewDraw.js';
+import { drawGolems } from '../ui/CompanionRenderers.js';
 
 const IDLE_ECHO_DURATION = 0.5;          // seconds — must match WorldEffectsSystem's IDLE_ECHO_DURATION
 const IDLE_ECHO_MAX_RADIUS = GRID.CELL_SIZE * 1.5;
@@ -374,6 +375,14 @@ export class RestRenderer {
           c.color
         );
       }
+    }
+
+    // Golem companions: bug #12 (bug-inbox) — REST previously drew crows but
+    // never golems, even though "all companions should" render there. REST
+    // has no plane-hiding concept for golems, so every golem is visible
+    // (same `() => true` predicate HutInteriorOverlay's PiP path uses).
+    if (game.golems && game.golems.length > 0) {
+      drawGolems(this.renderer, game, () => true);
     }
 
     // Draw bow charge indicator (shared between REST and EXPLORE states)
