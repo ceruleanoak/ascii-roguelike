@@ -259,18 +259,25 @@ export class AlchemySystem {
     this._openModeMenu();
   }
 
-  /** Top-level BREW / INFUSE choice — see class doc. Both options always show,
-   * same as Shopkeeper's WARES/PAWN; a mode with nothing to work with says so
-   * only once the player actually picks it, not before. */
+  /** Top-level BREW / INFUSE choice — see class doc. Both options always show
+   * and remain pickable (still lands on the existing "NO BOTTLE/STARTER
+   * POTION EQUIPPED" message from _openInputMenu), but each is dimmed
+   * (`disabled`, read by MenuOverlay) when the player has nothing equipped
+   * that mode could use — BREW needs any of the 4 liquid bottle types
+   * (Water/Electrified/Magma/Mud), INFUSE needs a Starter Potion. */
   _openModeMenu() {
     const game = this.game;
+    const slots = game.player.equippedConsumables ?? [];
+    const hasLiquidBottle = slots.some(s => LIQUID_BOTTLE_CHARS.has(s?.char));
+    const hasStarterPotion = slots.some(s => STARTER_POTION_CHARS.has(s?.char));
+
     game.menuOpen = true;
     game.currentMenuSlot = 'alchemy';
     game.alchemyMenuTitle = 'CAULDRON';
     game.selectedMenuIndex = 0;
     game.menuItems = [
-      { action: 'brew', label: 'BREW' },
-      { action: 'infuse', label: 'INFUSE' },
+      { action: 'brew', label: 'BREW', disabled: !hasLiquidBottle },
+      { action: 'infuse', label: 'INFUSE', disabled: !hasStarterPotion },
     ];
     game.renderController.menuOverlay.render(game);
     game.menuSystem.closeOnMovement = true;
