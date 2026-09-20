@@ -538,6 +538,99 @@ export const RESET_REGISTRY = [
     why: 'Previously-unhandled gap: neither reset path cleared this saved-EXPLORE-room snapshot shadow array.',
   },
 
+  // ── Bug #305 triage (plan §7 Step 4) — the 15 residual fields surfaced
+  // by the harness's registry-coverage check, all registered here. ──────
+  {
+    path: 'trapCharging',
+    scope: 'run',
+    value: null,
+    why: 'Unlike attackSequenceActive (already allowlisted — cleared synchronously within the same input-handler pass), trapCharging has no such guarantee: a death interrupting a mid-charge throw leaves it non-null with a stale timer, which BowChargeIndicator and WeaponPreviewDraw read directly and would render into the next run\'s first frame. Registering closes that staleness gap.',
+  },
+  {
+    path: 'blessingsCollected',
+    scope: 'run',
+    fresh: () => [],
+    why: 'Genuine pre-existing bug (bug #305): a pure accumulator (NeutralRoomSystem.applyBlessing pushes into it) with no reset call anywhere — blessings collected in one run persisted into the next. Registering this closes the bug, not just a housekeeping gap.',
+  },
+  {
+    path: 'cureRusalka',
+    scope: 'run',
+    value: null,
+    why: "Backstop clear for the polymorph-cure flag (PolymorphSystem). Room-transition sites (enterRestState, the neutral-room-transition path, and a third room-transition function) already null this inline on every room change — that is a different mechanism (per-room, not per-run) and is kept as-is; this entry is the death/title-return safety net those sites don't cover.",
+  },
+  {
+    path: 'neutralCharacters',
+    scope: 'run',
+    fresh: () => [],
+    why: 'Backstop clear for neutral-room NPC roster, mirroring the already-registered `captives` pattern: room-transition inline clears (enterRestState, applyRoomSwap) stay in place as the per-room mechanism; this is the run/title-reset backstop.',
+  },
+  {
+    path: 'inFlightTraps',
+    scope: 'run',
+    fresh: () => [],
+    why: "Genuine pre-existing bug (bug #305): unlike sibling `placedTraps` (already registered at title scope), inFlightTraps was cleared at NO site anywhere in the codebase — an in-flight thrown trap/wire could carry across a death or title return. Registering this closes the bug.",
+  },
+  {
+    path: 'playerTongueAttacks',
+    scope: 'run',
+    fresh: () => [],
+    why: 'Backstop clear for in-flight rusalka tongue-attack projectiles (PolymorphSystem). Room-transition inline clears (same three sites as cureRusalka) stay in place as the per-room mechanism; this is the run/title-reset backstop.',
+  },
+  {
+    path: 'gameOverDeathTimer',
+    scope: 'run',
+    value: 0,
+    why: "Death-screen wait timer (GameOverRenderer). Verified NOT tombstone-shaped despite living in the same death-output family as lastDeathCause/tombstoneActive/tombstonePopup: _resetRunToRest can only execute once this is already <=0 (main.js SPACE-in-GAME_OVER gate), so there is no erase-before-read hazard — by the time a run-reset runs, this field is already at/near zero via its own consumption logic. Registered at run scope as a backstop for any path that reaches title/run-reset without going through that gate (e.g. the CLEANSE wish revival in WishSystem.js, which clears it inline for the same reason).",
+  },
+  {
+    path: 'characterDeathPending',
+    scope: 'run',
+    value: false,
+    why: 'Same death-output family as gameOverDeathTimer above — verified run-scope-safe, not tombstone-shaped. respawnNextCharacter() (CharacterSystem.js) and the CLEANSE wish path (WishSystem.js) already clear this on their own success paths; this is the run/title-reset backstop for every other exit (e.g. quitting to title mid-death-sequence).',
+  },
+  {
+    path: 'characterDeathTimer',
+    scope: 'run',
+    value: 0,
+    why: 'Same death-output family as gameOverDeathTimer above — see that entry\'s reasoning.',
+  },
+  {
+    path: 'pendingNextCharacter',
+    scope: 'run',
+    value: null,
+    why: 'Same death-output family as gameOverDeathTimer above — see that entry\'s reasoning.',
+  },
+  {
+    path: 'characterDeathName',
+    scope: 'run',
+    value: '',
+    why: 'Same death-output family as gameOverDeathTimer above — see that entry\'s reasoning.',
+  },
+  {
+    path: 'spellResponse',
+    scope: 'run',
+    value: null,
+    why: 'Self-clearing ritual/spell-feedback text with a start-time-based auto-expiry (RenderController), same shape as the already-registered wellCoinAnim/wellFlashTimer/wellFlashDuration. Registered anyway as a backstop against a stale message surviving into the next run\'s first frame.',
+  },
+  {
+    path: 'soundEvents',
+    scope: 'run',
+    fresh: () => [],
+    why: 'Backstop clear for the per-frame noise-detection queue (read by ExploreRenderer/enemy hearing). Already cleared inline in applyRoomSwap()\'s resetEntities block (a room-transition mechanism, kept as-is); this is the run/title-reset backstop.',
+  },
+  {
+    path: 'idleEchoes',
+    scope: 'run',
+    fresh: () => [],
+    why: "Minor pre-existing gap: idle-echo particles (InteractionSystem pushes, WorldEffectsSystem ages them out) are self-healing within IDLE_ECHO_DURATION and were never included in _resetEnvironmentalEffects(). Low-severity (echoes are short-lived), but nothing previously cleared them on death/title-return; registering closes the gap.",
+  },
+  {
+    path: 'slotPopup',
+    scope: 'run',
+    value: null,
+    why: 'REST quick-slot interaction popup (MenuSystem). Self-closes within ~0.25s via its own phase timer, and is explicitly dismissed on SPACE in REST — but nothing previously cleared it on a run/title reset reached some other way; registered as a backstop.',
+  },
+
   // ── late: whole-entity resets (plan §4, ordering dependency #1) ───────
   // player.reset() rewrites hp/quickSlots/activeSlotIndex/destroyedSlots/
   // magicMeter/buff timers wholesale. It MUST run after every other
