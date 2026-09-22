@@ -425,10 +425,26 @@ export class ExitSystem {
     const altLetterBoosts = EXIT_LETTERS[letters[altIndex]]?.zoneBoosts;
     const altZoneGated = z => altLetterBoosts?.[z] === 0;
 
-    if (progressionColor && progressionColor !== zone.exitColor &&
-        !altZoneGated(zoneForColor(progressionColor))) {
-      // Mid-progression: use progression color
-      colors[altIndex] = progressionColor;
+    if (progressionColor && progressionColor !== zone.exitColor) {
+      // Mid-progression: the streak guarantee ("a same-color exit is always on
+      // offer") outranks which of the 3 slots carries it. Checking only the
+      // randomly-picked altIndex meant a room where THAT slot's letter happened
+      // to be hard-gated against the progression zone silently dropped the
+      // color entirely — all 3 exits fell back to this zone's own color and a
+      // 2-streak died with no 3rd same-color exit ever appearing (bug: 2 red
+      // exits followed, 3rd room showed 3 green). Search every open slot for
+      // one whose letter isn't gated before giving up on the streak.
+      const progressionZone = zoneForColor(progressionColor);
+      const openSlots = [0, 1, 2].filter(i => !closedSlots.has(i));
+      const eligible = openSlots.filter(i => EXIT_LETTERS[letters[i]]?.zoneBoosts?.[progressionZone] !== 0);
+      if (eligible.length > 0) {
+        const slot = eligible.includes(altIndex) ? altIndex : eligible[Math.floor(Math.random() * eligible.length)];
+        colors[slot] = progressionColor;
+      }
+      // Every open slot's letter is hard-gated against this destination —
+      // exceedingly rare (all 3 letters would need to share the gate) — the
+      // streak simply breaks this room rather than force a color onto a
+      // letter that explicitly refuses that zone.
     } else if (zoneType === 'green' || Math.random() < ALT_EXIT_CHANCE_NON_GREEN) {
       // No progression: use random alternative, excluding zones whose boss is defeated.
       // Green always offers one; other zones only sometimes (gate above).

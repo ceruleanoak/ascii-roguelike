@@ -115,5 +115,18 @@ export const PlayerDamageSystem = {
 
     // Return true if dead, or a truthy value if damaged (for damage numbers)
     return player.hp <= 0 ? true : { damaged: true, actualDamage };
+  },
+
+  // Stops the corpse sliding on its last frame's momentum. physicsSystem
+  // keeps integrating every registered entity's velocity straight through
+  // GAME_OVER's interior hold window (GameOverRenderer delegates to the live
+  // interior overlay there so the death explosion lands in the right spot),
+  // so a hut/dungeon death that never zeroed velocity kept visibly moving
+  // for the full 2s hold. Called once from main.js's death handling, which
+  // is the single funnel for every death cause (combat, DoT, lava, direct
+  // hp writes) — not from applyDamage itself, since that only covers combat.
+  freezeOnDeath(player) {
+    player.velocity.vx = 0;
+    player.velocity.vy = 0;
   }
 };

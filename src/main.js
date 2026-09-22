@@ -51,6 +51,8 @@ import { ThreeRoomSystem } from './systems/ThreeRoomSystem.js';
 import { BarricadeSystem } from './systems/BarricadeSystem.js';
 import { UndeadSystem } from './systems/UndeadSystem.js';
 import { CursedRunSystem } from './systems/CursedRunSystem.js';
+import { RestSystem } from './systems/RestSystem.js';
+import { PlayerDamageSystem } from './systems/PlayerDamageSystem.js';
 import { ThreeSlotGlobeSystem } from './systems/ThreeSlotGlobeSystem.js';
 import { BossSystem } from './systems/BossSystem.js';
 import { BoulderSystem } from './systems/BoulderSystem.js';
@@ -113,7 +115,7 @@ import { Puddle } from './entities/Puddle.js';
 import { Leshy } from './entities/Leshy.js';
 import { CharacterNPC } from './entities/CharacterNPC.js';
 import { WiseFellow } from './entities/WiseFellow.js';
-import { ITEM_TYPES, INGREDIENTS, ITEMS } from './data/items.js';
+import { ITEM_TYPES, INGREDIENTS, ITEMS, getItemData } from './data/items.js';
 import { CHARACTER_TYPES } from './data/characters.js';
 import { EXIT_LETTERS } from './data/exitLetters.js';
 import { ZONES, freshZoneDepths } from './data/zones.js';
@@ -1182,29 +1184,10 @@ class Game {
     // Reset zone system on rest
     this.zoneSystem.resetOnRest();
 
-    // Capture magic-meter state from prior player before reconstructing.
-    // Cleared by the true-game-over reset block, so death wipes it correctly.
-    // Only an ACTIVE meter is carried: stamping an inactive one from a dead
-    // run re-populated _savedMagicMeter after the reset nulled it.
-    const savedMagicMeter = this.player?.magicMeter?.active
-      ? { ...this.player.magicMeter }
-      : this._savedMagicMeter ?? null;
-
-    // A decayed REST no longer heals. Read off the outgoing Player, same as the
-    // magic meter above, because the rebuild below is what does the healing.
-    const carriedHp = this.cursedRunSystem.carryRestHp(this, this.player);
-
-    // Create player just below the "E X P L O R E" label (text centre = 4.5 * CELL_SIZE),
-    // offset 2 tiles lower than the label-relative spawn point
-    const centerX = GRID.WIDTH / 2;
-    const spawnY = GRID.CELL_SIZE * 5.5 + GRID.CELL_SIZE * 2;
-    this.player = new Player(centerX, spawnY);
-    this.player.godMode = this.cheatMenu.godMode;
-    if (carriedHp !== null) this.player.hp = carriedHp;
-    if (savedMagicMeter) {
-      this.player.magicMeter = savedMagicMeter;
-      this._savedMagicMeter = savedMagicMeter;
-    }
+    // Replaces this.player with a fresh REST spawn, carrying over the state
+    // that's meant to survive the rebuild (magic meter, cursed-run wound, and
+    // any fairy-fountain maxHp blessing — see RestSystem for what and why).
+    RestSystem.rebuildForRest(this);
 
     // Reset fishing system so Rusalka pull/suppression doesn't persist into REST
     this.fishingSystem.resetForNewRoom(this.player);
@@ -1257,7 +1240,7 @@ class Game {
           char: 'ට',
           color: '#cc9944',
           position: {
-            x: centerX - GRID.CELL_SIZE / 2,
+            x: this.player.position.x - GRID.CELL_SIZE / 2,
             y: (CRAFTING.STATION_Y + 4) * GRID.CELL_SIZE
           },
           chars: rollStarterSatchelChars()
@@ -3100,6 +3083,8 @@ class Game {
         console.log('✨ Phoenix Feather activated — death intercepted! HP restored to ' + this.player.hp);
         // fall through — do NOT transition to GAME_OVER
       } else {
+        PlayerDamageSystem.freezeOnDeath(this.player);
+
         // Stop music and play death SFX
         this.audioSystem.stop();
         this.audioSystem.playSFX('player_death');
@@ -4421,8 +4406,9 @@ class Game {
     this.menuSystem.handleCenterSlotSelection(selectedItem);
   }
 
+  // Name is legacy; callers pass any slot char — use getItemData's two-tier lookup.
   getIngredientData(char) {
-    return INGREDIENTS[char] || { name: 'Unknown' };
+    return getItemData(char) || { name: 'Unknown' };
   }
 
 }
