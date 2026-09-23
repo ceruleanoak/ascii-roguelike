@@ -98,11 +98,7 @@ reportDuplicates((scanLiteralKeys(enemiesSource, 'ENEMIES') ?? []).map(String), 
 //     2026-06-19). Detected by matching names + ITEMS type INGREDIENT.
 //   - Shadowing: two different things share a char; non-alnum resolves as the
 //     ITEM and the ingredient silently vanishes from getItemData paths (#124).
-const SHADOWED_CHARS_ALLOWLIST = {
-  // '#217 — ITEMS['●'] Slime Bomb (TRAP) shadows INGREDIENTS['●'] Pearl;
-  // latent (pickup/display read INGREDIENTS directly), re-glyph is authorial.
-  '●': '#217',
-};
+const SHADOWED_CHARS_ALLOWLIST = {};
 for (const ing of Object.keys(INGREDIENTS)) {
   const itemDef = ITEMS[ing];
   if (!itemDef) continue;

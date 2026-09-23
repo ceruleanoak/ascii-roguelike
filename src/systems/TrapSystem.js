@@ -44,7 +44,7 @@ const TRAP_SPAWN_IMMUNITY_MS = 1000;
 // Trap type → placed Item char. Shared with TrapLayerMechanic so an enemy
 // deciding what trap it just committed to can look up the same item data
 // (effectRadius, etc.) that placeTrapAtPosition will spawn.
-export const TRAP_TYPE_CHAR = { slow: '●', fire: '^', freeze: '[', stun: '{' };
+export const TRAP_TYPE_CHAR = { slow: '◉', fire: '^', freeze: '[', stun: '{' };
 const THROW_PROFILES = {
   trap:    { maxDist: TRAP_MAX_DIST,      damageMult: 0,   minVelForDamage: 0,   maxDamageVel: 1 },
   wire:    { maxDist: WIRE_MAX_DIST,      damageMult: 0,   minVelForDamage: 0,   maxDamageVel: 1 },
@@ -707,10 +707,10 @@ export class TrapSystem {
   }
 
   // Place a trap at an arbitrary world position (used by Trap Goblin enemy).
-  // type: 'slow' → Slime Bomb (●), 'fire' → Fire Trap (^)
+  // type: 'slow' → Slime Bomb (◉), 'fire' → Fire Trap (^)
   placeTrapAtPosition(x, y, type, plane = 0, owner = null) {
     const game = this.game;
-    const char = TRAP_TYPE_CHAR[type] || '●';
+    const char = TRAP_TYPE_CHAR[type] || '◉';
 
     const trapItem = new Item(char, x - GRID.CELL_SIZE / 2, y - GRID.CELL_SIZE / 2);
     trapItem.isPlaced = true;

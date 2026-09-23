@@ -57,7 +57,7 @@ export const TrapLayerMechanic = {
 
     const types = cfg.trapTypes ?? ['slow'];
     const trapType = types[Math.floor(Math.random() * types.length)];
-    const trapChar = TRAP_TYPE_CHAR[trapType] ?? '●';
+    const trapChar = TRAP_TYPE_CHAR[trapType] ?? '◉';
     const radius = getItemData(trapChar)?.effectRadius ?? GRID.CELL_SIZE * 2;
 
     enemy.ownTrapPositions.push({ x, y, radius });

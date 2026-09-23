@@ -2515,8 +2515,11 @@ export const ITEMS = {
     damage: 2,
     color: '#ff6600'
   },
-  '●': {
-    char: '●',
+  // Re-keyed off '●' to '◉' (bug #217): that char collided with
+  // INGREDIENTS['●'] Pearl, whose Unicode char is a documented, permanent
+  // exception (see TREASURE_CHARS comment) — so Slime Bomb moved instead.
+  '◉': {
+    char: '◉',
     name: 'Slime Bomb',
     type: ITEM_TYPES.TRAP,
     oneShot: true,
