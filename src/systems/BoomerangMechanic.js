@@ -115,7 +115,10 @@ export const BoomerangMechanic = {
       if (proj.boomerangTimer <= 0 && !proj.boomerangBounceTarget) proj.boomerangReturning = true;
     }
     if (proj.boomerangReturning) {
-      if (!proj.owner || proj.owner.isDead) return true;
+      if (!proj.owner || proj.owner.isDead) {
+        this._refundAmmo(proj);
+        return true;
+      }
       const tx = proj.owner.position.x + (proj.owner.width || GRID.CELL_SIZE) / 2;
       const ty = proj.owner.position.y + (proj.owner.height || GRID.CELL_SIZE) / 2;
       const dx = tx - proj.position.x;

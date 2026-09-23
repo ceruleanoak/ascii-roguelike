@@ -493,6 +493,7 @@ export class CombatSystem {
       }
 
       if (bgObjectHit) {
+        if (proj.boomerang) BoomerangMechanic._refundAmmo(proj);
         this.projectiles.splice(i, 1);
         continue;
       }
@@ -511,6 +512,7 @@ export class CombatSystem {
 
       // Check bounds
       if (WallRicochetMechanic.isOutOfBounds(proj)) {
+        if (proj.boomerang) BoomerangMechanic._refundAmmo(proj);
         this.projectiles.splice(i, 1);
         continue;
       }
