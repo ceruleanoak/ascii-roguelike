@@ -2078,40 +2078,7 @@ class Game {
     this.interactionSystem.updateNeutralCharacters(deltaTime);
 
     // Update ingredient attraction, cooldown, and separation (same as EXPLORE/REST mode)
-    for (let i = this.ingredients.length - 1; i >= 0; i--) {
-      const ingredient = this.ingredients[i];
-
-      if (ingredient.pickupCooldown > 0) {
-        ingredient.pickupCooldown = Math.max(0, ingredient.pickupCooldown - deltaTime);
-      }
-      if (ingredient.dropBounceTimer > 0) {
-        ingredient.dropBounceTimer = Math.max(0, ingredient.dropBounceTimer - deltaTime);
-      }
-
-      for (let j = i - 1; j >= 0; j--) {
-        const other = this.ingredients[j];
-        const dx = ingredient.position.x - other.position.x;
-        const dy = ingredient.position.y - other.position.y;
-        const distSq = dx * dx + dy * dy;
-        const sep = GRID.CELL_SIZE * 1.2;
-        if (distSq < sep * sep && distSq > 0.01) {
-          const dist = Math.sqrt(distSq);
-          const force = (sep - dist) * 40;
-          const nx = dx / dist;
-          const ny = dy / dist;
-          ingredient.velocity.vx += nx * force * deltaTime;
-          ingredient.velocity.vy += ny * force * deltaTime;
-          other.velocity.vx -= nx * force * deltaTime;
-          other.velocity.vy -= ny * force * deltaTime;
-        }
-      }
-
-      const shouldPickup = this.physicsSystem.applyAttraction(ingredient, this.player);
-
-      if (shouldPickup) {
-        this.lootSystem.collectIngredient(ingredient);
-      }
-    }
+    this.lootSystem.updateIngredientSeparation(deltaTime);
 
     // Update items (for prize pickups)
     // NEUTRAL state: No item magnetization - all items require manual pickup with SPACE
