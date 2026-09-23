@@ -2731,6 +2731,11 @@ export class RoomGenerator {
         if (!pattern[py][px]) continue;
         const col = startCol + px, row = startRow + py;
         if (collisionMap[row] && collisionMap[row][col]) return false; // on a wall
+        // Reject positions inside the vault interior (only walls are solid; interior must stay hazard-free)
+        if (this.currentVaultInfo) {
+          const v = this.currentVaultInfo;
+          if (col > v.minCol && col < v.maxCol && row > v.minRow && row < v.maxRow) return false;
+        }
         // Protect exits
         if (Math.abs(col - midCol) <= clearRadius && row <= clearRadius + 2) return false;
         if (Math.abs(col - midCol) <= clearRadius && row >= GRID.ROWS - clearRadius - 3) return false;
@@ -2948,6 +2953,14 @@ export class RoomGenerator {
     // Check collision map
     if (room.collisionMap[y][x]) {
       return false;
+    }
+
+    // Reject positions inside the vault interior (only walls are solid; interior must stay hazard-free)
+    if (this.currentVaultInfo) {
+      const v = this.currentVaultInfo;
+      if (x > v.minCol && x < v.maxCol && y > v.minRow && y < v.maxRow) {
+        return false;
+      }
     }
 
     // Check exit clearance zones
