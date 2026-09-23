@@ -269,20 +269,25 @@ export class HutInteriorOverlay {
     }
 
     // ── 16. Player ────────────────────────────────────────────────────────────
-    const playerAlpha = game.player.getVisibilityAlpha?.() ?? 1.0;
-    const mossActive = game.player.mossCloakActive === true;
-    const playerChar = mossActive ? '%' : game.player.char;
-    const playerColor = mossActive
-      ? '#228822'
-      : (game.player.getDisplayColor?.() ?? game.player.color);
-    this.renderer.drawTextWithAlpha(
-      game.player.position.x + GRID.CELL_SIZE / 2,
-      game.player.position.y + GRID.CELL_SIZE / 2,
-      playerChar,
-      playerColor,
-      playerAlpha
-    );
-    drawStatusPips(this.renderer, game.player);
+    // Hidden during the death hold (game.characterDeathPending) — the death
+    // screen shows only particles/debris, matching the surface GAME_OVER path
+    // (GameOverRenderer's non-interior branch never draws the player either).
+    if (!game.characterDeathPending) {
+      const playerAlpha = game.player.getVisibilityAlpha?.() ?? 1.0;
+      const mossActive = game.player.mossCloakActive === true;
+      const playerChar = mossActive ? '%' : game.player.char;
+      const playerColor = mossActive
+        ? '#228822'
+        : (game.player.getDisplayColor?.() ?? game.player.color);
+      this.renderer.drawTextWithAlpha(
+        game.player.position.x + GRID.CELL_SIZE / 2,
+        game.player.position.y + GRID.CELL_SIZE / 2,
+        playerChar,
+        playerColor,
+        playerAlpha
+      );
+      drawStatusPips(this.renderer, game.player);
+    }
 
     // ── 16b. Camp companion (uses interior coords because it tracks player) ──
     if (game.companion) {
