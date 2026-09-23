@@ -657,7 +657,7 @@ export const ITEMS = {
     weaponSubtype: 'sword',
     damage: 2,
     windup: 0.5,
-    recovery: 1.25,
+    recovery: .95,
     patternSpeed: 0.07,
     range: 30,         // 1.5× base sword reach
     drawScale: 1.3,    // strike rendered larger to telegraph the longer reach
