@@ -278,7 +278,28 @@ export const SECRET_PATTERNS = {
   'D-R-A-W': {
     name: 'Gallery',
     neutralScript: 'drawRoom',
-    message: 'A blank canvas awaits.'
+    message: 'A blank canvas awaits.',
+    sequence: { offerSteps: 'sometimes' }
+  },
+  'A-R-T': {
+    name: 'Gallery',
+    neutralScript: 'drawRoom',
+    message: 'A blank canvas awaits.',
+    sequence: { offerSteps: 'passive' }
+  },
+  'B-O-S-S': {
+    name: 'Boss Rush',
+    message: 'The dungeon shudders — something waits ahead...',
+    sequence: {
+      // offerSteps[k-1] = class applied to letters[k], once pathHistory's tail
+      // matches letters[0..k-1]. No entry for the head letter (letters[0]).
+      offerSteps: ['always', 'always', 'sometimes'], // O:always, S:always, S:sometimes
+      reward: {
+        kind: 'depth_jump',
+        depthOffset: -1,            // land one room before bossDepth
+        zoneOverrides: { green: 0 } // green lands AT bossDepth (no anticipation)
+      }
+    }
   },
 
   // Four separate 3-letter paths land on the same door — T/E/A are all

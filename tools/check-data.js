@@ -25,6 +25,8 @@ import { ITEMS, INGREDIENTS, AFFINITY_POOLS, RARITY, RARITY_PROFILES, ITEM_TYPES
 import { RECIPES } from '../src/data/recipes.js';
 import { ENEMIES } from '../src/data/enemies.js';
 import { BACKGROUND_OBJECTS } from '../src/game/GameConfig.js';
+import { SECRET_PATTERNS } from '../src/data/exitLetters.js';
+import { normalizeOfferSteps } from '../src/systems/ExitSystem.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const itemsSource = readFileSync(join(root, 'src/data/items.js'), 'utf8');
@@ -221,6 +223,31 @@ for (const [tierName, profile] of Object.entries(RARITY_PROFILES)) {
 const bgChars = new Set(Object.keys(BACKGROUND_OBJECTS));
 for (const key of Object.keys(ENEMIES)) {
   if (bgChars.has(key)) warn(`enemy glyph '${key}' is also a BACKGROUND_OBJECTS char — ensure color/shape disambiguates in play (#102)`);
+}
+
+// ── Room-letter sequence data (SECRET_PATTERNS.sequence) ───────────────────
+// A sequence's offerSteps must have exactly one entry per non-head letter
+// (letters[1..end]), and no head letter may start more than 2 distinct
+// sequence-bearing patterns — the Path Amulet can only ever track/display
+// one in-progress sequence at a time, so a 3rd option off the same head
+// letter would be undiscoverable/unofferable noise.
+const sequenceHeadCounts = {};
+for (const [pattern, data] of Object.entries(SECRET_PATTERNS)) {
+  if (!data.sequence) continue;
+  const letters = pattern.split('-');
+  const expectedSteps = letters.length - 1;
+  const offerSteps = normalizeOfferSteps(data.sequence.offerSteps, expectedSteps);
+  if (!Array.isArray(offerSteps) || offerSteps.length !== expectedSteps) {
+    fail(`SECRET_PATTERNS['${pattern}'].sequence.offerSteps has ${Array.isArray(offerSteps) ? offerSteps.length : 'invalid'} entries, expected ${expectedSteps} (one per letter after the head)`);
+  }
+  const head = letters[0];
+  sequenceHeadCounts[head] = (sequenceHeadCounts[head] || []);
+  sequenceHeadCounts[head].push(pattern);
+}
+for (const [head, patterns] of Object.entries(sequenceHeadCounts)) {
+  if (patterns.length > 2) {
+    fail(`Head letter '${head}' starts ${patterns.length} sequence-bearing patterns (${patterns.join(', ')}) — cap is 2 per head letter`);
+  }
 }
 
 if (failed) {

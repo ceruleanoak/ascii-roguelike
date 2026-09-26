@@ -29,6 +29,15 @@ function zoneForColor(color) {
   return Object.keys(ZONE_COLORS).find(z => ZONE_COLORS[z] === color) ?? null;
 }
 
+// SECRET_PATTERNS' `sequence.offerSteps` may be authored as a single class
+// word (shorthand for "every non-head step shares this class") instead of an
+// explicit per-step array. Expand it here so callers only ever deal with the
+// array form. tools/check-data.js normalizes the same way for validation.
+export function normalizeOfferSteps(offerSteps, stepCount) {
+  if (typeof offerSteps === 'string') return Array(stepCount).fill(offerSteps);
+  return offerSteps;
+}
+
 function closedSlotsForLetter(currentLetter) {
   const rules = currentLetter ? LETTER_TEMPLATES[currentLetter]?.exitRules : null;
   if (!rules) return new Set();
@@ -359,11 +368,38 @@ export class ExitSystem {
       colors[forcedBossIndex] = ZONES[zoneType].exitColor;
     }
 
+    // A letter sequence in progress (B-O-S-S, D-R-A-W, A-R-T, ...) may force
+    // or bias its next letter onto an open slot, per its authored offer
+    // class. See resolveSequenceOffers for the single-winner tie-break — the
+    // Path Amulet can only ever render one live sequence trail, so at most
+    // one sequence is ever "in progress".
+    const sequenceOffer = this.resolveSequenceOffers(this.zoneSystem?.pathHistory);
+    let sequenceColors = colors;
+    if (sequenceOffer && sequenceOffer.offerClass !== 'passive' && !letters.includes(sequenceOffer.letter)) {
+      const forceIt = sequenceOffer.offerClass === 'always' ||
+        (sequenceOffer.offerClass === 'sometimes' && Math.random() < 0.5);
+      if (forceIt) {
+        const candidates = [0, 1, 2].filter(i => i !== forcedBossIndex && !closedSlots.has(i));
+        if (candidates.length > 0) {
+          const slot = candidates[Math.floor(Math.random() * candidates.length)];
+          letters[slot] = sequenceOffer.letter;
+          // Letters changed after colors were assigned — recompute so the
+          // new letter's color follows the same zone/alt-color rules as
+          // every other slot, rather than inheriting the stale color that
+          // belonged to whatever letter this slot held before.
+          sequenceColors = this.assignExitColors(letters, zoneType, progressionColor, closedSlots);
+          if (forcedBossIndex !== -1) {
+            sequenceColors[forcedBossIndex] = ZONES[zoneType].exitColor;
+          }
+        }
+      }
+    }
+
     // Return exit objects with letter + color
     const exits = {
-      north: { letter: letters[0], color: colors[0] },
-      east: { letter: letters[1], color: colors[1] },
-      west: { letter: letters[2], color: colors[2] },
+      north: { letter: letters[0], color: sequenceColors[0] },
+      east: { letter: letters[1], color: sequenceColors[1] },
+      west: { letter: letters[2], color: sequenceColors[2] },
       south: !ZONES[zoneType]?.noRest  // South is boolean (return to REST); noRest zones have no way back
     };
 
@@ -563,17 +599,74 @@ export class ExitSystem {
     const letterPath = pathHistory.map(exit => exit.letter);
     const fullPath = letterPath.join('-');
 
+    // Prefer the most specific (longest) matching pattern rather than
+    // whichever happens to be declared first in SECRET_PATTERNS — an
+    // authoring accident, not a rule. Not reachable today (B-O-S-S and
+    // B-A-T diverge at letter 2), but removes a latent bug for the next
+    // sequence someone authors.
+    let best = null;
     for (const [pattern, data] of Object.entries(SECRET_PATTERNS)) {
-      if (fullPath.includes(pattern)) {
-        const patternLength = pattern.split('-').length;
-        const lastNLetters = letterPath.slice(-patternLength).join('-');
+      if (!fullPath.includes(pattern)) continue;
+      const patternLength = pattern.split('-').length;
+      const lastNLetters = letterPath.slice(-patternLength).join('-');
+      if (lastNLetters !== pattern) continue;
+      if (!best || patternLength > best.patternLength) {
+        best = { pattern, patternLength, data };
+      }
+    }
+    return best ? { pattern: best.pattern, ...best.data } : null;
+  }
 
-        if (lastNLetters === pattern) {
-          return { pattern, ...data };
+  /**
+   * Finds the single in-progress letter sequence, if any, and what class of
+   * offer its next letter should get. Because the Path Amulet can only ever
+   * render one live sequence trail (a single text readout of pathHistory),
+   * at most one sequence is ever "in progress" — this resolves to exactly
+   * one winner, never a list.
+   *
+   * Every SECRET_PATTERNS entry participates in the search (not just
+   * sequence-bearing ones): a longer coincidental match on a legacy pattern
+   * must still suppress a shorter sequence match on the same tail letters
+   * (e.g. in-progress B-A-T outranks a fresh A-R start off the shared 'A'),
+   * even though the legacy entry itself grants no forced offer.
+   */
+  resolveSequenceOffers(pathHistory) {
+    if (!pathHistory || pathHistory.length === 0) return null;
+    const tailLetters = pathHistory.map(e => e.letter);
+
+    // Two passes: first find the deepest match depth across ALL entries
+    // (legacy patterns included, since a deeper coincidental match must
+    // still suppress a shallower sequence match on the same tail letters).
+    // Then, among only the entries tied at that depth, prefer one with a
+    // `sequence` field — declaration order alone must not let an unrelated
+    // legacy pattern (e.g. B-A-T, no `sequence`) blot out a same-depth
+    // sequence-bearing sibling (e.g. B-O-S-S) sharing the same head letter.
+    let bestK = 0;
+    let matchesAtBestK = [];
+
+    for (const [pattern, data] of Object.entries(SECRET_PATTERNS)) {
+      const letters = pattern.split('-');
+      const maxK = Math.min(letters.length - 1, tailLetters.length);
+      for (let k = maxK; k >= 1; k--) {
+        const tailSlice = tailLetters.slice(-k).join('-');
+        const prefixSlice = letters.slice(0, k).join('-');
+        if (tailSlice === prefixSlice) {
+          if (k > bestK) {
+            bestK = k;
+            matchesAtBestK = [{ data, letters }];
+          } else if (k === bestK) {
+            matchesAtBestK.push({ data, letters });
+          }
+          break; // only the deepest match per entry matters
         }
       }
     }
-    return null;
+
+    const winner = matchesAtBestK.find(m => m.data.sequence);
+    if (!winner) return null;
+    const stepCount = winner.letters.length - 1;
+    const offerSteps = normalizeOfferSteps(winner.data.sequence.offerSteps, stepCount);
+    return { letter: winner.letters[bestK], offerClass: offerSteps[bestK - 1] };
   }
 
   /**

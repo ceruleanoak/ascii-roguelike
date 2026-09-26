@@ -1,5 +1,6 @@
 import { ZONES, ZONE_COLORS } from '../data/zones.js';
 import { ROOM_TYPES } from '../game/GameConfig.js';
+import { SECRET_PATTERNS } from '../data/exitLetters.js';
 
 // Utility function to blend two hex colors
 function blendColors(color1, color2, percent) {
@@ -395,6 +396,46 @@ export class ZoneSystem {
     }
 
     return null;
+  }
+
+  // ── Secret-pattern rewards (B-A-T, B-O-S-S, ...) ───────────────────────────
+
+  /**
+   * Dispatches a completed SECRET_PATTERNS reward. Called from
+   * enterExploreState right after zoneDepths bookkeeping, before
+   * resolveForcedRoomType runs — so a depth_jump reward's write to
+   * game.zoneDepths is visible to that very next resolution.
+   *
+   * Returns { roomType } for the legacy rewardType-based rooms (e.g.
+   * bat_belfry), or null (sequence rewards like depth_jump apply their
+   * effect directly and never override room type).
+   */
+  applySecretPatternReward(game, secretPattern, zone) {
+    if (!secretPattern) return null;
+    const data = SECRET_PATTERNS[secretPattern];
+    if (!data) return null;
+
+    if (data.rewardType === 'bat_belfry') return { roomType: 'BAT_BELFRY' };
+
+    const reward = data.sequence?.reward;
+    if (reward?.kind === 'depth_jump') this._applyDepthJumpReward(game, zone, reward);
+    return null;
+  }
+
+  /**
+   * B-O-S-S completion: jumps zoneDepths[zone] to just before (or, per
+   * zoneOverrides, exactly at) the zone's bossDepth, so the very next
+   * resolveForcedRoomType call lands the player in the boss/miniboss room
+   * exactly as if they'd walked there normally.
+   */
+  _applyDepthJumpReward(game, zone, reward) {
+    const bossDepth = ZONES[zone]?.bossDepth;
+    if (bossDepth == null) return;             // gray/blue: no zone boss, no-op
+    if (this.defeatedBosses.has(zone)) return;  // boss already down: silent no-op
+    const offset = reward.zoneOverrides?.[zone] ?? reward.depthOffset ?? 0;
+    const targetDepth = bossDepth + offset;
+    if ((game.zoneDepths[zone] || 0) >= targetDepth) return; // forward-only, never rewind
+    game.zoneDepths[zone] = targetDepth;
   }
 
   /**

@@ -1841,12 +1841,16 @@ class Game {
         }
       }
 
-      // Determine room type from exit letter (if provided)
+      // Determine room type from exit letter (if provided). Secret-pattern
+      // completions (B-A-T, B-O-S-S, ...) are dispatched through
+      // ZoneSystem.applySecretPatternReward, which may either override the
+      // room type (bat_belfry) or apply its effect directly (B-O-S-S's
+      // depth_jump, applied to zoneDepths before resolveForcedRoomType below).
       let roomType = null;
-      if (secretPattern === 'B-A-T') {
-        // B-A-T sequence: generate bat belfry instead of the T tunnel room
-        roomType = ROOM_TYPES.BAT_BELFRY;
-        console.log('[Secret] B-A-T pattern detected → Bat Belfry!');
+      const secretReward = this.zoneSystem.applySecretPatternReward(this, secretPattern, currentZone);
+      if (secretReward?.roomType) {
+        roomType = ROOM_TYPES[secretReward.roomType];
+        console.log(`[Secret] ${secretPattern} pattern detected → ${secretReward.roomType}!`);
       } else if (exitObj && exitObj.letter) {
         const letterData = EXIT_LETTERS[exitObj.letter];
         if (letterData && letterData.roomType) {

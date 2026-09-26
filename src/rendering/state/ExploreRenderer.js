@@ -1020,6 +1020,20 @@ export class ExploreRenderer {
       ctx.restore();
     }
 
+    // Path Amulet's live letter trail (#42 fix: this previously only rendered
+    // in RestRenderer, so it never appeared during EXPLORE — the only state
+    // room-letter sequences matter in).
+    if (game.pathAnnouncement && game.pathAnnouncementTimer > 0) {
+      const spectaclesOn = isSpectaclesActive(game);
+      this.renderer.fgCtx.save();
+      this.renderer.fgCtx.font = cipherFont(GRID.CELL_SIZE * 2, spectaclesOn);
+      this.renderer.fgCtx.textAlign = 'center';
+      this.renderer.fgCtx.textBaseline = 'middle';
+      this.renderer.fgCtx.fillStyle = '#ffaa00'; // Yellow-orange for path
+      this.renderer.fgCtx.fillText(spectaclesTransformString(game.pathAnnouncement, spectaclesOn), GRID.WIDTH / 2, GRID.HEIGHT / 2 - 100);
+      this.renderer.fgCtx.restore();
+    }
+
     // Render cheat menu overlay (if open)
     game.cheatMenu.render(this.renderer);
   }
