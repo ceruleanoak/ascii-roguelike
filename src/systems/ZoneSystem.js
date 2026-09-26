@@ -401,14 +401,19 @@ export class ZoneSystem {
   // ── Secret-pattern rewards (B-A-T, B-O-S-S, ...) ───────────────────────────
 
   /**
-   * Dispatches a completed SECRET_PATTERNS reward. Called from
+   * Dispatches a completed SECRET_PATTERNS room-type override. Called from
    * enterExploreState right after zoneDepths bookkeeping, before
-   * resolveForcedRoomType runs — so a depth_jump reward's write to
-   * game.zoneDepths is visible to that very next resolution.
+   * resolveForcedRoomType runs — so a legacy rewardType override (e.g.
+   * bat_belfry) replaces the room the completing exit itself leads to,
+   * exactly as before.
    *
-   * Returns { roomType } for the legacy rewardType-based rooms (e.g.
-   * bat_belfry), or null (sequence rewards like depth_jump apply their
-   * effect directly and never override room type).
+   * Sequence rewards (e.g. B-O-S-S's depth_jump) are NOT applied here —
+   * see applySequenceReward, called later in the same transition, once
+   * this room's own type/depth have already been resolved. The room
+   * reached by the completing exit must still be a normal room for its
+   * own letter; the reward only affects the *next* room entry.
+   *
+   * Returns { roomType } for the legacy rewardType-based rooms, or null.
    */
   applySecretPatternReward(game, secretPattern, zone) {
     if (!secretPattern) return null;
@@ -416,15 +421,28 @@ export class ZoneSystem {
     if (!data) return null;
 
     if (data.rewardType === 'bat_belfry') return { roomType: 'BAT_BELFRY' };
-
-    const reward = data.sequence?.reward;
-    if (reward?.kind === 'depth_jump') this._applyDepthJumpReward(game, zone, reward);
     return null;
   }
 
   /**
+   * Applies a completed sequence's reward (currently only depth_jump).
+   * Called from enterExploreState AFTER this transition's room has already
+   * been resolved and generated, so the write to game.zoneDepths only
+   * takes effect starting the *next* room entry — the room reached by the
+   * completing exit itself stays a normal room for its own letter.
+   */
+  applySequenceReward(game, secretPattern, zone) {
+    if (!secretPattern) return;
+    const data = SECRET_PATTERNS[secretPattern];
+    if (!data) return;
+
+    const reward = data.sequence?.reward;
+    if (reward?.kind === 'depth_jump') this._applyDepthJumpReward(game, zone, reward);
+  }
+
+  /**
    * B-O-S-S completion: jumps zoneDepths[zone] to just before (or, per
-   * zoneOverrides, exactly at) the zone's bossDepth, so the very next
+   * zoneOverrides, exactly at) the zone's bossDepth, so the *next*
    * resolveForcedRoomType call lands the player in the boss/miniboss room
    * exactly as if they'd walked there normally.
    */

@@ -1843,9 +1843,10 @@ class Game {
 
       // Determine room type from exit letter (if provided). Secret-pattern
       // completions (B-A-T, B-O-S-S, ...) are dispatched through
-      // ZoneSystem.applySecretPatternReward, which may either override the
-      // room type (bat_belfry) or apply its effect directly (B-O-S-S's
-      // depth_jump, applied to zoneDepths before resolveForcedRoomType below).
+      // ZoneSystem.applySecretPatternReward, which overrides the room type
+      // for legacy rewardType patterns (bat_belfry). Sequence rewards
+      // (B-O-S-S's depth_jump) are applied later, via applySequenceReward,
+      // once this room's own type/depth are already resolved — see there.
       let roomType = null;
       const secretReward = this.zoneSystem.applySecretPatternReward(this, secretPattern, currentZone);
       if (secretReward?.roomType) {
@@ -1874,6 +1875,11 @@ class Game {
       this.currentRoom = this.roomGenerator.generateRoom(roomType, { x: startX, y: startY }, currentZone, progressionColor, exitObj?.letter);
       this.roomGenerator.isZoneBossRoom = false; // always reset after generation
       this.currentRoom.exitLetter = exitObj?.letter || null;
+
+      // Sequence completion reward (B-O-S-S's depth_jump, ...) — deferred
+      // until after this room's own type/depth resolution above, so it only
+      // takes effect starting the next room entry (see applySequenceReward).
+      this.zoneSystem.applySequenceReward(this, secretPattern, currentZone);
 
       // Blue-zone linear progression: north exit always points at the next
       // tutorial room (or stays disabled in Pearl Cache, where RoomGenerator
