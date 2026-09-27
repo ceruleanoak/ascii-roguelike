@@ -5,7 +5,7 @@ import {
   TORCH_LIGHT_RADIUS, TORCH_ALPHA_HIGH, TORCH_ALPHA_LOW,
   TORCH_PULSE_SPEED, TORCH_LIT_COLOR, TORCH_UNLIT_COLOR,
 } from '../../systems/MazeSystem.js';
-import { hasTorchLight, drawPlayerTorchLight } from './torchLight.js';
+import { hasTorchLight, drawPlayerTorchLight, drawInteriorVisionFogOverlay } from './torchLight.js';
 import { drawStatusPips } from '../effects/StatusPipEffects.js';
 
 /**
@@ -191,6 +191,9 @@ export class MazeInteriorOverlay {
     this.renderController.bowChargeIndicator.render(game);
     this.renderController.greenRangerIndicator.render(game);
     this.renderController.cyanRogueIndicator.render(game);
+
+    // ── 10. Blind vision fog (after everything, inside the PiP clip) ────────
+    drawInteriorVisionFogOverlay(this.renderer, game);
 
     // ── Restore interior translate ────────────────────────────────────────
     ctx.restore();

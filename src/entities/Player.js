@@ -501,6 +501,8 @@ export class Player {
 
   isDizzy() { return this.statusEffects.dizzy.active; }
 
+  isBlind() { return this.statusEffects.blind.active; }
+
   // Stack-count pip rows for StatusPipEffects.js (see computePlayerPipRows —
   // the enemy version of this indicator, extended to the player because the
   // glyph blink alone doesn't surface burn/poison/wet/freeze the way it does

@@ -1,6 +1,6 @@
 import { GRID } from '../../game/GameConfig.js';
 import { drawInteriorFrame } from './interiorFrame.js';
-import { hasTorchLight, drawPlayerTorchLight } from './torchLight.js';
+import { hasTorchLight, drawPlayerTorchLight, drawInteriorVisionFogOverlay } from './torchLight.js';
 import {
   TORCH_LIGHT_RADIUS, TORCH_ALPHA_HIGH, TORCH_ALPHA_LOW,
   TORCH_PULSE_SPEED, TORCH_LIT_COLOR, TORCH_UNLIT_COLOR,
@@ -395,6 +395,9 @@ export class HutInteriorOverlay {
       ctx.fillText(rightChar, (rightX + 1) * CS + CS / 2, cy);
       ctx.restore();
     }
+
+    // ── 20. Blind vision fog (after everything, inside the PiP clip) ──────────
+    drawInteriorVisionFogOverlay(this.renderer, game);
 
     // ── Restore interior offset ────────────────────────────────────────────────
     ctx.restore(); // removes translate + restores outer state

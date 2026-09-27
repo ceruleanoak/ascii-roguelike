@@ -57,7 +57,9 @@ const STATUS_EFFECTS = {
   charm: { enemy: { stacks: 0 } },
   wet: { enemy: { stacks: 0 }, player: { stacks: 0 } }, // pips synced to wetPipCount (PhysicsSystem)
   knockback: { enemy: {} },
-  blind: { enemy: {} }, // attacks miss (0 damage)
+  // Enemy: attacks miss (0 damage). Player: vision closes in to a few cells
+  // (the cave-fog overlay — drawVisionFogOverlay in torchLight.js).
+  blind: { enemy: {}, player: {} },
   dizzy: { enemy: { stacks: 0 }, player: { stacks: 0 } },
   goo: {
     enemy: { slowAmount: 0.8, stacks: 0 },

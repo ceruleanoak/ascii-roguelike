@@ -41,7 +41,7 @@ import {
 import { BossRenderer } from './BossRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
 import { isInteriorActive } from '../../systems/PlaneSystem.js';
-import { drawUndergroundFogOverlay } from '../ui/torchLight.js';
+import { drawVisionFogOverlay } from '../ui/torchLight.js';
 import { drawKnownSpellHints, drawWellCoinHint, drawDoorPrompts } from '../ui/ContextHints.js';
 import { drawManaGems } from '../effects/ManaGemRenderer.js';
 import { drawSparkle, GRASS_SPARKLE_SPEED, GLITTER_SPARKLE_SPEED } from '../effects/SparkleEffects.js';
@@ -156,7 +156,7 @@ export class ExploreRenderer {
     // Get zone background color (with progression blending). Underground on
     // plane 1 the surface palette is never seen at all: the ground clears to
     // black so the only thing that reads is whatever the fog radius leaves
-    // unwashed (drawUndergroundFogOverlay). Clearing to the zone's daylight
+    // unwashed (drawVisionFogOverlay). Clearing to the zone's daylight
     // ground and darkening it afterwards left the surface colour glowing
     // through the cave.
     const environmentColors = game.zoneSystem.getBlendedEnvironmentColors(game.currentRoom.zone);
@@ -982,8 +982,9 @@ export class ExploreRenderer {
     // Old exit indicator system removed - now using colored exit letters
     // (Letters render at actual exit positions when exits unlock)
 
-    // Underground fog-of-war overlay (cave fog radius + torch glow boost).
-    drawUndergroundFogOverlay(this.renderer, game);
+    // Vision fog: underground cave fog (radius + torch glow boost) and the
+    // player's blind status, whichever is tighter.
+    drawVisionFogOverlay(this.renderer, game, playerInInterior);
 
     // Gray zone mist: surface-plane '~' glyph field (cave fog above owns plane 1).
     // After entities — mist hangs in front of them — before Tab overlay and PiPs.

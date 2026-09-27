@@ -5,7 +5,8 @@ import { GRID } from '../../game/GameConfig.js';
  * HutInteriorOverlay (hut + dungeon), MazeInteriorOverlay, and ExploreRenderer's
  * underground fog-of-war. Purely cosmetic reinforcement of the Maze Torch
  * auto-lighting mechanic — carries no gameplay effect outside the underground
- * fog-radius boost applied where it's drawn.
+ * fog-radius boost applied where it's drawn. Also home to the vision fog that
+ * cave darkness and the player's blind status share.
  */
 
 const CS = GRID.CELL_SIZE;
@@ -39,9 +40,11 @@ export function drawPlayerTorchLight(renderer, x, y) {
   renderer.drawCircle(x, y, PLAYER_TORCH_LIGHT_RADIUS, PLAYER_TORCH_COLOR, true, alpha);
 }
 
-// Underground fog-of-war overlay: darken everything outside the player's
-// visibility radius. Drawn after all entities so it clips both fg content and
-// the bg canvas beneath.
+// Vision fog: darken everything outside a radius around the player. Two
+// things narrow the player's vision and both draw through here — the
+// underground cave fog, and the player's blind Status Effect. Enemies carry
+// blind as "attacks miss"; the player carries it from their own perspective,
+// as the world closing in around them.
 //
 // The fog is drawn CELL BY CELL rather than as one circular hole: each cell
 // gets a black wash whose alpha ramps from clear at the player to solid at the
@@ -60,14 +63,15 @@ const FOG_COLOR = '#000000';
 // this the player's own cell and its immediate neighbours are unwashed.
 const FOG_CORE_FRACTION = 0.35;
 
-export function drawUndergroundFogOverlay(renderer, game) {
-  if (!(game.currentRoom?.underground && game.player?.plane === 1)) return;
-  const torchLit = hasTorchLight(game);
-  const fogRadius = (game.currentRoom.underground.caveFogRadius || 5) * CS * (torchLit ? 1.5 : 1);
-  const px = game.player.position.x + CS / 2;
-  const py = game.player.position.y + CS / 2;
-  const ctx = renderer.fgCtx;
+// Blind vision radius, in cells — tighter than the cave's 5 so being blinded
+// underground still reads as a change. A torch doesn't widen it: light
+// doesn't help eyes that can't see.
+const BLIND_FOG_RADIUS_CELLS = 3;
 
+// Draw the fog around (px, py) on `ctx`, in whatever coordinate space ctx is
+// currently in (canvas for the surface, interior-translated inside a PiP —
+// the PiP clip bounds the slabs there).
+function drawVisionFog(ctx, px, py, fogRadius) {
   ctx.save();
   ctx.fillStyle = FOG_COLOR;
 
@@ -104,5 +108,36 @@ export function drawUndergroundFogOverlay(renderer, game) {
 
   ctx.globalAlpha = 1;
   ctx.restore();
+}
+
+const blindFogRadius = (game) => (game.player?.isBlind?.() ? BLIND_FOG_RADIUS_CELLS * CS : Infinity);
+
+// Surface pass (ExploreRenderer, drawn after all entities so it clips both fg
+// content and the bg canvas beneath): underground cave fog and/or blind,
+// whichever is tighter. Blind is skipped while the player is inside an
+// interior — the PiP draws its own (drawInteriorVisionFogOverlay).
+export function drawVisionFogOverlay(renderer, game, playerInInterior) {
+  const player = game.player;
+  if (!player) return;
+  const underground = !!(game.currentRoom?.underground && player.plane === 1);
+  const torchLit = underground && hasTorchLight(game);
+  const caveRadius = underground
+    ? (game.currentRoom.underground.caveFogRadius || 5) * CS * (torchLit ? 1.5 : 1)
+    : Infinity;
+  const fogRadius = Math.min(caveRadius, playerInInterior ? Infinity : blindFogRadius(game));
+  if (fogRadius === Infinity) return;
+
+  const px = player.position.x + CS / 2;
+  const py = player.position.y + CS / 2;
+  drawVisionFog(renderer.fgCtx, px, py, fogRadius);
   if (torchLit) drawPlayerTorchLight(renderer, px, py);
+}
+
+// Interior PiP pass (HutInteriorOverlay, MazeInteriorOverlay): blind only,
+// drawn inside the overlay's interior translate + clip, after the player.
+export function drawInteriorVisionFogOverlay(renderer, game) {
+  const fogRadius = blindFogRadius(game);
+  if (fogRadius === Infinity) return;
+  const player = game.player;
+  drawVisionFog(renderer.fgCtx, player.position.x + CS / 2, player.position.y + CS / 2, fogRadius);
 }
