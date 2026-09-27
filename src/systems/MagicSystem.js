@@ -42,6 +42,16 @@ export const INGREDIENT_MANA_VALUES = {
 // across however many slots are active.
 const PER_SLOT_MANA_MAX = 10;
 
+// Spend `cost` from the player's mana meter; false (nothing spent) when the
+// meter is inactive or short. Module-level so entity code that has only the
+// player — Item.createBullets for mana-fed guns — spends through the same rule.
+export function spendMeterMana(player, cost) {
+  const meter = player?.magicMeter;
+  if (!meter?.active || meter.current < cost) return false;
+  meter.current -= cost;
+  return true;
+}
+
 export class MagicSystem {
   constructor(game) {
     this.game = game;
@@ -204,9 +214,7 @@ export class MagicSystem {
   }
 
   spendMana(player, cost) {
-    if (!this.hasMana(player, cost)) return false;
-    player.magicMeter.current -= cost;
-    return true;
+    return spendMeterMana(player, cost);
   }
 
   // Mana Potion auto-trigger: the only way to gain a mana slot without a true

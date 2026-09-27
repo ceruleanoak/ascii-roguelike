@@ -8,7 +8,8 @@
  *   callsLightning — delayed strike past the tip (CharacterSystem.callLightningStrike)
  *   swingBolt      — char of a GUN weapon whose bolt the swing also throws
  *                    (Magic Sword → Storm Staff '⚡'). Read live from that
- *                    weapon's data, so the two stay in parity.
+ *                    weapon's data, so the two stay in parity — including its
+ *                    manaCost: no mana, no bolt.
  *   dustBurst      — { status, duration, color }: a sight-blocking cloud that
  *                    applies `status` to every enemy in it (Spore Mace sleep,
  *                    Cinder Hammer blind). Lands at the weapon tip, or around
@@ -109,8 +110,10 @@ export class WeaponEffectsSystem {
   }
 
   // The same bolt the source GUN weapon fires, thrown along the swing's facing.
+  // Costs the source gun's manaCost; with no mana the swing lands boltless.
   _throwBolt(player, bolt) {
     if (!bolt) return;
+    if (bolt.manaCost && !this.game.magicSystem.spendMana(player, bolt.manaCost)) return;
     const angle = Math.atan2(player.facing.y, player.facing.x);
     const spawnOffset = 6;
     const speed = bolt.bulletSpeed || 300;
