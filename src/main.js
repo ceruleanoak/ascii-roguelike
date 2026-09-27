@@ -33,6 +33,7 @@ import { MenuSystem } from './systems/MenuSystem.js';
 import { AnimationSystem } from './systems/AnimationSystem.js';
 import { EnemySpawnSystem } from './systems/EnemySpawnSystem.js';
 import { HutSystem } from './systems/HutSystem.js';
+import { CavernSystem } from './systems/CavernSystem.js';
 import { PressSystem } from './systems/PressSystem.js';
 import { FireplaceSystem } from './systems/FireplaceSystem.js';
 import { AlchemySystem } from './systems/AlchemySystem.js';
@@ -198,6 +199,7 @@ class Game {
     this.animationSystem = new AnimationSystem(this);
     this.enemySpawnSystem = new EnemySpawnSystem(this);
     this.hutSystem = new HutSystem(this);
+    this.cavernSystem = new CavernSystem(this);
     this.pressSystem = new PressSystem(this);
     this.fireplaceSystem = new FireplaceSystem(this);
     this.alchemySystem = new AlchemySystem(this);

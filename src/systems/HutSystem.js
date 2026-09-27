@@ -413,7 +413,14 @@ export class HutSystem {
     const { game } = this;
     if (!game.player || game.player.inHut) return null;
     if ((game.player._hutEntryCooldown ?? 0) > 0) return null;
-    const huts = game.currentRoom?.huts ?? (game.currentRoom?.hut ? [game.currentRoom.hut] : []);
+    // A Cavern is a hut record too (hutKind 'cavern'), but its door only
+    // exists once a bomb has broken the Bombable Rock hiding it. Copied into a
+    // fresh array so the Settlement's own room.huts list is never mutated.
+    const cavern = game.currentRoom?.cavern;
+    const huts = [
+      ...(game.currentRoom?.huts ?? (game.currentRoom?.hut ? [game.currentRoom.hut] : [])),
+      ...(cavern?.revealed ? [cavern] : []),
+    ];
     for (const hut of huts) {
       if (!hut?.doorPosition) continue;
       // Witch huts on chicken legs are inaccessible until SIT/SITDOWN lowers them.
@@ -613,6 +620,10 @@ export class HutSystem {
     // visit — preserves broken barrels, defeated enemies, NPC dialogue state, etc.
     if (hut.interiorState) {
       game.activeFloor = hut.interiorState;
+    } else if (hut.hutKind === 'cavern') {
+      game.activeFloor = game.cavernSystem.generateCavernInterior();
+      hut.interiorState = game.activeFloor;
+      hut.interiorGenerated = true;
     } else {
       const depth = game.getCurrentZoneDepth ? game.getCurrentZoneDepth() : 1;
       const sizeOverride = hut.hutKind === 'alchemy' ? { cols: 12, rows: 12 } : null;
@@ -830,6 +841,9 @@ export class HutSystem {
       for (const obj of game.activeFloor.backgroundObjects) {
         obj.update(dt);
       }
+
+      // Cavern torch glow bookkeeping (CavernSystem owns the Cavern floor)
+      if (game.activeFloor.hutKind === 'cavern') this.game.cavernSystem.updateInterior(dt);
 
       // Update interior NPCs (WiseFellow, Witch, etc.)
       for (const npc of game.activeFloor.npcs) {

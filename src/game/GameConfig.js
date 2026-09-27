@@ -1305,6 +1305,71 @@ export const BACKGROUND_OBJECT_VARIANTS = {
       default: { animation: 'clang', message: null }
     }
   },
+  // Cavern Rock — the conspicuous cluster a Cavern hides behind (see
+  // roomFeatures.seedCavern). It keeps the rock glyph so the cluster reads as
+  // rocks, but a typeId replaces the Rock's data outright: no HP, no harvest,
+  // nothing a hammer or pickaxe opens. The darker tint and the size of the
+  // cluster are the tell — a knowing player learns that rocks this stubborn
+  // are guarding something.
+  //
+  // The '0' char still earns the Rock's narrow ellipse hitbox (BackgroundObject
+  // keys it on char), so packed cells leave no gap a player can squeeze through.
+  'cavern_rock': {
+    char: '0',
+    name: 'Cavern Rock',
+    color: '#5a5a5a',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    hp: null,
+    solid: true,
+    collisionShape: 'ellipse',
+    interactions: {
+      default: { animation: 'bounce', message: null }
+    }
+  },
+  // Bombable Rock — one rock in a Cavern's cluster that only a bomb
+  // explosion opens. Every other damage source reads it as indestructible
+  // (it shakes like its neighbours and drops nothing); CavernSystem.bombBlast
+  // is the sole destroyer, and breaking it reveals the Cavern's door.
+  //
+  // Deliberately identical to Cavern Rock on screen: which rock gives way is
+  // the secret, and the bomb is the question the player has to ask.
+  'bombable_rock': {
+    char: '0',
+    name: 'Bombable Rock',
+    color: '#5a5a5a',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    bombable: true,
+    hp: null,
+    solid: true,
+    collisionShape: 'ellipse',
+    interactions: {
+      default: { animation: 'bounce', message: null }
+    }
+  },
+  // Cavern Torch — one of the two lit torches every Cavern holds. Breaks in a
+  // single hit; its drop is resolved by CavernSystem.dropTorchLoot (a Stick,
+  // rarely Slick Oil with it). The glow is drawn from the floor's `torches`
+  // fixture list, which CavernSystem snuffs the moment this object is gone.
+  'cavern_torch': {
+    char: '!',
+    name: 'Cavern Torch',
+    color: '#ffaa33',
+    hp: 1,
+    dropEffect: 'destroyObject:cavernTorch',
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none',
+    solid: false,
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
 };
 
 export const WATER_COLORS = {

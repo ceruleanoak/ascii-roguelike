@@ -26,6 +26,12 @@ import { SLOT_CHROME } from '../../data/slotChrome.js';
 
 const BORDER_COLOR = '#c8a96e';
 
+// Cavern floors borrow the Underground's plane-1 cave palette ('}' Cave Wall,
+// #554433) so a Cavern reads as a pocket of the same rock, not a building.
+const CAVERN_PANEL_COLOR = '#0a0806';
+const CAVERN_ROCK_CHAR = '}';
+const CAVERN_ROCK_COLOR = '#554433';
+
 export class HutInteriorOverlay {
   constructor(renderer, renderController) {
     this.renderer = renderer;
@@ -41,13 +47,30 @@ export class HutInteriorOverlay {
     // font (auto-sizes for hut vs dungeon from the active floor's grid). The clip
     // keeps any surface-coord content that leaked past hutPlane filters (e.g.
     // untagged puddles/gooBlobs) from drawing on top of the PiP frame.
+    const isCavern = game.activeFloor.hutKind === 'cavern';
     drawInteriorFrame(ctx, {
       gridCols: game.activeFloor.gridCols,
       gridRows: game.activeFloor.gridRows,
-      panelColor: '#111108',
-      borderColor: BORDER_COLOR,
+      panelColor: isCavern ? CAVERN_PANEL_COLOR : '#111108',
+      borderColor: isCavern ? CAVERN_ROCK_COLOR : BORDER_COLOR,
       clip: true,
     });
+
+    // ── 3. Cavern rock walls ───────────────────────────────────────────────────
+    // Hut floors leave their solid perimeter undrawn; a Cavern paints every
+    // solid cell (perimeter + the knocked-in corners) as cave rock, skipping
+    // the exit cell so its '∩' door stays readable.
+    if (isCavern && game.activeFloor.collisionMap) {
+      const CS = GRID.CELL_SIZE;
+      const { collisionMap: cm, exitCol, exitRow } = game.activeFloor;
+      ctx.fillStyle = CAVERN_ROCK_COLOR;
+      for (let r = 0; r < cm.length; r++) {
+        for (let c = 0; c < (cm[r]?.length ?? 0); c++) {
+          if (!cm[r][c] || (c === exitCol && r === exitRow)) continue;
+          ctx.fillText(CAVERN_ROCK_CHAR, c * CS + CS / 2, r * CS + CS / 2);
+        }
+      }
+    }
 
     // ── 3a. Interior puddles + goo blobs + steam clouds (slime trails, etc.) ───
     // hutPlane=true selects only entries tagged with hutPlane=true on spawn,
@@ -130,6 +153,10 @@ export class HutInteriorOverlay {
           this.renderer.drawCircle(cx, cy, TORCH_LIGHT_RADIUS, TORCH_LIT_COLOR, true, alpha);
         }
 
+        // A fixture backed by a breakable background object (Cavern Torch)
+        // leaves its glyph to the background-object pass below, so the torch
+        // cracks and vanishes like any other object instead of drawing twice.
+        if (fixture.backgroundObject) return;
         ctx.fillStyle = lit ? TORCH_LIT_COLOR : TORCH_UNLIT_COLOR;
         ctx.fillText(fixture.char, cx, cy);
       };

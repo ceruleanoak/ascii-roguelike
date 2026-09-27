@@ -679,6 +679,15 @@ export class InteractionSystem {
       return;
     }
 
+    // Cavern Torch: the drop (Stick, rarely Slick Oil) is Cavern content, so
+    // CavernSystem owns the roll; this branch only routes the destruction.
+    if (effect === 'destroyObject:cavernTorch') {
+      obj.destroyAfterAnimation = true;
+      game.renderer.markBackgroundDirty();
+      game.cavernSystem.dropTorchLoot(obj);
+      return;
+    }
+
     // Rock harvest is checked BEFORE generic dropTable so mineral-formation rocks
     // (which have dropTable='basic' set by RoomGenerator) still get the guaranteed
     // Rock drop. Zone dropTable extras stack on top of the harvest rolls.
