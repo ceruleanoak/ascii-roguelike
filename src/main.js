@@ -4043,7 +4043,7 @@ class Game {
         if (this.player.canAttack()) {
           const attack = this.player.heldItem.releaseBow();
           if (attack) {
-            this.combatSystem.createAttack(this.applyGreenDamageModifier(attack), this.currentRoom ? this.currentRoom.enemies : []);
+            this.combatSystem.createAttack(this.applyGreenDamageModifier(attack), this._activeEnemies());
             this.triggerGreenActionCooldown();
             this._emitSoundEvent();
           }
