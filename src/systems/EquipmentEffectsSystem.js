@@ -107,6 +107,9 @@ export class EquipmentEffectsSystem {
         player.critChance = Math.max(player.critChance, cd.critChance || 0);
         player.luckDodgeBonus = Math.max(player.luckDodgeBonus, cd.dodgeBonus || 0);
       }
+      // Boots: slightly faster while equipped. Stacks on the armor's own
+      // speedBoost — a different slot, so both can be worn at once.
+      if (cd.passiveSpeedBoost) player.speedBoost += cd.passiveSpeedBoost;
       // Fire Berry: passive torch-light while equipped and unspent. Consuming
       // it (SPACE) empties the slot, which naturally stops the light.
       if (cd.fireBerryLight && !inventorySystem.spentConsumableSlots[idx]) {

@@ -1831,6 +1831,13 @@ export const ITEMS = {
   // After a dodge roll ends, the player becomes "armed". Staying still (no WASD)
   // activates the cloak: player renders as a bush `%`, and enemies that haven't
   // already aggro'd cannot detect the player at any range. Moving cancels it.
+  'ᐤ': {
+    char: 'ᐤ', name: 'Fur Cloak', type: ITEM_TYPES.ARMOR,
+    defense: 1,
+    dodgeChance: 0.15,      // loose fur — blows slide off
+    spellDescription: 'SLIPS THE BLOW.',
+    color: '#8b6914'
+  },
   '𐤒': {
     char: '𐤒', name: 'Moss Cloak', type: ITEM_TYPES.ARMOR,
     defense: 1,
@@ -2020,6 +2027,17 @@ export const ITEMS = {
     cooldown: 20, // Reusable with 20s cooldown
     color: '#00ffff'
   },
+  // Boots — Fur + Fur. A slot-holding passive: slightly faster while
+  // equipped (EquipmentEffectsSystem reads passiveSpeedBoost). Also the base
+  // the other boots are crafted from (recipes.js).
+  'ꙍ': {
+    char: 'ꙍ',
+    name: 'Boots',
+    type: ITEM_TYPES.CONSUMABLE,
+    passive: true,
+    passiveSpeedBoost: 0.08,
+    color: '#8b6914'
+  },
   'ѡ': {
     char: 'ѡ',
     name: 'Floating Boots',
@@ -2029,8 +2047,10 @@ export const ITEMS = {
     oneShot: true,
     color: '#ffaa44'
   },
-  'r': {
-    char: 'r',
+  // Rubber Boots — water immunity also grounds the wearer: electrified
+  // water/current can't shock them (ElectricitySystem.shockEntity).
+  'ѽ': {
+    char: 'ѽ',
     name: 'Rubber Boots',
     type: ITEM_TYPES.CONSUMABLE,
     effect: 'waterImmunity',
@@ -2048,20 +2068,6 @@ export const ITEMS = {
     cooldown: 15, // Reusable with 15s cooldown
     autoTriggerHP: 0.30,
     color: '#888888'
-  },
-  'ᐤ': {
-    char: 'ᐤ',
-    name: 'Fur Cloak',
-    type: ITEM_TYPES.CONSUMABLE,
-    effect: 'auto_dodge',
-    oneShot: true,
-    autoTrigger: {
-      condition: 'taking_damage',
-      dodgeNext: 1,
-      criticalHP: 0.20
-    },
-    duration: 10.0,
-    color: '#8b6914'
   },
   '𐤑': {
     char: '𐤑',
@@ -2686,7 +2692,6 @@ export const INGREDIENTS = {
   'j': { char: 'j', name: 'Jaw', color: '#cccccc' },
   'k': { char: 'k', name: 'Silk', color: '#cc88ff' },
   'l': { char: 'l', name: 'Leaf', color: '#33aa33' },
-  'o': { char: 'o', name: 'Oil', color: '#886644' },
   '●': { char: '●', name: 'Pearl', color: '#f4f4f8' },
   'r': { char: 'r', name: 'Root', color: '#996633' },
   'v': { char: 'v', name: 'Venom', color: '#00ff44' },
@@ -2704,6 +2709,10 @@ export const INGREDIENTS = {
   // recipe-intermediate rather than a standalone-use item. Registered as an
   // Unstable Potion component (alchemy.js) alongside Eye/Venom/Wing.
   '⚗': { char: '⚗', name: 'Slurry', color: '#6b8e23' },
+
+  // Cloth — String + String. A recipe intermediate like Slurry: Cloth + Fur
+  // = Fur Cloak, Cloth + Cloth = Robe.
+  '▤': { char: '▤', name: 'Cloth', color: '#d8ccb0' },
 
   // Raw oils — pressed at a hut press into oil consumables (bow/dagger augments).
   // Sap variants drop from Trees; the rare red/cyan variants only spawn in
@@ -2775,8 +2784,8 @@ export function resolveWeaponDefaults(data) {
 
 export function getItemData(char) {
   // Two-tier rule: letters and digits are always raw ingredients.
-  // Check INGREDIENTS first for letter/digit chars so that 'r' (Root),
-  // 'o' (Oil), 'v' (Venom), etc. are not shadowed by same-char ITEMS entries.
+  // Check INGREDIENTS first for letter/digit chars so that a raw ingredient
+  // is never shadowed by a same-char legacy ITEMS entry.
   if (INGREDIENTS[char] && /^[a-zA-Z0-9]$/.test(char)) {
     return INGREDIENTS[char];
   }
@@ -3199,7 +3208,7 @@ export const AFFINITY_POOLS = {
     ingredients: {
       [RARITY.COMMON]:   ['f', 't', 'g', 'w', 'c', 'b', 'm', 's', '|', '~'],
       [RARITY.UNCOMMON]: ['F', 'M', 'a', 'd', 'e', 'h', 'i', 'v'],
-      [RARITY.RARE]:     ['j', 'k', 'l', 'o', 'r', '0']
+      [RARITY.RARE]:     ['j', 'k', 'l', 'r', '0']
     },
     weapons: {
       [RARITY.UNCOMMON]: ['¬', '†', ')'],    // Gun, Sword, Bow

@@ -107,7 +107,6 @@ const MAZE_LOOT_TABLE = [
   { char: 's', baseWeight:  5, depthBonus: 0.8 }, // Scale
   { char: 'e', baseWeight:  4, depthBonus: 0.8 }, // Eye
   { char: 'k', baseWeight:  4, depthBonus: 0.8 }, // Silk
-  { char: 'o', baseWeight:  4, depthBonus: 0.8 }, // Oil
   { char: 'v', baseWeight:  4, depthBonus: 0.8 }, // Venom
   { char: 'F', baseWeight:  3, depthBonus: 1.0 }, // Fire Essence
   { char: 'M', baseWeight:  3, depthBonus: 1.0 }, // Metal

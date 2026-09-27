@@ -15,7 +15,7 @@ const THROW_DURATION = 0.45;
 const SELF_ONLY_EFFECTS = new Set([
   'heal', 'manaSlot', 'maxhp', 'speed', 'block', 'cleanse', 'invuln',
   'waterImmunity', 'float', 'stoneskin', 'regen',
-  'damageBuff', 'auto_dodge', 'arrowRefill',
+  'damageBuff', 'arrowRefill',
 ]);
 
 // Evaluates and dispatches consumable trigger conditions (auto and manual),
@@ -288,14 +288,6 @@ export class ConsumableTriggerSystem {
         }
         return false;
       }
-      case 'auto_dodge': {
-        // Fur Cloak: grants a brief invulnerability window when HP is critically low.
-        const threshold = cd.autoTrigger?.criticalHP ?? 0.20;
-        if (manual || player.hp < player.maxHp * threshold) {
-          return { windup: THROW_DURATION, effectType: 'auto_dodge' };
-        }
-        return false;
-      }
       case 'arrowRefill': {
         // Fletch of Arrows: only makes sense with an empty bow slot — a
         // physical precondition, stays absolute even under manual.
@@ -400,9 +392,6 @@ export class ConsumableTriggerSystem {
         player.applyDamageBuff(cd.duration, p?.damageBonus ?? cd.damageBonus ?? 2);
         break;
       }
-      case 'auto_dodge':
-        player.invulnerabilityTimer = Math.max(player.invulnerabilityTimer, cd.duration || 10.0);
-        break;
       case 'arrowRefill': {
         const emptyBow = player.quickSlots.find(s => s?.data?.weaponType === 'BOW' && s.usesRemaining <= 0);
         if (emptyBow) emptyBow.usesRemaining = Math.min(emptyBow.usesRemaining + (cd.amount || 5), emptyBow.maxUses ?? Infinity);

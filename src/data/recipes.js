@@ -1,6 +1,10 @@
 // Crafting recipes (hidden from player - pure discovery)
 // Format: [leftItem, rightItem] -> resultItem
 
+// Press oils (hut press output). A recipe that calls for "Oil" accepts any
+// of them — there is no raw Oil ingredient.
+const PRESS_OILS = ['🜁', '🜂', '❄', '🜔']; // Slick, Fire, Frost, Drowse
+
 export const RECIPES = [
   // === MANA CONVERSIONS (skeletal/organ/nature ingredients → raw mana) ===
   // Future use: mana flasks in consumable slots for magic builds
@@ -37,7 +41,8 @@ export const RECIPES = [
   { left: '¬', right: 'M', result: 'ᛉ', name: 'Shotgun' },       // Gun + Metal = Shotgun
   { left: '†', right: 'F', result: '‡', name: 'Flame Sword' },   // Sword + Fire = Flame Sword
   { left: 'F', right: '|', result: '♨', name: 'Torch' },         // Fire Essence + Stick = Torch
-  { left: 'o', right: '|', result: '♨', name: 'Torch' },         // Oil + Stick = Torch (alt)
+  // Oil + Stick = Torch (alt). "Oil" means any oil from a press.
+  ...PRESS_OILS.map(oil => ({ left: oil, right: '|', result: '♨', name: 'Torch' })),
   { left: '†', right: '†', result: '⫯', name: 'Longsword' },     // Sword + Sword = Longsword
   { left: '|', right: '~', result: ')', name: 'Bow' },           // Stick + String = Bow
   { left: '|', right: '|', result: '/', name: 'Staff' },         // Stick + Stick = Staff
@@ -118,7 +123,6 @@ export const RECIPES = [
   { left: 'b', right: 'M', result: '⊤', name: 'Bone Axe' },      // Bone + Metal = Bone Axe
 
   // Utility
-  { left: 'f', right: '~', result: '𐤄', name: 'Robe' },          // Fur + String = Rope
   { left: 't', right: '|', result: '↑', name: 'Spear' },         // Teeth + Stick = Spear
   { left: '↑', right: 'v', result: '↟', name: 'Venom Lance' },  // Spear + Venom = Venom Lance
   { left: '↑', right: 'j', result: 'ⲯ', name: 'Trident' },      // Spear + Jaw = Trident (jaw-bone prongs)
@@ -133,8 +137,10 @@ export const RECIPES = [
   // === GREEN GAP RECIPES (early game common ingredients) ===
   { left: 'm', right: 'm', result: 'ᒧ', name: 'Meat Jerky' },    // Meat + Meat = Meat Jerky (heal 2)
   { left: 'b', right: 'a', result: 'ᐧ', name: 'Bone Dust' },     // Bone + Ash = Bone Dust (panic blind)
-  { left: 'f', right: 'f', result: 'ᐤ', name: 'Fur Cloak' },     // Fur + Fur = Fur Cloak (auto-dodge)
+  { left: 'f', right: 'f', result: 'ꙍ', name: 'Boots' },         // Fur + Fur = Boots (slight speed)
   { left: 't', right: 't', result: 'ᑕ', name: 'Tooth Necklace' }, // Teeth + Teeth = Tooth Necklace (+1 dmg)
+  { left: '~', right: '~', result: '▤', name: 'Cloth' },         // String + String = Cloth
+  { left: '▤', right: 'f', result: 'ᐤ', name: 'Fur Cloak' },     // Cloth + Fur = Fur Cloak (armor, dodge)
   { left: '❦', right: '❦', result: '𐤒', name: 'Moss Cloak' },    // Moss + Moss = Moss Cloak (stealth bush transform)
 
   // More combinations
@@ -173,7 +179,6 @@ export const RECIPES = [
 
   // === NEW MELEE RECIPES (10) ===
   { left: '⊤', right: '⬨', result: 'ᛜ', name: 'Ice Hammer' },      // Bone Axe + Sapphire = Ice Hammer
-  { left: '~', right: '~', result: '≋', name: 'Whip' },            // String + String = Whip
   { left: 'j', right: '~', result: '○', name: 'Flail' },           // Jaw + String = Flail
   { left: '⊤', right: 'F', result: 'ᚨ', name: 'Thunder Axe' },     // Bone Axe + Fire = Thunder Axe
   { left: '⊤', right: '@', result: '✺', name: 'Exploding Mace' },  // Bone Axe + Bomb = Exploding Mace
@@ -240,7 +245,9 @@ export const RECIPES = [
   { left: '/', right: '~', result: 'ߒ', name: 'Fishing Pole' },  // Staff + String = Fishing Pole
 
   // === UTILITY ===
-  { left: 'w', right: 'f', result: 'ѡ', name: 'Floating Boots' }, // Wing + Fur = Floating Boots
+  { left: '▤', right: '▤', result: '𐤄', name: 'Robe' },           // Cloth + Cloth = Robe
+  { left: 'ꙍ', right: '∞', result: 'ѡ', name: 'Floating Boots' }, // Boots + Wings = Floating Boots
+  { left: 'g', right: 'ꙍ', result: 'ѽ', name: 'Rubber Boots' },   // Goo + Boots = Rubber Boots
 
   // === BLUE-ZONE ARMOR (water-only mechanics) ===
   { left: 'p', right: 'n', result: '∆', name: 'Shark Mask' },       // Pearl Shard + Sharkbone = Shark Mask
