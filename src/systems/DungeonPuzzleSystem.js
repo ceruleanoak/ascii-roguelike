@@ -4,7 +4,7 @@ import { Ingredient } from '../entities/Ingredient.js';
 import { ITEMS } from '../data/items.js';
 import { paintDescentVisual, paintStairsUpVisual } from '../data/dungeonFloorTemplates.js';
 import { TORCH_INTERACT_RADIUS } from './MazeSystem.js';
-import { tickTriggers, within, overlapsCell } from './triggerMachine.js';
+import { tickTriggers, within, overlapsCell, setTriggerVisual } from './triggerMachine.js';
 import { tagInteriorPlane } from './PlaneSystem.js';
 
 // Proximity radius for door/switch/slot interaction (px from cell center) —
@@ -39,7 +39,7 @@ export class DungeonPuzzleSystem {
     if (floor.roomKind === 'trapRoom') {
       this._updateTrapRoom(floor);
     } else if (floor.roomKind === 'numbered' && floor.floorIndex === 2) {
-      this._updateBranchSwitches(floor);
+      this._updateBranchPanels(floor);
     } else if (floor.roomKind === 'puzzleRoom') {
       this._updatePuzzleRoom(floor, dt);
     }
@@ -48,7 +48,7 @@ export class DungeonPuzzleSystem {
   // Compass (⌖) — dungeon-only beep, narrowed (2026-08-25) to exactly the
   // two dungeon secrets it's meant to flag: the skull key (wherever
   // game.dungeonKeySkullFloor rolled it — Entrance or Corridor) and Branch's
-  // companion-switch puzzle. Generic floor loot (Pyramid slots, Puzzle Room
+  // companion-panel puzzle. Generic floor loot (Pyramid slots, Puzzle Room
   // triggers, plain chests) no longer beeps. The full Explore-mode mechanic
   // (secret-reveal beep + directional arrow) lives in CompassSystem.js.
   updateCompassBeep(floor, dt) {
@@ -85,20 +85,20 @@ export class DungeonPuzzleSystem {
     this._spawnUnlockEffect(room.stairsUpObj);
   }
 
-  // Branch's companion-switch puzzle — lives directly on Branch's own floor
+  // Branch's companion-panel puzzle — lives directly on Branch's own floor
   // (bug #209: previously relocated into a side room off Branch's East
   // descent, gated on companion status, which hid the puzzle's very
   // existence from a solo player; git-archaeology into the pre-rework
-  // 5-floor system showed Floor 2's switches were always rendered in the
+  // 5-floor system showed Floor 2's panels were always rendered in the
   // room regardless of companion status — only solving them needed one).
   // Solving unlocks Branch's East descent (to the Pyramid) instead of a
   // floor-level stairsLocked flag.
-  _updateBranchSwitches(floor) {
+  _updateBranchPanels(floor) {
     const { game } = this;
     const player = game.player;
     const companion = game.companion;
-    const a = floor.switchAObj;
-    const b = floor.switchBObj;
+    const a = floor.panelAObj;
+    const b = floor.panelBObj;
     if (!a || !b) return;
 
     const aPx = a.position.x, aPy = a.position.y;
@@ -113,8 +113,8 @@ export class DungeonPuzzleSystem {
     const bPressed = playerOnB || compOnB;
 
     // Visual state — stay "pressed" once puzzle is solved
-    this._setSwitchVisual(a, aPressed || floor.puzzleSolved);
-    this._setSwitchVisual(b, bPressed || floor.puzzleSolved);
+    setTriggerVisual(a, aPressed || floor.puzzleSolved);
+    setTriggerVisual(b, bPressed || floor.puzzleSolved);
 
     // First simultaneous press → permanent unlock
     if (!floor.puzzleSolved && aPressed && bPressed) {
@@ -129,17 +129,17 @@ export class DungeonPuzzleSystem {
       return;
     }
 
-    // Dispatch companion to the unoccupied switch while player stands on one.
+    // Dispatch companion to the unoccupied panel while player stands on one.
     // Sticky once committed: the companion's crossing is a straight-line walk
-    // with no pathfinding, so it takes real time (the two switches are 10
-    // cols apart) — requiring the player to keep standing on their switch for
+    // with no pathfinding, so it takes real time (the two panels are 10
+    // cols apart) — requiring the player to keep standing on their panel for
     // the whole crossing made the puzzle unsolvable by anyone who moved
     // afterward (very plausible: watching the companion walk, repositioning).
     // Previously, the player stepping off before the companion arrived hit
     // the `else` branch below, nulled commandTarget mid-walk, and permanently
     // stranded the companion partway across the room — the puzzle could
     // never solve for the rest of the run (bug #205). Re-deriving the target
-    // only while the companion isn't yet holding either switch (not on every
+    // only while the companion isn't yet holding either panel (not on every
     // tick) lets it keep walking — and then hold — once dispatched.
     if (!floor.puzzleSolved && companion) {
       if (!compOnA && !compOnB) {
@@ -151,7 +151,7 @@ export class DungeonPuzzleSystem {
         // else: no assignment yet — leave commandTarget as-is (null before
         // the first dispatch), companion just follows the player normally.
       }
-      // else: companion is already holding a switch — leave commandTarget
+      // else: companion is already holding a panel — leave commandTarget
       // alone so it stays put regardless of where the player wanders.
     } else if (companion) {
       companion.commandTarget = null;
@@ -161,7 +161,7 @@ export class DungeonPuzzleSystem {
   // Puzzle Room — generic template-driven puzzle side room (see
   // DungeonFloorGenerator.generatePuzzleRoom). Every trigger in room.triggers
   // (a 'switch', strike-triggered via the puzzleSignal/glitterHit contract;
-  // a 'panel', occupancy-triggered like Branch's own switches; or a 'torch',
+  // a 'panel', occupancy-triggered like Branch's own panels; or a 'torch',
   // ignited by the same proximity + held-Torch-item contract as a decorative
   // PuzzleTorch below) runs through the shared triggerMachine state
   // machine; the exit unlocks once every trigger is active at once — the
@@ -215,16 +215,6 @@ export class DungeonPuzzleSystem {
       paintStairsUpVisual(room.stairsUpObj, false);
       this._spawnUnlockEffect(room.stairsUpObj);
     }
-  }
-
-  _setSwitchVisual(sw, pressed) {
-    const char = pressed ? '●' : '○';
-    const color = pressed ? '#ffcc44' : '#888888';
-    sw.isPressed = pressed;
-    sw.char = char;
-    sw.color = color;
-    sw.animationChar = char;
-    sw.animationColor = color;
   }
 
   // ─── SPACE-press puzzle actions ───────────────────────────────────────────

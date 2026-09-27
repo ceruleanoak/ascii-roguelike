@@ -1,7 +1,7 @@
 import { GRID, ROOM_TYPES } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { BARRICADE_FAMILIES, FAMILY_BY_COLOR } from '../data/barricades.js';
-import { tickTriggers } from './triggerMachine.js';
+import { tickTriggers, setTriggerVisual } from './triggerMachine.js';
 import { isExitLetterTile } from './ExitSystem.js';
 import { createBurstParticles } from './WorldEffectsSystem.js';
 import { isCellProtected } from './roomFeatures.js';
@@ -294,11 +294,9 @@ export class BarricadeSystem {
   _buildTrigger(room, spec, col, row) {
     const cs = GRID.CELL_SIZE;
     const isSwitch = spec.kind === 'switch';
-    const char = isSwitch ? '○' : '▭';
-    const obj = new BackgroundObject(char, col * cs, row * cs);
-    obj.color = '#888888';
-    obj.animationChar = char;
-    obj.animationColor = '#888888';
+    const obj = new BackgroundObject(isSwitch ? '○' : '▭', col * cs, row * cs);
+    obj.kind = spec.kind;
+    setTriggerVisual(obj, false);
     if (isSwitch) {
       obj.puzzleSignal = true;
       obj.indestructible = false;
@@ -306,7 +304,6 @@ export class BarricadeSystem {
       obj.maxHp = 1;
     }
     obj.structural = true;
-    obj.kind = spec.kind;
     obj.activation = spec.activation;
     obj.neutralizeSeconds = spec.neutralizeSeconds;
     obj.active = false;

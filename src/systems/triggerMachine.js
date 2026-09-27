@@ -67,10 +67,12 @@ export function advanceTrigger(trigger, dt, isTriggeredNow) {
   // activation === 'permanent': once active, never reverts.
 }
 
-// Visual for a generic trigger — switches reuse Branch/Whip Trial's ○/● pair
-// (one consistent "this is a switch" glyph language everywhere a switch
-// appears); panels use their own ▭/▬ pair so the two kinds always read as
-// visually distinct fixtures.
+// The one visual for every trigger fixture, everywhere (Barricades, dungeon
+// Puzzle Rooms, Branch's companion panels). The rule is universal: an impact
+// trigger (switch — struck) is circular, ○/●; a pressure trigger (panel —
+// stood on) is quadrilateral, ▭/▬. Every trigger builder sets `kind` and
+// calls this rather than choosing glyphs itself, so the two kinds can never
+// drift into looking alike.
 export function setTriggerVisual(trigger, active) {
   const isSwitch = trigger.kind === 'switch';
   const char = isSwitch ? (active ? '●' : '○') : (active ? '▬' : '▭');

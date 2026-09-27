@@ -1,5 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
+import { setTriggerVisual } from './triggerMachine.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
 import { getZoneRandomEnemy } from '../data/enemies.js';
@@ -72,16 +73,16 @@ const INTERIOR_ROWS = 24;
 // for clearing the gauntlet; easy to swap, not load-bearing on any other system.
 const TRAP_ROOM_REWARD_POOL = ['‡', '⟘', '↟', '⟩']; // Flame Sword, Maul, Venom Lance, Fire Bow
 
-// Branch's companion-switch puzzle — position mirrors the pre-rework 5-floor
+// Branch's companion-panel puzzle — position mirrors the pre-rework 5-floor
 // system's SWITCH_ROW/SWITCH_A_COL/SWITCH_B_COL (git-archaeology, bug #209).
 // Row 11 sits one cell off SPINE_ROW (12) so it doesn't collide with the
 // West/East footprints on that row; columns 7/17 clear both WEST_COL (4) and
 // EAST_COL (19) with room to spare for the straight-line companion walk
 // between them (see _generateBranch's bare-layout comment for why that walk
 // must never cross a wall).
-const BRANCH_SWITCH_ROW = 11;
-const BRANCH_SWITCH_A_COL = 7;
-const BRANCH_SWITCH_B_COL = 17;
+const BRANCH_PANEL_ROW = 11;
+const BRANCH_PANEL_A_COL = 7;
+const BRANCH_PANEL_B_COL = 17;
 
 // Puzzle Room torch fixture — maze-parity ignite behavior (unlit until the
 // player approaches while wielding the Torch item, permanent once lit,
@@ -451,14 +452,14 @@ export class DungeonFloorGenerator {
 
   _generateBranch(depth, zone) {
     // Bare 'open' layout — no wall template. Matches the pre-rework 5-floor
-    // system's floor 2 (git-archaeology, bug #209: "companion-switch floor
+    // system's floor 2 (git-archaeology, bug #209: "companion-panel floor
     // uses the bare 'open' layout — its puzzle assumes a clean playfield"),
     // and is a hard requirement, not just fidelity: the companion's dispatch
-    // walk between the two switches (DungeonPuzzleSystem._updateBranchSwitches
+    // walk between the two panels (DungeonPuzzleSystem._updateBranchPanels
     // → CampNPCSystem._moveToTarget) is a straight-line, unpathed walk with
-    // no obstacle avoidance, so a template wall between the switches would
+    // no obstacle avoidance, so a template wall between the panels would
     // silently strand it (the exact failure a shared-template experiment hit
-    // and reverted — see BRANCH_SWITCH_ROW/COL comment below for the columns
+    // and reverted — see BRANCH_PANEL_ROW/COL comment below for the columns
     // this preserves clearance for).
     const { cols, rows, collisionMap, backgroundObjects, pickOpenCell, spawnCells } = this._buildScaffold({ useTemplate: false });
     this._addDecor(backgroundObjects, pickOpenCell, rows, cols);
@@ -476,33 +477,29 @@ export class DungeonFloorGenerator {
     const stairsUpObj = this._makeStairsUp(false, SPINE_ROW, WEST_COL);
     backgroundObjects.push(stairsUpObj);
 
-    // Companion-switch puzzle — always visible, sitting directly in Branch
+    // Companion-panel puzzle — always visible, sitting directly in Branch
     // alongside the Trap Room door (bug #209: previously relocated into an
     // invisible-until-companion-recruited side room, which hid the puzzle's
     // very existence; the pre-rework implementation always rendered these).
-    // Only *solving* it needs a companion (_updateBranchSwitches); a solo
-    // player can walk in, see both switches, and read the puzzle before
+    // Only *solving* it needs a companion (_updateBranchPanels); a solo
+    // player can walk in, see both panels, and read the puzzle before
     // recruiting anyone. Row/cols mirror the original floor 2 constants.
-    const switchAObj = new BackgroundObject('○', BRANCH_SWITCH_A_COL * GRID.CELL_SIZE, BRANCH_SWITCH_ROW * GRID.CELL_SIZE);
-    switchAObj.color = '#888888';
-    switchAObj.animationChar = '○';
-    switchAObj.animationColor = '#888888';
-    switchAObj.isPressed = false;
-    backgroundObjects.push(switchAObj);
+    const panelAObj = new BackgroundObject('▭', BRANCH_PANEL_A_COL * GRID.CELL_SIZE, BRANCH_PANEL_ROW * GRID.CELL_SIZE);
+    panelAObj.kind = 'panel';
+    setTriggerVisual(panelAObj, false);
+    backgroundObjects.push(panelAObj);
 
-    const switchBObj = new BackgroundObject('○', BRANCH_SWITCH_B_COL * GRID.CELL_SIZE, BRANCH_SWITCH_ROW * GRID.CELL_SIZE);
-    switchBObj.color = '#888888';
-    switchBObj.animationChar = '○';
-    switchBObj.animationColor = '#888888';
-    switchBObj.isPressed = false;
-    backgroundObjects.push(switchBObj);
+    const panelBObj = new BackgroundObject('▭', BRANCH_PANEL_B_COL * GRID.CELL_SIZE, BRANCH_PANEL_ROW * GRID.CELL_SIZE);
+    panelBObj.kind = 'panel';
+    setTriggerVisual(panelBObj, false);
+    backgroundObjects.push(panelBObj);
 
     // North → Trap Room, always open — sealed enemy gauntlet, tier-2 reward
     // on clear (real risk room; reaching Branch at all was the key-gated cost).
     const north = this._makeDescent('north', NORTH_ROW, STAIRS_COL, {
       active: true, locked: false, destination: { kind: 'side', key: 'trapRoom' },
     });
-    // East → Pyramid, visible but locked until the switch puzzle is solved
+    // East → Pyramid, visible but locked until the panel puzzle is solved
     // (same visible-but-locked contract as Corridor's West/skull-key door).
     const east = this._makeDescent('east', SPINE_ROW, EAST_COL, {
       active: true, locked: true, destination: { kind: 'numbered', floorIndex: 3 },
@@ -523,7 +520,7 @@ export class DungeonFloorGenerator {
       stairsUpRow: SPINE_ROW, stairsUpCol: WEST_COL, stairsUpObj, stairsUpLocked: false,
       ascendTo: { kind: 'numbered', floorIndex: 1 },
       descents: [north, east],
-      switchAObj, switchBObj, puzzleSolved: false,
+      panelAObj, panelBObj, puzzleSolved: false,
     };
   }
 
@@ -782,18 +779,15 @@ export class DungeonFloorGenerator {
         continue;
       }
       const isSwitch = t.kind === 'switch';
-      const char = isSwitch ? '○' : '▭';
-      const obj = new BackgroundObject(char, t.col * CS, t.row * CS);
-      obj.color = '#888888';
-      obj.animationChar = char;
-      obj.animationColor = '#888888';
+      const obj = new BackgroundObject(isSwitch ? '○' : '▭', t.col * CS, t.row * CS);
+      obj.kind = t.kind;
+      setTriggerVisual(obj, false);
       if (isSwitch) {
         obj.puzzleSignal = true;
         obj.indestructible = false;
         obj.hp = 1;
         obj.maxHp = 1;
       }
-      obj.kind = t.kind;
       obj.activation = t.activation;
       obj.neutralizeSeconds = t.neutralizeSeconds;
       obj.active = false;
