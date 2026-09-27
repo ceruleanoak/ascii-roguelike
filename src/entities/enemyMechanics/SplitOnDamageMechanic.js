@@ -20,8 +20,8 @@ export const SplitOnDamageMechanic = {
     if (!enemy.game?.enemySpawnSystem) return;
 
     // One child per attack; its HP equals the damage the boss just took. Kill
-    // the child before mergeCooldown elapses to make the damage stick — otherwise
-    // colliding with the boss re-merges it and restores the HP.
+    // the child before it touches the boss again to make the damage stick —
+    // any contact after its spawn iframes re-merges it and restores the HP.
     const childHp = Math.max(1, Math.floor(damageAmount));
     // Child spawns at the boss's center and is launched outward in a random
     // direction by registerSplitChild — no placement search needed.
@@ -32,7 +32,6 @@ export const SplitOnDamageMechanic = {
       spawnerPosition: { x: enemy.position.x, y: enemy.position.y },
       _splitChildLink: {
         parent: enemy,
-        mergeCooldown: cfg.mergeCooldown,
         childHp
       }
     });
@@ -42,7 +41,6 @@ export const SplitOnDamageMechanic = {
   registerSplitChild(parent, child, cfg) {
     if (!parent.splitChildren) parent.splitChildren = new Set();
     child.parentRef = parent;
-    child.mergeCooldownTimer = cfg.mergeCooldown ?? 0;
     child.reformValue = cfg.childHp; // Absorbing returns exactly the HP the player failed to remove
     child.hp = cfg.childHp;
     // Launch the child away from the boss center in a random direction;
@@ -52,8 +50,9 @@ export const SplitOnDamageMechanic = {
     child.velocity.vy = Math.sin(launchAngle) * 300;
     child.applyStatusEffect('knockback', 0.35);
     // Spawn iframes: the child appears at the boss center, inside whatever
-    // attack just split it off — without these it dies instantly. 2 real
-    // seconds (timer is in double-seconds, ENEMY_TIMER_RATE = 2).
+    // attack just split it off — without these it dies instantly, and it
+    // would re-merge the instant it spawned (ReformMechanic waits them out).
+    // 2 real seconds (timer is in double-seconds, ENEMY_TIMER_RATE = 2).
     child.invulnerabilityTimer = 4.0;
     parent.splitChildren.add(child);
   },

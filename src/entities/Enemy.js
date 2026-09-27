@@ -417,10 +417,9 @@ export class Enemy {
     if (SlimeTrailDropMechanic.isEnabled(this)) SlimeTrailDropMechanic.init(this);
 
     // ── Reform behavior (split-child slimes) ──────────────────────────────────
-    // parentRef, mergeCooldownTimer, reformValue are attached post-construction
-    // by the Giant Slime split path. Fields default to inactive.
+    // parentRef, reformValue are attached post-construction by the Giant
+    // Slime split path. Fields default to inactive.
     this.parentRef = null;
-    this.mergeCooldownTimer = 0;
     this.reformValue = 0;
 
     // ── Follow-leader (Goblin Army followers) ─────────────────────────────────

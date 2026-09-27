@@ -473,11 +473,9 @@ export const ENEMIES = {
     },
     splitOnDamage: {
       enabled: true,
-      spawnChar: 'o',
-      // Children can't re-merge with the boss for this long after spawning.
-      // Value is in double-seconds: enemies tick twice per frame (main.js enemy
-      // loop + CombatSystem enemy loop, bug #92), so 10.0 = 5 real seconds.
-      mergeCooldown: 10.0
+      // Children re-merge on any contact with the boss once their spawn
+      // iframes end (ReformMechanic) — no separate merge cooldown.
+      spawnChar: 'o'
     },
     gooSpewCone: {
       enabled: true,

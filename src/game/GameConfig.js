@@ -32,8 +32,8 @@ export const PHYSICS = {
 
   // Enemy timers have the same history (resolved bug #92): enemies ticked
   // twice per frame (main.js + CombatSystem loops) from day one, so all enemy
-  // timing data (attack cooldowns, windups, status durations, decisionInterval,
-  // mergeCooldown) was tuned against double-rate ticking. The duplicate tick
+  // timing data (attack cooldowns, windups, status durations, decisionInterval)
+  // were tuned against double-rate ticking. The duplicate tick
   // is gone; the single canonical tick multiplies deltaTime by this rate to
   // preserve the tuned pacing. Effective seconds = data value / 2. Do NOT
   // remove without halving all enemy timing data in the same pass.

@@ -701,7 +701,6 @@ export const MECHANICS = [
     id: 'splitOnDamage', title: 'Split on damage', gate: 'splitOnDamage.enabled',
     fields: [
       { key: 'splitOnDamage.spawnChar', label: 'Spawn char', type: 'char', default: 'o' },
-      { key: 'splitOnDamage.mergeCooldown', label: 'Merge cooldown (dbl-sec)', type: 'number', step: 0.1, default: 10 },
     ]
   },
   {
