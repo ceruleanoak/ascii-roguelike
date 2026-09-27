@@ -7,3 +7,4 @@ Quick-capture list for feature/content ideas noticed during play/dev, before the
 Just one idea per line below, plain text.
 Slime trails conducts electricity, and lightning strikes as well as electric currents (or rather objects that have electricity like lightning rod) can trigger traps such as slime bomb
 After goo dragon is defeated, every exit should be one of the remaining colors not defeated (red, cyan, yellow). If all zone bosses have been defeatd, the north exit is always gray.
+Enemy freeze moves onto pip escalation like the player's (each ice hit +1 pip, pip 3 = Frozen lock) instead of one hit = 8s lock / second hit = stun — rebalances every ice weapon and trap, so tune alongside
