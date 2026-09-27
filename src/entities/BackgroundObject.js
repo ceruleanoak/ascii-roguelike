@@ -176,6 +176,9 @@ export class BackgroundObject {
     // Water state (only meaningful when this.char === '~')
     this.waterState = 'normal'; // 'normal' | 'frozen' | 'poisoned' | 'electrified' | 'crystallized'
     this.waterStateTimer = 0;
+    // Imbued current this tile was electrified by ({ pips, source } — a zapped
+    // enemy's weaker current, ElectricitySystem); null = full-strength current.
+    this.electricCurrent = null;
 
     // Drop tracking - prevents duplicate drops from same object
     this.hasDropped = false;
@@ -824,7 +827,7 @@ export class BackgroundObject {
     return this.isWater(); // legacy
   }
 
-  setWaterState(state, duration) {
+  setWaterState(state, duration, electricCurrent = null) {
     if (!this.isWater()) return; // Only real water supports water states
     // A Lead — the hole a Frosted Maw Breach punches in its frozen lake — never
     // closes again; the depleting floor is the whole point of that phase. The
@@ -835,6 +838,7 @@ export class BackgroundObject {
     if (this.isLead && state === 'frozen') return;
     this.waterState = state;
     this.waterStateTimer = duration;
+    this.electricCurrent = state === 'electrified' ? electricCurrent : null;
     // conductivity handled by isConductive() checking waterState — no mutation needed
   }
 

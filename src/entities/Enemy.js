@@ -38,7 +38,7 @@ import { EnemyStateMachine, legacyStateFor } from './EnemyStateMachine.js';
 import { computeNodePath as computeNodePathImpl } from '../systems/EnemyPathfinding.js';
 import { statesFor } from '../data/stateDefaults.js';
 import { computeBlinkColor, computePipRows, computeIframeFlashColor } from '../systems/StatusEffectVisuals.js';
-import { createStatusEffects } from '../systems/StatusEffects.js';
+import { createStatusEffects, MAX_PIPS } from '../systems/StatusEffects.js';
 import {
   applyStatusEffect as applyStatusEffectImpl,
   computeSpeedMultiplier as computeSpeedMultiplierImpl,
@@ -507,10 +507,11 @@ export class Enemy {
     return this.statusEffects.stun.active;
   }
 
-  // Zap = electric-affinity immobilization. Mechanically blocks movement/attacks like stun;
-  // visually distinct (rapid shake render). Affinity gating means electric enemies are auto-immune.
+  // Zapped = the zap Pip track at pip 3: blocks movement/attacks like stun,
+  // rapid-shake render. Pips 1–2 are only a slow (computeSpeedMultiplier).
+  // Affinity gating means electric enemies are auto-immune.
   isZapped() {
-    return this.statusEffects.zap.active;
+    return this.statusEffects.zap.active && this.statusEffects.zap.stacks >= MAX_PIPS;
   }
 
   isFrozen() {

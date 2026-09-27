@@ -694,6 +694,8 @@ programming terms.
   is a stronger tier, and pip 3 is its extreme. Wet: pip 1 = wet, deep water fills pips 2–3,
   pip 3 drowns, and each pip slows harder in water. Freeze: pips 1–2 slow, pip 3 = Frozen.
   Blind (player): each pip closes vision in tighter (6 / 4.5 / 3 cells).
+  Zap (enemy): pips 1–2 slow, pip 3 = stun + disarm; wet holds its timer, and a zapped enemy
+  shocks what it touches (and water it stands in) one pip weaker than itself.
   A discrete hit adds one pip; a per-frame source (ice puddle) or an all-at-once hit (freeze
   trap) raises the track to a level instead, so lingering never stacks by itself.
 - **In code:** `statusEffects[x].stacks` on both sides (`MAX_PIPS = 3`, `StatusEffects.js`);

@@ -341,6 +341,7 @@ export class PhysicsSystem {
     let onIce = false;
     let inLiquid = false;
     let liquidState = 'normal';
+    let electricCurrent = null; // the electrified tile's imbued current, if any
     let inDeepWaterTile = false; // Deep water (BackgroundObject.deepWater) — see velocityMultiplier below
     let inGrass = false;
     let inMud = false; // Wet mud — heavier than water, dodge roll bypasses
@@ -451,6 +452,7 @@ export class PhysicsSystem {
               } else {
                 inLiquid = true;
                 liquidState = wState;
+                if (wState === 'electrified') electricCurrent = obj.electricCurrent;
                 if (obj.deepWater) inDeepWaterTile = true;
                 // Glacier Crab freezes water on contact
                 if (!isProjectile && entity.data?.char === 'u' && entity.isEnemy && obj.setWaterState) {
@@ -738,7 +740,7 @@ export class PhysicsSystem {
       this.resolveTunnelWallOverlap(entity, room.tunnel, backgroundObjects, deltaTime);
     }
 
-    return { inLiquid, liquidState, damagingLiquid, healingLiquid, inDeepWater: inDeepWaterTile };
+    return { inLiquid, liquidState, electricCurrent, damagingLiquid, healingLiquid, inDeepWater: inDeepWaterTile };
   }
 
   checkCollision(entity, newX, newY, backgroundObjects = [], room = null) {
@@ -1584,7 +1586,7 @@ export class PhysicsSystem {
       ingredient.inWater = false;
     }
 
-    for (const { entity, inLiquid, liquidState, damagingLiquid, healingLiquid, inDeepWater } of waterResults) {
+    for (const { entity, inLiquid, liquidState, electricCurrent, damagingLiquid, healingLiquid, inDeepWater } of waterResults) {
       // Wet Pip track — deep water fills pips 1→3, pip 3 drowns. Independent
       // of (runs before) the lava/heal/wet branches below, so pips drain even
       // on a frame the entity has left the water for dry ground; they drain
@@ -1784,7 +1786,7 @@ export class PhysicsSystem {
         if (liquidState === 'poisoned') {
           if (entity.applyStatusEffect) entity.applyStatusEffect('poison', 4.0);
         } else if (liquidState === 'electrified') {
-          game.electricitySystem?.shockEntity(entity);
+          game.electricitySystem?.shockEntity(entity, electricCurrent);
         }
       }
     }

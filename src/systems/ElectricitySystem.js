@@ -15,6 +15,7 @@
  *   - Electric-affinity enemies in contact with water (ambient scan below —
  *     Sparks drifting over a river, Volt Spiders wading, etc.)
  *   - Stingray Mantle wearer swimming (ambient scan; wearer is shock-immune)
+ *   - Zapped enemies (ambient scan — see "Imbued current" below)
  *
  * Counterplay / conduction rules:
  *   - Only 'normal' water conducts. Frozen / poisoned / crystallized tiles
@@ -22,18 +23,29 @@
  *   - Seeding a tile that is already electrified is a no-op, so continuous
  *     sources (a hovering Spark) re-trigger only after the local tail decays.
  *
- * Per-tile effects (stun + damage on entities standing in electrified water)
+ * Per-tile effects (zap + damage on entities standing in electrified water)
  * are unchanged — they live in PhysicsSystem.applyLiquidResults; this system
  * only decides WHEN each tile becomes electrified.
+ *
+ * Imbued current: zap charges the enemy it lands on. A zapped enemy at pip N
+ * is itself a live source one pip weaker — it electrifies water it stands in
+ * and shocks whatever touches it, at pip N-1 — so current weakens as it
+ * passes through a crowd, and a pip-1 enemy passes nothing on. The source is
+ * never shocked by its own current, and imbued current only lands on a body
+ * it would charge further (two touching zapped enemies can't keep re-zapping
+ * each other forever).
  */
 
 import { GRID } from '../game/GameConfig.js';
+import { MAX_PIPS } from './StatusEffects.js';
+import { inSamePlane } from './PlaneSystem.js';
 
 const SPREAD_INTERVAL = 0.08; // seconds per ring (~12.5 tiles/sec down a channel)
 const TILE_DURATION = 2.5;    // seconds a tile stays electrified after the front passes
 const SCAN_INTERVAL = 0.25;   // ambient electric-source contact scan cadence
 const MAX_RING_PARTICLES = 4; // spark particles spawned per ring advance (visual cap)
 const CHARGE_DECAY_PER_RING = 2; // charge diminished per ring expansion; spread stops at ≤0
+const IMBUED_CONTACT_RANGE = GRID.CELL_SIZE * 0.8; // touching a zapped enemy
 
 const PARTICLE_CHARS = ['·', '`', "'", '.'];
 const PARTICLE_COLORS = ['#ffff88', '#ffffff', '#cccc00'];
@@ -92,7 +104,8 @@ export class ElectricitySystem {
     const initialCharge = opts.initialCharge ?? Infinity; // unlimited range if not specified
     const seedKey = this._key(obj);
 
-    obj.setWaterState('electrified', tileDuration);
+    const current = opts.current ?? null;
+    obj.setWaterState('electrified', tileDuration, current);
     this._emitSparks([obj], opts.hutPlane ?? false);
     this.game.audioSystem?.playSFX?.('water_zap'); // silently no-ops until a buffer is loaded
 
@@ -105,6 +118,7 @@ export class ElectricitySystem {
       interval: opts.interval ?? SPREAD_INTERVAL,
       tileDuration,
       charge: initialCharge,
+      current,
       hutPlane: opts.hutPlane ?? false
     });
     return true;
@@ -149,20 +163,56 @@ export class ElectricitySystem {
    * PhysicsSystem.applyLiquidResults each frame the contact holds — electric
    * consequences live here with the element, not in the physics pass.
    *
-   * The status applied is 'zap' (the electric stun variant: rapid-shake
-   * visual, EFFECT_AFFINITY auto-immunity), NOT generic 'stun'. Electric-
-   * affinity enemies are therefore immune for free — they ARE generating
-   * sources. Damage cadence is unchanged from the old inline code: per-frame
-   * takeDamage(1); player iframes gate it to ~1/s.
+   * Also the contact effect of the electric wire and of touching a zapped
+   * enemy (updateImbuedCurrent). `current` is the imbued current's
+   * { pips, source }, or null for full-strength current.
+   *
+   * The status applied is 'zap' (EFFECT_AFFINITY auto-immunity), NOT
+   * generic 'stun'. Electric-affinity enemies are therefore immune for free —
+   * they ARE generating sources. Contact is per-frame, so it raises the zap
+   * Pip track to a level (full current: pip 3) rather than adding a pip a
+   * frame. Damage cadence is unchanged from the old inline code: per-frame
+   * takeDamage(1); iframes gate it.
    */
-  shockEntity(entity) {
+  shockEntity(entity, current = null) {
     const p = this.game.player;
     // Stingray Mantle: wearer sits at the source of the current, not in its path.
     if (entity === p && p.stingrayMantle) return;
+    // A zapped enemy isn't shocked by the current it generates.
+    if (current?.source === entity) return;
     // Enemies route through affinity auto-immunity (zap → 'electric').
     if (entity.shouldApplyStatusEffect && !entity.shouldApplyStatusEffect('zap')) return;
-    if (entity.applyStatusEffect) entity.applyStatusEffect('zap', 1.5);
+    const pips = current?.pips ?? MAX_PIPS;
+    // Imbued current only lands on a body it would charge further.
+    if (current && (entity.statusEffects?.zap?.stacks ?? 0) >= pips) return;
+    if (entity.applyStatusEffect) entity.applyStatusEffect('zap', 1.5, pips);
     if (entity.takeDamage) entity.takeDamage(1);
+  }
+
+  /**
+   * Zapped enemies as live sources (see "Imbued current" in the header):
+   * each enemy at zap pip 2+ electrifies the water it stands in and shocks
+   * the player and enemies touching it, one pip weaker than itself. Runs on
+   * the ambient scan cadence.
+   */
+  updateImbuedCurrent(enemies) {
+    const player = this.game.player;
+    for (const e of enemies) {
+      const zap = e.statusEffects?.zap;
+      if (!zap?.active || zap.stacks < 2 || e.isDying || e.hp <= 0) continue;
+      const current = { pips: zap.stacks - 1, source: e };
+      if (e._isOnWater?.() || e.inLiquid) {
+        this.seedAt(e.position.x + GRID.CELL_SIZE / 2, e.position.y + GRID.CELL_SIZE / 2, { current });
+      }
+      const touchers = player ? [...enemies, player] : enemies;
+      for (const other of touchers) {
+        if (other === e || other.isDying || other.hp <= 0 || !inSamePlane(e, other)) continue;
+        const dx = other.position.x - e.position.x;
+        const dy = other.position.y - e.position.y;
+        if (dx * dx + dy * dy > IMBUED_CONTACT_RANGE * IMBUED_CONTACT_RANGE) continue;
+        this.shockEntity(other, current);
+      }
+    }
   }
 
   // ── Per-frame ────────────────────────────────────────────────────────────
@@ -200,6 +250,7 @@ export class ElectricitySystem {
       if (p?.stingrayMantle && p.inLiquid) {
         this.seedAt(p.position.x + GRID.CELL_SIZE / 2, p.position.y + GRID.CELL_SIZE / 2);
       }
+      this.updateImbuedCurrent(game.currentRoom?.enemies ?? []);
     }
   }
 
@@ -228,7 +279,7 @@ export class ElectricitySystem {
         // Only normal water conducts; frozen/poisoned/crystallized block the
         // spread entirely (counterplay: freeze a line to stop the cascade).
         if (n.waterState !== 'normal' && n.waterState !== 'electrified') continue;
-        n.setWaterState('electrified', c.tileDuration);
+        n.setWaterState('electrified', c.tileDuration, c.current);
         next.push(n);
       }
     }

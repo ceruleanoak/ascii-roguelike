@@ -15,19 +15,21 @@
 import {
   applyStatusEffect as applySharedStatusEffect,
   tickStatusEffects,
-  clearEffectOrder
+  clearEffectOrder,
+  MAX_PIPS
 } from './StatusEffects.js';
 
 // Re-exported so existing imports keep working; it lives in the shared core.
 export { clearEffectOrder };
 
 // Applies `effect` through the shared core (activation, pip, duration), then
-// the enemy-only consequence: electric shock jolts carried items loose.
-// 'zap' is the electric effect; 'stun' kept for legacy stun-source parity
-// (this hook predates zap).
+// the enemy-only consequence: a stun, or zap reaching pip 3, jolts carried
+// items loose. Zap pips 1–2 are only a slow — they don't disarm.
 export function applyStatusEffect(enemy, effect, duration = 3.0, pips = null) {
-  if (!applySharedStatusEffect(enemy, effect, duration, pips)) return;
-  if ((effect === 'stun' || effect === 'zap') && enemy.itemUsage && enemy.inventory.length > 0) {
+  const slot = applySharedStatusEffect(enemy, effect, duration, pips);
+  if (!slot) return;
+  const jolts = effect === 'stun' || (effect === 'zap' && slot.stacks >= MAX_PIPS);
+  if (jolts && enemy.itemUsage && enemy.inventory.length > 0) {
     enemy.shouldDropItems = true;
   }
 }
@@ -76,8 +78,11 @@ export function getStunDroppedItems(enemy) {
   return drops;
 }
 
+// Zap pips 1–2 slow the enemy (pip 3 halts it — Enemy.isZapped).
+const ZAP_SLOW = [1, 0.6, 0.35];
+
 // Combined movement-speed multiplier from every slowing/halting effect
-// currently on the enemy — freeze/gooey/dizzy/sleep tiers, rally-boost
+// currently on the enemy — freeze/gooey/dizzy/sleep tiers, zap pips 1–2, rally-boost
 // speedup, and gas-attack slow stacks. Split out of Enemy.js (getSpeedMultiplier) to
 // keep that file under its architecture budget; stun/zap/knockback/frozen's
 // hard-zero cases stay in Enemy.js since they're plain early-return guards
@@ -90,6 +95,8 @@ export function computeSpeedMultiplier(enemy) {
   // Drowse tiers 1-2 slow instead of halting (tier 3 already returns 0 via
   // isFullyAsleep() short-circuiting the AI before this is even called).
   else if (enemy.isSleeping()) m = enemy.statusEffects.sleep.stacks >= 2 ? 0.25 : 0.6;
+  const zap = enemy.statusEffects.zap;
+  if (zap.active && zap.stacks < MAX_PIPS) m *= ZAP_SLOW[zap.stacks];
   // Rally boost: scale chase target velocity so _blendVelocity converges cleanly.
   // (Earlier impl multiplied raw velocity post-blend, which compounded each frame
   // against any large velocity impulse — e.g. the melee leap — into a runaway.)
@@ -99,14 +106,15 @@ export function computeSpeedMultiplier(enemy) {
 }
 
 // Ticks every status effect down through the shared core. The enemy-only
-// parts ride on its hooks: a permanently frozen slime never thaws, a thawing
-// enemy shudders for its last 0.6s, and poison running fully out resets the
-// Venom Blade counter. DoT ticks bypass invulnerability (minimum 1) and are
+// parts ride on its hooks: a permanently frozen slime never thaws, zap holds
+// for as long as the enemy is wet, a thawing enemy shudders for its last
+// 0.6s, and poison running fully out resets the Venom Blade counter. DoT ticks bypass invulnerability (minimum 1) and are
 // returned for the caller to spawn damage numbers from.
 export function updateStatusEffects(enemy, deltaTime) {
   const permanentFreeze = !!enemy.data?.freezePermanent;
   const ticks = tickStatusEffects(enemy, deltaTime, {
-    holdsTimer: (effect, slot) => effect === 'freeze' && slot.frozen && permanentFreeze,
+    holdsTimer: (effect, slot) => (effect === 'freeze' && slot.frozen && permanentFreeze)
+      || (effect === 'zap' && enemy.isWet()),
     afterCountdown: (effect, slot) => {
       if (effect === 'freeze' && slot.frozen && !permanentFreeze && slot.duration < 0.6) slot.shuddering = true;
     },

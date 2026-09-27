@@ -21,6 +21,7 @@
  */
 
 import { GRID } from '../game/GameConfig.js';
+import { MAX_PIPS } from './StatusEffects.js';
 
 // Metal weapon subtypes that conduct electricity
 const METAL_SUBTYPES = new Set([
@@ -199,7 +200,8 @@ export class StormAscentSystem {
           // number per frame for damage it wasn't taking ([damage-number-desync]).
           const hit = enemy.takeDamage(CHARGE_DAMAGE);
           if (hit !== false) {
-            enemy.applyStatusEffect('zap', CHARGE_STUN_DURATION);
+            // Contact with a charged object is full-strength current: pip 3.
+            enemy.applyStatusEffect('zap', CHARGE_STUN_DURATION, MAX_PIPS);
             this.game.combatSystem.createDamageNumber(CHARGE_DAMAGE, enemy.position.x, enemy.position.y, '#ffff00');
           }
           break;

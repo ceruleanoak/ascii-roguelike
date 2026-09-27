@@ -52,7 +52,10 @@ const STATUS_EFFECTS = {
     immunity: 'freezeImmune'
   },
   stun: { enemy: { stacks: 0 } },
-  zap: { enemy: { stacks: 0 } }, // electric-affinity stun; renders with rapid shake
+  // Electric Pip track: pips 1–2 slow, pip 3 locks and disarms (rapid-shake
+  // render). Wet holds its timer, and a zapped enemy is itself a live source
+  // one pip weaker (ElectricitySystem.updateImbuedCurrent).
+  zap: { enemy: { stacks: 0 } },
   sleep: { enemy: { stacks: 0, durationPerStack: true } }, // tiers read by Enemy.isFullyAsleep/getSpeedMultiplier
   charm: { enemy: { stacks: 0 } },
   wet: { enemy: { stacks: 0 }, player: { stacks: 0 } }, // pips synced to wetPipCount (PhysicsSystem)

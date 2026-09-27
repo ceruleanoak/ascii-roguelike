@@ -2,6 +2,7 @@ import { Item } from '../entities/Item.js';
 import { Puddle } from '../entities/Puddle.js';
 import { createActivationBurst, createEmberBurst, createIceBurst } from '../entities/Particle.js';
 import { GRID } from '../game/GameConfig.js';
+import { MAX_PIPS } from './StatusEffects.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { isInteriorActive, tagInteriorPlane } from './PlaneSystem.js';
 
@@ -868,7 +869,8 @@ export class TrapSystem {
           }
 
         } else if (effect === 'zap') {
-          // Tesla Coil: damage + zap (electric-affinity stun) every tickInterval seconds.
+          // Tesla Coil: damage + zap every tickInterval seconds — each pulse is
+          // a discrete hit (+1 pip), so lingering in its field escalates to the lock.
           // Electric-affinity enemies are IMMUNE (handled by _applyTrapHit + affinity gate).
           entry.tickTimer -= deltaTime;
           if (entry.tickTimer <= 0) {
@@ -1145,7 +1147,10 @@ export class TrapSystem {
         const dy = enemy.position.y - ty;
         if (Math.sqrt(dx * dx + dy * dy) > r) continue;
         if (!this._applyTrapHit(enemy, trapData, effectDmg, dmgColor)) continue;
-        enemy.applyStatusEffect(trapData.effect, trapData.effectDuration);
+        // The Stun Trap's burst is an all-at-once hit: straight to zap pip 3
+        // (lock + disarm), the way the Freeze Trap goes straight to Frozen.
+        const pips = trapData.effect === 'zap' ? MAX_PIPS : null;
+        enemy.applyStatusEffect(trapData.effect, trapData.effectDuration, pips);
       }
       if (game.player) {
         const pdx = (game.player.position.x + GRID.CELL_SIZE / 2) - cx;
