@@ -2150,7 +2150,12 @@ export class Enemy {
       this.lastHitAttackId = attackId;
       // Arm a forced leap for the instant these iframes expire — see
       // LeapAttackMechanic.tryTrigger. No-op for enemies without leapAttack.
-      if (this.data?.leapAttack?.enabled) this.forcedLeapPending = true;
+      // One hit, one answering leap: a hit taken mid-leap (windup or airborne)
+      // doesn't queue another leap for the landing.
+      if (this.data?.leapAttack?.enabled &&
+          !this.leapWindupActive && !this.leapAirborneActive) {
+        this.forcedLeapPending = true;
+      }
     }
 
     // Retreat into shell after taking damage (shell-armored enemies)

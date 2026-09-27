@@ -205,6 +205,10 @@ export class PhysicsSystem {
         if (other === enemy || other.dead) continue;
         if (other.speedCollisionGraceFrames > 0) continue; // just hit — skip as target
         if (!inSamePlane(enemy, other)) continue;
+        // A Giant Slime and its split children never bump for damage: a child
+        // is launched out of the boss's center at speed, and contact between
+        // them is the re-merge (ReformMechanic), not a collision.
+        if (enemy.parentRef === other || other.parentRef === enemy) continue;
         const dx = other.position.x - enemy.position.x;
         const dy = other.position.y - enemy.position.y;
         if (!Number.isFinite(dx) || !Number.isFinite(dy)) continue;
