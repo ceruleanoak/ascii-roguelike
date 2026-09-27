@@ -4,6 +4,7 @@ import { BARRICADE_FAMILIES, FAMILY_BY_COLOR } from '../data/barricades.js';
 import { tickTriggers } from './triggerMachine.js';
 import { isExitLetterTile } from './ExitSystem.js';
 import { createBurstParticles } from './WorldEffectsSystem.js';
+import { isCellProtected } from './roomFeatures.js';
 
 // Barricades stay out of the first two depths of a zone: the shape has to be
 // met somewhere it can be answered, and a run two rooms deep is still finding
@@ -121,7 +122,7 @@ export class BarricadeSystem {
     // raises nothing at all — insistence included. What the world asks for is
     // the colour's question, and a colour with no question stays silent rather
     // than borrowing another one's.
-    const descriptor = this._pickFromFamily(exit.color);
+    const descriptor = this._pickFromFamily(exit.color, room, direction);
     if (!descriptor) return;
 
     this._raise(room, direction, descriptor);
@@ -147,10 +148,45 @@ export class BarricadeSystem {
     return open[Math.floor(Math.random() * open.length)];
   }
 
-  _pickFromFamily(color) {
+  // Only a member whose whole layout fits the room is eligible. The long
+  // layouts (the Boomerang Lock's switches run eight cells deep) reach well
+  // into the room, and a room built around a structure — the Maze shell, a
+  // hut — has no floor there to stand a fixture on. Stamping anyway used to
+  // clear the structure's own glyphs out from under a switch that then sat
+  // inside a wall. A family with no member that fits raises nothing here:
+  // what the room can't hold, it doesn't ask.
+  _pickFromFamily(color, room, direction) {
     const family = BARRICADE_FAMILIES[FAMILY_BY_COLOR[color]];
     if (!family?.length) return null;
-    return family[Math.floor(Math.random() * family.length)];
+    const fitting = family.filter(d => this._fits(room, direction, d));
+    if (fitting.length === 0) return null;
+    return fitting[Math.floor(Math.random() * fitting.length)];
+  }
+
+  // Every cell the descriptor would claim — plug footprint, fixtures, decoys
+  // and poles — lies on open floor.
+  _fits(room, direction, descriptor) {
+    const cells = [
+      ...laneFootprint(direction, descriptor.deep, descriptor.spread),
+      ...[...(descriptor.triggers || []), ...(descriptor.decoys || []), ...(descriptor.poles || [])]
+        .map(spec => laneCell(direction, spec.depth, spec.across))
+    ];
+    return cells.every(({ col, row }) => !this._isStructureCell(room, col, row));
+  }
+
+  // A cell that belongs to something built into the room rather than
+  // scattered across it: off the grid, walled in the collision map, inside a
+  // structure's protected region, or holding one of its structural objects.
+  // Scatter (grass, rocks, bushes) doesn't count — _clearCell sweeps that.
+  _isStructureCell(room, col, row) {
+    if (col < 0 || col >= GRID.COLS || row < 0 || row >= GRID.ROWS) return true;
+    if (room.collisionMap?.[row]?.[col]) return true;
+    if (isCellProtected(room, col, row)) return true;
+    const cs = GRID.CELL_SIZE;
+    return (room.backgroundObjects || []).some(o =>
+      o.structural &&
+      Math.floor(o.position.x / cs) === col &&
+      Math.floor(o.position.y / cs) === row);
   }
 
   // Stamp a descriptor across one exit lane and record it on the room. The whole
