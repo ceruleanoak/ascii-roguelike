@@ -244,13 +244,18 @@ export class SinkholeSystem {
     game.currentRoom = newRoom;
     game.player.position.x = spawn.x;
     game.player.position.y = spawn.y;
-    game.player.plane = PLANE_TUNNEL;
     game.player.setCollisionMap(newRoom.collisionMap);
 
     // Canonical, mandatory room-swap path (bug #93 warp-divergence
     // precedent) — must run after the state above is set, since it doesn't
-    // set currentRoom/player position/plane itself.
+    // set currentRoom/player position itself. Its resetEntities block DOES
+    // reset player.plane to PLANE_SURFACE (via interiorManager.reset(),
+    // registered room-scope), so the tunnel-plane assignment below must come
+    // AFTER this call, not before it — setting it first was silently
+    // clobbered here (bug #313: arrival landed on plane 0, stuck in the
+    // surface collision map of a room with no plane-0 content).
     game.applyRoomSwap(newRoom);
+    game.player.plane = PLANE_TUNNEL;
 
     game.audioSystem.switchZoneMusic(targetZone, import.meta.env.BASE_URL);
     game.updateUI();

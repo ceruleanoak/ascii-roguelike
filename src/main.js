@@ -3605,6 +3605,9 @@ class Game {
     // Fairy gesture: armed Bottle catches it, else full-health blessing (+1 max HP).
     if (this.interactionSystem?.tryBottleFairy() || this.interactionSystem?.tryFairyBlessing()) return;
 
+    // Armed Infused/Lucky Coin near a well — precedes fireSelected() (WellSystem.tryOfferArmedSlot).
+    if (this.wellSystem?.tryOfferArmedSlot()) return;
+
     // Consumable slot armed (keys 4-8) — SPACE fires it, priority over pickup/attack.
     if (this.consumableTriggerSystem.fireSelected(state)) return;
 
@@ -3826,20 +3829,23 @@ class Game {
         return; // Exit - successful pickup prevents attack
       }
 
+      // Revealed Sinkhole supersedes attacking AND spacebar-openable
+      // containers (SPACE action, not a swing) — checked ahead of the
+      // container-open branch below so a barrel/crate/etc. also in range
+      // can't consume SPACE before a hole dive (bug: SPACE priority in
+      // Grass rooms when another interactable is in the way). Only uncut
+      // grass ('|'), which is still meant to conceal the hole, is allowed
+      // to pre-empt it.
+      const nearbyBgObject = this.findNearbyBackgroundObject();
+      const blockedByGrass = nearbyBgObject?.char === '|';
+      if (!blockedByGrass && this.sinkholeSystem.handleSpacePress()) return;
+
       // Spacebar-openable containers (barrels, crates, metal boxes) supersede
       // attacking — opening should work whether or not the player is armed.
-      const nearbyContainer = this.findNearbyBackgroundObject();
-      if (nearbyContainer && nearbyContainer.acceptsInteraction('spacebar') && nearbyContainer.data.dropEffect) {
-        this.interactionSystem.openContainer(nearbyContainer);
+      if (nearbyBgObject && nearbyBgObject.acceptsInteraction('spacebar') && nearbyBgObject.data.dropEffect) {
+        this.interactionSystem.openContainer(nearbyBgObject);
         return;
       }
-
-      // Revealed Sinkhole supersedes attacking too (SPACE action, not a swing).
-      // Checked independently of nearbyContainer above so no unrelated
-      // background object can block it — only uncut grass ('|'), which is
-      // still meant to conceal it, is allowed to pre-empt this.
-      const blockedByGrass = nearbyContainer?.char === '|';
-      if (!blockedByGrass && this.sinkholeSystem.handleSpacePress()) return;
 
       // If player has a weapon and can attack, attack (gem/bread gating +
       // charge SFX + attack creation live in CombatSystem.tryUseHeldWeapon)

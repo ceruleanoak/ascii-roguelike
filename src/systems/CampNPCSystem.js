@@ -192,6 +192,12 @@ export class CampNPCSystem {
     const player = game.player;
     if (!player) return;
 
+    // Companion tracks the player's plane every tick — a Sinkhole dive (or
+    // any other plane-1 warp within a room) moves the player without moving
+    // the companion's plane, which left it colliding against plane-0 objects
+    // while the player was already in the cave (bug #313).
+    npc.plane = player.plane ?? 0;
+
     // Find nearest enemy within aggro range (in same plane).
     // Inside a hut or dungeon the active enemies are on activeFloor, not currentRoom.
     const enemies = ((game.player.inDungeon || game.player.inHut) && game.activeFloor)

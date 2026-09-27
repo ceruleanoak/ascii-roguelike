@@ -43,6 +43,11 @@ export class RoundCombatSystem {
     rc.current++;
     this._spawnWave(room, this._waveSize(rc.current));
     this.game.audioSystem?.playSFX?.('aggro');
+    // The clear check that triggered this wave already muted layer 2 on the
+    // now-empty room (main.js's counted-enemies-hit-zero hook, same frame) —
+    // re-enable it for the wave that just spawned, or battle music never
+    // returns for the rest of the Quagmire encounter.
+    this.game.audioSystem?.setLayer2Enabled?.(true);
     return true;
   }
 
