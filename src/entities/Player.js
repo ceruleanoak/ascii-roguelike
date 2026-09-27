@@ -385,8 +385,8 @@ export class Player {
       this.velocity.vy *= 0.75;
       if (Math.abs(this.velocity.vx) < 4) this.velocity.vx = 0;
       if (Math.abs(this.velocity.vy) < 4) this.velocity.vy = 0;
-    // Sapped by ice wraith(s) or Frozen: stop movement entirely
-    } else if (this.activeSappingBats.length > 0 || this.isFrozen()) {
+    // Sapped by ice wraith(s) or locked (Frozen/zapped/stunned): stop movement entirely
+    } else if (this.activeSappingBats.length > 0 || this.isLocked()) {
       this.acceleration.ax = 0;
       this.acceleration.ay = 0;
       this.velocity.vx *= 0.75;
@@ -499,6 +499,11 @@ export class Player {
 
   isFrozen() { return StatusEffectSystem.isPlayerFrozen(this); }
 
+  isZapped() { return StatusEffectSystem.isPlayerZapped(this); }
+
+  // Frozen, zap pip 3 or stun — no moving, attacking or rolling.
+  isLocked() { return StatusEffectSystem.isPlayerLocked(this); }
+
   isDizzy() { return this.statusEffects.dizzy.active; }
 
   isBlind() { return this.statusEffects.blind.active; }
@@ -509,13 +514,7 @@ export class Player {
   // for gooey/dizzy).
   getStatusPipRows() { return computePlayerPipRows(this); }
 
-  getStatusSpeedMultiplier() {
-    if (this.isGooey()) return 1 - this.statusEffects.goo.slowAmount;
-    if (this.statusEffects.freeze.active) return StatusEffectSystem.freezeSpeedMultiplier(this);
-    if (this.statusEffects.slimeBoost.active) return this.statusEffects.slimeBoost.speedMult;
-    if (this.isDizzy()) return 0.35;
-    return 1;
-  }
+  getStatusSpeedMultiplier() { return StatusEffectSystem.playerSpeedMultiplier(this); }
 
   // Blink/tint priority chain lives in StatusEffectVisuals.computePlayerDisplayColor
   // (moved out to keep Player.js under its architecture budget — that file
@@ -601,8 +600,8 @@ export class Player {
       return false;
     }
 
-    // Cannot dodge roll while gooey or Frozen!
-    if (this.isGooey() || this.isFrozen()) {
+    // Cannot dodge roll while gooey or locked (Frozen/zapped/stunned)!
+    if (this.isGooey() || this.isLocked()) {
       return false;
     }
 
@@ -796,7 +795,7 @@ export class Player {
   }
 
   canAttack() {
-    if (this.attackBlockTimer > 0 || this.isFrozen()) return false;
+    if (this.attackBlockTimer > 0 || this.isLocked()) return false;
     if (this.dodgeRoll.justEnded) return false;
     if (this.characterType === 'green' && this.actionCooldown > 0) return false;
     if (this.characterType === 'green' && this.continuousRollActive) return false;

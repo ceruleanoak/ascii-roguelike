@@ -870,7 +870,7 @@ export class TrapSystem {
 
         } else if (effect === 'zap') {
           // Tesla Coil: damage + zap every tickInterval seconds — each pulse is
-          // a discrete hit (+1 pip), so lingering in its field escalates to the lock.
+          // full-strength current, so it lands at zap pip 3 (lock + disarm).
           // Electric-affinity enemies are IMMUNE (handled by _applyTrapHit + affinity gate).
           entry.tickTimer -= deltaTime;
           if (entry.tickTimer <= 0) {
@@ -881,7 +881,7 @@ export class TrapSystem {
               const dy = enemy.position.y - ty;
               if (Math.sqrt(dx * dx + dy * dy) > trapData.effectRadius) continue;
               if (!this._applyTrapHit(enemy, trapData, zapDmg, '#00ffff')) continue;
-              enemy.applyStatusEffect('zap', trapData.stunDuration || 0.8);
+              enemy.applyStatusEffect('zap', trapData.stunDuration || 0.8, MAX_PIPS);
               // Lightning particle
               game.particles.push(tagInteriorPlane(game, {
                 x: tx,
@@ -1161,8 +1161,7 @@ export class TrapSystem {
           } else if (trapData.effect === 'freeze') {
             game.player.applyStatusEffect?.('freeze', trapData.effectDuration, 3); // straight to Frozen
           } else if (trapData.effect === 'zap') {
-            // Player has no zap status — map to freeze (the player's slow/lock status) for now.
-            game.player.applyStatusEffect?.('freeze', 1.0);
+            game.player.applyStatusEffect?.('zap', trapData.effectDuration, MAX_PIPS); // lock + disarm
           }
         }
       }

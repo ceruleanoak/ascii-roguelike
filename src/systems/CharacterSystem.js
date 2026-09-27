@@ -14,7 +14,7 @@ export class CharacterSystem {
     this.game = game;
     // Keys held last frame while Frozen — so a struggle counts fresh presses
     // (mashing), not a key held down.
-    this._frozenHeldKeys = new Set();
+    this._lockHeldKeys = new Set();
   }
 
   // A character died but others remain: clear the dead character's gear,
@@ -305,13 +305,16 @@ export class CharacterSystem {
     const game = this.game;
     const player = game.player;
 
-    // Frozen: no roll at all — every fresh key press is a struggle instead,
-    // and an arrow (dodge-roll) press chips the ice hardest.
-    if (player.isFrozen()) {
-      this._struggleFrozen(player);
+    // A zap/stun lock that landed since last frame knocks the held item loose.
+    StatusEffectSystem.applyPlayerDisarm(game);
+
+    // Locked (Frozen/zapped/stunned): no roll at all — every fresh key press
+    // is a struggle instead, and an arrow (dodge-roll) press chips hardest.
+    if (player.isLocked()) {
+      this._struggleLock(player);
       return;
     }
-    this._frozenHeldKeys.clear();
+    this._lockHeldKeys.clear();
 
     // Handle dodge rolling (continuous direction updates, supports diagonals and curving)
     // Disabled while Rusalka's charm is active or while polymorphed (frog form has no roll)
@@ -497,18 +500,18 @@ export class CharacterSystem {
 
   // Dagger roll auto-attack: fires immediately on roll completion, bypassing cooldown and windup.
   // Direction from current WASD input, falling back to player facing.
-  _struggleFrozen(player) {
+  _struggleLock(player) {
     const game = this.game;
     const held = new Set();
     for (const [key, down] of Object.entries(game.keys)) if (down) held.add(key);
     for (const [key, down] of Object.entries(game.arrowKeys ?? {})) if (down) held.add(key);
     if (!isInputCaptured(game)) {
       for (const key of held) {
-        if (this._frozenHeldKeys.has(key)) continue;
-        StatusEffectSystem.struggleFrozen(player, key.startsWith('Arrow'));
+        if (this._lockHeldKeys.has(key)) continue;
+        StatusEffectSystem.struggleLock(player, key.startsWith('Arrow'));
       }
     }
-    this._frozenHeldKeys = held;
+    this._lockHeldKeys = held;
   }
 
   triggerDaggerRollAttack() {

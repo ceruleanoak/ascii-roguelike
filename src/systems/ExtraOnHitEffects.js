@@ -11,6 +11,8 @@
 // projectile and melee primary-effect blocks in CombatSystem.js and by the
 // extras loop below, so the branch exists once instead of three times.
 
+import { MAX_PIPS } from './StatusEffects.js';
+
 // Applies `effect` to `enemy` for `duration`, handling freeze-escalation:
 // a second ice hit while already fully frozen converts to a stun instead of
 // re-applying/extending freeze. `effect` should already be past the
@@ -25,6 +27,10 @@ export function applyOnHitStatusEffect(enemy, effect, duration, elementalMod) {
       enemy.applyStatusEffect('freeze', dur);
       enemy.statusEffects.freeze.frozen = true;
     }
+  } else if (effect === 'zap') {
+    // An electric weapon hit is full-strength current: straight to zap pip 3
+    // (lock + disarm). Only chains and imbued current carry less.
+    enemy.applyStatusEffect('zap', duration, MAX_PIPS);
   } else {
     enemy.applyStatusEffect(effect, duration);
   }

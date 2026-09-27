@@ -34,6 +34,7 @@
 import { hasVision } from '../enemyVision.js';
 import { GRID } from '../../game/GameConfig.js';
 import { INGREDIENTS } from '../../data/items.js';
+import { disarmPlayer } from '../../systems/StatusEffectSystem.js';
 
 export const ThiefMechanic = {
   isEnabled(enemy) {
@@ -262,21 +263,7 @@ export const ThiefMechanic = {
       combatSystem.createDamageNumber(`-${ejected}`, player.position.x, player.position.y, '#88ff44');
     }
 
-    const weapon = player.dropItem();
-    if (weapon) {
-      const angle = Math.random() * Math.PI * 2;
-      const dist = GRID.CELL_SIZE * 3;
-      weapon.position.x = player.position.x + Math.cos(angle) * dist;
-      weapon.position.y = player.position.y + Math.sin(angle) * dist;
-      weapon.velocity = { vx: 0, vy: 0 };
-      weapon.pickupReadyAt = performance.now() + (attack.owner?.data?.thiefMechanic?.weaponPickupCooldown ?? 600);
-      weapon.plane = player.plane ?? 0;
-      weapon.hutPlane = player.inHut === true || player.inDungeon === true;
-      weapon.mazePlane = player.inMaze === true;
-      game.items.push(weapon);
-      game.physicsSystem.addEntity(weapon);
-      game.updateUI();
-    }
+    const weapon = disarmPlayer(game, attack.owner?.data?.thiefMechanic?.weaponPickupCooldown);
 
     if ((ejected > 0 || weapon) && attack.owner) ThiefMechanic.onTheftSuccess(attack.owner);
   },

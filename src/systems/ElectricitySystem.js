@@ -15,7 +15,7 @@
  *   - Electric-affinity enemies in contact with water (ambient scan below —
  *     Sparks drifting over a river, Volt Spiders wading, etc.)
  *   - Stingray Mantle wearer swimming (ambient scan; wearer is shock-immune)
- *   - Zapped enemies (ambient scan — see "Imbued current" below)
+ *   - Zapped enemies and a zapped player (ambient scan — see "Imbued current" below)
  *
  * Counterplay / conduction rules:
  *   - Only 'normal' water conducts. Frozen / poisoned / crystallized tiles
@@ -27,8 +27,8 @@
  * are unchanged — they live in PhysicsSystem.applyLiquidResults; this system
  * only decides WHEN each tile becomes electrified.
  *
- * Imbued current: zap charges the enemy it lands on. A zapped enemy at pip N
- * is itself a live source one pip weaker — it electrifies water it stands in
+ * Imbued current: zap charges the body it lands on, enemy or player. A zapped
+ * body at pip N is itself a live source one pip weaker — it electrifies water it stands in
  * and shocks whatever touches it, at pip N-1 — so current weakens as it
  * passes through a crowd, and a pip-1 enemy passes nothing on. The source is
  * never shocked by its own current, and imbued current only lands on a body
@@ -190,22 +190,22 @@ export class ElectricitySystem {
   }
 
   /**
-   * Zapped enemies as live sources (see "Imbued current" in the header):
-   * each enemy at zap pip 2+ electrifies the water it stands in and shocks
-   * the player and enemies touching it, one pip weaker than itself. Runs on
-   * the ambient scan cadence.
+   * Zapped carriers as live sources (see "Imbued current" in the header):
+   * each enemy — and the player — at zap pip 2+ electrifies the water it
+   * stands in and shocks whoever is touching it, one pip weaker than itself.
+   * Runs on the ambient scan cadence.
    */
   updateImbuedCurrent(enemies) {
     const player = this.game.player;
-    for (const e of enemies) {
+    const carriers = player ? [...enemies, player] : enemies;
+    for (const e of carriers) {
       const zap = e.statusEffects?.zap;
       if (!zap?.active || zap.stacks < 2 || e.isDying || e.hp <= 0) continue;
       const current = { pips: zap.stacks - 1, source: e };
       if (e._isOnWater?.() || e.inLiquid) {
         this.seedAt(e.position.x + GRID.CELL_SIZE / 2, e.position.y + GRID.CELL_SIZE / 2, { current });
       }
-      const touchers = player ? [...enemies, player] : enemies;
-      for (const other of touchers) {
+      for (const other of carriers) {
         if (other === e || other.isDying || other.hp <= 0 || !inSamePlane(e, other)) continue;
         const dx = other.position.x - e.position.x;
         const dy = other.position.y - e.position.y;

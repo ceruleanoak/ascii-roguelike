@@ -1,4 +1,5 @@
 import { inSamePlane } from './PlaneSystem.js';
+import { MAX_PIPS } from './StatusEffects.js';
 
 // Wet-enemy/player electrical conduction — extracted from CombatSystem so a
 // projectile/melee electric hit on a conductive object can chain into anyone
@@ -6,6 +7,9 @@ import { inSamePlane } from './PlaneSystem.js';
 export function conductElectricity(combatSystem, sourceObj, damage, enemies, player = null) {
   const WET_RANGE = 80;
   const WET_MULT = 2.0;
+  // The struck object took the full current; conduction through water
+  // carries one pip less.
+  const CONDUCTED_PIPS = MAX_PIPS - 1;
 
   for (const enemy of enemies) {
     if (!enemy.isWet || !enemy.isWet()) continue;
@@ -20,7 +24,7 @@ export function conductElectricity(combatSystem, sourceObj, damage, enemies, pla
       enemy.takeDamage(dmg);
       // 'zap', not 'stun' — electric immobilization with the shake visual;
       // electric-affinity enemies are auto-immune via EFFECT_AFFINITY.
-      enemy.applyStatusEffect('zap', 3.5);
+      enemy.applyStatusEffect('zap', 3.5, CONDUCTED_PIPS);
       combatSystem.createDamageNumber(dmg, enemy.position.x, enemy.position.y, '#00ffff');
       combatSystem.createDamageNumber('⚡', enemy.position.x, enemy.position.y - 10, '#ffff00');
     }
@@ -33,6 +37,7 @@ export function conductElectricity(combatSystem, sourceObj, damage, enemies, pla
     const dx = player.position.x - sourceObj.position.x;
     const dy = player.position.y - sourceObj.position.y;
     if (Math.sqrt(dx * dx + dy * dy) <= WET_RANGE) {
+      player.applyStatusEffect('zap', 3.5, CONDUCTED_PIPS);
       const dead = player.takeDamage(Math.ceil(damage * WET_MULT));
       if (dead === true) {
         combatSystem.createDamageNumber(Math.ceil(damage * WET_MULT), player.position.x, player.position.y, player.color);

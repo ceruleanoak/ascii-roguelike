@@ -16,7 +16,8 @@ import {
   applyStatusEffect as applySharedStatusEffect,
   tickStatusEffects,
   clearEffectOrder,
-  MAX_PIPS
+  MAX_PIPS,
+  ZAP_PIP_SPEED
 } from './StatusEffects.js';
 
 // Re-exported so existing imports keep working; it lives in the shared core.
@@ -78,9 +79,6 @@ export function getStunDroppedItems(enemy) {
   return drops;
 }
 
-// Zap pips 1–2 slow the enemy (pip 3 halts it — Enemy.isZapped).
-const ZAP_SLOW = [1, 0.6, 0.35];
-
 // Combined movement-speed multiplier from every slowing/halting effect
 // currently on the enemy — freeze/gooey/dizzy/sleep tiers, zap pips 1–2, rally-boost
 // speedup, and gas-attack slow stacks. Split out of Enemy.js (getSpeedMultiplier) to
@@ -95,8 +93,9 @@ export function computeSpeedMultiplier(enemy) {
   // Drowse tiers 1-2 slow instead of halting (tier 3 already returns 0 via
   // isFullyAsleep() short-circuiting the AI before this is even called).
   else if (enemy.isSleeping()) m = enemy.statusEffects.sleep.stacks >= 2 ? 0.25 : 0.6;
+  // Zap pips 1–2 slow (pip 3 halts it — Enemy.isZapped).
   const zap = enemy.statusEffects.zap;
-  if (zap.active && zap.stacks < MAX_PIPS) m *= ZAP_SLOW[zap.stacks];
+  if (zap.active && zap.stacks < MAX_PIPS) m *= ZAP_PIP_SPEED[zap.stacks];
   // Rally boost: scale chase target velocity so _blendVelocity converges cleanly.
   // (Earlier impl multiplied raw velocity post-blend, which compounded each frame
   // against any large velocity impulse — e.g. the melee leap — into a runaway.)

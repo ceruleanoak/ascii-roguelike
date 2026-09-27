@@ -14,6 +14,7 @@ import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Particle } from '../entities/Particle.js';
 import { GRID } from '../game/GameConfig.js';
 import { tagInteriorPlane } from './PlaneSystem.js';
+import { MAX_PIPS } from './StatusEffects.js';
 
 // Mana yield per ingredient char. Phase 1 only Goo is exposed in the UI;
 // remaining entries are reserved for the Phase 2 conversion menu expansion.
@@ -571,8 +572,10 @@ export class MagicSystem {
     const damage = 3;
     nearest.takeDamage(damage);
     // 'zap', not 'stun' — chain lightning is electric; zap carries the shake
-    // visual and electric-affinity auto-immunity (EFFECT_AFFINITY).
-    nearest.applyStatusEffect('zap', 2.0);
+    // visual and electric-affinity auto-immunity (EFFECT_AFFINITY). The seed
+    // takes the full bolt (pip 3); each hop after it carries one pip less
+    // (LightningStrikeSystem.createChainLightning).
+    nearest.applyStatusEffect('zap', 2.0, MAX_PIPS);
     this.game.combatSystem.createDamageNumber?.(
       damage, nearest.position.x, nearest.position.y, '#88ddff'
     );

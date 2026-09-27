@@ -22,6 +22,10 @@
 
 export const MAX_PIPS = 3; // every stackable effect's Pip cap
 
+// Movement multiplier per zap pip, shared by both carriers. Pip 3 is the
+// lock — the carrier layers stop movement outright there.
+export const ZAP_PIP_SPEED = [1, 0.6, 0.35, 0];
+
 // Every Status Effect, and the fields each carrier's slot starts with. A
 // carrier missing from an entry can't carry that effect: applying it is an
 // authoring error and says so, once. All slots also get `active`/`duration`.
@@ -51,11 +55,13 @@ const STATUS_EFFECTS = {
     player: { stacks: 0 },
     immunity: 'freezeImmune'
   },
-  stun: { enemy: { stacks: 0 } },
-  // Electric Pip track: pips 1–2 slow, pip 3 locks and disarms (rapid-shake
-  // render). Wet holds its timer, and a zapped enemy is itself a live source
-  // one pip weaker (ElectricitySystem.updateImbuedCurrent).
-  zap: { enemy: { stacks: 0 } },
+  // Stun: a lock + disarm, on both sides. `disarm` (player) marks a held
+  // item waiting to be knocked loose (StatusEffectSystem.applyPlayerDisarm).
+  stun: { enemy: { stacks: 0 }, player: { stacks: 0, disarm: false } },
+  // Electric Pip track: pips 1–2 slow (ZAP_PIP_SPEED), pip 3 locks and
+  // disarms. Wet holds its timer, and a zapped carrier is itself a live
+  // source one pip weaker (ElectricitySystem.updateImbuedCurrent).
+  zap: { enemy: { stacks: 0 }, player: { stacks: 0, disarm: false } },
   sleep: { enemy: { stacks: 0, durationPerStack: true } }, // tiers read by Enemy.isFullyAsleep/getSpeedMultiplier
   charm: { enemy: { stacks: 0 } },
   wet: { enemy: { stacks: 0 }, player: { stacks: 0 } }, // pips synced to wetPipCount (PhysicsSystem)

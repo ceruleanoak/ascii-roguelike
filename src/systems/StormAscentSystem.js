@@ -171,11 +171,9 @@ export class StormAscentSystem {
         // and numbers all hang off the result rather than off the attempt
         // ([damage-number-desync]).
         if (result !== false) {
-          // 'zap' is an ENEMY-only slot: on the player it hits the bug-#166
-          // guard and no-ops loudly. `dizzy` is the player's disorientation
-          // effect (scrambled inputs + gold blink, same gold as the arc) and is
-          // the closest shipped representation of a shock stun.
-          player.applyStatusEffect('dizzy', CHARGE_STUN_DURATION);
+          // Contact with a charged object is full-strength current: pip 3,
+          // the same as an enemy touching it.
+          player.applyStatusEffect('zap', CHARGE_STUN_DURATION, MAX_PIPS);
           this.game.physicsSystem.applyDamageKnockback(player, result, obj.position.x, obj.position.y);
           this.game.combatSystem.createDamageNumber(CHARGE_DAMAGE, player.position.x, player.position.y, '#ffff00');
           this.game.combatSystem.createDamageNumber('\u26A1', player.position.x, player.position.y - 12, '#ffff00');

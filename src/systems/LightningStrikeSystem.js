@@ -22,6 +22,7 @@
 
 import { GRID } from '../game/GameConfig.js';
 import { planeOf, inSamePlane } from './PlaneSystem.js';
+import { MAX_PIPS } from './StatusEffects.js';
 
 const FLASH_DURATION = 0.12;
 const DEFAULT_RADIUS = GRID.CELL_SIZE * 1.2;
@@ -152,6 +153,10 @@ export class LightningStrikeSystem {
     let chained = 0;
     const alreadyHit = new Set([hitEnemy]);
     let currentEnemy = hitEnemy;
+    // The struck enemy took the full current (zap pip 3); each hop carries
+    // one pip less than the link before it. A hop past pip 1 still deals its
+    // damage but no longer zaps.
+    let pips = MAX_PIPS;
 
     while (chained < maxChains) {
       let nearestEnemy = null;
@@ -173,7 +178,8 @@ export class LightningStrikeSystem {
       const actualDamage = isWet ? chainDamage * 2 : chainDamage;
       const stunDur = isWet ? 3.5 : 2.0;
       nearestEnemy.takeDamage(actualDamage);
-      nearestEnemy.applyStatusEffect('zap', stunDur);
+      pips -= 1;
+      if (pips > 0) nearestEnemy.applyStatusEffect('zap', stunDur, pips);
       game.combatSystem.createDamageNumber(actualDamage, nearestEnemy.position.x, nearestEnemy.position.y, '#00ffff');
       if (isWet) {
         game.combatSystem.createDamageNumber('⚡', nearestEnemy.position.x, nearestEnemy.position.y - 12, '#ffff00');

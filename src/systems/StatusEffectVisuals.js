@@ -148,10 +148,12 @@ const PLAYER_EFFECT_COLORS = {
   freeze: '#00ffff',
   goo: EFFECT_COLORS.goo,
   blind: '#bbbbbb', // light gray — sight going dim
+  zap: EFFECT_COLORS.zap, // same cyan as the enemy's zap pips
+  stun: EFFECT_COLORS.stun,
   stoneskin: '#8c7853' // gray/bronze — must match Player.js's STONE_SKIN_COLOR
 };
 
-const PLAYER_PIP_ORDER = ['wet', 'burn', 'poison', 'freeze', 'goo', 'dizzy', 'blind', 'stoneskin'];
+const PLAYER_PIP_ORDER = ['wet', 'burn', 'poison', 'freeze', 'zap', 'stun', 'goo', 'dizzy', 'blind', 'stoneskin'];
 
 function _isPlayerEffectActive(player, effect) {
   switch (effect) {
@@ -165,6 +167,8 @@ function _isPlayerEffectActive(player, effect) {
     case 'goo':    return player.isGooey();
     case 'dizzy':  return player.isDizzy();
     case 'blind':  return player.isBlind();
+    case 'zap':    return player.statusEffects.zap.active;
+    case 'stun':   return player.statusEffects.stun.active;
     case 'stoneskin': return player.stoneSkinTimer > 0;
     default: return false;
   }
@@ -182,8 +186,8 @@ function _playerPipRow(player, effect) {
     const stacks = player.statusEffects.freeze.stacks;
     return { effect, color: stacks >= 3 ? EFFECT_COLORS.freeze : PLAYER_EFFECT_COLORS.freeze, stacks };
   }
-  if (effect === 'blind') {
-    return { effect, color: PLAYER_EFFECT_COLORS.blind, stacks: player.statusEffects.blind.stacks };
+  if (effect === 'blind' || effect === 'zap') {
+    return { effect, color: PLAYER_EFFECT_COLORS[effect], stacks: player.statusEffects[effect].stacks };
   }
   return { effect, color: PLAYER_EFFECT_COLORS[effect], stacks: 1 };
 }
@@ -222,6 +226,17 @@ export function computePlayerDisplayColor(player) {
   }
   // Solid ice while Frozen — the body is locked, so no blink
   if (player.isFrozen()) return EFFECT_COLORS.freeze;
+  // Zapped (pip 3): fast cyan/white crackle — the player's read of the
+  // enemy's rapid zap shake
+  if (player.isZapped()) {
+    const blinkCycle = Math.floor(player.statusBlinkTimer / 0.06);
+    return blinkCycle % 2 === 0 ? EFFECT_COLORS.zap : '#ffffff';
+  }
+  // Stunned: blink stun yellow
+  if (player.statusEffects.stun.active) {
+    const blinkCycle = Math.floor(player.statusBlinkTimer / 0.15);
+    return blinkCycle % 2 === 0 ? EFFECT_COLORS.stun : player.baseColor;
+  }
   // Blink green when gooey
   if (player.isGooey()) {
     const BLINK_FREQUENCY = 0.3;
