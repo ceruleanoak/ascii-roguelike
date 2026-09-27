@@ -111,6 +111,7 @@ export class BatSystem {
         duration: 0.07,
         delay: i * delayPerStep,
         color: weapon.color,
+        onHit: weapon.data.onHit,  // Barbed Bat's poison barb; plain bats have none
         knockback: 0,          // heavy enemies hold their ground; launch handles the rest
         batLaunch: true,
         launchAngle: angle,

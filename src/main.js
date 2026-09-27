@@ -64,6 +64,7 @@ import { RidgeSystem } from './systems/RidgeSystem.js';
 import { PolymorphSystem } from './systems/PolymorphSystem.js';
 import { TransmutationSystem } from './systems/TransmutationSystem.js';
 import { MagicSystem } from './systems/MagicSystem.js';
+import { WeaponEffectsSystem } from './systems/WeaponEffectsSystem.js';
 import { BatSystem } from './systems/BatSystem.js';
 import { FlailSystem } from './systems/FlailSystem.js';
 import { WellSystem } from './systems/WellSystem.js';
@@ -235,6 +236,7 @@ class Game {
     this.polymorphSystem = new PolymorphSystem();
     this.transmutationSystem = new TransmutationSystem(this);
     this.magicSystem = new MagicSystem(this);
+    this.weaponEffectsSystem = new WeaponEffectsSystem(this);
     this.batSystem = new BatSystem(this);
     this.flailSystem = new FlailSystem(this);
     this.wellSystem = new WellSystem(this);
@@ -2495,7 +2497,7 @@ class Game {
       const windupAttack = this.player.heldItem.update(deltaTime * PHYSICS.WEAPON_TIMER_RATE);
       if (windupAttack) {
         this.playWeaponAttackSFX(this.player.heldItem);
-        this.combatSystem.createAttack(this.applyGreenDamageModifier(windupAttack), this.currentRoom ? this.currentRoom.enemies : []);
+        this.combatSystem.createAttack(this.applyGreenDamageModifier(windupAttack), this._activeEnemies());
         // Directly create the expanding shockwave ring for hammer-type attacks
         const _swHits = Array.isArray(windupAttack) ? windupAttack : [windupAttack];
         const _swTrigger = _swHits.find(a => a?.triggerShockwave);
@@ -2509,12 +2511,7 @@ class Game {
             color: _swTrigger.shockwaveColor || _swTrigger.color,
           };
         }
-        if (this.player.heldItem.data?.placesLava) {
-          this.characterSystem.spawnLavaSweep(this.player);
-        }
-        if (this.player.heldItem.data?.callsLightning) {
-          this.characterSystem.callLightningStrike(this.player, this.player.heldItem.data);
-        }
+        this.weaponEffectsSystem.onSwingComplete(this.player); // lava / lightning / bolt / dust
         if (this.characterSystem.isBlockingStaff(this.player.heldItem)) {
           this.player.staffSwingHasFired = true;
         }

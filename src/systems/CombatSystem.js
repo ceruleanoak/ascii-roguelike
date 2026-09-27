@@ -20,7 +20,7 @@ import { affinityDamageMultiplier } from '../entities/PandoraBox.js';
 import { TongueAttackSystem } from './TongueAttackSystem.js';
 import { applyExtraOnHitEffects, applyOnHitStatusEffect } from './ExtraOnHitEffects.js';
 import { applyMeleeStatusDamageBonus, getMeleeStatusBonusIndicator } from './MeleeStatusBonuses.js';
-import { aimAtNearestEnemy } from './NearestEnemyAim.js';
+import { applyKeenAim } from './KeenAim.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
 // room — keeps cross-room sniping in check while still feeling powerful.
@@ -268,6 +268,8 @@ export class CombatSystem {
         proj.loopTime += deltaTime;
       }
 
+      if (proj.spinRate) proj.drawAngle += proj.spinRate * deltaTime; // Bolo Launcher's whirl
+
       // Boomerang flight: bounce-target homing, outbound timer, return-to-owner steering.
       if (proj.boomerang && BoomerangMechanic.updateFlight(proj, deltaTime, this)) {
         this.projectiles.splice(i, 1);
@@ -508,6 +510,7 @@ export class CombatSystem {
             this.projectiles.splice(i, 1);
             continue;
           }
+          if (proj.keenAim) applyKeenAim(proj, enemies); // Pearl Slingshot: re-aim off every bounce
         }
       }
 
@@ -698,6 +701,7 @@ export class CombatSystem {
             if (proj.explode) {
               this.createExplosion(proj.position.x, proj.position.y, proj.explodeRadius || 30, proj.damage, enemies, backgroundObjects, 0, planeOf(proj));
             }
+            this.game?.weaponEffectsSystem?.onProjectileHit(proj, enemy, enemies);
 
             // Boomerang first hit: record it, stun, defer return timer, chain
             // splash damage, then lock onto the nearest un-hit enemy in range
@@ -1189,6 +1193,7 @@ export class CombatSystem {
               if (attack.explode) {
                 this.createExplosion(attack.position.x, attack.position.y, attack.explodeRadius || 40, attack.damage, enemies, backgroundObjects, 0, attack.shooterPlane ?? 0);
               }
+              this.game?.weaponEffectsSystem?.onMeleeHit(attack, enemy, isFrozen);
             }
           }
         }
@@ -1674,7 +1679,7 @@ export class CombatSystem {
       if (proj.type === 'bullet' && attackData.accuracy !== undefined && attackData.accuracy < 1.0) {
         proj.missed = Math.random() > attackData.accuracy;
       }
-      if (proj.aimsAtNearestEnemy) aimAtNearestEnemy(proj, enemies);
+      if (proj.keenAim) applyKeenAim(proj, enemies);
       this.projectiles.push(proj);
     } else if (attackData.type === 'melee') {
       // Check if this is a delayed attack (for sequential animations like flail sweep)

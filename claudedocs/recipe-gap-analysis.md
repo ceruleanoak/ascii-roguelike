@@ -22,7 +22,7 @@ Lava Sword `ᚠ`, Venom Blade `ᛡ`, and all four elemental whips.
 | dagger | No t3 rung at all; both t2s are dead ends. |
 | whip | ✅ fixed 2026-09-27: Infused Whip is the plain t2, gem whips are t3. |
 | bat | Two t1s, one t2, no t3; Rubber Bat never upgrades. |
-| spear | Bug #262: Venom Lance alone on t2. |
+| spear | ✅ Trident moved to t2 as the plain rung (bug #262 resolved). |
 | staff | Staff → Thick Staff only; Thick Staff's growth goes sideways into untiered gem wands. |
 | gun / bow | Deep: 11 gun t3s, 8 bow t3s. No gap. |
 
@@ -57,17 +57,17 @@ is the cosmology lens (`zone-cosmology.md`): the verb the weapon should reward.
 | # | Recipe | Result idea | Fills | Zone / verb |
 |---|---|---|---|---|
 | 1 ✅ | Axe `⊦` + Bone `b` | Bone Axe `⊤` (existing; Bone + Metal route kept) | Reconnects the axe ladder t1 → t2 | — |
-| 2 | Whip `≋` + Thick Fur `K` | **Bullwhip**, plain t2 whip (reach / stronger disarm) | Whip's plain t2 slot (fountain can upgrade whips); first Thick Fur sink | Green · Acquire (hunted hide) |
-| 3 | Whip `≋` + Moss `❦` | **Vine Whip**: disarmed gear flies to the player | Second Moss use; whip disarm made greedy | Green · Acquire |
-| 4 | Maul `⟘` + Slag `4` | **Slag Maul**, t3 hammer, impact leaves a burning slag patch | Maul dead end; first Slag weapon sink | Red · React |
-| 5 | Longsword `⫯` + Diamond `⧫` | **Diamond Longsword**, plain t2/t3 sword (crit) | Longsword dead end; Diamond's 2nd use | Yellow (gem ownership) |
-| 6 | Vampire Dagger `ᛘ` + Garnet `⬥` | **Bloodletter**, t3 dagger, stronger lifesteal | Dagger t3; ties to Garnet Staff / Blood Robe | Red · React |
-| 7 | Acid Blade `ᚢ` + Venom `v` | t3 poison dagger (stacking poison) | Dagger t3 elemental | Green |
-| 8 | Dagger `↾` + Ice `i` | **Icicle**, freeze dagger t2 | Dagger t2 elemental; Ice's 3rd use | Cyan · Anticipate |
+| 2 ✅ | Whip `≋` + Thick Fur `K` | **Bullwhip**, plain t2 whip (reach / stronger disarm) | Whip's plain t2 slot (fountain can upgrade whips); first Thick Fur sink | Green · Acquire (hunted hide) |
+| 3 ✅ | Whip `≋` + Moss `❦` | **Vine Whip**: disarmed gear flies to the player | Second Moss use; whip disarm made greedy | Green · Acquire |
+| 4 ✅ | Maul `⟘` + Slag `4` | **Slag Maul**, t3 hammer, impact leaves a burning slag patch | Maul dead end; first Slag weapon sink | Red · React |
+| 5 ✅ | Longsword `⫯` + Diamond `⧫` | **Diamond Longsword**, plain t2/t3 sword (crit) | Longsword dead end; Diamond's 2nd use | Yellow (gem ownership) |
+| 6 ✅ | Vampire Dagger `ᛘ` + Garnet `⬥` | **Bloodletter**, t3 dagger, stronger lifesteal | Dagger t3; ties to Garnet Staff / Blood Robe | Red · React |
+| 7 ✅ | Acid Blade `ᚢ` + Venom `v` | t3 poison dagger (stacking poison) | Dagger t3 elemental | Green |
+| 8 ✅ | Dagger `↾` + Ice `i` | **Icicle**, freeze dagger t2 | Dagger t2 elemental; Ice's 3rd use | Cyan · Anticipate |
 | 9 ✅ | Slingshot `Ψ` + Eye `e` | **Keen Slingshot** `⋔`: launches on the exact angle to the nearest enemy | Slingshot dead end; Eye weapon use | Cyan · Anticipate |
-| 10 | Scythe `Ƨ` + Dust `d` | **Reaper's Scythe**, gray-themed | Scythe untiered dead end; Dust weapon use | Gray |
-| 11 | Boomerang `↩` + Pollen `ł` | Drowse boomerang: sleep dust on return | Boomerang dead end; Pollen's 2nd use | Yellow (press/pollen) |
-| 12 | Axe `⊦` + Ice `i` | **Ice Axe** (freeze) | Axe gets an elemental t2 next to plain Bone Axe | Cyan |
+| 10 ✅ | Scythe `Ƨ` + Dust `d` | **Reaper's Scythe**, gray-themed | Scythe untiered dead end; Dust weapon use | Gray |
+| 11 ✅ | Boomerang `↩` + Pollen `ł` | Drowse boomerang: sleep dust on return | Boomerang dead end; Pollen's 2nd use | Yellow (press/pollen) |
+| 12 ✅ | Axe `⊦` + Ice `i` | **Ice Axe** (freeze) | Axe gets an elemental t2 next to plain Bone Axe | Cyan |
 
 Not proposed: **Maul + Diamond → Crystal Maul**. The pair is free, but Crystal Maul is a
 secret-vein U-room find (t4). A recipe would turn that discovery into a shortcut.
@@ -82,6 +82,13 @@ secret-vein U-room find (t4). A recipe would turn that discovery into a shortcut
   should also be spires.
 
 ## 5. Round 2 — existing tier-2 weapons
+
+**Implemented 2026-09-27**, with these changes from the proposals below:
+- Lightning Sword `Ꞩ` moved to **tier 3**; new plain t2 **Magic Sword `⸸`** (Sword + Mana) throws the Storm Staff's bolt on every swing (no mana cost). Lightning Sword = Magic Sword + Topaz.
+- Venom Blade and Venom Lance now go through **Slurry** (`†`+`⚗`, `↑`+`⚗`); Dragon Blade + Goo removed.
+- Trident `ⲯ` is the plain spear t2 (Spear + Jaw kept, Spear + Sharkbone added).
+- Barbed Bat / Barbed Lance use poison DoT, not bleed.
+- Behavior flags live in `src/systems/WeaponEffectsSystem.js`.
 
 Checked free in both slot orders, 2026-09-27.
 
@@ -115,17 +122,20 @@ Checked free in both slot orders, 2026-09-27.
 | Thick Staff `Ⲯ` + Root `r` | Rootstaff: roots enemies in place (staff t3) | Green |
 | Keen Slingshot `⋔` + Pearl Shard `p` | Pearl Slingshot: ricochets, re-aiming at the nearest enemy after each bounce | Cyan |
 
-## 6. Nearest-enemy aim: other users
+## 6. Keen aim: other users
 
-The mechanic is `aimsAtNearestEnemy` in `src/systems/NearestEnemyAim.js`. It aims once, at
-launch, which makes it different from `homing`. It needs a glossary term; the current
-names are placeholders.
+The mechanic is `keenAim` in `src/systems/KeenAim.js` (term "Keen", chosen 2026-09-27; glossary entry pending). It aims once, at
+launch, which makes it different from `homing`.
 
 | Candidate | Recipe (free) | Wiring cost |
 |---|---|---|
-| Pearl Slingshot | Keen Slingshot + Pearl Shard | Re-run the aim on each ricochet (WallRicochetMechanic) |
+| Pearl Slingshot ✅ | Keen Slingshot + Pearl Shard | Re-aims on each ricochet |
 | Marksman Pistols | Heavy Pistols `ᚷ` + Eye `e` | Bullet path already done; aim the two pistols at the 1st and 2nd nearest enemies |
 | Hawk Bow | Sky Bow `⇒` + Eye `e` | Apply the flag to `createArrow`; must stay distinct from Homing Bow (aim fixed at launch vs. steering in flight) |
 | Keen Boomerang | Boomerang `↩` + Eye `e` | Aim BoomerangMechanic's outbound throw |
 | Trap throws | (an armour or oil property) | TrapSystem deploy throw lands on the nearest enemy |
 | Eye enemies | the enemy that drops Eye | Its shots use the same aim; you learn it from the enemy before you craft it |
+
+## 7. Later additions
+
+- **Bolo Launcher `⊶`** (t2 plain GUN, Sling + Fur): one whirling bolo `⚯` per room; snares any enemy that isn't huge (boss-tier, or mass ≥ 2.5 — Troll and up).

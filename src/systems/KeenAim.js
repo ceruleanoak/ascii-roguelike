@@ -1,17 +1,18 @@
 /**
- * Nearest-enemy aim — a projectile flagged `aimsAtNearestEnemy` leaves on the
- * exact angle to the nearest live enemy on its plane, instead of the way the
- * shooter faces. Aim is fixed at launch (not homing): a target that moves
- * after the shot can still step out of the line.
+ * Keen aim — a projectile flagged `keenAim` leaves on the exact angle to the
+ * nearest live enemy on its plane, instead of the way the shooter faces. Aim
+ * is fixed at the moment it is taken (not homing): a target that moves after
+ * the shot can still step out of the line.
  *
- * Used by: Keen Slingshot. CombatSystem.addAttack calls this once per bullet,
- * with the active-layer enemy list.
+ * Used by: Keen Slingshot, Pearl Slingshot. CombatSystem.addAttack aims once
+ * per bullet at launch, and CombatSystem's ricochet branch aims again after
+ * each wall bounce — both with the active-layer enemy list.
  */
 
 import { GRID } from '../game/GameConfig.js';
 import { planeOf } from './PlaneSystem.js';
 
-export function aimAtNearestEnemy(proj, enemies) {
+export function applyKeenAim(proj, enemies) {
   // Only enemies the stone can actually reach count as "nearest"; with none
   // in range the shot keeps its facing direction.
   const range = proj.remainingDistance ?? Infinity;

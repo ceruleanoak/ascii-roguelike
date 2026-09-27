@@ -563,7 +563,10 @@ export class Item {
         extraOnHit,
         electric: this.data.electric,
         homing: this.data.homing,
-        aimsAtNearestEnemy: this.data.aimsAtNearestEnemy,  // re-aimed on spawn — see NearestEnemyAim.js
+        keenAim: this.data.keenAim,  // re-aimed on spawn — see KeenAim.js
+        plagueBurst: this.data.plagueBurst,  // poison cloud on hit — see WeaponEffectsSystem
+        ensnares: this.data.ensnares,  // Bolo Launcher snare — see WeaponEffectsSystem
+        spinRate: this.data.bulletSpin,  // glyph whirls in flight (Bolo Launcher)
         ricochet: this.data.ricochet,
         maxRicochets: this.data.maxRicochets || 3,
         wallNudgeDistance: this.data.wallNudgeDistance,  // per-weapon tangential wall-nudge override — see WallRicochetMechanic.tryTangentialNudge
@@ -849,6 +852,11 @@ export class Item {
       if (this.data.poisonStacks) props.poisonStacks = true;
       if (this.data.acidBlade) props.acidBlade = true;
       if (this.data.randomOnHit) props.randomOnHit = this.data.randomOnHit;
+      // WeaponEffectsSystem.onMeleeHit flags (Glacier Hammer, Reaper's Scythe, Vine Whip, Rootstaff)
+      if (this.data.shattersFrozen) props.shattersFrozen = true;
+      if (this.data.healOnKill) props.healOnKill = this.data.healOnKill;
+      if (this.data.pullsDisarmedGear) props.pullsDisarmedGear = true;
+      if (this.data.rootDuration) props.rootDuration = this.data.rootDuration;
 
       if (Object.keys(props).length === 0) return result;
       if (Array.isArray(result)) {
@@ -1220,7 +1228,7 @@ export class Item {
     const attacks = [];
     const baseAngle = Math.atan2(player.facing.y, player.facing.x);
     const patternSpeed = this.data.patternSpeed || 0.02;
-    const reach = 5;
+    const reach = this.data.whipReach || 5;  // crack segments, one cell each
 
     // What a plain whip does is take the weapon out of their hands (`disarm`);
     // it applies no status effect of its own. The stun is the whip category's
