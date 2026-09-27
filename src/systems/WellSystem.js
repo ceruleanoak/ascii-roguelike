@@ -17,9 +17,12 @@
  * The green/red/cyan blessings are run-flags and cannot stack — a repeat toss
  * lands silently (plink, no flash, no message). Yellow drops are repeatable.
  *
- * All offerings play the spinning-arc animation. Slot offerings (¤, ★) land
- * with a flash and consume the well. Raw-coin offerings flash only when a
- * blessing is actually granted, and never consume the well.
+ * All offerings play the spinning-arc animation. Slot offerings (¤, ★)
+ * require the slot to be armed first (number key) then thrown with SPACE —
+ * see tryOfferArmedSlot(), mirroring AlchemySystem.tryFillArmedBottle's
+ * arm-then-SPACE shape — and land with a flash that consumes the well. Raw-coin
+ * offerings flash only when a blessing is actually granted, and never consume
+ * the well; they still auto-fire from proximity+SPACE via handleSpacePress().
  */
 
 import { GRID, ROOM_TYPES } from '../game/GameConfig.js';
@@ -60,6 +63,55 @@ export class WellSystem {
     }
   }
 
+  // Armed Infused/Lucky Coin (selected via number key) near a well — mirrors
+  // AlchemySystem.tryFillArmedBottle's arm-then-SPACE shape rather than
+  // auto-firing off proximity+SPACE alone. Must be checked BEFORE
+  // ConsumableTriggerSystem.fireSelected(), same as the Bottle/fairy checks.
+  tryOfferArmedSlot() {
+    const game = this.game;
+    const player = game.player;
+    const room = game.currentRoom;
+
+    if (!player || !room) return false;
+    if (room.type !== ROOM_TYPES.WELL) return false;
+    if (!room.well || room.well.consumed || game.wellCoinAnim) return false;
+
+    const idx = player.selectedConsumableIndex ?? -1;
+    if (idx < 0) return false;
+
+    const offering = this._findOfferingSlot();
+    if (!offering || offering.index !== idx) return false;
+
+    const wellCx = room.well.centerX;
+    const wellCy = room.well.centerY;
+    const px = player.position.x + GRID.CELL_SIZE / 2;
+    const py = player.position.y + GRID.CELL_SIZE / 2;
+    const dx = px - wellCx;
+    const dy = py - wellCy;
+    if (dx * dx + dy * dy > PROXIMITY_RADIUS * PROXIMITY_RADIUS) return false;
+
+    // Skip if this offering is redundant for the current state.
+    if (offering.type === 'infused' && player.magicMeter?.active) return false;
+    if (offering.type === 'lucky'   && player.luckBlessed)        return false;
+
+    game.wellCoinAnim = {
+      startX: px,
+      startY: py,
+      endX: wellCx,
+      endY: wellCy,
+      t: 0,
+      spinPhase: 0,
+      slotIndex: offering.index,
+      offeringType: offering.type,   // 'infused' | 'lucky'
+      room                            // anim aborts if player warps out
+    };
+
+    // Lock the well immediately so a second SPACE during the arc can't re-fire.
+    room.well.consumed = true;
+    player.selectedConsumableIndex = -1;
+    return true;
+  }
+
   // Returns true if it consumed the SPACE press (well + offering in range).
   handleSpacePress() {
     const game = this.game;
@@ -78,32 +130,6 @@ export class WellSystem {
     const dx = px - wellCx;
     const dy = py - wellCy;
     if (dx * dx + dy * dy > PROXIMITY_RADIUS * PROXIMITY_RADIUS) return false;
-
-    // Slot offerings (¤, ★) require the well to still be usable.
-    if (!room.well.consumed) {
-      const offering = this._findOfferingSlot();
-      if (offering) {
-        // Skip if this offering is redundant for the current state.
-        if (offering.type === 'infused' && player.magicMeter?.active) return false;
-        if (offering.type === 'lucky'   && player.luckBlessed)        return false;
-
-        game.wellCoinAnim = {
-          startX: px,
-          startY: py,
-          endX: wellCx,
-          endY: wellCy,
-          t: 0,
-          spinPhase: 0,
-          slotIndex: offering.index,
-          offeringType: offering.type,   // 'infused' | 'lucky'
-          room                            // anim aborts if player warps out
-        };
-
-        // Lock the well immediately so a second SPACE during the arc can't re-fire.
-        room.well.consumed = true;
-        return true;
-      }
-    }
 
     // Raw coin probe (`c` ingredient): always available, doesn't consume the well.
     // Plays the spinning arc + hollow plink — the well's indifferent response
