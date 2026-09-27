@@ -44,7 +44,8 @@ import {
   computeSpeedMultiplier as computeSpeedMultiplierImpl,
   clearEffectOrder as clearEffectOrderImpl,
   updateStatusEffects as updateStatusEffectsImpl,
-  getStunDroppedItems
+  getStunDroppedItems,
+  isEnemyFrozen
 } from '../systems/EnemyStatusEffects.js';
 
 // ─── Enemy AI Debug Logger ─────────────────────────────────────────────────
@@ -514,8 +515,10 @@ export class Enemy {
     return this.statusEffects.zap.active && this.statusEffects.zap.stacks >= MAX_PIPS;
   }
 
+  // Frozen = the freeze Pip track at pip 3; pips 1–2 are only a slow
+  // (computeSpeedMultiplier).
   isFrozen() {
-    return this.statusEffects.freeze.active && this.statusEffects.freeze.frozen;
+    return isEnemyFrozen(this);
   }
 
   isWet() { return this.statusEffects.wet.active; }

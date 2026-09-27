@@ -22,17 +22,13 @@ import { CHARACTER_TYPES } from '../data/characters.js';
 import { GRID } from '../game/GameConfig.js';
 import {
   createStatusEffects, applyStatusEffect, tickStatusEffects,
-  MAX_PIPS, ZAP_PIP_SPEED
+  MAX_PIPS, ZAP_PIP_SPEED, FREEZE_PIP_SPEED
 } from './StatusEffects.js';
 
 /** A fresh player `statusEffects` table (constructor and reset() share it — #256). */
 export function createPlayerStatusSlots() {
   return createStatusEffects('player');
 }
-
-// Movement multiplier per freeze pip. Pip 1 is the old flat freeze slow;
-// pip 3 is Frozen, so no movement at all.
-const FREEZE_PIP_SPEED = [1, 0.5, 0.3, 0];
 
 // Frozen outlasts every other player status, but each fresh key press chips
 // time off it; a dodge-roll press chips much more, scaled by the character's

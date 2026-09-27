@@ -7,6 +7,7 @@
 
 import { WATER_COLORS } from '../game/GameConfig.js';
 import { wetPipCount } from './StatusEffectSystem.js';
+import { MAX_PIPS } from './StatusEffects.js';
 
 const DOT_BLINK_FREQUENCY = 0.2; // baseline blink period at 1 stack
 const SLICE_DURATION = 0.6; // seconds each active effect gets the blink "turn"
@@ -75,7 +76,7 @@ export function computeBlinkColor(enemy) {
   }
 
   if (effect === 'freeze') {
-    if (status.frozen) {
+    if (status.stacks >= MAX_PIPS) {
       if (status.shuddering) {
         // Rapid shudder flash between ice-white and ice-blue before breaking free
         const shudderCycle = Math.floor(enemy.dotBlinkTimer / 0.06);
@@ -83,7 +84,7 @@ export function computeBlinkColor(enemy) {
       }
       return EFFECT_COLORS.freeze; // Solid ice color — fully locked
     }
-    // Puddle/slime slow: subtle cyan blink, stack-scaled like every other effect
+    // Freeze pips 1–2 (the slow): cyan blink, stack-scaled like every other effect
     const period = DOT_BLINK_FREQUENCY / stacks;
     const blinkCycle = Math.floor(enemy.dotBlinkTimer / period);
     return blinkCycle % 2 === 0 ? EFFECT_COLORS.freeze : enemy.baseColor;

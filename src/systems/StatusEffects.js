@@ -2,8 +2,8 @@
 // share (GLOSSARY: Status Effect, Pip). One declaration table, one apply, one
 // tick, one clear. The carrier layers on top only add what is genuinely
 // carrier-specific:
-//   - EnemyStatusEffects.js — DoT damage straight to hp, freeze's frozen/
-//     shudder sub-states, the stun/zap item jolt.
+//   - EnemyStatusEffects.js — DoT damage straight to hp, Frozen's lock
+//     duration and thaw shudder, the stun/zap item jolt.
 //   - StatusEffectSystem.js — DoT damage through takeDamage (immunity and
 //     i-frames), Frozen and the struggle out of it, the pip speed tables.
 //
@@ -25,6 +25,10 @@ export const MAX_PIPS = 3; // every stackable effect's Pip cap
 // Movement multiplier per zap pip, shared by both carriers. Pip 3 is the
 // lock — the carrier layers stop movement outright there.
 export const ZAP_PIP_SPEED = [1, 0.6, 0.35, 0];
+
+// Movement multiplier per freeze pip, shared by both carriers. Pip 3 is
+// Frozen — the carrier layers stop movement outright there.
+export const FREEZE_PIP_SPEED = [1, 0.5, 0.3, 0];
 
 // Seconds each zap pip below the hit's own takes to drain (the cooldown).
 const ZAP_PIP_DECAY = 1.0;
@@ -58,9 +62,11 @@ const STATUS_EFFECTS = {
     player: { damage: 1, tickRate: 1.5, tickTimer: 0, stacks: 0, stackTickRate: 1.5, decayInterval: 3.0 }
   },
   freeze: {
-    // Enemy: one ice hit slows; ExtraOnHitEffects flips `frozen` for the full
-    // lock. Player: pips 1–2 slow, pip 3 is Frozen (StatusEffectSystem).
-    enemy: { slowAmount: 0.5, frozen: false, shuddering: false, stacks: 0 },
+    // Pip track on both sides: each ice hit adds a pip, pips 1–2 slow
+    // (FREEZE_PIP_SPEED), pip 3 is Frozen. Entering Frozen sets the lock's
+    // duration in each carrier layer (EnemyStatusEffects / StatusEffectSystem);
+    // the enemy's `shuddering` marks the thaw flash in a lock's last moments.
+    enemy: { shuddering: false, stacks: 0 },
     player: { stacks: 0 },
     immunity: 'freezeImmune'
   },

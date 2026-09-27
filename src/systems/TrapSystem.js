@@ -950,9 +950,10 @@ export class TrapSystem {
     } else if (trapData.effect === 'freeze') {
       // Freeze Trap: damage + freeze enemies + crystallize water/puddle tiles + scatter ice objects.
       // freezePermanent enemies (slimes) lock at Infinity duration and never thaw; other ice-weak
-      // enemies (freeze >1.0) also get Infinity. Everyone else uses effectDuration. `frozen=true`
-      // unconditionally so the freeze is full immobilization, not just slow. Freeze-immune enemies
-      // are filtered by _applyTrapHit via trapData.affinity='freeze'.
+      // enemies (freeze >1.0) also get Infinity. Everyone else uses effectDuration. The trap is
+      // an all-at-once hit: straight to freeze pip 3 (Frozen — full immobilization, not just
+      // slow), matching the player-side trap below. Freeze-immune enemies are filtered by
+      // _applyTrapHit via trapData.affinity='freeze'.
       for (const p of createIceBurst(cx, cy)) game.particles.push(tagInteriorPlane(game, p));
       const freezeDmg = trapData.damage || 1;
       for (const enemy of targets) {
@@ -962,8 +963,7 @@ export class TrapSystem {
         if (!this._applyTrapHit(enemy, trapData, freezeDmg, '#aaffff')) continue;
         const isIceWeak = enemy.getElementalModifier('freeze') > 1.0;
         const duration = (enemy.data.freezePermanent || isIceWeak) ? Infinity : trapData.effectDuration;
-        enemy.applyStatusEffect('freeze', duration);
-        enemy.statusEffects.freeze.frozen = true;
+        enemy.applyStatusEffect('freeze', duration, 3); // straight to Frozen
       }
 
       const C = GRID.CELL_SIZE;
@@ -1289,8 +1289,9 @@ export class TrapSystem {
     for (const enemy of (game.currentRoom?.enemies ?? [])) {
       if ((enemy.plane ?? 0) !== playerPlane) continue;
       if (!puddle.isEntityOnPuddle(enemy)) continue;
+      // Same as the player: held at pip 1, never stacking up to Frozen.
       if (enemy.shouldApplyStatusEffect?.('freeze')) {
-        enemy.applyStatusEffect('freeze', 0.5);
+        enemy.applyStatusEffect('freeze', 0.5, 1);
       }
     }
   }

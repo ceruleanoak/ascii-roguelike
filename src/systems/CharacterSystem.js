@@ -580,8 +580,9 @@ export class CharacterSystem {
       if (Math.hypot(ex - cx, ey - cy) > radius) continue;
       enemy.takeDamage(EMERGE_DAMAGE);
       game.combatSystem?.createDamageNumber(EMERGE_DAMAGE, enemy.position.x, enemy.position.y, '#88ccff', 1.4, 1.1);
-      // Brief stagger so the player can follow up
-      enemy.applyStatusEffect?.('freeze', 0.5);
+      // Brief stagger so the player can follow up — a slow held at freeze
+      // pip 1, so it never tips a chilled enemy into Frozen
+      enemy.applyStatusEffect?.('freeze', 0.5, 1);
     }
     // Splash particles
     for (let i = 0; i < 14; i++) {

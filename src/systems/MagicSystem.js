@@ -529,7 +529,8 @@ export class MagicSystem {
     );
   }
 
-  // Sapphire Staff — blizzard, freezes all enemies in a wide ring around player.
+  // Sapphire Staff — blizzard, one freeze pip on every enemy in a wide ring
+  // around the player (a discrete hit: repeat casts escalate toward Frozen).
   _castBlizzard(attack) {
     const enemies = this._activeEnemies();
     const radius = 90;

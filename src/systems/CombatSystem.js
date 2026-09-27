@@ -660,7 +660,7 @@ export class CombatSystem {
             if (proj.onHit && enemy.shouldApplyStatusEffect(projStatus)) {
               const baseDuration = 3.0;
               const modifiedDuration = baseDuration * elementalMod;
-              applyOnHitStatusEffect(enemy, projStatus, modifiedDuration, elementalMod);
+              applyOnHitStatusEffect(enemy, projStatus, modifiedDuration);
               // Emit impact effect for visual feedback
               this.impactEffects.push({ x: enemy.position.x, y: enemy.position.y, onHit: proj.onHit, color: proj.color });
             } else if (proj.onHit && !enemy.shouldApplyStatusEffect(projStatus)) {
@@ -1016,7 +1016,7 @@ export class CombatSystem {
               statusDuration = 3.5;  // Extended stun
             } else if (isWet && attack.onHit === 'freeze') {
               totalDamage += Math.ceil(attack.damage * 0.5); // +50% from ice on wet enemies
-              statusDuration = 5.0;  // Extended freeze
+              statusDuration = 5.0;  // Extended freeze pip (the Frozen lock keeps its own duration)
             }
 
             // Blunt-vs-frozen and blade-vs-snared damage bonuses (MeleeStatusBonuses.js)
@@ -1088,7 +1088,7 @@ export class CombatSystem {
               const attackStatus = (attack.onHit === 'stun' && attack.electric) ? 'zap' : attack.onHit;
               if (attack.onHit && !acidOutOfCharges && enemy.shouldApplyStatusEffect(attackStatus)) {
                 const modifiedDuration = statusDuration * elementalMod;
-                applyOnHitStatusEffect(enemy, attackStatus, modifiedDuration, elementalMod);
+                applyOnHitStatusEffect(enemy, attackStatus, modifiedDuration);
                 // Emit impact effect for visual feedback
                 this.impactEffects.push({ x: enemy.position.x, y: enemy.position.y, onHit: attack.onHit, color: attack.color });
               } else if (attack.onHit && !acidOutOfCharges && !enemy.shouldApplyStatusEffect(attackStatus)) {

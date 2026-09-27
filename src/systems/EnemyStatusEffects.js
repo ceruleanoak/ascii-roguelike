@@ -1,8 +1,8 @@
 // EnemyStatusEffects — the enemy carrier layer over the shared Status
 // Effect core (StatusEffects.js, which owns the declaration table, apply,
 // tick and clear for the player and enemies alike). What lives here is only
-// what is enemy-specific: DoT ticks landing straight on hp, freeze's frozen/
-// shudder sub-states, and the stun/zap jolt that knocks carried items loose.
+// what is enemy-specific: DoT ticks landing straight on hp, Frozen's lock
+// duration and thaw shudder, and the stun/zap jolt that knocks carried items loose.
 // The read side (blink color, stack pips) lives in StatusEffectVisuals.js;
 // the player's carrier layer is StatusEffectSystem.js.
 //
@@ -17,18 +17,40 @@ import {
   tickStatusEffects,
   clearEffectOrder,
   MAX_PIPS,
-  ZAP_PIP_SPEED
+  ZAP_PIP_SPEED,
+  FREEZE_PIP_SPEED
 } from './StatusEffects.js';
 
 // Re-exported so existing imports keep working; it lives in the shared core.
 export { clearEffectOrder };
 
+// Seconds an enemy stays Frozen once freeze reaches pip 3, scaled by its ice
+// affinity (weak = longer). Enemies can't struggle out like the player
+// (GLOSSARY: Frozen), so they wait out this timer. `data.freezePermanent`
+// (slimes) never thaws.
+const FROZEN_DURATION = 8.0;
+
+/** Frozen = the freeze Pip track at pip 3 (GLOSSARY: Frozen). */
+export function isEnemyFrozen(enemy) {
+  const freeze = enemy.statusEffects.freeze;
+  return freeze.active && freeze.stacks >= MAX_PIPS;
+}
+
 // Applies `effect` through the shared core (activation, pip, duration), then
-// the enemy-only consequence: a stun, or zap reaching pip 3, jolts carried
-// items loose. Zap pips 1–2 are only a slow — they don't disarm.
+// the enemy-only consequences: freeze reaching pip 3 locks for the Frozen
+// duration (a further hit on a Frozen enemy only refreshes, like the
+// player's), and a stun, or zap reaching pip 3, jolts carried items loose.
+// Zap pips 1–2 are only a slow — they don't disarm.
 export function applyStatusEffect(enemy, effect, duration = 3.0, pips = null) {
+  const wasFrozen = effect === 'freeze' && isEnemyFrozen(enemy);
   const slot = applySharedStatusEffect(enemy, effect, duration, pips);
   if (!slot) return;
+  if (effect === 'freeze' && !wasFrozen && slot.stacks >= MAX_PIPS) {
+    const lock = enemy.data?.freezePermanent
+      ? Infinity
+      : FROZEN_DURATION * (enemy.getElementalModifier?.('freeze') ?? 1);
+    slot.duration = Math.max(slot.duration, lock);
+  }
   const jolts = effect === 'stun' || (effect === 'zap' && slot.stacks >= MAX_PIPS);
   if (jolts && enemy.itemUsage && enemy.inventory.length > 0) {
     enemy.shouldDropItems = true;
@@ -80,14 +102,16 @@ export function getStunDroppedItems(enemy) {
 }
 
 // Combined movement-speed multiplier from every slowing/halting effect
-// currently on the enemy — freeze/gooey/dizzy/sleep tiers, zap pips 1–2, rally-boost
+// currently on the enemy — freeze pips 1–2/gooey/dizzy/sleep tiers, zap pips 1–2, rally-boost
 // speedup, and gas-attack slow stacks. Split out of Enemy.js (getSpeedMultiplier) to
 // keep that file under its architecture budget; stun/zap/knockback/frozen's
 // hard-zero cases stay in Enemy.js since they're plain early-return guards
 // on the caller's own state, not part of this stacking multiplier.
 export function computeSpeedMultiplier(enemy) {
   let m = 1;
-  if (enemy.statusEffects.freeze.active) m = 1 - enemy.statusEffects.freeze.slowAmount;
+  // Freeze pips 1–2 slow per pip (the player's table); pip 3 (Frozen) halts
+  // it via Enemy.isFrozen before this is reached.
+  if (enemy.statusEffects.freeze.active) m = FREEZE_PIP_SPEED[enemy.statusEffects.freeze.stacks];
   else if (enemy.isGooey()) m = 1 - enemy.statusEffects.goo.slowAmount;
   else if (enemy.isDizzy()) m = 0.35;
   // Drowse tiers 1-2 slow instead of halting (tier 3 already returns 0 via
@@ -112,10 +136,14 @@ export function computeSpeedMultiplier(enemy) {
 export function updateStatusEffects(enemy, deltaTime) {
   const permanentFreeze = !!enemy.data?.freezePermanent;
   const ticks = tickStatusEffects(enemy, deltaTime, {
-    holdsTimer: (effect, slot) => (effect === 'freeze' && slot.frozen && permanentFreeze)
+    holdsTimer: (effect, slot) => (effect === 'freeze' && slot.stacks >= MAX_PIPS && permanentFreeze)
       || (effect === 'zap' && enemy.isWet()),
+    // Recomputed every frame, so a hit that refreshes a thawing lock stops
+    // the shudder instead of leaving it flashing for the whole new lock.
     afterCountdown: (effect, slot) => {
-      if (effect === 'freeze' && slot.frozen && !permanentFreeze && slot.duration < 0.6) slot.shuddering = true;
+      if (effect === 'freeze') {
+        slot.shuddering = slot.stacks >= MAX_PIPS && !permanentFreeze && slot.duration < 0.6;
+      }
     },
     onExpire: (effect) => {
       if (effect === 'poison') enemy.poisonStackCount = 0;

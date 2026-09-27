@@ -6,28 +6,19 @@
 // its own effect (bug #183) — this module is what lets both land on the
 // same swing, and generalizes to any number of stacked oils.
 //
-// Also exports applyOnHitStatusEffect — the freeze-escalation special case
-// (second ice hit while fully frozen -> stun) shared verbatim by the
-// projectile and melee primary-effect blocks in CombatSystem.js and by the
-// extras loop below, so the branch exists once instead of three times.
+// Also exports applyOnHitStatusEffect — the per-effect special cases of a
+// weapon hit (full-strength zap) shared verbatim by the projectile and melee
+// primary-effect blocks in CombatSystem.js and by the extras loop below, so
+// the branch exists once instead of three times.
 
 import { MAX_PIPS } from './StatusEffects.js';
 
-// Applies `effect` to `enemy` for `duration`, handling freeze-escalation:
-// a second ice hit while already fully frozen converts to a stun instead of
-// re-applying/extending freeze. `effect` should already be past the
-// stun->zap dual-key translation if the caller does one — freeze itself is
-// never translated, so checking it here post-translation is safe.
-export function applyOnHitStatusEffect(enemy, effect, duration, elementalMod) {
-  if (effect === 'freeze') {
-    if (enemy.isFrozen()) {
-      enemy.applyStatusEffect('stun', 2.5 * elementalMod);
-    } else {
-      const dur = enemy.data.freezePermanent ? Infinity : 8.0 * elementalMod;
-      enemy.applyStatusEffect('freeze', dur);
-      enemy.statusEffects.freeze.frozen = true;
-    }
-  } else if (effect === 'zap') {
+// Applies `effect` to `enemy` for `duration`. `effect` should already be
+// past the stun->zap dual-key translation if the caller does one. An ice hit
+// is a discrete hit like any other: it adds one freeze pip, and the enemy
+// carrier layer turns pip 3 into the Frozen lock (EnemyStatusEffects).
+export function applyOnHitStatusEffect(enemy, effect, duration) {
+  if (effect === 'zap') {
     // An electric weapon hit is full-strength current: straight to zap pip 3
     // (lock + disarm). Only chains and imbued current carry less.
     enemy.applyStatusEffect('zap', duration, MAX_PIPS);
@@ -37,7 +28,7 @@ export function applyOnHitStatusEffect(enemy, effect, duration, elementalMod) {
 }
 
 // Mirrors the primary effect's per-effect resolution in CombatSystem.js
-// (elemental modifier/immunity gate, freeze-escalation, impact effect) but
+// (elemental modifier/immunity gate, zap strength, impact effect) but
 // resolves each extra independently, with its own elemental-modifier check —
 // an extra must not be swallowed just because the primary effect happened to
 // be immune-voided on this enemy, nor gated behind Acid Blade's per-room
@@ -59,7 +50,7 @@ export function applyExtraOnHitEffects(combatSystem, enemy, extraOnHitList, colo
     if (elementalMod === 0.0) continue;
     if (!enemy.shouldApplyStatusEffect(onHit)) continue;
 
-    applyOnHitStatusEffect(enemy, onHit, baseDuration * elementalMod, elementalMod);
+    applyOnHitStatusEffect(enemy, onHit, baseDuration * elementalMod);
     combatSystem.impactEffects.push({ x: enemy.position.x, y: enemy.position.y, onHit, color });
   }
 }

@@ -716,9 +716,9 @@ programming terms.
 - **In code:** `StatusEffectSystem.isPlayerFrozen` / `struggleLock` (`FROZEN` constants — the
   same struggle frees the player from a zap pip 3 or stun), struggle input read in
   `CharacterSystem._struggleLock`; red's multiplier is
-  `frozenRollChipMult` in `characters.js`. Enemy side: `statusEffects.freeze.frozen` and the
-  `frozen` hard interrupt in `EnemyStateMachine.INTERRUPTS`. Enemies can't struggle, so they
-  thaw on the timer.
+  `frozenRollChipMult` in `characters.js`. Enemy side: `Enemy.isFrozen` (freeze pip 3,
+  `isEnemyFrozen` / `FROZEN_DURATION` in `EnemyStatusEffects.js`) and the `frozen` hard
+  interrupt in `EnemyStateMachine.INTERRUPTS`. Enemies can't struggle, so they thaw on the timer.
 - **Not:** the freeze slow tier (pips 1–2); an Enemy State (it's an interrupt that preempts
   the current State without replacing it); Freeze-Over (the Lake Boss's permanent sheet).
 
