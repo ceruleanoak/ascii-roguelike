@@ -41,6 +41,8 @@ export class ConsumableWindupEffects {
         }
         // Explosion particles
         createBurstParticles(inv.game, particles, px, py, 20, windup.consumable.color || '#ff4400');
+        // A bomb is the only thing that opens a Bombable Rock (Cavern entrance).
+        inv.game.cavernSystem.bombBlast(px, py, aoeRadius);
         break;
       }
       case 'curse': {

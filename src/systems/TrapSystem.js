@@ -1089,6 +1089,8 @@ export class TrapSystem {
           isImpact: true
         }));
       }
+      // A bomb is the only thing that opens a Bombable Rock (Cavern entrance).
+      game.cavernSystem.bombBlast(cx, cy, r);
     } else if (trapData.effect === 'snare') {
       // Snare Trap: a beast-affinity enemy caught in the radius is rooted in place
       // permanently (reuses the Trident-pin immobilizer). Non-beasts walk through it
