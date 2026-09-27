@@ -9,7 +9,7 @@ import { cellularCaveGrid } from './roomFeatures.js';
 
 // Discovery pools — one Key Item per dive at a far dead-end; the rest rare Ingredients.
 const KEY_ITEMS = ['§', '⊙'];
-const RARE_INGREDIENTS = ['v', 'e', 'k', '`', '1', '?', 'h', 'r'];
+const RARE_INGREDIENTS = ['v', 'e', 'k', '⬦', '◇', '◈', 'h', 'r']; // Emerald, Topaz, Ruby
 
 /**
  * AquiferSystem — the frog-only underwater dive in a Quagmire (Q) room.

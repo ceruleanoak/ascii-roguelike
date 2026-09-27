@@ -20,7 +20,7 @@ export const ZONE_COLORS = {
 export const ZONE_MINERALS = {
   green:  ['❦'],                       // Moss
   red:    ['M'],                       // Metal
-  yellow: ['1', '9', '`', '?', '('],   // Gemstone
+  yellow: ['◇', '⬥', '⬦', '◈', '⬨'],   // Topaz, Garnet, Emerald, Ruby, Sapphire
   cyan:   ['△']                        // Arrowhead
 };
 
