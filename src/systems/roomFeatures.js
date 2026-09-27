@@ -68,6 +68,62 @@ export function carveForcedRiver(gen, room, forced) {
 }
 
 /**
+ * Yellow zone's per-room water template (stream / river / dry bed /
+ * river+river / river+2 streams / pond) — or, while the river-follow chase is
+ * active, a forced river pinned to the entry wall. The path carving itself is
+ * RoomGenerator._buildPath (see the "Yellow zone: rivers" block there).
+ */
+export function generateYellowWaterTemplate(gen, room, forced = null) {
+  if (forced) {
+    carveForcedRiver(gen, room, forced);
+    return;
+  }
+
+  const templates = ['stream', 'river', 'dry', 'river_river', 'river_streams', 'pond'];
+  const choice = templates[Math.floor(Math.random() * templates.length)];
+
+  switch (choice) {
+    case 'stream':
+      gen._buildPath(room, 'stream');
+      break;
+    case 'river': {
+      const path = gen._buildPath(room, 'river');
+      const dir = deriveRiverFlowDirection(path);
+      if (dir && room.zone === 'yellow') room.riverFlowDirection = dir;
+      break;
+    }
+    case 'dry':
+      gen._buildPath(room, 'dry');
+      break;
+    case 'river_river': {
+      const main = gen._buildPath(room, 'river');
+      const dir = deriveRiverFlowDirection(main);
+      if (dir && room.zone === 'yellow') room.riverFlowDirection = dir;
+      if (main && main.length > 6) {
+        const tap = main[Math.floor(main.length / 2)];
+        gen._buildPath(room, 'river', tap, gen._pickEdgePoint());
+      }
+      break;
+    }
+    case 'river_streams': {
+      const main = gen._buildPath(room, 'river');
+      const dir = deriveRiverFlowDirection(main);
+      if (dir && room.zone === 'yellow') room.riverFlowDirection = dir;
+      if (main && main.length > 8) {
+        for (let i = 0; i < 2; i++) {
+          const j = Math.floor((i + 1) * main.length / 3);
+          gen._buildPath(room, 'stream', main[j], gen._pickEdgePoint());
+        }
+      }
+      break;
+    }
+    case 'pond':
+      gen._placePond(room);
+      break;
+  }
+}
+
+/**
  * Cellular-automata cave grid. Returns grid[row][col] where 1 = wall, 0 = open.
  * Borders are always wall; `isOpen(col, row)` cells are forced open (clearings,
  * dive pockets). Shared by underground, bat belfry, and the Aquifer.

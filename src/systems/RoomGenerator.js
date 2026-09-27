@@ -11,7 +11,7 @@ import { getDungeonDesign } from '../data/dungeonDesigns.js';
 import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
-import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, deriveRiverFlowDirection, buildForcedRiverParams, carveForcedRiver, cellularCaveGrid, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, spawnGuaranteedItems, offerL1Weapon, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl } from './roomFeatures.js';
+import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, buildForcedRiverParams, generateYellowWaterTemplate, cellularCaveGrid, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, spawnGuaranteedItems, offerL1Weapon, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl } from './roomFeatures.js';
 
 // Zone-boss arena → letter template key. Boss rooms are entered without a
 // letter (cheat warp) or with an arbitrary one (normal progression), so we
@@ -2071,10 +2071,15 @@ export class RoomGenerator {
       //
       // River-follow chase active (ZoneSystem.riverChaseActive) → force a river
       // pinned to the entry wall, flowing forward-only (never south/back out).
-      const forced = this.zoneSystem?.riverChaseActive
-        ? buildForcedRiverParams(this.zoneSystem.riverLastExitDirection)
-        : null;
-      this.generateYellowWaterTemplate(room, forced);
+      //
+      // Exempt: B rooms. The Giant Slime arena brings its own water (the Imbue
+      // Pools), and a river through the clearing would bury them.
+      if (room.exitLetter !== 'B') {
+        const forced = this.zoneSystem?.riverChaseActive
+          ? buildForcedRiverParams(this.zoneSystem.riverLastExitDirection)
+          : null;
+        generateYellowWaterTemplate(this, room, forced);
+      }
     } else {
       // Structured liquid (depth 3+, or always in zones with special liquids like lava)
       if (this.currentDepth >= 3 || zoneHasSpecialLiquid) {
@@ -2237,56 +2242,6 @@ export class RoomGenerator {
   // visual gaps at turns or diagonals. Dry beds use the same footprint with
   // mud tiles (no conduction). Streams are just the centerline.
   // ──────────────────────────────────────────────────────────────────────────
-
-  generateYellowWaterTemplate(room, forced = null) {
-    if (forced) {
-      carveForcedRiver(this, room, forced);
-      return;
-    }
-
-    const templates = ['stream', 'river', 'dry', 'river_river', 'river_streams', 'pond'];
-    const choice = templates[Math.floor(Math.random() * templates.length)];
-
-    switch (choice) {
-      case 'stream':
-        this._buildPath(room, 'stream');
-        break;
-      case 'river': {
-        const path = this._buildPath(room, 'river');
-        const dir = deriveRiverFlowDirection(path);
-        if (dir && room.zone === 'yellow') room.riverFlowDirection = dir;
-        break;
-      }
-      case 'dry':
-        this._buildPath(room, 'dry');
-        break;
-      case 'river_river': {
-        const main = this._buildPath(room, 'river');
-        const dir = deriveRiverFlowDirection(main);
-        if (dir && room.zone === 'yellow') room.riverFlowDirection = dir;
-        if (main && main.length > 6) {
-          const tap = main[Math.floor(main.length / 2)];
-          this._buildPath(room, 'river', tap, this._pickEdgePoint());
-        }
-        break;
-      }
-      case 'river_streams': {
-        const main = this._buildPath(room, 'river');
-        const dir = deriveRiverFlowDirection(main);
-        if (dir && room.zone === 'yellow') room.riverFlowDirection = dir;
-        if (main && main.length > 8) {
-          for (let i = 0; i < 2; i++) {
-            const j = Math.floor((i + 1) * main.length / 3);
-            this._buildPath(room, 'stream', main[j], this._pickEdgePoint());
-          }
-        }
-        break;
-      }
-      case 'pond':
-        this._placePond(room);
-        break;
-    }
-  }
 
   _dirChar(dir) {
     // '∧' (logical AND, U+2227) — upside-down V, matches the Ascend-room idiom.
