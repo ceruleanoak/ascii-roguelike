@@ -21,7 +21,7 @@ const EFFECT_COLORS = {
   burn: '#ff4400',
   poison: '#8a9a2e', // sickly olive-green — deliberately duller/muddier than goo's clean lime so the two read apart at pip size
   zap: '#ffff00',   // electric yellow
-  stun: '#ffff00',
+  stun: '#ff9900',   // orange — sits between burn's red-orange and zap's yellow
   charm: '#ff44ff',
   freeze: '#00ffff', // ice cyan — the slow tiers and Frozen alike
   wet: '#4488ff',
