@@ -9,7 +9,7 @@
  *   swingBolt      — char of a GUN weapon whose bolt the swing also throws
  *                    (Magic Sword → Storm Staff '⚡'). Read live from that
  *                    weapon's data, so the two stay in parity — including its
- *                    manaCost: no mana, no bolt.
+ *                    manaCost: a dry meter throws the same fizzled spark.
  *   dustBurst      — { status, duration, color }: a sight-blocking cloud that
  *                    applies `status` to every enemy in it (Spore Mace sleep,
  *                    Cinder Hammer blind). Lands at the weapon tip, or around
@@ -34,6 +34,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { ITEMS } from '../data/items.js';
 import { tagInteriorPlane } from './PlaneSystem.js';
+import { fizzleToSpark } from './MagicSystem.js';
 
 const C = GRID.CELL_SIZE;
 const DUST_BURST_RADIUS = C * 2.5;
@@ -110,14 +111,14 @@ export class WeaponEffectsSystem {
   }
 
   // The same bolt the source GUN weapon fires, thrown along the swing's facing.
-  // Costs the source gun's manaCost; with no mana the swing lands boltless.
+  // Costs the source gun's manaCost; with no mana it fizzles to a spark.
   _throwBolt(player, bolt) {
     if (!bolt) return;
-    if (bolt.manaCost && !this.game.magicSystem.spendMana(player, bolt.manaCost)) return;
+    const unpaid = bolt.manaCost && !this.game.magicSystem.spendMana(player, bolt.manaCost);
     const angle = Math.atan2(player.facing.y, player.facing.x);
     const spawnOffset = 6;
     const speed = bolt.bulletSpeed || 300;
-    this.game.combatSystem.createAttack({
+    const attack = {
       type: 'bullet',
       char: bolt.bulletChar || '·',
       drawAngle: angle,
@@ -132,7 +133,9 @@ export class WeaponEffectsSystem {
       bulletRange: bolt.bulletRange,
       owner: player,
       shooterPlane: player.plane
-    }, this.game._activeEnemies());
+    };
+    if (unpaid) fizzleToSpark(attack);
+    this.game.combatSystem.createAttack(attack, this.game._activeEnemies());
   }
 
   _dustBurst(player, data) {

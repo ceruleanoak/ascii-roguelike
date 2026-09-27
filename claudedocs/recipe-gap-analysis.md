@@ -84,7 +84,7 @@ secret-vein U-room find (t4). A recipe would turn that discovery into a shortcut
 ## 5. Round 2 — existing tier-2 weapons
 
 **Implemented 2026-09-27**, with these changes from the proposals below:
-- Lightning Sword `Ꞩ` moved to **tier 3**; new plain t2 **Magic Sword `⸸`** (Sword + Mana) throws the Storm Staff's bolt on every swing, paying the Storm Staff's mana cost (dry meter = plain swing). Lightning Sword = Magic Sword + Topaz.
+- Lightning Sword `Ꞩ` moved to **tier 3**; new plain t2 **Magic Sword `⸸`** (Sword + Mana) throws the Storm Staff's bolt on every swing, paying the Storm Staff's mana cost (dry meter = the same half-size fizzled spark). Lightning Sword = Magic Sword + Topaz.
 - Venom Blade and Venom Lance now go through **Slurry** (`†`+`⚗`, `↑`+`⚗`); Dragon Blade + Goo removed.
 - Trident `ⲯ` is the plain spear t2 (Spear + Jaw kept, Spear + Sharkbone added).
 - Barbed Bat / Barbed Lance use poison DoT, not bleed.
@@ -139,5 +139,5 @@ launch, which makes it different from `homing`.
 ## 7. Later additions
 
 - **Bolo Launcher `⊶`** (t2 plain GUN, Sling + Fur): one whirling bolo `⚯` per room; snares any enemy that isn't huge (boss-tier, or mass ≥ 2.5 — Troll and up).
-- **Magic staves (Storm Staff line):** Storm Staff `⚡` = Staff `/` + Mana `𝑚`, a low-mana bolt gun (1 mana per bolt; an empty or inactive meter fizzles the shot to a harmless 1.5-cell spark). The 7 gem staves are Storm Staff + gem (previously Thick Staff + gem, commit ed9a920) and keep their charge + mana-cost casts.
+- **Magic staves (Storm Staff line):** Storm Staff `⚡` = Staff `/` + Mana `𝑚`, a low-mana bolt gun (1 mana per bolt; an empty or inactive meter fizzles the shot to a harmless half-size 1.5-cell spark, shared with the Magic Sword's bolt via `fizzleToSpark`). The 7 gem staves are Storm Staff + gem (previously Thick Staff + gem, commit ed9a920) and keep their charge + mana-cost casts.
 - **Metal Block `■`** = Metal `M` + Rock `0`; **Smoke Bomb `𐤑`** = Bomb `@` + Ash `a` (both were authored but unobtainable, bug #324).

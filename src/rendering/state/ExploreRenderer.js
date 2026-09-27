@@ -1919,7 +1919,7 @@ export class ExploreRenderer {
       const cy = proj.position.y + GRID.CELL_SIZE / 2;
       if (proj.drawAngle != null) {
         const method = useDithering ? 'drawEntityRotatedDithered' : 'drawEntityRotated';
-        this.renderer[method](cx, cy, proj.char, proj.color, proj.drawAngle);
+        this.renderer[method](cx, cy, proj.char, proj.color, proj.drawAngle, proj.drawScale ?? 1.0);
       } else {
         const method = useDithering ? 'drawEntityDithered' : 'drawEntity';
         this.renderer[method](cx, cy, proj.char, proj.color);

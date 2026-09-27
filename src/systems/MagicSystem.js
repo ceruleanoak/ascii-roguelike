@@ -52,6 +52,19 @@ export function spendMeterMana(player, cost) {
   return true;
 }
 
+// What a mana-fed bolt becomes when the meter can't pay: a tiny, harmless
+// spark that dies barely past the muzzle. Shared by the Storm Staff's shot
+// (Item.createBullets) and the Magic Sword's thrown bolt (WeaponEffectsSystem).
+const MANALESS_SPARK_RANGE = GRID.CELL_SIZE * 1.5;
+export function fizzleToSpark(bolt) {
+  bolt.char = '˙';
+  bolt.color = '#8a7a44';
+  bolt.drawScale = 0.5;
+  bolt.damage = 0;
+  bolt.chain = false;
+  bolt.remainingDistance = MANALESS_SPARK_RANGE;
+}
+
 export class MagicSystem {
   constructor(game) {
     this.game = game;

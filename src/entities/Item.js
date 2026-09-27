@@ -1,6 +1,6 @@
 import { GRID, COLORS } from '../game/GameConfig.js';
 import { ITEMS, WEAPON_TYPES, TRAINING_TECHNIQUES, resolveWeaponDefaults } from '../data/items.js';
-import { spendMeterMana } from '../systems/MagicSystem.js';
+import { spendMeterMana, fizzleToSpark } from '../systems/MagicSystem.js';
 
 /**
  * Carrier interface (duck-typed)
@@ -28,10 +28,6 @@ let _nextAttackId = 0;
 // Forward impulse (px/s) a hammer strike adds to its carrier. Damped by
 // PHYSICS.FRICTION, this carries roughly one cell before it dies out.
 const HAMMER_LUNGE_SPEED = 90;
-
-// How far a mana-fed gun's shot travels when the meter can't pay for it —
-// barely past the muzzle.
-const MANALESS_SPARK_RANGE = GRID.CELL_SIZE * 1.5;
 
 // The impact burst left on the cell a hammer strikes — the blow's own
 // footprint, drawn where the damage lands rather than where the weapon is
@@ -613,15 +609,9 @@ export class Item {
     }
 
     // Mana-fed guns (Storm Staff): one trigger pull spends manaCost; with an
-    // empty or inactive meter the shot fizzles into a harmless short spark.
+    // empty or inactive meter the shot fizzles into a harmless spark.
     if (this.data.manaCost && !spendMeterMana(player, this.data.manaCost)) {
-      for (const bullet of bullets) {
-        bullet.char = '˙';
-        bullet.color = '#8a7a44';
-        bullet.damage = 0;
-        bullet.chain = false;
-        bullet.remainingDistance = MANALESS_SPARK_RANGE;
-      }
+      bullets.forEach(fizzleToSpark);
     }
 
     return bullets;
