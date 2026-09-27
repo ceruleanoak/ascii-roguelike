@@ -503,9 +503,10 @@ export const ENEMIES = {
       shockwaveKnockback: 140,                 // Mild push as the ring sweeps past
       trailDropOnLanding: true                 // Spawn a slime trail puddle at the landing site
     },
-    elementalAffinity: { immunity: ['poison'], weakness: { freeze: 2.0, blade: 2.0 } },
+    // Immune to wet: its arena is two water pools, and unlike its young it
+    // doesn't dissolve in them (no wetDot).
+    elementalAffinity: { immunity: ['poison', 'wet'], weakness: { freeze: 2.0, blade: 2.0 } },
     freezePermanent: true,
-    wetDot: true,  // wet pips are damage over time (EnemyStatusEffects)
     // Imbue: takes electric/ice/fire from its surroundings for `duration` s (ImbuePoolSystem).
     imbue: { enabled: true, duration: 10.0 },
     affinities: ['goo'],

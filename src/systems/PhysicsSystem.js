@@ -1702,11 +1702,14 @@ export class PhysicsSystem {
 
       // Check water immunity (Rubber Boots) — blocks elemental status effects but not movement slow
       const isImmune = entity === game.player && game.player.waterImmunityTimer > 0;
+      // An authored wet immunity (Giant Slime) blocks only the wet status —
+      // electrified water still shocks it (that shock is its electric Imbue).
+      const wetImmune = isImmune || !!entity.elementalAffinity?.immunity?.includes('wet');
       // Shock consequences (and shock immunities — Stingray Mantle, electric
       // affinity) are owned by ElectricitySystem.shockEntity, not here.
 
       // Apply wet status (6s; applyStatusEffect's Math.max refreshes while in water)
-      if (!isImmune && entity.applyStatusEffect) {
+      if (!wetImmune && entity.applyStatusEffect) {
         // Getting wet washes any equipped Oil augment off the weapon it's
         // coating. Gate on the pre-apply dry state so this only fires on
         // the dry→wet transition, not every frame the player lingers in
