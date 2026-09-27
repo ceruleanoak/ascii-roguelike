@@ -6,10 +6,15 @@ import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Captive } from '../entities/Captive.js';
 import { isCellProtected } from './roomFeatures.js';
 import { tagInteriorPlane } from './PlaneSystem.js';
+import { StatusEffectSystem } from './StatusEffectSystem.js';
+import { isInputCaptured } from '../game/inputCapture.js';
 
 export class CharacterSystem {
   constructor(game) {
     this.game = game;
+    // Keys held last frame while Frozen — so a struggle counts fresh presses
+    // (mashing), not a key held down.
+    this._frozenHeldKeys = new Set();
   }
 
   // A character died but others remain: clear the dead character's gear,
@@ -300,6 +305,14 @@ export class CharacterSystem {
     const game = this.game;
     const player = game.player;
 
+    // Frozen: no roll at all — every fresh key press is a struggle instead,
+    // and an arrow (dodge-roll) press chips the ice hardest.
+    if (player.isFrozen()) {
+      this._struggleFrozen(player);
+      return;
+    }
+    this._frozenHeldKeys.clear();
+
     // Handle dodge rolling (continuous direction updates, supports diagonals and curving)
     // Disabled while Rusalka's charm is active or while polymorphed (frog form has no roll)
     const rusalkaActive = game.fishingSystem?.rusalka?.alive === true;
@@ -484,6 +497,20 @@ export class CharacterSystem {
 
   // Dagger roll auto-attack: fires immediately on roll completion, bypassing cooldown and windup.
   // Direction from current WASD input, falling back to player facing.
+  _struggleFrozen(player) {
+    const game = this.game;
+    const held = new Set();
+    for (const [key, down] of Object.entries(game.keys)) if (down) held.add(key);
+    for (const [key, down] of Object.entries(game.arrowKeys ?? {})) if (down) held.add(key);
+    if (!isInputCaptured(game)) {
+      for (const key of held) {
+        if (this._frozenHeldKeys.has(key)) continue;
+        StatusEffectSystem.struggleFrozen(player, key.startsWith('Arrow'));
+      }
+    }
+    this._frozenHeldKeys = held;
+  }
+
   triggerDaggerRollAttack() {
     const game = this.game;
     const player = game.player;

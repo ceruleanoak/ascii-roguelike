@@ -1154,7 +1154,7 @@ export class TrapSystem {
           if (trapData.effect === 'burn') {
             game.player.applyBurn?.(trapData.effectDuration);
           } else if (trapData.effect === 'freeze') {
-            game.player.applyStatusEffect?.('freeze', trapData.effectDuration);
+            game.player.applyStatusEffect?.('freeze', trapData.effectDuration, 3); // straight to Frozen
           } else if (trapData.effect === 'zap') {
             // Player has no zap status — map to freeze (the player's slow/lock status) for now.
             game.player.applyStatusEffect?.('freeze', 1.0);
@@ -1277,9 +1277,10 @@ export class TrapSystem {
     const game = this.game;
     if (puddle.isEntityOnPuddle(game.player)) {
       // Ice patches slow the player. Player has no 'slow' status — `freeze` is
-      // the slow-bearing key (slowAmount 0.5). Refresh each frame so movement
-      // resumes shortly after stepping off.
-      game.player.applyStatusEffect?.('freeze', 0.3);
+      // the slow-bearing key. Refresh each frame so movement resumes shortly
+      // after stepping off; held at pip 1 (a level, not +1 per frame) so
+      // standing on ice chills but never stacks up to Frozen.
+      game.player.applyStatusEffect?.('freeze', 0.3, 1);
     }
     for (const enemy of (game.currentRoom?.enemies ?? [])) {
       if ((enemy.plane ?? 0) !== playerPlane) continue;

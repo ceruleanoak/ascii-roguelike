@@ -375,9 +375,10 @@ export class Enemy {
 
     // Deep-water drowning (PhysicsSystem.applyLiquidResults). Immune with
     // data.waterAffinity or data.swimAffinity — aquatic enemies live in it.
-    // Mirrors Player.js's drownPips/inDeepWater/drownDamageTimer fields.
+    // Mirrors Player.js's wetPips/inDeepWater/drownDamageTimer fields; the
+    // wet status's `stacks` is synced to the wet Pip count each frame.
     this.inDeepWater = false;
-    this.drownPips = 0;
+    this.wetPips = 0;
     this.drownDamageTimer = 0;
 
     if (PackBehaviorMechanic.isEnabled(this)) PackBehaviorMechanic.init(this);

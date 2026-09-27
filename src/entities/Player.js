@@ -147,12 +147,12 @@ export class Player {
     this.inDamagingLiquid = false;
 
     // Deep water (PhysicsSystem sets inDeepWater every frame; applyLiquidResults
-    // fills/drains drownPips and ticks drownDamageTimer once maxed at 3).
+    // fills/drains wetPips — the wet Pip track — and ticks drownDamageTimer at 3).
     // deepWaterImmune is armor-derived (Flippers), projected by
     // EquipmentEffectsSystem same as sharkMask/coralCrown/stingrayMantle;
     // frog form's existing `polymorphed` flag grants the same immunity.
     this.inDeepWater = false;
-    this.drownPips = 0;
+    this.wetPips = 0;
     this.drownDamageTimer = 0;
     this.deepWaterImmune = false;
 
@@ -398,8 +398,8 @@ export class Player {
       this.velocity.vy *= 0.75;
       if (Math.abs(this.velocity.vx) < 4) this.velocity.vx = 0;
       if (Math.abs(this.velocity.vy) < 4) this.velocity.vy = 0;
-    // Sapped by ice wraith(s): freeze movement entirely
-    } else if (this.activeSappingBats.length > 0) {
+    // Sapped by ice wraith(s) or Frozen: stop movement entirely
+    } else if (this.activeSappingBats.length > 0 || this.isFrozen()) {
       this.acceleration.ax = 0;
       this.acceleration.ay = 0;
       this.velocity.vx *= 0.75;
@@ -508,8 +508,8 @@ export class Player {
     this.blockBoostAmount = Math.max(this.blockBoostAmount, amount);
   }
 
-  applyStatusEffect(effect, duration = 3.0) {
-    StatusEffectSystem.applyPlayerStatusEffect(this, effect, duration);
+  applyStatusEffect(effect, duration = 3.0, pips = null) {
+    StatusEffectSystem.applyPlayerStatusEffect(this, effect, duration, pips);
   }
 
   updateStatusEffects(deltaTime) {
@@ -520,9 +520,7 @@ export class Player {
     return this.statusEffects.goo.active;
   }
 
-  isFrozen() {
-    return this.statusEffects.freeze.active;
-  }
+  isFrozen() { return StatusEffectSystem.isPlayerFrozen(this); }
 
   isDizzy() { return this.statusEffects.dizzy.active; }
 
@@ -534,7 +532,7 @@ export class Player {
 
   getStatusSpeedMultiplier() {
     if (this.isGooey()) return 1 - this.statusEffects.goo.slowAmount;
-    if (this.isFrozen()) return 1 - this.statusEffects.freeze.slowAmount;
+    if (this.statusEffects.freeze.active) return StatusEffectSystem.freezeSpeedMultiplier(this);
     if (this.statusEffects.slimeBoost.active) return this.statusEffects.slimeBoost.speedMult;
     if (this.isDizzy()) return 0.35;
     return 1;
@@ -625,8 +623,8 @@ export class Player {
       return false;
     }
 
-    // Cannot dodge roll while gooey!
-    if (this.isGooey()) {
+    // Cannot dodge roll while gooey or Frozen!
+    if (this.isGooey() || this.isFrozen()) {
       return false;
     }
 
@@ -820,7 +818,7 @@ export class Player {
   }
 
   canAttack() {
-    if (this.attackBlockTimer > 0) return false;
+    if (this.attackBlockTimer > 0 || this.isFrozen()) return false;
     if (this.dodgeRoll.justEnded) return false;
     if (this.characterType === 'green' && this.actionCooldown > 0) return false;
     if (this.characterType === 'green' && this.continuousRollActive) return false;
@@ -1118,7 +1116,7 @@ export class Player {
 
     // Reset deep-water drowning state
     this.inDeepWater = false;
-    this.drownPips = 0;
+    this.wetPips = 0;
     this.drownDamageTimer = 0;
     this.deepWaterImmune = false;
 

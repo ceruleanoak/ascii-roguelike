@@ -6,6 +6,7 @@
 // priority chain.
 
 import { WATER_COLORS } from '../game/GameConfig.js';
+import { wetPipCount } from './StatusEffectSystem.js';
 
 const DOT_BLINK_FREQUENCY = 0.2; // baseline blink period at 1 stack
 const SLICE_DURATION = 0.6; // seconds each active effect gets the blink "turn"
@@ -135,10 +136,9 @@ export function computePipRows(enemy) {
 // effectApplicationOrder), so this is a fixed-priority list of 1-dot rows
 // instead of a generic stack-driven one. Reuses EFFECT_COLORS for the
 // effects whose meaning matches the enemy version exactly (burn, poison,
-// wet, dizzy, goo); freeze gets its own color because the player's
-// "freeze" (statusEffects.freeze) is always the slow tier — matching the
-// enemy's puddle-slow cyan, never the full ice-lock EFFECT_COLORS.freeze
-// represents. EFFECT_COLORS.goo itself mirrors the player's own gooey blink
+// wet, dizzy, goo); freeze pips 1–2 are the slow tier — the enemy's
+// puddle-slow cyan — and switch to the full ice-lock EFFECT_COLORS.freeze
+// at pip 3 (Frozen). EFFECT_COLORS.goo itself mirrors the player's own gooey blink
 // in Player.getDisplayColor(), which predates the enemy-side goo pip.
 const PLAYER_EFFECT_COLORS = {
   wet: EFFECT_COLORS.wet,
@@ -154,13 +154,13 @@ const PLAYER_PIP_ORDER = ['wet', 'burn', 'poison', 'freeze', 'goo', 'dizzy', 'st
 
 function _isPlayerEffectActive(player, effect) {
   switch (effect) {
-    case 'wet':    return player.isWet();
+    case 'wet':    return wetPipCount(player) > 0;
     // isBurning() is the real burn DOT; inDamagingLiquid is lava contact,
     // which deals its own damage tick (see PhysicsSystem.applyLiquidResults)
     // but should still read as burning for the pip.
     case 'burn':   return player.isBurning() || player.inDamagingLiquid;
     case 'poison': return player.isPoisoned();
-    case 'freeze': return player.isFrozen();
+    case 'freeze': return player.statusEffects.freeze.active;
     case 'goo':    return player.isGooey();
     case 'dizzy':  return player.isDizzy();
     case 'stoneskin': return player.stoneSkinTimer > 0;
@@ -168,21 +168,25 @@ function _isPlayerEffectActive(player, effect) {
   }
 }
 
-export function computePlayerPipRows(player) {
-  const rows = PLAYER_PIP_ORDER
-    .filter(effect => _isPlayerEffectActive(player, effect))
-    .map(effect => ({ effect, color: PLAYER_EFFECT_COLORS[effect], stacks: 1 }));
-
-  // Drowning meter — deep water (PhysicsSystem.applyLiquidResults) fills
-  // player.drownPips 0→3 over 6s of non-immune deep-water contact. Unlike
-  // the fixed 1-dot rows above, this is a progress meter: stacks tracks
-  // whole pips filled so far, so the row visibly grows dot-by-dot instead
-  // of appearing/disappearing as a single unit.
-  const drownStacks = Math.floor(player.drownPips || 0);
-  if (drownStacks > 0) {
-    rows.push({ effect: 'drown', color: WATER_COLORS.deep, stacks: drownStacks });
+// Wet and freeze are Pip tracks (StatusEffectSystem), so their rows grow
+// dot-by-dot; every other effect is a fixed 1-dot row. Wet's third pip
+// (drowning) takes the deep-water color, freeze's third (Frozen) the ice-lock.
+function _playerPipRow(player, effect) {
+  if (effect === 'wet') {
+    const stacks = wetPipCount(player);
+    return { effect, color: stacks >= 3 ? WATER_COLORS.deep : PLAYER_EFFECT_COLORS.wet, stacks };
   }
-  return rows;
+  if (effect === 'freeze') {
+    const stacks = player.statusEffects.freeze.pips;
+    return { effect, color: stacks >= 3 ? EFFECT_COLORS.freeze : PLAYER_EFFECT_COLORS.freeze, stacks };
+  }
+  return { effect, color: PLAYER_EFFECT_COLORS[effect], stacks: 1 };
+}
+
+export function computePlayerPipRows(player) {
+  return PLAYER_PIP_ORDER
+    .filter(effect => _isPlayerEffectActive(player, effect))
+    .map(effect => _playerPipRow(player, effect));
 }
 
 const STONE_SKIN_COLOR = '#8c7853'; // gray/bronze — must match the stoneskin pip color above
@@ -211,6 +215,8 @@ export function computePlayerDisplayColor(player) {
     const blinkCycle = Math.floor(player.statusBlinkTimer / 0.25);
     if (blinkCycle % 2 === 0) return '#660000';
   }
+  // Solid ice while Frozen — the body is locked, so no blink
+  if (player.isFrozen()) return EFFECT_COLORS.freeze;
   // Blink green when gooey
   if (player.isGooey()) {
     const BLINK_FREQUENCY = 0.3;

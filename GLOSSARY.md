@@ -681,8 +681,34 @@ programming terms.
   behavior, movement, or damage. Effects have a duration and wear off over time.
 - **In code:** `Character.applyStatusEffect(name, duration)` in `src/entities/` (Player,
   Enemy). Active effects tracked in `statusEffects` object. Examples: `'burn'`, `'poison'`,
-  `'freeze'`, `'stun'`, `'dizzy'`, `'goo'`.
+  `'freeze'`, `'stun'`, `'dizzy'`, `'goo'`. Wet and freeze are Pip tracks (see Pip).
 - **Not:** permanent attributes (like health or stats); a temporary modifier only.
+
+### Pip
+- **Definition:** One unit of a Status Effect's strength, capped at 3, and the dot that
+  shows it above the character. A Pip track is a Status Effect whose pips escalate it: each pip
+  is a stronger tier, and pip 3 is its extreme. Wet: pip 1 = wet, deep water fills pips 2–3,
+  pip 3 drowns, and each pip slows harder in water. Freeze: pips 1–2 slow, pip 3 = Frozen.
+  A discrete hit adds one pip; a per-frame source (ice puddle) or an all-at-once hit (freeze
+  trap) raises the track to a level instead, so lingering never stacks by itself.
+- **In code:** Enemy — `statusEffects[x].stacks` (`MAX_STACKUP = 3`); Player —
+  `statusEffects.freeze.pips` and `wetPips` + `wetPipCount()` (`StatusEffectSystem.js`); drawn
+  by `StatusPipEffects.js` from `computePipRows` / `computePlayerPipRows`.
+- **Not:** a resource the player spends or banks; the duration (pips are tiers, the timer is
+  separate).
+
+### Frozen
+- **Definition:** Pip 3 of freeze: full immobilization (no moving, attacking, or rolling)
+  that outlasts every other player status. The player breaks out early by mashing: each fresh
+  key press chips time off, a dodge-roll press chips much more, and red's roll press chips
+  double. Breaking out clears the whole freeze track.
+- **In code:** `StatusEffectSystem.isPlayerFrozen` / `struggleFrozen` (`FROZEN` constants),
+  struggle input read in `CharacterSystem._struggleFrozen`; red's multiplier is
+  `frozenRollChipMult` in `characters.js`. Enemy side: `statusEffects.freeze.frozen` and the
+  `frozen` hard interrupt in `EnemyStateMachine.INTERRUPTS`. Enemies can't struggle, so they
+  thaw on the timer.
+- **Not:** the freeze slow tier (pips 1–2); an Enemy State (it's an interrupt that preempts
+  the current State without replacing it); Freeze-Over (the Lake Boss's permanent sheet).
 
 ### Companion
 - **Definition:** A persistent non-player character that follows the player across rooms and

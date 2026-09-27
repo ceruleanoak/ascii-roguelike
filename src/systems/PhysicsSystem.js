@@ -6,6 +6,7 @@ import {
   objectOnPlane,
 } from './PlaneSystem.js';
 import { clearEffectOrder } from './EnemyStatusEffects.js';
+import { wetPipCount, wetPipSpeed } from './StatusEffectSystem.js';
 
 // Re-exported so existing imports (e.g. Enemy.js) keep working.
 // New code should import directly from PlaneSystem.
@@ -568,16 +569,15 @@ export class PhysicsSystem {
       // they compensate via higher jump velocity in water. Shark Mask divers
       // are treated the same way while their dive is active.
       const swimsFast = entity.data?.swimAffinity || entity.diving;
-      // Deep water: an extra slow beyond the standard 0.5x, unless the entity
-      // already swims fast, or is a frog (polymorphed) or wearing Flippers
-      // (deepWaterImmune) — the two deep-water-specific immunities.
-      const deepWaterImmune = swimsFast || entity.polymorphed || entity.deepWaterImmune;
+      // Water slows by wet Pip count (StatusEffectSystem.wetPipSpeed) — pip 1
+      // is the standard 0.5x, and only deep water fills pips 2–3. A frog
+      // (polymorphed) or Flippers (deepWaterImmune) never fill past pip 1, so
+      // they keep the standard slow even in deep water.
       if (swimsFast) {
         velocityMultiplier = 1.0;
-      } else if (inDeepWaterTile && !deepWaterImmune) {
-        velocityMultiplier = 0.3;
       } else {
-        velocityMultiplier = 0.5;
+        const deepWaterImmune = entity.polymorphed || entity.deepWaterImmune;
+        velocityMultiplier = wetPipSpeed(deepWaterImmune ? 1 : wetPipCount(entity));
       }
     } else if (inDeepSnow && !isDodgeRolling) {
       // Ice-affinity enemies and small enemies travel under deep snow uninhibited
@@ -1585,16 +1585,19 @@ export class PhysicsSystem {
     }
 
     for (const { entity, inLiquid, liquidState, damagingLiquid, healingLiquid, inDeepWater } of waterResults) {
-      // Deep-water drowning — independent of (runs before) the lava/heal/wet
-      // branches below, so pips drain even on a frame the entity has left the
-      // water for dry ground. Immune: aquatic enemies (data.waterAffinity or
-      // swimAffinity), frog form (polymorphed), and Flippers (deepWaterImmune).
-      if (entity.drownPips !== undefined) {
+      // Wet Pip track — deep water fills pips 1→3, pip 3 drowns. Independent
+      // of (runs before) the lava/heal/wet branches below, so pips drain even
+      // on a frame the entity has left the water for dry ground; they drain
+      // back to pip 1 (plain wet) while the wet timer holds. Immune:
+      // aquatic enemies (data.waterAffinity or swimAffinity), frog form
+      // (polymorphed), and Flippers (deepWaterImmune).
+      if (entity.wetPips !== undefined) {
         const drownImmune = entity.data?.waterAffinity || entity.data?.swimAffinity
           || entity.polymorphed || entity.deepWaterImmune;
         if (inDeepWater && !drownImmune) {
-          entity.drownPips = Math.min(3, entity.drownPips + deltaTime * 0.5); // fills over 6s
-          if (entity.drownPips >= 3) {
+          // pip 1 → 3 over 6s, the same time-to-drown as the old 0→3 meter
+          entity.wetPips = Math.min(3, Math.max(1, entity.wetPips) + deltaTime / 3);
+          if (entity.wetPips >= 3) {
             entity.drownDamageTimer -= deltaTime;
             if (entity.drownDamageTimer <= 0) {
               entity.drownDamageTimer = 1.0;
@@ -1610,9 +1613,13 @@ export class PhysicsSystem {
             entity.drownDamageTimer = 0;
           }
         } else {
-          entity.drownPips = Math.max(0, entity.drownPips - deltaTime); // drains over 3s
+          const floor = entity.isWet?.() ? 1 : 0;
+          entity.wetPips = Math.max(floor, entity.wetPips - deltaTime); // one pip per second
           entity.drownDamageTimer = 0;
         }
+        // Enemy wet pips render from the status's `stacks` (computePipRows).
+        const wetStatus = entity.statusEffects?.wet;
+        if (wetStatus?.stacks !== undefined) wetStatus.stacks = wetStatus.active ? wetPipCount(entity) : 0;
       }
 
       // Ingredients: lava destroys them, water makes them bob
@@ -1743,6 +1750,18 @@ export class PhysicsSystem {
       // Track player liquid state for Rusalka movement
       if (entity === game.player) game.player.inLiquid = true;
 
+      // Water washes slime (goo) off — player and enemy alike. A rinse, not
+      // an elemental status, so Rubber Boots' water immunity doesn't stop it.
+      const goo = entity.statusEffects?.goo;
+      if (goo?.active) {
+        goo.active = false;
+        goo.duration = 0;
+        if (goo.stacks !== undefined) {
+          goo.stacks = 0;
+          clearEffectOrder(entity, 'goo');
+        }
+      }
+
       // Check water immunity (Rubber Boots) — blocks elemental status effects but not movement slow
       const isImmune = entity === game.player && game.player.waterImmunityTimer > 0;
       // Shock consequences (and shock immunities — Stingray Mantle, electric
@@ -1762,6 +1781,7 @@ export class PhysicsSystem {
           entity.burnDuration = 0;  // Water extinguishes burn
         } else if (entity.applyStatusEffect) {
           entity.applyStatusEffect('wet', 6.0); // Enemies
+          entity.statusEffects.wet.stacks = wetPipCount(entity); // pips, not per-frame applications
           if (entity.statusEffects?.burn?.active) {
             // Water extinguishes burn. Zero stacks (not just active) and
             // remove the stale entry from effectApplicationOrder — leaving

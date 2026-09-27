@@ -31,6 +31,7 @@ export const CHARACTER_TYPES = {
     name: 'Red Warrior',
     color: '#ff4444',
     rollType: 'damage', // Damages + knocks back enemies; smashes background objects
+    frozenRollChipMult: 2, // A roll press breaks Frozen ice twice as hard (StatusEffectSystem.struggleFrozen)
     rollDuration: 0.2,
     rollCooldown: 0.6,
     rollSpeed: 550,
