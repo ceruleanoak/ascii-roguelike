@@ -92,6 +92,28 @@ export const ITEMS = {
   },
 
   // ── GUN — Tier 2 ──────────────────────────────────────────────────────────
+  // Bolo Launcher: one whirling bolo per room (maxUses 1 with no reloadTime,
+  // so the mag only refills through resetUses on room entry). The bolo snares
+  // any enemy that isn't huge (boss-tier, or Troll-mass and up) — see WeaponEffectsSystem.
+  '⊶': {
+    char: '⊶',
+    tier: 2,
+    name: 'Bolo Launcher',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.GUN,
+    damage: 1,
+    cooldown: 2,
+    windup: .5,
+    bulletChar: '⚯',
+    bulletSpin: 18,          // rad/s the bolo glyph whirls in flight
+    bulletSpeed: 260,
+    bulletRange: 260,
+    maxUses: 1,
+    accuracy: .95,
+    inaccuracy: 0.02,
+    ensnares: true,
+    color: '#c8a060'
+  },
   'ᛉ': {
     char: 'ᛉ',
     tier: 2,
@@ -135,6 +157,27 @@ export const ITEMS = {
     reloadTime: 6,
     reloadType: 'magazine',
     color: '#aaaaaa'
+  },
+  // Plague Gun (Fester's Gun + Venom): the looping bullet poisons what it hits
+  // and bursts into a poison cloud there (plagueBurst → WeaponEffectsSystem).
+  '⌭': {
+    char: '⌭',
+    tier: 3,
+    name: 'Plague Gun',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.GUN,
+    damage: 2,
+    cooldown: 2,
+    bulletChar: '*',
+    bulletRange: 700,
+    loopOmega: 4 * Math.PI,
+    loopRadius: 10,
+    loopLinearSpeed: 130,
+    accuracy: 0.9,
+    maxUses: null,
+    onHit: 'poison',
+    plagueBurst: true,
+    color: '#66cc44'
   },
   'ƒ': {
     char: 'ƒ',
@@ -544,6 +587,55 @@ export const ITEMS = {
     critChance: 0.10,
     color: '#aaaaaa'
   },
+  // Keen Slingshot (Slingshot + Eye): the eye finds the shot. Each stone
+  // leaves on the exact angle to the nearest live enemy on the shooter's plane
+  // within bulletRange (KeenAim.js, applied in CombatSystem.addAttack);
+  // with no enemy in range it flies the way the player faces, like a Slingshot.
+  // The accuracy roll still applies — the eye picks the line, not the hit.
+  '⋔': {
+    char: '⋔',
+    tier: 2,
+    name: 'Keen Slingshot',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.BOW,
+    firesBullet: true,
+    keenAim: true,
+    damage: 1,
+    cooldown: .7,
+    maxChargeTime: 0.5,
+    bulletSpeed: 450,
+    bulletSize: 0.6,
+    bulletRange: 260,
+    maxUses: 12,
+    accuracy: .92,
+    critChance: 0.15,
+    color: '#dddd66'
+  },
+
+  // Pearl Slingshot (Keen Slingshot + Pearl Shard): the pearl-smooth stone
+  // ricochets off the room's border walls, and after every bounce keen aim
+  // picks the nearest enemy again (CombatSystem's ricochet branch).
+  '⑂': {
+    char: '⑂',
+    tier: 3,
+    name: 'Pearl Slingshot',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.BOW,
+    firesBullet: true,
+    keenAim: true,
+    ricochet: true,
+    maxRicochets: 3,
+    damage: 1,
+    cooldown: .7,
+    maxChargeTime: 0.5,
+    bulletSpeed: 450,
+    bulletSize: 0.6,
+    bulletRange: 420,
+    maxUses: 12,
+    accuracy: .92,
+    critChance: 0.15,
+    color: '#eeeeff'
+  },
 
   // ============================================================================
   // WEAPONS — MELEE
@@ -710,9 +802,12 @@ export const ITEMS = {
     placesLava: true,
     color: '#ff6600'
   },
+  // Lightning Sword is tier 3 (Magic Sword + Topaz): its strike is non-elemental
+  // for the fountain, so as a tier 2 an unattuned fountain handed it straight
+  // to a plain Sword. Magic Sword is now the Sword's plain tier-2 rung.
   'Ꞩ': {
     char: 'Ꞩ',
-    tier: 2,
+    tier: 3,
     name: 'Lightning Sword',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -1066,10 +1161,12 @@ export const ITEMS = {
     color: '#44ff44'
   },
 
-  // ── MELEE / spear — Tier 3 ────────────────────────────────────────────────
+  // ── MELEE / spear — Tier 2 (plain) ────────────────────────────────────────
+  // Spear + Jaw or Spear + Sharkbone. The spear's non-elemental tier-2 rung,
+  // so an unattuned fountain has something to hand back for a Spear.
   'ⲯ': {
     char: 'ⲯ',
-    tier: 3,
+    tier: 2,
     name: 'Trident',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -1159,6 +1256,7 @@ export const ITEMS = {
     accuracy: 0.92,
     isConductiveStaff: true,     // Fires rapid magic bolts; passes through mana gems
     maxUses: null,
+    manaCost: 1,                 // per bolt; an empty meter fizzles the shot to a harmless spark (Item.createBullets)
     color: '#ffcc00'
   },
 
@@ -1363,15 +1461,178 @@ export const ITEMS = {
     color: '#8b4513'
   },
 
-  // ── MELEE / whip — mana-infused (Whip + Mana Potion) ──────────────────────
-  // Sidegrade of the base Whip, not an elemental upgrade — the lash carries
+  // ── Recipe-tree upgrades (claudedocs/recipe-gap-analysis.md) ─────────────
+  // Swing/hit extras (swingBolt, dustBurst, shattersFrozen, healOnKill,
+  // pullsDisarmedGear, rootDuration) are handled in WeaponEffectsSystem.js.
+
+  // Magic Sword (Sword + Mana): the Sword's plain tier-2 rung. Every swing
+  // also throws the Storm Staff's bolt, read live from its '⚡' entry —
+  // mana cost included, so a dry meter means a plain swing.
+  '⸸': {
+    char: '⸸', tier: 2, name: 'Magic Sword',
+    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'sword',
+    damage: 2, windup: 0.35, recovery: 0.8, patternSpeed: 0.05, range: 20,
+    swingBolt: '⚡',
+    color: '#cc88ff'
+  },
+  // Diamond Longsword (Longsword + Diamond): plain tier 2, a crit edge.
+  '⟡': {
+    char: '⟡', tier: 2, name: 'Diamond Longsword',
+    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'sword',
+    damage: 3, windup: 0.5, recovery: 0.95, patternSpeed: 0.07, range: 30,
+    drawScale: 1.3, critChance: 0.4,
+    color: '#ccffff'
+  },
+  // Slag Blade (Lava Sword + Slag): heavier Lava Sword.
+  '⟊': {
+    char: '⟊', tier: 3, name: 'Slag Blade',
+    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'sword',
+    damage: 4, windup: 0.5, recovery: 0.8, patternSpeed: 0.05, range: 22,
+    attackPattern: 'arc', onHit: 'burn', placesLava: true,
+    color: '#aa5533'
+  },
+  // Icicle (Dagger + Ice): freezing dagger.
+  '⍖': {
+    char: '⍖', tier: 2, name: 'Icicle',
+    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'dagger',
+    damage: 1, windup: 0.15, recovery: 0.6, range: 20, patternSpeed: 0.05,
+    onHit: 'freeze',
+    color: '#aaeeff'
+  },
+  // Bloodletter (Vampire Dagger + Garnet): drinks twice as deep.
+  '⸶': {
+    char: '⸶', tier: 3, name: 'Bloodletter',
+    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'dagger',
+    damage: 2, windup: 0.4, recovery: 0.6, range: 20, patternSpeed: 0.05,
+    lifesteal: 2,
+    color: '#cc1133'
+  },
+  // Viper Fang (Acid Blade + Venom): stacking poison, three hits burst.
+  '⸷': {
+    char: '⸷', tier: 3, name: 'Viper Fang',
+    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'dagger',
+    damage: 2, windup: 0.3, recovery: 0.6, range: 20, patternSpeed: 0.05,
+    onHit: 'poison', poisonStacks: true,
+    color: '#88ff22'
+  },
+  // Ice Axe (Axe + Ice): freezing axe.
+  '⍑': {
+    char: '⍑', tier: 2, name: 'Ice Axe',
+    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'axe',
+    damage: 2, windup: 0.65, recovery: 0.9, patternSpeed: 0.04, range: 16,
+    onHit: 'freeze',
+    color: '#88ccff'
+  },
+  // Barbed Lance (Venom Lance + Stingray Barb): stacking poison, three hits burst.
+  '⍏': {
+    char: '⍏', tier: 3, name: 'Barbed Lance',
+    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'spear',
+    damage: 3, windup: 0.5, recovery: 1.0, patternSpeed: 0.04,
+    onHit: 'poison', poisonStacks: true,
+    color: '#33dd88'
+  },
+  // Barbed Bat (Metal Bat + Stingray Barb): the barb poisons (BatSystem sweep onHit).
+  '⧧': {
+    char: '⧧', tier: 3, name: 'Barbed Bat',
+    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'bat',
+    batCharge: true, damage: 4, chargeTime: 2.4, recovery: 0.9,
+    meleeChar: '❚', range: 20, isBlunt: true, launchForce: 1100,
+    onHit: 'poison',
+    color: '#88aa99'
+  },
+  // Glacier Hammer (Ice Hammer + Ice): hitting a Frozen enemy shatters it,
+  // spraying a freeze pip onto everything nearby.
+  '⟙': {
+    char: '⟙', tier: 3, name: 'Glacier Hammer',
+    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'hammer',
+    damage: 5, windup: 0.6, recovery: 1, patternSpeed: 0.4, range: 18,
+    onHit: 'freeze', knockback: 250, weaponLevel: 3, shattersFrozen: true,
+    color: '#bbf4ff'
+  },
+  // Spore Mace (Exploding Mace + Pollen): every swing also bursts a
+  // sleep-dust cloud at the head.
+  '⁂': {
+    char: '⁂', tier: 3, name: 'Spore Mace',
+    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'hammer',
+    damage: 4, windup: 0.6, recovery: 0.3, patternSpeed: 0.1, range: 20,
+    explode: true, explodeRadius: 45, weaponLevel: 3,
+    dustBurst: { status: 'sleep', duration: 3.0, color: '#ffe566' },
+    color: '#ddcc44'
+  },
+  // Cinder Hammer (Onyx Hammer + Ash): the ring throws up a blinding ash cloud.
+  '⫪': {
+    char: '⫪', tier: 3, name: 'Cinder Hammer',
+    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'hammer',
+    damage: 4, windup: 0.35, recovery: 0.8, range: 20,
+    attackPattern: 'hammerRing', locksMovement: true, critChance: 0.35, weaponLevel: 3,
+    dustBurst: { status: 'blind', duration: 3.0, color: '#888888' },
+    color: '#555555'
+  },
+  // Slag Maul (Maul + Slag): the impact leaves a lava patch.
+  '⟂': {
+    char: '⟂', tier: 3, name: 'Slag Maul',
+    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'hammer',
+    damage: 5, windup: 0.8, recovery: 1, range: 20,
+    attackPattern: 'hammerRing', locksMovement: true, knockback: 140, weaponLevel: 3,
+    placesLava: true,
+    color: '#cc6633'
+  },
+  // Rootstaff (Thick Staff + Root): a thrust roots the enemy in place.
+  '⸾': {
+    char: '⸾', tier: 3, name: 'Rootstaff',
+    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'staff',
+    damage: 2, windup: 0.25, recovery: 0.75, patternSpeed: 0.05,
+    meleeChar: '|', range: 28, blockReleaseDamage: 1,
+    rootDuration: 2.0,
+    color: '#77aa44'
+  },
+  // Reaper's Scythe (Scythe + Dust): a killing blow restores 1 HP. Untiered
+  // like the Scythe.
+  '⸕': {
+    char: '⸕', name: "Reaper's Scythe",
+    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'scythe',
+    damage: 3, windup: 0.7, recovery: 1.95, patternSpeed: 0.03, range: 26,
+    drawScale: 1.25, healOnKill: 1,
+    color: '#999999'
+  },
+  // Bullwhip (Whip + Thick Fur): plain tier 2, a longer, harder crack.
+  '⥊': {
+    char: '⥊', tier: 2, name: 'Bullwhip',
+    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'whip',
+    damage: 2, windup: 0.5, recovery: 1.45, patternSpeed: 0.02, range: 40,
+    meleeChar: '~', whipReach: 6,
+    color: '#6b3a1a'
+  },
+  // Vine Whip (Whip + Moss): disarmed gear flies to the wielder.
+  '∻': {
+    char: '∻', tier: 2, name: 'Vine Whip',
+    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'whip',
+    damage: 1, windup: 0.5, recovery: 1.45, patternSpeed: 0.02, range: 40,
+    meleeChar: '~', pullsDisarmedGear: true,
+    color: '#5a8a3a'
+  },
+  // Drowse Boomerang (Boomerang + Pollen): its hit puts the target to sleep.
+  '⤺': {
+    char: '⤺', tier: 2, name: 'Drowse Boomerang',
+    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.BOW,
+    damage: 1, cooldown: 1.5, maxUses: 1, critChance: 0.1,
+    boomerang: true, boomerangMinCells: 2, boomerangMaxCells: 8,
+    boomerangHitDefer: 0.18, boomerangMaxRicochets: 3, chainRadius: 32,
+    knockback: 150, wallNudgeDistance: 3,
+    onHit: 'sleep',
+    color: '#ffe566'
+  },
+
+  // ── MELEE / whip — mana-infused (Whip + Mana Potion) — Tier 2 ─────────────
+  // The whip's plain tier-2 rung, not an elemental upgrade — the lash carries
   // no damage bonus, only the confusion (dizzy) effect from the mana soaked
-  // into the leather. Now the required base ingredient for the gem-infused
-  // whips below (was plain Whip) — infusing with mana first, then a gemstone,
-  // is the intended crafting path to an elemental lash.
+  // into the leather. Being non-elemental, it is what an unattuned fountain
+  // hands back for a Whip. Also the required base ingredient for the
+  // gem-infused (tier 3) whips below — infusing with mana first, then a
+  // gemstone, is the intended crafting path to an elemental lash.
   '∾': {
     char: '∾',
-    tier: 1,
+    tier: 2,
     name: 'Infused Whip',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -1386,11 +1647,11 @@ export const ITEMS = {
     color: '#aa66ff'
   },
 
-  // ── MELEE / whip — gem-infused (Infused Whip + gemstone) ──────────────────
+  // ── MELEE / whip — gem-infused (Infused Whip + gemstone) — Tier 3 ─────────
   // Elemental whipcracks: long-range lash inherits the gem's status effect.
   '∿': {
     char: '∿',
-    tier: 2,
+    tier: 3,
     name: 'Ruby Whip',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -1406,7 +1667,7 @@ export const ITEMS = {
   },
   '≀': {
     char: '≀',
-    tier: 2,
+    tier: 3,
     name: 'Sapphire Whip',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -1422,7 +1683,7 @@ export const ITEMS = {
   },
   '⤳': {
     char: '⤳',
-    tier: 2,
+    tier: 3,
     name: 'Topaz Whip',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -1440,7 +1701,7 @@ export const ITEMS = {
   },
   '∽': {
     char: '∽',
-    tier: 2,
+    tier: 3,
     name: 'Emerald Whip',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -1632,7 +1893,7 @@ export const ITEMS = {
     char: '𐤄', name: 'Robe', type: ITEM_TYPES.ARMOR,
     armorClass: 'robe',
     defense: 1,
-    dodgeChance: 0.15,      // magically treats luck as defense
+    dodgeChance: 0.1,     
     fireImmune: true,
     freezeImmune: true,
     rollCooldownMult: 0.95,  // floaty — decent recharge
@@ -1834,7 +2095,7 @@ export const ITEMS = {
   'ᐤ': {
     char: 'ᐤ', name: 'Fur Cloak', type: ITEM_TYPES.ARMOR,
     defense: 1,
-    dodgeChance: 0.15,      // loose fur — blows slide off
+    dodgeChance: 0.25,      // loose fur — blows slide off
     spellDescription: 'SLIPS THE BLOW.',
     color: '#8b6914'
   },
@@ -2561,6 +2822,19 @@ export const ITEMS = {
     effectRadius: 128,
     effect: 'noise',
     color: '#ffff00'
+  },
+  // Lightning Rod: a placeable Lightning Spire. It calls down nothing on its
+  // own. Placed, it becomes a real spire (TrapSystem._armTrap →
+  // LightningSpire.createLightningSpire): it draws as the spire glyph, catches
+  // strikes and charges when struck exactly as every other spire does.
+  '⟟': {
+    char: '⟟',
+    name: 'Lightning Rod',
+    type: ITEM_TYPES.TRAP,
+    oneShot: false,
+    charges: 1,
+    placesLightningSpire: true,
+    color: '#ccccaa'
   },
   ']': {
     char: ']',

@@ -33,6 +33,8 @@ export const RECIPES = [
   { left: '⊥', right: '⬧', result: '⬢', name: 'Onyx Hammer' },   // Hammer + Onyx = Onyx Hammer (crit + faster windup)
   { left: '0', right: '~', result: '⊸', name: 'Sling' },         // Rock + String = Sling
   { left: '⊸', right: '|', result: 'Ψ', name: 'Slingshot' },     // Sling + Stick = Slingshot
+  { left: '⊸', right: 'f', result: '⊶', name: 'Bolo Launcher' }, // Sling + Fur = Bolo Launcher (one snaring bolo per room)
+  { left: 'Ψ', right: 'e', result: '⋔', name: 'Keen Slingshot' }, // Slingshot + Eye = Keen Slingshot (finds the nearest enemy)
   { left: '|', right: '△', result: '⇈', name: 'Fletch of Arrows' }, // Stick + Arrowhead = Fletch of Arrows
   { left: '⊿', right: '|', result: '⊦', name: 'Axe' },           // Axe head + Stick = Axe (distinct ingredients now — no slot-order clash with Fletch)
   { left: '/', right: '△', result: '↑', name: 'Spear' },         // Staff + Arrowhead = Spear
@@ -52,14 +54,17 @@ export const RECIPES = [
   { left: '¡', right: 'M', result: '⸘', name: 'Metal Bat' },     // Bat + Metal = Metal Bat (double damage)
   { left: 'M', right: '|', result: '↾', name: 'Dagger' },      // Metal + Stick = Dagger
 
-  // === GEM WANDS (Thick Staff + gemstone) ===
-  { left: 'Ⲯ', right: '◈', result: '⚝', name: 'Ruby Staff' },     // Thick Staff + Ruby
-  { left: 'Ⲯ', right: '⬨', result: '⚹', name: 'Sapphire Staff' }, // Thick Staff + Sapphire
-  { left: 'Ⲯ', right: '◇', result: '⚶', name: 'Topaz Staff' },    // Thick Staff + Topaz
-  { left: 'Ⲯ', right: '⬧', result: '⚸', name: 'Onyx Staff' },     // Thick Staff + Onyx
-  { left: 'Ⲯ', right: '⬦', result: '⚘', name: 'Emerald Staff' },  // Thick Staff + Emerald
-  { left: 'Ⲯ', right: '⬥', result: '⚭', name: 'Garnet Staff' },   // Thick Staff + Garnet
-  { left: 'Ⲯ', right: '⧫', result: '⚳', name: 'Force Wand' },    // Thick Staff + Diamond
+  // === MAGIC STAVES (Storm Staff + gemstone) ===
+  // Staff splits two ways: Thick Staff is the blunt-melee line (Bat, Rootstaff);
+  // Staff + Mana is the Storm Staff, and every gem wand is built from it.
+  { left: '/', right: '𝑚', result: '⚡', name: 'Storm Staff' },    // Staff + Mana (like Sword + Mana = Magic Sword)
+  { left: '⚡', right: '◈', result: '⚝', name: 'Ruby Staff' },     // Storm Staff + Ruby
+  { left: '⚡', right: '⬨', result: '⚹', name: 'Sapphire Staff' }, // Storm Staff + Sapphire
+  { left: '⚡', right: '◇', result: '⚶', name: 'Topaz Staff' },    // Storm Staff + Topaz
+  { left: '⚡', right: '⬧', result: '⚸', name: 'Onyx Staff' },     // Storm Staff + Onyx
+  { left: '⚡', right: '⬦', result: '⚘', name: 'Emerald Staff' },  // Storm Staff + Emerald
+  { left: '⚡', right: '⬥', result: '⚭', name: 'Garnet Staff' },   // Storm Staff + Garnet
+  { left: '⚡', right: '⧫', result: '⚳', name: 'Force Wand' },    // Storm Staff + Diamond
 
   // === MANA WHIP (Whip + Mana Potion) — confusion lash, and the required base
   // for the gem whips below (was plain Whip) ===
@@ -121,11 +126,13 @@ export const RECIPES = [
   { left: '†', right: 's', result: 'ᛖ', name: 'Dragon Blade' },  // Sword + Scale = Dragon Blade
   { left: ')', right: 'F', result: '⟩', name: 'Fire Bow' },      // Bow + Fire = Fire Bow
   { left: 'b', right: 'M', result: '⊤', name: 'Bone Axe' },      // Bone + Metal = Bone Axe
+  { left: '⊦', right: 'b', result: '⊤', name: 'Bone Axe' },      // Axe + Bone = Bone Axe (second route — connects the Axe to its tier-2 rung)
 
   // Utility
   { left: 't', right: '|', result: '↑', name: 'Spear' },         // Teeth + Stick = Spear
-  { left: '↑', right: 'v', result: '↟', name: 'Venom Lance' },  // Spear + Venom = Venom Lance
+  { left: '↑', right: '⚗', result: '↟', name: 'Venom Lance' },  // Spear + Slurry = Venom Lance (Slurry is the acid/venom route)
   { left: '↑', right: 'j', result: 'ⲯ', name: 'Trident' },      // Spear + Jaw = Trident (jaw-bone prongs)
+  { left: '↑', right: 'n', result: 'ⲯ', name: 'Trident' },      // Spear + Sharkbone = Trident (second route)
   { left: '↑', right: 'M', result: '⇑', name: 'War Spear' },    // Spear + Metal = War Spear
   { left: '/', right: 'M', result: 'Ƨ', name: 'Scythe' },        // Staff + Metal = Scythe (long handle + curved blade)
 
@@ -141,6 +148,14 @@ export const RECIPES = [
   { left: 't', right: 't', result: 'ᑕ', name: 'Tooth Necklace' }, // Teeth + Teeth = Tooth Necklace (+1 dmg)
   { left: '~', right: '~', result: '▤', name: 'Cloth' },         // String + String = Cloth
   { left: '▤', right: 'f', result: 'ᐤ', name: 'Fur Cloak' },     // Cloth + Fur = Fur Cloak (armor, dodge)
+  // Cloth alt routes — String + String is the most common craft, so Cloth
+  // gets second routes into existing garments/remedies. Each still needs a
+  // real second ingredient; Silk-gated items (Shield, Tower Shield) stay Silk-only.
+  { left: '▤', right: 'k', result: '𐤏', name: 'Ninja Garb' },    // Cloth + Silk = Ninja Garb (second route alongside Silk + Venom)
+  { left: '▤', right: 'a', result: '𐤉', name: 'Ember Cloak' },   // Cloth + Ash = Ember Cloak
+  { left: '▤', right: '❦', result: '𐤒', name: 'Moss Cloak' },    // Cloth + Moss = Moss Cloak (one Moss instead of two)
+  { left: '▤', right: 'ł', result: '𐤖', name: 'Bloom Mantle' },  // Cloth + Pollen = Bloom Mantle
+  { left: '▤', right: 'h', result: 'z', name: 'Mending Brew' },   // Cloth + Herb = Mending Brew (poultice)
   { left: '❦', right: '❦', result: '𐤒', name: 'Moss Cloak' },    // Moss + Moss = Moss Cloak (stealth bush transform)
 
   // More combinations
@@ -151,7 +166,7 @@ export const RECIPES = [
   { left: '‡', right: 's', result: '⚔', name: 'Legendary Flame Sword' }, // Flame Sword + Scale = Legendary
   { left: '‡', right: 'a', result: 'ᚠ', name: 'Lava Sword' },             // Flame Sword + Ash = Lava Sword
   { left: 'X', right: 'M', result: 'ᚷ', name: 'Heavy Pistols' },  // Dual Pistols + Metal = Heavy Pistols
-  { left: 'ᛖ', right: 'g', result: 'ᛡ', name: 'Venom Blade' },    // Dragon Blade + Goo = Venom Blade
+  { left: '†', right: '⚗', result: 'ᛡ', name: 'Venom Blade' },    // Sword + Slurry = Venom Blade (Slurry is the acid/venom route)
   { left: '⟩', right: 'w', result: '⇒', name: 'Sky Bow' },        // Fire Bow + Wing = Sky Bow
   { left: '⊤', right: 'b', result: '⚒', name: 'Bone Crusher' },   // Bone Axe + Bone = Bone Crusher
 
@@ -163,6 +178,8 @@ export const RECIPES = [
   { left: 'b', right: 'F', result: '☠', name: 'Cursed Skull' },   // Bone + Fire = Cursed Skull
   { left: 'm', right: '~', result: '♥', name: 'Heart' },          // Meat + String = Heart
   { left: 'c', right: 'F', result: '★', name: 'Lucky Coin' },     // Coin + Fire = Lucky Coin
+  { left: 'M', right: '0', result: '■', name: 'Metal Block' },    // Metal + Rock = Metal Block (auto-blocks at low HP)
+  { left: '@', right: 'a', result: '𐤑', name: 'Smoke Bomb' },     // Bomb + Ash = Smoke Bomb (brief invulnerability)
   { left: 'a', right: 'c', result: '¤', name: 'Infused Coin' },   // Ash + Coin = Infused Coin (offering for Well)
 
   // === NEW GUN RECIPES (10) ===
@@ -209,10 +226,39 @@ export const RECIPES = [
   { left: 'w', right: 'm', result: ';', name: 'Sleep Bomb' },      // Wing + Meat = Sleep Bomb
   { left: 'f', right: '|', result: '∩', name: 'Snare Trap' },      // Fur + Stick = Snare Trap (permanently roots a beast)
   { left: 'c', right: 's', result: "'", name: 'Charm Lure' },      // Coin + Scale = Charm Lure
+  // Recipe-tree upgrades (claudedocs/recipe-gap-analysis.md). Base left, ingredient right.
+  // Tier-1 → tier-2 rungs
+  { left: '†', right: '𝑚', result: '⸸', name: 'Magic Sword' },       // Sword + Mana
+  { left: '⸸', right: '◇', result: 'Ꞩ', name: 'Lightning Sword' },   // Magic Sword + Topaz
+  { left: '↾', right: 'm', result: 'ᛘ', name: 'Vampire Dagger' },    // Dagger + Meat
+  { left: '⊥', right: '⬨', result: 'ᛜ', name: 'Ice Hammer' },        // Hammer + Sapphire
+  { left: '⊥', right: '@', result: '✺', name: 'Exploding Mace' },    // Hammer + Bomb
+  { left: '≋', right: 'K', result: '⥊', name: 'Bullwhip' },          // Whip + Thick Fur
+  { left: '≋', right: '❦', result: '∻', name: 'Vine Whip' },         // Whip + Moss
+  { left: '⫯', right: '⧫', result: '⟡', name: 'Diamond Longsword' }, // Longsword + Diamond
+  { left: '↾', right: 'i', result: '⍖', name: 'Icicle' },            // Dagger + Ice
+  { left: '⊦', right: 'i', result: '⍑', name: 'Ice Axe' },           // Axe + Ice
+  { left: '↩', right: 'ł', result: '⤺', name: 'Drowse Boomerang' },  // Boomerang + Pollen
+  { left: 'Ƨ', right: 'd', result: '⸕', name: "Reaper's Scythe" },   // Scythe + Dust
+  // Tier-2 → tier-3
+  { left: 'ƒ', right: 'v', result: '⌭', name: 'Plague Gun' },        // Fester's Gun + Venom
+  { left: '⋔', right: 'p', result: '⑂', name: 'Pearl Slingshot' },   // Keen Slingshot + Pearl Shard
+  { left: '⸘', right: 'Y', result: '⧧', name: 'Barbed Bat' },        // Metal Bat + Stingray Barb
+  { left: '↟', right: 'Y', result: '⍏', name: 'Barbed Lance' },      // Venom Lance + Stingray Barb
+  { left: 'ᛜ', right: 'i', result: '⟙', name: 'Glacier Hammer' },    // Ice Hammer + Ice
+  { left: '✺', right: 'ł', result: '⁂', name: 'Spore Mace' },        // Exploding Mace + Pollen
+  { left: 'ᚠ', right: '4', result: '⟊', name: 'Slag Blade' },        // Lava Sword + Slag
+  { left: '⬢', right: 'a', result: '⫪', name: 'Cinder Hammer' },     // Onyx Hammer + Ash
+  { left: 'Ⲯ', right: 'r', result: '⸾', name: 'Rootstaff' },         // Thick Staff + Root
+  { left: '⟘', right: '4', result: '⟂', name: 'Slag Maul' },         // Maul + Slag
+  { left: 'ᛘ', right: '⬥', result: '⸶', name: 'Bloodletter' },       // Vampire Dagger + Garnet
+  { left: 'ᚢ', right: 'v', result: '⸷', name: 'Viper Fang' },        // Acid Blade + Venom
+
   // Persistent placeables
   { left: 'c', right: '~', result: '"', name: 'Music Box' },       // Coin + String = Music Box
   { left: 'b', right: '~', result: ':', name: 'Noise-maker' },     // Bone + String = Noise-maker
-  { left: 'M', right: 'F', result: ']', name: 'Tesla Coil' },      // Metal + Fire = Tesla Coil
+  { left: 'M', right: 'F', result: '⟟', name: 'Lightning Rod' },   // Metal + Fire = Lightning Rod
+  { left: '⟟', right: '◇', result: ']', name: 'Tesla Coil' },     // Lightning Rod + Topaz = Tesla Coil (gem infusion: base left, gem right)
   { left: 'j', right: 'w', result: '↩', name: 'Boomerang' },       // Stick + Wing = Boomerang
   { left: 'g', right: '~', result: '⌇', name: 'Sticky Tripline' }, // Goo + String = Sticky Tripline
   { left: '⌇', right: '◇', result: '⏦', name: 'Electric Tripline' }, // Sticky Tripline + Topaz = Electric Tripline (gem infusion: base left, gem right)
