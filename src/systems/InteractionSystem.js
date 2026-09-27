@@ -688,6 +688,18 @@ export class InteractionSystem {
       return;
     }
 
+    // Barricade ice thaws in place: the block goes and a water tile takes its
+    // cell, pushed onto the active plane's list like the obsidian a fire
+    // projectile leaves on frozen water (WaterLavaHitMechanic).
+    if (effect === 'destroyObject:meltToWater') {
+      obj.destroyAfterAnimation = true;
+      game._activeBackgroundObjects().push(
+        BackgroundObject.createVariant('water', obj.position.x, obj.position.y)
+      );
+      game.renderer.markBackgroundDirty();
+      return;
+    }
+
     // Rock harvest is checked BEFORE generic dropTable so mineral-formation rocks
     // (which have dropTable='basic' set by RoomGenerator) still get the guaranteed
     // Rock drop. Zone dropTable extras stack on top of the harvest rolls.

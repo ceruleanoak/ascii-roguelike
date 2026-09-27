@@ -45,8 +45,14 @@ export const WaterLavaHitMechanic = {
     // than in the collision handler's damage path because a projectile never
     // consults the smash rules at all: this module is where a projectile's
     // elemental reactions to terrain already live.
+    // The block's drop effect (its thaw into water) has to be queued here:
+    // ice's bulletInteraction is 'block', so the collision handler's own
+    // effect collection upstream never saw a kill to queue.
     if (obj.typeId === 'barricade_ice' && proj.onHit === 'burn') {
-      obj.takeDamage(Math.max(1, proj.damage || 1));
+      const result = obj.takeDamage(Math.max(1, proj.damage || 1));
+      if (result.destroyed && result.effect) {
+        combat.objectDestroyEvents.push({ obj, effect: result.effect });
+      }
     }
 
     // Fire projectile hits deep snow → melt it (shared with the melee path,

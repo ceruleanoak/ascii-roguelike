@@ -1243,8 +1243,10 @@ export const BACKGROUND_OBJECT_VARIANTS = {
     color: '#aaffff',
     hp: 1,
     // Melting leaves the water behind, which is the same answer the lava moat
-    // in this family wants — the two yellow gates teach each other.
-    dropEffect: 'destroyObject:spawnIngredient:w',
+    // in this family wants — the two yellow gates teach each other. It leaves
+    // it as a water tile on the block's own cell, not as a dropped ingredient:
+    // 'w' is Wing, not water, and a thaw that coughs up feathers says nothing.
+    dropEffect: 'destroyObject:meltToWater',
     dropChance: 1.0,
     bulletInteraction: 'block',
     flammability: 'none',
