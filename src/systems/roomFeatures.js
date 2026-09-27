@@ -1,4 +1,4 @@
-import { GRID, BACKGROUND_OBJECT_VARIANTS, WALL_STRUCTURES } from '../game/GameConfig.js';
+import { GRID, BACKGROUND_OBJECT_VARIANTS, WALL_STRUCTURES, LIGHTNING_SPIRE_CHAR } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Fisherman } from '../entities/Fisherman.js';
 import { Enemy } from '../entities/Enemy.js';
@@ -583,7 +583,7 @@ export function seedFrozenAscentCycle(gen, room, centerCol, centerRow, innerRadi
 // Ascent's plateau and the yellow miniboss room's electric Imbue Pool, so a
 // player who has learned the spire in one reads it in the other.
 function createLightningSpire(x, y) {
-  const spireTile = new BackgroundObject('\u2B22', x, y); // ⬢ hexagon
+  const spireTile = new BackgroundObject(LIGHTNING_SPIRE_CHAR, x, y);
   spireTile.data = {
     name: 'Lightning Spire',
     color: '#ccccaa',

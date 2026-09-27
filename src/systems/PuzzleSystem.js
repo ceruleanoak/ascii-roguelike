@@ -128,6 +128,18 @@ export class PuzzleSystem {
         return water;
       });
       const rod = new BackgroundObject(cfg.rodChar, def.rod.col * CS, def.rod.row * CS);
+      // Own data rather than a char lookup: the lightning rod glyph is also an
+      // item's char, so the constructor's fallback would name it after that.
+      rod.data = {
+        name: 'Lightning Rod',
+        color: cfg.rodColor,
+        solid: true,
+        bulletInteraction: 'block',
+        flammability: 'none',
+        conductivity: 'high',
+        indestructible: true,
+        interactions: { default: { animation: 'clang', message: null } }
+      };
       rod.color = cfg.rodColor;
       rod.animationColor = cfg.rodColor;
       rod.structural = true;

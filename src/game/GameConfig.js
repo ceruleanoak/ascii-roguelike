@@ -8,6 +8,13 @@ export const GRID = {
   HEIGHT: 480    // 30 * 16
 };
 
+// The lightning rod glyph — one shape for every conductor that stands in a room
+// and carries a strike or current: the Lightning Spire (storm rooms, electric
+// Imbue Pool), the Electric Poles of a circuit Barricade, and the Three
+// Conductors' rods. A player who has learned the hexagon in one place reads it
+// everywhere else.
+export const LIGHTNING_SPIRE_CHAR = '⬢';
+
 export const PHYSICS = {
   PLAYER_SPEED: 180,           // pixels per second (1.5x speed increase)
   PLAYER_ACCELERATION: 600,    // pixels per second squared
@@ -1295,7 +1302,7 @@ export const BACKGROUND_OBJECT_VARIANTS = {
   // floor. Its name is what WireSystem's ELIGIBLE_ANCHOR_NAMES matches on, so
   // renaming it silently breaks every circuit gate.
   'electric_pole': {
-    char: 'A',
+    char: LIGHTNING_SPIRE_CHAR,
     name: 'Electric Pole',
     color: '#666666',
     bulletInteraction: 'block',

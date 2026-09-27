@@ -1,3 +1,5 @@
+import { LIGHTNING_SPIRE_CHAR } from '../game/GameConfig.js';
+
 /**
  * Per-zone P-room puzzle definitions.
  *
@@ -44,7 +46,7 @@ export const PUZZLES = {
   // weapon, Stingray Mantle swim, or kiting electric enemies through pools).
   yellow: {
     type: 'three_conductors',
-    rodChar: 'I',
+    rodChar: LIGHTNING_SPIRE_CHAR,
     rodColor: '#ccccdd',
     rodLitColor: '#ffffaa',
     latchSeconds: 5,
