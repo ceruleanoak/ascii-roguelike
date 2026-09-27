@@ -419,7 +419,7 @@ export class WorldEffectsSystem {
 
       // Check collision with player (only if on the same plane)
       if (game.player && (gooBlob.plane ?? 0) === (game.player.plane ?? 0) && gooBlob.isNearEntity(game.player)) {
-        game.player.applyStatusEffect('goo', 5.0); // 5 second goo effect
+        game.player.applyStatusEffect('goo', 5.0, 1); // per-frame contact: holds pip 1
       }
 
       // Check collision with enemies (slimes are immune, must share plane).
@@ -428,7 +428,7 @@ export class WorldEffectsSystem {
         for (const enemy of game._activeEnemies()) {
           if (enemy.data?.affinities?.includes('goo')) continue; // goo-affinity enemies are immune to goo
           if ((gooBlob.plane ?? 0) === (enemy.plane ?? 0) && gooBlob.isNearEntity(enemy)) {
-            enemy.applyStatusEffect('goo', 5.0);
+            enemy.applyStatusEffect('goo', 5.0, 1); // per-frame contact: holds pip 1
           }
         }
       }

@@ -39,6 +39,8 @@ const ZAP_PIP_DECAY = 1.0;
 //   decayInterval  — on expiry, lose one pip and buy this much more time
 //                    instead of falling off all at once.
 //   durationPerStack — the applied duration is multiplied by the pip count.
+//                    The default stage for any Pip track with no stage
+//                    mechanic of its own: each pip makes it last longer.
 //   immunity       — carrier field that refuses the effect outright.
 //   cooldown       — while active, the effect can't be re-applied: its pips
 //                    are a cooldown draining toward the next application.
@@ -46,12 +48,14 @@ const STATUS_EFFECTS = {
   burn: {
     // Enemy burn's first ignite lasts at least 5s — the slot's original
     // starting duration, kept as-is.
-    enemy: { duration: 5, damage: 1, tickRate: 1.25, tickTimer: 0, stacks: 0 }, // ~4 ticks of 1 over 5s
-    player: { damage: 1, tickRate: 1.5, tickTimer: 0, stacks: 0 }
+    enemy: { duration: 5, damage: 1, tickRate: 1.25, tickTimer: 0, stacks: 0, durationPerStack: true }, // ~4 ticks of 1 over 5s
+    player: { damage: 1, tickRate: 1.5, tickTimer: 0, stacks: 0, durationPerStack: true }
   },
   poison: {
+    // Each pip ticks faster, and pips drain one at a time. Same stages on
+    // both sides; the player keeps its own faster pip-1 rate.
     enemy: { damage: 1, tickRate: 3.0, tickTimer: 0, stacks: 0, stackTickRate: 3.0, decayInterval: 3.0 },
-    player: { damage: 1, tickRate: 1.5, tickTimer: 0, stacks: 0 }
+    player: { damage: 1, tickRate: 1.5, tickTimer: 0, stacks: 0, stackTickRate: 1.5, decayInterval: 3.0 }
   },
   freeze: {
     // Enemy: one ice hit slows; ExtraOnHitEffects flips `frozen` for the full
@@ -62,7 +66,7 @@ const STATUS_EFFECTS = {
   },
   // Stun: a lock + disarm, on both sides. `disarm` (player) marks a held
   // item waiting to be knocked loose (StatusEffectSystem.applyPlayerDisarm).
-  stun: { enemy: { stacks: 0 }, player: { stacks: 0, disarm: false } },
+  stun: { enemy: { stacks: 0, durationPerStack: true }, player: { stacks: 0, disarm: false, durationPerStack: true } },
   // Electric Pip track: pips 1–2 slow (ZAP_PIP_SPEED), pip 3 locks and
   // disarms. Once zapped, a body can't be zapped again until the pips drain:
   // the hit's pip holds for its duration, then one pip per ZAP_PIP_DECAY.
@@ -73,17 +77,17 @@ const STATUS_EFFECTS = {
     player: { stacks: 0, disarm: false, decayInterval: ZAP_PIP_DECAY, cooldown: true }
   },
   sleep: { enemy: { stacks: 0, durationPerStack: true } }, // tiers read by Enemy.isFullyAsleep/getSpeedMultiplier
-  charm: { enemy: { stacks: 0 } },
+  charm: { enemy: { stacks: 0, durationPerStack: true } },
   wet: { enemy: { stacks: 0 }, player: { stacks: 0 } }, // pips synced to wetPipCount (PhysicsSystem)
   knockback: { enemy: {} },
   // Enemy: attacks miss (0 damage). Player: a Pip track — each pip closes
   // vision in tighter (the cave-fog overlay — drawVisionFogOverlay in
   // torchLight.js).
   blind: { enemy: {}, player: { stacks: 0 } },
-  dizzy: { enemy: { stacks: 0 }, player: { stacks: 0 } },
+  dizzy: { enemy: { stacks: 0, durationPerStack: true }, player: { stacks: 0, durationPerStack: true } },
   goo: {
-    enemy: { slowAmount: 0.8, stacks: 0 },
-    player: { slowAmount: 0.8, stacks: 0 }, // heavy slow + prevents dodge roll
+    enemy: { slowAmount: 0.8, stacks: 0, durationPerStack: true },
+    player: { slowAmount: 0.8, stacks: 0, durationPerStack: true }, // heavy slow + prevents dodge roll
     immunity: 'slimeImmune'
   },
   slimeBoost: { player: { speedMult: 2.0 } } // slime puddle while wearing the slime suit; matches the slime enemy's 2x

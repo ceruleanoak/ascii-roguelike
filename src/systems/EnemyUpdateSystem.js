@@ -145,7 +145,7 @@ export class EnemyUpdateSystem {
         const pdx = player.position.x - slime.position.x;
         const pdy = player.position.y - slime.position.y;
         if (pdx * pdx + pdy * pdy < SLIME_COLLISION_SQ) {
-          player.applyStatusEffect('goo', 5.0);
+          player.applyStatusEffect('goo', 5.0, 1); // per-frame contact: holds pip 1
         }
       }
       for (const other of enemies) {
@@ -154,7 +154,7 @@ export class EnemyUpdateSystem {
         const dx = other.position.x - slime.position.x;
         const dy = other.position.y - slime.position.y;
         if (dx * dx + dy * dy < SLIME_COLLISION_SQ) {
-          other.applyStatusEffect('goo', 5.0);
+          other.applyStatusEffect('goo', 5.0, 1);
         }
       }
     }
@@ -170,12 +170,12 @@ export class EnemyUpdateSystem {
       if (puddle.type !== 'slimeTrail') continue;
       if (!!puddle.hutPlane !== playerInInterior) continue;
       if ((puddle.plane ?? 0) === playerPlane && puddle.isEntityOnPuddle(player)) {
-        player.applyStatusEffect(player.slimeImmune ? 'slimeBoost' : 'goo', 5.0);
+        player.applyStatusEffect(player.slimeImmune ? 'slimeBoost' : 'goo', 5.0, 1); // per-frame: holds pip 1
       }
       for (const enemy of activeEnemies) {
         if (enemy.data?.affinities?.includes('goo')) continue;
         if ((puddle.plane ?? 0) !== (enemy.plane ?? 0)) continue;
-        if (puddle.isEntityOnPuddle(enemy)) enemy.applyStatusEffect('goo', 5.0);
+        if (puddle.isEntityOnPuddle(enemy)) enemy.applyStatusEffect('goo', 5.0, 1);
       }
     }
   }

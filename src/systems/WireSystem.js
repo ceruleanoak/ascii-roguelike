@@ -234,7 +234,7 @@ export class WireSystem {
     if (!entity || typeof entity.applyStatusEffect !== 'function') return;
     if (wireType === 'slime') {
       if (entity.data?.affinities?.includes('goo')) return; // goo-affinity immune
-      entity.applyStatusEffect('goo', 5.0);
+      entity.applyStatusEffect('goo', 5.0, 1); // per-frame contact: holds pip 1
     }
   }
 

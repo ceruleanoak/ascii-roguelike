@@ -684,8 +684,8 @@ programming terms.
   `applyStatusEffect`, `tickStatusEffects`, `clearStatusEffect` are shared. Entry point is
   `applyStatusEffect(name, duration, pips?)` on Player and Enemy; carrier-specific layers are
   `StatusEffectSystem.js` (player) and `EnemyStatusEffects.js` (enemy). Examples: `'burn'`,
-  `'poison'`, `'wet'`, `'freeze'`, `'stun'`, `'dizzy'`, `'goo'`. Wet and freeze are Pip tracks
-  (see Pip).
+  `'poison'`, `'wet'`, `'freeze'`, `'stun'`, `'dizzy'`, `'goo'`. Every stackable effect is a
+  Pip track, with the same stages on the player and enemies (see Pip).
 - **Not:** permanent attributes (like health or stats); a temporary modifier only.
 
 ### Pip
@@ -695,6 +695,9 @@ programming terms.
   pip 3 drowns, and each pip slows harder in water. Freeze: pips 1–2 slow, pip 3 = Frozen.
   Blind (player): each pip closes vision in tighter (6 / 4.5 / 3 cells).
   Zap: pips 1–2 slow, pip 3 = no movement + disarm; the pips are a cooldown (see Zap).
+  Poison: each pip ticks faster, and pips drain one at a time. Sleep: pips 1–2 slow, pip 3
+  sleeps. Everything else (burn, stun, dizzy, goo, charm) has the default stage: each pip
+  multiplies the duration (pip 2 lasts twice as long, pip 3 three times).
   A discrete hit adds one pip; a per-frame source (ice puddle) or an all-at-once hit (freeze
   trap) raises the track to a level instead, so lingering never stacks by itself. Electric
   current is all-at-once: a full-strength source lands at zap pip 3, and each chain link or

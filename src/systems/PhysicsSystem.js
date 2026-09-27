@@ -1784,7 +1784,8 @@ export class PhysicsSystem {
       // Apply water state effects (skip if immune)
       if (!isImmune) {
         if (liquidState === 'poisoned') {
-          if (entity.applyStatusEffect) entity.applyStatusEffect('poison', 4.0);
+          // Per-frame contact holds pip 1 — lingering never stacks by itself.
+          if (entity.applyStatusEffect) entity.applyStatusEffect('poison', 4.0, 1);
         } else if (liquidState === 'electrified') {
           game.electricitySystem?.shockEntity(entity, electricCurrent);
         }
