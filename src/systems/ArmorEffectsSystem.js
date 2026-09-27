@@ -197,7 +197,7 @@ export class ArmorEffectsSystem {
         const cx = obj.position.x + half;
         const cy = obj.position.y + half;
         if (Math.abs(cx - ex) < half && Math.abs(cy - ey) < half) {
-          const wet = (enemy.wetDuration || 0) > 0;
+          const wet = enemy.isWet?.() ?? false;
           const dmg = wet ? 2 : 1;
           enemy.takeDamage(dmg);
           game.combatSystem?.createDamageNumber(dmg, enemy.position.x, enemy.position.y, wet ? '#ffff66' : '#88ddff', 1.0, 0.6);

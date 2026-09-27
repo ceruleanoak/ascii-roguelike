@@ -5,7 +5,7 @@
 // Player.takeDamage() (Player.js was over its architecture budget) — the
 // player still owns every field this reads/writes (hp, invulnerabilityTimer,
 // dodgeRoll, defense, resists, etc.); this module is pure resolution logic
-// with no state of its own, mirroring the StatusEffectSystem.tickPlayerDot
+// with no state of its own, mirroring the StatusEffectSystem.tickPlayer
 // pattern of a system operating directly on the player it's passed.
 export const PlayerDamageSystem = {
   // Returns false (no damage), an object describing what happened

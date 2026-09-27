@@ -289,7 +289,7 @@ export class WorldEffectsSystem {
                 game.player.emberStackTimer = EMBER_STACK_WINDOW;
                 game.player.emberStackCooldown = EMBER_STACK_COOLDOWN;
                 if (game.player.emberStacks >= EMBER_THRESHOLD) {
-                  game.player.applyBurn(2.0);
+                  game.player.applyStatusEffect('burn', 2.0);
                   game.player.emberStacks = 0;
                   game.player.emberStackTimer = 0;
                 }
@@ -382,11 +382,7 @@ export class WorldEffectsSystem {
           // Optional ignite (e.g. Bomb's RipenMechanic detonation) — opt-in via
           // sw.burnDuration so unrelated shockwaves (Giant Slime's leap ring) stay unaffected.
           if (!isSlime && sw.burnDuration > 0) {
-            if (entity === game.player) {
-              entity.applyBurn(sw.burnDuration);
-            } else {
-              entity.applyStatusEffect('burn', sw.burnDuration);
-            }
+            entity.applyStatusEffect('burn', sw.burnDuration);
           }
         };
         apply(game.player);
@@ -627,7 +623,7 @@ export class WorldEffectsSystem {
         for (let d = 0; d < dropCount; d++) {
           particles.push(tagInteriorPlane(game, createWetDrop(player.position.x, player.position.y)));
         }
-        const wet = player.wetDuration;
+        const wet = player.statusEffects.wet.duration;
         player.wetDropTimer = wet > 4 ? 0.10 : wet > 2 ? 0.14 : 0.20;
       }
     } else {

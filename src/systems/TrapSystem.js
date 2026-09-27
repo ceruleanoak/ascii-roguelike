@@ -1152,7 +1152,7 @@ export class TrapSystem {
         const pdy = (game.player.position.y + GRID.CELL_SIZE / 2) - cy;
         if (Math.sqrt(pdx * pdx + pdy * pdy) <= r) {
           if (trapData.effect === 'burn') {
-            game.player.applyBurn?.(trapData.effectDuration);
+            game.player.applyStatusEffect?.('burn', trapData.effectDuration);
           } else if (trapData.effect === 'freeze') {
             game.player.applyStatusEffect?.('freeze', trapData.effectDuration, 3); // straight to Frozen
           } else if (trapData.effect === 'zap') {
@@ -1259,10 +1259,10 @@ export class TrapSystem {
 
   _applyFirePuddle(puddle, playerPlane) {
     const game = this.game;
-    // Player burn lives on its own duration field (applyBurn), not statusEffects.
-    // Refresh past the 1.5s tick rate so a tick actually fires before it expires.
+    // Refresh past the player's 1.5s burn tick rate so a tick actually fires
+    // before it expires.
     if (puddle.isEntityOnPuddle(game.player) && !game.player.fireImmune) {
-      game.player.applyBurn?.(2.0);
+      game.player.applyStatusEffect?.('burn', 2.0);
     }
     for (const enemy of (game.currentRoom?.enemies ?? [])) {
       if ((enemy.plane ?? 0) !== playerPlane) continue;

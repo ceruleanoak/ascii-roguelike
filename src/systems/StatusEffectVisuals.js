@@ -177,7 +177,7 @@ function _playerPipRow(player, effect) {
     return { effect, color: stacks >= 3 ? WATER_COLORS.deep : PLAYER_EFFECT_COLORS.wet, stacks };
   }
   if (effect === 'freeze') {
-    const stacks = player.statusEffects.freeze.pips;
+    const stacks = player.statusEffects.freeze.stacks;
     return { effect, color: stacks >= 3 ? EFFECT_COLORS.freeze : PLAYER_EFFECT_COLORS.freeze, stacks };
   }
   return { effect, color: PLAYER_EFFECT_COLORS[effect], stacks: 1 };
@@ -203,8 +203,8 @@ function additiveTint(base, tint, factor = 0.5) {
 }
 
 // Player's glyph blink/tint color, in fixed-priority order (unlike the enemy
-// round-robin above — the player has no stacks/effectApplicationOrder to
-// cycle through, so the loudest signal simply wins). Moved out of
+// round-robin above — the player has no effectApplicationOrder to cycle
+// through, so the loudest signal simply wins). Moved out of
 // Player.getDisplayColor() to keep Player.js under its architecture budget;
 // this file already tracked the two in lockstep by comment cross-reference,
 // so this is the same "operates on player, holds no state" shape as

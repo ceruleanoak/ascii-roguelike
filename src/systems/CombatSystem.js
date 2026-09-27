@@ -1453,7 +1453,7 @@ export class CombatSystem {
 
                 // Enemy melee elemental follow-through (e.g. Plague Rat's poison bite)
                 if (attack.onHit === 'poison') {
-                  player.applyPoison(attack.poisonDuration ?? 4.0);
+                  player.applyStatusEffect('poison', attack.poisonDuration ?? 4.0);
                 }
 
                 // Handle reflection

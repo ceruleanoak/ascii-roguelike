@@ -520,7 +520,7 @@ export class EnemyUpdateSystem {
         player.takeDamage(cfg.detonateDamage);
         game.combatSystem.createDamageNumber(cfg.detonateDamage, player.position.x, player.position.y, player.color);
         game.physicsSystem.applyKnockback(player, ed.x, ed.y, cfg.shockwaveKnockback, 0.12);
-        if (cfg.burnDuration > 0) player.applyBurn(cfg.burnDuration);
+        if (cfg.burnDuration > 0) player.applyStatusEffect('burn', cfg.burnDuration);
         hitEntities.add(player);
       }
     }

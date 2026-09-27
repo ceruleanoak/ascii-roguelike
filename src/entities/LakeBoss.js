@@ -1,5 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { isImmuneToEffect, getElementalModifierFor } from './elementalAffinity.js';
+import { createStatusEffects } from '../systems/StatusEffects.js';
 
 export const LAKE_BOSS_MAX_HP  = 80;
 // 40% of max HP. Arms the Freeze-Over; the next slam carries it as its payload.
@@ -107,20 +108,10 @@ export class LakeBoss {
 
     // Shared-loop stubs: CombatSystem inspects these on every melee/projectile
     // hit. LakeBoss exposes a hitbox (most bosses don't), so it reaches those
-    // branches. Matches Enemy.js shape so freeze etc. resolve cleanly.
-    this.statusEffects = {
-      burn:      { active: false, duration: 0, damage: 0.5, tickRate: 2.5, tickTimer: 0 },
-      poison:    { active: false, duration: 0, damage: 0.3, tickRate: 0.3, tickTimer: 0 },
-      freeze:    { active: false, duration: 0, slowAmount: 0.5, frozen: false, shuddering: false },
-      stun:      { active: false, duration: 0 },
-      sleep:     { active: false, duration: 0 },
-      charm:     { active: false, duration: 0 },
-      wet:       { active: false, duration: 0 },
-      knockback: { active: false, duration: 0 },
-      blind:     { active: false, duration: 0 },
-      dizzy:     { active: false, duration: 0 },
-      goo:       { active: false, duration: 0, slowAmount: 0.8 }
-    };
+    // branches. Built from the shared enemy table so the shape can't drift
+    // from Enemy.js's; applyStatusEffect below is a no-op, so nothing here
+    // ever activates.
+    this.statusEffects = createStatusEffects('enemy');
     this.detectionIndicatorTimer = 0;
 
     // Ice-affinity boss: immune to freeze, weak to burn. Data-driven so it reads the

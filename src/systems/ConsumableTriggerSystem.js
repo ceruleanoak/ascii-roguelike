@@ -1,5 +1,6 @@
 import { getPotionEffectParams } from '../data/alchemy.js';
 import { GAME_STATES } from '../game/GameConfig.js';
+import { clearStatusEffect } from './StatusEffects.js';
 
 // Every consumable use is a throw: the item arcs up and lands before its
 // effect resolves (checkTriggerCondition only gates whether it CAN fire;
@@ -186,7 +187,7 @@ export class ConsumableTriggerSystem {
       }
       case 'cleanse': {
         // Tonic: player has burn or wet; manual force-cleanses regardless
-        if (manual || player.burnDuration > 0 || player.wetDuration > 0) {
+        if (manual || player.isBurning() || player.isWet()) {
           return { windup: THROW_DURATION, effectType: 'cleanse' };
         }
         return false;
@@ -362,8 +363,8 @@ export class ConsumableTriggerSystem {
         player.applyBlockBoost(8, 5);
         break;
       case 'cleanse':
-        player.burnDuration = 0;
-        player.wetDuration = 0;
+        clearStatusEffect(player, 'burn');
+        clearStatusEffect(player, 'wet');
         break;
       case 'invuln': {
         const duration = cd.duration || 3.5;

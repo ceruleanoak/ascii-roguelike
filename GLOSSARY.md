@@ -679,9 +679,13 @@ programming terms.
 ### Status Effect
 - **Definition:** A temporary condition applied to a character (player or enemy) that modifies
   behavior, movement, or damage. Effects have a duration and wear off over time.
-- **In code:** `Character.applyStatusEffect(name, duration)` in `src/entities/` (Player,
-  Enemy). Active effects tracked in `statusEffects` object. Examples: `'burn'`, `'poison'`,
-  `'freeze'`, `'stun'`, `'dizzy'`, `'goo'`. Wet and freeze are Pip tracks (see Pip).
+- **In code:** one model for both sides — `STATUS_EFFECTS` in `src/systems/StatusEffects.js`
+  declares every effect and which carrier (player/enemy) can hold it; `createStatusEffects`,
+  `applyStatusEffect`, `tickStatusEffects`, `clearStatusEffect` are shared. Entry point is
+  `applyStatusEffect(name, duration, pips?)` on Player and Enemy; carrier-specific layers are
+  `StatusEffectSystem.js` (player) and `EnemyStatusEffects.js` (enemy). Examples: `'burn'`,
+  `'poison'`, `'wet'`, `'freeze'`, `'stun'`, `'dizzy'`, `'goo'`. Wet and freeze are Pip tracks
+  (see Pip).
 - **Not:** permanent attributes (like health or stats); a temporary modifier only.
 
 ### Pip
@@ -691,8 +695,8 @@ programming terms.
   pip 3 drowns, and each pip slows harder in water. Freeze: pips 1–2 slow, pip 3 = Frozen.
   A discrete hit adds one pip; a per-frame source (ice puddle) or an all-at-once hit (freeze
   trap) raises the track to a level instead, so lingering never stacks by itself.
-- **In code:** Enemy — `statusEffects[x].stacks` (`MAX_STACKUP = 3`); Player —
-  `statusEffects.freeze.pips` and `wetPips` + `wetPipCount()` (`StatusEffectSystem.js`); drawn
+- **In code:** `statusEffects[x].stacks` on both sides (`MAX_PIPS = 3`, `StatusEffects.js`);
+  wet's deep-water fill is `wetPips`, read through `wetPipCount()` (`StatusEffectSystem.js`); drawn
   by `StatusPipEffects.js` from `computePipRows` / `computePlayerPipRows`.
 - **Not:** a resource the player spends or banks; the duration (pips are tiers, the timer is
   separate).

@@ -5,7 +5,7 @@ import {
   inSamePlane,
   objectOnPlane,
 } from './PlaneSystem.js';
-import { clearEffectOrder } from './EnemyStatusEffects.js';
+import { clearStatusEffect } from './StatusEffects.js';
 import { wetPipCount, wetPipSpeed } from './StatusEffectSystem.js';
 
 // Re-exported so existing imports (e.g. Enemy.js) keep working.
@@ -1752,49 +1752,31 @@ export class PhysicsSystem {
 
       // Water washes slime (goo) off — player and enemy alike. A rinse, not
       // an elemental status, so Rubber Boots' water immunity doesn't stop it.
-      const goo = entity.statusEffects?.goo;
-      if (goo?.active) {
-        goo.active = false;
-        goo.duration = 0;
-        if (goo.stacks !== undefined) {
-          goo.stacks = 0;
-          clearEffectOrder(entity, 'goo');
-        }
-      }
+      if (entity.statusEffects?.goo?.active) clearStatusEffect(entity, 'goo');
 
       // Check water immunity (Rubber Boots) — blocks elemental status effects but not movement slow
       const isImmune = entity === game.player && game.player.waterImmunityTimer > 0;
       // Shock consequences (and shock immunities — Stingray Mantle, electric
       // affinity) are owned by ElectricitySystem.shockEntity, not here.
 
-      // Apply wet status (6s; Math.max in applyWet/applyStatusEffect refreshes while in water)
-      if (!isImmune) {
-        if (entity.applyWet) {
-          // Getting wet washes any equipped Oil augment off the weapon it's
-          // coating. Gate on the pre-applyWet dry state so this only fires on
-          // the dry→wet transition, not every frame the player lingers in
-          // water (the oil is already gone by the second frame).
-          if (entity === game.player && !entity.isWet()) {
-            game.inventorySystem.destroyWetOils(entity);
-          }
-          entity.applyWet(6.0); // Player
-          entity.burnDuration = 0;  // Water extinguishes burn
-        } else if (entity.applyStatusEffect) {
-          entity.applyStatusEffect('wet', 6.0); // Enemies
-          entity.statusEffects.wet.stacks = wetPipCount(entity); // pips, not per-frame applications
-          if (entity.statusEffects?.burn?.active) {
-            // Water extinguishes burn. Zero stacks (not just active) and
-            // remove the stale entry from effectApplicationOrder — leaving
-            // either behind survives to the next ignite, since
-            // applyStatusEffect only re-pushes onto effectApplicationOrder
-            // on an inactive→active transition (bug #301: a burn/wet/burn
-            // cycle left duplicate 'burn' entries, each contributing its own
-            // full pip row once burn reactivated).
-            entity.statusEffects.burn.active = false;
-            entity.statusEffects.burn.stacks = 0;
-            clearEffectOrder(entity, 'burn');
-          }
+      // Apply wet status (6s; applyStatusEffect's Math.max refreshes while in water)
+      if (!isImmune && entity.applyStatusEffect) {
+        // Getting wet washes any equipped Oil augment off the weapon it's
+        // coating. Gate on the pre-apply dry state so this only fires on
+        // the dry→wet transition, not every frame the player lingers in
+        // water (the oil is already gone by the second frame).
+        if (entity === game.player && !entity.isWet()) {
+          game.inventorySystem.destroyWetOils(entity);
         }
+        entity.applyStatusEffect('wet', 6.0);
+        const wet = entity.statusEffects?.wet;
+        if (wet?.stacks !== undefined) wet.stacks = wetPipCount(entity); // pips, not per-frame applications
+        // Water extinguishes burn. clearStatusEffect also drops the stale
+        // effectApplicationOrder entry — leaving it survives to the next
+        // ignite, since only an inactive→active transition re-pushes it
+        // (bug #301: a burn/wet/burn cycle left duplicate 'burn' entries,
+        // each contributing its own full pip row once burn reactivated).
+        if (entity.statusEffects?.burn?.active) clearStatusEffect(entity, 'burn');
       }
 
       // Apply water state effects (skip if immune)

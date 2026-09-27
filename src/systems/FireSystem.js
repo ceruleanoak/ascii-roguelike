@@ -235,7 +235,7 @@ export class FireSystem {
         player.emberStackTimer = EMBER_STACK_WINDOW;
         player.emberStackCooldown = EMBER_STACK_COOLDOWN;
         if (player.emberStacks >= EMBER_THRESHOLD) {
-          player.applyBurn(2.0);
+          player.applyStatusEffect('burn', 2.0);
           player.emberStacks = 0;
           player.emberStackTimer = 0;
         }
@@ -268,7 +268,7 @@ export class FireSystem {
       igniteUnderEntity(enemy);
     }
     const player = game.player;
-    if (player && player.burnDuration > 0) igniteUnderEntity(player);
+    if (player?.isBurning()) igniteUnderEntity(player);
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────

@@ -38,6 +38,7 @@ import { EnemyStateMachine, legacyStateFor } from './EnemyStateMachine.js';
 import { computeNodePath as computeNodePathImpl } from '../systems/EnemyPathfinding.js';
 import { statesFor } from '../data/stateDefaults.js';
 import { computeBlinkColor, computePipRows, computeIframeFlashColor } from '../systems/StatusEffectVisuals.js';
+import { createStatusEffects } from '../systems/StatusEffects.js';
 import {
   applyStatusEffect as applyStatusEffectImpl,
   computeSpeedMultiplier as computeSpeedMultiplierImpl,
@@ -203,28 +204,15 @@ export class Enemy {
     this._prevState = 'idle'; // for detecting state transitions
     this._zeroNodeCount = 0; // consecutive 0-node computeNodePath results
 
-    // Status effects
-    this.statusEffects = {
-      // `stacks` (capped at 3, see EnemyStatusEffects.js's MAX_STACKUP) counts
-      // how many times each of these 10 blink-capable effects has been freshly
-      // applied while still active — generic across every effect and every
-      // source (weapon, oil, any future onHit), not special-cased per effect
-      // name. Drives blink speed uniformly; poison and sleep layer additional
-      // stack-driven behavior (tick-rate scaling, tier escalation) elsewhere.
-      // knockback/blind aren't blink-capable and don't track stacks.
-      burn: { active: false, duration: 5, damage: 1, tickRate: 1.25, tickTimer: 0, stacks: 0 }, // ~4 ticks of 1 over 5s — short, punchy, readable
-      poison: { active: false, duration: 0, damage: 1, tickRate: 3.0, tickTimer: 0, stacks: 0 },
-      freeze: { active: false, duration: 0, slowAmount: 0.5, frozen: false, shuddering: false, stacks: 0 },
-      stun: { active: false, duration: 0, stacks: 0 },
-      zap: { active: false, duration: 0, stacks: 0 }, // electric-affinity stun; renders with rapid shake
-      sleep: { active: false, duration: 0, stacks: 0 },
-      charm: { active: false, duration: 0, stacks: 0 },
-      wet: { active: false, duration: 0, stacks: 0 },
-      knockback: { active: false, duration: 0 },
-      blind: { active: false, duration: 0 }, // Attacks miss (0 damage)
-      dizzy: { active: false, duration: 0, stacks: 0 },
-      goo: { active: false, duration: 0, slowAmount: 0.8, stacks: 0 }
-    };
+    // Status effects — the table is declared once, in StatusEffects.js's
+    // STATUS_EFFECTS, and shared with the player. `stacks` (the Pip track,
+    // capped at MAX_PIPS = 3) counts how many times each blink-capable effect
+    // has been freshly applied while still active — generic across every
+    // effect and every source, not special-cased per effect name. Drives
+    // blink speed uniformly; poison and sleep layer additional stack-driven
+    // behavior (tick-rate scaling, tier escalation). knockback/blind aren't
+    // blink-capable and don't track stacks.
+    this.statusEffects = createStatusEffects('enemy');
 
     // Ordered list of currently-active blink-capable effect names, in the
     // order they most recently transitioned inactive→active. Drives the
@@ -501,12 +489,12 @@ export class Enemy {
   // blink color and stack pips, is StatusEffectVisuals.js). Kept as a thin
   // delegating method so every existing `enemy.applyStatusEffect(...)` call
   // site across the codebase is unaffected.
-  applyStatusEffect(effect, duration = 3.0) {
-    applyStatusEffectImpl(this, effect, duration);
+  applyStatusEffect(effect, duration = 3.0, pips = null) {
+    applyStatusEffectImpl(this, effect, duration, pips);
   }
 
   // Removes an effect from the round-robin blink/pip order. See
-  // EnemyStatusEffects.js's clearEffectOrder for the full explanation.
+  // StatusEffects.js's clearEffectOrder for the full explanation.
   _clearEffectOrder(effect) {
     clearEffectOrderImpl(this, effect);
   }

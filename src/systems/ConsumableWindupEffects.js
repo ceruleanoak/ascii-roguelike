@@ -129,7 +129,7 @@ export class ConsumableWindupEffects {
           if (Math.sqrt(dx * dx + dy * dy) <= burnRadius) {
             // Two stacks so the blast reads as a real hit, not a graze —
             // applyStatusEffect increments enemy.statusEffects.burn.stacks
-            // by 1 per call (capped at MAX_STACKUP=3 in EnemyStatusEffects.js).
+            // by 1 per call (capped at MAX_PIPS=3 in StatusEffects.js).
             enemy.applyStatusEffect('burn', 3.0);
             enemy.applyStatusEffect('burn', 3.0);
           }

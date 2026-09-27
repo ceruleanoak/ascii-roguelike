@@ -127,22 +127,14 @@ export class Player {
     // Interior state (inDungeon derived from _activeInteriorKind; see ADR-0001)
     this.dungeonExitPosition = null; // saved exterior position when entering a dungeon
 
-    // Wet status
-    this.wetDuration = 0;
-    this.wetDropTimer = 0; // throttles trail particle emission
+    this.wetDropTimer = 0; // throttles wet trail particle emission
 
     // Sprint footstep trail
     this.footstepTimer = 0; // throttles footstep dot emission
     this.footstepSide = 0;  // alternates 0/1 for left/right foot
 
-    // Burn status
-    this.burnDuration = 0;
-    this.burnTickTimer = 0;
-    this.burnTickRate = 1.5; // deal damage every 1.5s
-    this.burnDamage = 1;    // damage per tick
-
     // Lava contact (PhysicsSystem.applyLiquidResults sets this every frame).
-    // Lava deals its own damage tick rather than the burn DOT above, but
+    // Lava deals its own damage tick rather than the burn DoT, but
     // reads as "burning" for the status pip — see StatusEffectVisuals.js.
     this.inDamagingLiquid = false;
 
@@ -155,12 +147,6 @@ export class Player {
     this.wetPips = 0;
     this.drownDamageTimer = 0;
     this.deepWaterImmune = false;
-
-    // Poison status (Plague Rat bite) — mirrors burn's shape exactly
-    this.poisonDuration = 0;
-    this.poisonTickTimer = 0;
-    this.poisonTickRate = 1.5; // deal damage every 1.5s
-    this.poisonDamage = 1;    // damage per tick
 
     // Ember accumulation (cumulative burn resistance — 3 hits within window to ignite)
     this.emberStacks = 0;
@@ -288,8 +274,9 @@ export class Player {
     this.isOnSlope = false;
     this.isOnIce   = false;
 
-    // Timed status slots. Declared once, in StatusEffectSystem — reset() builds
-    // them from the same factory, which is what keeps the two from drifting.
+    // Status Effects (burn, poison, wet, freeze, goo, …). Declared once, in
+    // StatusEffects.js's table shared with enemies — reset() builds them from
+    // the same factory, which is what keeps the two from drifting.
     this.statusEffects = createPlayerStatusSlots();
 
     // Status visual feedback
@@ -474,20 +461,9 @@ export class Player {
     };
   }
 
-  isWet() { return this.wetDuration > 0; }
-  applyWet(duration) { this.wetDuration = Math.max(this.wetDuration, duration); }
-
-  isBurning() { return this.burnDuration > 0; }
-  applyBurn(duration) {
-    if (this.burnDuration <= 0) this.burnTickTimer = this.burnTickRate;
-    this.burnDuration = Math.max(this.burnDuration, duration);
-  }
-
-  isPoisoned() { return this.poisonDuration > 0; }
-  applyPoison(duration) {
-    if (this.poisonDuration <= 0) this.poisonTickTimer = this.poisonTickRate;
-    this.poisonDuration = Math.max(this.poisonDuration, duration);
-  }
+  isWet() { return this.statusEffects.wet.active; }
+  isBurning() { return this.statusEffects.burn.active; }
+  isPoisoned() { return this.statusEffects.poison.active; }
 
   applySpeedBoost(duration) { this.speedBoostTimer = Math.max(this.speedBoostTimer, duration); }
   applyStoneSkin(duration) {
@@ -512,8 +488,9 @@ export class Player {
     StatusEffectSystem.applyPlayerStatusEffect(this, effect, duration, pips);
   }
 
+  // Ticks the whole table; returns burn/poison DoT ticks for applyPlayerDot.
   updateStatusEffects(deltaTime) {
-    StatusEffectSystem.tickPlayerStatusSlots(this, deltaTime);
+    return StatusEffectSystem.tickPlayer(this, deltaTime);
   }
 
   isGooey() {
@@ -548,7 +525,7 @@ export class Player {
   update(deltaTime) {
     this.dodgeRoll.justEnded = false;
     // Update status effects
-    this.updateStatusEffects(deltaTime);
+    const dotTicks = this.updateStatusEffects(deltaTime);
 
     // Update status blink timer
     this.statusBlinkTimer += deltaTime;
@@ -574,8 +551,6 @@ export class Player {
         this.attackBlockTimer = 0;
       }
     }
-
-    if (this.wetDuration > 0) this.wetDuration -= deltaTime;
 
     // Tick timed buffs
     if (this.speedBoostTimer > 0) this.speedBoostTimer -= deltaTime;
@@ -612,9 +587,10 @@ export class Player {
       if (this.actionCooldown < 0) this.actionCooldown = 0;
     }
 
-    // Burn/poison DoT ticking — StatusEffectSystem.js (damage applied back
-    // in main.js via takeDamage, once immunity/i-frames have their say).
-    return StatusEffectSystem.tickPlayerDot(this, deltaTime);
+    // Burn/poison DoT ticks from the status tick at the top of update() —
+    // damage applied back in main.js via takeDamage, once immunity/i-frames
+    // have their say.
+    return dotTicks;
   }
 
   startDodgeRoll(direction, enemies = []) {
@@ -1034,21 +1010,11 @@ export class Player {
     this.fishingLocked = false;
     this.rusalkaInputScale = 1.0;
 
-    // Reset status effects — the same factory the constructor uses, so a slot
-    // can never go missing from one and not the other (#256: this rebuild had
-    // no `dizzy`, and isDizzy() reads `.dizzy.active` unguarded).
+    // Reset status effects (burn/poison/wet included) — the same factory the
+    // constructor uses, so a slot can never go missing from one and not the
+    // other (#256: this rebuild had no `dizzy`, and isDizzy() reads
+    // `.dizzy.active` unguarded).
     this.statusEffects = createPlayerStatusSlots();
-
-    // Reset burn state
-    this.burnDuration = 0;
-    this.burnTickTimer = 0;
-
-    // Reset poison state
-    this.poisonDuration = 0;
-    this.poisonTickTimer = 0;
-
-    // Reset wet state
-    this.wetDuration = 0;
     this.wetDropTimer = 0;
 
     // Reset ember accumulation
