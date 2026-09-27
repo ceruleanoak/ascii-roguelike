@@ -1,4 +1,4 @@
-import { GRID, BACKGROUND_OBJECT_VARIANTS, WALL_STRUCTURES, LIGHTNING_SPIRE_CHAR } from '../game/GameConfig.js';
+import { GRID, BACKGROUND_OBJECT_VARIANTS, WALL_STRUCTURES } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Fisherman } from '../entities/Fisherman.js';
 import { Enemy } from '../entities/Enemy.js';
@@ -11,6 +11,7 @@ import { WeaponsMaster } from '../entities/WeaponsMaster.js';
 import { ErrandCharacter } from '../entities/ErrandCharacter.js';
 import { HOT_WATER_CHAR } from '../data/alchemy.js';
 import { PLANE_TUNNEL } from './PlaneSystem.js';
+import { createLightningSpire } from './LightningSpire.js';
 
 // Room-generation feature helpers extracted from RoomGenerator (arch budget).
 // Each takes the generator instance (`gen`) for its placement utilities.
@@ -578,30 +579,6 @@ export function seedFrozenAscentCycle(gen, room, centerCol, centerRow, innerRadi
   };
 }
 
-// The Lightning Spire: an indestructible conductive rod that every storm strike
-// in its room lands on (SandstormSystem._strikeRandom). Shared by the yellow
-// Ascent's plateau and the yellow miniboss room's electric Imbue Pool, so a
-// player who has learned the spire in one reads it in the other.
-function createLightningSpire(x, y) {
-  const spireTile = new BackgroundObject(LIGHTNING_SPIRE_CHAR, x, y);
-  spireTile.data = {
-    name: 'Lightning Spire',
-    color: '#ccccaa',
-    solid: false,
-    bulletInteraction: 'pass-through',
-    flammability: 'none',
-    conductivity: 'high',
-    indestructible: true,
-    environmental: true,
-    interactions: { default: { animation: 'none', message: null } }
-  };
-  spireTile.conductive = true;
-  spireTile.isSpire = true;
-  spireTile.charged = false;
-  spireTile.chargeTimer = 0;
-  return spireTile;
-}
-
 // ── Yellow Zone Ascent: storm spire + charged metal ────────────────────────
 // Seeds a central conductive spire on the plateau and electrified puddle patches
 // on the floor ring. StormAscentSystem drives the lightning-attraction and
@@ -645,7 +622,6 @@ export function seedStormAscent(gen, room, centerCol, centerRow, innerRadius, ou
     spire: spireTile,
     floorTiles,
     chargedObjects: [], // items on ground that got charged
-    strikeFlash: 0     // visual flash timer after lightning hits spire
   };
 }
 

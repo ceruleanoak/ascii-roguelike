@@ -211,19 +211,8 @@ export class SandstormSystem {
     if (!lss) return;
     let x, y;
 
-    // Spires draw the lightning: the yellow Ascent's storm spire, or the
-    // lightning rod standing in the electric Imbue Pool.
-    const room = this.game.currentRoom;
-    const storm = room?.ascentStorm;
-    const spire = storm?.spire ?? room?.lightningRod;
-    if (spire && !spire.destroyed) {
-      x = spire.position.x + GRID.CELL_SIZE / 2;
-      y = spire.position.y + GRID.CELL_SIZE / 2;
-      const strike = lss.scheduleStrike({ x, y, delay: 0.7, hitsPlayer: true, plane: 0 });
-      if (storm?.spire) this.game.stormAscentSystem?.redirectStrike(strike);
-      return;
-    }
-
+    // A Lightning Spire in the room catches the strike wherever it aims
+    // (LightningStrikeSystem → LightningSpire.findStrikeSpire).
     // Half the storm strikes aim at water when the room has any — rivers are
     // the show: a strike on the channel sends a visible electric cascade
     // downstream (ElectricitySystem). The rest stay fully random.

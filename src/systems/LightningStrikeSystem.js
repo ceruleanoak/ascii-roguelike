@@ -24,6 +24,7 @@ import { GRID } from '../game/GameConfig.js';
 import { planeOf, inSamePlane } from './PlaneSystem.js';
 import { MAX_PIPS } from './StatusEffects.js';
 import { absorbsZap } from './ImbuePoolSystem.js';
+import { findStrikeSpire, spireStruck } from './LightningSpire.js';
 
 const FLASH_DURATION = 0.12;
 const DEFAULT_RADIUS = GRID.CELL_SIZE * 1.2;
@@ -55,6 +56,20 @@ export class LightningStrikeSystem {
     // ever fire, rather than letting the visual render a strike that (after
     // the active-layer fix above) would otherwise now land in a dungeon.
     if (this.game?.player?.inDungeon) return null;
+
+    // A Lightning Spire catches every strike, whatever the source: the one
+    // nearest the strike's landing point takes it (LightningSpire.js). The
+    // telegraph is drawn on the spire, so the dodge window stays honest.
+    const spire = findStrikeSpire(this.game, x, y, plane);
+    if (spire) {
+      x = spire.position.x + GRID.CELL_SIZE / 2;
+      y = spire.position.y + GRID.CELL_SIZE / 2;
+      const sourceResolve = onResolve;
+      onResolve = (s) => {
+        spireStruck(this.game, spire);
+        sourceResolve?.(s);
+      };
+    }
 
     const strike = {
       x, y, radius, damage, hitsPlayer, plane, hutPlane, source, onResolve,

@@ -6,6 +6,7 @@ import { applyLavaContact } from './LavaContact.js';
 import { MAX_PIPS } from './StatusEffects.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { isInteriorActive, tagInteriorPlane } from './PlaneSystem.js';
+import { createLightningSpire } from './LightningSpire.js';
 
 const MAX_CHARGE_TIME = 0.7; // seconds to reach max throw distance
 const MIN_DIST = GRID.CELL_SIZE;       // 16px — tap distance
@@ -690,6 +691,16 @@ export class TrapSystem {
   _armTrap(t) {
     const game = this.game;
     const C = GRID.CELL_SIZE;
+    // The Lightning Rod lands as a real Lightning Spire on the active layer,
+    // not a trap entry — every spire rule (catch, charge) applies to it as-is.
+    if (t.trapData.placesLightningSpire) {
+      const spire = createLightningSpire(t.x - C / 2, t.y - C / 2);
+      spire.plane = t.plane;
+      game._activeBackgroundObjects().push(spire);
+      game.renderer?.markBackgroundDirty();
+      for (const p of createActivationBurst(t.x, t.y, t.trapData.color || '#ffffff')) game.particles.push(tagInteriorPlane(game, p));
+      return;
+    }
     const placedTrapItem = new Item(t.char, t.x - C / 2, t.y - C / 2);
     placedTrapItem.isPlaced = true;
     placedTrapItem.plane = t.plane;

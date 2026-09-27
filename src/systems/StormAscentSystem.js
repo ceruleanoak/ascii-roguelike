@@ -5,16 +5,17 @@
  * `room.zone === 'yellow'`: a central conductive spire sits on the plateau,
  * and the floor ring has sporadic electrified puddles.
  *
- * Lightning attraction: all lightning strikes (SandstormSystem, Lightning Sword,
- * Topaz Staff, enemy attacks) are redirected to the spire position. The bolt
- * renders traveling from sky → spire, and all effects happen on the spire.
+ * Lightning attraction is the shared Lightning Spire mechanic
+ * (LightningSpire.js): every strike, from any source, lands on the nearest
+ * spire — this room's, or a Lightning Rod the player placed.
  *
- * Charged metal: after a lightning strike at the spire, nearby conductive
- * objects (weapons on ground, slope tiles, metal boxes) become charged —
- * yellow blinking, damage + stun on contact. Electrified water also charges
- * conductive objects touching it. If the player is stunned while holding a
- * metal weapon, the weapon drops to the ground and becomes charged (can't
- * be retrieved while charged).
+ * Charged metal runs in every room, not just the Ascent, because any spire
+ * can be struck anywhere: after a strike on a spire, nearby conductive
+ * objects (the spire itself, weapons on ground, slope tiles, metal boxes)
+ * become charged — yellow blinking, damage + stun on contact. In the Ascent,
+ * electrified water also charges conductive objects touching it. If the
+ * player is stunned while holding a metal weapon, the weapon drops to the
+ * ground and becomes charged (can't be retrieved while charged).
  *
  * Metal detection: weaponSubtype in [sword, dagger, axe, hammer, spear,
  * pickaxe, scythe, flail, whip, bat, metal_bat] is conductive.
@@ -22,6 +23,7 @@
 
 import { GRID } from '../game/GameConfig.js';
 import { MAX_PIPS } from './StatusEffects.js';
+import { absorbsZap } from './ImbuePoolSystem.js';
 
 // Metal weapon subtypes that conduct electricity
 const METAL_SUBTYPES = new Set([
@@ -32,7 +34,6 @@ const METAL_SUBTYPES = new Set([
 const CHARGE_DURATION = 4;     // seconds a charged object stays charged
 const CHARGE_STUN_DURATION = 2; // seconds of zap stun from charged contact
 const CHARGE_DAMAGE = 3;
-const STRIKE_FLASH_DURATION = 0.3;
 
 export class StormAscentSystem {
   constructor(game) {
@@ -43,42 +44,18 @@ export class StormAscentSystem {
 
   update(dt) {
     const room = this.game.currentRoom;
-    if (!room || !this.isActive(room)) return;
-    const storm = room.ascentStorm;
-    if (!storm) return;
-
-    // Decrement strike flash
-    if (storm.strikeFlash > 0) storm.strikeFlash -= dt;
+    if (!room) return;
+    const storm = room.ascentStorm ?? null;
 
     // Tick charged object timers
     this._tickCharges(storm, dt);
 
-    // Electrified water charges conductive objects touching it
-    this._chargeFromWater(storm, room);
+    // Electrified water charges conductive objects touching it (Ascent only)
+    if (storm) this._chargeFromWater(storm, room);
 
-    // Check player contact with charged objects
-    this._checkPlayerContact(storm, room);
-
-    // Check enemy contact with charged objects
-    this._checkEnemyContact(storm, room);
-  }
-
-  /** Called by SandstormSystem/LightningStrikeSystem to redirect strike to spire. */
-  redirectStrike(strike) {
-    const room = this.game.currentRoom;
-    if (!room?.ascentStorm?.spire) return false;
-    const spire = room.ascentStorm.spire;
-    strike.x = spire.position.x + GRID.CELL_SIZE / 2;
-    strike.y = spire.position.y + GRID.CELL_SIZE / 2;
-    // Flash and charge ride the IMPACT hook, not schedule time. The strike
-    // carries a 0.7s telegraph that is the player's whole dodge window —
-    // energising the metal while the warning is still drawn makes the tell a
-    // lie, and burns 0.7s off every CHARGE_DURATION besides.
-    strike.onResolve = () => {
-      room.ascentStorm.strikeFlash = STRIKE_FLASH_DURATION;
-      this._chargeNearby(spire, room);
-    };
-    return true;
+    // Contact with charged objects — any room, since any spire can be struck
+    this._checkPlayerContact();
+    this._checkEnemyContact();
   }
 
   /** Mark an item on the ground as charged (e.g. dropped by stunned player). */
@@ -90,10 +67,16 @@ export class StormAscentSystem {
     if (storm) storm.chargedObjects.push(item);
   }
 
-  _chargeNearby(spire, room) {
+  /**
+   * A strike landed on `spire` (LightningSpire.spireStruck): charge every
+   * conductive object within three cells, the spire included. Water is left
+   * out — it already carries the strike as an electrified cascade
+   * (ElectricitySystem.seedNear).
+   */
+  chargeNearby(spire) {
     const radius = GRID.CELL_SIZE * 3;
-    for (const obj of room.backgroundObjects) {
-      if (obj.destroyed) continue;
+    for (const obj of this.game._activeBackgroundObjects()) {
+      if (obj.destroyed || obj.isWater?.()) continue;
       const dx = obj.position.x - spire.position.x;
       const dy = obj.position.y - spire.position.y;
       if (Math.sqrt(dx * dx + dy * dy) <= radius) {
@@ -121,7 +104,7 @@ export class StormAscentSystem {
 
   _tickCharges(storm, dt) {
     const toRemove = [];
-    for (const obj of storm.chargedObjects) {
+    for (const obj of storm?.chargedObjects ?? []) {
       obj.chargeTimer -= dt;
       if (obj.chargeTimer <= 0) {
         obj.charged = false;
@@ -134,7 +117,7 @@ export class StormAscentSystem {
     }
 
     // Also tick background objects
-    for (const obj of this.game.currentRoom?.backgroundObjects || []) {
+    for (const obj of this.game._activeBackgroundObjects()) {
       if (obj.charged && obj.chargeTimer !== undefined) {
         obj.chargeTimer -= dt;
         if (obj.chargeTimer <= 0) this._setCharged(obj, false);
@@ -156,11 +139,11 @@ export class StormAscentSystem {
     this.game.renderer?.markBackgroundDirty();
   }
 
-  _checkPlayerContact(storm, room) {
+  _checkPlayerContact() {
     const player = this.game.player;
     if (!player || player.invulnerabilityTimer > 0) return;
 
-    for (const obj of room.backgroundObjects) {
+    for (const obj of this.game._activeBackgroundObjects()) {
       if (obj.destroyed || !obj.charged) continue;
       const dx = player.position.x - obj.position.x;
       const dy = player.position.y - obj.position.y;
@@ -183,11 +166,11 @@ export class StormAscentSystem {
     }
   }
 
-  _checkEnemyContact(storm, room) {
-    const enemies = room.enemies || [];
-    for (const enemy of enemies) {
+  _checkEnemyContact() {
+    const bg = this.game._activeBackgroundObjects();
+    for (const enemy of this.game._activeEnemies()) {
       if (enemy.hp <= 0 || enemy.collapsed) continue;
-      for (const obj of room.backgroundObjects) {
+      for (const obj of bg) {
         if (obj.destroyed || !obj.charged) continue;
         const dx = enemy.position.x - obj.position.x;
         const dy = enemy.position.y - obj.position.y;
@@ -196,6 +179,8 @@ export class StormAscentSystem {
           // the post-hit iframes inside Enemy.takeDamage are what actually
           // paces this. Unchecked, that made a standing enemy spray a damage
           // number per frame for damage it wasn't taking ([damage-number-desync]).
+          // An Imbue-capable enemy takes the current as its electric Imbue.
+          if (absorbsZap(enemy)) break;
           const hit = enemy.takeDamage(CHARGE_DAMAGE);
           if (hit !== false) {
             // Contact with a charged object is full-strength current: pip 3.
