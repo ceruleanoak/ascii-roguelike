@@ -392,6 +392,10 @@ export class ElectricitySystem {
     if (game.player) bodies.push(game.player);
     for (const body of bodies) {
       if (body.isDying || body.hp <= 0) continue;
+      // Rubber Boots: the same waterImmunityTimer that gates electrified
+      // water in PhysicsSystem also covers standing on live slime. Only
+      // ground contact — every other electric source still lands.
+      if (body === game.player && body.waterImmunityTimer > 0) continue;
       const bodyPlane = planeOf(body);
       for (const p of live) {
         if ((p.plane ?? 0) !== bodyPlane || !p.isEntityOnPuddle(body)) continue;
