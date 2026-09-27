@@ -207,7 +207,7 @@ export class ExploreRenderer {
     }
 
     // Draw border after collision map so zone color overwrites the gray perimeter cells.
-    this.renderer.drawBorder(borderExits, game.currentRoom.borderColor);
+    this.renderer.drawBorder(borderExits, game.currentRoom.borderColor, game.zoneSystem.getStagingStripeColor());
 
     // Draw recipe sign FIRST (under all other background objects)
     if (game.currentRoom.recipeSign) {

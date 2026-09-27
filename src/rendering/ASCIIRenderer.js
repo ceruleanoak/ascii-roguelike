@@ -294,22 +294,25 @@ export class ASCIIRenderer {
     this.fgCtx.restore();
   }
 
-  // Draw border (grid-based, background layer)
-  drawBorder(exits = { north: false, south: false, east: false, west: false }, borderColor = COLORS.BORDER) {
+  // Draw border (grid-based, background layer). An optional stripeColor
+  // alternates with borderColor cell-by-cell around the perimeter — used in
+  // staging rooms to show the zone the player is drifting toward.
+  drawBorder(exits = { north: false, south: false, east: false, west: false }, borderColor = COLORS.BORDER, stripeColor = null) {
     const centerX = Math.floor(GRID.COLS / 2);
     const centerY = Math.floor(GRID.ROWS / 2);
     const cs = GRID.CELL_SIZE;
     const extra = 2; // extra pixels to widen each exit gap on each side
+    const colorAt = (x, y) => (stripeColor && (x + y) % 2 === 1) ? stripeColor : borderColor;
 
     // Top and bottom borders
     for (let x = 0; x < GRID.COLS; x++) {
       // Create gap in top border for north exit
       if (!(exits.north && x === centerX)) {
-        this.drawFilledCell(x, 0, borderColor);
+        this.drawFilledCell(x, 0, colorAt(x, 0));
       }
       // Create gap in bottom border for south exit
       if (!(exits.south && x === centerX)) {
-        this.drawFilledCell(x, GRID.ROWS - 1, borderColor);
+        this.drawFilledCell(x, GRID.ROWS - 1, colorAt(x, GRID.ROWS - 1));
       }
     }
 
@@ -317,11 +320,11 @@ export class ASCIIRenderer {
     for (let y = 0; y < GRID.ROWS; y++) {
       // Create gap in left border for west exit
       if (!(exits.west && y === centerY)) {
-        this.drawFilledCell(0, y, borderColor);
+        this.drawFilledCell(0, y, colorAt(0, y));
       }
       // Create gap in right border for east exit
       if (!(exits.east && y === centerY)) {
-        this.drawFilledCell(GRID.COLS - 1, y, borderColor);
+        this.drawFilledCell(GRID.COLS - 1, y, colorAt(GRID.COLS - 1, y));
       }
     }
 

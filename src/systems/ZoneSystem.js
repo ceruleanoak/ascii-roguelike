@@ -236,6 +236,15 @@ export class ZoneSystem {
     };
   }
 
+  // Border stripe color for staging rooms: the 1st/2nd consecutive exit toward
+  // another zone stripes the perimeter with that zone's border color, in step
+  // with the background blend. Null outside a partial progression.
+  getStagingStripeColor() {
+    const progressionBlend = this.getProgressionBlend();
+    if (!progressionBlend || progressionBlend.blendPercent >= 1) return null;
+    return ZONES[progressionBlend.targetZone].borderColor;
+  }
+
   incrementRoomCount() {
     this.roomsSinceRest++;
 
