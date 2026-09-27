@@ -47,6 +47,7 @@ import {
   getStunDroppedItems,
   isEnemyFrozen
 } from '../systems/EnemyStatusEffects.js';
+import { absorbsZap } from '../systems/ImbuePoolSystem.js';
 
 // ─── Enemy AI Debug Logger ─────────────────────────────────────────────────
 // Toggle in browser console: window.ENEMY_AI_DEBUG = true
@@ -506,6 +507,8 @@ export class Enemy {
   // delegating method so every existing `enemy.applyStatusEffect(...)` call
   // site across the codebase is unaffected.
   applyStatusEffect(effect, duration = 3.0, pips = null) {
+    // Electric weapon hits: the zap becomes the electric Imbue (the hit's own damage still lands).
+    if (effect === 'zap' && absorbsZap(this)) return;
     applyStatusEffectImpl(this, effect, duration, pips);
   }
 

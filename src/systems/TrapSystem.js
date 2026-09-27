@@ -1,7 +1,8 @@
 import { Item } from '../entities/Item.js';
 import { Puddle } from '../entities/Puddle.js';
 import { createActivationBurst, createEmberBurst, createIceBurst } from '../entities/Particle.js';
-import { GRID } from '../game/GameConfig.js';
+import { GRID, BACKGROUND_OBJECT_VARIANTS } from '../game/GameConfig.js';
+import { applyLavaContact } from './LavaContact.js';
 import { MAX_PIPS } from './StatusEffects.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { isInteriorActive, tagInteriorPlane } from './PlaneSystem.js';
@@ -1309,6 +1310,9 @@ export class TrapSystem {
     const game = this.game;
     if (!game.puddles?.length || !game.player) return;
     const playerPlane = game.player.plane ?? 0;
+    // Bodies standing on any lava stamp this frame — collected so overlapping
+    // stamps still burn each body once (LavaContact runs its own 1s tick).
+    const onLava = new Set();
 
     for (let i = game.puddles.length - 1; i >= 0; i--) {
       const puddle = game.puddles[i];
@@ -1328,9 +1332,24 @@ export class TrapSystem {
       switch (puddle.type) {
         case 'fire': this._applyFirePuddle(puddle, playerPlane); break;
         case 'ice':  this._applyIcePuddle(puddle, playerPlane);  break;
+        case 'lava': this._collectLavaPuddle(puddle, playerPlane, onLava); break;
         // slimeTrail contact effects are applied in main.js (see updateExploreState).
         // Future types added here
       }
+    }
+
+    // A lava stamp (fire-imbued Giant Slime trail) is exactly a lava tile.
+    // A lethal tick drops player hp to 0, which the explore death check catches.
+    const lavaDamage = BACKGROUND_OBJECT_VARIANTS.lava.damage;
+    for (const body of onLava) applyLavaContact(game, body, lavaDamage, deltaTime);
+  }
+
+  _collectLavaPuddle(puddle, playerPlane, onLava) {
+    const game = this.game;
+    if (puddle.isEntityOnPuddle(game.player)) onLava.add(game.player);
+    for (const enemy of (game.currentRoom?.enemies ?? [])) {
+      if ((enemy.plane ?? 0) !== playerPlane) continue;
+      if (puddle.isEntityOnPuddle(enemy)) onLava.add(enemy);
     }
   }
 

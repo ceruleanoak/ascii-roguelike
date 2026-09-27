@@ -23,6 +23,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { planeOf, inSamePlane } from './PlaneSystem.js';
 import { MAX_PIPS } from './StatusEffects.js';
+import { absorbsZap } from './ImbuePoolSystem.js';
 
 const FLASH_DURATION = 0.12;
 const DEFAULT_RADIUS = GRID.CELL_SIZE * 1.2;
@@ -109,6 +110,8 @@ export class LightningStrikeSystem {
       const dx = ex - s.x;
       const dy = ey - s.y;
       if (Math.sqrt(dx * dx + dy * dy) <= s.radius) {
+        // An Imbue-capable enemy takes the bolt as its electric Imbue instead.
+        if (absorbsZap(enemy)) continue;
         enemy.takeDamage(s.damage);
         game.combatSystem.createDamageNumber(s.damage, enemy.position.x, enemy.position.y, '#ffff88');
       }

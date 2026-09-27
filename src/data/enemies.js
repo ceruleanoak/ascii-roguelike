@@ -508,6 +508,8 @@ export const ENEMIES = {
     elementalAffinity: { immunity: ['poison'], weakness: { freeze: 2.0, blade: 2.0 } },
     freezePermanent: true,
     wetDot: true,  // wet pips are damage over time (EnemyStatusEffects)
+    // Imbue: takes electric/ice/fire from its surroundings for `duration` s (ImbuePoolSystem).
+    imbue: { enabled: true, duration: 10.0 },
     affinities: ['goo'],
     sfx: { hit: 'goo_hit', death: ['goo_death_1', 'goo_death_2'] },
     tier: 'boss'

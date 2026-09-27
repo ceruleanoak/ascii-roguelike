@@ -554,8 +554,11 @@ export class PhysicsSystem {
       entity.velocity.vy += py * accel * deltaTime;
     }
 
-    // Float (Floating Boots or flying enemies) — immune to all liquid and mud effects
-    const hasFloat = (entity.floatTimer > 0) || (entity.data?.float);
+    // Float (Floating Boots or flying enemies) — immune to all liquid and mud effects.
+    // A leap in the air (LeapAttackMechanic) counts too: the lerped body sweeps
+    // over liquid it never touches, and a slime leaping into the lava Imbue Pool
+    // must not burn before it lands and takes the fire Imbue.
+    const hasFloat = (entity.floatTimer > 0) || (entity.data?.float) || entity.leapAirborneActive;
     if (hasFloat) {
       inLiquid = false;
       inDeepWaterTile = false;

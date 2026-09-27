@@ -522,15 +522,12 @@ export function seedFrozenAscentCycle(gen, room, centerCol, centerRow, innerRadi
   };
 }
 
-// ── Yellow Zone Ascent: storm spire + charged metal ────────────────────────
-// Seeds a central conductive spire on the plateau and electrified puddle patches
-// on the floor ring. StormAscentSystem drives the lightning-attraction and
-// charged-metal cycle.
-export function seedStormAscent(gen, room, centerCol, centerRow, innerRadius, outerRadius) {
-  const C = GRID.CELL_SIZE;
-
-  // Central spire — conductive, attracts all lightning
-  const spireTile = new BackgroundObject('\u2B22', centerCol * C, centerRow * C); // ⬢ hexagon
+// The Lightning Spire: an indestructible conductive rod that every storm strike
+// in its room lands on (SandstormSystem._strikeRandom). Shared by the yellow
+// Ascent's plateau and the yellow miniboss room's electric Imbue Pool, so a
+// player who has learned the spire in one reads it in the other.
+function createLightningSpire(x, y) {
+  const spireTile = new BackgroundObject('\u2B22', x, y); // ⬢ hexagon
   spireTile.data = {
     name: 'Lightning Spire',
     color: '#ccccaa',
@@ -546,6 +543,18 @@ export function seedStormAscent(gen, room, centerCol, centerRow, innerRadius, ou
   spireTile.isSpire = true;
   spireTile.charged = false;
   spireTile.chargeTimer = 0;
+  return spireTile;
+}
+
+// ── Yellow Zone Ascent: storm spire + charged metal ────────────────────────
+// Seeds a central conductive spire on the plateau and electrified puddle patches
+// on the floor ring. StormAscentSystem drives the lightning-attraction and
+// charged-metal cycle.
+export function seedStormAscent(gen, room, centerCol, centerRow, innerRadius, outerRadius) {
+  const C = GRID.CELL_SIZE;
+
+  // Central spire — conductive, attracts all lightning
+  const spireTile = createLightningSpire(centerCol * C, centerRow * C);
   room.backgroundObjects.push(spireTile);
 
   // Slope tiles: mark as conductive (metal grating)
@@ -1788,6 +1797,9 @@ export function spawnMinibossOrFallback(gen, room) {
       spawnCentipedeGunDrop(gen, room);
     } else {
       const encounter = BOSS_ENCOUNTERS[encounterId];
+      // Yellow's Giant Slime fights beside its three Imbue Pools. Seeded before
+      // the spawn so the pool cells are settled terrain when the boss arrives.
+      if (encounterId === 'giant_slime' && room.zone === 'yellow') seedImbuePools(room);
       if (encounter) spawnBossEncounter(gen, room, encounter);
     }
     return;
@@ -1817,6 +1829,55 @@ export function spawnMinibossOrFallback(gen, room) {
     enemy.setBackgroundObjects(room.backgroundObjects);
     gen.addEnemyToRoom(room, enemy);
   }
+}
+
+// ── Imbue Pools (yellow miniboss room) ─────────────────────────────────────
+// Three 3×3 pools in a triangle inside the B template's 10×10 clearing
+// (cols/rows 10–19, boss at the centre): electric water with a Lightning Spire
+// at the top, ice at bottom-left, lava at bottom-right. The room is always a
+// thunderstorm (room.forceLightning) and every strike lands on the spire, so
+// the electric pool is live on a cadence. ImbuePoolSystem drives the fight.
+const IMBUE_POOL_LAYOUT = [
+  { element: 'electric', col: 15, row: 11 },
+  { element: 'ice',      col: 11, row: 18 },
+  { element: 'fire',     col: 19, row: 18 }
+];
+
+export function seedImbuePools(room) {
+  const C = GRID.CELL_SIZE;
+  room.imbuePools = [];
+  for (const { element, col, row } of IMBUE_POOL_LAYOUT) {
+    const cells = [];
+    for (let dc = -1; dc <= 1; dc++) {
+      for (let dr = -1; dr <= 1; dr++) cells.push({ col: col + dc, row: row + dr });
+    }
+    const inPool = (o) => cells.some(c => Math.floor(o.position.x / C) === c.col && Math.floor(o.position.y / C) === c.row);
+    room.backgroundObjects = room.backgroundObjects.filter(o => !inPool(o));
+    for (const c of cells) {
+      if (room.collisionMap?.[c.row]) room.collisionMap[c.row][c.col] = false;
+    }
+
+    const tiles = cells.map(c => {
+      const tile = BackgroundObject.createVariant(element === 'fire' ? 'lava' : 'water', c.col * C, c.row * C);
+      if (element === 'electric') tile.conductive = true;
+      if (element === 'ice') tile.setWaterState('frozen', Infinity);
+      room.backgroundObjects.push(tile);
+      return tile;
+    });
+
+    if (element === 'electric') {
+      room.lightningRod = createLightningSpire(col * C, row * C);
+      room.backgroundObjects.push(room.lightningRod);
+    }
+
+    room.imbuePools.push({
+      element,
+      tiles,
+      center: { x: col * C, y: row * C }, // top-left of the centre cell — same space as enemy.position
+      brokenTimer: 0                     // ice only: > 0 while the broken ice reforms
+    });
+  }
+  room.forceLightning = true;
 }
 
 /**

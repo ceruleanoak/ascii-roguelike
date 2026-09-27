@@ -59,6 +59,7 @@ import { GRID } from '../game/GameConfig.js';
 import { Puddle } from '../entities/Puddle.js';
 import { MAX_PIPS } from './StatusEffects.js';
 import { inSamePlane, planeOf, isInteriorActive } from './PlaneSystem.js';
+import { absorbsZap } from './ImbuePoolSystem.js';
 
 const SPREAD_INTERVAL = 0.08; // seconds per ring (~12.5 tiles/sec down a channel)
 const TILE_DURATION = 2.5;    // seconds a tile stays electrified after the front passes
@@ -302,6 +303,8 @@ export class ElectricitySystem {
     if (entity === p && p.stingrayMantle) return;
     // A zapped enemy isn't shocked by the current it generates.
     if (current?.source === entity) return;
+    // An Imbue-capable enemy takes the current as its electric Imbue instead.
+    if (absorbsZap(entity)) return;
     // Enemies route through affinity auto-immunity (zap → 'electric').
     if (entity.shouldApplyStatusEffect && !entity.shouldApplyStatusEffect('zap')) return;
     const pips = current?.pips ?? MAX_PIPS;

@@ -139,6 +139,11 @@ export class EnemyUpdateSystem {
       // shouldn't slime anything it passes over.
       : enemies.filter(e => e.data?.affinities?.includes('goo') && !e.leapWindupActive && !e.leapAirborneActive);
     for (const slime of slimeEnemies) {
+      // An imbued slime's element replaces its goo on contact (ImbuePoolSystem).
+      if (slime.imbue) {
+        this.game.imbuePoolSystem.applyImbuedContact(slime, player, enemies);
+        continue;
+      }
       // A commanded slime's goo is a weapon against the unsworn, not against
       // its commander — skip the player branch for warband members.
       if (!slime.commanded) {
@@ -382,18 +387,19 @@ export class EnemyUpdateSystem {
 
     if (updateResult.shouldDropSlimeTrail) {
       const t = updateResult.shouldDropSlimeTrail;
-      game._dropSlimeTrail(t.x, t.y, t.plane);
+      const dropTrail = (x, y) => this._dropEnemySlimeTrail(enemy, x, y, t.plane);
+      dropTrail(t.x, t.y);
       if (enemy.char === 'M') {
         const RING_RADIUS = GRID.CELL_SIZE * 0.4;
         for (let r = 0; r < 4; r++) {
           const a = (r / 4) * Math.PI * 2;
-          game._dropSlimeTrail(t.x + Math.cos(a) * RING_RADIUS, t.y + Math.sin(a) * RING_RADIUS, t.plane);
+          dropTrail(t.x + Math.cos(a) * RING_RADIUS, t.y + Math.sin(a) * RING_RADIUS);
         }
       }
     }
 
     if (updateResult.shouldLeapLand && updateResult.leapLandData) {
-      this._handleLeapLand(player, updateResult.leapLandData);
+      this._handleLeapLand(player, updateResult.leapLandData, enemy);
     }
 
     if (updateResult.shouldExplode && updateResult.explodeData) {
@@ -473,7 +479,14 @@ export class EnemyUpdateSystem {
     }
   }
 
-  _handleLeapLand(player, ld) {
+  // One trail stamp. Imbue-capable slimes route through ImbuePoolSystem, which
+  // turns the stamp live, lava, or nothing depending on the active Imbue.
+  _dropEnemySlimeTrail(enemy, x, y, plane) {
+    if (enemy?.data?.imbue?.enabled) this.game.imbuePoolSystem.dropTrail(enemy, x, y, plane);
+    else this.game._dropSlimeTrail(x, y, plane);
+  }
+
+  _handleLeapLand(player, ld, enemy) {
     const game = this.game;
     const cfg = ld.cfg;
     const hitEntities = new Set();
@@ -493,12 +506,14 @@ export class EnemyUpdateSystem {
       speed: cfg.shockwaveSpeed, damage: cfg.shockwaveDamage,
       knockback: cfg.shockwaveKnockback, hitEntities
     });
+    // Pool landing first, so the ring below already carries the new Imbue.
+    game.imbuePoolSystem.onLeapLand(enemy, ld);
     if (cfg.trailDropOnLanding) {
-      game._dropSlimeTrail(ld.x, ld.y, ld.plane);
+      this._dropEnemySlimeTrail(enemy, ld.x, ld.y, ld.plane);
       const RING_RADIUS = GRID.CELL_SIZE * 1.4;
       for (let r = 0; r < 10; r++) {
         const a = (r / 10) * Math.PI * 2;
-        game._dropSlimeTrail(ld.x + Math.cos(a) * RING_RADIUS, ld.y + Math.sin(a) * RING_RADIUS, ld.plane);
+        this._dropEnemySlimeTrail(enemy, ld.x + Math.cos(a) * RING_RADIUS, ld.y + Math.sin(a) * RING_RADIUS, ld.plane);
       }
     }
     game.audioSystem?.playSFX('goo_hit');

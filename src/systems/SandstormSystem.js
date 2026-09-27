@@ -79,7 +79,10 @@ export class SandstormSystem {
     // Lightning is a combat hazard — withhold it from windThemed-only rooms
     // (e.g. Oasis) so the neutral "no enemies" contract holds; true yellow
     // EXPLORE rooms still get the full storm.
-    this.lightningEnabled = this.activeRoom?.zone === 'yellow' && Math.random() < LIGHTNING_ROOM_CHANCE;
+    // A room can force the storm on (the Giant Slime's Imbue Pool room is
+    // always a thunderstorm — roomFeatures.seedImbuePools).
+    this.lightningEnabled = !!this.activeRoom?.forceLightning
+      || (this.activeRoom?.zone === 'yellow' && Math.random() < LIGHTNING_ROOM_CHANCE);
     this.lightningTimer = this.lightningEnabled
       ? (LIGHTNING_MIN + Math.random() * (LIGHTNING_MAX - LIGHTNING_MIN))
       : 0;
@@ -208,13 +211,16 @@ export class SandstormSystem {
     if (!lss) return;
     let x, y;
 
-    // Yellow Ascent: redirect lightning to the storm spire
-    const storm = this.game.currentRoom?.ascentStorm;
-    if (storm?.spire && !storm.spire.destroyed) {
-      x = storm.spire.position.x + GRID.CELL_SIZE / 2;
-      y = storm.spire.position.y + GRID.CELL_SIZE / 2;
+    // Spires draw the lightning: the yellow Ascent's storm spire, or the
+    // lightning rod standing in the electric Imbue Pool.
+    const room = this.game.currentRoom;
+    const storm = room?.ascentStorm;
+    const spire = storm?.spire ?? room?.lightningRod;
+    if (spire && !spire.destroyed) {
+      x = spire.position.x + GRID.CELL_SIZE / 2;
+      y = spire.position.y + GRID.CELL_SIZE / 2;
       const strike = lss.scheduleStrike({ x, y, delay: 0.7, hitsPlayer: true, plane: 0 });
-      this.game.stormAscentSystem?.redirectStrike(strike);
+      if (storm?.spire) this.game.stormAscentSystem?.redirectStrike(strike);
       return;
     }
 

@@ -30,6 +30,10 @@ export const LeapAttackMechanic = {
     enemy.leapTargetX = 0;
     enemy.leapTargetY = 0;
     enemy.leapArcLift = 0;
+    // Imbue Pools (ImbuePoolSystem): the pool a forced leap should aim at
+    // instead of the player, and the pool the leap in flight is aimed at.
+    enemy.leapPoolTarget = null;
+    enemy.leapPool = null;
   },
 
   // Early-phase update: cooldown tick + windup/airborne handling.
@@ -58,6 +62,8 @@ export const LeapAttackMechanic = {
         enemy.position.x = enemy.leapTargetX;
         enemy.position.y = enemy.leapTargetY;
         enemy.leapCooldown = cfg.cooldown;
+        const landedPool = enemy.leapPool;
+        enemy.leapPool = null;
         return {
           suspend: true,
           result: {
@@ -67,7 +73,8 @@ export const LeapAttackMechanic = {
               x: enemy.leapTargetX + GRID.CELL_SIZE / 2,
               y: enemy.leapTargetY + GRID.CELL_SIZE / 2,
               cfg,
-              plane: enemy.plane ?? 0
+              plane: enemy.plane ?? 0,
+              pool: landedPool
             }
           }
         };
@@ -128,8 +135,14 @@ export const LeapAttackMechanic = {
     const hpFraction = enemy.maxHp > 0 ? Math.max(0, Math.min(1, enemy.hp / enemy.maxHp)) : 1;
     enemy.leapWindupActive = true;
     enemy.leapWindupTimer = cfg.windupTime * (0.5 + 0.5 * hpFraction);
-    enemy.leapTargetX = enemy.target.position.x;
-    enemy.leapTargetY = enemy.target.position.y;
+    // A forced leap from an un-imbued slime may aim at an Imbue Pool instead
+    // (leapPoolTarget, set by ImbuePoolSystem) — otherwise at the player.
+    const pool = forced ? enemy.leapPoolTarget : null;
+    const target = pool ? pool.center : enemy.target.position;
+    enemy.leapPool = pool ?? null;
+    enemy.leapPoolTarget = null;
+    enemy.leapTargetX = target.x;
+    enemy.leapTargetY = target.y;
     enemy.velocity.vx = 0;
     enemy.velocity.vy = 0;
     if (enemy.targetVelocity) { enemy.targetVelocity.vx = 0; enemy.targetVelocity.vy = 0; }

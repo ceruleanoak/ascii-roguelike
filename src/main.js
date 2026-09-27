@@ -70,6 +70,7 @@ import { WellSystem } from './systems/WellSystem.js';
 import { LavaAscentSystem } from './systems/LavaAscentSystem.js';
 import { IceAscentSystem } from './systems/IceAscentSystem.js';
 import { StormAscentSystem } from './systems/StormAscentSystem.js';
+import { ImbuePoolSystem } from './systems/ImbuePoolSystem.js';
 import { MistAscentSystem } from './systems/MistAscentSystem.js';
 import { HuntingSystem } from './systems/HuntingSystem.js';
 import { WarpSystem } from './systems/WarpSystem.js';
@@ -240,6 +241,7 @@ class Game {
     this.lavaAscentSystem = new LavaAscentSystem(this);
     this.iceAscentSystem = new IceAscentSystem(this);
     this.stormAscentSystem = new StormAscentSystem(this);
+    this.imbuePoolSystem = new ImbuePoolSystem(this);
     this.mistAscentSystem = new MistAscentSystem(this);
     this.huntingSystem = new HuntingSystem(this);
     this.warpSystem = new WarpSystem(this);
@@ -2258,10 +2260,11 @@ class Game {
     // Tag with the active interior so the render path filters surface vs interior puddles.
     tagInteriorPlane(this, newPuddle);
     this.puddles.push(newPuddle);
+    return newPuddle;
   }
 
   _dropSlimeTrail(x, y, plane) {
-    this._dropTrailTile(x, y, 'slimeTrail', plane ?? 0, 7.0);
+    return this._dropTrailTile(x, y, 'slimeTrail', plane ?? 0, 7.0);
   }
 
   // Stamp a disk of trail tiles for an enemy's fire/ice trail.
@@ -2734,6 +2737,10 @@ class Game {
 
     // Drive the yellow-zone Ascent storm spire + charged metal cycle
     this.stormAscentSystem.update(deltaTime);
+
+    // Imbue timers, ice-pool reform, and the Giant Slime's pool pick.
+    // rest-parity: absent because Imbue Pools and Imbue-capable enemies exist only in EXPLORE rooms
+    this.imbuePoolSystem.update(deltaTime);
 
     // Drive room-stillness timer + huntable game (moose/rabbit) lifecycle
     this.huntingSystem.update(deltaTime);
