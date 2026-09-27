@@ -128,7 +128,11 @@ export class LightningStrikeSystem {
 
     // Strike on (or near) water: charge the body of water — the cascade
     // spreads tile-to-tile from the impact point at a fixed rate.
+    // Strikes land on the surface plane: seedNear also reaches slime trail
+    // stamps (plane 0 default), and the strike sets off any placed trap in
+    // its blast radius (TrapSystem electric trigger).
     game.electricitySystem?.seedNear(s.x, s.y, s.radius, { initialCharge: s.electricityCharge, hutPlane: s.hutPlane });
+    game.trapSystem?.triggerElectricAt(s.x, s.y, s.radius, 0);
 
     // Spark burst — simple particles with gravity, parabolic arc
     const sparks = createLightningSparks(s.x, s.y);

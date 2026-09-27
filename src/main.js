@@ -2833,6 +2833,8 @@ class Game {
     // Update placed traps (sets this.activeNoiseSource for this frame)
     this.updatePlacedTraps(deltaTime);
     this.trapSystem.checkWeaponTriggers();
+    // rest-parity: absent because REST has no placed traps, water cascades or lightning.
+    this.trapSystem.checkElectricTriggers();
     this.trapSystem.updatePuddles(deltaTime);
     this.wireSystem.update(deltaTime);
     this.lightningStrikeSystem.update(deltaTime);

@@ -1,4 +1,4 @@
-import { GRID } from '../game/GameConfig.js';
+import { GRID, WATER_COLORS } from '../game/GameConfig.js';
 
 // Persistent floor-level area that applies effects to entities standing on it.
 // Designed to be extended for any fluid/hazard type: slime, lava, mud, water, poison, etc.
@@ -28,6 +28,16 @@ export class Puddle {
     this.fillColor = visual.fillColor;
     this.char = visual.char;
 
+    // Electric current — conductive types only (Puddle.CONDUCTIVE_TYPES).
+    // Mirrors a water tile's 'electrified' state: ElectricitySystem's cascade
+    // sets it, the timer decays it, and `electricCurrent` carries the imbued
+    // current ({ pips, source }) the way BackgroundObject.electricCurrent does,
+    // or null for full-strength current.
+    this.electrifiedTimer = 0;
+    this.electricCurrent = null;
+    this._electricBlinkTimer = 0;
+    this._electricBlinkOn = false;
+
     // Pre-seeded scatter positions for stable per-frame rendering
     this.scatterPoints = [];
     const count = Math.min(Math.floor(Math.PI * radius * radius / 220), 28);
@@ -39,9 +49,50 @@ export class Puddle {
   }
 
   update(deltaTime) {
+    this._updateElectrified(deltaTime);
     if (this.lifetime === Infinity) return;
     this.age += deltaTime;
     if (this.age >= this.lifetime) this.expired = true;
+  }
+
+  isConductive() {
+    return Puddle.CONDUCTIVE_TYPES.has(this.type);
+  }
+
+  isElectrified() {
+    return this.electrifiedTimer > 0;
+  }
+
+  // Charge this puddle for `duration` seconds. Only conductive types take it.
+  electrify(duration, electricCurrent = null) {
+    if (!this.isConductive()) return;
+    this.electrifiedTimer = duration;
+    this.electricCurrent = electricCurrent;
+  }
+
+  // Electrified blink: the same yellow/base alternation at the same 0.15s
+  // cadence as an electrified water tile (BackgroundObject.update), so live
+  // slime reads as the same hazard as live water. Drives fillColor/color
+  // directly, so every drawPuddles pass (surface + interior PiP) shows it
+  // with no renderer change.
+  _updateElectrified(deltaTime) {
+    if (this.electrifiedTimer <= 0) return;
+    const visual = Puddle.VISUALS[this.type] ?? Puddle.VISUALS.slime;
+    this.electrifiedTimer -= deltaTime;
+    if (this.electrifiedTimer <= 0) {
+      this.electrifiedTimer = 0;
+      this.electricCurrent = null;
+      this.fillColor = visual.fillColor;
+      this.color = visual.color;
+      return;
+    }
+    this._electricBlinkTimer -= deltaTime;
+    if (this._electricBlinkTimer <= 0) {
+      this._electricBlinkTimer = 0.15;
+      this._electricBlinkOn = !this._electricBlinkOn;
+    }
+    this.fillColor = this._electricBlinkOn ? WATER_COLORS.electrified : visual.fillColor;
+    this.color = this._electricBlinkOn ? WATER_COLORS.electrified : visual.color;
   }
 
   isEntityOnPuddle(entity) {
@@ -58,6 +109,12 @@ export class Puddle {
     return (dx * dx + dy * dy) <= this.radius * this.radius;
   }
 }
+
+// Puddle types that conduct electricity the way water does (ElectricitySystem
+// cascade). Slime trails only: a sticky, wet film. Fire/ice/lava are not
+// conductors here — ice already blocks the water cascade, and fire/lava would
+// need their own rules.
+Puddle.CONDUCTIVE_TYPES = new Set(['slimeTrail']);
 
 // Visual definition per type. Add new types here as they are implemented.
 Puddle.VISUALS = {

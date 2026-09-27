@@ -698,6 +698,7 @@ export class TrapSystem {
       activeDuration: t.trapData.activeDuration != null ? t.trapData.activeDuration : Infinity,
       affectedEnemies: new Set(),
       interior: t.interior === true,
+      electricTriggered: false, // set by triggerElectricAt, resolved in checkElectricTriggers
     };
     if (t.trapData.remoteTrigger) {
       entry.blinkTimer = 0;
@@ -725,6 +726,7 @@ export class TrapSystem {
       affectedEnemies: new Set(),
       fuseTimer: 0,
       spawnedAt: performance.now(),
+      electricTriggered: false, // set by triggerElectricAt, resolved in checkElectricTriggers
     });
   }
 
@@ -875,6 +877,8 @@ export class TrapSystem {
           entry.tickTimer -= deltaTime;
           if (entry.tickTimer <= 0) {
             entry.tickTimer = trapData.tickInterval;
+            // Each pulse is an electric source: it sets off other traps in its radius.
+            this.triggerElectricAt(tx + GRID.CELL_SIZE / 2, ty + GRID.CELL_SIZE / 2, trapData.effectRadius, item.plane ?? 0);
             const zapDmg = trapData.damage || 2;
             for (const enemy of enemies) {
               const dx = enemy.position.x - tx;
@@ -1127,6 +1131,9 @@ export class TrapSystem {
       const effectDmg = trapData.damage || 1;
       const dmgColor = trapData.color || '#ffffff';
 
+      // The Stun Trap's burst is an electric source: it sets off other traps in its radius.
+      if (trapData.effect === 'zap') this.triggerElectricAt(cx, cy, r, item.plane ?? 0);
+
       // Fire Trap also ignites flammable bg objects in radius — environmental, not per-enemy.
       // Routed through FireSystem (owns spread + render dirty flag).
       const burnObjects = game._activeBackgroundObjects();
@@ -1228,6 +1235,70 @@ export class TrapSystem {
       }
 
       if (hit) this._fireOneShotTrap(entry, i, enemies);
+    }
+  }
+
+  // ── Electric trigger ─────────────────────────────────────────────────────
+  // Electricity sets off placed traps, the same way a weapon hit does. Two
+  // kinds of source, both resolved in checkElectricTriggers:
+  //   - Standing current, asked of ElectricitySystem.isLiveAt: electrified
+  //     water or slime trail under the trap, or a charged object (lightning
+  //     rod spire, charged metal) touching it.
+  //   - Momentary bursts, marked by triggerElectricAt: a lightning strike, a
+  //     Tesla Coil pulse, a Stun Trap going off. Marking (not firing on the
+  //     spot) keeps the burst from splicing placedTraps under an iteration
+  //     already in progress — updatePlacedTraps and _fireOneShotTrap both call
+  //     it mid-loop — and lets one Stun Trap chain into the next a frame later.
+
+  // Every one-shot trap is electric-triggerable except an electric trap
+  // itself (Stun Trap): it IS the current, so current doesn't set it off.
+  // Persistent placeables (Music Box, Noise-maker, Tesla Coil) have no
+  // detonation to set off. The Remote Bomb IS triggerable — current reaching
+  // it is the one way it goes off without the player's signal.
+  _isElectricTriggerable(trapData) {
+    return !!trapData.oneShot && !!trapData.effect && trapData.affinity !== 'electric';
+  }
+
+  /**
+   * A momentary electric burst at (x, y) with `radius` px on `plane`: marks
+   * every electric-triggerable trap of the active layer inside it to fire on
+   * the next checkElectricTriggers pass.
+   */
+  triggerElectricAt(x, y, radius, plane = 0) {
+    const game = this.game;
+    const playerInInterior = isInteriorActive(game);
+    const C = GRID.CELL_SIZE;
+    for (const entry of game.placedTraps) {
+      if ((entry.interior === true) !== playerInInterior) continue;
+      if ((entry.item.plane ?? 0) !== plane) continue;
+      if (!this._isElectricTriggerable(entry.item.data) || this._isSpawnImmune(entry)) continue;
+      const dx = entry.item.position.x + C / 2 - x;
+      const dy = entry.item.position.y + C / 2 - y;
+      if (dx * dx + dy * dy <= radius * radius) entry.electricTriggered = true;
+    }
+  }
+
+  // Fire every trap of the active layer that a burst marked or that sits in
+  // live current. EXPLORE-only (see the rest-parity note at the call site).
+  checkElectricTriggers() {
+    const game = this.game;
+    if (!game.placedTraps.length || !game.currentRoom) return;
+    const electricity = game.electricitySystem;
+    const enemies = this._getActiveEnemies();
+    const playerInInterior = isInteriorActive(game);
+    const C = GRID.CELL_SIZE;
+
+    for (let i = game.placedTraps.length - 1; i >= 0; i--) {
+      const entry = game.placedTraps[i];
+      if ((entry.interior === true) !== playerInInterior) continue;
+      const trapData = entry.item.data;
+      if (!this._isElectricTriggerable(trapData) || this._isSpawnImmune(entry)) continue;
+      const tx = entry.item.position.x + C / 2;
+      const ty = entry.item.position.y + C / 2;
+      const live = entry.electricTriggered ||
+        !!electricity?.isLiveAt(tx, ty, entry.item.plane ?? 0);
+      entry.electricTriggered = false;
+      if (live) this._fireOneShotTrap(entry, i, enemies);
     }
   }
 
