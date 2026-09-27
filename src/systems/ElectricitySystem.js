@@ -179,8 +179,6 @@ export class ElectricitySystem {
     const p = this.game.player;
     // Stingray Mantle: wearer sits at the source of the current, not in its path.
     if (entity === p && p.stingrayMantle) return;
-    // Rubber Boots: grounded — no current reaches the wearer, whatever the source.
-    if (entity === p && p.waterImmunityTimer > 0) return;
     // A zapped enemy isn't shocked by the current it generates.
     if (current?.source === entity) return;
     // Enemies route through affinity auto-immunity (zap → 'electric').

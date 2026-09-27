@@ -2047,8 +2047,9 @@ export const ITEMS = {
     oneShot: true,
     color: '#ffaa44'
   },
-  // Rubber Boots — water immunity also grounds the wearer: electrified
-  // water/current can't shock them (ElectricitySystem.shockEntity).
+  // Rubber Boots — water immunity covers electrified water too: standing in
+  // it doesn't shock the wearer (PhysicsSystem's water-state branch). Every
+  // other electric source (weapons, wires, a zapped body's contact) still lands.
   'ѽ': {
     char: 'ѽ',
     name: 'Rubber Boots',
