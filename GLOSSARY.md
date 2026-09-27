@@ -694,7 +694,7 @@ programming terms.
   is a stronger tier, and pip 3 is its extreme. Wet: pip 1 = wet, deep water fills pips 2–3,
   pip 3 drowns, and each pip slows harder in water. Freeze: pips 1–2 slow, pip 3 = Frozen.
   Blind (player): each pip closes vision in tighter (6 / 4.5 / 3 cells).
-  Zap: pips 1–2 slow, pip 3 = stun + disarm (see Zap).
+  Zap: pips 1–2 slow, pip 3 = no movement + disarm; the pips are a cooldown (see Zap).
   A discrete hit adds one pip; a per-frame source (ice puddle) or an all-at-once hit (freeze
   trap) raises the track to a level instead, so lingering never stacks by itself. Electric
   current is all-at-once: a full-strength source lands at zap pip 3, and each chain link or
@@ -709,7 +709,7 @@ programming terms.
 - **Definition:** Pip 3 of freeze: full immobilization (no moving, attacking, or rolling)
   that outlasts every other player status. The player breaks out early by mashing: each fresh
   key press chips time off, a dodge-roll press chips much more, and red's roll press chips
-  double. Breaking out clears the whole freeze track.
+  double. Breaking out clears the whole freeze track. Freeze is cyan, on both sides.
 - **In code:** `StatusEffectSystem.isPlayerFrozen` / `struggleLock` (`FROZEN` constants — the
   same struggle frees the player from a zap pip 3 or stun), struggle input read in
   `CharacterSystem._struggleLock`; red's multiplier is
@@ -720,14 +720,19 @@ programming terms.
   the current State without replacing it); Freeze-Over (the Lake Boss's permanent sheet).
 
 ### Zap
-- **Definition:** The electric Status Effect, on the player and enemies alike. A Pip track: pips
-  1–2 slow, pip 3 stuns and disarms (the held item is knocked loose). Full-strength current —
+- **Definition:** The electric Status Effect, on the player and enemies alike — like stun, but
+  its own debuff. A Pip track: pips 1–2 slow, pip 3 stops the body and disarms it (the held item
+  is knocked loose). The pips are a cooldown: once zapped, a body can't be zapped again until
+  they drain — the hit's pip lasts its duration, then one pip drains per second, and effects
+  follow the current pip (3 → 2 → 1 → clear). Full-strength current —
   an electric weapon hit, the Stun Trap, the Tesla Coil, a charged object, electrified water, the
   electric wire — lands at pip 3; a chain carries one pip less per link (chain lightning 3 → 2 →
   1, then damage only; water conduction from a struck object lands at 2). Wet holds zap's timer:
   as long as the body stays wet, zap endures. A zapped body carries Imbued current. The player
-  struggles out of zap pip 3 the same way as Frozen; enemies wait it out.
-- **In code:** `statusEffects.zap` (`StatusEffects.js`, `ZAP_PIP_SPEED`); enemy `Enemy.isZapped`
+  struggles out of zap pip 3 the same way as Frozen (down to pip 2, still draining); enemies wait
+  it out. Zap is yellow, on both sides.
+- **In code:** `statusEffects.zap` (`StatusEffects.js`, `ZAP_PIP_SPEED`, `ZAP_PIP_DECAY`, the
+  slot's `cooldown` flag); enemy `Enemy.isZapped`
   + `shouldDropItems`, player `Player.isZapped` / `isLocked` + `StatusEffectSystem.applyPlayerDisarm`
   / `disarmPlayer`. Item data spells an electric weapon `onHit: 'stun'` + `electric: true`; the
   hit applies `'zap'`. Electric-affinity enemies are immune (they generate current).
@@ -738,8 +743,7 @@ programming terms.
 - **Definition:** The charge a zapped body carries. A body at zap pip N (N ≥ 2) is itself a live
   source at pip N−1: it electrifies the water it stands in and shocks whoever touches it. So
   current weakens as it passes through a crowd, and a pip-1 body passes nothing on. A body is
-  never shocked by its own current, and imbued current only lands on a body it would charge
-  further.
+  never shocked by its own current, and imbued current only lands on a body not already zapped.
 - **In code:** `ElectricitySystem.updateImbuedCurrent` (ambient scan, enemies and player);
   `current = { pips, source }` threaded through `shockEntity`, the cascade, and water tiles'
   `electricCurrent`.

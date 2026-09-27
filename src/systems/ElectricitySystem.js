@@ -32,8 +32,8 @@
  * and shocks whatever touches it, at pip N-1 — so current weakens as it
  * passes through a crowd, and a pip-1 enemy passes nothing on. The source is
  * never shocked by its own current, and imbued current only lands on a body
- * it would charge further (two touching zapped enemies can't keep re-zapping
- * each other forever).
+ * not already zapped — once zapped, a body can't be zapped again until its
+ * pips drain (GLOSSARY: Zap), so it can't pass current back and forth.
  */
 
 import { GRID } from '../game/GameConfig.js';
@@ -171,7 +171,8 @@ export class ElectricitySystem {
    * generic 'stun'. Electric-affinity enemies are therefore immune for free —
    * they ARE generating sources. Contact is per-frame, so it raises the zap
    * Pip track to a level (full current: pip 3) rather than adding a pip a
-   * frame. Damage cadence is unchanged from the old inline code: per-frame
+   * frame; while the body is still zapped the zap itself is refused (its
+   * pips are a cooldown). Damage cadence is unchanged from the old inline code: per-frame
    * takeDamage(1); iframes gate it.
    */
   shockEntity(entity, current = null) {
@@ -183,8 +184,8 @@ export class ElectricitySystem {
     // Enemies route through affinity auto-immunity (zap → 'electric').
     if (entity.shouldApplyStatusEffect && !entity.shouldApplyStatusEffect('zap')) return;
     const pips = current?.pips ?? MAX_PIPS;
-    // Imbued current only lands on a body it would charge further.
-    if (current && (entity.statusEffects?.zap?.stacks ?? 0) >= pips) return;
+    // Imbued current only lands on a body not already zapped.
+    if (current && entity.statusEffects?.zap?.active) return;
     if (entity.applyStatusEffect) entity.applyStatusEffect('zap', 1.5, pips);
     if (entity.takeDamage) entity.takeDamage(1);
   }

@@ -26,6 +26,9 @@ export const MAX_PIPS = 3; // every stackable effect's Pip cap
 // lock — the carrier layers stop movement outright there.
 export const ZAP_PIP_SPEED = [1, 0.6, 0.35, 0];
 
+// Seconds each zap pip below the hit's own takes to drain (the cooldown).
+const ZAP_PIP_DECAY = 1.0;
+
 // Every Status Effect, and the fields each carrier's slot starts with. A
 // carrier missing from an entry can't carry that effect: applying it is an
 // authoring error and says so, once. All slots also get `active`/`duration`.
@@ -37,6 +40,8 @@ export const ZAP_PIP_SPEED = [1, 0.6, 0.35, 0];
 //                    instead of falling off all at once.
 //   durationPerStack — the applied duration is multiplied by the pip count.
 //   immunity       — carrier field that refuses the effect outright.
+//   cooldown       — while active, the effect can't be re-applied: its pips
+//                    are a cooldown draining toward the next application.
 const STATUS_EFFECTS = {
   burn: {
     // Enemy burn's first ignite lasts at least 5s — the slot's original
@@ -59,9 +64,14 @@ const STATUS_EFFECTS = {
   // item waiting to be knocked loose (StatusEffectSystem.applyPlayerDisarm).
   stun: { enemy: { stacks: 0 }, player: { stacks: 0, disarm: false } },
   // Electric Pip track: pips 1–2 slow (ZAP_PIP_SPEED), pip 3 locks and
-  // disarms. Wet holds its timer, and a zapped carrier is itself a live
-  // source one pip weaker (ElectricitySystem.updateImbuedCurrent).
-  zap: { enemy: { stacks: 0 }, player: { stacks: 0, disarm: false } },
+  // disarms. Once zapped, a body can't be zapped again until the pips drain:
+  // the hit's pip holds for its duration, then one pip per ZAP_PIP_DECAY.
+  // Wet holds the timer, and a zapped carrier is itself a live source one
+  // pip weaker (ElectricitySystem.updateImbuedCurrent).
+  zap: {
+    enemy: { stacks: 0, decayInterval: ZAP_PIP_DECAY, cooldown: true },
+    player: { stacks: 0, disarm: false, decayInterval: ZAP_PIP_DECAY, cooldown: true }
+  },
   sleep: { enemy: { stacks: 0, durationPerStack: true } }, // tiers read by Enemy.isFullyAsleep/getSpeedMultiplier
   charm: { enemy: { stacks: 0 } },
   wet: { enemy: { stacks: 0 }, player: { stacks: 0 } }, // pips synced to wetPipCount (PhysicsSystem)
@@ -108,7 +118,7 @@ export function clearEffectOrder(entity, effect) {
 
 /**
  * Apply `effect` for `duration`. Returns the slot, or null if the entity can't
- * carry it (or is immune). `pips` raises the Pip track to at least that level
+ * carry it (or is immune, or it's a cooldown effect still running). `pips` raises the Pip track to at least that level
  * — the shape for per-frame refreshers and all-at-once hits; without it a
  * stackable effect gains one pip per application. Duration is last-hit-wins
  * (Math.max), never additive.
@@ -130,6 +140,8 @@ export function applyStatusEffect(entity, effect, duration = 3.0, pips = null) {
 
   const immunity = STATUS_EFFECTS[effect]?.immunity;
   if (immunity && entity[immunity]) return null;
+  // A cooldown effect refuses re-application until it has fully drained.
+  if (slot.cooldown && slot.active) return null;
 
   const wasActive = slot.active;
   slot.active = true;

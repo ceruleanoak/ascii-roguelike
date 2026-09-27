@@ -12,20 +12,32 @@ const DOT_BLINK_FREQUENCY = 0.2; // baseline blink period at 1 stack
 const SLICE_DURATION = 0.6; // seconds each active effect gets the blink "turn"
 const IFRAME_BLINK_FREQUENCY = 0.05; // blink every 0.05 seconds
 
-// Representative "on" color per blink-capable effect — used both for the
-// round-robin blink target and the stack-pip dots. Sleep's color depends on
-// tier (see computeBlinkColor/computePipRows below) so it isn't listed here.
+// The one color per Status Effect, for the player and enemies alike — the
+// blink target, the pip dots, and any solid body color the effect takes. An
+// effect reads the same on either carrier (rule: color parity), so there is
+// no second player table; player-only effects (blind, stoneskin) just live
+// here too. Tier variants go through pipColor(), which both carriers share.
 const EFFECT_COLORS = {
   burn: '#ff4400',
   poison: '#8a9a2e', // sickly olive-green — deliberately duller/muddier than goo's clean lime so the two read apart at pip size
-  zap: '#00ffff',
+  zap: '#ffff00',   // electric yellow
   stun: '#ffff00',
   charm: '#ff44ff',
-  freeze: '#aaffff',
+  freeze: '#00ffff', // ice cyan — the slow tiers and Frozen alike
   wet: '#4488ff',
   dizzy: '#ddbb00',
-  goo: '#00ff00' // matches Player.getDisplayColor()'s own gooey blink color
+  goo: '#00ff00', // matches the player's own gooey blink (computePlayerDisplayColor)
+  blind: '#bbbbbb', // light gray — sight going dim
+  stoneskin: '#8c7853' // gray/bronze — must match STONE_SKIN_COLOR below
 };
+
+// Pip-dot color for `effect` at `stacks` pips, on either carrier. Wet's third
+// pip (drowning) takes the deep-water color.
+function pipColor(effect, stacks) {
+  if (effect === 'sleep') return SLEEP_COLOR;
+  if (effect === 'wet' && stacks >= 3) return WATER_COLORS.deep;
+  return EFFECT_COLORS[effect];
+}
 
 const SLEEP_COLOR = '#ff66cc'; // pink, all three drowse tiers
 
@@ -67,14 +79,14 @@ export function computeBlinkColor(enemy) {
       if (status.shuddering) {
         // Rapid shudder flash between ice-white and ice-blue before breaking free
         const shudderCycle = Math.floor(enemy.dotBlinkTimer / 0.06);
-        return shudderCycle % 2 === 0 ? '#ffffff' : '#aaffff';
+        return shudderCycle % 2 === 0 ? '#ffffff' : EFFECT_COLORS.freeze;
       }
-      return '#aaffff'; // Solid ice color — fully locked
+      return EFFECT_COLORS.freeze; // Solid ice color — fully locked
     }
     // Puddle/slime slow: subtle cyan blink, stack-scaled like every other effect
     const period = DOT_BLINK_FREQUENCY / stacks;
     const blinkCycle = Math.floor(enemy.dotBlinkTimer / period);
-    return blinkCycle % 2 === 0 ? '#00ffff' : enemy.baseColor;
+    return blinkCycle % 2 === 0 ? EFFECT_COLORS.freeze : enemy.baseColor;
   }
 
   // Every other blink-capable effect shares one frequency formula — more
@@ -102,8 +114,7 @@ export function computePipRows(enemy) {
     .map(effect => {
       const stacks = enemy.statusEffects[effect].stacks || 0;
       if (stacks < 1) return null;
-      const color = effect === 'sleep' ? SLEEP_COLOR : EFFECT_COLORS[effect];
-      return { effect, color, stacks };
+      return { effect, color: pipColor(effect, stacks), stacks };
     })
     .filter(Boolean);
 
@@ -131,28 +142,8 @@ export function computePipRows(enemy) {
 }
 
 // Player-side counterpart to computePipRows, feeding the same
-// StatusPipEffects.js renderer. The player doesn't stack effects or track
-// per-effect application order the way Enemy.js does (no `stacks` field, no
-// effectApplicationOrder), so this is a fixed-priority list of 1-dot rows
-// instead of a generic stack-driven one. Reuses EFFECT_COLORS for the
-// effects whose meaning matches the enemy version exactly (burn, poison,
-// wet, dizzy, goo); freeze pips 1–2 are the slow tier — the enemy's
-// puddle-slow cyan — and switch to the full ice-lock EFFECT_COLORS.freeze
-// at pip 3 (Frozen). EFFECT_COLORS.goo itself mirrors the player's own gooey blink
-// in Player.getDisplayColor(), which predates the enemy-side goo pip.
-const PLAYER_EFFECT_COLORS = {
-  wet: EFFECT_COLORS.wet,
-  burn: EFFECT_COLORS.burn,
-  poison: EFFECT_COLORS.poison,
-  dizzy: EFFECT_COLORS.dizzy,
-  freeze: '#00ffff',
-  goo: EFFECT_COLORS.goo,
-  blind: '#bbbbbb', // light gray — sight going dim
-  zap: EFFECT_COLORS.zap, // same cyan as the enemy's zap pips
-  stun: EFFECT_COLORS.stun,
-  stoneskin: '#8c7853' // gray/bronze — must match Player.js's STONE_SKIN_COLOR
-};
-
+// StatusPipEffects.js renderer and the same colors (EFFECT_COLORS/pipColor).
+// The player has no effectApplicationOrder, so rows come in a fixed order.
 const PLAYER_PIP_ORDER = ['wet', 'burn', 'poison', 'freeze', 'zap', 'stun', 'goo', 'dizzy', 'blind', 'stoneskin'];
 
 function _isPlayerEffectActive(player, effect) {
@@ -174,22 +165,13 @@ function _isPlayerEffectActive(player, effect) {
   }
 }
 
-// Wet, freeze and blind are Pip tracks, so their rows grow dot-by-dot; every
-// other effect is a fixed 1-dot row. Wet's third pip
-// (drowning) takes the deep-water color, freeze's third (Frozen) the ice-lock.
+// Pip tracks grow dot-by-dot from their stacks (wet from its deep-water fill);
+// an effect without pips, or lava contact reading as burn, is a 1-dot row.
 function _playerPipRow(player, effect) {
-  if (effect === 'wet') {
-    const stacks = wetPipCount(player);
-    return { effect, color: stacks >= 3 ? WATER_COLORS.deep : PLAYER_EFFECT_COLORS.wet, stacks };
-  }
-  if (effect === 'freeze') {
-    const stacks = player.statusEffects.freeze.stacks;
-    return { effect, color: stacks >= 3 ? EFFECT_COLORS.freeze : PLAYER_EFFECT_COLORS.freeze, stacks };
-  }
-  if (effect === 'blind' || effect === 'zap') {
-    return { effect, color: PLAYER_EFFECT_COLORS[effect], stacks: player.statusEffects[effect].stacks };
-  }
-  return { effect, color: PLAYER_EFFECT_COLORS[effect], stacks: 1 };
+  const stacks = effect === 'wet'
+    ? wetPipCount(player)
+    : Math.max(1, player.statusEffects[effect]?.stacks || 0);
+  return { effect, color: pipColor(effect, stacks), stacks };
 }
 
 export function computePlayerPipRows(player) {
@@ -226,7 +208,7 @@ export function computePlayerDisplayColor(player) {
   }
   // Solid ice while Frozen — the body is locked, so no blink
   if (player.isFrozen()) return EFFECT_COLORS.freeze;
-  // Zapped (pip 3): fast cyan/white crackle — the player's read of the
+  // Zapped (pip 3): fast yellow/white crackle — the player's read of the
   // enemy's rapid zap shake
   if (player.isZapped()) {
     const blinkCycle = Math.floor(player.statusBlinkTimer / 0.06);

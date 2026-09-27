@@ -21,7 +21,7 @@
 import { CHARACTER_TYPES } from '../data/characters.js';
 import { GRID } from '../game/GameConfig.js';
 import {
-  createStatusEffects, applyStatusEffect, clearStatusEffect, tickStatusEffects,
+  createStatusEffects, applyStatusEffect, tickStatusEffects,
   MAX_PIPS, ZAP_PIP_SPEED
 } from './StatusEffects.js';
 
@@ -169,11 +169,9 @@ export const StatusEffectSystem = {
     if (this.isPlayerFrozen(player)) held.push('freeze');
     if (isZapLock(player)) held.push('zap');
     if (player.statusEffects.stun.active) held.push('stun');
-    for (const effect of held) {
-      const slot = player.statusEffects[effect];
-      slot.duration -= chip;
-      if (slot.duration <= 0) clearStatusEffect(player, effect);
-    }
+    // Only chip the time; the tick expires the lock next frame. Freeze and
+    // stun end there, while a zap drains to pip 2 like any other of its pips.
+    for (const effect of held) player.statusEffects[effect].duration -= chip;
   },
 
   /**
