@@ -56,6 +56,7 @@
  */
 
 import { GRID } from '../game/GameConfig.js';
+import { Puddle } from '../entities/Puddle.js';
 import { MAX_PIPS } from './StatusEffects.js';
 import { inSamePlane, planeOf, isInteriorActive } from './PlaneSystem.js';
 
@@ -432,8 +433,12 @@ export class ElectricitySystem {
   // Nodes are water tiles (BackgroundObject, grid-aligned, position = cell
   // corner) and conductive puddles (Puddle, position = center).
 
+  // instanceof, not duck typing: water BackgroundObjects answer isConductive()
+  // too, so a `typeof node.isConductive` check sends every water tile down the
+  // puddle branch — water never spreads past its seed tile, and a cascade that
+  // reaches water through a slime stamp throws in _electrifyNode (bug #322).
   _isPuddle(node) {
-    return typeof node.isConductive === 'function';
+    return node instanceof Puddle;
   }
 
   // Only normal water conducts; frozen/poisoned/crystallized block the spread
