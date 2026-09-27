@@ -37,6 +37,9 @@ const CONTACT_DURATION = { electric: 1.5, ice: 1.0, fire: 3.0 };
 const CONTACT_EFFECT = { electric: 'zap', ice: 'freeze', fire: 'burn' };
 // Matches EnemyUpdateSystem's slime contact reach.
 const CONTACT_REACH_SQ = GRID.CELL_SIZE * GRID.CELL_SIZE;
+// Lava trail stamps fade fast, like goo: a hazard behind the slime, not a
+// floor that outlasts the fire Imbue.
+const LAVA_TRAIL_LIFETIME = 3.0;
 // The lightning strike the rod calls down on a slime that lands in the electric pool.
 const ROD_STRIKE_DELAY = 0.7;
 
@@ -188,7 +191,7 @@ export class ImbuePoolSystem {
     const element = enemy.imbue?.element;
     if (element === 'ice') return;
     if (element === 'fire') {
-      game._dropTrailTile(x, y, 'lava', plane ?? 0, 7.0);
+      game._dropTrailTile(x, y, 'lava', plane ?? 0, LAVA_TRAIL_LIFETIME);
       return;
     }
     const stamp = game._dropSlimeTrail(x, y, plane);

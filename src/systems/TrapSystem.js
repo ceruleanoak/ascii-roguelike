@@ -1346,7 +1346,9 @@ export class TrapSystem {
 
   _collectLavaPuddle(puddle, playerPlane, onLava) {
     const game = this.game;
-    if (puddle.isEntityOnPuddle(game.player)) onLava.add(game.player);
+    // Fire armor (the player's fire affinity) walks a lava trail unharmed, the
+    // way it ignores a fire puddle. Enemy fire affinity is LavaContact's check.
+    if (!game.player.fireImmune && puddle.isEntityOnPuddle(game.player)) onLava.add(game.player);
     for (const enemy of (game.currentRoom?.enemies ?? [])) {
       if ((enemy.plane ?? 0) !== playerPlane) continue;
       if (puddle.isEntityOnPuddle(enemy)) onLava.add(enemy);
