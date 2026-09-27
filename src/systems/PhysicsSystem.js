@@ -6,6 +6,7 @@ import {
   objectOnPlane,
 } from './PlaneSystem.js';
 import { clearStatusEffect } from './StatusEffects.js';
+import { applyLavaContact } from './LavaContact.js';
 import { wetPipCount, wetPipSpeed } from './StatusEffectSystem.js';
 
 // Re-exported so existing imports (e.g. Enemy.js) keep working.
@@ -508,7 +509,9 @@ export class PhysicsSystem {
       // Cyan-zone Ascent ice: momentum-based slide (much lower friction)
       // Applies to both frozen water tiles (onIce) and icy slope tiles (onIcySlope)
       const cyanAscentIce = (onIce || onIcySlope) && room?.zone === 'cyan' && room?.ascentIce;
-      const friction = cyanAscentIce ? 0.15 : (onIce ? PHYSICS.FRICTION * 1.03 : PHYSICS.FRICTION);
+      // An instance override (the Giant Slime's ice Imbue) wins over terrain.
+      const friction = entity.slideFriction
+        ?? (cyanAscentIce ? 0.15 : (onIce ? PHYSICS.FRICTION * 1.03 : PHYSICS.FRICTION));
       entity.velocity.vx *= friction;
       entity.velocity.vy *= friction;
     }
@@ -1655,73 +1658,7 @@ export class PhysicsSystem {
       // Float (Floating Boots) bypasses all liquid damage — already cleared by PhysicsSystem,
       // but guard here too in case an enemy with float: true passes through this path.
       if (damagingLiquid) {
-        // Lava-immune enemies (e.g. Tortoise) survive lava but track their state for behavior changes
-        if (entity.data?.lavaImmune) {
-          entity.inLava = true;
-          entity.inDamagingLiquid = false; // immune — not actually taking damage, no burn pip
-          continue;
-        }
-        // Wet skin survives lava. Water is scarce wherever lava is — the red
-        // zone's own liquidType replaces water with lava outright — so this is
-        // a crossing bought somewhere else and carried in, not a standing
-        // immunity, and it lasts exactly as long as the 6s wet status does.
-        // The yellow lava-moat Barricade is the gate written against it.
-        // Player and Enemy both answer isWet(); a companion that answers
-        // nothing simply keeps burning.
-        if (entity.isWet?.()) {
-          entity.inLava = true;
-          entity.inDamagingLiquid = false;
-          continue;
-        }
-        // Lava contact reads as "burning" for the status pip (StatusEffectVisuals.js)
-        // even though the damage below is lava's own tick, not the burn DOT.
-        entity.inDamagingLiquid = true;
-        // Apply lava damage (not affected by water immunity)
-        if (entity.takeDamage) {
-          // Initialize lava damage timer if needed
-          if (!entity.lavaDamageTimer) {
-            entity.lavaDamageTimer = 0;
-          }
-
-          // Only apply damage once per second (not every frame)
-          entity.lavaDamageTimer -= deltaTime;
-          if (entity.lavaDamageTimer <= 0) {
-            const damageResult = entity.takeDamage(damagingLiquid.damage);
-
-            // Visual feedback for whichever entity took the hit — player or
-            // enemy (enemies used to take lava damage silently, no damage
-            // number and no hit flash).
-            if (damageResult === true) {
-              // Lethal hit
-              if (entity === game.player) lavaKilledPlayer = true;
-              game.combatSystem.createDamageNumber(
-                damagingLiquid.damage,
-                entity.position.x,
-                entity.position.y,
-                '#ff4400'
-              );
-              entity.hitFlashTimer = 0.15;
-            } else if (damageResult && damageResult.damaged) {
-              // Damage was dealt successfully
-              game.combatSystem.createDamageNumber(
-                damagingLiquid.damage,
-                entity.position.x,
-                entity.position.y,
-                '#ff4400'
-              );
-              entity.hitFlashTimer = 0.15;
-            } else if (damageResult && damageResult.dodged) {
-              game.combatSystem.createDamageNumber('DODGE', entity.position.x, entity.position.y, '#ffff00');
-            } else if (damageResult && damageResult.immune) {
-              game.combatSystem.createDamageNumber('IMMUNE', entity.position.x, entity.position.y, '#00ffff');
-            } else if (damageResult === false) {
-              // Blocked by invulnerability frames - no visual feedback
-            }
-
-            // Reset timer for next damage tick (1 second interval)
-            entity.lavaDamageTimer = 1.0;
-          }
-        }
+        if (applyLavaContact(game, entity, damagingLiquid.damage, deltaTime)) lavaKilledPlayer = true;
         // Lava doesn't apply water effects - skip rest of loop
         continue;
       } else {

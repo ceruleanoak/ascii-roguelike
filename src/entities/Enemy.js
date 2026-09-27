@@ -255,6 +255,13 @@ export class Enemy {
       resistance: {},
       weakness: {}
     };
+    // Imbue (GLOSSARY): a timed affinity held on this instance — `{ element,
+    // timer }` or null. Only enemies with `data.imbue` ever gain one
+    // (ImbuePoolSystem); getAffinities() folds it in without touching shared data.
+    this.imbue = null;
+    // Per-instance friction override (PhysicsSystem); null = terrain decides.
+    // The ice Imbue sets it so the Giant Slime slides.
+    this.slideFriction = null;
 
     // Wand system properties
     this.electrified = false; // Electrical infusion on enemy
@@ -469,16 +476,24 @@ export class Enemy {
   // Immunity model (see elementalAffinity.js for the actual rules):
   //   - Explicit `elementalAffinity.immunity: [effect, ...]` blocks specific effects by name.
   //   - Affinity auto-immunity: if the effect maps to an affinity (EFFECT_AFFINITY) and the
-  //     enemy's `data.affinities` includes that affinity, the effect is blocked. This way a
+  //     enemy's affinities (getAffinities) include that affinity, the effect is blocked. This way a
   //     fire-affinity enemy is auto-immune to burn (and any future fire-affinity effect) with
   //     no per-effect data needed.
   //   - Resistance/weakness lookup is keyed by effect name (not affinity).
   _isImmuneToEffect(effect) {
-    return isImmuneToEffect(this.elementalAffinity, this.data?.affinities, effect);
+    return isImmuneToEffect(this.elementalAffinity, this.getAffinities(), effect);
   }
 
   getElementalModifier(elementType) {
-    return getElementalModifierFor(this.elementalAffinity, this.data?.affinities, elementType);
+    return getElementalModifierFor(this.elementalAffinity, this.getAffinities(), elementType);
+  }
+
+  // Authored affinities plus an active Imbue's element. A new array only while
+  // imbued — the shared ENEMIES data is never mutated. Readers that should not
+  // see an Imbue keep reading `data.affinities` directly (ADR backlog).
+  getAffinities() {
+    const authored = this.data?.affinities ?? [];
+    return this.imbue ? [...authored, this.imbue.element] : authored;
   }
 
   shouldApplyStatusEffect(effect) {
