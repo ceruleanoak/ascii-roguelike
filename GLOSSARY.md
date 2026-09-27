@@ -751,7 +751,32 @@ programming terms.
   `current = { pips, source }` threaded through `shockEntity`, the cascade, and water tiles'
   `electricCurrent`.
 - **Not:** an electric-affinity enemy's own current (always full strength, not tied to zap); a
-  chain (chains are a single hit's hops, imbued current persists while the zap lasts).
+  chain (chains are a single hit's hops, imbued current persists while the zap lasts); an Imbue
+  (a timed element taken from the environment, not a zap's charge).
+
+### Imbue
+- **Definition:** A timed element — electric, ice, or fire — an enemy takes from its surroundings
+  and holds for a fixed duration (10s on the Giant Slime), then loses. While imbued the enemy
+  takes the element's affinity, recolors, and its contact lands that element's pip 1 in place of
+  its normal contact effect. Electric comes from any zap (the zap is absorbed as the Imbue instead
+  of the normal shock reaction); ice and fire come from landing in an Imbue Pool. An Imbue never
+  refreshes and never swaps element until it runs out.
+- **In code:** opt-in via enemy data `imbue: { enabled, duration }`; per-instance
+  `enemy.imbue = { element, timer }`; `applyImbue` / `absorbsZap` in
+  `src/systems/ImbuePoolSystem.js`; the element joins affinities through `Enemy.getAffinities()`.
+- **Not:** Imbued current (a zapped body's pip N−1 charge); an affinity (permanent, authored on
+  the enemy's data).
+
+### Imbue Pool
+- **Definition:** One of the three pools in yellow's Giant Slime B room — electric water with a
+  lightning rod (the room is always a thunderstorm), ice, and lava. A hit on an un-imbued Giant
+  Slime sends its counter-leap into a random intact pool, and landing there grants the pool's
+  Imbue. The ice pool breaks under the landing and freezes over again shortly after; it can't be
+  picked while broken.
+- **In code:** `room.imbuePools = [{ element, tiles, center, brokenTimer }]` and
+  `room.lightningRod`, seeded by `seedImbuePools` (`roomFeatures.js`); pool choice and landing in
+  `ImbuePoolSystem` (`leapPoolTarget` → `LeapAttackMechanic`).
+- **Not:** ordinary water, ice, or lava tiles elsewhere (they don't grant an Imbue by landing).
 
 ### Companion
 - **Definition:** A persistent non-player character that follows the player across rooms and
