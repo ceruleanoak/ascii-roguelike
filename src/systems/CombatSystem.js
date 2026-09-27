@@ -20,6 +20,7 @@ import { affinityDamageMultiplier } from '../entities/PandoraBox.js';
 import { TongueAttackSystem } from './TongueAttackSystem.js';
 import { applyExtraOnHitEffects, applyOnHitStatusEffect } from './ExtraOnHitEffects.js';
 import { applyMeleeStatusDamageBonus, getMeleeStatusBonusIndicator } from './MeleeStatusBonuses.js';
+import { aimAtNearestEnemy } from './NearestEnemyAim.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
 // room — keeps cross-room sniping in check while still feeling powerful.
@@ -1673,6 +1674,7 @@ export class CombatSystem {
       if (proj.type === 'bullet' && attackData.accuracy !== undefined && attackData.accuracy < 1.0) {
         proj.missed = Math.random() > attackData.accuracy;
       }
+      if (proj.aimsAtNearestEnemy) aimAtNearestEnemy(proj, enemies);
       this.projectiles.push(proj);
     } else if (attackData.type === 'melee') {
       // Check if this is a delayed attack (for sequential animations like flail sweep)

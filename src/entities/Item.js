@@ -563,6 +563,7 @@ export class Item {
         extraOnHit,
         electric: this.data.electric,
         homing: this.data.homing,
+        aimsAtNearestEnemy: this.data.aimsAtNearestEnemy,  // re-aimed on spawn — see NearestEnemyAim.js
         ricochet: this.data.ricochet,
         maxRicochets: this.data.maxRicochets || 3,
         wallNudgeDistance: this.data.wallNudgeDistance,  // per-weapon tangential wall-nudge override — see WallRicochetMechanic.tryTangentialNudge
