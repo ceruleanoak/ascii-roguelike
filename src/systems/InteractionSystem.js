@@ -67,6 +67,11 @@ export class InteractionSystem {
       if (attack.weaponSubtype === 'hammer') return 0;
       if (attack.weaponSubtype === 'axe') return Math.max(1, Math.floor(attack.damage * 0.5));
     }
+    // Bat: a swinging slugger cracks rock but was never built for it —
+    // half damage, same as an axe's clumsy grass trim.
+    if (obj.char === '0' && attack.weaponSubtype === 'bat') {
+      return Math.max(1, Math.floor(attack.damage * 0.5));
+    }
     return attack.canSmash ? attack.damage * 2 : attack.damage;
   }
 
