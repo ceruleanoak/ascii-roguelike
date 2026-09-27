@@ -84,7 +84,9 @@ const STATUS_EFFECTS = {
   },
   sleep: { enemy: { stacks: 0, durationPerStack: true } }, // tiers read by Enemy.isFullyAsleep/getSpeedMultiplier
   charm: { enemy: { stacks: 0, durationPerStack: true } },
-  wet: { enemy: { stacks: 0 }, player: { stacks: 0 } }, // pips synced to wetPipCount (PhysicsSystem)
+  // Pips synced to wetPipCount (PhysicsSystem). The enemy's dotElapsed drives
+  // the slime-only wet DoT (EnemyStatusEffects.updateStatusEffects).
+  wet: { enemy: { stacks: 0, dotElapsed: 0 }, player: { stacks: 0 } },
   knockback: { enemy: {} },
   // Enemy: attacks miss (0 damage). Player: a Pip track — each pip closes
   // vision in tighter (the cave-fog overlay — drawVisionFogOverlay in

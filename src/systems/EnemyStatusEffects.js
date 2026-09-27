@@ -30,6 +30,10 @@ export { clearEffectOrder };
 // (slimes) never thaws.
 const FROZEN_DURATION = 8.0;
 
+// Slimes (`data.wetDot`) dissolve in water: each wet pip is damage over time,
+// 1 damage per tick, ticking faster per pip. Indexed by wet pip (0 unused).
+const WET_DOT_INTERVAL = [Infinity, 2.0, 1.25, 0.75];
+
 /** Frozen = the freeze Pip track at pip 3 (GLOSSARY: Frozen). */
 export function isEnemyFrozen(enemy) {
   const freeze = enemy.statusEffects.freeze;
@@ -149,6 +153,19 @@ export function updateStatusEffects(enemy, deltaTime) {
       if (effect === 'poison') enemy.poisonStackCount = 0;
     }
   });
+
+  // Wet has no DoT of its own — only slimes take it, so it rides here rather
+  // than in the shared slot. Elapsed-time counter, so the first tick lands one
+  // interval after the slime gets wet and a clear resets it.
+  const wet = enemy.statusEffects.wet;
+  if (enemy.data?.wetDot && wet?.active && wet.stacks >= 1) {
+    wet.dotElapsed += deltaTime;
+    const interval = WET_DOT_INTERVAL[Math.min(MAX_PIPS, wet.stacks)];
+    if (wet.dotElapsed >= interval) {
+      wet.dotElapsed -= interval;
+      ticks.push({ effect: 'wet', damage: 1 });
+    }
+  }
 
   const damageEvents = [];
   for (const { effect, damage } of ticks) {

@@ -421,6 +421,7 @@ export const ENEMIES = {
     telegraph: { area: 'box', animation: 'blink' },
     elementalAffinity: { immunity: ['poison'], weakness: { freeze: 2.0 } },
     freezePermanent: true,
+    wetDot: true,  // wet pips are damage over time (EnemyStatusEffects)
     affinities: ['goo'],
     sfx: { hit: 'goo_hit', death: ['goo_death_1', 'goo_death_2'] },
     tier: 'weak'
@@ -506,6 +507,7 @@ export const ENEMIES = {
     },
     elementalAffinity: { immunity: ['poison'], weakness: { freeze: 2.0, blade: 2.0 } },
     freezePermanent: true,
+    wetDot: true,  // wet pips are damage over time (EnemyStatusEffects)
     affinities: ['goo'],
     sfx: { hit: 'goo_hit', death: ['goo_death_1', 'goo_death_2'] },
     tier: 'boss'

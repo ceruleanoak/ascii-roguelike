@@ -1478,7 +1478,8 @@ export class CombatSystem {
     // DOT effect colors
     const DOT_COLORS = {
       burn: '#ff4400',
-      poison: '#88ff00'
+      poison: '#88ff00',
+      wet: '#4488ff'  // slimes only (data.wetDot)
     };
 
     // Enemy attacks and DOT damage
