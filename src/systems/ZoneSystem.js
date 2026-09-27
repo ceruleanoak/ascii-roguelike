@@ -369,6 +369,26 @@ export class ZoneSystem {
     return this.defeatedBosses.has(zone);
   }
 
+  /** Green's zone Boss is the Goo Dragon (L15); its defeat opens the endgame exit rules. */
+  isGooDragonDefeated() {
+    return this.defeatedBosses.has('green');
+  }
+
+  /**
+   * Zones that have a Boss (a bossDepth) whose Boss is still standing this
+   * run. Once the Goo Dragon is down this is some subset of red/cyan/yellow —
+   * the only colors ExitSystem may still paint on an exit. Gray and blue have
+   * no Boss, so they never appear here.
+   */
+  undefeatedBossZones() {
+    return Object.keys(ZONES).filter(z => ZONES[z].bossDepth != null && !this.defeatedBosses.has(z));
+  }
+
+  /** True once every zone Boss (green/red/cyan/yellow) has fallen this run. */
+  allZoneBossesDefeated() {
+    return this.undefeatedBossZones().length === 0;
+  }
+
   // ── Miniboss gating (depth 9 mandatory encounter) ──────────────────────────
 
   /** True when the room being generated must be a forced miniboss room. */

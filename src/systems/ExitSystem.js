@@ -321,7 +321,41 @@ export class ExitSystem {
       if (zoneType !== 'gray' && nextDepth === 8) return true;
     }
 
+    // After the Goo Dragon, every exit must wear a still-undefeated zone
+    // Boss's color (assignPostDragonColors). A letter hard-gated against
+    // every one of those zones (e.g. green-only 'G'/'Q') could only ever
+    // be dressed in a color its own gate refuses — reroll it instead.
+    const remaining = this._postDragonExitZones(zoneType);
+    if (remaining && !remaining.some(z => EXIT_LETTERS[letter]?.zoneBoosts?.[z] !== 0)) return true;
+
     return false;
+  }
+
+  /**
+   * The zones an exit may lead to under the post-Goo-Dragon rule, or null
+   * when the rule doesn't apply: the Goo Dragon still stands, the current
+   * zone has no color drift of its own (gray is sticky, blue is Tidefall's
+   * fixed chain), or no zone Boss is left standing (then the ordinary
+   * completed-zone coloring runs and the north exit turns gray instead —
+   * see generateExits).
+   */
+  _postDragonExitZones(zoneType) {
+    if (!this.zoneSystem?.isGooDragonDefeated?.()) return null;
+    if (!ZONES[zoneType]?.alternativeZones?.length) return null;
+    const remaining = this.zoneSystem.undefeatedBossZones();
+    return remaining.length > 0 ? remaining : null;
+  }
+
+  /** All zone Bosses down: the north exit of every drifting zone leads to gray. */
+  _northLeadsToGray(zoneType) {
+    return !!this.zoneSystem?.allZoneBossesDefeated?.() &&
+      (ZONES[zoneType]?.alternativeZones?.length ?? 0) > 0;
+  }
+
+  /** Repaints an existing north exit gray + forceZone when _northLeadsToGray holds. */
+  _pointNorthAtGray(exits, zoneType) {
+    if (!this._northLeadsToGray(zoneType) || !exits?.north?.letter) return;
+    exits.north = { ...exits.north, color: ZONE_COLORS.gray, forceZone: 'gray' };
   }
 
   generateExits(currentDepth, roomType, zoneType, progressionColor = null, currentLetter = null) {
@@ -352,7 +386,11 @@ export class ExitSystem {
     let forcedBossIndex = -1;
     if (currentDepth >= 5 && zoneType !== 'gray' && currentLetter !== 'B' &&
         !letters.includes('B') && !this.zoneSystem?.clearedZones?.has(zoneType)) {
-      forcedBossIndex = randomOpenSlot(closedSlots);
+      // Keep the forced 'B' off the north slot once north always leads to
+      // gray — a gray-colored 'B' would carry the player out of the zone
+      // whose miniboss it is meant to guarantee.
+      const bossSlotClosed = this._northLeadsToGray(zoneType) ? new Set([...closedSlots, 0]) : closedSlots;
+      forcedBossIndex = randomOpenSlot(bossSlotClosed);
       letters[forcedBossIndex] = 'B';
     }
 
@@ -403,6 +441,12 @@ export class ExitSystem {
       south: !ZONES[zoneType]?.noRest  // South is boolean (return to REST); noRest zones have no way back
     };
 
+    // Every zone Boss defeated: the north exit always leads to gray. Its
+    // letter stays whatever was rolled (or sequence-forced); only the color
+    // changes, and forceZone makes the step immediate the same way a Ridge's
+    // north exit does (main.js primes ZoneSystem.forceNextZone from it).
+    this._pointNorthAtGray(exits, zoneType);
+
     // The inevitable call — once per run, at gray depth 3, the north exit's
     // own signage turns into '3'. Taking it routes to the Three Room (the
     // north-exit block in main.js intercepts exit.threeRoom); LOOK NORTH here
@@ -430,6 +474,15 @@ export class ExitSystem {
     // Gray zone: all exits gray (no alternatives)
     if (zone.alternativeZones.length === 0) {
       return colors;
+    }
+
+    // Goo Dragon defeated: every exit, in every drifting zone, rolls only
+    // among the zones whose Boss still stands. Once none are left this
+    // returns null and the completed-zone path below keeps each exit on
+    // the zone's own color (north is overridden to gray in generateExits).
+    const postDragonZones = this._postDragonExitZones(zoneType);
+    if (postDragonZones) {
+      return this.assignPostDragonColors(letters, postDragonZones, progressionColor, closedSlots);
     }
 
     // Completed zone (its own boss already defeated): flip the usual ratio.
@@ -524,6 +577,63 @@ export class ExitSystem {
     }
 
     return colors;
+  }
+
+  /**
+   * Post-Goo-Dragon exit coloring: each of the 3 slots independently takes
+   * the color of one of `remainingZones` (zone Bosses still standing),
+   * honoring the slot letter's zoneBoosts hard gate. _slotRefuses already
+   * rerolls letters gated against every remaining zone, so the ungated
+   * fallback only catches a letter forced in after rolling (a sequence
+   * step) — the exit rule outranks the gate there.
+   *
+   * An in-progress color streak toward a remaining zone keeps its usual
+   * guarantee: if no open slot rolled the streak color, one eligible open
+   * slot is repainted with it, so a 2-streak can still complete.
+   */
+  assignPostDragonColors(letters, remainingZones, progressionColor, closedSlots) {
+    const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+    const letterAllows = (letter, z) => EXIT_LETTERS[letter]?.zoneBoosts?.[z] !== 0;
+
+    const colors = letters.map(letter => {
+      const eligible = remainingZones.filter(z => letterAllows(letter, z));
+      return ZONE_COLORS[pick(eligible.length > 0 ? eligible : remainingZones)];
+    });
+
+    const progressionZone = progressionColor ? zoneForColor(progressionColor) : null;
+    if (progressionZone && remainingZones.includes(progressionZone)) {
+      const openSlots = [0, 1, 2].filter(i => !closedSlots.has(i));
+      const alreadyOffered = openSlots.some(i => colors[i] === progressionColor);
+      const eligible = openSlots.filter(i => letterAllows(letters[i], progressionZone));
+      if (!alreadyOffered && eligible.length > 0) colors[pick(eligible)] = progressionColor;
+    }
+
+    return colors;
+  }
+
+  /**
+   * Called once when a zone Boss room clears. Its exits were generated while
+   * the Boss still stood, so a kill that just defeated the Goo Dragon (or the
+   * last zone Boss) would otherwise leave the player choosing among colors
+   * the rule now forbids. Keeps each exit's letter and any other flags; only
+   * the color (and, for gray north, forceZone) changes. A no-op whenever
+   * neither post-Goo-Dragon rule applies, so pre-Dragon boss rooms keep the
+   * exits they were generated with.
+   */
+  recolorExitsAfterZoneBoss(room) {
+    if (!room?.isZoneBossRoom) return;
+    const zone = room.zone || 'green';
+    if (!this._postDragonExitZones(zone) && !this._northLeadsToGray(zone)) return;
+
+    const slots = ['north', 'east', 'west'];
+    const exits = slots.map(s => room.exits?.[s]);
+    const closedSlots = new Set(slots.map((_, i) => i).filter(i => !exits[i]?.letter));
+    const colors = this.assignExitColors(exits.map(e => e?.letter), zone, null, closedSlots);
+    slots.forEach((s, i) => {
+      if (exits[i]?.letter) room.exits[s] = { ...exits[i], color: colors[i] };
+    });
+
+    this._pointNorthAtGray(room.exits, zone);
   }
 
   getLetterWeightsForZone(zoneType, depth) {
@@ -820,6 +930,10 @@ export class ExitSystem {
           // missed (or skipped) the heal/bottle touch. Reveal the pedestal so
           // they can complete the offering and unlock the blue-zone exit.
           game.pearlSystem.revealPearlPedestal();
+
+          // A zone Boss room's exits were rolled before the kill; re-dress
+          // them under the post-Goo-Dragon rules the kill may have unlocked.
+          this.recolorExitsAfterZoneBoss(room);
 
           // Pre-boss gate: depth (bossDepth - 1) cleared → north-only 'B' exit + anticipation music.
           // Uses >= (not ===) as a self-correcting safety net: if the player somehow
