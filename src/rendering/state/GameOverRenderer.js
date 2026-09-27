@@ -29,16 +29,25 @@ export class GameOverRenderer {
       const borderExits = game.currentRoom.exitsLocked ?
         { north: false, south: game.currentRoom.exits.south && game.playerHasNoItems(), east: false, west: false } :
         game.currentRoom.exits;
-      this.renderer.drawBorder(borderExits, game.currentRoom.borderColor);
 
-      // Draw collision map
+      // Draw collision map as filled cells, then the border on top — same order
+      // as ExploreRenderer. Drawing the border first and stamping '█' glyphs
+      // over it left gray bars striping the zone-colored perimeter whenever the
+      // background repainted during GAME_OVER.
+      const centerX = Math.floor(GRID.COLS / 2);
+      const centerY = Math.floor(GRID.ROWS / 2);
       for (let y = 0; y < GRID.ROWS; y++) {
         for (let x = 0; x < GRID.COLS; x++) {
           if (game.currentRoom.collisionMap[y][x]) {
-            this.renderer.drawCell(x, y, '█', '#444444');
+            if (borderExits.south && y === GRID.ROWS - 1 && x === centerX) continue;
+            if (borderExits.north && y === 0             && x === centerX) continue;
+            if (borderExits.east  && x === GRID.COLS - 1 && y === centerY) continue;
+            if (borderExits.west  && x === 0             && y === centerY) continue;
+            this.renderer.drawFilledCell(x, y, '#444444');
           }
         }
       }
+      this.renderer.drawBorder(borderExits, game.currentRoom.borderColor, game.zoneSystem.getStagingStripeColor());
 
       // Draw static background objects (water and grass render on foreground).
       // Always render plane 0 (surface) here, regardless of which plane the
