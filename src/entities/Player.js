@@ -893,6 +893,22 @@ export class Player {
     return item;
   }
 
+  // Destroys `item` if it still occupies a quick slot — unlike dropItem(),
+  // nothing is handed back or spawned in the world. Looks the item up by
+  // identity rather than assuming activeSlotIndex, since a weapon can shatter
+  // from a delayed hit (e.g. Bat's release sweep) after the player has already
+  // switched away from it.
+  destroyHeldItem(item) {
+    const idx = this.quickSlots.indexOf(item);
+    if (idx === -1) return false;
+    this.quickSlots[idx] = null;
+    if (idx === this.activeSlotIndex) {
+      const nextFilled = this.quickSlots.findIndex((slot, i) => i !== idx && slot !== null);
+      if (nextFilled !== -1) this.activeSlotIndex = nextFilled;
+    }
+    return true;
+  }
+
   useHeldItem() {
     if (!this.heldItem || !this.heldItem.use) return null;
 

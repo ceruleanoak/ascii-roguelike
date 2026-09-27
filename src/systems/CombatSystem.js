@@ -839,6 +839,15 @@ export class CombatSystem {
                 this.objectDestroyEvents.push({ obj, effect: result.effect, attack });
               }
 
+              // Bat: rare chance the weapon itself shatters on a rock hit.
+              if (attack.weapon && this.game.interactionSystem.resolveSmashWeaponBreak(attack, obj)) {
+                if (attack.owner?.destroyHeldItem?.(attack.weapon)) {
+                  this.createDamageNumber('BREAK', obj.position.x, obj.position.y, '#ff6644');
+                  this.game.audioSystem?.playSFX?.('bat_break');
+                  this.game.menuSystem?.updateUI?.();
+                }
+              }
+
               // Fire weapons ignite flammable objects — spread outward if object is destroyed.
               // Ignitions route through FireSystem so the deterministic front + dirty flag own propagation.
               if (attack.onHit === 'burn' && obj.isFlammable()) {

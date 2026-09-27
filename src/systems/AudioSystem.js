@@ -1314,6 +1314,7 @@ export class AudioSystem {
     this.loadSFX('boss_breath', null);     // Gold Breath curse lands (phase-2 entry)
     this.loadSFX('boss_hit', null);        // bribe refused / pile struck home
     this.loadSFX('armor_break', null);     // coin scale chipped loose, or re-absorbed
+    this.loadSFX('bat_break', null);       // Bat weapon shatters on a rock hit
     this.loadSFX('scale_ricochet', null);  // a hit the armor turned away; grab broken
     // Dungeon 6-floor rework — placeholder names, no assets yet.
     this.loadSFX('dungeon_key_pickup', null); // Skull destroyed, key obtained

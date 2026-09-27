@@ -79,9 +79,12 @@ export class BatSystem {
 
     if (sweptAngle < 0.05) return; // released before any visible windup
 
-    // Damage scales with windup; the Rubber Bat (damage 0) never deals damage.
+    // Damage scales with windup and always rounds down — no forced minimum of
+    // 1, since that floor is what let spamming SPACE with hardly any windup
+    // guarantee full-tap damage on every swing. The Rubber Bat (damage 0)
+    // never deals damage.
     const maxDamage = weapon.data.damage || 0;
-    const damage = maxDamage > 0 ? Math.max(1, Math.round(maxDamage * ratio)) : 0;
+    const damage = maxDamage > 0 ? Math.floor(maxDamage * ratio) : 0;
     const launchForce = (weapon.data.launchForce || 1100) * Math.max(ratio, MIN_LAUNCH_RATIO);
 
     // Sweep counter-clockwise from the wound-up angle back to the start angle:
@@ -114,6 +117,7 @@ export class BatSystem {
         launchForce,
         weaponSubtype: 'bat',
         isBlunt: true,
+        weapon,               // identity ref for InteractionSystem.resolveSmashWeaponBreak
         owner: player,
         shooterPlane: player.plane
       });

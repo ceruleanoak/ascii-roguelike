@@ -75,6 +75,18 @@ export class InteractionSystem {
     return attack.canSmash ? attack.damage * 2 : attack.damage;
   }
 
+  // Whether this melee hit shatters the swung weapon — currently only the Bat
+  // family against rock, since a bat is built for a ball, not stone. Rolled
+  // per landed hit (caller only reaches this once resolveSmashRefusal has
+  // already let the swing through), independent of resolveSmashDamage's
+  // amount so a 0-damage tap can still crack the bat.
+  resolveSmashWeaponBreak(attack, obj) {
+    if (obj.char === '0' && attack.weaponSubtype === 'bat') {
+      return Math.random() < 0.08;
+    }
+    return false;
+  }
+
   // Whether a melee swing may damage this background object at all — the
   // companion question to resolveSmashDamage's "how much", and the reason both
   // live here rather than inline in CombatSystem's melee loop. These are the
