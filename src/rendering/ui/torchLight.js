@@ -63,10 +63,11 @@ const FOG_COLOR = '#000000';
 // this the player's own cell and its immediate neighbours are unwashed.
 const FOG_CORE_FRACTION = 0.35;
 
-// Blind vision radius, in cells — tighter than the cave's 5 so being blinded
-// underground still reads as a change. A torch doesn't widen it: light
-// doesn't help eyes that can't see.
-const BLIND_FOG_RADIUS_CELLS = 3;
+// Blind vision radius in cells, by Pip (index = pips): each pip closes the
+// world in further, down to 3 at pip 3 — tighter than the cave's 5, so being
+// fully blinded underground still reads as a change. A torch doesn't widen
+// it: light doesn't help eyes that can't see.
+const BLIND_FOG_RADIUS_CELLS = [Infinity, 6, 4.5, 3];
 
 // Draw the fog around (px, py) on `ctx`, in whatever coordinate space ctx is
 // currently in (canvas for the surface, interior-translated inside a PiP —
@@ -110,7 +111,11 @@ function drawVisionFog(ctx, px, py, fogRadius) {
   ctx.restore();
 }
 
-const blindFogRadius = (game) => (game.player?.isBlind?.() ? BLIND_FOG_RADIUS_CELLS * CS : Infinity);
+const blindFogRadius = (game) => {
+  const blind = game.player?.statusEffects?.blind;
+  if (!blind?.active) return Infinity;
+  return BLIND_FOG_RADIUS_CELLS[Math.max(1, blind.stacks)] * CS;
+};
 
 // Surface pass (ExploreRenderer, drawn after all entities so it clips both fg
 // content and the bg canvas beneath): underground cave fog and/or blind,

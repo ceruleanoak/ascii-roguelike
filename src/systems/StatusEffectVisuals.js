@@ -147,10 +147,11 @@ const PLAYER_EFFECT_COLORS = {
   dizzy: EFFECT_COLORS.dizzy,
   freeze: '#00ffff',
   goo: EFFECT_COLORS.goo,
+  blind: '#bbbbbb', // light gray — sight going dim
   stoneskin: '#8c7853' // gray/bronze — must match Player.js's STONE_SKIN_COLOR
 };
 
-const PLAYER_PIP_ORDER = ['wet', 'burn', 'poison', 'freeze', 'goo', 'dizzy', 'stoneskin'];
+const PLAYER_PIP_ORDER = ['wet', 'burn', 'poison', 'freeze', 'goo', 'dizzy', 'blind', 'stoneskin'];
 
 function _isPlayerEffectActive(player, effect) {
   switch (effect) {
@@ -163,13 +164,14 @@ function _isPlayerEffectActive(player, effect) {
     case 'freeze': return player.statusEffects.freeze.active;
     case 'goo':    return player.isGooey();
     case 'dizzy':  return player.isDizzy();
+    case 'blind':  return player.isBlind();
     case 'stoneskin': return player.stoneSkinTimer > 0;
     default: return false;
   }
 }
 
-// Wet and freeze are Pip tracks (StatusEffectSystem), so their rows grow
-// dot-by-dot; every other effect is a fixed 1-dot row. Wet's third pip
+// Wet, freeze and blind are Pip tracks, so their rows grow dot-by-dot; every
+// other effect is a fixed 1-dot row. Wet's third pip
 // (drowning) takes the deep-water color, freeze's third (Frozen) the ice-lock.
 function _playerPipRow(player, effect) {
   if (effect === 'wet') {
@@ -179,6 +181,9 @@ function _playerPipRow(player, effect) {
   if (effect === 'freeze') {
     const stacks = player.statusEffects.freeze.stacks;
     return { effect, color: stacks >= 3 ? EFFECT_COLORS.freeze : PLAYER_EFFECT_COLORS.freeze, stacks };
+  }
+  if (effect === 'blind') {
+    return { effect, color: PLAYER_EFFECT_COLORS.blind, stacks: player.statusEffects.blind.stacks };
   }
   return { effect, color: PLAYER_EFFECT_COLORS[effect], stacks: 1 };
 }

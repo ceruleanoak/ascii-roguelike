@@ -693,6 +693,7 @@ programming terms.
   shows it above the character. A Pip track is a Status Effect whose pips escalate it: each pip
   is a stronger tier, and pip 3 is its extreme. Wet: pip 1 = wet, deep water fills pips 2–3,
   pip 3 drowns, and each pip slows harder in water. Freeze: pips 1–2 slow, pip 3 = Frozen.
+  Blind (player): each pip closes vision in tighter (6 / 4.5 / 3 cells).
   A discrete hit adds one pip; a per-frame source (ice puddle) or an all-at-once hit (freeze
   trap) raises the track to a level instead, so lingering never stacks by itself.
 - **In code:** `statusEffects[x].stacks` on both sides (`MAX_PIPS = 3`, `StatusEffects.js`);
