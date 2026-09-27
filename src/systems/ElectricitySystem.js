@@ -15,7 +15,8 @@
  * (SLIME_LINK_REACH — about a cell, the slime analogue of water's 4-adjacent
  * cell) and to any water tile they overlap. One cascade therefore runs river →
  * slime trail → river under the same spread rate, charge decay and imbued
- * current as water; an electrified slime stamp blinks like electrified water
+ * current as water, except a charged slime stamp stays live until it expires
+ * (no tile duration). An electrified slime stamp blinks like electrified water
  * (Puddle._updateElectrified) and shocks whoever stands on it through the same
  * shockEntity contact rule (_shockOnElectrifiedSlime).
  *
@@ -138,7 +139,7 @@ export class ElectricitySystem {
    */
   seedFromPuddle(puddle, opts = {}) {
     if (!puddle || puddle.expired || !puddle.isConductive?.()) return false;
-    // Already-charged stamp: the local tail hasn't decayed — no re-trigger.
+    // Already-charged stamp: slime charge is permanent — no re-trigger.
     if (puddle.isElectrified()) return false;
     const bg = this.game._activeBackgroundObjects?.() ?? [];
     return this._startCascade(puddle, bg, puddle.plane ?? 0, { ...opts, hutPlane: !!puddle.hutPlane });

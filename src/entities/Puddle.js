@@ -29,11 +29,12 @@ export class Puddle {
     this.char = visual.char;
 
     // Electric current — conductive types only (Puddle.CONDUCTIVE_TYPES).
-    // Mirrors a water tile's 'electrified' state: ElectricitySystem's cascade
-    // sets it, the timer decays it, and `electricCurrent` carries the imbued
-    // current ({ pips, source }) the way BackgroundObject.electricCurrent does,
-    // or null for full-strength current.
-    this.electrifiedTimer = 0;
+    // Unlike a water tile's timed 'electrified' state, a charged slime stamp
+    // stays live until the stamp itself expires: slime is already short-lived,
+    // so a charge timer on top of it would leave almost no window to use it.
+    // `electricCurrent` carries the imbued current ({ pips, source }) the way
+    // BackgroundObject.electricCurrent does, or null for full-strength current.
+    this.electrified = false;
     this.electricCurrent = null;
     this._electricBlinkTimer = 0;
     this._electricBlinkOn = false;
@@ -60,13 +61,15 @@ export class Puddle {
   }
 
   isElectrified() {
-    return this.electrifiedTimer > 0;
+    return this.electrified;
   }
 
-  // Charge this puddle for `duration` seconds. Only conductive types take it.
-  electrify(duration, electricCurrent = null) {
+  // Charge this puddle for the rest of its life. Only conductive types take
+  // it. `_duration` is the cascade's per-tile duration — meaningful for water,
+  // ignored here (see the constructor note).
+  electrify(_duration, electricCurrent = null) {
     if (!this.isConductive()) return;
-    this.electrifiedTimer = duration;
+    this.electrified = true;
     this.electricCurrent = electricCurrent;
   }
 
@@ -76,16 +79,8 @@ export class Puddle {
   // directly, so every drawPuddles pass (surface + interior PiP) shows it
   // with no renderer change.
   _updateElectrified(deltaTime) {
-    if (this.electrifiedTimer <= 0) return;
+    if (!this.electrified) return;
     const visual = Puddle.VISUALS[this.type] ?? Puddle.VISUALS.slime;
-    this.electrifiedTimer -= deltaTime;
-    if (this.electrifiedTimer <= 0) {
-      this.electrifiedTimer = 0;
-      this.electricCurrent = null;
-      this.fillColor = visual.fillColor;
-      this.color = visual.color;
-      return;
-    }
     this._electricBlinkTimer -= deltaTime;
     if (this._electricBlinkTimer <= 0) {
       this._electricBlinkTimer = 0.15;
