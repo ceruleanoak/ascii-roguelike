@@ -211,10 +211,6 @@ body {
   color: #0f0;
 }
 
-.menu-item:hover {
-  background: rgba(0, 255, 0, 0.2);
-}
-
 .menu-item.selected {
   background: rgba(0, 255, 0, 0.3);
 }
