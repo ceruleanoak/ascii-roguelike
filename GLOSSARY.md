@@ -1057,6 +1057,25 @@ programming terms.
   char; the variant keeps that gate while dropping the Tree's flammability and `slowing`.
 - **Not:** "gray tree", "stone tree", "dead tree", "fossil tree".
 
+### Cavern
+- **Definition:** Like layer 1 in the U room, but a smaller, hut-sized area meant for secrets.
+  Its hidden entrance sits inside a large, conspicuous cluster of unbreakable rocks; Bombs reveal
+  it. It always has 2 lit torches that can be destroyed. The friendly Goblin (`G`) inside says
+  "It's a secret to everybody." and drops between 2 and 5 coins.
+- **In code:** `room.cavern` (a hut record with `hutKind: 'cavern'`), seeded by `seedCavern()`
+  (`roomFeatures.js`) in any room letter where wall structures can spawn, never on top of one.
+  Entered and exited through HutSystem; the interior comes from
+  `CavernSystem.generateCavernInterior()`. The rocks are the `cavern_rock` Background Object
+  variant; the torches are `cavern_torch`. The Goblin is `FriendlyGoblin`.
+- **Not:** "cave", "grotto", "secret room", "hidden hut".
+
+### Bombable rock
+- **Definition:** A rock that can technically be destroyed, but only by bombs. It hides a
+  Cavern's entrance among the unbreakable rocks and looks the same as them.
+- **In code:** the `bombable_rock` Background Object variant (`GameConfig.js`, `bombable: true`),
+  broken by `CavernSystem.bombBlast()` from the Bomb consumable and the Remote Bomb trap.
+- **Not:** "cracked rock", "weak wall", "breakable rock".
+
 ## Conventions
 
 - **Casing:** types/classes PascalCase; functions/variables camelCase; constants

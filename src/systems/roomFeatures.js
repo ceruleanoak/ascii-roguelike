@@ -1,4 +1,4 @@
-import { GRID, BACKGROUND_OBJECT_VARIANTS } from '../game/GameConfig.js';
+import { GRID, BACKGROUND_OBJECT_VARIANTS, WALL_STRUCTURES } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Fisherman } from '../entities/Fisherman.js';
 import { Enemy } from '../entities/Enemy.js';
@@ -2132,5 +2132,159 @@ export function stampWaterBlobs(gen, room, nodes, edgeNoise, waterDensity) {
         room.backgroundObjects.push(decObj);
       }
     }
+  }
+}
+
+// ─── Cavern ──────────────────────────────────────────────────────────────────
+// A Cavern is a small secret interior hidden behind a Bombable Rock set in a
+// large, conspicuous cluster of Cavern Rocks. Only a bomb opens the Bombable
+// Rock; its cell then holds the Cavern's door (CavernSystem.bombBlast), and
+// HutSystem enters the Cavern like any hut via the `room.cavern` record.
+
+// Chance an eligible room hides a Cavern. Rare on purpose: the cluster is a
+// secret the player learns to recognise, not furniture.
+const CAVERN_SPAWN_CHANCE = 0.08;
+
+// Cluster shape, read top-down: 'R' Cavern Rock, 'B' the Bombable Rock (always
+// the bottom-centre cell, facing south), '.' left open. A low mound, wider at
+// the base, so it reads as one deliberate pile rather than scattered rocks.
+const CAVERN_CLUSTER_PATTERN = [
+  '..RRR..',
+  '.RRRRR.',
+  'RRRRRRR',
+  'RRRBRRR',
+];
+
+// Mirrors getRandomPosition's exit clearance: nothing of the Cavern may sit
+// within this many cells of an exit's spawn cell.
+const CAVERN_EXIT_CLEARANCE = 3;
+const CAVERN_PLACEMENT_ATTEMPTS = 40;
+
+// Caverns spawn wherever wall structures can: the letter template must not
+// forbid them, and the room type must be one some wall structure targets.
+function roomAllowsCavern(room) {
+  if (room.letterTemplate?.wallStructures?.allow === false) return false;
+  return Object.values(WALL_STRUCTURES).some(s => s.roomTypes.includes(room.type));
+}
+
+// Objects a Cavern may never displace. Everything else in its footprint is
+// ordinary scenery (grass, bushes, trees, loose rocks) and is cleared so no
+// background object overlaps the Cavern.
+function blocksCavern(obj) {
+  return obj.structural || obj.indestructible || obj.isEnvironmental?.() ||
+    obj.conductivity === 'water' || obj.dropsKey || obj.dropsDungeonKey || obj.puzzleSignal;
+}
+
+// Cells holding anything generation already placed that isn't a background
+// object — enemies, items, crows, NPCs, recipe-sign glyphs, the player start.
+// Scans every collection on the room so a new one can't be silently missed.
+function occupiedEntityCells(room) {
+  const CS = GRID.CELL_SIZE;
+  const cells = new Set();
+  const mark = (x, y) => {
+    if (typeof x !== 'number' || typeof y !== 'number') return;
+    cells.add(`${Math.round(x / CS)},${Math.round(y / CS)}`);
+  };
+  const markEntity = (entity) => {
+    if (!entity || typeof entity !== 'object') return;
+    if (entity.position) mark(entity.position.x, entity.position.y);
+    else mark(entity.x, entity.y);
+  };
+  for (const [key, value] of Object.entries(room)) {
+    if (key === 'backgroundObjects' || key === 'collisionMap' || key === 'protectedRegions') continue;
+    if (Array.isArray(value)) value.forEach(markEntity);
+    else if (value?.position) markEntity(value);
+  }
+  for (const glyph of room.recipeSign?.characters ?? []) mark(glyph.x, glyph.y);
+  if (room.playerStartPos) mark(room.playerStartPos.x, room.playerStartPos.y);
+  return cells;
+}
+
+/**
+ * Rolls a Cavern into an eligible room: a Cavern Rock cluster with a Bombable
+ * Rock at its bottom-centre, recorded on `room.cavern` (a hut record that
+ * stays hidden until CavernSystem.bombBlast reveals its door). Runs at the end
+ * of RoomGenerator.generateRoom, after every other placement pass, so it can
+ * see — and refuse — wall structures, protected structures and entities.
+ */
+export function seedCavern(room) {
+  if (!roomAllowsCavern(room)) return;
+  if (Math.random() >= CAVERN_SPAWN_CHANCE) return;
+
+  const CS = GRID.CELL_SIZE;
+  const height = CAVERN_CLUSTER_PATTERN.length;
+  const width = CAVERN_CLUSTER_PATTERN[0].length;
+  const centerCol = Math.floor(GRID.COLS / 2);
+  const centerRow = Math.floor(GRID.ROWS / 2);
+  const exitCells = [
+    { col: centerCol, row: 2 }, { col: centerCol, row: GRID.ROWS - 3 },
+    { col: GRID.COLS - 3, row: centerRow }, { col: 2, row: centerRow },
+  ];
+  const occupied = occupiedEntityCells(room);
+  const cellKey = (obj) => `${Math.round(obj.position.x / CS)},${Math.round(obj.position.y / CS)}`;
+
+  for (let attempt = 0; attempt < CAVERN_PLACEMENT_ATTEMPTS; attempt++) {
+    // Bounding box plus a one-cell ring (the ring's bottom row holds the
+    // approach cell in front of the Bombable Rock), kept off the border.
+    const minCol = 2 + Math.floor(Math.random() * (GRID.COLS - width - 4));
+    const minRow = 2 + Math.floor(Math.random() * (GRID.ROWS - height - 4));
+
+    // Every cell of the footprint and its ring must be open ground: no wall
+    // structure, no protected structure region, no exit lane, no entity, and
+    // no background object a Cavern may not displace. The open ring keeps the
+    // cluster from ever sealing a corridor between wall structures.
+    const ringCells = new Set();
+    for (let row = minRow - 1; row <= minRow + height; row++) {
+      for (let col = minCol - 1; col <= minCol + width; col++) ringCells.add(`${col},${row}`);
+    }
+    let ok = true;
+    for (const key of ringCells) {
+      const [col, row] = key.split(',').map(Number);
+      if (room.collisionMap[row]?.[col] !== false ||
+          isCellProtected(room, col, row) ||
+          occupied.has(key) ||
+          exitCells.some(e => Math.abs(col - e.col) <= CAVERN_EXIT_CLEARANCE && Math.abs(row - e.row) <= CAVERN_EXIT_CLEARANCE)) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) ok = !room.backgroundObjects.some(o => !o.destroyed && ringCells.has(cellKey(o)) && blocksCavern(o));
+    if (!ok) continue;
+
+    // Clear scenery from the cluster and the approach cell, then build.
+    const doorCol = minCol + CAVERN_CLUSTER_PATTERN[height - 1].indexOf('B');
+    const doorRow = minRow + height - 1;
+    const footprint = [{ col: doorCol, row: doorRow + 1 }];
+    for (let dy = 0; dy < height; dy++) {
+      for (let dx = 0; dx < width; dx++) {
+        if (CAVERN_CLUSTER_PATTERN[dy][dx] !== '.') footprint.push({ col: minCol + dx, row: minRow + dy });
+      }
+    }
+    const inFootprint = new Set(footprint.map(c => `${c.col},${c.row}`));
+    room.backgroundObjects = room.backgroundObjects.filter(o => !inFootprint.has(cellKey(o)));
+
+    for (let dy = 0; dy < height; dy++) {
+      for (let dx = 0; dx < width; dx++) {
+        const mark = CAVERN_CLUSTER_PATTERN[dy][dx];
+        if (mark === '.') continue;
+        const typeId = mark === 'B' ? 'bombable_rock' : 'cavern_rock';
+        const rock = new BackgroundObject('0', (minCol + dx) * CS, (minRow + dy) * CS, { typeId });
+        rock.structural = true;
+        room.backgroundObjects.push(rock);
+      }
+    }
+
+    // Protected so cleanupStrayBackgroundObjects strips anything else that
+    // lands on the Cavern (its own rocks are structural, so they are exempt).
+    protectRegion(room, { kind: 'cells', cells: footprint });
+
+    room.cavern = {
+      hutKind: 'cavern',
+      doorPosition: { col: doorCol, row: doorRow },
+      revealed: false,
+      interiorState: null,
+      interiorGenerated: false,
+    };
+    return;
   }
 }

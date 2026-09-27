@@ -11,7 +11,7 @@ import { getDungeonDesign } from '../data/dungeonDesigns.js';
 import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
-import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, deriveRiverFlowDirection, buildForcedRiverParams, carveForcedRiver, cellularCaveGrid, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, spawnGuaranteedItems, offerL1Weapon, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl } from './roomFeatures.js';
+import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, deriveRiverFlowDirection, buildForcedRiverParams, carveForcedRiver, cellularCaveGrid, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, spawnGuaranteedItems, offerL1Weapon, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl } from './roomFeatures.js';
 
 // Zone-boss arena → letter template key. Boss rooms are entered without a
 // letter (cheat warp) or with an arbitrary one (normal progression), so we
@@ -303,6 +303,10 @@ export class RoomGenerator {
         this.spawnPearlFairy(room);
       }
     }
+
+    // Rare Cavern (bomb-revealed secret interior) — after every placement
+    // pass so it can refuse walls/structures/entities; roomFeatures.js.
+    seedCavern(room);
 
     // Final pass: strip stray bg objects inside protected structure regions
     // (hut footprint, maze shell, ravine band, well ring, …) and on room
