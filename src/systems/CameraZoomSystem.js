@@ -1,4 +1,5 @@
 import { GRID, GAME_STATES, ZOOM } from '../game/GameConfig.js';
+import { isDeathHeldOffSurface } from './PlaneSystem.js';
 
 /**
  * CameraZoomSystem — combat-proximity camera zoom.
@@ -140,6 +141,11 @@ export class CameraZoomSystem {
       // (isEntityOnScreen gates committed attacks) and shrink the player's
       // view of the obstacle field the chain is bouncing around in.
       if (game.currentRoom?.centipedeChains?.length) desiredScale = 1;
+    } else if (state === GAME_STATES.GAME_OVER && isDeathHeldOffSurface(game)) {
+      // Death underground / inside an Interior reads in place first: keep the
+      // zoom (and pivot) exactly as it was at the moment of death until the
+      // view cuts to the surface GAME OVER screen, then release rapidly.
+      desiredScale = this.targetZoom;
     } else {
       this._noEnemyElapsedMs = Infinity;
       // Origin deliberately left untouched here — see class doc comment.

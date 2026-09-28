@@ -9,7 +9,8 @@
  */
 
 import { GRID, COLORS } from '../../game/GameConfig.js';
-import { objectOnPlane, PLANE_SURFACE } from '../../systems/PlaneSystem.js';
+import { objectOnPlane, planeOf, isDeathHeldOffSurface, PLANE_SURFACE } from '../../systems/PlaneSystem.js';
+import { drawVisionFogOverlay } from '../ui/torchLight.js';
 
 export class GameOverRenderer {
   constructor(renderer, renderController) {
@@ -20,8 +21,26 @@ export class GameOverRenderer {
   render(game) {
     if (!game.currentRoom) return;
 
+    // Deaths off the surface layer (Interior PiP, or plane 1 underground /
+    // tunnel) hold the scene the player died in for the 2-second death delay,
+    // then cut to the surface room for the GAME OVER text.
+    const isCharacterDeath = game.characterDeathPending;
+    const timerExpired = isCharacterDeath ? game.characterDeathTimer <= 0 : game.gameOverDeathTimer <= 0;
+    const holdOffSurface = isDeathHeldOffSurface(game);
+    const holdInterior = holdOffSurface && (game.interiorManager?.isActive ?? false);
+    const holdPlane = holdOffSurface && !holdInterior;
+
+    // The cached background canvas still holds the EXPLORE paint of the
+    // layer the player died on (for plane 1: the blacked-out cave). Keep it
+    // untouched during the hold, and force a surface repaint the frame the
+    // hold ends — without this the plane-1 background was never repainted,
+    // so the cave showed full-screen with no fog behind GAME OVER (#274
+    // regression: the plane-0 filter below only runs on a dirty repaint).
+    if (this._wasHoldingOffSurface && !holdOffSurface) this.renderer.backgroundDirty = true;
+    this._wasHoldingOffSurface = holdOffSurface;
+
     // Render background (keep the room visible)
-    if (this.renderer.backgroundDirty) {
+    if (this.renderer.backgroundDirty && !holdPlane) {
       this.renderer.clearBackground();
 
       // Only create holes in border when exits are unlocked
@@ -78,15 +97,13 @@ export class GameOverRenderer {
     // stays visible, then the view cuts to the plain GAME OVER screen at the
     // same moment the "GAME OVER" text appears, rather than the two being
     // superimposed instantly.
-    const isCharacterDeath = game.characterDeathPending;
-    const timerExpired = isCharacterDeath ? game.characterDeathTimer <= 0 : game.gameOverDeathTimer <= 0;
-    const holdInterior = (game.interiorManager?.isActive ?? false) && !timerExpired;
-
     if (holdInterior) {
       // Delegate to the matching interior overlay (hut/dungeon/maze — see
       // InteriorOverlay/ADR-0001) so the death explosion renders at the
       // correct PIP position instead of the frozen, empty surface room.
       this.renderController.interiorOverlay.render(game);
+    } else if (holdPlane) {
+      this._renderPlaneDeathHold(game);
     } else {
       // Draw water tiles (dynamic state changes each frame)
       for (const obj of game.backgroundObjects) {
@@ -115,38 +132,7 @@ export class GameOverRenderer {
         }
       }
 
-      // Draw debris (remains on ground)
-      for (const piece of game.debris) {
-        this.renderer.drawEntity(
-          piece.position.x + GRID.CELL_SIZE / 2,
-          piece.position.y + GRID.CELL_SIZE / 2,
-          piece.char,
-          piece.color
-        );
-      }
-
-      // Draw particles (explosion and embers)
-      for (const particle of game.particles) {
-        if (particle.getAlpha) {
-          const alpha = particle.getAlpha();
-          this.renderer.drawTextWithAlpha(
-            particle.position.x + GRID.CELL_SIZE / 2,
-            particle.position.y + GRID.CELL_SIZE / 2,
-            particle.char,
-            particle.color,
-            alpha
-          );
-        } else {
-          const alpha = Math.max(0, particle.life / particle.maxLife);
-          this.renderer.drawTextWithAlpha(
-            particle.x,
-            particle.y,
-            particle.char,
-            particle.color,
-            alpha
-          );
-        }
-      }
+      this._drawDeathEffects(game);
     }
 
     // Gray zone: the mist swallows the death site — the vision hole lingers
@@ -156,9 +142,9 @@ export class GameOverRenderer {
     const mistSwallowing = game.grayZoneSystem?.isSwallowing() ?? false;
     if (mistSwallowing) return;
 
-    // Still inside the interior hold window — no GAME OVER text yet, just the
-    // interior PIP rendered above.
-    if (holdInterior) return;
+    // Still inside the off-surface hold window — no GAME OVER text yet, just
+    // the interior PIP / underground scene rendered above.
+    if (holdOffSurface) return;
 
     // Draw main death text
     const deathText = isCharacterDeath ? `${game.characterDeathName} lost` : 'GAME OVER';
@@ -182,6 +168,66 @@ export class GameOverRenderer {
       this.renderer.fgCtx.fillStyle = COLORS.TEXT;
       this.renderer.fgCtx.fillText(continueText, GRID.WIDTH / 2, GRID.HEIGHT / 2 + GRID.CELL_SIZE * 3);
       this.renderer.fgCtx.restore();
+    }
+  }
+
+  /**
+   * The plane the player died on (U-room cave, T-room tunnel, Aquifer), as
+   * EXPLORE drew it: the cached plane-1 background, dithered tunnel walls,
+   * the death debris/particles, then the cave fog around the body. Mirrors
+   * the plane-1 parts of ExploreRenderer's surface pass.
+   */
+  _renderPlaneDeathHold(game) {
+    const deathPlane = planeOf(game.player);
+    const room = game.currentRoom;
+    if ((room.tunnel || room.underground) && deathPlane === 1) {
+      for (const obj of game.backgroundObjects) {
+        if (!obj.data?.tunnelWall || obj.destroyed) continue;
+        this.renderer.drawEntityDithered(
+          obj.position.x + GRID.CELL_SIZE / 2,
+          obj.position.y + GRID.CELL_SIZE / 2,
+          obj.char,
+          obj.color
+        );
+      }
+    }
+    this._drawDeathEffects(game);
+    drawVisionFogOverlay(this.renderer, game, false);
+  }
+
+  /** Death debris (remains on ground) + explosion/ember particles. */
+  _drawDeathEffects(game) {
+    // Draw debris (remains on ground)
+    for (const piece of game.debris) {
+      this.renderer.drawEntity(
+        piece.position.x + GRID.CELL_SIZE / 2,
+        piece.position.y + GRID.CELL_SIZE / 2,
+        piece.char,
+        piece.color
+      );
+    }
+
+    // Draw particles (explosion and embers)
+    for (const particle of game.particles) {
+      if (particle.getAlpha) {
+        const alpha = particle.getAlpha();
+        this.renderer.drawTextWithAlpha(
+          particle.position.x + GRID.CELL_SIZE / 2,
+          particle.position.y + GRID.CELL_SIZE / 2,
+          particle.char,
+          particle.color,
+          alpha
+        );
+      } else {
+        const alpha = Math.max(0, particle.life / particle.maxLife);
+        this.renderer.drawTextWithAlpha(
+          particle.x,
+          particle.y,
+          particle.char,
+          particle.color,
+          alpha
+        );
+      }
     }
   }
 }

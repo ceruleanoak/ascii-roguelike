@@ -108,6 +108,20 @@ export function isInteriorActive(game) {
 }
 
 /**
+ * True while GAME_OVER's 2-second death delay is still showing the death in
+ * place on a layer other than the surface — inside an Interior (PiP) or on a
+ * non-surface Plane (U-room cave, T-room tunnel, Aquifer). Once the delay
+ * expires the view cuts to the surface room for the GAME OVER text. Shared by
+ * GameOverRenderer (what to draw) and CameraZoomSystem (hold the zoom) so the
+ * scene and the camera release on the same frame.
+ */
+export function isDeathHeldOffSurface(game) {
+  const timer = game.characterDeathPending ? game.characterDeathTimer : game.gameOverDeathTimer;
+  if (!(timer > 0)) return false;
+  return isInteriorActive(game) || planeOf(game.player) !== PLANE_SURFACE;
+}
+
+/**
  * Tag a transient effect/entity (particle, puddle, goo blob, steam cloud, ...)
  * with the interior plane it was spawned on, so render filtering (hutPlane)
  * matches the layer the player was in at spawn time. Call this at every
