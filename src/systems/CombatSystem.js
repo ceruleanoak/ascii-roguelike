@@ -693,8 +693,9 @@ export class CombatSystem {
             this.physicsSystem.applyHitstop(enemy, 0.06);
             if (proj.owner) this.physicsSystem.applyHitstop(proj.owner, 0.04);
 
-            // Apply lifesteal to player
-            if (proj.lifesteal && proj.owner === 'player') {
+            // Apply lifesteal to player (a 'lifesteal' immunity — bloodless
+            // Skeletons — lets the hit land but heals nothing)
+            if (proj.lifesteal && proj.owner === 'player' && enemy.shouldApplyStatusEffect('lifesteal')) {
               proj.owner.hp = Math.min(proj.owner.hp + proj.damage * proj.lifesteal, proj.owner.maxHp);
             }
 
@@ -1177,8 +1178,8 @@ export class CombatSystem {
                 }
               }
 
-              // Apply lifesteal
-              if (attack.lifesteal && attack.owner) {
+              // Apply lifesteal ('lifesteal' immunity: the hit lands, nothing to drink)
+              if (attack.lifesteal && attack.owner && enemy.shouldApplyStatusEffect('lifesteal')) {
                 attack.owner.hp = Math.min(attack.owner.hp + attack.damage * attack.lifesteal, attack.owner.maxHp);
               }
 

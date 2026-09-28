@@ -13,7 +13,7 @@
 //   - Explicit `elementalAffinity.immunity: [effect, ...]` blocks specific effects by
 //     name. This is the "give this boss an explicit onHit immunity" lever — works for
 //     any effect, including affinity-less ones (stun, sleep, charm, dizzy, blind,
-//     knockback) that have no entry below.
+//     knockback, lifesteal) that have no entry below.
 //   - Affinity auto-immunity: if the effect maps to an affinity here and the entity's
 //     `affinities` list includes that affinity, the effect is blocked. A fire-affinity
 //     enemy is auto-immune to burn (and any future fire-affinity effect) with no

@@ -2272,7 +2272,7 @@ export const ENEMIES = {
     attackType: 'melee',
     decisionInterval: 0.5,  // Average intelligence
     color: '#eeeeee',
-    elementalAffinity: { immunity: ['poison'] },  // Bone — nothing left to poison
+    elementalAffinity: { immunity: ['poison', 'lifesteal'] },  // Bone — nothing left to poison, no blood to drink
     affinities: ['undead'],
     tier: 'weak'
   },
