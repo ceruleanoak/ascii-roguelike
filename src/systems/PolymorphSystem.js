@@ -1,8 +1,12 @@
-import { GRID } from '../game/GameConfig.js';
+import { GRID, PHYSICS } from '../game/GameConfig.js';
+import { ENEMIES } from '../data/enemies.js';
 import { NeutralCharacter } from '../entities/NeutralCharacter.js';
 
 const FROG_SPEED = 130;        // matches ENEMIES['g'].speed
 const FROG_ACCEL = 800;        // matches ENEMIES['g'].acceleration
+// Tongue cooldown in real seconds — parity with the enemy Frog, whose data
+// value is double-seconds (ticked at ENEMY_TIMER_RATE), so convert here.
+const TONGUE_COOLDOWN = ENEMIES['g'].attackCooldown / PHYSICS.ENEMY_TIMER_RATE;
 const TONGUE_MAX_LENGTH = GRID.CELL_SIZE * 2.5;
 const TONGUE_DAMAGE = 1;
 const TONGUE_STUN = 2.0;       // seconds of stun applied on hit
@@ -28,7 +32,12 @@ const CURE_RUSALKA_COLOR = '#88ffee';
 export class PolymorphSystem {
   // ── Activation ─────────────────────────────────────────────────────────────
 
-  activatePolymorph(game, cursed = false) {
+  /**
+   * @param {boolean} [silent=false] — skip the transform SFX. Used when the
+   *   frog form is re-applied to the fresh Player on a room transition; that
+   *   is a state restore, not a transformation.
+   */
+  activatePolymorph(game, cursed = false, silent = false) {
     const player = game.player;
     if (!player || player.polymorphed) return;
 
@@ -56,6 +65,7 @@ export class PolymorphSystem {
     player._frogJumpActive   = false;
     player._frogJumpDurationTimer = 0;
     player._frogJumpSide     = 1;
+    player._frogTongueCooldown = 0;
 
     // Witch curse: force exits open immediately
     if (cursed && game.currentRoom) {
@@ -66,7 +76,7 @@ export class PolymorphSystem {
     player.dodgeRoll.active = false;
     player.dodgeRoll.cooldownTimer = 0;
 
-    game.audioSystem?.playSFX('polymorph');
+    if (!silent) game.audioSystem?.playSFX('polymorph');
   }
 
   // ── Deactivation ───────────────────────────────────────────────────────────
@@ -96,6 +106,7 @@ export class PolymorphSystem {
     player._frogJumpTimer        = 0;
     player._frogJumpDurationTimer = 0;
     player._frogJumpSide         = 1;
+    player._frogTongueCooldown   = 0;
 
     if (markCured) {
       player.polymorphCured = true;
@@ -145,6 +156,9 @@ export class PolymorphSystem {
 
   spawnCureRusalka(game) {
     if (game.cureRusalka) return; // already present
+    // The healer answers a curse only. A voluntary frog (FROG spell, post-cure)
+    // is not cursed, so she must not reappear to force-revert it.
+    if (!game.player?.polymorphCursed) return;
 
     const rusalka = new NeutralCharacter(
       CURE_RUSALKA_CHAR,
@@ -161,6 +175,8 @@ export class PolymorphSystem {
   createTongueAttack(game) {
     const player = game.player;
     if (!player?.polymorphed) return;
+    if (player._frogTongueCooldown > 0) return;
+    player._frogTongueCooldown = TONGUE_COOLDOWN;
 
     // Find enemies for whichever layer the player currently occupies.
     const enemies = game._activeEnemies();
@@ -219,12 +235,14 @@ export class PolymorphSystem {
 
     if (!game.player.polymorphed) return;
 
+    if (game.player._frogTongueCooldown > 0) game.player._frogTongueCooldown -= dt;
+
     // Drive frog jumper movement (sets velocity bursts, manages jump timer)
     this._updateFrogMovement(dt, game);
 
     // Check for Lake room entry — spawn cure Rusalka if needed
     const isLakeRoom = game.currentRoom?.exitLetter === 'L';
-    if (isLakeRoom && !game.cureRusalka && !game.player.inHut) {
+    if (isLakeRoom && !game.cureRusalka && !game.player.inHut && game.player.polymorphCursed) {
       this.spawnCureRusalka(game);
     }
 

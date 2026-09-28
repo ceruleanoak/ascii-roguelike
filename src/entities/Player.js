@@ -116,6 +116,7 @@ export class Player {
     this._frogJumpTimer = 0;
     this._frogJumpDurationTimer = 0;
     this._frogJumpSide = 1;
+    this._frogTongueCooldown = 0; // real seconds until the frog tongue can fire again
 
     // Boss grab state
     this.grabbed   = false; // true while a GooHead has the player in its grip
@@ -1105,6 +1106,7 @@ export class Player {
     this._frogJumpTimer = 0;
     this._frogJumpDurationTimer = 0;
     this._frogJumpSide = 1;
+    this._frogTongueCooldown = 0;
 
     // Restore display char (may have been overwritten by bat form or frog form)
     this.char = '@';

@@ -578,18 +578,18 @@ export class PhysicsSystem {
     let velocityMultiplier = 1.0;
     if (inLiquid) {
       // swimAffinity entities (e.g. frog) glide through water at full speed —
-      // they compensate via higher jump velocity in water. Shark Mask divers
-      // are treated the same way while their dive is active.
-      const swimsFast = entity.data?.swimAffinity || entity.diving;
+      // they compensate via higher jump velocity in water. A polymorphed
+      // player frog gets the same treatment as the enemy Frog (parity), and
+      // Shark Mask divers are treated the same way while their dive is active.
+      const swimsFast = entity.data?.swimAffinity || entity.polymorphed || entity.diving;
       // Water slows by wet Pip count (StatusEffectSystem.wetPipSpeed) — pip 1
-      // is the standard 0.5x, and only deep water fills pips 2–3. A frog
-      // (polymorphed) or Flippers (deepWaterImmune) never fill past pip 1, so
-      // they keep the standard slow even in deep water.
+      // is the standard 0.5x, and only deep water fills pips 2–3. Flippers
+      // (deepWaterImmune) never fill past pip 1, so they keep the standard
+      // slow even in deep water.
       if (swimsFast) {
         velocityMultiplier = 1.0;
       } else {
-        const deepWaterImmune = entity.polymorphed || entity.deepWaterImmune;
-        velocityMultiplier = wetPipSpeed(deepWaterImmune ? 1 : wetPipCount(entity));
+        velocityMultiplier = wetPipSpeed(entity.deepWaterImmune ? 1 : wetPipCount(entity));
       }
     } else if (inDeepSnow && !isDodgeRolling) {
       // Ice-affinity enemies and small enemies travel under deep snow uninhibited

@@ -1983,7 +1983,7 @@ class Game {
     // savedState will capture the correct base char/color for this character)
     if (savedPolymorph) {
       if (savedPolymorph.active) {
-        this.polymorphSystem.activatePolymorph(this, savedPolymorph.cursed);
+        this.polymorphSystem.activatePolymorph(this, savedPolymorph.cursed, true);
       }
       // Always restore cured flag — this is what unlocks the F key toggle
       if (savedPolymorph.cured) this.player.polymorphCured = true;

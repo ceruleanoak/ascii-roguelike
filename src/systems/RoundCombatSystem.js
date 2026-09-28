@@ -52,7 +52,7 @@ export class RoundCombatSystem {
   }
 
   /**
-   * The Quagmire's final-round outcome. A frog player gets the silent healer
+   * The Quagmire's final-round outcome. A cursed frog player gets the silent healer
    * (cure on contact, via PolymorphSystem) unconditionally — that branch is
    * deterministic and never rolled. Anyone else draws from a weighted table:
    * the rescued Alchemist (the game's namesake NPC finally freed), the Hag
@@ -62,7 +62,7 @@ export class RoundCombatSystem {
    */
   _spawnFinalEncounter(room) {
     const game = this.game;
-    if (game.player?.polymorphed) {
+    if (game.player?.polymorphCursed) {
       game.polymorphSystem?.spawnCureRusalka(game);
       return;
     }
