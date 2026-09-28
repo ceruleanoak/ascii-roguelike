@@ -17,6 +17,7 @@ import { GooBlob } from '../entities/GooBlob.js';
 import { LakeBoss, LAKE_BOSS_PHASE2_HP_THRESHOLD } from '../entities/LakeBoss.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Item } from '../entities/Item.js';
+import { BoomerangMechanic } from './BoomerangMechanic.js';
 import { TurtleShell, TURTLE_MAX_HP, TURTLE_PHASE2_HP } from '../entities/TurtleShell.js';
 import { Enemy } from '../entities/Enemy.js';
 import { TurtleHead } from '../entities/TurtleHead.js';
@@ -366,6 +367,7 @@ export class BossSystem {
         const pcx2 = proj.position.x + (proj.width  || GRID.CELL_SIZE) / 2;
         const pcy2 = proj.position.y + (proj.height || GRID.CELL_SIZE) / 2;
         if (Math.hypot(pcx2 - sw.x, pcy2 - sw.y) <= sw.radius) {
+          if (proj.boomerang) BoomerangMechanic._refundAmmo(proj);
           playerProjs.splice(pi, 1);
         }
       }
@@ -375,6 +377,7 @@ export class BossSystem {
       for (let ai = stuckArrows.length - 1; ai >= 0; ai--) {
         const arrow = stuckArrows[ai];
         if (Math.hypot(arrow.position.x - sw.x, arrow.position.y - sw.y) <= sw.radius) {
+          BoomerangMechanic.releaseStuck(arrow);
           stuckArrows.splice(ai, 1);
         }
       }

@@ -3,6 +3,7 @@ import { planeOf, inSamePlane, objectOnPlane, tagInteriorPlane } from './PlaneSy
 import { applyExitMutatingSwordHit } from './ExitSystem.js';
 import { BoomerangMechanic } from './BoomerangMechanic.js';
 import { WallRicochetMechanic } from './WallRicochetMechanic.js';
+import { updateStuckArrows } from './StuckArrowMechanic.js';
 import { WaterLavaHitMechanic } from './WaterLavaHitMechanic.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { GameAnimalMechanic } from '../entities/enemyMechanics/GameAnimalMechanic.js';
@@ -487,7 +488,11 @@ export class CombatSystem {
                 color: proj.color,
                 isBurning: proj.onHit === 'burn',
                 fireGenTimer: 0,
-                lifetime: 12.0
+                lifetime: 12.0,
+                // A lodged boomerang carries its throw's ammo charge until
+                // picked up or despawned — see BoomerangMechanic.releaseStuck.
+                boomerang: !!proj.boomerang,
+                owner: proj.owner
               });
             }
             break;
@@ -496,7 +501,8 @@ export class CombatSystem {
       }
 
       if (bgObjectHit) {
-        if (proj.boomerang) BoomerangMechanic._refundAmmo(proj);
+        // No boomerang refund here: it lodged as a stuck entry above, which
+        // holds the charge until pickup/despawn.
         this.projectiles.splice(i, 1);
         continue;
       }
@@ -1534,73 +1540,8 @@ export class CombatSystem {
       }
     }
 
-    // Update stuck arrows (follow their targets and emit fire particles if burning)
-    for (let i = this.stuckArrows.length - 1; i >= 0; i--) {
-      const arrow = this.stuckArrows[i];
-
-      // Expire after lifetime
-      arrow.lifetime -= deltaTime;
-      if (arrow.lifetime <= 0) {
-        this.stuckArrows.splice(i, 1);
-        continue;
-      }
-
-      // If stuck to something, check if target is dead and remove arrow
-      if (arrow.stuckTo) {
-        const targetDead = (arrow.stuckTo.hp !== undefined && arrow.stuckTo.hp <= 0) ||
-                          arrow.stuckTo.destroyed;
-        if (targetDead) {
-          // Small chance for an arrow stuck in a slain enemy to drop for re-pickup
-          if (arrow.stuckType === 'enemy' && arrow.weaponChar && Math.random() < 0.25) {
-            arrow.stuckTo = null;
-            arrow.stuckType = 'ground';
-            arrow.pickupable = true;
-            arrow.lifetime = 8.0;
-            arrow.offset = { x: 0, y: 0 };
-          } else {
-            this.stuckArrows.splice(i, 1);
-            continue;
-          }
-        } else {
-          // Update position to follow target
-          arrow.position.x = arrow.stuckTo.position.x + arrow.offset.x;
-          arrow.position.y = arrow.stuckTo.position.y + arrow.offset.y;
-        }
-      }
-      // If on ground (stuckTo === null), arrow stays at fixed position
-
-      // Player can pick up ground arrows to refund ammo to the matching bow
-      if (arrow.pickupable && arrow.weaponChar && player && !player.isDead) {
-        const ax = arrow.position.x + GRID.CELL_SIZE / 2;
-        const ay = arrow.position.y + GRID.CELL_SIZE / 2;
-        const px = player.position.x + player.width / 2;
-        const py = player.position.y + player.height / 2;
-        if (Math.abs(ax - px) < GRID.CELL_SIZE && Math.abs(ay - py) < GRID.CELL_SIZE) {
-          const bow = (player.quickSlots || []).find(slot =>
-            slot &&
-            slot.data?.weaponType === 'BOW' &&
-            slot.char === arrow.weaponChar &&
-            slot.maxUses !== null &&
-            slot.usesRemaining < slot.maxUses
-          );
-          if (bow) {
-            bow.usesRemaining++;
-            if (bow.cooldownTimer > 1000) bow.cooldownTimer = 0; // Clear depletion lock
-            this.createDamageNumber('+1', arrow.position.x, arrow.position.y, arrow.color || '#ffffff');
-            this.stuckArrows.splice(i, 1);
-            continue;
-          }
-        }
-      }
-
-      // Advance fire generator timer; expire after 3 seconds
-      if (arrow.isBurning) {
-        arrow.fireGenTimer += deltaTime;
-        if (arrow.fireGenTimer >= 3.0) {
-          arrow.isBurning = false;
-        }
-      }
-    }
+    // Stuck arrows: follow hosts, expire, player pickup refunds, burn timer.
+    updateStuckArrows(this.stuckArrows, deltaTime, player, this);
 
     // Update tongue attacks (frog) — extend/hold/retract + hit resolution lives in TongueAttackSystem
     const tongueResult = this.tongueAttackSystem.update(deltaTime, player);
@@ -2080,6 +2021,12 @@ export class CombatSystem {
   }
 
   clear() {
+    // Boomerangs still in the air or lodged in the room being torn down hand
+    // their charge back first — otherwise a room exit strands the bow's ammo.
+    for (const proj of this.projectiles) {
+      if (proj.boomerang) BoomerangMechanic._refundAmmo(proj);
+    }
+    for (const arrow of this.stuckArrows) BoomerangMechanic.releaseStuck(arrow);
     this.projectiles = [];
     this.enemyProjectiles = [];
     this.meleeAttacks = [];

@@ -67,6 +67,9 @@ export const BoomerangMechanic = {
   // Refund one charge to the matching bow slot on catch (or on the
   // safety-net timeout below) — matches the arrow-pickup pattern, minus the
   // '+1' popup (maxUses is 1, so there's never more than one to count).
+  // Takes anything carrying `owner` + `weaponChar`: an in-flight projectile
+  // or a stuck boomerang entry in CombatSystem.stuckArrows. Returns true if a
+  // bow slot was refilled.
   _refundAmmo(proj) {
     const bow = (proj.owner?.quickSlots || []).find(slot =>
       slot &&
@@ -75,10 +78,27 @@ export const BoomerangMechanic = {
       slot.maxUses !== null &&
       slot.usesRemaining < slot.maxUses
     );
-    if (bow) {
-      bow.usesRemaining++;
-      if (bow.cooldownTimer > 1000) bow.cooldownTimer = 0; // Clear depletion lock
-    }
+    if (!bow) return false;
+    bow.usesRemaining++;
+    if (bow.cooldownTimer > 1000) bow.cooldownTimer = 0; // Clear depletion lock
+    return true;
+  },
+
+  // Ammo contract for a boomerang that lodges in a blocking object: the stuck
+  // entry holds the throw's charge, so nothing is refunded at impact. The
+  // charge comes back exactly once, by whichever ends the entry first — the
+  // player picking it up (CombatSystem's stuck-arrow pickup) or the entry
+  // leaving the world for any other reason (lifetime despawn, boss shockwave
+  // dislodge, room clear) via releaseStuck. A host object destroyed out from
+  // under it drops it to the ground instead (dropStuckToGround).
+  releaseStuck(entry) {
+    if (entry.boomerang) this._refundAmmo(entry);
+  },
+
+  dropStuckToGround(entry) {
+    entry.stuckTo = null;
+    entry.stuckType = 'ground';
+    entry.offset = { x: 0, y: 0 };
   },
 
   // Per-frame flight control. Outbound: home onto a locked bounce target (re-aimed
