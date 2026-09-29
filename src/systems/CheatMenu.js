@@ -45,9 +45,11 @@ export class CheatMenu {
     const demoRecording = !!this.game?.demoSystem?.recording;
     const recordHotkey = !!this.game?.demoSystem?.hotkeyEnabled;
     const fireworks = !!this.game?.particleFireworks;
+    const frog = !!this.game?.player?.polymorphed;
     const deathCount = sessionDeaths.filter(r => r.event !== 'revive').length;
     const togglesItems = [
       { char: godMode ? '✓' : '○', name: `GOD MODE [${godMode ? 'ON' : 'OFF'}]`, type: 'toggle_god_mode', color: godMode ? '#00ff88' : '#888888' },
+      { char: frog ? 'g' : '○', name: `FROG FORM [${frog ? 'ON' : 'OFF'}]`, type: 'toggle_frog', color: frog ? '#44bb44' : '#888888' },
       { char: '+', name: `MANA SLOT +1 (${manaSlotCount})`, type: 'activate_magic_meter', color: manaSlotCount > 0 ? '#cc66ff' : '#888888' },
       { char: demoRecording ? '●' : '○', name: `RECORD DEMO [${demoRecording ? 'ON' : 'OFF'}]`, type: 'toggle_demo_recording', color: demoRecording ? '#ff4444' : '#888888' },
       { char: recordHotkey ? 'R' : '○', name: `R RECORD KEY [${recordHotkey ? 'ON' : 'OFF'}]`, type: 'toggle_record_hotkey', color: recordHotkey ? '#ff8844' : '#888888' },
@@ -563,6 +565,18 @@ export class CheatMenu {
       // without a main.js dispatch branch.
       const demo = this.game?.demoSystem;
       if (demo) demo.hotkeyEnabled = !demo.hotkeyEnabled;
+      this.rebuild();
+      return 'handled';
+    }
+    if (selected.type === 'toggle_frog') {
+      // Self-contained like the record key — no main.js dispatch branch. An
+      // uncursed polymorph: exits keep their normal locks, and it lifts from
+      // here (or any ordinary cure). Counts as a cheat for the death ledger.
+      const game = this.game;
+      if (!game?.player) return 'handled';
+      if (game.player.polymorphed) game.polymorphSystem.deactivatePolymorph(game);
+      else game.polymorphSystem.activatePolymorph(game);
+      game.cheatUsed = true;
       this.rebuild();
       return 'handled';
     }
