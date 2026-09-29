@@ -334,8 +334,10 @@ export class Player {
       }
       this.acceleration.ax = 0;
       this.acceleration.ay = 0;
-      if (!this._frogJumpActive) {
-        // Coast to a stop between jumps
+      // Coast to a stop between land hops. Not while swimming — the swim gait
+      // (PolymorphSystem) carries a glide between strokes, and this per-frame
+      // decay would crush it to a crawl (bug #334).
+      if (!this._frogJumpActive && !(this.inLiquid || this.inAquifer)) {
         this.velocity.vx *= 0.75;
         this.velocity.vy *= 0.75;
         if (Math.abs(this.velocity.vx) < 2) this.velocity.vx = 0;
