@@ -100,6 +100,8 @@ export class Player {
     this.boundToGrid = true;
     this.collisionMap = null; // Set by game state
     this.plane = 0; // 0=normal plane, 1=tunnel plane
+    this.inAquifer = false;
+    this.aquiferCurrent = null; // {x,y} px/s carrier push, set per frame by AquiferSystem
     // Interior membership (ADR-0001); accessors on prototype (InteriorManager.js).
     this._activeInteriorKind = null; // null | 'hut' | 'dungeon' | 'maze'
     this.hutExitPosition = null; // saved exterior position when entering a hut
@@ -1090,6 +1092,8 @@ export class Player {
 
     // Reset plane and interior state
     this.plane = 0;
+    this.inAquifer = false;
+    this.aquiferCurrent = null;
     this._activeInteriorKind = null;
     this.hutExitPosition = null;
     this.mazeExitPosition = null;

@@ -633,8 +633,18 @@ export class PhysicsSystem {
     }
 
     // Update position with velocity multiplier
-    const newX = entity.position.x + entity.velocity.vx * deltaTime * velocityMultiplier;
-    const newY = entity.position.y + entity.velocity.vy * deltaTime * velocityMultiplier;
+    let newX = entity.position.x + entity.velocity.vx * deltaTime * velocityMultiplier;
+    let newY = entity.position.y + entity.velocity.vy * deltaTime * velocityMultiplier;
+
+    // Aquifer Current (AquiferSystem sets it per frame): a carrier displacement
+    // added on top of the entity's own motion rather than written into its
+    // velocity, so it is neither clamped by Player.updateInput's speed cap nor
+    // erased by the frog's stroke (which assigns velocity outright). Walls
+    // still stop it — collision runs on the combined step below.
+    if (entity.aquiferCurrent) {
+      newX += entity.aquiferCurrent.x * deltaTime;
+      newY += entity.aquiferCurrent.y * deltaTime;
+    }
 
     // Collision detection (if entity has collision)
     if (entity.hasCollision) {

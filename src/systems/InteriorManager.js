@@ -107,9 +107,10 @@ export class InteriorManager {
       g.player.mazeExitPosition = null;
       g.player.dungeonExitPosition = null;
       // Aquifer is plane-1 content on the surface room, not a registered interior;
-      // clear its dive state here alongside the interior resets.
+      // clear its current-ride state here alongside the interior resets.
       g.player.inAquifer = false;
       g.player.aquiferExitPosition = null;
+      g.player.aquiferCurrent = null;
       g.player.plane = 0;
       // Tomb Ghost sap (DungeonGhostSystem) — DungeonSystem's own
       // _activateFloor/_exitDungeon hooks already clear this on the normal
