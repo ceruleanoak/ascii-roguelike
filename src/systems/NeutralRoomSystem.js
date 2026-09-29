@@ -1,5 +1,6 @@
 import { GRID, ROOM_TYPES, GAME_STATES } from '../game/GameConfig.js';
 import { NEUTRAL_ROOMS } from '../data/neutralRooms.js';
+import { seedZonePath } from './CrossZoneWarp.js';
 
 // The edge a neutral room is left through, given the exit taken to reach it.
 // 'south' entry (REST → the Graveyard) is the only one that puts the door home
@@ -173,6 +174,20 @@ export class NeutralRoomSystem {
    */
   returnToSavedRoom(game) {
     const saved = game.savedExploreState;
+
+    // A one-way arrival (the Aquifer Current's yellow branch into the Oasis)
+    // has no room to go back to: the saved room is dropped and the exit opens
+    // into a fresh room of the named zone instead, as an ordinary room
+    // transition through the exit edge.
+    if (saved?.returnTo) {
+      const exitEdge = game.currentRoom.returnExit;
+      game.savedExploreState = null;
+      seedZonePath(game, saved.returnTo.zone);
+      game.zoneSystem.forceNextZone(saved.returnTo.zone);
+      game.stateMachine.currentState = GAME_STATES.EXPLORE;
+      game.enterExploreState(exitEdge, null);
+      return;
+    }
 
     if (saved) {
       game.currentRoom = saved.room;

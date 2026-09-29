@@ -849,8 +849,7 @@ export class ExitSystem {
    * frame from main.js's updateExploreState. Hidden mimics don't block clear
    * — they're still in the enemies array, so if they reveal post-clear they
    * fight normally, but exits and clear-side effects fire on visible-enemy
-   * defeat. Skips entirely while diving the Aquifer (defer wave advance
-   * until the frog surfaces) or mid ascent-lava fill (own state machine).
+   * defeat. Skips entirely mid ascent-lava fill (own state machine).
    *
    * Two directions:
    *  - Counted enemies hit zero → unlock exits. One-time clear rewards
@@ -876,7 +875,7 @@ export class ExitSystem {
     const ascentHazardActive =
       !!game.lavaAscentSystem?.isHazardActive(room) ||
       !!game.iceAscentSystem?.isHazardActive(room);
-    if (game.player.inAquifer || ascentHazardActive) return;
+    if (ascentHazardActive) return;
 
     if (game._countedEnemies(room.enemies).length === 0) {
       // Quagmire: spawn the next wave instead of clearing while rounds remain.

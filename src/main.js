@@ -220,7 +220,7 @@ class Game {
     this.interiorManager = new InteriorManager(this);
     this.cameraZoomSystem = new CameraZoomSystem(this); // combat-proximity zoom
     this.roundCombatSystem = new RoundCombatSystem(this); // Quagmire wave combat
-    this.aquiferSystem = new AquiferSystem(this);         // frog-only plane-1 Aquifer (Quagmire dive)
+    this.aquiferSystem = new AquiferSystem(this);         // Quagmire Whirlpool + plane-1 Aquifer Current
     this.sinkholeSystem = new SinkholeSystem(this);       // concealed G-room shortcut → yellow-zone U room
     this.threeRoomSystem = new ThreeRoomSystem();          // the source room: N×3 + gray '3' discoveries, Death behind its door
     this.threeSlotGlobeSystem = new ThreeSlotGlobeSystem(this); // the turning globe of offerings its slots are fed from
@@ -2208,7 +2208,7 @@ class Game {
     return false;
   }
   _countedEnemies(enemies) {
-    // `uncounted` hazards (e.g. the Aquifer eel) never gate room-clear or waves.
+    // `uncounted` enemies (e.g. the Quagmire Hag) never gate room-clear or waves.
     return enemies.filter(e => !this._isHiddenEnemy(e) && !e.isDying && !e.uncounted);
   }
 
@@ -2976,7 +2976,7 @@ class Game {
 
     // Update hut/dungeon/maze systems (door entry/exit and interior entity logic)
     this.interiorManager.update(deltaTime);
-    this.aquiferSystem.update(deltaTime); // Quagmire dive: entry cooldown + plane-1 pickup
+    this.aquiferSystem.update(deltaTime); // Quagmire Whirlpool + Aquifer Current ride
     this.sinkholeSystem.update(deltaTime); // Sinkhole cave: river-exit → cross-zone transition
     this.alchemySystem.update(deltaTime);
     this.fireplaceSystem.update(); // Torch in a quick slot auto-lights an unlit fireplace on approach
@@ -3622,9 +3622,8 @@ class Game {
     // EXPLORE (and ARCADE_DEMO, which drives the explore loop with prerecorded inputs)
     if (state === GAME_STATES.EXPLORE || state === GAME_STATES.ARCADE_DEMO) {
 
-      // Polymorphed frog: dive, then interior exit, else tongue.
+      // Polymorphed frog: interior exit, else tongue.
       if (this.player?.polymorphed) {
-        if (this.aquiferSystem.handleSpacePress()) return;
         if (this.interiorManager.handleSpacePress()) return;
         this.polymorphSystem.createTongueAttack(this);
         return;

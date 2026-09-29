@@ -186,7 +186,7 @@ export const ThiefMechanic = {
     enemy.thiefRecoverTimer = 0;
     // `uncounted` stays true — recovery restores hunting/biting behavior but
     // never restores room-clear gating. Every other `uncounted` user in the
-    // codebase (Aquifer eel, Quagmire Hag) is one-way for the same reason:
+    // codebase (Quagmire Hag, Errand spawns) is one-way for the same reason:
     // once a room's exits have opened on this thief's account, a later
     // change of heart shouldn't re-trap the player behind an already-earned-
     // open door. Bug #195 — recovering rats were re-locking exits mid-flap.

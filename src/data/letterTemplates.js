@@ -332,7 +332,7 @@ export const LETTER_TEMPLATES = {
 
   // Quagmire (Q) — rare green-zone water arena. Dispersed pools (reusing the
   // lakeZone blob carver) host escalating round combat; a Rusalka surfaces after
-  // the final clear. Frog-only Ponds are seeded into these pools in a later phase.
+  // the final clear, and one outer pool holds the Whirlpool down to the Aquifer.
   Q: {
     name: 'Quagmire',
     description: 'A rare green mire of scattered pools — combat rises in rounds, then the Rusalka',
@@ -363,7 +363,7 @@ export const LETTER_TEMPLATES = {
     // Combat (when present) escalates over 3 rounds — RoundCombatSystem.
     roundCombat: { enabled: true, rounds: 3 },
 
-    // Marks the room a Quagmire for the post-clear Rusalka + (later) Pond seeding.
+    // Marks the room a Quagmire for the post-clear Rusalka + the Whirlpool.
     quagmire: true,
 
     // Frogs near the pools, like the Lake room.

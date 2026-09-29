@@ -16,9 +16,10 @@ import { Player } from '../entities/Player.js';
  * `game.dungeonCurrentFloor`) stay on `game` — the manager owns lifecycle, game
  * holds the data (documented compromise, like trap/companion state).
  *
- * The Aquifer (Quagmire dive) is intentionally NOT an interior here: it is plane-1
- * content laid onto the surface room (reusing the underground render/physics path),
- * not a separate layer with its own collision source. AquiferSystem owns it.
+ * The Aquifer (the Quagmire Whirlpool's current) is intentionally NOT an interior
+ * here: it is plane-1 content laid onto the surface room (reusing the underground
+ * render/physics path), not a separate layer with its own collision source.
+ * AquiferSystem owns it.
  */
 
 // ── Derived interior-membership accessors (ADR-0001) ──────────────────────────
@@ -109,7 +110,6 @@ export class InteriorManager {
       // Aquifer is plane-1 content on the surface room, not a registered interior;
       // clear its current-ride state here alongside the interior resets.
       g.player.inAquifer = false;
-      g.player.aquiferExitPosition = null;
       g.player.aquiferCurrent = null;
       g.player.plane = 0;
       // Tomb Ghost sap (DungeonGhostSystem) — DungeonSystem's own

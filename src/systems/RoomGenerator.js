@@ -11,7 +11,7 @@ import { getDungeonDesign } from '../data/dungeonDesigns.js';
 import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
-import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placePondEntries, generateSettlementRoom as generateSettlementRoomImpl, buildForcedRiverParams, generateYellowWaterTemplate, cellularCaveGrid, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, spawnGuaranteedItems, offerL1Weapon, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl } from './roomFeatures.js';
+import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placeWhirlpool, generateSettlementRoom as generateSettlementRoomImpl, buildForcedRiverParams, generateYellowWaterTemplate, cellularCaveGrid, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, spawnGuaranteedItems, offerL1Weapon, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl } from './roomFeatures.js';
 
 // Zone-boss arena → letter template key. Boss rooms are entered without a
 // letter (cheat warp) or with an arbitrary one (normal progression), so we
@@ -631,8 +631,8 @@ export class RoomGenerator {
     if (this.currentLetterTemplate?.lakeZone?.enabled) {
       this.generateLakeTerrain(room);
     }
-    // Quagmire: mark a conspicuous frog-only Pond entrance in the largest pool.
-    if (this.currentLetterTemplate?.quagmire) placePondEntries(this, room);
+    // Quagmire: the Whirlpool down to the Aquifer, dormant until the rounds clear.
+    if (this.currentLetterTemplate?.quagmire) placeWhirlpool(this, room);
 
     // Spawn training dummy in Green zone L1 (a pacifist Enemy — see data/enemies.js '@')
     if (this.currentDepth === 1 && room.zone === 'green') {
@@ -1158,8 +1158,8 @@ export class RoomGenerator {
     }
 
     // ── Cellular automata cave generation ────────────────────────────────────
-    // caveGrid[row][col] = 1 → wall, 0 → passage. Shared with the bat belfry and
-    // the Aquifer (Quagmire dive) via _cellularCaveGrid.
+    // caveGrid[row][col] = 1 → wall, 0 → passage. Shared with the bat belfry
+    // via cellularCaveGrid.
     const caveGrid = cellularCaveGrid(COLS, ROWS, isInClearing);
 
     // ── Carve corridors from center to each clearing entrance ────────────────

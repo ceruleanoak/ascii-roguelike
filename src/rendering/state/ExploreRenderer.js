@@ -44,7 +44,8 @@ import { isInteriorActive } from '../../systems/PlaneSystem.js';
 import { drawVisionFogOverlay } from '../ui/torchLight.js';
 import { drawKnownSpellHints, drawWellCoinHint, drawDoorPrompts } from '../ui/ContextHints.js';
 import { drawManaGems } from '../effects/ManaGemRenderer.js';
-import { drawSparkle, GRASS_SPARKLE_SPEED, GLITTER_SPARKLE_SPEED } from '../effects/SparkleEffects.js';
+import { drawSparkle, drawGlitterSparkles, GRASS_SPARKLE_SPEED } from '../effects/SparkleEffects.js';
+import { drawWhirlpool } from '../effects/WhirlpoolEffects.js';
 import { stepConcealmentAlpha } from '../../systems/WorldEffectsSystem.js';
 import { drawFracturedRock } from '../sprites/fracturedRockSprite.js';
 import { renderMawShadow, chargedColor, renderChargedObjects } from '../AscentRenderHelpers.js';
@@ -509,26 +510,11 @@ export class ExploreRenderer {
     // Yellow Ascent: charged metal blinks each frame (skipped by the bg loop)
     renderChargedObjects(this.renderer, game, (obj) => this.shouldRenderBackgroundObject(obj, game.player));
 
-    // Glittering Rocks twinkle each frame. The rock glyph itself is baked into
-    // the cached background layer, so the glint has to ride the foreground
-    // pass — same reason campfires and charged metal are drawn up here. It
-    // sits up-right of the glyph's center, reading as light caught on a facet
-    // rather than as something sitting on top of the rock.
-    //
-    // Surface pass only, deliberately: '5' rocks are generated into the
-    // underground layer of an EXPLORE room (RoomGenerator's two cave passes)
-    // and never onto a hut, dungeon or maze floor, so there is no interior PiP
-    // pass to ship alongside this one.
-    for (const obj of game.backgroundObjects) {
-      if (!obj.data?.showsGlitter || obj.destroyed) continue;
-      if (!this.shouldRenderBackgroundObject(obj, game.player)) continue;
-      drawSparkle(
-        this.renderer,
-        obj.position.x + GRID.CELL_SIZE * 0.75,
-        obj.position.y + GRID.CELL_SIZE * 0.25,
-        GLITTER_SPARKLE_SPEED
-      );
-    }
+    // Glittering Rocks twinkle each frame (see drawGlitterSparkles).
+    drawGlitterSparkles(this.renderer, game, (obj) => this.shouldRenderBackgroundObject(obj, game.player));
+
+    // Quagmire Whirlpool spins on the surface once the rounds clear.
+    drawWhirlpool(this.renderer, game);
 
     // Cyan Ascent: Frozen Maw shadow under the ice (visual only, fades downward)
     renderMawShadow(this.renderer.fgCtx, game);
@@ -542,7 +528,7 @@ export class ExploreRenderer {
 
     // Draw water tiles on foreground so state changes (frozen '=', electrified blink) render each frame
     for (const obj of game.backgroundObjects) {
-      if (obj.char === '~' && !obj.currentAnimation) {
+      if (obj.char === '~' && !obj.currentAnimation && !obj.whirlpoolActive) {
         // Check plane-aware rendering
         if (!this.shouldRenderBackgroundObject(obj, game.player)) continue;
 

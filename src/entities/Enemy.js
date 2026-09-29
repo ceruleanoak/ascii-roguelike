@@ -28,7 +28,6 @@ import { PotionMechanic } from './enemyMechanics/PotionMechanic.js';
 import { WindupTelegraphMechanic } from './enemyMechanics/WindupTelegraphMechanic.js';
 import { SplitOnDamageMechanic } from './enemyMechanics/SplitOnDamageMechanic.js';
 import { RiseAgainMechanic } from './enemyMechanics/RiseAgainMechanic.js';
-import { PatrolMechanic } from './enemyMechanics/PatrolMechanic.js';
 import { GameAnimalMechanic } from './enemyMechanics/GameAnimalMechanic.js';
 import { SniperMechanic } from './enemyMechanics/SniperMechanic.js';
 import { RipenMechanic } from './enemyMechanics/RipenMechanic.js';
@@ -74,7 +73,7 @@ const ENEMY_INVULNERABILITY_DURATION = 0.3; // seconds
 export class Enemy {
   constructor(char, x, y, depth = 0, dataOverride = null) {
     this.char = char;
-    // dataOverride: for enemies spawned outside the ENEMIES char registry (e.g. Eel, Moose, Rabbit).
+    // dataOverride: for enemies spawned outside the ENEMIES char registry (e.g. Moose, Rabbit).
     this.data = dataOverride || ENEMIES[char] || {
       char,
       name: 'Unknown',
@@ -404,8 +403,6 @@ export class Enemy {
     if (RiseAgainMechanic.isEnabled(this)) RiseAgainMechanic.init(this);
 
     if (GooSpewMechanic.isEnabled(this)) GooSpewMechanic.init(this);
-
-    if (PatrolMechanic.isEnabled(this)) PatrolMechanic.init(this);
 
     GameAnimalMechanic.init(this);
 
@@ -1011,8 +1008,6 @@ export class Enemy {
     JumpMechanic.update(this, { deltaTime });
 
     FlockMechanic.updateSwirl(this, { deltaTime });
-
-    PatrolMechanic.update(this, { deltaTime });
 
     // State transition logging (only fires when state actually changes)
     if (this.state !== this._prevState) {

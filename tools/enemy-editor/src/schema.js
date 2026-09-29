@@ -812,21 +812,6 @@ export const MECHANICS = [
     ]
   },
   {
-    // Waypoint path-follower. The waypoints themselves are not authored here —
-    // the spawning system writes `enemy.patrolWaypoints` in pixel space (the
-    // Aquifer eel), so this block only tunes how the path is walked.
-    id: 'patrol', title: 'Patrol path', gate: 'patrol',
-    bareGate: true,
-    fields: [
-      { key: 'patrol.speed', label: 'Patrol speed (px/s)', type: 'number', min: 0,
-        default: (d) => d.speed ?? 60,
-        help: 'Unset cruises at the enemy\'s own speed.' },
-      { key: 'patrol.loop', label: 'Loop (else ping-pong)', type: 'bool', default: false },
-      { key: 'patrol.arriveGap', label: 'Arrive gap', type: 'px', default: GRID_CELL * 0.5,
-        help: 'How close counts as having reached a waypoint.' },
-    ]
-  },
-  {
     // Huntable game — flee behavior for animals the player stalks rather than
     // fights. Pairs with `pacifist`, which is what keeps the combat FSM out of
     // the way so this mechanic owns the movement.

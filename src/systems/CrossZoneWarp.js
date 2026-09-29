@@ -4,6 +4,22 @@ import { ZONES } from '../data/zones.js';
 const CS = GRID.CELL_SIZE;
 
 /**
+ * Seed pathHistory with 3 entries in `zone`'s exit color, so
+ * checkZoneTransition() keeps the player in that zone on their next natural
+ * exit (mirrors CheatWarpSystem.handleZoneTeleport). Shared by
+ * performCrossZoneWarp and hand-offs that reach the target zone through
+ * enterExploreState instead (the Aquifer's Oasis redirect).
+ */
+export function seedZonePath(game, zone) {
+  const color = ZONES[zone].exitColor;
+  game.zoneSystem.pathHistory = [
+    { letter: 'X', color },
+    { letter: 'X', color },
+    { letter: 'X', color }
+  ];
+}
+
+/**
  * Cross-zone warp — the shared hand-off for in-room shortcuts that drop the
  * player into a freshly generated Room in another Zone (Sinkhole cross,
  * Aquifer Current branch ends). Lifted out of SinkholeSystem so every
@@ -30,15 +46,7 @@ const CS = GRID.CELL_SIZE;
 export function performCrossZoneWarp(game, opts) {
   const { zone, roomType, exitLetter, beforeGenerate, afterGenerate, arrival, plane } = opts;
 
-  // Seed pathHistory with 3 target-colored entries so checkZoneTransition()
-  // stays consistent for the player's next natural exit (mirrors
-  // CheatWarpSystem.handleZoneTeleport).
-  const targetColor = ZONES[zone].exitColor;
-  game.zoneSystem.pathHistory = [
-    { letter: 'X', color: targetColor },
-    { letter: 'X', color: targetColor },
-    { letter: 'X', color: targetColor }
-  ];
+  seedZonePath(game, zone);
   game.zoneSystem.currentZone = zone;
   if (game.zoneDepths[zone] === 0) game.zoneDepths[zone] = 1;
   game.roomGenerator.setDepth(game.zoneDepths[zone]);

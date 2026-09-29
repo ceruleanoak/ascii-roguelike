@@ -18,28 +18,6 @@ export function resolveHitSfx(data) {
   return 'enemy_hit';
 }
 
-// Aquifer eel — a fixed-pattern underwater hazard (Quagmire dive). Not in the
-// ENEMIES registry: every letter/digit key is taken, and the eel is a contained
-// plane-1 spawn AquiferSystem injects via the Enemy dataOverride. It never aggros
-// (pure patrol via PatrolMechanic); contact damage is applied by AquiferSystem.
-export const EEL = {
-  char: 'e',
-  name: 'Eel',
-  description: 'Coils through the deep on a set path.',
-  hp: 9999,            // hazard, not a kill target
-  mass: 1.4,
-  speed: 55,
-  acceleration: 300,
-  damage: 2,           // contact damage (read + applied by AquiferSystem)
-  attackRange: 0,
-  aggroRange: 0.01,    // effectively never aggros — see Enemy.js aggroRange fallback (0 is falsy)
-  attackCooldown: Infinity,
-  idleBehavior: 'stationary',
-  color: '#5fae7a',    // murky green
-  patrol: { loop: false },
-  drops: []
-};
-
 // Huntable game (rooms with letterTemplates.js huntableGame: true, HuntingSystem
 // stillness trigger). Not in the ENEMIES registry: they're injected by
 // HuntingSystem, never by normal room generation. See GameAnimalMechanic for

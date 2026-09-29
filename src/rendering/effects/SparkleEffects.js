@@ -1,3 +1,5 @@
+import { GRID } from '../../game/GameConfig.js';
+
 /**
  * SparkleEffects — the intermittent "something here catches the light"
  * twinkle: dot → slowly spinning asterisk → dot, then a quiet tail.
@@ -39,5 +41,32 @@ export function drawSparkle(renderer, cx, cy, speed = 1) {
   } else {
     const angle = ((t - SPIN_START) / SPIN_LENGTH) * SPIN_ARC;
     renderer.drawEntityRotated(cx, cy, '*', SPARKLE_COLOR, angle);
+  }
+}
+
+/**
+ * Glittering Rocks twinkle each frame. The rock glyph itself is baked into
+ * the cached background layer, so the glint has to ride the foreground
+ * pass — same reason campfires and charged metal are drawn there. It sits
+ * up-right of the glyph's center, reading as light caught on a facet rather
+ * than as something sitting on top of the rock.
+ *
+ * Surface pass only, deliberately: '5' rocks are generated into the
+ * underground layer of an EXPLORE room (RoomGenerator's two cave passes) and
+ * never onto a hut, dungeon or maze floor, so there is no interior PiP pass to
+ * ship alongside this one.
+ *
+ * `shouldRender(obj)` is ExploreRenderer's plane-aware visibility check.
+ */
+export function drawGlitterSparkles(renderer, game, shouldRender) {
+  for (const obj of game.backgroundObjects) {
+    if (!obj.data?.showsGlitter || obj.destroyed) continue;
+    if (!shouldRender(obj)) continue;
+    drawSparkle(
+      renderer,
+      obj.position.x + GRID.CELL_SIZE * 0.75,
+      obj.position.y + GRID.CELL_SIZE * 0.25,
+      GLITTER_SPARKLE_SPEED
+    );
   }
 }

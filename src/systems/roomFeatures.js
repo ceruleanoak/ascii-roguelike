@@ -126,8 +126,8 @@ export function generateYellowWaterTemplate(gen, room, forced = null) {
 
 /**
  * Cellular-automata cave grid. Returns grid[row][col] where 1 = wall, 0 = open.
- * Borders are always wall; `isOpen(col, row)` cells are forced open (clearings,
- * dive pockets). Shared by underground, bat belfry, and the Aquifer.
+ * Borders are always wall; `isOpen(col, row)` cells are forced open (clearings).
+ * Shared by underground and the bat belfry.
  */
 export function cellularCaveGrid(cols, rows, isOpen, seedChance = 0.45, generations = 5) {
   const grid = Array.from({ length: rows }, (_, r) =>
@@ -647,39 +647,43 @@ export function seedMistAscent(gen, room, centerCol, centerRow, innerRadius, out
   };
 }
 
-// Quagmire Pond: shape a small round body of water (from '~' bg objects) at the
-// largest pool's center with a conspicuous dark water tile in the middle — the
-// frog-only Pond entrance. AquiferSystem reads room.pondEntry to dive.
-export function placePondEntries(gen, room) {
+// Quagmire Whirlpool: shape a small round Pond (from '~' bg objects) around one
+// of the outer pools and tag its center tile as the Whirlpool — plain-looking
+// water until the rounds clear, when AquiferSystem activates it and anyone who
+// steps on it rides the Aquifer Current. Outer pools only (≥6 cells from room
+// center) so the inflow has room to run before it reaches the Confluence. The
+// Pond is shallow throughout: lake centers are deep water, which would drown a
+// walker on the way to the Whirlpool.
+export function placeWhirlpool(gen, room) {
   const nodes = gen.currentLetterTemplate?.lakeZone?.nodes;
   if (!nodes?.length) return;
   const C = GRID.CELL_SIZE;
-  const node = nodes.reduce((a, b) => (b.radius > a.radius ? b : a));
+  const mid = { col: Math.floor(GRID.COLS / 2), row: Math.floor(GRID.ROWS / 2) };
+  const outer = nodes.filter(n => Math.hypot(n.col - mid.col, n.row - mid.row) >= 6);
+  const pool = outer.length ? outer : nodes;
+  const node = pool[Math.floor(Math.random() * pool.length)];
   const R = 2; // pond radius in cells
 
   const waterAt = (col, row) => room.backgroundObjects.find(o =>
     o.char === '~' && Math.round(o.position.x / C) === col && Math.round(o.position.y / C) === row);
 
-  // Fill a circular disc of water around the node center.
+  // Fill a circular disc of shallow water around the node center.
   for (let dr = -R; dr <= R; dr++) {
     for (let dc = -R; dc <= R; dc++) {
       if (dc * dc + dr * dr > R * R) continue;
       const col = node.col + dc, row = node.row + dr;
       if (col < 1 || row < 1 || col >= GRID.COLS - 1 || row >= GRID.ROWS - 1) continue;
       if (room.collisionMap[row]?.[col]) continue;
-      if (!waterAt(col, row)) {
-        room.backgroundObjects.push(new BackgroundObject('~', col * C, row * C));
-      }
+      const water = waterAt(col, row);
+      if (water) water.deepWater = false;
+      else room.backgroundObjects.push(new BackgroundObject('~', col * C, row * C));
     }
   }
 
-  // Dark water in the middle = the unique entrance.
   const center = waterAt(node.col, node.row);
   if (!center) return;
-  center.pondEntry = true;
-  center.color = '#0a3050';
-  center.animationColor = '#0a3050';
-  room.pondEntry = center;
+  center.whirlpool = true;
+  room.whirlpool = center;
 }
 
 // Scatters 4-7 dense circular clusters of tall grass across the room (density

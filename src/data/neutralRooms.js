@@ -378,7 +378,7 @@ export const NEUTRAL_ROOMS = {
       // here visually continues into the oasis instead of the lake looking
       // like an unrelated pool. Reuses the same wall-to-wall carver as the
       // yellow zone's forced river-follow chain (RoomGenerator._buildPath).
-      const ENTRY_EDGE = { south: 'bottom', west: 'left', east: 'right' };
+      const ENTRY_EDGE = { north: 'top', south: 'bottom', west: 'left', east: 'right' };
       const entryEdge = ENTRY_EDGE[room.returnExit] || 'bottom';
       if (roomGenerator) {
         const start = roomGenerator._pickEdgePoint(entryEdge);
