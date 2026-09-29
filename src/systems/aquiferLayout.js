@@ -3,7 +3,7 @@ import { GRID } from '../game/GameConfig.js';
 /**
  * Aquifer layout — the pure geometry of the Quagmire's plane-1 Aquifer
  * Current. No game state, no entities: AquiferSystem stamps the result onto the
- * room (roomFeatures.stampAquiferLayout) and reads it back every frame to push
+ * room (AquiferSystem._build) and reads it back every frame to push
  * the player.
  *
  * Shape: an inflow channel runs from the Whirlpool to the Confluence at room
@@ -12,6 +12,10 @@ import { GRID } from '../game/GameConfig.js';
  * to (yellow → Oasis, red → Caldera, cyan → the Frosted Maw's lake). Channels
  * never touch each other except inside the Confluence, so which branch the
  * player rides is decided there and nowhere else.
+ *
+ * Off the main channels, a few Offshoots: 1-cell-wide dead ends whose current
+ * pushes out, too strong for a walker to swim into but not for a Frog. One
+ * always holds ◓ Chromablade, another § Sword of the Letter, any others a gem.
  *
  * Coordinates are grid cells. Channels stay inside cells 1..COLS-2 / 1..ROWS-2
  * (row/col 0 and the last row/col are the room border).
@@ -26,8 +30,20 @@ const MERGE_RADIUS = CONFLUENCE.radius + 2;
 // Half-width of a channel around its center line (1 → 3 cells wide).
 const CHANNEL_HALF_WIDTH = 1;
 const BRANCH_COLORS = ['yellow', 'red', 'cyan'];
+// Gem Ingredients for Offshoots beyond the two that hold ◓ and §.
+const OFFSHOOT_GEMS = ['◇', '⬥', '⬦', '◈', '⬨'];
 const EDGE_DIRS = { north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0] };
 const LAYOUT_ATTEMPTS = 20;
+// Offshoots per Aquifer (the first two carry ◓ and §), and their length range.
+const OFFSHOOT_MIN = 2;
+const OFFSHOOT_MAX = 4;
+const OFFSHOOT_LENGTH = { min: 4, max: 7 };
+// An Offshoot leaves its channel at least this far out from the Confluence,
+// and never along a channel's first or last few center-line cells.
+const OFFSHOOT_CLEARANCE = MERGE_RADIUS + 2;
+const OFFSHOOT_END_MARGIN = 3;
+// Minimum Chebyshev distance between two Offshoot roots.
+const OFFSHOOT_SPACING = 5;
 
 const inBounds = (col, row) => col >= 1 && row >= 1 && col <= COLS - 2 && row <= ROWS - 2;
 const distToConfluence = (col, row) => Math.hypot(col - CONFLUENCE.col, row - CONFLUENCE.row);
@@ -187,6 +203,80 @@ function mouthOf(path) {
 }
 
 /**
+ * Carve Offshoots into `mask`: dead-end corridors running straight out,
+ * sideways to a channel's flow, from its edge. Every cell past the root keeps
+ * clear of all other water on all 8 sides (the same no-touch rule the
+ * channels obey), so an Offshoot connects only at its own root. Tries
+ * the full length range first, then settles for shorter ones rather than
+ * fielding fewer than OFFSHOOT_MIN.
+ *
+ * @returns {Array<{parent:number, dir:{col,row}, cells:Array<{col,row}>}>}
+ *   cells run root → tip.
+ */
+function carveOffshoots(paths, mask, rng) {
+  const target = OFFSHOOT_MIN + Math.floor(rng() * (OFFSHOOT_MAX - OFFSHOOT_MIN + 1));
+  const candidates = [];
+  paths.forEach((path, p) => {
+    const line = path.centerline;
+    for (let k = OFFSHOOT_END_MARGIN; k < line.length - OFFSHOOT_END_MARGIN; k++) {
+      const here = line[k];
+      if (distToConfluence(here.col, here.row) <= OFFSHOOT_CLEARANCE) continue;
+      const tc = line[k + 1].col - line[k - 1].col, tr = line[k + 1].row - line[k - 1].row;
+      const sides = Math.abs(tc) >= Math.abs(tr) ? [[0, 1], [0, -1]] : [[1, 0], [-1, 0]];
+      for (const [dc, dr] of sides) candidates.push({ parent: p, from: here, dir: { col: dc, row: dr } });
+    }
+  });
+  for (let i = candidates.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+  }
+
+  const isWater = (c, r) => mask[r]?.[c] === true;
+  const touchesWater = (c, r, except) => {
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if ((dc || dr) && isWater(c + dc, r + dr) && !(except && except(c + dc, r + dr))) return true;
+      }
+    }
+    return false;
+  };
+  const parentWater = (p) => {
+    const keys = new Set(paths[p].channel.map(({ col, row }) => row * COLS + col));
+    return (c, r) => keys.has(r * COLS + c);
+  };
+
+  const offshoots = [];
+  for (const minLength of [OFFSHOOT_LENGTH.min, 3]) {
+    for (const { parent, from, dir } of candidates) {
+      if (offshoots.length >= target) break;
+      // Walk out of the channel to its edge: the first dry cell is the root.
+      let c = from.col, r = from.row;
+      while (isWater(c, r)) { c += dir.col; r += dir.row; }
+      const inParent = parentWater(parent);
+      if (!inBounds(c, r) || touchesWater(c, r, inParent)) continue;
+      if (distToConfluence(c, r) <= OFFSHOOT_CLEARANCE) continue;
+      // Spread them out — a comb of parallel dead ends reads as one blob.
+      if (offshoots.some(o => Math.max(Math.abs(o.cells[0].col - c), Math.abs(o.cells[0].row - r)) < OFFSHOOT_SPACING)) continue;
+
+      const length = minLength + Math.floor(rng() * (OFFSHOOT_LENGTH.max - minLength + 1));
+      const cells = [{ col: c, row: r }];
+      while (cells.length < length) {
+        const nc = c + dir.col * cells.length, nr = r + dir.row * cells.length;
+        const prev = cells[cells.length - 1];
+        const isPrev = (x, y) => x === prev.col && y === prev.row;
+        if (!inBounds(nc, nr) || touchesWater(nc, nr, isPrev)) break;
+        if (distToConfluence(nc, nr) <= OFFSHOOT_CLEARANCE) break;
+        cells.push({ col: nc, row: nr });
+      }
+      if (cells.length < minLength) continue;
+      for (const cell of cells) mask[cell.row][cell.col] = true;
+      offshoots.push({ parent, dir, cells });
+    }
+  }
+  return offshoots;
+}
+
+/**
  * Generate the Aquifer Current's layout for a Whirlpool at `whirlpool`
  * ({col,row}). Branches go to the three edges other than the one the inflow
  * arrives from; zone colors are dealt to them at random.
@@ -199,6 +289,9 @@ function mouthOf(path) {
  *   paths: Array<{kind:'inflow'|'branch', color?, edge?, centerline, channel, mouth}>,
  *   mask: boolean[][],               // [row][col] → cell is channel
  *   near: Array<Array<{p:number,k:number}|null>>  // nearest center-line point per channel cell
+ *   offshoots: Array<{parent, dir, cells, loot}>,  // cells root → tip; loot = glyph at the tip
+ *   offshootAt: Array<Array<{o:number,k:number}|null>>  // Offshoot + index per Offshoot cell
+ *   approachAt: Array<Array<number|null>>  // Offshoot index per parent-channel cell in line with its mouth
  * }}
  */
 export function generateAquiferLayout(whirlpool, rng = Math.random) {
@@ -248,12 +341,36 @@ export function generateAquiferLayout(whirlpool, rng = Math.random) {
     near[row][col] = best;
   }
 
+  // Offshoots are carved after `near` so their cells never claim a
+  // center-line point: the current in them runs back out, not along a channel.
+  const offshoots = carveOffshoots(paths, mask, rng);
+  const loot = ['◓', '§'];
+  offshoots.forEach((o, i) => {
+    o.loot = loot[i] ?? OFFSHOOT_GEMS[Math.floor(rng() * OFFSHOOT_GEMS.length)];
+  });
+  const offshootAt = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+  offshoots.forEach((o, i) => o.cells.forEach(({ col, row }, k) => { offshootAt[row][col] = { o: i, k }; }));
+  // The parent-channel cells straight back across the channel from each
+  // mouth — where a rider lines up to swim in.
+  const approachAt = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+  offshoots.forEach((o, i) => {
+    const [root] = o.cells;
+    for (let j = 1; j <= CHANNEL_HALF_WIDTH * 2 + 1; j++) {
+      const col = root.col - o.dir.col * j, row = root.row - o.dir.row * j;
+      if (!mask[row]?.[col] || offshootAt[row][col]) break;
+      approachAt[row][col] = i;
+    }
+  });
+
   return {
     confluence: { ...CONFLUENCE },
     whirlpool: { col: whirlpool.col, row: whirlpool.row },
     paths,
     mask,
     near,
+    offshoots,
+    offshootAt,
+    approachAt,
   };
 }
 

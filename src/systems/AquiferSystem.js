@@ -1,5 +1,7 @@
 import { GRID, ROOM_TYPES } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
+import { Item } from '../entities/Item.js';
+import { Ingredient } from '../entities/Ingredient.js';
 import { ZONES } from '../data/zones.js';
 import { generateAquiferLayout, inConfluence } from './aquiferLayout.js';
 import { performCrossZoneWarp } from './CrossZoneWarp.js';
@@ -20,7 +22,10 @@ import { PLANE_SURFACE, PLANE_TUNNEL } from './PlaneSystem.js';
  *
  * The current outpaces walking, so a walker can only steer across it (and
  * choose a branch at the Confluence), never swim back. A Frog swims nearly
- * against it.
+ * against it — enough to push up the narrow Offshoots, whose current runs
+ * back out into the channel. One Offshoot always holds ◓ Chromablade,
+ * another § Sword of the Letter, any others a gem; all are taken on contact
+ * (a Frog's SPACE is its tongue, not a pickup).
  *
  * Like the Sinkhole cave, the Aquifer is plane-1 content laid directly onto
  * the surface room rather than a registered InteriorManager interior. The
@@ -35,8 +40,9 @@ const CS = GRID.CELL_SIZE;
 const CURRENT_SPEED = 240;
 // Inside the Confluence the current slackens so the player can pick a branch.
 const CONFLUENCE_FACTOR = 0.6;
-// A Frog feels only this fraction of the current — its stroke outpaces it.
-const FROG_RESIST = 0.35;
+// A Frog feels only this fraction of the current (36 px/s), under its ~58
+// px/s average swim — enough to make slow headway up an Offshoot.
+const FROG_RESIST = 0.15;
 // How strongly a rider off the center line is drawn back toward it, relative
 // to the downstream push. Keeps riders off the stair-stepped channel walls.
 const CENTERING = 0.6;
@@ -54,6 +60,13 @@ const PULL_RADIUS = CS * 2;
 const ENTRY_RADIUS = CS * 0.5;
 // Reaching within this of a branch's last center-line cell ends the ride.
 const BRANCH_END_RADIUS = CS * 1.5;
+// In line with an Offshoot's mouth and swimming at it, the current turns to
+// square the rider up with the 1-cell gap: pull per cell of lateral offset.
+const MOUTH_ALIGN = 4;
+// Touching Offshoot loot within this distance takes it.
+const LOOT_CONTACT_RADIUS = CS;
+// Offshoot mouths get a dim tint so the gap in the channel wall reads.
+const OFFSHOOT_MOUTH_COLOR = '#1e4a66';
 
 export class AquiferSystem {
   constructor(game) {
@@ -102,7 +115,35 @@ export class AquiferSystem {
     p.velocity.vy = 0;
     p.plane = PLANE_TUNNEL;
     p.inAquifer = true;
+    if (!layout.lootSpawned) this._spawnOffshootLoot(layout);
     this.game.renderer.markBackgroundDirty();
+  }
+
+  /**
+   * Offshoot loot, placed once per room at each Offshoot's tip on plane 1.
+   * Gems are pinned (`noGravitate`) so ingredient attraction can't drag them
+   * out of the Offshoot past a rider in the main channel.
+   */
+  _spawnOffshootLoot(layout) {
+    const { game } = this;
+    layout.lootSpawned = true;
+    layout.loot = [];
+    layout.lootTouched = new Set();
+    for (const offshoot of layout.offshoots) {
+      const tip = offshoot.cells[offshoot.cells.length - 1];
+      const x = tip.col * CS, y = tip.row * CS;
+      const isGem = !(offshoot.loot === '◓' || offshoot.loot === '§');
+      const entity = isGem ? new Ingredient(offshoot.loot, x, y) : new Item(offshoot.loot, x, y);
+      entity.plane = PLANE_TUNNEL;
+      layout.loot.push(entity);
+      if (isGem) {
+        entity.noGravitate = true;
+        game.ingredients.push(entity);
+      } else {
+        game.items.push(entity);
+      }
+      game.physicsSystem.addEntity(entity);
+    }
   }
 
   /**
@@ -124,6 +165,9 @@ export class AquiferSystem {
       if (path.kind !== 'branch') continue;
       const tint = ZONES[path.color].exitColor;
       for (const { col, row } of path.centerline) tints.set(row * GRID.COLS + col, tint);
+    }
+    for (const { cells: [root] } of layout.offshoots) {
+      tints.set(root.row * GRID.COLS + root.col, OFFSHOOT_MOUTH_COLOR);
     }
 
     const added = [];
@@ -169,9 +213,36 @@ export class AquiferSystem {
       }
     }
 
+    this._takeLootInReach(layout, px, py);
+
     const flow = this._flowAt(layout, px, py);
     const scale = CURRENT_SPEED * (p.polymorphed ? FROG_RESIST : 1);
     p.aquiferCurrent = flow ? { x: flow.x * scale, y: flow.y * scale } : null;
+  }
+
+  /**
+   * Contact pickup for Offshoot loot. An Item is offered once per touch — if
+   * full quick slots open the slot-choice prompt and the player declines, it
+   * isn't offered again until they've drifted off and come back.
+   */
+  _takeLootInReach(layout, px, py) {
+    const { game } = this;
+    if (!layout.loot?.length) return;
+    const inReach = (e) => Math.hypot(px - (e.position.x + CS / 2), py - (e.position.y + CS / 2)) < LOOT_CONTACT_RADIUS;
+    for (const entity of [...layout.loot]) {
+      const near = inReach(entity);
+      if (!near) { layout.lootTouched.delete(entity); continue; }
+      if (layout.lootTouched.has(entity)) continue;
+      layout.lootTouched.add(entity);
+      const taken = entity instanceof Ingredient
+        ? game.lootSystem.collectIngredient(entity)
+        : (game.tryPickupItem(), entity.consumed);
+      if (!taken) continue;
+      layout.loot.splice(layout.loot.indexOf(entity), 1);
+      // Once held, the Item belongs to no plane — drop it later and it lies
+      // on the surface like any other.
+      entity.plane = PLANE_SURFACE;
+    }
   }
 
   /**
@@ -183,6 +254,12 @@ export class AquiferSystem {
     const col = Math.floor(px / CS), row = Math.floor(py / CS);
     if (!layout.mask[row]?.[col]) return null;
     if (inConfluence(col, row)) return this._confluenceFlow(layout, px, py);
+    const offshoot = layout.offshootAt[row][col];
+    if (offshoot) return this._offshootFlow(layout.offshoots[offshoot.o], offshoot.k, px, py);
+    const approach = layout.approachAt[row][col];
+    if (approach !== null && this._swimmingInto(layout.offshoots[approach].dir)) {
+      return this._mouthFlow(layout.offshoots[approach], px, py);
+    }
 
     const near = layout.near[row][col];
     if (!near) return null;
@@ -203,6 +280,47 @@ export class AquiferSystem {
     const vx = fx / fl + cx * CENTERING, vy = fy / fl + cy * CENTERING;
     const vl = Math.hypot(vx, vy) || 1;
     return { x: vx / vl, y: vy / vl };
+  }
+
+  /**
+   * An Offshoot's current runs straight back out toward its mouth at full
+   * strength — faster than a walker swims, slower than a Frog — and holds the
+   * rider to the corridor's middle.
+   */
+  _offshootFlow(offshoot, k, px, py) {
+    const cell = offshoot.cells[k];
+    const { dir } = offshoot;
+    // Lateral offset from the corridor's middle, across `dir`.
+    const lx = dir.col === 0 ? (cell.col * CS + CS / 2 - px) / CS : 0;
+    const ly = dir.row === 0 ? (cell.row * CS + CS / 2 - py) / CS : 0;
+    const vx = -dir.col + lx * CENTERING, vy = -dir.row + ly * CENTERING;
+    const vl = Math.hypot(vx, vy) || 1;
+    return { x: vx / vl, y: vy / vl };
+  }
+
+  /** True when the player's held direction points into an Offshoot. */
+  _swimmingInto(dir) {
+    const { keys } = this.game;
+    const ix = (keys.d ? 1 : 0) - (keys.a ? 1 : 0);
+    const iy = (keys.s ? 1 : 0) - (keys.w ? 1 : 0);
+    return ix * dir.col + iy * dir.row > 0;
+  }
+
+  /**
+   * Swimming at an Offshoot's mouth, the channel current gives way to a pull
+   * that lines the rider up with the gap — the player's hitbox is a full cell,
+   * so without it the channel would sweep them past the opening every time.
+   * Nothing pushes them toward the mouth: getting in is still their stroke
+   * against the Offshoot's own outflow.
+   */
+  _mouthFlow(offshoot, px, py) {
+    const [root] = offshoot.cells;
+    const { dir } = offshoot;
+    const lx = dir.col === 0 ? (root.col * CS + CS / 2 - px) / CS : 0;
+    const ly = dir.row === 0 ? (root.row * CS + CS / 2 - py) / CS : 0;
+    const pull = Math.min(1, Math.hypot(lx, ly) * MOUTH_ALIGN);
+    const ll = Math.hypot(lx, ly) || 1;
+    return { x: (lx / ll) * pull, y: (ly / ll) * pull };
   }
 
   /**

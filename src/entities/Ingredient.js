@@ -20,6 +20,8 @@ export class Ingredient {
     this.hasCollision = false;
     this.boundToGrid = true;
     this.friction = true;
+    // Plane it lies on (PlaneSystem) — the Aquifer's Offshoot gems lie on plane 1.
+    this.plane = 0;
 
     // Flags
     this.noGravitate = false; // when true, attraction system ignores this ingredient

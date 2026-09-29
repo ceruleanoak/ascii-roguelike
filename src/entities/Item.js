@@ -82,6 +82,9 @@ export class Item {
     this.hasCollision = false;
     this.boundToGrid = true;
     this.friction = true;
+    // Plane while lying on the ground (PlaneSystem) — the Aquifer's Offshoot
+    // loot lies on plane 1.
+    this.plane = 0;
 
     // Weapon state
     this.cooldownTimer = 0;
