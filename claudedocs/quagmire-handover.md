@@ -1,5 +1,17 @@
 # Quagmire Feature — Handover & Revised Plan
 
+> **SUPERSEDED 2026-09-28 — the Aquifer below (frog-only SPACE dive, cellular cave, eels,
+> scattered discoveries) was replaced.** Current design: once the rounds clear, one Pond tile
+> becomes a Whirlpool (`꩜`, walk-on, any form). Entering flips the player to plane 1, where the
+> Aquifer Current (`aquiferLayout.js` flow field, `player.aquiferCurrent` displacement in
+> PhysicsSystem) carries them to a Confluence at room center that splits into three
+> non-touching branches, center lines tinted by destination: yellow → Oasis → fresh yellow
+> room, red → Caldera, cyan → the Maw lake with a dormant Maw Shadow (fishing wakes it).
+> Narrow Offshoots flow outward and are reachable only by a Frog; one always holds ◓
+> Chromablade, another § Sword of the Letter, extras hold gems. Eels, PatrolMechanic and the
+> cave are deleted. Code: `AquiferSystem.js`, `aquiferLayout.js`, `CrossZoneWarp.js`,
+> `MawShadowSystem.js`. Sections below are historical.
+
 **For a fresh context.** Build is currently green, but the Pond/underwater work (Phase 2)
 is **wrong and must be rebuilt**. Phase 0 and Phase 1 are solid and user-verified.
 
