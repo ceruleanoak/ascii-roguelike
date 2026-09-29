@@ -288,7 +288,9 @@ export class PolymorphSystem {
       const sdir = player._frogSwimDir ?? { x: dx, y: dy };
 
       player._frogJumpTimer -= dt;
-      if (player._frogJumpTimer <= 0) {
+      // Strokes need held input — an idle frog drifts to a stop (and with any
+      // current it rides), rather than paddling on in its last direction.
+      if (player._frogJumpTimer <= 0 && hasInput) {
         player.velocity.vx = sdir.x * STROKE_SPEED;
         player.velocity.vy = sdir.y * STROKE_SPEED;
         player._frogJumpTimer = STROKE_INTERVAL * (0.85 + Math.random() * 0.3);
