@@ -1,8 +1,8 @@
 import { GRID, ROOM_TYPES, INTERACTION_RANGE } from '../game/GameConfig.js';
-import { ZONES } from '../data/zones.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { cellularCaveGrid, bfsFarthestOpenPath } from './roomFeatures.js';
 import { PLANE_SURFACE, PLANE_TUNNEL } from './PlaneSystem.js';
+import { performCrossZoneWarp } from './CrossZoneWarp.js';
 
 const CS = GRID.CELL_SIZE;
 const EXIT_RADIUS = CS * 1.5;
@@ -217,47 +217,16 @@ export class SinkholeSystem {
 
   _doCrossToYellow() {
     const { game } = this;
-    const targetZone = 'yellow';
-
-    // Seed pathHistory with 3 yellow-colored entries so checkZoneTransition()
-    // stays consistent for the player's next natural exit (mirrors
-    // handleZoneTeleport).
-    const targetColor = ZONES[targetZone].exitColor;
-    game.zoneSystem.pathHistory = [
-      { letter: 'X', color: targetColor },
-      { letter: 'X', color: targetColor },
-      { letter: 'X', color: targetColor }
-    ];
-    game.zoneSystem.currentZone = targetZone;
-    if (game.zoneDepths[targetZone] === 0) game.zoneDepths[targetZone] = 1;
-    game.roomGenerator.setDepth(game.zoneDepths[targetZone]);
-
-    // One-shot flag: generateUndergroundRoom injects a guaranteed lake +
-    // river trail + arrival spawn only when this flag is set, so ordinary
-    // yellow U rooms reached via normal exits are unaffected.
-    game.roomGenerator._forceSinkholeArrival = true;
-    const playerPos = { x: game.player.position.x, y: game.player.position.y };
-    const newRoom = game.roomGenerator.generateRoom(ROOM_TYPES.UNDERGROUND, playerPos, targetZone, null, 'U');
-    newRoom.exitLetter = 'U';
-
-    const spawn = newRoom._sinkholeArrivalSpawn || newRoom.spawnZones?.default || { x: 15 * CS, y: 15 * CS };
-    game.currentRoom = newRoom;
-    game.player.position.x = spawn.x;
-    game.player.position.y = spawn.y;
-    game.player.setCollisionMap(newRoom.collisionMap);
-
-    // Canonical, mandatory room-swap path (bug #93 warp-divergence
-    // precedent) — must run after the state above is set, since it doesn't
-    // set currentRoom/player position itself. Its resetEntities block DOES
-    // reset player.plane to PLANE_SURFACE (via interiorManager.reset(),
-    // registered room-scope), so the tunnel-plane assignment below must come
-    // AFTER this call, not before it — setting it first was silently
-    // clobbered here (bug #313: arrival landed on plane 0, stuck in the
-    // surface collision map of a room with no plane-0 content).
-    game.applyRoomSwap(newRoom);
-    game.player.plane = PLANE_TUNNEL;
-
-    game.audioSystem.switchZoneMusic(targetZone, import.meta.env.BASE_URL);
-    game.updateUI();
+    performCrossZoneWarp(game, {
+      zone: 'yellow',
+      roomType: ROOM_TYPES.UNDERGROUND,
+      exitLetter: 'U',
+      // One-shot flag: generateUndergroundRoom injects a guaranteed lake +
+      // river trail + arrival spawn only when this flag is set, so ordinary
+      // yellow U rooms reached via normal exits are unaffected.
+      beforeGenerate: () => { game.roomGenerator._forceSinkholeArrival = true; },
+      afterGenerate: (room) => room._sinkholeArrivalSpawn,
+      plane: PLANE_TUNNEL
+    });
   }
 }
