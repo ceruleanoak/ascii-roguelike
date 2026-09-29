@@ -63,8 +63,14 @@ export class FishingSystem {
     return game.currentRoom?.letterTemplate?.name === 'Ocean';
   }
 
+  // The Maw Shadow's lake arena (the L_BOSS template, reached through the
+  // Aquifer) fishes like a Lake — and a cast there wakes the Maw.
+  isMawShadowRoom(game) {
+    return !!game.currentRoom?.mawShadow;
+  }
+
   isOpenWaterRoom(game) {
-    return this.isLakeRoom(game) || this.isOceanRoom(game);
+    return this.isLakeRoom(game) || this.isOceanRoom(game) || this.isMawShadowRoom(game);
   }
 
   // Fountain ('F') rooms support fishing with the FOUNTAIN_CATCHES table.
@@ -281,6 +287,14 @@ export class FishingSystem {
         if (this.bobber) this.bobber.update(dt);
 
         if (this.bobber && !this.bobber.flying) {
+          // Bobber has landed — in a Maw Shadow room nothing bites: the
+          // Maw wakes instead, the cast is dropped and the fish scatter.
+          if (this.isMawShadowRoom(game)) {
+            this.cancelFishing(game);
+            this.fishEntities = [];
+            game.bossSystem.mawShadowSystem.wake();
+            break;
+          }
           // Bobber has landed — initialize bite timer on first landed frame
           if (this.biteTimer < 0) {
             this.biteTimer = 2.0 + Math.random() * 6.0;

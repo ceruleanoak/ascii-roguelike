@@ -516,7 +516,7 @@ export class ExploreRenderer {
     // Quagmire Whirlpool spins on the surface once the rounds clear.
     drawWhirlpool(this.renderer, game);
 
-    // Cyan Ascent: Frozen Maw shadow under the ice (visual only, fades downward)
+    // Frosted Maw shadows: under the Ascent ice, and the Aquifer arena's Maw Shadow
     renderMawShadow(this.renderer.fgCtx, game);
 
     // Draw mana gems on foreground with pulsing glow (boss room)

@@ -12,6 +12,7 @@ import { CHARGE_DURATION, ROLL_CHARS } from '../../entities/TurtleShell.js';
 import { HEAD_FLASH_FREQ } from '../../entities/TurtleHead.js';
 import { HoardmawRenderer } from './HoardmawRenderer.js';
 import { BREACH_RADIUS, BREACH_TELEGRAPH } from '../../entities/LakeBoss.js';
+import { drawSubmergedShadow } from '../AscentRenderHelpers.js';
 
 export class BossRenderer {
   constructor(renderer) {
@@ -240,19 +241,7 @@ export class BossRenderer {
     // 'underwater' and phase 2's 'stalking'/'breaching' — the boss is under the
     // sheet for nearly all of phase 2, and a shadow is the only thing to see.
     if (boss.isSubmerged()) {
-      const tx = boss.position.x, ty = boss.position.y;
-      const R  = cs * 4;
-      const RSq = R * R;
-      ctx.save();
-      ctx.globalAlpha = 0.4;
-      ctx.fillStyle   = '#000033';
-      for (const obj of game.currentRoom.backgroundObjects) {
-        if (obj.destroyed || !obj.isWater || !obj.isWater()) continue;
-        const dx = obj.position.x - tx, dy = obj.position.y - ty;
-        if (dx * dx + dy * dy <= RSq)
-          ctx.fillRect(obj.position.x, obj.position.y, cs, cs);
-      }
-      ctx.restore();
+      drawSubmergedShadow(ctx, game.currentRoom, boss.position.x, boss.position.y);
 
       // BREACHING: the anticipation window made visible. Cracks spread outward
       // over the exact disc the eruption will crush, tightening as the timer runs

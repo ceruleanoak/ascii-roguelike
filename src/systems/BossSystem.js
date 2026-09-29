@@ -24,6 +24,7 @@ import { TurtleHead } from '../entities/TurtleHead.js';
 import { TurtleLeg } from '../entities/TurtleLeg.js';
 import { PandoraBox, PANDORA_PHASE2_HP } from '../entities/PandoraBox.js';
 import { tagInteriorPlane } from './PlaneSystem.js';
+import { MawShadowSystem } from './MawShadowSystem.js';
 
 
 
@@ -43,6 +44,8 @@ export class BossSystem {
     this.bossPhase = 1;
     this.prevBossHp = Infinity;   // HP tracking for audio damage signal
     this.tortoiseWaveSpawned = false;  // 75% HP tortoise wave (red boss)
+    // The dormant Frosted Maw of the Aquifer's cyan arena (ticked while inactive).
+    this.mawShadowSystem = new MawShadowSystem(game);
 
     // Collision damage cooldown per head (prevents damage spam)
   }
@@ -53,8 +56,11 @@ export class BossSystem {
    * Called right after a zone-boss room is generated.
    * Adds boss entities to room.enemies so they participate in normal
    * combat, target-setting, and physics registration.
+   *
+   * `spawn` optionally overrides the cyan Lake Boss's spawn point — a woken
+   * Maw Shadow rises where it was drifting (MawShadowSystem.wake).
    */
-  activate(room, zone) {
+  activate(room, zone, spawn = null) {
     this.active = true;
     this.zone   = zone;
     this.bossPhase = 1;
@@ -94,7 +100,7 @@ export class BossSystem {
         .filter(o => !o.destroyed && o.isWater && o.isWater())
         .map(o => ({ x: o.position.x + GRID.CELL_SIZE / 2,
                      y: o.position.y + GRID.CELL_SIZE / 2 }));
-      const cx = GRID.WIDTH / 2, cy = GRID.HEIGHT / 2;
+      const cx = spawn?.x ?? GRID.WIDTH / 2, cy = spawn?.y ?? GRID.HEIGHT / 2;
       this.lakeBoss = new LakeBoss(cx, cy, waterTiles);
       // Set once here rather than per-frame: the boss is driven by EnemyUpdateSystem
       // before this system runs, so a per-frame assignment would always land a tick
@@ -221,7 +227,7 @@ export class BossSystem {
   // ── Per-frame update ───────────────────────────────────────────────────────
 
   update(deltaTime) {
-    if (!this.active) return;
+    if (!this.active) { this.mawShadowSystem.update(deltaTime); return; }
     if (this.lakeBoss)    { this._updateLakeBoss(deltaTime); this._trackBossDamage(); return; }
     if (this.turtleShell) { this._updateRedBoss(deltaTime);  this._trackBossDamage(); return; }
     if (this.pandoraBox)  { this._updateYellowBoss(deltaTime); this._trackBossDamage(); return; }

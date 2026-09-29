@@ -18,7 +18,8 @@ import { PLANE_SURFACE, PLANE_TUNNEL } from './PlaneSystem.js';
  * reaching its end warps the player there:
  *   yellow → the Oasis, whose exit then opens into a fresh yellow room
  *   red    → the Caldera (red Camp room)
- *   cyan   → the Frosted Maw's lake arena, exits open
+ *   cyan   → the Frosted Maw's lake arena, exits open, the Maw asleep as a
+ *            drifting shadow until a fishing cast wakes it
  *
  * The current outpaces walking, so a walker can only steer across it (and
  * choose a branch at the Confluence), never swim back. A Frog swims nearly
@@ -393,7 +394,7 @@ export class AquiferSystem {
   /**
    * The Frosted Maw's lake arena, reached by the back door: generated as the
    * zone Boss room (for its L_BOSS terrain) but entered with the exits open
-   * and no Boss fight started.
+   * and no Boss fight started — the Maw is a Maw Shadow (MawShadowSystem).
    */
   _warpToMawLake() {
     const { game } = this;
@@ -409,6 +410,9 @@ export class AquiferSystem {
         room.isMiniboss = false;
         room.exitsLocked = false;
         room.cleared = true;
+        // The Maw sleeps as a drifting shadow until a fishing cast wakes it.
+        // Once it's dead the lake is just an open arena.
+        if (!game.zoneSystem.defeatedBosses.has('cyan')) game.bossSystem.mawShadowSystem.seed(room);
       },
     });
     game.updateExitCollisions();
