@@ -1,4 +1,5 @@
 import { GRID } from '../../game/GameConfig.js';
+import { inSamePlane } from '../../systems/PlaneSystem.js';
 
 /**
  * Fishing system render passes — fish, bobber, charge bar, bite indicator,
@@ -68,7 +69,7 @@ export function renderFishingPasses(renderer, game) {
   }
 
   // Rusalka (rendered separately from neutralCharacters to avoid double-update)
-  if (fishingSystem.rusalka?.alive) {
+  if (fishingSystem.rusalka?.alive && inSamePlane(fishingSystem.rusalka, game.player)) {
     const rusalka = fishingSystem.rusalka;
     const ctx = renderer.fgCtx;
     ctx.save();

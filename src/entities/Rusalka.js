@@ -1,4 +1,5 @@
 import { GRID } from '../game/GameConfig.js';
+import { inSamePlane } from '../systems/PlaneSystem.js';
 import { NeutralCharacter } from './NeutralCharacter.js';
 
 const PULL_FORCE_MIN = 30;        // Initial pull acceleration (px/s²)
@@ -37,6 +38,12 @@ export class Rusalka extends NeutralCharacter {
     if (!this.alive || !game?.player) return;
 
     const player = game.player;
+    // A player on another Plane (riding the Aquifer below the Quagmire) is out
+    // of her reach: no contact kill, no pull, no input drag.
+    if (!inSamePlane(this, player)) {
+      player.rusalkaInputScale = 1.0;
+      return;
+    }
     const dx = this.position.x - player.position.x;
     const dy = this.position.y - player.position.y;
     const dist = Math.sqrt(dx * dx + dy * dy);

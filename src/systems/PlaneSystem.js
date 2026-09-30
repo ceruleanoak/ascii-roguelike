@@ -108,6 +108,22 @@ export function isInteriorActive(game) {
 }
 
 /**
+ * True when `player` is below a surface world it is cut off from — riding the
+ * Aquifer, plane-1 content laid over a surface room (the Quagmire) whose own
+ * occupants stay behind on plane 0. The surface layer is then neither drawn
+ * (ExploreRenderer.shouldRenderEntity / shouldRenderBackgroundObject) nor
+ * reachable (interaction sites gate on `inSamePlane`), the way the surface
+ * room drops out while a hut/dungeon interior owns the frame.
+ *
+ * Aquifer-only on purpose: T-room tunnels keep the surface in view by design,
+ * and the Sinkhole / U-room caves are built from plane-0 objects that must
+ * still draw underground.
+ */
+export function isCutOffFromSurface(player) {
+  return !!player?.inAquifer;
+}
+
+/**
  * True while GAME_OVER's 2-second death delay is still showing the death in
  * place on a layer other than the surface — inside an Interior (PiP) or on a
  * non-surface Plane (U-room cave, T-room tunnel, Aquifer). Once the delay

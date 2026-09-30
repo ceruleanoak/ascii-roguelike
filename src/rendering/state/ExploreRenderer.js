@@ -40,7 +40,7 @@ import {
 } from '../effects/WeaponPreviewDraw.js';
 import { BossRenderer } from './BossRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
-import { isInteriorActive } from '../../systems/PlaneSystem.js';
+import { isInteriorActive, isCutOffFromSurface, inSamePlane, objectOnPlane, PLANE_SURFACE } from '../../systems/PlaneSystem.js';
 import { drawVisionFogOverlay } from '../ui/torchLight.js';
 import { drawKnownSpellHints, drawWellCoinHint, drawDoorPrompts } from '../ui/ContextHints.js';
 import { drawManaGems } from '../effects/ManaGemRenderer.js';
@@ -603,7 +603,7 @@ export class ExploreRenderer {
 
     // Draw captives (pulsing @ characters)
     for (const captive of game.captives) {
-      if (!captive.freed) {
+      if (!captive.freed && this.shouldRenderEntity(captive, game.player, game.currentRoom)) {
         captive.render(this.renderer.fgCtx, (gx, gy) => ({
           x: gx * GRID.CELL_SIZE,
           y: gy * GRID.CELL_SIZE
@@ -613,6 +613,7 @@ export class ExploreRenderer {
 
     // Draw neutral characters (Leshy, NPCs, etc.)
     for (const neutralChar of game.neutralCharacters) {
+      if (!this.shouldRenderEntity(neutralChar, game.player, game.currentRoom)) continue;
       neutralChar.render(this.renderer.fgCtx, (gx, gy) => ({
         x: gx * GRID.CELL_SIZE,
         y: gy * GRID.CELL_SIZE
@@ -698,7 +699,7 @@ export class ExploreRenderer {
     if (!playerInInterior) drawWires(this.renderer, game);
 
     // Draw cure Rusalka (polymorph reversal, Lake rooms) — skip when inHut/inMaze
-    if (!playerInInterior && game.cureRusalka) {
+    if (!playerInInterior && game.cureRusalka && inSamePlane(game.cureRusalka, game.player)) {
       const r = game.cureRusalka;
       const ra = r.getPulseAlpha ? r.getPulseAlpha() : 1.0;
       this.renderer.drawTextWithAlpha(
@@ -1030,7 +1031,7 @@ export class ExploreRenderer {
   _renderCampNPCs(game) {
     // Skip rendering when player is inside a sub-area where NPCs aren't drawn.
     // (HutInterior/DungeonFloor are still in EXPLORE; companion follows in.)
-    if (game.player?.inMaze) return;
+    if (game.player?.inMaze || isCutOffFromSurface(game.player)) return;
 
     const ctx = this.renderer.fgCtx;
     const gridToPixel = (gx, gy) => ({ x: gx * GRID.CELL_SIZE, y: gy * GRID.CELL_SIZE });
@@ -1701,16 +1702,16 @@ export class ExploreRenderer {
   /**
    * Determine if an entity should be rendered based on plane visibility
    * CRITICAL RULES:
-   * - Standard plane (0) entities: ALWAYS visible
+   * - Standard plane (0) entities: visible unless the player is cut off from
+   *   the surface (riding the Aquifer — PlaneSystem.isCutOffFromSurface)
    * - Tunnel plane (1) entities: ONLY visible if player is in tunnel (player.plane === 1)
    * - Tunnel walls: Always rendered (handled separately as background objects)
    */
   shouldRenderEntity(entity, player, room) {
     const entityPlane = entity.plane !== undefined ? entity.plane : 0;
 
-    // Standard plane (0) ALWAYS renders
     if (entityPlane === 0) {
-      return true;
+      return !isCutOffFromSurface(player);
     }
 
     // No tunnel/underground room - plane 1 still hides (e.g. burrowed game animals)
@@ -1737,6 +1738,10 @@ export class ExploreRenderer {
     if (obj.data && obj.data.alwaysRender) {
       return true;
     }
+
+    // Riding the Aquifer, the Quagmire's surface (Pond water, grass, rocks)
+    // is a layer the player has left — only the plane-1 channels draw.
+    if (isCutOffFromSurface(player) && objectOnPlane(obj, PLANE_SURFACE)) return false;
 
     // Surface-only obstacles: hide when player is underground
     if (obj.surfaceOnly) {

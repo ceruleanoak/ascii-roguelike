@@ -1,4 +1,5 @@
 import { GRID, PHYSICS } from '../game/GameConfig.js';
+import { inSamePlane } from './PlaneSystem.js';
 import { ENEMIES } from '../data/enemies.js';
 import { NeutralCharacter } from '../entities/NeutralCharacter.js';
 
@@ -247,7 +248,7 @@ export class PolymorphSystem {
     }
 
     // Update cure Rusalka pulse animation and check contact
-    if (game.cureRusalka && !game.player.inHut) {
+    if (game.cureRusalka && !game.player.inHut && inSamePlane(game.cureRusalka, game.player)) {
       game.cureRusalka.update(dt);
 
       const dx = game.player.position.x - game.cureRusalka.position.x;

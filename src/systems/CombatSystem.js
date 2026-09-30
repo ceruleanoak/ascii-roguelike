@@ -1610,7 +1610,7 @@ export class CombatSystem {
         ...attackData,
         width: GRID.CELL_SIZE,
         height: GRID.CELL_SIZE,
-        plane: attackData.shooterPlane !== undefined ? attackData.shooterPlane : 0 // Inherit plane from shooter
+        plane: attackData.shooterPlane ?? planeOf(attackData.owner) // Inherit plane from shooter (player weapons carry only `owner`)
       };
       // Universal finite bullet range — arrows have their own deceleration model
       if (proj.type === 'bullet' && proj.remainingDistance === undefined) {

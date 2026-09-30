@@ -1,4 +1,5 @@
 import { GRID } from '../game/GameConfig.js';
+import { inSamePlane } from './PlaneSystem.js';
 
 // Walking this far from the speaker closes the box automatically.
 const BREAK_RANGE = GRID.CELL_SIZE * 4;
@@ -59,7 +60,7 @@ export class DialogueSystem {
 
     for (const npc of npcs ?? []) {
       if (typeof npc.getDialogueLines !== 'function') continue;
-      if (!npc.isInRange(player)) continue;
+      if (!inSamePlane(npc, player) || !npc.isInRange(player)) continue;
       const lines = npc.getDialogueLines(game);
       if (this.open(npc, lines)) return true;
     }
