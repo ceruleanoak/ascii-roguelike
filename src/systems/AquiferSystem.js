@@ -21,8 +21,9 @@ import { PLANE_SURFACE, PLANE_TUNNEL } from './PlaneSystem.js';
  *   cyan   → the Frosted Maw's lake arena, exits open, the Maw asleep as a
  *            drifting shadow until a fishing cast wakes it
  *
- * The current outpaces walking, so a walker can only steer across it (and
- * choose a branch at the Confluence), never swim back. A Frog swims nearly
+ * A walker can only steer across the current (and choose a branch at the
+ * Confluence), never swim back: whatever part of their stroke points
+ * upstream, the current matches. A Frog swims nearly
  * against it — enough to push up the narrow Offshoots, whose current runs
  * back out into the channel. One Offshoot always holds ◓ Chromablade,
  * another § Sword of the Letter, any others a gem; all are taken on contact
@@ -31,19 +32,24 @@ import { PLANE_SURFACE, PLANE_TUNNEL } from './PlaneSystem.js';
  * Like the Sinkhole cave, the Aquifer is plane-1 content laid directly onto
  * the surface room rather than a registered InteriorManager interior. The
  * layout is built lazily on first entry (aquiferLayout.js) and cached on
- * `room.aquifer`. The ride is one-way: branch ends are the only way out.
+ * `room.aquifer`. The ride is one-way: branch ends are the only way out, and
+ * reaching one warps the player instantly — no exit-edge animation, which
+ * belongs to plane-0 room exits — into the destination's own body of water.
  */
 const CS = GRID.CELL_SIZE;
 
-// Current speed along a channel, px/s. Above the player's 180 walk cap, so a
-// walker pushing upstream still drifts down (~60 px/s) while full walking
-// speed across the flow keeps lateral steering.
-const CURRENT_SPEED = 240;
+// Current speed along a channel, px/s — about 5-6 cells a second, slow enough
+// to watch the channel go by. Holding back a walker doesn't rest on this
+// outpacing the 180 walk cap: the upstream part of a walker's stroke is
+// cancelled outright (_rideCurrent), so any speed boost or dodge roll is
+// cancelled too, while full walking speed across the flow keeps steering.
+const CURRENT_SPEED = 90;
 // Inside the Confluence the current slackens so the player can pick a branch.
 const CONFLUENCE_FACTOR = 0.6;
-// A Frog feels only this fraction of the current (36 px/s), under its ~58
-// px/s average swim — enough to make slow headway up an Offshoot.
-const FROG_RESIST = 0.15;
+// A Frog feels only this fraction of the current (36 px/s) and its stroke is
+// never cancelled; under its ~58 px/s average swim, that's slow headway up an
+// Offshoot.
+const FROG_RESIST = 0.4;
 // How strongly a rider off the center line is drawn back toward it, relative
 // to the downstream push. Keeps riders off the stair-stepped channel walls.
 const CENTERING = 0.6;
@@ -68,6 +74,9 @@ const MOUTH_ALIGN = 4;
 const LOOT_CONTACT_RADIUS = CS;
 // Offshoot mouths get a dim tint so the gap in the channel wall reads.
 const OFFSHOOT_MOUTH_COLOR = '#1e4a66';
+// The Oasis's main lake blob (neutralRooms.js `oasis` nodes[0]); the Yellow
+// branch surfaces in the water nearest it.
+const OASIS_LAKE = { col: 13, row: 14 };
 
 export class AquiferSystem {
   constructor(game) {
@@ -217,8 +226,25 @@ export class AquiferSystem {
     this._takeLootInReach(layout, px, py);
 
     const flow = this._flowAt(layout, px, py);
-    const scale = CURRENT_SPEED * (p.polymorphed ? FROG_RESIST : 1);
-    p.aquiferCurrent = flow ? { x: flow.x * scale, y: flow.y * scale } : null;
+    p.aquiferCurrent = flow ? this._rideCurrent(flow, p) : null;
+  }
+
+  /**
+   * The displacement the current applies to the rider this frame. A Frog
+   * feels a fraction of it and swims freely; a walker feels all of it, plus
+   * whatever matches the upstream part of their own velocity — so no stroke,
+   * roll or speed boost ever makes headway against the flow.
+   */
+  _rideCurrent(flow, p) {
+    if (p.polymorphed) return { x: flow.x * CURRENT_SPEED * FROG_RESIST, y: flow.y * CURRENT_SPEED * FROG_RESIST };
+    let x = flow.x * CURRENT_SPEED, y = flow.y * CURRENT_SPEED;
+    const fl = Math.hypot(flow.x, flow.y);
+    if (fl > 0) {
+      const ux = flow.x / fl, uy = flow.y / fl;
+      const upstream = Math.min(0, p.velocity.vx * ux + p.velocity.vy * uy);
+      x -= upstream * ux; y -= upstream * uy;
+    }
+    return { x, y };
   }
 
   /**
@@ -285,8 +311,8 @@ export class AquiferSystem {
 
   /**
    * An Offshoot's current runs straight back out toward its mouth at full
-   * strength — faster than a walker swims, slower than a Frog — and holds the
-   * rider to the corridor's middle.
+   * strength — a walker's stroke into it is cancelled, a Frog outswims it —
+   * and holds the rider to the corridor's middle.
    */
   _offshootFlow(offshoot, k, px, py) {
     const cell = offshoot.cells[k];
@@ -362,14 +388,27 @@ export class AquiferSystem {
   // ── Branch ends ────────────────────────────────────────────────────────────
 
   /**
-   * The current delivers the player out through the branch's edge. The warp
-   * rides the ordinary exit animation, so the arrival reads as walking in
-   * from the matching edge of the next room.
+   * The current delivers the player straight into the destination — an
+   * instant warp, surfacing in that room's body of water.
    */
   _exitBranch(layout, path, p) {
     layout.exited = true;
     p.aquiferCurrent = null;
-    this.game.animateExitWarp(path.edge, () => this._warp(path));
+    this._warp(path);
+  }
+
+  /**
+   * Top-left of the `match`ing tile in `room` nearest cell (col,row) — where
+   * the player surfaces. Null if the room has no such tile.
+   */
+  _surfacingPoint(room, col, row, match) {
+    let best = null, bestD = Infinity;
+    for (const o of room.backgroundObjects) {
+      if (o.destroyed || !match(o)) continue;
+      const d = Math.hypot(o.position.x - col * CS, o.position.y - row * CS);
+      if (d < bestD) { bestD = d; best = o; }
+    }
+    return best ? { x: best.position.x, y: best.position.y } : null;
   }
 
   _warp(path) {
@@ -381,9 +420,14 @@ export class AquiferSystem {
         // fresh yellow room instead (NeutralRoomSystem.returnToSavedRoom).
         game.transitionToNeutralRoom('oasis', path.edge);
         if (game.savedExploreState) game.savedExploreState.returnTo = { zone: 'yellow' };
+        this._surfaceAt(this._surfacingPoint(game.currentRoom, OASIS_LAKE.col, OASIS_LAKE.row, o => o.isWater()));
         break;
       case 'red':
-        performCrossZoneWarp(game, { zone: 'red', roomType: ROOM_TYPES.CAMP, exitLetter: 'C' });
+        // Surfaces in the Caldera's hot spring, centered on the room.
+        performCrossZoneWarp(game, {
+          zone: 'red', roomType: ROOM_TYPES.CAMP, exitLetter: 'C',
+          afterGenerate: (room) => this._surfacingPoint(room, GRID.COLS / 2, GRID.ROWS / 2, o => o.typeId === 'hot_water'),
+        });
         break;
       case 'cyan':
         this._warpToMawLake();
@@ -413,8 +457,16 @@ export class AquiferSystem {
         // The Maw sleeps as a drifting shadow until a fishing cast wakes it.
         // Once it's dead the lake is just an open arena.
         if (!game.zoneSystem.defeatedBosses.has('cyan')) game.bossSystem.mawShadowSystem.seed(room);
+        return this._surfacingPoint(room, GRID.COLS / 2, GRID.ROWS / 2, o => o.isWater());
       },
     });
     game.updateExitCollisions();
+  }
+
+  _surfaceAt(point) {
+    if (!point) return;
+    const p = this.game.player;
+    p.position.x = point.x;
+    p.position.y = point.y;
   }
 }
