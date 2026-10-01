@@ -7,3 +7,4 @@ Quick-capture list for feature/content ideas noticed during play/dev, before the
 Just one idea per line below, plain text.
 Aquifer is not properly done, needs full rework.
 Check progress of Golem creation minigame/npc
+Dungeons persist across REST visits — returning to a dungeon after a trip to REST re-enters the same floors, not a regenerated dungeon.
