@@ -2032,7 +2032,10 @@ export class Enemy {
     // triggered the iframe (allows multi-bullet weapons to land all their shots).
     if (this.invulnerabilityTimer > 0) {
       const sameBurst = attackId !== null && attackId === this.lastHitAttackId;
-      if (!sameBurst) return false;
+      // A slam (opts.impact — PhysicsSystem's high-speed wall/object hit) is the
+      // reverse case: it lands through the iframes of the blow that launched
+      // the enemy, and is blocked only by a previous slam's own iframes (#343).
+      if (opts.impact ? this.lastHitAttackId === opts.impact : !sameBurst) return false;
     }
 
     // Dodge roll (data-driven, 0-1 chance to fully evade any hit). Mirrors
@@ -2141,7 +2144,7 @@ export class Enemy {
     // Start (or refresh) invulnerability frames and record the triggering burst
     if (this.hp > 0) {
       this.invulnerabilityTimer = this.invulnerabilityDuration;
-      this.lastHitAttackId = attackId;
+      this.lastHitAttackId = opts.impact ?? attackId;
       // Arm a forced leap for the instant these iframes expire — see
       // LeapAttackMechanic.tryTrigger. No-op for enemies without leapAttack.
       // One hit, one answering leap: a hit taken mid-leap (windup or airborne)

@@ -32,6 +32,11 @@ const WHIP_PULL_SPEED = 280;
 // ordinary PHYSICS.FRICTION once hookedByWhip clears below.
 const WHIP_PULL_MOMENTUM_SPEED = WHIP_PULL_SPEED * 0.5;
 
+// Marks a high-speed wall/object slam in Enemy.takeDamage's opts.impact. The
+// enemy records it as the source of the iframes that slam starts, which is how
+// a ricocheting enemy takes one slam per iframe window rather than one per bounce.
+const IMPACT_HIT_ID = 'impact';
+
 export class PhysicsSystem {
   constructor() {
     this.entities = [];
@@ -668,13 +673,17 @@ export class PhysicsSystem {
         entity.velocity.vy = 0;
       }
       if (highSpeed && (collision.x || collision.y)) {
-        // takeDamage returns false when the hit is blocked (e.g. still inside
-        // the iframes from the melee hit that launched this enemy — a Bat/
-        // Rubber Bat swing sets invulnerabilityTimer before the knockback
-        // carries the enemy into a wall this same frame or shortly after).
-        // Only show the number when the damage actually landed, matching the
-        // dodge-roll wall-slam's own guard at CombatSystem.js's `if (result)`.
-        const damaged = entity.takeDamage(1);
+        // The slam is tagged as an impact so it lands through the iframes of
+        // the hit that launched this enemy. A Bat/Rubber Bat swing starts those
+        // iframes, and at launch speed the enemy reaches anything within ~7
+        // cells before they expire — so without the tag a nearby rock (or wall)
+        // never hurt, and only a distant wall did (#343). takeDamage still
+        // returns false when the slam is blocked (iframes left by a previous
+        // slam — one per window while ricocheting — or an entity that takes no
+        // damage right now), so only show the number when the damage actually
+        // landed, matching the dodge-roll wall-slam's own guard at
+        // CombatSystem.js's `if (result)`.
+        const damaged = entity.takeDamage(1, null, { impact: IMPACT_HIT_ID });
         if (damaged !== false) {
           combatSystem?.createDamageNumber(1, entity.position.x, entity.position.y, '#ff4444');
         }
