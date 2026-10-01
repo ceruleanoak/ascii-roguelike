@@ -135,7 +135,7 @@ export class DungeonBossSystem {
     // Bitten: one heavy but survivable hit, thrown back out of the mouth.
     maw.ambushSnapPending = true;
     if (player.invulnerabilityTimer <= 0 && !player.dodgeRoll?.active) {
-      player.takeDamage(3);
+      player.takeDamage(3, { attacker: maw });
       game.physicsSystem.applyDamageKnockback(player, {}, maw.mouthX(), maw.mouthY(), 340);
     }
     createSparkBurst(game, game.particles, maw.mouthX(), maw.mouthY());
@@ -239,7 +239,7 @@ export class DungeonBossSystem {
       const py = player.position.y + player.height / 2;
       if (Math.hypot(px - x, py - y) < SLAM_RADIUS
           && player.invulnerabilityTimer <= 0 && !player.dodgeRoll?.active) {
-        player.takeDamage(2);
+        player.takeDamage(2, { attacker: maw });
         game.physicsSystem.applyDamageKnockback(player, {}, x, y, 260);
       }
       game.audioSystem?.playSFX?.('boss_slam');
@@ -288,7 +288,7 @@ export class DungeonBossSystem {
       maw.swallowedAt = null;
       player.grabbed = false;
       player.grabbedBy = null;
-      player.takeDamage(3);
+      player.takeDamage(3, { attacker: maw });
       // Spit straight down the arena, away from the body — the maw fills the
       // north half, so south is the only direction with room to land.
       player.position.y = py + GRID.CELL_SIZE * 2;
@@ -533,7 +533,7 @@ export class DungeonBossSystem {
     // Greed punished: themed callback to the eventual death explosion, sized
     // down — self-damage only, the boss is untouched and stays killable.
     if (player.invulnerabilityTimer <= 0 && !player.dodgeRoll?.active) {
-      player.takeDamage(TEMPTATION_PILE_SELF_DAMAGE);
+      player.takeDamage(TEMPTATION_PILE_SELF_DAMAGE, { attacker: maw });
       game.physicsSystem.applyDamageKnockback(player, {},
         player.position.x, player.position.y, 220);
     }

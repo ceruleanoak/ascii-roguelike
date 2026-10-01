@@ -13,12 +13,30 @@ export function newRunId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+// Who the REST tombstone and the ledger credit for a death. Most killers are
+// Enemy instances and carry their name on `data`; a boss that is not an Enemy
+// (LakeBoss — the Frosted Maw) has no `data` and names itself directly. Reading
+// only `killer.data` is why a Frosted Maw kill left no tombstone at all.
+// Returns null when the killer cannot be named, so callers keep whatever they
+// already had rather than writing a nameless cause.
+export function deathCauseOf(killer) {
+  const name = killer?.data?.name ?? killer?.name;
+  if (!name) return null;
+  return {
+    name,
+    char: killer.char,
+    color: killer.color,
+    description: killer.data?.description || '',
+    tier: killer.data?.tier ?? null
+  };
+}
+
 // event: 'death' (true death) | 'revive' (death intercepted by a revive item).
 // revivedBy names the intercepting item on revive records.
 export function captureDeath(game, { event = 'death', revivedBy = null } = {}) {
   const player = game.player;
   const inv = game.inventorySystem;
-  const killer = player._lastAttacker;
+  const cause = deathCauseOf(player._lastAttacker);
 
   const record = {
     timestamp: new Date().toISOString(),
@@ -27,8 +45,8 @@ export function captureDeath(game, { event = 'death', revivedBy = null } = {}) {
     ...(revivedBy ? { revivedBy } : {}),
     character: game.activeCharacterType,
     cheatMenu: game.cheatUsed ? 'Y' : 'N',
-    killedBy: killer?.data
-      ? { name: killer.data.name, char: killer.char, tier: killer.data.tier ?? null }
+    killedBy: cause
+      ? { name: cause.name, char: cause.char, tier: cause.tier }
       : (game.lastDeathCause ?? null),
     zoneDepths: { ...game.zoneDepths },
     currentZone: game.zoneSystem?.currentZone ?? null,

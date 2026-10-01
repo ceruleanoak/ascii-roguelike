@@ -123,7 +123,7 @@ import { CHARACTER_TYPES } from './data/characters.js';
 import { EXIT_LETTERS } from './data/exitLetters.js';
 import { ZONES, freshZoneDepths } from './data/zones.js';
 import { GAME_STATES, GRID, CRAFTING, INTERACTION_RANGE, ROOM_TYPES, PHYSICS } from './game/GameConfig.js';
-import { captureDeath, downloadSessionLedger, newRunId } from './systems/DeathLedgerSystem.js';
+import { captureDeath, deathCauseOf, downloadSessionLedger, newRunId } from './systems/DeathLedgerSystem.js';
 import{DiagonalInputSystem as DIS}from'./systems/DiagonalInputSystem.js';
 import { MAGIC_SFX_NAMES } from './data/enemies.js';
 import * as ingredientPile from './systems/IngredientPile.js';
@@ -3078,15 +3078,8 @@ class Game {
         captureDeath(this);
 
         // Record what killed the player (for REST tombstone)
-        const killer = this.player._lastAttacker;
-        if (killer && killer.data) {
-          this.lastDeathCause = {
-            name: killer.data.name,
-            char: killer.char,
-            color: killer.color,
-            description: killer.data.description || ''
-          };
-        }
+        const deathCause = deathCauseOf(this.player._lastAttacker);
+        if (deathCause) this.lastDeathCause = deathCause;
         this.tombstoneActive = true;
         this.tombstonePopup = null;
 

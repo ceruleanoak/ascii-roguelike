@@ -650,7 +650,8 @@ export class BossSystem {
             delay: 0.3,       // short warning for the chaotic yellow phase
             damage: 4,
             hitsPlayer: true,
-            source: 'boss'
+            source: 'boss',
+            attacker: atk.owner   // credited on the REST tombstone
           });
         }
       } else {

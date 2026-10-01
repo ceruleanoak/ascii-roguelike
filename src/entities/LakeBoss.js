@@ -48,6 +48,10 @@ const BREACH_DAMAGE            = 7;     // of the player's 10 max HP — two Bre
 export class LakeBoss {
   constructor(x, y, waterTiles = []) {
     this.char   = '~';   // placeholder — skipped by normal render loop
+    // LakeBoss has no `data` block (it is not an Enemy, and the shared enemy
+    // loops key off `data` being absent to skip it), so the name the REST
+    // tombstone credits lives on the entity itself — see deathCauseOf().
+    this.name   = 'The Frosted Maw';
     this.hp     = LAKE_BOSS_MAX_HP;
     this.maxHp  = LAKE_BOSS_MAX_HP;
     this.damage = 3;

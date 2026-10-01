@@ -13,7 +13,7 @@
  *
  * Callers:
  *   scheduleStrike({ x, y, radius, delay, damage, hitsPlayer, hutPlane, source,
- *                    onResolve })
+ *                    attacker, onResolve })
  *
  * Used by: Lightning Sword (weapon-driven test driver). Designed for reuse by
  * future yellow-zone storm hazards and enemy attacks — same pipeline, same
@@ -46,6 +46,10 @@ export class LightningStrikeSystem {
     plane = 0,
     hutPlane = !!this.game?.activeFloor,
     source = null,
+    // The entity that called the bolt down, when there is one (Pandora's Box).
+    // Carried to the player's damage source so a lightning kill is credited on
+    // the REST tombstone; weapon- and storm-driven strikes leave it null.
+    attacker = null,
     // Fired once, at impact — never at schedule time. Hazards that go live
     // with the bolt (the yellow Ascent spire charging its metal) hang here so
     // the telegraph window stays a real dodge window.
@@ -72,7 +76,7 @@ export class LightningStrikeSystem {
     }
 
     const strike = {
-      x, y, radius, damage, hitsPlayer, plane, hutPlane, source, onResolve,
+      x, y, radius, damage, hitsPlayer, plane, hutPlane, source, attacker, onResolve,
       warningTimer: delay,
       warningDuration: delay,
       flashTimer: 0,
@@ -139,7 +143,7 @@ export class LightningStrikeSystem {
       const dx = px - s.x;
       const dy = py - s.y;
       if (Math.sqrt(dx * dx + dy * dy) <= s.radius) {
-        const result = game.player.takeDamage(s.damage);
+        const result = game.player.takeDamage(s.damage, s.attacker ? { attacker: s.attacker } : {});
         game.physicsSystem.applyDamageKnockback(game.player, result, s.x, s.y);
       }
     }
