@@ -21,7 +21,7 @@
  */
 
 import { GRID } from '../game/GameConfig.js';
-import { planeOf, inSamePlane } from './PlaneSystem.js';
+import { planeOf, inSamePlane, isInteriorActive } from './PlaneSystem.js';
 import { MAX_PIPS } from './StatusEffects.js';
 import { absorbsZap } from './ImbuePoolSystem.js';
 import { findStrikeSpire, spireStruck } from './LightningSpire.js';
@@ -44,7 +44,7 @@ export class LightningStrikeSystem {
     damage = DEFAULT_DAMAGE,
     hitsPlayer = true,
     plane = 0,
-    hutPlane = !!this.game?.activeFloor,
+    hutPlane = isInteriorActive(this.game),
     source = null,
     // The entity that called the bolt down, when there is one (Pandora's Box).
     // Carried to the player's damage source so a lightning kill is credited on

@@ -1,5 +1,6 @@
 import { GRID, BACKGROUND_OBJECT_VARIANTS } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
+import { isInteriorActive } from './PlaneSystem.js';
 
 // Water/lava elemental reactions to a projectile hit — split out of
 // CombatSystem's background-object collision handler, which owns everything
@@ -22,7 +23,7 @@ export const WaterLavaHitMechanic = {
         obj.setWaterState('poisoned', 8.0);
       } else if (proj.onHit === 'stun' && proj.electric) {
         combat.game?.electricitySystem?.seedFromWeapon(obj, backgroundObjects, proj,
-          { tileDuration: 4.0, hutPlane: !!combat.game?.activeFloor });
+          { tileDuration: 4.0, hutPlane: isInteriorActive(combat.game) });
       } else if (proj.onHit === 'burn') {
         if (obj.getWaterState() === 'frozen') {
           // Fire + frozen water/ice → create obsidian rock

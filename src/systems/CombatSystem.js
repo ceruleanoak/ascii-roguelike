@@ -1,5 +1,5 @@
 import { GRID, PHYSICS, COLORS } from '../game/GameConfig.js';
-import { planeOf, inSamePlane, objectOnPlane, tagInteriorPlane } from './PlaneSystem.js';
+import { planeOf, inSamePlane, objectOnPlane, tagInteriorPlane, isInteriorActive } from './PlaneSystem.js';
 import { applyExitMutatingSwordHit } from './ExitSystem.js';
 import { BoomerangMechanic } from './BoomerangMechanic.js';
 import { WallRicochetMechanic } from './WallRicochetMechanic.js';
@@ -908,7 +908,7 @@ export class CombatSystem {
                   obj.setWaterState('poisoned', 8.0);
                 } else if (attack.onHit === 'stun' && attack.electric) {
                   this.game?.electricitySystem?.seedFromWeapon(obj, backgroundObjects, attack,
-                    { tileDuration: 4.0, hutPlane: !!this.game?.activeFloor });
+                    { tileDuration: 4.0, hutPlane: isInteriorActive(this.game) });
                 } else if (attack.onHit === 'burn') {
                   if (obj.getWaterState() === 'frozen') {
                     obj.setWaterState('normal', 0); // Melt ice

@@ -20,6 +20,7 @@
  */
 
 import { createBurstParticles, createSparkBurst } from './WorldEffectsSystem.js';
+import { isInteriorActive } from './PlaneSystem.js';
 
 export class ConsumableWindupEffects {
   execute(inv, windup, player, enemies, combatSystem, steamClouds, particles) {
@@ -170,7 +171,7 @@ export class ConsumableWindupEffects {
             maxLife: 0.5,
             char: burstChars[Math.floor(Math.random() * burstChars.length)],
             color: windup.consumable.color || '#ffaa00',
-            hutPlane: !!inv.game.activeFloor
+            hutPlane: isInteriorActive(inv.game)
           });
         }
 
