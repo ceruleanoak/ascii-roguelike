@@ -2359,6 +2359,7 @@ export class Enemy {
     let bestScore = 0;
 
     for (const item of items) {
+      if (!inSamePlane(this, item)) continue;
       const distance = Math.hypot(
         item.position.x - this.position.x,
         item.position.y - this.position.y
