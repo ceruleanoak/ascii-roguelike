@@ -48,22 +48,28 @@ programming terms.
 - **Not:** "screen", "scene", "mode" (as a code identifier).
 
 ### Floor
-- **Definition:** The canonical interior the player currently occupies (hut, dungeon, or
-  maze interior). Carries `type` + `viewport` metadata.
-- **In code:** `game.activeFloor` (renamed from the older `hutInterior`).
+- **Definition:** The space of the Interior the player currently occupies (hut, Cavern, dungeon
+  floor, or Aquifer). Carries `type` + `viewport` metadata, its own collision map, Background
+  Objects and NPCs.
+- **In code:** `game.activeFloor` (renamed from the older `hutInterior`); read it through
+  `activeInteriorFloor(game)` (PlaneSystem), which is null outside an Interior and in a Maze.
 - **Not:** "interior slot" as a variable, "level", or Depth.
-
 ### Interior
-- **Definition:** A self-contained sub-space entered from the surface — Hut, Dungeon, Maze, or
-  Pond. Each is a controller registered with the InteriorManager, which owns the shared
-  lifecycle (enter/exit, surface freeze/thaw, reset, active-source accessors, PiP frame).
-- **In code:** `InteriorManager` (ADR-0001) + `HutSystem` / `DungeonSystem` / `MazeSystem`
-  (+ planned `PondSystem`). Membership is the single field `player._activeInteriorKind`, with
-  `inHut` / `inDungeon` / `inMaze` as derived accessors; overlays dispatch through
-  `InteriorOverlay` (shared frame in `interiorFrame.js`).
-- **Not:** "room" (an Interior contains its own space; a Room is the surface unit); a fourth
-  bespoke copy of the lifecycle (the duplication ADR-0001 retired).
-
+- **Definition:** A self-contained space entered from a surface Room — Hut (incl. Cavern),
+  Dungeon, Maze, or Aquifer — during which the **surface Room is frozen** and the Interior owns
+  the frame through a PiP panel. A layer is an Interior when **combat does not span the
+  layers**; when it does, the layer is a Plane swap instead (see Plane). Every Interior gets the
+  same render and interaction separation with no per-kind wiring.
+- **In code:** `InteriorManager` (ADR-0001) + `HutSystem` / `DungeonSystem` / `MazeSystem` /
+  `AquiferSystem`. Membership is the single field `player._activeInteriorKind`, with `inHut` /
+  `inDungeon` / `inMaze` / `inAquifer` as derived accessors. Floor Interiors enter and leave
+  through `InteriorManager.enterFloor` / `exitFloor` (freeze/thaw, collision map, floor loot);
+  "is the player inside?" is `isInteriorActive(game)`, the live floor is
+  `activeInteriorFloor(game)`, the NPCs in reach are `InteriorManager.activeNpcs()`. Overlays
+  dispatch through `InteriorOverlay` (shared frame in `interiorFrame.js`).
+- **Not:** "room" (an Interior contains its own space; a Room is the surface unit); a Plane
+  (the other layer keeps simulating there); a hand-listed `inHut || inDungeon || inMaze` check
+  (the layer-leak anti-pattern — bug #107); the Frozen status effect.
 ### Maze
 - **Definition:** An Interior built from a single continuous DFS-generated corridor. Loot hides
   behind cipher-covered breakable objects; one blinks a warning at a time, and letting it
@@ -94,25 +100,24 @@ programming terms.
   Yellow Mage's teleport-dash (`WarpSystem.resolveBlinkTeleport`) — unrelated naming collision.
 
 ### Pond
-- **Definition:** The **surface entrance** in a Quagmire: a small body of water shaped from
-  water background objects with a conspicuous **dark water tile in the middle** that marks the
-  frog-only way down. The Pond is the doorway, *not* the space below it.
-- **In code:** built by `roomFeatures.placePondEntries` (disc of `~` objects + dark center
-  tagged `pondEntry`, stored as `room.pondEntry`). Entered by a Frog (see Polymorph) via SPACE.
-- **Not:** the Aquifer it leads to, nor a Lake (an open-water Room).
-
+- **Definition:** The small round body of shallow water in a Quagmire whose center tile is the
+  Whirlpool — plain-looking water until the Quagmire's rounds are cleared.
+- **In code:** shaped by `roomFeatures.placeWhirlpool` (disc of `~` objects; the center is tagged
+  `whirlpool` and stored as `room.whirlpool`).
+- **Not:** the Aquifer below it, nor a Lake (an open-water Room).
 ### Aquifer
-- **Definition:** The plane-1 underwater interior reached through a Pond. A **free-form, organic**
-  (not square) system of walled passages the frog swims through with **flowing** movement and
-  limited vision (lighting parity with the underground/tunnel system). Underwater **platforming**:
-  static / simple fixed-pattern hazards (e.g. an eel on a strict point path) deal contact damage;
-  passage ends hold discoveries (rare Ingredients + a Key Item).
-- **In code:** to be built on the **underground tunnel** render/physics path — walls are
-  `tunnelWall` objects (solid on plane 1), lighting is the cave-fog overlay, rendered full-screen
-  (no PiP). (The failed first attempt — `PondSystem`/`PondInteriorOverlay`, a square PiP maze with
-  no real collision — is being replaced; see `claudedocs/quagmire-handover.md`.)
-- **Not:** the Pond (its surface entrance), a PiP panel, a square maze, or open collision-free water.
-
+- **Definition:** The underwater Interior below a Quagmire, entered by stepping onto the
+  **Whirlpool** (the Pond's center, active once the rounds clear; any form). The **Aquifer
+  Current** carries the player to the **Confluence** at the room center, which splits into three
+  non-touching branches tinted by destination — yellow (Oasis, then a fresh yellow Room), red
+  (Caldera), cyan (the Maw's lake). One-way: the only ways out are the branch ends. A Frog nearly
+  swims against the current and can enter the narrow **Offshoots** that hold the loot.
+- **In code:** `AquiferSystem` (kind `'aquifer'`; Floor cached on `room.aquifer.floor`, drawn by
+  the shared hut overlay with cave-fog lighting); layout from `aquiferLayout.js`; the current is
+  `player.aquiferCurrent` (displacement applied in `PhysicsSystem`); branch warps via
+  `CrossZoneWarp.js`.
+- **Not:** the Pond (its surface entrance); a Plane (combat doesn't span the layers, so it is an
+  Interior); the Imbued current (electric).
 ### Sinkhole
 - **Definition:** A concealed hole in a Grass (`G`) Room, disguised as ordinary tall grass
   until a majority of the grass tiles touching it have been cut. Once revealed, SPACE dives
@@ -124,19 +129,21 @@ programming terms.
   the first.
 - **In code:** `SinkholeSystem`; `room.sinkholes[]` (site + adjacency-cut tracking); reveal
   glyph `⬤`, plane-1 water glyph `≈`.
-- **Not:** the Pond (a fixed, always-visible Quagmire entrance reached by a Frog only) or the
-  Aquifer (Pond's underwater destination); the Sinkhole is concealed until earned by cutting
+- **Not:** the Pond (a fixed, always-visible Quagmire entrance) or the Aquifer (the Interior
+  below the Whirlpool); the Sinkhole is concealed until earned by cutting
   grass, is entered by the player directly (no Polymorph required), and its plane-1 space is a
   one-way cross-Zone shortcut rather than a self-contained interior loop. Also not a Burrow
   (an enemy hiding mechanic, not a player-enterable space).
 
 ### Plane
-- **Definition:** Which interaction layer an entity lives on — surface (0) vs. interior (1).
-  The single predicate that decides combat, vision, pickup, and collision eligibility.
-- **In code:** `PlaneSystem`; route new combat/vision/pickup/collision checks through it.
-- **Not:** ad-hoc `inHut || inMaze || inDungeon` guards scattered per-frame (the layer-leak
-  anti-pattern — bug #107).
-
+- **Definition:** Which layer of a **live** Room an entity is on — surface (0), tunnel/cave (1),
+  or submerged (2, Shark Mask dive). A Plane swap keeps the other plane simulating, because
+  combat spans the layers (T-room tunnel, U-room cave, Sinkhole cave, Shark dive). Plane
+  membership decides combat, vision, pickup, and collision eligibility.
+- **In code:** `PlaneSystem` (`PLANE_SURFACE` / `PLANE_TUNNEL` / `PLANE_SUBMERGED`,
+  `inSamePlane`, `objectOnPlane`); route new combat/vision/pickup/collision checks through it.
+- **Not:** an Interior (there the surface is frozen and the layer owns the frame); ad-hoc
+  per-frame guards (the layer-leak anti-pattern — bug #107).
 ### Room
 - **Definition:** One procedurally generated surface space in EXPLORE/NEUTRAL. Has a type
   from the room-type registry.
@@ -860,7 +867,7 @@ programming terms.
 ### Quagmire
 - **Definition:** A rare green-zone Room (exit letter Q): a water-dispersed arena. Mostly not
   generic combat; when combat occurs it runs in escalating rounds, and a Rusalka may appear
-  after the final clear. Holds Ponds (Frog-only Interiors). Variants may instead present the
+  after the final clear. Holds a Pond whose Whirlpool opens into the Aquifer. Variants may instead present the
   Witch as a roaming enemy or a witch's hut.
 - **In code:** exit letter `'Q'` in `src/data/exitLetters.js` (green-only weighting); template
   in `letterTemplates.js`; built via `RoomGenerator`. (Phase 1+, planned.)
