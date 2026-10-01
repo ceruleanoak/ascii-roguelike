@@ -33,7 +33,7 @@
 
 import { GRID } from '../game/GameConfig.js';
 import { ITEMS } from '../data/items.js';
-import { tagInteriorPlane } from './PlaneSystem.js';
+import { tagInteriorPlane, tagLootLayer } from './PlaneSystem.js';
 import { fizzleToSpark } from './MagicSystem.js';
 
 const C = GRID.CELL_SIZE;
@@ -175,7 +175,7 @@ export class WeaponEffectsSystem {
       const dist = Math.hypot(dx, dy) || 1;
       const speed = Math.max(0, dist - C) * PULL_SPEED_PER_PX;
       item.velocity = { vx: (dx / dist) * speed, vy: (dy / dist) * speed };
-      this.game.items.push(item);
+      this.game.items.push(tagLootLayer(this.game, item));
       this.game.physicsSystem.addEntity(item);
     }
   }

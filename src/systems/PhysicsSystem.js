@@ -4,6 +4,7 @@ import {
   planeOf,
   inSamePlane,
   objectOnPlane,
+  lootOnActiveLayer,
 } from './PlaneSystem.js';
 import { clearStatusEffect } from './StatusEffects.js';
 import { applyLavaContact } from './LavaContact.js';
@@ -1653,8 +1654,11 @@ export class PhysicsSystem {
         if (wetStatus?.stacks !== undefined) wetStatus.stacks = wetStatus.active ? wetPipCount(entity) : 0;
       }
 
-      // Ingredients: lava destroys them, water makes them bob
+      // Ingredients: lava destroys them, water makes them bob. Loot on another
+      // layer (the frozen surface while an Interior owns the frame) was tested
+      // against the live layer's liquid at overlapping coordinates — skip it.
       if (entity.pickupCooldown !== undefined) {
+        if (!lootOnActiveLayer(game, entity)) continue;
         if (damagingLiquid) {
           const idx = game.ingredients.indexOf(entity);
           if (idx !== -1) {
@@ -1673,7 +1677,7 @@ export class PhysicsSystem {
       // Dropped items (weapons/armor): lava destroys them
       const itemIdx = game.items.indexOf(entity);
       if (itemIdx !== -1) {
-        if (damagingLiquid) {
+        if (damagingLiquid && lootOnActiveLayer(game, entity)) {
           this.removeEntity(entity);
           game.items.splice(itemIdx, 1);
         }

@@ -1,4 +1,5 @@
 import { Item } from '../entities/Item.js';
+import { tagLootLayer } from './PlaneSystem.js';
 import { Shopkeeper } from '../entities/Shopkeeper.js';
 import { menuIntent } from './MenuInput.js';
 import { ShopOverlay } from '../rendering/ui/ShopOverlay.js';
@@ -354,7 +355,7 @@ export class ShopSystem {
    */
   _tryDeliverItem(row, player) {
     const game = this.game;
-    const scratch = [new Item(row.char, player.position.x, player.position.y)];
+    const scratch = [tagLootLayer(game, new Item(row.char, player.position.x, player.position.y))];
     return game.inventorySystem.tryPickupItem(
       scratch, game.placedTraps, player, game.physicsSystem,
       true, 0, 0, game.renderer

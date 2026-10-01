@@ -1,6 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { ErrandCharacter } from '../entities/ErrandCharacter.js';
 import { Item } from '../entities/Item.js';
+import { tagLootLayer } from './PlaneSystem.js';
 import { Enemy } from '../entities/Enemy.js';
 import { applyZoneCombatModifiers } from '../data/zones.js';
 
@@ -234,8 +235,7 @@ export class ErrandSystem {
 
   /** Spawns the reward Item from a checkGive() result — shared glue for handleConfirmMenuSpacePress(). */
   _spawnReward(game, giveResult) {
-    const rewardItem = new Item(giveResult.rewardChar, giveResult.x, giveResult.y);
-    if (game.activeFloor) rewardItem.hutPlane = true;
+    const rewardItem = tagLootLayer(game, new Item(giveResult.rewardChar, giveResult.x, giveResult.y));
     game.items.push(rewardItem);
     game.physicsSystem.addEntity(rewardItem);
   }

@@ -3,6 +3,7 @@ import { FISHING_TABLES, pickRandomCatch } from '../data/fishingTables.js';
 import { Bobber } from '../entities/Bobber.js';
 import { FishEntity } from '../entities/FishEntity.js';
 import { Item } from '../entities/Item.js';
+import { tagLootLayer } from './PlaneSystem.js';
 import { RewardObject } from '../entities/RewardObject.js';
 import { Rusalka } from '../entities/Rusalka.js';
 
@@ -551,7 +552,7 @@ export class FishingSystem {
       if (dx * dx + dy * dy > radius * radius) continue;
       reward.alive = false;
       this.rewardObjects.splice(i, 1);
-      const grabbed = new Item(reward.directPickupItem, game.player.position.x, game.player.position.y);
+      const grabbed = tagLootLayer(game, new Item(reward.directPickupItem, game.player.position.x, game.player.position.y));
       game.items.push(grabbed);
       game.physicsSystem.addEntity(grabbed);
       game.tryPickupItem();

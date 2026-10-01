@@ -11,7 +11,7 @@
  * - Room persistence anti-cheat
  */
 
-import { inSamePlane } from './PlaneSystem.js';
+import { canReachLoot } from './PlaneSystem.js';
 import { Item } from '../entities/Item.js';
 import { GRID } from '../game/GameConfig.js';
 import { addItemToChestArray, removeItemFromChestArray, chestEntryLabel, trapAlreadyEquipped, mergeStackableConsumable as mergeStackableConsumableStack } from './TrapSystem.js';
@@ -343,7 +343,7 @@ export class InventorySystem {
    */
   // Ground-item proximity check — dedup of 5 identical inline checks in main.js.
   hasNearbyGroundItem(items, player, physicsSystem, radius = 20) {
-    return items.some(item => physicsSystem.getDistance(player, item) < radius);
+    return items.some(item => canReachLoot(this.game, player, item) && physicsSystem.getDistance(player, item) < radius);
   }
 
   tryPickupItem(items, placedTraps, player, physicsSystem, allowSlotChoice = false, _unused = 0, selectedWeaponSlotIdx = 0, renderer = null) {
@@ -363,7 +363,7 @@ export class InventorySystem {
     const now = performance.now();
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      if (!inSamePlane(player, item)) continue; // Cross-plane items are unreachable
+      if (!canReachLoot(this.game, player, item)) continue; // Other-Plane / other-layer items are unreachable
       if (item.pickupReadyAt && item.pickupReadyAt > now) continue; // Recently swapped — wait
       const distance = physicsSystem.getDistance(player, item);
 

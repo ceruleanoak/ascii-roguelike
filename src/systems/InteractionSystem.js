@@ -10,7 +10,7 @@ import { CHARACTER_TYPES } from '../data/characters.js';
 import { createDebris } from '../entities/Debris.js';
 import { createIceBurst, Particle } from '../entities/Particle.js';
 import { INTERACTION_RANGE, OBJECT_ANIMATIONS, GRID, GAME_STATES } from '../game/GameConfig.js';
-import { inSamePlane, planeOf, objectOnPlane, tagInteriorPlane } from './PlaneSystem.js';
+import { inSamePlane, planeOf, objectOnPlane, tagInteriorPlane, tagLootLayer } from './PlaneSystem.js';
 import { WiseFellow } from '../entities/WiseFellow.js';
 
 // Refusal singletons for resolveSmashRefusal — the melee loop tests every
@@ -997,7 +997,7 @@ export class InteractionSystem {
       const weaponChar = effect.split(':')[2];
       obj.destroyAfterAnimation = true;
       game.renderer.markBackgroundDirty();
-      const weapon = new Item(weaponChar, obj.position.x, obj.position.y);
+      const weapon = tagLootLayer(game, new Item(weaponChar, obj.position.x, obj.position.y));
       game.items.push(weapon);
       game.physicsSystem.addEntity(weapon);
     } else if (effect.startsWith('spawnIngredient:')) {

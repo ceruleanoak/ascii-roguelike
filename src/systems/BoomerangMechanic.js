@@ -1,5 +1,5 @@
 import { GRID } from '../game/GameConfig.js';
-import { inSamePlane } from './PlaneSystem.js';
+import { inSamePlane, canReachLoot } from './PlaneSystem.js';
 
 // Bounce-target search radius used only for puzzle-room switch chaining
 // (onObjectHit below) — deliberately its own constant rather than reusing
@@ -56,7 +56,7 @@ export const BoomerangMechanic = {
     for (let i = game.ingredients.length - 1; i >= 0; i--) {
       const ing = game.ingredients[i];
       if (ing.pickupCooldown > 0) continue;
-      if (!inSamePlane(proj, ing)) continue;
+      if (!canReachLoot(game, proj, ing)) continue;
       const dx = ing.position.x + (ing.width || GRID.CELL_SIZE) / 2 - cx;
       const dy = ing.position.y + (ing.height || GRID.CELL_SIZE) / 2 - cy;
       if (Math.hypot(dx, dy) > GRID.CELL_SIZE) continue;

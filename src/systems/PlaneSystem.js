@@ -159,8 +159,42 @@ export function tagInteriorPlane(game, entity) {
  * never hutPlane (#342).
  */
 export function lootOnActiveLayer(game, entity) {
-  if (game.player?.inMaze) return !!entity.mazePlane;
+  if (game?.player?.inMaze) return !!entity.mazePlane;
   return !entity.mazePlane && !!entity.hutPlane === isInteriorActive(game);
+}
+
+/**
+ * True when `observer` can reach a loot entity: it shares the observer's Plane
+ * AND lies on the layer the player is standing on. The one reach rule for
+ * every pickup that happens alongside the player — SPACE item pickup, the
+ * boomerang fetch, companions. Reading the Plane alone is not enough: an
+ * Interior's coordinates overlap the surface Room's, so loot lying on the
+ * frozen surface would be takeable from inside (and unseen while it happens).
+ */
+export function canReachLoot(game, observer, entity) {
+  return inSamePlane(observer, entity) && lootOnActiveLayer(game, entity);
+}
+
+/**
+ * True for loot lying in the surface Room — it carries neither Interior tag.
+ * The reach rule for entities that never leave the surface (wild and follower
+ * crows), whatever layer the player happens to be on.
+ */
+export function lootOnSurface(entity) {
+  return !entity.hutPlane && !entity.mazePlane;
+}
+
+/**
+ * Tag a loot entity (ingredient or item) at spawn with the Interior it was
+ * created in: `mazePlane` in the Maze, `hutPlane` on a floor Interior, nothing
+ * on the surface. Every loot spawn site calls this rather than writing the
+ * tags by hand — untagged loot created inside an Interior draws on the frozen
+ * surface instead of the overlay and fails lootOnActiveLayer.
+ */
+export function tagLootLayer(game, entity) {
+  if (game.player?.inMaze) entity.mazePlane = true;
+  else if (isInteriorActive(game)) entity.hutPlane = true;
+  return entity;
 }
 
 /**

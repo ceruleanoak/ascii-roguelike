@@ -1,7 +1,7 @@
 import { Ingredient } from '../entities/Ingredient.js';
 import { Item } from '../entities/Item.js';
 import { isIngredient, isItem, generateEnemyDrops, resolvePickupSfx } from '../data/items.js';
-import { planeOf, lootOnActiveLayer } from './PlaneSystem.js';
+import { planeOf, lootOnActiveLayer, tagLootLayer } from './PlaneSystem.js';
 import { GRID } from '../game/GameConfig.js';
 import { STARTER_POTION_CHARS, starterPotionIngredientsFor } from '../data/alchemy.js';
 import { INGREDIENT_STACK_CAP } from './ingredientPile.js';
@@ -216,8 +216,7 @@ export class LootSystem {
     // hutPlane covers both hut and dungeon interiors — they share game.activeFloor and
     // the same overlay render path. Without this, dungeon-spawned loot drops would
     // render at wrong screen coords and slip past the overlay's hutPlane filter.
-    if (this.game.activeFloor) ingredient.hutPlane = true;
-    if (this.game.player?.inMaze) ingredient.mazePlane = true;
+    tagLootLayer(this.game, ingredient);
     const a = angle !== null ? angle : Math.random() * Math.PI * 2;
     const speed = 60 + Math.random() * 80;
     ingredient.velocity.vx = Math.cos(a) * speed;
@@ -239,8 +238,7 @@ export class LootSystem {
       item.baseIngredient = baseIng;
     }
     if (source) item.plane = planeOf(source);
-    if (this.game.activeFloor) item.hutPlane = true;
-    if (this.game.player?.inMaze) item.mazePlane = true;
+    tagLootLayer(this.game, item);
     const a = angle !== null ? angle : Math.random() * Math.PI * 2;
     const speed = 60 + Math.random() * 80;
     item.velocity.vx = Math.cos(a) * speed;

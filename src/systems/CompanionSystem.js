@@ -1,7 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { NPCRat } from '../entities/NPCRat.js';
 import { Ingredient } from '../entities/Ingredient.js';
-import { planeOf, PLANE_SURFACE, tagInteriorPlane } from './PlaneSystem.js';
+import { planeOf, PLANE_SURFACE, tagInteriorPlane, isInteriorActive, canReachLoot, lootOnActiveLayer, lootOnSurface } from './PlaneSystem.js';
 import { GolemCompanion } from '../entities/GolemCompanion.js';
 import { GOLEM_TYPES, GOLEM_CAP } from '../data/golems.js';
 
@@ -202,6 +202,7 @@ export class CompanionSystem {
           const ing = game.ingredients[j];
           if (!ing.noGravitate) continue;
           if (ing.pickedUp) continue;
+          if (!canReachLoot(game, rat, ing)) continue;
           const dx = rat.position.x - ing.position.x;
           const dy = rat.position.y - ing.position.y;
           if (Math.abs(dx) < rw && Math.abs(dy) < rh) {
@@ -351,7 +352,7 @@ export class CompanionSystem {
     for (let i = game.golems.length - 1; i >= 0; i--) {
       const golem = game.golems[i];
       if (golem.state !== 'dead' && game.items?.length) {
-        const weapon = golem.findBetterGroundWeapon(game.items);
+        const weapon = golem.findBetterGroundWeapon(game.items.filter(it => lootOnActiveLayer(game, it)));
         if (weapon) {
           golem.equipWeapon(weapon);
           const idx = game.items.indexOf(weapon);
@@ -536,8 +537,10 @@ export class CompanionSystem {
     const crows = game.currentRoom?.crows || [];
     const followers = game.followerCrows || [];
 
-    // Pull all on-ground bread loaves so crows can target them.
-    const breadItems = game.items.filter(it => it && it.char === '⌬' && !it.consumed);
+    // Pull all on-ground bread loaves so crows can target them. Wild and
+    // follower crows live in the surface Room, so only surface bread counts —
+    // a loaf on an Interior floor sits at floor coordinates they can't reach.
+    const breadItems = game.items.filter(it => it && it.char === '⌬' && !it.consumed && lootOnSurface(it));
 
     // Skip the whole pipeline when there's nothing to drive. Followers
     // without bread still need the weapon-threat scare pass below, so this
@@ -552,13 +555,13 @@ export class CompanionSystem {
     // non-bread ground items. Bread is excluded — it has its own dedicated
     // seek/eat/promotion path below rather than being "stolen." Wild crows
     // are always plane 0 (surface) — gate through PlaneSystem so a crow
-    // never "sees" loot sitting inside a tunnel/interior plane.
+    // never "sees" loot sitting on another Plane or on an Interior's floor.
     const lootItems = [];
     const lootNow = performance.now();
     for (const ing of game.ingredients) {
       if (!ing || ing.consumed || ing.destroyed) continue;
       if (ing.pickupReadyAt && ing.pickupReadyAt > lootNow) continue;
-      if (planeOf(ing) !== PLANE_SURFACE) continue;
+      if (planeOf(ing) !== PLANE_SURFACE || !lootOnSurface(ing)) continue;
       if (ing._lootSeenAt == null) ing._lootSeenAt = lootNow;
       if (lootNow - ing._lootSeenAt < LOOT_SEEK_DELAY_MS) continue;
       lootItems.push(ing);
@@ -566,7 +569,7 @@ export class CompanionSystem {
     for (const it of game.items) {
       if (!it || it.consumed || it.destroyed || it.char === '⌬') continue;
       if (it.pickupReadyAt && it.pickupReadyAt > lootNow) continue;
-      if (planeOf(it) !== PLANE_SURFACE) continue;
+      if (planeOf(it) !== PLANE_SURFACE || !lootOnSurface(it)) continue;
       if (it._lootSeenAt == null) it._lootSeenAt = lootNow;
       if (lootNow - it._lootSeenAt < LOOT_SEEK_DELAY_MS) continue;
       lootItems.push(it);
@@ -628,7 +631,8 @@ export class CompanionSystem {
     // threatening — otherwise a nearby dropped loaf creates a scare loop:
     // crow seeks → enters scare radius → flees → returns → seeks → forever.
     // Weapon attacks below still scare.
-    const playerThreat = (game.player && game.player.plane === 0 && breadItems.length === 0)
+    const surfaceLive = !isInteriorActive(game);
+    const playerThreat = (surfaceLive && game.player && game.player.plane === 0 && breadItems.length === 0)
       ? { x: game.player.position.x, y: game.player.position.y }
       : null;
 
@@ -648,6 +652,9 @@ export class CompanionSystem {
     for (const particle of game.particles) {
       if (particle.isEmber) weaponThreats.push({ x: particle.x, y: particle.y });
     }
+    // Inside an Interior every attack, projectile and ember is on the floor,
+    // at floor coordinates — nothing there threatens a crow on the surface.
+    if (!surfaceLive) weaponThreats.length = 0;
 
     // Eat handler: remove the loaf, promote the eater to companion. Every
     // bread-eat adds one more companion — they accumulate. Other crows in the
@@ -800,11 +807,13 @@ export class CompanionSystem {
     if (!game.companionCrows || game.companionCrows.length === 0) return;
     const ctx = {
       player: game.player,
-      ingredients: game.ingredients,
+      // Companion crows travel with the player, so they fetch only loot on
+      // the player's layer — never the frozen surface's from inside an Interior.
+      ingredients: game.ingredients.filter(e => lootOnActiveLayer(game, e)),
       // Active-layer enemies (floor roster inside dungeons) — dive targeting
       // must see the enemies the player is actually fighting.
       enemies: game._activeEnemies?.() || [],
-      items: game.items,
+      items: game.items.filter(e => lootOnActiveLayer(game, e)),
       // Lift the ingredient off the ground but DON'T credit the player —
       // the companion ferries it back and deposits on perch. Returns true if
       // the world removal succeeded so the crow knows the pickup took.
