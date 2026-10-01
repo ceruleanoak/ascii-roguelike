@@ -347,9 +347,10 @@ export class BossSystem {
             obj._shockwaveTouched = true;
           }
         } else if (obj.getWaterState?.() === 'frozen') {
+          // No floating number: environmental terrain never spawns one. The
+          // ring's shake and the tile's own colour/char change are the feedback.
           obj.setWaterState('normal', 0);
           obj._shockwaveTouched = true;
-          this.game.combatSystem.createDamageNumber('~', obj.position.x, obj.position.y, '#88ddff');
         }
       }
 
