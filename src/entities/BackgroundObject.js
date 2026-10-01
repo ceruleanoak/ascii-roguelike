@@ -836,6 +836,15 @@ export class BackgroundObject {
     // and the boss's own ice stream would otherwise repair the floor it is
     // destroying. Thawing a Lead is always allowed.
     if (this.isLead && state === 'frozen') return;
+    // Ice is solid — nothing soaks into it. A frozen tile can only thaw (or be
+    // refrozen); poison, charge and crystal all need liquid water to take.
+    // Coral Crown and ElectricitySystem already checked for this at their own
+    // call sites, but the poison paths (melee, projectile, Acid Blade flood
+    // fill) did not, so a Barbed Lance swing turned the Frosted Maw's
+    // Freeze-Over sheet into a pool that then expired back to open water.
+    // Guarded here for the same reason as the Lead above: one gate, not one
+    // check per entry point.
+    if (this.waterState === 'frozen' && state !== 'frozen' && state !== 'normal') return;
     this.waterState = state;
     this.waterStateTimer = duration;
     this.electricCurrent = state === 'electrified' ? electricCurrent : null;
