@@ -1,5 +1,5 @@
 import { GRID, GAME_STATES, ZOOM } from '../game/GameConfig.js';
-import { isDeathHeldOffSurface } from './PlaneSystem.js';
+import { isDeathHeldOffSurface, isInteriorActive, activeInteriorFloor } from './PlaneSystem.js';
 
 /**
  * CameraZoomSystem — combat-proximity camera zoom.
@@ -131,7 +131,7 @@ export class CameraZoomSystem {
       // instead of the full scale, rather than suppressing the zoom outright.
       // Interiors (Maze/Hut/Dungeon) are exempt from this downgrade — their
       // zoom isn't threat-driven to begin with.
-      if (!player.heldItem && !player.inMaze && !player.inHut && !player.inDungeon) {
+      if (!player.heldItem && !isInteriorActive(game)) {
         desiredScale = desiredScale === ZOOM.SCALE ? ZOOM.HALF_SCALE : 1;
       }
 
@@ -163,11 +163,12 @@ export class CameraZoomSystem {
         gridRows: game.mazeInterior.gridRows
       };
     }
-    if ((player.inHut || player.inDungeon) && game.activeFloor) {
+    const floor = activeInteriorFloor(game);
+    if (floor) {
       return {
-        entities: game.activeFloor.enemies,
-        gridCols: game.activeFloor.gridCols,
-        gridRows: game.activeFloor.gridRows
+        entities: floor.enemies,
+        gridCols: floor.gridCols,
+        gridRows: floor.gridRows
       };
     }
     return {

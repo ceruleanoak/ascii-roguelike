@@ -757,7 +757,7 @@ export const RESET_REGISTRY = [
       'dungeonRareItemObtainedThisRun', 'dungeonTemplatesUsedThisRun',
       'player._activeInteriorKind', 'player.hutExitPosition',
       'player.mazeExitPosition', 'player.dungeonExitPosition',
-      'player.inAquifer', 'player.aquiferCurrent',
+      'player.aquiferCurrent',
       'player.plane',
       'player.tombSapped', 'player._tombSapTimer', 'player._tombSappingGhost',
     ],

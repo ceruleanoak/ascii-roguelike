@@ -1,5 +1,5 @@
 import { GRID, PHYSICS } from '../game/GameConfig.js';
-import { freezeSurfaceRoom, thawSurfaceRoom } from './PlaneSystem.js';
+import { freezeSurfaceRoom, thawSurfaceRoom, isInteriorActive } from './PlaneSystem.js';
 import { NORTH_ROW, SPINE_ROW, WEST_COL, EAST_COL, STAIRS_COL } from '../data/dungeonFloorTemplates.js';
 import { PUZZLE_ROOM_TEMPLATES } from '../data/dungeonPuzzleTemplates.js';
 
@@ -111,7 +111,7 @@ export class DungeonSystem {
   /** Returns true if player is close enough to the exterior dungeon door to interact. */
   nearExteriorDoor() {
     const { game } = this;
-    if (!game.player || game.player.inDungeon) return false;
+    if (!game.player || isInteriorActive(game)) return false;
     if (!game.currentRoom?.dungeon?.doorPosition) return false;
     if ((game.player._hutEntryCooldown ?? 0) > 0) return false;
     const { col, row } = game.currentRoom.dungeon.doorPosition;

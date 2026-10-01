@@ -2,6 +2,7 @@ import { EXIT_LETTERS, SECRET_PATTERNS } from '../data/exitLetters.js';
 import { LETTER_TEMPLATES } from '../data/letterTemplates.js';
 import { ZONES, ZONE_COLORS } from '../data/zones.js';
 import { GRID } from '../game/GameConfig.js';
+import { isInteriorActive } from './PlaneSystem.js';
 
 // Letters whose weights get boosted when the player has the well-vested luck
 // blessing. V (Vault), ? (Mystery), C (Camp) — all desirable stops that make
@@ -838,8 +839,8 @@ export class ExitSystem {
       room.collisionMap[GRID.ROWS - 1][centerX] = false;
     }
 
-    // Don't overwrite the player's collision map while inside a maze/hut/dungeon interior
-    if (!player.inMaze && !player.inHut && !player.inDungeon) {
+    // Don't overwrite the player's collision map while inside an Interior
+    if (!isInteriorActive(this.game)) {
       player.setCollisionMap(room.collisionMap);
     }
   }

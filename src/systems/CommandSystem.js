@@ -1,6 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { findEnemyDataByTrueName } from '../data/enemies.js';
 import { steerToward } from './npcSteering.js';
+import { isInteriorActive } from './PlaneSystem.js';
 
 /**
  * CommandSystem — permanent charm via true names.
@@ -208,7 +209,7 @@ export class CommandSystem {
     if (!roster.length || !room || !game.player) return;
 
     // Interiors are another plane's business — the warband waits outside.
-    if (game.activeFloor || game.player.inHut || game.player.inDungeon || game.player.inMaze) return;
+    if (isInteriorActive(game)) return;
 
     for (let i = 0; i < roster.length; i++) {
       const enemy = roster[i];

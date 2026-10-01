@@ -17,6 +17,7 @@
 // the switch — no new system needed.
 
 import { GRID } from '../game/GameConfig.js';
+import { activeInteriorFloor } from './PlaneSystem.js';
 
 const ELIGIBLE_ANCHOR_NAMES = new Set([
   'Tree', 'Stump', 'Crystal', 'Boulder', 'Mushroom',
@@ -48,10 +49,8 @@ export class WireSystem {
 
   // Surface room or interior floor — whichever holds the live bg-object list.
   _activeLayer() {
-    const player = this.game.player;
-    if (!player) return null;
-    if ((player.inHut || player.inDungeon) && this.game.activeFloor) return this.game.activeFloor;
-    return this.game.currentRoom || null;
+    if (!this.game.player) return null;
+    return activeInteriorFloor(this.game) ?? this.game.currentRoom ?? null;
   }
 
   _activeTriplines() {

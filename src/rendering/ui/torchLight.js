@@ -138,10 +138,14 @@ export function drawVisionFogOverlay(renderer, game, playerInInterior) {
   if (torchLit) drawPlayerTorchLight(renderer, px, py);
 }
 
-// Interior PiP pass (HutInteriorOverlay, MazeInteriorOverlay): blind only,
-// drawn inside the overlay's interior translate + clip, after the player.
+// Interior PiP pass (HutInteriorOverlay, MazeInteriorOverlay): the floor's own
+// cave fog (`caveFogRadius`, e.g. the Aquifer — widened by a lit torch, as
+// underground) and/or blind, whichever is tighter. Drawn inside the overlay's
+// interior translate + clip, after the player.
 export function drawInteriorVisionFogOverlay(renderer, game) {
-  const fogRadius = blindFogRadius(game);
+  const caveCells = game.activeFloor?.caveFogRadius;
+  const caveRadius = caveCells ? caveCells * CS * (hasTorchLight(game) ? 1.5 : 1) : Infinity;
+  const fogRadius = Math.min(caveRadius, blindFogRadius(game));
   if (fogRadius === Infinity) return;
   const player = game.player;
   drawVisionFog(renderer.fgCtx, player.position.x + CS / 2, player.position.y + CS / 2, fogRadius);

@@ -54,11 +54,7 @@ export class DialogueSystem {
     const player = game.player;
     if (!player) return false;
 
-    const npcs = player.inHut && game.activeFloor
-      ? game.activeFloor.npcs
-      : game.neutralCharacters;
-
-    for (const npc of npcs ?? []) {
+    for (const npc of game.interiorManager.activeNpcs()) {
       if (typeof npc.getDialogueLines !== 'function') continue;
       if (!inSamePlane(npc, player) || !npc.isInRange(player)) continue;
       const lines = npc.getDialogueLines(game);

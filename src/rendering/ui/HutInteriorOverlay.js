@@ -1,4 +1,5 @@
 import { GRID } from '../../game/GameConfig.js';
+import { activeInteriorFloor } from '../../systems/PlaneSystem.js';
 import { drawInteriorFrame } from './interiorFrame.js';
 import { hasTorchLight, drawPlayerTorchLight, drawInteriorVisionFogOverlay } from './torchLight.js';
 import {
@@ -12,12 +13,14 @@ import { drawTamedRats, drawGolems } from './CompanionRenderers.js';
 import { SLOT_CHROME } from '../../data/slotChrome.js';
 
 /**
- * HutInteriorOverlay — picture-in-picture rendering for both Hut and Dungeon interiors.
+ * HutInteriorOverlay — picture-in-picture rendering for every floor Interior
+ * (Hut, Dungeon, Aquifer — anything on game.activeFloor).
  *
  * Canvas: 480×480 (30×30 cells × 16px)
  * Panel size and offset are computed dynamically from game.activeFloor.gridCols/gridRows:
  *   Hut (10×10)    → 160×160 panel, centered at offset (160, 160)
  *   Dungeon (24×24) → 384×384 panel, centered at offset (48, 48)
+ *   Aquifer (30×30) → the full canvas, covering the frozen room above
  *
  * Coordinate contract:
  *   ctx.translate(offsetX, offsetY) is applied before entity rendering so that
@@ -26,8 +29,8 @@ import { SLOT_CHROME } from '../../data/slotChrome.js';
 
 const BORDER_COLOR = '#c8a96e';
 
-// Cavern floors borrow the Underground's plane-1 cave palette ('}' Cave Wall,
-// #554433) so a Cavern reads as a pocket of the same rock, not a building.
+// Cavern and Aquifer floors borrow the Underground's plane-1 cave palette ('}'
+// Cave Wall, #554433) so they read as the same rock, not a building.
 const CAVERN_PANEL_COLOR = '#0a0806';
 const CAVERN_ROCK_CHAR = '}';
 const CAVERN_ROCK_COLOR = '#554433';
@@ -39,7 +42,7 @@ export class HutInteriorOverlay {
   }
 
   render(game) {
-    if ((!game.player?.inHut && !game.player?.inDungeon) || !game.activeFloor) return;
+    if (!activeInteriorFloor(game)) return;
 
     const ctx = this.renderer.fgCtx;
 
@@ -48,11 +51,12 @@ export class HutInteriorOverlay {
     // keeps any surface-coord content that leaked past hutPlane filters (e.g.
     // untagged puddles/gooBlobs) from drawing on top of the PiP frame.
     const isCavern = game.activeFloor.hutKind === 'cavern';
+    const isRock = isCavern || game.player.inAquifer;
     drawInteriorFrame(ctx, {
       gridCols: game.activeFloor.gridCols,
       gridRows: game.activeFloor.gridRows,
-      panelColor: isCavern ? CAVERN_PANEL_COLOR : '#111108',
-      borderColor: isCavern ? CAVERN_ROCK_COLOR : BORDER_COLOR,
+      panelColor: isRock ? CAVERN_PANEL_COLOR : '#111108',
+      borderColor: isRock ? CAVERN_ROCK_COLOR : BORDER_COLOR,
       clip: true,
     });
 
@@ -81,8 +85,9 @@ export class HutInteriorOverlay {
 
     // ── 3b. Dungeon wall tiles ─────────────────────────────────────────────────
     // Render solid collision-map cells as visible stone walls.
-    // Hut interiors are open floor only (10 cols); dungeon interiors are 24 cols.
-    if (game.activeFloor.collisionMap && game.activeFloor.gridCols > 12) {
+    // Hut interiors are open floor only; the Aquifer's rock is its own '}'
+    // background objects.
+    if (game.activeFloor.collisionMap && game.player.inDungeon) {
       const CS = GRID.CELL_SIZE;
       const cm = game.activeFloor.collisionMap;
       const gapCells = game.activeFloor.gapCells;
@@ -423,7 +428,7 @@ export class HutInteriorOverlay {
       ctx.restore();
     }
 
-    // ── 20. Blind vision fog (after everything, inside the PiP clip) ──────────
+    // ── 20. Blind / cave vision fog (after everything, inside the PiP clip) ──
     drawInteriorVisionFogOverlay(this.renderer, game);
 
     // ── Restore interior offset ────────────────────────────────────────────────

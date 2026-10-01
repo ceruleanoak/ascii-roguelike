@@ -4,7 +4,7 @@ import { applyReset, initRegisteredState } from './game/resetRegistry.js';
 import { ASCIIRenderer } from './rendering/ASCIIRenderer.js';
 import { RenderController } from './rendering/RenderController.js';
 import { PhysicsSystem } from './systems/PhysicsSystem.js';
-import { tagInteriorPlane } from './systems/PlaneSystem.js';
+import { tagInteriorPlane, isInteriorActive } from './systems/PlaneSystem.js';
 import { CraftingSystem } from './systems/CraftingSystem.js';
 import { CombatSystem } from './systems/CombatSystem.js';
 import { RoomGenerator } from './systems/RoomGenerator.js';
@@ -2775,8 +2775,8 @@ class Game {
     }
 
     // Store previous position before physics update (for exit zone crossing detection)
-    // Skip while inside a maze/hut/dungeon — their coordinate spaces differ from the room grid
-    if (!this.player.inMaze && !this.player.inHut && !this.player.inDungeon) {
+    // Skip while inside an Interior — its coordinate space differs from the room grid
+    if (!isInteriorActive(this)) {
       this.previousPlayerPosition.x = this.player.position.x;
       this.previousPlayerPosition.y = this.player.position.y;
     }
@@ -2785,7 +2785,7 @@ class Game {
     const waterResults = this.physicsSystem.update(deltaTime, this._activeBackgroundObjects(), this.activeRoom, this.combatSystem);
 
     // Soft contact: gently separate player from overlapping enemies to prevent stacking
-    if (!this.player.inHut && !this.player.inDungeon && !this.player.inMaze) {
+    if (!isInteriorActive(this)) {
       this.physicsSystem.resolveEntityContacts(this.player, this.currentRoom.enemies);
     }
 
@@ -3683,11 +3683,8 @@ class Game {
       if (this.treasureOfferingSystem.handleSpacePress()) return;
 
       // NPC interactions (errand traveler + wise fellow). Resolve which list
-      // to scan once — interior NPCs live on activeFloor.npcs; surface NPCs on
-      // neutralCharacters.
-      const npcArray = this.player.inHut && this.activeFloor
-        ? this.activeFloor.npcs
-        : this.neutralCharacters;
+      // to scan once — the active layer's (InteriorManager.activeNpcs).
+      const npcArray = this.interiorManager.activeNpcs();
 
       // Errand confirm popup already open: SPACE confirms the trade. This
       // owns SPACE outright while open — checked before the artifact/wise

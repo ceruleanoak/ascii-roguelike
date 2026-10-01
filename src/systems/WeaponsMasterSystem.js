@@ -39,9 +39,7 @@ export class WeaponsMasterSystem {
 
     // Hut Weapons Master (Settlement S room) or the rare outdoor Red Zone
     // caldera Weapons Master — same training flow either way.
-    const master = (player?.inHut && game.activeFloor)
-      ? game.activeFloor.npcs?.find(n => n instanceof WeaponsMaster)
-      : game.neutralCharacters?.find(n => n instanceof WeaponsMaster);
+    const master = game.interiorManager.activeNpcs().find(n => n instanceof WeaponsMaster);
     if (!master) return false;
 
     if (!master.isInRange(player)) return false;
@@ -79,9 +77,7 @@ export class WeaponsMasterSystem {
     // Player left the hut, or the outdoor master's room was left behind —
     // cancel quietly, coin is already spent.
     const { master } = this.coinAnim;
-    const stillPresent = game.player?.inHut
-      ? game.activeFloor?.npcs?.includes(master)
-      : game.neutralCharacters?.includes(master);
+    const stillPresent = game.interiorManager.activeNpcs().includes(master);
     if (!stillPresent) {
       this.coinAnim = null;
       return;

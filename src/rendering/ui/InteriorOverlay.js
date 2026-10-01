@@ -11,10 +11,12 @@ export class InteriorOverlay {
   constructor(renderer, renderController) {
     this.renderer = renderer;
     this.renderController = renderController;
-    // Hut and dungeon share one overlay (auto-sizes from the active floor).
+    // Every floor Interior (hut, dungeon, Aquifer) shares one overlay, which
+    // auto-sizes from the active floor.
     this.overlays = {
       hut:     renderController.hutInteriorOverlay,
       dungeon: renderController.hutInteriorOverlay,
+      aquifer: renderController.hutInteriorOverlay,
       maze:    renderController.mazeInteriorOverlay,
     };
   }

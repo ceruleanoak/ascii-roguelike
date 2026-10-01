@@ -108,25 +108,21 @@ export function isInteriorActive(game) {
 }
 
 /**
- * True when `player` is below a surface world it is cut off from — riding the
- * Aquifer, plane-1 content laid over a surface room (the Quagmire) whose own
- * occupants stay behind on plane 0. The surface layer is then neither drawn
- * (ExploreRenderer.shouldRenderEntity / shouldRenderBackgroundObject) nor
- * reachable (interaction sites gate on `inSamePlane`), the way the surface
- * room drops out while a hut/dungeon interior owns the frame.
- *
- * Aquifer-only on purpose: T-room tunnels keep the surface in view by design,
- * and the Sinkhole / U-room caves are built from plane-0 objects that must
- * still draw underground.
+ * The active Interior's floor — the hut / dungeon / Aquifer space whose content
+ * lives on `game.activeFloor` — or null on the surface and in the Maze (whose
+ * content is its own arrays on `game.mazeInterior`). Use this, never an
+ * `inHut || inDungeon` list, wherever a system needs "the floor the player is
+ * on", so a new Interior kind is covered without touching the call site.
  */
-export function isCutOffFromSurface(player) {
-  return !!player?.inAquifer;
+export function activeInteriorFloor(game) {
+  if (!isInteriorActive(game) || game.player.inMaze) return null;
+  return game.activeFloor ?? null;
 }
 
 /**
  * True while GAME_OVER's 2-second death delay is still showing the death in
  * place on a layer other than the surface — inside an Interior (PiP) or on a
- * non-surface Plane (U-room cave, T-room tunnel, Aquifer). Once the delay
+ * non-surface Plane (U-room cave, T-room tunnel). Once the delay
  * expires the view cuts to the surface room for the GAME OVER text. Shared by
  * GameOverRenderer (what to draw) and CameraZoomSystem (hold the zoom) so the
  * scene and the camera release on the same frame.

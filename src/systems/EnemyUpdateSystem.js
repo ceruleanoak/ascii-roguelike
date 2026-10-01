@@ -1,5 +1,5 @@
 import { GRID, PHYSICS } from '../game/GameConfig.js';
-import { inSamePlane, tagInteriorPlane } from './PlaneSystem.js';
+import { inSamePlane, tagInteriorPlane, isInteriorActive } from './PlaneSystem.js';
 import { CAMP_NPC_STATE } from '../entities/CampNPC.js';
 import { GooBlob } from '../entities/GooBlob.js';
 import { createEmberBurst, createExplosion } from '../entities/Particle.js';
@@ -132,7 +132,7 @@ export class EnemyUpdateSystem {
   }
 
   _applySlimeContact(player, enemies) {
-    const slimeEnemies = (player.inMaze || player.inHut || player.inDungeon)
+    const slimeEnemies = isInteriorActive(this.game)
       ? []
       // Mid-leap (windup or airborne) the body isn't on the ground to touch —
       // its lerped position sweeps across the room to the landing target and
@@ -227,7 +227,7 @@ export class EnemyUpdateSystem {
 
   _runEnemyLoop(deltaTime, player, enemies) {
     const game = this.game;
-    if (player.inHut || player.inDungeon || player.inMaze) return;
+    if (isInteriorActive(game)) return;
 
     for (const enemy of enemies) {
       if (enemy.isDying) continue;

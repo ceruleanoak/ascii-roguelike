@@ -1,5 +1,5 @@
 import { GRID, PHYSICS } from '../game/GameConfig.js';
-import { inSamePlane } from './PlaneSystem.js';
+import { inSamePlane, isInteriorActive } from './PlaneSystem.js';
 import { ENEMIES } from '../data/enemies.js';
 import { NeutralCharacter } from '../entities/NeutralCharacter.js';
 
@@ -243,12 +243,12 @@ export class PolymorphSystem {
 
     // Check for Lake room entry — spawn cure Rusalka if needed
     const isLakeRoom = game.currentRoom?.exitLetter === 'L';
-    if (isLakeRoom && !game.cureRusalka && !game.player.inHut && game.player.polymorphCursed) {
+    if (isLakeRoom && !game.cureRusalka && !isInteriorActive(game) && game.player.polymorphCursed) {
       this.spawnCureRusalka(game);
     }
 
     // Update cure Rusalka pulse animation and check contact
-    if (game.cureRusalka && !game.player.inHut && inSamePlane(game.cureRusalka, game.player)) {
+    if (game.cureRusalka && !isInteriorActive(game) && inSamePlane(game.cureRusalka, game.player)) {
       game.cureRusalka.update(dt);
 
       const dx = game.player.position.x - game.cureRusalka.position.x;

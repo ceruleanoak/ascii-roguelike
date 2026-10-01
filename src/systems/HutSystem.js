@@ -11,7 +11,7 @@ import { ErrandCharacter } from '../entities/ErrandCharacter.js';
 import { WeaponsMaster } from '../entities/WeaponsMaster.js';
 import { Shopkeeper } from '../entities/Shopkeeper.js';
 import { WizardNPC } from '../entities/WizardNPC.js';
-import { freezeSurfaceRoom, thawSurfaceRoom } from './PlaneSystem.js';
+import { isInteriorActive } from './PlaneSystem.js';
 import { HOT_WATER_CHAR } from '../data/alchemy.js';
 
 /**
@@ -411,7 +411,7 @@ export class HutSystem {
    */
   _findNearbyHut() {
     const { game } = this;
-    if (!game.player || game.player.inHut) return null;
+    if (!game.player || isInteriorActive(game)) return null;
     if ((game.player._hutEntryCooldown ?? 0) > 0) return null;
     // A Cavern is a hut record too (hutKind 'cavern'), but its door only
     // exists once a bomb has broken the Bombable Rock hiding it. Copied into a
@@ -611,68 +611,26 @@ export class HutSystem {
       y: game.player.position.y
     };
 
-    // Wipe surface combat state on transition into interior so in-flight
-    // surface projectiles/arrows don't ghost-render at upper-left of canvas
-    // during interior play. Matches the clear pattern of surface room transitions.
-    game.combatSystem.clear();
-
     // Reuse cached interior if the player has been here before in this room
     // visit — preserves broken barrels, defeated enemies, NPC dialogue state, etc.
-    if (hut.interiorState) {
-      game.activeFloor = hut.interiorState;
-    } else if (hut.hutKind === 'cavern') {
-      game.activeFloor = game.cavernSystem.generateCavernInterior();
-      hut.interiorState = game.activeFloor;
-      hut.interiorGenerated = true;
-    } else {
-      const depth = game.getCurrentZoneDepth ? game.getCurrentZoneDepth() : 1;
-      const sizeOverride = hut.hutKind === 'alchemy' ? { cols: 12, rows: 12 } : null;
-      game.activeFloor = this.generateHutInterior(hut.hutKind, depth, sizeOverride, game.currentRoom?.zone);
-      hut.interiorState = game.activeFloor;
-      hut.interiorGenerated = true;
-    }
-
-    // Register interior enemies with physics
-    for (const enemy of game.activeFloor.enemies) {
-      game.physicsSystem.addEntity(enemy);
-    }
-
-    // Hand pre-seeded interior items (bread) to the live game.items list and
-    // tag them as hutPlane so _exitHut sweeps any unpicked loaves out cleanly.
-    // We drain activeFloor.items so cached re-entry doesn't double-spawn.
-    if (game.activeFloor.items && game.activeFloor.items.length) {
-      for (const it of game.activeFloor.items) {
-        it.hutPlane = true;
-        game.items.push(it);
-        game.physicsSystem.addEntity(it);
+    let floor = hut.interiorState;
+    if (!floor) {
+      if (hut.hutKind === 'cavern') {
+        floor = game.cavernSystem.generateCavernInterior();
+      } else {
+        const depth = game.getCurrentZoneDepth ? game.getCurrentZoneDepth() : 1;
+        const sizeOverride = hut.hutKind === 'alchemy' ? { cols: 12, rows: 12 } : null;
+        floor = this.generateHutInterior(hut.hutKind, depth, sizeOverride, game.currentRoom?.zone);
       }
-      game.activeFloor.items = [];
+      hut.interiorState = floor;
+      hut.interiorGenerated = true;
     }
 
-    // Switch player collision map to interior grid
-    game.player.setCollisionMap(game.activeFloor.collisionMap);
-
-    // Teleport player into interior
-    game.player.position.x = game.activeFloor.spawnPoint.x;
-    game.player.position.y = game.activeFloor.spawnPoint.y;
-    game.player.inHut = true;
-    freezeSurfaceRoom(game);
-
-    // Bring the camp companion (if any) along — snap it beside the player
-    game.campNPCSystem?.snapCompanionToPlayer?.();
-    if (game.companion) {
-      // Sync collision map to the interior so the companion resolves walls
-      // correctly inside the hut (surface map has different geometry).
-      // Mirrors DungeonSystem._activateFloor's identical sync (bug #116).
-      game.companion.collisionMap = game.activeFloor.collisionMap;
-    }
+    game.interiorManager.enterFloor('hut', floor, floor.spawnPoint);
 
     // Alchemist hut presence is re-evaluated live on every entry (unlike the
     // rest of the cached interior) — see _syncAlchemistHutPresence.
     if (hut.hutKind === 'alchemy') this._syncAlchemistHutPresence(hut);
-
-    // Force background redraw so the overlay paints immediately
-    game.renderer.backgroundDirty = true;
   }
 
   /**
@@ -716,66 +674,10 @@ export class HutSystem {
 
   _exitHut() {
     const { game } = this;
-
-    // Wipe interior combat state on exit so interior projectiles/arrows don't
-    // leak into the surface render at interior coords.
-    game.combatSystem.clear();
-
-    // Remove interior enemies from physics
-    if (game.activeFloor?.enemies) {
-      for (const enemy of game.activeFloor.enemies) {
-        game.physicsSystem.removeEntity(enemy);
-        // Drop the unconsumed tick cache so CombatSystem can't replay stale
-        // dot/sap events on re-entry (bug #92)
-        enemy._frameUpdateResult = null;
-      }
-    }
-
-    // Restore exact exterior position and set a brief cooldown so
-    // proximity checks do not immediately re-trigger on the next frame.
-    if (game.player.hutExitPosition) {
-      game.player.position.x = game.player.hutExitPosition.x;
-      game.player.position.y = game.player.hutExitPosition.y;
-    }
+    game.interiorManager.exitFloor(game.player.hutExitPosition);
+    // Brief cooldown so the door's proximity check doesn't immediately
+    // re-trigger on the next frame.
     game.player._hutEntryCooldown = 0.5;
-    game.player.hookedByMimic = null;
-    game.player.hookedByWhip = null;
-
-    // Restore player collision map to exterior room
-    if (game.currentRoom?.collisionMap) {
-      game.player.setCollisionMap(game.currentRoom.collisionMap);
-    }
-
-    game.player.inHut = false;
-    thawSurfaceRoom(game);
-
-    // Bring the companion back outside beside the player
-    game.campNPCSystem?.snapCompanionToPlayer?.();
-    if (game.companion && game.currentRoom?.collisionMap) {
-      game.companion.collisionMap = game.currentRoom.collisionMap;
-    }
-
-    // Golems summoned inside a hut (Wizard Hut — see WizardSystem) get
-    // switched onto the interior's collision map/background objects while
-    // they're in there; resync every golem back to the exterior room here,
-    // same as the companion swap above, so one summoned mid-visit doesn't
-    // keep walking against the tiny interior grid once outside.
-    if (game.golems?.length && game.currentRoom?.collisionMap) {
-      const bgObjects = game._activeBackgroundObjects() || null;
-      for (const golem of game.golems) {
-        golem.collisionMap = game.currentRoom.collisionMap;
-        golem.backgroundObjects = bgObjects;
-      }
-    }
-
-    // Clear hutPlane loot (ingredients/items spawned inside are abandoned on exit)
-    game.ingredients = game.ingredients.filter(i => !i.hutPlane);
-    game.items = game.items.filter(i => !i.hutPlane);
-
-    game.activeFloor = null;
-
-    // Force background redraw
-    game.renderer.backgroundDirty = true;
   }
 
   // ─── Update ───────────────────────────────────────────────────────────────

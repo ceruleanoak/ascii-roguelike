@@ -5,14 +5,14 @@ import { Ingredient } from '../entities/Ingredient.js';
 import { ZONES } from '../data/zones.js';
 import { generateAquiferLayout, inConfluence } from './aquiferLayout.js';
 import { performCrossZoneWarp } from './CrossZoneWarp.js';
-import { PLANE_SURFACE, PLANE_TUNNEL } from './PlaneSystem.js';
+import { PLANE_SURFACE } from './PlaneSystem.js';
 
 /**
  * AquiferSystem — the Quagmire's Whirlpool and the Aquifer Current beneath it.
  *
  * Once a Quagmire (Q) room's round combat has fully cleared, one Pond tile
- * becomes a Whirlpool. Any form that steps onto it is pulled down to plane 1
- * and carried by the Aquifer Current: an inflow channel to the Confluence at
+ * becomes a Whirlpool. Any form that steps onto it is pulled under into the
+ * Aquifer and carried by the Aquifer Current: an inflow channel to the Confluence at
  * room center, where the current splits into three branches to three room
  * edges. Each branch's center line is tinted by the Zone it delivers to, and
  * reaching its end warps the player there:
@@ -29,12 +29,15 @@ import { PLANE_SURFACE, PLANE_TUNNEL } from './PlaneSystem.js';
  * another § Sword of the Letter, any others a gem; all are taken on contact
  * (a Frog's SPACE is its tongue, not a pickup).
  *
- * Like the Sinkhole cave, the Aquifer is plane-1 content laid directly onto
- * the surface room rather than a registered InteriorManager interior. The
- * layout is built lazily on first entry (aquiferLayout.js) and cached on
- * `room.aquifer`. The ride is one-way: branch ends are the only way out, and
- * reaching one warps the player instantly — no exit-edge animation, which
- * belongs to plane-0 room exits — into the destination's own body of water.
+ * The Aquifer is an Interior (kind 'aquifer'): nothing fights across it and
+ * the Quagmire above, so it is a Freeze layer like a hut — the surface room
+ * freezes on entry and the Aquifer's floor owns the frame through the shared
+ * PiP overlay (InteriorManager.enterFloor). The layout is built lazily on
+ * first entry (aquiferLayout.js) and cached on `room.aquifer`, its floor on
+ * `room.aquifer.floor`. The ride is one-way: branch ends are the only way
+ * out, and reaching one warps the player instantly — no exit-edge animation,
+ * which belongs to surface room exits — into the destination's own body of
+ * water.
  */
 const CS = GRID.CELL_SIZE;
 
@@ -74,6 +77,8 @@ const MOUTH_ALIGN = 4;
 const LOOT_CONTACT_RADIUS = CS;
 // Offshoot mouths get a dim tint so the gap in the channel wall reads.
 const OFFSHOOT_MOUTH_COLOR = '#1e4a66';
+// Cave-fog reach around the rider, in cells (HutInteriorOverlay's fog pass).
+const CAVE_FOG_RADIUS = 5;
 // The Oasis's main lake blob (neutralRooms.js `oasis` nodes[0]); the Yellow
 // branch surfaces in the water nearest it.
 const OASIS_LAKE = { col: 13, row: 14 };
@@ -119,19 +124,15 @@ export class AquiferSystem {
 
   _enter(room, whirlpool, p) {
     const layout = room.aquifer ?? this._build(room, whirlpool);
-    p.position.x = layout.whirlpool.col * CS;
-    p.position.y = layout.whirlpool.row * CS;
     p.velocity.vx = 0;
     p.velocity.vy = 0;
-    p.plane = PLANE_TUNNEL;
-    p.inAquifer = true;
+    this.game.interiorManager.enterFloor('aquifer', layout.floor, layout.floor.spawnPoint);
     if (!layout.lootSpawned) this._spawnOffshootLoot(layout);
-    this.game.renderer.markBackgroundDirty();
   }
 
   /**
-   * Offshoot loot, placed once per room at each Offshoot's tip on plane 1.
-   * Gems are pinned (`noGravitate`) so ingredient attraction can't drag them
+   * Offshoot loot, placed once per room at each Offshoot's tip, on the
+   * Aquifer's floor (hutPlane — abandoned if the ride ends without it). Gems are pinned (`noGravitate`) so ingredient attraction can't drag them
    * out of the Offshoot past a rider in the main channel.
    */
   _spawnOffshootLoot(layout) {
@@ -144,7 +145,7 @@ export class AquiferSystem {
       const x = tip.col * CS, y = tip.row * CS;
       const isGem = !(offshoot.loot === '◓' || offshoot.loot === '§');
       const entity = isGem ? new Ingredient(offshoot.loot, x, y) : new Item(offshoot.loot, x, y);
-      entity.plane = PLANE_TUNNEL;
+      entity.hutPlane = true;
       layout.loot.push(entity);
       if (isGem) {
         entity.noGravitate = true;
@@ -157,12 +158,11 @@ export class AquiferSystem {
   }
 
   /**
-   * Lay the Aquifer onto the room: `≈` Cave River over every channel cell
-   * (branch center lines tinted per instance by destination — the registry
-   * entry stays blue), `}` cave wall everywhere else on plane 1, and
-   * `room.underground` for cave fog and the plane-1 visibility path.
-   * `entrances` stays empty so the physics auto-plane-flip never fires — this
-   * system owns the plane change.
+   * Build the Aquifer's floor: `≈` Cave River over every channel cell (branch
+   * center lines tinted per instance by destination — the registry entry
+   * stays blue), `}` cave wall over the rest, and a collision map that is
+   * solid everywhere but the channels. Full-room sized, so the floor's PiP
+   * panel covers the frozen Quagmire entirely.
    */
   _build(room, whirlpool) {
     const layout = generateAquiferLayout({
@@ -180,34 +180,38 @@ export class AquiferSystem {
       tints.set(root.row * GRID.COLS + root.col, OFFSHOOT_MOUTH_COLOR);
     }
 
-    const added = [];
+    const backgroundObjects = [];
     for (let r = 1; r < GRID.ROWS - 1; r++) {
       for (let c = 1; c < GRID.COLS - 1; c++) {
         if (!layout.mask[r][c]) {
-          added.push(new BackgroundObject('}', c * CS, r * CS));
+          backgroundObjects.push(new BackgroundObject('}', c * CS, r * CS));
           continue;
         }
         const water = new BackgroundObject('≈', c * CS, r * CS);
         const tint = tints.get(r * GRID.COLS + c);
         if (tint) water.color = water.animationColor = tint;
-        added.push(water);
+        backgroundObjects.push(water);
       }
     }
-    room.backgroundObjects.push(...added);
-    // After a REST round-trip the game's surface list is a copy of the room's
-    // rather than the same array; keep both in step. Marked layer-guard-ok
-    // because this stamps room terrain, not a combat spawn, and no interior
-    // is ever live on this path — the Whirlpool is a surface tile.
-    const surface = this.game.backgroundObjects;   // layer-guard-ok
-    if (surface && surface !== room.backgroundObjects) surface.push(...added);
 
-    const caveGrid = layout.mask.map(row => row.map(open => (open ? 0 : 1)));
-    room.underground = { entrances: [], entranceAxis: 'all', caveFogRadius: 5, caveGrid };
+    layout.floor = {
+      type: 'AQUIFER',
+      gridCols: GRID.COLS,
+      gridRows: GRID.ROWS,
+      collisionMap: layout.mask.map(row => row.map(open => !open)),
+      backgroundObjects,
+      enemies: [],
+      npcs: [],
+      items: [],
+      caveFogRadius: CAVE_FOG_RADIUS,
+      spawnPoint: { x: layout.whirlpool.col * CS, y: layout.whirlpool.row * CS },
+      viewport: { offsetX: 0, offsetY: 0, gridCols: GRID.COLS, gridRows: GRID.ROWS, cellSize: CS },
+    };
     room.aquifer = layout;
     return layout;
   }
 
-  // ── Plane 1: the ride ──────────────────────────────────────────────────────
+  // ── Below: the ride ──────────────────────────────────────────────────────
 
   _updateRide(room, p) {
     const layout = room.aquifer;
@@ -266,9 +270,9 @@ export class AquiferSystem {
         : (game.tryPickupItem(), entity.consumed);
       if (!taken) continue;
       layout.loot.splice(layout.loot.indexOf(entity), 1);
-      // Once held, the Item belongs to no plane — drop it later and it lies
-      // on the surface like any other.
-      entity.plane = PLANE_SURFACE;
+      // Once held, the Item belongs to no layer — drop it later and it lies
+      // wherever the player is, like any other.
+      entity.hutPlane = false;
     }
   }
 
@@ -394,6 +398,9 @@ export class AquiferSystem {
   _exitBranch(layout, path, p) {
     layout.exited = true;
     p.aquiferCurrent = null;
+    // Surface into the Quagmire's frame first (thaw, drop the floor) so the
+    // warp leaves from an ordinary surface room, like any other room exit.
+    this.game.interiorManager.exitFloor(null);
     this._warp(path);
   }
 

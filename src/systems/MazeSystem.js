@@ -3,7 +3,7 @@ import { Ingredient } from '../entities/Ingredient.js';
 import { Item } from '../entities/Item.js';
 import { INGREDIENTS } from '../data/items.js';
 import { coverFor } from '../data/cipher.js';
-import { freezeSurfaceRoom, thawSurfaceRoom } from './PlaneSystem.js';
+import { freezeSurfaceRoom, thawSurfaceRoom, isInteriorActive } from './PlaneSystem.js';
 
 /**
  * MazeSystem — manages the Maze (M) room interior.
@@ -301,7 +301,7 @@ export class MazeSystem {
   /** Returns true if player is close enough to the exterior maze door to interact. */
   nearExteriorDoor() {
     const { game } = this;
-    if (!game.player || game.player.inMaze || game.player.inHut) return false;
+    if (!game.player || isInteriorActive(game)) return false;
     if (!game.currentRoom?.maze) return false;
     if (game.currentRoom.maze.sealed) return false;
     if ((game.player._mazeEntryCooldown ?? 0) > 0) return false;

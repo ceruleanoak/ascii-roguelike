@@ -2,6 +2,7 @@ import { GRID } from '../game/GameConfig.js';
 import { steerToward } from './npcSteering.js';
 import { ZONES } from '../data/zones.js';
 import { CampNPC, CAMP_NPC_STATE } from '../entities/CampNPC.js';
+import { isInteriorActive, activeInteriorFloor } from './PlaneSystem.js';
 
 /**
  * CampNPCSystem
@@ -115,10 +116,10 @@ export class CampNPCSystem {
 
       if (npc.hp <= 0) {
         const game = this.game;
-        if ((game.player.inDungeon || game.player.inHut) && game.activeFloor) {
+        if (activeInteriorFloor(game)) {
           // Inside an interior, flee toward the floor-0 exit door or the up-stairs —
           // exterior exit coordinates are meaningless here.
-          const interior = game.activeFloor;
+          const interior = activeInteriorFloor(game);
           const fleeX = (interior.exitCol ?? Math.floor(interior.gridCols / 2)) * GRID.CELL_SIZE;
           const fleeY = (interior.exitRow ?? (interior.gridRows - 2)) * GRID.CELL_SIZE;
           npc.startFleeingToPosition(fleeX, fleeY);
@@ -131,7 +132,7 @@ export class CampNPCSystem {
 
     // Clamp companion to interior bounds — the companion self-manages its position
     // with no physics collision, so without this it can drift outside the PiP panel.
-    if (isCompanion && (this.game.player.inDungeon || this.game.player.inHut) && this.game.activeFloor) {
+    if (isCompanion && activeInteriorFloor(this.game)) {
       const C = GRID.CELL_SIZE;
       const interior = this.game.activeFloor;
       npc.position.x = Math.max(C, Math.min((interior.gridCols - 2) * C, npc.position.x));
@@ -199,10 +200,8 @@ export class CampNPCSystem {
     npc.plane = player.plane ?? 0;
 
     // Find nearest enemy within aggro range (in same plane).
-    // Inside a hut or dungeon the active enemies are on activeFloor, not currentRoom.
-    const enemies = ((game.player.inDungeon || game.player.inHut) && game.activeFloor)
-      ? game.activeFloor.enemies
-      : game.currentRoom?.enemies || [];
+    // Inside an Interior the active enemies are on its floor, not currentRoom.
+    const enemies = activeInteriorFloor(game)?.enemies ?? game.currentRoom?.enemies ?? [];
     let target = null;
     let targetDist = Infinity;
     for (const e of enemies) {
@@ -366,9 +365,7 @@ export class CampNPCSystem {
     };
     // Route attacks to the active enemy list (interior or surface) so the
     // companion's hits register against dungeon enemies, not the surface room.
-    const activeEnemies = ((game.player?.inDungeon || game.player?.inHut) && game.activeFloor)
-      ? game.activeFloor.enemies
-      : game.currentRoom?.enemies || [];
+    const activeEnemies = activeInteriorFloor(game)?.enemies ?? game.currentRoom?.enemies ?? [];
 
     // Bow charge release: when fully charged, release toward target
     if (wt === 'BOW') {
@@ -529,10 +526,10 @@ export class CampNPCSystem {
     const game = this.game;
     const player = game.player;
     if (!player) return false;
-    // Coin interactions are surface-only — inside hut/dungeon the player can't
+    // Coin interactions are surface-only — inside an Interior the player can't
     // see or reach the C-room campfire, so swallow nothing and let the interior
     // system handle SPACE instead.
-    if (player.inDungeon || player.inHut) return false;
+    if (isInteriorActive(game)) return false;
 
     const npc = game.companion ?? game.currentRoom?.campNPC;
     if (!npc) return false;

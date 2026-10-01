@@ -40,7 +40,7 @@ import {
 } from '../effects/WeaponPreviewDraw.js';
 import { BossRenderer } from './BossRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
-import { isInteriorActive, isCutOffFromSurface, inSamePlane, objectOnPlane, PLANE_SURFACE } from '../../systems/PlaneSystem.js';
+import { isInteriorActive, inSamePlane } from '../../systems/PlaneSystem.js';
 import { drawVisionFogOverlay } from '../ui/torchLight.js';
 import { drawKnownSpellHints, drawWellCoinHint, drawDoorPrompts } from '../ui/ContextHints.js';
 import { drawManaGems } from '../effects/ManaGemRenderer.js';
@@ -1029,9 +1029,9 @@ export class ExploreRenderer {
   // Camp NPC rendering: idle/interested NPC in current room, hired companion,
   // coin-offering arc, and hint text overlay.
   _renderCampNPCs(game) {
-    // Skip rendering when player is inside a sub-area where NPCs aren't drawn.
-    // (HutInterior/DungeonFloor are still in EXPLORE; companion follows in.)
-    if (game.player?.inMaze || isCutOffFromSurface(game.player)) return;
+    // Surface NPCs belong to the surface pass; inside any Interior the PiP
+    // overlay draws the companion that followed the player in.
+    if (isInteriorActive(game)) return;
 
     const ctx = this.renderer.fgCtx;
     const gridToPixel = (gx, gy) => ({ x: gx * GRID.CELL_SIZE, y: gy * GRID.CELL_SIZE });
@@ -1039,15 +1039,13 @@ export class ExploreRenderer {
     const drawn = new Set();
 
     const idle = game.currentRoom?.campNPC;
-    if (idle && !game.player?.inHut) {
+    if (idle) {
       idle.render(ctx, gridToPixel);
       drawn.add(idle);
     }
 
     const companion = game.companion;
-    // When the player is inside a hut/dungeon PiP, the companion is rendered
-    // by HutInteriorOverlay instead of the main fg pass.
-    if (companion && !drawn.has(companion) && !game.player?.inHut && !game.player?.inDungeon) {
+    if (companion && !drawn.has(companion)) {
       companion.render(ctx, gridToPixel);
     }
 
@@ -1702,16 +1700,16 @@ export class ExploreRenderer {
   /**
    * Determine if an entity should be rendered based on plane visibility
    * CRITICAL RULES:
-   * - Standard plane (0) entities: visible unless the player is cut off from
-   *   the surface (riding the Aquifer — PlaneSystem.isCutOffFromSurface)
+   * - Standard plane (0) entities: ALWAYS visible
    * - Tunnel plane (1) entities: ONLY visible if player is in tunnel (player.plane === 1)
    * - Tunnel walls: Always rendered (handled separately as background objects)
    */
   shouldRenderEntity(entity, player, room) {
     const entityPlane = entity.plane !== undefined ? entity.plane : 0;
 
+    // Standard plane (0) ALWAYS renders
     if (entityPlane === 0) {
-      return !isCutOffFromSurface(player);
+      return true;
     }
 
     // No tunnel/underground room - plane 1 still hides (e.g. burrowed game animals)
@@ -1738,10 +1736,6 @@ export class ExploreRenderer {
     if (obj.data && obj.data.alwaysRender) {
       return true;
     }
-
-    // Riding the Aquifer, the Quagmire's surface (Pond water, grass, rocks)
-    // is a layer the player has left — only the plane-1 channels draw.
-    if (isCutOffFromSurface(player) && objectOnPlane(obj, PLANE_SURFACE)) return false;
 
     // Surface-only obstacles: hide when player is underground
     if (obj.surfaceOnly) {

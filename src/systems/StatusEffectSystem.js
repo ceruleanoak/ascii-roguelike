@@ -24,6 +24,7 @@ import {
   createStatusEffects, applyStatusEffect, tickStatusEffects,
   MAX_PIPS, ZAP_PIP_SPEED, FREEZE_PIP_SPEED
 } from './StatusEffects.js';
+import { activeInteriorFloor } from './PlaneSystem.js';
 
 /** A fresh player `statusEffects` table (constructor and reset() share it — #256). */
 export function createPlayerStatusSlots() {
@@ -199,7 +200,7 @@ export function disarmPlayer(game, pickupDelayMs = DISARM_PICKUP_DELAY_MS) {
   item.velocity = { vx: 0, vy: 0 };
   item.pickupReadyAt = performance.now() + pickupDelayMs;
   item.plane = player.plane ?? 0;
-  item.hutPlane = player.inHut === true || player.inDungeon === true;
+  item.hutPlane = activeInteriorFloor(game) !== null;
   item.mazePlane = player.inMaze === true;
   game.items.push(item);
   game.physicsSystem.addEntity(item);

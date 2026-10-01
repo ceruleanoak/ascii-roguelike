@@ -25,6 +25,7 @@ import { getExitSlotPosition } from './ExitSystem.js';
 import { MOOSE, RABBIT } from '../data/enemies.js';
 import { Enemy } from '../entities/Enemy.js';
 import { LETTER_TEMPLATES } from '../data/letterTemplates.js';
+import { isInteriorActive } from './PlaneSystem.js';
 
 const STILLNESS_MIN = 5;
 const STILLNESS_MAX = 10;
@@ -69,7 +70,7 @@ export class HuntingSystem {
     }
 
     if (!game.player || !game.currentRoom) return;
-    if (game.player.inHut || game.player.inDungeon || game.player.inMaze) return;
+    if (isInteriorActive(game)) return;
     if (game.currentRoom.zone !== 'cyan') return;
     if (!LETTER_TEMPLATES[game.currentRoom.exitLetter]?.huntableGame) return;
 

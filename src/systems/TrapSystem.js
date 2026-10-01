@@ -347,8 +347,6 @@ export class TrapSystem {
         baseDamage: thrownItem.data?.damage ?? 1,
         hitEnemies: new Set(),
         plane: game.player.plane ?? 0,
-        inHut: game.player.inHut === true,
-        inDungeon: game.player.inDungeon === true,
         inMaze: game.player.inMaze === true,
         interior,
       });
@@ -412,8 +410,6 @@ export class TrapSystem {
       baseDamage: 0,
       hitEnemies: new Set(),
       plane: player.plane ?? 0,
-      inHut: player.inHut === true,
-      inDungeon: player.inDungeon === true,
       inMaze: player.inMaze === true,
       interior,
     });
@@ -677,11 +673,11 @@ export class TrapSystem {
     // would otherwise carry the stale flag and confuse plane-aware scans
     // (e.g. surface rats ignoring SHIFT-thrown bread that was originally a
     // hut loaf).
-    // hutPlane is the shared interior-floor tag (huts AND dungeons render off
-    // game.activeFloor via the same overlay + hutPlane item filter), so a weapon
-    // landing in a dungeon must carry it too — otherwise it reads as surface loot
-    // and the interior overlay never draws it.
-    item.hutPlane = t.inHut === true || t.inDungeon === true;
+    // hutPlane is the shared interior-floor tag (every Interior but the Maze
+    // renders off game.activeFloor via the same overlay + hutPlane item filter),
+    // so a weapon landing on any floor must carry it — otherwise it reads as
+    // surface loot and the interior overlay never draws it.
+    item.hutPlane = t.interior === true && t.inMaze !== true;
     item.mazePlane = t.inMaze === true;
     game.items.push(item);
     game.physicsSystem.addEntity(item);

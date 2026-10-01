@@ -1,4 +1,5 @@
 import { GRID, ROOM_TYPES } from '../game/GameConfig.js';
+import { isInteriorActive } from './PlaneSystem.js';
 
 const BOULDER_SPEED      = 60;   // px/s
 const BOULDER_SPEED_LAVA = 40;   // px/s on lava
@@ -104,8 +105,8 @@ export class BoulderSystem {
     }
 
     // Update active rocks
-    const inHut = game.player.inHut;
-    const inMaze = game.player.inMaze;
+    // Boulders roll on the surface; a player inside any Interior is out of reach.
+    const inInterior = isInteriorActive(game);
 
     for (let i = this.rocks.length - 1; i >= 0; i--) {
       const r = this.rocks[i];
@@ -196,7 +197,7 @@ export class BoulderSystem {
       }
 
       // Damage player
-      if (!inHut && !inMaze && !r.hitCooldowns.has(game.player)) {
+      if (!inInterior && !r.hitCooldowns.has(game.player)) {
         const dx = (game.player.position.x + GRID.CELL_SIZE / 2) - r.x;
         const dy = (game.player.position.y + GRID.CELL_SIZE / 2) - r.y;
         if (dx * dx + dy * dy < HIT_RADIUS * HIT_RADIUS) {
