@@ -461,6 +461,12 @@ export class AquiferSystem {
         room.isMiniboss = false;
         room.exitsLocked = false;
         room.cleared = true;
+        // No weapon offering here. generateBossRoom's offerL1Weapon is the
+        // arena's only item source (a first cyan visit lands at depth 1, so
+        // it rolled the cyan pool — Fishing Pole included, the one item that
+        // wakes the Maw). Nothing aggros on arrival and every exit is open,
+        // so the lake hands out nothing: the pole is the player's to bring.
+        room.items.length = 0;
         // The Maw sleeps as a drifting shadow until a fishing cast wakes it.
         // Once it's dead the lake is just an open arena.
         if (!game.zoneSystem.defeatedBosses.has('cyan')) game.bossSystem.mawShadowSystem.seed(room);
