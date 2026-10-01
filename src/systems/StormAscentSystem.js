@@ -21,6 +21,7 @@
  * pickaxe, scythe, flail, whip, bat, metal_bat] is conductive.
  */
 
+import { DEATH_CAUSES } from '../data/deathCauses.js';
 import { GRID } from '../game/GameConfig.js';
 import { MAX_PIPS } from './StatusEffects.js';
 import { absorbsZap } from './ImbuePoolSystem.js';
@@ -148,7 +149,7 @@ export class StormAscentSystem {
       const dx = player.position.x - obj.position.x;
       const dy = player.position.y - obj.position.y;
       if (Math.sqrt(dx * dx + dy * dy) <= GRID.CELL_SIZE * 0.8) {
-        const result = player.takeDamage(CHARGE_DAMAGE);
+        const result = player.takeDamage(CHARGE_DAMAGE, { cause: DEATH_CAUSES.electricity });
         // The iframe check above is not the whole gate — god mode and a few
         // other states also make takeDamage a no-op — so the stun, knockback
         // and numbers all hang off the result rather than off the attempt

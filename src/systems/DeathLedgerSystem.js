@@ -13,12 +13,15 @@ export function newRunId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-// Who the REST tombstone and the ledger credit for a death. Most killers are
-// Enemy instances and carry their name on `data`; a boss that is not an Enemy
-// (LakeBoss — the Frosted Maw) has no `data` and names itself directly. Reading
-// only `killer.data` is why a Frosted Maw kill left no tombstone at all.
-// Returns null when the killer cannot be named, so callers keep whatever they
-// already had rather than writing a nameless cause.
+// What the REST tombstone and the ledger credit for a death. Most killers are
+// Enemy instances and carry their name on `data`; anything else names itself
+// directly — a boss that is not an Enemy (LakeBoss — the Frosted Maw), a
+// neutral character (Rusalka), a Ghost, or an environmental death cause from
+// src/data/deathCauses.js. Reading only `killer.data` is why a Frosted Maw
+// kill left no tombstone at all.
+// Returns null when the killer cannot be named. Callers write that null
+// through: a death nothing can name gets no tombstone, never the previous
+// death's (#341).
 export function deathCauseOf(killer) {
   const name = killer?.data?.name ?? killer?.name;
   if (!name) return null;
@@ -26,7 +29,7 @@ export function deathCauseOf(killer) {
     name,
     char: killer.char,
     color: killer.color,
-    description: killer.data?.description || '',
+    description: killer.data?.description || killer.description || '',
     tier: killer.data?.tier ?? null
   };
 }
@@ -36,7 +39,7 @@ export function deathCauseOf(killer) {
 export function captureDeath(game, { event = 'death', revivedBy = null } = {}) {
   const player = game.player;
   const inv = game.inventorySystem;
-  const cause = deathCauseOf(player._lastAttacker);
+  const cause = deathCauseOf(player._lastDamageCause);
 
   const record = {
     timestamp: new Date().toISOString(),
@@ -47,7 +50,7 @@ export function captureDeath(game, { event = 'death', revivedBy = null } = {}) {
     cheatMenu: game.cheatUsed ? 'Y' : 'N',
     killedBy: cause
       ? { name: cause.name, char: cause.char, tier: cause.tier }
-      : (game.lastDeathCause ?? null),
+      : null,
     zoneDepths: { ...game.zoneDepths },
     currentZone: game.zoneSystem?.currentZone ?? null,
     currentDepth: game.getCurrentZoneDepth?.() ?? 0,

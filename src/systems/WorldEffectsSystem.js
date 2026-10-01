@@ -372,10 +372,12 @@ export class WorldEffectsSystem {
           const isSlime = entity.data?.affinities?.includes('goo');
           game.physicsSystem.applyKnockback(entity, sw.x, sw.y, sw.knockback, 0.12);
           if (!isSlime && sw.damage > 0) {
-            entity.takeDamage(sw.damage);
             if (entity === game.player) {
+              // Credit the enemy whose landing/detonation threw the ring.
+              entity.takeDamage(sw.damage, { attacker: sw.owner });
               game.combatSystem.createDamageNumber(sw.damage, entity.position.x, entity.position.y, entity.color);
             } else {
+              entity.takeDamage(sw.damage);
               game.combatSystem.createDamageNumber(sw.damage, entity.position.x, entity.position.y, '#ffffff');
             }
           }

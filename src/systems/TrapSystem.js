@@ -1076,7 +1076,7 @@ export class TrapSystem {
         const pdx = (game.player.position.x + GRID.CELL_SIZE / 2) - cx;
         const pdy = (game.player.position.y + GRID.CELL_SIZE / 2) - cy;
         if (Math.sqrt(pdx * pdx + pdy * pdy) <= r) {
-          const result = game.player.takeDamage(dmg, { type: 'explosion' });
+          const result = game.player.takeDamage(dmg, { type: 'explosion', cause: { name: trapData.name, char: trapData.char, color: trapData.color } });
           game.combatSystem.createDamageNumber(dmg, game.player.position.x, game.player.position.y, '#ff6600');
           game.physicsSystem.applyDamageKnockback(game.player, result, cx, cy, 300);
         }

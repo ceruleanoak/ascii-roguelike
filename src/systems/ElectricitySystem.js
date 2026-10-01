@@ -55,6 +55,7 @@
  * current back and forth.
  */
 
+import { DEATH_CAUSES } from '../data/deathCauses.js';
 import { GRID } from '../game/GameConfig.js';
 import { Puddle } from '../entities/Puddle.js';
 import { MAX_PIPS } from './StatusEffects.js';
@@ -311,7 +312,14 @@ export class ElectricitySystem {
     // Imbued current only lands on a body not already zapped.
     if (current && entity.statusEffects?.zap?.active) return;
     if (entity.applyStatusEffect) entity.applyStatusEffect('zap', 1.5, pips);
-    if (entity.takeDamage) entity.takeDamage(1);
+    // The player's hit names its death cause: the carrier generating the
+    // current when it is an enemy, otherwise the electricity itself.
+    if (entity === p) {
+      p.takeDamage(1, {
+        attacker: current?.source?.data?.name ? current.source : undefined,
+        cause: DEATH_CAUSES.electricity
+      });
+    } else if (entity.takeDamage) entity.takeDamage(1);
   }
 
   /**

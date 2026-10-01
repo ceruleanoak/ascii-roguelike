@@ -403,7 +403,7 @@ export class EnemyUpdateSystem {
     }
 
     if (updateResult.shouldExplode && updateResult.explodeData) {
-      this._handleBombExplode(player, updateResult.explodeData);
+      this._handleBombExplode(player, updateResult.explodeData, enemy);
     }
 
     if (enemy._shamBuff) {
@@ -494,7 +494,7 @@ export class EnemyUpdateSystem {
       const pcx = player.position.x + GRID.CELL_SIZE / 2;
       const pcy = player.position.y + GRID.CELL_SIZE / 2;
       if (Math.hypot(pcx - ld.x, pcy - ld.y) <= cfg.landRadius) {
-        player.takeDamage(cfg.landDamage);
+        player.takeDamage(cfg.landDamage, { attacker: enemy });
         game.combatSystem.createDamageNumber(cfg.landDamage, player.position.x, player.position.y, player.color);
         game.physicsSystem.applyKnockback(player, ld.x, ld.y, cfg.landKnockback ?? cfg.shockwaveKnockback, 0.12);
         hitEntities.add(player);
@@ -504,7 +504,7 @@ export class EnemyUpdateSystem {
       x: ld.x, y: ld.y, plane: ld.plane,
       radius: cfg.landRadius, maxRadius: cfg.shockwaveMaxRadius,
       speed: cfg.shockwaveSpeed, damage: cfg.shockwaveDamage,
-      knockback: cfg.shockwaveKnockback, hitEntities
+      knockback: cfg.shockwaveKnockback, hitEntities, owner: enemy
     });
     // Pool landing first, so the ring below already carries the new Imbue.
     game.imbuePoolSystem.onLeapLand(enemy, ld);
@@ -524,7 +524,7 @@ export class EnemyUpdateSystem {
   // — the shockwave sweep in WorldEffectsSystem naturally excludes the Bomb
   // itself, since it's already spliced out of currentRoom.enemies (hp was set
   // to 0 synchronously in RipenMechanic.updateBlink) by the time that sweep runs.
-  _handleBombExplode(player, ed) {
+  _handleBombExplode(player, ed, enemy) {
     const game = this.game;
     const cfg = ed.cfg;
     const hitEntities = new Set();
@@ -532,7 +532,7 @@ export class EnemyUpdateSystem {
       const pcx = player.position.x + GRID.CELL_SIZE / 2;
       const pcy = player.position.y + GRID.CELL_SIZE / 2;
       if (Math.hypot(pcx - ed.x, pcy - ed.y) <= cfg.detonateRange) {
-        player.takeDamage(cfg.detonateDamage);
+        player.takeDamage(cfg.detonateDamage, { attacker: enemy });
         game.combatSystem.createDamageNumber(cfg.detonateDamage, player.position.x, player.position.y, player.color);
         game.physicsSystem.applyKnockback(player, ed.x, ed.y, cfg.shockwaveKnockback, 0.12);
         if (cfg.burnDuration > 0) player.applyStatusEffect('burn', cfg.burnDuration);
@@ -543,7 +543,8 @@ export class EnemyUpdateSystem {
       x: ed.x, y: ed.y, plane: ed.plane,
       radius: cfg.detonateRange, maxRadius: cfg.shockwaveMaxRadius,
       speed: cfg.shockwaveSpeed, damage: cfg.shockwaveDamage,
-      knockback: cfg.shockwaveKnockback, burnDuration: cfg.burnDuration, hitEntities
+      knockback: cfg.shockwaveKnockback, burnDuration: cfg.burnDuration, hitEntities,
+      owner: enemy
     });
     // Large fire-flavored burst (flame blast + rising embers, layered with a
     // wide radial scatter) plus a screen shake — the shockwave ring itself is

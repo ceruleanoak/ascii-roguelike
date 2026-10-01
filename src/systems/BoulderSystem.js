@@ -1,3 +1,4 @@
+import { DEATH_CAUSES } from '../data/deathCauses.js';
 import { GRID, ROOM_TYPES } from '../game/GameConfig.js';
 import { isInteriorActive } from './PlaneSystem.js';
 
@@ -202,7 +203,7 @@ export class BoulderSystem {
         const dy = (game.player.position.y + GRID.CELL_SIZE / 2) - r.y;
         if (dx * dx + dy * dy < HIT_RADIUS * HIT_RADIUS) {
           const dmg = r.empowered ? BOULDER_DAMAGE * 2 : BOULDER_DAMAGE;
-          const damageResult = game.player.takeDamage(dmg, { type: 'boulder' });
+          const damageResult = game.player.takeDamage(dmg, { type: 'boulder', cause: DEATH_CAUSES.boulder });
           if (damageResult === true || (damageResult && damageResult.damaged)) {
             game.combatSystem.createDamageNumber(dmg, game.player.position.x, game.player.position.y, '#ff4400');
           }

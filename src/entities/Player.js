@@ -298,8 +298,9 @@ export class Player {
     this.greenCombatDamagePenalty = 0;
     this.backstabMultiplier = 1.0; // Cyan Rogue: multiplier applied when hitting undetected enemies
 
-    // Tracks the last enemy entity to deal damage to this player (for tombstone)
-    this._lastAttacker = null;
+    // What landed the last hit on this player, for the tombstone: an attacker
+    // entity or an environmental death cause. Written by PlayerDamageSystem.
+    this._lastDamageCause = null;
   }
 
   // Backward compatibility: heldItem getter returns active slot
@@ -1068,7 +1069,7 @@ export class Player {
     this.greenIdleDamageBonus = 0;
     this.greenCombatDamagePenalty = 0;
     this.backstabMultiplier = 1.0;
-    this._lastAttacker = null;
+    this._lastDamageCause = null;
 
     // Reset dodge roll state
     this.dodgeRoll.active = false;

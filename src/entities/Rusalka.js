@@ -21,6 +21,10 @@ export class Rusalka extends NeutralCharacter {
   constructor(x, y) {
     super('R', '#88ffee', x, y);
 
+    // Read by deathCauseOf() — her contact kill is credited on the tombstone.
+    this.name = 'Rusalka';
+    this.description = 'Draws you in. Her touch is the end.';
+
     // Pulse between 0.5 and 1.0 for eerie shimmer
     this.pulseMin = 0.5;
     this.pulseMax = 1.0;
@@ -52,6 +56,9 @@ export class Rusalka extends NeutralCharacter {
     if (dist < DEATH_RANGE) {
       this.alive = false;
       player.hp = 0;
+      // A direct hp write never passes through PlayerDamageSystem, so name
+      // the killer here.
+      player._lastDamageCause = this;
       return;
     }
 

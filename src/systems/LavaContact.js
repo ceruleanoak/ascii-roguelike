@@ -6,6 +6,8 @@
 // Takes the owning `game` first, matching the ElectricConduction.js pattern.
 // Returns true when the tick killed the player, so the caller can end the run
 // through its own death path.
+import { DEATH_CAUSES } from '../data/deathCauses.js';
+
 export function applyLavaContact(game, entity, damage, deltaTime) {
   // Lava-immune enemies (e.g. Tortoise) survive lava but track their state for
   // behavior changes. A fire affinity — authored or from an Imbue — is the
@@ -42,7 +44,11 @@ export function applyLavaContact(game, entity, damage, deltaTime) {
   if (entity.lavaDamageTimer > 0) return false;
 
   let killedPlayer = false;
-  const damageResult = entity.takeDamage(damage);
+  // Only the player's takeDamage takes a damage source; an enemy's second
+  // argument is an attack id.
+  const damageResult = entity === game.player
+    ? entity.takeDamage(damage, { cause: DEATH_CAUSES.lava })
+    : entity.takeDamage(damage);
 
   // Visual feedback for whichever entity took the hit — player or
   // enemy (enemies used to take lava damage silently, no damage

@@ -1,3 +1,4 @@
+import { DEATH_CAUSES } from '../data/deathCauses.js';
 import { PHYSICS, GRID, BACKGROUND_OBJECT_VARIANTS, WATER_COLORS } from '../game/GameConfig.js';
 import {
   PLANE_TUNNEL,
@@ -1634,7 +1635,9 @@ export class PhysicsSystem {
             if (entity.drownDamageTimer <= 0) {
               entity.drownDamageTimer = 1.0;
               if (entity.takeDamage) {
-                const damageResult = entity.takeDamage(1);
+                const damageResult = entity === game.player
+                  ? entity.takeDamage(1, { cause: DEATH_CAUSES.drowning })
+                  : entity.takeDamage(1);
                 if (damageResult === true || (damageResult && damageResult.damaged)) {
                   game.combatSystem.createDamageNumber(1, entity.position.x, entity.position.y, WATER_COLORS.deep);
                   entity.hitFlashTimer = 0.15;

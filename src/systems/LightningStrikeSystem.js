@@ -20,6 +20,7 @@
  * telegraph contract.
  */
 
+import { DEATH_CAUSES } from '../data/deathCauses.js';
 import { GRID } from '../game/GameConfig.js';
 import { planeOf, inSamePlane, isInteriorActive } from './PlaneSystem.js';
 import { MAX_PIPS } from './StatusEffects.js';
@@ -143,7 +144,7 @@ export class LightningStrikeSystem {
       const dx = px - s.x;
       const dy = py - s.y;
       if (Math.sqrt(dx * dx + dy * dy) <= s.radius) {
-        const result = game.player.takeDamage(s.damage, s.attacker ? { attacker: s.attacker } : {});
+        const result = game.player.takeDamage(s.damage, s.attacker ? { attacker: s.attacker } : { cause: DEATH_CAUSES.lightning });
         game.physicsSystem.applyDamageKnockback(game.player, result, s.x, s.y);
       }
     }

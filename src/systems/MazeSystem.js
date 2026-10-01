@@ -152,6 +152,9 @@ class MazeGhost {
   constructor(x, y) {
     this.char           = GHOST_CHAR;
     this.color          = GHOST_COLOR;
+    // Read by deathCauseOf() — a Ghost kill is credited on the tombstone.
+    this.name           = 'Ghost';
+    this.description    = 'Cannot be fought. Hurts on touch.';
     this.position       = { x, y };
     this.speed          = GHOST_SPEED;
     this.damageCooldown = 0;
@@ -769,7 +772,7 @@ export class MazeSystem {
       const gx = ghost.position.x + CS / 2, gy = ghost.position.y + CS / 2;
       if ((px - gx) ** 2 + (py - gy) ** 2 < (CS * 1.2) ** 2) {
         const hpBefore = player.hp;
-        const result = player.takeDamage(GHOST_DAMAGE);
+        const result = player.takeDamage(GHOST_DAMAGE, { cause: ghost });
         game.physicsSystem.applyDamageKnockback(player, result, gx, gy);
         ghost.damageCooldown = GHOST_DAMAGE_INTERVAL;
         game.audioSystem?.playSFX('hit');

@@ -515,6 +515,9 @@ export class ThreeRoomSystem {
     if (dist < DEATH_KILL_RADIUS) {
       // It cannot be blocked, dodged, or tanked — its touch is the end.
       p.hp = 0;
+      // Beyond naming: clear the record so the ledger does not credit
+      // whatever last hit the player before the door shut.
+      p._lastDamageCause = null;
       this._resolveContactDeath(game);
     }
   }

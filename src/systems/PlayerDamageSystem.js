@@ -84,10 +84,12 @@ export const PlayerDamageSystem = {
     player.hp -= actualDamage;
     if (player.hp < 0) player.hp = 0;
 
-    // Track last attacker for tombstone
-    if (damageSource.attacker) {
-      player._lastAttacker = damageSource.attacker;
-    }
+    // Track what landed this hit, for the tombstone: the attacker, or the
+    // environmental death cause (src/data/deathCauses.js) a source with no
+    // attacker names. Overwritten on every landed hit — an unnamed source
+    // clears it — so at death it describes the killing blow and nothing older:
+    // lava must not credit whichever enemy last scratched the player (#341).
+    player._lastDamageCause = damageSource.attacker ?? damageSource.cause ?? null;
 
     // Start invulnerability frames. damageSource.iframeDuration lets a
     // specific attacker grant a longer window than the default (e.g. the

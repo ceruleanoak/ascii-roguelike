@@ -839,7 +839,7 @@ export const RESET_REGISTRY = [
     path: 'lastDeathCause',
     scope: 'title',
     value: null,
-    why: 'Death-output field (plan §5.-1 addendum), deliberately absent from run scope — see the section comment above. Shape: { name, char, color, description } of the killing enemy.',
+    why: 'Death-output field (plan §5.-1 addendum), deliberately absent from run scope — see the section comment above. Shape: { name, char, color, description, tier } of the killer — an enemy or an environmental death cause; null when nothing can be named.',
   },
   {
     path: 'tombstoneActive',

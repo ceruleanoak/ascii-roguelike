@@ -3078,8 +3078,7 @@ class Game {
         captureDeath(this);
 
         // Record what killed the player (for REST tombstone)
-        const deathCause = deathCauseOf(this.player._lastAttacker);
-        if (deathCause) this.lastDeathCause = deathCause;
+        this.lastDeathCause = deathCauseOf(this.player._lastDamageCause);
         this.tombstoneActive = true;
         this.tombstonePopup = null;
 

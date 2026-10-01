@@ -18,6 +18,7 @@
 // outright. Frozen, zap pip 3 and stun are the three locks — each stops
 // movement, attacks and rolls, and each is struggled out of the same way.
 
+import { DEATH_CAUSES } from '../data/deathCauses.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
 import { GRID } from '../game/GameConfig.js';
 import {
@@ -86,11 +87,11 @@ export const StatusEffectSystem = {
   applyPlayerDot(game, playerUpdateResult) {
     let dotKilledPlayer = false;
     if (playerUpdateResult?.burnDamage) {
-      const burnDead = game.player.takeDamage(playerUpdateResult.burnDamage, { isBullet: false, element: 'burn' });
+      const burnDead = game.player.takeDamage(playerUpdateResult.burnDamage, { isBullet: false, element: 'burn', cause: DEATH_CAUSES.burn });
       if (burnDead === true) dotKilledPlayer = true;
     }
     if (playerUpdateResult?.poisonDamage) {
-      const poisonDead = game.player.takeDamage(playerUpdateResult.poisonDamage, { isBullet: false, element: 'poison' });
+      const poisonDead = game.player.takeDamage(playerUpdateResult.poisonDamage, { isBullet: false, element: 'poison', cause: DEATH_CAUSES.poison });
       if (poisonDead === true) dotKilledPlayer = true;
     }
     return dotKilledPlayer;
