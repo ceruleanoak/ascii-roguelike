@@ -31,7 +31,13 @@ const BREACH_RANGE_SQ          = (GRID.CELL_SIZE * 1.2) ** 2;
 // this long. The warning and the hit have to be the same shape or the player is
 // learning a lie.
 export const BREACH_TELEGRAPH  = 2.4;   // the anticipation window, held under the ice
-const SURFACED_WINDOW          = 8.0;   // fixed vulnerable window before submerging again
+// The surfaced beat is nearly the whole loop (the Stalk is a fraction of a second
+// against a player in reach, the telegraph 1.2s), so it sets both how long the
+// player gets to hit the boss and how fast Breaches eat the sheet. At 8.0 the boss
+// stood exposed ~4s of every ~5.3s — over three times phase 1's on-hit damage
+// window (HAMMER_COUNTDOWN_ON_HIT) — which made phase 2 the easier half. Halved,
+// so the sheet goes faster and each surfacing is a short opening, not a free one.
+const SURFACED_WINDOW          = 4.0;   // fixed vulnerable window before submerging again
 // The eruption is the boss's whole bulk coming through the sheet, so it covers the
 // boss's own footprint (the composite is 5 cells wide, half-width 2.5) plus a cell
 // of margin. Everything inside is crushed and holed in the same instant — which is
