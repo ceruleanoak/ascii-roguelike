@@ -392,6 +392,12 @@ export class InventorySystem {
             if (emptySlot === -1) return { success: false, needsSlotChoice: true, slotType: 'consumable', pendingItem: item, droppedItem: null, message: null, removedTrap: false };
             this.consumableInventory.push(item);
             this.equipConsumable(emptySlot, item);
+            // Re-project onto the player: the HUD and the passive consumable
+            // effects read player.equippedConsumables, a copy that would
+            // otherwise stay stale until the next projection (bug #335 — a
+            // shop purchase stayed invisible while the shop modal held the
+            // update loop paused).
+            this.applyEquipmentEffectsToPlayer(player);
           } else this.consumableInventory.push(item);
           item.consumed = true;
           physicsSystem.removeEntity(item);
