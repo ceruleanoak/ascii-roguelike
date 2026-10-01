@@ -1,7 +1,7 @@
 import { Ingredient } from '../entities/Ingredient.js';
 import { Item } from '../entities/Item.js';
 import { isIngredient, isItem, generateEnemyDrops, resolvePickupSfx } from '../data/items.js';
-import { planeOf, isInteriorActive } from './PlaneSystem.js';
+import { planeOf, lootOnActiveLayer } from './PlaneSystem.js';
 import { GRID } from '../game/GameConfig.js';
 import { STARTER_POTION_CHARS, starterPotionIngredientsFor } from '../data/alchemy.js';
 import { INGREDIENT_STACK_CAP } from './ingredientPile.js';
@@ -48,10 +48,10 @@ export class LootSystem {
       // dragging it in only to have collectIngredient bounce it right back.
       const capped = ingredient.char !== 'c'
         && game.countIngredient(ingredient.char) >= INGREDIENT_STACK_CAP;
-      // hutPlane is the interior-overlay flag (distinct from the surface/tunnel
-      // .plane field) — an ingredient tagged for one layer must not be reachable
-      // from the other, same as the render-side hutPlane filter already enforces.
-      const wrongLayer = !!ingredient.hutPlane !== isInteriorActive(game);
+      // The interior-overlay tags (hutPlane / mazePlane — distinct from the
+      // surface/tunnel .plane field) — an ingredient tagged for one layer must
+      // not be reachable from another, same as the render-side filters enforce.
+      const wrongLayer = !lootOnActiveLayer(game, ingredient);
       if (capped || wrongLayer) {
         ingredient.acceleration = { ax: 0, ay: 0 };
       } else if (game.physicsSystem.applyAttraction(ingredient, player)) {

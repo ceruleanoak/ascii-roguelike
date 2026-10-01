@@ -147,6 +147,23 @@ export function tagInteriorPlane(game, entity) {
 }
 
 /**
+ * True when a loot entity (ingredient or item) lies on the layer the player is
+ * standing on, so it can be attracted and picked up.
+ *
+ * Loot carries one of two interior tags, set at its spawn site: `mazePlane`
+ * for the Maze (whose loot is drawn by MazeInteriorOverlay) and `hutPlane` for
+ * the floor Interiors (hut / dungeon / Aquifer, drawn by the shared hut
+ * overlay); untagged loot is on the surface. The reach rule has to read both
+ * tags — comparing `hutPlane` against `isInteriorActive` alone called every
+ * Maze drop "wrong layer", since the Maze is an active Interior whose loot is
+ * never hutPlane (#342).
+ */
+export function lootOnActiveLayer(game, entity) {
+  if (game.player?.inMaze) return !!entity.mazePlane;
+  return !entity.mazePlane && !!entity.hutPlane === isInteriorActive(game);
+}
+
+/**
  * Freeze the surface room's enemies on interior entry: unregister them from
  * PhysicsSystem (so velocity/knockback/friction stop integrating, not just AI)
  * and empty currentRoom.enemies (so the many loops that iterate it directly
