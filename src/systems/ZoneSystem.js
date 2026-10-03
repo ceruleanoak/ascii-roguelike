@@ -2,6 +2,14 @@ import { ZONES, ZONE_COLORS } from '../data/zones.js';
 import { ROOM_TYPES } from '../game/GameConfig.js';
 import { SECRET_PATTERNS } from '../data/exitLetters.js';
 
+// Zone hazards (red lava, yellow storms + water, cyan ice + deep snow) step up
+// every 3 depths — the same cadence as enemy difficulty (Enemy depthMultiplier,
+// RoomGenerator maxEnemies). Depths 0-2 → 0, 3-5 → 1, 6-8 → 2, 9-11 → 3.
+export const HAZARD_DEPTH_STEP = 3;
+export function hazardStep(depth) {
+  return Math.max(0, Math.floor((depth || 0) / HAZARD_DEPTH_STEP));
+}
+
 // Utility function to blend two hex colors
 function blendColors(color1, color2, percent) {
   // percent = 0 means 100% color1, percent = 1 means 100% color2

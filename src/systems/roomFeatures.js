@@ -11,6 +11,7 @@ import { WeaponsMaster } from '../entities/WeaponsMaster.js';
 import { ErrandCharacter } from '../entities/ErrandCharacter.js';
 import { HOT_WATER_CHAR } from '../data/alchemy.js';
 import { PLANE_TUNNEL } from './PlaneSystem.js';
+import { hazardStep } from './ZoneSystem.js';
 import { createLightningSpire } from './LightningSpire.js';
 
 // Room-generation feature helpers extracted from RoomGenerator (arch budget).
@@ -121,6 +122,14 @@ export function generateYellowWaterTemplate(gen, room, forced = null) {
     case 'pond':
       gen._placePond(room);
       break;
+  }
+
+  // Deeper yellow rooms carry more water: one extra stream or pond per hazard
+  // step (ZoneSystem.hazardStep), on top of whichever template rolled.
+  const extraWater = hazardStep(gen.currentDepth);
+  for (let i = 0; i < extraWater; i++) {
+    if (Math.random() < 0.5) gen._buildPath(room, 'stream');
+    else gen._placePond(room);
   }
 }
 
@@ -2019,11 +2028,14 @@ export function spawnBossEncounter(gen, room, encounter) {
 
 // Cyan zone: deep snow fields — large swaths of full-block white terrain.
 // Called from RoomGenerator.generateBackgroundObjects for cyan rooms.
+// Each hazard step (ZoneSystem.hazardStep) adds a snow cluster, thickens every
+// cluster, and freezes another patch of ice (generateIcePatches).
 export function generateSnowFields(gen, room) {
-  const clusterCount = gen.randInt(3, 6);
+  const step = hazardStep(gen.currentDepth);
+  const clusterCount = gen.randInt(3, 6) + step;
 
   for (let i = 0; i < clusterCount; i++) {
-    const size = gen.randInt(5, 10);
+    const size = gen.randInt(5, 10) + 2 * step;
     const startX = gen.randInt(4, GRID.COLS - 4);
     const startY = gen.randInt(4, GRID.ROWS - 4);
 
@@ -2039,6 +2051,30 @@ export function generateSnowFields(gen, room) {
         );
         snow.compacted = false;
         room.backgroundObjects.push(snow);
+      }
+    }
+  }
+
+  generateIcePatches(gen, room, step);
+}
+
+// Cyan zone: `count` rough-circle patches of permanently frozen water, laid
+// after the snow fields. Same freeze as the Ascent
+// floor ring (seedFrozenAscentCycle) — Infinity, so the timer never thaws it.
+function generateIcePatches(gen, room, count) {
+  const C = GRID.CELL_SIZE;
+  for (let i = 0; i < count; i++) {
+    const centerCol = gen.randInt(4, GRID.COLS - 5);
+    const centerRow = gen.randInt(4, GRID.ROWS - 5);
+    const radius = gen.randInt(1, 2);
+    for (let dr = -radius; dr <= radius; dr++) {
+      for (let dc = -radius; dc <= radius; dc++) {
+        if (dc * dc + dr * dr > radius * radius + 1) continue;
+        const col = centerCol + dc, row = centerRow + dr;
+        if (!gen.isValidPosition(col, row, room)) continue;
+        const ice = BackgroundObject.createVariant('water', col * C, row * C);
+        ice.setWaterState('frozen', Infinity);
+        room.backgroundObjects.push(ice);
       }
     }
   }

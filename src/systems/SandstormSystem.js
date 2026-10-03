@@ -13,6 +13,7 @@
 
 import { GRID } from '../game/GameConfig.js';
 import { isInteriorActive } from './PlaneSystem.js';
+import { hazardStep } from './ZoneSystem.js';
 
 const DIRECTIONS = [
   { dx:  0, dy: -1 }, // N
@@ -36,8 +37,11 @@ const MAX_PUSH = 38;   // px/s² nudge at the high end
 const LIGHTNING_MIN = 5;
 const LIGHTNING_MAX = 10;
 
-// 25% of yellow rooms also storm with lightning
+// 25% of yellow rooms also storm with lightning at depths 0-2; each hazard
+// step (every 3 depths) adds 15% and shortens the gap between strikes by 20%.
 const LIGHTNING_ROOM_CHANCE = 0.25;
+const LIGHTNING_CHANCE_PER_STEP = 0.15;
+const LIGHTNING_GAP_SCALE_PER_STEP = 0.2;
 
 export class SandstormSystem {
   constructor(game) {
@@ -82,10 +86,9 @@ export class SandstormSystem {
     // A room can force the storm on (the Giant Slime's Imbue Pool room is
     // always a thunderstorm — roomFeatures.seedImbuePools).
     this.lightningEnabled = !!this.activeRoom?.forceLightning
-      || (this.activeRoom?.zone === 'yellow' && Math.random() < LIGHTNING_ROOM_CHANCE);
-    this.lightningTimer = this.lightningEnabled
-      ? (LIGHTNING_MIN + Math.random() * (LIGHTNING_MAX - LIGHTNING_MIN))
-      : 0;
+      || (this.activeRoom?.zone === 'yellow'
+        && Math.random() < LIGHTNING_ROOM_CHANCE + LIGHTNING_CHANCE_PER_STEP * this._hazardStep());
+    this.lightningTimer = this.lightningEnabled ? this._nextStrikeGap() : 0;
     this._seedParticles();
   }
 
@@ -170,9 +173,20 @@ export class SandstormSystem {
       this.lightningTimer -= deltaTime;
       if (this.lightningTimer <= 0) {
         this._strikeRandom();
-        this.lightningTimer = LIGHTNING_MIN + Math.random() * (LIGHTNING_MAX - LIGHTNING_MIN);
+        this.lightningTimer = this._nextStrikeGap();
       }
     }
+  }
+
+  // Hazard step of the room's zone depth (see ZoneSystem.hazardStep).
+  _hazardStep() {
+    return hazardStep(this.game.zoneDepths?.[this.activeRoom?.zone]);
+  }
+
+  // Seconds until the next strike — deeper yellow rooms strike more often.
+  _nextStrikeGap() {
+    const gap = LIGHTNING_MIN + Math.random() * (LIGHTNING_MAX - LIGHTNING_MIN);
+    return gap / (1 + LIGHTNING_GAP_SCALE_PER_STEP * this._hazardStep());
   }
 
   _pushEntity(entity, dt) {

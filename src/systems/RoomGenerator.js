@@ -7,6 +7,7 @@ import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { generateRidgeRoomImpl } from './RidgeSystem.js';
+import { hazardStep } from './ZoneSystem.js';
 import { getDungeonDesign } from '../data/dungeonDesigns.js';
 import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
@@ -2095,8 +2096,8 @@ export class RoomGenerator {
       if (shouldGenerateLiquid && !zoneHasSpecialLiquid) {
         // Only generate fallback if we didn't already generate structured special liquid
         this.generateLiquidFormation(room, effectiveZone);
-      } else if (zoneHasSpecialLiquid && Math.random() < 0.5) {
-        // 50% chance of additional organic lava formations
+      } else if (zoneHasSpecialLiquid && Math.random() < 0.5 + 0.15 * hazardStep(this.currentDepth)) {
+        // 50% chance of additional organic lava formations, +15% per hazard step
         this.generateLiquidFormation(room, effectiveZone);
       }
     }
@@ -2649,8 +2650,10 @@ export class RoomGenerator {
     const eligible = Object.values(WATER_STRUCTURES).filter(s => s.roomTypes.includes(room.type));
     if (!eligible.length) return;
 
-    const maxCount = this.currentDepth < 5 ? 1 : this.currentDepth < 10 ? 2 : 3;
-    const count = this.randInt(0, maxCount);
+    // Lava covers more of the room every hazard step (ZoneSystem.hazardStep):
+    // 0-1 structures at depths 0-2, 1-2 at 3-5, 2-3 at 6-8, 3-4 at 9+.
+    const step = hazardStep(this.currentDepth);
+    const count = this.randInt(step, step + 1);
 
     for (let i = 0; i < count; i++) {
       const structure = this._pickWeightedWaterStructure(eligible);
