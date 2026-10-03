@@ -562,6 +562,12 @@ export const RESET_REGISTRY = [
     why: 'CharonSystem state while Charon bars REST\'s north exit ({ npc, phase, toll, takeTimer, flights }); null otherwise. Rebuilt on every REST entry, but a death mid-toll must not carry him (or his queued toll) into the next run.',
   },
   {
+    path: 'charonGreeted',
+    scope: 'run',
+    value: false,
+    why: 'Set once Charon has spoken his line this run (CharonSystem.trySpacePress); later visits skip the dialogue and go straight to the toll. A new run hears him again.',
+  },
+  {
     path: 'thrownLastWeapon',
     scope: 'run',
     value: false,

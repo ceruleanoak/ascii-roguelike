@@ -10,6 +10,9 @@ const TOLL_DIVISOR = 3;
 const TAKE_INTERVAL = 0.15;  // seconds between taken ingredients
 const FLIGHT_TIME = 0.45;    // seconds for a taken glyph to reach him
 const FADE_TIME = 0.8;       // seconds for him to vanish once paid
+// Stick, Rock, Fur, Goo — beneath him. He takes them only once nothing else
+// takeable is left in the pile.
+const SCORNED_INGREDIENTS = new Set(['|', '0', 'f', 'g']);
 
 /**
  * CharonSystem — the toll at REST's north exit.
@@ -17,7 +20,9 @@ const FADE_TIME = 0.8;       // seconds for him to vanish once paid
  * On REST entry above L1 the north exit closes and Charon stands in it.
  * SPACE near him opens his dialogue; closing it starts the toll: one third of
  * the ingredient count (rounded up, coins not counted), paid coins first,
- * then random ingredients — never treasures. A hero lost to the gray mist
+ * then random ingredients — never treasures, and Stick/Rock/Fur/Goo only
+ * once nothing else is left. He speaks once per run (game.charonGreeted);
+ * after that, SPACE goes straight to the toll. A hero lost to the gray mist
  * hands off to the next one at REST without him (waiveNextVisit). Each taken
  * glyph flies from the player to him, then he fades out and the exit reopens.
  *
@@ -70,6 +75,12 @@ export class CharonSystem {
       return true;
     }
     if (!charon.npc.isInRange(game.player)) return false;
+    // Already heard him this run — no second speech, straight to the toll.
+    if (game.charonGreeted) {
+      this._beginToll(charon);
+      return true;
+    }
+    game.charonGreeted = true;
     return dialogue.open(charon.npc, charon.npc.getDialogueLines(game));
   }
 
@@ -99,7 +110,8 @@ export class CharonSystem {
     }
   }
 
-  // Coins first, then random non-treasure pile ingredients, up to the toll.
+  // Coins first, then random non-treasure pile ingredients (scorned ones
+  // last), up to the toll.
   _beginToll(charon) {
     const inv = this.game.inventorySystem;
     const pile = inv.getIngredients();
@@ -112,10 +124,14 @@ export class CharonSystem {
     owed -= coinsTaken;
 
     const takeable = pile.filter(char => getPickupCategory(char) !== 'treasure');
-    while (owed > 0 && takeable.length > 0) {
-      const i = Math.floor(Math.random() * takeable.length);
-      toll.push(takeable.splice(i, 1)[0]);
-      owed--;
+    const prized = takeable.filter(char => !SCORNED_INGREDIENTS.has(char));
+    const scorned = takeable.filter(char => SCORNED_INGREDIENTS.has(char));
+    for (const pool of [prized, scorned]) {
+      while (owed > 0 && pool.length > 0) {
+        const i = Math.floor(Math.random() * pool.length);
+        toll.push(pool.splice(i, 1)[0]);
+        owed--;
+      }
     }
 
     charon.toll = toll;
