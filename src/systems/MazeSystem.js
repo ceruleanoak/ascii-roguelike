@@ -104,7 +104,6 @@ const MAZE_LOOT_TABLE = [
 
   // ── Uncommon ─────────────────────────────────────────────────────────────────
   { char: 'w', baseWeight:  5, depthBonus: 0.8 }, // Wing
-  { char: 's', baseWeight:  5, depthBonus: 0.8 }, // Scale
   { char: 'e', baseWeight:  4, depthBonus: 0.8 }, // Eye
   { char: 'k', baseWeight:  4, depthBonus: 0.8 }, // Silk
   { char: 'v', baseWeight:  4, depthBonus: 0.8 }, // Venom
@@ -122,6 +121,7 @@ const MAZE_LOOT_TABLE = [
   { char: '◈', baseWeight:  0, depthBonus: 1.8 }, // Ruby  — "ruby is the stone of flame"
   { char: '⬨', baseWeight:  0, depthBonus: 1.5 }, // Sapphire
   { char: '⬧', baseWeight:  0, depthBonus: 1.2 }, // Onyx
+  { char: 's', baseWeight:  0, depthBonus: 1.0 }, // Scale — epic elsewhere, so deep-only here too
 ];
 
 // ─── MazeObject ────────────────────────────────────────────────────────────

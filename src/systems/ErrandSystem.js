@@ -15,7 +15,7 @@ import { applyZoneCombatModifiers } from '../data/zones.js';
 const STAGE_CONFIG = [
   {
     // Stage 0: rare ingredient for a solid tier-2 weapon or armor
-    requestPool: ['M', 't', 'e', 's', 'F', 'k'], // Metal, Teeth, Eye, Scale, Fire Essence, Silk
+    requestPool: ['M', 't', 'e', 'F', 'k'],      // Metal, Teeth, Eye, Fire Essence, Silk (Scale is epic — not a fair ask)
     rewardPool:  ['‡', 'ᛉ', '⟩', '⊤', 'X', '⛓', '𐤄', '𐤂'],
     isIngredient: true
   },

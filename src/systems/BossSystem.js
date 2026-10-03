@@ -26,6 +26,8 @@ import { PandoraBox, PANDORA_PHASE2_HP } from '../entities/PandoraBox.js';
 import { tagInteriorPlane } from './PlaneSystem.js';
 import { MawShadowSystem } from './MawShadowSystem.js';
 
+const GOO_DRAGON_SCALE_DROPS = 3;
+
 
 
 export class BossSystem {
@@ -1015,6 +1017,13 @@ export class BossSystem {
       if (bossEntities.has(enemies[i])) {
         enemies.splice(i, 1);
       }
+    }
+
+    // The Goo Dragon is the dependable source of Scale — elsewhere it is an
+    // epic-rarity drop. Fanned out evenly around the body.
+    for (let i = 0; i < GOO_DRAGON_SCALE_DROPS; i++) {
+      const angle = (i / GOO_DRAGON_SCALE_DROPS) * Math.PI * 2;
+      this.game.lootSystem.spawnIngredientDrop('s', this.dragon.position.x, this.dragon.position.y, angle, this.dragon);
     }
 
     // Announce

@@ -3352,9 +3352,9 @@ export const AFFINITY_POOLS = {
 
   dragon: {
     ingredients: {
-      [RARITY.COMMON]:   ['s'],              // Scale
       [RARITY.UNCOMMON]: ['F'],              // Fire Essence
-      [RARITY.RARE]:     ['M']               // Metal
+      [RARITY.RARE]:     ['M'],              // Metal
+      [RARITY.EPIC]:     ['s']               // Scale — epic everywhere; the Goo Dragon is its steady source
     },
     weapons: {
       [RARITY.RARE]:     ['ᚲ', 'ᛠ', 'ᛖ']   // Dragon Shotgun, Chaos Blade, Dragon Blade (now tier 3)
@@ -3437,8 +3437,9 @@ export const AFFINITY_POOLS = {
   aquatic: {
     ingredients: {
       [RARITY.COMMON]:   ['g', 'w'],         // Goo, Wing (fins/webbing)
-      [RARITY.UNCOMMON]: ['e', 's', 'p'],    // Eye, Scale, Pearl Shard
+      [RARITY.UNCOMMON]: ['e', 'p'],         // Eye, Pearl Shard
       [RARITY.RARE]:     ['k', 'n', 'Y'],    // Silk, Sharkbone, Stingray Barb
+      [RARITY.EPIC]:     ['s'],              // Scale
     },
     weapons: {
       [RARITY.UNCOMMON]: ['≋', 'ⲯ'],        // Whip (water-lash), Trident
@@ -3487,9 +3488,10 @@ export const AFFINITY_POOLS = {
   // Generic/random drops for crates, barrels, shrines, etc.
   generic: {
     ingredients: {
-      [RARITY.COMMON]:   ['f', 't', 'g', 'w', 'c', 'b', 'm', 's', '|', '~'],
+      [RARITY.COMMON]:   ['f', 't', 'g', 'w', 'c', 'b', 'm', '|', '~'],
       [RARITY.UNCOMMON]: ['F', 'M', 'a', 'd', 'e', 'h', 'i', 'v'],
-      [RARITY.RARE]:     ['j', 'k', 'l', 'r', '0']
+      [RARITY.RARE]:     ['j', 'k', 'l', 'r', '0'],
+      [RARITY.EPIC]:     ['s']               // Scale
     },
     weapons: {
       [RARITY.UNCOMMON]: ['¬', '†', ')'],    // Gun, Sword, Bow

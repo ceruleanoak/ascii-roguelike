@@ -181,7 +181,7 @@ export const NEUTRAL_ROOMS = {
       const prizes = [];
 
       // Rare ingredients (green-zone drops, crafting staples)
-      const rarePool   = ['k', 'e', 's', 'F', 'h', 'i']; // Silk, Eye, Scale, Fire Essence, Herb, Ice
+      const rarePool   = ['k', 'e', 'F', 'h', 'i']; // Silk, Eye, Fire Essence, Herb, Ice (Scale is epic-only)
       const commonPool = ['g', 'M', 'w', 'b', 'f', 't']; // Goo, Metal, Wing, Bone, Fur, Teeth
 
       // 3 premium bunches (signal the best picks)
