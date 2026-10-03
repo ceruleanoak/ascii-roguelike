@@ -510,23 +510,20 @@ export class ExitSystem {
       return this.assignCompletedZoneColors(letters, zone, closedSlots);
     }
 
-    // Pick 1 random OPEN exit for the alternative color. A player following a
-    // color trail reads "one exit of my color is always on offer" as the rule;
-    // putting that single alt color on the exit an Ocean room is about to wall
-    // off silently breaks the trail with no way to tell it happened.
-    const altIndex = randomOpenSlot(closedSlots);
-
+    // Pick a random OPEN exit as the first alternative-color slot. A player
+    // following a color trail reads "one exit of my color is always on offer"
+    // as the rule; putting the alt color on the exit an Ocean room is about to
+    // wall off silently breaks the trail with no way to tell it happened.
+    //
     // A letter's zoneBoosts of 0 is a hard gate against that DESTINATION zone
     // (same rule getLetterWeightsForZone enforces at selection time — resolved
-    // bug #103), but the letter for this slot was picked against the CURRENT
-    // zone's weights, before any of this alt-color logic ever runs. Left
-    // unchecked here, a letter hard-gated against e.g. cyan could still get
-    // dressed in cyan's color whenever the current zone's alt-zone pool offers
-    // it (green always includes cyan) — reaching the exact destination its own
-    // gate says it never should. Filter the alt-zone candidate by the slot's
-    // letter before using it.
-    const altLetterBoosts = EXIT_LETTERS[letters[altIndex]]?.zoneBoosts;
-    const altZoneGated = z => altLetterBoosts?.[z] === 0;
+    // bug #103), but each slot's letter was picked against the CURRENT zone's
+    // weights, before any of this alt-color logic ever runs. Left unchecked,
+    // a letter hard-gated against e.g. cyan could still get dressed in cyan's
+    // color whenever the current zone's alt-zone pool offers it — reaching the
+    // exact destination its own gate says it never should. Both branches below
+    // filter each slot's candidate zones by that slot's letter.
+    const altIndex = randomOpenSlot(closedSlots);
 
     if (progressionColor && progressionColor !== zone.exitColor) {
       // Mid-progression: the streak guarantee ("a same-color exit is always on
@@ -550,18 +547,30 @@ export class ExitSystem {
       // letter that explicitly refuses that zone.
     } else if ((depth == null || offersZoneChangeAt(depth)) &&
                (zoneType === 'green' || Math.random() < ALT_EXIT_CHANCE_NON_GREEN)) {
-      // No progression: use random alternative, excluding zones whose boss is defeated.
-      // Only at L3, L6, ...: a zone change can only start there, and the
-      // streak branch above carries it on through the next two rooms.
-      // Green always offers one; other zones only sometimes (gate above).
-      const available = zone.alternativeZones.filter(
-        z => !this.zoneSystem.isZoneDefeated(z) && !altZoneGated(z)
-      );
-      if (available.length > 0) {
+      // No progression: offer TWO different alternative zones, excluding
+      // zones whose boss is defeated. Only at L3, L6, ...: a zone change can
+      // only start there, and the streak branch above carries whichever color
+      // the player takes on through the next two rooms. Green always offers
+      // the choice; other zones only sometimes (gate above). One open exit
+      // always keeps this zone's own color, so when Ocean walls off a slot
+      // only one alt color fits.
+      const openSlots = [0, 1, 2].filter(i => !closedSlots.has(i));
+      const altCount = Math.min(2, Math.max(1, openSlots.length - 1));
+      const altSlots = [altIndex, ...openSlots.filter(i => i !== altIndex).sort(() => Math.random() - 0.5)]
+        .slice(0, altCount);
+      const offered = new Set();
+      for (const slot of altSlots) {
+        const slotBoosts = EXIT_LETTERS[letters[slot]]?.zoneBoosts;
+        const available = zone.alternativeZones.filter(
+          z => !this.zoneSystem.isZoneDefeated(z) && slotBoosts?.[z] !== 0 && !offered.has(z)
+        );
+        if (available.length === 0) continue;
         const altZone = available[Math.floor(Math.random() * available.length)];
-        colors[altIndex] = ZONE_COLORS[altZone];
+        offered.add(altZone);
+        colors[slot] = ZONE_COLORS[altZone];
       }
-      // If all alternativeZones are defeated (or gated out for this letter), all exits show the current zone color (no alt)
+      // A slot with no eligible alt zone left (defeated, gated for its letter,
+      // or already offered next door) keeps the current zone color.
     }
 
     return colors;
