@@ -1,6 +1,7 @@
 import { getPotionEffectParams } from '../data/alchemy.js';
 import { GAME_STATES } from '../game/GameConfig.js';
 import { clearStatusEffect } from './StatusEffects.js';
+import { FAIRY_HEAL } from '../entities/Fairy.js';
 
 // Every consumable use is a throw: the item arcs up and lands before its
 // effect resolves (checkTriggerCondition only gates whether it CAN fire;
@@ -13,7 +14,7 @@ const THROW_DURATION = 0.45;
 // Effect types with no AoE landing zone — the windup renderer skips the
 // pulsing radius ring for these (they always resolve on the player).
 const SELF_ONLY_EFFECTS = new Set([
-  'heal', 'manaSlot', 'maxhp', 'speed', 'block', 'cleanse', 'invuln',
+  'heal', 'fairyHeal', 'manaSlot', 'maxhp', 'speed', 'block', 'cleanse', 'invuln',
   'waterImmunity', 'stoneskin', 'regen',
   'damageBuff', 'arrowRefill',
 ]);
@@ -310,6 +311,13 @@ export class ConsumableTriggerSystem {
         }
         return false;
       }
+      case 'revive_on_death': {
+        // Fairy in a Bottle: its auto-trigger is the death intercept in
+        // main.js's game-over path, not an HP gate here. A manual use drinks
+        // the fairy now for the same FAIRY_HEAL.
+        if (!manual) return false;
+        return { windup: THROW_DURATION, effectType: 'fairyHeal' };
+      }
       default:
         return false;
     }
@@ -336,6 +344,10 @@ export class ConsumableTriggerSystem {
         if (p?.isUnstableBadRoll) player.takeDamage?.(Math.abs(Math.round(p.unstableRoll) - cd.amount));
         break;
       }
+      case 'fairyHeal':
+        player.heal(FAIRY_HEAL);
+        this.game.combatSystem.showHeal(FAIRY_HEAL, player.position.x, player.position.y, player);
+        break;
       case 'manaSlot':
         this.game.magicSystem.grantTempManaSlot(player, cd);
         break;

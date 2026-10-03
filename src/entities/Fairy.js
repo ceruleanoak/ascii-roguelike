@@ -24,10 +24,10 @@ import { getExitSlotPosition, mutateExitLetter } from '../systems/ExitSystem.js'
 // (InteractionSystem.tryBottleFairy) — and it suppresses the touch heal while
 // the bottle is armed so the walk-up can't spend the fairy first.
 
-// HP a fairy restores — on touch, and when a Fairy in a Bottle intercepts a
-// death. Fairies are free (cut grass), so their heal is small and fixed rather
-// than a full heal; consumables are balanced by what they cost to obtain.
-export const FAIRY_HEAL = 3;
+// HP a fairy restores — on touch, when a Fairy in a Bottle is drunk by hand
+// (ConsumableTriggerSystem), and when one auto-triggers to intercept a death
+// (main.js). A fixed amount rather than a full heal, whichever way it's spent.
+export const FAIRY_HEAL = 10;
 
 export class Fairy extends NeutralCharacter {
   constructor(x, y, exits, opts = {}) {
