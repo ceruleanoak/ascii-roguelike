@@ -292,38 +292,19 @@ export function seedTunnelZone(gen, room) {
   }
 }
 
-// ── Green Zone Tunnel: chest reward at the tunnel's far end ────────────────
+// ── Green Zone Tunnel: chest reward at the tunnel's center ─────────────────
 // Green's Tunnel room is the teaching room: the rock-flanked entrances are
 // the whole lesson, so the payoff for walking the corridor (rather than
-// fighting through the room) is a Chest planted near whichever entrance is
-// farther from the player's start — reaching it rewards noticing the
-// entrance rocks and taking the corridor rather than skipping it.
+// fighting through the room) is a Chest planted dead center of the tunnel —
+// reachable only from inside it, so it rewards noticing the entrance rocks
+// and taking the corridor rather than skipping it. (The ends are no good:
+// bounds' first/last cells along the corridor are the entrance markers.)
 export function seedGreenTunnelChest(gen, room) {
-  const { bounds, entrances, entranceAxis } = room.tunnel || {};
+  const { bounds, entrances } = room.tunnel || {};
   if (!bounds || !entrances?.length) return false;
 
-  const start = room.playerStartPos;
-  const distSq = (col, row) => {
-    const dx = col * GRID.CELL_SIZE - start.x;
-    const dy = row * GRID.CELL_SIZE - start.y;
-    return dx * dx + dy * dy;
-  };
-
-  // Pick the farther end of the corridor (left/right or top/bottom), then
-  // the interior cell just inside that end, centered across the tunnel's
-  // width so the chest sits in the open corridor floor, not against a wall.
-  let col, row;
-  if (entranceAxis === 'horizontal') {
-    const midRow = Math.round((bounds.minRow + bounds.maxRow) / 2);
-    const leftCol = bounds.minCol, rightCol = bounds.maxCol;
-    col = distSq(leftCol, midRow) > distSq(rightCol, midRow) ? leftCol : rightCol;
-    row = midRow;
-  } else {
-    const midCol = Math.round((bounds.minCol + bounds.maxCol) / 2);
-    const topRow = bounds.minRow, bottomRow = bounds.maxRow;
-    row = distSq(midCol, topRow) > distSq(midCol, bottomRow) ? topRow : bottomRow;
-    col = midCol;
-  }
+  const col = Math.round((bounds.minCol + bounds.maxCol) / 2);
+  const row = Math.round((bounds.minRow + bounds.maxRow) / 2);
 
   const chest = new BackgroundObject('⊞', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
   chest.spawnImmunityTimer = 1.0;
