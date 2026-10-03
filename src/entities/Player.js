@@ -42,6 +42,7 @@ export class Player {
     initParry(this);            // parry cycle timers, shared with enemy parry
     this.smokeOnHit = false;    // Bloom Mantle: bursts a pollen smoke screen when struck
     this.smokeBurstPending = false; // one-frame signal consumed by main.js to spawn the cloud
+    this.hurtPending = false; // survived a hit since the last consumable check (healOnHit; InventorySystem)
     this.speedBoost = 0;
     this.speedPenalty = 0;
     this.slowEnemies = false;
@@ -801,6 +802,7 @@ export class Player {
     this.hp = PLAYER_STATS.START_HP;
     this.maxHp = PLAYER_STATS.MAX_HP;
     this.passiveMaxHpBonus = 0;
+    this.hurtPending = false;
     this.velocity = { vx: 0, vy: 0 };
     this.acceleration = { ax: 0, ay: 0 };
     this.quickSlots = [null, null, null];

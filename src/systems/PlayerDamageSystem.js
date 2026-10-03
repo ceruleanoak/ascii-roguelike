@@ -89,6 +89,9 @@ export const PlayerDamageSystem = {
     // Sniper's armor-piercing beam/dagger — see SniperMechanic.consumeResult).
     if (player.hp > 0) {
       player.invulnerabilityTimer = damageSource.iframeDuration ?? player.invulnerabilityDuration;
+      // A survived hit — healOnHit consumables (Fairy King in a Bottle) read
+      // this on the next consumable check, which then clears it.
+      player.hurtPending = true;
     }
 
     // Bloom Mantle: a landed hit bursts a pollen smoke screen. Flag is consumed

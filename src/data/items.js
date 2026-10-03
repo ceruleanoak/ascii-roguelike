@@ -2570,6 +2570,20 @@ export const ITEMS = {
     oneShot: true,
     color: '#ffaaff'
   },
+  // 'Fairy King in a Bottle' — a Fairy King caught in an armed Empty Bottle
+  // (InteractionSystem.tryBottleFairy). Reusable: heals on any hit the player
+  // survives once the cooldown is over (healOnHit — player.hurtPending, read by
+  // ConsumableTriggerSystem), or on SPACE. A fairy orbits the player while ready.
+  '♔': {
+    char: '♔',
+    name: 'Fairy King in a Bottle',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'heal',
+    amount: 3,
+    cooldown: 20,
+    healOnHit: true,
+    color: '#ff3fa0'
+  },
   // 'Bottle of Water' — filled at a hut water trough (equipped Empty Bottle
   // + interact). Pure crafting input for the Alchemy Cauldron; not a drink.
   '🜉': {

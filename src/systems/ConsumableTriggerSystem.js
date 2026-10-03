@@ -93,6 +93,10 @@ export class ConsumableTriggerSystem {
 
     switch (cd.effect) {
       case 'heal': {
+        // Fairy King in a Bottle: fires on a survived hit, not an HP threshold
+        if (cd.healOnHit) {
+          return (manual || player.hurtPending) ? { windup: THROW_DURATION, effectType: 'heal' } : false;
+        }
         const threshold = cd.autoTriggerHP !== undefined ? cd.autoTriggerHP : (cd.amount >= 10 ? 0.25 : 0.5);
         if (manual || player.hp < player.maxHp * threshold) {
           return { windup: THROW_DURATION, effectType: 'heal' };

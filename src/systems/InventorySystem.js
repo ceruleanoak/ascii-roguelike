@@ -691,6 +691,9 @@ export class InventorySystem {
 
     // Check if consumables should activate
     this.checkConsumableActivation(player, currentRoom);
+    // A hit only counts for the check that follows it — a healOnHit item still
+    // on cooldown must not fire later off a stale hit.
+    player.hurtPending = false;
 
     // Update active windups
     this.updateConsumableWindups(deltaTime, player, currentRoom, combatSystem, steamClouds, particles);
