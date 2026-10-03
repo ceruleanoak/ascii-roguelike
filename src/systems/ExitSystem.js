@@ -15,6 +15,15 @@ const LUCKY_BOOST = { 'V': 2.5, '?': 2.0, 'C': 1.5 };
 // current color, so staying put feels like the default rather than a refusal.
 const ALT_EXIT_CHANCE_NON_GREEN = 0.5;
 
+// A zone change (its first alt-color exit) is only offered every this many
+// depths — L3, L6, L9 — matching the enemy difficulty steps. Completed zones,
+// the post-Goo-Dragon rule, forced zones (Ridge north, gray) and warps don't
+// go through this check.
+const ZONE_CHANGE_DEPTH_STEP = 3;
+function offersZoneChangeAt(depth) {
+  return depth > 0 && depth % ZONE_CHANGE_DEPTH_STEP === 0;
+}
+
 // Exit slots are ordered [north, east, west] everywhere in this file. Some
 // letter templates close one of those slots during room generation (Ocean's
 // wall of water eats the east exit — RoomGenerator.generateOceanTerrain reads
@@ -396,7 +405,7 @@ export class ExitSystem {
     }
 
     // Assign colors based on zone and progression state
-    const colors = this.assignExitColors(letters, zoneType, progressionColor, closedSlots);
+    const colors = this.assignExitColors(letters, zoneType, progressionColor, closedSlots, currentDepth);
 
     // The guarantee is "this zone's miniboss is reachable" — room.zone (and
     // therefore which zone's miniboss pool spawns) follows the exit's COLOR,
@@ -426,7 +435,7 @@ export class ExitSystem {
           // new letter's color follows the same zone/alt-color rules as
           // every other slot, rather than inheriting the stale color that
           // belonged to whatever letter this slot held before.
-          sequenceColors = this.assignExitColors(letters, zoneType, progressionColor, closedSlots);
+          sequenceColors = this.assignExitColors(letters, zoneType, progressionColor, closedSlots, currentDepth);
           if (forcedBossIndex !== -1) {
             sequenceColors[forcedBossIndex] = ZONES[zoneType].exitColor;
           }
@@ -468,7 +477,11 @@ export class ExitSystem {
     return this.weightedRandomChoice(weights);
   }
 
-  assignExitColors(letters, zoneType, progressionColor = null, closedSlots = new Set()) {
+  // `depth` is the depth of the room these exits belong to. A fresh alt color
+  // (the first step of a zone change) is only offered at a depth that is a
+  // multiple of ZONE_CHANGE_DEPTH_STEP. null skips that rule (post-boss
+  // recoloring, where a completed or post-Dragon rule decides the colors).
+  assignExitColors(letters, zoneType, progressionColor = null, closedSlots = new Set(), depth = null) {
     const zone = ZONES[zoneType];
     const colors = [zone.exitColor, zone.exitColor, zone.exitColor];
 
@@ -535,8 +548,11 @@ export class ExitSystem {
       // exceedingly rare (all 3 letters would need to share the gate) — the
       // streak simply breaks this room rather than force a color onto a
       // letter that explicitly refuses that zone.
-    } else if (zoneType === 'green' || Math.random() < ALT_EXIT_CHANCE_NON_GREEN) {
+    } else if ((depth == null || offersZoneChangeAt(depth)) &&
+               (zoneType === 'green' || Math.random() < ALT_EXIT_CHANCE_NON_GREEN)) {
       // No progression: use random alternative, excluding zones whose boss is defeated.
+      // Only at L3, L6, ...: a zone change can only start there, and the
+      // streak branch above carries it on through the next two rooms.
       // Green always offers one; other zones only sometimes (gate above).
       const available = zone.alternativeZones.filter(
         z => !this.zoneSystem.isZoneDefeated(z) && !altZoneGated(z)
