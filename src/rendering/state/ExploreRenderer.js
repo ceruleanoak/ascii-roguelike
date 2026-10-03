@@ -56,6 +56,7 @@ import { drawFloatPlatform } from '../effects/FloatPlatformDraw.js';
 import { fieldGuideEquipped, drawFieldGuideHpLabel } from '../ui/FieldGuideHpLabel.js';
 import { drawCursedRecipeReveal } from '../ui/CursedRecipeReveal.js';
 import { drawParryIndicator } from '../ui/ParryIndicator.js';
+import { drawFairyKingOrbit } from '../effects/FairyKingOrbit.js';
 
 function drawDizzyOrbitals(ctx, cx, cy, timer) {
   const r = 6;
@@ -796,6 +797,9 @@ export class ExploreRenderer {
 
     // Buckler parry window: same ']' tell enemies show.
     if (!playerInInterior) drawParryIndicator(this.renderer, game.player, game.player.parryMechanic);
+
+    // Fairy King in a Bottle ready: a fairy circles the player.
+    if (!playerInInterior) drawFairyKingOrbit(this.renderer, game);
 
     // Attack-direction indicator: small '^' orbiting tight around the player.
     if (!playerInInterior) drawPlayerFacingIndicator(this.renderer, game);

@@ -23,6 +23,7 @@ import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIP
 import { whirlwindSpinAngle } from '../effects/WeaponPreviewDraw.js';
 import { drawGolems } from '../ui/CompanionRenderers.js';
 import { drawFloatPlatform } from '../effects/FloatPlatformDraw.js';
+import { drawFairyKingOrbit } from '../effects/FairyKingOrbit.js';
 
 const IDLE_ECHO_DURATION = 0.5;          // seconds — must match WorldEffectsSystem's IDLE_ECHO_DURATION
 const IDLE_ECHO_MAX_RADIUS = GRID.CELL_SIZE * 1.5;
@@ -356,6 +357,7 @@ export class RestRenderer {
         playerAlpha
       );
     }
+    drawFairyKingOrbit(this.renderer, game);
 
     // Follower flock (persists across rooms after feeding events).
     if (game.followerCrows && game.followerCrows.length > 0) {

@@ -9,6 +9,7 @@ import { hasTorchLight, drawPlayerTorchLight, drawInteriorVisionFogOverlay } fro
 import { drawStatusPips } from '../effects/StatusPipEffects.js';
 import { drawFloatPlatform } from '../effects/FloatPlatformDraw.js';
 import { drawParryIndicator } from './ParryIndicator.js';
+import { drawFairyKingOrbit } from '../effects/FairyKingOrbit.js';
 
 /**
  * MazeInteriorOverlay — picture-in-picture renderer for the Maze maze.
@@ -191,6 +192,7 @@ export class MazeInteriorOverlay {
     );
     drawStatusPips(this.renderer, game.player);
     drawParryIndicator(this.renderer, game.player, game.player.parryMechanic);
+    drawFairyKingOrbit(this.renderer, game);
 
     this.renderController.bowChargeIndicator.render(game);
     this.renderController.greenRangerIndicator.render(game);

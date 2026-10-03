@@ -13,6 +13,7 @@ import { drawFloatPlatform } from '../effects/FloatPlatformDraw.js';
 import { drawTamedRats, drawGolems } from './CompanionRenderers.js';
 import { SLOT_CHROME } from '../../data/slotChrome.js';
 import { drawParryIndicator } from './ParryIndicator.js';
+import { drawFairyKingOrbit } from '../effects/FairyKingOrbit.js';
 
 /**
  * HutInteriorOverlay — picture-in-picture rendering for every floor Interior
@@ -323,6 +324,7 @@ export class HutInteriorOverlay {
       );
       drawStatusPips(this.renderer, game.player);
       drawParryIndicator(this.renderer, game.player, game.player.parryMechanic);
+      drawFairyKingOrbit(this.renderer, game);
     }
 
     // ── 16b. Camp companion (uses interior coords because it tracks player) ──
