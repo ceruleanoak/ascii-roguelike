@@ -51,12 +51,12 @@
 |------|-------|--------|------|--------|-------|
 | `F` | `g` | `@` | Bomb | Explode | 5 damage, 40 radius |
 | `m` | `F` | `H` | Health Potion | Heal | +5 HP |
-| `s` | `s` | `♦` | Dragon Heart | Max HP | +5 max HP |
+| `♥` | `s` | `♦` | Dragon Heart | Passive | +5 max HP while equipped; shatters on death or death save |
 | `w` | `w` | `∞` | Wings | Speed | 30s duration |
 | `t` | `f` | `◊` | Trophy | Gold | +10 gold |
 | `w` | `F` | `✦` | Phoenix Feather | Revive | One-time revive |
 | `b` | `F` | `☠` | Cursed Skull | Curse | 10 damage, 60 radius |
-| `m` | `~` | `♥` | Heart | Heal | +10 HP |
+| `m` | `~` | `♥` | Heart | Passive | +2 max HP while equipped; shatters on death or death save |
 | `c` | `F` | `★` | Lucky Coin | Luck | 60s duration |
 
 ### 4. Advanced Melee Weapons (20 recipes)
@@ -264,7 +264,7 @@ b (Bone)
 - `)` + `g` → `❅` (Ice Bow)
 
 ### By Ingredient: Scale (s)
-- `s` + `s` → `♦` (Dragon Heart)
+- `♥` + `s` → `♦` (Dragon Heart)
 - `†` + `s` → `⌘` (Dragon Blade)
 - `⌂` + `s` → `☼` (Dragon Shotgun)
 - `‡` + `s` → `⚔` (Legendary Flame Sword)

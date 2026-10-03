@@ -163,16 +163,18 @@ BOW    // Arrow-based weapons with charge mechanic
 | Property | Type | Default | Description | Balance Notes |
 |----------|------|---------|-------------|---------------|
 | `effect` | string | Required | Effect type (see below) | Defines behavior |
-| `oneShot` | boolean | false | Consumed permanently (true) or room-based (false) | Dragon Heart vs Bomb |
+| `oneShot` | boolean | false | Consumed permanently (true) or room-based (false) | Phoenix Feather vs Bomb |
 | `cooldown` | number | null | Recharge time in seconds (5-30) | For reusable items |
 | `passive` | boolean | false | Always active when equipped (Path Amulet) | No activation needed |
+| `maxHpBonus` | number | 0 | Max HP added while equipped and unspent (EquipmentEffectsSystem) | Heart 2, Dragon Heart 5 |
+| `breaksOnDeath` | boolean | false | Slot shatters when HP hits 0, before any death save (ConsumableSlotBreaks) | Heart, Dragon Heart |
+| `healOnHit` | boolean | false | `heal` fires on any survived hit when off cooldown, not an HP threshold | Fairy King in a Bottle |
 
 ### Effect-Specific Properties
 
 | Effect Type | Properties | Description | Example |
 |-------------|-----------|-------------|---------|
 | `'heal'` | `amount` (number) | Restore HP | Health Potion: `amount: 5` |
-| `'maxhp'` | `amount` (number) | Permanent max HP increase | Dragon Heart: `amount: 5`, `oneShot: true` |
 | `'speed'` | `duration` (number) | Temporary speed boost | Wings: `duration: 30`, `cooldown: 20` |
 | `'explode'` | `damage`, `radius` | Area explosion | Bomb: `damage: 5`, `radius: 40` |
 | `'revive'` | - | One death save | Phoenix Feather: `oneShot: true` |
@@ -430,9 +432,9 @@ const drops = generateEnemyDrops('beast', 'elite', 2);
 | Consumable Type | Cooldown | Duration | Special | Example |
 |-----------------|----------|----------|---------|---------|
 | Heal (minor) | 15s | - | amount: 5 | Health Potion |
-| Heal (major) | 20s | - | amount: 10 | Heart |
+| Heal (on hit) | 20s | - | amount: 3, healOnHit | Fairy King in a Bottle |
 | Buff | 20-30s | 30-60s | - | Wings |
-| Permanent | - | - | oneShot: true | Dragon Heart |
+| Passive max HP | - | - | passive, maxHpBonus, breaksOnDeath | Heart, Dragon Heart |
 | Offensive | 10-15s | - | damage, radius | Bomb |
 | Shield | 5-8s | - | charges: 2-3 | Shield |
 | Utility | 8-12s | 10-25s | - | Rubber Boots |
