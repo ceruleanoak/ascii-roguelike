@@ -4,6 +4,12 @@
 
 Browser-based roguelike, vanilla JavaScript + Vite. `npm run dev` / `npm run build`. Dev/debug tooling: see "Dev & Debug Tools" below.
 
+## Planning Inbox (first read)
+
+Large/design-heavy work that needs its own planning session before any code. Surface relevant entries when the user's request touches them; don't start one without a plan.
+
+@claudedocs/planning-inbox.md
+
 ## Ubiquitous Language (Glossary)
 
 `GLOSSARY.md` (repo root) is the canonical source of truth for what domain concepts are called and what they mean.
