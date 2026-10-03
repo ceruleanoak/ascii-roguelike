@@ -195,9 +195,9 @@ export class MenuSystem {
     const INTERACTION_DISTANCE = 1.5;
 
     const slots = [
-      { type: 'crafting-left',   x: CRAFTING.LEFT_SLOT_X,   y: CRAFTING.STATION_Y, range: 1.0 },
-      { type: 'crafting-center', x: CRAFTING.CENTER_SLOT_X, y: CRAFTING.STATION_Y, range: 1.0 },
-      { type: 'crafting-right',  x: CRAFTING.RIGHT_SLOT_X,  y: CRAFTING.STATION_Y, range: 1.0 },
+      { type: 'crafting-left',   x: CRAFTING.LEFT_SLOT_X,   y: CRAFTING.STATION_Y },
+      { type: 'crafting-center', x: CRAFTING.CENTER_SLOT_X, y: CRAFTING.STATION_Y },
+      { type: 'crafting-right',  x: CRAFTING.RIGHT_SLOT_X,  y: CRAFTING.STATION_Y },
       { type: 'equipment-chest1', x: EQUIPMENT.CHEST_X, y: EQUIPMENT.CHEST1_Y },
       { type: 'equipment-chest2', x: EQUIPMENT.CHEST_X, y: EQUIPMENT.CHEST2_Y },
       { type: 'equipment-chest3', x: EQUIPMENT.CHEST_X, y: EQUIPMENT.CHEST3_Y },
@@ -231,14 +231,31 @@ export class MenuSystem {
       return true;
     });
 
+    // Crafting slots highlight on any pixel overlap between the player's cell
+    // and the slot's char cell (column x+1, not the bracket column x) — a
+    // center-distance radius missed diagonal overlaps the eye reads as "on
+    // the slot". With several overlapping, the largest overlap wins.
+    let bestOverlap = 0;
+    let overlapSlot = null;
+    for (const slot of filteredSlots) {
+      if (!slot.type.startsWith('crafting-')) continue;
+      const ox = 1 - Math.abs(playerCenterX - (slot.x + 1.5));
+      const oy = 1 - Math.abs(playerCenterY - (slot.y + 0.5));
+      if (ox <= 0 || oy <= 0) continue;
+      if (ox * oy > bestOverlap) {
+        bestOverlap = ox * oy;
+        overlapSlot = slot;
+      }
+    }
+    if (overlapSlot) return overlapSlot;
+
     let nearestSlot = null;
     let minDistance = Infinity;
 
     for (const slot of filteredSlots) {
+      if (slot.type.startsWith('crafting-')) continue;
       const range = slot.range ?? INTERACTION_DISTANCE;
-      // Crafting slots: measure from the char column (x+1), not the bracket column (x)
-      const measureX = slot.type.startsWith('crafting-') ? slot.x + 1 : slot.x;
-      const dx = playerCenterX - measureX;
+      const dx = playerCenterX - slot.x;
       const dy = playerCenterY - slot.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
