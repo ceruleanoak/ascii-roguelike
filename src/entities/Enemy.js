@@ -2457,7 +2457,7 @@ export class Enemy {
     if (healthPercent > this.itemUsage.useConsumablesAt) return null;
 
     for (const item of this.inventory) {
-      if (item.data.effect === 'heal' || item.data.effect === 'maxhp') {
+      if (item.data.effect === 'heal') {
         return item;
       }
     }
@@ -2471,10 +2471,6 @@ export class Enemy {
     switch (item.data.effect) {
       case 'heal':
         this.hp = Math.min(this.hp + item.data.amount, this.maxHp);
-        break;
-      case 'maxhp':
-        this.maxHp += item.data.amount;
-        this.hp += item.data.amount;
         break;
     }
 

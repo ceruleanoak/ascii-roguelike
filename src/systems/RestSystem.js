@@ -52,6 +52,9 @@ export const RestSystem = {
     const priorMaxHp = priorPlayer?.maxHp;
     if (typeof priorMaxHp === 'number' && priorMaxHp > newPlayer.maxHp) {
       newPlayer.maxHp = priorMaxHp;
+      // priorMaxHp already includes any equipped hearts' bonus — carry the
+      // record of it too, or the next equipment pass adds it a second time.
+      newPlayer.passiveMaxHpBonus = priorPlayer.passiveMaxHpBonus;
     }
   }
 };

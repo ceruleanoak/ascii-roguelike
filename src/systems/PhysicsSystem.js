@@ -10,6 +10,7 @@ import {
 import { clearStatusEffect } from './StatusEffects.js';
 import { applyLavaContact } from './LavaContact.js';
 import { wetPipCount, wetPipSpeed } from './StatusEffectSystem.js';
+import { destroyWetOils } from './ConsumableSlotBreaks.js';
 
 // Re-exported so existing imports (e.g. Enemy.js) keep working.
 // New code should import directly from PlaneSystem.
@@ -1748,7 +1749,7 @@ export class PhysicsSystem {
         // the dry→wet transition, not every frame the player lingers in
         // water (the oil is already gone by the second frame).
         if (entity === game.player && !entity.isWet()) {
-          game.inventorySystem.destroyWetOils(entity);
+          destroyWetOils(game.inventorySystem, entity);
         }
         entity.applyStatusEffect('wet', 6.0);
         const wet = entity.statusEffects?.wet;

@@ -2215,23 +2215,27 @@ export const ITEMS = {
     autoTriggerHP: 0.30, color: '#3355ff',
     leavesBottle: true
   },
+  // Hearts — slot-holding passives, never fired. maxHpBonus raises max HP
+  // (not current HP) while equipped (EquipmentEffectsSystem). breaksOnDeath:
+  // the heart shatters the moment HP hits 0, whether or not a death save
+  // then catches the player (ConsumableSlotBreaks.breakOnDeathPassives).
   '♥': {
     char: '♥',
     name: 'Heart',
     type: ITEM_TYPES.CONSUMABLE,
-    effect: 'heal',
-    amount: 3,
-    cooldown: 20, // Reusable with 20s cooldown
-    autoTriggerHP: 0.15,
+    passive: true,
+    maxHpBonus: 2,
+    breaksOnDeath: true,
     color: '#ff0000'
   },
+  // Heart + Scale (recipes.js).
   '♦': {
     char: '♦',
     name: 'Dragon Heart',
     type: ITEM_TYPES.CONSUMABLE,
-    effect: 'maxhp',
-    amount: 5,
-    oneShot: true, // Permanent upgrade
+    passive: true,
+    maxHpBonus: 5,
+    breaksOnDeath: true,
     color: '#ff00ff'
   },
 

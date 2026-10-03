@@ -1,6 +1,7 @@
 import { GRID, GAME_STATES } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { captureDeath } from './DeathLedgerSystem.js';
+import { breakOnDeathPassives } from './ConsumableSlotBreaks.js';
 import { ITEM_TYPES } from '../data/items.js';
 
 /**
@@ -531,6 +532,8 @@ export class ThreeRoomSystem {
    */
   _resolveContactDeath(game) {
     console.log('💀 Death reached the player.');
+    // Hearts break here too, or a wish-revive out of this room would keep them.
+    breakOnDeathPassives(game.inventorySystem, game.player);
     captureDeath(game);
     game.audioSystem.stop();
     game.audioSystem.playSFX('player_death');

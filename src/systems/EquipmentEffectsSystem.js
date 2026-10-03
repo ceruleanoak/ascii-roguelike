@@ -127,6 +127,22 @@ export class EquipmentEffectsSystem {
     });
     player.critChance += critBonus;
 
+    // Hearts (maxHpBonus). maxHp is a running total other sources add to
+    // directly (fountain/fairy blessings), so it can't be zeroed and rebuilt
+    // like the fields above — apply only the change since the last call,
+    // tracked in player.passiveMaxHpBonus. A bonus raises max HP but never
+    // current HP, or unequip/re-equip would refill 2–5 HP for free; losing
+    // one clamps HP down to the new max.
+    let maxHpBonus = 0;
+    inventorySystem.equippedConsumables.forEach((slot, idx) => {
+      if (slot?.data?.maxHpBonus && !inventorySystem.spentConsumableSlots[idx]) {
+        maxHpBonus += slot.data.maxHpBonus;
+      }
+    });
+    player.maxHp += maxHpBonus - player.passiveMaxHpBonus;
+    player.passiveMaxHpBonus = maxHpBonus;
+    if (player.hp > player.maxHp) player.hp = player.maxHp;
+
     // Store equipped consumables for condition checking during gameplay
     player.equippedConsumables = [...inventorySystem.equippedConsumables];
   }

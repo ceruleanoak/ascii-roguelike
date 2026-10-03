@@ -137,7 +137,7 @@ export const RECIPES = [
   { left: '/', right: 'M', result: 'Ƨ', name: 'Scythe' },        // Staff + Metal = Scythe (long handle + curved blade)
 
   // Secret recipes
-  { left: 's', right: 's', result: '♦', name: 'Dragon Heart' },  // Scale + Scale = Dragon Heart
+  { left: '♥', right: 's', result: '♦', name: 'Dragon Heart' },  // Heart + Scale = Dragon Heart
   { left: 'g', right: 'g', result: '◉', name: 'Slime Bomb' },    // Goo + Goo = Slime Bomb (trap)
   { left: 'w', right: 'w', result: '∞', name: 'Wings' },         // Wing + Wing = Wings (speed boost)
 

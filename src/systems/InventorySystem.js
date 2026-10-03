@@ -16,7 +16,6 @@ import { Item } from '../entities/Item.js';
 import { GRID } from '../game/GameConfig.js';
 import { addItemToChestArray, removeItemFromChestArray, chestEntryLabel, trapAlreadyEquipped, mergeStackableConsumable as mergeStackableConsumableStack } from './TrapSystem.js';
 import { saveExploreRoomState, getSavedExploreRoomState, clearSavedExploreRoomState, saveRestIngredientsState, getSavedRestIngredientsState, clearSavedRestIngredientsState } from './RoomStatePersistence.js';
-import { createBurstParticles } from './WorldEffectsSystem.js';
 import { EquipmentEffectsSystem } from './EquipmentEffectsSystem.js';
 import { ConsumableWindupEffects } from './ConsumableWindupEffects.js';
 import { countItemChar, removeItemChar } from './itemCostDispatch.js';
@@ -809,25 +808,6 @@ export class InventorySystem {
     // can equip/use normally.
     if (this.spentConsumableSlots) this.spentConsumableSlots[slotIndex] = false;
     return true;
-  }
-
-  // Water washes any equipped Oil augment (oilEffect) off the bow/dagger it's
-  // coating — called by PhysicsSystem.applyLiquidResults on the player's
-  // dry→wet transition. Clears the slot to null exactly like a spent
-  // non-leavesBottle consumable (oils never carry leavesBottle); the new `wet`
-  // status pip (StatusEffectVisuals.js/StatusPipEffects.js) is the only
-  // feedback needed to tell the player why, per the non-instructive UI rule.
-  destroyWetOils(player) {
-    for (let i = 0; i < this.equippedConsumables.length; i++) {
-      const oil = this.equippedConsumables[i];
-      if (!oil?.data?.oilEffect) continue;
-      if (this.game?.particles) {
-        createBurstParticles(this.game, this.game.particles, player.position.x + 20, player.position.y + 20, 10, oil.color || '#a07040');
-      }
-      this.equippedConsumables[i] = null;
-      if (player.equippedConsumables) player.equippedConsumables[i] = null;
-      this.spentConsumableSlots[i] = true;
-    }
   }
 
   // Centralized slot-consumption for one-shot consumables. Honors leavesBottle:

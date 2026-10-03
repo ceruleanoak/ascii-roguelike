@@ -87,7 +87,7 @@ import { GrayZoneSystem } from './systems/GrayZoneSystem.js';
 import { ElectricitySystem } from './systems/ElectricitySystem.js';
 import { FireSystem } from './systems/FireSystem.js';
 import { FountainSystem } from './systems/FountainSystem.js';
-import { Fairy, FAIRY_HEAL } from './entities/Fairy.js';
+import { Fairy } from './entities/Fairy.js';
 import { CampNPCSystem } from './systems/CampNPCSystem.js';
 import { DialogueSystem } from './systems/DialogueSystem.js';
 import { FishermanDemoSystem } from './systems/FishermanDemoSystem.js';
@@ -129,6 +129,8 @@ import { captureDeath, deathCauseOf, downloadSessionLedger, newRunId } from './s
 import{DiagonalInputSystem as DIS}from'./systems/DiagonalInputSystem.js';
 import { MAGIC_SFX_NAMES } from './data/enemies.js';
 import * as ingredientPile from './systems/IngredientPile.js';
+import { breakOnDeathPassives } from './systems/ConsumableSlotBreaks.js';
+import { tryDeathSave } from './systems/DeathSaveSystem.js';
 import { PlayerParry } from './entities/enemyMechanics/ParryMechanic.js';
 
 // Particle Fireworks (debug toggle): each entry produces one effect at (x, y),
@@ -2965,7 +2967,7 @@ class Game {
 
     // Check consumable activation and update windups (delegated to InventorySystem)
     // Check activation AFTER combat so damage-reactive thresholds (heal, speed, block)
-    // see the post-hit HP value. "Immediate" consumables (maxhp, luck) also fire here
+    // see the post-hit HP value. "Immediate" consumables (luck) also fire here
     // on their first frame — one frame delay is fine.
     this.inventorySystem.update(
       deltaTime,
@@ -3012,6 +3014,7 @@ class Game {
     // If a heal consumable fired and restored HP, treat the player as alive
     // hp <= 0 catch-all covers Rusalka, burn-through-invuln, and any direct hp writes
     const playerDied = combatResult.playerDead || dotKilledPlayer || lavaKilledPlayer || this.player.hp <= 0;
+    if (playerDied) breakOnDeathPassives(this.inventorySystem, this.player);
     if (playerDied && this.player.hp > 0) {
       // Give brief invuln so the restored player doesn't instantly die again
       this.player.invulnerabilityTimer = Math.max(this.player.invulnerabilityTimer, 1.0);
@@ -3025,62 +3028,9 @@ class Game {
       console.log(`💀 Zone: ${this.zoneSystem.currentZone} | Depth: ${this.getCurrentZoneDepth()}`);
       console.log(`💀 ═══════════════════════════════════════════════════════════\n`);
 
-      // Check for Fairy in a Bottle death intercept (FAIRY_HEAL — the free
-      // revive is spent before a crafted Phoenix Feather)
-      const bottleIdx = (this.player.equippedConsumables || []).findIndex(c => c?.data?.effect === 'revive_on_death');
-      if (bottleIdx !== -1) {
-        // Ledger: record the intercepted death before restoring state
-        captureDeath(this, { event: 'revive', revivedBy: 'fairy_bottle' });
-        const bottle = this.player.equippedConsumables[bottleIdx];
-        this.player.hp = Math.min(this.player.maxHp, FAIRY_HEAL);
-        this.player.invulnerabilityTimer = 2.0;
-        // Clear movement-locking state so the player isn't frozen post-revive
-        // (e.g. died mid-dodge-roll — dodgeRoll.active must be false or
-        // updatePlayerMechanics zeroes input every frame; bug #1865).
-        this._clearReviveMovementLocks();
-        this.combatSystem.createDamageNumber(
-          bottle.char,
-          this.player.position.x,
-          this.player.position.y - GRID.CELL_SIZE * 0.5,
-          bottle.color
-        );
-        const burst = createActivationBurst(this.player.position.x, this.player.position.y, bottle.color);
-        for (const p of burst) tagInteriorPlane(this, p);
-        this.particles.push(...burst);
-        this.inventorySystem.equippedConsumables[bottleIdx] = null;
-        this.player.equippedConsumables[bottleIdx] = null;
-        this.inventorySystem.spentConsumableSlots[bottleIdx] = true;
-        this.audioSystem?.playSFX?.('pickup');
-        this.saveGameState();
-        console.log('🧚 Fairy in a Bottle activated — death intercepted! HP restored to ' + this.player.hp);
-        // fall through — do NOT transition to GAME_OVER
-      } else {
-      // Check for Phoenix Feather death intercept
-      const reviveIdx = (this.player.equippedConsumables || []).findIndex(c => c?.data?.effect === 'revive');
-      if (reviveIdx !== -1) {
-        // Ledger: record the intercepted death before restoring state
-        captureDeath(this, { event: 'revive', revivedBy: 'phoenix_feather' });
-        const feather = this.player.equippedConsumables[reviveIdx];
-        this.player.hp = Math.floor(this.player.maxHp * 0.5);
-        this.player.invulnerabilityTimer = 2.0;
-        // Clear movement-locking state so the player isn't frozen post-revive
-        this._clearReviveMovementLocks();
-        this.combatSystem.createDamageNumber(
-          feather.char,
-          this.player.position.x,
-          this.player.position.y - GRID.CELL_SIZE * 0.5,
-          feather.color
-        );
-        const burst = createActivationBurst(this.player.position.x, this.player.position.y, feather.color);
-        for (const p of burst) tagInteriorPlane(this, p);
-        this.particles.push(...burst);
-        this.inventorySystem.equippedConsumables[reviveIdx] = null;
-        this.player.equippedConsumables[reviveIdx] = null;
-        this.inventorySystem.spentConsumableSlots[reviveIdx] = true;
-        this.saveGameState();
-        console.log('✨ Phoenix Feather activated — death intercepted! HP restored to ' + this.player.hp);
-        // fall through — do NOT transition to GAME_OVER
-      } else {
+      // Equipped death saves (Fairy in a Bottle, then Phoenix Feather) —
+      // an intercepted death falls through without GAME_OVER.
+      if (!tryDeathSave(this)) {
         PlayerDamageSystem.freezeOnDeath(this.player);
 
         // Stop music and play death SFX
@@ -3165,7 +3115,6 @@ class Game {
           this.stateMachine.transition(GAME_STATES.GAME_OVER);
           return;
         }
-      }
       }
     }
 

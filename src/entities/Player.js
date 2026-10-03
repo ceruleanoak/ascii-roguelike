@@ -26,6 +26,7 @@ export class Player {
     // Game state
     this.hp = PLAYER_STATS.START_HP;
     this.maxHp = PLAYER_STATS.MAX_HP;
+    this.passiveMaxHpBonus = 0; // share of maxHp currently granted by equipped hearts (EquipmentEffectsSystem)
     this.defense = 0; // Defense from armor
 
     // Armor special properties
@@ -799,6 +800,7 @@ export class Player {
   reset() {
     this.hp = PLAYER_STATS.START_HP;
     this.maxHp = PLAYER_STATS.MAX_HP;
+    this.passiveMaxHpBonus = 0;
     this.velocity = { vx: 0, vy: 0 };
     this.acceleration = { ax: 0, ay: 0 };
     this.quickSlots = [null, null, null];

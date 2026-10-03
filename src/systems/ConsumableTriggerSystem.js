@@ -14,7 +14,7 @@ const THROW_DURATION = 0.45;
 // Effect types with no AoE landing zone — the windup renderer skips the
 // pulsing radius ring for these (they always resolve on the player).
 const SELF_ONLY_EFFECTS = new Set([
-  'heal', 'fairyHeal', 'manaSlot', 'maxhp', 'speed', 'block', 'cleanse', 'invuln',
+  'heal', 'fairyHeal', 'manaSlot', 'speed', 'block', 'cleanse', 'invuln',
   'waterImmunity', 'stoneskin', 'regen',
   'damageBuff', 'arrowRefill',
 ]);
@@ -102,10 +102,6 @@ export class ConsumableTriggerSystem {
       case 'manaSlot': {
         if (player?.magicMeter?.active) return false;
         return { windup: THROW_DURATION, effectType: 'manaSlot' };
-      }
-      case 'maxhp': {
-        // Dragon Heart
-        return { windup: THROW_DURATION, effectType: 'maxhp' };
       }
       case 'speed': {
         const threshold = cd.autoTriggerHP !== undefined ? cd.autoTriggerHP : 0.4;
@@ -350,10 +346,6 @@ export class ConsumableTriggerSystem {
         break;
       case 'manaSlot':
         this.game.magicSystem.grantTempManaSlot(player, cd);
-        break;
-      case 'maxhp':
-        player.maxHp += cd.amount;
-        player.hp = player.maxHp;
         break;
       case 'speed':
         player.applySpeedBoost(cd.duration || 8);
