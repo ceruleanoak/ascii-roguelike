@@ -2272,9 +2272,9 @@ export const ITEMS = {
     char: 'ᑕ',
     name: 'Tooth Necklace',
     type: ITEM_TYPES.CONSUMABLE,
-    effect: 'damageBuff',
+    effect: 'crit',
     passive: true,
-    damageBonus: 1,
+    critBonus: 0.05,      // +5% crit chance while equipped, added on top of Lucky Coin's
     color: '#ffffff'
   },
 

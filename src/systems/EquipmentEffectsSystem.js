@@ -94,11 +94,12 @@ export class EquipmentEffectsSystem {
     // set outside this function is erased the next time armor changes.
     player.defense += player.fountainArmorBonus;
 
-    // Apply passive consumable bonuses (Lucky Coin). luckBlessed (well ritual) is separate, untouched here.
+    // Apply passive consumable bonuses (Lucky Coin, Tooth Necklace). luckBlessed (well ritual) is separate, untouched here.
     player.luckActive = false;
     player.critChance = 0;
     player.luckDodgeBonus = 0;
     player.fireBerryLit = false;
+    let critBonus = 0;
     inventorySystem.equippedConsumables.forEach((slot, idx) => {
       const cd = slot?.data;
       if (!cd) return;
@@ -107,6 +108,9 @@ export class EquipmentEffectsSystem {
         player.critChance = Math.max(player.critChance, cd.critChance || 0);
         player.luckDodgeBonus = Math.max(player.luckDodgeBonus, cd.dodgeBonus || 0);
       }
+      // Tooth Necklace: a flat crit-chance bonus, added after the Lucky Coin's
+      // max() so the two stack.
+      if (cd.critBonus) critBonus += cd.critBonus;
       // Boots: slightly faster while equipped. Stacks on the armor's own
       // speedBoost — a different slot, so both can be worn at once.
       if (cd.passiveSpeedBoost) player.speedBoost += cd.passiveSpeedBoost;
@@ -116,6 +120,7 @@ export class EquipmentEffectsSystem {
         player.fireBerryLit = true;
       }
     });
+    player.critChance += critBonus;
 
     // Store equipped consumables for condition checking during gameplay
     player.equippedConsumables = [...inventorySystem.equippedConsumables];

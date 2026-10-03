@@ -15,7 +15,6 @@ Zone color changes should only be offered on levels in a multiple of 3 such as L
 Dragon Heart is equipped as a consumable, but falls in a class that is passive effect, is not consumed. Is destroyed in HP hits 0 (even if revied/saved). Check if there are other candidates for this kind, there should probably be a lower tier of this same effect that is one ingredient for Dragon Heart. Heart is too powerful and fits this in name, so rework and pass the current "Heart Effect" to a "Fairy King in a Bottle" (1 in every 100 fairies is a king, is a deeper color pink)
 Frog Coin only offers damage boost when player is wet.
 Increase red well cost (5 coins), need a wise man clue for this. And Well text should be "NO RESPONSE" for the first 4 coins and "YOUR PERSISTENCE IS REWARDED" for the buff.
-Tooth Necklace doesn't do anything "damageBonus" isn't tooled. It should be a +5% crit chance
 In red, lava hazard % of room should increase incrementally at the same 3 counts as enemy difficulty. In yellow, thunder strike frequency and amounts of ponds and streams should increase to a similar degree. In cyan, amount of ice and deep snow should increase.
 Rework enemy spawns for red, yellow, cyan to account for the L3 and L6 gates (zone caps at 10)
 Scales are OP, they should not work in the generic crafting table and require the Dragon Forge, found in the B room of Green Zone after defeating the Goo Dragon, which should drop some scales. Search for current "scale" drops and significantly pair them down to match their epic equivalency.
