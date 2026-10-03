@@ -218,6 +218,7 @@ export const RECIPES = [
   // === SHIELD RECIPES ===
   { left: 'k', right: 'b', result: 'S', name: 'Shield' },          // Silk + Bone = Shield
   { left: 'k', right: 'M', result: 'U', name: 'Tower Shield' },    // Silk + Metal = Tower Shield
+  { left: 'k', right: '|', result: '◍', name: 'Buckler' },         // Silk + Stick = Buckler (parries melee from the front)
 
   // === TRAP RECIPES ===
   // One-time traps

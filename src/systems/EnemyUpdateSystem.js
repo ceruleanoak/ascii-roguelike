@@ -325,11 +325,21 @@ export class EnemyUpdateSystem {
           Math.abs(player.position.y - ey) < GRID.CELL_SIZE) {
         enemy.chargeHasHit = true;
         const damage = enemy.getEffectiveDamage();
-        const result = player.takeDamage(damage, { isMelee: true, attacker: enemy });
-        if (result?.dodged) {
+        const result = player.takeDamage(damage, { isMelee: true, isCharge: true, attacker: enemy });
+        if (result?.guard === 'DEFLECT') {
+          // Deflect: the ram glances off and the charger reels as if it hit a wall.
+          game.combatSystem.createDamageNumber('DEFLECT', player.position.x, player.position.y, '#aaaaaa');
+          enemy.chargeState = 'stunned';
+          enemy.chargeDurationTimer = 0;
+          enemy.chargeStunTimer = enemy.data.chargeMechanic.wallStunDuration;
+          enemy.velocity.vx = 0;
+          enemy.velocity.vy = 0;
+          enemy.chargeTimer = enemy.data.chargeMechanic.cooldown;
+          return;
+        } else if (result?.dodged) {
           game.combatSystem.createDamageNumber('DODGE', player.position.x, player.position.y, '#ffff00');
         } else if (result?.blocked) {
-          game.combatSystem.createDamageNumber('BLOCK', player.position.x, player.position.y, '#aaaaaa');
+          game.combatSystem.createDamageNumber(result.guard ?? 'BLOCK', player.position.x, player.position.y, '#aaaaaa');
         } else if (result?.immune) {
           game.combatSystem.createDamageNumber('IMMUNE', player.position.x, player.position.y, '#00ffff');
         } else if (result !== false && result !== true) {

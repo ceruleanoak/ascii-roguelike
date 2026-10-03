@@ -28,6 +28,9 @@ export class EquipmentEffectsSystem {
     player.dodgeChance = 0;
     player.blockChance = 0;
     player.blockMelee = false;
+    player.deflectCharge = false;
+    player.parryChance = 0;
+    player.parryArcDegrees = 0;
     player.fireImmune = false;
     player.freezeImmune = false;
     player.poisonImmune = false;
@@ -59,6 +62,9 @@ export class EquipmentEffectsSystem {
       player.dodgeChance = a.dodgeChance || 0;
       player.blockChance = a.blockChance || 0;
       player.blockMelee = a.blockMelee || false;
+      player.deflectCharge = a.deflectCharge || false;
+      player.parryChance = a.parryChance || 0;
+      player.parryArcDegrees = a.parryArcDegrees || 0;
       player.fireImmune = a.fireImmune || false;
       player.freezeImmune = a.freezeImmune || false;
       player.poisonImmune = a.poisonImmune || false;

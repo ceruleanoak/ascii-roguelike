@@ -1442,7 +1442,7 @@ export class CombatSystem {
                                         player.position.x, player.position.y,
                                         result.lucky ? '#ffff66' : '#ffff00');
               } else if (result.blocked) {
-                this.createDamageNumber('BLOCK', player.position.x, player.position.y, '#aaaaaa');
+                this.createDamageNumber(result.guard ?? 'BLOCK', player.position.x, player.position.y, '#aaaaaa');
               } else if (result.immune) {
                 this.createDamageNumber('IMMUNE', player.position.x, player.position.y, '#00ffff');
               } else if (result !== false) {
