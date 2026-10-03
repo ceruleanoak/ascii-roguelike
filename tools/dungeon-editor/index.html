@@ -813,8 +813,8 @@
   }
 
   // Free-text entry for the pedestal's granted weapon character — any
-  // character an existing recipe produces (checked by main.js's
-  // validatePuzzleTemplate against recipes.js at save time, not a fixed
+  // weapon character in items.js (checked by main.js's
+  // validatePuzzleTemplate via pickWeaponTutorial at save time, not a fixed
   // dropdown of pre-registered tutorials). Mirrors renderTriggerList's
   // row-per-fixture pattern; only ever zero or one row since a template has
   // at most one pedestal.

@@ -27,6 +27,7 @@ import { ENEMIES } from '../src/data/enemies.js';
 import { BACKGROUND_OBJECTS } from '../src/game/GameConfig.js';
 import { SECRET_PATTERNS } from '../src/data/exitLetters.js';
 import { normalizeOfferSteps } from '../src/systems/ExitSystem.js';
+import { pickWeaponTutorial } from '../src/data/dungeon/weaponTutorials.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const itemsSource = readFileSync(join(root, 'src/data/items.js'), 'utf8');
@@ -247,6 +248,19 @@ for (const [pattern, data] of Object.entries(SECRET_PATTERNS)) {
 for (const [head, patterns] of Object.entries(sequenceHeadCounts)) {
   if (patterns.length > 2) {
     fail(`Head letter '${head}' starts ${patterns.length} sequence-bearing patterns (${patterns.join(', ')}) — cap is 2 per head letter`);
+  }
+}
+
+// ── Puzzle-room pedestal weapons ───────────────────────────────────────────
+// A pedestal whose weaponChar pickWeaponTutorial can't resolve is skipped at
+// runtime with only a console.warn — the Whip Trial's pedestal silently
+// vanished this way when its recipe was retired (#347). Read the template
+// JSON straight off disk (dungeonPuzzleTemplates.js imports it through Vite).
+const puzzleTemplateDir = join(root, 'src/data/dungeon/puzzleTemplates');
+for (const file of readdirSync(puzzleTemplateDir).filter(f => f.endsWith('.json'))) {
+  const { pedestal } = JSON.parse(readFileSync(join(puzzleTemplateDir, file), 'utf8'));
+  if (pedestal && !pickWeaponTutorial(pedestal.weaponChar)) {
+    fail(`puzzle template ${file}: pedestal weaponChar '${pedestal.weaponChar}' is not a weapon in ITEMS — the pedestal never appears (#347 pattern)`);
   }
 }
 

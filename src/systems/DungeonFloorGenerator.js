@@ -873,10 +873,11 @@ export class DungeonFloorGenerator {
         weaponPedestal = {
           row: pedestalMarker.row,
           leftX: pedestalMarker.col - 3, centerX: pedestalMarker.col - 1, rightX: pedestalMarker.col + 1,
-          leftChar: tutorial.recipe.left, rightChar: tutorial.recipe.right,
+          // Uncraftable (found-only) weapon: no recipe, flank Slots stay empty.
+          leftChar: tutorial.recipe?.left ?? null, rightChar: tutorial.recipe?.right ?? null,
         };
       } else {
-        console.warn(`[DungeonFloorGenerator] puzzle template "${templateName}" has a pedestal with weaponChar "${pedestalMarker.weaponChar}" that no recipe produces — skipping weapon grant.`);
+        console.warn(`[DungeonFloorGenerator] puzzle template "${templateName}" has a pedestal with weaponChar "${pedestalMarker.weaponChar}" that isn't a weapon in ITEMS — skipping weapon grant.`);
       }
     }
 

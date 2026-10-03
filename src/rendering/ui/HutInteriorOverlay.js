@@ -422,9 +422,10 @@ export class HutInteriorOverlay {
         ctx.fillText(SLOT_CHROME.BRACKET_LEFT, slotX * CS + CS / 2, cy);
         ctx.fillText(SLOT_CHROME.BRACKET_RIGHT, (slotX + 2) * CS + CS / 2, cy);
       }
+      // A found-only weapon has no recipe — its flank Slots stay empty frames.
       ctx.fillStyle = SLOT_CHROME.PENDING;
-      ctx.fillText(leftChar, (leftX + 1) * CS + CS / 2, cy);
-      ctx.fillText(rightChar, (rightX + 1) * CS + CS / 2, cy);
+      if (leftChar) ctx.fillText(leftChar, (leftX + 1) * CS + CS / 2, cy);
+      if (rightChar) ctx.fillText(rightChar, (rightX + 1) * CS + CS / 2, cy);
       ctx.restore();
     }
 

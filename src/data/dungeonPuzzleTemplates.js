@@ -52,13 +52,13 @@
 //   since dungeons have no ghosts (contrast MazeSystem's own MazeTorch).
 //
 // pedestal: { row, col, weaponChar } | absent — opt-in weapon-tutorial
-//   marker. weaponChar is any character an existing recipe produces (typed
-//   freely in the dungeon editor's Pedestal tool, checked against
-//   recipes.js at save time — not a fixed list). When present,
-//   generatePuzzleRoom grants a real pickup-able copy of that weapon (via
-//   pickWeaponTutorial()) flanked by decorative recipe-ingredient chrome,
-//   anchored on this cell's column (mirrors the original Whip Trial's own
-//   hardcoded pedestal, now authorable by any template).
+//   marker. weaponChar is any WEAPON in ITEMS (typed freely in the dungeon
+//   editor's Pedestal tool, checked against items.js at save time — not a
+//   fixed list). When present, generatePuzzleRoom grants a real pickup-able
+//   copy of that weapon (via pickWeaponTutorial()) flanked by decorative
+//   recipe-ingredient chrome — empty flank Slots if the weapon has no
+//   recipe — anchored on this cell's column (mirrors the original Whip
+//   Trial's own hardcoded pedestal, now authorable by any template).
 //
 // weight: selection weight for the North-descent pool (see
 // pickRandomPuzzleTemplateName below) — every named template participates,

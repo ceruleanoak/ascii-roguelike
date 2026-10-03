@@ -31,21 +31,22 @@ const PUZZLE_ROWS = 24;
 const DESIGN_COLS = 30;
 const DESIGN_ROWS = 30;
 
-// Pedestal weaponChar validation reads recipes.js's own findRecipeByResult
-// live, via Node's dynamic import() of that ES module from this CommonJS
-// main process — unlike the small geometry helpers above (reservedFootprintCells),
-// hand-duplicating an entire recipe catalog here would silently drift from
-// the game's actual recipes as they're rebalanced. import() works regardless
-// of the importer's module type; recipes.js resolves as ESM from the
-// project root's own package.json ("type": "module"). Cached after first
-// load since recipes.js has no reason to change mid-session.
-let _recipesModulePromise = null;
-function loadRecipesModule() {
-  if (!_recipesModulePromise) {
-    const recipesPath = path.join(__dirname, '..', '..', 'src', 'data', 'recipes.js');
-    _recipesModulePromise = import(pathToFileURL(recipesPath).href);
+// Pedestal weaponChar validation calls the game's own pickWeaponTutorial
+// (weaponTutorials.js) live, via Node's dynamic import() of that ES module
+// from this CommonJS main process — unlike the small geometry helpers above
+// (reservedFootprintCells), hand-duplicating the item catalog here would
+// silently drift from the game's actual weapons, and the editor would accept
+// a pedestal the runtime then skips. import() works regardless of the
+// importer's module type; the module resolves as ESM from the project
+// root's own package.json ("type": "module"). Cached after first load since
+// the item data has no reason to change mid-session.
+let _weaponTutorialsModulePromise = null;
+function loadWeaponTutorialsModule() {
+  if (!_weaponTutorialsModulePromise) {
+    const modulePath = path.join(__dirname, '..', '..', 'src', 'data', 'dungeon', 'weaponTutorials.js');
+    _weaponTutorialsModulePromise = import(pathToFileURL(modulePath).href);
   }
-  return _recipesModulePromise;
+  return _weaponTutorialsModulePromise;
 }
 
 function readJSON(file) {
@@ -244,7 +245,7 @@ function listPuzzleTemplates() {
 // walls/the exit non-paintable over each other and keeps the trigger list
 // in sync with placed fixtures, but a save is re-validated here regardless
 // (same posture as validateFloorTemplate/validateDesign above). Async
-// because the pedestal check below resolves recipes.js via dynamic import().
+// because the pedestal check below resolves weaponTutorials.js via dynamic import().
 async function validatePuzzleTemplate(data) {
   if (!data || typeof data !== 'object') return 'Not an object.';
   if (!Number.isFinite(data.weight) || data.weight < 0) return 'weight must be a number >= 0.';
@@ -346,9 +347,9 @@ async function validatePuzzleTemplate(data) {
   // Pedestal — optional, opt-in single marker (generalized off Whip Trial;
   // any template may set one). weaponChar is free text (the dungeon editor's
   // Pedestal tool no longer offers a fixed dropdown) — validated here
-  // against recipes.js's own findRecipeByResult rather than a hardcoded
-  // allow-list, so any current or future craftable weapon works without an
-  // editor code change.
+  // through the game's own pickWeaponTutorial rather than a hardcoded
+  // allow-list, so any current or future weapon (craftable or found-only)
+  // works without an editor code change.
   if (data.pedestal !== undefined && data.pedestal !== null) {
     const p = data.pedestal;
     if (typeof p !== 'object') return 'pedestal must be an object or null.';
@@ -362,9 +363,9 @@ async function validatePuzzleTemplate(data) {
     if (typeof p.weaponChar !== 'string' || !p.weaponChar) {
       return 'pedestal weaponChar must be a non-empty string.';
     }
-    const { findRecipeByResult } = await loadRecipesModule();
-    if (!findRecipeByResult(p.weaponChar)) {
-      return `pedestal weaponChar "${p.weaponChar}" doesn't match any recipe's result in recipes.js.`;
+    const { pickWeaponTutorial } = await loadWeaponTutorialsModule();
+    if (!pickWeaponTutorial(p.weaponChar)) {
+      return `pedestal weaponChar "${p.weaponChar}" isn't a weapon in items.js.`;
     }
   }
 
