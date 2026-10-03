@@ -7,7 +7,8 @@ import { getExitSlotPosition, mutateExitLetter } from '../systems/ExitSystem.js'
 // State machine:
 //   flutter    → oscillates around spawn point. Player touch → 'heal' outcome
 //                (handled externally by InteractionSystem). Timeout → fleeing.
-//                Catchable by an armed Empty Bottle, as is 'ambient'.
+//                Catchable by an armed Empty Bottle. ('ambient' fountain
+//                fairies are never catchable — they belong to the fountain.)
 //   fleeing    → flies toward nearest N/E/W exit (mirrors Leshy targeting).
 //   dusting    → at the exit slot, pauses, mutates the letter to 'F', then exits.
 //   exited     → flies offscreen and self-marks consumed.

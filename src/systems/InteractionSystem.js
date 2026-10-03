@@ -557,13 +557,15 @@ export class InteractionSystem {
 
   /**
    * Nearest fairy within FAIRY_CATCH_RADIUS that is willing to be caught.
-   * 'flutter' and 'ambient' both qualify — a fountain room's ambient fairies
-   * are as real as a fairy-grass one, and the old touch path could never
-   * reach them. A fairy already fleeing, dusting, delivering or carrying is
-   * mid-errand and stays out of reach.
+   * Only 'flutter' (fairy-grass) fairies qualify. A fountain room's 'ambient'
+   * flock belongs to the fountain — it can't be bottled or blessed from, so
+   * +1 max HP / a bottled revive stays a fairy-grass trade-off against the
+   * fountain's water and weapon upgrades, and the per-frame flock reseed in
+   * FountainSystem can't be farmed. A fairy already fleeing, dusting,
+   * delivering or carrying is mid-errand and stays out of reach.
    */
   _nearestCatchableFairy() {
-    const CATCHABLE = new Set(['flutter', 'ambient']);
+    const CATCHABLE = new Set(['flutter']);
     const player = this.game.player;
     if (!player) return null;
     const px = player.position.x + (player.width ?? GRID.CELL_SIZE) / 2;
