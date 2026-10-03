@@ -11,7 +11,9 @@
  * Raw-coin rewards depend on the current zone:
  *   green  → luckBlessed (same half-power luck blessing as ★ vesting)
  *   yellow → scatters 2–3 Mana ingredients (𝑚) from the well
- *   red    → wellDamageBlessed (+1 damage on all attacks)
+ *   red    → wellDamageBlessed (+1 damage on all attacks) — on the
+ *            RED_WELL_COST-th coin into the same well; the coins before it
+ *            get "NO RESPONSE" (a red wise-fellow saying hints at this)
  *   cyan   → stealthBlessed (enemies detect at reduced radius)
  *
  * The green/red/cyan blessings are run-flags and cannot stack — a repeat toss
@@ -31,6 +33,7 @@ const PROXIMITY_RADIUS = GRID.CELL_SIZE * 3;     // player must be within 3 cell
 const ARC_DURATION = 0.55;                       // total seconds for the coin arc
 const ARC_PEAK_HEIGHT = GRID.CELL_SIZE * 4;      // how high the arc peaks above the midpoint
 const FLASH_DURATION = 0.6;                      // screen flash fade time
+const RED_WELL_COST = 5;                         // raw coins a red well takes before it blesses
 
 export class WellSystem {
   constructor(game) {
@@ -209,13 +212,22 @@ export class WellSystem {
         return true;
       }
 
-      case 'red':
+      case 'red': {
         if (player.wellDamageBlessed) {
           return false;
         }
+        // The red well answers only persistence: coins are counted on this
+        // well, and every toss short of RED_WELL_COST gets no answer.
+        const well = anim.room.well;
+        well.coinsReceived += 1;
+        if (well.coinsReceived < RED_WELL_COST) {
+          msg('NO RESPONSE');
+          return false;
+        }
         player.wellDamageBlessed = true;
-        msg('FEELING STRONGER?');
+        msg('YOUR PERSISTENCE IS REWARDED');
         return true;
+      }
 
       case 'cyan':
         if (player.stealthBlessed) {

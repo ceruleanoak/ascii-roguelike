@@ -3658,7 +3658,8 @@ export class RoomGenerator {
       centerRow,
       centerX: centerCol * CS + CS / 2,
       centerY: centerRow * CS + CS / 2,
-      consumed: false
+      consumed: false,
+      coinsReceived: 0 // raw coins tossed in — the red well blesses on the 5th
     };
   }
 
