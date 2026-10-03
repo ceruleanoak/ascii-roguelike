@@ -18,6 +18,7 @@ import {
   clearEffectOrder,
   MAX_PIPS,
   ZAP_PIP_SPEED,
+  GOO_PIP_SPEED,
   FREEZE_PIP_SPEED
 } from './StatusEffects.js';
 
@@ -116,7 +117,7 @@ export function computeSpeedMultiplier(enemy) {
   // Freeze pips 1–2 slow per pip (the player's table); pip 3 (Frozen) halts
   // it via Enemy.isFrozen before this is reached.
   if (enemy.statusEffects.freeze.active) m = FREEZE_PIP_SPEED[enemy.statusEffects.freeze.stacks];
-  else if (enemy.isGooey()) m = 1 - enemy.statusEffects.goo.slowAmount;
+  else if (enemy.isGooey()) m = GOO_PIP_SPEED[enemy.statusEffects.goo.stacks];
   else if (enemy.isDizzy()) m = 0.35;
   // Drowse tiers 1-2 slow instead of halting (tier 3 already returns 0 via
   // isFullyAsleep() short-circuiting the AI before this is even called).

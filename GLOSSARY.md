@@ -728,10 +728,12 @@ programming terms.
   Blind (player): each pip closes vision in tighter (6 / 4.5 / 3 cells).
   Zap: pips 1–2 slow, pip 3 = no movement + disarm; the pips are a cooldown (see Zap).
   Poison: each pip ticks faster, and pips drain one at a time. Sleep: pips 1–2 slow, pip 3
-  sleeps. Everything else (burn, stun, dizzy, goo, charm) has the default stage: each pip
+  sleeps. Goo: each pip slows harder, never to a stop, and pips drain one at a time.
+  Everything else (burn, stun, dizzy, charm) has the default stage: each pip
   multiplies the duration (pip 2 lasts twice as long, pip 3 three times).
   A discrete hit adds one pip; a per-frame source (ice puddle) or an all-at-once hit (freeze
-  trap) raises the track to a level instead, so lingering never stacks by itself. Electric
+  trap) raises the track to a level instead, so lingering never stacks by itself — except
+  goo, where every 2s of unbroken slime contact adds a pip (stepping off restarts the count). Electric
   current is all-at-once: a full-strength source lands at zap pip 3, and each chain link or
   imbued hop lands one pip lower.
 - **In code:** `statusEffects[x].stacks` on both sides (`MAX_PIPS = 3`, `StatusEffects.js`);

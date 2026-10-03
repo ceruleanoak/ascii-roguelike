@@ -20,6 +20,8 @@
 // below — side by side, where it can be seen and decided on — not a second
 // code path.
 
+import { PHYSICS } from '../game/GameConfig.js';
+
 export const MAX_PIPS = 3; // every stackable effect's Pip cap
 
 // Movement multiplier per zap pip, shared by both carriers. Pip 3 is the
@@ -32,6 +34,18 @@ export const FREEZE_PIP_SPEED = [1, 0.5, 0.3, 0];
 
 // Seconds each zap pip below the hit's own takes to drain (the cooldown).
 const ZAP_PIP_DECAY = 1.0;
+
+// Movement multiplier per goo pip, shared by both carriers. Goo never locks:
+// even pip 3 is a crawl, not a stop, so the way out of the slime stays open.
+export const GOO_PIP_SPEED = [1, 0.2, 0.14, 0.08];
+
+// Seconds of unbroken slime contact per extra goo pip, and per pip drained
+// once out of it. Stepping off resets the count, so the climb only happens to
+// a body that stays in the slime. Enemy status timers tick in double-seconds
+// (Enemy.update runs at ENEMY_TIMER_RATE), so the enemy's slot is authored
+// at the rate's multiple to keep both carriers on the same real 2s beat.
+const GOO_CONTACT_STACK = 2.0;
+const ENEMY_GOO_CONTACT_STACK = GOO_CONTACT_STACK * PHYSICS.ENEMY_TIMER_RATE;
 
 // Every Status Effect, and the fields each carrier's slot starts with. A
 // carrier missing from an entry can't carry that effect: applying it is an
@@ -48,6 +62,10 @@ const ZAP_PIP_DECAY = 1.0;
 //   immunity       — carrier field that refuses the effect outright.
 //   cooldown       — while active, the effect can't be re-applied: its pips
 //                    are a cooldown draining toward the next application.
+//   contactStack/contactTime/inContact — lingering stacks: every application
+//                    marks `inContact`, and each `contactStack`s of contact
+//                    on consecutive frames adds a pip. A frame without an
+//                    application resets `contactTime`.
 const STATUS_EFFECTS = {
   burn: {
     // Enemy burn's first ignite lasts at least 5s — the slot's original
@@ -93,9 +111,13 @@ const STATUS_EFFECTS = {
   // torchLight.js).
   blind: { enemy: {}, player: { stacks: 0 } },
   dizzy: { enemy: { stacks: 0, durationPerStack: true }, player: { stacks: 0, durationPerStack: true } },
+  // Pip track on both sides: each pip slows harder (GOO_PIP_SPEED), and
+  // staying in slime climbs a pip every GOO_CONTACT_STACK s. Pips drain one
+  // per decayInterval once the last contact's hold runs out. The player also
+  // can't dodge roll while gooey.
   goo: {
-    enemy: { slowAmount: 0.8, stacks: 0, durationPerStack: true },
-    player: { slowAmount: 0.8, stacks: 0, durationPerStack: true }, // heavy slow + prevents dodge roll
+    enemy: { stacks: 0, decayInterval: ENEMY_GOO_CONTACT_STACK, contactStack: ENEMY_GOO_CONTACT_STACK, contactTime: 0, inContact: false },
+    player: { stacks: 0, decayInterval: GOO_CONTACT_STACK, contactStack: GOO_CONTACT_STACK, contactTime: 0, inContact: false },
     immunity: 'slimeImmune'
   },
   slimeBoost: { player: { speedMult: 2.0 } } // slime puddle while wearing the slime suit; matches the slime enemy's 2x
@@ -172,6 +194,7 @@ export function applyStatusEffect(entity, effect, duration = 3.0, pips = null) {
     }
     if (!wasActive && entity.effectApplicationOrder) entity.effectApplicationOrder.push(effect);
   }
+  if (slot.contactStack !== undefined) slot.inContact = true;
 
   const effectiveDuration = slot.durationPerStack && slot.stacks ? duration * slot.stacks : duration;
   slot.duration = Math.max(slot.duration, effectiveDuration);
@@ -194,6 +217,19 @@ export function clearStatusEffect(entity, effect) {
   clearEffectOrder(entity, effect);
 }
 
+// Lingering contact climbs the Pip track: `inContact` is set by every
+// application and consumed here, so contact on consecutive frames adds up and
+// one frame off the source starts the count over. A new pip lands with the
+// hold of the application that kept it going, so it doesn't decay at once.
+function tickContactStack(slot, deltaTime) {
+  if (!slot.inContact) { slot.contactTime = 0; return; }
+  slot.inContact = false;
+  slot.contactTime += deltaTime;
+  if (slot.contactTime < slot.contactStack) return;
+  slot.contactTime -= slot.contactStack;
+  slot.stacks = Math.min(MAX_PIPS, slot.stacks + 1);
+}
+
 /**
  * Count every active effect down by `deltaTime`: DoT ticks, pip decay, expiry.
  * Returns the DoT ticks that fired as `[{ effect, damage }]` — resolving them
@@ -209,6 +245,8 @@ export function tickStatusEffects(entity, deltaTime, hooks = {}) {
     if (!slot.active) continue;
 
     if (!hooks.holdsTimer?.(effect, slot)) slot.duration -= deltaTime;
+
+    if (slot.contactStack !== undefined) tickContactStack(slot, deltaTime);
 
     if (slot.tickRate !== undefined) {
       slot.tickTimer -= deltaTime;

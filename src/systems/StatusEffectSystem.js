@@ -23,7 +23,7 @@ import { CHARACTER_TYPES } from '../data/characters.js';
 import { GRID } from '../game/GameConfig.js';
 import {
   createStatusEffects, applyStatusEffect, tickStatusEffects,
-  MAX_PIPS, ZAP_PIP_SPEED, FREEZE_PIP_SPEED
+  MAX_PIPS, ZAP_PIP_SPEED, FREEZE_PIP_SPEED, GOO_PIP_SPEED
 } from './StatusEffects.js';
 import { activeInteriorFloor } from './PlaneSystem.js';
 
@@ -139,7 +139,7 @@ export const StatusEffectSystem = {
     if (this.isPlayerLocked(player)) return 0;
     const fx = player.statusEffects;
     let m = 1;
-    if (fx.goo.active) m = 1 - fx.goo.slowAmount;
+    if (fx.goo.active) m = GOO_PIP_SPEED[fx.goo.stacks];
     else if (fx.freeze.active) m = this.freezeSpeedMultiplier(player);
     else if (fx.slimeBoost.active) m = fx.slimeBoost.speedMult;
     else if (fx.dizzy.active) m = 0.35;
