@@ -556,6 +556,12 @@ export const RESET_REGISTRY = [
     why: 'Unlike attackSequenceActive (already allowlisted — cleared synchronously within the same input-handler pass), trapCharging has no such guarantee: a death interrupting a mid-charge throw leaves it non-null with a stale timer, which BowChargeIndicator and WeaponPreviewDraw read directly and would render into the next run\'s first frame. Registering closes that staleness gap. Shape: { timer: float } while charging a throw, null otherwise.',
   },
   {
+    path: 'thrownLastWeapon',
+    scope: 'run',
+    value: false,
+    why: 'Set by TrapSystem when the player throws the last weapon in their loadout; drives the thrown-weapon pointer (dotted line to the nearest floor weapon, or the CRAFT arrow). Cleared by TrapSystem.update once the player is armed again — a death mid-pointer must not carry it into the next run. Shape: boolean.',
+  },
+  {
     path: 'blessingsCollected',
     scope: 'run',
     fresh: () => [],

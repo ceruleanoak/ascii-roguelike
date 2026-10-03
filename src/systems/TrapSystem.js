@@ -8,6 +8,12 @@ import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { isInteriorActive, tagInteriorPlane } from './PlaneSystem.js';
 import { createLightningSpire } from './LightningSpire.js';
 
+// True when any quick slot holds a weapon — the "armed" test for the
+// thrown-weapon pointer.
+function playerHoldsWeapon(player) {
+  return !!player?.quickSlots?.some(slot => slot?.data?.type === 'WEAPON');
+}
+
 const MAX_CHARGE_TIME = 0.7; // seconds to reach max throw distance
 const MIN_DIST = GRID.CELL_SIZE;       // 16px — tap distance
 // Lower decel = weightier flight. Landing position is unchanged (v0=sqrt(2*decel*dist)),
@@ -216,6 +222,11 @@ export class TrapSystem {
   update(deltaTime) {
     this.updateTrapCharge(deltaTime);
     this.updateInFlightTraps(deltaTime);
+    // Any route back to an armed loadout (pickup, craft, chest) ends the
+    // thrown-weapon pointer — checked here rather than at each arming site.
+    if (this.game.thrownLastWeapon && playerHoldsWeapon(this.game.player)) {
+      this.game.thrownLastWeapon = false;
+    }
   }
 
   // Advance charge timer each frame.
@@ -324,6 +335,9 @@ export class TrapSystem {
       // Weapon throw: clear the active slot, item flies until it hits an enemy or stops
       const thrownItem = game.player.dropItem();
       if (!thrownItem) return;
+      // Throwing the last weapon in the loadout lights the thrown-weapon
+      // pointer (ThrownWeaponPointer.js) until the player is armed again.
+      if (!playerHoldsWeapon(game.player)) game.thrownLastWeapon = true;
       // REST equipment slots draw glyphs to the background layer, which only
       // clears on a dirty mark — without this, the thrown item's glyph lingers
       // over the now-empty slot's number placeholder.

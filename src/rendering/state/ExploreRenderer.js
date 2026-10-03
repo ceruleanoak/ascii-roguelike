@@ -22,6 +22,8 @@
 import { GRID, COLORS, ROOM_TYPES } from '../../game/GameConfig.js';
 import { drawOffscreenEnemyIndicators } from '../ui/OffscreenEnemyIndicators.js';
 import { drawPlayerFacingIndicator } from '../ui/PlayerFacingIndicator.js';
+import { drawRestExitLabel, REST_WORD, CRAFT_WORD } from '../ui/RestExitLabel.js';
+import { thrownWeaponPointerActive, nearestThrownWeaponTarget, drawThrownWeaponLine, drawCraftArrow } from '../ui/ThrownWeaponPointer.js';
 import { drawSniperIndicators, drawSniperBeams, drawSniperReticules, sniperHidingConcealAlpha } from '../effects/SniperEffects.js';
 import { drawSinkholes } from '../effects/SinkholeEffects.js';
 import { drawWires } from '../effects/WireEffects.js';
@@ -281,57 +283,17 @@ export class ExploreRenderer {
     const centerY = Math.floor(GRID.ROWS / 2);
     const exitsUnlocked = !game.currentRoom.exitsLocked;
 
-    // "R E S T" label — always call so the dissolve can animate in both directions.
-    // PixelatedDissolve handles the fade-out when visible=false.
     const southExitOpen = !!(game.currentRoom.exits.south && (exitsUnlocked || game.playerHasNoItems()));
-    const restLabelX = GRID.WIDTH / 2;
-    const restLabelY = (GRID.ROWS - 3) * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
+    // Thrown-weapon pointer: with no weapon left in reach, the exit reads CRAFT.
+    const pointerActive = thrownWeaponPointerActive(game);
+    const pointerTarget = pointerActive ? nearestThrownWeaponTarget(game) : null;
     if (game.currentRoom.exits.south) {
-      const spectaclesOn = isSpectaclesActive(game);
-      // VentureArcade has limited glyph coverage; under spectacles fall back to
-      // Unifont which renders the Greek substitutes correctly.
-      const restFont = spectaclesOn
-        ? `${Math.round(GRID.CELL_SIZE * CIPHER_FONT_SCALE)}px 'Unifont', monospace`
-        : `${GRID.CELL_SIZE}px 'VentureArcade', 'Unifont', monospace`;
-      this._restDissolve.render(this.renderer.fgCtx, {
-        text: spectaclesTransformString(' R E S T', spectaclesOn),
-        font: restFont,
-        color: '#666666',
-        x: restLabelX,
-        y: restLabelY,
-        visible: southExitOpen,
-      });
-
-      // Overlay lit letters on top of dissolve (one-shot blink)
-      if (this._restDissolve.alpha > 0) {
-        const FLASH_MS = 220;
-        const now = performance.now();
-        const flashMap = game.keyFlashMap || {};
-        const text = spectaclesTransformString(' R E S T', spectaclesOn);
-        // Flash lookup uses the original Latin letter so keypress R/E/S/T still lights the right slot.
-        const flashLookup = ' R E S T';
-        const ctx = this.renderer.fgCtx;
-        ctx.save();
-        ctx.globalAlpha = this._restDissolve.alpha;
-        ctx.font = restFont;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        const totalW = ctx.measureText(text).width;
-        const charW = totalW / text.length;
-        let cx = restLabelX - totalW / 2;
-        for (let i = 0; i < text.length; i++) {
-          const ch = text[i];
-          const upper = flashLookup[i].toUpperCase();
-          if (upper !== ' ' && flashMap[upper] !== undefined && (now - flashMap[upper]) < FLASH_MS) {
-            ctx.fillStyle = '#7a7a7a';
-            ctx.fillText(ch, cx, restLabelY);
-          }
-          cx += charW;
-        }
-        ctx.globalAlpha = 1;
-        ctx.restore();
-      }
+      const word = pointerActive && !pointerTarget ? CRAFT_WORD : REST_WORD;
+      drawRestExitLabel(this.renderer, game, this._restDissolve, word, southExitOpen);
     }
+
+    if (pointerTarget) drawThrownWeaponLine(this.renderer, game, pointerTarget);
+    else if (pointerActive && southExitOpen) drawCraftArrow(this.renderer, game);
 
     // South vacuum particles — pixel motes cycling downward into the south exit
     const _svpNow = performance.now();
