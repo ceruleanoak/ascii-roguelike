@@ -2497,13 +2497,15 @@ export const ZONE_SPAWN_TABLES = {
     0: ['g', 's']
   },
 
+  // Red/cyan/yellow cap at depth 10 (bossDepth) and only offer zone changes
+  // at multiples of 3 (ExitSystem.ZONE_CHANGE_DEPTH_STEP), so their bands sit
+  // on those gates — 0/3/6/9 — and stop at 9: an L12 band would never spawn.
   'red': {
     // Fire/scorched theme - NO green/ice enemies
     0: ['l'],                                      // L1-2: Magma Slugs only (intro trail mechanic)
     3: ['f', 't', 'l', '6'],                       // L3-5: Add Fire Bats, Tortoises, Bombs
     6: ['f', '0', 'F', 't', 'k', 'l', '6'],        // L6-8: Add Living Rocks, Fire Elementals, Miners
-    9: ['f', '0', 'F', 'S', 't', 'k', 'l', '6'],   // L9-11: Add Skeletons (charred bones), Miners
-    12: ['0', 'F', 'T', 'O', 't', 'k', 'R']        // L12+: Living Rocks, Trolls, Ogres, Miners, Rockwardens
+    9: ['f', '0', 'F', 'S', 't', 'k', '6', 'R']    // L9-10: Add Skeletons (charred bones), Rockwardens
   },
 
   'cyan': {
@@ -2511,8 +2513,7 @@ export const ZONE_SPAWN_TABLES = {
     0: ['w', 'c'],                          // L1-2: Frost Wolves, Breeze Wisps (intro push)
     3: ['w', 'X', 'c', 'v'],               // L3-5: Add Ice Wraiths, Sirens
     6: ['X', 'w', 'U', 'u', 'v'],          // L6-8: Add Frozen Constructs, Glacier Crabs, Sirens
-    9: ['w', 'U', 'C', 'I', 'u', 'x', 'D'], // L9-11: Add Cryomancers, Ice Golems, Steam Specters, Frozen Duelists
-    12: ['U', 'C', 'I', 'y', 'u', 'x', 'D'] // L12+: Add Yetis, Glacier Crabs, Steam Specters, Frozen Duelists
+    9: ['w', 'U', 'C', 'I', 'u', 'x', 'D', 'y'] // L9-10: Add Cryomancers, Ice Golems, Steam Specters, Frozen Duelists, Yetis
   },
 
   'yellow': {
@@ -2520,8 +2521,7 @@ export const ZONE_SPAWN_TABLES = {
     0: ['e', 'n'],                          // L1-2: Sparks, Trap Goblins (intro trap reading)
     3: ['e', 'j', 'n', 'q'],               // L3-5: Add Volt Spiders, Alchemists
     6: ['j', 'e', 'h', 'q', 'n'],          // L6-8: Add Thunder Hawks, Alchemists, Trap Goblins
-    9: ['j', 'h', 'V', 'q', 'i', 'H'],     // L9-11: Add Voltaic Golems, Mirror Imps, Hex Witches
-    12: ['h', 'V', 'z', 'i', 'H']          // L12+: Storm Callers, Mirror Imps, Hex Witches
+    9: ['j', 'h', 'V', 'q', 'i', 'H', 'z'] // L9-10: Add Voltaic Golems, Mirror Imps, Hex Witches, Storm Callers
   },
 
   'gray': {
