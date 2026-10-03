@@ -1,6 +1,7 @@
 import { GRID, COLORS } from '../../game/GameConfig.js';
 import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher.js';
 import { drawUndead } from '../ui/UndeadRenderer.js';
+import { drawFloatPlatform } from '../effects/FloatPlatformDraw.js';
 
 /**
  * NeutralRenderer - Renders NEUTRAL state (Leshy Grove, future shops/puzzles)
@@ -130,6 +131,7 @@ export class NeutralRenderer {
 
     // Draw player
     const pulseAlpha = game.player.getPulseAlpha ? game.player.getPulseAlpha() : 1.0;
+    drawFloatPlatform(this.renderer, game.player);
     this.renderer.drawTextWithAlpha(
       game.player.position.x + GRID.CELL_SIZE / 2,
       game.player.position.y + GRID.CELL_SIZE / 2,

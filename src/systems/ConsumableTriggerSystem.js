@@ -14,7 +14,7 @@ const THROW_DURATION = 0.45;
 // pulsing radius ring for these (they always resolve on the player).
 const SELF_ONLY_EFFECTS = new Set([
   'heal', 'manaSlot', 'maxhp', 'speed', 'block', 'cleanse', 'invuln',
-  'waterImmunity', 'float', 'stoneskin', 'regen',
+  'waterImmunity', 'stoneskin', 'regen',
   'damageBuff', 'arrowRefill',
 ]);
 
@@ -243,11 +243,6 @@ export class ConsumableTriggerSystem {
         if (!player.inLiquid && !player.inDamagingLiquid) return false;
         return { windup: THROW_DURATION, effectType: 'waterImmunity' };
       }
-      case 'float': {
-        // Floating Boots: same physical-precondition exception as waterImmunity.
-        if (!player.inLiquid && !player.inDamagingLiquid) return false;
-        return { windup: THROW_DURATION, effectType: 'float' };
-      }
       case 'throwSteam': {
         // Steam Vial: creates a steam cloud — START WINDUP
         return { windup: 0.6, effectType: 'throwSteam' };
@@ -373,9 +368,6 @@ export class ConsumableTriggerSystem {
       }
       case 'waterImmunity':
         player.waterImmunityTimer = cd.duration;
-        break;
-      case 'float':
-        player.floatTimer = cd.duration;
         break;
       case 'stoneskin': {
         const p = params();

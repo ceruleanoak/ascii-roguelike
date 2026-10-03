@@ -50,6 +50,7 @@ import { stepConcealmentAlpha } from '../../systems/WorldEffectsSystem.js';
 import { drawFracturedRock } from '../sprites/fracturedRockSprite.js';
 import { renderMawShadow, chargedColor, renderChargedObjects } from '../AscentRenderHelpers.js';
 import { ReflectShieldMechanic } from '../../entities/enemyMechanics/ReflectShieldMechanic.js';
+import { drawFloatPlatform } from '../effects/FloatPlatformDraw.js';
 
 function drawDizzyOrbitals(ctx, cx, cy, timer) {
   const r = 6;
@@ -778,6 +779,7 @@ export class ExploreRenderer {
     const playerOnTunnelPlane = game.player.plane === 1;
     const ctx = this.renderer.fgCtx;
     const needsAlpha = concealAlpha < 0.999;
+    drawFloatPlatform(this.renderer, game.player);
     if (needsAlpha) { ctx.save(); ctx.globalAlpha = concealAlpha; }
 
     // Use dithered rendering when on tunnel plane

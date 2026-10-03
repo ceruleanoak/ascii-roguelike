@@ -547,7 +547,7 @@ export class PhysicsSystem {
     // River current — constant acceleration along flow direction (8 dirs).
     // Same shape as the slope push above so diagonal vs cardinal movement gives
     // the same net drift. Floating entities are unaffected (handled below).
-    if (onCurrentDirection && !isProjectile && !(entity.floatTimer > 0) && !(entity.data?.float)) {
+    if (onCurrentDirection && !isProjectile && !(entity.floatCharge > 0) && !(entity.data?.float)) {
       const CURRENT_ACCEL = 320; // px/s² — gentler than slopes; enemies/items still navigable
       const absVx = Math.abs(entity.velocity.vx);
       const absVy = Math.abs(entity.velocity.vy);
@@ -569,7 +569,14 @@ export class PhysicsSystem {
     // A leap in the air (LeapAttackMechanic) counts too: the lerped body sweeps
     // over liquid it never touches, and a slime leaping into the lava Imbue Pool
     // must not burn before it lands and takes the fire Imbue.
-    const hasFloat = (entity.floatTimer > 0) || (entity.data?.float) || entity.leapAirborneActive;
+    // Floating Boots float only while there is liquid underfoot, so the raw
+    // contact is recorded on the player BEFORE float clears it below —
+    // FloatingBootsSystem drains the boots' charge from it, and it would
+    // otherwise read dry ground under the player's own float. Only the
+    // Player declares floatCharge (the boots' wearer), so only it records this.
+    const overLiquid = inLiquid || inMud || !!damagingLiquid;
+    if (entity.floatCharge !== undefined) entity.overLiquid = overLiquid;
+    const hasFloat = (overLiquid && entity.floatCharge > 0) || (entity.data?.float) || entity.leapAirborneActive;
     if (hasFloat) {
       inLiquid = false;
       inDeepWaterTile = false;
@@ -835,7 +842,7 @@ export class PhysicsSystem {
    * room-defined conditional passable zone.
    *
    * Supported conditions (room.passableZones[i].condition):
-   *   'float' — entity.floatTimer > 0 (Floating Boots active)
+   *   'float' — entity.floatCharge > 0 (charged Floating Boots equipped)
    *   'small' — entity.isSmall truthy (frog form / mini — future)
    *
    * The passableZones array is set on rooms at generation time and is read-only
@@ -846,7 +853,7 @@ export class PhysicsSystem {
     for (const zone of room.passableZones) {
       if (row < zone.minRow || row > zone.maxRow) continue;
       if (col < zone.minCol || col > zone.maxCol) continue;
-      if (zone.condition === 'float' && entity.floatTimer > 0) return true;
+      if (zone.condition === 'float' && entity.floatCharge > 0) return true;
       if (zone.condition === 'small' && entity.isSmall)        return true;
     }
     return false;

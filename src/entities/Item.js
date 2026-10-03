@@ -100,6 +100,11 @@ export class Item {
     // Trap charge system — traps only; tracks uses remaining across rooms
     this.charges = this.data.type === 'TRAP' ? (this.data.charges ?? 3) : null;
 
+    // Floating Boots — seconds of float left; drains only while the wearer is
+    // over liquid (FloatingBootsSystem). Lives on the instance so a half-spent
+    // pair keeps its charge across rooms.
+    this.floatCharge = this.data.floatCharge ?? null;
+
     // Wand use limit system (resets per room)
     this.maxUsesPerRoom = this.data.maxUsesPerRoom || null; // null = unlimited
     this.wandUsesRemaining = this.maxUsesPerRoom;

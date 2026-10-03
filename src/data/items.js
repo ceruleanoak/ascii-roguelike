@@ -1187,7 +1187,7 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'spear',
-    damage: 4,
+    damage: 3,
     windup: 0.7,
     recovery: 0.5,
     patternSpeed: 0.05,
@@ -2299,13 +2299,18 @@ export const ITEMS = {
     passiveSpeedBoost: 0.08,
     color: '#8b6914'
   },
+  // Floating Boots — Boots + Wings. A slot-holding passive, never thrown: the
+  // wearer floats over water, lava and mud automatically, and floatCharge
+  // (seconds) drains only while there is liquid underfoot. Spent, the Wings'
+  // lift is gone and the slot holds the plain Boots they were crafted from
+  // (spentChar). FloatingBootsSystem owns the drain.
   'ѡ': {
     char: 'ѡ',
     name: 'Floating Boots',
     type: ITEM_TYPES.CONSUMABLE,
-    effect: 'float',
-    duration: 25,
-    oneShot: true,
+    passive: true,
+    floatCharge: 25,
+    spentChar: 'ꙍ',
     color: '#ffaa44'
   },
   // Rubber Boots — water immunity covers electrified water too: standing in

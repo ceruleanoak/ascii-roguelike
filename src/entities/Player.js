@@ -167,8 +167,13 @@ export class Player {
     this._crystalPlatformCells = []; // recent platform cells [{col,row,timer}], cap 8
     this._wakeEmitTimer = 0;         // throttles wake-tile emission
 
-    // Float (from Floating Boots) — ignores lava, water, and mud
-    this.floatTimer = 0;
+    // Float (from Floating Boots) — ignores lava, water, and mud.
+    // floatCharge: seconds of float left in the equipped boots, projected each
+    // frame by FloatingBootsSystem (0 = none equipped). overLiquid: raw liquid
+    // contact under the player, written by PhysicsSystem before float clears
+    // inLiquid. Float is active only while both hold.
+    this.floatCharge = 0;
+    this.overLiquid = false;
 
     // Steam trail emission timer (throttles puff particle emission)
     this.steamTrailTimer = 0;
@@ -572,7 +577,6 @@ export class Player {
       }
     }
     if (this.waterImmunityTimer > 0) this.waterImmunityTimer -= deltaTime;
-    if (this.floatTimer > 0) this.floatTimer -= deltaTime;
     if (this.stoneSkinTimer > 0) {
       this.stoneSkinTimer -= deltaTime;
       if (this.stoneSkinTimer <= 0) this.stoneSkinTimer = 0;
@@ -1035,7 +1039,8 @@ export class Player {
     this.blockBoostTimer = 0;
     this.blockBoostAmount = 0;
     this.waterImmunityTimer = 0;
-    this.floatTimer = 0;
+    this.floatCharge = 0;
+    this.overLiquid = false;
     this.steamTrailTimer = 0;
     this.footstepTimer = 0;
     this.footstepSide = 0;

@@ -7,6 +7,7 @@ import {
 } from '../../systems/MazeSystem.js';
 import { hasTorchLight, drawPlayerTorchLight, drawInteriorVisionFogOverlay } from './torchLight.js';
 import { drawStatusPips } from '../effects/StatusPipEffects.js';
+import { drawFloatPlatform } from '../effects/FloatPlatformDraw.js';
 
 /**
  * MazeInteriorOverlay — picture-in-picture renderer for the Maze maze.
@@ -181,6 +182,7 @@ export class MazeInteriorOverlay {
     const playerColor = mossActive
       ? '#228822'
       : (game.player.getDisplayColor?.() ?? game.player.color);
+    drawFloatPlatform(this.renderer, game.player);
     this.renderer.drawTextWithAlpha(
       game.player.position.x + CS / 2,
       game.player.position.y + CS / 2,

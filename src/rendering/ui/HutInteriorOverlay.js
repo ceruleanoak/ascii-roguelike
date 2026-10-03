@@ -9,6 +9,7 @@ import {
 import { drawWires } from '../effects/WireEffects.js';
 import { drawCoinArc } from '../effects/ArcTossEffects.js';
 import { drawStatusPips } from '../effects/StatusPipEffects.js';
+import { drawFloatPlatform } from '../effects/FloatPlatformDraw.js';
 import { drawTamedRats, drawGolems } from './CompanionRenderers.js';
 import { SLOT_CHROME } from '../../data/slotChrome.js';
 
@@ -311,6 +312,7 @@ export class HutInteriorOverlay {
       const playerColor = mossActive
         ? '#228822'
         : (game.player.getDisplayColor?.() ?? game.player.color);
+      drawFloatPlatform(this.renderer, game.player);
       this.renderer.drawTextWithAlpha(
         game.player.position.x + GRID.CELL_SIZE / 2,
         game.player.position.y + GRID.CELL_SIZE / 2,

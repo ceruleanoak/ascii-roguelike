@@ -15,6 +15,7 @@ import { PersistenceSystem } from './systems/PersistenceSystem.js';
 import { InventorySystem } from './systems/InventorySystem.js';
 import { captureExploreRoomForRest } from './systems/RoomStatePersistence.js';
 import { ArmorEffectsSystem } from './systems/ArmorEffectsSystem.js';
+import { FloatingBootsSystem } from './systems/FloatingBootsSystem.js';
 import { ConsumableTriggerSystem } from './systems/ConsumableTriggerSystem.js';
 import { NeutralRoomSystem, applyBlessing as applyBlessingBuff } from './systems/NeutralRoomSystem.js';
 import { spawnRoomNeutralCharacters } from './systems/roomFeatures.js';
@@ -148,7 +149,7 @@ const FIREWORK_FACTORIES = [
 // Starter satchel: 3 distinct ingredients from a fixed pool. Each rolled char
 // drops per the table below; unlisted chars drop x2 (per-run replay variety).
 function rollStarterSatchelChars() {
-  const drops = { M: ['M'], f: ['f', '0'], g: ['g', '~'], '0': ['0', '|'], '~': ['0', '~'] };
+  const drops = { M: ['M'], f: ['f', 'f'], g: ['g', '~'], '0': ['0', '|'], '~': ['0', '~'] };
   const remaining = ['g', '0', '|', '~', 'f', 'M'];
   const chars = [];
   for (let i = 0; i < 3; i++) {
@@ -185,6 +186,7 @@ class Game {
     this.persistenceSystem = new PersistenceSystem();
     this.inventorySystem = new InventorySystem();
     this.armorEffectsSystem = new ArmorEffectsSystem(this);
+    this.floatingBootsSystem = new FloatingBootsSystem(this);
     this.audioSystem = new AudioSystem();
     this.combatSystem.audioSystem = this.audioSystem;
     this.combatSystem.game = this;
@@ -2454,6 +2456,8 @@ class Game {
     const dotKilledPlayer = StatusEffectSystem.applyPlayerDot(this, playerUpdateResult);
 
     this.armorEffectsSystem.updateMossCloak();
+
+    this.floatingBootsSystem.update(deltaTime);
 
     this.characterSystem.triggerDaggerRollAttack();
 

@@ -21,6 +21,7 @@ import { drawUndead } from '../ui/UndeadRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
 import { whirlwindSpinAngle } from '../effects/WeaponPreviewDraw.js';
 import { drawGolems } from '../ui/CompanionRenderers.js';
+import { drawFloatPlatform } from '../effects/FloatPlatformDraw.js';
 
 const IDLE_ECHO_DURATION = 0.5;          // seconds — must match WorldEffectsSystem's IDLE_ECHO_DURATION
 const IDLE_ECHO_MAX_RADIUS = GRID.CELL_SIZE * 1.5;
@@ -333,6 +334,7 @@ export class RestRenderer {
     const playerAlpha = game.player.getVisibilityAlpha();
     const playerColor = game.player.getDisplayColor();
     const spinAngle = whirlwindSpinAngle(game.player);
+    drawFloatPlatform(this.renderer, game.player);
     if (spinAngle !== null) {
       this.renderer.drawEntityRotated(
         game.player.position.x + GRID.CELL_SIZE / 2,
