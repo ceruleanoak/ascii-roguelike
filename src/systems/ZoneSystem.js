@@ -674,15 +674,19 @@ export class ZoneSystem {
     return zoneDepths[this.currentZone] || 0;
   }
 
-  incrementZoneDepth(zoneDepths) {
+  // `step` is how many depths one exit advances (2 under the Cursed Belt —
+  // CursedRunSystem.depthStep); a step that would overshoot the cap stops at it.
+  incrementZoneDepth(zoneDepths, step = 1) {
     const zone = this.currentZone;
     // bossDepth caps boss zones; maxDepth caps bossless zones (gray's mist
     // takes the character at maxDepth instead — GrayZoneSystem).
     const cap = ZONES[zone]?.bossDepth ?? ZONES[zone]?.maxDepth;
     if (zoneDepths[zone] === 0) {
       zoneDepths[zone] = 1;
-    } else if (cap == null || zoneDepths[zone] < cap) {
-      zoneDepths[zone]++;
+    } else if (cap == null) {
+      zoneDepths[zone] += step;
+    } else if (zoneDepths[zone] < cap) {
+      zoneDepths[zone] = Math.min(cap, zoneDepths[zone] + step);
     }
   }
 

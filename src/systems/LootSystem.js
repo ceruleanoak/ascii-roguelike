@@ -187,6 +187,9 @@ export class LootSystem {
       }
     }
 
+    // Cursed Run: undead may drop a cursed recipe scroll (CursedRunSystem).
+    game.cursedRunSystem.rollScrollDrop(game, enemy);
+
     // Universal coin chance (bug-inbox 2026-09-18): every enemy has an
     // independent 10% chance to drop 1 Coin, on top of whatever the
     // affinity/tier or legacy `drops` tooling above already rolled — not

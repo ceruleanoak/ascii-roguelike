@@ -175,7 +175,6 @@ export const RECIPES = [
   { left: 's', right: 'M', result: '𐤓', name: 'Dragon Scale Armor' }, // Scale + Metal = Dragon Scale Armor
   { left: 'g', right: 'f', result: '⚗', name: 'Slurry' },         // Goo + Fur = Slurry
   { left: '↾', right: '⚗', result: 'ᚢ', name: 'Acid Blade' },     // Dagger + Slurry = Acid Blade
-  { left: 'b', right: 'F', result: '☠', name: 'Cursed Skull' },   // Bone + Fire = Cursed Skull
   { left: 'm', right: '~', result: '♥', name: 'Heart' },          // Meat + String = Heart
   { left: 'c', right: 'F', result: '★', name: 'Lucky Coin' },     // Coin + Fire = Lucky Coin
   { left: 'M', right: '0', result: '■', name: 'Metal Block' },    // Metal + Rock = Metal Block (auto-blocks at low HP)
@@ -334,6 +333,20 @@ export const RECIPES = [
   // breaking every cover object and collecting every dropped ingredient —
   // without ever letting one blink out into a ghost. See MazeSystem.js.
 ];
+
+// Cursed recipes: the crafting station only recognizes these during a Cursed
+// Run (CraftingSystem.updateCrafting). Undead drop a scroll that shows one of
+// them (CursedRunSystem.tryReadScroll); knowing a pair from an earlier run
+// works just as well — the scroll is a hint, not a gate.
+export const CURSED_RECIPES = [
+  { left: 'b', right: 'F', result: '☠', name: 'Cursed Skull' },   // Bone + Fire = Cursed Skull
+  { left: 'j', right: 'k', result: '⊷', name: 'Cursed Belt' },    // Jaw + Silk = Cursed Belt (two depths per exit)
+];
+
+export function findCursedRecipe(leftChar, rightChar) {
+  return CURSED_RECIPES.find(r => (r.left === leftChar && r.right === rightChar)
+                               || (r.left === rightChar && r.right === leftChar));
+}
 
 export function findRecipe(leftChar, rightChar) {
   // Try both orderings

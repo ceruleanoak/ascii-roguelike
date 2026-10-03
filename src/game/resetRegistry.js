@@ -257,7 +257,7 @@ export const RESET_REGISTRY = [
     path: 'cursedRunSystem.hardReset',
     scope: 'run',
     call: (game) => game.cursedRunSystem.hardReset(),
-    why: "Three Room run-state: the gray '3' call can happen again next run, and the N×3 streak starts clean.",
+    why: "Curse run-state: the Graveyard count and REST decay start over, read cursed recipe scrolls are forgotten, and a showing scroll reveal clears.",
   },
   {
     path: 'threeSlotGlobeSystem.hardReset',

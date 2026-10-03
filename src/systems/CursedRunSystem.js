@@ -1,5 +1,8 @@
 import { GRID, COLORS } from '../game/GameConfig.js';
 import { ZONE_COLORS } from '../data/zones.js';
+import { CURSED_RECIPES } from '../data/recipes.js';
+import { ITEM_TYPES } from '../data/items.js';
+import { canReachLoot } from './PlaneSystem.js';
 
 // The Graveyard is never empty on a first look, and it thickens from there.
 const GRAVEYARD_BASE = 5;
@@ -23,6 +26,12 @@ const REST_STREAM_MAX = 12;
 // How far in from the door an arrival makes for before it starts milling.
 const REST_WALK_IN_CELLS = 6;
 
+// Cursed recipe scrolls: a Rare drop from undead enemies, only while cursed.
+const SCROLL_CHAR = '∫';
+const SCROLL_DROP_CHANCE = 0.10;   // matches RARE's 10-in-100 weight against COMMON
+const SCROLL_PICKUP_RADIUS = 20;   // same reach as InventorySystem.tryPickupItem
+const SCROLL_REVEAL_MS = 4000;     // how long a read scroll's recipe stays up
+
 /**
  * CursedRunSystem — what a Cursed run does to the rest of the world.
  *
@@ -32,6 +41,9 @@ const REST_WALK_IN_CELLS = 6;
  * of scattering conditionals through the orchestrator: REST opening its south
  * wall onto the Graveyard first, and — as the curse runs further — REST going
  * gray, no longer healing, and admitting the Undead.
+ *
+ * It also owns the cursed recipes' reach into the run: undead dropping
+ * scrolls that show one, and the Cursed Belt's doubled depth step.
  *
  * Every method is a no-op on an uncursed run, so call sites stay unconditional.
  */
@@ -46,12 +58,82 @@ export class CursedRunSystem {
     // Counts down to the next arrival through REST's south door. Reset on
     // every REST entry (applyToRest) as well as on a full run reset.
     this._streamTimer = REST_STREAM_INTERVAL;
+
+    // Results of the cursed recipes whose scrolls have been read this run, so
+    // the next scroll shows one not yet seen. System-internal like the above.
+    this._readScrolls = new Set();
+
+    // The recipe a just-read scroll is showing ({ recipe, until }), or null.
+    this.scrollReveal = null;
   }
 
   /** Full run-scoped reset — death/title. */
   hardReset() {
     this._roomsExplored = 0;
     this._streamTimer = REST_STREAM_INTERVAL;
+    this._readScrolls = new Set();
+    this.scrollReveal = null;
+  }
+
+  /**
+   * Depths one exit advances — 2 with a Cursed Belt equipped on a Cursed Run,
+   * else 1. ZoneSystem.incrementZoneDepth clamps the step at the zone's cap.
+   */
+  depthStep(game) {
+    if (!game.cursedRun) return 1;
+    const belt = game.player?.equippedConsumables?.find(slot => slot?.data?.depthStepMultiplier);
+    return belt ? belt.data.depthStepMultiplier : 1;
+  }
+
+  /**
+   * An enemy died. On a Cursed Run, undead enemies have a Rare chance to drop
+   * a cursed recipe scroll — until every cursed recipe has been read.
+   */
+  rollScrollDrop(game, enemy) {
+    if (!game.cursedRun || !enemy.data?.affinities?.includes('undead')) return;
+    if (this._readScrolls.size >= CURSED_RECIPES.length) return;
+    if (Math.random() >= SCROLL_DROP_CHANCE) return;
+    game.lootSystem.spawnItemDrop(SCROLL_CHAR, enemy.position.x, enemy.position.y, null, enemy);
+  }
+
+  /**
+   * SPACE pickup: a scroll in reach is read on the spot — its recipe shows
+   * for a few seconds and the scroll is gone for good. Returns true when a
+   * scroll was read, so the ordinary pickup does not also run.
+   */
+  tryReadScroll(game) {
+    const items = game.items || [];
+    const now = performance.now();
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.data?.type !== ITEM_TYPES.SCROLL) continue;
+      if (!canReachLoot(game, game.player, item)) continue;
+      if (item.pickupReadyAt && item.pickupReadyAt > now) continue;
+      if (game.physicsSystem.getDistance(game.player, item) >= SCROLL_PICKUP_RADIUS) continue;
+
+      item.consumed = true;
+      game.physicsSystem.removeEntity(item);
+      items.splice(i, 1);
+
+      // An unread recipe first; a duplicate scroll that dropped before the
+      // last one was read shows one already seen.
+      const recipe = CURSED_RECIPES.find(r => !this._readScrolls.has(r.result))
+        ?? CURSED_RECIPES[Math.floor(Math.random() * CURSED_RECIPES.length)];
+      this._readScrolls.add(recipe.result);
+      this.scrollReveal = { recipe, until: now + SCROLL_REVEAL_MS };
+      return true;
+    }
+    return false;
+  }
+
+  /** The recipe a read scroll is currently showing, or null once it has faded. */
+  activeScrollReveal() {
+    if (!this.scrollReveal) return null;
+    if (performance.now() >= this.scrollReveal.until) {
+      this.scrollReveal = null;
+      return null;
+    }
+    return this.scrollReveal.recipe;
   }
 
   /**

@@ -13,6 +13,9 @@ export const ITEM_TYPES = {
   // InventorySystem.tryPickupItem into keyItemInventory instead of a
   // quick/equip slot — held, never equipped. See hasKeyItem/consumeKeyItem.
   KEY: 'KEY',
+  // Cursed recipe scroll: read on pickup and gone (CursedRunSystem.tryReadScroll),
+  // never held.
+  SCROLL: 'SCROLL',
   // Golem-summon sentinel: a recipe "result" that CraftingSystem.
   // claimCraftedGolem() intercepts before any Item is ever constructed — see
   // src/data/golems.js. Never spawned into the world, never picked up; exists
@@ -2394,6 +2397,20 @@ export const ITEMS = {
     oneShot: true, // Powerful one-time nuke
     manualOnly: true,
     color: '#ffffff'
+  },
+  '⊷': {
+    char: '⊷',
+    name: 'Cursed Belt',
+    type: ITEM_TYPES.CONSUMABLE,
+    passive: true,
+    depthStepMultiplier: 2,   // CursedRunSystem.depthStep: each exit advances zone depth by 2 (capped)
+    color: '#aa66aa'
+  },
+  '∫': {
+    char: '∫',
+    name: 'Cursed Recipe',
+    type: ITEM_TYPES.SCROLL,  // dropped by undead on a Cursed Run (CursedRunSystem.rollScrollDrop)
+    color: '#aa66aa'
   },
   'ᐧ': {
     char: 'ᐧ',

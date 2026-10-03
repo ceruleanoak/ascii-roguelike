@@ -1,4 +1,4 @@
-import { findRecipe } from '../data/recipes.js';
+import { findRecipe, findCursedRecipe } from '../data/recipes.js';
 import { Item } from '../entities/Item.js';
 import { WEAPON_TIERS, ITEMS, isIngredient } from '../data/items.js';
 import { POTION_STARTER_MODIFIERS, applyPotionModifierColor } from '../data/alchemy.js';
@@ -22,7 +22,10 @@ export function getNextTierPool(char) {
 }
 
 export class CraftingSystem {
-  constructor() {
+  // `game` is read only for game.cursedRun (cursed recipes); optional so
+  // headless harnesses can still build one bare.
+  constructor(game = null) {
+    this.game = game;
     this.leftSlot = null;
     this.rightSlot = null;
     this.centerSlot = null;
@@ -74,7 +77,8 @@ export class CraftingSystem {
     if (!this.leftSlot || !this.rightSlot) return;
 
     // Normal recipe takes priority
-    const recipe = findRecipe(this.leftSlot, this.rightSlot);
+    const recipe = findRecipe(this.leftSlot, this.rightSlot)
+      ?? (this.game?.cursedRun ? findCursedRecipe(this.leftSlot, this.rightSlot) : null);
     if (recipe) {
       this.centerSlot = recipe.result;
       // Flag both ingredients as identified partners

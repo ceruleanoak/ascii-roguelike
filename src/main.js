@@ -172,7 +172,7 @@ class Game {
     this.renderController = new RenderController(this.renderer);
     this.stateMachine = new GameStateMachine();
     this.physicsSystem = new PhysicsSystem();
-    this.craftingSystem = new CraftingSystem();
+    this.craftingSystem = new CraftingSystem(this);
     this.combatSystem = new CombatSystem(this.physicsSystem);
     this.zoneSystem = new ZoneSystem();
     this.exitSystem = new ExitSystem(this.zoneSystem, this);
@@ -821,7 +821,7 @@ class Game {
   }
 
   incrementZoneDepth() {
-    this.zoneSystem.incrementZoneDepth(this.zoneDepths);
+    this.zoneSystem.incrementZoneDepth(this.zoneDepths, this.cursedRunSystem.depthStep(this));
   }
 
   loadGame() {
@@ -4209,6 +4209,7 @@ class Game {
   }
 
   tryPickupItem() {
+    if (this.cursedRunSystem.tryReadScroll(this)) return;
     const result = this.inventorySystem.tryPickupItem(
       this.items,
       this.placedTraps,

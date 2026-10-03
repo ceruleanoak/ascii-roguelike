@@ -54,6 +54,7 @@ import { renderMawShadow, chargedColor, renderChargedObjects } from '../AscentRe
 import { ReflectShieldMechanic } from '../../entities/enemyMechanics/ReflectShieldMechanic.js';
 import { drawFloatPlatform } from '../effects/FloatPlatformDraw.js';
 import { fieldGuideEquipped, drawFieldGuideHpLabel } from '../ui/FieldGuideHpLabel.js';
+import { drawCursedRecipeReveal } from '../ui/CursedRecipeReveal.js';
 
 function drawDizzyOrbitals(ctx, cx, cy, timer) {
   const r = 6;
@@ -972,6 +973,9 @@ export class ExploreRenderer {
       this.renderer.drawWrappedText(ctx, game.pickupMessage, GRID.WIDTH / 2, GRID.HEIGHT / 2 - 100, GRID.WIDTH * 0.8, GRID.CELL_SIZE * 2.5);
       ctx.restore();
     }
+
+    // A just-read cursed recipe scroll's recipe, station-shaped
+    drawCursedRecipeReveal(this.renderer, game);
 
     // Path Amulet's live letter trail (#42 fix: this previously only rendered
     // in RestRenderer, so it never appeared during EXPLORE — the only state
