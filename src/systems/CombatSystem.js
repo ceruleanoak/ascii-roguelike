@@ -1142,7 +1142,7 @@ export class CombatSystem {
               // Show blunt-on-frozen / blade-on-snared bonus indicator
               const statusBonusIndicator = getMeleeStatusBonusIndicator(attack, { isFrozen, isSnared });
               if (statusBonusIndicator) {
-                this.createDamageNumber(statusBonusIndicator.char, enemy.position.x, enemy.position.y - 12, statusBonusIndicator.color);
+                this.createDamageNumber(statusBonusIndicator.text, enemy.position.x, enemy.position.y - 12, statusBonusIndicator.color);
               }
 
               // Show distance crit indicator (spear full-extension bonus)

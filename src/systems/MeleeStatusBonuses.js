@@ -20,9 +20,13 @@ export function applyMeleeStatusDamageBonus(totalDamage, attack, { isFrozen, isS
   return damage;
 }
 
-/** Damage-number indicator for a landed status-bonus hit, or null if none applies. */
+/**
+ * Damage-number indicator for a landed status-bonus hit, or null if none
+ * applies. The hammer's frozen bonus calls itself out as SMASH; the snare
+ * bonus keeps the plain mark.
+ */
 export function getMeleeStatusBonusIndicator(attack, { isFrozen, isSnared }) {
-  if (isFrozen && attack.weaponSubtype === 'hammer') return { char: '*', color: '#00ddff' };
-  if (isSnared && attack.isBlade) return { char: '*', color: '#8b6914' };
+  if (isFrozen && attack.weaponSubtype === 'hammer') return { text: 'SMASH', color: '#00ddff' };
+  if (isSnared && attack.isBlade) return { text: '*', color: '#8b6914' };
   return null;
 }
