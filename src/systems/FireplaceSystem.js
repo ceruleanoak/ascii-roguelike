@@ -10,8 +10,9 @@ import { Item } from '../entities/Item.js';
  * (100% → Meat Jerky), a held Fire Berry (100% → Mana), an equipped Bottle of
  * Water (100% → Bottle of Hot Water — a fourth parallel path to hot water
  * alongside the Caldera fill, the Fire Essence recipe, and the Fire Berry
- * recipe in recipes.js), and Ore and Sticks, both of which open a quantity
- * submenu asking how many to feed at once, then roll each independently for
+ * recipe in recipes.js), Sand (100% → Empty Bottle), and Ore and Sticks,
+ * both of which open a quantity submenu asking how many to feed at once,
+ * then roll each independently for
  * a byproduct: Ore rolls Metal (30%) / Slag (rest, a whiff); Sticks roll Ash
  * (common) / Fire Essence (rare) — a whiff there just feeds the fire.
  * Byproducts pop out of the fireplace as physical drops (LootSystem) rather
@@ -36,6 +37,8 @@ const ORE_METAL_CHANCE = 0.30;
 
 const INTERACT_RADIUS = GRID.CELL_SIZE * 1.2;
 const TORCH_CHAR = '♨';
+const SAND_CHAR = 'D';
+const EMPTY_BOTTLE_CHAR = 'B';
 
 export class FireplaceSystem {
   constructor(game) {
@@ -109,6 +112,11 @@ export class FireplaceSystem {
         counts.set('2', oreCount);
         items.push('2');
       }
+      const sandCount = game.inventorySystem.countIngredient(SAND_CHAR);
+      if (sandCount > 0) {
+        counts.set(SAND_CHAR, sandCount);
+        items.push(SAND_CHAR);
+      }
       const berryCount = game.inventorySystem.consumableInventory.filter(it => it.char === '❋').length;
       if (berryCount > 0) {
         counts.set('❋', berryCount);
@@ -161,6 +169,12 @@ export class FireplaceSystem {
       const stacked = game.inventorySystem.mergeStackableConsumable(jerky);
       if (!stacked) game.inventorySystem.consumableInventory.push(jerky);
       game.menuSystem.showPickupMessage(jerky.data.name);
+    } else if (rawChar === SAND_CHAR) {
+      if (!fireplace.burning || !game.removeIngredient(SAND_CHAR)) return;
+      const bottle = new Item(EMPTY_BOTTLE_CHAR, game.player.position.x, game.player.position.y);
+      const stacked = game.inventorySystem.mergeStackableConsumable(bottle);
+      if (!stacked) game.inventorySystem.consumableInventory.push(bottle);
+      game.menuSystem.showPickupMessage(bottle.data.name);
     } else if (rawChar === '2') {
       // Ore, like Sticks, opens a quantity submenu rather than smelting one
       // implicit unit — see openOreQuantityMenu.

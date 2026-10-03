@@ -2963,6 +2963,9 @@ export const INGREDIENTS = {
   // into anything yet; exists so a bad smelting roll leaves something in
   // hand rather than nothing.
   '4': { char: '4', name: 'Slag', color: '#5a4a42' },
+  // Shore sand: breaking a Sand tile (ocean transition strip) can drop it.
+  // A burning hut fireplace melts one into an Empty Bottle — see FireplaceSystem.
+  'D': { char: 'D', name: 'Sand', color: '#d4a896' },
   '~': { char: '~', name: 'String', color: '#cccccc' },
   '|': { char: '|', name: 'Stick', color: '#8b4513' },
   'a': { char: 'a', name: 'Ash', color: '#888888' },
