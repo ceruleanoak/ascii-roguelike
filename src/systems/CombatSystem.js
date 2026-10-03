@@ -539,6 +539,11 @@ export class CombatSystem {
         if (proj.boomerang) {
           if (proj.boomerangReturning && !proj.boomerangRicochetReturn) continue;
           if (proj._boomerangHitEnemies && proj._boomerangHitEnemies.has(enemy)) continue;
+        } else if (proj.pierce && proj.pierceHitEnemies?.has(enemy)) {
+          // A piercing shot hits each enemy once. Its attackId counts as the
+          // same burst, which slips through enemy iframes, so without this it
+          // re-hit every frame it overlapped the body.
+          continue;
         }
 
         if (this.checkProjectileCollision(proj, enemy)) {
@@ -583,6 +588,8 @@ export class CombatSystem {
             BoomerangMechanic.onRicochetHit(proj, enemy, enemies, this);
             continue;
           }
+
+          if (proj.pierce && !proj.boomerang) proj.pierceHitEnemies?.add(enemy);
 
           // Calculate arrow speed falloff (damage decreases as arrow slows down)
           let speedMultiplier = 1.0;
@@ -1955,6 +1962,7 @@ export class CombatSystem {
         explode: originalProj.explode,
         explodeRadius: originalProj.explodeRadius,
         pierce: originalProj.pierce,
+        pierceHitEnemies: new Set(),
         lifesteal: originalProj.lifesteal,
         // Split-specific overrides
         type: originalProj.type,
