@@ -5,7 +5,6 @@ import { Item } from './Item.js';
 import { attachTelegraph, meleeAimOffset } from '../game/Telegraph.js';
 import { inSamePlane, planeOf, objectOnPlane } from '../systems/PlaneSystem.js';
 import { hasLineOfSight, getVisionObstructionPoint, hasVision, spineCanSee, initSenses } from './enemyVision.js';
-import { EXIT_SLOT_POSITIONS } from '../systems/ExitSystem.js';
 import { LureMechanic } from './enemyMechanics/LureMechanic.js';
 import { ParryMechanic } from './enemyMechanics/ParryMechanic.js';
 import { ReflectShieldMechanic } from './enemyMechanics/ReflectShieldMechanic.js';
@@ -32,6 +31,8 @@ import { GameAnimalMechanic } from './enemyMechanics/GameAnimalMechanic.js';
 import { SniperMechanic } from './enemyMechanics/SniperMechanic.js';
 import { RipenMechanic } from './enemyMechanics/RipenMechanic.js';
 import { ThiefMechanic } from './enemyMechanics/ThiefMechanic.js';
+import { WaterBoundMechanic } from './enemyMechanics/WaterBoundMechanic.js';
+import { CloseQuartersMechanic } from './enemyMechanics/CloseQuartersMechanic.js';
 import { BreadSeekMechanic } from './enemyMechanics/BreadSeekMechanic.js';
 import { EnemyStateMachine, legacyStateFor } from './EnemyStateMachine.js';
 import { computeNodePath as computeNodePathImpl } from '../systems/EnemyPathfinding.js';
@@ -411,6 +412,7 @@ export class Enemy {
     if (SniperMechanic.isEnabled(this)) SniperMechanic.init(this);
     if (RipenMechanic.isEnabled(this)) RipenMechanic.init(this);
     if (ThiefMechanic.isEnabled(this)) ThiefMechanic.init(this);
+    if (WaterBoundMechanic.isEnabled(this)) WaterBoundMechanic.init(this);
 
     if (SlimeTrailDropMechanic.isEnabled(this)) SlimeTrailDropMechanic.init(this);
 
@@ -1026,39 +1028,12 @@ export class Enemy {
     // Follower formation + chief rally call override (Goblin Army encounter).
     // Runs after the regular AI so it can stamp final velocity for formation orbit.
     LeaderFollowerMechanic.update(this, { deltaTime });
+    CloseQuartersMechanic.update(this, { distance });
+    WaterBoundMechanic.update(this);
 
     const shouldDropSlimeTrail = SlimeTrailDropMechanic.update(this);
 
     return { dotDamage: dotDamageEvents, justAggrod, shouldDropSlimeTrail };
-  }
-
-  /**
-   * Returns a velocity vector that pushes this enemy radially away from any
-   * open room exit within `radius` pixels. Magnitude scales linearly with
-   * proximity, reaching `this.speed` at the exit center. Intended for fleeing
-   * enemies that would otherwise hide in doorways; opt-in per movement style.
-   */
-  _exitRepulsionVector(radius = GRID.CELL_SIZE * 3) {
-    const room = this.game?.currentRoom;
-    if (!room?.exits) return { vx: 0, vy: 0 };
-    const gx = this.position.x + GRID.CELL_SIZE / 2;
-    const gy = this.position.y + GRID.CELL_SIZE / 2;
-    let vx = 0, vy = 0;
-    for (const dir of ['north', 'east', 'west']) {
-      if (!room.exits[dir]?.letter) continue;
-      const slot = EXIT_SLOT_POSITIONS[dir];
-      const ex = slot.col * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
-      const ey = slot.row * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
-      const dx = gx - ex;
-      const dy = gy - ey;
-      const d = Math.sqrt(dx * dx + dy * dy);
-      if (d > 0 && d < radius) {
-        const strength = (radius - d) / radius;
-        vx += (dx / d) * this.speed * strength;
-        vy += (dy / d) * this.speed * strength;
-      }
-    }
-    return { vx, vy };
   }
 
   /**
@@ -1824,6 +1799,9 @@ export class Enemy {
       };
     }
 
+    // Fire bolts (Sea Snake) wear the death-nova's fire color and carry the
+    // burn element, so fire immunity/resistance apply to them.
+    const fire = this.data.projectileType === 'fire';
     return {
       type: 'enemy_projectile',
       char: '·',
@@ -1836,7 +1814,8 @@ export class Enemy {
         vy: Math.sin(finalAngle) * 200
       },
       damage: this.getEffectiveDamage(),
-      color: this.color,
+      color: fire ? '#ff6600' : this.color,
+      onHit: fire ? 'burn' : undefined,
       owner: this,
       shooterPlane: this.plane
     };
@@ -2428,6 +2407,7 @@ export class Enemy {
     if (item.data.type !== 'WEAPON') return;
 
     this.equippedWeapon = item;
+    if (CloseQuartersMechanic.holdInReserve(this, item)) return;
 
     // Capture native speed once so melee/ranged swaps can toggle the boost cleanly.
     if (this._baseSpeed === undefined) this._baseSpeed = this.speed;

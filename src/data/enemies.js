@@ -2401,20 +2401,43 @@ export const ENEMIES = {
   's': {
     char: 's',
     name: 'Sea Snake',
-    description: 'A water-dweller. Bites and retreats to the deep.',
+    description: 'Never leaves the water. Spits fire from it, and stabs with a trident if it carries one.',
     spellDescription: 'LOVES THE WATER.',
     trueName: 'SERPENS',
     hp: 3,
     speed: 38,
     damage: 2,
-    attackRange: GRID.CELL_SIZE * 2,   // 2 units (bite range)
+    attackRange: GRID.CELL_SIZE * 6,   // 6 units (fire bolt, shot from the water)
     aggroRange: GRID.CELL_SIZE * 8,    // 8 units
-    attackCooldown: 1.2,
+    attackCooldown: 1.8,
     attackWindup: 1.0,
-    attackType: 'melee',
+    attackType: 'ranged',
+    // Fire bolt: burn element for immunity/resist only. It must never steam or
+    // smoke the water it's shot across — enemy shots don't run
+    // WaterLavaHitMechanic (player projectiles only); keep it that way.
+    projectileType: 'fire',
     decisionInterval: 0.4,
     color: '#00bbcc',
     waterAffinity: true,               // Prefers water; never avoids it while wandering
+    waterBound: true,                  // Never leaves it — see WaterBoundMechanic
+    // Some carry a Trident: held in reserve for a player who comes within its
+    // reach (CloseQuartersMechanic), dropped on death. They never pick
+    // anything up.
+    itemUsage: {
+      enabled: true,
+      canPickup: false,
+      preferredItems: [],
+      useRange: GRID.CELL_SIZE * 2,
+      useCooldown: 1.5,
+      maxItems: 1,
+      dropOnDeath: true,
+      useConsumablesAt: 0,
+      closeQuarters: true
+    },
+    spawnEquipment: {
+      chance: 0.35,
+      weapons: ['ⲯ']
+    },
     elementalAffinity: {
       resistance: { 'freeze': 0.6 },
       weakness: { 'burn': 1.5 }
