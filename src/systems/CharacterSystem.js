@@ -696,51 +696,64 @@ export class CharacterSystem {
       game.magicSystem.evictReservedConsumables(game.player);
     }
 
+    this.applyCharacterTypeTo(game.player, type);
+  }
+
+  // The body half of applyCharacterType: everything a character type writes
+  // onto one Player instance (color, dodge roll, affinities, per-type combat
+  // fields). Split out so a body that is not game.player can wear a character
+  // too — applyCharacterType above keeps the inventory/mana switching, which
+  // is global and only ever belongs to game.player.
+  applyCharacterTypeTo(body, type) {
+    const game = this.game;
+    const charData = CHARACTER_TYPES[type];
+    if (!charData || !body) return;
+
     // Update player visual
-    game.player.color = charData.color;
-    game.player.baseColor = charData.color;
+    body.color = charData.color;
+    body.baseColor = charData.color;
 
     // Update dodge roll properties
-    game.player.dodgeRoll.type = charData.rollType;
-    game.player.dodgeRoll.duration = charData.rollDuration;
-    game.player.dodgeRoll.cooldown = charData.rollCooldown;
-    game.player.dodgeRoll.speed = charData.rollSpeed;
-    game.player.dodgeRoll.hideDuration = charData.hideDuration || 0;
+    body.dodgeRoll.type = charData.rollType;
+    body.dodgeRoll.duration = charData.rollDuration;
+    body.dodgeRoll.cooldown = charData.rollCooldown;
+    body.dodgeRoll.speed = charData.rollSpeed;
+    body.dodgeRoll.hideDuration = charData.hideDuration || 0;
     // Roll i-frames are per character: `rollInvulnerable: false` means the roll
     // grants none at all (Green Ranger's sprint); `rollIframes` is the brief
     // window that persists after the roll ends.
-    game.player.dodgeRoll.iframes = charData.rollInvulnerable !== false;
-    game.player.dodgeRoll.postRollIframes = charData.rollIframes ?? 0.1;
+    body.dodgeRoll.iframes = charData.rollInvulnerable !== false;
+    body.dodgeRoll.postRollIframes = charData.rollIframes ?? 0.1;
     if (charData.blinkDistance) {
-      game.player.dodgeRoll.distance = charData.blinkDistance;
+      body.dodgeRoll.distance = charData.blinkDistance;
     }
 
     // Apply weapon affinities
-    game.player.weaponAffinities = charData.weaponAffinities;
+    body.weaponAffinities = charData.weaponAffinities;
 
     // Point the player at this character's Weapons Master training map. It's a
     // live reference, so training earned mid-run is visible to Item.js without
     // a second write — but the player is rebuilt across rooms and swaps, which
     // is why it is re-pointed here rather than copied once.
-    game.player.trainedWeapons =
+    body.trainedWeapons =
       game.inventorySystem?.characterInventories?.[type]?.trainedWeapons || null;
 
     // Store character type and apply character-specific properties
-    game.player.characterType = type;
-    game.player.actionCooldownMax = charData.actionCooldownMax || 0;
-    game.player.greenIdleDamageBonus = charData.idleDamageBonus || 0;
-    game.player.greenCombatDamagePenalty = charData.combatDamagePenalty || 0;
-    game.player.backstabMultiplier = charData.backstabMultiplier || 1.0;
+    body.characterType = type;
+    body.actionCooldownMax = charData.actionCooldownMax || 0;
+    body.greenIdleDamageBonus = charData.idleDamageBonus || 0;
+    body.greenCombatDamagePenalty = charData.combatDamagePenalty || 0;
+    body.backstabMultiplier = charData.backstabMultiplier || 1.0;
     // Reset green ranger state when switching characters
-    game.player.actionCooldown = 0;
-    game.player.rollCharge = game.player.actionCooldownMax; // Start with full charge
-    game.player.continuousRollActive = false;
+    body.actionCooldown = 0;
+    body.rollCharge = body.actionCooldownMax; // Start with full charge
+    body.continuousRollActive = false;
 
     // Yellow Mage gets one free mana slot the moment they become Yellow.
     // Further mana slots (Yellow or otherwise) are earned via the well/hut
     // upgrade path, one slot at a time — same mechanism for every character.
     if (type === 'yellow') {
-      game.magicSystem?.grantYellowFreeManaSlot(game.player);
+      game.magicSystem?.grantYellowFreeManaSlot(body);
     }
   }
 
