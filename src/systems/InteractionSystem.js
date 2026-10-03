@@ -2,6 +2,7 @@ import { Item } from '../entities/Item.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Leshy } from '../entities/Leshy.js';
 import { Fairy, FAIRY_HEAL } from '../entities/Fairy.js';
+import { FairyKing, createWildFairy } from '../entities/FairyKing.js';
 import { isIngredient, isItem, generateEnemyDrops } from '../data/items.js';
 import { pickQuagmireIngredient } from '../data/alchemy.js';
 import { getZoneRandomEnemy, ENEMIES } from '../data/enemies.js';
@@ -477,6 +478,9 @@ export class InteractionSystem {
     // An armed Empty Bottle claims the fairy for tryBottleFairy — see header.
     if (this._armedBottleIndex() >= 0) return false;
 
+    // The Fairy King doesn't heal on touch — it talks (SPACE, DialogueSystem).
+    if (fairy instanceof FairyKing) return false;
+
     // At full health, touch does nothing — the fairy is worth more than a
     // no-op heal. tryFairyBlessing (SPACE, below) is the deliberate gesture
     // for a full-health player instead.
@@ -517,12 +521,15 @@ export class InteractionSystem {
     const fairy = this._nearestCatchableFairy();
     if (!fairy) return false;
 
+    // A caught Fairy King becomes the reusable on-hit heal, not the revive.
+    const isKing = fairy instanceof FairyKing;
+    const bottled = isKing ? '♔' : '⚱';
     const inv = game.inventorySystem;
-    if (!inv?.replaceConsumableSlot?.(slotIndex, '⚱')) {
-      this._fallbackReplaceConsumableSlot(slotIndex, '⚱');
+    if (!inv?.replaceConsumableSlot?.(slotIndex, bottled)) {
+      this._fallbackReplaceConsumableSlot(slotIndex, bottled);
     }
     game.player.selectedConsumableIndex = -1;
-    game.menuSystem?.showPickupMessage?.('CAUGHT A FAIRY!');
+    game.menuSystem?.showPickupMessage?.(isKing ? 'CAUGHT THE FAIRY KING!' : 'CAUGHT A FAIRY!');
     game.audioSystem?.playSFX?.('fairy_pickup');
     game.menuSystem?.updateUI?.();
     fairy.consume();
@@ -542,7 +549,9 @@ export class InteractionSystem {
     if (!player || player.hp < player.maxHp) return false;
     if (this._armedBottleIndex() >= 0) return false;
 
-    const fairy = this._nearestCatchableFairy();
+    // The Fairy King gives no blessing — SPACE beside it falls through to
+    // its dialogue (DialogueSystem.tryOpenNearby).
+    const fairy = this._nearestCatchableFairy({ excludeKing: true });
     if (!fairy) return false;
 
     player.maxHp += 1;
@@ -564,7 +573,7 @@ export class InteractionSystem {
    * FountainSystem can't be farmed. A fairy already fleeing, dusting,
    * delivering or carrying is mid-errand and stays out of reach.
    */
-  _nearestCatchableFairy() {
+  _nearestCatchableFairy({ excludeKing = false } = {}) {
     const CATCHABLE = new Set(['flutter']);
     const player = this.game.player;
     if (!player) return null;
@@ -576,6 +585,7 @@ export class InteractionSystem {
     for (const char of this.game.neutralCharacters || []) {
       if (!(char instanceof Fairy) || char.consumed) continue;
       if (!CATCHABLE.has(char.state)) continue;
+      if (excludeKing && char instanceof FairyKing) continue;
       const dist = Math.hypot(px - char.position.x, py - char.position.y);
       if (dist < bestDist) {
         bestDist = dist;
@@ -944,7 +954,7 @@ export class InteractionSystem {
       // room are marked; the first one cut spawns the fairy, the rest are inert.
       if (obj.fairyGrass && !game.currentRoom?.fairySpawned && !game.fairiesAngered) {
         game.currentRoom.fairySpawned = true;
-        const fairy = new Fairy(
+        const fairy = createWildFairy(
           obj.position.x + GRID.CELL_SIZE / 2,
           obj.position.y + GRID.CELL_SIZE / 2,
           game.currentRoom.exits

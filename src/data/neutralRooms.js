@@ -2,7 +2,7 @@ import { GRID } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Item } from '../entities/Item.js';
 import { Ingredient } from '../entities/Ingredient.js';
-import { Fairy } from '../entities/Fairy.js';
+import { createWildFairy } from '../entities/FairyKing.js';
 import { Hatter } from '../entities/Hatter.js';
 import { ITEMS, ITEM_TYPES, INGREDIENTS, getItemData, isIngredient } from './items.js';
 import { ZONES } from './zones.js';
@@ -402,8 +402,8 @@ export const NEUTRAL_ROOMS = {
       // enemies) and hold still since exits are always unlocked; touching one
       // with an equipped Empty Bottle catches it (InteractionSystem.checkFairyTouch).
       state.fairies = [
-        new Fairy(centerX - GRID.CELL_SIZE * 3, centerY, room.exits, { flutterDuration: Infinity }),
-        new Fairy(centerX + GRID.CELL_SIZE * 3, centerY, room.exits, { flutterDuration: Infinity })
+        createWildFairy(centerX - GRID.CELL_SIZE * 3, centerY, room.exits, { flutterDuration: Infinity }),
+        createWildFairy(centerX + GRID.CELL_SIZE * 3, centerY, room.exits, { flutterDuration: Infinity })
       ];
       room.pendingNeutralCharacters = state.fairies;
     },

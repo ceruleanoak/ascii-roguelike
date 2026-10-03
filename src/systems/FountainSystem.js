@@ -33,6 +33,7 @@
 import { GRID, ROOM_TYPES } from '../game/GameConfig.js';
 import { WEAPON_TIERS, TREASURE_OFFERINGS, weaponElement, getItemData } from '../data/items.js';
 import { Fairy } from '../entities/Fairy.js';
+import { FairyKing, rollFairyKing } from '../entities/FairyKing.js';
 
 const AMBIENT_FAIRY_COUNT = 6;
 
@@ -109,9 +110,13 @@ export class FountainSystem {
     ).length;
     if (existing > 0) return;
 
+    // One seeding in FAIRY_KING_ODDS holds court with a Fairy King — same
+    // odds as a wild King. It only talks: ambient fairies can't be bottled.
+    const kingIndex = rollFairyKing() ? 0 : -1;
     for (let i = 0; i < AMBIENT_FAIRY_COUNT; i++) {
       const spawn = this._pickAmbientSpawn(room);
-      const fairy = new Fairy(spawn.x, spawn.y, room.exits || {}, {
+      const FairyClass = i === kingIndex ? FairyKing : Fairy;
+      const fairy = new FairyClass(spawn.x, spawn.y, room.exits || {}, {
         state: 'ambient',
         touchImmunity: 0,           // ambient fairies don't trigger heal touch
       });
@@ -201,6 +206,7 @@ export class FountainSystem {
       if (!(c instanceof Fairy)) continue;
       if (c.consumed) continue;
       if (c.state !== 'ambient') continue;
+      if (c instanceof FairyKing) continue; // the King holds court; it doesn't fetch
       const dx = c.position.x - x;
       const dy = c.position.y - y;
       const d = dx * dx + dy * dy;

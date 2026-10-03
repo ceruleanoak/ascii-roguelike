@@ -87,7 +87,7 @@ import { GrayZoneSystem } from './systems/GrayZoneSystem.js';
 import { ElectricitySystem } from './systems/ElectricitySystem.js';
 import { FireSystem } from './systems/FireSystem.js';
 import { FountainSystem } from './systems/FountainSystem.js';
-import { Fairy } from './entities/Fairy.js';
+import { createWildFairy } from './entities/FairyKing.js';
 import { CampNPCSystem } from './systems/CampNPCSystem.js';
 import { DialogueSystem } from './systems/DialogueSystem.js';
 import { FishermanDemoSystem } from './systems/FishermanDemoSystem.js';
@@ -2899,7 +2899,7 @@ class Game {
       (specialKey, x, y) => {
         if (specialKey === 'fairy') {
           if (this.fairiesAngered) return;
-          const fairy = new Fairy(x, y, this.currentRoom?.exits || {});
+          const fairy = createWildFairy(x, y, this.currentRoom?.exits || {});
           if (!this.neutralCharacters) this.neutralCharacters = [];
           this.neutralCharacters.push(fairy);
           return;
