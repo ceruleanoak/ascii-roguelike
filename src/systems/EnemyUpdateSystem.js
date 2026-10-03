@@ -340,6 +340,10 @@ export class EnemyUpdateSystem {
           game.combatSystem.createDamageNumber('DODGE', player.position.x, player.position.y, '#ffff00');
         } else if (result?.blocked) {
           game.combatSystem.createDamageNumber(result.guard ?? 'BLOCK', player.position.x, player.position.y, '#aaaaaa');
+          if (result.reflect && result.attacker) {
+            result.attacker.takeDamage(result.reflect);
+            game.combatSystem.createDamageNumber(result.reflect, result.attacker.position.x, result.attacker.position.y, '#eeeeff');
+          }
         } else if (result?.immune) {
           game.combatSystem.createDamageNumber('IMMUNE', player.position.x, player.position.y, '#00ffff');
         } else if (result !== false && result !== true) {

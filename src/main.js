@@ -129,6 +129,7 @@ import { captureDeath, deathCauseOf, downloadSessionLedger, newRunId } from './s
 import{DiagonalInputSystem as DIS}from'./systems/DiagonalInputSystem.js';
 import { MAGIC_SFX_NAMES } from './data/enemies.js';
 import * as ingredientPile from './systems/IngredientPile.js';
+import { PlayerParry } from './entities/enemyMechanics/ParryMechanic.js';
 
 // Particle Fireworks (debug toggle): each entry produces one effect at (x, y),
 // cycled in order. Mix of bursts (return arrays) and single emitters.
@@ -2461,6 +2462,8 @@ class Game {
     this.armorEffectsSystem.updateMossCloak();
 
     this.floatingBootsSystem.update(deltaTime);
+
+    PlayerParry.update(this.player, this._activeEnemies(), deltaTime);
 
     this.characterSystem.triggerDaggerRollAttack();
 

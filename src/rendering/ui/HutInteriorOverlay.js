@@ -12,6 +12,7 @@ import { drawStatusPips } from '../effects/StatusPipEffects.js';
 import { drawFloatPlatform } from '../effects/FloatPlatformDraw.js';
 import { drawTamedRats, drawGolems } from './CompanionRenderers.js';
 import { SLOT_CHROME } from '../../data/slotChrome.js';
+import { drawParryIndicator } from './ParryIndicator.js';
 
 /**
  * HutInteriorOverlay — picture-in-picture rendering for every floor Interior
@@ -321,6 +322,7 @@ export class HutInteriorOverlay {
         playerAlpha
       );
       drawStatusPips(this.renderer, game.player);
+      drawParryIndicator(this.renderer, game.player, game.player.parryMechanic);
     }
 
     // ── 16b. Camp companion (uses interior coords because it tracks player) ──

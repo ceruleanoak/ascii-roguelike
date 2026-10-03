@@ -1788,8 +1788,9 @@ export const ITEMS = {
   //   blockChance    0–1  chance to fully block a bullet (and melee too, if blockMelee)
   //   blockMelee     bool blockChance also rolls against melee hits, not just bullets
   //   deflectCharge  bool Guard: a charging enemy's ram does no damage and stuns the charger
-  //   parryChance    0–1  Guard: chance to parry a melee hit from the front, stunning the attacker
-  //   parryArcDegrees     width of the front arc parryChance covers, centered on facing
+  //   parryMechanic  {}   Guard: the enemy parryMechanic shape (enemies.js / ParryMechanic.js) —
+  //                       windup → active window → cooldown, opened by a chasing enemy in reach;
+  //                       parryArcDegrees is measured around the player's facing
   //   burnResist     0–1  fraction of burn DoT absorbed (stacks with fireImmune)
   //   reflectDamage  0–1  fraction of taken damage reflected to attacker
   //   massBonus      +N   added to base mass=1; higher = less knockback received
@@ -1900,8 +1901,16 @@ export const ITEMS = {
     char: '◍', name: 'Buckler', type: ITEM_TYPES.ARMOR,
     defense: 1,
     speedBoost: 0.05,       // small and light — barely slows the arm
-    parryChance: 0.5,       // face the blow: melee from the front can be turned aside
-    parryArcDegrees: 100,   // same arc as the enemy parry mechanic
+    parryMechanic: {        // same mechanic and numbers as the Duelist's parry
+      enabled: true,
+      parryArcDegrees: 100,
+      parryDuration: 0.45,
+      parryCooldown: 2.0,
+      parryWindup: 0.25,
+      reflectDamage: true,
+      counterAttack: false, // enemy-only: a counter swing needs an AI to throw it
+      parryColor: '#ccaa77',
+    },
     spellDescription: 'FACE THE BLOW.',
     color: '#ccaa77'
   },

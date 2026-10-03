@@ -2,6 +2,7 @@ import { PHYSICS, GRID, COLORS, PLAYER_STATS } from '../game/GameConfig.js';
 import { StatusEffectSystem, createPlayerStatusSlots } from '../systems/StatusEffectSystem.js';
 import { computePlayerPipRows, computePlayerDisplayColor } from '../systems/StatusEffectVisuals.js';
 import { PlayerDamageSystem } from '../systems/PlayerDamageSystem.js';
+import { initParry } from './enemyMechanics/ParryMechanic.js';
 
 const INVULNERABILITY_DURATION = 1.0;
 const BLINK_FREQUENCY = 0.1;
@@ -36,6 +37,8 @@ export class Player {
     this.poisonImmune = false;
     this.slimeImmune = false;
     this.reflectDamage = 0;
+    this.parryMechanic = null;  // Buckler: armor's parryMechanic config (ParryMechanic.js)
+    initParry(this);            // parry cycle timers, shared with enemy parry
     this.smokeOnHit = false;    // Bloom Mantle: bursts a pollen smoke screen when struck
     this.smokeBurstPending = false; // one-frame signal consumed by main.js to spawn the cloud
     this.speedBoost = 0;
@@ -1009,6 +1012,8 @@ export class Player {
     this.poisonImmune = false;
     this.slimeImmune = false;
     this.reflectDamage = 0;
+    this.parryMechanic = null;
+    initParry(this);
     this.smokeOnHit = false;
     this.speedBoost = 0;
     this.speedPenalty = 0;

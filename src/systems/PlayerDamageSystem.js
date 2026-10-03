@@ -7,8 +7,7 @@
 // dodgeRoll, defense, resists, etc.); this module is pure resolution logic
 // with no state of its own, mirroring the StatusEffectSystem.tickPlayer
 // pattern of a system operating directly on the player it's passed.
-// Seconds a parried attacker stays stunned.
-const PARRY_STUN_DURATION = 1.0;
+import { PlayerParry, PARRY_REFLECT_FRACTION } from '../entities/enemyMechanics/ParryMechanic.js';
 
 export const PlayerDamageSystem = {
   // Returns false (no damage), an object describing what happened
@@ -31,7 +30,7 @@ export const PlayerDamageSystem = {
     // Guard: armor checks that turn one specific kind of hit aside entirely.
     // Runs before the dodge rolls so a guaranteed Guard (Deflect) is never
     // pre-empted by a lucky dodge that skips its stun.
-    const guard = this.resolveGuard(player, damageSource);
+    const guard = this.resolveGuard(player, amount, damageSource);
     if (guard) return guard;
 
     // Dodge check (all damage types). Two independent rolls so the floating-text
@@ -118,21 +117,25 @@ export const PlayerDamageSystem = {
   // BLOCK keep working; `guard` names a Guard that has its own text.
   //   Deflect     — a charging enemy's ram (damageSource.isCharge). Always
   //                 succeeds; the charge call site stuns the charger.
-  //   Parry       — a melee hit from in front of the player (parryArcDegrees
-  //                 around player.facing), at parryChance. Stuns the attacker.
+  //   Parry       — a melee hit caught by the Buckler's parry window — the
+  //                 same parryMechanic cycle and catch rule enemies use
+  //                 (ParryMechanic.js). reflectDamage returns `reflect`,
+  //                 which the call site applies to the attacker.
   //   Arrow Guard — bullets: shield blockChance (also melee with blockMelee),
   //                 then armor bulletResist.
-  resolveGuard(player, damageSource) {
+  resolveGuard(player, amount, damageSource) {
     if (damageSource.isCharge && player.deflectCharge) {
       return { blocked: true, guard: 'DEFLECT' };
     }
 
     const attacker = damageSource.attacker;
-    if (damageSource.isMelee && player.parryChance > 0 && attacker?.position
-        && this._inFrontArc(player, attacker, player.parryArcDegrees)
-        && Math.random() < player.parryChance) {
-      attacker.applyStatusEffect?.('stun', PARRY_STUN_DURATION);
-      return { blocked: true, guard: 'PARRY' };
+    if (damageSource.isMelee && player.parryMechanic?.enabled
+        && PlayerParry.catches(player, attacker?.position)) {
+      const reflect = player.parryMechanic.reflectDamage && attacker?.takeDamage
+        ? Math.ceil(amount * PARRY_REFLECT_FRACTION) : 0;
+      return reflect > 0
+        ? { blocked: true, guard: 'PARRY', reflect, attacker }
+        : { blocked: true, guard: 'PARRY' };
     }
 
     if (player.blockChance > 0 && (damageSource.isBullet || (damageSource.isMelee && player.blockMelee))) {
@@ -142,18 +145,6 @@ export const PlayerDamageSystem = {
       if (Math.random() < player.bulletResist) return { blocked: true };
     }
     return null;
-  },
-
-  // True when `other`'s center lies within arcDegrees centered on player.facing.
-  _inFrontArc(player, other, arcDegrees) {
-    const fx = player.facing?.x ?? 0, fy = player.facing?.y ?? 0;
-    const flen = Math.hypot(fx, fy);
-    const dx = other.position.x - player.position.x;
-    const dy = other.position.y - player.position.y;
-    const dlen = Math.hypot(dx, dy);
-    if (flen === 0 || dlen === 0) return false;
-    const cos = (fx * dx + fy * dy) / (flen * dlen);
-    return cos >= Math.cos((arcDegrees / 2) * Math.PI / 180);
   },
 
   // Stops the corpse sliding on its last frame's momentum. physicsSystem

@@ -10,6 +10,7 @@ import { GameAnimalMechanic } from '../entities/enemyMechanics/GameAnimalMechani
 import { SniperMechanic } from '../entities/enemyMechanics/SniperMechanic.js';
 import { ThiefMechanic } from '../entities/enemyMechanics/ThiefMechanic.js';
 import { ReflectShieldMechanic } from '../entities/enemyMechanics/ReflectShieldMechanic.js';
+import { ParryMechanic, PARRY_REFLECT_FRACTION } from '../entities/enemyMechanics/ParryMechanic.js';
 import { queueDamageNumber as queueDamageNumberImpl, ageDamageTextQueue, reportDamageResult as reportDamageResultImpl } from './DamageNumberQueue.js';
 import { applyTargetOverrides as applyTargetOverridesImpl } from './enemyTargeting.js';
 import { updateEnemyMeleeAttack, resolveEnemyAttack, attackHitsBox, retireAfterTest } from '../game/Telegraph.js';
@@ -955,9 +956,11 @@ export class CombatSystem {
           // Sniper stays hittable while sniperHidden — see the projectile-loop comment above.
 
           if (this.checkMeleeCollision(attack, enemy)) {
-            // Parry mechanic (Duelist): reflect melee back at player
-            if (enemy.parryActive && attack.owner && attack.isMelee !== false) {
-              const reflectDmg = Math.ceil(attack.damage * (enemy.data.parryMechanic?.reflectDamage ? 0.5 : 0));
+            // Parry mechanic (Duelist): reflect melee back at player.
+            // Same catch rule as the player's Buckler parry (ParryMechanic.js).
+            if (attack.owner && attack.isMelee !== false
+                && ParryMechanic.catches(enemy, attack.owner.position, attack.owner)) {
+              const reflectDmg = Math.ceil(attack.damage * (enemy.data.parryMechanic?.reflectDamage ? PARRY_REFLECT_FRACTION : 0));
               if (reflectDmg > 0 && attack.owner.takeDamage) {
                 attack.owner.takeDamage(reflectDmg, { isBullet: false, isMelee: true });
                 this.createDamageNumber('PARRY', enemy.position.x, enemy.position.y, '#eeeeff');
@@ -1443,6 +1446,10 @@ export class CombatSystem {
                                         result.lucky ? '#ffff66' : '#ffff00');
               } else if (result.blocked) {
                 this.createDamageNumber(result.guard ?? 'BLOCK', player.position.x, player.position.y, '#aaaaaa');
+                if (result.reflect && result.attacker) {
+                  result.attacker.takeDamage(result.reflect);
+                  this.createDamageNumber(result.reflect, result.attacker.position.x, result.attacker.position.y, '#eeeeff');
+                }
               } else if (result.immune) {
                 this.createDamageNumber('IMMUNE', player.position.x, player.position.y, '#00ffff');
               } else if (result !== false) {

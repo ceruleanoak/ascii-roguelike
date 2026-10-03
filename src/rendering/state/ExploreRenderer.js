@@ -55,6 +55,7 @@ import { ReflectShieldMechanic } from '../../entities/enemyMechanics/ReflectShie
 import { drawFloatPlatform } from '../effects/FloatPlatformDraw.js';
 import { fieldGuideEquipped, drawFieldGuideHpLabel } from '../ui/FieldGuideHpLabel.js';
 import { drawCursedRecipeReveal } from '../ui/CursedRecipeReveal.js';
+import { drawParryIndicator } from '../ui/ParryIndicator.js';
 
 function drawDizzyOrbitals(ctx, cx, cy, timer) {
   const r = 6;
@@ -793,6 +794,9 @@ export class ExploreRenderer {
     // StatusEffectVisuals.computePlayerPipRows.
     if (!playerInInterior) drawStatusPips(this.renderer, game.player);
 
+    // Buckler parry window: same ']' tell enemies show.
+    if (!playerInInterior) drawParryIndicator(this.renderer, game.player, game.player.parryMechanic);
+
     // Attack-direction indicator: small '^' orbiting tight around the player.
     if (!playerInInterior) drawPlayerFacingIndicator(this.renderer, game);
 
@@ -1378,15 +1382,7 @@ export class ExploreRenderer {
     }
 
     // Parry indicator (Duelist): show ']' above enemy when parry is active
-    if (enemy.parryActive) {
-      const parryColor = enemy.data?.parryMechanic?.parryColor || '#eeeeff';
-      this.renderer.drawEntity(
-        enemy.position.x + GRID.CELL_SIZE / 2,
-        enemy.position.y + GRID.CELL_SIZE / 2 - GRID.CELL_SIZE,
-        ']',
-        parryColor
-      );
-    }
+    drawParryIndicator(this.renderer, enemy, enemy.data?.parryMechanic);
 
     // Reflect shield indicator (Mirror Imp, Ice Golem): show '|' above when shield is active.
     // Asks the mechanic the same question the projectile check asks — the
