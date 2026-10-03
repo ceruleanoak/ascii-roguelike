@@ -505,6 +505,29 @@ programming terms.
   `detectionIndicatorTimer` gate that backstabs check.
 - **Not:** a sentry turret or a damage threat in itself; the Watcher's weapon is information.
 
+### Water-Bound
+- **Definition:** A Mechanic: the Enemy never leaves the room's water. Movement that would
+  carry it ashore is stopped; one spawned on sand starts in the nearest water, and one
+  knocked ashore swims straight back. The player chooses whether to come to the shoreline.
+- **In code:** `WaterBoundMechanic` gated by `data.waterBound`. "Water" is PhysicsSystem's
+  water: a `~` tile that isn't lava/mud/hot water and isn't frozen or crystallized.
+- **Not:** a swimmer that merely prefers water, and not a clamp on knockback — a hit can
+  still throw it onto the beach.
+
+### Close Quarters
+- **Definition:** A Mechanic for a carried melee weapon held in reserve: the Enemy keeps
+  its native attack, movement, and range, and switches to the weapon only while the player
+  is inside the weapon's reach. A Sea Snake shoots fire, and stabs with a Trident up close.
+- **In code:** `CloseQuartersMechanic` gated by `itemUsage.closeQuarters`; hooks
+  `Enemy.equipWeapon` (skips melee conversion) and picks `attackType` outside Strike.
+- **Not:** the default weapon pickup, which converts the Enemy into a melee chaser for good.
+
+### Scorned Ingredient
+- **Definition:** An Ingredient Charon considers beneath him — Stick, Rock, Fur, Goo. His
+  toll takes them only once nothing else takeable is left.
+- **In code:** `SCORNED_INGREDIENTS` in `CharonSystem.js`.
+- **Not:** an ingredient he refuses outright; scorned ones still settle the toll last.
+
 ### Ingredient
 - **Definition:** A raw drop from enemies/environment. Never crafted.
 - **In code:** rendered as a **letter** (`a–z`, `A–Z`) or **digit** (`0–9`).
