@@ -54,7 +54,10 @@ export class Particle {
 }
 
 // Factory function to create a single water drip trail particle
-export function createWetDrop(x, y) {
+export const WET_DROP_COLOR = '#3399ff';
+
+// `color` tints the drop for other soaking statuses (goo drips green).
+export function createWetDrop(x, y, color = WET_DROP_COLOR) {
   // Slight random horizontal scatter, slow downward drift then evaporate
   const vx = (Math.random() - 0.5) * 18;
   const vy = 12 + Math.random() * 20; // drips downward
@@ -64,7 +67,7 @@ export function createWetDrop(x, y) {
   // Shift spawn to random pixel within the entity cell for scattered look
   const ox = (Math.random() - 0.5) * GRID.CELL_SIZE * 0.8;
   const oy = (Math.random() - 0.5) * GRID.CELL_SIZE * 0.4 + GRID.CELL_SIZE * 0.3;
-  const p = new Particle(x + ox, y + oy, char, '#3399ff', { vx, vy }, lifetime);
+  const p = new Particle(x + ox, y + oy, char, color, { vx, vy }, lifetime);
   p.decelerationRate = 0.88; // drips decelerate quickly
   p.boundToGrid = false; // don't clamp so they fall off entity feet naturally
   return p;

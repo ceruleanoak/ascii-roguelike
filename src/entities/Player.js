@@ -130,6 +130,7 @@ export class Player {
     this.dungeonExitPosition = null; // saved exterior position when entering a dungeon
 
     this.wetDropTimer = 0; // throttles wet trail particle emission
+    this.gooDropTimer = 0; // throttles goo (slimed) trail particle emission
 
     // Sprint footstep trail
     this.footstepTimer = 0; // throttles footstep dot emission
@@ -1026,6 +1027,7 @@ export class Player {
     // `.dizzy.active` unguarded).
     this.statusEffects = createPlayerStatusSlots();
     this.wetDropTimer = 0;
+    this.gooDropTimer = 0;
 
     // Reset ember accumulation
     this.emberStacks = 0;

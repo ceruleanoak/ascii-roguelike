@@ -32,6 +32,12 @@ const EFFECT_COLORS = {
   stoneskin: '#8c7853' // gray/bronze — must match STONE_SKIN_COLOR below
 };
 
+// Base color of a status effect, for effects drawn outside the pip rows
+// (e.g. WorldEffectsSystem's goo drip trail).
+export function statusEffectColor(effect) {
+  return EFFECT_COLORS[effect];
+}
+
 // Pip-dot color for `effect` at `stacks` pips, on either carrier. Wet's third
 // pip (drowning) takes the deep-water color.
 function pipColor(effect, stacks) {

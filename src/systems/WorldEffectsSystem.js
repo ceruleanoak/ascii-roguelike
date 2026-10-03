@@ -1,7 +1,8 @@
 import { GRID } from '../game/GameConfig.js';
 import { GooBlob } from '../entities/GooBlob.js';
 import { createDebris } from '../entities/Debris.js';
-import { createFootstep, createWetDrop, createSteamPuff, createChaff } from '../entities/Particle.js';
+import { createFootstep, createWetDrop, createSteamPuff, createChaff, WET_DROP_COLOR } from '../entities/Particle.js';
+import { statusEffectColor } from './StatusEffectVisuals.js';
 import { inSamePlane, tagInteriorPlane } from './PlaneSystem.js';
 
 const MAX_GOO_BLOBS = 20;
@@ -617,36 +618,10 @@ export class WorldEffectsSystem {
       }
     }
 
-    // Wet trail: player
-    if (player.isWet()) {
-      player.wetDropTimer -= deltaTime;
-      if (player.wetDropTimer <= 0) {
-        const dropCount = Math.random() < 0.4 ? 2 : 1;
-        for (let d = 0; d < dropCount; d++) {
-          particles.push(tagInteriorPlane(game, createWetDrop(player.position.x, player.position.y)));
-        }
-        const wet = player.statusEffects.wet.duration;
-        player.wetDropTimer = wet > 4 ? 0.10 : wet > 2 ? 0.14 : 0.20;
-      }
-    } else {
-      player.wetDropTimer = 0;
-    }
-
-    // Wet trail: enemies
-    for (const enemy of enemies) {
-      if (enemy.isWet()) {
-        enemy.wetDropTimer -= deltaTime;
-        if (enemy.wetDropTimer <= 0) {
-          const dropCount = Math.random() < 0.4 ? 2 : 1;
-          for (let d = 0; d < dropCount; d++) {
-            particles.push(tagInteriorPlane(game, createWetDrop(enemy.position.x, enemy.position.y)));
-          }
-          const wet = enemy.statusEffects.wet.duration;
-          enemy.wetDropTimer = wet > 4 ? 0.10 : wet > 2 ? 0.14 : 0.20;
-        }
-      } else {
-        enemy.wetDropTimer = 0;
-      }
+    // Drip trails: wet (blue) and goo (green) — player and enemies alike
+    for (const entity of [player, ...enemies]) {
+      this._emitDripTrail(entity, 'wet', 'wetDropTimer', WET_DROP_COLOR, deltaTime);
+      this._emitDripTrail(entity, 'goo', 'gooDropTimer', statusEffectColor('goo'), deltaTime);
     }
 
     // Steam trail: player
@@ -688,6 +663,25 @@ export class WorldEffectsSystem {
         enemy.steamTrailTimer = 0;
       }
     }
+  }
+
+  // Drip trail for a soaking status (wet, goo) on the player or an enemy: one
+  // or two drops at the entity's feet, faster while the status is fresh.
+  // `timerKey` names the entity's own emission timer for that status.
+  _emitDripTrail(entity, effect, timerKey, color, deltaTime) {
+    const status = entity.statusEffects?.[effect];
+    if (!status?.active) {
+      entity[timerKey] = 0;
+      return;
+    }
+    entity[timerKey] -= deltaTime;
+    if (entity[timerKey] > 0) return;
+    const dropCount = Math.random() < 0.4 ? 2 : 1;
+    for (let d = 0; d < dropCount; d++) {
+      this.game.particles.push(tagInteriorPlane(this.game, createWetDrop(entity.position.x, entity.position.y, color)));
+    }
+    const left = status.duration;
+    entity[timerKey] = left > 4 ? 0.10 : left > 2 ? 0.14 : 0.20;
   }
 
   spawnImpactEffects(impactEffects) {

@@ -246,8 +246,9 @@ export class Enemy {
     // DOT blink timer
     this.dotBlinkTimer = 0;
 
-    // Wet trail emission timer (mirrors player implementation)
+    // Wet/goo trail emission timers (mirror the player's)
     this.wetDropTimer = 0;
+    this.gooDropTimer = 0;
 
     // Elemental affinity system
     this.elementalAffinity = this.data.elementalAffinity || {
