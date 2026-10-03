@@ -286,9 +286,11 @@ export const BACKGROUND_OBJECTS = {
     name: 'Tree',
     color: '#336633',
     hp: 3,
-    // No dropChance — guaranteed Stick like the rock harvest; sap is a bonus
-    // roll on top (see InteractionSystem spawnIngredient tree branch).
+    // Stick on 30% of harvests. harvestDropChance, not dropChance: it gates
+    // only the Stick, so the sap bonus roll stays independent (see
+    // InteractionSystem spawnIngredient tree branch).
     dropEffect: 'destroyObject:spawnIngredient:|',
+    harvestDropChance: 0.30,
     bulletInteraction: 'block',
     flammability: 'high',
     // A tree catching like a blade of grass off one adjacent ember or a

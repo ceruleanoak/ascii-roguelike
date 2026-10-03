@@ -782,13 +782,18 @@ export class InteractionSystem {
       game.renderer.markBackgroundDirty();
       // Not always an ingredient char — e.g. the caldera Ember Bush drops the
       // Unicode/CONSUMABLE Fire Berry, which needs the Item pickup pipeline.
-      if (isIngredient(ingredientChar)) {
-        game.lootSystem.spawnIngredientDrop(ingredientChar, obj.position.x, obj.position.y, null, obj);
-      } else {
-        game.lootSystem.spawnItemDrop(ingredientChar, obj.position.x, obj.position.y, null, obj);
+      // harvestDropChance (Tree) gates only this main drop, unlike dropChance,
+      // which skips the whole effect — the tree's sap roll below stays its own.
+      const harvestDropChance = obj.data?.harvestDropChance ?? 1;
+      if (Math.random() < harvestDropChance) {
+        if (isIngredient(ingredientChar)) {
+          game.lootSystem.spawnIngredientDrop(ingredientChar, obj.position.x, obj.position.y, null, obj);
+        } else {
+          game.lootSystem.spawnItemDrop(ingredientChar, obj.position.x, obj.position.y, null, obj);
+        }
       }
 
-      // Tree harvest mirrors rockHarvest: guaranteed Stick above, plus a 15%
+      // Tree harvest: a harvestDropChance Stick above, plus an independent 15%
       // sap bonus (red/cyan zones carry rare elemental saps; others common ŝ).
       if (obj.originalChar === 'Y' && Math.random() < 0.15) {
         const zone = game.currentRoom?.zone;
