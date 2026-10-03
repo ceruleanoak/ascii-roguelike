@@ -181,6 +181,7 @@ export const RECIPES = [
   { left: 'M', right: '0', result: '■', name: 'Metal Block' },    // Metal + Rock = Metal Block (auto-blocks at low HP)
   { left: '@', right: 'a', result: '𐤑', name: 'Smoke Bomb' },     // Bomb + Ash = Smoke Bomb (brief invulnerability)
   { left: 'a', right: 'c', result: '¤', name: 'Infused Coin' },   // Ash + Coin = Infused Coin (offering for Well)
+  { left: 'N', right: 'N', result: '¶', name: 'Field Guide' },    // Paper + Paper = Field Guide (enemy HP shown while equipped)
 
   // === NEW GUN RECIPES (10) ===
   { left: 'ᛉ', right: 'j', result: '⌐', name: 'Machine Gun' },     // Shotgun + Goo = Machine Gun

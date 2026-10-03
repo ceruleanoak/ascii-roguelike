@@ -53,6 +53,7 @@ import { drawFracturedRock } from '../sprites/fracturedRockSprite.js';
 import { renderMawShadow, chargedColor, renderChargedObjects } from '../AscentRenderHelpers.js';
 import { ReflectShieldMechanic } from '../../entities/enemyMechanics/ReflectShieldMechanic.js';
 import { drawFloatPlatform } from '../effects/FloatPlatformDraw.js';
+import { fieldGuideEquipped, drawFieldGuideHpLabel } from '../ui/FieldGuideHpLabel.js';
 
 function drawDizzyOrbitals(ctx, cx, cy, timer) {
   const r = 6;
@@ -1474,6 +1475,11 @@ export class ExploreRenderer {
 
     // Draw blind indicator (red X when blinded)
     this._drawHeadIndicator(enemy, enemy.getBlindIndicator());
+
+    // Field Guide: current HP above every visible enemy
+    if (fieldGuideEquipped(game) && enemy.shouldRenderVisible()) {
+      drawFieldGuideHpLabel(this.renderer, enemy);
+    }
 
     // Dizzy orbital particles
     if (enemy.statusEffects.dizzy?.active && enemy.shouldRenderVisible()) {

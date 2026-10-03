@@ -2248,6 +2248,14 @@ export const ITEMS = {
     effect: 'wellOffering',  // Consumed by WellSystem when tossed into a W-room well
     color: '#ffcc66'
   },
+  '¶': {
+    char: '¶',
+    name: 'Field Guide',
+    type: ITEM_TYPES.CONSUMABLE,
+    passive: true,
+    fieldGuide: true,     // FieldGuideHpLabel reads this: enemy HP shown above each enemy while equipped
+    color: '#f0ead6'
+  },
   '⊚': {
     char: '⊚',
     name: 'Frog Coin',
@@ -2966,6 +2974,9 @@ export const INGREDIENTS = {
   // Shore sand: breaking a Sand tile (ocean transition strip) can drop it.
   // A burning hut fireplace melts one into an Empty Bottle — see FireplaceSystem.
   'D': { char: 'D', name: 'Sand', color: '#d4a896' },
+  // Paper: humanoid enemies carry it, and the hut press turns Slurry into it
+  // (PressSystem). Two sheets make a Field Guide.
+  'N': { char: 'N', name: 'Paper', color: '#f0ead6' },
   '~': { char: '~', name: 'String', color: '#cccccc' },
   '|': { char: '|', name: 'Stick', color: '#8b4513' },
   'a': { char: 'a', name: 'Ash', color: '#888888' },
@@ -3265,7 +3276,7 @@ export const AFFINITY_POOLS = {
   humanoid: {
     ingredients: {
       [RARITY.COMMON]:   ['c', '~'],         // Coin, String
-      [RARITY.UNCOMMON]: ['F', 'M'],         // Fire Essence, Metal (red zone owns Metal; humanoids carry scraps)
+      [RARITY.UNCOMMON]: ['F', 'M', 'N'],    // Fire Essence, Metal (red zone owns Metal; humanoids carry scraps), Paper
       [RARITY.RARE]:     []
     },
     weapons: {

@@ -1,12 +1,14 @@
 import { GRID } from '../game/GameConfig.js';
 import { Item } from '../entities/Item.js';
+import { INGREDIENTS } from '../data/items.js';
 
 /**
  * PressSystem — operates the oil press inside huts.
  *
  * Players walk up to a `⊓` press, hit SPACE, and pick a raw oil from the
  * pop-up list. The raw is consumed and a pressed oil is added to the
- * consumable inventory.
+ * consumable inventory. Some outputs are ingredients instead (Slurry → Paper);
+ * those go back to the ingredient pouch.
  */
 
 const PRESS_TABLE = {
@@ -14,6 +16,7 @@ const PRESS_TABLE = {
   'š': '🜂',  // Fire Sap   → Fire Oil
   'ş': '❄',  // Frost Sap  → Frost Oil
   'ł': '🜔',  // Pollen     → Drowse Oil
+  '⚗': 'N',  // Slurry     → Paper (ingredient)
 };
 
 const INTERACT_RADIUS = GRID.CELL_SIZE * 1.2;
@@ -71,18 +74,22 @@ export class PressSystem {
     game.menuSystem.closeOnMovement = true;
   }
 
-  /** Commit the press: consume one raw, drop pressed oil into consumables. */
+  /** Commit the press: consume one raw, drop the output into consumables (or ingredients). */
   commitSelection(rawChar) {
     const game = this.game;
-    const oilChar = PRESS_TABLE[rawChar];
-    if (!oilChar) return;
+    const outChar = PRESS_TABLE[rawChar];
+    if (!outChar) return;
 
     if (!game.removeIngredient(rawChar)) return;
 
-    const oil = new Item(oilChar, game.player.position.x, game.player.position.y);
-    game.inventorySystem.consumableInventory.push(oil);
-
-    game.menuSystem.showPickupMessage(oil.data.name);
+    if (INGREDIENTS[outChar]) {
+      game.addIngredient(outChar);
+      game.menuSystem.showPickupMessage(INGREDIENTS[outChar].name);
+    } else {
+      const oil = new Item(outChar, game.player.position.x, game.player.position.y);
+      game.inventorySystem.consumableInventory.push(oil);
+      game.menuSystem.showPickupMessage(oil.data.name);
+    }
     game.audioSystem?.playSFX?.('craft');
     game.closeMenu();
     game.updateUI();
