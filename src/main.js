@@ -92,6 +92,7 @@ import { CampNPCSystem } from './systems/CampNPCSystem.js';
 import { DialogueSystem } from './systems/DialogueSystem.js';
 import { FishermanDemoSystem } from './systems/FishermanDemoSystem.js';
 import { WeaponsMasterSystem } from './systems/WeaponsMasterSystem.js';
+import { CharonSystem } from './systems/CharonSystem.js';
 import { ShopSystem } from './systems/ShopSystem.js';
 import { WizardSystem } from './systems/WizardSystem.js';
 import { PearlSystem } from './systems/PearlSystem.js';
@@ -271,6 +272,7 @@ class Game {
     this.dialogueSystem = new DialogueSystem(this);
     this.fishermanDemoSystem = new FishermanDemoSystem(this);
     this.weaponsMasterSystem = new WeaponsMasterSystem(this);
+    this.charonSystem = new CharonSystem(this);
     this.shopSystem = new ShopSystem(this);
     this.wizardSystem = new WizardSystem(this);
     this.pearlSystem = new PearlSystem(this);
@@ -1221,6 +1223,7 @@ class Game {
     // A Cursed run opens REST's south wall onto the Graveyard. Runs before the
     // collision map is handed to the player so the gap is already cut.
     this.cursedRunSystem.applyToRest(this, this.currentRoom);
+    this.charonSystem.onEnterRest(this.currentRoom);
 
     // Set player collision map
     this.player.setCollisionMap(collisionMap);
@@ -2565,6 +2568,7 @@ class Game {
     for (const npc of this.characterNPCs) {
       npc.update(deltaTime);
     }
+    this.charonSystem.update(deltaTime);
 
     // Animate tombstone and slot popups
     this.menuSystem.updateTombstonePopup(deltaTime);
@@ -3774,6 +3778,9 @@ class Game {
         return;
       }
       if (this.slotPopup) { this.slotPopup = null; return; }
+
+      // Charon at the north exit: talk, then pay his toll (CharonSystem)
+      if (this.charonSystem.trySpacePress()) return;
 
       // Bundle world object: destroy and scatter ingredients
       if (this.lootSystem.scatterRestBundle()) return;

@@ -15,6 +15,7 @@
  */
 
 import { GRID, COLORS, EQUIPMENT, CRAFTING } from '../../game/GameConfig.js';
+import { drawCharon } from '../ui/CharonDraw.js';
 import { getItemData } from '../../data/items.js';
 import { PixelatedDissolve, TextSwapDissolve } from '../effects/TextEffects.js';
 import { drawUndead } from '../ui/UndeadRenderer.js';
@@ -83,7 +84,7 @@ export class RestRenderer {
     const _vpNow = performance.now();
     const _vpDt = Math.min((_vpNow - (this._lastVacuumTime || _vpNow)) / 1000, 0.05);
     this._lastVacuumTime = _vpNow;
-    this._updateAndDrawVacuumParticles(_vpDt);
+    if (game.currentRoom.exits.north) this._updateAndDrawVacuumParticles(_vpDt);
 
     // Cycling upgrade animation on center crafting slot (updates every frame)
     this.renderController.craftingStation.renderForeground(game);
@@ -326,6 +327,9 @@ export class RestRenderer {
         y: gy * GRID.CELL_SIZE
       }));
     }
+
+    // Charon barring the north exit, and his toll in flight
+    drawCharon(this.renderer, game);
 
     // Draw player (with i-frame alpha fade and status color). Whirlwind Cape's
     // dodge roll spins the glyph instead — shared with ExploreRenderer via

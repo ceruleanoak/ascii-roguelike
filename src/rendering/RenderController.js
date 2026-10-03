@@ -113,6 +113,7 @@ export class RenderController {
 
   renderRestState(game) {
     this.restRenderer.render(game);
+    this.dialogueBox.render(game);
   }
 
   renderExploreState(game) {

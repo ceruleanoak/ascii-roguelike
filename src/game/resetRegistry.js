@@ -556,6 +556,12 @@ export const RESET_REGISTRY = [
     why: 'Unlike attackSequenceActive (already allowlisted — cleared synchronously within the same input-handler pass), trapCharging has no such guarantee: a death interrupting a mid-charge throw leaves it non-null with a stale timer, which BowChargeIndicator and WeaponPreviewDraw read directly and would render into the next run\'s first frame. Registering closes that staleness gap. Shape: { timer: float } while charging a throw, null otherwise.',
   },
   {
+    path: 'charon',
+    scope: 'run',
+    value: null,
+    why: 'CharonSystem state while Charon bars REST\'s north exit ({ npc, phase, toll, takeTimer, flights }); null otherwise. Rebuilt on every REST entry, but a death mid-toll must not carry him (or his queued toll) into the next run.',
+  },
+  {
     path: 'thrownLastWeapon',
     scope: 'run',
     value: false,
