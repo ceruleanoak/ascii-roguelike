@@ -1098,6 +1098,33 @@ export class MenuSystem {
   }
 
   /** Route a character returned from a crafting slot back to the right inventory. */
+  /**
+   * REST tick: once the player walks away from the crafting station, whatever
+   * sits in the left/right slots goes back to inventory (the center slot is
+   * derived from them, so it empties too). Otherwise the table is a hiding
+   * place — anything parked there is out of Charon's reach.
+   */
+  returnCraftingSlotsWhenAway() {
+    const game = this.game;
+    const cs = game.craftingSystem;
+    if (!game.player || (!cs.leftSlot && !cs.rightSlot)) return;
+    const C = GRID.CELL_SIZE;
+    const px = (game.player.position.x + C / 2) / C;
+    const py = (game.player.position.y + C / 2) / C;
+    const AWAY_MARGIN = 2;  // cells beyond the station's bracket span
+    const nearX = px >= CRAFTING.LEFT_SLOT_X - AWAY_MARGIN && px <= CRAFTING.RIGHT_SLOT_X + 3 + AWAY_MARGIN;
+    const nearY = Math.abs(py - (CRAFTING.STATION_Y + 0.5)) <= AWAY_MARGIN + 0.5;
+    if (nearX && nearY) return;
+
+    game.audioSystem.stopSFXByName('craft_cycle');
+    const left = cs.clearLeftSlot();
+    const right = cs.clearRightSlot();
+    if (left) this._returnSlotItemToInventory(left);
+    if (right) this._returnSlotItemToInventory(right);
+    game.renderer.markBackgroundDirty();
+    game.updateUI();
+  }
+
   _returnSlotItemToInventory(char) {
     const game = this.game;
     if (isIngredient(char)) {

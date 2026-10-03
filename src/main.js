@@ -2572,6 +2572,7 @@ class Game {
       npc.update(deltaTime);
     }
     this.charonSystem.update(deltaTime);
+    this.menuSystem.returnCraftingSlotsWhenAway();
 
     // Animate tombstone and slot popups
     this.menuSystem.updateTombstonePopup(deltaTime);
