@@ -2322,15 +2322,15 @@ export const ITEMS = {
     cooldown: 20, // Reusable with 20s cooldown
     color: '#00ffff'
   },
-  // Boots — Fur + Fur. A slot-holding passive: slightly faster while
-  // equipped (EquipmentEffectsSystem reads passiveSpeedBoost). Also the base
-  // the other boots are crafted from (recipes.js).
+  // Boots — Fur + Fur. A slot-holding passive: unarmed sprint speed while
+  // equipped, even with a weapon out (EquipmentEffectsSystem reads
+  // passiveSprint). Also the base the other boots are crafted from (recipes.js).
   'ꙍ': {
     char: 'ꙍ',
     name: 'Boots',
     type: ITEM_TYPES.CONSUMABLE,
     passive: true,
-    passiveSpeedBoost: 0.08,
+    passiveSprint: true,
     color: '#8b6914'
   },
   // Floating Boots — Boots + Wings. A slot-holding passive, never thrown: the

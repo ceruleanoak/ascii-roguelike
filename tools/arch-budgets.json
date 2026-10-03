@@ -5,5 +5,5 @@
   "src/rendering/state/ExploreRenderer.js": 104635,
   "src/systems/CombatSystem.js": 100163,
   "src/systems/InventorySystem.js": 41873,
-  "src/entities/Player.js": 46517
+  "src/entities/Player.js": 40690
 }

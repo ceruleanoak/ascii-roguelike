@@ -2,13 +2,13 @@ import { PHYSICS, GRID, COLORS, PLAYER_STATS } from '../game/GameConfig.js';
 import { StatusEffectSystem, createPlayerStatusSlots } from '../systems/StatusEffectSystem.js';
 import { computePlayerPipRows, computePlayerDisplayColor } from '../systems/StatusEffectVisuals.js';
 import { PlayerDamageSystem } from '../systems/PlayerDamageSystem.js';
+import { PlayerDodgeRollSystem } from '../systems/PlayerDodgeRollSystem.js';
 import { initParry } from './enemyMechanics/ParryMechanic.js';
 
 const INVULNERABILITY_DURATION = 1.0;
 const BLINK_FREQUENCY = 0.1;
 const SPAWN_FADE_DURATION = 0.9;
 const EXIT_FADE_DURATION = 0.3;
-const DAGGER_POST_DODGE_CRIT_WINDOW = 0.6;
 
 export class Player {
   constructor(x, y) {
@@ -210,6 +210,9 @@ export class Player {
     // a non-elemental treasure to the pool. Also booleans, also non-stacking.
     this.fountainSprintBlessed = false; // Diamond: unarmed sprint speed even while armed
     this.fountainArmorBonus = 0;        // Onyx: +1 defense, folded in on every equip recompute
+    // Boots: unarmed sprint speed even while armed, for as long as they're
+    // equipped. Recomputed by EquipmentEffectsSystem on every equip change.
+    this.bootsSprint = false;
     this.blockBoostTimer = 0;
     this.blockBoostAmount = 0;
     this.stoneSkinTimer = 0;
@@ -323,11 +326,17 @@ export class Player {
 
   // Unarmed sprint multiplier, applied to both acceleration and max speed.
   // Empty hands normally mean 1.5x; a Diamond offered to a fairy fountain
-  // (fountainSprintBlessed) keeps that speed even with a weapon out. Every
-  // speed and roll calculation routes through here so the blessing can't miss
-  // a site.
+  // (fountainSprintBlessed) or equipped Boots (bootsSprint) keep that speed
+  // even with a weapon out. Every speed and roll calculation routes through
+  // here so the blessing can't miss a site.
   getSprintMultiplier() {
-    return (!this.heldItem || this.fountainSprintBlessed) ? 1.5 : 1;
+    return this.isSprinting() ? 1.5 : 1;
+  }
+
+  // True whenever the player moves at sprint speed — also drives the sprint
+  // footstep trail (WorldEffectsSystem), so every sprint source shows it.
+  isSprinting() {
+    return !this.heldItem || this.fountainSprintBlessed || this.bootsSprint;
   }
 
   updateInput(inputState, lockFacing = false) {
@@ -607,194 +616,15 @@ export class Player {
     return dotTicks;
   }
 
+  // Activation (cooldown/goo/lock gates, roll speed, per-type i-frames) and
+  // per-frame roll movement live in PlayerDodgeRollSystem — extracted for the
+  // same reason as PlayerDamageSystem.
   startDodgeRoll(direction, enemies = []) {
-    // Check if on cooldown
-    if (this.dodgeRoll.cooldownTimer > 0) {
-      return false;
-    }
-
-    // Cannot dodge roll while gooey or locked (Frozen/zapped/stunned)!
-    if (this.isGooey() || this.isLocked()) {
-      return false;
-    }
-
-    // Deep water blocks roll activation outright — frog form and Flippers
-    // (deepWaterImmune) are exempt, matching their full deep-water immunity.
-    if (this.inDeepWater && !this.polymorphed && !this.deepWaterImmune) {
-      return false;
-    }
-
-    // Cancel attack windup for melee weapons
-    if (this.heldItem && this.heldItem.windupActive) {
-      this.heldItem.windupActive = false;
-      this.heldItem.windupTimer = 0;
-      this.heldItem.pendingPlayer = null;
-    }
-
-    // Cancel bow charging
-    if (this.heldItem && this.heldItem.isCharging) {
-      this.heldItem.isCharging = false;
-      this.heldItem.chargeTime = 0;
-      this.heldItem.chargingPlayer = null;
-    }
-
-    // Break any sapping enemies attached to this player
-    for (const enemy of enemies) {
-      if (enemy.sapping && enemy.sappingTarget === this) {
-        enemy.breakSapping(300); // Stronger knockback from dodge roll
-      }
-    }
-
-    // Calculate current max movement speed (from updateInput logic)
-    const baseMaxSpeed = PHYSICS.PLAYER_SPEED * this.getSprintMultiplier();
-    const armorModified = baseMaxSpeed * (1 + this.speedBoost - this.speedPenalty);
-    const currentMaxSpeed = this.speedBoostTimer > 0 ? armorModified * this.speedBoostMultiplier : armorModified;
-
-    // Dodge roll speed is 1.1x current max speed (always slightly faster)
-    const rollSpeed = currentMaxSpeed * 1.1;
-
-    // Activate roll
-    this.dodgeRoll.active = true;
-    this.dodgeRoll.direction = direction;
-    // Dizzy: deviate roll up to ±54° from intended direction
-    if (this.isDizzy()) {
-      const baseAngle = Math.atan2(this.dodgeRoll.direction.y, this.dodgeRoll.direction.x);
-      const newAngle = baseAngle + (Math.random() - 0.5) * (Math.PI * 0.6);
-      this.dodgeRoll.direction = { x: Math.cos(newAngle), y: Math.sin(newAngle) };
-    }
-    this.dodgeRoll.timer = this.dodgeRoll.duration;
-    this.dodgeRoll.cooldownTimer = this.dodgeRoll.cooldown * this.rollCooldownMult;
-    this.dodgeRoll.speed = rollSpeed; // Set dynamic speed
-
-    // Reset slope/ice lock state for fresh roll
-    this.dodgeRoll.slopeTimer  = 0;
-    this.dodgeRoll.slopeActive = false;
-    this.dodgeRoll.slopeLocked = false;
-
-    // Zero out velocity for flat dodge roll speed (not additive with movement)
-    this.velocity.vx = 0;
-    this.velocity.vy = 0;
-    this.acceleration.ax = 0;
-    this.acceleration.ay = 0;
-
-    // Apply roll-specific effects based on type
-    switch (this.dodgeRoll.type) {
-      case 'dodge':
-        // Roll duration plus this character's brief post-roll tail, plus any
-        // armor bonus. A roll with `iframes: false` (sprint) grants none.
-        this.invulnerabilityTimer = this.dodgeRoll.iframes
-          ? this.dodgeRoll.duration + this.dodgeRoll.postRollIframes + this.extraIframes
-          : 0;
-        break;
-      case 'hide':
-        if (this.dodgeRoll.invisRecoveryTimer > 0) {
-          // Recovering from a recent invisibility trigger: roll works normally, no invis effect
-          this.invulnerabilityTimer = this.dodgeRoll.duration + this.dodgeRoll.postRollIframes + this.extraIframes;
-        } else {
-          // Invisible to enemies + extended i-frames (cyan rogue specialty)
-          this.hidden = true;
-          // Extended i-frames: 0.25s roll + 1.25s = 1.5s total invulnerability
-          this.invulnerabilityTimer = this.dodgeRoll.duration + 1.25;
-          // Attacks blocked for entire extended iframe duration
-          this.attackBlockTimer = this.invulnerabilityTimer;
-          // Hide persists past the roll itself — enemies actively forget the player while hidden,
-          // giving room to reposition and set up a backstab.
-          this.dodgeRoll.hideTimer = this.dodgeRoll.hideDuration || this.invulnerabilityTimer;
-          // Recovery gate: invisibility can't trigger again for 10s (plain dodge still available)
-          this.dodgeRoll.invisRecoveryTimer = this.dodgeRoll.invisRecoveryDuration;
-        }
-        break;
-      case 'damage':
-        // Minimal i-frames — only for the roll duration itself, no buffer (requires precision)
-        this.invulnerabilityTimer = this.dodgeRoll.duration;
-        break;
-      case 'whirlwind':
-        // No i-frames — offensive spin, not defensive evasion
-        break;
-      case 'blink':
-        // Defer teleport to main.js for collision checking, bounds enforcement, and trail particles
-        this.pendingBlink = { direction: { x: direction.x, y: direction.y }, distance: this.dodgeRoll.distance };
-        this.dodgeRoll.timer = 0; // Instant
-        break;
-    }
-
-    return true;
+    return PlayerDodgeRollSystem.start(this, direction, enemies);
   }
 
   updateDodgeRoll(deltaTime) {
-    // Cooldown tick
-    if (this.dodgeRoll.cooldownTimer > 0) {
-      this.dodgeRoll.cooldownTimer -= deltaTime;
-    }
-
-    // Invisibility recovery tick (cyan rogue) — while active, rolls are dodge-only, no hide
-    if (this.dodgeRoll.invisRecoveryTimer > 0) {
-      this.dodgeRoll.invisRecoveryTimer -= deltaTime;
-    }
-
-    // Hide window tick (cyan rogue) — persists past the roll itself
-    if (this.dodgeRoll.hideTimer > 0) {
-      this.dodgeRoll.hideTimer -= deltaTime;
-      if (this.dodgeRoll.hideTimer <= 0) {
-        this.dodgeRoll.hideTimer = 0;
-        this.hidden = false;
-      }
-    }
-
-    // Active roll movement
-    if (this.dodgeRoll.active) {
-      // Slope / ice lock phase
-      // When the player enters a slope or frozen-ice tile during a roll, a
-      // free-time window opens (slopeFreeTime ≈ 20 frames).  During that window
-      // the roll velocity drives movement as normal ("burst").  Once the window
-      // expires, slopeLocked is set: roll velocity is zeroed and the tile's own
-      // physics (slope push / ice inertia) take over ("mercy phase").
-      const onSpecialTerrain = this.isOnSlope || this.isOnIce;
-      if (onSpecialTerrain && this.dodgeRoll.type !== 'blink') {
-        if (!this.dodgeRoll.slopeActive) {
-          this.dodgeRoll.slopeActive = true; // Start window on first contact
-          this.dodgeRoll.slopeTimer  = 0;
-        }
-        if (!this.dodgeRoll.slopeLocked) {
-          this.dodgeRoll.slopeTimer += deltaTime;
-          if (this.dodgeRoll.slopeTimer >= this.dodgeRoll.slopeFreeTime) {
-            this.dodgeRoll.slopeLocked = true;
-          }
-        }
-      }
-
-      this.dodgeRoll.timer -= deltaTime;
-
-      if (this.dodgeRoll.timer <= 0) {
-        // Roll complete — zero out velocity and deactivate
-        this.dodgeRoll.active = false;
-        this.dodgeRoll.justEnded = true;
-        this.velocity.vx = 0;
-        this.velocity.vy = 0;
-        this.acceleration.ax = 0;
-        this.acceleration.ay = 0;
-        // Note: hidden flag for 'hide' rolls is driven by hideTimer (which persists past
-        // the roll itself); do NOT clear it here.
-        // Open post-dodge crit window for dagger-class weapons (subtype behavior).
-        const activeWeapon = this.quickSlots?.[this.activeSlotIndex];
-        if (activeWeapon?.data?.weaponSubtype === 'dagger') {
-          this.postDodgeCritTimer = DAGGER_POST_DODGE_CRIT_WINDOW;
-          this.dodgeRoll.daggerAutoFire = true;
-        }
-      } else if (this.dodgeRoll.type !== 'blink') {
-        if (this.dodgeRoll.slopeLocked) {
-          // Mercy phase: zero roll velocity so slope push / ice momentum drives
-          this.velocity.vx = 0;
-          this.velocity.vy = 0;
-        } else {
-          // Normal roll or within free-time window on special terrain
-          this.velocity.vx = this.dodgeRoll.direction.x * this.dodgeRoll.speed;
-          this.velocity.vy = this.dodgeRoll.direction.y * this.dodgeRoll.speed;
-        }
-        this.acceleration.ax = 0;
-        this.acceleration.ay = 0;
-      }
-    }
+    PlayerDodgeRollSystem.update(this, deltaTime);
   }
 
   // Resolution logic (i-frames, dodge, resists, defense, reflect) lives in
@@ -1001,6 +831,7 @@ export class Player {
     // Reset fairy fountain treasure blessings
     this.fountainSprintBlessed = false;
     this.fountainArmorBonus = 0;
+    this.bootsSprint = false;
 
     // Reset armor properties
     this.defense = 0;

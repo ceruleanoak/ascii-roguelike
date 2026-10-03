@@ -597,9 +597,9 @@ export class WorldEffectsSystem {
     const steamClouds = game.steamClouds;
     const particles = game.particles;
 
-    // Sprint footstep trail: dots while unarmed and moving
+    // Sprint footstep trail: dots while sprinting (unarmed, Boots, Diamond) and moving
     {
-      const isSprinting = !player.heldItem && !player.dodgeRoll.active;
+      const isSprinting = player.isSprinting() && !player.dodgeRoll.active;
       const speed = Math.sqrt(player.velocity.vx ** 2 + player.velocity.vy ** 2);
       if (isSprinting && speed > 30) {
         player.footstepTimer -= deltaTime;

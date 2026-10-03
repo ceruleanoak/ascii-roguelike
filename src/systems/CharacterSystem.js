@@ -344,7 +344,7 @@ export class CharacterSystem {
       // dispatch entirely (otherwise Green Ranger's slide would override us).
       if (player.diving) {
         if (hasDodgeInput) {
-          const baseMax = (player.heldItem ? 110 : 165) * (1 + player.speedBoost);
+          const baseMax = 110 * player.getSprintMultiplier() * (1 + player.speedBoost);
           player.velocity.vx = dodgeDirection.x * baseMax;
           player.velocity.vy = dodgeDirection.y * baseMax;
           player.acceleration.ax = 0;
@@ -616,7 +616,7 @@ export class CharacterSystem {
     player._diveSavedSpeedBoost = player.speedBoost;
     player.speedBoost = 0.8; // additive → +80% (1.8× base)
     // Give the dive an initial directional kick so the player visibly enters.
-    const baseMax = (player.heldItem ? 110 : 165) * (1 + player.speedBoost);
+    const baseMax = 110 * player.getSprintMultiplier() * (1 + player.speedBoost);
     player.velocity.vx = direction.x * baseMax;
     player.velocity.vy = direction.y * baseMax;
     // Brief iframe on entry so contact damage doesn't trigger as the dive starts.
