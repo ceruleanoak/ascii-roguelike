@@ -1,7 +1,7 @@
 import { Item } from '../entities/Item.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Leshy } from '../entities/Leshy.js';
-import { Fairy } from '../entities/Fairy.js';
+import { Fairy, FAIRY_HEAL } from '../entities/Fairy.js';
 import { isIngredient, isItem, generateEnemyDrops } from '../data/items.js';
 import { pickQuagmireIngredient } from '../data/alchemy.js';
 import { getZoneRandomEnemy, ENEMIES } from '../data/enemies.js';
@@ -482,8 +482,8 @@ export class InteractionSystem {
     // for a full-health player instead.
     if (player.hp >= player.maxHp) return false;
 
-    // Full heal. No text — the HP readout blinks instead.
-    player.hp = player.maxHp;
+    // Small fixed heal. No text — the HP readout blinks instead.
+    player.hp = Math.min(player.maxHp, player.hp + FAIRY_HEAL);
     game.audioSystem?.playSFX?.('fairy_pickup');
     game.menuSystem?.updateUI?.();
     this._blinkHPDisplay();

@@ -87,7 +87,7 @@ import { GrayZoneSystem } from './systems/GrayZoneSystem.js';
 import { ElectricitySystem } from './systems/ElectricitySystem.js';
 import { FireSystem } from './systems/FireSystem.js';
 import { FountainSystem } from './systems/FountainSystem.js';
-import { Fairy } from './entities/Fairy.js';
+import { Fairy, FAIRY_HEAL } from './entities/Fairy.js';
 import { CampNPCSystem } from './systems/CampNPCSystem.js';
 import { DialogueSystem } from './systems/DialogueSystem.js';
 import { FishermanDemoSystem } from './systems/FishermanDemoSystem.js';
@@ -3017,13 +3017,14 @@ class Game {
       console.log(`💀 Zone: ${this.zoneSystem.currentZone} | Depth: ${this.getCurrentZoneDepth()}`);
       console.log(`💀 ═══════════════════════════════════════════════════════════\n`);
 
-      // Check for Fairy in a Bottle death intercept (full heal — preferred over Phoenix Feather)
+      // Check for Fairy in a Bottle death intercept (FAIRY_HEAL — the free
+      // revive is spent before a crafted Phoenix Feather)
       const bottleIdx = (this.player.equippedConsumables || []).findIndex(c => c?.data?.effect === 'revive_on_death');
       if (bottleIdx !== -1) {
         // Ledger: record the intercepted death before restoring state
         captureDeath(this, { event: 'revive', revivedBy: 'fairy_bottle' });
         const bottle = this.player.equippedConsumables[bottleIdx];
-        this.player.hp = this.player.maxHp;
+        this.player.hp = Math.min(this.player.maxHp, FAIRY_HEAL);
         this.player.invulnerabilityTimer = 2.0;
         // Clear movement-locking state so the player isn't frozen post-revive
         // (e.g. died mid-dodge-roll — dodgeRoll.active must be false or
@@ -3043,7 +3044,7 @@ class Game {
         this.inventorySystem.spentConsumableSlots[bottleIdx] = true;
         this.audioSystem?.playSFX?.('pickup');
         this.saveGameState();
-        console.log('🧚 Fairy in a Bottle activated — death intercepted! HP fully restored.');
+        console.log('🧚 Fairy in a Bottle activated — death intercepted! HP restored to ' + this.player.hp);
         // fall through — do NOT transition to GAME_OVER
       } else {
       // Check for Phoenix Feather death intercept

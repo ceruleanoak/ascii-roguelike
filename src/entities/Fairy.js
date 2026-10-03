@@ -18,11 +18,17 @@ import { getExitSlotPosition, mutateExitLetter } from '../systems/ExitSystem.js'
 //                (opposite the assigned exit) and applies a continuous impulse
 //                that herds the player out. Each fairy acts independently.
 //
-// Touch outcome (decided by the caller, not the entity): heal the player to
-// full, then consume() to despawn. Catching a fairy in an Empty Bottle is a
-// separate, deliberate act — arm the bottle and press SPACE in range
+// Touch outcome (decided by the caller, not the entity): heal the player by
+// FAIRY_HEAL, then consume() to despawn. Catching a fairy in an Empty Bottle is
+// a separate, deliberate act — arm the bottle and press SPACE in range
 // (InteractionSystem.tryBottleFairy) — and it suppresses the touch heal while
 // the bottle is armed so the walk-up can't spend the fairy first.
+
+// HP a fairy restores — on touch, and when a Fairy in a Bottle intercepts a
+// death. Fairies are free (cut grass), so their heal is small and fixed rather
+// than a full heal; consumables are balanced by what they cost to obtain.
+export const FAIRY_HEAL = 3;
+
 export class Fairy extends NeutralCharacter {
   constructor(x, y, exits, opts = {}) {
     super('*', '#ffaaff', x, y);
