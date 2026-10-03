@@ -865,6 +865,35 @@ programming terms.
 - **Not:** soft-lock or save-scumming. Death is final and intentional; mental progression is
   the reward, not inventory accumulation.
 
+### Death Save
+- **Definition:** A lethal hit that something catches before it becomes a Death: HP is
+  restored and the run goes on. The equipped saves are spent in a fixed order — Fairy in a
+  Bottle (restores the flat fairy heal) before Phoenix Feather (half of max HP) — and each is
+  used up by the save. A wish revive is a death save too. Anything marked to break on death
+  (Heart `♥`, Dragon Heart `♦`) shatters on every lethal hit, saved or not, before the save
+  restores HP, so its max-HP bonus never carries through.
+- **In code:** `tryDeathSave(game)` walks `DEATH_SAVES` (`src/systems/DeathSaveSystem.js`),
+  called from main.js's death check; `breakOnDeathPassives` (`ConsumableSlotBreaks.js`) runs
+  first for every `breaksOnDeath` item. The ledger records a save as `event: 'revive'`.
+- **Not:** a Death — no reset happens. Not a heal-on-hit (Fairy King in a Bottle heals hits
+  the player survives; it never catches a lethal one).
+
+### Fairy King
+- **Definition:** A rare Fairy (1 in 100), deeper pink, that talks instead of healing.
+  Touching it does nothing; SPACE in range speaks its one line, pointing the player to the
+  fountain's gem offering. It appears wherever wild fairies spawn (fairy grass, fishing,
+  Oasis), where it flutters without leaving so it can be found and heard, and as an ambient
+  fairy at the Fairy Fountain, where it only talks. An armed Empty Bottle catches a wild one as
+  **Fairy King in a Bottle** `♔`: a reusable consumable that heals 3 HP on any hit the player
+  survives, then waits out a 20s cooldown; a fairy orbits the player while it is ready.
+- **In code:** `FairyKing extends Fairy` (`src/entities/FairyKing.js`; `FAIRY_KING_ODDS`,
+  `createWildFairy`, `getDialogueLines`); the bottle catch is in
+  `InteractionSystem.tryBottleFairy`. `♔` is `healOnHit: true` in `src/data/items.js`, fired by
+  `player.hurtPending` (set by `PlayerDamageSystem`) in `ConsumableTriggerSystem`; the ready orbit is
+  `drawFairyKingOrbit` (`src/rendering/effects/FairyKingOrbit.js`).
+- **Not:** a Fairy in a Bottle — the King's bottle heals on surviving a hit and is never a
+  Death Save. Not a blessing source: touching it grants nothing.
+
 ### Reset Registry
 - **Definition:** The declare-once table of every run/title/room-scoped `game.*`/`player.*` field
   and how it's cleared. Replaces scattered ad hoc clears duplicated across separate reset
