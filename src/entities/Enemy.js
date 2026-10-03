@@ -2088,9 +2088,15 @@ export class Enemy {
     // Become enraged when attacked - never un-aggro
     this.enraged = true;
 
-    // Interrupt windup when taking damage (unless immune)
-    if (this.state === 'windup' && !this.windupImmune) {
+    // Damage during Strike's opening beat cancels the swing (unless the enemy
+    // is windupImmune). Zeroing windupTimer alone is not a cancel — Strike reads
+    // an expired windup as "swing now", so a hit made the attack land sooner.
+    // Leaving Strike is what stops it: the legacy state stops reading 'attack',
+    // so Telegraph discards the windup visual instead of activating it, and no
+    // cooldown is charged (Strike's exit never charges one).
+    if (this.stateMachine?.current === 'strike' && this.windupTimer > 0 && !this.windupImmune) {
       this.windupTimer = 0;
+      this.stateMachine.transition(this, null, 'approach', 'windup interrupted');
     }
 
     // Lock onto attacker's position for navigation.

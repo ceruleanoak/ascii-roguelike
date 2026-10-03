@@ -117,8 +117,10 @@ const FALLBACK = {
 // precedence was encoded as nothing but source-line position.
 //
 // `hard: true` means the interrupt wins even against a committed State. Damage
-// is the soft case — a committed Strike absorbs it and swings anyway — while
-// being frozen mid-swing is not something commitment should survive. That
+// is the soft case — a live swing absorbs it and lands anyway — while being
+// frozen mid-swing is not something commitment should survive. (Damage during
+// Strike's windup is a different matter: Enemy.takeDamage aborts the Strike
+// outright, unless the enemy is windupImmune.) That
 // distinction is the generalization of `DAGGER_INTERRUPTIBLE` in SniperMechanic,
 // which is the codebase's only existing interruptibility declaration.
 export const INTERRUPTS = [
