@@ -4,8 +4,8 @@ import { Charon } from '../entities/Charon.js';
 
 // Every REST visit from deeper than this depth finds Charon at the north exit.
 const CHARON_MIN_DEPTH = 1;
-// His toll: this fraction of everything carried (coins + pile, treasures
-// included in the count), rounded up.
+// His toll: this fraction of the ingredient pile (treasures included in the
+// count, coins not), rounded up. Coins are only what he takes first.
 const TOLL_DIVISOR = 3;
 const TAKE_INTERVAL = 0.15;  // seconds between taken ingredients
 const FLIGHT_TIME = 0.45;    // seconds for a taken glyph to reach him
@@ -16,9 +16,10 @@ const FADE_TIME = 0.8;       // seconds for him to vanish once paid
  *
  * On REST entry above L1 the north exit closes and Charon stands in it.
  * SPACE near him opens his dialogue; closing it starts the toll: one third of
- * the carried ingredient count (rounded up), coins first, then random
- * ingredients — never treasures. Each taken glyph flies from the player to
- * him, then he fades out and the exit reopens.
+ * the ingredient count (rounded up, coins not counted), paid coins first,
+ * then random ingredients — never treasures. A hero lost to the gray mist
+ * hands off to the next one at REST without him (waiveNextVisit). Each taken
+ * glyph flies from the player to him, then he fades out and the exit reopens.
  *
  * State lives on game.charon (null when absent; Reset Registry, run scope):
  *   { npc, phase: 'waiting'|'taking'|'leaving', toll: [char], takeTimer, flights }
@@ -26,12 +27,22 @@ const FADE_TIME = 0.8;       // seconds for him to vanish once paid
 export class CharonSystem {
   constructor(game) {
     this.game = game;
+    // One-shot: the next REST entry finds no Charon. Consumed by onEnterRest.
+    this.waived = false;
+  }
+
+  /** The next REST entry is a hand-off, not a return — he doesn't stand there. */
+  waiveNextVisit() {
+    this.waived = true;
   }
 
   /** REST entry: bar the north exit when the player is returning from deeper than L1. */
   onEnterRest(room) {
     const game = this.game;
     game.charon = null;
+    const waived = this.waived;
+    this.waived = false;
+    if (waived) return;
     const depth = game.zoneDepths[game.zoneSystem.currentZone] || 0;
     if (depth <= CHARON_MIN_DEPTH || !room) return;
 
@@ -93,7 +104,7 @@ export class CharonSystem {
     const inv = this.game.inventorySystem;
     const pile = inv.getIngredients();
     const coins = inv.getCoinCount();
-    let owed = Math.ceil((pile.length + coins) / TOLL_DIVISOR);
+    let owed = Math.ceil(pile.length / TOLL_DIVISOR);
 
     const toll = [];
     const coinsTaken = Math.min(coins, owed);

@@ -237,6 +237,8 @@ export class GrayZoneSystem {
     );
 
     if (living.length > 0) {
+      // The next walker arrives at REST without having paid passage — no Charon.
+      game.charonSystem.waiveNextVisit();
       game.characterSystem.switchToCharacterAtRest(living[0]);
     } else {
       // The mist took the last walker — the run is over, snapshots and all.
