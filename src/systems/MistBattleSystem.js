@@ -12,6 +12,8 @@
 // - Flanks mirror the Primary: same attack press (each with its own weapon),
 //   same slot on 1/2/3, and a roll in the same direction with their own
 //   character's roll type.
+// - Rotate (double-tap SPACE) turns the Trine clockwise: `game.player` is
+//   repointed at the back-left body and the gear slots swap with it.
 // - Each body carries its own character type and its own gear. The global
 //   InventorySystem gear slots always mirror the Primary; a Flank's passive
 //   armor/consumable stats are projected onto it by briefly loading its gear
@@ -42,6 +44,12 @@ const ARRIVE_EPSILON = 1.5;
 // How long each body's newly held weapon glyph shows above it after a 1/2/3
 // swap (seconds).
 const SWAP_FLASH_TIME = 0.6;
+// Two SPACE presses within this many seconds are a Rotate, not two attacks.
+const ROTATE_DOUBLE_TAP = 0.25;
+// After a Rotate the new Primary glides up into the old apex position over
+// this many seconds, so the triangle turns in place instead of the whole
+// Trine stepping back a corner with every Rotate.
+const ROTATE_GLIDE_TIME = 0.2;
 
 // Weapon behavior that lives in Primary-bound systems (MagicSystem's mana
 // meter, the bat-charge and flail-spin tickers in main.js, the charge-hammer
@@ -132,6 +140,10 @@ export class MistBattleSystem {
     // Last frame's Primary roll state, for the mirrored-dodge edge (_mirrorDodge).
     this.leadRollCooldown = 0;
     this.leadSliding = false;
+    // Game-time clock for the double-tap window (deterministic, pauses with the game).
+    this.clock = 0;
+    this.lastSpacePress = -Infinity;
+    this.glide = null; // { x, y, timer } — the new Primary's run to the old apex
   }
 
   /**
@@ -367,6 +379,91 @@ export class MistBattleSystem {
     }
   }
 
+  // ── Rotate ────────────────────────────────────────────────────────────
+  // Double-tap SPACE turns the Trine clockwise one slot: the back-left Flank
+  // becomes the Primary at the apex, the old Primary drops to back-right. The
+  // first tap of the pair attacks as usual; the second rotates instead.
+
+  /**
+   * Called on every EXPLORE SPACE press before the attack. Returns true when
+   * the press completed a double-tap and Rotated (the press is consumed).
+   */
+  tryRotate() {
+    if (!this.active) return false;
+    if (this.clock - this.lastSpacePress > ROTATE_DOUBLE_TAP) {
+      this.lastSpacePress = this.clock;
+      return false;
+    }
+    this.lastSpacePress = -Infinity; // a third tap starts a fresh pair
+    return this.rotate();
+  }
+
+  /** Promote the next living member clockwise (back-left first) to Primary. */
+  rotate() {
+    const n = this.members.length;
+    let next = -1;
+    for (let k = n - 1; k >= 1; k--) { // back-left (n-1) before back-right
+      const idx = (this.primaryIndex + k) % n;
+      if (this.members[idx].body.hp > 0) { next = idx; break; }
+    }
+    if (next < 0) return false;
+    this._promote(next);
+    return true;
+  }
+
+  _promote(index) {
+    const game = this.game;
+    const outgoing = this.primary;
+    this._stashGear(outgoing);
+    // The outgoing body stops answering input; formation steering takes over.
+    outgoing.body.acceleration.ax = 0;
+    outgoing.body.acceleration.ay = 0;
+    outgoing.body.heldItem?.cancelChargeAndReload?.();
+
+    this.glide = { x: outgoing.body.position.x, y: outgoing.body.position.y, timer: ROTATE_GLIDE_TIME };
+    this.primaryIndex = index;
+    const incoming = this.primary;
+    // Keep the Trine's heading: the new apex faces where the old one did.
+    incoming.body.facing.x = outgoing.body.facing.x;
+    incoming.body.facing.y = outgoing.body.facing.y;
+    game.player = incoming.body;
+    game.activeCharacterType = incoming.characterType;
+    this._loadGear(incoming);
+    this.leadRollCooldown = incoming.body.dodgeRoll.cooldownTimer;
+    this.leadSliding = incoming.body.continuousRollActive;
+    game.updateUI();
+  }
+
+  // Copy the global gear slots (the Primary's live gear — consumables may
+  // have been spent or cooled down since they were loaded) back onto the member.
+  _stashGear(member) {
+    const inv = this.game.inventorySystem;
+    member.gear.armor = inv.equippedArmor;
+    member.gear.consumables = [...inv.equippedConsumables];
+    member.gear.spent = [...inv.spentConsumableSlots];
+    member.gear.cooldowns = [...inv.consumableCooldowns];
+  }
+
+  _updateGlide(deltaTime, minSpeed) {
+    const glide = this.glide;
+    if (!glide) return;
+    const body = this.game.player;
+    glide.timer -= deltaTime;
+    const dist = Math.hypot(glide.x - body.position.x, glide.y - body.position.y);
+    if (body.dodgeRoll.active) {
+      this.glide = null; // a roll takes over the body
+      return;
+    }
+    if (glide.timer <= 0 || dist < ARRIVE_EPSILON) {
+      // Stop on the mark — the glide's speed would otherwise coast past it.
+      body.velocity.vx = 0;
+      body.velocity.vy = 0;
+      this.glide = null;
+      return;
+    }
+    steerToward(this.game, body, glide.x, glide.y, Math.max(minSpeed, dist / glide.timer));
+  }
+
   // ── Mirrored dodge ────────────────────────────────────────────────────
   // When the Primary rolls, every Flank rolls the same way with its OWN
   // character's roll (hide, blink, damage, sprint...). Detected as an edge on
@@ -417,11 +514,13 @@ export class MistBattleSystem {
     const game = this.game;
     const lead = game.player;
     const flankSpeed = PHYSICS.PLAYER_SPEED * FLANK_SPEED_MULT;
+    this.clock += deltaTime;
 
     for (const member of this.members) {
       if (member.swapFlash > 0) member.swapFlash = Math.max(0, member.swapFlash - deltaTime);
     }
     this._mirrorDodge();
+    this._updateGlide(deltaTime, flankSpeed);
 
     for (let k = 1; k < this.members.length; k++) {
       const body = this.members[(this.primaryIndex + k) % this.members.length].body;

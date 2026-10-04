@@ -3818,6 +3818,7 @@ class Game {
 
       // If player has a weapon and can attack, attack (gem/bread gating +
       // charge SFX + attack creation live in CombatSystem.tryUseHeldWeapon)
+      if (this.mistBattleSystem.tryRotate()) return; // double-tap SPACE = Rotate
       if (this.player.heldItem && !this.captiveInteractionThisFrame && this.player.canAttack()) {
         this.combatSystem.tryUseHeldWeapon();
         this.mistBattleSystem.onAttackPress(); // Flanks fire with the Primary
