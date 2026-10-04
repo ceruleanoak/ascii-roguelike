@@ -36,6 +36,9 @@ const FLANK_SIDE = 1.5;
 const FLANK_SPEED_MULT = 1.2;
 const SETTLE_RADIUS = CELL;
 const ARRIVE_EPSILON = 1.5;
+// How long each body's newly held weapon glyph shows above it after a 1/2/3
+// swap (seconds).
+const SWAP_FLASH_TIME = 0.6;
 
 // Weapon behavior that lives in Primary-bound systems (MagicSystem's mana
 // meter, the bat-charge and flail-spin tickers in main.js, the charge-hammer
@@ -169,6 +172,7 @@ export class MistBattleSystem {
       this.members.push({
         body,
         characterType: snap.characterType,
+        swapFlash: 0,
         gear: {
           armor: snap.armor ? this._makeItem(snap.armor.char, body) : null,
           consumables: (snap.consumables || []).map(c => (c ? this._makeItem(c.char, body) : null)),
@@ -287,6 +291,76 @@ export class MistBattleSystem {
     };
   }
 
+  // ── Mirrored attacks ──────────────────────────────────────────────────
+  // Flanks fire with the Primary, Galaga-style: the same press, the same
+  // facing, each with its own held weapon. A Flank's weapon runs the carrier
+  // pattern (CampNPCSystem._tryAttack): `use(body)` / `releaseBow()` build the
+  // attack from that body's position, and CombatSystem resolves it. The
+  // Primary-only damage modifier (shrines, Frog Coin, training — all read
+  // `game.player`) is deliberately not applied to Flank attacks.
+
+  _fire(attack) {
+    if (attack) this.game.combatSystem.createAttack(attack, this.game._activeEnemies());
+  }
+
+  /** SPACE press, right after the Primary's attack (main.js handleSpacePress). */
+  onAttackPress() {
+    if (!this.active) return;
+    for (const { body } of this.flanks()) {
+      if (body.heldItem && body.canAttack()) this._fire(body.useHeldItem());
+    }
+  }
+
+  /** SPACE release: loose every charged Flank bow (mirrors handleSpaceRelease). */
+  onAttackRelease() {
+    if (!this.active) return;
+    for (const { body } of this.flanks()) {
+      if (body.heldItem?.isCharging && body.canAttack()) this._fire(body.heldItem.releaseBow());
+    }
+  }
+
+  // Held-SPACE repeat for guns and melee, the per-Flank shape of
+  // CharacterSystem.handleAutoAttack (charge weapons fire on release instead).
+  _autoAttack(body) {
+    const game = this.game;
+    const weapon = body.heldItem;
+    if (!game.keys.space || !game.attackSequenceActive || !weapon) return;
+    const type = weapon.data.weaponType;
+    if (type === WEAPON_TYPES.BOW || type === 'WAND' || type === 'UTILITY') return;
+    if (body.dodgeRoll.active) body.dodgeRoll.queuedAttack = true;
+    else if (body.canAttack()) this._fire(body.useHeldItem());
+  }
+
+  // A Flank's held weapon ticks here, at the same WEAPON_TIMER_RATE as the
+  // Primary's (main.js updatePlayerMechanics); a completed windup lands here.
+  _tickWeapon(body, deltaTime) {
+    const weapon = body.heldItem;
+    if (!weapon?.update) return;
+    const windupAttack = weapon.update(deltaTime * PHYSICS.WEAPON_TIMER_RATE);
+    if (windupAttack) {
+      this.game.playWeaponAttackSFX(weapon);
+      this._fire(windupAttack);
+    }
+  }
+
+  /**
+   * 1/2/3 select the slot on every body at once, and each body flashes its
+   * newly held weapon above it so the three loadouts read at a glance.
+   * Called after main.js has switched the Primary's slot.
+   */
+  onSelectSlot(index) {
+    if (!this.active) return;
+    for (const member of this.members) {
+      const body = member.body;
+      if (body.hp <= 0) continue;
+      if (body !== this.game.player && !body.destroyedSlots?.[index]) {
+        if (index !== body.activeSlotIndex) body.heldItem?.cancelChargeAndReload?.();
+        body.activeSlotIndex = index;
+      }
+      member.swapFlash = SWAP_FLASH_TIME;
+    }
+  }
+
   // rest-parity: absent because the Mist Battle only exists in its EXPLORE arena.
   update(deltaTime) {
     if (!this.active) return;
@@ -294,12 +368,18 @@ export class MistBattleSystem {
     const lead = game.player;
     const flankSpeed = PHYSICS.PLAYER_SPEED * FLANK_SPEED_MULT;
 
+    for (const member of this.members) {
+      if (member.swapFlash > 0) member.swapFlash = Math.max(0, member.swapFlash - deltaTime);
+    }
+
     for (let k = 1; k < this.members.length; k++) {
       const body = this.members[(this.primaryIndex + k) % this.members.length].body;
       if (body.hp <= 0) continue;
       body.update(deltaTime);
       body.facing.x = lead.facing.x;
       body.facing.y = lead.facing.y;
+      this._tickWeapon(body, deltaTime);
+      this._autoAttack(body);
       if (body.dodgeRoll.active) continue; // the roll owns velocity; drift back afterward
 
       const slot = this._slotPosition(k);

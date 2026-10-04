@@ -3820,6 +3820,7 @@ class Game {
       // charge SFX + attack creation live in CombatSystem.tryUseHeldWeapon)
       if (this.player.heldItem && !this.captiveInteractionThisFrame && this.player.canAttack()) {
         this.combatSystem.tryUseHeldWeapon();
+        this.mistBattleSystem.onAttackPress(); // Flanks fire with the Primary
       } else {
         // Unarmed and no item nearby: interact with background object if present
         const nearbyObject = this.findNearbyBackgroundObject();
@@ -4008,6 +4009,7 @@ class Game {
         }
       }
     }
+    this.mistBattleSystem.onAttackRelease();
   }
 
   // SHIFT release fires the drop throw (mode='drop', started by SHIFT press).
@@ -4027,6 +4029,7 @@ class Game {
     }
     this.player.activeSlotIndex = index;
     this.player.selectedConsumableIndex = -1; // weapon selection wins back SPACE control
+    this.mistBattleSystem.onSelectSlot(index);
     this.updateUI();
   }
 
