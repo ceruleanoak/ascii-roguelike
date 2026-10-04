@@ -1,5 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { planeOf } from './PlaneSystem.js';
+import { createExplosionAftermath } from './WorldEffectsSystem.js';
 
 // Area-effect combat helpers — extracted from CombatSystem (proximity check,
 // AOE status application, explosion damage/knockback/object destruction).
@@ -111,6 +112,8 @@ export function createExplosion(combatSystem, x, y, radius, damage, enemies, bac
 
   // Create visual effect (you can enhance this later)
   combatSystem.createDamageNumber('BOOM!', x, y, '#ff4400');
+  // Explosive weapon hits fire this every hit, so the shake is lighter than a Bomb's.
+  if (combatSystem.game) createExplosionAftermath(combatSystem.game, x, y, { shake: 4, shakeDuration: 0.25, smoke: 6, spread: radius * 0.4 });
 
   // Red zone Vault: a bomb in range of the wall breaks it, same as a boulder.
   combatSystem.game?.interactionSystem?.tryBreakVaultWall(x, y, radius);

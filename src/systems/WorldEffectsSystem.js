@@ -159,6 +159,33 @@ export function createBurstParticles(game, particles, x, y, count, color) {
   }
 }
 
+// Explosion aftermath — screen shake plus a slow-rising smoke plume, for an
+// explosive going off (Bomb, Firecracker, Remote Bomb, explosive weapon hits
+// via ExplosionEffects.createExplosion, the Bomb enemy's detonation). Purely
+// visual: unlike a steam cloud or Smoke Bomb, this smoke never blocks sight.
+// Slime Bomb is deliberately not an explosive and doesn't call this.
+const SMOKE_CHARS = ['o', 'O', '~', '.', 'o'];
+export function createExplosionAftermath(game, x, y, { shake = 8, shakeDuration = 0.4, smoke = 12, spread = GRID.CELL_SIZE * 1.5 } = {}) {
+  if (shake > 0) game.renderController?.screenShake.trigger(shake, shakeDuration);
+  for (let i = 0; i < smoke; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const r = Math.random() * spread;
+    const gray = Math.floor(90 + Math.random() * 80); // #5a5a5a – #aaaaaa
+    const life = 1.0 + Math.random() * 0.9;
+    game.particles.push(tagInteriorPlane(game, {
+      x: x + Math.cos(angle) * r,
+      y: y + Math.sin(angle) * r,
+      vx: Math.cos(angle) * (6 + Math.random() * 10),
+      vy: -(18 + Math.random() * 22),  // rises…
+      gravity: 14,                       // …and slows as it drifts
+      life,
+      maxLife: life,
+      char: SMOKE_CHARS[Math.floor(Math.random() * SMOKE_CHARS.length)],
+      color: `rgb(${gray},${gray},${gray})`
+    }));
+  }
+}
+
 export function createSparkBurst(game, particles, x, y) {
   for (let i = 0; i < 12; i++) {
     const angle = Math.random() * Math.PI * 2;

@@ -19,7 +19,7 @@
  * ConsumableTriggerSystem.applyEffect, which owns those mutations.
  */
 
-import { createBurstParticles, createSparkBurst } from './WorldEffectsSystem.js';
+import { createBurstParticles, createSparkBurst, createExplosionAftermath } from './WorldEffectsSystem.js';
 import { isInteriorActive } from './PlaneSystem.js';
 
 export class ConsumableWindupEffects {
@@ -42,6 +42,7 @@ export class ConsumableWindupEffects {
         }
         // Explosion particles
         createBurstParticles(inv.game, particles, px, py, 20, windup.consumable.color || '#ff4400');
+        createExplosionAftermath(inv.game, px, py, { shake: 10, shakeDuration: 0.5, smoke: 16, spread: aoeRadius * 0.5 });
         // A bomb is the only thing that opens a Bombable Rock (Cavern entrance).
         inv.game.cavernSystem.bombBlast(px, py, aoeRadius);
         break;
@@ -138,6 +139,7 @@ export class ConsumableWindupEffects {
           }
         }
         createSparkBurst(inv.game, particles, px, py);
+        createExplosionAftermath(inv.game, px, py, { shake: 5, shakeDuration: 0.3, smoke: 8, spread: burnRadius * 0.4 });
         break;
       }
       case 'throwSteam': {

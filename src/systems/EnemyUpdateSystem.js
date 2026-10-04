@@ -4,6 +4,7 @@ import { CAMP_NPC_STATE } from '../entities/CampNPC.js';
 import { GooBlob } from '../entities/GooBlob.js';
 import { createEmberBurst, createExplosion } from '../entities/Particle.js';
 import { findNearbyOpenExitDirection, getExitDespawnPoint } from './ExitSystem.js';
+import { createExplosionAftermath } from './WorldEffectsSystem.js';
 
 const MAX_GOO_BLOBS = 20;
 const SLIME_COLLISION_DISTANCE = 16;
@@ -572,7 +573,7 @@ export class EnemyUpdateSystem {
     // own visual payoff to read as "large and devastating."
     for (const p of createEmberBurst(ed.x, ed.y)) game.particles.push(tagInteriorPlane(game, p));
     for (const p of createExplosion(ed.x, ed.y, 24, '#ff6600')) game.particles.push(tagInteriorPlane(game, p));
-    game.renderController?.screenShake.trigger(10, 0.5);
+    createExplosionAftermath(game, ed.x, ed.y, { shake: 10, shakeDuration: 0.5, smoke: 16, spread: GRID.CELL_SIZE * 2 });
     game.audioSystem?.playSFX('destroy');
   }
 

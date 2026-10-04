@@ -7,6 +7,7 @@ import { MAX_PIPS } from './StatusEffects.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { isInteriorActive, tagInteriorPlane } from './PlaneSystem.js';
 import { createLightningSpire } from './LightningSpire.js';
+import { createExplosionAftermath } from './WorldEffectsSystem.js';
 
 // True when any quick slot holds a weapon — the "armed" test for the
 // thrown-weapon pointer.
@@ -1111,6 +1112,7 @@ export class TrapSystem {
           isImpact: true
         }));
       }
+      createExplosionAftermath(game, cx, cy, { shake: 9, shakeDuration: 0.45, smoke: 14, spread: r * 0.5 });
       // A bomb is the only thing that opens a Bombable Rock (Cavern entrance).
       game.cavernSystem.bombBlast(cx, cy, r);
     } else if (trapData.effect === 'snare') {
