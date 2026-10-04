@@ -941,14 +941,12 @@ export class ExitSystem {
   updateRoomClearState() {
     const game = this.game;
     const room = game.currentRoom;
-    // Ask each Ascent hazard whether it is mid-flood rather than re-listing its
+    // Ask the Ascent hazard whether it is mid-flood rather than re-listing its
     // phase names here — `PhasedHazardSystem.isHazardActive()` reads the same
     // FILL_PHASES the system itself schedules against, so renaming or adding a
     // fill phase can't leave this gate silently out of date (#142 drift shape).
-    const ascentHazardActive =
-      !!game.lavaAscentSystem?.isHazardActive(room) ||
-      !!game.iceAscentSystem?.isHazardActive(room);
-    if (ascentHazardActive) return;
+    // The cyan Ascent has no phases: its Maw Shadow never holds the exits.
+    if (game.lavaAscentSystem?.isHazardActive(room)) return;
 
     if (game._countedEnemies(room.enemies).length === 0) {
       // Quagmire: spawn the next wave instead of clearing while rounds remain.

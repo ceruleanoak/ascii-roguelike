@@ -420,9 +420,8 @@ export function generateCalderaRoom(gen, room) {
 // Red Zone's A-room (Ascent) addition: seeds the mud floor ring outside the
 // plateau and captures the slope belt's original glyph/direction so
 // LavaAscentSystem can flood both to lava (and revert) over time. Called
-// from RoomGenerator.generateAscentRoom() right after its normal slope-belt
-// loop finishes, so slope tiles already have their final char/slopeDirection
-// set by the time this runs.
+// from seedAscentZone() right after stampSlopeBelt(), so slope tiles already
+// have their final char/slopeDirection set by the time this runs.
 //
 // Floor tiles convert in `floorFillOrder`, ascending distance from a
 // handful of random seed tiles — the flood spreads from a few sources
@@ -487,18 +486,100 @@ export function seedMoltenAscentCycle(gen, room, centerCol, centerRow, innerRadi
   };
 }
 
+// ── Slopes ──────────────────────────────────────────────────────────────────
+// A Slope is a non-solid terrain tile that pushes whatever stands on it in one
+// cardinal direction — downhill (PhysicsSystem's slope push). The Ascent is
+// built from them: a belt running down off a raised plateau, or a ring running
+// down into a Pit.
+const SLOPE_COLOR = '#555555';
+const SLOPE_CHARS = { up: 'ʌ', down: 'v', left: '<', right: '>' };
+
+function makeSlopeTile(col, row, direction) {
+  const C = GRID.CELL_SIZE;
+  const tile = new BackgroundObject(SLOPE_CHARS[direction], col * C, row * C);
+  // Override the tunnel-entrance properties the slope glyphs carry in
+  // BACKGROUND_OBJECTS with slope properties shared by all four directions.
+  tile.data = {
+    name: `Slope (${direction})`,
+    color: SLOPE_COLOR,
+    solid: false,
+    bulletInteraction: 'pass-through',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    environmental: true, // terrain (push ramp), not a hittable prop — see BackgroundObject.isEnvironmental()
+    interactions: { default: { animation: 'none', message: null } }
+  };
+  tile.slope = true;
+  tile.slopeDirection = direction;
+  tile.color = SLOPE_COLOR;
+  tile.animationColor = SLOPE_COLOR;
+  tile.bulletInteraction = 'pass-through';
+  tile.indestructible = true;
+  return tile;
+}
+
+// The cardinal direction of (dx, dy), dominant axis wins (ties go vertical).
+function cardinalOf(dx, dy) {
+  if (Math.abs(dy) >= Math.abs(dx)) return dy < 0 ? 'up' : 'down';
+  return dx < 0 ? 'left' : 'right';
+}
+
+// The Ascent's raised plateau: a belt of Slopes from innerRadius to
+// outerRadius, each pushing away from the centre, so reaching the flat top
+// means climbing against them.
+function stampSlopeBelt(gen, room, centerCol, centerRow, innerRadius, outerRadius) {
+  const FILL_CHANCE = 0.92;  // high fill so the larger ring reads as a solid circle
+  for (let col = 1; col < GRID.COLS - 1; col++) {
+    for (let row = 1; row < GRID.ROWS - 1; row++) {
+      const dx = col - centerCol;
+      const dy = row - centerRow;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < innerRadius || dist > outerRadius) continue;
+      if (Math.random() > FILL_CHANCE) continue;
+      if (!gen.isValidPosition(col, row, room)) continue;
+      room.backgroundObjects.push(makeSlopeTile(col, row, cardinalOf(dx, dy)));
+    }
+  }
+}
+
+// A Pit (see pits.js): the cells within `radius` of the centre cell, with the
+// outer ring as Slopes running down into it and a flat floor in the middle.
+// Every cell is stamped (no fill gaps) so the rim reads cleanly — the rim is
+// the only thing telling the player where cover begins.
+export function stampPit(gen, room, centerCol, centerRow, radius) {
+  for (let dr = -radius; dr <= radius; dr++) {
+    for (let dc = -radius; dc <= radius; dc++) {
+      const dist = Math.sqrt(dc * dc + dr * dr);
+      if (dist > radius || dist <= radius - 1) continue; // floor cells stay open ground
+      const col = centerCol + dc, row = centerRow + dr;
+      if (!gen.isValidPosition(col, row, room)) continue;
+      const slope = makeSlopeTile(col, row, cardinalOf(-dc, -dr)); // downhill = inward
+      slope.structural = true;
+      room.backgroundObjects.push(slope);
+    }
+  }
+  if (!room.pits) room.pits = [];
+  room.pits.push({ col: centerCol, row: centerRow, radius });
+  protectRegion(room, { kind: 'circle', centerCol, centerRow, radius });
+}
+
 // ── Zone-specific Ascent seeding (unified dispatcher) ──────────────────────
-// Called from RoomGenerator.generateAscentRoom() to seed zone-specific tiles
-// and capture slope metadata. Returns true if the zone handled its own bg
-// objects (caller should skip generateBackgroundObjects).
+// Called from RoomGenerator.generateAscentRoom() to lay the Ascent's terrain:
+// the zone's own layout, or the standard Slope belt plus the zone's hazard
+// tiles. Returns true if the zone handled its own bg objects (caller should
+// skip generateBackgroundObjects).
 export function seedAscentZone(gen, room, centerCol, centerRow, innerRadius, outerRadius) {
+  // Cyan replaces the plateau outright: low ground (Pits), not high ground.
+  if (room.zone === 'cyan') {
+    seedFrozenAscent(gen, room, centerCol, centerRow);
+    return false; // standard bg objects around the pond and Pits
+  }
+  stampSlopeBelt(gen, room, centerCol, centerRow, innerRadius, outerRadius);
   switch (room.zone) {
     case 'red':
       seedMoltenAscentCycle(gen, room, centerCol, centerRow, innerRadius, outerRadius);
       return true; // mud/lava cycle covers the whole grid
-    case 'cyan':
-      seedFrozenAscentCycle(gen, room, centerCol, centerRow, innerRadius, outerRadius);
-      return true; // ice covers the floor ring
     case 'yellow':
       seedStormAscent(gen, room, centerCol, centerRow, innerRadius, outerRadius);
       return false; // still needs standard bg objects around the spire
@@ -510,62 +591,55 @@ export function seedAscentZone(gen, room, centerCol, centerRow, innerRadius, out
   }
 }
 
-// ── Cyan Zone Ascent: frozen floor ring + momentum slopes + Maw shadow ──────
-// Seeds the floor ring outside the plateau with frozen water tiles and captures
-// the slope belt's original glyph/direction. IceAscentSystem drives the
-// cracking/breaking/refreezing cycle each frame.
-export function seedFrozenAscentCycle(gen, room, centerCol, centerRow, innerRadius, outerRadius) {
-  const C = GRID.CELL_SIZE;
-  const floorIceTiles = [];
+// ── Cyan Zone Ascent: frozen pond + three Pits + the Maw Shadow ─────────────
+// Cyan's Ascent teaches the Slope as low ground. The middle is a frozen pond
+// with the Maw Shadow drifting beneath it; around it sit three Pits. The
+// Shadow's ice volleys (IceAscentSystem) punch holes in the pond and fly
+// across the room, and a player down in a Pit is under them — so the room is
+// cleared by reading the Shadow and moving between Pits.
+const POND_RADIUS = 4;      // cells
+const PIT_RADIUS = 2;       // cells
+const PIT_DISTANCE = 9;     // cells from the room centre to each Pit's centre
 
-  for (let col = 1; col < GRID.COLS - 1; col++) {
-    for (let row = 1; row < GRID.ROWS - 1; row++) {
-      const dx = col - centerCol;
-      const dy = row - centerRow;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist <= outerRadius) continue;
+export function seedFrozenAscent(gen, room, centerCol, centerRow) {
+  const C = GRID.CELL_SIZE;
+  const pondTiles = [];
+
+  for (let col = centerCol - POND_RADIUS; col <= centerCol + POND_RADIUS; col++) {
+    for (let row = centerRow - POND_RADIUS; row <= centerRow + POND_RADIUS; row++) {
+      if (Math.hypot(col - centerCol, row - centerRow) > POND_RADIUS) continue;
       if (!gen.isValidPosition(col, row, room)) continue;
-      const iceTile = BackgroundObject.createVariant('water', col * C, row * C);
+      const ice = BackgroundObject.createVariant('water', col * C, row * C);
       // Infinity, not 0: BackgroundObject.update ticks waterStateTimer down and
       // thaws back to 'normal' the moment it hits zero, so a 0-second freeze is
-      // gone on the first frame — the ring would be open water before the player
-      // ever sees ice. Every other permanent freeze in the codebase (Freeze-Over
-      // sweep, ice stream, frost traps) passes Infinity for the same reason.
-      iceTile.setWaterState('frozen', Infinity);
-      iceTile._ascentCol = col;
-      iceTile._ascentRow = row;
-      iceTile._weight = 0;
-      iceTile._cracked = false;
-      room.backgroundObjects.push(iceTile);
-      floorIceTiles.push(iceTile);
+      // gone on the first frame. Every other permanent freeze in the codebase
+      // (Freeze-Over sweep, ice stream, frost traps) passes Infinity too.
+      ice.setWaterState('frozen', Infinity);
+      ice.structural = true;
+      room.backgroundObjects.push(ice);
+      pondTiles.push(ice);
     }
   }
+  protectRegion(room, { kind: 'circle', centerCol, centerRow, radius: POND_RADIUS });
 
-  // Slope tiles get original char/direction saved for restore on refreeze
-  const ringGroups = new Map();
-  for (const obj of room.backgroundObjects) {
-    if (!obj.slope) continue;
-    obj.originalSlopeChar = obj.char;
-    obj.originalSlopeDirection = obj.slopeDirection;
-    obj.onIce = true; // momentum-based push
+  // Three Pits evenly around the pond, rotated at random per room.
+  const turn = Math.random() * Math.PI * 2;
+  for (let i = 0; i < 3; i++) {
+    const angle = turn + i * (Math.PI * 2 / 3);
+    stampPit(gen, room,
+      Math.round(centerCol + Math.cos(angle) * PIT_DISTANCE),
+      Math.round(centerRow + Math.sin(angle) * PIT_DISTANCE),
+      PIT_RADIUS);
   }
 
-  // Frozen Maw shadow — large glyph under the ice, drifts down and fades
-  const mawShadow = {
-    x: centerCol * C,
-    y: centerRow * C,
-    glyph: 'M',
-    alpha: 0.3,
-    yOffset: 0,
-    timer: 0
-  };
-
+  // The Maw Shadow, in tile top-left space like the Aquifer arena's
+  // (drawSubmergedShadow compares it against tile positions). Kept on
+  // `room.ascentIce`, not `room.mawShadow`: that field is the Aquifer's
+  // dormant Frosted Maw, which a fishing cast wakes into the Boss fight.
+  const x = centerCol * C, y = centerRow * C;
   room.ascentIce = {
-    phase: 'stable',
-    timer: 0,
-    floorTiles: floorIceTiles,
-    plateau: { centerCol, centerRow, radius: innerRadius },
-    mawShadow
+    pondTiles,
+    mawShadow: { x, y, tx: x, ty: y, volleyTimer: 0, telegraph: 0, erupted: false }
   };
 }
 
@@ -2060,8 +2134,8 @@ export function generateSnowFields(gen, room) {
 }
 
 // Cyan zone: `count` rough-circle patches of permanently frozen water, laid
-// after the snow fields. Same freeze as the Ascent
-// floor ring (seedFrozenAscentCycle) — Infinity, so the timer never thaws it.
+// after the snow fields. Same freeze as the cyan Ascent's
+// pond (seedFrozenAscent) — Infinity, so the timer never thaws it.
 function generateIcePatches(gen, room, count) {
   const C = GRID.CELL_SIZE;
   for (let i = 0; i < count; i++) {

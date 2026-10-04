@@ -2755,7 +2755,7 @@ class Game {
     // Drive the red-zone Ascent mud→lava flood/recede cycle
     this.lavaAscentSystem.update(deltaTime);
 
-    // Drive the cyan-zone Ascent ice crack/break/refreeze cycle
+    // Drive the cyan-zone Ascent's Maw Shadow (drift under the pond, ice volleys)
     this.iceAscentSystem.update(deltaTime);
 
     // Drive the yellow-zone Ascent storm spire + charged metal cycle

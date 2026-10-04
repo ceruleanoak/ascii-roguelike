@@ -710,6 +710,40 @@ identity, not standard programming terms.
 - **Not:** a Ridge — that name belongs to `RidgeSystem.js`. Not permanent terrain either; a
   Hummock exists only for the duration of the encounter.
 
+### Maw Shadow
+- **Definition:** The Frosted Maw seen only as darkness moving beneath water or ice. Two rooms
+  show it: the Aquifer's cyan lake arena, where it drifts until a fishing cast wakes the real
+  Boss, and the cyan Ascent, where it drifts under the frozen pond and erupts every few seconds:
+  the ice above it shakes, breaks to open water, and a cone of freeze shots flies at the player.
+  It vanishes when the Ascent is cleared.
+- **In code:** Drawn by `drawSubmergedShadow()` (`AscentRenderHelpers.js`), the same darkening
+  the submerged Lake Boss uses. Aquifer arena: `room.mawShadow`, driven by `MawShadowSystem`.
+  Ascent: `room.ascentIce.mawShadow`, driven by `IceAscentSystem`. The Ascent's Shadow is kept
+  off `room.mawShadow` on purpose, because that field is what `FishingSystem` wakes into the
+  Boss fight.
+- **Not:** an enemy; it has no hitbox and cannot be damaged. The holes it breaks are not Leads.
+  They are plain water that any freeze can close again.
+
+### Slope
+- **Definition:** A terrain cell that pushes anything standing on it downhill in one cardinal
+  direction, drawn as an arrow glyph (`ʌ v < >`). Slopes are how the Ascent reads height: a belt
+  of Slopes facing outward is a plateau, and a ring of Slopes facing inward is a Pit.
+- **In code:** `BackgroundObject.slope` + `slopeDirection`, built by
+  `roomFeatures.makeSlopeTile()`. The push is a constant `SLOPE_ACCEL` in `PhysicsSystem`.
+  `stampSlopeBelt()` lays the plateau belt, and `stampPit()` lays a Pit's ring.
+- **Not:** the yellow zone's river Current, which also pushes but is water.
+
+### Pit
+- **Definition:** Low ground ringed by inward Slopes. Projectiles in flight pass over anyone
+  standing in a Pit, so a Pit is cover: drop in to let a volley pass, then step out to shoot
+  back. The cover works both ways, so an enemy in a Pit is also safe from the player's shots.
+  It does not apply when shooter and target stand in the same Pit, and melee always reaches
+  into one. The cyan Ascent has three; the Sniper fight is meant to reuse them as bunkers.
+- **In code:** `room.pits = [{ col, row, radius }]`, stamped by `roomFeatures.stampPit()`.
+  Membership and the pass-over rule live in `src/systems/pits.js` (`pitAt`, `pitOf`,
+  `projectileSailsOver`), which `CombatSystem` consults in both projectile-hit loops.
+- **Not:** a Sinkhole or any hole you fall into. A Pit is walkable floor; it is only lower.
+
 ### Dungeon Boss
 - **Definition:** A Layer-2 boss encounter fought inside a Dungeon interior — the delve-capper,
   not a depth-gated surface Boss. Every Dungeon Boss is a three-phase fight whose windows key

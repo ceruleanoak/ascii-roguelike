@@ -1022,62 +1022,9 @@ export class RoomGenerator {
     const INNER_RADIUS = 5;
     // Slope ring: INNER_RADIUS to OUTER_RADIUS
     const OUTER_RADIUS = 8;
-    const FILL_CHANCE = 0.92;  // high fill so the larger ring reads as a solid circle
-    const SLOPE_COLOR = '#555555';
 
-    // Slope data shared by all four directional chars (overrides tunnel entrance data)
-    const makeSlopeData = (direction) => ({
-      name: `Slope (${direction})`,
-      color: SLOPE_COLOR,
-      solid: false,
-      bulletInteraction: 'pass-through',
-      flammability: 'none',
-      conductivity: 'none',
-      indestructible: true,
-      environmental: true, // terrain (push ramp), not a hittable prop — see BackgroundObject.isEnvironmental()
-      interactions: { default: { animation: 'none', message: null } }
-    });
-
-    for (let col = 1; col < GRID.COLS - 1; col++) {
-      for (let row = 1; row < GRID.ROWS - 1; row++) {
-        const dx = col - CENTER_COL;
-        const dy = row - CENTER_ROW;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        if (dist < INNER_RADIUS || dist > OUTER_RADIUS) continue;
-        if (Math.random() > FILL_CHANCE) continue;
-        if (!this.isValidPosition(col, row, room)) continue;
-
-        // Determine cardinal direction away from center
-        const absDx = Math.abs(dx);
-        const absDy = Math.abs(dy);
-        let slopeChar, slopeDirection;
-
-        if (absDy >= absDx) {
-          if (dy < 0) { slopeChar = 'ʌ'; slopeDirection = 'up'; }
-          else        { slopeChar = 'v'; slopeDirection = 'down'; }
-        } else {
-          if (dx < 0) { slopeChar = '<'; slopeDirection = 'left'; }
-          else        { slopeChar = '>'; slopeDirection = 'right'; }
-        }
-
-        const slopeTile = new BackgroundObject(slopeChar, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
-
-        // Override tunnel-entrance properties with slope properties
-        slopeTile.data         = makeSlopeData(slopeDirection);
-        slopeTile.slope        = true;
-        slopeTile.slopeDirection = slopeDirection;
-        slopeTile.color        = SLOPE_COLOR;
-        slopeTile.animationColor = SLOPE_COLOR;
-        slopeTile.bulletInteraction = 'pass-through';
-        slopeTile.indestructible = true;
-
-        room.backgroundObjects.push(slopeTile);
-      }
-    }
-
-    // Zone-specific Ascent variations: each zone's hazard seeds its own
-    // floor tiles and captures slope metadata for the per-zone system.
+    // Terrain: the Slope belt plus each zone's hazard tiles, or a zone's own
+    // layout (cyan's pond and Pits) — roomFeatures.seedAscentZone.
     const handledBg = seedAscentZone(this, room, CENTER_COL, CENTER_ROW, INNER_RADIUS, OUTER_RADIUS);
     if (!handledBg) this.generateBackgroundObjects(room);
 

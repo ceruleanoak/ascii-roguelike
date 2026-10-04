@@ -1,5 +1,5 @@
 import { GRID, PHYSICS, COLORS } from '../game/GameConfig.js';
-import { planeOf, inSamePlane, objectOnPlane, tagInteriorPlane, isInteriorActive } from './PlaneSystem.js';
+import { planeOf, inSamePlane, objectOnPlane, tagInteriorPlane, isInteriorActive, updateProjectileTunnelPlane } from './PlaneSystem.js';
 import { applyExitMutatingSwordHit } from './ExitSystem.js';
 import { BoomerangMechanic } from './BoomerangMechanic.js';
 import { WallRicochetMechanic } from './WallRicochetMechanic.js';
@@ -23,6 +23,7 @@ import { TongueAttackSystem } from './TongueAttackSystem.js';
 import { applyExtraOnHitEffects, applyOnHitStatusEffect } from './ExtraOnHitEffects.js';
 import { applyMeleeStatusDamageBonus, getMeleeStatusBonusIndicator } from './MeleeStatusBonuses.js';
 import { applyKeenAim } from './KeenAim.js';
+import { projectileSailsOver } from './pits.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
 // room — keeps cross-room sniping in check while still feeling powerful.
@@ -294,7 +295,7 @@ export class CombatSystem {
 
       // Update plane if in tunnel room
       if (room && room.tunnel && proj.plane !== undefined) {
-        this.updateProjectilePlane(proj, room.tunnel);
+        updateProjectileTunnelPlane(proj, room.tunnel);
       }
 
       // Check collision with room walls via collisionMap.
@@ -545,6 +546,9 @@ export class CombatSystem {
           // re-hit every frame it overlapped the body.
           continue;
         }
+
+        // An enemy down in a Pit is under the shot (pits.js)
+        if (projectileSailsOver(this.game?.activeRoom, enemy, this.game?.player)) continue;
 
         if (this.checkProjectileCollision(proj, enemy)) {
           // Missed shot — show MISS once per enemy and pass through. Bullet keeps traveling
@@ -1262,7 +1266,7 @@ export class CombatSystem {
 
       // Update plane if in tunnel room
       if (room && room.tunnel && proj.plane !== undefined) {
-        this.updateProjectilePlane(proj, room.tunnel);
+        updateProjectileTunnelPlane(proj, room.tunnel);
       }
 
       // Check collision with room walls via collisionMap
@@ -1306,6 +1310,9 @@ export class CombatSystem {
 
       // Reflected boss projectiles travel back toward the boss; skip player collision
       if (proj.reflected) continue;
+
+      // A player down in a Pit is under the shot (pits.js)
+      if (projectileSailsOver(this.game?.activeRoom, player, proj.owner)) continue;
 
       // Check collision with player
       if (this.checkProjectileCollisionWithPlayer(proj, player)) {
@@ -1865,61 +1872,6 @@ export class CombatSystem {
       attack.position.x, attack.position.y,
       attack.knockback || 200
     );
-  }
-
-  /**
-   * Update projectile's plane based on tunnel boundaries
-   * Projectiles switch planes when crossing tunnel boundaries from the correct axis
-   */
-  updateProjectilePlane(projectile, tunnelData) {
-    const { bounds, entranceAxis } = tunnelData;
-
-    // Convert projectile position to grid coordinates
-    const projGridX = Math.floor(projectile.position.x / GRID.CELL_SIZE);
-    const projGridY = Math.floor(projectile.position.y / GRID.CELL_SIZE);
-
-    // Check if projectile is inside tunnel bounds
-    const inTunnelBounds =
-      projGridX >= bounds.minCol && projGridX <= bounds.maxCol &&
-      projGridY >= bounds.minRow && projGridY <= bounds.maxRow;
-
-    // Determine target plane based on position
-    const targetPlane = inTunnelBounds ? 1 : 0;
-
-    // Only switch planes if entering from the correct axis
-    if (targetPlane !== projectile.plane) {
-      const crossingFromCorrectAxis = this.checkProjectileTunnelEntrance(projectile, bounds, entranceAxis);
-
-      if (crossingFromCorrectAxis) {
-        projectile.plane = targetPlane;
-      }
-    }
-  }
-
-  /**
-   * Check if projectile is entering tunnel from the correct axis
-   * For horizontal tunnels: must enter from left/right edges
-   * For vertical tunnels: must enter from top/bottom edges
-   */
-  checkProjectileTunnelEntrance(projectile, bounds, entranceAxis) {
-    const projGridX = Math.floor(projectile.position.x / GRID.CELL_SIZE);
-    const projGridY = Math.floor(projectile.position.y / GRID.CELL_SIZE);
-
-    if (entranceAxis === 'horizontal') {
-      // Horizontal tunnel: check if entering from left or right edge
-      const atLeftEdge = projGridX === bounds.minCol;
-      const atRightEdge = projGridX === bounds.maxCol;
-      const withinVerticalBounds = projGridY >= bounds.minRow && projGridY <= bounds.maxRow;
-
-      return (atLeftEdge || atRightEdge) && withinVerticalBounds;
-    } else {
-      // Vertical tunnel: check if entering from top or bottom edge
-      const atTopEdge = projGridY === bounds.minRow;
-      const atBottomEdge = projGridY === bounds.maxRow;
-      const withinHorizontalBounds = projGridX >= bounds.minCol && projGridX <= bounds.maxCol;
-
-      return (atTopEdge || atBottomEdge) && withinHorizontalBounds;
-    }
   }
 
   getChainArcs() {

@@ -1,179 +1,169 @@
 /**
- * IceAscentSystem — drives the cyan-zone Ascent (A room) ice cycle.
+ * IceAscentSystem — the Maw Shadow under the cyan Ascent's frozen pond.
  *
- * `RoomGenerator.generateAscentRoom()` seeds `room.ascentIce` when
- * `room.zone === 'cyan'`: the floor ring outside the plateau is frozen water
- * (low elevation ice), and slope tiles are icy (momentum-based sliding,
- * no constant acceleration).
+ * `roomFeatures.seedFrozenAscent()` lays out the room: a frozen pond in the
+ * middle, three Pits around it, and `room.ascentIce = { pondTiles, mawShadow }`.
+ * The pond is ordinary frozen water (slippery, same as the Frosted Maw's
+ * sheet) — this system adds nothing to its physics.
  *
- * Phases (one pass, then done): stable → cracking → broken → refreezing →
- * complete. The cycle does not repeat — `PhasedHazardSystem.update` stops
- * ticking once `phase === 'complete'`, so the room settles back to solid ice
- * and stays there.
- *   - stable: frozen floor, slopes push with momentum (friction = 0.15×)
- *   - cracking: tiles accumulate weight from overlapping entities; the
- *     heaviest-loaded tiles craze first (visual only — they stay walkable)
- *   - broken: the whole floor ring thaws to open water (drops to plane 1) and
- *     exits unlock; the open water is the hazard, so this is not a fill phase
- *   - refreezing: water reverts to frozen (wave from outside in). Exits are
- *     NOT re-locked — matching LavaAscentSystem, the hazard hands the exits
- *     back to the normal enemy-clear gate and never takes them again.
+ * The Maw Shadow drifts beneath the pond between random pond tiles. Every few
+ * seconds it stops, the ice above it shakes (the telegraph), and then it
+ * erupts: the tile it is under breaks to open water — a hole that stays until
+ * something refreezes it — and a staggered cone of freeze shots flies at the
+ * player. Freeze shots pass over a player standing in a Pit (pits.js), so the
+ * room is cleared by reading the telegraph and moving between Pits.
  *
- * Frozen Maw shadow: a large glyph under the ice that appears briefly on
- * room entry, then drifts downward and fades. Purely visual, no collision.
+ * When the room is cleared the Shadow is gone for good (`mawShadow = null`).
+ * Exits are the normal enemy-clear gate; the Shadow never locks or holds them.
+ *
+ * All state lives on the room, so it dies with the room and needs no Reset
+ * Registry entry. The Shadow is not `room.mawShadow` — that field is the
+ * Aquifer's dormant Frosted Maw, which a fishing cast wakes into the Boss fight.
  */
 
-import { PhasedHazardSystem } from './PhasedHazardSystem.js';
 import { GRID } from '../game/GameConfig.js';
 
-const PHASE_DURATIONS = {
-  stable: 12,     // how long the ice holds before cracks begin
-  cracking: 8,    // weight threshold builds, then tiles break
-  broken: 6,      // open water hazard
-  refreezing: 8   // wave of ice returns
-};
+const DRIFT_SPEED = 25;        // px/s — matches MawShadowSystem's lazy circling
+const ARRIVE_DIST = 4;         // px — close enough to pick the next tile
+const VOLLEY_INTERVAL = 4.5;   // s of drifting between eruptions
+const FIRST_VOLLEY_DELAY = 3;  // s after entry before the first eruption
+const TELEGRAPH_DURATION = 1;  // s the ice shakes before it breaks
 
-const PHASE_ORDER = ['stable', 'cracking', 'broken', 'refreezing', 'complete'];
-// Only 'cracking' — NOT 'broken'. `_getFillPhases()` names the phases where
-// exits stay locked (PhasedHazardSystem's own contract), and `broken` is the
-// phase that explicitly unlocks them below. Listing it here made
-// `isHazardActive()` true across the whole open-water window, which
-// short-circuits `ExitSystem.updateRoomClearState` — so a room cleared during
-// those seconds never ran its clear bookkeeping (captive spawn, secret events,
-// pre-boss gate) and the hazard's unlock stuck even with enemies still alive.
-// LavaAscentSystem already draws the line this way: fill phases end exactly
-// where the unlock begins.
-const FILL_PHASES = ['cracking'];
+// Freeze volley — the Frosted Maw's ice stream, lighter for an Ascent room.
+const SHOTS = 5;
+const SHOT_SPEED = 110;              // px/s, same as the Lake Boss's stream
+const SHOT_STAGGER = 0.08;           // s between shots in one volley
+const CONE_SPREAD = Math.PI / 5;
+const SHOT_DAMAGE = 2;
 
-// Frozen Maw shadow — visual only
-const MAW_GLYPH = 'M';
-const MAW_COLOR = '#4488aa';
-const MAW_SIZE = 2.5;        // glyph scale multiplier
-const MAW_ALPHA = 0.3;
-const MAW_FADE_DURATION = 3; // seconds to drift down and vanish
+// Stand-in attacker for the volley: names the Shadow on the tombstone
+// (DeathLedgerSystem.deathCauseOf) and gives pits.js a shooter position. It
+// cannot be hurt — thorns/reflect damage aimed back at it does nothing.
+function createShadowAttacker(maw) {
+  return {
+    name: 'Maw Shadow',
+    char: 'M',
+    color: '#4488aa',
+    description: 'Something huge beneath the ice.',
+    position: { x: maw.x, y: maw.y },
+    takeDamage() { return false; }
+  };
+}
 
-export class IceAscentSystem extends PhasedHazardSystem {
-  _getData(room) { return room?.ascentIce; }
-  isActive(room) { return !!room?.ascentIce; }
-  _getPhaseOrder() { return PHASE_ORDER; }
-  _getDuration(phase) { return PHASE_DURATIONS[phase] ?? 1; }
-  _getFillPhases() { return FILL_PHASES; }
-
-  onPhaseStart(phase, room) {
-    const ice = room.ascentIce;
-    if (!ice) return;
-
-    if (phase === 'cracking') {
-      ice._crackProgress = 0;
-      ice._crackedTiles = new Set();
-    }
-    if (phase === 'broken') {
-      // Thaw all floor tiles to open water
-      for (const tile of ice.floorTiles) {
-        if (tile.destroyed) continue;
-        tile.setWaterState('normal', 0);
-        tile.damaging = false;
-      }
-      // Unlock exits — the open water is the hazard, not the recede
-      room.exitsLocked = false;
-      this.game.updateExitCollisions?.();
-    }
-    if (phase === 'refreezing') {
-      ice._refreezeProgress = 0;
-    }
+export class IceAscentSystem {
+  constructor(game) {
+    this.game = game;
   }
 
-  onTick(phase, eased, dt, room) {
-    const ice = room.ascentIce;
-    if (!ice) return;
+  update(deltaTime) {
+    const room = this.game.currentRoom;
+    const ice = room?.ascentIce;
+    const maw = ice?.mawShadow;
+    if (!maw) return;
 
-    if (phase === 'stable') {
-      // During stable, track entity weight on tiles for the cracking queue
-      this._trackWeight(ice, room);
-      // Fade the Maw shadow downward
-      this._updateMawShadow(ice, dt);
-    } else if (phase === 'cracking') {
-      this._advanceCracking(ice, eased, room);
-      this._updateMawShadow(ice, dt);
-    } else if (phase === 'refreezing') {
-      this._advanceRefreeze(ice, eased);
+    if (room.cleared) {
+      ice.mawShadow = null;
+      return;
     }
+
+    if (maw.telegraph > 0) {
+      maw.telegraph -= deltaTime;
+      if (maw.telegraph <= 0) this._erupt(ice, maw);
+      return;
+    }
+
+    maw.volleyTimer += deltaTime;
+    const due = maw.erupted ? VOLLEY_INTERVAL : FIRST_VOLLEY_DELAY;
+    if (maw.volleyTimer >= due) {
+      maw.volleyTimer = 0;
+      maw.telegraph = TELEGRAPH_DURATION;
+      this._tileUnder(ice, maw)?._playAnimation('shake');
+      return;
+    }
+
+    this._drift(ice, maw, deltaTime);
   }
 
-  _trackWeight(ice, room) {
+  _drift(ice, maw, deltaTime) {
+    const dx = maw.tx - maw.x, dy = maw.ty - maw.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist <= ARRIVE_DIST) { this._retarget(ice, maw); return; }
+    const step = Math.min(dist, DRIFT_SPEED * deltaTime);
+    maw.x += (dx / dist) * step;
+    maw.y += (dy / dist) * step;
+  }
+
+  _retarget(ice, maw) {
+    const tiles = ice.pondTiles.filter(t => !t.destroyed);
+    if (tiles.length === 0) return;
+    const tile = tiles[Math.floor(Math.random() * tiles.length)];
+    maw.tx = tile.position.x;
+    maw.ty = tile.position.y;
+  }
+
+  /** The pond tile nearest the Shadow (both in tile top-left space). */
+  _tileUnder(ice, maw) {
+    let best = null, bestDist = Infinity;
+    for (const tile of ice.pondTiles) {
+      if (tile.destroyed) continue;
+      const d = Math.hypot(tile.position.x - maw.x, tile.position.y - maw.y);
+      if (d < bestDist) { best = tile; bestDist = d; }
+    }
+    return best;
+  }
+
+  _erupt(ice, maw) {
+    maw.erupted = true;
+    const tile = this._tileUnder(ice, maw);
+    if (tile && tile.getWaterState?.() === 'frozen') {
+      tile.setWaterState('normal', 0);
+      tile._playAnimation('shake');
+    }
+    this._spawnShards(maw);
+    this._fireVolley(maw);
+  }
+
+  _fireVolley(maw) {
     const game = this.game;
     const player = game.player;
     if (!player) return;
-
-    // Check player position against floor tiles
-    for (const tile of ice.floorTiles) {
-      if (tile.destroyed) continue;
-      const dx = player.position.x - tile.position.x;
-      const dy = player.position.y - tile.position.y;
-      if (Math.abs(dx) < GRID.CELL_SIZE && Math.abs(dy) < GRID.CELL_SIZE) {
-        tile._weight = (tile._weight || 0) + 1;
-      }
+    const owner = createShadowAttacker(maw);
+    const base = Math.atan2(player.position.y - maw.y, player.position.x - maw.x);
+    for (let i = 0; i < SHOTS; i++) {
+      const angle = base - CONE_SPREAD / 2 + (i / (SHOTS - 1)) * CONE_SPREAD;
+      game.combatSystem.createEnemyAttack({
+        position:    { x: maw.x, y: maw.y },
+        velocity:    { vx: Math.cos(angle) * SHOT_SPEED, vy: Math.sin(angle) * SHOT_SPEED },
+        damage:      SHOT_DAMAGE,
+        char:        '*',
+        color:       '#88ddff',
+        onHit:       'freeze',
+        // Not freezesWater: the holes the Shadow breaks stay open until the
+        // player (or a frost trap) chooses to refreeze them.
+        reflectable: false,
+        reflected:   false,
+        owner,
+        delay:       i * SHOT_STAGGER
+      });
     }
   }
 
-  _advanceCracking(ice, eased, room) {
-    const tiles = ice.floorTiles;
-    if (!tiles.length) return;
-
-    // Cracking is weight-driven: tiles with accumulated weight crack first
-    // Sort by weight descending (heaviest = cracks first)
-    const crackable = tiles.filter(t => !t.destroyed && t.waterState === 'frozen');
-    crackable.sort((a, b) => (b._weight || 0) - (a._weight || 0));
-
-    const targetCount = Math.floor(eased * crackable.length);
-    for (let i = 0; i < targetCount && i < crackable.length; i++) {
-      const tile = crackable[i];
-      if (tile._cracked) continue;
-      tile._cracked = true;
-      // Visual crack: change char to indicate damage
-      tile.animationColor = '#aaddff';
-      // Slight transparency to hint at the water below
-      tile.alpha = 0.6;
+  // Ice thrown up out of the new hole — printable ASCII per the encoding rule.
+  _spawnShards(maw) {
+    const SHARDS = ['*', '+', '.', ':'];
+    const cx = maw.x + GRID.CELL_SIZE / 2, cy = maw.y + GRID.CELL_SIZE / 2;
+    for (let i = 0; i < 12; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 45 + Math.random() * 70;
+      this.game.particles.push({
+        x: cx, y: cy,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 40,
+        life: 0.4 + Math.random() * 0.3,
+        maxLife: 0.7,
+        char: SHARDS[Math.floor(Math.random() * SHARDS.length)],
+        color: Math.random() < 0.5 ? '#ffffff' : '#cceeff'
+      });
     }
-  }
-
-  _advanceRefreeze(ice, eased) {
-    const tiles = ice.floorTiles;
-    if (!tiles.length) return;
-
-    // Refreeze from outside in (tiles farther from center refreeze first)
-    const centerCol = ice.plateau.centerCol;
-    const centerRow = ice.plateau.centerRow;
-    const sorted = [...tiles].sort((a, b) => {
-      const da = Math.hypot(a._ascentCol - centerCol, a._ascentRow - centerRow);
-      const db = Math.hypot(b._ascentCol - centerCol, b._ascentRow - centerRow);
-      return db - da; // farthest first
-    });
-
-    const targetCount = Math.floor(eased * sorted.length);
-    for (let i = 0; i < targetCount; i++) {
-      const tile = sorted[i];
-      if (tile.waterState === 'frozen') continue;
-      // Infinity — a 0-second freeze thaws on the next BackgroundObject.update
-      // tick, which would make the whole refreeze phase a no-op (see the same
-      // note on the seed in roomFeatures.seedFrozenAscentCycle).
-      tile.setWaterState('frozen', Infinity);
-      tile._cracked = false;
-      tile._weight = 0;
-      tile.alpha = 1;
-    }
-  }
-
-  _updateMawShadow(ice, dt) {
-    if (!ice.mawShadow) return;
-    const maw = ice.mawShadow;
-    maw.timer += dt;
-    if (maw.timer >= MAW_FADE_DURATION) {
-      maw.alpha = 0;
-      return;
-    }
-    const t = maw.timer / MAW_FADE_DURATION;
-    maw.alpha = MAW_ALPHA * (1 - t);
-    maw.yOffset = t * GRID.CELL_SIZE * 3; // drift downward
   }
 }

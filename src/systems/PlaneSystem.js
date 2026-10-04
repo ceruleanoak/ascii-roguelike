@@ -32,6 +32,8 @@
  * Filtering helpers wrap the predicate for the common iteration patterns.
  */
 
+import { GRID } from '../game/GameConfig.js';
+
 export const PLANE_SURFACE = 0;
 export const PLANE_TUNNEL = 1;
 export const PLANE_SUBMERGED = 2;
@@ -222,4 +224,63 @@ export function thawSurfaceRoom(game) {
   game.currentRoom.enemies = game.currentRoom._frozenEnemies; // layer-guard-ok
   for (const e of game.currentRoom.enemies) game.physicsSystem.addEntity(e); // layer-guard-ok
   game.currentRoom._frozenEnemies = null;
+}
+
+// ── Projectile tunnel crossing ──────────────────────────────────────────────
+// Moved from CombatSystem: a projectile's plane follows the tunnel it flies
+// into, which is plane membership, not combat resolution.
+
+/**
+ * Update projectile's plane based on tunnel boundaries
+ * Projectiles switch planes when crossing tunnel boundaries from the correct axis
+ */
+export function updateProjectileTunnelPlane(projectile, tunnelData) {
+  const { bounds, entranceAxis } = tunnelData;
+
+  // Convert projectile position to grid coordinates
+  const projGridX = Math.floor(projectile.position.x / GRID.CELL_SIZE);
+  const projGridY = Math.floor(projectile.position.y / GRID.CELL_SIZE);
+
+  // Check if projectile is inside tunnel bounds
+  const inTunnelBounds =
+    projGridX >= bounds.minCol && projGridX <= bounds.maxCol &&
+    projGridY >= bounds.minRow && projGridY <= bounds.maxRow;
+
+  // Determine target plane based on position
+  const targetPlane = inTunnelBounds ? 1 : 0;
+
+  // Only switch planes if entering from the correct axis
+  if (targetPlane !== projectile.plane) {
+    const crossingFromCorrectAxis = enteringTunnelFromAxis(projectile, bounds, entranceAxis);
+
+    if (crossingFromCorrectAxis) {
+      projectile.plane = targetPlane;
+    }
+  }
+}
+
+/**
+ * Check if projectile is entering tunnel from the correct axis
+ * For horizontal tunnels: must enter from left/right edges
+ * For vertical tunnels: must enter from top/bottom edges
+ */
+function enteringTunnelFromAxis(projectile, bounds, entranceAxis) {
+  const projGridX = Math.floor(projectile.position.x / GRID.CELL_SIZE);
+  const projGridY = Math.floor(projectile.position.y / GRID.CELL_SIZE);
+
+  if (entranceAxis === 'horizontal') {
+    // Horizontal tunnel: check if entering from left or right edge
+    const atLeftEdge = projGridX === bounds.minCol;
+    const atRightEdge = projGridX === bounds.maxCol;
+    const withinVerticalBounds = projGridY >= bounds.minRow && projGridY <= bounds.maxRow;
+
+    return (atLeftEdge || atRightEdge) && withinVerticalBounds;
+  } else {
+    // Vertical tunnel: check if entering from top or bottom edge
+    const atTopEdge = projGridY === bounds.minRow;
+    const atBottomEdge = projGridY === bounds.maxRow;
+    const withinHorizontalBounds = projGridX >= bounds.minCol && projGridX <= bounds.maxCol;
+
+    return (atTopEdge || atBottomEdge) && withinHorizontalBounds;
+  }
 }

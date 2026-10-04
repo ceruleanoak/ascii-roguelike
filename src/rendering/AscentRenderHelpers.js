@@ -2,8 +2,8 @@
  * AscentRenderHelpers — rendering helpers for zone-specific Ascent (A-room)
  * visuals. Extracted from ExploreRenderer to stay within architecture budget.
  *
- * - Cyan: Frozen Maw shadow under ice (fades downward); also the Aquifer
- *   lake arena's Maw Shadow, drawn with the Lake Boss's submerged darkening
+ * - Cyan: the Maw Shadow under the Ascent's frozen pond and under the
+ *   Aquifer lake arena, both drawn with the Lake Boss's submerged darkening
  * - Yellow: Charged-object yellow blink (background objects + ground items)
  */
 
@@ -31,29 +31,40 @@ export function drawSubmergedShadow(ctx, room, x, y) {
 }
 
 /**
- * The Frosted Maw's two dormant shadows:
- * - Cyan Ascent: the Frozen Maw under the ice — a large glyph that appears
- *   briefly on room entry, then drifts downward and fades.
+ * The Frosted Maw's two dormant shadows, both the Lake Boss's submerged
+ * darkening:
+ * - Cyan Ascent: the Maw Shadow under the frozen pond (IceAscentSystem). While
+ *   it telegraphs an eruption, cracks flicker on the ice above it.
  * - The Aquifer's cyan lake arena: the Maw Shadow drifting beneath the water
  *   until a fishing cast wakes it (MawShadowSystem).
  * Purely visual, no collision.
  */
 export function renderMawShadow(ctx, game) {
-  const lakeShadow = game.currentRoom?.mawShadow;
-  if (lakeShadow) drawSubmergedShadow(ctx, game.currentRoom, lakeShadow.x, lakeShadow.y);
+  const room = game.currentRoom;
+  const lakeShadow = room?.mawShadow;
+  if (lakeShadow) drawSubmergedShadow(ctx, room, lakeShadow.x, lakeShadow.y);
 
-  const ice = game.currentRoom?.ascentIce;
-  if (!ice?.mawShadow) return;
-  const maw = ice.mawShadow;
-  if (maw.alpha <= 0) return;
+  const maw = room?.ascentIce?.mawShadow;
+  if (!maw) return;
+  drawSubmergedShadow(ctx, room, maw.x, maw.y);
+  if (maw.telegraph > 0) drawIceCracks(ctx, maw.x, maw.y);
+}
 
+// Cracks crazing the ice over an erupting Maw Shadow — a few pale glyphs
+// jittered around its tile, re-rolled every frame so the ice reads as shaking.
+function drawIceCracks(ctx, x, y) {
+  const cs = GRID.CELL_SIZE;
+  const CRACKS = ['/', '\\', 'x', '+'];
   ctx.save();
-  ctx.globalAlpha = maw.alpha;
-  ctx.font = `${Math.round(GRID.CELL_SIZE * 2.5)}px 'Unifont', monospace`;
+  ctx.font = `${cs}px 'Unifont', monospace`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#4488aa';
-  ctx.fillText(maw.glyph, maw.x, maw.y + maw.yOffset);
+  ctx.fillStyle = '#ddf4ff';
+  for (let i = 0; i < 5; i++) {
+    const ox = (Math.random() - 0.5) * cs * 2;
+    const oy = (Math.random() - 0.5) * cs * 2;
+    ctx.fillText(CRACKS[i % CRACKS.length], x + cs / 2 + ox, y + cs / 2 + oy);
+  }
   ctx.restore();
 }
 
