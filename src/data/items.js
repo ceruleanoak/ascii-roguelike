@@ -1232,6 +1232,24 @@ export const ITEMS = {
     blockReleaseDamage: 1,
     color: '#aa8855'
   },
+  // Glaive (Dagger + Staff): a blade lashed to the staff's head. Still a
+  // staff — same block stance and bare-staff missile — with the heaviest
+  // swing of the line and a touch more reach.
+  '⍋': {
+    char: '⍋',
+    tier: 2,
+    name: 'Glaive',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'staff',
+    damage: 3,
+    windup: 0.35,
+    recovery: 0.75,
+    patternSpeed: 0.05,
+    meleeChar: '|',
+    range: 30,
+    color: '#bbccdd'
+  },
   'ߒ': {
     char: 'ߒ',
     name: 'Fishing Pole',

@@ -53,6 +53,7 @@ export const RECIPES = [
   { left: 'g', right: '|', result: '‖', name: 'Rubber Bat' },    // Goo + Stick = Rubber Bat (0 dmg, launch only)
   { left: '¡', right: 'M', result: '⸘', name: 'Metal Bat' },     // Bat + Metal = Metal Bat (double damage)
   { left: 'M', right: '|', result: '↾', name: 'Dagger' },      // Metal + Stick = Dagger
+  { left: '↾', right: '/', result: '⍋', name: 'Glaive' },      // Dagger + Staff = Glaive (high-damage staff)
 
   // === MAGIC STAVES (Storm Staff + gemstone) ===
   // Staff splits two ways: Thick Staff is the blunt-melee line (Bat, Rootstaff);
