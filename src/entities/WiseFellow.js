@@ -14,9 +14,15 @@ export class WiseFellow extends NeutralCharacter {
     this.hintText = null; // set by HutSystem via setHint() after construction
   }
 
-  /** Called by HutSystem immediately after construction to bind zone hint text. */
-  setHint(zoneName) {
-    const sayings = ZONES[zoneName]?.wiseSayings;
+  /**
+   * Called by HutSystem immediately after construction to bind zone hint text.
+   * On a Cursed Run the zone's `cursedSayings` replace its `wiseSayings` as
+   * the table he rolls from — the curse changes what he knows. A zone with no
+   * cursed table yet keeps its ordinary one.
+   */
+  setHint(zoneName, cursed = false) {
+    const zone = ZONES[zoneName];
+    const sayings = cursed && zone?.cursedSayings?.length ? zone.cursedSayings : zone?.wiseSayings;
     if (Array.isArray(sayings) && sayings.length > 0) {
       this.hintText = sayings[Math.floor(Math.random() * sayings.length)];
     } else {

@@ -236,7 +236,7 @@ export class HutSystem {
       const centerCol = Math.floor(cols / 2);
       const centerRow = Math.floor(rows / 2) - 1;
       const wise = new WiseFellow(centerCol * GRID.CELL_SIZE, centerRow * GRID.CELL_SIZE);
-      wise.setHint(zone);
+      wise.setHint(zone, this.game.cursedRun);
       npcs.push(wise);
 
     } else if (hutKind === 'fisherman') {

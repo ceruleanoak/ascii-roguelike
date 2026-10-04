@@ -1149,6 +1149,8 @@ identity, not standard programming terms.
   changes outside the Three Room is owned by `CursedRunSystem`, including when REST itself
   gives way (`isRestDecayed`), how Charon meets each REST visit (`charonVisit`), and whether
   his farewell has shut the way back (`isRestSealed`).
+  The hut Wise Fellow rolls from the zone's `cursedSayings` (`zones.js`) instead of its
+  `wiseSayings` (`WiseFellow.setHint`).
 - **Not:** "cursed mode", "bad ending", "hard mode".
 
 ### Undead
