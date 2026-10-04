@@ -16,7 +16,8 @@ Large/design-heavy work that needs its own planning session before any code. Sur
 
 - **Use the exact terms** defined there in type names, function names, variables, comments, and commit messages.
 - **Do not introduce synonyms or generic substitutes** (no `Manager`/`Handler`/`Helper`/`data`/`info` for a concept that has a glossary term).
-- **Need a concept that isn't in the glossary?** Stop and propose a term — don't invent one silently. New terms are an authorial act; the user names them and adds the entry.
+- **Need a concept that isn't in the glossary?** Stop and propose a term — don't invent one silently. The user ratifies the name.
+- **Claude writes and maintains `GLOSSARY.md`, not the user.** Once a term is ratified, write its entry (Definition / In code / Not) in the same change that introduces the term to code, and update entries when the concept they describe changes. Never hand glossary entries back to the user as a to-do.
 - Correct off-vocabulary naming on sight before it spreads.
 
 ## Architecture Decision Records (ADRs)

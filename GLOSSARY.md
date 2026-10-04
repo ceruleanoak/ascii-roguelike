@@ -5,9 +5,10 @@
 > don't invent silently. No synonyms, no generic substitutes.
 
 This is a **seed**, not a finished dictionary. It codifies vocabulary already established in
-the codebase. Grow it deliberately — when a genuinely new concept appears, *you* name it and
-add the entry. Keep it lean: define the concepts that carry the game's identity, not standard
-programming terms.
+the codebase. Grow it deliberately — when a genuinely new concept appears, the AI assistant
+proposes a name, the user ratifies it, and the assistant writes and maintains the entry (the
+user does not write this file). Keep it lean: define the concepts that carry the game's
+identity, not standard programming terms.
 
 ## Domain concepts
 
@@ -561,6 +562,51 @@ programming terms.
   for all new content.
 - **In code:** not a runtime construct; lives in `claudedocs/zone-cosmology.md`.
 - **Not:** surfaced in-world text (the hidden canon is never spoken in-game).
+
+### Mist Battle
+- **Definition:** The true ending, triggered when the third character is lost to the gray
+  mist. Two acts: Act 1 is a controlled final battle in which the player fights mixed waves
+  with all three lost characters at once as the Trine; after a brief delay, Act 2 has the three
+  fight each other with no player input, last one standing → credits.
+- **In code:** `MistBattleSystem` (Act 1 only, reachable today from the CheatMenu BOSSES entry
+  via `CheatWarpSystem.handleMistBattleTest`). Fed by `game.graySnapshots` /
+  `game.lostCharacters` from `GrayZoneSystem`; the mist-out → Mist Battle wiring and Act 2 are
+  not built.
+- **Not:** a Boss fight; the mist-out itself (the per-character loss at gray depth 10).
+
+### Trine
+- **Definition:** The three-body formation the player controls in the Mist Battle's Act 1: the
+  Primary at the apex, pointing where the Primary faces, with a Flank behind on each side. The
+  three share one attack direction, swap weapons together, and roll together.
+- **In code:** `MistBattleSystem.members` (clockwise ring; `primaryIndex` is the apex), formation
+  slots `FLANK_BACK` / `FLANK_SIDE`; drawn by `drawTrine` (`src/rendering/effects/TrineDraw.js`).
+- **Not:** a party or companion group (every body is a full `Player`); "triad" (that word
+  belongs to the Power of Three's experience/instinct/convention).
+
+### Primary
+- **Definition:** The Trine body the player is directly controlling, at the apex. Only the
+  Primary throws, drops, picks up, or uses consumables, and the HUD and equipped gear are its.
+- **In code:** `game.player` points at the Primary's `Player`; `MistBattleSystem.primary`.
+  Global gear (`inventorySystem.equippedArmor` / `equippedConsumables`) mirrors it.
+- **Not:** "Lead" (a Lead is the hole a Breach punches in the frozen lake); "leader".
+
+### Flank
+- **Definition:** Either of the two Trine bodies behind the Primary. A Flank mirrors the
+  Primary's attacks and rolls with its own weapons and roll type, drifts back to its formation
+  slot, and is hit and targeted by enemies like any character. A Flank that falls leaves the
+  Trine.
+- **In code:** `MistBattleSystem.flanks()` (living non-Primary members); enemy hits resolved in
+  `MistBattleSystem.resolveCombat`; enemy targeting in `EnemyUpdateSystem._selectTarget`.
+- **Not:** a Companion or NPC; a follower that acts on its own.
+
+### Rotate
+- **Definition:** Changing the Primary: double-tap SPACE and the Trine turns one step
+  clockwise, so the back-left Flank becomes the Primary at the apex. A fallen Primary is
+  replaced the same way, automatically.
+- **In code:** `MistBattleSystem.tryRotate()` (double-tap window `ROTATE_DOUBLE_TAP`), `rotate()`,
+  `_promote()` (repoints `game.player`, swaps gear).
+- **Not:** a character switch at REST; turning to face a new direction (the apex follows facing
+  without a Rotate).
 
 ### NPC
 - **Definition:** A non-hostile character that inhabits NEUTRAL rooms and interacts with the
