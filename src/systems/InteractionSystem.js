@@ -242,7 +242,29 @@ export class InteractionSystem {
     const game = this.game;
     const vault = game.currentRoom?.vaultInfo;
     if (!vault || vault.unlockMethod !== 'break' || vault.unlocked) return false;
+    if (!this._reachesVaultWall(vault, x, y, radius)) return false;
 
+    this._openVaultWall(vault);
+    game.audioSystem?.playSFX?.('vault_wall_break');
+    return true;
+  }
+
+  // Every zone but yellow: a Bomb blast (the Bomb consumable or a Remote
+  // Bomb, via CavernSystem.bombBlast) that reaches the wall opens it, on top
+  // of the zone's own unlock method. Returns true if this call broke the wall.
+  tryBombVaultWall(x, y, radius) {
+    const game = this.game;
+    const vault = game.currentRoom?.vaultInfo;
+    if (!vault?.bombable || vault.unlocked) return false;
+    if (!this._reachesVaultWall(vault, x, y, radius)) return false;
+
+    this._openVaultWall(vault);
+    game.audioSystem?.playSFX?.('vault_wall_break');
+    return true;
+  }
+
+  // True when a circle at (x, y) with `radius` touches the vault's bottom wall.
+  _reachesVaultWall(vault, x, y, radius) {
     const bottomWallY = vault.bottomWallRow * GRID.CELL_SIZE + GRID.CELL_SIZE / 2;
     const minX = vault.minCol * GRID.CELL_SIZE;
     const maxX = (vault.maxCol + 1) * GRID.CELL_SIZE;
@@ -250,9 +272,6 @@ export class InteractionSystem {
 
     if (Math.abs(y - bottomWallY) > halfCell + radius) return false;
     if (x + radius < minX || x - radius > maxX) return false;
-
-    this._openVaultWall(vault);
-    game.audioSystem?.playSFX?.('vault_wall_break');
     return true;
   }
 

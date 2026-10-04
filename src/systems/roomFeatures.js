@@ -1150,11 +1150,14 @@ export function buildVaultCoinAbundance(bounds, shuffleFn, count) {
 // yellow, sealed except by blink. InteractionSystem's canUnlockVault/
 // unlockVault, tryBreakVaultWall, and canActivateVaultSwitch/
 // activateVaultSwitch all read the resulting unlockMethod off vaultInfo.
+// `bombable` is a second way in on top of the zone's own method: a Bomb blast
+// at the wall opens it (InteractionSystem.tryBombVaultWall). Yellow alone
+// stays blink-only, so it is not bombable.
 export const VAULT_UNLOCK_BY_ZONE = {
-  green: { method: 'key', keyChar: '߃', dropsKeyRock: true },
-  gray: { method: 'key', keyChar: '⚿' },
-  red: { method: 'break' },
-  cyan: { method: 'switch' },
+  green: { method: 'key', keyChar: '߃', dropsKeyRock: true, bombable: true },
+  gray: { method: 'key', keyChar: '⚿', bombable: true },
+  red: { method: 'break', bombable: true },
+  cyan: { method: 'switch', bombable: true },
   yellow: { method: 'none' },
 };
 

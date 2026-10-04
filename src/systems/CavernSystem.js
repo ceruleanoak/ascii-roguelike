@@ -17,7 +17,8 @@ import { isInteriorActive } from './PlaneSystem.js';
  *                               reveals the Cavern's door where one stood.
  *                               Also the sole destroyer of Puzzle Room
  *                               Bombable Walls (any `data.bombable` object on
- *                               the active layer), opening their cell.
+ *                               the active layer), opening their cell —
+ *                               and opens a bombable V room Vault wall.
  *   - generateCavernInterior() — the cave floor HutSystem._enterHut builds.
  *   - updateInterior()        — torch glow bookkeeping while inside.
  *   - dropTorchLoot()         — what a broken Cavern Torch drops.
@@ -69,10 +70,14 @@ export class CavernSystem {
    *
    * Called from the two bomb explosion paths only (Bomb windup in
    * ConsumableWindupEffects, Remote Bomb in TrapSystem) — nothing else in the
-   * game can open a Bombable Rock.
+   * game can open a Bombable Rock. Also opens a bombable Vault wall
+   * (InteractionSystem.tryBombVaultWall).
    */
   bombBlast(x, y, radius) {
     const { game } = this;
+    // A V room's Vault wall (every zone but yellow) is a surface structure —
+    // an interior blast can't reach it.
+    if (!isInteriorActive(game)) game.interactionSystem?.tryBombVaultWall(x, y, radius);
     const backgroundObjects = game._activeBackgroundObjects();
     if (!backgroundObjects?.length) return;
 

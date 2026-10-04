@@ -3198,6 +3198,7 @@ export class RoomGenerator {
       unlocked: false,
       unlockMethod: unlockConfig.method,
       keyChar: unlockConfig.keyChar || null,
+      bombable: !!unlockConfig.bombable,
       switchObject
     };
 
