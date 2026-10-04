@@ -31,6 +31,7 @@ import { GameAnimalMechanic } from './enemyMechanics/GameAnimalMechanic.js';
 import { SniperMechanic } from './enemyMechanics/SniperMechanic.js';
 import { RipenMechanic } from './enemyMechanics/RipenMechanic.js';
 import { ThiefMechanic } from './enemyMechanics/ThiefMechanic.js';
+import { WeaponConversion } from './enemyMechanics/weaponConversion.js';
 import { QuiverRechargeMechanic } from './enemyMechanics/QuiverRechargeMechanic.js';
 import { WaterBoundMechanic } from './enemyMechanics/WaterBoundMechanic.js';
 import { CloseQuartersMechanic } from './enemyMechanics/CloseQuartersMechanic.js';
@@ -287,6 +288,9 @@ export class Enemy {
       this.inventory = [];
       this.equippedWeapon = null;
       this.itemUseCooldown = 0;
+      // The Approach verb this Enemy was declared with, captured the first
+      // time a melee weapon overrides it (WeaponConversion.syncApproachToWeapon).
+      this._nativeApproachMovement = null;
       this.targetItem = null;
       this.shouldDropItems = false;
       // Set alongside shouldDropItems specifically by whip disarm (never by
@@ -1431,6 +1435,7 @@ export class Enemy {
   // was called by nobody at all.
   resolveStrike() {
     this.attackTimer = this.attackCooldown;
+    WeaponConversion.holdStrikeForWeapon(this);
     // Only the legacy ladder reads this. The State spine writes `state` from its
     // own current State every frame and reads it for nothing, so under the spine
     // this line is stomped a frame later and costs nothing; it is here so the
@@ -2418,45 +2423,7 @@ export class Enemy {
     this.equippedWeapon = item;
     if (CloseQuartersMechanic.holdInReserve(this, item)) return;
 
-    // Capture native speed once so melee/ranged swaps can toggle the boost cleanly.
-    if (this._baseSpeed === undefined) this._baseSpeed = this.speed;
-
-    if (item.data.weaponType === 'GUN' || item.data.weaponType === 'BOW') {
-      this.attackType = 'item_ranged';
-      // Restore keeper distance-hold behavior for ranged loadouts.
-      if (this.data.movementStyle) this.movementStyle = this.data.movementStyle;
-      this.leapOnAttack = false;
-      this.attackRange = this.itemUsage.useRange;
-      this.speed = this._baseSpeed;
-    } else {
-      this.attackType = 'item_melee';
-      // Melee weapon → close the distance instead of holding bow range, then
-      // commit a forward leap when the swing fires (see windup → attack
-      // transition in update()). attackRange is tightened so melee goblins
-      // don't try to swing from across the room. Fall back to the same range
-      // default Item.createMeleeAttack uses (20) — spear has no `range` field
-      // and would otherwise produce NaN here, leaving the goblin unable to
-      // ever register being in attack range.
-      this.movementStyle = 'chaser';
-      this.leapOnAttack = true;
-      const wpnRange = item.data.range ?? 20;
-      this.attackRange = Math.max(GRID.CELL_SIZE * 1.5, wpnRange * 1.2);
-      // Melee-wielders get a +30% speed boost so they can actually close the
-      // gap and commit a swing. Without this, ranged-archetype enemies who
-      // grabbed a melee weapon kept their original (slower) chase speed and
-      // were trivially kited.
-      this.speed = this._baseSpeed * 1.3;
-      // The state machine's declared States are fixed at construction from
-      // this enemy's original archetype (stateDefaults.js), so a kiter/jumper/
-      // ambusher whose native attack isn't melee was never given a Recover —
-      // there was nothing to overlap and whiff on. Now that it is wielding a
-      // swung weapon, it needs the exact same overlap protection a born
-      // melee enemy gets, and there is no later point that re-derives
-      // declared States to pick it up on its own.
-      if (!this.stateMachine.has('recover')) {
-        this.stateMachine.declared.recover = { duration: 0.4, variant: 'retreat', speed: 0.5 };
-      }
-    }
+    WeaponConversion.convert(this, item);
   }
 
   shouldUseConsumable() {

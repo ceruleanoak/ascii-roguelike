@@ -534,7 +534,17 @@ identity, not standard programming terms.
   is inside the weapon's reach. A Sea Snake shoots fire, and stabs with a Trident up close.
 - **In code:** `CloseQuartersMechanic` gated by `itemUsage.closeQuarters`; hooks
   `Enemy.equipWeapon` (skips melee conversion) and picks `attackType` outside Strike.
-- **Not:** the default weapon pickup, which converts the Enemy into a melee chaser for good.
+- **Not:** Weapon Conversion, the default pickup, which turns the Enemy into a melee chaser for good.
+
+### Weapon Conversion
+- **Definition:** What equipping a weapon does to an item-using Enemy (Goblins). A melee
+  weapon converts it into a chaser: it closes to the weapon's reach (Approach verb `close`),
+  moves faster, leaps with the swing, and uses the weapon's own windup as its telegraph.
+  A ranged weapon restores its native spacing and windup.
+- **In code:** `WeaponConversion` (`enemyMechanics/weaponConversion.js`), called from
+  `Enemy.equipWeapon`; `syncApproachToWeapon` also runs after `leaveCowardice`, and
+  `holdStrikeForWeapon` keeps `attackTimer` from expiring before the weapon is ready.
+- **Not:** Close Quarters, which skips the melee conversion and holds the weapon in reserve.
 
 ### Scorned Ingredient
 - **Definition:** An Ingredient Charon considers beneath him — Stick, Rock, Fur, Goo. His

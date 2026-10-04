@@ -11,6 +11,8 @@
 // `lookback`/`withdraw` on its own doesn't gain them permanently just because
 // it was cowardly once.
 
+import { WeaponConversion } from './weaponConversion.js';
+
 const SNAPSHOT_KEYS = ['approach', 'search', 'anticipate', 'recover', 'flee', 'lookback', 'withdraw', 'strike'];
 
 /**
@@ -48,5 +50,8 @@ export function leaveCowardice(enemy, ctx, snapshot, reason = 'coward recovered'
     if (pre[key] === undefined) delete declared[key];
     else declared[key] = pre[key];
   }
+  // The snapshot predates any weapon picked up mid-flight; re-aim Approach at
+  // what the Enemy is holding now.
+  WeaponConversion.syncApproachToWeapon(enemy);
   enemy.stateMachine.transition(enemy, ctx, 'alert', reason);
 }
