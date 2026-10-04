@@ -1011,7 +1011,9 @@ export class Enemy {
 
     RipenMechanic.updateGrowth(this, { deltaTime, dotDamageEvents });
     ThiefMechanic.update(this, { deltaTime, dotDamageEvents, targetPos: this.target?.position, effectiveVisionLength });
-    QuiverRechargeMechanic.update(this, { deltaTime });
+    // Same ctx shape as the Thief flip above: both transition into Flee, whose
+    // enter() stamps the mark from ctx.targetPos.
+    QuiverRechargeMechanic.update(this, { deltaTime, targetPos: this.target?.position, effectiveVisionLength });
 
     ChargeMechanic.update(this, { deltaTime, distance, effectiveVisionLength, onScreen });
 
