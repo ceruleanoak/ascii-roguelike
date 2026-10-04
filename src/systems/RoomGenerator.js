@@ -768,12 +768,12 @@ export class RoomGenerator {
   generateDiscoveryRoom(room) {
     // No enemies, guaranteed rare item. Equal-odds pool — no per-entry weighting.
     // ᛉ Shotgun, ‡ Flame Sword, X Dual Pistols, ⟩ Fire Bow, ⊤ Bone Axe, ƒ Fester's Gun,
-    // ¡ Bat, @ Bomb, 🜛 Mana Potion, ∾ Infused Whip, ↑ Spear, ᑕ Tooth Necklace,
+    // ¡ Bat, ⊗ Bomb, 🜛 Mana Potion, ∾ Infused Whip, ↑ Spear, ᑕ Tooth Necklace,
     // 𐤒 Moss Cloak, ★ Lucky Coin, ¤ Infused Coin, ✦ Phoenix Feather, ᛟ Homing Bow,
     // S Shield, ⏦ Electric Tripline
     const rareItems = [
       'ᛉ', '‡', 'X', '⟩', '⊤', 'ƒ',
-      '¡', '@', '🜛', '∾', '↑', 'ᑕ',
+      '¡', '⊗', '🜛', '∾', '↑', 'ᑕ',
       '𐤒', '★', '¤', '✦', 'ᛟ', 'S', '⏦'
     ];
     const itemChar = rareItems[Math.floor(Math.random() * rareItems.length)];

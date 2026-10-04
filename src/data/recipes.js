@@ -88,9 +88,9 @@ export const RECIPES = [
 
 
   // Consumables
-  { left: 'F', right: 'g', result: '@', name: 'Bomb' },          // Fire + Goo = Bomb
+  { left: 'F', right: 'g', result: '⊗', name: 'Bomb' },          // Fire + Goo = Bomb
   { left: 'm', right: 'F', result: 'H', name: 'Health Potion' }, // Meat + Fire = Health Potion
-  { left: 'y', right: 'y', result: '@', name: 'Bomb' },           // Firecracker + Firecracker = Bomb
+  { left: 'y', right: 'y', result: '⊗', name: 'Bomb' },           // Firecracker + Firecracker = Bomb
   { left: '🜄', right: 'm', result: 'H', name: 'Health Potion' },  // Base Potion + Meat = Health Potion
   { left: '🜄', right: 'w', result: 'q', name: 'Haste Draught' },  // Base Potion + Wing = Haste Draught
   { left: '🜄', right: 'b', result: 'x', name: 'Stone Skin' },     // Base Potion + Bone = Stone Skin
@@ -179,7 +179,7 @@ export const RECIPES = [
   { left: 'm', right: '~', result: '♥', name: 'Heart' },          // Meat + String = Heart
   { left: 'c', right: 'F', result: '★', name: 'Lucky Coin' },     // Coin + Fire = Lucky Coin
   { left: 'M', right: '0', result: '■', name: 'Metal Block' },    // Metal + Rock = Metal Block (auto-blocks at low HP)
-  { left: '@', right: 'a', result: '𐤑', name: 'Smoke Bomb' },     // Bomb + Ash = Smoke Bomb (brief invulnerability)
+  { left: '⊗', right: 'a', result: '𐤑', name: 'Smoke Bomb' },     // Bomb + Ash = Smoke Bomb (brief invulnerability)
   { left: 'a', right: 'c', result: '¤', name: 'Infused Coin' },   // Ash + Coin = Infused Coin (offering for Well)
   { left: 'N', right: 'N', result: '¶', name: 'Field Guide' },    // Paper + Paper = Field Guide (enemy HP shown while equipped)
 
@@ -199,7 +199,7 @@ export const RECIPES = [
   { left: '⊤', right: '⬨', result: 'ᛜ', name: 'Ice Hammer' },      // Bone Axe + Sapphire = Ice Hammer
   { left: 'j', right: '~', result: '○', name: 'Flail' },           // Jaw + String = Flail
   { left: '⊤', right: 'F', result: 'ᚨ', name: 'Thunder Axe' },     // Bone Axe + Fire = Thunder Axe
-  { left: '⊤', right: '@', result: '✺', name: 'Exploding Mace' },  // Bone Axe + Bomb = Exploding Mace
+  { left: '⊤', right: '⊗', result: '✺', name: 'Exploding Mace' },  // Bone Axe + Bomb = Exploding Mace
   { left: '↑', right: 'w', result: '⌁', name: 'Stun Baton' },      // Spear + Wing = Stun Baton
   { left: '‡', right: 'm', result: 'ᛘ', name: 'Vampire Dagger' },  // Flame Sword + Meat = Vampire Dagger
   { left: '⚒', right: 'M', result: '⏚', name: 'Earthquake Hammer' }, // Bone Crusher + Metal = Earthquake Hammer
@@ -208,7 +208,7 @@ export const RECIPES = [
   // === NEW BOW RECIPES (8) ===
   { left: ')', right: '⬨', result: 'ᛇ', name: 'Ice Bow' },         // Bow + Sapphire = Ice Bow
   { left: ')', right: ')', result: '⋙', name: 'Multi-Shot Bow' },  // Bow + Bow = Multi-Shot Bow
-  { left: ')', right: '@', result: 'ᛒ', name: 'Explosive Bow' },   // Bow + Bomb = Explosive Bow
+  { left: ')', right: '⊗', result: 'ᛒ', name: 'Explosive Bow' },   // Bow + Bomb = Explosive Bow
   { left: ')', right: 'w', result: 'ᛟ', name: 'Homing Bow' },      // Bow + Wing = Homing Bow
   { left: ')', right: 'M', result: 'ᛏ', name: 'Piercing Bow' },    // Bow + Metal = Piercing Bow
   { left: '⟩', right: 'F', result: 'ᛚ', name: 'Chain Bow' },       // Fire Bow + Fire = Chain Bow
@@ -234,7 +234,7 @@ export const RECIPES = [
   { left: '⸸', right: '◇', result: 'Ꞩ', name: 'Lightning Sword' },   // Magic Sword + Topaz
   { left: '↾', right: 'm', result: 'ᛘ', name: 'Vampire Dagger' },    // Dagger + Meat
   { left: '⊥', right: '⬨', result: 'ᛜ', name: 'Ice Hammer' },        // Hammer + Sapphire
-  { left: '⊥', right: '@', result: '✺', name: 'Exploding Mace' },    // Hammer + Bomb
+  { left: '⊥', right: '⊗', result: '✺', name: 'Exploding Mace' },    // Hammer + Bomb
   { left: '≋', right: 'K', result: '⥊', name: 'Bullwhip' },          // Whip + Thick Fur
   { left: '≋', right: '❦', result: '∻', name: 'Vine Whip' },         // Whip + Moss
   { left: '⫯', right: '⧫', result: '⟡', name: 'Diamond Longsword' }, // Longsword + Diamond

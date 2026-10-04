@@ -2421,8 +2421,8 @@ export const ITEMS = {
     char: 'y', name: 'Firecracker', type: ITEM_TYPES.CONSUMABLE,
     effect: 'firecracker', radius: 64, oneShot: true, manualOnly: true, stackable: true, color: '#ff8800'
   },
-  '@': {
-    char: '@',
+  '⊗': {
+    char: '⊗',
     name: 'Bomb',
     type: ITEM_TYPES.CONSUMABLE,
     effect: 'explode',
