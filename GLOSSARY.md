@@ -1249,6 +1249,17 @@ identity, not standard programming terms.
   broken by `CavernSystem.bombBlast()` from the Bomb consumable and the Remote Bomb trap.
 - **Not:** "cracked rock", "weak wall", "breakable rock".
 
+### Bombable wall
+- **Definition:** A Puzzle Room wall cell that only a bomb opens. It looks like the ordinary
+  dungeon wall around it, but shakes when struck; a bomb blast breaks it and leaves the cell
+  walkable. The Bomb Trial hides its triggers behind them.
+- **In code:** template grid glyph `B` (`dungeonPuzzleTemplates.js`, stamped solid by
+  `applyPuzzleTemplateToCollisionMap`) plus a `bombable_wall` Background Object variant on each
+  such cell (`GameConfig.js`, `bombable: true`), placed by `generatePuzzleRoom`.
+  `CavernSystem.bombBlast()` breaks it and clears the cell's collision. Painted with the
+  dungeon editor's Bombable Wall tool.
+- **Not:** "cracked wall", "weak wall", "breakable wall", "secret wall".
+
 ## Conventions
 
 - **Casing:** types/classes PascalCase; functions/variables camelCase; constants

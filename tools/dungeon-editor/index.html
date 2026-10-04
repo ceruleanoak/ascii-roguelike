@@ -134,6 +134,7 @@
         <button class="tool" data-tool="floor">.  Floor</button>
         <button class="tool" data-tool="water">~  Water</button>
         <button class="tool" data-tool="gap">G  Gap</button>
+        <button class="tool" data-tool="bombable">B  Bombable Wall</button>
         <button class="tool" data-tool="exit">X  Exit</button>
         <button class="tool" data-tool="switch">○  Switch</button>
         <button class="tool" data-tool="panel">▭  Floor Panel</button>
@@ -150,7 +151,7 @@
         <div id="torchList"></div>
         <h4>Pedestal</h4>
         <div id="pedestalEditor"></div>
-        <div class="hint">Switch = struck by a weapon attack. Floor Panel = triggered by standing on it. Torch (Trigger) = lit by approaching while holding a Torch, same as Torch (Ambient) below, but counts toward the exit unlock. With Switch/Panel/Torch (Trigger) selected, click an empty floor cell to place one, click an existing one to remove it. Permanent stays active forever once triggered; Timed reverts after its neutralize-seconds unless re-triggered (Torch triggers are always permanent). The exit unlocks once every trigger is active at the same time. Gap is an impassable void — paints like Wall/Water. Hook Post and Torch (Ambient) are click-only toggles like Switch/Panel — Torch (Ambient) never gates the exit, it's pure ambience, and can be authored already lit via the checkbox below. Pedestal is a single opt-in weapon-tutorial marker (click to place, click again to remove) — type the exact character of any existing crafted weapon into the field above; Save checks it against the recipe list. Every fixture must sit on plain floor and only one may occupy a cell.</div>
+        <div class="hint">Switch = struck by a weapon attack. Floor Panel = triggered by standing on it. Torch (Trigger) = lit by approaching while holding a Torch, same as Torch (Ambient) below, but counts toward the exit unlock. With Switch/Panel/Torch (Trigger) selected, click an empty floor cell to place one, click an existing one to remove it. Permanent stays active forever once triggered; Timed reverts after its neutralize-seconds unless re-triggered (Torch triggers are always permanent). The exit unlocks once every trigger is active at the same time. Gap is an impassable void — paints like Wall/Water. Bombable Wall looks like Wall in-game but a bomb blast opens it.Hook Post and Torch (Ambient) are click-only toggles like Switch/Panel — Torch (Ambient) never gates the exit, it's pure ambience, and can be authored already lit via the checkbox below. Pedestal is a single opt-in weapon-tutorial marker (click to place, click again to remove) — type the exact character of any existing crafted weapon into the field above; Save checks it against the recipe list. Every fixture must sit on plain floor and only one may occupy a cell.</div>
       </div>
     </div>
   </div>
@@ -314,6 +315,7 @@
     if (ch === '#') return { bg: '#3a3a3a' };
     if (ch === '~') return { bg: '#1c3d5c' };
     if (ch === 'G') return { bg: '#050506' }; // impassable gap — true void look, no glyph
+    if (ch === 'B') return { bg: '#3a3a3a', fg: '#e05a5a', glyph: 'B' }; // wall in-game; marked here so the author can see it
     if (ch === 'X') return { bg: '#161616', fg: '#5ad088', glyph: 'X' };
     return { bg: '#161616' }; // floor
   }
@@ -591,6 +593,7 @@
     if (activeTool === 'wall') ch = '#';
     else if (activeTool === 'water') ch = '~';
     else if (activeTool === 'gap') ch = 'G';
+    else if (activeTool === 'bombable') ch = 'B';
     else if (activeTool === 'exit') ch = 'X';
     else ch = '.'; // floor
 

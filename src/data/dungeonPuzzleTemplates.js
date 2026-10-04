@@ -11,6 +11,9 @@
 //     by-reach-only void (HutInteriorOverlay), not an ordinary wall. Paired
 //     with hookPosts (below) to cross it, same shape as the original Whip
 //     Trial's hardcoded gap band, generalized to any per-cell arrangement.
+// B = Bombable Wall — solid and drawn exactly like '#', but holds a
+//     bombable_wall object that only a bomb blast breaks, opening the cell
+//     (CavernSystem.bombBlast). The Bomb Trial hides its triggers behind them.
 //
 // Coordinate contract: 24 cols × 24 rows, outer border (row 0, row 23,
 // col 0, col 23) always walls — the generator stamps these unconditionally
@@ -52,7 +55,7 @@
 //   since dungeons have no ghosts (contrast MazeSystem's own MazeTorch).
 //
 // pedestal: { row, col, weaponChar } | absent — opt-in weapon-tutorial
-//   marker. weaponChar is any WEAPON in ITEMS (typed freely in the dungeon
+//   marker. weaponChar is any WEAPON in ITEMS, or the Bomb Bag (typed freely in the dungeon
 //   editor's Pedestal tool, checked against items.js at save time — not a
 //   fixed list). When present, generatePuzzleRoom grants a real pickup-able
 //   copy of that weapon (via pickWeaponTutorial()) flanked by decorative
@@ -112,7 +115,11 @@ export function pickRandomPuzzleTemplateName(excludeNames = null) {
   return pool[0]?.name ?? 'whip_trial';
 }
 
-/** Stamp a template's wall cells ('#') and gap cells ('G') onto an existing collisionMap — both solid. */
+/**
+ * Stamp a template's wall cells ('#'), gap cells ('G') and bombable wall
+ * cells ('B') onto an existing collisionMap — all solid. A 'B' cell opens
+ * when a bomb breaks its Bombable Wall object (CavernSystem.bombBlast).
+ */
 export function applyPuzzleTemplateToCollisionMap(collisionMap, templateName) {
   const { grid } = getPuzzleTemplate(templateName);
   const rows = collisionMap.length;
@@ -120,9 +127,22 @@ export function applyPuzzleTemplateToCollisionMap(collisionMap, templateName) {
   for (let r = 1; r < rows - 1; r++) {
     const line = grid[r] ?? '';
     for (let c = 1; c < cols - 1; c++) {
-      if (line[c] === '#' || line[c] === 'G') collisionMap[r][c] = true;
+      if (line[c] === '#' || line[c] === 'G' || line[c] === 'B') collisionMap[r][c] = true;
     }
   }
+}
+
+/** Interior cells a template marks as Bombable Wall ('B') — the generator places a bombable_wall object on each. */
+export function getPuzzleTemplateBombableCells(templateName) {
+  const { grid } = getPuzzleTemplate(templateName);
+  const cells = [];
+  for (let r = 0; r < grid.length; r++) {
+    const line = grid[r];
+    for (let c = 0; c < line.length; c++) {
+      if (line[c] === 'B') cells.push({ row: r, col: c });
+    }
+  }
+  return cells;
 }
 
 /** Interior cells a template marks as water ('~'). Walkable — the generator places a Puddle on each. */

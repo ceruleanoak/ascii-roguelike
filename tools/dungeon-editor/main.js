@@ -259,8 +259,8 @@ async function validatePuzzleTemplate(data) {
       return `row ${r} must be exactly ${PUZZLE_COLS} chars.`;
     }
     for (const ch of line) {
-      if (ch !== '#' && ch !== '.' && ch !== '~' && ch !== 'X' && ch !== 'G') {
-        return `row ${r} has invalid char "${ch}" (only # . ~ X G allowed).`;
+      if (ch !== '#' && ch !== '.' && ch !== '~' && ch !== 'X' && ch !== 'G' && ch !== 'B') {
+        return `row ${r} has invalid char "${ch}" (only # . ~ X G B allowed).`;
       }
       if (ch === 'X') exitCount++;
     }

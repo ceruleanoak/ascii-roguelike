@@ -1367,6 +1367,28 @@ export const BACKGROUND_OBJECT_VARIANTS = {
       default: { animation: 'bounce', message: null }
     }
   },
+  // Bombable Wall — a Puzzle Room cell (template glyph 'B') that only a bomb
+  // explosion opens; the Bomb Trial hides its triggers behind them. The cell
+  // is also stamped solid in the floor's collisionMap, so HutInteriorOverlay
+  // draws it as ordinary '≡' dungeon wall underneath this object's own '≡'.
+  // CavernSystem.bombBlast is the sole destroyer and clears that collision
+  // cell. Like the Bombable Rock it shakes when struck (indestructible
+  // objects do) — in a room of still masonry, that shake is the tell.
+  'bombable_wall': {
+    char: '≡',
+    name: 'Bombable Wall',
+    color: '#6a4830',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    bombable: true,
+    hp: null,
+    solid: true,
+    interactions: {
+      default: { animation: 'bounce', message: null }
+    }
+  },
   // Cavern Torch — one of the two lit torches every Cavern holds. Breaks in a
   // single hit; its drop is resolved by CavernSystem.dropTorchLoot (a Stick,
   // rarely Slick Oil with it). The glow is drawn from the floor's `torches`

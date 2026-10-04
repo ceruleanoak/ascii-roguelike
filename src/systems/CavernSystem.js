@@ -1,6 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { FriendlyGoblin } from '../entities/FriendlyGoblin.js';
+import { isInteriorActive } from './PlaneSystem.js';
 
 /**
  * CavernSystem — owns the Cavern: the small secret interior hidden behind a
@@ -14,6 +15,9 @@ import { FriendlyGoblin } from '../entities/FriendlyGoblin.js';
  *
  *   - bombBlast()             — a bomb explosion breaks Bombable Rocks and
  *                               reveals the Cavern's door where one stood.
+ *                               Also the sole destroyer of Puzzle Room
+ *                               Bombable Walls (any `data.bombable` object on
+ *                               the active layer), opening their cell.
  *   - generateCavernInterior() — the cave floor HutSystem._enterHut builds.
  *   - updateInterior()        — torch glow bookkeeping while inside.
  *   - dropTorchLoot()         — what a broken Cavern Torch drops.
@@ -80,9 +84,20 @@ export class CavernSystem {
     for (const rock of rocks) {
       rock.destroyAfterAnimation = true;
       rock._playAnimation('crack');
+      this._openCollisionCell(rock);
       this._revealCavernAt(rock, backgroundObjects);
     }
     if (rocks.length) game.renderer.markBackgroundDirty();
+  }
+
+  // A Puzzle Room's Bombable Wall stands in a cell its template stamped solid
+  // (dungeonPuzzleTemplates.js 'B'); breaking it opens that cell. Any broken
+  // bombable leaves its cell walkable, so this is correct for a Cavern rock too.
+  _openCollisionCell(rock) {
+    const { collisionMap } = this.game.activeGridBounds();
+    const col = Math.round(rock.position.x / CS);
+    const row = Math.round(rock.position.y / CS);
+    if (collisionMap?.[row]?.[col]) collisionMap[row][col] = false;
   }
 
   _withinBlast(obj, x, y, radius) {
@@ -98,6 +113,9 @@ export class CavernSystem {
     const { game } = this;
     const cavern = game.currentRoom?.cavern;
     if (!cavern || cavern.revealed) return;
+    // Only a surface rock can be the Cavern's door — a Bombable Wall broken on
+    // an interior floor may share the door's cell coordinates by chance.
+    if (isInteriorActive(game)) return;
     const col = Math.round(rock.position.x / CS);
     const row = Math.round(rock.position.y / CS);
     if (cavern.doorPosition.col !== col || cavern.doorPosition.row !== row) return;

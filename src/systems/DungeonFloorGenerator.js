@@ -15,7 +15,7 @@ import { SLOT_CHROME } from '../data/slotChrome.js';
 import { pickWeaponTutorial } from '../data/dungeon/weaponTutorials.js';
 import {
   pickRandomPuzzleTemplateName, applyPuzzleTemplateToCollisionMap, getPuzzleTemplateWaterCells,
-  getPuzzleTemplateGapCells, getPuzzleTemplateExitCell, getPuzzleTemplateTriggers,
+  getPuzzleTemplateGapCells, getPuzzleTemplateBombableCells, getPuzzleTemplateExitCell, getPuzzleTemplateTriggers,
   getPuzzleTemplateHookPosts, getPuzzleTemplateTorches, getPuzzleTemplatePedestal,
 } from '../data/dungeonPuzzleTemplates.js';
 
@@ -738,6 +738,14 @@ export class DungeonFloorGenerator {
     const gapCells = gapCellList.length
       ? new Set(gapCellList.map(({ row, col }) => `${row},${col}`))
       : null;
+
+    // Bombable Wall cells ('B') — collision already stamped solid above, so
+    // the overlay's wall pass draws them as ordinary wall; the object on top
+    // is what a bomb blast finds and breaks (CavernSystem.bombBlast clears
+    // the collision cell when it does).
+    for (const { row, col } of getPuzzleTemplateBombableCells(templateName)) {
+      backgroundObjects.push(new BackgroundObject('≡', col * CS, row * CS, { typeId: 'bombable_wall' }));
+    }
 
     const exitCell = getPuzzleTemplateExitCell(templateName);
     const exitRow = exitCell?.row ?? STAIRS_UP_ROW;
