@@ -57,6 +57,7 @@ import { fieldGuideEquipped, drawFieldGuideHpLabel } from '../ui/FieldGuideHpLab
 import { drawCursedRecipeReveal } from '../ui/CursedRecipeReveal.js';
 import { drawParryIndicator } from '../ui/ParryIndicator.js';
 import { drawFairyKingOrbit } from '../effects/FairyKingOrbit.js';
+import { drawFlanks } from '../effects/TrineDraw.js';
 
 function drawDizzyOrbitals(ctx, cx, cy, timer) {
   const r = 6;
@@ -733,6 +734,7 @@ export class ExploreRenderer {
     // Draw player — skip when inHut (overlay renders player at correct interior offset)
     // Tall-grass concealment fades rapidly in/out so stepping into cover
     // doesn't pop the player sprite.
+    if (!playerInInterior) drawFlanks(this.renderer, game);
     if (!playerInInterior) {
     const playerHidden = this._isOnTallGrass(game, game.player.position.x, game.player.position.y);
     const concealAlpha = stepConcealmentAlpha(game.player, !playerHidden);

@@ -10,6 +10,7 @@ import { CombatSystem } from './systems/CombatSystem.js';
 import { RoomGenerator } from './systems/RoomGenerator.js';
 import { ZoneSystem } from './systems/ZoneSystem.js';
 import { CheatWarpSystem } from './systems/CheatWarpSystem.js';
+import { MistBattleSystem } from './systems/MistBattleSystem.js';
 import { ExitSystem, isPressingIntoExitGap } from './systems/ExitSystem.js';
 import { PersistenceSystem } from './systems/PersistenceSystem.js';
 import { InventorySystem } from './systems/InventorySystem.js';
@@ -268,6 +269,7 @@ class Game {
     this.inventorySystem.game = this;
     this.consumableTriggerSystem = new ConsumableTriggerSystem(this);
     this.campNPCSystem = new CampNPCSystem(this);
+    this.mistBattleSystem = new MistBattleSystem(this);
     this.companionSystem = new CompanionSystem(this);
     this.commandSystem = new CommandSystem(this);
     this.worldEffectsSystem = new WorldEffectsSystem(this);
@@ -515,6 +517,11 @@ class Game {
           return;
         } else if (result && result.action === 'boss_test') {
           this.cheatWarpSystem.handleBossTest(this, result.zone);
+          this.cheatMenu.toggle();
+          e.preventDefault();
+          return;
+        } else if (result && result.action === 'mist_battle_test') {
+          this.cheatWarpSystem.handleMistBattleTest(this);
           this.cheatMenu.toggle();
           e.preventDefault();
           return;
@@ -2770,6 +2777,7 @@ class Game {
 
     // Drive C-room camp NPC (idle/interested/companion/fleeing)
     this.campNPCSystem.update(deltaTime);
+    this.mistBattleSystem.update(deltaTime); // Trine formation (see its rest-parity note)
 
     // Tick dodge blocked feedback cooldown
     if (this.dodgeBlockedFeedbackTimer > 0) {

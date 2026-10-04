@@ -69,7 +69,9 @@ export class CheatMenu {
       { char: 'Ⲱ', name: 'GOO DRAGON (green)',  type: 'boss_test', zone: 'green',  color: '#22cc44' },
       { char: '@', name: 'ANCIENT SHELL (red)', type: 'boss_test', zone: 'red',    color: '#ff4400' },
       { char: '~', name: 'FROSTED MAW (cyan)',  type: 'boss_test', zone: 'cyan',   color: '#44ffff' },
-      { char: 'Ⲱ', name: 'BOSS (yellow)',       type: 'boss_test', zone: 'yellow', color: '#ffff44' }
+      { char: 'Ⲱ', name: 'BOSS (yellow)',       type: 'boss_test', zone: 'yellow', color: '#ffff44' },
+      // The final fight: a fresh random Trine (3 lost characters) every pick.
+      { char: '△', name: 'MIST BATTLE (gray)',  type: 'mist_battle_test',      color: '#888888' }
     ] : [];
 
     // BOULDER TEST — debug placement for the Red deflect puzzle. Spawn the 4
@@ -584,6 +586,7 @@ export class CheatMenu {
     if (selected.type === 'download_death_ledger') return { action: 'download_death_ledger' };
     if (selected.type === 'zone') return { action: 'teleport_zone', zone: selected.zone };
     if (selected.type === 'boss_test') return { action: 'boss_test', zone: selected.zone };
+    if (selected.type === 'mist_battle_test') return { action: 'mist_battle_test' };
     if (selected.type === 'character') {
       if (selected.disabled) return 'handled';
       return { action: 'change_character', characterType: selected.characterType };

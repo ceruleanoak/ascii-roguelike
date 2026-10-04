@@ -781,6 +781,12 @@ export const RESET_REGISTRY = [
     ],
     why: "InteriorManager.reset() is Non-Goals-exempt (PRD: system-owned reset methods keep their internal logic; the registry only guarantees the CALL happens at the right scope). InteriorManager.reset() already runs from its own three direct call sites (enterRestState, transitionToNeutralRoom, enterExploreState) — those are unchanged by this entry. Registering it here at 'room' scope means it ALSO now fires a 4th time via applyRoomSwap's applyReset('room') call (Step 6) — every existing call site to those three functions already runs applyRoomSwap downstream, so this is a same-tick duplicate call, not a new independent trigger. Verified idempotent: every field it writes is a plain null/-1/[]/new-Set() assignment, and its one side-effecting call (inventorySystem.consumeKeyItem('⚿')) is a no-op splice-miss when nothing is held (InventorySystem.js:321-326) — so the duplicate call is inert, not merely 'probably harmless'. Registering it was primarily for FR5 traceability (plan §5.E) so the harness's registry-coverage check accounts for the game.*/player.* fields it reaches via `covers`, without duplicating InteriorManager's own internal reset logic as table entries — the extra call is an accepted side effect of that, not the goal.",
   },
+  {
+    path: 'mistBattleSystem.reset',
+    scope: 'room',
+    call: (game) => game.mistBattleSystem.reset(),
+    why: "The Mist Battle's Trine (Primary + two Flank bodies) exists only inside its arena room — leaving the room ends the battle. MistBattleSystem.reset() drops the Flank bodies from physics and clears the member ring; the Primary body is game.player, which the room transition rebuilds on its own.",
+  },
 
   // ── C. Title-only today (plan §5.C) — STEP 3. These fields/calls, plus
   // everything above (inherited via scopeIncludes('title') === ['room','run',
