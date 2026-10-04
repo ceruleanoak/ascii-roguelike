@@ -936,7 +936,7 @@ export const ITEMS = {
     windup: 0.6,
     recovery: 0.8,
     patternSpeed: 0.04,
-    range: 22,
+    range: 16,
     color: '#cccccc'
   },
 
