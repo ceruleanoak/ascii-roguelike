@@ -58,7 +58,7 @@ export class ArmorEffectsSystem {
       const radius = (armorData.rollPulseRadius || 3) * 16;
       const duration = armorData.rollPulseDuration || 2.0;
 
-      for (const enemy of game._activeEnemies()) {
+      for (const enemy of this.game._activeEnemies()) {
         if (enemy.hp <= 0) continue;
         if (Math.hypot(enemy.position.x + 8 - cx, enemy.position.y + 8 - cy) <= radius) {
           enemy.applyStatusEffect(armorData.rollPulse, duration);
