@@ -12,7 +12,7 @@
  * 2. Depth-10 finish line: gray has no zone boss. Entering the room at
  *    ZONES.gray.maxDepth arms the mist-out — a short grace, then the circle
  *    closes to black and the mist takes the character. Their loadout is
- *    snapshotted to game.graySnapshots (the future 5-character-ending hook),
+ *    snapshotted to game.graySnapshots (the Mist Battle / true-ending hook),
  *    the character joins game.lostCharacters, and play resumes at REST with
  *    the next living character. Losing the last living character ends the
  *    run. Fully diegetic — no text, the closing fog is the ceremony.
@@ -203,8 +203,9 @@ export class GrayZoneSystem {
     const player = game.player;
 
     // Snapshot the loadout the character carried into the mist. Plain
-    // descriptors, not live objects — this is the data hook the future
-    // 5-character ending consumes ("FIVE MUST BECOME ONE.").
+    // descriptors, not live objects — this is the data hook the Mist Battle
+    // (true ending, three lost characters) consumes; MistBattleSystem.start
+    // takes snapshots of this shape.
     game.graySnapshots.push({
       characterType: game.activeCharacterType,
       depth: game.zoneDepths.gray,

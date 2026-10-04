@@ -137,17 +137,32 @@ indirect signature)? Recommended yes, as a transformed *mode*, not an ending.
   roster — *not all*. (Supersedes the 5-character threshold; the hooks already
   exist: `game.graySnapshots` carries each lost character's exact loadout,
   `game.lostCharacters` the roster, both run-scoped in GrayZoneSystem/main.js.)
-- Instead of switching to the next survivor, the three lost characters appear
-  in an arena with their snapshotted equipment. **The player has no input.**
-  Auto-battle, last one standing → credits roll.
-- **The player authors but does not control.** *Which* three characters you
-  lost, with *what* gear, decides the field — then canon resolves it. The
+- **Two acts** (revised 2026-10-03 — supersedes the input-less-only version).
+  It should feel like the traditional game-convention reward: a final battle
+  that pays the player off, *then* the yield.
+  1. **Act 1 — the controlled final battle.** Instead of switching to the next
+     survivor, the three lost characters appear together in a gray arena with
+     their snapshotted equipment, and the player controls all three at once as
+     the **Trine**: one **Primary** at the apex (pointing where you face), two
+     **Flanks** behind. Attacks share one direction (Galaga-style), Flanks roll
+     when the Primary rolls (each with its own roll), 1/2/3 swaps all three,
+     double-tap SPACE **Rotates** the Primary clockwise, and only the Primary
+     throws, drops or uses consumables. Mixed enemy waves keep coming; a fallen
+     Primary hands off to a living Flank.
+  2. **Act 2 — the yield.** After Act 1 is complete, a brief delay, then the
+     three characters fight each other. **The player has no input.**
+     Auto-battle, last one standing → credits roll.
+- **The player authors but does not control** (Act 2). *Which* three characters
+  you lost, with *what* gear, decides the field — then canon resolves it. The
   battle should be deterministic (seeded — the mulberry32/DemoSystem seam
   exists): the verdict was written the moment the third character was lost.
 - This is the commentary made mechanical: the player's three powers contend
   without the player, every swing resolved by code they never touched — and
   when the last one falls, the authors' names appear. The game ends by showing
   its source.
+- **Status (2026-10-03)**: Act 1's mechanics are built (`MistBattleSystem`),
+  reachable only from the CheatMenu BOSSES entry with random characters. Not
+  yet built: the Act 1 end condition, Act 2, and the depth-10 mist-out wiring.
 
 ### Endings restructure (supersedes the foundation design's three-endings list)
 
@@ -273,7 +288,7 @@ no meta text — with the remaining signatures already live in the design:
   refused, choice is the only force still operating ("the only exit is
   voluntary," above).
 - **The Mist Battle honors it in the negative**: the true ending is the one
-  where choice is finally surrendered — no input — and only then does the
+  where choice is finally surrendered — no input in its second act — and only then does the
   designer appear, in the credits. The player's power and the designer's power
   meet exactly once, at the end: one yields, the other signs.
 
