@@ -17,6 +17,11 @@ const GRAVEYARD_MAX = 40;
 // opening move.
 const REST_DECAY_ROOMS = 8;
 
+// Halfway to the decay, Charon stops keeping his post: past this many cursed
+// rooms he neither stands at REST's north exit nor takes a toll — until REST
+// has given way and he comes back once to say goodbye (charonVisit).
+const CHARON_FORSAKES_ROOMS = REST_DECAY_ROOMS / 2;
+
 // A decayed REST admits the Undead through its south door one at a time — the
 // pace is the point, so the player watches the hub fill while they craft
 // rather than turning around to find a crowd already standing there.
@@ -65,6 +70,10 @@ export class CursedRunSystem {
 
     // The recipe a just-read scroll is showing ({ recipe, until }), or null.
     this.scrollReveal = null;
+
+    // Set when Charon has said his farewell over a decayed REST: from then on
+    // EXPLORE's south exit stays shut, gray, for the rest of the run.
+    this._restSealed = false;
   }
 
   /** Full run-scoped reset — death/title. */
@@ -73,6 +82,7 @@ export class CursedRunSystem {
     this._streamTimer = REST_STREAM_INTERVAL;
     this._readScrolls = new Set();
     this.scrollReveal = null;
+    this._restSealed = false;
   }
 
   /**
@@ -163,6 +173,33 @@ export class CursedRunSystem {
    */
   isRestDecayed(game) {
     return !!game.cursedRun && this._roomsExplored >= REST_DECAY_ROOMS;
+  }
+
+  /**
+   * How Charon meets this REST visit on a Cursed Run — read by CharonSystem
+   * on REST entry. null on an uncursed run (the plain ferryman).
+   *   'cursed'   — still at his post, with his cursed line, taking his toll.
+   *   'absent'   — the curse has run far enough that he no longer comes.
+   *   'farewell' — REST has given way; he comes back once to say goodbye.
+   */
+  charonVisit(game) {
+    if (!game.cursedRun) return null;
+    if (this._restSealed) return 'absent';
+    if (this.isRestDecayed(game)) return 'farewell';
+    return this._roomsExplored >= CHARON_FORSAKES_ROOMS ? 'absent' : 'cursed';
+  }
+
+  /** Charon's farewell is spoken — REST is behind the player for good. */
+  sealRest() {
+    this._restSealed = true;
+  }
+
+  /**
+   * Is EXPLORE's way back to REST shut? Read by the south-exit crossing, its
+   * collision cell, and the renderer, which draws the shut door gray.
+   */
+  isRestSealed(game) {
+    return !!game.cursedRun && this._restSealed;
   }
 
   /**

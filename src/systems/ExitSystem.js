@@ -478,7 +478,11 @@ export class ExitSystem {
       north: { letter: letters[0], color: sequenceColors[0] },
       east: { letter: letters[1], color: sequenceColors[1] },
       west: { letter: letters[2], color: sequenceColors[2] },
-      south: !ZONES[zoneType]?.noRest  // South is boolean (return to REST); noRest zones have no way back
+      // South is boolean (return to REST); noRest zones have no way back.
+      // Once Charon's farewell has sealed REST, every room keeps a south door
+      // — shut and gray (ExitSystem collision, RestExitLabel) — even in gray,
+      // so the player sees the way back is gone rather than merely absent.
+      south: !ZONES[zoneType]?.noRest || !!this.game?.cursedRunSystem.isRestSealed(this.game)
     };
 
     // Every zone Boss defeated: the north exit always leads to gray. Its
@@ -901,6 +905,10 @@ export class ExitSystem {
     // set above for this one case.
     if (room.exits.south && locked && this.game?.playerHasNoItems()) {
       room.collisionMap[GRID.ROWS - 1][centerX] = false;
+    }
+    // Charon's farewell shut the way back to REST for the run — no escape route.
+    if (room.exits.south && this.game?.cursedRunSystem.isRestSealed(this.game)) {
+      room.collisionMap[GRID.ROWS - 1][centerX] = true;
     }
 
     // Don't overwrite the player's collision map while inside an Interior

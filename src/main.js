@@ -3425,7 +3425,8 @@ class Game {
       const crossedSouthExit = prevPx.y < southThreshold && playerPx.y >= southThreshold && gridPos.x === centerX;
 
       // South exit opens if: 1) exits unlocked, 2) player has no items (escape route), OR 3) south exit exists
-      const canUseSouthExit = this.currentRoom.exits.south && (!this.currentRoom.exitsLocked || this.playerHasNoItems() || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0;
+      const canUseSouthExit = this.currentRoom.exits.south && (!this.currentRoom.exitsLocked || this.playerHasNoItems() || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0
+        && !this.cursedRunSystem.isRestSealed(this);
 
       if ((inSouthExit || crossedSouthExit || isPressingIntoExitGap(this.player, this.keys, 'south')) && canUseSouthExit) {
         // South exit is always boolean (returns to REST), not a letter

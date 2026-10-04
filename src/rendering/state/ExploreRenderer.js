@@ -22,7 +22,7 @@
 import { GRID, COLORS, ROOM_TYPES } from '../../game/GameConfig.js';
 import { drawOffscreenEnemyIndicators } from '../ui/OffscreenEnemyIndicators.js';
 import { drawPlayerFacingIndicator } from '../ui/PlayerFacingIndicator.js';
-import { drawRestExitLabel, REST_WORD, CRAFT_WORD } from '../ui/RestExitLabel.js';
+import { drawRestExitLabel, southExitShowsOpen, southDoorColor, REST_WORD, CRAFT_WORD } from '../ui/RestExitLabel.js';
 import { thrownWeaponPointerActive, nearestThrownWeaponTarget, drawThrownWeaponLine, drawCraftArrow } from '../ui/ThrownWeaponPointer.js';
 import { drawSniperIndicators, drawSniperBeams, drawSniperReticules, sniperHidingConcealAlpha } from '../effects/SniperEffects.js';
 import { drawSinkholes } from '../effects/SinkholeEffects.js';
@@ -288,7 +288,7 @@ export class ExploreRenderer {
     const centerY = Math.floor(GRID.ROWS / 2);
     const exitsUnlocked = !game.currentRoom.exitsLocked;
 
-    const southExitOpen = !!(game.currentRoom.exits.south && (exitsUnlocked || game.playerHasNoItems()));
+    const southExitOpen = southExitShowsOpen(game);
     // Thrown-weapon pointer: with no weapon left in reach, the exit reads CRAFT.
     const pointerActive = thrownWeaponPointerActive(game);
     const pointerTarget = pointerActive ? nearestThrownWeaponTarget(game) : null;
@@ -1059,11 +1059,11 @@ export class ExploreRenderer {
     const extra = 2;
 
     // South exit: opens as escape route even while locked (playerHasNoItems).
-    const southOpen = !!(exits.south && (exitsUnlocked || game.playerHasNoItems() || entering));
+    const southOpen = southExitShowsOpen(game, entering);
     if (exits.south) {
       this._exitSplits.south.render(ctx, {
         x: centerX * cs - extra, y: (GRID.ROWS - 1) * cs,
-        width: cs + extra * 2, height: cs, color: wallColor, visible: southOpen,
+        width: cs + extra * 2, height: cs, color: southDoorColor(game, wallColor), visible: southOpen,
       });
     }
 

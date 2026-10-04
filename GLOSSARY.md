@@ -1142,10 +1142,13 @@ identity, not standard programming terms.
 ### Cursed Run
 - **Definition:** The state a run enters the moment a slot cracks. The Three Room can no
   longer be found for the rest of the run, the Graveyard fills as rooms are explored, and REST
-  eventually turns gray, stops healing, and starts admitting undead from the south.
+  eventually turns gray, stops healing, and starts admitting undead from the south. Charon
+  meets it with a cursed line, then stops coming; once REST has given way he returns once to
+  say farewell, and from then on EXPLORE's way back to REST is shut, its door gray.
 - **In code:** `game.cursedRun`, set in `ThreeRoomSystem._beginCurse`. Everything the flag
   changes outside the Three Room is owned by `CursedRunSystem`, including when REST itself
-  gives way (`isRestDecayed`).
+  gives way (`isRestDecayed`), how Charon meets each REST visit (`charonVisit`), and whether
+  his farewell has shut the way back (`isRestSealed`).
 - **Not:** "cursed mode", "bad ending", "hard mode".
 
 ### Undead

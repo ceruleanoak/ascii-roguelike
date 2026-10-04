@@ -257,7 +257,7 @@ export const RESET_REGISTRY = [
     path: 'cursedRunSystem.hardReset',
     scope: 'run',
     call: (game) => game.cursedRunSystem.hardReset(),
-    why: "Curse run-state: the Graveyard count and REST decay start over, read cursed recipe scrolls are forgotten, and a showing scroll reveal clears.",
+    why: "Curse run-state: the Graveyard count, REST decay and Charon's sealing of REST start over, read cursed recipe scrolls are forgotten, and a showing scroll reveal clears.",
   },
   {
     path: 'threeSlotGlobeSystem.hardReset',
@@ -565,7 +565,7 @@ export const RESET_REGISTRY = [
     path: 'charonGreeted',
     scope: 'run',
     value: false,
-    why: 'Set once Charon has spoken his line this run (CharonSystem.trySpacePress); later visits skip the dialogue and go straight to the toll. A new run hears him again.',
+    why: "The voice Charon last spoke in this run ('ferry' or 'cursed'; CharonSystem.trySpacePress); later visits in the same voice skip the dialogue and go straight to the toll. A new run hears him again.",
   },
   {
     path: 'thrownLastWeapon',

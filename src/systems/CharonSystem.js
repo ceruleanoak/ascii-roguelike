@@ -26,8 +26,14 @@ const SCORNED_INGREDIENTS = new Set(['|', '0', 'f', 'g']);
  * hands off to the next one at REST without him (waiveNextVisit). Each taken
  * glyph flies from the player to him, then he fades out and the exit reopens.
  *
+ * A Cursed Run changes the visit (CursedRunSystem.charonVisit): first his
+ * cursed line over the same toll, then — as the curse runs on — no Charon at
+ * all, and finally, once REST has given way, one last visit with no toll: he
+ * says farewell, and EXPLORE's way back to REST is shut for the run.
+ *
  * State lives on game.charon (null when absent; Reset Registry, run scope):
  *   { npc, phase: 'waiting'|'taking'|'leaving', toll: [char], takeTimer, flights }
+ * The farewell visit is the npc whose voice is 'farewell'.
  */
 export class CharonSystem {
   constructor(game) {
@@ -47,13 +53,16 @@ export class CharonSystem {
     game.charon = null;
     const waived = this.waived;
     this.waived = false;
-    if (waived) return;
+    if (waived || !room) return;
+    const visit = game.cursedRunSystem.charonVisit(game);
+    if (visit === 'absent') return;
+    // His farewell is owed whatever depth the player comes back from.
     const depth = game.zoneDepths[game.zoneSystem.currentZone] || 0;
-    if (depth <= CHARON_MIN_DEPTH || !room) return;
+    if (visit !== 'farewell' && depth <= CHARON_MIN_DEPTH) return;
 
     const centerX = Math.floor(GRID.COLS / 2);
     game.charon = {
-      npc: new Charon(centerX * GRID.CELL_SIZE, GRID.CELL_SIZE),
+      npc: new Charon(centerX * GRID.CELL_SIZE, GRID.CELL_SIZE, visit ?? 'ferry'),
       phase: 'waiting',
       toll: [],
       takeTimer: 0,
@@ -62,7 +71,10 @@ export class CharonSystem {
     this._setNorthExitOpen(room, false);
   }
 
-  /** REST SPACE: talk to him, and start the toll once his line is closed. */
+  /**
+   * REST SPACE: talk to him, and start the toll once his line is closed —
+   * or, for his farewell, seal REST and let him go without one.
+   */
   trySpacePress() {
     const game = this.game;
     const charon = game.charon;
@@ -71,16 +83,16 @@ export class CharonSystem {
 
     if (dialogue.isOpen() && dialogue.getState().npc === charon.npc) {
       dialogue.advance();
-      if (!dialogue.isOpen()) this._beginToll(charon);
+      if (!dialogue.isOpen()) this._afterLine(charon);
       return true;
     }
     if (!charon.npc.isInRange(game.player)) return false;
-    // Already heard him this run — no second speech, straight to the toll.
-    if (game.charonGreeted) {
+    // Already heard this line this run — no second speech, straight to the toll.
+    if (game.charonGreeted === charon.npc.voice) {
       this._beginToll(charon);
       return true;
     }
-    game.charonGreeted = true;
+    game.charonGreeted = charon.npc.voice;
     return dialogue.open(charon.npc, charon.npc.getDialogueLines(game));
   }
 
@@ -108,6 +120,15 @@ export class CharonSystem {
         game.charon = null;
       }
     }
+  }
+
+  _afterLine(charon) {
+    if (charon.npc.voice !== 'farewell') {
+      this._beginToll(charon);
+      return;
+    }
+    this.game.cursedRunSystem.sealRest();
+    charon.phase = 'leaving';
   }
 
   // Coins first, then random non-treasure pile ingredients (scorned ones
