@@ -1,6 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { setTriggerVisual } from './triggerMachine.js';
+import { createPushRock } from './PushRock.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
 import { getZoneRandomEnemy } from '../data/enemies.js';
@@ -784,6 +785,14 @@ export class DungeonFloorGenerator {
           _timer: 0,
           pulseTimer: 0,
         });
+        continue;
+      }
+      // A Push Rock is its own fixture: a Cavern Rock look-alike that slides
+      // a cell when leaned on (PushRock.js). Always permanent.
+      if (t.kind === 'push') {
+        const rock = createPushRock(t.col, t.row);
+        backgroundObjects.push(rock);
+        triggers.push(rock);
         continue;
       }
       const isSwitch = t.kind === 'switch';

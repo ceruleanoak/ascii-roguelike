@@ -163,9 +163,9 @@ export class DungeonPuzzleSystem {
   // Puzzle Room — generic template-driven puzzle side room (see
   // DungeonFloorGenerator.generatePuzzleRoom). Every trigger in room.triggers
   // (a 'switch', strike-triggered via the puzzleSignal/glitterHit contract;
-  // a 'panel', occupancy-triggered like Branch's own panels; or a 'torch',
+  // a 'panel', occupancy-triggered like Branch's own panels; a 'torch',
   // ignited by the same proximity + held-Torch-item contract as a decorative
-  // PuzzleTorch below) runs through the shared triggerMachine state
+  // PuzzleTorch below; or a 'push', a Push Rock shoved one cell) runs through the shared triggerMachine state
   // machine; the exit unlocks once every trigger is active at once — the
   // generalized form of both Branch's own "all at once" solve rule and the
   // original Whip Trial's "both switches struck together" rule (now itself
@@ -213,7 +213,15 @@ export class DungeonPuzzleSystem {
 
     this._restockDais(room);
 
-    if (tickTriggers(room.triggers, dt, player, companion)) {
+    // What a Push Rock needs to know about its destination cell. The stairs
+    // cell is reserved so a shove can never bury the room's own exit; no
+    // onMove hook, since the interior overlay redraws every frame.
+    const world = {
+      collisionMap: room.collisionMap,
+      backgroundObjects: room.backgroundObjects,
+      isReserved: (col, row) => col === room.stairsUpCol && row === room.stairsUpRow
+    };
+    if (tickTriggers(room.triggers, dt, player, companion, world)) {
       room.puzzleSolved = true;
       room.stairsUpLocked = false;
       paintStairsUpVisual(room.stairsUpObj, false);

@@ -5,6 +5,7 @@ import { tickTriggers, setTriggerVisual } from './triggerMachine.js';
 import { isExitLetterTile } from './ExitSystem.js';
 import { createBurstParticles } from './WorldEffectsSystem.js';
 import { isCellProtected } from './roomFeatures.js';
+import { createPushRock } from './PushRock.js';
 
 // Barricades stay out of the first two depths of a zone: the shape has to be
 // met somewhere it can be answered, and a run two rooms deep is still finding
@@ -262,16 +263,37 @@ export class BarricadeSystem {
         this._buildCover(room, spec, col, row);
         continue;
       }
+      if (spec.kind === 'push') {
+        const rock = createPushRock(col, row);
+        room.backgroundObjects.push(rock);
+        room.barricade.triggers.push(rock);
+        continue;
+      }
       this._buildTrigger(room, spec, col, row);
     }
     // The decoys go down last and are the same object minus the fixture, so a
     // concealed layout reads as a stand of grass rather than as one tile with
-    // something obviously under it.
+    // something obviously under it. A layout whose fixture is itself the
+    // disguise (a Push Rock) names its look-alike with `decoyTypeId` instead.
     for (const spec of descriptor.decoys || []) {
       const { col, row } = laneCell(direction, spec.depth, spec.across);
       this._clearCell(room, col, row);
-      this._buildCover(room, null, col, row);
+      if (descriptor.decoyTypeId) {
+        this._buildDecoy(room, descriptor.decoyTypeId, col, row);
+      } else {
+        this._buildCover(room, null, col, row);
+      }
     }
+  }
+
+  // A look-alike that is only ever scenery — for a Push Rock, the Cavern Rocks
+  // it hides among.
+  _buildDecoy(room, typeId, col, row) {
+    const cs = GRID.CELL_SIZE;
+    const decoy = BackgroundObject.createVariant(typeId, col * cs, row * cs);
+    decoy.structural = true;
+    room.backgroundObjects.push(decoy);
+    return decoy;
   }
 
   // A concealing cover: the tile a fixture hides under, and — with `spec` null —
@@ -391,7 +413,13 @@ export class BarricadeSystem {
     const barricade = room?.barricade;
     if (!barricade || barricade.cleared) return;
     if (barricade.shape === 'trigger') {
-      if (tickTriggers(barricade.triggers, deltaTime, this.game.player, this.game.companion)) {
+      const world = {
+        collisionMap: room.collisionMap,
+        backgroundObjects: room.backgroundObjects,
+        isReserved: isExitLetterTile,
+        onMove: () => this.game.renderer?.markBackgroundDirty?.()
+      };
+      if (tickTriggers(barricade.triggers, deltaTime, this.game.player, this.game.companion, world)) {
         this._lift(room, barricade);
       }
       return;

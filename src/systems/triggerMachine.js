@@ -1,5 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { TORCH_INTERACT_RADIUS } from './MazeSystem.js';
+import { readPushRock } from './PushRock.js';
 
 /**
  * triggerMachine — the generic Switch/Panel/Torch activation state machine,
@@ -14,7 +15,7 @@ import { TORCH_INTERACT_RADIUS } from './MazeSystem.js';
  *
  * A trigger is a plain object (usually a BackgroundObject, but the torch kind
  * is not) carrying:
- *   kind              'switch' | 'panel' | 'torch'
+ *   kind              'switch' | 'panel' | 'torch' | 'push'
  *   activation        'permanent' | 'timed'
  *   neutralizeSeconds  how long a timed trigger holds after release
  *   active, _timer     mutable state, initialized by whoever builds it
@@ -33,7 +34,12 @@ import { TORCH_INTERACT_RADIUS } from './MazeSystem.js';
 // 'torch'   proximity while wielding the Torch item. Authored activation is
 //           always 'permanent' since a lit torch never reverts, so the
 //           !trigger.active guard keeps it a one-shot.
-export function readTrigger(trigger, dt, player, companion = null) {
+// 'push'    a Push Rock leaned on until it slides a cell (PushRock.js). It
+//           needs to know what the destination cell holds, which only the
+//           caller's `world` can say; always 'permanent'.
+export function readTrigger(trigger, dt, player, companion = null, world = null) {
+  if (trigger.kind === 'push') return readPushRock(trigger, dt, player, world);
+
   if (trigger.kind === 'switch') {
     const hit = !!trigger.glitterHit;
     trigger.glitterHit = false;
@@ -92,13 +98,17 @@ export function setTriggerVisual(trigger, active) {
  * Torch-kind triggers render themselves every frame from `.active` directly
  * (the shared torch-fixture draw, same as a decorative torch) rather than
  * mutating char/color on a BackgroundObject, so setTriggerVisual — which only
- * knows the switch and panel glyph pairs — is skipped for them.
+ * knows the switch and panel glyph pairs — is skipped for them. So is the
+ * Push Rock: its having moved IS its active state, and it must keep looking
+ * like the rocks around it.
+ *
+ * `world` is passed through to the 'push' read only (see readPushRock).
  */
-export function tickTriggers(triggers, dt, player, companion = null) {
+export function tickTriggers(triggers, dt, player, companion = null, world = null) {
   for (const trigger of triggers) {
     const wasActive = trigger.active;
-    advanceTrigger(trigger, dt, readTrigger(trigger, dt, player, companion));
-    if (trigger.active !== wasActive && trigger.kind !== 'torch') {
+    advanceTrigger(trigger, dt, readTrigger(trigger, dt, player, companion, world));
+    if (trigger.active !== wasActive && trigger.kind !== 'torch' && trigger.kind !== 'push') {
       setTriggerVisual(trigger, trigger.active);
     }
   }

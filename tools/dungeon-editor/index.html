@@ -139,6 +139,7 @@
         <button class="tool" data-tool="switch">○  Switch</button>
         <button class="tool" data-tool="panel">▭  Floor Panel</button>
         <button class="tool" data-tool="torchtrigger">!  Torch (Trigger)</button>
+        <button class="tool" data-tool="pushrock">0  Push Rock</button>
         <button class="tool" data-tool="hookpost">•  Hook Post</button>
         <button class="tool" data-tool="torch">!  Torch (Ambient)</button>
         <button class="tool" data-tool="pedestal">P  Pedestal</button>
@@ -327,8 +328,8 @@
     if (!currentData || !currentData.triggers) return;
     for (const t of currentData.triggers) {
       const x = t.col * CELL, y = t.row * CELL;
-      const glyph = t.kind === 'switch' ? '○' : t.kind === 'torch' ? '!' : '▭';
-      const color = t.kind === 'switch' ? '#e0a040' : t.kind === 'torch' ? '#ffaa33' : '#7aa2ff';
+      const glyph = t.kind === 'switch' ? '○' : t.kind === 'torch' ? '!' : t.kind === 'push' ? '0' : '▭';
+      const color = t.kind === 'switch' ? '#e0a040' : t.kind === 'torch' ? '#ffaa33' : t.kind === 'push' ? '#8a8a8a' : '#7aa2ff';
       ctx.fillStyle = color;
       ctx.fillRect(x, y, CELL, CELL);
       ctx.fillStyle = '#0a0a12';
@@ -538,7 +539,7 @@
   // sit on plain floor, so none can survive under one).
   function applyPuzzleTool(row, col, isClick) {
     if (isBorderRingPuzzle(row, col)) return;
-    if (activeTool === 'switch' || activeTool === 'panel' || activeTool === 'torchtrigger') {
+    if (activeTool === 'switch' || activeTool === 'panel' || activeTool === 'torchtrigger' || activeTool === 'pushrock') {
       if (!isClick) return; // ignore drag-continuation — this is a toggle, not a brush
       const existing = findTriggerAt(row, col);
       if (existing) {
@@ -547,6 +548,7 @@
         currentData.triggers.push(
           activeTool === 'switch' ? { row, col, kind: 'switch', activation: 'timed', neutralizeSeconds: 0.25 }
           : activeTool === 'panel' ? { row, col, kind: 'panel', activation: 'permanent' }
+          : activeTool === 'pushrock' ? { row, col, kind: 'push', activation: 'permanent' } // a Push Rock never slides back
           : { row, col, kind: 'torch', activation: 'permanent' } // torch triggers are always permanent — a lit torch never reverts
         );
       } else {
@@ -738,16 +740,17 @@
 
       const label = document.createElement('span');
       label.className = 'triggerLabel';
-      const glyph = t.kind === 'switch' ? '○' : t.kind === 'torch' ? '!' : '▭';
+      const glyph = t.kind === 'switch' ? '○' : t.kind === 'torch' ? '!' : t.kind === 'push' ? '0' : '▭';
       label.textContent = glyph + ' ' + t.row + ',' + t.col;
       row.appendChild(label);
 
-      if (t.kind === 'torch') {
-        // Torch triggers are always permanent (ignite once, never revert) —
-        // no activation choice to offer, unlike Switch/Panel.
+      if (t.kind === 'torch' || t.kind === 'push') {
+        // Torch triggers and Push Rocks are always permanent (ignite once /
+        // slide once, never revert) — no activation choice to offer, unlike
+        // Switch/Panel.
         const note = document.createElement('span');
         note.className = 'triggerLabel';
-        note.textContent = 'permanent (ignite)';
+        note.textContent = t.kind === 'torch' ? 'permanent (ignite)' : 'permanent (push)';
         row.appendChild(note);
       } else {
         const actSel = document.createElement('select');

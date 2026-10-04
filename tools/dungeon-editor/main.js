@@ -291,8 +291,8 @@ async function validatePuzzleTemplate(data) {
     seen.add(key);
     const cellChar = data.grid[t.row][t.col];
     if (cellChar !== '.') return `trigger ${i} at (${t.row},${t.col}) must sit on plain floor ('.'), not "${cellChar}".`;
-    if (t.kind !== 'switch' && t.kind !== 'panel' && t.kind !== 'torch') {
-      return `trigger ${i} kind must be "switch", "panel", or "torch".`;
+    if (t.kind !== 'switch' && t.kind !== 'panel' && t.kind !== 'torch' && t.kind !== 'push') {
+      return `trigger ${i} kind must be "switch", "panel", "torch", or "push".`;
     }
     if (t.activation !== 'permanent' && t.activation !== 'timed') {
       return `trigger ${i} activation must be "permanent" or "timed".`;
@@ -302,6 +302,10 @@ async function validatePuzzleTemplate(data) {
     // (permanent flame) or DungeonPuzzleSystem's ignite-only update logic.
     if (t.kind === 'torch' && t.activation !== 'permanent') {
       return `trigger ${i} is a torch — activation must be "permanent" (a lit torch never reverts).`;
+    }
+    // A Push Rock slides once and stays where it was shoved.
+    if (t.kind === 'push' && t.activation !== 'permanent') {
+      return `trigger ${i} is a Push Rock — activation must be "permanent" (it never slides back).`;
     }
     if (t.activation === 'timed' && !(Number.isFinite(t.neutralizeSeconds) && t.neutralizeSeconds > 0)) {
       return `trigger ${i} is timed but neutralizeSeconds must be a number > 0.`;

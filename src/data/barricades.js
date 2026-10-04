@@ -33,6 +33,10 @@ import { ZONE_COLORS } from './zones.js';
  *              cover and nothing under it. A layout whose only cover IS the
  *              answer gives itself away; decoys make the cover ordinary again,
  *              so uncovering is a search rather than a single obvious tile.
+ *   decoyTypeId  optional BACKGROUND_OBJECT_VARIANTS key each decoy is built as
+ *              instead of a grass cover — for a fixture that is its own
+ *              disguise, like a Push Rock (`kind: 'push'`) hidden among
+ *              Cavern Rocks.
  *
  * shape 'hazard' — terrain laid across the lane rather than a wall built in it.
  * The way through is open the whole time; what it costs is HP, and the answer
@@ -181,6 +185,29 @@ const GRASS_LOCK = {
   ]
 };
 
+// A row of five stubborn rocks across the lane in front of the plug, and one
+// of them is a Push Rock. Nothing tells them apart: every rock bounces a blow
+// the same way, and the only way to find the one that moves is to lean on
+// them. The row's neighbours box the Push Rock in sideways, so it can only go
+// deeper into the room or back toward the plug — the player has to walk round
+// the row's end to find the side with room. A gate that asks for no tool at
+// all, only for the player to try the obvious thing everywhere.
+const PUSH_LOCK = {
+  id: 'push_lock',
+  shape: 'trigger',
+  plugColor: ZONE_COLORS.green,
+  triggers: [
+    { depth: 4, across: 1, kind: 'push', activation: 'permanent' }
+  ],
+  decoyTypeId: 'cavern_rock',
+  decoys: [
+    { depth: 4, across: -2 },
+    { depth: 4, across: -1 },
+    { depth: 4, across:  0 },
+    { depth: 4, across:  2 }
+  ]
+};
+
 // ── Yellow: mage gates ──────────────────────────────────────────────────────
 // The elements, and what the run has learned to do about them. None of these
 // wants a weapon in particular; each wants the player to have understood one
@@ -224,7 +251,7 @@ const ELECTRIC_POLES = {
 };
 
 export const BARRICADE_FAMILIES = {
-  green: [ROCKS, PETRIFIED_TREES, WHIP_LOCK, BOOMERANG_LOCK, SPEAR_LOCK, GRASS_LOCK],
+  green: [ROCKS, PETRIFIED_TREES, WHIP_LOCK, BOOMERANG_LOCK, SPEAR_LOCK, GRASS_LOCK, PUSH_LOCK],
   yellow: [LAVA_MOAT, ICE_BLOCKS, ELECTRIC_POLES],
   // Red — mastery gates, keyed to weapon-class upgrades. Deliberately empty:
   // a red exit raises nothing until they are authored, rather than borrowing

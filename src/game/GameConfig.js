@@ -1367,6 +1367,25 @@ export const BACKGROUND_OBJECT_VARIANTS = {
       default: { animation: 'bounce', message: null }
     }
   },
+  // Push Rock — a 'push' trigger (src/systems/PushRock.js) that slides one
+  // cell when leaned on. Deliberately identical to Cavern Rock on screen, for
+  // the same reason the Bombable Rock is: the rocks around it never move, and
+  // which one does is the question. Only placed by a gate that wants it.
+  'push_rock': {
+    char: '0',
+    name: 'Push Rock',
+    color: '#5a5a5a',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    hp: null,
+    solid: true,
+    collisionShape: 'ellipse',
+    interactions: {
+      default: { animation: 'bounce', message: null }
+    }
+  },
   // Bombable Wall — a Puzzle Room cell (template glyph 'B') that only a bomb
   // explosion opens; the Bomb Trial hides its triggers behind them. The cell
   // is also stamped solid in the floor's collisionMap, so HutInteriorOverlay

@@ -30,10 +30,13 @@
 //         fixture below, but this one counts toward the exit-unlock check).
 //         A torch-kind trigger is always activation: 'permanent' (a lit
 //         torch never reverts) — 'timed' is rejected for this kind.
+//         'push' is a Push Rock (src/systems/PushRock.js): a Cavern Rock
+//         look-alike that activates by sliding one cell when the player
+//         leans on it. Also always 'permanent' — it never slides back.
 //   activation: 'permanent' (once triggered, stays active forever) or
 //         'timed' (reverts to inactive neutralizeSeconds after the last
 //         trigger pulse/occupancy ends — required, > 0, when timed; not
-//         valid for kind:'torch', see above).
+//         valid for kind:'torch' or kind:'push', see above).
 // The room's exit unlocks once every trigger in the list is active at once
 // (DungeonPuzzleSystem._updatePuzzleRoom) — the generalized form of the
 // Whip Trial's "both switches struck within the same swing" rule and the

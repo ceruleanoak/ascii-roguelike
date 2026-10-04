@@ -1283,6 +1283,19 @@ identity, not standard programming terms.
   broken by `CavernSystem.bombBlast()` from the Bomb consumable and the Remote Bomb trap.
 - **Not:** "cracked rock", "weak wall", "breakable rock".
 
+### Push Rock
+- **Definition:** A rock that looks identical to the unbreakable rocks around it but slides one
+  cell when the player leans into it from a side with room. It is never a secret on its own,
+  only the answer to a locked thing. Moving it is a trigger. It cannot be moved back and never
+  moves again.
+- **In code:** the `push_rock` Background Object variant (`GameConfig.js`), built by
+  `createPushRock()` and read by `readPushRock()` (`src/systems/PushRock.js`) as triggerMachine
+  kind `'push'`, always `activation: 'permanent'`. The caller's `world` (`collisionMap`,
+  `backgroundObjects`, `isReserved`, `onMove`) decides which cells it may slide into. It is placed
+  by the `push_lock` Barricade (among `cavern_rock` decoys, via `decoyTypeId`) and by Puzzle Room
+  templates (dungeon editor Push Rock tool).
+- **Not:** "pushable block", "movable rock", "push block", "boulder".
+
 ### Bombable wall
 - **Definition:** A Puzzle Room wall cell that only a bomb opens. It looks like the ordinary
   dungeon wall around it, but shakes when struck; a bomb blast breaks it and leaves the cell
