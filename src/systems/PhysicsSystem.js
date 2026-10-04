@@ -365,7 +365,6 @@ export class PhysicsSystem {
     let onCurrentDirection = null; // Yellow zone river current push direction
     let inDeepSnow = false;
     let inCompactedSnow = false;
-    let onIcySlope = false; // Cyan ascent: slope tiles with onIce=true
     const isProjectile = entity.type === 'bullet' || entity.type === 'arrow';
 
     // Reset per-frame terrain flags (read by Player.updateDodgeRoll with 1-frame lag)
@@ -396,8 +395,6 @@ export class PhysicsSystem {
           if (obj.slope) {
             onSlopeDirection = obj.slopeDirection;
             entity.isOnSlope = true; // For dodge roll slope-lock mechanic
-            // Cyan ascent: slope tiles marked with onIce=true use momentum-based physics
-            if (obj.onIce) onIcySlope = true;
           }
 
           // Check for water/lava/mud (~)
@@ -518,12 +515,9 @@ export class PhysicsSystem {
 
     // Apply friction (ice = less friction = more sliding)
     if (entity.friction !== false) {
-      // Cyan-zone Ascent ice: momentum-based slide (much lower friction)
-      // Applies to both frozen water tiles (onIce) and icy slope tiles (onIcySlope)
-      const cyanAscentIce = (onIce || onIcySlope) && room?.zone === 'cyan' && room?.ascentIce;
       // An instance override (the Giant Slime's ice Imbue) wins over terrain.
       const friction = entity.slideFriction
-        ?? (cyanAscentIce ? 0.15 : (onIce ? PHYSICS.FRICTION * 1.03 : PHYSICS.FRICTION));
+        ?? (onIce ? PHYSICS.FRICTION * 1.03 : PHYSICS.FRICTION);
       entity.velocity.vx *= friction;
       entity.velocity.vy *= friction;
     }
