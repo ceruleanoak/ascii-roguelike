@@ -70,6 +70,15 @@ export const ZONES = {
       // (GREEN_HOARDMAW_SPEC.victorySaying → game.unlockedRareSayings), so an
       // Artifact alone can never buy it. See dungeonBosses/green.js.
     ],
+    // Cursed Run table — replaces wiseSayings once a slot has cracked
+    // (WiseFellow.setHint). Speaks to the curse's own layer: the Graveyard,
+    // the Undead, REST's decay, Charon, the cursed recipes and scrolls.
+    cursedSayings: [
+      'WHAT WAS CRACKED STAYS CRACKED.',
+      'EVERY ROOM YOU WALK FILLS THE YARD BELOW.',
+      'THE DEAD DO NOT STRIKE. THEY ONLY GATHER.',
+      'THE FERRYMAN WILL NOT WAIT FOREVER.'
+    ],
     borderColor: '#00ff00',
     exitColor: ZONE_COLORS.green,
     alternativeZones: ['red', 'cyan', 'yellow'],
@@ -113,6 +122,11 @@ export const ZONES = {
       'BRING THE INFUSED COIN TO THE WELL.',
       'A SHREWD TACTIC IS REFLECTING BULLETS.',
       'STRIKE BRAVELY AT THE ROLLING STONE.'
+    ],
+    cursedSayings: [
+      'BONE REMEMBERS FIRE.',
+      'THE HEARTH WILL GO COLD. HEAL WHILE YOU CAN.',
+      'THE UNDEAD STILL FEAR FIRE. THEY STILL COME.'
     ],
     borderColor: '#ff4400',
     exitColor: ZONE_COLORS.red,
@@ -184,6 +198,11 @@ export const ZONES = {
       'BRING LIGHT TO THE DARK TOMBS.',
       'OBSERVE THE ICE FOR THE HIDDEN SAPPHIRE.'
     ],
+    cursedSayings: [
+      'THE DEAD CARRY WRITING. READ IT.',
+      'COUNT EIGHT ROOMS, THEN COUNT NO MORE.',
+      'THE THREE WILL NOT BE FOUND AGAIN.'
+    ],
     borderColor: '#44ffff',
     exitColor: ZONE_COLORS.cyan,
     alternativeZones: ['green', 'red', 'yellow'],
@@ -227,6 +246,11 @@ export const ZONES = {
       'THE BOX CONDUCTS, THE WOOD DOES NOT.',
       'A WET FOE IS A LIT FOE.'
     ],
+    cursedSayings: [
+      'A JAW BOUND IN SILK HURRIES THE STEP.',
+      'THE CURSED BELT SKIPS WHAT LIES BETWEEN.',
+      'THE WAY HOME CLOSES FROM THE SOUTH.'
+    ],
     borderColor: '#ffff44',
     exitColor: ZONE_COLORS.yellow,
     alternativeZones: ['green', 'red', 'cyan'],
@@ -257,21 +281,20 @@ export const ZONES = {
     name: 'Realm of the Dead',
     spellDescription: 'LOST IN THE MIST.',
     wiseSayings: [
-      'NONE ESCAPE THE MIST.',
+      'DEATH FEARS ONLY THREE THINGS.',
       'TEN STEPS AND THEN NOTHING.',
-      'THE DEAD WALK BUT DO NOT LEAD.',
-      'RETURN IS NOT GIVEN HERE.',
-      'FIVE MUST BECOME ONE.',
-      'COUNT YOUR STEPS CAREFULLY.',
-      'THE MIST KNOWS YOUR NAME.',
-      'NO SHRINE ANSWERS HERE.'
+      'NORTH.',
+      'WHAT ONLY TAKES AND NEVER GIVES BACK?',
+      'SO MANY BEFORE HAVE TREAD YOUR PATH.',
+      'HAVE YOU HEARD THEIR VOICE?',
+      'THIS LAND BELONGS TO THE CURSED.'
     ],
     // Rare-tier sayings — the gray zone's are the run-defining ones: the mist
     // radius, the depth-10 finish line, and the snapshot rule.
     rareSayings: [
-      'THE MIST GRANTS TEN PACES. COUNT THEM.',
-      'THE TENTH ROOM TAKES THE WALKER.',
-      'WHAT THE MIST TAKES, IT KEEPS. CARRY YOUR BEST.'
+      'THREE MUST BECOME ONE.',
+      'TEN. THEN THREE. THEN ONE. THEN...',
+      'WHAT THE MIST TAKES, IT KEEPS. PREPARE, THEN.'
     ],
     borderColor: '#888888',
     exitColor: ZONE_COLORS.gray,
