@@ -7,7 +7,7 @@ import { MAX_PIPS } from './StatusEffects.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { isInteriorActive, tagInteriorPlane } from './PlaneSystem.js';
 import { createLightningSpire } from './LightningSpire.js';
-import { createExplosionAftermath } from './WorldEffectsSystem.js';
+import { createExplosionAftermath, createGooBurst } from './WorldEffectsSystem.js';
 
 // True when any quick slot holds a weapon — the "armed" test for the
 // thrown-weapon pointer.
@@ -964,16 +964,13 @@ export class TrapSystem {
           game.player.applyStatusEffect?.('goo', 5.0);
         }
       }
-      // Lay a disk of slimeTrail tiles covering the blast footprint — uses the
-      // shared trail-tile system instead of a one-off circle puddle.
+      // Bursts like a slime dying: 8 goo blobs, one per compass direction, each
+      // sliding out past the blast and laying slime trail behind it. Not an
+      // explosive — no shake or smoke (createExplosionAftermath).
       const plane = item.plane ?? 0;
       game._dropSlimeTrail(cx, cy, plane);
-      const RING_RADIUS = r * 0.7;
-      const RING_TILES = 12;
-      for (let i = 0; i < RING_TILES; i++) {
-        const a = (i / RING_TILES) * Math.PI * 2;
-        game._dropSlimeTrail(cx + Math.cos(a) * RING_RADIUS, cy + Math.sin(a) * RING_RADIUS, plane);
-      }
+      createGooBurst(game, cx, cy, { count: 8, reach: r * 1.5, plane });
+      game.audioSystem?.playSFX('goo_hit');
     } else if (trapData.effect === 'freeze') {
       // Freeze Trap: damage + freeze enemies + crystallize water/puddle tiles + scatter ice objects.
       // freezePermanent enemies (slimes) lock at Infinity duration and never thaw; other ice-weak

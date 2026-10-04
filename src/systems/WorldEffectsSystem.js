@@ -186,6 +186,22 @@ export function createExplosionAftermath(game, x, y, { shake = 8, shakeDuration 
   }
 }
 
+// Goo burst — `count` goo blobs launched at even angles from (x, y), each
+// sliding to a stop and laying slime trail as it goes (GooBlob + the blob
+// ticker below). Slime Bomb's blast: 8 blobs, one per compass direction.
+// `reach` is roughly how far each slides — drag makes a blob travel speed/decel.
+export function createGooBurst(game, x, y, { count = 8, reach = GRID.CELL_SIZE * 3, decel = 2.0, plane = 0 } = {}) {
+  const speed = reach * decel;
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 * i) / count;
+    const blob = new GooBlob(x, y, performance.now(), false, Math.cos(angle) * speed, Math.sin(angle) * speed, decel);
+    blob.plane = plane;
+    tagInteriorPlane(game, blob);
+    game.gooBlobs.push(blob);
+  }
+  while (game.gooBlobs.length > MAX_GOO_BLOBS) game.gooBlobs.shift();
+}
+
 export function createSparkBurst(game, particles, x, y) {
   for (let i = 0; i < 12; i++) {
     const angle = Math.random() * Math.PI * 2;
