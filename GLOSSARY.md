@@ -905,6 +905,19 @@ identity, not standard programming terms.
 - **Not:** an Ingredient (raw drop) or an equipped weapon/armor. Consumables are crafted via
   recipes.
 
+### Bomb Bag
+- **Definition:** A consumable-slot item (⊟) that throws Bombs (⊗) and is never spent itself.
+  It holds one free Bomb, refilled on every room exit, and throws that first; after that it
+  throws the Bombs in the consumable list. With the bag equipped, a Bomb you pick up or craft
+  goes into the consumable list (its stock) instead of asking for a slot.
+- **In code:** `ITEMS['⊟']` (`bombBag: true`); `BombBagSystem` owns the throw
+  (`throwFrom`), stock (`stockCount` = Bombs in `consumableInventory`), pickup claim
+  (`claimsPickup`) and the refill (`refillForNewRoom`, beside `resetTrapsForNewRoom`). Free
+  charge is `Item.freeCharge`. Throws go through `InventorySystem.startConsumableWindup`, so the
+  explosion is the Bomb's own.
+- **Not:** a Key Item (it takes a slot and is lost on death), and not a stack counter — the
+  stock has no number of its own; it is the Bombs you can see in the list.
+
 ### Key Item
 - **Definition:** A unique, run-scoped item that unlocks progression and enables access to
   new areas or mechanics. Persists across death within a single run.

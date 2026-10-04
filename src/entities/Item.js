@@ -100,6 +100,10 @@ export class Item {
     // Trap charge system — traps only; tracks uses remaining across rooms
     this.charges = this.data.type === 'TRAP' ? (this.data.charges ?? 3) : null;
 
+    // Bomb Bag — the one free Bomb per room (BombBagSystem refills it on
+    // room exit). Starts full: a bag is never found empty.
+    this.freeCharge = this.data.bombBag ? 1 : null;
+
     // Floating Boots — seconds of float left; drains only while the wearer is
     // over liquid (FloatingBootsSystem). Lives on the instance so a half-spent
     // pair keeps its charge across rooms.

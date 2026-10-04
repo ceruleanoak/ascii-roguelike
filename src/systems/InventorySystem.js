@@ -386,7 +386,7 @@ export class InventorySystem {
           const stacked = this.mergeStackableConsumable(item);
           if (stacked) {
             customMessage = `${item.data.name} x${stacked.count}`;
-          } else if (allowSlotChoice) {
+          } else if (allowSlotChoice && !this.game?.bombBagSystem?.claimsPickup(item)) {
             const emptySlot = this.firstFreeConsumableSlot(player);
             if (emptySlot === -1) return { success: false, needsSlotChoice: true, slotType: 'consumable', pendingItem: item, droppedItem: null, message: null, removedTrap: false };
             this.consumableInventory.push(item);
@@ -397,7 +397,7 @@ export class InventorySystem {
             // shop purchase stayed invisible while the shop modal held the
             // update loop paused).
             this.applyEquipmentEffectsToPlayer(player);
-          } else this.consumableInventory.push(item);
+          } else this.consumableInventory.push(item); // incl. a Bomb the equipped Bomb Bag claims as stock
           item.consumed = true;
           physicsSystem.removeEntity(item);
           items.splice(i, 1);
@@ -845,9 +845,21 @@ export class InventorySystem {
     // Check if this is a one-shot or reusable consumable
     const isOneShot = cd.oneShot === true;
 
-    // Every consumable use is a throw — arc up and land before the effect
-    // resolves. `triggerData.windup` is always set by checkTriggerCondition
-    // when it approves a trigger (see ConsumableTriggerSystem).
+    this.startConsumableWindup(slotIndex, consumable, triggerData, player);
+
+    if (isOneShot) {
+      this._consumeOneShotSlot(slotIndex, consumable, player);
+    } else {
+      this.consumableCooldowns[slotIndex] = cd.cooldown || 10;
+    }
+  }
+
+  // Every consumable use is a throw — arc up and land before the effect
+  // resolves. `triggerData.windup` is always set by checkTriggerCondition
+  // when it approves a trigger (see ConsumableTriggerSystem). Starts the
+  // throw only — slot consumption/cooldown is the caller's (the Bomb Bag
+  // throws a Bomb from its slot without spending the bag; BombBagSystem).
+  startConsumableWindup(slotIndex, consumable, triggerData, player) {
     const startX = player.position.x + 20;
     const startY = player.position.y + 20;
     this.consumableWindups.push({
@@ -862,14 +874,8 @@ export class InventorySystem {
       startY,
       targetX: triggerData.targetX ?? null,
       targetY: triggerData.targetY ?? null,
-      isOneShot: isOneShot
+      isOneShot: consumable.data.oneShot === true
     });
-
-    if (isOneShot) {
-      this._consumeOneShotSlot(slotIndex, consumable, player);
-    } else {
-      this.consumableCooldowns[slotIndex] = cd.cooldown || 10;
-    }
   }
 
   /**

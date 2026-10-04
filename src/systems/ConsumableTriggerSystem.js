@@ -76,6 +76,8 @@ export class ConsumableTriggerSystem {
 
     const cd = consumable.data;
     if (cd.oilEffect) return false;
+    // The Bomb Bag throws a Bomb without spending itself — BombBagSystem.
+    if (cd.bombBag) return this.game.bombBagSystem.throwFrom(slotIndex, consumable, player);
 
     const result = this.checkTriggerCondition(cd, player, currentRoom, consumable, true);
     if (!result) return false;

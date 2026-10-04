@@ -38,7 +38,7 @@ import { PixelatedDissolve, SplitReveal } from '../effects/TextEffects.js';
 import { drawPlayerMeleeAttacks, drawEnemyMelee } from '../effects/MeleeAttackDraw.js';
 import {
   drawConsumableWindups, drawGemWandCharge, drawHammerWindupPose,
-  drawTrapChargeCount, drawStaffBlockStance, whirlwindSpinAngle
+  drawTrapChargeCount, drawBombBagCount, drawStaffBlockStance, whirlwindSpinAngle
 } from '../effects/WeaponPreviewDraw.js';
 import { BossRenderer } from './BossRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
@@ -841,8 +841,8 @@ export class ExploreRenderer {
     if (!playerInInterior) this.drawHammerWindupPose(game);
 
     // Draw blinking trap charge count above player (hidden during charge-up).
-    // Shared with RestRenderer via drawTrapChargeCount(game) (render-helper pattern).
-    if (!playerInInterior) this.drawTrapChargeCount(game);
+    // Shared with RestRenderer via drawChargeCounts(game) (render-helper pattern).
+    if (!playerInInterior) this.drawChargeCounts(game);
 
     // Draw trap throw reticule while charging (traps only) or a translucent weapon
     // ghost at the estimated landing spot (thrown weapons only).
@@ -2186,7 +2186,11 @@ export class ExploreRenderer {
   drawConsumableWindups(game) { drawConsumableWindups(this.renderer, game); }
   drawGemWandCharge(game) { drawGemWandCharge(this.renderer, game); }
   drawHammerWindupPose(game) { drawHammerWindupPose(this.renderer, game); }
-  drawTrapChargeCount(game) { drawTrapChargeCount(this.renderer, game); }
+  // Held trap charges + armed Bomb Bag ammo — the counts that float over the player.
+  drawChargeCounts(game) {
+    drawTrapChargeCount(this.renderer, game);
+    drawBombBagCount(this.renderer, game);
+  }
   drawStaffBlockStance(game) { drawStaffBlockStance(this.renderer, game); }
 
   // Reticule + in-flight + placed traps share a single render path so the

@@ -27,6 +27,7 @@ import { AudioSystem } from './systems/AudioSystem.js';
 import { FishingSystem } from './systems/FishingSystem.js';
 import { LootSystem } from './systems/LootSystem.js';
 import { TrapSystem } from './systems/TrapSystem.js';
+import { BombBagSystem } from './systems/BombBagSystem.js';
 import { TossSystem } from './systems/TossSystem.js';
 import { WireSystem } from './systems/WireSystem.js';
 import { InteractionSystem } from './systems/InteractionSystem.js';
@@ -200,6 +201,7 @@ class Game {
     new DIS(this);
     this.lootSystem = new LootSystem(this);
     this.trapSystem = new TrapSystem(this);
+    this.bombBagSystem = new BombBagSystem(this);
     this.tossSystem = new TossSystem(this);
     this.wireSystem = new WireSystem(this);
     this.interactionSystem = new InteractionSystem(this);
@@ -1940,9 +1942,10 @@ class Game {
         if (zone) { startX = zone.x; startY = zone.y; }
       }
 
-      // Reset trap charges for new room
+      // Reset trap charges and the Bomb Bag's free Bomb for new room
       if (this.player) {
         this.trapSystem.resetTrapsForNewRoom();
+        this.bombBagSystem.refillForNewRoom();
       }
 
       // Reset charge-hammer once-per-room usage for new room
@@ -2018,9 +2021,11 @@ class Game {
     this.characterSystem.restoreMagicMeterForRoomTransition(this.player, capturedMagicMeter, this.activeCharacterType);
 
 
-    // Reset trap charges when entering from REST or restoring saved room
+    // Reset trap charges (and the Bomb Bag's free Bomb) when entering from
+    // REST or restoring saved room
     if (leavingRest || shouldRestoreExploreRoom) {
       this.trapSystem.resetTrapsForNewRoom();
+      this.bombBagSystem.refillForNewRoom();
     }
 
     // Reset bow uses for all equipped weapons (new room = fresh arrows)

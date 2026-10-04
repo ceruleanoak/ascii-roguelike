@@ -388,7 +388,7 @@ export class HutInteriorOverlay {
     this.renderController.exploreRenderer.drawStaffBlockStance(game);
     this.renderController.exploreRenderer.drawGemWandCharge(game);
     this.renderController.exploreRenderer.drawHammerWindupPose(game);
-    this.renderController.exploreRenderer.drawTrapChargeCount(game);
+    this.renderController.exploreRenderer.drawChargeCounts(game);
 
     // ── 16e. Trap throw reticule + in-flight throwables (interior plane) ──────
     this.renderController.exploreRenderer.drawTrapReticule(game);

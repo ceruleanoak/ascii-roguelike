@@ -135,7 +135,7 @@ export class EquipmentSlots {
       this.renderer.drawCell(x + 1, y, ']', color);
 
       if (!isLocked && equipped) {
-        const dim = _isOilInert(equipped, game);
+        const dim = _isOilInert(equipped, game) || _isBombBagEmpty(equipped, game);
         this.renderer.drawCell(x, y, equipped.char, dim ? _dimColor(equipped.color) : equipped.color);
       }
     }
@@ -165,6 +165,13 @@ function _isOilInert(consumable, game) {
   const isBow = weapon.data.weaponType === 'BOW';
   const isDagger = weapon.data.weaponSubtype === 'dagger';
   return !(isBow || isDagger);
+}
+
+// An empty Bomb Bag (free Bomb spent, no Bombs in the consumable list) dims
+// like an inert oil — it refills on the next room exit.
+function _isBombBagEmpty(consumable, game) {
+  if (!consumable?.data?.bombBag) return false;
+  return game.bombBagSystem.ammoCount(consumable) <= 0;
 }
 
 function _dimColor(hex) {

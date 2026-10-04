@@ -2432,6 +2432,17 @@ export const ITEMS = {
     manualOnly: true,
     color: '#ff0000'
   },
+  // Bomb Bag — earned in the dungeon's Bomb Trial. Throws Bombs (⊗): one free
+  // per room, then the Bombs in the consumable list. Never spent itself; all
+  // throw logic lives in BombBagSystem (no `effect` — it has none of its own).
+  '⊟': {
+    char: '⊟',
+    name: 'Bomb Bag',
+    type: ITEM_TYPES.CONSUMABLE,
+    bombBag: true,
+    manualOnly: true,
+    color: '#b5835a'
+  },
   '☠': {
     char: '☠',
     name: 'Cursed Skull',

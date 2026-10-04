@@ -118,6 +118,27 @@ export function drawHammerWindupPose(renderer, game) {
   );
 }
 
+/**
+ * Blinking Bomb Bag ammo count above the player while the bag's slot is armed
+ * — the same read as a held trap's charges (drawTrapChargeCount).
+ */
+export function drawBombBagCount(renderer, game) {
+  const index = game.player.selectedConsumableIndex ?? -1;
+  if (index < 0) return;
+  const bag = game.inventorySystem.equippedConsumables[index];
+  if (!bag?.data?.bombBag) return;
+  if (Math.floor(performance.now() / 200) % 2 !== 0) return;
+  const C = GRID.CELL_SIZE;
+  const ctx = renderer.fgCtx;
+  ctx.save();
+  ctx.font = `${C * 0.7}px 'Unifont', monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = bag.color || '#ffffff';
+  ctx.fillText(game.bombBagSystem.ammoCount(bag).toString(), game.player.position.x + C / 2, game.player.position.y - C * 0.4);
+  ctx.restore();
+}
+
 /** Blinking trap charge count above the player, hidden during charge-up. */
 export function drawTrapChargeCount(renderer, game) {
   if (game.trapCharging) return;

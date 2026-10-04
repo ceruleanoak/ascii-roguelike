@@ -214,7 +214,7 @@ export class RestRenderer {
     // the blinking charge count once charged (SHIFT throw from REST mode).
     this.renderController.exploreRenderer.drawTrapReticule(game);
     this.renderController.exploreRenderer.drawThrowPreview(game);
-    this.renderController.exploreRenderer.drawTrapChargeCount(game);
+    this.renderController.exploreRenderer.drawChargeCounts(game);
 
     // Draw particles (dodge trails, explosions, etc.)
     for (const particle of game.particles) {
