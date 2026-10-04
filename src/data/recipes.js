@@ -241,6 +241,7 @@ export const RECIPES = [
   { left: '↾', right: 'i', result: '⍖', name: 'Icicle' },            // Dagger + Ice
   { left: '⊦', right: 'i', result: '⍑', name: 'Ice Axe' },           // Axe + Ice
   { left: '↩', right: 'ł', result: '⤺', name: 'Drowse Boomerang' },  // Boomerang + Pollen
+  { left: '↩', right: 'M', result: '⌾', name: 'Chakram' },           // Boomerang + Metal (damages every bounce, no stun)
   { left: 'Ƨ', right: 'd', result: '⸕', name: "Reaper's Scythe" },   // Scythe + Dust
   // Tier-2 → tier-3
   { left: 'ƒ', right: 'v', result: '⌭', name: 'Plague Gun' },        // Fester's Gun + Venom

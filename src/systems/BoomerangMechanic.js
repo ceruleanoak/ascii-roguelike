@@ -36,7 +36,10 @@ export const BoomerangMechanic = {
   // stun-immune enemy shows RESIST via shouldApplyStatusEffect and does not
   // consume the stun). Duration is in enemy double-seconds (ENEMY_TIMER_RATE
   // = 2): 4.0 = 2.0s real.
+  // A non-stunning boomerang (Chakram, `boomerangStun: false`) skips it
+  // entirely.
   _stun(proj, enemy, combat) {
+    if (proj.boomerangStun === false) return;
     if (proj._boomerangStunUsed) return;
     if (!enemy.shouldApplyStatusEffect('stun')) return;
     proj._boomerangStunUsed = true;
@@ -254,10 +257,18 @@ export const BoomerangMechanic = {
   // Outbound ricochet hit (every enemy the boomerang bounces into after the
   // first): no damage, no stun — just a knockback bonk out of the flight
   // path — then the same bounce-target search as the first hit to keep the
-  // chain going while budget remains.
+  // chain going while budget remains. A `ricochetDamage` boomerang (Chakram)
+  // cuts each bounced enemy for its base damage instead, the same direct
+  // takeDamage the first hit's chain splash uses.
   onRicochetHit(proj, enemy, enemies, combat) {
     if (!proj._boomerangHitEnemies) proj._boomerangHitEnemies = new Set();
     proj._boomerangHitEnemies.add(enemy);
+    if (proj.ricochetDamage) {
+      const damaged = enemy.takeDamage(proj.damage, proj.attackId);
+      if (damaged !== false && !damaged?.dodged) {
+        combat.createDamageNumber(proj.damage, enemy.position.x, enemy.position.y, enemy.color);
+      }
+    }
     if (proj.knockback) combat.applyKnockback(enemy, proj);
     combat.physicsSystem.applyHitstop(enemy, 0.06);
     proj.boomerangTimer += proj.boomerangHitDefer || 0.18;

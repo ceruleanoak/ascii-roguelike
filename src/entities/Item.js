@@ -1429,6 +1429,8 @@ export class Item {
       boomerangTimer,                                   // counts down to return-mode flip
       boomerangHitDefer: this.data.boomerangHitDefer,
       chainRadius: this.data.chainRadius,
+      boomerangStun: this.data.boomerangStun !== false, // Chakram: false — never stuns
+      ricochetDamage: !!this.data.ricochetDamage,       // Chakram: every bounce deals damage
       boomerangReturning: false,
       boomerangHasHitFirst: false,
       boomerangBounceTarget: null,                      // enemy locked by post-hit bounce homing

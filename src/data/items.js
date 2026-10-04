@@ -1643,6 +1643,20 @@ export const ITEMS = {
     onHit: 'sleep',
     color: '#ffe566'
   },
+  // Chakram (Boomerang + Metal): a metal ring that cuts instead of bonks.
+  // Every enemy it bounces to takes its low damage (ricochetDamage), but it
+  // never stuns (boomerangStun: false) and never knocks back. Two more
+  // bounces at full charge than the Boomerang.
+  '⌾': {
+    char: '⌾', tier: 2, name: 'Chakram',
+    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.BOW,
+    damage: 1, cooldown: 1.5, maxUses: 1, critChance: 0.1,
+    boomerang: true, boomerangMinCells: 2, boomerangMaxCells: 8,
+    boomerangHitDefer: 0.18, boomerangMaxRicochets: 5, chainRadius: 32,
+    boomerangStun: false, ricochetDamage: true,
+    wallNudgeDistance: 3,
+    color: '#cccccc'
+  },
 
   // ── MELEE / whip — mana-infused (Whip + Mana Potion) — Tier 2 ─────────────
   // The whip's plain tier-2 rung, not an elemental upgrade — the lash carries
