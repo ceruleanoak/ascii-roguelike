@@ -2426,6 +2426,18 @@ export const ENEMIES = {
     color: '#00bbcc',
     waterAffinity: true,               // Prefers water; never avoids it while wandering
     waterBound: true,                  // Never leaves it — see WaterBoundMechanic
+    // The derived preset minus `search`: the snake responds only on sight and
+    // never pursues. Search steered it toward a last-known mark, which for a
+    // shore target is on land it can never reach — it stalled there, unable
+    // to turn back to a player it could see (bug #360). With Search
+    // undeclared, every door into it falls back to Alert, whose sight door
+    // re-engages.
+    states: {
+      alert: { movement: 'wander' },
+      approach: { movement: 'close' },
+      strike: {},
+      recover: { duration: 0.4, variant: 'retreat', speed: 0.5 }
+    },
     // Some carry a Trident: held in reserve for a player who comes within its
     // reach (CloseQuartersMechanic), dropped on death. They never pick
     // anything up.

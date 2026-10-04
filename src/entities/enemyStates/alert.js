@@ -58,7 +58,15 @@ export default {
     // moment a pursuer reaches it, instead of the intended "settles down
     // once actually left alone." Wandering keeps the enemy in motion, which
     // keeps that comparison meaningful either way.
-    if (!cfg.requirePursuit && ctx.effectiveDistance <= ctx.effectiveAggroRange) {
+    //
+    // Listening is only worth holding for if hearing leads somewhere: the
+    // proximity door (next(), below) hands off to Search. An enemy whose
+    // Search resolves back to Alert (Sea Snake: responds on sight only, never
+    // pursues) would hold forever facing wherever it stopped, its cone never
+    // sweeping toward a target it could see by turning — so it keeps
+    // wandering instead.
+    const canActOnHearing = machine.resolve('search') !== 'alert';
+    if (!cfg.requirePursuit && canActOnHearing && ctx.effectiveDistance <= ctx.effectiveAggroRange) {
       moveStill(enemy);
       return;
     }
