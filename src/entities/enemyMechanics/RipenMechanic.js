@@ -41,6 +41,7 @@ export const RipenMechanic = {
     enemy.ripenGrowTimer = 0;
     enemy.ripenPrimed = false;  // fully grown AND in blink countdown
     enemy.ripenBlinkTimer = 0;
+    enemy.ripenDetonated = false; // blew itself up — LootSystem drops nothing for it
   },
 
   // Called from Enemy.js takeDamage(), inside the `hp > 0` block, right
@@ -147,6 +148,7 @@ export const RipenMechanic = {
     // is what excludes the Bomb from its own blast: it's already spliced out
     // of currentRoom.enemies by the time the shockwave sweeps for targets.
     enemy.hp = 0;
+    enemy.ripenDetonated = true;
     return {
       suspend: true,
       result: {

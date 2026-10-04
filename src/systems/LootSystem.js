@@ -178,7 +178,12 @@ export class LootSystem {
       }
 
       drops = luckyDrops;
-    } else if (enemy.data.drops && enemy.data.drops.length) {
+    }
+
+    // Authored `drops` roll on top of the affinity roll, not instead of it —
+    // the Bomb's Bomb is in addition to its beast loot. A Bomb that detonated
+    // spent the bomb it would have dropped (RipenMechanic `ripenDetonated`).
+    if (enemy.data.drops?.length && !enemy.ripenDetonated) {
       for (const drop of enemy.data.drops) {
         const adjustedChance = Math.min(1.0, drop.chance * luckMult);
         if (Math.random() < adjustedChance) {

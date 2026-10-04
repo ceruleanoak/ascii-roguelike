@@ -1308,6 +1308,9 @@ export const ENEMIES = {
       weakness: { 'freeze': 2.0 }
     },
     affinities: ['beast'],
+    // Killed before it goes off, a Bomb also drops a Bomb. One that detonated
+    // doesn't (LootSystem reads `ripenDetonated`) — that bomb is spent.
+    drops: [{ char: '@', chance: 1.0 }],
     tier: 'weak'
   },
 
