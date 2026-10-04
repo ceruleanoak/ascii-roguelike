@@ -368,6 +368,30 @@ export class ExitSystem {
     exits.north = { ...exits.north, color: ZONE_COLORS.gray, forceZone: 'gray' };
   }
 
+  /**
+   * The forced miniboss 'B' takes one of the three slots, leaving only two to
+   * carry an in-progress color streak. When both remaining letters are
+   * hard-gated against the streak's zone (e.g. green-only G/Q/M), the streak
+   * would silently die — reroll one of them to a letter that allows it.
+   */
+  _keepStreakSlotOpen(letters, closedSlots, forcedBossIndex, progressionColor, currentDepth, zoneType, currentLetter) {
+    const progressionZone = progressionColor ? zoneForColor(progressionColor) : null;
+    if (!progressionZone || progressionColor === ZONES[zoneType]?.exitColor) return;
+    const allows = letter => EXIT_LETTERS[letter]?.zoneBoosts?.[progressionZone] !== 0;
+    const candidates = [0, 1, 2].filter(i => i !== forcedBossIndex && !closedSlots.has(i));
+    if (candidates.length === 0 || candidates.some(i => allows(letters[i]))) return;
+
+    const slot = candidates[Math.floor(Math.random() * candidates.length)];
+    for (let attempts = 0; attempts < 50; attempts++) {
+      const letter = this.selectExitLetter(currentDepth, zoneType);
+      if (allows(letter) && !letters.includes(letter) && letter !== currentLetter &&
+          !this._slotRefuses(slot, letter, currentDepth, zoneType)) {
+        letters[slot] = letter;
+        return;
+      }
+    }
+  }
+
   generateExits(currentDepth, roomType, zoneType, progressionColor = null, currentLetter = null) {
     // Generate 3 UNIQUE letters (no duplicates, never the same letter as the room we're in)
     const letters = [];
@@ -402,10 +426,16 @@ export class ExitSystem {
       const bossSlotClosed = this._northLeadsToGray(zoneType) ? new Set([...closedSlots, 0]) : closedSlots;
       forcedBossIndex = randomOpenSlot(bossSlotClosed);
       letters[forcedBossIndex] = 'B';
+      this._keepStreakSlotOpen(letters, closedSlots, forcedBossIndex, progressionColor, currentDepth, zoneType, currentLetter);
     }
 
-    // Assign colors based on zone and progression state
-    const colors = this.assignExitColors(letters, zoneType, progressionColor, closedSlots, currentDepth);
+    // Assign colors based on zone and progression state. The forced 'B' slot
+    // is reserved: alt/streak colors are placed on the other open slots, so
+    // the zone-color repaint below can never erase a streak color that would
+    // otherwise have landed there (bug #355 — 2 cyan exits followed, the L5
+    // room offered no 3rd).
+    const reservedSlot = forcedBossIndex;
+    const colors = this.assignExitColors(letters, zoneType, progressionColor, closedSlots, currentDepth, reservedSlot);
 
     // The guarantee is "this zone's miniboss is reachable" — room.zone (and
     // therefore which zone's miniboss pool spawns) follows the exit's COLOR,
@@ -435,7 +465,7 @@ export class ExitSystem {
           // new letter's color follows the same zone/alt-color rules as
           // every other slot, rather than inheriting the stale color that
           // belonged to whatever letter this slot held before.
-          sequenceColors = this.assignExitColors(letters, zoneType, progressionColor, closedSlots, currentDepth);
+          sequenceColors = this.assignExitColors(letters, zoneType, progressionColor, closedSlots, currentDepth, reservedSlot);
           if (forcedBossIndex !== -1) {
             sequenceColors[forcedBossIndex] = ZONES[zoneType].exitColor;
           }
@@ -481,7 +511,10 @@ export class ExitSystem {
   // (the first step of a zone change) is only offered at a depth that is a
   // multiple of ZONE_CHANGE_DEPTH_STEP. null skips that rule (post-boss
   // recoloring, where a completed or post-Dragon rule decides the colors).
-  assignExitColors(letters, zoneType, progressionColor = null, closedSlots = new Set(), depth = null) {
+  // `reservedSlot` (-1 = none) is an open exit that must keep this zone's own
+  // color (the forced miniboss 'B'): it never receives an alt or streak color,
+  // but it does count as the one own-color exit every room keeps.
+  assignExitColors(letters, zoneType, progressionColor = null, closedSlots = new Set(), depth = null, reservedSlot = -1) {
     const zone = ZONES[zoneType];
     const colors = [zone.exitColor, zone.exitColor, zone.exitColor];
 
@@ -490,13 +523,16 @@ export class ExitSystem {
       return colors;
     }
 
+    // Slots an alt/streak color may be placed on: open and not reserved.
+    const paintBlocked = reservedSlot >= 0 ? new Set([...closedSlots, reservedSlot]) : closedSlots;
+
     // Goo Dragon defeated: every exit, in every drifting zone, rolls only
     // among the zones whose Boss still stands. Once none are left this
     // returns null and the completed-zone path below keeps each exit on
     // the zone's own color (north is overridden to gray in generateExits).
     const postDragonZones = this._postDragonExitZones(zoneType);
     if (postDragonZones) {
-      return this.assignPostDragonColors(letters, postDragonZones, progressionColor, closedSlots);
+      return this.assignPostDragonColors(letters, postDragonZones, progressionColor, paintBlocked);
     }
 
     // Completed zone (its own boss already defeated): flip the usual ratio.
@@ -507,7 +543,7 @@ export class ExitSystem {
     // needing a 3-color streak. Universal rule for any completed zone, not
     // just green (post-L15 Goo Dragon).
     if (this.zoneSystem?.isZoneDefeated(zoneType)) {
-      return this.assignCompletedZoneColors(letters, zone, closedSlots);
+      return this.assignCompletedZoneColors(letters, zone, paintBlocked);
     }
 
     // Pick a random OPEN exit as the first alternative-color slot. A player
@@ -523,7 +559,7 @@ export class ExitSystem {
     // color whenever the current zone's alt-zone pool offers it — reaching the
     // exact destination its own gate says it never should. Both branches below
     // filter each slot's candidate zones by that slot's letter.
-    const altIndex = randomOpenSlot(closedSlots);
+    const altIndex = randomOpenSlot(paintBlocked);
 
     if (progressionColor && progressionColor !== zone.exitColor) {
       // Mid-progression: the streak guarantee ("a same-color exit is always on
@@ -535,7 +571,7 @@ export class ExitSystem {
       // exits followed, 3rd room showed 3 green). Search every open slot for
       // one whose letter isn't gated before giving up on the streak.
       const progressionZone = zoneForColor(progressionColor);
-      const openSlots = [0, 1, 2].filter(i => !closedSlots.has(i));
+      const openSlots = [0, 1, 2].filter(i => !paintBlocked.has(i));
       const eligible = openSlots.filter(i => EXIT_LETTERS[letters[i]]?.zoneBoosts?.[progressionZone] !== 0);
       if (eligible.length > 0) {
         const slot = eligible.includes(altIndex) ? altIndex : eligible[Math.floor(Math.random() * eligible.length)];
@@ -554,9 +590,12 @@ export class ExitSystem {
       // the choice; other zones only sometimes (gate above). One open exit
       // always keeps this zone's own color, so when Ocean walls off a slot
       // only one alt color fits.
+      // A reserved slot is the kept own-color exit, so it counts toward
+      // openSlots (how many alts fit) but is never itself painted.
       const openSlots = [0, 1, 2].filter(i => !closedSlots.has(i));
+      const paintableSlots = openSlots.filter(i => !paintBlocked.has(i));
       const altCount = Math.min(2, Math.max(1, openSlots.length - 1));
-      const altSlots = [altIndex, ...openSlots.filter(i => i !== altIndex).sort(() => Math.random() - 0.5)]
+      const altSlots = [altIndex, ...paintableSlots.filter(i => i !== altIndex).sort(() => Math.random() - 0.5)]
         .slice(0, altCount);
       const offered = new Set();
       for (const slot of altSlots) {
