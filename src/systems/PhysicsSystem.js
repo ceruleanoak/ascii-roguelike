@@ -35,6 +35,11 @@ const WHIP_PULL_SPEED = 280;
 // ordinary PHYSICS.FRICTION once hookedByWhip clears below.
 const WHIP_PULL_MOMENTUM_SPEED = WHIP_PULL_SPEED * 0.5;
 
+// How far off the grid line (px) a blocked Maze turn still slips into the
+// corridor. Just under half a cell, so every offset slides toward the
+// nearer line; an exact half-cell straddle stays put.
+const CORNER_SLIP_PX = GRID.CELL_SIZE * 0.45;
+
 // Marks a high-speed wall/object slam in Enemy.takeDamage's opts.impact. The
 // enemy records it as the source of the iframes that slam starts, which is how
 // a ricocheting enemy takes one slam per iframe window rather than one per bounce.
@@ -658,6 +663,9 @@ export class PhysicsSystem {
     // Collision detection (if entity has collision)
     if (entity.hasCollision) {
       const collision = this.checkCollision(entity, newX, newY, backgroundObjects, room);
+      // Read before the collision response below zeroes the blocked axis.
+      const intendedVx = entity.velocity.vx;
+      const intendedVy = entity.velocity.vy;
       // Speed-collision ricochet: a fast enemy hitting a wall bounces off
       // (reflect + halve) instead of just stopping, and takes 1 damage.
       const speedSq = entity.velocity.vx ** 2 + entity.velocity.vy ** 2;
@@ -695,6 +703,16 @@ export class PhysicsSystem {
       if (entity.pinOnWallContact && (collision.x || collision.y)) {
         entity.pinnedDuration = 2.0;
         entity.pinOnWallContact = false;
+      }
+      // Maze corridors are exactly one body wide, so a turn otherwise needs
+      // pixel-perfect alignment. Scoped to the Maze; the same helper would
+      // serve any other one-cell-corridor collisionMap if it ever needs it.
+      if (entity.inMaze && entity.collisionMap) {
+        if (collision.x && intendedVx !== 0 && Math.abs(intendedVy) < 1) {
+          this._slipAroundCorner(entity, 'x', intendedVx, deltaTime * velocityMultiplier, room);
+        } else if (collision.y && intendedVy !== 0 && Math.abs(intendedVx) < 1) {
+          this._slipAroundCorner(entity, 'y', intendedVy, deltaTime * velocityMultiplier, room);
+        }
       }
 
     } else {
@@ -874,6 +892,40 @@ export class PhysicsSystem {
       }
     }
     return false;
+  }
+
+  /**
+   * Corner slip (Pac-Man pre-turn): when movement along `axis` is blocked by
+   * the collisionMap but the entity sits within CORNER_SLIP_PX of the grid
+   * line where that move would be open, ease it along the perpendicular axis
+   * toward that line at its own speed. Only slips when both the slide itself
+   * and the move after it are clear, so it never drags anything into a wall.
+   */
+  _slipAroundCorner(entity, axis, intendedV, stepTime, room) {
+    const CS = GRID.CELL_SIZE;
+    const width  = entity.width  || CS;
+    const height = entity.height || CS;
+    const perp = axis === 'x' ? 'y' : 'x';
+    const pos = entity.position[perp];
+    const off = ((pos % CS) + CS) % CS;
+    if (off === 0) return;
+    const target = off <= CS / 2 ? pos - off : pos + (CS - off);
+    const dist = Math.abs(target - pos);
+    if (dist > CORNER_SLIP_PX) return;
+
+    const map = entity.collisionMap;
+    const at = (x, y, testAxis) => this.checkAxisCollision(map, x, y, width, height, testAxis, entity, room);
+    const ahead = Math.sign(intendedV);
+    const aligned = axis === 'x'
+      ? { x: entity.position.x, y: target }
+      : { x: target, y: entity.position.y };
+    if (at(aligned.x, aligned.y, perp)) return; // the slide itself is walled
+    const nextX = aligned.x + (axis === 'x' ? ahead : 0);
+    const nextY = aligned.y + (axis === 'y' ? ahead : 0);
+    if (at(nextX, nextY, axis)) return; // still blocked once aligned — a dead wall, not a corner
+
+    const step = Math.min(dist, Math.abs(intendedV) * stepTime);
+    entity.position[perp] += Math.sign(target - pos) * step;
   }
 
   /**
