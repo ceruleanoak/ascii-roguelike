@@ -435,6 +435,22 @@ export class HutInteriorOverlay {
       ctx.restore();
     }
 
+    // Bomb Trial dais — a single empty Slot frame; the restocked Bomb itself
+    // is a real Item drawn by the Item loop (DungeonPuzzleSystem._restockDais).
+    if (game.activeFloor.dais) {
+      const { row, col } = game.activeFloor.dais;
+      const CS = GRID.CELL_SIZE;
+      const cy = row * CS + CS / 2;
+      ctx.save();
+      ctx.font = `${CS}px 'Unifont', monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = SLOT_CHROME.STONE;
+      ctx.fillText(SLOT_CHROME.BRACKET_LEFT, (col - 1) * CS + CS / 2, cy);
+      ctx.fillText(SLOT_CHROME.BRACKET_RIGHT, (col + 1) * CS + CS / 2, cy);
+      ctx.restore();
+    }
+
     // ── 20. Blind / cave vision fog (after everything, inside the PiP clip) ──
     drawInteriorVisionFogOverlay(this.renderer, game);
 

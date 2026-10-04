@@ -16,7 +16,7 @@ import { pickWeaponTutorial } from '../data/dungeon/weaponTutorials.js';
 import {
   pickRandomPuzzleTemplateName, applyPuzzleTemplateToCollisionMap, getPuzzleTemplateWaterCells,
   getPuzzleTemplateGapCells, getPuzzleTemplateBombableCells, getPuzzleTemplateExitCell, getPuzzleTemplateTriggers,
-  getPuzzleTemplateHookPosts, getPuzzleTemplateTorches, getPuzzleTemplatePedestal,
+  getPuzzleTemplateHookPosts, getPuzzleTemplateTorches, getPuzzleTemplatePedestal, getPuzzleTemplateDais,
 } from '../data/dungeonPuzzleTemplates.js';
 
 /**
@@ -907,6 +907,9 @@ export class DungeonFloorGenerator {
       ascendTo: { kind: 'numbered', floorIndex: originFloorIndex },
       descents: [],
       triggers, hookPosts, torches, weaponPedestal, gapCells, puzzleSolved: false,
+      // Bomb Trial dais cell ({ row, col } or null) — restocked with a Bomb
+      // by DungeonPuzzleSystem._restockDais while the Bomb Bag is empty.
+      dais: getPuzzleTemplateDais(templateName),
     };
   }
 }

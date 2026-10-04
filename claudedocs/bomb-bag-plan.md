@@ -3,6 +3,12 @@
 Source: feature inbox → planning inbox ("Add Bomb Bag as a Dungeon Puzzle. Use 1 free bomb per
 room. Crafting bombs increases the ammo count."). Planned 2026-10-03.
 
+**Status (2026-10-03):** Phases 0–5 implemented and verified headlessly. Still open: a CheatMenu
+playtest (the dungeon warp list already includes every `PUZZLE_ROOM_TEMPLATES` entry, so
+`bomb_trial` appears there) and refining the `bomb_trial.json` layout in the dungeon editor.
+The layout is a first draft: three walled panel alcoves (west, east, south), with the pedestal
+at (8,12) and the dais at (16,12).
+
 ## Decisions (ratified 2026-10-03)
 
 | Question | Decision |

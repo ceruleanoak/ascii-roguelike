@@ -278,7 +278,7 @@ async function validatePuzzleTemplate(data) {
     return 'triggers must be a non-empty array — a puzzle room needs at least one switch or panel.';
   }
   // Cell uniqueness is tracked across ALL placeable categories (triggers,
-  // hook posts, torches, the pedestal) — two different fixtures sharing one
+  // hook posts, torches, the pedestal, the dais) — two different fixtures sharing one
   // cell is invalid regardless of which categories they come from.
   const seen = new Set();
   for (let i = 0; i < data.triggers.length; i++) {
@@ -367,6 +367,21 @@ async function validatePuzzleTemplate(data) {
     if (!pickWeaponTutorial(p.weaponChar)) {
       return `pedestal weaponChar "${p.weaponChar}" isn't a weapon (or the Bomb Bag) in items.js.`;
     }
+  }
+
+  // Dais — optional single marker (Bomb Trial): a Bomb is dropped here while
+  // the room is unsolved and the player's Bomb Bag is empty
+  // (DungeonPuzzleSystem._restockDais). Sits on plain floor like the pedestal.
+  if (data.dais !== undefined && data.dais !== null) {
+    const d = data.dais;
+    if (typeof d !== 'object') return 'dais must be an object or null.';
+    if (!Number.isInteger(d.row) || d.row < 1 || d.row > PUZZLE_ROWS - 2) return 'dais row out of bounds.';
+    if (!Number.isInteger(d.col) || d.col < 1 || d.col > PUZZLE_COLS - 2) return 'dais col out of bounds.';
+    const key = `${d.row},${d.col}`;
+    if (seen.has(key)) return 'dais shares a cell with another fixture.';
+    seen.add(key);
+    const cellChar = data.grid[d.row][d.col];
+    if (cellChar !== '.') return `dais at (${d.row},${d.col}) must sit on plain floor ('.'), not "${cellChar}".`;
   }
 
   return null;

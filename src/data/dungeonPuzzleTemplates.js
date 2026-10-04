@@ -63,6 +63,11 @@
 //   recipe — anchored on this cell's column (mirrors the original Whip
 //   Trial's own hardcoded pedestal, now authorable by any template).
 //
+// dais: { row, col } | absent — opt-in Bomb Trial marker. While the room is
+//   unsolved and the player's equipped Bomb Bag is empty (no free charge, no
+//   Bombs in the consumable list), DungeonPuzzleSystem._restockDais drops a
+//   Bomb onto this cell — teaching that the bag refills. Sits on plain floor.
+//
 // weight: selection weight for the North-descent pool (see
 // pickRandomPuzzleTemplateName below) — every named template participates,
 // same as dungeonFloorTemplates.js's numbered-floor pool.
@@ -70,6 +75,7 @@
 import whipTrialTemplate from './dungeon/puzzleTemplates/whip_trial.json';
 import boomerangTrialTemplate from './dungeon/puzzleTemplates/boomerang_trial.json';
 import torchTrialTemplate from './dungeon/puzzleTemplates/torch_trial.json';
+import bombTrialTemplate from './dungeon/puzzleTemplates/bomb_trial.json';
 
 // Named templates, loaded from src/data/dungeon/puzzleTemplates/*.json.
 // Adding a new one (via the editor or by hand) needs a JSON file plus one
@@ -80,6 +86,7 @@ export const PUZZLE_ROOM_TEMPLATES = {
   whip_trial: whipTrialTemplate,
   boomerang_trial: boomerangTrialTemplate,
   torch_trial: torchTrialTemplate,
+  bomb_trial: bombTrialTemplate,
 };
 
 /** Look up a template by name, falling back to Whip Trial if the name is unknown. */
@@ -199,4 +206,9 @@ export function getPuzzleTemplateTorches(templateName) {
 /** The template's opt-in weapon-tutorial pedestal marker, or null if this template doesn't grant one. */
 export function getPuzzleTemplatePedestal(templateName) {
   return getPuzzleTemplate(templateName).pedestal ?? null;
+}
+
+/** The template's opt-in Bomb Trial dais marker, or null if this template has none. */
+export function getPuzzleTemplateDais(templateName) {
+  return getPuzzleTemplate(templateName).dais ?? null;
 }

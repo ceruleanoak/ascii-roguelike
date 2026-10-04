@@ -142,6 +142,7 @@
         <button class="tool" data-tool="hookpost">•  Hook Post</button>
         <button class="tool" data-tool="torch">!  Torch (Ambient)</button>
         <button class="tool" data-tool="pedestal">P  Pedestal</button>
+        <button class="tool" data-tool="dais">D  Dais</button>
         <div id="exitCount" class="doorCount"></div>
         <h4>Weight</h4>
         <input id="puzzleWeightInput" type="number" min="0" step="1" style="width:100%" />
@@ -151,7 +152,7 @@
         <div id="torchList"></div>
         <h4>Pedestal</h4>
         <div id="pedestalEditor"></div>
-        <div class="hint">Switch = struck by a weapon attack. Floor Panel = triggered by standing on it. Torch (Trigger) = lit by approaching while holding a Torch, same as Torch (Ambient) below, but counts toward the exit unlock. With Switch/Panel/Torch (Trigger) selected, click an empty floor cell to place one, click an existing one to remove it. Permanent stays active forever once triggered; Timed reverts after its neutralize-seconds unless re-triggered (Torch triggers are always permanent). The exit unlocks once every trigger is active at the same time. Gap is an impassable void — paints like Wall/Water. Bombable Wall looks like Wall in-game but a bomb blast opens it.Hook Post and Torch (Ambient) are click-only toggles like Switch/Panel — Torch (Ambient) never gates the exit, it's pure ambience, and can be authored already lit via the checkbox below. Pedestal is a single opt-in weapon-tutorial marker (click to place, click again to remove) — type the exact character of any existing crafted weapon into the field above; Save checks it against the recipe list. Every fixture must sit on plain floor and only one may occupy a cell.</div>
+        <div class="hint">Switch = struck by a weapon attack. Floor Panel = triggered by standing on it. Torch (Trigger) = lit by approaching while holding a Torch, same as Torch (Ambient) below, but counts toward the exit unlock. With Switch/Panel/Torch (Trigger) selected, click an empty floor cell to place one, click an existing one to remove it. Permanent stays active forever once triggered; Timed reverts after its neutralize-seconds unless re-triggered (Torch triggers are always permanent). The exit unlocks once every trigger is active at the same time. Gap is an impassable void — paints like Wall/Water. Bombable Wall looks like Wall in-game but a bomb blast opens it. Hook Post and Torch (Ambient) are click-only toggles like Switch/Panel — Torch (Ambient) never gates the exit, it's pure ambience, and can be authored already lit via the checkbox below. Pedestal is a single opt-in weapon-tutorial marker (click to place, click again to remove) — type the exact character of any existing crafted weapon into the field above; Save checks it against the recipe list. Dais is a single opt-in marker (click to place, click again to remove): while the room is unsolved and the player's Bomb Bag is empty, a Bomb drops onto it. Every fixture must sit on plain floor and only one may occupy a cell.</div>
       </div>
     </div>
   </div>
@@ -365,6 +366,15 @@
     ctx.fillStyle = '#0a0a12';
     ctx.fillText('P', x + CELL / 2, y + CELL / 2 + 1);
   }
+  function drawDaisMarker() {
+    if (!currentData || !currentData.dais) return;
+    const { row, col } = currentData.dais;
+    const x = col * CELL, y = row * CELL;
+    ctx.fillStyle = '#d65a5a';
+    ctx.fillRect(x, y, CELL, CELL);
+    ctx.fillStyle = '#0a0a12';
+    ctx.fillText('D', x + CELL / 2, y + CELL / 2 + 1);
+  }
   function drawLockHatch(x, y) {
     ctx.save();
     ctx.beginPath(); ctx.rect(x, y, CELL, CELL); ctx.clip();
@@ -418,6 +428,7 @@
       drawHookPostMarkers();
       drawTorchMarkers();
       drawPedestalMarker();
+      drawDaisMarker();
     }
     updateDoorCount();
     updateExitCount();
@@ -503,7 +514,10 @@
   // occupies this cell — cross-category placement is invalid the same way a
   // trigger can't share a cell with another trigger (see validatePuzzleTemplate).
   function anyFixtureAt(row, col) {
-    return !!findTriggerAt(row, col) || !!findHookPostAt(row, col) || !!findTorchAt(row, col) || isPedestalAt(row, col);
+    return !!findTriggerAt(row, col) || !!findHookPostAt(row, col) || !!findTorchAt(row, col) || isPedestalAt(row, col) || isDaisAt(row, col);
+  }
+  function isDaisAt(row, col) {
+    return !!(currentData && currentData.dais && currentData.dais.row === row && currentData.dais.col === col);
   }
   // Removes whichever fixture (if any) occupies this cell — used when
   // painting a non-floor char (wall/water/gap/exit) over it, since every
@@ -514,6 +528,7 @@
     if (currentData.hookPosts) currentData.hookPosts = currentData.hookPosts.filter(p => !(p.row === row && p.col === col));
     if (currentData.torches) currentData.torches = currentData.torches.filter(t => !(t.row === row && t.col === col));
     if (isPedestalAt(row, col)) currentData.pedestal = null;
+    if (isDaisAt(row, col)) currentData.dais = null;
   }
   // Switch/Panel/Hook Post/Torch/Pedestal are all click-only toggles (place
   // on an empty floor cell not already holding another fixture, click an
@@ -581,6 +596,19 @@
         // defaults to timed/0.25s and gets refined there. Save will flag a
         // still-blank weaponChar rather than silently accepting it.
         currentData.pedestal = { row, col, weaponChar: '' };
+      } else {
+        return;
+      }
+      dirty = true;
+      render();
+      return;
+    }
+    if (activeTool === 'dais') {
+      if (!isClick) return;
+      if (isDaisAt(row, col)) {
+        currentData.dais = null;
+      } else if (currentData.grid[row][col] === '.' && !anyFixtureAt(row, col)) {
+        currentData.dais = { row, col }; // at most one — placing elsewhere moves it
       } else {
         return;
       }

@@ -6,6 +6,8 @@ import { paintDescentVisual, paintStairsUpVisual } from '../data/dungeonFloorTem
 import { TORCH_INTERACT_RADIUS } from './MazeSystem.js';
 import { tickTriggers, within, overlapsCell, setTriggerVisual } from './triggerMachine.js';
 import { tagInteriorPlane } from './PlaneSystem.js';
+import { Item } from '../entities/Item.js';
+import { BOMB_CHAR } from './BombBagSystem.js';
 
 // Proximity radius for door/switch/slot interaction (px from cell center) —
 // mirrors DungeonSystem's DOOR_INTERACT_RADIUS.
@@ -209,12 +211,35 @@ export class DungeonPuzzleSystem {
 
     if (room.puzzleSolved) return;
 
+    this._restockDais(room);
+
     if (tickTriggers(room.triggers, dt, player, companion)) {
       room.puzzleSolved = true;
       room.stairsUpLocked = false;
       paintStairsUpVisual(room.stairsUpObj, false);
       this._spawnUnlockEffect(room.stairsUpObj);
     }
+  }
+
+  /**
+   * Bomb Trial dais: while the room is unsolved and the equipped Bomb Bag is
+   * empty, a Bomb appears on the dais — the room's lesson that the bag is
+   * refillable. Nothing drops while a thrown Bomb is still winding up (its
+   * blast may yet solve the room) or while a dropped Bomb is still lying on
+   * this floor.
+   */
+  _restockDais(room) {
+    const { game } = this;
+    if (!room.dais) return;
+    if (!game.bombBagSystem?.isDepleted()) return;
+    const windups = game.inventorySystem?.consumableWindups ?? [];
+    if (windups.some(w => w.consumable?.char === BOMB_CHAR)) return;
+    if (game.items.some(item => item.hutPlane && item.char === BOMB_CHAR)) return;
+
+    const CS = GRID.CELL_SIZE;
+    const bomb = Object.assign(new Item(BOMB_CHAR, room.dais.col * CS, room.dais.row * CS), { hutPlane: true });
+    game.items.push(bomb);
+    this._spawnUnlockEffect(bomb);
   }
 
   // ─── SPACE-press puzzle actions ───────────────────────────────────────────
