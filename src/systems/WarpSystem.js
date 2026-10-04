@@ -9,8 +9,9 @@ export class WarpSystem {
 
   // Check if a candidate position is within bounds and outside the perimeter safety margin
   // (allows warping through any background object walls inside the perimeter)
-  isValidBlinkPosition(x, y) {
-    const player = this.game.player;
+  // `player` is the blinking body — game.player unless a Mist Battle Flank
+  // mirrors the roll (MistBattleSystem).
+  isValidBlinkPosition(x, y, player = this.game.player) {
     const w = player.width;
     const h = player.height;
     const C = GRID.CELL_SIZE;
@@ -45,8 +46,7 @@ export class WarpSystem {
   }
 
   // Yellow mage blink: find the furthest valid position along the blink direction, emit trail particles, then move
-  resolveBlinkTeleport({ direction, distance }) {
-    const player = this.game.player;
+  resolveBlinkTeleport({ direction, distance }, player = this.game.player) {
     const C = GRID.CELL_SIZE;
     const step = C / 4; // 4px steps for fine collision resolution
 
@@ -59,7 +59,7 @@ export class WarpSystem {
     for (let d = step; d <= distance; d += step) {
       const testX = originX + direction.x * d;
       const testY = originY + direction.y * d;
-      if (this.isValidBlinkPosition(testX, testY)) {
+      if (this.isValidBlinkPosition(testX, testY, player)) {
         bestX = testX;
         bestY = testY;
       } else {
@@ -73,7 +73,7 @@ export class WarpSystem {
         for (let d = step; d <= retryDist; d += step) {
           const testX = originX + direction.x * d;
           const testY = originY + direction.y * d;
-          if (this.isValidBlinkPosition(testX, testY)) {
+          if (this.isValidBlinkPosition(testX, testY, player)) {
             bestX = testX;
             bestY = testY;
           } else {

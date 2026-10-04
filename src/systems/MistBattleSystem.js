@@ -9,6 +9,9 @@
 // - The Trine is a triangle whose apex (the Primary) points where the Primary
 //   faces; Flanks hold the two back corners and copy the Primary's facing so
 //   all three attack in one direction.
+// - Flanks mirror the Primary: same attack press (each with its own weapon),
+//   same slot on 1/2/3, and a roll in the same direction with their own
+//   character's roll type.
 // - Each body carries its own character type and its own gear. The global
 //   InventorySystem gear slots always mirror the Primary; a Flank's passive
 //   armor/consumable stats are projected onto it by briefly loading its gear
@@ -126,6 +129,9 @@ export class MistBattleSystem {
     // apex points up.
     this.members = [];
     this.primaryIndex = 0;
+    // Last frame's Primary roll state, for the mirrored-dodge edge (_mirrorDodge).
+    this.leadRollCooldown = 0;
+    this.leadSliding = false;
   }
 
   /**
@@ -327,8 +333,8 @@ export class MistBattleSystem {
     if (!game.keys.space || !game.attackSequenceActive || !weapon) return;
     const type = weapon.data.weaponType;
     if (type === WEAPON_TYPES.BOW || type === 'WAND' || type === 'UTILITY') return;
-    if (body.dodgeRoll.active) body.dodgeRoll.queuedAttack = true;
-    else if (body.canAttack()) this._fire(body.useHeldItem());
+    // Held SPACE simply resumes once a Flank's roll ends — no roll-queued shot.
+    if (!body.dodgeRoll.active && body.canAttack()) this._fire(body.useHeldItem());
   }
 
   // A Flank's held weapon ticks here, at the same WEAPON_TIMER_RATE as the
@@ -361,6 +367,50 @@ export class MistBattleSystem {
     }
   }
 
+  // ── Mirrored dodge ────────────────────────────────────────────────────
+  // When the Primary rolls, every Flank rolls the same way with its OWN
+  // character's roll (hide, blink, damage, sprint...). Detected as an edge on
+  // the Primary's state rather than hooked into CharacterSystem.updateDodge,
+  // so every way a roll starts is covered: a standard roll re-arms
+  // dodgeRoll.cooldownTimer (blink included — it is instant, so `active`
+  // alone can miss it), and Green Ranger's continuous slide raises
+  // continuousRollActive instead.
+  _mirrorDodge() {
+    const lead = this.game.player;
+    const rolled = lead.dodgeRoll.cooldownTimer > this.leadRollCooldown;
+    const slid = lead.continuousRollActive && !this.leadSliding;
+    this.leadRollCooldown = lead.dodgeRoll.cooldownTimer;
+    this.leadSliding = lead.continuousRollActive;
+
+    let direction = null;
+    if (rolled) direction = lead.dodgeRoll.direction;
+    else if (slid) direction = this._unit(lead.velocity.vx, lead.velocity.vy) ?? lead.facing;
+    if (direction) {
+      const enemies = this.game._activeEnemies();
+      for (const { body } of this.flanks()) {
+        if (body.dodgeRoll.active) continue;
+        if (!body.startDodgeRoll({ x: direction.x, y: direction.y }, enemies)) continue;
+        if (body.pendingBlink) {
+          this.game.warpSystem.resolveBlinkTeleport(body.pendingBlink, body);
+          body.pendingBlink = null;
+        }
+      }
+    }
+
+    // A roll curves with held input (CharacterSystem.updateDodge); Flanks
+    // curve with the Primary's so the Trine keeps its shape mid-roll.
+    if (lead.dodgeRoll.active) {
+      for (const { body } of this.flanks()) {
+        if (body.dodgeRoll.active) body.dodgeRoll.direction = lead.dodgeRoll.direction;
+      }
+    }
+  }
+
+  _unit(x, y) {
+    const len = Math.hypot(x, y);
+    return len > 0 ? { x: x / len, y: y / len } : null;
+  }
+
   // rest-parity: absent because the Mist Battle only exists in its EXPLORE arena.
   update(deltaTime) {
     if (!this.active) return;
@@ -371,6 +421,7 @@ export class MistBattleSystem {
     for (const member of this.members) {
       if (member.swapFlash > 0) member.swapFlash = Math.max(0, member.swapFlash - deltaTime);
     }
+    this._mirrorDodge();
 
     for (let k = 1; k < this.members.length; k++) {
       const body = this.members[(this.primaryIndex + k) % this.members.length].body;
