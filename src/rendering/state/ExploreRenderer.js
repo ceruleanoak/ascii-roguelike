@@ -1450,7 +1450,8 @@ export class ExploreRenderer {
     }
 
     // Draw windup telegraph
-    this._drawHeadIndicator(enemy, enemy.getWindupIndicator());
+    const windupIndicator = enemy.getWindupIndicator();
+    this._drawHeadIndicator(enemy, windupIndicator);
 
     // Bow-draw charge bar: an equipped-bow enemy's windup mirrors the
     // player's own charge indicator (BowChargeIndicator), so the arrow's
@@ -1460,11 +1461,13 @@ export class ExploreRenderer {
     // Sniper reticule + telegraph/dagger-windup indicator
     drawSniperIndicators(this.renderer, enemy);
 
-    // Draw memory/vision lost indicator
-    this._drawHeadIndicator(enemy, enemy.getMemoryIndicator());
-
-    // Draw detection/aggro indicator
-    this._drawHeadIndicator(enemy, enemy.getDetectionIndicator());
+    // Draw memory/vision lost and detection/aggro indicators. Both share the
+    // windup tell's head slot, so they give way while it shows — the yellow
+    // detection '!' drawn on top is what hid a bow goblin's ')'.
+    if (!windupIndicator) {
+      this._drawHeadIndicator(enemy, enemy.getMemoryIndicator());
+      this._drawHeadIndicator(enemy, enemy.getDetectionIndicator());
+    }
 
     // Draw stolen-item indicator (satchel-thief Monkey: the ingredient it's
     // carrying, in that ingredient's own char/color)

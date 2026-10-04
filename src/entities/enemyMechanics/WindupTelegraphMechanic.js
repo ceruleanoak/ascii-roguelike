@@ -38,8 +38,14 @@ export const WindupTelegraphMechanic = {
   // read "what's above the goblin" as "what's about to hit me" the same way
   // they read their own held item. Bare-handed enemies (Wizard, native
   // melee/ranged with no `equippedWeapon`) keep the plain red '!'.
+  //
+  // A melee wielder has no Strike windup (WeaponConversion zeroes its
+  // attackWindup — the swung weapon's own Item windup is the telegraph), so
+  // the held weapon's `windupActive` counts as winding up too; without it a
+  // goblin's axe swing showed nothing above its head.
   getWindupIndicator(enemy) {
-    if (this.isWindingUp(enemy)) {
+    const weaponWindingUp = enemy.equippedWeapon?.windupActive === true;
+    if (this.isWindingUp(enemy) || weaponWindingUp) {
       if (enemy.equippedWeapon) {
         return {
           char: enemy.equippedWeapon.char,
