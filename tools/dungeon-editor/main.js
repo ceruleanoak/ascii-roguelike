@@ -365,7 +365,7 @@ async function validatePuzzleTemplate(data) {
     }
     const { pickWeaponTutorial } = await loadWeaponTutorialsModule();
     if (!pickWeaponTutorial(p.weaponChar)) {
-      return `pedestal weaponChar "${p.weaponChar}" isn't a weapon in items.js.`;
+      return `pedestal weaponChar "${p.weaponChar}" isn't a weapon (or the Bomb Bag) in items.js.`;
     }
   }
 

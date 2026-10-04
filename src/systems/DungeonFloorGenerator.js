@@ -877,7 +877,7 @@ export class DungeonFloorGenerator {
           leftChar: tutorial.recipe?.left ?? null, rightChar: tutorial.recipe?.right ?? null,
         };
       } else {
-        console.warn(`[DungeonFloorGenerator] puzzle template "${templateName}" has a pedestal with weaponChar "${pedestalMarker.weaponChar}" that isn't a weapon in ITEMS — skipping weapon grant.`);
+        console.warn(`[DungeonFloorGenerator] puzzle template "${templateName}" has a pedestal with weaponChar "${pedestalMarker.weaponChar}" that isn't a weapon (or the Bomb Bag) in ITEMS — skipping weapon grant.`);
       }
     }
 
