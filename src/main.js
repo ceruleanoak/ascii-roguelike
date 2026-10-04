@@ -3021,7 +3021,8 @@ class Game {
 
     // If a heal consumable fired and restored HP, treat the player as alive
     // hp <= 0 catch-all covers Rusalka, burn-through-invuln, and any direct hp writes
-    const playerDied = combatResult.playerDead || dotKilledPlayer || lavaKilledPlayer || this.player.hp <= 0;
+    const trineCaught = this.mistBattleSystem.resolveCombat(); // Flank hits; a fallen Primary hands off
+    const playerDied = !trineCaught && (combatResult.playerDead || dotKilledPlayer || lavaKilledPlayer || this.player.hp <= 0);
     if (playerDied) breakOnDeathPassives(this.inventorySystem, this.player);
     if (playerDied && this.player.hp > 0) {
       // Give brief invuln so the restored player doesn't instantly die again

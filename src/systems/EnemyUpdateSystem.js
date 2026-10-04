@@ -300,6 +300,12 @@ export class EnemyUpdateSystem {
       const d = cDx * cDx + cDy * cDy;
       if (d < nearestDistSq) { nearestDistSq = d; nearestTarget = commanded; }
     }
+    // Mist Battle Flanks are full characters — enemies spread across the Trine.
+    for (const { body } of game.mistBattleSystem?.flanks() ?? []) {
+      if ((enemy.plane ?? 0) !== 0) continue; // the Trine fights on the surface
+      const d = (body.position.x - enemy.position.x) ** 2 + (body.position.y - enemy.position.y) ** 2;
+      if (d < nearestDistSq) { nearestDistSq = d; nearestTarget = body; }
+    }
     enemy.setTarget(nearestTarget);
   }
 

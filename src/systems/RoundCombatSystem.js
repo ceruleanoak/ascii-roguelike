@@ -41,7 +41,7 @@ export class RoundCombatSystem {
       return false;
     }
     rc.current++;
-    this._spawnWave(room, this._waveSize(rc.current));
+    this.spawnWave(room, this._waveSize(rc.current));
     this.game.audioSystem?.playSFX?.('aggro');
     // The clear check that triggered this wave already muted layer 2 on the
     // now-empty room (main.js's counted-enemies-hit-zero hook, same frame) —
@@ -108,7 +108,7 @@ export class RoundCombatSystem {
 
   /**
    * Hag outcome — a hostile 'Q' enemy ("the Hag keeps whatever wanders too
-   * far south"), wired identically to _spawnWave's per-enemy block. `uncounted`
+   * far south"), wired identically to spawnWave's per-enemy block. `uncounted`
    * keeps her out of `_countedEnemies` so the room stays cleared and exits stay
    * open despite her being alive (matches the existing lethal-Rusalka precedent
    * of a post-clear hazard that outlives the clear flag) — without this she'd
@@ -144,9 +144,10 @@ export class RoundCombatSystem {
    * Spawn a wave into the already-active room, fully wired for live play
    * (physics, target, room) — mirrors the runtime registration in
    * RoomGenerator.spawnEnemiesFrom — placed away from the live player so a wave
-   * never materializes on top of them.
+   * never materializes on top of them. Also tops up the Mist Battle arena
+   * (MistBattleSystem).
    */
-  _spawnWave(room, count) {
+  spawnWave(room, count) {
     const game = this.game;
     const gen = game.roomGenerator;
     const depth = game?.getCurrentZoneDepth?.() ?? 1;

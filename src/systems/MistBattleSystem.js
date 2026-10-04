@@ -14,6 +14,8 @@
 //   character's roll type.
 // - Rotate (double-tap SPACE) turns the Trine clockwise: `game.player` is
 //   repointed at the back-left body and the gear slots swap with it.
+// - Enemies target and hit Flanks too (resolveCombat). A fallen Primary hands
+//   off to a living Flank; only the last body's death ends the run.
 // - Each body carries its own character type and its own gear. The global
 //   InventorySystem gear slots always mirror the Primary; a Flank's passive
 //   armor/consumable stats are projected onto it by briefly loading its gear
@@ -30,6 +32,11 @@ import { ITEMS, ITEM_TYPES, WEAPON_TYPES, AFFINITY_POOLS } from '../data/items.j
 import { CHARACTER_TYPES } from '../data/characters.js';
 import { PUZZLE_ROOM_TEMPLATES } from '../data/dungeonPuzzleTemplates.js';
 import { steerToward } from './npcSteering.js';
+import { tryDeathSave } from './DeathSaveSystem.js';
+import { attackHitsBox, isSweptStrike } from '../game/Telegraph.js';
+import { inSamePlane } from './PlaneSystem.js';
+import { createExplosion } from '../entities/Particle.js';
+import { DEATH_CAUSES } from '../data/deathCauses.js';
 
 const CELL = GRID.CELL_SIZE;
 // Trine geometry, in cells, measured from the Primary along its facing.
@@ -50,6 +57,11 @@ const ROTATE_DOUBLE_TAP = 0.25;
 // this many seconds, so the triangle turns in place instead of the whole
 // Trine stepping back a corner with every Rotate.
 const ROTATE_GLIDE_TIME = 0.2;
+// Arena waves: when fewer than WAVE_FLOOR enemies remain, WAVE_SIZE more
+// arrive after WAVE_DELAY seconds — the fight never runs dry (no win state yet).
+const WAVE_FLOOR = 3;
+const WAVE_SIZE = 4;
+const WAVE_DELAY = 1.5;
 
 // Weapon behavior that lives in Primary-bound systems (MagicSystem's mana
 // meter, the bat-charge and flail-spin tickers in main.js, the charge-hammer
@@ -144,6 +156,11 @@ export class MistBattleSystem {
     this.clock = 0;
     this.lastSpacePress = -Infinity;
     this.glide = null; // { x, y, timer } — the new Primary's run to the old apex
+    this.waveTimer = 0;
+    // Enemy melee attack → Set of Flank bodies it is done with. CombatSystem
+    // marks a still attack `hasHit` after its one Primary test frame, so the
+    // Flanks keep their own record instead of reading that flag.
+    this.meleeResolved = new WeakMap();
   }
 
   /**
@@ -508,6 +525,127 @@ export class MistBattleSystem {
     return len > 0 ? { x: x / len, y: y / len } : null;
   }
 
+  // ── Combat against the Trine ──────────────────────────────────────────
+  // CombatSystem resolves enemy attacks against `game.player` only; this
+  // resolves them against the Flanks, the same poll-after-combat shape as
+  // CompanionSystem.applyEnemyDamageToTamedRats. Damage goes through
+  // Player.takeDamage, so each Flank's own armor, i-frames and roll apply.
+
+  /**
+   * Called from main.js right after CombatSystem.update, before the death
+   * check. Returns true when the Primary fell and the Trine caught it (a death
+   * save fired or a living Flank was promoted) — main.js must then skip its
+   * death path this frame.
+   */
+  resolveCombat() {
+    if (!this.active) return false;
+    this._applyEnemyDamageToFlanks();
+    return this._catchPrimaryDeath();
+  }
+
+  _applyEnemyDamageToFlanks() {
+    const cs = this.game.combatSystem;
+    const projectiles = cs.enemyProjectiles || [];
+    const melee = cs.enemyMeleeAttacks || [];
+    for (const member of this.flanks()) {
+      const body = member.body;
+      for (let i = projectiles.length - 1; i >= 0; i--) {
+        const proj = projectiles[i];
+        if (proj.reflected || !inSamePlane(proj, body)) continue;
+        if (!cs.checkProjectileCollisionWithPlayer(proj, body)) continue;
+        const result = body.takeDamage(proj.damage, { isBullet: true, element: proj.onHit, attacker: proj.owner });
+        if (result === false) continue; // i-frames: the shot passes through
+        projectiles.splice(i, 1);
+        this._reportHit(body, result, proj.damage, proj.position, proj.knockbackForce || PHYSICS.DEFAULT_DAMAGE_KNOCKBACK);
+      }
+      for (const attack of melee) {
+        if (attack.windupPhase || attack.isCharmedAttack) continue;
+        if ((attack.shooterPlane ?? 0) !== 0) continue;
+        let resolved = this.meleeResolved.get(attack);
+        if (resolved?.has(body)) continue;
+        const connected = attackHitsBox(attack, body.getHitbox(), () => cs.checkMeleeCollisionWithPlayer(attack, body));
+        // A still attack gets one test per Flank; a travelling strike keeps
+        // testing until it connects (Telegraph.retireAfterTest's rule).
+        if (connected || !isSweptStrike(attack)) {
+          if (!resolved) this.meleeResolved.set(attack, resolved = new Set());
+          resolved.add(body);
+        }
+        if (!connected) continue;
+        const result = body.takeDamage(attack.damage, { isBullet: false, isMelee: true, element: attack.onHit, attacker: attack.owner });
+        if (result === false) continue;
+        this._reportHit(body, result, attack.damage, attack.position, attack.knockback);
+      }
+      if (body.hp <= 0) this._fall(member);
+    }
+  }
+
+  // Damage number + knockback for a landed hit, matching CombatSystem's
+  // player-hit reporting (dodge/block/immune words, else the damage taken).
+  _reportHit(body, result, damage, from, knockbackForce) {
+    const cs = this.game.combatSystem;
+    const { x, y } = body.position;
+    if (result?.dodged) cs.createDamageNumber(result.lucky ? 'LUCKY DODGE' : 'DODGE', x, y, result.lucky ? '#ffff66' : '#ffff00');
+    else if (result?.blocked) cs.createDamageNumber(result.guard ?? 'BLOCK', x, y, '#aaaaaa');
+    else if (result?.immune) cs.createDamageNumber('IMMUNE', x, y, '#00ffff');
+    else {
+      cs.createDamageNumber(result?.actualDamage ?? damage, x, y, body.color);
+      if (knockbackForce) this.game.physicsSystem.applyKnockback(body, from.x, from.y, knockbackForce);
+    }
+  }
+
+  // The Primary is down. With a Flank still standing the Trine doesn't end:
+  // an equipped death save gets its normal chance first, then the fallen
+  // Primary leaves and the next living body is promoted. The last body
+  // standing dies through main.js's normal path.
+  _catchPrimaryDeath() {
+    const primary = this.primary;
+    if (!primary || primary.body.hp > 0 || this.flanks().length === 0) return false;
+    if (tryDeathSave(this.game)) return true;
+    this.rotate();
+    this._fall(primary);
+    this.glide = null; // the new Primary holds its ground; the apex is empty
+    return true;
+  }
+
+  // A member leaves the fight: burst, out of physics, out of every roster
+  // (flanks(), rotate() and the draw all skip hp <= 0).
+  _fall(member) {
+    const game = this.game;
+    const body = member.body;
+    body.hp = 0;
+    body.velocity.vx = 0;
+    body.velocity.vy = 0;
+    body.heldItem?.cancelChargeAndReload?.();
+    game.physicsSystem.removeEntity(body);
+    const burst = createExplosion(body.position.x + CELL / 2, body.position.y + CELL / 2, 20, body.color);
+    game.particles.push(...burst);
+    for (const particle of burst) game.physicsSystem.addEntity(particle);
+  }
+
+  // Keep the arena fed: mixed gray-zone enemies, topped up through the
+  // Quagmire's live wave spawner.
+  _updateWaves(deltaTime) {
+    const room = this.game.currentRoom;
+    if (!room || room.enemies.length >= WAVE_FLOOR) {
+      this.waveTimer = WAVE_DELAY;
+      return;
+    }
+    this.waveTimer -= deltaTime;
+    if (this.waveTimer > 0) return;
+    this.waveTimer = WAVE_DELAY;
+    this.game.roundCombatSystem.spawnWave(room, WAVE_SIZE);
+  }
+
+  // Burn/poison ticks a Flank's own Player.update reports (the Primary's go
+  // through StatusEffectSystem.applyPlayerDot, which is game.player-bound).
+  _applyDot(member, tick) {
+    if (!tick) return;
+    const body = member.body;
+    if (tick.burnDamage) body.takeDamage(tick.burnDamage, { isBullet: false, element: 'burn', cause: DEATH_CAUSES.burn });
+    if (tick.poisonDamage) body.takeDamage(tick.poisonDamage, { isBullet: false, element: 'poison', cause: DEATH_CAUSES.poison });
+    if (body.hp <= 0) this._fall(member);
+  }
+
   // rest-parity: absent because the Mist Battle only exists in its EXPLORE arena.
   update(deltaTime) {
     if (!this.active) return;
@@ -522,10 +660,14 @@ export class MistBattleSystem {
     this._mirrorDodge();
     this._updateGlide(deltaTime, flankSpeed);
 
+    this._updateWaves(deltaTime);
+
     for (let k = 1; k < this.members.length; k++) {
-      const body = this.members[(this.primaryIndex + k) % this.members.length].body;
+      const member = this.members[(this.primaryIndex + k) % this.members.length];
+      const body = member.body;
       if (body.hp <= 0) continue;
-      body.update(deltaTime);
+      this._applyDot(member, body.update(deltaTime));
+      if (body.hp <= 0) continue;
       body.facing.x = lead.facing.x;
       body.facing.y = lead.facing.y;
       this._tickWeapon(body, deltaTime);
