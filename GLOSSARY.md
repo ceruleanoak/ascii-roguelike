@@ -500,6 +500,17 @@ identity, not standard programming terms.
 - **Not:** Looter (an Enemy that picks items up off the ground; it never takes from the
   player). Not despawn-on-success — the thief flees and can recover, it doesn't vanish.
 
+### Quiver Recharge
+- **Definition:** A Mechanic for an archer Enemy: when its equipped bow runs out of arrows
+  (enemy-held bows share the player's per-room magazine), it flips to cowardly flight until a
+  recharge clock fills (Goblin: 10 real seconds), then the bow refills and it hunts again.
+  Picking up another weapon mid-flight ends the flight early.
+- **In code:** `QuiverRechargeMechanic` gated by `data.quiverRecharge` (`rechargeTime` in
+  double-seconds). The flip itself is the shared `enterCowardice`/`leaveCowardice`
+  (`enemyMechanics/cowardice.js`), the same one Thief uses.
+- **Not:** Thief's flip — a recharging archer still counts toward room-clear and never bites
+  back when cornered.
+
 ### Watcher
 - **Definition:** A Mechanic for a wide-vision alarm Enemy: on spotting the player it marks
   them — clearing backstab eligibility — and alerts its roommates. Contests the

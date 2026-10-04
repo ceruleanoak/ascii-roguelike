@@ -35,6 +35,7 @@ import { hasVision } from '../enemyVision.js';
 import { GRID } from '../../game/GameConfig.js';
 import { INGREDIENTS } from '../../data/items.js';
 import { disarmPlayer } from '../../systems/StatusEffectSystem.js';
+import { enterCowardice, leaveCowardice } from './cowardice.js';
 
 export const ThiefMechanic = {
   isEnabled(enemy) {
@@ -107,35 +108,17 @@ export const ThiefMechanic = {
     enemy.uncounted = true; // no longer blocks room-clear — reads as an NPC now
     enemy.attackType = enemy.data.attackType || 'melee';
 
-    const declared = enemy.stateMachine.declared;
-    // Snapshotted before any of the mutations below touch `declared` — the
-    // thief's own recovery (`_unflip`) restores exactly this, rather than
+    // The shared flip snapshots `declared` before touching it — the thief's
+    // own recovery (`_unflip`) restores exactly that snapshot, rather than
     // reconstructing the archetype's defaults from `movementStyle`.
-    enemy._thiefPreFlipStates = {
-      approach: declared.approach,
-      search: declared.search,
-      anticipate: declared.anticipate,
-      recover: declared.recover,
-      flee: declared.flee ? { ...declared.flee } : undefined,
-      lookback: declared.lookback ? { ...declared.lookback } : undefined,
-      withdraw: declared.withdraw ? { ...declared.withdraw } : undefined,
-      strike: declared.strike ? { ...declared.strike } : undefined,
-    };
-
-    delete declared.approach;
-    delete declared.search;
-    delete declared.anticipate;
-    delete declared.recover;
     // Strike stays declared — a flipped thief no longer hunts, but it isn't
     // defenseless: flee.js's `cornered` branch reaches this same State
     // (undeclared `anticipate`/`recover` fall back through it to `flee`,
     // exactly the path a normal un-flipped bite already resolves through
     // when neither is authored) so the bite fires only when the player
     // closes the distance, never on the thief's own initiative.
-    if (!enemy.stateMachine.has('flee')) declared.flee = {};
-    declared.flee.cornered = true;
-    if (!enemy.stateMachine.has('lookback')) declared.lookback = {};
-    if (!enemy.stateMachine.has('withdraw')) declared.withdraw = { duration: 1.2 };
+    enemy._thiefPreFlipStates = enterCowardice(enemy, ctx, { cornered: true });
+
     // Strike's default windup movement is 'still' — correct for the normal
     // approach-then-strike flow, where Approach already turned the enemy to
     // face its target before Strike holds that stance. A flipped thief never
@@ -143,12 +126,11 @@ export const ThiefMechanic = {
     // so 'still' would hold the away-facing the flight left behind and the
     // bite would read as landing while still running from the player. Safe
     // to set unconditionally rather than gate it on the cornered branch,
-    // because Approach is deleted above — the cornered path in flee.js is
-    // the only way this thief ever reaches Strike again.
+    // because Approach is deleted by the flip — the cornered path in flee.js
+    // is the only way this thief ever reaches Strike again.
+    const declared = enemy.stateMachine.declared;
     if (!declared.strike) declared.strike = {};
     declared.strike.movement = 'close';
-
-    enemy.stateMachine.transition(enemy, ctx, 'flee', 'coward flip');
   },
 
   // Ticks while flipped, regardless of which State the coward wildcard chain
@@ -177,10 +159,7 @@ export const ThiefMechanic = {
     }
   },
 
-  // Restores exactly what `_flipToCoward` snapshotted — a key absent before
-  // the flip goes back to absent (undeclared), not to an empty `{}`, so an
-  // enemy that never declared `lookback`/`withdraw` on its own doesn't gain
-  // them permanently just because it was cowardly once.
+  // Restores exactly what `_flipToCoward` snapshotted (see cowardice.js).
   _unflip(enemy, ctx) {
     enemy.thiefFlipped = false;
     enemy.thiefRecoverTimer = 0;
@@ -191,15 +170,8 @@ export const ThiefMechanic = {
     // change of heart shouldn't re-trap the player behind an already-earned-
     // open door. Bug #195 — recovering rats were re-locking exits mid-flap.
 
-    const declared = enemy.stateMachine.declared;
-    const pre = enemy._thiefPreFlipStates ?? {};
-    for (const key of ['approach', 'search', 'anticipate', 'recover', 'flee', 'lookback', 'withdraw', 'strike']) {
-      if (pre[key] === undefined) delete declared[key];
-      else declared[key] = pre[key];
-    }
+    leaveCowardice(enemy, ctx, enemy._thiefPreFlipStates);
     enemy._thiefPreFlipStates = null;
-
-    enemy.stateMachine.transition(enemy, ctx, 'alert', 'coward recovered');
   },
 
   // Runs from CombatSystem once a steal attack actually connects (i.e. after

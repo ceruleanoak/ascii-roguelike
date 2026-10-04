@@ -526,6 +526,9 @@ export const ENEMIES = {
       dropOnDeath: true,
       useConsumablesAt: 0.4
     },
+    // An emptied bow (10 arrows per room) turns it coward until the quiver
+    // refills — see QuiverRechargeMechanic. rechargeTime is double-seconds.
+    quiverRecharge: { enabled: true, rechargeTime: 20.0 },
     // When spawned as a Brute follower, leaderRef gets set on the instance and
     // this orbits the leader at formationRadius. Standalone goblins have no
     // leaderRef so the block is inert.

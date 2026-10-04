@@ -31,6 +31,7 @@ import { GameAnimalMechanic } from './enemyMechanics/GameAnimalMechanic.js';
 import { SniperMechanic } from './enemyMechanics/SniperMechanic.js';
 import { RipenMechanic } from './enemyMechanics/RipenMechanic.js';
 import { ThiefMechanic } from './enemyMechanics/ThiefMechanic.js';
+import { QuiverRechargeMechanic } from './enemyMechanics/QuiverRechargeMechanic.js';
 import { WaterBoundMechanic } from './enemyMechanics/WaterBoundMechanic.js';
 import { CloseQuartersMechanic } from './enemyMechanics/CloseQuartersMechanic.js';
 import { BreadSeekMechanic } from './enemyMechanics/BreadSeekMechanic.js';
@@ -412,6 +413,7 @@ export class Enemy {
     if (SniperMechanic.isEnabled(this)) SniperMechanic.init(this);
     if (RipenMechanic.isEnabled(this)) RipenMechanic.init(this);
     if (ThiefMechanic.isEnabled(this)) ThiefMechanic.init(this);
+    if (QuiverRechargeMechanic.isEnabled(this)) QuiverRechargeMechanic.init(this);
     if (WaterBoundMechanic.isEnabled(this)) WaterBoundMechanic.init(this);
 
     if (SlimeTrailDropMechanic.isEnabled(this)) SlimeTrailDropMechanic.init(this);
@@ -1005,6 +1007,7 @@ export class Enemy {
 
     RipenMechanic.updateGrowth(this, { deltaTime, dotDamageEvents });
     ThiefMechanic.update(this, { deltaTime, dotDamageEvents, targetPos: this.target?.position, effectiveVisionLength });
+    QuiverRechargeMechanic.update(this, { deltaTime });
 
     ChargeMechanic.update(this, { deltaTime, distance, effectiveVisionLength, onScreen });
 
