@@ -1252,12 +1252,15 @@ identity, not standard programming terms.
 ### Bombable wall
 - **Definition:** A Puzzle Room wall cell that only a bomb opens. It looks like the ordinary
   dungeon wall around it, but shakes when struck; a bomb blast breaks it and leaves the cell
-  walkable. The Bomb Trial hides its triggers behind them.
+  walkable. The Bomb Trial hides its triggers behind them. Every bombable V room Vault (all
+  zones but yellow) has a row of them as its bottom wall.
 - **In code:** template grid glyph `B` (`dungeonPuzzleTemplates.js`, stamped solid by
   `applyPuzzleTemplateToCollisionMap`) plus a `bombable_wall` Background Object variant on each
   such cell (`GameConfig.js`, `bombable: true`), placed by `generatePuzzleRoom`.
   `CavernSystem.bombBlast()` breaks it and clears the cell's collision. Painted with the
-  dungeon editor's Bombable Wall tool.
+  dungeon editor's Bombable Wall tool. On a Vault, `buildVaultUnlockExtras` places the row
+  (`vaultInfo.wallObjects`, `structural`), and `InteractionSystem._openVaultWall` cracks the
+  whole row, whichever unlock method opened it.
 - **Not:** "cracked wall", "weak wall", "breakable wall", "secret wall".
 
 ### Bomb Trial

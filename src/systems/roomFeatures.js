@@ -1163,17 +1163,34 @@ export const VAULT_UNLOCK_BY_ZONE = {
 
 /**
  * Resolve a Vault's per-zone unlock method and build whatever extra
- * BackgroundObject it needs (green's key rock, cyan's buried switch).
+ * BackgroundObjects it needs (green's key rock, cyan's buried switch, the
+ * Bombable Wall row of a bombable Vault).
  * `applyZoneProperties(obj, zone)` is passed in rather than imported, since
  * it's a RoomGenerator instance method. Returns
- * { unlockConfig, extraLoot, switchObject } — extraLoot is pushed onto the
- * vault's pending loot by the caller, switchObject is stored on vaultInfo
- * so InteractionSystem can check `.compacted`.
+ * { unlockConfig, extraLoot, switchObject, wallObjects } — extraLoot is
+ * pushed onto the vault's pending loot by the caller; switchObject and
+ * wallObjects are stored on vaultInfo so InteractionSystem can check
+ * `.compacted` and crack the wall row.
  */
-export function buildVaultUnlockExtras(zoneType, { centerCol, maxRow }, applyZoneProperties) {
+export function buildVaultUnlockExtras(zoneType, { centerCol, minCol, maxCol, maxRow }, applyZoneProperties) {
   const unlockConfig = VAULT_UNLOCK_BY_ZONE[zoneType] || { method: 'none' };
   const extraLoot = [];
   let switchObject = null;
+  const wallObjects = [];
+
+  // Bombable Vault: its bottom wall is a row of Bombable Walls, the same
+  // object the Puzzle Room uses, so it shakes when struck — the tell that a
+  // bomb will open it. structural keeps cleanupStrayBackgroundObjects from
+  // stripping them off the protected wall cells. InteractionSystem.
+  // _openVaultWall cracks the whole row whichever way the Vault opens.
+  if (unlockConfig.bombable && maxRow < GRID.ROWS - 1) {
+    for (let col = Math.max(minCol, 1); col <= Math.min(maxCol, GRID.COLS - 2); col++) {
+      const wall = new BackgroundObject('≡', col * GRID.CELL_SIZE, maxRow * GRID.CELL_SIZE, { typeId: 'bombable_wall' });
+      wall.structural = true;
+      wallObjects.push(wall);
+      extraLoot.push(wall);
+    }
+  }
 
   // Green zone: the key rock stands just south of the cage (K room retired
   // — this replaces the separate Key Room letter with a rock right at the
@@ -1205,7 +1222,7 @@ export function buildVaultUnlockExtras(zoneType, { centerCol, maxRow }, applyZon
     extraLoot.push(switchObject);
   }
 
-  return { unlockConfig, extraLoot, switchObject };
+  return { unlockConfig, extraLoot, switchObject, wallObjects };
 }
 
 /**

@@ -3181,8 +3181,8 @@ export class RoomGenerator {
     // buildVaultUnlockExtras for the full per-zone rationale). InteractionSystem's
     // canUnlockVault/unlockVault, tryBreakVaultWall, and canActivateVaultSwitch/
     // activateVaultSwitch all read unlockMethod.
-    const { unlockConfig, extraLoot, switchObject } = buildVaultUnlockExtras(
-      zoneType, { centerCol, maxRow }, (obj, zone) => this.applyZoneProperties(obj, zone)
+    const { unlockConfig, extraLoot, switchObject, wallObjects } = buildVaultUnlockExtras(
+      zoneType, { centerCol, minCol, maxCol, maxRow }, (obj, zone) => this.applyZoneProperties(obj, zone)
     );
 
     // Store vault info for key interaction (will be attached to room later)
@@ -3199,7 +3199,8 @@ export class RoomGenerator {
       unlockMethod: unlockConfig.method,
       keyChar: unlockConfig.keyChar || null,
       bombable: !!unlockConfig.bombable,
-      switchObject
+      switchObject,
+      wallObjects
     };
 
     for (let row = minRow; row <= maxRow; row++) {

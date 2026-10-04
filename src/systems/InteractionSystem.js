@@ -171,6 +171,13 @@ export class InteractionSystem {
       game.currentRoom.collisionMap[bottomRow][col] = false;
     }
     vault.unlocked = true;
+    // A bombable Vault's wall row is Bombable Wall objects — crack them all,
+    // whichever method opened it.
+    for (const wall of vault.wallObjects ?? []) {
+      if (wall.destroyed || wall.destroyAfterAnimation) continue;
+      wall.destroyAfterAnimation = true;
+      wall._playAnimation('crack');
+    }
     game.renderer.markBackgroundDirty();
 
     // Visual feedback - create some debris particles
