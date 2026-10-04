@@ -2257,6 +2257,14 @@ export function generateOceanTerrain(gen, room) {
 
   // Generate water in ocean zone (columns 20-29). Deep water covers most of
   // the band — only a shallow strip nearest the sand stays normal depth.
+  // Tall-grass swaths are seeded before this overlay runs, so clear any that
+  // landed in the water band first — otherwise they stand in the sea as
+  // vision blockers, and a Sea Snake can't see a player on the shore past
+  // them (only a player wading within 3 cells slips under the grass rule).
+  const waterEdgeX = (oceanConfig.waterStartCol - 0.5) * GRID.CELL_SIZE;
+  room.backgroundObjects = room.backgroundObjects.filter(obj =>
+    !((obj.char === '|' || obj.char === ',') && obj.position.x >= waterEdgeX));
+
   const oceanWaterSpan = oceanConfig.waterEndCol - oceanConfig.waterStartCol;
   const oceanShallowCols = Math.max(1, Math.round(oceanWaterSpan * 0.2));
   for (let col = oceanConfig.waterStartCol; col <= oceanConfig.waterEndCol; col++) {
