@@ -89,8 +89,11 @@ export const ParryMechanic = {
   },
 
   // An enemy holder faces its target, so its arc is measured toward `target`.
+  // Called for every melee-hit enemy, including data-less bosses (LakeBoss),
+  // so `data` is optional here — no data means no parry.
   catches(enemy, attackerPos, target) {
-    const cfg = enemy.data.parryMechanic;
+    const cfg = enemy.data?.parryMechanic;
+    if (!cfg) return false;
     const facing = target
       ? { x: target.position.x - enemy.position.x, y: target.position.y - enemy.position.y }
       : null;
