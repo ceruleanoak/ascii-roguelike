@@ -7,7 +7,8 @@
     "enemy-editor": "vite --open /tools/enemy-editor/index.html",
     "check:arch": "node tools/check-architecture.js",
     "check:data": "node tools/check-data.js",
-    "build": "npm run check:arch && npm run check:data && NODE_ENV=production vite build",
+    "check:frames": "node tools/check-frame-passes.js",
+    "build": "npm run check:arch && npm run check:data && npm run check:frames && NODE_ENV=production vite build",
     "preview": "vite preview",
     "deploy": "npm run build && gh-pages -d dist --no-history"
   },

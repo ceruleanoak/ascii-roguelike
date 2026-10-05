@@ -156,6 +156,28 @@ identity, not standard programming terms.
   `inSamePlane`, `objectOnPlane`); route new combat/vision/pickup/collision checks through it.
 - **Not:** an Interior (there the surface is frozen and the layer owns the frame); ad-hoc
   per-frame guards (the layer-leak anti-pattern — bug #107).
+### Frame Owner
+*(Proposed 2026-10-05; awaiting ratification.)*
+- **Definition:** The one space that owns the frame on a given tick, meaning the place the player
+  currently is: the surface Room, a Floor's PiP, the Maze's PiP, REST, or NEUTRAL. There is exactly
+  one each frame. A Frame Owner tells you who draws the frame. A Plane tells you which layer of a
+  live Room an entity is on, and Planes can share one owner's frame.
+- **In code:** `FRAME_OWNERS` (`'surface' | 'floor' | 'maze' | 'rest' | 'neutral'`),
+  `resolveFrameOwner(game)` and `ownsFrame(game, owner, reason)` in
+  `src/rendering/framePasses.js`. The resolver mirrors InteriorOverlay's dispatch.
+- **Not:** a Plane; a Game State (EXPLORE has two to three owners); "scene"; the `!playerInInterior`
+  gate it replaces.
+### Frame Pass
+*(Proposed 2026-10-05; awaiting ratification.)*
+- **Definition:** A shared draw pass for something that can appear wherever the player is (loot,
+  projectiles, particles, the player glyph and its overlays). Every pass declares every Frame
+  Owner: it either draws there or gives a written reason why it doesn't. A missing scenario is
+  then a load-time error, not a silent gap.
+- **In code:** `FRAME_PASSES` (grouped by `FRAME_LAYERS`: ground / combat / player / indicators)
+  and `drawFramePasses(rc, game, owner, layer)` in `src/rendering/framePasses.js`.
+  `npm run check:frames` (`tools/check-frame-passes.js`) enforces the registry as the only path.
+- **Not:** owner content (the scenery of one owner only, such as surface enemies or the Maze
+  ghosts, which gate with `ownsFrame`); a hand-kept per-renderer call list (the #376/#385 shape).
 ### Room
 - **Definition:** One procedurally generated surface space in EXPLORE/NEUTRAL. Has a type
   from the room-type registry.
