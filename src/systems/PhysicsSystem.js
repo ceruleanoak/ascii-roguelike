@@ -427,6 +427,10 @@ export class PhysicsSystem {
                   } else {
                     obj.isDryMud = false;
                     obj.color = '#664422';
+                    // getRenderPosition() draws animationColor, not color —
+                    // without this the tile went wet (and slowing) but
+                    // kept its dry color on screen.
+                    obj.animationColor = '#664422';
                     obj.slowing = true;
                     obj.name = 'Wet Mud';
                   }
