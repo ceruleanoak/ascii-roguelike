@@ -39,6 +39,9 @@ const STAGE_CONFIG = [
   }
 ];
 
+// Coins the Betrayed Traveler drops when killed (rollSlainDrops).
+const SLAIN_COIN_REWARD = 5;
+
 /**
  * ErrandSystem
  *
@@ -61,6 +64,8 @@ const STAGE_CONFIG = [
  *   8. Attacking the traveler (feature-inbox, Errand-only special case — not
  *      general NeutralCharacter attackability) permanently flips it hostile
  *      for the rest of the run: see checkAttackHit()/_becomeHostile().
+ *   9. Killing the Betrayed Traveler drops its purse once per run — 5 Coins
+ *      and the Shed Key if not yet given: see rollSlainDrops().
  *
  * The same traveler also stands on Settlement ground and in 'neutral_npc'
  * hut floors. Every site builds it through createTraveler(), and every
@@ -77,6 +82,7 @@ export class ErrandSystem {
                                // owns activeErrand/stage itself rather than on `game`.
     this.shedKeyGiven = false; // Final stage traded once — the Shed Key came with it
     this.hostile = false;     // Attacked the traveler — permanent for the run (resetOnDeath wipes it)
+    this.slainRewardGiven = false; // Betrayed Traveler killed once — its purse already paid out this run
   }
 
   // ── Hooks called by main.js ─────────────────────────────────────────────────
@@ -437,6 +443,7 @@ export class ErrandSystem {
     this.menuOpen = false;
     this.shedKeyGiven = false;
     this.hostile = false;
+    this.slainRewardGiven = false;
   }
 
   // ── Hostility (feature-inbox) ───────────────────────────────────────────────
@@ -501,6 +508,27 @@ export class ErrandSystem {
     room.enemies.push(enemy);
     game.physicsSystem.addEntity(enemy);
     return enemy;
+  }
+
+  /**
+   * Called from LootSystem.spawnLoot on every enemy death. Killing the
+   * Betrayed Traveler pays its purse once per run: SLAIN_COIN_REWARD Coins,
+   * plus the Shed Key if the trade route hasn't already handed it over. The
+   * traveler still returns in later E rooms (spawnHostileEnemy), so a once-
+   * per-run purse keeps it from becoming a coin farm.
+   */
+  rollSlainDrops(game, enemy) {
+    if (enemy.data?.char !== 'E' || this.slainRewardGiven) return;
+    this.slainRewardGiven = true;
+    const { x, y } = enemy.position;
+    if (!this.shedKeyGiven) {
+      this.shedKeyGiven = true;
+      game.lootSystem.spawnItemDrop(SHED_KEY_CHAR, x, y, null, enemy);
+    }
+    for (let i = 0; i < SLAIN_COIN_REWARD; i++) {
+      const angle = (i / SLAIN_COIN_REWARD) * Math.PI * 2 + Math.random() * 0.4;
+      game.lootSystem.spawnIngredientDrop('c', x, y, angle, enemy);
+    }
   }
 
   // ── Internal ────────────────────────────────────────────────────────────────
