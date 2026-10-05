@@ -949,8 +949,10 @@ export class Enemy {
         const itemAttack = this.equippedWeapon.update(deltaTime);
         if (itemAttack) {
           // Weapon windup just resolved — the swing is firing this frame, so
-          // burst forward in sync with it.
+          // burst forward in sync with it. Same swing sound the player's
+          // weapon makes when its windup resolves.
           this._executeLeapAttack();
+          this.game?.playWeaponAttackSFX?.(this.equippedWeapon);
           return {
             dotDamage: dotDamageEvents,
             itemAttack: this.convertToEnemyAttack(itemAttack)
