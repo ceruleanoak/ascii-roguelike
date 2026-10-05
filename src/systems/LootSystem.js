@@ -6,6 +6,9 @@ import { GRID } from '../game/GameConfig.js';
 import { STARTER_POTION_CHARS, starterPotionIngredientsFor } from '../data/alchemy.js';
 import { INGREDIENT_STACK_CAP } from './ingredientPile.js';
 
+// Chance each Coin an enemy drops becomes a Frog Coin while the player is in frog form.
+const FROG_COIN_SWAP_CHANCE = 0.25;
+
 export class LootSystem {
   constructor(game) {
     this.game = game;
@@ -202,6 +205,13 @@ export class LootSystem {
     // those systems rather than folded into them.
     if (Math.random() < 0.10) {
       drops.push('c');
+    }
+
+    // Frog form: each Coin a kill would drop has a 25% chance to come up a
+    // Frog Coin (⊚) instead. Stolen coins returned above stay plain Coins —
+    // they were the player's own.
+    if (player?.polymorphed) {
+      drops = drops.map(d => (d === 'c' && Math.random() < FROG_COIN_SWAP_CHANCE) ? '⊚' : d);
     }
 
     for (let i = 0; i < drops.length; i++) {
