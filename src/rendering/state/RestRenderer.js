@@ -20,10 +20,8 @@ import { getItemData } from '../../data/items.js';
 import { PixelatedDissolve, TextSwapDissolve } from '../effects/TextEffects.js';
 import { drawUndead } from '../ui/UndeadRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
-import { whirlwindSpinAngle } from '../effects/WeaponPreviewDraw.js';
 import { drawGolems } from '../ui/CompanionRenderers.js';
-import { drawFloatPlatform } from '../effects/FloatPlatformDraw.js';
-import { drawFairyKingOrbit } from '../effects/FairyKingOrbit.js';
+import { drawFramePasses } from '../framePasses.js';
 
 const IDLE_ECHO_DURATION = 0.5;          // seconds — must match WorldEffectsSystem's IDLE_ECHO_DURATION
 const IDLE_ECHO_MAX_RADIUS = GRID.CELL_SIZE * 1.5;
@@ -190,59 +188,13 @@ export class RestRenderer {
       );
     }
 
-    // Draw projectiles and melee attacks (weapon preview) — shared with
-    // EXPLORE's surface pass via ExploreRenderer.drawProjectiles/
-    // drawMeleeAttacks (render-helper pattern), so a swing or arrow reads
-    // identically in REST (strike-flash overlay, drawAboveOwner anchor,
-    // dithering included) instead of a second hand-maintained copy.
-    this.renderController.exploreRenderer.drawProjectiles(game, false);
-    this.renderController.exploreRenderer.drawMeleeAttacks(game, false);
-
-    // Arrows that missed and stuck in the ground — same shared pass as EXPLORE.
-    this.renderController.exploreRenderer.drawStuckArrows(game, false);
-
-    // Thrown consumables (arc + spin + AoE ring telegraph) — weapon preview.
-    this.renderController.exploreRenderer.drawConsumableWindups(game);
-
-    // Held-weapon poses that don't depend on an enemy being present: gem wand
-    // charge shake, hammer overhead windup, staff-block stance.
-    this.renderController.exploreRenderer.drawGemWandCharge(game);
-    this.renderController.exploreRenderer.drawHammerWindupPose(game);
-    this.renderController.exploreRenderer.drawStaffBlockStance(game);
-
-    // Trap/thrown-weapon charge preview: reticule + ghost while charging, and
-    // the blinking charge count once charged (SHIFT throw from REST mode).
-    this.renderController.exploreRenderer.drawTrapReticule(game);
-    this.renderController.exploreRenderer.drawThrowPreview(game);
-    this.renderController.exploreRenderer.drawChargeCounts(game);
-
-    // Draw particles (dodge trails, explosions, etc.)
-    for (const particle of game.particles) {
-      if (particle.getAlpha) {
-        // Particle class instance
-        const alpha = particle.getAlpha();
-        this.renderer.drawTextWithAlpha(
-          particle.position.x + GRID.CELL_SIZE / 2,
-          particle.position.y + GRID.CELL_SIZE / 2,
-          particle.char,
-          particle.color,
-          alpha
-        );
-      } else {
-        // Simple particle object
-        const alpha = Math.max(0, particle.life / particle.maxLife);
-        this.renderer.drawTextWithAlpha(
-          particle.x,
-          particle.y,
-          particle.char,
-          particle.color,
-          alpha
-        );
-      }
-    }
-
-    // Draw thrown weapons in-flight (SHIFT throw from REST mode)
-    this.renderController.exploreRenderer.drawInFlightTraps(game, false);
+    // Weapon preview: swings, arrows, thrown consumables, poses, reticules,
+    // particles and in-flight throwables — every pass shared with EXPLORE and
+    // the interiors runs from the Frame Pass registry (framePasses.js), so a
+    // weapon reads identically wherever it is used. Ground loot draws here
+    // too, under the bundle and NPCs.
+    drawFramePasses(this.renderController, game, 'rest', 'ground');
+    drawFramePasses(this.renderController, game, 'rest', 'combat');
 
     // Draw idle echoes — expanding fade-out ring shown when SPACE had nothing to interact
     // with. Tracks the player's live position rather than a captured spawn point, so the
@@ -301,26 +253,6 @@ export class RestRenderer {
       }
     }
 
-    // Draw ingredients
-    for (const ingredient of game.ingredients) {
-      this.renderer.drawEntity(
-        ingredient.position.x + GRID.CELL_SIZE / 2,
-        ingredient.position.y + GRID.CELL_SIZE / 2,
-        ingredient.char,
-        ingredient.color
-      );
-    }
-
-    // Draw items
-    for (const item of game.items) {
-      this.renderer.drawEntity(
-        item.position.x + GRID.CELL_SIZE / 2,
-        item.position.y + GRID.CELL_SIZE / 2,
-        item.char,
-        item.color
-      );
-    }
-
     // Draw character NPCs (other unlocked characters)
     for (const npc of game.characterNPCs) {
       npc.render(this.renderer.fgCtx, (gx, gy) => ({
@@ -332,32 +264,9 @@ export class RestRenderer {
     // Charon barring the north exit, and his toll in flight
     drawCharon(this.renderer, game);
 
-    // Draw player (with i-frame alpha fade and status color). Whirlwind Cape's
-    // dodge roll spins the glyph instead — shared with ExploreRenderer via
-    // whirlwindSpinAngle() (render-helper pattern) so the cape reads the same
-    // whether it's dodged in EXPLORE or previewed in REST.
-    const playerAlpha = game.player.getVisibilityAlpha();
-    const playerColor = game.player.getDisplayColor();
-    const spinAngle = whirlwindSpinAngle(game.player);
-    drawFloatPlatform(this.renderer, game.player);
-    if (spinAngle !== null) {
-      this.renderer.drawEntityRotated(
-        game.player.position.x + GRID.CELL_SIZE / 2,
-        game.player.position.y + GRID.CELL_SIZE / 2,
-        game.player.char,
-        playerColor,
-        spinAngle
-      );
-    } else {
-      this.renderer.drawTextWithAlpha(
-        game.player.position.x + GRID.CELL_SIZE / 2,
-        game.player.position.y + GRID.CELL_SIZE / 2,
-        game.player.char,
-        playerColor,
-        playerAlpha
-      );
-    }
-    drawFairyKingOrbit(this.renderer, game);
+    // The player and everything attached to them (glyph, pips, parry,
+    // Fairy King orbit, facing, known spells) — shared Frame Passes.
+    drawFramePasses(this.renderController, game, 'rest', 'player');
 
     // Follower flock (persists across rooms after feeding events).
     if (game.followerCrows && game.followerCrows.length > 0) {
@@ -401,12 +310,8 @@ export class RestRenderer {
       drawGolems(this.renderer, game, () => true);
     }
 
-    // Draw bow charge indicator (shared between REST and EXPLORE states)
-    this.renderController.bowChargeIndicator.render(game);
-
-    // Draw green ranger action cooldown indicator
-    this.renderController.greenRangerIndicator.render(game);
-    this.renderController.cyanRogueIndicator.render(game);
+    // Bow charge / ranger / rogue readouts — shared indicator Frame Passes.
+    drawFramePasses(this.renderController, game, 'rest', 'indicators');
 
     // Draw contextual floating text above player when near a slot
     if (nearestSlot && activeHint === 'slot') {

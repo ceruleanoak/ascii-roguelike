@@ -1,7 +1,7 @@
 import { GRID, COLORS } from '../../game/GameConfig.js';
 import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher.js';
 import { drawUndead } from '../ui/UndeadRenderer.js';
-import { drawFloatPlatform } from '../effects/FloatPlatformDraw.js';
+import { drawFramePasses } from '../framePasses.js';
 
 /**
  * NeutralRenderer - Renders NEUTRAL state (Leshy Grove, future shops/puzzles)
@@ -96,6 +96,10 @@ export class NeutralRenderer {
       }
     }
 
+    // Shared ground Frame Passes — all declared absent here (non-combat room;
+    // prizes draw plainly just below), kept so a pass added later must decide.
+    drawFramePasses(this.renderController, game, 'neutral', 'ground');
+
     // Draw items (prizes)
     for (const item of game.items) {
       const x = item.position.x + GRID.CELL_SIZE / 2;
@@ -129,16 +133,10 @@ export class NeutralRenderer {
       );
     }
 
-    // Draw player
-    const pulseAlpha = game.player.getPulseAlpha ? game.player.getPulseAlpha() : 1.0;
-    drawFloatPlatform(this.renderer, game.player);
-    this.renderer.drawTextWithAlpha(
-      game.player.position.x + GRID.CELL_SIZE / 2,
-      game.player.position.y + GRID.CELL_SIZE / 2,
-      game.player.char,
-      game.player.color,
-      pulseAlpha
-    );
+    // Shared combat + player Frame Passes. The player glyph pulses with the
+    // room script here (getPulseAlpha) instead of the i-frame fade.
+    drawFramePasses(this.renderController, game, 'neutral', 'combat');
+    drawFramePasses(this.renderController, game, 'neutral', 'player');
 
     // Follower flock (persists across rooms after feeding events).
     if (game.followerCrows && game.followerCrows.length > 0) {
@@ -165,6 +163,8 @@ export class NeutralRenderer {
         );
       }
     }
+
+    drawFramePasses(this.renderController, game, 'neutral', 'indicators');
 
     // Script-specific rendering (if script provides onRender hook)
     if (game.neutralRoomSystem.currentScript && game.neutralRoomSystem.currentScript.onRender) {

@@ -5,11 +5,8 @@ import {
   TORCH_LIGHT_RADIUS, TORCH_ALPHA_HIGH, TORCH_ALPHA_LOW,
   TORCH_PULSE_SPEED, TORCH_LIT_COLOR, TORCH_UNLIT_COLOR,
 } from '../../systems/MazeSystem.js';
-import { hasTorchLight, drawPlayerTorchLight, drawInteriorVisionFogOverlay } from './torchLight.js';
-import { drawStatusPips } from '../effects/StatusPipEffects.js';
-import { drawFloatPlatform } from '../effects/FloatPlatformDraw.js';
-import { drawParryIndicator } from './ParryIndicator.js';
-import { drawFairyKingOrbit } from '../effects/FairyKingOrbit.js';
+import { drawInteriorVisionFogOverlay } from './torchLight.js';
+import { drawFramePasses } from '../framePasses.js';
 
 /**
  * MazeInteriorOverlay — picture-in-picture renderer for the Maze maze.
@@ -21,17 +18,17 @@ import { drawFairyKingOrbit } from '../effects/FairyKingOrbit.js';
  *   1. Dim exterior + floor panel
  *   2. Wall cells
  *   2b. Maze torches (fixture glyph + pulsing light when lit)
- *   2c. Interior puddles / goo blobs / steam clouds (slime trails, etc.)
  *   3. Exit indicator
  *   4. Maze objects (3-hit breakables, hit flash, blink warning)
- *   5. Dropped ingredients / items (mazePlane)
+ *   5. Ground Frame Passes (puddles, goo, debris, mazePlane loot, traps)
  *   6. Ghosts
- *   6b. Interior debris
- *   7. Player attacks (projectiles, melee, arrows, damage numbers)
- *   8. Particles
- *   9. Player
- *   9b. Camp companion
- *  10. HUD: label  (absolute canvas coords)
+ *   7. Combat Frame Passes (attacks, arcs, damage numbers, particles, steam)
+ *   8. Player Frame Passes (torch glow, glyph, pips, poses, throwables)
+ *   9. Camp companion
+ *  10. Indicator Frame Passes, then blind vision fog
+ *
+ * Every pass shared with the other Frame Owners runs from the registry in
+ * framePasses.js — never a hand call here (npm run check:frames).
  */
 
 const CS          = GRID.CELL_SIZE; // 16
@@ -89,13 +86,6 @@ export class MazeInteriorOverlay {
       ctx.fillText(torch.char, cx, cy);
     }
 
-    // ── 2c. Interior puddles + goo blobs + steam clouds (slime trails, etc.) ──
-    // Same shared-helper convention as HutInteriorOverlay; hutPlane=true selects
-    // entries tagged on spawn via tagInteriorPlane (PlaneSystem.js).
-    this.renderController.exploreRenderer.drawPuddles(game, true);
-    this.renderController.exploreRenderer.drawGooBlobs(game, true);
-    this.renderController.exploreRenderer.drawSteamClouds(game, true);
-
     // ── 3. Exit indicator ──────────────────────────────────────────────────
     {
       const ex = mi.exitCol * CS + CS / 2;
@@ -133,16 +123,8 @@ export class MazeInteriorOverlay {
       }
     }
 
-    // ── 5. Maze-plane loot ──────────────────────────────────────────────
-    for (const ing of game.ingredients) {
-      if (!ing.mazePlane) continue;
-      const bobY = ing.inWater ? Math.sin(ing.bobTimer * 4) * 2 : 0;
-      this.renderer.drawEntity(ing.position.x + CS / 2, ing.position.y + CS / 2 + bobY, ing.char, ing.color);
-    }
-    for (const item of game.items) {
-      if (!item.mazePlane) continue;
-      this.renderer.drawEntity(item.position.x + CS / 2, item.position.y + CS / 2, item.char, item.color);
-    }
+    // ── 5. Shared ground Frame Passes ────────────────────────────────────
+    drawFramePasses(this.renderController, game, 'maze', 'ground');
 
     // ── 6. Ghosts ──────────────────────────────────────────────────────────
     for (const ghost of mi.ghosts) {
@@ -150,61 +132,19 @@ export class MazeInteriorOverlay {
       ctx.fillText(ghost.char, ghost.position.x + CS / 2, ghost.position.y + CS / 2);
     }
 
-    // ── 6b. Interior debris ─────────────────────────────────────────────────
-    this.renderController.exploreRenderer.drawDebris(game, true);
+    // ── 7-8. Shared combat + player Frame Passes ─────────────────────────
+    drawFramePasses(this.renderController, game, 'maze', 'combat');
+    drawFramePasses(this.renderController, game, 'maze', 'player');
 
-    // ── 7. Player attacks (shared with surface/hut via hutPlane=true filter;
-    //      see render_helper_pattern — keeps maze combat draw in sync with
-    //      the surface pass instead of reimplementing an unfiltered copy) ──
-    this.renderController.exploreRenderer.drawProjectiles(game, true);
-    this.renderController.exploreRenderer.drawEnemyProjectiles(game, true);
-    this.renderController.exploreRenderer.drawPlayerTongueAttacks(game, true);
-    this.renderController.exploreRenderer.drawEnemyTongues(game);
-    this.renderController.exploreRenderer.drawMimicTongues(game);
-    this.renderController.exploreRenderer.drawMeleeAttacks(game, true);
-    this.renderController.exploreRenderer.drawEnemyMeleeAttacks(game, true);
-    this.renderController.exploreRenderer.drawStuckArrows(game, true);
-    this.renderController.exploreRenderer.drawDamageNumbers(game, true);
-
-    // ── 8. Particles ───────────────────────────────────────────────────────
-    this.renderController.exploreRenderer.drawParticles(game, true);
-
-    // ── 8b. Torch light (cosmetic glow when Torch equipped) ────────────────
-    if (hasTorchLight(game)) {
-      drawPlayerTorchLight(
-        this.renderer,
-        game.player.position.x + CS / 2,
-        game.player.position.y + CS / 2
-      );
-    }
-
-    // ── 9. Player ──────────────────────────────────────────────────────────
-    const playerAlpha = game.player.getVisibilityAlpha?.() ?? 1.0;
-    const mossActive = game.player.mossCloakActive === true;
-    const playerChar = mossActive ? '%' : game.player.char;
-    const playerColor = mossActive
-      ? '#228822'
-      : (game.player.getDisplayColor?.() ?? game.player.color);
-    drawFloatPlatform(this.renderer, game.player);
-    this.renderer.drawTextWithAlpha(
-      game.player.position.x + CS / 2,
-      game.player.position.y + CS / 2,
-      playerChar, playerColor, playerAlpha
-    );
-    drawStatusPips(this.renderer, game.player);
-    drawParryIndicator(this.renderer, game.player, game.player.parryMechanic);
-    drawFairyKingOrbit(this.renderer, game);
-
-    // ── 9b. Camp companion (followed the player in; maze coords) ──────────
+    // ── 9. Camp companion (followed the player in; maze coords) ───────────
     if (game.companion) {
       game.companion.render(ctx, (gx, gy) => ({ x: gx * CS, y: gy * CS }));
     }
 
-    this.renderController.bowChargeIndicator.render(game);
-    this.renderController.greenRangerIndicator.render(game);
-    this.renderController.cyanRogueIndicator.render(game);
+    // ── 10. Shared indicator Frame Passes ────────────────────────────────
+    drawFramePasses(this.renderController, game, 'maze', 'indicators');
 
-    // ── 10. Blind vision fog (after everything, inside the PiP clip) ────────
+    // ── 10b. Blind vision fog (after everything, inside the PiP clip) ───────
     drawInteriorVisionFogOverlay(this.renderer, game);
 
     // ── Restore interior translate ────────────────────────────────────────

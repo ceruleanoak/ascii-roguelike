@@ -21,13 +21,11 @@
 
 import { GRID, COLORS, ROOM_TYPES } from '../../game/GameConfig.js';
 import { drawOffscreenEnemyIndicators } from '../ui/OffscreenEnemyIndicators.js';
-import { drawPlayerFacingIndicator } from '../ui/PlayerFacingIndicator.js';
 import { drawRestExitLabel, southExitShowsOpen, southDoorColor, REST_WORD, CRAFT_WORD } from '../ui/RestExitLabel.js';
 import { thrownWeaponPointerActive, nearestThrownWeaponTarget, drawThrownWeaponLine, drawCraftArrow } from '../ui/ThrownWeaponPointer.js';
 import { drawSniperIndicators, drawSniperBeams, drawSniperReticules, sniperHidingConcealAlpha } from '../effects/SniperEffects.js';
 import { drawSinkholes } from '../effects/SinkholeEffects.js';
 import { drawDragonForge } from '../effects/DragonForgeDraw.js';
-import { drawWires } from '../effects/WireEffects.js';
 import { drawDonationArc, drawCoinArc, drawWellRitual } from '../effects/ArcTossEffects.js';
 import { renderBombEnemy } from '../effects/BombEffects.js';
 import { renderIceGolem, renderSmallEnemyUnderSnow, renderYetiFrenzyPip } from '../effects/CyanEnemyEffects.js';
@@ -39,13 +37,13 @@ import { PixelatedDissolve, SplitReveal } from '../effects/TextEffects.js';
 import { drawPlayerMeleeAttacks, drawEnemyMelee } from '../effects/MeleeAttackDraw.js';
 import {
   drawConsumableWindups, drawGemWandCharge, drawHammerWindupPose,
-  drawTrapChargeCount, drawBombBagCount, drawStaffBlockStance, whirlwindSpinAngle
+  drawTrapChargeCount, drawBombBagCount, drawStaffBlockStance
 } from '../effects/WeaponPreviewDraw.js';
 import { BossRenderer } from './BossRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
-import { isInteriorActive, inSamePlane, objectVisibleToPlayer } from '../../systems/PlaneSystem.js';
+import { objectVisibleToPlayer } from '../../systems/PlaneSystem.js';
 import { drawVisionFogOverlay } from '../ui/torchLight.js';
-import { drawKnownSpellHints, drawWellCoinHint, drawDoorPrompts } from '../ui/ContextHints.js';
+import { drawWellCoinHint, drawDoorPrompts } from '../ui/ContextHints.js';
 import { drawManaGems } from '../effects/ManaGemRenderer.js';
 import { drawSparkle, drawGlitterSparkles, GRASS_SPARKLE_SPEED } from '../effects/SparkleEffects.js';
 import { drawWhirlpool } from '../effects/WhirlpoolEffects.js';
@@ -53,35 +51,11 @@ import { stepConcealmentAlpha } from '../../systems/WorldEffectsSystem.js';
 import { drawFracturedRock } from '../sprites/fracturedRockSprite.js';
 import { renderMawShadow, chargedColor, renderChargedObjects } from '../AscentRenderHelpers.js';
 import { ReflectShieldMechanic } from '../../entities/enemyMechanics/ReflectShieldMechanic.js';
-import { drawFloatPlatform } from '../effects/FloatPlatformDraw.js';
 import { fieldGuideEquipped, drawFieldGuideHpLabel } from '../ui/FieldGuideHpLabel.js';
 import { drawCursedRecipeReveal } from '../ui/CursedRecipeReveal.js';
 import { drawParryIndicator } from '../ui/ParryIndicator.js';
-import { drawFairyKingOrbit } from '../effects/FairyKingOrbit.js';
-import { drawTrine } from '../effects/TrineDraw.js';
-
-function drawDizzyOrbitals(ctx, cx, cy, timer) {
-  const r = 6;
-  const wobbleFreq = 2.5;
-  const orbitSpeed = 1.0;
-  const tilt = Math.sin(timer * wobbleFreq) * (Math.PI / 2);
-  const b = r * Math.abs(Math.sin(tilt));
-  const phi = timer * orbitSpeed * Math.PI * 2;
-  const planeAngle = Math.PI / 4;
-  ctx.save();
-  ctx.fillStyle = '#ddbb00';
-  for (let i = 0; i < 3; i++) {
-    const theta = phi + (i * Math.PI * 2 / 3);
-    const lx = Math.cos(theta) * r;
-    const ly = Math.sin(theta) * b;
-    const sx = cx + lx * Math.cos(planeAngle) - ly * Math.sin(planeAngle);
-    const sy = cy + lx * Math.sin(planeAngle) + ly * Math.cos(planeAngle);
-    ctx.beginPath();
-    ctx.arc(sx, sy, 1.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
-}
+import { drawDizzyOrbitals } from '../effects/DizzyOrbitals.js';
+import { drawFramePasses, ownsFrame } from '../framePasses.js';
 
 export class ExploreRenderer {
   constructor(renderer, renderController) {
@@ -523,15 +497,18 @@ export class ExploreRenderer {
       }
     }
 
-    // Draw puddles + goo blobs (surface entries only — interior entries routed via overlay).
-    // hutPlane=false here selects the surface set; hutPlane=true is called by HutInteriorOverlay.
-    this.drawPuddles(game, false);
-    this.drawGooBlobs(game, false);
-    drawSniperBeams(this.renderer, game);
+    // Shared ground Frame Passes (puddles, goo, debris, loot, placed traps).
+    // Every pass shared with another Frame Owner runs from the registry in
+    // framePasses.js — never a hand call here (npm run check:frames). While an
+    // Interior owns the frame these are no-ops: the PiP draws its own set.
+    drawFramePasses(this.renderController, game, 'surface', 'ground');
 
-    // Draw debris + ingredients (surface entries only — interior entries routed via overlay).
-    this.drawDebris(game, false);
-    this.drawIngredients(game, false);
+    // Everything below that is NOT a Frame Pass is the surface Room's own
+    // scenery — gated on owning the frame so it never bleeds under a PiP.
+    const ownsSurface = ownsFrame(game, 'surface',
+      'enemies, sniper tells, grass, boulders, sandstorm, mist, door prompts and the camp NPCs live in surface Room coordinates');
+
+    if (ownsSurface) drawSniperBeams(this.renderer, game);
 
     // Draw crows (first explore room flavor)
     if (game.currentRoom.crows && game.currentRoom.crows.length > 0) {
@@ -549,26 +526,10 @@ export class ExploreRenderer {
 
     // Companion crows draw on the surface pass only — inside a dungeon their
     // coordinates are floor-space and the interior overlay draws them there.
-    if (game.companionCrows && game.companionCrows.length > 0 && !isInteriorActive(game)) {
+    if (game.companionCrows && game.companionCrows.length > 0 && ownsSurface) {
       for (const c of game.companionCrows) {
         this._drawCrow(c);
       }
-    }
-
-    // Draw items (surface entries only — interior entries routed via overlay).
-    this.drawItems(game, false);
-
-    // Draw placed traps (surface only — interior-tagged entries draw via overlay).
-    for (const entry of game.placedTraps) {
-      const { item } = entry;
-      if (entry.interior === true) continue;
-      if (entry.blinkVisible === false) continue;
-      this.renderer.drawEntity(
-        item.position.x + GRID.CELL_SIZE / 2,
-        item.position.y + GRID.CELL_SIZE / 2,
-        item.char,
-        item.color
-      );
     }
 
     // Draw captives (pulsing @ characters)
@@ -590,8 +551,9 @@ export class ExploreRenderer {
       }));
     }
 
-    // Draw camp NPC (idle/interested in current room) and companion (cross-room)
-    this._renderCampNPCs(game);
+    // Draw camp NPC (idle/interested in current room) and companion (cross-room).
+    // Inside any Interior the PiP draws the companion that followed the player in.
+    if (ownsSurface) this._renderCampNPCs(game);
 
     // ── Bridge donation panel ─────────────────────────────────────────────────
     if (game.bridgeMenuOpen && game.currentRoom?.type === ROOM_TYPES.RIDGE) {
@@ -606,20 +568,9 @@ export class ExploreRenderer {
     renderFishingPasses(this.renderer, game);
     // ── End fishing render passes ─────────────────────────────────────────────
 
-    // When player is inside a hut, all interior-coord entities (player, combat,
-    // particles) are rendered by HutInteriorOverlay at the correct canvas offset.
-    // Skip them here to prevent ghosting at unshifted positions.
-    const playerInInterior = isInteriorActive(game);
-
-    // Draw consumable windups — every consumable throw arcs up and spins
-    // before landing, where its effect resolves (ConsumableTriggerSystem).
-    // Shared with RestRenderer via drawConsumableWindups(game) (render-helper
-    // pattern) so a thrown potion previews identically in both states.
-    if (!playerInInterior) this.drawConsumableWindups(game);
-
-    // Draw non-sapping enemies first (so they render behind player)
-    // Skip when interior (overlay calls drawNonSappingEnemies after translate with activeFloor enemies)
-    if (!playerInInterior) {
+    // Draw non-sapping enemies first (so they render behind player). Inside
+    // an Interior the PiP draws its own enemies from the active floor.
+    if (ownsSurface) {
       // Commanded warband renders through the same Enemy pass — full Enemy
       // instances, and the charm slot lights the shared magenta tint.
       const commanded = game.commandedEnemies ?? [];
@@ -637,227 +588,35 @@ export class ExploreRenderer {
     }
 
     // Detection system overlay (toggle with 'v' key)
-    if (game.showVectors && !playerInInterior) {
+    if (game.showVectors && ownsSurface) {
       this._renderDetectionVisuals(game);
     }
 
-    // Surface projectiles only — interior projectiles routed via overlay's drawProjectiles(true).
-    this.drawProjectiles(game, false);
+    // Shared combat Frame Passes: consumable windups, projectiles, melee,
+    // tongues, wires, the cure Rusalka, stuck arrows, wand feedback, lightning,
+    // damage numbers, particles, steam. The player shockwave (Crystal Maul
+    // charged attack) is invisible by design — it manifests only through
+    // background objects shaking as the ring sweeps them (InteractionSystem).
+    drawFramePasses(this.renderController, game, 'surface', 'combat');
 
-    // Surface enemy projectiles + melee — interior versions routed via overlay.
-    this.drawEnemyProjectiles(game, false);
-    this.drawMeleeAttacks(game, false);
-
-    // Player shockwave (Crystal Maul charged attack) is invisible by design —
-    // it manifests only through background objects shaking as the ring sweeps
-    // them (handled in InteractionSystem). Mirrors the cyan-zone boss pattern.
-
-    // Surface enemy melee — interior versions routed via overlay.
-    this.drawEnemyMeleeAttacks(game, false);
-
-    // Enemy frog tongues + mimic tongues — interior versions routed via overlay
-    // (both helpers read game._activeEnemies(), so they resolve to the active layer).
-    if (!playerInInterior) {
-      this.drawEnemyTongues(game);
-      this.drawMimicTongues(game);
-    }
-
-    // Surface frog-tongue attacks — interior versions routed via overlay.
-    this.drawPlayerTongueAttacks(game, false);
-
-    // Triplines: committed segments + the live half-strung preview.
-    if (!playerInInterior) drawWires(this.renderer, game);
-
-    // Draw cure Rusalka (polymorph reversal, Lake rooms) — skip when inHut/inMaze
-    if (!playerInInterior && game.cureRusalka && inSamePlane(game.cureRusalka, game.player)) {
-      const r = game.cureRusalka;
-      const ra = r.getPulseAlpha ? r.getPulseAlpha() : 1.0;
-      this.renderer.drawTextWithAlpha(
-        r.position.x + GRID.CELL_SIZE / 2,
-        r.position.y + GRID.CELL_SIZE / 2,
-        r.char,
-        r.color,
-        ra
-      );
-    }
-
-    // Surface stuck arrows — interior versions routed via overlay.
-    this.drawStuckArrows(game, false);
-
-    // Draw wand proximity failure indicators — skip when inHut
-    if (!playerInInterior && game.combatSystem.wandProximityFailures) {
-      const blinkOn = Math.floor(performance.now() / 1000 * 8) % 2 === 0; // 8 Hz blink
-      if (blinkOn) {
-        for (const failure of game.combatSystem.wandProximityFailures) {
-          // Draw the proximity requirement radius (blinking outline)
-          this.renderer.drawCircle(
-            failure.position.x,
-            failure.position.y,
-            failure.proximityRequired || 100, // Default 100 if not specified
-            failure.color,
-            false, // Outline only
-            0.8
-          );
-        }
-      }
-    }
-
-    // Draw wand AOE effects — skip when inHut
-    if (!playerInInterior && game.combatSystem.aoeEffects) {
-      const fgCtx = this.renderer.fgCtx;
-      for (const effect of game.combatSystem.aoeEffects) {
-        const alpha = effect.maxTimer
-          ? (effect.timer / effect.maxTimer) * 0.5
-          : Math.min(effect.timer / 0.3, 0.5);
-        if (effect.type === 'cone') {
-          fgCtx.save();
-          fgCtx.globalAlpha = alpha;
-          fgCtx.fillStyle = effect.color;
-          fgCtx.beginPath();
-          fgCtx.moveTo(effect.x, effect.y);
-          fgCtx.arc(effect.x, effect.y, effect.radius,
-            effect.angle - effect.halfAngle, effect.angle + effect.halfAngle);
-          fgCtx.closePath();
-          fgCtx.fill();
-          fgCtx.restore();
-        } else {
-          this.renderer.drawCircle(effect.x, effect.y, effect.radius, effect.color, true, alpha);
-        }
-      }
-    }
-
-    // Surface combat flourish — interior versions routed via overlay.
-    this.drawLightningStrikes(game, false);
-    this.drawChainArcs(game, false);
-    this.drawDamageNumbers(game, false);
-    this.drawParticles(game, false);
-    this.drawSteamClouds(game, false);
-
-    // Draw player — skip when inHut (overlay renders player at correct interior offset)
-    // Tall-grass concealment fades rapidly in/out so stepping into cover
-    // doesn't pop the player sprite.
-    if (!playerInInterior) drawTrine(this.renderer, game);
-    if (!playerInInterior) {
-    const playerHidden = this._isOnTallGrass(game, game.player.position.x, game.player.position.y);
-    const concealAlpha = stepConcealmentAlpha(game.player, !playerHidden);
-    if (concealAlpha > 0.005) {
-    const playerAlpha = game.player.getVisibilityAlpha();
-    // Moss Cloak 𐤒 active: render the player as a bush `%` in moss-green.
-    const mossActive = game.player.mossCloakActive === true;
-    const playerChar = mossActive ? '%' : game.player.char;
-    const playerColor = mossActive ? '#228822' : game.player.getDisplayColor();
-    const playerOnTunnelPlane = game.player.plane === 1;
-    const ctx = this.renderer.fgCtx;
-    const needsAlpha = concealAlpha < 0.999;
-    drawFloatPlatform(this.renderer, game.player);
-    if (needsAlpha) { ctx.save(); ctx.globalAlpha = concealAlpha; }
-
-    // Use dithered rendering when on tunnel plane
-    if (playerOnTunnelPlane) {
-      this.renderer.drawTextWithAlphaDithered(
-        game.player.position.x + GRID.CELL_SIZE / 2,
-        game.player.position.y + GRID.CELL_SIZE / 2,
-        playerChar,
-        playerColor,
-        playerAlpha
-      );
-    } else if (whirlwindSpinAngle(game.player) !== null) {
-      // Whirlwind Cape: render player spinning rapidly (no alpha — iframes are short).
-      // Shared with RestRenderer via whirlwindSpinAngle() (render-helper pattern).
-      this.renderer.drawEntityRotated(
-        game.player.position.x + GRID.CELL_SIZE / 2,
-        game.player.position.y + GRID.CELL_SIZE / 2,
-        playerChar,
-        playerColor,
-        whirlwindSpinAngle(game.player)
-      );
-    } else {
-      this.renderer.drawTextWithAlpha(
-        game.player.position.x + GRID.CELL_SIZE / 2,
-        game.player.position.y + GRID.CELL_SIZE / 2,
-        playerChar,
-        playerColor,
-        playerAlpha
-      );
-    }
-    if (needsAlpha) ctx.restore();
-    }
-    } // end player render block
-
-    // Dizzy orbital particles — player
-    if (!playerInInterior && game.player.isDizzy()) {
-      drawDizzyOrbitals(
-        this.renderer.fgCtx,
-        game.player.position.x + GRID.CELL_SIZE / 2,
-        game.player.position.y + GRID.CELL_SIZE / 2,
-        game.player.statusBlinkTimer
-      );
-    }
-
-    // Stack-count pips for the player's active status effects (wet, burn,
-    // poison, freeze, goo, dizzy) — same indicator as enemies get, see
-    // StatusEffectVisuals.computePlayerPipRows.
-    if (!playerInInterior) drawStatusPips(this.renderer, game.player);
-
-    // Buckler parry window: same ']' tell enemies show.
-    if (!playerInInterior) drawParryIndicator(this.renderer, game.player, game.player.parryMechanic);
-
-    // Fairy King in a Bottle ready: a fairy circles the player.
-    if (!playerInInterior) drawFairyKingOrbit(this.renderer, game);
-
-    // Attack-direction indicator: small '^' orbiting tight around the player.
-    if (!playerInInterior) drawPlayerFacingIndicator(this.renderer, game);
-
-    // Draw staff-block stance: staff held perpendicular to facing direction,
-    // ~1 cell forward from player center. Shared with RestRenderer via
-    // drawStaffBlockStance(game) (render-helper pattern).
-    if (!playerInInterior) this.drawStaffBlockStance(game);
-
-    // Draw known-spell indicators above player
-    if (!playerInInterior && game.knownSpells?.size > 0) {
-      drawKnownSpellHints(this.renderer, game);
-    }
+    // Shared player Frame Passes: the Trine, the player glyph (tall-grass
+    // concealment fades it via playerConcealAlpha), dizzy, pips, parry, Fairy
+    // King orbit, facing, poses, known spells, reticule, in-flight throwables.
+    drawFramePasses(this.renderController, game, 'surface', 'player');
 
     // Coin-in-pocket hint when standing in a usable W room. Tells the player
     // they have something coin-shaped without explaining what it's for.
-    if (!playerInInterior) {
+    if (ownsSurface) {
       drawWellCoinHint(this.renderer, game);
     }
 
     // Draw "SPACE ENTER" prompt near exterior hut/dungeon/maze doors
-    if (!playerInInterior) {
+    if (ownsSurface) {
       drawDoorPrompts(this.renderer, game);
     }
 
-    // Draw gem wand held aloft (with shake) while charging. Shared with
-    // RestRenderer via drawGemWandCharge(game) (render-helper pattern).
-    if (!playerInInterior) this.drawGemWandCharge(game);
-
-    // Draw hammer held raised overhead during its windup — the same anchor
-    // MeleeAttackDraw uses for drawAboveOwner, so the glyph doesn't jump when
-    // the windup completes and createMeleeHammerRing's attack object takes
-    // over drawing it for the strike itself. Static (no shake): the raised
-    // pose alone reads as "about to swing" without competing with the
-    // impact-frame burst at the strike. Shared with RestRenderer via
-    // drawHammerWindupPose(game) (render-helper pattern).
-    if (!playerInInterior) this.drawHammerWindupPose(game);
-
-    // Draw blinking trap charge count above player (hidden during charge-up).
-    // Shared with RestRenderer via drawChargeCounts(game) (render-helper pattern).
-    if (!playerInInterior) this.drawChargeCounts(game);
-
-    // Draw trap throw reticule while charging (traps only) or a translucent weapon
-    // ghost at the estimated landing spot (thrown weapons only).
-    if (!playerInInterior) {
-      this.drawTrapReticule(game);
-      this.drawThrowPreview(game);
-    }
-
-    // Draw in-flight throwables (traps + thrown weapons).
-    if (!playerInInterior) this.drawInFlightTraps(game, false);
-
-    // Draw sapping enemies on top of player — skip when interior (overlay handles via its own drawSappingEnemies call)
-    if (!playerInInterior) {
+    // Draw sapping enemies on top of player — the PiP draws its own
+    if (ownsSurface) {
       const commandedForSap = game.commandedEnemies ?? [];
       this.drawSappingEnemies(game, commandedForSap.length
         ? [...game.activeRoom.enemies, ...commandedForSap]
@@ -866,10 +625,10 @@ export class ExploreRenderer {
 
     // Sniper reticule on top of player (see SniperEffects.js — was previously
     // drawn in the enemy pass, before the player, so it rendered behind them).
-    if (!playerInInterior) drawSniperReticules(this.renderer, game.activeRoom.enemies);
+    if (ownsSurface) drawSniperReticules(this.renderer, game.activeRoom.enemies);
 
     // Draw boss composite (body + necks + multi-char heads) — skips individual entity rendering
-    if (!playerInInterior && game.bossSystem?.active) {
+    if (ownsSurface && game.bossSystem?.active) {
       this.bossRenderer.renderBossComposite(game);
     }
 
@@ -877,7 +636,7 @@ export class ExploreRenderer {
     // Includes tall grass (|, \, /) and cut grass (,)
     // Only draw exterior grass when player is NOT inside a PiP interior — interiors
     // render their own foreground layer, and exterior grass must not bleed over the overlay.
-    if (!playerInInterior) {
+    if (ownsSurface) {
       for (const obj of game.backgroundObjects) {
         if (obj.onFire) continue; // burning grass is drawn by the flicker pass below
         const isGrass = obj.char === '|' || obj.char === '\\' || obj.char === '/' || obj.char === ',';
@@ -900,7 +659,7 @@ export class ExploreRenderer {
     }
 
     // Draw rolling rocks and edge-warning arrows (red zone only)
-    if (!playerInInterior && game.boulderSystem) {
+    if (ownsSurface && game.boulderSystem) {
       const { rocks, warnings } = game.boulderSystem.getRenderData();
       const BOULDER_COLOR = '#aa7744';
       const WARN_COLOR = '#ffff00';
@@ -928,19 +687,13 @@ export class ExploreRenderer {
       }
     }
 
-    // Draw bow charge indicator — skip when inHut (overlay renders these)
-    if (!playerInInterior) this.renderController.bowChargeIndicator.render(game);
-
-    // Draw green ranger action cooldown indicator — skip when inHut
-    if (!playerInInterior) {
-      this.renderController.greenRangerIndicator.render(game);
-      this.renderController.cyanRogueIndicator.render(game);
-    }
+    // Shared indicator Frame Passes (bow charge, ranger, rogue) — above grass.
+    drawFramePasses(this.renderController, game, 'surface', 'indicators');
 
     // Sandstorm sand motes — yellow zone wind. Drawn over entities so motes
     // pass in front, under interior overlays so they don't bleed into the PiP.
     // Also suppressed underground (Aquifer tunnel plane), separate from interior state.
-    if (!playerInInterior && game.player?.plane !== 1) {
+    if (ownsSurface && game.player?.plane !== 1) {
       game.sandstormSystem?.render(this.renderer.fgCtx);
     }
 
@@ -949,11 +702,11 @@ export class ExploreRenderer {
 
     // Vision fog: underground cave fog (radius + torch glow boost) and the
     // player's blind status, whichever is tighter.
-    drawVisionFogOverlay(this.renderer, game, playerInInterior);
+    drawVisionFogOverlay(this.renderer, game, !ownsSurface);
 
     // Gray zone mist: surface-plane '~' glyph field (cave fog above owns plane 1).
     // After entities — mist hangs in front of them — before Tab overlay and PiPs.
-    if (!playerInInterior) {
+    if (ownsSurface) {
       game.grayZoneSystem?.renderMist(this.renderer.fgCtx, game);
     }
 
@@ -1010,10 +763,6 @@ export class ExploreRenderer {
   // Camp NPC rendering: idle/interested NPC in current room, hired companion,
   // coin-offering arc, and hint text overlay.
   _renderCampNPCs(game) {
-    // Surface NPCs belong to the surface pass; inside any Interior the PiP
-    // overlay draws the companion that followed the player in.
-    if (isInteriorActive(game)) return;
-
     const ctx = this.renderer.fgCtx;
     const gridToPixel = (gx, gy) => ({ x: gx * GRID.CELL_SIZE, y: gy * GRID.CELL_SIZE });
 
@@ -1097,6 +846,15 @@ export class ExploreRenderer {
   // we count raw '|' instances in the standing cell plus its 4 cardinal
   // neighbours and require ≥ 6 — ~3 visual blades minimum. Same rule drives
   // grassStealth detection and universal player/item/enemy concealment.
+  // Surface tall-grass fade for the player glyph (Frame Pass `playerGlyph`):
+  // fades rapidly in/out so stepping into cover doesn't pop the sprite.
+  // Lives here, beside _isOnTallGrass, so framePasses.js stays a pure
+  // rendering module with no system imports.
+  playerConcealAlpha(game) {
+    const hidden = this._isOnTallGrass(game, game.player.position.x, game.player.position.y);
+    return stepConcealmentAlpha(game.player, !hidden);
+  }
+
   _isOnTallGrass(game, x, y) {
     const bgObjects = game._activeBackgroundObjects
       ? game._activeBackgroundObjects()
@@ -2278,7 +2036,8 @@ export class ExploreRenderer {
 
   drawIngredients(game, hutPlane = false) {
     for (const ingredient of game.ingredients) {
-      if (!!ingredient.hutPlane !== hutPlane) continue;
+      // Maze loot carries `mazePlane` instead of `hutPlane` (PlaneSystem.lootOnPlayerLayer).
+      if (!!(ingredient.hutPlane || ingredient.mazePlane) !== hutPlane) continue;
       if (!this.shouldRenderEntity(ingredient, game.player, game.currentRoom)) continue;
       const ingredientPlane = ingredient.plane !== undefined ? ingredient.plane : 0;
       const useDithering = ingredientPlane === 1 && game.player.plane === 1;
@@ -2301,7 +2060,8 @@ export class ExploreRenderer {
 
   drawItems(game, hutPlane = false) {
     for (const item of game.items) {
-      if (!!item.hutPlane !== hutPlane) continue;
+      // Maze loot carries `mazePlane` instead of `hutPlane` (PlaneSystem.lootOnPlayerLayer).
+      if (!!(item.hutPlane || item.mazePlane) !== hutPlane) continue;
       if (!this.shouldRenderEntity(item, game.player, game.currentRoom)) continue;
       const itemPlane = item.plane !== undefined ? item.plane : 0;
       const cx = item.position.x + GRID.CELL_SIZE / 2;

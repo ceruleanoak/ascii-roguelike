@@ -1,20 +1,16 @@
 import { GRID } from '../../game/GameConfig.js';
 import { activeInteriorFloor } from '../../systems/PlaneSystem.js';
 import { drawInteriorFrame } from './interiorFrame.js';
-import { hasTorchLight, drawPlayerTorchLight, drawInteriorVisionFogOverlay } from './torchLight.js';
+import { drawInteriorVisionFogOverlay } from './torchLight.js';
 import {
   TORCH_LIGHT_RADIUS, TORCH_ALPHA_HIGH, TORCH_ALPHA_LOW,
   TORCH_PULSE_SPEED, TORCH_LIT_COLOR, TORCH_UNLIT_COLOR,
 } from '../../systems/MazeSystem.js';
-import { drawWires } from '../effects/WireEffects.js';
 import { drawCoinArc } from '../effects/ArcTossEffects.js';
 import { drawErrandConfirmPanel } from './ErrandConfirmOverlay.js';
-import { drawStatusPips } from '../effects/StatusPipEffects.js';
-import { drawFloatPlatform } from '../effects/FloatPlatformDraw.js';
 import { drawTamedRats, drawGolems } from './CompanionRenderers.js';
 import { SLOT_CHROME } from '../../data/slotChrome.js';
-import { drawParryIndicator } from './ParryIndicator.js';
-import { drawFairyKingOrbit } from '../effects/FairyKingOrbit.js';
+import { drawFramePasses } from '../framePasses.js';
 
 /**
  * HutInteriorOverlay — picture-in-picture rendering for every floor Interior
@@ -79,13 +75,6 @@ export class HutInteriorOverlay {
         }
       }
     }
-
-    // ── 3a. Interior puddles + goo blobs + steam clouds (slime trails, etc.) ───
-    // hutPlane=true selects only entries tagged with hutPlane=true on spawn,
-    // i.e. those that originated inside the active interior.
-    this.renderController.exploreRenderer.drawPuddles(game, true);
-    this.renderController.exploreRenderer.drawGooBlobs(game, true);
-    this.renderController.exploreRenderer.drawSteamClouds(game, true);
 
     // ── 3b. Dungeon wall tiles ─────────────────────────────────────────────────
     // Render solid collision-map cells as visible stone walls.
@@ -208,14 +197,10 @@ export class HutInteriorOverlay {
     // (hutPlane=true selects activeFloor objects; ctx translate already applied).
     this.renderController.exploreRenderer.drawBurningObjects(game, true);
 
-    // ── 5-7. Hutplane debris / ingredients / items ────────────────────────────
-    // Delegates to the shared helpers on ExploreRenderer with hutPlane=true filter.
-    this.renderController.exploreRenderer.drawDebris(game, true);
-    this.renderController.exploreRenderer.drawIngredients(game, true);
-    this.renderController.exploreRenderer.drawItems(game, true);
-
-    // ── 7b. Placed traps tagged as interior (armed where they landed) ─────────
-    this.renderController.exploreRenderer.drawPlacedTraps(game, true);
+    // ── 5-7. Shared ground Frame Passes (puddles, goo, debris, loot, traps) ──
+    // Every pass shared with the other Frame Owners runs from the registry in
+    // framePasses.js — never a hand call here (npm run check:frames).
+    drawFramePasses(this.renderController, game, 'floor', 'ground');
 
     // ── 8. Interior enemies (full indicator rendering) ─────────────────────────
     // Use the shared non-sapping pass, then redraw sapping ones on top of player below.
@@ -263,79 +248,12 @@ export class HutInteriorOverlay {
       );
     }
 
-    // ── 8b. Consumable windups (thrown bombs/potions in flight) ─────────────────
-    // ExploreRenderer skips this pass while the player is inside; windups are
-    // stamped from the player position, so they are already in interior coords.
-    this.renderController.exploreRenderer.drawConsumableWindups(game);
-
-    // ── 9. Player projectiles (interior coords) ────────────────────────────────
-    this.renderController.exploreRenderer.drawProjectiles(game, true);
-
-    // ── 10. Enemy projectiles (interior coords) ────────────────────────────────
-    this.renderController.exploreRenderer.drawEnemyProjectiles(game, true);
-
-    // ── 10b. Player tongue attacks (frog form) + enemy frog/mimic tongues ──────
-    // Enemy + mimic tongue helpers read game._activeEnemies() (= activeFloor here),
-    // so they render the interior layer's tongues under the overlay translate.
-    this.renderController.exploreRenderer.drawPlayerTongueAttacks(game, true);
-    this.renderController.exploreRenderer.drawEnemyTongues(game);
-    this.renderController.exploreRenderer.drawMimicTongues(game);
-
-    // ── 11. Player melee attacks ───────────────────────────────────────────────
-    this.renderController.exploreRenderer.drawMeleeAttacks(game, true);
-
-    // ── 12. Enemy melee attacks ────────────────────────────────────────────────
-    this.renderController.exploreRenderer.drawEnemyMeleeAttacks(game, true);
-
-    // ── 13. Stuck arrows ───────────────────────────────────────────────────────
-    this.renderController.exploreRenderer.drawStuckArrows(game, true);
-
-    // ── 13b. Chain lightning arcs ─────────────────────────────────────────────
-    this.renderController.exploreRenderer.drawLightningStrikes(game, true);
-    this.renderController.exploreRenderer.drawChainArcs(game, true);
-
-    // ── 14. Damage numbers ─────────────────────────────────────────────────────
-    this.renderController.exploreRenderer.drawDamageNumbers(game, true);
-
-    // ── 15. Particles ─────────────────────────────────────────────────────────
-    this.renderController.exploreRenderer.drawParticles(game, true);
-
-    // ── 15b. Triplines (committed segments + live preview + red-X) ────────────
-    // Interior-coord variant: reads activeFloor.triplines; ctx translate already applied.
-    drawWires(this.renderer, game, true);
-
-    // ── 15c. Torch light (cosmetic glow when Torch equipped) ───────────────────
-    if (hasTorchLight(game)) {
-      drawPlayerTorchLight(
-        this.renderer,
-        game.player.position.x + GRID.CELL_SIZE / 2,
-        game.player.position.y + GRID.CELL_SIZE / 2
-      );
-    }
-
-    // ── 16. Player ────────────────────────────────────────────────────────────
-    // Hidden during the death hold (game.characterDeathPending) — the death
-    // screen shows only particles/debris, matching the surface GAME_OVER path
-    // (GameOverRenderer's non-interior branch never draws the player either).
-    if (!game.characterDeathPending) {
-      const playerAlpha = game.player.getVisibilityAlpha?.() ?? 1.0;
-      const mossActive = game.player.mossCloakActive === true;
-      const playerChar = mossActive ? '%' : game.player.char;
-      const playerColor = mossActive
-        ? '#228822'
-        : (game.player.getDisplayColor?.() ?? game.player.color);
-      drawFloatPlatform(this.renderer, game.player);
-      this.renderer.drawTextWithAlpha(
-        game.player.position.x + GRID.CELL_SIZE / 2,
-        game.player.position.y + GRID.CELL_SIZE / 2,
-        playerChar,
-        playerColor,
-        playerAlpha
-      );
-      drawStatusPips(this.renderer, game.player);
-      drawParryIndicator(this.renderer, game.player, game.player.parryMechanic);
-      drawFairyKingOrbit(this.renderer, game);
-    }
+    // ── 9-15. Shared combat Frame Passes, then the player and everything
+    // attached to them (glyph, torch glow, pips, poses, reticule, in-flight
+    // throwables). The player passes hide during the death hold
+    // (game.characterDeathPending), matching the surface GAME_OVER path.
+    drawFramePasses(this.renderController, game, 'floor', 'combat');
+    drawFramePasses(this.renderController, game, 'floor', 'player');
 
     // ── 16b. Camp companion (uses interior coords because it tracks player) ──
     if (game.companion) {
@@ -390,27 +308,8 @@ export class HutInteriorOverlay {
       }
     }
 
-    // ── 16d. Player weapon charge-up/windup poses (render-helper pattern) ─────
-    // ExploreRenderer's surface pass suppresses these while playerInInterior
-    // is true; this overlay is the interior half of the same shared helper
-    // (bug #277 — was missing entirely, so gem wand/staff/hammer charge-ups
-    // never drew inside any hut/dungeon/maze).
-    this.renderController.exploreRenderer.drawStaffBlockStance(game);
-    this.renderController.exploreRenderer.drawGemWandCharge(game);
-    this.renderController.exploreRenderer.drawHammerWindupPose(game);
-    this.renderController.exploreRenderer.drawChargeCounts(game);
-
-    // ── 16e. Trap throw reticule + in-flight throwables (interior plane) ──────
-    this.renderController.exploreRenderer.drawTrapReticule(game);
-    this.renderController.exploreRenderer.drawThrowPreview(game);
-    this.renderController.exploreRenderer.drawInFlightTraps(game, true);
-
-    // ── 17. Bow charge indicator (reads game.player.position — offset applies) ─
-    this.renderController.bowChargeIndicator.render(game);
-
-    // ── 18. Green ranger indicator ─────────────────────────────────────────────
-    this.renderController.greenRangerIndicator.render(game);
-    this.renderController.cyanRogueIndicator.render(game);
+    // ── 17-18. Shared indicator Frame Passes (bow charge, ranger, rogue) ──
+    drawFramePasses(this.renderController, game, 'floor', 'indicators');
 
     // ── 19b. Puzzle Room weapon pedestal — [x][x][x] Slot chrome, the shared
     // world-Slot vocabulary from slotChrome.js (same stone/pending pair the
