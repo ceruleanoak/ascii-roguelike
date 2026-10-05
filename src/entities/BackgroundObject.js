@@ -223,6 +223,7 @@ export class BackgroundObject {
     this.burnt = false;             // Set by burnGrass() after fire burns out
     this.damaging = false;          // Set by RoomGenerator for lava tiles
     this.isDryMud = false;          // Set by PhysicsSystem for drying mud tiles
+    this.ratDug = false;            // Mud tile a tamed rat has already dug (NPCRat Dig) — one dig per tile
 
     // River-flow animation (yellow zone). Set by RoomGenerator on river center tiles.
     // animationChar is held at this._directionChar (`< > v ^`); color cycles blue→white

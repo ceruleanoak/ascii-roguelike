@@ -668,6 +668,14 @@ identity, not standard programming terms.
   in `src/data/neutralRooms.js`; spawned via `NeutralRoomSystem`.
 - **Not:** an Enemy (NPCs are non-hostile); not a Companion (NPCs don't follow the player).
 
+### Dig
+- **Definition:** A tamed rat with no target walks to a nearby mud tile and digs it for 3s.
+  The dig has a 20% chance to unearth one plant Ingredient (Root, Leaf, Herb, Stick, Sap).
+  Each tile can be dug once. A hostile coming into range ends the dig.
+- **In code:** `NPCRat` state `'dig'` (`_updateDig`, `DIG_*` constants);
+  `BackgroundObject.ratDug` marks a dug tile; `CompanionSystem.updateTamedRats` spawns the find.
+- **Not:** a harvest (no tool, no player action); not an Enemy State (NPCRat has its own FSM).
+
 ### Boss
 - **Definition:** An Enemy that appears at a zone-specific depth threshold and must be defeated
   to progress deeper. Bosses have enhanced drops (guaranteed Mana) and special behavior.

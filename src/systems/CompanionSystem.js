@@ -11,6 +11,8 @@ import { GOLEM_TYPES, GOLEM_CAP } from '../data/golems.js';
 // first look at anything that just hit the ground — including their own
 // starting gear — instead of a crow instantly swooping on it.
 const LOOT_SEEK_DELAY_MS = 2000;
+// Dirt particles per second off a digging tamed rat (NPCRat Dig).
+const DIG_DIRT_RATE = 6;
 
 // Contact damage from an enraged wild crow's dive-bomb (see snareCrow /
 // updateCrows) — a peck-strength hit, not a real threat on its own, but it
@@ -192,6 +194,20 @@ export class CompanionSystem {
         game.combatSystem.createDamageNumber?.(result.damage ?? 1,
                                                victim.position.x, victim.position.y,
                                                victim.color || '#ffffff');
+      }
+
+      // Dig: dirt kicks up while the rat digs; a find pops out of the tile.
+      if (rat.state === 'dig' && rat.digTimer > 0 && Math.random() < deltaTime * DIG_DIRT_RATE) {
+        const dx = rat.position.x + GRID.CELL_SIZE / 2;
+        const dy = rat.position.y + GRID.CELL_SIZE / 2;
+        game.particles.push(tagInteriorPlane(game, {
+          x: dx, y: dy,
+          vx: (Math.random() - 0.5) * 40, vy: -20 - Math.random() * 20,
+          life: 0.4, maxLife: 0.4, char: '.', color: '#664422'
+        }));
+      }
+      if (result?.unearthed && game.lootSystem) {
+        game.lootSystem.spawnIngredientDrop(result.unearthed, result.x, result.y, null, rat);
       }
 
       // Tamed rats collect non-gravitating ingredients they overlap (e.g. vault coins)

@@ -1,5 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { steerToward } from '../systems/npcSteering.js';
+import { objectOnPlane } from '../systems/PlaneSystem.js';
 
 /**
  * NPCRat — bread-tamed companion. Separate class from Enemy so it carries no
@@ -10,6 +11,8 @@ import { steerToward } from '../systems/npcSteering.js';
  *   'chase'     — pursuing a hostile enemy
  *   'flee'      — short retreat after each hit (1.5s), then re-engages
  *   'permaFlee' — third hit in a room; runs to nearest exit, despawns on arrival
+ *   'dig'       — no target; walks to a nearby mud tile and digs it (Dig).
+ *                 A hostile in range always interrupts.
  *
  * Created by main.js when a wild rat (Enemy) reaches a dropped loaf. Lives on
  * game.tamedRats, persists across room transitions like other companions, and
@@ -50,6 +53,17 @@ const FLEE_SPEED_MULT = 1.4;
 const PERMA_FLEE_SPEED = 140;
 const PERMA_FLEE_ARRIVE_DIST = 6;
 
+// Dig: an idle rat seeks a mud tile near itself and the player, digs for
+// DIG_DURATION, then has DIG_CHANCE to unearth one plant Ingredient. Each
+// tile is dug once (BackgroundObject.ratDug).
+const DIG_SEEK_RANGE = GRID.CELL_SIZE * 6;   // from the rat
+const DIG_LEASH = GRID.CELL_SIZE * 8;        // from the player — never wander off to dig
+const DIG_REACH = GRID.CELL_SIZE * 0.5;
+const DIG_DURATION = 3.0;
+const DIG_CHANCE = 0.20;
+const DIG_REST = 1.5;                        // pause after a dig before seeking the next tile
+const DIG_POOL = ['r', 'l', 'h', '|', 'ŝ'];  // Root, Leaf, Herb, Stick, Sap
+
 export class NPCRat {
   constructor(x, y) {
     this.position = { x, y };
@@ -81,6 +95,11 @@ export class NPCRat {
     this.fleeTargetPos = null;
     this.fleeReached = false;
     this.permaFleeTimer = 0;
+
+    // Dig state — see DIG_* above.
+    this.digTile = null;
+    this.digTimer = 0;
+    this.digCooldown = 0;
 
     // Physics flags so PhysicsSystem treats us like a normal collide-able mover.
     this.hasCollision = true;
@@ -130,6 +149,8 @@ export class NPCRat {
     this.fleeTargetPos = null;
     this.fleeReached = false;
     this.permaFleeTimer = 0;
+    this._clearDig();
+    this.digCooldown = 0;
     if (game) {
       this.game = game;
       this.room = game.currentRoom;
@@ -147,6 +168,7 @@ export class NPCRat {
       if (this.invulnerabilityTimer < 0) this.invulnerabilityTimer = 0;
     }
     if (this.attackTimer > 0) this.attackTimer -= deltaTime;
+    if (this.digCooldown > 0) this.digCooldown -= deltaTime;
 
     if (this.state === 'permaFlee') {
       this._updatePermaFlee(deltaTime);
@@ -171,11 +193,18 @@ export class NPCRat {
 
     let result = null;
     if (this.target) {
+      this._clearDig();
       this.state = 'chase';
       result = this._chaseAndAttack(deltaTime);
     } else {
-      this.state = 'idle';
-      this._driftTowardPlayer(deltaTime, player);
+      const dig = this._updateDig(deltaTime, player, siblings);
+      if (dig) {
+        this.state = 'dig';
+        if (dig.unearthed) result = dig;
+      } else {
+        this.state = 'idle';
+        this._driftTowardPlayer(deltaTime, player);
+      }
     }
     this._applySeparation(siblings);
     return result;
@@ -231,6 +260,7 @@ export class NPCRat {
     this.invulnerabilityTimer = INVULNERABILITY_DURATION;
     const from = attacker?.position || this.target?.position || null;
     this.fleeFromPos = from ? { x: from.x, y: from.y } : null;
+    this._clearDig();
     this.game?.audioSystem?.playSFX?.('enemy_hit');
     if (this.hitsThisRoom >= PERMA_FLEE_HIT_THRESHOLD) {
       this._startPermaFlee();
@@ -359,6 +389,75 @@ export class NPCRat {
     }
     this.velocity.vx = this.targetVelocity.vx;
     this.velocity.vy = this.targetVelocity.vy;
+  }
+
+  // Dig driver. Returns null when the rat isn't digging (caller drifts toward
+  // the player instead), {} while walking to / digging a tile, and
+  // { unearthed, x, y } on the frame a dig turns something up —
+  // CompanionSystem spawns the Ingredient.
+  _updateDig(deltaTime, player, siblings) {
+    if (!player) return null;
+    let tile = this.digTile;
+    if (tile && (tile.destroyed || tile.ratDug || !tile.isMud?.()
+                 || this._distTo(tile.position, player.position) > DIG_LEASH)) {
+      this._clearDig();
+      tile = null;
+    }
+    if (!tile) {
+      if (this.digCooldown > 0) return null;
+      tile = this._findDigTile(player, siblings);
+      if (!tile) return null;
+      this.digTile = tile;
+      this.digTimer = 0;
+    }
+
+    const { x, y } = tile.position;
+    if (this._distTo(this.position, tile.position) > DIG_REACH) {
+      steerToward(this.game, this, x, y, SPEED * FOLLOW_SPEED_MULT);
+      this.targetVelocity.vx = this.velocity.vx;
+      this.targetVelocity.vy = this.velocity.vy;
+      return {};
+    }
+
+    this.velocity.vx = 0;
+    this.velocity.vy = 0;
+    this.targetVelocity.vx = 0;
+    this.targetVelocity.vy = 0;
+    this.digTimer += deltaTime;
+    if (this.digTimer < DIG_DURATION) return {};
+
+    tile.ratDug = true;
+    this._clearDig();
+    this.digCooldown = DIG_REST;
+    if (Math.random() >= DIG_CHANCE) return {};
+    return { unearthed: DIG_POOL[Math.floor(Math.random() * DIG_POOL.length)], x, y };
+  }
+
+  // Nearest undug mud tile on the rat's plane, within reach of both the rat
+  // and the player, that no sibling rat has already claimed.
+  _findDigTile(player, siblings) {
+    const objects = this.backgroundObjects; // layer-guard-ok: router-injected
+    if (!objects) return null;
+    let best = null;
+    let bestDist = DIG_SEEK_RANGE;
+    for (const obj of objects) {
+      if (obj.ratDug || !obj.isMud?.()) continue;
+      if (!objectOnPlane(obj, this.plane)) continue;
+      if (this._distTo(obj.position, player.position) > DIG_LEASH) continue;
+      if (siblings?.some(r => r !== this && r.digTile === obj)) continue;
+      const d = this._distTo(this.position, obj.position);
+      if (d < bestDist) { bestDist = d; best = obj; }
+    }
+    return best;
+  }
+
+  _clearDig() {
+    this.digTile = null;
+    this.digTimer = 0;
+  }
+
+  _distTo(a, b) {
+    return Math.hypot(a.x - b.x, a.y - b.y);
   }
 
   _startPermaFlee() {
