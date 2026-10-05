@@ -134,6 +134,18 @@ export class ZoneSystem {
       }
     }
 
+    // Inside a colored zone, an exit in that zone's own color keeps you there.
+    // The 3-consecutive streak below is the requirement to ENTER a zone, not
+    // to stay in it — without this, a zone entered via the completed-zone
+    // shortcut above (1 exit, not 3) fell through to the green default on its
+    // very next own-color exit (red A → red D landed in a green D room).
+    // Blue/gray are excluded: blue's forced chain and gray's stickiness own
+    // their own continuation rules.
+    if (['red', 'cyan', 'yellow'].includes(this.currentZone) && this.pathHistory.length > 0) {
+      const lastColor = this.pathHistory[this.pathHistory.length - 1].color;
+      if (lastColor === ZONES[this.currentZone].exitColor) return this.currentZone;
+    }
+
     // Color matching: 3 consecutive same color
     if (this.pathHistory.length >= 3) {
       const last3Colors = this.pathHistory.slice(-3).map(exit => exit.color);
