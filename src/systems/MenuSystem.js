@@ -584,10 +584,17 @@ export class MenuSystem {
     this._openSlotMenu();
   }
 
-  openCraftingMenu(slotType) {
+  /**
+   * Open the item picker for a crafting slot. `cs` is the station being
+   * filled — the REST station by default, or the Dragon Forge's
+   * (ForgeSystem). The forge passes `includeChest: false`: the REST Item
+   * Chest is out of reach in the field, so only carried items are offered.
+   */
+  openCraftingMenu(slotType, cs = this.game.craftingSystem, { includeChest = true } = {}) {
     const game = this.game;
     game.menuOpen = true;
     game.currentMenuSlot = slotType;
+    game.menuCraftingSystem = cs;
     game.selectedMenuIndex = 0;
 
     const weaponsList = [];
@@ -602,9 +609,11 @@ export class MenuSystem {
         equippedMenuItems.add(item);
       }
     }
-    for (const item of game.inventorySystem.itemChest) {
-      if (!weaponsList.find(i => i.char === item.char)) {
-        weaponsList.push(item);
+    if (includeChest) {
+      for (const item of game.inventorySystem.itemChest) {
+        if (!weaponsList.find(i => i.char === item.char)) {
+          weaponsList.push(item);
+        }
       }
     }
 
@@ -653,7 +662,6 @@ export class MenuSystem {
     game.ingredientCounts = ingredientCounts;
 
     // Sort identified partners to top when opposite slot is filled
-    const cs = game.craftingSystem;
     const otherSlot = slotType === 'left' ? cs.rightSlot : cs.leftSlot;
     if (otherSlot) {
       const partnerChars = cs.getIdentifiedPartners(otherSlot);
@@ -702,6 +710,7 @@ export class MenuSystem {
     }
     game.menuOpen = false;
     game.currentMenuSlot = null;
+    game.menuCraftingSystem = null;
     game.menuColumns = null;
     game.disabledColumns = [];
     game.identifiedMenuItems = null;
@@ -920,13 +929,15 @@ export class MenuSystem {
         }
       }
 
+      // The station this menu was opened for (REST or the Dragon Forge).
+      const cs = game.menuCraftingSystem ?? game.craftingSystem;
       if (game.currentMenuSlot === 'left') {
-        game.craftingSystem.setLeftSlot(itemChar);
+        cs.setLeftSlot(itemChar);
       } else if (game.currentMenuSlot === 'right') {
-        game.craftingSystem.setRightSlot(itemChar);
+        cs.setRightSlot(itemChar);
       }
 
-      if (game.craftingSystem.cycleState) {
+      if (cs.cycleState) {
         game.audioSystem.playStoppableSFX('craft_cycle', 0.6);
       }
 
@@ -1015,85 +1026,96 @@ export class MenuSystem {
 
     if (slotType === 'crafting-center') {
       if (game.craftingSystem.hasCenterContent()) {
-        game.audioSystem.stopSFXByName('craft_cycle');
-
-        // Golem-result recipes (e.g. Slag + Mana) summon a companion
-        // immediately rather than yielding an inventory item — at the
-        // combined GOLEM_CAP the claim is refused and the slots stay full
-        // (see CraftingSystem.claimCraftedGolem).
-        const golemType = game.craftingSystem.claimCraftedGolem(game.golems.length);
-        if (golemType) {
-          game.companionSystem.spawnGolem(golemType);
-          game.showPickupMessage(GOLEM_TYPES[golemType].name);
-          game.renderer.markBackgroundDirty();
-          game.updateUI();
-          return;
-        }
-
-        // Ingredient-result recipes (e.g. Mana) land straight in the pile —
-        // they're raw ingredients, not equippable items, and must never
-        // occupy a weapon/consumable slot.
-        const ingredientChar = game.craftingSystem.claimCraftedIngredient();
-        if (ingredientChar) {
-          // Mirror LootSystem.collectIngredient: once the meter is active,
-          // Mana bypasses inventory entirely and tops the meter up directly.
-          if (ingredientChar === '𝑚' && game.player.magicMeter?.active) {
-            game.magicSystem.addMana(game.player, 2);
-          } else {
-            game.addIngredient(ingredientChar);
-          }
-          game.showPickupMessage(getItemData(ingredientChar)?.name ?? ingredientChar);
-          game.renderer.markBackgroundDirty();
-          game.updateUI();
-          return;
-        }
-
-        const item = game.craftingSystem.claimCraftedItem(
-          game.player.position.x,
-          game.player.position.y
-        );
-        if (item) {
-          // Crafted output counts as touched for the Three Room's globe — the
-          // run put it in the player's hands just as surely as a floor pickup.
-          game.threeSlotGlobeSystem.recordTouched(item.char);
-          if (item.data.type === 'ARMOR') {
-            // Mirror world-pickup behavior: auto-equip, or prompt when occupied
-            if (game.inventorySystem.equippedArmor !== null) {
-              game.slotReplacementSystem.open(item, 'armor');
-              game.renderer.markBackgroundDirty();
-              return;
-            }
-            game.inventorySystem.armorInventory.push(item);
-            game.inventorySystem.equipArmor(item);
-            game.inventorySystem.applyEquipmentEffectsToPlayer(game.player);
-          } else if (item.data.type === 'CONSUMABLE') {
-            const emptySlot = game.inventorySystem.firstFreeConsumableSlot(game.player);
-            if (emptySlot === -1) {
-              game.slotReplacementSystem.open(item, 'consumable');
-              game.renderer.markBackgroundDirty();
-              return;
-            }
-            game.inventorySystem.consumableInventory.push(item);
-            game.inventorySystem.equipConsumable(emptySlot, item);
-          } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
-            if (trapAlreadyEquipped(game.player, item)) {
-              game.inventorySystem.addToChest(item);
-            } else {
-              const dropped = game.player.pickupItem(item);
-              if (dropped) game.inventorySystem.addToChest(dropped);
-            }
-          } else if (item.data.type === 'INGREDIENT') {
-            game.addIngredient(item.char);
-          }
-          game.showPickupMessage(item.data.name);
-          game.renderer.markBackgroundDirty();
-          game.updateUI();
-        }
+        this.claimCenter(game.craftingSystem);
         return;
       } else if (!game.craftingSystem.leftSlot && !game.craftingSystem.rightSlot) {
         game.openCraftingMenu('center');
       }
       // If ingredient slots occupied, block interaction silently
+    }
+  }
+
+  /**
+   * Claim a station's finished centre slot and route the result: golem
+   * summons, ingredient results to the pile, armor/consumables/weapons to
+   * their slots (prompting when full). Shared by the REST station and the
+   * Dragon Forge (ForgeSystem) — `cs` is whichever station is being claimed.
+   */
+  claimCenter(cs) {
+    const game = this.game;
+    game.audioSystem.stopSFXByName('craft_cycle');
+
+    // Golem-result recipes (e.g. Slag + Mana) summon a companion
+    // immediately rather than yielding an inventory item — at the
+    // combined GOLEM_CAP the claim is refused and the slots stay full
+    // (see CraftingSystem.claimCraftedGolem).
+    const golemType = cs.claimCraftedGolem(game.golems.length);
+    if (golemType) {
+      game.companionSystem.spawnGolem(golemType);
+      game.showPickupMessage(GOLEM_TYPES[golemType].name);
+      game.renderer.markBackgroundDirty();
+      game.updateUI();
+      return;
+    }
+
+    // Ingredient-result recipes (e.g. Mana) land straight in the pile —
+    // they're raw ingredients, not equippable items, and must never
+    // occupy a weapon/consumable slot.
+    const ingredientChar = cs.claimCraftedIngredient();
+    if (ingredientChar) {
+      // Mirror LootSystem.collectIngredient: once the meter is active,
+      // Mana bypasses inventory entirely and tops the meter up directly.
+      if (ingredientChar === '𝑚' && game.player.magicMeter?.active) {
+        game.magicSystem.addMana(game.player, 2);
+      } else {
+        game.addIngredient(ingredientChar);
+      }
+      game.showPickupMessage(getItemData(ingredientChar)?.name ?? ingredientChar);
+      game.renderer.markBackgroundDirty();
+      game.updateUI();
+      return;
+    }
+
+    const item = cs.claimCraftedItem(
+      game.player.position.x,
+      game.player.position.y
+    );
+    if (item) {
+      // Crafted output counts as touched for the Three Room's globe — the
+      // run put it in the player's hands just as surely as a floor pickup.
+      game.threeSlotGlobeSystem.recordTouched(item.char);
+      if (item.data.type === 'ARMOR') {
+        // Mirror world-pickup behavior: auto-equip, or prompt when occupied
+        if (game.inventorySystem.equippedArmor !== null) {
+          game.slotReplacementSystem.open(item, 'armor');
+          game.renderer.markBackgroundDirty();
+          return;
+        }
+        game.inventorySystem.armorInventory.push(item);
+        game.inventorySystem.equipArmor(item);
+        game.inventorySystem.applyEquipmentEffectsToPlayer(game.player);
+      } else if (item.data.type === 'CONSUMABLE') {
+        const emptySlot = game.inventorySystem.firstFreeConsumableSlot(game.player);
+        if (emptySlot === -1) {
+          game.slotReplacementSystem.open(item, 'consumable');
+          game.renderer.markBackgroundDirty();
+          return;
+        }
+        game.inventorySystem.consumableInventory.push(item);
+        game.inventorySystem.equipConsumable(emptySlot, item);
+      } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
+        if (trapAlreadyEquipped(game.player, item)) {
+          game.inventorySystem.addToChest(item);
+        } else {
+          const dropped = game.player.pickupItem(item);
+          if (dropped) game.inventorySystem.addToChest(dropped);
+        }
+      } else if (item.data.type === 'INGREDIENT') {
+        game.addIngredient(item.char);
+      }
+      game.showPickupMessage(item.data.name);
+      game.renderer.markBackgroundDirty();
+      game.updateUI();
     }
   }
 
