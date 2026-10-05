@@ -445,8 +445,8 @@ export class HutInteriorOverlay {
       ctx.restore();
     }
 
-    // Bomb Trial dais — a single empty Slot frame; the restocked Bomb itself
-    // is a real Item drawn by the Item loop (DungeonPuzzleSystem._restockDais).
+    // Bomb Trial dais — a single Slot frame; the Bomb Bag on it is a real
+    // Item drawn by the Item loop (DungeonFloorGenerator.generatePuzzleRoom).
     if (game.activeFloor.dais) {
       const { row, col } = game.activeFloor.dais;
       const CS = GRID.CELL_SIZE;

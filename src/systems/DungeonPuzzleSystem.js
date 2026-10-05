@@ -211,7 +211,7 @@ export class DungeonPuzzleSystem {
 
     if (room.puzzleSolved) return;
 
-    this._restockDais(room);
+    this._restockBomb(room);
 
     // What a Push Rock needs to know about its destination cell. The stairs
     // cell is reserved so a shove can never bury the room's own exit; no
@@ -230,22 +230,33 @@ export class DungeonPuzzleSystem {
   }
 
   /**
-   * Bomb Trial dais: while the room is unsolved and the equipped Bomb Bag is
-   * empty, a Bomb appears on the dais — the room's lesson that the bag is
-   * refillable. Nothing drops while a thrown Bomb is still winding up (its
-   * blast may yet solve the room) or while a dropped Bomb is still lying on
-   * this floor.
+   * Bomb Trial: a Bomb explodes on the active floor. Flags the Trial to drop
+   * a fresh Bomb on its pedestal (_restockBomb) — the room hands back every
+   * Bomb it costs, so a player who brought their own Bomb Bag is never made
+   * to spend its stock. Called from ConsumableWindupEffects' explode case.
    */
-  _restockDais(room) {
+  onBombExploded() {
+    const floor = this.game.activeFloor;
+    if (floor?.dais && !floor.puzzleSolved) floor.bombRestockPending = true;
+  }
+
+  /**
+   * Bomb Trial pedestal restock: after a Bomb explodes (onBombExploded), drop
+   * a fresh one on the pedestal. Waits while a thrown Bomb is still winding
+   * up (its blast may yet solve the room) or a Bomb is still lying on this
+   * floor.
+   */
+  _restockBomb(room) {
     const { game } = this;
-    if (!room.dais) return;
-    if (!game.bombBagSystem?.isDepleted()) return;
+    if (!room.bombRestockPending || !room.weaponPedestal) return;
     const windups = game.inventorySystem?.consumableWindups ?? [];
     if (windups.some(w => w.consumable?.char === BOMB_CHAR)) return;
     if (game.items.some(item => item.hutPlane && item.char === BOMB_CHAR)) return;
 
+    room.bombRestockPending = false;
     const CS = GRID.CELL_SIZE;
-    const bomb = Object.assign(new Item(BOMB_CHAR, room.dais.col * CS, room.dais.row * CS), { hutPlane: true });
+    const { col, row } = room.weaponPedestal;
+    const bomb = Object.assign(new Item(BOMB_CHAR, col * CS, row * CS), { hutPlane: true });
     game.items.push(bomb);
     this._spawnUnlockEffect(bomb);
   }

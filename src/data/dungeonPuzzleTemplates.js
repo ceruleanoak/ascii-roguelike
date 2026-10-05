@@ -58,7 +58,7 @@
 //   since dungeons have no ghosts (contrast MazeSystem's own MazeTorch).
 //
 // pedestal: { row, col, weaponChar } | absent — opt-in weapon-tutorial
-//   marker. weaponChar is any WEAPON in ITEMS, or the Bomb Bag (typed freely in the dungeon
+//   marker. weaponChar is any WEAPON in ITEMS, or the Bomb (typed freely in the dungeon
 //   editor's Pedestal tool, checked against items.js at save time — not a
 //   fixed list). When present, generatePuzzleRoom grants a real pickup-able
 //   copy of that weapon (via pickWeaponTutorial()) flanked by decorative
@@ -66,10 +66,11 @@
 //   recipe — anchored on this cell's column (mirrors the original Whip
 //   Trial's own hardcoded pedestal, now authorable by any template).
 //
-// dais: { row, col } | absent — opt-in Bomb Trial marker. While the room is
-//   unsolved and the player's equipped Bomb Bag is empty (no free charge, no
-//   Bombs in the consumable list), DungeonPuzzleSystem._restockDais drops a
-//   Bomb onto this cell — teaching that the bag refills. Sits on plain floor.
+// dais: { row, col } | absent — opt-in Bomb Trial marker. generatePuzzleRoom
+//   places the Bomb Bag here. The Trial's pedestal holds a Bomb; while the
+//   room is unsolved, each Bomb that explodes on the floor drops a fresh one
+//   back onto the pedestal (DungeonPuzzleSystem._restockBomb), so a player
+//   who brought their own bag never has to spend its stock. Plain floor only.
 //
 // weight: selection weight for the North-descent pool (see
 // pickRandomPuzzleTemplateName below) — every named template participates,

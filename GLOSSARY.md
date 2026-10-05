@@ -1380,21 +1380,25 @@ identity, not standard programming terms.
 - **Not:** "cracked wall", "weak wall", "breakable wall", "secret wall".
 
 ### Bomb Trial
-- **Definition:** The dungeon Puzzle Room that grants the Bomb Bag. The bag sits on a pedestal,
-  and the room's floor panels are walled off behind Bombable walls; the stairs out unlock once
-  every panel has been stood on. The alcoves are spaced so that each one needs its own bomb.
+- **Definition:** The dungeon Puzzle Room that grants the Bomb Bag. A Bomb sits on the pedestal,
+  whose flank slots show the Bomb recipe, and the bag sits on the dais. The room's floor panels
+  are walled off behind Bombable walls; the stairs out unlock once every panel has been stood on.
+  The alcoves are spaced so that each one needs its own bomb.
 - **In code:** `src/data/dungeon/puzzleTemplates/bomb_trial.json` (`bomb_trial` in
   `PUZZLE_ROOM_TEMPLATES`, `weight: 1`). It uses the generic Puzzle Room fields: `B` cells,
-  `panel` triggers, a `pedestal` with `weaponChar: '⊟'` and a `dais`.
+  `panel` triggers, a `pedestal` with `weaponChar: '⊗'` and a `dais`.
 - **Not:** "bomb room", "bomb puzzle", "Bomb Bag room".
 
 ### Dais
-- **Definition:** A Puzzle Room fixture: an empty slot frame on the floor. While the room is
-  unsolved and the equipped Bomb Bag is empty, a Bomb appears on it. This teaches that the bag
-  refills, and it keeps the room solvable without crafting.
+- **Definition:** A Puzzle Room fixture: a slot frame on the floor that holds the Bomb Trial's
+  Bomb Bag. While the Trial is unsolved, every Bomb that explodes there puts a fresh Bomb back
+  on the pedestal, so the room stays solvable without crafting, and a player who brings their
+  own bag never has to spend its stock.
 - **In code:** template marker `dais: { row, col }` (`getPuzzleTemplateDais`) → `floor.dais`.
-  `DungeonPuzzleSystem._restockDais` drops the Bomb. Nothing drops while a Bomb is winding up
-  or already lying on the floor. `HutInteriorOverlay` draws the `[ ]` frame. Placed with the
+  `DungeonFloorGenerator.generatePuzzleRoom` places the Bomb Bag (`BOMB_BAG_CHAR`) on it.
+  An explosion calls `DungeonPuzzleSystem.onBombExploded` (sets `floor.bombRestockPending`) and
+  `_restockBomb` drops the Bomb on the pedestal. Nothing drops while a Bomb is winding up or
+  already lying on the floor. `HutInteriorOverlay` draws the `[ ]` frame. Placed with the
   dungeon editor's Dais tool.
 - **Not:** a pedestal (which grants a weapon once and has recipe flanks), and not a "spawner"
   or "refill station".

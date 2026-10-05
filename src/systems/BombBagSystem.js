@@ -2,6 +2,8 @@ import { Item } from '../entities/Item.js';
 
 // The Bomb the bag throws, and the Bombs that count as its stock.
 export const BOMB_CHAR = '⊗';
+// The Bomb Bag itself — placed on the Bomb Trial's dais.
+export const BOMB_BAG_CHAR = '⊟';
 
 /**
  * BombBagSystem — the Bomb Bag (⊟), a consumable-slot item earned in the
@@ -40,12 +42,6 @@ export class BombBagSystem {
   equippedBag() {
     const slots = this.game.inventorySystem?.equippedConsumables ?? [];
     return slots.find(item => this.isBombBag(item)) ?? null;
-  }
-
-  // Free charge + no Bombs in the list — the Bomb Trial's dais reads this.
-  isDepleted() {
-    const bag = this.equippedBag();
-    return !!bag && this.ammoCount(bag) <= 0;
   }
 
   /**

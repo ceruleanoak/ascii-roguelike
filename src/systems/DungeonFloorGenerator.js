@@ -4,6 +4,7 @@ import { setTriggerVisual } from './triggerMachine.js';
 import { createPushRock } from './PushRock.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
+import { BOMB_BAG_CHAR } from './BombBagSystem.js';
 import { getZoneRandomEnemy } from '../data/enemies.js';
 import { applyZoneCombatModifiers } from '../data/zones.js';
 import {
@@ -888,14 +889,21 @@ export class DungeonFloorGenerator {
         );
         items.push(weaponItem);
         weaponPedestal = {
-          row: pedestalMarker.row,
+          row: pedestalMarker.row, col: pedestalMarker.col,
           leftX: pedestalMarker.col - 3, centerX: pedestalMarker.col - 1, rightX: pedestalMarker.col + 1,
           // Uncraftable (found-only) weapon: no recipe, flank Slots stay empty.
           leftChar: tutorial.recipe?.left ?? null, rightChar: tutorial.recipe?.right ?? null,
         };
       } else {
-        console.warn(`[DungeonFloorGenerator] puzzle template "${templateName}" has a pedestal with weaponChar "${pedestalMarker.weaponChar}" that isn't a weapon (or the Bomb Bag) in ITEMS — skipping weapon grant.`);
+        console.warn(`[DungeonFloorGenerator] puzzle template "${templateName}" has a pedestal with weaponChar "${pedestalMarker.weaponChar}" that isn't a weapon (or the Bomb) in ITEMS — skipping weapon grant.`);
       }
+    }
+
+    // Bomb Trial dais — the Bomb Bag the Trial awards, opposite the Bomb on
+    // the pedestal (whose flank Slots teach the Bomb recipe).
+    const dais = getPuzzleTemplateDais(templateName);
+    if (dais) {
+      items.push(Object.assign(new Item(BOMB_BAG_CHAR, dais.col * CS, dais.row * CS), { hutPlane: true }));
     }
 
     return {
@@ -916,9 +924,11 @@ export class DungeonFloorGenerator {
       ascendTo: { kind: 'numbered', floorIndex: originFloorIndex },
       descents: [],
       triggers, hookPosts, torches, weaponPedestal, gapCells, puzzleSolved: false,
-      // Bomb Trial dais cell ({ row, col } or null) — restocked with a Bomb
-      // by DungeonPuzzleSystem._restockDais while the Bomb Bag is empty.
-      dais: getPuzzleTemplateDais(templateName),
+      // Bomb Trial dais cell ({ row, col } or null) — holds the Bomb Bag.
+      dais,
+      // Set when a Bomb explodes on this floor; DungeonPuzzleSystem._restockBomb
+      // consumes it by dropping a fresh Bomb on the pedestal.
+      bombRestockPending: false,
     };
   }
 }

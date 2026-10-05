@@ -45,6 +45,8 @@ export class ConsumableWindupEffects {
         createExplosionAftermath(inv.game, px, py, { shake: 10, shakeDuration: 0.5, smoke: 16, spread: aoeRadius * 0.5 });
         // A bomb is the only thing that opens a Bombable Rock (Cavern entrance).
         inv.game.cavernSystem.bombBlast(px, py, aoeRadius);
+        // The Bomb Trial hands back each Bomb it costs.
+        inv.game.dungeonPuzzleSystem.onBombExploded();
         break;
       }
       case 'curse': {

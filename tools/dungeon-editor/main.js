@@ -369,13 +369,13 @@ async function validatePuzzleTemplate(data) {
     }
     const { pickWeaponTutorial } = await loadWeaponTutorialsModule();
     if (!pickWeaponTutorial(p.weaponChar)) {
-      return `pedestal weaponChar "${p.weaponChar}" isn't a weapon (or the Bomb Bag) in items.js.`;
+      return `pedestal weaponChar "${p.weaponChar}" isn't a weapon (or the Bomb) in items.js.`;
     }
   }
 
-  // Dais — optional single marker (Bomb Trial): a Bomb is dropped here while
-  // the room is unsolved and the player's Bomb Bag is empty
-  // (DungeonPuzzleSystem._restockDais). Sits on plain floor like the pedestal.
+  // Dais — optional single marker (Bomb Trial): the Bomb Bag is placed here
+  // (DungeonFloorGenerator.generatePuzzleRoom). Sits on plain floor like the
+  // pedestal.
   if (data.dais !== undefined && data.dais !== null) {
     const d = data.dais;
     if (typeof d !== 'object') return 'dais must be an object or null.';
