@@ -135,14 +135,15 @@ export function computeSpeedMultiplier(enemy) {
 
 // Ticks every status effect down through the shared core. The enemy-only
 // parts ride on its hooks: a permanently frozen slime never thaws, zap holds
-// for as long as the enemy is wet, a thawing enemy shudders for its last
+// for as long as the enemy is wet but out of the water (standing in water
+// grounds it — see Zap in GLOSSARY.md), a thawing enemy shudders for its last
 // 0.6s, and poison running fully out resets the Venom Blade counter. DoT ticks bypass invulnerability (minimum 1) and are
 // returned for the caller to spawn damage numbers from.
 export function updateStatusEffects(enemy, deltaTime) {
   const permanentFreeze = !!enemy.data?.freezePermanent;
   const ticks = tickStatusEffects(enemy, deltaTime, {
     holdsTimer: (effect, slot) => (effect === 'freeze' && slot.stacks >= MAX_PIPS && permanentFreeze)
-      || (effect === 'zap' && enemy.isWet()),
+      || (effect === 'zap' && enemy.isWet() && !enemy._isOnWater()),
     // Recomputed every frame, so a hit that refreshes a thawing lock stops
     // the shudder instead of leaving it flashing for the whole new lock.
     afterCountdown: (effect, slot) => {

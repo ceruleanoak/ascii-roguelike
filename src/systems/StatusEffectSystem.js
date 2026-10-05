@@ -73,8 +73,10 @@ export const StatusEffectSystem = {
   tickPlayer(player, deltaTime) {
     let burnDamage = null;
     let poisonDamage = null;
-    // Wet holds zap's timer: as long as the player is wet, the charge stays.
-    const hooks = { holdsTimer: (effect) => effect === 'zap' && player.isWet() };
+    // Wet holds zap's timer: as long as the player is wet, the charge stays —
+    // except while standing in water, which grounds it. Holding there let a
+    // zapped body re-electrify its own water forever (it never drained).
+    const hooks = { holdsTimer: (effect) => effect === 'zap' && player.isWet() && !player.inLiquid };
     for (const { effect, damage } of tickStatusEffects(player, deltaTime, hooks)) {
       if (effect === 'burn') burnDamage = damage;
       else if (effect === 'poison') poisonDamage = damage;

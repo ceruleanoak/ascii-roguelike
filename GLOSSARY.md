@@ -886,7 +886,9 @@ identity, not standard programming terms.
   an electric weapon hit, the Stun Trap, the Tesla Coil, a charged object, electrified water, the
   electric wire — lands at pip 3; a chain carries one pip less per link (chain lightning 3 → 2 →
   1, then damage only; water conduction from a struck object lands at 2). Wet holds zap's timer:
-  as long as the body stays wet, zap endures. A zapped body carries Imbued current. The player
+  as long as the body stays wet out of the water, zap endures. Standing in water grounds it — the
+  zap drains normally there (holding it let a zapped body re-electrify its own water forever).
+  A zapped body carries Imbued current. The player
   struggles out of zap pip 3 the same way as Frozen (down to pip 2, still draining); enemies wait
   it out. Zap is yellow, on both sides.
 - **In code:** `statusEffects.zap` (`StatusEffects.js`, `ZAP_PIP_SPEED`, `ZAP_PIP_DECAY`, the
