@@ -49,7 +49,7 @@ export class InteractionSystem {
   }
 
   // Melee-vs-background-object damage for CombatSystem's generic object-smash
-  // path. Bushes always die in one hit to a blunt or axe strike. Cuttable
+  // path. Brush always dies in one hit to a blunt or axe strike. Cuttable
   // growth (grass) is choosy about its cutters: axes deal half damage
   // against it — they're blades, but clumsy ones for trimming; true blades
   // (sword, scythe, spear, dagger — isBlade) never call this for cuttable
@@ -61,7 +61,7 @@ export class InteractionSystem {
   // its normal damage against grass; hammers (canSmash) still double their
   // damage against every other object.
   resolveSmashDamage(attack, obj) {
-    if (obj.char === '%' && (attack.isBlunt || attack.weaponSubtype === 'axe')) {
+    if (obj.data.kind === 'brush' && (attack.isBlunt || attack.weaponSubtype === 'axe')) {
       return obj.hp;
     }
     if (obj.data.cuttable) {

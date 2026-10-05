@@ -848,12 +848,12 @@ export class CombatSystem {
               continue;
             }
 
-            // Blunt weapons can't damage objects, but still rustle grass; bushes and
-            // brambles yield to anything, and allWeaponsDamage-flagged instances yield to anything too.
+            // Blunt weapons can't damage objects, but still rustle grass; Brush
+            // yields to anything, and allWeaponsDamage-flagged instances yield to anything too.
             // Rocks (0) are the standing exception (bug #10): smashing stone is
             // what a blunt weapon is for, and resolveSmashRefusal already let
             // the swing through — without this the payload below would eat it.
-            if (!attack.isBlunt || obj.char === '%' || obj.char === '+' || obj.char === '0' || obj.allWeaponsDamage) {
+            if (!attack.isBlunt || obj.data.kind === 'brush' || obj.char === '0' || obj.allWeaponsDamage) {
               const smashDamage = this.game.interactionSystem.resolveSmashDamage(attack, obj);
               const result = obj.takeDamage(smashDamage, attack.isBlade);
 

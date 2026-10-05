@@ -1115,6 +1115,20 @@ identity, not standard programming terms.
 - **Not:** an Enemy or Ingredient. Objects are static/semi-static environmental features, not
   autonomous or droppable initially.
 
+### Brush
+- **Definition:** A kind of Background Object, low growth that clears to anything. SPACE
+  (armed or not), every melee weapon including blunt ones, and projectiles all destroy it.
+  Projectiles stop on it instead of passing over. A blunt or axe strike always clears it in
+  one hit. Members: Shrub (`%`) and Brambles (`+`).
+- **In code:** `kind: 'brush'` on the `BACKGROUND_OBJECTS` entry, set by spreading the
+  `BRUSH` rule set in `src/game/GameConfig.js` (which also carries
+  `bulletInteraction: 'interact-destroy'` and `acceptsInteractions: ['all']`). Code asks
+  `obj.data.kind === 'brush'`, never a char check. Hp, drop, and `dropChance` stay
+  per-entry.
+- **Not:** Grass (`|`, `cuttable`, which is choosy about its cutters), Bush (`&`), or
+  Stump (`ŋ`). Those may share a look or a placement group in `RoomGenerator`, but not
+  Brush's rules.
+
 ### Weapon Timing
 - **Definition:** The multi-phase cycle of a melee/ranged weapon attack: Windup (startup delay
   before damage), Recovery (cooldown after impact), and optional Reload/Charge phases for

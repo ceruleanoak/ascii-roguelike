@@ -185,14 +185,26 @@ export const INTERACTION_TYPES = {
   ALL: 'all'
 };
 
+// Brush (see GLOSSARY.md): growth that clears to anything. SPACE (armed or
+// not), every melee weapon including blunt ones, and projectiles, which spend
+// themselves tearing through instead of passing over. Spread into each Brush
+// entry so every reader of `obj.data` sees the same rules; code that asks
+// "does this yield to anything?" checks `data.kind === 'brush'`, never a char.
+// Hp, drop, and dropChance stay per-entry.
+const BRUSH = {
+  kind: 'brush',
+  bulletInteraction: 'interact-destroy',
+  acceptsInteractions: ['all']
+};
+
 export const BACKGROUND_OBJECTS = {
   '%': {
+    ...BRUSH,
     name: 'Shrub',
     color: '#228822',
     hp: 3,
     dropEffect: 'destroyObject:spawnIngredient:|',
     dropChance: 0.25,
-    bulletInteraction: 'pass-through',
     flammability: 'high',
     conductivity: 'none',
     slowing: 0.8,
@@ -381,17 +393,14 @@ export const BACKGROUND_OBJECTS = {
     }
   },
   '+': {
+    ...BRUSH,
     name: 'Brambles',
     color: '#557733',
     hp: 1,
     dropEffect: 'destroyObject:spawnIngredient:~',
     dropChance: 0.15,
-    // Clears to anything: SPACE (armed or not), melee, and projectiles — a
-    // projectile spends itself tearing through rather than passing over.
-    bulletInteraction: 'interact-destroy',
     flammability: 'high',
     conductivity: 'none',
-    acceptsInteractions: ['all'],
     interactions: {
       default: { animation: 'shake', message: null }
     }
