@@ -677,12 +677,6 @@ export class InteractionSystem {
     const game = this.game;
     const heldItemChar = game.player.heldItem ? game.player.heldItem.char : null;
 
-    // Fountain water is its own liquid family — fairy water when the pool is
-    // unattuned, the matching elemental bottle once a gem has coloured it.
-    // Checked before the generic liquid path, which would otherwise read the
-    // pool as ordinary water and hand back a plain 🜉 bottle.
-    if (game.fountainSystem.tryBottleFountainWater(obj)) return;
-
     const result = obj.interact(heldItemChar);
 
     // Leshy spawn event: trigger on ANY interaction with shaking bush (not just destruction)

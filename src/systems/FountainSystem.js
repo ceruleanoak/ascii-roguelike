@@ -343,22 +343,23 @@ export class FountainSystem {
 
   // ── Bottling ──────────────────────────────────────────────────────────────
 
-  // Fill an equipped Empty Bottle from the pool. Free and repeatable: it spends
-  // neither the attunement nor the one offering per visit, so the only limit is
-  // how many Empty Bottles the player is carrying. Returns true if it filled one.
-  tryBottleFountainWater(obj) {
+  // Fill the armed Empty Bottle (slot `slotIndex`) from the pool. Free and
+  // repeatable: it spends neither the attunement nor the one offering per
+  // visit, so the only limit is how many Empty Bottles the player is carrying.
+  // Reached through AlchemySystem.tryFillArmedBottle — the same arm-then-SPACE
+  // gesture as every other liquid source — and checked ahead of its generic
+  // world-liquid pass, which would read the pool as plain water (🜉). Reach is
+  // the pool's own (isPlayerAtPool), not the one-cell liquid-tile radius: the
+  // pool tiles are solid, so a player on the bank can sit a full cell from the
+  // nearest tile centre. Returns true if it filled the bottle.
+  tryFillArmedBottle(slotIndex) {
     const game = this.game;
     const room = game.currentRoom;
-    if (!obj || (!obj.fountainWater && !obj.fountainWaterfall)) return false;
     if (!room || room.type !== ROOM_TYPES.FOUNTAIN || !room.fountain) return false;
     // A corrupted pool is no longer fairy water. Fall through to the ordinary
     // liquid-bottle path so it yields whatever the element turned it into.
     if (room.fountain.corrupted) return false;
-    if (game.player?.heldItem?.char !== 'B') return false;
-
-    const slots = game.player.equippedConsumables;
-    const slotIndex = slots?.findIndex(s => s?.char === 'B') ?? -1;
-    if (slotIndex === -1) return false;
+    if (!this.isPlayerAtPool()) return false;
 
     const bottleChar = FOUNTAIN_BOTTLES[room.fountain.attunement || 'none'];
     game.inventorySystem.replaceConsumableSlot(slotIndex, bottleChar);

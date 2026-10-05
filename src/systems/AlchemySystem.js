@@ -152,6 +152,10 @@ export class AlchemySystem {
     const slots = game.player.equippedConsumables;
     if (slots?.[idx]?.char !== 'B') return false;
 
+    if (game.fountainSystem?.tryFillArmedBottle(idx)) {
+      game.player.selectedConsumableIndex = -1;
+      return true;
+    }
     if (this.nearTrough()) {
       this.fillBottle(idx);
       game.player.selectedConsumableIndex = -1;
