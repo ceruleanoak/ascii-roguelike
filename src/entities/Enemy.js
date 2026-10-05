@@ -749,6 +749,11 @@ export class Enemy {
     // Full sleep (tier 3) overrides all AI (like stun, but breaks on damage —
     // see takeDamage). Tiers 1-2 fall through to normal AI and are handled as
     // a plain speed slow instead (getSpeedMultiplier).
+    // Every AI override below skips ChargeMechanic.update, which would leave a
+    // charge windup paused and resuming afterwards — interrupt it instead.
+    if (this.isFullyAsleep() || this.isStunned() || this.isZapped() || this.isFrozen() || this.isKnockedBack()) {
+      ChargeMechanic.interrupt(this);
+    }
     if (this.isFullyAsleep()) {
       this.targetVelocity.vx = 0;
       this.targetVelocity.vy = 0;
@@ -2107,6 +2112,7 @@ export class Enemy {
     if (this.stateMachine?.current === 'strike' && this.windupTimer > 0 && !this.windupImmune) {
       this.windupTimer = 0;
       this.stateMachine.transition(this, null, 'approach', 'windup interrupted');
+      ChargeMechanic.onMeleeInterrupted(this);
     }
 
     // Lock onto attacker's position for navigation.

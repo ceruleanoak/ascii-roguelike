@@ -11,6 +11,7 @@ import { clearStatusEffect } from './StatusEffects.js';
 import { applyLavaContact } from './LavaContact.js';
 import { wetPipCount, wetPipSpeed } from './StatusEffectSystem.js';
 import { destroyWetOils } from './ConsumableSlotBreaks.js';
+import { ChargeMechanic } from '../entities/enemyMechanics/ChargeMechanic.js';
 
 // Re-exported so existing imports (e.g. Enemy.js) keep working.
 // New code should import directly from PlaneSystem.
@@ -257,14 +258,14 @@ export class PhysicsSystem {
     // Knocked away interrupts in-flight telegraphs (attack windup, charge
     // windup/dash) so they don't resume mid-air or fire on landing. The AI
     // loop already idles the main state machine while knockback is active.
+    // An interrupted attack hands the turn to the enemy's other attack kind
+    // (ChargeMechanic: charge ↔ melee) rather than re-arming the same one.
     if (entity.state === 'windup') {
       entity.state = 'chase';
       entity.windupTimer = 0;
+      ChargeMechanic.onMeleeInterrupted(entity);
     }
-    if (entity.chargeState === 'windup' || entity.chargeState === 'charging') {
-      entity.chargeState = 'idle';
-      entity.chargeWindupTimer = 0;
-    }
+    ChargeMechanic.interrupt(entity);
   }
 
   update(deltaTime, backgroundObjects = [], room = null, combatSystem = null) {

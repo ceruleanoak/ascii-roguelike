@@ -14,6 +14,17 @@ import { GRID } from '../../game/GameConfig.js';
 // opt-in per enemy via `nearDeathCooldownMultiplier` on this mechanic's data.
 const NEAR_DEATH_HP_FRACTION = 0.3;
 
+// Cornered enemies charge more often — a landslide gains momentum as it's
+// chipped away, it doesn't slow down. Applies at every cooldown site (abort,
+// interrupt, natural completion) so every path out of a charge pays the same
+// desperate-cycle price.
+function cooldownFor(enemy, cfg) {
+  const mult = cfg.nearDeathCooldownMultiplier
+    && enemy.hp <= enemy.maxHp * NEAR_DEATH_HP_FRACTION
+    ? cfg.nearDeathCooldownMultiplier : 1;
+  return cfg.cooldown * mult;
+}
+
 export const ChargeMechanic = {
   isEnabled(enemy) {
     return enemy.data.chargeMechanic?.enabled === true;
@@ -35,13 +46,6 @@ export const ChargeMechanic = {
     const cfg = enemy.data.chargeMechanic;
     if (!cfg?.enabled) return;
     const { deltaTime, distance, effectiveVisionLength, onScreen } = ctx;
-    // Cornered enemies charge more often — a landslide gains momentum as it's
-    // chipped away, it doesn't slow down. Applies at both cooldown sites
-    // (abort below and natural completion) so every path out of a charge
-    // pays the same desperate-cycle price.
-    const cooldownMult = cfg.nearDeathCooldownMultiplier
-      && enemy.hp <= enemy.maxHp * NEAR_DEATH_HP_FRACTION
-      ? cfg.nearDeathCooldownMultiplier : 1;
 
     // Wet/goo block charging entirely — a soaked or slimed boar can't get
     // traction. Off-screen joins the same abort: charging is a continuous
@@ -55,10 +59,8 @@ export const ChargeMechanic = {
     // from a real incoming knockback, so a mid-charge boar was snapping its own
     // snare/pin every tick (bug: "boar breaks out of snare"). Abort first.
     // Abort an in-progress windup/charge and pay the full cooldown.
-    if ((enemy.isWet() || enemy.isGooey() || enemy.isPinned() || !onScreen)
-        && (enemy.chargeState === 'windup' || enemy.chargeState === 'charging')) {
-      enemy.chargeState = 'idle';
-      enemy.chargeTimer = cfg.cooldown * cooldownMult;
+    if (enemy.isWet() || enemy.isGooey() || enemy.isPinned() || !onScreen) {
+      this.interrupt(enemy);
     }
 
     if (enemy.chargeState === 'stunned') {
@@ -122,7 +124,7 @@ export const ChargeMechanic = {
       }
       if (enemy.chargeDurationTimer <= 0) {
         enemy.chargeState = 'idle';
-        enemy.chargeTimer = cfg.cooldown * cooldownMult;
+        enemy.chargeTimer = cooldownFor(enemy, cfg);
       }
     } else {
       // idle — count down to next charge whenever a target is engaged
@@ -150,5 +152,31 @@ export const ChargeMechanic = {
         }
       }
     }
+  },
+
+  /**
+   * Cancel an in-progress windup/charge and pay the full cooldown. Every
+   * interruption — knockback, stun, freeze, zap, sleep, plus the traction
+   * aborts above — goes through here, so the enemy moves on to its other
+   * attack (melee) instead of resuming the frozen windup or re-arming the
+   * same charge the moment it recovers. No-op when idle or wall-stunned.
+   */
+  interrupt(enemy) {
+    const cfg = enemy.data?.chargeMechanic;
+    if (!cfg?.enabled) return;
+    if (enemy.chargeState !== 'windup' && enemy.chargeState !== 'charging') return;
+    enemy.chargeState = 'idle';
+    enemy.chargeWindupTimer = 0;
+    enemy.chargeTimer = cooldownFor(enemy, cfg);
+  },
+
+  /**
+   * The other half of the alternation: an interrupted melee swing hands the
+   * next turn to the charge (it fires as soon as its own range/vision gates
+   * pass) rather than letting the enemy re-swing straight away.
+   */
+  onMeleeInterrupted(enemy) {
+    const cfg = enemy.data?.chargeMechanic;
+    if (cfg?.enabled && enemy.chargeState === 'idle') enemy.chargeTimer = 0;
   }
 };
