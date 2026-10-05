@@ -2333,7 +2333,7 @@ export const ITEMS = {
     name: 'Frog Coin',
     type: ITEM_TYPES.CONSUMABLE,
     passive: true,
-    damageBonus: 1,           // +1 damage to all attacks while equipped...
+    damageBonus: 1,           // +1 damage to all attacks per equipped coin (they stack)...
     requiresWet: true,        // ...and only while the player is wet
     color: '#44bb44'
   },

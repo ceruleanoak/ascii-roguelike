@@ -783,11 +783,12 @@ export class CharacterSystem {
     if (game.player.damageBonusTimer > 0) baseBonus += game.player.damageBonusAmount;
     if (game.player.wellDamageBlessed) baseBonus += 1; // red well coin blessing
 
-    // Frog Coin passive: +1 damage while equipped in any consumable slot and
-    // the player is wet (its requiresWet). Duplicate coins don't stack.
-    const frogCoin = game.player.equippedConsumables?.find(c => c?.data?.char === '⊚');
-    if (frogCoin && (!frogCoin.data.requiresWet || game.player.isWet())) {
-      baseBonus += frogCoin.data.damageBonus;
+    // Frog Coin passive: +1 damage per coin equipped in a consumable slot,
+    // while the player is wet (its requiresWet). The one consumable exempt
+    // from the no-stacking rule — five coins equipped is +5 when wet.
+    const frogCoins = game.player.equippedConsumables?.filter(c => c?.data?.char === '⊚') ?? [];
+    for (const frogCoin of frogCoins) {
+      if (!frogCoin.data.requiresWet || game.player.isWet()) baseBonus += frogCoin.data.damageBonus;
     }
 
     // Weapons Master training — permanent per-character, per-weapon-category bonus.
