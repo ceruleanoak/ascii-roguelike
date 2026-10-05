@@ -252,7 +252,7 @@ export const ENEMIES = {
     char: 'g',
     name: 'Frog',
     description: 'Zigzag jumper. Snaps its tongue when close.',
-    spellDescription: 'WEAK TO SHOCK.',
+    spellDescription: 'WEAK TO SHOCK AND FIRE.',
     trueName: 'GRODA',
     mass: 0.5,
     hp: 5,
@@ -282,7 +282,8 @@ export const ENEMIES = {
       waterJumpDuration: 0.30
     },
     elementalAffinity: {
-      weakness: { 'shock': 2.0 }
+      // Frog form (player polymorph) shares the burn weakness — PlayerDamageSystem reads it from here.
+      weakness: { 'shock': 2.0, 'burn': 2.0 }
     },
     affinities: ['beast', 'aquatic'],
     sfx: { hit: 'frog', death: 'frog' },

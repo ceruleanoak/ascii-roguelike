@@ -8,6 +8,11 @@
 // with no state of its own, mirroring the StatusEffectSystem.tickPlayer
 // pattern of a system operating directly on the player it's passed.
 import { PlayerParry, PARRY_REFLECT_FRACTION } from '../entities/enemyMechanics/ParryMechanic.js';
+import { ENEMIES } from '../data/enemies.js';
+
+// Frog form carries the Frog enemy's burn weakness, read from its data so the
+// two never drift apart.
+const FROG_BURN_WEAKNESS = ENEMIES.g.elementalAffinity.weakness.burn;
 
 export const PlayerDamageSystem = {
   // Returns false (no damage), an object describing what happened
@@ -54,6 +59,12 @@ export const PlayerDamageSystem = {
       if (player.poisonImmune && damageSource.element === 'poison') {
         return { immune: true };
       }
+    }
+
+    // Frog form is weak to fire: burn hits (fire weapons, burn DoT) land
+    // multiplied before Stone Skin/defense/resists reduce them.
+    if (player.polymorphed && damageSource.element === 'burn') {
+      amount = Math.ceil(amount * FROG_BURN_WEAKNESS);
     }
 
     // Stone Skin: halves incoming damage, rounded down, applied before defense/resists
