@@ -24,6 +24,7 @@ import { applyExtraOnHitEffects, applyOnHitStatusEffect } from './ExtraOnHitEffe
 import { applyMeleeStatusDamageBonus, getMeleeStatusBonusIndicator } from './MeleeStatusBonuses.js';
 import { applyKeenAim } from './KeenAim.js';
 import { projectileSailsOver, tagLaunchPit } from './pits.js';
+import { vaultWallBlocksReach } from './vaultWalls.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
 // room — keeps cross-room sniping in check while still feeling powerful.
@@ -801,6 +802,7 @@ export class CombatSystem {
           if (!objectOnPlane(obj, attack.shooterPlane ?? 0)) continue;
 
           if (this.checkMeleeCollisionWithObject(attack, obj)) {
+            if (attack.owner && vaultWallBlocksReach(room, attack.owner, obj)) continue;
             // Glittering rocks require a pickaxe — other weapons bounce off
             if (obj.data?.glitteringRock) {
               if (!attack.isPickaxe) {
