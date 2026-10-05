@@ -386,9 +386,12 @@ export const BACKGROUND_OBJECTS = {
     hp: 1,
     dropEffect: 'destroyObject:spawnIngredient:~',
     dropChance: 0.15,
-    bulletInteraction: 'pass-through',
+    // Clears to anything: SPACE (armed or not), melee, and projectiles — a
+    // projectile spends itself tearing through rather than passing over.
+    bulletInteraction: 'interact-destroy',
     flammability: 'high',
     conductivity: 'none',
+    acceptsInteractions: ['all'],
     interactions: {
       default: { animation: 'shake', message: null }
     }

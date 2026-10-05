@@ -663,7 +663,13 @@ export class InteractionSystem {
       obj.destroyAfterAnimation = true;
       obj._playAnimation('crack');
     }
-    this.handleObjectEffect(effect, obj);
+    // Same dropChance roll as the weapon-destroy path (main.js objectEffects),
+    // so opening by hand is never a better harvest than breaking it. Key
+    // droppers bypass the roll there too.
+    const chance = obj.data.dropChance;
+    if (obj.dropsKey || obj.dropsDungeonKey || chance === undefined || Math.random() < chance) {
+      this.handleObjectEffect(effect, obj);
+    }
     this.game.renderer.markBackgroundDirty();
   }
 
