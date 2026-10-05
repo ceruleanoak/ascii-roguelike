@@ -157,7 +157,6 @@ identity, not standard programming terms.
 - **Not:** an Interior (there the surface is frozen and the layer owns the frame); ad-hoc
   per-frame guards (the layer-leak anti-pattern — bug #107).
 ### Frame Owner
-*(Proposed 2026-10-05; awaiting ratification.)*
 - **Definition:** The one space that owns the frame on a given tick, meaning the place the player
   currently is: the surface Room, a Floor's PiP, the Maze's PiP, REST, or NEUTRAL. There is exactly
   one each frame. A Frame Owner tells you who draws the frame. A Plane tells you which layer of a
@@ -168,7 +167,6 @@ identity, not standard programming terms.
 - **Not:** a Plane; a Game State (EXPLORE has two to three owners); "scene"; the `!playerInInterior`
   gate it replaces.
 ### Frame Pass
-*(Proposed 2026-10-05; awaiting ratification.)*
 - **Definition:** A shared draw pass for something that can appear wherever the player is (loot,
   projectiles, particles, the player glyph and its overlays). Every pass declares every Frame
   Owner: it either draws there or gives a written reason why it doesn't. A missing scenario is
