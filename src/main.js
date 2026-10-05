@@ -1212,6 +1212,8 @@ class Game {
     // Replaces this.player with a fresh REST spawn, carrying over the state
     // that's meant to survive the rebuild (magic meter, cursed-run wound, and
     // any fairy-fountain maxHp blessing — see RestSystem for what and why).
+    // Charon reads the arriving player's health before the rebuild heals it.
+    const arrivedAtFullHp = !!this.player && this.player.hp >= this.player.maxHp;
     RestSystem.rebuildForRest(this);
 
     // Reset fishing system so Rusalka pull/suppression doesn't persist into REST
@@ -1238,7 +1240,7 @@ class Game {
     // A Cursed run opens REST's south wall onto the Graveyard. Runs before the
     // collision map is handed to the player so the gap is already cut.
     this.cursedRunSystem.applyToRest(this, this.currentRoom);
-    this.charonSystem.onEnterRest(this.currentRoom);
+    this.charonSystem.onEnterRest(this.currentRoom, { arrivedAtFullHp });
 
     // Set player collision map
     this.player.setCollisionMap(collisionMap);

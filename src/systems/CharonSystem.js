@@ -7,6 +7,9 @@ const CHARON_MIN_DEPTH = 1;
 // His toll: this fraction of the ingredient pile (treasures included in the
 // count, coins not), rounded up. Coins are only what he takes first.
 const TOLL_DIVISOR = 3;
+// Coins he takes never exceed the depth returned from ÷ this, rounded up;
+// the rest of the toll is paid in ingredients.
+const COIN_LIMIT_DIVISOR = 3;
 const TAKE_INTERVAL = 0.15;  // seconds between taken ingredients
 const FLIGHT_TIME = 0.45;    // seconds for a taken glyph to reach him
 const FADE_TIME = 0.8;       // seconds for him to vanish once paid
@@ -17,11 +20,13 @@ const SCORNED_INGREDIENTS = new Set(['|', '0', 'f', 'g']);
 /**
  * CharonSystem — the toll at REST's north exit.
  *
- * On REST entry above L1 the north exit closes and Charon stands in it.
+ * On REST entry above L1 the north exit closes and Charon stands in it —
+ * unless the player came back at full HP, when he doesn't stand there.
  * SPACE near him opens his dialogue; closing it starts the toll: one third of
- * the ingredient count (rounded up, coins not counted), paid coins first,
- * then random ingredients — never treasures, and Stick/Rock/Fur/Goo only
- * once nothing else is left. He speaks once per run (game.charonGreeted);
+ * the ingredient count (rounded up, coins not counted), paid coins first —
+ * at most a third of the depth returned from, rounded up — then random
+ * ingredients — never treasures, and Stick/Rock/Fur/Goo only once nothing
+ * else is left. He speaks once per run (game.charonGreeted);
  * after that, SPACE goes straight to the toll. A hero lost to the gray mist
  * hands off to the next one at REST without him (waiveNextVisit). Each taken
  * glyph flies from the player to him, then he fades out and the exit reopens.
@@ -32,7 +37,7 @@ const SCORNED_INGREDIENTS = new Set(['|', '0', 'f', 'g']);
  * says farewell, and EXPLORE's way back to REST is shut for the run.
  *
  * State lives on game.charon (null when absent; Reset Registry, run scope):
- *   { npc, phase: 'waiting'|'taking'|'leaving', toll: [char], takeTimer, flights }
+ *   { npc, phase: 'waiting'|'taking'|'leaving', toll: [char], coinLimit, takeTimer, flights }
  * The farewell visit is the npc whose voice is 'farewell'.
  */
 export class CharonSystem {
@@ -47,8 +52,12 @@ export class CharonSystem {
     this.waived = true;
   }
 
-  /** REST entry: bar the north exit when the player is returning from deeper than L1. */
-  onEnterRest(room) {
+  /**
+   * REST entry: bar the north exit when the player is returning from deeper
+   * than L1 and hurt. `arrivedAtFullHp` is read off the player who walked in,
+   * before REST's rebuild heals them.
+   */
+  onEnterRest(room, { arrivedAtFullHp = false } = {}) {
     const game = this.game;
     game.charon = null;
     const waived = this.waived;
@@ -56,15 +65,16 @@ export class CharonSystem {
     if (waived || !room) return;
     const visit = game.cursedRunSystem.charonVisit(game);
     if (visit === 'absent') return;
-    // His farewell is owed whatever depth the player comes back from.
+    // His farewell is owed whatever depth or health the player comes back with.
     const depth = game.zoneDepths[game.zoneSystem.currentZone] || 0;
-    if (visit !== 'farewell' && depth <= CHARON_MIN_DEPTH) return;
+    if (visit !== 'farewell' && (depth <= CHARON_MIN_DEPTH || arrivedAtFullHp)) return;
 
     const centerX = Math.floor(GRID.COLS / 2);
     game.charon = {
       npc: new Charon(centerX * GRID.CELL_SIZE, GRID.CELL_SIZE, visit ?? 'ferry'),
       phase: 'waiting',
       toll: [],
+      coinLimit: Math.ceil(depth / COIN_LIMIT_DIVISOR),
       takeTimer: 0,
       flights: [],
     };
@@ -131,8 +141,8 @@ export class CharonSystem {
     charon.phase = 'leaving';
   }
 
-  // Coins first, then random non-treasure pile ingredients (scorned ones
-  // last), up to the toll.
+  // Coins first (up to his coin limit), then random non-treasure pile
+  // ingredients (scorned ones last), up to the toll.
   _beginToll(charon) {
     const inv = this.game.inventorySystem;
     const pile = inv.getIngredients();
@@ -140,7 +150,7 @@ export class CharonSystem {
     let owed = Math.ceil(pile.length / TOLL_DIVISOR);
 
     const toll = [];
-    const coinsTaken = Math.min(coins, owed);
+    const coinsTaken = Math.min(coins, owed, charon.coinLimit);
     for (let i = 0; i < coinsTaken; i++) toll.push('c');
     owed -= coinsTaken;
 
