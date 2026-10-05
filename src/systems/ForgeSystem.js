@@ -14,7 +14,7 @@ import { CraftingSystem } from './CraftingSystem.js';
  *
  * The station is a three-slot bracket triad shaped like the REST station
  * ([left][centre][right]). It runs on its own CraftingSystem instance in
- * forge mode and reuses MenuSystem's crafting picker and centre-claim
+ * forge mode — sharing the REST station's tried-pair memory — and reuses MenuSystem's crafting picker and centre-claim
  * routing, so it fills and claims exactly like REST. Drawn by
  * rendering/effects/DragonForgeDraw.js.
  */
@@ -29,7 +29,9 @@ const AWAY_MARGIN = 2;            // cells beyond the triad before slots empty
 export class ForgeSystem {
   constructor(game) {
     this.game = game;
-    this.crafting = new CraftingSystem(game, { forge: true });
+    // Shares the REST station's identified/failed pair memory (built earlier
+    // in Game.constructor), so its run-scope reset covers the forge too.
+    this.crafting = new CraftingSystem(game, { forge: true, pairMemory: game.craftingSystem });
   }
 
   /** Raise the forge where the Goo Dragon stood — the open centre of the boss room. */
@@ -138,10 +140,5 @@ export class ForgeSystem {
    */
   reset() {
     this.crafting.setState({ leftSlot: null, rightSlot: null, centerSlot: null });
-  }
-
-  /** Run-scope reset: forget which pairs were identified at the forge. */
-  resetDiscoveries() {
-    this.crafting.resetDiscoveries();
   }
 }

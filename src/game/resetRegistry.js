@@ -499,7 +499,7 @@ export const RESET_REGISTRY = [
     path: 'craftingSystem.resetDiscoveries',
     scope: 'run',
     call: (game) => game.craftingSystem.resetDiscoveries(),
-    why: 'Clear crafting slots and wipe localStorage save.',
+    why: 'Forget which crafting pairs were identified or failed — the Dragon Forge shares these maps (pairMemory), so this clears its memory too.',
   },
   {
     path: 'forgeSystem.reset',
@@ -507,12 +507,6 @@ export const RESET_REGISTRY = [
     call: (game) => game.forgeSystem.reset(),
     covers: [],
     why: 'Dragon Forge slots belong to the boss room; anything a death or warp abandoned mid-craft is discarded, not returned.',
-  },
-  {
-    path: 'forgeSystem.resetDiscoveries',
-    scope: 'run',
-    call: (game) => game.forgeSystem.resetDiscoveries(),
-    why: 'Forget which pairs were identified at the Dragon Forge.',
   },
   {
     path: 'persistenceSystem.clearSave',

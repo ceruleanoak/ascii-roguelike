@@ -27,7 +27,10 @@ export class CraftingSystem {
   // `forge: true` makes this the Dragon Forge's station (ForgeSystem): it
   // crafts Forge Recipes only — no tier-up cycles, no cursed recipes. The
   // default REST station refuses Forge Recipes and raises the ember tell.
-  constructor(game = null, { forge = false } = {}) {
+  // `pairMemory`: another CraftingSystem whose identified/failed pair maps
+  // this one shares — which pairs were tried is the player's knowledge, not
+  // the station's, so the forge reads and writes the REST station's memory.
+  constructor(game = null, { forge = false, pairMemory = null } = {}) {
     this.game = game;
     this.forge = forge;
     this.leftSlot = null;
@@ -38,8 +41,8 @@ export class CraftingSystem {
     // in the centre slot — the pair means something, just not here. Not
     // centre content: claiming does nothing.
     this.emberTell = false;
-    this.discoveredPairs = new Map(); // ingredientChar → Set<ingredientChar>
-    this.failedPairs = new Map();    // ingredientChar → Set<ingredientChar>
+    this.discoveredPairs = pairMemory?.discoveredPairs ?? new Map(); // ingredientChar → Set<ingredientChar>
+    this.failedPairs = pairMemory?.failedPairs ?? new Map();         // ingredientChar → Set<ingredientChar>
   }
 
   setLeftSlot(item) {
@@ -85,14 +88,17 @@ export class CraftingSystem {
 
     if (!this.leftSlot || !this.rightSlot) return;
 
-    // The Dragon Forge crafts Forge Recipes and nothing else. Any other pair
-    // simply leaves the centre empty — recorded nowhere, since it may well
-    // be a real recipe that belongs at the REST station.
+    // The Dragon Forge crafts Forge Recipes and nothing else. A pair that is
+    // something at the REST station (a recipe, a cursed recipe, a tier-up
+    // pair) leaves the centre empty and is recorded nowhere; a pair that is
+    // nothing anywhere is a failed pair, same as at REST.
     if (this.forge) {
       const recipe = findRecipe(this.leftSlot, this.rightSlot);
       if (requiresForge(recipe)) {
         this.centerSlot = recipe.result;
         this._recordPair(this.discoveredPairs);
+      } else if (!recipe && !this._isRestOnlyPair()) {
+        this._recordPair(this.failedPairs);
       }
       return;
     }
@@ -132,6 +138,16 @@ export class CraftingSystem {
     this._recordPair(this.failedPairs);
   }
 
+  /**
+   * Forge only: the recipe-less current pair still means something at the
+   * REST station — a cursed recipe this run, or a duplicate weapon's tier-up
+   * cycle — so the forge must not record it as failed in the shared memory.
+   */
+  _isRestOnlyPair() {
+    if (this.game?.cursedRun && findCursedRecipe(this.leftSlot, this.rightSlot)) return true;
+    return this.leftSlot === this.rightSlot && !!getNextTierPool(this.leftSlot)?.length;
+  }
+
   /** Record the current left/right pair as mutual partners in `pairs`. */
   _recordPair(pairs) {
     if (!pairs.has(this.leftSlot)) pairs.set(this.leftSlot, new Set());
@@ -148,9 +164,12 @@ export class CraftingSystem {
     return this.failedPairs.get(char) ?? new Set();
   }
 
+  // Cleared in place, never replaced: the Dragon Forge's CraftingSystem holds
+  // references to these same maps (pairMemory), and new Maps would quietly
+  // split the two stations' memory after the first run reset.
   resetDiscoveries() {
-    this.discoveredPairs = new Map();
-    this.failedPairs = new Map();
+    this.discoveredPairs.clear();
+    this.failedPairs.clear();
   }
 
   hasCenterContent() {
