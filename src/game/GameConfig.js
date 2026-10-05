@@ -191,7 +191,7 @@ export const BACKGROUND_OBJECTS = {
     color: '#228822',
     hp: 3,
     dropEffect: 'destroyObject:spawnIngredient:|',
-    dropChance: 0.40,
+    dropChance: 0.25,
     bulletInteraction: 'pass-through',
     flammability: 'high',
     conductivity: 'none',
