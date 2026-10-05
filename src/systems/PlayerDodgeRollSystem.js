@@ -43,7 +43,7 @@ export const PlayerDodgeRollSystem = {
 
     // Break any sapping enemies attached to this player
     for (const enemy of enemies) {
-      if (enemy.sapping && enemy.sappingTarget === this) {
+      if (enemy.sapping && enemy.sappingTarget === player) {
         enemy.breakSapping(300); // Stronger knockback from dodge roll
       }
     }

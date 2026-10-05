@@ -39,6 +39,11 @@ const ZAP_PIP_DECAY = 1.0;
 // even pip 3 is a crawl, not a stop, so the way out of the slime stays open.
 export const GOO_PIP_SPEED = [1, 0.2, 0.14, 0.08];
 
+// Player movement multiplier per bat latched on (player.activeSappingBats,
+// up to 3). Bat sap slows, never locks — the latched bats ride along on the
+// player's position, so walking off drags them with you.
+export const SAP_BAT_SPEED = [1, 0.6, 0.45, 0.3];
+
 // Seconds of unbroken slime contact per extra goo pip, and per pip drained
 // once out of it. Stepping off resets the count, so the climb only happens to
 // a body that stays in the slime. Enemy status timers tick in double-seconds

@@ -410,8 +410,9 @@ export class Player {
       this.velocity.vy *= 0.75;
       if (Math.abs(this.velocity.vx) < 4) this.velocity.vx = 0;
       if (Math.abs(this.velocity.vy) < 4) this.velocity.vy = 0;
-    // Sapped by ice wraith(s) or locked (Frozen/zapped/stunned): stop movement entirely
-    } else if (this.activeSappingBats.length > 0 || this.isLocked()) {
+    // Locked (Frozen/zapped/stunned): stop movement entirely. Bat sap is a
+    // slow, not a lock — see SAP_BAT_SPEED in getStatusSpeedMultiplier().
+    } else if (this.isLocked()) {
       this.acceleration.ax = 0;
       this.acceleration.ay = 0;
       this.velocity.vx *= 0.75;

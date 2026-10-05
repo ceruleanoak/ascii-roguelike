@@ -23,7 +23,7 @@ import { CHARACTER_TYPES } from '../data/characters.js';
 import { GRID } from '../game/GameConfig.js';
 import {
   createStatusEffects, applyStatusEffect, tickStatusEffects,
-  MAX_PIPS, ZAP_PIP_SPEED, FREEZE_PIP_SPEED, GOO_PIP_SPEED
+  MAX_PIPS, ZAP_PIP_SPEED, FREEZE_PIP_SPEED, GOO_PIP_SPEED, SAP_BAT_SPEED
 } from './StatusEffects.js';
 import { activeInteriorFloor } from './PlaneSystem.js';
 
@@ -144,6 +144,8 @@ export const StatusEffectSystem = {
     else if (fx.slimeBoost.active) m = fx.slimeBoost.speedMult;
     else if (fx.dizzy.active) m = 0.35;
     if (fx.zap.active) m *= ZAP_PIP_SPEED[fx.zap.stacks];
+    const bats = Math.min(player.activeSappingBats?.length ?? 0, SAP_BAT_SPEED.length - 1);
+    m *= SAP_BAT_SPEED[bats];
     return m;
   },
 
