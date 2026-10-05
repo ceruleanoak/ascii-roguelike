@@ -330,6 +330,7 @@ const UNREGISTERED_ALLOWLIST = [
   /^menuColumns$/,
   /^disabledColumns$/,
   /^currentMenuSlot$/,
+  /^menuCraftingSystem$/,
   /^selectedWeaponSlotIndex$/,
   /^selectedColumn$/,
 

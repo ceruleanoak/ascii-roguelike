@@ -26,6 +26,7 @@ import { drawRestExitLabel, southExitShowsOpen, southDoorColor, REST_WORD, CRAFT
 import { thrownWeaponPointerActive, nearestThrownWeaponTarget, drawThrownWeaponLine, drawCraftArrow } from '../ui/ThrownWeaponPointer.js';
 import { drawSniperIndicators, drawSniperBeams, drawSniperReticules, sniperHidingConcealAlpha } from '../effects/SniperEffects.js';
 import { drawSinkholes } from '../effects/SinkholeEffects.js';
+import { drawDragonForge } from '../effects/DragonForgeDraw.js';
 import { drawWires } from '../effects/WireEffects.js';
 import { drawDonationArc, drawCoinArc, drawWellRitual } from '../effects/ArcTossEffects.js';
 import { renderBombEnemy } from '../effects/BombEffects.js';
@@ -493,6 +494,7 @@ export class ExploreRenderer {
     // Draw revealed Sinkholes on foreground each frame so the in-range
     // highlight (SPACE would trigger a dive) tracks player movement live.
     drawSinkholes(this.renderer, game);
+    drawDragonForge(this.renderer, game);
 
     // Draw water tiles on foreground so state changes (frozen '=', electrified blink) render each frame
     for (const obj of game.backgroundObjects) {

@@ -141,6 +141,7 @@ export class RoomGenerator {
       backgroundRepaint: false,
       recipeSign: null, // Visual-only recipe hint (not a BackgroundObject)
       barricade: null, // Set by BarricadeSystem.raiseForRoom once the exits are final
+      dragonForge: null, // Set by ForgeSystem.placeForge when the Goo Dragon falls
       exits: this.exitSystem ? this.exitSystem.generateExits(this.currentDepth, type, zoneType, progressionColor, exitLetter) : { north: false, east: false, west: false, south: true },
       playerStartPos: playerStartPos,  // Store for enemy generation
       letterTemplate: this.currentLetterTemplate, // Store template for later event checks

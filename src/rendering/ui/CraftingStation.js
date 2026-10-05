@@ -10,6 +10,10 @@
 
 import { CRAFTING, COLORS, GRID } from '../../game/GameConfig.js';
 
+// Ember tell (CraftingSystem.emberTell) — REST station only; the forge never raises it.
+export const EMBER_TELL_CHAR = '*';
+export const EMBER_TELL_COLOR = '#aa4400';
+
 export class CraftingStation {
   constructor(renderer) {
     this.renderer = renderer;
@@ -44,6 +48,9 @@ export class CraftingStation {
     // Static center slot — only drawn here when NOT cycling (cycling draws on foreground every frame)
     if (state.centerSlot && !state.cycleState) {
       this.renderer.drawCell(CRAFTING.CENTER_SLOT_X + 1, CRAFTING.STATION_Y, state.centerSlot, COLORS.ITEM);
+    } else if (state.emberTell) {
+      // A Forge Recipe pair: a dim, unclaimable ember — needs the Dragon Forge.
+      this.renderer.drawCell(CRAFTING.CENTER_SLOT_X + 1, CRAFTING.STATION_Y, EMBER_TELL_CHAR, EMBER_TELL_COLOR);
     }
   }
 

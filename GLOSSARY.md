@@ -563,6 +563,26 @@ identity, not standard programming terms.
   box-drawing, literal glyphs only). Recipes in `src/data/recipes.js`.
 - **Not:** an Ingredient; never a letter/digit char.
 
+### Forge Recipe
+- **Definition:** A recipe with Scale as an input. It crafts only at the Dragon Forge. At the
+  REST station the pair shows an ember tell in the centre slot: a dim `*` that can't be
+  claimed and is recorded as neither discovered nor failed. Dismantling a Scale item at REST
+  still works.
+- **In code:** `requiresForge(recipe)` / `FORGE_INGREDIENT` in `src/data/recipes.js`; derived
+  from the input, so every future Scale recipe is gated with no per-recipe field.
+  `CraftingSystem.emberTell` raises the tell.
+- **Not:** a failed pair; a cursed recipe; a per-recipe `station` tag.
+
+### Dragon Forge
+- **Definition:** The station where Forge Recipes are crafted. It rises in the green zone boss
+  room when the Goo Dragon falls and belongs to that room alone. It comes back with the room
+  after a REST round-trip and is gone once the player moves on. Its three slots
+  (`[left][centre][right]`) take only carried items; the REST chest is out of reach.
+- **In code:** `ForgeSystem` (`src/systems/ForgeSystem.js`) with its own
+  `CraftingSystem(game, { forge: true })`; `room.dragonForge = { col, row }`; drawn by
+  `rendering/effects/DragonForgeDraw.js`.
+- **Not:** the REST Combine Station; the Fireplace or other hut stations; a forge anywhere else.
+
 ### Quick slot
 - **Definition:** A persistent equipped-item slot shown in the top status bar. Persists across
   REST.

@@ -38,6 +38,7 @@ import { EnemySpawnSystem } from './systems/EnemySpawnSystem.js';
 import { HutSystem } from './systems/HutSystem.js';
 import { CavernSystem } from './systems/CavernSystem.js';
 import { PressSystem } from './systems/PressSystem.js';
+import { ForgeSystem } from './systems/ForgeSystem.js';
 import { FireplaceSystem } from './systems/FireplaceSystem.js';
 import { AlchemySystem } from './systems/AlchemySystem.js';
 import { DungeonSystem } from './systems/DungeonSystem.js';
@@ -212,6 +213,7 @@ class Game {
     this.hutSystem = new HutSystem(this);
     this.cavernSystem = new CavernSystem(this);
     this.pressSystem = new PressSystem(this);
+    this.forgeSystem = new ForgeSystem(this);
     this.fireplaceSystem = new FireplaceSystem(this);
     this.alchemySystem = new AlchemySystem(this);
     this.dungeonSystem = new DungeonSystem(this);
@@ -422,6 +424,7 @@ class Game {
     this.menuItems = [];
     this.selectedMenuIndex = 0;
     this.currentMenuSlot = null; // 'left' or 'right'
+    this.menuCraftingSystem = null; // CraftingSystem the open crafting picker fills (REST station or Dragon Forge)
     this.selectedWeaponSlotIndex = 0; // Track which weapon slot is currently focused for pickup
     // Multi-column menu support (viewport shows 3 at a time with active centered)
     this.menuColumns = null; // [weaponsList, armorList, ingredientList?, consumableList]
@@ -1443,37 +1446,6 @@ class Game {
 
   swapWithCharacter(newType) {
     this.characterSystem.swapWithCharacter(newType);
-  }
-
-  markRandomBushShaking() {
-    if (!this.currentRoom || !this.currentRoom.backgroundObjects) return;
-
-    // Find spawn object: bush → tree → rock (fallback chain)
-    let selectedObject = null;
-    const bushes = this.currentRoom.backgroundObjects.filter(obj => !obj.destroyed && (obj.char === '%' || obj.char === '&'));
-    const trees = this.currentRoom.backgroundObjects.filter(obj => !obj.destroyed && obj.char === 'Y');
-    const rocks = this.currentRoom.backgroundObjects.filter(obj => !obj.destroyed && obj.char === '0');
-
-    if (bushes.length > 0) {
-      selectedObject = bushes[Math.floor(Math.random() * bushes.length)];
-    } else if (trees.length > 0) {
-      selectedObject = trees[Math.floor(Math.random() * trees.length)];
-    } else if (rocks.length > 0) {
-      selectedObject = rocks[Math.floor(Math.random() * rocks.length)];
-    }
-
-    if (!selectedObject) {
-        if (this.zoneSystem.leshyChaseActive) {
-        console.warn('[Leshy Chase] No spawn objects found, chase ended');
-        this.zoneSystem.resetLeshyChase();
-      }
-      return;
-    }
-
-    // Mark as shaking Leshy bush
-    selectedObject.isShaking = true;
-    selectedObject.leshyBush = true;
-
   }
 
   checkCaptiveInteraction() {
@@ -3006,6 +2978,8 @@ class Game {
     this.aquiferSystem.update(deltaTime); // Quagmire Whirlpool + Aquifer Current ride
     this.sinkholeSystem.update(deltaTime); // Sinkhole cave: river-exit → cross-zone transition
     this.alchemySystem.update(deltaTime);
+    // rest-parity: absent because the Dragon Forge exists only in the green boss room
+    this.forgeSystem.update(); // Dragon Forge: walking away hands slotted items back
     this.fireplaceSystem.update(); // Torch in a quick slot auto-lights an unlit fireplace on approach
 
     // Update polymorph system (tongue attacks, cure Rusalka contact, Lake room spawn)
@@ -3620,6 +3594,7 @@ class Game {
       // maze-object hit) via the InteriorManager registry (ADR-0001).
       if (this.interiorManager.handleSpacePress()) return;
       if (this.pressSystem?.handleSpacePress()) return;
+      if (this.forgeSystem.handleSpacePress()) return;
       if (this.fireplaceSystem?.handleSpacePress()) return;
       if (this.alchemySystem?.handleSpacePress()) return;
       if (this.wellSystem?.handleSpacePress()) return;

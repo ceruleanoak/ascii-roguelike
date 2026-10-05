@@ -1026,6 +1026,10 @@ export class BossSystem {
       this.game.lootSystem.spawnIngredientDrop('s', this.dragon.position.x, this.dragon.position.y, angle, this.dragon);
     }
 
+    // The Dragon Forge rises where the dragon stood — the only place its
+    // Scales can be worked (ForgeSystem).
+    this.game.forgeSystem.placeForge(this.game.currentRoom);
+
     // Announce
     this.game.menuSystem.showPickupMessage('The Goo Dragon is defeated!', '#22ff66', 3.0);
     this._grantBossReward();

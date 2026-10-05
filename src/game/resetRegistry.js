@@ -502,6 +502,19 @@ export const RESET_REGISTRY = [
     why: 'Clear crafting slots and wipe localStorage save.',
   },
   {
+    path: 'forgeSystem.reset',
+    scope: 'room',
+    call: (game) => game.forgeSystem.reset(),
+    covers: [],
+    why: 'Dragon Forge slots belong to the boss room; anything a death or warp abandoned mid-craft is discarded, not returned.',
+  },
+  {
+    path: 'forgeSystem.resetDiscoveries',
+    scope: 'run',
+    call: (game) => game.forgeSystem.resetDiscoveries(),
+    why: 'Forget which pairs were identified at the Dragon Forge.',
+  },
+  {
     path: 'persistenceSystem.clearSave',
     scope: 'run',
     call: (game) => game.persistenceSystem.clearSave(),

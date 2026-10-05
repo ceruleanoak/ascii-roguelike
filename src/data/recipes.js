@@ -359,6 +359,17 @@ export function findRecipe(leftChar, rightChar) {
   return recipe;
 }
 
+// Forge Recipes — Scale only works in fire. Any recipe with Scale as an input
+// crafts at the Dragon Forge (ForgeSystem, green boss room after the Goo
+// Dragon falls) and never at the REST station, which shows an ember tell
+// instead. Derived from the input rather than a per-recipe field, so a new
+// Scale recipe is gated without anyone remembering to tag it.
+export const FORGE_INGREDIENT = 's';
+
+export function requiresForge(recipe) {
+  return !!recipe && (recipe.left === FORGE_INGREDIENT || recipe.right === FORGE_INGREDIENT);
+}
+
 export function getRecipeResult(leftChar, rightChar) {
   const recipe = findRecipe(leftChar, rightChar);
   return recipe ? recipe.result : null;

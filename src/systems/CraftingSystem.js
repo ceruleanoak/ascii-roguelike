@@ -1,4 +1,4 @@
-import { findRecipe, findCursedRecipe } from '../data/recipes.js';
+import { findRecipe, findCursedRecipe, requiresForge } from '../data/recipes.js';
 import { Item } from '../entities/Item.js';
 import { WEAPON_TIERS, ITEMS, isIngredient } from '../data/items.js';
 import { POTION_STARTER_MODIFIERS, applyPotionModifierColor } from '../data/alchemy.js';
@@ -24,12 +24,20 @@ export function getNextTierPool(char) {
 export class CraftingSystem {
   // `game` is read only for game.cursedRun (cursed recipes); optional so
   // headless harnesses can still build one bare.
-  constructor(game = null) {
+  // `forge: true` makes this the Dragon Forge's station (ForgeSystem): it
+  // crafts Forge Recipes only — no tier-up cycles, no cursed recipes. The
+  // default REST station refuses Forge Recipes and raises the ember tell.
+  constructor(game = null, { forge = false } = {}) {
     this.game = game;
+    this.forge = forge;
     this.leftSlot = null;
     this.rightSlot = null;
     this.centerSlot = null;
     this.cycleState = null; // { pool, predeterminedResult, cyclingStartTime }
+    // REST only: the pair is a Forge Recipe. Drawn as a dim, unclaimable ember
+    // in the centre slot — the pair means something, just not here. Not
+    // centre content: claiming does nothing.
+    this.emberTell = false;
     this.discoveredPairs = new Map(); // ingredientChar → Set<ingredientChar>
     this.failedPairs = new Map();    // ingredientChar → Set<ingredientChar>
   }
@@ -72,20 +80,38 @@ export class CraftingSystem {
 
   updateCrafting() {
     this.centerSlot = null;
+    this.emberTell = false;
     this._cancelCycling();
 
     if (!this.leftSlot || !this.rightSlot) return;
 
+    // The Dragon Forge crafts Forge Recipes and nothing else. Any other pair
+    // simply leaves the centre empty — recorded nowhere, since it may well
+    // be a real recipe that belongs at the REST station.
+    if (this.forge) {
+      const recipe = findRecipe(this.leftSlot, this.rightSlot);
+      if (requiresForge(recipe)) {
+        this.centerSlot = recipe.result;
+        this._recordPair(this.discoveredPairs);
+      }
+      return;
+    }
+
     // Normal recipe takes priority
     const recipe = findRecipe(this.leftSlot, this.rightSlot)
       ?? (this.game?.cursedRun ? findCursedRecipe(this.leftSlot, this.rightSlot) : null);
+
+    // A Forge Recipe at the REST station: ember tell, neither discovered nor
+    // failed — the pair is right, the station is wrong.
+    if (requiresForge(recipe)) {
+      this.emberTell = true;
+      return;
+    }
+
     if (recipe) {
       this.centerSlot = recipe.result;
       // Flag both ingredients as identified partners
-      if (!this.discoveredPairs.has(this.leftSlot)) this.discoveredPairs.set(this.leftSlot, new Set());
-      if (!this.discoveredPairs.has(this.rightSlot)) this.discoveredPairs.set(this.rightSlot, new Set());
-      this.discoveredPairs.get(this.leftSlot).add(this.rightSlot);
-      this.discoveredPairs.get(this.rightSlot).add(this.leftSlot);
+      this._recordPair(this.discoveredPairs);
       return;
     }
 
@@ -103,10 +129,15 @@ export class CraftingSystem {
     }
 
     // Both slots filled, no recipe, no cycle → failed pair
-    if (!this.failedPairs.has(this.leftSlot)) this.failedPairs.set(this.leftSlot, new Set());
-    if (!this.failedPairs.has(this.rightSlot)) this.failedPairs.set(this.rightSlot, new Set());
-    this.failedPairs.get(this.leftSlot).add(this.rightSlot);
-    this.failedPairs.get(this.rightSlot).add(this.leftSlot);
+    this._recordPair(this.failedPairs);
+  }
+
+  /** Record the current left/right pair as mutual partners in `pairs`. */
+  _recordPair(pairs) {
+    if (!pairs.has(this.leftSlot)) pairs.set(this.leftSlot, new Set());
+    if (!pairs.has(this.rightSlot)) pairs.set(this.rightSlot, new Set());
+    pairs.get(this.leftSlot).add(this.rightSlot);
+    pairs.get(this.rightSlot).add(this.leftSlot);
   }
 
   getIdentifiedPartners(char) {
@@ -194,7 +225,8 @@ export class CraftingSystem {
       leftSlot: this.leftSlot,
       rightSlot: this.rightSlot,
       centerSlot: this.centerSlot,
-      cycleState: this.cycleState
+      cycleState: this.cycleState,
+      emberTell: this.emberTell
     };
   }
 
@@ -202,6 +234,7 @@ export class CraftingSystem {
     this.leftSlot = state.leftSlot || null;
     this.rightSlot = state.rightSlot || null;
     this.centerSlot = state.centerSlot || null;
+    this.emberTell = false;
     this.cycleState = null; // cycling is transient, never serialized
   }
 }
