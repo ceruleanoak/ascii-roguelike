@@ -147,7 +147,11 @@ export class PhysicsSystem {
         const overlap = (MIN_DIST - dist) / MIN_DIST;
         const force = FORCE * overlap;
         this.applyImpulse(player, dx, dy, force);
-        this.applyImpulse(enemy, -dx, -dy, force);
+        // Fully knockback-immune enemies (the Training Dummy on its stick) are
+        // rooted: the player slides off them instead of shoving them around.
+        if ((enemy.knockbackResistance ?? 0) < 1) {
+          this.applyImpulse(enemy, -dx, -dy, force);
+        }
       }
     }
   }
