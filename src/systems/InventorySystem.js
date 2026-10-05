@@ -1032,6 +1032,13 @@ export class InventorySystem {
     return removeItemFromChestArray(this.itemChest, item);
   }
 
+  // Removes one unit of `item` from the deferred deposits (not yet flushed to
+  // itemChest — see deferToChest); same contract as retrieveFromChest. Lets
+  // the Settlement shop's PAWN list sell a weapon swapped out this trip.
+  retrieveFromPendingChest(item) {
+    return removeItemFromChestArray(this.pendingChestDeposits, item);
+  }
+
   getChestContents() {
     return this.itemChest.map((item) => ({ action: 'retrieve', item, label: chestEntryLabel(item) }));
   }

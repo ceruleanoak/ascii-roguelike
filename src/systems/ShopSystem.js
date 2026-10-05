@@ -408,6 +408,10 @@ export class ShopSystem {
     });
 
     for (const item of inv.getItemChest()) entries.push({ item, source: 'chest' });
+    // Weapons displaced from a quick slot this trip wait in the deferred
+    // deposit buffer until the next safe REST — they're the player's to sell
+    // now, not only after a trip home.
+    for (const item of inv.pendingChestDeposits)entries.push({ item, source: 'pendingChest' });
     for (const item of inv.getArmorInventory()) entries.push({ item, source: 'armor' });
     for (const item of inv.getConsumableInventory()) entries.push({ item, source: 'consumable' });
 
@@ -454,6 +458,9 @@ export class ShopSystem {
 
     if (entry.source === 'chest') {
       for (let i = 0; i < units; i++) inv.retrieveFromChest(entry.item);
+      inv.addCoin(entry.value * units);
+    } else if (entry.source === 'pendingChest') {
+      for (let i = 0; i < units; i++) inv.retrieveFromPendingChest(entry.item);
       inv.addCoin(entry.value * units);
     } else if (entry.source === 'armor' || entry.source === 'consumable') {
       if (entry.source === 'armor') inv.removeFromArmorInventory(entry.item);

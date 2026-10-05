@@ -107,7 +107,8 @@ function computeCoinPrice(T, role) {
 // ============================================================================
 
 // Flat per-tier coin payout for the Shopkeeper's Pawn side (selling FROM the
-// player's own itemChest/armorInventory/consumableInventory — see ShopSystem's
+// player's own loadout and storage — quick slots, worn armor, itemChest plus
+// its not-yet-flushed deferred deposits, armorInventory, consumableInventory — see ShopSystem's
 // 'pawn' mode), as opposed to the WARES buy side above. One flat scale
 // regardless of role: a payout doesn't need the WARES side's per-role skew,
 // just "worth more if rarer."
