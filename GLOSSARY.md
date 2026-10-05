@@ -1209,7 +1209,8 @@ identity, not standard programming terms.
 ### Three Room
 - **Definition:** The source-head of the game — a Neutral Room holding one carved object with
   three slots in it and a shut door to the north. Found only by travelling north three times
-  in a row, or through a Gray zone `'3'` room. What is placed in the slots decides how the run
+  in a row (a zone boss room's north never counts, and it breaks the streak), or through a
+  Gray zone `'3'` room. What is placed in the slots decides how the run
   can end.
 - **In code:** `threeRoom` script in `src/data/neutralRooms.js`; `room.isThreeRoom`;
   `ThreeRoomSystem` owns the offerings, the music and the door; `ThreeRoomRenderer` draws the

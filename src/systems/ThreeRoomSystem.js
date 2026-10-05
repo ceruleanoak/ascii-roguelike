@@ -131,8 +131,17 @@ export class ThreeRoomSystem {
    * A Cursed run is never answered. The streak still counts — insisting north
    * is not what the curse takes away — but the world has stopped replying, so
    * the third north is just another room.
+   *
+   * A zone boss room's north is never answered either: it is the way out of a
+   * finished zone (often forced gray), and the pre-boss gate's forced north
+   * into the boss room would otherwise line it up as the third. Leaving the
+   * boss room breaks the streak.
    */
   recordNorthTraversal(game) {
+    if (game?.currentRoom?.isZoneBossRoom) {
+      this.breakStreak();
+      return false;
+    }
     this._northStreak += 1;
     if (game?.cursedRun) return false;
     if (this._northStreak >= NORTH_STREAK_TRIGGER) {
