@@ -263,6 +263,11 @@ export class HutInteriorOverlay {
       );
     }
 
+    // ── 8b. Consumable windups (thrown bombs/potions in flight) ─────────────────
+    // ExploreRenderer skips this pass while the player is inside; windups are
+    // stamped from the player position, so they are already in interior coords.
+    this.renderController.exploreRenderer.drawConsumableWindups(game);
+
     // ── 9. Player projectiles (interior coords) ────────────────────────────────
     this.renderController.exploreRenderer.drawProjectiles(game, true);
 
