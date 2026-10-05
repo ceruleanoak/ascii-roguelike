@@ -12,7 +12,7 @@ import { getDungeonDesign } from '../data/dungeonDesigns.js';
 import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
-import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placeWhirlpool, generateSettlementRoom as generateSettlementRoomImpl, buildForcedRiverParams, generateYellowWaterTemplate, cellularCaveGrid, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, spawnGuaranteedItems, offerL1Weapon, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl } from './roomFeatures.js';
+import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, isCellProtected, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placeWhirlpool, generateSettlementRoom as generateSettlementRoomImpl, buildForcedRiverParams, generateYellowWaterTemplate, cellularCaveGrid, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, spawnGuaranteedItems, offerL1Weapon, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl } from './roomFeatures.js';
 
 // Zone-boss arena → letter template key. Boss rooms are entered without a
 // letter (cheat warp) or with an arbitrary one (normal progression), so we
@@ -3596,7 +3596,17 @@ export class RoomGenerator {
     for (let i = 0; i < enemyCount; i++) {
       const enemyChar = getZoneRandomEnemy(this.currentDepth, room.zone);
       if (!enemyChar) continue;
-      const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects);
+      // The cells inside the ring stay walkable (see above), so
+      // getRandomPosition's collision check alone can drop an enemy inside the
+      // well. Re-roll any position that lands in the protected ring footprint.
+      let pos = null;
+      for (let tries = 0; tries < 10; tries++) {
+        const candidate = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects);
+        if (!candidate) break;
+        if (isCellProtected(room, Math.floor(candidate.x / CS), Math.floor(candidate.y / CS))) continue;
+        pos = candidate;
+        break;
+      }
       if (!pos) continue;
       const enemy = new Enemy(enemyChar, pos.x, pos.y, this.currentDepth);
       enemy.setCollisionMap(room.collisionMap);
