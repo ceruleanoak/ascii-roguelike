@@ -132,7 +132,9 @@ export const ENEMIES = {
     // Steals coin instead of biting whenever the player is carrying any (see
     // ThiefMechanic) — bite is untouched otherwise. Taking damage OR a
     // successful grab permanently flips the rat to pure flight.
-    thiefMechanic: { enabled: true }
+    thiefMechanic: { enabled: true },
+    // Walks to a dropped loaf and turns into a tamed rat (CompanionSystem).
+    tameableByBread: true
   },
 
   'P': {
@@ -164,7 +166,8 @@ export const ENEMIES = {
     tier: 'normal',
     onHit: 'poison',
     poisonDuration: 4.0,
-    thiefMechanic: { enabled: true }
+    thiefMechanic: { enabled: true },
+    tameableByBread: true
   },
 
   '3': {

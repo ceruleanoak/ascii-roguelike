@@ -76,7 +76,7 @@ export class CompanionSystem {
         let nearest = null;
         let nearestDistSq = Infinity;
         for (const r of enemies) {
-          if (r.char !== 'r') continue;
+          if (!r.data?.tameableByBread) continue;
           if (r.hp <= 0) continue;
           if (claimedRats.has(r)) continue;
           const dx = r.position.x - loaf.position.x;
