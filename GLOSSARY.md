@@ -776,11 +776,14 @@ identity, not standard programming terms.
 - **Definition:** Low ground ringed by inward Slopes. Projectiles in flight pass over anyone
   standing in a Pit, so a Pit is cover: drop in to let a volley pass, then step out to shoot
   back. The cover works both ways, so an enemy in a Pit is also safe from the player's shots.
-  It does not apply when shooter and target stand in the same Pit, and melee always reaches
-  into one. The cyan Ascent has three; the Sniper fight is meant to reuse them as bunkers.
+  It does not apply to a shot fired from inside the same Pit as its target, and melee always
+  reaches into one. A shot's height is fixed when it is fired: moving after the trigger does
+  not change what it sails over. The cyan Ascent has three; the Sniper fight is meant to
+  reuse them as bunkers.
 - **In code:** `room.pits = [{ col, row, radius }]`, stamped by `roomFeatures.stampPit()`.
   Membership and the pass-over rule live in `src/systems/pits.js` (`pitAt`, `pitOf`,
-  `projectileSailsOver`), which `CombatSystem` consults in both projectile-hit loops.
+  `tagLaunchPit`, `projectileSailsOver`). Every launch site stamps `proj.launchPit`;
+  `CombatSystem` consults the rule in both projectile-hit loops.
 - **Not:** a Sinkhole or any hole you fall into. A Pit is walkable floor; it is only lower.
 
 ### Dungeon Boss

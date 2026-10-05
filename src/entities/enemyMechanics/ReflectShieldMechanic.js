@@ -2,6 +2,8 @@
 // shieldActive=true, projectiles bounce (handled in CombatSystem). Starts
 // active so the imp spawns guarded.
 
+import { tagLaunchPit } from '../../systems/pits.js';
+
 export const ReflectShieldMechanic = {
   isEnabled(enemy) {
     return enemy.data.reflectShield?.enabled === true;
@@ -51,12 +53,14 @@ export const ReflectShieldMechanic = {
     // case: a live enemy projectile aimed at the player. Tagging it made the
     // whole shield inert — the arrow was eaten, "REFLECT" popped, and the
     // return shot passed straight through the player.
-    combatSystem.enemyProjectiles.push({
+    // Re-launched from the shield, so it flies at the enemy's height, not
+    // the height the player's shot was fired from (pits.js).
+    combatSystem.enemyProjectiles.push(tagLaunchPit(combatSystem.game?.activeRoom, {
       ...proj,
       velocity: { vx: (rdx / rdist) * spd, vy: (rdy / rdist) * spd },
       damage: reflectedDmg,
       owner: enemy
-    });
+    }, enemy));
     combatSystem.createDamageNumber('REFLECT', enemy.position.x, enemy.position.y, '#ccddff');
     return true;
   },

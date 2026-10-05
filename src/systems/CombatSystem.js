@@ -23,7 +23,7 @@ import { TongueAttackSystem } from './TongueAttackSystem.js';
 import { applyExtraOnHitEffects, applyOnHitStatusEffect } from './ExtraOnHitEffects.js';
 import { applyMeleeStatusDamageBonus, getMeleeStatusBonusIndicator } from './MeleeStatusBonuses.js';
 import { applyKeenAim } from './KeenAim.js';
-import { projectileSailsOver } from './pits.js';
+import { projectileSailsOver, tagLaunchPit } from './pits.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
 // room — keeps cross-room sniping in check while still feeling powerful.
@@ -100,6 +100,8 @@ export class CombatSystem {
       const pending = this.pendingEnemyProjectiles[i];
       pending.delay -= deltaTime;
       if (pending.delay <= 0) {
+        // Launched now, so its height is fixed now (pits.js)
+        tagLaunchPit(this.game?.activeRoom, pending, pending.owner);
         this.enemyProjectiles.push(pending);
         this.pendingEnemyProjectiles.splice(i, 1);
       }
@@ -548,7 +550,7 @@ export class CombatSystem {
         }
 
         // An enemy down in a Pit is under the shot (pits.js)
-        if (projectileSailsOver(this.game?.activeRoom, enemy, this.game?.player)) continue;
+        if (projectileSailsOver(this.game?.activeRoom, enemy, proj)) continue;
 
         if (this.checkProjectileCollision(proj, enemy)) {
           // Missed shot — show MISS once per enemy and pass through. Bullet keeps traveling
@@ -1312,7 +1314,7 @@ export class CombatSystem {
       if (proj.reflected) continue;
 
       // A player down in a Pit is under the shot (pits.js)
-      if (projectileSailsOver(this.game?.activeRoom, player, proj.owner)) continue;
+      if (projectileSailsOver(this.game?.activeRoom, player, proj)) continue;
 
       // Check collision with player
       if (this.checkProjectileCollisionWithPlayer(proj, player)) {
@@ -1643,6 +1645,8 @@ export class CombatSystem {
         proj.missed = Math.random() > attackData.accuracy;
       }
       if (proj.keenAim) applyKeenAim(proj, enemies);
+      // Untagged shots in this list are the player's own
+      tagLaunchPit(this.game?.activeRoom, proj, attackData.owner ?? this.game?.player);
       this.projectiles.push(proj);
     } else if (attackData.type === 'melee') {
       // Check if this is a delayed attack (for sequential animations like flail sweep)
@@ -1815,8 +1819,9 @@ export class CombatSystem {
       plane: attackData.shooterPlane !== undefined ? attackData.shooterPlane : 0
     };
     if (attackData.delay && attackData.delay > 0) {
-      this.pendingEnemyProjectiles.push(proj);
+      this.pendingEnemyProjectiles.push(proj); // Pit-tagged on release (update)
     } else {
+      tagLaunchPit(this.game?.activeRoom, proj, proj.owner);
       this.enemyProjectiles.push(proj);
     }
   }
@@ -1916,6 +1921,7 @@ export class CombatSystem {
         pierce: originalProj.pierce,
         pierceHitEnemies: new Set(),
         lifesteal: originalProj.lifesteal,
+        launchPit: originalProj.launchPit, // splits fly at the parent shot's height
         // Split-specific overrides
         type: originalProj.type,
         char: originalProj.char,
