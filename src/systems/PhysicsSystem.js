@@ -399,6 +399,11 @@ export class PhysicsSystem {
           entityBox.x < objBox.x + objBox.width && entityBox.x + entityBox.width > objBox.x &&
           entityBox.y < objBox.y + objBox.height && entityBox.y + entityBox.height > objBox.y;
 
+        // Deep snow compacts once the entity wading it steps off, so the
+        // compacted trail forms behind it and the tile underfoot keeps its
+        // heavy slow (see the deep-snow check below).
+        if (!overlapping && obj.compactor === entity) this._compactSnow(obj, room);
+
         if (overlapping) {
           // Check for slope tiles (Ascent room — push entity in slope direction)
           if (obj.slope) {
@@ -489,23 +494,18 @@ export class PhysicsSystem {
             }
             break;
           }
-          // Check for deep snow (full-block terrain — player slowed, compacts on contact)
+          // Check for deep snow (full-block terrain — slows while waded, compacts behind)
           if (obj.char === '█' && obj._variantData?.environmental && obj._variantData?.compactColor) {
             if (obj.compacted) {
               inCompactedSnow = true;
             } else {
               inDeepSnow = true;
-              // Compaction: player or large enemies (mass > 1) compact snow on contact
-              const entityMass = entity.mass ?? 1;
-              if (entityMass > 1 || entity.isPlayer) {
-                obj.compacted = true;
-                obj.color = obj._variantData.compactColor;
-                // The snow tile is baked into the cached background layer, which
-                // only repaints when dirty — without this the compacted trail
-                // stays invisible until some unrelated event forces a repaint.
-                // PhysicsSystem holds no renderer reference, so the request rides
-                // the room and ExploreRenderer consumes it.
-                if (room) room.backgroundRepaint = true;
+              // Compaction: the player or large enemies (mass > 1) mark the tile
+              // as theirs; it compacts when they step off (above). A Vault switch
+              // tile compacts on contact — the press is the switch.
+              if ((entity.mass ?? 1) > 1 || entity.compactsSnow) {
+                if (obj.vaultSwitch) this._compactSnow(obj, room);
+                else obj.compactor = entity;
               }
             }
           }
@@ -800,6 +800,19 @@ export class PhysicsSystem {
     }
 
     return { inLiquid, liquidState, electricCurrent, damagingLiquid, healingLiquid, inDeepWater: inDeepWaterTile };
+  }
+
+  // Pack a deep-snow tile down to compacted snow (light slow, compactColor).
+  _compactSnow(obj, room) {
+    obj.compacted = true;
+    obj.compactor = null;
+    obj.color = obj._variantData.compactColor;
+    // The snow tile is baked into the cached background layer, which only
+    // repaints when dirty — without this the compacted trail stays invisible
+    // until some unrelated event forces a repaint. PhysicsSystem holds no
+    // renderer reference, so the request rides the room and ExploreRenderer
+    // consumes it.
+    if (room) room.backgroundRepaint = true;
   }
 
   checkCollision(entity, newX, newY, backgroundObjects = [], room = null) {

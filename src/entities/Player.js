@@ -101,6 +101,7 @@ export class Player {
 
     // Physics flags
     this.mass = 1; // Affects knockback received. Armor/character type may modify this.
+    this.compactsSnow = true; // Wading deep snow leaves a compacted trail (PhysicsSystem), at any mass
     this.hasCollision = true;
     this.boundToGrid = true;
     this.collisionMap = null; // Set by game state

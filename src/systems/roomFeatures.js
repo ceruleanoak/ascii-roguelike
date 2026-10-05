@@ -1291,6 +1291,7 @@ export function buildVaultUnlockExtras(zoneType, { centerCol, minCol, maxCol, ma
       'snow_deep', switchCol * GRID.CELL_SIZE, switchRow * GRID.CELL_SIZE
     );
     switchObject.compacted = false;
+    switchObject.compactor = null;
     switchObject.vaultSwitch = true;
     extraLoot.push(switchObject);
   }
@@ -2128,6 +2129,7 @@ export function generateSnowFields(gen, room) {
           y * GRID.CELL_SIZE
         );
         snow.compacted = false;
+        snow.compactor = null; // entity wading it; compacts when it steps off (PhysicsSystem)
         room.backgroundObjects.push(snow);
       }
     }
