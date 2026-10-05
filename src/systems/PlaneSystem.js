@@ -97,6 +97,26 @@ export function filterObjectsByPlane(objects, observer) {
 }
 
 /**
+ * Should a surface-room background object render for the player? Render-side
+ * visibility, separate from objectOnPlane (interaction): a tunnel's plane 1
+ * runs under an open surface, so most surface objects stay visible from it.
+ *   - data.alwaysRender: always visible (e.g. tunnel entrances)
+ *   - surfaceOnly: hidden while the player is down in a cave
+ *     (`room.underground` — U rooms, Sinkhole caves). A tunnel room has no
+ *     `underground`, so its grass stays visible like every other surface
+ *     object there.
+ *   - data.renderOnlyOnPlane: visible only from that plane (e.g. tunnel walls)
+ *   - otherwise: visible from every plane
+ */
+export function objectVisibleToPlayer(obj, player, room) {
+  if (obj.data?.alwaysRender) return true;
+  const playerPlane = player.plane ?? PLANE_SURFACE;
+  if (obj.surfaceOnly && room?.underground) return playerPlane === PLANE_SURFACE;
+  if (obj.data?.renderOnlyOnPlane !== undefined) return playerPlane === obj.data.renderOnlyOnPlane;
+  return true;
+}
+
+/**
  * True when the player is inside a hut/dungeon/maze interior (a PiP overlay
  * layer, distinct from the surface/tunnel/submerged plane system above).
  * Canonical replacement for the scattered `player.inHut || player.inDungeon ||

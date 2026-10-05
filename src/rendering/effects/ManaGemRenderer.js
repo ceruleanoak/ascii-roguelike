@@ -15,7 +15,7 @@ const GEM_BASE = {
 export function drawManaGems(renderer, game) {
   for (const obj of game.backgroundObjects) {
     if (!obj.data?.manaGem || obj.destroyed) continue;
-    if (!renderer.shouldRenderBackgroundObject(obj, game.player)) continue;
+    if (!renderer.shouldRenderBackgroundObject(obj, game.player, game.currentRoom)) continue;
     const pulse = Math.sin(obj.pulseTimer * 3) * 0.3 + 0.7;
     const gemColor = obj.manaGemColor || obj.data.manaGemColor;
     const base = GEM_BASE[gemColor];

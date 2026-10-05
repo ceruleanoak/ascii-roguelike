@@ -43,7 +43,7 @@ import {
 } from '../effects/WeaponPreviewDraw.js';
 import { BossRenderer } from './BossRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
-import { isInteriorActive, inSamePlane } from '../../systems/PlaneSystem.js';
+import { isInteriorActive, inSamePlane, objectVisibleToPlayer } from '../../systems/PlaneSystem.js';
 import { drawVisionFogOverlay } from '../ui/torchLight.js';
 import { drawKnownSpellHints, drawWellCoinHint, drawDoorPrompts } from '../ui/ContextHints.js';
 import { drawManaGems } from '../effects/ManaGemRenderer.js';
@@ -241,7 +241,7 @@ export class ExploreRenderer {
       if (obj.charged) continue; // Yellow Ascent: charged metal blinks on the foreground
       if (!obj.currentAnimation && obj.char !== '~' && !isGrass && !isTunnelWall) {
         // Check plane-aware rendering (tunnel entrances, etc.)
-        if (!this.shouldRenderBackgroundObject(obj, game.player)) continue;
+        if (!this.shouldRenderBackgroundObject(obj, game.player, game.currentRoom)) continue;
 
         const x = obj.position.x + GRID.CELL_SIZE / 2;
         const y = obj.position.y + GRID.CELL_SIZE / 2;
@@ -445,7 +445,7 @@ export class ExploreRenderer {
     for (const obj of game.backgroundObjects) {
       if (obj.currentAnimation) {
         // Check plane-aware rendering
-        if (!this.shouldRenderBackgroundObject(obj, game.player)) continue;
+        if (!this.shouldRenderBackgroundObject(obj, game.player, game.currentRoom)) continue;
 
         const renderData = obj.getRenderPosition();
         const rx = renderData.x + GRID.CELL_SIZE / 2 + obj.animationOffset.x;
@@ -477,10 +477,10 @@ export class ExploreRenderer {
     }
 
     // Yellow Ascent: charged metal blinks each frame (skipped by the bg loop)
-    renderChargedObjects(this.renderer, game, (obj) => this.shouldRenderBackgroundObject(obj, game.player));
+    renderChargedObjects(this.renderer, game, (obj) => this.shouldRenderBackgroundObject(obj, game.player, game.currentRoom));
 
     // Glittering Rocks twinkle each frame (see drawGlitterSparkles).
-    drawGlitterSparkles(this.renderer, game, (obj) => this.shouldRenderBackgroundObject(obj, game.player));
+    drawGlitterSparkles(this.renderer, game, (obj) => this.shouldRenderBackgroundObject(obj, game.player, game.currentRoom));
 
     // Quagmire Whirlpool spins on the surface once the rounds clear.
     drawWhirlpool(this.renderer, game);
@@ -500,7 +500,7 @@ export class ExploreRenderer {
     for (const obj of game.backgroundObjects) {
       if (obj.char === '~' && !obj.currentAnimation && !obj.whirlpoolActive) {
         // Check plane-aware rendering
-        if (!this.shouldRenderBackgroundObject(obj, game.player)) continue;
+        if (!this.shouldRenderBackgroundObject(obj, game.player, game.currentRoom)) continue;
 
         const renderData = obj.getRenderPosition();
         this.renderer.drawEntity(
@@ -882,7 +882,7 @@ export class ExploreRenderer {
         if (obj.onFire) continue; // burning grass is drawn by the flicker pass below
         const isGrass = obj.char === '|' || obj.char === '\\' || obj.char === '/' || obj.char === ',';
         if (isGrass && !obj.currentAnimation && !obj.destroyed) {
-          if (!this.shouldRenderBackgroundObject(obj, game.player)) continue;
+          if (!this.shouldRenderBackgroundObject(obj, game.player, game.currentRoom)) continue;
 
           const offsetX = obj.grassRenderOffset ? obj.grassRenderOffset.x : 0;
           this.renderer.drawEntity(
@@ -1707,31 +1707,10 @@ export class ExploreRenderer {
     return true;
   }
 
-  /**
-   * Check if a background object should render based on plane and visibility flags
-   * - alwaysRender: Always visible (e.g., tunnel entrances)
-   * - renderOnlyOnPlane: Only visible when player is on specified plane (e.g., tunnel walls)
-   */
-  shouldRenderBackgroundObject(obj, player) {
-    // Always render objects with alwaysRender flag (tunnel entrances)
-    if (obj.data && obj.data.alwaysRender) {
-      return true;
-    }
-
-    // Surface-only obstacles: hide when player is underground
-    if (obj.surfaceOnly) {
-      const playerPlane = player.plane !== undefined ? player.plane : 0;
-      return playerPlane === 0;
-    }
-
-    // Check renderOnlyOnPlane flag (tunnel walls)
-    if (obj.data && obj.data.renderOnlyOnPlane !== undefined) {
-      const playerPlane = player.plane !== undefined ? player.plane : 0;
-      return playerPlane === obj.data.renderOnlyOnPlane;
-    }
-
-    // Default: render all objects
-    return true;
+  // Render visibility of a surface-room background object for the player's
+  // plane — the rule lives in PlaneSystem.objectVisibleToPlayer.
+  shouldRenderBackgroundObject(obj, player, room) {
+    return objectVisibleToPlayer(obj, player, room);
   }
 
   _renderBridgePanel(game) {
@@ -2100,7 +2079,7 @@ export class ExploreRenderer {
     const FIRE_COLORS = ['#ff4400', '#ff8800', '#ffaa00'];
     for (const obj of objects) {
       if (!obj.onFire || obj.destroyed || obj.isCampfire) continue;
-      if (!hutPlane && !this.shouldRenderBackgroundObject(obj, game.player)) continue;
+      if (!hutPlane && !this.shouldRenderBackgroundObject(obj, game.player, game.currentRoom)) continue;
       // Campfire-like cadence (~0.13s per swap), keyed off the object's own
       // fireTimer with a per-cell phase offset so a field doesn't blink in unison.
       const phase = Math.floor(obj.position.x / GRID.CELL_SIZE) * 7 +
