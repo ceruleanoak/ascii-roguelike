@@ -324,6 +324,14 @@ export class MazeSystem {
     game.player.position.y = game.mazeInterior.spawnPoint.y;
     game.player.inMaze = true;
     freezeSurfaceRoom(game);
+
+    // Bring the camp companion (if any) along, onto the maze's collision map —
+    // left behind it kept following the player's maze coordinates across the
+    // surface room and wedged itself inside the maze structure. Snapped onto
+    // the player's own cell (offset 0): one cell east of the entry corridor is
+    // the maze's outer wall.
+    game.campNPCSystem?.snapCompanionToPlayer?.(0);
+    if (game.companion) game.companion.collisionMap = game.mazeInterior.collisionMap;
     game.renderer.backgroundDirty = true;
 
     // Maze music override: the mono maze track fills both dual-layer slots
@@ -381,6 +389,14 @@ export class MazeSystem {
     game.player.hookedByMimic = null;
     game.player.hookedByWhip = null;
     thawSurfaceRoom(game);
+
+    // Bring the companion back outside onto the player's (known-walkable) exit
+    // cell and the surface collision map — the cell beside it may be the maze
+    // structure's own wall.
+    game.campNPCSystem?.snapCompanionToPlayer?.(0);
+    if (game.companion && game.currentRoom?.collisionMap) {
+      game.companion.collisionMap = game.currentRoom.collisionMap;
+    }
 
     // Drop maze-plane loot (abandoned on exit)
     game.ingredients = game.ingredients.filter(i => !i.mazePlane);

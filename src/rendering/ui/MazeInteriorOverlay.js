@@ -30,6 +30,7 @@ import { drawFairyKingOrbit } from '../effects/FairyKingOrbit.js';
  *   7. Player attacks (projectiles, melee, arrows, damage numbers)
  *   8. Particles
  *   9. Player
+ *   9b. Camp companion
  *  10. HUD: label  (absolute canvas coords)
  */
 
@@ -193,6 +194,11 @@ export class MazeInteriorOverlay {
     drawStatusPips(this.renderer, game.player);
     drawParryIndicator(this.renderer, game.player, game.player.parryMechanic);
     drawFairyKingOrbit(this.renderer, game);
+
+    // ── 9b. Camp companion (followed the player in; maze coords) ──────────
+    if (game.companion) {
+      game.companion.render(ctx, (gx, gy) => ({ x: gx * CS, y: gy * CS }));
+    }
 
     this.renderController.bowChargeIndicator.render(game);
     this.renderController.greenRangerIndicator.render(game);
