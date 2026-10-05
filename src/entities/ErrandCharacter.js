@@ -44,6 +44,16 @@ export class ErrandCharacter extends NeutralCharacter {
   update(deltaTime, game) {
     super.update(deltaTime);
 
+    // Show the live request, not the one this traveler was built with: a
+    // Settlement traveler is created at room generation and a hut traveler
+    // persists on its cached floor, so a trade made elsewhere would otherwise
+    // leave them asking for an item they no longer want.
+    const errand = game?.errandSystem?.activeErrand;
+    if (errand) {
+      this.requestedItem = errand.requestedItem;
+      this.stage = errand.stage;
+    }
+
     const playerPos = game?.player?.position;
     if (!playerPos) return;
 

@@ -8,7 +8,6 @@ import { ENEMIES, getZoneRandomEnemy, createBossEnemy, BOSS_ENCOUNTERS } from '.
 import { ZONES } from '../data/zones.js';
 import { ITEM_TYPES } from '../data/items.js';
 import { WeaponsMaster } from '../entities/WeaponsMaster.js';
-import { ErrandCharacter } from '../entities/ErrandCharacter.js';
 import { HOT_WATER_CHAR } from '../data/alchemy.js';
 import { PLANE_TUNNEL } from './PlaneSystem.js';
 import { hazardStep } from './ZoneSystem.js';
@@ -1637,23 +1636,20 @@ export function generateSettlementRoom(gen, room) {
   if (Math.random() < 0.40) {
     const errandSystem = gen.game?.errandSystem;
     if (errandSystem) {
-      if (!errandSystem.activeErrand) errandSystem._pickRequest(gen.game.player);
-      const errand = errandSystem.activeErrand;
-      if (errand) {
-        for (let attempt = 0; attempt < 40; attempt++) {
-          const centerCol = SETTLEMENT_CENTER_MIN + Math.floor(Math.random() * SETTLEMENT_CENTER_SPAN);
-          const centerRow = SETTLEMENT_CENTER_MIN + Math.floor(Math.random() * SETTLEMENT_CENTER_SPAN);
-          const candidate = { minCol: centerCol - 1, maxCol: centerCol + 1, minRow: centerRow - 1, maxRow: centerRow + 1 };
-          if (placedBounds.some(b => footprintsTooClose(candidate, b, SETTLEMENT_HUT_BUFFER))) continue;
-          room.settlementErrand = new ErrandCharacter(
-            centerCol * GRID.CELL_SIZE,
-            centerRow * GRID.CELL_SIZE,
-            errand.requestedItem,
-            errand.stage
-          );
-          placedBounds.push(candidate);
-          break;
-        }
+      for (let attempt = 0; attempt < 40; attempt++) {
+        const centerCol = SETTLEMENT_CENTER_MIN + Math.floor(Math.random() * SETTLEMENT_CENTER_SPAN);
+        const centerRow = SETTLEMENT_CENTER_MIN + Math.floor(Math.random() * SETTLEMENT_CENTER_SPAN);
+        const candidate = { minCol: centerCol - 1, maxCol: centerCol + 1, minRow: centerRow - 1, maxRow: centerRow + 1 };
+        if (placedBounds.some(b => footprintsTooClose(candidate, b, SETTLEMENT_HUT_BUFFER))) continue;
+        // After a betrayal, spawnRoomNeutralCharacters swaps it for the
+        // hostile enemy on entry (ErrandSystem.replaceBetrayedTravelers).
+        room.settlementErrand = errandSystem.createTraveler(
+          centerCol * GRID.CELL_SIZE,
+          centerRow * GRID.CELL_SIZE,
+          { seed: true, player: gen.game.player }
+        );
+        if (room.settlementErrand) placedBounds.push(candidate);
+        break;
       }
     }
   }
@@ -1686,8 +1682,14 @@ export function spawnRoomNeutralCharacters(game, room) {
 
   // Settlement errand traveler: roams the open ground rather than
   // requiring a dedicated hut (see generateSettlementRoom).
+  // After a betrayal it is swapped for the hostile enemy instead, once: the
+  // room keeps that enemy, so the friendly traveler is dropped for good.
   if (room.settlementErrand) {
     game.neutralCharacters.push(room.settlementErrand);
+    if (game.errandSystem.hostile) {
+      game.errandSystem.replaceBetrayedTravelers(game.neutralCharacters, room, game);
+      room.settlementErrand = null;
+    }
   }
 
   // Rare Red Zone caldera Weapons Master

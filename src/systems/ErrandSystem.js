@@ -15,13 +15,16 @@ import { applyZoneCombatModifiers } from '../data/zones.js';
 const STAGE_CONFIG = [
   {
     // Stage 0: rare ingredient for a solid tier-2 weapon or armor
-    requestPool: ['M', 't', 'e', 'F', 'k'],      // Metal, Teeth, Eye, Fire Essence, Silk (Scale is epic — not a fair ask)
+    // Metal, Teeth, Eye, Fire Essence, Silk, Ice, Slurry, Arrowhead, Axe head,
+    // Cloth, Moss (Scale is epic — not a fair ask)
+    requestPool: ['M', 't', 'e', 'F', 'k', 'i', '⚗', '△', '⊿', '▤', '❦'],
     rewardPool:  ['‡', 'ᛉ', '⟩', '⊤', 'X', '⛓', '𐤄', '𐤂'],
     isIngredient: true
   },
   {
-    // Stage 1: starter weapon for a strong mid-tier weapon or armor
-    requestPool: ['¬', '†', ')', '/', '↑'],       // tier-1 starters
+    // Stage 1: starter weapon (or a plain bottled consumable) for a strong
+    // mid-tier weapon or armor
+    requestPool: ['¬', '†', ')', '/', '↑', '◐'],  // tier-1 starters, Bottle of Mud
     rewardPool:  ['⌐', 'ᛁ', '↯', 'ᛞ', 'ᚺ', 'ᛟ', 'ᛏ', '✺', '𐤆'],
     isIngredient: false
   },
@@ -55,6 +58,12 @@ const STAGE_CONFIG = [
  *   8. Attacking the traveler (feature-inbox, Errand-only special case — not
  *      general NeutralCharacter attackability) permanently flips it hostile
  *      for the rest of the run: see checkAttackHit()/_becomeHostile().
+ *
+ * The same traveler also stands on Settlement ground and in 'neutral_npc'
+ * hut floors. Every site builds it through createTraveler(), and every
+ * interaction (SPACE trade, Artifact side trade, popup, walk-away close,
+ * attack) finds it in `interiorManager.activeNpcs()`, the player's current
+ * layer. That keeps the hut, Settlement, and E room behaving the same.
  */
 export class ErrandSystem {
   constructor() {
@@ -93,10 +102,58 @@ export class ErrandSystem {
    * @returns {ErrandCharacter|null}
    */
   spawnErrandCharacter(room) {
-    if (!this.activeErrand || this.hostile) return null;
-
     const { x, y } = this._findSafeSpawnPosition(room);
+    return this.createTraveler(x, y);
+  }
+
+  /**
+   * The one way a traveler is built, wherever it stands: E room, Settlement
+   * ground, or a hut floor. `seed` starts an errand when none is active
+   * (Settlement and hut travelers can be met before any E room is cleared).
+   * Built even after a betrayal: hostility is resolved when the player enters
+   * the layer (replaceBetrayedTravelers, or the E room branch of
+   * spawnRoomNeutralCharacters), so every site turns hostile the same way.
+   * The request shown is only a starting value:
+   * ErrandCharacter.update re-reads activeErrand every frame, because a
+   * Settlement traveler is built at room generation and can outlive a trade
+   * made somewhere else.
+   */
+  createTraveler(x, y, { seed = false, player = null } = {}) {
+    if (!this.activeErrand && seed) this._pickRequest(player);
+    if (!this.activeErrand) return null;
     return new ErrandCharacter(x, y, this.activeErrand.requestedItem, this.activeErrand.stage);
+  }
+
+  /**
+   * The traveler in `npcs` (pass `game.interiorManager.activeNpcs()`, the
+   * player's current layer) when the player is within `rangeScale` × its talk
+   * range, else null. Every SPACE, popup, and attack check goes through this,
+   * so a hut traveler and a surface traveler answer identically.
+   */
+  findTravelerInRange(player, npcs, rangeScale = 1) {
+    const traveler = npcs?.find(nc => nc instanceof ErrandCharacter);
+    if (!traveler || !player) return null;
+    const dist = Math.hypot(
+      player.position.x - traveler.position.x,
+      player.position.y - traveler.position.y
+    );
+    return dist <= traveler.getInteractionDistance() * rangeScale ? traveler : null;
+  }
+
+  /**
+   * Called when the player enters a layer that may hold a traveler built
+   * before the betrayal (a cached hut floor, a pre-generated Settlement).
+   * Once hostile, each such traveler is swapped for the hostile enemy where
+   * it stood, matching what an E room spawns on re-entry.
+   */
+  replaceBetrayedTravelers(npcs, room, game) {
+    if (!this.hostile || !npcs) return;
+    for (let i = npcs.length - 1; i >= 0; i--) {
+      if (!(npcs[i] instanceof ErrandCharacter)) continue;
+      const { x, y } = npcs[i].position;
+      npcs.splice(i, 1);
+      this.spawnHostileEnemy(room, game, { x, y });
+    }
   }
 
   /**
@@ -158,33 +215,79 @@ export class ErrandSystem {
   }
 
   /**
-   * Non-mutating eligibility check shared by tryOpenMenu() and main.js's
-   * walk-away auto-close — does the player currently hold (or carry, for the
-   * ingredient stage) the active errand's requested item, within range?
-   * Mirrors checkGive()'s own lookup but doesn't consume anything; keep the
-   * two in sync if the request/give rules change.
+   * Non-mutating eligibility check for tryOpenMenu(): does the player
+   * currently hold (or carry, for the ingredient stage) the active errand's
+   * requested item, within range? Shares _findCarriedRequest() with
+   * checkGive(), so the two can't drift.
    */
   canGive(player, neutralCharacters, inventorySystem) {
     if (!this.activeErrand) return false;
-    const errandChar = neutralCharacters?.find(nc => nc instanceof ErrandCharacter);
-    if (!errandChar) return false;
+    if (!this.findTravelerInRange(player, neutralCharacters)) return false;
+    return !!this._findCarriedRequest(player, inventorySystem);
+  }
 
-    const dist = Math.hypot(
-      player.position.x - errandChar.position.x,
-      player.position.y - errandChar.position.y
-    );
-    if (dist > errandChar.getInteractionDistance()) return false;
-
-    const stageConfig = STAGE_CONFIG[this.activeErrand.stage];
+  /**
+   * Where the requested item sits on the player, as a `remove()` that hands
+   * one over, or null when they don't carry it. Stage 0 spends from the
+   * ingredient pile. Item stages search only what the player carries (quick
+   * slots, worn armor, carried armor spares, equipped and spare
+   * consumables), never the REST chest, since the traveler is met out in
+   * the world. A stacked consumable gives up one unit, not the stack.
+   */
+  _findCarriedRequest(player, inv) {
     const requestedChar = this.activeErrand.requestedItem;
 
-    if (stageConfig.isIngredient) {
-      return !!inventorySystem?.hasIngredient(requestedChar);
+    if (STAGE_CONFIG[this.activeErrand.stage].isIngredient) {
+      if (!inv?.hasIngredient(requestedChar)) return null;
+      return { remove: () => inv.removeIngredient(requestedChar) };
     }
-    if (player.quickSlots?.some(slot => slot?.char === requestedChar)) return true;
-    if (inventorySystem?.equippedArmor?.char === requestedChar) return true;
-    if (inventorySystem?.armorInventory?.some(a => a.char === requestedChar)) return true;
-    return false;
+
+    const slotIdx = player.quickSlots?.findIndex(slot => slot?.char === requestedChar) ?? -1;
+    if (slotIdx !== -1) {
+      return {
+        remove: () => {
+          player.quickSlots[slotIdx] = null;
+          if (slotIdx === player.activeSlotIndex) {
+            const nextFilled = player.quickSlots.findIndex(
+              (slot, idx) => idx !== player.activeSlotIndex && slot !== null
+            );
+            if (nextFilled !== -1) player.activeSlotIndex = nextFilled;
+          }
+          return true;
+        }
+      };
+    }
+    if (!inv) return null;
+
+    if (inv.equippedArmor?.char === requestedChar) {
+      // removeCarriedItem re-projects equipment, so the worn armor's defense
+      // leaves with it (same path the Shopkeeper's Pawn sale uses).
+      return { remove: () => inv.removeCarriedItem('equippedArmor', -1, player) };
+    }
+    const spareArmor = inv.armorInventory?.find(a => a.char === requestedChar);
+    if (spareArmor) return { remove: () => inv.removeFromArmorInventory(spareArmor) };
+
+    const takeOneFromStack = (item) => {
+      if ((item.count || 1) <= 1) return false;
+      item.count -= 1;
+      return true;
+    };
+    // Spare consumables first, so handing one over doesn't strip the armed slot
+    // while a spare is in the pack (same preference as itemCostDispatch).
+    const spareConsumable = inv.consumableInventory?.find(c => c.char === requestedChar);
+    if (spareConsumable) {
+      return {
+        remove: () => takeOneFromStack(spareConsumable) || inv.removeFromConsumableInventory(spareConsumable)
+      };
+    }
+    const consumableSlot = inv.equippedConsumables?.findIndex(c => c?.char === requestedChar) ?? -1;
+    if (consumableSlot !== -1) {
+      const equipped = inv.equippedConsumables[consumableSlot];
+      return {
+        remove: () => takeOneFromStack(equipped) || inv.removeCarriedItem('equippedConsumable', consumableSlot, player)
+      };
+    }
+    return null;
   }
 
   /**
@@ -247,13 +350,8 @@ export class ErrandSystem {
 
   /** True once the player has wandered far enough that the open confirm popup should auto-close. */
   isOutOfRange(player, neutralCharacters) {
-    const errandChar = neutralCharacters?.find(nc => nc instanceof ErrandCharacter);
-    if (!errandChar || !player) return true;
-    const dist = Math.hypot(
-      player.position.x - errandChar.position.x,
-      player.position.y - errandChar.position.y
-    );
-    return dist > errandChar.getInteractionDistance() * 1.5; // matches RidgeSystem's own 1.5x slack
+    // 1.5x slack matches RidgeSystem's own walk-away tolerance.
+    return !this.findTravelerInRange(player, neutralCharacters, 1.5);
   }
 
   /**
@@ -271,49 +369,13 @@ export class ErrandSystem {
   checkGive(player, neutralCharacters, inventorySystem) {
     if (!this.activeErrand) return null;
 
-    const errandChar = neutralCharacters.find(nc => nc instanceof ErrandCharacter);
+    const errandChar = this.findTravelerInRange(player, neutralCharacters);
     if (!errandChar) return null;
 
-    const dist = Math.hypot(
-      player.position.x - errandChar.position.x,
-      player.position.y - errandChar.position.y
-    );
-    if (dist > errandChar.getInteractionDistance()) return null;
-
     const stageConfig = STAGE_CONFIG[this.activeErrand.stage];
-    const requestedChar = this.activeErrand.requestedItem;
-    let givenChar;
-
-    if (stageConfig.isIngredient) {
-      // Stage 0: spend the ingredient out of the one pile. Where the player
-      // picked it up — this run or an earlier one — never mattered to the
-      // errand, and now there is nowhere else it could be.
-      if (!inventorySystem?.removeIngredient(requestedChar)) return null;
-      givenChar = requestedChar;
-    } else {
-      // Stages 1-2: item can be in any quick slot (not just the active one),
-      // equipped as armor, or sitting in the carried armor spares — scan all
-      // of them rather than only the active held item.
-      const slotIdx = player.quickSlots.findIndex(slot => slot?.char === requestedChar);
-      if (slotIdx !== -1) {
-        givenChar = requestedChar;
-        player.quickSlots[slotIdx] = null;
-        if (slotIdx === player.activeSlotIndex) {
-          const nextFilled = player.quickSlots.findIndex(
-            (slot, idx) => idx !== player.activeSlotIndex && slot !== null
-          );
-          if (nextFilled !== -1) player.activeSlotIndex = nextFilled;
-        }
-      } else if (inventorySystem?.equippedArmor?.char === requestedChar) {
-        givenChar = requestedChar;
-        inventorySystem.equippedArmor = null;
-      } else {
-        const armorIdx = inventorySystem?.armorInventory?.findIndex(a => a.char === requestedChar) ?? -1;
-        if (armorIdx === -1) return null;
-        givenChar = requestedChar;
-        inventorySystem.armorInventory.splice(armorIdx, 1);
-      }
-    }
+    const carried = this._findCarriedRequest(player, inventorySystem);
+    if (!carried?.remove()) return null;
+    const givenChar = this.activeErrand.requestedItem;
 
     // Collect reward before advancing stage
     const rewardChar = stageConfig.rewardPool[this.activeErrand.rewardIndex];
@@ -343,14 +405,8 @@ export class ErrandSystem {
    * Active errand is untouched — the player can still complete the stage trade.
    */
   tryGiveArtifact(player, neutralCharacters, inventorySystem) {
-    const errandChar = neutralCharacters?.find(nc => nc instanceof ErrandCharacter);
+    const errandChar = this.findTravelerInRange(player, neutralCharacters);
     if (!errandChar) return null;
-
-    const dist = Math.hypot(
-      player.position.x - errandChar.position.x,
-      player.position.y - errandChar.position.y
-    );
-    if (dist > errandChar.getInteractionDistance()) return null;
 
     if (!inventorySystem?.removeIngredient('⚜')) return null;
 
@@ -386,17 +442,19 @@ export class ErrandSystem {
    */
   checkAttackHit(attack, combatSystem, game, room) {
     if (this.hostile || attack.hasHit) return;
-    const errandChar = game.neutralCharacters?.find(nc => nc instanceof ErrandCharacter);
+    // The player's current layer (hut floor or surface), same list SPACE reads.
+    const npcs = game.interiorManager.activeNpcs();
+    const errandChar = npcs.find(nc => nc instanceof ErrandCharacter);
     if (!errandChar) return;
     if (!combatSystem.checkMeleeCollision(attack, errandChar)) return;
-    this._becomeHostile(errandChar, combatSystem, game, room);
+    this._becomeHostile(errandChar, npcs, combatSystem, game, room);
   }
 
-  /** Removes the traveler and spawns the hostile enemy in its place. */
-  _becomeHostile(errandChar, combatSystem, game, room) {
+  /** Removes the traveler from its layer's list and spawns the hostile enemy in its place. */
+  _becomeHostile(errandChar, npcs, combatSystem, game, room) {
     this.hostile = true;
-    const idx = game.neutralCharacters.indexOf(errandChar);
-    if (idx !== -1) game.neutralCharacters.splice(idx, 1);
+    const idx = npcs.indexOf(errandChar);
+    if (idx !== -1) npcs.splice(idx, 1);
     combatSystem.createDamageNumber('BETRAYED', errandChar.position.x, errandChar.position.y, '#ff4444');
     if (room) this.spawnHostileEnemy(room, game, errandChar.position);
   }
@@ -406,8 +464,11 @@ export class ErrandSystem {
    * RoundCombatSystem._spawnHag's runtime registration (physics, target,
    * room). `uncounted` keeps it out of the room's clear-gate, same as Hag:
    * a permanent hazard shouldn't lock exits behind killing it.
-   * Reused both by the live conversion above and by spawnRoomNeutralCharacters
-   * on any later re-entry into an E room, once `hostile` is set.
+   * Reused by the live conversion above, by spawnRoomNeutralCharacters on any
+   * later re-entry into an E room, and by replaceBetrayedTravelers.
+   * `room` may be a hut floor: those keep a single `enemies` list (no
+   * per-plane lists) and no zone of their own, so the zone comes from the
+   * surface room the hut stands in.
    */
   spawnHostileEnemy(room, game, pos = null) {
     const depth = game?.getCurrentZoneDepth?.() ?? 1;
@@ -419,10 +480,10 @@ export class ErrandSystem {
     enemy.setTarget?.(game.player);
     enemy.setGame?.(game);
     enemy.setRoom?.(room);
-    applyZoneCombatModifiers(enemy, room.zone);
+    applyZoneCombatModifiers(enemy, room.zone ?? game.currentRoom?.zone);
     enemy.uncounted = true;
-    if (enemy.plane === 1) room.enemiesPlane1.push(enemy);
-    else room.enemiesPlane0.push(enemy);
+    const planeList = enemy.plane === 1 ? room.enemiesPlane1 : room.enemiesPlane0;
+    planeList?.push(enemy);
     room.enemies.push(enemy);
     game.physicsSystem.addEntity(enemy);
     return enemy;

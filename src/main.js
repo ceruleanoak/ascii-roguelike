@@ -2855,7 +2855,7 @@ class Game {
     }
 
     // Close errand confirm popup when player walks out of interaction range
-    if (this.errandSystem.isMenuOpen() && this.errandSystem.isOutOfRange(this.player, this.neutralCharacters)) {
+    if (this.errandSystem.isMenuOpen() && this.errandSystem.isOutOfRange(this.player, this.interiorManager.activeNpcs())) {
       this.errandSystem.closeMenu();
     }
 

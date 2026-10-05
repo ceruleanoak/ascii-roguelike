@@ -7,7 +7,6 @@ import { applyZoneCombatModifiers } from '../data/zones.js';
 import { WiseFellow } from '../entities/WiseFellow.js';
 import { Fisherman } from '../entities/Fisherman.js';
 import { Witch } from '../entities/Witch.js';
-import { ErrandCharacter } from '../entities/ErrandCharacter.js';
 import { WeaponsMaster } from '../entities/WeaponsMaster.js';
 import { Shopkeeper } from '../entities/Shopkeeper.js';
 import { WizardNPC } from '../entities/WizardNPC.js';
@@ -280,22 +279,16 @@ export class HutSystem {
 
     } else if (hutKind === 'neutral_npc') {
       // Placeholder NPC: spawn the errand traveler. Seeds an errand if none active
-      // so the room never feels empty.
-      const errandSystem = this.game.errandSystem;
-      if (errandSystem) {
-        if (!errandSystem.activeErrand) errandSystem._pickRequest(this.game.player);
-        const errand = errandSystem.activeErrand;
-        if (errand) {
-          const centerCol = Math.floor(cols / 2);
-          const centerRow = Math.floor(rows / 2) - 1;
-          npcs.push(new ErrandCharacter(
-            centerCol * GRID.CELL_SIZE,
-            centerRow * GRID.CELL_SIZE,
-            errand.requestedItem,
-            errand.stage
-          ));
-        }
-      }
+      // so the room never feels empty. After a betrayal, _enterHut swaps it
+      // for the hostile enemy (ErrandSystem.replaceBetrayedTravelers).
+      const centerCol = Math.floor(cols / 2);
+      const centerRow = Math.floor(rows / 2) - 1;
+      const traveler = this.game.errandSystem?.createTraveler(
+        centerCol * GRID.CELL_SIZE,
+        centerRow * GRID.CELL_SIZE,
+        { seed: true, player: this.game.player }
+      );
+      if (traveler) npcs.push(traveler);
     } else if (hutKind === 'wizard') {
       // Wizard at interior center; summoning circle 2 cells south of them —
       // the ground point WizardSystem's lightning strike lands on and the
@@ -627,6 +620,10 @@ export class HutSystem {
     }
 
     game.interiorManager.enterFloor('hut', floor, floor.spawnPoint);
+
+    // A cached floor can still hold the friendly traveler from before a
+    // betrayal elsewhere — swap it for the hostile enemy, as an E room would.
+    game.errandSystem.replaceBetrayedTravelers(floor.npcs, floor, game);
 
     // Alchemist hut presence is re-evaluated live on every entry (unlike the
     // rest of the cached interior) — see _syncAlchemistHutPresence.

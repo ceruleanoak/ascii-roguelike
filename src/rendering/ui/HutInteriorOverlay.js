@@ -8,6 +8,7 @@ import {
 } from '../../systems/MazeSystem.js';
 import { drawWires } from '../effects/WireEffects.js';
 import { drawCoinArc } from '../effects/ArcTossEffects.js';
+import { drawErrandConfirmPanel } from './ErrandConfirmOverlay.js';
 import { drawStatusPips } from '../effects/StatusPipEffects.js';
 import { drawFloatPlatform } from '../effects/FloatPlatformDraw.js';
 import { drawTamedRats, drawGolems } from './CompanionRenderers.js';
@@ -233,6 +234,10 @@ export class HutInteriorOverlay {
       // NPC speech now goes through the SPACE-driven dialogue box
       // (DialogueSystem + DialogueBox) — no passive proximity text here.
     }
+
+    // Errand trade popup — same helper as the surface pass, which skips
+    // itself while a floor is active (ctx translate already applied).
+    drawErrandConfirmPanel(ctx, game, game.activeFloor.npcs);
 
     // Fisherman coin pay — spinning arc from player to the fisherman
     // (interior coords; shared draw helper, ctx translate already applied).
