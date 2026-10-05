@@ -35,8 +35,10 @@ export const ReflectShieldMechanic = {
    * Lives here rather than in CombatSystem because the shield's whole contract
    * — when it is up, what it does to an incoming shot — belongs to one owner.
    */
+  // Called for every projectile-hit enemy, including data-less bosses
+  // (LakeBoss), so `data` is optional here — no data means no shield.
   tryReflect(enemy, proj, combatSystem) {
-    const cfg = enemy.data.reflectShield;
+    const cfg = enemy.data?.reflectShield;
     if (!enemy.shieldActive || !cfg?.enabled || this.isShieldDown(enemy)) return false;
 
     const reflectedDmg = Math.ceil(proj.damage * (cfg.reflectDamageBonus ?? 0.5));
