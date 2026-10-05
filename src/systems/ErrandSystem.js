@@ -64,8 +64,11 @@ const SLAIN_COIN_REWARD = 5;
  *   8. Attacking the traveler (feature-inbox, Errand-only special case — not
  *      general NeutralCharacter attackability) permanently flips it hostile
  *      for the rest of the run: see checkAttackHit()/_becomeHostile().
- *   9. Killing the Betrayed Traveler drops its purse once per run — 5 Coins
- *      and the Shed Key if not yet given: see rollSlainDrops().
+ *   9. Killing the Betrayed Traveler drops its purse — 5 Coins and the Shed
+ *      Key if not yet given — and ends it for the rest of the run: no
+ *      traveler, friendly or hostile, appears anywhere again. See
+ *      rollSlainDrops() and the `slain` gates in createTraveler(),
+ *      replaceBetrayedTravelers(), and spawnHostileEnemy().
  *
  * The same traveler also stands on Settlement ground and in 'neutral_npc'
  * hut floors. Every site builds it through createTraveler(), and every
@@ -82,7 +85,7 @@ export class ErrandSystem {
                                // owns activeErrand/stage itself rather than on `game`.
     this.shedKeyGiven = false; // Final stage traded once — the Shed Key came with it
     this.hostile = false;     // Attacked the traveler — permanent for the run (resetOnDeath wipes it)
-    this.slainRewardGiven = false; // Betrayed Traveler killed once — its purse already paid out this run
+    this.slain = false;       // Betrayed Traveler killed — gone for the rest of the run (resetOnDeath wipes it)
   }
 
   // ── Hooks called by main.js ─────────────────────────────────────────────────
@@ -129,6 +132,7 @@ export class ErrandSystem {
    * made somewhere else.
    */
   createTraveler(x, y, { seed = false, player = null } = {}) {
+    if (this.slain) return null; // Killed this run — no site builds it again
     if (!this.activeErrand && seed) this._pickRequest(player);
     if (!this.activeErrand) return null;
     return new ErrandCharacter(x, y, this.activeErrand.requestedItem, this.activeErrand.stage);
@@ -154,7 +158,8 @@ export class ErrandSystem {
    * Called when the player enters a layer that may hold a traveler built
    * before the betrayal (a cached hut floor, a pre-generated Settlement).
    * Once hostile, each such traveler is swapped for the hostile enemy where
-   * it stood, matching what an E room spawns on re-entry.
+   * it stood, matching what an E room spawns on re-entry. Once the hostile
+   * traveler has been killed (`slain`), the stale traveler is just removed.
    */
   replaceBetrayedTravelers(npcs, room, game) {
     if (!this.hostile || !npcs) return;
@@ -162,7 +167,7 @@ export class ErrandSystem {
       if (!(npcs[i] instanceof ErrandCharacter)) continue;
       const { x, y } = npcs[i].position;
       npcs.splice(i, 1);
-      this.spawnHostileEnemy(room, game, { x, y });
+      this.spawnHostileEnemy(room, game, { x, y }); // no-op once slain
     }
   }
 
@@ -443,7 +448,7 @@ export class ErrandSystem {
     this.menuOpen = false;
     this.shedKeyGiven = false;
     this.hostile = false;
-    this.slainRewardGiven = false;
+    this.slain = false;
   }
 
   // ── Hostility (feature-inbox) ───────────────────────────────────────────────
@@ -490,8 +495,10 @@ export class ErrandSystem {
    * `room` may be a hut floor: those keep a single `enemies` list (no
    * per-plane lists) and no zone of their own, so the zone comes from the
    * surface room the hut stands in.
+   * Returns null without spawning once the traveler has been killed (`slain`).
    */
   spawnHostileEnemy(room, game, pos = null) {
+    if (this.slain) return null;
     const depth = game?.getCurrentZoneDepth?.() ?? 1;
     const spawnPos = pos || this._findSafeSpawnPosition(room);
     const enemy = new Enemy('E', spawnPos.x, spawnPos.y, depth);
@@ -512,14 +519,13 @@ export class ErrandSystem {
 
   /**
    * Called from LootSystem.spawnLoot on every enemy death. Killing the
-   * Betrayed Traveler pays its purse once per run: SLAIN_COIN_REWARD Coins,
-   * plus the Shed Key if the trade route hasn't already handed it over. The
-   * traveler still returns in later E rooms (spawnHostileEnemy), so a once-
-   * per-run purse keeps it from becoming a coin farm.
+   * Betrayed Traveler pays its purse: SLAIN_COIN_REWARD Coins, plus the Shed
+   * Key if the trade route hasn't already handed it over. It also marks the
+   * traveler `slain`, which keeps it from appearing again this run.
    */
   rollSlainDrops(game, enemy) {
-    if (enemy.data?.char !== 'E' || this.slainRewardGiven) return;
-    this.slainRewardGiven = true;
+    if (enemy.data?.char !== 'E' || this.slain) return;
+    this.slain = true;
     const { x, y } = enemy.position;
     if (!this.shedKeyGiven) {
       this.shedKeyGiven = true;

@@ -561,8 +561,9 @@ export const ENEMIES = {
   // special case), and again on any later re-entry into an E room for the
   // rest of the run (see roomFeatures.spawnRoomNeutralCharacters). Fast and
   // near-unhittable rather than dangerous per hit — the punishment for
-  // attacking a trade partner is losing the trade, not a tough fight. The
-  // first kill each run drops its purse (ErrandSystem.rollSlainDrops).
+  // attacking a trade partner is losing the trade, not a tough fight. Killing
+  // it drops its purse and ends the traveler for the run
+  // (ErrandSystem.rollSlainDrops).
   'E': {
     char: 'E',
     name: 'Betrayed Traveler',

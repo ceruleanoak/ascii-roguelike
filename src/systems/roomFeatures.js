@@ -1717,7 +1717,8 @@ export function spawnRoomNeutralCharacters(game, room) {
   } else if (game.errandSystem.hostile && room.exitLetter === 'E') {
     // Traveler is gone for good (feature-inbox) — re-entering an E room
     // for the rest of the run spawns the hostile enemy it turned into
-    // instead of the peaceful trader.
+    // instead of the peaceful trader, until that enemy is killed
+    // (spawnHostileEnemy no-ops once ErrandSystem.slain).
     game.errandSystem.spawnHostileEnemy(room, game);
   }
 }
