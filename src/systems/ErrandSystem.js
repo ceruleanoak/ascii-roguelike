@@ -4,6 +4,7 @@ import { Item } from '../entities/Item.js';
 import { tagLootLayer } from './PlaneSystem.js';
 import { Enemy } from '../entities/Enemy.js';
 import { applyZoneCombatModifiers } from '../data/zones.js';
+import { SHED_KEY_CHAR } from '../data/items.js';
 
 /**
  * Three-stage trade progression.
@@ -11,6 +12,8 @@ import { applyZoneCombatModifiers } from '../data/zones.js';
  * Stage 0 — rare ingredient → good item (tier-2 weapon/armor)
  * Stage 1 — low-tier item   → medium-tier item
  * Stage 2 — medium-tier item → legendary item  (repeats indefinitely)
+ *
+ * The first Stage 2 trade completes every tier and also drops the Shed Key.
  */
 const STAGE_CONFIG = [
   {
@@ -72,6 +75,7 @@ export class ErrandSystem {
     this.menuOpen = false;    // Confirm popup gate — mirrors game.bridgeMenuOpen,
                                // but kept internal since ErrandSystem already
                                // owns activeErrand/stage itself rather than on `game`.
+    this.shedKeyGiven = false; // Final stage traded once — the Shed Key came with it
     this.hostile = false;     // Attacked the traveler — permanent for the run (resetOnDeath wipes it)
   }
 
@@ -341,6 +345,11 @@ export class ErrandSystem {
     const rewardItem = tagLootLayer(game, new Item(giveResult.rewardChar, giveResult.x, giveResult.y));
     game.items.push(rewardItem);
     game.physicsSystem.addEntity(rewardItem);
+    if (giveResult.shedKey) {
+      const key = tagLootLayer(game, new Item(SHED_KEY_CHAR, giveResult.x + GRID.CELL_SIZE, giveResult.y));
+      game.items.push(key);
+      game.physicsSystem.addEntity(key);
+    }
   }
 
   /** SHIFT, or walking out of range, while the confirm popup is open: cancel without trading. */
@@ -382,8 +391,12 @@ export class ErrandSystem {
     const result = {
       rewardChar,
       x: errandChar.position.x + (Math.random() - 0.5) * GRID.CELL_SIZE * 2,
-      y: errandChar.position.y + (Math.random() - 0.5) * GRID.CELL_SIZE * 2
+      y: errandChar.position.y + (Math.random() - 0.5) * GRID.CELL_SIZE * 2,
+      // The first final-stage trade completes every tier: the Shed Key comes
+      // with that reward, once per run.
+      shedKey: this.activeErrand.stage === STAGE_CONFIG.length - 1 && !this.shedKeyGiven
     };
+    if (result.shedKey) this.shedKeyGiven = true;
 
     // Advance stage (cap at 2 so legendary trades continue indefinitely)
     this.stage = Math.min(this.stage + 1, STAGE_CONFIG.length - 1);
@@ -422,6 +435,7 @@ export class ErrandSystem {
     this.activeErrand = null;
     this.stage = 0;
     this.menuOpen = false;
+    this.shedKeyGiven = false;
     this.hostile = false;
   }
 

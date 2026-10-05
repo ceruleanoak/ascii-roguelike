@@ -2,6 +2,9 @@ import { COLORS, GRID } from '../game/GameConfig.js';
 import { isPotionIngredient } from './alchemy.js';
 
 // Item types
+// The Shed Key's char, shared by the Errand reward and the Shed door check.
+export const SHED_KEY_CHAR = '⟜';
+
 export const ITEM_TYPES = {
   WEAPON: 'WEAPON',
   ARMOR: 'ARMOR',
@@ -1807,6 +1810,14 @@ export const ITEMS = {
     name: 'Skull Key',
     type: ITEM_TYPES.KEY,
     color: '#cc3333'
+  },
+  // Errand traveler's completion reward (ErrandSystem) — opens every Shed's
+  // small door into a full one (HutSystem._tryShedDoor). Never consumed.
+  [SHED_KEY_CHAR]: {
+    char: SHED_KEY_CHAR,
+    name: 'Shed Key',
+    type: ITEM_TYPES.KEY,
+    color: '#88ffcc'
   },
 
   // ============================================================================

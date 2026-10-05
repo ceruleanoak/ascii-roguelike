@@ -5,6 +5,7 @@ import { Item } from '../entities/Item.js';
 import { getZoneRandomEnemy } from '../data/enemies.js';
 import { applyZoneCombatModifiers } from '../data/zones.js';
 import { WiseFellow } from '../entities/WiseFellow.js';
+import { SHED_KEY_CHAR } from '../data/items.js';
 import { Fisherman } from '../entities/Fisherman.js';
 import { Witch } from '../entities/Witch.js';
 import { WeaponsMaster } from '../entities/WeaponsMaster.js';
@@ -55,8 +56,8 @@ export class HutSystem {
   // ─── Interior Generation ─────────────────────────────────────────────────
 
   generateHutInterior(hutKind, depth, sizeOverride = null, zone = null) {
-    const cols = sizeOverride?.cols ?? (hutKind === 'frog_hut' ? 6 : INTERIOR_COLS);
-    const rows = sizeOverride?.rows ?? (hutKind === 'frog_hut' ? 6 : INTERIOR_ROWS);
+    const cols = sizeOverride?.cols ?? (hutKind === 'shed' ? 6 : INTERIOR_COLS);
+    const rows = sizeOverride?.rows ?? (hutKind === 'shed' ? 6 : INTERIOR_ROWS);
 
     // Build collision map: border solid, interior open
     const collisionMap = [];
@@ -308,11 +309,6 @@ export class HutSystem {
         y: circleRow * GRID.CELL_SIZE + GRID.CELL_SIZE / 2,
       };
 
-    } else if (hutKind === 'frog_hut') {
-      // Frog Coin at center — only reachable by frog/rat
-      const centerCol = Math.floor(cols / 2);
-      const centerRow = Math.floor(rows / 2);
-      breadItems.push(new Item('⊚', centerCol * GRID.CELL_SIZE, centerRow * GRID.CELL_SIZE));
     }
 
     // Bread loaves: occasional in huts (40% chance to spawn, 1–2 loaves) —
@@ -322,7 +318,14 @@ export class HutSystem {
     // activeFloor.items and pushed into game.items on entry by _enterHut
     // (marked hutPlane).
     const breadItems = [];
-    if (hutKind === 'alchemy') {
+    if (hutKind === 'shed') {
+      // Frog Coin at center — the prize for getting in (small form, or the
+      // Shed Key). Seeded here, after breadItems exists: it used to be pushed
+      // from the NPC branch above, before the declaration, and threw.
+      const centerCol = Math.floor(cols / 2);
+      const centerRow = Math.floor(rows / 2);
+      breadItems.push(new Item('⊚', centerCol * GRID.CELL_SIZE, centerRow * GRID.CELL_SIZE));
+    } else if (hutKind === 'alchemy') {
       // 2 pre-placed Empty Bottles so the player can start brewing without
       // already owning one.
       let placed = 0;
@@ -418,8 +421,9 @@ export class HutSystem {
       if (!hut?.doorPosition) continue;
       // Witch huts on chicken legs are inaccessible until SIT/SITDOWN lowers them.
       if (hut.raised) continue;
-      // Frog hut: only isSmall entities (frog form, tamed rat) can enter
-      if (hut.hutKind === 'frog_hut' && !game.player.isSmall) continue;
+      // Shed: only isSmall entities (frog form, tamed rat) fit its small
+      // door, until the Shed Key opens it into a full door (_tryShedDoor).
+      if (hut.hutKind === 'shed' && !hut.unlocked && !game.player.isSmall) continue;
       const { col, row } = hut.doorPosition;
       if (this._nearCell(game.player, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE)) return hut;
     }
@@ -582,6 +586,7 @@ export class HutSystem {
         this._enterHut(hut);
         return true;
       }
+      if (this._tryShedDoor()) return true;
     }
 
     // Exit from interior (hut only — dungeon handled by DungeonSystem)
@@ -591,6 +596,30 @@ export class HutSystem {
     }
 
     return false;
+  }
+
+  /**
+   * SPACE at a Shed's small door while too big to fit through it. Holding the
+   * Shed Key (the Errand traveler's completion reward) turns the small door
+   * into a full Hut Door, which stays open for the rest of the room's life;
+   * the key is kept, so every Shed in the run opens. Without it the door
+   * reads LOCKED. Returns whether the press was consumed.
+   */
+  _tryShedDoor() {
+    const { game } = this;
+    const shed = (game.currentRoom?.huts ?? []).find(hut =>
+      hut.hutKind === 'shed' && !hut.unlocked &&
+      this._nearCell(game.player, hut.doorPosition.col * GRID.CELL_SIZE, hut.doorPosition.row * GRID.CELL_SIZE));
+    if (!shed) return false;
+
+    const door = shed.doorObject;
+    if (!game.inventorySystem.hasKeyItem(SHED_KEY_CHAR, game)) {
+      game.combatSystem.createDamageNumber('LOCKED', door.position.x, door.position.y - GRID.CELL_SIZE * 0.5, '#eeeeee');
+      return true;
+    }
+    shed.unlocked = true;
+    door.becomeHutDoor();
+    return true;
   }
 
   // ─── Entry / Exit ────────────────────────────────────────────────────────

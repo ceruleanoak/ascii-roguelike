@@ -1507,11 +1507,11 @@ const SETTLEMENT_CENTER_SPAN = 22; // centers land in [4, 25]
 const SETTLEMENT_HUT_BUFFER = 1; // min empty-cell gap between hut footprints
 
 /**
- * Stamp a tiny 3×3 hut with a ▄ small-door entrance (only isSmall entities
- * can enter). Used for the unnamed frog-hut in Settlement rooms. Returns a
- * hut record compatible with HutSystem._findNearbyHut.
+ * Stamp the Shed: a tiny 3×3 hut with a ▄ Shed Door entrance (only isSmall
+ * entities can enter, until the Shed Key opens it — HutSystem._tryShedDoor).
+ * Returns a hut record compatible with HutSystem._findNearbyHut.
  */
-export function stampSmallHutFootprint(room, { centerCol, centerRow, hutKind = 'frog_hut' }) {
+export function stampShedFootprint(room, { centerCol, centerRow }) {
   const halfW = 1;
   const halfH = 1;
   const minCol = centerCol - halfW;
@@ -1541,7 +1541,7 @@ export function stampSmallHutFootprint(room, { centerCol, centerRow, hutKind = '
     }
   }
 
-  // Small door (▄) at south-center — only isSmall entities can pass
+  // Shed Door (▄) at south-center — only isSmall entities can pass
   const doorCol = centerCol;
   const doorRow = maxRow;
   const doorObj = new BackgroundObject('▄', doorCol * GRID.CELL_SIZE, doorRow * GRID.CELL_SIZE);
@@ -1551,7 +1551,8 @@ export function stampSmallHutFootprint(room, { centerCol, centerRow, hutKind = '
   return {
     exteriorBounds: { minCol, maxCol, minRow, maxRow },
     doorPosition: { col: doorCol, row: doorRow },
-    hutKind,
+    hutKind: 'shed',
+    unlocked: false, // the Shed Key turned the small door into a full one
     interiorGenerated: false,
     raised: false,
     verticalShift: 0,
@@ -1612,18 +1613,18 @@ export function generateSettlementRoom(gen, room) {
     room.huts.push(hut);
   }
 
-  // 50% chance: unnamed frog hut (tiny 3×3, ▄ entrance, Frog Coin inside)
+  // 50% chance: a Shed (tiny 3×3, ▄ entrance, Frog Coin inside)
   if (Math.random() < 0.5) {
     for (let attempt = 0; attempt < 40; attempt++) {
       const centerCol = SETTLEMENT_CENTER_MIN + Math.floor(Math.random() * SETTLEMENT_CENTER_SPAN);
       const centerRow = SETTLEMENT_CENTER_MIN + Math.floor(Math.random() * SETTLEMENT_CENTER_SPAN);
       const candidate = { minCol: centerCol - 1, maxCol: centerCol + 1, minRow: centerRow - 1, maxRow: centerRow + 1 };
       if (placedBounds.some(b => footprintsTooClose(candidate, b, SETTLEMENT_HUT_BUFFER))) continue;
-      const smallHut = stampSmallHutFootprint(room, { centerCol, centerRow });
-      const { minCol, maxCol, minRow, maxRow } = smallHut.exteriorBounds;
+      const shed = stampShedFootprint(room, { centerCol, centerRow });
+      const { minCol, maxCol, minRow, maxRow } = shed.exteriorBounds;
       placedBounds.push({ minCol, maxCol, minRow, maxRow });
       protectRegion(room, { kind: 'rect', minCol, maxCol, minRow, maxRow });
-      room.huts.push(smallHut);
+      room.huts.push(shed);
       break;
     }
   }

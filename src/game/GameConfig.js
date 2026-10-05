@@ -1097,11 +1097,12 @@ export const BACKGROUND_OBJECTS = {
       default: { animation: 'shake', message: null }
     }
   },
-  // Small door — a few-pixel-tall gap at the bottom of a wall. Only entities
-  // with isSmall (frog form, tamed rat) can pass through. Also blocks crow
-  // flight via the blocksCrows flag (crows normally skip all collision).
+  // Shed Door — a few-pixel-tall gap at the bottom of a Shed's wall. Only
+  // entities with isSmall (frog form, tamed rat) can pass through, until the
+  // Shed Key opens it into a full Hut Door. Also blocks crow flight via the
+  // blocksCrows flag (crows normally skip all collision).
   '▄': {
-    name: 'Small Door',
+    name: 'Shed Door',
     color: '#5c4a2a',
     bulletInteraction: 'block',
     flammability: 'none',

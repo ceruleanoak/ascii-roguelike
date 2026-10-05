@@ -71,6 +71,17 @@ identity, not standard programming terms.
 - **Not:** "room" (an Interior contains its own space; a Room is the surface unit); a Plane
   (the other layer keeps simulating there); a hand-listed `inHut || inDungeon || inMaze` check
   (the layer-leak anti-pattern — bug #107); the Frozen status effect.
+### Shed
+- **Definition:** The tiny 3×3 Hut that can stand in a Settlement (50% of them), with a Frog
+  Coin inside. Its door (`▄`, Shed Door) only lets small things through: frog form or a tamed
+  rat. Anyone else pressing SPACE at it gets "LOCKED", unless they hold the Shed Key, which
+  turns the small door into a full Hut Door (`∩`) for good.
+- **In code:** `hutKind: 'shed'`, stamped by `stampShedFootprint` (`src/systems/roomFeatures.js`);
+  the hut record's `unlocked` marks a Shed opened by the key. Entry gate in
+  `HutSystem._findNearbyHut`, key/LOCKED handling in `HutSystem._tryShedDoor`, door swap in
+  `BackgroundObject.becomeHutDoor`. The `▄` entry keeps the generic `smallDoor` physics flag.
+- **Not:** "frog hut" or "small hut" (retired names); a Cavern (also a Hut record, but
+  revealed by a bomb, not a key).
 ### Maze
 - **Definition:** An Interior built from a single continuous DFS-generated corridor. Loot hides
   behind cipher-covered breakable objects; one blinks a warning at a time, and letting it
@@ -977,7 +988,9 @@ identity, not standard programming terms.
 ### Key Item
 - **Definition:** A unique, run-scoped item that unlocks progression and enables access to
   new areas or mechanics. Persists across death within a single run.
-- **In code:** tracked via a flag on `game` (e.g. `spectaclesObtainedThisRun`). Spectacles (⊙)
+- **In code:** held items of type `KEY` live in `inventorySystem.keyItemInventory`, read through
+  `hasKeyItem` and spent through `consumeKeyItem` (Vault Key, Skull Key, Shed Key). Some older
+  ones are still a flag on `game` (e.g. `spectaclesObtainedThisRun`). Spectacles (⊙)
   are obtained by clearing a Maze — breaking every cover object and collecting every dropped
   Ingredient — without ever letting a Ghost spawn; granted via `MazeSystem._checkMazeCleared`.
 - **Not:** a regular Ingredient or Crafted item; not persistent across runs.
@@ -990,6 +1003,15 @@ identity, not standard programming terms.
   ID. Used by `LootSystem` on death.
 - **Not:** inventory (player's bag). Loot is what enemies distribute; Inventory is what the
   player carries.
+
+### Shed Key
+- **Definition:** The Key Item the Errand traveler gives once every trade tier is done: it
+  drops beside the reward of the first final-stage (Stage 2) trade, once per run. Opens every
+  Shed's door into a full door and is never spent.
+- **In code:** `SHED_KEY_CHAR` (`⟜`) in `src/data/items.js`; granted by
+  `ErrandSystem.checkGive` / `_spawnReward` (run flag `shedKeyGiven`, cleared by
+  `resetOnDeath`); read with `inventorySystem.hasKeyItem(SHED_KEY_CHAR, game)`.
+- **Not:** the Vault Key or Skull Key (both are spent on their lock).
 
 ### Death / Permadeath
 - **Definition:** The core roguelike reset mechanic — when the player dies, all Inventory,

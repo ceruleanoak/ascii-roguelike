@@ -338,6 +338,23 @@ export class BackgroundObject {
     this._playAnimation('shake');
   }
 
+  // The Shed Key opening a Shed: its small door ('▄') becomes a full Hut
+  // Door ('∩') in place, same reassignment shape as openTomb() above.
+  becomeHutDoor() {
+    const doorChar = '∩';
+    this.char = doorChar;
+    this.originalChar = doorChar;
+    this.data = BACKGROUND_OBJECTS[doorChar];
+    this.animationChar = doorChar;
+    this.color = this.data.color;
+    this.animationColor = this.color;
+
+    this.indestructible = this.data.indestructible || false;
+    this.bulletInteraction = this.data.bulletInteraction || 'block';
+
+    this._playAnimation('shake');
+  }
+
   acceptsInteraction(type) {
     return this.acceptsInteractions.includes('all') || this.acceptsInteractions.includes(type);
   }
