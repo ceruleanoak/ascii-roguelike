@@ -201,8 +201,10 @@ export class PolymorphSystem {
       dirY = dy / dist;
     } else {
       // Use stored facing direction
-      dirX = player.facing?.x || 0;
-      dirY = player.facing?.y || 1;
+      // ?? not ||: a straight-left facing {-1, 0} must not become {-1, 1}.
+      dirX = player.facing?.x ?? 0;
+      dirY = player.facing?.y ?? 1;
+      if (dirX === 0 && dirY === 0) dirY = 1;
       const len = Math.sqrt(dirX * dirX + dirY * dirY) || 1;
       dirX /= len;
       dirY /= len;

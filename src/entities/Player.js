@@ -347,11 +347,13 @@ export class Player {
 
     // Frog form: suppress normal input-driven movement; PolymorphSystem drives velocity via jumps
     if (this.polymorphed) {
+      // Set both axes together from the held keys, like the normal path below.
+      // Writing one axis per key never zeroed the other, so after any turn
+      // facing stuck on a diagonal (the indicator only ever showed diagonals).
       if (!lockFacing) {
-        if (inputState.left)  this.facing.x = -1;
-        if (inputState.right) this.facing.x =  1;
-        if (inputState.up)    this.facing.y = -1;
-        if (inputState.down)  this.facing.y =  1;
+        const fx = (inputState.right ? 1 : 0) - (inputState.left ? 1 : 0);
+        const fy = (inputState.down ? 1 : 0) - (inputState.up ? 1 : 0);
+        if (fx !== 0 || fy !== 0) { this.facing.x = fx; this.facing.y = fy; }
       }
       this.acceleration.ax = 0;
       this.acceleration.ay = 0;
