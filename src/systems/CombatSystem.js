@@ -25,6 +25,7 @@ import { applyMeleeStatusDamageBonus, getMeleeStatusBonusIndicator } from './Mel
 import { applyKeenAim } from './KeenAim.js';
 import { projectileSailsOver, tagLaunchPit } from './pits.js';
 import { vaultWallBlocksReach } from './vaultWalls.js';
+import { knockbackTakenScale } from '../entities/knockbackTaken.js';
 
 // Default maximum travel distance (in pixels) for gun bullets. Roughly 2/3 of a
 // room — keeps cross-room sniping in check while still feeling powerful.
@@ -1173,7 +1174,7 @@ export class CombatSystem {
               // Apply knockback — spear uses exact facing direction, others use positional
               if (attack.knockback) {
                 if (attack.facing) {
-                  this.physicsSystem.applyKnockbackDir(enemy, attack.facing.x, attack.facing.y, attack.knockback);
+                  this.physicsSystem.applyKnockbackDir(enemy, attack.facing.x, attack.facing.y, attack.knockback * knockbackTakenScale(enemy, attack));
                 } else {
                   this.applyKnockback(enemy, attack);
                 }
@@ -1878,7 +1879,7 @@ export class CombatSystem {
     this.physicsSystem.applyKnockback(
       enemy,
       attack.position.x, attack.position.y,
-      attack.knockback || 200
+      (attack.knockback || 200) * knockbackTakenScale(enemy, attack)
     );
   }
 

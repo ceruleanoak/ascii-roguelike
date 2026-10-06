@@ -1,5 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { inSamePlane, planeOf, objectOnPlane } from '../systems/PlaneSystem.js';
+import { LavaShyMechanic } from './enemyMechanics/LavaShyMechanic.js';
 
 // Every question an Enemy asks about what it can see, in one place.
 //
@@ -98,10 +99,18 @@ export function hasLineOfSight(enemy, start, end, maxLength) {
   const mapRows = enemy.collisionMap.length;
   const mapCols = enemy.collisionMap[0]?.length ?? GRID.COLS;
 
+  // Lava-Shy enemies path around lava as if it were wall. The start cell is
+  // exempt so one already standing in lava can still route its way out.
+  const lavaShy = LavaShyMechanic.isEnabled(enemy);
+  const startGx = gx, startGy = gy;
+  const isLava = (cx, cy) => lavaShy && (cx !== startGx || cy !== startGy)
+    && LavaShyMechanic.isLavaCell(enemy, cx, cy);
+
   // Check each cell the ray enters until checkDist is reached
   for (let safety = 0; safety < 128; safety++) {
     if (gx < 0 || gx >= mapCols || gy < 0 || gy >= mapRows) return false;
     if (enemy.collisionMap[gy][gx]) return false;
+    if (isLava(gx, gy)) return false;
 
     const tNext = Math.min(tMaxX, tMaxY);
     if (tNext >= checkDist) break; // Reached the end without hitting anything
@@ -115,6 +124,7 @@ export function hasLineOfSight(enemy, start, end, maxLength) {
       // Cross cell
       if (cy < 0 || cy >= mapRows || cx >= 0 && cx < mapCols && enemy.collisionMap[gy][cx]) return false;
       if (cx < 0 || cx >= mapCols || cy >= 0 && cy < mapRows && enemy.collisionMap[cy][gx]) return false;
+      if (isLava(cx, gy) || isLava(gx, cy)) return false;
       tMaxX += tDeltaX;
       tMaxY += tDeltaY;
       gx = cx;

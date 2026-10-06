@@ -5,6 +5,7 @@ import { GooBlob } from '../entities/GooBlob.js';
 import { createEmberBurst, createExplosion } from '../entities/Particle.js';
 import { findNearbyOpenExitDirection, getExitDespawnPoint } from './ExitSystem.js';
 import { createExplosionAftermath } from './WorldEffectsSystem.js';
+import { BumpMechanic } from '../entities/enemyMechanics/BumpMechanic.js';
 
 const MAX_GOO_BLOBS = 20;
 const SLIME_COLLISION_DISTANCE = 16;
@@ -256,6 +257,7 @@ export class EnemyUpdateSystem {
       if (!enemy.data) continue;
 
       this._handleChargeContact(enemy, player, prevChargeSpeed);
+      BumpMechanic.resolveContact(enemy, player, game, deltaTime);
       this._handleUpdateResult(enemy, player, updateResult, deltaTime);
     }
   }

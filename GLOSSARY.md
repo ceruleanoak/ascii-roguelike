@@ -559,6 +559,27 @@ identity, not standard programming terms.
 - **Not:** a swimmer that merely prefers water, and not a clamp on knockback — a hit can
   still throw it onto the beach.
 
+### Lava-Shy
+- **Definition:** A Mechanic, the mirror of Water-Bound: the Enemy never walks onto lava.
+  Its route-finding treats lava as a wall, so it paths around a lava river. Movement that
+  would step onto lava is stopped at the shore. One already in lava (thrown, spawned, or
+  flooded in) walks to the nearest safe cell. Lava becomes the player's refuge from it.
+- **In code:** `LavaShyMechanic` gated by `data.lavaShy`. It is consulted by
+  `enemyVision.hasLineOfSight` for navigation. "Lava" is PhysicsSystem's lava: a `~`
+  tile whose typeId is `lava`, or an untyped damaging `~`. The Bumper is the first user.
+- **Not:** lava immunity. Taking no lava damage is the separate `lavaImmune` flag. It is
+  also not a clamp on knockback, so a hit can still throw it into the lava.
+
+### Bump
+- **Definition:** A Mechanic for contact without damage: touching the Enemy flings the
+  player hard, on a per-Enemy cooldown. A dodge roll passes through it. The body is the
+  threat, and the danger is wherever the shove lands the player.
+- **In code:** `BumpMechanic` gated by `data.bump = { force, duration, cooldown }`. It is
+  resolved in `EnemyUpdateSystem._runEnemyLoop` beside charge contact.
+- **Not:** a Charge (no windup, no rush), and not an attack, since it never deals damage.
+  It is also not `knockbackTaken`, which scales how far the player's weapon hits shove an
+  Enemy (`src/entities/knockbackTaken.js`).
+
 ### Close Quarters
 - **Definition:** A Mechanic for a carried melee weapon held in reserve: the Enemy keeps
   its native attack, movement, and range, and switches to the weapon only while the player

@@ -970,6 +970,35 @@ export const ENEMIES = {
     tier: 'weak'
   },
 
+  '%': {
+    char: '%',
+    name: 'Bumper',
+    description: 'Harmless to touch, and that is the problem — it flings you hard. It will not set foot on lava, but it will happily throw you in.',
+    spellDescription: 'IT DOES NOT BITE. IT SHOVES.',
+    trueName: 'PULSUS',
+    hp: 6,
+    speed: 42,
+    acceleration: 260,
+    damage: 0,
+    attackType: 'none',    // no ordinary attack — contact is the whole threat (BumpMechanic)
+    attackRange: 0,
+    aggroRange: GRID.CELL_SIZE * 8,
+    decisionInterval: 0.4,
+    color: '#ffaa55',
+    movementStyle: 'chaser',
+    bump: {
+      force: 700,          // "major recoil" — charge contact is 450
+      duration: 0.3,
+      cooldown: 0.6        // real seconds between bumps from the same Bumper
+    },
+    lavaShy: true,         // paths around lava, never steps on it, walks out if thrown in
+    lavaImmune: true,      // ...and takes no lava damage while it's there
+    // Most weapons barely move it; a hammer sends it flying.
+    knockbackTaken: { default: 0.25, bySubtype: { hammer: 2.0 } },
+    affinities: ['fire'],
+    tier: 'weak'
+  },
+
   'F': {
     char: 'F',
     name: 'Fire Elemental',
@@ -2549,7 +2578,7 @@ export const ZONE_SPAWN_TABLES = {
   // on those gates — 0/3/6/9 — and stop at 9: an L12 band would never spawn.
   'red': {
     // Fire/scorched theme - NO green/ice enemies
-    0: ['l'],                                      // L1-2: Magma Slugs only (intro trail mechanic)
+    0: ['l', '%'],                                 // L1-2: Magma Slugs (intro trail mechanic), Bumpers (intro lava spacing)
     3: ['f', 't', 'l', '6'],                       // L3-5: Add Fire Bats, Tortoises, Bombs
     6: ['f', '0', 'F', 't', 'k', 'l', '6'],        // L6-8: Add Living Rocks, Fire Elementals, Miners
     9: ['f', '0', 'F', 'S', 't', 'k', '6', 'R']    // L9-10: Add Skeletons (charred bones), Rockwardens

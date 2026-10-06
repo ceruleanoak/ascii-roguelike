@@ -34,6 +34,8 @@ import { ThiefMechanic } from './enemyMechanics/ThiefMechanic.js';
 import { WeaponConversion } from './enemyMechanics/weaponConversion.js';
 import { QuiverRechargeMechanic } from './enemyMechanics/QuiverRechargeMechanic.js';
 import { WaterBoundMechanic } from './enemyMechanics/WaterBoundMechanic.js';
+import { LavaShyMechanic } from './enemyMechanics/LavaShyMechanic.js';
+import { BumpMechanic } from './enemyMechanics/BumpMechanic.js';
 import { CloseQuartersMechanic } from './enemyMechanics/CloseQuartersMechanic.js';
 import { BreadSeekMechanic } from './enemyMechanics/BreadSeekMechanic.js';
 import { EnemyStateMachine, legacyStateFor } from './EnemyStateMachine.js';
@@ -419,6 +421,8 @@ export class Enemy {
     if (ThiefMechanic.isEnabled(this)) ThiefMechanic.init(this);
     if (QuiverRechargeMechanic.isEnabled(this)) QuiverRechargeMechanic.init(this);
     if (WaterBoundMechanic.isEnabled(this)) WaterBoundMechanic.init(this);
+    if (LavaShyMechanic.isEnabled(this)) LavaShyMechanic.init(this);
+    if (BumpMechanic.isEnabled(this)) BumpMechanic.init(this);
 
     if (SlimeTrailDropMechanic.isEnabled(this)) SlimeTrailDropMechanic.init(this);
 
@@ -1046,6 +1050,7 @@ export class Enemy {
     LeaderFollowerMechanic.update(this, { deltaTime });
     CloseQuartersMechanic.update(this, { distance });
     WaterBoundMechanic.update(this);
+    LavaShyMechanic.update(this);
 
     const shouldDropSlimeTrail = SlimeTrailDropMechanic.update(this);
 
