@@ -24,6 +24,16 @@ function offersZoneChangeAt(depth) {
   return depth > 0 && depth % ZONE_CHANGE_DEPTH_STEP === 0;
 }
 
+// A Dungeon ('D') exit is only offered from rooms on the same L3/L6/L9 beat,
+// and from L6 on that beat guarantees one. The Compass's 3-follow streak
+// (CompassSystem) and letter sequences (B-A-D, G-O-O-D) place a 'D'
+// directly and are deliberately exempt — they are earned, not rolled.
+const DUNGEON_DEPTH_STEP = 3;
+const DUNGEON_GUARANTEED_DEPTH = 6;
+function offersDungeonAt(depth) {
+  return depth > 0 && depth % DUNGEON_DEPTH_STEP === 0;
+}
+
 // Exit slots are ordered [north, east, west] everywhere in this file. Some
 // letter templates close one of those slots during room generation (Ocean's
 // wall of water eats the east exit — RoomGenerator.generateOceanTerrain reads
@@ -369,6 +379,21 @@ export class ExitSystem {
   }
 
   /**
+   * From L6 on the dungeon beat (see offersDungeonAt), one exit is always a
+   * 'D'. It never takes the north slot: the pre-boss gate (bossDepth - 1 = 9
+   * in the colored zones) overwrites the cleared room's north exit with a
+   * forced 'B', and _pointNorthAtGray can repaint north toward gray. 'D' is
+   * gated against no zone, so it can't break a streak _keepStreakSlotOpen kept.
+   */
+  _guaranteeDungeonExit(letters, closedSlots, forcedBossIndex, currentDepth, currentLetter) {
+    if (currentDepth == null || currentDepth < DUNGEON_GUARANTEED_DEPTH || !offersDungeonAt(currentDepth)) return;
+    if (currentLetter === 'D' || letters.includes('D')) return;
+    const candidates = [1, 2].filter(i => i !== forcedBossIndex && !closedSlots.has(i));
+    if (candidates.length === 0) return;
+    letters[candidates[Math.floor(Math.random() * candidates.length)]] = 'D';
+  }
+
+  /**
    * The forced miniboss 'B' takes one of the three slots, leaving only two to
    * carry an in-progress color streak. When both remaining letters are
    * hard-gated against the streak's zone (e.g. green-only G/Q/M), the streak
@@ -428,6 +453,8 @@ export class ExitSystem {
       letters[forcedBossIndex] = 'B';
       this._keepStreakSlotOpen(letters, closedSlots, forcedBossIndex, progressionColor, currentDepth, zoneType, currentLetter);
     }
+
+    this._guaranteeDungeonExit(letters, closedSlots, forcedBossIndex, currentDepth, currentLetter);
 
     // Assign colors based on zone and progression state. The forced 'B' slot
     // is reserved: alt/streak colors are placed on the other open slots, so
@@ -731,6 +758,11 @@ export class ExitSystem {
           const t = Math.min(depth, 9) - 5; // 0 at depth 5, 4 at depth 9+
           weight *= 2 + (6 * t / 4);        // 2 -> 8 linearly over depths 5..9
         }
+      }
+
+      // Dungeon: only rolled on the L3/L6/L9 beat (offersDungeonAt).
+      if (letter === 'D' && !offersDungeonAt(depth)) {
+        weight = 0;
       }
 
       // Lucky blessing reshapes the route: more vaults, key rooms, mystery,
