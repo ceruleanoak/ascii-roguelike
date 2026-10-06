@@ -757,8 +757,11 @@ export class InteractionSystem {
         { char: '2', chance: 0.15 * mineralMult }, // Ore
         { char: '⚜', chance: 0.03 }
       ];
+      // Red's Metal takes ¾ of the vein bonus (10.5% surface, ~16% Underground)
+      // — the full bonus dropped it a tad too often; Ore keeps the full bonus.
       const zoneMineral = this.getZoneMineral(zone);
-      if (zoneMineral) rolls.splice(1, 0, { char: zoneMineral, chance: 0.07 * mineralMult });
+      const zoneMineralMult = zone === 'red' ? mineralMult * 0.75 : mineralMult;
+      if (zoneMineral) rolls.splice(1, 0, { char: zoneMineral, chance: 0.07 * zoneMineralMult });
       let i = 0;
       for (const r of rolls) {
         if (Math.random() < r.chance) {
