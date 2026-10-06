@@ -133,6 +133,25 @@ export function generateYellowWaterTemplate(gen, room, forced = null) {
 }
 
 /**
+ * The plane-1 cells just inside each cave entrance (^ row 4, v row 25,
+ * > col 25, < col 4; three cells each) shared by underground and the bat
+ * belfry — where the player lands on crossing an entrance. The clearings stop
+ * at the entrance row, so without this the cell beyond it was ordinary cave:
+ * cave walls, glittering rocks, mud, enemies, and sinkhole water could all
+ * land there and block an entrance from the cave side. Every placement pass
+ * treats these like clearing cells.
+ */
+const CAVE_ENTRANCE_LANDING_KEYS = new Set([
+  ...[14, 15, 16].map(c => `${c},5`),   // below the north ^^^
+  ...[14, 15, 16].map(c => `${c},24`),  // above the south vvv
+  ...[14, 15, 16].map(r => `24,${r}`),  // left of the east >>>
+  ...[14, 15, 16].map(r => `5,${r}`),   // right of the west <<<
+]);
+export function isCaveEntranceLanding(col, row) {
+  return CAVE_ENTRANCE_LANDING_KEYS.has(`${col},${row}`);
+}
+
+/**
  * Cellular-automata cave grid. Returns grid[row][col] where 1 = wall, 0 = open.
  * Borders are always wall; `isOpen(col, row)` cells are forced open (clearings).
  * Shared by underground and the bat belfry.
@@ -962,7 +981,8 @@ export function injectSinkholeLake(gen, room) {
     return room.backgroundObjects.some(o => !o.surfaceOnly && o.position.x === x && o.position.y === y);
   };
   const canStampWater = (col, row) =>
-    caveGrid[row]?.[col] === 0 && !isInClearing(col, row) && !occupied(col, row);
+    caveGrid[row]?.[col] === 0 && !isInClearing(col, row) &&
+    !isCaveEntranceLanding(col, row) && !occupied(col, row);
 
   const openCells = [];
   for (let r = 1; r < ROWS - 1; r++) {

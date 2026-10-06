@@ -12,7 +12,7 @@ import { getDungeonDesign } from '../data/dungeonDesigns.js';
 import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
-import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, isCellProtected, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placeWhirlpool, generateSettlementRoom as generateSettlementRoomImpl, buildForcedRiverParams, generateYellowWaterTemplate, cellularCaveGrid, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, spawnGuaranteedItems, offerL1Weapon, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl } from './roomFeatures.js';
+import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, isCellProtected, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placeWhirlpool, generateSettlementRoom as generateSettlementRoomImpl, buildForcedRiverParams, generateYellowWaterTemplate, cellularCaveGrid, isCaveEntranceLanding, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, spawnGuaranteedItems, offerL1Weapon, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl } from './roomFeatures.js';
 
 // Zone-boss arena → letter template key. Boss rooms are entered without a
 // letter (cheat warp) or with an arbitrary one (normal progression), so we
@@ -1106,10 +1106,14 @@ export class RoomGenerator {
       }
     }
 
+    // Clearings plus the cave-side landing cell of every entrance — forced
+    // open and kept out of every placement pass below.
+    const isReserved = (col, row) => isInClearing(col, row) || isCaveEntranceLanding(col, row);
+
     // ── Cellular automata cave generation ────────────────────────────────────
     // caveGrid[row][col] = 1 → wall, 0 → passage. Shared with the bat belfry
     // via cellularCaveGrid.
-    const caveGrid = cellularCaveGrid(COLS, ROWS, isInClearing);
+    const caveGrid = cellularCaveGrid(COLS, ROWS, isReserved);
 
     // ── Carve corridors from center to each clearing entrance ────────────────
     const centerCol = Math.floor(COLS / 2);
@@ -1198,8 +1202,8 @@ export class RoomGenerator {
           if (isEntrance) continue;
           const obj = new BackgroundObject('}', c * GRID.CELL_SIZE, r * GRID.CELL_SIZE);
           room.backgroundObjects.push(obj);
-        } else if (!isInClearing(c, r)) {
-          // Open cave passage (not in clearing) — eligible for rocks / enemy spawns
+        } else if (!isReserved(c, r)) {
+          // Open cave passage (not in clearing or an entrance landing) — eligible for rocks / enemy spawns
           const isEntrance = entranceData.some(e => e.col === c && e.row === r);
           if (!isEntrance) passageCells.push({ col: c, row: r });
         }
@@ -1427,8 +1431,11 @@ export class RoomGenerator {
     const isInClearing = (col, row) =>
       clearings.some(c => col >= c.minCol && col <= c.maxCol && row >= c.minRow && row <= c.maxRow);
 
+    // Clearings plus each entrance's cave-side landing cell (see underground).
+    const isReserved = (col, row) => isInClearing(col, row) || isCaveEntranceLanding(col, row);
+
     // Cellular automata cave generation (shared helper; same as underground)
-    const caveGrid = cellularCaveGrid(COLS, ROWS, isInClearing);
+    const caveGrid = cellularCaveGrid(COLS, ROWS, isReserved);
 
     // Carve corridors from center to each clearing
     const centerCol = Math.floor(COLS / 2);
@@ -1491,7 +1498,7 @@ export class RoomGenerator {
           if (isEntrance) continue;
           const obj = new BackgroundObject('}', c * GRID.CELL_SIZE, r * GRID.CELL_SIZE);
           room.backgroundObjects.push(obj);
-        } else if (!isInClearing(c, r)) {
+        } else if (!isReserved(c, r)) {
           const isEntrance = entranceData.some(e => e.col === c && e.row === r);
           if (!isEntrance) passageCells.push({ col: c, row: r });
         }
