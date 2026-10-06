@@ -172,7 +172,7 @@ export const FRAME_PASSES = {
     // Fairy King in a Bottle ready: a fairy circles the player.
     { id: 'fairyKingOrbit', on: combatOnly, draw: (rc, game, owner) => { if (!deathHeld(game, owner)) drawFairyKingOrbit(rc.renderer, game); } },
     // Attack-direction '^' orbiting tight around the player.
-    { id: 'facingIndicator', on: combatOnly, draw: (rc, game) => drawPlayerFacingIndicator(rc.renderer, game) },
+    { id: 'facingIndicator', on: { ...combatOnly, rest: 'REST is the safe hub; the attack-direction cue is hidden there by design' }, draw: (rc, game) => drawPlayerFacingIndicator(rc.renderer, game) },
     { id: 'staffBlockStance', on: combatOnly, draw: (rc, game) => er(rc).drawStaffBlockStance(game) },
     { id: 'knownSpellHints', on: combatOnly, draw: (rc, game) => { if (game.knownSpells?.size > 0) drawKnownSpellHints(rc.renderer, game); } },
     { id: 'gemWandCharge', on: combatOnly, draw: (rc, game) => er(rc).drawGemWandCharge(game) },
