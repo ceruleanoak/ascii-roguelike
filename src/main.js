@@ -2914,24 +2914,12 @@ class Game {
           console.log(`[Secret] Leshy discovered! Fleeing to ${leshy.targetExit} exit`);
         }
 
-        // Key droppers always drop (bypass dropChance) — dungeon key skulls
-        // are visually identical Bones ('8') objects with dropChance 0.2, so
-        // without this they'd usually be destroyed with no drop at all,
-        // silently losing the run's only key (bug: "dungeon key never
-        // appeared" after clearing every skull).
-        if (obj.dropsKey || obj.dropsDungeonKey) {
+        // Key droppers and guaranteed drops bypass the roll (passesDropRoll).
+        if (obj.passesDropRoll()) {
           this.handleObjectEffect(effect, obj, attack);
-        } else {
-          // Normal drop chance logic
-          const chance = obj.data.dropChance;
-          if (chance === undefined || Math.random() < chance) {
-            this.handleObjectEffect(effect, obj, attack);
-          } else {
-            // No drop this time — still mark background dirty if object was destroyed
-            if (effect && effect.startsWith('destroyObject')) {
-              this.renderer.markBackgroundDirty();
-            }
-          }
+        } else if (effect && effect.startsWith('destroyObject')) {
+          // No drop this time — still mark background dirty if object was destroyed
+          this.renderer.markBackgroundDirty();
         }
       }
     }

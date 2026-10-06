@@ -88,6 +88,10 @@ export class BackgroundObject {
     // exempt from the post-generation stray cleanup pass (roomFeatures.js).
     this.structural = false;
 
+    // Set at placement to skip the data dropChance roll for this one instance
+    // (e.g. the Caldera's one guaranteed Fire Berry bush). See passesDropRoll().
+    this.guaranteedDrop = false;
+
     // Special-case hitboxes for certain char types, then fall through to
     // data-driven hitbox (from BACKGROUND_OBJECTS), then to the render-size default.
     const isGroundLiquid = char === '=' || char === '~' || char === '!';
@@ -358,6 +362,17 @@ export class BackgroundObject {
 
   acceptsInteraction(type) {
     return this.acceptsInteractions.includes('all') || this.acceptsInteractions.includes(type);
+  }
+
+  // The one dropChance roll shared by the weapon-destroy path (main.js) and
+  // the open-by-hand path (InteractionSystem). Key droppers always drop —
+  // dungeon key skulls are visually identical Bones ('8') with dropChance 0.2,
+  // so rolling them would silently lose the run's only key. guaranteedDrop is
+  // the same bypass for a placement-time guarantee (Caldera Fire Berry bush).
+  passesDropRoll() {
+    if (this.dropsKey || this.dropsDungeonKey || this.guaranteedDrop) return true;
+    const chance = this.data.dropChance;
+    return chance === undefined || Math.random() < chance;
   }
 
   // Non-destructive interact (used by unarmed players, shrines, water, etc.)

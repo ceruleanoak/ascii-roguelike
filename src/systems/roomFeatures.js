@@ -397,12 +397,20 @@ export function generateCalderaRoom(gen, room) {
 
   // Scatter a handful of Ember Bushes away from the pool and exits.
   const bushCount = 3 + Math.floor(Math.random() * 2); // 3-4
+  const bushes = [];
   for (let i = 0; i < bushCount; i++) {
     const pos = gen.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects);
     if (!pos) continue;
     const col = Math.round(pos.x / C), row = Math.round(pos.y / C);
     if (poolCells.some(c => c.col === col && c.row === row)) continue;
-    room.backgroundObjects.push(new BackgroundObject('e', pos.x, pos.y));
+    const bush = new BackgroundObject('e', pos.x, pos.y);
+    room.backgroundObjects.push(bush);
+    bushes.push(bush);
+  }
+  // Every Caldera yields at least one Fire Berry: one random bush skips the
+  // dropChance roll. Which one stays unknown, so the rest still read as luck.
+  if (bushes.length > 0) {
+    bushes[Math.floor(Math.random() * bushes.length)].guaranteedDrop = true;
   }
 
   // Rare outdoor Weapons Master — same interactions as the Settlement hut version.
