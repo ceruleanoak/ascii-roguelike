@@ -239,23 +239,45 @@ export class AudioSystem {
       this._lastResumeAttempt = now;
       this._resumeInFlight = true;
 
-      this.audioContext.resume()
-        .then(() => { this._resumeInFlight = false; })
-        .catch(() => { this._resumeInFlight = false; });
+      // After a system sleep, resume() can stay pending indefinitely (WebKit
+      // in particular) — and with the in-flight guard set, every later key
+      // press would then be ignored and audio stays dead for the session.
+      // Race it against a timeout so a hung attempt frees the guard and the
+      // next gesture retries.
+      const RESUME_TIMEOUT_MS = 1500;
+      let settled = false;
+      const release = () => {
+        if (settled) return;
+        settled = true;
+        this._resumeInFlight = false;
+      };
+      setTimeout(release, RESUME_TIMEOUT_MS);
+      this.audioContext.resume().then(release, release);
     };
 
-    // Also resume when the tab becomes visible again (covers browser-initiated
-    // suspensions that occur while the page is hidden).
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') tryResume();
+    // Wake signals: tab visible again, page restored (bfcache / wake from
+    // sleep). Clear the throttle so the attempt runs immediately rather than
+    // being swallowed by a stale timestamp from before the sleep.
+    const onWake = () => {
+      if (document.visibilityState !== 'visible') return;
+      this._lastResumeAttempt = -Infinity;
+      tryResume();
+    };
+
+    // The context can leave 'running' on its own ('suspended', or WebKit's
+    // 'interrupted' on sleep / audio-device change). Reset the throttle so the
+    // very next gesture retries.
+    this.audioContext.onstatechange = () => {
+      if (this.audioContext?.state !== 'running') this._lastResumeAttempt = -Infinity;
     };
 
     this.autoResumeListener = tryResume;
-    this.visibilityChangeListener = onVisibilityChange;
+    this.visibilityChangeListener = onWake;
     document.addEventListener('pointerdown', tryResume);
     document.addEventListener('keydown', tryResume);
     document.addEventListener('touchstart', tryResume, { passive: true });
-    document.addEventListener('visibilitychange', onVisibilityChange);
+    document.addEventListener('visibilitychange', onWake);
+    window.addEventListener('pageshow', onWake);
   }
 
   /**
@@ -338,6 +360,7 @@ export class AudioSystem {
     }
     if (this.visibilityChangeListener) {
       document.removeEventListener('visibilitychange', this.visibilityChangeListener);
+      window.removeEventListener('pageshow', this.visibilityChangeListener);
       this.visibilityChangeListener = null;
     }
   }
