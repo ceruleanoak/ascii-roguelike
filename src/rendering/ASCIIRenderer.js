@@ -55,19 +55,44 @@ export class ASCIIRenderer {
     this.fgCtx = foregroundCanvas.getContext('2d');
     this.uiCtx = uiCanvas.getContext('2d');
 
-    // Scale canvas buffer to physical device pixels so pixel fonts render
-    // at 1:1 device pixels instead of being upscaled and blurred by the OS.
-    // All game coordinates remain in logical (480px) space via ctx.scale().
+    for (const ctx of [this.bgCtx, this.fgCtx, this.uiCtx]) installRetroAlphaQuantization(ctx);
+    this.syncCanvasResolution();
+
+    // Waking a laptop from sleep can discard the canvas backing stores
+    // (WebKit), which resets every context's transform/font/alignment — the
+    // game then draws unscaled into the top-left corner. Moving the window to
+    // a display with a different pixel ratio stales the buffer size the same
+    // way. Re-sync on every wake/visibility/display signal.
+    const resync = () => this.syncCanvasResolution();
+    window.addEventListener('pageshow', resync);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') resync();
+    });
+    for (const canvas of [this.bgCanvas, this.fgCanvas, this.uiCanvas]) {
+      canvas.addEventListener('contextrestored', resync);
+    }
+    this._watchPixelRatio(resync);
+  }
+
+  /**
+   * Size the canvas buffers to physical device pixels so pixel fonts render
+   * at 1:1 device pixels instead of being upscaled and blurred by the OS, and
+   * (re)apply each context's drawing state. All game coordinates remain in
+   * logical (480px) space via the context transform. Idempotent — safe to
+   * call any time the backing store may have been lost.
+   */
+  syncCanvasResolution() {
     const dpr = window.devicePixelRatio || 1;
     this.dpr = dpr;
     for (const canvas of [this.bgCanvas, this.fgCanvas, this.uiCanvas]) {
-      canvas.width  = GRID.WIDTH  * dpr;
-      canvas.height = GRID.HEIGHT * dpr;
+      // Assigning width/height clears the buffer even when unchanged, so
+      // only touch it when the size actually differs.
+      if (canvas.width !== GRID.WIDTH * dpr) canvas.width = GRID.WIDTH * dpr;
+      if (canvas.height !== GRID.HEIGHT * dpr) canvas.height = GRID.HEIGHT * dpr;
       canvas.style.width  = GRID.WIDTH  + 'px';
       canvas.style.height = GRID.HEIGHT + 'px';
     }
 
-    // Configure rendering contexts
     this.setupContext(this.bgCtx);
     this.setupContext(this.fgCtx);
     this.setupContext(this.uiCtx);
@@ -75,9 +100,20 @@ export class ASCIIRenderer {
     this.backgroundDirty = true;
   }
 
+  // A `resolution` media query only matches the ratio it was built for, so
+  // re-arm it with the new ratio after each change.
+  _watchPixelRatio(onChange) {
+    if (!window.matchMedia) return;
+    const mq = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+    mq.addEventListener?.('change', () => {
+      onChange();
+      this._watchPixelRatio(onChange);
+    }, { once: true });
+  }
+
   setupContext(ctx) {
-    installRetroAlphaQuantization(ctx);
-    ctx.scale(this.dpr, this.dpr);
+    // setTransform (not scale) so a re-sync never compounds the scale.
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.font = `${GRID.CELL_SIZE}px 'Unifont', monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
