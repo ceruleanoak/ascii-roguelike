@@ -41,7 +41,12 @@ export class FishingSystem {
     this.bobber = null;
     this.rewardObjects = [];
     this.rusalka = null;
-    this.rusalkaHasAppeared = false; // True once a Rusalka has been summoned this room visit
+    this.rusalkaHasAppeared = false; // True once a Rusalka has been summoned this run (never reset per room)
+    // The Cure Rusalka (PolymorphSystem) appeared this room visit. The lethal
+    // Rusalka stays away for the rest of the visit — otherwise the water-touch
+    // respawn summoned her beside the healer, or onto the player the moment
+    // the cure landed.
+    this.cureRusalkaThisRoom = false;
     this.fishEntities = [];
     this.targetedFish = null; // The specific fish entity the current cast is aimed at
     this.maxFishCount = 3; // Decreases with each successful catch
@@ -256,12 +261,25 @@ export class FishingSystem {
     this.rewardObjects.push(reward);
   }
 
+  // The Cure Rusalka is arriving: dismiss any lethal Rusalka and keep her
+  // away for the rest of this room visit.
+  yieldToCureRusalka(player) {
+    if (this.rusalka) {
+      this.rusalka.cleanup(player);
+      this.rusalka = null;
+    }
+    this.cureRusalkaThisRoom = true;
+  }
+
   spawnRusalka(game) {
     if (!this.bobber) return;
     this.spawnRusalkaAt(game, this.bobber.position.x, this.bobber.position.y);
   }
 
   spawnRusalkaAt(game, x, y) {
+    // A cursed frog's Rusalka is the healer, never this one (see yieldToCureRusalka).
+    if (game.cureRusalka || game.player?.polymorphCursed || this.cureRusalkaThisRoom) return;
+
     // Remove any existing Rusalka first
     if (this.rusalka) {
       this.rusalka.cleanup(game.player);
@@ -577,6 +595,7 @@ export class FishingSystem {
     this.maxFishCount = 3;
     this.fishSpawnTimer = 0;
     this.rusalkaKilledPlayer = false;
+    this.cureRusalkaThisRoom = false;
     this.fishingElectrocuted = false; // dead water is per-room — new room, new fish
     // rusalkaHasAppeared is intentionally NOT reset — it's a permanent run toggle
     if (player) {

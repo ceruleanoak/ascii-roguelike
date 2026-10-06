@@ -169,6 +169,7 @@ export class PolymorphSystem {
     );
     rusalka.isCureRusalka = true;
     game.cureRusalka = rusalka;
+    game.fishingSystem?.yieldToCureRusalka(game.player);
   }
 
   // ── Player tongue attack ────────────────────────────────────────────────────
