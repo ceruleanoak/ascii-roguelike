@@ -167,6 +167,7 @@ export class InteriorManager {
     p.position.y = spawn.y;
     p._activeInteriorKind = kind;
     freezeSurfaceRoom(g);
+    this._syncCombatMusic();
 
     // Bring the camp companion (if any) along — snap it beside the player and
     // onto the floor's collision map (bug #116).
@@ -230,6 +231,17 @@ export class InteriorManager {
 
     g.activeFloor = null;
     g.renderer.backgroundDirty = true;
+    this._syncCombatMusic();
+  }
+
+  // Battle music (layer 2) follows the layer the player is on. Its only other
+  // on-switch is room entry, and the per-frame clear check mutes it once the
+  // active layer is empty — so without this, entering a floor muted it (the
+  // frozen surface reads as cleared) and nothing turned it back on inside or
+  // after leaving.
+  _syncCombatMusic() {
+    const g = this.game;
+    g.audioSystem?.setLayer2Enabled(g._countedEnemies(g._activeEnemies()).length > 0);
   }
 
   // ── Active-layer source accessors ───────────────────────────────────────────

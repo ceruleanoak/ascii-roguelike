@@ -3221,9 +3221,11 @@ class Game {
       }
     }
 
-    // Mute layer 2 (bassline) immediately when all enemies are cleared.
-    // Hidden mimics don't count — combat is effectively over from the player's POV.
-    if (this._countedEnemies(this.currentRoom.enemies).length === 0) {
+    // Mute layer 2 (bassline) immediately when all enemies on the player's
+    // layer are cleared. Hidden mimics don't count — combat is effectively
+    // over from the player's POV. Active layer, not currentRoom: entering a
+    // hut freezes the surface to [] and would read as cleared.
+    if (this._countedEnemies(this._activeEnemies()).length === 0) {
       this.audioSystem.muteLayer2Immediately();
     }
 
