@@ -46,8 +46,12 @@ export function updateStuckArrows(stuckArrows, deltaTime, player, combat) {
     }
     // If on ground (stuckTo === null), arrow stays at fixed position
 
-    // Player can pick up ground arrows to refund ammo to the matching bow
-    if (arrow.pickupable && arrow.weaponChar && player && !player.isDead) {
+    // Player can pick up ground arrows to refund ammo to the matching bow —
+    // only on the layer they're standing on: interior coordinates overlap the
+    // surface Room's, so an arrow left on the surface would otherwise refund
+    // from inside a hut.
+    if (arrow.pickupable && arrow.weaponChar && player && !player.isDead &&
+        arrow.hutPlane === combat.activeHutPlane()) {
       const ax = arrow.position.x + GRID.CELL_SIZE / 2;
       const ay = arrow.position.y + GRID.CELL_SIZE / 2;
       const px = player.position.x + player.width / 2;

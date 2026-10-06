@@ -323,9 +323,10 @@ export class CombatSystem {
         if (proj.type === 'bullet' && !proj.loopOmega && WallRicochetMechanic.tryStructureWallRicochet(proj, room, deltaTime, this)) {
           continue;
         }
-        // Arrows stick to walls in the main room; in interior rooms (hut/dungeon) just destroy.
-        const isInterior = room?.gridCols !== undefined && room.gridCols !== GRID.COLS;
-        if (proj.type === 'arrow' && !isInterior) {
+        // Arrows stick to walls on every layer — interiors included, where
+        // _tagCombatHutPlane gives the stuck arrow its hutPlane so the
+        // interior pass draws it.
+        if (proj.type === 'arrow') {
           this.stuckArrows.push({
             char: proj.char,
             weaponChar: proj.weaponChar,
@@ -2020,12 +2021,18 @@ export class CombatSystem {
     this.objectDestroyEvents = [];
   }
 
+  // The hutPlane value a combat entity spawned right now carries — and so
+  // the layer the player is on, for anything that must match it.
+  activeHutPlane() {
+    return !!(this.game?.activeFloor || this.game?.player?.inMaze);
+  }
+
   // Tag all combat entities with hutPlane based on current interior state
   // (game.activeFloor for hut/dungeon, player.inMaze for the maze — it has no
   // activeFloor of its own). Called at the end of update() so newly-spawned
   // entities get tagged before render; existing tags are left alone.
   _tagCombatHutPlane() {
-    const hp = !!(this.game?.activeFloor || this.game?.player?.inMaze);
+    const hp = this.activeHutPlane();
     const arrays = [
       this.projectiles, this.enemyProjectiles,
       this.meleeAttacks, this.enemyMeleeAttacks,
