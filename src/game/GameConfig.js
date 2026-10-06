@@ -1450,6 +1450,10 @@ export const WATER_COLORS = {
   deep:        '#0a1a55'  // Deep water (BackgroundObject.deepWater) — darker tint, drowning hazard
 };
 
+// Seconds a poison hit (melee or projectile) keeps one water tile poisoned
+// before it reverts to normal. Was 8s; poisoned water lingered too long.
+export const POISONED_WATER_DURATION = 4.0;
+
 export const WATER_STRUCTURES = {
   CHANNEL: {
     name: 'Channel',

@@ -59,6 +59,9 @@ const ENEMY_GOO_CONTACT_STACK = GOO_CONTACT_STACK * PHYSICS.ENEMY_TIMER_RATE;
 //   stacks         — Pip track (0–3). Present = the effect counts pips.
 //   damage/tickRate/tickTimer — damage over time: `damage` every `tickRate`s.
 //   stackTickRate  — tickRate becomes stackTickRate / pips (poison speeds up).
+//   pipTickRates   — explicit tickRate per pip ([unused, pip1, pip2, pip3]);
+//                    overrides stackTickRate's division when a stage needs
+//                    its own pace (player poison's slow pip 1).
 //   decayInterval  — on expiry, lose one pip and buy this much more time
 //                    instead of falling off all at once.
 //   durationPerStack — the applied duration is multiplied by the pip count.
@@ -80,9 +83,10 @@ const STATUS_EFFECTS = {
   },
   poison: {
     // Each pip ticks faster, and pips drain one at a time. Same stages on
-    // both sides; the player keeps its own faster pip-1 rate.
+    // both sides. The player's pip 1 — what standing in poisoned water holds
+    // — is a slow 4s tick; pips 2–3 keep the earlier 0.75s/0.5s pace.
     enemy: { damage: 1, tickRate: 3.0, tickTimer: 0, stacks: 0, stackTickRate: 3.0, decayInterval: 3.0 },
-    player: { damage: 1, tickRate: 1.5, tickTimer: 0, stacks: 0, stackTickRate: 1.5, decayInterval: 3.0 }
+    player: { damage: 1, tickRate: 4.0, tickTimer: 0, stacks: 0, stackTickRate: 1.5, pipTickRates: [null, 4.0, 0.75, 0.5], decayInterval: 3.0 }
   },
   freeze: {
     // Pip track on both sides: each ice hit adds a pip, pips 1–2 slow
@@ -163,6 +167,12 @@ export function clearEffectOrder(entity, effect) {
  * stackable effect gains one pip per application. Duration is last-hit-wins
  * (Math.max), never additive.
  */
+// A stacking DoT's tickRate at its current pip count.
+function pipTickRate(slot) {
+  const pips = Math.max(1, slot.stacks);
+  return slot.pipTickRates?.[pips] ?? slot.stackTickRate / pips;
+}
+
 export function applyStatusEffect(entity, effect, duration = 3.0, pips = null) {
   const slot = entity.statusEffects?.[effect];
   if (!slot) {
@@ -194,7 +204,7 @@ export function applyStatusEffect(entity, effect, duration = 3.0, pips = null) {
       ? Math.min(MAX_PIPS, slot.stacks + 1)
       : Math.max(slot.stacks, Math.min(MAX_PIPS, pips));
     if (slot.stackTickRate !== undefined) {
-      slot.tickRate = slot.stackTickRate / Math.max(1, slot.stacks);
+      slot.tickRate = pipTickRate(slot);
       // A pip that speeds the DoT up doesn't wait out the slower timer.
       slot.tickTimer = Math.min(slot.tickTimer, slot.tickRate);
     }
@@ -267,7 +277,7 @@ export function tickStatusEffects(entity, deltaTime, hooks = {}) {
 
     if (slot.decayInterval !== undefined && slot.stacks > 1) {
       slot.stacks -= 1;
-      if (slot.stackTickRate !== undefined) slot.tickRate = slot.stackTickRate / slot.stacks;
+      if (slot.stackTickRate !== undefined) slot.tickRate = pipTickRate(slot);
       slot.duration = slot.decayInterval;
       continue;
     }

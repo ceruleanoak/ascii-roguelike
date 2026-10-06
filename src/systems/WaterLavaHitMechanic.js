@@ -1,4 +1,4 @@
-import { GRID, BACKGROUND_OBJECT_VARIANTS } from '../game/GameConfig.js';
+import { GRID, BACKGROUND_OBJECT_VARIANTS, POISONED_WATER_DURATION } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { isInteriorActive } from './PlaneSystem.js';
 
@@ -20,7 +20,7 @@ export const WaterLavaHitMechanic = {
       if (proj.onHit === 'freeze') {
         obj.setWaterState('frozen', Infinity); // Stays frozen until thawed by fire
       } else if (proj.onHit === 'poison') {
-        obj.setWaterState('poisoned', 8.0);
+        obj.setWaterState('poisoned', POISONED_WATER_DURATION);
       } else if (proj.onHit === 'stun' && proj.electric) {
         combat.game?.electricitySystem?.seedFromWeapon(obj, backgroundObjects, proj,
           { tileDuration: 4.0, hutPlane: isInteriorActive(combat.game) });

@@ -1,9 +1,13 @@
 import { GRID } from '../game/GameConfig.js';
 
+// How long an Acid Blade flood keeps a pond poisoned. Was Infinity (a
+// permanent pond); a whole poisoned pond should still clear in a few seconds.
+const ACID_FLOOD_DURATION = 6.0;
+
 /**
- * Acid Blade: flood-fill connected water tiles, permanently converting the
- * entire pond to acid (modelled as the existing 'poisoned' waterState with
- * Infinity duration). 4-connected adjacency on the cell grid — hitting one
+ * Acid Blade: flood-fill connected water tiles, converting the entire pond to
+ * acid (modelled as the existing 'poisoned' waterState for
+ * ACID_FLOOD_DURATION). 4-connected adjacency on the cell grid — hitting one
  * edge of a pond poisons the whole pond, not a single cell.
  *
  * (Electrify is NOT instant like this — shock-on-water routes through
@@ -31,7 +35,7 @@ export function acidFloodFillWater(startObj, backgroundObjects) {
 
   while (queue.length > 0) {
     const obj = queue.shift();
-    obj.setWaterState('poisoned', Infinity);
+    obj.setWaterState('poisoned', ACID_FLOOD_DURATION);
 
     const cx = Math.round(obj.position.x / CELL);
     const cy = Math.round(obj.position.y / CELL);

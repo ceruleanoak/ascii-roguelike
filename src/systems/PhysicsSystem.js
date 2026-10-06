@@ -1834,7 +1834,8 @@ export class PhysicsSystem {
       if (!isImmune) {
         if (liquidState === 'poisoned') {
           // Per-frame contact holds pip 1 — lingering never stacks by itself.
-          if (entity.applyStatusEffect) entity.applyStatusEffect('poison', 4.0, 1);
+          // 1.5s (was 4s): poison wears off soon after stepping out.
+          if (entity.applyStatusEffect) entity.applyStatusEffect('poison', 1.5, 1);
         } else if (liquidState === 'electrified') {
           game.electricitySystem?.shockEntity(entity, electricCurrent);
         }
