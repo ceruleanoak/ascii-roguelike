@@ -594,6 +594,16 @@ identity, not standard programming terms.
   box-drawing, literal glyphs only). Recipes in `src/data/recipes.js`.
 - **Not:** an Ingredient; never a letter/digit char.
 
+### Dismantle
+- **Definition:** Breaking a Crafted item back into its recipe pair at the REST station. Placing
+  the item in the centre slot *stages* it: the pair appears in the side slots and the item
+  shows in the centre. Taking a side slot commits the Dismantle. Walking away cancels it and
+  hands the item back.
+- **In code:** `CraftingSystem.stageDismantle()` / `cancelDismantle()`, with `dismantleItem`
+  holding the live staged Item. `MenuSystem.returnCraftingSlotsWhenAway()` cancels. The same
+  verb is the DISMANTLE option in SlotReplacementOverlay and the SHIFT label.
+- **Not:** a craft (the reverse direction).
+
 ### Forge Recipe
 - **Definition:** A recipe with Scale as an input. It crafts only at the Dragon Forge. At the
   REST station the pair shows an ember tell in the centre slot: a dim `*` that can't be

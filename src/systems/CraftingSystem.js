@@ -36,6 +36,12 @@ export class CraftingSystem {
     this.leftSlot = null;
     this.rightSlot = null;
     this.centerSlot = null;
+    // REST only: the item (Item, or ingredient char) placed into the centre
+    // slot to Dismantle it, while
+    // its recipe pair still sits in left/right untouched. Taking either side
+    // slot commits the Dismantle; walking away cancels it (cancelDismantle).
+    // The slots alone can't tell this apart from an ordinary craft.
+    this.dismantleItem = null;
     this.cycleState = null; // { pool, predeterminedResult, cyclingStartTime }
     // REST only: the pair is a Forge Recipe. Drawn as a dim, unclaimable ember
     // in the centre slot — the pair means something, just not here. Not
@@ -71,6 +77,33 @@ export class CraftingSystem {
     return item;
   }
 
+  /**
+   * Place `item` in the centre to Dismantle it into `recipe`'s pair. `item`
+   * is the live Item (kept so cancelling returns it with its uses/colour
+   * intact), or a bare char for an ingredient-result recipe.
+   */
+  stageDismantle(item, recipe) {
+    this.leftSlot = recipe.left;
+    this.rightSlot = recipe.right;
+    this.centerSlot = typeof item === 'string' ? item : item.char;
+    this.dismantleItem = item;
+  }
+
+  /**
+   * Undo a staged Dismantle: empty the station and hand back the staged item
+   * (not the pair — that would complete the Dismantle for free). Null when
+   * no Dismantle is staged.
+   */
+  cancelDismantle() {
+    const item = this.dismantleItem;
+    if (!item) return null;
+    this.leftSlot = null;
+    this.rightSlot = null;
+    this.centerSlot = null;
+    this.dismantleItem = null;
+    return item;
+  }
+
   clearCenterSlot() {
     const item = this.centerSlot;
     this.centerSlot = null;
@@ -83,6 +116,7 @@ export class CraftingSystem {
 
   updateCrafting() {
     this.centerSlot = null;
+    this.dismantleItem = null;
     this.emberTell = false;
     this._cancelCycling();
 
@@ -188,6 +222,7 @@ export class CraftingSystem {
     this.leftSlot = null;
     this.rightSlot = null;
     this.centerSlot = null;
+    this.dismantleItem = null;
     return char;
   }
 
@@ -209,6 +244,7 @@ export class CraftingSystem {
     this.leftSlot = null;
     this.rightSlot = null;
     this.centerSlot = null;
+    this.dismantleItem = null;
     return golemType;
   }
 
@@ -224,6 +260,7 @@ export class CraftingSystem {
       this.leftSlot = null;
       this.rightSlot = null;
       this.centerSlot = null;
+      this.dismantleItem = null;
       const item = new Item(result, x, y);
       if (starterChar) applyPotionModifierColor(item, starterChar);
       return item;
@@ -235,6 +272,7 @@ export class CraftingSystem {
     this.leftSlot = null;
     this.rightSlot = null;
     this.centerSlot = null;
+    this.dismantleItem = null;
     if (starterChar) applyPotionModifierColor(item, starterChar);
     return item;
   }
@@ -253,6 +291,7 @@ export class CraftingSystem {
     this.leftSlot = state.leftSlot || null;
     this.rightSlot = state.rightSlot || null;
     this.centerSlot = state.centerSlot || null;
+    this.dismantleItem = null;
     this.emberTell = false;
     this.cycleState = null; // cycling is transient, never serialized
   }

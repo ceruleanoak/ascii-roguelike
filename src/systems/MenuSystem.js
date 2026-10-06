@@ -955,9 +955,7 @@ export class MenuSystem {
     const recipe = findRecipeByResult(itemChar);
 
     if (recipe) {
-      game.craftingSystem.leftSlot = recipe.left;
-      game.craftingSystem.rightSlot = recipe.right;
-      game.craftingSystem.centerSlot = itemChar;
+      game.craftingSystem.stageDismantle(selectedItem, recipe);
 
       if (typeof selectedItem === 'string') {
         game.removeIngredient(selectedItem);
@@ -1123,8 +1121,9 @@ export class MenuSystem {
   /**
    * REST tick: once the player walks away from the crafting station, whatever
    * sits in the left/right slots goes back to inventory (the center slot is
-   * derived from them, so it empties too). Otherwise the table is a hiding
-   * place — anything parked there is out of Charon's reach.
+   * derived from them, so it empties too) — except a staged Dismantle, whose
+   * centre item goes back instead of its recipe pair. Otherwise the table is
+   * a hiding place — anything parked there is out of Charon's reach.
    */
   returnCraftingSlotsWhenAway() {
     const game = this.game;
@@ -1139,20 +1138,32 @@ export class MenuSystem {
     if (nearX && nearY) return;
 
     game.audioSystem.stopSFXByName('craft_cycle');
-    const left = cs.clearLeftSlot();
-    const right = cs.clearRightSlot();
-    if (left) this._returnSlotItemToInventory(left);
-    if (right) this._returnSlotItemToInventory(right);
+    // A staged Dismantle hands back the item itself; anything else hands
+    // back whatever the player put in the side slots.
+    const dismantled = cs.cancelDismantle();
+    if (dismantled) {
+      this._returnSlotItemToInventory(dismantled);
+    } else {
+      const left = cs.clearLeftSlot();
+      const right = cs.clearRightSlot();
+      if (left) this._returnSlotItemToInventory(left);
+      if (right) this._returnSlotItemToInventory(right);
+    }
     game.renderer.markBackgroundDirty();
     game.updateUI();
   }
 
-  _returnSlotItemToInventory(char) {
+  // `slotContent` is a slot char, or a live Item (a cancelled Dismantle) that
+  // goes back as-is instead of being rebuilt from its char.
+  _returnSlotItemToInventory(slotContent) {
     const game = this.game;
+    const char = typeof slotContent === 'string' ? slotContent : slotContent.char;
     if (isIngredient(char)) {
       game.addIngredient(char);
     } else if (isItem(char)) {
-      const item = new Item(char, game.player.position.x, game.player.position.y);
+      const item = typeof slotContent === 'string'
+        ? new Item(char, game.player.position.x, game.player.position.y)
+        : slotContent;
       if (item.data.type === 'ARMOR') {
         game.inventorySystem.armorInventory.push(item);
       } else if (item.data.type === 'CONSUMABLE') {
@@ -1215,9 +1226,7 @@ export class MenuSystem {
       const itemChar = item.char;
       const recipe = findRecipeByResult(itemChar);
       if (recipe) {
-        game.craftingSystem.leftSlot = recipe.left;
-        game.craftingSystem.rightSlot = recipe.right;
-        game.craftingSystem.centerSlot = itemChar;
+        game.craftingSystem.stageDismantle(item, recipe);
         clearSource();
         game.saveGameState();
         game.renderer.markBackgroundDirty();
