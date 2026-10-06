@@ -737,6 +737,12 @@ export const RESET_REGISTRY = [
     why: 'No room exists between room transitions.',
   },
   {
+    path: 'fishingSystem.resetForNewRoom',
+    scope: 'room',
+    call: (game) => game.fishingSystem.resetForNewRoom(game.player),
+    why: 'The lethal Rusalka lives on fishingSystem, not the room. Natural entry paths called this by hand but applyRoomSwap did not, so a Rusalka summoned by the Quagmire final round followed the player out of the Aquifer\'s red/cyan branches at her old room-center position and drowned them on arrival.',
+  },
+  {
     path: 'cureRusalka',
     scope: 'room',
     value: null,
