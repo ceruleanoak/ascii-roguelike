@@ -572,8 +572,9 @@ function driveThroughRun(game) {
   // EXPLORE: generates a room, spawns enemies/combat machinery, ticks it.
   game.enterExploreState('north');
   tick(game, 45);
-  // A second pickup mid-EXPLORE exercises the queue shape.
-  game.menuSystem?.showPickupMessage?.('/');
+  // A second pickup mid-EXPLORE exercises the queue shape, and an item
+  // announcement dirties the per-run announced-name memory.
+  game.menuSystem?.announceItem?.('/');
   tick(game, 3);
 }
 

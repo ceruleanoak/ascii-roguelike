@@ -26,6 +26,7 @@ import { NeutralRenderer } from './state/NeutralRenderer.js';
 import { DemoRenderer } from './state/DemoRenderer.js';
 import { HutInteriorOverlay } from './ui/HutInteriorOverlay.js';
 import { DialogueBox } from './ui/DialogueBox.js';
+import { PickupBox } from './ui/PickupBox.js';
 import { CompassIndicator } from './ui/CompassIndicator.js';
 import { ErrandConfirmOverlay } from './ui/ErrandConfirmOverlay.js';
 import { MazeInteriorOverlay } from './ui/MazeInteriorOverlay.js';
@@ -53,6 +54,9 @@ export class RenderController {
 
     // NPC speech panel — drawn last so it sits above interior overlays
     this.dialogueBox = new DialogueBox(renderer);
+
+    // What-just-came-to-hand box, bottom-center — drawn by each state renderer
+    this.pickupBox = new PickupBox(renderer);
 
     // Compass (⌖) bottom-right HUD dial — Explore-mode directional arrow
     this.compassIndicator = new CompassIndicator(renderer);

@@ -271,7 +271,7 @@ export class SlotReplacementSystem {
       }
     }
 
-    game.showPickupMessage(item.data.name);
+    game.menuSystem.announceItem(item.char);
     game.updateUI();
     // REST equipment slots draw their glyphs to the background layer, which is
     // only cleared on a dirty mark. Without this, the displaced item's glyph

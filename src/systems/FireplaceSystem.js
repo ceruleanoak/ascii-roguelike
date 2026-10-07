@@ -168,13 +168,13 @@ export class FireplaceSystem {
       const jerky = new Item('ᒧ', game.player.position.x, game.player.position.y);
       const stacked = game.inventorySystem.mergeStackableConsumable(jerky);
       if (!stacked) game.inventorySystem.consumableInventory.push(jerky);
-      game.menuSystem.showPickupMessage(jerky.data.name);
+      game.menuSystem.announceItem(jerky.char);
     } else if (rawChar === SAND_CHAR) {
       if (!fireplace.burning || !game.removeIngredient(SAND_CHAR)) return;
       const bottle = new Item(EMPTY_BOTTLE_CHAR, game.player.position.x, game.player.position.y);
       const stacked = game.inventorySystem.mergeStackableConsumable(bottle);
       if (!stacked) game.inventorySystem.consumableInventory.push(bottle);
-      game.menuSystem.showPickupMessage(bottle.data.name);
+      game.menuSystem.announceItem(bottle.char);
     } else if (rawChar === '2') {
       // Ore, like Sticks, opens a quantity submenu rather than smelting one
       // implicit unit — see openOreQuantityMenu.
@@ -186,7 +186,7 @@ export class FireplaceSystem {
       const berry = game.inventorySystem.consumableInventory.find(it => it.char === '❋');
       if (!berry || !game.inventorySystem.removeFromConsumableInventory(berry)) return;
       game.addIngredient('𝑚');
-      game.menuSystem.showPickupMessage('Mana');
+      game.menuSystem.announceItem('𝑚');
     } else if (rawChar === '🜉') {
       if (!fireplace.burning) return;
       const idx = game.player.equippedConsumables.findIndex(s => s?.char === '🜉');
@@ -195,7 +195,7 @@ export class FireplaceSystem {
       // Reverts after 3 room exits, same decay as the Caldera fill — see
       // main.js's room-transition reset block.
       game.player.equippedConsumables[idx].hotWaterRoomsLeft = 3;
-      game.menuSystem.showPickupMessage('BOTTLE OF HOT WATER');
+      game.menuSystem.announceItem('🜊');
     } else {
       return;
     }

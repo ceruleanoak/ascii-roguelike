@@ -329,7 +329,7 @@ export class ShopSystem {
     }
 
     if (result.success) {
-      if (result.message) game.showPickupMessage(result.message);
+      game.menuSystem.announcePickupResult(result);
       if (result.pickedUpType === 'WEAPON') game.audioSystem.playSFX('weapon_pickup');
       game.updateUI();
     }

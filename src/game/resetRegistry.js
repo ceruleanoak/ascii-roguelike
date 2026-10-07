@@ -291,6 +291,12 @@ export const RESET_REGISTRY = [
     why: 'Same transient-feedback clears as TITLE (bug #198 family).',
   },
   {
+    path: 'announcedItemChars',
+    scope: 'run',
+    fresh: () => new Set(),
+    why: "Items whose name the pickup box has already shown this run; a new run names everything again, matching the pair memory's per-run reset.",
+  },
+  {
     path: 'restBundle',
     scope: 'run',
     value: null,

@@ -363,9 +363,7 @@ export class FountainSystem {
 
     const bottleChar = FOUNTAIN_BOTTLES[room.fountain.attunement || 'none'];
     game.inventorySystem.replaceConsumableSlot(slotIndex, bottleChar);
-    game.menuSystem.showPickupMessage(
-      (getItemData(bottleChar)?.name || 'bottle').toUpperCase()
-    );
+    game.menuSystem.announceItem(bottleChar);
     game.audioSystem?.playSFX?.('pickup');
     game.updateUI();
     return true;

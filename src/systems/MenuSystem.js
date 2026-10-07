@@ -268,11 +268,40 @@ export class MenuSystem {
     return nearestSlot;
   }
 
-  showPickupMessage(itemName) {
-    const game = this.game;
-    // Add to queue
-    game.pickupMessageQueue.push(itemName.toUpperCase());
+  /**
+   * Queue a plain notice for the pickup box (PickupBox, bottom of screen):
+   * status lines like 'FIREPLACE LIT' or a boss defeat. Items go through
+   * announceItem instead, so their name can retire after the first sighting.
+   * Never center-screen: large center text is the THREE's voice alone.
+   */
+  showPickupMessage(text, color = null, duration = null) {
+    this._queuePickupMessage({ glyph: null, text: text.toUpperCase(), color, duration });
+  }
 
+  /**
+   * Queue an item for the pickup box: its glyph always, its name (`label`,
+   * default the item's own name) only the first time this run the item comes
+   * to hand. After that the glyph alone says what arrived.
+   */
+  announceItem(char, label = null) {
+    const game = this.game;
+    const data = getItemData(char);
+    const firstTime = !game.announcedItemChars.has(char);
+    game.announcedItemChars.add(char);
+    const text = firstTime ? (label ?? data?.name ?? char).toUpperCase() : null;
+    this._queuePickupMessage({ glyph: char, text, color: data?.color ?? null, duration: null });
+  }
+
+  /** Pickup-result dispatch shared by the world pickup (main.js) and the shop. */
+  announcePickupResult(result) {
+    if (!result.message) return;
+    if (result.pickedUpChar) this.announceItem(result.pickedUpChar, result.message);
+    else this.showPickupMessage(result.message);
+  }
+
+  _queuePickupMessage(entry) {
+    const game = this.game;
+    game.pickupMessageQueue.push(entry);
     // If no message is currently showing, start showing the first one
     if (!game.pickupMessage) {
       this.showNextPickupMessage();
@@ -293,7 +322,8 @@ export class MenuSystem {
     const game = this.game;
     if (game.pickupMessageQueue.length > 0) {
       game.pickupMessage = game.pickupMessageQueue.shift();
-      game.pickupMessageTimer = game.PICKUP_MESSAGE_DURATION;
+      game.pickupMessageTimer = game.pickupMessage.duration ?? game.PICKUP_MESSAGE_DURATION;
+      game.pickupMessage.shownFor = game.pickupMessageTimer;
     } else {
       game.pickupMessage = null;
       game.pickupMessageTimer = 0;
@@ -1074,7 +1104,7 @@ export class MenuSystem {
     if (fizzleMana > 0) {
       for (let i = 0; i < fizzleMana; i++) this._collectCraftedIngredient('𝑚');
       game.screenFlash = { startTime: performance.now(), duration: 500, color: '#ff2222' };
-      game.showPickupMessage(getItemData('𝑚').name);
+      this.announceItem('𝑚');
       game.renderer.markBackgroundDirty();
       game.updateUI();
       return;
@@ -1086,7 +1116,7 @@ export class MenuSystem {
     const ingredientChar = cs.claimCraftedIngredient();
     if (ingredientChar) {
       this._collectCraftedIngredient(ingredientChar);
-      game.showPickupMessage(getItemData(ingredientChar)?.name ?? ingredientChar);
+      this.announceItem(ingredientChar);
       game.renderer.markBackgroundDirty();
       game.updateUI();
       return;
@@ -1129,7 +1159,7 @@ export class MenuSystem {
       } else if (item.data.type === 'INGREDIENT') {
         game.addIngredient(item.char);
       }
-      game.showPickupMessage(item.data.name);
+      this.announceItem(item.char);
       game.renderer.markBackgroundDirty();
       game.updateUI();
     }

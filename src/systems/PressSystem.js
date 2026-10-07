@@ -84,11 +84,11 @@ export class PressSystem {
 
     if (INGREDIENTS[outChar]) {
       game.addIngredient(outChar);
-      game.menuSystem.showPickupMessage(INGREDIENTS[outChar].name);
+      game.menuSystem.announceItem(outChar);
     } else {
       const oil = new Item(outChar, game.player.position.x, game.player.position.y);
       game.inventorySystem.consumableInventory.push(oil);
-      game.menuSystem.showPickupMessage(oil.data.name);
+      game.menuSystem.announceItem(oil.char);
     }
     game.audioSystem?.playSFX?.('craft');
     game.closeMenu();

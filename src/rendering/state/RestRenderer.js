@@ -598,20 +598,8 @@ export class RestRenderer {
     // === RIGHT SIDE: ARROW KEYS WITH "D O D G E" ===
     this.renderController.arrowKeyIndicators.render(game);
 
-    // Draw pickup message if active (crafted items). Never ciphered: it's a
-    // direct system notification, not in-world writing — otherwise equipping
-    // Spectacles would garble its own pickup announcement the instant it
-    // auto-equips.
-    if (game.pickupMessage && game.pickupMessageTimer > 0) {
-      const ctx = this.renderer.fgCtx;
-      ctx.save();
-      ctx.font = cipherFont(GRID.CELL_SIZE * 2, false);
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = COLORS.ITEM;
-      this.renderer.drawWrappedText(ctx, game.pickupMessage, GRID.WIDTH / 2, GRID.HEIGHT / 2 - 100, GRID.WIDTH * 0.8, GRID.CELL_SIZE * 2.5);
-      ctx.restore();
-    }
+    // Pickup box (what just came to hand) — see PickupBox.
+    this.renderController.pickupBox.render(game);
 
     // Draw path announcement if active (Path Amulet)
     if (game.pathAnnouncement && game.pathAnnouncementTimer > 0) {

@@ -193,20 +193,8 @@ export class NeutralRenderer {
       ctx.restore();
     }
 
-    // Draw pickup message (identical to EXPLORE/REST states). Never ciphered:
-    // it's a direct system notification, not in-world writing — otherwise
-    // equipping Spectacles would garble its own pickup announcement the
-    // instant it auto-equips.
-    if (game.pickupMessage && game.pickupMessageTimer > 0) {
-      const ctx = this.renderer.fgCtx;
-      ctx.save();
-      ctx.font = `${GRID.CELL_SIZE * 2}px 'Unifont', monospace`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = COLORS.ITEM;
-      this.renderer.drawWrappedText(ctx, game.pickupMessage, GRID.WIDTH / 2, GRID.HEIGHT / 2, GRID.WIDTH * 0.8, GRID.CELL_SIZE * 2.5);
-      ctx.restore();
-    }
+    // Pickup box (what just came to hand) — see PickupBox.
+    this.renderController.pickupBox.render(game);
 
     // Wind-themed rooms (e.g. Oasis) — drifting sand motes, same visual as
     // the yellow zone's Sandstorm. No-ops when the current room isn't bound.

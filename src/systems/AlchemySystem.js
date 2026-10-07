@@ -213,7 +213,7 @@ export class AlchemySystem {
   fillLiquidBottle(slotIndex, liquidChar) {
     const game = this.game;
     game.inventorySystem.replaceConsumableSlot(slotIndex, liquidChar);
-    game.menuSystem.showPickupMessage(LIQUID_BOTTLE_NAMES[liquidChar] ?? 'LIQUID');
+    game.menuSystem.announceItem(liquidChar, LIQUID_BOTTLE_NAMES[liquidChar]);
     game.audioSystem?.playSFX?.('pickup');
     game.updateUI();
   }
@@ -229,7 +229,7 @@ export class AlchemySystem {
       return;
     }
     game.inventorySystem.replaceConsumableSlot(idx, '🜉');
-    game.menuSystem.showPickupMessage('BOTTLE OF WATER');
+    game.menuSystem.announceItem('🜉');
     game.audioSystem?.playSFX?.('pickup');
     game.updateUI();
   }
@@ -248,7 +248,7 @@ export class AlchemySystem {
     // Reverts to a regular Bottle of Water after 3 room exits — decremented
     // in main.js's room-transition reset block.
     game.player.equippedConsumables[idx].hotWaterRoomsLeft = 3;
-    game.menuSystem.showPickupMessage('BOTTLE OF HOT WATER');
+    game.menuSystem.announceItem('🜊');
     game.audioSystem?.playSFX?.('pickup');
     game.updateUI();
   }
@@ -465,7 +465,7 @@ export class AlchemySystem {
 
     // Place the true potion in the equipped slot
     game.inventorySystem.equippedConsumables[this.cauldronSlotIndex] = result;
-    game.menuSystem.showPickupMessage(result.data.name);
+    game.menuSystem.announceItem(result.char);
     game.audioSystem?.playSFX?.('craft');
 
     this.cauldronStage = 'mode';

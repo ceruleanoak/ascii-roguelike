@@ -4171,9 +4171,7 @@ class Game {
         this.applyBlessing(result.blessing);
       }
 
-      if (result.message) {
-        this.showPickupMessage(result.message);
-      }
+      this.menuSystem.announcePickupResult(result);
 
       if (result.pickedUpType === 'WEAPON' && this.stateMachine.currentState === GAME_STATES.EXPLORE) {
         this.audioSystem.playSFX('weapon_pickup');
