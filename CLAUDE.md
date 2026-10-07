@@ -123,7 +123,7 @@ All modes share CombatSystem, PhysicsSystem, and entity classes.
 
 **Top status bar must stay a single horizontal line.** Never break HP | DEPTH | INVENTORY | QUICK SLOTS into multiple rows.
 
-**Spell text is the THREE's voice alone — hard rule.** Large center-screen text (the narrator / `spellResponse` VentureArcade voice) is never used for item names, pickups, or status notices. What came to hand goes to the pickup box (`src/rendering/ui/PickupBox.js`) via `menuSystem.announceItem(char)` (glyph always, name only the first time this run) or `menuSystem.showPickupMessage(text)` for plain notices.
+**Spell text is the THREE's voice alone — hard rule.** Large center-screen text (the narrator / `spellResponse` VentureArcade voice) is never used for item names, pickups, or status notices. What came to hand goes to the pickup box (`src/rendering/ui/PickupBox.js`) via `menuSystem.announceItem(char)` (glyph + name, first time this run only — repeats show no box) or `menuSystem.showPickupMessage(text)` for plain notices.
 
 **Popup/modal UIs are non-instructive — compliance rule.** No key-hint footers, no explanatory headers/questions, no "X → Y" pickup messages. Content is limited to glyphs, the selection cursor, and bare option labels (e.g. STORE IN CHEST) — the visuals speak for themselves. Applies to every new popup; SlotReplacementOverlay is the reference implementation.
 

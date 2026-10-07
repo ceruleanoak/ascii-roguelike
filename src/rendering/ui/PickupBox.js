@@ -5,8 +5,9 @@ import { GRID, COLORS } from '../../game/GameConfig.js';
  * to hand (game.pickupMessage, queued by MenuSystem.showPickupMessage /
  * announceItem).
  *
- * An item shows its glyph in its own color, plus its name the first time this
- * run; a plain notice ('FIREPLACE LIT') shows text only. It floats up a few
+ * An item shows its glyph in its own color and its name, only the first time
+ * it comes to hand this run (announceItem skips repeats); a plain notice
+ * ('FIREPLACE LIT') shows text only. It floats up a few
  * pixels as it arrives and fades over its last beat.
  *
  * Deliberately not center-screen: large center text belongs to the THREE's

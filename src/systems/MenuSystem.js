@@ -279,16 +279,16 @@ export class MenuSystem {
   }
 
   /**
-   * Queue an item for the pickup box: its glyph always, its name (`label`,
-   * default the item's own name) only the first time this run the item comes
-   * to hand. After that the glyph alone says what arrived.
+   * Queue an item for the pickup box — its glyph and its name (`label`,
+   * default the item's own name) — only the first time this run the item
+   * comes to hand. After that no box shows at all: the item is already known.
    */
   announceItem(char, label = null) {
     const game = this.game;
-    const data = getItemData(char);
-    const firstTime = !game.announcedItemChars.has(char);
+    if (game.announcedItemChars.has(char)) return;
     game.announcedItemChars.add(char);
-    const text = firstTime ? (label ?? data?.name ?? char).toUpperCase() : null;
+    const data = getItemData(char);
+    const text = (label ?? data?.name ?? char).toUpperCase();
     this._queuePickupMessage({ glyph: char, text, color: data?.color ?? null, duration: null });
   }
 
