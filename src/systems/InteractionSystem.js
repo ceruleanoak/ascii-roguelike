@@ -841,7 +841,8 @@ export class InteractionSystem {
         ingredientChar = pickQuagmireIngredient();
       }
 
-      obj.destroyAfterAnimation = true;
+      // A depleted object (Sand) stays in the room, spent — see BackgroundObject.deplete().
+      if (!obj.depleted) obj.destroyAfterAnimation = true;
       game.renderer.markBackgroundDirty();
       // Not always an ingredient char — e.g. the caldera Ember Bush drops the
       // Unicode/CONSUMABLE Fire Berry, which needs the Item pickup pipeline.

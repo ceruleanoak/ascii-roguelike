@@ -561,10 +561,12 @@ export const BACKGROUND_OBJECTS = {
     name: 'Sand',
     color: '#d4a896',
     hp: 1,
-    // Scooped up, not mined: the tile breaks and sometimes leaves Sand, which
-    // the hut fireplace melts into an Empty Bottle (FireplaceSystem).
+    // Scooped up, not mined: the tile darkens in place (depletedColor) and
+    // sometimes leaves Sand, which the hut fireplace melts into an Empty
+    // Bottle (FireplaceSystem).
     dropEffect: 'destroyObject:spawnIngredient:D',
-    dropChance: 0.35,
+    dropChance: 0.20,
+    depletedColor: '#8a6a50',
     bulletInteraction: 'pass-through',
     flammability: 'none',
     conductivity: 'none',

@@ -141,6 +141,8 @@ export class BackgroundObject {
     // Bullet interaction properties
     this.bulletInteraction = this.data.bulletInteraction || 'block';
     this.indestructible = this.data.indestructible || false;
+    // Set by deplete(): a `depletedColor` object (Sand) spent in place.
+    this.depleted = false;
     this.conductivity = this.data.conductivity || 'none';
     this.flammability = this.data.flammability || 'none';
 
@@ -288,6 +290,11 @@ export class BackgroundObject {
     }
 
     if (this.hp <= 0) {
+      // A `depletedColor` object yields its drop once and stays put, spent.
+      if (this.data.depletedColor) {
+        this.deplete();
+        return { destroyed: true, effect: this.data.dropEffect || null };
+      }
       this.destroyAfterAnimation = true;
       this._playAnimation('crack');
       return { destroyed: true, effect: this.data.dropEffect || null };
@@ -299,6 +306,18 @@ export class BackgroundObject {
     }
     this._playAnimation('shake');
     return { destroyed: false, effect: null };
+  }
+
+  // Spend a `depletedColor` object in place (Sand scooped): it darkens and
+  // becomes inert — indestructible with no HP, so isNonInteractive() holds
+  // and no further hit can yield another drop.
+  deplete() {
+    this.depleted = true;
+    this.color = this.data.depletedColor;
+    this.animationColor = this.color;
+    this.indestructible = true;
+    this.hp = null;
+    this.maxHp = null;
   }
 
   // Cut grass: transition from tall grass to cut grass
