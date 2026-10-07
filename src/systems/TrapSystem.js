@@ -20,6 +20,7 @@ const MIN_DIST = GRID.CELL_SIZE;       // 16px — tap distance
 // Lower decel = weightier flight. Landing position is unchanged (v0=sqrt(2*decel*dist)),
 // but total flight time = v0/decel = sqrt(2*dist/decel) increases as decel drops.
 const THROW_DECEL = 350;               // px/s² deceleration
+const SWITCH_BOUNCE_RESTITUTION = 0.7; // share of speed a thrown weapon keeps rebounding off a switch
 
 // Per-subtype throw profile. Subtype implies intended use:
 // - `maxDist`: full-charge throw distance (reticule cap)
@@ -607,8 +608,13 @@ export class TrapSystem {
    * Routed through takeDamage rather than by setting glitterHit directly: the
    * puzzleSignal short-circuit in there is the sanctioned contract, and it
    * keeps the fixture's HP and animation behaving the same for a thrown weapon
-   * as for a swung one. The weapon keeps flying — a switch is a fixture the
-   * throw clips, not a wall it stops against.
+   * as for a swung one. A switch (kind 'switch') bounces the weapon back off
+   * it (_bounceOffSwitch); every other puzzleSignal fixture is clipped and the
+   * throw keeps flying.
+   *
+   * `t._lastSignal` is the fixture the weapon is still overlapping from last
+   * frame, so one pass over a fixture reads as one strike (and one bounce)
+   * rather than a strike every frame of the overlap.
    */
   _checkThrownWeaponSignalHit(t) {
     const game = this.game;
@@ -616,14 +622,42 @@ export class TrapSystem {
     const objs = source?.backgroundObjects;
     if (!objs) return;
     const hitR = GRID.CELL_SIZE * 0.75;
+    let overlapping = null;
     for (const obj of objs) {
       if (obj.destroyed || !obj.puzzleSignal) continue;
       const cx = obj.position.x + GRID.CELL_SIZE / 2;
       const cy = obj.position.y + GRID.CELL_SIZE / 2;
       const dx = cx - t.x, dy = cy - t.y;
       if (dx * dx + dy * dy > hitR * hitR) continue;
+      overlapping = obj;
+      if (t._lastSignal === obj) continue;
       obj.takeDamage(t.baseDamage || 1);
+      if (obj.kind === 'switch') this._bounceOffSwitch(t, cx, cy);
+      break;
     }
+    t._lastSignal = overlapping;
+  }
+
+  // Reflect a thrown weapon off a struck switch. The switch is treated as a
+  // cell-sized block: whichever axis the weapon is further off-center along is
+  // the face it struck, and only the velocity component heading into that face
+  // flips. The rebound keeps SWITCH_BOUNCE_RESTITUTION of its speed, and
+  // targetX/Y is repointed (as in _tryThrownDeflect) so the natural
+  // decel→stop logic lands it along the new heading.
+  _bounceOffSwitch(t, cx, cy) {
+    const offX = t.x - cx, offY = t.y - cy;
+    if (Math.abs(offX) >= Math.abs(offY)) {
+      if (t.vx * offX < 0 || offX === 0) t.vx = -t.vx;
+    } else if (t.vy * offY < 0) {
+      t.vy = -t.vy;
+    }
+    t.vx *= SWITCH_BOUNCE_RESTITUTION;
+    t.vy *= SWITCH_BOUNCE_RESTITUTION;
+    const speed = Math.hypot(t.vx, t.vy);
+    if (speed <= 0) return;
+    const stopDist = t.decel > 0 ? (speed * speed) / (2 * t.decel) : 0;
+    t.targetX = t.x + (t.vx / speed) * stopDist;
+    t.targetY = t.y + (t.vy / speed) * stopDist;
   }
 
   // Detect enemy collision for a flying weapon. Marks t.landed on hit.
