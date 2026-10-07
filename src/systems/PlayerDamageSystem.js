@@ -137,7 +137,11 @@ export const PlayerDamageSystem = {
   // the hit and returns { blocked: true }, so existing call sites that print
   // BLOCK keep working; `guard` names a Guard that has its own text.
   //   Deflect     — a charging enemy's ram (damageSource.isCharge). Always
-  //                 succeeds; the charge call site stuns the charger.
+  //                 succeeds; the charge call site stuns the charger. Granted
+  //                 by worn armor (player.deflectCharge, set by
+  //                 EquipmentEffectsSystem) or by the held weapon's own
+  //                 `deflectCharge` (the Flag), read live so a weapon swap
+  //                 needs no recompute.
   //   Parry       — a melee hit caught by the Buckler's parry window — the
   //                 same parryMechanic cycle and catch rule enemies use
   //                 (ParryMechanic.js). reflectDamage returns `reflect`,
@@ -145,7 +149,7 @@ export const PlayerDamageSystem = {
   //   Arrow Guard — bullets: shield blockChance (also melee with blockMelee),
   //                 then armor bulletResist.
   resolveGuard(player, amount, damageSource) {
-    if (damageSource.isCharge && player.deflectCharge) {
+    if (damageSource.isCharge && (player.deflectCharge || player.heldItem?.data?.deflectCharge)) {
       return { blocked: true, guard: 'DEFLECT' };
     }
 
