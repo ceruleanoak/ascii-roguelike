@@ -89,9 +89,19 @@ export class SlotReplacementSystem {
     return true;
   }
 
-  /** Open the prompt for a ground item. Item is NOT yet removed from the world. */
+  /**
+   * Open the prompt for a ground item. Item is NOT yet removed from the world.
+   * A duplicate of something already slotted never prompts: it replaces its
+   * twin straight away (a refill), exactly as if that slot had been chosen.
+   */
   open(item, slotType = 'weapon') {
     this.slotType = slotType;
+    const twin = this._matchingSlot(item);
+    if (twin !== -1) {
+      this.pendingItem = item;
+      this._confirmSlot(twin);
+      return;
+    }
     let start = 0;
     if (slotType === 'weapon') {
       const player = this.game.player;
@@ -182,6 +192,21 @@ export class SlotReplacementSystem {
   }
 
   // ── Internals ────────────────────────────────────────────────────────────
+
+  /** The usable slot already holding `item`'s char, or -1 (armor: its one slot is 0). */
+  _matchingSlot(item) {
+    if (this.slotType === 'armor') {
+      return this.game.inventorySystem.equippedArmor?.char === item.char ? 0 : -1;
+    }
+    if (this.slotType === 'consumable') {
+      const reserved = this._reservedManaSlots();
+      return this.game.inventorySystem.equippedConsumables
+        .findIndex((s, i) => s?.char === item.char && !reserved.includes(i));
+    }
+    const player = this.game.player;
+    return player.quickSlots
+      .findIndex((s, i) => s?.char === item.char && !player.destroyedSlots?.[i]);
+  }
 
   _moveSlot(dir) {
     if (this.selection === this.storeIndex) return;
@@ -278,7 +303,10 @@ export class SlotReplacementSystem {
     // lingers under the newly-equipped one (both render). Mirrors the
     // markBackgroundDirty() every MenuSystem equip path already issues.
     game.renderer.markBackgroundDirty();
-    game.pauseSystem.closeModal();
+    // The duplicate auto-replace confirms without ever opening the modal —
+    // only close it when it is ours, never another modal that happens to be up.
+    if (game.pauseSystem.activeModal === this) game.pauseSystem.closeModal();
+    else this.pendingItem = null;
   }
 
   _confirmStore() {
