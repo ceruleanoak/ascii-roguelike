@@ -108,6 +108,18 @@ export const LeapAttackMechanic = {
     }
   },
 
+  // Called from Enemy.takeDamage on a non-lethal hit, as its iframes start.
+  // Arms a forced leap for the instant these iframes expire — see tryTrigger.
+  // No-op for enemies without leapAttack. One hit, one answering leap: a hit
+  // taken mid-leap (windup or airborne) doesn't queue another leap for the
+  // landing.
+  onDamaged(enemy) {
+    if (enemy.data?.leapAttack?.enabled &&
+        !enemy.leapWindupActive && !enemy.leapAirborneActive) {
+      enemy.forcedLeapPending = true;
+    }
+  },
+
   // Mid-phase trigger: check if conditions are met to start a new leap.
   tryTrigger(enemy, ctx) {
     const cfg = enemy.data.leapAttack;

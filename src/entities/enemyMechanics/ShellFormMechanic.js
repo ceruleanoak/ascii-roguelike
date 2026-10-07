@@ -67,6 +67,18 @@ export const ShellFormMechanic = {
     }
   },
 
+  // Called from Enemy.takeDamage on a non-lethal hit: retreat into the shell
+  // (which arms the shell launch on the next update). A hammer-flipped enemy
+  // (HammerFlipMechanic) stays on its back — the punish window holds.
+  onDamaged(enemy) {
+    if (!this.isEnabled(enemy) || enemy.flipped) return;
+    enemy.inShellForm = true;
+    enemy.shellFormTimer = 2.5;
+    enemy.knockbackResistance = 0.8; // Restore shell knockback reduction
+    enemy.state = 'idle';
+    enemy.burstActive = false;
+  },
+
   _launchFromShell(enemy, launch) {
     const cfg = enemy.data.chargeMechanic;
     const target = enemy.target;

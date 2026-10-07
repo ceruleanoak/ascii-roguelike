@@ -22,6 +22,7 @@ import { SlimeTrailDropMechanic } from './enemyMechanics/SlimeTrailDropMechanic.
 import { PackBehaviorMechanic } from './enemyMechanics/PackBehaviorMechanic.js';
 import { FlockMechanic } from './enemyMechanics/FlockMechanic.js';
 import { ShellFormMechanic } from './enemyMechanics/ShellFormMechanic.js';
+import { HammerFlipMechanic } from './enemyMechanics/HammerFlipMechanic.js';
 import { ArmorMechanic } from './enemyMechanics/ArmorMechanic.js';
 import { PotionMechanic } from './enemyMechanics/PotionMechanic.js';
 import { WindupTelegraphMechanic } from './enemyMechanics/WindupTelegraphMechanic.js';
@@ -369,6 +370,7 @@ export class Enemy {
     }
 
     if (ShellFormMechanic.isEnabled(this)) ShellFormMechanic.init(this);
+    if (HammerFlipMechanic.isEnabled(this)) HammerFlipMechanic.init(this);
 
     // Lava state tracking (for lava-immune enemies that change behavior in lava)
     this.inLava = false;
@@ -643,6 +645,7 @@ export class Enemy {
     const onScreen = this.game?.cameraZoomSystem?.isEntityOnScreen(this) ?? true;
 
     ShellFormMechanic.update(this, { deltaTime });
+    HammerFlipMechanic.update(this);
 
     // Update DOT blink timer
     this.dotBlinkTimer += deltaTime;
@@ -2030,6 +2033,10 @@ export class Enemy {
     // Training dummy: indestructible, but still runs the hit SFX/blink pipeline below.
     if (this.data?.isDummy) amount = 0;
 
+    // A hammer blow flips a shelled Tortoise out of its shell first, so the
+    // immunity below never sees it (HammerFlipMechanic).
+    HammerFlipMechanic.tryFlip(this, opts.weaponSubtype);
+
     // Shell form: immune to all damage; knockback still applies via physics
     if (this.inShellForm) return false;
 
@@ -2103,12 +2110,7 @@ export class Enemy {
       this.breakSapping(200); // Knockback force
     }
 
-    // Mimic tongue releases on any damage taken
-    if (this.mimicTongue?.phase === 'hooked' && this.target) {
-      this.target.hookedByMimic = null;
-      this.mimicTongue = null;
-      this.mimicTongueCooldown = 8.0;
-    }
+    MimicMechanic.onDamaged(this);
 
     // Become enraged when attacked - never un-aggro
     this.enraged = true;
@@ -2157,23 +2159,8 @@ export class Enemy {
     if (this.hp > 0) {
       this.invulnerabilityTimer = this.invulnerabilityDuration;
       this.lastHitAttackId = opts.impact ?? attackId;
-      // Arm a forced leap for the instant these iframes expire — see
-      // LeapAttackMechanic.tryTrigger. No-op for enemies without leapAttack.
-      // One hit, one answering leap: a hit taken mid-leap (windup or airborne)
-      // doesn't queue another leap for the landing.
-      if (this.data?.leapAttack?.enabled &&
-          !this.leapWindupActive && !this.leapAirborneActive) {
-        this.forcedLeapPending = true;
-      }
-    }
-
-    // Retreat into shell after taking damage (shell-armored enemies)
-    if (this.data?.shellCamouflage && this.hp > 0) {
-      this.inShellForm = true;
-      this.shellFormTimer = 2.5;
-      this.knockbackResistance = 0.8; // Restore shell knockback reduction
-      this.state = 'idle';
-      this.burstActive = false;
+      LeapAttackMechanic.onDamaged(this);
+      ShellFormMechanic.onDamaged(this);
     }
 
     // Return true if dead, or a truthy value if damaged (for damage numbers)

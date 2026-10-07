@@ -123,5 +123,14 @@ export const MimicMechanic = {
         player.position.y += (dy / dist) * 22 * deltaTime;
       }
     }
+  },
+
+  // Called from Enemy.takeDamage: the tongue releases on any damage taken.
+  onDamaged(enemy) {
+    if (enemy.mimicTongue?.phase === 'hooked' && enemy.target) {
+      enemy.target.hookedByMimic = null;
+      enemy.mimicTongue = null;
+      enemy.mimicTongueCooldown = 8.0;
+    }
   }
 };

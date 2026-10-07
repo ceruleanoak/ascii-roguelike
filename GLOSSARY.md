@@ -580,6 +580,16 @@ identity, not standard programming terms.
   It is also not `knockbackTaken`, which scales how far the player's weapon hits shove an
   Enemy (`src/entities/knockbackTaken.js`).
 
+### Hammer Flip
+- **Definition:** A Mechanic that lets a hammer blow tip a shelled Enemy (the Tortoise) onto
+  its back. The Enemy is knocked out of its shell and stunned for a fixed time. During that
+  time it can't launch, charge, or strike, and it doesn't re-tuck when hit, so every weapon
+  lands. It rights itself when the stun ends.
+- **In code:** `HammerFlipMechanic` is gated by `data.hammerFlip = { duration }` (real seconds),
+  and its state is `enemy.flipped`. `Enemy.takeDamage` calls `tryFlip` before the shell-form
+  immunity check, so a blow on a tucked shell still flips it. It is drawn upside down.
+- **Not:** the Ancient Turtle boss's `TurtleShell.flipped` (its P2 phase change, driven by HP).
+
 ### Close Quarters
 - **Definition:** A Mechanic for a carried melee weapon held in reserve: the Enemy keeps
   its native attack, movement, and range, and switches to the weapon only while the player

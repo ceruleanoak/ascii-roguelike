@@ -1125,6 +1125,7 @@ export const ENEMIES = {
       delay: 0.45,               // Coiled pause before it comes out of the shell
       range: GRID.CELL_SIZE * 6
     },
+    hammerFlip: { duration: 3.0 }, // A hammer blow tips it onto its back: stunned, shell-less, open to every hit (HammerFlipMechanic)
     elementalAffinity: {
       resistance: { 'physical': 0.4 },
       weakness: { 'freeze': 1.5, 'wet': 1.5 }

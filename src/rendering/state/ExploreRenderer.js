@@ -1127,6 +1127,16 @@ export class ExploreRenderer {
         renderIceGolem(this.renderer, enemy, displayColor, shakeX, shakeY, drawMethod);
       } else if (enemy.char === '6' && enemy.data?.ripenMechanic?.enabled) {
         renderBombEnemy(this.renderer, enemy, displayColor, shakeX, shakeY);
+      } else if (enemy.flipped) {
+        // Hammer-flipped (HammerFlipMechanic): on its back — glyph upside down.
+        const method = useDithering ? 'drawEntityRotatedDithered' : 'drawEntityRotated';
+        this.renderer[method](
+          enemy.position.x + GRID.CELL_SIZE / 2 + shakeX,
+          enemy.position.y + GRID.CELL_SIZE / 2 + shakeY,
+          enemy.displayChar,
+          displayColor,
+          Math.PI
+        );
       } else {
         const arcLift = enemy.jumpArcLift || 0;
         this.renderer[drawMethod](
