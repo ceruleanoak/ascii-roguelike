@@ -1388,7 +1388,7 @@ export class AudioSystem {
    * Stops the current dual-layer playback and enters sequence mode.
    */
   startBossAnticipation() {
-    if (!this.bossBuffers.length) {
+    if (!this._bossTracksPlayable()) {
       console.warn('[Audio] Boss tracks not loaded yet');
       return;
     }
@@ -1421,8 +1421,19 @@ export class AudioSystem {
     if (this.bossAnticipationActive) {
       this.bossSequencePending = true;
     } else {
-      this._beginFullBossSequence();
+      // startBossSequence, not _beginFullBossSequence: with no anticipation
+      // running we may still be in 'dual'/'zoneSequence' mode, and only
+      // startBossSequence stops those sources and enters 'sequence' mode.
+      this.startBossSequence();
     }
+  }
+
+  /**
+   * True when the boss sequence can actually play: boss buffers decoded and
+   * the shared layer1Gain output exists (it stays null if loadMusic failed).
+   */
+  _bossTracksPlayable() {
+    return this.bossBuffers.length > 0 && !!this.layer1Gain;
   }
 
   /**
@@ -1430,6 +1441,10 @@ export class AudioSystem {
    * If already in sequence mode, restarts from track 0.
    */
   startBossSequence() {
+    if (!this._bossTracksPlayable()) {
+      console.warn('[Audio] Boss tracks or music output not ready — keeping zone music');
+      return;
+    }
     if (this.mode === 'sequence') {
       this._beginFullBossSequence();
     } else {
