@@ -16,7 +16,6 @@
 
 import { GRID, COLORS, EQUIPMENT, CRAFTING } from '../../game/GameConfig.js';
 import { drawCharon } from '../ui/CharonDraw.js';
-import { getItemData } from '../../data/items.js';
 import { PixelatedDissolve, TextSwapDissolve } from '../effects/TextEffects.js';
 import { drawUndead } from '../ui/UndeadRenderer.js';
 import { spectaclesTransform, spectaclesTransformString, isSpectaclesActive, CIPHER_FONT_SCALE, cipherFont } from '../../data/cipher.js';
@@ -348,15 +347,9 @@ export class RestRenderer {
       } else if (nearestSlot.type === 'equipment-consumable3') {
         const cons = game.inventorySystem.equippedConsumables[2];
         if (cons) { slotItemName = cons.data.name; slotItemColor = '#ffff00'; }
-      } else if (nearestSlot.type.startsWith('crafting-')) {
-        const state = game.craftingSystem.getState();
-        const charMap = { 'crafting-left': state.leftSlot, 'crafting-right': state.rightSlot, 'crafting-center': state.centerSlot };
-        const char = charMap[nearestSlot.type];
-        if (char) {
-          const data = getItemData(char);
-          if (data) { slotItemName = data.name; slotItemColor = COLORS.ITEM; }
-        }
       }
+      // Crafting slots float no name: the pickup box names an item the first
+      // time it comes to hand, so the station stays glyphs only.
 
       if (slotItemName) {
         this.renderer.fgCtx.fillStyle = slotItemColor;
