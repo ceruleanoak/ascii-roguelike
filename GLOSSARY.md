@@ -627,9 +627,10 @@ identity, not standard programming terms.
 
 ### Armor Flavor
 - **Definition:** The material family a worn piece belongs to, and the feel that family gives.
-  **fur** (Fur / Leather) is light, quick, and slips blows. **metal** is slow and blocks.
-  **bone** is sturdy but can Splinter against weapons. Putting a piece on floats its family's word
-  ('SPEED+' / 'HEAVY' / 'STURDY') above the player in the family's color. The word conveys a
+  **fur** (Fur / Leather) is light, quick, and slips blows. **metal** is slow and heavy.
+  **block** (the shields and Chain Mail) catches the blow rather than slipping it. **bone** is
+  sturdy but can Splinter against weapons. Putting a piece on floats its family's word
+  ('SPEED+' / 'HEAVY' / 'BLOCK+' / 'STURDY') above the player in the family's color. The word conveys a
   feeling, not a stat.
 - **In code:** `ARMOR_FLAVORS` in `src/data/items.js`, referenced per entry as
   `flavor: ARMOR_FLAVORS.<family>`. `ArmorEffectsSystem.announceFlavor(item)` floats the word,
