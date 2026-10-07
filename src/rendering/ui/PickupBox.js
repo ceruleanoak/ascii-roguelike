@@ -27,7 +27,9 @@ export class PickupBox {
     const msg = game.pickupMessage;
     if (!msg || game.pickupMessageTimer <= 0) return;
 
-    const ctx = this.renderer.fgCtx;
+    // The UI layer, not fg: camera zoom/shake CSS-transform only bg + fg
+    // (RenderController.applyCameraEffects), so the box holds still on screen.
+    const ctx = this.renderer.uiCtx;
     const cs = GRID.CELL_SIZE;
     const elapsed = (msg.shownFor ?? game.pickupMessageTimer) - game.pickupMessageTimer;
     const rise = Math.min(elapsed / RISE_S, 1);
