@@ -8,6 +8,7 @@
 // so all reads/writes go through `enemy.data.chargeMechanic`.
 
 import { GRID } from '../../game/GameConfig.js';
+import { planeOf, objectOnPlane } from '../../systems/PlaneSystem.js';
 
 // Near-death threshold shared with Enemy.getNearDeathBlinkColor (≤30% HP) so
 // an enemy's blink and its behavioral desperation start on the same hit —
@@ -23,6 +24,26 @@ function cooldownFor(enemy, cfg) {
     && enemy.hp <= enemy.maxHp * NEAR_DEATH_HP_FRACTION
     ? cfg.nearDeathCooldownMultiplier : 1;
   return cfg.cooldown * mult;
+}
+
+// A living Tree is slowing terrain, not solid (petrified trees are solid and
+// stop the charge through PhysicsSystem like a wall), so a charger would plow
+// straight through one. Ramming its trunk stuns the charger the same as a
+// wall. Floating chargers (Thunder Hawk's dive) pass over the canopy.
+function rammedTree(enemy) {
+  if (enemy.data.float) return false;
+  const objs = enemy.backgroundObjects; // layer-guard-ok: the enemy's own plane list
+  if (!objs) return false;
+  const plane = planeOf(enemy);
+  const ex = enemy.position.x, ey = enemy.position.y;
+  const ew = enemy.width ?? GRID.CELL_SIZE, eh = enemy.height ?? GRID.CELL_SIZE;
+  for (const obj of objs) {
+    if (obj.destroyed || obj.char !== 'Y' || obj.data.solid) continue;
+    if (!objectOnPlane(obj, plane)) continue;
+    const b = obj.getHitbox();
+    if (ex < b.x + b.width && ex + ew > b.x && ey < b.y + b.height && ey + eh > b.y) return true;
+  }
+  return false;
 }
 
 export const ChargeMechanic = {
@@ -116,6 +137,12 @@ export const ChargeMechanic = {
           enemy.chargeLastDeflector = null;
         }
       }
+      if (rammedTree(enemy)) {
+        this.stun(enemy);
+        enemy.targetVelocity.vx = 0;
+        enemy.targetVelocity.vy = 0;
+        return;
+      }
       enemy.targetVelocity.vx = enemy.chargeDir.x * cfg.chargeSpeed;
       enemy.targetVelocity.vy = enemy.chargeDir.y * cfg.chargeSpeed;
       if (enemy.state === 'windup' || enemy.state === 'attack') {
@@ -152,6 +179,22 @@ export const ChargeMechanic = {
         }
       }
     }
+  },
+
+  /**
+   * End the charge in a wall stun: the charger stops dead, reels for
+   * `wallStunDuration`, and pays its cooldown. Shared by every collision that
+   * ends a charge against something immovable — walls (EnemyUpdateSystem's
+   * speed-drop check), a Deflect guard, and tree trunks.
+   */
+  stun(enemy) {
+    const cfg = enemy.data.chargeMechanic;
+    enemy.chargeState = 'stunned';
+    enemy.chargeDurationTimer = 0;
+    enemy.chargeStunTimer = cfg.wallStunDuration;
+    enemy.velocity.vx = 0;
+    enemy.velocity.vy = 0;
+    enemy.chargeTimer = cfg.cooldown;
   },
 
   /**

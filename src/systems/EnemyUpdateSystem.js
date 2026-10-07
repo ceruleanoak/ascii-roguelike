@@ -6,6 +6,7 @@ import { createEmberBurst, createExplosion } from '../entities/Particle.js';
 import { findNearbyOpenExitDirection, getExitDespawnPoint } from './ExitSystem.js';
 import { createExplosionAftermath } from './WorldEffectsSystem.js';
 import { BumpMechanic } from '../entities/enemyMechanics/BumpMechanic.js';
+import { ChargeMechanic } from '../entities/enemyMechanics/ChargeMechanic.js';
 import { glyphsTouch } from '../entities/enemyMechanics/glyphContact.js';
 
 const MAX_GOO_BLOBS = 20;
@@ -319,14 +320,7 @@ export class EnemyUpdateSystem {
 
     if (enemy.chargeState === 'charging' && prevChargeSpeed !== null) {
       const expected = enemy.data.chargeMechanic.chargeSpeed;
-      if (prevChargeSpeed < expected * 0.3) {
-        enemy.chargeState = 'stunned';
-        enemy.chargeDurationTimer = 0;
-        enemy.chargeStunTimer = enemy.data.chargeMechanic.wallStunDuration;
-        enemy.velocity.vx = 0;
-        enemy.velocity.vy = 0;
-        enemy.chargeTimer = enemy.data.chargeMechanic.cooldown;
-      }
+      if (prevChargeSpeed < expected * 0.3) ChargeMechanic.stun(enemy);
     }
 
     if (enemy.chargeState === 'charging' && !enemy.chargeHasHit && !enemy.commanded && inSamePlane(enemy, player)) {
@@ -339,12 +333,7 @@ export class EnemyUpdateSystem {
         if (result?.guard === 'DEFLECT') {
           // Deflect: the ram glances off and the charger reels as if it hit a wall.
           game.combatSystem.createDamageNumber('DEFLECT', player.position.x, player.position.y, '#aaaaaa');
-          enemy.chargeState = 'stunned';
-          enemy.chargeDurationTimer = 0;
-          enemy.chargeStunTimer = enemy.data.chargeMechanic.wallStunDuration;
-          enemy.velocity.vx = 0;
-          enemy.velocity.vy = 0;
-          enemy.chargeTimer = enemy.data.chargeMechanic.cooldown;
+          ChargeMechanic.stun(enemy);
           return;
         } else if (result?.dodged) {
           game.combatSystem.createDamageNumber('DODGE', player.position.x, player.position.y, '#ffff00');
