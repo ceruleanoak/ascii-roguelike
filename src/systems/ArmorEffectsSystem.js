@@ -38,6 +38,29 @@ export class ArmorEffectsSystem {
     );
   }
 
+  // Splinter: bone armor that a landed melee hit broke (PlayerDamageSystem sets
+  // player.splinterPending) is destroyed — gone from the slot, not returned to
+  // inventory. 'SPLINTER' floats in the piece's Armor Flavor color.
+  updateSplinter() {
+    const game = this.game;
+    const player = game.player;
+    if (!player?.splinterPending) return;
+    player.splinterPending = false;
+
+    const inventory = game.inventorySystem;
+    const armor = inventory.equippedArmor;
+    if (!armor?.data?.splinterChance) return;
+
+    inventory.equippedArmor = null;
+    inventory.applyEquipmentEffectsToPlayer(player);
+    game.combatSystem.createDamageNumber(
+      'SPLINTER', player.position.x, player.position.y - GRID.CELL_SIZE,
+      armor.data.flavor?.color ?? armor.data.color, 1, 1.2
+    );
+    game.audioSystem?.playSFX?.('armor_splinter');
+    game.menuSystem?.updateUI?.();
+  }
+
   // Elemental robe aura: ambient particle emission plus a one-per-room status
   // pulse on the first frame of a dodge roll.
   updateRobeAura(deltaTime, player, currentRoom, particles) {

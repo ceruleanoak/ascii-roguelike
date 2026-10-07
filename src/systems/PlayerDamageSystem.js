@@ -111,6 +111,13 @@ export const PlayerDamageSystem = {
       player.smokeBurstPending = true;
     }
 
+    // Splinter: a landed melee hit may break bone armor outright. The armor
+    // still absorbed this hit; ArmorEffectsSystem.updateSplinter consumes the
+    // flag and destroys the piece (this module has no game/inventory access).
+    if (damageSource.isMelee && player.splinterChance > 0 && Math.random() < player.splinterChance) {
+      player.splinterPending = true;
+    }
+
     // Damage reflection
     if (player.reflectDamage > 0 && damageSource.attacker) {
       const reflectedAmount = Math.ceil(actualDamage * player.reflectDamage);

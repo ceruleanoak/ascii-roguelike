@@ -2449,6 +2449,8 @@ class Game {
     const dotKilledPlayer = StatusEffectSystem.applyPlayerDot(this, playerUpdateResult);
 
     this.armorEffectsSystem.updateMossCloak();
+    // rest-parity: absent because REST has no enemies to land a melee hit.
+    this.armorEffectsSystem.updateSplinter();
 
     this.floatingBootsSystem.update(deltaTime);
 

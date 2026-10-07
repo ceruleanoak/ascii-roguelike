@@ -628,13 +628,23 @@ identity, not standard programming terms.
 ### Armor Flavor
 - **Definition:** The material family a worn piece belongs to, and the feel that family gives.
   **fur** (Fur / Leather) is light, quick, and slips blows. **metal** is slow and blocks.
-  **bone** is sturdy but can break against weapons. Putting a piece on floats its family's word
+  **bone** is sturdy but can Splinter against weapons. Putting a piece on floats its family's word
   ('SPEED+' / 'HEAVY' / 'STURDY') above the player in the family's color. The word conveys a
   feeling, not a stat.
 - **In code:** `ARMOR_FLAVORS` in `src/data/items.js`, referenced per entry as
   `flavor: ARMOR_FLAVORS.<family>`. `ArmorEffectsSystem.announceFlavor(item)` floats the word,
   fired from `InventorySystem.equipArmor` via `onArmorEquipped`.
 - **Not:** a stat readout or tooltip. Robes, crowns, and mantles have no family and float nothing.
+
+### Splinter
+- **Definition:** Bone armor breaking outright when a melee hit lands on the player. The piece is
+  destroyed, not returned to inventory, and 'SPLINTER' floats in its Armor Flavor color. Padded
+  Bone is more durable than Bone Armor but can still Splinter.
+- **In code:** per-piece `splinterChance` in `src/data/items.js` (Bone Armor 𐤔 0.12, Padded Bone
+  𐤊 0.06), projected onto `player.splinterChance` by EquipmentEffectsSystem. `PlayerDamageSystem`
+  rolls it on an `isMelee` hit and sets `player.splinterPending`.
+  `ArmorEffectsSystem.updateSplinter()` consumes the flag and removes the armor.
+- **Not:** the Bat's shatter or the frozen-enemy Shatter. Ranged hits never Splinter.
 
 ### Dismantle
 - **Definition:** Breaking a Crafted item back into its recipe pair at the REST station. Placing
