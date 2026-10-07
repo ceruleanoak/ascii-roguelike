@@ -88,6 +88,7 @@ export class InventorySystem {
 
     // Equipment slots (lost on death)
     this.equippedArmor = null; // Single armor slot
+    this.onArmorEquipped = null; // Game wires: Armor Flavor word on equip
     this.equippedConsumables = [null]; // 1 consumable slot to start (can expand to 5)
     this.maxConsumableSlots = 1; // Unlockable up to 5; resets on death
 
@@ -550,6 +551,7 @@ export class InventorySystem {
       this.armorInventory.splice(armorIndex, 1);
     }
     this.equippedArmor = selectedItem;
+    this.onArmorEquipped?.(selectedItem);
 
     return previousArmor;
   }

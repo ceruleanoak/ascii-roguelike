@@ -625,6 +625,17 @@ identity, not standard programming terms.
   box-drawing, literal glyphs only). Recipes in `src/data/recipes.js`.
 - **Not:** an Ingredient; never a letter/digit char.
 
+### Armor Flavor
+- **Definition:** The material family a worn piece belongs to, and the feel that family gives.
+  **fur** (Fur / Leather) is light, quick, and slips blows. **metal** is slow and blocks.
+  **bone** is sturdy but can break against weapons. Putting a piece on floats its family's word
+  ('SPEED+' / 'HEAVY' / 'STURDY') above the player in the family's color. The word conveys a
+  feeling, not a stat.
+- **In code:** `ARMOR_FLAVORS` in `src/data/items.js`, referenced per entry as
+  `flavor: ARMOR_FLAVORS.<family>`. `ArmorEffectsSystem.announceFlavor(item)` floats the word,
+  fired from `InventorySystem.equipArmor` via `onArmorEquipped`.
+- **Not:** a stat readout or tooltip. Robes, crowns, and mantles have no family and float nothing.
+
 ### Dismantle
 - **Definition:** Breaking a Crafted item back into its recipe pair at the REST station. Placing
   the item in the centre slot *stages* it: the pair appears in the side slots and the item

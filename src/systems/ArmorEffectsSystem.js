@@ -24,6 +24,20 @@ export class ArmorEffectsSystem {
     this.game = game;
   }
 
+  // Armor Flavor: putting a piece on floats its family's word ('SPEED+',
+  // 'HEAVY', 'STURDY') above the player in the family's color, the way a
+  // damage number floats. It evokes how the piece feels, never its numbers —
+  // the written choice is not to show stat panels (docs/adr/BACKLOG.md).
+  // Fired by InventorySystem.equipArmor, the one equip choke point.
+  announceFlavor(item) {
+    const flavor = item?.data?.flavor;
+    const player = this.game.player;
+    if (!flavor || !player) return;
+    this.game.combatSystem.createDamageNumber(
+      flavor.word, player.position.x, player.position.y - GRID.CELL_SIZE, flavor.color, 1, 1.2
+    );
+  }
+
   // Elemental robe aura: ambient particle emission plus a one-per-room status
   // pulse on the first frame of a dodge roll.
   updateRobeAura(deltaTime, player, currentRoom, particles) {

@@ -193,6 +193,7 @@ class Game {
     this.persistenceSystem = new PersistenceSystem();
     this.inventorySystem = new InventorySystem();
     this.armorEffectsSystem = new ArmorEffectsSystem(this);
+    this.inventorySystem.onArmorEquipped = (item) => this.armorEffectsSystem.announceFlavor(item);
     this.floatingBootsSystem = new FloatingBootsSystem(this);
     this.audioSystem = new AudioSystem();
     this.combatSystem.audioSystem = this.audioSystem;
