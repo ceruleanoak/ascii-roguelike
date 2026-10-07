@@ -17,7 +17,12 @@
 import { GRID } from '../../game/GameConfig.js';
 import { inSamePlane } from '../../systems/PlaneSystem.js';
 
-const CONTACT_CELLS = 1.1;
+// Contact box, in cells, between the player's and the Bumper's glyph centers.
+// Both are half-width Unifont glyphs (half a cell wide, a full cell tall), so
+// the boxes meet at half a cell apart horizontally and a full cell apart
+// vertically; the small slack lets a graze register.
+const CONTACT_X_CELLS = 0.6;
+const CONTACT_Y_CELLS = 1.0;
 
 export const BumpMechanic = {
   isEnabled(enemy) {
@@ -34,12 +39,13 @@ export const BumpMechanic = {
     if (enemy.bumpCooldownTimer > 0 || enemy.commanded || enemy.isDying) return;
     if (player.dodgeRoll?.active || !inSamePlane(enemy, player)) return;
 
-    // Contact is just inside PhysicsSystem.resolveEntityContacts' 1.2-cell
-    // separation distance — that pass keeps a pressing chaser from ever
-    // fully overlapping the player, so "touching" has to mean "pressing".
+    // Contact follows the rendered glyphs, not a circle. Bumpers are exempt
+    // from PhysicsSystem.resolveEntityContacts' 1.2-cell soft separation so
+    // the glyphs can actually meet before the bump fires.
     const ex = enemy.position.x, ey = enemy.position.y;
-    const dist = Math.hypot(player.position.x - ex, player.position.y - ey);
-    if (!(dist < GRID.CELL_SIZE * CONTACT_CELLS)) return;
+    const dx = Math.abs(player.position.x - ex);
+    const dy = Math.abs(player.position.y - ey);
+    if (!(dx < GRID.CELL_SIZE * CONTACT_X_CELLS && dy < GRID.CELL_SIZE * CONTACT_Y_CELLS)) return;
 
     const cfg = enemy.data.bump;
     const half = GRID.CELL_SIZE / 2;

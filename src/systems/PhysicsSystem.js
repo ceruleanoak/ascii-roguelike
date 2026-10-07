@@ -137,6 +137,7 @@ export class PhysicsSystem {
       if (enemy.sapping) continue; // Sapping enemies are intentionally on the player — no separation
       if (enemy.isBossEntity) continue; // Boss entities own their movement — separation would prevent grabs
       if (enemy.chargeState === 'charging') continue; // Charging enemies (boar) plow through — soft push would cancel the dash hit
+      if (enemy.data?.bump) continue; // Bumpers resolve contact by glyph box (BumpMechanic) — a 1.2-cell push would hold the glyphs apart
       if (!inSamePlane(player, enemy)) continue; // Cross-plane enemies are non-interactive
       const dx = player.position.x - enemy.position.x;
       const dy = player.position.y - enemy.position.y;

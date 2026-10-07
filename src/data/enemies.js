@@ -987,7 +987,7 @@ export const ENEMIES = {
     color: '#ffaa55',
     movementStyle: 'chaser',
     bump: {
-      force: 700,          // "major recoil" — charge contact is 450
+      force: 1400,         // "major recoil" — charge contact is 450
       duration: 0.3,
       cooldown: 0.6        // real seconds between bumps from the same Bumper
     },
