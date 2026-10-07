@@ -8,7 +8,8 @@ import { GRID } from '../game/GameConfig.js';
 // blinks white — full charge. Release: a rapid counter-clockwise sweep back
 // through the wound arc. Sweep segments carry batLaunch — CombatSystem launches
 // non-heavy enemies along the contact angle (see the melee hit path there).
-// Damage and launch force scale with the windup ratio at release.
+// Damage and launch force scale with the windup ratio at release. Every
+// sweep leaves what it hits dizzy.
 //
 // Charge state (isCharging / chargeTime) lives on the Item like every other
 // hold-to-charge weapon; this system owns the visual and the release sweep.
@@ -111,7 +112,10 @@ export class BatSystem {
         duration: 0.07,
         delay: i * delayPerStep,
         color: weapon.color,
-        onHit: weapon.data.onHit,  // Barbed Bat's poison barb; plain bats have none
+        // Every bat leaves its target dizzy. A bat with its own effect
+        // (Barbed Bat's poison barb) keeps it as the primary; dizzy rides along.
+        onHit: weapon.data.onHit ?? 'dizzy',
+        extraOnHit: weapon.data.onHit ? ['dizzy'] : undefined,
         knockback: 0,          // heavy enemies hold their ground; launch handles the rest
         batLaunch: true,
         launchAngle: angle,
