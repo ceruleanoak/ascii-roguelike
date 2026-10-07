@@ -179,15 +179,16 @@ export class RenderController {
     ctx.restore();
   }
 
-  renderBossDefeatFlash(game) {
-    if (!game.bossDefeatFlash) return;
+  /** Full-screen colour flash set via game.screenFlash (boss reward, failed tier-up). */
+  renderScreenFlash(game) {
+    if (!game.screenFlash) return;
 
-    const { startTime, duration } = game.bossDefeatFlash;
+    const { startTime, duration, color } = game.screenFlash;
     const elapsed = performance.now() - startTime;
     const t = Math.min(elapsed / duration, 1);
 
     if (t >= 1) {
-      game.bossDefeatFlash = null;
+      game.screenFlash = null;
       return;
     }
 
@@ -197,7 +198,7 @@ export class RenderController {
 
     ctx.save();
     ctx.globalAlpha = Math.max(0, alpha);
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = color;
     ctx.fillRect(0, 0, GRID.WIDTH, GRID.HEIGHT);
     ctx.globalAlpha = 1;
     ctx.restore();

@@ -4,6 +4,12 @@ import { WEAPON_TIERS, ITEMS, isIngredient } from '../data/items.js';
 import { POTION_STARTER_MODIFIERS, applyPotionModifierColor } from '../data/alchemy.js';
 import { getGolemTypeForResult, GOLEM_CAP } from '../data/golems.js';
 
+// Duplicate-weapon tier-up odds. The cycle is a lottery: only this share of
+// pairs comes out as a next-tier weapon; the rest fizzle, spending the pair
+// for FAILED_TIER_UP_MANA Mana instead (MenuSystem.claimCenter).
+const TIER_UP_CHANCE = 0.25;
+const FAILED_TIER_UP_MANA = 2;
+
 /**
  * Returns the next-tier pool for a given weapon char, or null if none exists.
  * Returns null if the char is at the top tier or not in any tier list.
@@ -42,7 +48,9 @@ export class CraftingSystem {
     // slot commits the Dismantle; walking away cancels it (cancelDismantle).
     // The slots alone can't tell this apart from an ordinary craft.
     this.dismantleItem = null;
-    this.cycleState = null; // { pool, predeterminedResult, cyclingStartTime }
+    // { pool, predeterminedResult, cyclingStartTime } — predeterminedResult is
+    // null when the tier-up rolled a fizzle (see TIER_UP_CHANCE).
+    this.cycleState = null;
     // REST only: the pair is a Forge Recipe. Drawn as a dim, unclaimable ember
     // in the centre slot — the pair means something, just not here. Not
     // centre content: claiming does nothing.
@@ -159,9 +167,12 @@ export class CraftingSystem {
     if (this.leftSlot === this.rightSlot) {
       const pool = getNextTierPool(this.leftSlot);
       if (pool && pool.length > 0) {
+        // Rolled up front like the result itself: the cycle animates the same
+        // either way, so the outcome only shows on claim.
+        const tierUp = Math.random() < TIER_UP_CHANCE;
         this.cycleState = {
           pool,
-          predeterminedResult: pool[Math.floor(Math.random() * pool.length)],
+          predeterminedResult: tierUp ? pool[Math.floor(Math.random() * pool.length)] : null,
           cyclingStartTime: performance.now()
         };
       }
@@ -248,6 +259,21 @@ export class CraftingSystem {
     return golemType;
   }
 
+  /**
+   * Claim a tier-up cycle that rolled a fizzle: the weapon pair is spent and
+   * no weapon is crafted. Returns the Mana count it leaves behind, or 0 when
+   * the centre slot isn't a fizzled tier-up (claimCraftedItem handles a win).
+   */
+  claimFailedTierUp() {
+    if (!this.cycleState || this.cycleState.predeterminedResult) return 0;
+    this._cancelCycling();
+    this.leftSlot = null;
+    this.rightSlot = null;
+    this.centerSlot = null;
+    this.dismantleItem = null;
+    return FAILED_TIER_UP_MANA;
+  }
+
   claimCraftedItem(x, y) {
     // The Alchemist's Path — a potion's color/purity is fixed at the starter
     // tier and persists to the true potion, rather than resetting to a
@@ -256,6 +282,7 @@ export class CraftingSystem {
 
     if (this.cycleState) {
       const result = this.cycleState.predeterminedResult;
+      if (!result) return null; // a fizzle — claimFailedTierUp owns it
       this._cancelCycling();
       this.leftSlot = null;
       this.rightSlot = null;

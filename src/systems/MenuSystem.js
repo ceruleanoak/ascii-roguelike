@@ -1039,6 +1039,18 @@ export class MenuSystem {
    * their slots (prompting when full). Shared by the REST station and the
    * Dragon Forge (ForgeSystem) — `cs` is whichever station is being claimed.
    */
+  /** Route one crafted ingredient char to the pile (or the magic meter, for Mana). */
+  _collectCraftedIngredient(char) {
+    const game = this.game;
+    // Mirror LootSystem.collectIngredient: once the meter is active,
+    // Mana bypasses inventory entirely and tops the meter up directly.
+    if (char === '𝑚' && game.player.magicMeter?.active) {
+      game.magicSystem.addMana(game.player, 2);
+    } else {
+      game.addIngredient(char);
+    }
+  }
+
   claimCenter(cs) {
     const game = this.game;
     game.audioSystem.stopSFXByName('craft_cycle');
@@ -1056,18 +1068,24 @@ export class MenuSystem {
       return;
     }
 
+    // A tier-up cycle that rolled a fizzle: the weapon pair is spent, Mana is
+    // all it leaves, and a red screen flash says the gamble lost.
+    const fizzleMana = cs.claimFailedTierUp();
+    if (fizzleMana > 0) {
+      for (let i = 0; i < fizzleMana; i++) this._collectCraftedIngredient('𝑚');
+      game.screenFlash = { startTime: performance.now(), duration: 500, color: '#ff2222' };
+      game.showPickupMessage(getItemData('𝑚').name);
+      game.renderer.markBackgroundDirty();
+      game.updateUI();
+      return;
+    }
+
     // Ingredient-result recipes (e.g. Mana) land straight in the pile —
     // they're raw ingredients, not equippable items, and must never
     // occupy a weapon/consumable slot.
     const ingredientChar = cs.claimCraftedIngredient();
     if (ingredientChar) {
-      // Mirror LootSystem.collectIngredient: once the meter is active,
-      // Mana bypasses inventory entirely and tops the meter up directly.
-      if (ingredientChar === '𝑚' && game.player.magicMeter?.active) {
-        game.magicSystem.addMana(game.player, 2);
-      } else {
-        game.addIngredient(ingredientChar);
-      }
+      this._collectCraftedIngredient(ingredientChar);
       game.showPickupMessage(getItemData(ingredientChar)?.name ?? ingredientChar);
       game.renderer.markBackgroundDirty();
       game.updateUI();

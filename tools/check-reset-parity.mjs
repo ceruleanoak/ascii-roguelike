@@ -307,7 +307,7 @@ const UNREGISTERED_ALLOWLIST = [
   // practice" fact the plan's §0.1 audit already relied on for a different
   // field set.
   /^cleanseWave$/,
-  /^bossDefeatFlash$/,
+  /^screenFlash$/,
   /^pendingZoneMusicResume$/,
 
   // Per-frame scratch, recomputed every tick from live world state.

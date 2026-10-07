@@ -307,7 +307,7 @@ class Game {
 
     this.activeNoiseSource = null; // Set each frame by updatePlacedTraps if noise-maker is active
     this.cleanseWave = null; // Active wave animation { startTime, duration }
-    this.bossDefeatFlash = null; // White screen flash on boss defeat { startTime, duration }
+    this.screenFlash = null; // Full-screen colour flash (boss reward, failed tier-up) { startTime, duration, color }
     this.pendingZoneMusicResume = null; // Delayed zone-music resume after boss defeat { readyAt, zone }
     this.activeFloor = null;       // Active interior floor (hut or dungeon floor). Null on surface.
     this.mazeInterior = null;   // Active maze interior (MazeSystem)
@@ -2143,7 +2143,7 @@ class Game {
 
   enterGameOverState() {
     this.cleanseWave = null;
-    this.bossDefeatFlash = null;
+    this.screenFlash = null;
     this.pendingZoneMusicResume = null;
 
     // Reset spell follow-up state
@@ -4292,7 +4292,7 @@ class Game {
 
     if (state !== GAME_STATES.TITLE && state !== GAME_STATES.GAME_OVER) {
       this.renderController.renderCleanseWave(this);
-      this.renderController.renderBossDefeatFlash(this);
+      this.renderController.renderScreenFlash(this);
     }
     if (state !== GAME_STATES.TITLE) {
       this.renderController.renderSpellResponse(this);

@@ -1043,7 +1043,7 @@ export class BossSystem {
   /** Grant +1 consumable slot, screen flash, and announce. */
   _grantBossReward() {
     this.game.inventorySystem.unlockConsumableSlot();
-    this.game.bossDefeatFlash = { startTime: performance.now(), duration: 600 };
+    this.game.screenFlash = { startTime: performance.now(), duration: 600, color: '#ffffff' };
     this.game.menuSystem.showPickupMessage('Your power has grown');
     this.game.audioSystem.playSFX('boss_defeat');
   }
@@ -1052,7 +1052,7 @@ export class BossSystem {
    * Stop the boss music sequence immediately and schedule the zone's normal
    * EXPLORE track to resume after a brief silence, rather than leaving the
    * boss sequence looping forever over an empty room. Mirrors the frame-
-   * driven timer pattern used by `bossDefeatFlash` (checked via elapsed
+   * driven timer pattern used by `screenFlash` (checked via elapsed
    * `performance.now()`, not setTimeout) — ticked in `Game.update()` since
    * this BossSystem instance deactivates (and stops updating) immediately
    * after the defeat handler that calls this returns.
