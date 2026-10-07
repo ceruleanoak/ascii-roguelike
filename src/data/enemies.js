@@ -1093,6 +1093,7 @@ export const ENEMIES = {
     attackCooldown: 2.0,
     attackWindup: 1.0,  // Fixed: was 0.8, below minimum 1.0
     attackType: 'melee',
+    strikesOnlyInLava: true,  // the melee slot is only its lava fire breath — on land, damage comes from the charging body alone
     decisionInterval: 0.6,
     color: '#886633',
     grassStealth: true,
@@ -1111,7 +1112,7 @@ export const ENEMIES = {
     // the shell-comes-at-you lesson a full zone early.
     chargeMechanic: {
       enabled: true,
-      chargeSpeed: 165,          // Rolling rush — heavier line than Living Rock's snap
+      chargeSpeed: 260,          // Rolling rush — fast, but it only hurts on body contact
       chargeDuration: 0.9,
       chargeWindup: 0.35,        // Barely a beat — the coil inside the shell is the real tell
       cooldown: 5.0,

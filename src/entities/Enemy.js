@@ -894,7 +894,10 @@ export class Enemy {
       // concept, so a keeper that sidesteps perpendicular to its target would
       // never once be facing it at the moment it is finally in range. Both
       // checks are carried because both are asked.
-      canStrike: this.hasVision(this.position, this.target.position, effectiveVisionLength, { ignoreCone: true }),
+      // `strikesOnlyInLava` (Tortoise): out of lava its body is the whole hit
+      // (charge contact), so it never opens a native swing there.
+      canStrike: (!this.data.strikesOnlyInLava || this.inLava)
+        && this.hasVision(this.position, this.target.position, effectiveVisionLength, { ignoreCone: true }),
       // True on exactly one frame per `decisionInterval` (decremented above,
       // reset at the end of this update). States gate their *perception*
       // transitions on it so noticing, losing and re-acquiring a target all

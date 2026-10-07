@@ -6,6 +6,7 @@ import { createEmberBurst, createExplosion } from '../entities/Particle.js';
 import { findNearbyOpenExitDirection, getExitDespawnPoint } from './ExitSystem.js';
 import { createExplosionAftermath } from './WorldEffectsSystem.js';
 import { BumpMechanic } from '../entities/enemyMechanics/BumpMechanic.js';
+import { glyphsTouch } from '../entities/enemyMechanics/glyphContact.js';
 
 const MAX_GOO_BLOBS = 20;
 const SLIME_COLLISION_DISTANCE = 16;
@@ -330,8 +331,8 @@ export class EnemyUpdateSystem {
 
     if (enemy.chargeState === 'charging' && !enemy.chargeHasHit && !enemy.commanded && inSamePlane(enemy, player)) {
       const ex = enemy.position.x, ey = enemy.position.y;
-      if (Math.abs(player.position.x - ex) < GRID.CELL_SIZE &&
-          Math.abs(player.position.y - ey) < GRID.CELL_SIZE) {
+      // The ram lands only when the rendered bodies meet (glyphContact.js).
+      if (glyphsTouch(enemy, player)) {
         enemy.chargeHasHit = true;
         const damage = enemy.getEffectiveDamage();
         const result = player.takeDamage(damage, { isMelee: true, isCharge: true, attacker: enemy });
