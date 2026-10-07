@@ -432,6 +432,32 @@ export class InteractionSystem {
     return null;
   }
 
+  // Nearest spacebar-openable container (chest, barrel, crate, tomb…) in
+  // range. Scanned on its own rather than through findNearbyBackgroundObject,
+  // which returns the first in-range object of any kind — a rock or bush
+  // earlier in the array would otherwise shadow a chest beside it and leave
+  // it unopenable by hand.
+  findNearbyContainer() {
+    const game = this.game;
+    const objects = (game.player?.inMaze && game.mazeInterior)
+      ? []
+      : game._activeBackgroundObjects();
+    const playerPlane = planeOf(game.player);
+    let nearest = null;
+    let nearestDist = INTERACTION_RANGE;
+    for (const obj of objects) {
+      if (obj.destroyed || obj.destroyAfterAnimation) continue;
+      if (!obj.data.dropEffect || !obj.acceptsInteraction('spacebar')) continue;
+      if (!objectOnPlane(obj, playerPlane)) continue;
+      const distance = game.physicsSystem.getDistance(game.player, obj);
+      if (distance < nearestDist) {
+        nearest = obj;
+        nearestDist = distance;
+      }
+    }
+    return nearest;
+  }
+
   // Fairy touch resolution. Called per-frame from main.js for each Fairy in
   // neutralCharacters. Returns true if the fairy was consumed by the touch,
   // so the caller can despawn it.

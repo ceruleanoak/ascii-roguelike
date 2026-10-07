@@ -3785,8 +3785,9 @@ class Game {
 
       // Spacebar-openable containers (barrels, crates, metal boxes) supersede
       // attacking — opening should work whether or not the player is armed.
-      if (nearbyBgObject && nearbyBgObject.acceptsInteraction('spacebar') && nearbyBgObject.data.dropEffect) {
-        this.interactionSystem.openContainer(nearbyBgObject);
+      const nearbyContainer = this.interactionSystem.findNearbyContainer();
+      if (nearbyContainer) {
+        this.interactionSystem.openContainer(nearbyContainer);
         return;
       }
 
