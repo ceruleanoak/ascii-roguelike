@@ -61,9 +61,11 @@ export class BoulderSystem {
     const game = this.game;
     // Settlement ('S') is excluded: the red zone's town is a safe-feeling hub
     // of neutral huts and NPCs, and a rockfall sweeping through it reads as
-    // the room betraying its own premise.
+    // the room betraying its own premise. Underground ('U') is excluded too:
+    // no rockfall rolls in from the surface edges of a room below ground.
     if (!game.currentRoom || game.currentRoom.zone !== 'red' ||
-        game.currentRoom.type === ROOM_TYPES.SETTLEMENT) {
+        game.currentRoom.type === ROOM_TYPES.SETTLEMENT ||
+        game.currentRoom.type === ROOM_TYPES.UNDERGROUND) {
       this._reset();
       return;
     }
