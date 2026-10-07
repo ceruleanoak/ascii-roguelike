@@ -222,9 +222,9 @@ export const SPELLS = {
       !game.currentRoom?.bridgeBuilt &&
       (game.ridgeSystem?._checkMaterials().sufficient || game.wishesUsed < 3),
     followUps: {
-      'YES':    { text: 'BUILDING...', action: _buildBridgeAction },
-      'Y':      { text: 'BUILDING...', action: _buildBridgeAction },
-      'AYE':    { text: 'BUILDING...', action: _buildBridgeAction },
+      'YES':    { action: _buildBridgeAction },
+      'Y':      { action: _buildBridgeAction },
+      'AYE':    { action: _buildBridgeAction },
       'NO':     'SPELL CANCELLED.',
       'NAY':    'SPELL CANCELLED.',
       'CANCEL': 'SPELL CANCELLED.',

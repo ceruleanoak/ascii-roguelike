@@ -54,9 +54,11 @@ export class SpellSystem {
           } else {
             text = typeof entry === 'function' ? entry(this.game) : entry;
           }
-          if (text) {
+          // An action-only follow-up (no text) answers silently — the
+          // world's response is the answer (the bridge just starts forming).
+          if (text || action) {
             this.awaitingSpell = null;
-            this.game.spellResponse = { text, startTime: performance.now() };
+            if (text) this.game.spellResponse = { text, startTime: performance.now() };
             if (action) action(this.game);
             return;
           }

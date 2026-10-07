@@ -269,9 +269,6 @@ export class RidgeSystem {
   _startBridgeAnimation(room) {
     room.bridgeAnimating = true;
 
-    // Show spell-style response
-    this.game.spellResponse = { text: 'BUILDING...', startTime: performance.now() };
-
     // Reset animation cursor to bottom row
     this._animRoom  = room;
     this._animRow   = BRIDGE_ROW_MAX;
