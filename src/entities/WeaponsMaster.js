@@ -21,6 +21,19 @@ const WEAPON_MASTER_ADVICE = {
   GUN:     'A GUN IS LOUD AND FAST — MIND YOUR SHOTS.'
 };
 
+// What he says of worn armor that belongs to no Armor Flavor family (robes,
+// crowns, mantles), and of no armor at all. Family remarks live with the
+// families themselves: ARMOR_FLAVORS[x].masterRemark in items.js.
+const UNFAMILIAR_ARMOR_REMARK = 'THAT IS NO ARMOR I KNOW HOW TO JUDGE.';
+const BARE_REMARK = 'NOTHING ON YOUR BACK. BOLD, OR CARELESS.';
+
+/** His secondary topic: a remark on what the player is wearing. */
+function armorRemark(game) {
+  const armor = game.inventorySystem?.equippedArmor;
+  if (!armor) return BARE_REMARK;
+  return armor.data?.flavor?.masterRemark ?? UNFAMILIAR_ARMOR_REMARK;
+}
+
 /** Resolves the held item's training/advice category, or null if unarmed. */
 export function resolveWeaponCategory(weapon) {
   if (!weapon?.data) return null;
@@ -29,8 +42,8 @@ export function resolveWeaponCategory(weapon) {
 
 /**
  * WeaponsMaster — hut interior NPC who advises on the player's currently
- * equipped weapon and, for a coin, permanently trains that weapon's category
- * for the current character (+1 damage, or that category's training technique
+ * equipped weapon, remarks on the armor they wear, and, for a coin,
+ * permanently trains that weapon's category for the current character (+1 damage, or that category's training technique
  * where one is defined). See WeaponsMasterSystem for the paid training flow;
  * this class only speaks (DialogueSystem).
  */
@@ -39,18 +52,21 @@ export class WeaponsMaster extends NeutralCharacter {
     super('m', '#c08840', x, y);
   }
 
+  // Weapon first, then the armor remark as his secondary topic, then the
+  // training offer last so it is what the player walks away with.
   getDialogueLines(game) {
+    const remark = armorRemark(game);
     const category = resolveWeaponCategory(game.player?.heldItem);
     if (!category) {
-      return ['COME BACK WHEN YOU CARRY A WEAPON.'];
+      return [remark, 'COME BACK WHEN YOU CARRY A WEAPON.'];
     }
 
     const advice = WEAPON_MASTER_ADVICE[category] || 'EVERY WEAPON HAS ITS OWN LESSON.';
     const trained = game.inventorySystem?.characterInventories?.[game.activeCharacterType]?.trainedWeapons;
     if (trained?.[category]) {
-      return [advice, 'YOU HAVE ALREADY LEARNED ALL I CAN TEACH OF THIS.'];
+      return [advice, remark, 'YOU HAVE ALREADY LEARNED ALL I CAN TEACH OF THIS.'];
     }
-    return [advice, "GOT A COIN? I CAN SHARPEN YOUR TECHNIQUE."];
+    return [advice, remark, "GOT A COIN? I CAN SHARPEN YOUR TECHNIQUE."];
   }
 
   update(dt, game) {
