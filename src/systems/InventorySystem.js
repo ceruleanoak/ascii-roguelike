@@ -13,6 +13,7 @@
 
 import { canReachLoot } from './PlaneSystem.js';
 import { Item } from '../entities/Item.js';
+import { createCharacterLoadout } from './characterLoadout.js';
 import { GRID } from '../game/GameConfig.js';
 import { addItemToChestArray, removeItemFromChestArray, chestEntryLabel, trapAlreadyEquipped, mergeStackableConsumable as mergeStackableConsumableStack } from './TrapSystem.js';
 import { saveExploreRoomState, getSavedExploreRoomState, clearSavedExploreRoomState, saveRestIngredientsState, getSavedRestIngredientsState, clearSavedRestIngredientsState } from './RoomStatePersistence.js';
@@ -47,12 +48,7 @@ export class InventorySystem {
     // Quick slots stay per-character because each character runs their own
     // weapon loadout.
     this.characterInventories = {
-      'default': {
-        quickSlots: [null, null, null],  // Weapons only
-        activeSlotIndex: 0,   // Persistent active slot index
-        manaState: null,      // { slots, current, max } — survives character swaps
-        trainedWeapons: {}    // { [weaponCategory]: true } — Weapons Master training, per character
-      }
+      'default': createCharacterLoadout('default')
     };
 
     // Legacy properties - maintained for backward compatibility with existing code
@@ -243,13 +239,10 @@ export class InventorySystem {
    */
   setActiveCharacter(characterType) {
     // Ensure character inventory exists
+    // A character's loadout is created the first time it becomes active in a
+    // run — which is also when its Starter Weapon is granted (once per run).
     if (!this.characterInventories[characterType]) {
-      this.characterInventories[characterType] = {
-        quickSlots: [null, null, null],
-        activeSlotIndex: 0,
-        manaState: null,
-        trainedWeapons: {}
-      };
+      this.characterInventories[characterType] = createCharacterLoadout(characterType);
     }
 
     // Update legacy property pointers to active character's data.
@@ -280,12 +273,7 @@ export class InventorySystem {
    */
   clearAllCharacterInventories() {
     this.characterInventories = {
-      'default': {
-        quickSlots: [null, null, null],
-        activeSlotIndex: 0,
-        manaState: null,
-        trainedWeapons: {}
-      }
+      'default': createCharacterLoadout('default')
     };
 
     // Clear shared ingredients pile (in-place so external references stay valid).

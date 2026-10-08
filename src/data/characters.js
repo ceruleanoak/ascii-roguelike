@@ -25,7 +25,8 @@ export const CHARACTER_TYPES = {
     combatDamagePenalty: 1,    // -1 flat damage when any enemy is not idle
     weaponAffinities: {
       'bow': { cooldownReduction: 0.25 } // 25% faster bow fire rate
-    }
+    },
+    starterWeapon: '⇒' // Sky Bow — slot 1 when this character's loadout is first created
   },
   'red': {
     name: 'Red Warrior',
@@ -61,7 +62,8 @@ export const CHARACTER_TYPES = {
     blinkDistance: 75, // Allow warping over background object walls
     weaponAffinities: {
       'gun': { fireRateBonus: 0.2 } // 20% faster gun fire rate
-    }
+    },
+    starterWeapon: '⚡' // Storm Staff — slot 1 when this character's loadout is first created
   },
   'gray': {
     name: 'Gray Assassin',

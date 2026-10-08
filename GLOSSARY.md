@@ -683,6 +683,14 @@ identity, not standard programming terms.
 - **In code:** the QUICK SLOTS segment of the single-line status bar.
 - **Not:** "hotbar", "inventory slot" (Inventory is the full bag, lost on death in EXPLORE).
 
+### Starter Weapon
+- **Definition:** The weapon an unlocked character's loadout starts with in quick slot 1,
+  granted once per run, the first time that character becomes active. Every Starter Weapon
+  must have a crafting upgrade path. The Gold Hero has none: a run still opens unarmed.
+- **In code:** `CHARACTER_TYPES[type].starterWeapon` (item char); seeded by
+  `createCharacterLoadout()` in `InventorySystem.js`.
+- **Not:** "default weapon", "starting item", "loadout" (a Loadout is all three quick slots).
+
 ### Double-seconds
 - **Definition:** The timing unit for weapon data. Held items tick at `WEAPON_TIMER_RATE`
   (= 2), so a weapon's effective cooldown/windup/reload in real seconds is its data value ÷ 2.

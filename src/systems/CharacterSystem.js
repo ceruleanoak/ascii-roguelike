@@ -884,8 +884,26 @@ export class CharacterSystem {
       return;
     }
 
+    // Each character keeps its own quick-slot loadout. Save the outgoing
+    // character's slots into its own entry, then hand the player the incoming
+    // character's slots (including its Starter Weapon on first use this run)
+    // — without this the new character kept holding the old one's weapons
+    // and the next REST save wrote them into the wrong entry.
+    // (Written directly rather than via saveRestLoadout, which also flushes
+    // EXPLORE-deferred chest deposits — a cheat-menu swap mid-EXPLORE must
+    // not bank those early.)
+    const inv = game.inventorySystem;
+    const outgoing = inv.characterInventories[inv._activeCharacterType];
+    if (outgoing) {
+      outgoing.quickSlots.splice(0, outgoing.quickSlots.length, ...game.player.quickSlots);
+      outgoing.activeSlotIndex = game.player.activeSlotIndex;
+    }
+
     game.activeCharacterType = newType;
     game.applyCharacterType(newType);
+
+    game.player.quickSlots = [...inv.restQuickSlots];
+    game.player.activeSlotIndex = inv.restActiveSlotIndex;
 
     game.spawnCharacterNPCs();
 
