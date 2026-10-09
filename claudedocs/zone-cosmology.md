@@ -72,7 +72,9 @@ Hard representation rules:
   is never given a slot.
 - **The one near-direct appearance: the credits.** The authors' names — and
   they roll only at the true ending, after the player's agency has fully
-  drained out of the game.
+  drained out of the game. *(Open since 2026-10-09: this was written when the
+  Mist Battle was called the true ending; which ending now carries the
+  credits is undecided.)*
 
 ### The Legend of Three — Canon speaking
 
@@ -131,7 +133,12 @@ room.* Open question: does completion also unlock the 2nd-Quest transform
 (letter chars → rune glyphs — i.e. the alphabet rewritten, canon's loudest
 indirect signature)? Recommended yes, as a transformed *mode*, not an ending.
 
-### The True Ending — the Mist Battle
+### The False Ending — the Mist Battle
+
+*(Corrected 2026-10-09 by the author: the Mist Battle "was always the false
+ending" — earlier revisions of this doc called it the true ending in error. Its
+mechanics below are unchanged; only its standing is. The true and pure endings
+are the THREE room — see "Endings" and "Path to Canon" below.)*
 
 - **Trigger**: the **3rd** character mists out at gray depth 10. Three of the
   roster — *not all*. (Supersedes the 5-character threshold; the hooks already
@@ -164,21 +171,56 @@ indirect signature)? Recommended yes, as a transformed *mode*, not an ending.
   reachable only from the CheatMenu BOSSES entry with random characters. Not
   yet built: the Act 1 end condition, Act 2, and the depth-10 mist-out wiring.
 
-### Endings restructure (supersedes the foundation design's three-endings list)
+### Endings (restated 2026-10-09 — supersedes the Win/Know/Yield list)
 
-Still three endings — now one per *relationship with the game*:
+In the author's words: *"Mist Battle was always the false ending, this is a
+mistake. The 'true ending' was always completing the THREE room. The 'pure
+ending' was always completing the THREE room with the PURE items, unlocking the
+way south, which gives the EXIT command in puzzle form."*
 
-1. **Win it** (Convention): defeat all 3 zone bosses in a single run — the
-   natural Outrun conclusion. (Unchanged from the old "bad ending.")
-2. **Know it** (Experience): complete the Triangle Room — the revelation beat.
-   Recommended credits-less (a revelation that reframes the other endings),
-   reserving the credits exclusively for the true ending.
-3. **Yield to it** (True): the Mist Battle.
+1. **False ending** — the Mist Battle (above).
+2. **True ending** — completing the THREE room.
+3. **Pure ending** — completing the THREE room with the pure items (the True 3:
+   `⊥` `⊙` `🜛`). It unseals the way south of REST, and what waits there gives
+   the **EXIT** command in puzzle form.
+4. **The non-ending conclusion** — EXIT itself: the player leaves the game and
+   becomes the creator. See "Path to Canon."
 
-What's gone: the 5-character good ending (threshold is now 3 and it is the
-*true* ending), and the rune-as-item (now the Triangle Room). The 2nd-Quest
-transform survives only as a candidate Triangle Room unlock, no longer an
-ending path.
+Still open from the old list: whether "all 3 zone bosses in one run" gets an
+end beat at all.
+
+### Path to Canon — the CLI
+
+*(Stated 2026-10-09.)* The true point of the game is to **exit** to a CLI,
+where the player writes their own story by understanding and manipulating the
+canon, reshaping the entire run. "You have 'won' by making the game into
+whatever you want it to be." The player becomes the creator.
+
+- **The way out is a word.** Typed anywhere, any run, by anyone who knows it:
+  `EXIT`. The THREE asks `ARE YOU SURE?`; any affirmative closes the game. The
+  pure ending is where the word is learned — knowledge is the only gate, and
+  the save file stays mental right up to the exit.
+- **The CLI.** A `>` prompt, always center screen, with a blinking cursor.
+  `HELP` lays its commands out as a plain table (no lines, just text). `LIST`
+  shows every editable file and executable. It is a menu-based metagame in its
+  own right — not a real terminal, but what a non-technical person would want
+  one to be: accessible and mind-expanding. Every editor is a table navigated
+  with arrows and SPACE/SHIFT; toggles and numbers are values stepped through.
+- **☠ PURE ROGUE** (U+2620) is the game's executable. Selecting it from `LIST`
+  relaunches the game. This is the non-ending conclusion.
+- **Canon Edits persist** across death and reload — the one exception to the
+  no-persistence law, and only for what the player authored in the CLI. Runs
+  still reset completely. `FORGET` erases every Canon Edit and returns the
+  virgin game. These changes effectively "break" the game, making it infinite
+  and, more importantly, a **human tool**.
+- **What can be rewritten**: character names, cheats, weapons (created and
+  edited, craftable by a recipe the player assigns), and a blank `Story.md` —
+  writing in it adds the **Storyteller**, an NPC who tells one line at a time
+  each time you interact with SPACE. Every dev/debug tool is meant to migrate
+  here over time.
+- **How this sits with Canon's representation rules**: the CLI is not in the
+  world — the player has left it. Canon is still never named or itemized
+  *in-world*; what changes is that, outside it, the player holds the pen.
 
 ### Death's inevitability — and the Infinite Loop
 
@@ -287,7 +329,8 @@ no meta text — with the remaining signatures already live in the design:
 - **The Infinite Loop is its proof-chamber**: with death suspended and endings
   refused, choice is the only force still operating ("the only exit is
   voluntary," above).
-- **The Mist Battle honors it in the negative**: the true ending is the one
+- **The Mist Battle honors it in the negative** *(now the false ending — see
+  "Endings")*: it is the one
   where choice is finally surrendered — no input in its second act — and only then does the
   designer appear, in the credits. The player's power and the designer's power
   meet exactly once, at the end: one yields, the other signs.

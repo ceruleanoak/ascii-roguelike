@@ -144,10 +144,10 @@ Avoid double-rendering by always drawing keys to a single layer. The 2× scaling
 
 ## Critical Technical Constraints
 
-**NO localStorage, sessionStorage, or IndexedDB.** All state resets on page refresh and on death. This is intentional.
+**Runs never persist.** All run state resets on page refresh and on death. This is intentional.
 
-- `PersistenceSystem.js` exists but is permanently disabled (no-ops).
-- If asked to add persistence, explain the design decision.
+- **One exception: Canon Edits** (Path to Canon — `claudedocs/zone-cosmology.md`). What the player authors in the CLI (names, cheats, weapons/recipes, `Story.md`) persists in localStorage, read and written **only** by `src/systems/CanonStore.js` and applied at boot by the Canon Overlay. `npm run check:arch` fails on `localStorage`/`sessionStorage`/`indexedDB` anywhere else in `src/`.
+- Never persist run progress (inventory, depth, unlocks earned in play). If asked to, explain the design decision.
 
 ## Runtime-Fetched Assets Must Live in `public/`
 
