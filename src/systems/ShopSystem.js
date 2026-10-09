@@ -260,33 +260,27 @@ export class ShopSystem {
     this.game.audioSystem?.playSFX?.('shop_error');
   }
 
-  /** Even, remainder-distributed share of (baseCoins - coinFloor) per ingredient lane. */
-  _ingredientShares() {
-    const row = this.currentRow;
-    const ingredientLaneCount = this.lanes.filter(l => l.type === 'ingredient').length;
-    const reducible = row.baseCoins - row.coinFloor;
-    const base = Math.floor(reducible / ingredientLaneCount);
-    const remainder = reducible % ingredientLaneCount;
-
-    const shares = {};
-    let ordinal = 0;
-    for (let i = 0; i < this.lanes.length; i++) {
-      if (this.lanes[i].type !== 'ingredient') continue;
-      shares[i] = base + (ordinal < remainder ? 1 : 0);
-      ordinal++;
-    }
-    return shares;
-  }
-
-  /** Current coin price after toggled-ingredient reductions (never below coinFloor). */
+  /**
+   * Current coin price after toggled-ingredient reductions (never below
+   * coinFloor). (baseCoins - coinFloor) is split evenly across the ingredient
+   * lanes, and the remainder goes to whichever lanes are toggled first — so
+   * the discount depends on how many lanes are toggled, never which ones (a
+   * Fur + Fur listing's second Fur is worth the same as its first).
+   */
   getRemainingCoinPrice() {
     const row = this.currentRow;
-    const shares = this._ingredientShares();
-    let price = row.baseCoins;
+    let laneCount = 0;
+    let toggledCount = 0;
     for (let i = 0; i < this.lanes.length; i++) {
-      if (this.lanes[i].type === 'ingredient' && this.toggled[i]) price -= shares[i];
+      if (this.lanes[i].type !== 'ingredient') continue;
+      laneCount++;
+      if (this.toggled[i]) toggledCount++;
     }
-    return Math.max(row.coinFloor, price);
+    if (laneCount === 0) return row.baseCoins;
+    const reducible = row.baseCoins - row.coinFloor;
+    const reduction = Math.floor(reducible / laneCount) * toggledCount
+      + Math.min(toggledCount, reducible % laneCount);
+    return Math.max(row.coinFloor, row.baseCoins - reduction);
   }
 
   isCostMet() {
