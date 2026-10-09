@@ -1,5 +1,5 @@
 import { GRID } from '../game/GameConfig.js';
-import { planeOf } from './PlaneSystem.js';
+import { planeOf, objectOnPlane } from './PlaneSystem.js';
 import { createExplosionAftermath } from './WorldEffectsSystem.js';
 
 // Area-effect combat helpers — extracted from CombatSystem (proximity check,
@@ -77,6 +77,7 @@ export function createExplosion(combatSystem, x, y, radius, damage, enemies, bac
   // Affect background objects in blast radius
   for (const obj of backgroundObjects) {
     if (obj.destroyed || obj.isRecipeSign) continue; // Skip destroyed and recipe signs
+    if (!objectOnPlane(obj, sourcePlane)) continue; // a blast never reaches another Plane's objects
 
     const dx = obj.position.x - x;
     const dy = obj.position.y - y;
@@ -101,7 +102,9 @@ export function createExplosion(combatSystem, x, y, radius, damage, enemies, bac
       }
 
       // Damage destructible objects
-      if (!obj.indestructible && obj.hp !== null) {
+      // Obsidian is unbreakable — checked directly because its `indestructible`
+      // flag is overwritten in the constructor (known bug #155).
+      if (!obj.indestructible && !obj.obsidian && obj.hp !== null) {
         const result = obj.takeDamage(explosionDamage);
         if (result.effect) {
           combatSystem.objectDestroyEvents.push({ obj, effect: result.effect });

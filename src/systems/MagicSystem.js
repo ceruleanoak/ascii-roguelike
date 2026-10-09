@@ -13,7 +13,7 @@
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Particle } from '../entities/Particle.js';
 import { GRID } from '../game/GameConfig.js';
-import { tagInteriorPlane } from './PlaneSystem.js';
+import { tagInteriorPlane, planeOf } from './PlaneSystem.js';
 import { MAX_PIPS } from './StatusEffects.js';
 
 // Mana yield per ingredient char. Phase 1 only Goo is exposed in the UI;
@@ -536,11 +536,14 @@ export class MagicSystem {
     const damage = 6;
     const burnDuration = 3.0;
 
+    // The blast lands on the caster's Plane only (a cast from a U-room
+    // tunnel must not reach the surface field above it, or vice versa).
+    const plane = planeOf(attack.owner);
     this.game.combatSystem.createExplosion(
-      attack.position.x, attack.position.y, radius, damage, enemies, objs, 0.4
+      attack.position.x, attack.position.y, radius, damage, enemies, objs, 0.4, plane
     );
     this.game.combatSystem.applyAOEStatus(
-      attack.position, radius, 'burn', burnDuration, enemies
+      attack.position, radius, 'burn', burnDuration, enemies, plane
     );
     this._spawnRingBurst(
       attack.position.x, attack.position.y, radius, 28,
@@ -557,7 +560,7 @@ export class MagicSystem {
     const radius = 90;
     const freezeDuration = 5.0;
     this.game.combatSystem.applyAOEStatus(
-      attack.position, radius, 'freeze', freezeDuration, enemies
+      attack.position, radius, 'freeze', freezeDuration, enemies, planeOf(attack.owner)
     );
     this._spawnRingBurst(
       attack.position.x, attack.position.y, radius, 32,
