@@ -711,9 +711,9 @@ export class MagicSystem {
   _castCharmAOE(attack) {
     const enemies = this._activeEnemies();
     const radius = 80;
-    const charmDuration = 10.0;
+    const charmDuration = 30.0; // dbl-sec (enemy status clock) = 15s real
     this.game.combatSystem.applyAOEStatus(
-      attack.position, radius, 'charm', charmDuration, enemies
+      attack.position, radius, 'charm', charmDuration, enemies, planeOf(attack.owner)
     );
     this._spawnRingBurst(
       attack.position.x, attack.position.y, radius, 24,

@@ -1,4 +1,5 @@
 import { GRID } from '../game/GameConfig.js';
+import { charmTargetOf } from './charmHits.js';
 
 // Frog tongue attacks: extend → hold → retract. Extracted out of
 // CombatSystem.js (which still owns spawning via createEnemyAttack and all
@@ -50,7 +51,9 @@ export class TongueAttackSystem {
             const ownerTarget = owner.target;
             const isGolemTarget = ownerTarget && ownerTarget !== player && game?.golems?.includes(ownerTarget);
             const isRatTarget = ownerTarget && ownerTarget !== player && game?.tamedRats?.includes(ownerTarget);
-            const target = (isGolemTarget || isRatTarget) ? ownerTarget : player;
+            // A charmed frog snaps at the enemy it's fighting (charmHits.js, #203)
+            const charmTarget = charmTargetOf(owner, player);
+            const target = (isGolemTarget || isRatTarget || charmTarget) ? ownerTarget : player;
 
             const sx = owner.position.x + GRID.CELL_SIZE / 2;
             const sy = owner.position.y + GRID.CELL_SIZE / 2;

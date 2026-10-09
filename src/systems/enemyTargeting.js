@@ -11,6 +11,8 @@
 //
 // Returns true when it set the target (caller skips its own selection).
 
+import { inSamePlane } from './PlaneSystem.js';
+
 /**
  * @param {Enemy} enemy
  * @param {Array} enemies candidates on this loop's tick list (room enemies
@@ -30,6 +32,9 @@ export function applyTargetOverrides(enemy, enemies, player, noiseSource = null)
     let nearestDist = Infinity;
     for (const other of enemies) {
       if (other === enemy) continue;
+      // A downed foe or one on another plane can't be fought — skipping it
+      // lets a charmed enemy move on to the next live hostile.
+      if (other.isDying || other.hp <= 0 || !inSamePlane(enemy, other)) continue;
       // Commanded units never turn on each other — the warband's hostility
       // is reserved for the unsworn. Temporary charm keeps the original
       // free-for-all.

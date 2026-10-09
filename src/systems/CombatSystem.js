@@ -20,6 +20,8 @@ import { updateRollDamage as updateRollDamageImpl } from './RollDamageMechanic.j
 import { acidFloodFillWater } from './AcidWaterSpread.js';
 import { affinityDamageMultiplier } from '../entities/PandoraBox.js';
 import { TongueAttackSystem } from './TongueAttackSystem.js';
+import { createSplitProjectiles } from './SplitProjectiles.js';
+import { tagCharmedProjectile, resolveCharmedMelee, resolveCharmedProjectile } from './charmHits.js';
 import { applyExtraOnHitEffects, applyOnHitStatusEffect } from './ExtraOnHitEffects.js';
 import { applyMeleeStatusDamageBonus, getMeleeStatusBonusIndicator } from './MeleeStatusBonuses.js';
 import { applyKeenAim } from './KeenAim.js';
@@ -764,7 +766,7 @@ export class CombatSystem {
 
           // Split projectiles
           if (proj.split && !proj.hasSplit) {
-            this.createSplitProjectiles(proj);
+            this.projectiles.push(...createSplitProjectiles(proj));
             proj.hasSplit = true;
           }
 
@@ -1316,6 +1318,12 @@ export class CombatSystem {
       }
       if (!this.enemyProjectiles[i] || this.enemyProjectiles[i] !== proj) continue;
 
+      // A charmed enemy's shot flies at the enemy it's fighting (charmHits.js)
+      if (proj.charmedTarget) {
+        if (resolveCharmedProjectile(this, proj) === 'hit') this.enemyProjectiles.splice(i, 1);
+        continue;
+      }
+
       if (!inSamePlane(proj, player)) continue;
 
       // Reflected boss projectiles travel back toward the boss; skip player collision
@@ -1437,13 +1445,7 @@ export class CombatSystem {
         let connected = false;
 
         if (attack.isCharmedAttack && attack.charmedTarget && attack.charmedTarget !== player) {
-          // Charmed attack hits the charmed target enemy
-          connected = attackHitsBox(attack, attack.charmedTarget.getHitbox(),
-                                    () => this.checkMeleeCollision(attack, attack.charmedTarget));
-          if (connected) {
-            attack.charmedTarget.takeDamage(attack.damage);
-            this.createDamageNumber(attack.damage, attack.charmedTarget.position.x, attack.charmedTarget.position.y, '#ff44ff');
-          }
+          connected = resolveCharmedMelee(this, attack); // charmHits.js
         } else if (planeOf(player) !== (attack.shooterPlane ?? 0)) {
           attack.hasHit = true; // Mark as processed so it doesn't linger
         } else {
@@ -1832,6 +1834,7 @@ export class CombatSystem {
       tagLaunchPit(this.game?.activeRoom, proj, proj.owner);
       this.enemyProjectiles.push(proj);
     }
+    tagCharmedProjectile(proj, this.game?.player);
   }
 
   checkProjectileCollisionWithPlayer(proj, player) {
@@ -1905,46 +1908,6 @@ export class CombatSystem {
 
   createExplosion(x, y, radius, damage, enemies, backgroundObjects = [], damageMin = 0, sourcePlane = 0) {
     return createExplosionImpl(this, x, y, radius, damage, enemies, backgroundObjects, damageMin, sourcePlane);
-  }
-
-  createSplitProjectiles(originalProj) {
-    const splitCount = originalProj.splitCount || 3;
-    const angle = Math.atan2(originalProj.velocity.vy, originalProj.velocity.vx);
-    const speed = Math.sqrt(originalProj.velocity.vx ** 2 + originalProj.velocity.vy ** 2);
-
-    for (let i = 0; i < splitCount; i++) {
-      const spreadAngle = angle + (i - Math.floor(splitCount / 2)) * 0.4;
-
-      this.projectiles.push({
-        // Inherit all special properties from the original projectile
-        onHit: originalProj.onHit,
-        owner: originalProj.owner,
-        plane: originalProj.plane,
-        shooterPlane: originalProj.shooterPlane,
-        knockback: originalProj.knockback,
-        chain: originalProj.chain,
-        chainCount: originalProj.chainCount,
-        explode: originalProj.explode,
-        explodeRadius: originalProj.explodeRadius,
-        pierce: originalProj.pierce,
-        pierceHitEnemies: new Set(),
-        lifesteal: originalProj.lifesteal,
-        launchPit: originalProj.launchPit, // splits fly at the parent shot's height
-        // Split-specific overrides
-        type: originalProj.type,
-        char: originalProj.char,
-        position: { ...originalProj.position },
-        velocity: {
-          vx: Math.cos(spreadAngle) * speed * 0.8,
-          vy: Math.sin(spreadAngle) * speed * 0.8
-        },
-        damage: Math.ceil(originalProj.damage * 0.6),
-        color: originalProj.color,
-        width: GRID.CELL_SIZE,
-        height: GRID.CELL_SIZE,
-        hasSplit: true // Prevent infinite splitting
-      });
-    }
   }
 
   // Returns { damage, isCrit, isLucky }. Only player attacks roll crits, gated
