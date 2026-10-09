@@ -5,20 +5,23 @@
  * closes into this faux command line. Here they stop playing the canon and
  * start authoring it. Canon Edits persist through CanonStore.
  *
- * Views (one at a time; rendered by CliRenderer):
- *   prompt  — the centered `>` with a typed buffer. ENTER or SPACE submits.
- *   table   — a borderless list of rows. Up/down move, SPACE/ENTER selects,
- *             SHIFT returns to the prompt.
- *   confirm — the prompt again, waiting on a yes/no answer (FORGET).
+ * With nothing open, the CLI is the prompt: the centered `>` with a typed
+ * buffer, where ENTER or SPACE submits. `mode` is 'confirm' while the prompt
+ * waits on a yes/no answer (FORGET). Everything else is a frame on `stack`,
+ * rendered by CliRenderer:
+ *   table  — a borderless list of rows (src/systems/cliTables.js). Up/down
+ *            move, left/right step a value, SPACE/ENTER selects, SHIFT backs out.
+ *   text   — a text edit of one row. ENTER keeps it, Escape drops it (SHIFT
+ *            types capitals here, so it can't back out).
+ *   glyphs — the Unicode table. Arrows move, SPACE picks, SHIFT backs out.
  *
  * Commands: HELP (the command table), LIST (editable files and
- * executables), FORGET (erase every Canon Edit). ☠ PURE ROGUE in LIST
- * relaunches the game; a page reload is a real relaunch, so the Canon
- * Overlay re-applies from a clean boot and the game lands on the title.
+ * executables), FORGET (erase every Canon Edit).
  */
 
 import { menuIntent } from './MenuInput.js';
 import { CanonStore } from './CanonStore.js';
+import { LIST, GLYPH_COLUMNS, actionRow, stepValue } from './cliTables.js';
 import { GAME_STATES } from '../game/GameConfig.js';
 import { applyReset } from '../game/resetRegistry.js';
 
@@ -28,12 +31,12 @@ const MAX_BUFFER = 24;
 export class CliSystem {
   constructor(game) {
     this.game = game;
-    this.view = 'prompt';
+    this.canon = CanonStore.load();
+    this.mode = 'prompt';       // 'prompt' | 'confirm' — the prompt under the stack
     this.buffer = '';
-    this.reply = '';      // one dim line under the prompt
-    this.rows = [];       // table view: [{ label, run }]
-    this.index = 0;
-    this.pendingConfirm = null; // confirm view: action run on an affirmative
+    this.reply = '';            // one dim line under the prompt
+    this.pendingConfirm = null; // confirm mode: action run on an affirmative
+    this.stack = [];            // open frames, top last
   }
 
   /** EXIT confirmed: close the game into the CLI. */
@@ -54,26 +57,69 @@ export class CliSystem {
     game.player = null; // after applyReset — every player.* entry no-ops once null
     game.spellResponse = null;
     game.renderer.markBackgroundDirty();
-    this.view = 'prompt';
+    this.canon = CanonStore.load();
+    this.mode = 'prompt';
     this.buffer = '';
     this.reply = '';
-    this.rows = [];
-    this.index = 0;
     this.pendingConfirm = null;
+    this.stack = [];
   }
+
+  save() {
+    CanonStore.save(this.canon);
+  }
+
+  // ── Frames ───────────────────────────────────────────────────────────────
+
+  top() {
+    return this.stack[this.stack.length - 1] ?? null;
+  }
+
+  /** The open table's rows, with its selection kept in range. */
+  rows() {
+    const frame = this.top();
+    if (frame?.kind !== 'table') return [];
+    const rows = frame.build(this);
+    frame.index = Math.max(0, Math.min(frame.index, rows.length - 1));
+    return rows;
+  }
+
+  openTable(build) {
+    this.reply = '';
+    this.stack.push({ kind: 'table', build, index: 0 });
+  }
+
+  /** Swap the open table for another, keeping the selection. */
+  replaceTable(build) {
+    const frame = this.top();
+    if (frame?.kind === 'table') frame.build = build;
+  }
+
+  openGlyphs(glyphs, onPick) {
+    this.stack.push({ kind: 'glyphs', glyphs, index: 0, onPick });
+  }
+
+  back() {
+    this.stack.pop();
+  }
+
+  // ── Input ────────────────────────────────────────────────────────────────
 
   handleKeydown(e) {
     if (e.metaKey || e.ctrlKey || e.altKey) return; // leave browser shortcuts alone
     e.preventDefault();
-    if (this.view === 'table') this._tableKey(e);
-    else this._promptKey(e);
+    const frame = this.top();
+    if (!frame) this._promptKey(e);
+    else if (frame.kind === 'table') this._tableKey(e, frame);
+    else if (frame.kind === 'text') this._textKey(e, frame);
+    else this._glyphKey(e, frame);
   }
 
   _promptKey(e) {
     if (e.key === 'Enter' || e.key === ' ') {
       const word = this.buffer.trim();
       this.buffer = '';
-      if (this.view === 'confirm') this._answerConfirm(word);
+      if (this.mode === 'confirm') this._answerConfirm(word);
       else if (word) this._runCommand(word);
       return;
     }
@@ -86,17 +132,58 @@ export class CliSystem {
     }
   }
 
-  _tableKey(e) {
+  _tableKey(e, frame) {
+    const rows = this.rows();
+    const row = rows[frame.index];
     const intent = menuIntent(e);
     if (intent === 'up' || intent === 'down') {
-      const n = this.rows.length;
-      this.index = (this.index + (intent === 'up' ? -1 : 1) + n) % n;
-    } else if (intent === 'confirm') {
-      this.rows[this.index]?.run();
+      const n = rows.length;
+      if (n) frame.index = (frame.index + (intent === 'up' ? -1 : 1) + n) % n;
+    } else if ((intent === 'left' || intent === 'right') && row?.kind === 'steps') {
+      stepValue(row, intent === 'left' ? -1 : 1);
+    } else if (intent === 'confirm' && row) {
+      this._selectRow(row);
     } else if (intent === 'shift' || e.key === 'Escape') {
-      this._showPrompt('');
+      this.back();
     }
   }
+
+  _selectRow(row) {
+    if (row.kind === 'steps') stepValue(row, 1);
+    else if (row.kind === 'text') this.stack.push({ kind: 'text', row, buffer: row.get() ?? '' });
+    else if (row.kind === 'glyph') row.pick();
+    else if (row.kind === 'table') this.openTable(row.build);
+    else if (row.kind === 'action') row.run(this);
+  }
+
+  _textKey(e, frame) {
+    if (e.key === 'Enter') {
+      this.back();
+      frame.row.set(frame.buffer.trim());
+    } else if (e.key === 'Escape') {
+      this.back();
+    } else if (e.key === 'Backspace') {
+      frame.buffer = frame.buffer.slice(0, -1);
+    } else if (e.key.length === 1 && frame.buffer.length < frame.row.max) {
+      frame.buffer += e.key;
+    }
+  }
+
+  _glyphKey(e, frame) {
+    const n = frame.glyphs.length;
+    const intent = menuIntent(e);
+    const moves = { left: -1, right: 1, up: -GLYPH_COLUMNS, down: GLYPH_COLUMNS };
+    if (moves[intent] && n) {
+      frame.index = Math.max(0, Math.min(n - 1, frame.index + moves[intent]));
+    } else if (intent === 'confirm' && n) {
+      this.back();
+      frame.onPick(frame.glyphs[frame.index]);
+    } else if (intent === 'shift' || e.key === 'Escape') {
+      this.back();
+    }
+  }
+
+  // ── Prompt commands ──────────────────────────────────────────────────────
 
   _runCommand(word) {
     const command = COMMANDS[word];
@@ -110,39 +197,28 @@ export class CliSystem {
   _answerConfirm(word) {
     const action = this.pendingConfirm;
     this.pendingConfirm = null;
-    this.view = 'prompt';
+    this.mode = 'prompt';
     this.reply = AFFIRMATIVE.has(word) ? action() : '...';
-  }
-
-  _showPrompt(reply) {
-    this.view = 'prompt';
-    this.reply = reply;
-    this.rows = [];
-    this.index = 0;
-  }
-
-  _showTable(rows) {
-    this.view = 'table';
-    this.reply = '';
-    this.rows = rows;
-    this.index = 0;
   }
 }
 
 // Each command takes the CliSystem. HELP's rows run the command they name.
 const COMMANDS = {
-  HELP: (cli) => cli._showTable(['HELP', 'LIST', 'FORGET'].map(label => ({
-    label,
-    run: () => { cli._showPrompt(''); COMMANDS[label](cli); },
+  HELP: (cli) => cli.openTable(() => ['HELP', 'LIST', 'FORGET'].map(label => actionRow(label, () => {
+    cli.stack = [];
+    COMMANDS[label](cli);
   }))),
 
-  LIST: (cli) => cli._showTable([
-    { label: '☠ PURE ROGUE', run: () => window.location.reload() },
-  ]),
+  LIST: (cli) => cli.openTable(LIST),
 
   FORGET: (cli) => {
-    cli.view = 'confirm';
+    cli.stack = [];
+    cli.mode = 'confirm';
     cli.reply = 'ARE YOU SURE?';
-    cli.pendingConfirm = () => (CanonStore.forget() ? 'FORGOTTEN.' : '...');
+    cli.pendingConfirm = () => {
+      if (!CanonStore.forget()) return '...';
+      cli.canon = CanonStore.load();
+      return 'FORGOTTEN.';
+    };
   },
 };

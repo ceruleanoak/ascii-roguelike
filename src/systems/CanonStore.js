@@ -16,7 +16,10 @@
 const STORAGE_KEY = 'pure-rogue-canon-v1';
 
 function emptyCanon() {
-  return { exited: false, story: '', names: {}, cheats: {}, weapons: {}, recipes: [] };
+  // weapons: { glyph: fields } — `authored: true` (+ `recipe: {left, right}`)
+  // marks a weapon the player created; otherwise the fields override an
+  // existing weapon's data. Applied at boot by CanonOverlay.
+  return { exited: false, story: '', names: {}, cheats: {}, weapons: {} };
 }
 
 export const CanonStore = {
@@ -26,7 +29,17 @@ export const CanonStore = {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (!raw) return emptyCanon();
       const parsed = JSON.parse(raw);
-      return { ...emptyCanon(), ...(parsed && typeof parsed === 'object' ? parsed : {}) };
+      const canon = emptyCanon();
+      if (!parsed || typeof parsed !== 'object') return canon;
+      // Keep each stored field only when it has the expected shape.
+      for (const key of Object.keys(canon)) {
+        const value = parsed[key];
+        const expected = canon[key];
+        if (typeof value === typeof expected && Array.isArray(value) === Array.isArray(expected) && value !== null) {
+          canon[key] = value;
+        }
+      }
+      return canon;
     } catch {
       return emptyCanon();
     }

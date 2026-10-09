@@ -25,6 +25,8 @@ import { CheatMenu } from './systems/CheatMenu.js';
 import { DemoSystem } from './systems/DemoSystem.js';
 import { ParticleFireworks } from './systems/ParticleFireworks.js';
 import { CliSystem } from './systems/CliSystem.js';
+import { CanonStore } from './systems/CanonStore.js';
+import { applyCanonOverlay, seedCanonCheats } from './systems/CanonOverlay.js';
 import { AudioSystem } from './systems/AudioSystem.js';
 import { FishingSystem } from './systems/FishingSystem.js';
 import { LootSystem } from './systems/LootSystem.js';
@@ -3984,5 +3986,7 @@ class Game {
 
 // Start game when page loads
 window.addEventListener('load', () => {
-  new Game();
+  const canon = CanonStore.load();
+  applyCanonOverlay(canon); // Canon Edits reach the registries before anything reads them
+  seedCanonCheats(new Game(), canon);
 });

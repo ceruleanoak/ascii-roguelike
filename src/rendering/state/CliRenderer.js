@@ -6,10 +6,15 @@
  */
 
 import { GRID, COLORS } from '../../game/GameConfig.js';
+import { rowValue } from '../../systems/cliTables.js';
+import { drawUnicodeTable } from '../ui/UnicodeTable.js';
 
 const SELECTED = '#ffff00';
 const DIM = '#999999';
 const TEXT = '#ffffff';
+const VISIBLE_ROWS = 15;
+
+const cursorOn = () => Math.floor(performance.now() / 500) % 2 === 0;
 
 export class CliRenderer {
   constructor(renderer) {
@@ -25,29 +30,22 @@ export class CliRenderer {
     r.clearForeground();
 
     const cli = game.cliSystem;
+    const frame = cli.top();
     const ctx = r.fgCtx;
     const cs = GRID.CELL_SIZE;
     ctx.save();
-    ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = `${cs}px 'Unifont', monospace`;
 
-    if (cli.view === 'table') {
-      const rowH = cs * 1.5;
-      const top = GRID.HEIGHT / 2 - ((cli.rows.length - 1) * rowH) / 2;
-      cli.rows.forEach((row, i) => {
-        ctx.fillStyle = i === cli.index ? SELECTED : DIM;
-        ctx.fillText(row.label, GRID.WIDTH / 2, top + i * rowH);
-      });
-    } else {
-      this._drawPrompt(ctx, cli, cs);
-    }
+    if (!frame) this._drawPrompt(ctx, cli, cs);
+    else if (frame.kind === 'table') this._drawTable(ctx, cli.rows(), frame.index, cs);
+    else if (frame.kind === 'text') this._drawText(ctx, frame, cs);
+    else drawUnicodeTable(ctx, frame.glyphs, frame.index);
     ctx.restore();
   }
 
   _drawPrompt(ctx, cli, cs) {
     const midY = GRID.HEIGHT / 2;
-    const cursorOn = Math.floor(performance.now() / 500) % 2 === 0;
     // Measure with a fixed-width cursor slot so the line doesn't jitter as it blinks.
     const line = `> ${cli.buffer}`;
     const big = cs * 1.5;
@@ -57,7 +55,7 @@ export class CliRenderer {
     ctx.textAlign = 'left';
     ctx.fillStyle = TEXT;
     ctx.fillText(line, left, midY);
-    if (cursorOn) ctx.fillText('█', left + ctx.measureText(line).width, midY);
+    if (cursorOn()) ctx.fillText('█', left + ctx.measureText(line).width, midY);
 
     if (cli.reply) {
       ctx.font = `${cs}px 'Unifont', monospace`;
@@ -65,5 +63,46 @@ export class CliRenderer {
       ctx.fillStyle = DIM;
       ctx.fillText(cli.reply, GRID.WIDTH / 2, midY + big * 1.5);
     }
+  }
+
+  /** A window of rows around the selection; a label and its value sit either side of center. */
+  _drawTable(ctx, rows, index, cs) {
+    const rowH = cs * 1.5;
+    const first = Math.max(0, Math.min(index - Math.floor(VISIBLE_ROWS / 2), rows.length - VISIBLE_ROWS));
+    const shown = rows.slice(first, first + VISIBLE_ROWS);
+    const top = GRID.HEIGHT / 2 - ((shown.length - 1) * rowH) / 2;
+    const midX = GRID.WIDTH / 2;
+    shown.forEach((row, i) => {
+      const y = top + i * rowH;
+      const selected = first + i === index;
+      const color = selected ? SELECTED : (row.color ?? DIM);
+      const value = rowValue(row);
+      ctx.fillStyle = color;
+      if (row.label && value) {
+        ctx.textAlign = 'right';
+        ctx.fillText(row.label, midX - cs / 2, y);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = row.valueColor ?? color;
+        ctx.fillText(value, midX + cs / 2, y);
+      } else {
+        ctx.textAlign = 'center';
+        ctx.fillText(row.label || value, midX, y);
+      }
+    });
+  }
+
+  _drawText(ctx, frame, cs) {
+    const midY = GRID.HEIGHT / 2;
+    if (frame.row.label) {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = DIM;
+      ctx.fillText(frame.row.label, GRID.WIDTH / 2, midY - cs * 2);
+    }
+    const width = ctx.measureText(frame.buffer + '█').width;
+    const left = GRID.WIDTH / 2 - width / 2;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = TEXT;
+    ctx.fillText(frame.buffer, left, midY);
+    if (cursorOn()) ctx.fillText('█', left + ctx.measureText(frame.buffer).width, midY);
   }
 }
