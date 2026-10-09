@@ -23,6 +23,13 @@ export const PlayerDamageSystem = {
       return false;
     }
 
+    // Room exit/entrance (and hut door) walks are scripted moves the player
+    // can't steer out of — a lava barrier at the threshold can't touch them
+    // until the AnimationSystem lock releases (or input cancels the walk-in).
+    if (player._animLock) {
+      return false;
+    }
+
     // Can't take damage during invulnerability frames
     if (player.invulnerabilityTimer > 0) {
       // Active dodge roll: signal as a roll-dodge so call sites can show DODGE text
