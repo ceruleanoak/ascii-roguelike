@@ -369,8 +369,9 @@ are secretly the same lesson from opposite ends.
 conductive objects and combat arcs lightning through them.
 
 - **Environment** — forces act *on* you (wind, rivers push, lightning). *Note:
-  the full ambient storm — always-blowing wind + occasional lightning strikes —
-  currently lives on a separate branch, not main.*
+  the ambient storm (`SandstormSystem` — one room-wide wind direction + occasional
+  lightning) is on main; the Storm Eye boss adds local, shaped Wind Fields
+  (`WindFieldSystem`).*
 - **Combat** — magic-weighted: energy, chain, ranged.
 - **Puzzle** — the *essence & nature of the elements*; conductivity, element
   interactions; the connective thread into the game's larger mystery.

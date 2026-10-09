@@ -103,7 +103,29 @@ Note the treasure boon would be the **second** encounter-specific reward in the 
 grants the same uniform `_grantBossReward()`. That is a system-shape decision worth surfacing when
 it is implemented, not a blocker on the ideal.
 
-### Yellow — Storm / *Channel* — Ratified 2026-08-23 (concept)
+### Yellow — Storm / *Channel* — the Storm Eye (⛯) — Built 2026-10-08
+
+> **Supersedes** the affinity concept below (and Pandora's Box, its implementation), per user
+> direction 2026-10-08. The original text is kept for the record.
+
+A Kracko-style eye inside a living storm (`src/entities/StormEye.js`). The lock is the wind:
+forces near the eye keep the player and their shots away, and the eye opens only when its wind
+dies. Every Storm Form runs **Windup** (a long mood tell — glyph motion layered on an impatient
+sine wobble) → **Attack** (glyph ⛭, invulnerable) → **Calm** (wind fades; the only damage
+window). Forms are random with no immediate repeat.
+
+| Storm Form | Attack | Correct avoidance | The opening |
+|---|---|---|---|
+| Cyclone | swirl field; core contact damages and strips every quick-slot weapon, armor and equipped consumable, which the wind carries | stay outside the radius, or roll through (rolls skip the push) | cyclone collapses; tossed gear settles |
+| Gale | sweeping gust cone toward the player, debris rides it, shoves toward corner water | shelter behind a pillar (wind shadow) | the gust stops |
+| Thundercloud | eye goes aloft (untargetable), trails the player in a Y-squashed orbit, strikes underneath | keep moving | the cloud sinks back down |
+| Black Hole | roll-proof suction that swallows projectiles; core contact hits and flings | run outward — rolling doesn't help | the suction stops, eye is close |
+
+**Boss Phases:** 66% / 33% HP; step timers ×1.0 / 0.8 / 0.6, spin ×1.0 / 1.3 / 1.6. HP 90.
+**Arena:** open floor, four two-cell obsidian pillars, quarter-circle water in each corner;
+ambient Sandstorm off (`room.calmWind`). All tuning constants are untested starting values.
+
+#### Superseded (2026-08-23 concept)
 
 Yellow is still early in development. Current state (Observed): **yellow has no boss of its own.**
 `BossSystem.activate()` falls through its `else` branch to `GooDragon`, so yellow inherits green's
