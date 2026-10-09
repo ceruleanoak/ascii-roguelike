@@ -613,11 +613,13 @@ export class CombatSystem {
           if (proj.isBlade) elementalMod *= enemy.getElementalModifier('blade');
           let adjustedDamage = Math.ceil(proj.damage * elementalMod * speedMultiplier);
           // Pandora's Box affinity rock-paper-scissors modifier
-          if (proj.affinity && enemy.currentAffinity) {
+          // A 0-damage projectile (fizzled spark, Freeze Ray) stays harmless
+          // through both flat modifiers below.
+          if (proj.affinity && enemy.currentAffinity && adjustedDamage > 0) {
             adjustedDamage = Math.max(1, Math.ceil(adjustedDamage * affinityDamageMultiplier(proj.affinity, enemy.currentAffinity)));
           }
           // Green Ranger flat modifier (not scaled by speed falloff); excludes boomerangs.
-          if (proj.owner && proj.owner.characterType === 'green' && !proj.boomerang) {
+          if (proj.owner && proj.owner.characterType === 'green' && !proj.boomerang && adjustedDamage > 0) {
             const enemyUndetected = enemy.detectionIndicatorTimer <= 0;
             const greenBonus = enemyUndetected ? proj.owner.greenIdleDamageBonus : -proj.owner.greenCombatDamagePenalty;
             adjustedDamage = Math.max(1, adjustedDamage + greenBonus);
@@ -1024,7 +1026,9 @@ export class CombatSystem {
             if (attack.distanceCrit) {
               totalDamage = Math.ceil(totalDamage * 1.5);
             }
-            if (attack.owner && attack.owner.characterType === 'green') {
+            // A 0-damage swing (Flag) stays harmless — the Green flat bonus
+            // only adjusts a hit that already does damage.
+            if (attack.owner && attack.owner.characterType === 'green' && totalDamage > 0) {
               const enemyUndetected = enemy.detectionIndicatorTimer <= 0;
               const greenBonus = enemyUndetected ? attack.owner.greenIdleDamageBonus : -attack.owner.greenCombatDamagePenalty;
               totalDamage = Math.max(1, totalDamage + greenBonus);
