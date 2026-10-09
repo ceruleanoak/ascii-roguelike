@@ -783,6 +783,9 @@ export class TrapSystem {
       affectedEnemies: new Set(),
       fuseTimer: 0,
       spawnedAt: performance.now(),
+      // Same layer tag as a player-armed trap (_armTrap): a goblin on a hut or
+      // dungeon floor lays its trap on that floor, not the surface.
+      interior: isInteriorActive(game),
       electricTriggered: false, // set by triggerElectricAt, resolved in checkElectricTriggers
     });
   }
@@ -862,10 +865,14 @@ export class TrapSystem {
         }
       }
 
-      if (trapData.oneShot && !this._isSpawnImmune(entry)) {
-        // One-shot trap: triggered by enemy or player proximity (owner is immune)
+      if (trapData.oneShot) {
+        // One-shot trap: triggered by enemy or player proximity (owner is immune).
+        // The spawn grace only delays the trigger — it must never route a
+        // one-shot into the persistent branch below, where a Stun Trap's
+        // 'zap' effect would pulse as a Tesla Coil on its own placer.
+        const armed = !this._isSpawnImmune(entry);
         let triggered = false;
-        for (const enemy of enemies) {
+        for (const enemy of (armed ? enemies : [])) {
           if (enemy === entry.owner) continue;
           const dx = enemy.position.x - tx;
           const dy = enemy.position.y - ty;
@@ -875,7 +882,7 @@ export class TrapSystem {
           }
         }
         // Player can also trigger traps by walking near them
-        if (!triggered && game.player && !trapData.remoteTrigger) {
+        if (armed && !triggered && game.player && !trapData.remoteTrigger) {
           const pdx = (game.player.position.x + GRID.CELL_SIZE / 2) - (tx + GRID.CELL_SIZE / 2);
           const pdy = (game.player.position.y + GRID.CELL_SIZE / 2) - (ty + GRID.CELL_SIZE / 2);
           if (Math.sqrt(pdx * pdx + pdy * pdy) <= trapData.triggerRadius) {
