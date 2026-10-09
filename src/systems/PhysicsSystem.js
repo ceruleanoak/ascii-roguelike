@@ -1695,6 +1695,10 @@ export class PhysicsSystem {
     }
 
     for (const { entity, inLiquid, liquidState, electricCurrent, damagingLiquid, healingLiquid, inDeepWater } of waterResults) {
+      // Every body (player and enemy) carries this frame's liquid contact —
+      // the enemy zap-hold, Sandstorm and seedUnderBody all read it.
+      entity.inLiquid = !!inLiquid;
+
       // Wet Pip track — deep water fills pips 1→3, pip 3 drowns. Independent
       // of (runs before) the lava/heal/wet branches below, so pips drain even
       // on a frame the entity has left the water for dry ground; they drain
@@ -1795,9 +1799,6 @@ export class PhysicsSystem {
       if (entity.data?.lavaImmune && entity.inLava) entity.inLava = false;
 
       if (!inLiquid) continue;
-
-      // Track player liquid state for Rusalka movement
-      if (entity === game.player) game.player.inLiquid = true;
 
       // Water washes slime (goo) off — player and enemy alike. A rinse, not
       // an elemental status, so Rubber Boots' water immunity doesn't stop it.

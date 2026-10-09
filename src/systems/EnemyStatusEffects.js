@@ -143,7 +143,7 @@ export function updateStatusEffects(enemy, deltaTime) {
   const permanentFreeze = !!enemy.data?.freezePermanent;
   const ticks = tickStatusEffects(enemy, deltaTime, {
     holdsTimer: (effect, slot) => (effect === 'freeze' && slot.stacks >= MAX_PIPS && permanentFreeze)
-      || (effect === 'zap' && enemy.isWet() && !enemy._isOnWater()),
+      || (effect === 'zap' && enemy.isWet() && !enemy.inLiquid),
     // Recomputed every frame, so a hit that refreshes a thawing lock stops
     // the shudder instead of leaving it flashing for the whole new lock.
     afterCountdown: (effect, slot) => {

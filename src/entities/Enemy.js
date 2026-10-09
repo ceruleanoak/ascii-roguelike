@@ -375,6 +375,10 @@ export class Enemy {
     // Lava state tracking (for lava-immune enemies that change behavior in lava)
     this.inLava = false;
 
+    // Standing in water this frame (PhysicsSystem.applyLiquidResults, the
+    // same hitbox test as the player's). Grounds a wet enemy's zap hold.
+    this.inLiquid = false;
+
     // Lava contact for non-immune enemies (PhysicsSystem.applyLiquidResults
     // sets this every frame). Lava deals its own damage tick rather than the
     // burn DOT, but reads as "burning" for the status pip — StatusEffectVisuals.js.
