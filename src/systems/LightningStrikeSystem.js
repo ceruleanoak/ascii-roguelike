@@ -47,7 +47,7 @@ export class LightningStrikeSystem {
     plane = 0,
     hutPlane = isInteriorActive(this.game),
     source = null,
-    // The entity that called the bolt down, when there is one (Pandora's Box).
+    // The entity that called the bolt down, when there is one (the Storm Eye's Thundercloud).
     // Carried to the player's damage source so a lightning kill is credited on
     // the REST tombstone; weapon- and storm-driven strikes leave it null.
     attacker = null,

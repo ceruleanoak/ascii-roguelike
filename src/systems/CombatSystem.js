@@ -18,7 +18,6 @@ import { conductElectricity as conductElectricityImpl } from './ElectricConducti
 import { checkProximity as checkProximityImpl, applyAOEStatus as applyAOEStatusImpl, createExplosion as createExplosionImpl } from './ExplosionEffects.js';
 import { updateRollDamage as updateRollDamageImpl } from './RollDamageMechanic.js';
 import { acidFloodFillWater } from './AcidWaterSpread.js';
-import { affinityDamageMultiplier } from '../entities/PandoraBox.js';
 import { TongueAttackSystem } from './TongueAttackSystem.js';
 import { createSplitProjectiles } from './SplitProjectiles.js';
 import { tagCharmedProjectile, resolveCharmedMelee, resolveCharmedProjectile } from './charmHits.js';
@@ -284,6 +283,9 @@ export class CombatSystem {
         this.projectiles.splice(i, 1);
         continue;
       }
+
+      // Wind Fields (Storm Eye) bend shots in flight
+      this.game?.bossSystem?.windFieldSystem.pushProjectile(proj, deltaTime);
 
       // Move projectile
       proj.position.x += proj.velocity.vx * deltaTime;
@@ -554,8 +556,9 @@ export class CombatSystem {
           continue;
         }
 
-        // An enemy down in a Pit is under the shot (pits.js)
-        if (projectileSailsOver(this.game?.activeRoom, enemy, proj)) continue;
+        // An enemy down in a Pit is under the shot (pits.js); an aloft one
+        // (the Storm Eye's Thundercloud) is over it.
+        if (projectileSailsOver(this.game?.activeRoom, enemy, proj) || enemy.aloft) continue;
 
         if (this.checkProjectileCollision(proj, enemy)) {
           // Missed shot — show MISS once per enemy and pass through. Bullet keeps traveling
@@ -614,12 +617,8 @@ export class CombatSystem {
           if (proj.electric) elementalMod *= enemy.getElementalModifier('shock');
           if (proj.isBlade) elementalMod *= enemy.getElementalModifier('blade');
           let adjustedDamage = Math.ceil(proj.damage * elementalMod * speedMultiplier);
-          // Pandora's Box affinity rock-paper-scissors modifier
           // A 0-damage projectile (fizzled spark, Freeze Ray) stays harmless
-          // through both flat modifiers below.
-          if (proj.affinity && enemy.currentAffinity && adjustedDamage > 0) {
-            adjustedDamage = Math.max(1, Math.ceil(adjustedDamage * affinityDamageMultiplier(proj.affinity, enemy.currentAffinity)));
-          }
+          // through the flat modifier below.
           // Green Ranger flat modifier (not scaled by speed falloff); excludes boomerangs.
           if (proj.owner && proj.owner.characterType === 'green' && !proj.boomerang && adjustedDamage > 0) {
             const enemyUndetected = enemy.detectionIndicatorTimer <= 0;
@@ -974,6 +973,7 @@ export class CombatSystem {
       if (!attack.hasHit) {
         for (const enemy of enemies) {
           if (planeOf(enemy) !== (attack.shooterPlane ?? 0)) continue;
+          if (enemy.aloft) continue; // out of reach overhead (Storm Eye's Thundercloud)
           // Sniper stays hittable while sniperHidden — see the projectile-loop comment above.
 
           if (this.checkMeleeCollision(attack, enemy)) {
@@ -1252,6 +1252,8 @@ export class CombatSystem {
           continue;
         }
       }
+
+      this.game?.bossSystem?.windFieldSystem.pushProjectile(proj, deltaTime);
 
       // Move projectile
       proj.position.x += proj.velocity.vx * deltaTime;

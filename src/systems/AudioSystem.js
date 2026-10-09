@@ -1341,6 +1341,14 @@ export class AudioSystem {
     this.loadSFX('bat_break', null);       // Bat weapon shatters on a rock hit
     this.loadSFX('armor_splinter', null);  // Bone armor Splinters on a melee hit
     this.loadSFX('scale_ricochet', null);  // a hit the armor turned away; grab broken
+    // Storm Eye (yellow zone Boss) — placeholder names, no assets yet.
+    this.loadSFX('storm_eye_mood', null);     // windup begins: the mood for the next Storm Form
+    this.loadSFX('storm_eye_channel', null);  // attack fires: the eye turns ⛭
+    this.loadSFX('storm_eye_calm', null);     // the wind dies — the opening
+    this.loadSFX('storm_eye_phase', null);    // Boss Phase escalation
+    this.loadSFX('storm_eye_hit', null);      // struck during the calm
+    this.loadSFX('storm_eye_strip', null);    // Cyclone core tears the gear loose
+    this.loadSFX('storm_eye_catch', null);    // Black Hole core catch + fling
     // Dungeon 6-floor rework — placeholder names, no assets yet.
     this.loadSFX('dungeon_key_pickup', null); // Skull destroyed, key obtained
     this.loadSFX('dungeon_key_use', null);    // Key consumed at the Vault door

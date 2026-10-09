@@ -82,6 +82,7 @@ const PLAIN_PRIZES = 'NeutralRenderer draws room prizes plainly: the shared tall
 const TRINE_ONLY = 'the Trine fights only in the Mist Battle, on a surface Room';
 const RUSALKA_ONLY = 'the cure Rusalka surfaces only in Lake Rooms (surface)';
 const NO_DARK = 'nothing here is dark enough for a torch to cut';
+const STORM_EYE_ONLY = 'Wind Fields blow only in the Storm Eye arena, a surface Room';
 
 const everywhere = { surface: true, floor: true, maze: true, rest: true, neutral: true };
 const combatOnly = { ...everywhere, neutral: NON_COMBAT };
@@ -134,6 +135,8 @@ export const FRAME_PASSES = {
     // Dodge trails and weapon-preview bursts happen in REST as well as combat.
     { id: 'particles', on: { ...everywhere, neutral: 'particles never tick in NEUTRAL (WorldEffectsSystem runs in REST/EXPLORE only), so leftovers would hang frozen' }, draw: (rc, game, owner) => er(rc).drawParticles(game, isInterior(owner)) },
     { id: 'steamClouds', on: combatOnly, draw: (rc, game, owner) => er(rc).drawSteamClouds(game, isInterior(owner)) },
+    // Wind Field motes (Storm Eye): swirl, gust streaks, suction spirals.
+    { id: 'windField', on: surfaceOnly(STORM_EYE_ONLY), draw: (rc, game) => game.bossSystem?.windFieldSystem.render(rc.renderer.fgCtx) },
   ],
 
   // The player and everything attached to them.

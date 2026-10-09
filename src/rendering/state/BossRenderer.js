@@ -39,7 +39,7 @@ export class BossRenderer {
     if (!bs?.active) return;
     if (bs.lakeBoss)    { this.renderLakeBossComposite(game); return; }
     if (bs.turtleShell) { this.renderTurtleBossComposite(game); return; }
-    if (bs.pandoraBox)  { this.renderPandoraBoxComposite(game); return; }
+    if (bs.stormEye)    { this.renderStormEyeComposite(game); return; }
     if (!bs.dragon) return;
 
     const dragon = bs.dragon;
@@ -470,112 +470,54 @@ export class BossRenderer {
     }
   }
 
-  // ── Pandora's Box (Yellow Zone Boss) ──────────────────────────────────────
+  // ── Storm Eye (Yellow Zone Boss) ──────────────────────────────────────────
 
-  renderPandoraBoxComposite(game) {
-    const box = game.bossSystem?.pandoraBox;
-    if (!box || box.hp <= 0) return;
+  /**
+   * The eye is drawn at its root plus `glyphOffset` — the mood motion the
+   * StormEye computes (impatient wobble, windup tells, the calm's droop).
+   * While lifted (Thundercloud) the glyph floats `lift` px above a ground
+   * shadow that marks where the cloud really is; lightning falls on that spot.
+   */
+  renderStormEyeComposite(game) {
+    const eye = game.bossSystem?.stormEye;
+    if (!eye || eye.hp <= 0) return;
 
     const cs  = GRID.CELL_SIZE;
     const ctx = this.renderer.fgCtx;
-    const cx  = box.position.x;
-    const cy  = box.position.y + box.bounceOffset;
+    const gx = eye.root.x;
+    const gy = eye.root.y;
 
-    // Affinity face characters (2-face view: left face + right face)
-    const FACE_CHARS = {
-      red:    { left: '|', right: '/' },
-      green:  { left: 'o', right: 'O' },
-      blue:   { left: '*', right: '+' },
-      yellow: { left: '~', right: '⚡' }
-    };
+    // Ground shadow under a lifted eye (squashed ellipse, grows with height).
+    if (eye.lift > 0.5) {
+      const k = eye.lift / cs;
+      ctx.save();
+      ctx.globalAlpha = 0.4;
+      ctx.fillStyle = '#000000';
+      ctx.beginPath();
+      ctx.ellipse(gx, gy + cs * 0.3, cs * (0.5 + 0.35 * k), cs * (0.2 + 0.12 * k), 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
 
-    const AFFINITY_COLORS = {
-      red:    '#ff3333',
-      green:  '#33cc33',
-      blue:   '#3388ff',
-      yellow: '#ffcc00'
-    };
-
-    const face = FACE_CHARS[box.currentAffinity];
-    const faceColor = AFFINITY_COLORS[box.currentAffinity];
-
-    // I-frame flash
-    const isFlashing = box.hitFlash && box.invulnerabilityTimer > 0
+    const isFlashing = eye.hitFlash && eye.invulnerabilityTimer > 0
       && Math.floor(performance.now() / 1000 * 24) % 2 === 0;
+    const nearDeathColor = eye.getNearDeathBlinkColor?.() ?? null;
+    const color = nearDeathColor ?? (isFlashing ? '#ffffff' : eye.moodColor);
 
-    // Near-death blink
-    const nearDeathColor = box.getNearDeathBlinkColor?.() ?? null;
-    const drawColor = nearDeathColor ?? (isFlashing ? '#ffffff' : faceColor);
-
-    // Gray top row
-    const topY = cy - cs * 1.5;
-    const GRAY = '#666666';
-    const grayColor = isFlashing ? '#ffffff' : GRAY;
-
-    // ── Gray top row (4 cells) ─────────────────────────────────────────────
-    for (let col = -2; col <= 1; col++) {
-      this.renderer.drawEntity(cx + col * cs, topY, '░', grayColor);
-    }
-
-    // ── Spinning body (4×3 cells: 4 columns, 3 rows showing 2 faces) ──────
-    // The spin is animated by shifting which columns show which face.
-    // During spin phase, columns shift left over time.
-    const spinProgress = box.cyclePhase === 'spin' ? box.spinProgress : 0;
-    const bodyTopY = cy - cs * 0.5;
-
-    for (let row = 0; row < 3; row++) {
-      for (let col = -2; col <= 1; col++) {
-        // Determine which face this column shows based on spin state
-        let showLeftFace;
-        if (box.cyclePhase === 'spin') {
-          // During spin: columns shift left, wrapping
-          const shifted = col + Math.floor(spinProgress * 4);
-          showLeftFace = shifted < 0;
-        } else {
-          // After spin: left 2 cols = current face, right 2 cols = next face preview
-          showLeftFace = col < 0;
-        }
-
-        const char = showLeftFace ? face.left : face.right;
-        const color = drawColor;
-
-        // Lull dimming
-        const lullDim = box.isLull ? 0.6 : 1.0;
-        const finalColor = this._dimColor(color, lullDim);
-
-        this.renderer.drawEntity(cx + col * cs, bodyTopY + row * cs, char, finalColor);
-      }
-    }
-
-    // ── Phase 2 indicator: rapid color pulse on all faces ──────────────────
-    if (box.bossPhase === 2) {
-      const pulse = Math.sin(performance.now() / 1000 * 12) * 0.3 + 0.7;
-      const pulseColor = this._dimColor(drawColor, pulse);
-      // Draw a border char around the box
-      for (let col = -2; col <= 1; col++) {
-        this.renderer.drawEntity(cx + col * cs, bodyTopY - cs * 0.5, '·', pulseColor);
-        this.renderer.drawEntity(cx + col * cs, bodyTopY + cs * 2.5, '·', pulseColor);
-      }
-    }
+    const ex = gx + eye.glyphOffset.x;
+    const ey = gy + eye.glyphOffset.y - eye.lift;
+    this.renderer.drawEntity(ex, ey, eye.displayChar, color);
 
     // ── HP bar ─────────────────────────────────────────────────────────────
-    if (box.hasTakenDamage) {
-      const BAR_W = cs * 4;
-      const BAR_H = 4;
-      const barX = cx - BAR_W / 2;
-      const barY = topY - cs * 1.0;
+    if (eye.hasTakenDamage) {
+      const BAR_W = cs * 3;
+      const BAR_H = 3;
+      const barX = gx - BAR_W / 2;
+      const barY = gy - eye.lift - cs * 1.4;
       ctx.fillStyle = '#333333';
       ctx.fillRect(barX, barY, BAR_W, BAR_H);
-      ctx.fillStyle = box.bossPhase === 2 ? '#ffcc00' : '#8844ff';
-      ctx.fillRect(barX, barY, BAR_W * Math.max(0, box.hp / box.maxHp), BAR_H);
+      ctx.fillStyle = eye.bossPhase === 1 ? '#ffd84a' : eye.bossPhase === 2 ? '#ffaa33' : '#ff5533';
+      ctx.fillRect(barX, barY, BAR_W * Math.max(0, eye.hp / eye.maxHp), BAR_H);
     }
-  }
-
-  _dimColor(hexColor, factor) {
-    // Simple brightness multiplier on a hex color
-    const r = parseInt(hexColor.slice(1, 3), 16);
-    const g = parseInt(hexColor.slice(3, 5), 16);
-    const b = parseInt(hexColor.slice(5, 7), 16);
-    return `rgb(${Math.round(r * factor)},${Math.round(g * factor)},${Math.round(b * factor)})`;
   }
 }
