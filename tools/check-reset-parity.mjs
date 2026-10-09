@@ -251,10 +251,9 @@ const UNREGISTERED_ALLOWLIST = [
   /^keyBuffer$/,
   /^keyFlashMap$/,
   // Raw per-frame input-down booleans — same category as `keys`/`arrowKeys`
-  // above (SPACE/SHIFT/V key-down state), not run-scoped data.
+  // above (SPACE/SHIFT key-down state), not run-scoped data.
   /^spacePressed$/,
   /^shiftPressed$/,
-  /^vPressed$/,
 
   // Generator instances — same Non-Goals category as System/Manager
   // instances (their INTERNAL state is out of scope; only the game.*
@@ -381,8 +380,7 @@ const UNREGISTERED_ALLOWLIST = [
   // not gameplay state.
   /^showVectors$/,
   /^particleFireworks$/,
-  /^_fwTimer$/,
-  /^_fwIndex$/,
+  /^particleFireworksTicker$/,   // the toggle's cycle timer (src/systems/ParticleFireworks.js)
 
   // Per-frame scratch — recomputed every tick from live world state, never
   // read before being written that same frame; nothing "resets" a value

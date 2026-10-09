@@ -65,7 +65,7 @@ Builds for production and pushes `dist/` to the `gh-pages` branch. Live at https
 
 Three tiers — pick the right one; don't reach for the CheatMenu when a headless tool fits.
 
-**In-game — CheatMenu** (`\` in-game, `src/systems/CheatMenu.js`): god mode, magic meter, demo recording, particle fireworks, death-ledger download, zone jump, boss/enemy/item/trap/ingredient spawning. Manual browser testing only — it cannot verify anything headlessly.
+**In-game — CheatMenu** (type the spell `CHEAT` + SPACE in-game; SHIFT at the root closes it; `src/systems/CheatMenu.js`): god mode, magic meter, demo recording, particle fireworks, show vectors, maze test, death-ledger download, zone jump, boss/enemy/item/trap/ingredient spawning. Manual browser testing only — it cannot verify anything headlessly.
 
 **CLI / headless:**
 - `npm run build` — production build; runs `check:arch` first. Primary verification step after code changes.

@@ -175,6 +175,13 @@ const COMMAND_FOLLOWUPS = Object.fromEntries(
 );
 
 export const SPELLS = {
+  // Dev menu. The THREE stays silent (null response); the cheat menu opens.
+  // Replaces the old backslash key — a word anyone can learn.
+  'CHEAT': {
+    response: null,
+    action: (game) => game.cheatMenu.open()
+  },
+
   'HEX': {
     response: (game) => {
       if (!game.knownSpells?.has('HEX')) return 'UNKNOWN SPELL.';

@@ -3,7 +3,7 @@ import { Item } from '../entities/Item.js';
 import { ENEMIES, ZONE_SPAWN_TABLES } from '../data/enemies.js';
 import { GRID, GAME_STATES } from '../game/GameConfig.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
-import { sessionDeaths } from './DeathLedgerSystem.js';
+import { sessionDeaths, downloadSessionLedger } from './DeathLedgerSystem.js';
 import { PUZZLE_ROOM_TEMPLATES } from '../data/dungeonPuzzleTemplates.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Enemy } from '../entities/Enemy.js';
@@ -15,7 +15,7 @@ const TILE_ROWS = 3;   // cell-heights per tile
 // Actions that do NOT mark the run as cheated (dev/cosmetic only).
 // Everything else returned by handleInput sets game.cheatUsed for the death ledger.
 const CHEAT_EXEMPT_ACTIONS = new Set([
-  'download_death_ledger', 'toggle_demo_recording', 'toggle_record_hotkey', 'toggle_particle_fireworks'
+  'download_death_ledger', 'toggle_demo_recording', 'toggle_particle_fireworks', 'toggle_show_vectors'
 ]);
 
 export class CheatMenu {
@@ -43,7 +43,7 @@ export class CheatMenu {
     const manaSlotCount = this.game?.player?.magicMeter?.slots?.length ?? 0;
 
     const demoRecording = !!this.game?.demoSystem?.recording;
-    const recordHotkey = !!this.game?.demoSystem?.hotkeyEnabled;
+    const vectors = !!this.game?.showVectors;
     const fireworks = !!this.game?.particleFireworks;
     const frog = !!this.game?.player?.polymorphed;
     const deathCount = sessionDeaths.filter(r => r.event !== 'revive').length;
@@ -52,7 +52,7 @@ export class CheatMenu {
       { char: frog ? 'g' : '○', name: `FROG FORM [${frog ? 'ON' : 'OFF'}]`, type: 'toggle_frog', color: frog ? '#44bb44' : '#888888' },
       { char: '+', name: `MANA SLOT +1 (${manaSlotCount})`, type: 'activate_magic_meter', color: manaSlotCount > 0 ? '#cc66ff' : '#888888' },
       { char: demoRecording ? '●' : '○', name: `RECORD DEMO [${demoRecording ? 'ON' : 'OFF'}]`, type: 'toggle_demo_recording', color: demoRecording ? '#ff4444' : '#888888' },
-      { char: recordHotkey ? 'R' : '○', name: `R RECORD KEY [${recordHotkey ? 'ON' : 'OFF'}]`, type: 'toggle_record_hotkey', color: recordHotkey ? '#ff8844' : '#888888' },
+      { char: vectors ? '→' : '○', name: `SHOW VECTORS [${vectors ? 'ON' : 'OFF'}]`, type: 'toggle_show_vectors', color: vectors ? '#44aaff' : '#888888' },
       { char: fireworks ? '✶' : '○', name: `PARTICLE FIREWORKS [${fireworks ? 'ON' : 'OFF'}]`, type: 'toggle_particle_fireworks', color: fireworks ? '#ffaa44' : '#888888' },
       { char: '↓', name: `DOWNLOAD LEDGER (${deathCount} death${deathCount !== 1 ? 's' : ''})`, type: 'download_death_ledger', color: deathCount > 0 ? '#aaaaff' : '#444466' }
     ];
@@ -62,7 +62,10 @@ export class CheatMenu {
       { char: 'R', name: `RED (L${this.game.zoneDepths.red})`, type: 'zone', zone: 'red', color: '#ff4400' },
       { char: 'C', name: `CYAN (L${this.game.zoneDepths.cyan})`, type: 'zone', zone: 'cyan', color: '#44ffff' },
       { char: 'Y', name: `YELLOW (L${this.game.zoneDepths.yellow})`, type: 'zone', zone: 'yellow', color: '#ffff44' },
-      { char: 'D', name: `GRAY (L${this.game.zoneDepths.gray})`, type: 'zone', zone: 'gray', color: '#888888' }
+      { char: 'D', name: `GRAY (L${this.game.zoneDepths.gray})`, type: 'zone', zone: 'gray', color: '#888888' },
+      // Maze test room — REST only, like the old M key it replaces.
+      ...(this.game.stateMachine?.getCurrentState() === GAME_STATES.REST
+        ? [{ char: '#', name: 'MAZE TEST', type: 'maze_test', color: '#aaaaaa' }] : [])
     ] : [];
 
     const bossItems = (this.game && this.game.zoneDepths) ? [
@@ -308,22 +311,130 @@ export class CheatMenu {
 
   // ── Lifecycle ───────────────────────────────────────────────────────────
 
-  toggle() {
-    this.isOpen = !this.isOpen;
-    if (this.isOpen) {
-      this.tree = this.buildTree();
-      this.path = [];
-      this.selectedIndex = 0;
-      this.savedIndices = [];
-      this.scrollOffset = 0;
-      this.gridRowOffset = 0;
-      this.warpMode = false;
-      this.depthMode = false;
-      this.depthInput = '';
+  /** Opened by the CHEAT spell (src/data/spells.js). */
+  open() {
+    if (this.isOpen) return;
+    this.isOpen = true;
+    this.tree = this.buildTree();
+    this.path = [];
+    this.selectedIndex = 0;
+    this.savedIndices = [];
+    this.scrollOffset = 0;
+    this.gridRowOffset = 0;
+    this.warpMode = false;
+    this.depthMode = false;
+    this.depthInput = '';
+    this._clearHeldInput();
+  }
+
+  close() {
+    this.isOpen = false;
+  }
+
+  // Clear any held keys / charges so the player stops moving/attacking
+  // while the menu owns input.
+  _clearHeldInput() {
+    const game = this.game;
+    if (!game?.keys) return;
+    game.keys.w = game.keys.a = game.keys.s = game.keys.d = false;
+    game.keys.space = game.keys.shift = game.keys.tab = false;
+    game.spacePressed = false;
+    game.shiftPressed = false;
+    game.attackSequenceActive = false;
+    if (game.arrowKeys) {
+      game.arrowKeys.ArrowUp = game.arrowKeys.ArrowDown = false;
+      game.arrowKeys.ArrowLeft = game.arrowKeys.ArrowRight = false;
     }
   }
 
   // ── Input ───────────────────────────────────────────────────────────────
+
+  /**
+   * Window keydown while the menu is open (main.js dispatches here and
+   * swallows the key). Returns the background-object list a spawn_object
+   * landed in, so main.js — owner of the game.backgroundObjects surface
+   * mirror — can keep that alias in sync; otherwise null.
+   */
+  handleKeydown(key) {
+    const result = this.handleInput(key);
+    if (!result || result === 'handled') return null;
+    return this.dispatchAction(result);
+  }
+
+  /** Carry out an action returned by handleInput. */
+  dispatchAction(result) {
+    const game = this.game;
+    switch (result.action) {
+      case 'spawn':
+        this.spawnItem(result.item);
+        return null;
+      case 'spawn_enemy':
+        this.spawnEnemyAtPlayer(result.enemy);
+        return null;
+      case 'spawn_object': {
+        const objects = this.spawnObjectAtPlayer(result.objChar);
+        this.close(); // so the player can reposition for the next placement
+        return objects;
+      }
+      case 'trigger_boulder':
+        game.boulderSystem?.triggerBoulderRain(1);
+        break;
+      case 'dungeon_warp':
+        game.dungeonSystem.debugWarpTo(result.destination, { forceRegenerate: result.forceRegenerate });
+        break;
+      case 'teleport_zone':
+        game.cheatWarpSystem.handleZoneTeleport(game, result.zone);
+        break;
+      case 'warp':
+        game.cheatWarpSystem.handleRoomWarp(game, result.roomLetter);
+        break;
+      case 'maze_test':
+        game.cheatWarpSystem.enterMazeTestRoom(game);
+        break;
+      case 'change_character':
+        game.swapWithCharacter(result.characterType);
+        break;
+      case 'boss_test':
+        game.cheatWarpSystem.handleBossTest(game, result.zone);
+        break;
+      case 'mist_battle_test':
+        game.cheatWarpSystem.handleMistBattleTest(game);
+        break;
+      case 'set_depth':
+        game.cheatWarpSystem.handleDepthJump(game, result.depth);
+        break;
+      case 'toggle_god_mode':
+        this.godMode = !this.godMode;
+        game.player.godMode = this.godMode;
+        this.rebuild();
+        return null;
+      case 'activate_magic_meter':
+        game.magicSystem?.activateMagicMeter(game.player);
+        this.rebuild();
+        game.updateUI();
+        return null;
+      case 'toggle_demo_recording':
+        game.demoSystem.toggleRecording();
+        this.rebuild();
+        return null;
+      case 'toggle_particle_fireworks':
+        game.particleFireworksTicker.toggle();
+        this.rebuild();
+        return null;
+      case 'toggle_show_vectors':
+        game.showVectors = !game.showVectors;
+        this.rebuild();
+        return null;
+      case 'download_death_ledger':
+        downloadSessionLedger();
+        return null;
+      default:
+        return null;
+    }
+    // Warps, swaps and room actions close the menu.
+    this.close();
+    return null;
+  }
 
   handleInput(key) {
     const result = this._handleInput(key);
@@ -364,7 +475,7 @@ export class CheatMenu {
 
     // Warp mode
     if (this.warpMode) {
-      if (key === 'Escape' || key === '\\') {
+      if (key === 'Escape') {
         this.warpMode = false;
         return 'handled';
       }
@@ -386,9 +497,10 @@ export class CheatMenu {
       return 'handled';
     }
 
-    // Escape / Backspace / Shift ascend the menu hierarchy
+    // Escape / Backspace / Shift ascend the menu hierarchy; at the root
+    // they close the menu.
     if (key === 'Escape' || key === 'Backspace' || key === 'Shift') {
-      this._ascend();
+      if (!this._ascend()) this.close();
       return 'handled';
     }
 
@@ -433,7 +545,7 @@ export class CheatMenu {
       }
     }
 
-    if (key === 'Enter') {
+    if (key === 'Enter' || key === ' ') {
       const selected = entries[this.selectedIndex];
       if (!selected) return null;
       // Folder → descend
@@ -562,16 +674,10 @@ export class CheatMenu {
     if (selected.type === 'toggle_god_mode') return { action: 'toggle_god_mode' };
     if (selected.type === 'activate_magic_meter') return { action: 'activate_magic_meter' };
     if (selected.type === 'toggle_demo_recording') return { action: 'toggle_demo_recording' };
-    if (selected.type === 'toggle_record_hotkey') {
-      // Self-contained dev toggle — arms/disarms the global 'r' record hotkey
-      // without a main.js dispatch branch.
-      const demo = this.game?.demoSystem;
-      if (demo) demo.hotkeyEnabled = !demo.hotkeyEnabled;
-      this.rebuild();
-      return 'handled';
-    }
+    if (selected.type === 'toggle_show_vectors') return { action: 'toggle_show_vectors' };
+    if (selected.type === 'maze_test') return { action: 'maze_test' };
     if (selected.type === 'toggle_frog') {
-      // Self-contained like the record key — no main.js dispatch branch. An
+      // Self-contained — handled here rather than in dispatchAction. An
       // uncursed polymorph: exits keep their normal locks, and it lifts from
       // here (or any ordinary cure). Counts as a cheat for the death ledger.
       const game = this.game;

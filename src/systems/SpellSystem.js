@@ -82,7 +82,7 @@ export class SpellSystem {
           }
         }
         const text = typeof spell.response === 'function' ? spell.response(this.game) : spell.response;
-        this.game.spellResponse = { text, startTime: performance.now() };
+        if (text) this.game.spellResponse = { text, startTime: performance.now() }; // null = silent spell
         if (spell.action) spell.action(this.game);
         return;
       }

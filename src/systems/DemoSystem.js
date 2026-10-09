@@ -10,13 +10,22 @@
  * runs untouched.
  *
  * Recording: when active, every keydown/keyup that reaches setupInput is
- * appended to a buffer with the current frame index. main.js captures the
- * room spec, player startState, and enemy snapshot at record start and
- * passes them in via setRecordingContext. Stopping prints the payload to
- * console for paste into src/data/demoRecording.js.
+ * appended to a buffer with the current frame index. toggleRecording
+ * captures the room spec, player startState, and enemy snapshot at record
+ * start. Stopping prints the payload to console for paste into
+ * src/data/demoRecording.js.
+ *
+ * World setup: setupWorld / applyStartState / applyEnemies rebuild a
+ * recording's room, player and enemies. Recording (toggleRecording) and
+ * playback (main.js enterDemoState) share them so world generation is
+ * identical in both directions.
  */
 
 import { DEMO_RECORDINGS } from '../data/demoRecording.js';
+import { ZONES } from '../data/zones.js';
+import { GAME_STATES, GRID, ROOM_TYPES } from '../game/GameConfig.js';
+import { Item } from '../entities/Item.js';
+import { Enemy } from '../entities/Enemy.js';
 
 const ACTION_KEYS = new Set([' ', 'Shift', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 
@@ -31,7 +40,6 @@ export class DemoSystem {
     this.currentIndex = 0; // index into DEMO_RECORDINGS; advances each play
 
     // Recording state
-    this.hotkeyEnabled = false; // arms the global 'r' record hotkey (cheat-menu toggle); off so 'r' stays a normal gameplay key
     this.recording = false;
     this.recordBuffer = [];
     this.recordSeed = 0;
@@ -175,10 +183,9 @@ export class DemoSystem {
     const g = this.game;
     if (!g.keys) return;
     g.keys.w = g.keys.a = g.keys.s = g.keys.d = false;
-    g.keys.space = g.keys.shift = g.keys.tab = g.keys.v = false;
+    g.keys.space = g.keys.shift = g.keys.tab = false;
     g.spacePressed = false;
     g.shiftPressed = false;
-    g.vPressed = false;
     g.attackSequenceActive = false;
     if (g.arrowKeys) {
       g.arrowKeys.ArrowUp = g.arrowKeys.ArrowDown = false;
@@ -202,7 +209,7 @@ export class DemoSystem {
   }
 
   /**
-   * Called by main.js after it has captured the room spec + player state
+   * Called by toggleRecording after it has captured the room spec + player state
    * + enemy snapshot for the recording. Stored fields are emitted in the
    * stopRecording payload.
    */
@@ -254,5 +261,199 @@ export class DemoSystem {
   /** Called every frame by main.js so recording/playback share a clock. */
   tickGlobalFrame() {
     this.globalFrame++;
+  }
+
+  // ── World setup (shared by recording and playback) ──────────────────────
+
+  /**
+   * Toggle the recorder (cheat-menu RECORD DEMO). Builds the seeded world
+   * the same way playback will.
+   */
+  toggleRecording() {
+    if (this.recording) {
+      this.stopRecording();
+      return;
+    }
+    // Capture the room spec BEFORE installing the seed so it reflects
+    // where the player chose to start the recording.
+    const roomSpec = this._buildRoomSpec();
+    this.startRecording();
+    // Regenerate the current room under the seeded RNG so playback sees
+    // the same world the recording captured.
+    if (this.game.stateMachine.getCurrentState() === GAME_STATES.EXPLORE) {
+      this.setupWorld(roomSpec);
+    }
+    // Capture player + enemy snapshot AFTER the seeded regen.
+    const startState = this._captureStartState();
+    const enemies = this._captureEnemies();
+    this.setRecordingContext({ roomSpec, startState, enemies });
+  }
+
+  /** Read current world state into a roomSpec for the active recording. */
+  _buildRoomSpec() {
+    const game = this.game;
+    const zone = game.zoneSystem.currentZone || 'green';
+    const depth = game.zoneDepths[zone] || 1;
+    const boss = !!(game.currentRoom && game.currentRoom.isZoneBossRoom);
+    return { zone, depth, boss };
+  }
+
+  /** Capture the player state needed to reproduce demo conditions. */
+  _captureStartState() {
+    const p = this.game.player;
+    if (!p) return null;
+    return {
+      characterType: p.characterType || 'default',
+      hp: p.hp,
+      quickSlots: p.quickSlots.map(slot => (slot ? slot.char : null)),
+      activeSlotIndex: p.activeSlotIndex || 0,
+      position: { x: p.position.x, y: p.position.y },
+      magicMeter: {
+        active: !!p.magicMeter?.active,
+        slots: Array.isArray(p.magicMeter?.slots) ? [...p.magicMeter.slots] : [],
+        current: p.magicMeter?.current || 0,
+        max: p.magicMeter?.max || 10,
+      },
+    };
+  }
+
+  /** Capture room enemies into a plain-data snapshot. */
+  _captureEnemies() {
+    const enemies = this.game.currentRoom?.enemies || [];
+    return enemies.map(e => ({
+      char: e.char,
+      x: e.position.x,
+      y: e.position.y,
+      hp: e.hp,
+    }));
+  }
+
+  /**
+   * Generate the demo's room under whatever RNG is currently installed.
+   * Mirrors the cheat-menu warp paths (CheatWarpSystem.handleZoneTeleport /
+   * handleBossTest) but skips side effects a demo doesn't need (music
+   * switches, grace timers tied to player progress).
+   */
+  setupWorld(roomSpec) {
+    if (!roomSpec) return;
+    const game = this.game;
+    const zone = roomSpec.zone || 'green';
+    const depth = roomSpec.depth || 1;
+    const wantBoss = !!roomSpec.boss;
+
+    // Force the zone + depth so room generation is deterministic.
+    const zoneColor = ZONES[zone]?.exitColor || '#ffffff';
+    game.zoneSystem.pathHistory = [
+      { letter: 'X', color: zoneColor },
+      { letter: 'X', color: zoneColor },
+      { letter: 'X', color: zoneColor },
+    ];
+    game.zoneSystem.currentZone = zone;
+    game.zoneDepths[zone] = depth;
+    game.roomGenerator.setDepth(depth);
+
+    // Deactivate any prior boss state before regenerating.
+    game.bossSystem.deactivate();
+
+    const playerPos = game.player
+      ? { x: game.player.position.x, y: game.player.position.y }
+      : { x: GRID.WIDTH / 2, y: (GRID.ROWS - 3) * GRID.CELL_SIZE };
+
+    game.roomGenerator.isZoneBossRoom = wantBoss;
+    const roomType = wantBoss ? ROOM_TYPES.BOSS : null;
+    const newRoom = game.roomGenerator.generateRoom(roomType, playerPos, zone, null);
+    game.roomGenerator.isZoneBossRoom = false;
+
+    game.currentRoom = newRoom;
+
+    if (wantBoss) {
+      game.bossSystem.activate(newRoom, zone);
+    }
+
+    // Apply room-declared spawn zone so the player isn't stranded in a wall
+    // after regeneration.
+    if (game.player) {
+      if (newRoom.spawnZones?.default) {
+        game.player.position.x = newRoom.spawnZones.default.x;
+        game.player.position.y = newRoom.spawnZones.default.y;
+      }
+      game.player.setCollisionMap(newRoom.collisionMap);
+    }
+
+    // Room-swap core, sans entry grace (demo enemies act immediately)
+    game.applyRoomSwap(newRoom, { grace: false });
+    // Demo rooms may pre-place ingredients; applyRoomSwap clears them
+    game.ingredients = newRoom.ingredients || [];
+  }
+
+  /** Apply a demo startState snapshot onto the active player. */
+  applyStartState(startState) {
+    const game = this.game;
+    const player = game.player;
+    if (!startState || !player) return;
+
+    if (startState.characterType && startState.characterType !== player.characterType) {
+      game.applyCharacterType(startState.characterType);
+    }
+
+    if (startState.hp != null) {
+      player.hp = startState.hp;
+    }
+
+    if (startState.position) {
+      player.position.x = startState.position.x;
+      player.position.y = startState.position.y;
+      player.velocity.vx = 0;
+      player.velocity.vy = 0;
+    }
+
+    if (Array.isArray(startState.quickSlots)) {
+      player.quickSlots = startState.quickSlots.map(char => {
+        if (!char) return null;
+        return new Item(char, 0, 0);
+      });
+    }
+
+    if (Number.isInteger(startState.activeSlotIndex)) {
+      player.activeSlotIndex = Math.max(
+        0,
+        Math.min(startState.activeSlotIndex, player.quickSlots.length - 1)
+      );
+    }
+
+    // Restore magic meter so wand demos can actually cast.
+    if (startState.magicMeter && player.magicMeter) {
+      const mm = startState.magicMeter;
+      player.magicMeter.active = !!mm.active;
+      player.magicMeter.slots = Array.isArray(mm.slots) ? [...mm.slots] : [];
+      player.magicMeter.current = mm.current || 0;
+      game.magicSystem.recalcMax(player.magicMeter);
+    }
+  }
+
+  /** Replace the current room's enemies with a demo snapshot. */
+  applyEnemies(enemiesSnapshot) {
+    const game = this.game;
+    if (!Array.isArray(enemiesSnapshot) || enemiesSnapshot.length === 0) return;
+    if (!game.currentRoom) return;
+
+    const depth = game.zoneDepths[game.zoneSystem.currentZone] || 1;
+    const newEnemies = enemiesSnapshot.map(snap => {
+      const e = new Enemy(snap.char, snap.x, snap.y, depth);
+      if (snap.hp != null) e.hp = snap.hp;
+      return e;
+    });
+
+    // Drop previous enemies from physics, then install the snapshot ones.
+    // Demo rooms are surface rooms built by setupWorld, so the surface list
+    // is the right target here (generation code, not combat routing).
+    for (const old of game.currentRoom.enemies) { // layer-guard-ok: demo room is a freshly generated surface room
+      game.physicsSystem.removeEntity?.(old);
+    }
+    game.currentRoom.enemies = newEnemies; // layer-guard-ok: demo room is a freshly generated surface room
+    game.wireRoomEnemies(game.currentRoom);
+    for (const e of newEnemies) {
+      game.physicsSystem.addEntity(e);
+    }
   }
 }

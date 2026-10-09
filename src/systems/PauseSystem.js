@@ -55,7 +55,6 @@ export class PauseSystem {
     if (e.key === 'Tab') game.keys.tab = false;
     if (key === ' ') { game.keys.space = false; game.spacePressed = false; }
     if (key === 'shift') { game.keys.shift = false; game.shiftPressed = false; }
-    if (key === 'v') { game.keys.v = false; game.vPressed = false; }
     if (e.key.startsWith('Arrow')) game.arrowKeys[e.key] = false;
   }
 

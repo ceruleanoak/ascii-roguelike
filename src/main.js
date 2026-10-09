@@ -23,6 +23,7 @@ import { spawnRoomNeutralCharacters } from './systems/roomFeatures.js';
 import { ErrandSystem } from './systems/ErrandSystem.js';
 import { CheatMenu } from './systems/CheatMenu.js';
 import { DemoSystem } from './systems/DemoSystem.js';
+import { ParticleFireworks } from './systems/ParticleFireworks.js';
 import { AudioSystem } from './systems/AudioSystem.js';
 import { FishingSystem } from './systems/FishingSystem.js';
 import { LootSystem } from './systems/LootSystem.js';
@@ -111,14 +112,13 @@ import { StatusEffectSystem } from './systems/StatusEffectSystem.js';
 import { menuIntent } from './systems/MenuInput.js';
 import { CAMP_NPC_STATE } from './entities/CampNPC.js';
 import { Player } from './entities/Player.js';
-import { Enemy } from './entities/Enemy.js';
 import { Ingredient } from './entities/Ingredient.js';
 import { Item } from './entities/Item.js';
 import { BackgroundObject } from './entities/BackgroundObject.js';
 import { GooBlob } from './entities/GooBlob.js';
 import { Crow } from './entities/Crow.js';
 import { NPCRat } from './entities/NPCRat.js';
-import { Particle, createExplosion, createWetDrop, createActivationBurst, createSteamPuff, createChaff, createDodgeTrail, createFootstep, createEmberBurst, createIceBurst, createFrostAuraParticle, createFlameAuraParticle, createShockAuraParticle } from './entities/Particle.js';
+import { Particle, createExplosion, createDodgeTrail } from './entities/Particle.js';
 import { Puddle } from './entities/Puddle.js';
 import { Leshy } from './entities/Leshy.js';
 import { CharacterNPC } from './entities/CharacterNPC.js';
@@ -126,32 +126,15 @@ import { WiseFellow } from './entities/WiseFellow.js';
 import { ITEM_TYPES, INGREDIENTS, ITEMS, getItemData } from './data/items.js';
 import { CHARACTER_TYPES } from './data/characters.js';
 import { EXIT_LETTERS } from './data/exitLetters.js';
-import { ZONES, freshZoneDepths } from './data/zones.js';
+import { freshZoneDepths } from './data/zones.js';
 import { GAME_STATES, GRID, CRAFTING, INTERACTION_RANGE, ROOM_TYPES, PHYSICS } from './game/GameConfig.js';
-import { captureDeath, deathCauseOf, downloadSessionLedger, newRunId } from './systems/DeathLedgerSystem.js';
+import { captureDeath, deathCauseOf, newRunId } from './systems/DeathLedgerSystem.js';
 import{DiagonalInputSystem as DIS}from'./systems/DiagonalInputSystem.js';
 import { MAGIC_SFX_NAMES } from './data/enemies.js';
 import * as ingredientPile from './systems/IngredientPile.js';
 import { breakOnDeathPassives } from './systems/ConsumableSlotBreaks.js';
 import { tryDeathSave } from './systems/DeathSaveSystem.js';
 import { PlayerParry } from './entities/enemyMechanics/ParryMechanic.js';
-
-// Particle Fireworks (debug toggle): each entry produces one effect at (x, y),
-// cycled in order. Mix of bursts (return arrays) and single emitters.
-const FIREWORK_FACTORIES = [
-  { name: 'WetDrop',        fn: (x, y) => createWetDrop(x, y) },
-  { name: 'SteamPuff',      fn: (x, y) => createSteamPuff(x, y) },
-  { name: 'ActivationBurst',fn: (x, y) => createActivationBurst(x, y) },
-  { name: 'EmberBurst',     fn: (x, y) => createEmberBurst(x, y) },
-  { name: 'IceBurst',       fn: (x, y) => createIceBurst(x, y) },
-  { name: 'Explosion',      fn: (x, y) => createExplosion(x, y) },
-  { name: 'Chaff',          fn: (x, y) => createChaff(x, y) },
-  { name: 'Footstep',       fn: (x, y) => createFootstep(x, y) },
-  { name: 'FrostAura',      fn: (x, y) => createFrostAuraParticle(x, y) },
-  { name: 'FlameAura',      fn: (x, y) => createFlameAuraParticle(x, y) },
-  { name: 'ShockAura',      fn: (x, y) => createShockAuraParticle(x, y) },
-  { name: 'DodgeTrail',     fn: (x, y) => createDodgeTrail(x, y) }
-];
 
 // Starter satchel: 3 distinct ingredients from a fixed pool. Each rolled char
 // drops per the table below; unlisted chars drop x2 (per-run replay variety).
@@ -270,6 +253,7 @@ class Game {
     this.electricitySystem = new ElectricitySystem(this);
     this.fireSystem = new FireSystem(this);
     this.demoSystem = new DemoSystem(this);
+    this.particleFireworksTicker = new ParticleFireworks(this);
     // Wire InventorySystem back to game so it can mutate player.equippedConsumables
     this.inventorySystem.game = this;
     this.consumableTriggerSystem = new ConsumableTriggerSystem(this);
@@ -323,10 +307,8 @@ class Game {
     this.dungeonTemplatesUsedThisRun = new Set(); // no floor-layout repeats within one dungeon visit
 
     this.particleFireworks = false; // Debug toggle: cycles every particle factory at random screen positions
-    this._fwTimer = 0;
-    this._fwIndex = -1;
     this.dodgeBlockedFeedbackTimer = 0; // Cooldown for red X feedback
-    this.showVectors = false; // Debug: Toggle with 'v' key
+    this.showVectors = false; // Debug: cheat-menu TOGGLES → SHOW VECTORS
 
     // ALL INVENTORY STATE NOW IN InventorySystem
     // Access via: this.inventorySystem.property
@@ -373,7 +355,7 @@ class Game {
     this.keys = {
       w: false, a: false, s: false, d: false,
       space: false, shift: false, tab: false,
-      m: false, v: false
+      m: false
     };
     // Rolling keystroke buffer for background word highlighting (up to 9 chars, uppercase)
     this.keyBuffer = [];
@@ -381,7 +363,6 @@ class Game {
     this.keyFlashMap = {};
     this.spacePressed = false;
     this.shiftPressed = false;
-    this.vPressed = false;
     this.attackSequenceActive = false; // Tracks if attack was initiated by button press (not just hold)
 
     // Arrow keys for dodge rolling
@@ -453,119 +434,13 @@ class Game {
 
   setupInput() {
     window.addEventListener('keydown', (e) => {
-      // Handle cheat menu toggle (backslash key)
-      if (e.key === '\\') {
-        this.cheatMenu.toggle();
-        if (this.cheatMenu.isOpen) {
-          // Clear any held keys / charges so the player stops moving/attacking
-          this.keys.w = this.keys.a = this.keys.s = this.keys.d = false;
-          this.keys.space = this.keys.shift = this.keys.tab = this.keys.v = false;
-          this.spacePressed = false;
-          this.shiftPressed = false;
-          this.vPressed = false;
-          this.attackSequenceActive = false;
-          if (this.arrowKeys) {
-            this.arrowKeys.ArrowUp = this.arrowKeys.ArrowDown = false;
-            this.arrowKeys.ArrowLeft = this.arrowKeys.ArrowRight = false;
-          }
-        }
-        e.preventDefault();
-        return;
-      }
-
-      // Handle cheat menu input
+      // Cheat menu (opened by the CHEAT spell) owns every key while open.
       if (this.cheatMenu.isOpen) {
-        const result = this.cheatMenu.handleInput(e.key);
-        if (result === 'handled') {
-          e.preventDefault();
-          return;
-        } else if (result && result.action === 'spawn') {
-          this.cheatMenu.spawnItem(result.item);
-          e.preventDefault();
-          return;
-        } else if (result && result.action === 'spawn_enemy') {
-          this.cheatMenu.spawnEnemyAtPlayer(result.enemy);
-          e.preventDefault();
-          return;
-        } else if (result && result.action === 'spawn_object') {
-          const objects = this.cheatMenu.spawnObjectAtPlayer(result.objChar);
-          // Surface alias sync — game.backgroundObjects is a main.js-owned
-          // mirror of the surface list; systems may not write it themselves
-          // (layer guard, #107 divergent-copy class).
-          if (objects === this.currentRoom.backgroundObjects) this.backgroundObjects = objects;
-          this.cheatMenu.toggle(); // Close so the player can reposition for the next placement
-          e.preventDefault();
-          return;
-        } else if (result && result.action === 'trigger_boulder') {
-          this.boulderSystem?.triggerBoulderRain(1);
-          this.cheatMenu.toggle();
-          e.preventDefault();
-          return;
-        } else if (result && result.action === 'dungeon_warp') {
-          this.dungeonSystem.debugWarpTo(result.destination, { forceRegenerate: result.forceRegenerate });
-          this.cheatMenu.toggle(); // Close menu after warp
-          e.preventDefault();
-          return;
-        } else if (result && result.action === 'teleport_zone') {
-          this.cheatWarpSystem.handleZoneTeleport(this, result.zone);
-          this.cheatMenu.toggle(); // Close menu after teleport
-          e.preventDefault();
-          return;
-        } else if (result && result.action === 'warp') {
-          this.cheatWarpSystem.handleRoomWarp(this, result.roomLetter);
-          this.cheatMenu.toggle(); // Close menu after warp
-          e.preventDefault();
-          return;
-        } else if (result && result.action === 'change_character') {
-          this.swapWithCharacter(result.characterType);
-          this.cheatMenu.toggle(); // Close menu after swap
-          e.preventDefault();
-          return;
-        } else if (result && result.action === 'boss_test') {
-          this.cheatWarpSystem.handleBossTest(this, result.zone);
-          this.cheatMenu.toggle();
-          e.preventDefault();
-          return;
-        } else if (result && result.action === 'mist_battle_test') {
-          this.cheatWarpSystem.handleMistBattleTest(this);
-          this.cheatMenu.toggle();
-          e.preventDefault();
-          return;
-        } else if (result && result.action === 'set_depth') {
-          this.cheatWarpSystem.handleDepthJump(this, result.depth);
-          this.cheatMenu.toggle();
-          e.preventDefault();
-          return;
-        } else if (result && result.action === 'toggle_god_mode') {
-          this.cheatMenu.godMode = !this.cheatMenu.godMode;
-          this.player.godMode = this.cheatMenu.godMode;
-          this.cheatMenu.rebuild();
-          e.preventDefault();
-          return;
-        } else if (result && result.action === 'activate_magic_meter') {
-          this.magicSystem?.activateMagicMeter(this.player);
-          this.cheatMenu.rebuild();
-          this.updateUI();
-          e.preventDefault();
-          return;
-        } else if (result && result.action === 'toggle_demo_recording') {
-          this.toggleDemoRecording();
-          this.cheatMenu.rebuild();
-          e.preventDefault();
-          return;
-        } else if (result && result.action === 'toggle_particle_fireworks') {
-          this.particleFireworks = !this.particleFireworks;
-          this._fwTimer = 0;
-          this._fwIndex = -1;  // first tick advances to 0
-          this.cheatMenu.rebuild();
-          e.preventDefault();
-          return;
-        } else if (result && result.action === 'download_death_ledger') {
-          downloadSessionLedger();
-          e.preventDefault();
-          return;
-        }
-        // Menu is open — swallow all unhandled keys so player can't move/attack/roll/drop
+        const spawnedInto = this.cheatMenu.handleKeydown(e.key);
+        // Surface alias sync — game.backgroundObjects is a main.js-owned
+        // mirror of the surface list; systems may not write it themselves
+        // (layer guard, #107 divergent-copy class).
+        if (spawnedInto && spawnedInto === this.currentRoom.backgroundObjects) this.backgroundObjects = spawnedInto;
         e.preventDefault();
         return;
       }
@@ -573,17 +448,6 @@ class Game {
       // Arcade demo: any keypress aborts playback back to the pre-intro title.
       if (this.stateMachine.getCurrentState() === GAME_STATES.ARCADE_DEMO) {
         this.stateMachine.transition(GAME_STATES.TITLE);
-        e.preventDefault();
-        return;
-      }
-
-      // Demo recording toggle (dev hotkey). Only active while armed via the
-      // cheat-menu R RECORD KEY toggle — otherwise 'r' falls through to normal
-      // gameplay handling (wishes, etc.). Placed after the arcade-demo
-      // abort so 'r' during playback still cancels back to title, and before
-      // recordEvent so the toggle keystroke isn't captured into the buffer.
-      if (this.demoSystem.hotkeyEnabled && (e.key === 'r' || e.key === 'R')) {
-        this.toggleDemoRecording();
         e.preventDefault();
         return;
       }
@@ -637,6 +501,7 @@ class Game {
         this.spellSystem.detect(this.keyBuffer);
         this.keyBuffer = [];
         this.keyFlashMap = {};
+        if (this.cheatMenu.isOpen) { e.preventDefault(); return; } // CHEAT spell: don't also attack/roll
       } else if (e.key.length === 1) {
         const upper = e.key.toUpperCase();
         this.keyBuffer.push(upper);
@@ -668,15 +533,6 @@ class Game {
         if (key === '7') this.handleSelectConsumableSlot(3);
         if (key === '8') this.handleSelectConsumableSlot(4);
       }
-      if (key === 'v') {
-        this.keys.v = true;
-        if (!this.vPressed) {
-          this.vPressed = true;
-          this.handleVPress();
-        }
-      }
-
-
 
       // Arrow keys for dodge rolling — suppressed when polymorphed
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown' ||
@@ -718,10 +574,6 @@ class Game {
         this.keys.shift = false;
         this.shiftPressed = false;
         this.handleShiftRelease();
-      }
-      if (key === 'v') {
-        this.keys.v = false;
-        this.vPressed = false;
       }
 
       // Arrow key releases
@@ -817,6 +669,7 @@ class Game {
     this.stateMachine.registerStateHandler(GAME_STATES.GAME_OVER, () => {
       this.enterGameOverState();
     });
+
   }
 
   getNearestInteractiveSlot() {
@@ -928,210 +781,16 @@ class Game {
     this.demoSystem.installSeededRandom(recording.seed);
 
     // Generate the demo's room under the seeded RNG.
-    this._setupDemoWorld(recording.room, recording.startState);
+    this.demoSystem.setupWorld(recording.room);
 
     // Apply the player startState snapshot (character, hp, loadout, pos).
-    this._applyDemoStartState(recording.startState);
+    this.demoSystem.applyStartState(recording.startState);
 
     // Overlay enemy snapshot on top of the regenerated room.
-    this._applyDemoEnemies(recording.enemies);
+    this.demoSystem.applyEnemies(recording.enemies);
 
     // Begin event playback now that the world matches the recording.
     this.demoSystem.startPlayback();
-  }
-
-  // ── Demo room/state setup helpers ───────────────────────────────────────
-  //
-  // Shared by recording (toggle_demo_recording) and playback (enterDemoState)
-  // so the world generation path is identical in both directions. Keeping
-  // these in main.js (next to enterDemoState/enterExploreState) makes the
-  // orchestration responsibilities obvious; DemoSystem stays focused on
-  // event capture/playback.
-
-  /**
-   * Toggle the DemoSystem recorder. Shared by the cheat-menu entry and the
-   * 'r' global hotkey so both paths build the seeded world identically.
-   */
-  toggleDemoRecording() {
-    if (this.demoSystem.recording) {
-      this.demoSystem.stopRecording();
-      return;
-    }
-    // Capture the room spec BEFORE installing the seed so it reflects
-    // where the player chose to start the recording.
-    const roomSpec = this._buildDemoRoomSpec();
-    this.demoSystem.startRecording();
-    // Regenerate the current room under the seeded RNG so playback sees
-    // the same world the recording captured.
-    if (this.stateMachine.getCurrentState() === GAME_STATES.EXPLORE) {
-      this._setupDemoWorld(roomSpec, null);
-    }
-    // Capture player + enemy snapshot AFTER the seeded regen.
-    const startState = this._captureDemoStartState();
-    const enemies = this._captureDemoEnemies();
-    this.demoSystem.setRecordingContext({ roomSpec, startState, enemies });
-  }
-
-  /** Read current world state into a roomSpec for the active recording. */
-  _buildDemoRoomSpec() {
-    const zone = this.zoneSystem.currentZone || 'green';
-    const depth = this.zoneDepths[zone] || 1;
-    const boss = !!(this.currentRoom && this.currentRoom.isZoneBossRoom);
-    return { zone, depth, boss };
-  }
-
-  /** Capture the player state needed to reproduce demo conditions. */
-  _captureDemoStartState() {
-    const p = this.player;
-    if (!p) return null;
-    return {
-      characterType: p.characterType || 'default',
-      hp: p.hp,
-      quickSlots: p.quickSlots.map(slot => (slot ? slot.char : null)),
-      activeSlotIndex: p.activeSlotIndex || 0,
-      position: { x: p.position.x, y: p.position.y },
-      magicMeter: {
-        active: !!p.magicMeter?.active,
-        slots: Array.isArray(p.magicMeter?.slots) ? [...p.magicMeter.slots] : [],
-        current: p.magicMeter?.current || 0,
-        max: p.magicMeter?.max || 10,
-      },
-    };
-  }
-
-  /** Capture room enemies into a plain-data snapshot. */
-  _captureDemoEnemies() {
-    const enemies = this.currentRoom?.enemies || [];
-    return enemies.map(e => ({
-      char: e.char,
-      x: e.position.x,
-      y: e.position.y,
-      hp: e.hp,
-    }));
-  }
-
-  /**
-   * Generate the demo's room under whatever RNG is currently installed.
-   * Mirrors the cheat-menu warp paths (CheatWarpSystem.handleZoneTeleport /
-   * handleBossTest)
-   * but skipped of side effects we don't need for a demo (music switches,
-   * grace timers tied to player progress).
-   */
-  _setupDemoWorld(roomSpec, _startState) {
-    if (!roomSpec) return;
-    const zone = roomSpec.zone || 'green';
-    const depth = roomSpec.depth || 1;
-    const wantBoss = !!roomSpec.boss;
-
-    // Force the zone + depth so room generation is deterministic.
-    const zoneColor = ZONES[zone]?.exitColor || '#ffffff';
-    this.zoneSystem.pathHistory = [
-      { letter: 'X', color: zoneColor },
-      { letter: 'X', color: zoneColor },
-      { letter: 'X', color: zoneColor },
-    ];
-    this.zoneSystem.currentZone = zone;
-    this.zoneDepths[zone] = depth;
-    this.roomGenerator.setDepth(depth);
-
-    // Deactivate any prior boss state before regenerating.
-    this.bossSystem.deactivate();
-
-    const playerPos = this.player
-      ? { x: this.player.position.x, y: this.player.position.y }
-      : { x: GRID.WIDTH / 2, y: (GRID.ROWS - 3) * GRID.CELL_SIZE };
-
-    this.roomGenerator.isZoneBossRoom = wantBoss;
-    const roomType = wantBoss ? ROOM_TYPES.BOSS : null;
-    const newRoom = this.roomGenerator.generateRoom(roomType, playerPos, zone, null);
-    this.roomGenerator.isZoneBossRoom = false;
-
-    this.currentRoom = newRoom;
-
-    if (wantBoss) {
-      this.bossSystem.activate(newRoom, zone);
-    }
-
-    // Apply room-declared spawn zone so the player isn't stranded in a wall
-    // after regeneration.
-    if (this.player) {
-      if (newRoom.spawnZones?.default) {
-        this.player.position.x = newRoom.spawnZones.default.x;
-        this.player.position.y = newRoom.spawnZones.default.y;
-      }
-      this.player.setCollisionMap(newRoom.collisionMap);
-    }
-
-    // Room-swap core, sans entry grace (demo enemies act immediately)
-    this.applyRoomSwap(newRoom, { grace: false });
-    // Demo rooms may pre-place ingredients; applyRoomSwap clears them
-    this.ingredients = newRoom.ingredients || [];
-  }
-
-  /** Apply a demo startState snapshot onto the active player. */
-  _applyDemoStartState(startState) {
-    if (!startState || !this.player) return;
-
-    if (startState.characterType && startState.characterType !== this.player.characterType) {
-      this.applyCharacterType(startState.characterType);
-    }
-
-    if (startState.hp != null) {
-      this.player.hp = startState.hp;
-    }
-
-    if (startState.position) {
-      this.player.position.x = startState.position.x;
-      this.player.position.y = startState.position.y;
-      this.player.velocity.vx = 0;
-      this.player.velocity.vy = 0;
-    }
-
-    if (Array.isArray(startState.quickSlots)) {
-      this.player.quickSlots = startState.quickSlots.map(char => {
-        if (!char) return null;
-        return new Item(char, 0, 0);
-      });
-    }
-
-    if (Number.isInteger(startState.activeSlotIndex)) {
-      this.player.activeSlotIndex = Math.max(
-        0,
-        Math.min(startState.activeSlotIndex, this.player.quickSlots.length - 1)
-      );
-    }
-
-    // Restore magic meter so wand demos can actually cast.
-    if (startState.magicMeter && this.player.magicMeter) {
-      const mm = startState.magicMeter;
-      this.player.magicMeter.active = !!mm.active;
-      this.player.magicMeter.slots = Array.isArray(mm.slots) ? [...mm.slots] : [];
-      this.player.magicMeter.current = mm.current || 0;
-      this.magicSystem.recalcMax(this.player.magicMeter);
-    }
-  }
-
-  /** Replace the current room's enemies with a demo snapshot. */
-  _applyDemoEnemies(enemiesSnapshot) {
-    if (!Array.isArray(enemiesSnapshot) || enemiesSnapshot.length === 0) return;
-    if (!this.currentRoom) return;
-
-    const depth = this.zoneDepths[this.zoneSystem.currentZone] || 1;
-    const newEnemies = enemiesSnapshot.map(snap => {
-      const e = new Enemy(snap.char, snap.x, snap.y, depth);
-      if (snap.hp != null) e.hp = snap.hp;
-      return e;
-    });
-
-    // Drop previous enemies from physics, then install the snapshot ones.
-    for (const old of this.currentRoom.enemies) {
-      this.physicsSystem.removeEntity?.(old);
-    }
-    this.currentRoom.enemies = newEnemies;
-    this.wireRoomEnemies(this.currentRoom);
-    for (const e of newEnemies) {
-      this.physicsSystem.addEntity(e);
-    }
   }
 
   enterRestState() {
@@ -2294,22 +1953,7 @@ class Game {
     // itself deactivates right after queuing this — see BossSystem docstring.
     this.bossSystem.updatePendingMusicResume();
 
-    // Particle Fireworks (debug): cycle through every effect at ~2.5 bursts/sec
-    // at random screen positions. Skips TITLE (no canvas particle pipe there).
-    if (this.particleFireworks && state !== GAME_STATES.TITLE) {
-      this._fwTimer += deltaTime;
-      if (this._fwTimer >= 0.4) {
-        this._fwTimer = 0;
-        this._fwIndex = (this._fwIndex + 1) % FIREWORK_FACTORIES.length;
-        const W = GRID.COLS * GRID.CELL_SIZE;
-        const H = GRID.ROWS * GRID.CELL_SIZE;
-        const x = 48 + Math.random() * (W - 96);
-        const y = 48 + Math.random() * (H - 96);
-        const result = FIREWORK_FACTORIES[this._fwIndex].fn(x, y);
-        if (Array.isArray(result)) this.particles.push(...result);
-        else if (result) this.particles.push(result);
-      }
-    }
+    this.particleFireworksTicker.update(deltaTime, state); // debug toggle
 
     // Advance any in-flight animations before per-state logic so the new
     // target position is visible to physics, exit detection, and rendering.
@@ -4014,19 +3658,6 @@ class Game {
 
   handleSelectConsumableSlot(index) {
     this.consumableTriggerSystem.selectSlot(index);
-  }
-
-  handleMPress() {
-    const state = this.stateMachine.getCurrentState();
-    if (state !== GAME_STATES.REST) return;
-
-    this.cheatWarpSystem.enterMazeTestRoom(this);
-  }
-
-  handleVPress() {
-    // Toggle vector visualization
-    this.showVectors = !this.showVectors;
-    console.log(`Vector visualization: ${this.showVectors ? 'ON' : 'OFF'}`);
   }
 
   // Post-generation enemy wiring — part of the room-swap core below, also

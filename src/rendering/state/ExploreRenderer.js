@@ -587,7 +587,7 @@ export class ExploreRenderer {
       if (game.golems?.length) drawGolems(this.renderer, game, this.shouldRenderEntity);
     }
 
-    // Detection system overlay (toggle with 'v' key)
+    // Detection system overlay (cheat-menu SHOW VECTORS)
     if (game.showVectors && ownsSurface) {
       this._renderDetectionVisuals(game);
     }
@@ -1258,7 +1258,7 @@ export class ExploreRenderer {
       );
     }
 
-    // Draw debug vectors (toggle with 'v' key)
+    // Draw debug vectors (cheat-menu SHOW VECTORS)
     if (game.showVectors && enemy.target && enemy.state === 'chase') {
       const enemyCenter = {
         x: enemy.position.x + GRID.CELL_SIZE / 2,
@@ -1360,7 +1360,7 @@ export class ExploreRenderer {
   }
 
   /**
-   * Sound-detection system overlay — drawn when game.showVectors is active ('v' key).
+   * Sound-detection system overlay — drawn when game.showVectors is active (cheat-menu SHOW VECTORS).
    *
    * Renders:
    *  • Per enemy: hearing range ring (7-cell radius) colour-coded by alert state,
