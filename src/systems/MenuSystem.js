@@ -689,6 +689,12 @@ export class MenuSystem {
       ingredientList.push('c');
       ingredientCounts.set('c', coinCount);
     }
+    // Meter mana is craftable as Mana (𝑚) too, CRAFT_MANA_COST per pick.
+    const meterMana = game.magicSystem.craftableManaCount(game.player);
+    if (meterMana > 0) {
+      if (!ingredientList.includes('𝑚')) ingredientList.push('𝑚');
+      ingredientCounts.set('𝑚', (ingredientCounts.get('𝑚') ?? 0) + meterMana);
+    }
     game.ingredientCounts = ingredientCounts;
 
     // Sort identified partners to top when opposite slot is filled
@@ -935,7 +941,10 @@ export class MenuSystem {
       const itemChar = typeof selectedItem === 'string' ? selectedItem : selectedItem.char;
 
       if (typeof selectedItem === 'string') {
-        game.removeIngredient(selectedItem);
+        // Mana with none left in the pile comes out of the magic meter
+        if (!game.removeIngredient(selectedItem) && selectedItem === '𝑚') {
+          game.magicSystem.spendCraftMana(game.player);
+        }
       } else {
         const quickSlotIdx = game.player.quickSlots.indexOf(selectedItem);
         if (quickSlotIdx !== -1) {
@@ -1206,6 +1215,7 @@ export class MenuSystem {
   _returnSlotItemToInventory(slotContent) {
     const game = this.game;
     const char = typeof slotContent === 'string' ? slotContent : slotContent.char;
+    if (char === '𝑚' && game.magicSystem.refundCraftMana(game.player)) return;
     if (isIngredient(char)) {
       game.addIngredient(char);
     } else if (isItem(char)) {

@@ -42,6 +42,9 @@ export const INGREDIENT_MANA_VALUES = {
 // across however many slots are active.
 const PER_SLOT_MANA_MAX = 10;
 
+// Meter mana spent per Mana (𝑚) picked from the crafting menu.
+const CRAFT_MANA_COST = 3;
+
 // Spend `cost` from the player's mana meter; false (nothing spent) when the
 // meter is inactive or short. Module-level so entity code that has only the
 // player — Item.createBullets for mana-fed guns — spends through the same rule.
@@ -260,6 +263,29 @@ export class MagicSystem {
       meter.active = this.effectiveManaSlotCount(this.game.player) > 0;
       if (!meter.active) meter.current = 0;
     }
+  }
+
+  // ─── Mana as a crafting ingredient ──────────────────────────────────────
+  // While the meter is active, every CRAFT_MANA_COST of meter mana can be
+  // picked as one Mana (𝑚) in the crafting menu, on top of any Mana sitting
+  // in the ingredient pile (the pile is spent first — see MenuSystem).
+  craftableManaCount(player) {
+    const meter = player?.magicMeter;
+    return meter?.active ? Math.floor(meter.current / CRAFT_MANA_COST) : 0;
+  }
+
+  spendCraftMana(player) {
+    return this.spendMana(player, CRAFT_MANA_COST);
+  }
+
+  // A Mana taken back out of a crafting slot returns to the meter at its full
+  // cost when the meter is active and has the room; otherwise it goes to the
+  // pile (returns false so the caller does that).
+  refundCraftMana(player) {
+    const meter = player?.magicMeter;
+    if (!meter?.active || meter.max - meter.current < CRAFT_MANA_COST) return false;
+    this.addMana(player, CRAFT_MANA_COST);
+    return true;
   }
 
   addMana(player, amount) {
