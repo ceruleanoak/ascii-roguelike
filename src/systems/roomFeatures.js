@@ -1860,6 +1860,63 @@ export function stampCentipedeArena(room) {
   }));
 }
 
+// ── Storm Eye arena (yellow zone Boss room) ─────────────────────────────────
+// Wide open so the wind has room to work: four short obsidian pillars give the
+// Gale a wind shadow to hide in, and a quarter-blob of water fills each corner
+// so the corners can't be used to wedge out of the storm.
+const STORM_EYE_PILLAR_CELLS = [
+  { col: 7, row: 9 },  { col: 8, row: 9 },
+  { col: 21, row: 9 }, { col: 22, row: 9 },
+  { col: 7, row: 20 }, { col: 8, row: 20 },
+  { col: 21, row: 20 }, { col: 22, row: 20 },
+];
+const STORM_EYE_CORNER_WATER_RADIUS = 4;   // cells, measured from the inner corner cell
+
+export function stampStormEyeArena(room) {
+  const CS = GRID.CELL_SIZE;
+  const lastCol = GRID.COLS - 2, lastRow = GRID.ROWS - 2;   // inside the border wall
+
+  // Open the floor: drop every non-structural object and clear interior
+  // collision that no surviving structural object stands on.
+  room.backgroundObjects = room.backgroundObjects.filter(obj => {
+    if (obj.structural) return true;
+    const col = Math.floor(obj.position.x / CS), row = Math.floor(obj.position.y / CS);
+    return col < 1 || col > lastCol || row < 1 || row > lastRow;   // border/exit dressing stays
+  });
+  const held = new Set(room.backgroundObjects.map(o => `${Math.floor(o.position.x / CS)},${Math.floor(o.position.y / CS)}`));
+  for (let row = 1; row <= lastRow; row++) {
+    for (let col = 1; col <= lastCol; col++) {
+      if (room.collisionMap?.[row] && !held.has(`${col},${row}`)) room.collisionMap[row][col] = false;
+    }
+  }
+
+  for (const { col, row } of STORM_EYE_PILLAR_CELLS) {
+    const pillar = new BackgroundObject('0', col * CS, row * CS, { obsidian: true });
+    pillar.structural = true;
+    room.backgroundObjects.push(pillar);
+    // Solid in the collision map too: the Gale's wind shadow ray-marches it.
+    if (room.collisionMap?.[row]) room.collisionMap[row][col] = true;
+  }
+
+  const r = STORM_EYE_CORNER_WATER_RADIUS;
+  const corners = [
+    { col: 1, row: 1, dc: 1, dr: 1 }, { col: lastCol, row: 1, dc: -1, dr: 1 },
+    { col: 1, row: lastRow, dc: 1, dr: -1 }, { col: lastCol, row: lastRow, dc: -1, dr: -1 },
+  ];
+  for (const corner of corners) {
+    for (let i = 0; i <= r; i++) {
+      for (let j = 0; j <= r; j++) {
+        if (i * i + j * j > r * r) continue;
+        const col = corner.col + i * corner.dc, row = corner.row + j * corner.dr;
+        room.backgroundObjects.push(BackgroundObject.createVariant('water', col * CS, row * CS));
+      }
+    }
+  }
+
+  // The Storm Eye's Wind Fields own all the wind here (SandstormSystem.bindToRoom).
+  room.calmWind = true;
+}
+
 // Fallback arms for the unarmed safety net in zones that author no
 // l1WeaponPool of their own (gray, blue) — the baseline tier-1 spread.
 const BASELINE_T1_WEAPONS = ['†', '/', '↾', ')', '⊥']; // sword, staff, dagger, bow, hammer

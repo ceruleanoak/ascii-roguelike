@@ -62,6 +62,14 @@ export class SandstormSystem {
   // opt into the same wind as its home zone without actually being 'yellow'
   // zone (neutral rooms carry zone: 'neutral' for unrelated systems).
   bindToRoom(room) {
+    // `calmWind` (the Storm Eye's arena) is checked ahead of the idempotency
+    // guard: the boss can claim a room after it was first bound, and from then
+    // on the boss's Wind Fields own all the wind there.
+    if (room?.calmWind) {
+      this.activeRoom = room;
+      this.deactivate();
+      return;
+    }
     if (this.activeRoom === room) return;
     this.activeRoom = room;
     if (!room || (room.zone !== 'yellow' && !room.windThemed)) {
