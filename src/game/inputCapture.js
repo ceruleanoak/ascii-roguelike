@@ -8,6 +8,7 @@ export function isInputCaptured(game) {
     game?.player?.polymorphed ||
     game?.cheatMenu?.isOpen ||
     game?.menuOpen ||
-    game?.pauseSystem?.isPaused()
+    game?.pauseSystem?.isPaused() ||
+    game?.stateMachine?.getCurrentState() === 'CLI' // GAME_STATES.CLI — the CLI owns the keyboard
   );
 }

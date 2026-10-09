@@ -182,6 +182,22 @@ export const SPELLS = {
     action: (game) => game.cheatMenu.open()
   },
 
+  // Path to Canon: leaving the game is the non-ending. Knowledge is the
+  // only gate — EXIT works anywhere, in any run. An affirmative closes the
+  // game into the CLI; anything else lets the run go on.
+  'EXIT': {
+    response: 'ARE YOU SURE?',
+    followUps: {
+      'YES':  { action: (game) => game.cliSystem.requestExit() },
+      'Y':    { action: (game) => game.cliSystem.requestExit() },
+      'SURE': { action: (game) => game.cliSystem.requestExit() },
+      'OK':   { action: (game) => game.cliSystem.requestExit() },
+      'AYE':  { action: (game) => game.cliSystem.requestExit() },
+      'NO':   '...',
+      'NAY':  '...',
+    },
+  },
+
   'HEX': {
     response: (game) => {
       if (!game.knownSpells?.has('HEX')) return 'UNKNOWN SPELL.';

@@ -24,6 +24,7 @@ import { ErrandSystem } from './systems/ErrandSystem.js';
 import { CheatMenu } from './systems/CheatMenu.js';
 import { DemoSystem } from './systems/DemoSystem.js';
 import { ParticleFireworks } from './systems/ParticleFireworks.js';
+import { CliSystem } from './systems/CliSystem.js';
 import { AudioSystem } from './systems/AudioSystem.js';
 import { FishingSystem } from './systems/FishingSystem.js';
 import { LootSystem } from './systems/LootSystem.js';
@@ -254,6 +255,7 @@ class Game {
     this.fireSystem = new FireSystem(this);
     this.demoSystem = new DemoSystem(this);
     this.particleFireworksTicker = new ParticleFireworks(this);
+    this.cliSystem = new CliSystem(this);
     // Wire InventorySystem back to game so it can mutate player.equippedConsumables
     this.inventorySystem.game = this;
     this.consumableTriggerSystem = new ConsumableTriggerSystem(this);
@@ -434,6 +436,7 @@ class Game {
 
   setupInput() {
     window.addEventListener('keydown', (e) => {
+      if (this.stateMachine.getCurrentState() === GAME_STATES.CLI) return this.cliSystem.handleKeydown(e);
       // Cheat menu (opened by the CHEAT spell) owns every key while open.
       if (this.cheatMenu.isOpen) {
         const spawnedInto = this.cheatMenu.handleKeydown(e.key);
@@ -543,8 +546,8 @@ class Game {
     });
 
     window.addEventListener('keyup', (e) => {
-      // Block all player action-release logic while the cheat menu is open
-      if (this.cheatMenu.isOpen) {
+      // Block all player action-release logic while the cheat menu or the CLI owns the keys
+      if (this.cheatMenu.isOpen || this.stateMachine.getCurrentState() === GAME_STATES.CLI) {
         e.preventDefault();
         return;
       }
@@ -670,6 +673,7 @@ class Game {
       this.enterGameOverState();
     });
 
+    this.stateMachine.registerStateHandler(GAME_STATES.CLI, () => this.cliSystem.enter());
   }
 
   getNearestInteractiveSlot() {
@@ -3907,6 +3911,7 @@ class Game {
     this.renderController.applyCameraEffects(this);
     this.renderer.clearUI();
     const state = this.stateMachine.getCurrentState();
+    if (state === GAME_STATES.CLI) return this.renderController.renderCliState(this);
 
     if (state === GAME_STATES.TITLE) {
       this.renderController.renderTitleState(this);

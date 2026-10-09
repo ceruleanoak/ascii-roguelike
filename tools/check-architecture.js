@@ -142,6 +142,37 @@ function checkLayerGuard() {
   return guardFailed;
 }
 
+// Runs never persist. The single exception is Canon Edits (Path to Canon),
+// and only CanonStore may read or write them — any other storage access in
+// src/ is how run progress would start leaking across deaths.
+const STORAGE_OWNER = 'src/systems/CanonStore.js';
+const FORBIDDEN_STORAGE = /\b(?:localStorage|sessionStorage|indexedDB)\s*[.[]/; // access, not prose
+
+function checkStorageGuard() {
+  let guardFailed = false;
+  (function walk(d) {
+    let entries;
+    try { entries = readdirSync(join(root, d)); } catch { return; }
+    for (const entry of entries) {
+      const full = join(d, entry);
+      let st;
+      try { st = statSync(join(root, full)); } catch { continue; }
+      if (st.isDirectory()) { walk(full); continue; }
+      if (!entry.endsWith('.js') || full.replaceAll('\\', '/') === STORAGE_OWNER) continue;
+      let src;
+      try { src = readFileSync(join(root, full), 'utf8'); } catch { continue; }
+      inBlock = false;
+      stripComments(src).split('\n').forEach((code, i) => {
+        if (FORBIDDEN_STORAGE.test(code)) {
+          guardFailed = true;
+          console.error(`  FAIL  ${full}:${i + 1}  browser storage outside ${STORAGE_OWNER}: ${code.trim()}`);
+        }
+      });
+    }
+  })('src');
+  return guardFailed;
+}
+
 for (const [file, budget] of Object.entries(budgets)) {
   const chars = readFileSync(join(root, file), 'utf8').length;
   next[file] = Math.min(budget, chars + HEADROOM);
@@ -163,6 +194,7 @@ if (update) {
 }
 
 const layerGuardFailed = checkLayerGuard();
+const storageGuardFailed = checkStorageGuard();
 
 if (failed) {
   console.error('\nArchitecture budget exceeded.');
@@ -177,4 +209,9 @@ if (layerGuardFailed) {
   console.error('directly — otherwise effects leak onto the surface from inside huts/dungeons.');
 }
 
-if (failed || layerGuardFailed) process.exit(1);
+if (storageGuardFailed) {
+  console.error('\nBrowser storage outside CanonStore.');
+  console.error('Runs never persist; only Canon Edits do, through src/systems/CanonStore.js.');
+}
+
+if (failed || layerGuardFailed || storageGuardFailed) process.exit(1);

@@ -380,6 +380,7 @@ const UNREGISTERED_ALLOWLIST = [
   // not gameplay state.
   /^showVectors$/,
   /^particleFireworks$/,
+  /^cliSystem$/,                 // CLI prompt/view state; reset by its own enter() (src/systems/CliSystem.js)
   /^particleFireworksTicker$/,   // the toggle's cycle timer (src/systems/ParticleFireworks.js)
 
   // Per-frame scratch — recomputed every tick from live world state, never

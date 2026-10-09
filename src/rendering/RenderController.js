@@ -24,6 +24,7 @@ import { RestRenderer } from './state/RestRenderer.js';
 import { ExploreRenderer } from './state/ExploreRenderer.js';
 import { NeutralRenderer } from './state/NeutralRenderer.js';
 import { DemoRenderer } from './state/DemoRenderer.js';
+import { CliRenderer } from './state/CliRenderer.js';
 import { HutInteriorOverlay } from './ui/HutInteriorOverlay.js';
 import { DialogueBox } from './ui/DialogueBox.js';
 import { PickupBox } from './ui/PickupBox.js';
@@ -79,6 +80,7 @@ export class RenderController {
     this.neutralRenderer = new NeutralRenderer(renderer, this);
     this.threeRoomRenderer = new ThreeRoomRenderer();
     this.demoRenderer = new DemoRenderer(renderer, this);
+    this.cliRenderer = new CliRenderer(renderer);
 
     // Spell response overlay state
     this._spellText = null;
@@ -143,6 +145,13 @@ export class RenderController {
 
   renderDemoState(game) {
     this.demoRenderer.render(game);
+  }
+
+  // The CLI is outside the world: no narrator, no world effects, no modal
+  // pause — just the command line and the fade that carried the player in.
+  renderCliState(game) {
+    this.cliRenderer.render(game);
+    this.renderScreenFade(game);
   }
 
   renderCleanseWave(game) {

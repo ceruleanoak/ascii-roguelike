@@ -87,7 +87,8 @@ export const GAME_STATES = {
   COMBAT: 'COMBAT',
   NEUTRAL: 'NEUTRAL',
   GAME_OVER: 'GAME_OVER',
-  ARCADE_DEMO: 'ARCADE_DEMO'
+  ARCADE_DEMO: 'ARCADE_DEMO',
+  CLI: 'CLI' // Path to Canon: the game closed, the player authoring its canon
 };
 
 /**
