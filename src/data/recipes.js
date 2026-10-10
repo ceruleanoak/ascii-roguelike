@@ -31,6 +31,7 @@ export const RECIPES = [
   { left: '0', right: '|', result: '⊥', name: 'Hammer' },        // Rock + Stick = Hammer
   { left: '⊥', right: '⊥', result: '⟘', name: 'Maul' },          // Hammer + Hammer = Maul (radial knockback; explicit so T1 never slot-machines)
   { left: '⊥', right: '⬧', result: '⬢', name: 'Onyx Hammer' },   // Hammer + Onyx = Onyx Hammer (crit + faster windup)
+  { left: '⊥', right: 'M', result: '⫫', name: 'Sledgehammer' },  // Hammer + Metal = Sledgehammer (faster swing)
   { left: '0', right: '~', result: '⊸', name: 'Sling' },         // Rock + String = Sling
   { left: '⊸', right: '|', result: 'Ψ', name: 'Slingshot' },     // Sling + Stick = Slingshot
   { left: '⊸', right: 'f', result: '⊶', name: 'Bolo Launcher' }, // Sling + Fur = Bolo Launcher (one snaring bolo per room)
@@ -54,18 +55,19 @@ export const RECIPES = [
   { left: '¡', right: 'M', result: '⸘', name: 'Metal Bat' },     // Bat + Metal = Metal Bat (double damage)
   { left: 'M', right: '|', result: '↾', name: 'Dagger' },      // Metal + Stick = Dagger
   { left: '↾', right: '/', result: '⍋', name: 'Glaive' },      // Dagger + Staff = Glaive (high-damage staff)
+  { left: '↾', right: 'e', result: '↿', name: 'Keen Dagger' }, // Dagger + Eye = Keen Dagger (stabs toward the nearest enemy)
 
   // === MAGIC STAVES (Storm Staff + gemstone) ===
   // Staff splits two ways: Thick Staff is the blunt-melee line (Bat, Rootstaff);
   // Staff + Mana is the Storm Staff, and every gem wand is built from it.
-  { left: '/', right: '𝑚', result: '⚡', name: 'Storm Staff' },    // Staff + Mana (like Sword + Mana = Magic Sword)
-  { left: '⚡', right: '◈', result: '⚝', name: 'Ruby Staff' },     // Storm Staff + Ruby
-  { left: '⚡', right: '⬨', result: '⚹', name: 'Sapphire Staff' }, // Storm Staff + Sapphire
-  { left: '⚡', right: '◇', result: '⚶', name: 'Topaz Staff' },    // Storm Staff + Topaz
-  { left: '⚡', right: '⬧', result: '⚸', name: 'Onyx Staff' },     // Storm Staff + Onyx
-  { left: '⚡', right: '⬦', result: '⚘', name: 'Emerald Staff' },  // Storm Staff + Emerald
-  { left: '⚡', right: '⬥', result: '⚭', name: 'Garnet Staff' },   // Storm Staff + Garnet
-  { left: '⚡', right: '⧫', result: '⚳', name: 'Force Wand' },    // Storm Staff + Diamond
+  { left: '/', right: '𝑚', result: '⚚', name: 'Storm Staff' },    // Staff + Mana (like Sword + Mana = Magic Sword)
+  { left: '⚚', right: '◈', result: '⚝', name: 'Ruby Staff' },     // Storm Staff + Ruby
+  { left: '⚚', right: '⬨', result: '⚹', name: 'Sapphire Staff' }, // Storm Staff + Sapphire
+  { left: '⚚', right: '◇', result: '⚶', name: 'Topaz Staff' },    // Storm Staff + Topaz
+  { left: '⚚', right: '⬧', result: '⚸', name: 'Onyx Staff' },     // Storm Staff + Onyx
+  { left: '⚚', right: '⬦', result: '⚘', name: 'Emerald Staff' },  // Storm Staff + Emerald
+  { left: '⚚', right: '⬥', result: '⚭', name: 'Garnet Staff' },   // Storm Staff + Garnet
+  { left: '⚚', right: '⧫', result: '⚳', name: 'Force Wand' },    // Storm Staff + Diamond
 
   // === MANA WHIP (Whip + Mana Potion) — confusion lash, and the required base
   // for the gem whips below (was plain Whip) ===
@@ -144,11 +146,13 @@ export const RECIPES = [
 
   // === GREEN GAP RECIPES (early game common ingredients) ===
   { left: 'm', right: 'm', result: 'ᒧ', name: 'Meat Jerky' },    // Meat + Meat = Meat Jerky (heal 2)
+  { left: '⌬', right: 'm', result: '☰', name: 'Sandwich' },      // Bread + Meat = Sandwich (heal 3, still Feed)
   { left: 'b', right: 'a', result: 'ᐧ', name: 'Bone Dust' },     // Bone + Ash = Bone Dust (panic blind)
   { left: 'f', right: 'f', result: 'ꙍ', name: 'Boots' },         // Fur + Fur = Boots (slight speed)
   { left: 't', right: 't', result: 'ᑕ', name: 'Tooth Necklace' }, // Teeth + Teeth = Tooth Necklace (+1 dmg)
   { left: '~', right: '~', result: '▤', name: 'Cloth' },         // String + String = Cloth
   { left: '▤', right: 'f', result: 'ᐤ', name: 'Fur Cloak' },     // Cloth + Fur = Fur Cloak (armor, dodge)
+  { left: '▤', right: '|', result: '⚑', name: 'Flag' },          // Cloth + Stick = Flag (0 dmg, dizzy, deflects charges)
   // Cloth alt routes — String + String is the most common craft, so Cloth
   // gets second routes into existing garments/remedies. Each still needs a
   // real second ingredient; Silk-gated items (Shield, Tower Shield) stay Silk-only.
@@ -214,6 +218,7 @@ export const RECIPES = [
   { left: '⟩', right: 'F', result: 'ᛚ', name: 'Chain Bow' },       // Fire Bow + Fire = Chain Bow
   { left: ')', right: 's', result: 'ᛃ', name: 'Split Bow' },       // Bow + Scale = Split Bow
   { left: '⇒', right: 'F', result: 'ᛈ', name: 'Burst Bow' },       // Sky Bow + Fire = Burst Bow
+  { left: '⇒', right: 'M', result: 'ᛏ', name: 'Piercing Bow' },    // Sky Bow + Metal = Piercing Bow
 
   // === SHIELD RECIPES ===
   { left: 'k', right: 'b', result: 'S', name: 'Shield' },          // Silk + Bone = Shield
@@ -233,6 +238,7 @@ export const RECIPES = [
   { left: '†', right: '𝑚', result: '⸸', name: 'Magic Sword' },       // Sword + Mana
   { left: '⸸', right: '◇', result: 'Ꞩ', name: 'Lightning Sword' },   // Magic Sword + Topaz
   { left: '↾', right: 'm', result: 'ᛘ', name: 'Vampire Dagger' },    // Dagger + Meat
+  { left: '↾', right: 'j', result: '⌠', name: 'Hook Sword' },        // Dagger + Jaw (dizzy on hit)
   { left: '⊥', right: '⬨', result: 'ᛜ', name: 'Ice Hammer' },        // Hammer + Sapphire
   { left: '⊥', right: '⊗', result: '✺', name: 'Exploding Mace' },    // Hammer + Bomb
   { left: '≋', right: 'K', result: '⥊', name: 'Bullwhip' },          // Whip + Thick Fur
@@ -246,6 +252,7 @@ export const RECIPES = [
   // Tier-2 → tier-3
   { left: 'ƒ', right: 'v', result: '⌭', name: 'Plague Gun' },        // Fester's Gun + Venom
   { left: '⋔', right: 'p', result: '⑂', name: 'Pearl Slingshot' },   // Keen Slingshot + Pearl Shard
+  { left: '↿', right: 'p', result: '⥣', name: 'Pearl Dagger' },      // Keen Dagger + Pearl Shard
   { left: '⸘', right: 'Y', result: '⧧', name: 'Barbed Bat' },        // Metal Bat + Stingray Barb
   { left: '↟', right: 'Y', result: '⍏', name: 'Barbed Lance' },      // Venom Lance + Stingray Barb
   { left: 'ᛜ', right: 'i', result: '⟙', name: 'Glacier Hammer' },    // Ice Hammer + Ice
@@ -272,7 +279,7 @@ export const RECIPES = [
   { left: '𐤔', right: 'f', result: '𐤊', name: 'Padded Bone Armor' },     // Bone Armor + Fur = Padded Bone Armor
 
   // === NEW ARMOR RECIPES (7) ===
-  { left: 'f', right: 'b', result: '𐤂', name: 'Leather Armor' },   // Fur + Bone = Leather Armor
+  { left: 'f', right: 'M', result: '𐤂', name: 'Leather Armor' },   // Fur + Metal = Leather Armor
   { left: 'M', right: '~', result: '⛓', name: 'Chain Mail' },      // Metal + String = Chain Mail
   { left: 'k', right: 'F', result: '𐤄', name: 'Robe' },            // Silk + Fire = Robe
   { left: 'M', right: 'b', result: '𐤆', name: 'Warplate' },        // Metal + Bone = Warplate

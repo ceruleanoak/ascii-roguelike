@@ -1,4 +1,5 @@
 import { GRID } from '../game/GameConfig.js';
+import { isFeed } from '../systems/feed.js';
 import { INGREDIENTS } from '../data/items.js';
 
 const SCARE_RADIUS = GRID.CELL_SIZE * 1.6;
@@ -670,7 +671,7 @@ export class Crow {
       }
 
       // Priority 3: pickup items (weapons, armor, consumables, traps)
-      const item = this._closestPickable(ctx.items, ctx.player.plane, it => it.char !== '⌬');
+      const item = this._closestPickable(ctx.items, ctx.player.plane, it => !isFeed(it));
       if (item) {
         this.companionTask = 'item';
         this.companionTarget = item;

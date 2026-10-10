@@ -1,4 +1,5 @@
 import { GRID } from '../game/GameConfig.js';
+import { isFeed } from './feed.js';
 import { NPCRat } from '../entities/NPCRat.js';
 import { Ingredient } from '../entities/Ingredient.js';
 import { planeOf, PLANE_SURFACE, tagInteriorPlane, isInteriorActive, canReachLoot, lootOnActiveLayer, lootOnSurface } from './PlaneSystem.js';
@@ -52,7 +53,7 @@ export class CompanionSystem {
     // outer-room origin) and must be excluded, or surface rats path to the
     // wrong coordinates and "eat" a loaf the player never dropped.
     const loaves = game.items.filter(it =>
-      it && it.char === '⌬' && !it.consumed && !it.hutPlane && !it.mazePlane
+      it && isFeed(it) && !it.consumed && !it.hutPlane && !it.mazePlane
     );
     if (loaves.length > 0) {
       const claimedLoaves = new Set();
@@ -556,7 +557,7 @@ export class CompanionSystem {
     // Pull all on-ground bread loaves so crows can target them. Wild and
     // follower crows live in the surface Room, so only surface bread counts —
     // a loaf on an Interior floor sits at floor coordinates they can't reach.
-    const breadItems = game.items.filter(it => it && it.char === '⌬' && !it.consumed && lootOnSurface(it));
+    const breadItems = game.items.filter(it => it && isFeed(it) && !it.consumed && lootOnSurface(it));
 
     // Skip the whole pipeline when there's nothing to drive. Followers
     // without bread still need the weapon-threat scare pass below, so this
@@ -583,7 +584,7 @@ export class CompanionSystem {
       lootItems.push(ing);
     }
     for (const it of game.items) {
-      if (!it || it.consumed || it.destroyed || it.char === '⌬') continue;
+      if (!it || it.consumed || it.destroyed || isFeed(it)) continue;
       if (it.pickupReadyAt && it.pickupReadyAt > lootNow) continue;
       if (planeOf(it) !== PLANE_SURFACE || !lootOnSurface(it)) continue;
       if (it._lootSeenAt == null) it._lootSeenAt = lootNow;

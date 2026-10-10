@@ -8,6 +8,7 @@ import { isCellProtected } from './roomFeatures.js';
 import { tagInteriorPlane } from './PlaneSystem.js';
 import { StatusEffectSystem } from './StatusEffectSystem.js';
 import { isInputCaptured } from '../game/inputCapture.js';
+import { aimFacingAtNearestEnemy, keenStrikeReach } from './KeenAim.js';
 
 export class CharacterSystem {
   constructor(game) {
@@ -527,6 +528,8 @@ export class CharacterSystem {
       player.facing.x = dx;
       player.facing.y = dy;
     }
+    // A keen dagger's roll-stab still finds the nearest enemy in reach.
+    if (daggerItem.data.keenAim) aimFacingAtNearestEnemy(player, game._activeEnemies(), keenStrikeReach(daggerItem));
     daggerItem.windupActive = false;
     daggerItem.windupTimer = 0;
     daggerItem.cooldownTimer = 0;
@@ -801,12 +804,16 @@ export class CharacterSystem {
       return TRAINING_TECHNIQUES[category] ? 0 : 1;
     };
 
+    // An authored damage of 0 is a utility hit (Flag wave, fizzled spark) —
+    // no bonus or floor turns it into a damaging one.
+    const withBonus = (a, bonus) => (a.damage === 0 ? a
+      : { ...a, damage: Math.max(1, (a.damage || 1) + bonus) });
     if (Array.isArray(attack)) {
-      return attack.map(a => ({ ...a, damage: Math.max(1, (a.damage || 1) + baseBonus + trainingBonus(a)) }));
+      return attack.map(a => withBonus(a, baseBonus + trainingBonus(a)));
     }
     const bonus = baseBonus + trainingBonus(attack);
     if (bonus === 0) return attack;
-    return { ...attack, damage: Math.max(1, (attack.damage || 1) + bonus) };
+    return withBonus(attack, bonus);
   }
 
   triggerGreenActionCooldown() {
@@ -906,6 +913,12 @@ export class CharacterSystem {
     game.player.activeSlotIndex = inv.restActiveSlotIndex;
 
     game.spawnCharacterNPCs();
+
+    // REST's slot glyphs draw onto the cached background layer, which only
+    // clears when marked dirty — without this the incoming loadout is drawn
+    // over the outgoing one.
+    game.renderer.markBackgroundDirty();
+    game.updateUI();
 
     const charData = CHARACTER_TYPES[newType];
     game.showPickupMessage(charData.name);

@@ -1,6 +1,7 @@
 import { GRID, COLORS } from '../game/GameConfig.js';
 import { ITEMS, WEAPON_TYPES, TRAINING_TECHNIQUES, resolveWeaponDefaults } from '../data/items.js';
 import { spendMeterMana, fizzleToSpark } from '../systems/MagicSystem.js';
+import { canonStandIn } from '../systems/CanonOverlay.js';
 
 /**
  * Carrier interface (duck-typed)
@@ -60,6 +61,7 @@ function _readEquippedOilEffect(player) {
 
 export class Item {
   constructor(char, x, y) {
+    char = canonStandIn(char); // a Disabled Weapon never appears — something else stands in
     this.char = char;
     this.data = resolveWeaponDefaults(ITEMS[char] || {
       char,
@@ -108,6 +110,9 @@ export class Item {
     // over liquid (FloatingBootsSystem). Lives on the instance so a half-spent
     // pair keeps its charge across rooms.
     this.floatCharge = this.data.floatCharge ?? null;
+    // Rubber Boots — seconds of water immunity left; drains only while the
+    // wearer stands in water (FloatingBootsSystem).
+    this.waterCharge = this.data.waterCharge ?? null;
 
     // Wand use limit system (resets per room)
     this.maxUsesPerRoom = this.data.maxUsesPerRoom || null; // null = unlimited
@@ -472,6 +477,7 @@ export class Item {
       ? attacks.map((a, idx) => {
           const merged = { ...a, ...props };
           if (idx > 0) { delete merged.cyclesExitLetter; delete merged.cyclesExitColor; }
+          if (idx > 0 && props.lunge) delete merged.lunge;
           return merged;
         })
       : { ...attacks, ...props };
@@ -881,6 +887,15 @@ export class Item {
       if (this.data.healOnKill) props.healOnKill = this.data.healOnKill;
       if (this.data.pullsDisarmedGear) props.pullsDisarmedGear = true;
       if (this.data.rootDuration) props.rootDuration = this.data.rootDuration;
+      // A data-set lungeSpeed carries the wielder along the swing's facing
+      // (Pearl Dagger, onto its keen-aimed target). CombatSystem applies any
+      // attack.lunge to the owner; the hammer ring builds its own, so it's
+      // never overwritten here. Multi-hit patterns lunge on the first hit only.
+      const firstHit = Array.isArray(result) ? result[0] : result;
+      if (this.data.lungeSpeed && firstHit && !firstHit.lunge) {
+        const lungeAngle = Math.atan2(player.facing.y, player.facing.x);
+        props.lunge = { vx: Math.cos(lungeAngle) * this.data.lungeSpeed, vy: Math.sin(lungeAngle) * this.data.lungeSpeed };
+      }
 
       if (Object.keys(props).length === 0) return result;
       if (Array.isArray(result)) {

@@ -15,15 +15,14 @@ const THROW_DURATION = 0.45;
 // pulsing radius ring for these (they always resolve on the player).
 const SELF_ONLY_EFFECTS = new Set([
   'heal', 'fairyHeal', 'manaSlot', 'speed', 'block', 'cleanse', 'invuln',
-  'waterImmunity', 'stoneskin', 'regen',
+  'stoneskin', 'regen',
   'damageBuff', 'arrowRefill',
 ]);
 
 // Evaluates and dispatches consumable trigger conditions (auto and manual),
 // and owns the keys-4-8-select / SPACE-fires manual consumable flow.
 // Auto-trigger = emergency gate; manual (SPACE) trigger = tactics, bypasses
-// HP/proximity/count gates but not physical preconditions (liquid contact,
-// empty bow slot).
+// HP/proximity/count gates but not physical preconditions (empty bow slot).
 export class ConsumableTriggerSystem {
   constructor(game) {
     this.game = game;
@@ -88,8 +87,8 @@ export class ConsumableTriggerSystem {
   }
 
   // `manual` bypasses HP/proximity/count emergency gates (manual trigger =
-  // tactics), but NOT physical preconditions like liquid contact or an empty
-  // bow slot — those stay absolute.
+  // tactics), but NOT physical preconditions like an empty bow slot — those
+  // stay absolute.
   checkTriggerCondition(cd, player, currentRoom, consumable, manual = false) {
     const enemies = this.game._activeEnemies();
 
@@ -240,12 +239,6 @@ export class ConsumableTriggerSystem {
           targetY: nearest.position.y + 20,
         };
       }
-      case 'waterImmunity': {
-        // Rubber Boots: only makes sense in liquid — a physical precondition,
-        // not an emergency gate, so this stays absolute even under manual.
-        if (!player.inLiquid && !player.inDamagingLiquid) return false;
-        return { windup: THROW_DURATION, effectType: 'waterImmunity' };
-      }
       case 'throwSteam': {
         // Steam Vial: creates a steam cloud — START WINDUP
         return { windup: 0.6, effectType: 'throwSteam' };
@@ -376,9 +369,6 @@ export class ConsumableTriggerSystem {
         }
         break;
       }
-      case 'waterImmunity':
-        player.waterImmunityTimer = cd.duration;
-        break;
       case 'stoneskin': {
         const p = params();
         player.applyStoneSkin(p?.duration ?? cd.duration ?? 10);

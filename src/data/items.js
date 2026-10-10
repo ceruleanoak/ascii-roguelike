@@ -4,6 +4,9 @@ import { isPotionIngredient } from './alchemy.js';
 // Item types
 // The Shed Key's char, shared by the Errand reward and the Shed door check.
 export const SHED_KEY_CHAR = '⟜';
+// The Simple Key's char, shared by the dungeon generator ('K' template cells)
+// and the Lock Block check (DungeonPuzzleSystem._tryOpenLockBlock).
+export const SIMPLE_KEY_CHAR = '⚩';
 
 export const ITEM_TYPES = {
   WEAPON: 'WEAPON',
@@ -49,6 +52,35 @@ export const WEAPON_TYPES = {
 // family's top rung even though it still feeds the Venom/Chaos Blade
 // recipes as a mid-chain ingredient — the naming rule wins over recipe-tree
 // placement. Apply this to future "Dragon ___" weapons on sight.
+
+// Armor Flavor — the material family an armor belongs to (GLOSSARY.md).
+// Equipping a piece floats its word above the player in its color
+// (ArmorEffectsSystem.announceFlavor): a feeling, not a stat. Pieces with no
+// material family (robes, crowns, mantles) carry no `flavor` and stay silent.
+//   fur   — Fur / Leather: light, quick, slips blows (speed + dodge)
+//   metal — slow, heavy, stands its ground
+//   block — shields and Chain Mail: catches the blow rather than slipping it
+//   bone  — sturdy, but can Splinter against weapons
+// `masterRemark` is what the Weapons Master says on noticing the family worn
+// (WeaponsMaster.getDialogueLines).
+export const ARMOR_FLAVORS = {
+  fur: {
+    word: 'SPEED+', color: '#e0a060',
+    masterRemark: 'FUR ON YOUR BACK. QUICK FEET — BUT IT WILL NOT TURN A BLADE.'
+  },
+  metal: {
+    word: 'HEAVY', color: '#a8c0d8',
+    masterRemark: 'METAL. YOU WILL STAND YOUR GROUND, AND YOU WILL NOT OUTRUN ANYTHING.'
+  },
+  block: {
+    word: 'BLOCK+', color: '#70d8c8',
+    masterRemark: 'BUILT TO CATCH THE BLOW, NOT TO DODGE IT. KEEP YOUR GUARD UP.'
+  },
+  bone: {
+    word: 'STURDY', color: '#f0e6c0',
+    masterRemark: 'BONE HOLDS FIRM UNTIL IT DOES NOT. LISTEN FOR THE CRACK.'
+  },
+};
 
 // Item definitions
 // Item definitions are organized by class → type → tier:
@@ -1034,6 +1066,23 @@ export const ITEMS = {
     weaponLevel: 2,
     color: '#666666'
   },
+  // Hammer + Metal: the plain Hammer's ring, swung faster (shorter windup and recovery).
+  '⫫': {
+    char: '⫫',
+    tier: 2,
+    name: 'Sledgehammer',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'hammer',
+    damage: 3,
+    windup: 0.3,
+    recovery: 0.4,
+    range: 20,
+    attackPattern: 'hammerRing',
+    locksMovement: true,
+    weaponLevel: 2,
+    color: '#aaaaaa'
+  },
   '✺': {
     char: '✺',
     tier: 2,
@@ -1042,8 +1091,8 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'hammer',
     damage: 4,
-    windup: 0.6,
-    recovery: 0.3,
+    windup: 1.2,
+    recovery: 0.8,
     patternSpeed: 0.1,
     range: 20,
     explode: true,
@@ -1093,7 +1142,6 @@ export const ITEMS = {
   // ── MELEE / hammer — Tier 4 (secret vein drop, U room only) ─────────────
   '⬡': {
     char: '⬡',
-    tier: 4,
     name: 'Crystal Maul',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
@@ -1267,18 +1315,17 @@ export const ITEMS = {
     knockback: 25,
     color: '#8b4513'
   },
-  '⚡': {
-    char: '⚡',
+  '⚚': {
+    char: '⚚',
     name: 'Storm Staff',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
     damage: 1,
     cooldown: 0.35,              // 3× faster than Fester's Gun (0.35 vs 1.0 effective)
-    bulletChar: '↯',
+    bulletChar: 'ϟ',
     bulletSpeed: 280,
     bulletRange: 600,
-    accuracy: 0.92,
-    isConductiveStaff: true,     // Fires rapid magic bolts; passes through mana gems
+    inaccuracy: 0,               // flies dead-straight and never rolls a miss — the same bolt the Magic Sword throws (WeaponEffectsSystem._throwBolt)
     maxUses: null,
     manaCost: 1,                 // per bolt; an empty meter fizzles the shot to a harmless spark (Item.createBullets)
     color: '#ffcc00'
@@ -1346,6 +1393,29 @@ export const ITEMS = {
     isBlunt: true,
     launchForce: 1100,
     color: '#44dd44'
+  },
+  // Flag — Cloth + Stick. Pure utility: the wave deals no damage, only leaves
+  // whatever it brushes dizzy (confused). Held, it turns a charge aside the
+  // way a cape turns a bull — a charging enemy's ram is Deflected (no damage,
+  // the charger stunned; PlayerDamageSystem.resolveGuard reads the held
+  // weapon's deflectCharge). No weaponSubtype: it is no category's weapon,
+  // so no Weapons Master technique or staff/sword behavior applies.
+  '⚑': {
+    char: '⚑',
+    tier: 1,
+    name: 'Flag',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    attackPattern: 'arc',
+    damage: 0,
+    windup: 0.3,
+    recovery: 0.6,
+    patternSpeed: 0.05,
+    meleeChar: '⚑',
+    range: 20,
+    onHit: 'dizzy',
+    deflectCharge: true,
+    color: '#dd3333'
   },
 
   // ── WAND / gem-fused (Staff + gemstone) ───────────────────────────────────
@@ -1452,6 +1522,46 @@ export const ITEMS = {
     patternSpeed: 0.05,
     color: '#cccccc'
   },
+  // Keen Dagger (Dagger + Eye; the Cyan Rogue's Starter Weapon): the eye
+  // finds the stab. While the windup runs, facing turns to the nearest live
+  // enemy within keenAimCells (KeenAim.updateKeenStrike); with none in reach
+  // it stabs the way the player faces, like a Dagger.
+  '↿': {
+    char: '↿',
+    tier: 2,
+    name: 'Keen Dagger',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'dagger',
+    keenAim: true,
+    keenAimCells: 2,
+    damage: 1,
+    windup: 0.1,
+    recovery: 0.6,
+    range: 20,
+    patternSpeed: 0.05,
+    color: '#66dddd'
+  },
+  // Pearl Dagger (Keen Dagger + Pearl Shard): the eye reaches twice as far,
+  // and the stab carries the wielder onto the target (lungeSpeed → attack.lunge
+  // in Item.createMeleeAttack).
+  '⥣': {
+    char: '⥣',
+    tier: 3,
+    name: 'Pearl Dagger',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'dagger',
+    keenAim: true,
+    keenAimCells: 4,
+    lungeSpeed: 90,
+    damage: 2,
+    windup: 0.1,
+    recovery: 0.6,
+    range: 20,
+    patternSpeed: 0.05,
+    color: '#ddeeff'
+  },
   'ᛘ': {
     char: 'ᛘ',
     tier: 2,
@@ -1466,6 +1576,22 @@ export const ITEMS = {
     patternSpeed: 0.05,
     lifesteal: 1.0,
     color: '#990000'
+  },
+  // Dagger + Jaw: the jaw-bone hook catches and twists, so every stab leaves the target dizzy.
+  '⌠': {
+    char: '⌠',
+    tier: 2,
+    name: 'Hook Sword',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'dagger',
+    damage: 1,
+    windup: 0.1,
+    recovery: 0.6,
+    range: 20,
+    patternSpeed: 0.05,
+    onHit: 'dizzy',
+    color: '#dddddd'
   },
 
   // ── MELEE / whip ──────────────────────────────────────────────────────────
@@ -1490,13 +1616,13 @@ export const ITEMS = {
   // pullsDisarmedGear, rootDuration) are handled in WeaponEffectsSystem.js.
 
   // Magic Sword (Sword + Mana): the Sword's plain tier-2 rung. Every swing
-  // also throws the Storm Staff's bolt, read live from its '⚡' entry —
+  // also throws the Storm Staff's bolt, read live from its '⚚' entry —
   // mana cost included, so a dry meter means a plain swing.
   '⸸': {
     char: '⸸', tier: 2, name: 'Magic Sword',
     type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'sword',
     damage: 2, windup: 0.35, recovery: 0.8, patternSpeed: 0.05, range: 20,
-    swingBolt: '⚡',
+    swingBolt: '⚚',
     color: '#cc88ff'
   },
   // Diamond Longsword (Longsword + Diamond): plain tier 2, a crit edge.
@@ -1819,6 +1945,15 @@ export const ITEMS = {
     type: ITEM_TYPES.KEY,
     color: '#88ffcc'
   },
+  // Dungeon templates place it ('K' cells); each one opens a single Lock
+  // Block and is spent doing so. A universal key (data.opensAnyLock) opens
+  // Lock Blocks without spending anything.
+  [SIMPLE_KEY_CHAR]: {
+    char: SIMPLE_KEY_CHAR,
+    name: 'Simple Key',
+    type: ITEM_TYPES.KEY,
+    color: '#c8c8b0'
+  },
 
   // ============================================================================
   // ARMOR
@@ -1840,10 +1975,13 @@ export const ITEMS = {
   //   rollCooldownMult    multiplier to dodge cooldown (< 1 faster, > 1 slower)
   //   extraIframes   +s   extra invulnerability seconds granted after dodge roll
   //   speedBoost / speedPenalty  movement speed modifiers
+  //   flavor         ARMOR_FLAVORS.x  Armor Flavor — word floated on equip (see ARMOR_FLAVORS)
+  //   splinterChance 0–1  Splinter: chance a landed melee hit destroys the armor (bone)
 
   // ── Tier 1: common drops / basic crafts ───────────────────────────────────
   '𐤀': {
     char: '𐤀', name: 'Fur Vest', type: ITEM_TYPES.ARMOR,
+    flavor: ARMOR_FLAVORS.fur,
     defense: 1,
     speedBoost: 0.1,        // light — slight movement bonus
     rollCooldownMult: 0.9, // fast dodge recharge; rolls feel snappy
@@ -1852,6 +1990,7 @@ export const ITEMS = {
   },
   '𐤅': {
     char: '𐤅', name: 'Stitched Vest', type: ITEM_TYPES.ARMOR,
+    flavor: ARMOR_FLAVORS.fur,
     defense: 2,
     speedBoost: 0.05,
     rollCooldownMult: 0.95,
@@ -1879,6 +2018,8 @@ export const ITEMS = {
   },
   '𐤔': {
     char: '𐤔', name: 'Bone Armor', type: ITEM_TYPES.ARMOR,
+    splinterChance: 0.12,   // a landed melee hit may Splinter it (destroyed)
+    flavor: ARMOR_FLAVORS.bone,
     defense: 2,
     meleeResist: 0.25,      // bone plates deflect strikes
     massBonus: 1.0,         // heavier — noticeably less knockback
@@ -1888,6 +2029,8 @@ export const ITEMS = {
   },
   '𐤊': {
     char: '𐤊', name: 'Padded Bone Armor', type: ITEM_TYPES.ARMOR,
+    splinterChance: 0.06,   // padding halves the Splinter chance
+    flavor: ARMOR_FLAVORS.bone,
     defense: 3,
     meleeResist: 0.3,
     massBonus: 1.5,
@@ -1899,6 +2042,7 @@ export const ITEMS = {
   // ── Tier 2: craftable mid-game ────────────────────────────────────────────
   '𐤂': {
     char: '𐤂', name: 'Leather Armor', type: ITEM_TYPES.ARMOR,
+    flavor: ARMOR_FLAVORS.fur,
     defense: 1,
     speedBoost: 0.2,        // lightest proper armor
     rollCooldownMult: 0.8, // fastest dodge recharge of any armor
@@ -1917,7 +2061,8 @@ export const ITEMS = {
   },
   '⛓': {
     char: '⛓', name: 'Chain Mail', type: ITEM_TYPES.ARMOR,
-    defense: 3,
+    flavor: ARMOR_FLAVORS.block,
+    defense: 2,
     bulletResist: 0.3,      // interlocked rings shed projectiles
     massBonus: 2.0,         // heavy metal — excellent knockback resistance
     rollCooldownMult: 1.65,  // rolling in chain mail is a commitment
@@ -1926,6 +2071,7 @@ export const ITEMS = {
   },
   'S': {
     char: 'S', name: 'Shield', type: ITEM_TYPES.ARMOR,
+    flavor: ARMOR_FLAVORS.block,
     defense: 1,
     blockChance: 0.4,       // chance to fully negate a bullet — bullets only
     spellDescription: 'CATCHES ARROWS.',
@@ -1933,6 +2079,7 @@ export const ITEMS = {
   },
   'U': {
     char: 'U', name: 'Tower Shield', type: ITEM_TYPES.ARMOR,
+    flavor: ARMOR_FLAVORS.block,
     defense: 2,
     blockChance: 0.3,       // lower per-hit chance, but covers melee too
     blockMelee: true,
@@ -1942,6 +2089,7 @@ export const ITEMS = {
   },
   '◍': {
     char: '◍', name: 'Buckler', type: ITEM_TYPES.ARMOR,
+    flavor: ARMOR_FLAVORS.block,
     defense: 1,
     speedBoost: 0.05,       // small and light — barely slows the arm
     parryMechanic: {        // same mechanic and numbers as the Duelist's parry
@@ -1971,6 +2119,7 @@ export const ITEMS = {
   },
   '𐤆': {
     char: '𐤆', name: 'Warplate', type: ITEM_TYPES.ARMOR,
+    flavor: ARMOR_FLAVORS.metal,
     defense: 4,
     bulletResist: 0.5,
     meleeResist: 0.3,       // thick plate absorbs all physical damage types
@@ -2162,6 +2311,7 @@ export const ITEMS = {
   // already aggro'd cannot detect the player at any range. Moving cancels it.
   'ᐤ': {
     char: 'ᐤ', name: 'Fur Cloak', type: ITEM_TYPES.ARMOR,
+    flavor: ARMOR_FLAVORS.fur,
     defense: 1,
     dodgeChance: 0.25,      // loose fur — blows slide off
     spellDescription: 'SLIPS THE BLOW.',
@@ -2369,15 +2519,17 @@ export const ITEMS = {
     cooldown: 20, // Reusable with 20s cooldown
     color: '#00ffff'
   },
-  // Boots — Fur + Fur. A slot-holding passive: unarmed sprint speed while
-  // equipped, even with a weapon out (EquipmentEffectsSystem reads
+  // Boots — Fur + Fur. A slot-holding passive: most of the unarmed sprint
+  // speed while equipped, even with a weapon out (EquipmentEffectsSystem reads
   // passiveSprint). Also the base the other boots are crafted from (recipes.js).
   'ꙍ': {
     char: 'ꙍ',
     name: 'Boots',
     type: ITEM_TYPES.CONSUMABLE,
     passive: true,
-    passiveSprint: true,
+    // Armed move-speed multiplier. Unarmed sprint is 1.5x; Boots alone get
+    // most of the way, and a Fur Vest's 1.1x on top makes ~1.5x (1.36 × 1.1).
+    passiveSprint: 1.36,
     color: '#8b6914'
   },
   // Floating Boots — Boots + Wings. A slot-holding passive, never thrown: the
@@ -2394,16 +2546,20 @@ export const ITEMS = {
     spentChar: 'ꙍ',
     color: '#ffaa44'
   },
-  // Rubber Boots — water immunity covers electrified water too: standing in
-  // it doesn't shock the wearer (PhysicsSystem's water-state branch). Every
-  // other electric source (weapons, wires, a zapped body's contact) still lands.
+  // Rubber Boots — Goo + Boots. Floating Boots' sibling: a slot-holding
+  // passive, never thrown. Instead of float, the wearer is immune to water's
+  // elemental effects (no wet status), and waterCharge (seconds) drains only
+  // while standing in water. The immunity covers electrified water too:
+  // standing in it doesn't shock the wearer. Every other electric source
+  // (weapons, wires, a zapped body's contact) still lands. Spent, the slot
+  // holds the plain Boots (spentChar). FloatingBootsSystem owns the drain.
   'ѽ': {
     char: 'ѽ',
     name: 'Rubber Boots',
     type: ITEM_TYPES.CONSUMABLE,
-    effect: 'waterImmunity',
-    duration: 25,
-    oneShot: true,
+    passive: true,
+    waterCharge: 25,
+    spentChar: 'ꙍ',
     color: '#ffdd44'
   },
 
@@ -2780,7 +2936,23 @@ export const ITEMS = {
     type: ITEM_TYPES.CONSUMABLE,
     oneShot: true,
     stackable: true, // shares one quick slot by count — see InventorySystem.mergeStackableConsumable
+    feed: true,      // crows and rats seek it on the ground — see systems/feed.js
     color: '#daa520'
+  },
+  // Sandwich (Bread + Meat): Feed like Bread — SHIFT throws it and crows/rats
+  // eat it exactly as they eat a loaf — but SPACE eats it for a bigger heal
+  // than Meat Jerky, and it auto-eats at low HP the same way.
+  '☰': {
+    char: '☰',
+    name: 'Sandwich',
+    type: ITEM_TYPES.CONSUMABLE,
+    effect: 'heal',
+    amount: 3,
+    oneShot: true,
+    stackable: true,
+    autoTriggerHP: 0.18,
+    feed: true,
+    color: '#d2a060'
   },
 
   // Compass: equippable utility weapon, passive (no activation, no oneShot —
@@ -2893,7 +3065,7 @@ export const ITEMS = {
     triggerRadius: 32,
     effectRadius: 128,
     effect: 'charm',
-    effectDuration: 8.0,
+    effectDuration: 24.0,          // dbl-sec (enemy status clock) = 12s real
     color: '#ff44ff'
   },
   '(': {

@@ -50,7 +50,8 @@ export const CHARACTER_TYPES = {
     rollSpeed: 650,
     hideDuration: 1.5, // Total hidden window (matches iframe+attackBlock); enemies forget player while hidden
     backstabMultiplier: 2.5, // 2.5x damage when hitting an enemy that hasn't detected the player
-    weaponAffinities: {}
+    weaponAffinities: {},
+    starterWeapon: '↿' // Keen Dagger — slot 1 when this character's loadout is first created
   },
   'yellow': {
     name: 'Yellow Mage',
@@ -63,7 +64,7 @@ export const CHARACTER_TYPES = {
     weaponAffinities: {
       'gun': { fireRateBonus: 0.2 } // 20% faster gun fire rate
     },
-    starterWeapon: '⚡' // Storm Staff — slot 1 when this character's loadout is first created
+    starterWeapon: '⚚' // Storm Staff — slot 1 when this character's loadout is first created
   },
   'gray': {
     name: 'Gray Assassin',

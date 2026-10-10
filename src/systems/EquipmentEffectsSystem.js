@@ -36,6 +36,7 @@ export class EquipmentEffectsSystem {
     player.slimeImmune = false;
     player.reflectDamage = 0;
     player.smokeOnHit = false;
+    player.splinterChance = 0;
     player.speedBoost = 0;
     player.speedPenalty = 0;
     player.slowEnemies = false;
@@ -69,6 +70,7 @@ export class EquipmentEffectsSystem {
       player.slimeImmune = a.slimeImmune || false;
       player.reflectDamage = a.reflectDamage || 0;
       player.smokeOnHit = a.smokeOnHit || false;
+      player.splinterChance = a.splinterChance || 0;
       player.speedBoost = a.speedBoost || 0;
       player.speedPenalty = a.speedPenalty || 0;
       player.slowEnemies = a.slowEnemies || false;
@@ -103,7 +105,7 @@ export class EquipmentEffectsSystem {
     player.critChance = 0;
     player.luckDodgeBonus = 0;
     player.fireBerryLit = false;
-    player.bootsSprint = false;
+    player.bootsSprintMult = 1;
     let critBonus = 0;
     inventorySystem.equippedConsumables.forEach((slot, idx) => {
       const cd = slot?.data;
@@ -116,9 +118,9 @@ export class EquipmentEffectsSystem {
       // Tooth Necklace: a flat crit-chance bonus, added after the Lucky Coin's
       // max() so the two stack.
       if (cd.critBonus) critBonus += cd.critBonus;
-      // Boots: unarmed sprint speed (and its footstep trail) while equipped,
-      // weapon out or not — routed through Player.getSprintMultiplier().
-      if (cd.passiveSprint) player.bootsSprint = true;
+      // Boots: part of the unarmed sprint speed (and its footstep trail)
+      // while armed — routed through Player.getSprintMultiplier().
+      if (cd.passiveSprint) player.bootsSprintMult = Math.max(player.bootsSprintMult, cd.passiveSprint);
       // Fire Berry: passive torch-light while equipped and unspent. Consuming
       // it (SPACE) empties the slot, which naturally stops the light.
       if (cd.fireBerryLight && !inventorySystem.spentConsumableSlots[idx]) {

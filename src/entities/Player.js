@@ -42,6 +42,8 @@ export class Player {
     initParry(this);            // parry cycle timers, shared with enemy parry
     this.smokeOnHit = false;    // Bloom Mantle: bursts a pollen smoke screen when struck
     this.smokeBurstPending = false; // one-frame signal consumed by main.js to spawn the cloud
+    this.splinterChance = 0;     // bone armor: chance a landed melee hit Splinters it
+    this.splinterPending = false; // one-frame signal consumed by ArmorEffectsSystem.updateSplinter
     this.hurtPending = false; // survived a hit since the last consumable check (healOnHit; InventorySystem)
     this.speedBoost = 0;
     this.speedPenalty = 0;
@@ -162,7 +164,8 @@ export class Player {
     this.emberStackTimer = 0;
     this.emberStackCooldown = 0; // minimum 0.5s between stack gains
 
-    // Water immunity (from Rubber Boots)
+    // Water immunity (from Rubber Boots): seconds of charge left in the equipped
+    // boots, projected each frame by FloatingBootsSystem (0 = none equipped).
     this.waterImmunityTimer = 0;
 
     // Shark Mask dive state (active only while equipped + in water)
@@ -213,9 +216,9 @@ export class Player {
     // a non-elemental treasure to the pool. Also booleans, also non-stacking.
     this.fountainSprintBlessed = false; // Diamond: unarmed sprint speed even while armed
     this.fountainArmorBonus = 0;        // Onyx: +1 defense, folded in on every equip recompute
-    // Boots: unarmed sprint speed even while armed, for as long as they're
-    // equipped. Recomputed by EquipmentEffectsSystem on every equip change.
-    this.bootsSprint = false;
+    // Boots: armed move-speed multiplier while equipped (1 = no Boots).
+    // Recomputed by EquipmentEffectsSystem on every equip change.
+    this.bootsSprintMult = 1;
     this.blockBoostTimer = 0;
     this.blockBoostAmount = 0;
     this.stoneSkinTimer = 0;
@@ -329,17 +332,20 @@ export class Player {
 
   // Unarmed sprint multiplier, applied to both acceleration and max speed.
   // Empty hands normally mean 1.5x; a Diamond offered to a fairy fountain
-  // (fountainSprintBlessed) or equipped Boots (bootsSprint) keep that speed
-  // even with a weapon out. Every speed and roll calculation routes through
-  // here so the blessing can't miss a site.
+  // (fountainSprintBlessed) keeps that speed even with a weapon out. Equipped
+  // Boots give only part of it while armed (bootsSprintMult, from the Boots'
+  // passiveSprint) — a Fur Vest's speed on top is what reaches the full 1.5x.
+  // Every speed and roll calculation routes through here so no source can
+  // miss a site.
   getSprintMultiplier() {
-    return this.isSprinting() ? 1.5 : 1;
+    if (!this.heldItem || this.fountainSprintBlessed) return 1.5;
+    return this.bootsSprintMult;
   }
 
   // True whenever the player moves at sprint speed — also drives the sprint
   // footstep trail (WorldEffectsSystem), so every sprint source shows it.
   isSprinting() {
-    return !this.heldItem || this.fountainSprintBlessed || this.bootsSprint;
+    return !this.heldItem || this.fountainSprintBlessed || this.bootsSprintMult > 1;
   }
 
   updateInput(inputState, lockFacing = false) {
@@ -595,7 +601,6 @@ export class Player {
         if (!this.polymorphed) this.char = '@'; // don't overwrite frog form
       }
     }
-    if (this.waterImmunityTimer > 0) this.waterImmunityTimer -= deltaTime;
     if (this.stoneSkinTimer > 0) {
       this.stoneSkinTimer -= deltaTime;
       if (this.stoneSkinTimer <= 0) this.stoneSkinTimer = 0;
@@ -839,7 +844,7 @@ export class Player {
     // Reset fairy fountain treasure blessings
     this.fountainSprintBlessed = false;
     this.fountainArmorBonus = 0;
-    this.bootsSprint = false;
+    this.bootsSprintMult = 1;
 
     // Reset armor properties
     this.defense = 0;
@@ -854,6 +859,8 @@ export class Player {
     this.parryMechanic = null;
     initParry(this);
     this.smokeOnHit = false;
+    this.splinterChance = 0;
+    this.splinterPending = false;
     this.speedBoost = 0;
     this.speedPenalty = 0;
     this.slowEnemies = false;

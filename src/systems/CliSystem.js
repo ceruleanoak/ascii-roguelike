@@ -13,7 +13,8 @@
  *            move, left/right step a value, SPACE/ENTER selects, SHIFT backs out.
  *   text   — a text edit of one row. ENTER keeps it, Escape drops it (SHIFT
  *            types capitals here, so it can't back out).
- *   glyphs — the Unicode table. Arrows move, SPACE picks, SHIFT backs out.
+ *   glyphs — the glyph globe (glyphGlobe.js). Arrows turn it, SPACE picks
+ *            the glyph at front-center, SHIFT backs out.
  *
  * Commands: HELP (the command table), LIST (editable files and
  * executables), FORGET (erase every Canon Edit).
@@ -21,7 +22,8 @@
 
 import { menuIntent } from './MenuInput.js';
 import { CanonStore } from './CanonStore.js';
-import { LIST, GLYPH_COLUMNS, actionRow, stepValue } from './cliTables.js';
+import { LIST, actionRow, stepValue } from './cliTables.js';
+import { openGlobe, moveGlobe } from './glyphGlobe.js';
 import { GAME_STATES } from '../game/GameConfig.js';
 import { applyReset } from '../game/resetRegistry.js';
 
@@ -96,7 +98,12 @@ export class CliSystem {
   }
 
   openGlyphs(glyphs, onPick) {
-    this.stack.push({ kind: 'glyphs', glyphs, index: 0, onPick });
+    this.stack.push(openGlobe(glyphs, onPick));
+  }
+
+  /** A text edit of `row`, as SPACE on a text row opens. */
+  openText(row) {
+    this.stack.push({ kind: 'text', row, buffer: row.get() ?? '' });
   }
 
   back() {
@@ -150,7 +157,7 @@ export class CliSystem {
 
   _selectRow(row) {
     if (row.kind === 'steps') stepValue(row, 1);
-    else if (row.kind === 'text') this.stack.push({ kind: 'text', row, buffer: row.get() ?? '' });
+    else if (row.kind === 'text') this.openText(row);
     else if (row.kind === 'glyph') row.pick();
     else if (row.kind === 'table') this.openTable(row.build);
     else if (row.kind === 'action') row.run(this);
@@ -170,12 +177,9 @@ export class CliSystem {
   }
 
   _glyphKey(e, frame) {
-    const n = frame.glyphs.length;
     const intent = menuIntent(e);
-    const moves = { left: -1, right: 1, up: -GLYPH_COLUMNS, down: GLYPH_COLUMNS };
-    if (moves[intent] && n) {
-      frame.index = Math.max(0, Math.min(n - 1, frame.index + moves[intent]));
-    } else if (intent === 'confirm' && n) {
+    if (moveGlobe(frame, intent)) return;
+    if (intent === 'confirm' && frame.glyphs.length) {
       this.back();
       frame.onPick(frame.glyphs[frame.index]);
     } else if (intent === 'shift' || e.key === 'Escape') {

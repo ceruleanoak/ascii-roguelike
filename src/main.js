@@ -139,6 +139,7 @@ import * as ingredientPile from './systems/IngredientPile.js';
 import { breakOnDeathPassives } from './systems/ConsumableSlotBreaks.js';
 import { tryDeathSave } from './systems/DeathSaveSystem.js';
 import { PlayerParry } from './entities/enemyMechanics/ParryMechanic.js';
+import { updateKeenStrike } from './systems/KeenAim.js';
 
 // Starter satchel: 3 distinct ingredients from a fixed pool. Each rolled char
 // drops per the table below; unlisted chars drop x2 (per-run replay variety).
@@ -882,6 +883,8 @@ class Game {
     // any fairy-fountain maxHp blessing — see RestSystem for what and why).
     // Charon reads the arriving player's health before the rebuild heals it.
     const arrivedAtFullHp = !!this.player && this.player.hp >= this.player.maxHp;
+    // The frog curse follows the player home — REST is not a cure.
+    const savedPolymorph = this.polymorphSystem.capturePolymorph(this.player);
     RestSystem.rebuildForRest(this);
 
     // Reset fishing system so Rusalka pull/suppression doesn't persist into REST
@@ -894,6 +897,7 @@ class Game {
 
     // Apply active character type
     this.applyCharacterType(this.activeCharacterType);
+    this.polymorphSystem.restorePolymorph(this, savedPolymorph);
 
     // Restore quick slots (not lost on death). Ingredients need no restoring —
     // the pile lives on InventorySystem and a new Player never held it.
@@ -1381,13 +1385,7 @@ class Game {
     const savedHp = this.player ? this.player.hp : null; // Always save HP
     const savedDestroyedSlots = this.player ? [...this.player.destroyedSlots] : [...this._savedDestroyedSlots];
     // Polymorph state persists across rooms
-    const savedPolymorph = this.player
-      ? {
-          active:  this.player.polymorphed,
-          cursed:  this.player.polymorphCursed,
-          cured:   this.player.polymorphCured,   // persists even when not currently morphed
-        }
-      : null;
+    const savedPolymorph = this.polymorphSystem.capturePolymorph(this.player);
     // Magic meter persists across rooms, scoped per-character (CharacterSystem).
     const capturedMagicMeter = this.characterSystem.captureMagicMeterForRoomTransition(this.player);
 
@@ -1639,15 +1637,8 @@ class Game {
     // Apply active character type
     this.applyCharacterType(this.activeCharacterType);
 
-    // Restore polymorph across room transition (applyCharacterType ran first so
-    // savedState will capture the correct base char/color for this character)
-    if (savedPolymorph) {
-      if (savedPolymorph.active) {
-        this.polymorphSystem.activatePolymorph(this, savedPolymorph.cursed, true);
-      }
-      // Always restore cured flag — this is what unlocks the F key toggle
-      if (savedPolymorph.cured) this.player.polymorphCured = true;
-    }
+    // Restore polymorph across room transition (after applyCharacterType)
+    this.polymorphSystem.restorePolymorph(this, savedPolymorph);
 
     // Save room entry position for Rope consumable
     this.roomEntryX = startX;
@@ -2147,6 +2138,7 @@ class Game {
     // ONLY place the held item ticks — at WEAPON_TIMER_RATE (2×), preserving
     // the double-tick feel all weapon data was tuned against (resolved bug #88).
     if (this.player.heldItem && this.player.heldItem.update) {
+      updateKeenStrike(this.player, this._activeEnemies()); // Keen Dagger: windup tracks the nearest enemy
       const windupAttack = this.player.heldItem.update(deltaTime * PHYSICS.WEAPON_TIMER_RATE);
       if (windupAttack) {
         this.playWeaponAttackSFX(this.player.heldItem);

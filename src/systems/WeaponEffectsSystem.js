@@ -7,7 +7,7 @@
  *   placesLava     — lava tiles in a forward arc (CharacterSystem.spawnLavaSweep)
  *   callsLightning — delayed strike past the tip (CharacterSystem.callLightningStrike)
  *   swingBolt      — char of a GUN weapon whose bolt the swing also throws
- *                    (Magic Sword → Storm Staff '⚡'). Read live from that
+ *                    (Magic Sword → Storm Staff '⚚'). Read live from that
  *                    weapon's data, so the two stay in parity — including its
  *                    manaCost: a dry meter throws the same fizzled spark.
  *   dustBurst      — { status, duration, color }: a sight-blocking cloud that

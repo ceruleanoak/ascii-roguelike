@@ -1,43 +1,58 @@
-// FloatingBootsSystem — owns the Floating Boots (ѡ) charge lifecycle.
+// FloatingBootsSystem — owns the charge lifecycle of the charged boots:
+// Floating Boots (ѡ, float) and their sibling Rubber Boots (ѽ, water
+// immunity).
 //
-// The boots are a passive slot item, never thrown or consumed. Their charge
-// (seconds of float, `item.floatCharge`) lives on the slot's Item instance so
-// it survives slot reorders and travels with the boots. Each frame:
-//   - the charge is projected onto `player.floatCharge`, which PhysicsSystem
-//     reads to keep the player afloat (and to open 'float' passable zones);
-//   - while PhysicsSystem reports the player over liquid (`player.overLiquid`),
-//     the charge drains in real seconds — dry ground costs nothing;
+// Both are passive slot items, never thrown or consumed. Their charge
+// (seconds, `item.floatCharge` / `item.waterCharge`) lives on the slot's Item
+// instance so it survives slot reorders and travels with the boots. Each frame,
+// per pair:
+//   - the charge is projected onto the player (`player.floatCharge`, which
+//     PhysicsSystem reads to keep the player afloat and to open 'float'
+//     passable zones; `player.waterImmunityTimer`, which PhysicsSystem and
+//     ElectricitySystem read to skip water's wet status and shock);
+//   - while the player is in the boots' medium, the charge drains in real
+//     seconds — dry ground costs nothing. Float drains over any liquid
+//     (`player.overLiquid`), rubber over water only (`player.inLiquid`);
 //   - at zero the slot reverts to the boots' `spentChar` (plain Boots ꙍ).
 //
 // Runs from Game.updatePlayerMechanics, so it ticks in every state that moves
 // the player (REST / EXPLORE / NEUTRAL) — no per-state wiring needed.
+const CHARGED_BOOTS = [
+  { charge: 'floatCharge', playerField: 'floatCharge',        drains: player => player.overLiquid },
+  { charge: 'waterCharge', playerField: 'waterImmunityTimer', drains: player => player.inLiquid },
+];
+
 export class FloatingBootsSystem {
   constructor(game) {
     this.game = game;
   }
 
   update(deltaTime) {
-    const { player, inventorySystem } = this.game;
+    const { player } = this.game;
     if (!player) return;
+    for (const boots of CHARGED_BOOTS) this._updateBoots(player, boots, deltaTime);
+  }
 
+  _updateBoots(player, { charge, playerField, drains }, deltaTime) {
+    const { inventorySystem } = this.game;
     const slots = player.equippedConsumables ?? [];
-    const index = slots.findIndex(item => item?.floatCharge > 0);
+    const index = slots.findIndex(item => item?.[charge] > 0);
     if (index < 0) {
-      player.floatCharge = 0;
+      player[playerField] = 0;
       return;
     }
 
     const boots = slots[index];
-    if (player.overLiquid) {
-      boots.floatCharge = Math.max(0, boots.floatCharge - deltaTime);
-      if (boots.floatCharge <= 0) {
+    if (drains(player)) {
+      boots[charge] = Math.max(0, boots[charge] - deltaTime);
+      if (boots[charge] <= 0) {
         inventorySystem.replaceConsumableSlot(index, boots.data.spentChar);
         inventorySystem.applyEquipmentEffectsToPlayer(player);
-        player.floatCharge = 0;
+        player[playerField] = 0;
         this.game.updateUI();
         return;
       }
     }
-    player.floatCharge = boots.floatCharge;
+    player[playerField] = boots[charge];
   }
 }

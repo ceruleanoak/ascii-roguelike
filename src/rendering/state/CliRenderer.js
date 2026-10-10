@@ -1,13 +1,15 @@
 /**
  * CliRenderer — draws the CLI (GAME_STATES.CLI): a black screen, Unifont,
  * everything centered. The prompt is a prominent `>` with a blinking
- * cursor; tables are borderless text with the selected row in yellow.
+ * cursor; tables are borderless text with the selected row in yellow; the
+ * glyph picker is a full-screen globe. Everything reads in capitals (rows
+ * arrive capitalized from cliTables; typed text is shown through caps()).
  * Non-instructive: no hint footers, no headers — bare labels only.
  */
 
 import { GRID, COLORS } from '../../game/GameConfig.js';
-import { rowValue } from '../../systems/cliTables.js';
-import { drawUnicodeTable } from '../ui/UnicodeTable.js';
+import { rowValue, caps } from '../../systems/cliTables.js';
+import { drawGlyphGlobe } from '../ui/GlyphGlobe.js';
 
 const SELECTED = '#ffff00';
 const DIM = '#999999';
@@ -40,7 +42,7 @@ export class CliRenderer {
     if (!frame) this._drawPrompt(ctx, cli, cs);
     else if (frame.kind === 'table') this._drawTable(ctx, cli.rows(), frame.index, cs);
     else if (frame.kind === 'text') this._drawText(ctx, frame, cs);
-    else drawUnicodeTable(ctx, frame.glyphs, frame.index);
+    else drawGlyphGlobe(ctx, frame);
     ctx.restore();
   }
 
@@ -98,11 +100,12 @@ export class CliRenderer {
       ctx.fillStyle = DIM;
       ctx.fillText(frame.row.label, GRID.WIDTH / 2, midY - cs * 2);
     }
-    const width = ctx.measureText(frame.buffer + '█').width;
+    const text = caps(frame.buffer);
+    const width = ctx.measureText(text + '█').width;
     const left = GRID.WIDTH / 2 - width / 2;
     ctx.textAlign = 'left';
     ctx.fillStyle = TEXT;
-    ctx.fillText(frame.buffer, left, midY);
-    if (cursorOn()) ctx.fillText('█', left + ctx.measureText(frame.buffer).width, midY);
+    ctx.fillText(text, left, midY);
+    if (cursorOn()) ctx.fillText('█', left + ctx.measureText(text).width, midY);
   }
 }

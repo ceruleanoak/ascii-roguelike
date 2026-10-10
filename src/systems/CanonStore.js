@@ -22,7 +22,8 @@ function emptyCanon() {
   // existing weapon's data. Applied at boot by CanonOverlay.
   // story: Story.md, one line per newline. It is never blank to begin with;
   // its first line is the player's to keep, rewrite, or delete.
-  return { exited: false, story: DEFAULT_STORY, names: {}, cheats: {}, weapons: {} };
+  // disabled: { glyph: true } — weapons CUSTOMIZE has switched out of every run.
+  return { exited: false, story: DEFAULT_STORY, names: {}, cheats: {}, weapons: {}, disabled: {} };
 }
 
 export const CanonStore = {

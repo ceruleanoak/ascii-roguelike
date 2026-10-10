@@ -80,6 +80,29 @@ export class PolymorphSystem {
     if (!silent) game.audioSystem?.playSFX('polymorph');
   }
 
+  // ── Carry across a Player rebuild ──────────────────────────────────────────
+  // Room transitions and REST entry both replace game.player with a fresh
+  // Player, which starts unmorphed. Capture from the outgoing player, then
+  // restore onto the new one AFTER applyCharacterType, so the frog's saved
+  // state records this character's own char/color for the eventual cure.
+  // Death never reaches here with a frog: the run reset clears the flags first.
+
+  capturePolymorph(player) {
+    if (!player) return null;
+    return {
+      active: player.polymorphed,
+      cursed: player.polymorphCursed,
+      cured:  player.polymorphCured,   // persists even when not currently morphed
+    };
+  }
+
+  restorePolymorph(game, carried) {
+    if (!carried) return;
+    if (carried.active) this.activatePolymorph(game, carried.cursed, true);
+    // Always restore cured flag — this is what unlocks the F key toggle
+    if (carried.cured) game.player.polymorphCured = true;
+  }
+
   // ── Deactivation ───────────────────────────────────────────────────────────
 
   deactivatePolymorph(game, markCured = false) {

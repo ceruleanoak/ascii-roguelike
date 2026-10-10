@@ -2,6 +2,10 @@
  * cliTables — the CLI's tables: the generic row model every CLI table is
  * built from, and the LIST content (Story.md, Names, Cheats, Weapons).
  *
+ * The CLI reads in capitals: every label and value is built through caps().
+ * Glyphs never are — ƒ and ⲯ are weapons whose capitals are other glyphs —
+ * so a row puts its glyph beside caps(text), never inside it.
+ *
  * A table is a function `(cli) => rows`, rebuilt on every key and frame, so a
  * row always shows the current Canon Edit. Row kinds:
  *   steps  — a value array stepped with left/right (SPACE steps forward).
@@ -19,6 +23,10 @@ import { ITEMS, INGREDIENTS, ITEM_TYPES, WEAPON_TYPES, SUBTYPE_DEFAULTS } from '
 import { findRecipe } from '../data/recipes.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
 import { COLORS } from '../game/GameConfig.js';
+import { WEAPON_STYLES } from '../data/weaponStyles.js';
+
+/** Text as the CLI shows it. Never pass a glyph through this. */
+export const caps = text => String(text ?? '').toUpperCase();
 
 // ── Row model ──────────────────────────────────────────────────────────────
 
@@ -34,7 +42,8 @@ export const actionRow = (label, run) => ({ kind: 'action', label, run });
 /** The text a row shows beside its label (empty for table/action rows). */
 export function rowValue(row) {
   if (row.kind === 'steps') return row.format(row.get());
-  if (row.kind === 'text' || row.kind === 'glyph') return row.get() ?? '';
+  if (row.kind === 'text') return caps(row.get());
+  if (row.kind === 'glyph') return row.get() ?? '';
   return '';
 }
 
@@ -62,11 +71,10 @@ export function stepValue(row, dir) {
 const SHIPPED_ITEM_GLYPHS = new Set(Object.keys(ITEMS));
 const SHIPPED_WEAPON_GLYPHS = Object.keys(ITEMS).filter(g => ITEMS[g].type === ITEM_TYPES.WEAPON);
 const SHIPPED_NAMES = Object.fromEntries(Object.entries(CHARACTER_TYPES).map(([type, data]) => [type, data.name]));
+// Weapon Styles copy their stats from the shipped weapons, not overlaid ones.
+const SHIPPED_DATA = Object.fromEntries(Object.entries(ITEMS).map(([glyph, data]) => [glyph, { ...data }]));
 
-// ── Unicode table ──────────────────────────────────────────────────────────
-
-/** Glyphs per row in the Unicode table (CliSystem moves by it; CliRenderer draws by it). */
-export const GLYPH_COLUMNS = 16;
+// ── Glyph globe ────────────────────────────────────────────────────────────
 
 // BMP plus the musical and alchemical symbol blocks (🜛 lives in the latter).
 const GLYPH_RANGES = [[0x00A1, 0xFFFD], [0x1D100, 0x1D1FF], [0x1F700, 0x1F77F]];
@@ -168,19 +176,59 @@ const COOLDOWN = [0.4, 0.6, 0.8, 1, 1.2, 1.6, 2, 3];
 const AMMO = [1, 2, 3, 4, 5, 6, 8, 10, 12];
 const ACCURACY = [0.5, 0.7, 0.85, 0.95, 1];
 
-// The stats a new weapon starts with, per type (a Sword and a Gun).
+// The stats a new weapon starts with, per type (a Sword and a Gun), under
+// whatever its Weapon Style copies over them.
 const TYPE_DEFAULTS = {
   [WEAPON_TYPES.MELEE]: { weaponSubtype: 'sword', damage: 2, windup: 0.3, recovery: 0.8, patternSpeed: 0.05, range: 20 },
   [WEAPON_TYPES.GUN]: { damage: 1, cooldown: 1.2, maxUses: 6, accuracy: 0.85, reloadTime: 5, reloadType: 'magazine' },
 };
 
-function newWeapon(fields = {}) {
-  const weaponType = fields.weaponType ?? WEAPON_TYPES.MELEE;
-  return { authored: true, name: 'Weapon', color: COLORS.ITEM, ...fields, weaponType, ...TYPE_DEFAULTS[weaponType] };
+// What the TYPE row steps through: each melee subtype a swing reads cleanly
+// from (flail spin, bat charge and pickaxe mining are bespoke), then the gun.
+const KINDS = ['sword', 'dagger', 'axe', 'spear', 'hammer', 'staff', 'whip', 'scythe', 'gun'];
+const weaponTypeOf = kind => (kind === 'gun' ? WEAPON_TYPES.GUN : WEAPON_TYPES.MELEE);
+const kindOf = data => (data.weaponType === WEAPON_TYPES.GUN ? 'gun' : data.weaponSubtype);
+const stylesFor = kind => WEAPON_STYLES[weaponTypeOf(kind)];
+
+/** A Weapon Style's stats, copied off the shipped weapons it is drawn from. */
+function styleStats(kind, styleName) {
+  const style = stylesFor(kind).find(s => s.name === styleName);
+  if (!style) return {};
+  const stats = {};
+  for (const [glyph, keys] of style.from) {
+    for (const key of keys) {
+      const value = SHIPPED_DATA[glyph]?.[key];
+      if (value !== undefined) stats[key] = structuredClone(value);
+    }
+  }
+  return { ...stats, ...style.set };
 }
 
+/**
+ * An authored weapon from its kind, Weapon Style and damage. Everything else
+ * passed (name, color, recipe) is kept as is.
+ */
+function buildWeapon({ kind, style, damage, ...keep }) {
+  const weaponType = weaponTypeOf(kind);
+  const entry = { authored: true, name: 'Weapon', color: COLORS.ITEM, ...keep, weaponType, ...TYPE_DEFAULTS[weaponType] };
+  if (weaponType === WEAPON_TYPES.MELEE) entry.weaponSubtype = kind;
+  Object.assign(entry, styleStats(kind, style));
+  if (damage !== undefined) entry.damage = damage;
+  entry.style = style;
+  return entry;
+}
+
+const styleRow = (get, set, kind) => {
+  const styles = stylesFor(kind);
+  const reference = name => styles.find(s => s.name === name)?.reference;
+  return {
+    ...stepRow('STYLE', styles.map(s => s.name), get, set, name => (name ? `${name} ${reference(name)}` : '—')),
+    valueColor: SHIPPED_DATA[reference(get())]?.color,
+  };
+};
+
 const INGREDIENT_GLYPHS = Object.keys(INGREDIENTS);
-const ingredientLabel = g => (g ? `${g} ${INGREDIENTS[g].name}` : '—');
+const ingredientLabel = g => (g ? `${g} ${caps(INGREDIENTS[g].name)}` : '—');
 
 /**
  * Whether left + right may become `glyph`'s recipe: no shipped recipe and no
@@ -204,12 +252,22 @@ function weaponRows(cli, glyph) {
     cli.save();
   };
   const step = (label, key, values) => stepRow(label, values, () => data[key], v => set(key, v));
+  // Kind and Weapon Style rebuild the weapon; its name, color, damage and recipe stay.
+  const rebuild = (kind, style) => {
+    const { name, color, recipe, damage } = entry;
+    cli.canon.weapons[glyph] = buildWeapon({ name, color, recipe, damage, kind, style });
+    cli.save();
+  };
 
   const rows = [];
   if (authored) {
     rows.push(glyphRow('GLYPH', () => glyph, () => cli.openGlyphs(freeGlyphs(cli), picked => {
       delete cli.canon.weapons[glyph];
       cli.canon.weapons[picked] = entry;
+      if (cli.canon.disabled[glyph]) {
+        delete cli.canon.disabled[glyph];
+        cli.canon.disabled[picked] = true;
+      }
       cli.save();
       cli.replaceTable(c => weaponRows(c, picked));
     })));
@@ -218,15 +276,11 @@ function weaponRows(cli, glyph) {
   rows.push({ ...stepRow('COLOR', PALETTE, () => data.color, v => set('color', v), () => '█'), valueColor: data.color });
 
   if (authored) {
-    rows.push(stepRow('TYPE', [WEAPON_TYPES.MELEE, WEAPON_TYPES.GUN], () => data.weaponType, type => {
-      const { name, color, recipe } = entry;
-      cli.canon.weapons[glyph] = newWeapon({ name, color, recipe, weaponType: type });
-      cli.save();
-    }));
+    const kind = kindOf(data);
+    rows.push(stepRow('TYPE', KINDS, () => kind, k => rebuild(k, stylesFor(k)[0].name), caps));
+    rows.push(styleRow(() => data.style, style => rebuild(kind, style), kind));
   }
   if (data.weaponType === WEAPON_TYPES.MELEE) {
-    if (authored) rows.push(stepRow('SUBTYPE', Object.keys(SUBTYPE_DEFAULTS), () => data.weaponSubtype,
-      v => set('weaponSubtype', v), v => String(v).toUpperCase()));
     rows.push(step('DAMAGE', 'damage', DAMAGE), step('WINDUP', 'windup', WINDUP),
       step('RECOVERY', 'recovery', RECOVERY), step('RANGE', 'range', RANGE));
   } else if (data.weaponType === WEAPON_TYPES.GUN) {
@@ -246,6 +300,7 @@ function weaponRows(cli, glyph) {
       () => recipe.right ?? null, right => set('recipe', { left: recipe.left ?? null, right }), ingredientLabel));
     rows.push(actionRow('DELETE', () => {
       delete cli.canon.weapons[glyph];
+      delete cli.canon.disabled[glyph];
       cli.save();
       cli.back();
     }));
@@ -258,32 +313,91 @@ function weaponRows(cli, glyph) {
   return rows;
 }
 
-const weaponListRow = (cli, glyph) => {
-  const data = { ...ITEMS[glyph], ...cli.canon.weapons[glyph] };
-  return { ...tableRow(`${glyph} ${data.name}`, c => weaponRows(c, glyph)), color: data.color };
-};
-
 // The player's own weapons first, then every shipped weapon.
-const WEAPON_LIST = (cli) => [
-  ...Object.keys(cli.canon.weapons).filter(g => cli.canon.weapons[g].authored).map(g => weaponListRow(cli, g)),
-  ...SHIPPED_WEAPON_GLYPHS.map(g => weaponListRow(cli, g)),
+const weaponGlyphs = (cli) => [
+  ...Object.keys(cli.canon.weapons).filter(g => cli.canon.weapons[g].authored),
+  ...SHIPPED_WEAPON_GLYPHS,
 ];
 
+/** A weapon as a row label: its glyph, then its name in capitals. */
+const weaponLabel = (cli, glyph) => {
+  const data = { ...ITEMS[glyph], ...cli.canon.weapons[glyph] };
+  return { label: `${glyph} ${caps(data.name)}`, color: data.color };
+};
+
+const WEAPON_LIST = (cli) => weaponGlyphs(cli).map(glyph => {
+  const { label, color } = weaponLabel(cli, glyph);
+  return { ...tableRow(label, c => weaponRows(c, glyph)), color };
+});
+
+// CUSTOMIZE: every weapon, ON while it may appear in a run. OFF makes it a
+// Disabled Weapon (CanonOverlay keeps it out of every run from the next boot).
+const CUSTOMIZE = (cli) => weaponGlyphs(cli).map(glyph => {
+  const { label, color } = weaponLabel(cli, glyph);
+  return {
+    ...toggleRow(label, () => !cli.canon.disabled[glyph], on => {
+      if (on) delete cli.canon.disabled[glyph];
+      else cli.canon.disabled[glyph] = true;
+      cli.save();
+    }),
+    color,
+  };
+});
+
+/**
+ * ADD A WEAPON: a draft form — GLYPH, NAME, TYPE, DAMAGE, STYLE — that opens
+ * straight onto the glyph globe and then the name, so a weapon can be made in
+ * two picks and a word. Nothing is saved until ADD; SHIFT drops the draft.
+ * ADD keeps the weapon and turns the form into its full edit table.
+ */
+function addWeapon(cli) {
+  const draft = { glyph: null, name: '', kind: KINDS[0], damage: TYPE_DEFAULTS[WEAPON_TYPES.MELEE].damage, style: stylesFor(KINDS[0])[0].name };
+  const nameRow = textRow('NAME', () => draft.name, text => { draft.name = text; }, 20);
+  const pickGlyph = () => cli.openGlyphs(freeGlyphs(cli), glyph => {
+    draft.glyph = glyph;
+    if (!draft.name) cli.openText(nameRow);
+  });
+
+  cli.openTable(() => {
+    const rows = [
+      glyphRow('GLYPH', () => draft.glyph ?? '—', pickGlyph),
+      nameRow,
+      stepRow('TYPE', KINDS, () => draft.kind, kind => {
+        if (weaponTypeOf(kind) !== weaponTypeOf(draft.kind)) {
+          draft.style = stylesFor(kind)[0].name;
+          draft.damage = TYPE_DEFAULTS[weaponTypeOf(kind)].damage;
+        }
+        draft.kind = kind;
+      }, caps),
+      stepRow('DAMAGE', DAMAGE, () => draft.damage, damage => { draft.damage = damage; }),
+      styleRow(() => draft.style, style => { draft.style = style; }, draft.kind),
+    ];
+    if (draft.glyph && draft.name && !cli.canon.weapons[draft.glyph]) {
+      rows.push(actionRow('ADD', () => {
+        const { glyph, name, kind, damage, style } = draft;
+        cli.canon.weapons[glyph] = buildWeapon({ name, kind, damage, style });
+        cli.save();
+        cli.replaceTable(c => weaponRows(c, glyph));
+        cli.top().index = 0;
+      }));
+    }
+    return rows;
+  });
+  pickGlyph();
+}
+
 const WEAPONS = () => [
-  actionRow('CREATE A WEAPON', cli => cli.openGlyphs(freeGlyphs(cli), glyph => {
-    cli.canon.weapons[glyph] = newWeapon();
-    cli.save();
-    cli.openTable(c => weaponRows(c, glyph));
-  })),
+  actionRow('ADD A WEAPON', addWeapon),
   tableRow('EDIT A WEAPON', WEAPON_LIST),
+  tableRow('CUSTOMIZE', CUSTOMIZE),
 ];
 
 // ── LIST ───────────────────────────────────────────────────────────────────
 
 export const LIST = () => [
-  tableRow('Story.md', STORY),
-  tableRow('Names', NAMES),
-  tableRow('Cheats', CHEATS),
-  tableRow('Weapons', WEAPONS),
+  tableRow('STORY.MD', STORY),
+  tableRow('NAMES', NAMES),
+  tableRow('CHEATS', CHEATS),
+  tableRow('WEAPONS', WEAPONS),
   actionRow('☠', () => window.location.reload()),
 ];

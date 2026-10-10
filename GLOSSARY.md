@@ -104,9 +104,12 @@ identity, not standard programming terms.
 
 ### Blink
 - **Definition:** The warning state of a Maze cover object about to convert into a Ghost —
-  toggles visibly 5 times before conversion unless broken open first. Breaking it cancels the
-  threat and starts a cooldown before a different object begins blinking.
-- **In code:** `MazeObject.blinking`/`blinkOn`/`blinkCount` fields; state machine in
+  it toggles red, and every 3 red blinks spend one of its ticks (the 3 HP pips a hit also
+  spends). It converts when a blink takes the last tick, so a cover already hit and left
+  blinks for less time. Breaking it cancels the threat and starts a cooldown before a
+  different object begins blinking.
+- **In code:** `MazeObject.blinking`/`blinkOn`/`blinkCount` fields (ticks are `MazeObject.hp`,
+  `BLINKS_PER_TICK`); state machine in
   `MazeSystem._selectBlinkCandidate` / `_tickBlink` / `_convertToGhost`.
 - **Not:** the on/off toggle used for UI cooldown indicators (`BowChargeIndicator.js`); the
   Yellow Mage's teleport-dash (`WarpSystem.resolveBlinkTeleport`) — unrelated naming collision.
@@ -779,6 +782,53 @@ identity, not standard programming terms.
   Dungeon Boss (interior encounter, own system) or a Miniboss (`BOSS_ENCOUNTERS` B-room
   variant).
 
+### Boss Phase
+- **Definition:** A Boss's HP-threshold escalation tier. Every zone Boss has one or more; the
+  Storm Eye's three phases run the same patterns, faster each time.
+- **In code:** `bossPhase` (1-based) on the Boss entity, mirrored on `BossSystem.bossPhase`. The
+  Storm Eye crosses at 66% / 33% HP (`StormEye._checkPhase`), grants 0.6s i-frames, and scales
+  every step's timer by `PHASE_TIME_SCALE` and field spin by `PHASE_REVOLUTION`.
+- **Not:** an Enemy State (Bosses run their own cycle outside the State spine), and not the
+  Mist Battle's Acts.
+
+### Storm Eye
+- **Definition:** The yellow zone Boss (⛯, a Kracko reference): an eye inside a living storm
+  that cycles through Storm Forms. Its glyph carries the personality — an impatient sine wobble
+  around its root, a mood windup per form, and ⛭ (pupil turned white) while it channels.
+- **In code:** `src/entities/StormEye.js` (Enemy subclass, `state = 'boss'`, `isBossEntity`);
+  `BossSystem.stormEye`; arena from `roomFeatures.stampStormEyeArena` (`room.calmWind`).
+  Cycle step is `cycleStep` = `'windup' | 'attack' | 'calm'`.
+- **Not:** Pandora's Box (the affinity-rotating yellow boss it replaced, 2026-10-08), and not
+  the ambient Sandstorm.
+
+### Storm Form
+- **Definition:** One of the Storm Eye's four attack identities, drawn at random with no
+  immediate repeat: **Cyclone** (swirl; core contact strips all equipped gear and the wind
+  carries it), **Gale** (sweeping gust cone; pillars cast a wind shadow), **Thundercloud** (the
+  eye rises, trails the player, and strikes underneath), **Black Hole** (suction a dodge roll
+  doesn't escape; core contact hits and flings).
+- **In code:** `stormEye.form` = `'cyclone' | 'gale' | 'thundercloud' | 'blackHole'`
+  (`StormEye._pickForm`).
+- **Not:** a Boss Phase — every form appears in every phase.
+
+### Calm
+- **Definition:** The Storm Eye's vulnerable window after each Storm Form's attack, when its
+  wind dies. The only time it takes damage; each form signals it in its own way.
+- **In code:** `stormEye.cycleStep === 'calm'`; `StormEye.vulnerable` (calm, not `aloft`, no
+  i-frames) gates `takeDamage`.
+- **Not:** Recover (the Enemy State) — Calm is the boss-cycle analogue, outside the State spine.
+
+### Wind Field
+- **Definition:** A local, transient force source — swirl, gust, or suction — that pushes the
+  player, enemies, floor items and projectiles, drawn as motes that follow the same shape.
+  Simplified analytic forces, not a fluid sim.
+- **In code:** `src/systems/WindFieldSystem.js`, owned by `BossSystem.windFieldSystem`
+  (`setField(id, spec)` / `forceAt` / `pushProjectile`); motes drawn by the `windField` Frame
+  Pass. A `rollProof` field still pushes a rolling player. Entities flagged `aloft` (the
+  Thundercloud) are over shots and swings.
+- **Not:** the Sandstorm (`SandstormSystem` — one room-global direction, pushes only player and
+  enemies); a `calmWind` room switches the Sandstorm off.
+
 ### Freeze-Over
 - **Definition:** The one-shot event that flips the cyan boss arena into its second phase. The
   Frosted Maw runs its own ice-hammer thaw backwards, freezing every water tile on the lake
@@ -1052,7 +1102,7 @@ identity, not standard programming terms.
 - **Definition:** A persistent non-player character that follows the player across rooms and
   states. Companions offer passive support and interact with the environment.
 - **In code:** managed by `CompanionSystem`; currently crows (`companionCrows`, `followerCrows`);
-  also tamed rats (`tamedRats`, fed via bread consumable); also golems (`golems`, summoned by
+  also tamed rats (`tamedRats`, fed via Feed); also golems (`golems`, summoned by
   combining an ingredient with Mana at the REST Combine Station — see `src/data/golems.js`).
   State lives on `game`; logic in `src/systems/CompanionSystem.js`.
 - **Not:** an Enemy; not an NPC (Companions don't initiate dialogue).
@@ -1074,6 +1124,18 @@ identity, not standard programming terms.
 - **Not:** an Ingredient (raw drop) or an equipped weapon/armor. Consumables are crafted via
   recipes.
 
+### Feed
+- **Definition:** A Consumable that crows and rats seek out and eat once it lies on the ground.
+  Throwing (SHIFT) or dropping Feed is how crows are befriended and rats tamed into
+  Companions. Feed can also have its own SPACE effect: Bread (⌬) has none, while the Sandwich
+  (☰, Bread + Meat) heals 3 when eaten.
+- **In code:** the `feed: true` flag on the item's data in `src/data/items.js`; test it with
+  `isFeed(item)` (`src/systems/feed.js`). Never compare against a Bread char. Consumers:
+  `CompanionSystem` (rat bread-seek, crow targeting, crow loot exclusion),
+  `Crow._closestPickable` exclusion, and `CampNPC.acceptsHeal`.
+- **Not:** "bread" as a category (Bread is one Feed item); "bait" or "lure" (Lure is the
+  Charm Lure trap, and LureMechanic is an enemy behavior).
+
 ### Bomb Bag
 - **Definition:** A consumable-slot item (⊟) that throws Bombs (⊗) and is never spent itself.
   It holds one free Bomb, refilled on every room exit, and throws that first; after that it
@@ -1091,7 +1153,7 @@ identity, not standard programming terms.
 - **Definition:** A unique, run-scoped item that unlocks progression and enables access to
   new areas or mechanics. Persists across death within a single run.
 - **In code:** held items of type `KEY` live in `inventorySystem.keyItemInventory`, read through
-  `hasKeyItem` and spent through `consumeKeyItem` (Vault Key, Skull Key, Shed Key). Some older
+  `hasKeyItem` and spent through `consumeKeyItem` (Vault Key, Skull Key, Shed Key, Simple Key). Some older
   ones are still a flag on `game` (e.g. `spectaclesObtainedThisRun`). Spectacles (⊙)
   are obtained by clearing a Maze — breaking every cover object and collecting every dropped
   Ingredient — without ever letting a Ghost spawn; granted via `MazeSystem._checkMazeCleared`.
@@ -1458,13 +1520,15 @@ identity, not standard programming terms.
 - **Not:** "pushable block", "movable rock", "push block", "boulder".
 
 ### Bombable wall
-- **Definition:** A Puzzle Room wall cell that only a bomb opens. It looks like the ordinary
-  dungeon wall around it, but shakes when struck; a bomb blast breaks it and leaves the cell
-  walkable. The Bomb Trial hides its triggers behind them. Every bombable V room Vault (all
+- **Definition:** A dungeon wall cell (Puzzle Room or numbered floor) that only a bomb opens.
+  It looks like the ordinary dungeon wall around it, but shakes when struck; a bomb blast breaks
+  it and leaves the cell walkable. The Bomb Trial hides its triggers behind them; on a numbered
+  floor, whatever one hides is optional (Progression Solver). Every bombable V room Vault (all
   zones but yellow) has a row of them as its bottom wall.
-- **In code:** template grid glyph `B` (`dungeonPuzzleTemplates.js`, stamped solid by
-  `applyPuzzleTemplateToCollisionMap`) plus a `bombable_wall` Background Object variant on each
-  such cell (`GameConfig.js`, `bombable: true`), placed by `generatePuzzleRoom`.
+- **In code:** template grid glyph `B` (`src/data/dungeon/tiles.js`, stamped solid by
+  `applyPuzzleTemplateToCollisionMap` / `applyTemplateToCollisionMap`) plus a `bombable_wall`
+  Background Object variant on each such cell (`GameConfig.js`, `bombable: true`), placed by
+  `DungeonFloorGenerator._placeBombableWalls`.
   `CavernSystem.bombBlast()` breaks it and clears the cell's collision. Painted with the
   dungeon editor's Bombable Wall tool. On a Vault, `buildVaultUnlockExtras` places the row
   (`vaultInfo.wallObjects`, `structural`), and `InteractionSystem._openVaultWall` cracks the
@@ -1494,6 +1558,39 @@ identity, not standard programming terms.
   dungeon editor's Dais tool.
 - **Not:** a pedestal (which grants a weapon once and has recipe flanks), and not a "spawner"
   or "refill station".
+
+### Lock Block
+- **Definition:** A solid dungeon block that a key opens. SPACE beside it (any of the 8 cells
+  around it) while holding a Simple Key opens it and spends the key; a universal key
+  (`opensAnyLock`, e.g. the χ-blade) opens it without spending anything. Once open, the cell is
+  walkable for the rest of the visit.
+- **In code:** template grid glyph `L` (`src/data/dungeon/tiles.js`, `opensWith: 'key'`), stamped
+  solid and topped by a `lock_block` Background Object variant (`GameConfig.js`, `▣`,
+  `coversWall`) placed by `DungeonFloorGenerator._placeLockBlocks`; opened by
+  `DungeonPuzzleSystem._tryOpenLockBlock`. Painted with the dungeon editor's Lock Block tile.
+- **Not:** a locked staircase (a descent footprint's `locked` state, opened by the Skull Key);
+  "locked door", "key block", "key door".
+
+### Simple Key
+- **Definition:** The Key Item a dungeon template places for its Lock Blocks. Each one opens a
+  single Lock Block and is spent doing it. The Skeleton Key, found later in the game, is a
+  different item.
+- **In code:** `SIMPLE_KEY_CHAR` (`⚩`) in `src/data/items.js`; template grid glyph `K`, a real
+  `Item` placed by `DungeonFloorGenerator._placeSimpleKeys`; spent by
+  `DungeonPuzzleSystem._tryOpenLockBlock`.
+- **Not:** the Skull Key (opens the Corridor's West descent), the Skeleton Key, or a universal
+  key (`opensAnyLock`).
+
+### Progression Solver
+- **Definition:** The static proof that a dungeon template cannot softlock. On a numbered floor
+  every staircase and landing must connect without tools or keys, so anything behind a
+  Bombable wall or Lock Block is optional. In a Puzzle Room the exit must be solvable with only
+  what the room supplies, from every state the player can reach: a Push Rock shoved the wrong
+  way, a hook taken too early or a Simple Key spent on the wrong Lock Block must not cut it off.
+- **In code:** `solveTemplate()` in `src/data/dungeon/progressionSolver.js` (pure, shared by the
+  game, the dungeon editor and the data gate). `dungeonFloorTemplates.js` /
+  `dungeonPuzzleTemplates.js` keep templates that fail it out of the random pools.
+- **Not:** the editor's old advisory reachability check; a runtime check.
 
 ## Conventions
 

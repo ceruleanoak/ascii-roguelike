@@ -1,4 +1,5 @@
 import { GRID } from '../game/GameConfig.js';
+import { isFeed } from '../systems/feed.js';
 import { steerToward } from '../systems/npcSteering.js';
 import { NeutralCharacter } from './NeutralCharacter.js';
 
@@ -184,12 +185,12 @@ export class CampNPC extends NeutralCharacter {
 
   /**
    * Returns true if the dropped item is a heal source the NPC will pick up
-   * (bread loaf or any heal-effect potion). Thrown/dropped only — never
+   * (any Feed — Bread, Sandwich — or heal-effect potion). Thrown/dropped only — never
    * handed over directly.
    */
   static acceptsHeal(item) {
     if (!item?.data) return false;
-    return item.char === '⌬' /* Bread */ || item.data.effect === 'heal';
+    return isFeed(item) || item.data.effect === 'heal';
   }
 
   // ─── Fleeing (Leshy pattern) ────────────────────────────────────────────

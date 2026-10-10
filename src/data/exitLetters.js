@@ -10,7 +10,7 @@ export const EXIT_LETTERS = {
   'A': {
     name: 'Ascent',
     roomType: 'ASCENT',
-    weight: 0.30,
+    weight: 0.20,
     vowel: true,
     spellDescription: 'THE SEEKER PATH.'
   },
@@ -22,7 +22,7 @@ export const EXIT_LETTERS = {
       gray: 3,
       red: 1
     },
-    spellDescription: 'ARE YOU PREPARED?'
+    spellDescription: 'ANOTHER WAITS.'
   },
   'C': {
     name: 'Camp',
@@ -33,17 +33,17 @@ export const EXIT_LETTERS = {
   'D': {
     name: 'Dungeon',
     roomType: 'DUNGEON',
-    weight: 0.1,
+    weight: 0.05,
     zoneBoosts: {
       gray: 2.0,
       red: 1.5
     },
-    spellDescription: 'An Auspicious Structure.'
+    spellDescription: 'STAY AWAY.'
   },
   'E': {
     name: 'Errand',
     roomType: 'COMBAT',
-    weight: 0.20,
+    weight: 0.10,
     vowel: true,
     spellDescription: 'THE SERVANT PATH.'
   },
@@ -67,7 +67,7 @@ export const EXIT_LETTERS = {
       cyan: 0,
       gray: 0
     },
-    spellDescription: 'HIDDEN IN THE BLADES.'
+    spellDescription: 'BURN IT ALL.'
   },
   'H': {
     name: 'Hut',
@@ -84,7 +84,7 @@ export const EXIT_LETTERS = {
     roomType: 'COMBAT',
     weight: 0.10,
     vowel: true,
-    spellDescription: 'THE HOARDER PATH.'
+    spellDescription: 'LONELY.'
   },
   'L': {
     name: 'Lake',
@@ -100,7 +100,7 @@ export const EXIT_LETTERS = {
     name: 'Maze',
     roomType: 'MAZE',
     // Green and yellow only; yellow is the maze's home zone (resolved 2026-08-08).
-    weight: 0.08,
+    weight: 0.06,
     zoneBoosts: {
       green: 1.0,
       yellow: 3.0,
@@ -108,7 +108,7 @@ export const EXIT_LETTERS = {
       cyan: 0,
       gray: 0
     },
-    spellDescription: 'A TRAP FOR FOOLS.'
+    spellDescription: 'THE SEEKER PATH.'
   },
   'O': {
     name: 'Ocean',
@@ -142,13 +142,13 @@ export const EXIT_LETTERS = {
       cyan: 0,
       gray: 0
     },
-    spellDescription: 'ENEMIES RISE FROM THE MIRE.'
+    spellDescription: 'THE CORRECT CHOICE.'
   },
   'R': {
     name: 'Ridge',
     roomType: 'RIDGE',
     weight: 0.10,
-    spellDescription: 'HE CARRIES A WORRYING EXPRESSION.'
+    spellDescription: 'THE WAY.'
   },
   'S': {
     name: 'Settlement',
@@ -158,13 +158,13 @@ export const EXIT_LETTERS = {
       green: 1.5,
       yellow: 1.2
     },
-    spellDescription: 'WHERE PATHS GATHER.'
+    spellDescription: 'A GATHERING.'
   },
   'T': {
     name: 'Tunnel',
     roomType: 'TUNNEL',
     weight: 0.15,
-    spellDescription: 'BURROW AND HIDE.'
+    spellDescription: 'HIDDEN FROM VIEW.'
   },
   'U': {
     name: 'Underground',
@@ -181,29 +181,29 @@ export const EXIT_LETTERS = {
       gray: 3,
       red: 2
     },
-    spellDescription: 'A SIMPLE LOCK.'
+    spellDescription: 'MANY KEYS FOR ONE LOCK.'
   },
   'W': {
     name: 'Well',
     roomType: 'WELL',
-    weight: 0.06,
+    weight: 0.08,
     zoneBoosts: {
       green: 1.5,
       cyan: 1.3
     },
-    spellDescription: 'A WISH FOR MORE.'
+    spellDescription: 'WISHES ARE WORDS.'
   },
   'X': {
     name: 'Crossroads',
     roomType: 'COMBAT',
-    weight: 0.20,
-    spellDescription: 'MANY PATHS CROSS.'
+    weight: 0.15,
+    spellDescription: 'MANY PASS, FEW LOOK.'
   },
   '?': {
     name: 'Mystery',
     roomType: 'DISCOVERY',
     weight: 0.05,
-    spellDescription: 'QUESTIONABLE.'
+    spellDescription: 'POWER OR PERIL?'
   },
 
   // ── Blue-zone (Tidefall) tutorial rooms ──────────────────────────────────

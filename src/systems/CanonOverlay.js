@@ -11,18 +11,29 @@
  * Stored values are untrusted (the store survives across builds and can be
  * hand-edited), so only the fields the CLI can author are copied, and an
  * authored weapon never replaces an existing registry entry.
+ *
+ * A Disabled Weapon (switched off in CUSTOMIZE) never appears in a run: its
+ * recipes and tier-ladder rungs are cut here, and every other placement —
+ * loot pools, room offerings, starting loadouts — gets a stand-in, because
+ * Item construction asks canonStandIn() for the glyph it should really be.
  */
 
-import { ITEMS, INGREDIENTS, ITEM_TYPES } from '../data/items.js';
+import { ITEMS, INGREDIENTS, ITEM_TYPES, WEAPON_TIERS } from '../data/items.js';
 import { RECIPES, findRecipe } from '../data/recipes.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
+import { STYLE_FIELDS } from '../data/weaponStyles.js';
 
-/** The weapon fields the CLI's Weapons table can author. */
-export const WEAPON_FIELDS = [
+/** The weapon fields the CLI's Weapons table can author (a Weapon Style's included). */
+export const WEAPON_FIELDS = [...new Set([
   'name', 'color', 'weaponType', 'weaponSubtype', 'damage',
   'windup', 'recovery', 'patternSpeed', 'range',
   'cooldown', 'maxUses', 'accuracy', 'reloadTime', 'reloadType',
-];
+  ...STYLE_FIELDS,
+])];
+
+// Disabled Weapon glyph → the enabled weapons that stand in for it. Filled
+// once at boot by applyCanonOverlay; empty when nothing is disabled.
+const STAND_INS = new Map();
 
 function pickWeaponFields(entry) {
   const fields = {};
@@ -53,6 +64,53 @@ export function applyCanonOverlay(canon) {
       Object.assign(ITEMS[glyph], fields);
     }
   }
+
+  disableWeapons(Object.keys(canon.disabled || {}).filter(g => canon.disabled[g] && ITEMS[g]?.type === ITEM_TYPES.WEAPON));
+}
+
+const familyOf = data => data.weaponSubtype || data.weaponType;
+
+/**
+ * Cut Disabled Weapons out of a run: no recipe crafts them (which also takes
+ * them off shop counters — shop stock is the craftable catalogue), no fountain
+ * or duplicate upgrade climbs to them, and each gets its stand-ins — enabled
+ * weapons of the same family and tier, else the same family, else the same
+ * weapon type.
+ */
+function disableWeapons(glyphs) {
+  if (!glyphs.length) return;
+  const disabled = new Set(glyphs);
+
+  for (let i = RECIPES.length - 1; i >= 0; i--) {
+    if (disabled.has(RECIPES[i].result)) RECIPES.splice(i, 1);
+  }
+  for (const family of Object.keys(WEAPON_TIERS)) {
+    const rungs = WEAPON_TIERS[family].map(rung => rung.filter(g => !disabled.has(g))).filter(rung => rung.length);
+    if (rungs.length) WEAPON_TIERS[family] = rungs;
+    else delete WEAPON_TIERS[family];
+  }
+
+  const enabled = Object.values(ITEMS).filter(d => d.type === ITEM_TYPES.WEAPON && !disabled.has(d.char));
+  for (const glyph of glyphs) {
+    const data = ITEMS[glyph];
+    const sameFamily = enabled.filter(d => familyOf(d) === familyOf(data));
+    const candidates = [
+      sameFamily.filter(d => d.tier === data.tier),
+      sameFamily,
+      enabled.filter(d => d.weaponType === data.weaponType),
+    ].find(list => list.length);
+    if (candidates) STAND_INS.set(glyph, candidates.map(d => d.char));
+  }
+}
+
+/**
+ * The glyph an Item made as `char` should really be: a Disabled Weapon's
+ * random stand-in, or `char` itself. With every weapon of its kind disabled,
+ * nothing can stand in and the weapon appears as itself.
+ */
+export function canonStandIn(char) {
+  const standIns = STAND_INS.get(char);
+  return standIns ? standIns[Math.floor(Math.random() * standIns.length)] : char;
 }
 
 /** Cheats switched on in the CLI start every session switched on. */
