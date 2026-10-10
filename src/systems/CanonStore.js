@@ -14,12 +14,15 @@
  */
 
 const STORAGE_KEY = 'pure-rogue-canon-v1';
+const DEFAULT_STORY = 'Once upon a time...';
 
 function emptyCanon() {
   // weapons: { glyph: fields } — `authored: true` (+ `recipe: {left, right}`)
   // marks a weapon the player created; otherwise the fields override an
   // existing weapon's data. Applied at boot by CanonOverlay.
-  return { exited: false, story: '', names: {}, cheats: {}, weapons: {} };
+  // story: Story.md, one line per newline. It is never blank to begin with;
+  // its first line is the player's to keep, rewrite, or delete.
+  return { exited: false, story: DEFAULT_STORY, names: {}, cheats: {}, weapons: {} };
 }
 
 export const CanonStore = {

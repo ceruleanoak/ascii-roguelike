@@ -100,6 +100,7 @@ import { DialogueSystem } from './systems/DialogueSystem.js';
 import { FishermanDemoSystem } from './systems/FishermanDemoSystem.js';
 import { WeaponsMasterSystem } from './systems/WeaponsMasterSystem.js';
 import { CharonSystem } from './systems/CharonSystem.js';
+import { StorytellerSystem } from './systems/StorytellerSystem.js';
 import { ShopSystem } from './systems/ShopSystem.js';
 import { WizardSystem } from './systems/WizardSystem.js';
 import { PearlSystem } from './systems/PearlSystem.js';
@@ -271,6 +272,7 @@ class Game {
     this.fishermanDemoSystem = new FishermanDemoSystem(this);
     this.weaponsMasterSystem = new WeaponsMasterSystem(this);
     this.charonSystem = new CharonSystem(this);
+    this.storytellerSystem = new StorytellerSystem(this);
     this.shopSystem = new ShopSystem(this);
     this.wizardSystem = new WizardSystem(this);
     this.pearlSystem = new PearlSystem(this);
@@ -907,6 +909,7 @@ class Game {
     // collision map is handed to the player so the gap is already cut.
     this.cursedRunSystem.applyToRest(this, this.currentRoom);
     this.charonSystem.onEnterRest(this.currentRoom, { arrivedAtFullHp });
+    this.storytellerSystem.onEnterRest();
 
     // Set player collision map
     this.player.setCollisionMap(collisionMap);
@@ -2213,6 +2216,7 @@ class Game {
       npc.update(deltaTime);
     }
     this.charonSystem.update(deltaTime);
+    this.storytellerSystem.update(deltaTime);
     this.menuSystem.returnCraftingSlotsWhenAway();
 
     // Animate tombstone and slot popups
@@ -3369,6 +3373,7 @@ class Game {
 
       // Charon at the north exit: talk, then pay his toll (CharonSystem)
       if (this.charonSystem.trySpacePress()) return;
+      if (this.storytellerSystem.trySpacePress()) return;
 
       // Bundle world object: destroy and scatter ingredients
       if (this.lootSystem.scatterRestBundle()) return;
