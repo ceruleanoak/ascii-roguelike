@@ -133,6 +133,10 @@ export class NeutralRenderer {
       );
     }
 
+    // The Three Room's slot frames and Death's darkness — under the combat and
+    // player passes, so the player and their swings stay lit in the dark.
+    this.renderController.threeRoomRenderer.render(game);
+
     // Shared combat + player Frame Passes. The player glyph pulses with the
     // room script here (getPulseAlpha) instead of the i-frame fade.
     drawFramePasses(this.renderController, game, 'neutral', 'combat');

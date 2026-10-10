@@ -3,6 +3,7 @@ import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { captureDeath } from './DeathLedgerSystem.js';
 import { breakOnDeathPassives } from './ConsumableSlotBreaks.js';
 import { ITEM_TYPES } from '../data/items.js';
+import { isInputCaptured } from '../game/inputCapture.js';
 
 /**
  * ThreeRoomSystem — the source room, its offerings, and what the door lets out.
@@ -46,23 +47,28 @@ const NORTH_STREAK_TRIGGER = 3;
 // What stays here is the streak count, because the third north is what summons
 // the source and that is this system's business alone.
 
-// Death — behind the shut door, beyond naming. Printable ASCII per the
-// encoding rule; the room around it does the implying.
-//
-// NOTE: '&' was the original pick and is wrong — it is live scatter
-// vegetation (RoomGenerator organic weights, a crow perch, swept by
-// SecretEventSystem), so Death rendered as a glyph the player walks past all
-// run. '¥' is unclaimed by any background object, enemy, or item. This is a
-// naming call flagged for the user; the constant is the only place to change.
-const DEATH_CHAR = '¥';
+// Death — behind the shut door, beyond naming. It wears the game's own
+// executable: ☠, PURE ROGUE (the CLI's relaunch glyph), drawn giant. A
+// deliberate exception to the printable-ASCII rule for background objects,
+// ratified by the user; '&' (live scatter vegetation) and '¥' came before it.
+const DEATH_CHAR = '☠';
 const DEATH_COLOR = '#dddddd';
+// Drawn DEATH_SCALE cells tall, centered on its cell (ThreeRoomRenderer).
+const DEATH_SCALE = 3;
 
-// Slower than the player's walk on purpose — but the room is sealed the
-// moment the door opens, so the pace only decides how long the player has to
-// watch it come, not whether they get away. It never stops following.
-const DEATH_SPEED = 62;
-// Contact distance for the kill — inside a cell's shadow.
-const DEATH_KILL_RADIUS = GRID.CELL_SIZE * 0.55;
+// It starts from a standstill and keeps gaining speed until it outruns the
+// player's walk (180) — the room is sealed, so running only buys time.
+// Striking it is the one answer: it takes no damage, but the blow throws it
+// back and its speed starts over from nothing.
+const DEATH_ACCEL = 45;          // px/s² gained while it comes
+const DEATH_MAX_SPEED = 200;     // px/s ceiling
+const DEATH_KNOCKBACK_SPEED = 260;
+const DEATH_KNOCKBACK_TIME = 0.35; // seconds thrown back before it comes again
+const DEATH_KNOCKBACK_DECAY = 6;   // knockback velocity bleed-off per second
+// Contact distance for the kill, center to center: inside the skull's ink.
+const DEATH_KILL_RADIUS = GRID.CELL_SIZE * DEATH_SCALE * 0.35;
+// The struck area: most of the drawn glyph.
+const DEATH_HITBOX = Math.round(GRID.CELL_SIZE * DEATH_SCALE * 0.7);
 
 // ── The offering ────────────────────────────────────────────────────────────
 //
@@ -119,6 +125,16 @@ export class ThreeRoomSystem {
   constructor() {
     this._northStreak = 0;
     this.cinematic = null;
+    // SPACE held last frame, for the edge that swings at Death (see update).
+    this._spaceHeld = false;
+  }
+
+  /**
+   * Death is out and coming — the only time the Three Room is a fight. The
+   * neutral combat Frame Passes read this to draw the player's swings.
+   */
+  isDeathOut(game) {
+    return this.cinematic?.phase === 'chasing' && !!game.currentRoom?.isThreeRoom;
   }
 
   // ── Discovery: N×3 ──────────────────────────────────────────────────────────
@@ -463,11 +479,26 @@ export class ThreeRoomSystem {
 
     const death = new BackgroundObject(DEATH_CHAR, best.x, best.y);
     death.isDeath = true;
-    death.indestructible = true;
+    death.drawScale = DEATH_SCALE;
     death.color = DEATH_COLOR;
     death.animationColor = DEATH_COLOR;
     death.hasCollision = false;
+    // Struck, never harmed: the puzzleSignal contract (BackgroundObject.takeDamage)
+    // keeps its HP and pulses glitterHit on every hit, which update() turns
+    // into the knockback. Same setup as the dungeon's switch fixtures.
+    death.puzzleSignal = true;
+    death.indestructible = false;
+    death.hp = 1;
+    death.maxHp = 1;
+    death.width = DEATH_HITBOX;
+    death.height = DEATH_HITBOX;
+    death.hitboxOffsetX = (GRID.CELL_SIZE - DEATH_HITBOX) / 2;
+    death.hitboxOffsetY = (GRID.CELL_SIZE - DEATH_HITBOX) / 2;
+    death.speed = 0;
+    death.knockback = { vx: 0, vy: 0, timer: 0 };
     room.backgroundObjects.push(death);
+    // Nothing from before the dark carries into the fight.
+    game.combatSystem.clear();
     game.renderer.markBackgroundDirty();
   }
 
@@ -516,12 +547,10 @@ export class ThreeRoomSystem {
     const death = room.backgroundObjects.find(o => o.isDeath);
     if (!death) return;
 
-    const dx = p.position.x - death.position.x;
-    const dy = p.position.y - death.position.y;
-    const dist = Math.hypot(dx, dy) || 1;
-    death.position.x += (dx / dist) * DEATH_SPEED * dt;
-    death.position.y += (dy / dist) * DEATH_SPEED * dt;
+    this._fightDeath(dt, game, death);
+    this._moveDeath(dt, p, death);
 
+    const dist = Math.hypot(p.position.x - death.position.x, p.position.y - death.position.y);
     if (dist < DEATH_KILL_RADIUS) {
       // It cannot be blocked, dodged, or tanked — its touch is the end.
       p.hp = 0;
@@ -530,6 +559,58 @@ export class ThreeRoomSystem {
       p._lastDamageCause = null;
       this._resolveContactDeath(game);
     }
+  }
+
+  /**
+   * The Three Room is a NEUTRAL room, where SPACE only interacts and combat
+   * never runs. Once Death is out it becomes a fight against Death alone:
+   * a fresh SPACE press swings the held weapon (charge weapons release
+   * through the shared NEUTRAL release path), and combat resolves against
+   * Death only, so nothing else in the room can be broken in the dark.
+   */
+  _fightDeath(dt, game, death) {
+    const p = game.player;
+    const space = !!game.keys.space;
+    if (space && !this._spaceHeld && !isInputCaptured(game) && p.heldItem && p.canAttack()) {
+      game.combatSystem.tryUseHeldWeapon();
+    }
+    this._spaceHeld = space;
+    game.combatSystem.update(dt, p, [], [death]);
+  }
+
+  /**
+   * A struck Death is thrown straight back from the player, then its speed
+   * starts over from nothing; otherwise it homes on the player — straight
+   * line, through walls, no leash — a little faster every second.
+   */
+  _moveDeath(dt, p, death) {
+    const dx = p.position.x - death.position.x;
+    const dy = p.position.y - death.position.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const kb = death.knockback;
+
+    if (death.glitterHit) {
+      death.glitterHit = false;
+      kb.vx = -(dx / dist) * DEATH_KNOCKBACK_SPEED;
+      kb.vy = -(dy / dist) * DEATH_KNOCKBACK_SPEED;
+      kb.timer = DEATH_KNOCKBACK_TIME;
+      death.speed = 0;
+    }
+
+    if (kb.timer > 0) {
+      kb.timer -= dt;
+      death.position.x += kb.vx * dt;
+      death.position.y += kb.vy * dt;
+      const bleed = Math.max(0, 1 - DEATH_KNOCKBACK_DECAY * dt);
+      kb.vx *= bleed;
+      kb.vy *= bleed;
+      if (kb.timer <= 0) { kb.vx = 0; kb.vy = 0; death.speed = 0; }
+      return;
+    }
+
+    death.speed = Math.min(death.speed + DEATH_ACCEL * dt, DEATH_MAX_SPEED);
+    death.position.x += (dx / dist) * death.speed * dt;
+    death.position.y += (dy / dist) * death.speed * dt;
   }
 
   /**

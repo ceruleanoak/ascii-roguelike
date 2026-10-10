@@ -76,6 +76,11 @@ const isInterior = (owner) => owner === 'floor' || owner === 'maze';
 // matching the surface GAME_OVER path (GameOverRenderer never draws the player).
 const deathHeld = (game, owner) => isInterior(owner) && game.characterDeathPending;
 
+// NEUTRAL is non-combat except for one fight: Death in the Three Room, where
+// the player's swings and shots must show. Gated at draw time, because neutral
+// room transitions don't clear the combat lists.
+const neutralFight = (game, owner) => owner !== 'neutral' || !!game.threeRoomSystem?.isDeathOut(game);
+
 const NON_COMBAT = 'NEUTRAL rooms are non-combat (Game State: NEUTRAL)';
 const NO_ENEMIES = 'REST has no enemies (Game State: REST)';
 const PLAIN_PRIZES = 'NeutralRenderer draws room prizes plainly: the shared tall-grass concealment would hide Leshy grass prizes';
@@ -86,6 +91,8 @@ const STORM_EYE_ONLY = 'Wind Fields blow only in the Storm Eye arena, a surface 
 
 const everywhere = { surface: true, floor: true, maze: true, rest: true, neutral: true };
 const combatOnly = { ...everywhere, neutral: NON_COMBAT };
+// Player attacks also draw in NEUTRAL, gated to the Death fight by neutralFight().
+const playerAttacks = { ...everywhere };
 const enemySide = { ...everywhere, rest: NO_ENEMIES, neutral: NON_COMBAT };
 const surfaceOnly = (reason) => ({ surface: true, floor: reason, maze: reason, rest: reason, neutral: reason });
 
@@ -105,9 +112,9 @@ export const FRAME_PASSES = {
   // Attacks and their flourish: over enemies, under the player.
   combat: [
     { id: 'consumableWindups', on: combatOnly, draw: (rc, game) => er(rc).drawConsumableWindups(game) },
-    { id: 'projectiles', on: combatOnly, draw: (rc, game, owner) => er(rc).drawProjectiles(game, isInterior(owner)) },
+    { id: 'projectiles', on: playerAttacks, draw: (rc, game, owner) => { if (neutralFight(game, owner)) er(rc).drawProjectiles(game, isInterior(owner)); } },
     { id: 'enemyProjectiles', on: enemySide, draw: (rc, game, owner) => er(rc).drawEnemyProjectiles(game, isInterior(owner)) },
-    { id: 'meleeAttacks', on: combatOnly, draw: (rc, game, owner) => er(rc).drawMeleeAttacks(game, isInterior(owner)) },
+    { id: 'meleeAttacks', on: playerAttacks, draw: (rc, game, owner) => { if (neutralFight(game, owner)) er(rc).drawMeleeAttacks(game, isInterior(owner)); } },
     { id: 'enemyMeleeAttacks', on: enemySide, draw: (rc, game, owner) => er(rc).drawEnemyMeleeAttacks(game, isInterior(owner)) },
     // Enemy + mimic tongues read game._activeEnemies(), which already resolves to the active layer.
     { id: 'enemyTongues', on: enemySide, draw: (rc, game) => er(rc).drawEnemyTongues(game) },

@@ -130,12 +130,9 @@ export class RenderController {
   }
 
   renderNeutralState(game) {
+    // NeutralRenderer draws the Three Room's frames and darkness itself, under
+    // the player — see ThreeRoomRenderer.
     this.neutralRenderer.render(game);
-    // The Three Room's slot frames and Death's arrival — no-ops in every
-    // other neutral room. Drawn after the room so the staged darkness lands
-    // above it, and before the screen fade so a real state transition still
-    // wins over the cinematic.
-    this.threeRoomRenderer.render(game);
     this.dialogueBox.render(game);
   }
 

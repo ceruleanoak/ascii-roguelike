@@ -21,9 +21,10 @@ import { GRID } from '../../game/GameConfig.js';
  * The arrival: when the door opens, the room goes out in stepped darkness —
  * the game's fade idiom is quantized, never a smooth ramp — until only the
  * player is left lit. Death then stands up out of the dark at the far end of
- * the room and starts walking. Because the darkness is painted over the
- * foreground, the player and Death have to be redrawn above it; that redraw
- * IS the "leaving only the player" the scene is built around.
+ * the room, giant, and comes. NeutralRenderer calls render() just before its
+ * combat and player Frame Passes, so the darkness covers the room but never
+ * the player or their swings — that is the "leaving only the player" the
+ * scene is built around, and it lets the player fight back in the dark.
  */
 
 // Bracket color for an untouched frame — the same warm stone the slot uses.
@@ -140,7 +141,7 @@ export class ThreeRoomRenderer {
   }
 
   /**
-   * The staged darkness, with the player and Death painted back on top of it.
+   * The staged darkness, with Death standing in it at its drawScale.
    */
   _drawArrival(game, room, cin) {
     const ctx = game.renderer.fgCtx;
@@ -152,20 +153,13 @@ export class ThreeRoomRenderer {
     ctx.fillRect(0, 0, GRID.WIDTH, GRID.HEIGHT);
     ctx.globalAlpha = 1;
 
-    ctx.font = `${cs}px 'Unifont', monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    // The player is the one thing the dark does not take.
-    const p = game.player;
-    if (p) {
-      ctx.fillStyle = p.color;
-      ctx.fillText(p.char, p.position.x + cs / 2, p.position.y + cs / 2);
-    }
-
-    // And then it is not the only thing.
+    // The player is the one thing the dark does not take (drawn after this,
+    // by the player Frame Pass). And then it is not the only thing.
     const death = room.backgroundObjects.find(o => o.isDeath);
     if (death) {
+      ctx.font = `${cs * (death.drawScale || 1)}px 'Unifont', monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
       ctx.fillStyle = death.color;
       ctx.fillText(death.char, death.position.x + cs / 2, death.position.y + cs / 2);
     }
