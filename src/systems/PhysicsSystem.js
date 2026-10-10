@@ -46,6 +46,17 @@ const CORNER_SLIP_PX = GRID.CELL_SIZE * 0.45;
 // a ricocheting enemy takes one slam per iframe window rather than one per bounce.
 const IMPACT_HIT_ID = 'impact';
 
+// True when an enemy is moving fast enough for a speed collision (wall
+// ricochet or enemy-enemy bump) to hurt it. A jumper's own leap is excluded:
+// a Frog's water jump (190) clears the threshold, so every swim into a rock
+// cost it 1 HP. Its leap is aimed movement, not a launch — only knockback
+// (a Bat swing, a shockwave) can slam a jumper.
+function isSlamSpeed(entity, speedSq) {
+  if (speedSq < PHYSICS.HIGH_SPEED_COLLISION_THRESHOLD ** 2) return false;
+  if (entity.movementStyle === 'jumper' && !entity.isKnockedBack?.()) return false;
+  return true;
+}
+
 export class PhysicsSystem {
   constructor() {
     this.entities = [];
@@ -202,12 +213,13 @@ export class PhysicsSystem {
    * enemy away; the fast enemy halves its own velocity (its wall-hit counterpart
    * lives in updateEntity's collision block). Unlike propagateKnockAway this
    * doesn't require the flyer to be in a knockback state — any fast-moving
-   * enemy (charge dash, knockback, etc.) can trigger it. Resolves at most one
+   * enemy (charge dash, knockback, etc.) can trigger it, except a jumper
+   * mid-leap (see isSlamSpeed). Resolves at most one
    * collision per fast enemy per frame. Call once per frame after physics update.
    */
   resolveSpeedCollisions(enemies, combatSystem = null) {
     const CONTACT_DIST = GRID.CELL_SIZE * 1.1;
-    const { HIGH_SPEED_COLLISION_THRESHOLD: THRESHOLD, SPEED_COLLISION_KNOCKBACK: KNOCKBACK } = PHYSICS;
+    const { SPEED_COLLISION_KNOCKBACK: KNOCKBACK } = PHYSICS;
 
     // Tick down the grace window once per frame for every enemy, regardless
     // of whether it participates in a collision below.
@@ -218,8 +230,7 @@ export class PhysicsSystem {
     for (const enemy of enemies) {
       if (enemy.dead) continue;
       if (enemy.speedCollisionGraceFrames > 0) continue; // just hit — skip as driver
-      const speed = Math.sqrt(enemy.velocity.vx ** 2 + enemy.velocity.vy ** 2);
-      if (speed < THRESHOLD) continue;
+      if (!isSlamSpeed(enemy, enemy.velocity.vx ** 2 + enemy.velocity.vy ** 2)) continue;
       for (const other of enemies) {
         if (other === enemy || other.dead) continue;
         if (other.speedCollisionGraceFrames > 0) continue; // just hit — skip as target
@@ -679,7 +690,7 @@ export class PhysicsSystem {
       // Speed-collision ricochet: a fast enemy hitting a wall bounces off
       // (reflect + halve) instead of just stopping, and takes 1 damage.
       const speedSq = entity.velocity.vx ** 2 + entity.velocity.vy ** 2;
-      const highSpeed = entity.isEnemy && speedSq >= PHYSICS.HIGH_SPEED_COLLISION_THRESHOLD ** 2;
+      const highSpeed = entity.isEnemy && isSlamSpeed(entity, speedSq);
       if (!collision.x) {
         entity.position.x = newX;
       } else if (highSpeed) {
