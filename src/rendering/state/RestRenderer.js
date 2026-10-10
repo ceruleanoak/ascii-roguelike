@@ -263,12 +263,6 @@ export class RestRenderer {
     // Charon barring the north exit, and his toll in flight
     drawCharon(this.renderer, game);
 
-    // The Storyteller, when Story.md has lines (StorytellerSystem)
-    game.storytellerSystem.npc?.render(this.renderer.fgCtx, (gx, gy) => ({
-      x: gx * GRID.CELL_SIZE,
-      y: gy * GRID.CELL_SIZE
-    }));
-
     // The player and everything attached to them (glyph, pips, parry,
     // Fairy King orbit, facing, known spells) — shared Frame Passes.
     drawFramePasses(this.renderController, game, 'rest', 'player');

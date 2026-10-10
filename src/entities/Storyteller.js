@@ -1,10 +1,11 @@
 import { NeutralCharacter } from './NeutralCharacter.js';
 
 /**
- * Storyteller — the REST NPC who speaks the player's Story.md (a Canon Edit
- * written in the CLI). His speech is the whole story; DialogueSystem tells
- * it one line per interaction, like every speaker's, and he starts it over
- * once it has been told.
+ * Storyteller — the NPC met in EXPLORE Rooms who speaks the player's Story.md
+ * (a Canon Edit written in the CLI). Each one carries the few lines of the
+ * story StorytellerSystem dealt him; DialogueSystem tells them one line per
+ * interaction, like every speaker's, and once they have all been told he has
+ * nothing more to say.
  */
 export class Storyteller extends NeutralCharacter {
   constructor(x, y, lines) {
@@ -13,11 +14,12 @@ export class Storyteller extends NeutralCharacter {
   }
 
   getDialogueLines() {
-    return this.lines;
+    return this.spokenOnce ? [] : this.lines;
   }
 
   update(dt, game) {
     super.update(dt);
-    this.updateTalkIndicator(game);
+    if (!this.spokenOnce) this.updateTalkIndicator(game);
+    else this.clearIndicator();
   }
 }

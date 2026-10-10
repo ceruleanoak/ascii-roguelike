@@ -1716,7 +1716,7 @@ export function generateSettlementRoom(gen, room) {
  * Pushes every pre-generated / persistent neutral NPC attached to `room`
  * into `game.neutralCharacters` on room entry (Pearl-guide fairy, shore
  * Fisherman, Settlement errand traveler, caldera Weapons Master, roaming
- * Alchemist), and spawns the Errand room's traveler fresh when applicable.
+ * Alchemist, the Storyteller), and spawns the Errand room's traveler fresh when applicable.
  * Extracted out of main.js's room-entry path (arch budget) — a growing list
  * of "spawns from room generation, joins the fight" NPCs doesn't belong
  * accreting inline in the orchestrator.
@@ -1756,6 +1756,11 @@ export function spawnRoomNeutralCharacters(game, room) {
   if (room.alchemistNPC) {
     game.neutralCharacters.push(room.alchemistNPC);
   }
+
+  // The Storyteller, in about one Room in three while Story.md has lines —
+  // see StorytellerSystem.storytellerFor.
+  const storyteller = game.storytellerSystem.storytellerFor(room);
+  if (storyteller) game.neutralCharacters.push(storyteller);
 
   // Errand room: active errand + E room clears enemies and spawns the
   // traveler immediately (they remember what they wanted last time)
