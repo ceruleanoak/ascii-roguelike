@@ -909,7 +909,6 @@ class Game {
     // collision map is handed to the player so the gap is already cut.
     this.cursedRunSystem.applyToRest(this, this.currentRoom);
     this.charonSystem.onEnterRest(this.currentRoom, { arrivedAtFullHp });
-    this.storytellerSystem.onEnterRest();
 
     // Set player collision map
     this.player.setCollisionMap(collisionMap);

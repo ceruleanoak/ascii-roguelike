@@ -403,8 +403,9 @@ export class RidgeSystem {
         // Returning false here lets the press fall through to
         // dialogueSystem.tryOpenNearby() later in main.js's handleSpacePress
         // chain, which calls worker.getDialogueLines() and flips
-        // worker.readyToTrade — only then does the next SPACE open the menu.
-        if (!worker.readyToTrade) return false;
+        // worker.readyToTrade. Dialogue tells one line per press, so the
+        // menu waits until the greeting has been told in full.
+        if (!worker.readyToTrade || this.game.dialogueSystem.isMidSpeech(worker)) return false;
         this.openMenu();
         return true;
       }
