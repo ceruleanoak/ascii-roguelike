@@ -1668,11 +1668,13 @@ export class Enemy {
     };
   }
 
+  // Aim for an equipped-weapon use. Dizzy scrambles it like every native
+  // attack (_dizzyAngleOffset), so a confused goblin's sword swings wide too.
   getFacingDirection() {
     const dx = this.target.position.x - this.position.x;
     const dy = this.target.position.y - this.position.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    return { x: dx / dist, y: dy / dist };
+    const angle = Math.atan2(dy, dx) + this._dizzyAngleOffset();
+    return { x: Math.cos(angle), y: Math.sin(angle) };
   }
 
   createMeleeAttack(knockback = true) {

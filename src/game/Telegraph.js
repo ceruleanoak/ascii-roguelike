@@ -302,9 +302,13 @@ export function meleeAimOffset(enemy) {
   const dy = aimPos.y - enemy.position.y;
   const distance = Math.sqrt(dx * dx + dy * dy);
   if (distance === 0) return null;
+  // Dizzy (confusion) scrambles the swing the same ±120° every ranged attack
+  // gets. The windup visual is the Strike, so this is rolled once per swing
+  // and the telegraph shows where the confused blow will actually land.
+  const angle = Math.atan2(dy, dx) + (enemy._dizzyAngleOffset?.() ?? 0);
   return {
-    dirX: dx / distance,
-    dirY: dy / distance,
+    dirX: Math.cos(angle),
+    dirY: Math.sin(angle),
     attackDistance: Math.min(distance, enemy.attackRange)
   };
 }
