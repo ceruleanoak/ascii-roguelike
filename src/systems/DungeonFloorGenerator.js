@@ -163,14 +163,24 @@ export class DungeonFloorGenerator {
         .filter(({ row, col }) => !collisionMap[row]?.[col]);
     }
 
-    // Random open cell (not a wall, not a reserved footprint cell, not
+    // Everything placed on this floor must stand where the player can reach
+    // it. A template may wall off a walkable pocket (open.json's sealed
+    // pool): an enemy spawned there kept the Trap Room sealed forever, since
+    // it only unseals once every enemy is dead (bug #404), and a skull key or
+    // Tomb there was simply lost. Measured from the up-stairs footprint,
+    // which the Progression Solver checks connects to every other staircase
+    // and landing.
+    const reachable = this._reachableCells(collisionMap, rows, cols, STAIRS_UP_ROW, STAIRS_COL);
+    spawnCells = spawnCells.filter(({ row, col }) => reachable.has(`${row},${col}`));
+
+    // Random open cell (reachable, not a reserved footprint cell, not
     // already holding a background object). Used for decor/enemy/skull
     // placement so templates never trap entities or bury the staircases.
     const pickOpenCell = (minRow, maxRow, minCol, maxCol) => {
       for (let attempt = 0; attempt < 20; attempt++) {
         const r = minRow + Math.floor(Math.random() * (maxRow - minRow + 1));
         const c = minCol + Math.floor(Math.random() * (maxCol - minCol + 1));
-        if (collisionMap[r]?.[c]) continue;
+        if (!reachable.has(`${r},${c}`)) continue;
         if (reservedCells.some(cell => cell.row === r && cell.col === c)) continue;
         const x = c * GRID.CELL_SIZE;
         const y = r * GRID.CELL_SIZE;
