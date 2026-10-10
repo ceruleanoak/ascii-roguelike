@@ -50,7 +50,7 @@ export const DUNGEON_TILES = {
   },
   'B': {
     name: 'Bombable Wall', solid: true, opensWith: 'bomb', reachOver: false,
-    modes: ['puzzle'],
+    modes: ['floor', 'puzzle'],
     editor: { bg: '#3a3a3a', fg: '#e05a5a', glyph: 'B' },
   },
 };
@@ -58,4 +58,17 @@ export const DUNGEON_TILES = {
 /** The glyphs a template of this kind ('floor' | 'puzzle') may contain. */
 export function tileGlyphsForMode(mode) {
   return Object.keys(DUNGEON_TILES).filter(glyph => DUNGEON_TILES[glyph].modes.includes(mode));
+}
+
+/** Every cell of `grid` holding `glyph`, as { row, col }, minus `reservedCells`. */
+export function cellsWithGlyph(grid, glyph, reservedCells = []) {
+  const reserved = new Set(reservedCells.map(({ row, col }) => `${row},${col}`));
+  const cells = [];
+  for (let r = 0; r < grid.length; r++) {
+    const line = grid[r];
+    for (let c = 0; c < line.length; c++) {
+      if (line[c] === glyph && !reserved.has(`${r},${c}`)) cells.push({ row: r, col: c });
+    }
+  }
+  return cells;
 }

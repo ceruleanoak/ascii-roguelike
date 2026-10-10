@@ -8,7 +8,7 @@ import { BOMB_BAG_CHAR } from './BombBagSystem.js';
 import { getZoneRandomEnemy } from '../data/enemies.js';
 import { applyZoneCombatModifiers } from '../data/zones.js';
 import {
-  pickRandomTemplateName, applyTemplateToCollisionMap, getTemplateWaterCells,
+  pickRandomTemplateName, applyTemplateToCollisionMap, getTemplateWaterCells, getTemplateBombableCells,
   getTemplateSpawnCells, getReservedFootprintCells, paintDescentVisual, paintStairsUpVisual,
   STAIRS_COL, STAIRS_UP_ROW, NORTH_ROW, SPINE_ROW, WEST_COL, EAST_COL, EXIT_ROW,
 } from '../data/dungeonFloorTemplates.js';
@@ -163,6 +163,7 @@ export class DungeonFloorGenerator {
         if (collisionMap[row]?.[col]) continue;
         backgroundObjects.push(new BackgroundObject('~', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
       }
+      this._placeBombableWalls(backgroundObjects, getTemplateBombableCells(templateName, reservedCells));
       // Author-marked enemy spawn points ('E' in the template grid) — optional;
       // _spawnEnemies() prefers these before falling back to pickOpenCell's
       // randomness, so a template with none behaves exactly as before this existed.
@@ -248,6 +249,17 @@ export class DungeonFloorGenerator {
     }
     if (candidates.length === 0) return { row: startRow, col: startCol };
     return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
+  // Bombable Wall cells ('B', numbered floors and Puzzle Rooms alike) —
+  // collision is already stamped solid by the template, so the overlay's wall
+  // pass draws them as ordinary wall; the object on top is what a bomb blast
+  // finds and breaks (CavernSystem.bombBlast clears the collision cell when
+  // it does).
+  _placeBombableWalls(backgroundObjects, cells) {
+    for (const { row, col } of cells) {
+      backgroundObjects.push(new BackgroundObject('≡', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE, { typeId: 'bombable_wall' }));
+    }
   }
 
   // Fisher-Yates — used to consume template-authored spawn points in random
@@ -759,13 +771,7 @@ export class DungeonFloorGenerator {
       ? new Set(gapCellList.map(({ row, col }) => `${row},${col}`))
       : null;
 
-    // Bombable Wall cells ('B') — collision already stamped solid above, so
-    // the overlay's wall pass draws them as ordinary wall; the object on top
-    // is what a bomb blast finds and breaks (CavernSystem.bombBlast clears
-    // the collision cell when it does).
-    for (const { row, col } of getPuzzleTemplateBombableCells(templateName)) {
-      backgroundObjects.push(new BackgroundObject('≡', col * CS, row * CS, { typeId: 'bombable_wall' }));
-    }
+    this._placeBombableWalls(backgroundObjects, getPuzzleTemplateBombableCells(templateName));
 
     const exitCell = getPuzzleTemplateExitCell(templateName);
     const exitRow = exitCell?.row ?? STAIRS_UP_ROW;

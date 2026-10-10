@@ -45,6 +45,7 @@
 import FOOTPRINT_CONTRACT from './dungeon/footprintContract.json';
 import { reservedFootprintCells } from './dungeon/footprints.js';
 import { solveTemplate } from './dungeon/progressionSolver.js';
+import { DUNGEON_TILES, cellsWithGlyph } from './dungeon/tiles.js';
 
 export const STAIRS_COL    = FOOTPRINT_CONTRACT.STAIRS_COL;     // vertical spine column (up-stairs, North descent, exit door)
 export const STAIRS_UP_ROW = FOOTPRINT_CONTRACT.STAIRS_UP_ROW;  // ^ up-stairs row (floors 1+)
@@ -151,10 +152,12 @@ export function pickRandomTemplateName(excludeNames = null) {
 }
 
 /**
- * Apply a template's interior wall pattern to an existing collisionMap.
- * The map's outer border (row 0/last, col 0/last) is left unchanged — templates
- * are responsible only for interior cells. Cells listed in `reservedCells` are
- * never stamped, guaranteeing reachability of staircases and the spawn corridor.
+ * Apply a template's interior wall pattern to an existing collisionMap —
+ * every solid tile in the catalogue (dungeon/tiles.js): walls, and Bombable
+ * Walls until a bomb opens them. The map's outer border (row 0/last, col
+ * 0/last) is left unchanged — templates are responsible only for interior
+ * cells. Cells listed in `reservedCells` are never stamped, guaranteeing
+ * reachability of staircases and the spawn corridor.
  */
 export function applyTemplateToCollisionMap(collisionMap, templateName, reservedCells = []) {
   const grid = DUNGEON_FLOOR_TEMPLATES[templateName] ?? DUNGEON_FLOOR_TEMPLATES.open;
@@ -164,11 +167,23 @@ export function applyTemplateToCollisionMap(collisionMap, templateName, reserved
   for (let r = 1; r < rows - 1; r++) {
     const line = grid[r] ?? '';
     for (let c = 1; c < cols - 1; c++) {
-      if (line[c] !== '#') continue;
+      if (!DUNGEON_TILES[line[c]]?.solid) continue;
       if (reserved.has(`${r},${c}`)) continue;
       collisionMap[r][c] = true;
     }
   }
+}
+
+/**
+ * Interior cells a template marks as Bombable Wall ('B') — the generator
+ * places a bombable_wall object on each, which a bomb blast breaks open
+ * (CavernSystem.bombBlast). A floor never supplies a bomb, so the Progression
+ * Solver requires every staircase to connect without opening one: whatever a
+ * Bombable Wall hides on a numbered floor is optional.
+ */
+export function getTemplateBombableCells(templateName, reservedCells = []) {
+  const grid = DUNGEON_FLOOR_TEMPLATES[templateName] ?? DUNGEON_FLOOR_TEMPLATES.open;
+  return cellsWithGlyph(grid, 'B', reservedCells);
 }
 
 /**

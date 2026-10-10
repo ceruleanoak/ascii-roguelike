@@ -4,6 +4,8 @@ contextBridge.exposeInMainWorld('editorAPI', {
   // shared footprint contract (staircase geometry — read-only)
   footprintContractLoad: () => ipcRenderer.invoke('footprint-contract-load'),
   footprintReservedCellsLoad: () => ipcRenderer.invoke('footprint-reserved-cells'),
+  // shared dungeon tile catalogue (src/data/dungeon/tiles.js — read-only)
+  dungeonTilesLoad: () => ipcRenderer.invoke('dungeon-tiles-load'),
 
   // Interior — floor templates
   floorTemplatesList: () => ipcRenderer.invoke('floor-templates-list'),

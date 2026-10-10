@@ -105,13 +105,10 @@
     <div class="propsPanel">
       <div id="interiorPalette">
         <h4>Palette</h4>
-        <button class="tool" data-tool="wall">#  Wall</button>
-        <button class="tool" data-tool="floor">.  Floor</button>
-        <button class="tool" data-tool="water">~  Water</button>
-        <button class="tool" data-tool="enemy">E  Enemy Spawn</button>
+        <div id="interiorTiles"></div>
         <h4>Weight</h4>
         <input id="weightInput" type="number" min="0" step="1" style="width:100%" />
-        <div class="hint">Higher weight = picked more often by the random-template roll. The 4 red-hatched cells are the fixed staircase footprints — always kept walkable, not paintable here. Enemy Spawn marks a preferred spot for enemies to appear; the generator falls back to random placement past however many spots you've marked, and to fully random if you mark none.</div>
+        <div class="hint">Higher weight = picked more often by the random-template roll. The 4 red-hatched cells are the fixed staircase footprints — always kept walkable, not paintable here. Enemy Spawn marks a preferred spot for enemies to appear; the generator falls back to random placement past however many spots you've marked, and to fully random if you mark none. Bombable Wall looks like Wall in-game but a bomb blast opens it — whatever it hides must stay optional, since a floor never supplies a bomb.</div>
       </div>
       <div id="exteriorPalette" style="display:none">
         <h4>Palette</h4>
@@ -131,12 +128,7 @@
       </div>
       <div id="puzzlePalette" style="display:none">
         <h4>Palette</h4>
-        <button class="tool" data-tool="wall">#  Wall</button>
-        <button class="tool" data-tool="floor">.  Floor</button>
-        <button class="tool" data-tool="water">~  Water</button>
-        <button class="tool" data-tool="gap">G  Gap</button>
-        <button class="tool" data-tool="bombable">B  Bombable Wall</button>
-        <button class="tool" data-tool="exit">X  Exit</button>
+        <div id="puzzleTiles"></div>
         <button class="tool" data-tool="switch">○  Switch</button>
         <button class="tool" data-tool="panel">▭  Floor Panel</button>
         <button class="tool" data-tool="torchtrigger">!  Torch (Trigger)</button>
@@ -177,6 +169,7 @@
   const PUZZLE_COLS = 24, PUZZLE_ROWS = 24;
 
   let mode = 'interior';           // 'interior' | 'exterior' | 'puzzle'
+  let tiles = {};                  // glyph → tile — src/data/dungeon/tiles.js (DUNGEON_TILES)
   let contract = null;             // {cols, rows, STAIRS_COL, ...} — src/data/dungeon/footprintContract.json
   let reservedSet = new Set();     // "row,col" — fixed staircase footprint cells (interior only)
   let items = [];                  // template names or zone names, depending on mode
@@ -184,7 +177,7 @@
   let currentData = null;          // {weight, grid} (interior), {wallColor, doorColor, grid} (exterior), or {grid, triggers} (puzzle)
   let dirty = false;
   let painting = false;
-  let activeTool = 'wall';
+  let activeTool = 'tile:#';
   let decoChar = '*';
 
   const canvas = document.getElementById('gridCanvas');
@@ -299,28 +292,19 @@
   }
 
   // ── Rendering ──────────────────────────────────────────────────────────
-  // Interior is a solid-tile painter (3 states — block color is enough).
-  // Exterior renders the actual glyph per cell — it's authored ASCII art
-  // (dungeon-entrance "face" anatomy), so seeing the real characters matters.
-  function interiorVisual(ch) {
-    if (ch === '#') return { bg: '#3a3a3a' };
-    if (ch === '~') return { bg: '#1c3d5c' };
-    if (ch === 'E') return { bg: '#161616', fg: '#e05a5a', glyph: 'E' };
-    return { bg: '#161616' }; // floor
+  // Interior and Puzzle paint tiles from the shared catalogue
+  // (src/data/dungeon/tiles.js, loaded at boot into `tiles`) — block color
+  // plus an optional glyph. Exterior renders the actual glyph per cell — it's
+  // authored ASCII art (dungeon-entrance "face" anatomy), so seeing the real
+  // characters matters.
+  function tileVisual(ch) {
+    return tiles[ch]?.editor ?? tiles['.'].editor;
   }
   function exteriorVisual(ch) {
     if (ch === '≡') return { bg: '#241010', fg: wallColorInput.value, glyph: '≡' };
     if (ch === '∩') return { bg: '#241010', fg: doorColorInput.value, glyph: '∩' };
     if (ch === '#' || ch === '.' || !ch) return { bg: '#161616' };
     return { bg: '#161616', fg: decoPreviewColorInput.value, glyph: ch };
-  }
-  function puzzleVisual(ch) {
-    if (ch === '#') return { bg: '#3a3a3a' };
-    if (ch === '~') return { bg: '#1c3d5c' };
-    if (ch === 'G') return { bg: '#050506' }; // impassable gap — true void look, no glyph
-    if (ch === 'B') return { bg: '#3a3a3a', fg: '#e05a5a', glyph: 'B' }; // wall in-game; marked here so the author can see it
-    if (ch === 'X') return { bg: '#161616', fg: '#5ad088', glyph: 'X' };
-    return { bg: '#161616' }; // floor
   }
   // Triggers aren't grid chars (validatePuzzleTemplate requires their cell
   // stay plain '.') — drawn as a colored overlay on top of the grid pass so
@@ -413,7 +397,7 @@
       const line = currentData.grid[r] || '';
       for (let c = 0; c < cols; c++) {
         const ch = line[c] || (mode === 'exterior' ? '' : '.');
-        const v = mode === 'interior' ? interiorVisual(ch) : mode === 'puzzle' ? puzzleVisual(ch) : exteriorVisual(ch);
+        const v = mode === 'exterior' ? exteriorVisual(ch) : tileVisual(ch);
         ctx.fillStyle = v.bg;
         ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
         if (v.glyph) {
@@ -457,7 +441,7 @@
     function isOpen(r, c) {
       if (r <= 0 || r >= rows - 1 || c <= 0 || c >= cols - 1) return false; // border always wall
       if (reservedSet.has(r + ',' + c)) return true; // footprint cells stay force-open regardless of grid data
-      return (grid[r][c] || '#') !== '#';
+      return !(tiles[grid[r][c]]?.solid ?? true); // a Bombable Wall blocks too — a floor never supplies the bomb
     }
     const start = points[0];
     const visited = new Set([start.row + ',' + start.col]);
@@ -620,15 +604,10 @@
       return;
     }
 
-    let ch;
-    if (activeTool === 'wall') ch = '#';
-    else if (activeTool === 'water') ch = '~';
-    else if (activeTool === 'gap') ch = 'G';
-    else if (activeTool === 'bombable') ch = 'B';
-    else if (activeTool === 'exit') ch = 'X';
-    else ch = '.'; // floor
+    const ch = tileGlyphOf(activeTool);
+    if (ch === null) return;
 
-    if (activeTool === 'exit') {
+    if (ch === 'X') {
       // Exactly one exit — clear any other X before placing this one.
       for (let r = 1; r < PUZZLE_ROWS - 1; r++) {
         for (let c = 1; c < PUZZLE_COLS - 1; c++) {
@@ -644,7 +623,8 @@
   function applyTool(row, col, isClick) {
     if (mode === 'interior') {
       if (isLockedInterior(row, col)) return;
-      const ch = activeTool === 'wall' ? '#' : activeTool === 'water' ? '~' : activeTool === 'enemy' ? 'E' : '.';
+      const ch = tileGlyphOf(activeTool);
+      if (ch === null) return;
       setCharAt(currentData.grid, row, col, ch);
       dirty = true;
       render();
@@ -676,6 +656,25 @@
   window.addEventListener('mouseup', () => { painting = false; });
 
   // ── Tool buttons ───────────────────────────────────────────────────────
+  // Tile tools are generated from the catalogue, one per glyph the mode
+  // allows, and named 'tile:<glyph>'; fixture tools (switches, hook posts…)
+  // are hand-written buttons in the markup, since they aren't grid chars.
+  const tileTool = glyph => 'tile:' + glyph;
+  function tileGlyphOf(tool) {
+    return tool.startsWith('tile:') ? tool.slice(5) : null;
+  }
+  function buildTilePalette(container, paletteMode) {
+    container.innerHTML = '';
+    for (const [glyph, tile] of Object.entries(tiles)) {
+      if (!tile.modes.includes(paletteMode)) continue;
+      const btn = document.createElement('button');
+      btn.className = 'tool';
+      btn.dataset.tool = tileTool(glyph);
+      btn.textContent = glyph + '  ' + tile.name;
+      btn.onclick = () => { activeTool = btn.dataset.tool; syncToolButtons(); };
+      container.appendChild(btn);
+    }
+  }
   document.querySelectorAll('.tool').forEach(btn => {
     btn.onclick = () => { activeTool = btn.dataset.tool; syncToolButtons(); };
   });
@@ -1047,7 +1046,7 @@
     puzzlePalette.style.display = mode === 'puzzle' ? '' : 'none';
     interiorActions.style.display = mode !== 'exterior' ? '' : 'none';
     sidebarTitle.textContent = mode === 'interior' ? 'Floor Templates' : mode === 'puzzle' ? 'Puzzle Rooms' : 'Zone Designs';
-    activeTool = mode === 'exterior' ? 'erase' : 'wall';
+    activeTool = mode === 'exterior' ? 'erase' : tileTool('#');
     syncToolButtons();
     currentName = null; currentData = null; dirty = false;
     setValidation('');
@@ -1061,6 +1060,9 @@
   // ── Bootstrap ──────────────────────────────────────────────────────────
   (async function init() {
     contract = await window.editorAPI.footprintContractLoad();
+    tiles = await window.editorAPI.dungeonTilesLoad();
+    buildTilePalette(document.getElementById('interiorTiles'), 'floor');
+    buildTilePalette(document.getElementById('puzzleTiles'), 'puzzle');
     const cells = await window.editorAPI.footprintReservedCellsLoad();
     reservedSet = new Set(cells.map(c => c.row + ',' + c.col));
     items = await window.editorAPI.floorTemplatesList();

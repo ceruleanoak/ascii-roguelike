@@ -137,9 +137,22 @@ function loadFootprintsModule() {
   return _footprintsModulePromise;
 }
 
+// The dungeon tile catalogue (src/data/dungeon/tiles.js) — which glyphs each
+// template kind may contain, and how the palette paints them. Loaded from the
+// game's own module, same as footprints.js above, so a tile added there shows
+// up in the editor's palette and validation with no edit here.
+let _tilesModulePromise = null;
+function loadTilesModule() {
+  if (!_tilesModulePromise) {
+    _tilesModulePromise = import(pathToFileURL(path.join(DATA_ROOT, 'tiles.js')).href);
+  }
+  return _tilesModulePromise;
+}
+
 // Defense in depth against hand-edited files — the renderer already makes
 // these cells non-paintable, but a save is re-validated here regardless.
-function validateFloorTemplate(data) {
+async function validateFloorTemplate(data) {
+  const allowed = (await loadTilesModule()).tileGlyphsForMode('floor');
   const contract = readJSON(FOOTPRINT_CONTRACT_FILE);
   const { cols, rows } = contract;
   if (!data || typeof data !== 'object') return 'Not an object.';
@@ -153,7 +166,7 @@ function validateFloorTemplate(data) {
       return `row ${r} must be exactly ${cols} chars.`;
     }
     for (const ch of line) {
-      if (ch !== '#' && ch !== '.' && ch !== '~' && ch !== 'E') return `row ${r} has invalid char "${ch}" (only # . ~ E allowed).`;
+      if (!allowed.includes(ch)) return `row ${r} has invalid char "${ch}" (only ${allowed.join(' ')} allowed).`;
     }
     const isBorderRow = r === 0 || r === rows - 1;
     if (isBorderRow && [...line].some(ch => ch !== '#')) return `row ${r} is a border row — every cell must be #.`;
@@ -181,11 +194,12 @@ ipcMain.handle('footprint-reserved-cells', async () => {
   const { reservedFootprintCells } = await loadFootprintsModule();
   return reservedFootprintCells(readJSON(FOOTPRINT_CONTRACT_FILE));
 });
+ipcMain.handle('dungeon-tiles-load', async () => (await loadTilesModule()).DUNGEON_TILES);
 ipcMain.handle('floor-templates-list', () => listFloorTemplates());
 ipcMain.handle('floor-template-load', (_e, name) => readJSON(resolveFloorTemplatePath(name)));
 
-ipcMain.handle('floor-template-save', (_e, name, data) => {
-  const err = validateFloorTemplate(data);
+ipcMain.handle('floor-template-save', async (_e, name, data) => {
+  const err = await validateFloorTemplate(data);
   if (err) return { ok: false, error: err };
   writeJSONAtomic(resolveFloorTemplatePath(name), data);
   return { ok: true };
@@ -286,6 +300,7 @@ function listPuzzleTemplates() {
 // (same posture as validateFloorTemplate/validateDesign above). Async
 // because the pedestal check below resolves weaponTutorials.js via dynamic import().
 async function validatePuzzleTemplate(data) {
+  const allowed = (await loadTilesModule()).tileGlyphsForMode('puzzle');
   if (!data || typeof data !== 'object') return 'Not an object.';
   if (!Number.isFinite(data.weight) || data.weight < 0) return 'weight must be a number >= 0.';
   if (!Array.isArray(data.grid) || data.grid.length !== PUZZLE_ROWS) {
@@ -298,8 +313,8 @@ async function validatePuzzleTemplate(data) {
       return `row ${r} must be exactly ${PUZZLE_COLS} chars.`;
     }
     for (const ch of line) {
-      if (ch !== '#' && ch !== '.' && ch !== '~' && ch !== 'X' && ch !== 'G' && ch !== 'B') {
-        return `row ${r} has invalid char "${ch}" (only # . ~ X G B allowed).`;
+      if (!allowed.includes(ch)) {
+        return `row ${r} has invalid char "${ch}" (only ${allowed.join(' ')} allowed).`;
       }
       if (ch === 'X') exitCount++;
     }

@@ -80,6 +80,7 @@
 import FOOTPRINT_CONTRACT from './dungeon/footprintContract.json';
 import { solveTemplate, toolKitForItem } from './dungeon/progressionSolver.js';
 import { ITEMS } from './items.js';
+import { DUNGEON_TILES, cellsWithGlyph } from './dungeon/tiles.js';
 
 // Named templates: every src/data/dungeon/puzzleTemplates/*.json, keyed by
 // file name. Registration is automatic — a template the dungeon editor saves
@@ -136,9 +137,10 @@ export function pickRandomPuzzleTemplateName(excludeNames = null) {
 }
 
 /**
- * Stamp a template's wall cells ('#'), gap cells ('G') and bombable wall
- * cells ('B') onto an existing collisionMap — all solid. A 'B' cell opens
- * when a bomb breaks its Bombable Wall object (CavernSystem.bombBlast).
+ * Stamp a template's solid tiles (dungeon/tiles.js) onto an existing
+ * collisionMap — walls ('#'), gaps ('G') and bombable wall cells ('B'). A 'B'
+ * cell opens when a bomb breaks its Bombable Wall object
+ * (CavernSystem.bombBlast).
  */
 export function applyPuzzleTemplateToCollisionMap(collisionMap, templateName) {
   const { grid } = getPuzzleTemplate(templateName);
@@ -147,22 +149,14 @@ export function applyPuzzleTemplateToCollisionMap(collisionMap, templateName) {
   for (let r = 1; r < rows - 1; r++) {
     const line = grid[r] ?? '';
     for (let c = 1; c < cols - 1; c++) {
-      if (line[c] === '#' || line[c] === 'G' || line[c] === 'B') collisionMap[r][c] = true;
+      if (DUNGEON_TILES[line[c]]?.solid) collisionMap[r][c] = true;
     }
   }
 }
 
 /** Interior cells a template marks as Bombable Wall ('B') — the generator places a bombable_wall object on each. */
 export function getPuzzleTemplateBombableCells(templateName) {
-  const { grid } = getPuzzleTemplate(templateName);
-  const cells = [];
-  for (let r = 0; r < grid.length; r++) {
-    const line = grid[r];
-    for (let c = 0; c < line.length; c++) {
-      if (line[c] === 'B') cells.push({ row: r, col: c });
-    }
-  }
-  return cells;
+  return cellsWithGlyph(getPuzzleTemplate(templateName).grid, 'B');
 }
 
 /** Interior cells a template marks as water ('~'). Walkable — the generator places a Puddle on each. */
