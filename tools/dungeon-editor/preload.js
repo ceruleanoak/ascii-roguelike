@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('editorAPI', {
   floorTemplateLoad: (name) => ipcRenderer.invoke('floor-template-load', name),
   floorTemplateSave: (name, data) => ipcRenderer.invoke('floor-template-save', name, data),
   floorTemplateDelete: (name) => ipcRenderer.invoke('floor-template-delete', name),
+  floorTemplateRename: (oldName, newName) => ipcRenderer.invoke('floor-template-rename', oldName, newName),
 
   // Exterior — zone designs
   designsList: () => ipcRenderer.invoke('designs-list'),
@@ -21,4 +22,5 @@ contextBridge.exposeInMainWorld('editorAPI', {
   puzzleTemplateLoad: (name) => ipcRenderer.invoke('puzzle-template-load', name),
   puzzleTemplateSave: (name, data) => ipcRenderer.invoke('puzzle-template-save', name, data),
   puzzleTemplateDelete: (name) => ipcRenderer.invoke('puzzle-template-delete', name),
+  puzzleTemplateRename: (oldName, newName) => ipcRenderer.invoke('puzzle-template-rename', oldName, newName),
 });

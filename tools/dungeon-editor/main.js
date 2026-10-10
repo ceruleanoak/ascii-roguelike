@@ -59,6 +59,48 @@ function writeJSONAtomic(file, data) {
   fs.renameSync(tmp, file);
 }
 
+// Templates register themselves by file name (import.meta.glob), so a file
+// can be renamed or deleted freely — unless game code names it as a string
+// literal ('open' is the floor fallback, 'whip_trial' the puzzle fallback).
+// Returns the src/ .js files that do, relative to the project root; a rename
+// or delete is refused while the list is non-empty, so it can't strand a
+// lookup that would then fall through silently.
+const SRC_ROOT = path.join(__dirname, '..', '..', 'src');
+function codeReferencesTo(name) {
+  const needles = ["'" + name + "'", '"' + name + '"', '`' + name + '`'];
+  const hits = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const abs = path.join(dir, e.name);
+      if (e.isDirectory()) walk(abs);
+      else if (e.name.endsWith('.js')) {
+        const text = fs.readFileSync(abs, 'utf8');
+        if (needles.some(n => text.includes(n))) hits.push(path.relative(path.join(SRC_ROOT, '..'), abs));
+      }
+    }
+  };
+  walk(SRC_ROOT);
+  return hits;
+}
+
+// Shared rename/delete bodies for the two template collections.
+function renameTemplate(resolvePath, oldName, newName) {
+  const refs = codeReferencesTo(oldName);
+  if (refs.length) return { ok: false, error: `"${oldName}" is named in code: ${refs.join(', ')}` };
+  const from = resolvePath(oldName);
+  const to = resolvePath(newName);
+  if (fs.existsSync(to)) return { ok: false, error: `"${newName}" already exists` };
+  fs.renameSync(from, to);
+  return { ok: true };
+}
+
+function deleteTemplate(resolvePath, name) {
+  const refs = codeReferencesTo(name);
+  if (refs.length) return { ok: false, error: `"${name}" is named in code: ${refs.join(', ')}` };
+  fs.unlinkSync(resolvePath(name));
+  return { ok: true };
+}
+
 // ═══════════════════════════════════════════════════════════════
 // Interior — floor templates (src/data/dungeon/floorTemplates/*.json)
 // ═══════════════════════════════════════════════════════════════
@@ -149,10 +191,9 @@ ipcMain.handle('floor-template-save', (_e, name, data) => {
   return { ok: true };
 });
 
-ipcMain.handle('floor-template-delete', (_e, name) => {
-  fs.unlinkSync(resolveFloorTemplatePath(name));
-  return { ok: true };
-});
+ipcMain.handle('floor-template-delete', (_e, name) => deleteTemplate(resolveFloorTemplatePath, name));
+ipcMain.handle('floor-template-rename', (_e, oldName, newName) =>
+  renameTemplate(resolveFloorTemplatePath, oldName, newName));
 
 // ═══════════════════════════════════════════════════════════════
 // Exterior — zone designs (src/data/dungeon/designs/*.json)
@@ -399,10 +440,9 @@ ipcMain.handle('puzzle-template-save', async (_e, name, data) => {
   return { ok: true };
 });
 
-ipcMain.handle('puzzle-template-delete', (_e, name) => {
-  fs.unlinkSync(resolvePuzzleTemplatePath(name));
-  return { ok: true };
-});
+ipcMain.handle('puzzle-template-delete', (_e, name) => deleteTemplate(resolvePuzzleTemplatePath, name));
+ipcMain.handle('puzzle-template-rename', (_e, oldName, newName) =>
+  renameTemplate(resolvePuzzleTemplatePath, oldName, newName));
 
 // ═══════════════════════════════════════════════════════════════
 // APP BOOTSTRAP

@@ -86,6 +86,7 @@
       <div id="interiorActions" class="sidebarActions">
         <button id="btnNew">+ New</button>
         <button id="btnClone">Clone</button>
+        <button id="btnRename">Rename</button>
         <button id="btnDelete">Delete</button>
       </div>
     </div>
@@ -947,7 +948,7 @@
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(); }
   });
 
-  // ── New / Clone / Delete (interior + puzzle — exterior designs are a fixed set) ──
+  // ── New / Clone / Rename / Delete (interior + puzzle — exterior designs are a fixed set) ──
   const NAME_RE = /^[a-z0-9_]+$/i;
 
   function apiFor(m) {
@@ -955,13 +956,15 @@
       list: window.editorAPI.floorTemplatesList,
       save: window.editorAPI.floorTemplateSave,
       delete: window.editorAPI.floorTemplateDelete,
+      rename: window.editorAPI.floorTemplateRename,
     };
     if (m === 'puzzle') return {
       list: window.editorAPI.puzzleTemplatesList,
       save: window.editorAPI.puzzleTemplateSave,
       delete: window.editorAPI.puzzleTemplateDelete,
+      rename: window.editorAPI.puzzleTemplateRename,
     };
-    return null; // exterior — fixed zone set, no New/Clone/Delete
+    return null; // exterior — fixed zone set, no New/Clone/Rename/Delete
   }
 
   document.getElementById('btnNew').onclick = async () => {
@@ -994,20 +997,29 @@
     await selectItem(name);
   };
 
+  document.getElementById('btnRename').onclick = async () => {
+    const api = apiFor(mode);
+    if (!api || !currentName) return;
+    if (dirty) { setStatus('Save or discard changes before renaming', true); return; }
+    const name = await askPrompt('Rename "' + currentName + '" to:', currentName);
+    if (!name || name === currentName) return;
+    if (!NAME_RE.test(name)) { setStatus('Invalid name', true); return; }
+    if (items.includes(name)) { setStatus('Already exists', true); return; }
+    const result = await api.rename(currentName, name);
+    if (!result.ok) { setStatus(result.error, true); return; }
+    items = await api.list();
+    currentName = name;
+    renderList();
+    setStatus('Renamed to ' + name);
+  };
+
   document.getElementById('btnDelete').onclick = async () => {
     const api = apiFor(mode);
     if (!api || !currentName) return;
-    if (mode === 'interior' && currentName === 'open') {
-      setStatus('Cannot delete "open" — it\'s the code\'s hardcoded template fallback.', true);
-      return;
-    }
-    if (mode === 'puzzle' && (currentName === 'whip_trial' || currentName === 'boomerang_trial' || currentName === 'torch_trial')) {
-      setStatus('Cannot delete "' + currentName + '" — it\'s statically imported by dungeonPuzzleTemplates.js.', true);
-      return;
-    }
     const ok = await askConfirm('Delete template "' + currentName + '"? This cannot be undone.');
     if (!ok) return;
-    await api.delete(currentName);
+    const result = await api.delete(currentName);
+    if (!result.ok) { setStatus(result.error, true); return; }
     items = await api.list();
     currentName = null; currentData = null; dirty = false;
     renderList();

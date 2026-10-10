@@ -73,25 +73,23 @@
 //   who brought their own bag never has to spend its stock. Plain floor only.
 //
 // weight: selection weight for the North-descent pool (see
-// pickRandomPuzzleTemplateName below) — every named template participates,
-// same as dungeonFloorTemplates.js's numbered-floor pool.
+// pickRandomPuzzleTemplateName below) — every named template the Progression
+// Solver passes participates, same as dungeonFloorTemplates.js's
+// numbered-floor pool.
 
-import whipTrialTemplate from './dungeon/puzzleTemplates/whip_trial.json';
-import boomerangTrialTemplate from './dungeon/puzzleTemplates/boomerang_trial.json';
-import torchTrialTemplate from './dungeon/puzzleTemplates/torch_trial.json';
-import bombTrialTemplate from './dungeon/puzzleTemplates/bomb_trial.json';
+import FOOTPRINT_CONTRACT from './dungeon/footprintContract.json';
+import { solveTemplate, toolKitForItem } from './dungeon/progressionSolver.js';
+import { ITEMS } from './items.js';
 
-// Named templates, loaded from src/data/dungeon/puzzleTemplates/*.json.
-// Adding a new one (via the editor or by hand) needs a JSON file plus one
-// import + map entry here — nothing else in the codebase changes (the
-// weighted pool below and DungeonSystem.ensureFloorGenerated both discover
-// it automatically via this map).
-export const PUZZLE_ROOM_TEMPLATES = {
-  whip_trial: whipTrialTemplate,
-  boomerang_trial: boomerangTrialTemplate,
-  torch_trial: torchTrialTemplate,
-  bomb_trial: bombTrialTemplate,
-};
+// Named templates: every src/data/dungeon/puzzleTemplates/*.json, keyed by
+// file name. Registration is automatic — a template the dungeon editor saves
+// is live on the next build/reload with no JS edit (bug #402). The weighted
+// pool below and DungeonSystem.ensureFloorGenerated both discover it through
+// this map.
+const TEMPLATE_FILES = import.meta.glob('./dungeon/puzzleTemplates/*.json', { eager: true, import: 'default' });
+export const PUZZLE_ROOM_TEMPLATES = Object.fromEntries(
+  Object.entries(TEMPLATE_FILES).map(([filePath, data]) => [filePath.split('/').pop().replace(/\.json$/, ''), data])
+);
 
 /** Look up a template by name, falling back to Whip Trial if the name is unknown. */
 export function getPuzzleTemplate(templateName) {
@@ -99,10 +97,21 @@ export function getPuzzleTemplate(templateName) {
 }
 
 // Selection weights, read from each template's own JSON — mirrors
-// dungeonFloorTemplates.js's TEMPLATE_WEIGHTS/pickRandomTemplateName exactly.
-const TEMPLATE_WEIGHTS = Object.entries(PUZZLE_ROOM_TEMPLATES).map(([name, data]) => ({
-  name, weight: data.weight,
-}));
+// dungeonFloorTemplates.js's TEMPLATE_WEIGHTS/pickRandomTemplateName.
+// A Puzzle Room seals the player in until it is solved, so the pool holds only
+// templates the Progression Solver proves solvable with what the room itself
+// supplies (bug #401). A failing template stays in the map above, so the
+// CheatMenu can still warp into it by name.
+const TEMPLATE_WEIGHTS = Object.entries(PUZZLE_ROOM_TEMPLATES)
+  .filter(([name, data]) => {
+    const suppliedTools = data.pedestal ? toolKitForItem(ITEMS[data.pedestal.weaponChar]) : {};
+    const { ok, errors } = solveTemplate({
+      grid: data.grid, fixtures: data, mode: 'puzzle', contract: FOOTPRINT_CONTRACT, suppliedTools,
+    });
+    if (!ok) console.warn(`[dungeonPuzzleTemplates] "${name}" left out of the puzzle pool: ${errors[0]}`);
+    return ok;
+  })
+  .map(([name, data]) => ({ name, weight: data.weight }));
 
 /**
  * Pick a random puzzle-room template name using the configured weights.

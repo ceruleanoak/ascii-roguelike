@@ -44,11 +44,7 @@
 
 import FOOTPRINT_CONTRACT from './dungeon/footprintContract.json';
 import { reservedFootprintCells } from './dungeon/footprints.js';
-import openTemplate from './dungeon/floorTemplates/open.json';
-import pillarRowsTemplate from './dungeon/floorTemplates/pillar_rows.json';
-import mildMazeTemplate from './dungeon/floorTemplates/mild_maze.json';
-import separatedZonesTemplate from './dungeon/floorTemplates/separated_zones.json';
-import sewerTemplate from './dungeon/floorTemplates/sewer.json';
+import { solveTemplate } from './dungeon/progressionSolver.js';
 
 export const STAIRS_COL    = FOOTPRINT_CONTRACT.STAIRS_COL;     // vertical spine column (up-stairs, North descent, exit door)
 export const STAIRS_UP_ROW = FOOTPRINT_CONTRACT.STAIRS_UP_ROW;  // ^ up-stairs row (floors 1+)
@@ -104,27 +100,31 @@ export function paintStairsUpVisual(obj, locked) {
   obj.animationColor = color;
 }
 
-// Named templates, loaded from src/data/dungeon/floorTemplates/*.json. Each
-// file is { weight, grid }; weight feeds pickRandomTemplateName below, so
-// adding a new template (via the editor or by hand) only needs a JSON file
-// plus one import + map entry here — nothing else in the codebase changes.
-export const DUNGEON_FLOOR_TEMPLATES = {
-  open:             openTemplate.grid,
-  pillar_rows:      pillarRowsTemplate.grid,
-  mild_maze:        mildMazeTemplate.grid,
-  separated_zones:  separatedZonesTemplate.grid,
-  sewer:            sewerTemplate.grid,
-};
+// Named templates: every src/data/dungeon/floorTemplates/*.json, keyed by
+// file name. Each file is { weight, grid }. Registration is automatic — a
+// template the dungeon editor saves is live on the next build/reload with no
+// JS edit (bug #402: hand-written imports left editor templates dead).
+const TEMPLATE_FILES = import.meta.glob('./dungeon/floorTemplates/*.json', { eager: true, import: 'default' });
+const templateNameOf = filePath => filePath.split('/').pop().replace(/\.json$/, '');
+const TEMPLATE_DATA = Object.fromEntries(
+  Object.entries(TEMPLATE_FILES).map(([filePath, data]) => [templateNameOf(filePath), data])
+);
 
-// Selection weights, read from each template's own JSON — 'open' is rare so
-// most floors have some structure.
-const TEMPLATE_WEIGHTS = [
-  { name: 'open',            weight: openTemplate.weight },
-  { name: 'pillar_rows',     weight: pillarRowsTemplate.weight },
-  { name: 'mild_maze',       weight: mildMazeTemplate.weight },
-  { name: 'separated_zones', weight: separatedZonesTemplate.weight },
-  { name: 'sewer',           weight: sewerTemplate.weight },
-];
+export const DUNGEON_FLOOR_TEMPLATES = Object.fromEntries(
+  Object.entries(TEMPLATE_DATA).map(([name, data]) => [name, data.grid])
+);
+
+// The random pool holds only templates the Progression Solver passes, so a
+// draft that could strand the player (a landing in a wall, a footprint cut
+// off without tools) never reaches play. It stays in the map above, so a
+// direct lookup by name still finds it.
+const TEMPLATE_WEIGHTS = Object.entries(TEMPLATE_DATA)
+  .filter(([name, data]) => {
+    const { ok, errors } = solveTemplate({ grid: data.grid, mode: 'floor', contract: FOOTPRINT_CONTRACT });
+    if (!ok) console.warn(`[dungeonFloorTemplates] "${name}" left out of the floor pool: ${errors[0]}`);
+    return ok;
+  })
+  .map(([name, data]) => ({ name, weight: data.weight }));
 
 const TOTAL_WEIGHT = TEMPLATE_WEIGHTS.reduce((s, t) => s + t.weight, 0);
 
