@@ -13,13 +13,17 @@ import { freezeSurfaceRoom, thawSurfaceRoom, isInteriorActive } from './PlaneSys
  *
  * Maze objects are placed at dead-end corridors (degree-1 nodes in the maze).
  * Each takes 3 hits to break, dropping the hidden ingredient beneath its cipher cover.
+ * Those 3 hits are the tomb's ticks (its HP pips), and the blink warning spends
+ * the same ticks — see below — so a tomb chipped and then left is closer to a ghost.
  *
  * Blink warning:
  *   - Nothing blinks until the first maze object is broken open — that
  *     disturbance is what summons the doom system.
- *   - One object at a time (the "candidate") blinks — a visible on/off toggle.
- *   - After 5 completed blinks unbroken, the candidate converts into a ghost.
- *   - Breaking the candidate before its 5th blink cancels the threat; a 5 s
+ *   - One object at a time (the "candidate") blinks red — a visible on/off toggle.
+ *   - Every 3 completed red blinks take one tick (1 HP), the same as a hit.
+ *     When a blink takes the last tick, the candidate converts into a ghost:
+ *     an untouched tomb holds out for 9 blinks, one already hit twice for 3.
+ *   - Breaking the candidate before then cancels the threat; a 5 s
  *     cooldown follows before a different surviving object becomes the candidate.
  *   - Once 2 ghosts have spawned this way ("doom"), every surviving object blinks
  *     simultaneously with no cooldown/candidate gating.
@@ -36,7 +40,7 @@ import { freezeSurfaceRoom, thawSurfaceRoom, isInteriorActive } from './PlaneSys
  *   - A lit torch's light radius fully shields nearby tombs from ever spawning
  *     a ghost (never selected as blink candidate, immune even in doom mode).
  *   - Once all 5 are lit, every tomb's blink persists 3x as long (same
- *     flicker cadence, 3x the completed blinks required) before conversion.
+ *     flicker cadence, 3x the completed blinks per tick) before conversion.
  *   - Ghosts destroy any torch they touch — snuffed out for the rest of the
  *     run, losing its shielding/all-lit contribution.
  *
@@ -60,7 +64,7 @@ const GHOST_DAMAGE         = 1;
 const GHOST_DAMAGE_INTERVAL = 0.75; // s between damage ticks
 
 const BLINK_INTERVAL  = 0.4; // s per on/off toggle
-const BLINKS_TO_GHOST = 5;   // completed on-blinks before conversion
+const BLINKS_PER_TICK = 3;   // completed red on-blinks that take one tick (1 HP) off a tomb
 const BLINK_COOLDOWN  = 5.0; // s pause before the next single candidate blinks
 const DOOM_THRESHOLD  = 2;   // ghosts spawned before all-remaining-blink mode
 
@@ -74,7 +78,7 @@ export const TORCH_ALPHA_LOW       = 0.1;
 export const TORCH_PULSE_SPEED     = 2.0;        // rad/s
 export const TORCH_LIT_COLOR       = '#ffaa33';
 export const TORCH_UNLIT_COLOR     = '#664422';
-const DISTURBED_BLINKS_MULT = 3;          // blink duration multiplier once all torches lit — same flicker cadence, 3x more blinks required
+const DISTURBED_BLINKS_MULT = 3;          // blink duration multiplier once all torches lit — same flicker cadence, 3x more blinks per tick
 
 // Maze object cover color — actual cover glyph is derived from the hidden
 // ingredient via the cipher (see coverFor). Each cover taught is a cipher
@@ -142,7 +146,7 @@ class MazeObject {
     this.blinking   = false; // true while this object is the blink candidate
     this.blinkOn    = false; // current on/off toggle state
     this.blinkTimer = 0;     // s until next toggle
-    this.blinkCount = 0;     // completed on-blinks (0..BLINKS_TO_GHOST)
+    this.blinkCount = 0;     // completed on-blinks toward the next tick (0..BLINKS_PER_TICK)
   }
 }
 
@@ -577,11 +581,15 @@ export class MazeSystem {
     if (obj.blinkTimer > 0) return;
     obj.blinkTimer = BLINK_INTERVAL;
     obj.blinkOn = !obj.blinkOn;
-    if (obj.blinkOn) {
-      obj.blinkCount++;
-      const blinksNeeded = allTorchesLit ? BLINKS_TO_GHOST * DISTURBED_BLINKS_MULT : BLINKS_TO_GHOST;
-      if (obj.blinkCount >= blinksNeeded) this._convertToGhost(obj, mi);
-    }
+    if (!obj.blinkOn) return;
+    obj.blinkCount++;
+    const blinksPerTick = allTorchesLit ? BLINKS_PER_TICK * DISTURBED_BLINKS_MULT : BLINKS_PER_TICK;
+    if (obj.blinkCount < blinksPerTick) return;
+    // The blink spends a tick, exactly as a hit would — so every hit the
+    // player lands and walks away from shortens the warning.
+    obj.blinkCount = 0;
+    obj.hp--;
+    if (obj.hp <= 0) this._convertToGhost(obj, mi);
   }
 
   _convertToGhost(obj, mi) {
