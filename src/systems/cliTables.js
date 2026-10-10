@@ -12,7 +12,7 @@
  *   action — SPACE runs it.
  *
  * Every edit writes the stored canon at once (cli.save()); none of it reaches
- * the registries until ☠ PURE ROGUE relaunches and CanonOverlay applies it.
+ * the registries until ☠ (PURE ROGUE) relaunches and CanonOverlay applies it.
  */
 
 import { ITEMS, INGREDIENTS, ITEM_TYPES, WEAPON_TYPES, SUBTYPE_DEFAULTS } from '../data/items.js';
@@ -285,5 +285,5 @@ export const LIST = () => [
   tableRow('Names', NAMES),
   tableRow('Cheats', CHEATS),
   tableRow('Weapons', WEAPONS),
-  actionRow('☠ PURE ROGUE', () => window.location.reload()),
+  actionRow('☠', () => window.location.reload()),
 ];

@@ -206,7 +206,7 @@ whatever you want it to be." The player becomes the creator.
   own right — not a real terminal, but what a non-technical person would want
   one to be: accessible and mind-expanding. Every editor is a table navigated
   with arrows and SPACE/SHIFT; toggles and numbers are values stepped through.
-- **☠ PURE ROGUE** (U+2620) is the game's executable. Selecting it from `LIST`
+- **☠ PURE ROGUE** (U+2620) is the game's executable — listed in `LIST` as the bare glyph `☠`, no name. Selecting it
   relaunches the game. This is the non-ending conclusion.
 - **Canon Edits persist** across death and reload — the one exception to the
   no-persistence law, and only for what the player authored in the CLI. Runs

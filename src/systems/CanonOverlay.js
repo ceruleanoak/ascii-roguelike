@@ -5,7 +5,7 @@
  * The registries are read-only at runtime; the overlay is the one sanctioned
  * write, and it runs in the entry point before the Game is constructed, so
  * nothing has read ITEMS / RECIPES / CHARACTER_TYPES yet. The CLI itself
- * never touches the registries — it edits the stored canon, and ☠ PURE ROGUE
+ * never touches the registries — it edits the stored canon, and ☠ (PURE ROGUE)
  * relaunches so this overlay re-applies from a clean boot.
  *
  * Stored values are untrusted (the store survives across builds and can be
