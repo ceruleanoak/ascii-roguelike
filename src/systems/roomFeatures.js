@@ -1525,6 +1525,27 @@ function shuffled(arr) {
 }
 
 // Footprint bounding boxes overlap (or sit closer than `buffer` cells apart).
+// Each exit's spawn cell (where an entering player lands) — matches
+// getRandomPosition's exit zones in RoomGenerator.
+function exitSpawnCells() {
+  const centerCol = Math.floor(GRID.COLS / 2);
+  const centerRow = Math.floor(GRID.ROWS / 2);
+  return [
+    { col: centerCol, row: 2 }, { col: centerCol, row: GRID.ROWS - 3 },
+    { col: GRID.COLS - 3, row: centerRow }, { col: 2, row: centerRow },
+  ];
+}
+
+// Cells kept clear of solid structures around each exit spawn cell, so an
+// entering player never lands inside or pinned against a footprint.
+const STRUCTURE_EXIT_CLEARANCE = 3;
+
+function footprintBlocksExit(bounds) {
+  return exitSpawnCells().some(e =>
+    e.col >= bounds.minCol - STRUCTURE_EXIT_CLEARANCE && e.col <= bounds.maxCol + STRUCTURE_EXIT_CLEARANCE &&
+    e.row >= bounds.minRow - STRUCTURE_EXIT_CLEARANCE && e.row <= bounds.maxRow + STRUCTURE_EXIT_CLEARANCE);
+}
+
 function footprintsTooClose(a, b, buffer) {
   return !(a.maxCol + buffer < b.minCol || b.maxCol + buffer < a.minCol ||
            a.maxRow + buffer < b.minRow || b.maxRow + buffer < a.minRow);
@@ -1630,6 +1651,7 @@ export function generateSettlementRoom(gen, room) {
       const centerCol = SETTLEMENT_CENTER_MIN + Math.floor(Math.random() * SETTLEMENT_CENTER_SPAN);
       const centerRow = SETTLEMENT_CENTER_MIN + Math.floor(Math.random() * SETTLEMENT_CENTER_SPAN);
       const candidate = { minCol: centerCol - 2, maxCol: centerCol + 2, minRow: centerRow - 2, maxRow: centerRow + 2 };
+      if (footprintBlocksExit(candidate)) continue;
       if (placedBounds.some(b => footprintsTooClose(candidate, b, SETTLEMENT_HUT_BUFFER))) continue;
       chosenCenter = { centerCol, centerRow };
       break;
@@ -1649,6 +1671,7 @@ export function generateSettlementRoom(gen, room) {
       const centerCol = SETTLEMENT_CENTER_MIN + Math.floor(Math.random() * SETTLEMENT_CENTER_SPAN);
       const centerRow = SETTLEMENT_CENTER_MIN + Math.floor(Math.random() * SETTLEMENT_CENTER_SPAN);
       const candidate = { minCol: centerCol - 1, maxCol: centerCol + 1, minRow: centerRow - 1, maxRow: centerRow + 1 };
+      if (footprintBlocksExit(candidate)) continue;
       if (placedBounds.some(b => footprintsTooClose(candidate, b, SETTLEMENT_HUT_BUFFER))) continue;
       const shed = stampShedFootprint(room, { centerCol, centerRow });
       const { minCol, maxCol, minRow, maxRow } = shed.exteriorBounds;
@@ -2522,12 +2545,7 @@ export function seedCavern(room) {
   const CS = GRID.CELL_SIZE;
   const height = CAVERN_CLUSTER_PATTERN.length;
   const width = CAVERN_CLUSTER_PATTERN[0].length;
-  const centerCol = Math.floor(GRID.COLS / 2);
-  const centerRow = Math.floor(GRID.ROWS / 2);
-  const exitCells = [
-    { col: centerCol, row: 2 }, { col: centerCol, row: GRID.ROWS - 3 },
-    { col: GRID.COLS - 3, row: centerRow }, { col: 2, row: centerRow },
-  ];
+  const exitCells = exitSpawnCells();
   const occupied = occupiedEntityCells(room);
   const cellKey = (obj) => `${Math.round(obj.position.x / CS)},${Math.round(obj.position.y / CS)}`;
 
