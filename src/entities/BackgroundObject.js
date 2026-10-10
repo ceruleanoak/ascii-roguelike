@@ -138,8 +138,12 @@ export class BackgroundObject {
       this.hitboxOffsetY = Math.floor((GRID.CELL_SIZE - this.height) / 2); // 2px
     }
 
-    // Bullet interaction properties
-    this.bulletInteraction = this.data.bulletInteraction || 'block';
+    // Bullet interaction properties. Environmental terrain (water, lava, mud,
+    // deep snow) is ground a projectile flies over: a typeId variant's data
+    // replaces its char's outright, so without this default those variants
+    // fell back to 'block' — deep snow (borrowing the solid '█') stopped arrows.
+    this.bulletInteraction = this.data.bulletInteraction
+      || (this.isEnvironmental() ? 'pass-through' : 'block');
     this.indestructible = this.data.indestructible || false;
     // Set by deplete(): a `depletedColor` object (Sand) spent in place.
     this.depleted = false;
