@@ -1386,11 +1386,12 @@ export function getIslandPosition(islandConfig, collisionMap, existingEnemies = 
  * around a single anchor, sharing one roost/flight mode roll. Perched flocks
  * start dormant ('rest') and settle onto trees/stumps via FlockMechanic;
  * airborne flocks swirl as a group that drifts across the player's path.
- * Returns true when at least one bat spawned (caller skips further '^' picks).
+ * Any flockBehavior enemy (Bat '^', Fire Bat 'f') spawns this way.
+ * Returns true when at least one bat spawned (caller skips further picks of that bat).
  */
-export function spawnBatFlock(gen, room, clusterAnchors, islandConfig) {
+export function spawnBatFlock(gen, room, clusterAnchors, islandConfig, batChar = '^') {
   const flockSize = Math.min(1 + Math.floor(gen.currentDepth / 2), 5);
-  const perched = Math.random() < (ENEMIES['^'].flockBehavior?.perchChance ?? 0.5);
+  const perched = Math.random() < (ENEMIES[batChar].flockBehavior?.perchChance ?? 0.5);
   const anchor = clusterAnchors.length > 0
     ? clusterAnchors[Math.floor(Math.random() * clusterAnchors.length)]
     : null;
@@ -1405,7 +1406,7 @@ export function spawnBatFlock(gen, room, clusterAnchors, islandConfig) {
         : gen.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects, false);
     }
     if (!pos) continue;
-    const bat = new Enemy('^', pos.x, pos.y, gen.currentDepth);
+    const bat = new Enemy(batChar, pos.x, pos.y, gen.currentDepth);
     bat.flockMode = perched ? 'perch' : 'swirl';
     if (perched) bat.state = 'rest';
     bat.setCollisionMap(room.collisionMap);

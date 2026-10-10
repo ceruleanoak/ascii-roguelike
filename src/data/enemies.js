@@ -1032,44 +1032,49 @@ export const ENEMIES = {
 
   'f': {
     char: 'f',
+    // Reads as a bat: same '^' glyph as the green Bat, told apart by its red.
+    // See Enemy.js's `displayChar` field.
+    displayChar: '^',
     name: 'Fire Bat',
-    description: 'Keeps its distance, spitting fire, and drags a burning trail across the ground as it flies.',
-    spellDescription: 'SPITS FIRE. QUICK.',
+    description: 'Latches to flesh and sets it alight. Faster than its forest kin.',
+    spellDescription: 'DRAINS. BURNS. QUICK.',
     trueName: 'FURAX',
-    mass: 0.6,
+    mass: 0.4,
     hp: 5,
-    speed: 55,
-    damage: 1,
-    attackRange: GRID.CELL_SIZE * 4,
-    aggroRange: GRID.CELL_SIZE * 8,
-    attackCooldown: 2,
-    attackWindup: 1.2,
-    attackType: 'fire',
+    speed: 90,          // Bat is 70 — the fire bat is the quicker flyer
+    acceleration: 600,  // Same snappy darting as the Bat
+    damage: 1,  // Not used for sap attacks
+    attackRange: GRID.CELL_SIZE * 1.5,
+    aggroRange: GRID.CELL_SIZE * 10,
+    attackCooldown: 1.2,
+    attackWindup: 1.2,  // Telegraph before latching dive
+    attackType: 'sap',  // Sapping attack - locks to player
+    sapDamage: 1,
+    sapDamageInterval: 1.0,
+    sapBurnDuration: 2.0,  // Each sap tick that lands sets the player burning (CombatSystem)
+    decisionInterval: 0.4,
+    color: '#ff3322',
+    float: true,  // Flies — unaffected by lava, water, and mud
+    lavaImmune: true,
     movementStyle: 'kiter',
     movementConfig: {
-      kiteDistance: GRID.CELL_SIZE * 4,
-      retreatThreshold: GRID.CELL_SIZE * 2.5,
+      kiteDistance: GRID.CELL_SIZE * 3,
+      retreatThreshold: GRID.CELL_SIZE * 1.5,
     },
-    acceleration: 500,
-    decisionInterval: 0.3,
-    color: '#ff6622',
-    float: true,
-    lavaImmune: true,
-    trailMechanic: {
-      enabled: true,
-      trailType: 'fire',
-      trailInterval: 0.6,
-      trailDuration: 3.0,
-      trailRadius: GRID.CELL_SIZE * 0.7
+    flockBehavior: {           // Same roost/flock idle as the Bat (FlockMechanic)
+      perchChance: 0.5,
+      perchObjects: ['Y', 'ŋ'],
+      perchSearchRadius: GRID.CELL_SIZE * 6,
+      rePerchChance: 0.02,
+      swirlRadius: GRID.CELL_SIZE * 2,
+      swirlTurnRate: 2.2,
+      swirlSpeed: 70,                       // Bat swirls at 55 — scaled with its chase speed
+      sweepPlayerEvery: 3,
+      sweepOvershoot: GRID.CELL_SIZE * 8,
+      sweepJitter: GRID.CELL_SIZE * 4,
+      sweepWeaveRatio: 0.5
     },
-    deathExplosion: {
-      enabled: true,
-      projectileCount: 4,
-      projectileType: 'fire',
-      speed: 75,
-      damage: 1,
-      deathDelay: 0.8
-    },
+    knockbackMultiplier: 0.4, // Barely moves you — it wants to stick, not knock
     elementalAffinity: {
       weakness: { 'freeze': 1.8, 'wet': 1.5 }
     },

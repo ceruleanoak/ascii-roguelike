@@ -85,12 +85,15 @@ export class CombatSystem {
 
   // Staff-block-respecting damage application for enemy-initiated hits outside
   // the attack-object pipeline. Returns true if the hit killed the player.
-  _applyBlockableEnemyDamage(player, enemy, damage, damageSource) {
+  // `onLanded` runs only when the hit actually damaged a surviving player
+  // (not blocked/dodged/immune) — the hook for riders like a sap tick's burn.
+  _applyBlockableEnemyDamage(player, enemy, damage, damageSource, onLanded = null) {
     if (player.isStaffBlocking) {
       this.queueDamageNumber(player, 'BLOCK', player.position.x, player.position.y - GRID.CELL_SIZE, '#aaaaaa');
       return false;
     }
     const result = player.takeDamage(damage, damageSource);
+    if (onLanded && result?.damaged) onLanded();
     return this._reportDamageResult(result, damage, player);
   }
 
@@ -1552,8 +1555,11 @@ export class CombatSystem {
       // position to the player every frame, so any push is immediately undone
       // and would just cause jitter instead of a readable hit.
       if (updateResult && updateResult.sapDamage) {
+        // Fire Bat: each landed sap tick sets the player burning
+        const sapBurn = enemy.data.sapBurnDuration;
+        const onSapLanded = sapBurn ? () => player.applyStatusEffect('burn', sapBurn) : null;
         if (this._applyBlockableEnemyDamage(player, enemy, updateResult.sapDamage.damage,
-            { isBullet: false, element: null, attacker: enemy })) {
+            { isBullet: false, element: null, attacker: enemy }, onSapLanded)) {
           return { playerDead: true };
         }
       }

@@ -655,12 +655,15 @@ export class RoomGenerator {
     const islandConfig = this.currentLetterTemplate?.islandZone?.enabled ? this.currentLetterTemplate.islandZone : null;
     const clusterAnchors = this.pickEnemyClusterAnchors(room, 3, { islandConfig });
 
-    let batFlockSpawned = false;
+    const batFlocksSpawned = new Set();
     for (let i = 0; i < enemyCount; i++) {
       const enemyChar = getZoneRandomEnemy(this.currentDepth, room.zone);
-      // Bats spawn as one depth-scaled flock per room (roomFeatures.js), not singles
-      if (enemyChar === '^') {
-        if (!batFlockSpawned) batFlockSpawned = spawnBatFlock(this, room, clusterAnchors, islandConfig);
+      // Bats (any flockBehavior enemy) spawn as one depth-scaled flock per
+      // room (roomFeatures.js), not singles
+      if (ENEMIES[enemyChar]?.flockBehavior) {
+        if (!batFlocksSpawned.has(enemyChar) && spawnBatFlock(this, room, clusterAnchors, islandConfig, enemyChar)) {
+          batFlocksSpawned.add(enemyChar);
+        }
         continue;
       }
       const allowLiquid = ENEMIES[enemyChar]?.waterAffinity === true;

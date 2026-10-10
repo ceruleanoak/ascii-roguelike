@@ -157,7 +157,7 @@ export class RoundCombatSystem {
     for (let i = 0; i < count; i++) {
       if (room.enemies.length >= ROOM_ENEMY_CAP) break;
       const enemyChar = getZoneRandomEnemy(depth, room.zone);
-      if (!enemyChar || enemyChar === '^') continue; // bats spawn as flocks, not singles
+      if (!enemyChar || ENEMIES[enemyChar]?.flockBehavior) continue; // bats spawn as flocks, not singles
       const allowLiquid = ENEMIES[enemyChar]?.waterAffinity === true;
       const pos = gen.getRandomPosition(room.collisionMap, room.enemies, avoid, room.backgroundObjects, allowLiquid);
       if (!pos) continue;

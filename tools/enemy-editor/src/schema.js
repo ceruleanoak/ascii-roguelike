@@ -505,6 +505,7 @@ export const SECTIONS = [
     fields: [
       { key: 'sapDamage', label: 'Sap damage / tick', type: 'number', min: 0, default: 1 },
       { key: 'sapDamageInterval', label: 'Sap interval (dbl-sec)', type: 'number', min: 0.1, step: 0.1, default: 1.0 },
+      { key: 'sapBurnDuration', label: 'Sap burn (sec, 0 = none)', type: 'number', min: 0, step: 0.5, default: 0 },
     ]
   },
   {
