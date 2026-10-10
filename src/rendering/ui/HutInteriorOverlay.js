@@ -6,7 +6,7 @@ import {
   TORCH_LIGHT_RADIUS, TORCH_ALPHA_HIGH, TORCH_ALPHA_LOW,
   TORCH_PULSE_SPEED, TORCH_LIT_COLOR, TORCH_UNLIT_COLOR,
 } from '../../systems/MazeSystem.js';
-import { drawCoinArc } from '../effects/ArcTossEffects.js';
+import { drawCoinArc, drawDonationArc } from '../effects/ArcTossEffects.js';
 import { drawErrandConfirmPanel } from './ErrandConfirmOverlay.js';
 import { drawTamedRats, drawGolems } from './CompanionRenderers.js';
 import { SLOT_CHROME } from '../../data/slotChrome.js';
@@ -232,6 +232,10 @@ export class HutInteriorOverlay {
     // Weapons Master coin pay — same shared spinning-arc draw helper.
     const weaponsMasterCoinAnim = game.weaponsMasterSystem?.getCoinAnim?.();
     if (weaponsMasterCoinAnim) drawCoinArc(this.renderer, weaponsMasterCoinAnim);
+
+    // Artifact given to the Wise Fellow — the offered glyph spinning over to him.
+    const artifactArc = game.interactionSystem?.getArtifactArc?.();
+    if (artifactArc) drawDonationArc(this.renderer, artifactArc);
 
     // Shopkeeper purchases are menu-confirmed (ShopSystem's barter modal) —
     // no coin-arc animation, just the shared coin_plink SFX for parity.

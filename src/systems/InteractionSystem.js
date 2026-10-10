@@ -23,11 +23,18 @@ const SMASH_REFUSED_UNLESS_BURNED = Object.freeze({ fireBypass: true });
 // Wider than AlchemySystem's one-cell liquid radius: a liquid tile sits still
 // and a fluttering fairy does not, so the catch gets a cell and a half.
 const FAIRY_CATCH_RADIUS = GRID.CELL_SIZE * 1.5;
+const ARTIFACT_ARC_DURATION = 0.55; // matches ArcTossEffects' ARC_DURATION
 
 export class InteractionSystem {
   constructor(game) {
     this.game = game;
     this._lavaWaterCheckTimer = 0;
+    // Artifact in flight to the Wise Fellow: { startX, startY, endX, endY, t, spinPhase, char, npc }
+    this.artifactArc = null;
+  }
+
+  getArtifactArc() {
+    return this.artifactArc;
   }
 
   // SPACE in REST with nothing nearby to interact with — expanding fade-out
@@ -314,6 +321,9 @@ export class InteractionSystem {
   tryGiveArtifactToWiseFellow(npcArray) {
     const game = this.game;
     if (!npcArray) return false;
+    // Artifact still in the air — swallow the press so SPACE can't open his
+    // dialogue early or toss a second one.
+    if (this.artifactArc) return true;
     for (const npc of npcArray) {
       if (!(npc instanceof WiseFellow)) continue;
       const dist = Math.hypot(
@@ -323,16 +333,44 @@ export class InteractionSystem {
       if (dist > GRID.CELL_SIZE * 2) continue;
       if (!game.removeIngredient('⚜')) continue;
       npc.unlockRareHint(game.currentRoom?.zone || 'green', game.unlockedRareSayings);
-      // He answers the payment at once: the bought line opens on the same
-      // press. A give with no reply read as the trade failing (bug #318).
-      game.dialogueSystem.open(npc, npc.getDialogueLines(game));
+      // The Artifact spins over to him, and he answers the moment it lands —
+      // no second press: a give with no reply read as the trade failing
+      // (bug #318). The dialogue opens in _updateArtifactArc.
+      const C = GRID.CELL_SIZE;
+      this.artifactArc = {
+        startX: game.player.position.x + C / 2,
+        startY: game.player.position.y + C / 2,
+        endX: npc.position.x + C / 2,
+        endY: npc.position.y + C / 2,
+        t: 0, spinPhase: 0,
+        char: '⚜', npc
+      };
       return true;
     }
     return false;
   }
 
+  // Fly the given Artifact to the Wise Fellow, then open his bought line.
+  // Leaving the hut mid-flight drops the arc; the hint is already unlocked.
+  _updateArtifactArc(deltaTime) {
+    const arc = this.artifactArc;
+    if (!arc) return;
+    const game = this.game;
+    if (!game.interiorManager.activeNpcs().includes(arc.npc)) {
+      this.artifactArc = null;
+      return;
+    }
+    arc.t += deltaTime;
+    arc.spinPhase += deltaTime * 12;
+    if (arc.t < ARTIFACT_ARC_DURATION) return;
+    this.artifactArc = null;
+    game.dialogueSystem.open(arc.npc, arc.npc.getDialogueLines(game));
+  }
+
   // Check lava tiles adjacent to water tiles and solidify them
   update(deltaTime, backgroundObjects) {
+    this._updateArtifactArc(deltaTime);
+
     // ── Player shockwave — runs every frame (creation handled in main.js) ────
     const sw = this.game.playerShockwave;
     if (sw) {

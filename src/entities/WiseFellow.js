@@ -32,8 +32,9 @@ export class WiseFellow extends NeutralCharacter {
 
   /**
    * Swap to a rare-tier hint (gated by Artifact ⚜ payment — see
-   * InteractionSystem.tryGiveArtifactToWiseFellow, which opens the dialogue
-   * box on the new line in the same press). Re-callable — each Artifact buys
+   * InteractionSystem.tryGiveArtifactToWiseFellow, which tosses the Artifact
+   * to him and opens the dialogue box on the new line when it lands, with no
+   * second press). Re-callable — each Artifact buys
    * a fresh rare hint roll.
    *
    * `earned` carries lines this run unlocked by doing something rather than
