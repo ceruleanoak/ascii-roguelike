@@ -925,7 +925,9 @@ export class TrapSystem {
               if (Math.sqrt(dx * dx + dy * dy) <= trapData.effectRadius) {
                 if (!entry.affectedEnemies.has(enemy)) {
                   entry.affectedEnemies.add(enemy);
-                  enemy.applyStatusEffect('sleep', trapData.effectDuration);
+                  // Full Pip track: a single drowsy pip only slows; the box's
+                  // promise is sleep, so it lands at pip 3 (AI halted).
+                  enemy.applyStatusEffect('sleep', trapData.effectDuration, MAX_PIPS);
                 }
               } else {
                 // Enemy left radius — allow re-triggering if they re-enter
