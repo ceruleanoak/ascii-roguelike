@@ -2,6 +2,8 @@
 //
 // # = solid wall cell    . = floor (walkable)
 // ~ = water channel (walkable; DungeonSystem places a Puddle object on it)
+// The full glyph vocabulary (Bombable Wall, Lock Block, Simple Key, ...)
+// lives in dungeon/tiles.js.
 //
 // Coordinate contract:
 //   The grid is 24 cols × 24 rows. Row 0, row 23, col 0, col 23 are the
@@ -184,6 +186,16 @@ export function applyTemplateToCollisionMap(collisionMap, templateName, reserved
 export function getTemplateBombableCells(templateName, reservedCells = []) {
   const grid = DUNGEON_FLOOR_TEMPLATES[templateName] ?? DUNGEON_FLOOR_TEMPLATES.open;
   return cellsWithGlyph(grid, 'B', reservedCells);
+}
+
+/**
+ * Interior cells holding `glyph` — for tiles that need only their cells
+ * found: Lock Blocks ('L', a lock_block object each) and Simple Keys ('K', a
+ * key Item each). Reserved footprint cells are excluded.
+ */
+export function getTemplateCellsWithGlyph(templateName, glyph, reservedCells = []) {
+  const grid = DUNGEON_FLOOR_TEMPLATES[templateName] ?? DUNGEON_FLOOR_TEMPLATES.open;
+  return cellsWithGlyph(grid, glyph, reservedCells);
 }
 
 /**

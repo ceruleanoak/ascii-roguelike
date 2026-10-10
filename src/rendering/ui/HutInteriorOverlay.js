@@ -84,6 +84,14 @@ export class HutInteriorOverlay {
       const CS = GRID.CELL_SIZE;
       const cm = game.activeFloor.collisionMap;
       const gapCells = game.activeFloor.gapCells;
+      // A solid cell under an object that draws its own block (Lock Block,
+      // data.coversWall) keeps the wall fill but not the '≡', so the object's
+      // glyph reads alone.
+      const coveredCells = new Set();
+      for (const obj of game.activeFloor.backgroundObjects) {
+        if (!obj.data?.coversWall || obj.destroyed) continue;
+        coveredCells.add(`${Math.round(obj.position.y / CS)},${Math.round(obj.position.x / CS)}`);
+      }
       for (let r = 0; r < cm.length; r++) {
         for (let c = 0; c < (cm[r]?.length ?? 0); c++) {
           if (!cm[r][c]) continue;
@@ -120,6 +128,7 @@ export class HutInteriorOverlay {
           }
           ctx.fillStyle = '#3a2a1c';
           ctx.fillRect(c * CS, r * CS, CS, CS);
+          if (coveredCells.has(`${r},${c}`)) continue;
           ctx.fillStyle = '#6a4830';
           ctx.fillText('≡', c * CS + CS / 2, r * CS + CS / 2);
         }

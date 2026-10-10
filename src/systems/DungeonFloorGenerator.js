@@ -5,10 +5,12 @@ import { createPushRock } from './PushRock.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
 import { BOMB_BAG_CHAR } from './BombBagSystem.js';
+import { SIMPLE_KEY_CHAR } from '../data/items.js';
 import { getZoneRandomEnemy } from '../data/enemies.js';
 import { applyZoneCombatModifiers } from '../data/zones.js';
 import {
   pickRandomTemplateName, applyTemplateToCollisionMap, getTemplateWaterCells, getTemplateBombableCells,
+  getTemplateCellsWithGlyph,
   getTemplateSpawnCells, getReservedFootprintCells, paintDescentVisual, paintStairsUpVisual,
   STAIRS_COL, STAIRS_UP_ROW, NORTH_ROW, SPINE_ROW, WEST_COL, EAST_COL, EXIT_ROW,
 } from '../data/dungeonFloorTemplates.js';
@@ -19,6 +21,7 @@ import {
   pickRandomPuzzleTemplateName, applyPuzzleTemplateToCollisionMap, getPuzzleTemplateWaterCells,
   getPuzzleTemplateGapCells, getPuzzleTemplateBombableCells, getPuzzleTemplateExitCell, getPuzzleTemplateTriggers,
   getPuzzleTemplateHookPosts, getPuzzleTemplateTorches, getPuzzleTemplatePedestal, getPuzzleTemplateDais,
+  getPuzzleTemplateCellsWithGlyph,
 } from '../data/dungeonPuzzleTemplates.js';
 
 /**
@@ -157,6 +160,9 @@ export class DungeonFloorGenerator {
     }
 
     const backgroundObjects = [];
+    // Items the template itself places (Simple Keys) — every templated
+    // generator puts these in its floor's items list.
+    const templateItems = [];
     let spawnCells = [];
     if (templateName) {
       for (const { row, col } of getTemplateWaterCells(templateName, reservedCells)) {
@@ -164,6 +170,8 @@ export class DungeonFloorGenerator {
         backgroundObjects.push(new BackgroundObject('~', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
       }
       this._placeBombableWalls(backgroundObjects, getTemplateBombableCells(templateName, reservedCells));
+      this._placeLockBlocks(backgroundObjects, getTemplateCellsWithGlyph(templateName, 'L', reservedCells));
+      this._placeSimpleKeys(templateItems, getTemplateCellsWithGlyph(templateName, 'K', reservedCells));
       // Author-marked enemy spawn points ('E' in the template grid) — optional;
       // _spawnEnemies() prefers these before falling back to pickOpenCell's
       // randomness, so a template with none behaves exactly as before this existed.
@@ -198,7 +206,7 @@ export class DungeonFloorGenerator {
       return null;
     };
 
-    return { cols, rows, collisionMap, backgroundObjects, pickOpenCell, spawnCells };
+    return { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells };
   }
 
   // BFS-reachable interior cells from (startRow, startCol), 4-connected,
@@ -259,6 +267,23 @@ export class DungeonFloorGenerator {
   _placeBombableWalls(backgroundObjects, cells) {
     for (const { row, col } of cells) {
       backgroundObjects.push(new BackgroundObject('≡', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE, { typeId: 'bombable_wall' }));
+    }
+  }
+
+  // Lock Block cells ('L') — collision is already stamped solid by the
+  // template; the object is what DungeonPuzzleSystem._tryOpenLockBlock finds
+  // and removes when a key opens it.
+  _placeLockBlocks(backgroundObjects, cells) {
+    for (const { row, col } of cells) {
+      backgroundObjects.push(new BackgroundObject('▣', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE, { typeId: 'lock_block' }));
+    }
+  }
+
+  // Simple Key cells ('K') — a real key Item on each, picked up into the key
+  // item inventory like the Skull Key.
+  _placeSimpleKeys(items, cells) {
+    for (const { row, col } of cells) {
+      items.push(Object.assign(new Item(SIMPLE_KEY_CHAR, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE), { hutPlane: true }));
     }
   }
 
@@ -408,7 +433,7 @@ export class DungeonFloorGenerator {
   }
 
   _generateEntrance(depth, zone) {
-    const { cols, rows, collisionMap, backgroundObjects, pickOpenCell, spawnCells } = this._buildScaffold();
+    const { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells } = this._buildScaffold();
     this._addDecor(backgroundObjects, pickOpenCell, rows, cols);
     this._addTombs(backgroundObjects, pickOpenCell, rows, cols);
     this._placeSkullIfDue(0, { backgroundObjects, pickOpenCell, rows, cols });
@@ -430,7 +455,7 @@ export class DungeonFloorGenerator {
       roomKind: 'numbered',
       floorIndex: 0,
       gridCols: cols, gridRows: rows, collisionMap, backgroundObjects, enemies,
-      items: [], ingredients: [], npcs: [], doors: [], tombGhosts: [],
+      items: templateItems, ingredients: [], npcs: [], doors: [], tombGhosts: [],
       viewport: this._makeViewport(cols, rows),
       exitRow: EXIT_ROW, exitCol: STAIRS_COL,
       stairsUpRow: null, stairsUpCol: null, stairsUpObj: null, stairsUpLocked: false, ascendTo: null,
@@ -439,7 +464,7 @@ export class DungeonFloorGenerator {
   }
 
   _generateCorridor(depth, zone) {
-    const { cols, rows, collisionMap, backgroundObjects, pickOpenCell, spawnCells } = this._buildScaffold();
+    const { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells } = this._buildScaffold();
     this._addDecor(backgroundObjects, pickOpenCell, rows, cols);
     this._addTombs(backgroundObjects, pickOpenCell, rows, cols);
     this._placeSkullIfDue(1, { backgroundObjects, pickOpenCell, rows, cols });
@@ -474,7 +499,7 @@ export class DungeonFloorGenerator {
       roomKind: 'numbered',
       floorIndex: 1,
       gridCols: cols, gridRows: rows, collisionMap, backgroundObjects, enemies,
-      items: [], ingredients: [], npcs: [], doors: [], tombGhosts: [],
+      items: templateItems, ingredients: [], npcs: [], doors: [], tombGhosts: [],
       viewport: this._makeViewport(cols, rows),
       exitRow: null, exitCol: null,
       stairsUpRow: STAIRS_UP_ROW, stairsUpCol: STAIRS_COL, stairsUpObj, stairsUpLocked: false,
@@ -695,7 +720,7 @@ export class DungeonFloorGenerator {
   // 4429455) now that 'trapRoom' names this room instead.
   generateTrapRoom(depth, originFloorIndex) {
     const zone = this.game.currentRoom?.zone || 'gray';
-    const { cols, rows, collisionMap, backgroundObjects, pickOpenCell, spawnCells } = this._buildScaffold();
+    const { cols, rows, collisionMap, backgroundObjects, templateItems, pickOpenCell, spawnCells } = this._buildScaffold();
 
     // Locked exit until every enemy is cleared — DungeonPuzzleSystem unlocks it.
     const stairsUpObj = this._makeStairsUp(true);
@@ -725,7 +750,7 @@ export class DungeonFloorGenerator {
       roomKind: 'trapRoom',
       floorIndex: null,
       gridCols: cols, gridRows: rows, collisionMap, backgroundObjects, enemies,
-      items: [rewardItem], ingredients: [], npcs: [], doors: [], tombGhosts: [],
+      items: [rewardItem, ...templateItems], ingredients: [], npcs: [], doors: [], tombGhosts: [],
       viewport: this._makeViewport(cols, rows),
       exitRow: null, exitCol: null,
       stairsUpRow: STAIRS_UP_ROW, stairsUpCol: STAIRS_COL, stairsUpObj, stairsUpLocked: true,
@@ -772,6 +797,7 @@ export class DungeonFloorGenerator {
       : null;
 
     this._placeBombableWalls(backgroundObjects, getPuzzleTemplateBombableCells(templateName));
+    this._placeLockBlocks(backgroundObjects, getPuzzleTemplateCellsWithGlyph(templateName, 'L'));
 
     const exitCell = getPuzzleTemplateExitCell(templateName);
     const exitRow = exitCell?.row ?? STAIRS_UP_ROW;
@@ -900,6 +926,7 @@ export class DungeonFloorGenerator {
     // own column so any template can place it anywhere.
     const pedestalMarker = getPuzzleTemplatePedestal(templateName);
     const items = [];
+    this._placeSimpleKeys(items, getPuzzleTemplateCellsWithGlyph(templateName, 'K'));
     let weaponPedestal = null;
     if (pedestalMarker) {
       // Character authored directly on the marker (dungeon editor's Pedestal

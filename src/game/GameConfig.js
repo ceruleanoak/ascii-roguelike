@@ -1424,6 +1424,26 @@ export const BACKGROUND_OBJECT_VARIANTS = {
       default: { animation: 'bounce', message: null }
     }
   },
+  // Lock Block — a dungeon template cell (glyph 'L') that a held key opens on
+  // SPACE (DungeonPuzzleSystem._tryOpenLockBlock): a Simple Key is spent, a
+  // universal key (opensAnyLock) is not. The cell is stamped solid in the
+  // floor's collisionMap; coversWall tells HutInteriorOverlay to leave the
+  // wall glyph off so this block reads as itself, not as masonry.
+  'lock_block': {
+    char: '▣',
+    name: 'Lock Block',
+    color: '#cc3333',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    coversWall: true,
+    hp: null,
+    solid: true,
+    interactions: {
+      default: { animation: 'bounce', message: null }
+    }
+  },
   // Cavern Torch — one of the two lit torches every Cavern holds. Breaks in a
   // single hit; its drop is resolved by CavernSystem.dropTorchLoot (a Stick,
   // rarely Slick Oil with it). The glow is drawn from the floor's `torches`

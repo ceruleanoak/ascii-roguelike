@@ -8,10 +8,14 @@ import { tickTriggers, within, overlapsCell, setTriggerVisual } from './triggerM
 import { tagInteriorPlane } from './PlaneSystem.js';
 import { Item } from '../entities/Item.js';
 import { BOMB_CHAR } from './BombBagSystem.js';
+import { SIMPLE_KEY_CHAR } from '../data/items.js';
 
 // Proximity radius for door/switch/slot interaction (px from cell center) —
 // mirrors DungeonSystem's DOOR_INTERACT_RADIUS.
 const INTERACT_RADIUS = GRID.CELL_SIZE * 2;
+// A Lock Block opens from any of the 8 cells around it — the Progression
+// Solver (dungeon/progressionSolver.js LOCK_REACH_CELLS) assumes the same.
+const LOCK_BLOCK_REACH = GRID.CELL_SIZE * 1.5;
 
 const SFX_BEEP_INTERVAL = 2.0; // Compass ping throttle, seconds
 
@@ -270,6 +274,7 @@ export class DungeonPuzzleSystem {
     const floor = game.activeFloor;
     if (!floor) return false;
 
+    if (this._tryOpenLockBlock(floor)) return true;
     if (floor.roomKind === 'numbered' && floor.floorIndex === 1) {
       if (this._tryUnlockCorridorGate(floor)) return true;
     }
@@ -277,6 +282,36 @@ export class DungeonPuzzleSystem {
       if (this._tryDepositPyramid(floor)) return true;
     }
     return false;
+  }
+
+  // Lock Block — SPACE beside one with a key opens it, on any floor whose
+  // template placed one ('L'). A universal key (opensAnyLock) opens it for
+  // free; otherwise one Simple Key is spent. The nearest block in reach is
+  // the one opened, so a single press never spends two keys.
+  _tryOpenLockBlock(floor) {
+    const { game } = this;
+    const inventory = game.inventorySystem;
+    const universal = inventory.holdsUniversalKey(game);
+    if (!universal && !inventory.hasKeyItem(SIMPLE_KEY_CHAR)) return false;
+
+    const player = game.player;
+    let nearest = null, nearestDist = Infinity;
+    for (const obj of floor.backgroundObjects) {
+      if (obj.typeId !== 'lock_block' || obj.destroyed) continue;
+      const dist = Math.hypot(obj.position.x - player.position.x, obj.position.y - player.position.y);
+      if (dist < LOCK_BLOCK_REACH && dist < nearestDist) { nearest = obj; nearestDist = dist; }
+    }
+    if (!nearest) return false;
+
+    if (!universal) inventory.consumeKeyItem(SIMPLE_KEY_CHAR);
+    floor.backgroundObjects.splice(floor.backgroundObjects.indexOf(nearest), 1);
+    const row = Math.round(nearest.position.y / GRID.CELL_SIZE);
+    const col = Math.round(nearest.position.x / GRID.CELL_SIZE);
+    if (floor.collisionMap[row]) floor.collisionMap[row][col] = false;
+    this._spawnUnlockEffect(nearest);
+    game.renderer?.markBackgroundDirty?.();
+    game.audioSystem?.playSFX?.('dungeon_key_use');
+    return true;
   }
 
   // Corridor floor's West descent — SPACE while locked, key in hand,

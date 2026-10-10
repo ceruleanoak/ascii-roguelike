@@ -14,6 +14,8 @@
 // B = Bombable Wall — solid and drawn exactly like '#', but holds a
 //     bombable_wall object that only a bomb blast breaks, opening the cell
 //     (CavernSystem.bombBlast). The Bomb Trial hides its triggers behind them.
+// L = Lock Block — solid; SPACE beside it with a key opens it.
+// K = Simple Key — floor holding the key that opens one Lock Block.
 //
 // Coordinate contract: 24 cols × 24 rows, outer border (row 0, row 23,
 // col 0, col 23) always walls — the generator stamps these unconditionally
@@ -157,6 +159,11 @@ export function applyPuzzleTemplateToCollisionMap(collisionMap, templateName) {
 /** Interior cells a template marks as Bombable Wall ('B') — the generator places a bombable_wall object on each. */
 export function getPuzzleTemplateBombableCells(templateName) {
   return cellsWithGlyph(getPuzzleTemplate(templateName).grid, 'B');
+}
+
+/** Interior cells holding `glyph` — Lock Blocks ('L') and Simple Keys ('K'). */
+export function getPuzzleTemplateCellsWithGlyph(templateName, glyph) {
+  return cellsWithGlyph(getPuzzleTemplate(templateName).grid, glyph);
 }
 
 /** Interior cells a template marks as water ('~'). Walkable — the generator places a Puddle on each. */

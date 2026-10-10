@@ -13,9 +13,10 @@
 //   puzzle mode (Puzzle Room templates — a sealed room):
 //     from the North landing, the player must be able to make every trigger
 //     active and reach the Exit ('X') using only the tools the room itself
-//     supplies (pedestal weapon, dais Bomb Bag), and no reachable state —
-//     a Push Rock shoved the wrong way, a one-way hook across a gap taken too
-//     early — may cut that off.
+//     supplies (pedestal weapon, dais Bomb Bag, Simple Keys), and no
+//     reachable state — a Push Rock shoved the wrong way, a one-way hook
+//     across a gap taken too early, a Simple Key spent on the wrong Lock
+//     Block — may cut that off.
 //
 // Timing is not proven: timed triggers that can't be struck in one swing get
 // a warning when the walk between them looks longer than their timer.
@@ -32,6 +33,7 @@ const BASE_STRIKE_CELLS = 1.5;      // a held melee weapon reaches the 8 neighbo
 const HOOK_MIN_CELLS = 4;           // hook posts only count a crack segment this far out (generatePuzzleRoom)
 const BOMB_BLAST_CELLS = 40 / CELL_PX;
 const TORCH_IGNITE_CELLS = 1.2;     // TORCH_INTERACT_RADIUS
+const LOCK_REACH_CELLS = 1.5;       // LOCK_BLOCK_REACH (DungeonPuzzleSystem)
 // Exploring every order of every trigger is exponential; past this many
 // states the proof is abandoned with a warning rather than hanging the editor.
 const STATE_CAP = 100000;
@@ -188,6 +190,11 @@ function solveFloor(map, contract, errors, warnings) {
   if (unreached.length) {
     warnings.push(`${unreached.length} walkable cell(s) can't be reached from the staircases.`);
   }
+  const locks = tiles.filter(t => t === 'L').length;
+  const keys = tiles.filter(t => t === 'K').length;
+  if (locks > keys) {
+    warnings.push(`${locks} Lock Block(s) but ${keys} Simple Key(s) — the rest open only with a key carried in.`);
+  }
   return { unreached };
 }
 
@@ -209,8 +216,20 @@ function solvePuzzle(map, contract, fixtures, suppliedTools, errors, warnings) {
   const pushRocks = triggers.filter(t => t.kind === 'push');
   const plainTriggers = triggers.filter(t => t.kind !== 'push');
   const hookPosts = (fixtures.hookPosts ?? []).map(p => at(p.row, p.col));
-  const bombables = [];
-  for (let i = 0; i < tiles.length; i++) if (tiles[i] === 'B') bombables.push(i);
+  // Gates: solid tiles a tool opens — Bombable Walls (a bomb) and Lock Blocks
+  // (a key). `open` in a state is a bitmask over this list.
+  const gates = [];
+  const simpleKeys = [];
+  for (let i = 0; i < tiles.length; i++) {
+    if (tiles[i] === 'B') gates.push({ index: i, opensWith: 'bomb' });
+    if (tiles[i] === 'L') gates.push({ index: i, opensWith: 'key' });
+    if (tiles[i] === 'K') simpleKeys.push(i);
+  }
+  // Bitmasks are 32-bit; past that the proof would silently be wrong.
+  if (gates.length > 30 || simpleKeys.length > 30) {
+    errors.push(`Too many to prove: ${gates.length} Bombable Walls/Lock Blocks and ${simpleKeys.length} Simple Keys (30 each at most).`);
+    return { unreached: [] };
+  }
 
   // Tool sources: the pedestal holds the supplied weapon, the dais holds the
   // Bomb Bag. A source with no cell is treated as already in hand.
@@ -230,7 +249,7 @@ function solvePuzzle(map, contract, fixtures, suppliedTools, errors, warnings) {
   const arrival = landingCellFor(contract.NORTH_ROW, contract.STAIRS_COL, contract);
   const arrivalIndex = at(arrival.row, arrival.col);
 
-  // Geometry = which Bombable Walls are open + where each Push Rock sits.
+  // Geometry = which gates are open + where each Push Rock sits.
   // rockDirs[k] is -1 (unpushed) or an index into DIRECTIONS_4.
   const rockCell = (k, rockDirs) => {
     const rock = pushRocks[k];
@@ -243,7 +262,7 @@ function solvePuzzle(map, contract, fixtures, suppliedTools, errors, warnings) {
     let geo = geometryCache.get(key);
     if (geo) return geo;
     const rockCells = new Set(rockDirs.map((_, k) => rockCell(k, rockDirs)));
-    const openCells = new Set(bombables.filter((_, k) => openMask & (1 << k)));
+    const openCells = new Set(gates.filter((_, k) => openMask & (1 << k)).map(g => g.index));
     const solid = i => rockCells.has(i) || (DUNGEON_TILES[tiles[i]].solid && !openCells.has(i));
     // A strike passes over gaps and water, never through walls or rocks.
     const stopsStrike = i => rockCells.has(i) || (solid(i) && !DUNGEON_TILES[tiles[i]].reachOver);
@@ -293,18 +312,19 @@ function solvePuzzle(map, contract, fixtures, suppliedTools, errors, warnings) {
 
   // ── State search ──
   // A state: the region the player stands in, which plain triggers are
-  // active, which Bombable Walls are open, which tool sources are picked up,
-  // and where every Push Rock sits.
+  // active, which gates are open, which tool sources and Simple Keys are
+  // picked up, how many keys are spent, and where every Push Rock sits.
   const start = {
     label: geometry(0, pushRocks.map(() => -1)).labels[arrivalIndex],
-    trig: 0, open: 0, tools: 0, rocks: pushRocks.map(() => -1),
+    trig: 0, open: 0, tools: 0, keys: 0, spent: 0, rocks: pushRocks.map(() => -1),
   };
   if (start.label === -1) {
     errors.push(`The North landing ${cellName(arrival.row, arrival.col)} is solid — the player arrives in a wall.`);
     return { unreached: [] };
   }
 
-  const keyOf = s => `${s.label}|${s.trig}|${s.open}|${s.tools}|${s.rocks.join(',')}`;
+  const keyOf = s => `${s.label}|${s.trig}|${s.open}|${s.tools}|${s.keys}|${s.spent}|${s.rocks.join(',')}`;
+  const bitCount = mask => { let n = 0; for (; mask; mask &= mask - 1) n++; return n; };
   const states = [start];
   const parent = [-1];
   const via = [''];
@@ -353,16 +373,27 @@ function solvePuzzle(map, contract, fixtures, suppliedTools, errors, warnings) {
         push({ ...s, trig: s.trig | (1 << k) }, `activate ${t.kind} ${cellName(t.row, t.col)}`);
       }
     });
-    if (kit.bomb) {
-      bombables.forEach((b, k) => {
-        if (s.open & (1 << k)) return;
-        if (!regionWithin(geo, s.label, b, BOMB_BLAST_CELLS)) return;
-        const open = s.open | (1 << k);
-        // A region's label is its lowest cell, so it names a cell still in the grown region.
-        const label = geometry(open, s.rocks).labels[s.label];
-        push({ ...s, open, label }, `bomb ${cellName(rowOf(b), colOf(b))}`);
-      });
-    }
+    simpleKeys.forEach((cell, k) => {
+      if (s.keys & (1 << k) || geo.labels[cell] !== s.label) return;
+      push({ ...s, keys: s.keys | (1 << k) }, `take key ${cellName(rowOf(cell), colOf(cell))}`);
+    });
+    const keysHeld = bitCount(s.keys) - s.spent;
+    gates.forEach((gate, k) => {
+      if (s.open & (1 << k)) return;
+      let spent = s.spent;
+      if (gate.opensWith === 'bomb') {
+        if (!kit.bomb || !regionWithin(geo, s.label, gate.index, BOMB_BLAST_CELLS)) return;
+      } else {
+        if (!kit.anyLock && keysHeld < 1) return;
+        if (!regionWithin(geo, s.label, gate.index, LOCK_REACH_CELLS)) return;
+        if (!kit.anyLock) spent++;
+      }
+      const open = s.open | (1 << k);
+      // A region's label is its lowest cell, so it names a cell still in the grown region.
+      const label = geometry(open, s.rocks).labels[s.label];
+      const verb = gate.opensWith === 'bomb' ? 'bomb' : 'unlock';
+      push({ ...s, open, spent, label }, `${verb} ${cellName(rowOf(gate.index), colOf(gate.index))}`);
+    });
     if (kit.whip) {
       for (const post of hookPosts) {
         if (geo.solid(post) || geo.labels[post] === s.label) continue;

@@ -10,6 +10,9 @@
 //   solid      blocks movement until opened (collisionMap true)
 //   opensWith  null (permanent) or the tool that makes a solid tile walkable:
 //              'bomb' — a Bomb blast breaks it (CavernSystem.bombBlast)
+//              'key'  — SPACE beside it with a Simple Key (spent) or a
+//                       universal key (kept) opens it
+//                       (DungeonPuzzleSystem._tryOpenLockBlock)
 //   reachOver  a strike (whip crack, boomerang) passes over it even though it
 //              is solid — a Gap is a void, not a wall
 //   modes      which template kinds may use it: 'floor' (Interior —
@@ -52,6 +55,17 @@ export const DUNGEON_TILES = {
     name: 'Bombable Wall', solid: true, opensWith: 'bomb', reachOver: false,
     modes: ['floor', 'puzzle'],
     editor: { bg: '#3a3a3a', fg: '#e05a5a', glyph: 'B' },
+  },
+  'L': {
+    name: 'Lock Block', solid: true, opensWith: 'key', reachOver: false,
+    modes: ['floor', 'puzzle'],
+    editor: { bg: '#4a1c1c', fg: '#ff7070', glyph: 'L' },
+  },
+  // Plain floor holding a Simple Key, which opens one Lock Block.
+  'K': {
+    name: 'Simple Key', solid: false, opensWith: null, reachOver: true,
+    modes: ['floor', 'puzzle'],
+    editor: { bg: '#161616', fg: '#e0d890', glyph: 'K' },
   },
 };
 

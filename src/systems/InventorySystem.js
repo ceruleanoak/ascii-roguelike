@@ -298,8 +298,16 @@ export class InventorySystem {
    */
   hasKeyItem(char, game = null) {
     if (this.keyItemInventory.some(item => item.char === char)) return true;
-    if (game?.player?.quickSlots?.some(item => item?.data?.opensAnyLock)) return true;
-    return false;
+    return this.holdsUniversalKey(game);
+  }
+
+  /**
+   * Is a universal-key weapon (data.opensAnyLock) equipped in a quick slot?
+   * For locks that spend an ordinary key but not a universal one (Lock
+   * Blocks), so the caller knows whether to consumeKeyItem.
+   */
+  holdsUniversalKey(game) {
+    return !!game?.player?.quickSlots?.some(item => item?.data?.opensAnyLock);
   }
 
   /**
