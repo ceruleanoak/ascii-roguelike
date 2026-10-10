@@ -75,8 +75,7 @@ export class CameraZoomSystem {
     if (state === GAME_STATES.EXPLORE && player) {
       const { entities, gridCols, gridRows } = this._resolveActiveLayer(game, player);
 
-      const offsetX = Math.floor((GRID.WIDTH - gridCols * GRID.CELL_SIZE) / 2);
-      const offsetY = Math.floor((GRID.HEIGHT - gridRows * GRID.CELL_SIZE) / 2);
+      const { x: offsetX, y: offsetY } = layerCanvasOffset(gridCols, gridRows);
       const canvasX = offsetX + player.position.x + player.width / 2;
       const canvasY = offsetY + player.position.y + player.height / 2;
       const desiredXPercent = (canvasX / GRID.WIDTH) * 100;
@@ -272,6 +271,28 @@ export class CameraZoomSystem {
     return { x: this.originXPercent, y: this.originYPercent };
   }
 
+  // An entity's center in CANVAS pixels — the space the zoom origin lives in.
+  // Interior floors (Dungeon/Hut) and the Maze are smaller than the surface
+  // grid and drawn centered on the canvas, so their entities' positions are
+  // interior-local and need the same centering offset update() applies to the
+  // player. Without it every interior enemy was projected up to ~3 cells
+  // up-left of where it is drawn: judged off-screen while standing next to
+  // the player near a top/left wall, which aborted its Strike every frame and
+  // left it frozen in place (bug #398).
+  entityCanvasCenter(entity) {
+    const game = this.game;
+    const player = game.player;
+    let offset = { x: 0, y: 0 };
+    if (player && game.stateMachine.getCurrentState() === GAME_STATES.EXPLORE) {
+      const { gridCols, gridRows } = this._resolveActiveLayer(game, player);
+      offset = layerCanvasOffset(gridCols, gridRows);
+    }
+    return {
+      x: offset.x + entity.position.x + (entity.width ?? GRID.CELL_SIZE) / 2,
+      y: offset.y + entity.position.y + (entity.height ?? GRID.CELL_SIZE) / 2
+    };
+  }
+
   // Whether `entity` falls inside the visible canvas under the current zoom
   // transform. At scale 1 (no zoom) everything is on-screen by definition.
   // Same projection OffscreenEnemyIndicators uses to place its edge arrows —
@@ -283,12 +304,20 @@ export class CameraZoomSystem {
     if (scale <= 1) return true;
     const ox = (this.originXPercent / 100) * GRID.WIDTH;
     const oy = (this.originYPercent / 100) * GRID.HEIGHT;
-    const ex = entity.position.x + (entity.width ?? GRID.CELL_SIZE) / 2;
-    const ey = entity.position.y + (entity.height ?? GRID.CELL_SIZE) / 2;
+    const { x: ex, y: ey } = this.entityCanvasCenter(entity);
     const screenX = ox + (ex - ox) * scale;
     const screenY = oy + (ey - oy) * scale;
     return screenX >= 0 && screenX <= GRID.WIDTH && screenY >= 0 && screenY <= GRID.HEIGHT;
   }
+}
+
+// Canvas-pixel offset of a gridCols x gridRows layer drawn centered on the
+// canvas (zero for the full-size surface grid).
+function layerCanvasOffset(gridCols, gridRows) {
+  return {
+    x: Math.floor((GRID.WIDTH - gridCols * GRID.CELL_SIZE) / 2),
+    y: Math.floor((GRID.HEIGHT - gridRows * GRID.CELL_SIZE) / 2)
+  };
 }
 
 // Standard CSS "ease-in-out" cubic bezier — control points (0.42, 0), (0.58, 1).

@@ -41,8 +41,7 @@ export function drawOffscreenEnemyIndicators(renderer, game, enemies) {
     if (enemy.sniperHidden) continue;
     if (game.cameraZoomSystem.isEntityOnScreen(enemy)) continue;
 
-    const ex = enemy.position.x + (enemy.width ?? GRID.CELL_SIZE) / 2;
-    const ey = enemy.position.y + (enemy.height ?? GRID.CELL_SIZE) / 2;
+    const { x: ex, y: ey } = game.cameraZoomSystem.entityCanvasCenter(enemy);
     const dx = ex - ox;
     const dy = ey - oy;
     if (dx === 0 && dy === 0) continue;
