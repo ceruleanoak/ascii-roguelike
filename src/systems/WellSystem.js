@@ -6,6 +6,7 @@
  *
  *   ¤  Infused Coin (consumable slot)  → activates the magic meter
  *   ★  Lucky Coin   (consumable slot)  → permanent half-power luck blessing
+ *   ⊚  Frog Coin    (consumable slot)  → the Witch's frog curse (PolymorphSystem)
  *   c  Coin         (raw ingredient)    → zone-specific blessing, well stays usable
  *
  * Raw-coin rewards depend on the current zone:
@@ -19,7 +20,7 @@
  * The green/red/cyan blessings are run-flags and cannot stack — a repeat toss
  * lands silently (plink, no flash, no message). Yellow drops are repeatable.
  *
- * All offerings play the spinning-arc animation. Slot offerings (¤, ★)
+ * All offerings play the spinning-arc animation. Slot offerings (¤, ★, ⊚)
  * require the slot to be armed first (number key) then thrown with SPACE —
  * see tryOfferArmedSlot(), mirroring AlchemySystem.tryFillArmedBottle's
  * arm-then-SPACE shape — and land with a flash that consumes the well. Raw-coin
@@ -34,6 +35,8 @@ const ARC_DURATION = 0.55;                       // total seconds for the coin a
 const ARC_PEAK_HEIGHT = GRID.CELL_SIZE * 4;      // how high the arc peaks above the midpoint
 const FLASH_DURATION = 0.6;                      // screen flash fade time
 const RED_WELL_COST = 5;                         // raw coins a red well takes before it blesses
+// Slot-offering type → the coin char it consumes from the slot.
+const OFFERING_CHARS = { infused: '¤', lucky: '★', frog: '⊚' };
 
 export class WellSystem {
   constructor(game) {
@@ -96,6 +99,7 @@ export class WellSystem {
     // Skip if this offering is redundant for the current state.
     if (offering.type === 'infused' && player.magicMeter?.active) return false;
     if (offering.type === 'lucky'   && player.luckBlessed)        return false;
+    if (offering.type === 'frog'    && player.polymorphed)        return false;
 
     game.wellCoinAnim = {
       startX: px,
@@ -105,7 +109,7 @@ export class WellSystem {
       t: 0,
       spinPhase: 0,
       slotIndex: offering.index,
-      offeringType: offering.type,   // 'infused' | 'lucky'
+      offeringType: offering.type,   // 'infused' | 'lucky' | 'frog'
       room                            // anim aborts if player warps out
     };
 
@@ -166,19 +170,23 @@ export class WellSystem {
   // ── Internal ──────────────────────────────────────────────────────────────
 
   // Returns the first slot holding a recognized offering, or null. Infused Coin
-  // takes priority when both are equipped (the magic meter is the more central
-  // ritual; players who want the lucky blessing can move the coins around).
+  // takes priority when several are equipped (the magic meter is the more
+  // central ritual; players who want the lucky blessing can move the coins
+  // around), then Lucky Coin, then Frog Coin.
   _findOfferingSlot() {
     const inv = this.game.inventorySystem;
     if (!inv) return null;
     const slots = inv.equippedConsumables || [];
     let luckyIndex = -1;
+    let frogIndex = -1;
     for (let i = 0; i < slots.length; i++) {
       const ch = slots[i]?.data?.char;
       if (ch === '¤') return { index: i, type: 'infused' };
       if (ch === '★' && luckyIndex < 0) luckyIndex = i;
+      if (ch === '⊚' && frogIndex < 0) frogIndex = i;
     }
     if (luckyIndex >= 0) return { index: luckyIndex, type: 'lucky' };
+    if (frogIndex >= 0) return { index: frogIndex, type: 'frog' };
     return null;
   }
 
@@ -250,7 +258,7 @@ export class WellSystem {
     const inv = game.inventorySystem;
     if (!player || !inv) return;
 
-    // The coin lands. Same plink for ¤ and ★ — the well's voice doesn't
+    // The coin lands. Same plink for ¤, ★ and ⊚ — the well's voice doesn't
     // distinguish offerings, only the player's reward does.
     game.audioSystem?.playSFX?.('coin_plink');
 
@@ -268,7 +276,7 @@ export class WellSystem {
 
     // Consume the offering coin from its slot.
     const slotIndex = anim.slotIndex;
-    const expectedChar = anim.offeringType === 'lucky' ? '★' : '¤';
+    const expectedChar = OFFERING_CHARS[anim.offeringType];
     if (inv.equippedConsumables[slotIndex]?.data?.char === expectedChar) {
       inv.equippedConsumables[slotIndex] = null;
     }
@@ -276,7 +284,12 @@ export class WellSystem {
       player.equippedConsumables[slotIndex] = null;
     }
 
-    if (anim.offeringType === 'lucky') {
+    if (anim.offeringType === 'frog') {
+      // The Frog Coin carries the Witch's curse: the well hands it back as
+      // frog form, cursed — exits forced open, cured by the Lake Rusalka or a
+      // HEAL/UNCURSE wish. activatePolymorph plays the transform SFX.
+      game.polymorphSystem?.activatePolymorph(game, true);
+    } else if (anim.offeringType === 'lucky') {
       // Permanent half-power luck blessing for the rest of the run. Loot/exit
       // hooks read player.luckBlessed; the next applyEquipmentEffectsToPlayer
       // pass will leave the flag intact since it lives outside the recompute.
@@ -303,7 +316,8 @@ export class WellSystem {
     if (next) {
       const redundant =
         (next.type === 'infused' && player.magicMeter?.active) ||
-        (next.type === 'lucky'   && player.luckBlessed);
+        (next.type === 'lucky'   && player.luckBlessed) ||
+        (next.type === 'frog'    && player.polymorphed);
       if (!redundant) anim.room.well.consumed = false;
     }
 
