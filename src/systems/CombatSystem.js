@@ -1128,7 +1128,8 @@ export class CombatSystem {
               // melee applies 'zap', keeping item data ('stun' + electric) as-is.
               const attackStatus = (attack.onHit === 'stun' && attack.electric) ? 'zap' : attack.onHit;
               if (attack.onHit && !acidOutOfCharges && enemy.shouldApplyStatusEffect(attackStatus)) {
-                const modifiedDuration = statusDuration * elementalMod;
+                // statusDurationScale: per-effect multiplier an attack can carry (Bat: dizzy ×2).
+                const modifiedDuration = statusDuration * elementalMod * (attack.statusDurationScale?.[attackStatus] ?? 1);
                 applyOnHitStatusEffect(enemy, attackStatus, modifiedDuration);
                 // Emit impact effect for visual feedback
                 this.impactEffects.push({ x: enemy.position.x, y: enemy.position.y, onHit: attack.onHit, color: attack.color });
@@ -1142,7 +1143,7 @@ export class CombatSystem {
               // (acidOutOfCharges): oils are a separate resource from Acid
               // Blade's per-room charge counter, so running out of charges
               // must not suppress an unrelated oil's effect.
-              applyExtraOnHitEffects(this, enemy, attack.extraOnHit, attack.color);
+              applyExtraOnHitEffects(this, enemy, attack.extraOnHit, attack.color, attack.statusDurationScale);
 
               // Whip disarm — the lash rips carried gear out of an armed
               // enemy's hands. Sets the same flag the electric jolt uses;

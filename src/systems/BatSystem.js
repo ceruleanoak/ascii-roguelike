@@ -1,4 +1,5 @@
 import { GRID } from '../game/GameConfig.js';
+import { planeOf } from './PlaneSystem.js';
 
 // Bat weapons (data.batCharge — Bat, Rubber Bat): hold-to-windup swing.
 //
@@ -9,7 +10,11 @@ import { GRID } from '../game/GameConfig.js';
 // through the wound arc. Sweep segments carry batLaunch — CombatSystem launches
 // non-heavy enemies along the contact angle (see the melee hit path there).
 // Damage and launch force scale with the windup ratio at release. Every
-// sweep leaves what it hits dizzy.
+// sweep leaves what it hits dizzy, for twice the usual on-hit duration.
+//
+// Launch steering: a direction the player is holding (WASD) at impact pulls
+// the launch toward it, and a mild keen bends it toward the nearest other
+// enemy ahead — bat-struck enemies tend to ricochet into the crowd.
 //
 // Charge state (isCharging / chargeTime) lives on the Item like every other
 // hold-to-charge weapon; this system owns the visual and the release sweep.
@@ -17,6 +22,10 @@ import { GRID } from '../game/GameConfig.js';
 const FULL_WINDUP = Math.PI * 1.5; // 270°
 const BLINK_PERIOD = 0.09;         // full-charge white blink cadence (seconds)
 const MIN_LAUNCH_RATIO = 0.3;      // a tap still launches a little
+const DIZZY_DURATION_SCALE = 2;    // bat dizzy lasts twice the default on-hit duration
+const HELD_DIRECTION_WEIGHT = 0.65; // how hard a held WASD direction pulls the launch
+const KEEN_WEIGHT = 0.25;          // mild: a nudge toward the nearest enemy, not homing
+const KEEN_RANGE = GRID.CELL_SIZE * 8;
 
 export class BatSystem {
   constructor(game) {
@@ -116,6 +125,7 @@ export class BatSystem {
         // (Barbed Bat's poison barb) keeps it as the primary; dizzy rides along.
         onHit: weapon.data.onHit ?? 'dizzy',
         extraOnHit: weapon.data.onHit ? ['dizzy'] : undefined,
+        statusDurationScale: { dizzy: DIZZY_DURATION_SCALE },
         knockback: 0,          // heavy enemies hold their ground; launch handles the rest
         batLaunch: true,
         launchAngle: angle,
@@ -137,13 +147,34 @@ export class BatSystem {
   applyLaunch(enemy, attack) {
     const isHeavy = (enemy.data.mass ?? 1) >= 2 || enemy.data.isBoss || enemy.isBossEntity;
     if (isHeavy) return;
-    this.game.physicsSystem.applyKnockbackDir(
-      enemy,
-      Math.cos(attack.launchAngle),
-      Math.sin(attack.launchAngle),
-      attack.launchForce,
-      0.45
-    );
+    const dir = this._steerLaunch(enemy, Math.cos(attack.launchAngle), Math.sin(attack.launchAngle));
+    this.game.physicsSystem.applyKnockbackDir(enemy, dir.x, dir.y, attack.launchForce, 0.45);
+  }
+
+  // Bend the contact-angle launch: first toward the WASD direction the player
+  // is holding, then mildly toward the nearest other enemy in front of the
+  // flight path (within 90° of it, so the keen never reverses a launch).
+  _steerLaunch(enemy, x, y) {
+    const keys = this.game.keys || {};
+    const hx = (keys.d ? 1 : 0) - (keys.a ? 1 : 0);
+    const hy = (keys.s ? 1 : 0) - (keys.w ? 1 : 0);
+    if (hx || hy) ({ x, y } = blend(x, y, hx, hy, HELD_DIRECTION_WEIGHT));
+
+    const ex = enemy.position.x;
+    const ey = enemy.position.y;
+    let target = null;
+    let bestDist = KEEN_RANGE;
+    for (const other of this.game._activeEnemies()) {
+      if (other === enemy || !(other.hp > 0) || planeOf(other) !== planeOf(enemy)) continue;
+      const dx = other.position.x - ex;
+      const dy = other.position.y - ey;
+      const dist = Math.hypot(dx, dy);
+      if (dist === 0 || dist > bestDist || dx * x + dy * y <= 0) continue;
+      bestDist = dist;
+      target = { x: dx / dist, y: dy / dist };
+    }
+    if (target) ({ x, y } = blend(x, y, target.x, target.y, KEEN_WEIGHT));
+    return { x, y };
   }
 
   _resetCharge(weapon) {
@@ -201,4 +232,14 @@ export class BatSystem {
     if (idx !== -1) list.splice(idx, 1);
     this.windupVisual = null;
   }
+}
+
+// Weighted blend of two directions, renormalized. If they cancel (held
+// straight back against the swing), the original direction stands.
+function blend(ax, ay, bx, by, weight) {
+  const bl = Math.hypot(bx, by) || 1;
+  const x = ax * (1 - weight) + (bx / bl) * weight;
+  const y = ay * (1 - weight) + (by / bl) * weight;
+  const len = Math.hypot(x, y);
+  return len < 1e-3 ? { x: ax, y: ay } : { x: x / len, y: y / len };
 }

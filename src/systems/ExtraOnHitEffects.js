@@ -36,7 +36,9 @@ export function applyOnHitStatusEffect(enemy, effect, duration) {
 // of those gates). Extras use a flat duration; they don't inherit the
 // primary's wet-bonus extended durations, which are specific to a weapon's
 // own onHit==='stun'/'freeze' combo with isWet.
-export function applyExtraOnHitEffects(combatSystem, enemy, extraOnHitList, color) {
+// durationScale: the attack's `statusDurationScale` ({ effect: multiplier }),
+// so a weapon that lengthens one of its effects lengthens it as an extra too.
+export function applyExtraOnHitEffects(combatSystem, enemy, extraOnHitList, color, durationScale = null) {
   if (!extraOnHitList || extraOnHitList.length === 0) return;
   const baseDuration = 3.0;
 
@@ -50,7 +52,7 @@ export function applyExtraOnHitEffects(combatSystem, enemy, extraOnHitList, colo
     if (elementalMod === 0.0) continue;
     if (!enemy.shouldApplyStatusEffect(onHit)) continue;
 
-    applyOnHitStatusEffect(enemy, onHit, baseDuration * elementalMod);
+    applyOnHitStatusEffect(enemy, onHit, baseDuration * elementalMod * (durationScale?.[onHit] ?? 1));
     combatSystem.impactEffects.push({ x: enemy.position.x, y: enemy.position.y, onHit, color });
   }
 }
