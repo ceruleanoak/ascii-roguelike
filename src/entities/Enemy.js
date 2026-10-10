@@ -53,6 +53,7 @@ import {
   isEnemyFrozen
 } from '../systems/EnemyStatusEffects.js';
 import { absorbsZap } from '../systems/ImbuePoolSystem.js';
+import { gooRenderScale, gooFontSize, gooBodyHitbox } from './gooBody.js';
 
 // ─── Enemy AI Debug Logger ─────────────────────────────────────────────────
 // Toggle in browser console: window.ENEMY_AI_DEBUG = true
@@ -2192,17 +2193,17 @@ export class Enemy {
     return Math.floor(Date.now() / 250) % 2 === 0 ? '#660000' : null;
   }
 
-  // Goo-affinity render scale: Slime and Giant Slime render at a size that
-  // tracks current HP — a Giant Slime split child (registerSplitChild sets
-  // its hp to the damage the boss just took, uncapped by maxHp) reads as a
-  // chunk sized to match the hit that knocked it off. 1-2 HP is the original
-  // design size (never smaller); every HP above that scales the glyph up.
-  // sqrt keeps rendered AREA roughly proportional to HP rather than just
-  // glyph height; capped so an outlier one-hit chunk doesn't blow out the layout.
-  getGooRenderScale() {
-    if (!this.data?.affinities?.includes('goo')) return 1;
-    const hp = Math.max(0, this.hp);
-    return Math.min(2.5, Math.max(1, Math.sqrt(hp / 2)));
+  // Goo body geometry lives in gooBody.js (drawn 'o' size + matching hitbox).
+  getGooRenderScale() { return gooRenderScale(this); }
+  getGooFontSize() { return gooFontSize(this); }
+
+  getHitbox() {
+    return gooBodyHitbox(this, {
+      x: this.position.x,
+      y: this.position.y,
+      width: this.width,
+      height: this.height
+    });
   }
 
   // Round-robins the glyph blink color across every currently-active
@@ -2536,15 +2537,6 @@ export class Enemy {
     this.sapDamageTimer = 0;
     this.sapSlot = -1;
     this.attackTimer = this.attackCooldown; // Reset attack cooldown
-  }
-
-  getHitbox() {
-    return {
-      x: this.position.x,
-      y: this.position.y,
-      width: this.width,
-      height: this.height
-    };
   }
 
   getDrops() {
