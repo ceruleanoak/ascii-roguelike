@@ -323,6 +323,9 @@ export class InteractionSystem {
       if (dist > GRID.CELL_SIZE * 2) continue;
       if (!game.removeIngredient('⚜')) continue;
       npc.unlockRareHint(game.currentRoom?.zone || 'green', game.unlockedRareSayings);
+      // He answers the payment at once: the bought line opens on the same
+      // press. A give with no reply read as the trade failing (bug #318).
+      game.dialogueSystem.open(npc, npc.getDialogueLines(game));
       return true;
     }
     return false;

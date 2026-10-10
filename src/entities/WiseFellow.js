@@ -31,9 +31,10 @@ export class WiseFellow extends NeutralCharacter {
   }
 
   /**
-   * Swap to a rare-tier hint (gated by Artifact ⚜ payment in main.js SPACE handler).
-   * Re-callable — each Artifact buys a fresh rare hint roll. The next SPACE
-   * opens the dialogue box with the new line.
+   * Swap to a rare-tier hint (gated by Artifact ⚜ payment — see
+   * InteractionSystem.tryGiveArtifactToWiseFellow, which opens the dialogue
+   * box on the new line in the same press). Re-callable — each Artifact buys
+   * a fresh rare hint roll.
    *
    * `earned` carries lines this run unlocked by doing something rather than
    * paying for something (currently: dungeon-boss victory sayings). They join
