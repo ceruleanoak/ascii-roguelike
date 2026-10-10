@@ -73,6 +73,13 @@ const INTERIOR_ROWS = 24;
 // Trap Room reward pool — tier-2 weapons, spanning 3 melee subtypes + one
 // bow (mirrors the pre-Whip-Trial pool's type variety). This is the payoff
 // for clearing the gauntlet; easy to swap, not load-bearing on any other system.
+// The Vault keeps its up-stairs at the top of the room, where every other
+// floor's up-stairs sat before they moved to the South footprint: the
+// Hoardmaw's whole encounter (DungeonBossSystem SPAWN_ROW, its wake line, the
+// hoard and the sealed south door) is laid out for a player who walks in from
+// the north. The Vault uses no template, so the reserved South footprint
+// costs it nothing.
+const VAULT_STAIRS_UP_ROW = 3;
 const TRAP_ROOM_REWARD_POOL = ['‡', '⟘', '↟', '⟩']; // Flame Sword, Maul, Venom Lance, Fire Bow
 
 // Branch's companion-panel puzzle — position mirrors the pre-rework 5-floor
@@ -291,7 +298,9 @@ export class DungeonFloorGenerator {
     for (let i = 0; i < count; i++) {
       const enemyChar = getZoneRandomEnemy(depth, zone);
       if (!enemyChar) continue;
-      const cell = pool.length ? pool.pop() : pickOpenCell(7, rows - 5, 3, cols - 4);
+      // Random placement keeps 2 rows clear above the South up-stairs, where
+      // a player descending North lands (DungeonSystem._landingAnchorFor).
+      const cell = pool.length ? pool.pop() : pickOpenCell(4, rows - 7, 3, cols - 4);
       if (!cell) continue;
       const enemy = new Enemy(enemyChar, cell.col * GRID.CELL_SIZE, cell.row * GRID.CELL_SIZE, depth);
       enemy.setCollisionMap(collisionMap);
@@ -314,13 +323,6 @@ export class DungeonFloorGenerator {
     };
   }
 
-  // row/col default to the universal north-side up-stairs position — the
-  // right choice for every floor entered via a 'north' descent (Corridor,
-  // Trap Room). A floor entered via 'west' or 'east' must pass the matching
-  // footprint instead, so its up-stairs sits in the same room position as
-  // the descent that led there (see _generateBranch, _generatePyramid) —
-  // "matching doors are always in the same room position" is the rule; the
-  // universal north point is just its default.
   /**
    * One cell of a Slot's [glyph] frame. Color is painted explicitly (both
    * `color` and `animationColor`) because none of '[', ']' or an item glyph is
@@ -337,6 +339,13 @@ export class DungeonFloorGenerator {
     return obj;
   }
 
+  // row/col default to the South footprint (STAIRS_UP_ROW) — the right
+  // choice for every floor entered via a 'north' descent (Corridor, Trap
+  // Room): the player goes down through the north side and arrives from the
+  // south. A floor entered via 'west' or 'east' passes the matching footprint
+  // instead (see _generateBranch, _generatePyramid), so its up-stairs sits in
+  // the same room position as the descent that led there; the Vault passes
+  // its own row (VAULT_STAIRS_UP_ROW).
   _makeStairsUp(locked, row = STAIRS_UP_ROW, col = STAIRS_COL) {
     const obj = new BackgroundObject('{', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
     paintStairsUpVisual(obj, locked);
@@ -620,15 +629,14 @@ export class DungeonFloorGenerator {
   _generateVault(depth, zone) {
     const { cols, rows, collisionMap, backgroundObjects } = this._buildScaffold({ useTemplate: false });
 
-    // Entered via the Pyramid's North descent — up-stairs at the universal
-    // north point (the "matching doors are always in the same room
-    // position" rule's default). Locked for the whole encounter (mirrors the
-    // Trap Room's "all cleared" gate): the boss body sits right on top of
-    // this point, and an unlocked ascend trigger here fired an unintended
+    // Entered via the Pyramid's North descent — up-stairs at the top of the
+    // room (VAULT_STAIRS_UP_ROW, not the South footprint). Locked for the
+    // whole encounter (mirrors the Trap Room's "all cleared" gate): the boss
+    // body sits right on top of this point, and an unlocked ascend trigger here fired an unintended
     // mid-fight floor transition whenever a pull/knockback landed the player
     // on it (bug: player/boss ending up back in the Pyramid room). Unlocked
     // in DungeonBossSystem._defeat().
-    const stairsUpObj = this._makeStairsUp(true);
+    const stairsUpObj = this._makeStairsUp(true, VAULT_STAIRS_UP_ROW, STAIRS_COL);
     backgroundObjects.push(stairsUpObj);
 
     // The sealed inner-vault door, set into the south wall behind the hoard.
@@ -652,7 +660,7 @@ export class DungeonFloorGenerator {
       items: [], ingredients: [], npcs: [], doors: [], tombGhosts: [],
       viewport: this._makeViewport(cols, rows),
       exitRow: null, exitCol: null,
-      stairsUpRow: STAIRS_UP_ROW, stairsUpCol: STAIRS_COL, stairsUpObj, stairsUpLocked: true,
+      stairsUpRow: VAULT_STAIRS_UP_ROW, stairsUpCol: STAIRS_COL, stairsUpObj, stairsUpLocked: true,
       ascendTo: { kind: 'numbered', floorIndex: 3 },
       descents: [], // terminal — the delve ends here
       gildedTriggered: false,

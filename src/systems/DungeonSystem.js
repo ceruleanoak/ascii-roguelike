@@ -1,7 +1,9 @@
 import { GRID, PHYSICS } from '../game/GameConfig.js';
 import { freezeSurfaceRoom, thawSurfaceRoom, isInteriorActive } from './PlaneSystem.js';
-import { NORTH_ROW, SPINE_ROW, WEST_COL, EAST_COL, STAIRS_COL } from '../data/dungeonFloorTemplates.js';
+import { NORTH_ROW, STAIRS_COL } from '../data/dungeonFloorTemplates.js';
 import { PUZZLE_ROOM_TEMPLATES } from '../data/dungeonPuzzleTemplates.js';
+import FOOTPRINT_CONTRACT from '../data/dungeon/footprintContract.json';
+import { landingCellFor } from '../data/dungeon/footprints.js';
 
 /**
  * DungeonSystem — dungeon interior lifecycle (6-floor rework, plan Phase 0).
@@ -186,33 +188,32 @@ export class DungeonSystem {
 
   /**
    * Step one cell from a border-adjacent footprint toward the room's
-   * interior — direction-agnostic replacement for the old single-corridor
-   * "continue direction of travel" spawn logic, since footprints now sit on
-   * 3 different sides (top row, left col, right col) rather than one shared
-   * north-south spine.
+   * interior. Footprints sit on all 4 sides (North descent top, up-stairs
+   * bottom, West/East descents left/right), so the step direction comes from
+   * which border band the footprint is on — dungeon/footprints.js owns the
+   * geometry, shared with the Progression Solver that proves the landing
+   * cell is walkable.
    */
   _spawnOffsetFor(row, col) {
-    if (row <= 5) return { row: row + 1, col };                    // North footprint / up-stairs → step south
-    if (col <= 5) return { row, col: col + 1 };                    // West footprint → step east
-    if (col >= INTERIOR_COLS - 5) return { row, col: col - 1 };     // East footprint → step west
-    return { row: row + 1, col };                                  // fallback
+    return landingCellFor(row, col, FOOTPRINT_CONTRACT);
   }
 
   /**
-   * Every floor/side-room shares the same 24×24 footprint geometry (see
-   * dungeonFloorTemplates.js's staircase footprint contract), so a descent's
-   * id ('north'/'west'/'east') names the same physical side on every floor.
-   * Used by _descend() to land the player near the side of the DESTINATION
-   * floor that corresponds to which staircase they took, instead of always
-   * the single fixed up-stairs point — so two different descents to the same
-   * floor (e.g. Corridor's North + West both → Branch) feel spatially
-   * distinct rather than funneling everyone to one identical spawn.
+   * Where a player arriving on `floor` from above lands: beside the floor's
+   * own up-stairs, so the way back is the door they came through (the
+   * "matching doors are always in the same room position" rule). Up-stairs
+   * sit at the South footprint on floors entered by a North descent, and at
+   * the West/East footprint on Branch/Pyramid, matching the descent that
+   * leads there.
+   *
+   * Puzzle Rooms are the exception: their up-stairs is the template's locked
+   * 'X' exit, placed wherever the author chose, so every puzzle template is
+   * authored — and checked by the Progression Solver — around one fixed
+   * arrival beside the North footprint.
    */
-  _landingAnchorFor(id) {
-    if (id === 'north') return { row: NORTH_ROW, col: STAIRS_COL };
-    if (id === 'west')  return { row: SPINE_ROW, col: WEST_COL };
-    if (id === 'east')  return { row: SPINE_ROW, col: EAST_COL };
-    return null;
+  _landingAnchorFor(floor) {
+    if (floor.roomKind === 'puzzleRoom') return { row: NORTH_ROW, col: STAIRS_COL };
+    return { row: floor.stairsUpRow, col: floor.stairsUpCol };
   }
 
   /**
@@ -333,12 +334,9 @@ export class DungeonSystem {
     if (!nextFloor) return;
 
     // Remember which staircase led here so _ascend() can reverse it exactly,
-    // and land near the correspondingly-named footprint on the new floor
-    // rather than always its single fixed up-stairs point (bug: Corridor's
-    // North + West both → Branch used to funnel to one identical spawn).
+    // and land beside the new floor's way back up (_landingAnchorFor).
     nextFloor._enteredViaId = descent.id;
-    const anchor = this._landingAnchorFor(descent.id)
-      ?? { row: nextFloor.stairsUpRow, col: nextFloor.stairsUpCol };
+    const anchor = this._landingAnchorFor(nextFloor);
     const spawnCell = this._spawnOffsetFor(anchor.row, anchor.col);
     this._activateFloor(nextFloor, {
       x: spawnCell.col * GRID.CELL_SIZE,
@@ -538,7 +536,7 @@ export class DungeonSystem {
     }
     const id = this._debugEntryIdFor(destination);
     floor._enteredViaId = id;
-    const anchor = this._landingAnchorFor(id) ?? { row: floor.stairsUpRow, col: floor.stairsUpCol };
+    const anchor = this._landingAnchorFor(floor);
     const spawnCell = this._spawnOffsetFor(anchor.row, anchor.col);
     this._activateFloor(floor, { x: spawnCell.col * GRID.CELL_SIZE, y: spawnCell.row * GRID.CELL_SIZE });
     return true;

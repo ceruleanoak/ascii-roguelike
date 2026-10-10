@@ -150,9 +150,10 @@ function solveFloor(map, contract, errors, warnings) {
   const footprints = reservedFootprintCells(contract);
   const names = ['Up-stairs', 'North descent', 'West descent', 'East descent'];
   const points = footprints.map((cell, k) => ({ ...cell, what: names[k] }));
-  // Where the player lands beside each descent footprint (the descent id
-  // names the same side on every floor — DungeonSystem._landingAnchorFor).
-  for (let k = 1; k < footprints.length; k++) {
+  // Where the player lands beside each footprint: beside the up-stairs on
+  // the way down (DungeonSystem._landingAnchorFor), beside a descent on the
+  // way back up (DungeonSystem._ascend).
+  for (let k = 0; k < footprints.length; k++) {
     const { row, col } = footprints[k];
     points.push({ ...landingCellFor(row, col, contract), what: `${names[k]} landing` });
   }
