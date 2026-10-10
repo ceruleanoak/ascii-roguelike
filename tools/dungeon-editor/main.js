@@ -33,8 +33,7 @@ const DESIGN_ROWS = 30;
 
 // Pedestal weaponChar validation calls the game's own pickWeaponTutorial
 // (weaponTutorials.js) live, via Node's dynamic import() of that ES module
-// from this CommonJS main process — unlike the small geometry helpers above
-// (reservedFootprintCells), hand-duplicating the item catalog here would
+// from this CommonJS main process — hand-duplicating the item catalog here would
 // silently drift from the game's actual weapons, and the editor would accept
 // a pedestal the runtime then skips. import() works regardless of the
 // importer's module type; the module resolves as ESM from the project
@@ -83,21 +82,17 @@ function listFloorTemplates() {
     .sort((a, b) => a.localeCompare(b));
 }
 
-// Same 4-point reservation algorithm as src/data/dungeonFloorTemplates.js's
-// getReservedFootprintCells() — kept as a small, obviously-equivalent
-// duplicate rather than importing that ES module into this CommonJS main
-// process. Both read the one JSON contract file, so the *numbers* never
-// drift; only this handful-of-lines geometry is mirrored. Deliberately just
-// the 4 single-cell footprints, no connecting corridor between them — see
-// that file's header for why.
-function reservedFootprintCells(contract) {
-  const { STAIRS_COL, STAIRS_UP_ROW, NORTH_ROW, SPINE_ROW, WEST_COL, EAST_COL } = contract;
-  return [
-    { row: STAIRS_UP_ROW, col: STAIRS_COL },
-    { row: NORTH_ROW,     col: STAIRS_COL },
-    { row: SPINE_ROW,     col: WEST_COL },
-    { row: SPINE_ROW,     col: EAST_COL },
-  ];
+// The footprint geometry lives in the game's own pure module
+// (src/data/dungeon/footprints.js), loaded through the same dynamic import()
+// as weaponTutorials.js above, so the editor and the runtime reserve exactly
+// the same cells. Deliberately just the 4 single-cell footprints, no
+// connecting corridor between them — see dungeonFloorTemplates.js's header.
+let _footprintsModulePromise = null;
+function loadFootprintsModule() {
+  if (!_footprintsModulePromise) {
+    _footprintsModulePromise = import(pathToFileURL(path.join(DATA_ROOT, 'footprints.js')).href);
+  }
+  return _footprintsModulePromise;
 }
 
 // Defense in depth against hand-edited files — the renderer already makes
@@ -140,7 +135,10 @@ function validateFloorTemplate(data) {
 ipcMain.handle('footprint-contract-load', () => readJSON(FOOTPRINT_CONTRACT_FILE));
 // Precomputed here (not re-derived in the renderer) so the reservation
 // geometry has exactly one implementation in this whole tool.
-ipcMain.handle('footprint-reserved-cells', () => reservedFootprintCells(readJSON(FOOTPRINT_CONTRACT_FILE)));
+ipcMain.handle('footprint-reserved-cells', async () => {
+  const { reservedFootprintCells } = await loadFootprintsModule();
+  return reservedFootprintCells(readJSON(FOOTPRINT_CONTRACT_FILE));
+});
 ipcMain.handle('floor-templates-list', () => listFloorTemplates());
 ipcMain.handle('floor-template-load', (_e, name) => readJSON(resolveFloorTemplatePath(name)));
 

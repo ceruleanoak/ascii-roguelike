@@ -29,10 +29,10 @@
 // than the walkability guarantee was worth, so a template's walls are free
 // to route however the author likes between footprints (including cutting
 // one off from another, if that's the intended layout). See
-// getReservedFootprintCells() below — the single source of truth, shared by
-// DungeonFloorGenerator and the dungeon layout editor (tools/dungeon-editor/,
-// which also runs a live reachability check as an authoring aid — advisory
-// only, not a save-blocking rule).
+// getReservedFootprintCells() below, backed by dungeon/footprints.js — the
+// single source of truth, shared by DungeonFloorGenerator and the dungeon
+// layout editor (tools/dungeon-editor/). Whether the footprints actually
+// connect is the Progression Solver's job (dungeon/progressionSolver.js).
 //
 // ── Data storage (Phase 0.4 of the dungeon-rework plan) ────────────────────
 // The footprint numbers below and every named template's grid live in
@@ -43,6 +43,7 @@
 // unchanged from before the migration, so no call site elsewhere had to move.
 
 import FOOTPRINT_CONTRACT from './dungeon/footprintContract.json';
+import { reservedFootprintCells } from './dungeon/footprints.js';
 import openTemplate from './dungeon/floorTemplates/open.json';
 import pillarRowsTemplate from './dungeon/floorTemplates/pillar_rows.json';
 import mildMazeTemplate from './dungeon/floorTemplates/mild_maze.json';
@@ -65,12 +66,7 @@ export const EXIT_ROW      = FOOTPRINT_CONTRACT.EXIT_ROW;       // floor 0 exter
  * corridor is reserved between them.
  */
 export function getReservedFootprintCells() {
-  return [
-    { row: STAIRS_UP_ROW, col: STAIRS_COL },
-    { row: NORTH_ROW,     col: STAIRS_COL },
-    { row: SPINE_ROW,     col: WEST_COL },
-    { row: SPINE_ROW,     col: EAST_COL },
-  ];
+  return reservedFootprintCells(FOOTPRINT_CONTRACT);
 }
 
 // ── Footprint visual contract (3-state model) ───────────────────────────────
