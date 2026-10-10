@@ -19,19 +19,19 @@ import {
  * ambiguous list, and gave no feedback about which ingredients a given
  * choice would need until after committing. Picking a mode up front filters
  * the very next menu down to only the equipped items that mode can use, and
- * a mode with nothing valid says so immediately instead of silently.
+ * a mode with nothing valid is unselectable.
  *
- *   BREW   (liquid path, 3 stages total)
+ *   BREW   (liquid path — makes a starter potion and stops there)
  *   'mode'    — top choice: BREW
  *   'input'   — select an equipped liquid bottle (Water/Electrified/Magma/Mud)
  *   'starter' — select a held ingredient to brew a starter potion (Base /
- *               Purified / Unstable), which stays in the cauldron
- *   'true'    — select a held ingredient matching the starter's existing
- *               true-potion recipes; result is handed to the player
+ *               Purified / Unstable / Charged / Burning / Primal); it lands in
+ *               the bottle's slot, the pickup box names it, and the menu closes
  *
- *   INFUSE (starter-potion path, 2 stages total, skips starter creation)
+ *   INFUSE (finishes a starter potion)
  *   'mode'    — top choice: INFUSE
- *   'input'   — select an equipped Starter Potion
+ *   'input'   — select an equipped starter potion that a held ingredient
+ *               has a recipe with
  *   'true'    — select a held ingredient matching the starter's existing
  *               true-potion recipes; result is handed to the player
  *
@@ -44,7 +44,9 @@ const INTERACT_RADIUS = GRID.CELL_SIZE * 1.2;
 // filling is now an armed-slot action (see tryFillArmedBottle) rather than a
 // bare SPACE press, so the looser station radius isn't needed here.
 const LIQUID_SOURCE_RADIUS = GRID.CELL_SIZE;
-const STARTER_POTION_CHARS = new Set(['🜄', '🜅', '🜆']);
+// Base / Purified / Unstable (plain water) and Charged / Burning / Primal
+// (electrified water, magma, mud) — every BREW result INFUSE can finish.
+const STARTER_POTION_CHARS = new Set(['🜄', '🜅', '🜆', '!', '«', '¿']);
 const LIQUID_BOTTLE_CHARS = new Set(['🜉', 'ε', '◆', '◐']);  // Water, Electrified, Magma, Mud
 
 // Map liquid tile states to liquid bottle types
@@ -59,7 +61,10 @@ const LIQUID_TILE_TO_BOTTLE = {
 const STARTER_NAMES = {
   '🜄': 'BASE POTION',
   '🜅': 'PURIFIED POTION',
-  '🜆': 'UNSTABLE POTION'
+  '🜆': 'UNSTABLE POTION',
+  '!': 'CHARGED POTION',
+  '«': 'BURNING POTION',
+  '¿': 'PRIMAL POTION'
 };
 
 // Single source of truth for pickup-message names — used by fillLiquidBottle
@@ -263,26 +268,40 @@ export class AlchemySystem {
     this._openModeMenu();
   }
 
-  /** Top-level BREW / INFUSE choice — see class doc. Both options always show
-   * and remain pickable (still lands on the existing "NO BOTTLE/STARTER
-   * POTION EQUIPPED" message from _openInputMenu), but each is dimmed
-   * (`disabled`, read by MenuOverlay) when the player has nothing equipped
-   * that mode could use — BREW needs any of the 4 liquid bottle types
-   * (Water/Electrified/Magma/Mud), INFUSE needs a Starter Potion. */
+  /** Held ingredients (deduped, in pile order) that finish `starterChar`
+   * into a true potion — the INFUSE ingredient list. */
+  _infusionIngredients(starterChar) {
+    const valid = [];
+    for (const ch of this.game.getIngredients()) {
+      if (!valid.includes(ch) && findRecipe(starterChar, ch)) valid.push(ch);
+    }
+    return valid;
+  }
+
+  _canInfuse(slot) {
+    return STARTER_POTION_CHARS.has(slot?.char) && this._infusionIngredients(slot.char).length > 0;
+  }
+
+  /** Top-level BREW / INFUSE choice — see class doc. Both options always show,
+   * but each is `disabled` (dimmed by MenuOverlay, unselectable in
+   * MenuSystem) when the player can't complete it: BREW needs any of the 4
+   * liquid bottle types plus a held starter ingredient, INFUSE needs an
+   * equipped starter potion plus a held ingredient it has a recipe with. */
   _openModeMenu() {
     const game = this.game;
     const slots = game.player.equippedConsumables ?? [];
-    const hasLiquidBottle = slots.some(s => LIQUID_BOTTLE_CHARS.has(s?.char));
-    const hasStarterPotion = slots.some(s => STARTER_POTION_CHARS.has(s?.char));
+    const canBrew = slots.some(s => LIQUID_BOTTLE_CHARS.has(s?.char))
+      && game.getIngredients().some(ch => ALL_STARTER_INGREDIENTS.has(ch));
+    const canInfuse = slots.some(s => this._canInfuse(s));
 
     game.menuOpen = true;
     game.currentMenuSlot = 'alchemy';
     game.alchemyMenuTitle = 'CAULDRON';
-    game.selectedMenuIndex = 0;
     game.menuItems = [
-      { action: 'brew', label: 'BREW', disabled: !hasLiquidBottle },
-      { action: 'infuse', label: 'INFUSE', disabled: !hasStarterPotion },
+      { action: 'brew', label: 'BREW', disabled: !canBrew },
+      { action: 'infuse', label: 'INFUSE', disabled: !canInfuse },
     ];
+    game.selectedMenuIndex = Math.max(0, game.menuItems.findIndex(item => !item.disabled));
     game.renderController.menuOverlay.render(game);
     game.menuSystem.closeOnMovement = true;
   }
@@ -292,7 +311,10 @@ export class AlchemySystem {
     const slots = game.player.equippedConsumables;
     const validIndices = [];
     (slots ?? []).forEach((s, i) => {
-      if (validCharSet.has(s?.char)) validIndices.push(i);
+      if (!validCharSet.has(s?.char)) return;
+      // INFUSE lists only starters a held ingredient can finish.
+      if (validCharSet === STARTER_POTION_CHARS && !this._canInfuse(s)) return;
+      validIndices.push(i);
     });
 
     if (validIndices.length === 0) {
@@ -312,12 +334,12 @@ export class AlchemySystem {
     game.menuSystem.closeOnMovement = true;
   }
 
-  _openIngredientMenu(validSet, title) {
+  _openIngredientMenu(isValid, title) {
     const game = this.game;
     const counts = new Map();
     const valid = [];
     for (const ch of game.getIngredients()) {
-      if (!validSet.has(ch)) continue;
+      if (!isValid(ch)) continue;
       counts.set(ch, (counts.get(ch) ?? 0) + 1);
       if (!valid.includes(ch)) valid.push(ch);
     }
@@ -385,7 +407,7 @@ export class AlchemySystem {
       this.cauldronInputType = 'liquid';
       this.cauldronLiquidType = inputChar; // Store the liquid type for starter creation
       this.cauldronStage = 'starter';
-      this._openIngredientMenu(ALL_STARTER_INGREDIENTS, 'BREW');
+      this._openIngredientMenu(ch => ALL_STARTER_INGREDIENTS.has(ch), 'BREW');
       game.updateUI();
     } else if (STARTER_POTION_CHARS.has(inputChar)) {
       // Starter potion path: 2-stage (starter potion → select ingredient → final potion)
@@ -393,7 +415,7 @@ export class AlchemySystem {
       this.cauldronInputType = 'starter';
       this.cauldronStarterChar = inputChar;
       this.cauldronStage = 'true';
-      this._openIngredientMenu(ALL_STARTER_INGREDIENTS, STARTER_NAMES[inputChar] ?? 'CAULDRON');
+      this._openIngredientMenu(ch => !!findRecipe(inputChar, ch), STARTER_NAMES[inputChar] ?? 'CAULDRON');
       game.updateUI();
     }
   }
@@ -420,18 +442,17 @@ export class AlchemySystem {
     if (!starterChar) return;
 
     game.removeIngredient(ingredientChar);
-    this._pendingBaseIngredient = ingredientChar;
-    this._pendingHiddenIngredient = ingredientChar;
 
-    // Create the starter potion and place it in the equipped slot
+    // Create the starter potion and place it in the equipped slot. BREW ends
+    // here — finishing it into a true potion is INFUSE's job, a separate pick.
     const starterPotion = new Item(starterChar, game.player.position.x, game.player.position.y);
     starterPotion.baseIngredient = ingredientChar;
     starterPotion.hiddenIngredient = ingredientChar;
     game.inventorySystem.equippedConsumables[this.cauldronSlotIndex] = starterPotion;
 
-    this.cauldronStarterChar = starterChar;
-    this.cauldronStage = 'true';
-    this._openIngredientMenu(ALL_STARTER_INGREDIENTS, STARTER_NAMES[starterChar] ?? 'CAULDRON');
+    this._resetCauldron(); // before closeMenu, whose cancel would restore the bottle
+    game.closeMenu();
+    game.menuSystem.announceItem(starterChar);
     game.audioSystem?.playSFX?.('craft');
     game.updateUI();
   }
@@ -450,16 +471,10 @@ export class AlchemySystem {
     // persists to the true potion, rather than resetting to a static color.
     applyPotionModifierColor(result, this.cauldronStarterChar);
 
-    if (this.cauldronInputType === 'liquid') {
-      // Liquid path: use pending ingredients from starter creation
-      result.hiddenIngredient = this._pendingHiddenIngredient;
-      result.baseIngredient = this._pendingBaseIngredient;
-    } else if (this.cauldronInputType === 'starter') {
-      // Starter potion path: use the starter potion's own ingredient data
-      const starterPotion = game.inventorySystem.equippedConsumables[this.cauldronSlotIndex];
-      result.hiddenIngredient = starterPotion?.hiddenIngredient || null;
-      result.baseIngredient = starterPotion?.baseIngredient || null;
-    }
+    // Carry the starter potion's own ingredient data onto the result.
+    const starterPotion = game.inventorySystem.equippedConsumables[this.cauldronSlotIndex];
+    result.hiddenIngredient = starterPotion?.hiddenIngredient || null;
+    result.baseIngredient = starterPotion?.baseIngredient || null;
 
     result.secondaryIngredient = ingredientChar;
 
@@ -468,15 +483,17 @@ export class AlchemySystem {
     game.menuSystem.announceItem(result.char);
     game.audioSystem?.playSFX?.('craft');
 
+    this._resetCauldron();
+    game.closeMenu();
+    game.updateUI();
+  }
+
+  _resetCauldron() {
     this.cauldronStage = 'mode';
     this.cauldronInputType = null;
     this.cauldronLiquidType = null;
     this.cauldronStarterChar = null;
     this.cauldronSlotIndex = -1;
-    this._pendingHiddenIngredient = null;
-    this._pendingBaseIngredient = null;
-    game.closeMenu();
-    game.updateUI();
   }
 
   // ─── Condenser ───────────────────────────────────────────────────────────
@@ -557,18 +574,9 @@ export class AlchemySystem {
       const liquidBottle = new Item(this.cauldronLiquidType, game.player.position.x, game.player.position.y);
       game.inventorySystem.equippedConsumables[this.cauldronSlotIndex] = liquidBottle;
     }
-    // If in true ingredient selection stage and input type is starter,
-    // the potion stays in slot (being crafted into result, so correct behavior)
-    // If in input selection stage, nothing was consumed yet (correct behavior)
-
-    // Reset cauldron state
-    this.cauldronStage = 'mode';
-    this.cauldronInputType = null;
-    this.cauldronLiquidType = null;
-    this.cauldronStarterChar = null;
-    this.cauldronSlotIndex = -1;
-    this._pendingHiddenIngredient = null;
-    this._pendingBaseIngredient = null;
+    // In the INFUSE ingredient stage the starter potion is still in its slot
+    // untouched; in the input stage nothing was consumed yet.
+    this._resetCauldron();
   }
 
   update(dt) {

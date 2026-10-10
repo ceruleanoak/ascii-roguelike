@@ -42,12 +42,13 @@ export class MenuSystem {
   }
 
   // Move the selection within the current column, clamped. dir = -1 | 1.
+  // Skips `disabled` action items (e.g. the cauldron's BREW/INFUSE) — they
+  // show dimmed but are unselectable; with nothing enabled that way, stay put.
   moveSelection(dir) {
     const game = this.game;
-    game.selectedMenuIndex = Math.max(
-      0,
-      Math.min(game.menuItems.length - 1, game.selectedMenuIndex + dir)
-    );
+    let next = game.selectedMenuIndex + dir;
+    while (next >= 0 && next < game.menuItems.length && game.menuItems[next]?.disabled) next += dir;
+    if (next >= 0 && next < game.menuItems.length) game.selectedMenuIndex = next;
     game.renderController.menuOverlay.render(game);
   }
 
@@ -767,6 +768,7 @@ export class MenuSystem {
     }
 
     const selectedItem = game.menuItems[game.selectedMenuIndex];
+    if (selectedItem?.disabled) return; // dimmed options are unselectable
 
     // Handle mana conversion (ingredient → magic meter)
     if (game.currentMenuSlot === 'mana-conversion') {

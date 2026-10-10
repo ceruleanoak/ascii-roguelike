@@ -54,9 +54,8 @@ export class MenuOverlay {
 
       // Check if it's a chest menu option (has action and label)
       if (item.action) {
-        // Dimmed but still pickable — e.g. AlchemySystem's BREW/INFUSE, which
-        // stay selectable and fall through to their own "nothing equipped"
-        // message rather than being blocked outright.
+        // Dimmed and unselectable (MenuSystem skips/ignores `disabled`) —
+        // e.g. AlchemySystem's BREW/INFUSE when nothing could complete them.
         const style = item.disabled ? ' style="color: #555555;"' : '';
         html += `<div class="menu-item ${selected}"${style}>${item.label}</div>`;
       }
