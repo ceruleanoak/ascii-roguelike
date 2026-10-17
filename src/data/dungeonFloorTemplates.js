@@ -2,8 +2,14 @@
 //
 // # = solid wall cell    . = floor (walkable)
 // ~ = water channel (walkable; DungeonSystem places a Puddle object on it)
-// The full glyph vocabulary (Bombable Wall, Lock Block, Simple Key, ...)
-// lives in dungeon/tiles.js.
+// The full glyph vocabulary (Bombable Wall, Lock Block, Simple Key,
+// Shutter, ...) lives in dungeon/tiles.js.
+//
+// Besides `weight` and `grid`, a template may carry a `spawners` fixture
+// list — Spawn Vents, [{ row, col, enemyChar, maxAlive, interval }] (see
+// getTemplateSpawners below). A standing Vent keeps the floor's Shutters
+// shut, so the Progression Solver requires every Vent to be reachable from
+// the Up-stairs with the Shutters still closed.
 //
 // Coordinate contract:
 //   The grid is 24 cols × 24 rows. Row 0, row 23, col 0, col 23 are the
@@ -123,7 +129,7 @@ export const DUNGEON_FLOOR_TEMPLATES = Object.fromEntries(
 // direct lookup by name still finds it.
 const TEMPLATE_WEIGHTS = Object.entries(TEMPLATE_DATA)
   .filter(([name, data]) => {
-    const { ok, errors } = solveTemplate({ grid: data.grid, mode: 'floor', contract: FOOTPRINT_CONTRACT });
+    const { ok, errors } = solveTemplate({ grid: data.grid, fixtures: data, mode: 'floor', contract: FOOTPRINT_CONTRACT });
     if (!ok) console.warn(`[dungeonFloorTemplates] "${name}" left out of the floor pool: ${errors[0]}`);
     return ok;
   })
@@ -190,12 +196,24 @@ export function getTemplateBombableCells(templateName, reservedCells = []) {
 
 /**
  * Interior cells holding `glyph` — for tiles that need only their cells
- * found: Lock Blocks ('L', a lock_block object each) and Simple Keys ('K', a
- * key Item each). Reserved footprint cells are excluded.
+ * found: Lock Blocks ('L', a lock_block object each), Simple Keys ('K', a
+ * key Item each) and Shutters ('S', a shutter object each). Reserved
+ * footprint cells are excluded.
  */
 export function getTemplateCellsWithGlyph(templateName, glyph, reservedCells = []) {
   const grid = DUNGEON_FLOOR_TEMPLATES[templateName] ?? DUNGEON_FLOOR_TEMPLATES.open;
   return cellsWithGlyph(grid, glyph, reservedCells);
+}
+
+/**
+ * The template's Spawn Vents — [{ row, col, enemyChar, maxAlive, interval }],
+ * defaulting to none. A Vent on a reserved footprint cell is dropped, the
+ * same as every other template content there.
+ */
+export function getTemplateSpawners(templateName, reservedCells = []) {
+  const data = TEMPLATE_DATA[templateName] ?? TEMPLATE_DATA.open;
+  const reserved = new Set(reservedCells.map(({ row, col }) => `${row},${col}`));
+  return (data.spawners ?? []).filter(({ row, col }) => !reserved.has(`${row},${col}`));
 }
 
 /**

@@ -18,6 +18,17 @@
 //     across a gap taken too early, a Simple Key spent on the wrong Lock
 //     Block — may cut that off.
 //
+// Shutters ('S') open once the floor has no live enemies and no standing
+// Spawn Vent. Enemies are only ever spawned where the player can already
+// stand, so the solver treats them as killable and models just the Vents:
+//   floor mode: the arrival cells and every Vent must sit in the Up-stairs
+//     region with the Shutters closed; the other staircases may then rely on
+//     the Shutters opening.
+//   puzzle mode: breaking a Vent is an action, and "the Shutters open" is an
+//     action available once every Vent is broken and every Vent cell lies in
+//     the player's region (a Vent's last enemies, left behind across a
+//     one-way hook, could never be fought).
+//
 // Timing is not proven: timed triggers that can't be struck in one swing get
 // a warning when the walk between them looks longer than their timer.
 //
@@ -65,7 +76,8 @@ const cellName = (row, col) => `(${row},${col})`;
 /**
  * @param {object} args
  * @param {string[]} args.grid       the template's rows
- * @param {object}   [args.fixtures] { triggers, hookPosts, pedestal, dais } — puzzle mode
+ * @param {object}   [args.fixtures] { triggers, hookPosts, pedestal, dais } — puzzle mode;
+ *                                    { spawners } — both modes
  * @param {'floor'|'puzzle'} args.mode
  * @param {object}   args.contract   footprintContract.json
  * @param {object}   [args.suppliedTools] toolKitForItem() of the pedestal item — picked up at the pedestal
@@ -88,7 +100,7 @@ export function solveTemplate({ grid, fixtures = {}, mode, contract, suppliedToo
 
   const map = buildTileMap(grid, mode, contract);
   const result = mode === 'floor'
-    ? solveFloor(map, contract, errors, warnings)
+    ? solveFloor(map, contract, fixtures, errors, warnings)
     : solvePuzzle(map, contract, fixtures, suppliedTools, errors, warnings);
   return { ok: errors.length === 0, errors, warnings, regions: result };
 }
@@ -144,10 +156,17 @@ function labelRegions(map, blocked) {
 
 // ── Floor mode ──────────────────────────────────────────────────────────────
 
-function solveFloor(map, contract, errors, warnings) {
+function solveFloor(map, contract, fixtures, errors, warnings) {
   const { cols, tiles } = map;
-  const labels = labelRegions(map, i => DUNGEON_TILES[tiles[i]].solid);
+  // `closed`: Shutters still shut. `labels`: the floor once they open — the
+  // same map when the template has no Shutter.
+  const closed = labelRegions(map, i => DUNGEON_TILES[tiles[i]].solid);
+  const hasShutters = tiles.includes('S');
+  const labels = hasShutters
+    ? labelRegions(map, i => tiles[i] !== 'S' && DUNGEON_TILES[tiles[i]].solid)
+    : closed;
   const { STAIRS_COL, EXIT_ROW } = contract;
+  const vents = (fixtures.spawners ?? []).map(v => ({ ...v, index: v.row * cols + v.col }));
 
   const footprints = reservedFootprintCells(contract);
   const names = ['Up-stairs', 'North descent', 'West descent', 'East descent'];
@@ -160,20 +179,39 @@ function solveFloor(map, contract, errors, warnings) {
     points.push({ ...landingCellFor(row, col, contract), what: `${names[k]} landing` });
   }
   // The Entrance's arrival cell and the cell beside its exterior door.
-  points.push({ row: EXIT_ROW - 2, col: STAIRS_COL, what: 'Entrance arrival' });
-  points.push({ row: EXIT_ROW - 1, col: STAIRS_COL, what: 'Entrance door' });
+  points.push({ row: EXIT_ROW - 2, col: STAIRS_COL, what: 'Entrance arrival', arrival: true });
+  points.push({ row: EXIT_ROW - 1, col: STAIRS_COL, what: 'Entrance door', arrival: true });
+  // A floor is first entered by its up-stairs (or, on the Entrance, its door),
+  // so those must sit with the enemies and Vents while the Shutters are shut.
+  points[0].arrival = true;
+  points[footprints.length].arrival = true;
 
   for (const p of points) {
     if (DUNGEON_TILES[tiles[p.row * cols + p.col]].solid) {
       errors.push(`${p.what} ${cellName(p.row, p.col)} is solid — the player would land in a wall.`);
     }
   }
+  for (const v of vents) {
+    if (DUNGEON_TILES[tiles[v.index]]?.solid !== false) {
+      errors.push(`Spawn Vent ${cellName(v.row, v.col)} sits on a solid cell.`);
+    }
+  }
   if (errors.length) return { unreached: [] };
 
   const anchor = labels[points[0].row * cols + points[0].col];
+  const closedAnchor = closed[points[0].row * cols + points[0].col];
   for (const p of points) {
-    if (labels[p.row * cols + p.col] !== anchor) {
-      errors.push(`${p.what} ${cellName(p.row, p.col)} is cut off from the Up-stairs without tools.`);
+    const shut = hasShutters && p.arrival;
+    if ((shut ? closed : labels)[p.row * cols + p.col] !== (shut ? closedAnchor : anchor)) {
+      const how = shut ? 'without tools or opening a Shutter' : 'without tools';
+      errors.push(`${p.what} ${cellName(p.row, p.col)} is cut off from the Up-stairs ${how}.`);
+    }
+  }
+  if (hasShutters) {
+    for (const v of vents) {
+      if (closed[v.index] !== closedAnchor) {
+        errors.push(`Spawn Vent ${cellName(v.row, v.col)} is cut off from the Up-stairs — its Shutters would never open.`);
+      }
     }
   }
 
@@ -216,18 +254,33 @@ function solvePuzzle(map, contract, fixtures, suppliedTools, errors, warnings) {
   const pushRocks = triggers.filter(t => t.kind === 'push');
   const plainTriggers = triggers.filter(t => t.kind !== 'push');
   const hookPosts = (fixtures.hookPosts ?? []).map(p => at(p.row, p.col));
-  // Gates: solid tiles a tool opens — Bombable Walls (a bomb) and Lock Blocks
-  // (a key). `open` in a state is a bitmask over this list.
+  // Gates: solid tiles that open — Bombable Walls (a bomb), Lock Blocks (a
+  // key) and Shutters (the room cleared). `open` in a state is a bitmask over
+  // this list.
   const gates = [];
   const simpleKeys = [];
   for (let i = 0; i < tiles.length; i++) {
     if (tiles[i] === 'B') gates.push({ index: i, opensWith: 'bomb' });
     if (tiles[i] === 'L') gates.push({ index: i, opensWith: 'key' });
+    if (tiles[i] === 'S') gates.push({ index: i, opensWith: 'clear' });
     if (tiles[i] === 'K') simpleKeys.push(i);
   }
+  let shutterMask = 0;
+  gates.forEach((gate, k) => { if (gate.opensWith === 'clear') shutterMask |= 1 << k; });
+  const vents = (fixtures.spawners ?? []).map(v => at(v.row, v.col));
+  for (const v of vents) {
+    if (DUNGEON_TILES[tiles[v]]?.solid !== false) {
+      errors.push(`Spawn Vent ${cellName(rowOf(v), colOf(v))} sits on a solid cell.`);
+    }
+  }
+  if (errors.length) return { unreached: [] };
+  if (shutterMask && !vents.length) {
+    warnings.push('Shutters with no Spawn Vent open the moment the player arrives.');
+  }
   // Bitmasks are 32-bit; past that the proof would silently be wrong.
-  if (gates.length > 30 || simpleKeys.length > 30) {
-    errors.push(`Too many to prove: ${gates.length} Bombable Walls/Lock Blocks and ${simpleKeys.length} Simple Keys (30 each at most).`);
+  if (gates.length > 30 || simpleKeys.length > 30 || vents.length > 30) {
+    errors.push(`Too many to prove: ${gates.length} Bombable Walls/Lock Blocks/Shutters, `
+      + `${simpleKeys.length} Simple Keys and ${vents.length} Spawn Vents (30 each at most).`);
     return { unreached: [] };
   }
 
@@ -313,17 +366,18 @@ function solvePuzzle(map, contract, fixtures, suppliedTools, errors, warnings) {
   // ── State search ──
   // A state: the region the player stands in, which plain triggers are
   // active, which gates are open, which tool sources and Simple Keys are
-  // picked up, how many keys are spent, and where every Push Rock sits.
+  // picked up, how many keys are spent, which Spawn Vents are broken, and
+  // where every Push Rock sits.
   const start = {
     label: geometry(0, pushRocks.map(() => -1)).labels[arrivalIndex],
-    trig: 0, open: 0, tools: 0, keys: 0, spent: 0, rocks: pushRocks.map(() => -1),
+    trig: 0, open: 0, tools: 0, keys: 0, spent: 0, vents: 0, rocks: pushRocks.map(() => -1),
   };
   if (start.label === -1) {
     errors.push(`The North landing ${cellName(arrival.row, arrival.col)} is solid — the player arrives in a wall.`);
     return { unreached: [] };
   }
 
-  const keyOf = s => `${s.label}|${s.trig}|${s.open}|${s.tools}|${s.keys}|${s.spent}|${s.rocks.join(',')}`;
+  const keyOf = s => `${s.label}|${s.trig}|${s.open}|${s.tools}|${s.keys}|${s.spent}|${s.vents}|${s.rocks.join(',')}`;
   const bitCount = mask => { let n = 0; for (; mask; mask &= mask - 1) n++; return n; };
   const states = [start];
   const parent = [-1];
@@ -332,6 +386,7 @@ function solvePuzzle(map, contract, fixtures, suppliedTools, errors, warnings) {
   const edges = [];      // edges[i] = successor state indices
   const reached = new Set();
   const allTriggersMask = (1 << plainTriggers.length) - 1;
+  const allVentsMask = (1 << vents.length) - 1;
 
   const isGoal = s => {
     const geo = geometry(s.open, s.rocks);
@@ -378,8 +433,25 @@ function solvePuzzle(map, contract, fixtures, suppliedTools, errors, warnings) {
       push({ ...s, keys: s.keys | (1 << k) }, `take key ${cellName(rowOf(cell), colOf(cell))}`);
     });
     const keysHeld = bitCount(s.keys) - s.spent;
+    vents.forEach((vent, k) => {
+      if (s.vents & (1 << k)) return;
+      const broken = geo.labels[vent] === s.label
+        || struckFrom(geo, s.label, vent, BASE_STRIKE_CELLS)
+        || (kit.whip && struckFrom(geo, s.label, vent, kit.whip))
+        || (kit.boomerang && struckFrom(geo, s.label, vent, kit.boomerang))
+        || (kit.bomb && regionWithin(geo, s.label, vent, BOMB_BLAST_CELLS));
+      if (broken) push({ ...s, vents: s.vents | (1 << k) }, `break vent ${cellName(rowOf(vent), colOf(vent))}`);
+    });
+    // Every Shutter opens at once, when no Vent stands and each Vent's last
+    // enemies are somewhere the player can still fight them.
+    if ((s.open & shutterMask) !== shutterMask && s.vents === allVentsMask
+      && vents.every(v => geo.labels[v] === s.label)) {
+      const open = s.open | shutterMask;
+      const label = geometry(open, s.rocks).labels[s.label];
+      push({ ...s, open, label }, 'clear the room (Shutters open)');
+    }
     gates.forEach((gate, k) => {
-      if (s.open & (1 << k)) return;
+      if (s.open & (1 << k) || gate.opensWith === 'clear') return;
       let spent = s.spent;
       if (gate.opensWith === 'bomb') {
         if (!kit.bomb || !regionWithin(geo, s.label, gate.index, BOMB_BLAST_CELLS)) return;

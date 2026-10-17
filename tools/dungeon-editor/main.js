@@ -149,6 +149,51 @@ function loadTilesModule() {
   return _tilesModulePromise;
 }
 
+// The enemy catalogue (src/data/enemies.js) — a Spawn Vent's enemyChar is
+// checked against it, same posture as the pedestal's weaponChar above. A
+// failed import (the module growing a Vite-only dependency) skips the check
+// rather than blocking every save; the runtime falls back to a zone-random
+// enemy for an unknown char anyway.
+let _enemiesModulePromise = null;
+function loadEnemiesModule() {
+  if (!_enemiesModulePromise) {
+    _enemiesModulePromise = import(pathToFileURL(path.join(__dirname, '..', '..', 'src', 'data', 'enemies.js')).href)
+      .catch(err => { console.warn('[dungeon-editor] enemies.js not importable — enemyChar unchecked:', err.message); return null; });
+  }
+  return _enemiesModulePromise;
+}
+
+// Spawn Vents — optional in both template kinds: { row, col, enemyChar,
+// maxAlive, interval }. A vent sits on plain floor, never on a reserved
+// footprint cell (floor templates) or another fixture's cell (`seen`, shared
+// with the puzzle validator's other fixture lists). enemyChar null means a
+// zone-random enemy.
+async function validateSpawners(spawners, grid, { rows, cols, reservedCells = [], seen = new Set() }) {
+  if (spawners === undefined) return null;
+  if (!Array.isArray(spawners)) return 'spawners must be an array.';
+  const reserved = new Set(reservedCells.map(({ row, col }) => `${row},${col}`));
+  for (let i = 0; i < spawners.length; i++) {
+    const v = spawners[i];
+    if (!v || typeof v !== 'object') return `spawner ${i} must be an object.`;
+    if (!Number.isInteger(v.row) || v.row < 1 || v.row > rows - 2) return `spawner ${i} row out of bounds.`;
+    if (!Number.isInteger(v.col) || v.col < 1 || v.col > cols - 2) return `spawner ${i} col out of bounds.`;
+    const key = `${v.row},${v.col}`;
+    if (reserved.has(key)) return `spawner ${i} at (${v.row},${v.col}) sits on a reserved staircase footprint.`;
+    if (seen.has(key)) return `spawner ${i} shares a cell with another fixture.`;
+    seen.add(key);
+    const cellChar = grid[v.row][v.col];
+    if (cellChar !== '.') return `spawner ${i} at (${v.row},${v.col}) must sit on plain floor ('.'), not "${cellChar}".`;
+    if (!Number.isInteger(v.maxAlive) || v.maxAlive < 1) return `spawner ${i} maxAlive must be an integer >= 1.`;
+    if (!(Number.isFinite(v.interval) && v.interval > 0)) return `spawner ${i} interval must be a number > 0.`;
+    if (v.enemyChar !== null && v.enemyChar !== undefined) {
+      if (typeof v.enemyChar !== 'string' || !v.enemyChar) return `spawner ${i} enemyChar must be a non-empty string or null.`;
+      const enemies = await loadEnemiesModule();
+      if (enemies && !enemies.ENEMIES[v.enemyChar]) return `spawner ${i} enemyChar "${v.enemyChar}" isn't an enemy in enemies.js.`;
+    }
+  }
+  return null;
+}
+
 // Defense in depth against hand-edited files — the renderer already makes
 // these cells non-paintable, but a save is re-validated here regardless.
 async function validateFloorTemplate(data) {
@@ -184,7 +229,10 @@ async function validateFloorTemplate(data) {
   // contract existed. The editor still locks these cells from painting (see
   // index.html's isLockedInterior) as an authoring aid, but that's a UI
   // convenience, not a data invariant worth failing a save over.
-  return null;
+  // A Spawn Vent is a different matter: the generator would put a live
+  // fixture on the staircase, so validateSpawners rejects reserved cells.
+  const { reservedFootprintCells } = await loadFootprintsModule();
+  return validateSpawners(data.spawners, data.grid, { rows, cols, reservedCells: reservedFootprintCells(contract) });
 }
 
 ipcMain.handle('footprint-contract-load', () => readJSON(FOOTPRINT_CONTRACT_FILE));
@@ -332,7 +380,7 @@ async function validatePuzzleTemplate(data) {
     return 'triggers must be a non-empty array — a puzzle room needs at least one switch or panel.';
   }
   // Cell uniqueness is tracked across ALL placeable categories (triggers,
-  // hook posts, torches, the pedestal, the dais) — two different fixtures sharing one
+  // hook posts, torches, the pedestal, the dais, spawn vents) — two different fixtures sharing one
   // cell is invalid regardless of which categories they come from.
   const seen = new Set();
   for (let i = 0; i < data.triggers.length; i++) {
@@ -442,7 +490,7 @@ async function validatePuzzleTemplate(data) {
     if (cellChar !== '.') return `dais at (${d.row},${d.col}) must sit on plain floor ('.'), not "${cellChar}".`;
   }
 
-  return null;
+  return validateSpawners(data.spawners, data.grid, { rows: PUZZLE_ROWS, cols: PUZZLE_COLS, seen });
 }
 
 ipcMain.handle('puzzle-templates-list', () => listPuzzleTemplates());

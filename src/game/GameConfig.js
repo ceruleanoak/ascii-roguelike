@@ -1444,6 +1444,45 @@ export const BACKGROUND_OBJECT_VARIANTS = {
       default: { animation: 'bounce', message: null }
     }
   },
+  // Shutter — a dungeon template cell (glyph 'S') that stays shut until its
+  // room holds no counted enemies and no standing Spawn Vent, then every
+  // Shutter on the floor opens at once and for good
+  // (DungeonPuzzleSystem._updateShutters). Stamped solid in the floor's
+  // collisionMap like a Lock Block; coversWall keeps the masonry glyph off so
+  // the '+' (the roguelike closed door) reads as a door, not a wall.
+  'shutter': {
+    char: '+',
+    name: 'Shutter',
+    color: '#7f8fa6',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    coversWall: true,
+    hp: null,
+    solid: true,
+    interactions: {
+      default: { animation: 'bounce', message: null }
+    }
+  },
+  // Spawn Vent — a dungeon template fixture (`spawners` list) that keeps up
+  // to its maxAlive enemies alive at once, one more every interval seconds,
+  // each born on the vent's own cell (SpawnVentSystem). Walkable and
+  // breakable: melee and projectiles wear its hp down, and a broken vent
+  // spawns nothing more. While one stands, Shutters stay shut.
+  'spawn_vent': {
+    char: '&',
+    name: 'Spawn Vent',
+    color: '#a060e0',
+    bulletInteraction: 'interact-destroy',
+    flammability: 'none',
+    conductivity: 'none',
+    hp: 6,
+    solid: false,
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
   // Cavern Torch — one of the two lit torches every Cavern holds. Breaks in a
   // single hit; its drop is resolved by CavernSystem.dropTorchLoot (a Stick,
   // rarely Slick Oil with it). The glow is drawn from the floor's `torches`

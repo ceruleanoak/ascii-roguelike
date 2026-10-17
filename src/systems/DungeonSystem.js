@@ -4,6 +4,7 @@ import { NORTH_ROW, STAIRS_COL } from '../data/dungeonFloorTemplates.js';
 import { PUZZLE_ROOM_TEMPLATES } from '../data/dungeonPuzzleTemplates.js';
 import FOOTPRINT_CONTRACT from '../data/dungeon/footprintContract.json';
 import { landingCellFor } from '../data/dungeon/footprints.js';
+import { SpawnVentSystem } from './SpawnVentSystem.js';
 
 /**
  * DungeonSystem — dungeon interior lifecycle (6-floor rework, plan Phase 0).
@@ -54,6 +55,9 @@ const DOOR_INTERACT_RADIUS = GRID.CELL_SIZE * 2;
 export class DungeonSystem {
   constructor(game) {
     this.game = game;
+    // Spawn Vents exist only on dungeon floors, so their ticker is this
+    // system's collaborator rather than a Game-level system.
+    this.spawnVentSystem = new SpawnVentSystem(game);
   }
 
   // ─── Floor Generation (delegated) ─────────────────────────────────────────
@@ -617,6 +621,12 @@ export class DungeonSystem {
           floor.enemies.splice(i, 1);
         }
       }
+
+      // Spawn Vents — runs after the death sweep so a vent sees its kills
+      // gone this same tick, and before the puzzle gates so a Shutter never
+      // opens on a tick its vent refilled the room.
+      // rest-parity: absent because Spawn Vents only exist on dungeon floors.
+      this.spawnVentSystem.update(floor, dt);
 
       // Puzzle/gating logic (key vault lock, companion-gate visibility,
       // trap-room clear gate, companion-switch puzzle, compass beep).

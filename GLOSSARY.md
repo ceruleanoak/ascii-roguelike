@@ -1581,6 +1581,27 @@ identity, not standard programming terms.
 - **Not:** the Skull Key (opens the Corridor's West descent), the Skeleton Key, or a universal
   key (`opensAnyLock`).
 
+### Shutter
+- **Definition:** A solid dungeon block that opens for good once its floor has no live enemies
+  and no standing Spawn Vent. Every Shutter on the floor opens at the same moment. It is the
+  "clear the room to go on" gate.
+- **In code:** template grid glyph `S` (`src/data/dungeon/tiles.js`, `opensWith: 'clear'`),
+  stamped solid and topped by a `shutter` Background Object variant (`GameConfig.js`, `+`);
+  opened by `DungeonPuzzleSystem._updateShutters`. The Progression Solver requires every Spawn
+  Vent to be reachable before the Shutters it holds shut.
+- **Not:** a Lock Block (opened with a key) or a Barricade; "door", "gate", "clear wall".
+
+### Spawn Vent
+- **Definition:** A breakable dungeon fixture that keeps producing enemies on its own cell, with
+  at most `maxAlive` of its enemies alive at once and one new enemy every `interval` seconds.
+  Breaking it stops the spawning; a standing Vent keeps its floor's Shutters shut.
+- **In code:** the `spawners` fixture list on floor and puzzle templates
+  (`{ row, col, enemyChar|null, maxAlive, interval }`, `null` = a random zone enemy), a
+  `spawn_vent` Background Object variant (`GameConfig.js`, `&`), driven by
+  `src/systems/SpawnVentSystem.js` from the records in `floor.spawnVents`.
+- **Not:** an `E` Enemy Spawn mark (a one-time placement hint for the floor's initial enemies),
+  a Nest, or a "spawner"/"generator".
+
 ### Progression Solver
 - **Definition:** The static proof that a dungeon template cannot softlock. On a numbered floor
   every staircase and landing must connect without tools or keys, so anything behind a

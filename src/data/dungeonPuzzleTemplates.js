@@ -16,6 +16,9 @@
 //     (CavernSystem.bombBlast). The Bomb Trial hides its triggers behind them.
 // L = Lock Block — solid; SPACE beside it with a key opens it.
 // K = Simple Key — floor holding the key that opens one Lock Block.
+// S = Shutter — solid until the room has no live enemies and no standing
+//     Spawn Vent, then every Shutter opens for good
+//     (DungeonPuzzleSystem._updateShutters).
 //
 // Coordinate contract: 24 cols × 24 rows, outer border (row 0, row 23,
 // col 0, col 23) always walls — the generator stamps these unconditionally
@@ -73,6 +76,13 @@
 //   room is unsolved, each Bomb that explodes on the floor drops a fresh one
 //   back onto the pedestal (DungeonPuzzleSystem._restockBomb), so a player
 //   who brought their own bag never has to spend its stock. Plain floor only.
+//
+// spawners: [{ row, col, enemyChar, maxAlive, interval }] — Spawn Vents, the
+//   same fixture list floor templates use. Each is a breakable fixture
+//   (SpawnVentSystem) that spawns an enemy on its own cell every `interval`
+//   seconds while fewer than `maxAlive` of its enemies are alive; enemyChar
+//   null means a random enemy of the zone. A standing Vent keeps the room's
+//   Shutters shut.
 //
 // weight: selection weight for the North-descent pool (see
 // pickRandomPuzzleTemplateName below) — every named template the Progression
@@ -161,7 +171,7 @@ export function getPuzzleTemplateBombableCells(templateName) {
   return cellsWithGlyph(getPuzzleTemplate(templateName).grid, 'B');
 }
 
-/** Interior cells holding `glyph` — Lock Blocks ('L') and Simple Keys ('K'). */
+/** Interior cells holding `glyph` — Lock Blocks ('L'), Simple Keys ('K') and Shutters ('S'). */
 export function getPuzzleTemplateCellsWithGlyph(templateName, glyph) {
   return cellsWithGlyph(getPuzzleTemplate(templateName).grid, glyph);
 }
@@ -225,4 +235,9 @@ export function getPuzzleTemplatePedestal(templateName) {
 /** The template's opt-in Bomb Trial dais marker, or null if this template has none. */
 export function getPuzzleTemplateDais(templateName) {
   return getPuzzleTemplate(templateName).dais ?? null;
+}
+
+/** The template's Spawn Vents — optional, defaults to none. */
+export function getPuzzleTemplateSpawners(templateName) {
+  return getPuzzleTemplate(templateName).spawners ?? [];
 }

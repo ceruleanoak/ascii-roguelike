@@ -9,6 +9,7 @@ import { tagInteriorPlane } from './PlaneSystem.js';
 import { Item } from '../entities/Item.js';
 import { BOMB_CHAR } from './BombBagSystem.js';
 import { SIMPLE_KEY_CHAR } from '../data/items.js';
+import { hasStandingVent } from './SpawnVentSystem.js';
 
 // Proximity radius for door/switch/slot interaction (px from cell center) —
 // mirrors DungeonSystem's DOOR_INTERACT_RADIUS.
@@ -41,6 +42,7 @@ export class DungeonPuzzleSystem {
   update(floor, dt) {
     if (!floor) return;
     this.updateCompassBeep(floor, dt);
+    this._updateShutters(floor);
 
     if (floor.roomKind === 'trapRoom') {
       this._updateTrapRoom(floor);
@@ -86,6 +88,8 @@ export class DungeonPuzzleSystem {
   _updateTrapRoom(room) {
     if (!room.stairsUpLocked) return;
     if (room.enemies.length > 0) return;
+    // A standing Spawn Vent would only refill the room — it must fall too.
+    if (hasStandingVent(room)) return;
     room.stairsUpLocked = false;
     paintStairsUpVisual(room.stairsUpObj, false);
     this._spawnUnlockEffect(room.stairsUpObj);
@@ -312,6 +316,28 @@ export class DungeonPuzzleSystem {
     game.renderer?.markBackgroundDirty?.();
     game.audioSystem?.playSFX?.('dungeon_key_use');
     return true;
+  }
+
+  // Shutters ('S') — on any floor, every Shutter opens at once, for good,
+  // the first tick the floor holds no counted enemy and no standing Spawn
+  // Vent. Counted, not raw, so a hidden or pacifist enemy can't hold a door
+  // shut forever. A floor with Shutters and nothing to fight opens them the
+  // moment the player arrives.
+  _updateShutters(floor) {
+    const { game } = this;
+    const shutters = floor.backgroundObjects.filter(obj => obj.typeId === 'shutter' && !obj.destroyed);
+    if (shutters.length === 0) return;
+    if (game._countedEnemies(floor.enemies).length > 0) return;
+    if (hasStandingVent(floor)) return;
+    for (const shutter of shutters) {
+      floor.backgroundObjects.splice(floor.backgroundObjects.indexOf(shutter), 1);
+      const row = Math.round(shutter.position.y / GRID.CELL_SIZE);
+      const col = Math.round(shutter.position.x / GRID.CELL_SIZE);
+      if (floor.collisionMap[row]) floor.collisionMap[row][col] = false;
+      this._spawnUnlockEffect(shutter);
+    }
+    game.renderer?.markBackgroundDirty?.();
+    game.audioSystem?.playSFX?.('dungeon_key_use');
   }
 
   // Corridor floor's West descent — SPACE while locked, key in hand,

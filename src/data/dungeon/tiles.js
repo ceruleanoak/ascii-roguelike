@@ -13,6 +13,9 @@
 //              'key'  — SPACE beside it with a Simple Key (spent) or a
 //                       universal key (kept) opens it
 //                       (DungeonPuzzleSystem._tryOpenLockBlock)
+//              'clear' — opens for good once its floor has no live enemies
+//                       and no standing Spawn Vent
+//                       (DungeonPuzzleSystem._updateShutters)
 //   reachOver  a strike (whip crack, boomerang) passes over it even though it
 //              is solid — a Gap is a void, not a wall
 //   modes      which template kinds may use it: 'floor' (Interior —
@@ -66,6 +69,12 @@ export const DUNGEON_TILES = {
     name: 'Simple Key', solid: false, opensWith: null, reachOver: true,
     modes: ['floor', 'puzzle'],
     editor: { bg: '#161616', fg: '#e0d890', glyph: 'K' },
+  },
+  // Solid until the floor's enemies are all dead and its Spawn Vents broken.
+  'S': {
+    name: 'Shutter', solid: true, opensWith: 'clear', reachOver: false,
+    modes: ['floor', 'puzzle'],
+    editor: { bg: '#24243a', fg: '#b0b0ff', glyph: 'S' },
   },
 };
 
