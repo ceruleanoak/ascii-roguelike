@@ -8,11 +8,23 @@
 // through its own death path.
 import { DEATH_CAUSES } from '../data/deathCauses.js';
 
+// PhysicsSystem's lava: a `~` tile whose typeId is 'lava', or an untyped
+// damaging `~`. Tested on the live object, so a tile that changes type is
+// read as it is now.
+export function isLavaTile(obj) {
+  if (obj.destroyed || obj.char !== '~') return false;
+  return obj.typeId ? obj.typeId === 'lava' : !!(obj.damaging && obj.damage);
+}
+
+// Lava-immune enemies (e.g. Tortoise) survive lava. A fire affinity — authored
+// or from an Imbue — is the same immunity.
+export function isLavaImmune(entity) {
+  return !!(entity.data?.lavaImmune || entity.getAffinities?.().includes('fire'));
+}
+
 export function applyLavaContact(game, entity, damage, deltaTime) {
-  // Lava-immune enemies (e.g. Tortoise) survive lava but track their state for
-  // behavior changes. A fire affinity — authored or from an Imbue — is the
-  // same immunity.
-  if (entity.data?.lavaImmune || entity.getAffinities?.().includes('fire')) {
+  // Immune bodies still track their in-lava state for behavior changes.
+  if (isLavaImmune(entity)) {
     entity.inLava = true;
     entity.inDamagingLiquid = false; // immune — not actually taking damage, no burn pip
     return false;

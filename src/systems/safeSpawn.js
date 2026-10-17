@@ -1,4 +1,42 @@
 import { GRID } from '../game/GameConfig.js';
+import { isLavaTile } from './LavaContact.js';
+
+// Liquid chars enemies never spawn on (water, lava, mud all use '~'; '=' is static water).
+const LIQUID_CHARS = new Set(['~', '=']);
+
+/**
+ * Whether an enemy spawn at pixel (x, y) is blocked by the room's background
+ * objects: a liquid tile, or a solid object (rocks, boulders, crates — trees
+ * and stumps are passable). `allowLiquid` (a water-affinity spawn) lifts the
+ * liquid rule for water only — a swimmer's licence is not a lava-immune one.
+ * Shared by RoomGenerator's getRandomPosition and getClusteredPosition.
+ */
+export function spawnCellBlockedByBackground(x, y, backgroundObjects, allowLiquid = false) {
+  if (!backgroundObjects?.length) return false;
+  const C = GRID.CELL_SIZE;
+  const onLiquid = backgroundObjects.some(obj =>
+    (allowLiquid ? isLavaTile(obj) : LIQUID_CHARS.has(obj.char)) &&
+    Math.abs(obj.position.x - x) < C &&
+    Math.abs(obj.position.y - y) < C
+  );
+  if (onLiquid) return true;
+  return backgroundObjects.some(obj => {
+    if (obj.destroyed) return false;
+    if (!obj.data) return false;
+    if (typeof obj.data.slowing === 'number') return false; // trees/stumps are passable
+    const isSolid = obj.data.solid ||
+      obj.data.bulletInteraction === 'block' ||
+      obj.data.bulletInteraction === 'interact-preserve';
+    if (!isSolid) return false;
+    const objBox = obj.getHitbox();
+    return (
+      x < objBox.x + objBox.width &&
+      x + C > objBox.x &&
+      y < objBox.y + objBox.height &&
+      y + C > objBox.y
+    );
+  });
+}
 
 /**
  * Room centre, nudged off collision/liquid tiles. Mirrors RoomGenerator's
@@ -15,7 +53,6 @@ export function findSafeSpawnPosition(room) {
   const centerRow = Math.floor(GRID.ROWS / 2);
   const collisionMap = room?.collisionMap;
   const backgroundObjects = room?.backgroundObjects || [];
-  const LIQUID_CHARS = new Set(['~', '=']);
 
   const isBlocked = (col, row) => {
     if (collisionMap?.[row]?.[col]) return true;

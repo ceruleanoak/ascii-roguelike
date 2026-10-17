@@ -567,9 +567,11 @@ identity, not standard programming terms.
   Its route-finding treats lava as a wall, so it paths around a lava river. Movement that
   would step onto lava is stopped at the shore. One already in lava (thrown, spawned, or
   flooded in) walks to the nearest safe cell. Lava becomes the player's refuge from it.
-- **In code:** `LavaShyMechanic` gated by `data.lavaShy`. It is consulted by
-  `enemyVision.hasLineOfSight` for navigation. "Lava" is PhysicsSystem's lava: a `~`
-  tile whose typeId is `lava`, or an untyped damaging `~`. The Bumper is the first user.
+- **In code:** `LavaShyMechanic`. It is on by default for every Enemy lava would hurt
+  (not `lavaImmune`, no fire affinity, not `data.float`); `data.lavaShy` overrides that
+  default either way. The Bumper is lava-immune but sets `lavaShy: true`. It is consulted
+  by `enemyVision.hasLineOfSight` for navigation. "Lava" is `LavaContact.isLavaTile`: a
+  `~` tile whose typeId is `lava`, or an untyped damaging `~`.
 - **Not:** lava immunity. Taking no lava damage is the separate `lavaImmune` flag. It is
   also not a clamp on knockback, so a hit can still throw it into the lava.
 

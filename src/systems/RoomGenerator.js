@@ -12,6 +12,7 @@ import { getDungeonDesign } from '../data/dungeonDesigns.js';
 import { CampNPC } from '../entities/CampNPC.js';
 import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
+import { spawnCellBlockedByBackground } from './safeSpawn.js';
 import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, isCellProtected, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placeWhirlpool, generateSettlementRoom as generateSettlementRoomImpl, buildForcedRiverParams, generateYellowWaterTemplate, cellularCaveGrid, isCaveEntranceLanding, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, spawnGuaranteedItems, offerL1Weapon, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl } from './roomFeatures.js';
 
 // Zone-boss arena → letter template key. Boss rooms are entered without a
@@ -1733,8 +1734,6 @@ export class RoomGenerator {
     const MIN_SPACING = GRID.CELL_SIZE * 2; // Minimum distance between entities
     const PLAYER_BUFFER = GRID.CELL_SIZE * 3; // Larger buffer around player start
     const EXIT_CLEARANCE = 3; // Grid cells to clear around each exit
-    // Liquid chars enemies should never spawn on (water, lava, mud all use '~'; '=' is static water)
-    const LIQUID_CHARS = new Set(['~', '=']);
 
     // Calculate exit positions (matching createCollisionMap exit zones)
     const centerX = Math.floor(GRID.COLS / 2);
@@ -1815,41 +1814,10 @@ export class RoomGenerator {
         continue;
       }
 
-      // Reject positions on liquid tiles (water/lava/mud) unless enemy has water affinity
-      if (!allowLiquid && backgroundObjects.length > 0) {
-        const onLiquid = backgroundObjects.some(obj =>
-          LIQUID_CHARS.has(obj.char) &&
-          Math.abs(obj.position.x - pixelX) < GRID.CELL_SIZE &&
-          Math.abs(obj.position.y - pixelY) < GRID.CELL_SIZE
-        );
-        if (onLiquid) {
-          attempts++;
-          continue;
-        }
-      }
-
-      // Reject positions overlapping solid background objects (rocks, boulders, crates, etc.)
-      if (backgroundObjects.length > 0) {
-        const overlappingSolid = backgroundObjects.some(obj => {
-          if (obj.destroyed) return false;
-          if (!obj.data) return false;
-          if (typeof obj.data.slowing === 'number') return false; // trees/stumps are passable
-          const isSolid = obj.data.solid ||
-            obj.data.bulletInteraction === 'block' ||
-            obj.data.bulletInteraction === 'interact-preserve';
-          if (!isSolid) return false;
-          const objBox = obj.getHitbox();
-          return (
-            pixelX < objBox.x + objBox.width &&
-            pixelX + GRID.CELL_SIZE > objBox.x &&
-            pixelY < objBox.y + objBox.height &&
-            pixelY + GRID.CELL_SIZE > objBox.y
-          );
-        });
-        if (overlappingSolid) {
-          attempts++;
-          continue;
-        }
+      // Reject liquid tiles and solid background objects (rocks, boulders, crates, etc.)
+      if (spawnCellBlockedByBackground(pixelX, pixelY, backgroundObjects, allowLiquid)) {
+        attempts++;
+        continue;
       }
 
       // Valid position found
@@ -1916,7 +1884,6 @@ export class RoomGenerator {
     const MIN_SPACING = GRID.CELL_SIZE * 2;
     const PLAYER_BUFFER = GRID.CELL_SIZE * 3;
     const EXIT_CLEARANCE = 3;
-    const LIQUID_CHARS = new Set(['~', '=']);
 
     const centerX = Math.floor(GRID.COLS / 2);
     const centerY = Math.floor(GRID.ROWS / 2);
@@ -1970,34 +1937,7 @@ export class RoomGenerator {
       }
       if (tooCloseToEnemy) continue;
 
-      if (!allowLiquid && backgroundObjects.length > 0) {
-        const onLiquid = backgroundObjects.some(obj =>
-          LIQUID_CHARS.has(obj.char) &&
-          Math.abs(obj.position.x - pixelX) < GRID.CELL_SIZE &&
-          Math.abs(obj.position.y - pixelY) < GRID.CELL_SIZE
-        );
-        if (onLiquid) continue;
-      }
-
-      if (backgroundObjects.length > 0) {
-        const overlappingSolid = backgroundObjects.some(obj => {
-          if (obj.destroyed) return false;
-          if (!obj.data) return false;
-          if (typeof obj.data.slowing === 'number') return false;
-          const isSolid = obj.data.solid ||
-            obj.data.bulletInteraction === 'block' ||
-            obj.data.bulletInteraction === 'interact-preserve';
-          if (!isSolid) return false;
-          const objBox = obj.getHitbox();
-          return (
-            pixelX < objBox.x + objBox.width &&
-            pixelX + GRID.CELL_SIZE > objBox.x &&
-            pixelY < objBox.y + objBox.height &&
-            pixelY + GRID.CELL_SIZE > objBox.y
-          );
-        });
-        if (overlappingSolid) continue;
-      }
+      if (spawnCellBlockedByBackground(pixelX, pixelY, backgroundObjects, allowLiquid)) continue;
 
       return { x: pixelX, y: pixelY };
     }

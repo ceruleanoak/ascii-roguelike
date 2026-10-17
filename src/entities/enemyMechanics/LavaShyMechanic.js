@@ -1,7 +1,13 @@
-// Lava-Shy Mechanic — `data.lavaShy`: the enemy never walks onto lava.
+// Lava-Shy Mechanic — the enemy never walks onto lava.
 // Water-Bound's mirror: where a Sea Snake refuses to leave the water, a
 // Bumper refuses to enter the lava, and so the lava becomes the player's
 // refuge from it — and the place it shoves the player toward.
+//
+// On by default for every enemy lava would hurt: anything not lava-immune
+// (`lavaImmune` or a fire affinity, see LavaContact.isLavaImmune) and not
+// floating over it (`data.float`). `data.lavaShy` overrides the default
+// either way — the Bumper is lava-immune yet sets `lavaShy: true`, because
+// its refusal to enter is the whole fight.
 //
 // Three parts:
 //   - Navigation: `isLavaCell` is consulted by enemyVision.hasLineOfSight,
@@ -17,29 +23,26 @@
 //     never clamped: a hit can still throw it into the lava. Taking no lava
 //     damage while it's there is `lavaImmune`, a separate data flag.
 //
-// "Lava" is PhysicsSystem's lava: a `~` tile whose typeId is 'lava' (or an
-// untyped damaging `~`). Lava is tested on the live object at query time, so
-// a tile that changes type (Ascent floods) is seen as it is now. No suspend
+// "Lava" is LavaContact.isLavaTile, tested on the live object at query time,
+// so a tile that changes type (Ascent floods) is seen as it is now. No suspend
 // signal — writes velocity only.
 
 import { GRID } from '../../game/GameConfig.js';
 import { planeOf, objectOnPlane } from '../../systems/PlaneSystem.js';
+import { isLavaTile, isLavaImmune } from '../../systems/LavaContact.js';
 
 // How far past its center the enemy looks along each axis of motion.
 const LEADING_EDGE = GRID.CELL_SIZE * 0.6;
 // How many rings out the recovery search looks for a safe cell.
 const SAFE_SEARCH_RADIUS = 8;
 
-function isLavaTile(obj) {
-  if (obj.destroyed || obj.char !== '~') return false;
-  return obj.typeId ? obj.typeId === 'lava' : !!(obj.damaging && obj.damage);
-}
-
 const cellKey = (col, row) => `${col},${row}`;
 
 export const LavaShyMechanic = {
   isEnabled(enemy) {
-    return enemy.data?.lavaShy === true;
+    const explicit = enemy.data?.lavaShy;
+    if (explicit !== undefined) return explicit === true;
+    return !enemy.data?.float && !isLavaImmune(enemy);
   },
 
   init(enemy) {
