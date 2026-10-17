@@ -2172,6 +2172,11 @@ class Game {
     // Flail spin ramp + hitbox
     this.flailSystem.update(deltaTime);
 
+    // Frog form (hop/swim movement, tongue attacks, cure Rusalka contact, Lake
+    // room spawn). State-shared because the curse follows the player home:
+    // EXPLORE-only dispatch left a frog frozen in REST and NEUTRAL ([rest-parity]).
+    this.polymorphSystem.update(deltaTime, this);
+
     return { dotKilledPlayer };
   }
 
@@ -2619,9 +2624,6 @@ class Game {
     // rest-parity: absent because the Dragon Forge exists only in the green boss room
     this.forgeSystem.update(); // Dragon Forge: walking away hands slotted items back
     this.fireplaceSystem.update(); // Torch in a quick slot auto-lights an unlit fireplace on approach
-
-    // Update polymorph system (tongue attacks, cure Rusalka contact, Lake room spawn)
-    this.polymorphSystem.update(deltaTime, this);
 
     // Lava adjacent to water → solidify to rock
     this.interactionSystem.update(deltaTime, this._activeBackgroundObjects());
