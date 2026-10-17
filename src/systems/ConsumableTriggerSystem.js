@@ -11,6 +11,10 @@ import { FAIRY_HEAL } from '../entities/Fairy.js';
 // tuned windup/flight times.
 const THROW_DURATION = 0.45;
 
+// How far a manual Jolt Jar flies along the player's facing when there is no
+// enemy to aim at (px).
+const JOLT_FACING_THROW_DISTANCE = 100;
+
 // Effect types with no AoE landing zone — the windup renderer skips the
 // pulsing radius ring for these (they always resolve on the player).
 const SELF_ONLY_EFFECTS = new Set([
@@ -217,27 +221,35 @@ export class ConsumableTriggerSystem {
         return false;
       }
       case 'jolt': {
-        // Jolt Jar: normally needs 2+ enemies in room to auto-fire; manual
-        // trigger only needs 1 (still refuses with 0 — nothing to throw at).
-        const minEnemies = manual ? 1 : 2;
-        if (enemies.length < minEnemies) return false;
+        // Jolt Jar: auto-fires only with 2+ enemies in the room. A manual
+        // throw always fires, like every other thrown consumable: it lands on
+        // the nearest live enemy, or a fixed distance along the player's
+        // facing when there is none to aim at.
         const px = player.position.x + 20;
         const py = player.position.y + 20;
+        const live = enemies.filter(e => !e.isDying && e.hp > 0);
+        if (!manual && live.length < 2) return false;
         let nearest = null;
         let bestDist = Infinity;
-        for (const enemy of enemies) {
+        for (const enemy of live) {
           const dx = (enemy.position.x + 20) - px;
           const dy = (enemy.position.y + 20) - py;
           const d2 = dx * dx + dy * dy;
           if (d2 < bestDist) { bestDist = d2; nearest = enemy; }
         }
-        if (!nearest) return false;
-        return {
-          windup: 0.7,
-          effectType: 'jolt',
-          targetX: nearest.position.x + 20,
-          targetY: nearest.position.y + 20,
-        };
+        let targetX, targetY;
+        if (nearest) {
+          targetX = nearest.position.x + 20;
+          targetY = nearest.position.y + 20;
+        } else {
+          let fx = player.facing?.x ?? 0;
+          let fy = player.facing?.y ?? 1;
+          if (fx === 0 && fy === 0) fy = 1;
+          const len = Math.sqrt(fx * fx + fy * fy);
+          targetX = px + (fx / len) * JOLT_FACING_THROW_DISTANCE;
+          targetY = py + (fy / len) * JOLT_FACING_THROW_DISTANCE;
+        }
+        return { windup: 0.7, effectType: 'jolt', targetX, targetY };
       }
       case 'throwSteam': {
         // Steam Vial: creates a steam cloud — START WINDUP
