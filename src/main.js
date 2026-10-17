@@ -3207,8 +3207,9 @@ class Game {
     // EXPLORE (and ARCADE_DEMO, which drives the explore loop with prerecorded inputs)
     if (state === GAME_STATES.EXPLORE || state === GAME_STATES.ARCADE_DEMO) {
 
-      // Polymorphed frog: interior exit, else tongue.
+      // Polymorphed frog: a speaker's Frog Line, else interior exit, else tongue.
       if (this.player?.polymorphed) {
+        if (this.dialogueSystem.frogSpacePress()) return;
         if (this.interiorManager.handleSpacePress()) return;
         this.polymorphSystem.createTongueAttack(this);
         return;
@@ -3363,6 +3364,9 @@ class Game {
         return;
       }
       if (this.slotPopup) { this.slotPopup = null; return; }
+
+      // A frog hears Frog Lines in place of speech — Charon and the Storyteller too.
+      if (this.player?.polymorphed && this.dialogueSystem.frogSpacePress()) return;
 
       // Charon at the north exit: talk, then pay his toll (CharonSystem)
       if (this.charonSystem.trySpacePress()) return;

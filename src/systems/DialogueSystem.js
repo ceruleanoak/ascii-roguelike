@@ -1,5 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { inSamePlane } from './PlaneSystem.js';
+import { FROG_LINES } from '../data/frogLines.js';
 
 // Walking this far from the speaker closes the box automatically.
 const BREAK_RANGE = GRID.CELL_SIZE * 4;
@@ -84,6 +85,33 @@ export class DialogueSystem {
       if (typeof npc.getDialogueLines !== 'function') continue;
       if (!inSamePlane(npc, player) || !npc.isInRange(player)) continue;
       if (this.talk(npc)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * SPACE from a polymorphed (frog) player. A frog is never told a speech:
+   * each speaker in range says its Frog Line (data/frogLines.js) instead,
+   * without advancing its speech, firing getDialogueLines side effects, or
+   * setting spokenOnce — so nothing a frog hears unlocks a trade. Closing the
+   * line calls the speaker's optional onFrogLineTold(game) (the Witch's
+   * release).
+   */
+  frogSpacePress() {
+    if (this.active) {
+      const npc = this.active.npc;
+      this.active = null;
+      npc?.onFrogLineTold?.(this.game);
+      return true;
+    }
+    const player = this.game.player;
+    if (!player) return false;
+    for (const npc of this.game.interiorManager.activeNpcs()) {
+      const line = FROG_LINES.get(npc.constructor);
+      if (!line || typeof npc.isInRange !== 'function') continue;
+      if (!inSamePlane(npc, player) || !npc.isInRange(player)) continue;
+      this.active = { npc, lines: [line], lineIndex: 0 };
+      return true;
     }
     return false;
   }

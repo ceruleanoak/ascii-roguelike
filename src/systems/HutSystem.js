@@ -778,9 +778,10 @@ export class HutSystem {
         npc.update(dt, this.game);
       }
 
-      // Poll Witch trigger — activate polymorph on first contact
+      // Poll Witch trigger — activate polymorph on first contact; a Witch who
+      // has released the player (Witch.onFrogLineTold) never curses again.
       for (const npc of game.activeFloor.npcs) {
-        if (npc.triggered && !game.player.polymorphed) {
+        if (npc.triggered && !npc.released && !game.player.polymorphed) {
           this.game.polymorphSystem?.activatePolymorph(this.game, true);
         }
       }
