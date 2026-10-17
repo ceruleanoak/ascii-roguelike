@@ -3608,6 +3608,8 @@ class Game {
         this.characterSystem.releaseStaffBlock(this.player);
       }
       this.player.staffSwingHasFired = false;
+      // AoE melee drops its windup when SPACE lets go early (Item.holdsWindup).
+      this.player.heldItem?.cancelHeldWindup();
     }
 
     if (this.fishingSystem && this.fishingSystem.state === this.fishingSystem.STATES.CHARGING) {

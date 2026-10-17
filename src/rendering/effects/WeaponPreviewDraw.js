@@ -100,6 +100,30 @@ export function drawGemWandCharge(renderer, game) {
   ctx.restore();
 }
 
+/** AoE melee weapon held aloft through its held windup (Item.holdsWindup) —
+ * the gem wand's charge read: shake intensifies as the swing nears. */
+export function drawHeldWindupCharge(renderer, game) {
+  const held = game.player.heldItem;
+  if (!held?.windupActive || !held.holdsWindup?.()) return;
+  const C = GRID.CELL_SIZE;
+  const ctx = renderer.fgCtx;
+  const t = Math.min(1, 1 - held.windupTimer / (held.windupDuration || 1));
+  const shakeAmp = 0.5 + 2.5 * t;
+  const jitterX = (Math.random() - 0.5) * shakeAmp;
+  const jitterY = (Math.random() - 0.5) * shakeAmp;
+  ctx.save();
+  ctx.font = `${C}px 'Unifont', monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = held.color || '#ffffff';
+  ctx.fillText(
+    held.char,
+    game.player.position.x + C / 2 + jitterX,
+    game.player.position.y - C * 0.6 + jitterY
+  );
+  ctx.restore();
+}
+
 /** Hammer held raised overhead during its windup — the same anchor
  * MeleeAttackDraw uses for drawAboveOwner, so the glyph doesn't jump when the
  * windup completes and createMeleeHammerRing's attack object takes over

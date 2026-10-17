@@ -186,6 +186,7 @@ export const FRAME_PASSES = {
     { id: 'staffBlockStance', on: combatOnly, draw: (rc, game) => er(rc).drawStaffBlockStance(game) },
     { id: 'knownSpellHints', on: combatOnly, draw: (rc, game) => { if (game.knownSpells?.size > 0) drawKnownSpellHints(rc.renderer, game); } },
     { id: 'gemWandCharge', on: combatOnly, draw: (rc, game) => er(rc).drawGemWandCharge(game) },
+    { id: 'heldWindupCharge', on: combatOnly, draw: (rc, game) => er(rc).drawHeldWindupCharge(game) },
     { id: 'hammerWindupPose', on: combatOnly, draw: (rc, game) => er(rc).drawHammerWindupPose(game) },
     { id: 'chargeCounts', on: combatOnly, draw: (rc, game) => er(rc).drawChargeCounts(game) },
     { id: 'trapReticule', on: combatOnly, draw: (rc, game) => er(rc).drawTrapReticule(game) },

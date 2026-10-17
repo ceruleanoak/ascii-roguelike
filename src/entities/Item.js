@@ -91,6 +91,7 @@ export class Item {
     // Weapon state
     this.cooldownTimer = 0;
     this.windupTimer = 0;
+    this.windupDuration = 0; // full length of the windup in progress (drives its charge visual)
     this.windupActive = false;
     this.pendingPlayer = null; // Store player during windup
     this.attackLockTimer = 0; // Locks movement during attack flash for locksMovement weapons
@@ -347,6 +348,7 @@ export class Item {
     if (windup > 0) {
       // Start windup, attack will execute after windup completes
       this.windupTimer = windup;
+      this.windupDuration = windup;
       this.windupActive = true;
       this.pendingPlayer = player;
       return null; // No immediate attack
@@ -1652,6 +1654,26 @@ export class Item {
     this.cooldownTimer = this.data.recovery || 0.5;
 
     return attack;
+  }
+
+  // AoE melee — the explode-on-hit maces/hammers and every shockwave swing —
+  // must hold its windup the way a gem wand holds its charge: SPACE stays down
+  // until the swing fires, and letting go early drops it (cancelHeldWindup).
+  // The Crystal Maul is excluded; it has its own hold-to-charge mega-attack.
+  holdsWindup() {
+    const data = this.data;
+    if (data.weaponType !== WEAPON_TYPES.MELEE || data.chargeHammer) return false;
+    return !!data.explode || resolveWeaponDefaults(data).attackPattern === 'shockwave';
+  }
+
+  // SPACE released mid-windup on a weapon that holds it: the swing never
+  // happens and nothing is spent. Returns true if a windup was dropped.
+  cancelHeldWindup() {
+    if (!this.windupActive || !this.holdsWindup()) return false;
+    this.windupActive = false;
+    this.windupTimer = 0;
+    this.pendingPlayer = null;
+    return true;
   }
 
   // Cancel a gem-wand charge in progress (e.g. player released space before completion).

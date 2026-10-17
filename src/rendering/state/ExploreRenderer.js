@@ -36,7 +36,7 @@ import { BRIDGE_MATERIALS } from '../../systems/RidgeSystem.js';
 import { PixelatedDissolve, SplitReveal } from '../effects/TextEffects.js';
 import { drawPlayerMeleeAttacks, drawEnemyMelee } from '../effects/MeleeAttackDraw.js';
 import {
-  drawConsumableWindups, drawGemWandCharge, drawHammerWindupPose,
+  drawConsumableWindups, drawGemWandCharge, drawHeldWindupCharge, drawHammerWindupPose,
   drawTrapChargeCount, drawBombBagCount, drawStaffBlockStance
 } from '../effects/WeaponPreviewDraw.js';
 import { BossRenderer } from './BossRenderer.js';
@@ -1925,6 +1925,7 @@ export class ExploreRenderer {
   // for the interior PiP overlays.
   drawConsumableWindups(game) { drawConsumableWindups(this.renderer, game); }
   drawGemWandCharge(game) { drawGemWandCharge(this.renderer, game); }
+  drawHeldWindupCharge(game) { drawHeldWindupCharge(this.renderer, game); }
   drawHammerWindupPose(game) { drawHammerWindupPose(this.renderer, game); }
   // Held trap charges + armed Bomb Bag ammo — the counts that float over the player.
   drawChargeCounts(game) {
