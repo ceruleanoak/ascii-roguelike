@@ -1,6 +1,7 @@
 import { GRID, ROOM_TYPES, GAME_STATES } from '../game/GameConfig.js';
 import { NEUTRAL_ROOMS } from '../data/neutralRooms.js';
 import { seedZonePath } from './CrossZoneWarp.js';
+import { findSafeSpawnPosition } from './safeSpawn.js';
 
 // The edge a neutral room is left through, given the exit taken to reach it.
 // 'south' entry (REST → the Graveyard) is the only one that puts the door home
@@ -203,9 +204,12 @@ export class NeutralRoomSystem {
       game.neutralCharacters = [...saved.neutralCharacters];
 
       // The center of the restored room, not the saved edge-of-room position,
-      // which sits in the warp band that was just walked out of.
-      game.player.position.x = Math.floor(GRID.COLS / 2) * GRID.CELL_SIZE;
-      game.player.position.y = Math.floor(GRID.ROWS / 2) * GRID.CELL_SIZE;
+      // which sits in the warp band that was just walked out of — nudged to
+      // the nearest open cell, since the room can have a wall, rock or water
+      // standing on the exact center.
+      const spawn = findSafeSpawnPosition(saved.room);
+      game.player.position.x = spawn.x;
+      game.player.position.y = spawn.y;
 
       game.savedExploreState = null;
     }
