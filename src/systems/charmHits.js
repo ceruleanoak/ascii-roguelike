@@ -58,3 +58,19 @@ export function resolveCharmedProjectile(combatSystem, proj) {
   landCharmedHit(combatSystem, target, proj.damage);
   return 'hit';
 }
+
+// A sap tick from a bat latched onto something other than the player — a
+// charmed bat grabs the enemy it is fighting (createSapAttack latches onto
+// its current target). Lands on that enemy and returns true; returns false
+// when the bat is on the player, so the caller resolves the normal player
+// sap. A latched host that has gone down shakes the bat loose instead.
+export function resolveEnemySap(combatSystem, sapper, sapDamage, player) {
+  const target = sapDamage.target;
+  if (!target || target === player) return false;
+  if (target.isDying || target.hp <= 0) {
+    sapper.breakSapping();
+    return true;
+  }
+  landCharmedHit(combatSystem, target, sapDamage.damage);
+  return true;
+}

@@ -20,7 +20,7 @@ import { updateRollDamage as updateRollDamageImpl } from './RollDamageMechanic.j
 import { acidFloodFillWater } from './AcidWaterSpread.js';
 import { TongueAttackSystem } from './TongueAttackSystem.js';
 import { createSplitProjectiles } from './SplitProjectiles.js';
-import { tagCharmedProjectile, resolveCharmedMelee, resolveCharmedProjectile } from './charmHits.js';
+import { tagCharmedProjectile, resolveCharmedMelee, resolveCharmedProjectile, resolveEnemySap } from './charmHits.js';
 import { applyExtraOnHitEffects, applyOnHitStatusEffect } from './ExtraOnHitEffects.js';
 import { applyMeleeStatusDamageBonus, getMeleeStatusBonusIndicator } from './MeleeStatusBonuses.js';
 import { applyKeenAim } from './KeenAim.js';
@@ -1555,7 +1555,8 @@ export class CombatSystem {
       // Handle sap damage — no knockback here: the sapping enemy locks its
       // position to the player every frame, so any push is immediately undone
       // and would just cause jitter instead of a readable hit.
-      if (updateResult && updateResult.sapDamage) {
+      if (updateResult && updateResult.sapDamage
+          && !resolveEnemySap(this, enemy, updateResult.sapDamage, player)) {
         // Fire Bat: each landed sap tick sets the player burning
         const sapBurn = enemy.data.sapBurnDuration;
         const onSapLanded = sapBurn ? () => player.applyStatusEffect('burn', sapBurn) : null;
