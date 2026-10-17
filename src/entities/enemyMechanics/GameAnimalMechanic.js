@@ -2,7 +2,8 @@ import { GRID } from '../../game/GameConfig.js';
 import { getExitSlotPosition } from '../../systems/ExitSystem.js';
 
 // Huntable game (Moose, Rabbit) — spawned by HuntingSystem in eligible rooms.
-// Moose always flees toward its spawn-side exit once it detects the player.
+// Moose always flees toward its spawn-side exit once it detects the player,
+// and any game animal flees for an exit the moment it is hurt, seen or not.
 // Rabbit runs directly away from the player for a second on detection, then
 // burrows in place and reappears once the player is still again
 // (HuntingSystem.stillnessTimer) — but only until it takes its first hit.
@@ -78,6 +79,13 @@ export const GameAnimalMechanic = {
 
     if (cfg.role === 'rabbit' && !enemy.gaHasBeenDamaged) {
       if (this._updateRabbitBurrow(enemy, game, cfg, deltaTime)) return;
+    }
+
+    // A wound always sends it for an exit, seen or not — an arrow from beyond
+    // its vision range used to mark it damaged while it kept idling in place.
+    if (!enemy.gaFleeing && enemy.gaHasBeenDamaged) {
+      enemy.gaFleeing = true;
+      enemy.gaFleeTarget = enemy.gaFleeTarget || this._farthestExitPoint(enemy, game);
     }
 
     if (!enemy.gaFleeing && enemy.target) {
