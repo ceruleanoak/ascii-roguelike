@@ -884,48 +884,19 @@ export class MenuSystem {
       return;
     }
 
-    if (game.currentMenuSlot === 'consumable1') {
-      game.inventorySystem.equipConsumable(0, selectedItem);
-      game.player.equippedConsumables = [...game.inventorySystem.equippedConsumables];
-      game.saveGameState();
-      game.renderer.markBackgroundDirty();
-      game.closeMenu();
-      game.updateUI();
-      return;
-    }
-
-    if (game.currentMenuSlot === 'consumable2') {
-      game.inventorySystem.equipConsumable(1, selectedItem);
-      game.player.equippedConsumables = [...game.inventorySystem.equippedConsumables];
-      game.saveGameState();
-      game.renderer.markBackgroundDirty();
-      game.closeMenu();
-      game.updateUI();
-      return;
-    }
-
-    if (game.currentMenuSlot === 'consumable3') {
-      game.inventorySystem.equipConsumable(2, selectedItem);
-      game.player.equippedConsumables = [...game.inventorySystem.equippedConsumables];
-      game.saveGameState();
-      game.renderer.markBackgroundDirty();
-      game.closeMenu();
-      game.updateUI();
-      return;
-    }
-
-    if (game.currentMenuSlot === 'consumable4') {
-      game.inventorySystem.equipConsumable(3, selectedItem);
-      game.player.equippedConsumables = [...game.inventorySystem.equippedConsumables];
-      game.saveGameState();
-      game.renderer.markBackgroundDirty();
-      game.closeMenu();
-      game.updateUI();
-      return;
-    }
-
-    if (game.currentMenuSlot === 'consumable5') {
-      game.inventorySystem.equipConsumable(4, selectedItem);
+    const consumableSlot = /^consumable([1-5])$/.exec(game.currentMenuSlot);
+    if (consumableSlot) {
+      const slotIdx = Number(consumableSlot[1]) - 1;
+      // A second member of an Exclusive Group (another pair of boots) can't go
+      // in beside the first — the slot-replace prompt resolves it, offering
+      // only the conflicting slot.
+      if (selectedItem && game.inventorySystem.conflictingConsumableSlot(selectedItem, slotIdx) !== -1) {
+        game.closeMenu();
+        game.slotReplacementSystem.openFromInventory(selectedItem);
+        game.renderer.markBackgroundDirty();
+        return;
+      }
+      game.inventorySystem.equipConsumable(slotIdx, selectedItem);
       game.player.equippedConsumables = [...game.inventorySystem.equippedConsumables];
       game.saveGameState();
       game.renderer.markBackgroundDirty();
@@ -1153,7 +1124,7 @@ export class MenuSystem {
         game.inventorySystem.applyEquipmentEffectsToPlayer(game.player);
       } else if (item.data.type === 'CONSUMABLE') {
         const emptySlot = game.inventorySystem.firstFreeConsumableSlot(game.player);
-        if (emptySlot === -1) {
+        if (emptySlot === -1 || game.inventorySystem.conflictingConsumableSlot(item) !== -1) {
           game.slotReplacementSystem.open(item, 'consumable');
           game.renderer.markBackgroundDirty();
           return;

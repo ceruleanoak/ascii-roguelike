@@ -20,7 +20,14 @@ import { findRecipeByResult } from '../data/recipes.js';
  *   SPACE / ENTER   — confirm selection
  *   SHIFT           — fast path: store in chest immediately and close
  *
+ * Exclusive Groups: a consumable that conflicts with one already equipped
+ * (InventorySystem.conflictingConsumableSlot — e.g. a second pair of boots)
+ * opens this prompt even with a free slot, and only the conflicting slot is
+ * selectable; the others show dimmed.
+ *
  * The item stays on the ground (game is paused) until a choice is confirmed.
+ * REST slot equip opens it for an item already in the consumable inventory
+ * (openFromInventory); confirming then takes it from there instead.
  * Replacing a slot reuses Player.pickupItem so trap-charge affinity and the
  * displaced-item → chest routing match a normal pickup exactly.
  */
@@ -33,6 +40,12 @@ export class SlotReplacementSystem {
     this.selection = 0;
     this.lastSlotSelection = 0;
     this.inputReadyAt = 0;
+    // Consumable slot indices the cursor may not land on beyond the mana
+    // slots — every slot but the conflicting one, while an Exclusive Group
+    // conflict is being resolved. Empty otherwise.
+    this.lockedSlots = [];
+    // True when pendingItem sits in the consumable inventory, not the world.
+    this.fromInventory = false;
   }
 
   get storeIndex() {
@@ -54,9 +67,9 @@ export class SlotReplacementSystem {
   get storeAvailable() {
     if (this.game.activeFloor?.roomKind !== 'puzzleRoom') return true;
     if (this.slotType === 'consumable') {
-      const reserved = this._reservedManaSlots();
+      const blocked = this._blockedConsumableSlots();
       const equipped = this.game.inventorySystem.equippedConsumables;
-      const hasRealSlot = equipped.some((_, i) => !reserved.includes(i));
+      const hasRealSlot = equipped.some((_, i) => !blocked.includes(i));
       if (!hasRealSlot) return true;
     }
     return false;
@@ -82,6 +95,18 @@ export class SlotReplacementSystem {
     return meter?.active ? (meter.slots || []) : [];
   }
 
+  /** Consumable slots the cursor skips: the magic meter's, plus any locked by a conflict. */
+  _blockedConsumableSlots() {
+    return [...this._reservedManaSlots(), ...this.lockedSlots];
+  }
+
+  /** Open the prompt for an item already in the consumable inventory (REST slot equip). */
+  openFromInventory(item) {
+    this.fromInventory = true;
+    this.open(item, 'consumable');
+    if (!this.pendingItem) this.fromInventory = false; // resolved without the modal, or refused
+  }
+
   /** Dispatch helper for main.js: opens the prompt when a pickup result asks for it. */
   maybeOpen(result) {
     if (!result?.needsSlotChoice) return false;
@@ -96,6 +121,7 @@ export class SlotReplacementSystem {
    */
   open(item, slotType = 'weapon') {
     this.slotType = slotType;
+    this.lockedSlots = [];
     const twin = this._matchingSlot(item);
     if (twin !== -1) {
       this.pendingItem = item;
@@ -111,9 +137,11 @@ export class SlotReplacementSystem {
         if (start === -1) return;
       }
     } else if (slotType === 'consumable') {
-      const reserved = this._reservedManaSlots();
       const equipped = this.game.inventorySystem.equippedConsumables;
-      start = equipped.findIndex((_, i) => !reserved.includes(i));
+      const conflict = this.game.inventorySystem.conflictingConsumableSlot(item);
+      if (conflict !== -1) this.lockedSlots = equipped.map((_, i) => i).filter(i => i !== conflict);
+      const blocked = this._blockedConsumableSlots();
+      start = equipped.findIndex((_, i) => !blocked.includes(i));
       // Every real slot is a mana slot (e.g. Yellow Mage's single starting
       // slot) — land on STORE IN CHEST, the only real destination. (storeAvailable
       // stays true for this exact case even in a puzzle room — see its getter.)
@@ -144,8 +172,8 @@ export class SlotReplacementSystem {
       const maxIdx = this.dismantleIndex !== -1 ? this.dismantleIndex
         : this.storeAvailable ? this.storeIndex : this.storeIndex - 1;
       if (optionIdx > maxIdx) return;
-      const reserved = this.slotType === 'consumable' ? this._reservedManaSlots() : [];
-      if (optionIdx < this.storeIndex && reserved.includes(optionIdx)) return;
+      const blocked = this.slotType === 'consumable' ? this._blockedConsumableSlots() : [];
+      if (optionIdx < this.storeIndex && blocked.includes(optionIdx)) return;
       this.selection = optionIdx;
       if (optionIdx < this.storeIndex) {
         this.lastSlotSelection = optionIdx;
@@ -189,6 +217,8 @@ export class SlotReplacementSystem {
 
   onClose() {
     this.pendingItem = null;
+    this.lockedSlots = [];
+    this.fromInventory = false;
   }
 
   // ── Internals ────────────────────────────────────────────────────────────
@@ -217,9 +247,9 @@ export class SlotReplacementSystem {
         if (!destroyed[idx]) { this.selection = idx; return; }
       }
     } else if (this.slotType === 'consumable') {
-      const reserved = this._reservedManaSlots();
+      const blocked = this._blockedConsumableSlots();
       for (let idx = this.selection + dir; idx >= 0 && idx <= maxSlot; idx += dir) {
-        if (!reserved.includes(idx)) { this.selection = idx; return; }
+        if (!blocked.includes(idx)) { this.selection = idx; return; }
       }
     } else {
       const next = this.selection + dir;
@@ -231,6 +261,14 @@ export class SlotReplacementSystem {
   _takeFromWorld() {
     const game = this.game;
     const item = this.pendingItem;
+    if (this.fromInventory) {
+      // Already the player's: lift it out of the consumable inventory, which
+      // every consumable confirm path then pushes it back into or equips from.
+      const inv = game.inventorySystem.consumableInventory;
+      const invIdx = inv.indexOf(item);
+      if (invIdx > -1) inv.splice(invIdx, 1);
+      return item;
+    }
     const idx = game.items.indexOf(item);
     if (idx > -1) game.items.splice(idx, 1);
     game.physicsSystem.removeEntity(item);
@@ -306,7 +344,7 @@ export class SlotReplacementSystem {
     // The duplicate auto-replace confirms without ever opening the modal —
     // only close it when it is ours, never another modal that happens to be up.
     if (game.pauseSystem.activeModal === this) game.pauseSystem.closeModal();
-    else this.pendingItem = null;
+    else this.onClose();
   }
 
   _confirmStore() {

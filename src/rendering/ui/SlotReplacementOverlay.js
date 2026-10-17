@@ -103,6 +103,9 @@ export class SlotReplacementOverlay {
       if (destroyed) {
         ctx.fillStyle = '#553333';
         ctx.fillText('x', x + cellSize / 2, rowY + cellSize / 2);
+      } else if (slot && state.lockedSlots?.includes(i)) {
+        ctx.fillStyle = '#555555';
+        ctx.fillText(slot.char, x + cellSize / 2, rowY + cellSize / 2);
       } else if (slot) {
         ctx.fillStyle = slot.data?.color || '#ffffff';
         ctx.fillText(slot.char, x + cellSize / 2, rowY + cellSize / 2);

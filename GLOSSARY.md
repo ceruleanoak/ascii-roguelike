@@ -1126,6 +1126,19 @@ identity, not standard programming terms.
 - **Not:** an Ingredient (raw drop) or an equipped weapon/armor. Consumables are crafted via
   recipes.
 
+### Exclusive Group
+- **Definition:** A set of Consumables that can't be equipped side by side, so only one member
+  sits in the consumable slots at a time. Boots, Floating Boots and Rubber Boots form the
+  `boots` group: one pair at a time. Equipping a second member (explore pickup, crafting,
+  REST slot equip) opens the slot-replace prompt, which offers only the conflicting slot plus
+  STORE IN CHEST. The other slots show dimmed.
+- **In code:** `data.exclusiveGroup` in `src/data/items.js`.
+  `InventorySystem.conflictingConsumableSlot(item, exceptIdx)` finds the clash, and
+  `SlotReplacementSystem.lockedSlots` restricts the prompt. REST equip goes through
+  `openFromInventory`.
+- **Not:** a stack (Stackable consumables merge counts into one slot). It is also not a
+  mana-reserved slot.
+
 ### Feed
 - **Definition:** A Consumable that crows and rats seek out and eat once it lies on the ground.
   Throwing (SHIFT) or dropping Feed is how crows are befriended and rats tamed into

@@ -19,6 +19,7 @@ import { addItemToChestArray, removeItemFromChestArray, chestEntryLabel, trapAlr
 import { saveExploreRoomState, getSavedExploreRoomState, clearSavedExploreRoomState, saveRestIngredientsState, getSavedRestIngredientsState, clearSavedRestIngredientsState } from './RoomStatePersistence.js';
 import { EquipmentEffectsSystem } from './EquipmentEffectsSystem.js';
 import { ConsumableWindupEffects } from './ConsumableWindupEffects.js';
+import { tickConsumableFlash } from './ConsumableSlotFlash.js';
 import { countItemChar, removeItemChar } from './itemCostDispatch.js';
 import * as ingredientPile from './IngredientPile.js';
 
@@ -199,6 +200,18 @@ export class InventorySystem {
   firstFreeConsumableSlot(player) {
     const reserved = player?.magicMeter?.active ? (player.magicMeter.slots || []) : [];
     return this.equippedConsumables.findIndex((s, idx) => s === null && !reserved.includes(idx));
+  }
+
+  // The equipped consumable slot whose item shares `item`'s Exclusive Group
+  // (data.exclusiveGroup — e.g. every pair of boots), or -1. `exceptIdx` skips
+  // the slot about to be overwritten anyway. Every equip path that would add
+  // a second member routes to the SlotReplacementSystem prompt instead, which
+  // then only offers the conflicting slot.
+  conflictingConsumableSlot(item, exceptIdx = -1) {
+    const group = item?.data?.exclusiveGroup;
+    if (!group) return -1;
+    return this.equippedConsumables.findIndex((s, idx) =>
+      idx !== exceptIdx && s !== item && s?.data?.exclusiveGroup === group);
   }
 
   getItemChest() {
@@ -385,7 +398,7 @@ export class InventorySystem {
             customMessage = `${item.data.name} x${stacked.count}`;
           } else if (allowSlotChoice && !this.game?.bombBagSystem?.claimsPickup(item)) {
             const emptySlot = this.firstFreeConsumableSlot(player);
-            if (emptySlot === -1) return { success: false, needsSlotChoice: true, slotType: 'consumable', pendingItem: item, droppedItem: null, message: null, removedTrap: false };
+            if (emptySlot === -1 || this.conflictingConsumableSlot(item) !== -1) return { success: false, needsSlotChoice: true, slotType: 'consumable', pendingItem: item, droppedItem: null, message: null, removedTrap: false };
             this.consumableInventory.push(item);
             this.equipConsumable(emptySlot, item);
             // Re-project onto the player: the HUD and the passive consumable
@@ -685,7 +698,7 @@ export class InventorySystem {
     this.updateConsumableCooldowns(deltaTime);
 
     // Tick HUD flash timer
-    this.updateConsumableFlash(deltaTime);
+    tickConsumableFlash(this, deltaTime);
 
     // Check if consumables should activate
     this.checkConsumableActivation(player, currentRoom);
@@ -706,46 +719,6 @@ export class InventorySystem {
         this.consumableCooldowns[i] = Math.max(0, this.consumableCooldowns[i] - deltaTime);
       }
     }
-  }
-
-  /**
-   * Tick down HUD flash/blink timers for consumable slot.
-   * Returns true while a blink is in progress (caller should updateUI this frame).
-   */
-  updateConsumableFlash(deltaTime) {
-    // Legacy flash timer (color-only flash, used by windup completion)
-    if (this.consumableFlashTimer > 0) {
-      this.consumableFlashTimer = Math.max(0, this.consumableFlashTimer - deltaTime);
-      if (this.consumableFlashTimer === 0) {
-        this.consumableFlashSlot = -1;
-      }
-    }
-
-    // Block-blink animation: 4 half-cycles at 0.1s each = 0.4s total
-    if (this.consumableBlinkTimer > 0) {
-      this.consumableBlinkTimer = Math.max(0, this.consumableBlinkTimer - deltaTime);
-      this.consumableBlinkPhase -= deltaTime;
-      if (this.consumableBlinkPhase <= 0) {
-        // Toggle solid block vs normal char
-        this.consumableBlinkShowBlock = !this.consumableBlinkShowBlock;
-        this.consumableBlinkPhase = 0.1; // 100ms per half-cycle
-      }
-      if (this.consumableBlinkTimer === 0) {
-        this.consumableBlinkSlot = -1;
-        this.consumableBlinkShowBlock = false;
-      }
-      return true; // HUD needs refresh this frame
-    }
-
-    // Tick active-effect timers (drive slow blink in top bar while effect lasts)
-    let anyActive = false;
-    for (let i = 0; i < this.activeEffectTimers.length; i++) {
-      if (this.activeEffectTimers[i] > 0) {
-        this.activeEffectTimers[i] = Math.max(0, this.activeEffectTimers[i] - deltaTime);
-        anyActive = true;
-      }
-    }
-    return anyActive;
   }
 
   /**

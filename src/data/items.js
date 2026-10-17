@@ -2527,6 +2527,9 @@ export const ITEMS = {
     name: 'Boots',
     type: ITEM_TYPES.CONSUMABLE,
     passive: true,
+    // One pair of boots at a time — Boots, Floating Boots and Rubber Boots
+    // share an Exclusive Group (InventorySystem.conflictingConsumableSlot).
+    exclusiveGroup: 'boots',
     // Armed move-speed multiplier. Unarmed sprint is 1.5x; Boots alone get
     // most of the way, and a Fur Vest's 1.1x on top makes ~1.5x (1.36 × 1.1).
     passiveSprint: 1.36,
@@ -2542,6 +2545,7 @@ export const ITEMS = {
     name: 'Floating Boots',
     type: ITEM_TYPES.CONSUMABLE,
     passive: true,
+    exclusiveGroup: 'boots',
     floatCharge: 25,
     spentChar: 'ꙍ',
     color: '#ffaa44'
@@ -2558,6 +2562,7 @@ export const ITEMS = {
     name: 'Rubber Boots',
     type: ITEM_TYPES.CONSUMABLE,
     passive: true,
+    exclusiveGroup: 'boots',
     waterCharge: 25,
     spentChar: 'ꙍ',
     color: '#ffdd44'
