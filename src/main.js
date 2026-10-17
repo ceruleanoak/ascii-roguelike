@@ -3581,17 +3581,8 @@ class Game {
       // Interior SHIFT actions (dungeon item-slot sacrifice → unlock stairs) via InteriorManager.
       if (this.interiorManager.isActive && this.interiorManager.handleShiftPress()) return;
 
-      const held = this.player.heldItem;
-      if (held) {
-        // SHIFT throws to drop — any held item leaves the slot and lands as a
-        // pickup. Weapons may damage en route; traps do NOT arm (deploy is SPACE).
-        this.trapSystem.startTrapCharge('drop');
-      } else if (this.tossSystem.startToss()) {
-        // SHIFT with a consumable armed (keys 4-8) and hands free — Toss:
-        // charge on hold, release flings the armed item as a ground pickup.
-        // Release needs no dispatch here — a toss charge is a 'drop'-mode
-        // trapCharging, so handleShiftRelease's existing drop-release fires it.
-      }
+      // Toss the armed consumable, else drop the held item (TossSystem).
+      this.tossSystem.handleShiftPress();
     }
 
     this.updateUI();
