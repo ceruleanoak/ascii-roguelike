@@ -1328,6 +1328,8 @@ export class AudioSystem {
     this.loadSFX('puzzle_solve', null);  // puzzle solved, spirit rises
     this.loadSFX('barricade_lift', null); // a trigger Barricade's plug gives way
     this.loadSFX('plank_place', null);   // Platform plank laid over deep water
+    // AoE melee held windup (Item.holdsWindup) — placeholder name, no asset yet.
+    this.loadSFX('melee_charge', null);
     this.loadSFX('sword_draw', null);    // § drawn from the islet stone
     this.loadSFX('cavern_reveal', null); // a bomb opens a Bombable Rock onto a Cavern door
     // Hoardmaw (green dungeon boss) — placeholder names, no assets yet. Every
