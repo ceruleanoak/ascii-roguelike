@@ -153,7 +153,7 @@
         <button class="tool" data-tool="spawnvent">&amp;  Spawn Vent</button>
         <h4>Spawn Vents</h4>
         <div id="ventList"></div>
-        <div class="hint">Spawn Vent = a breakable fixture that keeps up to its max-alive count of enemies on the floor, spawning one on its own cell every interval seconds while it stands. Leave the enemy char blank for a zone-random enemy. Click an empty floor cell to place one, click it again to remove it. A Shutter opens only once every vent on the floor is destroyed and its enemies are dead.</div>
+        <div class="hint">Spawn Vent = a breakable fixture that keeps up to its max-alive count of enemies on the floor, spawning one on its own cell every interval seconds (5 at least) while it stands. Leave the enemy char blank for a zone-random enemy. Click an empty floor cell to place one, click it again to remove it. A Shutter opens only once every vent on the floor is destroyed and its enemies are dead.</div>
       </div>
     </div>
   </div>
@@ -557,7 +557,7 @@
       currentData.spawners = currentData.spawners.filter(v => v !== existing);
     } else if (currentData.grid[row][col] === '.' && !anyFixtureAt(row, col)) {
       if (!currentData.spawners) currentData.spawners = [];
-      currentData.spawners.push({ row, col, enemyChar: null, maxAlive: 2, interval: 4 });
+      currentData.spawners.push({ row, col, enemyChar: null, maxAlive: 2, interval: 5 });
     } else {
       return true; // must sit on plain floor, and not already hold another fixture
     }
@@ -980,7 +980,7 @@
       row.appendChild(label);
 
       row.appendChild(numberField(v.maxAlive, 1, 1, 'max alive', n => { v.maxAlive = n; }));
-      row.appendChild(numberField(v.interval, 0.5, 0.5, 'spawn interval (s)', n => { v.interval = n; }));
+      row.appendChild(numberField(v.interval, 5, 0.5, 'spawn interval (s), 5 at least', n => { v.interval = n; }));
 
       const charInput = document.createElement('input');
       charInput.type = 'text';

@@ -9,6 +9,11 @@ import { tagInteriorPlane } from './PlaneSystem.js';
 // 10-per-room ceiling the surface spawners respect.
 const FLOOR_ENEMY_CAP = 10;
 
+// Every spawn waits at least this long — the first after the floor is
+// built, and each after the one before. A template's own interval may be
+// longer, never shorter (the dungeon editor rejects one under this).
+const SPAWN_VENT_MIN_INTERVAL = 5;
+
 /** A vent that can still spawn: not broken, not mid-crack. */
 function isStanding(vent) {
   const { obj } = vent;
@@ -45,7 +50,7 @@ export class SpawnVentSystem {
       vent.alive = vent.alive.filter(e => e.hp > 0 && floor.enemies.includes(e));
       vent.timer += dt;
       if (vent.alive.length >= vent.maxAlive) continue;
-      if (vent.timer < vent.interval) continue;
+      if (vent.timer < Math.max(vent.interval, SPAWN_VENT_MIN_INTERVAL)) continue;
       if (floor.enemies.length >= FLOOR_ENEMY_CAP) continue;
       vent.timer = 0;
       this._spawnFrom(floor, vent);

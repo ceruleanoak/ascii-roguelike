@@ -184,7 +184,8 @@ async function validateSpawners(spawners, grid, { rows, cols, reservedCells = []
     const cellChar = grid[v.row][v.col];
     if (cellChar !== '.') return `spawner ${i} at (${v.row},${v.col}) must sit on plain floor ('.'), not "${cellChar}".`;
     if (!Number.isInteger(v.maxAlive) || v.maxAlive < 1) return `spawner ${i} maxAlive must be an integer >= 1.`;
-    if (!(Number.isFinite(v.interval) && v.interval > 0)) return `spawner ${i} interval must be a number > 0.`;
+    // SPAWN_VENT_MIN_INTERVAL (SpawnVentSystem) — the runtime clamps to it too.
+    if (!(Number.isFinite(v.interval) && v.interval >= 5)) return `spawner ${i} interval must be at least 5 seconds.`;
     if (v.enemyChar !== null && v.enemyChar !== undefined) {
       if (typeof v.enemyChar !== 'string' || !v.enemyChar) return `spawner ${i} enemyChar must be a non-empty string or null.`;
       const enemies = await loadEnemiesModule();
