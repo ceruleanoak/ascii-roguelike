@@ -355,7 +355,7 @@ export const NEUTRAL_ROOMS = {
   /**
    * Oasis — yellow-zone secret reached by following a river's flow direction
    * for 3 consecutive rooms (see ZoneSystem.recordRiverFollow / main.js exit
-   * handlers). Lake-style water terrain, a random tier-2 weapon, and fairies
+   * handlers). Lake-style water terrain, one random consumable, and fairies
    * to catch in bottles. No enemies.
    */
   oasis: {
@@ -388,14 +388,19 @@ export const NEUTRAL_ROOMS = {
       const centerX = Math.floor(GRID.COLS / 2) * GRID.CELL_SIZE;
       const centerY = Math.floor(GRID.ROWS / 2) * GRID.CELL_SIZE;
 
-      // Random tier-2 weapon, uniformly chosen — no thematic curation.
-      const tier2Weapons = Object.values(ITEMS).filter(
-        item => item.type === ITEM_TYPES.WEAPON && item.tier === 2
+      // One random usable consumable beside the fairies, uniformly chosen —
+      // no thematic curation. (A tier-2 weapon here was too strong a reward
+      // for a secret that is also a free fairy refill.) Passives, oils, the
+      // Bomb Bag, and the bottle/coin utility items are left out: the pick
+      // should be something you throw or drink.
+      const NOT_A_PICK = new Set(['cauldronInput', 'wellOffering', 'emptyBottle']);
+      const consumables = Object.values(ITEMS).filter(item =>
+        item.type === ITEM_TYPES.CONSUMABLE && item.effect && !item.passive
+        && !item.oilEffect && !item.bombBag && !NOT_A_PICK.has(item.effect)
       );
-      if (tier2Weapons.length > 0) {
-        const chosen = tier2Weapons[Math.floor(Math.random() * tier2Weapons.length)];
-        const weapon = new Item(chosen.char, centerX, centerY - GRID.CELL_SIZE * 2);
-        room.items.push(weapon);
+      if (consumables.length > 0) {
+        const chosen = consumables[Math.floor(Math.random() * consumables.length)];
+        room.items.push(new Item(chosen.char, centerX, centerY - GRID.CELL_SIZE * 2));
       }
 
       // Fairies flutter indefinitely (no room-clear gate here — Oasis has no
@@ -608,7 +613,7 @@ export const NEUTRAL_ROOMS = {
    * exit sequences (data/exitLetters.js SECRET_PATTERNS). The Hatter sits at
    * the table; the table always holds one potion, picked uniformly from
    * every CONSUMABLE named "...Potion" (same uncurated-roll shape as
-   * Oasis's tier-2 weapon pick, above).
+   * Oasis's consumable pick, above).
    */
   teaParty: {
     onGenerate(room, state) {
