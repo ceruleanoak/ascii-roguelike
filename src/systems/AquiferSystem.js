@@ -23,9 +23,10 @@ import { PLANE_SURFACE } from './PlaneSystem.js';
  *
  * A walker can only steer across the current (and choose a branch at the
  * Confluence), never swim back: whatever part of their stroke points
- * upstream, the current matches. A Frog swims nearly
- * against it — enough to push up the narrow Offshoots, whose current runs
- * back out into the channel. One Offshoot always holds ◓ Chromablade,
+ * upstream, the current matches. A Frog only resists it — swimming upstream
+ * slows its drift to a crawl but it is always carried along — except in the
+ * narrow Offshoots, whose current runs back out into the channel and which a
+ * Frog can push up. One Offshoot always holds ◓ Chromablade,
  * another § Sword of the Letter, any others a gem; all are taken on contact
  * (a Frog's SPACE is its tongue, not a pickup).
  *
@@ -49,10 +50,13 @@ const CS = GRID.CELL_SIZE;
 const CURRENT_SPEED = 90;
 // Inside the Confluence the current slackens so the player can pick a branch.
 const CONFLUENCE_FACTOR = 0.6;
-// A Frog feels only this fraction of the current (36 px/s) and its stroke is
-// never cancelled; under its ~58 px/s average swim, that's slow headway up an
-// Offshoot.
+// A Frog feels only this fraction of the current (36 px/s). In an Offshoot
+// its stroke is never cancelled; under its ~58 px/s average swim, that's slow
+// headway up to the loot.
 const FROG_RESIST = 0.4;
+// Everywhere else a Frog only resists: however hard it swims upstream, the
+// current still carries it downstream at least this fast (px/s).
+const FROG_CRAWL = 15;
 // How strongly a rider off the center line is drawn back toward it, relative
 // to the downstream push. Keeps riders off the stair-stepped channel walls.
 const CENTERING = 0.6;
@@ -235,12 +239,24 @@ export class AquiferSystem {
 
   /**
    * The displacement the current applies to the rider this frame. A Frog
-   * feels a fraction of it and swims freely; a walker feels all of it, plus
+   * feels a fraction of it: in an Offshoot it swims freely, elsewhere its
+   * upstream stroke is matched down to a FROG_CRAWL drift, so it slows but
+   * never stops or turns back. A walker feels all of it, plus
    * whatever matches the upstream part of their own velocity — so no stroke,
    * roll or speed boost ever makes headway against the flow.
    */
   _rideCurrent(flow, p) {
-    if (p.polymorphed) return { x: flow.x * CURRENT_SPEED * FROG_RESIST, y: flow.y * CURRENT_SPEED * FROG_RESIST };
+    if (p.polymorphed) {
+      let x = flow.x * CURRENT_SPEED * FROG_RESIST, y = flow.y * CURRENT_SPEED * FROG_RESIST;
+      const fl = Math.hypot(flow.x, flow.y);
+      if (!flow.frogSwims && fl > 0) {
+        const ux = flow.x / fl, uy = flow.y / fl;
+        const along = p.velocity.vx * ux + p.velocity.vy * uy + x * ux + y * uy;
+        const lift = Math.max(0, FROG_CRAWL - along);
+        x += lift * ux; y += lift * uy;
+      }
+      return { x, y };
+    }
     let x = flow.x * CURRENT_SPEED, y = flow.y * CURRENT_SPEED;
     const fl = Math.hypot(flow.x, flow.y);
     if (fl > 0) {
@@ -286,10 +302,12 @@ export class AquiferSystem {
     if (!layout.mask[row]?.[col]) return null;
     if (inConfluence(col, row)) return this._confluenceFlow(layout, px, py);
     const offshoot = layout.offshootAt[row][col];
-    if (offshoot) return this._offshootFlow(layout.offshoots[offshoot.o], offshoot.k, px, py);
+    // Offshoot and mouth flows are tagged `frogSwims`: the only water a
+    // Frog can make headway against (_rideCurrent).
+    if (offshoot) return { ...this._offshootFlow(layout.offshoots[offshoot.o], offshoot.k, px, py), frogSwims: true };
     const approach = layout.approachAt[row][col];
     if (approach !== null && this._swimmingInto(layout.offshoots[approach].dir)) {
-      return this._mouthFlow(layout.offshoots[approach], px, py);
+      return { ...this._mouthFlow(layout.offshoots[approach], px, py), frogSwims: true };
     }
 
     const near = layout.near[row][col];
