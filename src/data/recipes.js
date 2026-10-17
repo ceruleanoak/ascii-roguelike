@@ -11,6 +11,9 @@ export const RECIPES = [
   { left: 'j', right: 'e', result: '𝑚', name: 'Mana' },  // Jaw + Eye    (creature essence)
   { left: 'l', right: 'r', result: '𝑚', name: 'Mana' },  // Leaf + Root  (nature essence)
   { left: 'd', right: 'b', result: '𝑚', name: 'Mana' },  // Dust + Bone  (remains)
+  { left: 'i', right: 'h', result: '𝑚', name: 'Mana' },  // Ice + Herb   (frozen essence)
+  { left: 't', right: 'f', result: '𝑚', name: 'Mana' },  // Teeth + Fur  (beast remains)
+  { left: 'g', right: 'a', result: '𝑚', name: 'Mana' },  // Goo + Ash    (residue)
 
   // === GOLEM SUMMONS (ingredient + Mana → companion, not an item) ===
   // The "result" chars below are sentinels (src/data/golems.js /
@@ -130,6 +133,7 @@ export const RECIPES = [
   { left: ')', right: 'F', result: '⟩', name: 'Fire Bow' },      // Bow + Fire = Fire Bow
   { left: 'b', right: 'M', result: '⊤', name: 'Bone Axe' },      // Bone + Metal = Bone Axe
   { left: '⊦', right: 'b', result: '⊤', name: 'Bone Axe' },      // Axe + Bone = Bone Axe (second route — connects the Axe to its tier-2 rung)
+  { left: 'j', right: '|', result: '⊤', name: 'Bone Axe' },      // Jaw + Stick = Bone Axe (third route — the jaw is the blade)
 
   // Utility
   { left: 't', right: '|', result: '↑', name: 'Spear' },         // Teeth + Stick = Spear
