@@ -1537,7 +1537,7 @@ export const ITEMS = {
     keenAimCells: 2,
     damage: 1,
     windup: 0.1,
-    recovery: 0.6,
+    recovery: 1.0,   // slower than the plain Dagger's 0.6 — the Cyan Rogue's stab line was too rapid
     range: 20,
     patternSpeed: 0.05,
     color: '#66dddd'
@@ -1557,7 +1557,7 @@ export const ITEMS = {
     lungeSpeed: 90,
     damage: 2,
     windup: 0.1,
-    recovery: 0.6,
+    recovery: 1.0,   // slower than the plain Dagger's 0.6 — the Cyan Rogue's stab line was too rapid
     range: 20,
     patternSpeed: 0.05,
     color: '#ddeeff'
