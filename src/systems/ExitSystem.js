@@ -712,14 +712,18 @@ export class ExitSystem {
    * the Boss still stood, so a kill that just defeated the Goo Dragon (or the
    * last zone Boss) would otherwise leave the player choosing among colors
    * the rule now forbids. Keeps each exit's letter and any other flags; only
-   * the color (and, for gray north, forceZone) changes. A no-op whenever
-   * neither post-Goo-Dragon rule applies, so pre-Dragon boss rooms keep the
-   * exits they were generated with.
+   * the color (and, for gray north, forceZone) changes. The kill also makes
+   * this a completed zone, so even before the Goo Dragon falls the room
+   * re-dresses under the completed-zone rule (1 own-color exit, 2 alt-zone
+   * exits) — otherwise every zone Boss room left all 3 exits in its own
+   * color (Frosted Maw, turtle shell). A no-op only if the Boss isn't
+   * actually marked defeated.
    */
   recolorExitsAfterZoneBoss(room) {
     if (!room?.isZoneBossRoom) return;
     const zone = room.zone || 'green';
-    if (!this._postDragonExitZones(zone) && !this._northLeadsToGray(zone)) return;
+    if (!this.zoneSystem?.isZoneDefeated(zone) &&
+        !this._postDragonExitZones(zone) && !this._northLeadsToGray(zone)) return;
 
     const slots = ['north', 'east', 'west'];
     const exits = slots.map(s => room.exits?.[s]);
@@ -1034,7 +1038,7 @@ export class ExitSystem {
           game.pearlSystem.revealPearlPedestal();
 
           // A zone Boss room's exits were rolled before the kill; re-dress
-          // them under the post-Goo-Dragon rules the kill may have unlocked.
+          // them under the completed-zone / post-Goo-Dragon rules it unlocked.
           this.recolorExitsAfterZoneBoss(room);
 
           // Pre-boss gate: depth (bossDepth - 1) cleared → north-only 'B' exit + anticipation music.
