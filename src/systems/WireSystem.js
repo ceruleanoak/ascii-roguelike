@@ -1,8 +1,11 @@
 // WireSystem — two-stage placeable wires (Sticky Tripline, Electric Tripline)
 // anchored between two points in the room.
 //
-// Flow: SPACE anchors one end, SPACE anchors the other and commits the segment
-// to the room (one use per room). Each end is placed one of two ways:
+// Flow: SPACE anchors one end, SPACE anchors the next and commits the segment
+// to the room (one use per room). A wire with `maxVertices` > 2 (the Sticky
+// Tripline) keeps going: each committed point becomes the new anchor until the
+// last vertex is placed, stringing a bent polyline. Each point is placed one of
+// two ways:
 //   - standing next to an eligible anchor (bg object or wall) → the end bites
 //     onto that anchor directly.
 //   - standing nowhere near one → SPACE charges a throw instead (TrapSystem's
@@ -34,7 +37,9 @@ const ELIGIBLE_ANCHOR_NAMES = new Set([
 export class WireSystem {
   constructor(game) {
     this.game = game;
-    // { x, y, plane, wireChar, wireType } | null — point 1 placed, awaiting point 2.
+    // { x, y, plane, wireChar, wireType, item, vertices, committed } | null — the
+    // last point placed, awaiting the next. `vertices` counts points placed so far;
+    // `committed` is true once at least one segment is in the room.
     this.pendingAnchor = null;
     // Last layer reference seen, for detecting room/floor changes.
     this._lastLayer = null;
@@ -165,11 +170,11 @@ export class WireSystem {
 
     if (!this.pendingAnchor) {
       // Place point 1; preview segment goes live from player → anchor.
-      this.pendingAnchor = { x, y, plane, wireChar, wireType };
+      this.pendingAnchor = { x, y, plane, wireChar, wireType, item: held, vertices: 1, committed: false };
       return;
     }
 
-    // Point 2: commit a permanent tripline to the layer if the same point wasn't reused.
+    // Next point: commit a permanent tripline to the layer if the same point wasn't reused.
     if (Math.hypot(x - this.pendingAnchor.x, y - this.pendingAnchor.y) < GRID.CELL_SIZE * 0.5) {
       return; // same spot — swallow but don't commit a zero-length wire
     }
@@ -184,10 +189,24 @@ export class WireSystem {
         wireType
       });
     }
+    const vertices = this.pendingAnchor.vertices + 1;
+    if (vertices < (held.data.maxVertices || 2)) {
+      // More bends left: this point becomes the anchor the loose end runs from.
+      this.pendingAnchor = { ...this.pendingAnchor, x, y, plane, vertices, committed: true };
+      return;
+    }
     this.pendingAnchor = null;
     // Consume one charge through the standard trap path — updates slot UI and
     // advances activeSlotIndex when depleted.
     this.game.trapSystem.markTrapUsed();
+  }
+
+  // A wire let go after some of it is already strung still spent its charge —
+  // otherwise swapping slots mid-bend would leave a segment up AND a full wire.
+  _abandonPending() {
+    const pending = this.pendingAnchor;
+    this.pendingAnchor = null;
+    if (pending?.committed && pending.item?.charges > 0) pending.item.charges--;
   }
 
   // TrapSystem hands the in-flight entry over the moment the throw fires.
@@ -334,7 +353,7 @@ export class WireSystem {
     if (this.pendingAnchor) {
       const held = player?.heldItem;
       if (!held?.data?.wire || held.char !== this.pendingAnchor.wireChar) {
-        this.pendingAnchor = null;
+        this._abandonPending();
       }
     }
 

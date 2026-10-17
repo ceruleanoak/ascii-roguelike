@@ -3150,8 +3150,9 @@ export const ITEMS = {
     color: '#00ffff'
   },
   // Sticky Tripline: SPACE next to an eligible anchor bites one end onto it, SPACE
-  // away from one throws that end instead; the second placement commits the wire.
-  // The segment slows entities (goo status). One per room. WireSystem handles
+  // away from one throws that end instead. Each placement after the first commits
+  // a segment, up to maxVertices points (a two-segment bend). The wire slows
+  // entities (goo status). One per room. WireSystem handles
   // placement; uses the standard trap `charges` mechanism so resetTrapsForNewRoom()
   // refills it each new EXPLORE room.
   '⌇': {
@@ -3160,6 +3161,7 @@ export const ITEMS = {
     type: ITEM_TYPES.TRAP,
     wire: true,
     wireType: 'slime',
+    maxVertices: 3,
     charges: 1,
     color: '#88dd88'
   },
