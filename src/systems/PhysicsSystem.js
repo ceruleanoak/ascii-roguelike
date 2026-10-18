@@ -1848,7 +1848,13 @@ export class PhysicsSystem {
         if (liquidState === 'poisoned') {
           // Per-frame contact holds pip 1 — lingering never stacks by itself.
           // 1.5s (was 4s): poison wears off soon after stepping out.
-          if (entity.applyStatusEffect) entity.applyStatusEffect('poison', 1.5, 1);
+          // Affinity immunity gates here, as shockEntity does for zap —
+          // applyStatusEffect itself doesn't consult it, so a venom-affinity
+          // Sea Snake was poisoned by an Acid Blade pond.
+          if (entity.applyStatusEffect
+              && (!entity.shouldApplyStatusEffect || entity.shouldApplyStatusEffect('poison'))) {
+            entity.applyStatusEffect('poison', 1.5, 1);
+          }
         } else if (liquidState === 'electrified') {
           game.electricitySystem?.shockEntity(entity, electricCurrent);
         }

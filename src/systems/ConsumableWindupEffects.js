@@ -81,7 +81,7 @@ export class ConsumableWindupEffects {
           const dx = (enemy.position.x + 20) - px;
           const dy = (enemy.position.y + 20) - py;
           if (Math.sqrt(dx * dx + dy * dy) <= 55) {
-            enemy.applyStatusEffect('poison', 8);
+            if (enemy.shouldApplyStatusEffect('poison')) enemy.applyStatusEffect('poison', 8);
             combatSystem.createDamageNumber('☠', enemy.position.x, enemy.position.y, '#44ff44');
           }
         }
@@ -95,7 +95,7 @@ export class ConsumableWindupEffects {
           const dy = (enemy.position.y + 20) - py;
           if (Math.sqrt(dx * dx + dy * dy) <= 60) {
             enemy.takeDamage(3);
-            enemy.applyStatusEffect('poison', 8);
+            if (enemy.shouldApplyStatusEffect('poison')) enemy.applyStatusEffect('poison', 8);
             enemy.applyStatusEffect('freeze', 5, 1); // slow only: freeze pip 1
             combatSystem.createDamageNumber(3, enemy.position.x, enemy.position.y, '#00ff44');
           }
