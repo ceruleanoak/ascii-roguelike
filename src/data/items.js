@@ -1761,6 +1761,17 @@ export const ITEMS = {
     meleeChar: '~', pullsDisarmedGear: true,
     color: '#5a8a3a'
   },
+  // Morning Star (Whip + Metal): a whip's lash with a hammer blow at its tip.
+  // The chain cells crack like the whip (disarm); the farthest cell is the
+  // spiked head (Item.createMeleeMorningStar), which lands as a hammer.
+  '✹': {
+    char: '✹', tier: 2, name: 'Morning Star',
+    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'whip',
+    attackPattern: 'morningStar',
+    damage: 1, headDamage: 3, windup: 0.5, recovery: 1.45, patternSpeed: 0.02, range: 40,
+    meleeChar: '~',
+    color: '#aaaaaa'
+  },
   // Drowse Boomerang (Boomerang + Pollen): its hit puts the target to sleep.
   '⤺': {
     char: '⤺', tier: 2, name: 'Drowse Boomerang',

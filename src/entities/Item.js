@@ -927,6 +927,13 @@ export class Item {
         return injectSubtype(this.createMeleeMultistab(player));
       case 'whipcrack':
         return injectSubtype(this.createMeleeWhipcrack(player));
+      case 'morningStar': {
+        // injectSubtype stamps the item's subtype ('whip') on every hit; the
+        // head is a hammer blow, so it gets its own back afterwards.
+        const hits = injectSubtype(this.createMeleeMorningStar(player));
+        hits[hits.length - 1].weaponSubtype = 'hammer';
+        return hits;
+      }
       case 'slam':
         return injectSubtype(this.createMeleeSlam(player));
       default:
@@ -1310,6 +1317,33 @@ export class Item {
       });
     }
 
+    return attacks;
+  }
+
+  createMeleeMorningStar(player) {
+    // A whipcrack whose farthest segment is the spiked head. The near cells
+    // are the chain and hit like any whip (disarm, the trained stun); the head
+    // hits like a hammer: hammer damage (data.headDamage), canSmash, the
+    // hammer's impact burst, and — set by the caller after injectSubtype —
+    // the hammer subtype, so it flips Tortoises, SMASHes frozen foes and
+    // sends a Bumper flying. Each enemy meets one part of the lash: melee
+    // hitboxes share no burst id, so a second hit would land in iframes.
+    const attacks = this.createMeleeWhipcrack(player);
+    const head = attacks[attacks.length - 1];
+    Object.assign(head, {
+      char: this.data.char,
+      drawAngle: null, // the head is a ball, drawn upright — not a rotated lash cell
+      width: GRID.CELL_SIZE,
+      height: GRID.CELL_SIZE,
+      damage: this.data.headDamage ?? this.data.damage,
+      duration: 0.15,
+      disarm: false,
+      canSmash: true,
+      strikeChar: HAMMER_STRIKE_CHAR,
+      strikeScale: HAMMER_STRIKE_SCALE,
+      strikeFlashDuration: HAMMER_STRIKE_FLASH_DURATION,
+      strikeFlashTimer: HAMMER_STRIKE_FLASH_DURATION,
+    });
     return attacks;
   }
 

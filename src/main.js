@@ -1076,7 +1076,7 @@ class Game {
     if (!weapon) return;
     if (weapon.data.isBlade) {
       this.audioSystem.playSFX('attack_blade');
-    } else if (weapon.data.attackPattern === 'whipcrack') {
+    } else if (weapon.data.weaponSubtype === 'whip') {
       this.audioSystem.playSFX('attack_whip');
     }
   }

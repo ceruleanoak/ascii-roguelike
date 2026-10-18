@@ -248,6 +248,7 @@ export const RECIPES = [
   { left: '⊥', right: '⊗', result: '✺', name: 'Exploding Mace' },    // Hammer + Bomb
   { left: '≋', right: 'K', result: '⥊', name: 'Bullwhip' },          // Whip + Thick Fur
   { left: '≋', right: '❦', result: '∻', name: 'Vine Whip' },         // Whip + Moss
+  { left: '≋', right: 'M', result: '✹', name: 'Morning Star' },      // Whip + Metal
   { left: '⫯', right: '⧫', result: '⟡', name: 'Diamond Longsword' }, // Longsword + Diamond
   { left: '↾', right: 'i', result: '⍖', name: 'Icicle' },            // Dagger + Ice
   { left: '⊦', right: 'i', result: '⍑', name: 'Ice Axe' },           // Axe + Ice
