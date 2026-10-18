@@ -100,12 +100,13 @@ export class EquipmentEffectsSystem {
     // set outside this function is erased the next time armor changes.
     player.defense += player.fountainArmorBonus;
 
-    // Apply passive consumable bonuses (Lucky Coin, Tooth Necklace). luckBlessed (well ritual) is separate, untouched here.
+    // Apply passive consumable bonuses (Lucky Coin, Tooth Necklace, Gem Necklaces). luckBlessed (well ritual) is separate, untouched here.
     player.luckActive = false;
     player.critChance = 0;
     player.luckDodgeBonus = 0;
     player.fireBerryLit = false;
     player.bootsSprintMult = 1;
+    player.elementReduction = { burn: 0, freeze: 0, poison: 0, electric: 0 };
     let critBonus = 0;
     inventorySystem.equippedConsumables.forEach((slot, idx) => {
       const cd = slot?.data;
@@ -118,6 +119,12 @@ export class EquipmentEffectsSystem {
       // Tooth Necklace: a flat crit-chance bonus, added after the Lucky Coin's
       // max() so the two stack.
       if (cd.critBonus) critBonus += cd.critBonus;
+      // Gem Necklaces: flat per-element damage cut; two of a kind stack.
+      if (cd.elementReduction) {
+        for (const [element, amount] of Object.entries(cd.elementReduction)) {
+          player.elementReduction[element] += amount;
+        }
+      }
       // Boots: part of the unarmed sprint speed (and its footstep trail)
       // while armed — routed through Player.getSprintMultiplier().
       if (cd.passiveSprint) player.bootsSprintMult = Math.max(player.bootsSprintMult, cd.passiveSprint);

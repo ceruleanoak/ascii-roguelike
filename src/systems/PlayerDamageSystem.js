@@ -89,8 +89,11 @@ export const PlayerDamageSystem = {
       ? Math.floor(amount * player.burnResist)
       : 0;
 
+    // Gem Necklace: a flat cut from hits of the necklace's element
+    const elementAbsorb = player.elementReduction?.[damageSource.element] || 0;
+
     // Apply defense (reduce damage, minimum 1)
-    const actualDamage = Math.max(1, amount - player.defense - meleeAbsorb - burnAbsorb);
+    const actualDamage = Math.max(1, amount - player.defense - meleeAbsorb - burnAbsorb - elementAbsorb);
 
     player.hp -= actualDamage;
     if (player.hp < 0) player.hp = 0;

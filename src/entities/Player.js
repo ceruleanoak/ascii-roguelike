@@ -50,6 +50,7 @@ export class Player {
     this.speedPenalty = 0;
     this.slowEnemies = false;
     this.burnResist = 0;        // 0–1 fraction of burn DoT damage absorbed (stackable with fireImmune)
+    this.elementReduction = { burn: 0, freeze: 0, poison: 0, electric: 0 }; // flat per-element damage cut (Gem Necklaces)
     this.massBonus = 0;         // added to base mass; higher mass = less knockback received
     this.rollCooldownMult = 1.15; // multiplier on dodge cooldown (< 1 = faster recharge, > 1 = slower); baseline nudged up from 1.0 — unarmored rolling was too frequent
     this.extraIframes = 0;      // extra seconds of invulnerability granted after a dodge roll

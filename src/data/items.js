@@ -2519,6 +2519,26 @@ export const ITEMS = {
     critBonus: 0.05,      // +5% crit chance while equipped, added on top of Lucky Coin's
     color: '#ffffff'
   },
+  // Gem Necklaces — String + an elemental gemstone (recipes.js). A very minor
+  // passive affinity: each shaves a flat 1 off every hit of its element
+  // (PlayerDamageSystem, after defense; the 1-damage floor still holds).
+  // Same gem→element pairing as TREASURE_OFFERINGS / the gem whips and robes.
+  'ᑌ': {
+    char: 'ᑌ', name: 'Ruby Necklace', type: ITEM_TYPES.CONSUMABLE,
+    passive: true, elementReduction: { burn: 1 }, color: '#ff2244'
+  },
+  'ᑗ': {
+    char: 'ᑗ', name: 'Sapphire Necklace', type: ITEM_TYPES.CONSUMABLE,
+    passive: true, elementReduction: { freeze: 1 }, color: '#2244ff'
+  },
+  'ᑘ': {
+    char: 'ᑘ', name: 'Topaz Necklace', type: ITEM_TYPES.CONSUMABLE,
+    passive: true, elementReduction: { electric: 1 }, color: '#ffcc00'
+  },
+  'ᑙ': {
+    char: 'ᑙ', name: 'Emerald Necklace', type: ITEM_TYPES.CONSUMABLE,
+    passive: true, elementReduction: { poison: 1 }, color: '#00cc44'
+  },
 
   // ── Movement ──────────────────────────────────────────────────────────────
   '∞': {

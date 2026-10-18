@@ -39,7 +39,7 @@ export function conductElectricity(combatSystem, sourceObj, damage, enemies, pla
     const dy = player.position.y - sourceObj.position.y;
     if (Math.sqrt(dx * dx + dy * dy) <= WET_RANGE) {
       player.applyStatusEffect('zap', 3.5, CONDUCTED_PIPS);
-      const dead = player.takeDamage(Math.ceil(damage * WET_MULT), { cause: DEATH_CAUSES.electricity });
+      const dead = player.takeDamage(Math.ceil(damage * WET_MULT), { element: 'electric', cause: DEATH_CAUSES.electricity });
       if (dead === true) {
         combatSystem.createDamageNumber(Math.ceil(damage * WET_MULT), player.position.x, player.position.y, player.color);
         return { playerDead: true };

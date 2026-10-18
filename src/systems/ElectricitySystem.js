@@ -317,6 +317,7 @@ export class ElectricitySystem {
     if (entity === p) {
       p.takeDamage(1, {
         attacker: current?.source?.data?.name ? current.source : undefined,
+        element: 'electric',
         cause: DEATH_CAUSES.electricity
       });
     } else if (entity.takeDamage) entity.takeDamage(1);
