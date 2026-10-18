@@ -6,6 +6,9 @@ import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Captive } from '../entities/Captive.js';
 import { isCellProtected } from './roomFeatures.js';
 import { tagInteriorPlane } from './PlaneSystem.js';
+
+// Shark Mask dive swim speed, as a multiple of base walk speed.
+const SHARK_DIVE_SPEED = 1.8;
 import { StatusEffectSystem } from './StatusEffectSystem.js';
 import { isInputCaptured } from '../game/inputCapture.js';
 import { aimFacingAtNearestEnemy, keenStrikeReach } from './KeenAim.js';
@@ -344,8 +347,12 @@ export class CharacterSystem {
       // While diving, drive the player ourselves and skip the character-class
       // dispatch entirely (otherwise Green Ranger's slide would override us).
       if (player.diving) {
+        // skipFrame bypasses main.js's own updateSharkDive call, so the dive
+        // timer ticks here; a dive that just ended hands the frame back.
+        this.updateSharkDive(player, deltaTime);
+        if (!player.diving) return {};
         if (hasDodgeInput) {
-          const baseMax = 110 * player.getSprintMultiplier() * (1 + player.speedBoost);
+          const baseMax = 110 * player.getSprintMultiplier() * SHARK_DIVE_SPEED;
           player.velocity.vx = dodgeDirection.x * baseMax;
           player.velocity.vy = dodgeDirection.y * baseMax;
           player.acceleration.ax = 0;
@@ -573,7 +580,7 @@ export class CharacterSystem {
     const radius = CS * 1.5;
     const cx = game.player.position.x + CS / 2;
     const cy = game.player.position.y + CS / 2;
-    const enemies = game.currentRoom?.enemies || [];
+    const enemies = game._activeEnemies?.() ?? [];
     const BASE_DAMAGE = 1;
     const EMERGE_DAMAGE = BASE_DAMAGE * 3;
     for (const enemy of enemies) {
@@ -615,11 +622,10 @@ export class CharacterSystem {
     player.diveTimer = player.diveDuration;
     player.plane = 2; // PLANE_SUBMERGED — surface enemies stop seeing the player
     player.char = '^'; // fin glyph
-    // 1.8× speed via existing speedBoost system; resets in endSharkDive.
-    player._diveSavedSpeedBoost = player.speedBoost;
-    player.speedBoost = 0.8; // additive → +80% (1.8× base)
     // Give the dive an initial directional kick so the player visibly enters.
-    const baseMax = 110 * player.getSprintMultiplier() * (1 + player.speedBoost);
+    // SHARK_DIVE_SPEED is applied directly — speedBoost is re-projected from
+    // armor every frame (applyEquipmentEffects), which wiped the dive's boost.
+    const baseMax = 110 * player.getSprintMultiplier() * SHARK_DIVE_SPEED;
     player.velocity.vx = direction.x * baseMax;
     player.velocity.vy = direction.y * baseMax;
     // Brief iframe on entry so contact damage doesn't trigger as the dive starts.
@@ -634,8 +640,6 @@ export class CharacterSystem {
     player.diveTimer = 0;
     player.plane = 0;
     player.char = '@';
-    player.speedBoost = player._diveSavedSpeedBoost || 0;
-    player._diveSavedSpeedBoost = 0;
   }
 
   // Tick called from main.js each frame. Auto-ends the dive on timer expire

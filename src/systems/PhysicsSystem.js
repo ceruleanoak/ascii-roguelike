@@ -1,6 +1,7 @@
 import { DEATH_CAUSES } from '../data/deathCauses.js';
 import { PHYSICS, GRID, BACKGROUND_OBJECT_VARIANTS, WATER_COLORS } from '../game/GameConfig.js';
 import {
+  PLANE_SURFACE,
   PLANE_TUNNEL,
   planeOf,
   inSamePlane,
@@ -16,6 +17,14 @@ import { ChargeMechanic } from '../entities/enemyMechanics/ChargeMechanic.js';
 // Re-exported so existing imports (e.g. Enemy.js) keep working.
 // New code should import directly from PlaneSystem.
 export { inSamePlane };
+
+// The plane an entity meets terrain on. A Shark Mask diver is on
+// PLANE_SUBMERGED so surface enemies lose sight of it, but it still swims
+// through surface water and stops at surface walls — reading its own plane
+// here found no water, so the dive ended the frame after it began.
+function terrainPlaneOf(entity) {
+  return entity.diving ? PLANE_SURFACE : planeOf(entity);
+}
 
 // Deflector triangles collide at 80% of the drawn cell, centered — a forgiving
 // hitbox so the player isn't stopped by a hair's-width graze of the hypotenuse
@@ -396,7 +405,7 @@ export class PhysicsSystem {
     }
 
     if (!isProjectile && !entity.ignoreBackgroundCollision && backgroundObjects && backgroundObjects.length > 0) {
-      const entityPlane = planeOf(entity);
+      const entityPlane = terrainPlaneOf(entity);
       for (const obj of backgroundObjects) {
         if (obj.destroyed) continue;
         if (!objectOnPlane(obj, entityPlane)) continue;
@@ -1030,7 +1039,7 @@ export class PhysicsSystem {
     const collision = { x: false, y: false };
     const width = entity.width || GRID.CELL_SIZE;
     const height = entity.height || GRID.CELL_SIZE;
-    const entityPlane = planeOf(entity);
+    const entityPlane = terrainPlaneOf(entity);
 
     for (const obj of backgroundObjects) {
       if (obj.destroyed) continue;
@@ -1603,7 +1612,7 @@ export class PhysicsSystem {
   resolveSolidObjectOverlap(entity, backgroundObjects) {
     const width = entity.width || GRID.CELL_SIZE;
     const height = entity.height || GRID.CELL_SIZE;
-    const entityPlane = planeOf(entity);
+    const entityPlane = terrainPlaneOf(entity);
 
     // Multi-pass eject — pushing out of one object can put the entity inside
     // another (rocks placed in adjacent cells, knockback into a cluster, etc.).
