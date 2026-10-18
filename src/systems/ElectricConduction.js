@@ -12,6 +12,9 @@ export function conductElectricity(combatSystem, sourceObj, damage, enemies, pla
   // carries one pip less.
   const CONDUCTED_PIPS = MAX_PIPS - 1;
 
+  // A circuit Barricade's dead pole counts an electric hit as current arriving.
+  combatSystem.game?.barricadeSystem?.receiveCurrent(sourceObj);
+
   for (const enemy of enemies) {
     if (!enemy.isWet || !enemy.isWet()) continue;
     if (!inSamePlane(sourceObj, enemy)) continue;

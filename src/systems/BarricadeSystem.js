@@ -213,6 +213,8 @@ export class BarricadeSystem {
       // Only a 'circuit' Barricade uses this; declared here so every Barricade
       // record has the same shape whatever raised it.
       liveColor: descriptor.liveColor || null,
+      // 'circuit' only: an electric hit landed on the dead pole (receiveCurrent).
+      poleStruck: false,
       cleared: false
     };
     if (descriptor.shape === 'trigger') this._placeTriggers(room, direction, descriptor);
@@ -351,6 +353,9 @@ export class BarricadeSystem {
       this._clearCell(room, col, row);
       const pole = BackgroundObject.createVariant('electric_pole', col * cs, row * cs);
       pole.structural = true;
+      // A real conductor, so a lightning strike nearby charges it
+      // (StormAscentSystem.chargeNearby reads `conductive`).
+      pole.conductive = true;
       if (i === 0) {
         pole.color = descriptor.liveColor;
         pole.animationColor = descriptor.liveColor;
@@ -361,18 +366,26 @@ export class BarricadeSystem {
   }
 
   /**
-   * Has a tripline been strung between this Barricade's two poles? Measured
-   * geometrically rather than by asking the wire what it bit: an end anchored
-   * onto a pole records that pole's exact centre, and an end thrown against one
-   * comes to rest beside it, so one cell of tolerance accepts both ways of
-   * placing a wire and the gate does not care which the player used.
-   *
-   * The wire's own type is deliberately not checked — any tripline conducts
-   * here. What the gate asks for is a line between the two, not a current.
+   * Has current reached the dead pole? Any route counts: a tripline strung
+   * between the two poles, or electricity arriving at the dead pole itself —
+   * an electric weapon or shot striking it, a lightning charge, electrified
+   * water or slime trail touching it, or a body carrying current against it.
    */
   _circuitClosed(room, barricade) {
     const [a, b] = barricade.poles || [];
     if (!a || !b) return false;
+    return this._triplineBetween(room, a, b) || this._poleEnergized(barricade, b);
+  }
+
+  /**
+   * Has a tripline been strung between the two poles? Measured geometrically
+   * rather than by asking the wire what it bit: an end anchored onto a pole
+   * records that pole's exact centre, and an end thrown against one comes to
+   * rest beside it, so one cell of tolerance accepts both ways of placing a
+   * wire. The wire's own type is deliberately not checked — the live pole
+   * runs its current down any line.
+   */
+  _triplineBetween(room, a, b) {
     const reach = GRID.CELL_SIZE;
     const at = (x, y, pole) =>
       Math.hypot(x - (pole.position.x + GRID.CELL_SIZE / 2),
@@ -383,6 +396,42 @@ export class BarricadeSystem {
       if (oneWay || other) return true;
     }
     return false;
+  }
+
+  /** Is electricity arriving at the dead pole by any route but a tripline? */
+  _poleEnergized(barricade, pole) {
+    if (barricade.poleStruck || pole.charged) return true;
+    const C = GRID.CELL_SIZE;
+    const cx = pole.position.x + C / 2;
+    const cy = pole.position.y + C / 2;
+    // Electrified water or slime in the pole's own cell or touching it.
+    const es = this.game.electricitySystem;
+    if (es) {
+      for (const [dx, dy] of [[0, 0], [C, 0], [-C, 0], [0, C], [0, -C]]) {
+        if (es.isLiveAt(cx + dx, cy + dy, 0, C / 2)) return true;
+      }
+    }
+    // A body carrying current against it: the same carriers ElectricitySystem
+    // treats as live (zap pip 2+, or electric affinity).
+    const bodies = [...(this.game._activeEnemies?.() ?? []), this.game.player];
+    for (const e of bodies) {
+      if (!e || e.isDying || e.hp <= 0) continue;
+      const zap = e.statusEffects?.zap;
+      const live = (zap?.active && zap.stacks >= 2) || e.data?.affinities?.includes('electric');
+      if (!live) continue;
+      if (Math.hypot(e.position.x + C / 2 - cx, e.position.y + C / 2 - cy) <= C * 1.3) return true;
+    }
+    return false;
+  }
+
+  /**
+   * An electric weapon or shot struck a conductor (ElectricConduction). If it
+   * was this room's dead circuit pole, the current has reached it.
+   */
+  receiveCurrent(obj) {
+    const barricade = this.game?.currentRoom?.barricade;
+    if (barricade?.shape !== 'circuit' || barricade.cleared) return;
+    if (obj === barricade.poles?.[1]) barricade.poleStruck = true;
   }
 
   /**
@@ -426,7 +475,7 @@ export class BarricadeSystem {
     }
     if (barricade.shape === 'circuit' && this._circuitClosed(room, barricade)) {
       // The dead pole comes up live as the current reaches it — the one beat of
-      // feedback that says the wire, not the wall, was the thing that mattered.
+      // feedback that says the current, not the wall, was the thing that mattered.
       for (const pole of barricade.poles) {
         pole.color = barricade.liveColor;
         pole.animationColor = barricade.liveColor;

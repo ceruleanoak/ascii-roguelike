@@ -44,9 +44,10 @@ import { ZONE_COLORS } from './zones.js';
  *   typeId a BACKGROUND_OBJECT_VARIANTS key naming the terrain
  *
  * shape 'circuit' — an unbreakable plug flanked by two Electric Poles, one of
- * them already live. The plug lifts when a tripline of any kind runs between
- * them. WireSystem needs no new wire type for this; it needed only to accept a
- * pole as an anchor.
+ * them already live. The plug lifts when current reaches the dead pole by any
+ * route: a tripline of any kind run between them (WireSystem needed only to
+ * accept a pole as an anchor), an electric hit, a lightning charge,
+ * electrified water or slime touching it, or a body carrying current.
  *   plugColor  as for 'trigger'
  *   liveColor  the tint of the pole that is already carrying current, and of
  *              both poles once the circuit closes
@@ -235,10 +236,11 @@ const ICE_BLOCKS = {
   typeId: 'barricade_ice'
 };
 
-// Two poles set well outside the plug, one already live. Any tripline strung
-// between them closes the circuit — the answer is a line, not a current, so the
-// Sticky Tripline works exactly as well as the Electric one. Spread wide enough
-// that both ends cannot be placed without crossing in front of the plug.
+// Two poles set well outside the plug, one already live. Anything that runs
+// electricity to the dead pole closes the circuit — any tripline strung between
+// them (the Sticky Tripline works as well as the Electric one), or current
+// brought to it some other way. Spread wide enough that both ends of a wire
+// cannot be placed without crossing in front of the plug.
 const ELECTRIC_POLES = {
   id: 'electric_poles',
   shape: 'circuit',
