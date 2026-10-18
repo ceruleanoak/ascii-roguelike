@@ -1123,14 +1123,18 @@ export class MenuSystem {
         game.inventorySystem.equipArmor(item);
         game.inventorySystem.applyEquipmentEffectsToPlayer(game.player);
       } else if (item.data.type === 'CONSUMABLE') {
-        const emptySlot = game.inventorySystem.firstFreeConsumableSlot(game.player);
-        if (emptySlot === -1 || game.inventorySystem.conflictingConsumableSlot(item) !== -1) {
-          game.slotReplacementSystem.open(item, 'consumable');
-          game.renderer.markBackgroundDirty();
-          return;
+        // A crafted stackable (Meat Jerky, Sandwich, ...) joins an existing
+        // stack like a world pickup does, instead of contesting a slot.
+        if (!game.inventorySystem.mergeStackableConsumable(item)) {
+          const emptySlot = game.inventorySystem.firstFreeConsumableSlot(game.player);
+          if (emptySlot === -1 || game.inventorySystem.conflictingConsumableSlot(item) !== -1) {
+            game.slotReplacementSystem.open(item, 'consumable');
+            game.renderer.markBackgroundDirty();
+            return;
+          }
+          game.inventorySystem.consumableInventory.push(item);
+          game.inventorySystem.equipConsumable(emptySlot, item);
         }
-        game.inventorySystem.consumableInventory.push(item);
-        game.inventorySystem.equipConsumable(emptySlot, item);
       } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
         if (trapAlreadyEquipped(game.player, item)) {
           game.inventorySystem.addToChest(item);
@@ -1198,7 +1202,7 @@ export class MenuSystem {
       if (item.data.type === 'ARMOR') {
         game.inventorySystem.armorInventory.push(item);
       } else if (item.data.type === 'CONSUMABLE') {
-        game.inventorySystem.consumableInventory.push(item);
+        if (!game.inventorySystem.mergeStackableConsumable(item)) game.inventorySystem.consumableInventory.push(item);
       } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
         if (trapAlreadyEquipped(game.player, item)) {
           game.inventorySystem.addToChest(item);

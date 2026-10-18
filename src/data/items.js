@@ -2393,6 +2393,7 @@ export const ITEMS = {
     effect: 'heal',
     amount: 3,
     oneShot: true,
+    stackable: true, // shares one quick slot by count — see InventorySystem.mergeStackableConsumable
     autoTriggerHP: 0.12,
     color: '#7ec8e3'
   },
