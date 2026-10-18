@@ -6,7 +6,7 @@ import { SHOP_INTERACTION_RANGE } from '../game/GameConfig.js';
 // Offering the same unpurchased row twice without the player biting means a
 // third look at the identical counter — force a fresh roll on that third
 // visit rather than dead-ending on wares they've already passed on. See
-// refreshStock.
+// offerStock.
 const STALE_VISIT_LIMIT = 3;
 
 /**
@@ -51,28 +51,40 @@ export class Shopkeeper extends NeutralCharacter {
   }
 
   /**
-   * Re-rolls unsold rows against the run's current reach — every unsold row
-   * when progress has moved since the last look, or just the individual rows
-   * that have gone stale (offered STALE_VISIT_LIMIT times running with no
-   * purchase) when it hasn't. Re-opening the shop twice in a row with no
-   * progress and no stale rows leaves the counter untouched.
-   *
-   * Called on every shop open (ShopSystem.open) rather than on a timer: the
-   * moment the player looks is the only moment the stock needs to be current,
-   * and is also the only moment a row's "offered again" count should tick.
+   * Re-rolls every unsold row when the run's progress has moved since the
+   * last roll. Called on every shop open (ShopSystem.open): the moment the
+   * player looks is the only moment the stock needs to be current. No-ops
+   * when progress hasn't moved.
    */
   refreshStock(zoneDepths = {}) {
     const signature = progressSignature(zoneDepths);
-    const progressed = signature !== this.stockSignature;
+    if (signature === this.stockSignature) return;
     this.stockSignature = signature;
-
     const rerolled = rollShopStock(zoneDepths, this.zone);
+    this.stock = this.stock.map((row, i) => (row.sold ? row : (rerolled[i] ?? row)));
+  }
+
+  /**
+   * One look at the wares: every unsold row's "offered again" count ticks,
+   * and any row offered STALE_VISIT_LIMIT times running with no purchase is
+   * re-rolled. ShopSystem calls this once per open, and only when the player
+   * actually views the wares — opening the shop to pawn, or re-opening it
+   * after a slot choice, is not a look.
+   */
+  offerStock(zoneDepths = {}) {
+    let rerolled = null;
     this.stock = this.stock.map((row, i) => {
       if (row.sold) return row;
       row.staleVisits = (row.staleVisits || 0) + 1;
-      if (progressed || row.staleVisits >= STALE_VISIT_LIMIT) return rerolled[i] ?? row;
-      return row;
+      if (row.staleVisits < STALE_VISIT_LIMIT) return row;
+      rerolled ??= rollShopStock(zoneDepths, this.zone);
+      return rerolled[i] ?? row;
     });
+  }
+
+  /** A purchase is the player biting: every unsold row's stale count restarts. */
+  resetStaleness() {
+    for (const row of this.stock) if (!row.sold) row.staleVisits = 0;
   }
 
   isInRange(player, range = SHOP_INTERACTION_RANGE) {

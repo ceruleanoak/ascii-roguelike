@@ -49,6 +49,7 @@ export class ShopSystem {
     this.overlay = new ShopOverlay();
 
     this.shopkeeper = null;
+    this.waresOffered = false;
     this.mode = 'menu';
     this.menuIndex = 0;   // 0 = WARES, 1 = PAWN
     this.rowIndex = 0;
@@ -84,6 +85,8 @@ export class ShopSystem {
     // look; sold rows stay sold. No-ops when progress hasn't moved.
     shopkeeper.refreshStock(this.game.zoneDepths);
     this.shopkeeper = shopkeeper;
+    // Whether this open has counted as a look at the wares yet (offerStock).
+    this.waresOffered = false;
     this.mode = 'menu';
     this.menuIndex = 0;
     this.rowIndex = 0;
@@ -144,6 +147,13 @@ export class ShopSystem {
       this.menuIndex = Math.min(1, this.menuIndex + 1);
     } else if (intent === 'confirm') {
       if (this.menuIndex === 0) {
+        // The first look at the wares this open ages unsold rows (and swaps
+        // out any gone stale) — pawning or re-opening after a slot choice
+        // without browsing doesn't.
+        if (!this.waresOffered) {
+          this.waresOffered = true;
+          this.shopkeeper.offerStock(this.game.zoneDepths);
+        }
         this.mode = 'list';
         this.rowIndex = 0;
       } else {
@@ -308,6 +318,7 @@ export class ShopSystem {
     }
 
     row.sold = true;
+    this.shopkeeper.resetStaleness();
     const player = game.player;
     const result = this._tryDeliverItem(row, player);
 
