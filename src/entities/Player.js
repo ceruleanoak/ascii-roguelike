@@ -69,7 +69,10 @@ export class Player {
       slots: [],
       current: 0,
       max: 10,
-      freeSlotGranted: false
+      freeSlotGranted: false,
+      // Mana Potion's temporary slot (MagicSystem.grantTempManaSlot)
+      tempTimer: 0,
+      tempSlotIndex: -1
     };
     // No ingredient array here. Ingredients live in one pile on InventorySystem
     // (see its constructor) and are reached through game.getIngredients() /
@@ -704,7 +707,7 @@ export class Player {
     this.selectedConsumableIndex = -1;
     // Ingredients are not reset here — the pile belongs to InventorySystem, and
     // a character swap deliberately keeps it (game over clears it instead).
-    this.magicMeter = { active: false, slots: [], current: 0, max: 10, freeSlotGranted: false };
+    this.magicMeter = { active: false, slots: [], current: 0, max: 10, freeSlotGranted: false, tempTimer: 0, tempSlotIndex: -1 };
 
     // Reset new buff timers
     this.stoneSkinTimer = 0;

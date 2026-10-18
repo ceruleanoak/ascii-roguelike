@@ -356,7 +356,7 @@ export class ConsumableTriggerSystem {
         this.game.combatSystem.showHeal(FAIRY_HEAL, player.position.x, player.position.y, player);
         break;
       case 'manaSlot':
-        this.game.magicSystem.grantTempManaSlot(player, cd);
+        this.game.magicSystem.grantTempManaSlot(player, cd, windup?.slotIndex);
         break;
       case 'speed':
         player.applySpeedBoost(cd.duration || 8);

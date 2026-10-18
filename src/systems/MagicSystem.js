@@ -233,35 +233,52 @@ export class MagicSystem {
     return spendMeterMana(player, cost);
   }
 
-  // Mana Potion auto-trigger: the only way to gain a mana slot without a true
-  // (well/cauldron/Yellow-Mage) slot. While it's running, meter.active is true
-  // just like a real slot, so the mana spawn trigger (main.js kill drops) and
-  // the mana refill mechanic (LootSystem/CraftingSystem bypass-to-addMana)
-  // apply identically — they only ever gate on meter.active.
-  grantTempManaSlot(player, cd) {
-    if (player?.magicMeter?.active) return false;
-    this.activateTemporaryManaSlot(player, cd.duration ?? 30);
+  // Mana Potion: the only way to gain a mana slot without a true
+  // (well/cauldron/Yellow-Mage) slot. The potion's own consumable slot
+  // converts into a mana slot for cd.duration seconds — added to meter.slots
+  // like the boss slot, since the HUD fill, getSlotFill, and every
+  // reserved-slot equip check read meter.slots (flipping meter.active alone
+  // left a silent, invisible pool). Kill drops and the mana refill mechanic
+  // gate only on meter.active, so they apply identically.
+  grantTempManaSlot(player, cd, slotIndex = null) {
+    const meter = player?.magicMeter;
+    if (!meter || meter.active) return false;
+    if (!meter.slots) meter.slots = [];
+    let idx = slotIndex;
+    if (idx == null || meter.slots.includes(idx)) {
+      idx = 0;
+      while (meter.slots.includes(idx)) idx++;
+    }
+    meter.slots.push(idx);
+    meter.slots.sort((a, b) => a - b);
+    meter.tempSlotIndex = idx;
+    meter.tempTimer = Math.max(meter.tempTimer || 0, cd.duration ?? 30);
+    // Forced on: a Red Warrior's -1 modifier would otherwise cancel the
+    // very slot the potion grants.
+    meter.active = true;
+    meter.current = 0;
+    this.recalcMax(meter);
+    // The drained potion marked its slot spent; the slot is mana now.
+    const inv = this.game.inventorySystem;
+    if (inv?.spentConsumableSlots) inv.spentConsumableSlots[idx] = false;
+    this.evictReservedConsumables(player);
     return true;
   }
 
-  activateTemporaryManaSlot(player, duration) {
-    const meter = player?.magicMeter;
-    if (!meter) return;
-    meter.tempTimer = Math.max(meter.tempTimer || 0, duration);
-    meter.active = true;
-    meter.current = 0;
-  }
-
-  // Reverts to the true-slot state (or fully inactive) once the temporary
-  // slot's timer runs out. Called every frame from update().
+  // Reverts the potion's slot once its timer runs out, back to the
+  // true-slot state (or fully inactive). Called every frame from update().
   _updateTempManaSlot(dt) {
     const meter = this.game.player?.magicMeter;
     if (!meter?.tempTimer) return;
     meter.tempTimer -= dt;
     if (meter.tempTimer <= 0) {
       meter.tempTimer = 0;
+      const pos = meter.slots?.indexOf(meter.tempSlotIndex) ?? -1;
+      if (pos >= 0) meter.slots.splice(pos, 1);
+      meter.tempSlotIndex = -1;
       meter.active = this.effectiveManaSlotCount(this.game.player) > 0;
       if (!meter.active) meter.current = 0;
+      this.recalcMax(meter);
     }
   }
 
