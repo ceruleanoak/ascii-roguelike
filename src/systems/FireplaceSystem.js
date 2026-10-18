@@ -8,7 +8,7 @@ import { Item } from '../entities/Item.js';
  * same station but always lit) and hit SPACE. An unlit fireplace only
  * accepts a Stick, which ignites it (recolors the instance, no state machine
  * beyond the one `burning` flag). Once burning, the menu opens up to Meat
- * (100% → Meat Jerky), a held Fire Berry (100% → Mana), an equipped Bottle of
+ * (100% → Meat Jerky), Grain (100% → Bread), a held Fire Berry (100% → Mana), an equipped Bottle of
  * Water (100% → Bottle of Hot Water — a fourth parallel path to hot water
  * alongside the Caldera fill, the Fire Essence recipe, and the Fire Berry
  * recipe in recipes.js), Sand (100% → Empty Bottle), and Ore and Sticks,
@@ -40,6 +40,8 @@ const INTERACT_RADIUS = GRID.CELL_SIZE * 1.2;
 const TORCH_CHAR = '♨';
 const SAND_CHAR = 'D';
 const EMPTY_BOTTLE_CHAR = 'B';
+const GRAIN_CHAR = 'ψ';
+const BREAD_CHAR = '⌬';
 
 export class FireplaceSystem {
   constructor(game) {
@@ -115,6 +117,11 @@ export class FireplaceSystem {
         counts.set('m', meatCount);
         items.push('m');
       }
+      const grainCount = game.inventorySystem.countIngredient(GRAIN_CHAR);
+      if (grainCount > 0) {
+        counts.set(GRAIN_CHAR, grainCount);
+        items.push(GRAIN_CHAR);
+      }
       const oreCount = game.inventorySystem.countIngredient('2');
       if (oreCount > 0) {
         counts.set('2', oreCount);
@@ -177,6 +184,12 @@ export class FireplaceSystem {
       const stacked = game.inventorySystem.mergeStackableConsumable(jerky);
       if (!stacked) game.inventorySystem.consumableInventory.push(jerky);
       game.menuSystem.announceItem(jerky.char);
+    } else if (rawChar === GRAIN_CHAR) {
+      if (!fireplace.burning || !game.removeIngredient(GRAIN_CHAR)) return;
+      const bread = new Item(BREAD_CHAR, game.player.position.x, game.player.position.y);
+      const stacked = game.inventorySystem.mergeStackableConsumable(bread);
+      if (!stacked) game.inventorySystem.consumableInventory.push(bread);
+      game.menuSystem.announceItem(bread.char);
     } else if (rawChar === SAND_CHAR) {
       if (!fireplace.burning || !game.removeIngredient(SAND_CHAR)) return;
       const bottle = new Item(EMPTY_BOTTLE_CHAR, game.player.position.x, game.player.position.y);

@@ -992,7 +992,7 @@ export class InteractionSystem {
           // Uncommon: beast lurking in the grass. The band is 0.003045 wide —
           // baseline, cut 30%, then halved again — and every threshold below it
           // is shifted down by that same halving, so only the beast rate moved
-          // and the stick/rock/pollen/axe-head/arrowhead bands keep their width.
+          // and the stick/rock/pollen+grain/axe-head/arrowhead bands keep their width.
           // Fully respects the zone's normal depth-gated spawn table — no
           // separate/guaranteed roll. If the roll happens to land on Goblin,
           // it carries a Scythe (the item's sole source, since Goblin no
@@ -1017,9 +1017,13 @@ export class InteractionSystem {
         } else if (roll < 0.013145) {
           // Uncommon: rock
           game.lootSystem.spawnIngredientDrop('0', obj.position.x, obj.position.y, null, obj);
-        } else if (roll < 0.016245) {
-          // Uncommon: pollen (raw oil)
+        } else if (roll < 0.014695) {
+          // Uncommon: pollen (raw oil). Pollen and Grain split what was
+          // Pollen's band (0.0031) evenly, so each drops at half the old rate.
           game.lootSystem.spawnIngredientDrop('ł', obj.position.x, obj.position.y, null, obj);
+        } else if (roll < 0.016245) {
+          // Uncommon: grain (bakes into Bread at a lit fireplace)
+          game.lootSystem.spawnIngredientDrop('ψ', obj.position.x, obj.position.y, null, obj);
         } else if (roll < 0.016745) {
           // Rare: axe head
           game.lootSystem.spawnIngredientDrop('⊿', obj.position.x, obj.position.y, null, obj);

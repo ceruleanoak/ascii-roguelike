@@ -3338,6 +3338,7 @@ export const INGREDIENTS = {
   'š': { char: 'š', name: 'Fire Sap',  color: '#ff4400' },
   'ş': { char: 'ş', name: 'Frost Sap', color: '#88ddff' },
   'ł': { char: 'ł', name: 'Pollen',    color: '#ffe566' },
+  'ψ': { char: 'ψ', name: 'Grain',     color: '#d8b860' }, // grass cut (shares Pollen's band); a lit fireplace bakes it into Bread
 
   // Blue-zone ingredients — shared Pearl Shard base + one rare per armor recipe.
   // Drop sources: 'p' from Ocean fishing (rare), 'n' from Sea Snake (rare),
