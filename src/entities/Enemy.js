@@ -2097,6 +2097,7 @@ export class Enemy {
       GooSpewMechanic.onDamaged(this, amount);
       RipenMechanic.onDamaged(this);
       ThiefMechanic.onDamaged(this);
+      SniperMechanic.onDamaged(this);
     }
 
     // Sleep breaks on damage — full reset, not a tier step-down. Skipped when

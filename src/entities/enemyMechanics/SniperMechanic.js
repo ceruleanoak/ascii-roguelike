@@ -17,7 +17,8 @@ import { tagInteriorPlane } from '../../systems/PlaneSystem.js';
 //
 // States (enemy.sniperState):
 //   idle      — default; watches for near-range (→ hiding), else always → tracking
-//   hiding    — brief telegraph before vanishing (near-range response)
+//   hiding    — brief telegraph before vanishing (near-range response, and
+//               the response to any direct hit while uncommitted — onDamaged)
 //   hidden    — invisible + intangible (enemy.sniperHidden), travels to a new
 //               far position, disturbing nearby background objects as a tell
 //   tracking  — accumulates visionLockTime1 toward aiming; obstructed line of
@@ -29,8 +30,8 @@ import { tagInteriorPlane } from '../../systems/PlaneSystem.js';
 //   telegraph — committed: '!' indicator for telegraphTime, cannot be interrupted
 //   cooldown  — brief recovery after firing before re-engaging
 //   daggerWindup / daggerCooldown — HP <= 50% melee override when player is close;
-//               interrupts idle/tracking/aiming/cooldown but not the committed
-//               hiding/hidden/telegraph states
+//               interrupts the uncommitted idle/tracking/aiming/cooldown states
+//               but not the committed hiding/hidden/telegraph states
 //
 // The fired beam intentionally ignores background objects (only walls block it —
 // see _castBeam), matching the tracking/aiming phase now also being obstruction-
@@ -40,7 +41,9 @@ import { tagInteriorPlane } from '../../systems/PlaneSystem.js';
 // returned on the suspend payload and consumed by CombatSystem (sniperBeamHit /
 // sniperBeamFired / sniperDaggerHit).
 
-const DAGGER_INTERRUPTIBLE = new Set(['idle', 'tracking', 'aiming', 'cooldown']);
+// States not yet committed to an action: the cornered dagger and a direct hit
+// (onDamaged) may both preempt them.
+const UNCOMMITTED_STATES = new Set(['idle', 'tracking', 'aiming', 'cooldown']);
 
 export const SniperMechanic = {
   isEnabled(enemy) {
@@ -110,7 +113,7 @@ export const SniperMechanic = {
     // Only preempts states that haven't already committed to something else.
     // Gated on onScreen too — no starting a windup the player can't see.
     if (enemy.hp <= enemy.maxHp * 0.5 && distance <= meleeRange && onScreen
-        && DAGGER_INTERRUPTIBLE.has(enemy.sniperState)) {
+        && UNCOMMITTED_STATES.has(enemy.sniperState)) {
       this._resetRangedSequence(enemy);
       enemy.sniperState = 'daggerWindup';
       enemy.sniperTimer = cfg.daggerWindup ?? 0.4;
@@ -128,6 +131,28 @@ export const SniperMechanic = {
       case 'idle':
       default: return this._updateIdle(enemy, cfg, deltaTime, distance, dotDamageEvents);
     }
+  },
+
+  // A direct hit (Enemy.takeDamage — DoT ticks don't come through here) while
+  // uncommitted spooks the Sniper the same way closing in does: the aim is
+  // dropped and it vanishes to reposition. Without this a shot from range
+  // landed with no response at all and the lock kept building. A committed
+  // telegraph still fires. A cornered Sniper (HP <= 50%, player in dagger
+  // range) stands its ground — hiding would lock out the dagger override in
+  // updateActive, which only preempts uncommitted states.
+  onDamaged(enemy) {
+    if (!this.isEnabled(enemy) || !UNCOMMITTED_STATES.has(enemy.sniperState)) return;
+    if (this._isCornered(enemy)) return;
+    this._resetRangedSequence(enemy);
+    enemy.sniperState = 'hiding';
+    enemy.sniperTimer = enemy.data.sniperMechanic.hideDelay ?? 0.5;
+  },
+
+  _isCornered(enemy) {
+    const target = enemy.target?.position;
+    if (!target || enemy.hp > enemy.maxHp * 0.5) return false;
+    const meleeRange = enemy.data.sniperMechanic.meleeRange ?? GRID.CELL_SIZE * 1.5;
+    return Math.hypot(target.x - enemy.position.x, target.y - enemy.position.y) <= meleeRange;
   },
 
   _resetRangedSequence(enemy) {

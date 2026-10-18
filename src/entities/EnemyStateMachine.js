@@ -121,7 +121,7 @@ const FALLBACK = {
 // frozen mid-swing is not something commitment should survive. (Damage during
 // Strike's windup is a different matter: Enemy.takeDamage aborts the Strike
 // outright, unless the enemy is windupImmune.) That
-// distinction is the generalization of `DAGGER_INTERRUPTIBLE` in SniperMechanic,
+// distinction is the generalization of `UNCOMMITTED_STATES` in SniperMechanic,
 // which is the codebase's only existing interruptibility declaration.
 export const INTERRUPTS = [
   { id: 'frozen',  hard: true,  test: (e) => e.frozen || e.freezeTimer > 0 },
