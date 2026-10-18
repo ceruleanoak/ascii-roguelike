@@ -187,6 +187,7 @@ export const RECIPES = [
   // New ingredient combinations
   { left: 'w', right: 'F', result: '✦', name: 'Phoenix Feather' }, // Wing + Fire = Phoenix Feather
   { left: 's', right: 'M', result: '𐤓', name: 'Dragon Scale Armor' }, // Scale + Metal = Dragon Scale Armor
+  { left: '⛓', right: 's', result: '𐤓', name: 'Dragon Scale Armor' }, // Chain Mail + Scale = Dragon Scale Armor (scales set into the rings)
   { left: 'g', right: 'f', result: '⚗', name: 'Slurry' },         // Goo + Fur = Slurry
   { left: '↾', right: '⚗', result: 'ᚢ', name: 'Acid Blade' },     // Dagger + Slurry = Acid Blade
   { left: 'm', right: '~', result: '♥', name: 'Heart' },          // Meat + String = Heart
