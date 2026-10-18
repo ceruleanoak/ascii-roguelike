@@ -3,6 +3,7 @@ import { StatusEffectSystem, createPlayerStatusSlots } from '../systems/StatusEf
 import { computePlayerPipRows, computePlayerDisplayColor } from '../systems/StatusEffectVisuals.js';
 import { PlayerDamageSystem } from '../systems/PlayerDamageSystem.js';
 import { PlayerDodgeRollSystem } from '../systems/PlayerDodgeRollSystem.js';
+import { PlayerInputSystem } from '../systems/PlayerInputSystem.js';
 import { initParry } from './enemyMechanics/ParryMechanic.js';
 
 const INVULNERABILITY_DURATION = 1.0;
@@ -133,6 +134,10 @@ export class Player {
 
     // Gray-zone bone slope lock (brief movement lock from bone slope push)
     this.boneSlopeLock = 0;
+
+    // Bump Flight: real seconds left on a Bumper's shove (BumpMechanic). Input
+    // and the speed cap stand down so friction alone decays the throw.
+    this.bumpFlightTimer = 0;
 
     // Interior state (inDungeon derived from _activeInteriorKind; see ADR-0001)
     this.dungeonExitPosition = null; // saved exterior position when entering a dungeon
@@ -349,134 +354,7 @@ export class Player {
   }
 
   updateInput(inputState, lockFacing = false) {
-    this.inputState = inputState;
-
-    // Frog form: suppress normal input-driven movement; PolymorphSystem drives velocity via jumps
-    if (this.polymorphed) {
-      // Set both axes together from the held keys, like the normal path below.
-      // Writing one axis per key never zeroed the other, so after any turn
-      // facing stuck on a diagonal (the indicator only ever showed diagonals).
-      if (!lockFacing) {
-        const fx = (inputState.right ? 1 : 0) - (inputState.left ? 1 : 0);
-        const fy = (inputState.down ? 1 : 0) - (inputState.up ? 1 : 0);
-        if (fx !== 0 || fy !== 0) { this.facing.x = fx; this.facing.y = fy; }
-      }
-      this.acceleration.ax = 0;
-      this.acceleration.ay = 0;
-      // Coast to a stop between land hops. Not while swimming — the swim gait
-      // (PolymorphSystem) carries a glide between strokes, and this per-frame
-      // decay would crush it to a crawl (bug #334).
-      if (!this._frogJumpActive && !(this.inLiquid || this.inAquifer)) {
-        this.velocity.vx *= 0.75;
-        this.velocity.vy *= 0.75;
-        if (Math.abs(this.velocity.vx) < 2) this.velocity.vx = 0;
-        if (Math.abs(this.velocity.vy) < 2) this.velocity.vy = 0;
-      }
-      return;
-    }
-
-    // Check if charging a bow (for movement slowdown). Bat/flail charges are
-    // exempt from the full stop — reduced speed instead (see mult below).
-    const isChargingBow = this.heldItem && this.heldItem.isCharging
-      && !this.heldItem.data?.batCharge && !this.heldItem.data?.flailSpin;
-
-    // Calculate target acceleration based on input (1.5x acceleration when sprinting)
-    // Polymorph speed/accel overrides (set by PolymorphSystem when in frog form)
-    const accelBase = this._polymorphAccelOverride
-      ?? (PHYSICS.PLAYER_ACCELERATION * this.getSprintMultiplier());
-    const baseAcceleration = accelBase;
-    const batAccel = this.batFormTimer > 0 ? 1.8 : 1.0; // Bat form: noticeably faster acceleration
-    const acceleration = baseAcceleration * (1 + this.speedBoost - this.speedPenalty) * batAccel;
-    let targetAx = 0;
-    let targetAy = 0;
-
-    if (inputState.left) targetAx -= acceleration;
-    if (inputState.right) targetAx += acceleration;
-    if (inputState.up) targetAy -= acceleration;
-    if (inputState.down) targetAy += acceleration;
-
-    // Normalize diagonal movement
-    if (targetAx !== 0 && targetAy !== 0) {
-      const length = Math.sqrt(targetAx * targetAx + targetAy * targetAy);
-      targetAx = (targetAx / length) * acceleration;
-      targetAy = (targetAy / length) * acceleration;
-    }
-
-    // During dodge roll: ignore input acceleration entirely — roll direction drives movement
-    if (this.dodgeRoll.active) {
-      this.acceleration.ax = 0;
-      this.acceleration.ay = 0;
-      return;
-    }
-
-    // Grabbed by boss head, or mid-flight on a whip pull (hook post/Stump/Tree —
-    // PhysicsSystem.updateEntity owns position for the duration): lock movement
-    // but allow facing/attack input
-    if (this.grabbed || this.hookedByWhip) {
-      this.acceleration.ax = 0;
-      this.acceleration.ay = 0;
-      this.velocity.vx *= 0.75;
-      this.velocity.vy *= 0.75;
-      if (Math.abs(this.velocity.vx) < 4) this.velocity.vx = 0;
-      if (Math.abs(this.velocity.vy) < 4) this.velocity.vy = 0;
-    // Locked (Frozen/zapped/stunned): stop movement entirely. Bat sap is a
-    // slow, not a lock — see SAP_BAT_SPEED in getStatusSpeedMultiplier().
-    } else if (this.isLocked()) {
-      this.acceleration.ax = 0;
-      this.acceleration.ay = 0;
-      this.velocity.vx *= 0.75;
-      this.velocity.vy *= 0.75;
-      if (Math.abs(this.velocity.vx) < 4) this.velocity.vx = 0;
-      if (Math.abs(this.velocity.vy) < 4) this.velocity.vy = 0;
-    // Gray-zone bone slope: brief movement lock after push
-    } else if (this.boneSlopeLock > 0) {
-      this.acceleration.ax = 0;
-      this.acceleration.ay = 0;
-      this.velocity.vx *= 0.6;
-      this.velocity.vy *= 0.6;
-      if (Math.abs(this.velocity.vx) < 3) this.velocity.vx = 0;
-      if (Math.abs(this.velocity.vy) < 3) this.velocity.vy = 0;
-    // While charging bow: zero acceleration (movement slows to stop) but allow aiming
-    } else if (isChargingBow) {
-      this.acceleration.ax = 0;
-      this.acceleration.ay = 0;
-
-      // Apply gentle deceleration (friction) to bring player to a stop
-      const chargeDeceleration = 0.8; // Lower = faster stop (0.95 = gentle, gradual slowdown)
-      this.velocity.vx *= chargeDeceleration;
-      this.velocity.vy *= chargeDeceleration;
-
-      // Stop completely when velocity is very small
-      if (Math.abs(this.velocity.vx) < 5) this.velocity.vx = 0;
-      if (Math.abs(this.velocity.vy) < 5) this.velocity.vy = 0;
-    } else {
-      this.acceleration.ax = targetAx;
-      this.acceleration.ay = targetAy;
-    }
-
-    // Update facing direction for aiming (allow while charging, lock during auto-attack)
-    if (!lockFacing && (targetAx !== 0 || targetAy !== 0)) {
-      this.facing.x = Math.sign(targetAx);
-      this.facing.y = Math.sign(targetAy);
-    }
-
-    // Cap velocity to max speed (1.5x speed when sprinting, boosted when speed buff active, armor modifiers, status effects)
-    const baseMaxSpeed = this._polymorphSpeedOverride
-      ?? (PHYSICS.PLAYER_SPEED * this.getSprintMultiplier());
-    const armorModified = baseMaxSpeed * (1 + this.speedBoost - this.speedPenalty);
-    const batMax = this.batFormTimer > 0 ? armorModified * 1.8 : armorModified;
-    const boostedMax = this.speedBoostTimer > 0 ? Math.max(batMax, armorModified * this.speedBoostMultiplier) : batMax;
-    const firingMult = this.firingSlowTimer > 0 ? 0.35 : 1; // Dramatic ~65% slow while firing a gun
-    // Bat: half speed while charging. Flail: 1/8 speed while spinning up.
-    const chargeMult = !this.heldItem?.isCharging ? 1
-      : this.heldItem.data?.batCharge ? 0.5
-      : this.heldItem.data?.flailSpin ? 0.05 : 1;
-    const finalMax = boostedMax * this.getStatusSpeedMultiplier() * firingMult * chargeMult;
-    const speed = Math.sqrt(this.velocity.vx ** 2 + this.velocity.vy ** 2);
-    if (speed > finalMax) {
-      this.velocity.vx = (this.velocity.vx / speed) * finalMax;
-      this.velocity.vy = (this.velocity.vy / speed) * finalMax;
-    }
+    PlayerInputSystem.update(this, inputState, lockFacing);
   }
 
   getHitbox() {
@@ -568,6 +446,7 @@ export class Player {
     // Update dodge roll state
     this.updateDodgeRoll(deltaTime);
 
+    this.bumpFlightTimer = Math.max(0, this.bumpFlightTimer - deltaTime);
     if (!this.spawnFadeHeld) this.spawnFadeTimer = Math.max(0, this.spawnFadeTimer - deltaTime);
     if (this.titleSpawnMovementLocked && this.spawnFadeTimer <= 0) this.titleSpawnMovementLocked = false;
     this.exitFadeTimer = Math.max(0, this.exitFadeTimer - deltaTime);
@@ -912,6 +791,7 @@ export class Player {
 
     // Reset bone slope lock (gray-zone Ascent)
     this.boneSlopeLock = 0;
+    this.bumpFlightTimer = 0;
 
     // Reset sapping bats
     this.activeSappingBats = [];

@@ -987,8 +987,8 @@ export const ENEMIES = {
     color: '#ffaa55',
     movementStyle: 'chaser',
     bump: {
-      force: 1400,         // "major recoil" — charge contact is 450
-      duration: 0.3,
+      force: 1100,         // a full Rubber Bat launch (launchForce 1100) — charge contact is 450
+      duration: 0.45,      // Bump Flight, matching the bat launch's knockback window
       cooldown: 0.6        // real seconds between bumps from the same Bumper
     },
     lavaShy: true,         // paths around lava, never steps on it, walks out if thrown in

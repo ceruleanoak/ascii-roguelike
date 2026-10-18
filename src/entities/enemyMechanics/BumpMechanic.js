@@ -5,7 +5,7 @@
 //
 //   bump: {
 //     force,     // knockback force applied to the player (charge contact is 450)
-//     duration,  // knockback status duration, seconds
+//     duration,  // Bump Flight length, real seconds (see Player.bumpFlightTimer)
 //     cooldown,  // real seconds before the same Bumper can bump again
 //   }
 //
@@ -42,6 +42,10 @@ export const BumpMechanic = {
     const cfg = enemy.data.bump;
     const half = GRID.CELL_SIZE / 2;
     game.physicsSystem.applyKnockback(player, ex + half, ey + half, cfg.force, cfg.duration);
+    // Without this the player's walk-speed cap (Player.updateInput) clips the
+    // shove to a step on the next frame — the player has no knockback status
+    // to idle input the way a launched Enemy's AI does.
+    player.bumpFlightTimer = Math.max(player.bumpFlightTimer, cfg.duration);
     enemy.bumpCooldownTimer = cfg.cooldown;
   },
 };

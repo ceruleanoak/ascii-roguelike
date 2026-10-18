@@ -580,7 +580,10 @@ identity, not standard programming terms.
   player hard, on a per-Enemy cooldown. A dodge roll passes through it. The body is the
   threat, and the danger is wherever the shove lands the player.
 - **In code:** `BumpMechanic` gated by `data.bump = { force, duration, cooldown }`. It is
-  resolved in `EnemyUpdateSystem._runEnemyLoop` beside charge contact.
+  resolved in `EnemyUpdateSystem._runEnemyLoop` beside charge contact. The shove starts a
+  **Bump Flight** (`player.bumpFlightTimer`, `duration` real seconds): `Player.updateInput`
+  drops input acceleration and the walk-speed cap for its length, so friction alone decays
+  the throw. Without it the cap would clip the shove to a single step.
 - **Not:** a Charge (no windup, no rush), and not an attack, since it never deals damage.
   It is also not `knockbackTaken`, which scales how far the player's weapon hits shove an
   Enemy (`src/entities/knockbackTaken.js`).
