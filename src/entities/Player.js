@@ -45,6 +45,7 @@ export class Player {
     this.smokeBurstPending = false; // one-frame signal consumed by main.js to spawn the cloud
     this.splinterChance = 0;     // bone armor: chance a landed melee hit Splinters it
     this.splinterPending = false; // one-frame signal consumed by ArmorEffectsSystem.updateSplinter
+    this.stingrayDischargePending = false; // one-frame signal consumed by ArmorEffectsSystem._updateStingrayMantle
     this.hurtPending = false; // survived a hit since the last consumable check (healOnHit; InventorySystem)
     this.speedBoost = 0;
     this.speedPenalty = 0;
@@ -184,7 +185,6 @@ export class Player {
 
     // Coral Crown / Stingray Mantle per-frame trackers
     this._crystalPlatformCells = []; // recent platform cells [{col,row,timer}], cap 8
-    this._wakeEmitTimer = 0;         // throttles wake-tile emission
 
     // Float (from Floating Boots) — ignores lava, water, and mud.
     // floatCharge: seconds of float left in the equipped boots, projected each
@@ -748,6 +748,7 @@ export class Player {
     this.smokeOnHit = false;
     this.splinterChance = 0;
     this.splinterPending = false;
+    this.stingrayDischargePending = false;
     this.speedBoost = 0;
     this.speedPenalty = 0;
     this.slowEnemies = false;

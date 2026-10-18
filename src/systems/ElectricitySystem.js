@@ -108,7 +108,7 @@ export class ElectricitySystem {
   }
 
   /**
-   * Seed electricity from a player effect (e.g., Stingray Mantle wake).
+   * Seed electricity from a player effect.
    * Uses provided charge value, defaults to armor's electricityCharge or 10.
    */
   seedFromArmor(obj, backgroundObjects, armor, opts = {}) {
@@ -366,9 +366,8 @@ export class ElectricitySystem {
       if (c.frontier.length === 0) this.cascades.splice(i, 1);
     }
 
-    // Ambient sources: electric-affinity enemies and Stingray Mantle wearers
-    // in contact with water (or slime trail) continuously re-seed (no-op while
-    // the tail is live).
+    // Ambient sources: electric-affinity enemies in contact with water (or
+    // slime trail) continuously re-seed (no-op while the tail is live).
     this.scanTimer -= deltaTime;
     if (this.scanTimer <= 0) {
       this.scanTimer = SCAN_INTERVAL;
@@ -380,10 +379,6 @@ export class ElectricitySystem {
         if (e.isDying || e.hp <= 0) continue;
         if (!e.data?.affinities?.includes('electric')) continue;
         this.seedUnderBody(e);
-      }
-      const p = game.player;
-      if (p?.stingrayMantle && p.inLiquid) {
-        this.seedAt(p.position.x + GRID.CELL_SIZE / 2, p.position.y + GRID.CELL_SIZE / 2);
       }
       this.updateImbuedCurrent(enemies);
     }

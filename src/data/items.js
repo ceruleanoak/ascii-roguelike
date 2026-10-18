@@ -2303,8 +2303,7 @@ export const ITEMS = {
   '⚲': {
     char: '⚲', name: 'Stingray Mantle', type: ITEM_TYPES.ARMOR,
     defense: 1,
-    stingrayMantle: true,  // moving in water → leaves 4s electric wake in vacated cells; wearer is shock-immune; chains 2× shock on wet
-    electricityCharge: 10,  // modest charge for small cascades in the wake
+    stingrayMantle: true,  // struck while in water → the tile underfoot sparks for 0.5s; wearer is shock-immune
     spellDescription: 'LEAVE A LIVE WAKE.',
     color: '#ccddee'
   },

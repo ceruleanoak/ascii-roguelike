@@ -121,6 +121,12 @@ export const PlayerDamageSystem = {
       player.smokeBurstPending = true;
     }
 
+    // Stingray Mantle: a landed hit releases a tiny discharge into the water
+    // underfoot — consumed by ArmorEffectsSystem._updateStingrayMantle.
+    if (player.stingrayMantle) {
+      player.stingrayDischargePending = true;
+    }
+
     // Splinter: a landed melee hit may break bone armor outright. The armor
     // still absorbed this hit; ArmorEffectsSystem.updateSplinter consumes the
     // flag and destroys the piece (this module has no game/inventory access).

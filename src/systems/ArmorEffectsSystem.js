@@ -19,6 +19,11 @@ import { GRID } from '../game/GameConfig.js';
 import { makeAuraParticle } from './WorldEffectsSystem.js';
 import { tagInteriorPlane } from './PlaneSystem.js';
 
+// Stingray Mantle on-hit discharge. A cascade loses CHARGE_DECAY_PER_RING (2)
+// per ring, so charge 2 dies before the first ring: the wearer's tile only.
+const STINGRAY_DISCHARGE_CHARGE = 2;
+const STINGRAY_DISCHARGE_DURATION = 0.5;
+
 export class ArmorEffectsSystem {
   constructor(game) {
     this.game = game;
@@ -153,7 +158,7 @@ export class ArmorEffectsSystem {
 
   updateBlueArmorEffects(deltaTime) {
     this._updateCoralCrown();
-    this._updateStingrayMantle(deltaTime);
+    this._updateStingrayMantle();
   }
 
   // Coral Crown: while wearing the crown and standing on a water tile, that
@@ -179,68 +184,19 @@ export class ArmorEffectsSystem {
     }
   }
 
-  // Stingray Mantle: moving through water leaves an electrified wake. Each
-  // vacated water cell flips to 'electrified' for 4s — long enough to form a
-  // visible trail behind the player and keep zapping enemies that wander in.
-  // While the player is in water, ticks damage on enemies standing on any
-  // electrified cell — wet enemies take 2× via the existing wet+shock
-  // interaction (we apply the 2× directly here since this is the wake's own
-  // damage source).
-  _updateStingrayMantle(deltaTime) {
+  // Stingray Mantle: a landed hit on the wearer releases the smallest
+  // discharge — if they're standing in water, only the tile under them
+  // flips to 'electrified', briefly, shocking whatever shares it. Out of
+  // water there's nothing to carry it. (Was a continuous wake, an ambient
+  // re-seed, and its own damage tick that together kept whole pools live.)
+  _updateStingrayMantle() {
     const game = this.game;
     const p = game.player;
-    if (!p?.stingrayMantle || !game.currentRoom) return;
+    if (!p?.stingrayDischargePending) return;
+    p.stingrayDischargePending = false;
+    if (!p.stingrayMantle || !p.inLiquid) return;
     const CS = GRID.CELL_SIZE;
-    const px = p.position.x + CS / 2;
-    const py = p.position.y + CS / 2;
-    const col = Math.floor(px / CS);
-    const row = Math.floor(py / CS);
-
-    if (p.inLiquid) {
-      if (p._wakePrevCol === undefined) { p._wakePrevCol = col; p._wakePrevRow = row; }
-      if (col !== p._wakePrevCol || row !== p._wakePrevRow) {
-        const prevX = p._wakePrevCol * CS;
-        const prevY = p._wakePrevRow * CS;
-        for (const obj of game._activeBackgroundObjects()) {
-          if (obj.destroyed || obj.char !== '~') continue;
-          if (Math.abs(obj.position.x - prevX) < 4 && Math.abs(obj.position.y - prevY) < 4) {
-            if (obj.waterState === 'normal') {
-              game.electricitySystem?.seedFromArmor(obj, game._activeBackgroundObjects(),
-                p.heldItem?.data, { tileDuration: 4.0 });
-            }
-            break;
-          }
-        }
-        p._wakePrevCol = col;
-        p._wakePrevRow = row;
-      }
-    } else {
-      p._wakePrevCol = undefined;
-      p._wakePrevRow = undefined;
-    }
-
-    // Damage tick — 0.25s interval
-    p._wakeTickTimer = (p._wakeTickTimer || 0) - deltaTime;
-    if (p._wakeTickTimer > 0) return;
-    p._wakeTickTimer = 0.25;
-    const half = CS / 2;
-    for (const enemy of game._activeEnemies()) {
-      if (enemy.hp <= 0) continue;
-      const ex = enemy.position.x + half;
-      const ey = enemy.position.y + half;
-      for (const obj of game._activeBackgroundObjects()) {
-        if (obj.destroyed || obj.char !== '~') continue;
-        if (obj.waterState !== 'electrified') continue;
-        const cx = obj.position.x + half;
-        const cy = obj.position.y + half;
-        if (Math.abs(cx - ex) < half && Math.abs(cy - ey) < half) {
-          const wet = enemy.isWet?.() ?? false;
-          const dmg = wet ? 2 : 1;
-          enemy.takeDamage(dmg);
-          game.combatSystem?.createDamageNumber(dmg, enemy.position.x, enemy.position.y, wet ? '#ffff66' : '#88ddff', 1.0, 0.6);
-          break;
-        }
-      }
-    }
+    game.electricitySystem?.seedAt(p.position.x + CS / 2, p.position.y + CS / 2,
+      { initialCharge: STINGRAY_DISCHARGE_CHARGE, tileDuration: STINGRAY_DISCHARGE_DURATION });
   }
 }
