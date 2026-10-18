@@ -2495,7 +2495,7 @@ export const ENEMIES = {
       closeQuarters: true
     },
     spawnEquipment: {
-      chance: 0.35,
+      chance: 0.12,   // was 0.35 — Tridents came too easily (1/3 the rate)
       weapons: ['ⲯ']
     },
     elementalAffinity: {
