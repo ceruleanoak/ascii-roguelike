@@ -51,6 +51,10 @@ const DOOR_INTERACT_RADIUS = GRID.CELL_SIZE * 2;
 export class HutSystem {
   constructor(game) {
     this.game = game;
+    // The floor items the live hut floor was seeded with (bread, the Shed's
+    // Frog Coin, the alchemy bottles) — handed to game.items on entry. On
+    // exit these stay inside; anything else loose on the floor goes outside.
+    this._seededFloorItems = new Set();
   }
 
   // ─── Interior Generation ─────────────────────────────────────────────────
@@ -648,6 +652,7 @@ export class HutSystem {
       hut.interiorGenerated = true;
     }
 
+    this._seededFloorItems = new Set(floor.items ?? []);
     game.interiorManager.enterFloor('hut', floor, floor.spawnPoint);
 
     // A cached floor can still hold the friendly traveler from before a
@@ -700,10 +705,54 @@ export class HutSystem {
 
   _exitHut() {
     const { game } = this;
-    game.interiorManager.exitFloor(game.player.hutExitPosition);
+    const floor = game.activeFloor;
+    const exitPosition = game.player.hutExitPosition;
+    // Collected before exitFloor, which sweeps all hutPlane loot away.
+    const floorItems = game.items.filter(i => i.hutPlane);
+    const floorIngredients = game.ingredients.filter(i => i.hutPlane);
+    game.interiorManager.exitFloor(exitPosition);
+    this._carryFloorLootOutside(floor, floorItems, floorIngredients, exitPosition);
     // Brief cooldown so the door's proximity check doesn't immediately
     // re-trigger on the next frame.
     game.player._hutEntryCooldown = 0.5;
+  }
+
+  /**
+   * Loot left lying on the hut floor comes out of the door with the player:
+   * a weapon dropped for a swap, an enemy's drops, ingredients not yet picked
+   * up. It scatters from the exit spot onto the surface Room. The floor's own
+   * seeded items are the exception — they go back on the cached floor and
+   * are there again on the next entry.
+   */
+  _carryFloorLootOutside(floor, floorItems, floorIngredients, exitPosition) {
+    const { game } = this;
+    const outside = [];
+    for (const item of floorItems) {
+      if (this._seededFloorItems.has(item) && Array.isArray(floor?.items)) floor.items.push(item);
+      else outside.push(item);
+    }
+    this._seededFloorItems.clear();
+    if (!exitPosition) return;
+
+    const scatter = (entity) => {
+      entity.hutPlane = false;
+      entity.position.x = exitPosition.x;
+      entity.position.y = exitPosition.y;
+      const a = Math.random() * Math.PI * 2;
+      const speed = 60 + Math.random() * 80;
+      entity.velocity.vx = Math.cos(a) * speed;
+      entity.velocity.vy = Math.sin(a) * speed;
+      game.physicsSystem.addEntity(entity);
+    };
+    for (const item of outside) {
+      scatter(item);
+      game.items.push(item);
+    }
+    for (const ingredient of floorIngredients) {
+      scatter(ingredient);
+      ingredient.pickupCooldown = 0.75;
+      game.ingredients.push(ingredient);
+    }
   }
 
   // ─── Update ───────────────────────────────────────────────────────────────
