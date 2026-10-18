@@ -33,9 +33,10 @@ export const CHARACTER_TYPES = {
     color: '#ff4444',
     rollType: 'damage', // Damages + knocks back enemies; smashes background objects
     frozenRollChipMult: 2, // A roll press breaks Frozen ice twice as hard (StatusEffectSystem.struggleFrozen)
-    rollDuration: 0.2,
+    rollDuration: 0.26,
     rollCooldown: 0.6,
     rollSpeed: 550,
+    rollDizzy: 1.0, // Each ram leaves one pip of Dizzy (seconds per pip; chained rolls stack)
     weaponAffinities: {
       'melee': { windupReduction: 0.2 }, // 20% faster melee windup
       'bow': { cooldownPenalty: 0.5 }    // 50% longer bow cooldown (glass cannon trade-off)

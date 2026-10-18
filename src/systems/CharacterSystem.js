@@ -727,6 +727,7 @@ export class CharacterSystem {
     // window that persists after the roll ends.
     body.dodgeRoll.iframes = charData.rollInvulnerable !== false;
     body.dodgeRoll.postRollIframes = charData.rollIframes ?? 0.1;
+    body.dodgeRoll.dizzyAfter = charData.rollDizzy ?? 0;
     if (charData.blinkDistance) {
       body.dodgeRoll.distance = charData.blinkDistance;
     }

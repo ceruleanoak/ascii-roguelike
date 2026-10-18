@@ -272,6 +272,10 @@ export class Player {
       // cooldown: if the tail outlasts the cooldown, mashing dodge becomes
       // uninterrupted invulnerability and nothing can punish it.
       postRollIframes: 0.1,
+      // Seconds of Dizzy (one pip, stacking) the roll leaves on finishing.
+      // Per character (characters.js `rollDizzy`) — the Red Warrior's ram
+      // rattles them; 0 for everyone else.
+      dizzyAfter: 0,
       hideDuration: 0, // Cyan rogue: how long `hidden` flag persists after roll start (0 = roll-only)
       hideTimer: 0,    // Active countdown of the hide window
       invisRecoveryDuration: 10, // Cyan rogue: cooldown before invisibility can trigger again

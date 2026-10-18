@@ -176,6 +176,11 @@ export const PlayerDodgeRollSystem = {
         player.velocity.vy = 0;
         player.acceleration.ax = 0;
         player.acceleration.ay = 0;
+        // Applied on finishing, not starting, so the ram itself flies true;
+        // only a roll chained while still dizzy veers (start(), above).
+        if (player.dodgeRoll.dizzyAfter > 0) {
+          player.applyStatusEffect('dizzy', player.dodgeRoll.dizzyAfter);
+        }
         // Note: hidden flag for 'hide' rolls is driven by hideTimer (which persists past
         // the roll itself); do NOT clear it here.
         // Open post-dodge crit window for dagger-class weapons (subtype behavior).
