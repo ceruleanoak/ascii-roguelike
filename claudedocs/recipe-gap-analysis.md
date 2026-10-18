@@ -139,5 +139,5 @@ launch, which makes it different from `homing`.
 ## 7. Later additions
 
 - **Bolo Launcher `⊶`** (t2 plain GUN, Sling + Fur): one whirling bolo `⚯` per room; snares any enemy that isn't huge (boss-tier, or mass ≥ 2.5 — Troll and up).
-- **Magic staves (Storm Staff line):** Storm Staff `⚡` = Staff `/` + Mana `𝑚`, a low-mana bolt gun (1 mana per bolt; an empty or inactive meter fizzles the shot to a harmless half-size 1.5-cell spark, shared with the Magic Sword's bolt via `fizzleToSpark`). The 7 gem staves are Storm Staff + gem (previously Thick Staff + gem, commit ed9a920) and keep their charge + mana-cost casts.
+- **Magic staves (Storm Staff line):** Storm Staff `⚡` = Staff `/` + Mana `𝑚`, a Thick Staff swing that throws one bolt per swing via `swingBolt` (1 mana per bolt, re-fired on the melee cooldown; an empty or inactive meter fizzles the bolt to a harmless half-size 1.5-cell spark, shared with the Magic Sword's bolt via `fizzleToSpark`). The 7 gem staves are Storm Staff + gem (previously Thick Staff + gem, commit ed9a920) and keep their charge + mana-cost casts.
 - **Metal Block `■`** = Metal `M` + Rock `0`; **Smoke Bomb `𐤑`** = Bomb `@` + Ash `a` (both were authored but unobtainable, bug #324).

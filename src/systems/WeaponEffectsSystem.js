@@ -6,10 +6,11 @@
  * Swing-complete flags (onSwingComplete, from the held item's windup):
  *   placesLava     — lava tiles in a forward arc (CharacterSystem.spawnLavaSweep)
  *   callsLightning — delayed strike past the tip (CharacterSystem.callLightningStrike)
- *   swingBolt      — char of a GUN weapon whose bolt the swing also throws
- *                    (Magic Sword → Storm Staff '⚚'). Read live from that
- *                    weapon's data, so the two stay in parity — including its
- *                    manaCost: a dry meter throws the same fizzled spark.
+ *   swingBolt      — char of the weapon whose bolt the swing also throws
+ *                    (Storm Staff → itself, Magic Sword → Storm Staff '⚚').
+ *                    Read live from that weapon's bolt fields (boltDamage,
+ *                    bulletChar/Speed/Range, manaCost), so the two stay in
+ *                    parity — a dry meter throws the same fizzled spark.
  *   dustBurst      — { status, duration, color }: a sight-blocking cloud that
  *                    applies `status` to every enemy in it (Spore Mace sleep,
  *                    Cinder Hammer blind). Lands at the weapon tip, or around
@@ -110,8 +111,8 @@ export class WeaponEffectsSystem {
     this.game.combatSystem.createDamageNumber('SNARED', enemy.position.x, enemy.position.y - 14, '#c8a060');
   }
 
-  // The same bolt the source GUN weapon fires, thrown along the swing's facing.
-  // Costs the source gun's manaCost; with no mana it fizzles to a spark.
+  // The source weapon's bolt, thrown along the swing's facing. Costs the
+  // source's manaCost; with no mana it fizzles to a spark.
   _throwBolt(player, bolt) {
     if (!bolt) return;
     const unpaid = bolt.manaCost && !this.game.magicSystem.spendMana(player, bolt.manaCost);
@@ -128,7 +129,7 @@ export class WeaponEffectsSystem {
         y: player.position.y + player.height / 2 + Math.sin(angle) * spawnOffset
       },
       velocity: { vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed },
-      damage: bolt.damage,
+      damage: bolt.boltDamage,
       color: bolt.color,
       bulletRange: bolt.bulletRange,
       owner: player,

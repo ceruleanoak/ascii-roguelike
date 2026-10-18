@@ -1316,18 +1316,28 @@ export const ITEMS = {
     color: '#8b4513'
   },
   '⚚': {
+    // A Thick Staff swing (same stance, block and release sweep) that also
+    // throws its bolt once per swing — one press, one bolt, re-fired on the
+    // melee cooldown. The bolt fields below are read by WeaponEffectsSystem's
+    // swingBolt, which the Magic Sword shares by pointing at this entry.
     char: '⚚',
     name: 'Storm Staff',
     type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.GUN,
-    damage: 1,
-    cooldown: 0.35,              // 3× faster than Fester's Gun (0.35 vs 1.0 effective)
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'staff',
+    damage: 2,
+    windup: 0.25,
+    recovery: 0.75,
+    patternSpeed: 0.05,
+    meleeChar: '|',
+    range: 28,
+    blockReleaseDamage: 1,
+    swingBolt: '⚚',
+    boltDamage: 1,
     bulletChar: 'ϟ',
     bulletSpeed: 280,
     bulletRange: 600,
-    inaccuracy: 0,               // flies dead-straight and never rolls a miss — the same bolt the Magic Sword throws (WeaponEffectsSystem._throwBolt)
-    maxUses: null,
-    manaCost: 1,                 // per bolt; an empty meter fizzles the shot to a harmless spark (Item.createBullets)
+    manaCost: 1,                 // per bolt; an empty meter fizzles the bolt to a harmless spark (fizzleToSpark)
     color: '#ffcc00'
   },
 

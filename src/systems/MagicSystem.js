@@ -46,8 +46,7 @@ const PER_SLOT_MANA_MAX = 10;
 const CRAFT_MANA_COST = 3;
 
 // Spend `cost` from the player's mana meter; false (nothing spent) when the
-// meter is inactive or short. Module-level so entity code that has only the
-// player — Item.createBullets for mana-fed guns — spends through the same rule.
+// meter is inactive or short.
 export function spendMeterMana(player, cost) {
   const meter = player?.magicMeter;
   if (!meter?.active || meter.current < cost) return false;
@@ -56,8 +55,8 @@ export function spendMeterMana(player, cost) {
 }
 
 // What a mana-fed bolt becomes when the meter can't pay: a tiny, harmless
-// spark that dies barely past the muzzle. Shared by the Storm Staff's shot
-// (Item.createBullets) and the Magic Sword's thrown bolt (WeaponEffectsSystem).
+// spark that dies barely past the muzzle. Used by every swingBolt throw
+// (WeaponEffectsSystem: Storm Staff, Magic Sword).
 const MANALESS_SPARK_RANGE = GRID.CELL_SIZE * 1.5;
 export function fizzleToSpark(bolt) {
   bolt.char = '˙';
@@ -519,13 +518,15 @@ export class MagicSystem {
   // ─── Bare-staff missile ─────────────────────────────────────────────────
 
   // Plain Staff / Thick Staff (weaponSubtype 'staff', MELEE, not a gem wand,
-  // not the Fishing Pole which shares the subtype). Excludes gem staffs
-  // (WAND) — those already spend mana on their own charge/cast.
+  // not the Fishing Pole which shares the subtype, not the Storm Staff whose
+  // swing throws its own bolt). Excludes gem staffs (WAND) — those already
+  // spend mana on their own charge/cast.
   isBareStaff(weapon) {
     return !!weapon
       && weapon.data?.weaponType === 'MELEE'
       && weapon.data?.weaponSubtype === 'staff'
-      && !weapon.data?.isFishingRod;
+      && !weapon.data?.isFishingRod
+      && !weapon.data?.swingBolt;
   }
 
   // Called every time a bare staff's swing completes. When the mana meter is

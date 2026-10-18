@@ -1,6 +1,5 @@
 import { GRID, COLORS } from '../game/GameConfig.js';
 import { ITEMS, WEAPON_TYPES, TRAINING_TECHNIQUES, resolveWeaponDefaults } from '../data/items.js';
-import { spendMeterMana, fizzleToSpark } from '../systems/MagicSystem.js';
 import { canonStandIn } from '../systems/CanonOverlay.js';
 
 /**
@@ -627,12 +626,6 @@ export class Item {
       }
 
       bullets.push(bullet);
-    }
-
-    // Mana-fed guns (Storm Staff): one trigger pull spends manaCost; with an
-    // empty or inactive meter the shot fizzles into a harmless spark.
-    if (this.data.manaCost && !spendMeterMana(player, this.data.manaCost)) {
-      bullets.forEach(fizzleToSpark);
     }
 
     return bullets;
