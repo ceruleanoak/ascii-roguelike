@@ -210,6 +210,12 @@ export class LootSystem {
       drops.push('c');
     }
 
+    // A beast killed while snared (Snare Trap, Bolo — Enemy.isSnared) always
+    // drops a Meat on top of its normal drops: the hunter's catch.
+    if (enemy.isSnared?.() && enemy.data.affinities?.includes('beast')) {
+      drops.push('m');
+    }
+
     // Frog form: each Coin a kill would drop has a 25% chance to come up a
     // Frog Coin (⊚) instead. Stolen coins returned above stay plain Coins —
     // they were the player's own.
