@@ -977,8 +977,12 @@ export class InteractionSystem {
       // Grass drop table — rolled independently per grass object cut.
       // Thresholds are 1/8 of the per-swing values so that ~8 blades per swing
       // yields the same expected drop rate as before.
+      // GRASS_DROP_RATE scales every band below uniformly (0.5 = each drop,
+      // beast included, at half its authored threshold width) — the
+      // thresholds stay as authored so their relative widths remain legible.
       {
-        const roll = Math.random();
+        const GRASS_DROP_RATE = 0.5;
+        const roll = Math.random() / GRASS_DROP_RATE;
         if (roll < 0.0006) {
           // Very rare: chest
           const chest = new BackgroundObject('⊞', obj.position.x, obj.position.y);
