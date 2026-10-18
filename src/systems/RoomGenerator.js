@@ -833,6 +833,7 @@ export class RoomGenerator {
     const fire = new BackgroundObject('!', fireX, fireY);
     fire.indestructible = true;
     fire.isCampfire = true; // enables flicker animation in BackgroundObject.update
+    fire.burning = true;    // a lit fireplace for FireplaceSystem — cooks/smelts with no Stick needed
     fire.structural = true;
     room.backgroundObjects.push(fire);
 

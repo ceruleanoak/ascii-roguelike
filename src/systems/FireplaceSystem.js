@@ -4,7 +4,8 @@ import { Item } from '../entities/Item.js';
 /**
  * FireplaceSystem — operates the hut fireplace (mirrors PressSystem's shape).
  *
- * Players walk up to a `⌂` fireplace and hit SPACE. An unlit fireplace only
+ * Players walk up to a `⌂` fireplace (or the C-room campfire, which is the
+ * same station but always lit) and hit SPACE. An unlit fireplace only
  * accepts a Stick, which ignites it (recolors the instance, no state machine
  * beyond the one `burning` flag). Once burning, the menu opens up to Meat
  * (100% → Meat Jerky), a held Fire Berry (100% → Mana), an equipped Bottle of
@@ -45,19 +46,26 @@ export class FireplaceSystem {
     this.game = game;
   }
 
-  /** The nearby fireplace instance, or null. */
+  /**
+   * The nearby fireplace instance, or null. The C-room campfire counts as a
+   * fireplace that is always burning (RoomGenerator sets `burning` on it).
+   * When the CampNPC beside it is nearer to the player than the fire, SPACE
+   * belongs to the NPC's coin offering instead.
+   */
   _findFireplace() {
     const game = this.game;
-    if (!game.player?.inHut || !game.activeFloor) return null;
+    if (!game.player) return null;
     const C = GRID.CELL_SIZE;
     const px = game.player.position.x + C / 2;
     const py = game.player.position.y + C / 2;
-    for (const obj of game.activeFloor.backgroundObjects) {
-      if (obj.char !== '⌂' || obj.destroyed) continue;
-      const cx = obj.position.x + C / 2;
-      const cy = obj.position.y + C / 2;
-      const dx = px - cx, dy = py - cy;
-      if (Math.sqrt(dx * dx + dy * dy) < INTERACT_RADIUS) return obj;
+    const distTo = (pos) => Math.hypot(px - (pos.x + C / 2), py - (pos.y + C / 2));
+    for (const obj of game._activeBackgroundObjects()) {
+      if ((obj.char !== '⌂' && !obj.isCampfire) || obj.destroyed) continue;
+      const dist = distTo(obj.position);
+      if (dist >= INTERACT_RADIUS) continue;
+      const npc = obj.isCampfire ? (game.companion ?? game.currentRoom?.campNPC) : null;
+      if (npc && distTo(npc.position) < dist) continue;
+      return obj;
     }
     return null;
   }
