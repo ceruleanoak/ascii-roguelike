@@ -599,6 +599,20 @@ export const BACKGROUND_OBJECTS = {
       default: { animation: 'flicker', message: null }
     }
   },
+  // Tinder: a Stick split by a blade (TinderSystem). Catching fire turns it
+  // into a campfire ('!', always lit) instead of burning it away.
+  // Indestructible so a torch swing lights it rather than smashing it.
+  '⋀': {
+    name: 'Tinder',
+    color: '#a07040',
+    bulletInteraction: 'pass-through',
+    flammability: 'high',
+    conductivity: 'none',
+    indestructible: true,
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
   '$': {
     name: 'Shrine',
     color: '#ffff00',

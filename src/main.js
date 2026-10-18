@@ -44,6 +44,7 @@ import { CavernSystem } from './systems/CavernSystem.js';
 import { PressSystem } from './systems/PressSystem.js';
 import { ForgeSystem } from './systems/ForgeSystem.js';
 import { FireplaceSystem } from './systems/FireplaceSystem.js';
+import { TinderSystem } from './systems/TinderSystem.js';
 import { AlchemySystem } from './systems/AlchemySystem.js';
 import { DungeonSystem } from './systems/DungeonSystem.js';
 import { DungeonFloorGenerator } from './systems/DungeonFloorGenerator.js';
@@ -204,6 +205,7 @@ class Game {
     this.pressSystem = new PressSystem(this);
     this.forgeSystem = new ForgeSystem(this);
     this.fireplaceSystem = new FireplaceSystem(this);
+    this.tinderSystem = new TinderSystem(this);
     this.alchemySystem = new AlchemySystem(this);
     this.dungeonSystem = new DungeonSystem(this);
     // Internal collaborators DungeonSystem calls directly — not registered with
@@ -2624,6 +2626,8 @@ class Game {
     // rest-parity: absent because the Dragon Forge exists only in the green boss room
     this.forgeSystem.update(); // Dragon Forge: walking away hands slotted items back
     this.fireplaceSystem.update(); // Torch in a quick slot auto-lights an unlit fireplace on approach
+    // rest-parity: absent because Tinder is a field campfire; REST already has its crafting station
+    this.tinderSystem.update(); // blade splits a ground Stick into Tinder; burning Tinder becomes a campfire
 
     // Lava adjacent to water → solidify to rock
     this.interactionSystem.update(deltaTime, this._activeBackgroundObjects());

@@ -685,6 +685,15 @@ identity, not standard programming terms.
   `rendering/effects/DragonForgeDraw.js`.
 - **Not:** the REST Combine Station; the Fireplace or other hut stations; a forge anywhere else.
 
+### Tinder
+- **Definition:** A Stick lying on the ground that a blade swing has split into a small pile
+  (`⋀`). It sits in its cell until fire touches it (a torch or fire-weapon hit, a Fire Trap,
+  spreading flames), and then it becomes a campfire that is always lit and works as a Fireplace,
+  the same as the C-room campfire.
+- **In code:** `TinderSystem` (`src/systems/TinderSystem.js`); `BACKGROUND_OBJECTS['⋀']`. Once
+  lit, the object becomes `'!'` with `isCampfire` + `burning`, which `FireplaceSystem` reads.
+- **Not:** the Stick ingredient (`|`) itself; a Fire Trap; kindling fed to a Fireplace.
+
 ### Quick slot
 - **Definition:** A persistent equipped-item slot shown in the top status bar. Persists across
   REST.
