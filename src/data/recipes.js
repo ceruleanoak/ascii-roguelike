@@ -64,6 +64,7 @@ export const RECIPES = [
   // Staff splits two ways: Thick Staff is the blunt-melee line (Bat, Rootstaff);
   // Staff + Mana is the Storm Staff, and every gem wand is built from it.
   { left: '/', right: '𝑚', result: '⚚', name: 'Storm Staff' },    // Staff + Mana (like Sword + Mana = Magic Sword)
+  { left: 'Ⲯ', right: 'a', result: '⚚', name: 'Storm Staff' },    // Thick Staff + Ash — second route (dismantle still yields Staff + Mana, the first match)
   { left: '⚚', right: '◈', result: '⚝', name: 'Ruby Staff' },     // Storm Staff + Ruby
   { left: '⚚', right: '⬨', result: '⚹', name: 'Sapphire Staff' }, // Storm Staff + Sapphire
   { left: '⚚', right: '◇', result: '⚶', name: 'Topaz Staff' },    // Storm Staff + Topaz
