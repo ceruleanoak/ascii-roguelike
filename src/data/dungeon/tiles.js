@@ -49,6 +49,14 @@ export const DUNGEON_TILES = {
     modes: ['puzzle'],
     editor: { bg: '#161616', fg: '#5ad088', glyph: 'X' },
   },
+  // Walkable but burning (the 'lava' Background Object variant): a rolling
+  // rock crosses it slowed, the player crosses it hurt. The Hammer Trial's
+  // hallway to its switch.
+  '=': {
+    name: 'Lava', solid: false, opensWith: null, reachOver: true,
+    modes: ['puzzle'],
+    editor: { bg: '#5c1c0c' },
+  },
   'G': {
     name: 'Gap', solid: true, opensWith: null, reachOver: true,
     modes: ['puzzle'],

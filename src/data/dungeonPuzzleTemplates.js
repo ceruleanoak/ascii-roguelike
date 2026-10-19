@@ -6,6 +6,7 @@
 // drives it at runtime.
 //
 // # = solid wall cell    . = floor (walkable)    ~ = water (walkable)
+// = = lava (walkable, burning) — the generator places a lava tile on each
 // X = the room's one-way unlockable exit (stairsUp) — exactly one per grid
 // G = impassable gap (chasm) — solid like '#' but rendered as a crossable-
 //     by-reach-only void (HutInteriorOverlay), not an ordinary wall. Paired
@@ -84,10 +85,25 @@
 //   null means a random enemy of the zone. A standing Vent keeps the room's
 //   Shutters shut.
 //
+// unbreakableRocks: [{ row, col }] — Cavern Rocks (the unbreakable rock look)
+//   on plain floor cells. Solid; the Onyx Hammer knocks one loose into a
+//   rolling rock (BoulderSystem.rollFromRest), which breaks anything a bomb
+//   breaks and strikes a 'switch' trigger it runs into. The Hammer Trial.
+//
+// deflectors: [{ row, col, char }] — Deflector triangles (char one of
+//   ◣ ◢ ◥ ◤, GameConfig BACKGROUND_OBJECTS), the same fixture the surface
+//   rooms use: a rolling rock or a shot turns 90° off the hypotenuse.
+//
 // weight: selection weight for the North-descent pool (see
 // pickRandomPuzzleTemplateName below) — every named template the Progression
 // Solver passes participates, same as dungeonFloorTemplates.js's
 // numbered-floor pool.
+//
+// solverExempt: true | absent — the template is hand-checked rather than
+// proven by the Progression Solver, which does not model rolling rocks. It
+// joins the pool without a solver pass. Reserved for a Trial whose one
+// mechanic the solver cannot see (the Hammer Trial); every other template
+// must pass.
 
 import FOOTPRINT_CONTRACT from './dungeon/footprintContract.json';
 import { solveTemplate, toolKitForItem } from './dungeon/progressionSolver.js';
@@ -117,6 +133,7 @@ export function getPuzzleTemplate(templateName) {
 // CheatMenu can still warp into it by name.
 const TEMPLATE_WEIGHTS = Object.entries(PUZZLE_ROOM_TEMPLATES)
   .filter(([name, data]) => {
+    if (data.solverExempt) return true;
     const suppliedTools = data.pedestal ? toolKitForItem(ITEMS[data.pedestal.weaponChar]) : {};
     const { ok, errors } = solveTemplate({
       grid: data.grid, fixtures: data, mode: 'puzzle', contract: FOOTPRINT_CONTRACT, suppliedTools,
@@ -187,6 +204,21 @@ export function getPuzzleTemplateWaterCells(templateName) {
     }
   }
   return cells;
+}
+
+/** Interior cells a template marks as lava ('='). Walkable — the generator places a lava tile on each. */
+export function getPuzzleTemplateLavaCells(templateName) {
+  return cellsWithGlyph(getPuzzleTemplate(templateName).grid, '=');
+}
+
+/** The template's Cavern Rocks for the Onyx Hammer to roll — optional, defaults to none. */
+export function getPuzzleTemplateUnbreakableRocks(templateName) {
+  return getPuzzleTemplate(templateName).unbreakableRocks ?? [];
+}
+
+/** The template's Deflector triangles ({ row, col, char }) — optional, defaults to none. */
+export function getPuzzleTemplateDeflectors(templateName) {
+  return getPuzzleTemplate(templateName).deflectors ?? [];
 }
 
 /** Interior cells a template marks as an impassable gap ('G') — rendering-only metadata; collision is stamped by applyPuzzleTemplateToCollisionMap. */

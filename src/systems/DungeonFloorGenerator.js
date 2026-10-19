@@ -21,7 +21,8 @@ import {
   pickRandomPuzzleTemplateName, applyPuzzleTemplateToCollisionMap, getPuzzleTemplateWaterCells,
   getPuzzleTemplateGapCells, getPuzzleTemplateBombableCells, getPuzzleTemplateExitCell, getPuzzleTemplateTriggers,
   getPuzzleTemplateHookPosts, getPuzzleTemplateTorches, getPuzzleTemplatePedestal, getPuzzleTemplateDais,
-  getPuzzleTemplateCellsWithGlyph, getPuzzleTemplateSpawners,
+  getPuzzleTemplateCellsWithGlyph, getPuzzleTemplateSpawners, getPuzzleTemplateLavaCells,
+  getPuzzleTemplateUnbreakableRocks, getPuzzleTemplateDeflectors,
 } from '../data/dungeonPuzzleTemplates.js';
 
 /**
@@ -816,6 +817,19 @@ export class DungeonFloorGenerator {
     for (const { row, col } of getPuzzleTemplateWaterCells(templateName)) {
       if (collisionMap[row]?.[col]) continue;
       backgroundObjects.push(new BackgroundObject('~', col * CS, row * CS));
+    }
+
+    for (const { row, col } of getPuzzleTemplateLavaCells(templateName)) {
+      backgroundObjects.push(BackgroundObject.createVariant('lava', col * CS, row * CS));
+    }
+
+    // Hammer Trial fixtures: Cavern Rocks the Onyx Hammer rolls, and the
+    // Deflectors that turn a rolling rock toward its target.
+    for (const { row, col } of getPuzzleTemplateUnbreakableRocks(templateName)) {
+      backgroundObjects.push(BackgroundObject.createVariant('cavern_rock', col * CS, row * CS));
+    }
+    for (const { row, col, char } of getPuzzleTemplateDeflectors(templateName)) {
+      backgroundObjects.push(new BackgroundObject(char, col * CS, row * CS));
     }
 
     // Gap cells ('G') — impassable, chasm-rendered (same "reach across, not

@@ -1556,7 +1556,7 @@ identity, not standard programming terms.
   `applyPuzzleTemplateToCollisionMap` / `applyTemplateToCollisionMap`) plus a `bombable_wall`
   Background Object variant on each such cell (`GameConfig.js`, `bombable: true`), placed by
   `DungeonFloorGenerator._placeBombableWalls`.
-  `CavernSystem.bombBlast()` breaks it and clears the cell's collision. Painted with the
+  `CavernSystem.bombBlast()` (a bomb, or a Rolling rock) breaks it and clears the cell's collision. Painted with the
   dungeon editor's Bombable Wall tool. On a Vault, `buildVaultUnlockExtras` places the row
   (`vaultInfo.wallObjects`, `structural`), and `InteractionSystem._openVaultWall` cracks the
   whole row, whichever unlock method opened it.
@@ -1571,6 +1571,37 @@ identity, not standard programming terms.
   `PUZZLE_ROOM_TEMPLATES`, `weight: 1`). It uses the generic Puzzle Room fields: `B` cells,
   `panel` triggers, a `pedestal` with `weaponChar: '⊗'` and a `dais`.
 - **Not:** "bomb room", "bomb puzzle", "Bomb Bag room".
+
+### Rolling rock
+- **Definition:** A rock rolling along one cardinal axis. It hurts whatever it hits, players
+  and enemies alike, and it is spent on anything a bomb breaks (a Bombable Rock or Bombable
+  wall, a bombable Vault wall) or on a Puzzle Room switch. It bounces back off walls along the
+  same axis and turns at a Deflector. The red zone's rockfall drops them. The Onyx Hammer knocks
+  an unbreakable rock loose into one, and any hammer hitting one that is already rolling sends
+  it back the way the strike points; both hammer cases give a hammer-rolled rock, with the same
+  damage and twice the speed. It works the same way on the surface and on dungeon floors.
+- **In code:** a rock record in `BoulderSystem` (`src/systems/BoulderSystem.js`). Each one
+  carries its `space` (the room or a dungeon floor) and only moves while the player is in that
+  space. `empowered` = hammer-rolled (×2 speed, not ×2 damage). Rocks are started by
+  `rollFromRest(attack, obj)` (the weapon flag `rollsRock`; the target must pass
+  `isHammerRollable`, i.e. obsidian or `data.hammerRollable` and not `structural`/`surfaceOnly`).
+  `_strikeFixtures` handles what they break, and `redirectProjectile` handles Deflector turns.
+  Drawn by the `rollingRocks` Frame Pass (`src/rendering/effects/RollingRockDraw.js`).
+- **Not:** a Push Rock (which slides one cell and ignores the hammer). "Boulder" is the
+  code name only.
+
+### Hammer Trial
+- **Definition:** The dungeon Puzzle Room that grants the Onyx Hammer. One unbreakable rock sits
+  at the end of a channel. Struck east, it rolls down a lava hallway, turns north at a Deflector
+  and strikes the switch, which is otherwise out of reach, and that unlocks the exit. A second rock at the foot of a
+  one-wide neck, struck south, breaks the Bombable wall in front of the exit. Each rock can only
+  be reached from the side that sends it the right way.
+- **In code:** `src/data/dungeon/puzzleTemplates/hammer_trial.json` (`weight: 1`,
+  `solverExempt: true`). It uses `=` Lava cells (`tiles.js`, puzzle mode only),
+  `unbreakableRocks` (placed as `cavern_rock`), `deflectors` (`{ row, col, char }`), one
+  `switch` trigger, a `pedestal` with `weaponChar: '⬢'` and a `B` cell. Layout and the
+  reasoning behind it: `claudedocs/hammer-trial-layout.md`.
+- **Not:** "hammer room", "boulder puzzle", "rock room".
 
 ### Dais
 - **Definition:** A Puzzle Room fixture: a slot frame on the floor that holds the Bomb Trial's
@@ -1637,7 +1668,9 @@ identity, not standard programming terms.
   way, a hook taken too early or a Simple Key spent on the wrong Lock Block must not cut it off.
 - **In code:** `solveTemplate()` in `src/data/dungeon/progressionSolver.js` (pure, shared by the
   game, the dungeon editor and the data gate). `dungeonFloorTemplates.js` /
-  `dungeonPuzzleTemplates.js` keep templates that fail it out of the random pools.
+  `dungeonPuzzleTemplates.js` keep templates that fail it out of the random pools. A
+  Puzzle Room the solver can't model (the Hammer Trial's rolls) sets `solverExempt: true`
+  and is hand-checked instead.
 - **Not:** the editor's old advisory reachability check; a runtime check.
 
 ## Conventions
