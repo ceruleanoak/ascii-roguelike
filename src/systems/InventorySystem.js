@@ -207,11 +207,16 @@ export class InventorySystem {
   // the slot about to be overwritten anyway. Every equip path that would add
   // a second member routes to the SlotReplacementSystem prompt instead, which
   // then only offers the conflicting slot.
+  // A consumable also conflicts with its own twin (same char — a second Bomb),
+  // so one consumable never fills two slots. SlotReplacementSystem.open()
+  // resolves a twin without showing the prompt: the new copy takes the twin's
+  // slot and the old one goes to the consumable pile. Stackables never get
+  // here with a twin equipped; mergeStackableConsumable folds them in first.
   conflictingConsumableSlot(item, exceptIdx = -1) {
     const group = item?.data?.exclusiveGroup;
-    if (!group) return -1;
     return this.equippedConsumables.findIndex((s, idx) =>
-      idx !== exceptIdx && s !== item && s?.data?.exclusiveGroup === group);
+      idx !== exceptIdx && s && s !== item &&
+      (s.char === item?.char || (group && s.data?.exclusiveGroup === group)));
   }
 
   getItemChest() {
