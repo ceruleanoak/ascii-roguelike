@@ -356,7 +356,7 @@ export class CombatSystem {
       // Deflector triangles bend the bullet/arrow before any background-object
       // damage interaction can fire. Handled by cell occupancy (matches boulder
       // system) so the projectile no longer "hits" the deflector as a wall.
-      if (this._tryDeflectorRedirect(proj)) continue;
+      if (this.game.boulderSystem?.redirectProjectile(proj)) continue;
 
       // Check collision with background objects
       let bgObjectHit = false;
@@ -844,6 +844,12 @@ export class CombatSystem {
               continue;
             }
 
+            // Onyx Hammer: an unbreakable rock leaves its cell rolling.
+            if (this.game.boulderSystem?.rollFromRest(attack, obj)) {
+              attack.hasHitObject = true;
+              continue;
+            }
+
             // Which weapons may damage this material at all — obsidian, rock,
             // boulder, tree. InteractionSystem owns the answer, next door to
             // resolveSmashDamage's "how much"; what is left here is the
@@ -1306,7 +1312,7 @@ export class CombatSystem {
       // triangle instead of turning it. Reflected enemy projectiles skip player
       // collision (existing convention), so a deflected shot can no longer hurt
       // the player.
-      if (this._tryDeflectorRedirect(proj)) continue;
+      if (this.game.boulderSystem?.redirectProjectile(proj)) continue;
 
       // Check collision with background objects (cave walls, etc.)
       for (const obj of backgroundObjects) {
@@ -2082,35 +2088,6 @@ export class CombatSystem {
            projBox.x + projBox.width > objBox.x &&
            projBox.y < objBox.y + objBox.height &&
            projBox.y + projBox.height > objBox.y;
-  }
-
-  // Redirect a projectile off a deflector triangle by cell occupancy. Mirrors
-  // BoulderSystem's lookup so the bounce uses the same elbow table. Returns
-  // true if redirected. Tracks `_lastDeflectorObj` so the projectile doesn't
-  // re-deflect on the same tile every frame.
-  _tryDeflectorRedirect(proj) {
-    const bs = this.game?.boulderSystem;
-    if (!bs?.findDeflectorAt) return false;
-    // proj.position is the cell top-left; the deflector test wants the bullet's
-    // visual center so the triangle interior test lines up with the rendered glyph.
-    const cs = GRID.CELL_SIZE;
-    const deflector = bs.findDeflectorAt(proj.position.x + cs / 2, proj.position.y + cs / 2);
-    if (!deflector) {
-      if (proj._lastDeflectorObj) proj._lastDeflectorObj = null;
-      return false;
-    }
-    if (proj._lastDeflectorObj === deflector) return false;
-    const out = bs.deflectVelocity(deflector.data.deflectorElbow, proj.velocity.vx, proj.velocity.vy);
-    if (!out) return false;
-    // Update velocity in place — no snap. The bullet continues from its actual
-    // hit point inside the triangle and exits naturally on the next frames.
-    proj.velocity.vx = out.vx;
-    proj.velocity.vy = out.vy;
-    if (proj.drawAngle != null) proj.drawAngle = Math.atan2(out.vy, out.vx);
-    proj._lastDeflectorObj = deflector;
-    proj.reflected = true;
-    this.audioSystem?.playSFX?.('ricochet', 0.5);
-    return true;
   }
 
   reflectBullet(bullet, obj) {

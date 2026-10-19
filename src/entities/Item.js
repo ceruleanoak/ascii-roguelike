@@ -461,7 +461,7 @@ export class Item {
     if (!player) return null;
     // Call the shockwave creator directly — avoids mutating the shared data object.
     // Inject the same subtype props that injectSubtype() would apply in createMeleeAttack,
-    // so canSmash, electric, isBlade, isBlunt, isPickaxe, weaponLevel, cyclesExitLetter,
+    // so canSmash, electric, isBlade, isBlunt, isPickaxe, rollsRock, weaponLevel, cyclesExitLetter,
     // cyclesExitColor are preserved.
     const attacks = this.createMeleeShockwave(player);
     const props = {};
@@ -471,6 +471,7 @@ export class Item {
     if (this.data.isBlunt) props.isBlunt = this.data.isBlunt;
     if (this.data.canSmash) props.canSmash = this.data.canSmash;
     if (this.data.isPickaxe) props.isPickaxe = this.data.isPickaxe;
+    if (this.data.rollsRock) props.rollsRock = true;
     if (this.data.weaponLevel) props.weaponLevel = this.data.weaponLevel;
     if (this.data.cyclesExitLetter) props.cyclesExitLetter = this.data.cyclesExitLetter;
     if (this.data.cyclesExitColor) props.cyclesExitColor = this.data.cyclesExitColor;
@@ -871,6 +872,8 @@ export class Item {
       if (this.data.isBlunt) props.isBlunt = this.data.isBlunt;
       if (this.data.canSmash) props.canSmash = this.data.canSmash;
       if (this.data.isPickaxe) props.isPickaxe = this.data.isPickaxe;
+      // Onyx Hammer: knocks an unbreakable rock loose (BoulderSystem.rollFromRest).
+      if (this.data.rollsRock) props.rollsRock = true;
       if (this.data.weaponLevel) props.weaponLevel = this.data.weaponLevel;
       if (this.data.cyclesExitLetter) props.cyclesExitLetter = this.data.cyclesExitLetter;
       if (this.data.cyclesExitColor) props.cyclesExitColor = this.data.cyclesExitColor;

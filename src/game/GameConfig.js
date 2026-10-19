@@ -1353,7 +1353,8 @@ export const BACKGROUND_OBJECT_VARIANTS = {
   // Cavern Rock — the conspicuous cluster a Cavern hides behind (see
   // roomFeatures.seedCavern). It keeps the rock glyph so the cluster reads as
   // rocks, but a typeId replaces the Rock's data outright: no HP, no harvest,
-  // nothing a hammer or pickaxe opens. The darker tint and the size of the
+  // nothing a hammer or pickaxe opens (the Onyx Hammer rolls it loose
+  // instead, hammerRollable below). The darker tint and the size of the
   // cluster are the tell — a knowing player learns that rocks this stubborn
   // are guarding something.
   //
@@ -1367,6 +1368,10 @@ export const BACKGROUND_OBJECT_VARIANTS = {
     flammability: 'none',
     conductivity: 'none',
     indestructible: true,
+    // Unbreakable rock the Onyx Hammer knocks loose into a rolling rock
+    // (BoulderSystem.isHammerRollable). Bombable and Push Rocks look the same
+    // but leave this off, so the hammer does nothing to them.
+    hammerRollable: true,
     hp: null,
     solid: true,
     collisionShape: 'ellipse',

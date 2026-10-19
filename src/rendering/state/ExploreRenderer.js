@@ -658,10 +658,10 @@ export class ExploreRenderer {
       this.drawBurningObjects(game, false);
     }
 
-    // Draw rolling rocks and edge-warning arrows (red zone only)
+    // Rockfall edge-warning arrows (red zone only). The rocks themselves are
+    // the rollingRocks Frame Pass: they roll on dungeon floors too.
     if (ownsSurface && game.boulderSystem) {
-      const { rocks, warnings } = game.boulderSystem.getRenderData();
-      const BOULDER_COLOR = '#aa7744';
+      const { warnings } = game.boulderSystem.getRenderData();
       const WARN_COLOR = '#ffff00';
 
       // Warning arrows — blink yellow/transparent at 5 Hz
@@ -676,14 +676,6 @@ export class ExploreRenderer {
         else if (w.direction === 'west')  { wx = inside;      wy = w.lateralPx; }
         else                              { wx = GRID.WIDTH - inside; wy = w.lateralPx; }
         this.renderer.drawTextWithAlpha(wx, wy, WARN_CHAR[w.direction], WARN_COLOR, blinkOn ? 1.0 : 0.0);
-      }
-
-      // Active rocks — cycle through chars to look like rolling
-      const ROLL_CHARS = ['O', 'o', '0', 'Q'];
-      for (const r of rocks) {
-        if (r.x <= GRID.CELL_SIZE || r.x >= (GRID.COLS - 1) * GRID.CELL_SIZE ||
-            r.y <= GRID.CELL_SIZE || r.y >= (GRID.ROWS - 1) * GRID.CELL_SIZE) continue;
-        this.renderer.drawEntity(r.x, r.y, ROLL_CHARS[r.animFrame], BOULDER_COLOR);
       }
     }
 

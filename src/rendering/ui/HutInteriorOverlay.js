@@ -183,6 +183,14 @@ export class HutInteriorOverlay {
       if (obj.destroyed) continue;
       if (obj.onFire && !obj.isCampfire) continue; // drawn by the shared flicker pass below
       const renderData = obj.getRenderPosition();
+      // Deflectors draw as the same filled triangle the surface uses, so a
+      // rolling rock's turn lines up with the shape on screen.
+      if (obj.data?.boulderDeflector) {
+        this.renderController.exploreRenderer._drawDeflectorTriangle(ctx,
+          renderData.x + GRID.CELL_SIZE / 2, renderData.y + GRID.CELL_SIZE / 2,
+          obj.data.deflectorElbow, renderData.color);
+        continue;
+      }
       ctx.fillStyle = renderData.color;
       ctx.fillText(
         renderData.char,

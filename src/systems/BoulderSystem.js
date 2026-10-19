@@ -1,6 +1,7 @@
 import { DEATH_CAUSES } from '../data/deathCauses.js';
 import { GRID, ROOM_TYPES } from '../game/GameConfig.js';
-import { isInteriorActive } from './PlaneSystem.js';
+import { isInteriorActive, activeInteriorFloor } from './PlaneSystem.js';
+import { isLavaTile } from './LavaContact.js';
 
 const BOULDER_SPEED      = 60;   // px/s
 const BOULDER_SPEED_LAVA = 40;   // px/s on lava
@@ -13,6 +14,10 @@ const ROLL_ANIM_INTERVAL = 0.10;
 const HIT_COOLDOWN       = 0.5;
 const HIT_RADIUS         = GRID.CELL_SIZE * 0.85;
 const DEFLECT_RADIUS     = GRID.CELL_SIZE * 1.1;  // hammer reach to redirect a rolling boulder
+const HAMMER_SPEED_MULT  = 2;    // a hammer-rolled rock rolls this much faster; damage stays BOULDER_DAMAGE
+// bombBlast's reach is measured to the target's cell center plus half a cell,
+// so this radius makes a rock break what it touches at HIT_RADIUS.
+const BREAK_RADIUS       = HIT_RADIUS - GRID.CELL_SIZE / 2;
 
 // Deflector triangles render and collide at cell size, so the visible shape
 // and every physics test reference the exact same geometry.
@@ -46,10 +51,24 @@ const DIR_VEC = {
   west:  { dx: 1,  dy: 0  },
 };
 
+// An unbreakable rock the Onyx Hammer (`rollsRock`) knocks loose into a
+// rolling rock: a scattered obsidian '0' or a Cavern Rock. Push Rocks and
+// Bombable Rocks look the same but are neither, so the hammer does nothing to
+// them. Structural and surface-only rock is room architecture (Storm Eye
+// pillars, the U room's obsidian ceiling) and stays put.
+export function isHammerRollable(obj) {
+  if (obj.destroyed || obj.char !== '0' || obj.structural || obj.surfaceOnly) return false;
+  return !!(obj.obsidian || obj.data?.hammerRollable);
+}
+
 export class BoulderSystem {
   constructor(game) {
     this.game = game;
-    this.rocks = [];        // active single-char rocks
+    // Active single-char rocks. Each one belongs to the space it rolls in
+    // (`space`: the surface Room, or a dungeon/hut floor) and only moves while
+    // that space is the active one; leaving pauses it rather than losing it,
+    // so a Puzzle Room roll the player walked away from is still there.
+    this.rocks = [];
     this.pending = [];      // { delay, lateral } rocks waiting to spawn
     this.warnings = [];     // edge arrow indicators
     this.spawnCheckTimer = 0;
@@ -59,27 +78,49 @@ export class BoulderSystem {
 
   update(deltaTime) {
     const game = this.game;
-    // Settlement ('S') is excluded: the red zone's town is a safe-feeling hub
-    // of neutral huts and NPCs, and a rockfall sweeping through it reads as
-    // the room betraying its own premise. Underground ('U') is excluded too:
-    // no rockfall rolls in from the surface edges of a room below ground.
-    if (!game.currentRoom || game.currentRoom.zone !== 'red' ||
-        game.currentRoom.type === ROOM_TYPES.SETTLEMENT ||
-        game.currentRoom.type === ROOM_TYPES.UNDERGROUND) {
+    if (!game.currentRoom) {
       this._reset();
       return;
     }
 
+    // A new Room drops every rock, its floors' included: a dungeon's floors
+    // belong to the Room whose entrance leads into it.
     if (game.currentRoom !== this._lastRoom) {
+      this._reset();
       this._lastRoom = game.currentRoom;
       this.roomDirection = DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)];
-      this.rocks = [];
-      this.pending = [];
-      this.warnings = [];
-      this.spawnCheckTimer = 0;
-
     }
 
+    const space = this._activeSpace();
+    if (!space) return;   // the Maze has no rocks to roll
+    if (space === game.currentRoom && this._hasRockfall(game.currentRoom)) {
+      this._updateRockfall(deltaTime);
+    }
+    this._updateRocks(deltaTime, space);
+  }
+
+  // The red zone's rockfall hazard: edge warnings, then three rocks rolling in.
+  // Settlement ('S') is excluded: the red zone's town is a safe-feeling hub
+  // of neutral huts and NPCs, and a rockfall sweeping through it reads as
+  // the room betraying its own premise. Underground ('U') is excluded too:
+  // no rockfall rolls in from the surface edges of a room below ground.
+  _hasRockfall(room) {
+    return room.zone === 'red' &&
+      room.type !== ROOM_TYPES.SETTLEMENT &&
+      room.type !== ROOM_TYPES.UNDERGROUND;
+  }
+
+  // The space rocks roll in this tick: the dungeon/hut floor the player is
+  // on, the surface Room, or null in the Maze.
+  _activeSpace() {
+    const game = this.game;
+    const floor = activeInteriorFloor(game);
+    if (floor) return floor;
+    return isInteriorActive(game) ? null : game.currentRoom;
+  }
+
+  _updateRockfall(deltaTime) {
+    const game = this.game;
     // Periodic spawn roll
     this.spawnCheckTimer += deltaTime;
     if (this.spawnCheckTimer >= SPAWN_CHECK_INTERVAL) {
@@ -107,20 +148,26 @@ export class BoulderSystem {
       }
     }
 
-    // Update active rocks
-    // Boulders roll on the surface; a player inside any Interior is out of reach.
-    const inInterior = isInteriorActive(game);
+  }
+
+  _updateRocks(deltaTime, space) {
+    const game = this.game;
+    const { cols, rows, collisionMap } = game.activeGridBounds();
+    // The surface border is open sky: rocks roll off it and are gone. A floor's
+    // border is its wall, so there the border bounces like any other wall.
+    const onSurface = space === game.currentRoom;
 
     for (let i = this.rocks.length - 1; i >= 0; i--) {
       const r = this.rocks[i];
+      if (r.space !== space) continue;
 
       // Hammer strike ("the right tool") redirects the boulder away from the
-      // player and empowers it: ×2 speed and damage. The charged boulder turns
-      // the zone's hazard into the player's weapon — routed through deflector
-      // rocks into enemies or a blocked cave. Bounces (Phase 2) act on any
-      // boulder; only the empowered one carries enough force to break a cave.
-      // Other blunt weapons (flail, staff, bat) knock the boulder back the
-      // same way but never empower it — that stays hammer-exclusive.
+      // player and empowers it: ×2 speed, same damage — the same rock the Onyx
+      // Hammer knocks loose from rest (rollFromRest). The faster boulder turns
+      // the zone's hazard into the player's weapon, routed through deflector
+      // rocks into enemies or anything a bomb breaks. Other blunt weapons
+      // (flail, staff, bat) knock the boulder back the same way but never
+      // empower it — that stays hammer-exclusive.
       if (game.combatSystem) {
         for (const attack of game.combatSystem.getMeleeAttacks()) {
           if (!attack.canSmash && !attack.isBlunt) continue;
@@ -134,12 +181,9 @@ export class BoulderSystem {
           // Snap the new heading to the cardinal axis pointing away from the
           // player, so it reads as "I knocked it that way" and stays grid-true
           // for deterministic deflector-rock bounces.
-          const pcx = game.player.position.x + GRID.CELL_SIZE / 2;
-          const pcy = game.player.position.y + GRID.CELL_SIZE / 2;
-          const rdx = r.x - pcx;
-          const rdy = r.y - pcy;
-          if (Math.abs(rdx) >= Math.abs(rdy)) { r.vx = Math.sign(rdx) || 1; r.vy = 0; }
-          else { r.vx = 0; r.vy = Math.sign(rdy) || 1; }
+          const away = this._awayFromPlayer(r.x, r.y);
+          r.vx = away.vx;
+          r.vy = away.vy;
           if (attack.canSmash) r.empowered = true;
           // Grace the striker so the boulder they just hit doesn't instantly recoil into them.
           r.hitCooldowns.set(game.player, HIT_COOLDOWN);
@@ -151,7 +195,7 @@ export class BoulderSystem {
       const rRow = Math.floor(r.y / GRID.CELL_SIZE);
       let onLava = false;
       for (const obj of game._activeBackgroundObjects()) {
-        if (obj.char !== '~' || !obj.damaging || !obj.damage) continue;
+        if (!isLavaTile(obj)) continue;
         if (Math.floor(obj.position.x / GRID.CELL_SIZE) === rCol &&
             Math.floor(obj.position.y / GRID.CELL_SIZE) === rRow) {
           onLava = true;
@@ -160,7 +204,7 @@ export class BoulderSystem {
       }
 
       const baseSpeed = onLava ? BOULDER_SPEED_LAVA : BOULDER_SPEED;
-      const speed = r.empowered ? baseSpeed * 2 : baseSpeed;
+      const speed = r.empowered ? baseSpeed * HAMMER_SPEED_MULT : baseSpeed;
       const prevX = r.x;
       const prevY = r.y;
       r.x += r.vx * speed * deltaTime;
@@ -199,12 +243,12 @@ export class BoulderSystem {
         else r.hitCooldowns.set(entity, next);
       }
 
-      // Damage player
-      if (!inInterior && !r.hitCooldowns.has(game.player)) {
+      // Damage player — the rock only moves while its space is the player's.
+      if (!r.hitCooldowns.has(game.player)) {
         const dx = (game.player.position.x + GRID.CELL_SIZE / 2) - r.x;
         const dy = (game.player.position.y + GRID.CELL_SIZE / 2) - r.y;
         if (dx * dx + dy * dy < HIT_RADIUS * HIT_RADIUS) {
-          const dmg = r.empowered ? BOULDER_DAMAGE * 2 : BOULDER_DAMAGE;
+          const dmg = BOULDER_DAMAGE;
           const damageResult = game.player.takeDamage(dmg, { type: 'boulder', cause: DEATH_CAUSES.boulder });
           if (damageResult === true || (damageResult && damageResult.damaged)) {
             game.combatSystem.createDamageNumber(dmg, game.player.position.x, game.player.position.y, '#ff4400');
@@ -222,31 +266,39 @@ export class BoulderSystem {
         const dx = (enemy.position.x + GRID.CELL_SIZE / 2) - r.x;
         const dy = (enemy.position.y + GRID.CELL_SIZE / 2) - r.y;
         if (dx * dx + dy * dy < HIT_RADIUS * HIT_RADIUS) {
-          const enemyDmg = r.empowered ? BOULDER_DAMAGE * 2 : BOULDER_DAMAGE;
+          const enemyDmg = BOULDER_DAMAGE;
           enemy.takeDamage(enemyDmg, null);
           game.combatSystem.createDamageNumber(enemyDmg, enemy.position.x, enemy.position.y, '#ff4400');
           r.hitCooldowns.set(enemy, HIT_COOLDOWN);
         }
       }
 
-      // Boulders fly past the room border (despawn). Interior solid walls —
-      // anything else marked in the collisionMap — reflect them back as flat
-      // surfaces.
+      // A rolling rock breaks anything a bomb breaks (Bombable Rocks and
+      // Walls, a bombable Vault wall) and strikes a Puzzle Room switch; either
+      // way the rock is spent on what it hit.
+      if (this._strikeFixtures(r)) {
+        this.rocks.splice(i, 1);
+        continue;
+      }
+
+      // Boulders fly past the surface room's border (despawn). Interior solid
+      // walls — anything else marked in the collisionMap — reflect them back
+      // as flat surfaces.
       const cellCol = Math.floor(r.x / GRID.CELL_SIZE);
       const cellRow = Math.floor(r.y / GRID.CELL_SIZE);
-      const oob = cellCol < 0 || cellCol >= GRID.COLS ||
-                  cellRow < 0 || cellRow >= GRID.ROWS;
+      const oob = cellCol < 0 || cellCol >= cols ||
+                  cellRow < 0 || cellRow >= rows;
       if (oob) {
         this.rocks.splice(i, 1);
         continue;
       }
-      const onBorder = cellCol === 0 || cellCol === GRID.COLS - 1 ||
-                       cellRow === 0 || cellRow === GRID.ROWS - 1;
-      const intoWall = !onBorder && !!game.currentRoom?.collisionMap?.[cellRow]?.[cellCol];
+      const onBorder = cellCol === 0 || cellCol === cols - 1 ||
+                       cellRow === 0 || cellRow === rows - 1;
+      const intoWall = !(onSurface && onBorder) && !!collisionMap?.[cellRow]?.[cellCol];
       if (intoWall) {
         // Red zone Vault: a boulder into the wall breaks it instead of
         // deflecting — the boulder is spent on the break.
-        if (game.interactionSystem?.tryBreakVaultWall(r.x, r.y, GRID.CELL_SIZE / 2)) {
+        if (onSurface && game.interactionSystem?.tryBreakVaultWall(r.x, r.y, GRID.CELL_SIZE / 2)) {
           this.rocks.splice(i, 1);
           continue;
         }
@@ -261,6 +313,74 @@ export class BoulderSystem {
 
   getRenderData() {
     return { rocks: this.rocks, warnings: this.warnings };
+  }
+
+  // Rocks rolling in the space the player is in — what a renderer draws.
+  activeRocks() {
+    const space = this._activeSpace();
+    return space ? this.rocks.filter(r => r.space === space) : [];
+  }
+
+  /**
+   * Onyx Hammer (`attack.rollsRock`) on an unbreakable rock at rest: the rock
+   * leaves its cell as a hammer-rolled rock (×2 speed, same damage — the same
+   * result as any hammer on a rock already rolling), heading along the
+   * cardinal axis away from the player. Returns true when the swing rolled it,
+   * so the melee loop treats the hit as spent. Hitting a Push Rock or a
+   * Bombable Rock returns false: they only look like unbreakable rock.
+   */
+  rollFromRest(attack, obj) {
+    if (!attack.rollsRock || !isHammerRollable(obj)) return false;
+    const space = this._activeSpace();
+    if (!space) return false;
+    const game = this.game;
+    const x = obj.position.x + GRID.CELL_SIZE / 2;
+    const y = obj.position.y + GRID.CELL_SIZE / 2;
+    const away = this._awayFromPlayer(x, y);
+    const rock = this._makeRock(x, y, null, away.vx, away.vy, space);
+    rock.empowered = true;
+    // Grace the striker, and mark this swing as having moved the rock so the
+    // redirect pass doesn't strike it a second time while the swing lingers.
+    rock.hitCooldowns.set(game.player, HIT_COOLDOWN);
+    if (!attack._deflectedRocks) attack._deflectedRocks = new Set();
+    attack._deflectedRocks.add(rock);
+    this.rocks.push(rock);
+
+    obj.destroyed = true;
+    game.renderer?.markBackgroundDirty?.();
+    return true;
+  }
+
+  // Cardinal unit heading pointing away from the player, by the larger of
+  // |dx|/|dy| (a tie goes horizontal). Shared by both hammer strikes so a
+  // rolled rock always reads as "I knocked it that way", grid-true for
+  // deterministic deflector bounces.
+  _awayFromPlayer(x, y) {
+    const p = this.game.player.position;
+    const rdx = x - (p.x + GRID.CELL_SIZE / 2);
+    const rdy = y - (p.y + GRID.CELL_SIZE / 2);
+    if (Math.abs(rdx) >= Math.abs(rdy)) return { vx: Math.sign(rdx) || 1, vy: 0 };
+    return { vx: 0, vy: Math.sign(rdy) || 1 };
+  }
+
+  // What a rolling rock breaks or sets off by touching it. Returns true when
+  // it hit something, which spends the rock.
+  _strikeFixtures(r) {
+    const game = this.game;
+    if (game.cavernSystem?.bombBlast(r.x, r.y, BREAK_RADIUS)) return true;
+    for (const obj of game._activeBackgroundObjects()) {
+      if (!obj.puzzleSignal || obj.destroyed) continue;
+      const dx = (obj.position.x + GRID.CELL_SIZE / 2) - r.x;
+      const dy = (obj.position.y + GRID.CELL_SIZE / 2) - r.y;
+      if (dx * dx + dy * dy >= HIT_RADIUS * HIT_RADIUS) continue;
+      obj.takeDamage(1);   // a puzzleSignal object pulses glitterHit, never breaks
+      return true;
+    }
+    return false;
+  }
+
+  _makeRock(x, y, direction, vx, vy, space) {
+    return { x, y, direction, vx, vy, space, empowered: false, lastDeflector: null, animFrame: 0, animTimer: 0, hitCooldowns: new Map() };
   }
 
   // Find a deflector whose 1.5× triangle contains the given pixel point.
@@ -289,6 +409,34 @@ export class BoulderSystem {
     const out = this._deflect(elbow, cardX, cardY);
     if (!out) return null;
     return { vx: out.vx * speed, vy: out.vy * speed };
+  }
+
+  // Redirect a projectile off a deflector triangle by cell occupancy, through
+  // the same elbow table rolling rocks use. Called from CombatSystem's player
+  // and enemy projectile loops. Returns true if redirected. Tracks
+  // `_lastDeflectorObj` so the projectile doesn't re-deflect on the same tile
+  // every frame.
+  redirectProjectile(proj) {
+    // proj.position is the cell top-left; the deflector test wants the bullet's
+    // visual center so the triangle interior test lines up with the rendered glyph.
+    const cs = GRID.CELL_SIZE;
+    const deflector = this.findDeflectorAt(proj.position.x + cs / 2, proj.position.y + cs / 2);
+    if (!deflector) {
+      if (proj._lastDeflectorObj) proj._lastDeflectorObj = null;
+      return false;
+    }
+    if (proj._lastDeflectorObj === deflector) return false;
+    const out = this.deflectVelocity(deflector.data.deflectorElbow, proj.velocity.vx, proj.velocity.vy);
+    if (!out) return false;
+    // Update velocity in place — no snap. The bullet continues from its actual
+    // hit point inside the triangle and exits naturally on the next frames.
+    proj.velocity.vx = out.vx;
+    proj.velocity.vy = out.vy;
+    if (proj.drawAngle != null) proj.drawAngle = Math.atan2(out.vy, out.vx);
+    proj._lastDeflectorObj = deflector;
+    proj.reflected = true;
+    this.game.audioSystem?.playSFX?.('ricochet', 0.5);
+    return true;
   }
 
   // Right-triangle deflection in screen-space (vx,vy ∈ {0,±1}). `elbow` names
@@ -350,8 +498,7 @@ export class BoulderSystem {
       y = lateralPx;
     }
     const vec = DIR_VEC[direction];
-    this.rocks.push({ x, y, direction, vx: vec.dx, vy: vec.dy, empowered: false, lastDeflector: null, animFrame: 0, animTimer: 0, hitCooldowns: new Map() });
-
+    this.rocks.push(this._makeRock(x, y, direction, vec.dx, vec.dy, this.game.currentRoom));
   }
 
   /**

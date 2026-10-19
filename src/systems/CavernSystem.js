@@ -13,9 +13,9 @@ import { isInteriorActive } from './PlaneSystem.js';
  * 'cavern'`) that HutSystem enters, exits and caches exactly like any other
  * hut. This system supplies the pieces that are Cavern-specific:
  *
- *   - bombBlast()             — a bomb explosion breaks Bombable Rocks and
- *                               reveals the Cavern's door where one stood.
- *                               Also the sole destroyer of Puzzle Room
+ *   - bombBlast()             — a bomb explosion (or a rolling rock) breaks
+ *                               Bombable Rocks and reveals the Cavern's door
+ *                               where one stood. Also the sole destroyer of Puzzle Room
  *                               Bombable Walls (any `data.bombable` object on
  *                               the active layer), opening their cell —
  *                               and opens a bombable V room Vault wall.
@@ -68,18 +68,19 @@ export class CavernSystem {
    * Bombable Rock in range on the player's current layer; a broken rock that
    * was hiding a Cavern leaves the Cavern's door in its cell.
    *
-   * Called from the two bomb explosion paths only (Bomb windup in
-   * ConsumableWindupEffects, Remote Bomb in TrapSystem) — nothing else in the
+   * Called from the two bomb explosion paths (Bomb windup in
+   * ConsumableWindupEffects, Remote Bomb in TrapSystem) and by a rolling rock
+   * (BoulderSystem), which breaks anything a bomb breaks — nothing else in the
    * game can open a Bombable Rock. Also opens a bombable Vault wall
-   * (InteractionSystem.tryBombVaultWall).
+   * (InteractionSystem.tryBombVaultWall). Returns true when anything broke.
    */
   bombBlast(x, y, radius) {
     const { game } = this;
     // A V room's Vault wall (every zone but yellow) is a surface structure —
     // an interior blast can't reach it.
-    if (!isInteriorActive(game)) game.interactionSystem?.tryBombVaultWall(x, y, radius);
+    const vaultOpened = !isInteriorActive(game) && !!game.interactionSystem?.tryBombVaultWall(x, y, radius);
     const backgroundObjects = game._activeBackgroundObjects();
-    if (!backgroundObjects?.length) return;
+    if (!backgroundObjects?.length) return vaultOpened;
 
     // Snapshot the rocks first: revealing a door appends to the same list.
     const rocks = backgroundObjects.filter(obj =>
@@ -93,6 +94,7 @@ export class CavernSystem {
       this._revealCavernAt(rock, backgroundObjects);
     }
     if (rocks.length) game.renderer.markBackgroundDirty();
+    return vaultOpened || rocks.length > 0;
   }
 
   // A Puzzle Room's Bombable Wall stands in a cell its template stamped solid

@@ -44,6 +44,7 @@ import { hasTorchLight, drawPlayerTorchLight } from './ui/torchLight.js';
 import { drawPlayerGlyph } from './effects/PlayerGlyphDraw.js';
 import { drawDizzyOrbitals } from './effects/DizzyOrbitals.js';
 import { drawWandProximityFailures, drawAoeEffects } from './effects/WandEffectsDraw.js';
+import { drawRollingRocks } from './effects/RollingRockDraw.js';
 
 export const FRAME_OWNERS = ['surface', 'floor', 'maze', 'rest', 'neutral'];
 export const FRAME_LAYERS = ['ground', 'combat', 'player', 'indicators'];
@@ -197,6 +198,13 @@ export const FRAME_PASSES = {
   // Character-ability readouts: above everything an owner layers over the
   // player (surface grass, sapping enemies, a Maze companion).
   indicators: [
+    // Rolling rocks sit here, not in combat, so they stay above surface tall
+    // grass (where they always drew). The Maze has no rock to roll.
+    {
+      id: 'rollingRocks',
+      on: { ...combatOnly, maze: 'the Maze holds no unbreakable rock and no rockfall, so nothing rolls there', rest: 'REST has no rockfall and no unbreakable rock (Game State: REST)' },
+      draw: (rc, game) => drawRollingRocks(rc.renderer, game)
+    },
     { id: 'bowChargeIndicator', on: combatOnly, draw: (rc, game) => rc.bowChargeIndicator.render(game) },
     { id: 'greenRangerIndicator', on: combatOnly, draw: (rc, game) => rc.greenRangerIndicator.render(game) },
     { id: 'cyanRogueIndicator', on: combatOnly, draw: (rc, game) => rc.cyanRogueIndicator.render(game) },
