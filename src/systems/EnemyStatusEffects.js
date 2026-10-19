@@ -81,6 +81,7 @@ export function getStunDroppedItems(enemy) {
 
   const drops = [];
   for (const item of enemy.inventory) {
+    item.releaseCarrier?.();
     item.position.x = enemy.position.x;
     item.position.y = enemy.position.y;
     // Add some velocity to scatter items

@@ -1706,6 +1706,20 @@ export class Item {
     return true;
   }
 
+  // The weapon left its carrier's hands (an enemy dropped it on stun, disarm
+  // or death). An in-flight windup or charge holds the old carrier as
+  // pendingPlayer/chargingPlayer — for an enemy, a position-only stand-in —
+  // so it must not survive into the next hands, or the swing fires from the
+  // old carrier with no velocity to recoil (bug #415).
+  releaseCarrier() {
+    this.windupActive = false;
+    this.windupTimer = 0;
+    this.pendingPlayer = null;
+    this.isCharging = false;
+    this.chargeTime = 0;
+    this.chargingPlayer = null;
+  }
+
   // Cancel a gem-wand charge in progress (e.g. player released space before completion).
   // No mana cost. Returns true if a charge was in progress and cancelled.
   cancelGemWandCharge() {

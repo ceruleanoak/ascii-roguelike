@@ -2500,6 +2500,7 @@ export class Enemy {
 
     const drops = [];
     for (const item of this.inventory) {
+      item.releaseCarrier?.();
       item.position.x = this.position.x;
       item.position.y = this.position.y;
       item.velocity = { vx: 0, vy: 0 };
