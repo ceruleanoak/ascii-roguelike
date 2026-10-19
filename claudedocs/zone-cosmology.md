@@ -181,7 +181,7 @@ way south, which gives the EXIT command in puzzle form."*
 1. **False ending** — the Mist Battle (above).
 2. **True ending** — completing the THREE room.
 3. **Pure ending** — completing the THREE room with the pure items (the True 3:
-   `⊥` `⊙` `🜛`). It unseals the way south of REST, and what waits there gives
+   `⬢`/`⫪` `⊙` `🜛` — Onyx or Cinder Hammer). It unseals the way south of REST, and what waits there gives
    the **EXIT** command in puzzle form.
 4. **The non-ending conclusion** — EXIT itself: the player leaves the game and
    becomes the creator. See "Path to Canon."

@@ -82,16 +82,21 @@ const DEATH_HITBOX = Math.round(GRID.CELL_SIZE * DEATH_SCALE * 0.7);
 //
 // Two whole-set readings sit on top of that, and the order they are tested in
 // is load-bearing. The true 3 is a strict INSTANCE of the power trio's form
-// pattern (Hammer is a weapon, Spectacles are armor, Mana Potion is a
-// consumable), so it satisfies both rules at once — test identity first or
+// pattern (an Onyx or Cinder Hammer is a weapon, Spectacles are armor, Mana
+// Potion is a consumable), so it satisfies both rules at once — test identity first or
 // the south answer can never fire.
 //
 //   power trio  (any weapon / any armor / any consumable) — feeds the Voice,
 //                opens the way north, and what stands there is Death.
-//   the true 3  (these three items exactly) — liberates the path south of
+//   the true 3  (these items exactly; the top slot takes either hammer) — liberates the path south of
 //                REST: the run ends by permission rather than by dying.
 const SLOT_FORMS = [ITEM_TYPES.WEAPON, ITEM_TYPES.ARMOR, ITEM_TYPES.CONSUMABLE];
-const TRUE_THREE = ['⊥', '⊙', '🜛'];   // Hammer (top) / Spectacles (left) / Mana Potion (right)
+// Each slot lists every glyph that counts as its true offering.
+const TRUE_THREE = [
+  ['⬢', '⫪'],  // top   — Onyx Hammer or Cinder Hammer
+  ['⊙'],       // left  — Spectacles
+  ['🜛'],       // right — Mana Potion
+];
 
 const SLOT_COUNT = 3;
 
@@ -303,7 +308,7 @@ export class ThreeRoomSystem {
     if (slots.length !== SLOT_COUNT || !slots.every(s => s?.threeFilled)) return 'refused';
     if (slots.some(s => s.threeCracked)) return 'refused';
 
-    if (slots.every((s, i) => s.threeOffering === TRUE_THREE[i])) return 'true-three';
+    if (slots.every((s, i) => TRUE_THREE[i].includes(s.threeOffering))) return 'true-three';
     return 'power-trio';
   }
 
