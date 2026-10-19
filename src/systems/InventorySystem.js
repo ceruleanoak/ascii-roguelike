@@ -428,11 +428,7 @@ export class InventorySystem {
           // caller to open the paused slot-choice prompt (SlotReplacementSystem).
           // The item stays on the ground until the player confirms a destination.
           if (allowSlotChoice) {
-            const hasEmptyUsable = player.quickSlots.some(
-              (slot, idx) => slot === null && !player.destroyedSlots?.[idx]
-            );
-            const anyUsable = player.quickSlots.some((_, idx) => !player.destroyedSlots?.[idx]);
-            if (!hasEmptyUsable && anyUsable) {
+            if (player.quickSlotsFull()) {
               return {
                 success: false,
                 needsSlotChoice: true,

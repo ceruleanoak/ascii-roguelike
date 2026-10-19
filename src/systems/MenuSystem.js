@@ -1138,6 +1138,12 @@ export class MenuSystem {
       } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
         if (trapAlreadyEquipped(game.player, item)) {
           game.inventorySystem.addToChest(item);
+        } else if (game.player.quickSlotsFull()) {
+          // Full quick slots: prompt for the destination like armor and
+          // consumables above, rather than silently swapping the active slot.
+          game.slotReplacementSystem.open(item, 'weapon');
+          game.renderer.markBackgroundDirty();
+          return;
         } else {
           const dropped = game.player.pickupItem(item);
           if (dropped) game.inventorySystem.addToChest(dropped);

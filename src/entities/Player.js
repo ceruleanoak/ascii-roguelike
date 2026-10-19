@@ -567,6 +567,16 @@ export class Player {
     if (this.hp > this.maxHp) this.hp = this.maxHp;
   }
 
+  // True when a new weapon/trap has nowhere to go without displacing one:
+  // every usable (non-destroyed) quick slot is occupied, and at least one
+  // usable slot exists. Callers open the slot-replace prompt
+  // (SlotReplacementSystem) instead of letting pickupItem swap the active slot.
+  quickSlotsFull() {
+    const usable = (_, i) => !this.destroyedSlots?.[i];
+    return this.quickSlots.some(usable) &&
+      !this.quickSlots.some((slot, i) => slot === null && usable(slot, i));
+  }
+
   pickupItem(item, selectedSlotIdx = 0) {
     // Apply trap capacity affinity (e.g. Gray Assassin: +1 trap charge on pickup)
     if (item?.data?.type === 'TRAP' && item.charges != null) {
