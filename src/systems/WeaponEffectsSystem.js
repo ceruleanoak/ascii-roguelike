@@ -11,10 +11,12 @@
  *                    Read live from that weapon's bolt fields (boltDamage,
  *                    bulletChar/Speed/Range, manaCost), so the two stay in
  *                    parity — a dry meter throws the same fizzled spark.
- *   dustBurst      — { status, duration, color }: a sight-blocking cloud that
- *                    applies `status` to every enemy in it (Spore Mace sleep,
- *                    Cinder Hammer blind). Lands at the weapon tip, or around
- *                    the player for hammerRing weapons (the ring hits there).
+ *   dustBurst      — { status, duration, color, burnTicks }: a sight-blocking
+ *                    cloud that applies `status` to every enemy in it (Spore
+ *                    Mace sleep, Cinder Hammer blind). `burnTicks` also sets
+ *                    them burning for that many burn ticks (Cinder Hammer: 1).
+ *                    Lands at the weapon tip, or around the player for
+ *                    hammerRing weapons (the ring hits there).
  *
  * Melee-hit flags (onMeleeHit, injected onto attacks by Item.createMeleeAttack):
  *   shattersFrozen    — hitting a Frozen enemy sprays one freeze pip onto
@@ -34,8 +36,9 @@
 
 import { GRID } from '../game/GameConfig.js';
 import { ITEMS } from '../data/items.js';
-import { tagInteriorPlane, tagLootLayer } from './PlaneSystem.js';
+import { tagInteriorPlane, tagLootLayer, planeOf } from './PlaneSystem.js';
 import { fizzleToSpark } from './MagicSystem.js';
+import { applyDotTicks } from './StatusEffects.js';
 
 const C = GRID.CELL_SIZE;
 const DUST_BURST_RADIUS = C * 2.5;
@@ -140,7 +143,7 @@ export class WeaponEffectsSystem {
   }
 
   _dustBurst(player, data) {
-    const { status, duration = 3.0, color } = data.dustBurst;
+    const { status, duration = 3.0, color, burnTicks } = data.dustBurst;
     const px = player.position.x + C / 2;
     const py = player.position.y + C / 2;
     let x = px;
@@ -153,8 +156,19 @@ export class WeaponEffectsSystem {
       x += (fx / flen) * reach;
       y += (fy / flen) * reach;
     }
-    this.game.combatSystem.applyAOEStatus({ x, y }, DUST_BURST_RADIUS, status, duration, this.game._activeEnemies(), player.plane ?? 0);
+    const enemies = this.game._activeEnemies();
+    const plane = player.plane ?? 0;
+    this.game.combatSystem.applyAOEStatus({ x, y }, DUST_BURST_RADIUS, status, duration, enemies, plane);
+    if (burnTicks) this._burnInCloud(x, y, burnTicks, enemies, plane);
     this._pushCloud(x, y, DUST_BURST_RADIUS, DUST_CLOUD_SECONDS, color);
+  }
+
+  // Same reach as applyAOEStatus (plane + radius), but burns for a tick count.
+  _burnInCloud(x, y, ticks, enemies, plane) {
+    for (const enemy of enemies) {
+      if (planeOf(enemy) !== plane) continue;
+      if (Math.hypot(enemy.position.x - x, enemy.position.y - y) <= DUST_BURST_RADIUS) applyDotTicks(enemy, 'burn', ticks);
+    }
   }
 
   _shatter(attack, enemy) {

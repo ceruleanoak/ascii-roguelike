@@ -133,6 +133,24 @@ const STATUS_EFFECTS = {
   slimeBoost: { player: { speedMult: 2.0 } } // slime puddle while wearing the slime suit; matches the slime enemy's 2x
 };
 
+/**
+ * Apply DoT `effect` for exactly `ticks` ticks — a fresh ignite skips the
+ * slot's starting duration (enemy burn's 5s first ignite). A DoT's tick lands
+ * as its timer runs out, so `ticks` tickRates of time is exactly `ticks`
+ * ticks. Already-running DoTs keep their longer time. Goes through the
+ * entity's own applyStatusEffect when it has one, so carrier rules still hold.
+ */
+export function applyDotTicks(entity, effect, ticks) {
+  const slot = entity.statusEffects?.[effect];
+  if (!slot || slot.tickRate === undefined) return null;
+  const wasActive = slot.active;
+  const seconds = ticks * slot.tickRate;
+  if (entity.applyStatusEffect) entity.applyStatusEffect(effect, seconds);
+  else applyStatusEffect(entity, effect, seconds);
+  if (!wasActive && slot.active) slot.duration = seconds;
+  return slot;
+}
+
 // Which carrier built each table, so clear/tick can restore the right
 // defaults without every caller having to say.
 const tableCarrier = new WeakMap();
