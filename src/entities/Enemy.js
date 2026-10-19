@@ -203,6 +203,7 @@ export class Enemy {
     this.baseDecisionInterval = this.data.decisionInterval || 0.5; // How often to reassess (smarter = lower)
     this.decisionInterval = this.baseDecisionInterval;
     this.decisionTimer = Math.random() * this.decisionInterval; // Time until next decision (randomized start)
+    this.falterTimer = 0; // Remaining Falter beat in Approach/Flee (enemyStates/falter.js)
     this.bruteForceTimer = 0; // Cooldown after applying 45° brute force (prevents immediate recalc)
     this.lastBruteForceAngle = null; // Track last forced angle to avoid repeating
 

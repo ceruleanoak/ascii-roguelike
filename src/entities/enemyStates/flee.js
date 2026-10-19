@@ -18,6 +18,7 @@
 // `useTrap`), reached via the `next()` branch below. This State only owns the
 // run itself: freezing/refreshing the mark and moving away from it.
 import { applyStateMovement, moveStill } from '../enemyMovement.js';
+import { updateFalter, isFaltering, clearFalter } from './falter.js';
 
 export default {
   id: 'flee',
@@ -81,12 +82,18 @@ export default {
       ? (cfg.lookbackInterval ?? 2.0)
       : enemy.fleeLookbackTimer - ctx.deltaTime;
 
+    // A Falter (falter.js) stops the flight for a beat. The lookback timer
+    // above keeps running through it.
     const mark = enemy.lastKnownPosition;
-    if (!mark) {
+    if (updateFalter(enemy, ctx, cfg) || !mark) {
       moveStill(enemy);
     } else {
       applyStateMovement(enemy, { movement: 'flee', ...cfg }, ctx.speedMultiplier, mark, ctx.deltaTime);
     }
+  },
+
+  exit(enemy) {
+    clearFalter(enemy);
   },
 
   next(enemy, ctx, machine) {
@@ -112,7 +119,8 @@ export default {
     // require the enemy to be facing its pursuer.
     if (cfg.cornered) {
       const cornerRange = cfg.cornerRange ?? enemy.attackRange;
-      if (ctx.effectiveDistance <= cornerRange && enemy.attackTimer <= 0 && ctx.canStrike) {
+      if (ctx.effectiveDistance <= cornerRange && enemy.attackTimer <= 0 && ctx.canStrike
+          && !isFaltering(enemy)) {
         return { id: cfg.cornerTo ?? 'anticipate', cause: 'cornered' };
       }
     }

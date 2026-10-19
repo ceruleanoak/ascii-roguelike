@@ -6,7 +6,8 @@
 // so the archetype stops being a property of the enemy and becomes a property of
 // this one State, which is what lets a single enemy orbit here and close in
 // Strike.
-import { applyStateMovement } from '../enemyMovement.js';
+import { applyStateMovement, moveStill } from '../enemyMovement.js';
+import { updateFalter, isFaltering, clearFalter } from './falter.js';
 
 export default {
   id: 'approach',
@@ -27,7 +28,17 @@ export default {
       enemy.memoryMoveDelayTimer = 0;
     }
 
+    // A Falter (falter.js) stops the approach for a beat; the mark above
+    // still refreshes, so the Enemy keeps track of the target while it stands.
+    if (updateFalter(enemy, ctx, cfg)) {
+      moveStill(enemy);
+      return;
+    }
     applyStateMovement(enemy, { movement: 'close', ...cfg }, ctx.speedMultiplier, ctx.targetPos, ctx.deltaTime);
+  },
+
+  exit(enemy) {
+    clearFalter(enemy);
   },
 
   next(enemy, ctx, machine) {
@@ -50,7 +61,9 @@ export default {
     // because an enemy that has closed to arm's length is committing whether or
     // not its nose happens to be pointed at you. Ordering this below the sight
     // test would give every keeper and kiter a free pass out of every attack.
-    if (ctx.effectiveDistance <= enemy.attackRange && enemy.attackTimer <= 0 && ctx.canStrike) {
+    // A faltering Enemy waits out its beat before committing.
+    if (ctx.effectiveDistance <= enemy.attackRange && enemy.attackTimer <= 0 && ctx.canStrike
+        && !isFaltering(enemy)) {
       return { id: 'anticipate', cause: 'in attack range, off cooldown' };
     }
 
