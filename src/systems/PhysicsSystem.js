@@ -274,7 +274,9 @@ export class PhysicsSystem {
     const scaledForce = force * (1 - resistance);
     entity.velocity.vx = nx * scaledForce;
     entity.velocity.vy = ny * scaledForce;
-    entity.applyStatusEffect?.('knockback', duration);
+    // Only enemies carry the knockback status (it idles their AI); the
+    // player's knockback is the velocity alone (bug #416).
+    if (entity.statusEffects?.knockback) entity.applyStatusEffect('knockback', duration);
 
     // Knocked away interrupts in-flight telegraphs (attack windup, charge
     // windup/dash) so they don't resume mid-air or fire on landing. The AI
