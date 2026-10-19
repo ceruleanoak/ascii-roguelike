@@ -587,6 +587,14 @@ export class BossSystem {
   _onLakeBossDefeated() {
     this._clearLakeArena();
     this.game.zoneSystem.markBossDefeated(this.zone);
+    // The lake reached through the Aquifer is entered already cleared (the
+    // Maw sleeps as a Maw Shadow until fished awake), so the room-clear pass
+    // that re-dresses a zone Boss room's exits never runs again for it. Do it
+    // here, at the kill, so its exits take the completed-zone / post-Goo-Dragon
+    // colors like any other zone Boss room. A natural lake visit is cleared
+    // after this and simply re-dresses once more under the same rules.
+    this.game.exitSystem.recolorExitsAfterZoneBoss(this.game.currentRoom);
+    this.game.renderer.markBackgroundDirty();
     const enemies = this.game._activeEnemies();
     for (let i = enemies.length - 1; i >= 0; i--)
       if (enemies[i] === this.lakeBoss) enemies.splice(i, 1);
