@@ -1,5 +1,4 @@
 import { GRID, BACKGROUND_OBJECT_VARIANTS, POISONED_WATER_DURATION } from '../game/GameConfig.js';
-import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { isInteriorActive } from './PlaneSystem.js';
 
 // Water/lava elemental reactions to a projectile hit — split out of
@@ -13,8 +12,8 @@ export const WaterLavaHitMechanic = {
   // Water state transitions from projectiles. Environmental terrain
   // (BackgroundObject.isEnvironmental()) never spawns a damage number — each
   // branch already has its own feedback: the tile's own color/char changes
-  // with waterState, a steam cloud puffs, or a new obsidian rock appears in
-  // place. Also handles a freeze (water) attack hitting lava.
+  // with waterState (ice melting included), or a steam cloud puffs. Also
+  // handles a freeze (water) attack hitting lava.
   applyHit(proj, obj, backgroundObjects, combat) {
     if (obj.isWater && obj.isWater()) {
       if (proj.onHit === 'freeze') {
@@ -26,9 +25,12 @@ export const WaterLavaHitMechanic = {
           { tileDuration: 4.0, hutPlane: isInteriorActive(combat.game) });
       } else if (proj.onHit === 'burn') {
         if (obj.getWaterState() === 'frozen') {
-          // Fire + frozen water/ice → create obsidian rock
-          const obsidianRock = new BackgroundObject('0', obj.position.x, obj.position.y, { obsidian: true });
-          backgroundObjects.push(obsidianRock);
+          // Fire melts ice, the same thaw a burning melee swing gives
+          // (CombatSystem's melee water branch). This used to spawn an obsidian
+          // '0' on the tile instead — and since water is pass-through, a fire
+          // arrow crossing the Frosted Maw's frozen sheet dropped a rock on the
+          // first frozen tile it touched and then stopped dead against it.
+          obj.setWaterState('normal', 0);
         } else {
           // Fire hits liquid water → steam cloud
           combat.newSteamClouds.push({
