@@ -273,6 +273,8 @@ export class BoulderSystem {
         }
       }
 
+      this._crushLightweight(r);
+
       // A rolling rock breaks anything a bomb breaks (Bombable Rocks and
       // Walls, a bombable Vault wall) and strikes a Puzzle Room switch; either
       // way the rock is spent on what it hit.
@@ -377,6 +379,22 @@ export class BoulderSystem {
       return true;
     }
     return false;
+  }
+
+  // Lightweight objects (bushes, brambles, mushrooms, tall grass) are crushed
+  // flat by a rolling rock that touches them, and the rock rolls on — unlike
+  // _strikeFixtures, nothing here spends it. Tall grass goes through the
+  // blade path, so it flattens to cut grass the way a sword leaves it.
+  _crushLightweight(r) {
+    const game = this.game;
+    for (const obj of game._activeBackgroundObjects()) {
+      if (!obj.data?.lightweight || obj.destroyed || obj.destroyAfterAnimation) continue;
+      const dx = (obj.position.x + GRID.CELL_SIZE / 2) - r.x;
+      const dy = (obj.position.y + GRID.CELL_SIZE / 2) - r.y;
+      if (dx * dx + dy * dy >= HIT_RADIUS * HIT_RADIUS) continue;
+      const result = obj.takeDamage(obj.hp ?? 0, true);
+      if (result.effect) game.combatSystem.objectDestroyEvents.push({ obj, effect: result.effect });
+    }
   }
 
   _makeRock(x, y, direction, vx, vy, space) {

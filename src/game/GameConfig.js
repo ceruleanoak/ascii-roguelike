@@ -202,6 +202,7 @@ export const BACKGROUND_OBJECTS = {
   '%': {
     ...BRUSH,
     name: 'Shrub',
+    lightweight: true, // a Rolling rock crushes it and rolls on (BoulderSystem._crushLightweight)
     color: '#228822',
     hp: 3,
     dropEffect: 'destroyObject:spawnIngredient:|',
@@ -283,6 +284,7 @@ export const BACKGROUND_OBJECTS = {
 
   '&': {
     name: 'Bush',
+    lightweight: true, // a Rolling rock crushes it and rolls on (BoulderSystem._crushLightweight)
     color: '#336633',
     hp: 3,
     dropEffect: 'destroyObject:spawnIngredient:|',
@@ -396,6 +398,7 @@ export const BACKGROUND_OBJECTS = {
   '+': {
     ...BRUSH,
     name: 'Brambles',
+    lightweight: true, // a Rolling rock crushes it and rolls on (BoulderSystem._crushLightweight)
     color: '#557733',
     hp: 1,
     dropEffect: 'destroyObject:spawnIngredient:~',
@@ -422,6 +425,7 @@ export const BACKGROUND_OBJECTS = {
   },
   'n': {
     name: 'Mushroom',
+    lightweight: true, // a Rolling rock crushes it and rolls on (BoulderSystem._crushLightweight)
     color: '#cc6666',
     hp: 1,
     dropEffect: 'destroyObject:spawnIngredient:g',
@@ -719,6 +723,7 @@ export const BACKGROUND_OBJECTS = {
   },
   '|': {
     name: 'Tall Grass',
+    lightweight: true, // a Rolling rock crushes it and rolls on (BoulderSystem._crushLightweight)
     color: '#559944',
     // hp:2 only matters to non-blade cutters (axes, at half damage — see
     // CombatSystem's smashDamage calc). True blades (isBlade: true) never

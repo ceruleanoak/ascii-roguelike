@@ -1342,6 +1342,16 @@ identity, not standard programming terms.
   Stump (`ŋ`). Those may share a look or a placement group in `RoomGenerator`, but not
   Brush's rules.
 
+### Lightweight
+- **Definition:** A Background Object light enough that a Rolling rock crushes it and rolls on
+  without stopping. Members: Shrub (`%`), Bush (`&`), Brambles (`+`), Mushroom (`n`) and Tall
+  Grass (`|`, which is flattened to cut grass rather than destroyed). A crushed object gives
+  its usual drop.
+- **In code:** `lightweight: true` on the `BACKGROUND_OBJECTS` entry
+  (`src/game/GameConfig.js`), read by `BoulderSystem._crushLightweight`.
+- **Not:** Brush (a separate rule set about which weapons clear it; the two overlap in
+  members only), or anything a bomb breaks (which spends the rock instead).
+
 ### Weapon Timing
 - **Definition:** The multi-phase cycle of a melee/ranged weapon attack: Windup (startup delay
   before damage), Recovery (cooldown after impact), and optional Reload/Charge phases for
@@ -1575,7 +1585,8 @@ identity, not standard programming terms.
 ### Rolling rock
 - **Definition:** A rock rolling along one cardinal axis. It hurts whatever it hits, players
   and enemies alike, and it is spent on anything a bomb breaks (a Bombable Rock or Bombable
-  wall, a bombable Vault wall) or on a Puzzle Room switch. It bounces back off walls along the
+  wall, a bombable Vault wall) or on a Puzzle Room switch. It crushes Lightweight objects
+  in its path and keeps rolling. It bounces back off walls along the
   same axis and turns at a Deflector. The red zone's rockfall drops them. The Onyx Hammer knocks
   an unbreakable rock loose into one, and any hammer hitting one that is already rolling sends
   it back the way the strike points; both hammer cases give a hammer-rolled rock, with the same
@@ -1585,7 +1596,8 @@ identity, not standard programming terms.
   space. `empowered` = hammer-rolled (×2 speed, not ×2 damage). Rocks are started by
   `rollFromRest(attack, obj)` (the weapon flag `rollsRock`; the target must pass
   `isHammerRollable`, i.e. obsidian or `data.hammerRollable` and not `structural`/`surfaceOnly`).
-  `_strikeFixtures` handles what they break, and `redirectProjectile` handles Deflector turns.
+  `_strikeFixtures` handles what they break, `_crushLightweight` what they flatten, and
+  `redirectProjectile` handles Deflector turns.
   Drawn by the `rollingRocks` Frame Pass (`src/rendering/effects/RollingRockDraw.js`).
 - **Not:** a Push Rock (which slides one cell and ignores the hammer). "Boulder" is the
   code name only.
