@@ -432,6 +432,27 @@ async function validatePuzzleTemplate(data) {
     }
   }
 
+  // Unbreakable Rocks — optional Cavern Rocks the Onyx Hammer rolls (the
+  // Hammer Trial); Deflectors — optional { row, col, char } triangles that
+  // turn a rolling rock or a shot. Both sit on plain floor.
+  for (const [field, label] of [['unbreakableRocks', 'unbreakableRock'], ['deflectors', 'deflector']]) {
+    if (data[field] === undefined) continue;
+    if (!Array.isArray(data[field])) return `${field} must be an array.`;
+    for (let i = 0; i < data[field].length; i++) {
+      const p = data[field][i];
+      if (!p || typeof p !== 'object') return `${label} ${i} must be an object.`;
+      if (!Number.isInteger(p.row) || p.row < 1 || p.row > PUZZLE_ROWS - 2) return `${label} ${i} row out of bounds.`;
+      if (!Number.isInteger(p.col) || p.col < 1 || p.col > PUZZLE_COLS - 2) return `${label} ${i} col out of bounds.`;
+      const key = `${p.row},${p.col}`;
+      if (seen.has(key)) return `${label} ${i} shares a cell with another fixture.`;
+      seen.add(key);
+      const cellChar = data.grid[p.row][p.col];
+      if (cellChar !== '.') return `${label} ${i} at (${p.row},${p.col}) must sit on plain floor ('.'), not "${cellChar}".`;
+      if (field === 'deflectors' && !['◢', '◣', '◤', '◥'].includes(p.char)) return `deflector ${i} char must be one of ◢ ◣ ◤ ◥.`;
+    }
+  }
+  if (data.solverExempt !== undefined && data.solverExempt !== true) return 'solverExempt must be true or absent.';
+
   // Torches — optional, DECORATIVE maze-parity fixtures (contrast the
   // torch-KIND trigger above, which looks the same but gates the exit);
   // also sit on plain floor. `lit` is an optional starting-state flag.

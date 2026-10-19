@@ -103,9 +103,11 @@ the hallway until it rolls. No melee strike or straight shot can reach the switc
 - **Switch vs. projectiles:** the switch at (6,21) is walled on three sides, and the only way
   in is the lava hallway, which rock A plugs until it rolls. No bow or boomerang line reaches it.
 
-## Known gap
+## Editing
 
-The dungeon editor saves a template's data whole, so `unbreakableRocks`, `deflectors` and
-`solverExempt` survive a re-save. It has no tools for them, though, and doesn't draw the rocks or
-the Deflector, so they can only be moved by editing the JSON. The `=` Lava tile comes from
-`tiles.js`, so the editor can already paint it.
+The dungeon editor's puzzle mode places all of it: the **Unbreakable Rock** tool toggles a
+rock on a floor cell, the **Deflector** tool places `◢` and each further click turns it to
+the next facing (◢ ◣ ◤ ◥, then removes it), and the **Solver-exempt** checkbox sets
+`solverExempt`. Validation rejects rocks or Deflectors off plain floor, two on one cell, a
+Deflector char outside the four facings, and any `solverExempt` value other than `true`. The
+`=` Lava tile comes from `tiles.js`, so the editor paints it like any other tile.
