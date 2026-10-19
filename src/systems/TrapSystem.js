@@ -172,6 +172,9 @@ export class TrapSystem {
   // A trap in a quick slot carries a per-room charge count rather than being
   // consumed outright. Charges are refilled on room entry from every copy the
   // player owns, so crafting more of a trap raises how many can be deployed.
+  // Each copy is worth its authored `charges` (3 for most traps, 1 for the
+  // one-per-room wires and remotes) — the same number a freshly crafted trap
+  // shows, so the count doesn't drop on the first room entry (bug #414).
 
   // Can the held item be deployed right now?
   canUseTrap() {
@@ -202,9 +205,18 @@ export class TrapSystem {
     if (!player) return;
     for (const slot of player.quickSlots) {
       if (slot?.data?.type === 'TRAP') {
-        slot.charges = this.countHeldTraps(slot.char);
+        slot.charges = this.roomCharges(slot);
       }
     }
+  }
+
+  // A slotted trap's full per-room charge count: authored charges per copy
+  // owned, plus the character's trap affinity bonus (Gray Assassin's +1, the
+  // same bonus Player.pickupItem grants a newly picked-up trap).
+  roomCharges(item) {
+    const perCopy = item.data.charges ?? 3;
+    const bonus = this.game.player?.weaponAffinities?.trap?.additionalCharge ?? 0;
+    return perCopy * this.countHeldTraps(item.char) + bonus;
   }
 
   // Total copies of a trap the player owns: quick slots plus chest storage
