@@ -10,6 +10,7 @@ import {
 } from './PlaneSystem.js';
 import { clearStatusEffect } from './StatusEffects.js';
 import { applyLavaContact } from './LavaContact.js';
+import { isOnMetalPlatform, metalPlatformCovers } from './MetalPlatformSystem.js';
 import { wetPipCount, wetPipSpeed } from './StatusEffectSystem.js';
 import { destroyWetOils } from './ConsumableSlotBreaks.js';
 import { ChargeMechanic } from '../entities/enemyMechanics/ChargeMechanic.js';
@@ -408,6 +409,7 @@ export class PhysicsSystem {
 
     if (!isProjectile && !entity.ignoreBackgroundCollision && backgroundObjects && backgroundObjects.length > 0) {
       const entityPlane = terrainPlaneOf(entity);
+      const metalPlatform = room?.metalPlatform;
       for (const obj of backgroundObjects) {
         if (obj.destroyed) continue;
         if (!objectOnPlane(obj, entityPlane)) continue;
@@ -442,6 +444,8 @@ export class PhysicsSystem {
             const isMudObj  = obj.typeId ? (obj.typeId === 'mud_dry' || obj.typeId === 'mud_wet')
                                          : (obj.isDryMud || obj.slowing === true);
             const isHotWaterObj = obj.typeId === 'hot_water';
+            // Lava under the Metal Platform is covered: look past it.
+            if (isLavaObj && metalPlatform && metalPlatformCovers(metalPlatform, obj)) continue;
 
             // Mud activation: dry → wet after 15 frames (~0.25s) of overlap
             // so the player sees the color shift before the slowdown kicks in.
@@ -606,6 +610,11 @@ export class PhysicsSystem {
     // FloatingBootsSystem drains the boots' charge from it, and it would
     // otherwise read dry ground under the player's own float. Only the
     // Player declares floatCharge (the boots' wearer), so only it records this.
+    // Metal Platform (Island lava lake): an entity over the plate stands on
+    // metal, not the lava under it — no burn, and no float charge spent.
+    if (damagingLiquid && room?.metalPlatform && isOnMetalPlatform(room.metalPlatform, entity)) {
+      damagingLiquid = null;
+    }
     const overLiquid = inLiquid || inMud || !!damagingLiquid;
     if (entity.floatCharge !== undefined) entity.overLiquid = overLiquid;
     const hasFloat = (overLiquid && entity.floatCharge > 0) || (entity.data?.float) || entity.leapAirborneActive;
