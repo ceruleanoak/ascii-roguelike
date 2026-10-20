@@ -3,6 +3,7 @@ import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher
 import { drawUndead } from '../ui/UndeadRenderer.js';
 import { drawFramePasses } from '../framePasses.js';
 import { drawSunkenGlints } from '../effects/SparkleEffects.js';
+import { drawVisionFogOverlay } from '../ui/torchLight.js';
 
 /**
  * NeutralRenderer - Renders NEUTRAL state (Leshy Grove, Oasis, Three Room, ...)
@@ -180,6 +181,11 @@ export class NeutralRenderer {
     }
 
     drawFramePasses(this.renderController, game, 'neutral', 'indicators');
+
+    // Vision fog: an underwater room's dark (and the Lantern's glow) and the
+    // player's blind status, whichever is tighter — after everything in the
+    // room, as in EXPLORE.
+    drawVisionFogOverlay(this.renderer, game, false);
 
     // Script-specific rendering (if script provides onRender hook)
     if (game.neutralRoomSystem.currentScript && game.neutralRoomSystem.currentScript.onRender) {

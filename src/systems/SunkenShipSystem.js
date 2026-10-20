@@ -19,6 +19,11 @@ import { flagSunkenGlints } from './SunkenGlintSystem.js';
  *     often than the rest. Finding it opens a secret south exit — no message,
  *     only the shockwave and the gap in the wall.
  *
+ *   - The secret south leads down into the Sunken Hold, an Inner Room
+ *     (NeutralRoomSystem.enterInnerRoom): the wreck's flooded underside, all
+ *     deep water and pitch dark (`room.underwater` — torchLight), where SPACE
+ *     only swings (`room.interactionsOff`). Only a Lantern lights it.
+ *
  * The room is rebuilt from scratch on every entry (NeutralRoomSystem), so
  * what the player has done here lives in the run-scoped `game.sunkenShip`
  * (Reset Registry) and build() replays it: rock already pushed, Flippers
@@ -123,7 +128,28 @@ export class SunkenShipSystem {
 
     this._placeRock(room, state);
     this._placeGlints(room, state, holdTiles);
-    if (state.southOpen) room.exits.south = true;
+    if (state.southOpen) this._southExit(room);
+  }
+
+  /**
+   * The Sunken Hold script's onGenerate: the flooded underside of the wreck.
+   * Every cell is deep water in the hold's own dark blue, and nothing in it
+   * can be interacted with — the dark is the room.
+   */
+  buildHold(room) {
+    const cs = GRID.CELL_SIZE;
+    room.isSunkenHold = true;
+    room.underwater = true;
+    room.interactionsOff = true;
+    room.borderColor = SHIP_COLOR;
+
+    for (let row = 1; row < GRID.ROWS - 1; row++) {
+      for (let col = 1; col < GRID.COLS - 1; col++) {
+        const water = new BackgroundObject('~', col * cs, row * cs, { deepWater: true });
+        water.color = HOLD_WATER_COLOR;
+        room.backgroundObjects.push(water);
+      }
+    }
   }
 
   /**
@@ -256,12 +282,18 @@ export class SunkenShipSystem {
     }
   }
 
+  // The open south wall, and the Sunken Hold it leads down into.
+  _southExit(room) {
+    room.exits.south = true;
+    room.innerExits = { south: 'sunkenHold' };
+  }
+
   // The secret south: no words, just the wall giving way.
   _openSouth(room, state) {
     const game = this.game;
     const cs = GRID.CELL_SIZE;
     state.southOpen = true;
-    room.exits.south = true;
+    this._southExit(room);
     game.updateExitCollisions();
     game.renderer.markBackgroundDirty();
     game.playerShockwave = {

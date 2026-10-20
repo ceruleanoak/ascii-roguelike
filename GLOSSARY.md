@@ -195,7 +195,7 @@ identity, not standard programming terms.
   sea drowns anyone without Flippers, and the Flippers lie under a Push Rock on the beach. The
   flooded hold holds seven Sunken Glints, one of them the Slow Glint. The Room is rebuilt on
   every entry, but what the run did there (rock pushed, Flippers taken, glints spent, south open)
-  holds for the run.
+  holds for the run. The secret south leads down into the Sunken Hold.
 - **In code:** neutral script `sunkenShip` (`neutralRooms.js`), laid out and ticked by
   `SunkenShipSystem` (`build`, `update` from `updateNeutralState`); `room.isSunkenShip`; hull
   pieces are the `ship_hull` Background Object variant; run record `game.sunkenShip` (Reset
@@ -211,6 +211,30 @@ identity, not standard programming terms.
   `SLOW_GLINT_CYCLE` (SparkleEffects); `SunkenShipSystem.update` opens `room.exits.south` when its
   flag clears.
 - **Not:** a separate entity or object kind (it is a Sunken Glint with one more flag).
+
+### Sunken Hold
+- **Definition:** The Sunken Ship's Inner Room, through the secret south the Slow Glint opens: the
+  flooded underside of the wreck. Every cell is deep water and the Room is near-totally dark — the
+  player sees about a cell around themself, five with a Lantern, and a Torch gives no light. SPACE
+  only swings and picks up; nothing in the Room can be interacted with. Its north exit climbs back
+  into the Sunken Ship.
+- **In code:** neutral script `sunkenHold` (`neutralRooms.js`), laid out by
+  `SunkenShipSystem.buildHold`; `room.isSunkenHold`, `room.underwater` (read by
+  `torchLight.underwaterFogRadius`), `room.interactionsOff` (the NEUTRAL SPACE chain).
+- **Not:** the ship's hold — the flooded inside of the hull in the Sunken Ship itself, where the
+  glints lie; an Interior (the Sunken Ship is not frozen behind it — it is rebuilt on return).
+
+### Inner Room
+- **Definition:** A neutral Room reached from inside another neutral Room rather than from
+  EXPLORE or REST. Stepping in and out of it never touches the Room saved on the way into the outer
+  Room, so the outer Room's own return exit still leads where it did. The outer Room is rebuilt
+  from its script on the way back, like any neutral Room on entry.
+- **In code:** the outer Room declares `room.innerExits = { <edge>: '<script>' }`;
+  `NeutralRoomSystem.innerExitAt` / `enterInnerRoom` / `returnToOuterRoom`, dispatched from
+  `updateNeutralState`; the inner Room carries `room.outerRoom = { scriptName, entryDirection }`;
+  `transitionToNeutralRoom(..., { inner: true })` skips the `savedExploreState` save.
+- **Not:** an Interior (no PiP, no frozen surface); the `savedExploreState.returnTo` handshake
+  (which drops the saved Room for a fresh one in another Zone).
 
 ### Plane
 - **Definition:** Which layer of a **live** Room an entity is on — surface (0) or tunnel/cave

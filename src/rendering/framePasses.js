@@ -150,7 +150,7 @@ export const FRAME_PASSES = {
     { id: 'echo', on: { ...everywhere, rest: ECHO_AWAY }, draw: (rc, game) => drawEcho(rc.renderer, game) },
     {
       id: 'torchLight',
-      on: { surface: 'surface torch light is the cave-fog torch boost (drawVisionFogOverlay)', floor: true, maze: true, rest: NO_DARK, neutral: NO_DARK },
+      on: { surface: 'surface torch light is the cave-fog torch boost (drawVisionFogOverlay)', floor: true, maze: true, rest: NO_DARK, neutral: 'neutral light is the underwater Lantern glow (drawVisionFogOverlay)' },
       draw: (rc, game) => {
         if (!hasTorchLight(game)) return;
         drawPlayerTorchLight(rc.renderer,

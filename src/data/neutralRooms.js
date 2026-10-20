@@ -443,6 +443,22 @@ export const NEUTRAL_ROOMS = {
   },
 
   /**
+   * Sunken Hold — the Sunken Ship's Inner Room, through its secret south.
+   * Laid out by SunkenShipSystem.buildHold.
+   */
+  sunkenHold: {
+    onGenerate(room, state, roomGenerator) {
+      roomGenerator?.game?.sunkenShipSystem.buildHold(room);
+    },
+
+    onInteract(target, player, room, state) { return null; },
+
+    onUpdate(dt, room, player, state) {},
+
+    onExit(room, player, state) {}
+  },
+
+  /**
    * Three Room — the source. An emptied room, mist cleared, holding the three
    * slots in a pyramid and one shut way north. Typing here holds a
    * conversation instead of an observation (spells.js "The Three"). SPACE

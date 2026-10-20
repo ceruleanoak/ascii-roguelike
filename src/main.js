@@ -1129,10 +1129,12 @@ class Game {
     return this.player.quickSlots.every(slot => slot === null);
   }
 
-  transitionToNeutralRoom(scriptName, entryDirection = 'north') {
+  // `inner` hops between a neutral room and its Inner Room (NeutralRoomSystem
+  // .enterInnerRoom): the room saved on the way into the outer room stays saved.
+  transitionToNeutralRoom(scriptName, entryDirection = 'north', { inner = false } = {}) {
 
     // Save current explore state (for return via the entry-edge exit)
-    this.savedExploreState = {
+    if (!inner) this.savedExploreState = {
       room: this.currentRoom,
       items: [...this.items],
       ingredients: [...this.ingredients],
@@ -1696,6 +1698,21 @@ class Game {
     // Limited Explore: the same world tick as EXPLORE — liquids and drowning,
     // enemies, combat, the death catch-all, world effects and companions.
     if (this._updateRoomWorld(deltaTime, dotKilledPlayer)) return;
+
+    // An Inner Room's way in, or — from inside one — the way back out.
+    const innerExit = !this.animationSystem.isAnimating(this.player) &&
+      this.neutralRoomSystem.innerExitAt(this.currentRoom, this.player);
+    if (innerExit) {
+      this.animateExitWarp(innerExit.edge,
+        () => this.neutralRoomSystem.enterInnerRoom(this, innerExit.script, innerExit.edge));
+      return;
+    }
+    if (this.currentRoom.outerRoom && !this.animationSystem.isAnimating(this.player) &&
+        this.neutralRoomSystem.isInReturnExit(this.currentRoom, this.player)) {
+      this.animateExitWarp(this.currentRoom.returnExit,
+        () => this.neutralRoomSystem.returnToOuterRoom(this));
+      return;
+    }
 
     // Standing in — or having just stepped into — the return exit's warp band.
     if (!this.animationSystem.isAnimating(this.player) &&

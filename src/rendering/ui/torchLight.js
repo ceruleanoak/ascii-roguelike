@@ -134,10 +134,11 @@ const blindFogRadius = (game) => {
   return BLIND_FOG_RADIUS_CELLS[Math.max(1, blind.stacks)] * CS;
 };
 
-// Surface pass (ExploreRenderer, drawn after all entities so it clips both fg
-// content and the bg canvas beneath): underground cave fog, underwater dark
-// and/or blind, whichever is tighter. Blind is skipped while the player is
-// inside an interior — the PiP draws its own (drawInteriorVisionFogOverlay).
+// Surface pass (ExploreRenderer and NeutralRenderer, drawn after all entities
+// so it clips both fg content and the bg canvas beneath): underground cave
+// fog, underwater dark and/or blind, whichever is tighter. Blind is skipped
+// while the player is inside an interior — the PiP draws its own
+// (drawInteriorVisionFogOverlay).
 export function drawVisionFogOverlay(renderer, game, playerInInterior) {
   const player = game.player;
   if (!player) return;

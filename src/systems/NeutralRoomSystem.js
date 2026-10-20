@@ -94,6 +94,9 @@ export class NeutralRoomSystem {
       backgroundObjects: [],
       exits: { north: false, east: false, west: false, south: false, [returnExit]: true },
       returnExit,
+      // Kept so an Inner Room can rebuild this room when the player walks back.
+      scriptName,
+      entryDirection,
       exitsLocked: false,
       cleared: true // Always cleared (no enemies)
     };
@@ -122,6 +125,11 @@ export class NeutralRoomSystem {
    */
   isInReturnExit(room, player) {
     const edge = room?.returnExit || 'south';
+    return this._isInExitBand(room, player, edge);
+  }
+
+  // The warp-band test for any open edge of a neutral room.
+  _isInExitBand(room, player, edge) {
     if (!room?.exits?.[edge]) return false;
 
     const grid = player.getGridPosition();
@@ -221,6 +229,42 @@ export class NeutralRoomSystem {
     game.updateExitCollisions();
     game.renderer.markBackgroundDirty();
     game.stateMachine.currentState = saved?.returnState || GAME_STATES.EXPLORE;
+  }
+
+  /**
+   * Inner Rooms — a neutral room reached from inside another neutral room
+   * (the Sunken Hold, through the Sunken Ship's secret south). The outer room
+   * declares the way in as `room.innerExits = { <edge>: '<script>' }`; this
+   * returns the one the player is standing in, if any.
+   */
+  innerExitAt(room, player) {
+    for (const [edge, script] of Object.entries(room?.innerExits || {})) {
+      if (this._isInExitBand(room, player, edge)) return { edge, script };
+    }
+    return null;
+  }
+
+  /**
+   * Step from a neutral room into one of its Inner Rooms. The room saved on
+   * the way into the outer room (savedExploreState) is left alone — it is
+   * still where the outer room's own return exit leads — and the inner room
+   * remembers how to rebuild the outer one, since neutral rooms are generated
+   * fresh on every entry and keep what matters in run-scoped state.
+   */
+  enterInnerRoom(game, scriptName, edge) {
+    const outer = game.currentRoom;
+    const outerRoom = { scriptName: outer.scriptName, entryDirection: outer.entryDirection };
+    game.transitionToNeutralRoom(scriptName, edge, { inner: true });
+    game.currentRoom.outerRoom = outerRoom;
+    // Already NEUTRAL, so the state machine runs no enter handler to do this.
+    game.renderer.markBackgroundDirty();
+  }
+
+  /** Walk back out of an Inner Room into a rebuilt outer room. */
+  returnToOuterRoom(game) {
+    const { scriptName, entryDirection } = game.currentRoom.outerRoom;
+    game.transitionToNeutralRoom(scriptName, entryDirection, { inner: true });
+    game.renderer.markBackgroundDirty();
   }
 
   handleInteraction(target, player, room) {
