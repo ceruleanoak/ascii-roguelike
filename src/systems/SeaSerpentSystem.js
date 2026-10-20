@@ -1,6 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { SeaSerpentUnit } from '../entities/SeaSerpentUnit.js';
 import { Item } from '../entities/Item.js';
+import { surfaceVisionRadius } from '../rendering/ui/torchLight.js';
 
 /**
  * Sea Serpents — the twin hidden boss of the Sunken Hold, and the Centipede
@@ -25,6 +26,11 @@ import { Item } from '../entities/Item.js';
  *     serpent carries (one HP bar per serpent, SeaSerpentHealthBars). Iframes
  *     are the serpent's, not the segment's: a swing that overlaps several
  *     segments lands once. Touching any part of the serpent hurts.
+ *
+ * Boss music: the full boss sequence starts the first frame any segment is
+ * inside the player's vision (the Hold's dark — surfaceVisionRadius), and
+ * stops when both serpents die (zone music resumes after a beat, as after a
+ * zone boss) or the player leaves the Hold with them alive.
  *
  * Both dead → the Moon Pearl drops, and `game.sunkenShip.serpentsSlain` keeps
  * them dead for the run. A Moon Pearl left on the floor is put back on the
@@ -74,6 +80,8 @@ export class SeaSerpentSystem {
   constructor(game) {
     this.game = game;
     this._nextId = 1;
+    // The Hold whose sighting started the boss music, until it is stopped.
+    this._bossMusicRoom = null;
   }
 
   // ── Spawn ──────────────────────────────────────────────────────────────
@@ -135,6 +143,7 @@ export class SeaSerpentSystem {
   // ── Frame update ───────────────────────────────────────────────────────
   update(deltaTime) {
     const room = this.game.currentRoom;
+    this._updateBossMusic(room);
     if (!room?.seaSerpents) return;
 
     // Picked up: the Moon Pearl is the run's.
@@ -278,6 +287,44 @@ export class SeaSerpentSystem {
     }
   }
 
+  // ── Boss music ─────────────────────────────────────────────────────────
+  _updateBossMusic(room) {
+    const audio = this.game.audioSystem;
+    if (this._bossMusicRoom) {
+      // Something else already took the output back (death, REST): let go.
+      if (audio.mode !== 'sequence') { this._bossMusicRoom = null; return; }
+      // Walked out of the Hold with the serpents still alive.
+      if (room !== this._bossMusicRoom) this._endBossMusic();
+      return;
+    }
+    if (room?.seaSerpents?.length && this._serpentInSight(room)) {
+      audio.startBossSequence();
+      if (audio.mode === 'sequence') this._bossMusicRoom = room;
+    }
+  }
+
+  // True when any segment's center is inside the player's vision radius.
+  _serpentInSight(room) {
+    const player = this.game.player;
+    if (!player) return false;
+    const radius = surfaceVisionRadius(this.game);
+    const px = player.position.x + CS / 2, py = player.position.y + CS / 2;
+    return room.seaSerpents.some(serpent => serpent.units.some(u =>
+      Math.hypot(u.position.x + CS / 2 - px, u.position.y + CS / 2 - py) < radius));
+  }
+
+  // Stop the boss sequence and let zone music back in after a beat — the
+  // same frame-polled resume BossSystem queues after a zone boss falls.
+  _endBossMusic() {
+    this._bossMusicRoom = null;
+    const audio = this.game.audioSystem;
+    audio.stopBossMusic();
+    this.game.pendingZoneMusicResume = {
+      readyAt: performance.now() + 1500,
+      zone: audio.currentMusicZone,
+    };
+  }
+
   // ── Hits ───────────────────────────────────────────────────────────────
   // From SeaSerpentUnit.takeDamage. Any segment spends the serpent's HP.
   // One attack lands once per serpent — a swing across five segments is one
@@ -293,6 +340,7 @@ export class SeaSerpentSystem {
     for (const u of serpent.units) u.invulnerabilityTimer = HIT_IFRAMES;
 
     serpent.hp -= amount;
+    this.game.audioSystem.onBossDamaged();
     if (serpent.hp > 0) return true;
     this._killSerpent(room, serpent);
     return true;
@@ -306,6 +354,7 @@ export class SeaSerpentSystem {
     if (room.seaSerpents.length > 0) return;
 
     this.game.sunkenShip.serpentsSlain = true;
+    if (this._bossMusicRoom) this._endBossMusic();
     this._placeMoonPearl(room, at, true);
   }
 

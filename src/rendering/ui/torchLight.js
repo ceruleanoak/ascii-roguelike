@@ -139,17 +139,31 @@ const blindFogRadius = (game) => {
 // fog, underwater dark and/or blind, whichever is tighter. Blind is skipped
 // while the player is inside an interior — the PiP draws its own
 // (drawInteriorVisionFogOverlay).
-export function drawVisionFogOverlay(renderer, game, playerInInterior) {
+/**
+ * How far the player can see on the surface pass, in px from their center —
+ * the tighter of cave fog, underwater dark and blind (Infinity = no fog).
+ * The fog overlay draws exactly this radius; gameplay that asks "can the
+ * player see it?" (e.g. the Sea Serpents' boss music) reads it too.
+ */
+export function surfaceVisionRadius(game, playerInInterior = false) {
   const player = game.player;
-  if (!player) return;
+  if (!player) return Infinity;
   const underground = !!(game.currentRoom?.underground && player.plane === 1);
   const torchLit = underground && hasTorchLight(game);
   const caveRadius = underground
     ? (game.currentRoom.underground.caveFogRadius || 5) * CS * (torchLit ? 1.5 : 1)
     : Infinity;
-  const underwaterRadius = underwaterFogRadius(game);
-  const fogRadius = Math.min(caveRadius, underwaterRadius,
+  return Math.min(caveRadius, underwaterFogRadius(game),
     playerInInterior ? Infinity : blindFogRadius(game));
+}
+
+export function drawVisionFogOverlay(renderer, game, playerInInterior) {
+  const player = game.player;
+  if (!player) return;
+  const underground = !!(game.currentRoom?.underground && player.plane === 1);
+  const torchLit = underground && hasTorchLight(game);
+  const underwaterRadius = underwaterFogRadius(game);
+  const fogRadius = surfaceVisionRadius(game, playerInInterior);
   if (fogRadius === Infinity) return;
 
   const px = player.position.x + CS / 2;
