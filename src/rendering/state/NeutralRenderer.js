@@ -4,6 +4,7 @@ import { drawUndead } from '../ui/UndeadRenderer.js';
 import { drawFramePasses } from '../framePasses.js';
 import { drawSunkenGlints } from '../effects/SparkleEffects.js';
 import { drawVisionFogOverlay } from '../ui/torchLight.js';
+import { drawSeaSerpentHealthBars } from '../ui/SeaSerpentHealthBars.js';
 
 /**
  * NeutralRenderer - Renders NEUTRAL state (Leshy Grove, Oasis, Three Room, ...)
@@ -128,6 +129,8 @@ export class NeutralRenderer {
     // Enemies a script places in the room, through the EXPLORE helpers.
     const explore = this.renderController.exploreRenderer;
     explore.drawNonSappingEnemies(game, game.currentRoom.enemies);
+    // The Sunken Hold's Sea Serpents: one HP bar per serpent, not per segment.
+    drawSeaSerpentHealthBars(this.renderer, game.currentRoom);
 
     // Draw neutral characters (Leshy, Fairy, etc.)
     for (const neutralChar of game.neutralCharacters) {

@@ -21,6 +21,8 @@ export function fieldGuideEquipped(game) {
 /** Draws "hp / maxHp" centered above the enemy. */
 export function drawFieldGuideHpLabel(renderer, enemy) {
   if (enemy.data?.isDummy || !(enemy.maxHp > 0)) return;
+  // A Sea Serpent segment holds no HP of its own; its serpent's bar shows it.
+  if (enemy.isSeaSerpentUnit) return;
   const hp = Math.max(0, Math.ceil(enemy.hp));
   renderer.drawEntityScaled(
     enemy.position.x + GRID.CELL_SIZE / 2,

@@ -2,10 +2,10 @@ import { Enemy } from './Enemy.js';
 
 const SERPENT_COLOR = '#2fbf8f';
 
-// One segment of a Sea Serpent — the head ('S', the weak point and the only
-// part that steers) or a tail segment ('o', which drags behind on a distance
-// constraint and turns every blow aside). Position, color and the head's HP
-// pool are owned by SeaSerpentSystem every frame; this class carries identity
+// One segment of a Sea Serpent — the head ('S', the only part that steers)
+// or a tail segment ('o', which drags behind on a distance constraint). Any
+// segment can be struck; every blow spends the serpent's one HP pool.
+// Position, color and that HP pool are owned by SeaSerpentSystem; this class carries identity
 // and the two overrides that opt out of Enemy's generic AI and damage
 // pipeline — the same shape as CentipedeUnit, which the Sea Serpent extends.
 export class SeaSerpentUnit extends Enemy {
@@ -29,7 +29,7 @@ export class SeaSerpentUnit extends Enemy {
       displayChar: isHead ? 'S' : 'o',
     });
 
-    // The head's HP pool lives on the serpent (SeaSerpentSystem); every unit
+    // The HP pool lives on the serpent (SeaSerpentSystem); every unit
     // stays at 1 so the world tick's removal pass never takes one on its own.
     this.hp = 1;
     this.maxHp = 1;
@@ -59,9 +59,9 @@ export class SeaSerpentUnit extends Enemy {
     return {};
   }
 
-  // Never dies through Enemy's pipeline: the head's hit lands on the
-  // serpent's HP pool, a tail hit is turned aside.
-  takeDamage(amount, attackId = null, opts = {}) {
-    return this.game.seaSerpentSystem.handleUnitHit(this, amount, attackId, opts);
+  // Never dies through Enemy's pipeline: every hit lands on the serpent's
+  // shared HP pool.
+  takeDamage(amount, attackId = null) {
+    return this.game.seaSerpentSystem.handleUnitHit(this, amount, attackId);
   }
 }

@@ -227,17 +227,17 @@ identity, not standard programming terms.
 ### Sea Serpent
 - **Definition:** The Sunken Hold's twin hidden boss — two of them, the red zone's Centipede
   miniboss carried underwater. Each is a head (`S`) and a tail of ten segments (`o`). They circle
-  the Hold aimlessly on opposite sides of one wandering, breathing orbit, and every few seconds one
-  stops, shivers and brightens (Anticipate), then dashes straight along the line it locked onto the
+  the Hold on opposite sides of one slowly wandering, breathing orbit in a long, readable sway, and
+  every few seconds one stops, shivers and brightens for over a second (Anticipate), then dashes straight along the line it locked onto the
   player (Strike) and eases back onto its orbit (Recover); the two never strike together. The tail
-  drags behind the head on a distance constraint, swinging rather than tracing the head's path. The
-  head is the weak point and holds the serpent's HP; the tail turns every blow aside, but touching
-  any part of a serpent hurts. Both dead → the Moon Pearl, and they stay dead for the Run.
+  drags behind the head on a distance constraint, swinging rather than tracing the head's path. Any
+  segment can be struck, and every blow spends the serpent's one HP pool (one HP bar per serpent,
+  over its head); one swing across several segments lands once. Touching any part hurts. Both dead → the Moon Pearl, and they stay dead for the Run.
 - **In code:** `SeaSerpentSystem` (`room.seaSerpents`, States `orbit`/`anticipate`/`strike`/
   `recover`, `spawnPair` from `SunkenShipSystem.buildHold`, `handleUnitHit`); `SeaSerpentUnit`
-  (`isSeaSerpentUnit`, `isHead`, `serpentId`) in `room.enemies`; `game.sunkenShip.serpentsSlain`.
-- **Not:** the Sea Snake (`s`, the green Ocean template's ordinary enemy); a Boss (no boss bar, no
-  boss loot — the Moon Pearl is the whole reward).
+  (`isSeaSerpentUnit`, `isHead`, `serpentId`) in `room.enemies`; `game.sunkenShip.serpentsSlain`;
+  bars drawn by `drawSeaSerpentHealthBars` (`SeaSerpentHealthBars.js`).
+- **Not:** the Sea Snake (`s`, the green Ocean template's ordinary enemy); a Boss (no boss loot — the Moon Pearl is the whole reward).
 
 ### Moon Pearl
 - **Definition:** The key item the two Sea Serpents leave in the Sunken Hold. Held, never equipped

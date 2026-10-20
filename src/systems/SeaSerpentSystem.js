@@ -11,18 +11,20 @@ import { Item } from '../entities/Item.js';
  *
  *   - Movement is one closed set of States inside each serpent's single
  *     machine: `orbit` → `anticipate` → `strike` → `recover` → `orbit`.
- *     Orbit is aimless: the head circles a center that drifts, at an angular
- *     rate that floats (two slow sines summed), on a radius that breathes,
- *     with a sideways wobble that makes the path serpentine. Every few
- *     seconds it stops, shivers and brightens (Anticipate), then dashes in a
- *     straight line along the vector it locked onto the player (Strike), and
- *     eases back onto its orbit (Recover).
+ *     Orbit is slow and readable: the head circles a center that drifts, at
+ *     an angular rate that floats gently on one slow sine, on a radius that
+ *     breathes, with a long sideways wave that makes the path serpentine.
+ *     Every few seconds it stops, shivers and brightens (Anticipate — long
+ *     enough to see coming), then dashes in a straight line along the vector
+ *     it locked onto the player (Strike), and eases back onto its orbit
+ *     (Recover).
  *   - The tail follows the leader: each segment is pulled to within SPACING of
  *     the one ahead, from the head backwards, every frame — so it drags and
  *     swings behind the head rather than tracing the head's path.
- *   - The head is the weak point and carries the serpent's HP pool. The tail
- *     can't be hurt (a blow on it is turned aside), but touching any part of
- *     the serpent hurts.
+ *   - Every segment can be struck, and every blow spends the one HP pool the
+ *     serpent carries (one HP bar per serpent, SeaSerpentHealthBars). Iframes
+ *     are the serpent's, not the segment's: a swing that overlaps several
+ *     segments lands once. Touching any part of the serpent hurts.
  *
  * Both dead → the Moon Pearl drops, and `game.sunkenShip.serpentsSlain` keeps
  * them dead for the run. A Moon Pearl left on the floor is put back on the
@@ -33,7 +35,7 @@ const CS = GRID.CELL_SIZE;
 
 const TAIL_LENGTH = 10;
 const SPACING = CS * 0.8;               // px between consecutive segments
-const HEAD_HP = 12;
+const SERPENT_HP = 12;
 const HEAD_CONTACT_DAMAGE = 3;
 const TAIL_CONTACT_DAMAGE = 2;
 const CONTACT_COOLDOWN = 0.6;           // s between contact hits, per serpent
@@ -42,28 +44,29 @@ const CONTACT_HITBOX_RATIO = 0.625;     // as CentipedeSystem — brushing past 
 // Orbit (all in cells / radians / seconds).
 const ORBIT_RADIUS = 8;
 const ORBIT_RADIUS_SWING = 2.5;         // the radius breathes ±this
-const ORBIT_RADIUS_FREQ = 0.31;
-const ORBIT_BASE_RATE = 0.45;           // rad/s
-const ORBIT_RATE_FLOAT = [[0.22, 0.37], [0.14, 0.91]]; // [amplitude, frequency] sines
-const WOBBLE = 0.9;                     // sideways wobble, cells
-const WOBBLE_FREQ = 2.1;
-const DRIFT = 2.5;                      // the orbit center wanders ±this
-const DRIFT_FREQ = [0.13, 0.17];
+const ORBIT_RADIUS_FREQ = 0.2;
+const ORBIT_BASE_RATE = 0.35;           // rad/s
+const ORBIT_RATE_FLOAT = [[0.08, 0.25]]; // [amplitude, frequency] sines — a gentle, readable float
+const WOBBLE = 1.6;                     // sideways wave, cells
+const WOBBLE_FREQ = 0.7;                // long wavelength: a slow, predictable sway
+const DRIFT = 2;                        // the orbit center wanders ±this
+const DRIFT_FREQ = [0.09, 0.11];
 const ORBIT_FOLLOW = 6;                 // how hard the head holds its orbit point
 const RECOVER_FOLLOW = 1.6;             // ... and how gently it eases back on
 
 // Strike cycle (real seconds — this system ticks on the frame's deltaTime).
-const STRIKE_INTERVAL = [3, 6];         // orbit time between strikes
+const STRIKE_INTERVAL = [4, 6];         // orbit time between strikes
 const STRIKE_STAGGER = 1.5;             // min gap after the other serpent strikes
-const ANTICIPATE_TIME = 0.6;
+const ANTICIPATE_TIME = 1.3;
 const ANTICIPATE_JITTER = 2;            // px
 const ANTICIPATE_COLOR = '#b8ffe6';
 const STRIKE_SPEED = 13 * CS;           // px/s
 const STRIKE_TIME = 0.45;
 const RECOVER_TIME = 1.4;
 
-// Head iframes after a hit, on the same (doubled) clock as Enemy's own.
-const HEAD_IFRAMES = 0.3;
+// Serpent iframes after a hit (set on every segment), on the same (doubled)
+// clock as Enemy's own.
+const HIT_IFRAMES = 0.3;
 
 const MOON_PEARL_CHAR = '☾';
 
@@ -98,7 +101,8 @@ export class SeaSerpentSystem {
     const id = this._nextId++;
     const serpent = {
       id,
-      hp: HEAD_HP,
+      hp: SERPENT_HP,
+      maxHp: SERPENT_HP,
       state: 'orbit',
       stateTimer: 0,
       nextStrike: this._rollStrikeInterval() + strikeDelay,
@@ -109,6 +113,7 @@ export class SeaSerpentSystem {
       hold: null,                  // where Anticipate pinned the head
       strikeDir: null,
       contactCooldown: 0,
+      lastHitAttackId: null,
       units: [],
     };
     const start = this._orbitPoint(serpent);
@@ -120,7 +125,6 @@ export class SeaSerpentSystem {
         serpentId: id,
         contactDamage: i === 0 ? HEAD_CONTACT_DAMAGE : TAIL_CONTACT_DAMAGE,
       });
-      if (i === 0) { unit.hp = HEAD_HP; unit.maxHp = HEAD_HP; }
       serpent.units.push(unit);
       // A neutral room keeps a single enemy list (no per-plane arrays).
       room.enemies.push(unit);
@@ -275,29 +279,21 @@ export class SeaSerpentSystem {
   }
 
   // ── Hits ───────────────────────────────────────────────────────────────
-  // From SeaSerpentUnit.takeDamage. The head spends the serpent's HP; a tail
-  // segment turns the blow aside.
-  handleUnitHit(unit, amount, attackId, opts) {
+  // From SeaSerpentUnit.takeDamage. Any segment spends the serpent's HP.
+  // One attack lands once per serpent — a swing across five segments is one
+  // hit, not five — and the iframes it starts cover (and blink) every segment.
+  handleUnitHit(unit, amount, attackId) {
     const room = this.game.currentRoom;
     const serpent = room?.seaSerpents?.find(s => s.id === unit.serpentId);
     if (!serpent) return false;
 
-    if (!unit.isHead) {
-      if (opts?.kind) {
-        this.game.combatSystem.createDamageNumber('DEFLECT', unit.position.x, unit.position.y, '#aaaaaa');
-      }
-      return false;
-    }
-
-    if (unit.invulnerabilityTimer > 0 && !(attackId !== null && attackId === unit.lastHitAttackId)) return false;
-    unit.lastHitAttackId = attackId;
-    unit.invulnerabilityTimer = HEAD_IFRAMES;
+    if (attackId != null && attackId === serpent.lastHitAttackId) return false;
+    if (unit.invulnerabilityTimer > 0) return false;
+    serpent.lastHitAttackId = attackId;
+    for (const u of serpent.units) u.invulnerabilityTimer = HIT_IFRAMES;
 
     serpent.hp -= amount;
-    if (serpent.hp > 0) {
-      unit.hp = serpent.hp;
-      return true;
-    }
+    if (serpent.hp > 0) return true;
     this._killSerpent(room, serpent);
     return true;
   }
