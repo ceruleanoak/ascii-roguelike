@@ -779,6 +779,18 @@ identity, not standard programming terms.
   lit, the object becomes `'!'` with `isCampfire` + `burning`, which `FireplaceSystem` reads.
 - **Not:** the Stick ingredient (`|`) itself; a Fire Trap; kindling fed to a Fireplace.
 
+### Lantern
+- **Definition:** A Torch in a metal cage (`♁`, Torch + Metal). It does everything a Torch does
+  (lights Maze torches and dungeon torch triggers, burns on hit, glows while carried, counts at a
+  Fireplace) and one thing more: it stays lit underwater, where a Torch goes out. Carried in any
+  quick slot, it widens an underwater Room's dark from about one cell to five.
+- **In code:** `ITEMS['♁']` (`weaponSubtype: 'torch'`, `lightsUnderwater: true`); every torch
+  read checks `weaponSubtype === 'torch'`, never the name. The underwater radius is
+  `underwaterFogRadius` / `isLightingUnderwater` in `torchLight.js`, for a Room flagged
+  `underwater`.
+- **Not:** a light source of its own kind (no Lantern-only mechanic outside underwater); the
+  Fire Berry's passive glow.
+
 ### Quick slot
 - **Definition:** A persistent equipped-item slot shown in the top status bar. Persists across
   REST.

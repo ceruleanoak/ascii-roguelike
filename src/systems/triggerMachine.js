@@ -54,7 +54,7 @@ export function readTrigger(trigger, dt, player, companion = null, world = null)
 
   trigger.pulseTimer += dt;
   return !trigger.active
-    && player?.heldItem?.data?.name === 'Torch'
+    && player?.heldItem?.data?.weaponSubtype === 'torch' // Torch or Lantern
     && within(player.position, trigger.position, TORCH_INTERACT_RADIUS);
 }
 

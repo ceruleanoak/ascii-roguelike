@@ -65,7 +65,7 @@ export function toolKitForItem(item) {
   if (!item) return kit;
   if (item.weaponSubtype === 'whip') kit.whip = item.whipReach || 5;
   if (item.boomerang) kit.boomerang = item.boomerangMaxCells ?? 5;
-  if (item.name === 'Torch') kit.torch = true;
+  if (item.weaponSubtype === 'torch') kit.torch = true; // Torch or Lantern
   if (item.effect === 'explode') kit.bomb = true;
   if (item.opensAnyLock) kit.anyLock = true;
   return kit;

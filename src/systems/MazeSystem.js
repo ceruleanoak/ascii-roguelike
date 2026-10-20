@@ -444,7 +444,7 @@ export class MazeSystem {
       if (torch.destroyed) continue;
       torch.pulseTimer += dt;
       if (torch.lit) continue;
-      if (game.player.heldItem?.data?.name !== 'Torch') continue;
+      if (game.player.heldItem?.data?.weaponSubtype !== 'torch') continue; // Torch or Lantern
       if (this._within(game.player.position, torch.position, TORCH_INTERACT_RADIUS)) {
         torch.lit = true;
       }

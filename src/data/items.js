@@ -692,6 +692,28 @@ export const ITEMS = {
     color: '#ff8800',
   },
 
+  // ── MELEE / torch — Lantern (Torch + Metal) ───────────────────────────────
+  // The Torch in a metal cage: every stat and every torch read is the Torch's
+  // (each one checks weaponSubtype 'torch', never the name). The one thing the
+  // cage adds is a flame water can't put out — `lightsUnderwater` is what
+  // lights an underwater room (torchLight.underwaterFogRadius).
+  '♁': {
+    char: '♁',
+    tier: 1,
+    name: 'Lantern',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'torch',
+    damage: 1,
+    windup: 0.3,
+    recovery: 0.8,
+    patternSpeed: 0.05,
+    range: 16,
+    onHit: 'burn',
+    lightsUnderwater: true,
+    color: '#ffcc55',
+  },
+
   // ── MELEE / sword — Legendary (uncraftable) ──────────────────────────────
   // Stats mirror Tier 1 Sword; the unique behavior lives in CombatSystem:
   // striking an exit letter cycles it forward through EXIT_LETTERS.

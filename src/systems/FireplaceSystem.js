@@ -37,7 +37,6 @@ const STOKE_ESSENCE_CHANCE = 0.10;
 const ORE_METAL_CHANCE = 0.30;
 
 const INTERACT_RADIUS = GRID.CELL_SIZE * 1.2;
-const TORCH_CHAR = '♨';
 const SAND_CHAR = 'D';
 const EMPTY_BOTTLE_CHAR = 'B';
 const GRAIN_CHAR = 'ψ';
@@ -73,7 +72,7 @@ export class FireplaceSystem {
   }
 
   /**
-   * Passive tick: a Torch parked in any quick slot (not necessarily the
+   * Passive tick: a Torch (or Lantern) parked in any quick slot (not necessarily the
    * held/active one — "equipped" mirrors TrapSystem's slot-presence check)
    * ignites an unlit fireplace the moment the player is in range, mirroring
    * how a real torch would light one without any menu interaction.
@@ -82,7 +81,7 @@ export class FireplaceSystem {
     const fireplace = this._findFireplace();
     if (!fireplace || fireplace.burning) return;
     const game = this.game;
-    const hasTorch = game.player.quickSlots.some(slot => slot?.char === TORCH_CHAR);
+    const hasTorch = game.player.quickSlots.some(slot => slot?.data?.weaponSubtype === 'torch');
     if (!hasTorch) return;
 
     fireplace.burning = true;

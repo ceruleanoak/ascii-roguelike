@@ -211,7 +211,7 @@ export class DungeonPuzzleSystem {
     for (const torch of room.torches) {
       torch.pulseTimer += dt;
       if (torch.lit) continue;
-      if (player.heldItem?.data?.name !== 'Torch') continue;
+      if (player.heldItem?.data?.weaponSubtype !== 'torch') continue; // Torch or Lantern
       if (within(player.position, torch.position, TORCH_INTERACT_RADIUS)) {
         torch.lit = true;
       }

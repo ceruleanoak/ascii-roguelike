@@ -53,6 +53,7 @@ export const RECIPES = [
   { left: 'F', right: '|', result: '♨', name: 'Torch' },         // Fire Essence + Stick = Torch
   // Oil + Stick = Torch (alt). "Oil" means any oil from a press.
   ...PRESS_OILS.map(oil => ({ left: oil, right: '|', result: '♨', name: 'Torch' })),
+  { left: '♨', right: 'M', result: '♁', name: 'Lantern' },       // Torch + Metal = Lantern (stays lit underwater)
   { left: '†', right: '†', result: '⫯', name: 'Longsword' },     // Sword + Sword = Longsword
   { left: '|', right: '~', result: ')', name: 'Bow' },           // Stick + String = Bow
   { left: '|', right: '|', result: '/', name: 'Staff' },         // Stick + Stick = Staff
