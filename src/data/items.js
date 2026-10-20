@@ -2007,6 +2007,7 @@ export const ITEMS = {
     slimeImmune: true,
     meleeResist: 0.2,       // goo coating absorbs blunt and blade impacts
     burnResist: 0.5,        // wet slime suppresses fire damage
+    drownRateMult: 2,       // the soaked suit drags its wearer under: deep water drowns twice as fast
     spellDescription: 'SLIPPERY AND MOIST.',
     color: '#00ff00'
   },
@@ -2016,6 +2017,7 @@ export const ITEMS = {
     slimeImmune: true,
     meleeResist: 0.3,
     burnResist: 0.7,
+    drownRateMult: 2,
     spellDescription: 'EMBRACE WETNESS.',
     color: '#44ff44'
   },
@@ -2278,7 +2280,7 @@ export const ITEMS = {
   '⚷': {
     char: '⚷', name: 'Flippers', type: ITEM_TYPES.ARMOR,
     defense: 1,
-    deepWaterImmune: true, // full deep-water immunity: no extra slow, no drowning pips, dodge roll works normally (matches frog form)
+    deepWaterImmune: true, // never wet, never drowns, no extra deep-water slow, dodge roll works (matches frog form); found only under the Sunken Ship's Push Rock
     spellDescription: 'THE DEEP HOLDS NO CLAIM.',
     color: '#3399cc'
   },

@@ -321,9 +321,6 @@ export const RECIPES = [
   { left: 'ꙍ', right: '∞', result: 'ѡ', name: 'Floating Boots' }, // Boots + Wings = Floating Boots
   { left: 'g', right: 'ꙍ', result: 'ѽ', name: 'Rubber Boots' },   // Goo + Boots = Rubber Boots
 
-  // === WATER ARMOR ===
-  { left: 'p', right: 'V', result: '⚷', name: 'Flippers' },         // Pearl Shard + Webbed Foot = Flippers
-
   // Charged Potion true-potion recipes (from Charged Starter '!');
   // AlchemySystem stamps the charge potionModifier onto the result instance.
   { left: '!', right: 'm', result: 'H', name: 'Health Potion' },

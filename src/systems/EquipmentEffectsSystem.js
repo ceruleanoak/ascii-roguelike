@@ -49,6 +49,7 @@ export class EquipmentEffectsSystem {
     player.batTransform = false;
     player.whirlwindCape = false;
     player.deepWaterImmune = false;
+    player.drownRateMult = 1;
 
     // Apply equipped armor properties
     if (inventorySystem.equippedArmor) {
@@ -80,6 +81,7 @@ export class EquipmentEffectsSystem {
       player.batTransform = a.batTransform || false;
       player.whirlwindCape = a.whirlwindCape || false;
       player.deepWaterImmune = a.deepWaterImmune || false;
+      player.drownRateMult = a.drownRateMult || 1;
     }
 
     player.mass = 1 + player.massBonus; // base mass + massBonus, read by PhysicsSystem

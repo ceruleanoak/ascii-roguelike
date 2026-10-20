@@ -167,6 +167,7 @@ export class Player {
     this.wetPips = 0;
     this.drownDamageTimer = 0;
     this.deepWaterImmune = false;
+    this.drownRateMult = 1; // armor-derived (Slime Suit = 2): wet pips fill and drown damage ticks this much faster
 
     // Ember accumulation (cumulative burn resistance — 3 hits within window to ignite)
     this.emberStacks = 0;

@@ -1727,15 +1727,20 @@ export class PhysicsSystem {
         const drownImmune = entity.data?.waterAffinity || entity.data?.swimAffinity
           || entity.polymorphed || entity.deepWaterImmune;
         if (inDeepWater && !drownImmune) {
-          // pip 1 → 3 over 6s, the same time-to-drown as the old 0→3 meter
-          entity.wetPips = Math.min(3, Math.max(1, entity.wetPips) + deltaTime / 3);
+          // pip 1 → 3 over 6s, the same time-to-drown as the old 0→3 meter.
+          // drownRateMult (Slime Suit = 2) speeds both the fill and the
+          // drown damage cadence.
+          const drownRate = entity.drownRateMult || 1;
+          entity.wetPips = Math.min(3, Math.max(1, entity.wetPips) + deltaTime * drownRate / 3);
           if (entity.wetPips >= 3) {
             entity.drownDamageTimer -= deltaTime;
             if (entity.drownDamageTimer <= 0) {
-              entity.drownDamageTimer = 1.0;
+              entity.drownDamageTimer = 1.0 / drownRate;
               if (entity.takeDamage) {
+                // The drown hit's iframes match its interval — the default 1s
+                // window would swallow every other tick of a faster drown.
                 const damageResult = entity === game.player
-                  ? entity.takeDamage(1, { cause: DEATH_CAUSES.drowning })
+                  ? entity.takeDamage(1, { cause: DEATH_CAUSES.drowning, iframeDuration: 1.0 / drownRate })
                   : entity.takeDamage(1);
                 if (damageResult === true || (damageResult && damageResult.damaged)) {
                   game.combatSystem.createDamageNumber(1, entity.position.x, entity.position.y, WATER_COLORS.deep);
@@ -1826,7 +1831,9 @@ export class PhysicsSystem {
       const isImmune = entity === game.player && game.player.waterImmunityTimer > 0;
       // An authored wet immunity (Giant Slime) blocks only the wet status —
       // electrified water still shocks it (that shock is its electric Imbue).
-      const wetImmune = isImmune || !!entity.elementalAffinity?.immunity?.includes('wet');
+      // Flippers (deepWaterImmune) keep the wearer from getting wet at all.
+      const wetImmune = isImmune || !!entity.elementalAffinity?.immunity?.includes('wet')
+        || (entity === game.player && entity.deepWaterImmune);
       // Shock consequences (and shock immunities — electric affinity) are
       // owned by ElectricitySystem.shockEntity, not here.
 
