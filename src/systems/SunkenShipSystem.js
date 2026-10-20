@@ -76,7 +76,8 @@ export function freshSunkenShipState() {
     glintCells: null,       // [{ col, row, slow }] — seeded on the first visit
     glintsSpent: [],        // 'col,row' keys of discovered glints
     southOpen: false,
-    serpentsSlain: false    // set by the Sunken Hold's Sea Serpent fight
+    serpentsSlain: false,   // set by the Sunken Hold's Sea Serpent fight
+    moonPearlTaken: false   // the pair's reward, once it is off the floor
   };
 }
 
@@ -150,6 +151,9 @@ export class SunkenShipSystem {
         room.backgroundObjects.push(water);
       }
     }
+
+    // Its guardians — or, once they're dead, the Moon Pearl they left.
+    this.game.seaSerpentSystem.spawnPair(room);
   }
 
   /**

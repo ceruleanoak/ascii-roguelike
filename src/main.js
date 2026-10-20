@@ -71,6 +71,7 @@ import { PlayerDamageSystem } from './systems/PlayerDamageSystem.js';
 import { ThreeSlotGlobeSystem } from './systems/ThreeSlotGlobeSystem.js';
 import { BossSystem } from './systems/BossSystem.js';
 import { BoulderSystem } from './systems/BoulderSystem.js';
+import { SeaSerpentSystem } from './systems/SeaSerpentSystem.js';
 import { CentipedeSystem } from './systems/CentipedeSystem.js';
 import { SpellSystem } from './systems/SpellSystem.js';
 import { WishSystem } from './systems/WishSystem.js';
@@ -240,6 +241,7 @@ class Game {
     this.bossSystem = new BossSystem(this);
     this.boulderSystem = new BoulderSystem(this);
     this.centipedeSystem = new CentipedeSystem(this);
+    this.seaSerpentSystem = new SeaSerpentSystem(this); // the Sunken Hold's twin hidden boss
     this.spellSystem = new SpellSystem(this);
     this.wishSystem = new WishSystem();
     this.ridgeSystem = new RidgeSystem(this);
@@ -1684,6 +1686,7 @@ class Game {
     // Update neutral room system script
     this.neutralRoomSystem.update(deltaTime, this.currentRoom, this.player);
     this.sunkenShipSystem.update(deltaTime); // no-op outside the Sunken Ship
+    this.seaSerpentSystem.update(deltaTime); // no-op outside the Sunken Hold
 
     // Three Room runtime — Death homing once its door is open (no-ops
     // everywhere else via the room's isThreeRoom flag). Its touch ends the
@@ -1700,19 +1703,7 @@ class Game {
     if (this._updateRoomWorld(deltaTime, dotKilledPlayer)) return;
 
     // An Inner Room's way in, or — from inside one — the way back out.
-    const innerExit = !this.animationSystem.isAnimating(this.player) &&
-      this.neutralRoomSystem.innerExitAt(this.currentRoom, this.player);
-    if (innerExit) {
-      this.animateExitWarp(innerExit.edge,
-        () => this.neutralRoomSystem.enterInnerRoom(this, innerExit.script, innerExit.edge));
-      return;
-    }
-    if (this.currentRoom.outerRoom && !this.animationSystem.isAnimating(this.player) &&
-        this.neutralRoomSystem.isInReturnExit(this.currentRoom, this.player)) {
-      this.animateExitWarp(this.currentRoom.returnExit,
-        () => this.neutralRoomSystem.returnToOuterRoom(this));
-      return;
-    }
+    if (this.neutralRoomSystem.tryInnerRoomExit(this)) return;
 
     // Standing in — or having just stepped into — the return exit's warp band.
     if (!this.animationSystem.isAnimating(this.player) &&

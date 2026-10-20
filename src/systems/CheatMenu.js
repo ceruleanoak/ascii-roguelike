@@ -74,7 +74,9 @@ export class CheatMenu {
       { char: '~', name: 'FROSTED MAW (cyan)',  type: 'boss_test', zone: 'cyan',   color: '#44ffff' },
       { char: '⛯', name: 'STORM EYE (yellow)',  type: 'boss_test', zone: 'yellow', color: '#ffff44' },
       // The final fight: a fresh random Trine (3 lost characters) every pick.
-      { char: '△', name: 'MIST BATTLE (gray)',  type: 'mist_battle_test',      color: '#888888' }
+      { char: '△', name: 'MIST BATTLE (gray)',  type: 'mist_battle_test',      color: '#888888' },
+      // The hidden pair: through the Sunken Ship into its Hold, south open.
+      { char: 'S', name: 'SEA SERPENTS (hold)', type: 'sea_serpent_test',      color: '#2fbf8f' }
     ] : [];
 
     // BOULDER TEST — debug placement for the Red deflect puzzle. Spawn the 4
@@ -400,6 +402,9 @@ export class CheatMenu {
       case 'mist_battle_test':
         game.cheatWarpSystem.handleMistBattleTest(game);
         break;
+      case 'sea_serpent_test':
+        game.cheatWarpSystem.handleSeaSerpentTest(game);
+        break;
       case 'set_depth':
         game.cheatWarpSystem.handleDepthJump(game, result.depth);
         break;
@@ -693,6 +698,7 @@ export class CheatMenu {
     if (selected.type === 'zone') return { action: 'teleport_zone', zone: selected.zone };
     if (selected.type === 'boss_test') return { action: 'boss_test', zone: selected.zone };
     if (selected.type === 'mist_battle_test') return { action: 'mist_battle_test' };
+    if (selected.type === 'sea_serpent_test') return { action: 'sea_serpent_test' };
     if (selected.type === 'character') {
       if (selected.disabled) return 'handled';
       return { action: 'change_character', characterType: selected.characterType };

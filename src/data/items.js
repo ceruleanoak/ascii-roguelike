@@ -1979,6 +1979,14 @@ export const ITEMS = {
     type: ITEM_TYPES.KEY,
     color: '#c8c8b0'
   },
+  // What the two Sea Serpents leave in the Sunken Hold (SeaSerpentSystem).
+  // Held, never equipped; what it reveals is unbuilt (planning inbox).
+  '☾': {
+    char: '☾',
+    name: 'Moon Pearl',
+    type: ITEM_TYPES.KEY,
+    color: '#e8eef8'
+  },
 
   // ============================================================================
   // ARMOR

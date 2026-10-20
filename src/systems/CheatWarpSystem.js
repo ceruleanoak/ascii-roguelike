@@ -186,6 +186,16 @@ export class CheatWarpSystem {
     console.log(`[CHEAT] ✓ Mist Battle: ${game.mistBattleSystem.members.map(m => m.characterType).join(' / ')}`);
   }
 
+  // The Sea Serpents' Sunken Hold, entered the way a player would — the
+  // Sunken Ship first (from whatever room the cheat was picked in, which is
+  // where the ship returns to), then its secret south, opened for the run.
+  handleSeaSerpentTest(game) {
+    game.sunkenShip.southOpen = true;
+    game.transitionToNeutralRoom('sunkenShip', 'east');
+    game.neutralRoomSystem.enterInnerRoom(game, 'sunkenHold', 'south');
+    console.log('[CHEAT] ✓ Sunken Hold: Sea Serpents');
+  }
+
   handleRoomWarp(game, roomLetter) {
     console.log(`[CHEAT] Warping to room type: ${roomLetter}`);
 

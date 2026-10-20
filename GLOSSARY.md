@@ -224,6 +224,28 @@ identity, not standard programming terms.
 - **Not:** the ship's hold — the flooded inside of the hull in the Sunken Ship itself, where the
   glints lie; an Interior (the Sunken Ship is not frozen behind it — it is rebuilt on return).
 
+### Sea Serpent
+- **Definition:** The Sunken Hold's twin hidden boss — two of them, the red zone's Centipede
+  miniboss carried underwater. Each is a head (`S`) and a tail of ten segments (`o`). They circle
+  the Hold aimlessly on opposite sides of one wandering, breathing orbit, and every few seconds one
+  stops, shivers and brightens (Anticipate), then dashes straight along the line it locked onto the
+  player (Strike) and eases back onto its orbit (Recover); the two never strike together. The tail
+  drags behind the head on a distance constraint, swinging rather than tracing the head's path. The
+  head is the weak point and holds the serpent's HP; the tail turns every blow aside, but touching
+  any part of a serpent hurts. Both dead → the Moon Pearl, and they stay dead for the Run.
+- **In code:** `SeaSerpentSystem` (`room.seaSerpents`, States `orbit`/`anticipate`/`strike`/
+  `recover`, `spawnPair` from `SunkenShipSystem.buildHold`, `handleUnitHit`); `SeaSerpentUnit`
+  (`isSeaSerpentUnit`, `isHead`, `serpentId`) in `room.enemies`; `game.sunkenShip.serpentsSlain`.
+- **Not:** the Sea Snake (`s`, the green Ocean template's ordinary enemy); a Boss (no boss bar, no
+  boss loot — the Moon Pearl is the whole reward).
+
+### Moon Pearl
+- **Definition:** The key item the two Sea Serpents leave in the Sunken Hold. Held, never equipped
+  or spent. A Moon Pearl left on the floor is put back on the next visit until it is picked up.
+- **In code:** `ITEMS['☾']` (`ITEM_TYPES.KEY`), placed by `SeaSerpentSystem._placeMoonPearl`;
+  `game.sunkenShip.moonPearlTaken`.
+- **Not:** the Pearl (`●`) that opens the Sunken Ship at the O room pedestal.
+
 ### Inner Room
 - **Definition:** A neutral Room reached from inside another neutral Room rather than from
   EXPLORE or REST. Stepping in and out of it never touches the Room saved on the way into the outer

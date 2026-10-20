@@ -260,6 +260,27 @@ export class NeutralRoomSystem {
     game.renderer.markBackgroundDirty();
   }
 
+  /**
+   * Per-frame from updateNeutralState: standing in an Inner Room's way in
+   * (or, from inside one, its way back out) starts the exit warp to it.
+   * True when a warp started, so the frame's own return-exit check is skipped.
+   */
+  tryInnerRoomExit(game) {
+    const room = game.currentRoom, player = game.player;
+    if (game.animationSystem.isAnimating(player)) return false;
+    const innerExit = this.innerExitAt(room, player);
+    if (innerExit) {
+      game.animateExitWarp(innerExit.edge,
+        () => this.enterInnerRoom(game, innerExit.script, innerExit.edge));
+      return true;
+    }
+    if (room.outerRoom && this.isInReturnExit(room, player)) {
+      game.animateExitWarp(room.returnExit, () => this.returnToOuterRoom(game));
+      return true;
+    }
+    return false;
+  }
+
   /** Walk back out of an Inner Room into a rebuilt outer room. */
   returnToOuterRoom(game) {
     const { scriptName, entryDirection } = game.currentRoom.outerRoom;
