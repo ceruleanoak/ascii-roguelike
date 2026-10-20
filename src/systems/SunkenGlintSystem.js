@@ -25,8 +25,7 @@ const COIN_CHANCE = 0.8;
 const SEA_FINDS = [
   { char: 'p', weight: 12 },  // Pearl Shard (Oyster)
   { char: 'n', weight: 5 },   // Sharkbone
-  { char: 'Y', weight: 5 },   // Ray Tail
-  { char: 'V', weight: 5 }    // Webbed Foot
+  { char: 'Y', weight: 5 }    // Ray Tail
 ];
 
 /**

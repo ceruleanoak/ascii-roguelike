@@ -178,7 +178,7 @@ identity, not standard programming terms.
 - **Definition:** A twinkle out on the deep water of a green-Zone Ocean (`O`) Room, the same
   "something is hidden here" sparkle that loot in tall grass gives off. Reaching it means
   swimming deep enough to risk drowning; SPACE in range discovers what it hides: a coin 80% of
-  the time, otherwise a sea find (Pearl Shard, Sharkbone, Stingray Barb, Webbed Foot). Every
+  the time, otherwise a sea find (Pearl Shard, Sharkbone, Stingray Barb). Every
   green Ocean Room holds 1–2, in the outer half of the deep band. A discovered glint is spent.
   The Sunken Ship's hold holds seven more, one of them the Slow Glint.
 - **In code:** `SunkenGlintSystem` (`seedSunkenGlints` from `generateOceanTerrain`, both it and
