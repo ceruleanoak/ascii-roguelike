@@ -4,8 +4,10 @@ import { drawUndead } from '../ui/UndeadRenderer.js';
 import { drawFramePasses } from '../framePasses.js';
 
 /**
- * NeutralRenderer - Renders NEUTRAL state (Leshy Grove, future shops/puzzles)
- * Similar to ExploreRenderer but simplified (no enemies, combat, etc.)
+ * NeutralRenderer - Renders NEUTRAL state (Leshy Grove, Oasis, Three Room, ...)
+ * A neutral room runs the EXPLORE world tick (Limited Explore), so its combat
+ * and effects draw through the shared Frame Passes and ExploreRenderer's
+ * enemy helpers; the room's scenery and prizes stay its own.
  * Scripts can optionally provide onRender hook for custom overlays
  */
 export class NeutralRenderer {
@@ -96,8 +98,8 @@ export class NeutralRenderer {
       }
     }
 
-    // Shared ground Frame Passes — all declared absent here (non-combat room;
-    // prizes draw plainly just below), kept so a pass added later must decide.
+    // Shared ground Frame Passes (puddles, debris, traps); prizes draw
+    // plainly just below.
     drawFramePasses(this.renderController, game, 'neutral', 'ground');
 
     // Draw items (prizes)
@@ -117,6 +119,10 @@ export class NeutralRenderer {
     // The Undead — drawn with the other living figures and under the player,
     // so a crowd never hides the one thing the player is steering.
     drawUndead(this.renderer, game);
+
+    // Enemies a script places in the room, through the EXPLORE helpers.
+    const explore = this.renderController.exploreRenderer;
+    explore.drawNonSappingEnemies(game, game.currentRoom.enemies);
 
     // Draw neutral characters (Leshy, Fairy, etc.)
     for (const neutralChar of game.neutralCharacters) {
@@ -141,6 +147,7 @@ export class NeutralRenderer {
     // room script here (getPulseAlpha) instead of the i-frame fade.
     drawFramePasses(this.renderController, game, 'neutral', 'combat');
     drawFramePasses(this.renderController, game, 'neutral', 'player');
+    explore.drawSappingEnemies(game, game.currentRoom.enemies);
 
     // Follower flock (persists across rooms after feeding events).
     if (game.followerCrows && game.followerCrows.length > 0) {

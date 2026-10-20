@@ -115,7 +115,7 @@ Entry format: `| N | **Short title** — symptom + root cause | source/date | op
 
 - **REST** (`GAME_STATES.REST`): Safe hub. Crafting, preparation. No enemies. Quick slots persist.
 - **EXPLORE** (`GAME_STATES.EXPLORE`): Procedural combat rooms. N/E/W = deeper. S = back to REST. Inventory lost on death.
-- **NEUTRAL** (`GAME_STATES.NEUTRAL`): Non-combat rooms (fishing, errands, NPCs). `NeutralRenderer.js` / `neutralRooms.js` / `NeutralRoomSystem.js`.
+- **NEUTRAL** (`GAME_STATES.NEUTRAL`): Scripted rooms (fishing, errands, NPCs) run as Limited Explore — the EXPLORE world tick, limited by what the room script declares (GLOSSARY.md). `NeutralRenderer.js` / `neutralRooms.js` / `NeutralRoomSystem.js`.
 
 All modes share CombatSystem, PhysicsSystem, and entity classes.
 

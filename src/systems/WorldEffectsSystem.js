@@ -512,6 +512,9 @@ export class WorldEffectsSystem {
       // Grass bending: animate tall grass as player passes through; imprint on dodge roll.
       // Identity check uses cuttable+cutState so bent chars (/ \) don't break the gate.
       if (!(obj.data && obj.data.cuttable && obj.data.cutState === ',')) continue;
+      // Leshy Grove grass is cut by SPACE and read by its '|' glyph; bending it
+      // would hide a blade from the grove's own cut check.
+      if (obj.leshyGrass) continue;
 
       // Lazy-init grass state
       if (obj.grassImprinted === undefined) {

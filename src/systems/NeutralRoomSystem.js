@@ -212,6 +212,10 @@ export class NeutralRoomSystem {
       game.player.position.y = spawn.y;
 
       game.savedExploreState = null;
+
+      // The neutral room's physics and combat lists go with it; the restored
+      // room's entities take their place.
+      game.registerRoomWorld(saved.room);
     }
 
     game.updateExitCollisions();
@@ -225,6 +229,15 @@ export class NeutralRoomSystem {
     }
 
     return this.currentScript.onInteract(target, player, room, this.state);
+  }
+
+  /**
+   * The background objects weapons can hit in this neutral room — whatever
+   * the script declares through combatObjects(room), else none. Feeds the
+   * shared world tick's combat update (Limited Explore).
+   */
+  combatObjects(room) {
+    return this.currentScript?.combatObjects?.(room) ?? [];
   }
 
   /**

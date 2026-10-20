@@ -42,11 +42,24 @@ identity, not standard programming terms.
 ### Game State
 - **Definition:** The top-level mode the game is in. The three play modes are **REST** (safe
   hub: crafting, prep, no enemies), **EXPLORE** (procedural combat rooms), and **NEUTRAL**
-  (non-combat rooms: fishing, errands, NPCs). Plus `TITLE`, `COMBAT`, `GAME_OVER`,
-  `ARCADE_DEMO`.
+  (scripted rooms: fishing, errands, NPCs — run as Limited Explore). Plus `TITLE`, `COMBAT`,
+  `GAME_OVER`, `ARCADE_DEMO`.
 - **In code:** `GAME_STATES` enum in `GameConfig.js`; values are the SCREAMING strings
   (`'EXPLORE'`). State-specific rendering lives in `src/rendering/state/`.
 - **Not:** "screen", "scene", "mode" (as a code identifier).
+
+### Limited Explore
+- **Definition:** What a NEUTRAL room is: the same world as EXPLORE — liquids and drowning,
+  enemies, combat, traps, world effects, the death catch-all — limited by what the room's script
+  declares, not by a separate mode. A room has no spawns unless its script adds them, and its
+  decorations can't be broken unless the script names them as combat objects. Neutral rooms still
+  skip room-clear and depth bookkeeping.
+- **In code:** `Game._updateRoomWorld(dt, dotKilledPlayer)` is the shared world tick, called by both
+  `updateExploreState` and `updateNeutralState`. `Game.registerRoomWorld(room)` rebuilds physics and
+  combat for a room swap. A script's `combatObjects(room)` hook
+  (`NeutralRoomSystem.combatObjects`) lists the objects swings may hit. Script flags such as
+  `room.interactionsOff` limit the SPACE chain.
+- **Not:** "non-combat room", "safe room" (REST is the safe hub), or a second physics mode.
 
 ### Floor
 - **Definition:** The space of the Interior the player currently occupies (hut, Cavern, dungeon

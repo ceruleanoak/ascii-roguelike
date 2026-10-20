@@ -13,6 +13,8 @@
  * wrappers around these, so every external call site is unaffected.
  */
 
+import { GAME_STATES } from '../game/GameConfig.js';
+
 export function saveExploreRoomState(inv, currentRoom, items, ingredients, placedTraps, enemies = [], backgroundObjects = [], captives = []) {
   inv.savedExploreRoom = currentRoom;
   inv.savedExploreItems = [...items];
@@ -66,6 +68,36 @@ export function captureExploreRoomForRest(game) {
   game.savedExploreEnemies = [...game.currentRoom.enemies]; // layer-guard-ok: surface contract
   game.savedExploreBackgroundObjects = [...game.backgroundObjects]; // layer-guard-ok: surface contract
   game.savedExploreCaptives = [...game.captives];
+}
+
+/**
+ * captureNeutralEntryRoomForRest(game)
+ *
+ * The NEUTRAL counterpart of captureExploreRoomForRest, for a character-swap
+ * death inside a neutral room (Limited Explore). The room to resume is not
+ * the neutral room — those regenerate on entry — but the EXPLORE room it was
+ * entered from, held in game.savedExploreState. That snapshot is handed to the
+ * same REST capture, so the next hero walks back into the room the last one
+ * left. A one-way arrival (`returnTo`) or a neutral room entered from REST has
+ * no EXPLORE room to resume; either way the neutral handshake is spent.
+ */
+export function captureNeutralEntryRoomForRest(game) {
+  const saved = game.savedExploreState;
+  game.savedExploreState = null;
+  if (!saved || saved.returnTo || saved.returnState === GAME_STATES.REST) return;
+  saveExploreRoomState(
+    game.inventorySystem,
+    saved.room,
+    saved.items,
+    saved.ingredients,
+    saved.placedTraps,
+    saved.enemies,
+    saved.backgroundObjects,
+    saved.captives
+  );
+  game.savedExploreEnemies = [...saved.enemies];
+  game.savedExploreBackgroundObjects = [...saved.backgroundObjects];
+  game.savedExploreCaptives = [...saved.captives];
 }
 
 export function clearSavedExploreRoomState(inv) {

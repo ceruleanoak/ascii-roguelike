@@ -1,4 +1,5 @@
 import { GRID, PHYSICS } from '../game/GameConfig.js';
+import { MAGIC_SFX_NAMES } from '../data/enemies.js';
 import { inSamePlane, tagInteriorPlane, isInteriorActive } from './PlaneSystem.js';
 import { CAMP_NPC_STATE } from '../entities/CampNPC.js';
 import { GooBlob } from '../entities/GooBlob.js';
@@ -600,6 +601,142 @@ export class EnemyUpdateSystem {
           }
         }
         enemy.targetItem = null;
+      }
+    }
+  }
+
+  /**
+   * Post-combat enemy lifecycle: ticks the dying shake of deathDelay enemies,
+   * then removes every dead enemy from the room — death SFX, spawn-on-death,
+   * death explosion, Hex Witch spell, inventory drops, loot, mana drop and
+   * death detritus. Moved out of updateExploreState so EXPLORE and NEUTRAL
+   * (Limited Explore) share one removal path.
+   */
+  removeDeadEnemies(deltaTime) {
+    const game = this.game;
+    const enemies = game.currentRoom.enemies; // layer-guard-ok: surface roster, as in the per-frame tick above
+    // Tick dying-shake timers for enemies with deathExplosion deathDelay
+    for (const enemy of enemies) {
+      if (enemy.isDying) {
+        enemy.dyingTimer -= deltaTime;
+      }
+    }
+
+    // Remove dead enemies and spawn loot + debris
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const enemy = enemies[i];
+      // deathExplosion enemies shake for deathDelay seconds before truly dying
+      if (enemy.hp <= 0 && !enemy.isDying && enemy.data.deathExplosion?.deathDelay) {
+        enemy.isDying = true;
+        enemy.dyingTimer = enemy.data.deathExplosion.deathDelay;
+        enemy.velocity = { vx: 0, vy: 0 };
+        continue;
+      }
+      if (enemy.isDying && enemy.dyingTimer > 0) continue;
+      if (enemy.hp <= 0) {
+        // Blood Robe: blade kill heals 1HP
+        if (enemy.killedByBlade && game.player?.bladeKillHeal) {
+          game.player.hp = Math.min(game.player.hp + 1, game.player.maxHp);
+        }
+
+        // Per-enemy death SFX (data.sfx.death — string or array for random pick).
+        // Pure elementals and arcane casters share a magical death sound; everything
+        // else falls back to the generic destroy thud.
+        const deathSfx = enemy.data?.sfx?.death;
+        if (deathSfx) {
+          const name = Array.isArray(deathSfx)
+            ? deathSfx[Math.floor(Math.random() * deathSfx.length)]
+            : deathSfx;
+          game.audioSystem.playSFX(name);
+        } else if (MAGIC_SFX_NAMES.has(enemy.data?.name)) {
+          game.audioSystem.playSFX('magic_death');
+        } else {
+          game.audioSystem.playSFX('destroy');
+        }
+
+        // Handle spawn-on-death and parent spawner notification
+        game.enemySpawnSystem.handleEnemyDeath(enemy);
+
+        // Death explosion (Magma Slug, Fire Bat, Glacier Crab)
+        if (enemy.data.deathExplosion?.enabled) {
+          const de = enemy.data.deathExplosion;
+          // Wet/frozen fire enemies fizzle instead of detonating — same
+          // no-fuel rule as TrailMechanic's trail guard. Death shake, SFX and
+          // loot above are untouched; only the fire nova is suppressed.
+          // Freeze-type novas (Glacier Crab) are unaffected.
+          const novaFizzles = de.projectileType === 'fire' && (enemy.isWet() || enemy.isFrozen());
+          if (!novaFizzles) {
+            const cx = enemy.position.x + GRID.CELL_SIZE / 2;
+            const cy = enemy.position.y + GRID.CELL_SIZE / 2;
+            const spread = (de.spreadAngle || 360) * Math.PI / 180;
+            const baseAngle = Math.random() * Math.PI * 2;
+            for (let p = 0; p < de.projectileCount; p++) {
+              const angle = baseAngle + (spread / de.projectileCount) * p;
+              game.combatSystem.createEnemyAttack({
+                type: 'enemy_projectile',
+                char: de.projectileType === 'fire' ? '·' : '*',
+                position: { x: cx, y: cy },
+                velocity: { vx: Math.cos(angle) * de.speed, vy: Math.sin(angle) * de.speed },
+                damage: de.damage,
+                color: de.projectileType === 'fire' ? '#ff6600' : '#88ccff',
+                onHit: de.projectileType === 'freeze' ? 'freeze' : undefined,
+                owner: enemy,
+                shooterPlane: enemy.plane ?? 0
+              });
+            }
+          }
+        }
+
+        // Hex Witch spell learning on death
+        if (enemy.data.hexMechanic?.learnSpellOnDeath && game.knownSpells) {
+          game.knownSpells.add(enemy.data.hexMechanic.learnSpellOnDeath);
+        }
+
+        // Armor mechanic: Rockwarden — spawn debris projectiles when armor chunk breaks
+        // (armor chunk breaks are tracked in CombatSystem; see takeDamage override below)
+
+        // Drop inventory items
+        const itemDrops = enemy.dropInventory();
+        const enemyPlane = enemy.plane ?? 0;
+        for (const item of itemDrops) {
+          item.plane = enemyPlane;
+        }
+        game.items.push(...itemDrops);
+        for (const item of itemDrops) {
+          game.physicsSystem.addEntity(item);
+        }
+
+        game.spawnLoot(enemy);
+
+        // Alchemist dropLastThrown: guaranteed drop of the last potion type thrown
+        if (enemy.data.potionMechanic?.dropLastThrown && enemy.lastPotionThrown) {
+          const effectToIngredient = { burn: 'F', freeze: 'i', poison: 'v', confusion: 'd' };
+          const ingredientChar = effectToIngredient[enemy.lastPotionThrown.effect];
+          if (ingredientChar) {
+            game.lootSystem.spawnIngredientDrop(ingredientChar, enemy.position.x, enemy.position.y, null, enemy);
+          }
+        }
+
+        // Mana drop — only once the magic meter is active. 75% chance per
+        // kill (100% on bosses) to drop a Mana ingredient (𝑚) that auto-refills
+        // the meter on pickup. Skipped when the meter is already full so the
+        // player isn't tempted to dawdle for waste drops.
+        if (game.player?.magicMeter?.active &&
+            game.player.magicMeter.current < game.player.magicMeter.max) {
+          // Instance flag first (roomFeatures boss spawns), shared data
+          // second (Centipede head's own data object) — #215.
+          const manaDropChance = (enemy.isBoss || enemy.data?.isBoss) ? 1.0 : 0.75;
+          if (Math.random() < manaDropChance) {
+            game.lootSystem.spawnIngredientDrop('𝑚', enemy.position.x, enemy.position.y, null, enemy);
+          }
+        }
+
+        // Death detritus (goo blobs for slimes, gray debris otherwise);
+        // inherits knockback velocity from the killing blow
+        game.worldEffectsSystem.spawnDeathDetritus(enemy);
+
+        game.physicsSystem.removeEntity(enemy);
+        enemies.splice(i, 1);
       }
     }
   }

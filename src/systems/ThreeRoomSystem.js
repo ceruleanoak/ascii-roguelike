@@ -3,7 +3,6 @@ import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { captureDeath } from './DeathLedgerSystem.js';
 import { breakOnDeathPassives } from './ConsumableSlotBreaks.js';
 import { ITEM_TYPES } from '../data/items.js';
-import { isInputCaptured } from '../game/inputCapture.js';
 
 /**
  * ThreeRoomSystem — the source room, its offerings, and what the door lets out.
@@ -130,16 +129,6 @@ export class ThreeRoomSystem {
   constructor() {
     this._northStreak = 0;
     this.cinematic = null;
-    // SPACE held last frame, for the edge that swings at Death (see update).
-    this._spaceHeld = false;
-  }
-
-  /**
-   * Death is out and coming — the only time the Three Room is a fight. The
-   * neutral combat Frame Passes read this to draw the player's swings.
-   */
-  isDeathOut(game) {
-    return this.cinematic?.phase === 'chasing' && !!game.currentRoom?.isThreeRoom;
   }
 
   // ── Discovery: N×3 ──────────────────────────────────────────────────────────
@@ -552,7 +541,9 @@ export class ThreeRoomSystem {
     const death = room.backgroundObjects.find(o => o.isDeath);
     if (!death) return;
 
-    this._fightDeath(dt, game, death);
+    // The fight itself is the shared world tick's: SPACE swings through the
+    // NEUTRAL branch's fall-through to attack, and combat resolves against
+    // the script's combatObjects — Death alone.
     this._moveDeath(dt, p, death);
 
     const dist = Math.hypot(p.position.x - death.position.x, p.position.y - death.position.y);
@@ -564,23 +555,6 @@ export class ThreeRoomSystem {
       p._lastDamageCause = null;
       this._resolveContactDeath(game);
     }
-  }
-
-  /**
-   * The Three Room is a NEUTRAL room, where SPACE only interacts and combat
-   * never runs. Once Death is out it becomes a fight against Death alone:
-   * a fresh SPACE press swings the held weapon (charge weapons release
-   * through the shared NEUTRAL release path), and combat resolves against
-   * Death only, so nothing else in the room can be broken in the dark.
-   */
-  _fightDeath(dt, game, death) {
-    const p = game.player;
-    const space = !!game.keys.space;
-    if (space && !this._spaceHeld && !isInputCaptured(game) && p.heldItem && p.canAttack()) {
-      game.combatSystem.tryUseHeldWeapon();
-    }
-    this._spaceHeld = space;
-    game.combatSystem.update(dt, p, [], [death]);
   }
 
   /**
@@ -619,9 +593,10 @@ export class ThreeRoomSystem {
   }
 
   /**
-   * Death resolution for a kill that lands outside EXPLORE — EXPLORE's
-   * hp<=0 catch-all never runs in NEUTRAL, so this is the minimal honest
-   * path into GAME_OVER: same audio, same ledger, same transition. Keeps
+   * Death's touch resolves here rather than through the shared world tick's
+   * hp<=0 catch-all, because it is the end outright: no Fairy in a Bottle,
+   * no Phoenix Feather. Same audio, same ledger, same
+   * transition into GAME_OVER. Keeps
    * REVIVE/CONTINUE live; the wish-revive routes back to NEUTRAL when the
    * death happened here (WishSystem.executeRevive).
    */

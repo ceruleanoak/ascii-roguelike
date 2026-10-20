@@ -9,7 +9,11 @@ import { ZONES } from './zones.js';
 
 /**
  * Neutral Room Scripts
- * Define lifecycle hooks: onGenerate, onInteract, onUpdate, onExit
+ * Define lifecycle hooks: onGenerate, onInteract, onUpdate, onExit, and
+ * optionally combatObjects(room) — the background objects weapons can hit.
+ * A neutral room runs the shared world tick (Limited Explore), but its
+ * decorations are not breakable unless the script names them here; the
+ * default is none.
  */
 
 export const NEUTRAL_ROOMS = {
@@ -505,6 +509,10 @@ export const NEUTRAL_ROOMS = {
       room.backgroundObjects.push(door);
       room.collisionMap[doorRow][doorCol] = true;
     },
+
+    // Combat resolves against Death alone, so nothing else in the room can be
+    // broken in the dark.
+    combatObjects(room) { return room.backgroundObjects.filter(o => o.isDeath); },
 
     onInteract(target, player, room, state) { return null; },
 

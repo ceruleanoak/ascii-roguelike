@@ -79,12 +79,6 @@ const isInterior = (owner) => owner === 'floor' || owner === 'maze';
 // matching the surface GAME_OVER path (GameOverRenderer never draws the player).
 const deathHeld = (game, owner) => isInterior(owner) && game.characterDeathPending;
 
-// NEUTRAL is non-combat except for one fight: Death in the Three Room, where
-// the player's swings and shots must show. Gated at draw time, because neutral
-// room transitions don't clear the combat lists.
-const neutralFight = (game, owner) => owner !== 'neutral' || !!game.threeRoomSystem?.isDeathOut(game);
-
-const NON_COMBAT = 'NEUTRAL rooms are non-combat (Game State: NEUTRAL)';
 const NO_ENEMIES = 'REST has no enemies (Game State: REST)';
 const PLAIN_PRIZES = 'NeutralRenderer draws room prizes plainly: the shared tall-grass concealment would hide Leshy grass prizes';
 const ECHO_AWAY = 'the Echo is away at REST, where a broken Echo returns (DragonSpiritSystem rest-parity)';
@@ -94,11 +88,9 @@ const NO_DARK = 'nothing here is dark enough for a torch to cut';
 const STORM_EYE_ONLY = 'Wind Fields blow only in the Storm Eye arena, a surface Room';
 const ISLAND_ONLY = 'the Metal Platform crosses only the lava lake of an Island Room (surface)';
 
+// NEUTRAL included: it runs the EXPLORE world tick (Limited Explore).
 const everywhere = { surface: true, floor: true, maze: true, rest: true, neutral: true };
-const combatOnly = { ...everywhere, neutral: NON_COMBAT };
-// Player attacks also draw in NEUTRAL, gated to the Death fight by neutralFight().
-const playerAttacks = { ...everywhere };
-const enemySide = { ...everywhere, rest: NO_ENEMIES, neutral: NON_COMBAT };
+const enemySide = { ...everywhere, rest: NO_ENEMIES };
 const surfaceOnly = (reason) => ({ surface: true, floor: reason, maze: reason, rest: reason, neutral: reason });
 
 const er = (rc) => rc.exploreRenderer;
@@ -107,27 +99,27 @@ export const FRAME_PASSES = {
   // Lying on the floor: under enemies, attacks and the player.
   ground: [
     { id: 'metalPlatform', on: surfaceOnly(ISLAND_ONLY), draw: (rc, game) => drawMetalPlatform(rc.renderer, game) },
-    { id: 'puddles', on: combatOnly, draw: (rc, game, owner) => er(rc).drawPuddles(game, isInterior(owner)) },
-    { id: 'gooBlobs', on: combatOnly, draw: (rc, game, owner) => er(rc).drawGooBlobs(game, isInterior(owner)) },
-    { id: 'debris', on: combatOnly, draw: (rc, game, owner) => er(rc).drawDebris(game, isInterior(owner)) },
+    { id: 'puddles', on: everywhere, draw: (rc, game, owner) => er(rc).drawPuddles(game, isInterior(owner)) },
+    { id: 'gooBlobs', on: everywhere, draw: (rc, game, owner) => er(rc).drawGooBlobs(game, isInterior(owner)) },
+    { id: 'debris', on: everywhere, draw: (rc, game, owner) => er(rc).drawDebris(game, isInterior(owner)) },
     { id: 'ingredients', on: { ...everywhere, neutral: PLAIN_PRIZES }, draw: (rc, game, owner) => er(rc).drawIngredients(game, isInterior(owner)) },
     { id: 'items', on: { ...everywhere, neutral: PLAIN_PRIZES }, draw: (rc, game, owner) => er(rc).drawItems(game, isInterior(owner)) },
-    { id: 'placedTraps', on: combatOnly, draw: (rc, game, owner) => er(rc).drawPlacedTraps(game, isInterior(owner)) },
+    { id: 'placedTraps', on: everywhere, draw: (rc, game, owner) => er(rc).drawPlacedTraps(game, isInterior(owner)) },
   ],
 
   // Attacks and their flourish: over enemies, under the player.
   combat: [
-    { id: 'consumableWindups', on: combatOnly, draw: (rc, game) => er(rc).drawConsumableWindups(game) },
-    { id: 'projectiles', on: playerAttacks, draw: (rc, game, owner) => { if (neutralFight(game, owner)) er(rc).drawProjectiles(game, isInterior(owner)); } },
+    { id: 'consumableWindups', on: everywhere, draw: (rc, game) => er(rc).drawConsumableWindups(game) },
+    { id: 'projectiles', on: everywhere, draw: (rc, game, owner) => er(rc).drawProjectiles(game, isInterior(owner)) },
     { id: 'enemyProjectiles', on: enemySide, draw: (rc, game, owner) => er(rc).drawEnemyProjectiles(game, isInterior(owner)) },
-    { id: 'meleeAttacks', on: playerAttacks, draw: (rc, game, owner) => { if (neutralFight(game, owner)) er(rc).drawMeleeAttacks(game, isInterior(owner)); } },
+    { id: 'meleeAttacks', on: everywhere, draw: (rc, game, owner) => er(rc).drawMeleeAttacks(game, isInterior(owner)) },
     { id: 'enemyMeleeAttacks', on: enemySide, draw: (rc, game, owner) => er(rc).drawEnemyMeleeAttacks(game, isInterior(owner)) },
     // Enemy + mimic tongues read game._activeEnemies(), which already resolves to the active layer.
     { id: 'enemyTongues', on: enemySide, draw: (rc, game) => er(rc).drawEnemyTongues(game) },
     { id: 'mimicTongues', on: enemySide, draw: (rc, game) => er(rc).drawMimicTongues(game) },
-    { id: 'playerTongueAttacks', on: combatOnly, draw: (rc, game, owner) => er(rc).drawPlayerTongueAttacks(game, isInterior(owner)) },
+    { id: 'playerTongueAttacks', on: everywhere, draw: (rc, game, owner) => er(rc).drawPlayerTongueAttacks(game, isInterior(owner)) },
     // Triplines: committed segments + the live half-strung preview.
-    { id: 'wires', on: combatOnly, draw: (rc, game, owner) => drawWires(rc.renderer, game, isInterior(owner)) },
+    { id: 'wires', on: everywhere, draw: (rc, game, owner) => drawWires(rc.renderer, game, isInterior(owner)) },
     {
       id: 'cureRusalka', on: surfaceOnly(RUSALKA_ONLY),
       draw: (rc, game) => {
@@ -139,15 +131,15 @@ export const FRAME_PASSES = {
         );
       }
     },
-    { id: 'stuckArrows', on: combatOnly, draw: (rc, game, owner) => er(rc).drawStuckArrows(game, isInterior(owner)) },
-    { id: 'wandProximityFailures', on: combatOnly, draw: (rc, game) => drawWandProximityFailures(rc.renderer, game) },
-    { id: 'aoeEffects', on: combatOnly, draw: (rc, game) => drawAoeEffects(rc.renderer, game) },
-    { id: 'lightningStrikes', on: combatOnly, draw: (rc, game, owner) => er(rc).drawLightningStrikes(game, isInterior(owner)) },
-    { id: 'chainArcs', on: combatOnly, draw: (rc, game, owner) => er(rc).drawChainArcs(game, isInterior(owner)) },
-    { id: 'damageNumbers', on: combatOnly, draw: (rc, game, owner) => er(rc).drawDamageNumbers(game, isInterior(owner)) },
+    { id: 'stuckArrows', on: everywhere, draw: (rc, game, owner) => er(rc).drawStuckArrows(game, isInterior(owner)) },
+    { id: 'wandProximityFailures', on: everywhere, draw: (rc, game) => drawWandProximityFailures(rc.renderer, game) },
+    { id: 'aoeEffects', on: everywhere, draw: (rc, game) => drawAoeEffects(rc.renderer, game) },
+    { id: 'lightningStrikes', on: everywhere, draw: (rc, game, owner) => er(rc).drawLightningStrikes(game, isInterior(owner)) },
+    { id: 'chainArcs', on: everywhere, draw: (rc, game, owner) => er(rc).drawChainArcs(game, isInterior(owner)) },
+    { id: 'damageNumbers', on: everywhere, draw: (rc, game, owner) => er(rc).drawDamageNumbers(game, isInterior(owner)) },
     // Dodge trails and weapon-preview bursts happen in REST as well as combat.
-    { id: 'particles', on: { ...everywhere, neutral: 'particles never tick in NEUTRAL (WorldEffectsSystem runs in REST/EXPLORE only), so leftovers would hang frozen' }, draw: (rc, game, owner) => er(rc).drawParticles(game, isInterior(owner)) },
-    { id: 'steamClouds', on: combatOnly, draw: (rc, game, owner) => er(rc).drawSteamClouds(game, isInterior(owner)) },
+    { id: 'particles', on: everywhere, draw: (rc, game, owner) => er(rc).drawParticles(game, isInterior(owner)) },
+    { id: 'steamClouds', on: everywhere, draw: (rc, game, owner) => er(rc).drawSteamClouds(game, isInterior(owner)) },
     // Wind Field motes (Storm Eye): swirl, gust streaks, suction spirals.
     { id: 'windField', on: surfaceOnly(STORM_EYE_ONLY), draw: (rc, game) => game.bossSystem?.windFieldSystem.render(rc.renderer.fgCtx) },
   ],
@@ -155,7 +147,7 @@ export const FRAME_PASSES = {
   // The player and everything attached to them.
   player: [
     { id: 'trine', on: surfaceOnly(TRINE_ONLY), draw: (rc, game) => drawTrine(rc.renderer, game) },
-    { id: 'echo', on: { ...combatOnly, rest: ECHO_AWAY }, draw: (rc, game) => drawEcho(rc.renderer, game) },
+    { id: 'echo', on: { ...everywhere, rest: ECHO_AWAY }, draw: (rc, game) => drawEcho(rc.renderer, game) },
     {
       id: 'torchLight',
       on: { surface: 'surface torch light is the cave-fog torch boost (drawVisionFogOverlay)', floor: true, maze: true, rest: NO_DARK, neutral: NO_DARK },
@@ -185,20 +177,20 @@ export const FRAME_PASSES = {
     // Stack-count pips for the player's active status effects — StatusPipEffects.
     { id: 'statusPips', on: everywhere, draw: (rc, game, owner) => { if (!deathHeld(game, owner)) drawStatusPips(rc.renderer, game.player); } },
     // Buckler parry window: same ']' tell enemies show.
-    { id: 'parryIndicator', on: combatOnly, draw: (rc, game, owner) => { if (!deathHeld(game, owner)) drawParryIndicator(rc.renderer, game.player, game.player.parryMechanic); } },
+    { id: 'parryIndicator', on: everywhere, draw: (rc, game, owner) => { if (!deathHeld(game, owner)) drawParryIndicator(rc.renderer, game.player, game.player.parryMechanic); } },
     // Fairy King in a Bottle ready: a fairy circles the player.
-    { id: 'fairyKingOrbit', on: combatOnly, draw: (rc, game, owner) => { if (!deathHeld(game, owner)) drawFairyKingOrbit(rc.renderer, game); } },
+    { id: 'fairyKingOrbit', on: everywhere, draw: (rc, game, owner) => { if (!deathHeld(game, owner)) drawFairyKingOrbit(rc.renderer, game); } },
     // Attack-direction '^' orbiting tight around the player.
-    { id: 'facingIndicator', on: { ...combatOnly, rest: 'REST is the safe hub; the attack-direction cue is hidden there by design' }, draw: (rc, game) => drawPlayerFacingIndicator(rc.renderer, game) },
-    { id: 'staffBlockStance', on: combatOnly, draw: (rc, game) => er(rc).drawStaffBlockStance(game) },
-    { id: 'knownSpellHints', on: combatOnly, draw: (rc, game) => { if (game.knownSpells?.size > 0) drawKnownSpellHints(rc.renderer, game); } },
-    { id: 'gemWandCharge', on: combatOnly, draw: (rc, game) => er(rc).drawGemWandCharge(game) },
-    { id: 'heldWindupCharge', on: combatOnly, draw: (rc, game) => er(rc).drawHeldWindupCharge(game) },
-    { id: 'hammerWindupPose', on: combatOnly, draw: (rc, game) => er(rc).drawHammerWindupPose(game) },
-    { id: 'chargeCounts', on: combatOnly, draw: (rc, game) => er(rc).drawChargeCounts(game) },
-    { id: 'trapReticule', on: combatOnly, draw: (rc, game) => er(rc).drawTrapReticule(game) },
-    { id: 'throwPreview', on: combatOnly, draw: (rc, game) => er(rc).drawThrowPreview(game) },
-    { id: 'inFlightTraps', on: combatOnly, draw: (rc, game, owner) => er(rc).drawInFlightTraps(game, isInterior(owner)) },
+    { id: 'facingIndicator', on: { ...everywhere, rest: 'REST is the safe hub; the attack-direction cue is hidden there by design' }, draw: (rc, game) => drawPlayerFacingIndicator(rc.renderer, game) },
+    { id: 'staffBlockStance', on: everywhere, draw: (rc, game) => er(rc).drawStaffBlockStance(game) },
+    { id: 'knownSpellHints', on: everywhere, draw: (rc, game) => { if (game.knownSpells?.size > 0) drawKnownSpellHints(rc.renderer, game); } },
+    { id: 'gemWandCharge', on: everywhere, draw: (rc, game) => er(rc).drawGemWandCharge(game) },
+    { id: 'heldWindupCharge', on: everywhere, draw: (rc, game) => er(rc).drawHeldWindupCharge(game) },
+    { id: 'hammerWindupPose', on: everywhere, draw: (rc, game) => er(rc).drawHammerWindupPose(game) },
+    { id: 'chargeCounts', on: everywhere, draw: (rc, game) => er(rc).drawChargeCounts(game) },
+    { id: 'trapReticule', on: everywhere, draw: (rc, game) => er(rc).drawTrapReticule(game) },
+    { id: 'throwPreview', on: everywhere, draw: (rc, game) => er(rc).drawThrowPreview(game) },
+    { id: 'inFlightTraps', on: everywhere, draw: (rc, game, owner) => er(rc).drawInFlightTraps(game, isInterior(owner)) },
   ],
 
   // Character-ability readouts: above everything an owner layers over the
@@ -208,12 +200,12 @@ export const FRAME_PASSES = {
     // grass (where they always drew). The Maze has no rock to roll.
     {
       id: 'rollingRocks',
-      on: { ...combatOnly, maze: 'the Maze holds no unbreakable rock and no rockfall, so nothing rolls there', rest: 'REST has no rockfall and no unbreakable rock (Game State: REST)' },
+      on: { ...everywhere, maze: 'the Maze holds no unbreakable rock and no rockfall, so nothing rolls there', rest: 'REST has no rockfall and no unbreakable rock (Game State: REST)' },
       draw: (rc, game) => drawRollingRocks(rc.renderer, game)
     },
-    { id: 'bowChargeIndicator', on: combatOnly, draw: (rc, game) => rc.bowChargeIndicator.render(game) },
-    { id: 'greenRangerIndicator', on: combatOnly, draw: (rc, game) => rc.greenRangerIndicator.render(game) },
-    { id: 'cyanRogueIndicator', on: combatOnly, draw: (rc, game) => rc.cyanRogueIndicator.render(game) },
+    { id: 'bowChargeIndicator', on: everywhere, draw: (rc, game) => rc.bowChargeIndicator.render(game) },
+    { id: 'greenRangerIndicator', on: everywhere, draw: (rc, game) => rc.greenRangerIndicator.render(game) },
+    { id: 'cyanRogueIndicator', on: everywhere, draw: (rc, game) => rc.cyanRogueIndicator.render(game) },
   ],
 };
 

@@ -15,7 +15,7 @@ import { DragonSpiritSystem } from './systems/DragonSpiritSystem.js';
 import { ExitSystem, isPressingIntoExitGap } from './systems/ExitSystem.js';
 import { PersistenceSystem } from './systems/PersistenceSystem.js';
 import { InventorySystem } from './systems/InventorySystem.js';
-import { captureExploreRoomForRest } from './systems/RoomStatePersistence.js';
+import { captureExploreRoomForRest, captureNeutralEntryRoomForRest } from './systems/RoomStatePersistence.js';
 import { ArmorEffectsSystem } from './systems/ArmorEffectsSystem.js';
 import { FloatingBootsSystem } from './systems/FloatingBootsSystem.js';
 import { ConsumableTriggerSystem } from './systems/ConsumableTriggerSystem.js';
@@ -139,7 +139,6 @@ import { freshZoneDepths } from './data/zones.js';
 import { GAME_STATES, GRID, CRAFTING, INTERACTION_RANGE, ROOM_TYPES, PHYSICS } from './game/GameConfig.js';
 import { captureDeath, deathCauseOf, newRunId } from './systems/DeathLedgerSystem.js';
 import{DiagonalInputSystem as DIS}from'./systems/DiagonalInputSystem.js';
-import { MAGIC_SFX_NAMES } from './data/enemies.js';
 import * as ingredientPile from './systems/IngredientPile.js';
 import { breakOnDeathPassives } from './systems/ConsumableSlotBreaks.js';
 import { tryDeathSave } from './systems/DeathSaveSystem.js';
@@ -1160,6 +1159,10 @@ class Game {
     // Clear transient entities
     this.items = [...this.currentRoom.items]; // Use room's items
     this.ingredients = [];
+    // The room being left keeps its traps and captives in savedExploreState;
+    // the world tick would otherwise run them inside the neutral room.
+    this.placedTraps = [];
+    this.captives = [];
     this._resetEnvironmentalEffects();
     this.neutralCharacters = [];
     // Scripts with no `game` ref in onGenerate (e.g. Oasis) stash chars here.
@@ -1180,16 +1183,9 @@ class Game {
     // with physics on the rebuild below.
     this.companionSystem.snapAllCompanionsOnRoomEnter();
 
-    // Initialize physics system
-    this.physicsSystem.clear();
-    this.huntingSystem.reset();
-    this.physicsSystem.addEntity(this.player);
-    for (const item of this.items) {
-      this.physicsSystem.addEntity(item);
-    }
-
-    this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
-    this.companionSystem.registerCompanionsWithPhysics();
+    // Physics + combat for the neutral room, enemies included (Limited Explore).
+    this.wireRoomEnemies(this.currentRoom);
+    this.registerRoomWorld(this.currentRoom);
 
     // Update collision map
     this.updateExitCollisions();
@@ -1704,44 +1700,33 @@ class Game {
     if (!this.currentRoom) return;
 
     // Update shared player mechanics
-    this.updatePlayerMechanics(deltaTime);
+    const playerMechanicsResult = this.updatePlayerMechanics(deltaTime);
+    const dotKilledPlayer = playerMechanicsResult?.dotKilledPlayer || false;
 
-    // Update physics
-    this.physicsSystem.update(deltaTime, this.currentRoom.backgroundObjects);
+    // The pre-world pieces of the EXPLORE frame a neutral room shares:
+    // equipment projection (Flippers, timed buffs), gem-wand / charge-hammer
+    // lifecycles, and Push Rock / Barricade ticking.
+    this.applyEquipmentEffects();
+    this.magicSystem.update(deltaTime);
+    this.barricadeSystem.update(deltaTime);
+    if (this.dodgeBlockedFeedbackTimer > 0) this.dodgeBlockedFeedbackTimer -= deltaTime;
 
     // Update neutral room system script
     this.neutralRoomSystem.update(deltaTime, this.currentRoom, this.player);
 
     // Three Room runtime — Death homing once its door is open (no-ops
-    // everywhere else via the room's isThreeRoom flag).
+    // everywhere else via the room's isThreeRoom flag). Its touch ends the
+    // run on the spot, so nothing else runs this frame once it has.
     this.threeRoomSystem.update(deltaTime, this);
+    if (this.stateMachine.getCurrentState() !== GAME_STATES.NEUTRAL) return;
 
     // The Undead shamble in both non-combat states; nothing is risen on an
     // uncursed run, so this is inert until a slot cracks.
     this.undeadSystem.update(deltaTime, this);
 
-    // Wind (e.g. Oasis, flagged room.windThemed) — no-ops for rooms that
-    // aren't yellow/wind-themed, same guard as the EXPLORE loop.
-    this.sandstormSystem.bindToRoom(this.currentRoom);
-    this.sandstormSystem.update(deltaTime);
-
-    this.interactionSystem.updateNeutralCharacters(deltaTime);
-
-    // Update ingredient attraction, cooldown, and separation (same as EXPLORE/REST mode)
-    this.lootSystem.updateIngredientSeparation(deltaTime);
-
-    // Update items (for prize pickups)
-    // NEUTRAL state: No item magnetization - all items require manual pickup with SPACE
-    // (Only ingredients magnetize in all game states)
-
-    // Update background objects
-    for (const obj of this.currentRoom.backgroundObjects) {
-      obj.update(deltaTime);
-    }
-
-    // Companion crow perches/follows in NEUTRAL too.
-    this.companionSystem.updateCompanionCrow(deltaTime);
-    this.companionSystem.updateFollowerCrows(deltaTime);
+    // Limited Explore: the same world tick as EXPLORE — liquids and drowning,
+    // enemies, combat, the death catch-all, world effects and companions.
+    if (this._updateRoomWorld(deltaTime, dotKilledPlayer)) return;
 
     // Standing in — or having just stepped into — the return exit's warp band.
     if (!this.animationSystem.isAnimating(this.player) &&
@@ -2285,6 +2270,413 @@ class Game {
     return false;
   }
 
+  // ── Room world tick (Limited Explore) ─────────────────────────────────────
+  // The world half of a room frame — physics + liquids, enemies, traps and
+  // elements, combat, the death catch-all, world effects and companions —
+  // shared by EXPLORE and NEUTRAL. A NEUTRAL room is Limited Explore: the same
+  // world, minus the EXPLORE-only features gated on `explore` below, with its
+  // breakable objects declared by its script (neutralRoomSystem.combatObjects).
+  // Returns true when the frame must stop here (the player died and the state
+  // already changed).
+  _updateRoomWorld(deltaTime, dotKilledPlayer) {
+    const explore = this.stateMachine.getCurrentState() !== GAME_STATES.NEUTRAL;
+
+    // Update physics — collision source follows activeRoom (interior takes priority)
+    const waterResults = this.physicsSystem.update(deltaTime, this._activeBackgroundObjects(), this.activeRoom, this.combatSystem);
+
+    // Soft contact: gently separate player from overlapping enemies to prevent stacking
+    if (!isInteriorActive(this)) {
+      this.physicsSystem.resolveEntityContacts(this.player, this.currentRoom.enemies);
+    }
+
+    // Knocked-away chain: enemies sent flying bowl over enemies they hit
+    this.physicsSystem.propagateKnockAway(this.currentRoom.enemies);
+
+    // Speed collisions: fast-moving enemies that ram another enemy deal
+    // damage and knockback (wall ricochets are handled in physicsSystem.update)
+    this.physicsSystem.resolveSpeedCollisions(this.currentRoom.enemies, this.combatSystem);
+
+    // Apply liquid results: lava destroys ingredients/items + ticks damage;
+    // water applies bob/wet/status effects. True return = lava killed player.
+    const lavaKilledPlayer = this.physicsSystem.applyLiquidResults(deltaTime, waterResults, this);
+
+    // Rusalka water-touch respawn: if a Rusalka has ever appeared this run,
+    // stepping into water in any cleared lake room summons a new one
+    if (
+      explore &&
+      this.fishingSystem.rusalkaHasAppeared &&
+      !this.fishingSystem.rusalka?.alive &&
+      this.fishingSystem.isLakeRoom(this) &&
+      this.fishingSystem.roomCleared(this)
+    ) {
+      const playerWaterResult = waterResults.find(r => r.entity === this.player);
+      if (playerWaterResult?.inLiquid) {
+        this.fishingSystem.spawnRusalkaAt(this, GRID.WIDTH / 2, GRID.HEIGHT / 2);
+      }
+    }
+
+    // Slime contact, puddle contact, slow timers, trails — delegated to systems
+    this.enemyUpdateSystem.update(deltaTime);
+    // Commanded warband follow/prune pass — runs AFTER the canonical enemy
+    // tick so its steering writes are what physics integrates this frame.
+    // rest-parity: absent from updateRestState because the roster parks in
+    // non-EXPLORE states by design (CommandSystem.update early-outs on an
+    // empty roster; there is no degraded-in-hub behavior to guard).
+    this.commandSystem.update();
+    this.worldEffectsSystem.updateEntityTrails(deltaTime);
+
+    // Held-item ticking + windup completion live in updatePlayerMechanics
+    // (single source for all states). A verbatim copy used to sit here too,
+    // double-ticking every weapon timer in EXPLORE — bug #88.
+
+    // Bow charging: chargeTime is incremented by item.update() while isCharging is true.
+    // Charging can only START from handleSpacePress (which guards against pickup/other actions).
+    // Nothing needed here — item.update() handles the charge timer.
+
+    this.characterSystem.handleAutoAttack();
+
+    this.trapSystem.update(deltaTime);
+
+    // Update placed traps (sets this.activeNoiseSource for this frame)
+    this.updatePlacedTraps(deltaTime);
+    this.trapSystem.checkWeaponTriggers();
+    // rest-parity: absent because REST has no placed traps, water cascades or lightning.
+    this.trapSystem.checkElectricTriggers();
+    this.trapSystem.updatePuddles(deltaTime);
+    this.wireSystem.update(deltaTime);
+    this.lightningStrikeSystem.update(deltaTime);
+    this.sandstormSystem.bindToRoom(this.currentRoom);
+    this.sandstormSystem.update(deltaTime);
+    if (explore) this.grayZoneSystem.update(deltaTime);
+    this.electricitySystem.update(deltaTime);
+    this.fireSystem.update(deltaTime);
+
+    // Update captives (pulsing animation)
+    for (const captive of this.captives) {
+      captive.update(deltaTime);
+    }
+
+    // Close errand confirm popup when player walks out of interaction range
+    if (explore && this.errandSystem.isMenuOpen() && this.errandSystem.isOutOfRange(this.player, this.interiorManager.activeNpcs())) {
+      this.errandSystem.closeMenu();
+    }
+
+    // Close bridge menu when player walks out of interaction range
+    if (explore && this.bridgeMenuOpen && this.ridgeSystem.getWorkerDistance() > this.ridgeSystem.CLOSE_RANGE * 1.5) {
+      this.ridgeSystem.closeMenu();
+    }
+
+    this.interactionSystem.updateNeutralCharacters(deltaTime);
+
+    // Update combat — redirect to interior enemies/objects when inside a hut or maze.
+    // A NEUTRAL room's decorations are not breakable: only the objects its
+    // script declares (the Three Room's Death) take hits.
+    const activeEnemies = this._activeEnemies();
+    const activeBackgroundObjects = explore
+      ? this._activeBackgroundObjects()
+      : this.neutralRoomSystem.combatObjects(this.currentRoom);
+    const combatResult = this.combatSystem.update(
+      deltaTime,
+      this.player,
+      activeEnemies,
+      activeBackgroundObjects,
+      this.activeRoom
+    );
+
+    this.worldEffectsSystem.checkGooBlobHits();
+    if (explore) this.fishingSystem.checkRewardObjectHits(
+      this.combatSystem.meleeAttacks,
+      (char, x, y) => this.lootSystem.spawnIngredientDrop(char, x, y, null, null),
+      (specialKey, x, y) => {
+        if (specialKey === 'fairy') {
+          if (this.fairiesAngered) return;
+          const fairy = createWildFairy(x, y, this.currentRoom?.exits || {});
+          if (!this.neutralCharacters) this.neutralCharacters = [];
+          this.neutralCharacters.push(fairy);
+          return;
+        }
+        this.lootSystem?.spawnItemDrop?.(specialKey, x, y, null, null);
+      }
+    );
+
+    // Spawn drops from objects destroyed this frame (by melee or bullets)
+    if (combatResult.objectEffects) {
+      for (const { obj, effect, attack } of combatResult.objectEffects) {
+        // Skip if this object has already been processed (safety check)
+        if (obj.hasDropped) continue;
+
+        // Mark as processed immediately to prevent duplicate checks
+        obj.hasDropped = true;
+
+        // Leshy spawn event (fallback for destruction before interaction, e.g., ranged attacks)
+        if (obj.leshyBush && !obj.leshySpawned && effect && effect.startsWith('destroyObject')) {
+          obj.leshySpawned = true; // Mark to prevent multiple spawns
+          const leshy = new Leshy(obj.position.x, obj.position.y, this.currentRoom.exits);
+          leshy.startFleeing();
+          this.neutralCharacters.push(leshy);
+          this.zoneSystem.startLeshyChase(leshy.targetExit);
+          console.log(`[Secret] Leshy discovered! Fleeing to ${leshy.targetExit} exit`);
+        }
+
+        // Key droppers and guaranteed drops bypass the roll (passesDropRoll).
+        if (obj.passesDropRoll()) {
+          this.handleObjectEffect(effect, obj, attack);
+        } else if (effect && effect.startsWith('destroyObject')) {
+          // No drop this time — still mark background dirty if object was destroyed
+          this.renderer.markBackgroundDirty();
+        }
+      }
+    }
+
+    // Elemental impact particles (fire sparks, ice shards, chaff, etc.)
+    this.worldEffectsSystem.spawnImpactEffects(combatResult.impactEffects);
+
+    // Collect new steam clouds from combat (fire+water reactions)
+    if (combatResult.newSteamClouds && combatResult.newSteamClouds.length > 0) {
+      for (const cloud of combatResult.newSteamClouds) {
+        tagInteriorPlane(this, cloud);
+        this.steamClouds.push(cloud);
+      }
+    }
+
+    // Process polymorph transformations (Transmutation Wand) — resolution
+    // logic lives in TransmutationSystem, a separate mechanic from
+    // polymorphSystem (player frog-curse).
+    this.transmutationSystem.processPolymorphEvents(combatResult);
+
+    // Check consumable activation and update windups (delegated to InventorySystem)
+    // Check activation AFTER combat so damage-reactive thresholds (heal, speed, block)
+    // see the post-hit HP value. "Immediate" consumables (luck) also fire here
+    // on their first frame — one frame delay is fine.
+    this.inventorySystem.update(
+      deltaTime,
+      this.player,
+      this.currentRoom,
+      this.combatSystem,
+      this.steamClouds,
+      this.particles
+    );
+
+    // Elemental robe aura: particle emission + dodge-roll status pulse. Runs
+    // right after the consumable tick, where it used to sit inside
+    // InventorySystem.update, so frame ordering is unchanged.
+    this.armorEffectsSystem.updateRobeAura(deltaTime, this.player, this.currentRoom, this.particles);
+
+    // Drive per-frame HUD update while consumable slot is blinking
+    if (this.inventorySystem.consumableBlinkTimer > 0) {
+      this.updateUI();
+    }
+
+    // Update hut/dungeon/maze systems (door entry/exit and interior entity logic)
+    // and the EXPLORE room features — none of them exist in a NEUTRAL room.
+    if (explore) {
+      this.interiorManager.update(deltaTime);
+      this.aquiferSystem.update(deltaTime); // Quagmire Whirlpool + Aquifer Current ride
+      this.sinkholeSystem.update(deltaTime); // Sinkhole cave: river-exit → cross-zone transition
+      this.alchemySystem.update(deltaTime);
+      // rest-parity: absent because the Dragon Forge exists only in the green boss room
+      this.forgeSystem.update(); // Dragon Forge: walking away hands slotted items back
+      this.fireplaceSystem.update(); // Torch in a quick slot auto-lights an unlit fireplace on approach
+      // rest-parity: absent because Tinder is a field campfire; REST already has its crafting station
+      this.tinderSystem.update(); // blade splits a ground Stick into Tinder; burning Tinder becomes a campfire
+    }
+
+    // Lava adjacent to water → solidify to rock
+    this.interactionSystem.update(deltaTime, this._activeBackgroundObjects());
+
+    let trineCaught = false;
+    if (explore) {
+      // Update boss system (phase transitions, reflect checks, grab escape)
+      this.bossSystem.update(deltaTime);
+
+      // Update boulder system (red zone rolling boulder hazard)
+      this.boulderSystem.update(deltaTime);
+      this.centipedeSystem.update(deltaTime);
+
+      // Update fishing system before death check so Rusalka kills are caught this frame
+      this.fishingSystem.update(deltaTime, this);
+
+      this.dragonSpiritSystem.update(deltaTime); // the Echo fires and is hit (see its rest-parity note)
+      trineCaught = this.mistBattleSystem.resolveCombat(); // Flank hits; a fallen Primary hands off
+    }
+
+    // If a heal consumable fired and restored HP, treat the player as alive
+    // hp <= 0 catch-all covers Rusalka, burn-through-invuln, and any direct hp writes
+    const playerDied = !trineCaught && (combatResult.playerDead || dotKilledPlayer || lavaKilledPlayer || this.player.hp <= 0);
+    if (playerDied) breakOnDeathPassives(this.inventorySystem, this.player);
+    if (playerDied && this.player.hp > 0) {
+      // Give brief invuln so the restored player doesn't instantly die again
+      this.player.invulnerabilityTimer = Math.max(this.player.invulnerabilityTimer, 1.0);
+    }
+
+    if (playerDied && this.player.hp <= 0) {
+      console.log(`\n💀 ═══════════════════════════════════════════════════════════`);
+      console.log(`💀 PLAYER DEATH DETECTED`);
+      console.log(`💀 Final HP: ${this.player.hp}/${this.player.maxHp}`);
+      console.log(`💀 Defense: ${this.player.defense}`);
+      console.log(`💀 Zone: ${this.zoneSystem.currentZone} | Depth: ${this.getCurrentZoneDepth()}`);
+      console.log(`💀 ═══════════════════════════════════════════════════════════\n`);
+
+      // Equipped death saves (Fairy in a Bottle, then Phoenix Feather) —
+      // an intercepted death falls through without GAME_OVER.
+      if (!tryDeathSave(this)) {
+        PlayerDamageSystem.freezeOnDeath(this.player);
+
+        // Stop music and play death SFX
+        this.audioSystem.stop();
+        this.audioSystem.playSFX('player_death');
+
+        // Capture death snapshot for design analysis before any state is cleared
+        captureDeath(this);
+
+        // Record what killed the player (for REST tombstone)
+        this.lastDeathCause = deathCauseOf(this.player._lastDamageCause);
+        this.tombstoneActive = true;
+        this.tombstonePopup = null;
+
+        // Ghost kills have no death animation
+        if (!this.player._killedByGhost) {
+          const explosion = createExplosion(
+            this.player.position.x + GRID.CELL_SIZE / 2,
+            this.player.position.y + GRID.CELL_SIZE / 2,
+            20,
+            this.player.color
+          );
+          this.particles.push(...explosion);
+          for (const particle of explosion) {
+            this.physicsSystem.addEntity(particle);
+            // Tag hutPlane so HutInteriorOverlay's filtered drawParticles(game, true)
+            // picks the explosion up when the death happens inside a hut/dungeon —
+            // otherwise GameOverRenderer's interior hold window renders the PIP with
+            // no visible death animation. Same activeFloor-presence check used
+            // elsewhere (LootSystem/HutSystem). Maze doesn't need this: its overlay
+            // draws game.particles unfiltered.
+            if (this.activeFloor) particle.hutPlane = true;
+          }
+        }
+
+        console.log('⚰️  Character died...');
+
+        // Mark current character as dead
+        const diedCharacter = this.activeCharacterType;
+        if (!this.deadCharacters.includes(diedCharacter)) {
+          this.deadCharacters.push(diedCharacter);
+        }
+
+        // Find next available living character (lost-in-the-mist counts as gone)
+        const livingCharacters = this.unlockedCharacters.filter(
+          type => !this.deadCharacters.includes(type) && !this.lostCharacters.includes(type)
+        );
+
+        if (livingCharacters.length > 0) {
+          const diedCharData = CHARACTER_TYPES[diedCharacter];
+          const nextCharacter = livingCharacters[0];
+
+          // Set up character-death pause: stay in GAME_OVER to show "[name] lost" then wait for SPACE
+          this.characterDeathPending = true;
+          this.characterDeathTimer = 2.0;
+          this.pendingNextCharacter = nextCharacter;
+          this.characterDeathName = diedCharData.name;
+
+          // Save EXPLORE room state before returning to REST, same as a
+          // voluntary south exit (prevents room cycling cheat) — a
+          // character-swap death still returns to REST via
+          // CharacterSystem.switchToCharacterAtRest, and without this the
+          // next hero's EXPLORE entry generated a brand-new room instead of
+          // resuming the exact room (enemies, items) the previous character
+          // died in. Skipped only when this was the last character (else
+          // branch below) since that path fully resets the run anyway.
+          // A death in a NEUTRAL room resumes the room it was entered from.
+          if (explore) captureExploreRoomForRest(this);
+          else captureNeutralEntryRoomForRest(this);
+
+          // Clear combat system before transitioning
+          this.combatSystem.clear();
+
+          console.log(`⚰️  ${diedCharData.name} lost — waiting for SPACE before switching to ${CHARACTER_TYPES[nextCharacter].name}`);
+          this.stateMachine.transition(GAME_STATES.GAME_OVER);
+          return true;
+        } else {
+          // All characters dead - game over
+          console.log('💀 All characters have died - GAME OVER');
+
+          // Clear combat system before transitioning
+          this.combatSystem.clear();
+
+          this.stateMachine.transition(GAME_STATES.GAME_OVER);
+          return true;
+        }
+      }
+    }
+
+    // Dying-shake timers + dead-enemy removal, loot and debris
+    this.enemyUpdateSystem.removeDeadEnemies(deltaTime);
+
+    // Mute layer 2 (bassline) immediately when all enemies on the player's
+    // layer are cleared. Hidden mimics don't count — combat is effectively
+    // over from the player's POV. Active layer, not currentRoom: entering a
+    // hut freezes the surface to [] and would read as cleared.
+    if (this._countedEnemies(this._activeEnemies()).length === 0) {
+      this.audioSystem.muteLayer2Immediately();
+    }
+
+    // Update background object animations (incl. tall-grass bending/imprint) and fire propagation
+    this.worldEffectsSystem.updateBackgroundObjects(deltaTime);
+
+    // Fire propagation, ember visuals, and player fire contact live in
+    // FireSystem (updated alongside the other element systems above).
+
+    // Remove destroyed objects (exterior always; interior when active).
+    this.interiorManager.pruneDestroyedBackgroundObjects();
+    this.backgroundObjects = this.currentRoom.backgroundObjects; // Update local reference
+    this.renderer.markBackgroundDirty();
+
+    // Update shared game elements (particles, debris, etc.)
+    this.worldEffectsSystem.update(deltaTime);
+
+    // Ingredient attraction, cooldown, and separation
+    this.lootSystem.updateIngredientSeparation(deltaTime);
+
+    // EXPLORE state: No item magnetization - all items require manual pickup with SPACE
+    // (Only ingredients magnetize in all game states)
+
+    // Update idle crows (first explore room only — array is empty otherwise)
+    if (explore) this.companionSystem.updateCrows(deltaTime);
+
+    // Companion crow: persistent across rooms, runs its own priority FSM.
+    this.companionSystem.updateCompanionCrow(deltaTime);
+    this.companionSystem.applyEnemyDamageToCompanionCrows();
+    this.companionSystem.updateFollowerCrows(deltaTime);
+
+    // Tamed rats: wild → bread-seek, then tamed companion movement + flee FSM,
+    // then enemy attack collision against them (mirrors camp NPC damage poll).
+    this.companionSystem.updateBreadSeekingRats();
+    this.companionSystem.updateTamedRats(deltaTime);
+    this.companionSystem.applyEnemyDamageToTamedRats();
+    this.companionSystem.updateGolemsAndDamage(deltaTime);
+
+    // Age and prune sound events (used for global enemy sound detection)
+    for (let i = this.soundEvents.length - 1; i >= 0; i--) {
+      this.soundEvents[i].lifetime -= deltaTime;
+      if (this.soundEvents[i].lifetime <= 0) this.soundEvents.splice(i, 1);
+    }
+
+    // Update steam clouds (fire+water reaction and Steam Vial)
+    for (let i = this.steamClouds.length - 1; i >= 0; i--) {
+      this.steamClouds[i].timer -= deltaTime;
+      if (this.steamClouds[i].timer <= 0) {
+        this.steamClouds.splice(i, 1);
+      }
+    }
+
+    // Push steam clouds to enemies and combat system for vision checks
+    for (const enemy of this.currentRoom.enemies) {
+      enemy.steamClouds = this.steamClouds;
+    }
+
+    return false;
+  }
+
   updateExploreState(deltaTime) {
     if (!this.currentRoom) return;
 
@@ -2405,506 +2797,7 @@ class Game {
       this.previousPlayerPosition.y = this.player.position.y;
     }
 
-    // Update physics — collision source follows activeRoom (interior takes priority)
-    const waterResults = this.physicsSystem.update(deltaTime, this._activeBackgroundObjects(), this.activeRoom, this.combatSystem);
-
-    // Soft contact: gently separate player from overlapping enemies to prevent stacking
-    if (!isInteriorActive(this)) {
-      this.physicsSystem.resolveEntityContacts(this.player, this.currentRoom.enemies);
-    }
-
-    // Knocked-away chain: enemies sent flying bowl over enemies they hit
-    this.physicsSystem.propagateKnockAway(this.currentRoom.enemies);
-
-    // Speed collisions: fast-moving enemies that ram another enemy deal
-    // damage and knockback (wall ricochets are handled in physicsSystem.update)
-    this.physicsSystem.resolveSpeedCollisions(this.currentRoom.enemies, this.combatSystem);
-
-    // Apply liquid results: lava destroys ingredients/items + ticks damage;
-    // water applies bob/wet/status effects. True return = lava killed player.
-    const lavaKilledPlayer = this.physicsSystem.applyLiquidResults(deltaTime, waterResults, this);
-
-    // Rusalka water-touch respawn: if a Rusalka has ever appeared this run,
-    // stepping into water in any cleared lake room summons a new one
-    if (
-      this.fishingSystem.rusalkaHasAppeared &&
-      !this.fishingSystem.rusalka?.alive &&
-      this.fishingSystem.isLakeRoom(this) &&
-      this.fishingSystem.roomCleared(this)
-    ) {
-      const playerWaterResult = waterResults.find(r => r.entity === this.player);
-      if (playerWaterResult?.inLiquid) {
-        this.fishingSystem.spawnRusalkaAt(this, GRID.WIDTH / 2, GRID.HEIGHT / 2);
-      }
-    }
-
-    // Slime contact, puddle contact, slow timers, trails — delegated to systems
-    this.enemyUpdateSystem.update(deltaTime);
-    // Commanded warband follow/prune pass — runs AFTER the canonical enemy
-    // tick so its steering writes are what physics integrates this frame.
-    // rest-parity: absent from updateRestState because the roster parks in
-    // non-EXPLORE states by design (CommandSystem.update early-outs on an
-    // empty roster; there is no degraded-in-hub behavior to guard).
-    this.commandSystem.update();
-    this.worldEffectsSystem.updateEntityTrails(deltaTime);
-
-    // Held-item ticking + windup completion live in updatePlayerMechanics
-    // (single source for all states). A verbatim copy used to sit here too,
-    // double-ticking every weapon timer in EXPLORE — bug #88.
-
-    // Bow charging: chargeTime is incremented by item.update() while isCharging is true.
-    // Charging can only START from handleSpacePress (which guards against pickup/other actions).
-    // Nothing needed here — item.update() handles the charge timer.
-
-    this.characterSystem.handleAutoAttack();
-
-    this.trapSystem.update(deltaTime);
-
-    // Update placed traps (sets this.activeNoiseSource for this frame)
-    this.updatePlacedTraps(deltaTime);
-    this.trapSystem.checkWeaponTriggers();
-    // rest-parity: absent because REST has no placed traps, water cascades or lightning.
-    this.trapSystem.checkElectricTriggers();
-    this.trapSystem.updatePuddles(deltaTime);
-    this.wireSystem.update(deltaTime);
-    this.lightningStrikeSystem.update(deltaTime);
-    this.sandstormSystem.bindToRoom(this.currentRoom);
-    this.sandstormSystem.update(deltaTime);
-    this.grayZoneSystem.update(deltaTime);
-    this.electricitySystem.update(deltaTime);
-    this.fireSystem.update(deltaTime);
-
-    // Update captives (pulsing animation)
-    for (const captive of this.captives) {
-      captive.update(deltaTime);
-    }
-
-    // Close errand confirm popup when player walks out of interaction range
-    if (this.errandSystem.isMenuOpen() && this.errandSystem.isOutOfRange(this.player, this.interiorManager.activeNpcs())) {
-      this.errandSystem.closeMenu();
-    }
-
-    // Close bridge menu when player walks out of interaction range
-    if (this.bridgeMenuOpen && this.ridgeSystem.getWorkerDistance() > this.ridgeSystem.CLOSE_RANGE * 1.5) {
-      this.ridgeSystem.closeMenu();
-    }
-
-    this.interactionSystem.updateNeutralCharacters(deltaTime);
-
-    // Update combat — redirect to interior enemies/objects when inside a hut or maze
-    const activeEnemies = this._activeEnemies();
-    const activeBackgroundObjects = this._activeBackgroundObjects();
-    const combatResult = this.combatSystem.update(
-      deltaTime,
-      this.player,
-      activeEnemies,
-      activeBackgroundObjects,
-      this.activeRoom
-    );
-
-    this.worldEffectsSystem.checkGooBlobHits();
-    this.fishingSystem.checkRewardObjectHits(
-      this.combatSystem.meleeAttacks,
-      (char, x, y) => this.lootSystem.spawnIngredientDrop(char, x, y, null, null),
-      (specialKey, x, y) => {
-        if (specialKey === 'fairy') {
-          if (this.fairiesAngered) return;
-          const fairy = createWildFairy(x, y, this.currentRoom?.exits || {});
-          if (!this.neutralCharacters) this.neutralCharacters = [];
-          this.neutralCharacters.push(fairy);
-          return;
-        }
-        this.lootSystem?.spawnItemDrop?.(specialKey, x, y, null, null);
-      }
-    );
-
-    // Spawn drops from objects destroyed this frame (by melee or bullets)
-    if (combatResult.objectEffects) {
-      for (const { obj, effect, attack } of combatResult.objectEffects) {
-        // Skip if this object has already been processed (safety check)
-        if (obj.hasDropped) continue;
-
-        // Mark as processed immediately to prevent duplicate checks
-        obj.hasDropped = true;
-
-        // Leshy spawn event (fallback for destruction before interaction, e.g., ranged attacks)
-        if (obj.leshyBush && !obj.leshySpawned && effect && effect.startsWith('destroyObject')) {
-          obj.leshySpawned = true; // Mark to prevent multiple spawns
-          const leshy = new Leshy(obj.position.x, obj.position.y, this.currentRoom.exits);
-          leshy.startFleeing();
-          this.neutralCharacters.push(leshy);
-          this.zoneSystem.startLeshyChase(leshy.targetExit);
-          console.log(`[Secret] Leshy discovered! Fleeing to ${leshy.targetExit} exit`);
-        }
-
-        // Key droppers and guaranteed drops bypass the roll (passesDropRoll).
-        if (obj.passesDropRoll()) {
-          this.handleObjectEffect(effect, obj, attack);
-        } else if (effect && effect.startsWith('destroyObject')) {
-          // No drop this time — still mark background dirty if object was destroyed
-          this.renderer.markBackgroundDirty();
-        }
-      }
-    }
-
-    // Elemental impact particles (fire sparks, ice shards, chaff, etc.)
-    this.worldEffectsSystem.spawnImpactEffects(combatResult.impactEffects);
-
-    // Collect new steam clouds from combat (fire+water reactions)
-    if (combatResult.newSteamClouds && combatResult.newSteamClouds.length > 0) {
-      for (const cloud of combatResult.newSteamClouds) {
-        tagInteriorPlane(this, cloud);
-        this.steamClouds.push(cloud);
-      }
-    }
-
-    // Process polymorph transformations (Transmutation Wand) — resolution
-    // logic lives in TransmutationSystem, a separate mechanic from
-    // polymorphSystem (player frog-curse).
-    this.transmutationSystem.processPolymorphEvents(combatResult);
-
-    // Check consumable activation and update windups (delegated to InventorySystem)
-    // Check activation AFTER combat so damage-reactive thresholds (heal, speed, block)
-    // see the post-hit HP value. "Immediate" consumables (luck) also fire here
-    // on their first frame — one frame delay is fine.
-    this.inventorySystem.update(
-      deltaTime,
-      this.player,
-      this.currentRoom,
-      this.combatSystem,
-      this.steamClouds,
-      this.particles
-    );
-
-    // Elemental robe aura: particle emission + dodge-roll status pulse. Runs
-    // right after the consumable tick, where it used to sit inside
-    // InventorySystem.update, so frame ordering is unchanged.
-    this.armorEffectsSystem.updateRobeAura(deltaTime, this.player, this.currentRoom, this.particles);
-
-    // Drive per-frame HUD update while consumable slot is blinking
-    if (this.inventorySystem.consumableBlinkTimer > 0) {
-      this.updateUI();
-    }
-
-    // Update hut/dungeon/maze systems (door entry/exit and interior entity logic)
-    this.interiorManager.update(deltaTime);
-    this.aquiferSystem.update(deltaTime); // Quagmire Whirlpool + Aquifer Current ride
-    this.sinkholeSystem.update(deltaTime); // Sinkhole cave: river-exit → cross-zone transition
-    this.alchemySystem.update(deltaTime);
-    // rest-parity: absent because the Dragon Forge exists only in the green boss room
-    this.forgeSystem.update(); // Dragon Forge: walking away hands slotted items back
-    this.fireplaceSystem.update(); // Torch in a quick slot auto-lights an unlit fireplace on approach
-    // rest-parity: absent because Tinder is a field campfire; REST already has its crafting station
-    this.tinderSystem.update(); // blade splits a ground Stick into Tinder; burning Tinder becomes a campfire
-
-    // Lava adjacent to water → solidify to rock
-    this.interactionSystem.update(deltaTime, this._activeBackgroundObjects());
-
-    // Update boss system (phase transitions, reflect checks, grab escape)
-    this.bossSystem.update(deltaTime);
-
-    // Update boulder system (red zone rolling boulder hazard)
-    this.boulderSystem.update(deltaTime);
-    this.centipedeSystem.update(deltaTime);
-
-    // Update fishing system before death check so Rusalka kills are caught this frame
-    this.fishingSystem.update(deltaTime, this);
-
-    // If a heal consumable fired and restored HP, treat the player as alive
-    // hp <= 0 catch-all covers Rusalka, burn-through-invuln, and any direct hp writes
-    this.dragonSpiritSystem.update(deltaTime); // the Echo fires and is hit (see its rest-parity note)
-    const trineCaught = this.mistBattleSystem.resolveCombat(); // Flank hits; a fallen Primary hands off
-    const playerDied = !trineCaught && (combatResult.playerDead || dotKilledPlayer || lavaKilledPlayer || this.player.hp <= 0);
-    if (playerDied) breakOnDeathPassives(this.inventorySystem, this.player);
-    if (playerDied && this.player.hp > 0) {
-      // Give brief invuln so the restored player doesn't instantly die again
-      this.player.invulnerabilityTimer = Math.max(this.player.invulnerabilityTimer, 1.0);
-    }
-
-    if (playerDied && this.player.hp <= 0) {
-      console.log(`\n💀 ═══════════════════════════════════════════════════════════`);
-      console.log(`💀 PLAYER DEATH DETECTED`);
-      console.log(`💀 Final HP: ${this.player.hp}/${this.player.maxHp}`);
-      console.log(`💀 Defense: ${this.player.defense}`);
-      console.log(`💀 Zone: ${this.zoneSystem.currentZone} | Depth: ${this.getCurrentZoneDepth()}`);
-      console.log(`💀 ═══════════════════════════════════════════════════════════\n`);
-
-      // Equipped death saves (Fairy in a Bottle, then Phoenix Feather) —
-      // an intercepted death falls through without GAME_OVER.
-      if (!tryDeathSave(this)) {
-        PlayerDamageSystem.freezeOnDeath(this.player);
-
-        // Stop music and play death SFX
-        this.audioSystem.stop();
-        this.audioSystem.playSFX('player_death');
-
-        // Capture death snapshot for design analysis before any state is cleared
-        captureDeath(this);
-
-        // Record what killed the player (for REST tombstone)
-        this.lastDeathCause = deathCauseOf(this.player._lastDamageCause);
-        this.tombstoneActive = true;
-        this.tombstonePopup = null;
-
-        // Ghost kills have no death animation
-        if (!this.player._killedByGhost) {
-          const explosion = createExplosion(
-            this.player.position.x + GRID.CELL_SIZE / 2,
-            this.player.position.y + GRID.CELL_SIZE / 2,
-            20,
-            this.player.color
-          );
-          this.particles.push(...explosion);
-          for (const particle of explosion) {
-            this.physicsSystem.addEntity(particle);
-            // Tag hutPlane so HutInteriorOverlay's filtered drawParticles(game, true)
-            // picks the explosion up when the death happens inside a hut/dungeon —
-            // otherwise GameOverRenderer's interior hold window renders the PIP with
-            // no visible death animation. Same activeFloor-presence check used
-            // elsewhere (LootSystem/HutSystem). Maze doesn't need this: its overlay
-            // draws game.particles unfiltered.
-            if (this.activeFloor) particle.hutPlane = true;
-          }
-        }
-
-        console.log('⚰️  Character died...');
-
-        // Mark current character as dead
-        const diedCharacter = this.activeCharacterType;
-        if (!this.deadCharacters.includes(diedCharacter)) {
-          this.deadCharacters.push(diedCharacter);
-        }
-
-        // Find next available living character (lost-in-the-mist counts as gone)
-        const livingCharacters = this.unlockedCharacters.filter(
-          type => !this.deadCharacters.includes(type) && !this.lostCharacters.includes(type)
-        );
-
-        if (livingCharacters.length > 0) {
-          const diedCharData = CHARACTER_TYPES[diedCharacter];
-          const nextCharacter = livingCharacters[0];
-
-          // Set up character-death pause: stay in GAME_OVER to show "[name] lost" then wait for SPACE
-          this.characterDeathPending = true;
-          this.characterDeathTimer = 2.0;
-          this.pendingNextCharacter = nextCharacter;
-          this.characterDeathName = diedCharData.name;
-
-          // Save EXPLORE room state before returning to REST, same as a
-          // voluntary south exit (prevents room cycling cheat) — a
-          // character-swap death still returns to REST via
-          // CharacterSystem.switchToCharacterAtRest, and without this the
-          // next hero's EXPLORE entry generated a brand-new room instead of
-          // resuming the exact room (enemies, items) the previous character
-          // died in. Skipped only when this was the last character (else
-          // branch below) since that path fully resets the run anyway.
-          captureExploreRoomForRest(this);
-
-          // Clear combat system before transitioning
-          this.combatSystem.clear();
-
-          console.log(`⚰️  ${diedCharData.name} lost — waiting for SPACE before switching to ${CHARACTER_TYPES[nextCharacter].name}`);
-          this.stateMachine.transition(GAME_STATES.GAME_OVER);
-          return;
-        } else {
-          // All characters dead - game over
-          console.log('💀 All characters have died - GAME OVER');
-
-          // Clear combat system before transitioning
-          this.combatSystem.clear();
-
-          this.stateMachine.transition(GAME_STATES.GAME_OVER);
-          return;
-        }
-      }
-    }
-
-    // Tick dying-shake timers for enemies with deathExplosion deathDelay
-    for (const enemy of this.currentRoom.enemies) {
-      if (enemy.isDying) {
-        enemy.dyingTimer -= deltaTime;
-      }
-    }
-
-    // Remove dead enemies and spawn loot + debris
-    for (let i = this.currentRoom.enemies.length - 1; i >= 0; i--) {
-      const enemy = this.currentRoom.enemies[i];
-      // deathExplosion enemies shake for deathDelay seconds before truly dying
-      if (enemy.hp <= 0 && !enemy.isDying && enemy.data.deathExplosion?.deathDelay) {
-        enemy.isDying = true;
-        enemy.dyingTimer = enemy.data.deathExplosion.deathDelay;
-        enemy.velocity = { vx: 0, vy: 0 };
-        continue;
-      }
-      if (enemy.isDying && enemy.dyingTimer > 0) continue;
-      if (enemy.hp <= 0) {
-        // Blood Robe: blade kill heals 1HP
-        if (enemy.killedByBlade && this.player?.bladeKillHeal) {
-          this.player.hp = Math.min(this.player.hp + 1, this.player.maxHp);
-        }
-
-        // Per-enemy death SFX (data.sfx.death — string or array for random pick).
-        // Pure elementals and arcane casters share a magical death sound; everything
-        // else falls back to the generic destroy thud.
-        const deathSfx = enemy.data?.sfx?.death;
-        if (deathSfx) {
-          const name = Array.isArray(deathSfx)
-            ? deathSfx[Math.floor(Math.random() * deathSfx.length)]
-            : deathSfx;
-          this.audioSystem.playSFX(name);
-        } else if (MAGIC_SFX_NAMES.has(enemy.data?.name)) {
-          this.audioSystem.playSFX('magic_death');
-        } else {
-          this.audioSystem.playSFX('destroy');
-        }
-
-        // Handle spawn-on-death and parent spawner notification
-        this.enemySpawnSystem.handleEnemyDeath(enemy);
-
-        // Death explosion (Magma Slug, Fire Bat, Glacier Crab)
-        if (enemy.data.deathExplosion?.enabled) {
-          const de = enemy.data.deathExplosion;
-          // Wet/frozen fire enemies fizzle instead of detonating — same
-          // no-fuel rule as TrailMechanic's trail guard. Death shake, SFX and
-          // loot above are untouched; only the fire nova is suppressed.
-          // Freeze-type novas (Glacier Crab) are unaffected.
-          const novaFizzles = de.projectileType === 'fire' && (enemy.isWet() || enemy.isFrozen());
-          if (!novaFizzles) {
-            const cx = enemy.position.x + GRID.CELL_SIZE / 2;
-            const cy = enemy.position.y + GRID.CELL_SIZE / 2;
-            const spread = (de.spreadAngle || 360) * Math.PI / 180;
-            const baseAngle = Math.random() * Math.PI * 2;
-            for (let p = 0; p < de.projectileCount; p++) {
-              const angle = baseAngle + (spread / de.projectileCount) * p;
-              this.combatSystem.createEnemyAttack({
-                type: 'enemy_projectile',
-                char: de.projectileType === 'fire' ? '·' : '*',
-                position: { x: cx, y: cy },
-                velocity: { vx: Math.cos(angle) * de.speed, vy: Math.sin(angle) * de.speed },
-                damage: de.damage,
-                color: de.projectileType === 'fire' ? '#ff6600' : '#88ccff',
-                onHit: de.projectileType === 'freeze' ? 'freeze' : undefined,
-                owner: enemy,
-                shooterPlane: enemy.plane ?? 0
-              });
-            }
-          }
-        }
-
-        // Hex Witch spell learning on death
-        if (enemy.data.hexMechanic?.learnSpellOnDeath && this.knownSpells) {
-          this.knownSpells.add(enemy.data.hexMechanic.learnSpellOnDeath);
-        }
-
-        // Armor mechanic: Rockwarden — spawn debris projectiles when armor chunk breaks
-        // (armor chunk breaks are tracked in CombatSystem; see takeDamage override below)
-
-        // Drop inventory items
-        const itemDrops = enemy.dropInventory();
-        const enemyPlane = enemy.plane ?? 0;
-        for (const item of itemDrops) {
-          item.plane = enemyPlane;
-        }
-        this.items.push(...itemDrops);
-        for (const item of itemDrops) {
-          this.physicsSystem.addEntity(item);
-        }
-
-        this.spawnLoot(enemy);
-
-        // Alchemist dropLastThrown: guaranteed drop of the last potion type thrown
-        if (enemy.data.potionMechanic?.dropLastThrown && enemy.lastPotionThrown) {
-          const effectToIngredient = { burn: 'F', freeze: 'i', poison: 'v', confusion: 'd' };
-          const ingredientChar = effectToIngredient[enemy.lastPotionThrown.effect];
-          if (ingredientChar) {
-            this.lootSystem.spawnIngredientDrop(ingredientChar, enemy.position.x, enemy.position.y, null, enemy);
-          }
-        }
-
-        // Mana drop — only once the magic meter is active. 75% chance per
-        // kill (100% on bosses) to drop a Mana ingredient (𝑚) that auto-refills
-        // the meter on pickup. Skipped when the meter is already full so the
-        // player isn't tempted to dawdle for waste drops.
-        if (this.player?.magicMeter?.active &&
-            this.player.magicMeter.current < this.player.magicMeter.max) {
-          // Instance flag first (roomFeatures boss spawns), shared data
-          // second (Centipede head's own data object) — #215.
-          const manaDropChance = (enemy.isBoss || enemy.data?.isBoss) ? 1.0 : 0.75;
-          if (Math.random() < manaDropChance) {
-            this.lootSystem.spawnIngredientDrop('𝑚', enemy.position.x, enemy.position.y, null, enemy);
-          }
-        }
-
-        // Death detritus (goo blobs for slimes, gray debris otherwise);
-        // inherits knockback velocity from the killing blow
-        this.worldEffectsSystem.spawnDeathDetritus(enemy);
-
-        this.physicsSystem.removeEntity(enemy);
-        this.currentRoom.enemies.splice(i, 1);
-      }
-    }
-
-    // Mute layer 2 (bassline) immediately when all enemies on the player's
-    // layer are cleared. Hidden mimics don't count — combat is effectively
-    // over from the player's POV. Active layer, not currentRoom: entering a
-    // hut freezes the surface to [] and would read as cleared.
-    if (this._countedEnemies(this._activeEnemies()).length === 0) {
-      this.audioSystem.muteLayer2Immediately();
-    }
-
-    // Update background object animations (incl. tall-grass bending/imprint) and fire propagation
-    this.worldEffectsSystem.updateBackgroundObjects(deltaTime);
-
-    // Fire propagation, ember visuals, and player fire contact live in
-    // FireSystem (updated alongside the other element systems above).
-
-    // Remove destroyed objects (exterior always; interior when active).
-    this.interiorManager.pruneDestroyedBackgroundObjects();
-    this.backgroundObjects = this.currentRoom.backgroundObjects; // Update local reference
-    this.renderer.markBackgroundDirty();
-
-    // Update shared game elements (particles, debris, etc.)
-    this.worldEffectsSystem.update(deltaTime);
-
-    // Ingredient attraction, cooldown, and separation
-    this.lootSystem.updateIngredientSeparation(deltaTime);
-
-    // EXPLORE state: No item magnetization - all items require manual pickup with SPACE
-    // (Only ingredients magnetize in all game states)
-
-    // Update idle crows (first explore room only — array is empty otherwise)
-    this.companionSystem.updateCrows(deltaTime);
-
-    // Companion crow: persistent across rooms, runs its own priority FSM.
-    this.companionSystem.updateCompanionCrow(deltaTime);
-    this.companionSystem.applyEnemyDamageToCompanionCrows();
-    this.companionSystem.updateFollowerCrows(deltaTime);
-
-    // Tamed rats: wild → bread-seek, then tamed companion movement + flee FSM,
-    // then enemy attack collision against them (mirrors camp NPC damage poll).
-    this.companionSystem.updateBreadSeekingRats();
-    this.companionSystem.updateTamedRats(deltaTime);
-    this.companionSystem.applyEnemyDamageToTamedRats();
-    this.companionSystem.updateGolemsAndDamage(deltaTime);
-
-    // Age and prune sound events (used for global enemy sound detection)
-    for (let i = this.soundEvents.length - 1; i >= 0; i--) {
-      this.soundEvents[i].lifetime -= deltaTime;
-      if (this.soundEvents[i].lifetime <= 0) this.soundEvents.splice(i, 1);
-    }
-
-    // Update steam clouds (fire+water reaction and Steam Vial)
-    for (let i = this.steamClouds.length - 1; i >= 0; i--) {
-      this.steamClouds[i].timer -= deltaTime;
-      if (this.steamClouds[i].timer <= 0) {
-        this.steamClouds.splice(i, 1);
-      }
-    }
-
-    // Push steam clouds to enemies and combat system for vision checks
-    for (const enemy of this.currentRoom.enemies) {
-      enemy.steamClouds = this.steamClouds;
-    }
+    if (this._updateRoomWorld(deltaTime, dotKilledPlayer)) return;
 
     // (fishing system updated earlier, before death check)
 
@@ -3482,6 +3375,14 @@ class Game {
         // inside the system, since placement is one-shot.
         this.threeRoomSystem.handleSlotPress(this, nearbyObject);
       }
+      // Limited Explore: nothing of the room's own in reach — SPACE does what
+      // it does in EXPLORE. A room with interactionsOff keeps only the swing.
+      else if (!this.currentRoom.interactionsOff && this.sunkenGlintSystem.handleSpacePress()) {
+        return;
+      }
+      else if (this.player.heldItem && this.player.canAttack()) {
+        this.combatSystem.tryUseHeldWeapon();
+      }
     }
   }
 
@@ -3545,7 +3446,7 @@ class Game {
       }
     }
 
-    if (state === GAME_STATES.EXPLORE || state === GAME_STATES.ARCADE_DEMO || state === GAME_STATES.REST) {
+    if (state === GAME_STATES.EXPLORE || state === GAME_STATES.ARCADE_DEMO || state === GAME_STATES.REST || state === GAME_STATES.NEUTRAL) {
       // Close errand confirm popup on SHIFT (no trade) — delegated to ErrandSystem.
       if (this.errandSystem.isMenuOpen()) {
         this.errandSystem.closeMenu();
@@ -3738,7 +3639,22 @@ class Game {
     // Check for Path Amulet and display path announcement
     if (this.player) this.checkPathAmulet();
 
-    // Reset physics
+    this.registerRoomWorld(room);
+    // Commanded warband surfaces into the new room beside the player (parks
+    // itself when an interior owns the floor).
+    this.commandSystem.onRoomSwap(room);
+
+    // Mark background dirty
+    this.renderer.markBackgroundDirty();
+  }
+
+  // Rebuild physics and clear combat for the room now in currentRoom: the
+  // player, the room's enemies, the floor items, the camp NPC and the
+  // companions. Shared by applyRoomSwap and both edges of a NEUTRAL room
+  // (transitionToNeutralRoom, NeutralRoomSystem.returnToSavedRoom) — the
+  // world tick runs in both states, so whatever room it ticks must be the
+  // one registered.
+  registerRoomWorld(room) {
     this.physicsSystem.clear();
     this.huntingSystem.reset();
     if (this.player) this.physicsSystem.addEntity(this.player);
@@ -3750,15 +3666,7 @@ class Game {
     }
     this.campNPCSystem?.registerWithPhysics(this.physicsSystem);
     this.companionSystem.registerCompanionsWithPhysics();
-    // Commanded warband surfaces into the new room beside the player (parks
-    // itself when an interior owns the floor).
-    this.commandSystem.onRoomSwap(room);
-
-    // Reset combat
     this.combatSystem.clear();
-
-    // Mark background dirty
-    this.renderer.markBackgroundDirty();
   }
 
   tryPickupItem() {
