@@ -33,9 +33,14 @@ const PUSH_HOLD_SECONDS = 0.35;
 // teleporting a cell over.
 const SLIDE_SECONDS = 0.3;
 
-// How far off the rock's row/column (px) the player may stand and still be
-// "lined up" with it.
-const ALIGN_TOLERANCE = 5;
+// How far off the rock's row/column the player may stand and still be "lined
+// up" with it: anything short of half a cell, i.e. the player is mostly in
+// front of this rock's face. The round hitbox stops a player well off-line, so
+// a tighter band leaves a player blocked by the rock, leaning into it, and
+// nothing moving — easy to land in on open ground with nothing to line you up
+// (the Sunken Ship's beach). Strictly under half a cell keeps two rocks side
+// by side from both taking the same lean.
+const ALIGN_TOLERANCE_CELLS = 0.5;
 
 // How close the player's leading edge must be to the rock's cell face (px).
 // Negative reach covers the ellipse hitbox the '0' glyph earns, which lets
@@ -136,7 +141,7 @@ function pushDirection(rock, player) {
   else if (y === 1)  { gap = ry - (py + ph); offAxis = px - rx; }
   else               { gap = py - (ry + cs); offAxis = px - rx; }
 
-  if (Math.abs(offAxis) > ALIGN_TOLERANCE) return null;
+  if (Math.abs(offAxis) >= cs * ALIGN_TOLERANCE_CELLS) return null;
   if (gap > FACE_GAP_MAX || gap < FACE_GAP_MIN) return null;
   return { x, y };
 }
