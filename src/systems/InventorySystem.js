@@ -384,6 +384,7 @@ export class InventorySystem {
       if (distance < 20) {
         let droppedItem = null;
         let customMessage = null;
+        let stackCount = null; // set when a consumable merged into a stack (MenuSystem.announceStack)
 
         // Route items to correct inventory based on type
         if (item.data.type === 'ARMOR') {
@@ -400,7 +401,7 @@ export class InventorySystem {
           // see mergeStackableConsumable.
           const stacked = this.mergeStackableConsumable(item);
           if (stacked) {
-            customMessage = `${item.data.name} x${stacked.count}`;
+            stackCount = stacked.count;
           } else if (allowSlotChoice && !this.game?.bombBagSystem?.claimsPickup(item)) {
             const emptySlot = this.firstFreeConsumableSlot(player);
             if (emptySlot === -1 || this.conflictingConsumableSlot(item) !== -1) return { success: false, needsSlotChoice: true, slotType: 'consumable', pendingItem: item, droppedItem: null, message: null, removedTrap: false };
@@ -483,7 +484,8 @@ export class InventorySystem {
           message: customMessage || item.data.name,
           removedTrap: false,
           pickedUpType: item.data.type,
-          pickedUpChar: item.char
+          pickedUpChar: item.char,
+          stackCount
         };
       }
     }

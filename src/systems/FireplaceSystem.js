@@ -183,19 +183,19 @@ export class FireplaceSystem {
       const jerky = new Item('ᒧ', game.player.position.x, game.player.position.y);
       const stacked = game.inventorySystem.mergeStackableConsumable(jerky);
       if (!stacked) game.inventorySystem.consumableInventory.push(jerky);
-      game.menuSystem.announceItem(jerky.char);
+      game.menuSystem.announceGained(jerky.char, stacked);
     } else if (rawChar === GRAIN_CHAR) {
       if (!fireplace.burning || !game.removeIngredient(GRAIN_CHAR)) return;
       const bread = new Item(BREAD_CHAR, game.player.position.x, game.player.position.y);
       const stacked = game.inventorySystem.mergeStackableConsumable(bread);
       if (!stacked) game.inventorySystem.consumableInventory.push(bread);
-      game.menuSystem.announceItem(bread.char);
+      game.menuSystem.announceGained(bread.char, stacked);
     } else if (rawChar === SAND_CHAR) {
       if (!fireplace.burning || !game.removeIngredient(SAND_CHAR)) return;
       const bottle = new Item(EMPTY_BOTTLE_CHAR, game.player.position.x, game.player.position.y);
       const stacked = game.inventorySystem.mergeStackableConsumable(bottle);
       if (!stacked) game.inventorySystem.consumableInventory.push(bottle);
-      game.menuSystem.announceItem(bottle.char);
+      game.menuSystem.announceGained(bottle.char, stacked);
     } else if (rawChar === '2') {
       // Ore, like Sticks, opens a quantity submenu rather than smelting one
       // implicit unit — see openOreQuantityMenu.

@@ -293,10 +293,36 @@ export class MenuSystem {
     this._queuePickupMessage({ glyph: char, text, color: data?.color ?? null, duration: null });
   }
 
+  /**
+   * A stackable consumable joined an existing stack (mergeStackableConsumable):
+   * the box always shows — glyph and the new count (×2) — because the count
+   * is news even when the item is not. The name still shows only the first
+   * time this run, same as announceItem.
+   */
+  announceStack(char, count) {
+    const game = this.game;
+    const data = getItemData(char);
+    const named = !game.announcedItemChars.has(char);
+    game.announcedItemChars.add(char);
+    const text = named ? `${data?.name ?? char} ×${count}`.toUpperCase() : `×${count}`;
+    this._queuePickupMessage({ glyph: char, text, color: data?.color ?? null, duration: null });
+  }
+
+  /**
+   * Announce a consumable that just came to hand, given the stack it merged
+   * into (the return of mergeStackableConsumable) or null when it took its
+   * own place.
+   */
+  announceGained(char, stack) {
+    if (stack) this.announceStack(char, stack.count);
+    else this.announceItem(char);
+  }
+
   /** Pickup-result dispatch shared by the world pickup (main.js) and the shop. */
   announcePickupResult(result) {
     if (!result.message) return;
-    if (result.pickedUpChar) this.announceItem(result.pickedUpChar, result.message);
+    if (result.pickedUpChar && result.stackCount) this.announceStack(result.pickedUpChar, result.stackCount);
+    else if (result.pickedUpChar) this.announceItem(result.pickedUpChar, result.message);
     else this.showPickupMessage(result.message);
   }
 
@@ -1112,6 +1138,7 @@ export class MenuSystem {
       // Crafted output counts as touched for the Three Room's globe — the
       // run put it in the player's hands just as surely as a floor pickup.
       game.threeSlotGlobeSystem.recordTouched(item.char);
+      let stack = null;
       if (item.data.type === 'ARMOR') {
         // Mirror world-pickup behavior: auto-equip, or prompt when occupied
         if (game.inventorySystem.equippedArmor !== null) {
@@ -1125,7 +1152,8 @@ export class MenuSystem {
       } else if (item.data.type === 'CONSUMABLE') {
         // A crafted stackable (Meat Jerky, Sandwich, ...) joins an existing
         // stack like a world pickup does, instead of contesting a slot.
-        if (!game.inventorySystem.mergeStackableConsumable(item)) {
+        stack = game.inventorySystem.mergeStackableConsumable(item);
+        if (!stack) {
           const emptySlot = game.inventorySystem.firstFreeConsumableSlot(game.player);
           if (emptySlot === -1 || game.inventorySystem.conflictingConsumableSlot(item) !== -1) {
             game.slotReplacementSystem.open(item, 'consumable');
@@ -1151,7 +1179,7 @@ export class MenuSystem {
       } else if (item.data.type === 'INGREDIENT') {
         game.addIngredient(item.char);
       }
-      this.announceItem(item.char);
+      this.announceGained(item.char, stack);
       game.renderer.markBackgroundDirty();
       game.updateUI();
     }
