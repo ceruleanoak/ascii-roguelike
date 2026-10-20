@@ -4,15 +4,14 @@ export const ZONE_COLORS = {
   red: '#ff4400',
   cyan: '#44ffff',
   yellow: '#ffff44',
-  gray: '#888888',
-  blue: '#66aaff'
+  gray: '#888888'
 };
 
 // Rare mineral each zone's rocks hide — knowledge of WHERE to smash rocks is
 // the gate (see InteractionSystem's rockHarvest / rock-poke paths, which roll
 // one of these). Yellow owns the gemstones, so its entry is a list to pick
 // from; the others own exactly one mineral. Zones absent from this table
-// (gray, blue) have no mineral of their own.
+// (gray) have no mineral of their own.
 //
 // Lives here rather than inside InteractionSystem because it is zone identity
 // data, and the Home Zone derivation reads it too (see data/homeZone.js) —
@@ -332,34 +331,5 @@ export const ZONES = {
     },
     hardMode: true, // All enemies +50% stats
     noRest: true // Cannot return to base from gray zone
-  },
-  'blue': {
-    name: 'Tidefall',
-    spellDescription: 'THE TIDE HAS PARTED.',
-    wiseSayings: [
-      'WATER IS A WEAPON, NOT A WALL.',
-      'THE FIN STRIKES FROM BELOW.',
-      'CRYSTALS CARRY YOUR WEIGHT.',
-      'THE WAKE REMEMBERS.'
-    ],
-    borderColor: '#66aaff',
-    exitColor: ZONE_COLORS.blue,
-    alternativeZones: [], // Linear pearl-ritual zone; no in-zone color drift.
-    // No bossDepth — the zone is exactly 4 rooms (Shallows → Reef Walk → Wake
-    // Drift → Pearl Cache) tracked by game.blueZoneRoom; no boss.
-    environmentColors: {
-      grass: '#3a8fbf',    // wet sand
-      tree: '#2a6080',     // weathered seaweed columns
-      background: '#04101a' // deep tidal night
-    },
-    movementProfiles: ['keeper', 'kiter'], // gentle — tutorial zone
-    spawnTables: ['basic', 'forest'],       // reuses Frog/Sea Snake injections from terrain templates
-    objectWeights: {
-      '~': 0.35, // water
-      '0': 0.15, // rock
-      'C': 0.05, // coral cluster (cuttable, drops Coral Cluster ingredient)
-      '%': 0.05, // kelp (visually styled)
-      '⊞': 0.00  // no chests in tutorial rooms
-    }
   }
 };

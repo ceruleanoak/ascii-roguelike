@@ -14,11 +14,11 @@ identity, not standard programming terms.
 
 ### Zone
 - **Definition:** A color-coded region of the world with its own identity, danger level, and
-  independently tracked Depth. Green → Yellow → Red = increasing danger; Cyan, Gray, and Blue
-  are the off-axis / secret zones.
-- **In code:** keyed by color string — `'green'`, `'yellow'`, `'red'`, `'cyan'`, `'gray'`,
-  `'blue'`. Definitions in `src/data/zones.js`; logic in `ZoneSystem`. Each has a flavor name
-  (Verdant Wilds, Scorched Wastes, Frozen Peaks, Stormlands, Realm of the Dead, Tidefall).
+  independently tracked Depth. Green → Yellow → Red = increasing danger; Cyan and Gray are the
+  off-axis / secret zones.
+- **In code:** keyed by color string — `'green'`, `'yellow'`, `'red'`, `'cyan'`, `'gray'`.
+  Definitions in `src/data/zones.js`; logic in `ZoneSystem`. Each has a flavor name (Verdant
+  Wilds, Scorched Wastes, Frozen Peaks, Stormlands, Realm of the Dead).
 - **Not:** "level", "world", "area", "biome", "stage".
 
 ### Depth
@@ -188,9 +188,9 @@ identity, not standard programming terms.
   fishing (a catch from the Fisherman's rod, not a fixed spot).
 
 ### Plane
-- **Definition:** Which layer of a **live** Room an entity is on — surface (0), tunnel/cave (1),
-  or submerged (2, Shark Mask dive). A Plane swap keeps the other plane simulating, because
-  combat spans the layers (T-room tunnel, U-room cave, Sinkhole cave, Shark dive). Plane
+- **Definition:** Which layer of a **live** Room an entity is on — surface (0) or tunnel/cave
+  (1). A Plane swap keeps the other plane simulating, because combat spans the layers (T-room
+  tunnel, U-room cave, Sinkhole cave). Plane
   membership decides combat, vision, pickup, and collision eligibility.
 - **In code:** `PlaneSystem` (`PLANE_SURFACE` / `PLANE_TUNNEL` / `PLANE_SUBMERGED`,
   `inSamePlane`, `objectOnPlane`); route new combat/vision/pickup/collision checks through it.
@@ -1586,8 +1586,7 @@ identity, not standard programming terms.
   this ask me for": **craft gates** (green) want a tool used a particular way; **mastery gates**
   (red) want a weapon class carried far enough; **sacrifice gates** (cyan) want meaningful progress
   given away; **mage gates** (yellow) want the run's relationship to affinities and the elements.
-  Gray and blue have no family and raise nothing — gray is the Three Room's own signage, blue is
-  Tidefall's fixed tutorial chain.
+  Gray has no family and raises nothing — gray is the Three Room's own signage.
 - **In code:** `BARRICADE_FAMILIES` keyed by family name, `FAMILY_BY_COLOR` mapping a `ZONE_COLORS`
   value onto one. An empty family (red, for now) raises nothing rather than borrowing another
   family's question.

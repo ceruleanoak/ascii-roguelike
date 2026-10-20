@@ -398,9 +398,7 @@ export const LETTER_TEMPLATES = {
     // Background object generation rules
     bgObjectRules: {
       densityMultiplier: 1.0, // Normal object density
-      grassDensity: 0.8,      // Normal grass (except in water zone)
-      // Coral grows only here — absolute weight added to the zone table
-      objectWeights: { 'C': 0.08 }
+      grassDensity: 0.8       // Normal grass (except in water zone)
     },
 
     // Exit rules - east exit disabled (ocean blocks passage)
@@ -763,121 +761,5 @@ export const LETTER_TEMPLATES = {
 
     // Eligible for HuntingSystem's stillness-triggered moose/rabbit encounter.
     huntableGame: true
-  },
-
-  // ── Blue-zone (Tidefall) tutorial rooms ────────────────────────────────────
-  // The four room templates of the secret blue zone. Each pairs a familiar
-  // water terrain config (lake / ocean / dry-sand) with an armor pickup
-  // placed by RoomGenerator. See main.js blueZoneRoom for progression order.
-
-  '~': {
-    name: 'Shallows',
-    description: 'Blue-zone entry: a central pool bisects the room; Shark Mask waits on a midwater island',
-
-    wallStructures: { allow: false },
-
-    lakeZone: {
-      enabled: true,
-      nodes: [
-        { col: 15, row: 13, radius: 8 } // single broad central pool
-      ],
-      edgeNoise: 1.6,
-      waterDensity: 0.92
-    },
-
-    bgObjectRules: {
-      grassDensity: 0.0, // sand floor only
-      objectBias: { '0': 0.6 }
-    },
-
-    // 2-3 frogs in the water — tutorial targets for the emerge attack
-    enemyInjection: {
-      char: 'g',
-      minCount: 2,
-      maxCount: 3,
-      preferLiquid: true
-    },
-
-    blueZoneArmor: '∆' // Shark Mask placed on the central island
-  },
-
-  '⌇': {
-    name: 'Reef Walk',
-    description: 'Blue-zone reef: wide ocean body with scattered islands; Coral Crown gates the path',
-
-    wallStructures: { allow: false },
-
-    oceanZone: {
-      enabled: true,
-      waterStartCol: 6,
-      waterEndCol: 26,
-      sandStartCol: 5,
-      sandEndCol: 27,
-      waterDensity: 0.85,
-      sandDensity: 0.5
-    },
-
-    bgObjectRules: {
-      grassDensity: 0.0,
-      objectBias: { '0': 0.5 }
-    },
-
-    // Frogs + sea snakes patrol the water; player can ignore via Coral Crown bridge
-    enemyInjection: {
-      char: 's',
-      minCount: 2,
-      maxCount: 3,
-      preferLiquid: true
-    },
-
-    blueZoneArmor: '𐤕'
-  },
-
-  '⌒': {
-    name: 'Wake Drift',
-    description: 'Blue-zone wake gauntlet: elongated pool spanning the room; pack of enemies test the Stingray Mantle',
-
-    wallStructures: { allow: false },
-
-    lakeZone: {
-      enabled: true,
-      nodes: [
-        { col: 6,  row: 15, radius: 5 },
-        { col: 12, row: 15, radius: 5 },
-        { col: 18, row: 15, radius: 5 },
-        { col: 24, row: 15, radius: 5 }
-      ],
-      edgeNoise: 1.4,
-      waterDensity: 0.9
-    },
-
-    bgObjectRules: {
-      grassDensity: 0.0,
-      objectBias: { '0': 0.4 }
-    },
-
-    // Larger pack so the wake mechanic shines (4-5 frogs + sea snakes)
-    enemyInjection: {
-      char: 'g',
-      minCount: 4,
-      maxCount: 5,
-      preferLiquid: true
-    },
-
-    blueZoneArmor: '⚲'
-  },
-
-  '◌': {
-    name: 'Pearl Cache',
-    description: 'Blue-zone reward room: small hand-shaped sand chamber with a pedestal and a one-way return',
-
-    wallStructures: { allow: false },
-
-    bgObjectRules: {
-      grassDensity: 0.0,
-      objectBias: { '0': 0.3 }
-    },
-
-    blueZonePedestal: true // RoomGenerator places the pearl-cache pedestal at center
   }
 };

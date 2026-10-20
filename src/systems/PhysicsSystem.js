@@ -1,7 +1,6 @@
 import { DEATH_CAUSES } from '../data/deathCauses.js';
 import { PHYSICS, GRID, BACKGROUND_OBJECT_VARIANTS, WATER_COLORS } from '../game/GameConfig.js';
 import {
-  PLANE_SURFACE,
   PLANE_TUNNEL,
   planeOf,
   inSamePlane,
@@ -18,14 +17,6 @@ import { ChargeMechanic } from '../entities/enemyMechanics/ChargeMechanic.js';
 // Re-exported so existing imports (e.g. Enemy.js) keep working.
 // New code should import directly from PlaneSystem.
 export { inSamePlane };
-
-// The plane an entity meets terrain on. A Shark Mask diver is on
-// PLANE_SUBMERGED so surface enemies lose sight of it, but it still swims
-// through surface water and stops at surface walls — reading its own plane
-// here found no water, so the dive ended the frame after it began.
-function terrainPlaneOf(entity) {
-  return entity.diving ? PLANE_SURFACE : planeOf(entity);
-}
 
 // Deflector triangles collide at 80% of the drawn cell, centered — a forgiving
 // hitbox so the player isn't stopped by a hair's-width graze of the hypotenuse
@@ -408,7 +399,7 @@ export class PhysicsSystem {
     }
 
     if (!isProjectile && !entity.ignoreBackgroundCollision && backgroundObjects && backgroundObjects.length > 0) {
-      const entityPlane = terrainPlaneOf(entity);
+      const entityPlane = planeOf(entity);
       const metalPlatform = room?.metalPlatform;
       for (const obj of backgroundObjects) {
         if (obj.destroyed) continue;
@@ -502,9 +493,6 @@ export class PhysicsSystem {
               if (wState === 'frozen') {
                 onIce = true;
                 entity.isOnIce = true; // For dodge roll ice-lock mechanic
-              } else if (wState === 'crystallized') {
-                // Coral Crown platform — walkable, no wet status, no slide.
-                // Intentionally leave inLiquid/onIce false.
               } else {
                 inLiquid = true;
                 liquidState = wState;
@@ -634,9 +622,8 @@ export class PhysicsSystem {
     if (inLiquid) {
       // swimAffinity entities (e.g. frog) glide through water at full speed —
       // they compensate via higher jump velocity in water. A polymorphed
-      // player frog gets the same treatment as the enemy Frog (parity), and
-      // Shark Mask divers are treated the same way while their dive is active.
-      const swimsFast = entity.data?.swimAffinity || entity.polymorphed || entity.diving;
+      // player frog gets the same treatment as the enemy Frog (parity).
+      const swimsFast = entity.data?.swimAffinity || entity.polymorphed;
       // Water slows by wet Pip count (StatusEffectSystem.wetPipSpeed) — pip 1
       // is the standard 0.5x, and only deep water fills pips 2–3. Flippers
       // (deepWaterImmune) never fill past pip 1, so they keep the standard
@@ -1050,7 +1037,7 @@ export class PhysicsSystem {
     const collision = { x: false, y: false };
     const width = entity.width || GRID.CELL_SIZE;
     const height = entity.height || GRID.CELL_SIZE;
-    const entityPlane = terrainPlaneOf(entity);
+    const entityPlane = planeOf(entity);
 
     for (const obj of backgroundObjects) {
       if (obj.destroyed) continue;
@@ -1623,7 +1610,7 @@ export class PhysicsSystem {
   resolveSolidObjectOverlap(entity, backgroundObjects) {
     const width = entity.width || GRID.CELL_SIZE;
     const height = entity.height || GRID.CELL_SIZE;
-    const entityPlane = terrainPlaneOf(entity);
+    const entityPlane = planeOf(entity);
 
     // Multi-pass eject — pushing out of one object can put the entity inside
     // another (rocks placed in adjacent cells, knockback into a cluster, etc.).
@@ -1840,8 +1827,8 @@ export class PhysicsSystem {
       // An authored wet immunity (Giant Slime) blocks only the wet status —
       // electrified water still shocks it (that shock is its electric Imbue).
       const wetImmune = isImmune || !!entity.elementalAffinity?.immunity?.includes('wet');
-      // Shock consequences (and shock immunities — Stingray Mantle, electric
-      // affinity) are owned by ElectricitySystem.shockEntity, not here.
+      // Shock consequences (and shock immunities — electric affinity) are
+      // owned by ElectricitySystem.shockEntity, not here.
 
       // Apply wet status (6s; applyStatusEffect's Math.max refreshes while in water)
       if (!wetImmune && entity.applyStatusEffect) {

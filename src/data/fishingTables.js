@@ -21,9 +21,8 @@ export const FISHING_TABLES = {
       { name: 'Giant Turtle',char: 'ծ', color: '#88cc44', drops: ['b', 'm'],        weight: 10 },
       { name: 'Fish',        char: 'ծ', color: '#7ec8e3', drops: [], directPickupItem: '♓', weight: 20 },
       { name: 'Empty Bottle',char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 },
-      // Blue-zone supply line: rare catches that gate the water-armor recipes.
-      // Drop weights are low; the blue-zone Pearl Cache gives a bundle as the
-      // bootstrap source.
+      // Sea supply line: rare catches for the pearl, sharkbone and barb
+      // recipes (Pearl weapons, Trident, Barbed Bat/Lance).
       { name: 'Oyster Husk', char: 'ծ', color: '#ddeeff', drops: ['p'],             weight: 3 },
       { name: 'Sharkbone',   char: 'ծ', color: '#ccd8e8', drops: ['n'],             weight: 1 },
       { name: 'Ray Tail',    char: 'ծ', color: '#aabbcc', drops: ['Y'],             weight: 1 },
@@ -32,8 +31,8 @@ export const FISHING_TABLES = {
   },
 
   // Ocean ('O') rooms — any zone. Saltwater creatures plus a meaningfully
-  // fatter blue-zone supply line (p/n/Y) than green lakes: the ocean is the
-  // overworld face of Tidefall, and the fisherman's pearl legend points here.
+  // fatter sea supply line (p/n/Y) than green lakes; the fisherman's pearl
+  // legend points here.
   ocean: {
     rusalkaChance: 0,
     catches: [

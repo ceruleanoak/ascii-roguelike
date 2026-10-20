@@ -43,7 +43,7 @@ export const PUZZLES = {
   // Three disconnected pools, each beside a metal rod. Ambient lightning
   // periodically strikes one pool — its rod latches lit for latchSeconds,
   // demonstrating the mechanic. Solve: all three rods lit at once (shock
-  // weapon, Stingray Mantle swim, or kiting electric enemies through pools).
+  // weapon, or kiting electric enemies through pools).
   yellow: {
     type: 'three_conductors',
     rodChar: LIGHTNING_SPIRE_CHAR,

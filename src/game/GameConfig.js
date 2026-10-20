@@ -643,22 +643,6 @@ export const BACKGROUND_OBJECTS = {
       default: { animation: 'shake', message: null }
     }
   },
-  'C': {
-    // Coral Cluster — cuttable background object that drops the Coral Cluster
-    // ingredient. Spawns in green-zone Lake rooms (low weight) and inside
-    // blue-zone Reef Walk. Pink-coral palette to read distinctly from bushes.
-    name: 'Coral Cluster',
-    color: '#ff88aa',
-    hp: 1,
-    dropEffect: 'destroyObject:spawnIngredient:C',
-    dropChance: 0.6,
-    bulletInteraction: 'interact-destroy',
-    flammability: 'none',
-    conductivity: 'none',
-    interactions: {
-      default: { animation: 'shake', message: null }
-    }
-  },
   '⊞': {
     name: 'Chest',
     color: '#ccaa66',
@@ -1532,7 +1516,6 @@ export const WATER_COLORS = {
   frozen:      '#ffffff',
   poisoned:    '#44bb44',
   electrified: '#cccc00',
-  crystallized: '#bbeeff', // Coral Crown — walkable platform, blocks bullets, 6s decay
   deep:        '#0a1a55'  // Deep water (BackgroundObject.deepWater) — darker tint, drowning hazard
 };
 

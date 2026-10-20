@@ -45,7 +45,6 @@ export class Player {
     this.smokeBurstPending = false; // one-frame signal consumed by main.js to spawn the cloud
     this.splinterChance = 0;     // bone armor: chance a landed melee hit Splinters it
     this.splinterPending = false; // one-frame signal consumed by ArmorEffectsSystem.updateSplinter
-    this.stingrayDischargePending = false; // one-frame signal consumed by ArmorEffectsSystem._updateStingrayMantle
     this.hurtPending = false; // survived a hit since the last consumable check (healOnHit; InventorySystem)
     this.speedBoost = 0;
     this.speedPenalty = 0;
@@ -162,7 +161,7 @@ export class Player {
     // Deep water (PhysicsSystem sets inDeepWater every frame; applyLiquidResults
     // fills/drains wetPips — the wet Pip track — and ticks drownDamageTimer at 3).
     // deepWaterImmune is armor-derived (Flippers), projected by
-    // EquipmentEffectsSystem same as sharkMask/coralCrown/stingrayMantle;
+    // EquipmentEffectsSystem like every other armor flag;
     // frog form's existing `polymorphed` flag grants the same immunity.
     this.inDeepWater = false;
     this.wetPips = 0;
@@ -177,14 +176,6 @@ export class Player {
     // Water immunity (from Rubber Boots): seconds of charge left in the equipped
     // boots, projected each frame by FloatingBootsSystem (0 = none equipped).
     this.waterImmunityTimer = 0;
-
-    // Shark Mask dive state (active only while equipped + in water)
-    this.diving = false;
-    this.diveTimer = 0;            // seconds remaining in current dive
-    this.diveDuration = 3.0;       // max dive length before forced surface
-
-    // Coral Crown / Stingray Mantle per-frame trackers
-    this._crystalPlatformCells = []; // recent platform cells [{col,row,timer}], cap 8
 
     // Float (from Floating Boots) — ignores lava, water, and mud.
     // floatCharge: seconds of float left in the equipped boots, projected each
@@ -758,7 +749,6 @@ export class Player {
     this.smokeOnHit = false;
     this.splinterChance = 0;
     this.splinterPending = false;
-    this.stingrayDischargePending = false;
     this.speedBoost = 0;
     this.speedPenalty = 0;
     this.slowEnemies = false;

@@ -1433,23 +1433,6 @@ class Game {
         // Deactivate any active boss fight when leaving a room
         this.bossSystem.deactivate();
       }
-      // Blue-zone (Tidefall) entry/progression. Any exit tagged secretBlueZone
-      // routes into the linear 4-room tutorial sequence. Room counter tracks
-      // which room (1=Shallows, 2=Reef Walk, 3=Wake Drift, 4=Pearl Cache).
-      if (exitObj?.secretBlueZone) {
-        // Capture origin zone on first blue room so Pearl Cache's west exit
-        // can warp the player back to an O room in that same zone.
-        if (!this.blueZoneRoom) {
-          this.blueZoneOriginZone = this.zoneSystem.currentZone;
-        }
-        this.zoneSystem.forceNextZone('blue');
-        this.blueZoneRoom = (this.blueZoneRoom || 0) + 1;
-      }
-      // Returning from blue-zone Pearl Cache: reset the linear blue progression
-      // so a future secret entry starts at Shallows again.
-      if (exitObj?.returnFromBlueZone) {
-        this.blueZoneRoom = 0;
-      }
       const currentZone = this.zoneSystem.checkZoneTransition();
       const progressionColor = this.zoneSystem.getProgressionColor();
 
@@ -1521,25 +1504,8 @@ class Game {
       // takes effect starting the next room entry (see applySequenceReward).
       this.zoneSystem.applySequenceReward(this, secretPattern, currentZone);
 
-      // Blue-zone linear progression: north exit always points at the next
-      // tutorial room (or stays disabled in Pearl Cache, where RoomGenerator
-      // killed it). Tagging secretBlueZone keeps the chain going on next walk.
-      if (currentZone === 'blue' && this.currentRoom.exits.north) {
-        const BLUE_ROOM_LETTERS = ['⌇', '⌒', '◌'];
-        const nextLetter = BLUE_ROOM_LETTERS[(this.blueZoneRoom || 1) - 1];
-        if (nextLetter) {
-          this.currentRoom.exits.north = {
-            letter: nextLetter,
-            color: '#66aaff',
-            secretBlueZone: true
-          };
-        }
-      }
-
       // Compass (⌖) — mark this room's directional arrow; also consumes a
-      // pending guaranteed-D contract from a completed 3-exit streak. Runs
-      // after the blue-zone override above so its fixed tutorial exit can
-      // never get clobbered by a forced 'D' mutation.
+      // pending guaranteed-D contract from a completed 3-exit streak.
       this.compassSystem.onRoomEntered(this.currentRoom);
 
       // Barricades — whatever this room's exits are worth blocking. Placed
@@ -2006,11 +1972,9 @@ class Game {
     // holding the movement clamp for the rest of the run ([rest-parity]).
     this.mistAscentSystem.update(deltaTime);
 
-    // Dodge dispatch (shark dive / green continuous roll / standard roll)
-    // lives in CharacterSystem. skipFrame = shark dive drove the player
-    // directly; skip movement dispatch, player.update, and held-item tick
-    // this frame (pre-existing behavior).
-    if (this.characterSystem.updateDodge(deltaTime)?.skipFrame) return;
+    // Dodge dispatch (green continuous roll / standard roll) lives in
+    // CharacterSystem.
+    this.characterSystem.updateDodge(deltaTime);
 
     // Update player movement (locked when menu is open, during dodge roll, or continuous rolling)
     if (this.animationSystem.isAnimating(this.player)) {
@@ -2051,8 +2015,6 @@ class Game {
 
     // Update player state (i-frames, dodge roll, wet, burn DoT, etc)
     const playerUpdateResult = this.player.update(deltaTime);
-    // Shark Mask dive (auto-ends on timer expire or leaving water)
-    this.characterSystem.updateSharkDive(this.player, deltaTime);
 
     // Handle burn/poison DoT damage
     const dotKilledPlayer = StatusEffectSystem.applyPlayerDot(this, playerUpdateResult);
@@ -2713,11 +2675,6 @@ class Game {
     const playerMechanicsResult = this.updatePlayerMechanics(deltaTime);
     const dotKilledPlayer = playerMechanicsResult?.dotKilledPlayer || false;
 
-    // Blue-zone water armor tick — Coral Crown crystallizes the tile underfoot,
-    // Stingray Mantle drops an electrified wake in vacated cells + damages
-    // enemies standing in any electrified water within reach.
-    this.armorEffectsSystem.updateBlueArmorEffects(deltaTime);
-
     // Tick room-entry detection grace period
     if (this.roomEntryGraceTimer > 0) {
       this.roomEntryGraceTimer -= deltaTime;
@@ -3109,7 +3066,6 @@ class Game {
       if (this.wellSystem?.handleSpacePress()) return;
       if (this.campNPCSystem?.handleSpacePress()) return;
       if (this.pearlSystem.handlePearlPedestalSpace()) return;
-      if (this.pearlSystem.handlePearlCachePedestalSpace()) return;
       if (this.wireSystem?.handleSpacePress()) return;
 
       // Bridge donation menu — delegated to RidgeSystem's own handleSpacePress().

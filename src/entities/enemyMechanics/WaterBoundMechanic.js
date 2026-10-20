@@ -10,8 +10,8 @@
 // itself is never clamped: a hit can still throw it onto the beach.
 //
 // "Water" is the same tile PhysicsSystem treats as water: a `~` background
-// object that isn't lava, mud, or hot water, in a state that isn't frozen or
-// crystallized (both are walkable). A room with no water leaves the enemy
+// object that isn't lava, mud, or hot water, in a state that isn't frozen
+// (walkable). A room with no water leaves the enemy
 // unconfined. No suspend signal — writes velocity only.
 
 import { GRID } from '../../game/GameConfig.js';
@@ -26,7 +26,7 @@ function isWaterTile(obj) {
                            : (obj.isDryMud || obj.slowing === true);
   if (isLava || isMud || obj.typeId === 'hot_water') return false;
   const state = obj.getWaterState ? obj.getWaterState() : 'normal';
-  return state !== 'frozen' && state !== 'crystallized';
+  return state !== 'frozen';
 }
 
 const cellKey = (col, row) => `${col},${row}`;

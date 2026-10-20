@@ -6,9 +6,6 @@ import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Captive } from '../entities/Captive.js';
 import { isCellProtected } from './roomFeatures.js';
 import { tagInteriorPlane } from './PlaneSystem.js';
-
-// Shark Mask dive swim speed, as a multiple of base walk speed.
-const SHARK_DIVE_SPEED = 1.8;
 import { StatusEffectSystem } from './StatusEffectSystem.js';
 import { isInputCaptured } from '../game/inputCapture.js';
 import { aimFacingAtNearestEnemy, keenStrikeReach } from './KeenAim.js';
@@ -300,11 +297,8 @@ export class CharacterSystem {
     }
   }
 
-  // Per-frame dodge dispatch for the active character: Shark Mask water
-  // dive/emerge, Green Ranger continuous roll, or the standard dodge roll.
-  // Returns { skipFrame: true } when the shark dive drove the player directly
-  // this frame — caller must skip the rest of updatePlayerMechanics (existing
-  // behavior: no movement dispatch, no player.update, no held-item tick).
+  // Per-frame dodge dispatch for the active character: Green Ranger
+  // continuous roll, or the standard dodge roll.
   updateDodge(deltaTime) {
     const game = this.game;
     const player = game.player;
@@ -323,51 +317,7 @@ export class CharacterSystem {
     // Handle dodge rolling (continuous direction updates, supports diagonals and curving)
     // Disabled while Rusalka's charm is active or while polymorphed (frog form has no roll)
     const rusalkaActive = game.fishingSystem?.rusalka?.alive === true;
-    let dodgeDirection = (rusalkaActive || player.polymorphed || player.hookedByMimic || player.hookedByWhip) ? { x: 0, y: 0 } : game.getDodgeRollDirection();
-
-    // Shark Mask water dive/emerge — overrides standard dodge for ALL characters
-    // (including Green Ranger continuous-roll). Edge detection on dodgeDirection
-    // ensures a held arrow doesn't immediately auto-emerge after diving.
-    if (player.sharkMask && player.inLiquid && !game.keys.space && !player.isGooey()) {
-      const hasDodgeInput = (dodgeDirection.x !== 0 || dodgeDirection.y !== 0);
-      const dodgeInputEdge = hasDodgeInput && !game._sharkLastDodgeInput;
-      game._sharkLastDodgeInput = hasDodgeInput;
-
-      if (dodgeInputEdge && player.diving) {
-        // Re-press while diving → emerge burst
-        this._sharkEmergeAttack(dodgeDirection);
-      } else if (dodgeInputEdge && !player.diving &&
-                 player.dodgeRoll.cooldownTimer <= 0 &&
-                 !player.dodgeRoll.active &&
-                 !player.continuousRollActive) {
-        this.startSharkDive(player, dodgeDirection);
-        game.audioSystem.playSFX('roll');
-      }
-
-      // While diving, drive the player ourselves and skip the character-class
-      // dispatch entirely (otherwise Green Ranger's slide would override us).
-      if (player.diving) {
-        // skipFrame bypasses main.js's own updateSharkDive call, so the dive
-        // timer ticks here; a dive that just ended hands the frame back.
-        this.updateSharkDive(player, deltaTime);
-        if (!player.diving) return {};
-        if (hasDodgeInput) {
-          const baseMax = 110 * player.getSprintMultiplier() * SHARK_DIVE_SPEED;
-          player.velocity.vx = dodgeDirection.x * baseMax;
-          player.velocity.vy = dodgeDirection.y * baseMax;
-          player.acceleration.ax = 0;
-          player.acceleration.ay = 0;
-        }
-        return { skipFrame: true }; // skip dodge/movement dispatch this frame
-      }
-      // Shark Mask equipped + in water but not diving (e.g. dive ended while
-      // arrows still held, or cooldown blocks entry). Zero out dodgeDirection
-      // so the standard/green-ranger dodge handlers below cannot fire — the
-      // dive is the only valid water dodge response when wearing the mask.
-      dodgeDirection = { x: 0, y: 0 };
-    } else {
-      game._sharkLastDodgeInput = false;
-    }
+    const dodgeDirection = (rusalkaActive || player.polymorphed || player.hookedByMimic || player.hookedByWhip) ? { x: 0, y: 0 } : game.getDodgeRollDirection();
 
     if (game.activeCharacterType === 'green') {
       // Green ranger: hold arrow keys for a continuous slide (no individual roll timers)
@@ -565,90 +515,6 @@ export class CharacterSystem {
       game.combatSystem.createAttack(game.applyGreenDamageModifier(attack), game._activeEnemies());
       game.triggerGreenActionCooldown();
       game._emitSoundEvent();
-    }
-  }
-
-  // Shark Mask emerge attack: triggered when the player re-rolls during a dive.
-  // Deals 3× base melee damage to every enemy within 1.5 cells, ends the dive,
-  // produces a big splash via createWetDrop-style particles. Wet enemies eat
-  // an additional 2× from any subsequent shock — but we don't apply that here;
-  // it's a bonus of subsequent player attacks.
-  _sharkEmergeAttack(direction) {
-    const game = this.game;
-    if (!game.player.diving) return;
-    const CS = GRID.CELL_SIZE;
-    const radius = CS * 1.5;
-    const cx = game.player.position.x + CS / 2;
-    const cy = game.player.position.y + CS / 2;
-    const enemies = game._activeEnemies?.() ?? [];
-    const BASE_DAMAGE = 1;
-    const EMERGE_DAMAGE = BASE_DAMAGE * 3;
-    for (const enemy of enemies) {
-      if (enemy.hp <= 0) continue;
-      const ex = enemy.position.x + CS / 2;
-      const ey = enemy.position.y + CS / 2;
-      if (Math.hypot(ex - cx, ey - cy) > radius) continue;
-      enemy.takeDamage(EMERGE_DAMAGE);
-      game.combatSystem?.createDamageNumber(EMERGE_DAMAGE, enemy.position.x, enemy.position.y, '#88ccff', 1.4, 1.1);
-      // Brief stagger so the player can follow up — a slow held at freeze
-      // pip 1, so it never tips a chilled enemy into Frozen
-      enemy.applyStatusEffect?.('freeze', 0.5, 1);
-    }
-    // Splash particles
-    for (let i = 0; i < 14; i++) {
-      const ang = Math.random() * Math.PI * 2;
-      const speed = 60 + Math.random() * 90;
-      game.particles.push(tagInteriorPlane(game, {
-        x: cx, y: cy,
-        vx: Math.cos(ang) * speed,
-        vy: Math.sin(ang) * speed,
-        life: 0.7, maxLife: 0.7,
-        char: Math.random() < 0.5 ? '·' : '▪',
-        color: '#88ccff'
-      }));
-    }
-    game.audioSystem?.playSFX?.('roll');
-    this.endSharkDive(game.player);
-    game.player.dodgeRoll.cooldownTimer = 0.5;
-  }
-
-  // ── Shark Mask: dive + emerge ─────────────────────────────────────────────
-  // Activated when dodge-roll is pressed in water while Shark Mask is equipped
-  // (see updateDodge above). Player swims at 1.8× speed on plane PLANE_SUBMERGED
-  // (= 2), invisible to surface enemies via PlaneSystem.canInteract. Re-rolling
-  // during a dive triggers the emerge attack (_sharkEmergeAttack above).
-  startSharkDive(player, direction) {
-    player.diving = true;
-    player.diveTimer = player.diveDuration;
-    player.plane = 2; // PLANE_SUBMERGED — surface enemies stop seeing the player
-    player.char = '^'; // fin glyph
-    // Give the dive an initial directional kick so the player visibly enters.
-    // SHARK_DIVE_SPEED is applied directly — speedBoost is re-projected from
-    // armor every frame (applyEquipmentEffects), which wiped the dive's boost.
-    const baseMax = 110 * player.getSprintMultiplier() * SHARK_DIVE_SPEED;
-    player.velocity.vx = direction.x * baseMax;
-    player.velocity.vy = direction.y * baseMax;
-    // Brief iframe on entry so contact damage doesn't trigger as the dive starts.
-    player.invulnerabilityTimer = Math.max(player.invulnerabilityTimer, 0.3);
-    // Brief cooldown so the same press-and-release doesn't immediately emerge.
-    player.dodgeRoll.cooldownTimer = 0.2;
-  }
-
-  endSharkDive(player) {
-    if (!player.diving) return;
-    player.diving = false;
-    player.diveTimer = 0;
-    player.plane = 0;
-    player.char = '@';
-  }
-
-  // Tick called from main.js each frame. Auto-ends the dive on timer expire
-  // or when the player exits water (the fin only swims through liquid).
-  updateSharkDive(player, deltaTime) {
-    if (!player.diving) return;
-    player.diveTimer -= deltaTime;
-    if (player.diveTimer <= 0 || !player.inLiquid) {
-      this.endSharkDive(player);
     }
   }
 

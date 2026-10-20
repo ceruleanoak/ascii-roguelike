@@ -27,7 +27,7 @@ export class Fisherman extends NeutralCharacter {
   /**
    * Bind zone-specific tips. Accepts a zone color OR 'ocean' (O rooms fish
    * their own saltwater table; the ocean fisherman also carries the pearl
-   * legend — the breadcrumb toward the blue zone path).
+   * legend — the breadcrumb toward the Ocean pedestal).
    */
   setZone(zoneName, { coinDemo = false } = {}) {
     this.zoneName = FISHING_TABLES[zoneName] ? zoneName : 'green';

@@ -2275,30 +2275,6 @@ export const ITEMS = {
     color: '#77ddff'
   },
 
-  // ── Blue-zone armor: water-only mechanics (dormant on dry ground) ─────────
-  // All three share the armor slot — pick one per run. Effect activates only
-  // while player.inLiquid is true; reverts to vanilla on dry tiles.
-  '∆': {
-    char: '∆', name: 'Shark Mask', type: ITEM_TYPES.ARMOR,
-    defense: 1,
-    sharkMask: true,       // dodge in water → dive (fin glyph, plane=SUBMERGED, 1.8× speed); re-roll → 3× emerge damage
-    spellDescription: 'DIVE AND STRIKE.',
-    color: '#88aacc'
-  },
-  '𐤕': {
-    char: '𐤕', name: 'Coral Crown', type: ITEM_TYPES.ARMOR,
-    defense: 1,
-    coralCrown: true,      // standing on water tile → tile becomes crystallized (walkable, blocks bullets, 6s decay, 8-stack cap)
-    spellDescription: 'THE TIDE LAYS A PATH.',
-    color: '#ff99bb'
-  },
-  '⚲': {
-    char: '⚲', name: 'Stingray Mantle', type: ITEM_TYPES.ARMOR,
-    defense: 1,
-    stingrayMantle: true,  // struck while in water → the tile underfoot sparks for 0.5s; wearer is shock-immune
-    spellDescription: 'LEAVE A LIVE WAKE.',
-    color: '#ccddee'
-  },
   '⚷': {
     char: '⚷', name: 'Flippers', type: ITEM_TYPES.ARMOR,
     defense: 1,
@@ -3339,13 +3315,11 @@ export const INGREDIENTS = {
   'ł': { char: 'ł', name: 'Pollen',    color: '#ffe566' },
   'ψ': { char: 'ψ', name: 'Grain',     color: '#d8b860' }, // grass cut (shares Pollen's band); a lit fireplace bakes it into Bread
 
-  // Blue-zone ingredients — shared Pearl Shard base + one rare per armor recipe.
-  // Drop sources: 'p' from Ocean fishing (rare), 'n' from Sea Snake (rare),
-  // 'C' from Coral Cluster bg objects in Lake rooms, 'Y' from Ocean fishing (rare),
-  // 'V' from Lake/Ocean fishing (rare).
+  // Sea ingredients. Drop sources: 'p' from Ocean fishing (rare), 'n' from
+  // Sea Snake (rare), 'Y' from Ocean fishing (rare), 'V' from Lake/Ocean
+  // fishing (rare).
   'p': { char: 'p', name: 'Pearl Shard',    color: '#ddeeff' },
   'n': { char: 'n', name: 'Sharkbone',      color: '#ccd8e8' },
-  'C': { char: 'C', name: 'Coral Cluster',  color: '#ff88aa' },
   'Y': { char: 'Y', name: 'Stingray Barb',  color: '#aabbcc' },
   'V': { char: 'V', name: 'Webbed Foot',    color: '#77cc99' },
 

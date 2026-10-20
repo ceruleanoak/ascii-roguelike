@@ -26,11 +26,10 @@
  *     the old instant _electrifyFloodFillWater)
  *   - Electric-affinity enemies in contact with water or slime trail (ambient
  *     scan below — Sparks drifting over a river, Volt Spiders wading, etc.)
- *   - Stingray Mantle wearer swimming (ambient scan; wearer is shock-immune)
  *   - Zapped enemies and a zapped player (ambient scan — see "Imbued current" below)
  *
  * Counterplay / conduction rules:
- *   - Only 'normal' water conducts. Frozen / poisoned / crystallized tiles
+ *   - Only 'normal' water conducts. Frozen / poisoned tiles
  *     BLOCK the spread — a freeze-line across a river is a firebreak.
  *   - Seeding a tile (or slime stamp) that is already electrified is a no-op,
  *     so continuous sources (a hovering Spark) re-trigger only after the local
@@ -129,7 +128,7 @@ export class ElectricitySystem {
     if (!obj || obj.destroyed || !obj.isWater?.()) return false;
     // Already-charged tile: the local tail hasn't decayed — no re-trigger.
     if (obj.waterState === 'electrified') return false;
-    // Non-normal water (frozen/poisoned/crystallized) doesn't conduct.
+    // Non-normal water (frozen/poisoned) doesn't conduct.
     if (obj.waterState !== 'normal') return false;
     return this._startCascade(obj, backgroundObjects, planeOf(obj), opts);
   }
@@ -300,8 +299,6 @@ export class ElectricitySystem {
    */
   shockEntity(entity, current = null) {
     const p = this.game.player;
-    // Stingray Mantle: wearer sits at the source of the current, not in its path.
-    if (entity === p && p.stingrayMantle) return;
     // A zapped enemy isn't shocked by the current it generates.
     if (current?.source === entity) return;
     // An Imbue-capable enemy takes the current as its electric Imbue instead.
@@ -448,7 +445,7 @@ export class ElectricitySystem {
     return node instanceof Puddle;
   }
 
-  // Only normal water conducts; frozen/poisoned/crystallized block the spread
+  // Only normal water conducts; frozen/poisoned block the spread
   // entirely (counterplay: freeze a line to stop the cascade). A slime trail
   // stamp conducts until it expires.
   _conducts(node) {

@@ -131,10 +131,8 @@ export class BarricadeSystem {
 
   // Nothing to barricade without a way out in that direction. Never the gray
   // zone's own '3' exit: that is the inevitable path, and it stays inevitable.
-  // Never a secretBlueZone exit either — Tidefall's chain is a fixed tutorial
-  // and has no business asking for a tool the tutorial hasn't handed out.
   _isBarricadeable(exit) {
-    return !!exit?.letter && !exit.threeRoom && !exit.secretBlueZone;
+    return !!exit?.letter && !exit.threeRoom;
   }
 
   // The unearned Barricade: one roll for the room, then one of its eligible

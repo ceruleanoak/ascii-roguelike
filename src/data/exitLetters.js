@@ -206,36 +206,6 @@ export const EXIT_LETTERS = {
     spellDescription: 'POWER OR PERIL?'
   },
 
-  // ── Blue-zone (Tidefall) tutorial rooms ──────────────────────────────────
-  // Weight 0: these only appear via the linear blue-zone progression (driven
-  // by game.blueZoneRoom in main.js), never via the normal weighted picker.
-  // The '~' entry exit is opened by the pearl pedestal in an Ocean room
-  // (PearlSystem.handlePearlPedestalSpace).
-  '~': {
-    name: 'Shallows',
-    roomType: 'COMBAT',
-    weight: 0,
-    spellDescription: 'THE TIDE HAS PARTED.'
-  },
-  '⌇': {
-    name: 'Reef Walk',
-    roomType: 'COMBAT',
-    weight: 0,
-    spellDescription: 'STEP WHERE NO PATH IS.'
-  },
-  '⌒': {
-    name: 'Wake Drift',
-    roomType: 'COMBAT',
-    weight: 0,
-    spellDescription: 'LEAVE A LIVE TRAIL.'
-  },
-  '◌': {
-    name: 'Pearl Cache',
-    roomType: 'CAMP',
-    weight: 0,
-    spellDescription: 'THE GIFT OF THE DEEP.'
-  },
-
   // Weight is zero — the only way to encounter a '3' exit is the gray-zone
   // one-shot call (ExitSystem stamps it at depth 3, once per run). The entry
   // exists so the renderer and LOOK NORTH recognize it when it appears;

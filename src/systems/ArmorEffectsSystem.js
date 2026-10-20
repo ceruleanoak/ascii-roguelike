@@ -3,26 +3,20 @@
  *
  * Per-frame world effects produced by whatever armor the player is wearing:
  * the elemental robes' particle aura and dodge-roll status pulse, the Moss
- * Cloak's stealth state machine, and the blue-zone water pieces (Coral Crown,
- * Stingray Mantle).
+ * Cloak's stealth state machine.
  *
  * These lived on InventorySystem because that is where `equippedArmor` is
  * stored, but they are live behavior — particles, status effects, water-state
  * mutation, damage ticks — not inventory bookkeeping. InventorySystem owns
  * what the player has; this owns what the worn piece does each frame.
  *
- * Every method bails immediately unless the relevant piece is equipped, so all
- * three can be called unconditionally from the EXPLORE update.
+ * Every method bails immediately unless the relevant piece is equipped, so each
+ * can be called unconditionally from the EXPLORE update.
  */
 
 import { GRID } from '../game/GameConfig.js';
 import { makeAuraParticle } from './WorldEffectsSystem.js';
 import { tagInteriorPlane } from './PlaneSystem.js';
-
-// Stingray Mantle on-hit discharge. A cascade loses CHARGE_DECAY_PER_RING (2)
-// per ring, so charge 2 dies before the first ring: the wearer's tile only.
-const STINGRAY_DISCHARGE_CHARGE = 2;
-const STINGRAY_DISCHARGE_DURATION = 0.5;
 
 export class ArmorEffectsSystem {
   constructor(game) {
@@ -150,53 +144,5 @@ export class ArmorEffectsSystem {
       player.mossCloakActive = false;
       player._lastDodgeActive = player.dodgeRoll.active;
     }
-  }
-
-  // ── Blue-zone armor world-effects ──────────────────────────────────────────
-  // Per-frame EXPLORE ticks for water-interaction armor. Called from
-  // updateExploreState; both bail unless the relevant piece is equipped.
-
-  updateBlueArmorEffects(deltaTime) {
-    this._updateCoralCrown();
-    this._updateStingrayMantle();
-  }
-
-  // Coral Crown: while wearing the crown and standing on a water tile, that
-  // tile becomes 'crystallized' — walkable, blocks contact slowdown, lasts 6s.
-  // Tiles auto-expire via BackgroundObject.waterStateTimer.
-  _updateCoralCrown() {
-    const game = this.game;
-    const p = game.player;
-    if (!p?.coralCrown || !p.inLiquid || !game.currentRoom) return;
-    const CS = GRID.CELL_SIZE;
-    const px = p.position.x + CS / 2;
-    const py = p.position.y + CS / 2;
-    const half = CS / 2;
-    for (const obj of game._activeBackgroundObjects()) {
-      if (obj.destroyed || obj.char !== '~') continue;
-      if (obj.waterState !== 'normal') continue;
-      const cx = obj.position.x + half;
-      const cy = obj.position.y + half;
-      if (Math.abs(cx - px) < half && Math.abs(cy - py) < half) {
-        obj.setWaterState('crystallized', 6.0);
-        break;
-      }
-    }
-  }
-
-  // Stingray Mantle: a landed hit on the wearer releases the smallest
-  // discharge — if they're standing in water, only the tile under them
-  // flips to 'electrified', briefly, shocking whatever shares it. Out of
-  // water there's nothing to carry it. (Was a continuous wake, an ambient
-  // re-seed, and its own damage tick that together kept whole pools live.)
-  _updateStingrayMantle() {
-    const game = this.game;
-    const p = game.player;
-    if (!p?.stingrayDischargePending) return;
-    p.stingrayDischargePending = false;
-    if (!p.stingrayMantle || !p.inLiquid) return;
-    const CS = GRID.CELL_SIZE;
-    game.electricitySystem?.seedAt(p.position.x + CS / 2, p.position.y + CS / 2,
-      { initialCharge: STINGRAY_DISCHARGE_CHARGE, tileDuration: STINGRAY_DISCHARGE_DURATION });
   }
 }

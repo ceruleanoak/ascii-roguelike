@@ -243,9 +243,8 @@ export class WireSystem {
   _applyStatus(entity, wireType) {
     if (wireType === 'electric') {
       // Route through the canonical electric-contact path rather than applying
-      // 'zap' here: shockEntity() carries the electric-affinity auto-immunity,
-      // the Stingray Mantle exemption, and the same iframe-gated contact damage
-      // electrified water uses. Electric-affinity enemies walk it for free.
+      // 'zap' here: shockEntity() carries the electric-affinity auto-immunity
+      // and the same iframe-gated contact damage electrified water uses. Electric-affinity enemies walk it for free.
       this.game.electricitySystem?.shockEntity(entity);
       return;
     }

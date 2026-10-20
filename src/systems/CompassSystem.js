@@ -46,11 +46,7 @@ export class CompassSystem {
   onRoomEntered(room) {
     if (!this._isHolding()) { this.markedDirection = null; return; }
 
-    // secretBlueZone exits are a fixed tutorial chain (main.js's blue-zone
-    // override) — never a candidate to mark or force-mutate.
-    const candidates = MARKABLE_DIRECTIONS.filter(dir =>
-      room?.exits?.[dir]?.letter && !room.exits[dir].secretBlueZone
-    );
+    const candidates = MARKABLE_DIRECTIONS.filter(dir => room?.exits?.[dir]?.letter);
     if (candidates.length === 0) { this.markedDirection = null; return; }
 
     const dir = candidates[Math.floor(Math.random() * candidates.length)];

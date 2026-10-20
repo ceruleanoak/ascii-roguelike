@@ -833,20 +833,12 @@ export const RESET_REGISTRY = [
   // scope for this one field. TITLE still gets it via the cascade either
   // way. ─────────────────────────────────────────────────────────────────
   {
-    path: 'blueZoneRoom',
-    scope: 'title',
-    value: 0,
-    // Plan §5.C notes this also looks like a latent death-path gap (not
-    // cleared by _resetRunToRest today), but Step 3's brief is title-only —
-    // adding it at run scope too is a separate call, flagged in the Step 3
-    // report rather than made unilaterally here.
-    why: 'Blue Zone secret-room counter starts over for a fresh title session.',
-  },
-  {
     path: 'roomGenerator.setDepth',
     scope: 'title',
     call: (game) => game.roomGenerator.setDepth(0),
-    // Same latent-death-path-gap note as blueZoneRoom above.
+    // Plan §5.C notes this also looks like a latent death-path gap (not
+    // cleared by _resetRunToRest today), but Step 3's brief was title-only —
+    // adding it at run scope too is a separate call.
     why: "Room generator depth mirrors zoneDepths' reset for the title screen; enterExploreState re-sets it per room anyway.",
   },
   {

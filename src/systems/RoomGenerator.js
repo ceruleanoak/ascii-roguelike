@@ -233,11 +233,6 @@ export class RoomGenerator {
       spawnGuaranteedItems(this, room);
     }
 
-    // Blue-zone room post-processing — armor pickup + pedestal + linear exits
-    if (this.currentLetterTemplate?.blueZoneArmor || this.currentLetterTemplate?.blueZonePedestal) {
-      this.applyBlueZoneTemplate(room);
-    }
-
     // Attach vault info if this is a vault room
     if (this.currentVaultInfo) {
       room.vaultInfo = this.currentVaultInfo;
@@ -270,9 +265,9 @@ export class RoomGenerator {
       || type === ROOM_TYPES.DISCOVERY
       || type === ROOM_TYPES.CAMP;
     if (this.currentDepth === 1 && zoneType === 'green' && introRoomEligible) {
-      // 50/50 Pearl or Onyx. Pearl gates the blue-zone Ocean exit (PearlSystem
+      // 50/50 Pearl or Onyx. Pearl gates the Ocean pedestal exit (PearlSystem
       // requires it to spawn the guide fairy) — this was a guaranteed 100%
-      // Pearl drop until deliberately made a coin flip, so blue-zone access is
+      // Pearl drop until deliberately made a coin flip, so pedestal access is
       // no longer promised every run. Pearl is still reachable the rest of a
       // no-Pearl run via the X-room crow hoard (CROW_HOARD_POOL), just at much
       // lower odds.
@@ -301,7 +296,7 @@ export class RoomGenerator {
     }
 
     // O (Ocean) + pearl-in-inventory: pre-spawn a guide fairy that gates the
-    // hidden blue-zone exit. If the player ignores it through the fight, the
+    // hidden pedestal exit. If the player ignores it through the fight, the
     // fairy reveals a pedestal at room-clear (see main.js updateExploreState).
     if (exitLetter === 'O' && !this.game?.fairiesAngered) {
       if (this.game?.hasIngredient?.('●')) {
@@ -3007,7 +3002,7 @@ export class RoomGenerator {
     // Letter templates bias the base weights per object (bgObjectRules.objectBias).
     // Multiplicative only — chars absent from the base table stay absent, so a
     // bias can't introduce an object the zone doesn't carry. Template-exclusive
-    // objects (e.g. Ocean coral) use bgObjectRules.objectWeights: absolute
+    // objects use bgObjectRules.objectWeights: absolute
     // entries merged into the table, introducing chars the zone lacks.
     const rules = this.currentLetterTemplate?.bgObjectRules;
     if (rules?.objectBias || rules?.objectWeights) {
@@ -3336,74 +3331,6 @@ export class RoomGenerator {
     }
 
     return obj;
-  }
-
-  /**
-   * Spawn guaranteed items for special room templates (e.g., vault treasure)
-   * Places items at specific positions defined by the template
-   */
-  // Blue-zone tutorial rooms: drop the armor pickup (Shallows/Reef/Wake) or the
-  // pearl-cache pedestal (Pearl Cache), and clamp exits to a linear N/S spine
-  // so the player can only advance forward or retreat. The actual N exit-letter
-  // routing (which room comes next) is set in main.js via game.blueZoneRoom.
-  applyBlueZoneTemplate(room) {
-    const tpl = this.currentLetterTemplate;
-    if (!tpl) return;
-
-    // Clear any cell collision at the spawn cell so the player can pick up / step on
-    const clearCell = (col, row) => {
-      if (!room.collisionMap?.[row]) return;
-      room.collisionMap[row][col] = false;
-      protectRegion(room, { kind: 'cells', cells: [{ col, row }] });
-    };
-
-    // Armor pickup: spawn on the south-center dry strip — players enter from
-    // south so the item is the first thing they see.
-    if (tpl.blueZoneArmor) {
-      const armorCol = 15;
-      const armorRow = 26;
-      clearCell(armorCol, armorRow);
-      const x = armorCol * GRID.CELL_SIZE;
-      const y = armorRow * GRID.CELL_SIZE;
-      const armor = new Item(tpl.blueZoneArmor, x, y);
-      room.items.push(armor);
-    }
-
-    // Pearl Cache pedestal: BackgroundObject at room center, marked for the
-    // SPACE-press handler in main.js. Mirrors the Ocean pearl-pedestal pattern.
-    if (tpl.blueZonePedestal) {
-      const pCol = 15;
-      const pRow = 15;
-      clearCell(pCol, pRow);
-      const px = pCol * GRID.CELL_SIZE;
-      const py = pRow * GRID.CELL_SIZE;
-      const pedestal = new BackgroundObject('∏', px, py);
-      pedestal.color = '#ccddff';
-      pedestal.hasCollision = true;
-      pedestal.pearlCachePedestal = true;
-      pedestal.structural = true;
-      if (room.collisionMap?.[pRow]) {
-        room.collisionMap[pRow][pCol] = true;
-      }
-      room.backgroundObjects.push(pedestal);
-      room.pearlCachePedestal = {
-        col: pCol, row: pRow,
-        x: px + GRID.CELL_SIZE / 2,
-        y: py + GRID.CELL_SIZE / 2,
-        activated: false,
-        obj: pedestal
-      };
-    }
-
-    // Linear spine — kill east/west exits. North advances, south retreats.
-    // Pearl Cache is terminal: no north (no further blue rooms); south returns
-    // to Rest. The actual N exit letter for the three combat rooms is wired in
-    // main.js where game.blueZoneRoom drives the next room generation.
-    room.exits.east = false;
-    room.exits.west = false;
-    if (tpl.blueZonePedestal) {
-      room.exits.north = false;
-    }
   }
 
   generateHutRoom(room) {

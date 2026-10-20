@@ -354,8 +354,7 @@ export class ExitSystem {
   /**
    * The zones an exit may lead to under the post-Goo-Dragon rule, or null
    * when the rule doesn't apply: the Goo Dragon still stands, the current
-   * zone has no color drift of its own (gray is sticky, blue is Tidefall's
-   * fixed chain), or no zone Boss is left standing (then the ordinary
+   * zone has no color drift of its own (gray is sticky), or no zone Boss is left standing (then the ordinary
    * completed-zone coloring runs and the north exit turns gray instead —
    * see generateExits).
    */
@@ -1034,7 +1033,7 @@ export class ExitSystem {
 
           // Pearl-guide fairy: if it's still around at room clear, the player
           // missed (or skipped) the heal/bottle touch. Reveal the pedestal so
-          // they can complete the offering and unlock the blue-zone exit.
+          // they can complete the offering and unlock the pedestal's east exit.
           game.pearlSystem.revealPearlPedestal();
 
           // A zone Boss room's exits were rolled before the kill; re-dress

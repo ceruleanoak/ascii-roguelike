@@ -321,10 +321,7 @@ export const RECIPES = [
   { left: 'ꙍ', right: '∞', result: 'ѡ', name: 'Floating Boots' }, // Boots + Wings = Floating Boots
   { left: 'g', right: 'ꙍ', result: 'ѽ', name: 'Rubber Boots' },   // Goo + Boots = Rubber Boots
 
-  // === BLUE-ZONE ARMOR (water-only mechanics) ===
-  { left: 'p', right: 'n', result: '∆', name: 'Shark Mask' },       // Pearl Shard + Sharkbone = Shark Mask
-  { left: 'p', right: 'C', result: '𐤕', name: 'Coral Crown' },      // Pearl Shard + Coral Cluster = Coral Crown
-  { left: 'p', right: 'Y', result: '⚲', name: 'Stingray Mantle' },  // Pearl Shard + Stingray Barb = Stingray Mantle
+  // === WATER ARMOR ===
   { left: 'p', right: 'V', result: '⚷', name: 'Flippers' },         // Pearl Shard + Webbed Foot = Flippers
 
   // Charged Potion true-potion recipes (from Charged Starter '!');

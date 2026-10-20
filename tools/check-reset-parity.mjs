@@ -355,7 +355,7 @@ const UNREGISTERED_ALLOWLIST = [
   // Cosmetic/feedback animation timers — every one of these is a
   // self-healing accumulator that free-runs every frame regardless of reset
   // (same category as `titleIdleTimer`, IGNOREd above, and
-  // `_hotSpringSteamTimer`/`_sharkLastDodgeInput` below): a stale leftover
+  // `_hotSpringSteamTimer` below): a stale leftover
   // value only ever shifts *when* the next blink/pulse/hint animation fires,
   // never *whether* gameplay state is correct.
   /^previewBlinkTimer$/,
@@ -389,7 +389,6 @@ const UNREGISTERED_ALLOWLIST = [
   /^previousPlayerPosition$/,
   /^_enemyTickFrame$/,
   /^_hotSpringSteamTimer$/,
-  /^_sharkLastDodgeInput$/,
   /^captiveInteractionThisFrame$/,
 ];
 

@@ -2574,12 +2574,6 @@ export const ZONE_SPAWN_TABLES = {
     12: ['S', 'O', 'G', 'W', 'K', 'T', 'L', 'a', 'd'] // L12+: Add Knights, Trolls, Looters, Shamans, Duelists
   },
 
-  // Blue zone (Tidefall) — tutorial zone. Only Frogs + Sea Snakes; injected
-  // counts in letterTemplates dominate the encounter design.
-  'blue': {
-    0: ['g', 's']
-  },
-
   // Red/cyan/yellow cap at depth 10 (bossDepth) and only offer zone changes
   // at multiples of 3 (ExitSystem.ZONE_CHANGE_DEPTH_STEP), so their bands sit
   // on those gates — 0/3/6/9 — and stop at 9: an L12 band would never spawn.

@@ -1027,7 +1027,7 @@ export class TrapSystem {
       createGooBurst(game, cx, cy, { count: 8, reach: r * 1.5, plane });
       game.audioSystem?.playSFX('goo_hit');
     } else if (trapData.effect === 'freeze') {
-      // Freeze Trap: damage + freeze enemies + crystallize water/puddle tiles + scatter ice objects.
+      // Freeze Trap: damage + freeze enemies + freeze water/puddle tiles + scatter ice objects.
       // freezePermanent enemies (slimes) lock at Infinity duration and never thaw; other ice-weak
       // enemies (freeze >1.0) also get Infinity. Everyone else uses effectDuration. The trap is
       // an all-at-once hit: straight to freeze pip 3 (Frozen — full immobilization, not just

@@ -607,9 +607,6 @@ closes on itself.
 Canon implies otherwise: see "Death's inevitability — and the Infinite Loop"
 in the Power of 3 section above.)*
 
-*(Blue / Tidefall sits outside the cosmology too — a special linear zone, not a
-path. Not everything should be a path.)*
-
 ---
 
 ## How to use this doc

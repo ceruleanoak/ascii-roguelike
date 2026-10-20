@@ -262,8 +262,8 @@ export const BARRICADE_FAMILIES = {
 };
 
 // Exit-letter colour → family. A colour absent here never raises a Barricade:
-// gray is the Three Room's own signage and blue is Tidefall's fixed tutorial
-// chain, and neither should start asking the run for tools.
+// gray is the Three Room's own signage and should not start asking the run
+// for tools.
 export const FAMILY_BY_COLOR = {
   [ZONE_COLORS.green]: 'green',
   [ZONE_COLORS.yellow]: 'yellow',

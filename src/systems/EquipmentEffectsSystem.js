@@ -48,9 +48,6 @@ export class EquipmentEffectsSystem {
     player.bladeKillHeal = false;
     player.batTransform = false;
     player.whirlwindCape = false;
-    player.sharkMask = false;
-    player.coralCrown = false;
-    player.stingrayMantle = false;
     player.deepWaterImmune = false;
 
     // Apply equipped armor properties
@@ -82,9 +79,6 @@ export class EquipmentEffectsSystem {
       player.bladeKillHeal = a.bladeKillHeal || false;
       player.batTransform = a.batTransform || false;
       player.whirlwindCape = a.whirlwindCape || false;
-      player.sharkMask = a.sharkMask || false;
-      player.coralCrown = a.coralCrown || false;
-      player.stingrayMantle = a.stingrayMantle || false;
       player.deepWaterImmune = a.deepWaterImmune || false;
     }
 

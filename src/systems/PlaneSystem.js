@@ -1,12 +1,9 @@
 /**
  * PlaneSystem — single source of truth for layer/plane interaction permission.
  *
- * The game has three planes:
+ * The game has two planes:
  *   PLANE_SURFACE   (0) — aboveground / default
  *   PLANE_TUNNEL    (1) — inside a tunnel or underground passage
- *   PLANE_SUBMERGED (2) — underwater (Shark Mask dive). Surface enemies cannot
- *                         see or attack a player on this plane; the player
- *                         re-renders as a fin glyph.
  *
  * Every interaction (attack, vision, collision, pickup, trap effect) must be
  * gated by plane membership. Rather than spreading `entity.plane === other.plane`
@@ -36,7 +33,6 @@ import { GRID } from '../game/GameConfig.js';
 
 export const PLANE_SURFACE = 0;
 export const PLANE_TUNNEL = 1;
-export const PLANE_SUBMERGED = 2;
 
 /**
  * Read an entity's plane.

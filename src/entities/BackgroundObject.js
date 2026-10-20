@@ -188,7 +188,7 @@ export class BackgroundObject {
     this.sparkTimer = 0;
 
     // Water state (only meaningful when this.char === '~')
-    this.waterState = 'normal'; // 'normal' | 'frozen' | 'poisoned' | 'electrified' | 'crystallized'
+    this.waterState = 'normal'; // 'normal' | 'frozen' | 'poisoned' | 'electrified'
     this.waterStateTimer = 0;
     // Imbued current this tile was electrified by ({ pips, source } — a zapped
     // enemy's weaker current, ElectricitySystem); null = full-strength current.
@@ -492,9 +492,6 @@ export class BackgroundObject {
       if (this.waterState === 'frozen') {
         this.animationChar = '=';
         this.animationColor = WATER_COLORS.frozen;
-      } else if (this.waterState === 'crystallized') {
-        this.animationChar = '◇';
-        this.animationColor = WATER_COLORS.crystallized;
       } else if (this.waterState === 'electrified') {
         this.animationChar = this.riverFlow ? this._directionChar : '~';
         // Blink between yellow and blue at 0.15s interval
@@ -897,10 +894,9 @@ export class BackgroundObject {
     // destroying. Thawing a Lead is always allowed.
     if (this.isLead && state === 'frozen') return;
     // Ice is solid — nothing soaks into it. A frozen tile can only thaw (or be
-    // refrozen); poison, charge and crystal all need liquid water to take.
-    // Coral Crown and ElectricitySystem already checked for this at their own
-    // call sites, but the poison paths (melee, projectile, Acid Blade flood
-    // fill) did not, so a Barbed Lance swing turned the Frosted Maw's
+    // refrozen); poison and charge both need liquid water to take.
+    // ElectricitySystem already checked for this at its own call site, but
+    // the poison paths (melee, projectile, Acid Blade flood fill) did not, so a Barbed Lance swing turned the Frosted Maw's
     // Freeze-Over sheet into a pool that then expired back to open water.
     // Guarded here for the same reason as the Lead above: one gate, not one
     // check per entry point.

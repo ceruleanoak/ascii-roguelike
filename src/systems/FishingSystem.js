@@ -64,7 +64,7 @@ export class FishingSystem {
   }
 
   // Ocean ('O') rooms fish like lakes but roll the dedicated 'ocean' table
-  // (ocean creatures + the blue-zone supply line).
+  // (ocean creatures + the sea supply line).
   isOceanRoom(game) {
     return game.currentRoom?.letterTemplate?.name === 'Ocean';
   }
