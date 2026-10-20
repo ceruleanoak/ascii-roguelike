@@ -41,11 +41,12 @@ export class PearlSystem {
       pedestal.obj.color = '#f4f4f8';
     }
 
-    // Open the east exit (normally blocked by the ocean template). The
-    // letter '~' echoes the water motif; color is blue.
+    // Open the east exit (normally blocked by the ocean template) — out to
+    // the Sunken Ship. The letter '~' echoes the water motif; color is blue.
     room.exits.east = {
       letter: '~',
       color: '#66aaff',
+      neutralScript: 'sunkenShip',
     };
     game.updateExitCollisions();
     game.renderer.markBackgroundDirty();

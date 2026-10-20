@@ -1147,6 +1147,24 @@ export const BACKGROUND_OBJECT_VARIANTS = {
       default: { animation: 'none', message: null }
     }
   },
+  // Sunken Ship hull — the wreck's planks, keel, ribs, mast and spar
+  // (SunkenShipSystem). One variant for every piece: the glyph is the shape
+  // (passed to the constructor), the data is the same weathered wood. Solid,
+  // and stamped into the room's collisionMap, so the hold is only reached
+  // through the breach in the deck.
+  'ship_hull': {
+    char: '=',
+    name: 'Ship Hull',
+    color: '#7a4a22',
+    bulletInteraction: 'block',
+    flammability: 'none',
+    conductivity: 'none',
+    indestructible: true,
+    solid: true,
+    interactions: {
+      default: { animation: 'none', message: null }
+    }
+  },
   // Petrified Trees — the Barricade material standing in the way of the third
   // north. Wood that has already turned to stone, the color the world is
   // bending toward, and nothing but an axe gets through them: the Three Room is

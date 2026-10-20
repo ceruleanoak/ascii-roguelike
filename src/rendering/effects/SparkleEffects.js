@@ -15,6 +15,9 @@ import { GRID } from '../../game/GameConfig.js';
 // the rest, which is what makes it read as intermittent rather than as an
 // animation that happens to loop.
 const CYCLE = 1.8;
+// The Sunken Ship's Slow Glint: the same visible window on a cycle five times
+// as long, so it blinks five times less often than any other glint.
+export const SLOW_GLINT_CYCLE = CYCLE * 5;
 const ACTIVE_WINDOW = 0.6;
 const SPIN_START = 0.15;
 const SPIN_LENGTH = 0.3;
@@ -28,11 +31,12 @@ export const GLITTER_SPARKLE_SPEED = 2;
  * Draws one sparkle centered on (cx, cy), or nothing if this position is
  * currently in the dead part of its cycle. The phase is hashed from the
  * position so neighbouring sparkles never blink in unison, and `speed`
- * multiplies the whole cycle — 2 halves every window above.
+ * multiplies the whole cycle — 2 halves every window above. `cycle`
+ * lengthens only the dead air, leaving the visible window as it is.
  */
-export function drawSparkle(renderer, cx, cy, speed = 1) {
+export function drawSparkle(renderer, cx, cy, speed = 1, cycle = CYCLE) {
   const phase = (((cx * 73856093) ^ (cy * 19349663)) >>> 0) % 1800 / 1000;
-  const t = ((performance.now() / 1000 + phase) * speed) % CYCLE;
+  const t = ((performance.now() / 1000 + phase) * speed) % cycle;
   if (t > ACTIVE_WINDOW) return;
 
   if (t < SPIN_START || t >= SPIN_START + SPIN_LENGTH) {
@@ -61,8 +65,9 @@ export function drawSparkle(renderer, cx, cy, speed = 1) {
 /**
  * Sunken Glints twinkle out in a green Ocean's deep water at the tall-grass
  * tempo — the same "something is hidden here" tell, now behind a swim
- * instead of a cut. Centered on the tile, like the grass sparkle. Surface
- * only: glints are seeded by generateOceanTerrain, never on an interior floor.
+ * instead of a cut. Centered on the tile, like the grass sparkle. Never on
+ * an interior floor: glints are seeded by generateOceanTerrain and in the
+ * Sunken Ship's hold (NeutralRenderer draws those).
  */
 export function drawSunkenGlints(renderer, game, shouldRender) {
   for (const obj of game.backgroundObjects) {
@@ -72,7 +77,8 @@ export function drawSunkenGlints(renderer, game, shouldRender) {
       renderer,
       obj.position.x + GRID.CELL_SIZE / 2,
       obj.position.y + GRID.CELL_SIZE / 2,
-      GRASS_SPARKLE_SPEED
+      GRASS_SPARKLE_SPEED,
+      obj.slowGlint ? SLOW_GLINT_CYCLE : CYCLE
     );
   }
 }

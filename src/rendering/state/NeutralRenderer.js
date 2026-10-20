@@ -2,6 +2,7 @@ import { GRID, COLORS } from '../../game/GameConfig.js';
 import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher.js';
 import { drawUndead } from '../ui/UndeadRenderer.js';
 import { drawFramePasses } from '../framePasses.js';
+import { drawSunkenGlints } from '../effects/SparkleEffects.js';
 
 /**
  * NeutralRenderer - Renders NEUTRAL state (Leshy Grove, Oasis, Three Room, ...)
@@ -97,6 +98,9 @@ export class NeutralRenderer {
         );
       }
     }
+
+    // The Sunken Ship's hold glints (a neutral room has no planes to hide them).
+    drawSunkenGlints(this.renderer, game, () => true);
 
     // Shared ground Frame Passes (puddles, debris, traps); prizes draw
     // plainly just below.

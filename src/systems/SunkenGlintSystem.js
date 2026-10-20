@@ -10,6 +10,10 @@ import { GRID, INTERACTION_RANGE } from '../game/GameConfig.js';
  * The glint is a flag on a deep '~' BackgroundObject, not an entity of its
  * own: seedSunkenGlints() sets it at room generation, and discovering one
  * clears it, so a room's glints are spent for the rest of the run.
+ *
+ * The Sunken Ship's hold seeds its own (SunkenShipSystem), one of which is
+ * the Slow Glint (`slowGlint`): it blinks five times less often, and finding
+ * it opens the ship's secret south exit.
  */
 
 const GLINT_ZONE = 'green';
@@ -36,11 +40,24 @@ export function seedSunkenGlints(room, deepStartCol, waterEndCol) {
   const candidates = room.backgroundObjects.filter(obj =>
     obj.deepWater && !obj.destroyed && obj.position.x >= farCol * GRID.CELL_SIZE);
 
-  const count = 1 + Math.floor(Math.random() * 2);
-  for (let i = 0; i < count && candidates.length > 0; i++) {
-    const [tile] = candidates.splice(Math.floor(Math.random() * candidates.length), 1);
+  flagSunkenGlints(candidates, 1 + Math.floor(Math.random() * 2));
+}
+
+/**
+ * Flags up to `count` of the candidate deep-water tiles as Sunken Glints,
+ * picked at random, and returns the flagged tiles. Shared by the green Ocean
+ * (seedSunkenGlints) and the Sunken Ship's hold (SunkenShipSystem), which
+ * chooses its own candidates.
+ */
+export function flagSunkenGlints(candidates, count) {
+  const pool = [...candidates];
+  const flagged = [];
+  for (let i = 0; i < count && pool.length > 0; i++) {
+    const [tile] = pool.splice(Math.floor(Math.random() * pool.length), 1);
     tile.sunkenGlint = true;
+    flagged.push(tile);
   }
+  return flagged;
 }
 
 function rollSeaFind() {
@@ -76,13 +93,16 @@ export class SunkenGlintSystem {
   }
 
   /**
-   * EXPLORE SPACE dispatch. Discovers the glint in range, if there is one:
-   * the flag clears and what it hid surfaces as a drop on the tile.
+   * EXPLORE / NEUTRAL SPACE dispatch. Discovers the glint in range, if there
+   * is one: the flag clears and what it hid surfaces as a drop on the tile.
+   * A Slow Glint hides nothing to pick up — what it held was the way south,
+   * which SunkenShipSystem opens when it sees the flag go.
    */
   handleSpacePress() {
     const glint = this.findNearby();
     if (!glint) return false;
     glint.sunkenGlint = false;
+    if (glint.slowGlint) return true;
     const char = Math.random() < COIN_CHANCE ? 'c' : rollSeaFind();
     this.game.lootSystem.spawnIngredientDrop(char, glint.position.x, glint.position.y, null, glint);
     return true;

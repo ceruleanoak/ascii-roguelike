@@ -60,6 +60,7 @@ import { AquiferSystem } from './systems/AquiferSystem.js';
 import { MetalPlatformSystem } from './systems/MetalPlatformSystem.js';
 import { SinkholeSystem } from './systems/SinkholeSystem.js';
 import { SunkenGlintSystem } from './systems/SunkenGlintSystem.js';
+import { SunkenShipSystem } from './systems/SunkenShipSystem.js';
 import { ReloadAudioSystem } from './systems/ReloadAudioSystem.js';
 import { ThreeRoomSystem } from './systems/ThreeRoomSystem.js';
 import { BarricadeSystem } from './systems/BarricadeSystem.js';
@@ -229,6 +230,7 @@ class Game {
     this.metalPlatformSystem = new MetalPlatformSystem(this); // red Island's lava-lake ferry
     this.sinkholeSystem = new SinkholeSystem(this);       // concealed G-room shortcut → yellow-zone U room
     this.sunkenGlintSystem = new SunkenGlintSystem(this); // green Ocean deep-water hidden coins (SPACE to discover)
+    this.sunkenShipSystem = new SunkenShipSystem(this); // Pearl pedestal's neutral room: Flippers rock, hold glints, Slow Glint south
     this.reloadAudioSystem = new ReloadAudioSystem(this); // held gun's magazine ticks + energy charge hum
     this.threeRoomSystem = new ThreeRoomSystem();          // the source room: N×3 + gray '3' discoveries, Death behind its door
     this.threeSlotGlobeSystem = new ThreeSlotGlobeSystem(this); // the turning globe of offerings its slots are fed from
@@ -1679,6 +1681,7 @@ class Game {
 
     // Update neutral room system script
     this.neutralRoomSystem.update(deltaTime, this.currentRoom, this.player);
+    this.sunkenShipSystem.update(deltaTime); // no-op outside the Sunken Ship
 
     // Three Room runtime — Death homing once its door is open (no-ops
     // everywhere else via the room's isThreeRoom flag). Its touch ends the

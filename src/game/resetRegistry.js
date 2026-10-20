@@ -351,6 +351,17 @@ export const RESET_REGISTRY = [
     why: 'Reset wish/slot state for fresh run (transient world effects die with the run).',
   },
   {
+    path: 'sunkenShip',
+    scope: 'run',
+    // Shape mirrors SunkenShipSystem.freshSunkenShipState (this module imports
+    // nothing from src/systems — see the layering rule at the top).
+    fresh: () => ({
+      rockPushed: false, rockCell: null, flippersTaken: false,
+      glintCells: null, glintsSpent: [], southOpen: false, serpentsSlain: false
+    }),
+    why: 'The Sunken Ship rebuilds on every entry; what the run did there (rock pushed, Flippers taken, glints spent, south open) dies with the run.',
+  },
+  {
     path: 'inventorySystem.restQuickSlots',
     scope: 'run',
     fresh: () => [null, null, null],

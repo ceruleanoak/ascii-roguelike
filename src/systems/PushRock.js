@@ -11,6 +11,8 @@ import { BackgroundObject } from '../entities/BackgroundObject.js';
  * stairs) takes one with no wiring of its own — the same rock, wired to
  * whichever gate placed it. It only ever appears where such a gate exists:
  * the rock is never a secret on its own, only the answer to a locked thing.
+ * The Sunken Ship's beach rock is the same answer: the lock is the deep sea,
+ * and the Flippers that open it lie under the rock (SunkenShipSystem).
  *
  * Rules:
  *   - Pushing is input, not contact: the player must be lined up with the

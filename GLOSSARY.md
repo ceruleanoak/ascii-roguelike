@@ -180,19 +180,44 @@ identity, not standard programming terms.
   swimming deep enough to risk drowning; SPACE in range discovers what it hides: a coin 80% of
   the time, otherwise a sea find (Pearl Shard, Sharkbone, Stingray Barb, Webbed Foot). Every
   green Ocean Room holds 1–2, in the outer half of the deep band. A discovered glint is spent.
-- **In code:** `SunkenGlintSystem` (`seedSunkenGlints` from `generateOceanTerrain`;
-  `handleSpacePress` from EXPLORE SPACE dispatch); flag `BackgroundObject.sunkenGlint` on a deep
-  `~` tile; drawn by `drawSunkenGlints` (SparkleEffects) at `GRASS_SPARKLE_SPEED`.
+  The Sunken Ship's hold holds seven more, one of them the Slow Glint.
+- **In code:** `SunkenGlintSystem` (`seedSunkenGlints` from `generateOceanTerrain`, both it and
+  SunkenShipSystem flag tiles through `flagSunkenGlints`; `handleSpacePress` from the EXPLORE and
+  NEUTRAL SPACE dispatch); flag `BackgroundObject.sunkenGlint` on a deep `~` tile; drawn by
+  `drawSunkenGlints` (SparkleEffects) at `GRASS_SPARKLE_SPEED`.
 - **Not:** a Glittering Rock (a harvestable rock that advertises itself at double sparkle speed);
   loot hidden in tall grass (a real dropped entity, concealed by the grass rather than by water);
   fishing (a catch from the Fisherman's rod, not a fixed spot).
+
+### Sunken Ship
+- **Definition:** The neutral Room behind the Pearl pedestal's east exit in a green Ocean (`O`)
+  Room. A strip of beach on the west wall, then deep sea, with a wreck listing in the middle. The
+  sea drowns anyone without Flippers, and the Flippers lie under a Push Rock on the beach. The
+  flooded hold holds seven Sunken Glints, one of them the Slow Glint. The Room is rebuilt on
+  every entry, but what the run did there (rock pushed, Flippers taken, glints spent, south open)
+  holds for the run.
+- **In code:** neutral script `sunkenShip` (`neutralRooms.js`), laid out and ticked by
+  `SunkenShipSystem` (`build`, `update` from `updateNeutralState`); `room.isSunkenShip`; hull
+  pieces are the `ship_hull` Background Object variant; run record `game.sunkenShip` (Reset
+  Registry, run scope). Reached through PearlSystem's `neutralScript: 'sunkenShip'` exit.
+- **Not:** the retired blue Zone (Tidefall), which this Room replaces as what lies past the
+  Pearl pedestal; a Zone (it has no depth and no exits deeper).
+
+### Slow Glint
+- **Definition:** The one Sunken Glint in the Sunken Ship's hold that blinks five times less
+  often than the others (same visible window, a cycle five times as long). It hides no find.
+  Discovering it opens the ship's secret south exit, with a shockwave and no message.
+- **In code:** `BackgroundObject.slowGlint` (set by `SunkenShipSystem._placeGlints`); drawn with
+  `SLOW_GLINT_CYCLE` (SparkleEffects); `SunkenShipSystem.update` opens `room.exits.south` when its
+  flag clears.
+- **Not:** a separate entity or object kind (it is a Sunken Glint with one more flag).
 
 ### Plane
 - **Definition:** Which layer of a **live** Room an entity is on — surface (0) or tunnel/cave
   (1). A Plane swap keeps the other plane simulating, because combat spans the layers (T-room
   tunnel, U-room cave, Sinkhole cave). Plane
   membership decides combat, vision, pickup, and collision eligibility.
-- **In code:** `PlaneSystem` (`PLANE_SURFACE` / `PLANE_TUNNEL` / `PLANE_SUBMERGED`,
+- **In code:** `PlaneSystem` (`PLANE_SURFACE` / `PLANE_TUNNEL`,
   `inSamePlane`, `objectOnPlane`); route new combat/vision/pickup/collision checks through it.
 - **Not:** an Interior (there the surface is frozen and the layer owns the frame); ad-hoc
   per-frame guards (the layer-leak anti-pattern — bug #107).
@@ -1623,14 +1648,15 @@ identity, not standard programming terms.
 ### Push Rock
 - **Definition:** A rock that looks identical to the unbreakable rocks around it but slides one
   cell when the player leans into it from a side with room. It is never a secret on its own,
-  only the answer to a locked thing. Moving it is a trigger. It cannot be moved back and never
+  only the answer to a locked thing (in the Sunken Ship the lock is the deep sea, and the
+  Flippers lie under the rock). Moving it is a trigger. It cannot be moved back and never
   moves again.
 - **In code:** the `push_rock` Background Object variant (`GameConfig.js`), built by
   `createPushRock()` and read by `readPushRock()` (`src/systems/PushRock.js`) as triggerMachine
   kind `'push'`, always `activation: 'permanent'`. The caller's `world` (`collisionMap`,
   `backgroundObjects`, `isReserved`, `onMove`) decides which cells it may slide into. It is placed
-  by the `push_lock` Barricade (among `cavern_rock` decoys, via `decoyTypeId`) and by Puzzle Room
-  templates (dungeon editor Push Rock tool).
+  by the `push_lock` Barricade (among `cavern_rock` decoys, via `decoyTypeId`), by Puzzle Room
+  templates (dungeon editor Push Rock tool), and on the Sunken Ship's beach (`SunkenShipSystem`).
 - **Not:** "pushable block", "movable rock", "push block", "boulder".
 
 ### Bombable wall

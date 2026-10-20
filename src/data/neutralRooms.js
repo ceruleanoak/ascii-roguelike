@@ -425,6 +425,24 @@ export const NEUTRAL_ROOMS = {
   },
 
   /**
+   * Sunken Ship — behind the Pearl pedestal's east exit (PearlSystem). Beach,
+   * deep sea and a listing wreck; SunkenShipSystem lays it out and owns what
+   * happens in it (the Flippers under the Push Rock, the hold's glints, the
+   * Slow Glint's secret south). Nothing here can be broken.
+   */
+  sunkenShip: {
+    onGenerate(room, state, roomGenerator) {
+      roomGenerator?.game?.sunkenShipSystem.build(room);
+    },
+
+    onInteract(target, player, room, state) { return null; },
+
+    onUpdate(dt, room, player, state) {},
+
+    onExit(room, player, state) {}
+  },
+
+  /**
    * Three Room — the source. An emptied room, mist cleared, holding the three
    * slots in a pyramid and one shut way north. Typing here holds a
    * conversation instead of an observation (spells.js "The Three"). SPACE

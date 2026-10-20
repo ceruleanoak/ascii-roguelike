@@ -319,6 +319,10 @@ there:
   deeper rest, a revelation room (candidate home for hidden neutral rooms,
   the Triangle Room included) — discovered rarely and unforgettably. And *it*
   hints south too.
+- **Rule — secret South Entrances hint at the southern escape ending.** A
+  south exit that is hidden until found (the Sunken Ship's Slow Glint is the
+  first) is never only a shortcut: by rule it is a hint toward the southern
+  escape ending.
 
 Representation rules otherwise mirror canon's — never named, never itemized,
 no meta text — with the remaining signatures already live in the design:
