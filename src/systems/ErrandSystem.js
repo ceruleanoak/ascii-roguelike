@@ -43,6 +43,12 @@ const STAGE_CONFIG = [
 // Coins the Betrayed Traveler drops when killed (rollSlainDrops).
 const SLAIN_COIN_REWARD = 5;
 
+// The first hit on the traveler is forgiven with this line; the next betrays it.
+const WARNING_LINE = 'HEY! ONE MORE LIKE THAT AND WE ARE DONE.';
+// After the warning, hits are ignored this long so one swing (a thrust or
+// whip lands several hitboxes on the same target) can't warn and betray at once.
+const WARNING_GRACE_MS = 600;
+
 /**
  * ErrandSystem
  *
@@ -63,8 +69,9 @@ const SLAIN_COIN_REWARD = 5;
  *   6. Stage advances (capped at 2); ErrandCharacter requests the next item.
  *   7. Death → resetOnDeath(): wipes state for a clean new run.
  *   8. Attacking the traveler (feature-inbox, Errand-only special case — not
- *      general NeutralCharacter attackability) permanently flips it hostile
- *      for the rest of the run: see checkAttackHit()/_becomeHostile().
+ *      general NeutralCharacter attackability): the first hit only draws a
+ *      warning line; the second permanently flips it hostile for the rest of
+ *      the run: see checkAttackHit()/_becomeHostile().
  *   9. Killing the Betrayed Traveler drops its purse — 5 Coins and the Shed
  *      Key if not yet given — and ends it for the rest of the run: no
  *      traveler, friendly or hostile, appears anywhere again. See
@@ -87,6 +94,8 @@ export class ErrandSystem {
     this.shedKeyGiven = false; // Final stage traded once — the Shed Key came with it
     this.hostile = false;     // Attacked the traveler — permanent for the run (resetOnDeath wipes it)
     this.slain = false;       // Betrayed Traveler killed — gone for the rest of the run (resetOnDeath wipes it)
+    this.warned = false;      // Hit once and warned — the next hit betrays it (resetOnDeath wipes it)
+    this.warnedAt = 0;        // performance.now() of the warning, for WARNING_GRACE_MS
   }
 
   // ── Hooks called by main.js ─────────────────────────────────────────────────
@@ -404,13 +413,16 @@ export class ErrandSystem {
     this.shedKeyGiven = false;
     this.hostile = false;
     this.slain = false;
+    this.warned = false;
+    this.warnedAt = 0;
   }
 
   // ── Hostility (feature-inbox) ───────────────────────────────────────────────
   // Attacking the traveler is an Errand-only special case (not general
   // NeutralCharacter attackability — a ratified design call, see
-  // AskUserQuestion history). A landed hit converts it into a hostile 'E'
-  // enemy, permanently for the rest of the run (resetOnDeath wipes it).
+  // AskUserQuestion history). The first landed hit draws a warning line; the
+  // second converts it into a hostile 'E' enemy, permanently for the rest of
+  // the run (resetOnDeath wipes both).
 
   /**
    * Called once per player melee swing from CombatSystem, right alongside
@@ -428,6 +440,13 @@ export class ErrandSystem {
     const errandChar = npcs.find(nc => nc instanceof ErrandCharacter);
     if (!errandChar) return;
     if (!combatSystem.checkMeleeCollision(attack, errandChar)) return;
+    if (!this.warned) {
+      this.warned = true;
+      this.warnedAt = performance.now();
+      game.dialogueSystem?.open(errandChar, [WARNING_LINE]);
+      return;
+    }
+    if (performance.now() - this.warnedAt < WARNING_GRACE_MS) return;
     this._becomeHostile(errandChar, npcs, combatSystem, game, room);
   }
 
