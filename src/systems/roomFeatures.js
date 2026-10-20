@@ -6,12 +6,14 @@ import { Item } from '../entities/Item.js';
 import { Ingredient } from '../entities/Ingredient.js';
 import { ENEMIES, getZoneRandomEnemy, createBossEnemy, BOSS_ENCOUNTERS } from '../data/enemies.js';
 import { ZONES } from '../data/zones.js';
+import { seedSunkenGlints } from './SunkenGlintSystem.js';
 import { ITEM_TYPES } from '../data/items.js';
 import { WeaponsMaster } from '../entities/WeaponsMaster.js';
 import { HOT_WATER_CHAR } from '../data/alchemy.js';
 import { PLANE_TUNNEL } from './PlaneSystem.js';
 import { hazardStep } from './ZoneSystem.js';
 import { createLightningSpire } from './LightningSpire.js';
+import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
 
 // Room-generation feature helpers extracted from RoomGenerator (arch budget).
 // Each takes the generator instance (`gen`) for its placement utilities.
@@ -1979,10 +1981,15 @@ export function offerL1Weapon(gen, room) {
   if (gen.currentDepth !== 1 && !unarmed) return;
   const pool = ZONES[room.zone]?.l1WeaponPool || (unarmed ? BASELINE_T1_WEAPONS : null);
   if (!pool || pool.length === 0) return;
-  const itemChar = pool[Math.floor(Math.random() * pool.length)];
+  // The safety net ignores the Spawned Items list (spawnedItems.js) both ways:
+  // an unarmed player gets a weapon even if it repeats, and it isn't recorded.
+  const itemChar = unarmed
+    ? pool[Math.floor(Math.random() * pool.length)]
+    : pickUnspawnedItem(gen.game, pool);
   const pos = gen.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
   if (pos) {
     room.items.push(new Item(itemChar, pos.x, pos.y));
+    if (!unarmed) markItemSpawned(gen.game, itemChar);
   }
 }
 
@@ -2403,6 +2410,9 @@ export function generateOceanTerrain(gen, room) {
       }
     }
   }
+
+  // Green Oceans hide a coin or two out in the deep band.
+  seedSunkenGlints(room, oceanConfig.waterStartCol + oceanShallowCols + 1, oceanConfig.waterEndCol);
 
   // Disable east exit if configured
   if (gen.currentLetterTemplate.exitRules?.disableEast) {

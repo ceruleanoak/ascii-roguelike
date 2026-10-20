@@ -40,6 +40,8 @@ import { drawFairyKingOrbit } from './effects/FairyKingOrbit.js';
 import { drawPlayerFacingIndicator } from './ui/PlayerFacingIndicator.js';
 import { drawKnownSpellHints } from './ui/ContextHints.js';
 import { drawTrine } from './effects/TrineDraw.js';
+import { drawEcho } from './effects/EchoDraw.js';
+import { drawMetalPlatform } from './effects/MetalPlatformDraw.js';
 import { hasTorchLight, drawPlayerTorchLight } from './ui/torchLight.js';
 import { drawPlayerGlyph } from './effects/PlayerGlyphDraw.js';
 import { drawDizzyOrbitals } from './effects/DizzyOrbitals.js';
@@ -85,10 +87,12 @@ const neutralFight = (game, owner) => owner !== 'neutral' || !!game.threeRoomSys
 const NON_COMBAT = 'NEUTRAL rooms are non-combat (Game State: NEUTRAL)';
 const NO_ENEMIES = 'REST has no enemies (Game State: REST)';
 const PLAIN_PRIZES = 'NeutralRenderer draws room prizes plainly: the shared tall-grass concealment would hide Leshy grass prizes';
+const ECHO_AWAY = 'the Echo is away at REST, where a broken Echo returns (DragonSpiritSystem rest-parity)';
 const TRINE_ONLY = 'the Trine fights only in the Mist Battle, on a surface Room';
 const RUSALKA_ONLY = 'the cure Rusalka surfaces only in Lake Rooms (surface)';
 const NO_DARK = 'nothing here is dark enough for a torch to cut';
 const STORM_EYE_ONLY = 'Wind Fields blow only in the Storm Eye arena, a surface Room';
+const ISLAND_ONLY = 'the Metal Platform crosses only the lava lake of an Island Room (surface)';
 
 const everywhere = { surface: true, floor: true, maze: true, rest: true, neutral: true };
 const combatOnly = { ...everywhere, neutral: NON_COMBAT };
@@ -102,6 +106,7 @@ const er = (rc) => rc.exploreRenderer;
 export const FRAME_PASSES = {
   // Lying on the floor: under enemies, attacks and the player.
   ground: [
+    { id: 'metalPlatform', on: surfaceOnly(ISLAND_ONLY), draw: (rc, game) => drawMetalPlatform(rc.renderer, game) },
     { id: 'puddles', on: combatOnly, draw: (rc, game, owner) => er(rc).drawPuddles(game, isInterior(owner)) },
     { id: 'gooBlobs', on: combatOnly, draw: (rc, game, owner) => er(rc).drawGooBlobs(game, isInterior(owner)) },
     { id: 'debris', on: combatOnly, draw: (rc, game, owner) => er(rc).drawDebris(game, isInterior(owner)) },
@@ -150,6 +155,7 @@ export const FRAME_PASSES = {
   // The player and everything attached to them.
   player: [
     { id: 'trine', on: surfaceOnly(TRINE_ONLY), draw: (rc, game) => drawTrine(rc.renderer, game) },
+    { id: 'echo', on: { ...combatOnly, rest: ECHO_AWAY }, draw: (rc, game) => drawEcho(rc.renderer, game) },
     {
       id: 'torchLight',
       on: { surface: 'surface torch light is the cave-fog torch boost (drawVisionFogOverlay)', floor: true, maze: true, rest: NO_DARK, neutral: NO_DARK },

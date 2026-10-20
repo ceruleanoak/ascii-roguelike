@@ -19,7 +19,7 @@
 | `b` | Bone | White | Skeletons |
 | `m` | Meat | Red | Animals |
 | `s` | Scale | Magenta | Dragons |
-| `F` | Fire Essence | Orange | Fire enemies |
+| `F` | Fire Essence | Orange | Fire enemies; Fire Berry + Mana (`❋` + `𝑚`) |
 | `M` | Metal | Gray | Mechanical enemies |
 | `~` | String | Gray | Spiders |
 | `|` | Stick | Brown | Trees/wood |
@@ -54,7 +54,7 @@
 | `♥` | `s` | `♦` | Dragon Heart | Passive | +5 max HP while equipped; shatters on death or death save |
 | `w` | `w` | `∞` | Wings | Speed | 30s duration |
 | `t` | `f` | `◊` | Trophy | Gold | +10 gold |
-| `w` | `F` | `✦` | Phoenix Feather | Revive | One-time revive |
+| `∞` | `F` | `✦` | Phoenix Feather | Revive | One-time revive |
 | `b` | `F` | `☠` | Cursed Skull | Curse | 10 damage, 60 radius |
 | `m` | `~` | `♥` | Heart | Passive | +2 max HP while equipped; shatters on death or death save |
 | `c` | `F` | `★` | Lucky Coin | Luck | 60s duration |
@@ -109,7 +109,6 @@
 |------|-------|--------|------|--------|---------|
 | `/` | `M` | `⌐` | Machine Gun | 1 | Burst, very fast (0.15s) |
 | `/` | `g` | `❄` | Freeze Ray | 1 | Freeze effect |
-| `/` | `F` | `⚛` | Lightning Gun | 2 | Chain to 3 enemies |
 | `⌂` | `F` | `⊕` | Rocket Launcher | 3 | 50 radius explosion |
 | `/` | `s` | `═` | Plasma Rifle | 2 | Pierce through enemies |
 | `⌐` | `F` | `◙` | Laser Cannon | 5 | Very fast bullets |
@@ -174,7 +173,6 @@
 │  └─ + F → ◙ (Laser Cannon)
 │
 ├─ + g → ❄ (Freeze Ray)
-├─ + F → ⚛ (Lightning Gun)
 ├─ + s → ═ (Plasma Rifle)
 └─ + w → ╬ (Stun Gun)
 ```
@@ -226,10 +224,9 @@ b (Bone)
 - `m` + `F` → `H` (Health Potion)
 - `†` + `F` → `‡` (Flame Sword)
 - `)` + `F` → `⟩` (Fire Bow)
-- `w` + `F` → `✦` (Phoenix Feather)
+- `∞` + `F` → `✦` (Phoenix Feather)
 - `b` + `F` → `☠` (Cursed Skull)
 - `c` + `F` → `★` (Lucky Coin)
-- `/` + `F` → `⚛` (Lightning Gun)
 - `⌂` + `F` → `⊕` (Rocket Launcher)
 - `⌐` + `F` → `◙` (Laser Cannon)
 - `⊤` + `F` → `⚯` (Thunder Axe)
@@ -275,7 +272,7 @@ b (Bone)
 ### By Ingredient: Wing (w)
 - `w` + `w` → `∞` (Wings)
 - `⟩` + `w` → `⇒` (Sky Bow)
-- `w` + `F` → `✦` (Phoenix Feather)
+- `∞` + `F` → `✦` (Phoenix Feather)
 - `/` + `w` → `╬` (Stun Gun)
 - `↑` + `w` → `╪` (Stun Baton)
 - `)` + `w` → `◈` (Homing Bow)

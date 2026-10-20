@@ -133,6 +133,17 @@ identity, not standard programming terms.
   `CrossZoneWarp.js`.
 - **Not:** the Pond (its surface entrance); a Plane (combat doesn't span the layers, so it is an
   Interior); the Imbued current (electric).
+### Metal Platform
+- **Definition:** The 2×2 steel plate that ferries across a red Island Room's lava lake, shuttling
+  along one straight channel between a dock on the outer shore (on the player's entry side) and a
+  dock on the island, pausing at each end. Riders (player or enemy) move with it and stand on
+  metal, not lava; stepping off mid-lake is stepping into lava. A lava Island's lake is the only
+  lava in its Room.
+- **In code:** `MetalPlatformSystem` (state on `room.metalPlatform`, so Room-scoped; seeded by
+  `seedMetalPlatform` from `RoomGenerator.generateIslandTerrain`); `PhysicsSystem` skips lava it
+  covers (`metalPlatformCovers`) and clears lava contact for riders (`isOnMetalPlatform`); drawn by
+  the `metalPlatform` ground Frame Pass.
+- **Not:** the dungeon Platform plank (a carried key item); a bridge (fixed); Floating Boots.
 ### Sinkhole
 - **Definition:** A concealed hole in a Grass (`G`) Room, disguised as ordinary tall grass
   until a majority of the grass tiles touching it have been cut. Once revealed, SPACE dives
@@ -149,6 +160,19 @@ identity, not standard programming terms.
   grass, is entered by the player directly (no Polymorph required), and its plane-1 space is a
   one-way cross-Zone shortcut rather than a self-contained interior loop. Also not a Burrow
   (an enemy hiding mechanic, not a player-enterable space).
+
+### Sunken Glint
+- **Definition:** A twinkle out on the deep water of a green-Zone Ocean (`O`) Room, the same
+  "something is hidden here" sparkle that loot in tall grass gives off. Reaching it means
+  swimming deep enough to risk drowning; SPACE in range discovers what it hides: a coin 80% of
+  the time, otherwise a sea find (Pearl Shard, Sharkbone, Stingray Barb, Webbed Foot). Every
+  green Ocean Room holds 1–2, in the outer half of the deep band. A discovered glint is spent.
+- **In code:** `SunkenGlintSystem` (`seedSunkenGlints` from `generateOceanTerrain`;
+  `handleSpacePress` from EXPLORE SPACE dispatch); flag `BackgroundObject.sunkenGlint` on a deep
+  `~` tile; drawn by `drawSunkenGlints` (SparkleEffects) at `GRASS_SPARKLE_SPEED`.
+- **Not:** a Glittering Rock (a harvestable rock that advertises itself at double sparkle speed);
+  loot hidden in tall grass (a real dropped entity, concealed by the grass rather than by water);
+  fishing (a catch from the Fisherman's rod, not a fixed spot).
 
 ### Plane
 - **Definition:** Which layer of a **live** Room an entity is on — surface (0), tunnel/cave (1),
@@ -258,6 +282,19 @@ identity, not standard programming terms.
 - **Not:** `attackWindup` / the Windup phase of Weapon Timing — that is Strike's own opening
   beat, not a separate hesitation before Strike begins. Conflating the two would change
   behavior across the whole roster.
+
+### Falter
+- **Definition:** A chance beat, rolled on an Enemy's decision frames while it is in Approach
+  or Flee, during which it stands still and will not commit to Anticipate/Strike (or a
+  cornered bite). It puts natural pauses into an approach or a flight. Every Enemy has it by
+  default except bosses; leaving the State ends it.
+- **In code:** `src/entities/enemyStates/falter.js` (`updateFalter` / `isFaltering` /
+  `clearFalter`, `enemy.falterTimer`), called from `approach.js` and `flee.js`. Authored per
+  State as `data.states.<approach|flee>.falter`: `false` turns it off, `{ chance, duration }`
+  overrides the defaults (15%, one `decisionInterval`).
+- **Not:** Anticipate (a declared tell that always comes before a Strike, while a Falter is a
+  roll that comes before nothing in particular); a State of its own, or a sub-state beside the
+  machine.
 
 ### Strike
 - **Definition:** The attack itself, from its opening beat through its last — collapses the
@@ -633,6 +670,16 @@ identity, not standard programming terms.
   box-drawing, literal glyphs only). Recipes in `src/data/recipes.js`.
 - **Not:** an Ingredient; never a letter/digit char.
 
+### Spawned Items
+- **Definition:** The run's no-repeat list for world item spawns. The Camp (C), the Discovery
+  Room (?), the depth-1 weapon offer and the dungeon Trap Room reward all skip an item any of
+  them already placed this run. An item counts as soon as it is placed, picked up or not.
+  When a pool has nothing left, it opens up again in full.
+- **In code:** `game.spawnedItemChars` (Reset Registry, `run` scope);
+  `pickUnspawnedItem` / `markItemSpawned` in `src/systems/spawnedItems.js`.
+- **Not:** enemy drops or the unarmed safety net in `offerL1Weapon` (neither reads nor writes
+  the list); `announcedItemChars` (items whose name the pickup box has already shown).
+
 ### Armor Flavor
 - **Definition:** The material family a worn piece belongs to, and the feel that family gives.
   **fur** (Fur / Leather) is light, quick, and slips blows. **metal** is slow and heavy.
@@ -767,6 +814,24 @@ identity, not standard programming terms.
   `_promote()` (repoints `game.player`, swaps gear).
 - **Not:** a character switch at REST; turning to face a new direction (the apex follows facing
   without a Rotate).
+
+### Dragon Spirit
+- **Definition:** The passive consumable (Fire Essence + Scale, either order) that calls up
+  the Echo while it is equipped in a consumable slot. It never triggers and is never spent;
+  unequipping it sends the Echo away.
+- **In code:** `ITEMS['ᛝ']` (`passive: true`, `dragonSpirit: true`), read by
+  `DragonSpiritSystem.isEquipped()` from `inventorySystem.equippedConsumables`.
+- **Not:** a drunk or timed buff; the Fire Essence or Scale ingredients themselves.
+
+### Echo
+- **Definition:** The player's twin, called up by an equipped Dragon Spirit: it stands one cell to
+  the side of the player's facing and fires every mirrorable weapon a second time from its own
+  spot. It shares the player's HP: an enemy attack landing on it hurts the player and breaks
+  it, and a broken Echo returns when the player enters REST. Enemies never target it.
+- **In code:** `DragonSpiritSystem` (`isEquipped()` / `broken` / `present`, the `carrier` its attacks
+  are built from); drawn by `drawEcho` (`src/rendering/effects/EchoDraw.js`). Mirrors through
+  `src/systems/mirroredWeapon.js` (`canMirror`), the same shape as a Flank.
+- **Not:** a Flank (no body or HP of its own, never part of the Trine); a Companion.
 
 ### NPC
 - **Definition:** A non-hostile character that inhabits NEUTRAL rooms and interacts with the
@@ -1430,8 +1495,8 @@ identity, not standard programming terms.
 - **Not:** "the three powers", "correct set", "win condition".
 
 ### True 3
-- **Definition:** The one exact set of offerings the room is looking for — `⊥` Hammer,
-  `⊙` Spectacles, `🜛` Mana Potion, in the Instinct / Experience / Convention slots. It is
+- **Definition:** The one exact set of offerings the room is looking for — `⬢` Onyx Hammer
+  or `⫪` Cinder Hammer, `⊙` Spectacles, `🜛` Mana Potion, in the Instinct / Experience / Convention slots. It is
   spared the north door and instead liberates South of Rest: an ending by permission.
 - **In code:** `TRUE_THREE` in `ThreeRoomSystem`. Because those three items are themselves a
   weapon, an armor and a consumable, the True 3 also satisfies the Power Trio's form rule —

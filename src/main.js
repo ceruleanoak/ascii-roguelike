@@ -11,6 +11,7 @@ import { RoomGenerator } from './systems/RoomGenerator.js';
 import { ZoneSystem } from './systems/ZoneSystem.js';
 import { CheatWarpSystem } from './systems/CheatWarpSystem.js';
 import { MistBattleSystem } from './systems/MistBattleSystem.js';
+import { DragonSpiritSystem } from './systems/DragonSpiritSystem.js';
 import { ExitSystem, isPressingIntoExitGap } from './systems/ExitSystem.js';
 import { PersistenceSystem } from './systems/PersistenceSystem.js';
 import { InventorySystem } from './systems/InventorySystem.js';
@@ -56,7 +57,10 @@ import { InteriorManager } from './systems/InteriorManager.js';
 import { CameraZoomSystem } from './systems/CameraZoomSystem.js';
 import { RoundCombatSystem } from './systems/RoundCombatSystem.js';
 import { AquiferSystem } from './systems/AquiferSystem.js';
+import { MetalPlatformSystem } from './systems/MetalPlatformSystem.js';
 import { SinkholeSystem } from './systems/SinkholeSystem.js';
+import { SunkenGlintSystem } from './systems/SunkenGlintSystem.js';
+import { ReloadAudioSystem } from './systems/ReloadAudioSystem.js';
 import { ThreeRoomSystem } from './systems/ThreeRoomSystem.js';
 import { BarricadeSystem } from './systems/BarricadeSystem.js';
 import { UndeadSystem } from './systems/UndeadSystem.js';
@@ -223,7 +227,10 @@ class Game {
     this.cameraZoomSystem = new CameraZoomSystem(this); // combat-proximity zoom
     this.roundCombatSystem = new RoundCombatSystem(this); // Quagmire wave combat
     this.aquiferSystem = new AquiferSystem(this);         // Quagmire Whirlpool + plane-1 Aquifer Current
+    this.metalPlatformSystem = new MetalPlatformSystem(this); // red Island's lava-lake ferry
     this.sinkholeSystem = new SinkholeSystem(this);       // concealed G-room shortcut → yellow-zone U room
+    this.sunkenGlintSystem = new SunkenGlintSystem(this); // green Ocean deep-water hidden coins (SPACE to discover)
+    this.reloadAudioSystem = new ReloadAudioSystem(this); // held gun's magazine ticks + energy charge hum
     this.threeRoomSystem = new ThreeRoomSystem();          // the source room: N×3 + gray '3' discoveries, Death behind its door
     this.threeSlotGlobeSystem = new ThreeSlotGlobeSystem(this); // the turning globe of offerings its slots are fed from
     this.undeadSystem = new UndeadSystem();                // the Undead a Cursed run fills the world with
@@ -267,6 +274,7 @@ class Game {
     this.consumableTriggerSystem = new ConsumableTriggerSystem(this);
     this.campNPCSystem = new CampNPCSystem(this);
     this.mistBattleSystem = new MistBattleSystem(this);
+    this.dragonSpiritSystem = new DragonSpiritSystem(this);
     this.companionSystem = new CompanionSystem(this);
     this.commandSystem = new CommandSystem(this);
     this.worldEffectsSystem = new WorldEffectsSystem(this);
@@ -809,6 +817,7 @@ class Game {
 
     // First REST of a run starts the run timer; later returns from EXPLORE leave it running
     this.runTimerSystem.beginIfIdle();
+    this.dragonSpiritSystem.onEnterRest(); // a broken Echo returns
 
     // Cancel any in-progress trap throw
     this.trapSystem.cancelTrapCharge();
@@ -1086,36 +1095,6 @@ class Game {
   // Drive reload audio for the held weapon:
   // - 'magazine' guns: one short SFX per bullet refilled (queued by Item.update)
   // - 'energy' guns: one long stoppable SFX, started when reload begins, cut when it completes
-  _updateReloadAudio(item) {
-    if (!item || !this.audioSystem) return;
-
-    // Mechanical magazine ticks
-    if (item.consumeReloadTicks) {
-      const ticks = item.consumeReloadTicks();
-      for (let i = 0; i < ticks; i++) {
-        this.audioSystem.playSFX('mag_reload');
-      }
-    }
-
-    // Energy reload state tracking — only during the reload phase, not the
-    // normal post-fire cooldown that precedes it.
-    const isEnergyReloading =
-      item.data.weaponType === 'GUN' &&
-      item.data.reloadType === 'energy' &&
-      item._reloading &&
-      !!item.data.reloadTime;
-
-    if (isEnergyReloading && this._energyReloadItem !== item) {
-      // Stop any prior energy reload (in case of weapon swap mid-charge)
-      if (this._energyReloadItem) this.audioSystem.stopSFXByName('energy_charge');
-      this.audioSystem.playStoppableSFX('energy_charge');
-      this._energyReloadItem = item;
-    } else if (!isEnergyReloading && this._energyReloadItem) {
-      this.audioSystem.stopSFXByName('energy_charge');
-      this._energyReloadItem = null;
-    }
-  }
-
   spawnCharacterNPCs() {
     this.characterSystem.spawnCharacterNPCs();
   }
@@ -2145,19 +2124,7 @@ class Game {
       if (windupAttack) {
         this.playWeaponAttackSFX(this.player.heldItem);
         this.combatSystem.createAttack(this.applyGreenDamageModifier(windupAttack), this._activeEnemies());
-        // Directly create the expanding shockwave ring for hammer-type attacks
-        const _swHits = Array.isArray(windupAttack) ? windupAttack : [windupAttack];
-        const _swTrigger = _swHits.find(a => a?.triggerShockwave);
-        if (_swTrigger) {
-          this.playerShockwave = {
-            x: _swTrigger.shockwaveOrigin.x,
-            y: _swTrigger.shockwaveOrigin.y,
-            radius: 0, prevRadius: 0,
-            maxRadius: GRID.CELL_SIZE * 5,
-            speed: GRID.CELL_SIZE * 8,
-            color: _swTrigger.shockwaveColor || _swTrigger.color,
-          };
-        }
+        this.weaponEffectsSystem.startShockwave(windupAttack); // hammer-type rings
         this.weaponEffectsSystem.onSwingComplete(this.player); // lava / lightning / bolt / dust
         if (this.characterSystem.isBlockingStaff(this.player.heldItem)) {
           this.player.staffSwingHasFired = true;
@@ -2165,7 +2132,7 @@ class Game {
         this.magicSystem.fireStaffMissile(this.player); // no-op off-staff
         this._emitSoundEvent();
       }
-      this._updateReloadAudio(this.player.heldItem);
+      this.reloadAudioSystem.update(this.player.heldItem);
     }
 
     // Bat windup visual + charge lifecycle (batCharge weapons, all states)
@@ -2412,6 +2379,7 @@ class Game {
     // Drive C-room camp NPC (idle/interested/companion/fleeing)
     this.campNPCSystem.update(deltaTime);
     this.mistBattleSystem.update(deltaTime); // Trine formation (see its rest-parity note)
+    this.metalPlatformSystem.update(deltaTime); // carries riders before physics reads their lava contact
 
     // Tick dodge blocked feedback cooldown
     if (this.dodgeBlockedFeedbackTimer > 0) {
@@ -2644,6 +2612,7 @@ class Game {
 
     // If a heal consumable fired and restored HP, treat the player as alive
     // hp <= 0 catch-all covers Rusalka, burn-through-invuln, and any direct hp writes
+    this.dragonSpiritSystem.update(deltaTime); // the Echo fires and is hit (see its rest-parity note)
     const trineCaught = this.mistBattleSystem.resolveCombat(); // Flank hits; a fallen Primary hands off
     const playerDied = !trineCaught && (combatResult.playerDead || dotKilledPlayer || lavaKilledPlayer || this.player.hp <= 0);
     if (playerDied) breakOnDeathPassives(this.inventorySystem, this.player);
@@ -3442,6 +3411,9 @@ class Game {
       const blockedByGrass = nearbyBgObject?.char === '|';
       if (!blockedByGrass && this.sinkholeSystem.handleSpacePress()) return;
 
+      // Sunken Glint in range: SPACE discovers what the deep water hides.
+      if (this.sunkenGlintSystem.handleSpacePress()) return;
+
       // Spacebar-openable containers (barrels, crates, metal boxes) supersede
       // attacking — opening should work whether or not the player is armed.
       const nearbyContainer = this.interactionSystem.findNearbyContainer();
@@ -3456,6 +3428,7 @@ class Game {
       if (this.player.heldItem && !this.captiveInteractionThisFrame && this.player.canAttack()) {
         this.combatSystem.tryUseHeldWeapon();
         this.mistBattleSystem.onAttackPress(); // Flanks fire with the Primary
+        this.dragonSpiritSystem.onAttackPress();
       } else {
         // Unarmed and no item nearby: interact with background object if present
         const nearbyObject = this.findNearbyBackgroundObject();
@@ -3638,6 +3611,7 @@ class Game {
       }
     }
     this.mistBattleSystem.onAttackRelease();
+    this.dragonSpiritSystem.onAttackRelease();
   }
 
   // SHIFT release fires the drop throw (mode='drop', started by SHIFT press).

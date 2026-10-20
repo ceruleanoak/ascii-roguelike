@@ -24,6 +24,7 @@ import {
   getPuzzleTemplateCellsWithGlyph, getPuzzleTemplateSpawners, getPuzzleTemplateLavaCells,
   getPuzzleTemplateUnbreakableRocks, getPuzzleTemplateDeflectors,
 } from '../data/dungeonPuzzleTemplates.js';
+import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
 
 /**
  * DungeonFloorGenerator — content for every dungeon floor and side room
@@ -773,7 +774,9 @@ export class DungeonFloorGenerator {
       reachable, collisionMap, backgroundObjects, getReservedFootprintCells(),
       6, rows - 5, 3, cols - 4, STAIRS_UP_ROW, STAIRS_COL
     );
-    const rewardChar = TRAP_ROOM_REWARD_POOL[Math.floor(Math.random() * TRAP_ROOM_REWARD_POOL.length)];
+    // Shares the Spawned Items list with the surface rooms (spawnedItems.js).
+    const rewardChar = pickUnspawnedItem(this.game, TRAP_ROOM_REWARD_POOL);
+    markItemSpawned(this.game, rewardChar);
     const rewardItem = Object.assign(
       new Item(rewardChar, rewardCell.col * GRID.CELL_SIZE, rewardCell.row * GRID.CELL_SIZE),
       { hutPlane: true }

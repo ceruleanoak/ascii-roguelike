@@ -45,7 +45,7 @@ Open question: Dragon Shotgun and Dragon Blade are affinity items (dragon). Rule
 | Trident `ⲯ` | pinning | aquatic, UNCOMMON |
 | Ice Hammer, Ice Bow (t3), Freeze Ray (t3) | freeze | ice, UNCOMMON |
 | Venom Pistol (t3) | lifesteal | venom, UNCOMMON |
-| Lightning Gun, Thunder Axe, Stun Gun (t3) | chain/stun | electric, UNCOMMON |
+| Thunder Axe, Stun Gun (t3) | chain/stun | electric, UNCOMMON |
 | Fishing Pole `ߒ` | fishing | goo + humanoid, UNCOMMON — arguably *utility*, i.e. dungeon-found, not a drop |
 
 ### Rule 2: affinity items in a non-matching pool

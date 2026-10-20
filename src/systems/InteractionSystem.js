@@ -981,7 +981,7 @@ export class InteractionSystem {
       // beast included, at half its authored threshold width) — the
       // thresholds stay as authored so their relative widths remain legible.
       {
-        const GRASS_DROP_RATE = 0.5;
+        const GRASS_DROP_RATE = 0.7;
         const roll = Math.random() / GRASS_DROP_RATE;
         if (roll < 0.0006) {
           // Very rare: chest

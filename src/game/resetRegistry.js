@@ -297,6 +297,12 @@ export const RESET_REGISTRY = [
     why: "Items whose name the pickup box has already shown this run; a new run names everything again, matching the pair memory's per-run reset.",
   },
   {
+    path: 'spawnedItemChars',
+    scope: 'run',
+    fresh: () => new Set(),
+    why: "The Spawned Items list (spawnedItems.js): items the C room, ? room, depth-1 weapon offer and dungeon Trap Room have already placed this run, so they don't place them again. A new run starts with nothing seen.",
+  },
+  {
     path: 'restBundle',
     scope: 'run',
     value: null,
@@ -799,6 +805,12 @@ export const RESET_REGISTRY = [
       'player.tombSapped', 'player._tombSapTimer', 'player._tombSappingGhost',
     ],
     why: "InteriorManager.reset() is Non-Goals-exempt (PRD: system-owned reset methods keep their internal logic; the registry only guarantees the CALL happens at the right scope). InteriorManager.reset() already runs from its own three direct call sites (enterRestState, transitionToNeutralRoom, enterExploreState) — those are unchanged by this entry. Registering it here at 'room' scope means it ALSO now fires a 4th time via applyRoomSwap's applyReset('room') call (Step 6) — every existing call site to those three functions already runs applyRoomSwap downstream, so this is a same-tick duplicate call, not a new independent trigger. Verified idempotent: every field it writes is a plain null/-1/[]/new-Set() assignment, and its one side-effecting call (inventorySystem.consumeKeyItem('⚿')) is a no-op splice-miss when nothing is held (InventorySystem.js:321-326) — so the duplicate call is inert, not merely 'probably harmless'. Registering it was primarily for FR5 traceability (plan §5.E) so the harness's registry-coverage check accounts for the game.*/player.* fields it reaches via `covers`, without duplicating InteriorManager's own internal reset logic as table entries — the extra call is an accepted side effect of that, not the goal.",
+  },
+  {
+    path: 'dragonSpiritSystem.reset',
+    scope: 'run',
+    call: (game) => game.dragonSpiritSystem.reset(),
+    why: "The Echo stands beside the player while a Dragon Spirit (a passive consumable) is equipped; a hit breaks it until the next REST (DragonSpiritSystem.onEnterRest). Whether it is equipped is read live from the consumable slots, which the inventory reset owns. reset() clears the broken flag and the Echo's carrier and weapon copy, all system-owned state.",
   },
   {
     path: 'mistBattleSystem.reset',

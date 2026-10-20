@@ -33,8 +33,7 @@ import { CHARACTER_TYPES } from '../data/characters.js';
 import { PUZZLE_ROOM_TEMPLATES } from '../data/dungeonPuzzleTemplates.js';
 import { steerToward } from './npcSteering.js';
 import { tryDeathSave } from './DeathSaveSystem.js';
-import { attackHitsBox, isSweptStrike } from '../game/Telegraph.js';
-import { inSamePlane } from './PlaneSystem.js';
+import { canMirror, mirrorPress, mirrorRelease, mirrorAutoAttack, tickMirroredWeapon, resolveEnemyHitsOn, reportHit } from './mirroredWeapon.js';
 import { createExplosion } from '../entities/Particle.js';
 import { DEATH_CAUSES } from '../data/deathCauses.js';
 
@@ -63,17 +62,9 @@ const WAVE_FLOOR = 3;
 const WAVE_SIZE = 4;
 const WAVE_DELAY = 1.5;
 
-// Weapon behavior that lives in Primary-bound systems (MagicSystem's mana
-// meter, the bat-charge and flail-spin tickers in main.js, the charge-hammer
-// lifecycle) can't run on a Flank. Every body draws from the same pools
-// because Rotate can promote any body to Primary, so these stay out of all
-// three loadouts.
-function isTrineCapable(data) {
-  if (data.weaponSubtype === 'bat' || data.weaponSubtype === 'flail') return false;
-  if (data.chargeHammer || data.gemWand || data.batCharge || data.flailSpin) return false;
-  if (data.manaCost) return false;
-  return true;
-}
+// Weapons that can't mirror (canMirror: bat, flail, charge hammer, gem wand,
+// mana weapons) stay out of all three loadouts: Rotate can promote any body
+// to Primary, so every body draws from the same pools.
 
 // Utility = the weapon families the dungeon puzzle rooms teach on their
 // pedestals (whip, boomerang, torch today). Derived from the templates rather
@@ -94,7 +85,7 @@ function buildLoadoutPools() {
 
   const pools = { melee: [], ranged: [], utility: [], armor: [], consumables: [] };
   for (const [char, data] of Object.entries(ITEMS)) {
-    if (data.type !== ITEM_TYPES.WEAPON || !isTrineCapable(data)) continue;
+    if (data.type !== ITEM_TYPES.WEAPON || !canMirror(data)) continue;
     if (isUtilityWeapon(data, pedestalData)) pools.utility.push(char);
     else if (data.weaponType === WEAPON_TYPES.MELEE) pools.melee.push(char);
     else if (data.weaponType === WEAPON_TYPES.GUN || data.weaponType === WEAPON_TYPES.BOW) pools.ranged.push(char);
@@ -332,50 +323,24 @@ export class MistBattleSystem {
   // pattern (CampNPCSystem._tryAttack): `use(body)` / `releaseBow()` build the
   // attack from that body's position, and CombatSystem resolves it. The
   // Primary-only damage modifier (shrines, Frog Coin, training — all read
-  // `game.player`) is deliberately not applied to Flank attacks.
+  // `game.player`) is deliberately not applied to Flank attacks. The press,
+  // repeat, release and tick shapes are shared with the Dragon Spirit's Echo
+  // (mirroredWeapon.js).
 
-  _fire(attack) {
+  _fire = (attack) => {
     if (attack) this.game.combatSystem.createAttack(attack, this.game._activeEnemies());
-  }
+  };
 
   /** SPACE press, right after the Primary's attack (main.js handleSpacePress). */
   onAttackPress() {
     if (!this.active) return;
-    for (const { body } of this.flanks()) {
-      if (body.heldItem && body.canAttack()) this._fire(body.useHeldItem());
-    }
+    for (const { body } of this.flanks()) mirrorPress(body, this._fire);
   }
 
   /** SPACE release: loose every charged Flank bow (mirrors handleSpaceRelease). */
   onAttackRelease() {
     if (!this.active) return;
-    for (const { body } of this.flanks()) {
-      if (body.heldItem?.isCharging && body.canAttack()) this._fire(body.heldItem.releaseBow());
-    }
-  }
-
-  // Held-SPACE repeat for guns and melee, the per-Flank shape of
-  // CharacterSystem.handleAutoAttack (charge weapons fire on release instead).
-  _autoAttack(body) {
-    const game = this.game;
-    const weapon = body.heldItem;
-    if (!game.keys.space || !game.attackSequenceActive || !weapon) return;
-    const type = weapon.data.weaponType;
-    if (type === WEAPON_TYPES.BOW || type === 'WAND' || type === 'UTILITY') return;
-    // Held SPACE simply resumes once a Flank's roll ends — no roll-queued shot.
-    if (!body.dodgeRoll.active && body.canAttack()) this._fire(body.useHeldItem());
-  }
-
-  // A Flank's held weapon ticks here, at the same WEAPON_TIMER_RATE as the
-  // Primary's (main.js updatePlayerMechanics); a completed windup lands here.
-  _tickWeapon(body, deltaTime) {
-    const weapon = body.heldItem;
-    if (!weapon?.update) return;
-    const windupAttack = weapon.update(deltaTime * PHYSICS.WEAPON_TIMER_RATE);
-    if (windupAttack) {
-      this.game.playWeaponAttackSFX(weapon);
-      this._fire(windupAttack);
-    }
+    for (const { body } of this.flanks()) mirrorRelease(body, this._fire);
   }
 
   /**
@@ -544,52 +509,14 @@ export class MistBattleSystem {
   }
 
   _applyEnemyDamageToFlanks() {
-    const cs = this.game.combatSystem;
-    const projectiles = cs.enemyProjectiles || [];
-    const melee = cs.enemyMeleeAttacks || [];
     for (const member of this.flanks()) {
       const body = member.body;
-      for (let i = projectiles.length - 1; i >= 0; i--) {
-        const proj = projectiles[i];
-        if (proj.reflected || !inSamePlane(proj, body)) continue;
-        if (!cs.checkProjectileCollisionWithPlayer(proj, body)) continue;
-        const result = body.takeDamage(proj.damage, { isBullet: true, element: proj.onHit, attacker: proj.owner });
-        if (result === false) continue; // i-frames: the shot passes through
-        projectiles.splice(i, 1);
-        this._reportHit(body, result, proj.damage, proj.position, proj.knockbackForce || PHYSICS.DEFAULT_DAMAGE_KNOCKBACK);
-      }
-      for (const attack of melee) {
-        if (attack.windupPhase || attack.isCharmedAttack) continue;
-        if ((attack.shooterPlane ?? 0) !== 0) continue;
-        let resolved = this.meleeResolved.get(attack);
-        if (resolved?.has(body)) continue;
-        const connected = attackHitsBox(attack, body.getHitbox(), () => cs.checkMeleeCollisionWithPlayer(attack, body));
-        // A still attack gets one test per Flank; a travelling strike keeps
-        // testing until it connects (Telegraph.retireAfterTest's rule).
-        if (connected || !isSweptStrike(attack)) {
-          if (!resolved) this.meleeResolved.set(attack, resolved = new Set());
-          resolved.add(body);
-        }
-        if (!connected) continue;
-        const result = body.takeDamage(attack.damage, { isBullet: false, isMelee: true, element: attack.onHit, attacker: attack.owner });
-        if (result === false) continue;
-        this._reportHit(body, result, attack.damage, attack.position, attack.knockback);
-      }
+      resolveEnemyHitsOn(this.game, body, this.meleeResolved, (damage, source, from, knockbackForce) => {
+        const result = body.takeDamage(damage, source);
+        if (result !== false) reportHit(this.game, body, result, damage, from, knockbackForce);
+        return result;
+      });
       if (body.hp <= 0) this._fall(member);
-    }
-  }
-
-  // Damage number + knockback for a landed hit, matching CombatSystem's
-  // player-hit reporting (dodge/block/immune words, else the damage taken).
-  _reportHit(body, result, damage, from, knockbackForce) {
-    const cs = this.game.combatSystem;
-    const { x, y } = body.position;
-    if (result?.dodged) cs.createDamageNumber(result.lucky ? 'LUCKY DODGE' : 'DODGE', x, y, result.lucky ? '#ffff66' : '#ffff00');
-    else if (result?.blocked) cs.createDamageNumber(result.guard ?? 'BLOCK', x, y, '#aaaaaa');
-    else if (result?.immune) cs.createDamageNumber('IMMUNE', x, y, '#00ffff');
-    else {
-      cs.createDamageNumber(result?.actualDamage ?? damage, x, y, body.color);
-      if (knockbackForce) this.game.physicsSystem.applyKnockback(body, from.x, from.y, knockbackForce);
     }
   }
 
@@ -670,8 +597,8 @@ export class MistBattleSystem {
       if (body.hp <= 0) continue;
       body.facing.x = lead.facing.x;
       body.facing.y = lead.facing.y;
-      this._tickWeapon(body, deltaTime);
-      this._autoAttack(body);
+      tickMirroredWeapon(game, body, deltaTime, this._fire);
+      mirrorAutoAttack(game, body, this._fire);
       if (body.dodgeRoll.active) continue; // the roll owns velocity; drift back afterward
 
       const slot = this._slotPosition(k);

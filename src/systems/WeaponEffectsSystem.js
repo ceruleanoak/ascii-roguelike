@@ -59,6 +59,25 @@ export class WeaponEffectsSystem {
   }
 
   // Called once when the held weapon's windup completes and its attack spawns.
+  /**
+   * A completed windup whose hits include a `triggerShockwave` hit (hammer-
+   * type attacks) starts the player's expanding shockwave ring
+   * (game.playerShockwave, advanced by InteractionSystem).
+   */
+  startShockwave(windupAttack) {
+    const hits = Array.isArray(windupAttack) ? windupAttack : [windupAttack];
+    const trigger = hits.find(a => a?.triggerShockwave);
+    if (!trigger) return;
+    this.game.playerShockwave = {
+      x: trigger.shockwaveOrigin.x,
+      y: trigger.shockwaveOrigin.y,
+      radius: 0, prevRadius: 0,
+      maxRadius: GRID.CELL_SIZE * 5,
+      speed: GRID.CELL_SIZE * 8,
+      color: trigger.shockwaveColor || trigger.color,
+    };
+  }
+
   onSwingComplete(player) {
     const data = player.heldItem?.data;
     if (!data) return;

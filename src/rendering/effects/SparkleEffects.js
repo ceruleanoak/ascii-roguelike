@@ -58,6 +58,25 @@ export function drawSparkle(renderer, cx, cy, speed = 1) {
  *
  * `shouldRender(obj)` is ExploreRenderer's plane-aware visibility check.
  */
+/**
+ * Sunken Glints twinkle out in a green Ocean's deep water at the tall-grass
+ * tempo — the same "something is hidden here" tell, now behind a swim
+ * instead of a cut. Centered on the tile, like the grass sparkle. Surface
+ * only: glints are seeded by generateOceanTerrain, never on an interior floor.
+ */
+export function drawSunkenGlints(renderer, game, shouldRender) {
+  for (const obj of game.backgroundObjects) {
+    if (!obj.sunkenGlint || obj.destroyed) continue;
+    if (!shouldRender(obj)) continue;
+    drawSparkle(
+      renderer,
+      obj.position.x + GRID.CELL_SIZE / 2,
+      obj.position.y + GRID.CELL_SIZE / 2,
+      GRASS_SPARKLE_SPEED
+    );
+  }
+}
+
 export function drawGlitterSparkles(renderer, game, shouldRender) {
   for (const obj of game.backgroundObjects) {
     if (!obj.data?.showsGlitter || obj.destroyed) continue;

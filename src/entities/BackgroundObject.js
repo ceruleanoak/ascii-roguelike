@@ -60,6 +60,10 @@ export class BackgroundObject {
     // this class beyond the render-color override in update()/getRenderPosition().
     this.deepWater = options.deepWater || false;
 
+    // Sunken Glint — a deep tile in a green Ocean hiding a coin or sea find,
+    // shown only as a twinkle (see SunkenGlintSystem). Cleared on discovery.
+    this.sunkenGlint = options.sunkenGlint || false;
+
     // Obsidian flag — unbreakable rock (darker gray rendering)
     this.obsidian = options.obsidian || false;
     if (this.obsidian && char === '0') {

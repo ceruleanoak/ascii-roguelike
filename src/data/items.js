@@ -267,26 +267,6 @@ export const ITEMS = {
     reloadType: 'energy',
     color: '#00ffff'
   },
-  '↯': {
-    char: '↯',
-    tier: 3,
-    name: 'Lightning Gun',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.GUN,
-    damage: 1,
-    cooldown: 0.8,
-    chain: true,
-    chainCount: 1,
-    onHit: 'stun',
-    electric: true,
-    electricityCharge: 20,
-    requiresCharge: true,
-    bulletChar: '↯',
-    maxUses: 5,
-    reloadTime: 7,
-    reloadType: 'energy',
-    color: '#ffff00'
-  },
   '⟰': {
     char: '⟰',
     tier: 3,
@@ -1064,6 +1044,8 @@ export const ITEMS = {
     locksMovement: true,
     critChance: 0.35,
     weaponLevel: 2,
+    // Knocks an unbreakable rock loose into a rolling rock (BoulderSystem.rollFromRest).
+    rollsRock: true,
     color: '#666666'
   },
   // Hammer + Metal: the plain Hammer's ring, swung faster (shorter windup and recovery).
@@ -1190,8 +1172,8 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'spear',
     damage: 2,
-    windup: 0.25,
-    recovery: 0.55,
+    windup: 0.35,
+    recovery: 0.85,
     patternSpeed: 0.06,
     // Needle-thin thrust hitbox — 50% narrower than the default cell.
     attackWidth: GRID.CELL_SIZE * 0.5,
@@ -1227,7 +1209,7 @@ export const ITEMS = {
     weaponSubtype: 'spear',
     damage: 2,
     windup: 0.5,
-    recovery: 0.6,
+    recovery: 1.2,
     patternSpeed: 0.05,
     range: 32,
     knockback: 350,
@@ -1243,7 +1225,7 @@ export const ITEMS = {
     weaponSubtype: 'spear',
     damage: 3,
     windup: 0.7,
-    recovery: 0.5,
+    recovery: 1.5,
     patternSpeed: 0.05,
     range: 34,
     color: '#ddaa44'
@@ -1725,7 +1707,7 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'hammer',
     damage: 4, windup: 0.35, recovery: 0.8, range: 20,
     attackPattern: 'hammerRing', locksMovement: true, critChance: 0.35, weaponLevel: 3,
-    dustBurst: { status: 'blind', duration: 3.0, color: '#888888' },
+    dustBurst: { status: 'blind', duration: 3.0, color: '#888888', burnTicks: 1 },
     color: '#555555'
   },
   // Slag Maul (Maul + Slag): the impact leaves a lava patch.
@@ -2472,6 +2454,14 @@ export const ITEMS = {
     effect: 'damageBuff', permanentUntilRoomExit: true, damageBonus: 2, oneShot: true,
     manualOnly: true, color: '#3355ff',
     leavesBottle: true
+  },
+  // Fire Essence + Scale (recipes.js, either order): a passive consumable.
+  // While equipped it calls up the Echo, the player's twin, which fires every
+  // mirrorable weapon a second time. A hit breaks it until the next REST
+  // (DragonSpiritSystem).
+  'ᛝ': {
+    char: 'ᛝ', name: 'Dragon Spirit', type: ITEM_TYPES.CONSUMABLE,
+    passive: true, dragonSpirit: true, color: '#ff4488'
   },
   '★': {
     char: '★',
@@ -3764,7 +3754,7 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     ['e'],              // Eye (luminescent orb)
     },
     weapons: {
-      [RARITY.UNCOMMON]: ['↯', 'ᚨ', 'ᚾ'],   // Lightning Gun, Thunder Axe, Stun Gun
+      [RARITY.UNCOMMON]: ['ᚨ', 'ᚾ'],        // Thunder Axe, Stun Gun
       [RARITY.RARE]:     ['ᛚ', '⚶'],       // Chain Bow, Topaz Staff
     },
     traps: {

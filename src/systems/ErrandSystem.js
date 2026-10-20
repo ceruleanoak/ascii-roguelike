@@ -29,7 +29,7 @@ const STAGE_CONFIG = [
     // Stage 1: starter weapon (or a plain bottled consumable) for a strong
     // mid-tier weapon or armor
     requestPool: ['¬', '†', ')', '/', '↑', '◐'],  // tier-1 starters, Bottle of Mud
-    rewardPool:  ['⌐', 'ᛁ', '↯', 'ᛞ', 'ᚺ', 'ᛟ', 'ᛏ', '✺', '𐤆'],
+    rewardPool:  ['⌐', 'ᛁ', 'ᛞ', 'ᚺ', 'ᛟ', 'ᛏ', '✺', '𐤆'],
     isIngredient: false
   },
   {

@@ -45,7 +45,7 @@ import { objectVisibleToPlayer } from '../../systems/PlaneSystem.js';
 import { drawVisionFogOverlay } from '../ui/torchLight.js';
 import { drawWellCoinHint, drawDoorPrompts } from '../ui/ContextHints.js';
 import { drawManaGems } from '../effects/ManaGemRenderer.js';
-import { drawSparkle, drawGlitterSparkles, GRASS_SPARKLE_SPEED } from '../effects/SparkleEffects.js';
+import { drawSparkle, drawGlitterSparkles, drawSunkenGlints, GRASS_SPARKLE_SPEED } from '../effects/SparkleEffects.js';
 import { drawWhirlpool } from '../effects/WhirlpoolEffects.js';
 import { stepConcealmentAlpha } from '../../systems/WorldEffectsSystem.js';
 import { drawFracturedRock } from '../sprites/fracturedRockSprite.js';
@@ -455,6 +455,9 @@ export class ExploreRenderer {
 
     // Glittering Rocks twinkle each frame (see drawGlitterSparkles).
     drawGlitterSparkles(this.renderer, game, (obj) => this.shouldRenderBackgroundObject(obj, game.player, game.currentRoom));
+
+    // Sunken Glints twinkle in green Ocean deep water (see SunkenGlintSystem).
+    drawSunkenGlints(this.renderer, game, (obj) => this.shouldRenderBackgroundObject(obj, game.player, game.currentRoom));
 
     // Quagmire Whirlpool spins on the surface once the rounds clear.
     drawWhirlpool(this.renderer, game);

@@ -14,6 +14,8 @@ import { Crow } from '../entities/Crow.js';
 import { Fairy } from '../entities/Fairy.js';
 import { spawnCellBlockedByBackground } from './safeSpawn.js';
 import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, isCellProtected, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placeWhirlpool, generateSettlementRoom as generateSettlementRoomImpl, buildForcedRiverParams, generateYellowWaterTemplate, cellularCaveGrid, isCaveEntranceLanding, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, spawnGuaranteedItems, offerL1Weapon, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl } from './roomFeatures.js';
+import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
+import { seedMetalPlatform, makeZoneLava, islandLavaFeatures } from './MetalPlatformSystem.js';
 
 // Zone-boss arena → letter template key. Boss rooms are entered without a
 // letter (cheat warp) or with an arbitrary one (normal progression), so we
@@ -781,11 +783,12 @@ export class RoomGenerator {
       '¡', '⊗', '🜛', '∾', '↑', 'ᑕ',
       '𐤒', '★', '¤', '✦', 'ᛟ', 'S', '⏦'
     ];
-    const itemChar = rareItems[Math.floor(Math.random() * rareItems.length)];
+    const itemChar = pickUnspawnedItem(this.game, rareItems);
     const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
     if (pos) {
       const item = new Item(itemChar, pos.x, pos.y);
       room.items.push(item);
+      markItemSpawned(this.game, itemChar);
     }
 
     // Generate background objects
@@ -802,11 +805,12 @@ export class RoomGenerator {
     // Baseline weapon pool: sword (†) and staff (/) most common; spear (↑), bow ()), dagger (↾) less common.
     // Weighting via repetition keeps this dependency-free.
     const basicItems = ['†', '†', '†', '/', '/', '/', '↑', ')', '↾'];
-    const itemChar = basicItems[Math.floor(Math.random() * basicItems.length)];
+    const itemChar = pickUnspawnedItem(this.game, basicItems);
     const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
     if (pos) {
       const item = new Item(itemChar, pos.x, pos.y);
       room.items.push(item);
+      markItemSpawned(this.game, itemChar);
     }
 
     // Generate background objects
@@ -1555,6 +1559,11 @@ export class RoomGenerator {
       waterDensity, barrelMin, barrelMax
     } = config;
     const barrelCount = this.randInt(barrelMin, barrelMax);
+    // A lava zone's Island (red) is a solid lava lake, ending at lakeRadius so
+    // the shore stays dry, crossed only on the Metal Platform.
+    const lava = islandLavaFeatures(room, this.currentLetterTemplate);
+    const makeLava = lava && makeZoneLava(lava);
+    const density = lava ? 1 : waterDensity;
 
     // Shoreline transition bands
     const islandInner  = islandRadius - edgeNoise;  // Always land
@@ -1587,20 +1596,20 @@ export class RoomGenerator {
 
         if (dist > islandOuter && dist < lakeInner) {
           // Core water ring — full density
-          waterChance = waterDensity;
+          waterChance = density;
         } else if (dist > islandInner && dist <= islandOuter) {
           // Island shoreline — smooth fade from land to water
           const t = (dist - islandInner) / (islandOuter - islandInner);
-          waterChance = t * waterDensity;
-        } else if (dist >= lakeInner && dist < lakeOuter) {
+          waterChance = t * density;
+        } else if (dist >= lakeInner && dist < (lava ? lakeRadius : lakeOuter)) {
           // Outer shoreline — smooth fade from water to outer land
           const t = 1 - (dist - lakeInner) / (lakeOuter - lakeInner);
-          waterChance = t * waterDensity;
+          waterChance = t * density;
         }
 
         if (waterChance > 0 && Math.random() < waterChance) {
-          const water = new BackgroundObject('~', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
-          room.backgroundObjects.push(water);
+          room.backgroundObjects.push(makeLava ? makeLava(col, row)
+            : new BackgroundObject('~', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
         }
       }
     }
@@ -1623,6 +1632,8 @@ export class RoomGenerator {
         placed++;
       }
     }
+
+    if (makeLava) seedMetalPlatform(room, config, makeLava);
   }
 
   generateOceanTerrain(room) {
@@ -1980,7 +1991,7 @@ export class RoomGenerator {
           : null;
         generateYellowWaterTemplate(this, room, forced);
       }
-    } else {
+    } else if (!islandLavaFeatures(room, this.currentLetterTemplate)) { // a lava Island's lake is its only lava
       // Structured liquid (depth 3+, or always in zones with special liquids like lava)
       if (this.currentDepth >= 3 || zoneHasSpecialLiquid) {
         this.placeLiquidStructures(room, effectiveZone);
@@ -2783,6 +2794,7 @@ export class RoomGenerator {
 
     for (let i = 0; i < objectCount; i++) {
       const char = this.weightedRandomChoice(weights);
+      if (char === '~' && islandLavaFeatures(room, this.currentLetterTemplate)) continue;
       const pos = this.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
       if (!pos) continue;
 

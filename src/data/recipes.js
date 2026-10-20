@@ -15,6 +15,10 @@ export const RECIPES = [
   { left: 't', right: 'f', result: '𝑚', name: 'Mana' },  // Teeth + Fur  (beast remains)
   { left: 'g', right: 'a', result: '𝑚', name: 'Mana' },  // Goo + Ash    (residue)
 
+  // Fire Berry + Mana = Fire Essence: like Mana above, a crafted raw
+  // ingredient — a steady route to F beside the stoked-fireplace roll.
+  { left: '❋', right: '𝑚', result: 'F', name: 'Fire Essence' },
+
   // === GOLEM SUMMONS (ingredient + Mana → companion, not an item) ===
   // The "result" chars below are sentinels (src/data/golems.js /
   // ITEMS['♟'] etc.) — CraftingSystem.claimCraftedGolem() intercepts them
@@ -185,9 +189,11 @@ export const RECIPES = [
   { left: '⊤', right: 'b', result: '⚒', name: 'Bone Crusher' },   // Bone Axe + Bone = Bone Crusher
 
   // New ingredient combinations
-  { left: 'w', right: 'F', result: '✦', name: 'Phoenix Feather' }, // Wing + Fire = Phoenix Feather
+  { left: '∞', right: 'F', result: '✦', name: 'Phoenix Feather' }, // Wings + Fire Essence = Phoenix Feather
   { left: 's', right: 'M', result: '𐤓', name: 'Dragon Scale Armor' }, // Scale + Metal = Dragon Scale Armor
   { left: '⛓', right: 's', result: '𐤓', name: 'Dragon Scale Armor' }, // Chain Mail + Scale = Dragon Scale Armor (scales set into the rings)
+  { left: 'F', right: 's', result: 'ᛝ', name: 'Dragon Spirit' },   // Fire Essence + Scale = Dragon Spirit
+  { left: 's', right: 'F', result: 'ᛝ', name: 'Dragon Spirit' },   // either order (the Echo)
   { left: 'g', right: 'f', result: '⚗', name: 'Slurry' },         // Goo + Fur = Slurry
   { left: '↾', right: '⚗', result: 'ᚢ', name: 'Acid Blade' },     // Dagger + Slurry = Acid Blade
   { left: 'm', right: '~', result: '♥', name: 'Heart' },          // Meat + String = Heart
@@ -200,7 +206,6 @@ export const RECIPES = [
   // === NEW GUN RECIPES (10) ===
   { left: 'ᛉ', right: 'j', result: '⌐', name: 'Machine Gun' },     // Shotgun + Goo = Machine Gun
   { left: '¬', right: '⬨', result: 'ᛁ', name: 'Freeze Ray' },      // Gun + Sapphire = Freeze Ray
-  { left: '¬', right: 'F', result: '↯', name: 'Lightning Gun' },   // Gun + Fire = Lightning Gun
   { left: 'ᛉ', right: 'F', result: '⟰', name: 'Rocket Launcher' }, // Shotgun + Fire = Rocket Launcher
   { left: '¬', right: 's', result: 'ᛞ', name: 'Plasma Rifle' },    // Gun + Scale = Plasma Rifle
   { left: '⌐', right: 'F', result: 'ᛋ', name: 'Laser Cannon' },    // Machine Gun + Fire = Laser Cannon
