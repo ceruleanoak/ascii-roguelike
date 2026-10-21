@@ -252,13 +252,26 @@ const ELECTRIC_POLES = {
   ]
 };
 
+// ── Cyan ────────────────────────────────────────────────────────────────────
+// Cyan is the zone that hands out arrowheads and the bow.
+
+// A plug of bullseyes. Each block falls to one bullet or one arrow and turns
+// every other blow away — swings, bombs, a staff's missile, a boomerang. Only
+// something that fires opens it.
+const TARGETS = {
+  id: 'targets',
+  shape: 'material',
+  typeId: 'barricade_target'
+};
+
 export const BARRICADE_FAMILIES = {
   green: [ROCKS, PETRIFIED_TREES, WHIP_LOCK, BOOMERANG_LOCK, SPEAR_LOCK, GRASS_LOCK, PUSH_LOCK],
   yellow: [LAVA_MOAT, ICE_BLOCKS, ELECTRIC_POLES],
   // Red — mastery gates, keyed to weapon-class upgrades. Deliberately empty:
   // a red exit raises nothing until they are authored, rather than borrowing
   // another family's question and calling it mastery.
-  red: []
+  red: [],
+  cyan: [TARGETS]
 };
 
 // Exit-letter colour → family. A colour absent here never raises a Barricade:
@@ -267,5 +280,6 @@ export const BARRICADE_FAMILIES = {
 export const FAMILY_BY_COLOR = {
   [ZONE_COLORS.green]: 'green',
   [ZONE_COLORS.yellow]: 'yellow',
-  [ZONE_COLORS.red]: 'red'
+  [ZONE_COLORS.red]: 'red',
+  [ZONE_COLORS.cyan]: 'cyan'
 };

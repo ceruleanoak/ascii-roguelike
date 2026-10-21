@@ -144,6 +144,11 @@ export class InteractionSystem {
       return attack.onHit === 'burn' ? null : SMASH_REFUSED;
     }
 
+    // Barricade Target answers to a shot, never a swing (BackgroundObject's
+    // shotOnly gate would refuse the damage anyway; this gives the swing the
+    // same refusal every other material gives).
+    if (obj.data?.shotOnly) return SMASH_REFUSED;
+
     return null;
   }
 

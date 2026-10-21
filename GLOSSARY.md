@@ -1672,7 +1672,8 @@ identity, not standard programming terms.
   Gray has no family and raises nothing — gray is the Three Room's own signage.
 - **In code:** `BARRICADE_FAMILIES` keyed by family name, `FAMILY_BY_COLOR` mapping a `ZONE_COLORS`
   value onto one. An empty family (red, for now) raises nothing rather than borrowing another
-  family's question.
+  family's question. Cyan's only member so far is the Barricade Target, which asks for a gun or a
+  bow rather than a sacrifice.
 - **Not:** "barricade type", "gate category", "tier", "colour group".
 
 ### Petrified Tree
@@ -1683,6 +1684,16 @@ identity, not standard programming terms.
   ordinary Tree's `'Y'` char deliberately, because CombatSystem keys the axe requirement on the
   char; the variant keeps that gate while dropping the Tree's flammability and `slowing`.
 - **Not:** "gray tree", "stone tree", "dead tree", "fossil tree".
+
+### Barricade Target
+- **Definition:** The cyan Barricade plug: a block of bullseyes (`◎`), each broken by one bullet
+  from a gun or one arrow from a bow, and by nothing else. Swings, bombs, rolls, boulders, a
+  staff's missile, a boomerang and enemy shots all bounce off it.
+- **In code:** the `barricade_target` Background Object variant (`GameConfig.js`), raised by the
+  `targets` entry in `barricades.js`. Its `shotOnly` flag is the gate: `BackgroundObject.takeDamage`
+  refuses any hit not marked `{ shot: true }`, and `handleBulletCollision` marks only a gun or bow
+  shot (`isGunOrBowShot`). Shares `◎` with the hut's Looking Glass; the variant swaps the data.
+- **Not:** "target block", "bullseye", "shooting gallery", "target wall".
 
 ### Cavern
 - **Definition:** Like layer 1 in the U room, but a smaller, hut-sized area meant for secrets.

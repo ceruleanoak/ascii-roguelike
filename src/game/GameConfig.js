@@ -1306,6 +1306,27 @@ export const BACKGROUND_OBJECT_VARIANTS = {
       default: { animation: 'melt', message: null }
     }
   },
+  // Barricade Target — the cyan plug. A bullseye per block that answers to a
+  // gun's bullet or a bow's arrow and nothing else: BackgroundObject's
+  // `shotOnly` gate turns every other damage path away (swings, bombs, rolls,
+  // boulders), and handleBulletCollision bounces any other projectile — a staff
+  // missile, a thrown bolt, a boomerang, an enemy's shot. One shot per block.
+  // Shares '◎' with the hut's Looking Glass; the typeId swaps the data, the
+  // colour tells them apart.
+  'barricade_target': {
+    char: '◎',
+    name: 'Barricade Target',
+    color: '#44ffff',
+    hp: 1,
+    shotOnly: true,
+    bulletInteraction: 'interact-destroy',
+    flammability: 'none',
+    conductivity: 'none',
+    solid: true,
+    interactions: {
+      default: { animation: 'shake', message: null }
+    }
+  },
   // Barricade Wall — the unbreakable plug a 'trigger' or 'circuit' Barricade
   // stands in the exit gap. Solid block, because that is what the room's own
   // perimeter is: ASCIIRenderer.drawBorder paints the border as filled cells,

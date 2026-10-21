@@ -1,6 +1,15 @@
 import { GRID, BACKGROUND_OBJECTS, BACKGROUND_OBJECT_VARIANTS, OBJECT_ANIMATIONS, WATER_COLORS } from '../game/GameConfig.js';
 import { ITEMS, INGREDIENTS } from '../data/items.js';
 
+// A player's shot from a gun or a bow (the Slingshot's bullet included) —
+// what a Barricade Target answers to. A boomerang flies as an arrow but is a
+// thrown weapon, not a shot.
+function isGunOrBowShot(proj) {
+  if (proj.boomerang) return false;
+  const weaponType = ITEMS[proj.weaponChar]?.weaponType;
+  return weaponType === 'GUN' || weaponType === 'BOW';
+}
+
 // Concurrency window for `registerSpark()` — mirrors FireSystem's
 // EMBER_STACK_WINDOW (the same "close together counts, spread out doesn't"
 // shape used for the player's own ember-contact burn threshold).
@@ -251,7 +260,7 @@ export class BackgroundObject {
 
   // Called by melee attacks (and can be called by any damage source).
   // Returns { destroyed, effect } where effect is the dropEffect string on kill.
-  takeDamage(amount, isBlade = false) {
+  takeDamage(amount, isBlade = false, opts = {}) {
     // Block damage if already queued for destruction (prevents animation spam)
     if (this.destroyAfterAnimation) {
       return { destroyed: false, effect: null };
@@ -272,6 +281,15 @@ export class BackgroundObject {
     }
 
     if (this.indestructible || this.hp === null) {
+      this._playAnimation('shake');
+      return { destroyed: false, effect: null };
+    }
+
+    // A shotOnly object (Barricade Target) takes damage from a gun's bullet or
+    // a bow's arrow alone — handleBulletCollision passes `shot` for those.
+    // Gating here rather than at each caller turns away every other path at
+    // once: melee, explosions, rolls, boulders.
+    if (this.data?.shotOnly && !opts.shot) {
       this._playAnimation('shake');
       return { destroyed: false, effect: null };
     }
@@ -691,6 +709,18 @@ export class BackgroundObject {
     if (this.puzzleSignal) {
       const result = this.takeDamage(1);
       return { bulletBehavior: 'block', effect: result.effect, shouldDestroyBullet: true, message: null, object: this };
+    }
+
+    // Barricade Target: a gun's bullet or a bow's arrow breaks a block; any
+    // other projectile (staff missile, thrown bolt, boomerang, enemy shot)
+    // bounces off it like off a wall.
+    if (this.data?.shotOnly) {
+      if (!isGunOrBowShot(bullet)) {
+        this._playAnimation('bounce');
+        return { bulletBehavior: 'block', effect: null, shouldDestroyBullet: true, message: null, object: this };
+      }
+      const result = this.takeDamage(1, false, { shot: true });
+      return { bulletBehavior: 'interact-destroy', effect: result.destroyed ? result.effect : null, shouldDestroyBullet: true, message: null, object: this };
     }
 
     // Mana gems: indestructible but projectiles pass through and gain affinity
