@@ -34,6 +34,7 @@ export const ReformMechanic = {
       SplitOnDamageMechanic.notifySplitChildGone(enemy.parentRef, enemy, true);
       const ref = enemy.parentRef;
       enemy.parentRef = null;
+      enemy.absorbedByParent = true; // reabsorbed, not killed: no loot or mana drop
       enemy.hp = 0;
       return { suspend: true, result: { dotDamage: dotDamageEvents, absorbedBy: ref } };
     }

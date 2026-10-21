@@ -439,6 +439,7 @@ export class Enemy {
     // Slime split path. Fields default to inactive.
     this.parentRef = null;
     this.reformValue = 0;
+    this.absorbedByParent = false; // merged back into the boss — EnemyUpdateSystem drops nothing for it
 
     // ── Follow-leader (Goblin Army followers) ─────────────────────────────────
     // leaderRef, formationRadius, etc. attached post-construction by the

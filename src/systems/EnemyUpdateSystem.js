@@ -706,7 +706,10 @@ export class EnemyUpdateSystem {
           game.physicsSystem.addEntity(item);
         }
 
-        game.spawnLoot(enemy);
+        // A split child the boss reabsorbed wasn't killed — its HP went back
+        // into the boss (ReformMechanic), so it drops no loot and no mana.
+        // Anything it was carrying (dropInventory above) still falls.
+        if (!enemy.absorbedByParent) game.spawnLoot(enemy);
 
         // Alchemist dropLastThrown: guaranteed drop of the last potion type thrown
         if (enemy.data.potionMechanic?.dropLastThrown && enemy.lastPotionThrown) {
@@ -721,7 +724,7 @@ export class EnemyUpdateSystem {
         // kill (100% on bosses) to drop a Mana ingredient (𝑚) that auto-refills
         // the meter on pickup. Skipped when the meter is already full so the
         // player isn't tempted to dawdle for waste drops.
-        if (game.player?.magicMeter?.active &&
+        if (!enemy.absorbedByParent && game.player?.magicMeter?.active &&
             game.player.magicMeter.current < game.player.magicMeter.max) {
           // Instance flag first (roomFeatures boss spawns), shared data
           // second (Centipede head's own data object) — #215.
