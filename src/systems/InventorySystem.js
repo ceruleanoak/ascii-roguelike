@@ -23,6 +23,10 @@ import { tickConsumableFlash } from './ConsumableSlotFlash.js';
 import { countItemChar, removeItemChar } from './itemCostDispatch.js';
 import * as ingredientPile from './IngredientPile.js';
 
+// Consumable slots every run starts with; boss kills and the Bat Belfry
+// unlock more, up to 5 (unlockConsumableSlot).
+const STARTING_CONSUMABLE_SLOTS = 2;
+
 export class InventorySystem {
   constructor() {
     // THE ingredient pile — every raw ingredient the player is holding, in one
@@ -86,12 +90,12 @@ export class InventorySystem {
     // Equipment slots (lost on death)
     this.equippedArmor = null; // Single armor slot
     this.onArmorEquipped = null; // Game wires: Armor Flavor word on equip
-    this.equippedConsumables = [null]; // 1 consumable slot to start (can expand to 5)
-    this.maxConsumableSlots = 1; // Unlockable up to 5; resets on death
+    this.equippedConsumables = Array(STARTING_CONSUMABLE_SLOTS).fill(null); // can expand to 5
+    this.maxConsumableSlots = STARTING_CONSUMABLE_SLOTS; // Unlockable up to 5; resets on death
 
     // Consumable HUD feedback state
-    this.spentConsumableSlots = [false]; // tracks ONE-SHOT used slots this run
-    this.consumableCooldowns = [0]; // cooldown timers for reusable consumables
+    this.spentConsumableSlots = Array(STARTING_CONSUMABLE_SLOTS).fill(false); // tracks ONE-SHOT used slots this run
+    this.consumableCooldowns = Array(STARTING_CONSUMABLE_SLOTS).fill(0); // cooldown timers for reusable consumables
     this.consumableFlashTimer = 0; // HUD flash duration in seconds (kept for compat)
     this.consumableFlashSlot = -1; // which slot is flashing (-1 = none)
     // Blink animation: alternates solid block ↔ normal char
@@ -937,12 +941,12 @@ export class InventorySystem {
     this.keyItemInventory = [];
     this.coinWallet = 0;
     this.equippedArmor = null;
-    this.equippedConsumables = [null];
+    this.equippedConsumables = Array(STARTING_CONSUMABLE_SLOTS).fill(null);
 
     // Clear consumable state and reset unlocked slots
-    this.maxConsumableSlots = 1;
-    this.spentConsumableSlots = [false];
-    this.consumableCooldowns = [0];
+    this.maxConsumableSlots = STARTING_CONSUMABLE_SLOTS;
+    this.spentConsumableSlots = Array(STARTING_CONSUMABLE_SLOTS).fill(false);
+    this.consumableCooldowns = Array(STARTING_CONSUMABLE_SLOTS).fill(0);
     this.consumableFlashTimer = 0;
     this.consumableFlashSlot = -1;
     this.consumableBlinkSlot = -1;

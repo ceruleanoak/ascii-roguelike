@@ -1111,7 +1111,8 @@ export class BossSystem {
 
     // Announce
     this.game.menuSystem.showPickupMessage('The Goo Dragon is defeated!', '#22ff66', 3.0);
-    this._grantBossReward();
+    // The Dragon Forge is the Goo Dragon's reward in place of the slot unlock.
+    this._grantBossReward({ unlockSlot: false });
     this._scheduleZoneMusicResume();
 
     this.deactivate();
@@ -1119,9 +1120,9 @@ export class BossSystem {
 
   // ── Boss reward ────────────────────────────────────────────────────────────
 
-  /** Grant +1 consumable slot, screen flash, and announce. */
-  _grantBossReward() {
-    this.game.inventorySystem.unlockConsumableSlot();
+  /** Grant +1 consumable slot (unless the boss pays out otherwise), screen flash, and announce. */
+  _grantBossReward({ unlockSlot = true } = {}) {
+    if (unlockSlot) this.game.inventorySystem.unlockConsumableSlot();
     this.game.screenFlash = { startTime: performance.now(), duration: 600, color: '#ffffff' };
     this.game.menuSystem.showPickupMessage('Your power has grown');
     this.game.audioSystem.playSFX('boss_defeat');
