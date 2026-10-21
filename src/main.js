@@ -555,6 +555,7 @@ class Game {
         if (key === '6') this.handleSelectConsumableSlot(2);
         if (key === '7') this.handleSelectConsumableSlot(3);
         if (key === '8') this.handleSelectConsumableSlot(4);
+        if (key === 'r') this.player?.heldItem?.startManualReload?.(); // gun reload (Item)
       }
 
       // Arrow keys for dodge rolling — suppressed when polymorphed

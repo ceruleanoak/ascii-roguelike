@@ -1754,6 +1754,22 @@ export class Item {
     }
   }
 
+  // R key: start the reload phase early on a gun whose magazine isn't full.
+  // Same phase the empty-mag auto reload enters (update() above), so the
+  // reload SFX, the BowChargeIndicator bar and the full-mag refill all follow
+  // without anything new. Takes the full reloadTime however many rounds are
+  // left. Refused mid-charge or mid-windup, so a held shot isn't thrown away.
+  startManualReload() {
+    if (this.data.weaponType !== 'GUN' || !this.data.reloadTime || this.maxUses === null) return false;
+    if (this._reloading || this.usesRemaining >= this.maxUses) return false;
+    if (this.isCharging || this.windupActive) return false;
+    this._reloading = true;
+    this.cooldownTimer = this.data.reloadTime;
+    this._reloadTicksPlayed = 0;
+    this._reloadTicksPending = 0;
+    return true;
+  }
+
   // Drain pending mechanical reload ticks (audio layer plays one SFX per tick).
   consumeReloadTicks() {
     const n = this._reloadTicksPending || 0;
