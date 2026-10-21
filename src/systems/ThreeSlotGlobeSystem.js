@@ -189,6 +189,9 @@ export class ThreeSlotGlobeSystem {
       }
     } else if (intent === 'confirm') {
       this._confirm();
+    } else if (intent === 'shift') {
+      // Back out without placing — the slot stays empty (onClose clears it).
+      this.game.pauseSystem.closeModal();
     }
   }
 
