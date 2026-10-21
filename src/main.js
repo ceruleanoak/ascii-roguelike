@@ -61,6 +61,7 @@ import { MetalPlatformSystem } from './systems/MetalPlatformSystem.js';
 import { SinkholeSystem } from './systems/SinkholeSystem.js';
 import { SunkenGlintSystem } from './systems/SunkenGlintSystem.js';
 import { SunkenShipSystem } from './systems/SunkenShipSystem.js';
+import { OceanPushRockSystem } from './systems/OceanPushRockSystem.js';
 import { ReloadAudioSystem } from './systems/ReloadAudioSystem.js';
 import { ThreeRoomSystem } from './systems/ThreeRoomSystem.js';
 import { BarricadeSystem } from './systems/BarricadeSystem.js';
@@ -231,7 +232,8 @@ class Game {
     this.metalPlatformSystem = new MetalPlatformSystem(this); // red Island's lava-lake ferry
     this.sinkholeSystem = new SinkholeSystem(this);       // concealed G-room shortcut → yellow-zone U room
     this.sunkenGlintSystem = new SunkenGlintSystem(this); // green Ocean deep-water hidden coins (SPACE to discover)
-    this.sunkenShipSystem = new SunkenShipSystem(this); // Pearl pedestal's neutral room: Flippers rock, hold glints, Slow Glint south
+    this.sunkenShipSystem = new SunkenShipSystem(this); // Pearl pedestal's neutral room: hold glints, Slow Glint south
+    this.oceanPushRockSystem = new OceanPushRockSystem(this); // every O room's Push Rock, Flippers under it
     this.reloadAudioSystem = new ReloadAudioSystem(this); // held gun's magazine ticks + energy charge hum
     this.threeRoomSystem = new ThreeRoomSystem();          // the source room: N×3 + gray '3' discoveries, Death behind its door
     this.threeSlotGlobeSystem = new ThreeSlotGlobeSystem(this); // the turning globe of offerings its slots are fed from
@@ -2732,6 +2734,7 @@ class Game {
 
     // Drive trigger-shaped Barricades toward the moment their plug lifts
     this.barricadeSystem.update(deltaTime);
+    this.oceanPushRockSystem.update(deltaTime); // O room's Push Rock (see its rest-parity note)
 
     // Drive X-room χ proximity buzz + strike resolution
     this.chiBladeSystem.update(deltaTime);

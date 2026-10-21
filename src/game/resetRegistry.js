@@ -356,11 +356,10 @@ export const RESET_REGISTRY = [
     // Shape mirrors SunkenShipSystem.freshSunkenShipState (this module imports
     // nothing from src/systems — see the layering rule at the top).
     fresh: () => ({
-      rockPushed: false, rockCell: null, flippersTaken: false,
       glintCells: null, glintsSpent: [], southOpen: false, serpentsSlain: false,
       moonPearlTaken: false
     }),
-    why: 'The Sunken Ship rebuilds on every entry; what the run did there (rock pushed, Flippers taken, glints spent, south open, Sea Serpents slain, Moon Pearl taken) dies with the run.',
+    why: 'The Sunken Ship rebuilds on every entry; what the run did there (glints spent, south open, Sea Serpents slain, Moon Pearl taken) dies with the run.',
   },
   {
     path: 'inventorySystem.restQuickSlots',

@@ -192,10 +192,10 @@ identity, not standard programming terms.
 ### Sunken Ship
 - **Definition:** The neutral Room behind the Pearl pedestal's east exit in a green Ocean (`O`)
   Room. A strip of beach on the west wall, then deep sea, with a wreck listing in the middle. The
-  sea drowns anyone without Flippers, and the Flippers lie under a Push Rock on the beach. The
-  flooded hold holds seven Sunken Glints, one of them the Slow Glint. The Room is rebuilt on
-  every entry, but what the run did there (rock pushed, Flippers taken, glints spent, south open)
-  holds for the run. The secret south leads down into the Sunken Hold.
+  sea drowns anyone without Flippers; the Room supplies none (they lie under the Ocean's Push
+  Rock). The flooded hold holds seven Sunken Glints, one of them the Slow Glint. The Room is
+  rebuilt on every entry, but what the run did there (glints spent, south open) holds for the
+  run. The secret south leads down into the Sunken Hold.
 - **In code:** neutral script `sunkenShip` (`neutralRooms.js`), laid out and ticked by
   `SunkenShipSystem` (`build`, `update` from `updateNeutralState`); `room.isSunkenShip`; hull
   pieces are the `ship_hull` Background Object variant; run record `game.sunkenShip` (Reset
@@ -1706,15 +1706,16 @@ identity, not standard programming terms.
 ### Push Rock
 - **Definition:** A rock that looks identical to the unbreakable rocks around it but slides one
   cell when the player leans into it from a side with room. It is never a secret on its own,
-  only the answer to a locked thing (in the Sunken Ship the lock is the deep sea, and the
-  Flippers lie under the rock). Moving it is a trigger. It cannot be moved back and never
+  only the answer to a locked thing (in every green Ocean (`O`) Room the lock is the deep sea,
+  and the Flippers lie under the rock). Moving it is a trigger. It cannot be moved back and never
   moves again.
 - **In code:** the `push_rock` Background Object variant (`GameConfig.js`), built by
   `createPushRock()` and read by `readPushRock()` (`src/systems/PushRock.js`) as triggerMachine
   kind `'push'`, always `activation: 'permanent'`. The caller's `world` (`collisionMap`,
   `backgroundObjects`, `isReserved`, `onMove`) decides which cells it may slide into. It is placed
   by the `push_lock` Barricade (among `cavern_rock` decoys, via `decoyTypeId`), by Puzzle Room
-  templates (dungeon editor Push Rock tool), and on the Sunken Ship's beach (`SunkenShipSystem`).
+  templates (dungeon editor Push Rock tool), and on every Ocean Room's sand
+  (`OceanPushRockSystem`: `placeOceanPushRock` from `generateOceanTerrain`, `room.oceanPushRock`).
 - **Not:** "pushable block", "movable rock", "push block", "boulder".
 
 ### Bombable wall

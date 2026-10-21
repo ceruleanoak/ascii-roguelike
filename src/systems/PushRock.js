@@ -11,8 +11,8 @@ import { BackgroundObject } from '../entities/BackgroundObject.js';
  * stairs) takes one with no wiring of its own — the same rock, wired to
  * whichever gate placed it. It only ever appears where such a gate exists:
  * the rock is never a secret on its own, only the answer to a locked thing.
- * The Sunken Ship's beach rock is the same answer: the lock is the deep sea,
- * and the Flippers that open it lie under the rock (SunkenShipSystem).
+ * The Ocean room's rock is the same answer: the lock is the deep sea, and
+ * the Flippers that open it lie under the rock (OceanPushRockSystem).
  *
  * Rules:
  *   - Pushing is input, not contact: the player must be lined up with the
@@ -38,7 +38,7 @@ const SLIDE_SECONDS = 0.3;
 // front of this rock's face. The round hitbox stops a player well off-line, so
 // a tighter band leaves a player blocked by the rock, leaning into it, and
 // nothing moving — easy to land in on open ground with nothing to line you up
-// (the Sunken Ship's beach). Strictly under half a cell keeps two rocks side
+// (an Ocean room's sand). Strictly under half a cell keeps two rocks side
 // by side from both taking the same lean.
 const ALIGN_TOLERANCE_CELLS = 0.5;
 

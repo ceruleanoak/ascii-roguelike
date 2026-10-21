@@ -427,7 +427,7 @@ export const NEUTRAL_ROOMS = {
   /**
    * Sunken Ship — behind the Pearl pedestal's east exit (PearlSystem). Beach,
    * deep sea and a listing wreck; SunkenShipSystem lays it out and owns what
-   * happens in it (the Flippers under the Push Rock, the hold's glints, the
+   * happens in it (the hold's glints, the
    * Slow Glint's secret south). Nothing here can be broken.
    */
   sunkenShip: {

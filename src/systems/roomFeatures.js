@@ -7,6 +7,7 @@ import { Ingredient } from '../entities/Ingredient.js';
 import { ENEMIES, getZoneRandomEnemy, createBossEnemy, BOSS_ENCOUNTERS } from '../data/enemies.js';
 import { ZONES } from '../data/zones.js';
 import { seedSunkenGlints } from './SunkenGlintSystem.js';
+import { placeOceanPushRock } from './OceanPushRockSystem.js';
 import { ITEM_TYPES } from '../data/items.js';
 import { WeaponsMaster } from '../entities/WeaponsMaster.js';
 import { HOT_WATER_CHAR } from '../data/alchemy.js';
@@ -2413,6 +2414,9 @@ export function generateOceanTerrain(gen, room) {
 
   // Green Oceans hide a coin or two out in the deep band.
   seedSunkenGlints(room, oceanConfig.waterStartCol + oceanShallowCols + 1, oceanConfig.waterEndCol);
+
+  // Every Ocean has a Push Rock on its sand with the Flippers under it.
+  placeOceanPushRock(room, oceanConfig);
 
   // Disable east exit if configured
   if (gen.currentLetterTemplate.exitRules?.disableEast) {

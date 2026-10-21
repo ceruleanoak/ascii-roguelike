@@ -1,8 +1,5 @@
 import { GRID, WATER_COLORS } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
-import { Item } from '../entities/Item.js';
-import { createPushRock } from './PushRock.js';
-import { tickTriggers } from './triggerMachine.js';
 import { flagSunkenGlints } from './SunkenGlintSystem.js';
 
 /**
@@ -12,8 +9,8 @@ import { flagSunkenGlints } from './SunkenGlintSystem.js';
  * of it. Nothing in the room says what to do.
  *
  *   - The sea drowns the player on the ordinary wet-pip clock. The answer is
- *     the Flippers, under a Push Rock on the beach: the rock looks like any
- *     other, gives way to a lean, and the Flippers are lying where it stood.
+ *     the Flippers, found under the Push Rock every Ocean room keeps on its
+ *     sand (OceanPushRockSystem) — the room itself supplies nothing.
  *   - The hold is flooded a darker blue, and glints catch the light in it
  *     (SunkenGlintSystem). One of them, the Slow Glint, blinks five times less
  *     often than the rest. Finding it opens a secret south exit — no message,
@@ -26,8 +23,7 @@ import { flagSunkenGlints } from './SunkenGlintSystem.js';
  *
  * The room is rebuilt from scratch on every entry (NeutralRoomSystem), so
  * what the player has done here lives in the run-scoped `game.sunkenShip`
- * (Reset Registry) and build() replays it: rock already pushed, Flippers
- * gone, glints spent, south open.
+ * (Reset Registry) and build() replays it: glints spent, south open.
  */
 
 // The wreck's brown (BACKGROUND_OBJECT_VARIANTS.ship_hull) — the south
@@ -42,10 +38,6 @@ const SEA_BORDER_COLOR = '#1d3f6e';
 // and everything east of that is deep.
 const BEACH_END_COL = 4;
 const SHALLOW_COL = BEACH_END_COL + 1;
-
-// The rock sits up the beach, clear of the return exit's warp band (rows
-// 14–16 on the west wall), with open sand on every side so any lean moves it.
-const ROCK_CELL = { col: 3, row: 6 };
 
 // The hull runs stern (west) to bow (east). It lists to port: the deck steps
 // down one row every five cells toward the stern, and the keel follows it.
@@ -70,9 +62,6 @@ const GLINT_COUNT = 7;
 /** The run's record of the Sunken Ship — the Reset Registry's `sunkenShip`. */
 export function freshSunkenShipState() {
   return {
-    rockPushed: false,
-    rockCell: null,         // { col, row } the rock slid to
-    flippersTaken: false,
     glintCells: null,       // [{ col, row, slow }] — seeded on the first visit
     glintsSpent: [],        // 'col,row' keys of discovered glints
     southOpen: false,
@@ -127,7 +116,6 @@ export class SunkenShipSystem {
       }
     }
 
-    this._placeRock(room, state);
     this._placeGlints(room, state, holdTiles);
     if (state.southOpen) this._southExit(room);
   }
@@ -157,33 +145,14 @@ export class SunkenShipSystem {
   }
 
   /**
-   * Per-frame tick while the Sunken Ship is the current room: the rock's
-   * lean, the Flippers leaving the floor, and glints being found.
+   * Per-frame tick while the Sunken Ship is the current room: glints being
+   * found.
    */
   update(deltaTime) {
     const game = this.game;
     const room = game.currentRoom;
     if (!room?.isSunkenShip) return;
     const state = game.sunkenShip;
-
-    const rock = room.sunkenShipRock;
-    if (rock && !state.rockPushed) {
-      const world = {
-        collisionMap: room.collisionMap,
-        backgroundObjects: room.backgroundObjects,
-        onMove: () => game.renderer?.markBackgroundDirty?.()
-      };
-      if (tickTriggers([rock], deltaTime, game.player, game.companion, world)) {
-        this._onRockPushed(room, state, rock);
-      }
-    }
-
-    // Picked up: the Flippers are off the floor for the rest of the run.
-    const flippers = room.sunkenShipFlippers;
-    if (flippers && !game.items.includes(flippers)) {
-      state.flippersTaken = true;
-      room.sunkenShipFlippers = null;
-    }
 
     for (const glint of room.sunkenShipGlints) {
       if (glint.tile.sunkenGlint || state.glintsSpent.includes(glint.key)) continue;
@@ -224,39 +193,6 @@ export class SunkenShipSystem {
     for (const { col, row } of SPAR_CELLS) walls.set(cellKey(col, row), '/');
 
     return { walls, hold };
-  }
-
-  _placeRock(room, state) {
-    const cell = state.rockPushed ? state.rockCell : ROCK_CELL;
-    const rock = createPushRock(cell.col, cell.row);
-    if (state.rockPushed) rock.active = true;
-    room.backgroundObjects.push(rock);
-    room.sunkenShipRock = rock;
-
-    room.sunkenShipFlippers = null;
-    if (state.rockPushed && !state.flippersTaken) {
-      room.sunkenShipFlippers = this._flippersAt(ROCK_CELL);
-      room.items.push(room.sunkenShipFlippers);
-    }
-  }
-
-  // The rock has slid off its cell: what it was sitting on is uncovered.
-  _onRockPushed(room, state, rock) {
-    const cs = GRID.CELL_SIZE;
-    state.rockPushed = true;
-    state.rockCell = {
-      col: Math.round(rock.position.x / cs),
-      row: Math.round(rock.position.y / cs)
-    };
-    const flippers = this._flippersAt(ROCK_CELL);
-    room.sunkenShipFlippers = flippers;
-    this.game.items.push(flippers);
-    this.game.physicsSystem.addEntity(flippers);
-  }
-
-  _flippersAt(cell) {
-    const cs = GRID.CELL_SIZE;
-    return new Item('⚷', cell.col * cs, cell.row * cs);
   }
 
   // The hold's glints sit in the same cells for the whole run; spent ones
