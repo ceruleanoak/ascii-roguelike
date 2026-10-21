@@ -181,7 +181,7 @@ body {
 
 /* Bracket colors match their REST mode canvas slot equivalents */
 #armor-display {
-  color: #4488ff; /* blue — matches armor [ ] slot on canvas */
+  color: #00cccc; /* cyan — matches armor [ ] slot on canvas */
 }
 
 #consumable-display {

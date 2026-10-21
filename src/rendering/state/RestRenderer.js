@@ -337,7 +337,7 @@ export class RestRenderer {
         if (item) { slotItemName = item.data.name; slotItemColor = '#ff4444'; }
       } else if (nearestSlot.type === 'equipment-armor') {
         const armor = game.inventorySystem.equippedArmor;
-        if (armor) { slotItemName = armor.data.name; slotItemColor = '#4488ff'; }
+        if (armor) { slotItemName = armor.data.name; slotItemColor = '#00cccc'; }
       } else if (nearestSlot.type === 'equipment-consumable1') {
         const cons = game.inventorySystem.equippedConsumables[0];
         if (cons) { slotItemName = cons.data.name; slotItemColor = '#ffff00'; }

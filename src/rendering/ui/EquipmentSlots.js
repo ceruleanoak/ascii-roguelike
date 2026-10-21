@@ -4,7 +4,7 @@
  * Responsibilities:
  * - Display three numbered item chests (one per quick slot) — active chest drawn
  *   bright by RestRenderer on the foreground layer each frame
- * - Display armor slot with equipped armor
+ * - Display armor slot (cyan) with equipped armor
  * - Display five consumable slots (slot 3 is locked/unlockable)
  *
  * Called every frame from RestRenderer (not gated by backgroundDirty), matching
@@ -23,8 +23,8 @@ export class EquipmentSlots {
   render(game) {
     const DIM_AMBER = '#ff4444';
     const BRIGHT_AMBER = '#ffaa44';
-    const BLUE = '#4488ff';
-    const BRIGHT_BLUE = '#aaccff';
+    const CYAN = '#00cccc';
+    const BRIGHT_CYAN = '#aaffff';
     const YELLOW = '#ffff00';
     const DARK_YELLOW = '#665500';
     const LOCKED = '#333333';
@@ -64,11 +64,11 @@ export class EquipmentSlots {
       this.renderer.drawCell(EQUIPMENT.CHEST_X + 1, y, ']', bracketColor);
     }
 
-    // Draw armor slot — blue
+    // Draw armor slot — cyan
     const armorEquipped = game.inventorySystem.equippedArmor;
     const armorAvailable = (game.inventorySystem.armorInventory?.length ?? 0) > 0;
     const armorBlink = !armorEquipped && armorAvailable;
-    const armorBracketColor = (armorBlink && blinkOn(110)) ? BRIGHT_BLUE : BLUE;
+    const armorBracketColor = (armorBlink && blinkOn(110)) ? BRIGHT_CYAN : CYAN;
 
     this.renderer.drawCell(EQUIPMENT.ARMOR_X - 1, EQUIPMENT.ARMOR_Y, '[', armorBracketColor);
     this.renderer.drawCell(EQUIPMENT.ARMOR_X,     EQUIPMENT.ARMOR_Y, ' ', armorBracketColor);

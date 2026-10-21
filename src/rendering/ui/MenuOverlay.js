@@ -88,7 +88,7 @@ export class MenuOverlay {
     // Unique color for each column type
     const columnColors = {
       'WEAPONS': '#ff6666',      // Red
-      'ARMOR': '#66ccff',        // Blue
+      'ARMOR': '#66ffff',        // Cyan
       'INGREDIENTS': '#66ff66',  // Green
       'CONSUMABLES': '#ffaa66'   // Orange
     };

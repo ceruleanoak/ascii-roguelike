@@ -434,7 +434,7 @@ export class MenuSystem {
 
     // Armor display
     const armorChar = game.inventorySystem.equippedArmor ? game.inventorySystem.equippedArmor.char : ' ';
-    const armorColor = game.inventorySystem.equippedArmor ? (game.inventorySystem.equippedArmor.color || '#aaaaff') : '#4488ff';
+    const armorColor = game.inventorySystem.equippedArmor ? (game.inventorySystem.equippedArmor.color || '#aaaaff') : '#00cccc';
     game.ui.armorChar.textContent = armorChar;
     game.ui.armorChar.style.color = armorColor;
 

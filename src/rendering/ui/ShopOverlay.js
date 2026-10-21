@@ -26,12 +26,12 @@ import { spectaclesTransformString, isSpectaclesActive } from '../../data/cipher
 // Role-bracket colors, duplicated from EquipmentSlots.js (method-local
 // consts there, not exported) — "colors match REST slots."
 const BRIGHT_AMBER = '#ffaa44';  // WEAPON
-const BRIGHT_BLUE = '#aaccff';   // ARMOR
+const BRIGHT_CYAN = '#aaffff';   // ARMOR
 const YELLOW = '#ffff00';        // CONSUMABLE
 
 function roleColor(role) {
   if (role === 'WEAPON') return BRIGHT_AMBER;
-  if (role === 'ARMOR') return BRIGHT_BLUE;
+  if (role === 'ARMOR') return BRIGHT_CYAN;
   return YELLOW;
 }
 
