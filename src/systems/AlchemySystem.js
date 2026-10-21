@@ -452,7 +452,7 @@ export class AlchemySystem {
 
     this._resetCauldron(); // before closeMenu, whose cancel would restore the bottle
     game.closeMenu();
-    game.menuSystem.announceItem(starterChar);
+    game.menuSystem.announceCrafted(starterChar);
     game.audioSystem?.playSFX?.('craft');
     game.updateUI();
   }
@@ -480,7 +480,7 @@ export class AlchemySystem {
 
     // Place the true potion in the equipped slot
     game.inventorySystem.equippedConsumables[this.cauldronSlotIndex] = result;
-    game.menuSystem.announceItem(result.char);
+    game.menuSystem.announceCrafted(result.char);
     game.audioSystem?.playSFX?.('craft');
 
     this._resetCauldron();

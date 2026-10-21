@@ -182,19 +182,19 @@ export class FireplaceSystem {
       const jerky = new Item('ᒧ', game.player.position.x, game.player.position.y);
       const stacked = game.inventorySystem.mergeStackableConsumable(jerky);
       if (!stacked) game.inventorySystem.consumableInventory.push(jerky);
-      game.menuSystem.announceGained(jerky.char, stacked);
+      game.menuSystem.announceCrafted(jerky.char, stacked);
     } else if (rawChar === GRAIN_CHAR) {
       if (!fireplace.burning || !game.removeIngredient(GRAIN_CHAR)) return;
       const bread = new Item(BREAD_CHAR, game.player.position.x, game.player.position.y);
       const stacked = game.inventorySystem.mergeStackableConsumable(bread);
       if (!stacked) game.inventorySystem.consumableInventory.push(bread);
-      game.menuSystem.announceGained(bread.char, stacked);
+      game.menuSystem.announceCrafted(bread.char, stacked);
     } else if (rawChar === SAND_CHAR) {
       if (!fireplace.burning || !game.removeIngredient(SAND_CHAR)) return;
       const bottle = new Item(EMPTY_BOTTLE_CHAR, game.player.position.x, game.player.position.y);
       const stacked = game.inventorySystem.mergeStackableConsumable(bottle);
       if (!stacked) game.inventorySystem.consumableInventory.push(bottle);
-      game.menuSystem.announceGained(bottle.char, stacked);
+      game.menuSystem.announceCrafted(bottle.char, stacked);
     } else if (rawChar === '2') {
       // Ore, like Sticks, opens a quantity submenu rather than smelting one
       // implicit unit — see openOreQuantityMenu.
@@ -206,7 +206,7 @@ export class FireplaceSystem {
       const berry = game.inventorySystem.consumableInventory.find(it => it.char === '❋');
       if (!berry || !game.inventorySystem.removeFromConsumableInventory(berry)) return;
       game.addIngredient('𝑚');
-      game.menuSystem.announceItem('𝑚');
+      game.menuSystem.announceCrafted('𝑚');
     } else if (rawChar === '🜉') {
       if (!fireplace.burning) return;
       const idx = game.player.equippedConsumables.findIndex(s => s?.char === '🜉');
@@ -215,7 +215,7 @@ export class FireplaceSystem {
       // Reverts after 3 room exits, same decay as the Caldera fill — see
       // main.js's room-transition reset block.
       game.player.equippedConsumables[idx].hotWaterRoomsLeft = 3;
-      game.menuSystem.announceItem('🜊');
+      game.menuSystem.announceCrafted('🜊');
     } else {
       return;
     }

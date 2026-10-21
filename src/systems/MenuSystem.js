@@ -309,13 +309,20 @@ export class MenuSystem {
   }
 
   /**
-   * Announce a consumable that just came to hand, given the stack it merged
-   * into (the return of mergeStackableConsumable) or null when it took its
-   * own place.
+   * Announce what a crafting motion (crafting station, Fireplace, Press,
+   * cauldron) just made. Unlike a world pickup, crafted output always shows a
+   * box: the player made it on purpose, so a bake or a brew with no visible
+   * result reads as a failed craft. The name still shows only the first time
+   * this run (announceItem); after that the box carries the glyph alone, or
+   * glyph + ×N when `stack` (the return of mergeStackableConsumable) says it
+   * joined one.
    */
-  announceGained(char, stack) {
-    if (stack) this.announceStack(char, stack.count);
-    else this.announceItem(char);
+  announceCrafted(char, stack = null) {
+    if (stack) { this.announceStack(char, stack.count); return; }
+    const game = this.game;
+    if (!game.announcedItemChars.has(char)) { this.announceItem(char); return; }
+    const data = getItemData(char);
+    this._queuePickupMessage({ glyph: char, text: '', color: data?.color ?? null, duration: null });
   }
 
   /** Pickup-result dispatch shared by the world pickup (main.js) and the shop. */
@@ -1112,7 +1119,7 @@ export class MenuSystem {
     if (fizzleMana > 0) {
       for (let i = 0; i < fizzleMana; i++) this._collectCraftedIngredient('𝑚');
       game.screenFlash = { startTime: performance.now(), duration: 500, color: '#ff2222' };
-      this.announceItem('𝑚');
+      this.announceCrafted('𝑚');
       game.renderer.markBackgroundDirty();
       game.updateUI();
       return;
@@ -1124,7 +1131,7 @@ export class MenuSystem {
     const ingredientChar = cs.claimCraftedIngredient();
     if (ingredientChar) {
       this._collectCraftedIngredient(ingredientChar);
-      this.announceItem(ingredientChar);
+      this.announceCrafted(ingredientChar);
       game.renderer.markBackgroundDirty();
       game.updateUI();
       return;
@@ -1179,7 +1186,7 @@ export class MenuSystem {
       } else if (item.data.type === 'INGREDIENT') {
         game.addIngredient(item.char);
       }
-      this.announceGained(item.char, stack);
+      this.announceCrafted(item.char, stack);
       game.renderer.markBackgroundDirty();
       game.updateUI();
     }
