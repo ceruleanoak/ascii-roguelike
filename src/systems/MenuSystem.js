@@ -1,6 +1,6 @@
 import { findRecipe, findRecipeByResult } from '../data/recipes.js';
 import { CRAFTING, EQUIPMENT, COLORS, GRID } from '../game/GameConfig.js';
-import { Item } from '../entities/Item.js';
+import { Item, oilAppliesTo } from '../entities/Item.js';
 import { isIngredient, isItem, getItemData } from '../data/items.js';
 import { ZONES } from '../data/zones.js';
 import { GOLEM_TYPES } from '../data/golems.js';
@@ -515,13 +515,13 @@ export class MenuSystem {
           && game.inventorySystem.consumableBlinkTimer > 0;
         const isEffectActive = (game.inventorySystem.activeEffectTimers?.[i] ?? 0) > 0;
 
-        // Oils only fire on bow/dagger. Dim the slot when an oil is held
-        // but the active weapon can't use it.
+        // Oils only fire on bow/dagger (oilAppliesTo). Dim the slot when an
+        // oil is held but the active weapon can't use it.
         const isOilInert = (() => {
-          if (!consumables[i].data?.oilEffect) return false;
+          const oilEffect = consumables[i].data?.oilEffect;
+          if (!oilEffect) return false;
           const weapon = game.player?.quickSlots?.[game.player.activeSlotIndex];
-          if (!weapon?.data) return true;
-          return !(weapon.data.weaponType === 'BOW' || weapon.data.weaponSubtype === 'dagger');
+          return !oilAppliesTo(oilEffect, weapon?.data);
         })();
 
         if (isBlinking && game.inventorySystem.consumableBlinkShowBlock) {

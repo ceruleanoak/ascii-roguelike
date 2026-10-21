@@ -44,18 +44,29 @@ const HAMMER_STRIKE_FLASH_DURATION = 0.08;
 // an oil's effect, or two oils, may legitimately name the same effect; that
 // just means the swing grants extra stacks of it, not that one is dropped).
 // arrowSpeedMult multiplies across all oils (typically just one).
-function _readEquippedOilEffect(player) {
+// `forBow` is false for the dagger, which skips oils marked `bowOnly`
+// (Poison Tips are tipped arrows, not a blade coating).
+function _readEquippedOilEffect(player, forBow = true) {
   const slots = player?.equippedConsumables;
   if (!slots) return { onHits: [], arrowSpeedMult: 1 };
   const onHits = [];
   let arrowSpeedMult = 1;
   for (const c of slots) {
     const oe = c?.data?.oilEffect;
-    if (!oe) continue;
+    if (!oe || (oe.bowOnly && !forBow)) continue;
     if (oe.onHit) onHits.push(oe.onHit);
     if (oe.arrowSpeedMult) arrowSpeedMult *= oe.arrowSpeedMult;
   }
   return { onHits, arrowSpeedMult };
+}
+
+// Whether an equipped oil does anything for this weapon: bows take every oil,
+// daggers every oil but the bowOnly ones, nothing else takes any. The quick
+// slot bar and EquipmentSlots dim an oil slot this returns false for.
+export function oilAppliesTo(oilEffect, weaponData) {
+  if (!weaponData) return false;
+  if (weaponData.weaponType === 'BOW') return true;
+  return weaponData.weaponSubtype === 'dagger' && !oilEffect.bowOnly;
 }
 
 export class Item {
@@ -1223,7 +1234,7 @@ export class Item {
     // applies too, as extraOnHit — spending a consumable slot on an oil must
     // never cost the dagger its own effect (bug #183).
     const isDagger = subtype === 'dagger';
-    const oilOnHits = isDagger ? _readEquippedOilEffect(player).onHits : [];
+    const oilOnHits = isDagger ? _readEquippedOilEffect(player, false).onHits : [];
     const primaryOnHit = this.data.onHit || oilOnHits[0] || null;
     const extraOnHit = this.data.onHit ? oilOnHits : oilOnHits.slice(1);
 

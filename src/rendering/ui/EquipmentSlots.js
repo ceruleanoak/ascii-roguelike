@@ -13,6 +13,7 @@
  */
 
 import { EQUIPMENT } from '../../game/GameConfig.js';
+import { oilAppliesTo } from '../../entities/Item.js';
 
 export class EquipmentSlots {
   constructor(renderer) {
@@ -156,15 +157,14 @@ function _manaColor(current, max) {
   return '#cc66ff';
 }
 
-// Oils only do anything for bows and daggers. When a different weapon is
-// staged in the active slot, dim the oil slot so the player sees it's inert.
+// Oils only do anything for bows and daggers (bow-only oils, bows alone —
+// oilAppliesTo). When a weapon that can't use it is staged in the active
+// slot, dim the oil slot so the player sees it's inert.
 function _isOilInert(consumable, game) {
-  if (!consumable?.data?.oilEffect) return false;
+  const oilEffect = consumable?.data?.oilEffect;
+  if (!oilEffect) return false;
   const weapon = game.player?.quickSlots?.[game.player.activeSlotIndex];
-  if (!weapon?.data) return true;
-  const isBow = weapon.data.weaponType === 'BOW';
-  const isDagger = weapon.data.weaponSubtype === 'dagger';
-  return !(isBow || isDagger);
+  return !oilAppliesTo(oilEffect, weapon?.data);
 }
 
 // An empty Bomb Bag (free Bomb spent, no Bombs in the consumable list) dims
