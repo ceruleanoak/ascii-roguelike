@@ -424,6 +424,8 @@ export class CentipedeSystem {
     // normally break, so this must yield to any weapon type.
     rock.allWeaponsDamage = true;
     rock.bulletInteraction = 'interact-destroy';
+    // A husk, not a quarry: breaking it yields no rock harvest.
+    rock.dropsNothing = true;
     room.backgroundObjects.push(rock);
   }
 

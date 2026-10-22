@@ -222,6 +222,10 @@ export class BackgroundObject {
     // never wall off the player regardless of loadout (e.g. the Centipede arena's
     // obstacle rocks) — see CombatSystem's melee gates and handleBulletCollision below.
     this.allWeaponsDamage = false;
+    // Per-instance override: destroying this object yields nothing — no
+    // dropEffect payload, no dropTable. The Centipede's petrified segment
+    // husks wear a Fractured Rock's body without its rock harvest.
+    this.dropsNothing = false;
 
     // Wand system properties
     this.rock = this.data.rock || false; // Negates magic/elemental effects
@@ -411,11 +415,13 @@ export class BackgroundObject {
   }
 
   // The one dropChance roll shared by the weapon-destroy path (main.js) and
-  // the open-by-hand path (InteractionSystem). Key droppers always drop —
+  // the open-by-hand path (InteractionSystem). A dropsNothing instance never
+  // passes. Key droppers always drop —
   // dungeon key skulls are visually identical Bones ('8') with dropChance 0.2,
   // so rolling them would silently lose the run's only key. guaranteedDrop is
   // the same bypass for a placement-time guarantee (Caldera Fire Berry bush).
   passesDropRoll() {
+    if (this.dropsNothing) return false;
     if (this.dropsKey || this.dropsDungeonKey || this.guaranteedDrop) return true;
     const chance = this.data.dropChance;
     return chance === undefined || Math.random() < chance;
