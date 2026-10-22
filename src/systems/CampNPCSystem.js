@@ -81,7 +81,8 @@ export class CampNPCSystem {
   }
 
   _updateNPC(dt, npc, isCompanion) {
-    npc.update(dt, this.game);
+    const windupAttack = npc.update(dt, this.game);
+    if (windupAttack) this._emitAttack(windupAttack);
 
     // Tick companion's slowed attack cooldown (50% debuff vs player)
     if (npc._attackCooldown && npc._attackCooldown > 0) {
@@ -363,9 +364,7 @@ export class CampNPCSystem {
       const base = weapon.data.cooldown || weapon.data.recovery || 0.5;
       npc._attackCooldown = base * COMPANION_ATTACK_SPEED_MULT;
     };
-    // Route attacks to the active enemy list (interior or surface) so the
-    // companion's hits register against dungeon enemies, not the surface room.
-    const activeEnemies = activeInteriorFloor(game)?.enemies ?? game.currentRoom?.enemies ?? [];
+    const activeEnemies = this._activeEnemies();
 
     // Bow charge release: when fully charged, release toward target
     if (wt === 'BOW') {
@@ -385,11 +384,11 @@ export class CampNPCSystem {
 
     if (wt === 'GUN') {
       if (weapon.canUse() && distToTarget < ENEMY_AGGRO_RANGE) {
+        // A windup gun (Sling) returns null here and fires from _emitAttack
+        // when the windup ends; the companion debuff starts either way.
         const attack = weapon.use(npc);
-        if (attack) {
-          game.combatSystem.createAttack(attack, activeEnemies);
-          setCooldown();
-        }
+        if (attack) game.combatSystem.createAttack(attack, activeEnemies);
+        setCooldown();
       }
       return;
     }
@@ -408,6 +407,19 @@ export class CampNPCSystem {
       }
       return;
     }
+  }
+
+  // Route attacks to the active enemy list (interior or surface) so the
+  // companion's hits register against dungeon enemies, not the surface room.
+  _activeEnemies() {
+    const game = this.game;
+    return activeInteriorFloor(game)?.enemies ?? game.currentRoom?.enemies ?? [];
+  }
+
+  // A windup the weapon finished on its own tick (CampNPC.update) — the shot
+  // the companion committed to in _tryAttack lands here.
+  _emitAttack(attack) {
+    this.game.combatSystem.createAttack(attack, this._activeEnemies());
   }
 
   // ─── IDLE: walk toward a nearby dropped weapon ──────────────────────────

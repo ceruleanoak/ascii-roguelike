@@ -72,9 +72,12 @@ export const BoomerangMechanic = {
   // '+1' popup (maxUses is 1, so there's never more than one to count).
   // Takes anything carrying `owner` + `weaponChar`: an in-flight projectile
   // or a stuck boomerang entry in CombatSystem.stuckArrows. Returns true if a
-  // bow slot was refilled.
+  // bow slot was refilled. A Camp NPC companion carries its one weapon as
+  // `owner.weapon` rather than in quick slots.
   _refundAmmo(proj) {
-    const bow = (proj.owner?.quickSlots || []).find(slot =>
+    const owner = proj.owner;
+    const carried = [...(owner?.quickSlots || []), owner?.weapon];
+    const bow = carried.find(slot =>
       slot &&
       slot.data?.weaponType === 'BOW' &&
       slot.char === proj.weaponChar &&

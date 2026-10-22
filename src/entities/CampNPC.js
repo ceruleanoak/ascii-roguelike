@@ -223,16 +223,21 @@ export class CampNPC extends NeutralCharacter {
 
   // ─── Per-frame update ───────────────────────────────────────────────────
 
+  // Returns the attack a finished weapon windup released this frame (or null).
+  // A weapon fired through use() with a `windup` (Sling, Bolo Launcher) only
+  // yields its attack from update(); CampNPCSystem routes it into combat.
   update(dt, game) {
     super.update(dt); // pulse animation
 
     if (this._pickupCooldown > 0) this._pickupCooldown -= dt;
     if (this.invulnerabilityTimer > 0) this.invulnerabilityTimer -= dt;
-    if (this.weapon?.update) this.weapon.update(dt);
+    const windupAttack = this.weapon?.update ? this.weapon.update(dt) : null;
 
     if (this.state === CAMP_NPC_STATE.FLEEING) {
       this._updateFleeing(dt, game);
+      return null;
     }
+    return windupAttack;
   }
 
   _updateFleeing(dt, game) {
