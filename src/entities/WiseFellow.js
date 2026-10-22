@@ -12,6 +12,7 @@ export class WiseFellow extends NeutralCharacter {
   constructor(x, y) {
     super('w', '#e8c060', x, y);
     this.hintText = null; // set by HutSystem via setHint() after construction
+    this.rareHintText = null; // bought with an Artifact — see unlockRareHint()
   }
 
   /**
@@ -41,19 +42,24 @@ export class WiseFellow extends NeutralCharacter {
    * paying for something (currently: dungeon-boss victory sayings). They join
    * the roll instead of replacing it, so the reward is a chance at knowledge
    * the wallet cannot reach — not a guaranteed line that pre-empts the pool.
+   *
+   * The bought line sits beside his standing saying rather than replacing
+   * it, so after an Artifact he alternates between the two.
    */
   unlockRareHint(zoneName, earned = []) {
     const rare = ZONES[zoneName]?.rareSayings ?? [];
     const pool = Array.isArray(earned) && earned.length ? [...rare, ...earned] : rare;
     if (pool.length > 0) {
-      this.hintText = pool[Math.floor(Math.random() * pool.length)];
+      this.rareHintText = pool[Math.floor(Math.random() * pool.length)];
     } else {
-      this.hintText = 'WE WILL SPEAK IN ANOTHER PLACE.';
+      this.rareHintText = 'WE WILL SPEAK IN ANOTHER PLACE.';
     }
   }
 
   getDialogueLines() {
-    return this.hintText ? [this.hintText] : [];
+    // Bought line first, so the Artifact toss opens on it; DialogueSystem
+    // then tells one line per SPACE and wraps, cycling the two.
+    return [this.rareHintText, this.hintText].filter(Boolean);
   }
 
   update(dt, game) {

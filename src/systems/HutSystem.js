@@ -108,7 +108,7 @@ export class HutSystem {
     // 'press' hut guarantees one instead (see branch below) and skips the
     // random roll so it never gets a second; the Alchemy Hut never rolls one.
     // Placed BEFORE decor/bread so those spawn loops can reject the press cell.
-    const hasPress = hutKind !== 'press' && hutKind !== 'alchemy' && Math.random() < 0.12;
+    const hasPress = hutKind !== 'press' && hutKind !== 'alchemy' && hutKind !== 'wise_man' && Math.random() < 0.12;
     if (hasPress || hutKind === 'press') {
       backgroundObjects.push(new BackgroundObject(
         '⊓',
@@ -127,7 +127,7 @@ export class HutSystem {
     // (`burning: false`) — FireplaceSystem flips it on the first Stick and
     // the flag resets for free next visit since generateHutInterior rebuilds
     // this object from scratch.
-    const hasFireplace = hutKind !== 'press' && hutKind !== 'alchemy' && Math.random() < 0.24;
+    const hasFireplace = hutKind !== 'press' && hutKind !== 'alchemy' && hutKind !== 'wise_man' && Math.random() < 0.24;
     if (hasFireplace || hutKind === 'press') {
       const fireplace = new BackgroundObject(
         '⌂',
@@ -179,9 +179,30 @@ export class HutSystem {
       }
     }
 
+    // Wise Fellow's hut is laid out, not cluttered: a Shrine on the axis
+    // directly north of where he sits, a Wild Flower to either side of it,
+    // and two raked rows of Sand to the south split by a clear aisle from
+    // the door. It skips the press/fireplace rolls above, the random decor
+    // below, and the bread roll, so nothing breaks the symmetry. Placed
+    // before the decor loop so cellOccupied() would respect it regardless.
+    if (hutKind === 'wise_man') {
+      const axisCol = Math.floor(cols / 2);
+      const shrineRow = Math.floor(rows / 2) - 3;
+      const place = (char, col, row) =>
+        backgroundObjects.push(new BackgroundObject(char, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
+      place('$', axisCol, shrineRow);
+      place('✿', axisCol - 2, shrineRow);
+      place('✿', axisCol + 2, shrineRow);
+      for (const row of [rows - 4, rows - 3]) {
+        for (let col = 2; col <= cols - 2; col++) {
+          if (col !== axisCol) place('.', col, row);
+        }
+      }
+    }
+
     // Interior floor decor (very sparse — hut is small)
     const decorChars = ['n', '*', '8', '%'];
-    const decorCount = 1 + Math.floor(Math.random() * 3);
+    const decorCount = hutKind === 'wise_man' ? 0 : 1 + Math.floor(Math.random() * 3);
     for (let i = 0; i < decorCount; i++) {
       for (let attempt = 0; attempt < 12; attempt++) {
         const col = 2 + Math.floor(Math.random() * (cols - 4));
@@ -340,7 +361,7 @@ export class HutSystem {
         breadItems.push(new Item('B', col * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
         placed++;
       }
-    } else if (hutKind !== 'witch' && hutKind !== 'shopkeeper' && Math.random() < 0.40) {
+    } else if (hutKind !== 'witch' && hutKind !== 'shopkeeper' && hutKind !== 'wise_man' && Math.random() < 0.40) {
       // Shopkeeper excluded: a free loaf on the floor of a paid shop reads
       // wrong, and the alcove behind the counter is off-limits anyway.
       const loafCount = 1 + (Math.random() < 0.15 ? 1 : 0);
