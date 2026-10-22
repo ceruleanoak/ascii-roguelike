@@ -107,8 +107,11 @@ export const ChargeMechanic = {
         enemy.chargeHasHit = false;
         const cdx = enemy.target.position.x - enemy.position.x;
         const cdy = enemy.target.position.y - enemy.position.y;
-        const cdist = Math.sqrt(cdx * cdx + cdy * cdy) || 1;
-        enemy.chargeDir = { x: cdx / cdist, y: cdy / cdist };
+        // A dizzy charger veers off its line like every other dizzy attack
+        // (_dizzyAngleOffset is 0 when not dizzy). Speed stays full: a slowed
+        // charge would trip the wall-stun heuristic in EnemyUpdateSystem.
+        const ca = Math.atan2(cdy, cdx) + enemy._dizzyAngleOffset();
+        enemy.chargeDir = { x: Math.cos(ca), y: Math.sin(ca) };
         // Burst directly to top speed — bypass the acceleration ramp so the
         // 0.5s charge actually covers ground rather than spending most of it
         // accelerating.

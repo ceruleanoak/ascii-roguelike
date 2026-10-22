@@ -155,6 +155,16 @@ export const LeapAttackMechanic = {
     enemy.leapPoolTarget = null;
     enemy.leapTargetX = target.x;
     enemy.leapTargetY = target.y;
+    // A dizzy leaper misjudges its landing: rotate the player-aimed vector by
+    // the dizzy offset (a pool leap is a deliberate target, left alone).
+    const dizzyOffset = pool ? 0 : enemy._dizzyAngleOffset();
+    if (dizzyOffset) {
+      const ldx = target.x - enemy.position.x;
+      const ldy = target.y - enemy.position.y;
+      const cos = Math.cos(dizzyOffset), sin = Math.sin(dizzyOffset);
+      enemy.leapTargetX = enemy.position.x + ldx * cos - ldy * sin;
+      enemy.leapTargetY = enemy.position.y + ldx * sin + ldy * cos;
+    }
     enemy.velocity.vx = 0;
     enemy.velocity.vy = 0;
     if (enemy.targetVelocity) { enemy.targetVelocity.vx = 0; enemy.targetVelocity.vy = 0; }
