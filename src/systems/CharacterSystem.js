@@ -539,10 +539,9 @@ export class CharacterSystem {
           current: m.current,
           max: m.max,
           freeSlotGranted: !!m.freeSlotGranted,
-          // A Mana Potion's temporary slot belongs to the character who drank
-          // it: its timer leaves with them and pauses until they swap back.
-          tempTimer: m.tempTimer || 0,
-          tempSlotIndex: m.tempSlotIndex ?? -1
+          // The Mana Potion slot is one per character: the next character
+          // drinking one still gets theirs.
+          potionSlotGranted: !!m.potionSlotGranted
         };
       }
     }
@@ -558,19 +557,17 @@ export class CharacterSystem {
         m.slots = [...saved.slots];
         m.current = saved.current;
         m.freeSlotGranted = !!saved.freeSlotGranted;
-        m.tempTimer = saved.tempTimer || 0;
-        m.tempSlotIndex = saved.tempSlotIndex ?? -1;
+        m.potionSlotGranted = !!saved.potionSlotGranted;
       } else {
         m.slots = [];
         m.current = 0;
         m.freeSlotGranted = false;
-        m.tempTimer = 0;
-        m.tempSlotIndex = -1;
+        m.potionSlotGranted = false;
       }
       game.magicSystem.recalcMax(m);
-      // A live potion slot holds the meter on regardless of Red's -1 (same
-      // rule as MagicSystem.grantTempManaSlot).
-      m.active = m.tempTimer > 0 || game.magicSystem.effectiveManaSlotCount(game.player) > 0;
+      // Counted against the incoming type: applyCharacterTypeTo below is what
+      // re-types the body, so player.characterType is still the old one here.
+      m.active = game.magicSystem.effectiveManaSlotCount(game.player, type) > 0;
       // Mana slots are per-character (manaState above) but equippedConsumables
       // is shared across every character — restoring a different mana loadout
       // can claim an index that still holds a real consumable equipped under

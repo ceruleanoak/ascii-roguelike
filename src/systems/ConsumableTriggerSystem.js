@@ -109,7 +109,10 @@ export class ConsumableTriggerSystem {
         return false;
       }
       case 'manaSlot': {
-        if (player?.magicMeter?.active) return false;
+        // Once this character's potion slot is granted, a potion only fills
+        // the meter — nothing to give while it is full or not lit.
+        const meter = player?.magicMeter;
+        if (meter?.potionSlotGranted && (!meter.active || meter.current >= meter.max)) return false;
         return { windup: THROW_DURATION, effectType: 'manaSlot' };
       }
       case 'speed': {
@@ -356,7 +359,7 @@ export class ConsumableTriggerSystem {
         this.game.combatSystem.showHeal(FAIRY_HEAL, player.position.x, player.position.y, player);
         break;
       case 'manaSlot':
-        this.game.magicSystem.grantTempManaSlot(player, cd, windup?.slotIndex);
+        this.game.magicSystem.drinkManaPotion(player, windup?.slotIndex);
         break;
       case 'speed':
         player.applySpeedBoost(cd.duration || 8);

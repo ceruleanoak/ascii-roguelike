@@ -17,10 +17,15 @@ export const RestSystem = {
   rebuildForRest(game) {
     // Capture magic-meter state from prior player before reconstructing.
     // Cleared by the true-game-over reset block, so death wipes it correctly.
-    // Only an ACTIVE meter is carried: stamping an inactive one from a dead
-    // run re-populated _savedMagicMeter after the reset nulled it.
-    const savedMagicMeter = game.player?.magicMeter?.active
-      ? { ...game.player.magicMeter }
+    // Only a meter holding something earned is carried: stamping a blank one
+    // from a dead run re-populated _savedMagicMeter after the reset nulled it.
+    // Earned doesn't mean active — a Red Warrior's first slot (well or Mana
+    // Potion) sits under their -1 with the meter still dark, and has to
+    // survive REST to ever count toward lighting it.
+    const meter = game.player?.magicMeter;
+    const meterEarned = !!(meter?.active || meter?.slots?.length || meter?.potionSlotGranted);
+    const savedMagicMeter = meterEarned
+      ? { ...meter }
       : game._savedMagicMeter ?? null;
 
     // A decayed REST no longer heals. Read off the outgoing Player, same as

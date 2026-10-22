@@ -217,9 +217,11 @@ export class MagicSystem {
     return characterType === 'red' ? -1 : 0;
   }
 
-  effectiveManaSlotCount(player) {
+  // `characterType` defaults to the player's own; CharacterSystem passes the
+  // incoming type during a swap, before the body has been re-typed.
+  effectiveManaSlotCount(player, characterType = player?.characterType) {
     const raw = player?.magicMeter?.slots?.length || 0;
-    return Math.max(0, raw + this.characterManaModifier(player?.characterType));
+    return Math.max(0, raw + this.characterManaModifier(characterType));
   }
 
   // ─── Mana mutation ───────────────────────────────────────────────────────
@@ -232,53 +234,29 @@ export class MagicSystem {
     return spendMeterMana(player, cost);
   }
 
-  // Mana Potion: the only way to gain a mana slot without a true
-  // (well/cauldron/Yellow-Mage) slot. The potion's own consumable slot
-  // converts into a mana slot for cd.duration seconds — added to meter.slots
-  // like the boss slot, since the HUD fill, getSlotFill, and every
-  // reserved-slot equip check read meter.slots (flipping meter.active alone
-  // left a silent, invisible pool). Kill drops and the mana refill mechanic
-  // gate only on meter.active, so they apply identically.
-  grantTempManaSlot(player, cd, slotIndex = null) {
+  // Mana Potion: the first one a character drinks adds a mana slot for good —
+  // the potion's own consumable slot becomes mana, the same conversion as a
+  // well ritual (activateMagicMeter). Every potion after that only fills the
+  // meter. One per character: `potionSlotGranted` rides in magicMeter, which
+  // CharacterSystem saves and restores per character. A Red Warrior's -1 still
+  // applies, so their potion slot counts toward the meter without lighting it.
+  drinkManaPotion(player, slotIndex = null) {
     const meter = player?.magicMeter;
-    if (!meter || meter.active) return false;
+    if (!meter) return false;
     if (!meter.slots) meter.slots = [];
-    let idx = slotIndex;
-    if (idx == null || meter.slots.includes(idx)) {
-      idx = 0;
-      while (meter.slots.includes(idx)) idx++;
+    if (!meter.potionSlotGranted) {
+      const before = new Set(meter.slots);
+      const target = meter.slots.includes(slotIndex) ? null : slotIndex;
+      if (this.activateMagicMeter(player, target)) {
+        meter.potionSlotGranted = true;
+        // The drained potion marked its slot spent; the slot is mana now.
+        const added = meter.slots.find(i => !before.has(i));
+        const inv = this.game.inventorySystem;
+        if (inv?.spentConsumableSlots && added != null) inv.spentConsumableSlots[added] = false;
+      }
     }
-    meter.slots.push(idx);
-    meter.slots.sort((a, b) => a - b);
-    meter.tempSlotIndex = idx;
-    meter.tempTimer = Math.max(meter.tempTimer || 0, cd.duration ?? 30);
-    // Forced on: a Red Warrior's -1 modifier would otherwise cancel the
-    // very slot the potion grants.
-    meter.active = true;
-    meter.current = 0;
-    this.recalcMax(meter);
-    // The drained potion marked its slot spent; the slot is mana now.
-    const inv = this.game.inventorySystem;
-    if (inv?.spentConsumableSlots) inv.spentConsumableSlots[idx] = false;
-    this.evictReservedConsumables(player);
+    if (meter.active) meter.current = meter.max;
     return true;
-  }
-
-  // Reverts the potion's slot once its timer runs out, back to the
-  // true-slot state (or fully inactive). Called every frame from update().
-  _updateTempManaSlot(dt) {
-    const meter = this.game.player?.magicMeter;
-    if (!meter?.tempTimer) return;
-    meter.tempTimer -= dt;
-    if (meter.tempTimer <= 0) {
-      meter.tempTimer = 0;
-      const pos = meter.slots?.indexOf(meter.tempSlotIndex) ?? -1;
-      if (pos >= 0) meter.slots.splice(pos, 1);
-      meter.tempSlotIndex = -1;
-      meter.active = this.effectiveManaSlotCount(this.game.player) > 0;
-      if (!meter.active) meter.current = 0;
-      this.recalcMax(meter);
-    }
   }
 
   // ─── Mana as a crafting ingredient ──────────────────────────────────────
@@ -356,7 +334,6 @@ export class MagicSystem {
   update(dt) {
     this._updateGemWandAutoCast();
     this._updateChargeHammer();
-    this._updateTempManaSlot(dt);
     this._updateBossManaSlot(dt);
     this._updateStaffGrassEffects(dt);
   }
