@@ -1422,6 +1422,19 @@ export const ENEMIES = {
     small: true,           // Hides under deep snow — visible as cyan bump
     float: true,  // Ghostly — drifts over ground hazards
     packCoordination: true,  // Multiple wraiths coordinate latching to exhaust the player
+    // Frost Lunge (FrostLungeMechanic): hold, loose a Frost Line (1 freeze pip),
+    // then rush to latch — the float speed alone never caught a walking player.
+    frostLunge: {
+      enabled: true,
+      triggerRangeMin: GRID.CELL_SIZE * 2,
+      triggerRangeMax: GRID.CELL_SIZE * 6,
+      windupTime: 0.6,
+      lineSpeed: 260,
+      lungeSpeed: 220,
+      lungeTime: 0.9,
+      cooldown: 4.0,
+      initialDelay: 1.5
+    },
     elementalAffinity: {
       weakness: { 'burn': 2.0, 'magic': 1.5 }
     },

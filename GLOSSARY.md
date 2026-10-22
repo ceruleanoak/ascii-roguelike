@@ -1029,6 +1029,19 @@ identity, not standard programming terms.
 - **Not:** an Enemy State. `LakeBoss` is a bespoke entity that does not run
   `EnemyStateMachine`, so `stalking` does not extend the closed State set below.
 
+### Frost Lunge
+- **Definition:** How the Ice Wraith closes on a player it could never catch at float speed.
+  From 2–6 cells away, with the player in its vision cone (or from any facing once it has been
+  hit), it holds still for a beat, looses a **Frost Line** straight at the player (the Wraith's
+  damage plus one freeze pip), then rushes them. Reaching attack range mid-rush latches it
+  through the ordinary sap.
+- **In code:** `src/entities/enemyMechanics/FrostLungeMechanic.js`, configured by
+  `ENEMIES['X'].frostLunge`. `frostLungePhase` is `'idle'`, `'windup'` or `'lunge'`. The Frost
+  Line is an `enemy_projectile` carrying `statusOnHit: 'freeze'`, which CombatSystem applies.
+  Stun, freeze, zap, sleep and knockback call `FrostLungeMechanic.interrupt()`.
+- **Not:** an Enemy State; the phases run inside the mechanic and suspend the rest of the AI.
+  Not a Charge either: it homes on the player the whole way instead of committing to a line.
+
 ### Breach
 - **Definition:** The Frosted Maw crashing up through the ice at the player's feet — its whole
   bulk erupting through the floor the player is standing on. Crushes everything within

@@ -1377,6 +1377,9 @@ export class CombatSystem {
               }
             }
 
+            // A shot that carries a status (the Ice Wraith's Frost Line) adds its pip
+            if (proj.statusOnHit) player.applyStatusEffect?.(proj.statusOnHit, 3.0);
+
             // Steam cloud: apply scald (burn+slow) in AOE
             if (proj.type === 'steam_cloud') {
               player.applyStatusEffect?.('burn', proj.scaldDuration || 2.5);
