@@ -627,7 +627,8 @@ export const ENEMIES = {
       indicatorChar: '!',
       indicatorColor: '#ff3333',
       followerBoostMultiplier: 1.3,  // +30% speed
-      followerBoostDuration: 2.0
+      followerBoostDuration: 2.0,
+      packLossSpeedMax: 2.0          // chief's own speed: 1× with full pack → 2× with none left
     },
     elementalAffinity: { weakness: { stun: 1.5 } },
     affinities: ['humanoid'],

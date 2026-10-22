@@ -129,6 +129,8 @@ export function computeSpeedMultiplier(enemy) {
   // (Earlier impl multiplied raw velocity post-blend, which compounded each frame
   // against any large velocity impulse — e.g. the melee leap — into a runaway.)
   if (enemy.rallyBoostTimer > 0) m *= (enemy._rallyBoostMultiplier ?? 1.3);
+  // A Goblin Brute speeds up as its pack dies (LeaderFollowerMechanic).
+  m *= enemy.packLossSpeedMult ?? 1;
   if (enemy.gaSlowStacks) m *= Math.max(0.25, 1 - enemy.gaSlowStacks * 0.1);
   return m;
 }

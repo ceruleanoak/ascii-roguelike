@@ -48,6 +48,21 @@ export const LeaderFollowerMechanic = {
     return enemy.data.rallyCall?.enabled === true;
   },
 
+  // The chief moves faster the fewer followers it has left: 1× with the full
+  // pack, rising linearly to rc.packLossSpeedMax× once every follower is
+  // dead. The full pack is the largest count seen, since followers are
+  // linked after the chief is constructed.
+  _updatePackLossSpeed(enemy, rc) {
+    let alive = 0;
+    for (const e of enemy.game?.currentRoom?.enemies ?? []) {
+      if (e.leaderRef === enemy && e.hp > 0 && !e.isDying) alive++;
+    }
+    if (alive > enemy._packSizeSeen) enemy._packSizeSeen = alive;
+    if (enemy._packSizeSeen === 0) return;
+    const lost = 1 - alive / enemy._packSizeSeen;
+    enemy.packLossSpeedMult = 1 + (rc.packLossSpeedMax - 1) * lost;
+  },
+
   update(enemy, ctx) {
     const { deltaTime } = ctx;
 
@@ -56,6 +71,7 @@ export const LeaderFollowerMechanic = {
     if (enemy.rallyBoostTimer > 0) enemy.rallyBoostTimer -= deltaTime;
 
     const rc = enemy.data.rallyCall;
+    if (rc?.enabled && rc.packLossSpeedMax) LeaderFollowerMechanic._updatePackLossSpeed(enemy, rc);
     if (rc?.enabled && enemy.target && enemy.rallyCallCooldown <= 0) {
       const dx = enemy.target.position.x - enemy.position.x;
       const dy = enemy.target.position.y - enemy.position.y;
