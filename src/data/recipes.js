@@ -275,7 +275,7 @@ export const RECIPES = [
   { left: 'k', right: 'F', result: '𐤄', name: 'Robe' },            // Silk + Fire = Robe
   { left: 'M', right: 'b', result: '𐤆', name: 'Warplate' },        // Metal + Bone = Warplate
   { left: 'k', right: 'v', result: '𐤏', name: 'Ninja Garb' },      // Silk + Venom = Ninja Garb
-  { left: 'a', right: 'M', result: '𐤉', name: 'Ember Cloak' },     // Ash + Metal = Ember Cloak
+  { left: 'a', right: 'ᐤ', result: '𐤉', name: 'Ember Cloak' },     // Ash + Fur Cloak = Ember Cloak (a cloak, not metal)
   { left: 'i', right: 's', result: '𐤍', name: 'Ice Plate' },       // Ice + Scale = Ice Plate
   { left: 'ł', right: 'f', result: '𐤖', name: 'Bloom Mantle' },    // Pollen + Fur = Bloom Mantle (on-hit pollen smoke screen)
 
