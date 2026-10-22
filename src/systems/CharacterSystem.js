@@ -9,6 +9,7 @@ import { tagInteriorPlane } from './PlaneSystem.js';
 import { StatusEffectSystem } from './StatusEffectSystem.js';
 import { isInputCaptured } from '../game/inputCapture.js';
 import { aimFacingAtNearestEnemy, keenStrikeReach } from './KeenAim.js';
+import { stashEquipment, loadEquipment } from './characterLoadout.js';
 
 export class CharacterSystem {
   constructor(game) {
@@ -546,8 +547,15 @@ export class CharacterSystem {
       }
     }
 
+    // Armor and consumables are per-character too: park the outgoing
+    // character's, hand over the incoming one's. Before the mana restore
+    // below, whose eviction reads the incoming consumable slots.
+    const swapping = prevType !== type;
+    if (swapping) stashEquipment(inv, inv.characterInventories[prevType]);
+
     // Switch inventory system to this character's stored inventory
     inv.setActiveCharacter(type);
+    if (swapping) loadEquipment(inv, inv.characterInventories[type]);
 
     // Restore (or initialize) this character's saved magic-meter state.
     if (game.player?.magicMeter) {
@@ -568,11 +576,10 @@ export class CharacterSystem {
       // Counted against the incoming type: applyCharacterTypeTo below is what
       // re-types the body, so player.characterType is still the old one here.
       m.active = game.magicSystem.effectiveManaSlotCount(game.player, type) > 0;
-      // Mana slots are per-character (manaState above) but equippedConsumables
-      // is shared across every character — restoring a different mana loadout
-      // can claim an index that still holds a real consumable equipped under
-      // the outgoing character. Evict it back to the shared consumableInventory
-      // rather than leaving it invisibly stuck under the meter's slot fill.
+      // A restored meter can claim an index that still holds a real consumable
+      // (the incoming character's parked equipment predates its meter state).
+      // Evict it back to the shared consumableInventory rather than leaving it
+      // invisibly stuck under the meter's slot fill.
       game.magicSystem.evictReservedConsumables(game.player);
     }
 

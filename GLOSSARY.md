@@ -848,7 +848,7 @@ identity, not standard programming terms.
   granted once per run, the first time that character becomes active. Every Starter Weapon
   must have a crafting upgrade path. The Gold Hero has none: a run still opens unarmed.
 - **In code:** `CHARACTER_TYPES[type].starterWeapon` (item char); seeded by
-  `createCharacterLoadout()` in `InventorySystem.js`.
+  `createCharacterLoadout()` in `characterLoadout.js`.
 - **Not:** "default weapon", "starting item", "loadout" (a Loadout is all three quick slots).
 
 ### Double-seconds

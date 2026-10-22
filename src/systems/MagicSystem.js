@@ -119,10 +119,10 @@ export class MagicSystem {
   // getNearestInteractiveSlot filter / InventorySystem.firstFreeConsumableSlot)
   // — every one of those already refuses to EQUIP into a reserved index, but
   // none of them can stop a slot that already held a real consumable from
-  // becoming reserved out from under it. equippedConsumables is shared across
-  // characters while magicMeter.slots is per-character (see
-  // CharacterSystem.applyCharacterType), so a character swap that restores a
-  // different mana loadout is the main way this happens; activateMagicMeter
+  // becoming reserved out from under it. A character swap restores both the
+  // incoming character's parked consumables and its own mana slots (see
+  // CharacterSystem.applyCharacterType), and the two can disagree — the main
+  // way this happens; activateMagicMeter
   // (well ritual / cauldron / Yellow Mage's free slot) is the other. Both
   // call this after finalizing meter.slots/meter.active — do not call it
   // speculatively, since it reads meter.active to decide what's reserved.
