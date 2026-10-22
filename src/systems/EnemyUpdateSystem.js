@@ -9,6 +9,7 @@ import { createExplosionAftermath } from './WorldEffectsSystem.js';
 import { BumpMechanic } from '../entities/enemyMechanics/BumpMechanic.js';
 import { ChargeMechanic } from '../entities/enemyMechanics/ChargeMechanic.js';
 import { glyphsTouch } from '../entities/enemyMechanics/glyphContact.js';
+import { beginVisionFrame } from '../entities/enemyVision.js';
 
 const MAX_GOO_BLOBS = 20;
 const SLIME_COLLISION_DISTANCE = 16;
@@ -59,6 +60,7 @@ export class EnemyUpdateSystem {
     // per frame (this system runs once per EXPLORE frame); any other system
     // that must drive an entity does so through assertSingleDrive().
     game._enemyTickFrame = (game._enemyTickFrame ?? 0) + 1;
+    beginVisionFrame();
     // layer-guard-ok: deliberately surface-scoped — this is the surface
     // per-frame ticker (bug #92); interior floor enemies are driven by the
     // DungeonSystem/HutSystem interior loops instead.

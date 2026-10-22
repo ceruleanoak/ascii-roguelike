@@ -232,6 +232,60 @@ export function getVisionObstructionPoint(enemy, start, end, maxLength) {
 // target-specific gates on top) and `hasVisionBarrier` (the bare geometry
 // question, asked between two arbitrary points that aren't necessarily the
 // enemy's target).
+// Per-frame cell index of a background-object list, so a ray sample only
+// tests the objects that could possibly answer for its cell instead of every
+// object in the room. A grass-dense room holds ~1,700 objects; with several
+// enemies each casting multi-sample rays every frame, the linear scan was the
+// whole cost of the frame (measured 2026-10-22: G room, 16ms of enemy update,
+// nearly all of it here).
+//
+// Each object is filed under every cell its own grid square or its grass
+// hitbox (the ±quarter-cell box below) touches, and the per-object test in
+// obstructsPoint runs unchanged on that short list — so the answer is the same
+// as the full scan. Objects move (Push Rocks slide) and lists grow, so the
+// index is rebuilt whenever the frame stamp or the list length changes;
+// `beginVisionFrame()` advances the stamp once per enemy tick.
+let visionFrame = 0;
+const cellIndexCache = new WeakMap();
+const CELL_KEY_STRIDE = 4096;
+
+export function beginVisionFrame() {
+  visionFrame++;
+}
+
+function cellIndexFor(objects) {
+  const cached = cellIndexCache.get(objects);
+  if (cached && cached.frame === visionFrame && cached.length === objects.length) {
+    return cached.cells;
+  }
+  const C = GRID.CELL_SIZE;
+  const halfExtent = C * 0.25;
+  const cells = new Map();
+  const file = (gx, gy, obj) => {
+    const key = gy * CELL_KEY_STRIDE + gx;
+    const list = cells.get(key);
+    if (list) {
+      if (list[list.length - 1] !== obj) list.push(obj);
+    } else {
+      cells.set(key, [obj]);
+    }
+  };
+  for (const obj of objects) {
+    if (obj.destroyed) continue;
+    const cx = obj.position.x + C / 2;
+    const cy = obj.position.y + C / 2;
+    const x0 = Math.min(Math.floor(obj.position.x / C), Math.floor((cx - halfExtent) / C));
+    const x1 = Math.max(Math.floor(obj.position.x / C), Math.floor((cx + halfExtent) / C));
+    const y0 = Math.min(Math.floor(obj.position.y / C), Math.floor((cy - halfExtent) / C));
+    const y1 = Math.max(Math.floor(obj.position.y / C), Math.floor((cy + halfExtent) / C));
+    for (let gy = y0; gy <= y1; gy++) {
+      for (let gx = x0; gx <= x1; gx++) file(gx, gy, obj);
+    }
+  }
+  cellIndexCache.set(objects, { frame: visionFrame, length: objects.length, cells });
+  return cells;
+}
+
 function obstructsPoint(enemy, checkX, checkY, gridX, gridY, distanceFromStart) {
   const mapRows = enemy.collisionMap ? enemy.collisionMap.length : GRID.ROWS;
   const mapCols = enemy.collisionMap?.[0]?.length ?? GRID.COLS;
@@ -240,7 +294,9 @@ function obstructsPoint(enemy, checkX, checkY, gridX, gridY, distanceFromStart) 
 
   if (enemy.backgroundObjects) {
     const myPlane = planeOf(enemy);
-    for (const obj of enemy.backgroundObjects) {
+    const candidates = cellIndexFor(enemy.backgroundObjects).get(gridY * CELL_KEY_STRIDE + gridX);
+    if (!candidates) return false;
+    for (const obj of candidates) {
       if (obj.destroyed) continue;
       // Skip objects not present on this enemy's plane (e.g. surfaceOnly when underground).
       if (!objectOnPlane(obj, myPlane)) continue;
