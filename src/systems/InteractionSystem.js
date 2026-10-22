@@ -1071,19 +1071,8 @@ export class InteractionSystem {
         game.neutralCharacters.push(fairy);
         console.log('[Secret] Fairy discovered!');
       }
-      // Sinkhole reveal: majority of the grass tiles touching a concealed
-      // Sinkhole must be cut before it surfaces as a ⬤ glyph.
-      const sinkholes = game.currentRoom?.sinkholes;
-      if (sinkholes?.length) {
-        for (const sink of sinkholes) {
-          if (sink.revealed) continue;
-          if (!sink.adjacentGrass.includes(obj)) continue;
-          sink.cutSet.add(obj);
-          if (sink.cutSet.size / sink.adjacentGrass.length > 0.5) {
-            game.sinkholeSystem?.reveal(sink);
-          }
-        }
-      }
+      // Sinkhole reveal: counts this blade toward its concealing grass.
+      game.sinkholeSystem?.noteGrassCleared(obj);
     } else if (effect === 'destroyObject:spawnGemstone') {
       obj.destroyAfterAnimation = true;
       game.renderer.markBackgroundDirty();

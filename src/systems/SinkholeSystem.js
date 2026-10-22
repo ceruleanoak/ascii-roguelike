@@ -35,6 +35,22 @@ export class SinkholeSystem {
     this.game = game;
   }
 
+  // A grass tile beside a concealed Sinkhole stopped hiding it — cut by a
+  // blade (InteractionSystem) or burned down to stubble (FireSystem). Once a
+  // majority of the tiles touching the hole are gone it surfaces as ⬤.
+  noteGrassCleared(obj) {
+    const sinkholes = this.game.currentRoom?.sinkholes;
+    if (!sinkholes?.length) return;
+    for (const sink of sinkholes) {
+      if (sink.revealed) continue;
+      if (!sink.adjacentGrass.includes(obj)) continue;
+      sink.cutSet.add(obj);
+      if (sink.cutSet.size / sink.adjacentGrass.length > 0.5) {
+        this.reveal(sink);
+      }
+    }
+  }
+
   // Swaps a concealed Sinkhole's grass tile for its revealed ⬤ glyph.
   reveal(sink) {
     if (!sink || sink.revealed) return;

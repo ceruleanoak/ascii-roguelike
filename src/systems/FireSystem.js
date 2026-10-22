@@ -131,6 +131,9 @@ export class FireSystem {
         if (obj.destroyed && obj.originalChar === 'Y' && Math.random() < 0.35) {
           this.game.lootSystem?.spawnIngredientDrop('a', obj.position.x, obj.position.y, null, obj);
         }
+        // Grass that burned to stubble no longer conceals a Sinkhole — the
+        // same reveal a blade cut gives.
+        if (obj.burnt) this.game.sinkholeSystem?.noteGrassCleared(obj);
         this._burning.delete(obj);
         dirty = true;
       }
