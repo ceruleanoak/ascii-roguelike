@@ -138,9 +138,7 @@ export const RECIPES = [
 
   // Advanced weapons
   { left: '†', right: 's', result: 'ᛖ', name: 'Dragon Blade' },  // Sword + Scale = Dragon Blade
-  { left: 'b', right: 'M', result: '⊤', name: 'Bone Axe' },      // Bone + Metal = Bone Axe
-  { left: '⊦', right: 'b', result: '⊤', name: 'Bone Axe' },      // Axe + Bone = Bone Axe (second route — connects the Axe to its tier-2 rung)
-  { left: 'j', right: '|', result: '⊤', name: 'Bone Axe' },      // Jaw + Stick = Bone Axe (third route — the jaw is the blade)
+  { left: '⊦', right: 'b', result: '⊤', name: 'Bone Axe' },      // Axe + Bone = Bone Axe (the Axe's tier-2 rung)
 
   // Utility
   { left: 't', right: '|', result: '↑', name: 'Spear' },         // Teeth + Stick = Spear
@@ -210,7 +208,7 @@ export const RECIPES = [
   // === NEW MELEE RECIPES (10) ===
   { left: '⊤', right: '⬨', result: 'ᛜ', name: 'Ice Hammer' },      // Bone Axe + Sapphire = Ice Hammer
   { left: 'j', right: '~', result: '○', name: 'Flail' },           // Jaw + String = Flail
-  { left: '⊤', right: 'F', result: 'ᚨ', name: 'Thunder Axe' },     // Bone Axe + Fire = Thunder Axe
+  { left: '⊦', right: '◇', result: 'ᚨ', name: 'Thunder Axe' },     // Axe + Topaz = Thunder Axe (gem rule)
   { left: '⊤', right: '⊗', result: '✺', name: 'Exploding Mace' },  // Bone Axe + Bomb = Exploding Mace
   { left: '↑', right: 'w', result: '⌁', name: 'Stun Baton' },      // Spear + Wing = Stun Baton
   { left: '⚒', right: 'M', result: '⏚', name: 'Earthquake Hammer' }, // Bone Crusher + Metal = Earthquake Hammer

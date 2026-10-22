@@ -793,15 +793,15 @@ export const ITEMS = {
     color: '#cccccc'
   },
 
-  // ── MELEE / axe — Tier 3 ──────────────────────────────────────────────────
+  // Thunder Axe (Axe + Topaz): the gem rule's electric axe, capped at tier 2.
   'ᚨ': {
     char: 'ᚨ',
-    tier: 3,
+    tier: 2,
     name: 'Thunder Axe',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'axe',
-    damage: 4,
+    damage: 2,
     windup: 1.2,
     recovery: 0.6,
     patternSpeed: 0.06,
