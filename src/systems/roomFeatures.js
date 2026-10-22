@@ -1878,10 +1878,12 @@ export function stampCentipedeArena(room) {
     obj.structural = true;
     // Arena obstacle rocks are a unique instance, not normal Rock/Fractured Rock:
     // the player must never get walled in against one for lacking a pickaxe/hammer,
-    // so every weapon type (melee or ranged) can break them.
+    // so every weapon type (melee or ranged) can break them. Being breakable
+    // by anything, they are no quarry either: breaking one drops nothing.
     if (char === '0' || char === '9') {
       obj.allWeaponsDamage = true;
       obj.bulletInteraction = 'interact-destroy';
+      obj.dropsNothing = true;
     }
     room.backgroundObjects.push(obj);
   }

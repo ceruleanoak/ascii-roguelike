@@ -223,8 +223,9 @@ export class BackgroundObject {
     // obstacle rocks) — see CombatSystem's melee gates and handleBulletCollision below.
     this.allWeaponsDamage = false;
     // Per-instance override: destroying this object yields nothing — no
-    // dropEffect payload, no dropTable. The Centipede's petrified segment
-    // husks wear a Fractured Rock's body without its rock harvest.
+    // dropEffect payload, no dropTable. The Centipede arena's any-weapon
+    // rocks and its petrified segment husks wear a rock's body without its
+    // rock harvest.
     this.dropsNothing = false;
 
     // Wand system properties
