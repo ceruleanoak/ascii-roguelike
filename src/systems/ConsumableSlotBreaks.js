@@ -4,8 +4,8 @@ import { createBurstParticles } from './WorldEffectsSystem.js';
 // place: water washes oils off, HP hitting 0 shatters hearts. Free functions
 // over InventorySystem (which still owns the slot arrays), same shape as
 // IngredientPile.js. Each break clears the slot to null exactly like a spent
-// non-leavesBottle consumable and bursts particles in the item's colour —
-// that burst is the only feedback, per the non-instructive UI rule.
+// non-leavesBottle consumable and bursts particles in the item's colour.
+// A washed-off oil also floats a single DISSOLVED word over the player.
 
 function shatterSlot(inventorySystem, player, slotIndex, fallbackColor) {
   const item = inventorySystem.equippedConsumables[slotIndex];
@@ -23,9 +23,16 @@ function shatterSlot(inventorySystem, player, slotIndex, fallbackColor) {
 // dry→wet transition. Oils never carry leavesBottle; the `wet` status pip
 // (StatusEffectVisuals.js/StatusPipEffects.js) tells the player why.
 export function destroyWetOils(inventorySystem, player) {
+  let dissolved = false;
   inventorySystem.equippedConsumables.forEach((item, i) => {
-    if (item?.data?.oilEffect) shatterSlot(inventorySystem, player, i, '#a07040');
+    if (!item?.data?.oilEffect) return;
+    shatterSlot(inventorySystem, player, i, '#a07040');
+    dissolved = true;
   });
+  // One word per wash, however many oils it took.
+  if (dissolved) {
+    inventorySystem.game?.combatSystem?.createDamageNumber('DISSOLVED', player.position.x, player.position.y - 14, '#a07040');
+  }
 }
 
 // HP hit 0: every equipped breaksOnDeath item (Heart, Dragon Heart) shatters.
