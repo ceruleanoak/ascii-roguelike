@@ -21,11 +21,11 @@ export const WEAPON_STYLES = {
   [WEAPON_TYPES.GUN]: [
     { name: 'STEADY', reference: '¬', from: [['¬', [...GUN_TIMING, 'accuracy']]] },
     { name: 'WILD', reference: 'X', from: [['X', [...GUN_TIMING, 'accuracy', 'inaccuracy']]] },
-    { name: 'SHARPSHOOTER', reference: 'ᛋ', from: [['ᛋ', [...GUN_TIMING, 'bulletSpeed']]],
+    { name: 'SHARPSHOOTER', reference: '⊸', from: [['⊸', [...GUN_TIMING, 'bulletSpeed']]],
       set: { accuracy: 1, inaccuracy: 0 } },
     { name: 'SCATTER', reference: 'ᛉ', from: [['ᛉ', [...GUN_TIMING, 'accuracy', 'bulletCount', 'bulletRange']]] },
     { name: 'KEEN', reference: '⋔', from: [['¬', [...GUN_TIMING, 'accuracy']], ['⋔', ['keenAim']]] },
-    { name: 'PIERCING', reference: 'ᛞ', from: [['ᛞ', [...GUN_TIMING, 'pierce']]] },
+    { name: 'PIERCING', reference: 'ᛏ', from: [['¬', [...GUN_TIMING, 'accuracy']], ['ᛏ', ['pierce']]] },
     { name: 'BOUNCING', reference: 'ᚱ', from: [['ᚱ', [...GUN_TIMING, 'ricochet', 'maxRicochets']]] },
     { name: 'CURSED', reference: '⌭', from: [['⌭', ['cooldown', 'maxUses', 'accuracy', 'bulletChar', 'bulletRange',
       'loopOmega', 'loopRadius', 'loopLinearSpeed', 'onHit', 'plagueBurst']]] },

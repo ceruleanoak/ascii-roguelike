@@ -29,13 +29,13 @@ const STAGE_CONFIG = [
     // Stage 1: starter weapon (or a plain bottled consumable) for a strong
     // mid-tier weapon or armor
     requestPool: ['¬', '†', ')', '/', '↑', '◐'],  // tier-1 starters, Bottle of Mud
-    rewardPool:  ['⌐', 'ᛁ', 'ᛞ', 'ᚺ', 'ᛟ', 'ᛏ', '✺', '𐤆'],
+    rewardPool:  ['⌐', 'ᚺ', 'ᛟ', 'ᛏ', '✺', '𐤆'],
     isIngredient: false
   },
   {
     // Stage 2: mid-tier item for legendary — repeats on subsequent trades
     requestPool: ['‡', 'ᛉ', '⟩', '⊤', 'X', '⌐', '𐤄', '⛓', '𐤂', '𐤆'],
-    rewardPool:  ['⚔', '⏚', '⚒', 'ᛋ', 'ᚨ', '⟰', '⇒', '✦', '♦', '∞', '𐤓', '𐤉', '𐤏', 'ᚲ'],
+    rewardPool:  ['⚔', '⏚', '⚒', 'ᚨ', '⇒', '✦', '♦', '∞', '𐤓', '𐤉', '𐤏', 'ᚲ'],
     isIngredient: false
   }
 ];

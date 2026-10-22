@@ -208,21 +208,6 @@ export class ConsumableTriggerSystem {
         }
         return false;
       }
-      case 'venomcloud': {
-        // Venom Vial: 2+ enemies within 60px — START WINDUP
-        const px = player.position.x + 20;
-        const py = player.position.y + 20;
-        let nearbyCount = 0;
-        for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px;
-          const dy = (enemy.position.y + 20) - py;
-          if (Math.sqrt(dx * dx + dy * dy) <= 60) nearbyCount++;
-        }
-        if (manual || nearbyCount >= 2) {
-          return { windup: 1.0, effectType: 'venomcloud' };
-        }
-        return false;
-      }
       case 'jolt': {
         // Jolt Jar: auto-fires only with 2+ enemies in the room. A manual
         // throw always fires, like every other thrown consumable: it lands on
@@ -335,7 +320,7 @@ export class ConsumableTriggerSystem {
 
   // Applies a self/AoE-around-player consumable's effect once its throw
   // animation lands. The eight offensive items with their own fixed AoE
-  // landing spot (explode, curse, slow, poison, venomcloud, jolt,
+  // landing spot (explode, curse, slow, poison, jolt,
   // throwSteam, firecracker) resolve in ConsumableWindupEffects.execute —
   // this covers everything else, resolved against the player's CURRENT
   // position/state at landing time rather than at throw time.
@@ -433,7 +418,6 @@ export class ConsumableTriggerSystem {
       case 'curse':       return cd.radius;     // Cursed Skull
       case 'slow':        return 50;            // Slime Ball
       case 'poison':      return 55;            // Poison Flask
-      case 'venomcloud':  return 60;            // Venom Vial
       case 'jolt':        return cd.radius || 80; // Drawn at target position
       case 'throwSteam':  return cd.radius;     // Steam Vial
       case 'panic_blind': return cd.radius ?? 96; // Bone Dust

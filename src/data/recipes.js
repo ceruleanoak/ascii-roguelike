@@ -44,6 +44,7 @@ export const RECIPES = [
   { left: '⊸', right: 'f', result: '⊶', name: 'Bolo Launcher' }, // Sling + Fur = Bolo Launcher (one snaring bolo per room)
   { left: 'Ψ', right: 'e', result: '⋔', name: 'Keen Slingshot' }, // Slingshot + Eye = Keen Slingshot (finds the nearest enemy)
   { left: '|', right: '△', result: '⇈', name: 'Fletch of Arrows' }, // Stick + Arrowhead = Fletch of Arrows
+  { left: 'v', right: '⇈', result: '⇞', name: 'Poison Tips' },      // Venom + Fletch of Arrows = Poison Tips (bow-only oil)
   { left: '⊿', right: '|', result: '⊦', name: 'Axe' },           // Axe head + Stick = Axe (distinct ingredients now — no slot-order clash with Fletch)
   { left: '/', right: '△', result: '↑', name: 'Spear' },         // Staff + Arrowhead = Spear
 
@@ -108,6 +109,7 @@ export const RECIPES = [
   { left: '🜄', right: 't', result: 'u', name: 'Battle Elixir' },  // Base Potion + Teeth = Battle Elixir
   { left: '🜄', right: 'h', result: 'z', name: 'Mending Brew' },   // Base Potion + Herb = Mending Brew
   { left: '🜄', right: '𝑚', result: '🜛', name: 'Mana Potion' },   // Base Potion + Mana = Mana Potion
+  { left: '🜆', right: 'v', result: '🜕', name: 'Venom Vial' },    // Unstable Potion + Venom = Venom Vial (poison oil)
 
   // Fire Essence + Bottle of Water = Bottle of Hot Water — a second, parallel
   // path to the Caldera hot-spring fill (AlchemySystem.fillHotWaterBottle);
@@ -184,7 +186,6 @@ export const RECIPES = [
   { left: 'ᛉ', right: 's', result: 'ᚲ', name: 'Dragon Shotgun' }, // Shotgun + Scale = Dragon Shotgun
   { left: '‡', right: 's', result: '⚔', name: 'Legendary Flame Sword' }, // Flame Sword + Scale = Legendary
   { left: '‡', right: 'a', result: 'ᚠ', name: 'Lava Sword' },             // Flame Sword + Ash = Lava Sword
-  { left: 'X', right: 'M', result: 'ᚷ', name: 'Heavy Pistols' },  // Dual Pistols + Metal = Heavy Pistols
   { left: '†', right: '⚗', result: 'ᛡ', name: 'Venom Blade' },    // Sword + Slurry = Venom Blade (Slurry is the acid/venom route)
   { left: '⟩', right: 'w', result: '⇒', name: 'Sky Bow' },        // Fire Bow + Wing = Sky Bow
   { left: '⊤', right: 'b', result: '⚒', name: 'Bone Crusher' },   // Bone Axe + Bone = Bone Crusher
@@ -204,16 +205,11 @@ export const RECIPES = [
   { left: 'a', right: 'c', result: '¤', name: 'Infused Coin' },   // Ash + Coin = Infused Coin (offering for Well)
   { left: 'N', right: 'N', result: '¶', name: 'Field Guide' },    // Paper + Paper = Field Guide (enemy HP shown while equipped)
 
-  // === NEW GUN RECIPES (10) ===
-  { left: 'ᛉ', right: 'j', result: '⌐', name: 'Machine Gun' },     // Shotgun + Goo = Machine Gun
-  { left: '¬', right: '⬨', result: 'ᛁ', name: 'Freeze Ray' },      // Gun + Sapphire = Freeze Ray
-  { left: 'ᛉ', right: 'F', result: '⟰', name: 'Rocket Launcher' }, // Shotgun + Fire = Rocket Launcher
-  { left: '¬', right: 's', result: 'ᛞ', name: 'Plasma Rifle' },    // Gun + Scale = Plasma Rifle
-  { left: '⌐', right: 'F', result: 'ᛋ', name: 'Laser Cannon' },    // Machine Gun + Fire = Laser Cannon
+  // === NEW GUN RECIPES ===
+  { left: 'X', right: 'j', result: '⌐', name: 'Machine Gun' },     // Dual Pistols + Jaw = Machine Gun
   { left: 'ᛉ', right: 'M', result: 'ᚺ', name: 'Scatter Gun' },     // Shotgun + Metal = Scatter Gun
-  { left: 'X', right: 'g', result: 'ᚦ', name: 'Venom Pistol' },    // Dual Pistols + Goo = Venom Pistol
-  { left: '¬', right: 'w', result: 'ᚾ', name: 'Stun Gun' },        // Gun + Wing = Stun Gun
-  { left: 'ᚷ', right: 'M', result: 'ᚱ', name: 'Ricochet Rifle' },  // Heavy Pistols + Metal = Ricochet Rifle
+  { left: '¬', right: '◇', result: 'ᚾ', name: 'Stun Gun' },        // Gun + Topaz = Stun Gun
+  { left: 'X', right: 'M', result: 'ᚱ', name: 'Ricochet Rifle' },  // Dual Pistols + Metal = Ricochet Rifle
 
   // === NEW MELEE RECIPES (10) ===
   { left: '⊤', right: '⬨', result: 'ᛜ', name: 'Ice Hammer' },      // Bone Axe + Sapphire = Ice Hammer

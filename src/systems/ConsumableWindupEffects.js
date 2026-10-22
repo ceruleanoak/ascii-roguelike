@@ -13,7 +13,7 @@
  * as EquipmentEffectsSystem: the InventorySystem instance is passed in as
  * `inv` rather than duplicated state living here.
  *
- * Offensive effects (explode/curse/slow/poison/venomcloud/jolt/firecracker/
+ * Offensive effects (explode/curse/slow/poison/jolt/firecracker/
  * throwSteam) resolve in the switch below. Everything else — heals, buffs,
  * shields, anything that lands on the player — falls through to
  * ConsumableTriggerSystem.applyEffect, which owns those mutations.
@@ -86,21 +86,6 @@ export class ConsumableWindupEffects {
           }
         }
         createBurstParticles(inv.game, particles, px, py, 18, '#44ff44');
-        break;
-      }
-      case 'venomcloud': {
-        // Venom Vial - damage + poison + slow
-        for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px;
-          const dy = (enemy.position.y + 20) - py;
-          if (Math.sqrt(dx * dx + dy * dy) <= 60) {
-            enemy.takeDamage(3);
-            if (enemy.shouldApplyStatusEffect('poison')) enemy.applyStatusEffect('poison', 8);
-            enemy.applyStatusEffect('freeze', 5, 1); // slow only: freeze pip 1
-            combatSystem.createDamageNumber(3, enemy.position.x, enemy.position.y, '#00ff44');
-          }
-        }
-        createBurstParticles(inv.game, particles, px, py, 22, '#00ff44');
         break;
       }
       case 'jolt': {

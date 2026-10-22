@@ -158,7 +158,7 @@ export const ITEMS = {
     name: 'Shotgun',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
-    damage: 1,
+    damage: 2,
     cooldown: 2.0,
     bulletCount: 3,
     bulletRange: 120,
@@ -182,19 +182,6 @@ export const ITEMS = {
     reloadTime: 7,
     reloadType: 'magazine',
     color: COLORS.ITEM
-  },
-  'ᚷ': {
-    char: 'ᚷ',
-    tier: 2,
-    name: 'Heavy Pistols',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.GUN,
-    damage: 2,
-    cooldown: 2,
-    maxUses: 8,
-    reloadTime: 6,
-    reloadType: 'magazine',
-    color: '#aaaaaa'
   },
   // Plague Gun (Fester's Gun + Venom): the looping bullet poisons what it hits
   // and bursts into a poison cloud there (plagueBurst → WeaponEffectsSystem).
@@ -235,6 +222,25 @@ export const ITEMS = {
     color: '#bb88ff'
   },
 
+  // Stun Gun (Gun + Topaz): the electric zone flavor, capped at tier 2.
+  'ᚾ': {
+    char: 'ᚾ',
+    tier: 2,
+    name: 'Stun Gun',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.GUN,
+    damage: 1,
+    cooldown: 0.9,
+    onHit: 'stun',
+    electric: true,
+    electricityCharge: 12,
+    bulletChar: 'ᚾ',
+    maxUses: 6,
+    reloadTime: 6,
+    reloadType: 'energy',
+    color: '#8888ff'
+  },
+
   // ── GUN — Tier 3 ──────────────────────────────────────────────────────────
   '⌐': {
     char: '⌐',
@@ -251,76 +257,13 @@ export const ITEMS = {
     reloadType: 'magazine',
     color: '#888888'
   },
-  'ᛁ': {
-    char: 'ᛁ',
-    tier: 3,
-    name: 'Freeze Ray',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.GUN,
-    damage: 0,
-    cooldown: 2,
-    bulletSpeed: 150,
-    bulletChar: 'ᛁ',
-    onHit: 'freeze',
-    maxUses: 4,
-    reloadTime: 6,
-    reloadType: 'energy',
-    color: '#00ffff'
-  },
-  '⟰': {
-    char: '⟰',
-    tier: 3,
-    name: 'Rocket Launcher',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.GUN,
-    damage: 3,
-    cooldown: 1.5,
-    bulletSpeed: 250,
-    explode: true,
-    explodeRadius: 30,
-    bulletChar: '⁍',
-    maxUses: 3,
-    reloadTime: 8,
-    reloadType: 'magazine',
-    color: '#ff4400'
-  },
-  'ᛞ': {
-    char: 'ᛞ',
-    tier: 3,
-    name: 'Plasma Rifle',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.GUN,
-    damage: 2,
-    cooldown: 0.7,
-    pierce: true,
-    bulletChar: 'ᛞ',
-    maxUses: 8,
-    reloadTime: 6,
-    reloadType: 'energy',
-    color: '#00ff88'
-  },
-  'ᛋ': {
-    char: 'ᛋ',
-    tier: 3,
-    name: 'Laser Cannon',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.GUN,
-    damage: 5,
-    cooldown: 1.2,
-    bulletSpeed: 400,
-    bulletChar: '─',
-    maxUses: 4,
-    reloadTime: 8,
-    reloadType: 'energy',
-    color: '#ff0088'
-  },
   'ᚺ': {
     char: 'ᚺ',
     tier: 3,
     name: 'Scatter Gun',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.GUN,
-    damage: 1,
+    damage: 2,
     cooldown: 2.0,
     bulletCount: 7,
     accuracy: 0.55,
@@ -328,40 +271,6 @@ export const ITEMS = {
     reloadTime: 7,
     reloadType: 'magazine',
     color: '#cccccc'
-  },
-  'ᚦ': {
-    char: 'ᚦ',
-    tier: 3,
-    name: 'Venom Pistol',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.GUN,
-    damage: 2,
-    cooldown: 0.5,
-    onHit: 'poison',
-    lifesteal: 0.3,
-    bulletChar: '●',
-    accuracy: 0.75,
-    maxUses: 10,
-    reloadTime: 6,
-    reloadType: 'magazine',
-    color: '#88ff00'
-  },
-  'ᚾ': {
-    char: 'ᚾ',
-    tier: 3,
-    name: 'Stun Gun',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.GUN,
-    damage: 1,
-    cooldown: 0.9,
-    onHit: 'stun',
-    electric: true,
-    electricityCharge: 12,
-    bulletChar: 'ᚾ',
-    maxUses: 6,
-    reloadTime: 6,
-    reloadType: 'energy',
-    color: '#8888ff'
   },
   'ᚱ': {
     char: 'ᚱ',
@@ -2701,15 +2610,6 @@ export const ITEMS = {
     manualOnly: true,
     color: '#44ff44'
   },
-  'Z': {
-    char: 'Z',
-    name: 'Venom Vial',
-    type: ITEM_TYPES.CONSUMABLE,
-    effect: 'venomcloud',
-    cooldown: 12, // Reusable with 12s cooldown
-    manualOnly: true,
-    color: '#00ff44'
-  },
   'J': {
     char: 'J',
     name: 'Jolt Jar',
@@ -2800,6 +2700,25 @@ export const ITEMS = {
     type: ITEM_TYPES.CONSUMABLE,
     oilEffect: { onHit: 'sleep' },
     color: '#ffe566'
+  },
+  // Not pressed: crafted from Venom + Fletch of Arrows. An oil in every way
+  // (passive augment, washed off by water) but bowOnly — it tips arrows, so
+  // the dagger ignores it (Item.js _readEquippedOilEffect / oilAppliesTo).
+  '⇞': {
+    char: '⇞',
+    name: 'Poison Tips',
+    type: ITEM_TYPES.CONSUMABLE,
+    oilEffect: { onHit: 'poison', bowOnly: true },
+    color: '#00ff44'
+  },
+  // Not pressed either: brewed at the Alchemy Lab from Unstable Potion + Venom.
+  // The poison oil for every weapon that takes oils (no bowOnly).
+  '🜕': {
+    char: '🜕',
+    name: 'Venom Vial',
+    type: ITEM_TYPES.CONSUMABLE,
+    oilEffect: { onHit: 'poison' },
+    color: '#00ff44'
   },
 
   // ── Bottles ───────────────────────────────────────────────────────────────
@@ -3638,7 +3557,7 @@ export const AFFINITY_POOLS = {
     },
     weapons: {
       [RARITY.UNCOMMON]: ['‡'],              // Flame Sword
-      [RARITY.RARE]:     ['⟰', 'ᚠ', '⚝']  // Rocket Launcher, Lava Sword, Ruby Staff
+      [RARITY.RARE]:     ['ᚠ', '⚝']  // Lava Sword, Ruby Staff
     },
     traps: {
       [RARITY.UNCOMMON]: ['^'],              // Fire Trap
@@ -3659,7 +3578,7 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     []
     },
     weapons: {
-      [RARITY.UNCOMMON]: ['ᛁ', 'ᛜ', 'ᛇ'],   // Freeze Ray, Ice Hammer, Ice Bow
+      [RARITY.UNCOMMON]: ['ᛜ', 'ᛇ'],   // Ice Hammer, Ice Bow
       [RARITY.RARE]:     ['⚹']             // Sapphire Staff
     },
     traps: {
@@ -3679,7 +3598,7 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     ['h']               // Herb
     },
     weapons: {
-      [RARITY.UNCOMMON]: ['ᚦ'],              // Venom Pistol
+      [RARITY.UNCOMMON]: [],
       [RARITY.RARE]:     ['ᛘ', 'ᛡ', '⚭']  // Vampire Dagger, Venom Blade, Garnet Staff
     },
     traps: {
