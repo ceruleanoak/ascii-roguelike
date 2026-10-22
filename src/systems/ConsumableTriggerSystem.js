@@ -52,6 +52,16 @@ export class ConsumableTriggerSystem {
       || state === GAME_STATES.NEUTRAL || state === GAME_STATES.ARCADE_DEMO;
     if (!validState || (game.player?.selectedConsumableIndex ?? -1) < 0) return false;
 
+    // REST: a ground item in reach wins over the armed slot. The REST crafting
+    // workflow leaves a potion armed whenever a SHIFT-place into a slot fails,
+    // so SPACE on a dropped item beside the slots drank the potion (slot →
+    // Empty Bottle) instead of picking the item up. Declining here lets SPACE
+    // fall through to the REST pickup; the slot stays armed.
+    if (state === GAME_STATES.REST &&
+        game.inventorySystem.hasNearbyGroundItem(game.items, game.player, game.physicsSystem)) {
+      return false;
+    }
+
     // Gold Breath curse: the slots are coins now — SPACE flips one instead of
     // firing the remedy behind it (consumable use suspended, ratified). The
     // curse owner performs the discharge; an empty wallet spends nothing but
