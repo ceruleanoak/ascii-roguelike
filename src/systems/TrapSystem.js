@@ -211,6 +211,17 @@ export class TrapSystem {
     }
   }
 
+  // Lift every trap placed on the interior layer out of placedTraps and hand
+  // them back. A dungeon floor keeps its own (DungeonSystem stores them on the
+  // floor it is leaving); any other interior exit abandons them, the same as
+  // the loot left on that floor.
+  takeInteriorTraps() {
+    const game = this.game;
+    const taken = game.placedTraps.filter(e => e.interior === true);
+    if (taken.length) game.placedTraps = game.placedTraps.filter(e => e.interior !== true);
+    return taken;
+  }
+
   // A slotted trap's full per-room charge count: authored charges per copy
   // owned, plus the character's trap affinity bonus (Gray Assassin's +1, the
   // same bonus Player.pickupItem grants a newly picked-up trap).
@@ -978,8 +989,11 @@ export class TrapSystem {
         } else if (effect === 'sleep') {
           // Music Box: apply sleep to enemies that enter radius while active. No affinity
           // (sleep has no elemental class) — every enemy is a valid target.
+          // It plays for activeDuration seconds, then it is gone.
           entry.activeDuration -= deltaTime;
-          if (entry.activeDuration > 0) {
+          if (entry.activeDuration <= 0) {
+            game.placedTraps.splice(i, 1);
+          } else {
             for (const enemy of enemies) {
               const dx = enemy.position.x - tx;
               const dy = enemy.position.y - ty;

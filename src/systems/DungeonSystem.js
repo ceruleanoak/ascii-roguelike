@@ -257,6 +257,13 @@ export class DungeonSystem {
       if (!game.ingredients.includes(ing)) game.ingredients.push(ing);
     }
 
+    // Placed traps stay on the floor they were set on, and every floor is a
+    // fresh room for the quick-slotted traps' charges.
+    const leftTraps = game.trapSystem.takeInteriorTraps();
+    if (game.activeFloor) game.activeFloor.placedTraps = leftTraps;
+    game.placedTraps.push(...(floor.placedTraps ?? []));
+    game.trapSystem.resetTrapsForNewRoom();
+
     game.activeFloor = floor;
     game.dungeonCurrentFloor = floor.roomKind === 'numbered' ? floor.floorIndex : -1;
 
@@ -409,6 +416,7 @@ export class DungeonSystem {
     if (game.activeFloor) {
       game.activeFloor.items       = game.items.filter(i => i.hutPlane);
       game.activeFloor.ingredients = game.ingredients.filter(i => i.hutPlane);
+      game.activeFloor.placedTraps = game.trapSystem.takeInteriorTraps();
     }
 
     // Remove current floor enemies from physics (they remain on floor.enemies).

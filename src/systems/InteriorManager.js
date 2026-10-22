@@ -228,6 +228,7 @@ export class InteriorManager {
 
     g.ingredients = g.ingredients.filter(i => !i.hutPlane);
     g.items = g.items.filter(i => !i.hutPlane);
+    g.trapSystem.takeInteriorTraps(); // abandoned with the floor's loot
 
     g.activeFloor = null;
     g.renderer.backgroundDirty = true;
