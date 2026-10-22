@@ -33,8 +33,12 @@ export function tagCharmedProjectile(proj, player) {
   }
 }
 
+// The number only shows when the hit actually landed — takeDamage returns
+// false under its gates (shell form, post-hit iframes) and `{ dodged }` for a
+// dodge ([damage-number-desync]).
 function landCharmedHit(combatSystem, target, damage) {
-  target.takeDamage(damage);
+  const result = target.takeDamage(damage);
+  if (!result || result.dodged) return;
   combatSystem.createDamageNumber(damage, target.position.x, target.position.y, '#ff44ff');
 }
 
