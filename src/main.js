@@ -1326,11 +1326,6 @@ class Game {
     // Reset robe aura roll-pulse so it fires once in the new room
     if (this.player) this.player._auraRollPulseUsed = false;
 
-    // Reset Acid Blade charges (3 per room: each swing that hits water or an
-    // enemy depletes 1; at 0, swings still land but apply no poison and don't
-    // convert water tiles)
-    if (this.player) this.player._acidBladeChargesThisRoom = 3;
-
     // Zone depths only reset on death, not when entering from REST
     // Check if continuing in current zone (depth > 0) or starting fresh in this zone (depth === 0)
     const isContinuing = this.getCurrentZoneDepth() > 0;

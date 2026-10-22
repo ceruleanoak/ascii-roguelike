@@ -7,7 +7,7 @@
 // the player's carrier layer is StatusEffectSystem.js.
 //
 // Every export takes the owning `enemy` as its first argument, matching the
-// ElectricConduction.js/AcidWaterSpread.js pattern — Enemy.js keeps thin
+// ElectricConduction.js pattern — Enemy.js keeps thin
 // delegating methods (applyStatusEffect/updateStatusEffects) so every
 // existing `enemy.applyStatusEffect(...)` call site across the codebase is
 // unaffected.

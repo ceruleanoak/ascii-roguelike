@@ -63,6 +63,12 @@ function _readEquippedOilEffect(player, forBow = true) {
 // Whether an equipped oil does anything for this weapon: bows take every oil,
 // daggers every oil but the bowOnly ones, nothing else takes any. The quick
 // slot bar and EquipmentSlots dim an oil slot this returns false for.
+// The oils a thrown Kunai carries: every equipped oil but the bowOnly ones,
+// snapshotted at the throw (TrapSystem.releaseTrapThrow).
+export function equippedDaggerOils(player) {
+  return _readEquippedOilEffect(player, false).onHits;
+}
+
 export function oilAppliesTo(oilEffect, weaponData) {
   if (!weaponData) return false;
   if (weaponData.weaponType === 'BOW') return true;
@@ -128,6 +134,9 @@ export class Item {
     // Wand use limit system (resets per room)
     this.maxUsesPerRoom = this.data.maxUsesPerRoom || null; // null = unlimited
     this.wandUsesRemaining = this.maxUsesPerRoom;
+    // Kunai: SHIFT throws one of these per room before the weapon itself goes.
+    this.throwCharges = this.data.throwCharges || null; // null = no bundle
+    this.throwChargesRemaining = this.throwCharges;
 
     // Bow charging system (hold to charge)
     this.isCharging = false;
@@ -890,7 +899,6 @@ export class Item {
       if (this.data.cyclesExitLetter) props.cyclesExitLetter = this.data.cyclesExitLetter;
       if (this.data.cyclesExitColor) props.cyclesExitColor = this.data.cyclesExitColor;
       if (this.data.poisonStacks) props.poisonStacks = true;
-      if (this.data.acidBlade) props.acidBlade = true;
       if (this.data.randomOnHit) props.randomOnHit = this.data.randomOnHit;
       // WeaponEffectsSystem.onMeleeHit flags (Glacier Hammer, Reaper's Scythe, Vine Whip, Rootstaff)
       if (this.data.shattersFrozen) props.shattersFrozen = true;
@@ -1245,7 +1253,7 @@ export class Item {
     // '/', axe/pickaxe '═', spear '→', whip '~') — falling back to the
     // weapon's own decorative pickup char (as this used to) breaks rotation
     // for any dagger whose glyph isn't in getMeleeDrawAngle's NATURAL_ANGLES
-    // table (e.g. Acid Blade 'ᚢ', Vampire Dagger 'ᛘ' never rotated).
+    // table (e.g. Icicle '⍖', Hook Sword '⌠' never rotated).
     const multistabChar = this.data.meleeChar || '↾';
     const multistabDrawAngle = this.getMeleeDrawAngle(multistabChar, baseAngle);
     // Combo finisher: only the final stab applies knockback (and full hitstop).
@@ -1806,6 +1814,11 @@ export class Item {
     // Reset wand uses
     if (this.maxUsesPerRoom !== null) {
       this.wandUsesRemaining = this.maxUsesPerRoom;
+    }
+
+    // Refill the Kunai bundle
+    if (this.throwCharges !== null) {
+      this.throwChargesRemaining = this.throwCharges;
     }
   }
 }

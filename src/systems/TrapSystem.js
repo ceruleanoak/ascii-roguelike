@@ -1,13 +1,14 @@
-import { Item } from '../entities/Item.js';
+import { Item, equippedDaggerOils } from '../entities/Item.js';
 import { Puddle } from '../entities/Puddle.js';
 import { createActivationBurst, createEmberBurst, createIceBurst } from '../entities/Particle.js';
 import { GRID, BACKGROUND_OBJECT_VARIANTS } from '../game/GameConfig.js';
 import { applyLavaContact } from './LavaContact.js';
 import { MAX_PIPS } from './StatusEffects.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
-import { isInteriorActive, tagInteriorPlane } from './PlaneSystem.js';
+import { isInteriorActive, tagInteriorPlane, planeOf } from './PlaneSystem.js';
 import { createLightningSpire } from './LightningSpire.js';
 import { createExplosionAftermath, createGooBurst } from './WorldEffectsSystem.js';
+import { applyExtraOnHitEffects } from './ExtraOnHitEffects.js';
 
 // True when any quick slot holds a weapon — the "armed" test for the
 // thrown-weapon pointer.
@@ -345,6 +346,30 @@ export class TrapSystem {
         interior,
       });
       this.markTrapUsed();
+    } else if (heldItem.throwChargesRemaining > 0) {
+      // Kunai: one from the bundle flies and the weapon stays in hand. `spent`
+      // keeps it from landing as a pickup; the oils are snapshotted now.
+      heldItem.throwChargesRemaining--;
+      game.inFlightTraps.push({
+        kind: 'weapon',
+        x: px, y: py,
+        vx: (dx / dist) * v0,
+        vy: (dy / dist) * v0,
+        decel: THROW_DECEL,
+        targetX: pos.x, targetY: pos.y,
+        char: heldItem.char,
+        color: heldItem.color,
+        rotation: 0,
+        weaponItem: heldItem,
+        spent: true,
+        oilOnHits: equippedDaggerOils(game.player),
+        profile,
+        baseDamage: heldItem.data?.damage ?? 1,
+        hitEnemies: new Set(),
+        plane: game.player.plane ?? 0,
+        inMaze: game.player.inMaze === true,
+        interior,
+      });
     } else {
       // Weapon throw: clear the active slot, item flies until it hits an enemy or stops
       const thrownItem = game.player.dropItem();
@@ -696,6 +721,7 @@ export class TrapSystem {
         game.combatSystem?.createDamageNumber?.(dmg, enemy.position.x, enemy.position.y, t.color || '#ffffff');
       }
       t.hitEnemies.add(enemy);
+      if (t.oilOnHits?.length) applyExtraOnHitEffects(game.combatSystem, enemy, t.oilOnHits, t.color);
 
       // Pinning spear (Trident only): carry the enemy with the spear instead of landing immediately
       if (t.weaponItem?.data?.pinning) {
@@ -722,8 +748,11 @@ export class TrapSystem {
     const C = GRID.CELL_SIZE;
     const item = t.weaponItem;
     if (!item) return;
+    // A Kunai from the bundle is gone once it lands; the weapon never left hand.
+    if (t.spent) return;
     // Let FountainSystem intercept throws aimed at the pool
     if (game.fountainSystem?.checkWeaponLanding(t)) return;
+    if (item.data?.throwBurst) this._throwBurst(t, item.data.throwBurst);
     item.position.x = t.x - C / 2;
     item.position.y = t.y - C / 2;
     item.velocity = { vx: 0, vy: 0 };
@@ -742,6 +771,26 @@ export class TrapSystem {
     item.mazePlane = t.inMaze === true;
     game.items.push(item);
     game.physicsSystem.addEntity(item);
+  }
+
+  // A thrown weapon with `throwBurst` (Icicle) bursts where it lands: every
+  // enemy on its plane within `radius` takes the status at full pips (the
+  // Freeze Trap's straight-to-Frozen hit). The weapon itself still lands.
+  _throwBurst(t, burst) {
+    const game = this.game;
+    const C = GRID.CELL_SIZE;
+    const plane = t.plane ?? 0;
+    if (burst.onHit === 'freeze') {
+      for (const p of createIceBurst(t.x, t.y)) game.particles.push(tagInteriorPlane(game, p));
+    }
+    for (const enemy of game._activeEnemies()) {
+      if (planeOf(enemy) !== plane) continue;
+      const dx = (enemy.position.x + C / 2) - t.x;
+      const dy = (enemy.position.y + C / 2) - t.y;
+      if (Math.sqrt(dx * dx + dy * dy) > burst.radius) continue;
+      if (!enemy.shouldApplyStatusEffect?.(burst.onHit)) continue;
+      enemy.applyStatusEffect(burst.onHit, burst.duration ?? 3, MAX_PIPS);
+    }
   }
 
   // Place trap entity at landing position and emit burst particles.

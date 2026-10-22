@@ -726,22 +726,6 @@ export const ITEMS = {
   },
 
   // ── MELEE / sword — Tier 3 ────────────────────────────────────────────────
-  'ᚢ': {
-    char: 'ᚢ',
-    tier: 2,
-    name: 'Acid Blade',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.MELEE,
-    weaponSubtype: 'dagger',
-    damage: 1,
-    windup: 0.4,
-    recovery: 0.6,
-    patternSpeed: 0.05,
-    range: 20,
-    onHit: 'poison',
-    acidBlade: true,
-    color: '#44ff00'
-  },
   'ᛠ': {
     char: 'ᛠ',
     tier: 3,
@@ -1401,27 +1385,12 @@ export const ITEMS = {
     keenAim: true,
     keenAimCells: 4,
     lungeSpeed: 90,
-    damage: 2,
+    damage: 1,
     windup: 0.1,
     recovery: 1.0,   // slower than the plain Dagger's 0.6 — the Cyan Rogue's stab line was too rapid
     range: 20,
     patternSpeed: 0.05,
     color: '#ddeeff'
-  },
-  'ᛘ': {
-    char: 'ᛘ',
-    tier: 2,
-    name: 'Vampire Dagger',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.MELEE,
-    weaponSubtype: 'dagger',
-    damage: 1,
-    windup: 0.4,
-    recovery: 0.6,
-    range: 20,
-    patternSpeed: 0.05,
-    lifesteal: 1.0,
-    color: '#990000'
   },
   // Dagger + Jaw: the jaw-bone hook catches and twists, so every stab leaves the target dizzy.
   '⌠': {
@@ -1438,6 +1407,25 @@ export const ITEMS = {
     patternSpeed: 0.05,
     onHit: 'dizzy',
     color: '#dddddd'
+  },
+  // Kunai (Dagger + Dagger): SPACE stabs as a plain dagger. SHIFT throws one
+  // from the bundle instead of the weapon itself — `throwCharges` a room, each
+  // carrying the equipped oils (TrapSystem.releaseTrapThrow). With the bundle
+  // spent, SHIFT throws the Kunai like any weapon.
+  '⚲': {
+    char: '⚲',
+    tier: 2,
+    name: 'Kunai',
+    type: ITEM_TYPES.WEAPON,
+    weaponType: WEAPON_TYPES.MELEE,
+    weaponSubtype: 'dagger',
+    damage: 1,
+    windup: 0.15,
+    recovery: 0.6,
+    range: 20,
+    patternSpeed: 0.05,
+    throwCharges: 3,
+    color: '#8899aa'
   },
 
   // ── MELEE / whip ──────────────────────────────────────────────────────────
@@ -1479,29 +1467,15 @@ export const ITEMS = {
     drawScale: 1.3, critChance: 0.4,
     color: '#ccffff'
   },
-  // Icicle (Dagger + Ice): freezing dagger.
+  // Icicle (Dagger + Ice): stabs like a plain dagger; thrown, it shatters
+  // into an ice burst that freezes everything around where it lands
+  // (TrapSystem._landThrownWeapon).
   '⍖': {
     char: '⍖', tier: 2, name: 'Icicle',
     type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'dagger',
     damage: 1, windup: 0.15, recovery: 0.6, range: 20, patternSpeed: 0.05,
-    onHit: 'freeze',
+    throwBurst: { onHit: 'freeze', radius: 60 },
     color: '#aaeeff'
-  },
-  // Bloodletter (Vampire Dagger + Garnet): drinks twice as deep.
-  '⸶': {
-    char: '⸶', tier: 3, name: 'Bloodletter',
-    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'dagger',
-    damage: 2, windup: 0.4, recovery: 0.6, range: 20, patternSpeed: 0.05,
-    lifesteal: 2,
-    color: '#cc1133'
-  },
-  // Viper Fang (Acid Blade + Venom): stacking poison, three hits burst.
-  '⸷': {
-    char: '⸷', tier: 3, name: 'Viper Fang',
-    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'dagger',
-    damage: 2, windup: 0.3, recovery: 0.6, range: 20, patternSpeed: 0.05,
-    onHit: 'poison', poisonStacks: true,
-    color: '#88ff22'
   },
   // Ice Axe (Axe + Ice): freezing axe.
   '⍑': {
@@ -3503,7 +3477,7 @@ export const AFFINITY_POOLS = {
     },
     weapons: {
       [RARITY.UNCOMMON]: [],
-      [RARITY.RARE]:     ['ᛘ', '⚭']  // Vampire Dagger, Garnet Staff
+      [RARITY.RARE]:     ['⚭']  // Garnet Staff
     },
     traps: {
       [RARITY.UNCOMMON]: ["'"],              // Charm Lure

@@ -17,7 +17,6 @@ import { updateEnemyMeleeAttack, resolveEnemyAttack, attackHitsBox, retireAfterT
 import { conductElectricity as conductElectricityImpl } from './ElectricConduction.js';
 import { checkProximity as checkProximityImpl, applyAOEStatus as applyAOEStatusImpl, createExplosion as createExplosionImpl, detonateBombArrow } from './ExplosionEffects.js';
 import { updateRollDamage as updateRollDamageImpl } from './RollDamageMechanic.js';
-import { acidFloodFillWater } from './AcidWaterSpread.js';
 import { TongueAttackSystem } from './TongueAttackSystem.js';
 import { createSplitProjectiles } from './SplitProjectiles.js';
 import { tagCharmedProjectile, resolveCharmedMelee, resolveCharmedProjectile, resolveEnemySap } from './charmHits.js';
@@ -926,17 +925,7 @@ export class CombatSystem {
               // number — each branch already has its own feedback: the flood
               // fill / tile's own color-state change, a steam cloud puff.
               if (obj.isWater && obj.isWater()) {
-                const acidActive = attack.acidBlade && player && player._acidBladeChargesThisRoom > 0;
-                if (attack.acidBlade && !acidActive) {
-                  // Out of charges — Acid Blade swings still land but don't
-                  // convert water (and skip the 8s poisoned-water fallback below).
-                } else if (acidActive) {
-                  acidFloodFillWater(obj, backgroundObjects);
-                  if (!attack._acidChargeDepleted) {
-                    attack._acidChargeDepleted = true;
-                    player._acidBladeChargesThisRoom = Math.max(0, player._acidBladeChargesThisRoom - 1);
-                  }
-                } else if (attack.onHit === 'freeze') {
+                if (attack.onHit === 'freeze') {
                   obj.setWaterState('frozen', Infinity); // Stays frozen until thawed by fire
                 } else if (attack.onHit === 'poison') {
                   obj.setWaterState('poisoned', POISONED_WATER_DURATION);
@@ -1124,35 +1113,23 @@ export class CombatSystem {
                 this.createDamageNumber('!', enemy.position.x, enemy.position.y - 12, '#ff4400');
               }
 
-              // Acid Blade: each swing that connects with an enemy depletes 1
-              // charge (max 1 per swing across enemy + water-tile hits). At 0
-              // charges the sword still swings but applies no poison.
-              const acidOutOfCharges = attack.acidBlade && (!player || player._acidBladeChargesThisRoom <= 0);
-              if (attack.acidBlade && !acidOutOfCharges && !attack._acidChargeDepleted) {
-                attack._acidChargeDepleted = true;
-                player._acidBladeChargesThisRoom = Math.max(0, player._acidBladeChargesThisRoom - 1);
-              }
-
               // Apply status effects with affinity-modified duration.
               // Same stun→zap translation as the projectile path: electric
               // melee applies 'zap', keeping item data ('stun' + electric) as-is.
               const attackStatus = (attack.onHit === 'stun' && attack.electric) ? 'zap' : attack.onHit;
-              if (attack.onHit && !acidOutOfCharges && enemy.shouldApplyStatusEffect(attackStatus)) {
+              if (attack.onHit && enemy.shouldApplyStatusEffect(attackStatus)) {
                 // statusDurationScale: per-effect multiplier an attack can carry (Bat: dizzy ×2).
                 const modifiedDuration = statusDuration * elementalMod * (attack.statusDurationScale?.[attackStatus] ?? 1);
                 applyOnHitStatusEffect(enemy, attackStatus, modifiedDuration);
                 // Emit impact effect for visual feedback
                 this.impactEffects.push({ x: enemy.position.x, y: enemy.position.y, onHit: attack.onHit, color: attack.color });
-              } else if (attack.onHit && !acidOutOfCharges && !enemy.shouldApplyStatusEffect(attackStatus)) {
+              } else if (attack.onHit && !enemy.shouldApplyStatusEffect(attackStatus)) {
                 this.createDamageNumber('RESIST', enemy.position.x, enemy.position.y - 12, '#888888');
               }
 
               // Extra onHit effects from equipped oils beyond the primary (see
-              // Item.js's extraOnHit) — deliberately independent of both the
-              // primary's immunity outcome above and Acid Blade's charge gate
-              // (acidOutOfCharges): oils are a separate resource from Acid
-              // Blade's per-room charge counter, so running out of charges
-              // must not suppress an unrelated oil's effect.
+              // Item.js's extraOnHit) — deliberately independent of the
+              // primary's immunity outcome above.
               applyExtraOnHitEffects(this, enemy, attack.extraOnHit, attack.color, attack.statusDurationScale);
 
               // Whip disarm — the lash rips carried gear out of an armed

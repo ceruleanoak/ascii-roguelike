@@ -31,9 +31,9 @@ export function applyOnHitStatusEffect(enemy, effect, duration) {
 // (elemental modifier/immunity gate, zap strength, impact effect) but
 // resolves each extra independently, with its own elemental-modifier check —
 // an extra must not be swallowed just because the primary effect happened to
-// be immune-voided on this enemy, nor gated behind Acid Blade's per-room
-// charge counter (call sites in CombatSystem.js place this call outside both
-// of those gates). Extras use a flat duration; they don't inherit the
+// be immune-voided on this enemy (call sites in CombatSystem.js place this
+// call outside that gate). A thrown Kunai passes all its oils here as extras
+// (TrapSystem._checkThrownWeaponHit). Extras use a flat duration; they don't inherit the
 // primary's wet-bonus extended durations, which are specific to a weapon's
 // own onHit==='stun'/'freeze' combo with isWet.
 // durationScale: the attack's `statusDurationScale` ({ effect: multiplier }),

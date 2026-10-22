@@ -194,7 +194,6 @@ export const RECIPES = [
   { left: 'F', right: 's', result: 'ᛝ', name: 'Dragon Spirit' },   // Fire Essence + Scale = Dragon Spirit
   { left: 's', right: 'F', result: 'ᛝ', name: 'Dragon Spirit' },   // either order (the Echo)
   { left: 'g', right: 'f', result: '⚗', name: 'Slurry' },         // Goo + Fur = Slurry
-  { left: '↾', right: '⚗', result: 'ᚢ', name: 'Acid Blade' },     // Dagger + Slurry = Acid Blade
   { left: 'm', right: '~', result: '♥', name: 'Heart' },          // Meat + String = Heart
   { left: 'c', right: 'F', result: '★', name: 'Lucky Coin' },     // Coin + Fire = Lucky Coin
   { left: 'M', right: '0', result: '■', name: 'Metal Block' },    // Metal + Rock = Metal Block (auto-blocks at low HP)
@@ -214,7 +213,6 @@ export const RECIPES = [
   { left: '⊤', right: 'F', result: 'ᚨ', name: 'Thunder Axe' },     // Bone Axe + Fire = Thunder Axe
   { left: '⊤', right: '⊗', result: '✺', name: 'Exploding Mace' },  // Bone Axe + Bomb = Exploding Mace
   { left: '↑', right: 'w', result: '⌁', name: 'Stun Baton' },      // Spear + Wing = Stun Baton
-  { left: '‡', right: 'm', result: 'ᛘ', name: 'Vampire Dagger' },  // Flame Sword + Meat = Vampire Dagger
   { left: '⚒', right: 'M', result: '⏚', name: 'Earthquake Hammer' }, // Bone Crusher + Metal = Earthquake Hammer
   { left: '†', right: '🜆', result: 'ᛠ', name: 'Chaos Blade' },     // Sword + Unstable Potion = Chaos Blade
 
@@ -242,7 +240,6 @@ export const RECIPES = [
   // Tier-1 → tier-2 rungs
   { left: '†', right: '𝑚', result: '⸸', name: 'Magic Sword' },       // Sword + Mana
   { left: '⸸', right: '◇', result: 'Ꞩ', name: 'Lightning Sword' },   // Magic Sword + Topaz
-  { left: '↾', right: 'm', result: 'ᛘ', name: 'Vampire Dagger' },    // Dagger + Meat
   { left: '↾', right: 'j', result: '⌠', name: 'Hook Sword' },        // Dagger + Jaw (dizzy on hit)
   { left: '⊥', right: '⬨', result: 'ᛜ', name: 'Ice Hammer' },        // Hammer + Sapphire
   { left: '⊥', right: '⊗', result: '✺', name: 'Exploding Mace' },    // Hammer + Bomb
@@ -250,7 +247,8 @@ export const RECIPES = [
   { left: '≋', right: '❦', result: '∻', name: 'Vine Whip' },         // Whip + Moss
   { left: '≋', right: 'M', result: '✹', name: 'Morning Star' },      // Whip + Metal
   { left: '⫯', right: '⧫', result: '⟡', name: 'Diamond Longsword' }, // Longsword + Diamond
-  { left: '↾', right: 'i', result: '⍖', name: 'Icicle' },            // Dagger + Ice
+  { left: '↾', right: 'i', result: '⍖', name: 'Icicle' },
+  { left: '↾', right: '↾', result: '⚲', name: 'Kunai' },             // Dagger + Dagger (pre-empts the dagger's tier-up cycle)            // Dagger + Ice
   { left: '⊦', right: 'i', result: '⍑', name: 'Ice Axe' },           // Axe + Ice
   { left: '↩', right: 'M', result: '⌾', name: 'Chakram' },           // Boomerang + Metal (damages every bounce, no stun)
   { left: 'Ƨ', right: 'd', result: '⸕', name: "Reaper's Scythe" },   // Scythe + Dust
@@ -265,8 +263,6 @@ export const RECIPES = [
   { left: '⬢', right: 'a', result: '⫪', name: 'Cinder Hammer' },     // Onyx Hammer + Ash
   { left: 'Ⲯ', right: 'r', result: '⸾', name: 'Rootstaff' },         // Thick Staff + Root
   { left: '⟘', right: '4', result: '⟂', name: 'Slag Maul' },         // Maul + Slag
-  { left: 'ᛘ', right: '⬥', result: '⸶', name: 'Bloodletter' },       // Vampire Dagger + Garnet
-  { left: 'ᚢ', right: 'v', result: '⸷', name: 'Viper Fang' },        // Acid Blade + Venom
 
   // Persistent placeables
   { left: 'c', right: '~', result: '"', name: 'Music Box' },       // Coin + String = Music Box
