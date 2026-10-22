@@ -50,8 +50,8 @@ const SHOCKWAVE_KNOCKBACK = 320;
 // an oil's effect, or two oils, may legitimately name the same effect; that
 // just means the swing grants extra stacks of it, not that one is dropped).
 // arrowSpeedMult multiplies across all oils (typically just one).
-// `forBow` is false for the dagger, which skips oils marked `bowOnly`
-// (Poison Tips are tipped arrows, not a blade coating).
+// `forBow` is false for the dagger and spear, which skip oils marked
+// `bowOnly` (Poison Tips are tipped arrows, not a blade coating).
 function _readEquippedOilEffect(player, forBow = true) {
   const slots = player?.equippedConsumables;
   if (!slots) return { onHits: [], arrowSpeedMult: 1 };
@@ -66,19 +66,23 @@ function _readEquippedOilEffect(player, forBow = true) {
   return { onHits, arrowSpeedMult };
 }
 
-// Whether an equipped oil does anything for this weapon: bows take every oil,
-// daggers every oil but the bowOnly ones, nothing else takes any. The quick
-// slot bar and EquipmentSlots dim an oil slot this returns false for.
 // The oils a thrown Kunai carries: every equipped oil but the bowOnly ones,
 // snapshotted at the throw (TrapSystem.releaseTrapThrow).
 export function equippedDaggerOils(player) {
   return _readEquippedOilEffect(player, false).onHits;
 }
 
+// The melee subtypes a blade coating sticks to: their swings carry every
+// equipped oil but the bowOnly ones.
+const OILED_MELEE_SUBTYPES = new Set(['dagger', 'spear']);
+
+// Whether an equipped oil does anything for this weapon: bows take every oil,
+// daggers and spears every oil but the bowOnly ones, nothing else takes any.
+// The quick slot bar and EquipmentSlots dim an oil slot this returns false for.
 export function oilAppliesTo(oilEffect, weaponData) {
   if (!weaponData) return false;
   if (weaponData.weaponType === 'BOW') return true;
-  return weaponData.weaponSubtype === 'dagger' && !oilEffect.bowOnly;
+  return OILED_MELEE_SUBTYPES.has(weaponData.weaponSubtype) && !oilEffect.bowOnly;
 }
 
 export class Item {
@@ -561,7 +565,7 @@ export class Item {
       scaledChainCount = Math.round(chargeRatio * 3);
     }
 
-    // Oils apply to bows and daggers only (see _isOilInert in EquipmentSlots.js) —
+    // Oils apply to bows, daggers and spears only (oilAppliesTo) —
     // plain guns never read them. A BOW-classified weapon that fires bullets
     // (firesBullet, e.g. Slingshot) still counts as a bow here, mirroring
     // createSingleArrow's oil handling so an equipped oil isn't silently inert.
@@ -1185,6 +1189,11 @@ export class Item {
     const thrustChar = this.data.meleeChar || '→';
     const thrustDrawAngle = this.getMeleeDrawAngle(thrustChar, baseAngle);
     const facingX = Math.cos(baseAngle);
+    // A spear takes oils the way a dagger does: the weapon's own onHit stays
+    // primary and every equipped oil rides along as extraOnHit (bug #183).
+    const oilOnHits = this.data.weaponSubtype === 'spear' ? _readEquippedOilEffect(player, false).onHits : [];
+    const primaryOnHit = this.data.onHit || oilOnHits[0] || null;
+    const extraOnHit = this.data.onHit ? oilOnHits : oilOnHits.slice(1);
     const facingY = Math.sin(baseAngle);
 
     for (let i = 1; i <= 3; i++) {
@@ -1204,7 +1213,8 @@ export class Item {
         duration: 0.1,
         delay: (i - 1) * patternSpeed,
         color: this.color,
-        onHit: this.data.onHit,
+        onHit: primaryOnHit,
+        extraOnHit,
         knockback: this.data.knockback || 300,
         facing: { x: facingX, y: facingY },
         distanceCrit: i === 3 && (this.data.distanceCrit || false),

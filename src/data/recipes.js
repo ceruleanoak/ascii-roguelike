@@ -142,7 +142,6 @@ export const RECIPES = [
 
   // Utility
   { left: 't', right: '|', result: '↑', name: 'Spear' },         // Teeth + Stick = Spear
-  { left: '↑', right: '⚗', result: '↟', name: 'Venom Lance' },  // Spear + Slurry = Venom Lance (Slurry is the acid/venom route)
   { left: '↑', right: 'j', result: 'ⲯ', name: 'Trident' },      // Spear + Jaw = Trident (jaw-bone prongs)
   { left: '↑', right: 'n', result: 'ⲯ', name: 'Trident' },      // Spear + Sharkbone = Trident (second route)
   { left: '↑', right: 'M', result: '⇑', name: 'War Spear' },    // Spear + Metal = War Spear
@@ -252,7 +251,6 @@ export const RECIPES = [
   { left: '⋔', right: 'p', result: '⑂', name: 'Pearl Slingshot' },   // Keen Slingshot + Pearl Shard
   { left: '↿', right: 'p', result: '⥣', name: 'Pearl Dagger' },      // Keen Dagger + Pearl Shard
   { left: '⸘', right: 'Y', result: '⧧', name: 'Barbed Bat' },        // Metal Bat + Stingray Barb
-  { left: '↟', right: 'Y', result: '⍏', name: 'Barbed Lance' },      // Venom Lance + Stingray Barb
   { left: '✺', right: 'ł', result: '⁂', name: 'Spore Mace' },        // Exploding Mace + Pollen
   { left: '⬢', right: 'a', result: '⫪', name: 'Cinder Hammer' },     // Onyx Hammer + Ash
   { left: 'Ⲯ', right: 'r', result: '⸾', name: 'Rootstaff' },         // Thick Staff + Root

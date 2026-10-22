@@ -157,8 +157,8 @@ function _manaColor(current, max) {
   return '#cc66ff';
 }
 
-// Oils only do anything for bows and daggers (bow-only oils, bows alone —
-// oilAppliesTo). When a weapon that can't use it is staged in the active
+// Oils only do anything for bows, daggers and spears (bow-only oils, bows
+// alone — oilAppliesTo). When a weapon that can't use it is staged in the active
 // slot, dim the oil slot so the player sees it's inert.
 function _isOilInert(consumable, game) {
   const oilEffect = consumable?.data?.oilEffect;

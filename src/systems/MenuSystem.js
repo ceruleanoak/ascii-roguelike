@@ -515,7 +515,7 @@ export class MenuSystem {
           && game.inventorySystem.consumableBlinkTimer > 0;
         const isEffectActive = (game.inventorySystem.activeEffectTimers?.[i] ?? 0) > 0;
 
-        // Oils only fire on bow/dagger (oilAppliesTo). Dim the slot when an
+        // Oils only fire on bow/dagger/spear (oilAppliesTo). Dim the slot when an
         // oil is held but the active weapon can't use it.
         const isOilInert = (() => {
           const oilEffect = consumables[i].data?.oilEffect;

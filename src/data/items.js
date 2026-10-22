@@ -1008,22 +1008,6 @@ export const ITEMS = {
   },
 
   // ── MELEE / spear — Tier 2 ────────────────────────────────────────────────
-  '↟': {
-    char: '↟',
-    tier: 2,
-    name: 'Venom Lance',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.MELEE,
-    weaponSubtype: 'spear',
-    damage: 2,
-    windup: 0.5,
-    recovery: 1.2,
-    patternSpeed: 0.04,
-    onHit: 'poison',
-    color: '#44ff44'
-  },
-
-  // ── MELEE / spear — Tier 2 (plain) ────────────────────────────────────────
   // Spear + Jaw or Spear + Sharkbone. The spear's non-elemental tier-2 rung,
   // so an unattuned fountain has something to hand back for a Spear.
   'ⲯ': {
@@ -1472,14 +1456,6 @@ export const ITEMS = {
     damage: 2, windup: 0.65, recovery: 0.9, patternSpeed: 0.04, range: 16,
     onHit: 'freeze',
     color: '#88ccff'
-  },
-  // Barbed Lance (Venom Lance + Stingray Barb): stacking poison, three hits burst.
-  '⍏': {
-    char: '⍏', tier: 3, name: 'Barbed Lance',
-    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'spear',
-    damage: 3, windup: 0.5, recovery: 1.0, patternSpeed: 0.04,
-    onHit: 'poison', poisonStacks: true,
-    color: '#33dd88'
   },
   // Barbed Bat (Metal Bat + Stingray Barb): the barb poisons (BatSystem sweep onHit).
   '⧧': {
@@ -2526,9 +2502,9 @@ export const ITEMS = {
     color: '#ff8800'
   },
 
-  // ── Oils (pressed at hut presses; passive augments for bow/dagger) ────────
+  // ── Oils (pressed at hut presses; passive augments for bow/dagger/spear) ──
   // The oilEffect field marks these as augments — InventorySystem skips
-  // auto-trigger; Item.js bow/dagger factories read oilEffect to override
+  // auto-trigger; Item.js bow/dagger/spear factories read oilEffect to override
   // arrow speed and onHit.
   '🜁': {
     char: '🜁',
@@ -2560,7 +2536,7 @@ export const ITEMS = {
   },
   // Not pressed: crafted from Venom + Fletch of Arrows. An oil in every way
   // (passive augment, washed off by water) but bowOnly — it tips arrows, so
-  // the dagger ignores it (Item.js _readEquippedOilEffect / oilAppliesTo).
+  // daggers and spears ignore it (Item.js _readEquippedOilEffect / oilAppliesTo).
   '⇞': {
     char: '⇞',
     name: 'Poison Tips',
@@ -3114,7 +3090,7 @@ export const INGREDIENTS = {
   // = Fur Cloak, Cloth + Cloth = Robe.
   '▤': { char: '▤', name: 'Cloth', color: '#d8ccb0' },
 
-  // Raw oils — pressed at a hut press into oil consumables (bow/dagger augments).
+  // Raw oils — pressed at a hut press into oil consumables (bow/dagger/spear augments).
   // Sap variants drop from Trees; the rare red/cyan variants only spawn in
   // their respective zones (resolved in InteractionSystem).
   'ŝ': { char: 'ŝ', name: 'Sap',       color: '#a07040' },
@@ -3383,7 +3359,7 @@ export const AFFINITY_POOLS = {
     },
     weapons: {
       [RARITY.COMMON]:   ['†', ')', '↑', '≋', '○', '⊥', '⊸'],         // Sword, Bow, Spear, Whip, Flail, Hammer, Sling
-      [RARITY.UNCOMMON]: ['¬', '⋙', '⫯', '↟', 'Ⲯ', 'ߒ'],              // Gun, Multi-Shot Bow, Longsword, Venom Lance, Thick Staff, Fishing Pole
+      [RARITY.UNCOMMON]: ['¬', '⋙', '⫯', 'Ⲯ', 'ߒ'],                   // Gun, Multi-Shot Bow, Longsword, Thick Staff, Fishing Pole
       // Vault Key ('߃') intentionally excluded — it's a green-zone-only
       // "held, not equipped" pickup (InteractionSystem.dropsKey, from the
       // key rock RoomGenerator places by the green Vault), never a generic

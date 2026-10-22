@@ -180,7 +180,7 @@ src/
 | Subtype | Implicit behaviors | Wired in |
 |---------|--------------------|----------|
 | `staff` | Hold-to-block after first swing; deflects projectiles; half-speed bracing; 8-dir sweep on block release (dmg = `data.blockReleaseDamage \|\| 0`) | `main.js` `_isBlockingStaff`; `PhysicsSystem.js:281`; `CombatSystem.js:939,1086`; `ExploreRenderer.js:983` |
-| `dagger` | Benefits from oil augment (`onHit` override) on multistab; special slot UI and menu equip filter | `Item.js:809`; `EquipmentSlots.js:162`; `MenuSystem.js:293` |
+| `dagger` | Benefits from oil augment (`onHit` + `extraOnHit`) on multistab (spears too, on thrust); special slot UI and menu equip filter | `Item.js:809`; `EquipmentSlots.js:162`; `MenuSystem.js:293` |
 | `hammer` | Shatters frozen enemies (multiplied damage / instant kill) | `CombatSystem.js:777,839` |
 | `wand` | Gem-wand charge-cast pipeline (separate from bow charge) | `Item.js`, `MagicSystem.js` |
 | `sword`, `axe`, `spear`, `whip`, `flail`, `pickaxe` | Purely descriptive — no implicit behavior beyond `attackPattern` | — |
