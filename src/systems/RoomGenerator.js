@@ -815,11 +815,12 @@ export class RoomGenerator {
     const fireCol = centerCol;
     const fireRow = centerRow;
 
-    // Clear collision at and around the campfire/NPC tile
+    // Clear collision at and around the campfire, the NPC tile east of it,
+    // and the Storyteller's seat west of it (StorytellerSystem).
     if (room.collisionMap[fireRow]) {
       room.collisionMap[fireRow][fireCol] = false;
-      if (room.collisionMap[fireRow][fireCol + 1] !== undefined) {
-        room.collisionMap[fireRow][fireCol + 1] = false;
+      for (const col of [fireCol + 1, fireCol - 1]) {
+        if (room.collisionMap[fireRow][col] !== undefined) room.collisionMap[fireRow][col] = false;
       }
     }
 
@@ -832,11 +833,11 @@ export class RoomGenerator {
     fire.structural = true;
     room.backgroundObjects.push(fire);
 
-    // Keep the NPC's tile clear of background objects so it spawns clear
+    // Keep the NPC's and the Storyteller's tiles clear of background objects
     const npcCol = fireCol + 1;
     const npcX = npcCol * GRID.CELL_SIZE;
     const npcY = fireRow * GRID.CELL_SIZE;
-    protectRegion(room, { kind: 'cells', cells: [{ col: npcCol, row: fireRow }] });
+    protectRegion(room, { kind: 'cells', cells: [{ col: npcCol, row: fireRow }, { col: fireCol - 1, row: fireRow }] });
 
     const npc = new CampNPC(npcX, npcY, { x: fireX, y: fireY });
     room.campNPC = npc;

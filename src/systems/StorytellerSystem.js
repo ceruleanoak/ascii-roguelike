@@ -1,8 +1,7 @@
 import { CanonStore } from './CanonStore.js';
 import { Storyteller } from '../entities/Storyteller.js';
+import { GRID, ROOM_TYPES } from '../game/GameConfig.js';
 
-// Roughly one EXPLORE Room in this many finds him.
-const ROOM_CHANCE = 1 / 3;
 // Lines of Story.md told per visit; then he has nothing more for that Room.
 const LINES_PER_VISIT = 3;
 
@@ -11,7 +10,9 @@ const LINES_PER_VISIT = 3;
  *
  * Story.md is a Canon Edit (CanonStore `story`, one line per newline; it
  * starts with a default first line). While it holds a non-blank line, the
- * Storyteller turns up in about one EXPLORE Room in three — never in REST.
+ * Storyteller sits at the campsite — the Camp Room's campfire, one cell west
+ * of the fire, across it from the CampNPC — and nowhere else. The red Camp
+ * (the Caldera) has no campfire, so he is not met there.
  * Each visit carries the next LINES_PER_VISIT lines of the story; DialogueSystem
  * tells them one per interaction, as it does every speaker's, and once they
  * are told he goes quiet. The next Room he turns up in picks the story up
@@ -37,22 +38,21 @@ export class StorytellerSystem {
 
   /**
    * Room entry (spawnRoomNeutralCharacters): the Storyteller this Room holds,
-   * deciding on first entry. Boss Rooms never hold him.
+   * deciding on first entry. Only a Camp Room with its campfire holds him.
    */
   storytellerFor(room) {
     if (this.visits.has(room)) return this.visits.get(room);
-    const npc = (this.lines.length && !room.isBossRoom && Math.random() < ROOM_CHANCE)
-      ? this._place(room)
+    const campfire = this.lines.length && room.type === ROOM_TYPES.CAMP
+      ? room.backgroundObjects.find(obj => obj.isCampfire && !obj.destroyed)
       : null;
+    const npc = campfire ? this._placeAtFire(campfire) : null;
     this.visits.set(room, npc);
     return npc;
   }
 
-  _place(room) {
-    const gen = this.game.roomGenerator;
-    const pos = gen.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos, room.backgroundObjects);
-    if (!pos) return null;
-    return new Storyteller(pos.x, pos.y, this._nextChunk());
+  // One cell west of the fire — the cell generateCampRoom keeps clear for him.
+  _placeAtFire(campfire) {
+    return new Storyteller(campfire.position.x - GRID.CELL_SIZE, campfire.position.y, this._nextChunk());
   }
 
   /** The next LINES_PER_VISIT lines of Story.md, advancing the cursor. */

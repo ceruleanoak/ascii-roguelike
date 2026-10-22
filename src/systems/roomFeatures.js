@@ -1760,7 +1760,7 @@ export function spawnRoomNeutralCharacters(game, room) {
     game.neutralCharacters.push(room.alchemistNPC);
   }
 
-  // The Storyteller, in about one Room in three while Story.md has lines —
+  // The Storyteller, at the Camp Room's fire while Story.md has lines —
   // see StorytellerSystem.storytellerFor.
   const storyteller = game.storytellerSystem.storytellerFor(room);
   if (storyteller) game.neutralCharacters.push(storyteller);

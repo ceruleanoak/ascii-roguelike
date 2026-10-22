@@ -215,8 +215,8 @@ whatever you want it to be." The player becomes the creator.
   and, more importantly, a **human tool**.
 - **What can be rewritten**: character names, cheats, weapons (created and
   edited, craftable by a recipe the player assigns), and a blank `Story.md` —
-  writing in it adds the **Storyteller**, an NPC met in about one EXPLORE room
-  in three. He tells one line at a time each time you interact with SPACE,
+  writing in it adds the **Storyteller**, an NPC who sits by the campsite fire
+  (the Camp room's campfire). He tells one line at a time each time you interact with SPACE,
   three lines of the story per meeting, and the next meeting picks it up. Every dev/debug tool is meant to migrate
   here over time.
 - **How this sits with Canon's representation rules**: the CLI is not in the
