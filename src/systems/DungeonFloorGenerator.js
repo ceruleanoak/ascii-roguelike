@@ -25,6 +25,7 @@ import {
   getPuzzleTemplateUnbreakableRocks, getPuzzleTemplateDeflectors,
 } from '../data/dungeonPuzzleTemplates.js';
 import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
+import { hasKeyItem } from './keyItems.js';
 
 /**
  * DungeonFloorGenerator — content for every dungeon floor and side room
@@ -443,7 +444,7 @@ export class DungeonFloorGenerator {
   // decor char so the held item itself reads as a key, not a bone.
   _placeSkullIfDue(floorIndex, { backgroundObjects, pickOpenCell, rows, cols }) {
     const game = this.game;
-    if (game.inventorySystem.hasKeyItem('⚿') || game.dungeonKeyUsedThisRun) return;
+    if (hasKeyItem(game.inventorySystem, '⚿') || game.dungeonKeyUsedThisRun) return;
     if (game.dungeonKeySkullFloor !== floorIndex) return;
     const cell = pickOpenCell(6, rows - 5, 3, cols - 4);
     if (!cell) return;

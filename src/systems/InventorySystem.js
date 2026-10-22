@@ -83,7 +83,7 @@ export class InventorySystem {
 
     // Narrative/puzzle keys (Vault Key, Skull Key) — held, not equipped.
     // Real Items, populated by tryPickupItem's KEY branch below; never a
-    // quick/equip slot. hasKeyItem/consumeKeyItem are the only sanctioned
+    // quick/equip slot. keyItems.js (hasKeyItem/consumeKeyItem) is the only sanctioned
     // way to read or spend one — do not re-derive a parallel boolean flag.
     this.keyItemInventory = [];
 
@@ -309,44 +309,6 @@ export class InventorySystem {
     this.setActiveCharacter('default');
   }
 
-  // ========== KEY ITEMS (held, not equipped) ==========
-
-  /**
-   * Is a key item with this char currently held? The single source of truth
-   * for every door/gate check (Vault door, dungeon Key Vault descent) — read
-   * this instead of re-deriving a parallel boolean flag.
-   *
-   * Optional `game` param: when passed, also returns true if the player has
-   * a universal-key weapon (data.opensAnyLock, e.g. the χ-blade) equipped in
-   * a quick slot — "opens any lock" bypasses the per-char held-key check
-   * entirely. Never consumed by consumeKeyItem (it isn't in
-   * keyItemInventory), so it keeps opening locks for the rest of the run.
-   */
-  hasKeyItem(char, game = null) {
-    if (this.keyItemInventory.some(item => item.char === char)) return true;
-    return this.holdsUniversalKey(game);
-  }
-
-  /**
-   * Is a universal-key weapon (data.opensAnyLock) equipped in a quick slot?
-   * For locks that spend an ordinary key but not a universal one (Lock
-   * Blocks), so the caller knows whether to consumeKeyItem.
-   */
-  holdsUniversalKey(game) {
-    return !!game?.player?.quickSlots?.some(item => item?.data?.opensAnyLock);
-  }
-
-  /**
-   * Spend a held key item, e.g. on unlocking the door it opens. Returns
-   * true if one was found and removed, false if the player wasn't holding it.
-   */
-  consumeKeyItem(char) {
-    const idx = this.keyItemInventory.findIndex(item => item.char === char);
-    if (idx === -1) return false;
-    this.keyItemInventory.splice(idx, 1);
-    return true;
-  }
-
   // ========== PICKUP & DROP LOGIC ==========
 
   /**
@@ -455,7 +417,7 @@ export class InventorySystem {
           items.splice(i, 1);
         } else if (item.data.type === 'KEY') {
           // Held, not equipped — never touches a quick/equip slot. See
-          // hasKeyItem/consumeKeyItem.
+          // keyItems.js.
           this.keyItemInventory.push(item);
           item.consumed = true;
           physicsSystem.removeEntity(item);

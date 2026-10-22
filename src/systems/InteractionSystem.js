@@ -13,6 +13,7 @@ import { createIceBurst, Particle } from '../entities/Particle.js';
 import { INTERACTION_RANGE, OBJECT_ANIMATIONS, GRID, GAME_STATES } from '../game/GameConfig.js';
 import { inSamePlane, planeOf, objectOnPlane, tagInteriorPlane, tagLootLayer } from './PlaneSystem.js';
 import { WiseFellow } from '../entities/WiseFellow.js';
+import { consumeKeyItem, hasKeyItem } from './keyItems.js';
 
 // Refusal singletons for resolveSmashRefusal — the melee loop tests every
 // object a swing overlaps, so a refusal is not worth an allocation.
@@ -233,7 +234,7 @@ export class InteractionSystem {
     // InventorySystem.keyItemInventory, granted when the key-dropping
     // object is destroyed and picked up (handleObjectEffect's dropsKey
     // branch), spent by unlockVault() below.
-    if (!game.inventorySystem.hasKeyItem(vault.keyChar, game)) {
+    if (!hasKeyItem(game.inventorySystem, vault.keyChar, game)) {
       return false;
     }
 
@@ -249,7 +250,7 @@ export class InteractionSystem {
     this._openVaultWall(vault);
 
     // Spend the held key item (held, not equipped — no quick slot involved)
-    game.inventorySystem.consumeKeyItem(vault.keyChar);
+    consumeKeyItem(game.inventorySystem, vault.keyChar);
     game.audioSystem?.playSFX?.('vault_key_use');
   }
 

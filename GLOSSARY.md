@@ -1329,7 +1329,7 @@ identity, not standard programming terms.
 - **Definition:** A unique, run-scoped item that unlocks progression and enables access to
   new areas or mechanics. Persists across death within a single run.
 - **In code:** held items of type `KEY` live in `inventorySystem.keyItemInventory`, read through
-  `hasKeyItem` and spent through `consumeKeyItem` (Vault Key, Skull Key, Shed Key, Simple Key). Some older
+  `hasKeyItem` and spent through `consumeKeyItem` (`src/systems/keyItems.js`) (Vault Key, Skull Key, Shed Key, Simple Key). Some older
   ones are still a flag on `game` (e.g. `spectaclesObtainedThisRun`). Spectacles (⊙)
   are obtained by clearing a Maze — breaking every cover object and collecting every dropped
   Ingredient — without ever letting a Ghost spawn; granted via `MazeSystem._checkMazeCleared`.

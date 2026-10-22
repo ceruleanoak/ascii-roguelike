@@ -1,6 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
 import { Player } from '../entities/Player.js';
 import { activeInteriorFloor, freezeSurfaceRoom, thawSurfaceRoom } from './PlaneSystem.js';
+import { consumeKeyItem } from './keyItems.js';
 
 /**
  * InteriorManager — single host for the interior/second-layer systems
@@ -100,7 +101,7 @@ export class InteriorManager {
     // An unspent Skull Key doesn't survive leaving the dungeon (matches the
     // pre-Item flag this replaced) — drop it from keyItemInventory rather
     // than let it carry into the next visit.
-    g.inventorySystem.consumeKeyItem('⚿');
+    consumeKeyItem(g.inventorySystem, '⚿');
     g.dungeonKeyUsedThisRun = false;
     g.dungeonRareItemObtainedThisRun = false;
     // Templates already used this visit (dungeonFloorTemplates.js's

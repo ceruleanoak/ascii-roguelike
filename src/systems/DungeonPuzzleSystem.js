@@ -10,6 +10,7 @@ import { Item } from '../entities/Item.js';
 import { BOMB_CHAR } from './BombBagSystem.js';
 import { SIMPLE_KEY_CHAR } from '../data/items.js';
 import { hasStandingVent } from './SpawnVentSystem.js';
+import { consumeKeyItem, hasKeyItem, holdsUniversalKey } from './keyItems.js';
 
 // Proximity radius for door/switch/slot interaction (px from cell center) —
 // mirrors DungeonSystem's DOOR_INTERACT_RADIUS.
@@ -69,7 +70,7 @@ export class DungeonPuzzleSystem {
     // key is consumed), so dungeonKeyUsedThisRun disambiguates.
     const skullPending = floor.floorIndex === game.dungeonKeySkullFloor
       && !game.dungeonKeyUsedThisRun
-      && !game.inventorySystem?.hasKeyItem('⚿', game);
+      && !hasKeyItem(game.inventorySystem, '⚿', game);
     const branchPending = floor.roomKind === 'numbered' && floor.floorIndex === 2
       && !floor.puzzleSolved;
 
@@ -295,8 +296,8 @@ export class DungeonPuzzleSystem {
   _tryOpenLockBlock(floor) {
     const { game } = this;
     const inventory = game.inventorySystem;
-    const universal = inventory.holdsUniversalKey(game);
-    if (!universal && !inventory.hasKeyItem(SIMPLE_KEY_CHAR)) return false;
+    const universal = holdsUniversalKey(game);
+    if (!universal && !hasKeyItem(inventory, SIMPLE_KEY_CHAR)) return false;
 
     const player = game.player;
     let nearest = null, nearestDist = Infinity;
@@ -307,7 +308,7 @@ export class DungeonPuzzleSystem {
     }
     if (!nearest) return false;
 
-    if (!universal) inventory.consumeKeyItem(SIMPLE_KEY_CHAR);
+    if (!universal) consumeKeyItem(inventory, SIMPLE_KEY_CHAR);
     floor.backgroundObjects.splice(floor.backgroundObjects.indexOf(nearest), 1);
     const row = Math.round(nearest.position.y / GRID.CELL_SIZE);
     const col = Math.round(nearest.position.x / GRID.CELL_SIZE);
@@ -348,10 +349,10 @@ export class DungeonPuzzleSystem {
     const { game } = this;
     const west = floor.descents.find(d => d.id === 'west');
     if (!west || !west.locked) return false;
-    if (!game.inventorySystem.hasKeyItem('⚿', game)) return false;
+    if (!hasKeyItem(game.inventorySystem, '⚿', game)) return false;
     if (!overlapsCell(game.player, west.obj.position.x, west.obj.position.y)) return false;
 
-    game.inventorySystem.consumeKeyItem('⚿');
+    consumeKeyItem(game.inventorySystem, '⚿');
     game.dungeonKeyUsedThisRun = true;
     west.locked = false;
     paintDescentVisual(west.obj, { active: west.active, locked: false });

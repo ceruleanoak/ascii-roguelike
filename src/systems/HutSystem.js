@@ -13,6 +13,7 @@ import { Shopkeeper } from '../entities/Shopkeeper.js';
 import { WizardNPC } from '../entities/WizardNPC.js';
 import { isInteriorActive } from './PlaneSystem.js';
 import { HOT_WATER_CHAR } from '../data/alchemy.js';
+import { hasKeyItem } from './keyItems.js';
 
 /**
  * HutSystem — manages hut interior entry/exit and interior state.
@@ -638,7 +639,7 @@ export class HutSystem {
     if (!shed) return false;
 
     const door = shed.doorObject;
-    if (!game.inventorySystem.hasKeyItem(SHED_KEY_CHAR, game)) {
+    if (!hasKeyItem(game.inventorySystem, SHED_KEY_CHAR, game)) {
       game.combatSystem.createDamageNumber('LOCKED', door.position.x, door.position.y - GRID.CELL_SIZE * 0.5, '#eeeeee');
       return true;
     }
