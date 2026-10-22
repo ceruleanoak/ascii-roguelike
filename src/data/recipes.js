@@ -183,9 +183,7 @@ export const RECIPES = [
 
   // Item upgrades - use existing items to create better versions
   { left: 'ᛉ', right: 's', result: 'ᚲ', name: 'Dragon Shotgun' }, // Shotgun + Scale = Dragon Shotgun
-  { left: '‡', right: 's', result: '⚔', name: 'Legendary Flame Sword' }, // Flame Sword + Scale = Legendary
-  { left: '‡', right: 'a', result: 'ᚠ', name: 'Lava Sword' },             // Flame Sword + Ash = Lava Sword
-  { left: '†', right: '⚗', result: 'ᛡ', name: 'Venom Blade' },    // Sword + Slurry = Venom Blade (Slurry is the acid/venom route)
+  { left: '‡', right: '4', result: 'ᚠ', name: 'Lava Sword' },             // Flame Sword + Slag = Lava Sword
   { left: ')', right: 'w', result: '⇒', name: 'Sky Bow' },        // Bow + Wing = Sky Bow
   { left: '⊤', right: 'b', result: '⚒', name: 'Bone Crusher' },   // Bone Axe + Bone = Bone Crusher
 
@@ -218,7 +216,7 @@ export const RECIPES = [
   { left: '↑', right: 'w', result: '⌁', name: 'Stun Baton' },      // Spear + Wing = Stun Baton
   { left: '‡', right: 'm', result: 'ᛘ', name: 'Vampire Dagger' },  // Flame Sword + Meat = Vampire Dagger
   { left: '⚒', right: 'M', result: '⏚', name: 'Earthquake Hammer' }, // Bone Crusher + Metal = Earthquake Hammer
-  { left: 'ᛖ', right: 'F', result: 'ᛠ', name: 'Chaos Blade' },     // Dragon Blade + Fire = Chaos Blade
+  { left: '†', right: '🜆', result: 'ᛠ', name: 'Chaos Blade' },     // Sword + Unstable Potion = Chaos Blade
 
   // === NEW BOW RECIPES (8) ===
   { left: ')', right: ')', result: '⋙', name: 'Multi-Shot Bow' },  // Bow + Bow = Multi-Shot Bow
@@ -264,7 +262,6 @@ export const RECIPES = [
   { left: '↟', right: 'Y', result: '⍏', name: 'Barbed Lance' },      // Venom Lance + Stingray Barb
   { left: 'ᛜ', right: 'i', result: '⟙', name: 'Glacier Hammer' },    // Ice Hammer + Ice
   { left: '✺', right: 'ł', result: '⁂', name: 'Spore Mace' },        // Exploding Mace + Pollen
-  { left: 'ᚠ', right: '4', result: '⟊', name: 'Slag Blade' },        // Lava Sword + Slag
   { left: '⬢', right: 'a', result: '⫪', name: 'Cinder Hammer' },     // Onyx Hammer + Ash
   { left: 'Ⲯ', right: 'r', result: '⸾', name: 'Rootstaff' },         // Thick Staff + Root
   { left: '⟘', right: '4', result: '⟂', name: 'Slag Maul' },         // Maul + Slag

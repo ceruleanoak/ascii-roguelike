@@ -2298,9 +2298,8 @@ export function spawnGuaranteedItems(gen, room) {
   } else if (itemConfig.itemPool === 'rare_epic') {
     // High-tier weapons, armor, and consumables
     itemPool = [
-      'ᛖ', // Dragon Blade (damage 5)
+      'ᛖ', // Dragon Blade (damage 4)
       'ᚲ', // Dragon Shotgun
-      '⚔', // Legendary Flame Sword (damage 6)
       '♦', // Dragon Heart (max HP consumable)
       '𐤓', // Dragon Scale Armor (defense 5)
       '^', // Hammer (damage 7)

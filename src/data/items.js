@@ -663,7 +663,7 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'sword',
-    damage: 3,
+    damage: 2,
     windup: 0.45,
     recovery: 0.8,
     patternSpeed: 0.05,
@@ -678,7 +678,7 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'sword',
-    damage: 5,
+    damage: 4,
     windup: 0.75,
     recovery: 0.25,
     patternSpeed: 0.05,
@@ -726,37 +726,6 @@ export const ITEMS = {
   },
 
   // ── MELEE / sword — Tier 3 ────────────────────────────────────────────────
-  '⚔': {
-    char: '⚔',
-    tier: 3,
-    name: 'Legendary Flame Sword',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.MELEE,
-    weaponSubtype: 'sword',
-    damage: 6,
-    windup: 0.9,
-    recovery: 0.7,
-    patternSpeed: 0.05,
-    range: 24,
-    onHit: 'burn',
-    color: '#ffaa00'
-  },
-  'ᛡ': {
-    char: 'ᛡ',
-    tier: 2,
-    name: 'Venom Blade',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.MELEE,
-    weaponSubtype: 'sword',
-    damage: 5,
-    windup: 0.75,
-    recovery: 0.15,
-    patternSpeed: 0.05,
-    range: 24,
-    onHit: 'poison',
-    poisonStacks: true,
-    color: '#00ff00'
-  },
   'ᚢ': {
     char: 'ᚢ',
     tier: 2,
@@ -786,6 +755,9 @@ export const ITEMS = {
     patternSpeed: 0.05,
     range: 24,
     randomOnHit: ['burn', 'poison', 'freeze', 'stun'],
+    // Sword + Unstable Potion. The potion is brewed, so Home Zone can't derive
+    // this; shops carry it only once green Depth 15 is reached.
+    shopHome: { zone: 'green', depth: 15 },
     color: '#ff00ff'
   },
 
@@ -1503,17 +1475,9 @@ export const ITEMS = {
   '⟡': {
     char: '⟡', tier: 2, name: 'Diamond Longsword',
     type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'sword',
-    damage: 3, windup: 0.5, recovery: 0.95, patternSpeed: 0.07, range: 30,
+    damage: 2, windup: 0.5, recovery: 0.95, patternSpeed: 0.07, range: 30,
     drawScale: 1.3, critChance: 0.4,
     color: '#ccffff'
-  },
-  // Slag Blade (Lava Sword + Slag): heavier Lava Sword.
-  '⟊': {
-    char: '⟊', tier: 3, name: 'Slag Blade',
-    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'sword',
-    damage: 4, windup: 0.5, recovery: 0.8, patternSpeed: 0.05, range: 22,
-    attackPattern: 'arc', onHit: 'burn', placesLava: true,
-    color: '#aa5533'
   },
   // Icicle (Dagger + Ice): freezing dagger.
   '⍖': {
@@ -3539,7 +3503,7 @@ export const AFFINITY_POOLS = {
     },
     weapons: {
       [RARITY.UNCOMMON]: [],
-      [RARITY.RARE]:     ['ᛘ', 'ᛡ', '⚭']  // Vampire Dagger, Venom Blade, Garnet Staff
+      [RARITY.RARE]:     ['ᛘ', '⚭']  // Vampire Dagger, Garnet Staff
     },
     traps: {
       [RARITY.UNCOMMON]: ["'"],              // Charm Lure

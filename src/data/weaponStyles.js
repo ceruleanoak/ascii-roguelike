@@ -36,9 +36,14 @@ export const WEAPON_STYLES = {
     { name: 'HEAVY', reference: 'ᛖ', from: [['ᛖ', SWING]] },
     { name: 'LONG', reference: '⫯', from: [['⫯', [...SWING, 'drawScale', 'critChance']]] },
     { name: 'KEEN', reference: '↿', from: [['↿', [...SWING, 'keenAim', 'keenAimCells']]] },
-    { name: 'THIRSTY', reference: 'ᛘ', from: [['ᛘ', [...SWING, 'lifesteal']]] },
+    // THIRSTY and CURSED outlived their shipped sources (Vampire Dagger, Venom
+    // Blade — cut in the mental-load pass), so their stats are set here; the
+    // traits stay authorable and their keys stay in STYLE_FIELDS.
+    { name: 'THIRSTY', reference: '↾', from: [],
+      set: { windup: 0.4, recovery: 0.6, patternSpeed: 0.05, range: 20, lifesteal: 1.0 } },
     { name: 'WILD', reference: 'ᛠ', from: [['ᛠ', [...SWING, 'randomOnHit']]] },
-    { name: 'CURSED', reference: 'ᛡ', from: [['ᛡ', [...SWING, 'onHit', 'poisonStacks']]] },
+    { name: 'CURSED', reference: '🜕', from: [],
+      set: { windup: 0.75, recovery: 0.15, patternSpeed: 0.05, range: 24, onHit: 'poison', poisonStacks: true } },
   ],
 };
 

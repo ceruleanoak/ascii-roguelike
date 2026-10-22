@@ -288,6 +288,16 @@ export function getHomeZone(char) {
   if (homeZoneCache.has(char)) return homeZoneCache.get(char);
 
   const data = ITEMS[char];
+
+  // The one authored exception to "derived, never authored": an item whose
+  // recipe needs an input the supply model can't see (Chaos Blade's Unstable
+  // Potion is brewed, never dropped) would derive to null and never be stocked.
+  // `shopHome` names where the shop should start carrying it instead.
+  if (data?.shopHome) {
+    homeZoneCache.set(char, data.shopHome);
+    return data.shopHome;
+  }
+
   const tierFloor = data ? TIER_MIN_DEPTH[deriveValueTier(data, data.type)] ?? 1 : 1;
 
   let best = null;
