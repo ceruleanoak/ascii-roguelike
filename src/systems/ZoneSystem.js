@@ -72,6 +72,10 @@ export class ZoneSystem {
     // Boss tracking — persists for the entire run
     this.defeatedBosses = new Set(); // zones whose boss has been killed this run
     this.bossRoomPending = false;    // true once threshold reached, until room is generated
+    // Zones whose Boss fight was started early, below bossDepth — the Frosted
+    // Maw woken in the Aquifer's lake arena at cyan depth 1. Depth alone
+    // would never re-force that Boss room after a character-swap respawn.
+    this.engagedBosses = new Set();
   }
 
   recordExit(exitObject) {
@@ -361,9 +365,15 @@ export class ZoneSystem {
    */
   isBossReady(zone, depth) {
     if (this.defeatedBosses.has(zone)) return false;
+    if (this.engagedBosses.has(zone)) return true;
     const threshold = ZONES[zone]?.bossDepth;
     if (!threshold) return false;
     return depth >= threshold;
+  }
+
+  /** A Boss fight began below bossDepth; the next fresh room in `zone` is its Boss room until it dies. */
+  markBossEngaged(zone) {
+    this.engagedBosses.add(zone);
   }
 
   markBossDefeated(zone) {
@@ -540,6 +550,7 @@ export class ZoneSystem {
     this.clearedZones.clear();
     this.defeatedMinibossEncounters.clear();
     this.defeatedBosses.clear();
+    this.engagedBosses.clear();
     this.bossRoomPending = false;
     this.resetLeshyChase();
     this.resetRiverChase();

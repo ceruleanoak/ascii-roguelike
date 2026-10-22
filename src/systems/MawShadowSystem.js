@@ -58,6 +58,9 @@ export class MawShadowSystem {
     room.isZoneBossRoom = true;
 
     game.bossSystem.activate(room, 'cyan', { x: shadow.x, y: shadow.y });
+    // Woken at whatever cyan depth the back door left — remember the fight so
+    // a character dying here walks back into the Boss room like any other.
+    game.zoneSystem.markBossEngaged('cyan');
     const boss = game.bossSystem.lakeBoss;
     game.wireRoomEnemies(room);
     game.physicsSystem.addEntity(boss);
