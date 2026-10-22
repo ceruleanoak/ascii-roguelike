@@ -30,6 +30,9 @@ function offersZoneChangeAt(depth) {
 // directly and are deliberately exempt — they are earned, not rolled.
 const DUNGEON_DEPTH_STEP = 3;
 const DUNGEON_GUARANTEED_DEPTH = 6;
+
+// A Settlement 'S' is offered at least once in every this many exit sets.
+const SETTLEMENT_MAX_GAP = 5;
 function offersDungeonAt(depth) {
   return depth > 0 && depth % DUNGEON_DEPTH_STEP === 0;
 }
@@ -306,6 +309,9 @@ export class ExitSystem {
   constructor(zoneSystem, game = null) {
     this.zoneSystem = zoneSystem;
     this.game = game;
+    // Exit sets offered in a row with no 'S' on them — see
+    // _guaranteeSettlementExit. Run-scoped (RESET_REGISTRY).
+    this.exitSetsSinceSettlement = 0;
   }
 
   /**
@@ -393,6 +399,26 @@ export class ExitSystem {
   }
 
   /**
+   * A Settlement is on offer at least once in every SETTLEMENT_MAX_GAP exit
+   * sets: when the previous sets all went by without an 'S', one east/west
+   * slot is forced to 'S' — north only when both sides are taken and it does
+   * not lead to gray. The forced 'B' and a guaranteed 'D' are never replaced. Gray has no
+   * Settlement. The counter itself is advanced on the final letters at the
+   * end of generateExits, so a sequence override that lands on the 'S' slot
+   * simply leaves the guarantee owed for the next set.
+   */
+  _guaranteeSettlementExit(letters, closedSlots, forcedBossIndex, currentLetter, zoneType) {
+    if (zoneType === 'gray' || currentLetter === 'S' || letters.includes('S')) return;
+    if (this.exitSetsSinceSettlement < SETTLEMENT_MAX_GAP - 1) return;
+    const open = i => i !== forcedBossIndex && !closedSlots.has(i) && letters[i] !== 'D';
+    let candidates = [1, 2].filter(open);
+    // Both sides taken (forced 'B' + guaranteed 'D'): north, unless it leads to gray.
+    if (candidates.length === 0 && open(0) && !this._northLeadsToGray(zoneType)) candidates = [0];
+    if (candidates.length === 0) return;
+    letters[candidates[Math.floor(Math.random() * candidates.length)]] = 'S';
+  }
+
+  /**
    * The forced miniboss 'B' takes one of the three slots, leaving only two to
    * carry an in-progress color streak. When both remaining letters are
    * hard-gated against the streak's zone (e.g. green-only G/Q/M), the streak
@@ -454,6 +480,7 @@ export class ExitSystem {
     }
 
     this._guaranteeDungeonExit(letters, closedSlots, forcedBossIndex, currentDepth, currentLetter);
+    this._guaranteeSettlementExit(letters, closedSlots, forcedBossIndex, currentLetter, zoneType);
 
     // Assign colors based on zone and progression state. The forced 'B' slot
     // is reserved: alt/streak colors are placed on the other open slots, so
@@ -497,6 +524,12 @@ export class ExitSystem {
           }
         }
       }
+    }
+
+    // Settlement guarantee bookkeeping, on the letters actually offered.
+    if (zoneType !== 'gray') {
+      const offered = letters.some((l, i) => l === 'S' && !closedSlots.has(i));
+      this.exitSetsSinceSettlement = offered ? 0 : this.exitSetsSinceSettlement + 1;
     }
 
     // Return exit objects with letter + color

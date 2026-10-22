@@ -185,6 +185,12 @@ export const RESET_REGISTRY = [
     why: 'Reset all zone depths on death.',
   },
   {
+    path: 'exitSystem.exitSetsSinceSettlement',
+    scope: 'run',
+    value: 0,
+    why: "Settlement guarantee counter (ExitSystem._guaranteeSettlementExit): exit sets offered since the last 'S'. A new run starts its own count.",
+  },
+  {
     path: 'zoneSystem.resetOnDeath',
     scope: 'run',
     call: (game) => game.zoneSystem.resetOnDeath(game),
