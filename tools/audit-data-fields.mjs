@@ -68,7 +68,7 @@ for (const { label, fields } of registries) {
     // Member-access usage outside the defining data file. Requiring a leading
     // dot avoids false "readers" from local variables that merely share the
     // field's name (exactly how `arrowChar` hid: Item.js has a same-named
-    // local from getArrowCharForAngle, while this.data.arrowChar is never
+    // local from arrowCharForAngle, while this.data.arrowChar is never
     // read — open bug #201).
     const re = new RegExp(`\\.${field}\\b`);
     const externalReaders = sources.filter(s =>

@@ -54,6 +54,7 @@ import {
 } from '../systems/EnemyStatusEffects.js';
 import { absorbsZap } from '../systems/ImbuePoolSystem.js';
 import { gooRenderScale, gooFontSize, gooBodyHitbox } from './gooBody.js';
+import { arrowCharForAngle } from './arrowGlyph.js';
 
 // ─── Enemy AI Debug Logger ─────────────────────────────────────────────────
 // Toggle in browser console: window.ENEMY_AI_DEBUG = true
@@ -1824,7 +1825,7 @@ export class Enemy {
     if (this.data.projectileType === 'arrow') {
       return {
         type: 'arrow',
-        char: this.getArrowCharForAngle(finalAngle),
+        char: arrowCharForAngle(finalAngle),
         position: {
           x: this.position.x + this.width / 2,
           y: this.position.y + this.height / 2
@@ -1886,20 +1887,6 @@ export class Enemy {
       color: '#ff88aa',
       shooterPlane: this.plane
     };
-  }
-
-  getArrowCharForAngle(angle) {
-    let normalizedAngle = angle % (Math.PI * 2);
-    if (normalizedAngle < 0) normalizedAngle += Math.PI * 2;
-    const degrees = normalizedAngle * (180 / Math.PI);
-    if (degrees >= 337.5 || degrees < 22.5) return '→';
-    else if (degrees >= 22.5 && degrees < 67.5) return '↘';
-    else if (degrees >= 67.5 && degrees < 112.5) return '↓';
-    else if (degrees >= 112.5 && degrees < 157.5) return '↙';
-    else if (degrees >= 157.5 && degrees < 202.5) return '←';
-    else if (degrees >= 202.5 && degrees < 247.5) return '↖';
-    else if (degrees >= 247.5 && degrees < 292.5) return '↑';
-    else return '↗';
   }
 
   createMagicAttack() {
