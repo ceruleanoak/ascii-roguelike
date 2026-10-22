@@ -145,7 +145,7 @@ identity, not standard programming terms.
   `player.aquiferCurrent` (displacement applied in `PhysicsSystem`); branch warps via
   `CrossZoneWarp.js`.
 - **Not:** the Pond (its surface entrance); a Plane (combat doesn't span the layers, so it is an
-  Interior); the Imbued current (electric).
+  Interior); an electric current (water/slime electricity).
 ### Metal Platform
 - **Definition:** The 2×2 steel plate that ferries across a red Island Room's lava lake, shuttling
   along one straight channel between a dock on the outer shore (on the player's entry side) and a
@@ -1225,8 +1225,8 @@ identity, not standard programming terms.
   electric wire — lands at pip 3; a chain carries one pip less per link (chain lightning 3 → 2 →
   1, then damage only; water conduction from a struck object lands at 2). Wet holds zap's timer:
   as long as the body stays wet out of the water, zap endures. Standing in water grounds it — the
-  zap drains normally there (holding it let a zapped body re-electrify its own water forever).
-  A zapped body carries Imbued current. The player
+  zap drains normally there. A zapped body is not a source: it doesn't electrify the water it
+  stands in or shock what touches it. The player
   struggles out of zap pip 3 the same way as Frozen (down to pip 2, still draining); enemies wait
   it out. Zap is yellow, on both sides.
 - **In code:** `statusEffects.zap` (`StatusEffects.js`, `ZAP_PIP_SPEED`, `ZAP_PIP_DECAY`, the
@@ -1234,20 +1234,8 @@ identity, not standard programming terms.
   + `shouldDropItems`, player `Player.isZapped` / `isLocked` + `StatusEffectSystem.applyPlayerDisarm`
   / `disarmPlayer`. Item data spells an electric weapon `onHit: 'stun'` + `electric: true`; the
   hit applies `'zap'`. Electric-affinity enemies are immune (they generate current).
-- **Not:** plain stun (no electricity, no pips, not held by wet, doesn't imbue); the Stun Trap
+- **Not:** plain stun (no electricity, no pips, not held by wet); the Stun Trap
   (a source of zap, named for its effect).
-
-### Imbued current
-- **Definition:** The charge a zapped body carries. A body at zap pip N (N ≥ 2) is itself a live
-  source at pip N−1: it electrifies the water it stands in and shocks whoever touches it. So
-  current weakens as it passes through a crowd, and a pip-1 body passes nothing on. A body is
-  never shocked by its own current, and imbued current only lands on a body not already zapped.
-- **In code:** `ElectricitySystem.updateImbuedCurrent` (ambient scan, enemies and player);
-  `current = { pips, source }` threaded through `shockEntity`, the cascade, and water tiles'
-  `electricCurrent`.
-- **Not:** an electric-affinity enemy's own current (always full strength, not tied to zap); a
-  chain (chains are a single hit's hops, imbued current persists while the zap lasts); an Imbue
-  (a timed element taken from the environment, not a zap's charge).
 
 ### Imbue
 - **Definition:** A timed element — electric, ice, or fire — an enemy takes from its surroundings
@@ -1259,7 +1247,7 @@ identity, not standard programming terms.
 - **In code:** opt-in via enemy data `imbue: { enabled, duration }`; per-instance
   `enemy.imbue = { element, timer }`; `applyImbue` / `absorbsZap` in
   `src/systems/ImbuePoolSystem.js`; the element joins affinities through `Enemy.getAffinities()`.
-- **Not:** Imbued current (a zapped body's pip N−1 charge); an affinity (permanent, authored on
+- **Not:** a zap (a status on the body, not an element it holds); an affinity (permanent, authored on
   the enemy's data).
 
 ### Imbue Pool

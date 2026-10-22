@@ -103,9 +103,8 @@ const STATUS_EFFECTS = {
   // Electric Pip track: pips 1–2 slow (ZAP_PIP_SPEED), pip 3 locks and
   // disarms. Once zapped, a body can't be zapped again until the pips drain:
   // the hit's pip holds for its duration, then one pip per ZAP_PIP_DECAY.
-  // Wet holds the timer (out of the water — standing in water grounds it),
-  // and a zapped carrier is itself a live source one
-  // pip weaker (ElectricitySystem.updateImbuedCurrent).
+  // Wet holds the timer (out of the water — standing in water grounds it).
+  // A zapped body is not itself a source of current.
   zap: {
     enemy: { stacks: 0, decayInterval: ZAP_PIP_DECAY, cooldown: true },
     player: { stacks: 0, disarm: false, decayInterval: ZAP_PIP_DECAY, cooldown: true }

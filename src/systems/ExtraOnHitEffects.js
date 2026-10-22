@@ -20,7 +20,7 @@ import { MAX_PIPS } from './StatusEffects.js';
 export function applyOnHitStatusEffect(enemy, effect, duration) {
   if (effect === 'zap') {
     // An electric weapon hit is full-strength current: straight to zap pip 3
-    // (lock + disarm). Only chains and imbued current carry less.
+    // (lock + disarm). Only chains and weaker currents carry less.
     enemy.applyStatusEffect('zap', duration, MAX_PIPS);
   } else {
     enemy.applyStatusEffect(effect, duration);

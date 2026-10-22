@@ -32,8 +32,8 @@ export class Puddle {
     // Unlike a water tile's timed 'electrified' state, a charged slime stamp
     // stays live until the stamp itself expires: slime is already short-lived,
     // so a charge timer on top of it would leave almost no window to use it.
-    // `electricCurrent` carries the imbued current ({ pips, source }) the way
-    // BackgroundObject.electricCurrent does, or null for full-strength current.
+    // `electricCurrent` carries a weaker current ({ pips, source } — an
+    // electric Imbue's 1-pip slime trail), or null for full-strength current.
     this.electrified = false;
     this.electricCurrent = null;
     this._electricBlinkTimer = 0;

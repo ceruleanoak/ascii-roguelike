@@ -14,7 +14,7 @@
  * squares at pixel positions, so they link to each other by distance
  * (SLIME_LINK_REACH — about a cell, the slime analogue of water's 4-adjacent
  * cell) and to any water tile they overlap. One cascade therefore runs river →
- * slime trail → river under the same spread rate, charge decay and imbued
+ * slime trail → river under the same spread rate, charge decay and weaker
  * current as water, except a charged slime stamp stays live until it expires
  * (no tile duration). An electrified slime stamp blinks like electrified water
  * (Puddle._updateElectrified) and shocks whoever stands on it through the same
@@ -26,7 +26,6 @@
  *     the old instant _electrifyFloodFillWater)
  *   - Electric-affinity enemies in contact with water or slime trail (ambient
  *     scan below — Sparks drifting over a river, Volt Spiders wading, etc.)
- *   - Zapped enemies and a zapped player (ambient scan — see "Imbued current" below)
  *
  * Counterplay / conduction rules:
  *   - Only 'normal' water conducts. Frozen / poisoned tiles
@@ -44,14 +43,8 @@
  * systems ask (TrapSystem's electric trigger): electrified water, electrified
  * slime trail, or a charged object such as the Ascent's lightning rod spire.
  *
- * Imbued current: zap charges the body it lands on, enemy or player. A zapped
- * body at pip N is itself a live source one pip weaker — it electrifies water
- * or slime trail it stands in and shocks whatever touches it, at pip N-1 — so
- * current weakens as it passes through a crowd, and a pip-1 enemy passes
- * nothing on. The source is never shocked by its own current, and imbued
- * current only lands on a body not already zapped — once zapped, a body can't
- * be zapped again until its pips drain (GLOSSARY: Zap), so it can't pass
- * current back and forth.
+ * A zapped body is not a source: zap affects the body it lands on and stops
+ * there (it does not electrify the water it stands in or shock what touches it).
  */
 
 import { DEATH_CAUSES } from '../data/deathCauses.js';
@@ -66,14 +59,13 @@ const TILE_DURATION = 2.5;    // seconds a tile stays electrified after the fron
 const SCAN_INTERVAL = 0.25;   // ambient electric-source contact scan cadence
 const MAX_RING_PARTICLES = 4; // spark particles spawned per ring advance (visual cap)
 const CHARGE_DECAY_PER_RING = 2; // charge diminished per ring expansion; spread stops at ≤0
-const IMBUED_CONTACT_RANGE = GRID.CELL_SIZE * 0.8; // touching a zapped enemy
 // Two slime trail stamps conduct to each other when their centers are within
 // this (Chebyshev) reach — about one cell, the slime analogue of water's
 // 4-adjacent neighbour. Consecutive stamps along a trail sit a few px apart,
 // and the Slime Bomb's stamp ring sits ~17px apart, so both read as one pool.
 const SLIME_LINK_REACH = GRID.CELL_SIZE * 1.25;
 // A charged object (lightning rod spire, charged metal) counts as touching a
-// point within this range — the same reach as touching a zapped body.
+// point within this range (a little under one cell).
 const CHARGED_CONTACT_RANGE = GRID.CELL_SIZE * 0.8;
 
 const PARTICLE_CHARS = ['·', '`', "'", '.'];
@@ -149,8 +141,8 @@ export class ElectricitySystem {
 
   /** Seed at a pixel coordinate if it lands on a water tile of the active layer. */
   seedAt(x, y, opts = {}) {
-    // Active-layer accessor, same as seedNear (#281, [layer-leak]) — a zapped
-    // enemy wading in a dungeon pool charges that pool, not the surface.
+    // Active-layer accessor, same as seedNear (#281, [layer-leak]) — a Spark
+    // drifting over a dungeon pool charges that pool, not the surface.
     const bg = this.game._activeBackgroundObjects?.();
     if (!bg) return false;
     const cx = Math.floor(x / GRID.CELL_SIZE);
@@ -195,8 +187,8 @@ export class ElectricitySystem {
 
   /**
    * Seed whatever conductor a body is standing in: the water tile under it,
-   * and the slime trail stamp under it. Used by every ambient body source
-   * (electric-affinity enemies, zapped carriers).
+   * and the slime trail stamp under it. Used by the ambient body source
+   * (electric-affinity enemies).
    */
   seedUnderBody(body, opts = {}) {
     if (body._isOnWater?.() || body.inLiquid) {
@@ -285,9 +277,10 @@ export class ElectricitySystem {
    * PhysicsSystem.applyLiquidResults each frame the contact holds — electric
    * consequences live here with the element, not in the physics pass.
    *
-   * Also the contact effect of electrified slime trail, of the electric wire
-   * and of touching a zapped enemy (updateImbuedCurrent). `current` is the
-   * imbued current's { pips, source }, or null for full-strength current.
+   * Also the contact effect of electrified slime trail and of the electric
+   * wire. `current` is a weaker current's { pips, source } (an electric
+   * Imbue's slime trail, ImbuePoolSystem.dropTrail), or null for
+   * full-strength current.
    *
    * The status applied is 'zap' (EFFECT_AFFINITY auto-immunity), NOT
    * generic 'stun'. Electric-affinity enemies are therefore immune for free —
@@ -299,14 +292,14 @@ export class ElectricitySystem {
    */
   shockEntity(entity, current = null) {
     const p = this.game.player;
-    // A zapped enemy isn't shocked by the current it generates.
+    // A body isn't shocked by the current it generates.
     if (current?.source === entity) return;
     // An Imbue-capable enemy takes the current as its electric Imbue instead.
     if (absorbsZap(entity)) return;
     // Enemies route through affinity auto-immunity (zap → 'electric').
     if (entity.shouldApplyStatusEffect && !entity.shouldApplyStatusEffect('zap')) return;
     const pips = current?.pips ?? MAX_PIPS;
-    // Imbued current only lands on a body not already zapped.
+    // A weaker current only lands on a body not already zapped.
     if (current && entity.statusEffects?.zap?.active) return;
     if (entity.applyStatusEffect) entity.applyStatusEffect('zap', 1.5, pips);
     // The player's hit names its death cause: the carrier generating the
@@ -318,30 +311,6 @@ export class ElectricitySystem {
         cause: DEATH_CAUSES.electricity
       });
     } else if (entity.takeDamage) entity.takeDamage(1);
-  }
-
-  /**
-   * Zapped carriers as live sources (see "Imbued current" in the header):
-   * each enemy — and the player — at zap pip 2+ electrifies the water or
-   * slime trail it stands in and shocks whoever is touching it, one pip
-   * weaker than itself. Runs on the ambient scan cadence.
-   */
-  updateImbuedCurrent(enemies) {
-    const player = this.game.player;
-    const carriers = player ? [...enemies, player] : enemies;
-    for (const e of carriers) {
-      const zap = e.statusEffects?.zap;
-      if (!zap?.active || zap.stacks < 2 || e.isDying || e.hp <= 0) continue;
-      const current = { pips: zap.stacks - 1, source: e };
-      this.seedUnderBody(e, { current });
-      for (const other of carriers) {
-        if (other === e || other.isDying || other.hp <= 0 || !inSamePlane(e, other)) continue;
-        const dx = other.position.x - e.position.x;
-        const dy = other.position.y - e.position.y;
-        if (dx * dx + dy * dy > IMBUED_CONTACT_RANGE * IMBUED_CONTACT_RANGE) continue;
-        this.shockEntity(other, current);
-      }
-    }
   }
 
   // ── Per-frame ────────────────────────────────────────────────────────────
@@ -377,7 +346,6 @@ export class ElectricitySystem {
         if (!e.data?.affinities?.includes('electric')) continue;
         this.seedUnderBody(e);
       }
-      this.updateImbuedCurrent(enemies);
     }
 
     this._shockOnElectrifiedSlime();
@@ -386,7 +354,7 @@ export class ElectricitySystem {
   /**
    * Per-frame contact with electrified slime trail — the slime counterpart of
    * PhysicsSystem.applyLiquidResults' electrified-water branch, routed through
-   * the same shockEntity rule (pip 3 for full current, the stamp's imbued
+   * the same shockEntity rule (pip 3 for full current, the stamp's weaker
    * current otherwise; iframes gate the per-frame damage).
    */
   _shockOnElectrifiedSlime() {

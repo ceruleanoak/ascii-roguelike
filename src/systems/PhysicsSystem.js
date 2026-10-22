@@ -379,7 +379,7 @@ export class PhysicsSystem {
     let onIce = false;
     let inLiquid = false;
     let liquidState = 'normal';
-    let electricCurrent = null; // the electrified tile's imbued current, if any
+    let electricCurrent = null; // the electrified tile's weaker current, if any
     let inDeepWaterTile = false; // Deep water (BackgroundObject.deepWater) — see velocityMultiplier below
     let inGrass = false;
     let inMud = false; // Wet mud — heavier than water, dodge roll bypasses

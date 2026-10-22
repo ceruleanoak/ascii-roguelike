@@ -199,8 +199,9 @@ export class BackgroundObject {
     // Water state (only meaningful when this.char === '~')
     this.waterState = 'normal'; // 'normal' | 'frozen' | 'poisoned' | 'electrified'
     this.waterStateTimer = 0;
-    // Imbued current this tile was electrified by ({ pips, source } — a zapped
-    // enemy's weaker current, ElectricitySystem); null = full-strength current.
+    // Weaker current this tile was electrified by ({ pips, source } — carried
+    // over from an electric Imbue's slime trail, ElectricitySystem); null =
+    // full-strength current.
     this.electricCurrent = null;
 
     // Drop tracking - prevents duplicate drops from same object
