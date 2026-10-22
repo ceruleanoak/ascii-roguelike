@@ -911,6 +911,7 @@ class Game {
     this.interiorManager.reset();
     this.cureRusalka = null;
     this.playerTongueAttacks = [];
+    this.followerCrows = []; // room-scoped flock stays outside REST
 
     // Apply active character type
     this.applyCharacterType(this.activeCharacterType);

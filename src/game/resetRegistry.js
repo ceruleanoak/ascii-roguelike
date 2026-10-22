@@ -781,7 +781,7 @@ export const RESET_REGISTRY = [
     path: 'followerCrows',
     scope: 'room',
     fresh: () => [],
-    why: "Follower flock is room-scoped by design: bystander crows don't trail the player across rooms (companions still do — see companionCrows, which stays run-scoped). Re-scoped down from 'run' in Step 6 to match applyRoomSwap's actual per-room clear; auto-join reapplies per-room via companionSystem.autoJoinWildCrows().",
+    why: "Follower flock is room-scoped by design: bystander crows don't trail the player across rooms (companions still do — see companionCrows, which stays run-scoped). Re-scoped down from 'run' in Step 6 to match applyRoomSwap's actual per-room clear; auto-join reapplies per-room via companionSystem.autoJoinWildCrows(). enterRestState also clears it inline (same shape as cureRusalka/playerTongueAttacks there): REST is a room exit, and a flock carried in hung around ignoring bread.",
   },
   {
     path: 'soundEvents',

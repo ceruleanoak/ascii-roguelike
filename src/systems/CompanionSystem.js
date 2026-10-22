@@ -293,6 +293,9 @@ export class CompanionSystem {
   snapAllCompanionsOnRoomEnter() {
     const game = this.game;
     if (!game.player) return;
+    // A crow still mid-abandon-flight at the transition is gone, the same
+    // as a perma-fleeing rat below — it does not follow into the new room.
+    this._pruneAbandonedCrows(() => true);
     for (const c of game.companionCrows) c.onRoomEnter?.(game.player);
     // Perma-fleeing rats from the previous room don't come back — they've
     // abandoned the player and despawn at the transition.
@@ -866,13 +869,26 @@ export class CompanionSystem {
     for (let i = game.companionCrows.length - 1; i >= 0; i--) {
       const c = game.companionCrows[i];
       c.updateAsCompanion(deltaTime, ctx);
-      // Abandon flight finished — drop it from the roster for good. Mirrors
-      // updateTamedRats' permaFlee prune.
-      if (c.abandoning && c.abandonReached) {
-        game.companionCrows.splice(i, 1);
-      }
     }
+    // Abandon flight finished — drop it from the roster for good. Mirrors
+    // updateTamedRats' permaFlee prune.
+    this._pruneAbandonedCrows(c => c.abandonReached);
     this._processCompanionDiveAttacks(deltaTime);
+  }
+
+  // Drop abandoning companion crows (those `isGone` accepts) from the roster
+  // for good. Each one takes its standing with it: the fed count drops, so
+  // wild crows stop auto-joining (autoJoinWildCrows) on the reputation of a
+  // bond that no longer exists. The perch ring is then renumbered, or the
+  // next fed crow takes `length` as its index and lands on a perch in use.
+  _pruneAbandonedCrows(isGone) {
+    const game = this.game;
+    const before = game.companionCrows.length;
+    game.companionCrows = game.companionCrows.filter(c => !(c.abandoning && isGone(c)));
+    const removed = before - game.companionCrows.length;
+    if (removed === 0) return;
+    game.fedCrowCount = Math.max(0, (game.fedCrowCount || 0) - removed);
+    game.companionCrows.forEach((crow, idx) => { crow.companionShoulderIndex = idx; });
   }
 
   // Apply enemy melee + projectile hits to companion crows. Mirrors
