@@ -2154,6 +2154,18 @@ class Game {
     this.combatSystem.update(deltaTime, this.player, [], []);
     this.trapSystem.update(deltaTime);
 
+    // Consumable cooldowns, auto-triggers and windup throws — same tick as
+    // EXPLORE. Without it a potion fired with SPACE in REST spent its slot and
+    // its throw never landed ([rest-parity], #220).
+    this.inventorySystem.update(
+      deltaTime,
+      this.player,
+      this.currentRoom,
+      this.combatSystem,
+      this.steamClouds,
+      this.particles
+    );
+
     // Leaving REST: north is always open, south only on a Cursed run and it
     // leads to the Graveyard rather than deeper. ExitSystem owns the geometry —
     // both edges share one predicate so they cannot drift apart.
@@ -2432,11 +2444,6 @@ class Game {
     // right after the consumable tick, where it used to sit inside
     // InventorySystem.update, so frame ordering is unchanged.
     this.armorEffectsSystem.updateRobeAura(deltaTime, this.player, this.currentRoom, this.particles);
-
-    // Drive per-frame HUD update while consumable slot is blinking
-    if (this.inventorySystem.consumableBlinkTimer > 0) {
-      this.updateUI();
-    }
 
     // Update hut/dungeon/maze systems (door entry/exit and interior entity logic)
     // and the EXPLORE room features — none of them exist in a NEUTRAL room.

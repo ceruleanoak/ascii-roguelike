@@ -715,6 +715,9 @@ export class InventorySystem {
 
     // Update active windups
     this.updateConsumableWindups(deltaTime, player, currentRoom, combatSystem, steamClouds, particles);
+
+    // Drive per-frame HUD update while consumable slot is blinking
+    if (this.consumableBlinkTimer > 0) this.game.updateUI();
   }
 
   /**
