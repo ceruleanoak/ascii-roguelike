@@ -122,7 +122,7 @@ export class BatSystem {
         delay: i * delayPerStep,
         color: weapon.color,
         // Every bat leaves its target dizzy. A bat with its own effect
-        // (Barbed Bat's poison barb) keeps it as the primary; dizzy rides along.
+        // (the Crystal Maul's poison) keeps it as the primary; dizzy rides along.
         onHit: weapon.data.onHit ?? 'dizzy',
         extraOnHit: weapon.data.onHit ? ['dizzy'] : undefined,
         statusDurationScale: { dizzy: DIZZY_DURATION_SCALE },

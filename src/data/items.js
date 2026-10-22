@@ -1457,15 +1457,6 @@ export const ITEMS = {
     onHit: 'freeze',
     color: '#88ccff'
   },
-  // Barbed Bat (Metal Bat + Stingray Barb): the barb poisons (BatSystem sweep onHit).
-  '⧧': {
-    char: '⧧', tier: 3, name: 'Barbed Bat',
-    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'bat',
-    batCharge: true, damage: 4, chargeTime: 2.4, recovery: 0.9,
-    meleeChar: '❚', range: 20, isBlunt: true, launchForce: 1100,
-    onHit: 'poison',
-    color: '#88aa99'
-  },
   // Spore Mace (Exploding Mace + Pollen): every swing also bursts a
   // sleep-dust cloud at the head.
   '⁂': {
@@ -3100,10 +3091,9 @@ export const INGREDIENTS = {
   'ψ': { char: 'ψ', name: 'Grain',     color: '#d8b860' }, // grass cut (shares Pollen's band); a lit fireplace bakes it into Bread
 
   // Sea ingredients. Drop sources: 'p' from Ocean fishing (rare), 'n' from
-  // Sea Snake (rare), 'Y' from Ocean fishing (rare).
+  // Sea Snake (rare).
   'p': { char: 'p', name: 'Pearl Shard',    color: '#ddeeff' },
   'n': { char: 'n', name: 'Sharkbone',      color: '#ccd8e8' },
-  'Y': { char: 'Y', name: 'Stingray Barb',  color: '#aabbcc' },
 
   // Huntable game (HuntingSystem) — rare Moose drop.
   'K': { char: 'K', name: 'Thick Fur', color: '#c9a876' },
@@ -3530,7 +3520,7 @@ export const AFFINITY_POOLS = {
     ingredients: {
       [RARITY.COMMON]:   ['g', 'w'],         // Goo, Wing (fins/webbing)
       [RARITY.UNCOMMON]: ['e', 'p'],         // Eye, Pearl Shard
-      [RARITY.RARE]:     ['k', 'n', 'Y'],    // Silk, Sharkbone, Stingray Barb
+      [RARITY.RARE]:     ['k', 'n'],         // Silk, Sharkbone
       [RARITY.EPIC]:     ['s'],              // Scale
     },
     weapons: {

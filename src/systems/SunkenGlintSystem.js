@@ -24,8 +24,7 @@ const COIN_CHANCE = 0.8;
 // itself stays out — the fisherman's legend is its only way in.
 const SEA_FINDS = [
   { char: 'p', weight: 12 },  // Pearl Shard (Oyster)
-  { char: 'n', weight: 5 },   // Sharkbone
-  { char: 'Y', weight: 5 }    // Ray Tail
+  { char: 'n', weight: 5 }    // Sharkbone
 ];
 
 /**

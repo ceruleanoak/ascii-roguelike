@@ -241,8 +241,8 @@ export const RECIPES = [
   { left: '≋', right: '❦', result: '∻', name: 'Vine Whip' },         // Whip + Moss
   { left: '≋', right: 'M', result: '✹', name: 'Morning Star' },      // Whip + Metal
   { left: '⫯', right: '⧫', result: '⟡', name: 'Diamond Longsword' }, // Longsword + Diamond
-  { left: '↾', right: 'i', result: '⍖', name: 'Icicle' },
-  { left: '↾', right: '↾', result: '⚲', name: 'Kunai' },             // Dagger + Dagger (pre-empts the dagger's tier-up cycle)            // Dagger + Ice
+  { left: '↾', right: 'i', result: '⍖', name: 'Icicle' },            // Dagger + Ice
+  { left: '↾', right: '↾', result: '⚲', name: 'Kunai' },             // Dagger + Dagger (pre-empts the dagger's tier-up cycle)
   { left: '⊦', right: 'i', result: '⍑', name: 'Ice Axe' },           // Axe + Ice
   { left: '↩', right: 'M', result: '⌾', name: 'Chakram' },           // Boomerang + Metal (damages every bounce, no stun)
   { left: 'Ƨ', right: 'd', result: '⸕', name: "Reaper's Scythe" },   // Scythe + Dust
@@ -250,7 +250,6 @@ export const RECIPES = [
   { left: 'ƒ', right: 'v', result: '⌭', name: 'Plague Gun' },        // Fester's Gun + Venom
   { left: '⋔', right: 'p', result: '⑂', name: 'Pearl Slingshot' },   // Keen Slingshot + Pearl Shard
   { left: '↿', right: 'p', result: '⥣', name: 'Pearl Dagger' },      // Keen Dagger + Pearl Shard
-  { left: '⸘', right: 'Y', result: '⧧', name: 'Barbed Bat' },        // Metal Bat + Stingray Barb
   { left: '✺', right: 'ł', result: '⁂', name: 'Spore Mace' },        // Exploding Mace + Pollen
   { left: '⬢', right: 'a', result: '⫪', name: 'Cinder Hammer' },     // Onyx Hammer + Ash
   { left: 'Ⲯ', right: 'r', result: '⸾', name: 'Rootstaff' },         // Thick Staff + Root

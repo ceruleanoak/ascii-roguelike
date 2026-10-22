@@ -21,16 +21,15 @@ export const FISHING_TABLES = {
       { name: 'Giant Turtle',char: 'ծ', color: '#88cc44', drops: ['b', 'm'],        weight: 10 },
       { name: 'Fish',        char: 'ծ', color: '#7ec8e3', drops: [], directPickupItem: '♓', weight: 20 },
       { name: 'Empty Bottle',char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 },
-      // Sea supply line: rare catches for the pearl, sharkbone and barb
-      // recipes (Pearl weapons, Trident, Barbed Bat/Lance).
+      // Sea supply line: rare catches for the pearl and sharkbone recipes
+      // (Pearl weapons, Trident).
       { name: 'Oyster Husk', char: 'ծ', color: '#ddeeff', drops: ['p'],             weight: 3 },
-      { name: 'Sharkbone',   char: 'ծ', color: '#ccd8e8', drops: ['n'],             weight: 1 },
-      { name: 'Ray Tail',    char: 'ծ', color: '#aabbcc', drops: ['Y'],             weight: 1 }
+      { name: 'Sharkbone',   char: 'ծ', color: '#ccd8e8', drops: ['n'],             weight: 1 }
     ]
   },
 
   // Ocean ('O') rooms — any zone. Saltwater creatures plus a meaningfully
-  // fatter sea supply line (p/n/Y) than green lakes; the fisherman's pearl
+  // fatter sea supply line (p/n) than green lakes; the fisherman's pearl
   // legend points here.
   ocean: {
     rusalkaChance: 0,
@@ -40,7 +39,6 @@ export const FISHING_TABLES = {
       { name: 'Jellyfish',    char: 'ծ', color: '#ccaaff', drops: ['v', 'g'],       weight: 18 },
       { name: 'Oyster',       char: 'ծ', color: '#ddeeff', drops: ['p'],            weight: 12 },
       { name: 'Sharkbone',    char: 'ծ', color: '#ccd8e8', drops: ['n'],            weight: 5 },
-      { name: 'Ray Tail',     char: 'ծ', color: '#aabbcc', drops: ['Y'],            weight: 5 },
       { name: 'Fish',         char: 'ծ', color: '#7ec8e3', drops: [], directPickupItem: '♓', weight: 20 },
       { name: 'Empty Bottle', char: 'ծ', color: '#aaccee', drops: [], specialDrops: ['B'], weight: 4 }
     ]
