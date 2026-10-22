@@ -1,13 +1,41 @@
 # Weapon Mental-Load Audit — Tier 2+ Weapons
 
-Design doc, 2026-10-21. **Status: audit only — no data changed.** Verdicts below are
-proposals for the user to ratify family by family; each ratified family is its own
-later implementation pass (data + recipes + drop pools + fountain tiers, gated by
-`npm run check:data`).
+Design doc, 2026-10-21. **Status: implemented 2026-10-21. The user ratified a decision
+list and each family landed as its own commit (see §0).** §3–§10 below are the
+original audit, kept as the reasoning record. Where the user's decision differed from
+the proposed verdict, §0 is what shipped.
 
 Data was read from the working tree on 2026-10-21. That snapshot includes the
 user's in-flight edits: Shotgun and Scatter Gun damage 1→2, and the new Poison Tips oil.
 Damage numbers come from evaluating `ITEMS`/`RECIPES` directly, not from comments.
+
+---
+
+## 0. What shipped (2026-10-21)
+
+One commit per family, on `main`:
+
+| Family | Commit | Decisions as implemented |
+|---|---|---|
+| Gun | `73ec463` | **Cut:** Heavy Pistols, Freeze Ray, Rocket Launcher, Plasma Rifle, Laser Cannon, Venom Pistol. **Rerooted:** Machine Gun → Dual Pistols + Jaw; Ricochet Rifle → Dual Pistols + Metal. **Stun Gun:** Gun + Topaz, tier 2. **Kept:** Shotgun, Fester's Gun, Scatter Gun. **Venom Vial** is now a poison oil 🜕, brewed from Unstable Potion + Venom at the Alchemy Lab. |
+| Bow | `92f7bf9` | **Cut:** Fire Bow, Ice Bow, Split Bow, Burst Bow, Drowse Boomerang (oils already ride the boomerang). **Sky Bow** = Bow + Wing; **Homing Bow** = Bow + Eye. **Piercing Bow:** damage 3. **Chain Bow:** tier 2, damage 3, Bow + Topaz. **Explosive Bow:** one arrow, then a 15s recharge; the arrow detonates as a real Bomb. |
+| Sword | `447aa41` | **Cut:** Legendary Flame Sword, Venom Blade, Slag Blade. **Lava Sword** = Flame Sword + Slag. **Flame Sword:** damage 2. **Diamond Longsword:** damage 2. **Dragon Blade:** damage 4. **Chaos Blade** = Sword + Unstable Potion, tier 3; the shop stocks it only from green Depth 15 (`shopHome`). **Kept:** Lightning Sword. |
+| Dagger | `c7b2f98` | **Cut:** Vampire Dagger, Bloodletter, Viper Fang, Acid Blade (with `AcidWaterSpread.js`). **Icicle:** a plain dagger stab; thrown, it bursts and freezes everything nearby. **Pearl Dagger:** damage 1. **New Kunai ⚲** = Dagger + Dagger: SPACE stabs; SHIFT throws one of 3 per-room oiled kunai and the weapon stays in hand. With the bundle spent, it throws itself. |
+| Axe | `c9d614a` | **Bone Axe:** only Axe + Bone. **Thunder Axe:** tier 2, damage 2, Axe + Topaz. |
+| Hammer | `0a1b8db` | The **shockwave** is one blow, its **Impact Size** (GLOSSARY) centered on the carrier. Its ring only shakes the background and knocks enemies back; there is no timed AoE. **Maul:** damage 3, `onHit: 'dizzy'`. **Ice Hammer:** damage 3, gains `shattersFrozen` (Glacier Hammer folded in), Hammer + Sapphire only. **Cut:** Earthquake Hammer, Glacier Hammer. **Bone Crusher:** no recipe (Errand reward), Impact Size 5. **Cinder Hammer:** damage 3. **Slag Maul:** damage 3, equal to the retuned Maul. **Kept:** Exploding Mace. |
+| Spear | `a28cbc0` | **Cut:** Venom Lance, Barbed Lance. **Spears take oils** the way daggers do (R4 below is revised). |
+| Bat | `c4e5371` | **Cut:** Barbed Bat, and with it Stingray Barb `Y`, which had no recipe left (Ray Tail catches and the Sunken Glint find removed). |
+| Staff / Whip | — | **Kept:** Thick Staff and every magical whip. |
+
+**Thick Fur `K`:** it is a drop, but only from the beast RARE pool, at about 0.1% per kill
+(0.66% per Moose). That makes the Bullwhip unreachable in practice. Logged as
+known-bugs #425.
+
+**Still open:**
+- **Venom for daggers.** With Acid Blade gone, daggers have no poison of their own. Venom
+  Vial is an oil and does reach them. Tracked in `planning-inbox.md`.
+- **The pawn price / wares offering audit.** Every item's price and shop slot should match
+  its rarity and power after the cuts.
 
 ---
 
@@ -59,7 +87,7 @@ Each rule is stated as a test that can be checked against the data.
 | **R1** | Fire, Ice and Electric are zone flavors and stop at tier 2. | No `tier: 3` weapon has `weaponElement()` in `fire`/`ice`/`electric`. |
 | **R2** | Guns and poison/venom weapons are the main pruning targets. | Poison survives on at most ~2 weapons. Guns lose every entry that is only a stat step or only an element. |
 | **R3** | An upgrade that adds an affinity or effect rarely, if ever, also raises base damage. | For a recipe `parent + X → child` where the child gains an `onHit` or behavior flag, `child.damage ≤ parent.damage`. |
-| **R4** | Oils stay bow/dagger-only (`oilAppliesTo`, `Item.js:66`). | So within BOW (including boomerang and slingshot, which fire through `createSingleArrow`) and dagger, a weapon that differs from its parent only by burn/freeze/sleep is a direct duplicate of Fire/Frost/Drowse Oil. |
+| **R4** | Oils stay bow/dagger-only (`oilAppliesTo`, `Item.js:66`). **Revised at implementation: spears take oils too.** | So within BOW (including boomerang and slingshot, which fire through `createSingleArrow`), dagger and now spear, a weapon that differs from its parent only by burn/freeze/sleep is a direct duplicate of Fire/Frost/Drowse Oil. |
 
 Notes on R4 coverage: daggers take Fire, Frost and Drowse Oil but **not** Poison Tips
 (`bowOnly`). So daggers have no poison oil. That is why the audit keeps Acid Blade
