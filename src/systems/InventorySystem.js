@@ -216,11 +216,15 @@ export class InventorySystem {
   // resolves a twin without showing the prompt: the new copy takes the twin's
   // slot and the old one goes to the consumable pile. Stackables never get
   // here with a twin equipped; mergeStackableConsumable folds them in first.
+  // Heals are the exception: two Health Potions in two slots is carrying two
+  // heals, not doubling one effect, so a heal's twin takes a free slot like
+  // any other pickup (bug-inbox 2026-10-22).
   conflictingConsumableSlot(item, exceptIdx = -1) {
     const group = item?.data?.exclusiveGroup;
+    const twinsAllowed = item?.data?.effect === 'heal';
     return this.equippedConsumables.findIndex((s, idx) =>
       idx !== exceptIdx && s && s !== item &&
-      (s.char === item?.char || (group && s.data?.exclusiveGroup === group)));
+      ((!twinsAllowed && s.char === item?.char) || (group && s.data?.exclusiveGroup === group)));
   }
 
   getItemChest() {
