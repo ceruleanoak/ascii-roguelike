@@ -20,7 +20,7 @@
 
 import { DEATH_CAUSES } from '../data/deathCauses.js';
 import { CHARACTER_TYPES } from '../data/characters.js';
-import { GRID } from '../game/GameConfig.js';
+import { GRID, PHYSICS } from '../game/GameConfig.js';
 import {
   createStatusEffects, applyStatusEffect, tickStatusEffects,
   MAX_PIPS, ZAP_PIP_SPEED, FREEZE_PIP_SPEED, GOO_PIP_SPEED, SAP_BAT_SPEED
@@ -41,6 +41,9 @@ const FROZEN = { duration: 5.0, mashChip: 0.15, rollChip: 0.6 };
 // direction, and can't be picked back up for this long — the same shape as
 // the Thief's snatch (ThiefMechanic), which disarms through here too.
 const DISARM_DISTANCE = GRID.CELL_SIZE * 3;
+// Launch speed that carries a disarmed item about DISARM_DISTANCE under
+// per-frame friction: travel ≈ speed / 60 / (1 - FRICTION).
+const DISARM_SPEED = DISARM_DISTANCE * 60 * (1 - PHYSICS.FRICTION);
 const DISARM_PICKUP_DELAY_MS = 600;
 
 const isZapLock = (player) => {
@@ -191,18 +194,19 @@ export const StatusEffectSystem = {
 };
 
 /**
- * Disarm: knock the player's held item out of their hand onto the ground
- * nearby, on the player's own plane. Returns the item, or null if the hand
- * was empty. Shared by the zap/stun lock and the Thief's snatch.
+ * Disarm: knock the player's held item out of their hand — it leaves from the
+ * player and flies about DISARM_DISTANCE in a random direction, so the eye can
+ * follow where it went — on the player's own plane. Returns the item, or null
+ * if the hand was empty. Shared by the zap/stun lock and the Thief's snatch.
  */
 export function disarmPlayer(game, pickupDelayMs = DISARM_PICKUP_DELAY_MS) {
   const player = game.player;
   const item = player.dropItem();
   if (!item) return null;
   const angle = Math.random() * Math.PI * 2;
-  item.position.x = player.position.x + Math.cos(angle) * DISARM_DISTANCE;
-  item.position.y = player.position.y + Math.sin(angle) * DISARM_DISTANCE;
-  item.velocity = { vx: 0, vy: 0 };
+  item.position.x = player.position.x;
+  item.position.y = player.position.y;
+  item.velocity = { vx: Math.cos(angle) * DISARM_SPEED, vy: Math.sin(angle) * DISARM_SPEED };
   item.pickupReadyAt = performance.now() + pickupDelayMs;
   item.plane = player.plane ?? 0;
   item.hutPlane = activeInteriorFloor(game) !== null;

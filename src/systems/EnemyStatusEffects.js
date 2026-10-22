@@ -64,20 +64,19 @@ export function applyStatusEffect(enemy, effect, duration = 3.0, pips = null) {
 
 // Scatters an enemy's carried inventory after a stun/zap jolt or a whip
 // disarm knocks it loose (both set enemy.shouldDropItems — see
-// applyStatusEffect above and CombatSystem's disarm branch). Whip disarm
-// additionally flags enemy._disarmed, which this reads to scatter much
-// harder and lock out retrieval for a beat: without that distinction the
-// enemy stands exactly where the weapon lands and the plain jolt's gentle
-// scatter (speed 50-100) barely clears melee range, so it was re-equipping
-// almost the instant the weapon hit the ground.
+// applyStatusEffect above and CombatSystem's disarm branch). Either way the
+// item is cast away from the enemy at speed (140-250, ~1.5-2.5 cells of
+// travel): a gentle scatter left it under the enemy, hard to see and
+// re-equipped almost the instant it landed. Whip disarm additionally flags
+// enemy._disarmed, which this reads to lock out retrieval for a beat.
 export function getStunDroppedItems(enemy) {
   if (!enemy.shouldDropItems) return [];
   enemy.shouldDropItems = false;
 
   const disarmed = enemy._disarmed;
   enemy._disarmed = false;
-  const minSpeed = disarmed ? 140 : 50;
-  const speedRange = disarmed ? 110 : 50;
+  const minSpeed = 140;
+  const speedRange = 110;
 
   const drops = [];
   for (const item of enemy.inventory) {
