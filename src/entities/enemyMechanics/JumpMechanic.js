@@ -29,6 +29,13 @@ export const JumpMechanic = {
   update(enemy, ctx) {
     if (enemy.movementStyle !== 'jumper') return;
     if (enemy.isFrozen() || enemy.isStunned() || enemy.isKnockedBack()) return;
+    // Pinned or snared: no hop. Same gate as ChargeMechanic (#286) — a hop
+    // writes a velocity over the pin's break speed. Any hop in flight ends.
+    if (enemy.isPinned?.()) {
+      enemy.frogJumpActive = false;
+      enemy.jumpArcLift = 0;
+      return;
+    }
     const { deltaTime } = ctx;
 
     const onWater = enemy._isOnWater();

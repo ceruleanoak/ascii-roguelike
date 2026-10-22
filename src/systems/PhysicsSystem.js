@@ -357,10 +357,12 @@ export class PhysicsSystem {
     // Carried by thrown spear: TrapSystem owns position this frame — skip all physics
     if (entity.carriedBySpear) return null;
 
-    // Pinned to wall/object (spear throw): incoming knockback breaks it, otherwise frozen
+    // Pinned to wall/object (spear throw): incoming knockback breaks it, otherwise frozen.
+    // A snare (or Bolo) is an Infinity pin and never breaks this way — a hit's
+    // knockback on a light beast (Frog, mass 0.5) would otherwise free it.
     if (entity.pinnedDuration > 0) {
       const spd = Math.sqrt(entity.velocity.vx ** 2 + entity.velocity.vy ** 2);
-      if (spd > 80) {
+      if (spd > 80 && entity.pinnedDuration !== Infinity) {
         entity.pinnedDuration = 0; // New knockback breaks the pin
       } else {
         entity.pinnedDuration = Math.max(0, entity.pinnedDuration - deltaTime);
