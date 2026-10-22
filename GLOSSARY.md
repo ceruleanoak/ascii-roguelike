@@ -1565,7 +1565,8 @@ identity, not standard programming terms.
   can end.
 - **In code:** `threeRoom` script in `src/data/neutralRooms.js`; `room.isThreeRoom`;
   `ThreeRoomSystem` owns the offerings, the music and the door; `ThreeRoomRenderer` draws the
-  frames and the Death cinematic.
+  frames and the Death cinematic. Carrying torch light (`hasTorchLight`) colors each frame
+  with its slot's REST role color — apex red, left cyan, right yellow (`FRAME_TORCHLIT_COLORS`).
 - **Not:** "Triangle Room" (the superseded cosmology name), "puzzle room" (reserved — that is
   the dungeon side-room authoring pathway), "altar", "shrine".
 

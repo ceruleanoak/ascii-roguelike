@@ -1,4 +1,5 @@
 import { GRID } from '../../game/GameConfig.js';
+import { hasTorchLight } from './torchLight.js';
 
 /**
  * ThreeRoomRenderer — the slot cluster's frames, and Death's arrival.
@@ -42,6 +43,13 @@ const HIGHLIGHT_COLOR = '#9a9a9a55';
 // full swing, which at a 16px cell is a tremor and not a bounce.
 const SHAKE_X = [{ rate: 37.1, amp: 0.9 }, { rate: 23.7, amp: 0.6 }];
 const SHAKE_Y = [{ rate: 41.3, amp: 0.7 }, { rate: 19.1, amp: 0.5 }];
+// Torchlight shows what the stone is: carrying a light (any Torch or Lantern
+// in a quick slot, or a lit Fire Berry — hasTorchLight) colors each frame
+// with its slot's REST role color, so the slots read as the same three
+// registers as the REST slots without a word. Indexed by `threeSlot`:
+// apex weapon red, left armor cyan, right consumable yellow (RestRenderer's
+// slot-name colors).
+const FRAME_TORCHLIT_COLORS = ['#ff4444', '#00cccc', '#ffff00'];
 // A refused frame: drained, with the cracks drawn across it.
 const FRAME_CRACKED_COLOR = '#5a5a5a';
 const CRACK_COLOR = '#3a3a3a';
@@ -79,6 +87,7 @@ export class ThreeRoomRenderer {
     const ctx = game.renderer.fgCtx;
     const cs = GRID.CELL_SIZE;
     const shake = this._shake();
+    const torchlit = hasTorchLight(game);
 
     ctx.save();
     ctx.font = `${cs}px 'Unifont', monospace`;
@@ -98,6 +107,7 @@ export class ThreeRoomRenderer {
       }
 
       ctx.fillStyle = obj.threeCracked ? FRAME_CRACKED_COLOR
+        : torchlit ? FRAME_TORCHLIT_COLORS[obj.threeSlot]
         : isLit ? FRAME_LIT_COLOR
         : FRAME_COLOR;
       ctx.fillText('[', x - cs, y);
