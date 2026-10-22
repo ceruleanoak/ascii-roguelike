@@ -242,7 +242,8 @@ export class SunkenShipSystem {
       radius: 0, prevRadius: 0,
       maxRadius: cs * 6,
       speed: cs * 10,
-      color: SHIP_COLOR
+      color: SHIP_COLOR,
+      knockback: 0, // a reveal ripple, not a blow
     };
   }
 }

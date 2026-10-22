@@ -62,6 +62,7 @@ export class PearlSystem {
       maxRadius: GRID.CELL_SIZE * 6,
       speed: GRID.CELL_SIZE * 10,
       color: '#66aaff',
+      knockback: 0, // a reveal ripple, not a blow
     };
 
     // Dismiss the guide fairy — its job is done. Send it offscreen east.

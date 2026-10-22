@@ -2303,7 +2303,7 @@ export function spawnGuaranteedItems(gen, room) {
       '♦', // Dragon Heart (max HP consumable)
       '𐤓', // Dragon Scale Armor (defense 5)
       '^', // Hammer (damage 7)
-      'ᛜ', // Ice Hammer (damage 6)
+      'ᛜ', // Ice Hammer
     ];
   }
 

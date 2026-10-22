@@ -397,14 +397,15 @@ export class InteractionSystem {
       }
 
       // Knock back enemies the ring sweeps past (only on player's plane).
-      for (const enemy of this.game._activeEnemies()) {
+      // A ripple with no knockback (Pearl/Sunken Ship reveals) is visual only.
+      for (const enemy of (sw.knockback > 0 ? this.game._activeEnemies() : [])) {
         if (enemy.hp <= 0) continue;
         if (!inSamePlane(this.game.player, enemy)) continue;
         const cx = enemy.position.x + GRID.CELL_SIZE / 2;
         const cy = enemy.position.y + GRID.CELL_SIZE / 2;
         const dist = Math.hypot(cx - sw.x, cy - sw.y);
         if (dist > sw.prevRadius && dist <= sw.radius) {
-          this.game.physicsSystem.applyKnockback(enemy, sw.x, sw.y, 320, 0.18);
+          this.game.physicsSystem.applyKnockback(enemy, sw.x, sw.y, sw.knockback, 0.18);
         }
       }
 

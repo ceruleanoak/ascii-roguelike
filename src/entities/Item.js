@@ -38,6 +38,12 @@ const HAMMER_STRIKE_CHAR = '✷';
 const HAMMER_STRIKE_SCALE = 1.6;
 const HAMMER_STRIKE_FLASH_DURATION = 0.08;
 
+// A shockwave weapon's Impact Size (cells on a side of the square it strikes,
+// centered on the carrier) when its data names none, and the knockback the
+// ring it starts deals as it sweeps past an enemy.
+const DEFAULT_IMPACT_SIZE = 3;
+const SHOCKWAVE_KNOCKBACK = 320;
+
 // Aggregate oilEffect from any equipped consumables. Returns
 // { onHits: string[], arrowSpeedMult: number }. onHits collects every
 // equipped oil's onHit in slot order (no dedup — a weapon's own effect and
@@ -900,7 +906,7 @@ export class Item {
       if (this.data.cyclesExitColor) props.cyclesExitColor = this.data.cyclesExitColor;
       if (this.data.poisonStacks) props.poisonStacks = true;
       if (this.data.randomOnHit) props.randomOnHit = this.data.randomOnHit;
-      // WeaponEffectsSystem.onMeleeHit flags (Glacier Hammer, Reaper's Scythe, Vine Whip, Rootstaff)
+      // WeaponEffectsSystem.onMeleeHit flags (Ice Hammer, Reaper's Scythe, Vine Whip, Rootstaff)
       if (this.data.shattersFrozen) props.shattersFrozen = true;
       if (this.data.healOnKill) props.healOnKill = this.data.healOnKill;
       if (this.data.pullsDisarmedGear) props.pullsDisarmedGear = true;
@@ -1129,54 +1135,45 @@ export class Item {
   }
 
   createMeleeShockwave(player) {
-    // Expanding concentric rings — hammer augment/special pattern.
-    // patternSpeed is hardcoded here so the weapon's data.patternSpeed
-    // (used by the tap sweep) doesn't bleed into the shockwave cadence.
-    // 0.125s/ring matches the visual ring expansion (8 cells/sec, 1 cell per ring).
-    const attacks = [];
-    const patternSpeed = 0.4;
-    const rings = 3;
-    const cx = player.position.x + GRID.CELL_SIZE / 2;
-    const cy = player.position.y + GRID.CELL_SIZE / 2;
+    // One blow, not a timed AoE. The hit is a single square centered on the
+    // carrier, `impactSize` cells on a side (the weapon's Impact Size,
+    // GLOSSARY.md) — everything inside it is struck once, at the instant of
+    // impact. The expanding ring this hit starts (triggerShockwave →
+    // WeaponEffectsSystem.startShockwave) deals no damage: it only shakes the
+    // background and knocks enemies back as it sweeps past them.
+    const cs = GRID.CELL_SIZE;
+    const impactSize = this.data.impactSize ?? DEFAULT_IMPACT_SIZE;
+    const side = impactSize * cs;
+    // Offset of the box's top-left from the carrier's cell, so the box is
+    // centered on the carrier whatever its size.
+    const relX = -(side - cs) / 2;
+    const relY = -(side - cs) / 2;
+    const cx = player.position.x + cs / 2;
+    const cy = player.position.y + cs / 2;
 
-    for (let ring = 1; ring <= rings; ring++) {
-      const radius = ring * GRID.CELL_SIZE;
-      const positions = 8;
-
-      const shockwaveChar = this.data.meleeChar || '○';
-      for (let i = 0; i < positions; i++) {
-        const angle = (Math.PI * 2 / positions) * i;
-        const relX = Math.cos(angle) * radius;
-        const relY = Math.sin(angle) * radius;
-
-        attacks.push({
-          type: 'melee',
-          char: shockwaveChar,
-          drawAngle: this.getMeleeDrawAngle(shockwaveChar, angle),
-          position: { x: player.position.x + relX, y: player.position.y + relY },
-          relX, relY,
-          width: GRID.CELL_SIZE,
-          height: GRID.CELL_SIZE,
-          damage: this.data.damage,
-          duration: 0.15,
-          delay: (ring - 1) * patternSpeed,
-          color: this.color,
-          onHit: this.data.onHit,
-          knockback: this.data.knockback || 150,
-          explode: this.data.explode,
-          explodeRadius: this.data.explodeRadius,
-          owner: player,
-          shooterPlane: player.plane,
-          ...(ring === 1 && i === 0 ? {
-            triggerShockwave: true,
-            shockwaveOrigin: { x: cx, y: cy },
-            shockwaveColor: this.color,
-          } : {}),
-        });
-      }
-    }
-
-    return attacks;
+    return [{
+      type: 'melee',
+      char: this.data.char,
+      drawAboveOwner: true,
+      position: { x: player.position.x + relX, y: player.position.y + relY },
+      relX, relY,
+      width: side,
+      height: side,
+      damage: this.data.damage,
+      duration: 0.15,
+      delay: 0,
+      color: this.color,
+      onHit: this.data.onHit,
+      knockback: this.data.knockback || 150,
+      explode: this.data.explode,
+      explodeRadius: this.data.explodeRadius,
+      owner: player,
+      shooterPlane: player.plane,
+      triggerShockwave: true,
+      shockwaveOrigin: { x: cx, y: cy },
+      shockwaveColor: this.color,
+      shockwaveKnockback: this.data.shockwaveKnockback ?? SHOCKWAVE_KNOCKBACK,
+    }];
   }
 
   createMeleeThrust(player) {

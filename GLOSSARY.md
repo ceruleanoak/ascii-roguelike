@@ -1521,6 +1521,21 @@ identity, not standard programming terms.
   Weapon ticks at `PHYSICS.WEAPON_TIMER_RATE` (= 2). Compare to playtesting simulator by ÷2.
 - **Not:** just damage or accuracy. Timing defines weapon feel and combat rhythm.
 
+### Impact Size
+- **Definition:** How much ground a shockwave hammer's blow covers: the side, in cells, of the
+  square it strikes, centered on the carrier. Everything inside is hit once, at the instant
+  of impact. The ring the blow sends out afterwards deals no damage; it only shakes the
+  background and knocks back the enemies it sweeps past. The default is 3 (the carrier's
+  cell plus one cell all round); Bone Crusher swings 5.
+- **In code:** `data.impactSize` (default `DEFAULT_IMPACT_SIZE` in `Item.js`), read by
+  `Item.createMeleeShockwave()`, which returns one hit with `triggerShockwave`. The ring is
+  `game.playerShockwave` (started by `WeaponEffectsSystem.startShockwave`, advanced by
+  `InteractionSystem.update`). Its knockback is `shockwaveKnockback` (default
+  `SHOCKWAVE_KNOCKBACK`), and a ring with `knockback: 0` (the Pearl and Sunken Ship reveals) is
+  visual only.
+- **Not:** a timed AoE. The old three delayed damage rings are gone. Not `range`, which says what
+  a weapon can be swung at. Not `explodeRadius`, the burst an `explode` hit adds where it lands.
+
 ### Gemstone
 - **Definition:** A special Ingredient that crafts with a base weapon to produce a gem-infused
   Crafted item with enhanced effects (Gem Staves, Gem Whips, etc.).

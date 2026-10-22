@@ -840,16 +840,21 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'hammer',
-    damage: 4,
+    damage: 3,
     windup: 0.8,
     recovery: 1.0,
     range: 20,
     attackPattern: 'hammerRing',
     locksMovement: true,
     knockback: 140,
+    // The weight of the blow, not more damage: what it knocks back, it leaves Dizzy.
+    onHit: 'dizzy',
     weaponLevel: 2,
     color: '#bb9966'
   },
+  // Ice Hammer: the shockwave freezes what it strikes, and a blow that lands
+  // on an already-Frozen enemy shatters it, spraying a freeze pip onto
+  // everything nearby (folded in from the cut Glacier Hammer).
   'ᛜ': {
     char: 'ᛜ',
     tier: 2,
@@ -857,13 +862,13 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.MELEE,
     weaponSubtype: 'hammer',
-    damage: 4,
+    damage: 3,
     windup: 0.6,
     recovery: 1.0,
-    patternSpeed: 0.4,
     range: 18,
     onHit: 'freeze',
     knockback: 250,
+    shattersFrozen: true,
     weaponLevel: 2,
     color: '#00ddff'
   },
@@ -921,25 +926,7 @@ export const ITEMS = {
     color: '#ff6600'
   },
 
-  // ── MELEE / hammer — Tier 3 ───────────────────────────────────────────────
-  '⏚': {
-    char: '⏚',
-    tier: 3,
-    name: 'Earthquake Hammer',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.MELEE,
-    weaponSubtype: 'hammer',
-    damage: 6,
-    windup: 0.9,
-    recovery: 0.3,
-    patternSpeed: 0.1,
-    range: 20,
-    knockback: 350,
-    explode: true,
-    explodeRadius: 60,
-    weaponLevel: 3,
-    color: '#8b6914'
-  },
+  // Bone Crusher has no recipe — it is found, never crafted (an Errand reward).
   '⚒': {
     char: '⚒',
     tier: 3,
@@ -951,6 +938,7 @@ export const ITEMS = {
     windup: 1.05,
     recovery: 0.2,
     attackPattern: 'shockwave',
+    impactSize: 5,          // the widest blow in the family
     patternSpeed: 0.17,
     knockback: 380,
     locksMovement: true,
@@ -959,7 +947,7 @@ export const ITEMS = {
     color: '#ffffff'
   },
 
-  // ── MELEE / hammer — Tier 4 (secret vein drop, U room only) ─────────────
+  // ── MELEE / hammer — Crystal Maul (no tier; secret vein drop, U room only) ─
   '⬡': {
     char: '⬡',
     name: 'Crystal Maul',
@@ -1502,15 +1490,6 @@ export const ITEMS = {
     onHit: 'poison',
     color: '#88aa99'
   },
-  // Glacier Hammer (Ice Hammer + Ice): hitting a Frozen enemy shatters it,
-  // spraying a freeze pip onto everything nearby.
-  '⟙': {
-    char: '⟙', tier: 3, name: 'Glacier Hammer',
-    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'hammer',
-    damage: 5, windup: 0.6, recovery: 1, patternSpeed: 0.4, range: 18,
-    onHit: 'freeze', knockback: 250, weaponLevel: 3, shattersFrozen: true,
-    color: '#bbf4ff'
-  },
   // Spore Mace (Exploding Mace + Pollen): every swing also bursts a
   // sleep-dust cloud at the head.
   '⁂': {
@@ -1525,7 +1504,7 @@ export const ITEMS = {
   '⫪': {
     char: '⫪', tier: 3, name: 'Cinder Hammer',
     type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'hammer',
-    damage: 4, windup: 0.35, recovery: 0.8, range: 20,
+    damage: 3, windup: 0.35, recovery: 0.8, range: 20,
     attackPattern: 'hammerRing', locksMovement: true, critChance: 0.35, weaponLevel: 3,
     dustBurst: { status: 'blind', duration: 3.0, color: '#888888', burnTicks: 1 },
     color: '#555555'
@@ -1534,7 +1513,7 @@ export const ITEMS = {
   '⟂': {
     char: '⟂', tier: 3, name: 'Slag Maul',
     type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.MELEE, weaponSubtype: 'hammer',
-    damage: 5, windup: 0.8, recovery: 1, range: 20,
+    damage: 3, windup: 0.8, recovery: 1, range: 20,
     attackPattern: 'hammerRing', locksMovement: true, knockback: 140, weaponLevel: 3,
     placesLava: true,
     color: '#cc6633'

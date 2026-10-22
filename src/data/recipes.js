@@ -183,7 +183,6 @@ export const RECIPES = [
   { left: 'ᛉ', right: 's', result: 'ᚲ', name: 'Dragon Shotgun' }, // Shotgun + Scale = Dragon Shotgun
   { left: '‡', right: '4', result: 'ᚠ', name: 'Lava Sword' },             // Flame Sword + Slag = Lava Sword
   { left: ')', right: 'w', result: '⇒', name: 'Sky Bow' },        // Bow + Wing = Sky Bow
-  { left: '⊤', right: 'b', result: '⚒', name: 'Bone Crusher' },   // Bone Axe + Bone = Bone Crusher
 
   // New ingredient combinations
   { left: '∞', right: 'F', result: '✦', name: 'Phoenix Feather' }, // Wings + Fire Essence = Phoenix Feather
@@ -206,12 +205,10 @@ export const RECIPES = [
   { left: 'X', right: 'M', result: 'ᚱ', name: 'Ricochet Rifle' },  // Dual Pistols + Metal = Ricochet Rifle
 
   // === NEW MELEE RECIPES (10) ===
-  { left: '⊤', right: '⬨', result: 'ᛜ', name: 'Ice Hammer' },      // Bone Axe + Sapphire = Ice Hammer
   { left: 'j', right: '~', result: '○', name: 'Flail' },           // Jaw + String = Flail
   { left: '⊦', right: '◇', result: 'ᚨ', name: 'Thunder Axe' },     // Axe + Topaz = Thunder Axe (gem rule)
   { left: '⊤', right: '⊗', result: '✺', name: 'Exploding Mace' },  // Bone Axe + Bomb = Exploding Mace
   { left: '↑', right: 'w', result: '⌁', name: 'Stun Baton' },      // Spear + Wing = Stun Baton
-  { left: '⚒', right: 'M', result: '⏚', name: 'Earthquake Hammer' }, // Bone Crusher + Metal = Earthquake Hammer
   { left: '†', right: '🜆', result: 'ᛠ', name: 'Chaos Blade' },     // Sword + Unstable Potion = Chaos Blade
 
   // === NEW BOW RECIPES (8) ===
@@ -256,7 +253,6 @@ export const RECIPES = [
   { left: '↿', right: 'p', result: '⥣', name: 'Pearl Dagger' },      // Keen Dagger + Pearl Shard
   { left: '⸘', right: 'Y', result: '⧧', name: 'Barbed Bat' },        // Metal Bat + Stingray Barb
   { left: '↟', right: 'Y', result: '⍏', name: 'Barbed Lance' },      // Venom Lance + Stingray Barb
-  { left: 'ᛜ', right: 'i', result: '⟙', name: 'Glacier Hammer' },    // Ice Hammer + Ice
   { left: '✺', right: 'ł', result: '⁂', name: 'Spore Mace' },        // Exploding Mace + Pollen
   { left: '⬢', right: 'a', result: '⫪', name: 'Cinder Hammer' },     // Onyx Hammer + Ash
   { left: 'Ⲯ', right: 'r', result: '⸾', name: 'Rootstaff' },         // Thick Staff + Root

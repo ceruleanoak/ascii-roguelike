@@ -421,18 +421,7 @@ export class MagicSystem {
 
     game.combatSystem.createAttack(game.applyGreenDamageModifier(attacks), game._activeEnemies());
     game._emitSoundEvent();
-    const hits = Array.isArray(attacks) ? attacks : [attacks];
-    const trigger = hits.find(a => a?.triggerShockwave);
-    if (trigger) {
-      game.playerShockwave = {
-        x: trigger.shockwaveOrigin.x,
-        y: trigger.shockwaveOrigin.y,
-        radius: 0, prevRadius: 0,
-        maxRadius: GRID.CELL_SIZE * 5,
-        speed: GRID.CELL_SIZE * 8,
-        color: trigger.shockwaveColor || trigger.color,
-      };
-    }
+    game.weaponEffectsSystem.startShockwave(attacks);
   }
 
   // Dispatches the cast to its concrete effect. attack.position is the player

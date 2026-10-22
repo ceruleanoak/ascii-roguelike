@@ -1213,9 +1213,12 @@ export class CombatSystem {
                 this.game.lightningStrikeSystem.createChainLightning(attack, enemy, enemies);
               }
 
-              // Explosion effect
+              // Explosion effect — at the hitbox's center cell, so a hit wider
+              // than one cell (a shockwave's Impact Size) bursts on its carrier,
+              // not at the box's top-left corner.
               if (attack.explode) {
-                this.createExplosion(attack.position.x, attack.position.y, attack.explodeRadius || 40, attack.damage, enemies, backgroundObjects, 0, attack.shooterPlane ?? 0);
+                const inset = ((attack.width || GRID.CELL_SIZE) - GRID.CELL_SIZE) / 2;
+                this.createExplosion(attack.position.x + inset, attack.position.y + inset, attack.explodeRadius || 40, attack.damage, enemies, backgroundObjects, 0, attack.shooterPlane ?? 0);
               }
               this.game?.weaponEffectsSystem?.onMeleeHit(attack, enemy, isFrozen);
             }

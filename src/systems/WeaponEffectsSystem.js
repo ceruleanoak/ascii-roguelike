@@ -20,7 +20,7 @@
  *
  * Melee-hit flags (onMeleeHit, injected onto attacks by Item.createMeleeAttack):
  *   shattersFrozen    — hitting a Frozen enemy sprays one freeze pip onto
- *                       every enemy nearby (Glacier Hammer)
+ *                       every enemy nearby (Ice Hammer)
  *   healOnKill        — HP restored to the wielder on a killing blow (Reaper's Scythe)
  *   pullsDisarmedGear — a whip disarm flings the gear toward the wielder
  *                       instead of scattering it (Vine Whip)
@@ -62,7 +62,9 @@ export class WeaponEffectsSystem {
   /**
    * A completed windup whose hits include a `triggerShockwave` hit (hammer-
    * type attacks) starts the player's expanding shockwave ring
-   * (game.playerShockwave, advanced by InteractionSystem).
+   * (game.playerShockwave, advanced by InteractionSystem). The ring deals no
+   * damage — the hit itself already struck its Impact Size — it only shakes
+   * the background and knocks back what it sweeps past.
    */
   startShockwave(windupAttack) {
     const hits = Array.isArray(windupAttack) ? windupAttack : [windupAttack];
@@ -75,6 +77,7 @@ export class WeaponEffectsSystem {
       maxRadius: GRID.CELL_SIZE * 5,
       speed: GRID.CELL_SIZE * 8,
       color: trigger.shockwaveColor || trigger.color,
+      knockback: trigger.shockwaveKnockback ?? 0,
     };
   }
 
