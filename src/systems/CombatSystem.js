@@ -15,7 +15,7 @@ import { queueDamageNumber as queueDamageNumberImpl, ageDamageTextQueue, reportD
 import { applyTargetOverrides as applyTargetOverridesImpl } from './enemyTargeting.js';
 import { updateEnemyMeleeAttack, resolveEnemyAttack, attackHitsBox, retireAfterTest } from '../game/Telegraph.js';
 import { conductElectricity as conductElectricityImpl } from './ElectricConduction.js';
-import { checkProximity as checkProximityImpl, applyAOEStatus as applyAOEStatusImpl, createExplosion as createExplosionImpl } from './ExplosionEffects.js';
+import { checkProximity as checkProximityImpl, applyAOEStatus as applyAOEStatusImpl, createExplosion as createExplosionImpl, detonateBombArrow } from './ExplosionEffects.js';
 import { updateRollDamage as updateRollDamageImpl } from './RollDamageMechanic.js';
 import { acidFloodFillWater } from './AcidWaterSpread.js';
 import { TongueAttackSystem } from './TongueAttackSystem.js';
@@ -249,6 +249,7 @@ export class CombatSystem {
 
           // Arrow has stopped - create stuck arrow on ground
           if (newSpeed < 30) {
+            if (proj.bombBlast) { detonateBombArrow(this.game, proj, enemies); this.projectiles.splice(i, 1); continue; }
             this.stuckArrows.push({
               char: proj.char,
               weaponChar: proj.weaponChar,
@@ -331,6 +332,7 @@ export class CombatSystem {
         if (proj.type === 'bullet' && !proj.loopOmega && WallRicochetMechanic.tryStructureWallRicochet(proj, room, deltaTime, this)) {
           continue;
         }
+        if (proj.bombBlast) { detonateBombArrow(this.game, proj, enemies); this.projectiles.splice(i, 1); continue; }
         // Arrows stick to walls on every layer — interiors included, where
         // _tagCombatHutPlane gives the stuck arrow its hutPlane so the
         // interior pass draws it.
@@ -486,6 +488,7 @@ export class CombatSystem {
 
             bgObjectHit = true;
 
+            if (proj.bombBlast) { detonateBombArrow(this.game, proj, enemies); break; }
             // Create stuck arrow if this is an arrow hitting any background object
             if (proj.type === 'arrow') {
               this.stuckArrows.push({
@@ -727,7 +730,8 @@ export class CombatSystem {
               this.game.lightningStrikeSystem.createChainLightning(proj, enemy, enemies);
             }
 
-            // Explosion effect
+            // Explosion effect (the Explosive Bow's arrow is a Bomb instead)
+            if (proj.bombBlast) detonateBombArrow(this.game, proj, enemies);
             if (proj.explode) {
               this.createExplosion(proj.position.x, proj.position.y, proj.explodeRadius || 30, proj.damage, enemies, backgroundObjects, 0, planeOf(proj));
             }

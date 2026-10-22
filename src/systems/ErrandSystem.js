@@ -22,7 +22,7 @@ const STAGE_CONFIG = [
     // Metal, Teeth, Eye, Fire Essence, Silk, Ice, Slurry, Arrowhead, Axe head,
     // Cloth, Moss (Scale is epic — not a fair ask)
     requestPool: ['M', 't', 'e', 'F', 'k', 'i', '⚗', '△', '⊿', '▤', '❦'],
-    rewardPool:  ['‡', 'ᛉ', '⟩', '⊤', 'X', '⛓', '𐤄', '𐤂'],
+    rewardPool:  ['‡', 'ᛉ', '⇒', '⊤', 'X', '⛓', '𐤄', '𐤂'],
     isIngredient: true
   },
   {
@@ -34,7 +34,7 @@ const STAGE_CONFIG = [
   },
   {
     // Stage 2: mid-tier item for legendary — repeats on subsequent trades
-    requestPool: ['‡', 'ᛉ', '⟩', '⊤', 'X', '⌐', '𐤄', '⛓', '𐤂', '𐤆'],
+    requestPool: ['‡', 'ᛉ', '⇒', '⊤', 'X', '⌐', '𐤄', '⛓', '𐤂', '𐤆'],
     rewardPool:  ['⚔', '⏚', '⚒', 'ᚨ', '⇒', '✦', '♦', '∞', '𐤓', '𐤉', '𐤏', 'ᚲ'],
     isIngredient: false
   }

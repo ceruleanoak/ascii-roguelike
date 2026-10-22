@@ -21,6 +21,7 @@
 
 import { createBurstParticles, createSparkBurst, createExplosionAftermath } from './WorldEffectsSystem.js';
 import { isInteriorActive } from './PlaneSystem.js';
+import { detonateBomb } from './ExplosionEffects.js';
 
 export class ConsumableWindupEffects {
   execute(inv, windup, player, enemies, combatSystem, steamClouds, particles) {
@@ -31,20 +32,12 @@ export class ConsumableWindupEffects {
     // Execute effect based on type
     switch (windup.effectType) {
       case 'explode': {
-        // Bomb explosion
-        const aoeRadius = cd.radius * 2;
-        for (const enemy of enemies) {
-          const dx = (enemy.position.x + 20) - px;
-          const dy = (enemy.position.y + 20) - py;
-          if (Math.sqrt(dx * dx + dy * dy) <= aoeRadius) {
-            enemy.takeDamage(cd.damage);
-          }
-        }
-        // Explosion particles
-        createBurstParticles(inv.game, particles, px, py, 20, windup.consumable.color || '#ff4400');
-        createExplosionAftermath(inv.game, px, py, { shake: 10, shakeDuration: 0.5, smoke: 16, spread: aoeRadius * 0.5 });
-        // A bomb is the only thing that opens a Bombable Rock (Cavern entrance).
-        inv.game.cavernSystem.bombBlast(px, py, aoeRadius);
+        // Bomb explosion. A bomb (or an Explosive Bow arrow — the same
+        // detonateBomb) is what opens a Bombable Rock (Cavern entrance).
+        detonateBomb(inv.game, px, py, {
+          damage: cd.damage, radius: cd.radius * 2, enemies, particles,
+          color: windup.consumable.color
+        });
         // The Bomb Trial hands back each Bomb it costs.
         inv.game.dungeonPuzzleSystem.onBombExploded();
         break;

@@ -81,9 +81,10 @@ export class BowChargeIndicator {
     const barX = game.player.position.x + GRID.CELL_SIZE * 1.5; // To the right of player
     const barY = game.player.position.y; // Aligned with player
 
-    // GUN reload bar: only shown during the dedicated reload phase (post-fire
-    // cooldown runs first), fills bottom-to-top as reload progresses.
-    const isReloading = isGun && weapon._reloading && !!weapon.data.reloadTime;
+    // Reload bar (guns, and a recharging bow — the Explosive Bow): only shown
+    // during the dedicated reload phase (post-fire cooldown runs first),
+    // fills bottom-to-top as reload progresses.
+    const isReloading = (isGun || weaponType === 'BOW') && weapon._reloading && !!weapon.data.reloadTime;
     if (isReloading) {
       const ratio = 1 - Math.max(0, Math.min(1, weapon.cooldownTimer / weapon.data.reloadTime));
       const filledHeight = barHeight * ratio;

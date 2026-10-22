@@ -324,19 +324,6 @@ export const ITEMS = {
   },
 
   // ── BOW — Tier 2 ──────────────────────────────────────────────────────────
-  '⟩': {
-    char: '⟩',
-    tier: 2,
-    name: 'Fire Bow',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.BOW,
-    damage: 3,
-    cooldown: 1.8,
-    maxUses: 5,  // Very limited - one of the best attacks
-    onHit: 'burn',
-    critChance: 0.12,
-    color: '#ff4400'
-  },
   '⇒': {
     char: '⇒',
     tier: 2,
@@ -363,21 +350,27 @@ export const ITEMS = {
     color: '#ff8800'
   },
 
-  // ── BOW — Tier 3 ──────────────────────────────────────────────────────────
-  'ᛇ': {
-    char: 'ᛇ',
-    tier: 3,
-    name: 'Ice Bow',
+  // Chain Bow (Bow + Topaz): the electric zone flavor, capped at tier 2.
+  'ᛚ': {
+    char: 'ᛚ',
+    tier: 2,
+    name: 'Chain Bow',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
     damage: 3,
-    cooldown: 1.8,
-    maxUses: 5,  // Fewer uses for elemental bow
-    onHit: 'freeze',
-    critChance: 0.15,
-    arrowChar: 'ᛇ',
-    color: '#00ddff'
+    cooldown: 2.2,
+    maxUses: 5,  // Limited uses for chain lightning bow
+    chain: true,
+    chainCount: 2,
+    onHit: 'stun',
+    electric: true,
+    electricityCharge: 18,
+    critChance: 0.12,
+    arrowChar: '~',
+    color: '#ffff00'
   },
+
+  // ── BOW — Tier 3 ──────────────────────────────────────────────────────────
   'ᛒ': {
     char: 'ᛒ',
     tier: 3,
@@ -386,9 +379,13 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.BOW,
     damage: 3,
     cooldown: 2.5,
-    maxUses: 3,  // Very limited uses for powerful explosive bow
-    explode: true,
-    explodeRadius: 40,
+    // One arrow, then a 15s recharge (double-seconds: 30). The arrow is a
+    // Bomb — it detonates with the Bomb's own blast wherever it stops
+    // (ExplosionEffects.detonateBombArrow), opening Bombable Rocks too.
+    maxUses: 1,
+    reloadTime: 30,
+    reloadType: 'magazine',
+    bombBlast: true,
     arrowChar: '●',
     color: '#ff4400'
     // no critChance — AoE + 1.5× damage would be too powerful
@@ -413,59 +410,13 @@ export const ITEMS = {
     name: 'Piercing Bow',
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
-    damage: 4,
+    damage: 3,
     cooldown: 1.8,
     maxUses: 5,
     pierce: true,
     critChance: 0.15,  // crit propagates through pierced enemies
     arrowChar: 'ᛏ',
     color: '#00ff00'
-  },
-  'ᛚ': {
-    char: 'ᛚ',
-    tier: 3,
-    name: 'Chain Bow',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.BOW,
-    damage: 4,
-    cooldown: 2.2,
-    maxUses: 5,  // Limited uses for chain lightning bow
-    chain: true,
-    chainCount: 2,
-    onHit: 'stun',
-    electric: true,
-    electricityCharge: 18,
-    critChance: 0.12,
-    arrowChar: '~',
-    color: '#ffff00'
-  },
-  'ᛃ': {
-    char: 'ᛃ',
-    tier: 3,
-    name: 'Split Bow',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.BOW,
-    damage: 4,
-    cooldown: 2.0,
-    maxUses: 5,
-    split: true,
-    splitCount: 3,
-    critChance: 0.12,  // each split arrow rolls independently
-    arrowChar: '→',
-    color: '#00ffff'
-  },
-  'ᛈ': {
-    char: 'ᛈ',
-    tier: 3,
-    name: 'Burst Bow',
-    type: ITEM_TYPES.WEAPON,
-    weaponType: WEAPON_TYPES.BOW,
-    damage: 4,
-    cooldown: 1.8,
-    maxUses: 30,  // 10 trigger pulls × 3 arrows
-    attackPattern: 'burst',
-    critChance: 0.12,
-    color: '#ff8888'
   },
   // Zelda-style boomerang: flies out, returns to player along a straight-line
   // toward their current position (no curve). First enemy hit also chain-damages
@@ -1694,17 +1645,6 @@ export const ITEMS = {
     damage: 1, headDamage: 3, windup: 0.5, recovery: 1.45, patternSpeed: 0.02, range: 40,
     meleeChar: '~',
     color: '#aaaaaa'
-  },
-  // Drowse Boomerang (Boomerang + Pollen): its hit puts the target to sleep.
-  '⤺': {
-    char: '⤺', tier: 2, name: 'Drowse Boomerang',
-    type: ITEM_TYPES.WEAPON, weaponType: WEAPON_TYPES.BOW,
-    damage: 1, cooldown: 1.5, maxUses: 1, critChance: 0.1,
-    boomerang: true, boomerangMinCells: 2, boomerangMaxCells: 8,
-    boomerangHitDefer: 0.18, boomerangMaxRicochets: 3, chainRadius: 32,
-    knockback: 150, wallNudgeDistance: 3,
-    onHit: 'sleep',
-    color: '#ffe566'
   },
   // Chakram (Boomerang + Metal): a metal ring that cuts instead of bonks.
   // Every enemy it bounces to takes its low damage (ricochetDamage), but it
@@ -3578,7 +3518,7 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     []
     },
     weapons: {
-      [RARITY.UNCOMMON]: ['ᛜ', 'ᛇ'],   // Ice Hammer, Ice Bow
+      [RARITY.UNCOMMON]: ['ᛜ'],   // Ice Hammer
       [RARITY.RARE]:     ['⚹']             // Sapphire Staff
     },
     traps: {

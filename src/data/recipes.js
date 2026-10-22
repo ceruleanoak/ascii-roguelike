@@ -138,7 +138,6 @@ export const RECIPES = [
 
   // Advanced weapons
   { left: '†', right: 's', result: 'ᛖ', name: 'Dragon Blade' },  // Sword + Scale = Dragon Blade
-  { left: ')', right: 'F', result: '⟩', name: 'Fire Bow' },      // Bow + Fire = Fire Bow
   { left: 'b', right: 'M', result: '⊤', name: 'Bone Axe' },      // Bone + Metal = Bone Axe
   { left: '⊦', right: 'b', result: '⊤', name: 'Bone Axe' },      // Axe + Bone = Bone Axe (second route — connects the Axe to its tier-2 rung)
   { left: 'j', right: '|', result: '⊤', name: 'Bone Axe' },      // Jaw + Stick = Bone Axe (third route — the jaw is the blade)
@@ -187,7 +186,7 @@ export const RECIPES = [
   { left: '‡', right: 's', result: '⚔', name: 'Legendary Flame Sword' }, // Flame Sword + Scale = Legendary
   { left: '‡', right: 'a', result: 'ᚠ', name: 'Lava Sword' },             // Flame Sword + Ash = Lava Sword
   { left: '†', right: '⚗', result: 'ᛡ', name: 'Venom Blade' },    // Sword + Slurry = Venom Blade (Slurry is the acid/venom route)
-  { left: '⟩', right: 'w', result: '⇒', name: 'Sky Bow' },        // Fire Bow + Wing = Sky Bow
+  { left: ')', right: 'w', result: '⇒', name: 'Sky Bow' },        // Bow + Wing = Sky Bow
   { left: '⊤', right: 'b', result: '⚒', name: 'Bone Crusher' },   // Bone Axe + Bone = Bone Crusher
 
   // New ingredient combinations
@@ -222,15 +221,11 @@ export const RECIPES = [
   { left: 'ᛖ', right: 'F', result: 'ᛠ', name: 'Chaos Blade' },     // Dragon Blade + Fire = Chaos Blade
 
   // === NEW BOW RECIPES (8) ===
-  { left: ')', right: '⬨', result: 'ᛇ', name: 'Ice Bow' },         // Bow + Sapphire = Ice Bow
   { left: ')', right: ')', result: '⋙', name: 'Multi-Shot Bow' },  // Bow + Bow = Multi-Shot Bow
   { left: ')', right: '⊗', result: 'ᛒ', name: 'Explosive Bow' },   // Bow + Bomb = Explosive Bow
-  { left: ')', right: 'w', result: 'ᛟ', name: 'Homing Bow' },      // Bow + Wing = Homing Bow
+  { left: ')', right: 'e', result: 'ᛟ', name: 'Homing Bow' },      // Bow + Eye = Homing Bow
   { left: ')', right: 'M', result: 'ᛏ', name: 'Piercing Bow' },    // Bow + Metal = Piercing Bow
-  { left: '⟩', right: 'F', result: 'ᛚ', name: 'Chain Bow' },       // Fire Bow + Fire = Chain Bow
-  { left: ')', right: 's', result: 'ᛃ', name: 'Split Bow' },       // Bow + Scale = Split Bow
-  { left: '⇒', right: 'F', result: 'ᛈ', name: 'Burst Bow' },       // Sky Bow + Fire = Burst Bow
-  { left: '⇒', right: 'M', result: 'ᛏ', name: 'Piercing Bow' },    // Sky Bow + Metal = Piercing Bow
+  { left: ')', right: '◇', result: 'ᛚ', name: 'Chain Bow' },       // Bow + Topaz = Chain Bow
 
   // === SHIELD RECIPES ===
   { left: 'k', right: 'b', result: 'S', name: 'Shield' },          // Silk + Bone = Shield
@@ -259,7 +254,6 @@ export const RECIPES = [
   { left: '⫯', right: '⧫', result: '⟡', name: 'Diamond Longsword' }, // Longsword + Diamond
   { left: '↾', right: 'i', result: '⍖', name: 'Icicle' },            // Dagger + Ice
   { left: '⊦', right: 'i', result: '⍑', name: 'Ice Axe' },           // Axe + Ice
-  { left: '↩', right: 'ł', result: '⤺', name: 'Drowse Boomerang' },  // Boomerang + Pollen
   { left: '↩', right: 'M', result: '⌾', name: 'Chakram' },           // Boomerang + Metal (damages every bounce, no stun)
   { left: 'Ƨ', right: 'd', result: '⸕', name: "Reaper's Scythe" },   // Scythe + Dust
   // Tier-2 → tier-3

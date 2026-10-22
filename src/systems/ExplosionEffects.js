@@ -1,6 +1,7 @@
 import { GRID } from '../game/GameConfig.js';
+import { ITEMS } from '../data/items.js';
 import { planeOf, objectOnPlane } from './PlaneSystem.js';
-import { createExplosionAftermath } from './WorldEffectsSystem.js';
+import { createExplosionAftermath, createBurstParticles } from './WorldEffectsSystem.js';
 
 // Area-effect combat helpers — extracted from CombatSystem (proximity check,
 // AOE status application, explosion damage/knockback/object destruction).
@@ -45,6 +46,31 @@ export function applyAOEStatus(position, radius, statusType, duration, enemies, 
     }
   }
   return affectedCount;
+}
+
+// A Bomb's blast: flat damage to every enemy in radius, the heavy
+// aftermath, and the Bombable Rock / bombable wall opening. Shared by the
+// thrown Bomb (ConsumableWindupEffects) and the Explosive Bow's arrow
+// (CombatSystem), so the arrow is the same explosion a Bomb is — not the
+// lighter falloff createExplosion below.
+export function detonateBomb(game, x, y, { damage, radius, enemies, particles, color }) {
+  for (const enemy of enemies) {
+    const dx = (enemy.position.x + 20) - x;
+    const dy = (enemy.position.y + 20) - y;
+    if (Math.sqrt(dx * dx + dy * dy) <= radius) enemy.takeDamage(damage);
+  }
+  createBurstParticles(game, particles, x, y, 20, color || '#ff4400');
+  createExplosionAftermath(game, x, y, { shake: 10, shakeDuration: 0.5, smoke: 16, spread: radius * 0.5 });
+  game.cavernSystem.bombBlast(x, y, radius);
+}
+
+// The Explosive Bow's arrow (proj.bombBlast) detonates as a Bomb wherever it
+// stops — enemy, wall, object or ground — with the Bomb's own numbers.
+export function detonateBombArrow(game, proj, enemies) {
+  const bomb = ITEMS['⊗'];
+  detonateBomb(game, proj.position.x, proj.position.y, {
+    damage: bomb.damage, radius: bomb.radius * 2, enemies, particles: game.particles, color: proj.color
+  });
 }
 
 export function createExplosion(combatSystem, x, y, radius, damage, enemies, backgroundObjects = [], damageMin = 0, sourcePlane = 0) {

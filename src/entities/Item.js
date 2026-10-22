@@ -194,9 +194,10 @@ export class Item {
           this.maxUses !== null &&
           this.usesRemaining <= 0 &&
           this.data.reloadTime &&
-          this.data.weaponType === 'GUN'
+          (this.data.weaponType === 'GUN' || this.data.weaponType === 'BOW')
         ) {
-          // Normal post-fire cooldown ended on an empty mag — kick off reload phase
+          // Normal post-fire cooldown ended on an empty mag (or a recharging
+          // bow's quiver) — kick off reload phase
           this._reloading = true;
           this.cooldownTimer = this.data.reloadTime;
           this._reloadTicksPlayed = 0;
@@ -1407,8 +1408,10 @@ export class Item {
     if (this.maxUses !== null && this.usesRemaining > 0) {
       this.usesRemaining = Math.max(0, this.usesRemaining - arrows.length);
 
-      // If depleted, set a long cooldown to prevent further use
-      if (this.usesRemaining <= 0) {
+      // If depleted, set a long cooldown to prevent further use — unless the
+      // bow recharges (reloadTime: the Explosive Bow), whose post-fire
+      // cooldown hands off to the reload phase in update() instead.
+      if (this.usesRemaining <= 0 && !this.data.reloadTime) {
         this.cooldownTimer = 9999; // Effectively infinite until reset
       }
     }
@@ -1459,7 +1462,7 @@ export class Item {
     return {
       type: 'arrow',
       char: isBoomerang ? this.char : arrowChar,
-      weaponChar: this.char,
+      weaponChar: this.data.bombBlast ? null : this.char,  // a Bomb arrow is spent on detonation, never picked back up
       position: {
         x: spawnX,
         y: spawnY
@@ -1482,6 +1485,7 @@ export class Item {
       splitCount: this.data.splitCount || 3,
       explode: this.data.explode,
       explodeRadius: this.data.explodeRadius || 35,
+      bombBlast: this.data.bombBlast,
       chain: this.data.chain,
       chainCount: this.data.chainCount || 2,
       shooterPlane: player.plane,

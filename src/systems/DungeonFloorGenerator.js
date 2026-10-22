@@ -85,7 +85,7 @@ const INTERIOR_ROWS = 24;
 // the north. The Vault uses no template, so the reserved South footprint
 // costs it nothing.
 const VAULT_STAIRS_UP_ROW = 3;
-const TRAP_ROOM_REWARD_POOL = ['‡', '⟘', '↟', '⟩']; // Flame Sword, Maul, Venom Lance, Fire Bow
+const TRAP_ROOM_REWARD_POOL = ['‡', '⟘', '↟', '⇒']; // Flame Sword, Maul, Venom Lance, Sky Bow
 
 // Branch's companion-panel puzzle — position mirrors the pre-rework 5-floor
 // system's SWITCH_ROW/SWITCH_A_COL/SWITCH_B_COL (git-archaeology, bug #209).
