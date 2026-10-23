@@ -83,7 +83,7 @@ export class AlchemistNPC extends NeutralCharacter {
     return line;
   }
 
-  getDialogueLines() {
+  getDialogueLines(game) {
     // 1. Rescue — one-time, delivered wherever he's first spoken to.
     if (!this._rescueDialogueGiven) {
       this._rescueDialogueGiven = true;
@@ -102,8 +102,11 @@ export class AlchemistNPC extends NeutralCharacter {
       ];
     }
 
-    // 3. Hut, carrying Hot Water, after the lesson — unlock the Path.
+    // 3. Hut, carrying Hot Water, after the lesson — unlock the Path. He
+    //    stays in the hut for the rest of the visit the lesson was given in,
+    //    so being here is not proof of the Hot Water: check the inventory.
     if (this.placement === 'hut' && this.lessonGiven && !this.pathUnlocked) {
+      if (!game?.hutSystem?.playerCarriesHotWater()) return ['BRING HOT WATER.'];
       this.pathUnlocked = true;
       return [
         'YOU BROUGHT IT. LET\'S SEE.',

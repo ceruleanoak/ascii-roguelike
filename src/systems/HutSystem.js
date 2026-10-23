@@ -706,10 +706,7 @@ export class HutSystem {
     if (!floor || !alchemist?.rescued) return;
     floor.npcs = floor.npcs ?? [];
 
-    const carryingHotWater =
-      game.player.equippedConsumables?.some(it => it?.char === HOT_WATER_CHAR) ||
-      game.inventorySystem.consumableInventory?.some(it => it?.char === HOT_WATER_CHAR);
-    const shouldBePresent = !alchemist.lessonGiven || carryingHotWater;
+    const shouldBePresent = !alchemist.lessonGiven || this.playerCarriesHotWater();
 
     const idx = floor.npcs.indexOf(alchemist);
     if (shouldBePresent && idx === -1) {
@@ -723,6 +720,19 @@ export class HutSystem {
       floor.npcs.splice(idx, 1);
       if (alchemist.placement === 'hut') alchemist.placement = null;
     }
+  }
+
+  /**
+   * Whether the player holds a Bottle of Hot Water right now — equipped or in
+   * the consumable inventory. Gates the Alchemist's hut presence above and his
+   * "you brought it" line (AlchemistNPC.getDialogueLines), which is spoken
+   * after the presence check and must not take it on trust.
+   */
+  playerCarriesHotWater() {
+    const { game } = this;
+    return !!(
+      game.player.equippedConsumables?.some(it => it?.char === HOT_WATER_CHAR) ||
+      game.inventorySystem.consumableInventory?.some(it => it?.char === HOT_WATER_CHAR));
   }
 
   _exitHut() {
