@@ -103,6 +103,8 @@ export class EquipmentEffectsSystem {
     player.fireBerryLit = false;
     player.bootsSprintMult = 1;
     player.elementReduction = { burn: 0, freeze: 0, poison: 0, electric: 0 };
+    player.poisonResist = 0;
+    player.slimeResist = 0;
     let critBonus = 0;
     inventorySystem.equippedConsumables.forEach((slot, idx) => {
       const cd = slot?.data;
@@ -121,6 +123,10 @@ export class EquipmentEffectsSystem {
           player.elementReduction[element] += amount;
         }
       }
+      // Emerald Necklace: shorter poison, gentler goo. Two don't stack past
+      // the stronger one, so a pair can't zero either effect out.
+      if (cd.poisonResist) player.poisonResist = Math.max(player.poisonResist, cd.poisonResist);
+      if (cd.slimeResist) player.slimeResist = Math.max(player.slimeResist, cd.slimeResist);
       // Boots: part of the unarmed sprint speed (and its footstep trail)
       // while armed — routed through Player.getSprintMultiplier().
       if (cd.passiveSprint) player.bootsSprintMult = Math.max(player.bootsSprintMult, cd.passiveSprint);

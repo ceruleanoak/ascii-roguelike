@@ -2268,6 +2268,9 @@ export const ITEMS = {
   // passive affinity: each shaves a flat 1 off every hit of its element
   // (PlayerDamageSystem, after defense; the 1-damage floor still holds).
   // Same gem→element pairing as TREASURE_OFFERINGS / the gem whips and robes.
+  // The Emerald is the exception: poison ticks are 1 damage, so a flat cut
+  // could never land under the floor. It shortens poison instead, and eases
+  // the goo slow (EquipmentEffectsSystem → StatusEffectSystem).
   'ᑌ': {
     char: 'ᑌ', name: 'Ruby Necklace', type: ITEM_TYPES.CONSUMABLE,
     passive: true, elementReduction: { burn: 1 }, color: '#ff2244'
@@ -2282,7 +2285,7 @@ export const ITEMS = {
   },
   'ᑙ': {
     char: 'ᑙ', name: 'Emerald Necklace', type: ITEM_TYPES.CONSUMABLE,
-    passive: true, elementReduction: { poison: 1 }, color: '#00cc44'
+    passive: true, poisonResist: 0.5, slimeResist: 0.5, color: '#00cc44'
   },
 
   // ── Movement ──────────────────────────────────────────────────────────────

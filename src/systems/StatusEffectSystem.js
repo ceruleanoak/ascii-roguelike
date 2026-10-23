@@ -110,6 +110,7 @@ export const StatusEffectSystem = {
    */
   applyPlayerStatusEffect(player, effect, duration = 3.0, pips = null) {
     const wasLocked = this.isPlayerLocked(player);
+    if (effect === 'poison' && player.poisonResist > 0) duration *= 1 - player.poisonResist;
     const slot = applyStatusEffect(player, effect, duration, pips);
     if (!slot) return;
     const locks = effect === 'stun'
@@ -144,7 +145,7 @@ export const StatusEffectSystem = {
     if (this.isPlayerLocked(player)) return 0;
     const fx = player.statusEffects;
     let m = 1;
-    if (fx.goo.active) m = GOO_PIP_SPEED[fx.goo.stacks];
+    if (fx.goo.active) m = 1 - (1 - GOO_PIP_SPEED[fx.goo.stacks]) * (1 - player.slimeResist);
     else if (fx.freeze.active) m = this.freezeSpeedMultiplier(player);
     else if (fx.slimeBoost.active) m = fx.slimeBoost.speedMult;
     else if (fx.dizzy.active) m = 0.35;
