@@ -2,6 +2,7 @@ import { GRID, PHYSICS } from '../game/GameConfig.js';
 import { BackgroundObject } from '../entities/BackgroundObject.js';
 import { Enemy } from '../entities/Enemy.js';
 import { Item } from '../entities/Item.js';
+import { Ingredient } from '../entities/Ingredient.js';
 import { getZoneRandomEnemy } from '../data/enemies.js';
 import { applyZoneCombatModifiers } from '../data/zones.js';
 import { WiseFellow } from '../entities/WiseFellow.js';
@@ -14,6 +15,14 @@ import { WizardNPC } from '../entities/WizardNPC.js';
 import { isInteriorActive } from './PlaneSystem.js';
 import { HOT_WATER_CHAR } from '../data/alchemy.js';
 import { hasKeyItem } from './keyItems.js';
+
+// A bundle of Sticks — three laid side by side on the floor — turns up in
+// most huts, so a run that needs firewood or a handle knows where to look.
+const STICK_CHAR = '|';
+const STICK_BUNDLE_SIZE = 3;
+const STICK_BUNDLE_CHANCE = 0.6;
+// A paid shop doesn't leave goods on its floor; the shed is the Frog Coin's.
+const NO_STICK_BUNDLE_KINDS = new Set(['shopkeeper', 'shed']);
 
 /**
  * HutSystem — manages hut interior entry/exit and interior state.
@@ -377,6 +386,23 @@ export class HutSystem {
       }
     }
 
+    // Stick bundle: a row of three Sticks, kept clear of everything placed
+    // above. Seeded like the bread (floor.ingredients, handed to
+    // game.ingredients by InteriorManager.enterFloor).
+    const floorIngredients = [];
+    if (!NO_STICK_BUNDLE_KINDS.has(hutKind) && Math.random() < STICK_BUNDLE_CHANCE) {
+      for (let attempt = 0; attempt < 16; attempt++) {
+        const col = 2 + Math.floor(Math.random() * (cols - 4 - (STICK_BUNDLE_SIZE - 1)));
+        const row = 2 + Math.floor(Math.random() * (rows - 5));
+        const cells = Array.from({ length: STICK_BUNDLE_SIZE }, (_, i) => col + i);
+        if (cells.some(c => cellOccupied(c, row, breadItems))) continue;
+        for (const c of cells) {
+          floorIngredients.push(new Ingredient(STICK_CHAR, c * GRID.CELL_SIZE, row * GRID.CELL_SIZE));
+        }
+        break;
+      }
+    }
+
     // Interior exit door at south-center border. The door cell stays solid so
     // neither the player nor enemies can walk through the wall — leaving the hut
     // is SPACE-only, and `nearInteriorExit()` uses a 2-cell proximity radius
@@ -413,6 +439,7 @@ export class HutSystem {
       enemies,
       npcs,
       items: breadItems,
+      ingredients: floorIngredients,
       doors: [{ col: exitCol, row: exitRow, leadsTo: null }],
       hutKind,
       spawnPoint,
@@ -674,7 +701,7 @@ export class HutSystem {
       hut.interiorGenerated = true;
     }
 
-    this._seededFloorItems = new Set(floor.items ?? []);
+    this._seededFloorItems = new Set([...(floor.items ?? []), ...(floor.ingredients ?? [])]);
     game.interiorManager.enterFloor('hut', floor, floor.spawnPoint);
 
     // A cached floor can still hold the friendly traveler from before a
@@ -763,6 +790,11 @@ export class HutSystem {
       if (this._seededFloorItems.has(item) && Array.isArray(floor?.items)) floor.items.push(item);
       else outside.push(item);
     }
+    const outsideIngredients = [];
+    for (const ingredient of floorIngredients) {
+      if (this._seededFloorItems.has(ingredient) && Array.isArray(floor?.ingredients)) floor.ingredients.push(ingredient);
+      else outsideIngredients.push(ingredient);
+    }
     this._seededFloorItems.clear();
     if (!exitPosition) return;
 
@@ -780,7 +812,7 @@ export class HutSystem {
       scatter(item);
       game.items.push(item);
     }
-    for (const ingredient of floorIngredients) {
+    for (const ingredient of outsideIngredients) {
       scatter(ingredient);
       ingredient.pickupCooldown = 0.75;
       game.ingredients.push(ingredient);

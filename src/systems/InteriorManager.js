@@ -162,6 +162,15 @@ export class InteriorManager {
       }
       floor.items = [];
     }
+    // Pre-seeded floor ingredients (a hut's Stick bundle), handed over the same way.
+    if (floor.ingredients?.length) {
+      for (const ing of floor.ingredients) {
+        ing.hutPlane = true;
+        g.ingredients.push(ing);
+        g.physicsSystem.addEntity(ing);
+      }
+      floor.ingredients = [];
+    }
 
     p.setCollisionMap(floor.collisionMap);
     p.position.x = spawn.x;
