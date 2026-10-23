@@ -146,9 +146,15 @@ export class ThreeRoomSystem {
    * finished zone (often forced gray), and the pre-boss gate's forced north
    * into the boss room would otherwise line it up as the third. Leaving the
    * boss room breaks the streak.
+   *
+   * The forced 'B' gate in front of a boss or miniboss is the same promise
+   * from the other side: its north is the boss, and the gate lifted any
+   * Barricade across that lane (BarricadeSystem.liftForGate). Answering it
+   * with the source room would skip the boss and reach the Three unguarded,
+   * so leaving through the gate breaks the streak too.
    */
   recordNorthTraversal(game) {
-    if (game?.currentRoom?.isZoneBossRoom) {
+    if (game?.currentRoom?.isZoneBossRoom || game?.preBossGateActive || game?.preMinibossGateActive) {
       this.breakStreak();
       return false;
     }
