@@ -1200,12 +1200,14 @@ export class CombatSystem {
                 attack.owner.hp = Math.min(attack.owner.hp + attack.damage * attack.lifesteal, attack.owner.maxHp);
               }
 
-              // Dagger: a confirmed hit immediately refreshes both the attack
-              // cooldown and the dodge-roll cooldown, rewarding aggressive stab-roll chaining.
-              if (attack.weaponSubtype === 'dagger' && attack.owner) {
-                const activeWeapon = attack.owner.quickSlots?.[attack.owner.activeSlotIndex];
-                if (activeWeapon) activeWeapon.cooldownTimer = 0;
-                if (attack.owner.dodgeRoll) attack.owner.dodgeRoll.cooldownTimer = 0;
+              // Dagger: a confirmed hit refreshes the dodge-roll cooldown, and
+              // the roll's end fires the next stab (triggerDaggerRollAttack) —
+              // the chain is stab → roll → stab. The hit used to zero the stab
+              // cooldown too, which let stab → stab repeat every windup and,
+              // inside the post-roll guaranteed-crit window, stack 2× crits
+              // with no recovery at all.
+              if (attack.weaponSubtype === 'dagger' && attack.owner?.dodgeRoll) {
+                attack.owner.dodgeRoll.cooldownTimer = 0;
               }
 
               // Chain lightning effect
