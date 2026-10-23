@@ -118,7 +118,7 @@ export const ITEMS = {
     weaponType: WEAPON_TYPES.GUN,
     damage: 1,
     cooldown: 2,
-    windup: .5,
+    windup: .2,
     bulletSpeed: 400,
     bulletSize: 0.6,
     bulletRange: 240,
@@ -2090,7 +2090,11 @@ export const ITEMS = {
     char: '🜄', name: 'Base Potion', type: ITEM_TYPES.CONSUMABLE,
     effect: 'heal', amount: 1, oneShot: true,
     autoTriggerHP: 0.12, color: '#3355ff',
-    leavesBottle: true
+    leavesBottle: true,
+    // Share of enemy drops rolled as this item that actually drop it; the rest
+    // become an ingredient instead (generateEnemyDrops). It sits in the common
+    // consumable pool of most affinities and was offered too often.
+    dropKeep: 0.7
   },
   'H': {
     char: 'H',
@@ -3769,7 +3773,11 @@ export function generateEnemyDrops(affinities, tier = 'normal', dropCount = null
     else if (categoryRoll < 0.97) category = 'armor';
     else                          category = 'traps';
 
-    const drop = getWeightedRandomFromPool(mergedTable[category] ?? {}, profile);
+    let drop = getWeightedRandomFromPool(mergedTable[category] ?? {}, profile);
+    // data.dropKeep thins an over-offered item without emptying its pools.
+    if (drop && Math.random() >= (ITEMS[drop]?.dropKeep ?? 1)) {
+      drop = getWeightedRandomFromPool(mergedTable.ingredients ?? {}, profile);
+    }
     if (drop) drops.push(drop);
   }
 
