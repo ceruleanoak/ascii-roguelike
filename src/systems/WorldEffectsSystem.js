@@ -13,6 +13,10 @@ const IDLE_ECHO_DURATION = 0.5; // seconds — must match the radius/alpha envel
 // carrying the killing blow's momentum) is slowed to it, never sped up to it.
 const GOO_BLOB_PUSH_FORCE = 50;   // px/s added per swing
 const GOO_BLOB_MAX_SPEED = 300;   // px/s — 480px room, so ~1.6s corner to corner
+// Wet footprints (data.wetFootprints): one print per interval, each lasting
+// long enough to read a path from — longer than a sprint footstep's 0.55s.
+const WET_FOOTPRINT_INTERVAL = 0.14;
+const WET_FOOTPRINT_LIFETIME = 1.6;
 
 // Rapidly interpolate `entity._concealmentAlpha` toward 1 (visible) or 0
 // (hidden). Smooths the transition when a player or enemy steps in or out
@@ -229,6 +233,9 @@ export function createSparkBurst(game, particles, x, y) {
 export class WorldEffectsSystem {
   constructor(game) {
     this.game = game;
+    // Per-enemy wet footprint timer + alternating foot, for enemies whose data
+    // sets `wetFootprints` (updateEntityTrails). Kept here, not on the enemy.
+    this._wetFootprints = new WeakMap();
   }
 
   update(deltaTime) {
@@ -473,6 +480,7 @@ export class WorldEffectsSystem {
       if (game._activeEnemies().length) {
         for (const enemy of game._activeEnemies()) {
           if (enemy.data?.affinities?.includes('goo')) continue; // goo-affinity enemies are immune to goo
+          if (gooBlob.owner === enemy) continue; // never slimes the enemy that dropped it
           if ((gooBlob.plane ?? 0) === (enemy.plane ?? 0) && gooBlob.isNearEntity(enemy)) {
             enemy.applyStatusEffect('goo', 5.0, 1); // per-frame contact: holds pip 1
           }
@@ -670,6 +678,13 @@ export class WorldEffectsSystem {
       this._emitDripTrail(entity, 'goo', 'gooDropTimer', statusEffectColor('goo'), deltaTime);
     }
 
+    // Wet footprints: an enemy with `data.wetFootprints` (the Sniper) leaves
+    // a line of wet prints while it walks wet — the one trail that gives away
+    // where it went while it can't be seen.
+    for (const enemy of enemies) {
+      if (enemy.data?.wetFootprints) this._emitWetFootprints(enemy, deltaTime);
+    }
+
     // Steam trail: player
     {
       let playerInSteam = false;
@@ -709,6 +724,27 @@ export class WorldEffectsSystem {
         enemy.steamTrailTimer = 0;
       }
     }
+  }
+
+  _emitWetFootprints(enemy, deltaTime) {
+    const speed = Math.hypot(enemy.velocity.vx, enemy.velocity.vy);
+    if (!enemy.statusEffects?.wet?.active || speed < 20) {
+      this._wetFootprints.delete(enemy);
+      return;
+    }
+    const prints = this._wetFootprints.get(enemy) ?? { timer: 0, side: 0 };
+    this._wetFootprints.set(enemy, prints);
+    prints.timer -= deltaTime;
+    if (prints.timer > 0) return;
+    // Offset each print to one side of the walking direction, alternating.
+    const nx = enemy.velocity.vx / speed, ny = enemy.velocity.vy / speed;
+    const side = prints.side === 0 ? 0.5 : -0.5;
+    const ox = -ny * GRID.CELL_SIZE * 0.3 * side;
+    const oy =  nx * GRID.CELL_SIZE * 0.3 * side;
+    this.game.particles.push(tagInteriorPlane(this.game,
+      createFootstep(enemy.position.x + ox, enemy.position.y + oy, WET_DROP_COLOR, WET_FOOTPRINT_LIFETIME)));
+    prints.side = 1 - prints.side;
+    prints.timer = WET_FOOTPRINT_INTERVAL;
   }
 
   // Drip trail for a soaking status (wet, goo) on the player or an enemy: one

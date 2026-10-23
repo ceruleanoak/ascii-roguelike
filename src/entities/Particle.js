@@ -243,9 +243,9 @@ export function createChaff(x, y, count = 4) {
 // Factory function to create a sprint footstep dot particle
 // Emitted alternating left/right of the player's path while sprinting unarmed.
 // x, y: pixel-space center of where the foot landed
-export function createFootstep(x, y) {
+export function createFootstep(x, y, color = '#666666', lifetime = 0.55) {
   // Stationary dot that fades out quickly
-  const p = new Particle(x, y, '.', '#666666', { vx: 0, vy: 0 }, 0.55);
+  const p = new Particle(x, y, '.', color, { vx: 0, vy: 0 }, lifetime);
   p.decelerationRate = 1.0;
   p.boundToGrid = false;
   return p;

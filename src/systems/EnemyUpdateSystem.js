@@ -395,6 +395,7 @@ export class EnemyUpdateSystem {
       const g = updateResult.sniperGooDrop;
       const blob = new GooBlob(g.x, g.y, performance.now(), true);
       blob.plane = g.plane ?? 0;
+      blob.owner = enemy;
       tagInteriorPlane(game, blob);
       game.gooBlobs.push(blob);
       while (game.gooBlobs.length > MAX_GOO_BLOBS) game.gooBlobs.shift();

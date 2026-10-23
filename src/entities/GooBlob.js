@@ -34,6 +34,10 @@ export class GooBlob {
     // (0.08-0.15s), so without this the shove re-applied on every one of them —
     // the equivalent of the `attack.hasHit` guard enemies already get.
     this.lastPushAttack = null;
+
+    // The enemy that dropped this blob (the Sniper's phase-2 goo), which its
+    // contact never slimes — it lands at the dropper's own feet.
+    this.owner = null;
   }
 
   update(deltaTime) {

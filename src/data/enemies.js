@@ -2539,6 +2539,7 @@ export const ENEMIES = {
     decisionInterval: 0.9,
     color: '#44ffff',
     idleBehavior: 'stationary',
+    wetFootprints: true,               // walking wet leaves prints (WorldEffectsSystem) — tracks it while hidden
     sniperMechanic: {
       enabled: true,
       nearRange: GRID.CELL_SIZE * 5,
