@@ -1307,7 +1307,8 @@ export const BACKGROUND_OBJECT_VARIANTS = {
     }
   },
   // Barricade Target — the cyan plug. A bullseye per block that answers to a
-  // gun's bullet or a bow's arrow and nothing else: BackgroundObject's
+  // gun's bullet, a bow's arrow or a thrown dagger (TrapSystem's
+  // _checkThrownDaggerTargetHit) and nothing else: BackgroundObject's
   // `shotOnly` gate turns every other damage path away (swings, bombs, rolls,
   // boulders), and handleBulletCollision bounces any other projectile — a staff
   // missile, a thrown bolt, a boomerang, an enemy's shot. One shot per block.

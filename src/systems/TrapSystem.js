@@ -501,6 +501,7 @@ export class TrapSystem {
       if (t.kind === 'weapon' && speed > 0 && !t.harmless) {
         this._checkThrownWeaponHit(t, speed);
         this._checkThrownWeaponSignalHit(t);
+        this._checkThrownDaggerTargetHit(t);
         if (t.landed) {
           this._landThrownWeapon(t);
           game.inFlightTraps.splice(i, 1);
@@ -684,6 +685,30 @@ export class TrapSystem {
       break;
     }
     t._lastSignal = overlapping;
+  }
+
+  /**
+   * A thrown dagger counts as a shot against a Barricade Target. The Target's
+   * `shotOnly` gate turns away everything but a gun's bullet or a bow's arrow,
+   * and since Targets are solid, _spearHitsWall would otherwise stop the
+   * dagger dead at the block. Here a flying dagger breaks the block it
+   * reaches (passing `shot` the way handleBulletCollision does) and drops
+   * where it struck: one dagger, one block.
+   */
+  _checkThrownDaggerTargetHit(t) {
+    if (t.landed || t.weaponItem?.data?.weaponSubtype !== 'dagger') return;
+    const game = this.game;
+    const source = (t.interior === true && game.activeFloor) ? game.activeFloor : game.currentRoom;
+    const objs = source?.backgroundObjects;
+    if (!objs) return;
+    for (const obj of objs) {
+      if (obj.destroyed || !obj.data?.shotOnly) continue;
+      const box = obj.getHitbox();
+      if (t.x < box.x || t.x >= box.x + box.width || t.y < box.y || t.y >= box.y + box.height) continue;
+      obj.takeDamage(1, false, { shot: true });
+      t.landed = true;
+      return;
+    }
   }
 
   // Reflect a thrown weapon off a struck switch. The switch is treated as a
