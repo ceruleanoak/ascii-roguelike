@@ -17,7 +17,8 @@
 // fallback (see AudioSystem.switchRestMusic / enterRestState in main.js).
 const REST_MUSIC_PATHS = {
   green: 'assets/audio/rest-green.mp3',
-  cyan: 'assets/audio/rest-cyan.mp3'
+  cyan: 'assets/audio/rest-cyan.mp3',
+  yellow: 'assets/audio/rest-yellow.mp3'
 };
 
 // Zones whose EXPLORE music is a sequence of whole tracks rather than a
