@@ -15,6 +15,7 @@ import { PLANE_TUNNEL } from './PlaneSystem.js';
 import { hazardStep } from './ZoneSystem.js';
 import { createLightningSpire } from './LightningSpire.js';
 import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
+import { findSafeSpawnPosition } from './safeSpawn.js';
 
 // Room-generation feature helpers extracted from RoomGenerator (arch budget).
 // Each takes the generator instance (`gen`) for its placement utilities.
@@ -1989,11 +1990,23 @@ export function offerL1Weapon(gen, room) {
   const itemChar = unarmed
     ? pool[Math.floor(Math.random() * pool.length)]
     : pickUnspawnedItem(gen.game, pool);
-  const pos = gen.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos);
+  const pos = gen.getRandomPosition(room.collisionMap, room.enemies, room.playerStartPos)
+    ?? (unarmed ? findSafeSpawnPosition(room) : null);
   if (pos) {
     room.items.push(new Item(itemChar, pos.x, pos.y));
     if (!unarmed) markItemSpawned(gen.game, itemChar);
   }
+}
+
+// The unarmed safety net for every room type, not only the combat and boss
+// rooms that call offerL1Weapon themselves. A weaponless character (Gold Hero)
+// whose first rooms are a Discovery Room, a hut, a well or a settlement
+// would otherwise walk on with nothing to swing. Skips a room that
+// already holds a weapon pickup (the Camp's, the L1 offer's, a Discovery roll).
+export function offerWeaponIfUnarmed(gen, room) {
+  if (!playerIsUnarmed(gen)) return;
+  if (room.items?.some(item => item?.data?.type === ITEM_TYPES.WEAPON)) return;
+  offerL1Weapon(gen, room);
 }
 
 // Centipede arena is a long horizontal gauntlet that rewards a ranged option —
