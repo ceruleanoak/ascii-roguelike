@@ -1321,12 +1321,32 @@ identity, not standard programming terms.
 - **Not:** an Enemy; not an NPC (Companions don't initiate dialogue).
 
 ### Spell
-- **Definition:** A magical effect cast by the player through word input. Spells are discovered
-  through gameplay and can be cancelled mid-cast.
-- **In code:** `SPELLS` registry in `src/data/spells.js`; cast via `SpellSystem` which reads
-  the player's typed word input. Known spells tracked in `game.knownSpells` Set. Entry/effect
-  logic defined per spell in the registry.
-- **Not:** a Crafted item; never equipped. A transient magical action, not an inventory object.
+- **Definition:** A word the player types and confirms with SPACE (or Shift/Enter) that the
+  THREE answers or acts on. Adventure-style verbs are compound words with no spaces (GOWEST,
+  LOOKHERE), at most 9 letters; when one typed word ends in several Spells, the longest wins.
+  A Spell either answers in the THREE's voice, acts silently, or refuses with a terse line.
+  Some are discovered through gameplay (`knownSpells`); most are always available. Release
+  scope and grammar (including glyph targets such as LOOKR): `claudedocs/spell-catalogue.md`.
+- **In code:** `SPELLS` registry in `src/data/spells.js` (`response` string/fn/`null` for a
+  silent cast, optional `action`, `followUps`, `followUpsActive`); matched by `SpellSystem`
+  against `game.keyBuffer`, scanning suffixes longest-first. Learned Spells tracked in the
+  `game.knownSpells` Set. Each Spell routes to the system that owns the action (e.g. GO/HEAD →
+  `BeelineSystem`).
+- **Not:** a Crafted item; never equipped. Not a "command" — that word belongs to
+  `CommandSystem` (the CALL/COMMAND true-name charm). Not gem-wand magic (`MagicSystem`).
+
+### Beeline
+- **Definition:** An invulnerable rapid run, leaving a trail, from where the player stands to an
+  open exit, cast by GO/HEAD <direction> and by ESCAPE/FLEE. It routes around walls but phases
+  through Background Objects, and ends in the exit lane so the normal exit warp takes over.
+  Refused when the exit is shut or a Barricade still stands across that exit's lane, solid or
+  passive (lava). ESCAPE/FLEE first drops every weapon at the player's feet, which opens the
+  way back to REST, then Beelines south.
+- **In code:** `src/systems/BeelineSystem.js` — `cast(direction)`, `escape()`, `isActive()`
+  (drives the dodge trail in main.js), `reset()` (Reset Registry, room scope). Exit openness
+  via `ExitSystem.isExitOpen`; Barricade check via `BarricadeSystem.standsAcross`; the drop via
+  `TrapSystem.dropLoadout`; the run is an `AnimationSystem` sequence (`_animLock` = no damage).
+- **Not:** a dodge roll (player-steered, brief, no pathing); not a "dash" or "auto-run".
 
 ### Consumable
 - **Definition:** A single-use Crafted item that can be equipped in a consumable slot or used

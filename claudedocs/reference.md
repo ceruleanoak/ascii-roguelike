@@ -111,7 +111,7 @@ src/
 | Recipes | `src/data/recipes.js` → `RECIPES` | — |
 | Background Objects | `src/game/GameConfig.js` → `BACKGROUND_OBJECTS` | ~109 |
 | Spells | `src/data/spells.js` → `SPELLS` | 1 |
-| Known-spell UI | `ExploreRenderer._renderKnownSpellHints` | — |
+| Known-spell UI | `ContextHints.drawKnownSpellHints` (Frame Pass `knownSpellHints`) | — |
 | Combat Logic | `src/systems/CombatSystem.js` | — |
 | Level Gen | `src/systems/RoomGenerator.js` | — |
 | Physics | `src/systems/PhysicsSystem.js` | — |
@@ -389,20 +389,21 @@ Spells are words typed into the keystroke buffer, confirmed with SPACE. Two inde
 }
 ```
 
-Spell detection scans buffer tail shortest-first — "FIND" fires before "FINDE".
+Spell detection scans the buffer's suffixes **longest-first** — "GOWEST" fires GOWEST, not WEST. Junk typed before a word never blocks it ("XFIND" fires FIND); letters typed after it do ("FINDE" fires nothing). A `response` of `null` is a silent cast. Release grammar and the build queue: `claudedocs/spell-catalogue.md`.
 
 **`game.knownSpells`** (`Set<string>`): Tracks discovered spells this run. Resets on death.
 - Guard learnable spells: `game.knownSpells?.has('WORD')` → return `'UNKNOWN SPELL.'` and no-op.
 - Teach a spell: `game.knownSpells.add('YOUR_WORD')` at the discovery moment.
-- Hint UI (`ExploreRenderer._renderKnownSpellHints`) picks up new spells automatically.
+- Hint UI (`ContextHints.drawKnownSpellHints`) picks up new spells automatically.
 
 **Always-available spells** (no guard needed):
-`LOOK`, `FIND`, `HERE`, `ZONE`, `NORTH`, `EAST`, `WEST`, `WEAPON`, `ARMOR`, `CLEANSE`, `HEAL`, `UNCURSE`, `REVIVE`, `CONTINUE`, `BRIDGE`
+`LOOK`, `LOOKHERE`/`HERE`, `LOOKZONE`/`ZONE`, `LOOKCOLOR`/`COLOR`, `LOOKNORTH`/`LOOKEAST`/`LOOKWEST` (+ bare `NORTH`/`EAST`/`WEST`), `LOOKWEAPON`/`WEAPON`, `LOOKARMOR`/`ARMOR`, `LOOKENEMY`, `FIND`, `AREYOU`, `CLEANSE`, `HEAL`, `UNCURSE`, `REVIVE`, `CONTINUE`, `BRIDGE`, `SIT`/`SITDOWN`, `CALL`/`COMMAND`, `GO`/`HEAD` + `NORTH`/`EAST`/`WEST`/`SOUTH` (Beeline, `BeelineSystem.cast`), `ESCAPE`/`FLEE` (drop every weapon + Beeline to REST, `BeelineSystem.escape`), `CHEAT`, `EXIT`. Three Room layer (`HEREISONE`…`TISTHREE`) is hidden canon — out of scope for the catalogue.
 
 **Learnable spells:**
 
 | Word | Learned when | Effect |
 |------|-------------|--------|
+| `HEX` | Hex Witch dies (`learnSpellOnDeath`) | Nearest enemy: brief stun + 5s inverted movement (`_hexed`) |
 | `FROG` | Rusalka cures polymorph | Toggles voluntary frog form |
 
 ### Layer 2 — MagicSystem (gem wands + mana meter)
