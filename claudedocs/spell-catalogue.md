@@ -47,7 +47,7 @@ Refusal lines are drafts to tune:
 
 | Word(s) | Effect | Owner | Gate | Status |
 |---|---|---|---|---|
-| FIGHT | Auto-combat against the nearest enemy until the next keypress. The player is driven: `steerToward` headings become held WASD on the normal movement path; in range the player faces the target and attacks through `CombatSystem.tryUseHeldWeapon`, or the Punch when unarmed. Charged weapons release when full. Re-targets as enemies fall. Damage still lands. Refusals: `NO ONE.` (no enemy), `...NOTHING.` (not EXPLORE / already moving). | `FightSystem` | EXPLORE, an enemy on the player's plane | shipped |
+| FIGHT | Auto-combat against the nearest enemy until none are left or the next keypress. The player is driven: `steerToward` headings become held WASD on the normal movement path; in range the player faces the target and attacks through `CombatSystem.tryUseHeldWeapon`, or the Punch when unarmed. Charged weapons release when full. Re-targets as enemies fall. Damage still lands. Refusals: `NO ONE.` (no enemy), `...NOTHING.` (not EXPLORE / already moving). | `FightSystem` | EXPLORE, an enemy on the player's plane | shipped |
 | FIGHT<glyph> / ATTACK<glyph> | Auto-combat against that enemy. The player is driven by the companion AI: steered with `steerToward` and attacking through `CombatSystem.tryUseHeldWeapon`, as the `CompanionSystem` / `CommandSystem` charm loop does. | new mechanic over `npcSteering` + `CombatSystem` | Target enemy visible, weapon held | open (bare FIGHT shipped) |
 | CRAFT | Craft one random Recipe from what is on hand (pile, coins, meter Mana, carried items; the Item Chest in REST only). The pair is spent and claimed as at the REST station, and recorded in its pair memory. Forge Recipes never; golem Recipes skipped at the cap. Silent on success (the pickup box answers); `...NOTHING.` when nothing is craftable or outside REST/EXPLORE. | `CraftSpellSystem` | REST or EXPLORE | shipped |
 | TALK<glyph> | Open dialogue with that NPC from anywhere in the room | `DialogueSystem` | NPC in room | queued |
@@ -55,7 +55,7 @@ Refusal lines are drafts to tune:
 | FISH | Cast at the nearest fishable water | `FishingSystem` | Rod held, water in room | queued |
 | PUSH | Push the adjacent Push Rock | `PushRock` | Push Rock adjacent | queued |
 
-**FIGHT answers (bare FIGHT, shipped 2026-10-25):** damage still lands on the player; any keypress ends it (the casting SPACE doesn't); it re-targets when the target dies and idles once none are left. Open for FIGHT<glyph>: whether a named target ends the fight on its death.
+**FIGHT answers (bare FIGHT, shipped 2026-10-25):** damage still lands on the player; any keypress ends it (the casting SPACE doesn't); it re-targets when the target dies and ends once none are left. Open for FIGHT<glyph>: whether a named target ends the fight on its death.
 
 ## Meta / narrator
 

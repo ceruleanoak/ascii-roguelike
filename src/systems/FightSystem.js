@@ -56,7 +56,7 @@ const FRAME = 1 / 60;
  * to shooting range while the weapon reloads.
  *
  * Damage still lands on the player; the fight is not a Beeline. It re-targets
- * as enemies fall and idles while none are left, until any key is pressed.
+ * as enemies fall and ends when none are left, or when any key is pressed.
  */
 export class FightSystem {
   constructor(game) {
@@ -222,8 +222,11 @@ export class FightSystem {
       return;
     }
 
+    // No one left: the fight is over. Ending here also drops a reposition
+    // begun by the shot that felled the last enemy; left standing, its roll
+    // direction kept driving the dodge roll every frame.
     const target = this._nearestEnemy();
-    if (!target) return;
+    if (!target) { this.reset(); return; }
     if (this._repositioning(target)) return;
 
     const p = entityCenter(player);

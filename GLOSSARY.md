@@ -1381,8 +1381,8 @@ identity, not standard programming terms.
 ### Fight
 - **Definition:** The auto-combat cast by the FIGHT Spell: the player is driven toward the
   nearest fightable enemy (alive, revealed, not aloft, not charmed, same plane) and attacks it
-  with whatever is held (the Punch when nothing is), re-targeting as enemies fall, until the
-  player's next keypress. A gun or bow shoots from range and moves between shots: a dodge roll
+  with whatever is held (the Punch when nothing is), re-targeting as enemies fall, until none
+  are left or the player's next keypress. A gun or bow shoots from range and moves between shots: a dodge roll
   across the line of fire when the target is within 3 cells, a sidestep otherwise, and a
   back-away to shooting range while the weapon reloads. When the player stops making progress
   (beside a one-cell gap) it is eased onto the cell grid. Damage still lands. EXPLORE only.
