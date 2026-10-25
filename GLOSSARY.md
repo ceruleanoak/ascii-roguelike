@@ -1350,6 +1350,28 @@ identity, not standard programming terms.
   `TrapSystem.dropLoadout`; the run is an `AnimationSystem` sequence (`_animLock` = no damage).
 - **Not:** a dodge roll (player-steered, brief, no pathing); not a "dash" or "auto-run".
 
+### Punch
+- **Definition:** The attack SPACE makes in EXPLORE with no weapon held: 1 damage at 50%
+  accuracy (a miss shows MISS), thrown with the Slime's windup, cooldown and one-cell blinking
+  Telegraph, in yellow. Skips Background Objects (an unarmed SPACE beside one interacts
+  instead). Not thrown at REST or in NEUTRAL rooms.
+- **In code:** `src/systems/PunchSystem.js` — `tryPunch()`, `update(dt)` (the windup on the
+  enemy-melee clock, read straight off `ENEMIES.o`), `reset()` (Reset Registry, room scope).
+  The landed blow is a player melee hitbox via `CombatSystem.createAttack` with `accuracy`
+  (rolled per swing as `attack.missed`) and `telegraphDrawn`. Drawn by the `punches` Frame Pass.
+- **Not:** a weapon or Item; not "unarmed attack" / "fist" / "melee strike".
+
+### Fight
+- **Definition:** The auto-combat cast by the FIGHT Spell: the player is driven toward the
+  nearest fightable enemy (alive, revealed, not aloft, not charmed, same plane) and attacks it
+  with whatever is held (the Punch when nothing is), re-targeting as enemies fall, until the
+  player's next keypress. Damage still lands. EXPLORE only.
+- **In code:** `src/systems/FightSystem.js` — `cast()`, `heldKeys()` (steering heading →
+  held WASD, fed to `PlayerInputSystem.heldMoveInput`), `update()` (face + attack),
+  `onPlayerInput()` (main.js keydown), `reset()` (Reset Registry, room scope).
+- **Not:** a Beeline (not invulnerable, no animation); not "auto-battle" (that is the Mist
+  Battle's Act 2); not a Companion command.
+
 ### Consumable
 - **Definition:** A single-use Crafted item that can be equipped in a consumable slot or used
   directly, applying an instant or temporary effect to the player.

@@ -47,6 +47,7 @@ import { drawPlayerGlyph } from './effects/PlayerGlyphDraw.js';
 import { drawDizzyOrbitals } from './effects/DizzyOrbitals.js';
 import { drawWandProximityFailures, drawAoeEffects } from './effects/WandEffectsDraw.js';
 import { drawRollingRocks } from './effects/RollingRockDraw.js';
+import { drawPunches } from './effects/MeleeAttackDraw.js';
 
 export const FRAME_OWNERS = ['surface', 'floor', 'maze', 'rest', 'neutral'];
 export const FRAME_LAYERS = ['ground', 'combat', 'player', 'indicators'];
@@ -86,6 +87,8 @@ const TRINE_ONLY = 'the Trine fights only in the Mist Battle, on a surface Room'
 const RUSALKA_ONLY = 'the cure Rusalka surfaces only in Lake Rooms (surface)';
 const NO_DARK = 'nothing here is dark enough for a torch to cut';
 const STORM_EYE_ONLY = 'Wind Fields blow only in the Storm Eye arena, a surface Room';
+const NO_PUNCH = 'an unarmed SPACE at REST makes the idle echo, not a Punch (PunchSystem rest-parity)';
+const NO_PUNCH_NEUTRAL = 'SPACE in a NEUTRAL room interacts and never attacks, armed or not';
 const ISLAND_ONLY = 'the Metal Platform crosses only the lava lake of an Island Room (surface)';
 
 // NEUTRAL included: it runs the EXPLORE world tick (Limited Explore).
@@ -113,6 +116,7 @@ export const FRAME_PASSES = {
     { id: 'projectiles', on: everywhere, draw: (rc, game, owner) => er(rc).drawProjectiles(game, isInterior(owner)) },
     { id: 'enemyProjectiles', on: enemySide, draw: (rc, game, owner) => er(rc).drawEnemyProjectiles(game, isInterior(owner)) },
     { id: 'meleeAttacks', on: everywhere, draw: (rc, game, owner) => er(rc).drawMeleeAttacks(game, isInterior(owner)) },
+    { id: 'punches', on: { ...everywhere, rest: NO_PUNCH, neutral: NO_PUNCH_NEUTRAL }, draw: (rc, game, owner) => drawPunches(rc.renderer, game, isInterior(owner)) },
     { id: 'enemyMeleeAttacks', on: enemySide, draw: (rc, game, owner) => er(rc).drawEnemyMeleeAttacks(game, isInterior(owner)) },
     // Enemy + mimic tongues read game._activeEnemies(), which already resolves to the active layer.
     { id: 'enemyTongues', on: enemySide, draw: (rc, game) => er(rc).drawEnemyTongues(game) },

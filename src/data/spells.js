@@ -364,6 +364,10 @@ export const SPELLS = {
   'HEADWEST':  { response: (game) => game.beelineSystem.cast('west') },
   'HEADSOUTH': { response: (game) => game.beelineSystem.cast('south') },
 
+  // FIGHT — auto-combat against the nearest enemy until the next keypress
+  // (FightSystem). Silent when it starts; the fight is the answer.
+  'FIGHT': { response: (game) => game.fightSystem.cast() },
+
   'NORTH': { response: _lookDirection('north') },
   'EAST':  { response: _lookDirection('east') },
   'WEST':  { response: _lookDirection('west') },

@@ -26,6 +26,7 @@ import { drawTelegraph } from '../../game/Telegraph.js';
 export function drawPlayerMeleeAttacks(renderer, game, hutPlane = false) {
   for (const attack of game.combatSystem.getMeleeAttacks()) {
     if (!!attack.hutPlane !== hutPlane) continue;
+    if (attack.telegraphDrawn) continue; // its owner's own pass draws it (the Punch)
     const useDithering = attack.shooterPlane === 1 && game.player.plane === 1;
     const anchor = (attack.drawAboveOwner && attack.owner)
       ? { x: attack.owner.position.x, y: attack.owner.position.y - GRID.CELL_SIZE }
@@ -71,6 +72,18 @@ export function drawPlayerMeleeAttacks(renderer, game, hutPlane = false) {
       const drawMethod = useDithering ? 'drawEntityDithered' : 'drawEntity';
       renderer[drawMethod](cx, cy, attack.char, attack.color);
     }
+  }
+}
+
+/**
+ * The player's Punch (PunchSystem): the Slime's Telegraph in yellow, from the
+ * windup blink through the release flash. Its live hitbox in the melee list is
+ * marked `telegraphDrawn` and skipped above, so the blow draws exactly once.
+ */
+export function drawPunches(renderer, game, hutPlane = false) {
+  for (const punch of game.punchSystem.punches) {
+    if (!!punch.hutPlane !== hutPlane) continue;
+    drawTelegraph(renderer.fgCtx, punch);
   }
 }
 

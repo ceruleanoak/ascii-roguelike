@@ -46,16 +46,14 @@ Refusal lines are drafts to tune:
 
 | Word(s) | Effect | Owner | Gate | Status |
 |---|---|---|---|---|
-| FIGHT<glyph> / ATTACK<glyph> | Auto-combat against that enemy. The player is driven by the companion AI: steered with `steerToward` and attacking through `CombatSystem.tryUseHeldWeapon`, as the `CompanionSystem` / `CommandSystem` charm loop does. | new mechanic over `npcSteering` + `CombatSystem` | Target enemy visible, weapon held | open |
+| FIGHT | Auto-combat against the nearest enemy until the next keypress. The player is driven: `steerToward` headings become held WASD on the normal movement path; in range the player faces the target and attacks through `CombatSystem.tryUseHeldWeapon`, or the Punch when unarmed. Charged weapons release when full. Re-targets as enemies fall. Damage still lands. Refusals: `NO ONE.` (no enemy), `...NOTHING.` (not EXPLORE / already moving). | `FightSystem` | EXPLORE, an enemy on the player's plane | shipped |
+| FIGHT<glyph> / ATTACK<glyph> | Auto-combat against that enemy. The player is driven by the companion AI: steered with `steerToward` and attacking through `CombatSystem.tryUseHeldWeapon`, as the `CompanionSystem` / `CommandSystem` charm loop does. | new mechanic over `npcSteering` + `CombatSystem` | Target enemy visible, weapon held | open (bare FIGHT shipped) |
 | TALK<glyph> | Open dialogue with that NPC from anywhere in the room | `DialogueSystem` | NPC in room | queued |
 | OPEN | Open the nearest container / the REST chest popup | `InteractionSystem.openContainer` | Container in room | queued |
 | FISH | Cast at the nearest fishable water | `FishingSystem` | Rod held, water in room | queued |
 | PUSH | Push the adjacent Push Rock | `PushRock` | Push Rock adjacent | queued |
 
-**FIGHT open questions:**
-- Does damage still land on the player? The Beeline is invulnerable, and a fight probably shouldn't be.
-- What ends it: the target's death, any player input, or both?
-- Does it re-target when the target dies, or stop?
+**FIGHT answers (bare FIGHT, shipped 2026-10-25):** damage still lands on the player; any keypress ends it (the casting SPACE doesn't); it re-targets when the target dies and idles once none are left. Open for FIGHT<glyph>: whether a named target ends the fight on its death.
 
 ## Meta / narrator
 

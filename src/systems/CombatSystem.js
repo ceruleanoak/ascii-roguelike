@@ -979,6 +979,11 @@ export class CombatSystem {
           // Sniper stays hittable while sniperHidden — see the projectile-loop comment above.
 
           if (this.checkMeleeCollision(attack, enemy)) {
+            if (attack.missed) {
+              this.createDamageNumber('MISS', enemy.position.x, enemy.position.y, '#888888');
+              attack.hasHit = true;
+              break;
+            }
             // Parry mechanic (Duelist): reflect melee back at player.
             // Same catch rule as the player's Buckler parry (ParryMechanic.js).
             if (attack.owner && attack.isMelee !== false
@@ -1687,7 +1692,10 @@ export class CombatSystem {
         }
         this.meleeAttacks.push({
           ...attackData,
-          hasHit: false
+          hasHit: false,
+          // Per-swing accuracy roll, as for bullets: a missed swing lands no
+          // damage on whatever it reaches and shows MISS instead (the Punch).
+          missed: attackData.accuracy !== undefined && Math.random() > attackData.accuracy
         });
       }
     } else if (attackData.type === 'chaos_wand' || attackData.type === 'blind_wand') {

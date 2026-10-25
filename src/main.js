@@ -77,6 +77,8 @@ import { SeaSerpentSystem } from './systems/SeaSerpentSystem.js';
 import { CentipedeSystem } from './systems/CentipedeSystem.js';
 import { SpellSystem } from './systems/SpellSystem.js';
 import { BeelineSystem } from './systems/BeelineSystem.js';
+import { FightSystem } from './systems/FightSystem.js';
+import { PunchSystem } from './systems/PunchSystem.js';
 import { WishSystem } from './systems/WishSystem.js';
 import { RidgeSystem } from './systems/RidgeSystem.js';
 import { PolymorphSystem } from './systems/PolymorphSystem.js';
@@ -125,6 +127,7 @@ import { TreasureOfferingSystem } from './systems/TreasureOfferingSystem.js';
 import { ScreenFadeSystem } from './systems/ScreenFadeSystem.js';
 import { StatusEffectSystem } from './systems/StatusEffectSystem.js';
 import { menuIntent } from './systems/MenuInput.js';
+import { PlayerInputSystem } from './systems/PlayerInputSystem.js';
 import { CAMP_NPC_STATE } from './entities/CampNPC.js';
 import { Player } from './entities/Player.js';
 import { Ingredient } from './entities/Ingredient.js';
@@ -249,6 +252,8 @@ class Game {
     this.seaSerpentSystem = new SeaSerpentSystem(this); // the Sunken Hold's twin hidden boss
     this.spellSystem = new SpellSystem(this);
     this.beelineSystem = new BeelineSystem(this); // GO / HEAD / ESCAPE spells
+    this.fightSystem = new FightSystem(this);     // FIGHT spell
+    this.punchSystem = new PunchSystem(this);     // unarmed SPACE
     this.wishSystem = new WishSystem();
     this.ridgeSystem = new RidgeSystem(this);
     this.polymorphSystem = new PolymorphSystem();
@@ -515,6 +520,10 @@ class Game {
         e.preventDefault();
         return;
       }
+
+      // Any keypress hands a FIGHT back — checked before Spell detection so
+      // the SPACE that casts FIGHT doesn't end the fight it starts.
+      if (!e.repeat) this.fightSystem.onPlayerInput();
 
       const key = e.key.toLowerCase();
       if (key === 'w' || key === 'a' || key === 's' || key === 'd') {
@@ -1956,18 +1965,11 @@ class Game {
         (this.player.heldItem?.windupActive || this.player.heldItem?.attackLockTimer > 0));
       // Lock facing for non-bow weapons during attack; allow aiming while charging bow; lock during trap charge
       const lockFacing = !!this.trapCharging || (this.keys.space && this.player.heldItem && this.player.heldItem.data.weaponType !== 'BOW');
-      // Apply Rusalka input suppression (scale keys toward zero)
-      const rs = this.player.rusalkaInputScale;
-      const rng = () => Math.random() < rs; // probabilistic suppression
-      const dizzy = this.player.isDizzy();
       // Lock movement for the TITLE -> REST spawn fade-in, until alpha reaches 1
       const moveLocked = fishingBlocked || windupLocked || this.player.titleSpawnMovementLocked;
-      this.player.updateInput({
-        up:    moveLocked ? false : (dizzy && Math.random() < 0.15 ? this.keys.s : (rs >= 1.0 ? this.keys.w : rng() && this.keys.w)),
-        down:  moveLocked ? false : (dizzy && Math.random() < 0.15 ? this.keys.w : (rs >= 1.0 ? this.keys.s : rng() && this.keys.s)),
-        left:  moveLocked ? false : (dizzy && Math.random() < 0.15 ? this.keys.d : (rs >= 1.0 ? this.keys.a : rng() && this.keys.a)),
-        right: moveLocked ? false : (dizzy && Math.random() < 0.15 ? this.keys.a : (rs >= 1.0 ? this.keys.d : rng() && this.keys.d))
-      }, lockFacing);
+      // FIGHT holds the keys while it runs; Rusalka and Dizzy act on them either way.
+      const keys = this.fightSystem.heldKeys() ?? this.keys;
+      this.player.updateInput(PlayerInputSystem.heldMoveInput(this.player, keys, moveLocked), lockFacing);
     } else {
       // Stop player movement when menu is open or dodge rolling
       this.player.updateInput({
@@ -2314,6 +2316,11 @@ class Game {
     const activeBackgroundObjects = explore
       ? this._activeBackgroundObjects()
       : this.neutralRoomSystem.combatObjects(this.currentRoom);
+    // FIGHT swings before combat resolves, so a swing it starts lands this frame.
+    // rest-parity: absent because REST has no enemies to fight or Punch, and an
+    // unarmed SPACE there makes the idle echo instead.
+    this.fightSystem.update();
+    this.punchSystem.update(deltaTime);
     const combatResult = this.combatSystem.update(
       deltaTime,
       this.player,
@@ -3254,10 +3261,13 @@ class Game {
         this.mistBattleSystem.onAttackPress(); // Flanks fire with the Primary
         this.dragonSpiritSystem.onAttackPress();
       } else {
-        // Unarmed and no item nearby: interact with background object if present
+        // Unarmed and no item nearby: interact with background object if
+        // present; with nothing in hand and nothing to touch, Punch.
         const nearbyObject = this.findNearbyBackgroundObject();
         if (nearbyObject) {
           this.interactWithObject(nearbyObject);
+        } else if (!this.player.heldItem) {
+          this.punchSystem.tryPunch();
         }
       }
     } else if (state === GAME_STATES.NEUTRAL) {

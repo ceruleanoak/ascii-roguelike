@@ -7,6 +7,21 @@
 import { PHYSICS } from '../game/GameConfig.js';
 
 export const PlayerInputSystem = {
+  // The held WASD keys as this frame's movement input, after everything that
+  // gets between the player and their keys: a movement lock, the Rusalka's
+  // song (each key registers only with probability rusalkaInputScale) and
+  // Dizzy (15% of the time a key reads as its opposite). Lifted from main.js.
+  heldMoveInput(player, keys, locked) {
+    if (locked) return { up: false, down: false, left: false, right: false };
+    const rs = player.rusalkaInputScale;
+    const dizzy = player.isDizzy();
+    const read = (key, opposite) => {
+      if (dizzy && Math.random() < 0.15) return keys[opposite];
+      return rs >= 1.0 ? keys[key] : (Math.random() < rs && keys[key]);
+    };
+    return { up: read('w', 's'), down: read('s', 'w'), left: read('a', 'd'), right: read('d', 'a') };
+  },
+
   update(player, inputState, lockFacing = false) {
     player.inputState = inputState;
 

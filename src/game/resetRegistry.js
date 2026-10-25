@@ -538,6 +538,20 @@ export const RESET_REGISTRY = [
     why: 'A Beeline is a run to one room\'s exit; nothing of it survives the room it was cast in.',
   },
   {
+    path: 'fightSystem.reset',
+    scope: 'room',
+    call: (game) => game.fightSystem.reset(),
+    covers: [],
+    why: 'A FIGHT is against one room\'s enemies; leaving the room hands control back.',
+  },
+  {
+    path: 'punchSystem.reset',
+    scope: 'room',
+    call: (game) => game.punchSystem.reset(),
+    covers: [],
+    why: 'A Punch winding up when the room changes would land in the next room; it is dropped instead.',
+  },
+  {
     path: 'forgeSystem.reset',
     scope: 'room',
     call: (game) => game.forgeSystem.reset(),
