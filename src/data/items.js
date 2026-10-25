@@ -2287,6 +2287,16 @@ export const ITEMS = {
     char: 'ᑙ', name: 'Emerald Necklace', type: ITEM_TYPES.CONSUMABLE,
     passive: true, poisonResist: 0.5, slimeResist: 0.5, color: '#00cc44'
   },
+  // Rainbow Necklace — all four Gem Necklaces in one. No recipe: the Jeweler
+  // strings it from Ruby + Sapphire + Topaz + Emerald + 3 coins
+  // (data/jewelerWares.js). Its effects are exactly the union of the four
+  // above; EquipmentEffectsSystem already sums elementReduction and
+  // max-merges the resists, so it needs nothing of its own.
+  'ᑚ': {
+    char: 'ᑚ', name: 'Rainbow Necklace', type: ITEM_TYPES.CONSUMABLE,
+    passive: true, elementReduction: { burn: 1, freeze: 1, electric: 1 },
+    poisonResist: 0.5, slimeResist: 0.5, color: '#ff88ff'
+  },
 
   // ── Movement ──────────────────────────────────────────────────────────────
   '∞': {
