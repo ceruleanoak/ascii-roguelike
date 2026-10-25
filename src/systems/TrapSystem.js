@@ -74,7 +74,7 @@ const THROW_PROFILES = {
   default: { maxDist: GRID.CELL_SIZE * 8,  damageMult: 0.4, minVelForDamage: 100, maxDamageVel: 390 },
 };
 
-function getThrowProfile(item) {
+export function getThrowProfile(item) {
   const data = item?.data;
   if (!data) return THROW_PROFILES.default;
   if (data.wire) return THROW_PROFILES.wire; // wires are TRAP-typed but throw further
