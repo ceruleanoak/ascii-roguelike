@@ -1320,6 +1320,22 @@ identity, not standard programming terms.
   State lives on `game`; logic in `src/systems/CompanionSystem.js`.
 - **Not:** an Enemy; not an NPC (Companions don't initiate dialogue).
 
+### Steering
+- **Definition:** How a Companion, an NPC or a FIGHT-driven player moves toward a point. It
+  walks straight while the line there crosses only open ground. Otherwise it takes the
+  cheapest route over the ground, weighing each cell the way PhysicsSystem slows a body in it
+  (trees, grass, mud, water, snow) and going around walls and solid objects. A hazard (lava,
+  unless the body is lava-immune or floats; deep water, unless it can't drown) is a wall to
+  the route, as Lava-Shy makes it for an Enemy. A target only reachable through a hazard is
+  waited for at the nearest safe cell (the shore). Stuck detection commits to a short detour
+  when something the ground doesn't show holds the body in place.
+- **In code:** `src/systems/npcSteering.js` — `steerToward()` (writes velocity),
+  `steerHeading()` (heading only, for a body whose velocity comes from elsewhere: FIGHT's held
+  keys). The ground is `src/systems/steeringTerrain.js` — `buildTerrainGrid()` (cell costs,
+  `BLOCKED`, `HAZARD`), `lineWithin()` (swept-box line test), `planRoute()` (A*).
+- **Not:** Enemy navigation (`EnemyPathfinding.computeNodePath` + `enemyVision`); not a
+  Beeline (which phases through everything).
+
 ### Spell
 - **Definition:** A word the player types and confirms with SPACE (or Shift/Enter) that the
   THREE answers or acts on. Adventure-style verbs are compound words with no spaces (GOWEST,
@@ -1366,8 +1382,9 @@ identity, not standard programming terms.
   nearest fightable enemy (alive, revealed, not aloft, not charmed, same plane) and attacks it
   with whatever is held (the Punch when nothing is), re-targeting as enemies fall, until the
   player's next keypress. Damage still lands. EXPLORE only.
-- **In code:** `src/systems/FightSystem.js` — `cast()`, `heldKeys()` (steering heading →
-  held WASD, fed to `PlayerInputSystem.heldMoveInput`), `update()` (face + attack),
+- **In code:** `src/systems/FightSystem.js` — `cast()`, `heldKeys()` (Steering's
+  `steerHeading` → held WASD, fed to `PlayerInputSystem.heldMoveInput`, so the player walks at
+  its own speed), `update()` (face + attack),
   `onPlayerInput()` (main.js keydown), `reset()` (Reset Registry, room scope).
 - **Not:** a Beeline (not invulnerable, no animation); not "auto-battle" (that is the Mist
   Battle's Act 2); not a Companion command.

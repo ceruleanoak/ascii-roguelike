@@ -1,5 +1,5 @@
 import { GRID, GAME_STATES, PHYSICS } from '../game/GameConfig.js';
-import { steerToward } from './npcSteering.js';
+import { steerHeading } from './npcSteering.js';
 import { entityCenter } from '../game/Telegraph.js';
 import { planeOf } from './PlaneSystem.js';
 
@@ -19,7 +19,7 @@ const AXIS_DEADZONE = 0.38;
  * until the player's next keypress.
  *
  * The player is driven, not animated: each frame the steering heading toward
- * the target (`steerToward`, the shared NPC primitive) becomes held WASD keys
+ * the target (`steerHeading`, the shared NPC steering) becomes held WASD keys
  * fed to the ordinary movement path, so speed, armor, Dizzy, the Rusalka and
  * every movement lock apply exactly as if the player were walking. In
  * range, the player faces the target and attacks through the same entry points
@@ -73,9 +73,10 @@ export class FightSystem {
     const t = entityCenter(target);
     if (Math.hypot(t.x - p.x, t.y - p.y) <= this._range()) return none;
 
-    // steerToward writes the velocity an NPC would take; the player's movement
-    // path recomputes velocity from the keys below, so only the heading is kept.
-    const { heading } = steerToward(this.game, player, target.position.x, target.position.y, PHYSICS.PLAYER_SPEED);
+    // Only the heading: the player's velocity comes from the keys below through
+    // the ordinary movement path (acceleration, friction, the speed cap), so
+    // FIGHT walks exactly as fast as the player does.
+    const { heading } = steerHeading(this.game, player, target.position.x, target.position.y, PHYSICS.PLAYER_SPEED);
     return {
       w: heading.y < -AXIS_DEADZONE,
       s: heading.y > AXIS_DEADZONE,
