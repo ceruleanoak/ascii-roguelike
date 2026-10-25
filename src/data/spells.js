@@ -359,6 +359,8 @@ export const SPELLS = {
   'GOEAST':    { response: (game) => game.beelineSystem.cast('east') },
   'GOWEST':    { response: (game) => game.beelineSystem.cast('west') },
   'GOSOUTH':   { response: (game) => game.beelineSystem.cast('south') },
+  // GOREST — south is the way back to REST, so in EXPLORE it is GOSOUTH.
+  'GOREST':    { response: (game) => game.beelineSystem.goRest() },
   'HEADNORTH': { response: (game) => game.beelineSystem.cast('north') },
   'HEADEAST':  { response: (game) => game.beelineSystem.cast('east') },
   'HEADWEST':  { response: (game) => game.beelineSystem.cast('west') },

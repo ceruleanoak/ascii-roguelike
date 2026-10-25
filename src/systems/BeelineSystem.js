@@ -87,6 +87,16 @@ export class BeelineSystem {
     return this.cast('south');
   }
 
+  /**
+   * GOREST: in EXPLORE, south is the way back to REST, so this is GOSOUTH.
+   * Anywhere else there is no REST to run back to.
+   * @returns {string|null} null when the Beeline starts, else the THREE's refusal
+   */
+  goRest() {
+    if (this.game.stateMachine?.getCurrentState() !== GAME_STATES.EXPLORE) return '...NOTHING.';
+    return this.cast('south');
+  }
+
   /** Clear the run marker (Reset Registry, room scope). */
   reset() {
     this.active = null;
