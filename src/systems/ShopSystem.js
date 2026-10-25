@@ -12,9 +12,10 @@ import { deliverPurchase } from './purchaseDelivery.js';
  * listing is purchasable up to three ways: toggled real ingredients (padded
  * beyond the item's actual 2-ingredient recipe — a deliberately worse deal
  * than crafting), a shrinking coin balance, or a Treasure substitute — tier
- * 1+ only (row.treasureCount copies of the same gem char; tier 0 listings
- * have no Treasure lane at all). See src/data/shopPricing.js for how each
- * listing's costs are rolled.
+ * 1+ only (row.treasureCount copies of the same gem char; tier 0 listings,
+ * and listings whose ingredient price already holds a gem, have no Treasure
+ * lane at all). See src/data/shopPricing.js for how each listing's costs are
+ * rolled.
  *
  * Modes:
  *   'menu'   — Up/Down (W/S) moves menuIndex across WARES/PAWN. Confirm
@@ -186,8 +187,8 @@ export class ShopSystem {
     this.lanes = [
       ...row.ingredientCost.map(char => ({ type: 'ingredient', char })),
       { type: 'coins' },
-      // Tier 0 listings have no Treasure lane at all (row.treasureChar is
-      // null — see shopPricing.js's TIER_TREASURE_COUNT).
+      // Tier 0 listings and gem-priced listings have no Treasure lane at all
+      // (row.treasureChar is null — see shopPricing.js's buildListing).
       ...(row.treasureChar ? [{ type: 'treasure', char: row.treasureChar }] : []),
     ];
     this.toggled = this.lanes.map(() => false);

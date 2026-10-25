@@ -181,7 +181,13 @@ function buildListing(itemData, role) {
 
   // Tier 0 has no Treasure lane at all (see TIER_TREASURE_COUNT); tier 1-3
   // require 1/2/3 copies of the same picked treasure char respectively.
-  const treasureCount = TIER_TREASURE_COUNT[tier] ?? 0;
+  // A listing whose ingredient price already holds a gem (a gem recipe like
+  // Infused Whip + Ruby, or a gem rolled as padding) gets no Treasure lane either:
+  // the outright gem buy would undercut the listing's own recipe — Ruby ×1
+  // for a Ruby Whip costs less than the Infused Whip + Ruby.
+  const ingredientCost = [recipe.left, recipe.right, ...padding];
+  const gemInPrice = ingredientCost.some(char => TREASURE_CHARS.has(char));
+  const treasureCount = gemInPrice ? 0 : (TIER_TREASURE_COUNT[tier] ?? 0);
   const treasureChar = treasureCount > 0 ? pickTreasureChar(itemData, role) : null;
 
   return {
@@ -191,7 +197,7 @@ function buildListing(itemData, role) {
     color: itemData.color,
     tier,
     home: getHomeZone(itemData.char),  // {zone, depth} — why this row is stockable
-    ingredientCost: [recipe.left, recipe.right, ...padding], // 3-5 chars
+    ingredientCost,               // 3-5 chars
     baseCoins,
     coinFloor,
     treasureChar,
