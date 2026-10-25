@@ -1,6 +1,6 @@
-import { GRID, GAME_STATES, PHYSICS } from '../game/GameConfig.js';
-import { steerHeading } from './npcSteering.js';
-import { buildTerrainGrid, lineWithin, cellCost, BLOCKED, HAZARD } from './steeringTerrain.js';
+import { GRID, GAME_STATES } from '../game/GameConfig.js';
+import { buildTerrainGrid, lineWithin } from './steeringTerrain.js';
+import { HeldKeySteering } from './heldKeySteering.js';
 import { entityCenter } from '../game/Telegraph.js';
 import { planeOf } from './PlaneSystem.js';
 import { getThrowProfile } from './TrapSystem.js';
@@ -12,10 +12,6 @@ const CELL = GRID.CELL_SIZE;
 const MELEE_RANGE = CELL * 1.4;
 const RANGED_RANGE = CELL * 6;
 
-// A heading component below this is treated as zero when the steering heading
-// is turned into held keys, so a near-vertical heading doesn't jitter sideways.
-const AXIS_DEADZONE = 0.38;
-
 // After a ranged shot the player moves before shooting again: a dodge roll
 // across the line of fire when the target stands this close, a sidestep
 // otherwise. While the weapon reloads it backs away to its shooting range.
@@ -25,17 +21,6 @@ const SIDESTEP_TIME = 0.4;         // seconds before an unfinished sidestep is g
 const ROLL_HOLD = 0.25;            // seconds the roll direction is held (Green Ranger slides while held)
 const ROLL_CLEARANCE = CELL * 2;   // open ground a roll needs on its side
 
-// Lack of progress: when FIGHT has moved the player less than STUCK_PX in
-// STUCK_TIME, it eases the player onto the cell grid (the fine-tune). A
-// one-cell gap between wall cells only admits a body aligned to within a
-// pixel, which held keys with momentum can't land on: Steering asks for a
-// sub-pixel recenter, the heading falls under AXIS_DEADZONE, and the player
-// drifts beside the gap. Only a cell within FINE_TUNE_PX on both axes is
-// eased onto, so the nudge never crosses into a cell the body isn't already
-// touching.
-const STUCK_TIME = 0.25;
-const STUCK_PX = 1;
-const FINE_TUNE_PX = CELL * 0.45;
 const FRAME = 1 / 60;
 
 // A held trap is thrown from a distance: FIGHT backs off inside TRAP_HOLD_MIN
@@ -49,8 +34,8 @@ const WIRE_MIN_THROW = CELL * 2;
  * until the player's next keypress.
  *
  * The player is driven, not animated: each frame the steering heading toward
- * the target (`steerHeading`, the shared NPC steering) becomes held WASD keys
- * fed to the ordinary movement path, so speed, armor, Dizzy, the Rusalka and
+ * the target becomes held WASD keys (HeldKeySteering) fed to the ordinary
+ * movement path, so speed, armor, Dizzy, the Rusalka and
  * every movement lock apply exactly as if the player were walking. In
  * range, the player faces the target and attacks through the same entry points
  * SPACE uses — `CombatSystem.tryUseHeldWeapon` when armed, the Punch when not.
@@ -81,7 +66,7 @@ export class FightSystem {
     // The move between ranged shots: { kind: 'step'|'roll', x, y, timer }
     // (x, y: the sidestep's top-left target, or the roll's unit direction).
     this.reposition = null;
-    this.progress = { x: 0, y: 0, timer: 0 };
+    this.steering = new HeldKeySteering(game);
     // Reticule distance (px) at which the trap/wire throw FIGHT is charging
     // is let go, or null when FIGHT isn't charging one.
     this.throwAt = null;
@@ -102,7 +87,7 @@ export class FightSystem {
     if (!this._nearestEnemy()) return 'NO ONE.';
     this.active = true;
     this.reposition = null;
-    this._resetProgress();
+    this.steering.resetProgress();
     return null;
   }
 
@@ -138,12 +123,12 @@ export class FightSystem {
     const r = this.reposition;
     if (r?.kind === 'roll') return none; // the roll moves the player
 
-    if (r?.kind === 'step') return this._keysToward(r.x, r.y);
+    if (r?.kind === 'step') return this.steering.keysToward(r.x, r.y);
     if (this._deployingTrap()) {
       if (this.throwAt !== null) return none; // stand still while the throw charges
       if (dist < TRAP_HOLD_MIN) return this._keysAway(p, t, dist);
       const reach = player.heldItem.data.wire ? Infinity : getThrowProfile(player.heldItem).maxDist;
-      if (dist > reach) return this._keysToward(target.position.x, target.position.y);
+      if (dist > reach) return this.steering.keysToward(target.position.x, target.position.y);
       return none;
     }
     if (this._ranged() && this._reloading()) {
@@ -151,7 +136,7 @@ export class FightSystem {
       return this._keysAway(p, t, dist);
     }
     if (dist <= this._range()) return none;
-    return this._keysToward(target.position.x, target.position.y);
+    return this.steering.keysToward(target.position.x, target.position.y);
   }
 
   // Held keys backing the player three cells straight away from the target
@@ -161,81 +146,10 @@ export class FightSystem {
     if (dist === 0) return { w: false, a: false, s: false, d: false };
     const back = CELL * 3;
     const ax = (p.x - t.x) / dist, ay = (p.y - t.y) / dist;
-    return this._keysToward(
+    return this.steering.keysToward(
       p.x + ax * back - player.width / 2,
       p.y + ay * back - player.height / 2,
     );
-  }
-
-  // Held keys walking the player toward a top-left point. Only the heading:
-  // the player's velocity comes from the keys through the ordinary movement
-  // path (acceleration, friction, the speed cap), so FIGHT walks exactly as
-  // fast as the player does.
-  _keysToward(x, y) {
-    const player = this.game.player;
-    if (this._stalled() && this._fineTune()) return { w: false, a: false, s: false, d: false };
-    const { heading, next } = steerHeading(this.game, player, x, y, PHYSICS.PLAYER_SPEED);
-    const keys = {
-      w: heading.y < -AXIS_DEADZONE,
-      s: heading.y > AXIS_DEADZONE,
-      a: heading.x < -AXIS_DEADZONE,
-      d: heading.x > AXIS_DEADZONE,
-    };
-    // A re-center too fine for held keys: hold the one key toward the next
-    // route cell instead, and PhysicsSystem's corner slip lines the player up
-    // with the gap as it presses in.
-    if (next && !(keys.w || keys.s || keys.a || keys.d)) {
-      const c = entityCenter(player);
-      const dx = next.x - c.x, dy = next.y - c.y;
-      if (Math.abs(dx) >= Math.abs(dy)) { keys.a = dx < 0; keys.d = dx > 0; }
-      else { keys.w = dy < 0; keys.s = dy > 0; }
-    }
-    return keys;
-  }
-
-  // Whether FIGHT has stopped moving the player (see STUCK_TIME).
-  _stalled() {
-    const pos = this.game.player.position;
-    const pr = this.progress;
-    if (Math.hypot(pos.x - pr.x, pos.y - pr.y) >= STUCK_PX) {
-      this._resetProgress();
-      return false;
-    }
-    pr.timer += FRAME;
-    return pr.timer >= STUCK_TIME;
-  }
-
-  _resetProgress() {
-    const pos = this.game.player?.position;
-    this.progress = { x: pos?.x ?? 0, y: pos?.y ?? 0, timer: 0 };
-  }
-
-  // The fine-tune: one frame's ease toward the nearest open cell, at walking
-  // speed. True while still easing; false once aligned (or when no open cell
-  // is near enough), which hands the keys back to Steering with a fresh
-  // progress window.
-  _fineTune() {
-    const game = this.game;
-    const player = game.player;
-    const pos = player.position;
-    const col = Math.round(pos.x / CELL), row = Math.round(pos.y / CELL);
-    const ax = col * CELL, ay = row * CELL;
-    const dx = ax - pos.x, dy = ay - pos.y;
-    const done = () => { this._resetProgress(); return false; };
-    if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) return done();
-    if (Math.abs(dx) > FINE_TUNE_PX || Math.abs(dy) > FINE_TUNE_PX) return done();
-    const map = player.collisionMap || game.activeRoom?.collisionMap || game.currentRoom?.collisionMap || null;
-    const cost = cellCost(buildTerrainGrid(game, player, map), col, row);
-    if (cost === BLOCKED || cost === HAZARD) return done();
-
-    const step = PHYSICS.PLAYER_SPEED * FRAME;
-    const len = Math.hypot(dx, dy);
-    const k = Math.min(1, step / len);
-    pos.x += dx * k;
-    pos.y += dy * k;
-    player.velocity.vx = 0;
-    player.velocity.vy = 0;
-    return true;
   }
 
   /** Face and attack the target when it is in range (after movement this frame). */

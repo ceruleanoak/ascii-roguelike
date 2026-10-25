@@ -545,6 +545,13 @@ export const RESET_REGISTRY = [
     why: 'A FIGHT is against one room\'s enemies; leaving the room hands control back.',
   },
   {
+    path: 'harvestSystem.reset',
+    scope: 'room',
+    call: (game) => game.harvestSystem.reset(),
+    covers: [],
+    why: 'CHOP/MINE/HARVEST farm one room\'s objects; leaving the room hands control back.',
+  },
+  {
     path: 'takeAllSystem.reset',
     scope: 'room',
     call: (game) => game.takeAllSystem.reset(),

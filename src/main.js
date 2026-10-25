@@ -78,6 +78,7 @@ import { CentipedeSystem } from './systems/CentipedeSystem.js';
 import { SpellSystem } from './systems/SpellSystem.js';
 import { BeelineSystem } from './systems/BeelineSystem.js';
 import { FightSystem } from './systems/FightSystem.js';
+import { HarvestSystem } from './systems/HarvestSystem.js';
 import { CraftSpellSystem } from './systems/CraftSpellSystem.js';
 import { TakeAllSystem } from './systems/TakeAllSystem.js';
 import { settlePickup } from './systems/pickupSettlement.js';
@@ -256,6 +257,7 @@ class Game {
     this.spellSystem = new SpellSystem(this);
     this.beelineSystem = new BeelineSystem(this); // GO / HEAD / ESCAPE spells
     this.fightSystem = new FightSystem(this);     // FIGHT spell
+    this.harvestSystem = new HarvestSystem(this); // CHOP / MINE / HARVEST spells
     this.craftSpellSystem = new CraftSpellSystem(this); // CRAFT spell
     this.takeAllSystem = new TakeAllSystem(this);       // TAKEALL spell
     this.punchSystem = new PunchSystem(this);     // unarmed SPACE
@@ -526,9 +528,12 @@ class Game {
         return;
       }
 
-      // Any keypress hands a FIGHT back — checked before Spell detection so
-      // the SPACE that casts FIGHT doesn't end the fight it starts.
-      if (!e.repeat) this.fightSystem.onPlayerInput();
+      // Any keypress hands a FIGHT or a harvest back — checked before Spell
+      // detection so the SPACE that casts one doesn't end what it starts.
+      if (!e.repeat) {
+        this.fightSystem.onPlayerInput();
+        this.harvestSystem.onPlayerInput();
+      }
 
       const key = e.key.toLowerCase();
       if (key === 'w' || key === 'a' || key === 's' || key === 'd') {
@@ -1973,8 +1978,8 @@ class Game {
       const lockFacing = !!this.trapCharging || (this.keys.space && this.player.heldItem && this.player.heldItem.data.weaponType !== 'BOW');
       // Lock movement for the TITLE -> REST spawn fade-in, until alpha reaches 1
       const moveLocked = fishingBlocked || windupLocked || this.player.titleSpawnMovementLocked;
-      // FIGHT holds the keys while it runs; Rusalka and Dizzy act on them either way.
-      const keys = this.fightSystem.heldKeys() ?? this.keys;
+      // FIGHT and CHOP/MINE/HARVEST hold the keys while they run; Rusalka and Dizzy act on them either way.
+      const keys = this.fightSystem.heldKeys() ?? this.harvestSystem.heldKeys() ?? this.keys;
       this.player.updateInput(PlayerInputSystem.heldMoveInput(this.player, keys, moveLocked), lockFacing);
     } else {
       // Stop player movement when menu is open or dodge rolling
@@ -2327,6 +2332,9 @@ class Game {
     // rest-parity: absent because REST has no enemies to fight or Punch, and an
     // unarmed SPACE there makes the idle echo instead.
     this.fightSystem.update();
+    // rest-parity: absent because REST's combat update passes no background
+    // objects, so a swing there can't fell a tree or break a rock.
+    this.harvestSystem.update();
     this.punchSystem.update(deltaTime);
     const combatResult = this.combatSystem.update(
       deltaTime,

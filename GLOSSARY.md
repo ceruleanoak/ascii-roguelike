@@ -1321,7 +1321,7 @@ identity, not standard programming terms.
 - **Not:** an Enemy; not an NPC (Companions don't initiate dialogue).
 
 ### Steering
-- **Definition:** How a Companion, an NPC or a FIGHT-driven player moves toward a point. It
+- **Definition:** How a Companion, an NPC or a Spell-driven player (FIGHT, CHOP/MINE/HARVEST) moves toward a point. It
   walks straight while the line there crosses only open ground. Otherwise it takes the
   cheapest route over the ground, weighing each cell the way PhysicsSystem slows a body in it
   (trees, grass, mud, water, snow) and going around walls and solid objects. A hazard (lava,
@@ -1331,8 +1331,9 @@ identity, not standard programming terms.
   when something the ground doesn't show holds the body in place. Every Companion movement
   steers: following, chasing, backing off, fleeing and digging.
 - **In code:** `src/systems/npcSteering.js` — `steerToward()` (writes velocity),
-  `steerHeading()` (heading only, for a body whose velocity comes from elsewhere: FIGHT's held
-  keys). The ground is `src/systems/steeringTerrain.js` — `buildTerrainGrid()` (cell costs,
+  `steerHeading()` (heading only, for a body whose velocity comes from elsewhere: a driven
+  player's held keys, turned into WASD by `HeldKeySteering` in `src/systems/heldKeySteering.js`,
+  which also eases a stalled player onto the cell grid). The ground is `src/systems/steeringTerrain.js` — `buildTerrainGrid()` (cell costs,
   `BLOCKED`, `HAZARD`), `lineWithin()` (swept-box line test), `planRoute()` (A*).
 - **Not:** Enemy navigation (`EnemyPathfinding.computeNodePath` + `enemyVision`); not a
   Beeline (which phases through everything).
@@ -1386,13 +1387,30 @@ identity, not standard programming terms.
   across the line of fire when the target is within 3 cells, a sidestep otherwise, and a
   back-away to shooting range while the weapon reloads. When the player stops making progress
   (beside a one-cell gap) it is eased onto the cell grid. Damage still lands. EXPLORE only.
-- **In code:** `src/systems/FightSystem.js` — `cast()`, `heldKeys()` (Steering's
-  `steerHeading` → held WASD, fed to `PlayerInputSystem.heldMoveInput`, so the player walks at
+- **In code:** `src/systems/FightSystem.js` — `cast()`, `heldKeys()` (Steering via
+  `HeldKeySteering` → held WASD, fed to `PlayerInputSystem.heldMoveInput`, so the player walks at
   its own speed), `rollDirection()` (the roll, read by `Game.getDodgeRollDirection` so every
   character's roll applies), `update()` (face + attack, then the move between ranged shots),
   `onPlayerInput()` (main.js keydown), `reset()` (Reset Registry, room scope).
 - **Not:** a Beeline (not invulnerable, no animation); not "auto-battle" (that is the Mist
   Battle's Act 2); not a Companion command.
+
+### Harvest (Spell)
+- **Definition:** The CHOP, MINE and HARVEST Spells: the player is driven, as in a Fight, to
+  the open cell beside each farmable object in turn and swings at it with the tool it takes,
+  until none are left or the player's next keypress. CHOP fells Trees with an axe; MINE breaks
+  Rocks (anything with the rock harvest) with the pickaxe or a hammer; HARVEST does both,
+  working the material the held tool serves before swapping tools, then cuts the room's Tall
+  Grass with any blade, densest cell first, until every blade is cut. Tools come from the quick
+  slots. Barricade material, obsidian, indestructible and yield-nothing objects and other
+  planes are skipped; a target the player neither nears nor damages for 4 seconds is given up.
+  Enemies are not fought; damage still lands. EXPLORE only; `...NOTHING.` with no tool or
+  nothing to farm.
+- **In code:** `src/systems/HarvestSystem.js` — `cast(materials)` (`tree`/`rock`/`grass`),
+  `heldKeys()` (`HeldKeySteering`), `update()` (tool swap via `handleSelectSlot`, swing via
+  `CombatSystem.tryUseHeldWeapon`), `onPlayerInput()`, `reset()` (Reset Registry, room scope).
+- **Not:** the harvest drop itself (`destroyObject:rockHarvest`, the Tree's Stick roll), which is
+  the ordinary result of each swing; not a Fight.
 
 ### Craft (Spell)
 - **Definition:** The CRAFT Spell: crafts one Recipe chosen at random from every Recipe the
