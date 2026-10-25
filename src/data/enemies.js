@@ -128,7 +128,7 @@ export const ENEMIES = {
     telegraph: { area: 'box', animation: 'clap', attackShape: 'v' },
     recover: { variant: 'jumpBack' },  // Darty and skittish — flinches off after biting
     affinities: ['beast'],
-    motif: { name: 'rat', bars: 2 },  // 2-bar melody: plays twice per 4-bar phrase
+    motif: { name: 'rat', bars: 2 },
     tier: 'weak',
     // Steals coin instead of biting whenever the player is carrying any (see
     // ThiefMechanic) — bite is untouched otherwise. Taking damage OR a
@@ -291,7 +291,7 @@ export const ENEMIES = {
     },
     affinities: ['beast', 'aquatic'],
     sfx: { hit: 'frog', death: 'frog' },
-    motif: { name: 'frog', bars: 4 },
+    motif: { name: 'frog', bars: 2 },
     recover: { variant: 'retreat', duration: 0.5 },  // Hops back after the snap; the slow-on-hit lives in CombatSystem's tongue collision, not here
     tier: 'weak'
   },
