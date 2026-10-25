@@ -230,29 +230,36 @@ export class RenderController {
   renderSpellResponse(game) {
     if (!game.spellResponse) return;
 
+    // A response is one line, or several joined by '\n' (LOOKHERE's list),
+    // stacked around the screen's center.
     const { text, startTime } = game.spellResponse;
+    const lines = text.split('\n');
     const elapsed = performance.now() - startTime;
 
     const CHAR_DELAY_MS = 120;
+    const LINE_DELAY_MS = CHAR_DELAY_MS * 4; // each line starts this long after the one above
     const CHAR_SPEED    = 8;   // ~125 ms per dissolve transition
     const HOLD_MS       = 2200;
     const charDuration  = 1000 / CHAR_SPEED;
-    const totalRevealMs = (text.length - 1) * CHAR_DELAY_MS + charDuration;
-    const holdEnd       = totalRevealMs + HOLD_MS;
+    const revealAt      = (line, i) => line * LINE_DELAY_MS + i * CHAR_DELAY_MS;
+    const lastLine      = lines.length - 1;
+    const totalRevealMs = Math.max(...lines.map((l, n) => revealAt(n, Math.max(l.length - 1, 0)))) + charDuration;
+    // A longer list holds longer: each extra line buys another line's delay to read it.
+    const holdEnd       = totalRevealMs + HOLD_MS + lastLine * LINE_DELAY_MS;
 
     // Reinitialise dissolves when text changes
     if (text !== this._spellText) {
       this._spellText = text;
-      this._spellDissolves = Array.from(
-        { length: text.length },
+      this._spellDissolves = lines.map(line => Array.from(
+        { length: line.length },
         () => new PixelatedDissolve({ speed: CHAR_SPEED, blockSize: 4 })
-      );
+      ));
     }
 
     // After hold, visible=false triggers the retro dissolve-out on all chars.
     // Auto-clear once every dissolve has fully faded.
     const holding = elapsed < holdEnd;
-    if (!holding && this._spellDissolves.every(d => d.alpha <= 0)) {
+    if (!holding && this._spellDissolves.every(row => row.every(d => d.alpha <= 0))) {
       game.spellResponse = null;
       this._spellText = null;
       this._spellDissolves = [];
@@ -261,32 +268,39 @@ export class RenderController {
 
     const ctx = this.renderer.uiCtx;
     const MAX_TEXT_W = GRID.WIDTH * 0.92;
+    const MAX_TEXT_H = GRID.HEIGHT * 0.92;
+    const LINE_HEIGHT = 1.25;
 
-    // Start at 2× cell size, scale down if the text would overflow the canvas.
+    // Start at 2× cell size, scale down if the widest line would overflow the
+    // canvas or the stack would run off its top and bottom.
     let fontSize = GRID.CELL_SIZE * 2;
     ctx.save();
     ctx.font = `${fontSize}px 'VentureArcade', 'Unifont', monospace`;
-    let totalW = ctx.measureText(text).width;
-    if (totalW > MAX_TEXT_W) {
-      fontSize = Math.floor(fontSize * MAX_TEXT_W / totalW);
+    const widest = Math.max(...lines.map(line => ctx.measureText(line).width));
+    const scale = Math.min(1, MAX_TEXT_W / widest, MAX_TEXT_H / (lines.length * fontSize * LINE_HEIGHT));
+    if (scale < 1) {
+      fontSize = Math.floor(fontSize * scale);
       ctx.font = `${fontSize}px 'VentureArcade', 'Unifont', monospace`;
-      totalW = ctx.measureText(text).width;
     }
-    const font  = ctx.font;
-    const charW = totalW / text.length;
-    const baseX = GRID.WIDTH  / 2 - totalW / 2 + charW / 2;
-    const textY = GRID.HEIGHT / 2;
+    const font = ctx.font;
+    const lineH = fontSize * LINE_HEIGHT;
+    const topY = GRID.HEIGHT / 2 - (lastLine * lineH) / 2;
 
-    for (let i = 0; i < text.length; i++) {
-      this._spellDissolves[i].render(ctx, {
-        text:    text[i],
-        font,
-        color:   '#888888',
-        x:       baseX + i * charW,
-        y:       textY,
-        visible: holding && elapsed >= i * CHAR_DELAY_MS,
-      });
-    }
+    lines.forEach((line, n) => {
+      const totalW = ctx.measureText(line).width;
+      const charW = totalW / line.length;
+      const baseX = GRID.WIDTH / 2 - totalW / 2 + charW / 2;
+      for (let i = 0; i < line.length; i++) {
+        this._spellDissolves[n][i].render(ctx, {
+          text:    line[i],
+          font,
+          color:   '#888888',
+          x:       baseX + i * charW,
+          y:       topY + n * lineH,
+          visible: holding && elapsed >= revealAt(n, i),
+        });
+      }
+    });
 
     ctx.restore();
   }
