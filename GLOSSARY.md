@@ -1390,6 +1390,19 @@ identity, not standard programming terms.
 - **Not:** a Beeline (not invulnerable, no animation); not "auto-battle" (that is the Mist
   Battle's Act 2); not a Companion command.
 
+### Craft (Spell)
+- **Definition:** The CRAFT Spell: crafts one Recipe chosen at random from every Recipe the
+  player can make with what is on hand right now: the ingredient pile, coins, meter Mana,
+  carried weapons/armor/consumables, and the Item Chest in REST only. The pair is spent and the
+  result is claimed as at the REST station; the pair joins the station's pair memory. Forge
+  Recipes are never chosen; golem Recipes are skipped at the golem cap. REST and EXPLORE only;
+  `...NOTHING.` when nothing on hand makes anything.
+- **In code:** `src/systems/CraftSpellSystem.js` — `cast()`; spends inputs via
+  `MenuSystem.takeFromInventory` and claims through a scratch `CraftingSystem` sharing the REST
+  station's `pairMemory`, then `MenuSystem.claimCenter`.
+- **Not:** a tier-up cycle (duplicate-weapon pairs are not Recipes and never roll); not the
+  Dragon Forge.
+
 ### Consumable
 - **Definition:** A single-use Crafted item that can be equipped in a consumable slot or used
   directly, applying an instant or temporary effect to the player.

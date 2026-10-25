@@ -78,6 +78,7 @@ import { CentipedeSystem } from './systems/CentipedeSystem.js';
 import { SpellSystem } from './systems/SpellSystem.js';
 import { BeelineSystem } from './systems/BeelineSystem.js';
 import { FightSystem } from './systems/FightSystem.js';
+import { CraftSpellSystem } from './systems/CraftSpellSystem.js';
 import { PunchSystem } from './systems/PunchSystem.js';
 import { WishSystem } from './systems/WishSystem.js';
 import { RidgeSystem } from './systems/RidgeSystem.js';
@@ -253,6 +254,7 @@ class Game {
     this.spellSystem = new SpellSystem(this);
     this.beelineSystem = new BeelineSystem(this); // GO / HEAD / ESCAPE spells
     this.fightSystem = new FightSystem(this);     // FIGHT spell
+    this.craftSpellSystem = new CraftSpellSystem(this); // CRAFT spell
     this.punchSystem = new PunchSystem(this);     // unarmed SPACE
     this.wishSystem = new WishSystem();
     this.ridgeSystem = new RidgeSystem(this);

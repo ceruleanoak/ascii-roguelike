@@ -952,26 +952,7 @@ export class MenuSystem {
           game.magicSystem.spendCraftMana(game.player);
         }
       } else {
-        const quickSlotIdx = game.player.quickSlots.indexOf(selectedItem);
-        if (quickSlotIdx !== -1) {
-          game.player.quickSlots[quickSlotIdx] = null;
-        } else if (game.inventorySystem.equippedArmor === selectedItem) {
-          game.inventorySystem.equippedArmor = null;
-        } else {
-          const consumableIdx = game.inventorySystem.equippedConsumables.indexOf(selectedItem);
-          if (consumableIdx !== -1) {
-            game.inventorySystem.equippedConsumables[consumableIdx] = null;
-            game.player.equippedConsumables = [...game.inventorySystem.equippedConsumables];
-          } else if (selectedItem.data.type === 'WEAPON' || selectedItem.data.type === 'TRAP') {
-            game.inventorySystem.retrieveFromChest(selectedItem);
-          } else if (selectedItem.data.type === 'ARMOR') {
-            const armorIndex = game.inventorySystem.armorInventory.indexOf(selectedItem);
-            if (armorIndex > -1) game.inventorySystem.armorInventory.splice(armorIndex, 1);
-          } else if (selectedItem.data.type === 'CONSUMABLE') {
-            const consumableIndex = game.inventorySystem.consumableInventory.indexOf(selectedItem);
-            if (consumableIndex > -1) game.inventorySystem.consumableInventory.splice(consumableIndex, 1);
-          }
-        }
+        this.takeFromInventory(selectedItem);
       }
 
       // The station this menu was opened for (REST or the Dragon Forge).
@@ -1005,26 +986,7 @@ export class MenuSystem {
       if (typeof selectedItem === 'string') {
         game.removeIngredient(selectedItem);
       } else {
-        const quickSlotIdx = game.player.quickSlots.indexOf(selectedItem);
-        if (quickSlotIdx !== -1) {
-          game.player.quickSlots[quickSlotIdx] = null;
-        } else if (game.inventorySystem.equippedArmor === selectedItem) {
-          game.inventorySystem.equippedArmor = null;
-        } else {
-          const consumableIdx = game.inventorySystem.equippedConsumables.indexOf(selectedItem);
-          if (consumableIdx !== -1) {
-            game.inventorySystem.equippedConsumables[consumableIdx] = null;
-            game.player.equippedConsumables = [...game.inventorySystem.equippedConsumables];
-          } else if (selectedItem.data.type === 'WEAPON' || selectedItem.data.type === 'TRAP') {
-            game.inventorySystem.retrieveFromChest(selectedItem);
-          } else if (selectedItem.data.type === 'ARMOR') {
-            const armorIndex = game.inventorySystem.armorInventory.indexOf(selectedItem);
-            if (armorIndex > -1) game.inventorySystem.armorInventory.splice(armorIndex, 1);
-          } else if (selectedItem.data.type === 'CONSUMABLE') {
-            const consumableIndex = game.inventorySystem.consumableInventory.indexOf(selectedItem);
-            if (consumableIndex > -1) game.inventorySystem.consumableInventory.splice(consumableIndex, 1);
-          }
-        }
+        this.takeFromInventory(selectedItem);
       }
 
       game.saveGameState();
@@ -1226,6 +1188,37 @@ export class MenuSystem {
     }
     game.renderer.markBackgroundDirty();
     game.updateUI();
+  }
+
+  /**
+   * Take a live Item out of wherever the player holds it — a quick slot, the
+   * armor or consumable slots, the Item Chest, or the armor/consumable
+   * inventories — so it can go into a crafting slot. Shared by the crafting
+   * menu, the centre-slot Dismantle, and the CRAFT Spell (CraftSpellSystem).
+   */
+  takeFromInventory(item) {
+    const game = this.game;
+    const inv = game.inventorySystem;
+    const quickSlotIdx = game.player.quickSlots.indexOf(item);
+    if (quickSlotIdx !== -1) {
+      game.player.quickSlots[quickSlotIdx] = null;
+    } else if (inv.equippedArmor === item) {
+      inv.equippedArmor = null;
+    } else {
+      const consumableIdx = inv.equippedConsumables.indexOf(item);
+      if (consumableIdx !== -1) {
+        inv.equippedConsumables[consumableIdx] = null;
+        game.player.equippedConsumables = [...inv.equippedConsumables];
+      } else if (item.data.type === 'WEAPON' || item.data.type === 'TRAP') {
+        inv.retrieveFromChest(item);
+      } else if (item.data.type === 'ARMOR') {
+        const armorIndex = inv.armorInventory.indexOf(item);
+        if (armorIndex > -1) inv.armorInventory.splice(armorIndex, 1);
+      } else if (item.data.type === 'CONSUMABLE') {
+        const consumableIndex = inv.consumableInventory.indexOf(item);
+        if (consumableIndex > -1) inv.consumableInventory.splice(consumableIndex, 1);
+      }
+    }
   }
 
   // `slotContent` is a slot char, or a live Item (a cancelled Dismantle) that

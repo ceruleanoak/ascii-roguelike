@@ -368,6 +368,11 @@ export const SPELLS = {
   // (FightSystem). Silent when it starts; the fight is the answer.
   'FIGHT': { response: (game) => game.fightSystem.cast() },
 
+  // CRAFT — one random Recipe from what the player has on hand, REST or
+  // EXPLORE (CraftSpellSystem). Silent when it works; the pickup box shows
+  // what came of it.
+  'CRAFT': { response: (game) => game.craftSpellSystem.cast() },
+
   'NORTH': { response: _lookDirection('north') },
   'EAST':  { response: _lookDirection('east') },
   'WEST':  { response: _lookDirection('west') },
