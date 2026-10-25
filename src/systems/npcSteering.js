@@ -49,6 +49,17 @@ function unit(dx, dy) {
   return len > 0.001 ? { x: dx / len, y: dy / len } : { x: 0, y: 0 };
 }
 
+// A heading that lands on a point closer than one frame's travel instead of
+// stepping past it: a full-length heading toward a point 0.2px away
+// overshoots by most of a pixel every frame, which beside a one-cell lava gap
+// is a burn.
+function landing(dx, dy, speed) {
+  const len = Math.hypot(dx, dy);
+  const step = speed * FRAME;
+  if (step <= 0 || len >= step) return unit(dx, dy);
+  return { x: dx / step, y: dy / step };
+}
+
 // The furthest of the next LOOKAHEAD waypoints the body's box reaches in a
 // straight line over ground no worse than the route itself crosses to get
 // there, so a route through open ground is walked as a line rather than cell
@@ -57,7 +68,7 @@ function unit(dx, dy) {
 // cell first, which the planner's corner rule guarantees is clear.
 function shortcutWaypoint(grid, route, x, y, w, h) {
   if (!lineWithin(grid, x, y, route[0].x, route[0].y, Infinity, w, h)) {
-    return { x: Math.floor(x / CELL) * CELL + CELL / 2, y: Math.floor(y / CELL) * CELL + CELL / 2 };
+    return { x: Math.floor(x / CELL) * CELL + CELL / 2, y: Math.floor(y / CELL) * CELL + CELL / 2, recenter: true };
   }
   let best = route[0];
   let worst = 1; // heaviest cell the route crosses before reaching waypoint k
@@ -178,7 +189,8 @@ function chooseHeading(game, entity, targetX, targetY, speed) {
     return { heading: { x: 0, y: 0 }, mode: 'shore' };
   }
   const wp = shortcutWaypoint(grid, route, x, y, w, h);
-  return { heading: unit(wp.x - x, wp.y - y), mode: 'route' };
+  const heading = wp.recenter ? landing(wp.x - x, wp.y - y, speed) : unit(wp.x - x, wp.y - y);
+  return { heading, mode: 'route' };
 }
 
 /**

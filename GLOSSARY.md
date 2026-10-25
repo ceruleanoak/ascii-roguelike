@@ -1328,7 +1328,8 @@ identity, not standard programming terms.
   unless the body is lava-immune or floats; deep water, unless it can't drown) is a wall to
   the route, as Lava-Shy makes it for an Enemy. A target only reachable through a hazard is
   waited for at the nearest safe cell (the shore). Stuck detection commits to a short detour
-  when something the ground doesn't show holds the body in place.
+  when something the ground doesn't show holds the body in place. Every Companion movement
+  steers: following, chasing, backing off, fleeing and digging.
 - **In code:** `src/systems/npcSteering.js` — `steerToward()` (writes velocity),
   `steerHeading()` (heading only, for a body whose velocity comes from elsewhere: FIGHT's held
   keys). The ground is `src/systems/steeringTerrain.js` — `buildTerrainGrid()` (cell costs,

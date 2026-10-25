@@ -50,6 +50,7 @@ const AGGRO_RANGE = GRID.CELL_SIZE * 9;    // slightly broader than wild rat
 const FOLLOW_RADIUS = GRID.CELL_SIZE * 3;  // idle drift target around player
 const FOLLOW_SPEED_MULT = 0.6;
 const FLEE_SPEED_MULT = 1.4;
+const FLEE_REACH = GRID.CELL_SIZE * 4;     // how far ahead a retreat steers for
 const PERMA_FLEE_SPEED = 140;
 const PERMA_FLEE_ARRIVE_DIST = 6;
 
@@ -318,26 +319,36 @@ export class NPCRat {
     const dx = t.position.x - this.position.x;
     const dy = t.position.y - this.position.y;
     const dist = Math.hypot(dx, dy) || 1;
-    const dirX = dx / dist;
-    const dirY = dy / dist;
 
     if (dist > ATTACK_RANGE) {
       // Approach
-      this.targetVelocity.vx = dirX * SPEED;
-      this.targetVelocity.vy = dirY * SPEED;
-    } else {
-      // In range — stand and bite
-      this.targetVelocity.vx = 0;
-      this.targetVelocity.vy = 0;
-      if (this.attackTimer <= 0 && typeof t.takeDamage === 'function') {
-        t.takeDamage(ATTACK_DAMAGE);
-        this.attackTimer = ATTACK_COOLDOWN;
-        return { attacked: t, damage: ATTACK_DAMAGE };
-      }
+      this._steer(t.position.x, t.position.y, SPEED);
+      return null;
     }
-    this.velocity.vx = this.targetVelocity.vx;
-    this.velocity.vy = this.targetVelocity.vy;
+    // In range — stand and bite
+    this._halt();
+    if (this.attackTimer <= 0 && typeof t.takeDamage === 'function') {
+      t.takeDamage(ATTACK_DAMAGE);
+      this.attackTimer = ATTACK_COOLDOWN;
+      return { attacked: t, damage: ATTACK_DAMAGE };
+    }
     return null;
+  }
+
+  // Shared Steering toward a point, mirrored into targetVelocity (the field
+  // separation and the renderer read) — walls, solid objects and hazards are
+  // routed around rather than pressed against.
+  _steer(x, y, speed) {
+    steerToward(this.game, this, x, y, speed);
+    this.targetVelocity.vx = this.velocity.vx;
+    this.targetVelocity.vy = this.velocity.vy;
+  }
+
+  _halt() {
+    this.velocity.vx = 0;
+    this.velocity.vy = 0;
+    this.targetVelocity.vx = 0;
+    this.targetVelocity.vy = 0;
   }
 
   // Retreat straight away from the recorded hit origin, falling back to the
@@ -361,11 +372,11 @@ export class NPCRat {
       dirX = dx / d;
       dirY = dy / d;
     }
-    const speed = SPEED * FLEE_SPEED_MULT;
-    this.targetVelocity.vx = dirX * speed;
-    this.targetVelocity.vy = dirY * speed;
-    this.velocity.vx = this.targetVelocity.vx;
-    this.velocity.vy = this.targetVelocity.vy;
+    // Steer for a point FLEE_REACH away rather than pushing the bare heading,
+    // so a retreat that starts against a wall slides along it instead of
+    // pinning the rat in place.
+    this._steer(this.position.x + dirX * FLEE_REACH, this.position.y + dirY * FLEE_REACH,
+                SPEED * FLEE_SPEED_MULT);
   }
 
   _driftTowardPlayer(deltaTime, player) {
@@ -379,16 +390,8 @@ export class NPCRat {
     const dx = player.position.x - this.position.x;
     const dy = player.position.y - this.position.y;
     const d = Math.hypot(dx, dy);
-    if (d > FOLLOW_RADIUS) {
-      const s = SPEED * FOLLOW_SPEED_MULT;
-      this.targetVelocity.vx = (dx / d) * s;
-      this.targetVelocity.vy = (dy / d) * s;
-    } else {
-      this.targetVelocity.vx = 0;
-      this.targetVelocity.vy = 0;
-    }
-    this.velocity.vx = this.targetVelocity.vx;
-    this.velocity.vy = this.targetVelocity.vy;
+    if (d > FOLLOW_RADIUS) this._steer(player.position.x, player.position.y, SPEED * FOLLOW_SPEED_MULT);
+    else this._halt();
   }
 
   // Dig driver. Returns null when the rat isn't digging (caller drifts toward
@@ -413,9 +416,7 @@ export class NPCRat {
 
     const { x, y } = tile.position;
     if (this._distTo(this.position, tile.position) > DIG_REACH) {
-      steerToward(this.game, this, x, y, SPEED * FOLLOW_SPEED_MULT);
-      this.targetVelocity.vx = this.velocity.vx;
-      this.targetVelocity.vy = this.velocity.vy;
+      this._steer(x, y, SPEED * FOLLOW_SPEED_MULT);
       return {};
     }
 

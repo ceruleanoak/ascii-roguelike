@@ -181,8 +181,16 @@ function traverse(x0, y0, x1, y1, visit) {
  * in: every way to a target standing in grass ends in grass.
  */
 export function lineWithin(grid, x0, y0, x1, y1, maxCost = 1, w = 1, h = 1) {
-  const hx = Math.max(0, w / 2 - 0.5), hy = Math.max(0, h / 2 - 0.5);
-  for (const [ox, oy] of [[0, 0], [-hx, -hy], [hx, -hy], [-hx, hy], [hx, hy]]) {
+  // The box's corners as PhysicsSystem reads any overlap: [x, x + w) around a
+  // top-left origin (terrain contact is an open interval test; wall cells,
+  // [x, x + w - 1], are looser on the far edge, so this satisfies both). A
+  // softer inset lets a body a tenth of a pixel into a wall row pass this
+  // test, then physics blocks it against the wall's corner every frame.
+  const EDGE = 0.01;
+  const left = w > 1 ? -w / 2 : 0, right = w > 1 ? w / 2 - EDGE : 0;
+  const top = h > 1 ? -h / 2 : 0, bottom = h > 1 ? h / 2 - EDGE : 0;
+  const point = left === 0 && right === 0 && top === 0 && bottom === 0;
+  for (const [ox, oy] of [[0, 0], [left, top], [right, top], [left, bottom], [right, bottom]]) {
     const startCol = Math.floor((x0 + ox) / CELL), startRow = Math.floor((y0 + oy) / CELL);
     const endCol = Math.floor((x1 + ox) / CELL), endRow = Math.floor((y1 + oy) / CELL);
     const ok = traverse(x0 + ox, y0 + oy, x1 + ox, y1 + oy, (col, row) => {
@@ -192,7 +200,7 @@ export function lineWithin(grid, x0, y0, x1, y1, maxCost = 1, w = 1, h = 1) {
       return c <= maxCost || (col === endCol && row === endRow);
     });
     if (!ok) return false;
-    if (hx === 0 && hy === 0) break; // a point: the center ray is the whole test
+    if (point) break; // a point: the center ray is the whole test
   }
   return true;
 }

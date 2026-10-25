@@ -2,6 +2,7 @@ import { GRID } from '../game/GameConfig.js';
 import { GOLEM_TYPES } from '../data/golems.js';
 import { getElementalModifierFor } from './elementalAffinity.js';
 import { WEAPON_TYPES } from '../data/items.js';
+import { steerToward } from '../systems/npcSteering.js';
 
 /**
  * GolemCompanion — summoned at the REST Combine Station (ingredient + Mana,
@@ -325,24 +326,34 @@ export class GolemCompanion {
     const dx = t.position.x - this.position.x;
     const dy = t.position.y - this.position.y;
     const dist = Math.hypot(dx, dy) || 1;
-    const dirX = dx / dist;
-    const dirY = dy / dist;
 
     if (dist > this.attackRange) {
-      this.targetVelocity.vx = dirX * SPEED;
-      this.targetVelocity.vy = dirY * SPEED;
-    } else {
-      this.targetVelocity.vx = 0;
-      this.targetVelocity.vy = 0;
-      if (this.attackTimer <= 0 && typeof t.takeDamage === 'function') {
-        this.state = 'windup';
-        this.windupTimer = ATTACK_WINDUP;
-        this.windupDuration = ATTACK_WINDUP;
-      }
+      this._steer(t.position.x, t.position.y, SPEED);
+      return null;
     }
-    this.velocity.vx = this.targetVelocity.vx;
-    this.velocity.vy = this.targetVelocity.vy;
+    this._halt();
+    if (this.attackTimer <= 0 && typeof t.takeDamage === 'function') {
+      this.state = 'windup';
+      this.windupTimer = ATTACK_WINDUP;
+      this.windupDuration = ATTACK_WINDUP;
+    }
     return null;
+  }
+
+  // Shared Steering toward a point, mirrored into targetVelocity (the field
+  // separation and the renderer read) — walls, solid objects and hazards are
+  // routed around rather than pressed against.
+  _steer(x, y, speed) {
+    steerToward(this.game, this, x, y, speed);
+    this.targetVelocity.vx = this.velocity.vx;
+    this.targetVelocity.vy = this.velocity.vy;
+  }
+
+  _halt() {
+    this.velocity.vx = 0;
+    this.velocity.vy = 0;
+    this.targetVelocity.vx = 0;
+    this.targetVelocity.vy = 0;
   }
 
   // Holds position while the windup telegraph counts down, then lands the
@@ -495,15 +506,7 @@ export class GolemCompanion {
     const dx = player.position.x - this.position.x;
     const dy = player.position.y - this.position.y;
     const d = Math.hypot(dx, dy);
-    if (d > FOLLOW_RADIUS) {
-      const s = SPEED * FOLLOW_SPEED_MULT;
-      this.targetVelocity.vx = (dx / d) * s;
-      this.targetVelocity.vy = (dy / d) * s;
-    } else {
-      this.targetVelocity.vx = 0;
-      this.targetVelocity.vy = 0;
-    }
-    this.velocity.vx = this.targetVelocity.vx;
-    this.velocity.vy = this.targetVelocity.vy;
+    if (d > FOLLOW_RADIUS) this._steer(player.position.x, player.position.y, SPEED * FOLLOW_SPEED_MULT);
+    else this._halt();
   }
 }

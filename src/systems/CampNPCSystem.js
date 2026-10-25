@@ -36,6 +36,7 @@ const ENEMY_AGGRO_RANGE         = GRID.CELL_SIZE * 8;
 // Per-weapon-type AI tuning
 const KEEPER_PREFERRED_RANGE = GRID.CELL_SIZE * 5;
 const KEEPER_RANGE_TOLERANCE = GRID.CELL_SIZE * 1.5;
+const KEEPER_BACK_OFF_REACH  = GRID.CELL_SIZE * 3;   // how far ahead a back-off steers for
 
 // Delay between spotting an enemy and the first attack — gives the player a
 // beat to react and prevents the companion from instantly opening fire the
@@ -245,18 +246,23 @@ export class CampNPCSystem {
 
     // Movement: combat archetype if engaging, otherwise commanded target or follow player.
     // commandTarget is an externally-set { x, y } (e.g., DungeonSystem switch puzzle); enemy aggro overrides it.
+    let steer = null;
     if (hasEnemy) {
-      this._moveCombat(dt, npc, target, targetDist);
+      steer = this._moveCombat(dt, npc, target, targetDist);
       this._tryAttack(npc, target, targetDist);
     } else if (npc.commandTarget) {
-      this._moveToTarget(dt, npc, npc.commandTarget);
+      steer = this._moveToTarget(dt, npc, npc.commandTarget);
     } else {
-      this._moveFollow(dt, npc, player);
+      steer = this._moveFollow(dt, npc, player);
     }
 
     // Hard leash to player — suspended while honoring a command target so the
-    // companion can reach distant interactables (e.g., the second floor switch).
-    if (!npc.commandTarget) {
+    // companion can reach distant interactables (e.g., the second floor switch),
+    // and while steering is routing it around something: the leash pulls in a
+    // straight line, so applied mid-route it drags the companion back into the
+    // wall it is walking around and pins it there.
+    const routing = steer && steer.mode !== 'direct';
+    if (!npc.commandTarget && !routing) {
       const px = player.position.x - npc.position.x;
       const py = player.position.y - npc.position.y;
       const playerDist = Math.sqrt(px * px + py * py);
@@ -286,6 +292,7 @@ export class CampNPCSystem {
       npc.facing.y = Math.sign(result.heading.y) || npc.facing.y;
     }
     // Position update delegated to PhysicsSystem.updateEntity()
+    return result;
   }
 
   _moveFollow(dt, npc, player) {
@@ -303,10 +310,11 @@ export class CampNPCSystem {
         npc.facing.y = Math.sign(result.heading.y) || npc.facing.y;
       }
       // Position update delegated to PhysicsSystem.updateEntity()
-    } else {
-      npc.velocity.vx = 0;
-      npc.velocity.vy = 0;
+      return result;
     }
+    npc.velocity.vx = 0;
+    npc.velocity.vy = 0;
+    return null;
   }
 
   _moveCombat(dt, npc, target, distToTarget) {
@@ -331,21 +339,22 @@ export class CampNPCSystem {
     const dirX = dx / len;
     const dirY = dy / len;
 
-    let moveX = 0, moveY = 0;
     const tolerance = isMelee ? GRID.CELL_SIZE * 0.5 : KEEPER_RANGE_TOLERANCE;
-    if (distToTarget > desiredDist + tolerance) {
-      // Approach
-      moveX = dirX * npc.speed;
-      moveY = dirY * npc.speed;
-    } else if (distToTarget < desiredDist - tolerance) {
-      // Back off
-      moveX = -dirX * npc.speed * 0.7;
-      moveY = -dirY * npc.speed * 0.7;
-    }
-
+    // Approach and back-off both go through the shared steering, so a target
+    // across a wall is walked around to, and a retreat that starts against a
+    // wall slides along it, instead of pressing into it (#208 family).
     // Position update delegated to PhysicsSystem.updateEntity()
-    npc.velocity.vx = moveX;
-    npc.velocity.vy = moveY;
+    if (distToTarget > desiredDist + tolerance) {
+      return steerToward(this.game, npc, target.position.x, target.position.y, npc.speed);
+    }
+    if (distToTarget < desiredDist - tolerance) {
+      const backX = npc.position.x - dirX * KEEPER_BACK_OFF_REACH;
+      const backY = npc.position.y - dirY * KEEPER_BACK_OFF_REACH;
+      return steerToward(this.game, npc, backX, backY, npc.speed * 0.7);
+    }
+    npc.velocity.vx = 0;
+    npc.velocity.vy = 0;
+    return null;
   }
 
   _tryAttack(npc, target, distToTarget) {
