@@ -15,6 +15,11 @@ const TAKEN_TYPES = new Set(['ARMOR', 'CONSUMABLE', 'WEAPON', 'TRAP', 'KEY', 'BL
  * to the player and is taken on arrival. Only once the room is safe: no
  * counted enemy and the exits open (REST always is).
  *
+ * TAKE is the same pull for only the nearest ingredient or item. In REST the
+ * Satchel is one of the things TAKE can take: when it is the nearest, it
+ * bursts where it lies (LootSystem.burstRestBundle) and what was inside flies
+ * to the player.
+ *
  * Ingredients are collected as an ordinary attraction pickup
  * (LootSystem.collectIngredient). Items go through the ground pickup
  * (InventorySystem.tryPickupItem) on a one-item scratch array, as a purchase
@@ -33,10 +38,15 @@ export class TakeAllSystem {
     // Loot whose take was refused on arrival (a full pile, a pickup still
     // cooling down); it stops being pulled so the spell can end.
     this.refused = new Set();
+    // TAKE: the loot this pull is limited to (null = everything, TAKEALL).
+    this.only = null;
   }
 
-  /** Spell response: null when the pull starts (silent cast), else the THREE's refusal. */
-  cast() {
+  /**
+   * Spell response: null when the pull starts (silent cast), else the THREE's refusal.
+   * @param {{nearestOnly?: boolean}} [options] nearestOnly = TAKE
+   */
+  cast({ nearestOnly = false } = {}) {
     const game = this.game;
     const state = game.stateMachine?.getCurrentState();
     if (state !== GAME_STATES.REST && state !== GAME_STATES.EXPLORE && state !== GAME_STATES.NEUTRAL) return '...NOTHING.';
@@ -44,7 +54,9 @@ export class TakeAllSystem {
     if (!game.player || !room) return '...NOTHING.';
     if (room.exitsLocked || game._countedEnemies(room.enemies ?? []).length > 0) return 'NOT YET.';
     this.refused.clear();
-    if (this._pulled().length === 0) return '...NOTHING.';
+    this.only = null;
+    if (nearestOnly) this.only = this._nearest();
+    if (this._pulled().length === 0) { this.only = null; return '...NOTHING.'; }
     this.active = true;
     return null;
   }
@@ -77,13 +89,34 @@ export class TakeAllSystem {
   reset() {
     this.active = false;
     this.refused.clear();
+    this.only = null;
   }
 
-  // Everything TAKEALL can pull right now.
+  // TAKE's pick: the nearest loot TAKEALL would pull, or what the Satchel held
+  // when it is nearer still (REST only). Null when there is nothing.
+  _nearest() {
+    const game = this.game;
+    const { x, y } = game.player.position;
+    const distance = thing => Math.hypot(thing.position.x - x, thing.position.y - y);
+    let nearest = null;
+    for (const loot of this._pulled()) {
+      if (!nearest || distance(loot) < distance(nearest)) nearest = loot;
+    }
+    const satchel = game.stateMachine.getCurrentState() === GAME_STATES.REST ? game.restBundle : null;
+    if (satchel && (!nearest || distance(satchel) < distance(nearest))) {
+      const contents = game.lootSystem.burstRestBundle();
+      for (const ing of contents) ing.pickupCooldown = 0;
+      return new Set(contents);
+    }
+    return nearest ? new Set([nearest]) : null;
+  }
+
+  // Everything TAKEALL (or TAKE, limited to `only`) can pull right now.
   _pulled() {
     const game = this.game;
     const player = game.player;
-    const reachable = loot => !loot.consumed && !this.refused.has(loot) && !loot.noGravitate && canReachLoot(game, player, loot);
+    const reachable = loot => !loot.consumed && !this.refused.has(loot) && !loot.noGravitate
+      && (!this.only || this.only.has(loot)) && canReachLoot(game, player, loot);
     const ingredients = game.ingredients.filter(ing => reachable(ing)
       && (ing.char === 'c' || game.countIngredient(ing.char) < INGREDIENT_STACK_CAP));
     const items = game.items.filter(item => reachable(item) && TAKEN_TYPES.has(item.data?.type));

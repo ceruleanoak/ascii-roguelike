@@ -1,4 +1,5 @@
 import { GRID, GAME_STATES } from '../game/GameConfig.js';
+import { inSamePlane } from './PlaneSystem.js';
 
 // Beeline speed in px/s — three times the walk (PHYSICS PLAYER_SPEED 180).
 const BEELINE_SPEED = 540;
@@ -9,7 +10,8 @@ const BEELINE_SPEED = 540;
  * ESCAPE, which first drops every weapon so the way back to REST opens).
  * ENTERHUT / EXITHUT, ENTERCAVE / EXITCAVE and ENTERMAZE / EXITMAZE run
  * the same way to a hut, Cavern or Maze door and go through it on arrival;
- * OPENCAVE runs to the rock hiding a Cavern and breaks it open.
+ * OPENCAVE runs to the rock hiding a Cavern and breaks it open. TALK runs
+ * to the nearest person who speaks and talks to them on arrival.
  *
  * The Beeline only gets the player there. It ends with the player standing in
  * the exit lane, inside the threshold the per-frame exit check already reads,
@@ -29,8 +31,8 @@ const BEELINE_SPEED = 540;
 export class BeelineSystem {
   constructor(game) {
     this.game = game;
-    // What is being run toward — an exit direction, 'hut', 'cave' or 'maze' — or
-    // null. Read through isActive().
+    // What is being run toward — an exit direction, 'hut', 'cave', 'maze' or
+    // 'talk' — or null. Read through isActive().
     this.active = null;
   }
 
@@ -192,6 +194,42 @@ export class BeelineSystem {
   }
 
   /**
+   * TALK: Beeline beside the nearest speaker on the player's layer and plane
+   * (any NPC with getDialogueLines) and talk to them — one line, as SPACE
+   * beside them tells (DialogueSystem.talk).
+   *
+   * The talk waits for the run's end even when the player already stands in
+   * range: the SPACE that cast TALK goes on to handleSpacePress, which talks to
+   * a speaker in range itself, so on arrival the box opening (or the game
+   * pausing) means that SPACE already spoke and TALK says nothing more.
+   * @returns {string|null} null when the run starts, else the THREE's refusal
+   */
+  talk() {
+    const game = this.game;
+    const player = game.player;
+    const state = game.stateMachine?.getCurrentState();
+    if (!player || !game.currentRoom || game.animationSystem.isAnimating(player)) return '...NOTHING.';
+    if (state !== GAME_STATES.EXPLORE && state !== GAME_STATES.REST && state !== GAME_STATES.NEUTRAL) return '...NOTHING.';
+
+    const speakers = game.interiorManager.activeNpcs()
+      .filter(npc => typeof npc.getDialogueLines === 'function' && inSamePlane(npc, player));
+    if (speakers.length === 0) return 'NO ONE.';
+    const { x, y } = player.position;
+    const distance = npc => Math.hypot(npc.position.x - x, npc.position.y - y);
+    const npc = speakers.reduce((best, s) => (distance(s) < distance(best) ? s : best));
+
+    const C = GRID.CELL_SIZE;
+    const goal = npc.isInRange?.(player)
+      ? { x, y }
+      : this._doorstep({ col: Math.round(npc.position.x / C), row: Math.round(npc.position.y / C) }, game.activeRoom?.collisionMap);
+    this._runTo('talk', goal, () => {
+      if (game.dialogueSystem.isOpen() || game.pauseSystem.isPaused()) return;
+      game.dialogueSystem.talk(npc);
+    });
+    return null;
+  }
+
+  /**
    * ESCAPE / FLEE: let go of every weapon first — that is what opens the way
    * back to REST in a locked room (the escape route, ExitSystem.isExitOpen) —
    * then Beeline south, which checks the now-open exit like any GO.
@@ -289,10 +327,10 @@ export class BeelineSystem {
 
   // The open cell beside a door to stand on (top-left px): the door's
   // walkable neighbour nearest the player, so the way back out of the
-  // interior lands somewhere walkable. Falls back to the cell below.
-  _doorstep(door) {
+  // interior lands somewhere walkable. Falls back to the cell below. `map`
+  // is the surface room's unless given (TALK passes the live layer's).
+  _doorstep(door, map = this.game.currentRoom.collisionMap) {
     const C = GRID.CELL_SIZE;
-    const map = this.game.currentRoom.collisionMap;
     const { x, y } = this.game.player.position;
     const open = [[0, 1], [0, -1], [1, 0], [-1, 0]]
       .map(([dc, dr]) => ({ col: door.col + dc, row: door.row + dr }))

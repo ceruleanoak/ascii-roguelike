@@ -865,6 +865,15 @@ identity, not standard programming terms.
   `createCharacterLoadout()` in `characterLoadout.js`.
 - **Not:** "default weapon", "starting item", "loadout" (a Loadout is all three quick slots).
 
+### Satchel
+- **Definition:** The bundle of starter ingredients (`ට`) lying in REST at the start of a run.
+  SPACE beside it bursts it and scatters what was inside; TAKE bursts it from anywhere in REST
+  and takes what was inside. LOOKHERE lists it (YOU SEE A SATCHEL) until it is opened.
+- **In code:** `game.restBundle` (`{char, position, chars}`); burst by
+  `LootSystem.scatterRestBundle()` (SPACE, range-checked) or `LootSystem.burstRestBundle()`
+  (any range; TAKE via `TakeAllSystem`).
+- **Not:** "rest bundle", "starter pack". Not the Monkey's stolen satchel (ThiefMechanic loot).
+
 ### Double-seconds
 - **Definition:** The timing unit for weapon data. Held items tick at `WEAPON_TIMER_RATE`
   (= 2), so a weapon's effective cooldown/windup/reload in real seconds is its data value ÷ 2.
@@ -1360,7 +1369,8 @@ identity, not standard programming terms.
   ENTERCAVE/EXITCAVE and ENTERMAZE/EXITMAZE run it to a hut, Cavern or Maze door and go through
   on arrival (ENTERHUT picks the nearest hut that would let the player in, or an opened Cavern
   when the room has no hut); OPENCAVE runs it to the Bombable Rock hiding a Cavern and breaks it
-  with a carried Sledgehammer, Onyx Hammer or bomb. It runs in one straight line,
+  with a carried Sledgehammer, Onyx Hammer or bomb; TALK runs it beside the nearest speaker
+  and tells their next line on arrival. It runs in one straight line,
   phasing through walls and Background Objects alike, and ends in the exit lane so the normal
   exit warp takes over.
   Refused when the exit is shut or a Barricade still stands across that exit's lane, solid or

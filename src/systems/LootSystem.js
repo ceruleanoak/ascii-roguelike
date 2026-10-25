@@ -99,10 +99,19 @@ export class LootSystem {
       game.player.position.y - game.restBundle.position.y
     );
     if (dist >= GRID.CELL_SIZE * 3) return false;
+    this.burstRestBundle();
+    return true;
+  }
 
+  // Burst the Satchel wherever the player is (scatterRestBundle checks the
+  // range; TAKE doesn't). Returns the ingredients it scattered.
+  burstRestBundle() {
+    const game = this.game;
+    if (!game.restBundle) return [];
     const cx = game.restBundle.position.x;
     const cy = game.restBundle.position.y;
     const count = game.restBundle.chars.length;
+    const scattered = [];
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2;
       const r = GRID.CELL_SIZE * (1.5 + Math.random());
@@ -114,9 +123,10 @@ export class LootSystem {
       ing.pickupCooldown = 0.25;
       game.ingredients.push(ing);
       game.physicsSystem.addEntity(ing);
+      scattered.push(ing);
     }
     game.restBundle = null;
-    return true;
+    return scattered;
   }
 
   spawnLoot(enemy) {

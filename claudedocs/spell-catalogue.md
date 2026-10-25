@@ -63,7 +63,10 @@ Refusal lines are drafts to tune:
 | TAKEALL | Every ingredient and item on the player's layer flies to the player and is taken; slot choices are skipped (armor/consumables into the bag, weapons/traps into the Item Chest, deferred in the field). Skips other planes/layers, vault coins, full piles, Cursed scrolls. Silent on success; `NOT YET.` (enemies left / exits shut), `...NOTHING.` (nothing to take / wrong state). | `TakeAllSystem` | REST, EXPLORE or NEUTRAL; no counted enemy, exits open | shipped |
 | GETLAVA / GETWATER / GETMUD / GETFAIRY | Take that liquid or a fairy from anywhere in the room the player could walk to, without contact. Liquids fill the first equipped Empty Bottle; GETWATER prefers a hot spring, then the fountain pool, then trough/plain water, then electrified water. GETFAIRY needs no bottle: caught with one, else heal (hurt) or +1 max HP (full); the Fairy King only into a bottle. Reach = flood over the player's steering terrain (walls, solids, lava, deep water block). Silent on success; `NO BOTTLE.` (liquid, none equipped), `...NOTHING.` (nothing in reach / wrong state). | `GetSpellSystem` | REST, EXPLORE or NEUTRAL | shipped |
 | CHOP / MINE / HARVEST | Farm the room until none are left or the next keypress. CHOP: Trees, with an axe. MINE: Rocks (rock-harvest objects), with the pickaxe or a hammer. HARVEST: both, working the held tool's material before swapping (`handleSelectSlot`), then Tall Grass with any blade, densest cell first, until every blade is cut, then Sand with any non-blunt melee weapon. Driven like FIGHT (`HeldKeySteering`) to the open cell beside the nearest target; faces it and swings through `CombatSystem.tryUseHeldWeapon`, so drops are the ordinary harvest. Skips Barricade material, obsidian, indestructible/yield-nothing objects, other planes; gives up on a target not neared or damaged for 4s. Damage still lands. Silent on success; `...NOTHING.` (no tool in the quick slots, nothing to farm, not EXPLORE, already moving). | `HarvestSystem` | EXPLORE; a tool in the quick slots | shipped |
+| TAKE | TAKEALL for only the nearest ingredient or item. In REST the Satchel counts: when it is nearest, it bursts where it lies and its contents fly to the player. Same refusals as TAKEALL. | `TakeAllSystem` | as TAKEALL | shipped |
+| TALK | Beeline beside the nearest speaker (any NPC with `getDialogueLines`) on the player's layer and plane, then tell their next line (`DialogueSystem.talk`). Skipped on arrival if the casting SPACE already opened the box. Silent on success; `NO ONE.` (no speaker), `...NOTHING.` (wrong state / already moving). | `BeelineSystem.talk` | REST, EXPLORE or NEUTRAL; a speaker in the room | shipped |
 | TALK<glyph> | Open dialogue with that NPC from anywhere in the room | `DialogueSystem` | NPC in room | queued |
+| EQUIP | Dress the player from everything stored: three weapons in the quick slots, each a different weapon type while types go round (then subtype, then weapon), higher tiers preferred; the highest-defense armor; consumables in every open slot (Exclusive Groups and twins respected, magic-meter slots and destroyed quick slots left alone). Each pick carries chance, so casting again tries another loadout. A trap in a quick slot yields only to a spare weapon. Silent on success; `...NOTHING.` (nothing stored / not REST). | `EquipSpellSystem` | REST | shipped |
 | OPEN | Open the nearest container / the REST chest popup | `InteractionSystem.openContainer` | Container in room | queued |
 | FISH | Cast at the nearest fishable water | `FishingSystem` | Rod held, water in room | queued |
 | PUSH | Push the adjacent Push Rock | `PushRock` | Push Rock adjacent | queued |
@@ -74,7 +77,8 @@ Refusal lines are drafts to tune:
 
 | Word(s) | Effect | Owner | Status |
 |---|---|---|---|
-| LOOK, LOOKHERE/HERE, LOOKZONE/ZONE, LOOKCOLOR/COLOR, LOOKNORTH/EAST/WEST (+ bare), LOOKWEAPON/WEAPON, LOOKARMOR/ARMOR, LOOKENEMY, FIND, AREYOU | Narrator descriptions | `spells.js` | shipped |
+| LOOKHERE / HERE / LOOK HERE | Lists what in the room the player could act on, a line per kind: enemies (NAME DRAWS NEAR, shortened to fit; concealed enemies never), objects and structures (YOU SEE A HUT/SHOP/CAVE/MAZE/SATCHEL, YOU SEE TALL GRASS…), NPCs (A WISE PERSON…; any other speaker SOMEONE IS HERE), VARIOUS ITEMS for any loot, then YOU CAN CRAFT / YOU CAN EQUIP. Each line at most 15 letters, spaces free (`check:data`). Nothing to list → the room description (LOOK ROOM). | `lookHere.js`, `lookHereLines.js` | shipped |
+| LOOK, LOOKROOM (follow-up ROOM), LOOKZONE/ZONE, LOOKCOLOR/COLOR, LOOKNORTH/EAST/WEST (+ bare), LOOKWEAPON/WEAPON, LOOKARMOR/ARMOR, LOOKENEMY, FIND, AREYOU | Narrator descriptions | `spells.js` | shipped |
 | LOOK<name> / <name> | Describe an enemy by name | `SpellSystem` fallback (`_describeEntity`) | shipped |
 | LOOK<glyph> | Same fallback, keyed by glyph, and extended to huts, NPCs and Background Objects | `SpellSystem` fallback | queued |
 | LOOKSOUTH / SOUTH | Describe the south exit (the gap today) | `spells.js` | queued |
@@ -88,5 +92,6 @@ Already shipped utility Spells that stay as they are: CLEANSE, HEAL, UNCURSE, RE
 
 ## Excluded
 
-- **Inventory verbs** (USE, DROP, SWAP, EQUIP…). A word costs more keystrokes than the key it replaces. That's no use to the player.
+- **Inventory verbs** (USE, DROP, SWAP…). A word costs more keystrokes than the key it replaces. That's no use to the player. EQUIP is the exception: it dresses a whole loadout at once, which no single key does.
+- **Item and ingredient names.** No Spell is named for an item or ingredient (`check:data` fails one).
 - **The Three Room meta layer** (HEREISONE … TISTHREE, WHATIS…). This is hidden canon and stays outside the release catalogue.

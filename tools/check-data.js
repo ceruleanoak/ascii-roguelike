@@ -28,6 +28,8 @@ import { BACKGROUND_OBJECTS } from '../src/game/GameConfig.js';
 import { SECRET_PATTERNS } from '../src/data/exitLetters.js';
 import { normalizeOfferSteps } from '../src/systems/ExitSystem.js';
 import { pickWeaponTutorial } from '../src/data/dungeon/weaponTutorials.js';
+import { SPELLS } from '../src/data/spells.js';
+import * as LOOK_HERE from '../src/data/lookHereLines.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const itemsSource = readFileSync(join(root, 'src/data/items.js'), 'utf8');
@@ -261,6 +263,38 @@ for (const file of readdirSync(puzzleTemplateDir).filter(f => f.endsWith('.json'
   const { pedestal } = JSON.parse(readFileSync(join(puzzleTemplateDir, file), 'utf8'));
   if (pedestal && !pickWeaponTutorial(pedestal.weaponChar)) {
     fail(`puzzle template ${file}: pedestal weaponChar '${pedestal.weaponChar}' is not a weapon in ITEMS — the pedestal never appears (#347 pattern)`);
+  }
+}
+
+// ── Spells are never item or ingredient names ──────────────────────────────
+// The pickup box teaches the player every item's and ingredient's name; a
+// Spell keyed to one of those words would make the name a command (and TAKE
+// <name> a thing the player tries). Compared letters-only, uppercase, as the
+// keystroke buffer spells them.
+const spellWord = name => name.toUpperCase().replace(/[^A-Z]/g, '');
+const lootNames = new Map();
+for (const def of [...Object.values(ITEMS), ...Object.values(INGREDIENTS)]) {
+  if (def?.name) lootNames.set(spellWord(def.name), def.name);
+}
+for (const key of Object.keys(SPELLS)) {
+  if (lootNames.has(key)) fail(`Spell '${key}' is the name of '${lootNames.get(key)}' — item and ingredient names are never Spells`);
+}
+
+// ── LOOKHERE line limit ────────────────────────────────────────────────────
+// Every authored LOOKHERE line keeps LOOK_HERE_LINE_LIMIT letters (spaces are
+// free); enemy lines are built to the limit at runtime (lookHere.js).
+const lookHereAuthored = [
+  ...Object.values(LOOK_HERE.LOOK_HERE_OBJECT_LINES),
+  ...Object.values(LOOK_HERE.LOOK_HERE_STRUCTURE_LINES),
+  ...LOOK_HERE.LOOK_HERE_NPC_LINES.values(),
+  LOOK_HERE.LOOK_HERE_UNNAMED_SPEAKER, LOOK_HERE.LOOK_HERE_LOOT,
+  LOOK_HERE.LOOK_HERE_CAN_CRAFT, LOOK_HERE.LOOK_HERE_CAN_EQUIP,
+  LOOK_HERE.LOOK_HERE_UNNAMED_ENEMY,
+];
+for (const line of lookHereAuthored) {
+  const letters = LOOK_HERE.lookHereLetters(line);
+  if (letters > LOOK_HERE.LOOK_HERE_LINE_LIMIT) {
+    fail(`LOOKHERE line '${line}' has ${letters} letters — the limit is ${LOOK_HERE.LOOK_HERE_LINE_LIMIT} (lookHereLines.js)`);
   }
 }
 

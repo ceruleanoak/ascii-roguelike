@@ -556,7 +556,7 @@ export const RESET_REGISTRY = [
     scope: 'room',
     call: (game) => game.takeAllSystem.reset(),
     covers: [],
-    why: 'A TAKEALL pull gathers one room\'s loot; it stops at the room it was cast in.',
+    why: 'A TAKEALL or TAKE pull gathers one room\'s loot; it stops at the room it was cast in.',
   },
   {
     path: 'punchSystem.reset',

@@ -2,6 +2,7 @@ import { EXIT_LETTERS } from './exitLetters.js';
 import { ZONES } from './zones.js';
 import { ENEMIES } from './enemies.js';
 import { GAME_STATES, ROOM_TYPES } from '../game/GameConfig.js';
+import { lookHereLines } from '../systems/lookHere.js';
 
 
 /**
@@ -20,7 +21,14 @@ import { GAME_STATES, ROOM_TYPES } from '../game/GameConfig.js';
  * "FIND" triggers but "FINDE" does not (E is checked first).
  *
  * Static response text limit: ~18 chars to fit the 2× VentureArcade rendering.
+ * A response may hold several lines ('\n'); the THREE says them one after
+ * another, stacked (RenderController.renderSpellResponse). LOOKHERE's lines
+ * keep a stricter rule: 15 letters, spaces not counted (lookHereLines.js).
  * Function follow-ups return dynamic text from game state (explore mode only).
+ *
+ * No spell is named for an item or ingredient: a word the player learns from
+ * the pickup box must never also be a command (`npm run check:data` fails a
+ * key that matches an item or ingredient name).
  */
 
 /** Returns the closest enemy to the player, or null if none present. */
@@ -50,8 +58,17 @@ function _lookDirection(direction) {
   };
 }
 
-/** Describes the current room based on game state. */
+/**
+ * LOOKHERE: what in the room the player could act on, a line per kind
+ * (src/systems/lookHere.js). A room with nothing to list is described instead.
+ */
 function _lookHere(game) {
+  const lines = lookHereLines(game);
+  return lines.length > 0 ? lines.join('\n') : _lookRoom(game);
+}
+
+/** Describes the current room based on game state. */
+function _lookRoom(game) {
   const state = game.stateMachine?.getCurrentState();
   if (state === GAME_STATES.REST) return 'HOME. FOR NOW.';
   if (state === GAME_STATES.NEUTRAL) {
@@ -416,6 +433,19 @@ export const SPELLS = {
   // starts; the pull is the answer.
   'TAKEALL': { response: (game) => game.takeAllSystem.cast() },
 
+  // TAKE — the same, for only the nearest ingredient or item. In REST the
+  // Satchel counts: taking it opens it and takes what was inside.
+  'TAKE': { response: (game) => game.takeAllSystem.cast({ nearestOnly: true }) },
+
+  // TALK — run to the nearest person who speaks and hear their next line
+  // (BeelineSystem.talk, DialogueSystem). Silent when it starts.
+  'TALK': { response: (game) => game.beelineSystem.talk() },
+
+  // EQUIP — in REST, dress the player from everything stored: three diverse
+  // weapons (higher tiers preferred), armor and consumables. Chance is part
+  // of each pick, so casting it again tries another loadout (EquipSpellSystem).
+  'EQUIP': { response: (game) => game.equipSpellSystem.cast() },
+
   // GETLAVA / GETWATER / GETMUD — fill the first equipped Empty Bottle from
   // that liquid anywhere in the room the player could walk to, without
   // touching it; GETWATER takes hot water first. GETFAIRY needs no bottle
@@ -452,7 +482,7 @@ export const SPELLS = {
 
       // Dynamic — current room and zone
       'HERE':       _lookHere,
-      'ROOM':       _lookHere,
+      'ROOM':       _lookRoom,
       'ZONE':       _lookZone,
       'COLOR':      _lookZone,
       'LAND':       _lookZone,

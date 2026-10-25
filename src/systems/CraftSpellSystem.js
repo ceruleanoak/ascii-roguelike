@@ -48,6 +48,15 @@ export class CraftSpellSystem {
     return null;
   }
 
+  /** Would CRAFT make something right now? (LOOKHERE's YOU CAN CRAFT) */
+  canCraft() {
+    const game = this.game;
+    const state = game.stateMachine?.getCurrentState();
+    if (state !== GAME_STATES.REST && state !== GAME_STATES.EXPLORE) return false;
+    if (!game.player) return false;
+    return this._craftableRecipes(this._onHand(state === GAME_STATES.REST)).length > 0;
+  }
+
   /**
    * Everything the player could put in a crafting slot right now:
    * `pile` counts per char (ingredients, coins, meter Mana) and `items`
