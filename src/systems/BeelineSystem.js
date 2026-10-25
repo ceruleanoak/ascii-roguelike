@@ -78,7 +78,30 @@ export class BeelineSystem {
     if (refusal) return refusal;
     const all = this.game.hutSystem.roomHuts();
     const huts = all.filter(hut => hut.hutKind !== 'cavern');
-    return this._runIntoNearest(huts.length ? huts : all);
+    return this._runIntoNearest(this._hutDoors(huts.length ? huts : all));
+  }
+
+  /**
+   * ENTER: go in by the nearest door the room offers — any hut, an opened
+   * Cavern or the Maze — the same run as ENTERHUT / ENTERCAVE / ENTERMAZE.
+   * A Cavern still behind its rock is not a door yet.
+   * @returns {string|null} null when the Beeline starts, else the THREE's refusal
+   */
+  enter() {
+    const game = this.game;
+    const refusal = this._surfaceRefusal();
+    if (refusal) return refusal;
+    const doors = this._hutDoors(game.hutSystem.roomHuts());
+    const maze = game.currentRoom.maze;
+    if (maze?.doorPosition) {
+      doors.push({
+        cell: maze.doorPosition,
+        target: 'maze',
+        open: !!game.mazeSystem.exteriorDoorCell(),
+        enter: () => game.mazeSystem.enterMaze(),
+      });
+    }
+    return this._runIntoNearest(doors);
   }
 
   /**
@@ -91,7 +114,7 @@ export class BeelineSystem {
     if (refusal) return refusal;
     if (!this.game.currentRoom.cavern) return '...NOTHING.';
     if (this.game.cavernSystem.hiddenDoorCell()) return 'SHUT.';
-    return this._runIntoNearest(this.game.hutSystem.roomHuts().filter(hut => hut.hutKind === 'cavern'));
+    return this._runIntoNearest(this._hutDoors(this.game.hutSystem.roomHuts().filter(hut => hut.hutKind === 'cavern')));
   }
 
   /**
@@ -195,19 +218,29 @@ export class BeelineSystem {
     return this.cast('north');
   }
 
-  // Run into the nearest of `huts` whose door would let the player in.
+  // Each hut record as a door to run into: its cell, whether it would let the
+  // player in right now, and what going in does.
+  _hutDoors(huts) {
+    const hutSystem = this.game.hutSystem;
+    return huts.map(hut => ({
+      cell: hut.doorPosition,
+      target: hut.hutKind === 'cavern' ? 'cave' : 'hut',
+      open: hutSystem.canEnter(hut),
+      enter: () => hutSystem.enterHut(hut),
+    }));
+  }
+
+  // Run into the nearest open one of `doors` and go in on arrival.
   // '...NOTHING.' when there are none, 'SHUT.' when every one is closed.
-  _runIntoNearest(huts) {
-    const game = this.game;
-    if (huts.length === 0) return '...NOTHING.';
-    const open = huts.filter(hut => game.hutSystem.canEnter(hut));
+  _runIntoNearest(doors) {
+    if (doors.length === 0) return '...NOTHING.';
+    const open = doors.filter(door => door.open);
     if (open.length === 0) return 'SHUT.';
     const C = GRID.CELL_SIZE;
-    const { x, y } = game.player.position;
-    const distance = h => Math.hypot(h.doorPosition.col * C - x, h.doorPosition.row * C - y);
-    const hut = open.reduce((best, h) => (distance(h) < distance(best) ? h : best));
-    this._runTo(hut.hutKind === 'cavern' ? 'cave' : 'hut', this._doorstep(hut.doorPosition),
-      () => game.hutSystem.enterHut(hut));
+    const { x, y } = this.game.player.position;
+    const distance = d => Math.hypot(d.cell.col * C - x, d.cell.row * C - y);
+    const door = open.reduce((best, d) => (distance(d) < distance(best) ? d : best));
+    this._runTo(door.target, this._doorstep(door.cell), door.enter);
     return null;
   }
 

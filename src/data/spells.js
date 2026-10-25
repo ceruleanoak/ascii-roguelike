@@ -372,6 +372,8 @@ export const SPELLS = {
   // Cavern door or the Maze door and go in; the EXIT forms run to the way out
   // from inside. OPENCAVE breaks the rock hiding a Cavern with a carried
   // Sledgehammer, Onyx Hammer or bomb.
+  // ENTER — whichever of those doors is nearest.
+  'ENTER':     { response: (game) => game.beelineSystem.enter() },
   'ENTERHUT':  { response: (game) => game.beelineSystem.enterHut() },
   'EXITHUT':   { response: (game) => game.beelineSystem.exitHut() },
   'OPENCAVE':  { response: (game) => game.beelineSystem.openCave() },
