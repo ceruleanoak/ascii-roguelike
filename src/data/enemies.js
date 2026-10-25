@@ -999,6 +999,7 @@ export const ENEMIES = {
     // Most weapons barely move it; a hammer sends it flying.
     knockbackTaken: { default: 0.25, bySubtype: { hammer: 2.0 } },
     affinities: ['fire'],
+    motif: { name: 'bumper', bars: 2 },
     tier: 'weak'
   },
 
