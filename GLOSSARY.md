@@ -937,6 +937,29 @@ identity, not standard programming terms.
   in `src/data/neutralRooms.js`; spawned via `NeutralRoomSystem`.
 - **Not:** an Enemy (NPCs are non-hostile); not a Companion (NPCs don't follow the player).
 
+### Jeweler
+- **Definition:** The NPC (`J`) who makes Gem Necklaces and the Rainbow Necklace from the
+  player's gems and coins, without a String. First found collapsed in the J Room, begging
+  for water. A Bottle of Water or a Health Potion refreshes them for the rest of the run, and
+  from then on they sit beside the Shopkeeper in every Settlement.
+- **In code:** `Jeweler` (`src/entities/Jeweler.js`, a `NeutralCharacter`). The water hand-off
+  and wares modal are in `JewelerSystem`; the wares are `JEWELER_WARES` and the accepted drinks
+  `JEWELER_DRINKS` (`src/data/jewelerWares.js`); the overlay is `JewelerOverlay`. Run flag
+  `game.jewelerRefreshed` (Reset Registry, `run` scope). Settlement seat: the `shopkeeper`
+  branch of `HutSystem.generateHutInterior` (`behindCounter: true`).
+- **Not:** the Shopkeeper (fixed necklace wares that never sell out, paid partly in gems); not a
+  Gravejumper, which is the enemy that shares the `J` glyph.
+
+### J Room
+- **Definition:** The yellow-only exit letter `J`: an enemy-free clearing where the parched
+  Jeweler lies. Once the Jeweler is refreshed, J is retired for the run. It is never rolled
+  again, and the Sword of the Letter skips it.
+- **In code:** `EXIT_LETTERS.J` (`roomType: 'JEWELER'`), `ROOM_TYPES.JEWELER`,
+  `generateJewelerRoom` (`src/systems/roomFeatures.js`), template `LETTER_TEMPLATES.J`.
+  Retirement is `isLetterRetired` (`src/systems/ExitSystem.js`), read by
+  `getLetterWeightsForZone` and `cycleExitLetter`.
+- **Not:** a Settlement (S); the J Room has no huts.
+
 ### Dig
 - **Definition:** A tamed rat with no target walks to a nearby mud tile and digs it for 3s.
   The dig has a 20% chance to unearth one plant Ingredient (Root, Leaf, Herb, Stick, Sap).
@@ -1544,6 +1567,15 @@ identity, not standard programming terms.
   `src/data/items.js` as Ingredients; recipes in `src/data/recipes.js` combine gem + base
   weapon.
 - **Not:** a regular Ingredient or Crafted item; a special upgrade path for weapons.
+
+### Rainbow Necklace
+- **Definition:** The four Gem Necklaces in one: a passive consumable (`ᑚ`) that takes −1 off
+  burn, freeze and electric damage and halves poison and goo slow. Only the Jeweler makes it,
+  from Ruby, Sapphire, Topaz and Emerald plus 3 coins.
+- **In code:** `ITEMS['ᑚ']` (`src/data/items.js`): `elementReduction` + `poisonResist` /
+  `slimeResist`, summed by `EquipmentEffectsSystem`. No recipe. Sold as the last row of
+  `JEWELER_WARES`.
+- **Not:** the Rainbow Stone (the forged form with magic damage; unbuilt, see planning inbox).
 
 ### Errand
 - **Definition:** An NPC-initiated task that the player can accept and complete (e.g., fetch
