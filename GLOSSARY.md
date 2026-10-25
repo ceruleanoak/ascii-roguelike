@@ -1342,7 +1342,7 @@ identity, not standard programming terms.
   exit warp takes over.
   Refused when the exit is shut or a Barricade still stands across that exit's lane, solid or
   passive (lava). ESCAPE/FLEE first drops every weapon at the player's feet, which opens the
-  way back to REST, then Beelines south; going to REST deletes whatever the player dropped
+  way back to REST, then Beelines south; going to REST deletes whatever the player dropped or had knocked loose
   (`Item.droppedByPlayer`, filtered out in `saveExploreRoomState`).
 - **In code:** `src/systems/BeelineSystem.js` — `cast(direction)`, `escape()`, `isActive()`
   (drives the dodge trail in main.js), `reset()` (Reset Registry, room scope). Exit openness

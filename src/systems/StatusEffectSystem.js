@@ -209,8 +209,8 @@ export function disarmPlayer(game, pickupDelayMs = DISARM_PICKUP_DELAY_MS) {
   item.position.y = player.position.y;
   item.velocity = { vx: Math.cos(angle) * DISARM_SPEED, vy: Math.sin(angle) * DISARM_SPEED };
   item.pickupReadyAt = performance.now() + pickupDelayMs;
-  // Knocked loose, not put down — survives a trip to REST like any loot.
-  item.droppedByPlayer = false;
+  // Knocked loose still counts as dropped — gone once the player goes to REST.
+  item.droppedByPlayer = true;
   item.plane = player.plane ?? 0;
   item.hutPlane = activeInteriorFloor(game) !== null;
   item.mazePlane = player.inMaze === true;
