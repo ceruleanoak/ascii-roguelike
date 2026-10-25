@@ -586,13 +586,19 @@ export class InteractionSystem {
     // for a full-health player instead.
     if (player.hp >= player.maxHp) return false;
 
-    // Small fixed heal. No text — the HP readout blinks instead.
+    this.healFromFairy(fairy);
+    return true;
+  }
+
+  /** Spend `fairy` on the small fixed heal. No text — the HP readout blinks instead. */
+  healFromFairy(fairy) {
+    const game = this.game;
+    const player = game.player;
     player.hp = Math.min(player.maxHp, player.hp + FAIRY_HEAL);
     game.audioSystem?.playSFX?.('fairy_pickup');
     game.menuSystem?.updateUI?.();
     this._blinkHPDisplay();
     fairy.consume();
-    return true;
   }
 
   /** Index of the armed (number-key selected) Empty Bottle slot, or -1. */
@@ -621,6 +627,13 @@ export class InteractionSystem {
     const fairy = this._nearestCatchableFairy();
     if (!fairy) return false;
 
+    this.bottleFairy(fairy, slotIndex);
+    return true;
+  }
+
+  /** Catch `fairy` in the Empty Bottle at consumable slot `slotIndex`. */
+  bottleFairy(fairy, slotIndex) {
+    const game = this.game;
     // A caught Fairy King becomes the reusable on-hit heal, not the revive.
     const isKing = fairy instanceof FairyKing;
     const bottled = isKing ? '♔' : '⚱';
@@ -633,7 +646,6 @@ export class InteractionSystem {
     game.audioSystem?.playSFX?.('fairy_pickup');
     game.menuSystem?.updateUI?.();
     fairy.consume();
-    return true;
   }
 
   /**
@@ -654,6 +666,14 @@ export class InteractionSystem {
     const fairy = this._nearestCatchableFairy({ excludeKing: true });
     if (!fairy) return false;
 
+    this.blessFromFairy(fairy);
+    return true;
+  }
+
+  /** Spend `fairy` on the blessing: permanent +1 max HP, healed to full. */
+  blessFromFairy(fairy) {
+    const game = this.game;
+    const player = game.player;
     player.maxHp += 1;
     player.hp = player.maxHp;
     game.audioSystem?.playSFX?.('fairy_pickup');
@@ -661,12 +681,11 @@ export class InteractionSystem {
     game.menuSystem?.updateUI?.();
     this._blinkHPDisplay();
     fairy.consume();
-    return true;
   }
 
   /**
    * Nearest fairy within FAIRY_CATCH_RADIUS that is willing to be caught.
-   * Only 'flutter' (fairy-grass) fairies qualify. A fountain room's 'ambient'
+   * Only 'flutter' (fairy-grass) fairies qualify (isCatchableFairy). A fountain room's 'ambient'
    * flock belongs to the fountain — it can't be bottled or blessed from, so
    * +1 max HP / a bottled revive stays a fairy-grass trade-off against the
    * fountain's water and weapon upgrades, and the per-frame flock reseed in
@@ -674,7 +693,6 @@ export class InteractionSystem {
    * delivering or carrying is mid-errand and stays out of reach.
    */
   _nearestCatchableFairy({ excludeKing = false } = {}) {
-    const CATCHABLE = new Set(['flutter']);
     const player = this.game.player;
     if (!player) return null;
     const px = player.position.x + (player.width ?? GRID.CELL_SIZE) / 2;
@@ -683,8 +701,7 @@ export class InteractionSystem {
     let best = null;
     let bestDist = FAIRY_CATCH_RADIUS;
     for (const char of this.game.neutralCharacters || []) {
-      if (!(char instanceof Fairy) || char.consumed) continue;
-      if (!CATCHABLE.has(char.state)) continue;
+      if (!this.isCatchableFairy(char)) continue;
       if (excludeKing && char instanceof FairyKing) continue;
       const dist = Math.hypot(px - char.position.x, py - char.position.y);
       if (dist < bestDist) {
@@ -693,6 +710,11 @@ export class InteractionSystem {
       }
     }
     return best;
+  }
+
+  /** Whether `char` is a fairy willing to be caught (see _nearestCatchableFairy). */
+  isCatchableFairy(char) {
+    return char instanceof Fairy && !char.consumed && char.state === 'flutter';
   }
 
   // Retrigger the HP heal-blink CSS animation by toggling the class off/on.

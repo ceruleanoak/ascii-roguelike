@@ -190,6 +190,12 @@ export class AlchemySystem {
   // into that loadout (InventorySystem.tryPickupItem), so it was already
   // unreachable dead code.
 
+  /** The bottle an in-world liquid tile fills (LIQUID_TILE_TO_BOTTLE), or null when it isn't one. */
+  liquidBottleFor(obj) {
+    const state = this._liquidStateOf(obj);
+    return state ? LIQUID_TILE_TO_BOTTLE[state] : null;
+  }
+
   _liquidStateOf(obj) {
     if (obj.destroyed) return null;
     if (obj.isLava?.()) return 'lava';

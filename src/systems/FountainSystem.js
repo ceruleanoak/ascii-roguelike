@@ -354,19 +354,26 @@ export class FountainSystem {
   // nearest tile centre. Returns true if it filled the bottle.
   tryFillArmedBottle(slotIndex) {
     const game = this.game;
-    const room = game.currentRoom;
-    if (!room || room.type !== ROOM_TYPES.FOUNTAIN || !room.fountain) return false;
     // A corrupted pool is no longer fairy water. Fall through to the ordinary
     // liquid-bottle path so it yields whatever the element turned it into.
-    if (room.fountain.corrupted) return false;
+    const bottleChar = this.poolBottleChar();
+    if (!bottleChar) return false;
     if (!this.isPlayerAtPool()) return false;
 
-    const bottleChar = FOUNTAIN_BOTTLES[room.fountain.attunement || 'none'];
     game.inventorySystem.replaceConsumableSlot(slotIndex, bottleChar);
     game.menuSystem.announceItem(bottleChar);
     game.audioSystem?.playSFX?.('pickup');
     game.updateUI();
     return true;
+  }
+
+  // The bottle this room's pool fills right now, or null when there is no
+  // fairy water to take (not a fountain room, or the pool is corrupted).
+  poolBottleChar() {
+    const room = this.game.currentRoom;
+    if (!room || room.type !== ROOM_TYPES.FOUNTAIN || !room.fountain) return null;
+    if (room.fountain.corrupted) return null;
+    return FOUNTAIN_BOTTLES[room.fountain.attunement || 'none'];
   }
 
   // ── Corruption ────────────────────────────────────────────────────────────

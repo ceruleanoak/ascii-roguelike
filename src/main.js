@@ -81,6 +81,7 @@ import { FightSystem } from './systems/FightSystem.js';
 import { HarvestSystem } from './systems/HarvestSystem.js';
 import { CraftSpellSystem } from './systems/CraftSpellSystem.js';
 import { TakeAllSystem } from './systems/TakeAllSystem.js';
+import { GetSpellSystem } from './systems/GetSpellSystem.js';
 import { settlePickup } from './systems/pickupSettlement.js';
 import { PunchSystem } from './systems/PunchSystem.js';
 import { WishSystem } from './systems/WishSystem.js';
@@ -260,6 +261,7 @@ class Game {
     this.harvestSystem = new HarvestSystem(this); // CHOP / MINE / HARVEST spells
     this.craftSpellSystem = new CraftSpellSystem(this); // CRAFT spell
     this.takeAllSystem = new TakeAllSystem(this);       // TAKEALL spell
+    this.getSpellSystem = new GetSpellSystem(this);     // GETLAVA / GETWATER / GETMUD / GETFAIRY spells
     this.punchSystem = new PunchSystem(this);     // unarmed SPACE
     this.wishSystem = new WishSystem();
     this.ridgeSystem = new RidgeSystem(this);

@@ -391,6 +391,15 @@ export const SPELLS = {
   // starts; the pull is the answer.
   'TAKEALL': { response: (game) => game.takeAllSystem.cast() },
 
+  // GETLAVA / GETWATER / GETMUD — fill the first equipped Empty Bottle from
+  // that liquid anywhere in the room the player could walk to, without
+  // touching it; GETWATER takes hot water first. GETFAIRY needs no bottle
+  // (heal or blessing without one). Silent on success (GetSpellSystem).
+  'GETLAVA':  { response: (game) => game.getSpellSystem.cast('lava') },
+  'GETWATER': { response: (game) => game.getSpellSystem.cast('water') },
+  'GETMUD':   { response: (game) => game.getSpellSystem.cast('mud') },
+  'GETFAIRY': { response: (game) => game.getSpellSystem.cast('fairy') },
+
   'NORTH': { response: _lookDirection('north') },
   'EAST':  { response: _lookDirection('east') },
   'WEST':  { response: _lookDirection('west') },

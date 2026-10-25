@@ -1441,6 +1441,23 @@ identity, not standard programming terms.
 - **Not:** ingredient attraction (the always-on short-range pull); never opens the slot-choice
   prompt.
 
+### Get (Spell)
+- **Definition:** The GETLAVA, GETWATER, GETMUD and GETFAIRY Spells: take that liquid or a fairy
+  from anywhere in the room the player could walk to, without touching it (lava doesn't burn,
+  water doesn't wet). The liquids fill the first equipped Empty Bottle; GETWATER takes the best
+  water in reach: a hot spring, then the fountain's pool, then the hut trough or plain water,
+  then electrified water. GETFAIRY needs no bottle: with one equipped the fairy is caught,
+  without one it heals the player, or blesses them (+1 max HP) at full health. "Could walk to"
+  is a flood over the player's steering terrain: walls, solid objects, lava and deep water stop
+  it, so an islet or the far side of a lava moat is out of reach. REST, EXPLORE or NEUTRAL;
+  `NO BOTTLE.` (a liquid, none equipped), `...NOTHING.` (nothing in reach).
+- **In code:** `src/systems/GetSpellSystem.js` — `cast(kind)`; fills through
+  `AlchemySystem.fillLiquidBottle` / `fillHotWaterBottle` / `fillBottle` and
+  `FountainSystem.poolBottleChar`; fairies through `InteractionSystem.bottleFairy` /
+  `healFromFairy` / `blessFromFairy`; reach from `buildTerrainGrid` (`steeringTerrain.js`).
+- **Not:** a walk — the player stays put; not a bottle from the carried inventory (equipped
+  slots only, as with the armed-bottle gesture).
+
 ### Consumable
 - **Definition:** A single-use Crafted item that can be equipped in a consumable slot or used
   directly, applying an instant or temporary effect to the player.
