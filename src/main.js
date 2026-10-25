@@ -110,6 +110,7 @@ import { WeaponsMasterSystem } from './systems/WeaponsMasterSystem.js';
 import { CharonSystem } from './systems/CharonSystem.js';
 import { StorytellerSystem } from './systems/StorytellerSystem.js';
 import { ShopSystem } from './systems/ShopSystem.js';
+import { JewelerSystem } from './systems/JewelerSystem.js';
 import { WizardSystem } from './systems/WizardSystem.js';
 import { PearlSystem } from './systems/PearlSystem.js';
 import { CompanionSystem } from './systems/CompanionSystem.js';
@@ -289,6 +290,7 @@ class Game {
     this.charonSystem = new CharonSystem(this);
     this.storytellerSystem = new StorytellerSystem(this);
     this.shopSystem = new ShopSystem(this);
+    this.jewelerSystem = new JewelerSystem(this);
     this.wizardSystem = new WizardSystem(this);
     this.pearlSystem = new PearlSystem(this);
     this.pauseSystem = new PauseSystem(this);
@@ -3081,6 +3083,9 @@ class Game {
 
       // Hut Weapons Master coin training (gated on advice heard — see WeaponsMasterSystem)
       if (this.weaponsMasterSystem.trySpacePress()) return;
+
+      // Jeweler: water hand-off, then necklace wares (J room / Settlement counter)
+      if (this.jewelerSystem.trySpacePress()) return;
 
       // Hut Shopkeeper barter (no dialogue box — see Shopkeeper.getDialogueLines)
       if (this.shopSystem.trySpacePress()) return;

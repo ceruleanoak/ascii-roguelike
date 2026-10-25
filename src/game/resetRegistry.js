@@ -604,6 +604,12 @@ export const RESET_REGISTRY = [
     why: "The voice Charon last spoke in this run ('ferry' or 'cursed'; CharonSystem.trySpacePress); later visits in the same voice skip the dialogue and go straight to the toll. A new run hears him again.",
   },
   {
+    path: 'jewelerRefreshed',
+    scope: 'run',
+    value: false,
+    why: "Set when the player gives the parched Jeweler water (JewelerSystem); from then on the J letter is never offered and the Jeweler sits beside the Shopkeeper in every Settlement. A new run finds them parched in the J room again.",
+  },
+  {
     path: 'thrownLastWeapon',
     scope: 'run',
     value: false,

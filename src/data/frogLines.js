@@ -14,6 +14,7 @@ import { FairyKing } from '../entities/FairyKing.js';
 import { Fisherman } from '../entities/Fisherman.js';
 import { FriendlyGoblin } from '../entities/FriendlyGoblin.js';
 import { Hatter } from '../entities/Hatter.js';
+import { Jeweler } from '../entities/Jeweler.js';
 import { PuzzleSpirit } from '../entities/PuzzleSpirit.js';
 import { Shopkeeper } from '../entities/Shopkeeper.js';
 import { Storyteller } from '../entities/Storyteller.js';
@@ -37,5 +38,6 @@ export const FROG_LINES = new Map([
   [ErrandCharacter, 'Can\'t send a frog on errands. Go soak in the lake until somebody kisses you.'],
   [WiseFellow,      'Every frog in every story is waiting on a kiss. Look for still water.'],
   [Shopkeeper,      'No frogs in the shop. Take it up with the lake.'],
+  [Jeweler,         'A frog with no fingers for a ring. The lake has a kiss that fixes that.'],
   [WizardNPC,       'Hedge-witch work. It comes undone where the water is deepest.'],
 ]);

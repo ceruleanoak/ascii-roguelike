@@ -1322,6 +1322,7 @@ export class AudioSystem {
     this.loadSFX('bomb_ripen', `${base}assets/audio/sfx-bomb-ripen.wav`);
     // Gray zone — placeholder names, no assets yet (playSFX no-ops on null).
     this.loadSFX('mist_take', null);   // depth-10 mist-out sequence
+    this.loadSFX('jeweler_drink', null); // the parched Jeweler drinks the water given
     this.loadSFX('bone_rise', null);   // Risen reassembling from its bone pile
     // P-room puzzles + key items — placeholder names, no assets yet.
     this.loadSFX('puzzle_pulse', null);  // correct listening-stone strike

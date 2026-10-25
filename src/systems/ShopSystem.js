@@ -1,9 +1,8 @@
-import { Item } from '../entities/Item.js';
-import { tagLootLayer } from './PlaneSystem.js';
 import { Shopkeeper } from '../entities/Shopkeeper.js';
 import { menuIntent } from './MenuInput.js';
 import { ShopOverlay } from '../rendering/ui/ShopOverlay.js';
 import { computePawnSellValue } from '../data/shopPricing.js';
+import { deliverPurchase } from './purchaseDelivery.js';
 
 /**
  * ShopSystem — the Settlement Shopkeeper's paid barter flow.
@@ -319,52 +318,12 @@ export class ShopSystem {
 
     row.sold = true;
     this.shopkeeper.resetStaleness();
-    const player = game.player;
-    const result = this._tryDeliverItem(row, player);
-
-    // Full quick/armor/consumable slots: SlotReplacementSystem must be the
-    // only active modal (PauseSystem allows one at a time), so close the
-    // shop and hand off. tryPickupItem is a no-op in this branch — nothing
-    // was spliced/consumed — so it's safe to have called it before closing.
-    // The player re-opens the shop with SPACE afterward to keep shopping.
-    if (result.needsSlotChoice) {
-      game.pauseSystem.closeModal();
-      game.slotReplacementSystem.maybeOpen(result);
-      return;
-    }
-
-    if (result.success) {
-      game.menuSystem.announcePickupResult(result);
-      if (result.pickedUpType === 'WEAPON') game.audioSystem.playSFX('weapon_pickup');
-      game.updateUI();
-    }
-    // Borrowed from the well/camp-NPC/fisherman/weapons-master coin arcs for
-    // parity — same purchase cue, no visual arc (the menu already confirms
-    // the transaction, so there's nothing for an animation to add here).
-    game.audioSystem?.playSFX?.('coin_plink');
+    if (deliverPurchase(game, row.char)) return;
 
     // Shop stays open for additional purchases — back to the row list with
     // this row now marked sold, rather than closing after every buy.
     this.mode = 'list';
     this._clearBarter();
-  }
-
-  /**
-   * Runs the purchased item through InventorySystem.tryPickupItem, same
-   * pipeline a ground pickup uses, against a private one-item scratch array
-   * (not game.items, since tryPickupItem returns on the first item within
-   * range and a hut's own spawned bread loaf could otherwise get picked up
-   * instead). Returns the raw result — _confirmPurchase decides what to do
-   * with it, since a needsSlotChoice result has to close the shop's own
-   * modal first.
-   */
-  _tryDeliverItem(row, player) {
-    const game = this.game;
-    const scratch = [tagLootLayer(game, new Item(row.char, player.position.x, player.position.y))];
-    return game.inventorySystem.tryPickupItem(
-      scratch, game.placedTraps, player, game.physicsSystem,
-      true, 0, 0, game.renderer
-    );
   }
 
   // ── Pawn mode ────────────────────────────────────────────────────────────
