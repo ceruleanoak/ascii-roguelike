@@ -1082,28 +1082,9 @@ export class ExitSystem {
           // them under the completed-zone / post-Goo-Dragon rules it unlocked.
           this.recolorExitsAfterZoneBoss(room);
 
-          // Pre-boss gate: depth (bossDepth - 1) cleared → north-only 'B' exit + anticipation music.
-          // Uses >= (not ===) as a self-correcting safety net: if the player somehow
-          // ends up clearing a non-boss room at or past bossDepth with the boss still
-          // undefeated (e.g. depth-jump cheat, corrupted state), the very next room is
-          // still forced to the boss via the same gate rather than staying stuck.
-          const preBossZone = room.zone || 'green';
-          const preBossDepth = game.zoneDepths[preBossZone] || 0;
-          const preBossZoneBossDepth = ZONES[preBossZone]?.bossDepth;
-          if (preBossZoneBossDepth != null && preBossDepth >= preBossZoneBossDepth - 1 && !game.zoneSystem.defeatedBosses?.has(preBossZone)) {
-            game.preBossGateActive = true;
-            room.exits.east = null;
-            room.exits.west = null;
-            // Color MUST match the current zone's exitColor so recordExit keeps
-            // the streak intact in checkZoneTransition. ExploreRenderer paints
-            // the pulse from preBossGateActive, not from this stored color.
-            room.exits.north = { letter: 'B', color: ZONES[preBossZone].exitColor };
-            // The room already generated (and may have raised a Barricade
-            // across this same lane) before this retrofit existed to consult
-            // it — clear any plug now blocking the forced gate (bug #298).
-            game.barricadeSystem.liftForGate(room);
-            game.audioSystem.startBossAnticipation();
-          }
+          // Pre-boss gate: depth (bossDepth - 1) cleared → north-only 'B'
+          // exit + anticipation music (ZoneSystem.applyPreBossGate).
+          game.zoneSystem.applyPreBossGate(game);
 
           // Pre-miniboss gate: depth 8 cleared → north-only 'B' exit steering
           // toward the depth-9 mandatory miniboss.

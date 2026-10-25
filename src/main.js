@@ -886,6 +886,10 @@ class Game {
       // zones without one keep their EXPLORE track loaded (layer 2 muted
       // below serves as the "peaceful" fallback).
       this.audioSystem.switchRestMusic(this.audioSystem.currentMusicZone, import.meta.env.BASE_URL);
+    } else if (this.audioSystem.mode === 'zoneSequence') {
+      // Red/yellow sequential music — REST track if the zone has one,
+      // otherwise the sequence carries over (restarted after a death).
+      this.audioSystem.restFromZoneSequence(import.meta.env.BASE_URL);
     }
     // Note: when entering REST from a non-green zone (cyan, red) with no
     // dedicated REST track, the current zone's EXPLORE music carries over
@@ -1634,6 +1638,11 @@ class Game {
     this.applyRoomSwap(this.currentRoom, { resetEntities: !shouldRestoreExploreRoom });
 
     // Leshy chase rooms will get shaking bush AFTER clearing (same as first encounter)
+
+    // A restored gate room gets its gate (and boss anticipation) back —
+    // enterRestState dropped both. Before switchZoneMusic, which then defers
+    // to the boss tracks.
+    if (shouldRestoreExploreRoom) this.zoneSystem.reapplyGatesOnRestore(this);
 
     // Switch music based on zone (covers all entry paths: new room, restore, and leavingRest)
     this.audioSystem.switchZoneMusic(this.currentRoom?.zone || 'green', import.meta.env.BASE_URL);

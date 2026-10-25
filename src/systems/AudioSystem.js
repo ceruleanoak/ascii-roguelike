@@ -1124,15 +1124,20 @@ export class AudioSystem {
    * Resolve a zone's dual-layer buffer paths for REST: its dedicated REST
    * track (used for both layers — layer 2 stays muted) if one exists,
    * otherwise the zone's EXPLORE track as the "peaceful" fallback. Sets
-   * inRestMode accordingly and switches to it immediately (used only for the
-   * boss-retreat path, where the prior 'sequence' mode has no loop position
-   * to synchronize against).
+   * inRestMode accordingly and switches to it immediately (used for the
+   * boss-retreat path and sequential-zone REST entry, where the prior
+   * 'sequence'/'zoneSequence' mode has no dual loop position to synchronize
+   * against).
    * @param {string} zone
    * @param {string} base - BASE_URL prefix
    */
   loadRestBuffers(zone, base) {
     const restPath = this.getRestMusicPath(zone);
     this.inRestMode = !!restPath;
+    // The fallback is the green EXPLORE track whatever the zone — record that,
+    // or a red retreat leaves currentMusicZone === 'red' and switchZoneMusic
+    // skips the swap back to the red sequence on the way back in.
+    if (!restPath) this.currentMusicZone = 'green';
     const [l1, l2] = restPath
       ? [`${base}${restPath}`, `${base}${restPath}`]
       : [`${base}assets/audio/layer1.mp3`, `${base}assets/audio/layer2.mp3`];
@@ -1193,6 +1198,28 @@ export class AudioSystem {
     this.inRestMode = true;
     this.currentMusicZone = zone;
     this.switchMusicAtLoopEnd(`${base}${restPath}`, `${base}${restPath}`);
+  }
+
+  /**
+   * REST entry while a sequential zone (red/yellow) owns the output — the
+   * 'zoneSequence' counterpart of switchRestMusic. A zone with a dedicated
+   * REST track swaps to it (bug #257: yellow's sequence used to keep playing
+   * in the hub). A zone without one keeps its sequence, the same EXPLORE
+   * carryover dual zones get — but a death arrives here after stop() killed
+   * the sequence source, so it restarts. Left dead, REST stays silent, and so
+   * does the walk back into the zone: switchZoneMusic skips a zone that
+   * currentMusicZone says is already playing.
+   * @param {string} base - BASE_URL prefix
+   */
+  restFromZoneSequence(base) {
+    if (this.mode !== 'zoneSequence') return;
+    const zone = this.currentMusicZone;
+    if (this.getRestMusicPath(zone)) {
+      this.stopZoneSequence(); // mode → 'dual'
+      this.loadRestBuffers(zone, base).then(() => this.setLayer2Enabled(false));
+    } else if (!this.zoneSequenceSource) {
+      this.switchToZoneSequence(zone);
+    }
   }
 
   /**
@@ -1407,6 +1434,10 @@ export class AudioSystem {
     // Stop any red/yellow zoneSequence source — otherwise it keeps playing
     // underneath the boss track since it isn't one of layer1Source/layer2Source (#283).
     this._stopZoneSequenceSource();
+    // Cancel any zone/REST track still fetching (e.g. the REST track from a
+    // retreat, when the player turns straight back into the gate room) — it
+    // would otherwise start its dual sources on top of the boss track.
+    ++this._musicLoadId;
     // Stop current dual-layer sources
     for (const prop of ['layer1Source', 'layer2Source']) {
       if (this[prop]) {
@@ -1460,9 +1491,10 @@ export class AudioSystem {
     if (this.mode === 'sequence') {
       this._beginFullBossSequence();
     } else {
-      // Stop any red/yellow zoneSequence source — same reasoning as
-      // startBossAnticipation() above (#283).
+      // Stop any red/yellow zoneSequence source and cancel any in-flight
+      // zone/REST track load — same reasoning as startBossAnticipation() above.
       this._stopZoneSequenceSource();
+      ++this._musicLoadId;
       // Stop dual-layer playback and enter sequence mode
       for (const prop of ['layer1Source', 'layer2Source']) {
         if (this[prop]) {

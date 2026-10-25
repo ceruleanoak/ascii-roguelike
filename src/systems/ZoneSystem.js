@@ -503,6 +503,47 @@ export class ZoneSystem {
   }
 
   /**
+   * Pre-boss gate: depth (bossDepth - 1) cleared → north-only 'B' exit +
+   * anticipation music. Uses >= (not ===) as a self-correcting safety net:
+   * if the player somehow ends up clearing a non-boss room at or past
+   * bossDepth with the boss still undefeated (e.g. depth-jump cheat,
+   * corrupted state), the very next room is still forced to the boss via the
+   * same gate rather than staying stuck.
+   */
+  applyPreBossGate(game) {
+    const room = game.currentRoom;
+    const zone = room.zone || 'green';
+    const depth = game.zoneDepths[zone] || 0;
+    const bossDepth = ZONES[zone]?.bossDepth;
+    if (bossDepth == null || depth < bossDepth - 1 || this.defeatedBosses.has(zone)) return;
+    game.preBossGateActive = true;
+    room.exits.east = null;
+    room.exits.west = null;
+    // Color MUST match the current zone's exitColor so recordExit keeps
+    // the streak intact in checkZoneTransition. ExploreRenderer paints
+    // the pulse from preBossGateActive, not from this stored color.
+    room.exits.north = { letter: 'B', color: ZONES[zone].exitColor };
+    // The room already generated (and may have raised a Barricade
+    // across this same lane) before this retrofit existed to consult
+    // it — clear any plug now blocking the forced gate (bug #298).
+    game.barricadeSystem.liftForGate(room);
+    game.audioSystem.startBossAnticipation();
+  }
+
+  /**
+   * Re-raise the gates on a cleared gate room restored from REST. Retreating
+   * south clears both gate flags and stops the anticipation music
+   * (enterRestState), but the saved room comes back with its 'B' exit — so
+   * without this the walk back north arrives to plain zone music, with no
+   * gate pulse and no anticipation.
+   */
+  reapplyGatesOnRestore(game) {
+    if (!game.currentRoom?.cleared) return;
+    this.applyPreBossGate(game);
+    this.applyPreMinibossGate(game);
+  }
+
+  /**
    * Depth-8 room clear steers the exit toward the depth-9 mandatory miniboss,
    * mirroring the pre-boss gate's north-only 'B' exit forcing.
    */
