@@ -113,6 +113,7 @@ export class Player {
     this.hasCollision = true;
     this.boundToGrid = true;
     this.collisionMap = null; // Set by game state
+    this.slipsCorners = true; // PhysicsSystem corner slip into one-cell gaps, in every mode
     this.plane = 0; // 0=normal plane, 1=tunnel plane
     this.aquiferCurrent = null; // {x,y} px/s carrier push, set per frame by AquiferSystem
     // Interior membership (ADR-0001); accessors on prototype (InteriorManager.js).

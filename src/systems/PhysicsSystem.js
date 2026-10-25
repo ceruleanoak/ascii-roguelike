@@ -734,10 +734,11 @@ export class PhysicsSystem {
         entity.pinnedDuration = 2.0;
         entity.pinOnWallContact = false;
       }
-      // Maze corridors are exactly one body wide, so a turn otherwise needs
-      // pixel-perfect alignment. Scoped to the Maze; the same helper would
-      // serve any other one-cell-corridor collisionMap if it ever needs it.
-      if (entity.inMaze && entity.collisionMap) {
+      // A one-cell corridor or gap is exactly one body wide, so entering it
+      // otherwise needs pixel-perfect alignment. Everything in the Maze slips;
+      // elsewhere only the player (`slipsCorners`), since enemies and NPCs
+      // route through their own pathing.
+      if ((entity.inMaze || entity.slipsCorners) && entity.collisionMap) {
         if (collision.x && intendedVx !== 0 && Math.abs(intendedVy) < 1) {
           this._slipAroundCorner(entity, 'x', intendedVx, deltaTime * velocityMultiplier, room);
         } else if (collision.y && intendedVy !== 0 && Math.abs(intendedVx) < 1) {
