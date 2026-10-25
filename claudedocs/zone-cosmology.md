@@ -182,8 +182,8 @@ way south, which gives the EXIT command in puzzle form."*
 2. **True ending** — completing the THREE room.
 3. **Pure ending** — completing the THREE room with the pure items (the True 3:
    `⬢`/`⫪` `⊙` `🜛` — Onyx or Cinder Hammer). It unseals the way south of REST, and what waits there gives
-   the **EXIT** command in puzzle form.
-4. **The non-ending conclusion** — EXIT itself: the player leaves the game and
+   the **EXITGAME** command (alias CLOSEGAME; called EXIT until 2026-10-25) in puzzle form.
+4. **The non-ending conclusion** — EXITGAME itself: the player leaves the game and
    becomes the creator. See "Path to Canon."
 
 Still open from the old list: whether "all 3 zone bosses in one run" gets an
@@ -197,7 +197,7 @@ canon, reshaping the entire run. "You have 'won' by making the game into
 whatever you want it to be." The player becomes the creator.
 
 - **The way out is a word.** Typed anywhere, any run, by anyone who knows it:
-  `EXIT`. The THREE asks `ARE YOU SURE?`; any affirmative closes the game. The
+  `EXITGAME` (or `CLOSEGAME`). The THREE asks `ARE YOU SURE?`; any affirmative closes the game. The
   pure ending is where the word is learned — knowledge is the only gate, and
   the save file stays mental right up to the exit.
 - **The CLI.** A `>` prompt, always center screen, with a blinking cursor.

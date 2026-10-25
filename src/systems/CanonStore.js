@@ -3,7 +3,7 @@
  * Canon, claudedocs/zone-cosmology.md).
  *
  * Holds Canon Edits only: what the player authored in the CLI, plus the
- * flag recording that they have left the game through EXIT. Runs never
+ * flag recording that they have left the game through CLOSEGAME / EXITGAME. Runs never
  * persist — inventory, depth and unlocks earned in play must never be
  * written here. `npm run check:arch` fails on localStorage/sessionStorage/
  * indexedDB anywhere else in src/.
@@ -59,7 +59,7 @@ export const CanonStore = {
     }
   },
 
-  /** Record that the player has left the game through EXIT. */
+  /** Record that the player has left the game through CLOSEGAME / EXITGAME. */
   setExited() {
     const canon = this.load();
     canon.exited = true;

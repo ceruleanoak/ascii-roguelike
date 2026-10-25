@@ -174,6 +174,21 @@ const COMMAND_FOLLOWUPS = Object.fromEntries(
     .map(d => [d.trueName, (game) => game.commandSystem?.commandNearest(d.trueName) ?? '...NOTHING.'])
 );
 
+
+// CLOSEGAME and EXITGAME are one spell under two names.
+const EXIT_GAME_SPELL = {
+  response: 'ARE YOU SURE?',
+  followUps: {
+    'YES':  { action: (game) => game.cliSystem.requestExit() },
+    'Y':    { action: (game) => game.cliSystem.requestExit() },
+    'SURE': { action: (game) => game.cliSystem.requestExit() },
+    'OK':   { action: (game) => game.cliSystem.requestExit() },
+    'AYE':  { action: (game) => game.cliSystem.requestExit() },
+    'NO':   '...',
+    'NAY':  '...',
+  },
+};
+
 export const SPELLS = {
   // Dev menu. The THREE stays silent (null response); the cheat menu opens.
   // Replaces the old backslash key — a word anyone can learn.
@@ -183,20 +198,14 @@ export const SPELLS = {
   },
 
   // Path to Canon: leaving the game is the non-ending. Knowledge is the
-  // only gate — EXIT works anywhere, in any run. An affirmative closes the
-  // game into the CLI; anything else lets the run go on.
-  'EXIT': {
-    response: 'ARE YOU SURE?',
-    followUps: {
-      'YES':  { action: (game) => game.cliSystem.requestExit() },
-      'Y':    { action: (game) => game.cliSystem.requestExit() },
-      'SURE': { action: (game) => game.cliSystem.requestExit() },
-      'OK':   { action: (game) => game.cliSystem.requestExit() },
-      'AYE':  { action: (game) => game.cliSystem.requestExit() },
-      'NO':   '...',
-      'NAY':  '...',
-    },
-  },
+  // only gate — CLOSEGAME / EXITGAME work anywhere, in any run. An
+  // affirmative closes the game into the CLI; anything else lets the run go on.
+  'CLOSEGAME': EXIT_GAME_SPELL,
+  'EXITGAME':  EXIT_GAME_SPELL,
+
+  // EXIT — leave the hut, Cavern or Maze the player is in, the same run as
+  // EXITHUT / EXITMAZE (BeelineSystem.exit).
+  'EXIT': { response: (game) => game.beelineSystem.exit() },
 
   'HEX': {
     response: (game) => {
@@ -369,8 +378,8 @@ export const SPELLS = {
   'HEADSOUTH': { response: (game) => game.beelineSystem.cast('south') },
   // ENTERHUT / ENTERCAVE / ENTERMAZE — Beeline to the nearest hut door (a
   // Settlement's closest hut; an opened Cavern when there is no hut), the
-  // Cavern door or the Maze door and go in; the EXIT forms run to the way out
-  // from inside. OPENCAVE breaks the rock hiding a Cavern with a carried
+  // Cavern door or the Maze door and go in; the EXIT forms (and bare EXIT,
+  // above) run to the way out from inside. OPENCAVE breaks the rock hiding a Cavern with a carried
   // Sledgehammer, Onyx Hammer or bomb.
   // ENTER — whichever of those doors is nearest.
   'ENTER':     { response: (game) => game.beelineSystem.enter() },

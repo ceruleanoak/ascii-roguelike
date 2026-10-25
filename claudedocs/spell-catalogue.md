@@ -34,6 +34,7 @@ These are called **Spells**, never "commands". *Command* belongs to `CommandSyst
 | EXPLORE | Same as GONORTH in REST (north is the way out to EXPLORE) | `BeelineSystem.goExplore` | REST only, otherwise '...NOTHING.'. After that, GONORTH's checks apply. | built |
 | ESCAPE / FLEE | Drop every weapon at the player's feet (the escape route opens), then check the south exit and Beeline to REST. Going to REST deletes everything the player dropped (`droppedByPlayer`), so the weapons are gone for good. | `BeelineSystem.escape` → `TrapSystem.dropLoadout` | EXPLORE only (REST answers ONLY ONE WAY.). The drop always happens; the exit check (REST not sealed) comes after it, like any GO. | built |
 | ENTER | Beeline to whichever door in the room is nearest (any hut, an opened Cavern, the Maze) and go in, same as the specific form | `BeelineSystem.enter` | EXPLORE, on the surface. `...NOTHING.` with no door (a Cavern behind its rock isn't one); `SHUT.` when every door is closed. | built |
+| EXIT | Leave whichever hut, Cavern or Maze the player is in, same as EXITHUT / EXITMAZE. (Closing the game moved to CLOSEGAME / EXITGAME.) | `BeelineSystem.exit` | Inside a hut, Cavern or Maze, otherwise `...NOTHING.`; EXITMAZE's `SHUT.` applies in a sealed Maze. | built |
 | ENTERHUT | Beeline to the nearest hut door the player could go in by (in a Settlement, the closest of its huts) and go in on arrival. Stops on the open cell beside the door, so the way back out lands somewhere walkable. With no hut in the room, an opened Cavern counts. | `BeelineSystem.enterHut` → `HutSystem.enterHut` | EXPLORE, on the surface. `...NOTHING.` with no hut in the room; `SHUT.` when every hut is closed (a raised Witch hut, a locked Shed while full-size). | built |
 | EXITHUT | From inside a hut (or a Cavern), Beeline to its door and step out | `BeelineSystem.exitHut` → `HutSystem.exitHut` | On a hut floor, otherwise `...NOTHING.` | built |
 | OPENCAVE | Beeline to the Bombable Rock hiding the room's Cavern and break it, through the same path a bomb takes (`CavernSystem.bombBlast`). Force, best first: a Sledgehammer or Onyx Hammer in a quick slot (kept), an equipped Bomb (spent), a Remote Bomb (one room charge). Spent on arrival. | `BeelineSystem.openCave` → `CavernSystem.openHiddenDoor` | EXPLORE, on the surface. `...NOTHING.` with no hidden Cavern; `TOO HARD.` with no force carried. | built |
@@ -83,7 +84,7 @@ Refusal lines are drafts to tune:
 | SCORE | The THREE's answer about the run (no numbers shown that the UI doesn't already show) | `spells.js` | queued |
 | PRAY | The THREE's answer, possibly zone-flavored | `spells.js` | queued |
 
-Already shipped utility Spells that stay as they are: CLEANSE, HEAL, UNCURSE, REVIVE, CONTINUE, BRIDGE, SIT/SITDOWN, CALL/COMMAND, HEX (learned), FROG (learned), CHEAT, EXIT.
+Already shipped utility Spells that stay as they are: CLEANSE, HEAL, UNCURSE, REVIVE, CONTINUE, BRIDGE, SIT/SITDOWN, CALL/COMMAND, HEX (learned), FROG (learned), CHEAT, CLOSEGAME/EXITGAME (renamed from EXIT 2026-10-25).
 
 ## Excluded
 

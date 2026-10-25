@@ -143,6 +143,16 @@ export class BeelineSystem {
   }
 
   /**
+   * EXIT: leave whichever hut, Cavern or Maze the player is in — EXITHUT or
+   * EXITMAZE, as fits.
+   * @returns {string|null} null when the Beeline starts, else the THREE's refusal
+   */
+  exit() {
+    if (this.game.player?.inMaze) return this.exitMaze();
+    return this._runOutOfHut(false);
+  }
+
+  /**
    * EXITCAVE: EXITHUT, but only from inside a Cavern.
    * @returns {string|null} null when the Beeline starts, else the THREE's refusal
    */

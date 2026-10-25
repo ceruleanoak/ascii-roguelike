@@ -1355,7 +1355,8 @@ identity, not standard programming terms.
 
 ### Beeline
 - **Definition:** An invulnerable rapid run, leaving a trail, from where the player stands to an
-  open exit, cast by GO/HEAD <direction> and by ESCAPE/FLEE; ENTER (nearest door of any kind), ENTERHUT/EXITHUT,
+  open exit, cast by GO/HEAD <direction> and by ESCAPE/FLEE; ENTER (nearest door of any kind), EXIT (out of the current hut, Cavern or Maze),
+  ENTERHUT/EXITHUT,
   ENTERCAVE/EXITCAVE and ENTERMAZE/EXITMAZE run it to a hut, Cavern or Maze door and go through
   on arrival (ENTERHUT picks the nearest hut that would let the player in, or an opened Cavern
   when the room has no hut); OPENCAVE runs it to the Bombable Rock hiding a Cavern and breaks it
@@ -1366,7 +1367,7 @@ identity, not standard programming terms.
   passive (lava). ESCAPE/FLEE first drops every weapon at the player's feet, which opens the
   way back to REST, then Beelines south; going to REST deletes whatever the player dropped or had knocked loose
   (`Item.droppedByPlayer`, filtered out in `saveExploreRoomState`).
-- **In code:** `src/systems/BeelineSystem.js` — `cast(direction)`, `escape()`, `enter()`, `enterHut()`/`exitHut()`
+- **In code:** `src/systems/BeelineSystem.js` — `cast(direction)`, `escape()`, `enter()`, `exit()`, `enterHut()`/`exitHut()`
   (via `HutSystem.roomHuts`/`canEnter`/`enterHut`/`exitHut`), `enterMaze()`/`exitMaze()` (via
   `MazeSystem.exteriorDoorCell`/`enterMaze`/`exitMaze`), `enterCave()`/`exitCave()`/`openCave()` (via
   `CavernSystem.hiddenDoorCell`/`openingForce`/`openHiddenDoor`), `isActive()`
