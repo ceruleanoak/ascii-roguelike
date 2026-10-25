@@ -97,6 +97,16 @@ export class BeelineSystem {
     return this.cast('south');
   }
 
+  /**
+   * EXPLORE: in REST, north is the way out to EXPLORE, so this is GONORTH.
+   * Anywhere else the player is already out.
+   * @returns {string|null} null when the Beeline starts, else the THREE's refusal
+   */
+  goExplore() {
+    if (this.game.stateMachine?.getCurrentState() !== GAME_STATES.REST) return '...NOTHING.';
+    return this.cast('north');
+  }
+
   /** Clear the run marker (Reset Registry, room scope). */
   reset() {
     this.active = null;
