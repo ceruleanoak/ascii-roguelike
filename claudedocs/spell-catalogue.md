@@ -29,8 +29,8 @@ These are called **Spells**, never "commands". *Command* belongs to `CommandSyst
 
 | Word(s) | Effect | Owner | Gate | Status |
 |---|---|---|---|---|
-| GONORTH / GOEAST / GOWEST / GOSOUTH, HEADNORTH / HEADEAST / HEADWEST / HEADSOUTH | **Beeline** to that exit, then the normal exit warp | `BeelineSystem.cast` | Exit open (`ExitSystem.isExitOpen`; REST: north, or south on a Cursed run). No Barricade standing across the lane (`BarricadeSystem.standsAcross`). Not inside an interior. | built |
-| ESCAPE / FLEE | Drop every weapon at the player's feet (the escape route opens), then Beeline south to REST. The weapons stay in the room. | `BeelineSystem.escape` → `TrapSystem.dropLoadout` | EXPLORE only (REST answers ONLY ONE WAY.). REST not sealed. A path exists. Every refusal is checked before anything drops. | built |
+| GONORTH / GOEAST / GOWEST / GOSOUTH, HEADNORTH / HEADEAST / HEADWEST / HEADSOUTH | **Beeline** to that exit in one straight line, then the normal exit warp | `BeelineSystem.cast` | Exit open (`ExitSystem.isExitOpen`; REST: north, or south on a Cursed run). No Barricade standing across the lane (`BarricadeSystem.standsAcross`). Not inside an interior. | built |
+| ESCAPE / FLEE | Drop every weapon at the player's feet (the escape route opens), then check the south exit and Beeline to REST. Going to REST deletes everything the player dropped (`droppedByPlayer`), so the weapons are gone for good. | `BeelineSystem.escape` → `TrapSystem.dropLoadout` | EXPLORE only (REST answers ONLY ONE WAY.). The drop always happens; the exit check (REST not sealed) comes after it, like any GO. | built |
 | GO<glyph> | Beeline to that hut, NPC or door. On arrival, run the owner's interaction (hut door → `InteriorManager.enterFloor`). | `BeelineSystem` + the target's interaction owner | Target visible in the active room | queued (see grammar 5 for the open part) |
 | GOOUT / LEAVE | Leave the current interior | `InteriorManager.exitFloor` | Inside a floor | queued |
 | GODOWN | Take the stairs / descent | Dungeon floor owner | Stairs present and open | queued |
@@ -38,7 +38,6 @@ These are called **Spells**, never "commands". *Command* belongs to `CommandSyst
 Refusal lines are drafts to tune:
 - `SHUT.`: the exit is closed.
 - `SOMETHING BARS THE WAY.`: a Barricade stands across the lane.
-- `NO WAY THERE.`: no path.
 - `...NOTHING.`: wrong state, inside an interior, or already moving.
 
 **Barricade note.** Barricades of material plugs never set `cleared` when they break. The lava moat (a hazard plug) never lifts. So `standsAcross` checks whether any plug object is still in the room, and does not read the flag. No poison Barricade exists yet. A future hazard Barricade is covered by the same generic plug check.

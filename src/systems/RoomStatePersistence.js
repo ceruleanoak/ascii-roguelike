@@ -17,7 +17,8 @@ import { GAME_STATES } from '../game/GameConfig.js';
 
 export function saveExploreRoomState(inv, currentRoom, items, ingredients, placedTraps, enemies = [], backgroundObjects = [], captives = []) {
   inv.savedExploreRoom = currentRoom;
-  inv.savedExploreItems = [...items];
+  // What the player put down here is gone by the time they come back.
+  inv.savedExploreItems = items.filter(item => !item.droppedByPlayer);
   inv.savedExploreIngredients = [...ingredients];
   inv.savedExplorePlacedTraps = [...placedTraps];
   inv.savedExploreEnemies = [...enemies];

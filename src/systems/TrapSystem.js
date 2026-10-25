@@ -831,6 +831,7 @@ export class TrapSystem {
     item.position.y = t.y - C / 2;
     item.velocity = { vx: 0, vy: 0 };
     item.pickupReadyAt = performance.now() + 600;
+    item.droppedByPlayer = true;
     item.plane = t.plane ?? 0;
     // Absolute (not additive) — an item that was picked up inside a hut keeps
     // hutPlane=true on its inventory entry, so re-throwing it on the surface

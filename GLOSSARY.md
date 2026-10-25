@@ -1337,11 +1337,13 @@ identity, not standard programming terms.
 
 ### Beeline
 - **Definition:** An invulnerable rapid run, leaving a trail, from where the player stands to an
-  open exit, cast by GO/HEAD <direction> and by ESCAPE/FLEE. It routes around walls but phases
-  through Background Objects, and ends in the exit lane so the normal exit warp takes over.
+  open exit, cast by GO/HEAD <direction> and by ESCAPE/FLEE. It runs in one straight line,
+  phasing through walls and Background Objects alike, and ends in the exit lane so the normal
+  exit warp takes over.
   Refused when the exit is shut or a Barricade still stands across that exit's lane, solid or
   passive (lava). ESCAPE/FLEE first drops every weapon at the player's feet, which opens the
-  way back to REST, then Beelines south.
+  way back to REST, then Beelines south; going to REST deletes whatever the player dropped
+  (`Item.droppedByPlayer`, filtered out in `saveExploreRoomState`).
 - **In code:** `src/systems/BeelineSystem.js` — `cast(direction)`, `escape()`, `isActive()`
   (drives the dodge trail in main.js), `reset()` (Reset Registry, room scope). Exit openness
   via `ExitSystem.isExitOpen`; Barricade check via `BarricadeSystem.standsAcross`; the drop via

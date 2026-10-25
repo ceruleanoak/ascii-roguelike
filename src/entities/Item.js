@@ -114,6 +114,11 @@ export class Item {
     // Plane while lying on the ground (PlaneSystem) — the Aquifer's Offshoot
     // loot lies on plane 1.
     this.plane = 0;
+    // Set while lying where the player put it down (TrapSystem._placeOnGround —
+    // a thrown or tossed landing, an ESCAPE drop). Going to REST deletes it
+    // from the saved room (saveExploreRoomState), so nothing left behind waits
+    // there for the way back.
+    this.droppedByPlayer = false;
 
     // Weapon state
     this.cooldownTimer = 0;
