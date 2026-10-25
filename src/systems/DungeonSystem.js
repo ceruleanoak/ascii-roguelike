@@ -600,11 +600,11 @@ export class DungeonSystem {
         if (r.itemAttack) game.combatSystem.createEnemyAttack(r.itemAttack);
         if (r.shouldDropSlimeTrail) {
           const t = r.shouldDropSlimeTrail;
-          game._dropSlimeTrail(t.x, t.y, t.plane);
+          game.worldEffectsSystem.dropSlimeTrail(t.x, t.y, t.plane);
         }
         if (r.shouldPlaceTrail && r.trailData) {
           const td = r.trailData;
-          game._spawnEnemyTrailPuddle(td.x, td.y, td.type, td.radius, enemy.plane ?? 0, td.duration);
+          game.worldEffectsSystem.spawnEnemyTrailPuddle(td.x, td.y, td.type, td.radius, enemy.plane ?? 0, td.duration);
         }
       }
 

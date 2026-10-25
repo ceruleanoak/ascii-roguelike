@@ -1111,7 +1111,7 @@ export class TrapSystem {
       // sliding out past the blast and laying slime trail behind it. Not an
       // explosive — no shake or smoke (createExplosionAftermath).
       const plane = item.plane ?? 0;
-      game._dropSlimeTrail(cx, cy, plane);
+      game.worldEffectsSystem.dropSlimeTrail(cx, cy, plane);
       createGooBurst(game, cx, cy, { count: 8, reach: r * 1.5, plane });
       game.audioSystem?.playSFX('goo_hit');
     } else if (trapData.effect === 'freeze') {

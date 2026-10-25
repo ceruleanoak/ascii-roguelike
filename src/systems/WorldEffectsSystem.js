@@ -1,5 +1,6 @@
 import { GRID } from '../game/GameConfig.js';
 import { GooBlob } from '../entities/GooBlob.js';
+import { Puddle } from '../entities/Puddle.js';
 import { createDebris } from '../entities/Debris.js';
 import { createFootstep, createWetDrop, createSteamPuff, createChaff, WET_DROP_COLOR } from '../entities/Particle.js';
 import { statusEffectColor } from './StatusEffectVisuals.js';
@@ -465,7 +466,7 @@ export class WorldEffectsSystem {
       const tdx = gooBlob.position.x - gooBlob.trailLastX;
       const tdy = gooBlob.position.y - gooBlob.trailLastY;
       if (tdx * tdx + tdy * tdy >= SLIME_TRAIL_DROP_PX_SQ) {
-        game._dropSlimeTrail(gooBlob.position.x, gooBlob.position.y, gooBlob.plane ?? 0);
+        this.dropSlimeTrail(gooBlob.position.x, gooBlob.position.y, gooBlob.plane ?? 0);
         gooBlob.trailLastX = gooBlob.position.x;
         gooBlob.trailLastY = gooBlob.position.y;
       }
@@ -860,6 +861,65 @@ export class WorldEffectsSystem {
       piece.setCollisionMap(enemy.collisionMap);
       game.debris.push(piece);
       game.physicsSystem.addEntity(piece);
+    }
+  }
+
+  // ── Trail tiles ────────────────────────────────────────────────────────
+
+  // Stamp a trail tile of `type` at (x, y). Overlapping nearby same-type tiles
+  // bump their overlap counter and grow to maxR — moving entities leave a
+  // thinning trail, lingering ones accumulate a thicker pool. Lifetime is the
+  // per-tile decay; enemy fire/ice trails pass the enemy's configured trailDuration.
+  dropTrailTile(x, y, type, plane = 0, lifetime = 7.0) {
+    if (!this.game.puddles) return;
+    const baseR = GRID.CELL_SIZE / 8;          // Quarter-cell side at spawn (thin trail)
+    const maxR = GRID.CELL_SIZE / 4;           // Half-cell side at max growth (thick pool)
+
+    // Count visual overlaps with existing same-type tiles on this plane, and
+    // bump each touched tile's overlap counter. A tile rendered at half-width
+    // snaps to full once its overlap count reaches 2 — so the middle of any
+    // continuous trail thickens while the endpoints stay thin.
+    let newCount = 0;
+    for (const p of this.game.puddles) {
+      if (p.type !== type) continue;
+      if ((p.plane ?? 0) !== plane) continue;
+      const dx = p.position.x - x;
+      const dy = p.position.y - y;
+      if (Math.abs(dx) < p.radius + maxR && Math.abs(dy) < p.radius + maxR) {
+        p.overlapCount = (p.overlapCount ?? 0) + 1;
+        if (p.overlapCount >= 2) p.radius = maxR;
+        p.age = 0;
+        newCount++;
+      }
+    }
+
+    const newPuddle = new Puddle(x, y, newCount >= 2 ? maxR : baseR, type, plane, {
+      shape: 'square', opaque: true, lifetime
+    });
+    newPuddle.overlapCount = newCount;
+    // Tag with the active interior so the render path filters surface vs interior puddles.
+    tagInteriorPlane(this.game, newPuddle);
+    this.game.puddles.push(newPuddle);
+    return newPuddle;
+  }
+
+  dropSlimeTrail(x, y, plane) {
+    return this.dropTrailTile(x, y, 'slimeTrail', plane ?? 0, 7.0);
+  }
+
+  // Stamp a disk of trail tiles for an enemy's fire/ice trail.
+  // `radius` controls the disk coverage of each drop event.
+  // `duration` is the per-tile lifetime in seconds from the enemy's trailMechanic config.
+  spawnEnemyTrailPuddle(x, y, type, radius, plane, duration) {
+    if (!this.game.puddles) return;
+    const p = plane ?? 0;
+    const life = duration ?? 7.0;
+    this.dropTrailTile(x, y, type, p, life);
+    const RING_TILES = 6;
+    const RING_RADIUS = radius * 0.6;
+    for (let i = 0; i < RING_TILES; i++) {
+      const a = (i / RING_TILES) * Math.PI * 2;
+      this.dropTrailTile(x + Math.cos(a) * RING_RADIUS, y + Math.sin(a) * RING_RADIUS, type, p, life);
     }
   }
 }

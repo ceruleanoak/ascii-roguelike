@@ -1,5 +1,5 @@
 {
-  "src/main.js": 169959,
+  "src/main.js": 168903,
   "src/systems/RoomGenerator.js": 156744,
   "src/entities/Enemy.js": 105291,
   "src/rendering/state/ExploreRenderer.js": 95164,

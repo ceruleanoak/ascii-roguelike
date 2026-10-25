@@ -434,7 +434,7 @@ export class EnemyUpdateSystem {
 
     if (updateResult.shouldPlaceTrail) {
       const td = updateResult.trailData;
-      game._spawnEnemyTrailPuddle(td.x, td.y, td.type, td.radius, enemy.plane ?? 0, td.duration);
+      game.worldEffectsSystem.spawnEnemyTrailPuddle(td.x, td.y, td.type, td.radius, enemy.plane ?? 0, td.duration);
     }
 
     if (updateResult.shouldBuff) {
@@ -500,7 +500,7 @@ export class EnemyUpdateSystem {
   // turns the stamp live, lava, or nothing depending on the active Imbue.
   _dropEnemySlimeTrail(enemy, x, y, plane) {
     if (enemy?.data?.imbue?.enabled) this.game.imbuePoolSystem.dropTrail(enemy, x, y, plane);
-    else this.game._dropSlimeTrail(x, y, plane);
+    else this.game.worldEffectsSystem.dropSlimeTrail(x, y, plane);
   }
 
   _handleLeapLand(player, ld, enemy) {

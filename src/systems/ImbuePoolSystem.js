@@ -191,10 +191,10 @@ export class ImbuePoolSystem {
     const element = enemy.imbue?.element;
     if (element === 'ice') return;
     if (element === 'fire') {
-      game._dropTrailTile(x, y, 'lava', plane ?? 0, LAVA_TRAIL_LIFETIME);
+      game.worldEffectsSystem.dropTrailTile(x, y, 'lava', plane ?? 0, LAVA_TRAIL_LIFETIME);
       return;
     }
-    const stamp = game._dropSlimeTrail(x, y, plane);
+    const stamp = game.worldEffectsSystem.dropSlimeTrail(x, y, plane);
     if (element === 'electric') stamp?.electrify(0, { pips: 1, source: enemy });
   }
 }

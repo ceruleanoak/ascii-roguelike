@@ -131,7 +131,6 @@ import { GooBlob } from './entities/GooBlob.js';
 import { Crow } from './entities/Crow.js';
 import { NPCRat } from './entities/NPCRat.js';
 import { Particle, createExplosion, createDodgeTrail } from './entities/Particle.js';
-import { Puddle } from './entities/Puddle.js';
 import { Leshy } from './entities/Leshy.js';
 import { CharacterNPC } from './entities/CharacterNPC.js';
 import { WiseFellow } from './entities/WiseFellow.js';
@@ -1357,7 +1356,6 @@ class Game {
       this.magicSystem.addMana(this.player, grant);
     }
 
-
     // Save player state from previous room
     // Ingredients need no saving — the pile is on InventorySystem, which no
     // room transition touches
@@ -1601,7 +1599,6 @@ class Game {
     }
     this.characterSystem.restoreMagicMeterForRoomTransition(this.player, capturedMagicMeter, this.activeCharacterType);
 
-
     // Reset trap charges (and the Bomb Bag's free Bomb) when entering from
     // REST or restoring saved room
     if (leavingRest || shouldRestoreExploreRoom) {
@@ -1823,63 +1820,6 @@ class Game {
     this.fireSystem?.reset();
   }
 
-  // Stamp a trail tile of `type` at (x, y). Overlapping nearby same-type tiles
-  // bump their overlap counter and grow to maxR — moving entities leave a
-  // thinning trail, lingering ones accumulate a thicker pool. Lifetime is the
-  // per-tile decay; enemy fire/ice trails pass the enemy's configured trailDuration.
-  _dropTrailTile(x, y, type, plane = 0, lifetime = 7.0) {
-    if (!this.puddles) return;
-    const baseR = GRID.CELL_SIZE / 8;          // Quarter-cell side at spawn (thin trail)
-    const maxR = GRID.CELL_SIZE / 4;           // Half-cell side at max growth (thick pool)
-
-    // Count visual overlaps with existing same-type tiles on this plane, and
-    // bump each touched tile's overlap counter. A tile rendered at half-width
-    // snaps to full once its overlap count reaches 2 — so the middle of any
-    // continuous trail thickens while the endpoints stay thin.
-    let newCount = 0;
-    for (const p of this.puddles) {
-      if (p.type !== type) continue;
-      if ((p.plane ?? 0) !== plane) continue;
-      const dx = p.position.x - x;
-      const dy = p.position.y - y;
-      if (Math.abs(dx) < p.radius + maxR && Math.abs(dy) < p.radius + maxR) {
-        p.overlapCount = (p.overlapCount ?? 0) + 1;
-        if (p.overlapCount >= 2) p.radius = maxR;
-        p.age = 0;
-        newCount++;
-      }
-    }
-
-    const newPuddle = new Puddle(x, y, newCount >= 2 ? maxR : baseR, type, plane, {
-      shape: 'square', opaque: true, lifetime
-    });
-    newPuddle.overlapCount = newCount;
-    // Tag with the active interior so the render path filters surface vs interior puddles.
-    tagInteriorPlane(this, newPuddle);
-    this.puddles.push(newPuddle);
-    return newPuddle;
-  }
-
-  _dropSlimeTrail(x, y, plane) {
-    return this._dropTrailTile(x, y, 'slimeTrail', plane ?? 0, 7.0);
-  }
-
-  // Stamp a disk of trail tiles for an enemy's fire/ice trail.
-  // `radius` controls the disk coverage of each drop event.
-  // `duration` is the per-tile lifetime in seconds from the enemy's trailMechanic config.
-  _spawnEnemyTrailPuddle(x, y, type, radius, plane, duration) {
-    if (!this.puddles) return;
-    const p = plane ?? 0;
-    const life = duration ?? 7.0;
-    this._dropTrailTile(x, y, type, p, life);
-    const RING_TILES = 6;
-    const RING_RADIUS = radius * 0.6;
-    for (let i = 0; i < RING_TILES; i++) {
-      const a = (i / RING_TILES) * Math.PI * 2;
-      this._dropTrailTile(x + Math.cos(a) * RING_RADIUS, y + Math.sin(a) * RING_RADIUS, type, p, life);
-    }
-  }
-
   update(deltaTime) {
     const state = this.stateMachine.getCurrentState();
 
@@ -1968,7 +1908,6 @@ class Game {
       this.stateMachine.transition(GAME_STATES.TITLE);
     }
   }
-
 
   // Shared player mechanics for both REST and EXPLORE modes
   updatePlayerMechanics(deltaTime) {
@@ -3360,7 +3299,6 @@ class Game {
     }
   }
 
-
   // Clear movement-locking state that would freeze the player after any revive
   // path (wish spell, Fairy in a Bottle, Phoenix Feather). Called from the
   // three revive sites to avoid duplicating the cleanup. Bug #1865.
@@ -3737,7 +3675,6 @@ class Game {
     return this.lootSystem.spawnItemDrop(char, x, y, angle, source);
   }
 
-
   findSpawnPosition(center, range, collisionMap, enemies) {
     return this.roomGenerator.findSpawnPosition(center, range, collisionMap, enemies);
   }
@@ -3800,13 +3737,9 @@ class Game {
 
 
 
-
-
-
   updateUI() {
     this.menuSystem.updateUI();
   }
-
 
   openEquipmentMenu(slotType) {
     this.menuSystem.openEquipmentMenu(slotType);
