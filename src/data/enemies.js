@@ -369,6 +369,7 @@ export const ENEMIES = {
       weakness: { 'freeze': 1.5 }
     },
     affinities: ['beast'],
+    motif: { name: 'boar', bars: 2 },
     tier: 'normal'
   },
 
@@ -2317,6 +2318,7 @@ export const ENEMIES = {
     color: '#eeeeee',
     elementalAffinity: { immunity: ['poison', 'lifesteal', 'burn'] },  // Bone — nothing left to poison, no blood to drink, no flesh to burn
     affinities: ['undead'],
+    motif: { name: 'skeleton', bars: 2 },
     tier: 'weak'
   },
 
