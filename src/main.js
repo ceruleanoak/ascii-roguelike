@@ -79,6 +79,8 @@ import { SpellSystem } from './systems/SpellSystem.js';
 import { BeelineSystem } from './systems/BeelineSystem.js';
 import { FightSystem } from './systems/FightSystem.js';
 import { CraftSpellSystem } from './systems/CraftSpellSystem.js';
+import { TakeAllSystem } from './systems/TakeAllSystem.js';
+import { settlePickup } from './systems/pickupSettlement.js';
 import { PunchSystem } from './systems/PunchSystem.js';
 import { WishSystem } from './systems/WishSystem.js';
 import { RidgeSystem } from './systems/RidgeSystem.js';
@@ -255,6 +257,7 @@ class Game {
     this.beelineSystem = new BeelineSystem(this); // GO / HEAD / ESCAPE spells
     this.fightSystem = new FightSystem(this);     // FIGHT spell
     this.craftSpellSystem = new CraftSpellSystem(this); // CRAFT spell
+    this.takeAllSystem = new TakeAllSystem(this);       // TAKEALL spell
     this.punchSystem = new PunchSystem(this);     // unarmed SPACE
     this.wishSystem = new WishSystem();
     this.ridgeSystem = new RidgeSystem(this);
@@ -2107,6 +2110,7 @@ class Game {
 
     // Update ingredient attraction, cooldown, and separation
     this.lootSystem.updateIngredientSeparation(deltaTime);
+    this.takeAllSystem.update(deltaTime); // TAKEALL pull
 
     // Update physics system
     this.physicsSystem.update(deltaTime, this.currentRoom ? this.currentRoom.backgroundObjects : []);
@@ -2580,6 +2584,7 @@ class Game {
 
     // Ingredient attraction, cooldown, and separation
     this.lootSystem.updateIngredientSeparation(deltaTime);
+    this.takeAllSystem.update(deltaTime); // TAKEALL pull
 
     // EXPLORE state: No item magnetization - all items require manual pickup with SPACE
     // (Only ingredients magnetize in all game states)
@@ -3629,42 +3634,7 @@ class Game {
     // Full quick slots: paused slot-choice prompt instead of auto-displacement
     if (this.slotReplacementSystem.maybeOpen(result)) return;
 
-    if (result.success) {
-      // Handle blessing pickup (apply blessing effect)
-      if (result.blessing) {
-        this.applyBlessing(result.blessing);
-      }
-
-      this.menuSystem.announcePickupResult(result);
-
-      if (result.pickedUpType === 'WEAPON' && this.stateMachine.currentState === GAME_STATES.EXPLORE) {
-        this.audioSystem.playSFX('weapon_pickup');
-      }
-
-      // The Three Room's globe only offers back what this run actually held.
-      this.threeSlotGlobeSystem.recordTouched(result.pickedUpChar);
-
-      // Key items (Vault Key / Skull Key) — held-confirmation sfx fires here,
-      // at the moment it's actually picked up, not when the carrying object
-      // is merely destroyed (InteractionSystem.handleObjectEffect).
-      if (result.pickedUpType === 'KEY') {
-        this.audioSystem.playSFX(result.pickedUpChar === '⚿' ? 'dungeon_key_pickup' : 'vault_key_pickup');
-      }
-
-      // Displaced item routes to REST chest instead of being dropped on the ground.
-      // In EXPLORE, deposit is deferred — it only reaches the chest on a safe
-      // REST return,
-      // discarded on death so displaced weapons don't survive a wipe.
-      if (result.droppedItem) {
-        if (this.stateMachine.currentState === GAME_STATES.EXPLORE) {
-          this.inventorySystem.deferToChest(result.droppedItem);
-        } else {
-          this.inventorySystem.addToChest(result.droppedItem);
-        }
-      }
-
-      this.updateUI();
-    }
+    if (result.success) settlePickup(this, result);
   }
 
   // Apply blessing (permanent buff from Leshy Grove)

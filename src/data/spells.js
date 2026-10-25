@@ -375,6 +375,12 @@ export const SPELLS = {
   // what came of it.
   'CRAFT': { response: (game) => game.craftSpellSystem.cast() },
 
+  // TAKEALL — once the room is safe (no enemies, exits open), every
+  // ingredient and item on the player's layer flies to them and is taken,
+  // stowed rather than asking for a slot (TakeAllSystem). Silent when it
+  // starts; the pull is the answer.
+  'TAKEALL': { response: (game) => game.takeAllSystem.cast() },
+
   'NORTH': { response: _lookDirection('north') },
   'EAST':  { response: _lookDirection('east') },
   'WEST':  { response: _lookDirection('west') },

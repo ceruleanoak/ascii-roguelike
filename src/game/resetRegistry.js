@@ -545,6 +545,13 @@ export const RESET_REGISTRY = [
     why: 'A FIGHT is against one room\'s enemies; leaving the room hands control back.',
   },
   {
+    path: 'takeAllSystem.reset',
+    scope: 'room',
+    call: (game) => game.takeAllSystem.reset(),
+    covers: [],
+    why: 'A TAKEALL pull gathers one room\'s loot; it stops at the room it was cast in.',
+  },
+  {
     path: 'punchSystem.reset',
     scope: 'room',
     call: (game) => game.punchSystem.reset(),

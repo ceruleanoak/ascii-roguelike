@@ -1407,6 +1407,21 @@ identity, not standard programming terms.
 - **Not:** a tier-up cycle (duplicate-weapon pairs are not Recipes and never roll); not the
   Dragon Forge.
 
+### Take All (Spell)
+- **Definition:** The TAKEALL Spell: once the room is safe (no counted enemy, exits open; REST
+  always is), every ingredient and item on the player's layer flies to the player and is taken
+  on arrival. Where a pickup would ask for a slot choice it stows instead: armor and
+  consumables into the carried inventory, a weapon or trap into the Item Chest (deferred in
+  the field). Unreachable loot stays put: another plane or layer, vault coins (`noGravitate`),
+  a full pile, a Cursed scroll. `NOT YET.` while enemies remain or the exits are shut;
+  `...NOTHING.` when there is nothing to take.
+- **In code:** `src/systems/TakeAllSystem.js` — `cast()`, `update()` (the pull, ticked beside
+  `LootSystem.updateIngredientSeparation`); ingredients via `LootSystem.collectIngredient`,
+  items via `InventorySystem.tryPickupItem` on a one-item array, then `settlePickup`
+  (`src/systems/pickupSettlement.js`, shared with SPACE pickup).
+- **Not:** ingredient attraction (the always-on short-range pull); never opens the slot-choice
+  prompt.
+
 ### Consumable
 - **Definition:** A single-use Crafted item that can be equipped in a consumable slot or used
   directly, applying an instant or temporary effect to the player.
