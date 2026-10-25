@@ -3,8 +3,10 @@ import { SPELLS } from '../data/spells.js';
 /**
  * SpellSystem — detects typed spells from the keystroke buffer.
  *
- * Detection scans linearly from the most recently entered key outward.
- * The first (shortest) match wins. "FIND" fires; "FINDE" does not.
+ * Detection scans the buffer's suffixes from the longest inward, so the
+ * longest registered word wins: GOWEST beats the WEST it ends in. Junk typed
+ * before a word never blocks it ("XFIND" fires FIND); letters typed after it
+ * do ("FINDE" fires nothing).
  *
  * When a spell has followUps, the system enters an awaiting state after it
  * fires. On the next buffer submission, follow-up words are checked first.
@@ -70,8 +72,8 @@ export class SpellSystem {
       return;
     }
 
-    // Normal spell detection.
-    for (let len = 1; len <= keyBuffer.length; len++) {
+    // Normal spell detection — longest suffix first (compound words win).
+    for (let len = keyBuffer.length; len >= 1; len--) {
       const word = keyBuffer.slice(keyBuffer.length - len).join('');
       const spell = SPELLS[word];
       if (spell) {

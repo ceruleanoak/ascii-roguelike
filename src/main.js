@@ -2770,7 +2770,7 @@ class Game {
     // North exit check (warp zone is at rows 1-2, below the wall)
     const inNorthExit = playerPx.y < northThreshold && gridPos.x === centerX;
     const crossedNorthExit = prevPx.y >= northThreshold && playerPx.y < northThreshold && gridPos.x === centerX;
-    if ((inNorthExit || crossedNorthExit || isPressingIntoExitGap(this.player, this.keys, 'north')) && this.currentRoom.exits.north && (!this.currentRoom.exitsLocked || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0) {
+    if ((inNorthExit || crossedNorthExit || isPressingIntoExitGap(this.player, this.keys, 'north')) && this.exitSystem.isExitOpen(this.currentRoom, this.player, 'north')) {
       const exitObj = this.currentRoom.exits.north;
 
       // The Three takes this exit whole — no path history, no generation.
@@ -2839,9 +2839,8 @@ class Game {
       const inSouthExit = playerPx.y >= southThreshold && gridPos.x === centerX;
       const crossedSouthExit = prevPx.y < southThreshold && playerPx.y >= southThreshold && gridPos.x === centerX;
 
-      // South exit opens if: 1) exits unlocked, 2) player has no items (escape route), OR 3) south exit exists
-      const canUseSouthExit = this.currentRoom.exits.south && (!this.currentRoom.exitsLocked || this.playerHasNoItems() || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0
-        && !this.cursedRunSystem.isRestSealed(this);
+      // South opens unlocked, or locked with nothing carried (escape route).
+      const canUseSouthExit = this.exitSystem.isExitOpen(this.currentRoom, this.player, 'south');
 
       if ((inSouthExit || crossedSouthExit || isPressingIntoExitGap(this.player, this.keys, 'south')) && canUseSouthExit) {
         // South exit is always boolean (returns to REST), not a letter
@@ -2864,7 +2863,7 @@ class Game {
       else {
         const inEastExit = playerPx.x >= eastThreshold && gridPos.y === centerY;
         const crossedEastExit = prevPx.x < eastThreshold && playerPx.x >= eastThreshold && gridPos.y === centerY;
-        if ((inEastExit || crossedEastExit || isPressingIntoExitGap(this.player, this.keys, 'east')) && this.currentRoom.exits.east && (!this.currentRoom.exitsLocked || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0) {
+        if ((inEastExit || crossedEastExit || isPressingIntoExitGap(this.player, this.keys, 'east')) && this.exitSystem.isExitOpen(this.currentRoom, this.player, 'east')) {
           const exitObj = this.currentRoom.exits.east;
           this.threeRoomSystem.breakStreak(); // only consecutive norths count
           this.zoneSystem.recordExit(exitObj);
@@ -2915,7 +2914,7 @@ class Game {
         else {
           const inWestExit = playerPx.x < westThreshold && gridPos.y === centerY;
           const crossedWestExit = prevPx.x >= westThreshold && playerPx.x < westThreshold && gridPos.y === centerY;
-          if ((inWestExit || crossedWestExit || isPressingIntoExitGap(this.player, this.keys, 'west')) && this.currentRoom.exits.west && (!this.currentRoom.exitsLocked || this.player.polymorphCursed) && (this.player.plane ?? 0) === 0) {
+          if ((inWestExit || crossedWestExit || isPressingIntoExitGap(this.player, this.keys, 'west')) && this.exitSystem.isExitOpen(this.currentRoom, this.player, 'west')) {
             const exitObj = this.currentRoom.exits.west;
             this.threeRoomSystem.breakStreak(); // only consecutive norths count
             this.zoneSystem.recordExit(exitObj);

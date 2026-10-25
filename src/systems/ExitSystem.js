@@ -955,6 +955,30 @@ export class ExitSystem {
     return null;
   }
 
+  /**
+   * Can the player leave an EXPLORE room through `direction` right now? An exit
+   * passes while the room is unlocked (or the player is polymorph-cursed, which
+   * ignores the lock), and only from plane 0. South is the way back to REST:
+   * it also opens on a locked room when nothing is carried (the escape route),
+   * and never once Charon's farewell has sealed REST for the run.
+   *
+   * The one predicate the per-frame exit checks and the Beeline both ask, so
+   * "the exit is open" cannot mean two different things.
+   *
+   * @param {object} room - the EXPLORE room
+   * @param {Player} player
+   * @param {'north'|'east'|'west'|'south'} direction
+   * @returns {boolean}
+   */
+  isExitOpen(room, player, direction) {
+    if (!room?.exits?.[direction] || (player.plane ?? 0) !== 0) return false;
+    if (direction === 'south') {
+      if (this.game.cursedRunSystem.isRestSealed(this.game)) return false;
+      return !room.exitsLocked || this.game.playerHasNoItems() || !!player.polymorphCursed;
+    }
+    return !room.exitsLocked || !!player.polymorphCursed;
+  }
+
   updateExitCollisions(room, player) {
     if (!room || !room.collisionMap) return;
 
