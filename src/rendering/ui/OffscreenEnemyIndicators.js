@@ -10,6 +10,7 @@
  * scaling/drifting with the zoom transform.
  */
 
+import { isConcealedEnemy } from '../../systems/enemyConcealment.js';
 import { GRID, COLORS } from '../../game/GameConfig.js';
 
 const INSET = 10;
@@ -30,15 +31,10 @@ export function drawOffscreenEnemyIndicators(renderer, game, enemies) {
     if (enemy.sapping || enemy.isBossEntity) continue;
     if (enemy.boundToGrid === false) continue; // mid exit-despawn walk out of the room
 
-    // Don't spoil enemies the surface render is actively concealing: fully
-    // faded into tall grass (renderEnemy sets _concealmentAlpha before this
-    // runs), shell-camouflaged turtles disguised as a rock, or a mimic still
-    // disguised as an item. The arrow should only ever point at threats the
-    // player could otherwise perceive as enemies.
-    if (enemy._concealmentAlpha !== undefined && enemy._concealmentAlpha < 0.005) continue;
-    if (enemy.data?.shellCamouflage && enemy.inShellForm) continue;
-    if (enemy.data?.mimicMechanic?.enabled && !enemy.mimicRevealed) continue;
-    if (enemy.sniperHidden) continue;
+    // Don't spoil enemies the surface render is actively concealing. The
+    // arrow should only ever point at threats the player could otherwise
+    // perceive as enemies.
+    if (isConcealedEnemy(enemy)) continue;
     if (game.cameraZoomSystem.isEntityOnScreen(enemy)) continue;
 
     const { x: ex, y: ey } = game.cameraZoomSystem.entityCanvasCenter(enemy);
