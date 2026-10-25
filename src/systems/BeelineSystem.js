@@ -1,13 +1,12 @@
 import { GRID, GAME_STATES } from '../game/GameConfig.js';
-import { bfsPath } from './npcSteering.js';
 
 // Beeline speed in px/s — three times the walk (PHYSICS PLAYER_SPEED 180).
 const BEELINE_SPEED = 540;
 
 /**
- * BeelineSystem — the Beeline: an invulnerable rapid run along a path to an
- * open exit, leaving a trail, cast by the GO / HEAD spells (and by ESCAPE,
- * which first drops every weapon so the way back to REST opens).
+ * BeelineSystem — the Beeline: an invulnerable rapid run in one straight line
+ * to an open exit, leaving a trail, cast by the GO / HEAD spells (and by
+ * ESCAPE, which first drops every weapon so the way back to REST opens).
  *
  * The Beeline only gets the player there. It ends with the player standing in
  * the exit lane, inside the threshold the per-frame exit check already reads,
@@ -18,8 +17,8 @@ const BEELINE_SPEED = 540;
  *
  * The run is an AnimationSystem sequence, which is where the invulnerability
  * comes from: PlayerDamageSystem ignores damage while `player._animLock` is
- * set. Waypoints come from a BFS over the collision map alone, so walls route
- * the run but Background Objects do not — the Beeline phases through them.
+ * set. The run is one straight segment from where the player stands to the
+ * exit lane: it phases through Background Objects and walls alike.
  *
  * Refuses (returning a narrator line) when the exit is shut or a Barricade
  * still stands across its lane, solid or passive (the lava moat).
@@ -61,26 +60,20 @@ export class BeelineSystem {
     if (game.barricadeSystem.standsAcross(room, direction)) return 'SOMETHING BARS THE WAY.';
 
     const goal = this._laneTarget(state, direction);
-    const waypoints = this._route(room.collisionMap, player.position, goal);
-    if (!waypoints) return 'NO WAY THERE.';
+    const duration = Math.hypot(goal.x - player.position.x, goal.y - player.position.y) / BEELINE_SPEED;
 
     this.active = direction;
-    let from = { x: player.position.x, y: player.position.y };
-    const steps = waypoints.map(to => {
-      const duration = Math.hypot(to.x - from.x, to.y - from.y) / BEELINE_SPEED;
-      from = to;
-      return { type: 'moveTo', x: to.x, y: to.y, duration, easing: 'linear' };
-    });
-    steps.push({ type: 'callback', fn: () => { this.active = null; } });
-    game.animationSystem.play(player, steps);
+    game.animationSystem.play(player, [
+      { type: 'moveTo', x: goal.x, y: goal.y, duration, easing: 'linear' },
+      { type: 'callback', fn: () => { this.active = null; } },
+    ]);
     return null;
   }
 
   /**
-   * ESCAPE / FLEE: let go of every weapon, which opens the way back to REST
-   * even in a locked room (the escape route, ExitSystem.isExitOpen), then
-   * Beeline south. Everything that could refuse is checked before anything
-   * is dropped, so a refused ESCAPE never costs the loadout.
+   * ESCAPE / FLEE: let go of every weapon first — that is what opens the way
+   * back to REST in a locked room (the escape route, ExitSystem.isExitOpen) —
+   * then Beeline south, which checks the now-open exit like any GO.
    * @returns {string|null} null when the flight starts, else the THREE's refusal
    */
   escape() {
@@ -89,9 +82,6 @@ export class BeelineSystem {
     const room = game.currentRoom;
     if (!player || !room || game.stateMachine?.getCurrentState() !== GAME_STATES.EXPLORE) return 'ONLY ONE WAY.';
     if (game.interiorManager.isActive || game.animationSystem.isAnimating(player)) return '...NOTHING.';
-    // The lock is the one thing empty hands answer; anything else stays shut.
-    if (!room.exits?.south || (player.plane ?? 0) !== 0 || game.cursedRunSystem.isRestSealed(game)) return 'SHUT.';
-    if (!this._route(room.collisionMap, player.position, this._laneTarget(GAME_STATES.EXPLORE, 'south'))) return 'NO WAY THERE.';
 
     game.trapSystem.dropLoadout();
     return this.cast('south');
@@ -126,29 +116,5 @@ export class BeelineSystem {
       case 'west':  return { x: C, y: cy };
     }
     return null;
-  }
-
-  // BFS from the player's cell to the goal's cell, then collapse straight
-  // runs into single segments and finish on the exact goal point. Waypoints
-  // are player positions (top-left), not cell centres.
-  _route(collisionMap, start, goal) {
-    if (!goal) return null;
-    const C = GRID.CELL_SIZE;
-    const sc = Math.floor((start.x + C / 2) / C), sr = Math.floor((start.y + C / 2) / C);
-    const ec = Math.floor((goal.x + C / 2) / C), er = Math.floor((goal.y + C / 2) / C);
-    const cells = (sc === ec && sr === er) ? [] : bfsPath(collisionMap, sc, sr, ec, er);
-    if (!cells) return null;
-
-    const points = cells.map(p => ({ x: p.x - C / 2, y: p.y - C / 2 }));
-    const corners = [];
-    for (let i = 0; i < points.length - 1; i++) {
-      const prev = i === 0 ? start : points[i - 1];
-      const next = points[i + 1];
-      const turns = Math.sign(points[i].x - prev.x) !== Math.sign(next.x - points[i].x)
-        || Math.sign(points[i].y - prev.y) !== Math.sign(next.y - points[i].y);
-      if (turns) corners.push(points[i]);
-    }
-    corners.push({ x: goal.x, y: goal.y });
-    return corners;
   }
 }
