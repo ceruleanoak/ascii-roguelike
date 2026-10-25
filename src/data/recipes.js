@@ -103,6 +103,7 @@ export const RECIPES = [
   { left: 'F', right: 'g', result: '⊗', name: 'Bomb' },          // Fire + Goo = Bomb
   { left: 'm', right: 'F', result: 'H', name: 'Health Potion' }, // Meat + Fire = Health Potion
   { left: 'y', right: 'y', result: '⊗', name: 'Bomb' },           // Firecracker + Firecracker = Bomb
+  { left: 'D', right: 'a', result: 'y', name: 'Firecracker' },    // Sand + Ash = Firecracker (second route; it also drops raw, like Fire Essence)
   { left: '🜄', right: 'm', result: 'H', name: 'Health Potion' },  // Base Potion + Meat = Health Potion
   { left: '🜄', right: 'w', result: 'q', name: 'Haste Draught' },  // Base Potion + Wing = Haste Draught
   { left: '🜄', right: 'b', result: 'x', name: 'Stone Skin' },     // Base Potion + Bone = Stone Skin

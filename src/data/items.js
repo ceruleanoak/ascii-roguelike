@@ -3327,8 +3327,8 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     []
     },
     consumables: {
-      [RARITY.COMMON]:   ['🜄'],              // Base Potion
-      [RARITY.UNCOMMON]: ['y', 'B'],         // Firecracker, Empty Bottle
+      [RARITY.COMMON]:   ['🜄', 'y'],         // Base Potion, Firecracker
+      [RARITY.UNCOMMON]: ['B'],              // Empty Bottle
       [RARITY.RARE]:     []
     }
   },
@@ -3352,8 +3352,8 @@ export const AFFINITY_POOLS = {
       [RARITY.RARE]:     ['𐤏']              // Ninja Garb
     },
     consumables: {
-      [RARITY.COMMON]:   ['🜄'],              // Base Potion
-      [RARITY.UNCOMMON]: ['∞', 'y'],         // Wings, Firecracker
+      [RARITY.COMMON]:   ['🜄', 'y'],         // Base Potion, Firecracker
+      [RARITY.UNCOMMON]: ['∞'],              // Wings
       [RARITY.RARE]:     ['♥', 'ѡ']        // Heart, Floating Boots
     }
   },
@@ -3383,8 +3383,8 @@ export const AFFINITY_POOLS = {
       [RARITY.EPIC]:     ['𐤓']             // Dragon Scale Armor
     },
     consumables: {
-      [RARITY.COMMON]:   ['🜄'],              // Base Potion
-      [RARITY.UNCOMMON]: ['y'],              // Firecracker
+      [RARITY.COMMON]:   ['🜄', 'y'],         // Base Potion, Firecracker
+      [RARITY.UNCOMMON]: [],
       [RARITY.RARE]:     ['★']             // Lucky Coin
     }
   },
@@ -3606,8 +3606,8 @@ export const AFFINITY_POOLS = {
       [RARITY.EPIC]:     ['𐤉', '𐤍', '𐤓']  // Ember Cloak, Ice Plate, Dragon Scale
     },
     consumables: {
-      [RARITY.COMMON]:   ['🜄', '⌬'],         // Base Potion, Bread
-      [RARITY.UNCOMMON]: ['y'],              // Firecracker
+      [RARITY.COMMON]:   ['🜄', '⌬', 'y'],    // Base Potion, Bread, Firecracker
+      [RARITY.UNCOMMON]: [],
       [RARITY.RARE]:     ['♥', '★', '∞', '♦', 'ѡ']
     }
   }
