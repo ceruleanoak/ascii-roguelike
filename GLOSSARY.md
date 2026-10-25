@@ -1382,10 +1382,14 @@ identity, not standard programming terms.
 - **Definition:** The auto-combat cast by the FIGHT Spell: the player is driven toward the
   nearest fightable enemy (alive, revealed, not aloft, not charmed, same plane) and attacks it
   with whatever is held (the Punch when nothing is), re-targeting as enemies fall, until the
-  player's next keypress. Damage still lands. EXPLORE only.
+  player's next keypress. A gun or bow shoots from range and moves between shots: a dodge roll
+  across the line of fire when the target is within 3 cells, a sidestep otherwise, and a
+  back-away to shooting range while the weapon reloads. When the player stops making progress
+  (beside a one-cell gap) it is eased onto the cell grid. Damage still lands. EXPLORE only.
 - **In code:** `src/systems/FightSystem.js` — `cast()`, `heldKeys()` (Steering's
   `steerHeading` → held WASD, fed to `PlayerInputSystem.heldMoveInput`, so the player walks at
-  its own speed), `update()` (face + attack),
+  its own speed), `rollDirection()` (the roll, read by `Game.getDodgeRollDirection` so every
+  character's roll applies), `update()` (face + attack, then the move between ranged shots),
   `onPlayerInput()` (main.js keydown), `reset()` (Reset Registry, room scope).
 - **Not:** a Beeline (not invulnerable, no animation); not "auto-battle" (that is the Mist
   Battle's Act 2); not a Companion command.

@@ -681,7 +681,8 @@ class Game {
 
   // Get current dodge roll direction from arrow key state
   getDodgeRollDirection() {
-    return Player.getDodgeRollDirection(this.arrowKeys);
+    // FIGHT rolls between ranged shots through the same path the arrows drive.
+    return this.fightSystem.rollDirection() ?? Player.getDodgeRollDirection(this.arrowKeys);
   }
 
   setupStateMachine() {

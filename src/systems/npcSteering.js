@@ -93,9 +93,11 @@ function shortcutWaypoint(grid, route, x, y, w, h) {
  *
  * For bodies whose velocity is computed elsewhere from a heading (the player,
  * driven by FIGHT through held keys). Everything else wants steerToward.
- * @returns {{ heading: {x:number, y:number}, mode: 'direct'|'route'|'detour'|'shore' }}
+ * @returns {{ heading: {x:number, y:number}, mode: 'direct'|'route'|'detour'|'shore', next?: {x:number, y:number} }}
  *   heading (0, 0) with mode 'shore' when the target is only reachable
  *   through a hazard and the body already stands at the nearest safe cell.
+ *   `next` (route mode, while re-centering in its own cell): the center of
+ *   the cell the route goes on to.
  */
 export function steerHeading(game, entity, targetX, targetY, speed) {
   const result = chooseHeading(game, entity, targetX, targetY, speed);
@@ -189,8 +191,10 @@ function chooseHeading(game, entity, targetX, targetY, speed) {
     return { heading: { x: 0, y: 0 }, mode: 'shore' };
   }
   const wp = shortcutWaypoint(grid, route, x, y, w, h);
-  const heading = wp.recenter ? landing(wp.x - x, wp.y - y, speed) : unit(wp.x - x, wp.y - y);
-  return { heading, mode: 'route' };
+  if (!wp.recenter) return { heading: unit(wp.x - x, wp.y - y), mode: 'route' };
+  // Re-centering first: `next` is the cell center the route goes on to, for a
+  // key-driven body that can't land a sub-pixel recenter (FIGHT).
+  return { heading: landing(wp.x - x, wp.y - y, speed), mode: 'route', next: { x: route[0].x, y: route[0].y } };
 }
 
 /**
