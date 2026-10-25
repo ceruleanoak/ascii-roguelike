@@ -82,13 +82,20 @@ function randomOpenSlot(closedSlots) {
 // that is a defined entry in EXIT_LETTERS. Wraps A→...→Z→A. Non-alphabet
 // inputs (e.g. '?') start the search from before 'A'. Used by the
 // Sword of the Letter to cycle exit destinations on hit.
-export function cycleExitLetter(currentLetter) {
+export function cycleExitLetter(currentLetter, game = null) {
   const startCode = /^[A-Z]$/.test(currentLetter) ? currentLetter.charCodeAt(0) : 64;
   for (let i = 1; i <= 26; i++) {
     const next = String.fromCharCode(((startCode - 65 + i) % 26) + 65);
-    if (EXIT_LETTERS[next]) return next;
+    if (EXIT_LETTERS[next] && !isLetterRetired(next, game)) return next;
   }
   return currentLetter;
+}
+
+// A letter retired for the rest of the run: never rolled, never reached by
+// the Sword of the Letter. Only J today — once the Jeweler has been given
+// water (JewelerSystem) the J room has nothing left to offer.
+export function isLetterRetired(letter, game) {
+  return letter === 'J' && !!game?.jewelerRefreshed;
 }
 
 // Fixed progression order for the Chromablade's color cycle — the same
@@ -281,13 +288,13 @@ export function mutateExitColor(exit, newColor, { source = null } = {}) {
 // weapon) would resolve both. Lives here rather than inline in CombatSystem
 // so the two weapons' resolution logic sits next to the mutation primitives
 // (mutateExitLetter/mutateExitColor) it calls.
-export function applyExitMutatingSwordHit(attack, room) {
+export function applyExitMutatingSwordHit(attack, room, game = null) {
   if (!room || !room.exits) return;
 
   if (attack.cyclesExitLetter && !attack.hasCycledLetter) {
     const hit = findExitAtPoint(room, attack.position.x, attack.position.y, attack.width, attack.height);
     if (hit) {
-      const next = cycleExitLetter(hit.exit.letter);
+      const next = cycleExitLetter(hit.exit.letter, game);
       if (mutateExitLetter(hit.exit, next, { source: 'sword' })) {
         attack.hasCycledLetter = true;
       }
@@ -800,6 +807,8 @@ export class ExitSystem {
       if (letter === 'D' && !offersDungeonAt(depth)) {
         weight = 0;
       }
+
+      if (isLetterRetired(letter, this.game)) weight = 0;
 
       // Lucky blessing reshapes the route: more vaults, key rooms, mystery,
       // and camps. Boss is intentionally excluded — depth pacing owns it.

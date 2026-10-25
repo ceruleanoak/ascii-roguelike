@@ -710,6 +710,19 @@ export const LETTER_TEMPLATES = {
     }
   },
 
+  J: {
+    name: 'Jeweler',
+    description: 'A quiet yellow clearing where the parched Jeweler lies (generateJewelerRoom)',
+
+    wallStructures: {
+      allow: true
+    },
+
+    bgObjectRules: {
+      grassDensity: 0.4
+    }
+  },
+
   '?': {
     name: 'Mystery',
     description: 'A discovery room of unknown type — stub template, open floor',

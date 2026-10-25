@@ -10,6 +10,7 @@ import { seedSunkenGlints } from './SunkenGlintSystem.js';
 import { placeOceanPushRock } from './OceanPushRockSystem.js';
 import { ITEM_TYPES } from '../data/items.js';
 import { WeaponsMaster } from '../entities/WeaponsMaster.js';
+import { Jeweler } from '../entities/Jeweler.js';
 import { HOT_WATER_CHAR } from '../data/alchemy.js';
 import { PLANE_TUNNEL } from './PlaneSystem.js';
 import { hazardStep } from './ZoneSystem.js';
@@ -1618,6 +1619,32 @@ export function stampShedFootprint(room, { centerCol, centerRow }) {
   };
 }
 
+/**
+ * Jeweler room ('J', yellow) — a calm clearing with no enemies, and at its
+ * centre the Jeweler, collapsed and begging for water. Giving them water
+ * (JewelerSystem) retires the J letter for the run, so a J room is normally
+ * only ever built while the Jeweler is still parched; one reached anyway
+ * (an exit rolled before the refresh) is left an empty clearing.
+ */
+export function generateJewelerRoom(gen, room) {
+  gen.generateBackgroundObjects(room);
+
+  const col = Math.floor(GRID.COLS / 2);
+  const row = Math.floor(GRID.ROWS / 2);
+  const cells = [];
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let dc = -1; dc <= 1; dc++) cells.push({ col: col + dc, row: row + dr });
+  }
+  for (const { col: c, row: r } of cells) {
+    if (room.collisionMap[r]?.[c] !== undefined) room.collisionMap[r][c] = false;
+  }
+  protectRegion(room, { kind: 'cells', cells });
+
+  if (!gen.game?.jewelerRefreshed) {
+    room.jewelerNPC = new Jeweler(col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
+  }
+}
+
 // Odds a Settlement includes the Shopkeeper's hut. Applied before the other
 // kinds are drawn, so it is the real appearance rate rather than a weight
 // competing with the rest of settlementHutPool.
@@ -1759,6 +1786,11 @@ export function spawnRoomNeutralCharacters(game, room) {
   // maybeSpawnRoamingAlchemist below.
   if (room.alchemistNPC) {
     game.neutralCharacters.push(room.alchemistNPC);
+  }
+
+  // The parched Jeweler, lying in the J room's clearing (generateJewelerRoom).
+  if (room.jewelerNPC) {
+    game.neutralCharacters.push(room.jewelerNPC);
   }
 
   // The Storyteller, at the Camp Room's fire while Story.md has lines —

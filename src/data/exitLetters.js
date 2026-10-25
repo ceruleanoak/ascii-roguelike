@@ -86,6 +86,22 @@ export const EXIT_LETTERS = {
     vowel: true,
     spellDescription: 'LONELY.'
   },
+  // Jeweler: yellow only, and only until the Jeweler has been given water —
+  // after that the letter is retired for the run (ExitSystem.isLetterRetired)
+  // and the Jeweler is found in Settlements instead.
+  'J': {
+    name: 'Jeweler',
+    roomType: 'JEWELER',
+    weight: 0.06,
+    zoneBoosts: {
+      green: 0,
+      yellow: 1.0,
+      red: 0,
+      cyan: 0,
+      gray: 0
+    },
+    spellDescription: 'A THIRST.'
+  },
   'L': {
     name: 'Lake',
     roomType: 'COMBAT',

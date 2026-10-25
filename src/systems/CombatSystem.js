@@ -804,7 +804,7 @@ export class CombatSystem {
 
       // Sword of the Letter / Chromablade: striking an exit tile cycles its
       // letter or color forward. See ExitSystem.applyExitMutatingSwordHit.
-      applyExitMutatingSwordHit(attack, room);
+      applyExitMutatingSwordHit(attack, room, this.game);
 
       // Check collision with background objects (only on first frame)
       if (!attack.hasHitObject) {
