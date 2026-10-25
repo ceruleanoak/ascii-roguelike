@@ -1,12 +1,14 @@
 import { GAME_STATES } from '../game/GameConfig.js';
 import { ENEMIES } from '../data/enemies.js';
 
-// Every Motif name authored in enemy data. Giving an enemy type a Motif is a
-// bounce at public/assets/audio/motif-<name>.mp3 plus `motif: '<name>'` on
-// its ENEMIES entry — no code.
-const MOTIF_NAMES = [...new Set(
-  Object.values(ENEMIES).map(data => data.motif).filter(Boolean)
-)];
+// Every Motif authored in enemy data, one per name. Giving an enemy type a
+// Motif is a bounce at public/assets/audio/motif-<name>.mp3 plus
+// `motif: { name, bars }` on its ENEMIES entry — no code. `bars` is the
+// phrase length (2 or 4); the bounce can run longer (a release tail, a
+// 4-bar export of a 2-bar melody) and everything past it is never heard.
+const MOTIFS = [...new Map(
+  Object.values(ENEMIES).filter(data => data.motif).map(data => [data.motif.name, data.motif])
+).values()];
 
 /**
  * EnemyMotifSystem — loops an enemy type's Motif (GLOSSARY: Motif) while the
@@ -47,9 +49,9 @@ export class EnemyMotifSystem {
   }
 
   _ensureLoaded(audio) {
-    if (this._loadedContext === audio.audioContext || MOTIF_NAMES.length === 0) return;
+    if (this._loadedContext === audio.audioContext || MOTIFS.length === 0) return;
     this._loadedContext = audio.audioContext;
-    audio.loadMotifs(import.meta.env.BASE_URL, MOTIF_NAMES);
+    audio.loadMotifs(import.meta.env.BASE_URL, MOTIFS);
   }
 
   /** Motif names of the enemy types visible in the engaged zoom frame. */
@@ -61,7 +63,7 @@ export class EnemyMotifSystem {
       return wanted;
     }
     for (const enemy of zoom.activeLayerEntities()) {
-      const motif = enemy.data?.motif;
+      const motif = enemy.data?.motif?.name;
       if (!motif || wanted.has(motif)) continue;
       if (enemy.hp !== undefined && enemy.hp <= 0) continue;
       if (zoom.isEntityOnScreen(enemy)) wanted.add(motif);

@@ -1854,14 +1854,16 @@ export class AudioSystem {
   /**
    * Decode Motif bounces (`assets/audio/motif-<name>.mp3`) into this
    * AudioContext. Names already loaded or in flight are skipped, so calling
-   * this again is cheap. A Motif's length in bars comes from its bounce.
+   * this again is cheap. A Motif's length in bars is authored, not read from
+   * its bounce: a 2-bar melody is often bounced as 4 bars (release tail,
+   * export range), and only the authored bars ever play.
    * @param {string} base - BASE_URL prefix
-   * @param {string[]} names - Motif names (enemy data `motif` fields)
+   * @param {{name: string, bars: number}[]} motifs - Enemy data `motif` fields
    */
-  loadMotifs(base, names) {
+  loadMotifs(base, motifs) {
     if (!this.audioContext) return;
     const context = this.audioContext;
-    for (const name of names) {
+    for (const { name, bars } of motifs) {
       if (name in this.motifBuffers) continue;
       this.motifBuffers[name] = null;
       this.fetchAudioBuffer(`${base}assets/audio/motif-${name}.mp3`)
@@ -1869,7 +1871,7 @@ export class AudioSystem {
         .then(buffer => {
           // dispose() swapped the context out from under this load.
           if (context !== this.audioContext) return;
-          this.motifBuffers[name] = { buffer, bars: barsIn(buffer.duration) };
+          this.motifBuffers[name] = { buffer, bars };
         })
         .catch(error => console.error(`[Audio] Failed to load motif ${name}:`, error));
     }
@@ -2020,15 +2022,32 @@ export class AudioSystem {
       return;
     }
 
+    // The segment may run on into the music pass's padding tail, but the
+    // Motif's audio stops at its own phrase end: the bounce often continues
+    // past it (a 2-bar melody bounced as 4 bars), and that material must
+    // never sound. The stop lands mid-waveform, so it fades over a few ms
+    // instead of clicking. A segment cut short by a pass end mid-phrase
+    // (a 4-bar Motif over 1-bar boss tracks) carries straight on into the
+    // next segment's audio, so it doesn't fade.
+    const phraseEnd = t + motif.bars * BAR_DURATION - offset;
+    const playEnd = Math.min(end, phraseEnd);
+    const fade = this.audioContext.createGain();
+    if (playEnd >= phraseEnd - 1e-6) {
+      fade.gain.setValueAtTime(1, Math.max(t + late, playEnd - MOTIF_CUT_FADE));
+      fade.gain.linearRampToValueAtTime(0, playEnd);
+    }
+    fade.connect(voice.gain);
+
     const source = this.audioContext.createBufferSource();
     source.buffer = motif.buffer;
-    source.connect(voice.gain);
+    source.connect(fade);
     source.onended = () => {
       source.disconnect();
+      fade.disconnect();
       const index = voice.sources.indexOf(source);
       if (index !== -1) voice.sources.splice(index, 1);
     };
-    source.start(t + late, offset + late, end - t - late);
+    source.start(t + late, offset + late, Math.max(0, playEnd - t - late));
 
     voice.sources.push(source);
     voice.segment = { start: t, end, passStart: pass.start };

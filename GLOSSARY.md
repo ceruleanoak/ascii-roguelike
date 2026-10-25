@@ -306,8 +306,10 @@ identity, not standard programming terms.
   moment the last one leaves the frame or the zoom releases. A Motif comes in at the next bar
   line, in phase with the music (at the music's bar 3, a 4-bar Motif enters at its own bar 3).
   Several types in frame layer their Motifs.
-- **In code:** `motif: '<name>'` on an `ENEMIES` entry → bounce at
-  `public/assets/audio/motif-<name>.mp3` (length in bars read from the bounce). `EnemyMotifSystem`
+- **In code:** `motif: { name, bars }` on an `ENEMIES` entry → bounce at
+  `public/assets/audio/motif-<name>.mp3`. `bars` is authored, not read from the bounce: only
+  that many bars ever play, so a 2-bar Motif bounced as 4 bars repeats twice per 4-bar phrase
+  and its bars 3–4 are never heard. `EnemyMotifSystem`
   decides which Motifs are wanted each frame; `AudioSystem.startMotif`/`stopMotif`/`tickMotifs`
   play them on the music clock (`_musicPass`).
 - **Not:** an SFX (a one-shot `data.sfx` cue), and not a Beat (the combat term).
