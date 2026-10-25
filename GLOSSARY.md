@@ -1401,12 +1401,13 @@ identity, not standard programming terms.
   until none are left or the player's next keypress. CHOP fells Trees with an axe; MINE breaks
   Rocks (anything with the rock harvest) with the pickaxe or a hammer; HARVEST does both,
   working the material the held tool serves before swapping tools, then cuts the room's Tall
-  Grass with any blade, densest cell first, until every blade is cut. Tools come from the quick
+  Grass with any blade, densest cell first, until every blade is cut, then scoops its Sand with
+  any melee weapon but a blunt one. Tools come from the quick
   slots. Barricade material, obsidian, indestructible and yield-nothing objects and other
   planes are skipped; a target the player neither nears nor damages for 4 seconds is given up.
   Enemies are not fought; damage still lands. EXPLORE only; `...NOTHING.` with no tool or
   nothing to farm.
-- **In code:** `src/systems/HarvestSystem.js` — `cast(materials)` (`tree`/`rock`/`grass`),
+- **In code:** `src/systems/HarvestSystem.js` — `cast(materials)` (`tree`/`rock`/`grass`/`sand`),
   `heldKeys()` (`HeldKeySteering`), `update()` (tool swap via `handleSelectSlot`, swing via
   `CombatSystem.tryUseHeldWeapon`), `onPlayerInput()`, `reset()` (Reset Registry, room scope).
 - **Not:** the harvest drop itself (`destroyObject:rockHarvest`, the Tree's Stick roll), which is

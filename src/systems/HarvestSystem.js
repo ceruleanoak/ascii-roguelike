@@ -24,21 +24,30 @@ const NO_KEYS = Object.freeze({ w: false, a: false, s: false, d: false });
 // What each Spell farms, and the tool it takes. Trees fall only to an axe;
 // rocks to the pickaxe or a hammer (InteractionSystem.resolveSmashRefusal
 // lets other blunt weapons through too, but they are not tools for the job).
-// Grass (HARVEST only) is cut by any blade, and only once no tree or rock is
-// left to farm (`last`).
+// HARVEST works them in `stage` order: trees and rocks together, then grass
+// (any blade, densest cell first), then sand (any melee weapon a blunt one
+// excepted: CombatSystem lets a blunt swing rustle but never spend an object).
 const MATERIALS = {
   tree: {
     is: obj => obj.char === 'Y',
     tool: item => item?.data?.weaponSubtype === 'axe',
+    stage: 0,
   },
   rock: {
     is: obj => obj.data?.dropEffect === 'destroyObject:rockHarvest',
     tool: item => !!item?.data?.isPickaxe || item?.data?.weaponSubtype === 'hammer',
+    stage: 0,
   },
   grass: {
     is: obj => !!(obj.data?.cuttable && obj.data.cutState),
     tool: item => !!item?.data?.isBlade,
-    last: true,
+    stage: 1,
+    densestFirst: true,
+  },
+  sand: {
+    is: obj => obj.char === '.' && !!obj.data?.depletedColor,
+    tool: item => item?.data?.weaponType === 'MELEE' && !item.data.isBlunt,
+    stage: 2,
   },
 };
 
@@ -48,7 +57,7 @@ const MATERIALS = {
  * hammer), or both (HARVEST), until none are left or the player's next
  * keypress. Once HARVEST has no tree or rock left it cuts the room's grass
  * with any blade, densest cell first (the most grass objects in one cell),
- * until every blade is cut.
+ * until every blade is cut, then scoops its Sand.
  *
  * Driven like FIGHT: HeldKeySteering walks the player to the open cell beside
  * the target nearest the player, then the player faces it and swings through
@@ -174,19 +183,20 @@ export class HarvestSystem {
     return this._pickTarget();
   }
 
-  // The nearest farmable object, preferring the material the held tool
-  // serves so HARVEST only swaps tools when that material runs out. Grass
-  // waits until no tree or rock is left, then goes densest cell first.
+  // A target from the earliest stage with anything left: the nearest,
+  // preferring the material the held tool serves so HARVEST only swaps tools
+  // when that material runs out; grass goes densest cell first.
   _pickTarget() {
     const held = this.game.player.heldItem;
     const all = this._candidates();
-    const first = all.filter(o => !MATERIALS[this._materialOf(o)].last);
-    let best;
-    if (first.length) {
-      const served = first.filter(o => MATERIALS[this._materialOf(o)].tool(held));
-      best = this._nearest(served.length ? served : first);
-    } else {
-      best = this._densest(all);
+    const stage = Math.min(...all.map(o => MATERIALS[this._materialOf(o)].stage));
+    const pool = all.filter(o => MATERIALS[this._materialOf(o)].stage === stage);
+    let best = null;
+    if (pool.some(o => MATERIALS[this._materialOf(o)].densestFirst)) {
+      best = this._densest(pool);
+    } else if (pool.length) {
+      const served = pool.filter(o => MATERIALS[this._materialOf(o)].tool(held));
+      best = this._nearest(served.length ? served : pool);
     }
     this.target = best;
     this.targetHp = best?.hp ?? null;

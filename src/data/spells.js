@@ -373,12 +373,12 @@ export const SPELLS = {
   'FIGHT': { response: (game) => game.fightSystem.cast() },
 
   // CHOP / MINE / HARVEST — farm the room's Trees (axe), Rocks (pickaxe or
-  // hammer), or both and then its grass (any blade), swapping tools between
+  // hammer), or both and then its grass (any blade) and sand, swapping tools between
   // them, until none are left or the next keypress (HarvestSystem). Silent
   // when it starts.
   'CHOP':    { response: (game) => game.harvestSystem.cast(['tree']) },
   'MINE':    { response: (game) => game.harvestSystem.cast(['rock']) },
-  'HARVEST': { response: (game) => game.harvestSystem.cast(['tree', 'rock', 'grass']) },
+  'HARVEST': { response: (game) => game.harvestSystem.cast(['tree', 'rock', 'grass', 'sand']) },
 
   // CRAFT — one random Recipe from what the player has on hand, REST or
   // EXPLORE (CraftSpellSystem). Silent when it works; the pickup box shows
