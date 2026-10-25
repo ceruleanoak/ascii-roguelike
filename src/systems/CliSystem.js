@@ -1,7 +1,7 @@
 /**
  * CliSystem — the CLI (GAME_STATES.CLI), Path to Canon's non-ending.
  *
- * The player types CLOSEGAME or EXITGAME, answers the THREE's ARE YOU SURE?, and the game
+ * The player types CLOSE, CLOSEGAME or EXITGAME, answers the THREE's ARE YOU SURE?, and the game
  * closes into this faux command line. Here they stop playing the canon and
  * start authoring it. Canon Edits persist through CanonStore.
  *

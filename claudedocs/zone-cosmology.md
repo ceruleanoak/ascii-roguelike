@@ -197,7 +197,7 @@ canon, reshaping the entire run. "You have 'won' by making the game into
 whatever you want it to be." The player becomes the creator.
 
 - **The way out is a word.** Typed anywhere, any run, by anyone who knows it:
-  `EXITGAME` (or `CLOSEGAME`). The THREE asks `ARE YOU SURE?`; any affirmative closes the game. The
+  `EXITGAME` (or `CLOSEGAME`, or just `CLOSE`). The THREE asks `ARE YOU SURE?`; any affirmative closes the game. The
   pure ending is where the word is learned — knowledge is the only gate, and
   the save file stays mental right up to the exit.
 - **The CLI.** A `>` prompt, always center screen, with a blinking cursor.

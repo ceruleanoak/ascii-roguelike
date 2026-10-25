@@ -175,7 +175,7 @@ const COMMAND_FOLLOWUPS = Object.fromEntries(
 );
 
 
-// CLOSEGAME and EXITGAME are one spell under two names.
+// CLOSE, CLOSEGAME and EXITGAME are one spell under three names.
 const EXIT_GAME_SPELL = {
   response: 'ARE YOU SURE?',
   followUps: {
@@ -200,6 +200,8 @@ export const SPELLS = {
   // Path to Canon: leaving the game is the non-ending. Knowledge is the
   // only gate — CLOSEGAME / EXITGAME work anywhere, in any run. An
   // affirmative closes the game into the CLI; anything else lets the run go on.
+  // Bare CLOSE defaults to it, the game being the only thing that closes.
+  'CLOSE':     EXIT_GAME_SPELL,
   'CLOSEGAME': EXIT_GAME_SPELL,
   'EXITGAME':  EXIT_GAME_SPELL,
 
