@@ -492,6 +492,24 @@ export class BarricadeSystem {
    * and always was going to be; a plug the run has no more chances to answer
    * would make that a lie. Call this right after the exit mutation.
    */
+  /**
+   * Does a Barricade still stand across `direction`'s lane? `cleared` alone
+   * can't answer it: a material plug is cleared by breaking its blocks one at
+   * a time and never flips the flag, and a hazard plug (the lava moat) never
+   * lifts at all — so the question is whether any piece of the plug is still
+   * in the room. Passive and solid plugs both count as standing.
+   *
+   * @param {object} room
+   * @param {'north'|'east'|'west'|'south'} direction
+   * @returns {boolean}
+   */
+  standsAcross(room, direction) {
+    const barricade = room?.barricade;
+    if (!barricade || barricade.cleared || barricade.direction !== direction) return false;
+    const objs = room.backgroundObjects || [];
+    return barricade.objects.some(plug => objs.includes(plug));
+  }
+
   liftForGate(room) {
     const barricade = room?.barricade;
     if (!barricade || barricade.cleared || barricade.direction !== 'north') return;

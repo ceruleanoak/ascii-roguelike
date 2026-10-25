@@ -55,7 +55,7 @@ function chooseDetourHeading(collisionMap, x, y, baseAngle) {
 
 // BFS over walkable cells; returns array of {x, y} waypoints (world coords,
 // cell centers) excluding the start cell, or null when unreachable.
-function bfsPath(collisionMap, startCol, startRow, endCol, endRow) {
+export function bfsPath(collisionMap, startCol, startRow, endCol, endRow) {
   if (!collisionMap) return null;
   const rows = collisionMap.length;
   const cols = collisionMap[0]?.length ?? 0;

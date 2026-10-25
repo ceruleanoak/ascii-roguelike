@@ -352,6 +352,18 @@ export const SPELLS = {
   'LOOKEAST':  { response: _lookDirection('east') },
   'LOOKWEST':  { response: _lookDirection('west') },
 
+  // GO / HEAD <direction> — the Beeline (BeelineSystem): an invulnerable run
+  // to that exit, then the ordinary exit warp. Silent when it starts; the run
+  // is the answer. Longest-match detection lets GOWEST beat the WEST below.
+  'GONORTH':   { response: (game) => game.beelineSystem.cast('north') },
+  'GOEAST':    { response: (game) => game.beelineSystem.cast('east') },
+  'GOWEST':    { response: (game) => game.beelineSystem.cast('west') },
+  'GOSOUTH':   { response: (game) => game.beelineSystem.cast('south') },
+  'HEADNORTH': { response: (game) => game.beelineSystem.cast('north') },
+  'HEADEAST':  { response: (game) => game.beelineSystem.cast('east') },
+  'HEADWEST':  { response: (game) => game.beelineSystem.cast('west') },
+  'HEADSOUTH': { response: (game) => game.beelineSystem.cast('south') },
+
   'NORTH': { response: _lookDirection('north') },
   'EAST':  { response: _lookDirection('east') },
   'WEST':  { response: _lookDirection('west') },

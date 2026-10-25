@@ -76,6 +76,7 @@ import { BoulderSystem } from './systems/BoulderSystem.js';
 import { SeaSerpentSystem } from './systems/SeaSerpentSystem.js';
 import { CentipedeSystem } from './systems/CentipedeSystem.js';
 import { SpellSystem } from './systems/SpellSystem.js';
+import { BeelineSystem } from './systems/BeelineSystem.js';
 import { WishSystem } from './systems/WishSystem.js';
 import { RidgeSystem } from './systems/RidgeSystem.js';
 import { PolymorphSystem } from './systems/PolymorphSystem.js';
@@ -247,6 +248,7 @@ class Game {
     this.centipedeSystem = new CentipedeSystem(this);
     this.seaSerpentSystem = new SeaSerpentSystem(this); // the Sunken Hold's twin hidden boss
     this.spellSystem = new SpellSystem(this);
+    this.beelineSystem = new BeelineSystem(this); // GO / HEAD / ESCAPE spells
     this.wishSystem = new WishSystem();
     this.ridgeSystem = new RidgeSystem(this);
     this.polymorphSystem = new PolymorphSystem();
@@ -1994,8 +1996,8 @@ class Game {
 
     this.characterSystem.triggerQueuedRollAttack();
 
-    // Emit dodge roll trail particles (also during green ranger continuous roll)
-    if (this.player.dodgeRoll.active || this.player.continuousRollActive) {
+    // Emit dodge roll trail particles (also during green ranger continuous roll and a Beeline)
+    if (this.player.dodgeRoll.active || this.player.continuousRollActive || this.beelineSystem.isActive()) {
       const trail = createDodgeTrail(
         this.player.position.x + this.player.width / 2,
         this.player.position.y + this.player.height / 2,

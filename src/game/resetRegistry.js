@@ -531,6 +531,13 @@ export const RESET_REGISTRY = [
     why: 'Forget which crafting pairs were identified or failed — the Dragon Forge shares these maps (pairMemory), so this clears its memory too.',
   },
   {
+    path: 'beelineSystem.reset',
+    scope: 'room',
+    call: (game) => game.beelineSystem.reset(),
+    covers: [],
+    why: 'A Beeline is a run to one room\'s exit; nothing of it survives the room it was cast in.',
+  },
+  {
     path: 'forgeSystem.reset',
     scope: 'room',
     call: (game) => game.forgeSystem.reset(),
