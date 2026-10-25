@@ -76,6 +76,27 @@ export class BeelineSystem {
     return null;
   }
 
+  /**
+   * ESCAPE / FLEE: let go of every weapon, which opens the way back to REST
+   * even in a locked room (the escape route, ExitSystem.isExitOpen), then
+   * Beeline south. Everything that could refuse is checked before anything
+   * is dropped, so a refused ESCAPE never costs the loadout.
+   * @returns {string|null} null when the flight starts, else the THREE's refusal
+   */
+  escape() {
+    const game = this.game;
+    const player = game.player;
+    const room = game.currentRoom;
+    if (!player || !room || game.stateMachine?.getCurrentState() !== GAME_STATES.EXPLORE) return 'ONLY ONE WAY.';
+    if (game.interiorManager.isActive || game.animationSystem.isAnimating(player)) return '...NOTHING.';
+    // The lock is the one thing empty hands answer; anything else stays shut.
+    if (!room.exits?.south || (player.plane ?? 0) !== 0 || game.cursedRunSystem.isRestSealed(game)) return 'SHUT.';
+    if (!this._route(room.collisionMap, player.position, this._laneTarget(GAME_STATES.EXPLORE, 'south'))) return 'NO WAY THERE.';
+
+    game.trapSystem.dropLoadout();
+    return this.cast('south');
+  }
+
   /** Clear the run marker (Reset Registry, room scope). */
   reset() {
     this.active = null;

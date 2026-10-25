@@ -463,7 +463,10 @@ export const SPELLS = {
   // matching the registry's existing '...NOTHING.' idiom.
 
   'AREYOU': { response: 'NORTH.' },
-  'ESCAPE': { response: 'ONLY ONE WAY.' },
+  // ESCAPE / FLEE — drop every weapon and Beeline for REST (BeelineSystem.
+  // escape). Outside a room to flee, still the old answer: ONLY ONE WAY.
+  'ESCAPE': { response: (game) => game.beelineSystem.escape() },
+  'FLEE':   { response: (game) => game.beelineSystem.escape() },
 
   'HEREISONE':   { response: 'RED.' },
   'HEREISTWO':   { response: 'CYAN.' },

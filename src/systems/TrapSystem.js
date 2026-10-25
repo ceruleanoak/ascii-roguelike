@@ -781,7 +781,6 @@ export class TrapSystem {
   // Drop the thrown weapon as a floor pickup at its current position.
   _landThrownWeapon(t) {
     const game = this.game;
-    const C = GRID.CELL_SIZE;
     const item = t.weaponItem;
     if (!item) return;
     // A Kunai from the bundle is gone once it lands; the weapon never left hand.
@@ -789,6 +788,45 @@ export class TrapSystem {
     // Let FountainSystem intercept throws aimed at the pool
     if (game.fountainSystem?.checkWeaponLanding(t)) return;
     if (item.data?.throwBurst) this._throwBurst(t, item.data.throwBurst);
+    this._placeOnGround(item, t);
+  }
+
+  /**
+   * Let go of every weapon in the loadout at once: each lands as a pickup
+   * around the player's feet, nothing thrown, nothing bursting. The ESCAPE
+   * spell's price — empty hands are what open the way back to REST
+   * (playerHasNoItems), and the weapons stay behind in the room fled.
+   */
+  dropLoadout() {
+    const game = this.game;
+    const player = game.player;
+    const C = GRID.CELL_SIZE;
+    const cx = player.position.x + C / 2;
+    const cy = player.position.y + C / 2;
+    const interior = isInteriorActive(game);
+    const filled = player.quickSlots.filter(item => item !== null);
+    filled.forEach((item, i) => {
+      // Fanned a little apart so the glyphs read as separate things left behind.
+      const angle = (i / filled.length) * Math.PI * 2;
+      const spread = filled.length > 1 ? C * 0.75 : 0;
+      this._placeOnGround(item, {
+        x: cx + Math.cos(angle) * spread,
+        y: cy + Math.sin(angle) * spread,
+        plane: player.plane ?? 0,
+        interior,
+        inMaze: player.inMaze === true,
+      });
+    });
+    player.quickSlots.fill(null);
+    game.renderer.markBackgroundDirty();
+    game.updateUI();
+  }
+
+  // Put a weapon down as a world pickup centred on (t.x, t.y) — the landing
+  // half shared by a thrown weapon coming to rest and a dropped loadout.
+  _placeOnGround(item, t) {
+    const game = this.game;
+    const C = GRID.CELL_SIZE;
     item.position.x = t.x - C / 2;
     item.position.y = t.y - C / 2;
     item.velocity = { vx: 0, vy: 0 };
