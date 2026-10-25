@@ -1666,9 +1666,11 @@ export function generateSettlementRoom(gen, room) {
   // slots are filled at random. A flat shuffle over a 7-kind pool put the shop
   // in only ~36% of Settlements, which is too rare for a counter whose stock
   // is meant to track the run's progress — the player has to be able to find
-  // it again after pushing deeper (see Shopkeeper.refreshStock).
+  // it again after pushing deeper (see Shopkeeper.refreshStock). Once the
+  // Jeweler has been given water they sit beside the Shopkeeper, and the J
+  // room is gone, so the shop is then in every Settlement.
   const wantsShop = pool.includes(SETTLEMENT_SHOP_KIND)
-    && Math.random() < SETTLEMENT_SHOP_CHANCE;
+    && (gen.game?.jewelerRefreshed || Math.random() < SETTLEMENT_SHOP_CHANCE);
   const rest = shuffled(pool.filter(k => k !== SETTLEMENT_SHOP_KIND));
   const chosenKinds = wantsShop
     ? shuffled([SETTLEMENT_SHOP_KIND, ...rest.slice(0, hutCount - 1)])

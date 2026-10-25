@@ -11,6 +11,7 @@ import { Fisherman } from '../entities/Fisherman.js';
 import { Witch } from '../entities/Witch.js';
 import { WeaponsMaster } from '../entities/WeaponsMaster.js';
 import { Shopkeeper } from '../entities/Shopkeeper.js';
+import { Jeweler } from '../entities/Jeweler.js';
 import { WizardNPC } from '../entities/WizardNPC.js';
 import { isInteriorActive } from './PlaneSystem.js';
 import { HOT_WATER_CHAR } from '../data/alchemy.js';
@@ -312,6 +313,17 @@ export class HutSystem {
         this.game.zoneDepths,
         zone
       ));
+      // Once refreshed (JewelerSystem), the Jeweler sits beside the
+      // Shopkeeper in every Settlement shop, a few cells along the same
+      // alcove — far enough apart that the nearer of the two answers SPACE.
+      if (this.game.jewelerRefreshed) {
+        const jewelerCol = Math.min(cols - 2, centerCol + 3);
+        npcs.push(new Jeweler(
+          jewelerCol * GRID.CELL_SIZE,
+          SHOPKEEPER_ALCOVE_ROW * GRID.CELL_SIZE,
+          { behindCounter: true }
+        ));
+      }
 
     } else if (hutKind === 'neutral_npc') {
       // Placeholder NPC: spawn the errand traveler. Seeds an errand if none active
