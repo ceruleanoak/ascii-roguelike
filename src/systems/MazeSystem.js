@@ -317,6 +317,25 @@ export class MazeSystem {
     return this._nearCell(game.player, doorPosition.col * CS, doorPosition.row * CS);
   }
 
+  /** The exterior maze door's cell while it can be entered (ignores distance), else null. */
+  exteriorDoorCell() {
+    const { game } = this;
+    const maze = game.currentRoom?.maze;
+    if (!game.player || isInteriorActive(game) || !maze || maze.sealed) return null;
+    return maze.doorPosition ?? null;
+  }
+
+  /** Go in through the maze door (ENTERMAZE's arrival; SPACE uses the same path). */
+  enterMaze() {
+    if (this.exteriorDoorCell()) this._enterMaze();
+  }
+
+  /** Leave by the maze's south exit unless it is sealed (EXITMAZE's arrival). */
+  exitMaze() {
+    const { game } = this;
+    if (game.player?.inMaze && game.mazeInterior && !game.mazeInterior.exitsSealed) this._exitMaze();
+  }
+
   _enterMaze() {
     const { game } = this;
     game.player.mazeExitPosition = { x: game.player.position.x, y: game.player.position.y };

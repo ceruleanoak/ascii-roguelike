@@ -19,6 +19,9 @@ import { isInteriorActive } from './PlaneSystem.js';
  *                               Bombable Walls (any `data.bombable` object on
  *                               the active layer), opening their cell —
  *                               and opens a bombable V room Vault wall.
+ *   - openHiddenDoor()        — OPENCAVE: a carried Sledgehammer, Onyx
+ *                               Hammer or bomb breaks the Bombable Rock the
+ *                               same way (hiddenDoorCell, openingForce).
  *   - generateCavernInterior() — the cave floor HutSystem._enterHut builds.
  *   - updateInterior()        — torch glow bookkeeping while inside.
  *   - dropTorchLoot()         — what a broken Cavern Torch drops.
@@ -54,6 +57,12 @@ const GOBLIN_POSITION = { x: 4.5 * CS, y: 2 * CS };
 const TORCH_OIL_CHANCE = 0.15;
 
 const STICK_CHAR = '|';
+// What OPENCAVE can break the Bombable Rock with, best first: the two
+// hammers are kept, a Bomb is spent, a Remote Bomb spends one room charge.
+const SLEDGEHAMMER_CHAR = '⫫';
+const ONYX_HAMMER_CHAR = '⬢';
+const BOMB_CHAR = '⊗';
+const REMOTE_BOMB_CHAR = '(';
 const SLICK_OIL_CHAR = '🜁';
 
 export class CavernSystem {
@@ -95,6 +104,52 @@ export class CavernSystem {
     }
     if (rocks.length) game.renderer.markBackgroundDirty();
     return vaultOpened || rocks.length > 0;
+  }
+
+  // ─── OPENCAVE ─────────────────────────────────────────────────────────────
+
+  /** The cell of the Bombable Rock still hiding this room's Cavern, else null. */
+  hiddenDoorCell() {
+    const cavern = this.game.currentRoom?.cavern;
+    return cavern && !cavern.revealed ? cavern.doorPosition : null;
+  }
+
+  /**
+   * The carried force OPENCAVE would break the rock with, as a function that
+   * spends it (a no-op for the hammers), or null when the player has none.
+   */
+  openingForce() {
+    const { game } = this;
+    const player = game.player;
+    const slots = player?.quickSlots ?? [];
+    if (slots.some(item => item?.char === SLEDGEHAMMER_CHAR || item?.char === ONYX_HAMMER_CHAR)) {
+      return () => {};
+    }
+    const inv = game.inventorySystem;
+    const bombSlot = inv.equippedConsumables.findIndex(item => item?.char === BOMB_CHAR);
+    if (bombSlot !== -1) {
+      return () => {
+        const bomb = inv.equippedConsumables[bombSlot];
+        if ((bomb.count || 1) > 1) bomb.count -= 1;
+        else inv.removeCarriedItem('equippedConsumable', bombSlot, player);
+      };
+    }
+    const remote = slots.find(item => item?.char === REMOTE_BOMB_CHAR && item.charges > 0);
+    if (remote) return () => { remote.charges -= 1; };
+    return null;
+  }
+
+  /**
+   * OPENCAVE's arrival: spend the force and break the Bombable Rock at the
+   * Cavern door through the same path a bomb takes, so the door appears
+   * exactly as it would after a blast. Returns whether the rock broke.
+   */
+  openHiddenDoor() {
+    const cell = this.hiddenDoorCell();
+    const spend = cell && this.openingForce();
+    if (!spend || isInteriorActive(this.game)) return false;
+    spend();
+    return this.bombBlast(cell.col * CS + CS / 2, cell.row * CS + CS / 2, 1);
   }
 
   // A Puzzle Room's Bombable Wall stands in a cell its template stamped solid

@@ -1355,14 +1355,21 @@ identity, not standard programming terms.
 
 ### Beeline
 - **Definition:** An invulnerable rapid run, leaving a trail, from where the player stands to an
-  open exit, cast by GO/HEAD <direction> and by ESCAPE/FLEE. It runs in one straight line,
+  open exit, cast by GO/HEAD <direction> and by ESCAPE/FLEE; ENTERHUT/EXITHUT,
+  ENTERCAVE/EXITCAVE and ENTERMAZE/EXITMAZE run it to a hut, Cavern or Maze door and go through
+  on arrival (ENTERHUT picks the nearest hut that would let the player in, or an opened Cavern
+  when the room has no hut); OPENCAVE runs it to the Bombable Rock hiding a Cavern and breaks it
+  with a carried Sledgehammer, Onyx Hammer or bomb. It runs in one straight line,
   phasing through walls and Background Objects alike, and ends in the exit lane so the normal
   exit warp takes over.
   Refused when the exit is shut or a Barricade still stands across that exit's lane, solid or
   passive (lava). ESCAPE/FLEE first drops every weapon at the player's feet, which opens the
   way back to REST, then Beelines south; going to REST deletes whatever the player dropped or had knocked loose
   (`Item.droppedByPlayer`, filtered out in `saveExploreRoomState`).
-- **In code:** `src/systems/BeelineSystem.js` — `cast(direction)`, `escape()`, `isActive()`
+- **In code:** `src/systems/BeelineSystem.js` — `cast(direction)`, `escape()`, `enterHut()`/`exitHut()`
+  (via `HutSystem.roomHuts`/`canEnter`/`enterHut`/`exitHut`), `enterMaze()`/`exitMaze()` (via
+  `MazeSystem.exteriorDoorCell`/`enterMaze`/`exitMaze`), `enterCave()`/`exitCave()`/`openCave()` (via
+  `CavernSystem.hiddenDoorCell`/`openingForce`/`openHiddenDoor`), `isActive()`
   (drives the dodge trail in main.js), `reset()` (Reset Registry, room scope). Exit openness
   via `ExitSystem.isExitOpen`; Barricade check via `BarricadeSystem.standsAcross`; the drop via
   `TrapSystem.dropLoadout`; the run is an `AnimationSystem` sequence (`_animLock` = no damage).
@@ -1891,7 +1898,8 @@ identity, not standard programming terms.
 ### Cavern
 - **Definition:** Like layer 1 in the U room, but a smaller, hut-sized area meant for secrets.
   Its hidden entrance sits inside a large, conspicuous cluster of unbreakable rocks; Bombs reveal
-  it. It always has 2 lit torches that can be destroyed. The friendly Goblin (`G`) inside says
+  it (or OPENCAVE, which breaks the rock the same way with a carried Sledgehammer, Onyx Hammer
+  or bomb). It always has 2 lit torches that can be destroyed. The friendly Goblin (`G`) inside says
   "It's a secret to everybody." and drops between 2 and 5 coins.
 - **In code:** `room.cavern` (a hut record with `hutKind: 'cavern'`), seeded by `seedCavern()`
   (`roomFeatures.js`) in any room letter where wall structures can spawn, never on top of one.

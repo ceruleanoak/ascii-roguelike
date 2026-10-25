@@ -367,6 +367,18 @@ export const SPELLS = {
   'HEADEAST':  { response: (game) => game.beelineSystem.cast('east') },
   'HEADWEST':  { response: (game) => game.beelineSystem.cast('west') },
   'HEADSOUTH': { response: (game) => game.beelineSystem.cast('south') },
+  // ENTERHUT / ENTERCAVE / ENTERMAZE — Beeline to the nearest hut door (a
+  // Settlement's closest hut; an opened Cavern when there is no hut), the
+  // Cavern door or the Maze door and go in; the EXIT forms run to the way out
+  // from inside. OPENCAVE breaks the rock hiding a Cavern with a carried
+  // Sledgehammer, Onyx Hammer or bomb.
+  'ENTERHUT':  { response: (game) => game.beelineSystem.enterHut() },
+  'EXITHUT':   { response: (game) => game.beelineSystem.exitHut() },
+  'OPENCAVE':  { response: (game) => game.beelineSystem.openCave() },
+  'ENTERCAVE': { response: (game) => game.beelineSystem.enterCave() },
+  'EXITCAVE':  { response: (game) => game.beelineSystem.exitCave() },
+  'ENTERMAZE': { response: (game) => game.beelineSystem.enterMaze() },
+  'EXITMAZE':  { response: (game) => game.beelineSystem.exitMaze() },
 
   // FIGHT — auto-combat against the nearest enemy until none are left or the next keypress
   // (FightSystem). Silent when it starts; the fight is the answer.

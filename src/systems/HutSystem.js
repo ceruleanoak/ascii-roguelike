@@ -474,25 +474,37 @@ export class HutSystem {
     const { game } = this;
     if (!game.player || isInteriorActive(game)) return null;
     if ((game.player._hutEntryCooldown ?? 0) > 0) return null;
-    // A Cavern is a hut record too (hutKind 'cavern'), but its door only
-    // exists once a bomb has broken the Bombable Rock hiding it. Copied into a
-    // fresh array so the Settlement's own room.huts list is never mutated.
-    const cavern = game.currentRoom?.cavern;
-    const huts = [
-      ...(game.currentRoom?.huts ?? (game.currentRoom?.hut ? [game.currentRoom.hut] : [])),
-      ...(cavern?.revealed ? [cavern] : []),
-    ];
-    for (const hut of huts) {
-      if (!hut?.doorPosition) continue;
-      // Witch huts on chicken legs are inaccessible until SIT/SITDOWN lowers them.
-      if (hut.raised) continue;
-      // Shed: only isSmall entities (frog form, tamed rat) fit its small
-      // door, until the Shed Key opens it into a full door (_tryShedDoor).
-      if (hut.hutKind === 'shed' && !hut.unlocked && !game.player.isSmall) continue;
+    for (const hut of this.roomHuts()) {
+      if (!this.canEnter(hut)) continue;
       const { col, row } = hut.doorPosition;
       if (this._nearCell(game.player, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE)) return hut;
     }
     return null;
+  }
+
+  /**
+   * Every hut record in the current surface Room that has a door. A Cavern is
+   * a hut record too (hutKind 'cavern'), but its door only exists once a bomb
+   * has broken the Bombable Rock hiding it. Copied into a fresh array so the
+   * Settlement's own room.huts list is never mutated.
+   */
+  roomHuts() {
+    const room = this.game.currentRoom;
+    const cavern = room?.cavern;
+    return [
+      ...(room?.huts ?? (room?.hut ? [room.hut] : [])),
+      ...(cavern?.revealed ? [cavern] : []),
+    ].filter(hut => hut?.doorPosition);
+  }
+
+  /** Would this hut's door let the player in right now? (ignores distance) */
+  canEnter(hut) {
+    // Witch huts on chicken legs are inaccessible until SIT/SITDOWN lowers them.
+    if (hut.raised) return false;
+    // Shed: only isSmall entities (frog form, tamed rat) fit its small
+    // door, until the Shed Key opens it into a full door (_tryShedDoor).
+    if (hut.hutKind === 'shed' && !hut.unlocked && !this.game.player.isSmall) return false;
+    return true;
   }
 
   /** Returns true if player is close enough to any exterior hut door to interact. */
@@ -621,6 +633,24 @@ export class HutSystem {
     const host = { position: { x: 0, y: 0 } };
     this.game.animationSystem.play(host, steps);
     return true;
+  }
+
+  /** The interior exit door's cell while the player is on a hut floor, else null. */
+  interiorExitCell() {
+    const { game } = this;
+    if (!game.player?.inHut || !isHutFloor(game.activeFloor)) return null;
+    return { col: game.activeFloor.exitCol, row: game.activeFloor.exitRow };
+  }
+
+  /** Go in through this hut's door (ENTERHUT's arrival; SPACE uses the same path). */
+  enterHut(hut) {
+    if (!this.game.player || isInteriorActive(this.game) || !this.canEnter(hut)) return;
+    this._enterHut(hut);
+  }
+
+  /** Leave the hut through its door (EXITHUT's arrival; SPACE uses the same path). */
+  exitHut() {
+    if (this.interiorExitCell()) this._exitHut();
   }
 
   /** Returns true if player is close enough to the interior exit door to interact. */

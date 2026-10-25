@@ -7,6 +7,9 @@ const BEELINE_SPEED = 540;
  * BeelineSystem — the Beeline: an invulnerable rapid run in one straight line
  * to an open exit, leaving a trail, cast by the GO / HEAD spells (and by
  * ESCAPE, which first drops every weapon so the way back to REST opens).
+ * ENTERHUT / EXITHUT, ENTERCAVE / EXITCAVE and ENTERMAZE / EXITMAZE run
+ * the same way to a hut, Cavern or Maze door and go through it on arrival;
+ * OPENCAVE runs to the rock hiding a Cavern and breaks it open.
  *
  * The Beeline only gets the player there. It ends with the player standing in
  * the exit lane, inside the threshold the per-frame exit check already reads,
@@ -26,7 +29,8 @@ const BEELINE_SPEED = 540;
 export class BeelineSystem {
   constructor(game) {
     this.game = game;
-    // The direction being run toward, or null. Read through isActive().
+    // What is being run toward — an exit direction, 'hut', 'cave' or 'maze' — or
+    // null. Read through isActive().
     this.active = null;
   }
 
@@ -59,14 +63,98 @@ export class BeelineSystem {
     if (!open) return 'SHUT.';
     if (game.barricadeSystem.standsAcross(room, direction)) return 'SOMETHING BARS THE WAY.';
 
-    const goal = this._laneTarget(state, direction);
-    const duration = Math.hypot(goal.x - player.position.x, goal.y - player.position.y) / BEELINE_SPEED;
+    this._runTo(direction, this._laneTarget(state, direction));
+    return null;
+  }
 
-    this.active = direction;
-    game.animationSystem.play(player, [
-      { type: 'moveTo', x: goal.x, y: goal.y, duration, easing: 'linear' },
-      { type: 'callback', fn: () => { this.active = null; } },
-    ]);
+  /**
+   * ENTERHUT: Beeline to the nearest hut door the player could go in by
+   * (in a Settlement, the closest of its huts), then go in. A room with no
+   * hut but an opened Cavern sends the player into the Cavern instead.
+   * @returns {string|null} null when the Beeline starts, else the THREE's refusal
+   */
+  enterHut() {
+    const refusal = this._surfaceRefusal();
+    if (refusal) return refusal;
+    const all = this.game.hutSystem.roomHuts();
+    const huts = all.filter(hut => hut.hutKind !== 'cavern');
+    return this._runIntoNearest(huts.length ? huts : all);
+  }
+
+  /**
+   * ENTERCAVE: Beeline to the room's opened Cavern door and go in. A Cavern
+   * still behind its Bombable Rock is shut until OPENCAVE (or a bomb) breaks it.
+   * @returns {string|null} null when the Beeline starts, else the THREE's refusal
+   */
+  enterCave() {
+    const refusal = this._surfaceRefusal();
+    if (refusal) return refusal;
+    if (!this.game.currentRoom.cavern) return '...NOTHING.';
+    if (this.game.cavernSystem.hiddenDoorCell()) return 'SHUT.';
+    return this._runIntoNearest(this.game.hutSystem.roomHuts().filter(hut => hut.hutKind === 'cavern'));
+  }
+
+  /**
+   * OPENCAVE: with a Sledgehammer or Onyx Hammer in a quick slot, or a bomb
+   * to spend, Beeline to the Bombable Rock hiding the room's Cavern and break
+   * it open. ENTERCAVE goes in after.
+   * @returns {string|null} null when the Beeline starts, else the THREE's refusal
+   */
+  openCave() {
+    const game = this.game;
+    const refusal = this._surfaceRefusal();
+    if (refusal) return refusal;
+    const cell = game.cavernSystem.hiddenDoorCell();
+    if (!cell) return '...NOTHING.';
+    if (!game.cavernSystem.openingForce()) return 'TOO HARD.';
+    this._runTo('cave', this._doorstep(cell), () => game.cavernSystem.openHiddenDoor());
+    return null;
+  }
+
+  /**
+   * EXITHUT: from inside a hut (a Cavern counts), Beeline to its door and step out.
+   * @returns {string|null} null when the Beeline starts, else the THREE's refusal
+   */
+  exitHut() {
+    return this._runOutOfHut(false);
+  }
+
+  /**
+   * EXITCAVE: EXITHUT, but only from inside a Cavern.
+   * @returns {string|null} null when the Beeline starts, else the THREE's refusal
+   */
+  exitCave() {
+    return this._runOutOfHut(true);
+  }
+
+  /**
+   * ENTERMAZE: Beeline to the room's Maze door and go in. A Maze once left is
+   * sealed for good, so its door no longer answers.
+   * @returns {string|null} null when the Beeline starts, else the THREE's refusal
+   */
+  enterMaze() {
+    const game = this.game;
+    const refusal = this._surfaceRefusal();
+    if (refusal) return refusal;
+    if (!game.currentRoom?.maze) return '...NOTHING.';
+    const door = game.mazeSystem.exteriorDoorCell();
+    if (!door) return 'SHUT.';
+    this._runTo('maze', this._doorstep(door), () => game.mazeSystem.enterMaze());
+    return null;
+  }
+
+  /**
+   * EXITMAZE: from inside the Maze, Beeline to its south exit and leave —
+   * refused while the exits are sealed.
+   * @returns {string|null} null when the Beeline starts, else the THREE's refusal
+   */
+  exitMaze() {
+    const game = this.game;
+    const mi = game.mazeInterior;
+    if (!game.player?.inMaze || !mi || game.animationSystem.isAnimating(game.player)) return '...NOTHING.';
+    if (mi.exitsSealed) return 'SHUT.';
+    const C = GRID.CELL_SIZE;
+    this._runTo('maze', { x: mi.exitCol * C, y: mi.exitRow * C }, () => game.mazeSystem.exitMaze());
     return null;
   }
 
@@ -105,6 +193,71 @@ export class BeelineSystem {
   goExplore() {
     if (this.game.stateMachine?.getCurrentState() !== GAME_STATES.REST) return '...NOTHING.';
     return this.cast('north');
+  }
+
+  // Run into the nearest of `huts` whose door would let the player in.
+  // '...NOTHING.' when there are none, 'SHUT.' when every one is closed.
+  _runIntoNearest(huts) {
+    const game = this.game;
+    if (huts.length === 0) return '...NOTHING.';
+    const open = huts.filter(hut => game.hutSystem.canEnter(hut));
+    if (open.length === 0) return 'SHUT.';
+    const C = GRID.CELL_SIZE;
+    const { x, y } = game.player.position;
+    const distance = h => Math.hypot(h.doorPosition.col * C - x, h.doorPosition.row * C - y);
+    const hut = open.reduce((best, h) => (distance(h) < distance(best) ? h : best));
+    this._runTo(hut.hutKind === 'cavern' ? 'cave' : 'hut', this._doorstep(hut.doorPosition),
+      () => game.hutSystem.enterHut(hut));
+    return null;
+  }
+
+  // Run to the hut floor's exit door and step out; `caveOnly` refuses on any
+  // floor but a Cavern's.
+  _runOutOfHut(caveOnly) {
+    const game = this.game;
+    const cell = game.hutSystem.interiorExitCell();
+    if (!cell || game.animationSystem.isAnimating(game.player)) return '...NOTHING.';
+    if (caveOnly && game.activeFloor.hutKind !== 'cavern') return '...NOTHING.';
+    const C = GRID.CELL_SIZE;
+    this._runTo('hut', { x: cell.col * C, y: cell.row * C }, () => game.hutSystem.exitHut());
+    return null;
+  }
+
+  // The run itself: one straight invulnerable segment to `goal`, then
+  // `onArrive` (door runs) — exit runs have the per-frame exit check instead.
+  _runTo(target, goal, onArrive = null) {
+    const player = this.game.player;
+    const duration = Math.hypot(goal.x - player.position.x, goal.y - player.position.y) / BEELINE_SPEED;
+    this.active = target;
+    this.game.animationSystem.play(player, [
+      { type: 'moveTo', x: goal.x, y: goal.y, duration, easing: 'linear' },
+      { type: 'callback', fn: () => { this.active = null; onArrive?.(); } },
+    ]);
+  }
+
+  // Why a door run can't start on the surface, or null when it can.
+  _surfaceRefusal() {
+    const game = this.game;
+    if (!game.player || !game.currentRoom) return '...NOTHING.';
+    if (game.stateMachine?.getCurrentState() !== GAME_STATES.EXPLORE) return '...NOTHING.';
+    if (game.interiorManager.isActive || game.animationSystem.isAnimating(game.player)) return '...NOTHING.';
+    return null;
+  }
+
+  // The open cell beside a door to stand on (top-left px): the door's
+  // walkable neighbour nearest the player, so the way back out of the
+  // interior lands somewhere walkable. Falls back to the cell below.
+  _doorstep(door) {
+    const C = GRID.CELL_SIZE;
+    const map = this.game.currentRoom.collisionMap;
+    const { x, y } = this.game.player.position;
+    const open = [[0, 1], [0, -1], [1, 0], [-1, 0]]
+      .map(([dc, dr]) => ({ col: door.col + dc, row: door.row + dr }))
+      .filter(({ col, row }) => map?.[row] && map[row][col] === false);
+    const cells = open.length ? open : [{ col: door.col, row: door.row + 1 }];
+    const best = cells.reduce((a, b) =>
+      Math.hypot(a.col * C - x, a.row * C - y) <= Math.hypot(b.col * C - x, b.row * C - y) ? a : b);
+    return { x: best.col * C, y: best.row * C };
   }
 
   /** Clear the run marker (Reset Registry, room scope). */
