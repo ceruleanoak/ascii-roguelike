@@ -55,6 +55,7 @@ import { DungeonBossSystem } from './systems/DungeonBossSystem.js';
 import { MazeSystem } from './systems/MazeSystem.js';
 import { InteriorManager } from './systems/InteriorManager.js';
 import { CameraZoomSystem } from './systems/CameraZoomSystem.js';
+import { EnemyMotifSystem } from './systems/EnemyMotifSystem.js';
 import { RoundCombatSystem } from './systems/RoundCombatSystem.js';
 import { AquiferSystem } from './systems/AquiferSystem.js';
 import { MetalPlatformSystem } from './systems/MetalPlatformSystem.js';
@@ -227,6 +228,7 @@ class Game {
     // register them; also defines the Player interior-membership accessors.
     this.interiorManager = new InteriorManager(this);
     this.cameraZoomSystem = new CameraZoomSystem(this); // combat-proximity zoom
+    this.enemyMotifSystem = new EnemyMotifSystem(this); // enemy Motif loops while zoomed
     this.roundCombatSystem = new RoundCombatSystem(this); // Quagmire wave combat
     this.aquiferSystem = new AquiferSystem(this);         // Quagmire Whirlpool + plane-1 Aquifer Current
     this.metalPlatformSystem = new MetalPlatformSystem(this); // red Island's lava-lake ferry
@@ -1856,6 +1858,7 @@ class Game {
     // Combat-proximity camera zoom — runs unconditionally so it can ease back
     // to 1.0 if the player leaves EXPLORE while zoomed in.
     this.cameraZoomSystem.update(deltaTime);
+    this.enemyMotifSystem.update();
 
     if (state === GAME_STATES.TITLE) {
       this.updateTitleState(deltaTime);

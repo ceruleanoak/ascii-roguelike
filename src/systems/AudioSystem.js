@@ -50,6 +50,23 @@ const MUSIC_BPM = 94;
 const BEATS_PER_BAR = 4;
 const BAR_DURATION = (60 / MUSIC_BPM) * BEATS_PER_BAR;
 
+// Whole bars in a bounce. Every bounce carries a few tens of ms of MP3
+// padding past its last bar line (a 4-bar loop is 10.272s, not 4 × 2.553),
+// so this rounds rather than floors.
+function barsIn(duration) {
+  return Math.max(1, Math.round(duration / BAR_DURATION));
+}
+
+// Enemy Motif timing (see startMotif). Lookahead is how far ahead of a
+// segment boundary the next segment gets scheduled; the cut fade is short
+// enough to read as an immediate stop without clicking; a voice whose
+// segment no longer agrees with the music's bar grid by more than the drift
+// tolerance is re-entered on the next bar (the tolerance absorbs the few ms
+// a chained sequence track starts late, since it starts from onended).
+const MOTIF_LOOKAHEAD = 0.25;
+const MOTIF_CUT_FADE = 0.012;
+const MOTIF_DRIFT_TOLERANCE = 0.05;
+
 const SEQUENCE_MUSIC = {
   red: {
     tracks: ['assets/audio/red-a.mp3', 'assets/audio/red-b.mp3', 'assets/audio/red-c.mp3'],
@@ -124,6 +141,19 @@ export class AudioSystem {
     // for zone music, so repeated floor swaps can re-assert it without
     // restarting playback. Null whenever zone music owns the output.
     this.dungeonTrack = null;
+
+    // Music clock for chained tracks (zone sequences, boss tracks): when the
+    // current track started, how long it is, and how many bars of the
+    // continuous chain came before it. Dual-layer loops derive the same
+    // thing from playbackStartTime instead. See _musicPass.
+    this.trackStartTime = 0;
+    this.trackDuration = 0;
+    this.trackBarBase = 0;
+
+    // Enemy Motifs (GLOSSARY: Motif) — name → { buffer, bars } once decoded
+    // (null while in flight), and name → live voice. See startMotif.
+    this.motifBuffers = {};
+    this.motifVoices = {};
 
     // Shared state
     this.isPlaying = false;
@@ -813,6 +843,7 @@ export class AudioSystem {
    * Stop music and clean up sources
    */
   stop() {
+    this.stopAllMotifs();
     if (this.mode === 'single') {
       if (this.singleSource) {
         try { this.singleSource.stop(); } catch (_) {}
@@ -1525,8 +1556,10 @@ export class AudioSystem {
   /**
    * Play a specific boss track (0-indexed). Sets up onended callback for auto-advance.
    * @param {number} index - Track index (0–4)
+   * @param {boolean} continues - True when chained from the previous track's
+   *   end (keeps the music clock's bar count running; see _startChainedTrack)
    */
-  _startBossTrack(index) {
+  _startBossTrack(index, continues = false) {
     if (this.bossSequenceSource) {
       this.bossSequenceSource.onended = null;
       try { this.bossSequenceSource.stop(); } catch (_) {}
@@ -1538,7 +1571,7 @@ export class AudioSystem {
     source.loop = false;
     source.connect(this.layer1Gain); // reuse existing gain node at masterVolume
     source.onended = () => this._onBossTrackEnded();
-    source.start(0);
+    this._startChainedTrack(source, continues);
     this.bossSequenceSource = source;
     this.isPlaying = true;
   }
@@ -1554,7 +1587,7 @@ export class AudioSystem {
     if (this.bossSequencePending) {
       this.bossSequencePending = false;
       this.bossAnticipationActive = false;
-      this._startBossTrack(0);
+      this._startBossTrack(0, true);
       return;
     }
 
@@ -1568,16 +1601,16 @@ export class AudioSystem {
       source.connect(this.layer1Gain);
       source.onended = () => {
         this.bossLoopPlaying = false;
-        if (this.mode === 'sequence') this._startBossTrack(0);
+        if (this.mode === 'sequence') this._startBossTrack(0, true);
       };
-      source.start(0);
+      this._startChainedTrack(source, true);
       this.bossSequenceSource = source;
       return;
     }
 
     // Normal advancement — mini-loop wraps at 2, full sequence wraps at 5
     const wrapAt = this.bossAnticipationActive ? 2 : this.bossBuffers.length;
-    this._startBossTrack((this.bossSequenceIndex + 1) % wrapAt);
+    this._startBossTrack((this.bossSequenceIndex + 1) % wrapAt, true);
   }
 
   /**
@@ -1710,8 +1743,11 @@ export class AudioSystem {
   /**
    * Start playing the active zone's track at the given index.
    * Sets up onended to advance via _onZoneTrackEnded().
+   * @param {number} index - Track index into the zone's SEQUENCE_MUSIC tracks
+   * @param {boolean} continues - True when chained from the previous track's
+   *   end (keeps the music clock's bar count running; see _startChainedTrack)
    */
-  _startZoneTrack(index) {
+  _startZoneTrack(index, continues = false) {
     this._stopZoneSequenceSource();
     this.zoneSequenceIndex = index;
     const source = this.audioContext.createBufferSource();
@@ -1719,7 +1755,7 @@ export class AudioSystem {
     source.loop = false;
     source.connect(this.layer1Gain);
     source.onended = () => this._onZoneTrackEnded();
-    source.start(0);
+    this._startChainedTrack(source, continues);
     this.zoneSequenceSource = source;
     this.isPlaying = true;
   }
@@ -1733,7 +1769,270 @@ export class AudioSystem {
     const spec = SEQUENCE_MUSIC[this.sequenceZone];
     if (!spec) return;
     const table = this.zoneCombatActive ? spec.combatNext : spec.calmNext;
-    this._startZoneTrack(table[this.zoneSequenceIndex]);
+    this._startZoneTrack(table[this.zoneSequenceIndex], true);
+  }
+
+  // ============================================================
+  // Music clock
+  // ============================================================
+
+  /**
+   * Start a chained (non-looping) music track now and record it on the music
+   * clock. A track chained from the previous one's end continues the bar
+   * count, so a Motif longer than the track (a 4-bar Motif over 1-bar boss
+   * tracks) keeps its phrase instead of restarting on every track; a fresh
+   * start resets it.
+   * @param {AudioBufferSourceNode} source - Source with its buffer assigned
+   * @param {boolean} continues - True when chained from the previous track
+   */
+  _startChainedTrack(source, continues) {
+    const startTime = this.audioContext.currentTime;
+    this.trackBarBase = continues ? this.trackBarBase + barsIn(this.trackDuration) : 0;
+    this.trackStartTime = startTime;
+    this.trackDuration = source.buffer.duration;
+    source.start(startTime);
+  }
+
+  /**
+   * The music pass playing at AudioContext time `t` — one loop of a
+   * dual-layer track, or one chained sequence track: its start time, length,
+   * and how many bars of the continuous music came before it. Bar lines sit
+   * at start + i × BAR_DURATION for i < barsIn(length); the MP3 padding after
+   * the last one belongs to no bar. Null when no zone/boss music is playing,
+   * or when a loop-end swap has been scheduled but not landed yet (the old
+   * pass's own clock is gone by then).
+   * @param {number} t - AudioContext time
+   * @returns {{start: number, length: number, barBase: number} | null}
+   */
+  _musicPass(t) {
+    if (!this.audioContext || !this.isPlaying) return null;
+
+    let anchor, length, barBase;
+    if (this.mode === 'dual' && this.layer1Source && this.layer1Buffer) {
+      anchor = this.playbackStartTime;
+      length = this.layer1Buffer.duration;
+      barBase = 0;
+    } else if ((this.mode === 'zoneSequence' && this.zoneSequenceSource) ||
+               (this.mode === 'sequence' && this.bossSequenceSource)) {
+      anchor = this.trackStartTime;
+      length = this.trackDuration;
+      barBase = this.trackBarBase;
+    } else {
+      return null;
+    }
+
+    const elapsed = t - anchor;
+    if (elapsed < 0 || !(length > 0)) return null;
+    // A dual loop repeats its buffer. A chained track past its end hasn't
+    // been followed yet (the next one starts from onended); assume it
+    // starts on the boundary at the same length — the voice's drift check
+    // in tickMotifs corrects it if that turns out wrong.
+    const passIndex = Math.floor(elapsed / length);
+    return {
+      start: anchor + passIndex * length,
+      length,
+      barBase: barBase + passIndex * barsIn(length)
+    };
+  }
+
+  /**
+   * The first bar line at or after `t` on the music's grid, or null when no
+   * music is playing. A time inside the padding after a pass's last bar line
+   * rolls to the next pass's start.
+   */
+  _nextBarLine(t) {
+    const pass = this._musicPass(t);
+    if (!pass) return null;
+    const bar = Math.ceil((t - pass.start) / BAR_DURATION - 1e-3);
+    return bar >= barsIn(pass.length) ? pass.start + pass.length : pass.start + bar * BAR_DURATION;
+  }
+
+  // ============================================================
+  // Enemy Motifs (GLOSSARY: Motif)
+  // ============================================================
+
+  /**
+   * Decode Motif bounces (`assets/audio/motif-<name>.mp3`) into this
+   * AudioContext. Names already loaded or in flight are skipped, so calling
+   * this again is cheap. A Motif's length in bars comes from its bounce.
+   * @param {string} base - BASE_URL prefix
+   * @param {string[]} names - Motif names (enemy data `motif` fields)
+   */
+  loadMotifs(base, names) {
+    if (!this.audioContext) return;
+    const context = this.audioContext;
+    for (const name of names) {
+      if (name in this.motifBuffers) continue;
+      this.motifBuffers[name] = null;
+      this.fetchAudioBuffer(`${base}assets/audio/motif-${name}.mp3`)
+        .then(data => context.decodeAudioData(data))
+        .then(buffer => {
+          // dispose() swapped the context out from under this load.
+          if (context !== this.audioContext) return;
+          this.motifBuffers[name] = { buffer, bars: barsIn(buffer.duration) };
+        })
+        .catch(error => console.error(`[Audio] Failed to load motif ${name}:`, error));
+    }
+  }
+
+  /**
+   * Start looping a Motif in sync with the music. It enters at the next bar
+   * line, in phase: at the music's bar 3 a 4-bar Motif comes in at its own
+   * bar 3. No-op if the voice is already running or its bounce isn't
+   * decoded yet (the per-frame caller simply asks again).
+   *
+   * The loop is a chain of one-shot segments rather than `source.loop`.
+   * Each segment ends on the music's own boundaries, either the Motif's
+   * phrase end or the music pass end, whichever comes first. So the
+   * voice re-anchors on every music loop or track change, and the MP3
+   * padding on both bounces never adds up to drift.
+   * @param {string} name - Motif name
+   */
+  startMotif(name) {
+    if (this.motifVoices[name] || !this.motifBuffers[name]) return;
+    if (!this.audioContext || this.audioContext.state !== 'running' || !this.layer1Gain) return;
+
+    // Its own gain so a cut can fade just this voice; fed into the music
+    // bus so it follows music volume.
+    const gain = this.audioContext.createGain();
+    gain.connect(this.layer1Gain);
+    this.motifVoices[name] = { name, gain, sources: [], segment: null, nextAt: null };
+  }
+
+  /**
+   * Cut a Motif now — a fade of a few ms rather than a hard stop, so
+   * it doesn't click. Also cancels a segment scheduled for later.
+   * @param {string} name - Motif name
+   */
+  stopMotif(name) {
+    const voice = this.motifVoices[name];
+    if (!voice) return;
+    delete this.motifVoices[name];
+    if (!this.audioContext) return;
+
+    const now = this.audioContext.currentTime;
+    const cutAt = now + MOTIF_CUT_FADE;
+    voice.gain.gain.cancelScheduledValues(now);
+    voice.gain.gain.setValueAtTime(voice.gain.gain.value, now);
+    voice.gain.gain.linearRampToValueAtTime(0, cutAt);
+    for (const source of voice.sources) {
+      // A segment scheduled to start after cutAt never sounds.
+      try { source.stop(cutAt); } catch (_) {}
+    }
+    setTimeout(() => voice.gain.disconnect(), (MOTIF_CUT_FADE + 0.05) * 1000);
+  }
+
+  /** Cut every running Motif (music stopped, context going away). */
+  stopAllMotifs() {
+    for (const name of Object.keys(this.motifVoices)) this.stopMotif(name);
+  }
+
+  /** Names of the Motifs currently running. */
+  activeMotifs() {
+    return Object.keys(this.motifVoices);
+  }
+
+  /**
+   * Per-frame Motif upkeep: schedule each voice's next segment once it is
+   * within MOTIF_LOOKAHEAD, and re-enter any voice the music has jumped
+   * away from (a boss track or immediate swap starting mid-segment).
+   */
+  tickMotifs() {
+    if (!this.audioContext) return;
+    const now = this.audioContext.currentTime;
+
+    for (const name of Object.keys(this.motifVoices)) {
+      let voice = this.motifVoices[name];
+
+      // The segment sounding now was laid against a music pass; if the music
+      // now says a different pass is playing, it restarted out from under
+      // the voice. Cut and re-enter on the next bar of the new grid. Not
+      // checked until the segment's pass is due to have started: a chained
+      // track starts a few ms after its boundary, and until it does the
+      // music still reports the outgoing track.
+      const segment = voice.segment;
+      if (segment && now >= segment.passStart + MOTIF_DRIFT_TOLERANCE && now < segment.end) {
+        const pass = this._musicPass(now);
+        if (pass && Math.abs(pass.start - segment.passStart) > MOTIF_DRIFT_TOLERANCE) {
+          this.stopMotif(name);
+          this.startMotif(name);
+          voice = this.motifVoices[name];
+          if (!voice) continue;
+        }
+      }
+
+      if (voice.nextAt === null) {
+        // Not entered yet (or re-entering): wait for the music's next bar line.
+        voice.nextAt = this._nextBarLine(now);
+        if (voice.nextAt === null) continue;
+      }
+      if (voice.nextAt - now < MOTIF_LOOKAHEAD) {
+        this._scheduleMotifSegment(voice, voice.nextAt);
+      }
+    }
+  }
+
+  /**
+   * Lay one segment of a Motif starting on the bar line at `t`. The Motif bar
+   * is the music's continuous bar count mod the Motif's length, so the voice
+   * is always in phase with the music. The segment ends at the Motif's
+   * phrase end, or at the music pass end if that comes first. The last
+   * segment of a pass runs on through the pass's padding tail, so it
+   * reaches the next pass start without a gap.
+   */
+  _scheduleMotifSegment(voice, t) {
+    const motif = this.motifBuffers[voice.name];
+    // Sampled a hair past t so a bar line that lands exactly on a pass
+    // boundary resolves to the new pass rather than the old one's end.
+    let pass = this._musicPass(t + 1e-3);
+    if (!motif || !pass) {
+      voice.nextAt = null; // music stopped or is mid-swap — re-enter later
+      return;
+    }
+    // A t inside the padding tail after the pass's last bar line is the next
+    // pass's downbeat arriving early: a chained track starts from onended a
+    // few ms after the boundary this segment was timed against.
+    if (t - pass.start > barsIn(pass.length) * BAR_DURATION - MOTIF_DRIFT_TOLERANCE) {
+      pass = {
+        start: pass.start + pass.length,
+        length: pass.length,
+        barBase: pass.barBase + barsIn(pass.length)
+      };
+    }
+
+    const barInPass = Math.min(
+      Math.round(Math.max(0, t - pass.start) / BAR_DURATION),
+      barsIn(pass.length) - 1
+    );
+    const motifBar = (pass.barBase + barInPass) % motif.bars;
+    const offset = motifBar * BAR_DURATION;
+    const passEnd = pass.start + pass.length;
+    let end = Math.min(t + (motif.bars - motifBar) * BAR_DURATION, passEnd);
+    if (passEnd - end < BAR_DURATION / 2) end = passEnd;
+
+    // A frame hitch can leave t already past; Web Audio would then start
+    // the segment from `offset` late, out of phase. Skip ahead to keep phase
+    // (or past the whole segment, if the hitch outlasted it).
+    const late = Math.max(0, this.audioContext.currentTime - t);
+    if (late >= end - t) {
+      voice.segment = null;
+      voice.nextAt = end;
+      return;
+    }
+
+    const source = this.audioContext.createBufferSource();
+    source.buffer = motif.buffer;
+    source.connect(voice.gain);
+    source.onended = () => {
+      source.disconnect();
+      const index = voice.sources.indexOf(source);
+      if (index !== -1) voice.sources.splice(index, 1);
+    };
+    source.start(t + late, offset + late, end - t - late);
+
+    voice.sources.push(source);
+    voice.segment = { start: t, end, passStart: pass.start };
+    voice.nextAt = end;
   }
 
   /**
@@ -1776,6 +2075,8 @@ export class AudioSystem {
     this.zoneSequenceSource = null;
     this.sequenceZone = null;
     this.dungeonTrack = null;
+    this.motifBuffers = {};
+    this.motifVoices = {};
     this.mode = null;
   }
 }

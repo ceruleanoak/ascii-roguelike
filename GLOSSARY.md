@@ -300,6 +300,18 @@ identity, not standard programming terms.
 - **In code:** `Enemy` base in `src/entities/`; data in `src/data/enemies.js`.
 - **Not:** "foe", "hostile", "mob", "monster", "NPC" (an NPC is non-hostile and distinct).
 
+### Motif
+- **Definition:** An Enemy type's own 2- or 4-bar musical phrase. It loops over the music while
+  the camera is zoomed in and an Enemy of that type is in the zoomed frame, and it cuts the
+  moment the last one leaves the frame or the zoom releases. A Motif comes in at the next bar
+  line, in phase with the music (at the music's bar 3, a 4-bar Motif enters at its own bar 3).
+  Several types in frame layer their Motifs.
+- **In code:** `motif: '<name>'` on an `ENEMIES` entry → bounce at
+  `public/assets/audio/motif-<name>.mp3` (length in bars read from the bounce). `EnemyMotifSystem`
+  decides which Motifs are wanted each frame; `AudioSystem.startMotif`/`stopMotif`/`tickMotifs`
+  play them on the music clock (`_musicPass`).
+- **Not:** an SFX (a one-shot `data.sfx` cue), and not a Beat (the combat term).
+
 ### Enemy State
 - **Definition:** The AI State spine — a single closed, named set of behavioral States
   (Dormant, Alert, Approach, Anticipate, Strike, Recover, Search, Withdraw, Flee, Lookback,

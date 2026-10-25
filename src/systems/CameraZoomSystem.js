@@ -267,6 +267,25 @@ export class CameraZoomSystem {
     return this.currentZoom;
   }
 
+  /**
+   * True while the camera is committed to a zoomed frame (full or half
+   * scale) — from the moment it starts easing in until it starts easing out.
+   */
+  isZoomEngaged() {
+    return this.targetZoom > 1;
+  }
+
+  /**
+   * The entities on the player's current layer (surface enemies, an
+   * Interior floor's enemies, or the Maze's ghosts) — the same list the
+   * zoom trigger reads.
+   */
+  activeLayerEntities() {
+    const player = this.game.player;
+    if (!player) return [];
+    return this._resolveActiveLayer(this.game, player).entities ?? [];
+  }
+
   getOriginPercent() {
     return { x: this.originXPercent, y: this.originYPercent };
   }
