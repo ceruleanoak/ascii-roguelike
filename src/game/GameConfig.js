@@ -71,7 +71,7 @@ export const ZOOM = {
                                // aggro'd enemy is nearby but the player has no weapon equipped:
                                // still some tension, but not the full combat commit (see CameraZoomSystem)
   TRIGGER_RANGE_CELLS: 6.6,   // enemy/ghost within this many cells triggers zoom (+10% over the original 6 — cowards no longer trigger it at all, see CameraZoomSystem)
-  RELEASE_RANGE_CELLS: 7,     // once zoomed, enemy must clear this range before zoom releases (hysteresis — prevents flicker at the trigger boundary)
+  RELEASE_RANGE_CELLS: 7,     // once zoomed, enemy must clear this range (and leave the zoomed frame) before zoom releases (hysteresis — prevents flicker at the trigger boundary)
   ZOOM_OUT_DELAY_MS: 500,     // hold the zoom this long after the last detected enemy before actually releasing
   TRANSITION_IN_MS: 700,      // duration of the eased zoom-in transition (slower, deliberate)
   TRANSITION_OUT_MS: 700,     // duration of the eased zoom-out transition (matches zoom-in)

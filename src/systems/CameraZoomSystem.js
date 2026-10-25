@@ -10,7 +10,9 @@ import { isDeathHeldOffSurface, isInteriorActive, activeInteriorFloor } from './
  * — Rat post-steal, Trap Goblin, a still-growing Bomb) is a coward, not a
  * threat, and wandering close to one shouldn't zoom the camera in. Once zoomed,
  * stays zoomed until the nearest threat clears the wider
- * ZOOM.RELEASE_RANGE_CELLS (hysteresis, avoids flicker at the boundary).
+ * ZOOM.RELEASE_RANGE_CELLS (hysteresis, avoids flicker at the boundary)
+ * and no threat is left inside the zoomed frame — an enemy the player can
+ * still see keeps the frame (and its Motif) engaged.
  * Inside the Maze interior, zoom is forced on permanently regardless of
  * ghost proximity — the corridor is narrow enough that it's always relevant.
  * On the surface with no weapon equipped, the same trigger instead targets
@@ -105,11 +107,17 @@ export class CameraZoomSystem {
 
       // Hysteresis: once zoomed in, require the enemy to clear the wider
       // release range before we zoom back out, so it doesn't flicker in/out
-      // as an enemy hovers right at the trigger boundary.
-      const rangeCells = this.targetZoom !== 1
+      // as an enemy hovers right at the trigger boundary. A threat still
+      // inside the zoomed frame also holds the zoom: the frame reaches ~8.5
+      // cells to each edge (more diagonally or against a wall) — past the
+      // release range — and releasing on an enemy the player can still see
+      // also cut its Motif while it was on screen.
+      const zoomed = this.targetZoom !== 1;
+      const rangeCells = zoomed
         ? ZOOM.RELEASE_RANGE_CELLS
         : ZOOM.TRIGGER_RANGE_CELLS;
-      const enemyDetected = this._enemyNearby(player, entities, rangeCells);
+      const enemyDetected = this._enemyNearby(player, entities, rangeCells)
+        || (zoomed && this._threatInFrame(entities, this.targetZoom));
 
       // Extra hold: once no enemy is detected, keep the zoomed frame for
       // ZOOM.ZOOM_OUT_DELAY_MS before actually releasing, so a momentary
@@ -221,19 +229,20 @@ export class CameraZoomSystem {
     const px = player.position.x + player.width / 2;
     const py = player.position.y + player.height / 2;
     return entities.some((e) => {
-      if (e.hp !== undefined && e.hp <= 0) return false;
-      if (e.data?.pacifist) return false;
-      // Cowards: an enemy currently running away (State Flee) or glancing
-      // back mid-flight (State Lookback) is disengaging, not aggro — it
-      // doesn't warrant the combat-tension zoom just because the player
-      // happens to be nearby. Entities without a spine (e.g. Maze ghosts)
-      // fall through unaffected via the optional chain.
-      const spineState = e.stateMachine?.current;
-      if (spineState === 'flee' || spineState === 'lookback') return false;
+      if (!isThreat(e)) return false;
       const ex = e.position.x + (e.width ?? GRID.CELL_SIZE) / 2;
       const ey = e.position.y + (e.height ?? GRID.CELL_SIZE) / 2;
       return Math.hypot(ex - px, ey - py) <= range;
     });
+  }
+
+  // Whether any threat sits inside the frame the zoom is committed to.
+  // Judged at the target scale, not the live easing value, so a zoom that
+  // has only just started easing in (still near 1.0, where everything
+  // counts as on-screen) doesn't hold itself open on the whole room.
+  _threatInFrame(entities, scale) {
+    if (!entities || entities.length === 0) return false;
+    return entities.some((e) => isThreat(e) && this.isEntityOnScreen(e, scale));
   }
 
   _tickZoom(desiredScale, deltaTime, state, forceRestart) {
@@ -318,8 +327,8 @@ export class CameraZoomSystem {
   // kept here as the single source of truth so combat code (committed
   // windups/telegraphs that must not fire on an enemy the player can't see)
   // and that renderer agree on what "visible" means.
-  isEntityOnScreen(entity) {
-    const scale = this.currentZoom;
+  // `scale` defaults to the live zoom; the release check passes the target.
+  isEntityOnScreen(entity, scale = this.currentZoom) {
     if (scale <= 1) return true;
     const ox = (this.originXPercent / 100) * GRID.WIDTH;
     const oy = (this.originYPercent / 100) * GRID.HEIGHT;
@@ -328,6 +337,19 @@ export class CameraZoomSystem {
     const screenY = oy + (ey - oy) * scale;
     return screenX >= 0 && screenX <= GRID.WIDTH && screenY >= 0 && screenY <= GRID.HEIGHT;
   }
+}
+
+// Whether an entity counts toward the combat zoom: alive, not a pacifist,
+// and not a coward — an enemy currently running away (State Flee) or
+// glancing back mid-flight (State Lookback) is disengaging, not aggro, and
+// doesn't warrant the combat-tension zoom just because the player happens
+// to be nearby. Entities without a spine (e.g. Maze ghosts) fall through
+// unaffected via the optional chain.
+function isThreat(e) {
+  if (e.hp !== undefined && e.hp <= 0) return false;
+  if (e.data?.pacifist) return false;
+  const spineState = e.stateMachine?.current;
+  return spineState !== 'flee' && spineState !== 'lookback';
 }
 
 // Canvas-pixel offset of a gridCols x gridRows layer drawn centered on the
