@@ -6,6 +6,9 @@
 // logic with no state of its own, operating directly on the player it's passed.
 import { PHYSICS } from '../game/GameConfig.js';
 
+// Speed fraction while a melee weapon charges (a bat) or holds its windup.
+const CHARGING_MELEE_SPEED = 0.25;
+
 export const PlayerInputSystem = {
   // The held WASD keys as this frame's movement input, after everything that
   // gets between the player and their keys: a movement lock, the Rusalka's
@@ -145,10 +148,14 @@ export const PlayerInputSystem = {
     const batMax = player.batFormTimer > 0 ? armorModified * 1.8 : armorModified;
     const boostedMax = player.speedBoostTimer > 0 ? Math.max(batMax, armorModified * player.speedBoostMultiplier) : batMax;
     const firingMult = player.firingSlowTimer > 0 ? 0.35 : 1; // Dramatic ~65% slow while firing a gun
-    // Bat: half speed while charging. Flail: 1/8 speed while spinning up.
-    const chargeMult = !player.heldItem?.isCharging ? 1
-      : player.heldItem.data?.batCharge ? 0.5
-      : player.heldItem.data?.flailSpin ? 0.05 : 1;
+    // Charging melee is heavy: a bat charging or a held windup (the Exploding
+    // Mace and every other AoE swing that holds SPACE, Item.holdsWindup) drops
+    // to a quarter speed; the flail spinning up to 1/20. (The Crystal Maul's
+    // charge is a full stop, above.)
+    const held = player.heldItem;
+    const chargeMult = held?.isCharging
+      ? (held.data?.batCharge ? CHARGING_MELEE_SPEED : held.data?.flailSpin ? 0.05 : 1)
+      : (held?.windupActive && held.holdsWindup() ? CHARGING_MELEE_SPEED : 1);
     const finalMax = boostedMax * player.getStatusSpeedMultiplier() * firingMult * chargeMult;
     const speed = Math.sqrt(player.velocity.vx ** 2 + player.velocity.vy ** 2);
     if (speed > finalMax && !(player.bumpFlightTimer > 0)) {
