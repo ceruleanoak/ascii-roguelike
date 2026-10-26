@@ -14,7 +14,8 @@ const CUT_DELAY  = 1.2;  // fish on display → fisherman cuts it open
  * the catch's ingredients scatter and are picked up by the normal passive
  * pickup mechanics. Teaches "a blade opens the catch" by showing, not telling.
  *
- * Hut interiors only (the lakeside fisherman talks but doesn't trade).
+ * Hut interiors only (the shore Fisherman sells a rod instead —
+ * ShoreFishermanSystem).
  */
 export class FishermanDemoSystem {
   constructor(game) {

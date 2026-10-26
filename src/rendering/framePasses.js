@@ -34,6 +34,7 @@
 import { GRID, GAME_STATES } from '../game/GameConfig.js';
 import { isInteriorActive, inSamePlane } from '../systems/PlaneSystem.js';
 import { drawWires } from './effects/WireEffects.js';
+import { drawShoreFishermanCoin } from './effects/ArcTossEffects.js';
 import { drawStatusPips } from './effects/StatusPipEffects.js';
 import { drawParryIndicator } from './ui/ParryIndicator.js';
 import { drawFairyKingOrbit } from './effects/FairyKingOrbit.js';
@@ -86,6 +87,7 @@ const ECHO_AWAY = 'the Echo is away at REST, where a broken Echo returns (Dragon
 const TRINE_ONLY = 'the Trine fights only in the Mist Battle, on a surface Room';
 const RUSALKA_ONLY = 'the cure Rusalka surfaces only in Lake Rooms (surface)';
 const NO_DARK = 'nothing here is dark enough for a torch to cut';
+const SHORE_FISHERMAN_ONLY = 'the shore Fisherman stands only on a surface Lake or Ocean bank';
 const STORM_EYE_ONLY = 'Wind Fields blow only in the Storm Eye arena, a surface Room';
 const NO_PUNCH = 'an unarmed SPACE at REST makes the idle echo, not a Punch (PunchSystem rest-parity)';
 const NO_PUNCH_NEUTRAL = 'SPACE in a NEUTRAL room interacts and never attacks, armed or not';
@@ -145,6 +147,8 @@ export const FRAME_PASSES = {
     { id: 'particles', on: everywhere, draw: (rc, game, owner) => er(rc).drawParticles(game, isInterior(owner)) },
     { id: 'steamClouds', on: everywhere, draw: (rc, game, owner) => er(rc).drawSteamClouds(game, isInterior(owner)) },
     // Wind Field motes (Storm Eye): swirl, gust streaks, suction spirals.
+    // Shore Fisherman coin pay — the arc from player to him on the bank.
+    { id: 'shoreFishermanCoin', on: surfaceOnly(SHORE_FISHERMAN_ONLY), draw: (rc, game) => drawShoreFishermanCoin(rc.renderer, game) },
     { id: 'windField', on: surfaceOnly(STORM_EYE_ONLY), draw: (rc, game) => game.bossSystem?.windFieldSystem.render(rc.renderer.fgCtx) },
   ],
 

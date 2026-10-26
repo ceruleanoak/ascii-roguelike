@@ -1557,6 +1557,19 @@ identity, not standard programming terms.
   (`SunkenGlintSystem`); read by `SunkenGlintSystem.handleSpacePress` and `drawSunkenGlints`.
 - **Not:** Flippers (those let the player swim deep water; Goggles only let them see into it).
 
+### Shore Fisherman
+- **Definition:** The Fisherman standing on the bank of a peaceful Lake or Ocean Room. Once his
+  tips have been heard, a coin buys his one Fishing Pole, set down beside him. Whenever a catch
+  that needs a blade lands by the player, he walks over, cuts it open, and walks back to his
+  spot. He leaves a Caught Fish alone (a blade would waste it). The hut Fisherman instead sells
+  the cutting demonstration.
+- **In code:** `room.lakeFisherman` (a `Fisherman` with `sellsRod`, placed by
+  `roomFeatures.spawnShoreFisherman`); `ShoreFishermanSystem` (`trySpacePress` from the EXPLORE
+  SPACE dispatch, `update` from `updateExploreState`); the cut is
+  `FishingSystem.cutRewardObject`, shared with the player's blade; coin arc is the
+  `shoreFishermanCoin` Frame Pass.
+- **Not:** the hut Fisherman (`FishermanDemoSystem`, a paid demonstration, no rod).
+
 ### Bomb Bag
 - **Definition:** A consumable-slot item (⊟) that throws Bombs (⊗) and is never spent itself.
   It holds one free Bomb, refilled on every room exit, and throws that first; after that it

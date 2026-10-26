@@ -112,10 +112,10 @@ import { GrayZoneSystem } from './systems/GrayZoneSystem.js';
 import { ElectricitySystem } from './systems/ElectricitySystem.js';
 import { FireSystem } from './systems/FireSystem.js';
 import { FountainSystem } from './systems/FountainSystem.js';
-import { createWildFairy } from './entities/FairyKing.js';
 import { CampNPCSystem } from './systems/CampNPCSystem.js';
 import { DialogueSystem } from './systems/DialogueSystem.js';
 import { FishermanDemoSystem } from './systems/FishermanDemoSystem.js';
+import { ShoreFishermanSystem } from './systems/ShoreFishermanSystem.js';
 import { WeaponsMasterSystem } from './systems/WeaponsMasterSystem.js';
 import { CharonSystem } from './systems/CharonSystem.js';
 import { StorytellerSystem } from './systems/StorytellerSystem.js';
@@ -306,6 +306,7 @@ class Game {
     this.enemyUpdateSystem = new EnemyUpdateSystem(this);
     this.dialogueSystem = new DialogueSystem(this);
     this.fishermanDemoSystem = new FishermanDemoSystem(this);
+    this.shoreFishermanSystem = new ShoreFishermanSystem(this);
     this.weaponsMasterSystem = new WeaponsMasterSystem(this);
     this.charonSystem = new CharonSystem(this);
     this.storytellerSystem = new StorytellerSystem(this);
@@ -2351,20 +2352,7 @@ class Game {
     );
 
     this.worldEffectsSystem.checkGooBlobHits();
-    if (explore) this.fishingSystem.checkRewardObjectHits(
-      this.combatSystem.meleeAttacks,
-      (char, x, y) => this.lootSystem.spawnIngredientDrop(char, x, y, null, null),
-      (specialKey, x, y) => {
-        if (specialKey === 'fairy') {
-          if (this.fairiesAngered) return;
-          const fairy = createWildFairy(x, y, this.currentRoom?.exits || {});
-          if (!this.neutralCharacters) this.neutralCharacters = [];
-          this.neutralCharacters.push(fairy);
-          return;
-        }
-        this.lootSystem?.spawnItemDrop?.(specialKey, x, y, null, null);
-      }
-    );
+    if (explore) this.fishingSystem.checkRewardObjectHits(this, this.combatSystem.meleeAttacks);
 
     // Spawn drops from objects destroyed this frame (by melee or bullets)
     if (combatResult.objectEffects) {
@@ -2670,6 +2658,7 @@ class Game {
     // Auto-close the dialogue box when the player walks away from the speaker
     this.dialogueSystem.update();
     this.fishermanDemoSystem.update(deltaTime);
+    this.shoreFishermanSystem.update(deltaTime);
     this.weaponsMasterSystem.update(deltaTime);
 
     // Update all shared player mechanics
@@ -3122,6 +3111,8 @@ class Game {
 
       // Hut fisherman coin trade (gated on tips heard — see FishermanDemoSystem)
       if (this.fishermanDemoSystem.trySpacePress()) return;
+      // Shore fisherman sells a Fishing Pole for a coin (ShoreFishermanSystem)
+      if (this.shoreFishermanSystem.trySpacePress()) return;
 
       // Hut Weapons Master coin training (gated on advice heard — see WeaponsMasterSystem)
       if (this.weaponsMasterSystem.trySpacePress()) return;

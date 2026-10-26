@@ -6,6 +6,7 @@ import { Item } from '../entities/Item.js';
 import { tagLootLayer } from './PlaneSystem.js';
 import { RewardObject } from '../entities/RewardObject.js';
 import { Rusalka } from '../entities/Rusalka.js';
+import { createWildFairy } from '../entities/FairyKing.js';
 
 const STATES = {
   IDLE: 'IDLE',
@@ -539,7 +540,25 @@ export class FishingSystem {
     }
   }
 
-  checkRewardObjectHits(meleeAttacks, spawnIngredientFn, spawnSpecialFn) {
+  // Cuts a catch open in the world: ingredients drop as loot, specials as
+  // items, and a fairy catch flies free (unless the fairies are angered).
+  // Used for a player's blade and the shore Fisherman's (ShoreFishermanSystem).
+  cutRewardObject(game, reward) {
+    this.hitRewardObject(
+      reward,
+      (char, x, y) => game.lootSystem.spawnIngredientDrop(char, x, y, null, null),
+      (specialKey, x, y) => {
+        if (specialKey === 'fairy') {
+          if (game.fairiesAngered) return;
+          game.neutralCharacters.push(createWildFairy(x, y, game.currentRoom?.exits || {}));
+          return;
+        }
+        game.lootSystem.spawnItemDrop(specialKey, x, y, null, null);
+      }
+    );
+  }
+
+  checkRewardObjectHits(game, meleeAttacks) {
     if (!this.rewardObjects.length || !meleeAttacks.length) return;
     for (const attack of meleeAttacks) {
       if (!attack.isBlade) continue;
@@ -550,7 +569,7 @@ export class FishingSystem {
         const dx = reward.position.x + GRID.CELL_SIZE / 2 - atkX;
         const dy = reward.position.y + GRID.CELL_SIZE / 2 - atkY;
         if (dx * dx + dy * dy < atkR * atkR) {
-          this.hitRewardObject(reward, spawnIngredientFn, spawnSpecialFn);
+          this.cutRewardObject(game, reward);
         }
       }
     }

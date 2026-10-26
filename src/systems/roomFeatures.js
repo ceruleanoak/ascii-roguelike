@@ -250,7 +250,7 @@ export function spawnShoreFisherman(gen, room) {
     if (!gen.isValidPosition(col, row, room)) continue;
     if (gen.hasObjectAt(room, col * GRID.CELL_SIZE, row * GRID.CELL_SIZE)) continue;
     const fisherman = new Fisherman(col * GRID.CELL_SIZE, row * GRID.CELL_SIZE);
-    fisherman.setZone(room.exitLetter === 'O' ? 'ocean' : room.zone);
+    fisherman.setZone(room.exitLetter === 'O' ? 'ocean' : room.zone, { sellsRod: true });
     return fisherman;
   }
   return null;

@@ -41,6 +41,12 @@ export function drawCoinArc(renderer, anim) {
   drawArcFrame(renderer.fgCtx, anim, ['c', 'O', '|', 'O'], '#ffcc66', '#ffaa33');
 }
 
+/** The shore Fisherman's coin pay (ShoreFishermanSystem) — a Frame Pass. */
+export function drawShoreFishermanCoin(renderer, game) {
+  const anim = game.shoreFishermanSystem?.getCoinAnim();
+  if (anim) drawCoinArc(renderer, anim);
+}
+
 /**
  * Well ritual: spinning Infused/Lucky/raw coin arc + the white flash that
  * fires once the coin reaches the well center.

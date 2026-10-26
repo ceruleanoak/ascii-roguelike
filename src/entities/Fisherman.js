@@ -12,7 +12,7 @@ import { NeutralCharacter } from './NeutralCharacter.js';
  *   - What the local waters yield — derived from the zone's common catches
  *     (rare low-weight catches stay undisclosed; discovery is the reward).
  *   - The extraction hint — catches must be opened with a blade.
- *   - Ocean: the pearl legend. Hut: the coin-trade breadcrumb.
+ *   - Ocean: the pearl legend. Hut and shore: the coin-trade breadcrumb.
  */
 export class Fisherman extends NeutralCharacter {
   constructor(x, y) {
@@ -20,8 +20,15 @@ export class Fisherman extends NeutralCharacter {
     this.dialogueLines = ['THE FISH BITE WHERE THE WATER IS STILL.'];
     this.zoneName = 'green';
     // Hut fishermen trade: a coin buys the cutting demonstration
-    // (FishermanDemoSystem). Lakeside fishermen only talk.
+    // (FishermanDemoSystem).
     this.coinDemoEnabled = false;
+    // Shore fishermen (ShoreFishermanSystem) sell one Fishing Pole for a coin
+    // and walk over to cut open what the player catches, then walk back.
+    this.sellsRod = false;
+    this.rodSold = false;
+    this.homePosition = { x, y };
+    this.cutTimer = 0;
+    this.velocity = { x: 0, y: 0, vx: 0, vy: 0 }; // vx/vy: steerToward's
   }
 
   /**
@@ -29,9 +36,10 @@ export class Fisherman extends NeutralCharacter {
    * their own saltwater table; the ocean fisherman also carries the pearl
    * legend — the breadcrumb toward the Ocean pedestal).
    */
-  setZone(zoneName, { coinDemo = false } = {}) {
+  setZone(zoneName, { coinDemo = false, sellsRod = false } = {}) {
     this.zoneName = FISHING_TABLES[zoneName] ? zoneName : 'green';
     this.coinDemoEnabled = coinDemo;
+    this.sellsRod = sellsRod;
     const table = FISHING_TABLES[zoneName] || FISHING_TABLES.green;
 
     // Common catches only (weight >= 10) — rare catches stay a secret.
@@ -55,6 +63,9 @@ export class Fisherman extends NeutralCharacter {
     }
     if (coinDemo) {
       lines.push("GOT A COIN? I'LL SHOW YOU THE TRICK.");
+    }
+    if (sellsRod) {
+      lines.push("GOT A COIN? I'VE A SPARE ROD.");
     }
     // One saying per visit (WiseFellow pattern) — rolled once at spawn.
     this.dialogueLines = [lines[Math.floor(Math.random() * lines.length)]];
