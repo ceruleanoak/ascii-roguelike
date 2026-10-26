@@ -670,8 +670,13 @@ export class CampNPCSystem {
     const dx = pcx - ncx, dy = pcy - ncy;
     if (dx * dx + dy * dy > COIN_INTERACT_RADIUS * COIN_INTERACT_RADIUS) return false;
 
-    // Player must have a coin in the passive wallet
-    if (!game.inventorySystem?.hasCoin()) return false;
+    // Empty-handed SPACE: campfire talk instead of an offering (the Well's
+    // shape — a coin buys the ritual, no coin gets a plain line). Only at the
+    // fire: a hired companion walks at the player's elbow, and talk there
+    // would take SPACE from everything else it does in a fight.
+    if (!game.inventorySystem?.hasCoin()) {
+      return npc !== game.companion && game.dialogueSystem.talk(npc);
+    }
 
     // Determine intent: heal takes priority when hurt, then hire (INTERESTED
     // + armed), otherwise hint.

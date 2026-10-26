@@ -2,6 +2,7 @@ import { GRID } from '../game/GameConfig.js';
 import { isFeed } from '../systems/feed.js';
 import { steerToward } from '../systems/npcSteering.js';
 import { NeutralCharacter } from './NeutralCharacter.js';
+import { CAMP_NPC_SAYINGS } from '../data/campNPCSayings.js';
 
 /**
  * CampNPC — wandering mercenary found at C-room campfires.
@@ -111,6 +112,28 @@ export class CampNPC extends NeutralCharacter {
     this.rollCooldown = 0;
     this.rollDirection = { x: 0, y: 0 };
     this.sappedTimer = 0;
+
+    // Index into CAMP_NPC_SAYINGS of the last saying told, so the next one
+    // is never the same line twice in a row.
+    this.lastSayingIndex = -1;
+  }
+
+  // ─── Speech ─────────────────────────────────────────────────────────────
+
+  /**
+   * Campfire talk: one saying from CAMP_NPC_SAYINGS per interaction, rolled
+   * at random but never the one just told. Told through DialogueSystem when
+   * the player has no coin to offer (CampNPCSystem.handleSpacePress) — a coin
+   * still buys the zone's wise saying instead.
+   */
+  getDialogueLines() {
+    const count = CAMP_NPC_SAYINGS.length;
+    let index = Math.floor(Math.random() * count);
+    if (count > 1 && index === this.lastSayingIndex) {
+      index = (index + 1 + Math.floor(Math.random() * (count - 1))) % count;
+    }
+    this.lastSayingIndex = index;
+    return [CAMP_NPC_SAYINGS[index]];
   }
 
   // ─── Carrier interface support (Player-shaped takeDamage) ────────────────
