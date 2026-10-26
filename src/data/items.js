@@ -444,9 +444,10 @@ export const ITEMS = {
   // Slingshot: the Sling strung onto a proper Y-frame. Still a bow-slot weapon
   // (hold-to-draw, oil-compatible, quiver icon) but firesBullet routes it through
   // Item.js's bullet pipeline instead of createArrow — a straight, non-directional
-  // shot rather than an arrow. maxChargeTime overrides the 1.5s default draw to
-  // near-zero: there's no meaningful hold-to-charge here (createBullets never reads
-  // chargeRatio), so the draw just snaps to "ready" almost instantly.
+  // shot rather than an arrow. maxChargeTime overrides the 1.5s default draw;
+  // requiresFullCharge means the stone only flies from a full draw — let go
+  // early and the draw is cancelled (Item.releaseBow). Its Keen and Pearl
+  // upgrades carry the same rule.
   'Ψ': {
     char: 'Ψ',
     tier: 1,
@@ -454,6 +455,7 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
     firesBullet: true,
+    requiresFullCharge: true,
     damage: 1,
     cooldown: .7,
     maxChargeTime: 0.5,
@@ -477,6 +479,7 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
     firesBullet: true,
+    requiresFullCharge: true,
     keenAim: true,
     damage: 1,
     cooldown: .7,
@@ -500,6 +503,7 @@ export const ITEMS = {
     type: ITEM_TYPES.WEAPON,
     weaponType: WEAPON_TYPES.BOW,
     firesBullet: true,
+    requiresFullCharge: true,
     keenAim: true,
     ricochet: true,
     maxRicochets: 3,

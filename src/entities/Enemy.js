@@ -1534,7 +1534,7 @@ export class Enemy {
       if (this.equippedWeapon.data.weaponType === 'BOW') {
         this.equippedWeapon.use(fakePlayer); // starts the draw
         if (this.equippedWeapon.isCharging) {
-          const released = this.equippedWeapon.releaseBow();
+          const released = this.equippedWeapon.releaseBow({ ignoreFullCharge: true });
           if (released) {
             this.itemUseCooldown = this.itemUsage.useCooldown;
             return this.convertToEnemyAttack(released);

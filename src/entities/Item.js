@@ -414,7 +414,11 @@ export class Item {
 
   // Release charged weapon (called when player releases space)
   // Handles both bows and chargeable guns (requiresCharge flag).
-  releaseBow() {
+  // A `requiresFullCharge` weapon (the slingshots) let go before its draw is
+  // full cancels the draw: no shot, no ammo spent, no cooldown. Enemies,
+  // which have no input cycle and loose at zero charge, pass
+  // `ignoreFullCharge`.
+  releaseBow({ ignoreFullCharge = false } = {}) {
     if (!this.isCharging) return null;
     const isBow = this.data.weaponType === 'BOW';
     const isChargeGun = this.data.requiresCharge && this.data.weaponType === 'GUN';
@@ -428,6 +432,13 @@ export class Item {
 
     // Calculate charge multiplier (0 to 1, where 1 = max charge = 2x speed)
     const chargeRatio = Math.min(this.chargeTime / this.maxChargeTime, 1.0);
+
+    if (this.data.requiresFullCharge && chargeRatio < 1 && !ignoreFullCharge) {
+      this.isCharging = false;
+      this.chargeTime = 0;
+      this.chargingPlayer = null;
+      return null;
+    }
 
     // Fire arrow with charge multiplier
     const attack = this.executeAttack(player, chargeRatio);
