@@ -1713,6 +1713,16 @@ export class Item {
     return attack;
   }
 
+  // Spent: a trap with no charges left, or a gun or bow out of ammo that
+  // never reloads (a thrown boomerang until it comes back). SPACE with a
+  // spent item in hand throws the Punch, as with empty hands.
+  isSpent() {
+    const data = this.data;
+    if (data.type === 'TRAP') return this.charges !== null && this.charges <= 0;
+    return (data.weaponType === 'GUN' || data.weaponType === 'BOW')
+      && this.maxUses !== null && this.usesRemaining <= 0 && !data.reloadTime;
+  }
+
   // AoE melee — the explode-on-hit maces/hammers and every shockwave swing —
   // must hold its windup the way a gem wand holds its charge: SPACE stays down
   // until the swing fires, and letting go early drops it (cancelHeldWindup).

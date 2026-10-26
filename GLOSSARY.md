@@ -1408,11 +1408,12 @@ identity, not standard programming terms.
 - **Not:** a dodge roll (player-steered, brief, no pathing); not a "dash" or "auto-run".
 
 ### Punch
-- **Definition:** The attack SPACE makes in EXPLORE with no weapon held: 1 damage at 50%
+- **Definition:** The attack SPACE makes in EXPLORE with no weapon held, or with a spent one
+  in hand (a trap with no charges left, a gun or bow out of ammo that never reloads): 1 damage at 50%
   accuracy (a miss shows MISS), thrown with the Slime's windup, cooldown and one-cell blinking
   Telegraph, in yellow. Skips Background Objects (an unarmed SPACE beside one interacts
   instead). Not thrown at REST or in NEUTRAL rooms.
-- **In code:** `src/systems/PunchSystem.js` — `tryPunch()`, `update(dt)` (the windup on the
+- **In code:** `src/systems/PunchSystem.js` — `tryPunch()` (spent check: `Item.isSpent()`), `update(dt)` (the windup on the
   enemy-melee clock, read straight off `ENEMIES.o`), `reset()` (Reset Registry, room scope).
   The landed blow is a player melee hitbox via `CombatSystem.createAttack` with `accuracy`
   (rolled per swing as `attack.missed`) and `telegraphDrawn`. Drawn by the `punches` Frame Pass.

@@ -15,7 +15,7 @@ const PUNCH_DAMAGE = 1;
 const PUNCH_ACCURACY = 0.5;   // half the punches whiff (CombatSystem shows MISS)
 
 /**
- * PunchSystem — SPACE with no weapon held: a 1-damage, 50%-accuracy Punch with
+ * PunchSystem — SPACE with no weapon held (or a spent one, Item.isSpent): a 1-damage, 50%-accuracy Punch with
  * the Slime's windup and projection, in yellow.
  *
  * The windup is the Slime's Telegraph lifecycle, stepped by the same Telegraph

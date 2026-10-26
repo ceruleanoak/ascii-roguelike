@@ -341,13 +341,7 @@ export class FightSystem {
     if (item.data?.type === 'TRAP') {
       return this.trapSpent || !(item.charges > 0) || (item.data.wire && this.game.player.inMaze);
     }
-    return this._outOfAmmo(item);
-  }
-
-  _outOfAmmo(item) {
-    const d = item.data;
-    return (d.weaponType === 'GUN' || d.weaponType === 'BOW')
-      && item.maxUses !== null && item.usesRemaining <= 0 && !d.reloadTime;
+    return item.isSpent();
   }
 
   // Swap off a spent held item to the next slot that can still fight: a
@@ -366,7 +360,7 @@ export class FightSystem {
       const idx = (player.activeSlotIndex + i) % slots.length;
       if (!player.destroyedSlots?.[idx]) order.push(idx);
     }
-    const pick = order.find(i => slots[i]?.data?.type === 'WEAPON' && !this._outOfAmmo(slots[i]))
+    const pick = order.find(i => slots[i]?.data?.type === 'WEAPON' && !slots[i].isSpent())
       ?? order.find(i => slots[i] && !this._spent(slots[i]))
       ?? order.find(i => slots[i] === null);
     if (pick === undefined) return false;

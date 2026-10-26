@@ -3278,17 +3278,19 @@ class Game {
       // If player has a weapon and can attack, attack (gem/bread gating +
       // charge SFX + attack creation live in CombatSystem.tryUseHeldWeapon)
       if (this.mistBattleSystem.tryRotate()) return; // double-tap SPACE = Rotate
-      if (this.player.heldItem && !this.captiveInteractionThisFrame && this.player.canAttack()) {
+      // A spent item in hand (Item.isSpent) fights like empty hands.
+      const armed = this.player.heldItem && !this.player.heldItem.isSpent();
+      if (armed && !this.captiveInteractionThisFrame && this.player.canAttack()) {
         this.combatSystem.tryUseHeldWeapon();
         this.mistBattleSystem.onAttackPress(); // Flanks fire with the Primary
         this.dragonSpiritSystem.onAttackPress();
       } else {
         // Unarmed and no item nearby: interact with background object if
-        // present; with nothing in hand and nothing to touch, Punch.
+        // present; with nothing usable in hand and nothing to touch, Punch.
         const nearbyObject = this.findNearbyBackgroundObject();
         if (nearbyObject) {
           this.interactWithObject(nearbyObject);
-        } else if (!this.player.heldItem) {
+        } else if (!armed) {
           this.punchSystem.tryPunch();
         }
       }
