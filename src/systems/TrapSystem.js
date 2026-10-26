@@ -160,6 +160,9 @@ export class TrapSystem {
   //                       for the Toss (SHIFT with a consumable armed —
   //                       TossSystem). Release routes on this descriptor.
   startTrapCharge(mode = 'deploy', source = null) {
+    // A dizzy player can't place a trap or a wire end (see canPlaceTraps);
+    // a SHIFT drop/Toss is not a placement and still charges.
+    if (mode === 'deploy' && !this.canPlaceTraps()) return;
     const profile = getThrowProfile(this.game.player?.heldItem);
     this.game.trapCharging = { timer: 0, maxDist: profile.maxDist, maxTime: MAX_CHARGE_TIME, mode, source };
   }
@@ -181,7 +184,15 @@ export class TrapSystem {
   canUseTrap() {
     const item = this.game.player?.heldItem;
     if (!item || !item.data || item.data.type !== 'TRAP') return false;
+    if (!this.canPlaceTraps()) return false;
     return item.charges > 0;
+  }
+
+  // Placing a trap (or a wire end) needs a steady hand: none while the player
+  // is Dizzy. Read by every placement route — the deploy charge, its release,
+  // and WireSystem's bite onto an anchor.
+  canPlaceTraps() {
+    return !this.game.player?.isDizzy?.();
   }
 
   // Spend one charge, and advance to the next filled slot once they run out.
@@ -309,6 +320,8 @@ export class TrapSystem {
       && !heldItem.data?.wire;
 
     if (armsOnLanding && !this.canUseTrap()) { game.trapCharging = null; return; }
+    // Dizzy mid-charge: the wire end isn't thrown either.
+    if (throwsWireEnd && !this.canPlaceTraps()) { game.trapCharging = null; return; }
 
     const pos = this.getTrapReticulePos();
     game.trapCharging = null;

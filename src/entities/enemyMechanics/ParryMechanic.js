@@ -110,6 +110,15 @@ export const PlayerParry = {
       if (player.parryActive || player.parryWindupActive) initParry(player);
       return;
     }
+    // A dizzy player can't parry: a window winding up or open when the
+    // Dizzy lands closes (its cooldown, if any, keeps running), and none
+    // opens until it wears off. catches() refuses too, for the frame between.
+    if (player.isDizzy?.()) {
+      player.parryWindupActive = false;
+      player.parryActive = false;
+      if (player.parryCooldown > 0) player.parryCooldown -= deltaTime;
+      return;
+    }
     tickParry(player, cfg, deltaTime, () => (enemies ?? []).some(e =>
       e.hp > 0 && e.state === 'chase' && inSamePlane(e, player)
         && Math.hypot(e.position.x - player.position.x, e.position.y - player.position.y)
@@ -117,6 +126,7 @@ export const PlayerParry = {
   },
 
   catches(player, attackerPos) {
+    if (player.isDizzy?.()) return false;
     return parryCatches(player, player.parryMechanic, player.facing, attackerPos);
   }
 };

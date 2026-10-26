@@ -291,6 +291,7 @@ export class FightSystem {
       player.facing.x = Math.cos(angle);
       player.facing.y = Math.sin(angle);
       game.trapSystem.startTrapCharge('deploy');
+      if (!game.trapCharging) return; // refused (dizzy — TrapSystem.canPlaceTraps)
       this.throwAt = WIRE_MIN_THROW + Math.random() * (reach - WIRE_MIN_THROW);
       this.trapThrow = { item: held, charges: held.charges };
       return;
@@ -299,6 +300,7 @@ export class FightSystem {
     player.facing.x = dx / dist;
     player.facing.y = dy / dist;
     game.trapSystem.startTrapCharge('deploy');
+    if (!game.trapCharging) return; // refused (dizzy — TrapSystem.canPlaceTraps)
     this.throwAt = dist;
     this.trapThrow = { item: held, charges: held.charges };
   }

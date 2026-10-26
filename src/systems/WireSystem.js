@@ -140,6 +140,7 @@ export class WireSystem {
     const held = player?.heldItem;
     if (!held?.data?.wire) return false;
     if (held.charges != null && held.charges <= 0) return true;
+    if (!this.game.trapSystem.canPlaceTraps()) return true; // dizzy: no end is placed
     if (this.flyingEnd) return true; // an end is already in the air — wait for it to land
 
     const anchor = this.getEligibleAnchor(player);
