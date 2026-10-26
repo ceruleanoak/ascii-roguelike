@@ -72,6 +72,9 @@ export class BackgroundObject {
     // Sunken Glint — a deep tile in a green Ocean hiding a coin or sea find,
     // shown only as a twinkle (see SunkenGlintSystem). Cleared on discovery.
     this.sunkenGlint = options.sunkenGlint || false;
+    // What the glint hides (an ingredient char), rolled when it is flagged so
+    // Goggles can show it; null for the Slow Glint, which hides no find.
+    this.sunkenContents = options.sunkenContents ?? null;
 
     // Obsidian flag — unbreakable rock (darker gray rendering)
     this.obsidian = options.obsidian || false;

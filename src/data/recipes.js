@@ -120,6 +120,8 @@ export const RECIPES = [
   // third parallel path (alongside the Caldera fill and the fireplace stoke
   // in FireplaceSystem) reusing the held berry itself, not the fireplace.
   { left: '❋', right: '🜉', result: '🜊', name: 'Bottle of Hot Water' },
+  // Empty Bottle + Goo = Goggles — see through deep water to a Sunken Glint.
+  { left: 'B', right: 'g', result: '⚇', name: 'Goggles' },
   // Bottle of Water + Goo = Water Balloon — a thrown splash that soaks
   // everything in a Bomb's burst; slimes dissolve in it.
   { left: '🜉', right: 'g', result: '◒', name: 'Water Balloon' },

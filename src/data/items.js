@@ -2212,6 +2212,13 @@ export const ITEMS = {
     char: 'ᛝ', name: 'Dragon Spirit', type: ITEM_TYPES.CONSUMABLE,
     passive: true, dragonSpirit: true, color: '#ff4488'
   },
+  // Empty Bottle + Goo (recipes.js): a passive consumable. While equipped,
+  // what each Sunken Glint hides shows through the water, darkened, and only
+  // then can SPACE bring it up (SunkenGlintSystem).
+  '⚇': {
+    char: '⚇', name: 'Goggles', type: ITEM_TYPES.CONSUMABLE,
+    passive: true, goggles: true, color: '#88ddee'
+  },
   '★': {
     char: '★',
     name: 'Lucky Coin',

@@ -1,4 +1,7 @@
 import { GRID } from '../../game/GameConfig.js';
+import { getItemData } from '../../data/items.js';
+import { wearsGoggles } from '../../systems/SunkenGlintSystem.js';
+import { darkenColor } from '../../systems/roomFeatures.js';
 
 /**
  * SparkleEffects — the intermittent "something here catches the light"
@@ -23,6 +26,8 @@ const SPIN_START = 0.15;
 const SPIN_LENGTH = 0.3;
 const SPIN_ARC = Math.PI * 2 / 3;  // ~1/6 rotation across the mid window
 const SPARKLE_COLOR = '#ffffcc';
+// How much darker a Sunken Glint's find is drawn under the water (Goggles).
+const SUBMERGED_DARKEN = 0.55;
 
 export const GRASS_SPARKLE_SPEED = 1;
 export const GLITTER_SPARKLE_SPEED = 2;
@@ -70,9 +75,22 @@ export function drawSparkle(renderer, cx, cy, speed = 1, cycle = CYCLE) {
  * Sunken Ship's hold (NeutralRenderer draws those).
  */
 export function drawSunkenGlints(renderer, game, shouldRender) {
+  const goggles = wearsGoggles(game);
   for (const obj of game.backgroundObjects) {
     if (!obj.sunkenGlint || obj.destroyed) continue;
     if (!shouldRender(obj)) continue;
+    // Through Goggles, what the glint hides shows under the water, darkened.
+    // The Slow Glint hides no find, so it keeps blinking.
+    if (goggles && obj.sunkenContents) {
+      const data = getItemData(obj.sunkenContents);
+      renderer.drawEntity(
+        obj.position.x + GRID.CELL_SIZE / 2,
+        obj.position.y + GRID.CELL_SIZE / 2,
+        obj.sunkenContents,
+        darkenColor(data?.color ?? SPARKLE_COLOR, SUBMERGED_DARKEN)
+      );
+      continue;
+    }
     drawSparkle(
       renderer,
       obj.position.x + GRID.CELL_SIZE / 2,

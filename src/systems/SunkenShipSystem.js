@@ -62,7 +62,7 @@ const GLINT_COUNT = 7;
 /** The run's record of the Sunken Ship — the Reset Registry's `sunkenShip`. */
 export function freshSunkenShipState() {
   return {
-    glintCells: null,       // [{ col, row, slow }] — seeded on the first visit
+    glintCells: null,       // [{ col, row, slow, contents }] — seeded on the first visit
     glintsSpent: [],        // 'col,row' keys of discovered glints
     southOpen: false,
     serpentsSlain: false,   // set by the Sunken Hold's Sea Serpent fight
@@ -205,19 +205,21 @@ export class SunkenShipSystem {
       state.glintCells = tiles.map((tile, i) => ({
         col: Math.round(tile.position.x / cs),
         row: Math.round(tile.position.y / cs),
-        slow: i === slowIndex
+        slow: i === slowIndex,
+        contents: i === slowIndex ? null : tile.sunkenContents
       }));
     }
 
     const byKey = new Map(holdTiles.map(tile =>
       [cellKey(Math.round(tile.position.x / cs), Math.round(tile.position.y / cs)), tile]));
     room.sunkenShipGlints = [];
-    for (const { col, row, slow } of state.glintCells) {
+    for (const { col, row, slow, contents } of state.glintCells) {
       const key = cellKey(col, row);
       const tile = byKey.get(key);
       if (!tile) continue;
       tile.sunkenGlint = !state.glintsSpent.includes(key);
       tile.slowGlint = slow;
+      tile.sunkenContents = contents;
       room.sunkenShipGlints.push({ tile, key, slow });
     }
   }

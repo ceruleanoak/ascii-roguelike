@@ -3,9 +3,10 @@ import { GRID, INTERACTION_RANGE } from '../game/GameConfig.js';
 /**
  * Sunken Glint — something catching the light out in a green Ocean's deep
  * water. It twinkles the same way loot hidden in tall grass does
- * (SparkleEffects.drawSunkenGlints), and nothing says what it is: the player
- * has to swim out, risking drowning, and press SPACE over it to find out.
- * Usually it's a coin.
+ * (SparkleEffects.drawSunkenGlints), and nothing says what it is. Only with
+ * Goggles equipped (a passive consumable) does what it hides show through
+ * the water, darkened, and only then can SPACE over it bring it up — the
+ * player has to swim out, risking drowning. Usually it's a coin.
  *
  * The glint is a flag on a deep '~' BackgroundObject, not an entity of its
  * own: seedSunkenGlints() sets it at room generation, and discovering one
@@ -53,9 +54,20 @@ export function flagSunkenGlints(candidates, count) {
   for (let i = 0; i < count && pool.length > 0; i++) {
     const [tile] = pool.splice(Math.floor(Math.random() * pool.length), 1);
     tile.sunkenGlint = true;
+    tile.sunkenContents = rollContents();
     flagged.push(tile);
   }
   return flagged;
+}
+
+/** What a glint hides: a coin, or else a sea find. */
+export function rollContents() {
+  return Math.random() < COIN_CHANCE ? 'c' : rollSeaFind();
+}
+
+/** Are Goggles equipped in a consumable slot? */
+export function wearsGoggles(game) {
+  return game.inventorySystem.equippedConsumables.some(slot => slot?.data?.goggles);
 }
 
 function rollSeaFind() {
@@ -91,17 +103,19 @@ export class SunkenGlintSystem {
   }
 
   /**
-   * EXPLORE / NEUTRAL SPACE dispatch. Discovers the glint in range, if there
-   * is one: the flag clears and what it hid surfaces as a drop on the tile.
-   * A Slow Glint hides nothing to pick up — what it held was the way south,
-   * which SunkenShipSystem opens when it sees the flag go.
+   * EXPLORE / NEUTRAL SPACE dispatch. With Goggles on, discovers the glint
+   * in range, if there is one: the flag clears and what it hid surfaces as a
+   * drop on the tile. Without them SPACE passes it by. A Slow Glint hides
+   * nothing to pick up — what it held was the way south, which
+   * SunkenShipSystem opens when it sees the flag go.
    */
   handleSpacePress() {
+    if (!wearsGoggles(this.game)) return false;
     const glint = this.findNearby();
     if (!glint) return false;
     glint.sunkenGlint = false;
     if (glint.slowGlint) return true;
-    const char = Math.random() < COIN_CHANCE ? 'c' : rollSeaFind();
+    const char = glint.sunkenContents ?? rollContents();
     this.game.lootSystem.spawnIngredientDrop(char, glint.position.x, glint.position.y, null, glint);
     return true;
   }

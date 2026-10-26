@@ -177,14 +177,17 @@ identity, not standard programming terms.
 ### Sunken Glint
 - **Definition:** A twinkle out on the deep water of a green-Zone Ocean (`O`) Room, the same
   "something is hidden here" sparkle that loot in tall grass gives off. Reaching it means
-  swimming deep enough to risk drowning; SPACE in range discovers what it hides: a coin 80% of
-  the time, otherwise a sea find (Pearl Shard, Sharkbone, Stingray Barb). Every
+  swimming deep enough to risk drowning. What it hides (a coin 80% of the time, otherwise a sea
+  find: Pearl Shard, Sharkbone) is rolled when the glint is seeded, and only shows, as a
+  darkened glyph in place of the twinkle, through Goggles. Only with Goggles equipped does
+  SPACE in range bring it up; without them the glint can't be collected. Every
   green Ocean Room holds 1–2, in the outer half of the deep band. A discovered glint is spent.
   The Sunken Ship's hold holds seven more, one of them the Slow Glint.
 - **In code:** `SunkenGlintSystem` (`seedSunkenGlints` from `generateOceanTerrain`, both it and
   SunkenShipSystem flag tiles through `flagSunkenGlints`; `handleSpacePress` from the EXPLORE and
-  NEUTRAL SPACE dispatch); flag `BackgroundObject.sunkenGlint` on a deep `~` tile; drawn by
-  `drawSunkenGlints` (SparkleEffects) at `GRASS_SPARKLE_SPEED`.
+  NEUTRAL SPACE dispatch, gated by `wearsGoggles`); flag `BackgroundObject.sunkenGlint` on a
+  deep `~` tile, contents `BackgroundObject.sunkenContents`; drawn by `drawSunkenGlints`
+  (SparkleEffects) at `GRASS_SPARKLE_SPEED`, or as the darkened contents glyph under Goggles.
 - **Not:** a Glittering Rock (a harvestable rock that advertises itself at double sparkle speed);
   loot hidden in tall grass (a real dropped entity, concealed by the grass rather than by water);
   fishing (a catch from the Fisherman's rod, not a fixed spot).
@@ -205,7 +208,8 @@ identity, not standard programming terms.
 
 ### Slow Glint
 - **Definition:** The one Sunken Glint in the Sunken Ship's hold that blinks five times less
-  often than the others (same visible window, a cycle five times as long). It hides no find.
+  often than the others (same visible window, a cycle five times as long). It hides no find,
+  so it keeps blinking even through Goggles (which are still needed to discover it).
   Discovering it opens the ship's secret south exit, with a shockwave and no message.
 - **In code:** `BackgroundObject.slowGlint` (set by `SunkenShipSystem._placeGlints`); drawn with
   `SLOW_GLINT_CYCLE` (SparkleEffects); `SunkenShipSystem.update` opens `room.exits.south` when its
@@ -1544,6 +1548,14 @@ identity, not standard programming terms.
   with `data.wetDot`. The leap gate is `LeapAttackMechanic.tryTrigger` (`isWet()`); the
   dissolve is `SplitOnDamageMechanic.onStatusTicks`.
 - **Not:** a Bomb (no damage to non-slimes, opens nothing); not a trap.
+
+### Goggles
+- **Definition:** A passive consumable (⚇, Empty Bottle + Goo) worn in a consumable slot. While
+  equipped, what each Sunken Glint hides shows through the water as a darkened glyph, and the
+  glint can be collected; without them it is only a twinkle. Worn alongside Flippers.
+- **In code:** `ITEMS['⚇']` (`passive: true`, `goggles: true`); tested by `wearsGoggles(game)`
+  (`SunkenGlintSystem`); read by `SunkenGlintSystem.handleSpacePress` and `drawSunkenGlints`.
+- **Not:** Flippers (those let the player swim deep water; Goggles only let them see into it).
 
 ### Bomb Bag
 - **Definition:** A consumable-slot item (⊟) that throws Bombs (⊗) and is never spent itself.
