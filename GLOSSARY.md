@@ -1432,7 +1432,7 @@ identity, not standard programming terms.
 - **Definition:** The auto-combat cast by the FIGHT Spell: the player is driven toward the
   nearest fightable enemy (alive, revealed, not aloft, not charmed, same plane) and attacks it
   with whatever is held (the Punch when nothing is), re-targeting as enemies fall, until none
-  are left or the player's next keypress. A gun or bow shoots from range and moves between shots: a dodge roll
+  are left or the player next presses a letter, SPACE, Shift or Enter. A gun or bow shoots from range and moves between shots: a dodge roll
   across the line of fire when the target is within 3 cells, a sidestep otherwise, and a
   back-away to shooting range while the weapon reloads. When the player stops making progress
   (beside a one-cell gap) it is eased onto the cell grid. Damage still lands. EXPLORE only.
@@ -1447,7 +1447,7 @@ identity, not standard programming terms.
 ### Harvest (Spell)
 - **Definition:** The CHOP, MINE and HARVEST Spells: the player is driven, as in a Fight, to
   the open cell beside each farmable object in turn and swings at it with the tool it takes,
-  until none are left or the player's next keypress. CHOP fells Trees with an axe; MINE breaks
+  until none are left or the player next presses a letter, SPACE, Shift or Enter. CHOP fells Trees with an axe; MINE breaks
   Rocks (anything with the rock harvest) with the pickaxe or a hammer; HARVEST does both,
   working the material the held tool serves before swapping tools, then cuts the room's Tall
   Grass with any blade, densest cell first, until every blade is cut, then scoops its Sand with

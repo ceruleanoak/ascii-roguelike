@@ -79,6 +79,7 @@ import { SpellSystem } from './systems/SpellSystem.js';
 import { BeelineSystem } from './systems/BeelineSystem.js';
 import { FightSystem } from './systems/FightSystem.js';
 import { HarvestSystem } from './systems/HarvestSystem.js';
+import { takesBackSpellDrive } from './systems/heldKeySteering.js';
 import { CraftSpellSystem } from './systems/CraftSpellSystem.js';
 import { TakeAllSystem } from './systems/TakeAllSystem.js';
 import { EquipSpellSystem } from './systems/EquipSpellSystem.js';
@@ -533,9 +534,10 @@ class Game {
         return;
       }
 
-      // Any keypress hands a FIGHT or a harvest back — checked before Spell
-      // detection so the SPACE that casts one doesn't end what it starts.
-      if (!e.repeat) {
+      // A letter, SPACE, Shift or Enter hands a FIGHT or a harvest back
+      // (takesBackSpellDrive) — checked before Spell detection so the SPACE
+      // that casts one doesn't end what it starts.
+      if (takesBackSpellDrive(e)) {
         this.fightSystem.onPlayerInput();
         this.harvestSystem.onPlayerInput();
       }

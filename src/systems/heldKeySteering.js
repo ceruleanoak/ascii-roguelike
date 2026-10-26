@@ -29,6 +29,20 @@ const COAST_TIME = FRAME / (1 - PHYSICS.FRICTION);
 const NO_KEYS = Object.freeze({ w: false, a: false, s: false, d: false });
 
 /**
+ * Whether a keydown hands a Spell-driven player (FIGHT, CHOP/MINE/HARVEST)
+ * back to the player: a letter (WASD among them, and the start of any typed
+ * word), SPACE, Shift or Enter. Every other key (Tab, the arrow keys' dodge
+ * roll, the digit slot keys, Escape, modifier keys) leaves the drive running,
+ * so a dodge roll thrown with an arrow key lands mid-FIGHT without ending it.
+ * @param {KeyboardEvent} e
+ */
+export function takesBackSpellDrive(e) {
+  if (e.repeat) return false;
+  if (e.key === ' ' || e.key === 'Shift' || e.key === 'Enter') return true;
+  return e.key.length === 1 && /[a-z]/i.test(e.key);
+}
+
+/**
  * Steering for a player driven by a Spell (FIGHT, CHOP/MINE/HARVEST): the
  * Steering heading toward a point becomes held WASD keys, fed to the ordinary
  * movement path, so the player walks at its own speed under every movement
