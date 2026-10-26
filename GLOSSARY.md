@@ -1362,6 +1362,27 @@ identity, not standard programming terms.
 - **Not:** a Crafted item; never equipped. Not a "command" — that word belongs to
   `CommandSystem` (the CALL/COMMAND true-name charm). Not gem-wand magic (`MagicSystem`).
 
+### Recipe Sign
+- **Definition:** A Recipe written in dark gray in the earth as `X + Y = Z`, hidden inside a
+  grass cluster and only seen once the grass is cut. Plain glyphs, no cipher. 13% of rooms
+  with grass.
+- **In code:** `room.recipeSign = { recipe, characters }`, written by `generateRecipeSign`
+  (`src/systems/roomSigns.js`), drawn on the background layer by `ExploreRenderer`.
+- **Not:** a BackgroundObject (water, fire and physics never touch it), and not a Spell Sign.
+
+### Spell Sign
+- **Definition:** A Spell word written in dark gray in the earth in the Greek cipher, hidden in
+  grass the same way as a Recipe Sign. Wearing the Spectacles (⊙) shows it in English. It names
+  the Spell outright. Rolls on its own at half the Recipe Sign's chance (6.5%), so it never
+  changes how often a Recipe Sign appears, and the two never share a cell.
+- **In code:** `room.spellSign = { spell, characters }` (glyphs stored Greek), written by
+  `generateSpellSign` (`src/systems/roomSigns.js`) from `SPELL_SIGN_SPELLS`
+  (`src/data/spells.js`: LOOKHERE, TAKEALL, GOREST, HARVEST, FIGHT). `ExploreRenderer` decodes
+  it through `spectaclesTransform` and repaints the background when the Spectacles go on or
+  off.
+- **Not:** a maze cover (one ciphered ingredient letter). Never holds EXITGAME, CLOSEGAME or
+  CLOSE.
+
 ### Beeline
 - **Definition:** An invulnerable rapid run, leaving a trail, from where the player stands to an
   open exit, cast by GO/HEAD <direction> and by ESCAPE/FLEE; ENTER (nearest door of any kind), EXIT (out of the current hut, Cavern or Maze),

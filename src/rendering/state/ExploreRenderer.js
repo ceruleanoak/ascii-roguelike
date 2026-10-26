@@ -134,6 +134,14 @@ export class ExploreRenderer {
       this.renderer.backgroundDirty = true;
     }
 
+    // The Spell Sign is baked into the cached background, so putting the
+    // Spectacles on or off has to repaint it.
+    const spectaclesOn = isSpectaclesActive(game);
+    if (this._lastSpectaclesOn !== spectaclesOn) {
+      this._lastSpectaclesOn = spectaclesOn;
+      this.renderer.backgroundDirty = true;
+    }
+
     // Render background (only if dirty)
     if (!this.renderer.backgroundDirty) return;
 
@@ -200,6 +208,17 @@ export class ExploreRenderer {
         const y = char.y + GRID.CELL_SIZE / 2;
         this.renderer.bgCtx.fillStyle = char.color;
         this.renderer.bgCtx.fillText(char.char, x, y);
+      }
+    }
+
+    // Spell Sign — same earth writing, in the Greek cipher; the Spectacles
+    // decode it to English (spectaclesTransform swaps Greek → Latin).
+    if (game.currentRoom.spellSign) {
+      const spectaclesOn = isSpectaclesActive(game);
+      for (const glyph of game.currentRoom.spellSign.characters) {
+        this.renderer.bgCtx.fillStyle = glyph.color;
+        this.renderer.bgCtx.fillText(spectaclesTransform(glyph.char, spectaclesOn),
+          glyph.x + GRID.CELL_SIZE / 2, glyph.y + GRID.CELL_SIZE / 2);
       }
     }
 

@@ -206,6 +206,11 @@ const EXIT_GAME_SPELL = {
   },
 };
 
+// Spell Sign pool — the spell words a Spell Sign may write in the earth
+// (roomSigns.js). No-unlock spells only; EXITGAME / CLOSEGAME / CLOSE never
+// belong here.
+export const SPELL_SIGN_SPELLS = ['LOOKHERE', 'TAKEALL', 'GOREST', 'HARVEST', 'FIGHT'];
+
 export const SPELLS = {
   // Dev menu. The THREE stays silent (null response); the cheat menu opens.
   // Replaces the old backslash key — a word anyone can learn.

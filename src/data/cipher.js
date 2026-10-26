@@ -13,8 +13,8 @@
  *   2. Spectacles equipment — when ⊙ is equipped in the armor slot, every
  *      spectacles-aware render call site flips perception both ways: Greek
  *      glyphs decode to their Latin equivalent, Latin text encodes to Greek.
- *   3. Dungeon ciphered recipe hints — Greek-encoded recipe words like the
- *      DRAW sequence. (Wired in a later step.)
+ *   3. Spell Signs — Spell words written in Greek in the earth, hidden in
+ *      grass (roomSigns.js); the spectacles read them as English.
  *
  * The mapping starts from Beta Code (the scheme English speakers use to
  * type Greek) and corrects four pairings where Beta Code's ASCII-slot

@@ -2574,7 +2574,7 @@ function blocksCavern(obj) {
 }
 
 // Cells holding anything generation already placed that isn't a background
-// object — enemies, items, crows, NPCs, recipe-sign glyphs, the player start.
+// object — enemies, items, crows, NPCs, recipe/spell-sign glyphs, the player start.
 // Scans every collection on the room so a new one can't be silently missed.
 function occupiedEntityCells(room) {
   const CS = GRID.CELL_SIZE;
@@ -2594,6 +2594,7 @@ function occupiedEntityCells(room) {
     else if (value?.position) markEntity(value);
   }
   for (const glyph of room.recipeSign?.characters ?? []) mark(glyph.x, glyph.y);
+  for (const glyph of room.spellSign?.characters ?? []) mark(glyph.x, glyph.y);
   if (room.playerStartPos) mark(room.playerStartPos.x, room.playerStartPos.y);
   return cells;
 }

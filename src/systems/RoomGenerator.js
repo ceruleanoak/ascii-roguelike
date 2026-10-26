@@ -1,6 +1,5 @@
 import { GRID, ROOM_TYPES, BACKGROUND_OBJECTS, WALL_STRUCTURES, WATER_STRUCTURES } from '../game/GameConfig.js';
 import { ENEMIES, getRandomEnemy, getZoneRandomEnemy } from '../data/enemies.js';
-import { RECIPES } from '../data/recipes.js';
 import { ZONES, applyZoneCombatModifiers } from '../data/zones.js';
 import { LETTER_TEMPLATES } from '../data/letterTemplates.js';
 import { Enemy } from '../entities/Enemy.js';
@@ -15,6 +14,7 @@ import { Fairy } from '../entities/Fairy.js';
 import { spawnCellBlockedByBackground, findSafeSpawnPosition } from './safeSpawn.js';
 import { maybeSpawnPeacefulFishingRoom, maybeSpawnRoamingAlchemist, buildVaultInteriorLoot, buildVaultCoinAbundance, buildVaultUnlockExtras, getIslandPosition, protectRegion, isCellProtected, cleanupStrayBackgroundObjects, resolveLavaHazards, seedCavern, rotatePattern, darkenColor, spawnBatFlock, spawnBelfryBats, stampHutFootprint, placeWhirlpool, generateSettlementRoom as generateSettlementRoomImpl, generateJewelerRoom, buildForcedRiverParams, generateYellowWaterTemplate, cellularCaveGrid, isCaveEntranceLanding, generateCalderaRoom, seedAscentZone, seedSinkholes, injectSinkholeLake, spawnMinibossOrFallback, generateGrassSwaths, generateSnowFields, spawnGuaranteedItems, offerL1Weapon, offerWeaponIfUnarmed, seedTunnelZone, generateOceanTerrain as generateOceanTerrainImpl, stampWaterBlobs as stampWaterBlobsImpl } from './roomFeatures.js';
 import { pickUnspawnedItem, markItemSpawned } from './spawnedItems.js';
+import { generateRecipeSign, generateSpellSign } from './roomSigns.js';
 import { seedMetalPlatform, makeZoneLava, islandLavaFeatures } from './MetalPlatformSystem.js';
 
 // Zone-boss arena → letter template key. Boss rooms are entered without a
@@ -146,6 +146,7 @@ export class RoomGenerator {
       // consumes and clears it at the top of renderBackground.
       backgroundRepaint: false,
       recipeSign: null, // Visual-only recipe hint (not a BackgroundObject)
+      spellSign: null, // Visual-only ciphered spell word, read with the Spectacles (roomSigns.js)
       barricade: null, // Set by BarricadeSystem.raiseForRoom once the exits are final
       dragonForge: null, // Set by ForgeSystem.placeForge when the Goo Dragon falls
       exits: this.exitSystem ? this.exitSystem.generateExits(this.currentDepth, type, zoneType, progressionColor, exitLetter) : { north: false, east: false, west: false, south: true },
@@ -1977,8 +1978,9 @@ export class RoomGenerator {
     // can reference the placed grass objects directly.
     seedSinkholes(this, room);
 
-    // Generate recipe sign (10% chance) - positioned within grass clusters for natural obscuration
-    this.generateRecipeSign(room, grassClusters);
+    // Recipe Sign and Spell Sign - hidden within grass clusters (roomSigns.js)
+    generateRecipeSign(room, grassClusters);
+    generateSpellSign(room, grassClusters);
 
     // Generate organic clusters (trees, bushes, brambles)
     this.generateOrganicClusters(room);
@@ -2900,100 +2902,6 @@ export class RoomGenerator {
         }
       }
     }
-  }
-
-  generateRecipeSign(room, grassClusters) {
-    // 13% chance to generate a recipe sign (secret message in the earth)
-    if (Math.random() >= 0.13) return;
-    if (!grassClusters || grassClusters.length === 0) return; // Need grass to hide the sign
-
-    // Select random recipe
-    const recipe = RECIPES[Math.floor(Math.random() * RECIPES.length)];
-
-    // Pick a random grass cluster to place sign within
-    const cluster = grassClusters[Math.floor(Math.random() * grassClusters.length)];
-
-    // Place sign near cluster center (within inner 50% of radius for good grass coverage)
-    let placed = false;
-    for (let attempt = 0; attempt < 30 && !placed; attempt++) {
-      // Random position within 50% of cluster radius
-      const angle = Math.random() * Math.PI * 2;
-      const dist = Math.random() * (cluster.radius * 0.5);
-      const signX = cluster.center.x + Math.cos(angle) * dist;
-      const signY = cluster.center.y + Math.sin(angle) * dist;
-
-      // Convert to grid position
-      const startCol = Math.floor(signX / GRID.CELL_SIZE);
-      const startRow = Math.floor(signY / GRID.CELL_SIZE);
-
-      // Check if position is valid (in bounds and no walls)
-      if (startRow >= 2 && startRow < GRID.ROWS - 2 &&
-          startCol >= 2 && startCol < GRID.COLS - 11 &&
-          this.canPlaceSign(room, startRow, startCol)) {
-        this.stampRecipeSign(room, recipe, startRow, startCol);
-        placed = true;
-      }
-    }
-  }
-
-  canPlaceSign(room, startRow, startCol) {
-    const SIGN_HEIGHT = 1;
-    const SIGN_WIDTH = 11;
-
-    // Check collision map for walls
-    for (let row = startRow; row < startRow + SIGN_HEIGHT; row++) {
-      for (let col = startCol; col < startCol + SIGN_WIDTH; col++) {
-        if (room.collisionMap[row][col]) {
-          return false; // Overlaps with wall
-        }
-      }
-    }
-
-    // Check for overlaps with solid background objects
-    for (const bgObj of room.backgroundObjects) {
-      if (!bgObj || !bgObj.data) continue;
-      if (bgObj.data.solid) {
-        const objCol = Math.floor(bgObj.position.x / GRID.CELL_SIZE);
-        const objRow = Math.floor(bgObj.position.y / GRID.CELL_SIZE);
-
-        if (objCol >= startCol && objCol < startCol + SIGN_WIDTH &&
-            objRow >= startRow && objRow < startRow + SIGN_HEIGHT) {
-          return false; // Overlaps with solid object
-        }
-      }
-    }
-
-    return true;
-  }
-
-  stampRecipeSign(room, recipe, startRow, startCol) {
-    // Secret message in the earth: X + Y = Z
-    // Store as simple visual data (NOT BackgroundObject to avoid conflicts with water/etc)
-    const EARTH_COLOR = '#333333'; // Dark gray - mysterious writing in the earth
-
-    const pattern = [
-      { col: 0, char: recipe.left },   // Recipe left item
-      { col: 2, char: '+' },           // Plus operator
-      { col: 4, char: recipe.right },  // Recipe right item
-      { col: 6, char: '=' },           // Equals operator
-      { col: 8, char: recipe.result }  // Recipe result
-    ];
-
-    // Store as simple data for rendering
-    const characters = [];
-    for (const { col, char } of pattern) {
-      characters.push({
-        char,
-        x: (startCol + col) * GRID.CELL_SIZE,
-        y: startRow * GRID.CELL_SIZE,
-        color: EARTH_COLOR
-      });
-    }
-
-    room.recipeSign = {
-      recipe,
-      characters
-    };
   }
 
   getObjectWeights(depth) {
