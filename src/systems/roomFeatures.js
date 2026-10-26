@@ -2156,7 +2156,10 @@ export function seedImbuePools(room) {
 
     const tiles = element === 'electric' ? [] : cells.map(c => {
       const tile = BackgroundObject.createVariant(element === 'fire' ? 'lava' : 'water', c.col * C, c.row * C);
-      if (element === 'ice') tile.setWaterState('frozen', Infinity);
+      if (element === 'ice') {
+        tile.setWaterState('frozen', Infinity);
+        tile.imbuePoolIce = true; // broken, it doesn't soak the slime (PhysicsSystem)
+      }
       room.backgroundObjects.push(tile);
       return tile;
     });

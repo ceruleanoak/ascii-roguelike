@@ -75,6 +75,9 @@ export class BackgroundObject {
     // What the glint hides (an ingredient char), rolled when it is flagged so
     // Goggles can show it; null for the Slow Glint, which hides no find.
     this.sunkenContents = options.sunkenContents ?? null;
+    // Giant Slime ice Imbue Pool tile (roomFeatures.seedImbuePools): broken,
+    // its water doesn't soak the slime.
+    this.imbuePoolIce = false;
 
     // Obsidian flag — unbreakable rock (darker gray rendering)
     this.obsidian = options.obsidian || false;

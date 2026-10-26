@@ -382,6 +382,7 @@ export class PhysicsSystem {
     let inLiquid = false;
     let liquidState = 'normal';
     let electricCurrent = null; // the electrified tile's weaker current, if any
+    let imbuePoolWater = false; // standing in the Giant Slime's broken Imbue Pool ice
     let inDeepWaterTile = false; // Deep water (BackgroundObject.deepWater) — see velocityMultiplier below
     let inGrass = false;
     let inMud = false; // Wet mud — heavier than water, dodge roll bypasses
@@ -499,6 +500,7 @@ export class PhysicsSystem {
                 inLiquid = true;
                 liquidState = wState;
                 if (wState === 'electrified') electricCurrent = obj.electricCurrent;
+                if (obj.imbuePoolIce) imbuePoolWater = true;
                 if (obj.deepWater) inDeepWaterTile = true;
                 // Glacier Crab freezes water on contact
                 if (!isProjectile && entity.data?.char === 'u' && entity.isEnemy && obj.setWaterState) {
@@ -822,7 +824,7 @@ export class PhysicsSystem {
       this.resolveTunnelWallOverlap(entity, room.tunnel, backgroundObjects, deltaTime);
     }
 
-    return { inLiquid, liquidState, electricCurrent, damagingLiquid, healingLiquid, inDeepWater: inDeepWaterTile };
+    return { inLiquid, liquidState, electricCurrent, damagingLiquid, healingLiquid, inDeepWater: inDeepWaterTile, imbuePoolWater };
   }
 
   // Pack a deep-snow tile down to compacted snow (light slow, compactColor).
@@ -1715,7 +1717,7 @@ export class PhysicsSystem {
       ingredient.inWater = false;
     }
 
-    for (const { entity, inLiquid, liquidState, electricCurrent, damagingLiquid, healingLiquid, inDeepWater } of waterResults) {
+    for (const { entity, inLiquid, liquidState, electricCurrent, damagingLiquid, healingLiquid, inDeepWater, imbuePoolWater } of waterResults) {
       // Every body (player and enemy) carries this frame's liquid contact —
       // the enemy zap-hold, Sandstorm and seedUnderBody all read it.
       entity.inLiquid = !!inLiquid;
@@ -1836,8 +1838,11 @@ export class PhysicsSystem {
       // carries one today) blocks only the wet status — electrified water
       // still shocks it.
       // Flippers (deepWaterImmune) keep the wearer from getting wet at all.
+      // The Giant Slime's own broken Imbue Pool ice doesn't soak it: it lands
+      // there for the ice Imbue, not to lose its leap (Water Balloon).
       const wetImmune = isImmune || !!entity.elementalAffinity?.immunity?.includes('wet')
-        || (entity === game.player && entity.deepWaterImmune);
+        || (entity === game.player && entity.deepWaterImmune)
+        || (imbuePoolWater && !!entity.data?.imbue?.enabled);
       // Shock consequences (and shock immunities — electric affinity) are
       // owned by ElectricitySystem.shockEntity, not here.
 

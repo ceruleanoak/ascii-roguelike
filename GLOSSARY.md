@@ -1323,7 +1323,8 @@ identity, not standard programming terms.
   `room.lightningRod`, seeded by `seedImbuePools` (`roomFeatures.js`); pool choice and landing in
   `ImbuePoolSystem` (`leapPoolTarget` → `LeapAttackMechanic`).
   The electric pool has no tiles (`tiles: []`): only the strike imbues, and there's no water to
-  soak the slime.
+  soak the slime. The ice pool's tiles carry `imbuePoolIce`: broken, their water doesn't soak an
+  Imbue-capable slime (PhysicsSystem), though it still wets anyone else.
 - **Not:** ordinary water, ice, or lava tiles elsewhere (they don't grant an Imbue by landing).
 
 ### Companion
