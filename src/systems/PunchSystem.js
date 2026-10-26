@@ -137,6 +137,7 @@ export class PunchSystem {
       shooterPlane: player.plane ?? 0,
       hasHitObject: true,
       isBlunt: true,
+      isPunch: true,           // interior object passes (MazeSystem tombs) skip it too
     }, this.game._activeEnemies());
   }
 

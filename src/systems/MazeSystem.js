@@ -536,6 +536,11 @@ export class MazeSystem {
       let hit = false;
 
       for (const atk of melee) {
+        // The Punch never chips a tomb: it is only ever thrown at open
+        // ground, and SPACE beside a tomb chips it through handleSpacePress
+        // instead. Letting it land here made one SPACE-mash both interact
+        // and punch the same tomb.
+        if (atk.isPunch) continue;
         const r = (atk.radius || CS) + CS * 0.6;
         if ((atk.position.x + CS / 2 - ox) ** 2 + (atk.position.y + CS / 2 - oy) ** 2 < r * r) {
           hit = true; break;
@@ -686,7 +691,7 @@ export class MazeSystem {
     let closestDist = Infinity;
 
     for (const obj of mi.mazeObjects) {
-      if (obj.destroyed || obj.hitCooldown > 0) continue;
+      if (obj.destroyed) continue;
       const ox = obj.position.x + CS / 2;
       const oy = obj.position.y + CS / 2;
       const dist = Math.sqrt((ox - px) ** 2 + (oy - py) ** 2);
@@ -697,6 +702,10 @@ export class MazeSystem {
     }
 
     if (!closest) return false;
+    // A tomb in reach owns SPACE even while it is still recovering from the
+    // last hit: the press is consumed without a chip rather than falling
+    // through to the unarmed Punch (interaction always wins over a Punch).
+    if (closest.hitCooldown > 0) return true;
 
     closest.hp--;
     closest.hitFlash = 0.12;

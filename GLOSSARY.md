@@ -1418,12 +1418,14 @@ identity, not standard programming terms.
 - **Definition:** The attack SPACE makes in EXPLORE with no weapon held, or with a spent one
   in hand (a trap with no charges left, a gun or bow out of ammo that never reloads): 1 damage at 50%
   accuracy (a miss shows MISS), thrown with the Slime's windup, cooldown and one-cell blinking
-  Telegraph, in yellow. Skips Background Objects (an unarmed SPACE beside one interacts
-  instead). Not thrown at REST or in NEUTRAL rooms.
+  Telegraph, in yellow. Skips Background Objects and a Maze's cover objects (an unarmed SPACE
+  beside one interacts instead; a cover object still recovering from a hit swallows the press rather
+  than letting a Punch through). Not thrown at REST or in NEUTRAL rooms.
 - **In code:** `src/systems/PunchSystem.js` — `tryPunch()` (spent check: `Item.isSpent()`), `update(dt)` (the windup on the
   enemy-melee clock, read straight off `ENEMIES.o`), `reset()` (Reset Registry, room scope).
   The landed blow is a player melee hitbox via `CombatSystem.createAttack` with `accuracy`
-  (rolled per swing as `attack.missed`) and `telegraphDrawn`. Drawn by the `punches` Frame Pass.
+  (rolled per swing as `attack.missed`), `telegraphDrawn` and `isPunch` (MazeSystem's cover-object
+  hit pass skips it). Drawn by the `punches` Frame Pass.
 - **Not:** a weapon or Item; not "unarmed attack" / "fist" / "melee strike".
 
 ### Fight
