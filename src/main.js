@@ -1980,8 +1980,8 @@ class Game {
       // Lock movement during windup and attack flash for weapons that require a planted stance
       const windupLocked = !!(this.player.heldItem?.data?.locksMovement &&
         (this.player.heldItem?.windupActive || this.player.heldItem?.attackLockTimer > 0));
-      // Lock facing for non-bow weapons during attack; allow aiming while charging bow; lock during trap charge
-      const lockFacing = !!this.trapCharging || (this.keys.space && this.player.heldItem && this.player.heldItem.data.weaponType !== 'BOW');
+      // Lock facing for non-bow weapons during attack; allow aiming while charging bow; lock during trap charge; FIGHT's committed swing
+      const lockFacing = !!this.trapCharging || (this.keys.space && this.player.heldItem && this.player.heldItem.data.weaponType !== 'BOW') || this.fightSystem.locksFacing();
       // Lock movement for the TITLE -> REST spawn fade-in, until alpha reaches 1
       const moveLocked = fishingBlocked || windupLocked || this.player.titleSpawnMovementLocked;
       // FIGHT and CHOP/MINE/HARVEST hold the keys while they run; Rusalka and Dizzy act on them either way.
