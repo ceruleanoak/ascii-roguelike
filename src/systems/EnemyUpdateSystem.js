@@ -263,7 +263,7 @@ export class EnemyUpdateSystem {
 
       this._handleChargeContact(enemy, player, prevChargeSpeed);
       BumpMechanic.resolveContact(enemy, player, game, deltaTime);
-      this._handleUpdateResult(enemy, player, updateResult, deltaTime);
+      this.handleUpdateResult(enemy, player, updateResult, deltaTime);
     }
   }
 
@@ -365,7 +365,16 @@ export class EnemyUpdateSystem {
     }
   }
 
-  _handleUpdateResult(enemy, player, updateResult, deltaTime) {
+  // The one consumer of an enemy's `update()` result — the `{suspend, result}`
+  // requests a Mechanic hands back (lay a trap, spawn, spew goo, buff, lure,
+  // explode...). Public because the interior floor loops (HutSystem /
+  // DungeonSystem) tick their own enemies and must route results through here
+  // too: they used to carry a hand-mirrored subset of this method, so every
+  // request missing from the copy silently did nothing on a floor — a Trap
+  // Goblin skidded to a stop in a dungeon and planted nothing. Every spawn
+  // below already lands on the active layer (_activeEnemies / tagInteriorPlane
+  // / the layer-tagged trap and puddle spawners).
+  handleUpdateResult(enemy, player, updateResult, deltaTime) {
     const game = this.game;
 
     if (updateResult.justAggrod) {
@@ -453,6 +462,7 @@ export class EnemyUpdateSystem {
 
     const droppedItems = enemy.getStunDroppedItems();
     if (droppedItems.length > 0) {
+      for (const item of droppedItems) tagInteriorPlane(game, item);
       game.items.push(...droppedItems);
       for (const item of droppedItems) game.physicsSystem.addEntity(item);
     }

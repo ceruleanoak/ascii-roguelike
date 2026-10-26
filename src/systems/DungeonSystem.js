@@ -584,8 +584,10 @@ export class DungeonSystem {
       const floor = game.activeFloor;
 
       // Update interior enemies. Capture the return value so side-effect
-      // requests (slime trail, fire/ice trail, aggro sound, item attacks) flow
-      // — surface loop in main.js processes the same fields.
+      // requests (slime trail, item attacks, Trap Goblin traps, aggro sound)
+      // flow through EnemyUpdateSystem.handleUpdateResult, the same consumer
+      // the surface loop uses — a local subset is how Trap Goblins stopped
+      // laying traps on dungeon floors.
       for (const enemy of floor.enemies) {
         if (!game.combatSystem.applyTargetOverrides(enemy, floor.enemies, game.player, game.activeNoiseSource)) {
           enemy.target = game.player;
@@ -596,16 +598,8 @@ export class DungeonSystem {
         const r = enemy.update(dt * PHYSICS.ENEMY_TIMER_RATE);
         enemy._frameUpdateResult = r;
         if (!r) continue;
-        if (r.justAggrod) game.audioSystem?.playSFX(enemy.data?.sfx?.aggro ?? 'aggro');
-        if (r.itemAttack) game.combatSystem.createEnemyAttack(r.itemAttack);
-        if (r.shouldDropSlimeTrail) {
-          const t = r.shouldDropSlimeTrail;
-          game.worldEffectsSystem.dropSlimeTrail(t.x, t.y, t.plane);
-        }
-        if (r.shouldPlaceTrail && r.trailData) {
-          const td = r.trailData;
-          game.worldEffectsSystem.spawnEnemyTrailPuddle(td.x, td.y, td.type, td.radius, enemy.plane ?? 0, td.duration);
-        }
+        // Same result consumer as the surface loop — never a local subset.
+        game.enemyUpdateSystem.handleUpdateResult(enemy, game.player, r, dt);
       }
 
       // Dungeon boss encounter (vault floor only; no-ops elsewhere). Runs

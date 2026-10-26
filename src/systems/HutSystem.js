@@ -877,9 +877,10 @@ export class HutSystem {
       if (!isHutFloor(game.activeFloor)) return;
 
       // Update interior enemies. The return value carries side-effect requests
-      // (slime trail, fire/ice trail, goo spew, item attacks, aggro sound) that
-      // the surface loop in main.js consumes — interior enemies need the same
-      // routing or slime-affinity enemies emit no trail, etc.
+      // (slime trail, goo spew, item attacks, Trap Goblin traps, aggro sound)
+      // that EnemyUpdateSystem.handleUpdateResult consumes for the surface —
+      // interior enemies route through the same method, or any request it
+      // handles that a local copy forgot silently does nothing here.
       for (const enemy of game.activeFloor.enemies) {
         if (!game.combatSystem.applyTargetOverrides(enemy, game.activeFloor.enemies, game.player, game.activeNoiseSource)) {
           enemy.target = game.player;
@@ -890,16 +891,8 @@ export class HutSystem {
         const r = enemy.update(dt * PHYSICS.ENEMY_TIMER_RATE);
         enemy._frameUpdateResult = r;
         if (!r) continue;
-        if (r.justAggrod) game.audioSystem?.playSFX(enemy.data?.sfx?.aggro ?? 'aggro');
-        if (r.itemAttack) game.combatSystem.createEnemyAttack(r.itemAttack);
-        if (r.shouldDropSlimeTrail) {
-          const t = r.shouldDropSlimeTrail;
-          game.worldEffectsSystem.dropSlimeTrail(t.x, t.y, t.plane);
-        }
-        if (r.shouldPlaceTrail && r.trailData) {
-          const td = r.trailData;
-          game.worldEffectsSystem.spawnEnemyTrailPuddle(td.x, td.y, td.type, td.radius, enemy.plane ?? 0, td.duration);
-        }
+        // Same result consumer as the surface loop — never a local subset.
+        game.enemyUpdateSystem.handleUpdateResult(enemy, game.player, r, dt);
       }
 
       // Process interior enemy deaths
